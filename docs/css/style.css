@@ -428,6 +428,12 @@ td.negative { color: var(--red); }
     margin-bottom: 20px;
 }
 
+.chart-card canvas {
+    width: 100% !important;
+    height: 300px !important;
+    max-height: 300px;
+}
+
 .chart-card h3 {
     margin: 0 0 12px 0;
     font-size: 13px;

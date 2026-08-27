@@ -45,6 +45,7 @@ BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
 BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
 MAX_WEIGHT = 0.09        # 9% max na spolke
 CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
+MAX_HOLDINGS = 20
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
@@ -139,7 +140,8 @@ def add_zscore_and_momentum_score(df):
 # ============================================================================
 def select_with_buffer(df_ranked, current_tickers):
     n = len(df_ranked)
-    target_count = round(TARGET_QUINTILE * n)
+    # target_count = round(TARGET_QUINTILE * n)
+    target_count = min(round(TARGET_QUINTILE * n), MAX_HOLDINGS)
     if target_count <= 0 or n == 0:
         return set(), target_count
 
