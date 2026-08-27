@@ -337,6 +337,29 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc):
     print(f"💾 Wyeksportowano {out_path}")
 
 
+# ============================================================================
+# CENY DLA WSZYSTKICH SPÓŁEK W INDEKSACH (nie tylko wybranych do portfela)
+# -> docs/data/all_prices.json — pozwala panelowi rebalansu wycenić dowolną
+# pozycję użytkownika, nawet spółkę spoza aktualnej top-20 selekcji momentum.
+# ============================================================================
+def export_all_prices(con, ref_date, docs_data_dir):
+    df = con.execute(f"""
+        SELECT ic.Ticker AS ticker,
+               STRING_AGG(DISTINCT ic.Index_Name, ',') AS universes,
+               ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= DATE '{ref_date}') AS price
+        FROM index_constituents ic
+        JOIN prices p ON p.Ticker = ic.Ticker
+        GROUP BY ic.Ticker
+        HAVING price IS NOT NULL
+    """).df()
+    payload = {
+        row["ticker"]: {"price": round(float(row["price"]), 2), "universes": row["universes"].split(",")}
+        for _, row in df.iterrows()
+    }
+    Path(docs_data_dir, "all_prices.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"💾 Wyeksportowano all_prices.json ({len(payload)} spółek ze wszystkich indeksów).")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES "
@@ -369,6 +392,7 @@ def main():
     for universe in UNIVERSES:
         process_universe(con, universe, ref_date, args, docs_data_dir)
 
+    export_all_prices(con, ref_date, docs_data_dir)
     con.close()
 
 

@@ -392,6 +392,18 @@ td.negative { color: var(--red); }
     font-size: 11.5px;
 }
 
+.panel-hint {
+    font-size: 12px;
+    color: var(--text-faint);
+    margin: -6px 0 14px 0;
+}
+
+.settings-hint {
+    font-size: 11.5px;
+    color: var(--text-faint);
+    margin-top: 8px;
+}
+
 .settings-row { margin-bottom: 14px; }
 .settings-row:last-child { margin-bottom: 0; }
 .settings-row > label {
@@ -401,7 +413,7 @@ td.negative { color: var(--red); }
     margin-bottom: 6px;
 }
 
-#totalCapital {
+#contribution {
     background: var(--panel-alt);
     border: 1px solid var(--border);
     color: var(--text);
@@ -409,6 +421,12 @@ td.negative { color: var(--red); }
     border-radius: 6px;
     font-size: 14px;
     width: 200px;
+}
+
+input[type="range"] {
+    width: 100%;
+    max-width: 420px;
+    accent-color: var(--green);
 }
 
 .bucket-inputs { display: flex; gap: 18px; flex-wrap: wrap; }
@@ -521,6 +539,7 @@ table.holdings-table td, table.rebalance-table td {
 .action-badge.buy { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
 .action-badge.sell { background: rgba(224, 69, 90, 0.15); color: var(--red); }
 .action-badge.hold { background: var(--panel-alt); color: var(--text-faint); }
+.action-badge.skip { background: var(--panel-alt); color: var(--text-faint); font-weight: 400; }
 .action-badge.unknown { background: var(--panel-alt); color: var(--text-dim); }
 
 .empty-state {
