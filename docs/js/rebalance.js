@@ -187,25 +187,44 @@ function renderCapitalHint() {
 // wybranych przez strategię momentum (przed przycięciem limitem).
 function computeTargets(totalCapital) {
     const raw = {}; // ticker -> { ticker, price, target_value, universes: [] }
+
     UNIVERSES.forEach(u => {
-        const bucketTarget = totalCapital * (settings.pct[u] || 0) / 100;
-        (universeData[u].constituents || []).forEach(c => {
-            const contrib = bucketTarget * c.weight_pct / 100;
-            if (!raw[c.ticker]) raw[c.ticker] = { ticker: c.ticker, price: c.price, target_value: 0, universes: [] };
-            raw[c.ticker].target_value += contrib;
-            raw[c.ticker].universes.push(u);
-        });
+        const pctAllocation = settings.pct[u] || 0;
+        if (pctAllocation <= 0) return; // Pomijamy indeksy z wagą 0% (np. SP500)
+
+        const bucketTarget = totalCapital * (pctAllocation / 100);
+        const constituents = universeData[u].constituents || [];
+
+        // 1. Liczymy sumę wag surowych w pliku JSON dla tego indeksu
+        const totalRawWeight = constituents.reduce((sum, c) => sum + (c.weight_pct || 0), 0);
+
+        if (totalRawWeight > 0) {
+            constituents.forEach(c => {
+                // 2. Normalizujemy wagę spółki wewnątrz jej własnego koszyka do 100%
+                const normalizedWeightInBucket = (c.weight_pct || 0) / totalRawWeight;
+                // 3. Obliczamy jej realny przydział dolarowy z alokacji tego koszyka
+                const contrib = bucketTarget * normalizedWeightInBucket;
+
+                if (!raw[c.ticker]) {
+                    raw[c.ticker] = { ticker: c.ticker, price: c.price, target_value: 0, universes: [] };
+                }
+                raw[c.ticker].target_value += contrib;
+                raw[c.ticker].universes.push(u);
+            });
+        }
     });
 
     const momentumSelected = new Set(Object.keys(raw));
     const maxHoldings = settings.maxHoldings || DEFAULT_SETTINGS.maxHoldings;
+    
+    // Sortujemy spółki wg obliczonej docelowej wartości dolarowej
     const sorted = Object.values(raw).sort((a, b) => b.target_value - a.target_value);
     const kept = sorted.slice(0, maxHoldings);
 
-    // Twój limit liczby spółek jest mniejszy niż lista momentum — przeskaluj
-    // wagi zachowanych spółek tak, żeby dalej sumowały się do 100% kapitału.
+    // Jeśli limit maxHoldings odrzucił jakieś spółki, skalujemy zachowane,
+    // aby całkowita suma alokacji nadal stanowiła 100% kapitału docelowego
     const keptSum = kept.reduce((s, t) => s + t.target_value, 0);
-    if (keptSum > 0) {
+    if (keptSum > 0 && totalCapital > 0) {
         const scale = totalCapital / keptSum;
         kept.forEach(t => { t.target_value *= scale; });
     }
@@ -214,6 +233,7 @@ function computeTargets(totalCapital) {
     kept.forEach(t => { targets[t.ticker] = t; });
     return { targets, momentumSelected };
 }
+
 
 function renderSuggestions() {
     const totalCapital = targetCapital();
