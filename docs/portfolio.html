@@ -1,0 +1,69 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio — Momentum Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">MOMENTUM // SP500 · NASDAQ100 · DJIA</div>
+    <nav>
+        <a href="index.html">Dashboard</a>
+        <a href="portfolio.html" class="active">Portfolio</a>
+    </nav>
+</div>
+
+<div class="portfolio-page">
+
+    <div class="universe-toggle" id="universeToggle">
+        <button data-universe="blended" class="active">Blended (równa waga 3 strategii)</button>
+        <button data-universe="SP500">S&amp;P 500 Momentum</button>
+        <button data-universe="NASDAQ100">Nasdaq 100 Momentum</button>
+        <button data-universe="DOWJONES">Dow Jones Momentum</button>
+    </div>
+
+    <div class="stat-cards">
+        <div class="stat-card">
+            <div class="label">Zwrot łączny</div>
+            <div class="value" id="statTotalReturn">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">CAGR</div>
+            <div class="value" id="statCagr">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Max Drawdown</div>
+            <div class="value" id="statMaxDD">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Liczba rebalansów</div>
+            <div class="value" id="statPeriods">—</div>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <h3>Krzywa equity (% skumulowanego zwrotu)</h3>
+        <canvas id="equityChart" height="90"></canvas>
+    </div>
+
+    <div class="chart-card">
+        <h3>Drawdown (%)</h3>
+        <canvas id="drawdownChart" height="70"></canvas>
+    </div>
+
+    <div id="emptyState" class="empty-state" style="display:none;">
+        Brak jeszcze zrealizowanych okresów. Krzywa equity pojawi się po drugim comiesięcznym rebalansie
+        (potrzebne są co najmniej dwa punkty w czasie, żeby policzyć zwrot).
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="js/portfolio.js"></script>
+</body>
+</html>
+

@@ -1,0 +1,95 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momentum Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">MOMENTUM // SP500 · NASDAQ100 · DJIA</div>
+    <nav>
+        <a href="index.html" class="active">Dashboard</a>
+        <a href="portfolio.html">Portfolio</a>
+    </nav>
+</div>
+
+<div class="workspace">
+
+    <!-- ====================== LEWA KOLUMNA / SZUFLADA TABEL ====================== -->
+    <div class="sidebar" id="sidebar">
+        <button class="expand-btn" id="toggleDrawerBtn">&gt;&gt;&gt;</button>
+
+        <div class="sidebar-group">
+            <div class="sidebar-group-label">S&amp;P 500</div>
+            <div class="ticker-grid" id="tiles-SP500"></div>
+        </div>
+
+        <div class="sidebar-group">
+            <div class="sidebar-group-label">Nasdaq 100</div>
+            <div class="ticker-grid" id="tiles-NASDAQ100"></div>
+        </div>
+
+        <div class="sidebar-group">
+            <div class="sidebar-group-label">Dow Jones</div>
+            <div class="ticker-grid" id="tiles-DOWJONES"></div>
+        </div>
+    </div>
+
+    <div class="table-drawer" id="tableDrawer">
+        <div class="drawer-header">
+            <h2 id="drawerTitle">Pełna tabela — S&amp;P 500 Momentum</h2>
+            <div class="drawer-tabs">
+                <button class="drawer-tab active" data-universe="SP500">S&amp;P 500</button>
+                <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
+                <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
+            </div>
+        </div>
+        <div class="drawer-filters">
+            <input type="text" id="tickerSearch" placeholder="Szukaj tickera...">
+            <select id="sectorFilter">
+                <option value="">Wszystkie sektory</option>
+            </select>
+            <div class="drawer-meta" id="drawerMeta"></div>
+        </div>
+        <div class="table-scroll">
+            <table class="momentum-table" id="momentumTable">
+                <thead>
+                    <tr>
+                        <th data-key="rank">#</th>
+                        <th data-key="ticker">Ticker</th>
+                        <th data-key="sector">Sektor</th>
+                        <th data-key="price">Cena</th>
+                        <th data-key="momentum_pct">Momentum (12M-1M)</th>
+                        <th data-key="momentum_window">Okno</th>
+                        <th data-key="volatility_pct">Zmienność</th>
+                        <th data-key="z_score">Z-score</th>
+                        <th data-key="momentum_score">Momentum Score</th>
+                        <th data-key="weight_pct">Waga</th>
+                    </tr>
+                </thead>
+                <tbody id="momentumTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- ====================== WYKRES TRADINGVIEW (pełny ekran, przełącznik TF w widgecie) ====================== -->
+    <div class="charts-area">
+        <div class="chart-panel">
+            <div class="chart-panel-header">
+                <span>Wybrana spółka</span><span class="symbol" id="symbolLabel">SPY</span>
+            </div>
+            <div class="chart-container" id="tv_chart"></div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
+
