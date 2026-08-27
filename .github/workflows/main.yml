@@ -41,9 +41,9 @@ jobs:
         run: |
           python fetch_data.py
 
-      - name: Run Momentum Query and Generate HTML
+      - name: Run Momentum Query and Generate json data for page
         run: |
-          python run_query.py 2
+          python run_query.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
