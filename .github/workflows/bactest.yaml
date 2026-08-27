@@ -3,6 +3,17 @@ name: One-time 1-Year Backfill
 on:
   workflow_dispatch: # Pozwala odpalić akcję ręcznie z zakładki Actions
 
+# Wymagane uprawnienia do publikacji na GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Zapobiega nakładaniu się równoległych wdrożeń
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   run-backfill:
     runs-on: ubuntu-latest
