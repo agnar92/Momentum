@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 
 UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"]
-TARGET_QUINTILE = 1  # top 20% wg momentum score
+TARGET_QUINTILE = 0.20  # top 20% wg momentum score
 BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
 BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
 MAX_WEIGHT = 0.09        # 9% max na spolke
@@ -173,13 +173,20 @@ def select_with_buffer(df_ranked, current_tickers):
 # ============================================================================
 # 6: WAGI (sekcja "Constituent Weightings")
 # ============================================================================
-def compute_weights(df_selected, df_full_universe):
+def compute_weights(df_selected, df_full_universe, universe=None):
     """
     Waga surowa_i = FMC_i * momentum_score_i, znormalizowana do sumy 1.
     Cap_i = min(9%, 3 * waga_kapitalizacyjna_i_w_calym_uniwersum).
     Iteracyjna redystrybucja nadwyżki ponad cap do niekapowanych, proporcjonalnie.
     """
     df = df_selected.copy()
+    n = len(df)
+
+    if universe == "DOWJONES":
+       df["weight"] = 1.0
+       df["cap_selected_due_to_infeasibility"] = False
+       return df
+       
     total_fmc_universe = df_full_universe["fmc"].sum()
     df["cap_weight_universe"] = df["fmc"] / total_fmc_universe
 
@@ -262,8 +269,17 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
             SELECT ticker FROM portfolio_history
             WHERE universe = '{universe}' AND ref_date = DATE '{prev_ref_date}'
         """).df()["ticker"])
+    # Przed zmianą:
+    # selected_tickers, target_count = select_with_buffer(df_ranked, current_tickers)
 
-    selected_tickers, target_count = select_with_buffer(df_ranked, current_tickers)
+    # PO ZMIANIE:
+    if universe == "DOWJONES":
+        selected_tickers = set(df_ranked["Ticker"])
+        target_count = len(selected_tickers)
+    else:
+        selected_tickers, target_count = select_with_buffer(df_ranked, current_tickers)
+
+    #selected_tickers, target_count = select_with_buffer(df_ranked, current_tickers)
     print(f"Uniwersum: {len(df_ranked)} spółek kwalifikowanych. Target (kwintyl 20%): "
           f"{target_count}. Wybrano: {len(selected_tickers)}.")
 
@@ -272,7 +288,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
         print(f"❌ Brak wybranych spółek dla {universe}.")
         return None
 
-    df_weighted = compute_weights(df_selected, df_ranked)
+    df_weighted = compute_weights(df_selected, df_ranked, universe=universe)
     df_weighted = df_weighted.sort_values("weight", ascending=False).reset_index(drop=True)
     df_weighted["rank_in_universe"] = range(1, len(df_weighted) + 1)
 
