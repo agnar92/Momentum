@@ -45,19 +45,13 @@ jobs:
         run: |
           python run_query.py 2
 
-  
-      - name: Prepare HTML for github pages
-        run: |
-          cp portfel_rebalans.html index.html
-
-
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: '.' # Publikujemy cały katalog (w którym run_query.py zapisał index.html)
+          path: 'docs/'
 
       - name: Deploy to GitHub Pages
         id: deployment
