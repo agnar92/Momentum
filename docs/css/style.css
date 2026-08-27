@@ -358,13 +358,83 @@ td.negative { color: var(--red); }
 .chart-container iframe { border: none; width: 100%; height: 100%; }
 
 /* ============================================================
-   STRONA PORTFOLIO
+   STRONA REBALANS
    ============================================================ */
-.portfolio-page {
+.rebalance-page {
     height: calc(100vh - 48px);
     overflow-y: auto;
     padding: 24px 32px;
+    max-width: 980px;
+    margin: 0 auto;
 }
+
+.panel-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-bottom: 20px;
+}
+
+.panel-card h3 {
+    margin: 0 0 14px 0;
+    font-size: 13px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.ref-date-note {
+    text-transform: none;
+    letter-spacing: 0;
+    color: var(--text-faint);
+    font-weight: 400;
+    font-size: 11.5px;
+}
+
+.settings-row { margin-bottom: 14px; }
+.settings-row:last-child { margin-bottom: 0; }
+.settings-row > label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+}
+
+#totalCapital {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 14px;
+    width: 200px;
+}
+
+.bucket-inputs { display: flex; gap: 18px; flex-wrap: wrap; }
+.bucket-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+.bucket-input span { font-size: 12px; color: var(--text-dim); }
+.bucket-input input {
+    width: 56px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 14px;
+    text-align: right;
+}
+.bucket-input input:focus { outline: none; }
+
+.bucket-sum { font-size: 11.5px; margin-top: 8px; color: var(--text-faint); }
+.bucket-sum.ok { color: var(--green-bright); }
+.bucket-sum.warn { color: var(--red); }
 
 .stat-cards {
     display: flex;
@@ -379,6 +449,7 @@ td.negative { color: var(--red); }
     border-radius: 10px;
     padding: 16px 22px;
     min-width: 160px;
+    flex: 1;
 }
 
 .stat-card .label {
@@ -397,50 +468,60 @@ td.negative { color: var(--red); }
 .stat-card .value.positive { color: var(--green-bright); }
 .stat-card .value.negative { color: var(--red); }
 
-.universe-toggle {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
+table.holdings-table, table.rebalance-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12.5px;
 }
 
-.universe-toggle button {
+table.holdings-table th, table.rebalance-table th {
+    text-align: left;
+    padding: 6px 10px;
+    color: var(--text-faint);
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+}
+
+table.holdings-table td, table.rebalance-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--border);
+}
+
+.holdings-table input[type="text"], .holdings-table input[type="number"] {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 12.5px;
+    width: 90px;
+}
+
+.add-row-btn, .remove-row-btn {
     background: var(--panel-alt);
     border: 1px solid var(--border);
     color: var(--text-dim);
-    padding: 8px 16px;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
+    border-radius: 6px;
     cursor: pointer;
 }
+.add-row-btn { padding: 7px 14px; font-size: 12.5px; font-weight: 600; margin-top: 10px; }
+.add-row-btn:hover { border-color: var(--green); color: var(--text); }
+.remove-row-btn { width: 24px; height: 24px; font-size: 12px; }
+.remove-row-btn:hover { border-color: var(--red); color: var(--red); }
 
-.universe-toggle button.active {
-    background: var(--green);
-    color: #fff;
-    border-color: var(--green-bright);
-}
+.text-faint { color: var(--text-faint); }
 
-.chart-card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
-    margin-bottom: 20px;
+.action-badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 5px;
+    font-size: 11.5px;
+    font-weight: 700;
 }
-
-.chart-card canvas {
-    width: 100% !important;
-    height: 300px !important;
-    max-height: 300px;
-}
-
-.chart-card h3 {
-    margin: 0 0 12px 0;
-    font-size: 13px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
+.action-badge.buy { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
+.action-badge.sell { background: rgba(224, 69, 90, 0.15); color: var(--red); }
+.action-badge.hold { background: var(--panel-alt); color: var(--text-faint); }
+.action-badge.unknown { background: var(--panel-alt); color: var(--text-dim); }
 
 .empty-state {
     color: var(--text-faint);

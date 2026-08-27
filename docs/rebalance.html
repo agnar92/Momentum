@@ -1,0 +1,82 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rebalans — Momentum Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">MOMENTUM // SP500 · NASDAQ100 · DJIA</div>
+    <nav>
+        <a href="index.html">Dashboard</a>
+        <a href="rebalance.html" class="active">Rebalans</a>
+    </nav>
+</div>
+
+<div class="rebalance-page">
+
+    <div class="panel-card" id="settingsCard">
+        <h3>Ustawienia portfela</h3>
+        <div class="settings-row">
+            <label>Kapitał docelowy do zainwestowania ($)</label>
+            <input type="number" id="totalCapital" min="0" step="100" placeholder="np. 10000">
+        </div>
+        <div class="settings-row buckets-row">
+            <label>Podział między strategie (musi sumować się do 100%)</label>
+            <div class="bucket-inputs">
+                <div class="bucket-input"><span>S&amp;P 500</span><input type="number" id="pct-SP500" min="0" max="100" step="1"><span>%</span></div>
+                <div class="bucket-input"><span>Nasdaq 100</span><input type="number" id="pct-NASDAQ100" min="0" max="100" step="1"><span>%</span></div>
+                <div class="bucket-input"><span>Dow Jones</span><input type="number" id="pct-DOWJONES" min="0" max="100" step="1"><span>%</span></div>
+            </div>
+            <div class="bucket-sum" id="bucketSum"></div>
+        </div>
+    </div>
+
+    <div class="panel-card" id="holdingsCard">
+        <h3>Obecne pozycje</h3>
+        <table class="holdings-table" id="holdingsTable">
+            <thead>
+                <tr><th>Ticker</th><th>Liczba akcji</th><th>Cena</th><th>Wartość</th><th></th></tr>
+            </thead>
+            <tbody id="holdingsBody"></tbody>
+        </table>
+        <button class="add-row-btn" id="addHoldingBtn">+ Dodaj pozycję</button>
+    </div>
+
+    <div class="stat-cards" id="summaryCards">
+        <div class="stat-card">
+            <div class="label">Aktualna wartość pozycji</div>
+            <div class="value" id="statCurrentValue">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Kapitał docelowy</div>
+            <div class="value" id="statTargetValue">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Do dopłaty / wypłaty</div>
+            <div class="value" id="statCashDelta">—</div>
+        </div>
+    </div>
+
+    <div class="panel-card" id="suggestionsCard">
+        <h3>Sugerowany rebalans <span class="ref-date-note" id="refDateNote"></span></h3>
+        <table class="rebalance-table" id="rebalanceTable">
+            <thead>
+                <tr><th>Ticker</th><th>Strategia</th><th>Waga docelowa</th><th>Wartość docelowa</th><th>Masz teraz</th><th>Akcja</th></tr>
+            </thead>
+            <tbody id="rebalanceBody"></tbody>
+        </table>
+        <div class="empty-state" id="rebalanceEmpty" style="display:none;">
+            Ustaw kapitał docelowy i podział między strategie, żeby zobaczyć sugestię rebalansu.
+        </div>
+    </div>
+
+</div>
+
+<script src="js/rebalance.js"></script>
+</body>
+</html>
