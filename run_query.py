@@ -23,10 +23,10 @@ metodologii S&P Momentum Indices):
    kapitalizacyjna w uniwersum), iteracyjnie kapowane z redystrybucja
    nadwyzki (sekcja "Constituent Weightings").
 7. Zapis do trwalej tabeli portfolio_history (nigdy niekasowanej przez
-   fetch_data.py) + mark-to-market poprzedniego miesiaca do
-   portfolio_returns (do liczenia krzywej equity, CAGR, max drawdown).
+   fetch_data.py) — uzywanej m.in. do reguly bufora (current_tickers) oraz
+   jako zrodlo docelowych wag dla panelu rebalansu na stronie.
 8. Eksport JSON dla strony (docs/data/*.json) + wygenerowanie statycznych
-   plikow strony (docs/index.html, docs/portfolio.html, docs/css/*, docs/js/*).
+   plikow strony (docs/index.html, docs/rebalance.html, docs/css/*, docs/js/*).
 """
 
 import argparse
@@ -289,10 +289,6 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                 "price_at_rebalance, momentum_value, momentum_window, annualized_volatility, z_score, "
                 "momentum_score, weight FROM df_hist")
 
-    # --- Mark-to-market poprzedniego miesiąca -> portfolio_returns ---
-    if prev_ref_date is not None:
-        compute_realized_return(con, universe, str(prev_ref_date), ref_date)
-
     # --- Turnover ---
     if current_tickers:
         new_n = len(selected_tickers - current_tickers)
@@ -304,54 +300,6 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc)
 
     return df_weighted
-
-
-def compute_realized_return(con, universe, prev_ref_date, curr_ref_date):
-    """
-    Mark-to-market: liczy zrealizowany zwrot portfela z poprzedniego miesiąca
-    NA BAZIE aktualnej tabeli `prices` (która wciąż zawiera obie daty, bo
-    rolling window ma 15 miesięcy) i PERSYSTUJE go na stałe. Dzięki temu
-    krzywa equity przetrwa kolejne comiesięczne reinity tabeli prices.
-    """
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS portfolio_returns (
-            period_start DATE, period_end DATE, universe VARCHAR,
-            return_pct DOUBLE, n_holdings INTEGER, n_priced INTEGER,
-            PRIMARY KEY (period_start, period_end, universe)
-        )
-    """)
-    prev = con.execute(f"""
-        SELECT ticker, weight FROM portfolio_history
-        WHERE universe = '{universe}' AND ref_date = DATE '{prev_ref_date}'
-    """).df()
-    if prev.empty:
-        return
-    tickers = tuple(prev["ticker"]) if len(prev) > 1 else (prev["ticker"].iloc[0], prev["ticker"].iloc[0])
-    prices = con.execute(f"""
-        SELECT Ticker,
-            ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{prev_ref_date}') AS price_start,
-            ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{curr_ref_date}') AS price_end
-        FROM prices WHERE Ticker IN {tickers}
-        GROUP BY Ticker
-    """).df()
-    merged = prev.merge(prices, left_on="ticker", right_on="Ticker", how="left")
-    merged["stock_return"] = merged["price_end"] / merged["price_start"] - 1
-    missing = merged["stock_return"].isna().sum()
-    if missing > 0:
-        print(f"⚠️  {missing} spółek bez ceny do mark-to-market (prawdopodobnie delisting/błąd danych) "
-              f"— traktowane jako 0% w tym okresie.")
-    merged["stock_return"] = merged["stock_return"].fillna(0.0)
-    portfolio_return = float((merged["weight"] * merged["stock_return"]).sum())
-
-    con.execute(f"""
-        INSERT INTO portfolio_returns VALUES
-        (DATE '{prev_ref_date}', DATE '{curr_ref_date}', '{universe}', {portfolio_return},
-         {len(merged)}, {int(merged['stock_return'].notna().sum())})
-        ON CONFLICT (period_start, period_end, universe)
-        DO UPDATE SET return_pct = EXCLUDED.return_pct
-    """)
-    print(f"💰 Zrealizowany zwrot {universe} za okres {prev_ref_date} → {curr_ref_date}: "
-          f"{portfolio_return * 100:.2f}%")
 
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc):
@@ -390,65 +338,26 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc):
 
 
 # ============================================================================
-# KRZYWA EQUITY / CAGR / MAX DRAWDOWN -> docs/data/portfolio.json
+# CENY DLA WSZYSTKICH SPÓŁEK W INDEKSACH (nie tylko wybranych do portfela)
+# -> docs/data/all_prices.json — pozwala panelowi rebalansu wycenić dowolną
+# pozycję użytkownika, nawet spółkę spoza aktualnej top-20 selekcji momentum.
 # ============================================================================
-def export_portfolio_curve(con, docs_data_dir):
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS portfolio_returns (
-            period_start DATE, period_end DATE, universe VARCHAR,
-            return_pct DOUBLE, n_holdings INTEGER, n_priced INTEGER,
-            PRIMARY KEY (period_start, period_end, universe)
-        )
-    """)
-    df = con.execute("""
-        SELECT period_end, universe, return_pct FROM portfolio_returns ORDER BY period_end
+def export_all_prices(con, ref_date, docs_data_dir):
+    df = con.execute(f"""
+        SELECT ic.Ticker AS ticker,
+               STRING_AGG(DISTINCT ic.Index_Name, ',') AS universes,
+               ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= DATE '{ref_date}') AS price
+        FROM index_constituents ic
+        JOIN prices p ON p.Ticker = ic.Ticker
+        GROUP BY ic.Ticker
+        HAVING price IS NOT NULL
     """).df()
-    if df.empty:
-        print("ℹ️  Brak jeszcze żadnego zrealizowanego okresu — krzywa equity pojawi się od drugiego rebalansu.")
-        payload = {"universes": {}, "blended": {"dates": [], "equity_pct": [], "cagr_pct": None, "max_drawdown_pct": None}}
-        Path(docs_data_dir, "portfolio.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        return
-
-    result = {"universes": {}}
-    all_curves = []
-
-    for universe in df["universe"].unique():
-        sub = df[df["universe"] == universe].sort_values("period_end")
-        equity = (1 + sub["return_pct"]).cumprod()
-        running_max = equity.cummax()
-        drawdown = equity / running_max - 1
-        n_periods = len(sub)
-        n_years = n_periods / 12.0
-        cagr = (equity.iloc[-1]) ** (1 / n_years) - 1 if n_years > 0 and equity.iloc[-1] > 0 else None
-
-        result["universes"][universe] = {
-            "dates": sub["period_end"].astype(str).tolist(),
-            "equity_pct": [round((e - 1) * 100, 3) for e in equity],
-            "drawdown_pct": [round(d * 100, 3) for d in drawdown],
-            "cagr_pct": round(cagr * 100, 2) if cagr is not None else None,
-            "max_drawdown_pct": round(drawdown.min() * 100, 2),
-        }
-        all_curves.append(sub.set_index("period_end")["return_pct"].rename(universe))
-
-    # Blended = równa waga 3 uniwersów (tam gdzie dane dostępne w danym okresie)
-    blended_df = pd.concat(all_curves, axis=1)
-    blended_returns = blended_df.mean(axis=1, skipna=True)
-    equity_b = (1 + blended_returns).cumprod()
-    running_max_b = equity_b.cummax()
-    drawdown_b = equity_b / running_max_b - 1
-    n_years_b = len(blended_returns) / 12.0
-    cagr_b = (equity_b.iloc[-1]) ** (1 / n_years_b) - 1 if n_years_b > 0 and equity_b.iloc[-1] > 0 else None
-
-    result["blended"] = {
-        "dates": [pd.Timestamp(d).strftime("%Y-%m-%d") for d in blended_returns.index],
-        "equity_pct": [round((e - 1) * 100, 3) for e in equity_b],
-        "drawdown_pct": [round(d * 100, 3) for d in drawdown_b],
-        "cagr_pct": round(cagr_b * 100, 2) if cagr_b is not None else None,
-        "max_drawdown_pct": round(drawdown_b.min() * 100, 2),
+    payload = {
+        row["ticker"]: {"price": round(float(row["price"]), 2), "universes": row["universes"].split(",")}
+        for _, row in df.iterrows()
     }
-
-    Path(docs_data_dir, "portfolio.json").write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"💾 Wyeksportowano portfolio.json ({len(df)} zrealizowanych okresów łącznie).")
+    Path(docs_data_dir, "all_prices.json").write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"💾 Wyeksportowano all_prices.json ({len(payload)} spółek ze wszystkich indeksów).")
 
 
 def main():
@@ -483,7 +392,7 @@ def main():
     for universe in UNIVERSES:
         process_universe(con, universe, ref_date, args, docs_data_dir)
 
-    export_portfolio_curve(con, docs_data_dir)
+    export_all_prices(con, ref_date, docs_data_dir)
     con.close()
 
 
