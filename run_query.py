@@ -184,7 +184,7 @@ def compute_weights(df_selected, df_full_universe, universe=None):
 
     if universe == "DOWJONES":
        df["weight"] = 1.0
-       df["cap_selected_due_to_infeasibility"] = False
+       df["cap_scaled_due_to_infeasibility"] = False
        return df
        
     total_fmc_universe = df_full_universe["fmc"].sum()
