@@ -4,6 +4,8 @@ on:
   schedule:
     # Uruchamiaj 1. dnia każdego miesiąca o 06:00 UTC
     - cron: '0 6 1 * *'
+  push:
+    branches: [main]
   workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
 
 # Wymagane uprawnienia do publikacji na GitHub Pages
