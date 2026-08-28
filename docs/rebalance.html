@@ -45,6 +45,16 @@
         <button class="add-row-btn" id="addHoldingBtn">+ Dodaj pozycję</button>
     </div>
 
+    <div class="panel-card" id="excludeCard">
+        <h3>Wyklucz z rebalansu</h3>
+        <p class="panel-hint">Tickery na tej liście nigdy nie dostaną sugestii kupna/sprzedaży — nawet jeśli je zaimportujesz z XTB albo wybierze je momentum. Dla pozycji, które chcesz po prostu zatrzymać.</p>
+        <div class="import-row">
+            <input type="text" id="excludeInput" placeholder="np. AAPL" class="exclude-input">
+            <button class="add-row-btn" id="excludeAddBtn">+ Wyklucz</button>
+        </div>
+        <div class="exclude-list" id="excludedList"></div>
+    </div>
+
     <div class="panel-card" id="settingsCard">
         <h3>Ile dopłacasz w tym miesiącu?</h3>
         <div class="settings-row">
