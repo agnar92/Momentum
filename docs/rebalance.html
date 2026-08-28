@@ -98,9 +98,24 @@
         </div>
     </div>
 
+    <div class="panel-card" id="monteCarloCard">
+        <h3>
+            Prognoza Monte Carlo
+            <select id="mcHorizon" class="mc-horizon">
+                <option value="6">6 miesięcy</option>
+                <option value="12" selected>12 miesięcy</option>
+                <option value="24">24 miesiące</option>
+                <option value="36">36 miesięcy</option>
+            </select>
+        </h3>
+        <div class="mc-chart-wrap"><canvas id="monteCarloChart"></canvas></div>
+        <p class="panel-hint" id="mcCaption"></p>
+    </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="js/rebalance.js"></script>
 </body>
 </html>

@@ -39,6 +39,13 @@ html, body {
     border-bottom: 1px solid var(--border);
 }
 
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+}
+
 .topbar .brand {
     font-weight: 700;
     letter-spacing: 0.5px;
@@ -46,6 +53,85 @@ html, body {
     color: var(--green-bright);
     white-space: nowrap;
     overflow: hidden;
+}
+
+.cmdk-trigger {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-faint);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+}
+.cmdk-trigger:hover { color: var(--text); border-color: var(--green); }
+.cmdk-kbd {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 10.5px;
+    color: var(--text-faint);
+}
+
+.cmdk-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 50;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12vh;
+}
+
+.cmdk-box {
+    width: min(560px, 92vw);
+    max-height: 70vh;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.cmdk-input {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    font-size: 16px;
+    padding: 16px;
+    outline: none;
+}
+
+.cmdk-results { overflow-y: auto; }
+
+.cmdk-result {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    cursor: pointer;
+}
+
+.cmdk-result.selected { background: var(--panel-alt); }
+
+.cmdk-ticker { font-weight: 700; min-width: 64px; }
+.cmdk-sector { color: var(--text-dim); font-size: 12px; flex: 1; }
+.cmdk-universe { color: var(--text-faint); font-size: 11px; }
+
+.cmdk-empty {
+    padding: 20px 16px;
+    color: var(--text-faint);
+    font-size: 13px;
+    text-align: center;
 }
 
 .topbar nav a {
@@ -363,6 +449,22 @@ td.negative { color: var(--red); }
 .chart-container { flex: 1; }
 .chart-container iframe { border: none; width: 100%; height: 100%; }
 
+.chart-back-btn {
+    display: none; /* widoczny tylko w widoku wykresu na telefonie */
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-bottom: 8px;
+    align-self: flex-start;
+    flex-shrink: 0;
+}
+.chart-back-btn:hover { border-color: var(--green); }
+
 /* ============================================================
    STRONA REBALANS
    ============================================================ */
@@ -388,7 +490,25 @@ td.negative { color: var(--red); }
     color: var(--text-dim);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
 }
+
+.mc-horizon {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.mc-chart-wrap { height: 260px; }
+.mc-chart-wrap canvas { width: 100% !important; height: 100% !important; }
 
 .ref-date-note {
     text-transform: none;
@@ -594,13 +714,19 @@ table.holdings-table td, table.rebalance-table td {
 @media (max-width: 640px) {
     .brand-sub { display: none; }
     .topbar { padding: 0 12px; }
+    .topbar-left { gap: 8px; }
     .topbar nav a { margin-left: 8px; padding: 6px 8px; font-size: 12px; }
+    .cmdk-kbd { display: none; }
+    .cmdk-trigger { padding: 6px 8px; }
+    .cmdk-overlay { padding-top: 4vh; align-items: flex-start; }
 
-    /* --- Dashboard --- */
+    /* --- Dashboard: na telefonie nie ma miejsca na tabelę i wykres naraz,
+       więc to dwa osobne "widoki" — domyślnie lista (pełna wysokość), po
+       dotknięciu spółki przełącza się na pełnoekranowy wykres (patrz
+       .workspace.mobile-chart-view niżej i selectTicker() w app.js). --- */
     .workspace {
         flex-direction: column;
-        overflow-y: auto;
-        overflow-x: hidden;
+        overflow: hidden;
     }
 
     .sidebar { display: none; }
@@ -608,8 +734,8 @@ table.holdings-table td, table.rebalance-table td {
     .table-drawer {
         position: static;
         width: 100% !important;
-        height: auto;
-        max-height: 46vh;
+        height: calc(100vh - 48px);
+        max-height: none;
         border-right: none;
         border-bottom: 2px solid var(--accent-line);
     }
@@ -622,7 +748,16 @@ table.holdings-table td, table.rebalance-table td {
     .table-scroll { padding: 0 8px 8px 8px; }
     table.momentum-table { width: auto; min-width: 640px; }
 
-    .charts-area { flex: none; height: 46vh; padding: 8px; }
+    .charts-area { display: none; padding: 8px; }
+    .chart-back-btn { display: none; }
+
+    .workspace.mobile-chart-view .table-drawer { display: none; }
+    .workspace.mobile-chart-view .charts-area {
+        display: flex;
+        flex: none;
+        height: calc(100vh - 48px);
+    }
+    .workspace.mobile-chart-view .chart-back-btn { display: block; }
 
     /* --- Rebalans --- */
     .rebalance-page { padding: 14px 12px; }
@@ -637,5 +772,6 @@ table.holdings-table td, table.rebalance-table td {
     table.holdings-table th:nth-child(3), table.holdings-table td:nth-child(3) { display: none; }
     table.rebalance-table th:nth-child(3), table.rebalance-table td:nth-child(3) { display: none; }
     .holdings-table input[type="text"], .holdings-table input[type="number"] { width: 72px; }
+    .mc-chart-wrap { height: 200px; }
 }
 

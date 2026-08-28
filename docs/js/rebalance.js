@@ -262,7 +262,10 @@ function computeTargets(totalCapital) {
                 const contrib = bucketTarget * normalizedWeightInBucket;
 
                 if (!raw[c.ticker]) {
-                    raw[c.ticker] = { ticker: c.ticker, price: c.price, target_value: 0, universes: [] };
+                    raw[c.ticker] = {
+                        ticker: c.ticker, price: c.price, target_value: 0, universes: [],
+                        momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
+                    };
                 }
                 raw[c.ticker].target_value += contrib;
                 raw[c.ticker].universes.push(u);
@@ -371,12 +374,119 @@ function renderSuggestions() {
         ? `(wg rebalansu z ${refDates[0]} — kolejny automatycznie 1. dnia miesiąca)` : "";
 
     renderCapitalHint();
+    renderMonteCarlo();
+}
+
+// ============================================================
+// MONTE CARLO — statystyczny rozrzut możliwych wartości portfela,
+// NIE prognoza. mu/sigma to ważona średnia (wagą = target_value)
+// 12M momentum i rocznej zmienności obecnie wybranych spółek —
+// uproszczenie ignorujące korelacje między nimi (zwykle zawyża
+// pokazaną zmienność, więc pasmo jest raczej szersze niż węższe).
+// ============================================================
+let mcChart = null;
+
+// Surowe trailing 12M momentum bywa ekstremalne (np. spółka po skoku o
+// kilkaset %) i wprost jako roczny "oczekiwany zwrot" byłoby wprowadzające
+// w błąd, nawet z zastrzeżeniem w opisie — dlatego ograniczamy je do ±30%/rok
+// (szeroki, ale niewybuchowy przedział), zanim wejdzie do symulacji.
+const MC_MU_CAP = 0.30;
+
+function weightedMuSigma(targets, totalCapital) {
+    let mu = 0, sigma = 0;
+    Object.values(targets).forEach(t => {
+        const w = totalCapital > 0 ? t.target_value / totalCapital : 0;
+        mu += w * (t.momentum_pct || 0) / 100;
+        sigma += w * (t.volatility_pct || 0) / 100;
+    });
+    mu = Math.max(-MC_MU_CAP, Math.min(MC_MU_CAP, mu));
+    return { mu, sigma };
+}
+
+function randNormal() {
+    let u = 0, v = 0;
+    while (u === 0) u = Math.random();
+    while (v === 0) v = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+function simulateMonteCarlo(startValue, mu, sigma, horizonMonths, nPaths) {
+    const dt = 1 / 12;
+    const drift = (mu - 0.5 * sigma * sigma) * dt;
+    const vol = sigma * Math.sqrt(dt);
+    const paths = [];
+    for (let p = 0; p < nPaths; p++) {
+        let v = startValue;
+        const path = [v];
+        for (let m = 1; m <= horizonMonths; m++) {
+            v *= Math.exp(drift + vol * randNormal());
+            path.push(v);
+        }
+        paths.push(path);
+    }
+    const p10 = [], p50 = [], p90 = [];
+    for (let m = 0; m <= horizonMonths; m++) {
+        const vals = paths.map(p => p[m]).sort((a, b) => a - b);
+        p10.push(vals[Math.floor(0.10 * (vals.length - 1))]);
+        p50.push(vals[Math.floor(0.50 * (vals.length - 1))]);
+        p90.push(vals[Math.floor(0.90 * (vals.length - 1))]);
+    }
+    return { p10, p50, p90 };
+}
+
+function renderMonteCarlo() {
+    const totalCapital = targetCapital();
+    const { targets } = computeTargets(totalCapital);
+    const horizon = parseInt(document.getElementById("mcHorizon").value, 10) || 12;
+    const caption = document.getElementById("mcCaption");
+
+    if (totalCapital <= 0 || Object.keys(targets).length === 0) {
+        if (mcChart) { mcChart.destroy(); mcChart = null; }
+        caption.textContent = "Ustaw dopłatę / dodaj pozycje, żeby zobaczyć symulację.";
+        return;
+    }
+
+    const { mu, sigma } = weightedMuSigma(targets, totalCapital);
+    const { p10, p50, p90 } = simulateMonteCarlo(totalCapital, mu, sigma, horizon, 300);
+    const labels = p50.map((_, i) => i === 0 ? "dziś" : `+${i} mies.`);
+
+    if (mcChart) mcChart.destroy();
+    mcChart = new Chart(document.getElementById("monteCarloChart"), {
+        type: "line",
+        data: {
+            labels,
+            datasets: [
+                { label: "10. percentyl", data: p10, borderColor: "transparent", backgroundColor: "rgba(46,204,113,0.12)", pointRadius: 0 },
+                { label: "90. percentyl", data: p90, borderColor: "transparent", backgroundColor: "rgba(46,204,113,0.12)", fill: "-1", pointRadius: 0 },
+                { label: "Mediana", data: p50, borderColor: "#2ecc71", backgroundColor: "transparent", fill: false, pointRadius: 0, borderWidth: 2 },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${fmtMoney(ctx.parsed.y)}` } },
+            },
+            scales: {
+                x: { ticks: { color: "#8a8f9c", maxTicksLimit: 8 }, grid: { color: "#262a35" } },
+                y: { ticks: { color: "#8a8f9c", callback: fmtMoney }, grid: { color: "#262a35" } },
+            },
+        },
+    });
+
+    caption.textContent = `Założenia: oczekiwany zwrot ${(mu * 100).toFixed(1)}%/rok `
+        + `(śr. ważona 12M momentum wybranych spółek, ograniczona do ±${MC_MU_CAP * 100}%/rok żeby uniknąć ekstrapolacji `
+        + `chwilowych skoków), zmienność ${(sigma * 100).toFixed(1)}%/rok (śr. ważona zmienności rocznej), 300 symulowanych `
+        + `ścieżek. Pasmo = zakres 10.–90. percentyla. To NIE jest prognoza ani porada inwestycyjna — pokazuje statystyczny `
+        + `rozrzut przy założeniu, że przeszła zmienność i momentum się utrzymają, co nie jest gwarantowane.`;
 }
 
 function renderAll() {
     renderBucketSum();
     renderHoldingsTable();
-    renderSuggestions();
+    renderSuggestions(); // wywołuje też renderMonteCarlo()
 }
 
 (async function init() {
@@ -384,6 +494,7 @@ function renderAll() {
     initSettingsForm();
     initHoldingsForm();
     initXtbImport();
+    document.getElementById("mcHorizon").addEventListener("change", renderMonteCarlo);
     renderAll();
 })();
 

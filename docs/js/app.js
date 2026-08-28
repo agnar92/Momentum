@@ -65,6 +65,21 @@ function selectTicker(ticker, universe) {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     updateChart(ticker);
+    // Na telefonie nie ma miejsca na tabelę i wykres naraz — wybranie spółki
+    // przełącza widok na pełnoekranowy wykres (jak w apce TradingView).
+    if (window.matchMedia("(max-width: 640px)").matches) {
+        document.querySelector(".workspace").classList.add("mobile-chart-view");
+    }
+}
+
+// Przełącza zakładkę drawer na uniwersum danego tickera (żeby podświetlenie
+// w tabeli/kafelkach było spójne) i pokazuje jego wykres.
+function jumpToTicker(ticker, universe) {
+    document.querySelectorAll(".drawer-tab").forEach(t => t.classList.toggle("active", t.dataset.universe === universe));
+    state.drawerUniverse = universe;
+    document.getElementById("drawerTitle").textContent = `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+    renderTable();
+    selectTicker(ticker, universe);
 }
 
 // ============================================================
@@ -237,6 +252,120 @@ function renderTable() {
 }
 
 // ============================================================
+// SZYBKIE SZUKANIE (Ctrl/Cmd+K albo po prostu zacznij pisać) —
+// jak paleta poleceń w VSCode/Notion czy wyszukiwarka na TradingView.
+// ============================================================
+let cmdkIndex = [];
+let cmdkMatches = [];
+let cmdkSelectedIndex = 0;
+
+function buildSearchIndex() {
+    const byTicker = {};
+    UNIVERSES.forEach(u => {
+        (state.data[u].constituents || []).forEach(c => {
+            if (!byTicker[c.ticker]) byTicker[c.ticker] = { ticker: c.ticker, sector: c.sector, universes: [] };
+            byTicker[c.ticker].universes.push(u);
+        });
+    });
+    cmdkIndex = Object.values(byTicker).sort((a, b) => a.ticker.localeCompare(b.ticker));
+}
+
+function openCmdk(seed) {
+    const overlay = document.getElementById("cmdkOverlay");
+    const input = document.getElementById("cmdkInput");
+    overlay.style.display = "flex";
+    input.value = seed || "";
+    renderCmdkResults(input.value);
+    input.focus();
+}
+
+function closeCmdk() {
+    document.getElementById("cmdkOverlay").style.display = "none";
+}
+
+function renderCmdkResults(query) {
+    const q = query.trim().toUpperCase();
+    cmdkMatches = (q
+        ? cmdkIndex.filter(i => i.ticker.includes(q))
+            .sort((a, b) => (a.ticker.startsWith(q) === b.ticker.startsWith(q)) ? 0 : (a.ticker.startsWith(q) ? -1 : 1))
+        : cmdkIndex
+    ).slice(0, 20);
+    cmdkSelectedIndex = 0;
+
+    const results = document.getElementById("cmdkResults");
+    if (cmdkMatches.length === 0) {
+        results.innerHTML = `<div class="cmdk-empty">Brak wyników</div>`;
+        return;
+    }
+    results.innerHTML = cmdkMatches.map((m, i) => `
+        <div class="cmdk-result${i === 0 ? " selected" : ""}" data-idx="${i}">
+            <span class="cmdk-ticker">${m.ticker}</span>
+            <span class="cmdk-sector">${m.sector}</span>
+            <span class="cmdk-universe">${m.universes.map(u => UNIVERSE_LABELS[u].replace(" Momentum", "")).join(" + ")}</span>
+        </div>
+    `).join("");
+    results.querySelectorAll(".cmdk-result").forEach(el => {
+        el.addEventListener("mouseenter", () => {
+            cmdkSelectedIndex = Number(el.dataset.idx);
+            updateCmdkSelectionHighlight();
+        });
+        el.addEventListener("click", () => confirmCmdkSelection());
+    });
+}
+
+function updateCmdkSelectionHighlight() {
+    document.querySelectorAll(".cmdk-result").forEach(el => {
+        el.classList.toggle("selected", Number(el.dataset.idx) === cmdkSelectedIndex);
+    });
+    document.querySelector(".cmdk-result.selected")?.scrollIntoView({ block: "nearest" });
+}
+
+function moveCmdkSelection(delta) {
+    if (cmdkMatches.length === 0) return;
+    cmdkSelectedIndex = (cmdkSelectedIndex + delta + cmdkMatches.length) % cmdkMatches.length;
+    updateCmdkSelectionHighlight();
+}
+
+function confirmCmdkSelection() {
+    const m = cmdkMatches[cmdkSelectedIndex];
+    if (!m) return;
+    closeCmdk();
+    jumpToTicker(m.ticker, m.universes[0]);
+}
+
+function initCmdk() {
+    const overlay = document.getElementById("cmdkOverlay");
+    const input = document.getElementById("cmdkInput");
+
+    document.getElementById("cmdkTrigger").addEventListener("click", () => openCmdk());
+    input.addEventListener("input", () => renderCmdkResults(input.value));
+    overlay.addEventListener("click", (e) => { if (e.target === overlay) closeCmdk(); });
+
+    document.addEventListener("keydown", (e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+            e.preventDefault();
+            openCmdk();
+            return;
+        }
+        const isOpen = overlay.style.display !== "none";
+        if (isOpen) {
+            if (e.key === "Escape") { closeCmdk(); }
+            else if (e.key === "ArrowDown") { e.preventDefault(); moveCmdkSelection(1); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); moveCmdkSelection(-1); }
+            else if (e.key === "Enter") { e.preventDefault(); confirmCmdkSelection(); }
+            return;
+        }
+        // Nie przechwytuj pisania w polach formularza — zacznij szukać tylko
+        // gdy piszesz "po prostu na stronie" (tak jak Spotlight na macOS).
+        const tag = document.activeElement.tagName;
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+            openCmdk(e.key);
+        }
+    });
+}
+
+// ============================================================
 // INIT
 // ============================================================
 (async function init() {
@@ -244,7 +373,12 @@ function renderTable() {
     renderSidebarTiles();
     initDrawer();
     updateSortHeaderClasses();
-    renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile drawer jest zawsze widoczny
+    renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
+    buildSearchIndex();
+    initCmdk();
+    document.getElementById("chartBackBtn").addEventListener("click", () => {
+        document.querySelector(".workspace").classList.remove("mobile-chart-view");
+    });
     updateChart("SPY");
 })();
 
