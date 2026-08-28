@@ -141,8 +141,13 @@ def add_zscore_and_momentum_score(df):
         df["z_score_winsorized"] > 0, 1 + df["z_score_winsorized"],
         np.where(df["z_score_winsorized"] < 0, 1 / (1 - df["z_score_winsorized"]), 1.0)
     )
-    df["rank"] = df["momentum_score"].rank(ascending=False, method="first").astype(int)
-    df = df.sort_values("rank")
+    # Dokument nie precyzuje reguly tie-break, ale remisy sa tu gwarantowane
+    # (winsoryzacja na +/-3 daje identyczny momentum_score dla wielu spolek) —
+    # sortowanie po tickerze jako kluczu pomocniczym zapewnia powtarzalny wynik
+    # dla tych samych danych wejsciowych, zamiast zaleznosci od kolejnosci
+    # zwroconej przez SQL (ktora nie jest gwarantowana bez ORDER BY).
+    df = df.sort_values(["momentum_score", "Ticker"], ascending=[False, True]).reset_index(drop=True)
+    df["rank"] = np.arange(1, len(df) + 1)
     return df
 
 
@@ -184,11 +189,18 @@ def select_with_buffer(df_ranked, current_tickers):
 # ============================================================================
 # 6: WAGI (sekcja "Constituent Weightings")
 # ============================================================================
-def compute_weights(df_selected, df_full_universe, universe=None):
+def compute_weights(df_selected, universe=None):
     """
     Waga surowa_i = FMC_i * momentum_score_i, znormalizowana do sumy 1.
-    Cap_i = min(9%, 3 * waga_kapitalizacyjna_i_w_calym_uniwersum).
+    Cap_i = min(9%, 3 * waga_kapitalizacyjna_i_w_indeksie).
     Iteracyjna redystrybucja nadwyżki ponad cap do niekapowanych, proporcjonalnie.
+
+    Sekcja "Constituent Weightings": "three times the security's market
+    capitalization weight IN THE INDEX" -> mianownik to suma FMC WYSELEKCJONOWANYCH
+    (finalnych) skladnikow indeksu, nie calej puli kwalifikowanych spolek sprzed
+    selekcji kwintylowej. Wczesniej liczone bledbie wzgledem calego uniwersum
+    (df_full_universe), co sztucznie zanizalo capy przy malych selekcjach
+    (np. 20 z 100 kwalifikowanych w NASDAQ100).
     """
     df = df_selected.copy()
     n = len(df)
@@ -197,13 +209,13 @@ def compute_weights(df_selected, df_full_universe, universe=None):
        df["weight"] = 1.0/n
        df["cap_scaled_due_to_infeasibility"] = False
        return df
-       
-    total_fmc_universe = df_full_universe["fmc"].sum()
-    df["cap_weight_universe"] = df["fmc"] / total_fmc_universe
+
+    total_fmc_index = df["fmc"].sum()
+    df["cap_weight_index"] = df["fmc"] / total_fmc_index
 
     raw = df["fmc"] * df["momentum_score"]
     weights = raw / raw.sum()
-    caps = np.minimum(MAX_WEIGHT, CAP_MULTIPLE * df["cap_weight_universe"].values)
+    caps = np.minimum(MAX_WEIGHT, CAP_MULTIPLE * df["cap_weight_index"].values)
     caps = np.maximum(caps, 0.0)
 
     # Sprawdzenie wykonalności: przy małych uniwersach (np. DOWJONES: 30 spółek
@@ -299,7 +311,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
         print(f"❌ Brak wybranych spółek dla {universe}.")
         return None
 
-    df_weighted = compute_weights(df_selected, df_ranked, universe=universe)
+    df_weighted = compute_weights(df_selected, universe=universe)
     df_weighted = df_weighted.sort_values("weight", ascending=False).reset_index(drop=True)
     df_weighted["rank_in_universe"] = range(1, len(df_weighted) + 1)
 
