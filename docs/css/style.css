@@ -690,6 +690,48 @@ table.holdings-table td, table.rebalance-table td {
 .action-badge.hold { background: var(--panel-alt); color: var(--text-faint); }
 .action-badge.skip { background: var(--panel-alt); color: var(--text-faint); font-weight: 400; }
 .action-badge.unknown { background: var(--panel-alt); color: var(--text-dim); }
+.action-badge.excluded { background: var(--panel-alt); color: var(--text-faint); font-style: italic; }
+
+.exclude-input {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    width: 140px;
+}
+
+.exclude-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.exclude-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 5px 6px 5px 12px;
+    font-size: 12.5px;
+    font-weight: 600;
+}
+
+.exclude-chip-remove {
+    background: var(--border);
+    border: none;
+    color: var(--text-dim);
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+}
+.exclude-chip-remove:hover { background: var(--red); color: #fff; }
 
 .empty-state {
     color: var(--text-faint);

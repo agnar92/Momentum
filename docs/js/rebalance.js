@@ -5,6 +5,7 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
+const EXCLUDED_KEY = "momentum_rebalance_excluded";
 const DEFAULT_SETTINGS = { contribution: 0, pct: { SP500: 60, NASDAQ100: 30, DOWJONES: 10 }, maxHoldings: 20 };
 
 let universeData = {};   // { SP500: {...json}, ... }
@@ -24,8 +25,16 @@ function loadHoldings() {
 }
 function saveHoldings(h) { localStorage.setItem(HOLDINGS_KEY, JSON.stringify(h)); }
 
+function loadExcluded() {
+    try {
+        return JSON.parse(localStorage.getItem(EXCLUDED_KEY)) || [];
+    } catch (e) { return []; }
+}
+function saveExcluded() { localStorage.setItem(EXCLUDED_KEY, JSON.stringify(excluded)); }
+
 let settings = loadSettings();
 let holdings = loadHoldings();
+let excluded = loadExcluded();
 
 async function loadUniverseData() {
     for (const u of UNIVERSES) {
@@ -80,6 +89,50 @@ function currentHoldingsValue() {
 
 function targetCapital() {
     return currentHoldingsValue() + (settings.contribution || 0);
+}
+
+// Wartość pozycji wykluczonych z rebalansu — ten kapitał zostaje "poza
+// systemem": nie liczy się do puli, którą alokujemy na spółki momentum.
+function excludedHoldingsValue() {
+    return holdings.reduce((sum, h) => {
+        if (!h.ticker || !excluded.includes(h.ticker)) return sum;
+        const price = priceMap[h.ticker]?.price;
+        return sum + (price ? price * (h.shares || 0) : 0);
+    }, 0);
+}
+
+// ============================================================
+// WYKLUCZENIA — spółki, których panel nigdy nie ma sugerować kupić ani
+// sprzedać, nawet jeśli je importujesz z XTB albo wybierze je momentum.
+// ============================================================
+function renderExcludedList() {
+    const wrap = document.getElementById("excludedList");
+    wrap.innerHTML = excluded.length
+        ? excluded.map(t => `<span class="exclude-chip">${t}<button class="exclude-chip-remove" data-ticker="${t}" title="Usuń wykluczenie">✕</button></span>`).join("")
+        : `<span class="text-faint">Brak wykluczonych spółek.</span>`;
+    wrap.querySelectorAll(".exclude-chip-remove").forEach(btn => {
+        btn.addEventListener("click", () => {
+            excluded = excluded.filter(t => t !== btn.dataset.ticker);
+            saveExcluded();
+            renderExcludedList();
+            renderSuggestions();
+        });
+    });
+}
+
+function initExcludeForm() {
+    const input = document.getElementById("excludeInput");
+    const addTicker = () => {
+        const t = input.value.trim().toUpperCase();
+        input.value = "";
+        if (!t || excluded.includes(t)) return;
+        excluded.push(t);
+        saveExcluded();
+        renderExcludedList();
+        renderSuggestions();
+    };
+    document.getElementById("excludeAddBtn").addEventListener("click", addTicker);
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTicker(); } });
 }
 
 // ============================================================
@@ -231,8 +284,12 @@ function initXtbImport() {
 function renderCapitalHint() {
     const current = currentHoldingsValue();
     const contribution = settings.contribution || 0;
-    document.getElementById("capitalHint").textContent =
-        `Masz teraz ${fmtMoney(current)} w akcjach + dopłata ${fmtMoney(contribution)} = kapitał docelowy ${fmtMoney(current + contribution)}`;
+    let text = `Masz teraz ${fmtMoney(current)} w akcjach + dopłata ${fmtMoney(contribution)} = kapitał docelowy ${fmtMoney(current + contribution)}`;
+    const excludedValue = excludedHoldingsValue();
+    if (excludedValue > 0) {
+        text += ` (z czego ${fmtMoney(excludedValue)} w wykluczonych pozycjach — nie bierze udziału w rebalansie)`;
+    }
+    document.getElementById("capitalHint").textContent = text;
 }
 
 // ============================================================
@@ -249,7 +306,9 @@ function computeTargets(totalCapital) {
         if (pctAllocation <= 0) return; // Pomijamy indeksy z wagą 0% (np. SP500)
 
         const bucketTarget = totalCapital * (pctAllocation / 100);
-        const constituents = universeData[u].constituents || [];
+        // Wykluczone spółki znikają z puli momentum całkowicie — ich waga
+        // rozkłada się na resztę, tak jakby nigdy nie były w indeksie.
+        const constituents = (universeData[u].constituents || []).filter(c => !excluded.includes(c.ticker));
 
         // 1. Liczymy sumę wag surowych w pliku JSON dla tego indeksu
         const totalRawWeight = constituents.reduce((sum, c) => sum + (c.weight_pct || 0), 0);
@@ -296,8 +355,10 @@ function computeTargets(totalCapital) {
 
 function renderSuggestions() {
     const totalCapital = targetCapital();
-    const { targets, momentumSelected } = computeTargets(totalCapital);
-    const threshold = Math.max(totalCapital * TRADE_THRESHOLD_PCT, 5);
+    const excludedValue = excludedHoldingsValue();
+    const investableCapital = Math.max(0, totalCapital - excludedValue);
+    const { targets, momentumSelected } = computeTargets(investableCapital);
+    const threshold = Math.max(investableCapital * TRADE_THRESHOLD_PCT, 5);
 
     const holdingShares = {};
     holdings.forEach(h => { if (h.ticker) holdingShares[h.ticker] = (holdingShares[h.ticker] || 0) + (h.shares || 0); });
@@ -310,7 +371,7 @@ function renderSuggestions() {
             ticker: t.ticker,
             note: t.universes.map(u => UNIVERSE_LABELS[u]).join(" + "),
             target_value: t.target_value,
-            weight_pct: totalCapital ? (t.target_value / totalCapital * 100) : 0,
+            weight_pct: investableCapital ? (t.target_value / investableCapital * 100) : 0,
             current_value: currentValue,
             diff: t.target_value - currentValue,
             price: t.price,
@@ -319,11 +380,19 @@ function renderSuggestions() {
     });
 
     // Pozycje, które trzymasz, ale nie mieszczą się w aktualnej sugestii —
-    // albo wypadły z selekcji momentum, albo są ponad Twój limit spółek.
+    // wykluczone ręcznie, wypadły z selekcji momentum, albo są ponad limit.
     Object.keys(holdingShares).forEach(ticker => {
         if (targets[ticker]) return;
         const price = priceMap[ticker]?.price;
         const currentValue = price ? price * holdingShares[ticker] : null;
+        if (excluded.includes(ticker)) {
+            rows.push({
+                ticker, note: "wykluczone ręcznie", target_value: 0, weight_pct: 0,
+                current_value: currentValue, diff: null, excludedRow: true,
+                price, shares_held: holdingShares[ticker],
+            });
+            return;
+        }
         const note = momentumSelected.has(ticker) ? `ponad limit ${settings.maxHoldings} spółek` : "poza selekcją momentum";
         rows.push({
             ticker, note, target_value: 0, weight_pct: 0,
@@ -336,11 +405,13 @@ function renderSuggestions() {
 
     const tbody = document.getElementById("rebalanceBody");
     tbody.innerHTML = "";
-    document.getElementById("rebalanceEmpty").style.display = (totalCapital <= 0 || rows.length === 0) ? "block" : "none";
+    document.getElementById("rebalanceEmpty").style.display = (investableCapital <= 0 || rows.length === 0) ? "block" : "none";
 
     rows.forEach(r => {
         let actionHtml;
-        if (r.diff === null) {
+        if (r.excludedRow) {
+            actionHtml = `<span class="action-badge excluded">WYKLUCZONE — bez zmian</span>`;
+        } else if (r.diff === null) {
             actionHtml = `<span class="action-badge unknown">brak ceny — sprawdź ręcznie</span>`;
         } else if (r.dropped) {
             actionHtml = `<span class="action-badge sell">SPRZEDAJ CAŁOŚĆ: ${fmtQty(r.shares_held)} szt. (~${fmtMoney(r.current_value)})</span>`;
@@ -435,19 +506,22 @@ function simulateMonteCarlo(startValue, mu, sigma, horizonMonths, nPaths) {
 }
 
 function renderMonteCarlo() {
-    const totalCapital = targetCapital();
-    const { targets } = computeTargets(totalCapital);
+    // Symulacja obejmuje tylko część aktywnie zarządzaną przez momentum —
+    // wykluczone pozycje mają inną charakterystykę ryzyka/zwrotu, więc
+    // nie da się ich uczciwie opisać tym samym mu/sigma.
+    const investableCapital = Math.max(0, targetCapital() - excludedHoldingsValue());
+    const { targets } = computeTargets(investableCapital);
     const horizon = parseInt(document.getElementById("mcHorizon").value, 10) || 12;
     const caption = document.getElementById("mcCaption");
 
-    if (totalCapital <= 0 || Object.keys(targets).length === 0) {
+    if (investableCapital <= 0 || Object.keys(targets).length === 0) {
         if (mcChart) { mcChart.destroy(); mcChart = null; }
         caption.textContent = "Ustaw dopłatę / dodaj pozycje, żeby zobaczyć symulację.";
         return;
     }
 
-    const { mu, sigma } = weightedMuSigma(targets, totalCapital);
-    const { p10, p50, p90 } = simulateMonteCarlo(totalCapital, mu, sigma, horizon, 300);
+    const { mu, sigma } = weightedMuSigma(targets, investableCapital);
+    const { p10, p50, p90 } = simulateMonteCarlo(investableCapital, mu, sigma, horizon, 300);
     const labels = p50.map((_, i) => i === 0 ? "dziś" : `+${i} mies.`);
 
     if (mcChart) mcChart.destroy();
@@ -476,11 +550,13 @@ function renderMonteCarlo() {
         },
     });
 
-    caption.textContent = `Założenia: oczekiwany zwrot ${(mu * 100).toFixed(1)}%/rok `
+    let caption_text = `Symulacja obejmuje kapitał zarządzany przez momentum: ${fmtMoney(investableCapital)}. `
+        + `Założenia: oczekiwany zwrot ${(mu * 100).toFixed(1)}%/rok `
         + `(śr. ważona 12M momentum wybranych spółek, ograniczona do ±${MC_MU_CAP * 100}%/rok żeby uniknąć ekstrapolacji `
         + `chwilowych skoków), zmienność ${(sigma * 100).toFixed(1)}%/rok (śr. ważona zmienności rocznej), 300 symulowanych `
         + `ścieżek. Pasmo = zakres 10.–90. percentyla. To NIE jest prognoza ani porada inwestycyjna — pokazuje statystyczny `
         + `rozrzut przy założeniu, że przeszła zmienność i momentum się utrzymają, co nie jest gwarantowane.`;
+    caption.textContent = caption_text;
 }
 
 function renderAll() {
@@ -494,6 +570,8 @@ function renderAll() {
     initSettingsForm();
     initHoldingsForm();
     initXtbImport();
+    initExcludeForm();
+    renderExcludedList();
     document.getElementById("mcHorizon").addEventListener("change", renderMonteCarlo);
     renderAll();
 })();
