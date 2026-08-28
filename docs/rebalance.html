@@ -22,6 +22,11 @@
     <div class="panel-card" id="holdingsCard">
         <h3>Obecne pozycje</h3>
         <p class="panel-hint">Dodawaj i usuwaj dowolne akcje kiedy chcesz — to Twoje rzeczywiste pozycje, niezależnie od tego, co sugeruje strategia.</p>
+        <div class="import-row">
+            <label class="add-row-btn file-btn" for="xtbFile">📄 Importuj otwarte pozycje z raportu XTB (.xlsx)</label>
+            <input type="file" id="xtbFile" accept=".xlsx">
+            <span class="settings-hint" id="importStatus"></span>
+        </div>
         <table class="holdings-table" id="holdingsTable">
             <thead>
                 <tr><th>Ticker</th><th>Liczba akcji</th><th>Cena</th><th>Wartość</th><th></th></tr>
@@ -84,6 +89,7 @@
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="js/rebalance.js"></script>
 </body>
 </html>

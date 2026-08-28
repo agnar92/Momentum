@@ -40,7 +40,7 @@ import numpy as np
 import pandas as pd
 
 UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"]
-TARGET_QUINTILE = 0.20  # top 20% wg momentum score
+TARGET_QUINTILE = 0.20   # top 20% wg momentum score
 BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
 BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
 MAX_WEIGHT = 0.09        # 9% max na spolke

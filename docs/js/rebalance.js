@@ -172,6 +172,62 @@ function initHoldingsForm() {
     });
 }
 
+// ============================================================
+// IMPORT Z RAPORTU XTB (arkusz "Open Positions") — wiersze podsumowania
+// pozycji (jeden na ticker) mają pustą kolumnę "Type"; pojedyncze transakcje
+// składowe (Type = "BUY"/"SELL") są pomijane, bo ich suma to właśnie wiersz
+// podsumowania.
+function parseXtbOpenPositions(workbook) {
+    const sheetName = workbook.SheetNames.find(n => /open positions/i.test(n));
+    if (!sheetName) throw new Error('Nie znaleziono arkusza "Open Positions" w pliku.');
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
+
+    const headerIdx = rows.findIndex(r => r.includes("Ticker") && r.includes("Volume") && r.includes("Type"));
+    if (headerIdx === -1) throw new Error('Nie znaleziono nagłówka z kolumnami Ticker/Volume/Type w arkuszu "Open Positions".');
+    const header = rows[headerIdx];
+    const idxTicker = header.indexOf("Ticker");
+    const idxVolume = header.indexOf("Volume");
+    const idxType = header.indexOf("Type");
+
+    const imported = [];
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+        const r = rows[i];
+        const ticker = String(r[idxTicker] || "").trim();
+        const type = String(r[idxType] || "").trim();
+        const volume = parseFloat(r[idxVolume]);
+        if (!ticker || type || !volume) continue; // pomijamy wiersze transakcji i puste
+        imported.push({ ticker: ticker.split(".")[0].toUpperCase(), shares: volume });
+    }
+    return imported;
+}
+
+function initXtbImport() {
+    document.getElementById("xtbFile").addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        const status = document.getElementById("importStatus");
+        if (!file) return;
+        try {
+            const buf = await file.arrayBuffer();
+            const workbook = XLSX.read(buf, { type: "array" });
+            const imported = parseXtbOpenPositions(workbook);
+            if (imported.length === 0) throw new Error("Nie znaleziono żadnych otwartych pozycji w raporcie.");
+
+            const summary = imported.map(p => `${p.ticker}: ${fmtQty(p.shares)} szt.`).join("\n");
+            const ok = confirm(`Zaimportować ${imported.length} pozycji z raportu XTB? To zastąpi obecną listę pozycji:\n\n${summary}`);
+            if (!ok) { status.textContent = "Import anulowany."; return; }
+
+            holdings = imported;
+            saveHoldings(holdings);
+            renderAll();
+            status.textContent = `Zaimportowano ${imported.length} pozycji z raportu XTB.`;
+        } catch (err) {
+            status.textContent = `Błąd importu: ${err.message}`;
+        } finally {
+            e.target.value = "";
+        }
+    });
+}
+
 function renderCapitalHint() {
     const current = currentHoldingsValue();
     const contribution = settings.contribution || 0;
@@ -327,5 +383,6 @@ function renderAll() {
     await loadUniverseData();
     initSettingsForm();
     initHoldingsForm();
+    initXtbImport();
     renderAll();
 })();

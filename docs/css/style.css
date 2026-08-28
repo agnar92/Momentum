@@ -515,6 +515,24 @@ table.holdings-table td, table.rebalance-table td {
     width: 90px;
 }
 
+.import-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+}
+
+.import-row input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    opacity: 0;
+}
+
+.file-btn { display: inline-block; margin-top: 0; cursor: pointer; }
+
 .add-row-btn, .remove-row-btn {
     background: var(--panel-alt);
     border: 1px solid var(--border);
