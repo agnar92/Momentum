@@ -44,6 +44,8 @@ html, body {
     letter-spacing: 0.5px;
     font-size: 15px;
     color: var(--green-bright);
+    white-space: nowrap;
+    overflow: hidden;
 }
 
 .topbar nav a {
@@ -178,9 +180,18 @@ html, body {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 12px;
     padding: 10px 16px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.drawer-header-title {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
 }
 
 .drawer-header h2 {
@@ -212,40 +223,35 @@ html, body {
     border-color: var(--green-bright);
 }
 
-.drawer-filters {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
-    flex-shrink: 0;
-}
-
-.drawer-filters input[type="text"] {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    width: 160px;
-}
-
-.drawer-filters select {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-}
-
 .drawer-meta {
     font-size: 11px;
     color: var(--text-faint);
-    margin-left: auto;
 }
+
+.drawer-changelog {
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    font-size: 11.5px;
+    flex-shrink: 0;
+    max-height: 64px;
+    overflow-y: auto;
+}
+
+.changelog-label { color: var(--text-faint); margin-right: 2px; }
+
+.changelog-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 5px;
+    font-weight: 700;
+    font-size: 11px;
+}
+
+.changelog-badge.added { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
+.changelog-badge.dropped { background: rgba(224, 69, 90, 0.15); color: var(--red); }
 
 .table-scroll {
     overflow: auto;
@@ -486,6 +492,11 @@ input[type="range"] {
 .stat-card .value.positive { color: var(--green-bright); }
 .stat-card .value.negative { color: var(--red); }
 
+.table-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
 table.holdings-table, table.rebalance-table {
     width: 100%;
     border-collapse: collapse;
@@ -572,4 +583,59 @@ table.holdings-table td, table.rebalance-table td {
 ::-webkit-scrollbar-track { background: var(--panel); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+/* ============================================================
+   MOBILE (telefony, np. iPhone 6.1" ~390px szerokości) —
+   jednokolumnowy układ zamiast desktopowego panelu 3-kolumnowego.
+   Sidebar z kafelkami znika (dubluje pełną tabelę poniżej — tap
+   na wiersz też wybiera ticker), tabela jest zawsze widoczna
+   zamiast rozwijana, żeby nie dublować interakcji na małym ekranie.
+   ============================================================ */
+@media (max-width: 640px) {
+    .brand-sub { display: none; }
+    .topbar { padding: 0 12px; }
+    .topbar nav a { margin-left: 8px; padding: 6px 8px; font-size: 12px; }
+
+    /* --- Dashboard --- */
+    .workspace {
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .sidebar { display: none; }
+
+    .table-drawer {
+        position: static;
+        width: 100% !important;
+        height: auto;
+        max-height: 46vh;
+        border-right: none;
+        border-bottom: 2px solid var(--accent-line);
+    }
+
+    /* h2 znika — aktywna zakładka niżej już mówi, który indeks widać */
+    .drawer-header { flex-direction: column-reverse; align-items: stretch; gap: 6px; padding: 8px 12px; }
+    .drawer-header-title h2 { display: none; }
+    .drawer-tab { padding: 6px 10px; font-size: 11.5px; }
+
+    .table-scroll { padding: 0 8px 8px 8px; }
+    table.momentum-table { width: auto; min-width: 640px; }
+
+    .charts-area { flex: none; height: 46vh; padding: 8px; }
+
+    /* --- Rebalans --- */
+    .rebalance-page { padding: 14px 12px; }
+    .panel-card { padding: 14px; }
+    .stat-cards { gap: 10px; margin-bottom: 16px; }
+    .stat-card { min-width: 0; flex: 1 1 45%; padding: 12px 14px; }
+    .stat-card .value { font-size: 18px; }
+    #contribution { width: 100%; max-width: 220px; }
+    .bucket-inputs { gap: 8px; }
+
+    /* Cena / Waga docelowa — zbędne obok Wartości, znikają żeby zmieścić resztę bez przewijania */
+    table.holdings-table th:nth-child(3), table.holdings-table td:nth-child(3) { display: none; }
+    table.rebalance-table th:nth-child(3), table.rebalance-table td:nth-child(3) { display: none; }
+    .holdings-table input[type="text"], .holdings-table input[type="number"] { width: 72px; }
+}
 

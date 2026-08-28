@@ -6,11 +6,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rebalans — Momentum Dashboard</title>
 <link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Momentum">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
 </head>
 <body>
 
 <div class="topbar">
-    <div class="brand">MOMENTUM // SP500 · NASDAQ100 · DJIA</div>
+    <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA</span></div>
     <nav>
         <a href="index.html">Dashboard</a>
         <a href="rebalance.html" class="active">Rebalans</a>
@@ -27,12 +34,14 @@
             <input type="file" id="xtbFile" accept=".xlsx">
             <span class="settings-hint" id="importStatus"></span>
         </div>
+        <div class="table-wrap">
         <table class="holdings-table" id="holdingsTable">
             <thead>
                 <tr><th>Ticker</th><th>Liczba akcji</th><th>Cena</th><th>Wartość</th><th></th></tr>
             </thead>
             <tbody id="holdingsBody"></tbody>
         </table>
+        </div>
         <button class="add-row-btn" id="addHoldingBtn">+ Dodaj pozycję</button>
     </div>
 
@@ -76,12 +85,14 @@
     <div class="panel-card" id="suggestionsCard">
         <h3>Sugerowany rebalans <span class="ref-date-note" id="refDateNote"></span></h3>
         <p class="panel-hint">To tylko sugestia, tak jak tabele na dashboardzie — Ty decydujesz, co, kiedy i ile kupić lub sprzedać.</p>
+        <div class="table-wrap">
         <table class="rebalance-table" id="rebalanceTable">
             <thead>
                 <tr><th>Ticker</th><th>Indeks / uwaga</th><th>Waga docelowa</th><th>Wartość docelowa</th><th>Masz teraz</th><th>Sugestia</th></tr>
             </thead>
             <tbody id="rebalanceBody"></tbody>
         </table>
+        </div>
         <div class="empty-state" id="rebalanceEmpty" style="display:none;">
             Podaj kwotę dopłaty i podział między strategie, żeby zobaczyć sugestię rebalansu.
         </div>

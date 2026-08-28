@@ -12,9 +12,7 @@ const state = {
     drawerOpen: false,
     drawerUniverse: "SP500",
     sortKey: "rank",
-    sortDir: "asc",
-    searchText: "",
-    sectorFilter: ""
+    sortDir: "asc"
 };
 
 async function loadData() {
@@ -120,10 +118,6 @@ function initDrawer() {
         state.drawerOpen = !state.drawerOpen;
         drawer.classList.toggle("open", state.drawerOpen);
         toggleBtn.textContent = state.drawerOpen ? "<<<" : ">>>";
-        if (state.drawerOpen) {
-            populateSectorFilter();
-            renderTable();
-        }
     });
 
     document.querySelectorAll(".drawer-tab").forEach(tab => {
@@ -131,21 +125,9 @@ function initDrawer() {
             document.querySelectorAll(".drawer-tab").forEach(t => t.classList.remove("active"));
             tab.classList.add("active");
             state.drawerUniverse = tab.dataset.universe;
-            state.sectorFilter = "";
             document.getElementById("drawerTitle").textContent = `Pełna tabela — ${UNIVERSE_LABELS[state.drawerUniverse]}`;
-            populateSectorFilter();
             renderTable();
         });
-    });
-
-    document.getElementById("tickerSearch").addEventListener("input", (e) => {
-        state.searchText = e.target.value.trim().toUpperCase();
-        renderTable();
-    });
-
-    document.getElementById("sectorFilter").addEventListener("change", (e) => {
-        state.sectorFilter = e.target.value;
-        renderTable();
     });
 
     document.querySelectorAll("table.momentum-table thead th").forEach(th => {
@@ -172,15 +154,22 @@ function updateSortHeaderClasses() {
     });
 }
 
-function populateSectorFilter() {
-    const sel = document.getElementById("sectorFilter");
-    const sectors = Array.from(new Set(
-        (state.data[state.drawerUniverse].constituents || []).map(c => c.sector)
-    )).sort();
-    const current = state.sectorFilter;
-    sel.innerHTML = `<option value="">Wszystkie sektory</option>` +
-        sectors.map(s => `<option value="${s}">${s}</option>`).join("");
-    sel.value = current;
+// Co się zmieniło w selekcji momentum względem poprzedniego rebalansu
+// (spółki dodane/wypadłe) — pozwala szybko zobaczyć ruch bez porównywania
+// tabel ręcznie.
+function renderChangelog(d) {
+    const el = document.getElementById("drawerChangelog");
+    const added = d.added_tickers || [];
+    const dropped = d.dropped_tickers || [];
+    if (!d.prev_ref_date || (added.length === 0 && dropped.length === 0)) {
+        el.style.display = "none";
+        el.innerHTML = "";
+        return;
+    }
+    el.style.display = "flex";
+    el.innerHTML = `<span class="changelog-label">Zmiany vs ${d.prev_ref_date}:</span>`
+        + added.map(t => `<span class="changelog-badge added">+${t}</span>`).join("")
+        + dropped.map(t => `<span class="changelog-badge dropped">−${t}</span>`).join("");
 }
 
 function renderTable() {
@@ -199,15 +188,9 @@ function renderTable() {
     } else {
         meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
     }
+    renderChangelog(d);
 
     let rows = (d.constituents || []).slice();
-
-    if (state.searchText) {
-        rows = rows.filter(r => r.ticker.toUpperCase().includes(state.searchText));
-    }
-    if (state.sectorFilter) {
-        rows = rows.filter(r => r.sector === state.sectorFilter);
-    }
 
     rows.sort((a, b) => {
         let va = a[state.sortKey];
@@ -224,7 +207,7 @@ function renderTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="10" class="empty-state">Brak wyników dla wybranych filtrów.</td>`;
+        tr.innerHTML = `<td colspan="10" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -260,8 +243,12 @@ function renderTable() {
     await loadData();
     renderSidebarTiles();
     initDrawer();
-    populateSectorFilter();
     updateSortHeaderClasses();
+    renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile drawer jest zawsze widoczny
     updateChart("SPY");
 })();
+
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+}
 

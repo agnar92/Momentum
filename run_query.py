@@ -305,20 +305,23 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                 "price_at_rebalance, momentum_value, momentum_window, annualized_volatility, z_score, "
                 "momentum_score, weight FROM df_hist")
 
-    # --- Turnover ---
+    # --- Turnover (do changeloga na dashboardzie) ---
+    added_tickers, dropped_tickers = [], []
     if current_tickers:
-        new_n = len(selected_tickers - current_tickers)
-        dropped_n = len(current_tickers - selected_tickers)
-        print(f"🔁 Turnover vs {prev_ref_date}: {new_n} nowych, {dropped_n} wypadło "
+        added_tickers = sorted(selected_tickers - current_tickers)
+        dropped_tickers = sorted(current_tickers - selected_tickers)
+        print(f"🔁 Turnover vs {prev_ref_date}: {len(added_tickers)} nowych, {len(dropped_tickers)} wypadło "
               f"(z {len(current_tickers)} poprzednich).")
 
     # --- Eksport JSON dla strony ---
-    export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc)
+    export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
+                prev_ref_date, added_tickers, dropped_tickers)
 
     return df_weighted
 
 
-def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc):
+def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
+                 prev_ref_date=None, added_tickers=None, dropped_tickers=None):
     records = []
     for _, r in df_weighted.iterrows():
         records.append({
@@ -347,6 +350,9 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc):
         "n_missing_fmc": int(n_missing_fmc),
         "cap_scaled_due_to_infeasibility": cap_scaled,
         "constituents": records,
+        "prev_ref_date": str(prev_ref_date) if prev_ref_date is not None else None,
+        "added_tickers": added_tickers or [],
+        "dropped_tickers": dropped_tickers or [],
     }
     out_path = Path(docs_data_dir) / f"{universe.lower()}.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
