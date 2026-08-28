@@ -71,24 +71,35 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS') AS price_m2,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '14 MONTHS') AS price_m14,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '11 MONTHS') AS price_m11,
+            -- Appendix A pkt 2 (S&P Momentum Indices Methodology): "Standard deviation of daily
+            -- price returns for the SAME date period used in Step 1" -> zmienność musi być liczona
+            -- z tego samego okna co momentum_value (M-14..M-2, albo M-11..M-2 dla fallbacku 9M),
+            -- a nie z ostatnich 12 miesięcy liczonych od dziś.
             STDDEV(dr.daily_return) FILTER (
-                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '12 MONTHS'
-                  AND dr.Date <= (SELECT ref_date FROM params)
-            ) * SQRT(252) AS annualized_volatility,
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '14 MONTHS'
+                  AND dr.Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS'
+            ) * SQRT(252) AS annualized_volatility_12m,
+            STDDEV(dr.daily_return) FILTER (
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '11 MONTHS'
+                  AND dr.Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS'
+            ) * SQRT(252) AS annualized_volatility_9m,
             COUNT(dr.daily_return) FILTER (
-                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '12 MONTHS'
-                  AND dr.Date <= (SELECT ref_date FROM params)
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '14 MONTHS'
+                  AND dr.Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS'
             ) AS trading_days_12m,
             COUNT(dr.daily_return) FILTER (
-                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '9 MONTHS'
-                  AND dr.Date <= (SELECT ref_date FROM params)
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '11 MONTHS'
+                  AND dr.Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS'
             ) AS trading_days_9m
         FROM daily_returns dr
         GROUP BY dr.Ticker
     ),
     momentum AS (
         SELECT
-            Ticker, last_price_date, price_now, annualized_volatility,
+            Ticker, last_price_date, price_now,
+            CASE WHEN price_m14 IS NOT NULL AND price_m2 IS NOT NULL THEN annualized_volatility_12m
+                 WHEN price_m11 IS NOT NULL AND price_m2 IS NOT NULL THEN annualized_volatility_9m
+                 ELSE NULL END AS annualized_volatility,
             CASE WHEN price_m14 IS NOT NULL AND price_m2 IS NOT NULL THEN price_m2 / price_m14 - 1
                  WHEN price_m11 IS NOT NULL AND price_m2 IS NOT NULL THEN price_m2 / price_m11 - 1
                  ELSE NULL END AS momentum_value,
@@ -183,7 +194,7 @@ def compute_weights(df_selected, df_full_universe, universe=None):
     n = len(df)
 
     if universe == "DOWJONES":
-       df["weight"] = 1.0
+       df["weight"] = 1.0/n
        df["cap_scaled_due_to_infeasibility"] = False
        return df
        
