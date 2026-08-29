@@ -1,7 +1,7 @@
 
 const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"];
 const UNIVERSE_LABELS = { SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
-const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
+const TRADE_THRESHOLD_PCT = 0.02; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
 
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
