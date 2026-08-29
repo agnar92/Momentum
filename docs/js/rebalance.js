@@ -6,7 +6,12 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
-const DEFAULT_SETTINGS = { contribution: 0, pct: { SP500: 60, NASDAQ100: 30, DOWJONES: 10 }, maxHoldings: 20 };
+const DEFAULT_SETTINGS = {
+    contribution: 0, pct: { SP500: 60, NASDAQ100: 30, DOWJONES: 10 }, maxHoldings: 20,
+    fxCostPct: 0.5,        // % kosztu przewalutowania od kwoty transakcji (jedyny koszt na IKE — bez podatku Belki)
+    letWinnersRun: true,   // nie przycinaj spółki tylko dlatego, że urosła ponad wagę docelową, o ile wciąż jest w selekcji
+    trimBandMultiplier: 3, // ile razy szerszy próg (vs zwykły próg kupna) musi przekroczyć nadwaga, żeby zasugerować przycięcie
+};
 
 let universeData = {};   // { SP500: {...json}, ... }
 let priceMap = {};       // ticker -> { price, sources: [universe,...] }
@@ -138,11 +143,20 @@ function initExcludeForm() {
 // ============================================================
 // USTAWIENIA
 // ============================================================
+function renderTrimBandRow() {
+    document.getElementById("trimBandRow").style.display = settings.letWinnersRun ? "block" : "none";
+}
+
 function initSettingsForm() {
     document.getElementById("contribution").value = settings.contribution || "";
     UNIVERSES.forEach(u => { document.getElementById(`pct-${u}`).value = settings.pct[u]; });
     document.getElementById("maxHoldings").value = settings.maxHoldings;
     document.getElementById("maxHoldingsValue").textContent = settings.maxHoldings;
+    document.getElementById("fxCostPct").value = settings.fxCostPct;
+    document.getElementById("letWinnersRun").checked = !!settings.letWinnersRun;
+    document.getElementById("trimBandMultiplier").value = settings.trimBandMultiplier;
+    document.getElementById("trimBandMultiplierValue").textContent = settings.trimBandMultiplier;
+    renderTrimBandRow();
 
     const onChange = () => {
         settings.contribution = parseFloat(document.getElementById("contribution").value) || 0;
@@ -151,6 +165,11 @@ function initSettingsForm() {
         });
         settings.maxHoldings = parseInt(document.getElementById("maxHoldings").value, 10) || DEFAULT_SETTINGS.maxHoldings;
         document.getElementById("maxHoldingsValue").textContent = settings.maxHoldings;
+        settings.fxCostPct = parseFloat(document.getElementById("fxCostPct").value) || 0;
+        settings.letWinnersRun = document.getElementById("letWinnersRun").checked;
+        settings.trimBandMultiplier = parseFloat(document.getElementById("trimBandMultiplier").value) || 1;
+        document.getElementById("trimBandMultiplierValue").textContent = settings.trimBandMultiplier;
+        renderTrimBandRow();
         saveSettings(settings);
         renderBucketSum();
         renderSuggestions();
@@ -158,6 +177,9 @@ function initSettingsForm() {
     document.getElementById("contribution").addEventListener("input", onChange);
     UNIVERSES.forEach(u => document.getElementById(`pct-${u}`).addEventListener("input", onChange));
     document.getElementById("maxHoldings").addEventListener("input", onChange);
+    document.getElementById("fxCostPct").addEventListener("input", onChange);
+    document.getElementById("letWinnersRun").addEventListener("change", onChange);
+    document.getElementById("trimBandMultiplier").addEventListener("input", onChange);
 }
 
 function renderBucketSum() {
@@ -359,25 +381,58 @@ function renderSuggestions() {
     const investableCapital = Math.max(0, totalCapital - excludedValue);
     const { targets, momentumSelected } = computeTargets(investableCapital);
     const threshold = Math.max(investableCapital * TRADE_THRESHOLD_PCT, 5);
+    const fxCostPct = Math.max(0, (settings.fxCostPct || 0) / 100);
+    // Próg, powyżej którego w ogóle rozważamy przycięcie ROSNĄCEJ, wciąż
+    // wybranej przez momentum spółki. Świadomie znacznie szerszy niż zwykły
+    // próg kupna/sprzedaży — bo tu koszt (przewalutowanie) jest pewny, a
+    // korzyść (utrzymanie idealnej wagi) jest tylko kosmetyczna dopóki
+    // momentum tej spółki wciąż działa. Pełny wyjście z pozycji, gdy spółka
+    // WYPADA z selekcji, nie podlega temu — tam teza inwestycyjna już nie
+    // działa, więc nie ma po co "zostawiać zyski".
+    const trimThreshold = settings.letWinnersRun
+        ? threshold * Math.max(1, settings.trimBandMultiplier || 1)
+        : threshold;
 
     const holdingShares = {};
     holdings.forEach(h => { if (h.ticker) holdingShares[h.ticker] = (holdingShares[h.ticker] || 0) + (h.shares || 0); });
 
-    const rows = [];
-    Object.values(targets).forEach(t => {
+    // --- Krok 1: policz surowe niedoważenia/nadwagi vs cel ---
+    const rawRows = Object.values(targets).map(t => {
         const shares = holdingShares[t.ticker] || 0;
         const currentValue = t.price ? t.price * shares : 0;
-        rows.push({
-            ticker: t.ticker,
-            note: t.universes.map(u => UNIVERSE_LABELS[u]).join(" + "),
-            target_value: t.target_value,
-            weight_pct: investableCapital ? (t.target_value / investableCapital * 100) : 0,
-            current_value: currentValue,
-            diff: t.target_value - currentValue,
-            price: t.price,
-            shares_held: shares,
-        });
+        return { t, currentValue, diff: t.target_value - currentValue };
     });
+
+    // --- Krok 2: nową dopłatę rozdziel NAJPIERW na niedoważone pozycje —
+    // jej przewalutowanie i tak jest nieuniknione (wpłacasz nowe PLN), więc
+    // dokupienie za te środki nie generuje ŻADNEGO dodatkowego kosztu ponad
+    // ten, który i tak poniesiesz. To pozwala zamortyzować większość
+    // miesięcznego rebalansu bez sprzedawania czegokolwiek.
+    const underweight = rawRows.filter(r => r.diff > 0);
+    const totalUnderweight = underweight.reduce((s, r) => s + r.diff, 0);
+    const fundedByContribution = {};
+    let remainingContribution = Math.max(0, settings.contribution || 0);
+    if (totalUnderweight > 0 && remainingContribution > 0) {
+        const contribUsed = Math.min(remainingContribution, totalUnderweight);
+        underweight.forEach(r => {
+            fundedByContribution[r.t.ticker] = r.diff * (contribUsed / totalUnderweight);
+        });
+    }
+
+    const rows = rawRows.map(({ t, currentValue, diff }) => ({
+        ticker: t.ticker,
+        note: t.universes.map(u => UNIVERSE_LABELS[u]).join(" + "),
+        target_value: t.target_value,
+        weight_pct: investableCapital ? (t.target_value / investableCapital * 100) : 0,
+        current_value: currentValue,
+        diff,
+        // ile z niedoważenia pokrywa sama dopłata (koszt $0 dodatkowy)
+        coveredByContribution: fundedByContribution[t.ticker] || 0,
+        // ile ponad to trzeba by jeszcze kupić/sprzedać (tu liczy się koszt)
+        remainingDiff: diff - (fundedByContribution[t.ticker] || 0),
+        price: t.price,
+        shares_held: holdingShares[t.ticker] || 0,
+    }));
 
     // Pozycje, które trzymasz, ale nie mieszczą się w aktualnej sugestii —
     // wykluczone ręcznie, wypadły z selekcji momentum, albo są ponad limit.
@@ -388,15 +443,20 @@ function renderSuggestions() {
         if (excluded.includes(ticker)) {
             rows.push({
                 ticker, note: "wykluczone ręcznie", target_value: 0, weight_pct: 0,
-                current_value: currentValue, diff: null, excludedRow: true,
+                current_value: currentValue, diff: null, remainingDiff: null, excludedRow: true,
                 price, shares_held: holdingShares[ticker],
             });
             return;
         }
         const note = momentumSelected.has(ticker) ? `ponad limit ${settings.maxHoldings} spółek` : "poza selekcją momentum";
+        const dropDiff = currentValue !== null ? -currentValue : null;
+        // Wyjście z pozycji, która wypadła z selekcji momentum, NIE podlega
+        // regule "zostaw zyski" — teza inwestycyjna (momentum tej spółki)
+        // przestała działać, więc nie ma powodu dalej ją trzymać niezależnie
+        // od kosztu przewalutowania.
         rows.push({
             ticker, note, target_value: 0, weight_pct: 0,
-            current_value: currentValue, diff: currentValue !== null ? -currentValue : null, dropped: true,
+            current_value: currentValue, diff: dropDiff, remainingDiff: dropDiff, dropped: true,
             price, shares_held: holdingShares[ticker],
         });
     });
@@ -407,6 +467,8 @@ function renderSuggestions() {
     tbody.innerHTML = "";
     document.getElementById("rebalanceEmpty").style.display = (investableCapital <= 0 || rows.length === 0) ? "block" : "none";
 
+    let totalEstCost = 0;
+
     rows.forEach(r => {
         let actionHtml;
         if (r.excludedRow) {
@@ -414,11 +476,29 @@ function renderSuggestions() {
         } else if (r.diff === null) {
             actionHtml = `<span class="action-badge unknown">brak ceny — sprawdź ręcznie</span>`;
         } else if (r.dropped) {
-            actionHtml = `<span class="action-badge sell">SPRZEDAJ CAŁOŚĆ: ${fmtQty(r.shares_held)} szt. (~${fmtMoney(r.current_value)})</span>`;
-        } else if (r.diff > threshold) {
-            actionHtml = `<span class="action-badge buy">KUP ${sharesSuggestion(r.diff, r.price)}</span>`;
+            const cost = r.current_value * fxCostPct;
+            totalEstCost += cost;
+            actionHtml = `<span class="action-badge sell">SPRZEDAJ CAŁOŚĆ: ${fmtQty(r.shares_held)} szt. (~${fmtMoney(r.current_value)}) — wypadła z selekcji momentum`
+                + (cost > 0 ? ` <small class="cost-note">(koszt ~${fmtMoney(cost)})</small>` : "") + `</span>`;
+        } else if (r.coveredByContribution > threshold && r.remainingDiff <= threshold) {
+            // Cała potrzebna dokupka pokryta dopłatą — jej przewalutowanie
+            // jest nieuniknione niezależnie od tej sugestii, więc to $0
+            // KOSZTU DODATKOWEGO ponad to, co i tak zapłacisz przy wpłacie.
+            actionHtml = `<span class="action-badge buy">KUP ${sharesSuggestion(r.diff, r.price)} <small class="cost-note">(z dopłaty, bez dodatkowego kosztu)</small></span>`;
+        } else if (r.remainingDiff > threshold) {
+            const cost = r.remainingDiff * fxCostPct;
+            totalEstCost += cost;
+            const fromContrib = r.coveredByContribution > threshold
+                ? `, z czego ${fmtMoney(r.coveredByContribution)} z dopłaty bez dodatkowego kosztu` : "";
+            actionHtml = `<span class="action-badge buy">KUP ${sharesSuggestion(r.diff, r.price)}${fromContrib}`
+                + (cost > 0 ? ` <small class="cost-note">(koszt ~${fmtMoney(cost)})</small>` : "") + `</span>`;
+        } else if (r.remainingDiff < -trimThreshold) {
+            const cost = -r.remainingDiff * fxCostPct;
+            totalEstCost += cost;
+            actionHtml = `<span class="action-badge sell">PRZYTNIJ ${sharesSuggestion(-r.remainingDiff, r.price)}`
+                + (cost > 0 ? ` <small class="cost-note">(koszt ~${fmtMoney(cost)})</small>` : "") + `</span>`;
         } else if (r.diff < -threshold) {
-            actionHtml = `<span class="action-badge sell">SPRZEDAJ ${sharesSuggestion(-r.diff, r.price)}</span>`;
+            actionHtml = `<span class="action-badge hold">TRZYMAJ — rośnie ponad wagę docelową, zostawiamy zyski (koszt przewalutowania nie uzasadnia przycięcia)</span>`;
         } else if (r.current_value > 0) {
             actionHtml = `<span class="action-badge hold">TRZYMAJ</span>`;
         } else {
@@ -439,6 +519,7 @@ function renderSuggestions() {
     document.getElementById("statCurrentValue").textContent = fmtMoney(currentHoldingsValue());
     document.getElementById("statTargetValue").textContent = fmtMoney(totalCapital);
     document.getElementById("statHoldingsCount").textContent = Object.keys(targets).length;
+    document.getElementById("statEstCost").textContent = fmtMoney(totalEstCost);
 
     const refDates = UNIVERSES.map(u => universeData[u].ref_date).filter(Boolean);
     document.getElementById("refDateNote").textContent = refDates.length
