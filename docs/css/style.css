@@ -785,6 +785,7 @@ table.holdings-table td, table.rebalance-table td {
     /* h2 znika — aktywna zakładka niżej już mówi, który indeks widać */
     .drawer-header { flex-direction: column-reverse; align-items: stretch; gap: 6px; padding: 8px 12px; }
     .drawer-header-title h2 { display: none; }
+    .drawer-tabs { flex-wrap: wrap; }
     .drawer-tab { padding: 6px 10px; font-size: 11.5px; }
 
     .table-scroll { padding: 0 8px 8px 8px; }
