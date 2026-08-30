@@ -15,12 +15,12 @@ files (English is fine for new, unrelated code).
 
 ## Pipeline architecture (the core thing to understand)
 
-There are three Python scripts, run in this order, all operating on a local DuckDB file
+There are two Python scripts, run in this order, all operating on a local DuckDB file
 `momentum_data.duckdb`. Since a recent change, this file **is committed to git** (repo root, tracked —
 not under `docs/`, so it has no effect on the GitHub Pages deployment) and persists across scheduled
 runs; `main.yml` commits it back after each run (see CI section below). This is what keeps
 `portfolio_history` alive across separate monthly workflow runs, so the buffer rule actually has a
-"previous rebalance" to compare against in production, not just within a single backfill run.
+"previous rebalance" to compare against in production.
 
 1. **`fetch_data.py`** — data acquisition only.
    - Loads index composition + weights from the three manually-maintained CSV files at repo root
@@ -65,21 +65,7 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
      (latest price for every ticker across all three indices, so the rebalance panel can price
      positions that aren't in the current momentum selection).
    - Reference date defaults to `MAX(Date)` in the `prices` table; pass `--ref-date YYYY-MM-DD` to
-     recompute for a specific historical date (used by the backfill script below).
-3. **`backfill_year.py`** — reruns `run_query.py` once per month-end over roughly the last 12 months
-   (via `subprocess`), to backfill `portfolio_history` for a fresh/empty database. It only requires
-   `prices` to already span that period (loaded once by `fetch_data.py`).
-
-   ⚠️ **`backfill_year.py`/`bactest.yaml` interact with the persisted DB.** Because `momentum_data.duckdb`
-   is now tracked in git, `bactest.yaml`'s checkout also picks up whatever rolling ~15-month price window
-   the monthly pipeline has already accumulated, so `fetch_data.py`'s first step there will usually take
-   the *incremental* path (not a fresh bootstrap) unless the file has never been committed yet. Since
-   `backfill_year.py` needs `prices` to span roughly the last 12 months of rebalance dates *plus* a further
-   14-month momentum lookback for the oldest of them (~26 months), a 15-month rolling window is not enough
-   for a fully faithful backfill of the earliest months — those will fall back to the 9-month momentum
-   window (or fail eligibility) rather than deviate silently. If you need a truly from-scratch backfill,
-   delete/reset `momentum_data.duckdb` before running `bactest.yaml`, or temporarily raise
-   `--lookback-months` for that run.
+     recompute for a specific historical date.
 
 Monthly (not semi-annual, as the official S&P 500 Momentum index does) rebalancing is an intentional
 choice here — it matches the cadence used in most academic momentum-return literature — not an attempt
@@ -117,7 +103,6 @@ pip install -r requirements.txt   # NOTE: this file is UTF-16-encoded; edit with
 python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh prices (bootstrap or incremental) + index composition
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
                                    # compute momentum + regenerate docs/data/*.json
-python backfill_year.py           # backfill ~12 monthly rebalances by re-invoking run_query.py
 
 pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)
 ruff check .                      # linter
@@ -133,12 +118,5 @@ serve `docs/` with any static file server) after `docs/data/*.json` has been gen
   above), then **commits `momentum_data.duckdb` back to the repo** (`contents: write` permission; the
   commit message ends in `[skip ci]` to avoid re-triggering itself via the `push: main` trigger) before
   deploying `docs/` to GitHub Pages.
-- **`bactest.yaml`** — manual-only (`workflow_dispatch`). Runs `fetch_data.py`, then
-  `backfill_year.py` (12 months of historical rebalances), then a final `run_query.py`, then deploys
-  `docs/` — used to (re)populate `portfolio_history`. Does **not** commit the DuckDB file back; see the
-  ⚠️ note above about how it interacts with the now-persisted rolling price window.
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
   no effect on the deployed site) on pushes/PRs.
-
-`main.yml` and `bactest.yaml` deploy to GitHub Pages and share the `"pages"` concurrency group, so they
-can't run concurrently.
