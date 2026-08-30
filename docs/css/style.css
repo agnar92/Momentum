@@ -314,31 +314,6 @@ html, body {
     color: var(--text-faint);
 }
 
-.drawer-changelog {
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-wrap: wrap;
-    font-size: 11.5px;
-    flex-shrink: 0;
-    max-height: 64px;
-    overflow-y: auto;
-}
-
-.changelog-label { color: var(--text-faint); margin-right: 2px; }
-
-.changelog-badge {
-    display: inline-block;
-    padding: 2px 7px;
-    border-radius: 5px;
-    font-weight: 700;
-    font-size: 11px;
-}
-
-.changelog-badge.added { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
-.changelog-badge.dropped { background: rgba(224, 69, 90, 0.15); color: var(--red); }
-
 .table-scroll {
     overflow: auto;
     flex: 1;
