@@ -21,6 +21,7 @@ const {
     weightedMuSigma,
     simulateMonteCarlo,
     randNormal,
+    blendEquityCurves,
     _setState,
 } = rebalance;
 
@@ -212,4 +213,41 @@ test("computeTargets truncates to maxHoldings and rescales survivors back to 100
     assert.equal("SMALL" in targets, false); // najmniejsza pozycja odrzucona limitem
     const total = Object.values(targets).reduce((s, t) => s + t.target_value, 0);
     assert.ok(Math.abs(total - 1000) < 1e-6); // przeskalowane z powrotem do 100% kapitalu
+});
+
+test("blendEquityCurves weights universes by settings.pct", () => {
+    const curveData = {
+        SP500: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
+        NASDAQ100: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 90], benchmark_index: [100, 95] },
+        DOWJONES: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 100], benchmark_index: [100, 100] },
+    };
+    const pct = { SP500: 60, NASDAQ100: 40, DOWJONES: 0 };
+    const blended = blendEquityCurves(curveData, pct);
+    assert.deepEqual(blended.dates, ["2026-01-01", "2026-02-01"]);
+    // 0.6*110 + 0.4*90 = 66 + 36 = 102 (DOWJONES ma 0% -> pomijany calkowicie)
+    assert.ok(Math.abs(blended.portfolio[1] - 102) < 1e-9);
+    assert.ok(Math.abs(blended.benchmark[1] - 101) < 1e-9);
+});
+
+test("blendEquityCurves returns null when no allocated universe has enough history", () => {
+    const curveData = { SP500: { dates: ["2026-01-01"], momentum_index: [100], benchmark_index: [100] } };
+    const pct = { SP500: 100, NASDAQ100: 0, DOWJONES: 0 };
+    assert.equal(blendEquityCurves(curveData, pct), null);
+});
+
+test("blendEquityCurves returns null when settings.pct sums to zero", () => {
+    const curveData = {
+        SP500: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
+    };
+    assert.equal(blendEquityCurves(curveData, { SP500: 0, NASDAQ100: 0, DOWJONES: 0 }), null);
+});
+
+test("blendEquityCurves intersects dates when universes have mismatched history", () => {
+    const curveData = {
+        SP500: { dates: ["2026-01-01", "2026-02-01", "2026-03-01"], momentum_index: [100, 110, 121], benchmark_index: [100, 105, 110] },
+        NASDAQ100: { dates: ["2026-02-01", "2026-03-01"], momentum_index: [100, 105], benchmark_index: [100, 102] },
+    };
+    const blended = blendEquityCurves(curveData, { SP500: 50, NASDAQ100: 50, DOWJONES: 0 });
+    // Tylko wspolne daty (od 2026-02-01) -> 2 punkty, nie 3.
+    assert.deepEqual(blended.dates, ["2026-02-01", "2026-03-01"]);
 });
