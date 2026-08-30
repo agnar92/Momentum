@@ -565,17 +565,39 @@ function renderAll() {
     renderSuggestions(); // wywołuje też renderMonteCarlo()
 }
 
-(async function init() {
-    await loadUniverseData();
-    initSettingsForm();
-    initHoldingsForm();
-    initXtbImport();
-    initExcludeForm();
-    renderExcludedList();
-    document.getElementById("mcHorizon").addEventListener("change", renderMonteCarlo);
-    renderAll();
-})();
+// typeof document check: pozwala wczytać ten plik przez `require()` w testach
+// Node (patrz tests/js/) bez uruchamiania inicjalizacji strony — w przeglądarce
+// document zawsze istnieje, więc zachowanie się nie zmienia.
+if (typeof document !== "undefined") {
+    (async function init() {
+        await loadUniverseData();
+        initSettingsForm();
+        initHoldingsForm();
+        initXtbImport();
+        initExcludeForm();
+        renderExcludedList();
+        document.getElementById("mcHorizon").addEventListener("change", renderMonteCarlo);
+        renderAll();
+    })();
 
-if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
+}
+
+// Eksport wyłącznie dla test runnera Node (tests/js/) — nie ładowany
+// i bez efektu w przeglądarce (module tam nie istnieje).
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = {
+        fmtMoney, fmtQty, sharesSuggestion,
+        computeTargets, parseXtbOpenPositions,
+        weightedMuSigma, simulateMonteCarlo, randNormal,
+        // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded)
+        // bez importu przez window — to jedyny sposób bez przepisywania modułu na klasę.
+        _setState(s) {
+            if (s.universeData !== undefined) universeData = s.universeData;
+            if (s.settings !== undefined) settings = s.settings;
+            if (s.excluded !== undefined) excluded = s.excluded;
+        },
+    };
 }

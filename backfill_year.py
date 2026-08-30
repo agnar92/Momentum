@@ -1,12 +1,11 @@
 import subprocess
-import pandas as pd
 import duckdb
 
 def get_rebalance_dates(con, months=12):
     """Pobiera ostatni dzień handlowy z każdego z ostatnich N miesięcy."""
     query = f"""
     WITH monthly_dates AS (
-        SELECT 
+        SELECT
             DATE_TRUNC('month', Date) as month_start,
             MAX(Date) as last_trade_day
         FROM prices
@@ -23,7 +22,7 @@ def run_backfill():
     con = duckdb.connect("momentum_data.duckdb")
     dates = get_rebalance_dates(con, months=12)
     con.close()
-    
+
     print(f"🚀 Rozpoczynam symulację wsteczną dla {len(dates)} okresów:")
     for d in dates:
         print(f"\n--- Przetwarzanie daty: {d} ---")

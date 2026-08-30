@@ -166,7 +166,9 @@ def fetch_prices(con, tickers, lookback_months, min_coverage):
                                      int(row["Volume"]) if pd.notna(row.get("Volume")) else 0))
                         fetched_tickers.add(ticker)
             if rows:
-                df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+                # df_insert wyglada jak niewykorzystana zmienna dla lintera, ale
+                # DuckDB odwoluje sie do niej po nazwie wewnatrz zapytania SQL ponizej.
+                df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
                 con.execute("INSERT INTO prices_staging SELECT * FROM df_insert")
         except Exception as e:
             print(f"❌ Błąd pobierania cen dla paczki {batch}: {e}")

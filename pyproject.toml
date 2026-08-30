@@ -1,0 +1,19 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Bez tego "pytest" (w odroznieniu od "python -m pytest") nie ma katalogu
+# glownego repo w sys.path, wiec `from run_query import ...` / `from
+# fetch_data import ...` w tests/ rzuca ModuleNotFoundError w CI.
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Zestaw bazowy (pyflakes + pycodestyle) — repo nie ma dotychczas zadnej
+# konfiguracji lintera, wiec zaczynamy od bledow/nieuzywanych importow,
+# a nie od stylu, zeby nie generowac setek nieistotnych ostrzezen naraz.
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # dlugosc linii pilnowana przez line-length powyzej, nie przez blad
+]
