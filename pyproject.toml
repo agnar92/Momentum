@@ -1,5 +1,9 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Bez tego "pytest" (w odroznieniu od "python -m pytest") nie ma katalogu
+# glownego repo w sys.path, wiec `from run_query import ...` / `from
+# fetch_data import ...` w tests/ rzuca ModuleNotFoundError w CI.
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 120
