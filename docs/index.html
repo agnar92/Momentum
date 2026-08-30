@@ -74,6 +74,7 @@
                 <button class="drawer-tab active" data-universe="SP500">S&amp;P 500</button>
                 <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
                 <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
+                <button class="drawer-tab" data-universe="TOPBASKET" title="Top Momentum (quality proxy) — SP500 top 20 + NASDAQ100 top 5, rebalans co 6 mies.">🏆 Top</button>
             </div>
         </div>
         <div class="table-scroll">
@@ -93,6 +94,25 @@
                     </tr>
                 </thead>
                 <tbody id="momentumTableBody"></tbody>
+            </table>
+
+            <!-- Koszyk top-momentum (SP500 top20 + NASDAQ100 top5, rebalans co 6 mies.) —
+                 osobna, prostsza tabela: nie ma tu portfelowej wagi/z-score/momentum score,
+                 tylko surowe metryki + z których uniwersów pochodzi + czy dane są aktualne. -->
+            <table class="momentum-table" id="topBasketTable" hidden>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Ticker</th>
+                        <th>Sektor</th>
+                        <th>Cena</th>
+                        <th>Momentum (12M-1M)</th>
+                        <th>Zmienność</th>
+                        <th>Indeksy</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="topBasketTableBody"></tbody>
             </table>
         </div>
     </div>

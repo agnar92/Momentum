@@ -110,7 +110,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #topBasketTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     updateChart(ticker);
@@ -126,8 +126,7 @@ function selectTicker(ticker, universe) {
 function jumpToTicker(ticker, universe) {
     document.querySelectorAll(".drawer-tab").forEach(t => t.classList.toggle("active", t.dataset.universe === universe));
     state.drawerUniverse = universe;
-    document.getElementById("drawerTitle").textContent = `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
-    renderTable();
+    showDrawerTable(universe);
     selectTicker(ticker, universe);
 }
 
@@ -189,8 +188,7 @@ function initDrawer() {
             document.querySelectorAll(".drawer-tab").forEach(t => t.classList.remove("active"));
             tab.classList.add("active");
             state.drawerUniverse = tab.dataset.universe;
-            document.getElementById("drawerTitle").textContent = `Pełna tabela — ${UNIVERSE_LABELS[state.drawerUniverse]}`;
-            renderTable();
+            showDrawerTable(state.drawerUniverse);
         });
     });
 
@@ -228,6 +226,69 @@ function compareRows(a, b, sortKey, sortDir) {
     if (va < vb) return sortDir === "asc" ? -1 : 1;
     if (va > vb) return sortDir === "asc" ? 1 : -1;
     return 0;
+}
+
+// Przełącza, która z dwóch tabel w drawerze jest widoczna (pełna tabela
+// uniwersum vs. koszyk top-momentum — mają inny zestaw kolumn, patrz
+// renderTopBasketTable) i renderuje jej zawartość. Na telefonie sidebar
+// z kafelkami jest ukryty (patrz CSS @media max-width:640px), więc to
+// jedyny sposób dotarcia do koszyka top-momentum w pionie.
+function showDrawerTable(universe) {
+    const isTopBasket = universe === "TOPBASKET";
+    document.getElementById("momentumTable").hidden = isTopBasket;
+    document.getElementById("topBasketTable").hidden = !isTopBasket;
+    document.getElementById("drawerTitle").textContent = isTopBasket
+        ? "Pełna tabela — Top Momentum (quality proxy)"
+        : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+    if (isTopBasket) {
+        renderTopBasketTable();
+    } else {
+        renderTable();
+    }
+}
+
+function renderTopBasketTable() {
+    const b = state.topBasket;
+    const meta = document.getElementById("drawerMeta");
+    if (b.last_rebalance_ref_date) {
+        meta.textContent = `Rebalans: ${b.last_rebalance_ref_date}${b.rebalanced_today ? " (dziś)" : ""} · `
+            + `kolejny: ~${b.next_rebalance_ref_date} · dane: ${b.ref_date || "—"} · ${b.n_tickers || 0} spółek`;
+        meta.title = b.note || "";
+    } else {
+        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
+        meta.title = "";
+    }
+
+    const rows = b.constituents || [];
+    const tbody = document.getElementById("topBasketTableBody");
+    tbody.innerHTML = "";
+
+    if (rows.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="8" class="empty-state">Brak danych.</td>`;
+        tbody.appendChild(tr);
+        return;
+    }
+
+    rows.forEach(r => {
+        const tr = document.createElement("tr");
+        tr.dataset.ticker = r.ticker;
+        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
+        const sources = r.universes.map(u => UNIVERSE_LABELS[u].replace(" Momentum", "")).join(" + ");
+        const momentumClass = r.momentum_pct == null ? "" : (r.momentum_pct >= 0 ? "positive" : "negative");
+        tr.innerHTML = `
+            <td><span class="rank-badge">${r.rank}</span></td>
+            <td class="ticker-cell">${r.ticker}</td>
+            <td>${r.sector}</td>
+            <td>${r.price != null ? "$" + r.price.toFixed(2) : "—"}</td>
+            <td class="${momentumClass}">${r.momentum_pct != null ? r.momentum_pct.toFixed(2) + "%" : "—"}</td>
+            <td>${r.volatility_pct != null ? r.volatility_pct.toFixed(2) + "%" : "—"}</td>
+            <td>${sources}</td>
+            <td class="${r.stale ? "text-faint" : ""}">${r.stale ? "sprzed rebalansu" : "aktualne"}</td>
+        `;
+        tr.addEventListener("click", () => selectTicker(r.ticker, r.universes[0]));
+        tbody.appendChild(tr);
+    });
 }
 
 function renderTable() {
