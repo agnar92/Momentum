@@ -46,6 +46,8 @@ BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
 MAX_WEIGHT = 0.09        # 9% max na spolke
 CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
 MAX_HOLDINGS = 100
+TOP_BASKET_SP500_N = 20      # ile najsilniejszych spolek wg momentum score z SP500 w koszyku
+TOP_BASKET_NASDAQ100_N = 5   # jw. dla NASDAQ100 (DOWJONES pominiety - tam nie ma selekcji)
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
@@ -253,6 +255,67 @@ def compute_weights(df_selected, universe=None):
 
 
 # ============================================================================
+# MAŁY KOSZYK "TOP MOMENTUM" (proxy dla quality bez pobierania danych
+# fundamentalnych) — łączy najsilniejsze spółki wg momentum score z SP500
+# i NASDAQ100 (DOWJONES pominięty: tam nie ma selekcji kwintylowej, wszystkie
+# 30 spółek ma równą wagę). Założenie: liderzy momentum w dużych, płynnych
+# indeksach w praktyce mocno pokrywają się z quality (duże, stabilne, zyskowne
+# spółki) — bez dokładania nowego źródła danych do pipeline'u.
+# ============================================================================
+def build_top_basket(df_sp500, df_nasdaq100, sp500_n=TOP_BASKET_SP500_N, nasdaq100_n=TOP_BASKET_NASDAQ100_N):
+    sources = []
+    if df_sp500 is not None and not df_sp500.empty:
+        sources.append(("SP500", df_sp500.sort_values("momentum_score", ascending=False).head(sp500_n)))
+    if df_nasdaq100 is not None and not df_nasdaq100.empty:
+        sources.append(("NASDAQ100", df_nasdaq100.sort_values("momentum_score", ascending=False).head(nasdaq100_n)))
+
+    combined = {}
+    for universe_name, df in sources:
+        for _, r in df.iterrows():
+            ticker = r["Ticker"]
+            entry = combined.get(ticker)
+            if entry is None:
+                combined[ticker] = {
+                    "ticker": ticker,
+                    "sector": r["Sector"],
+                    "price": float(r["price_now"]),
+                    "momentum_pct": float(r["momentum_value"]) * 100,
+                    "volatility_pct": float(r["annualized_volatility"]) * 100,
+                    "universes": [universe_name],
+                }
+            else:
+                entry["universes"].append(universe_name)
+
+    records = sorted(combined.values(), key=lambda x: x["momentum_pct"], reverse=True)
+    for i, rec in enumerate(records, start=1):
+        rec["rank"] = i
+        rec["price"] = round(rec["price"], 2)
+        rec["momentum_pct"] = round(rec["momentum_pct"], 2)
+        rec["volatility_pct"] = round(rec["volatility_pct"], 2)
+    return records
+
+
+def export_top_basket(records, ref_date, docs_data_dir, sp500_n=TOP_BASKET_SP500_N, nasdaq100_n=TOP_BASKET_NASDAQ100_N):
+    n_overlap = sum(1 for r in records if len(r["universes"]) > 1)
+    payload = {
+        "ref_date": ref_date,
+        "sp500_top_n": sp500_n,
+        "nasdaq100_top_n": nasdaq100_n,
+        "n_tickers": len(records),
+        "n_overlap": n_overlap,
+        "note": (f"Koncentrowany koszyk łączący top-momentum liderów z SP500 (top {sp500_n}) "
+                 f"i NASDAQ100 (top {nasdaq100_n}) wg momentum score. Bez DOWJONES (tam nie ma "
+                 "selekcji kwintylowej). Nie jest to osobna strategia quality - to proxy: liderzy "
+                 "momentum w dużych indeksach zwykle pokrywają się z dużymi, stabilnymi, "
+                 "zyskownymi spółkami, bez pobierania dodatkowych danych fundamentalnych."),
+        "constituents": records,
+    }
+    out_path = Path(docs_data_dir) / "top_basket.json"
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"💾 Wyeksportowano {out_path} ({len(records)} spółek, {n_overlap} pokrywających się w obu indeksach).")
+
+
+# ============================================================================
 # GŁÓWNY PRZEBIEG DLA JEDNEGO UNIWERSUM
 # ============================================================================
 def process_universe(con, universe, ref_date, args, docs_data_dir):
@@ -434,8 +497,12 @@ def main():
     docs_data_dir = str(Path(args.docs_dir) / "data")
     Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
 
+    results = {}
     for universe in UNIVERSES:
-        process_universe(con, universe, ref_date, args, docs_data_dir)
+        results[universe] = process_universe(con, universe, ref_date, args, docs_data_dir)
+
+    top_basket_records = build_top_basket(results.get("SP500"), results.get("NASDAQ100"))
+    export_top_basket(top_basket_records, ref_date, docs_data_dir)
 
     export_all_prices(con, ref_date, docs_data_dir)
     con.close()

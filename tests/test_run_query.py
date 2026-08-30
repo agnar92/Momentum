@@ -11,6 +11,7 @@ from run_query import (
     MAX_HOLDINGS,
     MAX_WEIGHT,
     add_zscore_and_momentum_score,
+    build_top_basket,
     compute_weights,
     select_with_buffer,
 )
@@ -218,3 +219,55 @@ class TestComputeWeights:
         others = out[out["momentum_score"] == 1.0]
         if not out["cap_scaled_due_to_infeasibility"].iloc[0]:
             assert best["weight"] > others["weight"].max()
+
+
+# ---------------------------------------------------------------------------
+# build_top_basket
+# ---------------------------------------------------------------------------
+
+def make_weighted_df(rows):
+    """rows: list of (ticker, sector, price_now, momentum_value, annualized_volatility, momentum_score)."""
+    return pd.DataFrame(rows, columns=[
+        "Ticker", "Sector", "price_now", "momentum_value", "annualized_volatility", "momentum_score",
+    ])
+
+
+class TestBuildTopBasket:
+    def test_takes_top_n_by_momentum_score_from_each_universe(self):
+        sp500 = make_weighted_df([
+            ("A", "Tech", 100.0, 0.30, 0.20, 2.5),
+            ("B", "Tech", 50.0, 0.10, 0.20, 1.2),
+            ("C", "Health", 20.0, -0.05, 0.20, 0.8),
+        ])
+        nasdaq = make_weighted_df([
+            ("D", "Tech", 200.0, 0.40, 0.25, 3.0),
+        ])
+        out = build_top_basket(sp500, nasdaq, sp500_n=2, nasdaq100_n=1)
+        tickers = [r["ticker"] for r in out]
+        assert tickers == ["D", "A", "B"]  # posortowane po momentum_pct malejaco
+        assert "C" not in tickers  # spoza top 2 wg momentum_score w SP500
+
+    def test_overlapping_ticker_merges_universes_without_duplicate(self):
+        sp500 = make_weighted_df([("AAPL", "Tech", 100.0, 0.20, 0.20, 2.0)])
+        nasdaq = make_weighted_df([("AAPL", "Tech", 100.0, 0.20, 0.20, 2.2)])
+        out = build_top_basket(sp500, nasdaq, sp500_n=5, nasdaq100_n=5)
+        assert len(out) == 1
+        assert sorted(out[0]["universes"]) == ["NASDAQ100", "SP500"]
+
+    def test_rank_is_assigned_sequentially(self):
+        sp500 = make_weighted_df([
+            ("A", "Tech", 10.0, 0.10, 0.20, 1.0),
+            ("B", "Tech", 10.0, 0.20, 0.20, 2.0),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
+        assert [r["rank"] for r in out] == [1, 2]
+        assert out[0]["ticker"] == "B"  # wyzszy momentum_pct -> rank 1
+
+    def test_handles_missing_universe_gracefully(self):
+        sp500 = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
+        out = build_top_basket(sp500, None)
+        assert len(out) == 1
+        assert out[0]["universes"] == ["SP500"]
+
+        out_empty = build_top_basket(None, None)
+        assert out_empty == []
