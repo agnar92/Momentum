@@ -9,9 +9,11 @@ import pytest
 
 from fetch_data import (
     PRICES_SCHEMA,
+    _download_price_rows,
     _find_column,
     _parse_money,
     _prices_table_has_rows,
+    _to_yf_symbol,
     _upsert_price_rows,
     get_full_refresh_range,
     load_index_constituents,
@@ -157,12 +159,64 @@ class TestLoadIndexConstituents:
         ).fetchone()[0]
         assert count == 1
 
+    def test_no_market_residual_positions_are_filtered(self, tmp_path, monkeypatch):
+        """Rezydualne udzialy bez rynku notowan (np. po wykupie/delistingu) maja
+        znikoma wartosc i nigdy nie dostana ceny z yfinance — odfiltrowujemy je
+        na etapie wczytywania CSV, tak jak gotowke/futures."""
+        monkeypatch.chdir(tmp_path)
+        csv_no_market = (
+            "metadata\n"
+            "Ticker,Sector,Market Value,Asset Class,Exchange\n"
+            "GOOD,Technology,1000.00,Equity,NASDAQ\n"
+            "STALE,Health Care,5.00,Equity,NO MARKET (E.G. UNLISTED)\n"
+        )
+        (tmp_path / "CSPX_holdings.csv").write_text(csv_no_market)
+
+        con = duckdb.connect(":memory:")
+        load_index_constituents(con)
+
+        tickers = {r[0] for r in con.execute("SELECT Ticker FROM index_constituents").fetchall()}
+        assert tickers == {"GOOD"}
+
 
 # ---------------------------------------------------------------------------
-# Odswiezenie przyrostowe: _prices_table_has_rows, _upsert_price_rows,
-# update_prices_incremental (bez wywolan sieciowych — _download_price_rows
-# jest monkeypatchowane).
+# _to_yf_symbol / _download_price_rows: mapowanie tickerow klas akcji na
+# konwencje yfinance (np. "BRKB" -> "BRK-B"), przy zachowaniu kanonicznej
+# nazwy tickera (z CSV) w zapisanych wierszach.
 # ---------------------------------------------------------------------------
+
+class TestToYfSymbol:
+    def test_known_dual_class_tickers_are_translated(self):
+        assert _to_yf_symbol("BRKB") == "BRK-B"
+        assert _to_yf_symbol("BFB") == "BF-B"
+
+    def test_unmapped_ticker_passes_through_unchanged(self):
+        assert _to_yf_symbol("AAPL") == "AAPL"
+
+
+class TestDownloadPriceRows:
+    def test_translates_ticker_for_yfinance_but_stores_canonical_name(self, monkeypatch):
+        dates = pd.to_datetime(["2024-01-02", "2024-01-03"])
+        columns = pd.MultiIndex.from_product([["AAA", "BRK-B"], ["Close", "Adj Close", "Volume"]])
+        fake_data = pd.DataFrame(
+            [[10.0, 10.0, 100, 20.0, 20.0, 200],
+             [11.0, 11.0, 100, 21.0, 21.0, 200]],
+            index=dates, columns=columns,
+        )
+        captured = {}
+
+        def fake_download(tickers, **kwargs):
+            captured["tickers"] = tickers
+            return fake_data
+
+        monkeypatch.setattr("fetch_data.yf.download", fake_download)
+        rows, fetched, failed = _download_price_rows(["AAA", "BRKB"], "2024-01-02", "2024-01-04")
+
+        assert captured["tickers"] == ["AAA", "BRK-B"]  # BRKB przetlumaczony na potrzeby yfinance
+        assert {r[1] for r in rows} == {"AAA", "BRKB"}  # ale zapisany pod kanonicznym tickerem z CSV
+        assert fetched == {"AAA", "BRKB"}
+        assert failed == []
+
 
 def _make_prices_con(rows):
     """rows: lista (date_str, ticker, close, adj_close, volume)."""
