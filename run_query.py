@@ -405,6 +405,126 @@ def export_all_prices(con, ref_date, docs_data_dir):
     print(f"💾 Wyeksportowano all_prices.json ({len(payload)} spółek ze wszystkich indeksów).")
 
 
+# ============================================================================
+# EQUITY CURVE (historyczny, zrealizowany wynik strategii vs. benchmark)
+# — informacyjne porównanie, NIE prognoza ani porada inwestycyjna.
+# ============================================================================
+def compute_equity_curve(con, universe):
+    """
+    Buduje chained equity curve (start=100) ze zrealizowanych wag/cen zapisanych
+    w portfolio_history po każdym rebalansie, obok benchmarku "kup i trzymaj cały
+    indeks" (wazony biezacym FMC ze wszystkich kwalifikowanych skladnikow, nie
+    tylko wybranych do portfela momentum).
+
+    Ograniczenie danych: `prices` to rolling window (patrz fetch_data.py) liczone
+    od "dzisiaj" wstecz, a nie od kazdej historycznej daty rebalansu — cena
+    spolki, ktora dawno wypadla z selekcji, moze juz nie byc dostepna. W takim
+    wypadku jej wklad w danym okresie jest pomijany (aproksymacja: 0%), a okres
+    oznaczany jako `approximated=True`, zeby front-end mogl to zasygnalizowac.
+    """
+    hist = con.execute(f"""
+        SELECT ref_date, ticker, weight, price_at_rebalance
+        FROM portfolio_history WHERE universe = '{universe}'
+        ORDER BY ref_date
+    """).df()
+    if hist.empty:
+        return None
+    ref_dates = sorted(hist["ref_date"].unique())
+    if len(ref_dates) < 2:
+        return None
+
+    by_date = {d: hist[hist["ref_date"] == d].set_index("ticker") for d in ref_dates}
+
+    dates_out = [pd.Timestamp(ref_dates[0]).strftime("%Y-%m-%d")]
+    momentum_index = [100.0]
+    approximated = [False]
+
+    for t0, t1 in zip(ref_dates[:-1], ref_dates[1:]):
+        snap0, snap1 = by_date[t0], by_date[t1]
+        period_return = 0.0
+        period_approx = False
+
+        held = snap0.index.intersection(snap1.index)
+        for t in held:
+            w0, p0 = snap0.loc[t, "weight"], snap0.loc[t, "price_at_rebalance"]
+            p1 = snap1.loc[t, "price_at_rebalance"]
+            period_return += w0 * (p1 / p0 - 1)
+
+        dropped = snap0.index.difference(snap1.index)
+        if len(dropped) > 0:
+            tickers_sql = ",".join(f"'{t}'" for t in dropped)
+            t1_str = pd.Timestamp(t1).strftime("%Y-%m-%d")
+            prices_t1 = con.execute(f"""
+                SELECT Ticker, ARGMAX(Close, Date) AS price FROM prices
+                WHERE Ticker IN ({tickers_sql}) AND Date <= DATE '{t1_str}' GROUP BY Ticker
+            """).df().set_index("Ticker")["price"].to_dict()
+            for t in dropped:
+                w0, p0 = snap0.loc[t, "weight"], snap0.loc[t, "price_at_rebalance"]
+                p1 = prices_t1.get(t)
+                if p1 is None:
+                    period_approx = True
+                    continue
+                period_return += w0 * (p1 / p0 - 1)
+
+        dates_out.append(pd.Timestamp(t1).strftime("%Y-%m-%d"))
+        momentum_index.append(momentum_index[-1] * (1 + period_return))
+        approximated.append(period_approx)
+
+    # --- Benchmark: "kup i trzymaj caly indeks", wazony biezacym FMC ---
+    universe_df = con.execute(f"""
+        SELECT Ticker, fmc_etf AS fmc FROM index_constituents
+        WHERE Index_Name = '{universe}' AND fmc_etf IS NOT NULL
+    """).df()
+    total_fmc = universe_df["fmc"].sum() if not universe_df.empty else 0
+    bench_weights = (dict(zip(universe_df["Ticker"], universe_df["fmc"] / total_fmc))
+                      if total_fmc else {})
+
+    bench_prices = {}
+    if bench_weights:
+        tickers_sql = ",".join(f"'{t}'" for t in bench_weights)
+        for d in ref_dates:
+            d_str = pd.Timestamp(d).strftime("%Y-%m-%d")
+            df_p = con.execute(f"""
+                SELECT Ticker, ARGMAX(Close, Date) AS price FROM prices
+                WHERE Ticker IN ({tickers_sql}) AND Date <= DATE '{d_str}' GROUP BY Ticker
+            """).df()
+            bench_prices[d] = dict(zip(df_p["Ticker"], df_p["price"]))
+
+    benchmark_index = [100.0]
+    for t0, t1 in zip(ref_dates[:-1], ref_dates[1:]):
+        p0map, p1map = bench_prices.get(t0, {}), bench_prices.get(t1, {})
+        common = set(p0map) & set(p1map) & set(bench_weights)
+        w_sum = sum(bench_weights[t] for t in common)
+        if w_sum == 0:
+            benchmark_index.append(benchmark_index[-1])
+            continue
+        ret = sum(bench_weights[t] / w_sum * (p1map[t] / p0map[t] - 1) for t in common)
+        benchmark_index.append(benchmark_index[-1] * (1 + ret))
+
+    return {
+        "dates": dates_out,
+        "momentum_index": [round(v, 3) for v in momentum_index],
+        "benchmark_index": [round(v, 3) for v in benchmark_index],
+        "approximated_periods": approximated,
+        "note": ("Wynik historyczny (zrealizowany) selekcji momentum na bazie zapisów po "
+                 "kazdym rebalansie, zestawiony z 'kup i trzymaj caly indeks' (wazony biezacym "
+                 "FMC). Dane informacyjne, NIE prognoza ani porada inwestycyjna — wyniki z "
+                 "przeszlosci nie gwarantuja przyszlych zwrotow. Okresy 'approximated' obejmuja "
+                 "spolki, dla ktorych brakuje juz historycznej ceny (rolling window w `prices`)."),
+    }
+
+
+def export_equity_curve(con, docs_data_dir):
+    payload = {}
+    for universe in UNIVERSES:
+        curve = compute_equity_curve(con, universe)
+        if curve is not None:
+            payload[universe] = curve
+    out_path = Path(docs_data_dir) / "equity_curve.json"
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"💾 Wyeksportowano {out_path} ({len(payload)} uniwersów z wystarczającą historią).")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES "
@@ -438,6 +558,7 @@ def main():
         process_universe(con, universe, ref_date, args, docs_data_dir)
 
     export_all_prices(con, ref_date, docs_data_dir)
+    export_equity_curve(con, docs_data_dir)
     con.close()
 
 
