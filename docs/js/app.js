@@ -71,6 +71,15 @@ function renderSidebarTiles() {
 function renderTopBasketTiles() {
     const container = document.getElementById("tiles-TOPBASKET");
     if (!container) return;
+
+    const meta = document.getElementById("topBasketMeta");
+    if (meta) {
+        const b = state.topBasket;
+        meta.textContent = b.last_rebalance_ref_date
+            ? `Rebalans: ${b.last_rebalance_ref_date}${b.rebalanced_today ? " (dziś)" : ""} · kolejny: ~${b.next_rebalance_ref_date} · dane: ${b.ref_date || "—"}`
+            : "Brak danych — uruchom pipeline.";
+    }
+
     container.innerHTML = "";
     const items = state.topBasket.constituents || [];
     items.forEach(c => {
@@ -78,8 +87,10 @@ function renderTopBasketTiles() {
         tile.className = "ticker-tile";
         tile.textContent = c.ticker;
         const sources = c.universes.map(u => UNIVERSE_LABELS[u].replace(" Momentum", "")).join(" + ");
-        tile.title = `${c.ticker} — #${c.rank} · momentum ${c.momentum_pct.toFixed(2)}% · ${sources}`;
+        const staleNote = c.stale ? " · dane sprzed rebalansu (spółka poza bieżącą selekcją kwintylową)" : "";
+        tile.title = `${c.ticker} — #${c.rank} · momentum ${c.momentum_pct != null ? c.momentum_pct.toFixed(2) + "%" : "brak danych"} · ${sources}${staleNote}`;
         if (c.universes.length > 1) tile.classList.add("ticker-tile-overlap");
+        if (c.stale) tile.classList.add("ticker-tile-stale");
         tile.dataset.ticker = c.ticker;
         tile.dataset.universe = c.universes[0];
         if (c.ticker === state.selectedTicker) tile.classList.add("selected");

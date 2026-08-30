@@ -206,6 +206,14 @@ html, body {
     padding-left: 2px;
 }
 
+.sidebar-group-meta {
+    font-size: 9.5px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+    padding-left: 2px;
+    line-height: 1.4;
+}
+
 .ticker-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -248,6 +256,13 @@ html, body {
 
 .ticker-tile-overlap.selected {
     border-color: var(--green-bright);
+}
+
+/* Trzymana spolka bez swiezych (z biezacego miesiaca) danych w portfolio_history
+   -- wypadla z kwintylowej selekcji swojego uniwersum, ale zostaje w koszyku
+   az do kolejnego rebalansu; cena/momentum to ostatnie dostepne dane. */
+.ticker-tile-stale {
+    opacity: 0.55;
 }
 
 /* ============================================================

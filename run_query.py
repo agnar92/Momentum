@@ -48,6 +48,8 @@ CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
 MAX_HOLDINGS = 100
 TOP_BASKET_SP500_N = 20      # ile najsilniejszych spolek wg momentum score z SP500 w koszyku
 TOP_BASKET_NASDAQ100_N = 5   # jw. dla NASDAQ100 (DOWJONES pominiety - tam nie ma selekcji)
+TOP_BASKET_REBALANCE_MONTHS = 6   # sklad koszyka zmienia sie tylko co tyle miesiecy (ograniczenie rotacji);
+                                   # ceny/momentum wyswietlane dla trzymanych spolek i tak odswiezane co miesiac
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
@@ -282,6 +284,7 @@ def build_top_basket(df_sp500, df_nasdaq100, sp500_n=TOP_BASKET_SP500_N, nasdaq1
                     "momentum_pct": float(r["momentum_value"]) * 100,
                     "volatility_pct": float(r["annualized_volatility"]) * 100,
                     "universes": [universe_name],
+                    "stale": False,
                 }
             else:
                 entry["universes"].append(universe_name)
@@ -295,19 +298,143 @@ def build_top_basket(df_sp500, df_nasdaq100, sp500_n=TOP_BASKET_SP500_N, nasdaq1
     return records
 
 
-def export_top_basket(records, ref_date, docs_data_dir, sp500_n=TOP_BASKET_SP500_N, nasdaq100_n=TOP_BASKET_NASDAQ100_N):
+def _ensure_top_basket_table(con):
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS top_basket_rebalances (
+            ref_date DATE, ticker VARCHAR, sector VARCHAR, universes VARCHAR,
+            price DOUBLE, momentum_pct DOUBLE, volatility_pct DOUBLE, rank INTEGER,
+            PRIMARY KEY (ref_date, ticker)
+        )
+    """)
+
+
+def persist_top_basket_rebalance(con, ref_date, records):
+    """Zapisuje sklad koszyka wybrany PRZY REBALANSIE (trwale, jak portfolio_history) —
+    to on decyduje, ktore spolki sa 'trzymane' az do kolejnego rebalansu za
+    TOP_BASKET_REBALANCE_MONTHS miesiecy, niezaleznie od comiesiecznych przeliczen."""
+    _ensure_top_basket_table(con)
+    con.execute(f"DELETE FROM top_basket_rebalances WHERE ref_date = DATE '{ref_date}'")
+    df = pd.DataFrame([{  # noqa: F841 -- referenced by name in the SQL string below (duckdb frame scan)
+        "ref_date": pd.Timestamp(ref_date).date(),
+        "ticker": r["ticker"],
+        "sector": r["sector"],
+        "universes": ",".join(r["universes"]),
+        "price": r["price"],
+        "momentum_pct": r["momentum_pct"],
+        "volatility_pct": r["volatility_pct"],
+        "rank": r["rank"],
+    } for r in records])
+    con.execute("INSERT INTO top_basket_rebalances SELECT * FROM df")
+
+
+def refresh_top_basket_metrics(con, ref_date, members_df):
+    """Dla spolek trzymanych od ostatniego rebalansu koszyka: odswieza cene/momentum/
+    zmiennosc z portfolio_history na biezacy ref_date (co dzieje sie co miesiac,
+    razem z reszta pipeline'u), bez zmiany SKLADU koszyka. Jesli spolka danego
+    miesiaca wypadla z kwintylowej selekcji swojego uniwersum (brak wiersza w
+    portfolio_history na ten ref_date), bierzemy jej najswiezsze dostepne dane
+    wczesniejsze i oznaczamy rekord jako 'stale'."""
+    if members_df.empty:
+        return []
+
+    tickers_sql = ", ".join(f"'{t}'" for t in members_df["ticker"])
+    df_metrics = con.execute(f"""
+        SELECT ticker,
+               ARGMAX(price_at_rebalance, ref_date) AS price,
+               ARGMAX(momentum_value, ref_date) AS momentum_value,
+               ARGMAX(annualized_volatility, ref_date) AS annualized_volatility,
+               MAX(ref_date) AS last_data_date
+        FROM portfolio_history
+        WHERE ticker IN ({tickers_sql}) AND ref_date <= DATE '{ref_date}'
+        GROUP BY ticker
+    """).df().set_index("ticker")
+
+    ref_date_norm = pd.Timestamp(ref_date).date()
+    records = []
+    for _, m in members_df.iterrows():
+        ticker = m["ticker"]
+        rec = {"ticker": ticker, "sector": m["sector"], "universes": m["universes"].split(",")}
+        if ticker in df_metrics.index:
+            row = df_metrics.loc[ticker]
+            rec["price"] = round(float(row["price"]), 2)
+            rec["momentum_pct"] = round(float(row["momentum_value"]) * 100, 2)
+            rec["volatility_pct"] = round(float(row["annualized_volatility"]) * 100, 2)
+            rec["stale"] = pd.Timestamp(row["last_data_date"]).date() != ref_date_norm
+        else:
+            rec["price"] = None
+            rec["momentum_pct"] = None
+            rec["volatility_pct"] = None
+            rec["stale"] = True
+        records.append(rec)
+
+    records.sort(key=lambda r: (r["momentum_pct"] is None, -(r["momentum_pct"] or 0)))
+    for i, rec in enumerate(records, start=1):
+        rec["rank"] = i
+    return records
+
+
+def resolve_top_basket(con, ref_date, df_sp500, df_nasdaq100, rebalance_every_months=TOP_BASKET_REBALANCE_MONTHS):
+    """Decyduje, czy sklad koszyka top-momentum ma zostac dzis PRZEBUDOWANY (rebalans,
+    co ~rebalance_every_months miesiecy — to ogranicza rotacje/koszty transakcyjne),
+    czy tylko ODSWIEZONY danymi (co dzieje sie co miesiac, przy kazdym uruchomieniu
+    run_query.py, niezaleznie od tego czy dzis jest dzien rebalansu)."""
+    _ensure_top_basket_table(con)
+    last_rebalance_date = con.execute(
+        f"SELECT MAX(ref_date) FROM top_basket_rebalances WHERE ref_date <= DATE '{ref_date}'"
+    ).fetchone()[0]
+
+    due = last_rebalance_date is None
+    months_elapsed = None
+    if not due:
+        months_elapsed = (pd.Period(pd.Timestamp(ref_date), freq="M")
+                           - pd.Period(pd.Timestamp(last_rebalance_date), freq="M")).n
+        due = months_elapsed >= rebalance_every_months
+
+    if due:
+        records = build_top_basket(df_sp500, df_nasdaq100)
+        persist_top_basket_rebalance(con, ref_date, records)
+        rebalance_ref_date = ref_date
+        print(f"🔁 Koszyk top-momentum: rebalans składu ("
+              f"{'pierwszy' if last_rebalance_date is None else f'poprzedni {last_rebalance_date}, {months_elapsed} mies. temu'}"
+              f") → {len(records)} spółek wybranych na {ref_date}.")
+    else:
+        members_df = con.execute(f"""
+            SELECT ticker, sector, universes FROM top_basket_rebalances
+            WHERE ref_date = DATE '{last_rebalance_date}' ORDER BY rank
+        """).df()
+        records = refresh_top_basket_metrics(con, ref_date, members_df)
+        rebalance_ref_date = str(last_rebalance_date)
+        next_due_in = rebalance_every_months - months_elapsed
+        print(f"📌 Koszyk top-momentum: bez rebalansu (ostatni {last_rebalance_date}, kolejny za "
+              f"{next_due_in} mies.) — odświeżono ceny/momentum {len(records)} trzymanych spółek na {ref_date}.")
+
+    return records, due, rebalance_ref_date
+
+
+def export_top_basket(records, ref_date, docs_data_dir, rebalanced, rebalance_ref_date,
+                       sp500_n=TOP_BASKET_SP500_N, nasdaq100_n=TOP_BASKET_NASDAQ100_N,
+                       rebalance_every_months=TOP_BASKET_REBALANCE_MONTHS):
     n_overlap = sum(1 for r in records if len(r["universes"]) > 1)
+    next_rebalance_ref_date = (pd.Timestamp(rebalance_ref_date)
+                                + pd.DateOffset(months=rebalance_every_months)).date().isoformat()
     payload = {
         "ref_date": ref_date,
         "sp500_top_n": sp500_n,
         "nasdaq100_top_n": nasdaq100_n,
+        "rebalance_every_months": rebalance_every_months,
+        "rebalanced_today": rebalanced,
+        "last_rebalance_ref_date": rebalance_ref_date,
+        "next_rebalance_ref_date": next_rebalance_ref_date,
         "n_tickers": len(records),
         "n_overlap": n_overlap,
         "note": (f"Koncentrowany koszyk łączący top-momentum liderów z SP500 (top {sp500_n}) "
                  f"i NASDAQ100 (top {nasdaq100_n}) wg momentum score. Bez DOWJONES (tam nie ma "
                  "selekcji kwintylowej). Nie jest to osobna strategia quality - to proxy: liderzy "
                  "momentum w dużych indeksach zwykle pokrywają się z dużymi, stabilnymi, "
-                 "zyskownymi spółkami, bez pobierania dodatkowych danych fundamentalnych."),
+                 f"zyskownymi spółkami, bez pobierania dodatkowych danych fundamentalnych. Skład "
+                 f"koszyka zmienia się (rebalans) tylko raz na {rebalance_every_months} miesięcy, żeby "
+                 "ograniczyć rotację — ceny/momentum/zmienność wyświetlane dla trzymanych spółek są "
+                 "mimo to odświeżane co miesiąc, razem z resztą danych."),
         "constituents": records,
     }
     out_path = Path(docs_data_dir) / "top_basket.json"
@@ -501,8 +628,11 @@ def main():
     for universe in UNIVERSES:
         results[universe] = process_universe(con, universe, ref_date, args, docs_data_dir)
 
-    top_basket_records = build_top_basket(results.get("SP500"), results.get("NASDAQ100"))
-    export_top_basket(top_basket_records, ref_date, docs_data_dir)
+    top_basket_records, top_basket_rebalanced, top_basket_rebalance_ref_date = resolve_top_basket(
+        con, ref_date, results.get("SP500"), results.get("NASDAQ100")
+    )
+    export_top_basket(top_basket_records, ref_date, docs_data_dir,
+                       rebalanced=top_basket_rebalanced, rebalance_ref_date=top_basket_rebalance_ref_date)
 
     export_all_prices(con, ref_date, docs_data_dir)
     con.close()
