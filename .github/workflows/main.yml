@@ -8,9 +8,12 @@ on:
     branches: [main]
   workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
 
-# Wymagane uprawnienia do publikacji na GitHub Pages
+# contents: write jest potrzebne, żeby workflow mógł odcommitować z powrotem
+# zaktualizowany momentum_data.duckdb (patrz krok "Commit updated database" —
+# bez tego baza cen i portfolio_history znikałyby po każdym uruchomieniu,
+# bo każdy run CI startuje od świeżego checkoutu repo).
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -46,6 +49,22 @@ jobs:
       - name: Run Momentum Query and Generate json data for page
         run: |
           python run_query.py
+
+      # momentum_data.duckdb trzyma historię cen (żeby nie zależeć w 100% od
+      # tego, czy Yahoo odpowie poprawnie w TYM konkretnym uruchomieniu) oraz
+      # portfolio_history (potrzebne regule bufora 80–120% w run_query.py,
+      # żeby ograniczać obrót — bez trwałej bazy każdy rebalans wygląda jak
+      # pierwszy w historii). Commitujemy go z powrotem do repo po każdym
+      # uruchomieniu. Push przez domyślny GITHUB_TOKEN nie triggeruje kolejnego
+      # workflow (standardowe zabezpieczenie GitHuba przed pętlą), a [skip ci]
+      # to dodatkowe zabezpieczenie, gdyby kiedyś użyto tu innego tokenu.
+      - name: Commit updated database
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add momentum_data.duckdb
+          git diff --staged --quiet && echo "Brak zmian w bazie." || git commit -m "Update momentum_data.duckdb [skip ci]"
+          git push origin HEAD:main
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

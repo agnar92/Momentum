@@ -129,61 +129,98 @@ def get_full_refresh_range(lookback_months):
     return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
 
 
+def _download_with_retry(batch, start_date, end_date, max_retries=3):
+    """yfinance/Yahoo bywa niestabilne (rate limiting, chwilowe błędy sieci) —
+    jedna nieudana próba na paczkę 50 tickerów nie może kosztować nam całej
+    paczki. Ponawiamy z rosnącym odstępem (backoff) zanim uznamy paczkę za
+    faktycznie nie do pobrania w tym przebiegu."""
+    for attempt in range(max_retries):
+        try:
+            data = yf.download(tickers=batch, start=start_date, end=end_date, interval="1d",
+                                group_by="ticker", auto_adjust=False, threads=True, progress=False)
+            if data is not None and not data.empty:
+                return data
+        except Exception as e:
+            print(f"  ⚠️  Błąd pobierania paczki (próba {attempt + 1}/{max_retries}): {e}")
+        if attempt < max_retries - 1:
+            wait = 5 * (2 ** attempt)
+            print(f"  ⏳ Ponawiam za {wait}s...")
+            time.sleep(wait)
+    return None
+
+
 def fetch_prices(con, tickers, lookback_months, min_coverage):
     start_date, end_date = get_full_refresh_range(lookback_months)
-    print(f"🔄 Pełne odświeżenie cen: {start_date} → {end_date} dla {len(tickers)} tickerów...")
+    print(f"🔄 Odświeżenie cen: {start_date} → {end_date} dla {len(tickers)} tickerów...")
 
-    con.execute("DROP TABLE IF EXISTS prices_staging")
+    # WAŻNE: tabela 'prices' jest trwała (nigdy nie jest tu kasowana w całości).
+    # Środowisko CI (GitHub Actions) startuje co miesiąc od świeżego checkoutu
+    # repo, więc jedyny sposób, żeby cokolwiek "pamiętało" poprzednie miesiące
+    # (w tym portfolio_history / regułę bufora w run_query.py) to trzymanie
+    # tego pliku duckdb w repo między uruchomieniami (patrz workflow: krok
+    # commitujący momentum_data.duckdb). Skoro tak, to pojedyncze nieudane
+    # pobranie NIE MOŻE kasować historii, którą już mamy — stąd UPSERT
+    # (INSERT ... ON CONFLICT DO UPDATE) zamiast dawnego DROP+RENAME całej
+    # tabeli, który wywalał historię każdego tickera, który akurat nie
+    # pobrał się w danym miesiącu.
     con.execute("""
-        CREATE TABLE prices_staging (
+        CREATE TABLE IF NOT EXISTS prices (
             Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
             PRIMARY KEY (Date, Ticker)
         )
     """)
 
     failed_tickers, fetched_tickers = [], set()
+    rows = []
     batch_size = 50
     n_batches = (len(tickers) - 1) // batch_size + 1
 
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
         print(f"  Ceny — paczka {i // batch_size + 1}/{n_batches}...")
-        try:
-            data = yf.download(tickers=batch, start=start_date, end=end_date, interval="1d",
-                                group_by="ticker", auto_adjust=False, threads=True)
-            rows = []
-            for ticker in batch:
-                df_t = data.copy() if len(batch) == 1 else (
-                    data[ticker].dropna(how="all") if ticker in data.columns.levels[0] else pd.DataFrame()
-                )
-                if df_t.empty:
-                    failed_tickers.append(ticker)
-                    continue
-                for date, row in df_t.iterrows():
-                    if pd.notna(row.get("Close")):
-                        rows.append((date.strftime('%Y-%m-%d'), ticker, float(row["Close"]),
-                                     float(row.get("Adj Close", row["Close"])),
-                                     int(row["Volume"]) if pd.notna(row.get("Volume")) else 0))
-                        fetched_tickers.add(ticker)
-            if rows:
-                df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
-                con.execute("INSERT INTO prices_staging SELECT * FROM df_insert")
-        except Exception as e:
-            print(f"❌ Błąd pobierania cen dla paczki {batch}: {e}")
+        data = _download_with_retry(batch, start_date, end_date)
+        if data is None:
+            print(f"  ❌ Paczka nie do pobrania po kilku próbach — zostają stare dane dla: {batch}")
             failed_tickers.extend(batch)
+            time.sleep(2)
+            continue
+
+        for ticker in batch:
+            df_t = data.copy() if len(batch) == 1 else (
+                data[ticker].dropna(how="all") if ticker in data.columns.levels[0] else pd.DataFrame()
+            )
+            if df_t.empty:
+                failed_tickers.append(ticker)
+                continue
+            for date, row in df_t.iterrows():
+                # Odrzucamy oczywiście błędne wiersze (cena <= 0) — takie
+                # potrafią się przemknąć przy problemach po stronie Yahoo i
+                # zepsułyby liczenie momentum/zmienności downstream.
+                close = row.get("Close")
+                if pd.notna(close) and close > 0:
+                    rows.append((date.strftime('%Y-%m-%d'), ticker, float(close),
+                                 float(row.get("Adj Close", close)),
+                                 int(row["Volume"]) if pd.notna(row.get("Volume")) else 0))
+                    fetched_tickers.add(ticker)
         time.sleep(2)
+
+    if rows:
+        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+        con.execute("""
+            INSERT INTO prices SELECT * FROM df_insert
+            ON CONFLICT (Date, Ticker) DO UPDATE SET
+                Close = excluded.Close, Adj_Close = excluded.Adj_Close, Volume = excluded.Volume
+        """)
 
     coverage = len(fetched_tickers) / len(tickers) if tickers else 0
     if coverage < min_coverage:
-        print(f"❌ Pokrycie cen zbyt niskie ({coverage:.0%}). NIE podmieniam tabeli prices.")
-        con.execute("DROP TABLE prices_staging")
-        return False
-
-    con.execute("DROP TABLE IF EXISTS prices")
-    con.execute("ALTER TABLE prices_staging RENAME TO prices")
-    print(f"✅ Ceny odświeżone. Pokrycie: {len(fetched_tickers)}/{len(tickers)} ({coverage:.0%}).")
+        print(f"⚠️  Pokrycie cen w TYM przebiegu niższe niż oczekiwane ({coverage:.0%}). "
+              f"Nie kasujemy nic — tickery, które się nie pobrały, zostają przy ostatnich znanych "
+              f"cenach i zostaną odfiltrowane downstream przez próg świeżości (max_staleness_days), "
+              f"jeśli będą się starzeć zbyt długo.")
+    print(f"✅ Ceny zaktualizowane. Pokrycie w tym przebiegu: {len(fetched_tickers)}/{len(tickers)} ({coverage:.0%}).")
     if failed_tickers:
-        print(f"⚠️  Brak cen dla: {sorted(set(failed_tickers))}")
+        print(f"⚠️  Brak nowych cen w tym przebiegu dla: {sorted(set(failed_tickers))}")
     return True
 
 

@@ -3,9 +3,11 @@ name: One-time 1-Year Backfill
 on:
   workflow_dispatch: # Pozwala odpalić akcję ręcznie z zakładki Actions
 
-# Wymagane uprawnienia do publikacji na GitHub Pages
+# contents: write jest potrzebne, żeby workflow mógł odcommitować z powrotem
+# momentum_data.duckdb wygenerowany przez backfill — kolejne comiesięczne
+# uruchomienia (main.yml) budują na tej bazie zamiast zaczynać od zera.
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -44,6 +46,14 @@ jobs:
       - name: Run final query for latest state
         run: |
           python run_query.py
+
+      - name: Commit updated database
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add momentum_data.duckdb
+          git diff --staged --quiet && echo "Brak zmian w bazie." || git commit -m "Seed momentum_data.duckdb from backfill [skip ci]"
+          git push origin HEAD:main
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
