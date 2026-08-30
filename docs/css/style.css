@@ -206,6 +206,14 @@ html, body {
     padding-left: 2px;
 }
 
+.sidebar-group-meta {
+    font-size: 9.5px;
+    color: var(--text-faint);
+    margin-bottom: 6px;
+    padding-left: 2px;
+    line-height: 1.4;
+}
+
 .ticker-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -238,6 +246,23 @@ html, body {
     background: var(--green);
     color: #ffffff;
     border-color: var(--green-bright);
+}
+
+/* Koszyk top-momentum: spolka obecna jednoczesnie w SP500 top 20 i NASDAQ100
+   top 5 (patrz build_top_basket w run_query.py) */
+.ticker-tile-overlap {
+    border-color: var(--accent-line);
+}
+
+.ticker-tile-overlap.selected {
+    border-color: var(--green-bright);
+}
+
+/* Trzymana spolka bez swiezych (z biezacego miesiaca) danych w portfolio_history
+   -- wypadla z kwintylowej selekcji swojego uniwersum, ale zostaje w koszyku
+   az do kolejnego rebalansu; cena/momentum to ostatnie dostepne dane. */
+.ticker-tile-stale {
+    opacity: 0.55;
 }
 
 /* ============================================================

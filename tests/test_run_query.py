@@ -1,9 +1,11 @@
 """
 Testy jednostkowe dla czystych funkcji obliczeniowych w run_query.py
-(z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve).
-Wiekszosc funkcji operuje wylacznie na DataFrame'ach (bez DuckDB/sieci);
-compute_equity_curve czyta z portfolio_history/prices/index_constituents,
-wiec jego testy uzywaja polaczenia DuckDB ":memory:".
+(z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve) oraz
+integracyjne testy logiki rebalansu koszyka top-momentum (na lokalnej bazie DuckDB
+:memory:, bez sieci). Wiekszosc funkcji operuje wylacznie na DataFrame'ach;
+compute_equity_curve czyta z portfolio_history/prices/index_constituents, a
+resolve_top_basket z portfolio_history/top_basket_rebalances, wiec ich testy
+uzywaja polaczenia DuckDB ":memory:".
 """
 import duckdb
 import pandas as pd
@@ -13,8 +15,10 @@ from run_query import (
     MAX_HOLDINGS,
     MAX_WEIGHT,
     add_zscore_and_momentum_score,
+    build_top_basket,
     compute_equity_curve,
     compute_weights,
+    resolve_top_basket,
     select_with_buffer,
 )
 
@@ -221,6 +225,148 @@ class TestComputeWeights:
         others = out[out["momentum_score"] == 1.0]
         if not out["cap_scaled_due_to_infeasibility"].iloc[0]:
             assert best["weight"] > others["weight"].max()
+
+
+
+# ---------------------------------------------------------------------------
+# build_top_basket
+# ---------------------------------------------------------------------------
+
+def make_weighted_df(rows):
+    """rows: list of (ticker, sector, price_now, momentum_value, annualized_volatility, momentum_score)."""
+    return pd.DataFrame(rows, columns=[
+        "Ticker", "Sector", "price_now", "momentum_value", "annualized_volatility", "momentum_score",
+    ])
+
+
+class TestBuildTopBasket:
+    def test_takes_top_n_by_momentum_score_from_each_universe(self):
+        sp500 = make_weighted_df([
+            ("A", "Tech", 100.0, 0.30, 0.20, 2.5),
+            ("B", "Tech", 50.0, 0.10, 0.20, 1.2),
+            ("C", "Health", 20.0, -0.05, 0.20, 0.8),
+        ])
+        nasdaq = make_weighted_df([
+            ("D", "Tech", 200.0, 0.40, 0.25, 3.0),
+        ])
+        out = build_top_basket(sp500, nasdaq, sp500_n=2, nasdaq100_n=1)
+        tickers = [r["ticker"] for r in out]
+        assert tickers == ["D", "A", "B"]  # posortowane po momentum_pct malejaco
+        assert "C" not in tickers  # spoza top 2 wg momentum_score w SP500
+
+    def test_overlapping_ticker_merges_universes_without_duplicate(self):
+        sp500 = make_weighted_df([("AAPL", "Tech", 100.0, 0.20, 0.20, 2.0)])
+        nasdaq = make_weighted_df([("AAPL", "Tech", 100.0, 0.20, 0.20, 2.2)])
+        out = build_top_basket(sp500, nasdaq, sp500_n=5, nasdaq100_n=5)
+        assert len(out) == 1
+        assert sorted(out[0]["universes"]) == ["NASDAQ100", "SP500"]
+
+    def test_rank_is_assigned_sequentially(self):
+        sp500 = make_weighted_df([
+            ("A", "Tech", 10.0, 0.10, 0.20, 1.0),
+            ("B", "Tech", 10.0, 0.20, 0.20, 2.0),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
+        assert [r["rank"] for r in out] == [1, 2]
+        assert out[0]["ticker"] == "B"  # wyzszy momentum_pct -> rank 1
+
+    def test_handles_missing_universe_gracefully(self):
+        sp500 = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
+        out = build_top_basket(sp500, None)
+        assert len(out) == 1
+        assert out[0]["universes"] == ["SP500"]
+
+        out_empty = build_top_basket(None, None)
+        assert out_empty == []
+
+
+# ---------------------------------------------------------------------------
+# resolve_top_basket (rebalans co TOP_BASKET_REBALANCE_MONTHS miesiecy,
+# odswiezanie cen/momentum co miesiac niezaleznie od rebalansu)
+# ---------------------------------------------------------------------------
+
+def make_portfolio_history_con(rows):
+    """rows: list of dict z kluczami ref_date/universe/ticker/sector/price_at_rebalance/
+    momentum_value/annualized_volatility (reszta kolumn dostaje sensowny default)."""
+    con = duckdb.connect(":memory:")
+    con.execute("""
+        CREATE TABLE portfolio_history (
+            ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
+            ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
+            momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
+            z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
+            PRIMARY KEY (ref_date, universe, ticker)
+        )
+    """)
+    for r in rows:
+        con.execute(
+            "INSERT INTO portfolio_history VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            [r["ref_date"], r["universe"], r.get("rank_in_universe", 1), r["ticker"], r["sector"],
+             r["price_at_rebalance"], r["momentum_value"], r.get("momentum_window", "14M"),
+             r["annualized_volatility"], r.get("z_score", 0.0), r.get("momentum_score", 1.0),
+             r.get("weight", 0.1)],
+        )
+    return con
+
+
+class TestResolveTopBasket:
+    def test_first_run_triggers_rebalance_and_persists(self):
+        con = duckdb.connect(":memory:")
+        sp500 = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
+        records, rebalanced, rebalance_ref_date = resolve_top_basket(con, "2026-01-01", sp500, None)
+        assert rebalanced is True
+        assert rebalance_ref_date == "2026-01-01"
+        assert [r["ticker"] for r in records] == ["A"]
+        stored = con.execute(
+            "SELECT ticker FROM top_basket_rebalances WHERE ref_date = DATE '2026-01-01'"
+        ).df()
+        assert stored["ticker"].tolist() == ["A"]
+
+    def test_no_rebalance_before_interval_elapsed_but_metrics_refresh(self):
+        con = make_portfolio_history_con([
+            dict(ref_date="2026-01-01", universe="SP500", ticker="A", sector="Tech",
+                 price_at_rebalance=100.0, momentum_value=0.10, annualized_volatility=0.20),
+            dict(ref_date="2026-02-01", universe="SP500", ticker="A", sector="Tech",
+                 price_at_rebalance=110.0, momentum_value=0.15, annualized_volatility=0.22),
+        ])
+        sp500_jan = make_weighted_df([("A", "Tech", 100.0, 0.10, 0.20, 1.0)])
+        resolve_top_basket(con, "2026-01-01", sp500_jan, None)  # rebalans na styczen
+
+        # luty: mniej niz 6 miesiecy od stycznia -> bez rebalansu, ale metryki z lutego
+        records, rebalanced, rebalance_ref_date = resolve_top_basket(con, "2026-02-01", None, None)
+        assert rebalanced is False
+        assert rebalance_ref_date == "2026-01-01"
+        assert records[0]["price"] == pytest.approx(110.0)
+        assert records[0]["momentum_pct"] == pytest.approx(15.0)
+        assert records[0]["stale"] is False
+
+    def test_rebalance_after_interval_elapses(self):
+        con = make_portfolio_history_con([
+            dict(ref_date="2026-01-01", universe="SP500", ticker="A", sector="Tech",
+                 price_at_rebalance=100.0, momentum_value=0.10, annualized_volatility=0.20),
+        ])
+        sp500_jan = make_weighted_df([("A", "Tech", 100.0, 0.10, 0.20, 1.0)])
+        resolve_top_basket(con, "2026-01-01", sp500_jan, None)
+
+        sp500_jul = make_weighted_df([("B", "Health", 50.0, 0.30, 0.25, 2.0)])
+        records, rebalanced, rebalance_ref_date = resolve_top_basket(con, "2026-07-01", sp500_jul, None)
+        assert rebalanced is True
+        assert rebalance_ref_date == "2026-07-01"
+        assert [r["ticker"] for r in records] == ["B"]
+
+    def test_held_ticker_missing_current_month_data_is_marked_stale(self):
+        con = make_portfolio_history_con([
+            dict(ref_date="2026-01-01", universe="SP500", ticker="A", sector="Tech",
+                 price_at_rebalance=100.0, momentum_value=0.10, annualized_volatility=0.20),
+            # brak wiersza na 2026-02-01 dla A (np. wypadla z kwintylowej selekcji w tym miesiacu)
+        ])
+        sp500_jan = make_weighted_df([("A", "Tech", 100.0, 0.10, 0.20, 1.0)])
+        resolve_top_basket(con, "2026-01-01", sp500_jan, None)
+
+        records, rebalanced, _ = resolve_top_basket(con, "2026-02-01", None, None)
+        assert rebalanced is False
+        assert records[0]["stale"] is True
+        assert records[0]["price"] == pytest.approx(100.0)  # ostatnie dostepne dane, sprzed miesiaca
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@ const UNIVERSE_LABELS = {
 
 const state = {
     data: {},
+    topBasket: { constituents: [] },
     selectedTicker: null,
     drawerOpen: false,
     drawerUniverse: "SP500",
@@ -25,6 +26,14 @@ async function loadData() {
             console.error(`Nie udało się wczytać danych dla ${u}:`, e);
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
+    }
+    try {
+        const res = await fetch("data/top_basket.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        state.topBasket = await res.json();
+    } catch (e) {
+        console.error("Nie udało się wczytać koszyka top-momentum:", e);
+        state.topBasket = { ref_date: null, n_tickers: 0, constituents: [] };
     }
 }
 
@@ -54,6 +63,46 @@ function renderSidebarTiles() {
             container.appendChild(empty);
         }
     });
+}
+
+// Koncentrowany koszyk "top momentum" (SP500 top 20 + NASDAQ100 top 5 wg
+// momentum score, patrz docs/data/top_basket.json / run_query.py::build_top_basket).
+// Kafelki dzialaja tak samo jak w gornych 3 grupach — klik podmienia wykres.
+function renderTopBasketTiles() {
+    const container = document.getElementById("tiles-TOPBASKET");
+    if (!container) return;
+
+    const meta = document.getElementById("topBasketMeta");
+    if (meta) {
+        const b = state.topBasket;
+        meta.textContent = b.last_rebalance_ref_date
+            ? `Rebalans: ${b.last_rebalance_ref_date}${b.rebalanced_today ? " (dziś)" : ""} · kolejny: ~${b.next_rebalance_ref_date} · dane: ${b.ref_date || "—"}`
+            : "Brak danych — uruchom pipeline.";
+    }
+
+    container.innerHTML = "";
+    const items = state.topBasket.constituents || [];
+    items.forEach(c => {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+        tile.textContent = c.ticker;
+        const sources = c.universes.map(u => UNIVERSE_LABELS[u].replace(" Momentum", "")).join(" + ");
+        const staleNote = c.stale ? " · dane sprzed rebalansu (spółka poza bieżącą selekcją kwintylową)" : "";
+        tile.title = `${c.ticker} — #${c.rank} · momentum ${c.momentum_pct != null ? c.momentum_pct.toFixed(2) + "%" : "brak danych"} · ${sources}${staleNote}`;
+        if (c.universes.length > 1) tile.classList.add("ticker-tile-overlap");
+        if (c.stale) tile.classList.add("ticker-tile-stale");
+        tile.dataset.ticker = c.ticker;
+        tile.dataset.universe = c.universes[0];
+        if (c.ticker === state.selectedTicker) tile.classList.add("selected");
+        tile.addEventListener("click", () => selectTicker(c.ticker, c.universes[0]));
+        container.appendChild(tile);
+    });
+    if (items.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
+        empty.textContent = "brak danych";
+        container.appendChild(empty);
+    }
 }
 
 function selectTicker(ticker, universe) {
@@ -361,6 +410,7 @@ if (typeof document !== "undefined") {
     (async function init() {
         await loadData();
         renderSidebarTiles();
+        renderTopBasketTiles();
         initDrawer();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
