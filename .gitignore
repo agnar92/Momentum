@@ -219,3 +219,7 @@ __marimo__/
 
 # Data for web
 /docs/data/
+
+# Node.js (dev-only tooling for docs/js/*.js tests + linter — CI-only,
+# the deployed site itself has no build step and no Node dependency)
+node_modules/

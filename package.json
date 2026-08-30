@@ -1,0 +1,12 @@
+{
+  "name": "momentum-dashboard-tests",
+  "private": true,
+  "description": "Dev-only tooling (tests + linter) for docs/js/*.js. Not used by the deployed GitHub Pages site, which stays plain HTML/JS with no build step.",
+  "scripts": {
+    "test": "node --test tests/js/*.test.js",
+    "lint": "eslint docs/js tests/js"
+  },
+  "devDependencies": {
+    "eslint": "^10.9.1"
+  }
+}

@@ -1,0 +1,15 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+# Zestaw bazowy (pyflakes + pycodestyle) — repo nie ma dotychczas zadnej
+# konfiguracji lintera, wiec zaczynamy od bledow/nieuzywanych importow,
+# a nie od stylu, zeby nie generowac setek nieistotnych ostrzezen naraz.
+select = ["E", "F", "W"]
+ignore = [
+    "E501",  # dlugosc linii pilnowana przez line-length powyzej, nie przez blad
+]

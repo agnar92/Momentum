@@ -187,6 +187,18 @@ function renderChangelog(d) {
         + dropped.map(t => `<span class="changelog-badge dropped">−${t}</span>`).join("");
 }
 
+// Komparator wierszy tabeli: sortowanie tekstowe bez uwzględniania wielkości
+// liter, numeryczne dla reszty pól; wydzielony z renderTable, żeby dało się
+// go przetestować bez DOM.
+function compareRows(a, b, sortKey, sortDir) {
+    let va = a[sortKey];
+    let vb = b[sortKey];
+    if (typeof va === "string") { va = va.toLowerCase(); vb = String(vb).toLowerCase(); }
+    if (va < vb) return sortDir === "asc" ? -1 : 1;
+    if (va > vb) return sortDir === "asc" ? 1 : -1;
+    return 0;
+}
+
 function renderTable() {
     const d = state.data[state.drawerUniverse];
     const meta = document.getElementById("drawerMeta");
@@ -207,14 +219,7 @@ function renderTable() {
 
     let rows = (d.constituents || []).slice();
 
-    rows.sort((a, b) => {
-        let va = a[state.sortKey];
-        let vb = b[state.sortKey];
-        if (typeof va === "string") { va = va.toLowerCase(); vb = String(vb).toLowerCase(); }
-        if (va < vb) return state.sortDir === "asc" ? -1 : 1;
-        if (va > vb) return state.sortDir === "asc" ? 1 : -1;
-        return 0;
-    });
+    rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
 
     const tbody = document.getElementById("momentumTableBody");
     tbody.innerHTML = "";
@@ -368,21 +373,32 @@ function initCmdk() {
 // ============================================================
 // INIT
 // ============================================================
-(async function init() {
-    await loadData();
-    renderSidebarTiles();
-    initDrawer();
-    updateSortHeaderClasses();
-    renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
-    buildSearchIndex();
-    initCmdk();
-    document.getElementById("chartBackBtn").addEventListener("click", () => {
-        document.querySelector(".workspace").classList.remove("mobile-chart-view");
-    });
-    updateChart("SPY");
-})();
+// typeof document check: pozwala wczytać ten plik przez `require()` w testach
+// Node (patrz tests/js/) bez uruchamiania inicjalizacji strony — w przeglądarce
+// document zawsze istnieje, więc zachowanie się nie zmienia.
+if (typeof document !== "undefined") {
+    (async function init() {
+        await loadData();
+        renderSidebarTiles();
+        initDrawer();
+        updateSortHeaderClasses();
+        renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
+        buildSearchIndex();
+        initCmdk();
+        document.getElementById("chartBackBtn").addEventListener("click", () => {
+            document.querySelector(".workspace").classList.remove("mobile-chart-view");
+        });
+        updateChart("SPY");
+    })();
 
-if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    if ("serviceWorker" in navigator) {
+        window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
+    }
+}
+
+// Eksport wyłącznie dla test runnera Node (tests/js/) — nie ładowany
+// i bez efektu w przeglądarce (module tam nie istnieje).
+if (typeof module !== "undefined" && module.exports) {
+    module.exports = { compareRows };
 }
 
