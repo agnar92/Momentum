@@ -75,18 +75,6 @@
             <label>Maksymalna liczba spółek w portfelu: <span id="maxHoldingsValue"></span></label>
             <input type="range" id="maxHoldings" min="3" max="60" step="1">
         </div>
-        <div class="settings-row">
-            <label>Koszt przewalutowania (% od kwoty transakcji)</label>
-            <input type="number" id="fxCostPct" min="0" max="5" step="0.1">
-            <div class="settings-hint">Jedyny koszt na IKE (bez podatku Belki) — używany do liczenia, czy dana transakcja w ogóle się opłaca.</div>
-        </div>
-        <div class="settings-row">
-            <label><input type="checkbox" id="letWinnersRun"> Nie przycinaj rosnących spółek (zostaw zyski, dopóki nadal są w selekcji momentum)</label>
-        </div>
-        <div class="settings-row" id="trimBandRow">
-            <label>Jak bardzo pozwolić rosnącej spółce przekroczyć wagę docelową, zanim zasugerujemy przycięcie: <span id="trimBandMultiplierValue"></span>x zwykłego progu</label>
-            <input type="range" id="trimBandMultiplier" min="1" max="8" step="0.5">
-        </div>
     </div>
 
     <div class="stat-cards" id="summaryCards">
@@ -101,10 +89,6 @@
         <div class="stat-card">
             <div class="label">Spółek w sugestii</div>
             <div class="value" id="statHoldingsCount">—</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">Szacowany koszt tego rebalansu</div>
-            <div class="value" id="statEstCost">—</div>
         </div>
     </div>
 

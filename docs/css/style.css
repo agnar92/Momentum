@@ -691,7 +691,6 @@ table.holdings-table td, table.rebalance-table td {
 .action-badge.skip { background: var(--panel-alt); color: var(--text-faint); font-weight: 400; }
 .action-badge.unknown { background: var(--panel-alt); color: var(--text-dim); }
 .action-badge.excluded { background: var(--panel-alt); color: var(--text-faint); font-style: italic; }
-.action-badge .cost-note { font-weight: 400; opacity: 0.75; }
 
 .exclude-input {
     background: var(--panel-alt);
