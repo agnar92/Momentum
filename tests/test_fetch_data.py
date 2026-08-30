@@ -8,10 +8,14 @@ import pandas as pd
 import pytest
 
 from fetch_data import (
+    PRICES_SCHEMA,
     _find_column,
     _parse_money,
+    _prices_table_has_rows,
+    _upsert_price_rows,
     get_full_refresh_range,
     load_index_constituents,
+    update_prices_incremental,
 )
 
 
@@ -152,3 +156,117 @@ class TestLoadIndexConstituents:
             "SELECT COUNT(*) FROM index_constituents WHERE Ticker = 'DUP'"
         ).fetchone()[0]
         assert count == 1
+
+
+# ---------------------------------------------------------------------------
+# Odswiezenie przyrostowe: _prices_table_has_rows, _upsert_price_rows,
+# update_prices_incremental (bez wywolan sieciowych — _download_price_rows
+# jest monkeypatchowane).
+# ---------------------------------------------------------------------------
+
+def _make_prices_con(rows):
+    """rows: lista (date_str, ticker, close, adj_close, volume)."""
+    con = duckdb.connect(":memory:")
+    con.execute(f"CREATE TABLE prices ({PRICES_SCHEMA})")
+    if rows:
+        df = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
+        con.execute("INSERT INTO prices SELECT * FROM df")
+    return con
+
+
+class TestPricesTableHasRows:
+    def test_false_when_table_missing(self):
+        con = duckdb.connect(":memory:")
+        assert _prices_table_has_rows(con) is False
+
+    def test_false_when_table_empty(self):
+        con = _make_prices_con([])
+        assert _prices_table_has_rows(con) is False
+
+    def test_true_when_table_has_rows(self):
+        con = _make_prices_con([("2024-01-02", "AAA", 10.0, 10.0, 100)])
+        assert _prices_table_has_rows(con) is True
+
+
+class TestUpsertPriceRows:
+    def test_replaces_rows_in_range_for_given_tickers(self):
+        con = _make_prices_con([
+            ("2024-01-02", "AAA", 10.0, 10.0, 100),
+            ("2024-01-03", "AAA", 11.0, 11.0, 100),
+        ])
+        new_rows = [("2024-01-03", "AAA", 99.0, 99.0, 999)]
+        _upsert_price_rows(con, new_rows, ["AAA"], "2024-01-03")
+
+        out = con.execute("SELECT Date, Close FROM prices ORDER BY Date").df()
+        assert len(out) == 2
+        assert out.iloc[0]["Close"] == pytest.approx(10.0)   # przed zakresem — nietkniete
+        assert out.iloc[1]["Close"] == pytest.approx(99.0)   # w zakresie — nadpisane
+
+    def test_does_not_touch_other_tickers(self):
+        con = _make_prices_con([
+            ("2024-01-03", "AAA", 11.0, 11.0, 100),
+            ("2024-01-03", "BBB", 22.0, 22.0, 100),
+        ])
+        _upsert_price_rows(con, [("2024-01-03", "AAA", 99.0, 99.0, 999)], ["AAA"], "2024-01-01")
+
+        bbb = con.execute("SELECT Close FROM prices WHERE Ticker = 'BBB'").fetchone()[0]
+        assert bbb == pytest.approx(22.0)
+
+    def test_empty_ticker_list_is_a_noop(self):
+        con = _make_prices_con([("2024-01-03", "AAA", 11.0, 11.0, 100)])
+        _upsert_price_rows(con, [], [], "2024-01-01")
+        assert con.execute("SELECT COUNT(*) FROM prices").fetchone()[0] == 1
+
+
+class TestUpdatePricesIncremental:
+    def test_failed_catchup_fetch_preserves_existing_data(self, monkeypatch):
+        """Gdyby chwilowa awaria yfinance zwrocila 0 wierszy dla znanego tickera,
+        jego stare ceny w oknie doszacowania NIE moga zostac skasowane."""
+        recent_date = (pd.Timestamp.today() - pd.Timedelta(days=10)).strftime('%Y-%m-%d')
+        con = _make_prices_con([(recent_date, "AAA", 10.0, 10.0, 100)])
+
+        def fake_download(tickers, start_date, end_date):
+            return [], set(), list(tickers)  # wszystko sie nie udalo
+
+        monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
+        update_prices_incremental(con, ["AAA"], retention_months=15)
+
+        out = con.execute("SELECT Close FROM prices WHERE Ticker = 'AAA'").fetchall()
+        assert out == [(10.0,)]
+
+    def test_new_ticker_triggers_full_backfill_range_not_catchup_range(self, monkeypatch):
+        recent_date = (pd.Timestamp.today() - pd.DateOffset(months=2)).strftime('%Y-%m-%d')
+        con = _make_prices_con([(recent_date, "AAA", 10.0, 10.0, 100)])
+        calls = []
+
+        def fake_download(tickers, start_date, end_date):
+            calls.append((tuple(sorted(tickers)), start_date, end_date))
+            return (
+                [(end_date, t, 1.0, 1.0, 1) for t in tickers],
+                set(tickers),
+                [],
+            )
+
+        monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
+        update_prices_incremental(con, ["AAA", "NEW"], retention_months=15)
+
+        by_tickers = {c[0]: c for c in calls}
+        catchup_call = by_tickers[("AAA",)]
+        backfill_call = by_tickers[("NEW",)]
+        # Backfill nowej spolki siega dalej wstecz niz zwykle doszacowanie.
+        assert backfill_call[1] < catchup_call[1]
+
+    def test_trims_history_older_than_retention_window(self, monkeypatch):
+        old_date = (pd.Timestamp.today() - pd.DateOffset(months=20)).strftime('%Y-%m-%d')
+        recent_date = pd.Timestamp.today().strftime('%Y-%m-%d')
+        con = _make_prices_con([
+            (old_date, "AAA", 10.0, 10.0, 100),
+            (recent_date, "AAA", 11.0, 11.0, 100),
+        ])
+        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), []))
+
+        update_prices_incremental(con, ["AAA"], retention_months=15)
+
+        dates_left = [r[0] for r in con.execute("SELECT Date FROM prices").fetchall()]
+        assert len(dates_left) == 1
+        assert str(dates_left[0]) != old_date

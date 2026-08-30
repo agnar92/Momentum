@@ -15,8 +15,12 @@ files (English is fine for new, unrelated code).
 
 ## Pipeline architecture (the core thing to understand)
 
-There are three Python scripts, run in this order, all operating on a local DuckDB file
-`momentum_data.duckdb` (not committed to git — recreated fresh on every CI run):
+There are two Python scripts, run in this order, all operating on a local DuckDB file
+`momentum_data.duckdb`. Since a recent change, this file **is committed to git** (repo root, tracked —
+not under `docs/`, so it has no effect on the GitHub Pages deployment) and persists across scheduled
+runs; `main.yml` commits it back after each run (see CI section below). This is what keeps
+`portfolio_history` alive across separate monthly workflow runs, so the buffer rule actually has a
+"previous rebalance" to compare against in production.
 
 1. **`fetch_data.py`** — data acquisition only.
    - Loads index composition + weights from the three manually-maintained CSV files at repo root
@@ -24,10 +28,21 @@ There are three Python scripts, run in this order, all operating on a local Duck
      these are iShares ETF holdings exports and must be replaced by hand when the index composition
      changes) into the `index_constituents` table. The `Market Value` column from each CSV is stored
      as `fmc_etf` and used as a real-world float-adjusted-market-cap substitute for weighting.
-   - Downloads daily prices for every constituent ticker via `yfinance`, in batches of 50, and does a
-     **full replace** of the `prices` table (via a `prices_staging` table renamed into place) — it
-     never appends. If fetched ticker coverage falls below `--min-coverage` (default 80%), the refresh
-     is aborted and the old `prices` table is left untouched.
+   - Downloads daily prices for every constituent ticker via `yfinance`, in batches of 50, into the
+     `prices` table (PK `(Date, Ticker)`). Two modes, chosen automatically by `update_duckdb()`:
+     - **Bootstrap** (`bootstrap_prices`) — used only when `prices` doesn't exist yet or is empty.
+       Downloads the full `--lookback-months` (default 15) window for every ticker via a
+       `prices_staging` table renamed into place. If fetched ticker coverage falls below
+       `--min-coverage` (default 80%), the refresh is aborted and nothing is written.
+     - **Incremental** (`update_prices_incremental`) — used on every subsequent run, since the DB now
+       persists. Tickers already present in `prices` only get a short "catch-up" fetch back to their
+       last known date (minus `CATCHUP_OVERLAP_DAYS` for safety); tickers with no rows yet (e.g. a new
+       constituent after an index-composition CSV swap) get a full `--lookback-months` backfill.
+       Fetched data is upserted (`_upsert_price_rows`: delete-then-insert the affected date range for
+       the tickers that actually got fresh data — a ticker whose fetch failed keeps its old rows rather
+       than losing them). After fetching, rows older than `--lookback-months` are deleted
+       (`DELETE FROM prices WHERE Date < cutoff`), so the table is a rolling window and does not grow
+       without bound — it always holds just enough history for the M-14 momentum window plus a margin.
 2. **`run_query.py`** — all the calculation logic and static site generation. Nothing about data
    fetching lives here. For each universe (`SP500`, `NASDAQ100`, `DOWJONES`):
    - Computes momentum value `(price[M-2] / price[M-14]) - 1` (falls back to a 9-month window
@@ -50,16 +65,11 @@ There are three Python scripts, run in this order, all operating on a local Duck
      (latest price for every ticker across all three indices, so the rebalance panel can price
      positions that aren't in the current momentum selection).
    - Reference date defaults to `MAX(Date)` in the `prices` table; pass `--ref-date YYYY-MM-DD` to
-     recompute for a specific historical date (used by the backfill script below).
-3. **`backfill_year.py`** — reruns `run_query.py` once per month-end over roughly the last 12 months
-   (via `subprocess`), to backfill `portfolio_history` for a fresh/empty database. It only requires
-   `prices` to already span that period (loaded once by `fetch_data.py`).
+     recompute for a specific historical date.
 
-Because `momentum_data.duckdb` is not committed, in the normal monthly CI run `portfolio_history` starts
-empty every time and only ever accumulates one row per run before the next fetch — the buffer/turnover
-comparison against a *previous* rebalance only works within a single container's lifetime (e.g. during
-a backfill run), not across separate scheduled workflow runs, unless the DB is persisted/restored some
-other way.
+Monthly (not semi-annual, as the official S&P 500 Momentum index does) rebalancing is an intentional
+choice here — it matches the cadence used in most academic momentum-return literature — not an attempt
+at a literal 1:1 replication of S&P's own rebalance calendar.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -90,24 +100,23 @@ it only exists after the pipeline has run.
 pip install -r requirements.txt   # NOTE: this file is UTF-16-encoded; edit with a UTF-16-aware tool
                                    # or regenerate it, don't hand-append plain-ASCII lines
 
-python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh prices + index composition
+python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh prices (bootstrap or incremental) + index composition
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
                                    # compute momentum + regenerate docs/data/*.json
-python backfill_year.py           # backfill ~12 monthly rebalances by re-invoking run_query.py
+
+pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)
+ruff check .                      # linter
 ```
 
-There are no automated tests, linters, or formatters configured in this repo. To sanity-check changes
-to the frontend, open `docs/index.html` / `docs/rebalance.html` directly (or serve `docs/` with any
-static file server) after `docs/data/*.json` has been generated by the pipeline.
+To sanity-check changes to the frontend, open `docs/index.html` / `docs/rebalance.html` directly (or
+serve `docs/` with any static file server) after `docs/data/*.json` has been generated by the pipeline.
 
 ## CI (`.github/workflows/`)
 
 - **`main.yml`** — runs monthly (`cron: '0 6 1 * *'`), on push to `main`, and manually. Installs
-  `requirements.txt`, runs `fetch_data.py` then `run_query.py` against a fresh DuckDB file, and
-  deploys `docs/` to GitHub Pages.
-- **`bactest.yaml`** — manual-only (`workflow_dispatch`). Runs `fetch_data.py`, then
-  `backfill_year.py` (12 months of historical rebalances), then a final `run_query.py`, then deploys
-  `docs/` — used to (re)populate a year of `portfolio_history` from scratch.
-
-Both workflows deploy to GitHub Pages and share the `"pages"` concurrency group, so they can't run
-concurrently.
+  `requirements.txt`, runs `fetch_data.py` then `run_query.py` against the persisted DuckDB file (see
+  above), then **commits `momentum_data.duckdb` back to the repo** (`contents: write` permission; the
+  commit message ends in `[skip ci]` to avoid re-triggering itself via the `push: main` trigger) before
+  deploying `docs/` to GitHub Pages.
+- **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
+  no effect on the deployed site) on pushes/PRs.

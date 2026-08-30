@@ -129,29 +129,35 @@ def get_full_refresh_range(lookback_months):
     return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
 
 
-def fetch_prices(con, tickers, lookback_months, min_coverage):
-    start_date, end_date = get_full_refresh_range(lookback_months)
-    print(f"🔄 Pełne odświeżenie cen: {start_date} → {end_date} dla {len(tickers)} tickerów...")
+PRICES_SCHEMA = """
+    Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+    PRIMARY KEY (Date, Ticker)
+"""
 
-    con.execute("DROP TABLE IF EXISTS prices_staging")
-    con.execute("""
-        CREATE TABLE prices_staging (
-            Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
-            PRIMARY KEY (Date, Ticker)
-        )
-    """)
+# Ile dni wstecz od ostatniej znanej ceny dogrywać przy odświeżeniu przyrostowym —
+# łapie ewentualne korekty/opóźnienia danych z yfinance, bez ryzyka luk przy
+# weekendach/świętach. Nadpisywane (upsert), więc nie tworzy duplikatów.
+CATCHUP_OVERLAP_DAYS = 7
 
+
+def _download_price_rows(tickers, start_date, end_date):
+    """Pobiera OHLC z yfinance w paczkach po 50 tickerów dla zadanego zakresu dat.
+    Zwraca (rows, fetched_tickers, failed_tickers) — sama logika sieciowa/parsująca,
+    bez dotykania DuckDB, żeby dało się jej użyć zarówno przy pełnym bootstrapie,
+    jak i przy przyrostowym doszacowaniu/backfillu nowych spółek."""
+    rows = []
     failed_tickers, fetched_tickers = [], set()
+    if not tickers:
+        return rows, fetched_tickers, failed_tickers
     batch_size = 50
     n_batches = (len(tickers) - 1) // batch_size + 1
 
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
-        print(f"  Ceny — paczka {i // batch_size + 1}/{n_batches}...")
+        print(f"  Ceny — paczka {i // batch_size + 1}/{n_batches} ({start_date} → {end_date})...")
         try:
             data = yf.download(tickers=batch, start=start_date, end=end_date, interval="1d",
                                 group_by="ticker", auto_adjust=False, threads=True)
-            rows = []
             for ticker in batch:
                 df_t = data.copy() if len(batch) == 1 else (
                     data[ticker].dropna(how="all") if ticker in data.columns.levels[0] else pd.DataFrame()
@@ -165,15 +171,24 @@ def fetch_prices(con, tickers, lookback_months, min_coverage):
                                      float(row.get("Adj Close", row["Close"])),
                                      int(row["Volume"]) if pd.notna(row.get("Volume")) else 0))
                         fetched_tickers.add(ticker)
-            if rows:
-                # df_insert wyglada jak niewykorzystana zmienna dla lintera, ale
-                # DuckDB odwoluje sie do niej po nazwie wewnatrz zapytania SQL ponizej.
-                df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
-                con.execute("INSERT INTO prices_staging SELECT * FROM df_insert")
         except Exception as e:
             print(f"❌ Błąd pobierania cen dla paczki {batch}: {e}")
             failed_tickers.extend(batch)
         time.sleep(2)
+
+    return rows, fetched_tickers, failed_tickers
+
+
+def bootstrap_prices(con, tickers, lookback_months, min_coverage):
+    """Pierwsze, pełne pobranie historii cen (podmiana całej tabeli prices) —
+    używane tylko gdy baza jest pusta/nie istnieje jeszcze."""
+    start_date, end_date = get_full_refresh_range(lookback_months)
+    print(f"🔄 Pełne pobranie cen (bootstrap): {start_date} → {end_date} dla {len(tickers)} tickerów...")
+
+    con.execute("DROP TABLE IF EXISTS prices_staging")
+    con.execute(f"CREATE TABLE prices_staging ({PRICES_SCHEMA})")
+
+    rows, fetched_tickers, failed_tickers = _download_price_rows(tickers, start_date, end_date)
 
     coverage = len(fetched_tickers) / len(tickers) if tickers else 0
     if coverage < min_coverage:
@@ -181,12 +196,84 @@ def fetch_prices(con, tickers, lookback_months, min_coverage):
         con.execute("DROP TABLE prices_staging")
         return False
 
+    if rows:
+        # df_insert wyglada jak niewykorzystana zmienna dla lintera, ale
+        # DuckDB odwoluje sie do niej po nazwie wewnatrz zapytania SQL ponizej.
+        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
+        con.execute("INSERT INTO prices_staging SELECT * FROM df_insert")
+
     con.execute("DROP TABLE IF EXISTS prices")
     con.execute("ALTER TABLE prices_staging RENAME TO prices")
     print(f"✅ Ceny odświeżone. Pokrycie: {len(fetched_tickers)}/{len(tickers)} ({coverage:.0%}).")
     if failed_tickers:
         print(f"⚠️  Brak cen dla: {sorted(set(failed_tickers))}")
     return True
+
+
+def _upsert_price_rows(con, rows, tickers, start_date):
+    """Zastępuje w tabeli prices wiersze dla podanych tickerów od start_date wzwyż
+    świeżo pobranymi danymi (usuń stary zakres + wstaw nowy = upsert bez konfliktu
+    PRIMARY KEY). Wywoływać WYŁĄCZNIE z tickerami, dla których fetch się faktycznie
+    powiódł — inaczej przy chwilowej awarii yfinance skasowalibyśmy dobre, już
+    zapisane dane, nie mając czym ich zastąpić."""
+    if not tickers:
+        return
+    con.register("_tickers_tmp", pd.DataFrame({"Ticker": tickers}))
+    con.execute(f"""
+        DELETE FROM prices
+        WHERE Date >= DATE '{start_date}' AND Ticker IN (SELECT Ticker FROM _tickers_tmp)
+    """)
+    con.unregister("_tickers_tmp")
+    if rows:
+        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
+        con.execute("INSERT INTO prices SELECT * FROM df_insert")
+
+
+def update_prices_incremental(con, tickers, retention_months):
+    """Odświeżenie przyrostowe: dogrywa tylko nowe dni dla znanych tickerów (od
+    ostatniej znanej ceny wstecz o CATCHUP_OVERLAP_DAYS), robi pełny backfill
+    tylko dla tickerów, których jeszcze nie ma w prices (np. nowy skład indeksu
+    po podmianie CSV), a na końcu przycina historię do ostatnich retention_months
+    miesięcy — tak żeby baza nie rosła w nieskończoność, mając zawsze tyle
+    historii, ile potrzebuje momentum_value (M-14) + margines na fallback/staleness."""
+    existing_tickers = set(con.execute("SELECT DISTINCT Ticker FROM prices").df()["Ticker"]) & set(tickers)
+    new_tickers = [t for t in tickers if t not in existing_tickers]
+    watermark = con.execute("SELECT MAX(Date) FROM prices").fetchone()[0]
+    end_date = pd.Timestamp.today().strftime('%Y-%m-%d')
+
+    if existing_tickers:
+        catchup_start = (pd.Timestamp(watermark) - pd.Timedelta(days=CATCHUP_OVERLAP_DAYS)).strftime('%Y-%m-%d')
+        print(f"🔄 Doszacowanie cen: {catchup_start} → {end_date} dla {len(existing_tickers)} znanych tickerów...")
+        rows, fetched, failed = _download_price_rows(sorted(existing_tickers), catchup_start, end_date)
+        _upsert_price_rows(con, rows, sorted(fetched), catchup_start)
+        if failed:
+            print(f"⚠️  Brak świeżych cen dla: {sorted(set(failed))} — stare dane pozostają w bazie "
+                  f"(zostaną odfiltrowane przez --max-staleness-days w run_query.py, jeśli się zestarzeją).")
+
+    if new_tickers:
+        backfill_start, _ = get_full_refresh_range(retention_months)
+        print(f"🆕 Pełny backfill historii dla {len(new_tickers)} nowych spółek w indeksie "
+              f"({backfill_start} → {end_date})...")
+        rows, fetched, failed = _download_price_rows(new_tickers, backfill_start, end_date)
+        _upsert_price_rows(con, rows, sorted(fetched), backfill_start)
+        if failed:
+            print(f"⚠️  Brak historii dla nowych spółek: {sorted(set(failed))}.")
+
+    cutoff = (pd.Timestamp.today() - pd.DateOffset(months=retention_months)).strftime('%Y-%m-%d')
+    n_before = con.execute("SELECT COUNT(*) FROM prices").fetchone()[0]
+    con.execute(f"DELETE FROM prices WHERE Date < DATE '{cutoff}'")
+    n_after = con.execute("SELECT COUNT(*) FROM prices").fetchone()[0]
+    print(f"🧹 Przycięto historię cen do ostatnich {retention_months} mies. "
+          f"(usunięto {n_before - n_after} wierszy starszych niż {cutoff}).")
+
+
+def _prices_table_has_rows(con):
+    exists = con.execute("""
+        SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'prices'
+    """).fetchone()[0] > 0
+    if not exists:
+        return False
+    return con.execute("SELECT COUNT(*) FROM prices").fetchone()[0] > 0
 
 
 def update_duckdb(lookback_months=15, min_coverage=0.8):
@@ -197,13 +284,24 @@ def update_duckdb(lookback_months=15, min_coverage=0.8):
         print("❌ Brak tickerów. Przerywam.")
         con.close()
         return
-    fetch_prices(con, tickers, lookback_months, min_coverage)
+
+    if _prices_table_has_rows(con):
+        update_prices_incremental(con, tickers, retention_months=lookback_months)
+    else:
+        bootstrap_prices(con, tickers, lookback_months, min_coverage)
+
     con.close()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Pełne, comiesięczne odświeżenie bazy cen i składu indeksów (CSV).")
-    parser.add_argument("--lookback-months", type=int, default=15)
-    parser.add_argument("--min-coverage", type=float, default=0.8)
+    parser = argparse.ArgumentParser(
+        description="Odświeża bazę cen (bootstrap za pierwszym razem, potem przyrostowo: "
+                     "dogrywa nowe dni + przycina historię do --lookback-months) i skład indeksów (CSV)."
+    )
+    parser.add_argument("--lookback-months", type=int, default=15,
+                         help="Ile miesięcy historii cen trzymać w bazie (retencja) oraz zakres "
+                              "pierwszego pełnego pobrania / backfillu nowych spółek.")
+    parser.add_argument("--min-coverage", type=float, default=0.8,
+                         help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
     args = parser.parse_args()
     update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage)
