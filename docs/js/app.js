@@ -169,24 +169,6 @@ function updateSortHeaderClasses() {
     });
 }
 
-// Co się zmieniło w selekcji momentum względem poprzedniego rebalansu
-// (spółki dodane/wypadłe) — pozwala szybko zobaczyć ruch bez porównywania
-// tabel ręcznie.
-function renderChangelog(d) {
-    const el = document.getElementById("drawerChangelog");
-    const added = d.added_tickers || [];
-    const dropped = d.dropped_tickers || [];
-    if (!d.prev_ref_date || (added.length === 0 && dropped.length === 0)) {
-        el.style.display = "none";
-        el.innerHTML = "";
-        return;
-    }
-    el.style.display = "flex";
-    el.innerHTML = `<span class="changelog-label">Zmiany vs ${d.prev_ref_date}:</span>`
-        + added.map(t => `<span class="changelog-badge added">+${t}</span>`).join("")
-        + dropped.map(t => `<span class="changelog-badge dropped">−${t}</span>`).join("");
-}
-
 // Komparator wierszy tabeli: sortowanie tekstowe bez uwzględniania wielkości
 // liter, numeryczne dla reszty pól; wydzielony z renderTable, żeby dało się
 // go przetestować bez DOM.
@@ -215,7 +197,6 @@ function renderTable() {
     } else {
         meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
     }
-    renderChangelog(d);
 
     let rows = (d.constituents || []).slice();
 
