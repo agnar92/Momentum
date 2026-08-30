@@ -1,8 +1,11 @@
 """
 Testy jednostkowe dla czystych funkcji obliczeniowych w run_query.py
-(z-score/momentum score, selekcja z regula bufora, wagi z capami) oraz
-integracyjne testy logiki rebalansu koszyka top-momentum (na lokalnej
-bazie DuckDB :memory:, bez sieci).
+(z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve) oraz
+integracyjne testy logiki rebalansu koszyka top-momentum (na lokalnej bazie DuckDB
+:memory:, bez sieci). Wiekszosc funkcji operuje wylacznie na DataFrame'ach (bez
+DuckDB/sieci); compute_equity_curve i logika top-basket czytaja z
+portfolio_history/prices/index_constituents, wiec ich testy uzywaja polaczenia
+DuckDB ":memory:".
 """
 import duckdb
 import pandas as pd
@@ -13,6 +16,7 @@ from run_query import (
     MAX_WEIGHT,
     add_zscore_and_momentum_score,
     build_top_basket,
+    compute_equity_curve,
     compute_weights,
     resolve_top_basket,
     select_with_buffer,
@@ -362,3 +366,127 @@ class TestResolveTopBasket:
         assert rebalanced is False
         assert records[0]["stale"] is True
         assert records[0]["price"] == pytest.approx(100.0)  # ostatnie dostepne dane, sprzed miesiaca
+
+
+# ---------------------------------------------------------------------------
+# compute_equity_curve
+# ---------------------------------------------------------------------------
+
+def make_history_con():
+    con = duckdb.connect(":memory:")
+    con.execute("""
+        CREATE TABLE portfolio_history (
+            ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
+            ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
+            momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
+            z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
+            PRIMARY KEY (ref_date, universe, ticker)
+        )
+    """)
+    con.execute("""
+        CREATE TABLE prices (
+            Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+            PRIMARY KEY (Date, Ticker)
+        )
+    """)
+    con.execute("""
+        CREATE TABLE index_constituents (
+            Ticker VARCHAR, Index_Name VARCHAR, Sector VARCHAR, fmc_etf DOUBLE,
+            PRIMARY KEY (Ticker, Index_Name)
+        )
+    """)
+    return con
+
+
+def insert_history(con, rows):
+    """rows: (ref_date, universe, rank, ticker, price_at_rebalance, weight)."""
+    con.executemany(
+        "INSERT INTO portfolio_history VALUES (?, ?, ?, ?, 'Tech', ?, 0.1, '12M', 0.2, 1.0, 1.5, ?)",
+        rows,
+    )
+
+
+def insert_prices(con, rows):
+    """rows: (date, ticker, close)."""
+    con.executemany(
+        "INSERT INTO prices VALUES (?, ?, ?, ?, 0)",
+        [(d, t, c, c) for d, t, c in rows],
+    )
+
+
+class TestComputeEquityCurve:
+    def test_no_history_returns_none(self):
+        con = make_history_con()
+        assert compute_equity_curve(con, "SP500") is None
+
+    def test_single_ref_date_returns_none(self):
+        con = make_history_con()
+        insert_history(con, [("2026-01-01", "SP500", 1, "AAA", 100.0, 1.0)])
+        assert compute_equity_curve(con, "SP500") is None
+
+    def test_chained_return_for_fully_held_portfolio(self):
+        # AAA +10%, BBB +10%, wagi 0.6/0.4 -> caly portfel +10% w tym okresie.
+        con = make_history_con()
+        insert_history(con, [
+            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.6),
+            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.4),
+            ("2026-02-01", "SP500", 1, "AAA", 110.0, 0.5),
+            ("2026-02-01", "SP500", 2, "BBB", 55.0, 0.5),
+        ])
+        curve = compute_equity_curve(con, "SP500")
+        assert curve["dates"] == ["2026-01-01", "2026-02-01"]
+        assert curve["momentum_index"] == [100.0, pytest.approx(110.0)]
+        assert curve["approximated_periods"] == [False, False]
+
+    def test_benchmark_includes_non_selected_constituents(self):
+        # Benchmark (kup i trzymaj caly indeks) musi uwzglednic CCC, mimo ze
+        # nie zostal wybrany do portfela momentum (nie ma go w portfolio_history).
+        con = make_history_con()
+        insert_history(con, [
+            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.6),
+            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.4),
+            ("2026-02-01", "SP500", 1, "AAA", 110.0, 0.5),
+            ("2026-02-01", "SP500", 2, "BBB", 55.0, 0.5),
+        ])
+        con.executemany("INSERT INTO index_constituents VALUES (?, 'SP500', 'Tech', ?)", [
+            ("AAA", 100.0), ("BBB", 100.0), ("CCC", 200.0),
+        ])
+        insert_prices(con, [
+            ("2026-01-01", "AAA", 100.0), ("2026-02-01", "AAA", 110.0),
+            ("2026-01-01", "BBB", 50.0), ("2026-02-01", "BBB", 55.0),
+            ("2026-01-01", "CCC", 100.0), ("2026-02-01", "CCC", 90.0),
+        ])
+        curve = compute_equity_curve(con, "SP500")
+        # Momentum: 0.6*10% + 0.4*10% = +10% -> 110.0 (nie widzi CCC wcale)
+        assert curve["momentum_index"][1] == pytest.approx(110.0)
+        # Benchmark wazony fmc (0.25/0.25/0.5): 0.25*10% + 0.25*10% + 0.5*(-10%) = 0%
+        assert curve["benchmark_index"][1] == pytest.approx(100.0)
+
+    def test_dropped_ticker_uses_prices_table_when_available(self):
+        # BBB wypada z selekcji do t1, ale jego cena wciaz jest w `prices`
+        # (rolling window jeszcze ja obejmuje) -> wklad liczony dokladnie.
+        con = make_history_con()
+        insert_history(con, [
+            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.5),
+            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.5),
+            ("2026-02-01", "SP500", 1, "AAA", 110.0, 1.0),
+        ])
+        insert_prices(con, [("2026-02-01", "BBB", 55.0)])
+        curve = compute_equity_curve(con, "SP500")
+        # 0.5*(110/100-1) + 0.5*(55/50-1) = 0.05 + 0.05 = +10%
+        assert curve["momentum_index"][1] == pytest.approx(110.0)
+        assert curve["approximated_periods"] == [False, False]
+
+    def test_dropped_ticker_without_price_is_flagged_approximated(self):
+        # BBB wypada z selekcji i jego cena juz nie istnieje w `prices`
+        # (poza rolling window) -> wklad pominiety (0%), okres oznaczony.
+        con = make_history_con()
+        insert_history(con, [
+            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.5),
+            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.5),
+            ("2026-02-01", "SP500", 1, "AAA", 110.0, 1.0),
+        ])
+        curve = compute_equity_curve(con, "SP500")
+        # Tylko AAA liczony: 0.5*(110/100-1) = +5%
+        assert curve["momentum_index"][1] == pytest.approx(105.0)
+        assert curve["approximated_periods"] == [False, True]
