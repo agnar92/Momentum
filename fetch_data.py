@@ -20,6 +20,21 @@ TICKER_COL_CANDIDATES = ["Ticker", "Symbol", "Holding Ticker"]
 SECTOR_COL_CANDIDATES = ["Sector", "Sector Classification", "GICS Sector"]
 MARKET_VALUE_COL_CANDIDATES = ["Market Value", "Notional Value"]
 ASSET_CLASS_COL_CANDIDATES = ["Asset Class"]
+EXCHANGE_COL_CANDIDATES = ["Exchange"]
+
+# Tickery klas akcji uprzywilejowanych/podwojnych w plikach holdings ETF-ow (bez
+# separatora, np. "BRKB") nie odpowiadaja konwencji yfinance (z myslnikiem, np.
+# "BRK-B"). Bez tego mapowania takie spolki NIGDY nie dostana cen — kazde kolejne
+# odswiezenie probowaloby je pobrac na nowo jako "nowe" tickery (patrz
+# update_prices_incremental), bez skutku.
+YFINANCE_TICKER_OVERRIDES = {
+    "BRKB": "BRK-B",  # Berkshire Hathaway Class B
+    "BFB": "BF-B",    # Brown-Forman Class B
+}
+
+
+def _to_yf_symbol(ticker):
+    return YFINANCE_TICKER_OVERRIDES.get(ticker, ticker)
 
 
 def _find_column(df, candidates):
@@ -72,6 +87,7 @@ def load_index_constituents(con):
         sector_col = _find_column(df, SECTOR_COL_CANDIDATES)
         mv_col = _find_column(df, MARKET_VALUE_COL_CANDIDATES)
         asset_class_col = _find_column(df, ASSET_CLASS_COL_CANDIDATES)
+        exchange_col = _find_column(df, EXCHANGE_COL_CANDIDATES)
 
         if ticker_col is None:
             print(f"❌ Nie znaleziono kolumny z tickerem w {filepath}. Kolumny: {list(df.columns)}.")
@@ -93,6 +109,17 @@ def load_index_constituents(con):
             if n_filtered > 0:
                 print(f"ℹ️  {filepath}: odfiltrowano {n_filtered} pozycji nie-akcyjnych "
                       f"(gotówka/futures/cash collateral).")
+
+        # Odfiltrowanie rezydualnych udziałów bez rynku notowań (np. resztkowa
+        # pozycja po wykupie/delistingu spółki) — mają znikomą wartość, status
+        # Equity, ale zerowy realny wolumen, więc yfinance nigdy im nie da ceny.
+        if exchange_col is not None:
+            n_before_filter = len(df)
+            df = df[~df[exchange_col].astype(str).str.strip().str.upper().str.startswith("NO MARKET")]
+            n_filtered = n_before_filter - len(df)
+            if n_filtered > 0:
+                print(f"ℹ️  {filepath}: odfiltrowano {n_filtered} pozycji bez rynku notowań "
+                      f"(Exchange='NO MARKET...' — najczęściej rezydualny udział po wykupie/delistingu).")
 
         n_before = len(rows)
         for _, row in df.iterrows():
@@ -154,13 +181,14 @@ def _download_price_rows(tickers, start_date, end_date):
 
     for i in range(0, len(tickers), batch_size):
         batch = tickers[i:i + batch_size]
+        yf_batch = [_to_yf_symbol(t) for t in batch]
         print(f"  Ceny — paczka {i // batch_size + 1}/{n_batches} ({start_date} → {end_date})...")
         try:
-            data = yf.download(tickers=batch, start=start_date, end=end_date, interval="1d",
+            data = yf.download(tickers=yf_batch, start=start_date, end=end_date, interval="1d",
                                 group_by="ticker", auto_adjust=False, threads=True)
-            for ticker in batch:
-                df_t = data.copy() if len(batch) == 1 else (
-                    data[ticker].dropna(how="all") if ticker in data.columns.levels[0] else pd.DataFrame()
+            for ticker, yf_symbol in zip(batch, yf_batch):
+                df_t = data.copy() if len(yf_batch) == 1 else (
+                    data[yf_symbol].dropna(how="all") if yf_symbol in data.columns.levels[0] else pd.DataFrame()
                 )
                 if df_t.empty:
                     failed_tickers.append(ticker)
