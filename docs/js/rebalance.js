@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = { contribution: 0, pct: { SP500: 60, NASDAQ100: 30, DOW
 
 let universeData = {};   // { SP500: {...json}, ... }
 let priceMap = {};       // ticker -> { price, sources: [universe,...] }
+let equityCurveData = {}; // { SP500: {dates, momentum_index, benchmark_index, ...}, ... }
 
 function loadSettings() {
     try {
@@ -61,6 +62,13 @@ async function loadUniverseData() {
         (universeData[u].constituents || []).forEach(c => {
             if (!priceMap[c.ticker]) priceMap[c.ticker] = { price: c.price, sources: [u] };
         });
+    }
+
+    try {
+        const res = await fetch("data/equity_curve.json", { cache: "no-store" });
+        equityCurveData = res.ok ? await res.json() : {};
+    } catch (e) {
+        equityCurveData = {};
     }
 }
 
@@ -154,6 +162,7 @@ function initSettingsForm() {
         saveSettings(settings);
         renderBucketSum();
         renderSuggestions();
+        renderEquityCurve();
     };
     document.getElementById("contribution").addEventListener("input", onChange);
     UNIVERSES.forEach(u => document.getElementById(`pct-${u}`).addEventListener("input", onChange));
@@ -449,6 +458,93 @@ function renderSuggestions() {
 }
 
 // ============================================================
+// WYNIK HISTORYCZNY PORTFOLIA — łączy per-uniwersowe equity curves
+// (patrz run_query.py::compute_equity_curve, zbudowane z realnych zapisów
+// portfolio_history) wg Twojego podziału kapitału między indeksy
+// (settings.pct). To NIE jest historia Twoich konkretnych pozycji (tych nie
+// śledzimy wstecz) — to przybliżenie: "gdybyś trzymał/a kapitał w tych
+// proporcjach między indeksami przez ten okres, wybierając spółki momentum".
+// ============================================================
+function blendEquityCurves(curveData, pct) {
+    const included = UNIVERSES.filter(u => (pct[u] || 0) > 0 && (curveData[u]?.dates?.length || 0) >= 2);
+    if (included.length === 0) return null;
+
+    const pctSum = included.reduce((s, u) => s + pct[u], 0);
+    if (pctSum <= 0) return null;
+
+    // Przecięcie dat wszystkich uwzględnionych uniwersów — w praktyce
+    // identyczne (ten sam miesięczny przebieg pipeline'u), ale przecięcie
+    // zabezpiecza przed rozjazdem, gdyby kiedyś jeden uniwersum miał lukę.
+    let dates = curveData[included[0]].dates;
+    included.slice(1).forEach(u => {
+        const set = new Set(curveData[u].dates);
+        dates = dates.filter(d => set.has(d));
+    });
+    if (dates.length < 2) return null;
+
+    const portfolio = [], benchmark = [];
+    dates.forEach(d => {
+        let pVal = 0, bVal = 0;
+        included.forEach(u => {
+            const w = pct[u] / pctSum;
+            const idx = curveData[u].dates.indexOf(d);
+            pVal += w * curveData[u].momentum_index[idx];
+            bVal += w * curveData[u].benchmark_index[idx];
+        });
+        portfolio.push(pVal);
+        benchmark.push(bVal);
+    });
+    return { dates, portfolio, benchmark };
+}
+
+let equityChart = null;
+
+function renderEquityCurve() {
+    const caption = document.getElementById("equityCurveCaption");
+    const noteEl = document.getElementById("equityCurveNote");
+    const blended = blendEquityCurves(equityCurveData, settings.pct);
+
+    if (equityChart) { equityChart.destroy(); equityChart = null; }
+
+    if (!blended) {
+        noteEl.textContent = "";
+        caption.textContent = "Za mało zapisanej historii rebalansów, żeby pokazać wykres — rośnie z każdym miesięcznym uruchomieniem pipeline'u.";
+        return;
+    }
+
+    noteEl.textContent = `${blended.dates[0]} → ${blended.dates[blended.dates.length - 1]}`;
+
+    equityChart = new Chart(document.getElementById("equityCurveChart"), {
+        type: "line",
+        data: {
+            labels: blended.dates,
+            datasets: [
+                { label: "Twoje portfolio (wg podziału na indeksy)", data: blended.portfolio, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                { label: "Kup i trzymaj te same indeksy", data: blended.benchmark, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}` } },
+            },
+            scales: {
+                x: { ticks: { color: "#8a8f9c", maxTicksLimit: 8 }, grid: { color: "#262a35" } },
+                y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
+            },
+        },
+    });
+
+    caption.textContent = "Wynik historyczny (zrealizowany) selekcji momentum w Twoim podziale kapitału między indeksy, "
+        + "vs. 'kup i trzymaj' te same indeksy. To NIE jest historia konkretnie Twoich pozycji (tych nie śledzimy wstecz), "
+        + "tylko przybliżenie na bazie zapisanych rebalansów. Dane informacyjne, NIE prognoza ani porada inwestycyjna — "
+        + "wyniki z przeszłości nie gwarantują przyszłych zwrotów.";
+}
+
+// ============================================================
 // MONTE CARLO — statystyczny rozrzut możliwych wartości portfela,
 // NIE prognoza. mu/sigma to ważona średnia (wagą = target_value)
 // 12M momentum i rocznej zmienności obecnie wybranych spółek —
@@ -563,6 +659,7 @@ function renderAll() {
     renderBucketSum();
     renderHoldingsTable();
     renderSuggestions(); // wywołuje też renderMonteCarlo()
+    renderEquityCurve();
 }
 
 // typeof document check: pozwala wczytać ten plik przez `require()` w testach
@@ -592,6 +689,7 @@ if (typeof module !== "undefined" && module.exports) {
         fmtMoney, fmtQty, sharesSuggestion,
         computeTargets, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
+        blendEquityCurves,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded)
         // bez importu przez window — to jedyny sposób bez przepisywania modułu na klasę.
         _setState(s) {

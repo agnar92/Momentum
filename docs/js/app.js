@@ -8,7 +8,6 @@ const UNIVERSE_LABELS = {
 
 const state = {
     data: {},
-    equityCurve: {},
     selectedTicker: null,
     drawerOpen: false,
     drawerUniverse: "SP500",
@@ -26,13 +25,6 @@ async function loadData() {
             console.error(`Nie udało się wczytać danych dla ${u}:`, e);
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
-    }
-    try {
-        const res = await fetch("data/equity_curve.json", { cache: "no-store" });
-        state.equityCurve = res.ok ? await res.json() : {};
-    } catch (e) {
-        console.error("Nie udało się wczytać equity_curve.json:", e);
-        state.equityCurve = {};
     }
 }
 
@@ -87,7 +79,6 @@ function jumpToTicker(ticker, universe) {
     state.drawerUniverse = universe;
     document.getElementById("drawerTitle").textContent = `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     renderTable();
-    renderEquityCurve();
     selectTicker(ticker, universe);
 }
 
@@ -132,60 +123,6 @@ function mountWidget(containerId, symbol) {
 }
 
 // ============================================================
-// EQUITY CURVE — historyczny (zrealizowany) wynik selekcji momentum vs.
-// "kup i trzymaj cały indeks" (patrz run_query.py::compute_equity_curve).
-// Informacyjne porównanie — NIE prognoza ani porada inwestycyjna.
-// ============================================================
-let equityChart = null;
-
-function renderEquityCurve() {
-    const wrap = document.querySelector(".equity-curve-chart-wrap");
-    const noteEl = document.getElementById("equityCurveNote");
-    const curve = (state.equityCurve || {})[state.drawerUniverse];
-
-    if (equityChart) { equityChart.destroy(); equityChart = null; }
-
-    if (!curve || !curve.dates || curve.dates.length < 2) {
-        noteEl.textContent = "";
-        wrap.innerHTML = '<div class="equity-curve-empty">Za mało historii rebalansów, żeby pokazać wykres (dane rosną z każdym miesięcznym uruchomieniem).</div>';
-        return;
-    }
-
-    wrap.innerHTML = '<canvas id="equityCurveChart"></canvas>';
-    noteEl.textContent = curve.note || "";
-    noteEl.title = curve.note || "";
-
-    if (typeof Chart === "undefined") {
-        wrap.innerHTML = '<div class="equity-curve-empty">Nie udało się załadować biblioteki wykresu.</div>';
-        return;
-    }
-
-    equityChart = new Chart(document.getElementById("equityCurveChart"), {
-        type: "line",
-        data: {
-            labels: curve.dates,
-            datasets: [
-                { label: "Selekcja momentum", data: curve.momentum_index, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                { label: "Kup i trzymaj indeks", data: curve.benchmark_index, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
-            ],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: "index", intersect: false },
-            plugins: {
-                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
-                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}` } },
-            },
-            scales: {
-                x: { ticks: { color: "#8a8f9c", maxTicksLimit: 8, font: { size: 10 } }, grid: { color: "#262a35" } },
-                y: { ticks: { color: "#8a8f9c", font: { size: 10 } }, grid: { color: "#262a35" } },
-            },
-        },
-    });
-}
-
-// ============================================================
 // SZUFLADA TABEL (>>> rozwiń / <<< zwiń)
 // ============================================================
 function initDrawer() {
@@ -205,7 +142,6 @@ function initDrawer() {
             state.drawerUniverse = tab.dataset.universe;
             document.getElementById("drawerTitle").textContent = `Pełna tabela — ${UNIVERSE_LABELS[state.drawerUniverse]}`;
             renderTable();
-            renderEquityCurve();
         });
     });
 
@@ -428,7 +364,6 @@ if (typeof document !== "undefined") {
         initDrawer();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
-        renderEquityCurve();
         buildSearchIndex();
         initCmdk();
         document.getElementById("chartBackBtn").addEventListener("click", () => {
