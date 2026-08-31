@@ -1,16 +1,30 @@
 
-const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"];
+const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
 const UNIVERSE_LABELS = {
     SP500: "S&P 500 Momentum",
     NASDAQ100: "Nasdaq 100 Momentum",
-    DOWJONES: "Dow Jones Momentum"
+    DOWJONES: "Dow Jones Momentum",
+    WIG20: "WIG20 Momentum",
+    MWIG40: "mWIG40 Momentum"
 };
+// WIG20/mWIG40 są notowane w PLN (a nie USD jak reszta uniwersów) — patrz
+// formatPrice — oraz na GPW w TradingView, stąd sufiks "GPW:" w tvSymbolFor.
+const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
+
+function formatPrice(price, universe) {
+    return PLN_UNIVERSES.has(universe) ? `${price.toFixed(2)} zł` : `$${price.toFixed(2)}`;
+}
+
+function tvSymbolFor(ticker, universe) {
+    return PLN_UNIVERSES.has(universe) ? `GPW:${ticker}` : ticker;
+}
 
 const state = {
     data: {},
     gem: { indices: [], leaders: [] },
     rs: { universes: {} },
     selectedTicker: null,
+    selectedUniverse: null,
     currentRsEntry: null,
     chartMode: "TV",
     drawerOpen: false,
@@ -211,6 +225,7 @@ function renderRelativeStrengthPanel() {
 // pokazuje TradingView, tak jak wczesniej.
 function selectTicker(ticker, universe, preferMode) {
     state.selectedTicker = ticker;
+    state.selectedUniverse = universe;
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
@@ -271,7 +286,7 @@ function updateChartArea() {
     if (showRs) {
         renderRelativeStrengthChart(symbol, rsEntry);
     } else {
-        mountWidget("tv_chart", symbol);
+        mountWidget("tv_chart", tvSymbolFor(symbol, state.selectedUniverse));
     }
 }
 
@@ -509,7 +524,7 @@ function renderRelativeStrengthTable() {
             <td class="ticker-cell">${r.ticker}</td>
             <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
             <td>${r.sector}</td>
-            <td>$${r.price.toFixed(2)}</td>
+            <td>${formatPrice(r.price, r.universe)}</td>
             <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct.toFixed(2)}%</td>
             <td class="${r.index_return_pct >= 0 ? "positive" : "negative"}">${r.index_return_pct.toFixed(2)}%</td>
             <td class="positive">+${r.relative_strength_pct.toFixed(2)}pp</td>
@@ -559,7 +574,7 @@ function renderTable() {
             <td><span class="rank-badge">${r.rank}</span></td>
             <td class="ticker-cell">${r.ticker}</td>
             <td>${r.sector}</td>
-            <td>$${r.price.toFixed(2)}</td>
+            <td>${formatPrice(r.price, state.drawerUniverse)}</td>
             <td class="${r.momentum_pct >= 0 ? "positive" : "negative"}">${r.momentum_pct.toFixed(2)}%</td>
             <td>${r.momentum_window}</td>
             <td>${r.volatility_pct.toFixed(2)}%</td>
@@ -711,6 +726,7 @@ if (typeof document !== "undefined") {
             document.querySelector(".workspace").classList.remove("mobile-chart-view");
         });
         state.selectedTicker = "SPY";
+        state.selectedUniverse = "SP500";
         updateChartArea();
     })();
 

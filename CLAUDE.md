@@ -4,11 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A momentum-investing tool for SP500, NASDAQ100, and DOWJONES: a Python pipeline computes an S&P-style
-Momentum Index selection/weighting for each universe and publishes the results as a static dashboard
-(`docs/`) to GitHub Pages. There is a second page (`rebalance.html`) that lets a user paste in their
-current brokerage holdings (or import an XTB export) and get buy/sell suggestions to move toward the
-computed target weights.
+A momentum-investing tool for SP500, NASDAQ100, DOWJONES, WIG20, and mWIG40: a Python pipeline computes
+an S&P-style Momentum Index selection/weighting for each universe and publishes the results as a static
+dashboard (`docs/`) to GitHub Pages. There is a second page (`rebalance.html`) that lets a user paste in
+their current brokerage holdings (or import an XTB export) and get buy/sell suggestions to move toward
+the computed target weights. WIG20/mWIG40 are momentum + relative-strength screener universes only —
+they are **not** wired into the rebalance calculator's target-allocation split (`rebalance.js`'s own
+`UNIVERSES` stays SP500/NASDAQ100/DOWJONES), since mixing a PLN-denominated capital bucket into a
+USD-denominated allocation split would need FX handling that hasn't been built; a WIG20/mWIG40 position
+pasted into holdings is still priced correctly via `docs/data/all_prices.json`, which is universe-agnostic.
 
 Code comments and CLI print messages are written in Polish; keep that convention when editing existing
 files (English is fine for new, unrelated code).
@@ -28,6 +32,17 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
      these are iShares ETF holdings exports and must be replaced by hand when the index composition
      changes) into the `index_constituents` table. The `Market Value` column from each CSV is stored
      as `fmc_etf` and used as a real-world float-adjusted-market-cap substitute for weighting.
+   - **WIG20/mWIG40** (Warsaw Stock Exchange) have no equivalent ETF publishing holdings in the iShares
+     CSV format, so their composition instead comes from two manually-maintained JSON files at repo root
+     (`WIG20_holdings.json`, `MWIG40_holdings.json` — `JSON_INDEX_MAP`, loaded by
+     `_load_json_constituents()`), each just a list of GPW tickers (optionally with sector) and **no**
+     weight data — replace them by hand from GPW Benchmark's quarterly/annual index-revision portfolios.
+     `fmc_etf` is set to a dummy `1.0` for every row (satisfies the `NOT NULL` eligibility filter in
+     `get_universe_metrics` without implying a real weight); see `run_query.py`'s `EQUAL_WEIGHT_UNIVERSES`
+     for how that plays out downstream. Tickers loaded this way are tracked in the module-level
+     `GPW_TICKERS` set so `_to_yf_symbol()` can append the `.WA` suffix yfinance needs for GPW listings
+     (e.g. `PKN` → `PKN.WA`) — every other ticker only gets translated via the small, explicit
+     `YFINANCE_TICKER_OVERRIDES` dict (dual-class US shares like `BRKB` → `BRK-B`).
    - Downloads daily prices for every constituent ticker via `yfinance`, in batches of 50, into the
      `prices` table (PK `(Date, Ticker)`). Two modes, chosen automatically by `update_duckdb()`:
      - **Bootstrap** (`bootstrap_prices`) — used only when `prices` doesn't exist yet or is empty.
@@ -44,16 +59,20 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
        (`DELETE FROM prices WHERE Date < cutoff`), so the table is a rolling window and does not grow
        without bound — it always holds just enough history for the M-14 momentum window plus a margin.
 2. **`run_query.py`** — all the calculation logic and static site generation. Nothing about data
-   fetching lives here. For each universe (`SP500`, `NASDAQ100`, `DOWJONES`):
+   fetching lives here. For each universe (`SP500`, `NASDAQ100`, `DOWJONES`, `WIG20`, `MWIG40` —
+   `UNIVERSES`):
    - Computes momentum value `(price[M-2] / price[M-14]) - 1` (falls back to a 9-month window
      `price[M-2]/price[M-11] - 1` when 14 months of history isn't available), annualized volatility
      over the same window, a cross-sectional z-score winsorized to ±3, and a momentum score
      (`1+Z` for Z>0, `1/(1-Z)` for Z<0).
    - Selects constituents into the top quintile using a 20% buffer rule (existing holdings get
      re-included up to 120% of the target count before new names are added) — see `select_with_buffer`.
-     **DOWJONES is a special case**: all 30 constituents are used (no quintile selection) and weighted
-     equally, since it's a small, price-weighted index — see the `universe == "DOWJONES"` branches in
-     `process_universe` and `compute_weights`.
+     **`EQUAL_WEIGHT_UNIVERSES` (`DOWJONES`, `WIG20`, `MWIG40`) are a special case**: all qualifying
+     constituents are used (no quintile selection) and weighted equally — see the
+     `universe in EQUAL_WEIGHT_UNIVERSES` branches in `process_universe` and `compute_weights`. DOWJONES
+     is there because it's a small, price-weighted index; WIG20/mWIG40 are there because they have no
+     real `fmc_etf` weight to select/weight by in the first place (see `fetch_data.py` above) — this is
+     the direct consequence of the "just a ticker list, no weights" JSON format chosen for them.
    - Computes weights as `fmc * momentum_score`, normalized, capped at `min(9%, 3x cap-weight *within
      the selected set*)`, with excess iteratively redistributed to uncapped names (`compute_weights`).
      If the sum of individual caps can't reach 100% (mathematically infeasible for small selections),
@@ -75,13 +94,17 @@ at a literal 1:1 replication of S&P's own rebalance calendar.
 
 ### Global Equity Momentum (`compute_index_returns` / `compute_index_leaders`)
 
-Compares the **index level** (not constituents) of SP500/NASDAQ100/DOWJONES against each other over a
-trailing `GEM_LOOKBACK_MONTHS` (12) window — the classic dual/global-momentum idea of picking whichever
-market currently has the strongest trend. `fetch_data.py::update_index_prices` pulls daily closes for
-`^GSPC`/`^NDX`/`^DJI` (`INDEX_LEVEL_SYMBOLS`) into a small `index_prices` table (`Date, Index_Name,
-Close, ...`), fully replaced on every run since it's only 3 symbols (no incremental logic needed, unlike
-the per-constituent `prices` table). `compute_index_returns()` reads that table and returns each
-universe's return over the window, sorted descending; the top one is the `winner`.
+Compares the **index level** (not constituents) of SP500/NASDAQ100/DOWJONES (`GEM_UNIVERSES` — deliberately
+**not** WIG20/mWIG40, see below) against each other over a trailing `GEM_LOOKBACK_MONTHS` (12) window —
+the classic dual/global-momentum idea of picking whichever market currently has the strongest trend.
+`fetch_data.py::update_index_prices` pulls daily closes for every universe in `INDEX_LEVEL_SYMBOLS`
+(`^GSPC`/`^NDX`/`^DJI` for the three US universes, `WIG20.WA`/`MWIG40.WA` for WIG20/mWIG40) into a shared
+`index_prices` table (`Date, Index_Name, Close, ...`), fully replaced on every run (no incremental logic
+needed, unlike the per-constituent `prices` table). `compute_index_returns()` reads that table — filtered
+to `GEM_UNIVERSES` only — and returns each universe's return over the window, sorted descending; the top
+one is the `winner`. WIG20/mWIG40 price data still lands in `index_prices` (needed for their own Relative
+Strength, below) but is excluded from this specific cross-market race by that filter, so adding them
+didn't silently change who can win Global Equity Momentum.
 
 For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
 **pushing the index to its new highs** — ranked by *contribution to the index's return*
@@ -103,9 +126,10 @@ refresh possible without touching the (expensive, rate-limited) per-constituent 
 
 ### Relative strength (`compute_index_momentum` / `compute_relative_strength_leaders`)
 
-A screener for NASDAQ100 and DOWJONES only (SP500 deliberately excluded): for each constituent, compares
-its momentum to the *same-window* momentum of the index level (`index_prices`). Deliberately uses the
-exact same window as the three main universes' `momentum_value` (`get_universe_metrics`: M-14/M-2, falling
+A screener for NASDAQ100, DOWJONES, WIG20, and mWIG40 (`RELATIVE_STRENGTH_UNIVERSES` — SP500 deliberately
+excluded): for each constituent, compares its momentum to the *same-window* momentum of the index level
+(`index_prices`). Deliberately uses the exact same window as the main universes' `momentum_value`
+(`get_universe_metrics`: M-14/M-2, falling
 back to M-11/M-2 when 14 months of history isn't available) instead of a calendar-YTD window — YTD would
 have too little data right after New Year, and reusing this window means `compute_relative_strength_leaders`
 can call `get_universe_metrics()` directly (same eligibility filtering, no separate query/window needed).
@@ -115,7 +139,9 @@ constituents currently **outperforming their own index** in that window are kept
 sorted descending, so the biggest current outperformers come first. `export_relative_strength()` writes
 per-universe results (index return, `momentum_window` label, outperformer list) to
 `docs/data/relative_strength.json`; the frontend (`combinedRelativeStrengthLeaders()` in `app.js`) merges
-both universes into one ranked list for display. Like GEM, its `ref_date` defaults to `index_prices`'s own
+all universes into one ranked list for display, tagging each row with its own currency-aware price
+formatting (`formatPrice()` — WIG20/mWIG40 render `zł`, the rest `$`). Like GEM, its `ref_date` defaults
+to `index_prices`'s own
 watermark (not the monthly constituent-pipeline `ref_date`), and it's recomputed by the same
 `run_query.py --gem-only` daily path as GEM (see `daily_gem.yml`) since it only needs `index_prices`
 (daily) + `prices`/`index_constituents` (gracefully stale-tolerant, same as `compute_index_leaders`).
@@ -132,18 +158,19 @@ Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worke
 network-first for `docs/data/*.json`). `docs/data/` is generated by `run_query.py` and is gitignored —
 it only exists after the pipeline has run.
 
-- **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe plus a fourth
-  sidebar group for **Global Equity Momentum** (`docs/data/global_equity_momentum.json`,
-  `renderGemPanel()` — shows the winning index + its return, a ranked list of all 3 indices' returns, and
-  tiles for the winner's top-10 contribution leaders), a full sortable constituents table per universe
-  (`added_tickers`/`dropped_tickers` are exported in the JSON but not currently rendered), a Ctrl+K
+- **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe (`UNIVERSES` in
+  `app.js`, kept in sync with `run_query.py`'s own `UNIVERSES` — currently SP500/NASDAQ100/DOWJONES/
+  WIG20/mWIG40) plus a sidebar group for **Global Equity Momentum** (`docs/data/global_equity_momentum.json`,
+  `renderGemPanel()` — shows the winning index + its return, a ranked list of the (US-only) indices'
+  returns, and tiles for the winner's top-10 contribution leaders), a full sortable constituents table per
+  universe (`added_tickers`/`dropped_tickers` are exported in the JSON but not currently rendered), a Ctrl+K
   command-palette ticker search, and a full-screen TradingView chart widget (loaded from
-  `s3.tradingview.com`, mounted via `TradingView.widget(...)`), plus a fifth sidebar group for
+  `s3.tradingview.com`, mounted via `TradingView.widget(...)`), plus a sidebar group for
   **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
-  index's own return, and tiles merging NASDAQ100+DOWJONES outperformers via
+  index's own return, and tiles merging NASDAQ100+DOWJONES+WIG20+mWIG40 outperformers via
   `combinedRelativeStrengthLeaders()`, sorted by edge over their index). The sidebar is hidden on phones
-  in portrait (`@media max-width:640px`), so the drawer table has a 4th "🚀 GEM" tab (`showDrawerTable()` /
-  `renderGemTable()`) and a 5th "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as
+  in portrait (`@media max-width:640px`), so the drawer table has a "🚀 GEM" tab (`showDrawerTable()` /
+  `renderGemTable()`) and a "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as
   their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
   per-universe tables. The chart area itself has a TradingView/"💪 Siła Relatywna" toggle
   (`#chartModeToggle`, `updateChartArea()` in `app.js`): clicking a ticker from the relative-strength panel
@@ -151,7 +178,12 @@ it only exists after the pipeline has run.
   Chart.js line chart (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
   ticker's `weekly_chart` (see above) — the RS toggle button is disabled whenever the selected ticker has
   no such data. Every other ticker click (per-universe tables, GEM, Ctrl+K search) still defaults to the
-  TradingView widget as before; the toggle lets you switch either way for the current ticker.
+  TradingView widget as before; the toggle lets you switch either way for the current ticker. WIG20/mWIG40
+  are PLN-denominated and GPW-listed, unlike the rest (USD, NYSE/Nasdaq): prices render via `formatPrice()`
+  (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol gets a `GPW:` prefix via
+  `tvSymbolFor()` (tracked through `state.selectedUniverse`, set alongside `state.selectedTicker` in
+  `selectTicker()`) so the chart resolves to the correct Warsaw-listed instrument instead of clashing with
+  an unrelated ticker on another exchange.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`

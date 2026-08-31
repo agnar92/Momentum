@@ -1,4 +1,5 @@
 import argparse
+import json
 import time
 import pandas as pd
 import duckdb
@@ -14,6 +15,16 @@ INDEX_MAP = {
     "CSPX_holdings.csv": "SP500",
     "CNDX_holdings.csv": "NASDAQ100",
     "CIND_holdings.csv": "DOWJONES"
+}
+
+# WIG20/mWIG40 (GPW): brak globalnie dostępnego ETF-a z publikowanymi holdings
+# w formacie iShares (jak CSPX/CNDX/CIND) dla indeksów warszawskiej giełdy, więc
+# te dwa uniwersa są zasilane ręcznie utrzymywanym plikiem JSON z samą listą
+# tickerów (bez wag kapitałowych) — patrz _load_json_constituents. Tak jak
+# DOWJONES, są ważone równomiernie (patrz run_query.py::EQUAL_WEIGHT_UNIVERSES).
+JSON_INDEX_MAP = {
+    "WIG20_holdings.json": "WIG20",
+    "MWIG40_holdings.json": "MWIG40",
 }
 
 TICKER_COL_CANDIDATES = ["Ticker", "Symbol", "Holding Ticker"]
@@ -32,18 +43,31 @@ YFINANCE_TICKER_OVERRIDES = {
     "BFB": "BF-B",    # Brown-Forman Class B
 }
 
+# Tickery GPW (WIG20/mWIG40) wymagają sufiksu ".WA" w yfinance — w odróżnieniu
+# od YFINANCE_TICKER_OVERRIDES (rzadkie, pojedyncze wyjątki dla klas akcji USA),
+# to dotyczy WSZYSTKICH tickerów wczytanych z JSON_INDEX_MAP, więc zbiór jest
+# budowany dynamicznie przy wczytywaniu — patrz _load_json_constituents.
+GPW_TICKERS = set()
+
 # Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum — porownanie
 # zwrotu calego SP500/NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
 # compute_index_returns). ^GSPC/^NDX/^DJI to standardowe symbole yfinance
-# dla tych indeksow.
+# dla tych indeksow. WIG20/mWIG40 maja wlasne symbole (WIG20.WA/MWIG40.WA) —
+# potrzebne do liczenia Sily Relatywnej tych uniwersow (run_query.py::
+# compute_index_momentum), nie uczestnicza natomiast w wyscigu Global Equity
+# Momentum (patrz run_query.py::GEM_UNIVERSES).
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC",
     "NASDAQ100": "^NDX",
     "DOWJONES": "^DJI",
+    "WIG20": "WIG20.WA",
+    "MWIG40": "MWIG40.WA",
 }
 
 
 def _to_yf_symbol(ticker):
+    if ticker in GPW_TICKERS:
+        return f"{ticker}.WA"
     return YFINANCE_TICKER_OVERRIDES.get(ticker, ticker)
 
 
@@ -62,6 +86,50 @@ def _parse_money(series):
         series.astype(str).str.replace(",", "", regex=False).str.replace('"', "", regex=False),
         errors="coerce"
     )
+
+
+def _load_json_constituents():
+    """Wczytuje skład WIG20/mWIG40 z ręcznie utrzymywanych plików JSON (patrz
+    JSON_INDEX_MAP) — sama lista tickerów GPW, bez wag kapitałowych (brak ETF-a
+    z publikowanymi holdings dla tych indeksów, w odróżnieniu od CSPX/CNDX/CIND).
+    fmc_etf ustawiane na stałą wartość 1.0 dla każdej spółki — nieużywana
+    realnie do wagowania (WIG20/mWIG40 są ważone równomiernie, tak jak DOWJONES —
+    patrz run_query.py::EQUAL_WEIGHT_UNIVERSES), a get_universe_metrics wymaga
+    tylko, żeby fmc_etf NIE było NULL, by spółka kwalifikowała się do selekcji.
+
+    Format pliku: obiekt JSON z kluczem "tickers" (lista) — każdy element to
+    albo sam ticker jako string (np. "PKN"), albo obiekt {"ticker": "PKN",
+    "sector": "Energy"} jeśli chcesz podać też sektor. Akceptowana jest też
+    goła lista JSON zamiast obiektu z kluczem "tickers".
+    """
+    GPW_TICKERS.clear()
+    rows = []
+    for filepath, index_name in JSON_INDEX_MAP.items():
+        try:
+            with open(filepath, encoding="utf-8") as f:
+                data = json.load(f)
+        except FileNotFoundError:
+            print(f"⚠️  Brak pliku {filepath} — pomijam {index_name}.")
+            continue
+        except Exception as e:
+            print(f"❌ Błąd podczas odczytu {filepath}: {e}")
+            continue
+
+        entries = data.get("tickers", []) if isinstance(data, dict) else data
+        n_before = len(rows)
+        for entry in entries:
+            if isinstance(entry, str):
+                t, sec = entry.strip(), "Unknown"
+            elif isinstance(entry, dict):
+                t = str(entry.get("ticker", "")).strip()
+                sec = str(entry.get("sector") or "Unknown").strip()
+            else:
+                continue
+            if t:
+                GPW_TICKERS.add(t)
+                rows.append((t, index_name, sec, 1.0))
+        print(f"✅ {filepath}: wczytano {len(rows) - n_before} pozycji jako {index_name}.")
+    return rows
 
 
 def load_index_constituents(con):
@@ -139,6 +207,8 @@ def load_index_constituents(con):
             if t and t.lower() != "nan":
                 rows.append((t, index_name, sec, mv))
         print(f"✅ {filepath}: wczytano {len(rows) - n_before} pozycji jako {index_name}.")
+
+    rows.extend(_load_json_constituents())
 
     if rows:
         df_const = pd.DataFrame(rows, columns=["Ticker", "Index_Name", "Sector", "fmc_etf"]).drop_duplicates(
