@@ -33,7 +33,9 @@ metodologii S&P Momentum Indices):
    indeksu wg wkladu w jego zwrot — patrz export_global_equity_momentum.
 10. Sila relatywna (YTD) dla NASDAQ100/DOWJONES: zwrot kazdej spolki od
     poczatku roku vs. zwrot YTD samego indeksu, tylko spolki bijace indeks,
-    posortowane malejaco po przewadze — patrz export_relative_strength.
+    posortowane malejaco po przewadze — patrz export_relative_strength. Kazdy
+    lider ma tez tygodniowy wykres (cena/indeks/SMA10/SMA30 w % YTD, patrz
+    compute_relative_strength_chart) do wykresu innego niz TradingView.
 """
 
 import argparse
@@ -686,6 +688,8 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
 # malejąco po przewadze (relative_strength_pct = zwrot spółki - zwrot indeksu).
 # ============================================================================
 RELATIVE_STRENGTH_UNIVERSES = ["NASDAQ100", "DOWJONES"]
+RS_SMA_SHORT_WEEKS = 10   # klasyczne 10-tyg. SMA (Weinstein "stage analysis")
+RS_SMA_LONG_WEEKS = 30    # klasyczne 30-tyg. SMA
 
 
 def compute_index_ytd_return(con, universe, ref_date):
@@ -767,6 +771,77 @@ def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct)
     return records
 
 
+def _weekly_close_series(con, table, id_column, id_value, ref_date, lookback_weeks):
+    """Tygodniowe zamknięcia (ostatnia cena w tygodniu, DATE_TRUNC('week', Date)) dla
+    id_column=id_value (Ticker w `prices` albo Index_Name w `index_prices`), od
+    (początek roku ref_date - lookback_weeks) do ref_date. lookback_weeks to margines
+    PRZED początkiem roku, potrzebny żeby długie SMA (RS_SMA_LONG_WEEKS) miały już
+    wartość od pierwszego wyświetlanego tygodnia (1 stycznia), zamiast pustych
+    komórek przez pierwsze ~30 tygodni roku."""
+    return con.execute(f"""
+        WITH params AS (
+            SELECT DATE '{ref_date}' AS ref_date,
+                   DATE_TRUNC('year', DATE '{ref_date}') AS year_start
+        )
+        SELECT DATE_TRUNC('week', Date) AS week_start,
+               ARGMAX(Close, Date) AS close
+        FROM {table}
+        WHERE {id_column} = '{id_value}'
+          AND Date <= (SELECT ref_date FROM params)
+          AND Date >= (SELECT year_start FROM params) - INTERVAL '{lookback_weeks} WEEKS'
+        GROUP BY week_start
+        ORDER BY week_start
+    """).df()
+
+
+def compute_relative_strength_chart(con, ticker, universe, ref_date):
+    """Tygodniowy wykres 'nie-TradingView' dla panelu Siły Relatywnej: cena zamknięcia
+    spółki i indeksu, oba indeksowane do 0% w pierwszym tygodniu roku kalendarzowego
+    ref_date (YTD %), plus SMA 10-tyg. i 30-tyg. liczone na CENIE spółki (klasyczne
+    podejście Weinsteina — "stage analysis" na wykresie tygodniowym), przeliczone na tę
+    samą skalę % co reszta serii. Indeks jest czystym punktem odniesienia, bez SMA.
+    Zwraca None gdy brakuje danych (np. spółka bez historii cen w tym roku)."""
+    lookback = RS_SMA_LONG_WEEKS + 2
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, ref_date, lookback)
+    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, ref_date, lookback)
+    if stock_df.empty or index_df.empty:
+        return None
+
+    stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
+    stock_df["sma_short"] = stock_df["close"].rolling(RS_SMA_SHORT_WEEKS).mean()
+    stock_df["sma_long"] = stock_df["close"].rolling(RS_SMA_LONG_WEEKS).mean()
+
+    year_start = pd.Timestamp(ref_date).replace(month=1, day=1)
+    stock_in_year = stock_df[stock_df["week_start"] >= year_start]
+    index_in_year = index_df[index_df["week_start"] >= year_start]
+    if stock_in_year.empty or index_in_year.empty:
+        return None
+
+    stock_baseline = float(stock_in_year.iloc[0]["close"])
+    index_baseline = float(index_in_year.iloc[0]["close"])
+    index_by_week = dict(zip(index_in_year["week_start"], index_in_year["close"]))
+
+    def to_pct(value, baseline):
+        return round(float(value / baseline - 1) * 100, 2) if pd.notna(value) else None
+
+    dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
+    for _, r in stock_in_year.iterrows():
+        dates.append(r["week_start"].strftime("%Y-%m-%d"))
+        close_pct.append(to_pct(r["close"], stock_baseline))
+        sma10_pct.append(to_pct(r["sma_short"], stock_baseline))
+        sma30_pct.append(to_pct(r["sma_long"], stock_baseline))
+        index_val = index_by_week.get(r["week_start"])
+        index_pct.append(to_pct(index_val, index_baseline) if index_val is not None else None)
+
+    return {
+        "dates": dates,
+        "close_pct": close_pct,
+        "sma10_pct": sma10_pct,
+        "sma30_pct": sma30_pct,
+        "index_pct": index_pct,
+    }
+
+
 def export_relative_strength(con, docs_data_dir, ref_date=None):
     """ref_date=None: jak w export_global_equity_momentum — najświeższa data w
     index_prices (odświeżane codziennie), niezależnie od miesięcznego ref_date
@@ -787,6 +862,8 @@ def export_relative_strength(con, docs_data_dir, ref_date=None):
         if index_ytd is None:
             continue
         leaders = compute_relative_strength_leaders(con, universe, ref_date, index_ytd["return_pct"])
+        for leader in leaders:
+            leader["weekly_chart"] = compute_relative_strength_chart(con, leader["ticker"], universe, ref_date)
         universes_payload[universe] = {
             "index_return_pct": index_ytd["return_pct"],
             "ytd_start_date": index_ytd["date_start"],
@@ -806,7 +883,9 @@ def export_relative_strength(con, docs_data_dir, ref_date=None):
                  "zestawiony ze zwrotem YTD samego indeksu (poziom indeksu, nie średnia składników). "
                  "Lista 'leaders' w każdym uniwersum zawiera TYLKO spółki, które w tym roku rosną "
                  "szybciej niż sam indeks, posortowane malejąco po przewadze (relative_strength_pct = "
-                 "zwrot spółki - zwrot indeksu). Dane informacyjne, NIE porada inwestycyjna."),
+                 "zwrot spółki - zwrot indeksu). Każdy lider ma też 'weekly_chart': tygodniowy wykres "
+                 "cena/indeks/SMA10/SMA30 w % YTD (patrz compute_relative_strength_chart), do wykresu "
+                 "innego niż TradingView na dashboardzie. Dane informacyjne, NIE porada inwestycyjna."),
     }
     out_path = Path(docs_data_dir) / "relative_strength.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

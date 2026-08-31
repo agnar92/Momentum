@@ -11,6 +11,8 @@ const state = {
     gem: { indices: [], leaders: [] },
     rs: { universes: {} },
     selectedTicker: null,
+    currentRsEntry: null,
+    chartMode: "TV",
     drawerOpen: false,
     drawerUniverse: "SP500",
     sortKey: "rank",
@@ -190,7 +192,7 @@ function renderRelativeStrengthPanel() {
         tile.dataset.ticker = c.ticker;
         tile.dataset.universe = c.universe;
         if (c.ticker === state.selectedTicker) tile.classList.add("selected");
-        tile.addEventListener("click", () => selectTicker(c.ticker, c.universe));
+        tile.addEventListener("click", () => selectTicker(c.ticker, c.universe, "RS"));
         container.appendChild(tile);
     });
     if (combined.length === 0) {
@@ -201,7 +203,11 @@ function renderRelativeStrengthPanel() {
     }
 }
 
-function selectTicker(ticker, universe) {
+// preferMode="RS": wywolywane z kafelka/wiersza w panelu Sily Relatywnej — jesli
+// ten ticker ma wlasny tygodniowy wykres (weekly_chart), pokaz go od razu zamiast
+// TradingView. Kazde inne wywolanie (tabele uniwersow, GEM, Ctrl+K) domyslnie
+// pokazuje TradingView, tak jak wczesniej.
+function selectTicker(ticker, universe, preferMode) {
     state.selectedTicker = ticker;
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
@@ -209,7 +215,10 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr, #rsTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
-    updateChart(ticker);
+    const rsEntry = combinedRelativeStrengthLeaders().find(r => r.ticker === ticker) || null;
+    state.currentRsEntry = rsEntry;
+    state.chartMode = (preferMode === "RS" && rsEntry && rsEntry.weekly_chart) ? "RS" : "TV";
+    updateChartArea();
     // Na telefonie nie ma miejsca na tabelę i wykres naraz — wybranie spółki
     // przełącza widok na pełnoekranowy wykres (jak w apce TradingView).
     if (window.matchMedia("(max-width: 640px)").matches) {
@@ -227,12 +236,91 @@ function jumpToTicker(ticker, universe) {
 }
 
 // ============================================================
-// WYKRES TRADINGVIEW (jeden, pełnoekranowy — TF przełączany w widgecie)
+// OBSZAR WYKRESU: TradingView LUB własny tygodniowy wykres Siły Relatywnej
+// (cena spółki, indeks, SMA10/SMA30 w % YTD — patrz renderRelativeStrengthChart).
+// Przełącznik (#chartModeToggle) jest aktywny tylko gdy state.currentRsEntry ma
+// weekly_chart; w przeciwnym razie zawsze pokazujemy TradingView jak wcześniej.
 // ============================================================
-function updateChart(symbol) {
+let rsChartInstance = null;
+
+function updateChartArea() {
+    const symbol = state.selectedTicker;
+    const rsEntry = state.currentRsEntry;
+    const hasRsChart = !!(rsEntry && rsEntry.weekly_chart);
+
     const label = document.getElementById("symbolLabel");
     if (label) label.textContent = symbol;
-    mountWidget("tv_chart", symbol);
+
+    const tvBtn = document.getElementById("chartModeTvBtn");
+    const rsBtn = document.getElementById("chartModeRsBtn");
+    if (rsBtn) rsBtn.disabled = !hasRsChart;
+    if (!hasRsChart) state.chartMode = "TV";
+
+    const tvContainer = document.getElementById("tv_chart");
+    const rsContainer = document.getElementById("rs_chart");
+    const showRs = state.chartMode === "RS" && hasRsChart;
+
+    if (tvContainer) tvContainer.hidden = showRs;
+    if (rsContainer) rsContainer.hidden = !showRs;
+    if (tvBtn) tvBtn.classList.toggle("active", !showRs);
+    if (rsBtn) rsBtn.classList.toggle("active", showRs);
+
+    if (showRs) {
+        renderRelativeStrengthChart(symbol, rsEntry);
+    } else {
+        mountWidget("tv_chart", symbol);
+    }
+}
+
+function initChartModeToggle() {
+    const tvBtn = document.getElementById("chartModeTvBtn");
+    const rsBtn = document.getElementById("chartModeRsBtn");
+    if (tvBtn) tvBtn.addEventListener("click", () => { state.chartMode = "TV"; updateChartArea(); });
+    if (rsBtn) rsBtn.addEventListener("click", () => {
+        if (rsBtn.disabled) return;
+        state.chartMode = "RS";
+        updateChartArea();
+    });
+}
+
+function renderRelativeStrengthChart(symbol, rsEntry) {
+    const chartData = rsEntry.weekly_chart;
+    const rsContainer = document.getElementById("rs_chart");
+    const canvas = document.getElementById("rsChartCanvas");
+    if (!canvas || !chartData) return;
+
+    if (typeof Chart === "undefined") {
+        if (rsContainer) rsContainer.innerHTML = '<div class="empty-state">Nie udało się załadować biblioteki wykresu (sprawdź połączenie z internetem).</div>';
+        return;
+    }
+    if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
+
+    const indexLabel = UNIVERSE_LABELS[rsEntry.universe] ? UNIVERSE_LABELS[rsEntry.universe].replace(" Momentum", "") : "Indeks";
+    rsChartInstance = new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: chartData.dates,
+            datasets: [
+                { label: `${symbol} (zamknięcie)`, data: chartData.close_pct, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
+                { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#e0455a", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
+                { label: indexLabel, data: chartData.index_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2) + "%"}` } },
+            },
+            scales: {
+                x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
+                y: { ticks: { color: "#8a8f9c", callback: (v) => `${v}%` }, grid: { color: "#262a35" } },
+            },
+        },
+    });
 }
 
 function mountWidget(containerId, symbol) {
@@ -425,7 +513,7 @@ function renderRelativeStrengthTable() {
             <td class="${r.index_return_pct >= 0 ? "positive" : "negative"}">${r.index_return_pct.toFixed(2)}%</td>
             <td class="positive">+${r.relative_strength_pct.toFixed(2)}pp</td>
         `;
-        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe, "RS"));
         tbody.appendChild(tr);
     });
 }
@@ -613,6 +701,7 @@ if (typeof document !== "undefined") {
         renderGemPanel();
         renderRelativeStrengthPanel();
         initDrawer();
+        initChartModeToggle();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
         buildSearchIndex();
@@ -620,7 +709,8 @@ if (typeof document !== "undefined") {
         document.getElementById("chartBackBtn").addEventListener("click", () => {
             document.querySelector(".workspace").classList.remove("mobile-chart-view");
         });
-        updateChart("SPY");
+        state.selectedTicker = "SPY";
+        updateChartArea();
     })();
 
     if ("serviceWorker" in navigator) {
