@@ -1,10 +1,13 @@
 """Download historical OHLC CSV data from stooq.pl.
 
 A plain `requests.get(...)` against stooq's CSV export endpoint
-(https://stooq.pl/q/d/l/) returns HTTP 403, because stooq rejects the
-default "python-requests/x.x" User-Agent while happily serving the exact
-same URL to a browser. Sending a browser-like User-Agent (no cookies or
-auth needed) is enough to get the real CSV back.
+(https://stooq.pl/q/d/l/) gets stooq's own anti-bot page back instead of a
+CSV ("Ta strona wymaga JavaScriptu do weryfikacji przeglądarki...") — this
+is a real JavaScript browser-verification challenge, not just a
+User-Agent check, so plain `requests`/`urllib` can't get through it no
+matter what headers are sent. `cloudscraper` (a `requests.Session`
+subclass that emulates a browser's TLS/JS fingerprint and solves this
+class of challenge automatically) is used here instead.
 
 Usage:
     python stooq_download.py ale -i w -o ale.csv
@@ -13,30 +16,19 @@ import argparse
 import io
 import sys
 
+import cloudscraper
 import pandas as pd
 import requests
 
 STOOQ_URL = "https://stooq.pl/q/d/l/"
 
-# A bare `requests` User-Agent gets a 403 from stooq; any browser-like
-# string is accepted.
-BROWSER_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/csv,text/html,application/xhtml+xml,*/*;q=0.9",
-    "Accept-Language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Referer": "https://stooq.pl/",
-}
 
-
-def fetch_stooq_csv(symbol, interval="d", start=None, end=None, timeout=15):
+def fetch_stooq_csv(symbol, interval="d", start=None, end=None, timeout=30):
     """Fetch OHLC history for `symbol` from stooq.pl as a DataFrame.
 
     interval: 'd' (daily), 'w' (weekly), 'm' (monthly), or 'q'/'y' etc.
     start/end: optional 'YYYYMMDD' strings, passed through as stooq's d1/d2.
-    Raises ValueError if stooq returns its "no data" HTML page instead of a CSV.
+    Raises ValueError if stooq's JS-verification page comes back instead of a CSV.
     """
     params = {"s": symbol, "i": interval}
     if start:
@@ -44,12 +36,16 @@ def fetch_stooq_csv(symbol, interval="d", start=None, end=None, timeout=15):
     if end:
         params["d2"] = end
 
-    resp = requests.get(STOOQ_URL, params=params, headers=BROWSER_HEADERS, timeout=timeout)
+    scraper = cloudscraper.create_scraper()
+    resp = scraper.get(STOOQ_URL, params=params, timeout=timeout)
     resp.raise_for_status()
 
     text = resp.text
     if not text.strip() or text.lstrip().startswith("<"):
-        raise ValueError(f"stooq zwrócił błąd/HTML zamiast CSV dla symbolu '{symbol}': {text[:200]!r}")
+        raise ValueError(
+            f"stooq zwrócił błąd/HTML (prawdopodobnie stronę weryfikacji JS) zamiast CSV "
+            f"dla symbolu '{symbol}': {text[:200]!r}"
+        )
 
     df = pd.read_csv(io.StringIO(text))
     if "Data" in df.columns:
