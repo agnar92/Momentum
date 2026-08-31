@@ -258,13 +258,6 @@ html, body {
     border-color: var(--green-bright);
 }
 
-/* Trzymana spolka bez swiezych (z biezacego miesiaca) danych w portfolio_history
-   -- wypadla z kwintylowej selekcji swojego uniwersum, ale zostaje w koszyku
-   az do kolejnego rebalansu; cena/momentum to ostatnie dostepne dane. */
-.ticker-tile-stale {
-    opacity: 0.55;
-}
-
 /* ============================================================
    PANEL TABEL (rozwijany, ~80% szerokości ekranu)
    ============================================================ */
