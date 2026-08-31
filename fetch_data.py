@@ -7,18 +7,17 @@ import yfinance as yf
 
 # ============================================================================
 # HOLDINGS: wyłącznie z ręcznie podmienianych plików CSV (holdings ETF-ów
-# CSPX/CNDX/CIND). Próba użycia biblioteki etf_scraper została porzucona —
+# CNDX/CIND). Próba użycia biblioteki etf_scraper została porzucona —
 # pakiet okazał się niewspierany/niedziałający, więc zostajemy przy CSV jako
 # jedynym, sprawdzonym źródle.
 # ============================================================================
 INDEX_MAP = {
-    "CSPX_holdings.csv": "SP500",
     "CNDX_holdings.csv": "NASDAQ100",
     "CIND_holdings.csv": "DOWJONES"
 }
 
 # WIG20/mWIG40 (GPW): brak globalnie dostępnego ETF-a z publikowanymi holdings
-# w formacie iShares (jak CSPX/CNDX/CIND) dla indeksów warszawskiej giełdy, więc
+# w formacie iShares (jak CNDX/CIND) dla indeksów warszawskiej giełdy, więc
 # te dwa uniwersa są zasilane ręcznie utrzymywanym plikiem JSON z samą listą
 # tickerów (bez wag kapitałowych) — patrz _load_json_constituents. Tak jak
 # DOWJONES, są ważone równomiernie (patrz run_query.py::EQUAL_WEIGHT_UNIVERSES).
@@ -50,14 +49,13 @@ YFINANCE_TICKER_OVERRIDES = {
 GPW_TICKERS = set()
 
 # Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum — porownanie
-# zwrotu calego SP500/NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
-# compute_index_returns). ^GSPC/^NDX/^DJI to standardowe symbole yfinance
+# zwrotu calego NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
+# compute_index_returns). ^NDX/^DJI to standardowe symbole yfinance
 # dla tych indeksow. WIG20/mWIG40 maja wlasne symbole (WIG20.WA/MWIG40.WA) —
 # potrzebne do liczenia Sily Relatywnej tych uniwersow (run_query.py::
 # compute_index_momentum), nie uczestnicza natomiast w wyscigu Global Equity
 # Momentum (patrz run_query.py::GEM_UNIVERSES).
 INDEX_LEVEL_SYMBOLS = {
-    "SP500": "^GSPC",
     "NASDAQ100": "^NDX",
     "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA",
@@ -91,7 +89,7 @@ def _parse_money(series):
 def _load_json_constituents():
     """Wczytuje skład WIG20/mWIG40 z ręcznie utrzymywanych plików JSON (patrz
     JSON_INDEX_MAP) — sama lista tickerów GPW, bez wag kapitałowych (brak ETF-a
-    z publikowanymi holdings dla tych indeksów, w odróżnieniu od CSPX/CNDX/CIND).
+    z publikowanymi holdings dla tych indeksów, w odróżnieniu od CNDX/CIND).
     fmc_etf ustawiane na stałą wartość 1.0 dla każdej spółki — nieużywana
     realnie do wagowania (WIG20/mWIG40 są ważone równomiernie, tak jak DOWJONES —
     patrz run_query.py::EQUAL_WEIGHT_UNIVERSES), a get_universe_metrics wymaga
@@ -134,11 +132,11 @@ def _load_json_constituents():
 
 def load_index_constituents(con):
     """
-    Wczytuje skład indeksów z plików holdings funduszy ETF (CSPX/CNDX/CIND),
+    Wczytuje skład indeksów z plików holdings funduszy ETF (CNDX/CIND),
     które podmieniasz ręcznie. Oprócz tickera i sektora, wyciąga 'Market
     Value' — realną, publikowaną wagę kapitałową danej spółki w funduszu
     replikującym dany indeks (substytut FMC — patrz wcześniejsze wyjaśnienie
-    w rozmowie: dla SP500/NASDAQ100 to float-adjusted market cap, dla
+    w rozmowie: dla NASDAQ100 to float-adjusted market cap, dla
     DOWJONES to waga cenowa, bo DJIA jest indeksem ważonym ceną).
     """
     con.execute("""
@@ -338,8 +336,8 @@ def _upsert_price_rows(con, rows, tickers, start_date):
 
 
 def update_index_prices(con, lookback_months):
-    """Ceny POZIOMU INDEKSU (^GSPC/^NDX/^DJI, nie skladnikow) dla Global Equity
-    Momentum — tylko 3 symbole, wiec zamiast przyrostowego smart-refreshu jak
+    """Ceny POZIOMU INDEKSU (^NDX/^DJI/WIG20.WA/MWIG40.WA, nie skladnikow) dla Global
+    Equity Momentum i Sily Relatywnej — tylko 4 symbole, wiec zamiast przyrostowego smart-refreshu jak
     dla tysiaca tickerow akcji, przy kazdym uruchomieniu podmieniamy caly
     zakres na nowo (koszt pomijalny), reuzywajac _download_price_rows (ta sama
     logika batchowania/retry co ceny akcji)."""
@@ -421,7 +419,7 @@ def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
     con = duckdb.connect("momentum_data.duckdb")
 
     if indices_only:
-        # Tylko poziom indeksu (^GSPC/^NDX/^DJI, 3 symbole) dla Global Equity Momentum —
+        # Tylko poziom indeksu (^NDX/^DJI/WIG20.WA/MWIG40.WA, 4 symbole) dla Global Equity Momentum —
         # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc odswiezac to
         # codziennie bez kosztu/limitow pelnego pobrania cen akcji (patrz workflow
         # daily_gem.yml — GEM ma byc aktualny codziennie, nie tylko raz w miesiacu).
@@ -457,7 +455,7 @@ if __name__ == "__main__":
     parser.add_argument("--min-coverage", type=float, default=0.8,
                          help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
     parser.add_argument("--indices-only", action="store_true",
-                         help="Odśwież WYŁĄCZNIE ceny poziomu indeksu (^GSPC/^NDX/^DJI) dla Global Equity "
+                         help="Odśwież WYŁĄCZNIE ceny poziomu indeksu (^NDX/^DJI/WIG20.WA/MWIG40.WA) dla Global Equity "
                               "Momentum — pomija skład indeksów i ceny wszystkich składników. Do użycia w "
                               "codziennym workflow (patrz daily_gem.yml), osobno od pełnego miesięcznego "
                               "odświeżenia.")

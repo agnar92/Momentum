@@ -92,7 +92,7 @@ class TestGetFullRefreshRange:
 # load_index_constituents (CSV -> DuckDB), z syntetycznymi plikami CSV
 # ---------------------------------------------------------------------------
 
-CSPX_CSV = """Fund holdings as of ignored-metadata-line
+CNDX_CSV = """Fund holdings as of ignored-metadata-line
 Ticker,Sector,Market Value,Asset Class
 AAA,Technology,"1,234.50",Equity
 BBB,Financials,500.00,Equity
@@ -104,7 +104,7 @@ FUT,Index Futures,10000.00,Futures
 class TestLoadIndexConstituents:
     def test_loads_equity_rows_and_filters_non_equity(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        (tmp_path / "CSPX_holdings.csv").write_text(CSPX_CSV)
+        (tmp_path / "CNDX_holdings.csv").write_text(CNDX_CSV)
 
         con = duckdb.connect(":memory:")
         load_index_constituents(con)
@@ -117,12 +117,12 @@ class TestLoadIndexConstituents:
 
         by_ticker = {r[0]: r for r in rows}
         assert by_ticker["AAA"][3] == pytest.approx(1234.50)
-        assert by_ticker["AAA"][1] == "SP500"
+        assert by_ticker["AAA"][1] == "NASDAQ100"
         assert by_ticker["AAA"][2] == "Technology"
 
     def test_missing_csv_file_is_skipped_without_raising(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        # Zaden z trzech plikow CSPX/CNDX/CIND nie istnieje w tmp_path.
+        # Zaden z dwoch plikow CNDX/CIND nie istnieje w tmp_path.
         con = duckdb.connect(":memory:")
         load_index_constituents(con)  # nie powinno rzucic wyjatku
 
@@ -172,7 +172,7 @@ class TestLoadIndexConstituents:
             "GOOD,Technology,1000.00,Equity,NASDAQ\n"
             "STALE,Health Care,5.00,Equity,NO MARKET (E.G. UNLISTED)\n"
         )
-        (tmp_path / "CSPX_holdings.csv").write_text(csv_no_market)
+        (tmp_path / "CNDX_holdings.csv").write_text(csv_no_market)
 
         con = duckdb.connect(":memory:")
         load_index_constituents(con)

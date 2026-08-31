@@ -284,23 +284,23 @@ def insert_prices(con, rows):
 class TestComputeEquityCurve:
     def test_no_history_returns_none(self):
         con = make_history_con()
-        assert compute_equity_curve(con, "SP500") is None
+        assert compute_equity_curve(con, "NASDAQ100") is None
 
     def test_single_ref_date_returns_none(self):
         con = make_history_con()
-        insert_history(con, [("2026-01-01", "SP500", 1, "AAA", 100.0, 1.0)])
-        assert compute_equity_curve(con, "SP500") is None
+        insert_history(con, [("2026-01-01", "NASDAQ100", 1, "AAA", 100.0, 1.0)])
+        assert compute_equity_curve(con, "NASDAQ100") is None
 
     def test_chained_return_for_fully_held_portfolio(self):
         # AAA +10%, BBB +10%, wagi 0.6/0.4 -> caly portfel +10% w tym okresie.
         con = make_history_con()
         insert_history(con, [
-            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.6),
-            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.4),
-            ("2026-02-01", "SP500", 1, "AAA", 110.0, 0.5),
-            ("2026-02-01", "SP500", 2, "BBB", 55.0, 0.5),
+            ("2026-01-01", "NASDAQ100", 1, "AAA", 100.0, 0.6),
+            ("2026-01-01", "NASDAQ100", 2, "BBB", 50.0, 0.4),
+            ("2026-02-01", "NASDAQ100", 1, "AAA", 110.0, 0.5),
+            ("2026-02-01", "NASDAQ100", 2, "BBB", 55.0, 0.5),
         ])
-        curve = compute_equity_curve(con, "SP500")
+        curve = compute_equity_curve(con, "NASDAQ100")
         assert curve["dates"] == ["2026-01-01", "2026-02-01"]
         assert curve["momentum_index"] == [100.0, pytest.approx(110.0)]
         assert curve["approximated_periods"] == [False, False]
@@ -310,12 +310,12 @@ class TestComputeEquityCurve:
         # nie zostal wybrany do portfela momentum (nie ma go w portfolio_history).
         con = make_history_con()
         insert_history(con, [
-            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.6),
-            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.4),
-            ("2026-02-01", "SP500", 1, "AAA", 110.0, 0.5),
-            ("2026-02-01", "SP500", 2, "BBB", 55.0, 0.5),
+            ("2026-01-01", "NASDAQ100", 1, "AAA", 100.0, 0.6),
+            ("2026-01-01", "NASDAQ100", 2, "BBB", 50.0, 0.4),
+            ("2026-02-01", "NASDAQ100", 1, "AAA", 110.0, 0.5),
+            ("2026-02-01", "NASDAQ100", 2, "BBB", 55.0, 0.5),
         ])
-        con.executemany("INSERT INTO index_constituents VALUES (?, 'SP500', 'Tech', ?)", [
+        con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', ?)", [
             ("AAA", 100.0), ("BBB", 100.0), ("CCC", 200.0),
         ])
         insert_prices(con, [
@@ -323,7 +323,7 @@ class TestComputeEquityCurve:
             ("2026-01-01", "BBB", 50.0), ("2026-02-01", "BBB", 55.0),
             ("2026-01-01", "CCC", 100.0), ("2026-02-01", "CCC", 90.0),
         ])
-        curve = compute_equity_curve(con, "SP500")
+        curve = compute_equity_curve(con, "NASDAQ100")
         # Momentum: 0.6*10% + 0.4*10% = +10% -> 110.0 (nie widzi CCC wcale)
         assert curve["momentum_index"][1] == pytest.approx(110.0)
         # Benchmark wazony fmc (0.25/0.25/0.5): 0.25*10% + 0.25*10% + 0.5*(-10%) = 0%
@@ -334,12 +334,12 @@ class TestComputeEquityCurve:
         # (rolling window jeszcze ja obejmuje) -> wklad liczony dokladnie.
         con = make_history_con()
         insert_history(con, [
-            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.5),
-            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.5),
-            ("2026-02-01", "SP500", 1, "AAA", 110.0, 1.0),
+            ("2026-01-01", "NASDAQ100", 1, "AAA", 100.0, 0.5),
+            ("2026-01-01", "NASDAQ100", 2, "BBB", 50.0, 0.5),
+            ("2026-02-01", "NASDAQ100", 1, "AAA", 110.0, 1.0),
         ])
         insert_prices(con, [("2026-02-01", "BBB", 55.0)])
-        curve = compute_equity_curve(con, "SP500")
+        curve = compute_equity_curve(con, "NASDAQ100")
         # 0.5*(110/100-1) + 0.5*(55/50-1) = 0.05 + 0.05 = +10%
         assert curve["momentum_index"][1] == pytest.approx(110.0)
         assert curve["approximated_periods"] == [False, False]
@@ -349,11 +349,11 @@ class TestComputeEquityCurve:
         # (poza rolling window) -> wklad pominiety (0%), okres oznaczony.
         con = make_history_con()
         insert_history(con, [
-            ("2026-01-01", "SP500", 1, "AAA", 100.0, 0.5),
-            ("2026-01-01", "SP500", 2, "BBB", 50.0, 0.5),
-            ("2026-02-01", "SP500", 1, "AAA", 110.0, 1.0),
+            ("2026-01-01", "NASDAQ100", 1, "AAA", 100.0, 0.5),
+            ("2026-01-01", "NASDAQ100", 2, "BBB", 50.0, 0.5),
+            ("2026-02-01", "NASDAQ100", 1, "AAA", 110.0, 1.0),
         ])
-        curve = compute_equity_curve(con, "SP500")
+        curve = compute_equity_curve(con, "NASDAQ100")
         # Tylko AAA liczony: 0.5*(110/100-1) = +5%
         assert curve["momentum_index"][1] == pytest.approx(105.0)
         assert curve["approximated_periods"] == [False, True]
@@ -394,21 +394,19 @@ class TestComputeIndexReturns:
     def test_ranks_universes_by_return_descending(self):
         con = make_gem_con()
         con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2025-02-01", "SP500", 100.0, 100.0),
-            ("2026-02-01", "SP500", 110.0, 110.0),       # +10%
             ("2025-02-01", "NASDAQ100", 100.0, 100.0),
             ("2026-02-01", "NASDAQ100", 130.0, 130.0),   # +30%
             ("2025-02-01", "DOWJONES", 100.0, 100.0),
             ("2026-02-01", "DOWJONES", 105.0, 105.0),    # +5%
         ])
         out = compute_index_returns(con, "2026-02-01", lookback_months=12)
-        assert [r["universe"] for r in out] == ["NASDAQ100", "SP500", "DOWJONES"]
+        assert [r["universe"] for r in out] == ["NASDAQ100", "DOWJONES"]
         assert out[0]["return_pct"] == pytest.approx(30.0)
 
     def test_universe_missing_lookback_data_is_skipped(self):
         con = make_gem_con()
         con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2026-01-15", "SP500", 100.0, 100.0),  # brak ceny sprzed 12 mies. -> pominiete
+            ("2026-01-15", "NASDAQ100", 100.0, 100.0),  # brak ceny sprzed 12 mies. -> pominiete
         ])
         out = compute_index_returns(con, "2026-02-01", lookback_months=12)
         assert out == []
@@ -419,7 +417,7 @@ class TestComputeIndexLeaders:
         # SMALL ma wyzszy zwrot, ale znikoma wage w indeksie -> BIG (nizszy zwrot,
         # ale dominujaca waga) powinien miec wiekszy wklad w zwrot indeksu i wygrac.
         con = make_gem_con()
-        con.executemany("INSERT INTO index_constituents VALUES (?, 'SP500', 'Tech', ?)", [
+        con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', ?)", [
             ("BIG", 900.0), ("SMALL", 10.0),
         ])
         con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, 0)", [
@@ -428,25 +426,25 @@ class TestComputeIndexLeaders:
             ("2025-02-01", "SMALL", 100.0, 100.0),
             ("2026-02-01", "SMALL", 300.0, 300.0),   # +200%, waga ~1.1%
         ])
-        out = compute_index_leaders(con, "SP500", "2026-02-01", lookback_months=12, top_n=10)
+        out = compute_index_leaders(con, "NASDAQ100", "2026-02-01", lookback_months=12, top_n=10)
         assert out[0]["ticker"] == "BIG"
         assert out[0]["rank"] == 1
 
     def test_top_n_limits_result_count(self):
         con = make_gem_con()
-        rows_const = [(f"T{i}", "SP500", "Tech", 10.0) for i in range(15)]
+        rows_const = [(f"T{i}", "NASDAQ100", "Tech", 10.0) for i in range(15)]
         con.executemany("INSERT INTO index_constituents VALUES (?, ?, ?, ?)", rows_const)
         rows_px = []
         for i in range(15):
             rows_px.append(("2025-02-01", f"T{i}", 100.0, 100.0, 0))
             rows_px.append(("2026-02-01", f"T{i}", 100.0 + i, 100.0 + i, 0))
         con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, ?)", rows_px)
-        out = compute_index_leaders(con, "SP500", "2026-02-01", lookback_months=12, top_n=5)
+        out = compute_index_leaders(con, "NASDAQ100", "2026-02-01", lookback_months=12, top_n=5)
         assert len(out) == 5
 
     def test_missing_price_data_returns_empty_list(self):
         con = make_gem_con()
-        assert compute_index_leaders(con, "SP500", "2026-02-01") == []
+        assert compute_index_leaders(con, "NASDAQ100", "2026-02-01") == []
 
 
 # ---------------------------------------------------------------------------
@@ -461,10 +459,8 @@ class TestExportGlobalEquityMomentum:
     def test_auto_derives_ref_date_from_index_prices_watermark(self, tmp_path):
         con = make_gem_con()
         con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2025-03-15", "SP500", 100.0, 100.0),
-            ("2026-03-15", "SP500", 120.0, 120.0),   # +20%, najswiezsza data w index_prices
             ("2025-03-15", "NASDAQ100", 100.0, 100.0),
-            ("2026-03-15", "NASDAQ100", 110.0, 110.0),
+            ("2026-03-15", "NASDAQ100", 120.0, 120.0),   # +20%, najswiezsza data w index_prices
             ("2025-03-15", "DOWJONES", 100.0, 100.0),
             ("2026-03-15", "DOWJONES", 105.0, 105.0),
         ])
@@ -472,7 +468,7 @@ class TestExportGlobalEquityMomentum:
 
         payload = json.loads((tmp_path / "global_equity_momentum.json").read_text())
         assert payload["ref_date"] == "2026-03-15"  # nie jakas inna data pipeline'u
-        assert payload["winner"] == "SP500"
+        assert payload["winner"] == "NASDAQ100"
 
     def test_no_index_prices_data_writes_nothing(self, tmp_path):
         con = duckdb.connect(":memory:")
@@ -570,7 +566,7 @@ class TestExportRelativeStrength:
         prices_by_universe = {
             universe: insert_daily_series(con, "index_prices", "Index_Name", universe,
                                            "2024-06-01", "2026-03-16", 100.0, 0.05)
-            for universe in ["SP500", "NASDAQ100", "DOWJONES"]
+            for universe in ["NASDAQ100", "DOWJONES"]
         }
         actual_ref_date = max(prices_by_universe["NASDAQ100"]).strftime("%Y-%m-%d")
 
@@ -583,7 +579,7 @@ class TestExportRelativeStrength:
 
         payload = json.loads((tmp_path / "relative_strength.json").read_text())
         assert payload["ref_date"] == actual_ref_date
-        assert set(payload["universes"].keys()) == {"NASDAQ100", "DOWJONES"}  # SP500 celowo pominiety
+        assert set(payload["universes"].keys()) == {"NASDAQ100", "DOWJONES"}
         assert payload["universes"]["NASDAQ100"]["leaders"][0]["ticker"] == "WIN"
         assert payload["universes"]["DOWJONES"]["leaders"][0]["ticker"] == "WIN"
         assert payload["universes"]["NASDAQ100"]["leaders"][0]["weekly_chart"] is not None

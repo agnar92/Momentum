@@ -154,11 +154,10 @@ test("parseXtbOpenPositions throws when the Open Positions sheet is missing", ()
 test("computeTargets allocates capital across universes by settings.pct, skipping 0% buckets", () => {
     _setState({
         universeData: {
-            SP500: { constituents: [{ ticker: "AAA", weight_pct: 100, price: 10 }] },
-            NASDAQ100: { constituents: [{ ticker: "BBB", weight_pct: 100, price: 20 }] },
-            DOWJONES: { constituents: [] },
+            NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 100, price: 10 }] },
+            DOWJONES: { constituents: [{ ticker: "BBB", weight_pct: 100, price: 20 }] },
         },
-        settings: { pct: { SP500: 70, NASDAQ100: 30, DOWJONES: 0 }, maxHoldings: 20 },
+        settings: { pct: { NASDAQ100: 70, DOWJONES: 30 }, maxHoldings: 20 },
         excluded: [],
     });
 
@@ -172,16 +171,15 @@ test("computeTargets allocates capital across universes by settings.pct, skippin
 test("computeTargets excludes tickers in the excluded list entirely", () => {
     _setState({
         universeData: {
-            SP500: {
+            NASDAQ100: {
                 constituents: [
                     { ticker: "AAA", weight_pct: 50, price: 10 },
                     { ticker: "EXCLUDED", weight_pct: 50, price: 10 },
                 ],
             },
-            NASDAQ100: { constituents: [] },
             DOWJONES: { constituents: [] },
         },
-        settings: { pct: { SP500: 100, NASDAQ100: 0, DOWJONES: 0 }, maxHoldings: 20 },
+        settings: { pct: { NASDAQ100: 100, DOWJONES: 0 }, maxHoldings: 20 },
         excluded: ["EXCLUDED"],
     });
 
@@ -194,17 +192,16 @@ test("computeTargets excludes tickers in the excluded list entirely", () => {
 test("computeTargets truncates to maxHoldings and rescales survivors back to 100%", () => {
     _setState({
         universeData: {
-            SP500: {
+            NASDAQ100: {
                 constituents: [
                     { ticker: "BIG", weight_pct: 60, price: 10 },
                     { ticker: "MID", weight_pct: 30, price: 10 },
                     { ticker: "SMALL", weight_pct: 10, price: 10 },
                 ],
             },
-            NASDAQ100: { constituents: [] },
             DOWJONES: { constituents: [] },
         },
-        settings: { pct: { SP500: 100, NASDAQ100: 0, DOWJONES: 0 }, maxHoldings: 2 },
+        settings: { pct: { NASDAQ100: 100, DOWJONES: 0 }, maxHoldings: 2 },
         excluded: [],
     });
 
@@ -217,37 +214,36 @@ test("computeTargets truncates to maxHoldings and rescales survivors back to 100
 
 test("blendEquityCurves weights universes by settings.pct", () => {
     const curveData = {
-        SP500: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
-        NASDAQ100: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 90], benchmark_index: [100, 95] },
-        DOWJONES: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 100], benchmark_index: [100, 100] },
+        NASDAQ100: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
+        DOWJONES: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 90], benchmark_index: [100, 95] },
     };
-    const pct = { SP500: 60, NASDAQ100: 40, DOWJONES: 0 };
+    const pct = { NASDAQ100: 60, DOWJONES: 40 };
     const blended = blendEquityCurves(curveData, pct);
     assert.deepEqual(blended.dates, ["2026-01-01", "2026-02-01"]);
-    // 0.6*110 + 0.4*90 = 66 + 36 = 102 (DOWJONES ma 0% -> pomijany calkowicie)
+    // 0.6*110 + 0.4*90 = 66 + 36 = 102
     assert.ok(Math.abs(blended.portfolio[1] - 102) < 1e-9);
     assert.ok(Math.abs(blended.benchmark[1] - 101) < 1e-9);
 });
 
 test("blendEquityCurves returns null when no allocated universe has enough history", () => {
-    const curveData = { SP500: { dates: ["2026-01-01"], momentum_index: [100], benchmark_index: [100] } };
-    const pct = { SP500: 100, NASDAQ100: 0, DOWJONES: 0 };
+    const curveData = { NASDAQ100: { dates: ["2026-01-01"], momentum_index: [100], benchmark_index: [100] } };
+    const pct = { NASDAQ100: 100, DOWJONES: 0 };
     assert.equal(blendEquityCurves(curveData, pct), null);
 });
 
 test("blendEquityCurves returns null when settings.pct sums to zero", () => {
     const curveData = {
-        SP500: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
+        NASDAQ100: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
     };
-    assert.equal(blendEquityCurves(curveData, { SP500: 0, NASDAQ100: 0, DOWJONES: 0 }), null);
+    assert.equal(blendEquityCurves(curveData, { NASDAQ100: 0, DOWJONES: 0 }), null);
 });
 
 test("blendEquityCurves intersects dates when universes have mismatched history", () => {
     const curveData = {
-        SP500: { dates: ["2026-01-01", "2026-02-01", "2026-03-01"], momentum_index: [100, 110, 121], benchmark_index: [100, 105, 110] },
-        NASDAQ100: { dates: ["2026-02-01", "2026-03-01"], momentum_index: [100, 105], benchmark_index: [100, 102] },
+        NASDAQ100: { dates: ["2026-01-01", "2026-02-01", "2026-03-01"], momentum_index: [100, 110, 121], benchmark_index: [100, 105, 110] },
+        DOWJONES: { dates: ["2026-02-01", "2026-03-01"], momentum_index: [100, 105], benchmark_index: [100, 102] },
     };
-    const blended = blendEquityCurves(curveData, { SP500: 50, NASDAQ100: 50, DOWJONES: 0 });
+    const blended = blendEquityCurves(curveData, { NASDAQ100: 50, DOWJONES: 50 });
     // Tylko wspolne daty (od 2026-02-01) -> 2 punkty, nie 3.
     assert.deepEqual(blended.dates, ["2026-02-01", "2026-03-01"]);
 });

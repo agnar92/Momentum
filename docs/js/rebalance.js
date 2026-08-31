@@ -1,16 +1,16 @@
 
-const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"];
-const UNIVERSE_LABELS = { SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
+const UNIVERSES = ["NASDAQ100", "DOWJONES"];
+const UNIVERSE_LABELS = { NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
 const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
 
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
-const DEFAULT_SETTINGS = { contribution: 0, pct: { SP500: 60, NASDAQ100: 30, DOWJONES: 10 }, maxHoldings: 20 };
+const DEFAULT_SETTINGS = { contribution: 0, pct: { NASDAQ100: 75, DOWJONES: 25 }, maxHoldings: 20 };
 
-let universeData = {};   // { SP500: {...json}, ... }
+let universeData = {};   // { NASDAQ100: {...json}, ... }
 let priceMap = {};       // ticker -> { price, sources: [universe,...] }
-let equityCurveData = {}; // { SP500: {dates, momentum_index, benchmark_index, ...}, ... }
+let equityCurveData = {}; // { NASDAQ100: {dates, momentum_index, benchmark_index, ...}, ... }
 
 function loadSettings() {
     try {
@@ -312,7 +312,7 @@ function computeTargets(totalCapital) {
 
     UNIVERSES.forEach(u => {
         const pctAllocation = settings.pct[u] || 0;
-        if (pctAllocation <= 0) return; // Pomijamy indeksy z wagą 0% (np. SP500)
+        if (pctAllocation <= 0) return; // Pomijamy indeksy z wagą 0%
 
         const bucketTarget = totalCapital * (pctAllocation / 100);
         // Wykluczone spółki znikają z puli momentum całkowicie — ich waga

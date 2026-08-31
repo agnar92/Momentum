@@ -248,7 +248,7 @@ html, body {
     border-color: var(--green-bright);
 }
 
-/* Global Equity Momentum: zwroty poziomu indeksu (SP500/NASDAQ100/DOWJONES),
+/* Global Equity Momentum: zwroty poziomu indeksu (NASDAQ100/DOWJONES),
    zwycięzca wyróżniony (patrz renderGemPanel w app.js) */
 .gem-index-returns {
     display: flex;
