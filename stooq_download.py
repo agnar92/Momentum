@@ -1,26 +1,74 @@
 """Download historical OHLC CSV data from stooq.pl.
 
 A plain `requests.get(...)` against stooq's CSV export endpoint
-(https://stooq.pl/q/d/l/) gets stooq's own anti-bot page back instead of a
-CSV ("Ta strona wymaga JavaScriptu do weryfikacji przeglądarki...") — this
-is a real JavaScript browser-verification challenge, not just a
-User-Agent check, so plain `requests`/`urllib` can't get through it no
-matter what headers are sent. `cloudscraper` (a `requests.Session`
-subclass that emulates a browser's TLS/JS fingerprint and solves this
-class of challenge automatically) is used here instead.
+(https://stooq.pl/q/d/l/) gets stooq's anti-bot page back instead of a CSV
+("This site requires JavaScript to verify your browser..."). That page
+turns out to be a client-side proof-of-work challenge, not real
+browser/TLS fingerprinting: it hands over a random string `c` and a
+difficulty `d`, has the browser brute-force a nonce `n` such that
+sha256(c + n) has `d` leading hex zeros, POSTs `{c, n}` to `/__verify`,
+then reloads. That's pure hashing — solvable in plain Python with
+`hashlib` in a few milliseconds, no real browser or TLS-fingerprint
+emulation (cloudscraper, Playwright, etc.) required.
 
 Usage:
     python stooq_download.py ale -i w -o ale.csv
 """
 import argparse
+import hashlib
 import io
+import re
 import sys
+from urllib.parse import urljoin
 
-import cloudscraper
 import pandas as pd
 import requests
 
 STOOQ_URL = "https://stooq.pl/q/d/l/"
+
+BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "pl-PL,pl;q=0.9,en-US;q=0.8,en;q=0.7",
+}
+
+CHALLENGE_RE = re.compile(r'const c="([^"]+)"\s*,\s*d=(\d+)')
+
+MAX_CHALLENGE_ATTEMPTS = 3
+
+
+def _solve_pow(challenge, difficulty):
+    """Brute-forces the nonce n such that sha256(challenge + n) has
+    `difficulty` leading hex-zero digits, mirroring the page's own JS loop."""
+    target = "0" * difficulty
+    n = 0
+    while True:
+        digest = hashlib.sha256(f"{challenge}{n}".encode()).hexdigest()
+        if digest.startswith(target):
+            return n
+        n += 1
+
+
+def _is_pow_challenge(text):
+    return "/__verify" in text and 'const c="' in text
+
+
+def _solve_and_verify(session, html, timeout):
+    match = CHALLENGE_RE.search(html)
+    if not match:
+        raise ValueError("Nie udało się sparsować wyzwania proof-of-work stooq (format strony się zmienił?).")
+    challenge, difficulty = match.group(1), int(match.group(2))
+    nonce = _solve_pow(challenge, difficulty)
+    verify_url = urljoin(STOOQ_URL, "/__verify")
+    resp = session.post(
+        verify_url,
+        data={"c": challenge, "n": str(nonce)},
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        timeout=timeout,
+    )
+    resp.raise_for_status()
 
 
 def fetch_stooq_csv(symbol, interval="d", start=None, end=None, timeout=30):
@@ -28,7 +76,8 @@ def fetch_stooq_csv(symbol, interval="d", start=None, end=None, timeout=30):
 
     interval: 'd' (daily), 'w' (weekly), 'm' (monthly), or 'q'/'y' etc.
     start/end: optional 'YYYYMMDD' strings, passed through as stooq's d1/d2.
-    Raises ValueError if stooq's JS-verification page comes back instead of a CSV.
+    Solves stooq's proof-of-work verification page automatically if served one.
+    Raises ValueError if a CSV still can't be obtained after solving it.
     """
     params = {"s": symbol, "i": interval}
     if start:
@@ -36,16 +85,22 @@ def fetch_stooq_csv(symbol, interval="d", start=None, end=None, timeout=30):
     if end:
         params["d2"] = end
 
-    scraper = cloudscraper.create_scraper()
-    resp = scraper.get(STOOQ_URL, params=params, timeout=timeout)
+    session = requests.Session()
+    session.headers.update(BROWSER_HEADERS)
+
+    resp = session.get(STOOQ_URL, params=params, timeout=timeout)
     resp.raise_for_status()
+
+    attempts = 0
+    while _is_pow_challenge(resp.text) and attempts < MAX_CHALLENGE_ATTEMPTS:
+        _solve_and_verify(session, resp.text, timeout)
+        resp = session.get(STOOQ_URL, params=params, timeout=timeout)
+        resp.raise_for_status()
+        attempts += 1
 
     text = resp.text
     if not text.strip() or text.lstrip().startswith("<"):
-        raise ValueError(
-            f"stooq zwrócił błąd/HTML (prawdopodobnie stronę weryfikacji JS) zamiast CSV "
-            f"dla symbolu '{symbol}': {text[:200]!r}"
-        )
+        raise ValueError(f"stooq zwrócił błąd/HTML zamiast CSV dla symbolu '{symbol}': {text[:200]!r}")
 
     df = pd.read_csv(io.StringIO(text))
     if "Data" in df.columns:
