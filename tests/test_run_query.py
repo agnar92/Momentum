@@ -279,6 +279,45 @@ class TestBuildTopBasket:
         out_empty = build_top_basket(None, None)
         assert out_empty == []
 
+    def test_excludes_negative_raw_momentum_even_if_score_is_positive(self):
+        # momentum_score jest zawsze > 0 (1+Z albo 1/(1-Z)) i moze byc wysoki nawet
+        # dla spolki z ujemnym surowym momentum_value, jesli reszta uniwersum radzila
+        # sobie jeszcze gorzej (Z>0 wzgledem grupy) -> to nie jest "wzrost", ma byc odciete.
+        sp500 = make_weighted_df([
+            ("A", "Tech", 100.0, -0.05, 0.15, 1.5),
+            ("B", "Tech", 90.0, 0.05, 0.15, 1.0),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
+        assert [r["ticker"] for r in out] == ["B"]
+
+    def test_prefers_calmer_names_over_the_single_most_volatile_mover(self):
+        # HOT ma najwyzszy momentum_score (najbardziej spekulacyjny ruch), ale jest
+        # w gornej (bardziej zmiennej) polowie puli po annualized_volatility -> odciety
+        # filtrem stabilnosci. CALM1/CALM2 sa spokojniejsze (dolna polowa) i mimo
+        # nizszego surowego score powinny wygrac ranking "consistent compounders".
+        sp500 = make_weighted_df([
+            ("HOT", "Tech", 100.0, 0.50, 0.60, 3.0),
+            ("MID", "Tech", 100.0, 0.20, 0.30, 1.8),
+            ("CALM1", "Tech", 100.0, 0.15, 0.10, 1.5),
+            ("CALM2", "Tech", 100.0, 0.12, 0.12, 1.3),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
+        tickers = [r["ticker"] for r in out]
+        assert "HOT" not in tickers
+        assert tickers == ["CALM1", "CALM2"]
+
+    def test_falls_back_to_unfiltered_positive_momentum_if_stability_filter_empties_pool(self):
+        # Brakujaca zmiennosc (NaN, np. za krotka historia cen) sprawia, ze filtr
+        # stabilnosci (vol <= mediana) nie przepuszcza nikogo (NaN <= cokolwiek jest
+        # zawsze False) -> zamiast pustego koszyka, funkcja wycofuje sie do calej puli
+        # z dodatnim momentum, bez filtra zmiennosci.
+        sp500 = make_weighted_df([
+            ("A", "Tech", 100.0, 0.10, float("nan"), 1.0),
+            ("B", "Tech", 90.0, 0.05, float("nan"), 0.8),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
+        assert {r["ticker"] for r in out} == {"A", "B"}
+
 
 # ---------------------------------------------------------------------------
 # resolve_top_basket (rebalans co TOP_BASKET_REBALANCE_MONTHS miesiecy,

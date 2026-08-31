@@ -75,11 +75,16 @@ at a literal 1:1 replication of S&P's own rebalance calendar.
 
 ### Top-momentum basket (`build_top_basket` / `resolve_top_basket`)
 
-A separate, deliberately concentrated basket — SP500 top `TOP_BASKET_SP500_N` (20) + NASDAQ100 top
-`TOP_BASKET_NASDAQ100_N` (5) names by `momentum_score`, DOWJONES excluded (no quintile selection there),
-overlapping tickers deduplicated. It's a *quality proxy* without fetching any fundamental data: the idea
-is that momentum leaders in large, liquid indices tend to already be large, stable, profitable
-companies.
+A separate, deliberately concentrated "consistent compounders" basket — SP500 top `TOP_BASKET_SP500_N`
+(20) + NASDAQ100 top `TOP_BASKET_NASDAQ100_N` (5), DOWJONES excluded (no quintile selection there),
+overlapping tickers deduplicated. It's a *quality proxy* without fetching any fundamental data — but
+ranking the already-selected top-quintile-by-momentum pool by raw `momentum_score` just re-selects the
+most volatile/extreme movers within an already momentum-tilted pool (i.e. "who returned the most", not
+quality). `_stable_growth_candidates()` filters that pool first — drops names with non-positive raw
+`momentum_value` (could be in the quintile only because the rest of the universe did even worse) and the
+more volatile half by `annualized_volatility` (`TOP_BASKET_MAX_VOLATILITY_PERCENTILE`, 0.5) — and only
+*then* ranks the calmer, genuinely-growing remainder by `momentum_score`. Falls back to the unfiltered
+positive-momentum set if the volatility cut would leave nothing.
 
 Unlike the three main universes, this basket's **membership** only changes once every
 `TOP_BASKET_REBALANCE_MONTHS` (6) months, to keep turnover low — but `run_query.py` still runs monthly
@@ -108,7 +113,10 @@ it only exists after the pipeline has run.
   `renderTopBasketTiles()` — shows last/next rebalance date, dims tickers flagged `stale`), a
   full sortable constituents table per universe (with an added/dropped changelog vs. the previous
   rebalance), a Ctrl+K command-palette ticker search, and a full-screen TradingView chart widget
-  (loaded from `s3.tradingview.com`, mounted via `TradingView.widget(...)`).
+  (loaded from `s3.tradingview.com`, mounted via `TradingView.widget(...)`). The sidebar is hidden on
+  phones in portrait (`@media max-width:640px`), so the drawer table has a 4th "🏆 Top" tab
+  (`showDrawerTable()` / `renderTopBasketTable()`) rendering the same basket as its own table — the
+  only way to reach it on mobile, since it isn't otherwise duplicated by the per-universe tables.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`

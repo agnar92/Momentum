@@ -48,6 +48,9 @@ CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
 MAX_HOLDINGS = 100
 TOP_BASKET_SP500_N = 20      # ile najsilniejszych spolek wg momentum score z SP500 w koszyku
 TOP_BASKET_NASDAQ100_N = 5   # jw. dla NASDAQ100 (DOWJONES pominiety - tam nie ma selekcji)
+TOP_BASKET_MAX_VOLATILITY_PERCENTILE = 0.5   # koszyk celuje w "consistent compounders", nie w
+                                              # najgwaltowniejsze ruchy cenowe -> przed rankingiem po
+                                              # momentum odrzucamy gorna (bardziej zmienna) polowe puli
 TOP_BASKET_REBALANCE_MONTHS = 6   # sklad koszyka zmienia sie tylko co tyle miesiecy (ograniczenie rotacji);
                                    # ceny/momentum wyswietlane dla trzymanych spolek i tak odswiezane co miesiac
 
@@ -258,18 +261,34 @@ def compute_weights(df_selected, universe=None):
 
 # ============================================================================
 # MAŁY KOSZYK "TOP MOMENTUM" (proxy dla quality bez pobierania danych
-# fundamentalnych) — łączy najsilniejsze spółki wg momentum score z SP500
-# i NASDAQ100 (DOWJONES pominięty: tam nie ma selekcji kwintylowej, wszystkie
-# 30 spółek ma równą wagę). Założenie: liderzy momentum w dużych, płynnych
-# indeksach w praktyce mocno pokrywają się z quality (duże, stabilne, zyskowne
-# spółki) — bez dokładania nowego źródła danych do pipeline'u.
+# fundamentalnych) — łączy najsilniejsze spółki z SP500 i NASDAQ100 (DOWJONES
+# pominięty: tam nie ma selekcji kwintylowej, wszystkie 30 spółek ma równą
+# wagę). Celem NIE jest "kto urósł najgwałtowniej" (to najzwyczajniej faworyzuje
+# najbardziej spekulacyjne/zmienne nazwy w puli) — celem są "consistent
+# compounders": duże, spokojne spółki z solidnym, ale niekoniecznie ekstremalnym
+# momentum. Dlatego z puli już wyselekcjonowanej top-kwintylowo po momentum
+# najpierw odrzucamy najbardziej zmienną (górną) połowę wg annualized_volatility
+# i spółki z ujemnym surowym momentum (mogły trafić do kwintyla tylko dlatego,
+# że reszta uniwersum radziła sobie jeszcze gorzej — to nie jest "wzrost"),
+# a dopiero wśród spokojniejszej reszty rankingujemy po momentum score.
 # ============================================================================
+def _stable_growth_candidates(df, max_volatility_percentile=TOP_BASKET_MAX_VOLATILITY_PERCENTILE):
+    candidates = df[df["momentum_value"] > 0]
+    if candidates.empty:
+        return candidates
+    vol_cutoff = candidates["annualized_volatility"].quantile(max_volatility_percentile)
+    stable = candidates[candidates["annualized_volatility"] <= vol_cutoff]
+    return stable if not stable.empty else candidates
+
+
 def build_top_basket(df_sp500, df_nasdaq100, sp500_n=TOP_BASKET_SP500_N, nasdaq100_n=TOP_BASKET_NASDAQ100_N):
     sources = []
     if df_sp500 is not None and not df_sp500.empty:
-        sources.append(("SP500", df_sp500.sort_values("momentum_score", ascending=False).head(sp500_n)))
+        stable = _stable_growth_candidates(df_sp500)
+        sources.append(("SP500", stable.sort_values("momentum_score", ascending=False).head(sp500_n)))
     if df_nasdaq100 is not None and not df_nasdaq100.empty:
-        sources.append(("NASDAQ100", df_nasdaq100.sort_values("momentum_score", ascending=False).head(nasdaq100_n)))
+        stable = _stable_growth_candidates(df_nasdaq100)
+        sources.append(("NASDAQ100", stable.sort_values("momentum_score", ascending=False).head(nasdaq100_n)))
 
     combined = {}
     for universe_name, df in sources:
@@ -427,14 +446,16 @@ def export_top_basket(records, ref_date, docs_data_dir, rebalanced, rebalance_re
         "next_rebalance_ref_date": next_rebalance_ref_date,
         "n_tickers": len(records),
         "n_overlap": n_overlap,
-        "note": (f"Koncentrowany koszyk łączący top-momentum liderów z SP500 (top {sp500_n}) "
-                 f"i NASDAQ100 (top {nasdaq100_n}) wg momentum score. Bez DOWJONES (tam nie ma "
-                 "selekcji kwintylowej). Nie jest to osobna strategia quality - to proxy: liderzy "
-                 "momentum w dużych indeksach zwykle pokrywają się z dużymi, stabilnymi, "
-                 f"zyskownymi spółkami, bez pobierania dodatkowych danych fundamentalnych. Skład "
-                 f"koszyka zmienia się (rebalans) tylko raz na {rebalance_every_months} miesięcy, żeby "
-                 "ograniczyć rotację — ceny/momentum/zmienność wyświetlane dla trzymanych spółek są "
-                 "mimo to odświeżane co miesiąc, razem z resztą danych."),
+        "note": (f"Koncentrowany koszyk \"consistent compounders\": z puli już wyselekcjonowanej "
+                 f"top-kwintylowo po momentum (SP500 top {sp500_n}, NASDAQ100 top {nasdaq100_n}; bez "
+                 "DOWJONES — tam nie ma selekcji kwintylowej) odrzuca najbardziej zmienną połowę "
+                 "spółek oraz te z ujemnym surowym momentum, a dopiero wśród spokojniejszej reszty "
+                 "wybiera liderów momentum score. To nie jest strategia \"kto urósł najgwałtowniej\" "
+                 "— celem są duże, stabilne, powoli ale konsekwentnie rosnące spółki (blue chips) z "
+                 "solidnym momentum, bez pobierania dodatkowych danych fundamentalnych. Skład koszyka "
+                 f"zmienia się (rebalans) tylko raz na {rebalance_every_months} miesięcy, żeby ograniczyć "
+                 "rotację — ceny/momentum/zmienność wyświetlane dla trzymanych spółek są mimo to "
+                 "odświeżane co miesiąc, razem z resztą danych."),
         "constituents": records,
     }
     out_path = Path(docs_data_dir) / "top_basket.json"
