@@ -623,6 +623,18 @@ class TestComputeRelativeStrengthChart:
         # Cena rosnie liniowo -> pozniejszy tydzien ma wyzszy % niz wczesniejszy.
         assert out["close_pct"][-1] > out["close_pct"][0]
 
+    def test_rs_line_is_raw_stock_over_index_ratio_not_rebased(self):
+        # AAA: 100 -> 100+2*10=120 w 11 tygodniach. NASDAQ100: 200 -> 200+1*10=210.
+        con = make_gem_con()
+        insert_weekly_series(con, "prices", "Ticker", "AAA", "2026-01-05", 11, 100.0, 2.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2026-01-05", 11, 200.0, 1.0)
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16", "2026-01-05")
+        assert out["rs_line"][0] == pytest.approx(100.0 / 200.0)   # surowy stosunek, NIE 1.0/100/0%
+        assert out["rs_line"][-1] == pytest.approx(120.0 / 210.0, abs=1e-4)  # zaokraglone do 4 miejsc
+        # Spolka rosnie szybciej niz indeks -> linia RS rosnie (klasyczny sygnal Weinsteina).
+        assert out["rs_line"][-1] > out["rs_line"][0]
+
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2026-01-05", 11, 200.0, 1.0)
