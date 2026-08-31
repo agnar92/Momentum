@@ -458,14 +458,23 @@ td.negative { color: var(--red); }
 
 .chart-container { flex: 1; }
 .chart-container iframe { border: none; width: 100%; height: 100%; }
-/* Dwa wykresy jeden pod drugim: cena spółki/indeks w % (duży, u góry) + klasyczna
-   Relative Strength Line Stana Weinsteina (mniejszy pasek u dołu, patrz
+/* Dwa wykresy jeden pod drugim: "wykres 10:30" (cena + SMA10/SMA30, duży, u góry)
+   + Mansfield Relative Strength (oscylator, mniejszy pasek u dołu, patrz
    renderRelativeStrengthChart w app.js). */
 .rs-chart-container {
     display: flex;
     flex-direction: column;
     gap: 12px;
     padding: 12px;
+}
+
+/* [hidden] to zwykla regula user-agent (nie autorska), wiec bez tego nadpisania
+   powyzsze `display: flex` zawsze by wygrywalo — #rs_chart nigdy nie chowalby
+   sie realnie (mimo atrybutu hidden ustawianego w JS), tylko dzielil miejsce
+   z #tv_chart w tym samym .chart-panel (stad TradingView "nie na cały ekran"
+   i oba widoki widoczne naraz przy przełączaniu trybu wykresu). */
+.rs-chart-container[hidden] {
+    display: none;
 }
 
 .rs-chart-panel {
