@@ -562,7 +562,7 @@ class TestExportRelativeStrength:
 
 # ---------------------------------------------------------------------------
 # compute_relative_strength_chart: tygodniowy wykres (nie-TradingView) dla panelu
-# Siły Relatywnej — cena spółki i indeksu w % YTD + SMA10/SMA30 na cenie spółki.
+# Siły Relatywnej — cena spółki i indeksu, oba w % YTD.
 # ---------------------------------------------------------------------------
 
 def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks, start_price, weekly_step):
@@ -580,41 +580,25 @@ def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks,
 
 
 class TestComputeRelativeStrengthChart:
-    def test_returns_pct_series_with_sma_when_enough_lookback(self):
+    def test_returns_pct_series_indexed_to_first_week_of_year(self):
         con = make_gem_con()
-        # 35 tygodni przed 2026-01-05 (pierwszy poniedzialek roku) + tygodnie w roku,
-        # az do ref_date -> wystarczajacy zapas dla SMA30 (RS_SMA_LONG_WEEKS) juz od
-        # pierwszego wyswietlanego tygodnia.
-        insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-05-05", 50, 100.0, 2.0)
-        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2025-05-05", 50, 200.0, 1.0)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", "2026-01-05", 11, 100.0, 2.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2026-01-05", 11, 200.0, 1.0)
 
         out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16")
         assert out is not None
         assert out["dates"][0] == "2026-01-05"  # pierwszy poniedzialek W ROKU
         assert out["close_pct"][0] == pytest.approx(0.0)   # baza YTD = 0%
         assert out["index_pct"][0] == pytest.approx(0.0)
-        assert out["sma10_pct"][0] is not None
-        assert out["sma30_pct"][0] is not None
         # Cena rosnie liniowo -> pozniejszy tydzien ma wyzszy % niz wczesniejszy.
         assert out["close_pct"][-1] > out["close_pct"][0]
 
-    def test_insufficient_lookback_leaves_early_sma_as_none(self):
-        con = make_gem_con()
-        # Tylko 5 tygodni historii PRZED poczatkiem roku -> za malo na pelne 30-tyg.
-        # SMA przy pierwszym tygodniu roku (musi byc None, nie blad/0).
-        insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-12-01", 20, 100.0, 2.0)
-        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2025-12-01", 20, 200.0, 1.0)
-
-        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16")
-        assert out is not None
-        assert out["sma30_pct"][0] is None
-
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
-        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2025-05-05", 50, 200.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2026-01-05", 11, 200.0, 1.0)
         assert compute_relative_strength_chart(con, "NOPE", "NASDAQ100", "2026-03-16") is None
 
     def test_no_index_history_returns_none(self):
         con = make_gem_con()
-        insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-05-05", 50, 100.0, 2.0)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", "2026-01-05", 11, 100.0, 2.0)
         assert compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16") is None

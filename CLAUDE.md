@@ -118,14 +118,9 @@ the same `run_query.py --gem-only` daily path as GEM (see `daily_gem.yml`) since
 
 Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`): weekly closes (resampled
 from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` + `ARGMAX`) for the stock and
-its index, both indexed to 0% at the first trading week of the calendar year (YTD %), plus a 10-week and
-30-week SMA on the *stock's own price* (classic Weinstein "stage analysis" convention — the index line is
-a plain reference, no SMA of its own). The query fetches `RS_SMA_LONG_WEEKS` extra weeks of history
-*before* the year start purely as SMA warm-up context, so the 30-week SMA already has a value at the very
-first displayed (YTD) point instead of being null for the first ~30 weeks of the year; that pre-year
-lookback data itself is never included in the output series. This exists because the free TradingView
-widget embed can't reliably chart something like this (comparing a stock's price to its own index on one
-weekly % chart with custom SMAs isn't a free-tier feature) — see `renderRelativeStrengthChart()` below.
+its index, both indexed to 0% at the first trading week of the calendar year (YTD %) — a stock-vs-its-index
+comparison the free TradingView widget embed can't reliably chart (adding a compare symbol can hit
+free-tier account limits). See `renderRelativeStrengthChart()` below for how it's rendered.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
