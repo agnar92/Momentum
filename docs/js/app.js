@@ -75,8 +75,8 @@ function renderTopBasketTiles() {
     const meta = document.getElementById("topBasketMeta");
     if (meta) {
         const b = state.topBasket;
-        meta.textContent = b.last_rebalance_ref_date
-            ? `Rebalans: ${b.last_rebalance_ref_date}${b.rebalanced_today ? " (dziś)" : ""} · kolejny: ~${b.next_rebalance_ref_date} · dane: ${b.ref_date || "—"}`
+        meta.textContent = b.ref_date
+            ? `Rebalans: ${b.ref_date} · ${b.n_tickers || 0} spółek`
             : "Brak danych — uruchom pipeline.";
     }
 
@@ -87,10 +87,8 @@ function renderTopBasketTiles() {
         tile.className = "ticker-tile";
         tile.textContent = c.ticker;
         const sources = c.universes.map(u => UNIVERSE_LABELS[u].replace(" Momentum", "")).join(" + ");
-        const staleNote = c.stale ? " · dane sprzed rebalansu (spółka poza bieżącą selekcją kwintylową)" : "";
-        tile.title = `${c.ticker} — #${c.rank} · momentum ${c.momentum_pct != null ? c.momentum_pct.toFixed(2) + "%" : "brak danych"} · ${sources}${staleNote}`;
+        tile.title = `${c.ticker} — #${c.rank} · momentum ${c.momentum_pct != null ? c.momentum_pct.toFixed(2) + "%" : "brak danych"} · ${sources}`;
         if (c.universes.length > 1) tile.classList.add("ticker-tile-overlap");
-        if (c.stale) tile.classList.add("ticker-tile-stale");
         tile.dataset.ticker = c.ticker;
         tile.dataset.universe = c.universes[0];
         if (c.ticker === state.selectedTicker) tile.classList.add("selected");
@@ -250,9 +248,8 @@ function showDrawerTable(universe) {
 function renderTopBasketTable() {
     const b = state.topBasket;
     const meta = document.getElementById("drawerMeta");
-    if (b.last_rebalance_ref_date) {
-        meta.textContent = `Rebalans: ${b.last_rebalance_ref_date}${b.rebalanced_today ? " (dziś)" : ""} · `
-            + `kolejny: ~${b.next_rebalance_ref_date} · dane: ${b.ref_date || "—"} · ${b.n_tickers || 0} spółek`;
+    if (b.ref_date) {
+        meta.textContent = `Rebalans: ${b.ref_date} · ${b.n_tickers || 0} spółek`;
         meta.title = b.note || "";
     } else {
         meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
@@ -265,7 +262,7 @@ function renderTopBasketTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="8" class="empty-state">Brak danych.</td>`;
+        tr.innerHTML = `<td colspan="7" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -284,7 +281,6 @@ function renderTopBasketTable() {
             <td class="${momentumClass}">${r.momentum_pct != null ? r.momentum_pct.toFixed(2) + "%" : "—"}</td>
             <td>${r.volatility_pct != null ? r.volatility_pct.toFixed(2) + "%" : "—"}</td>
             <td>${sources}</td>
-            <td class="${r.stale ? "text-faint" : ""}">${r.stale ? "sprzed rebalansu" : "aktualne"}</td>
         `;
         tr.addEventListener("click", () => selectTicker(r.ticker, r.universes[0]));
         tbody.appendChild(tr);

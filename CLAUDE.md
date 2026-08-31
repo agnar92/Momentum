@@ -59,8 +59,9 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
      If the sum of individual caps can't reach 100% (mathematically infeasible for small selections),
      all caps are scaled up proportionally — see `cap_scaled_due_to_infeasibility` in the JSON output.
    - Persists results to `portfolio_history` (append-only per `ref_date`/`universe`, never dropped by
-     `fetch_data.py`) — this is what makes the buffer rule and the dashboard's added/dropped changelog
-     possible across runs.
+     `fetch_data.py`) — this is what makes the buffer rule possible across runs (and lets `export_json`
+     compute an `added_tickers`/`dropped_tickers` changelog vs. the previous run, exported in the JSON
+     though not currently rendered on the dashboard).
    - Exports `docs/data/{universe}.json` (per-universe constituent list) and `docs/data/all_prices.json`
      (latest price for every ticker across all three indices, so the rebalance panel can price
      positions that aren't in the current momentum selection).
@@ -73,7 +74,7 @@ Monthly (not semi-annual, as the official S&P 500 Momentum index does) rebalanci
 choice here — it matches the cadence used in most academic momentum-return literature — not an attempt
 at a literal 1:1 replication of S&P's own rebalance calendar.
 
-### Top-momentum basket (`build_top_basket` / `resolve_top_basket`)
+### Top-momentum basket (`build_top_basket` / `select_top_basket`)
 
 A separate, deliberately concentrated "consistent compounders" basket — SP500 top `TOP_BASKET_SP500_N`
 (20) + NASDAQ100 top `TOP_BASKET_NASDAQ100_N` (5), DOWJONES excluded (no quintile selection there),
@@ -86,21 +87,21 @@ more volatile half by `annualized_volatility` (`TOP_BASKET_MAX_VOLATILITY_PERCEN
 *then* ranks the calmer, genuinely-growing remainder by `momentum_score`. Falls back to the unfiltered
 positive-momentum set if the volatility cut would leave nothing.
 
-Unlike the three main universes, this basket's **membership** only changes once every
-`TOP_BASKET_REBALANCE_MONTHS` (6) months, to keep turnover low — but `run_query.py` still runs monthly
-and always refreshes the **displayed metrics** (price, momentum %, volatility) for whichever tickers are
-currently held, even between rebalances. This split is implemented via a persisted `top_basket_rebalances`
-table (same durability story as `portfolio_history` — committed to git via `momentum_data.duckdb`):
-- `resolve_top_basket()` checks the months elapsed since `MAX(ref_date)` in `top_basket_rebalances`. If
-  ≥ 6 months (or no rebalance has ever happened), it calls `build_top_basket()` on this month's freshly
-  computed SP500/NASDAQ100 selections and persists the new membership (`persist_top_basket_rebalance`).
-- Otherwise, it loads the tickers held since the last rebalance and calls `refresh_top_basket_metrics()`,
-  which looks up each held ticker's most recent price/momentum/volatility from `portfolio_history` as of
-  the current `ref_date`. A ticker that fell out of its universe's quintile selection this month (so it
-  has no `portfolio_history` row for the current `ref_date`) falls back to its latest available data and
-  is flagged `"stale": true` in the JSON output (shown de-emphasized on the dashboard).
-- `docs/data/top_basket.json` carries `rebalanced_today`, `last_rebalance_ref_date`, and
-  `next_rebalance_ref_date` so the frontend can show rebalance status without recomputing it.
+Like the three main universes, this basket's membership is recomputed **every month** — there is no
+separate "rebalance event" on a slower calendar. Turnover is instead damped by the *same buffer rule* as
+the quintile selection (`select_with_buffer`, now generalized to accept an explicit `target_count` instead
+of always deriving it from `TARGET_QUINTILE * n`): a currently-held ticker isn't dropped just because a
+slightly-better-ranked newcomer showed up — it stays as long as it's still within the buffer band and still
+passes `_stable_growth_candidates()` (positive momentum + calmer half). It only drops out when it's clearly
+been overtaken or, more commonly, when it no longer qualifies as a stable grower at all (buffer only ever
+retains names still present in that month's filtered candidate pool — it cannot rescue one that fell out).
+- `select_top_basket()` reads each universe's current membership from `top_basket_history` (as of the
+  most recent earlier `ref_date`, mirroring how `process_universe` reads `portfolio_history` for the three
+  main universes' own buffer), passes it into `build_top_basket()` as `current_sp500_tickers`/
+  `current_nasdaq100_tickers`, then persists the new selection (`persist_top_basket_history`) and computes
+  an `added`/`dropped` changelog vs. last month.
+- `docs/data/top_basket.json` carries `added_tickers`/`dropped_tickers` (exported like the three main
+  universes, not currently rendered in the UI either — see the note on that changelog below).
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -109,14 +110,15 @@ network-first for `docs/data/*.json`). `docs/data/` is generated by `run_query.p
 it only exists after the pipeline has run.
 
 - **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe plus a
-  fourth sidebar group for the low-turnover top-momentum basket (`docs/data/top_basket.json`,
-  `renderTopBasketTiles()` — shows last/next rebalance date, dims tickers flagged `stale`), a
-  full sortable constituents table per universe (with an added/dropped changelog vs. the previous
-  rebalance), a Ctrl+K command-palette ticker search, and a full-screen TradingView chart widget
-  (loaded from `s3.tradingview.com`, mounted via `TradingView.widget(...)`). The sidebar is hidden on
-  phones in portrait (`@media max-width:640px`), so the drawer table has a 4th "🏆 Top" tab
-  (`showDrawerTable()` / `renderTopBasketTable()`) rendering the same basket as its own table — the
-  only way to reach it on mobile, since it isn't otherwise duplicated by the per-universe tables.
+  fourth sidebar group for the "Stabilny Wzrost" top-momentum basket (`docs/data/top_basket.json`,
+  `renderTopBasketTiles()` — shows the current `ref_date` and ticker count, same phrasing as the three
+  main universes), a full sortable constituents table per universe (`added_tickers`/`dropped_tickers` are
+  exported in the JSON but not currently rendered), a Ctrl+K command-palette ticker search, and a
+  full-screen TradingView chart widget (loaded from `s3.tradingview.com`, mounted via
+  `TradingView.widget(...)`). The sidebar is hidden on phones in portrait (`@media max-width:640px`), so
+  the drawer table has a 4th "🏆 Top" tab (`showDrawerTable()` / `renderTopBasketTable()`) rendering the
+  same basket as its own table — the only way to reach it on mobile, since it isn't otherwise duplicated
+  by the per-universe tables.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`

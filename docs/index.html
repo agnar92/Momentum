@@ -56,7 +56,7 @@
         </div>
 
         <div class="sidebar-group" id="topBasketGroup">
-            <div class="sidebar-group-label" title="Consistent compounders: z top-kwintylowej puli SP500/NASDAQ100 odrzucamy najbardziej zmienna polowe i spolki z ujemnym momentum, wsrod spokojniejszej reszty wybieramy liderow momentum score — blue chips z solidnym, niekoniecznie ekstremalnym wzrostem, proxy quality bez dodatkowych danych fundamentalnych. Sklad zmienia sie tylko raz na 6 miesiecy (ograniczenie rotacji), ceny/momentum odswiezane co miesiac.">
+            <div class="sidebar-group-label" title="Consistent compounders: z top-kwintylowej puli SP500/NASDAQ100 odrzucamy najbardziej zmienna polowe i spolki z ujemnym momentum, wsrod spokojniejszej reszty wybieramy liderow momentum score — blue chips z solidnym, niekoniecznie ekstremalnym wzrostem, proxy quality bez dodatkowych danych fundamentalnych. Sklad przeliczany co miesiac z regula bufora (jak w 3 glownych uniwersach) — dampuje rotacje zamiast ja sztywno blokowac.">
                 🏆 Stabilny Wzrost (quality proxy)
             </div>
             <div class="sidebar-group-meta" id="topBasketMeta"></div>
@@ -74,7 +74,7 @@
                 <button class="drawer-tab active" data-universe="SP500">S&amp;P 500</button>
                 <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
                 <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
-                <button class="drawer-tab" data-universe="TOPBASKET" title="Stabilny Wzrost (quality proxy) — consistent compounders z SP500 top 20 + NASDAQ100 top 5, rebalans co 6 mies.">🏆 Top</button>
+                <button class="drawer-tab" data-universe="TOPBASKET" title="Stabilny Wzrost (quality proxy) — consistent compounders z SP500 top 20 + NASDAQ100 top 5, przeliczane co miesiąc z regułą bufora.">🏆 Top</button>
             </div>
         </div>
         <div class="table-scroll">
@@ -96,9 +96,10 @@
                 <tbody id="momentumTableBody"></tbody>
             </table>
 
-            <!-- Koszyk top-momentum (SP500 top20 + NASDAQ100 top5, rebalans co 6 mies.) —
-                 osobna, prostsza tabela: nie ma tu portfelowej wagi/z-score/momentum score,
-                 tylko surowe metryki + z których uniwersów pochodzi + czy dane są aktualne. -->
+            <!-- Koszyk "stabilny wzrost" (consistent compounders, SP500 top20 + NASDAQ100 top5,
+                 przeliczany co miesiąc z regułą bufora) — osobna, prostsza tabela: nie ma tu
+                 portfelowej wagi/z-score/momentum score, tylko surowe metryki + z których
+                 uniwersów pochodzi. -->
             <table class="momentum-table" id="topBasketTable" hidden>
                 <thead>
                     <tr>
@@ -109,7 +110,6 @@
                         <th>Momentum (12M-1M)</th>
                         <th>Zmienność</th>
                         <th>Indeksy</th>
-                        <th>Status</th>
                     </tr>
                 </thead>
                 <tbody id="topBasketTableBody"></tbody>

@@ -1,11 +1,11 @@
 """
 Testy jednostkowe dla czystych funkcji obliczeniowych w run_query.py
 (z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve) oraz
-integracyjne testy logiki rebalansu koszyka top-momentum (na lokalnej bazie DuckDB
-:memory:, bez sieci). Wiekszosc funkcji operuje wylacznie na DataFrame'ach;
+integracyjne testy comiesiecznej selekcji koszyka top-momentum (na lokalnej bazie
+DuckDB :memory:, bez sieci). Wiekszosc funkcji operuje wylacznie na DataFrame'ach;
 compute_equity_curve czyta z portfolio_history/prices/index_constituents, a
-resolve_top_basket z portfolio_history/top_basket_rebalances, wiec ich testy
-uzywaja polaczenia DuckDB ":memory:".
+select_top_basket z top_basket_history, wiec ich testy uzywaja polaczenia
+DuckDB ":memory:".
 """
 import duckdb
 import pandas as pd
@@ -18,7 +18,7 @@ from run_query import (
     build_top_basket,
     compute_equity_curve,
     compute_weights,
-    resolve_top_basket,
+    select_top_basket,
     select_with_buffer,
 )
 
@@ -318,94 +318,92 @@ class TestBuildTopBasket:
         out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
         assert {r["ticker"] for r in out} == {"A", "B"}
 
+    def test_buffer_retains_currently_held_ticker_over_marginally_better_newcomer(self):
+        # Y jest trzymany od poprzedniego miesiaca; X ma nieco lepszy momentum_score
+        # i rankuje wyzej, ale reguła bufora (jak w select_with_buffer dla 3 glownych
+        # uniwersow) chroni istniejacy holding przed odrzuceniem tylko dlatego, ze
+        # pojawil sie ktos nieznacznie lepszy — comiesieczna selekcja ma dampowac
+        # rotacje, nie sztywno zamrazac sklad na pol roku.
+        sp500 = make_weighted_df([
+            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
+            ("Y", "Tech", 90.0, 0.15, 0.15, 1.5),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=1, nasdaq100_n=1,
+                                current_sp500_tickers={"Y"})
+        assert [r["ticker"] for r in out] == ["Y"]
+
+    def test_without_prior_holding_top_ranked_candidate_wins(self):
+        # Ten sam scenariusz co wyzej, ale bez current_sp500_tickers (zimny start,
+        # jak w poprzednim tescie bez bufora) -> wygrywa X, lepiej rankowany.
+        sp500 = make_weighted_df([
+            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
+            ("Y", "Tech", 90.0, 0.15, 0.15, 1.5),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=1, nasdaq100_n=1)
+        assert [r["ticker"] for r in out] == ["X"]
+
+    def test_buffer_cannot_retain_a_holding_that_lost_positive_momentum(self):
+        # Y byl trzymany, ale jego momentum spadlo ponizej zera -> odpada juz na
+        # etapie _stable_growth_candidates, wiec bufor (ktory dziala tylko na
+        # spolkach obecnych w puli stabilnego wzrostu) nie moze go zatrzymac.
+        sp500 = make_weighted_df([
+            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
+            ("Y", "Tech", 90.0, -0.05, 0.15, 1.5),
+        ])
+        out = build_top_basket(sp500, None, sp500_n=1, nasdaq100_n=1,
+                                current_sp500_tickers={"Y"})
+        assert [r["ticker"] for r in out] == ["X"]
+
 
 # ---------------------------------------------------------------------------
-# resolve_top_basket (rebalans co TOP_BASKET_REBALANCE_MONTHS miesiecy,
-# odswiezanie cen/momentum co miesiac niezaleznie od rebalansu)
+# select_top_basket (comiesieczna selekcja z regula bufora, persystencja w
+# top_basket_history — current_tickers dla nastepnego miesiaca)
 # ---------------------------------------------------------------------------
 
-def make_portfolio_history_con(rows):
-    """rows: list of dict z kluczami ref_date/universe/ticker/sector/price_at_rebalance/
-    momentum_value/annualized_volatility (reszta kolumn dostaje sensowny default)."""
-    con = duckdb.connect(":memory:")
-    con.execute("""
-        CREATE TABLE portfolio_history (
-            ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
-            ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
-            momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
-            z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
-            PRIMARY KEY (ref_date, universe, ticker)
-        )
-    """)
-    for r in rows:
-        con.execute(
-            "INSERT INTO portfolio_history VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            [r["ref_date"], r["universe"], r.get("rank_in_universe", 1), r["ticker"], r["sector"],
-             r["price_at_rebalance"], r["momentum_value"], r.get("momentum_window", "14M"),
-             r["annualized_volatility"], r.get("z_score", 0.0), r.get("momentum_score", 1.0),
-             r.get("weight", 0.1)],
-        )
-    return con
-
-
-class TestResolveTopBasket:
-    def test_first_run_triggers_rebalance_and_persists(self):
+class TestSelectTopBasket:
+    def test_first_run_selects_and_persists(self):
         con = duckdb.connect(":memory:")
         sp500 = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
-        records, rebalanced, rebalance_ref_date = resolve_top_basket(con, "2026-01-01", sp500, None)
-        assert rebalanced is True
-        assert rebalance_ref_date == "2026-01-01"
+        records, added, dropped = select_top_basket(con, "2026-01-01", sp500, None)
         assert [r["ticker"] for r in records] == ["A"]
+        assert added == ["A"]
+        assert dropped == []
         stored = con.execute(
-            "SELECT ticker FROM top_basket_rebalances WHERE ref_date = DATE '2026-01-01'"
+            "SELECT ticker FROM top_basket_history WHERE ref_date = DATE '2026-01-01' AND universe = 'SP500'"
         ).df()
         assert stored["ticker"].tolist() == ["A"]
 
-    def test_no_rebalance_before_interval_elapsed_but_metrics_refresh(self):
-        con = make_portfolio_history_con([
-            dict(ref_date="2026-01-01", universe="SP500", ticker="A", sector="Tech",
-                 price_at_rebalance=100.0, momentum_value=0.10, annualized_volatility=0.20),
-            dict(ref_date="2026-02-01", universe="SP500", ticker="A", sector="Tech",
-                 price_at_rebalance=110.0, momentum_value=0.15, annualized_volatility=0.22),
+    def test_buffer_carries_through_the_db_layer_across_months(self):
+        # Styczen: Y wygrywa (jedyny kandydat). Luty: pojawia sie X, nieco lepszy
+        # niz Y, ale target_count=1 i Y jest juz trzymany -> bufor (odczytany z
+        # top_basket_history) ma go zatrzymac zamiast od razu podmieniac na X.
+        con = duckdb.connect(":memory:")
+        sp500_jan = make_weighted_df([("Y", "Tech", 90.0, 0.15, 0.15, 1.5)])
+        select_top_basket(con, "2026-01-01", sp500_jan, None, sp500_n=1, nasdaq100_n=1)
+
+        sp500_feb = make_weighted_df([
+            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
+            ("Y", "Tech", 90.0, 0.15, 0.15, 1.5),
         ])
-        sp500_jan = make_weighted_df([("A", "Tech", 100.0, 0.10, 0.20, 1.0)])
-        resolve_top_basket(con, "2026-01-01", sp500_jan, None)  # rebalans na styczen
+        records, added, dropped = select_top_basket(con, "2026-02-01", sp500_feb, None,
+                                                      sp500_n=1, nasdaq100_n=1)
+        assert [r["ticker"] for r in records] == ["Y"]
+        assert added == []
+        assert dropped == []
 
-        # luty: mniej niz 6 miesiecy od stycznia -> bez rebalansu, ale metryki z lutego
-        records, rebalanced, rebalance_ref_date = resolve_top_basket(con, "2026-02-01", None, None)
-        assert rebalanced is False
-        assert rebalance_ref_date == "2026-01-01"
-        assert records[0]["price"] == pytest.approx(110.0)
-        assert records[0]["momentum_pct"] == pytest.approx(15.0)
-        assert records[0]["stale"] is False
+    def test_added_and_dropped_reflect_real_turnover(self):
+        con = duckdb.connect(":memory:")
+        sp500_jan = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
+        select_top_basket(con, "2026-01-01", sp500_jan, None, sp500_n=1, nasdaq100_n=1)
 
-    def test_rebalance_after_interval_elapses(self):
-        con = make_portfolio_history_con([
-            dict(ref_date="2026-01-01", universe="SP500", ticker="A", sector="Tech",
-                 price_at_rebalance=100.0, momentum_value=0.10, annualized_volatility=0.20),
-        ])
-        sp500_jan = make_weighted_df([("A", "Tech", 100.0, 0.10, 0.20, 1.0)])
-        resolve_top_basket(con, "2026-01-01", sp500_jan, None)
-
-        sp500_jul = make_weighted_df([("B", "Health", 50.0, 0.30, 0.25, 2.0)])
-        records, rebalanced, rebalance_ref_date = resolve_top_basket(con, "2026-07-01", sp500_jul, None)
-        assert rebalanced is True
-        assert rebalance_ref_date == "2026-07-01"
+        # Luty: A stracil dodatnie momentum (odpada z puli stabilnego wzrostu, bufor
+        # nie moze go uratowac), B jest jedynym kandydatem -> realny turnover.
+        sp500_feb = make_weighted_df([("B", "Tech", 20.0, 0.10, 0.20, 1.0)])
+        records, added, dropped = select_top_basket(con, "2026-02-01", sp500_feb, None,
+                                                      sp500_n=1, nasdaq100_n=1)
         assert [r["ticker"] for r in records] == ["B"]
-
-    def test_held_ticker_missing_current_month_data_is_marked_stale(self):
-        con = make_portfolio_history_con([
-            dict(ref_date="2026-01-01", universe="SP500", ticker="A", sector="Tech",
-                 price_at_rebalance=100.0, momentum_value=0.10, annualized_volatility=0.20),
-            # brak wiersza na 2026-02-01 dla A (np. wypadla z kwintylowej selekcji w tym miesiacu)
-        ])
-        sp500_jan = make_weighted_df([("A", "Tech", 100.0, 0.10, 0.20, 1.0)])
-        resolve_top_basket(con, "2026-01-01", sp500_jan, None)
-
-        records, rebalanced, _ = resolve_top_basket(con, "2026-02-01", None, None)
-        assert rebalanced is False
-        assert records[0]["stale"] is True
-        assert records[0]["price"] == pytest.approx(100.0)  # ostatnie dostepne dane, sprzed miesiaca
+        assert added == ["B"]
+        assert dropped == ["A"]
 
 
 # ---------------------------------------------------------------------------
