@@ -101,26 +101,30 @@ ref_date)` even though the per-constituent `prices` table itself is only as fres
 `fetch_data.py --indices-only` and `run_query.py --gem-only` are the two flags that make this cheap daily
 refresh possible without touching the (expensive, rate-limited) per-constituent price fetch.
 
-### Relative strength YTD (`compute_index_ytd_return` / `compute_relative_strength_leaders`)
+### Relative strength (`compute_index_momentum` / `compute_relative_strength_leaders`)
 
 A screener for NASDAQ100 and DOWJONES only (SP500 deliberately excluded): for each constituent, compares
-its return since the first available trading day of the current calendar year to the *same* YTD return
-computed for the index level (`index_prices`, like GEM). Only constituents that are currently
-**outperforming their own index** this year are kept — `relative_strength_pct = constituent_return_pct -
-index_return_pct`, always positive by construction — sorted descending, so the biggest current outperformers
-come first. `export_relative_strength()` writes per-universe results (index YTD return, YTD start date,
-outperformer list) to `docs/data/relative_strength.json`; the frontend (`combinedRelativeStrengthLeaders()`
-in `app.js`) merges both universes into one ranked list for display. Like GEM, its `ref_date` defaults to
-`index_prices`'s own watermark (not the monthly constituent-pipeline `ref_date`), and it's recomputed by
-the same `run_query.py --gem-only` daily path as GEM (see `daily_gem.yml`) since it only needs
-`index_prices` (daily) + `prices`/`index_constituents` (gracefully stale-tolerant, same as
-`compute_index_leaders`).
+its momentum to the *same-window* momentum of the index level (`index_prices`). Deliberately uses the
+exact same window as the three main universes' `momentum_value` (`get_universe_metrics`: M-14/M-2, falling
+back to M-11/M-2 when 14 months of history isn't available) instead of a calendar-YTD window — YTD would
+have too little data right after New Year, and reusing this window means `compute_relative_strength_leaders`
+can call `get_universe_metrics()` directly (same eligibility filtering, no separate query/window needed).
+`compute_index_momentum()` computes the same M-14/M-2 (or M-11/M-2) momentum for the index level. Only
+constituents currently **outperforming their own index** in that window are kept —
+`relative_strength_pct = constituent_return_pct - index_return_pct`, always positive by construction —
+sorted descending, so the biggest current outperformers come first. `export_relative_strength()` writes
+per-universe results (index return, `momentum_window` label, outperformer list) to
+`docs/data/relative_strength.json`; the frontend (`combinedRelativeStrengthLeaders()` in `app.js`) merges
+both universes into one ranked list for display. Like GEM, its `ref_date` defaults to `index_prices`'s own
+watermark (not the monthly constituent-pipeline `ref_date`), and it's recomputed by the same
+`run_query.py --gem-only` daily path as GEM (see `daily_gem.yml`) since it only needs `index_prices`
+(daily) + `prices`/`index_constituents` (gracefully stale-tolerant, same as `compute_index_leaders`).
 
 Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`): weekly closes (resampled
 from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` + `ARGMAX`) for the stock and
-its index, both indexed to 0% at the first trading week of the calendar year (YTD %) — a stock-vs-its-index
-comparison the free TradingView widget embed can't reliably chart (adding a compare symbol can hit
-free-tier account limits). See `renderRelativeStrengthChart()` below for how it's rendered.
+its index, both indexed to 0% at the start of that same momentum window (M-14 or M-11) through to `ref_date`
+— a stock-vs-its-index comparison the free TradingView widget embed can't reliably chart (adding a compare
+symbol can hit free-tier account limits). See `renderRelativeStrengthChart()` below for how it's rendered.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -135,8 +139,8 @@ it only exists after the pipeline has run.
   (`added_tickers`/`dropped_tickers` are exported in the JSON but not currently rendered), a Ctrl+K
   command-palette ticker search, and a full-screen TradingView chart widget (loaded from
   `s3.tradingview.com`, mounted via `TradingView.widget(...)`), plus a fifth sidebar group for
-  **relative strength YTD** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
-  index's own YTD return, and tiles merging NASDAQ100+DOWJONES outperformers via
+  **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
+  index's own return, and tiles merging NASDAQ100+DOWJONES outperformers via
   `combinedRelativeStrengthLeaders()`, sorted by edge over their index). The sidebar is hidden on phones
   in portrait (`@media max-width:640px`), so the drawer table has a 4th "🚀 GEM" tab (`showDrawerTable()` /
   `renderGemTable()`) and a 5th "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as

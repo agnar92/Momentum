@@ -31,10 +31,11 @@ metodologii S&P Momentum Indices):
    fetch_data.py) dla SP500/NASDAQ100/DOWJONES w oknie GEM_LOOKBACK_MONTHS,
    wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N liderow zwycieskiego
    indeksu wg wkladu w jego zwrot — patrz export_global_equity_momentum.
-10. Sila relatywna (YTD) dla NASDAQ100/DOWJONES: zwrot kazdej spolki od
-    poczatku roku vs. zwrot YTD samego indeksu, tylko spolki bijace indeks,
+10. Sila relatywna dla NASDAQ100/DOWJONES: momentum kazdej spolki (TO SAMO okno
+    co momentum_value 3 glownych uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs.
+    momentum samego indeksu w tym samym oknie, tylko spolki bijace indeks,
     posortowane malejaco po przewadze — patrz export_relative_strength. Kazdy
-    lider ma tez tygodniowy wykres (cena/indeks w % YTD, patrz
+    lider ma tez tygodniowy wykres (cena/indeks w %, od poczatku tego okna, patrz
     compute_relative_strength_chart) do wykresu innego niz TradingView.
 """
 
@@ -681,16 +682,22 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
 
 
 # ============================================================================
-# SIŁA RELATYWNA WZGLĘDEM INDEKSU (YTD, od początku roku) — dla NASDAQ100 i
-# DOWJONES (SP500 celowo pominięty). Liczy zwrot każdej spółki i samego indeksu
-# od pierwszej dostępnej ceny w danym roku kalendarzowym do ref_date, i zostawia
-# tylko te spółki, które w tym roku rosną SZYBCIEJ niż sam indeks — posortowane
-# malejąco po przewadze (relative_strength_pct = zwrot spółki - zwrot indeksu).
+# SIŁA RELATYWNA WZGLĘDEM INDEKSU — dla NASDAQ100 i DOWJONES (SP500 celowo
+# pominięty). Zamiast osobnego okna YTD (za mało danych tuż po Nowym Roku),
+# używa DOKŁADNIE tego samego okna co momentum_value 3 głównych uniwersów
+# (get_universe_metrics: M-14/M-2, fallback M-11/M-2 przy krótszej historii) —
+# nie trzeba więc liczyć/pobierać danych dla osobnego okna tylko na potrzeby
+# tego ekranu. Zostają tylko spółki, których momentum w tym oknie przebiło
+# momentum samego indeksu — posortowane malejąco po przewadze
+# (relative_strength_pct = zwrot spółki - zwrot indeksu).
 # ============================================================================
 RELATIVE_STRENGTH_UNIVERSES = ["NASDAQ100", "DOWJONES"]
 
 
-def compute_index_ytd_return(con, universe, ref_date):
+def compute_index_momentum(con, universe, ref_date):
+    """Momentum POZIOMU INDEKSU w TYM SAMYM oknie co momentum_value składników
+    (get_universe_metrics: price[ref-2mies] / price[ref-14mies] - 1, fallback
+    9M jeśli brak 14 miesięcy historii) — punkt odniesienia dla Siły Relatywnej."""
     has_table = con.execute("""
         SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
     """).fetchone()[0] > 0
@@ -698,60 +705,37 @@ def compute_index_ytd_return(con, universe, ref_date):
         return None
 
     row = con.execute(f"""
-        WITH params AS (
-            SELECT DATE '{ref_date}' AS ref_date, DATE_TRUNC('year', DATE '{ref_date}') AS year_start
-        )
+        WITH params AS (SELECT DATE '{ref_date}' AS ref_date)
         SELECT
-            ARGMAX(Close, Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS price_now,
-            MAX(Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS date_now,
-            ARGMIN(Close, Date) FILTER (WHERE Date >= (SELECT year_start FROM params)) AS price_start,
-            MIN(Date) FILTER (WHERE Date >= (SELECT year_start FROM params)) AS date_start
+            ARGMAX(Close, Date) FILTER (WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS') AS price_m2,
+            ARGMAX(Close, Date) FILTER (WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '14 MONTHS') AS price_m14,
+            MAX(Date) FILTER (WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '14 MONTHS') AS date_m14,
+            ARGMAX(Close, Date) FILTER (WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '11 MONTHS') AS price_m11,
+            MAX(Date) FILTER (WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '11 MONTHS') AS date_m11
         FROM index_prices
         WHERE Index_Name = '{universe}'
     """).fetchone()
     if row is None:
         return None
-    price_now, date_now, price_start, date_start = row
-    if price_now is None or price_start is None or price_start == 0:
-        return None
-    return {
-        "return_pct": round(float(price_now / price_start - 1) * 100, 2),
-        "price_now": round(float(price_now), 2),
-        "date_now": str(date_now),
-        "price_start": round(float(price_start), 2),
-        "date_start": str(date_start),
-    }
+    price_m2, price_m14, date_m14, price_m11, date_m11 = row
+    if price_m2 is not None and price_m14 is not None:
+        return {"momentum_value": float(price_m2 / price_m14 - 1), "momentum_window": "12M", "date_start": str(date_m14)}
+    if price_m2 is not None and price_m11 is not None:
+        return {"momentum_value": float(price_m2 / price_m11 - 1), "momentum_window": "9M (fallback)", "date_start": str(date_m11)}
+    return None
 
 
-def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct):
-    """Zwraca spółki `universe`, których zwrot YTD przebił zwrot YTD samego indeksu
-    (index_return_pct, patrz compute_index_ytd_return), posortowane malejąco po
+def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct, min_trading_days, max_staleness_days):
+    """Zwraca spółki `universe`, których momentum_value (TEN SAM window co 3 główne
+    uniwersa, patrz get_universe_metrics) przebiło momentum samego indeksu
+    (index_return_pct, patrz compute_index_momentum), posortowane malejąco po
     przewadze (relative_strength_pct)."""
-    df = con.execute(f"""
-        WITH params AS (
-            SELECT DATE '{ref_date}' AS ref_date, DATE_TRUNC('year', DATE '{ref_date}') AS year_start
-        ),
-        uni AS (
-            SELECT Ticker, Sector FROM index_constituents WHERE Index_Name = '{universe}'
-        ),
-        px AS (
-            SELECT p.Ticker,
-                   ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= (SELECT ref_date FROM params)) AS price_now,
-                   ARGMIN(p.Close, p.Date) FILTER (
-                       WHERE p.Date >= (SELECT year_start FROM params)
-                   ) AS price_start
-            FROM prices p
-            JOIN uni u ON p.Ticker = u.Ticker
-            GROUP BY p.Ticker
-        )
-        SELECT u.Ticker, u.Sector, px.price_now, px.price_start
-        FROM uni u JOIN px ON px.Ticker = u.Ticker
-        WHERE px.price_now IS NOT NULL AND px.price_start IS NOT NULL AND px.price_start > 0
-    """).df()
+    df = get_universe_metrics(con, universe, ref_date, min_trading_days, max_staleness_days)
     if df.empty:
         return []
 
-    df["return_pct"] = (df["price_now"] / df["price_start"] - 1) * 100
+    df = df.copy()
+    df["return_pct"] = df["momentum_value"] * 100
     df["relative_strength_pct"] = df["return_pct"] - index_return_pct
     df = df[df["relative_strength_pct"] > 0]
     df = df.sort_values("relative_strength_pct", ascending=False).reset_index(drop=True)
@@ -764,38 +748,37 @@ def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct)
             "sector": r["Sector"],
             "price": round(float(r["price_now"]), 2),
             "return_pct": round(float(r["return_pct"]), 2),
+            "momentum_window": r["momentum_window"],
             "relative_strength_pct": round(float(r["relative_strength_pct"]), 2),
         })
     return records
 
 
-def _weekly_close_series(con, table, id_column, id_value, ref_date):
+def _weekly_close_series(con, table, id_column, id_value, start_date, end_date):
     """Tygodniowe zamknięcia (ostatnia cena w tygodniu, DATE_TRUNC('week', Date)) dla
     id_column=id_value (Ticker w `prices` albo Index_Name w `index_prices`), od
-    początku roku kalendarzowego ref_date do ref_date."""
+    start_date do end_date (włącznie)."""
     return con.execute(f"""
-        WITH params AS (
-            SELECT DATE '{ref_date}' AS ref_date,
-                   DATE_TRUNC('year', DATE '{ref_date}') AS year_start
-        )
         SELECT DATE_TRUNC('week', Date) AS week_start,
                ARGMAX(Close, Date) AS close
         FROM {table}
         WHERE {id_column} = '{id_value}'
-          AND Date <= (SELECT ref_date FROM params)
-          AND Date >= (SELECT year_start FROM params)
+          AND Date >= DATE '{start_date}'
+          AND Date <= DATE '{end_date}'
         GROUP BY week_start
         ORDER BY week_start
     """).df()
 
 
-def compute_relative_strength_chart(con, ticker, universe, ref_date):
+def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date):
     """Tygodniowy wykres 'nie-TradingView' dla panelu Siły Relatywnej: cena zamknięcia
-    spółki i indeksu, oba indeksowane do 0% w pierwszym tygodniu roku kalendarzowego
-    ref_date (YTD %). Zwraca None gdy brakuje danych (np. spółka bez historii cen
-    w tym roku)."""
-    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, ref_date)
-    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, ref_date)
+    spółki i indeksu, oba indeksowane do 0% na start_date — początek TEGO SAMEGO okna
+    momentum_value co reszta pipeline'u (M-14 albo M-11 przy fallbacku, patrz
+    compute_index_momentum) — aż do ref_date (dziś), żeby wykres pokazywał cały
+    bieżący trend, a nie tylko do M-2 (na czym kończy się sama metryka momentum_value).
+    Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii cen)."""
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, start_date, ref_date)
+    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, start_date, ref_date)
     if stock_df.empty or index_df.empty:
         return None
 
@@ -820,7 +803,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date):
     }
 
 
-def export_relative_strength(con, docs_data_dir, ref_date=None):
+def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days=150, max_staleness_days=10):
     """ref_date=None: jak w export_global_equity_momentum — najświeższa data w
     index_prices (odświeżane codziennie), niezależnie od miesięcznego ref_date
     pipeline'u 3 głównych uniwersów."""
@@ -836,33 +819,38 @@ def export_relative_strength(con, docs_data_dir, ref_date=None):
 
     universes_payload = {}
     for universe in RELATIVE_STRENGTH_UNIVERSES:
-        index_ytd = compute_index_ytd_return(con, universe, ref_date)
-        if index_ytd is None:
+        index_mom = compute_index_momentum(con, universe, ref_date)
+        if index_mom is None:
             continue
-        leaders = compute_relative_strength_leaders(con, universe, ref_date, index_ytd["return_pct"])
+        index_return_pct = round(index_mom["momentum_value"] * 100, 2)
+        leaders = compute_relative_strength_leaders(con, universe, ref_date, index_return_pct,
+                                                      min_trading_days, max_staleness_days)
         for leader in leaders:
-            leader["weekly_chart"] = compute_relative_strength_chart(con, leader["ticker"], universe, ref_date)
+            leader["weekly_chart"] = compute_relative_strength_chart(con, leader["ticker"], universe,
+                                                                       ref_date, index_mom["date_start"])
         universes_payload[universe] = {
-            "index_return_pct": index_ytd["return_pct"],
-            "ytd_start_date": index_ytd["date_start"],
+            "index_return_pct": index_return_pct,
+            "momentum_window": index_mom["momentum_window"],
             "n_outperformers": len(leaders),
             "leaders": leaders,
         }
 
     if not universes_payload:
-        print("❌ Brak danych siły relatywnej YTD dla NASDAQ100/DOWJONES.")
+        print("❌ Brak danych siły relatywnej dla NASDAQ100/DOWJONES.")
         return
 
     payload = {
         "ref_date": ref_date,
         "universes": universes_payload,
-        "note": ("Siła relatywna względem indeksu (YTD, od początku roku kalendarzowego) dla NASDAQ100 "
-                 "i DOWJONES: zwrot każdej spółki od pierwszej dostępnej ceny w tym roku do ref_date, "
-                 "zestawiony ze zwrotem YTD samego indeksu (poziom indeksu, nie średnia składników). "
-                 "Lista 'leaders' w każdym uniwersum zawiera TYLKO spółki, które w tym roku rosną "
-                 "szybciej niż sam indeks, posortowane malejąco po przewadze (relative_strength_pct = "
-                 "zwrot spółki - zwrot indeksu). Każdy lider ma też 'weekly_chart': tygodniowy wykres "
-                 "cena/indeks w % YTD (patrz compute_relative_strength_chart), do wykresu innego niż "
+        "note": ("Siła relatywna względem indeksu dla NASDAQ100 i DOWJONES, w TYM SAMYM oknie co "
+                 "momentum_value 3 głównych uniwersów (M-14/M-2, fallback M-11/M-2 przy krótszej "
+                 "historii — patrz get_universe_metrics), zamiast osobnego okna YTD, które tuż po "
+                 "Nowym Roku miałoby za mało danych. Lista 'leaders' w każdym uniwersum zawiera TYLKO "
+                 "spółki, których momentum w tym oknie przebiło momentum samego indeksu (poziom "
+                 "indeksu, nie średnia składników), posortowane malejąco po przewadze "
+                 "(relative_strength_pct = zwrot spółki - zwrot indeksu). Każdy lider ma też "
+                 "'weekly_chart': tygodniowy wykres cena/indeks w %, indeksowany do 0% na początku "
+                 "tego samego okna (patrz compute_relative_strength_chart), do wykresu innego niż "
                  "TradingView na dashboardzie. Dane informacyjne, NIE porada inwestycyjna."),
     }
     out_path = Path(docs_data_dir) / "relative_strength.json"
@@ -902,7 +890,8 @@ def main():
         docs_data_dir = str(Path(args.docs_dir) / "data")
         Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
         export_global_equity_momentum(con, docs_data_dir)
-        export_relative_strength(con, docs_data_dir)
+        export_relative_strength(con, docs_data_dir, min_trading_days=args.min_trading_days,
+                                  max_staleness_days=args.max_staleness_days)
         con.close()
         return
 
@@ -926,7 +915,8 @@ def main():
     export_all_prices(con, ref_date, docs_data_dir)
     export_equity_curve(con, docs_data_dir)
     export_global_equity_momentum(con, docs_data_dir)
-    export_relative_strength(con, docs_data_dir)
+    export_relative_strength(con, docs_data_dir, min_trading_days=args.min_trading_days,
+                              max_staleness_days=args.max_staleness_days)
     con.close()
 
 
