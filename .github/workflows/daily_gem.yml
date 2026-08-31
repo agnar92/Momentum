@@ -1,7 +1,7 @@
 name: Daily Global Equity Momentum Update
 
 # Global Equity Momentum (docs/data/global_equity_momentum.json) i sila relatywna
-# YTD (docs/data/relative_strength.json) porownuja POZIOM INDEKSU (^GSPC/^NDX/^DJI,
+# (docs/data/relative_strength.json) porownuja POZIOM INDEKSU (^GSPC/^NDX/^DJI,
 # tylko 3 symbole) — w przeciwienstwie do pelnego przeliczenia 3 glownych uniwersow
 # (main.yml, raz w miesiacu: setki tickerow z yfinance), to odswiezenie jest tanie,
 # wiec robimy je codziennie, zeby zwyciezca/liderzy faktycznie odzwierciedlali
@@ -70,7 +70,7 @@ jobs:
         run: |
           python fetch_data.py --indices-only
 
-      - name: Recompute Global Equity Momentum + relative strength YTD only
+      - name: Recompute Global Equity Momentum + relative strength only
         run: |
           python run_query.py --gem-only
 

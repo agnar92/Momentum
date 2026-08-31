@@ -1,9 +1,9 @@
 """
 Testy jednostkowe dla czystych funkcji obliczeniowych w run_query.py
 (z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve,
-Global Equity Momentum, sila relatywna YTD) na lokalnej bazie DuckDB :memory:, bez
+Global Equity Momentum, sila relatywna) na lokalnej bazie DuckDB :memory:, bez
 sieci. Wiekszosc funkcji operuje wylacznie na DataFrame'ach; compute_equity_curve/
-compute_index_returns/compute_index_leaders/compute_index_ytd_return/
+compute_index_returns/compute_index_leaders/compute_index_momentum/
 compute_relative_strength_leaders czytaja z portfolio_history/prices/
 index_constituents/index_prices, wiec ich testy uzywaja polaczenia DuckDB ":memory:".
 """
@@ -19,8 +19,8 @@ from run_query import (
     add_zscore_and_momentum_score,
     compute_equity_curve,
     compute_index_leaders,
+    compute_index_momentum,
     compute_index_returns,
-    compute_index_ytd_return,
     compute_relative_strength_chart,
     compute_relative_strength_leaders,
     compute_weights,
@@ -481,78 +481,112 @@ class TestExportGlobalEquityMomentum:
 
 
 # ---------------------------------------------------------------------------
-# compute_index_ytd_return / compute_relative_strength_leaders / export_relative_strength
-# (Siła relatywna YTD, NASDAQ100 + DOWJONES)
+# compute_index_momentum / compute_relative_strength_leaders / export_relative_strength
+# (Siła relatywna, NASDAQ100 + DOWJONES, TO SAMO okno co momentum_value skladnikow)
 # ---------------------------------------------------------------------------
 
-class TestComputeIndexYtdReturn:
-    def test_uses_first_trading_day_of_year_not_earlier_data(self):
+def insert_daily_series(con, table, id_column, id_value, start_date, end_date, start_price, step_per_day):
+    """Wstawia ciag dziennych cen (dni robocze), rosnacych liniowo o step_per_day
+    kazdego kolejnego dnia sesyjnego, od start_price w start_date. Zwraca
+    {Timestamp: price} do wyliczenia oczekiwanych wartosci w asercjach."""
+    dates = pd.bdate_range(start=start_date, end=end_date)
+    prices, rows = {}, []
+    for i, d in enumerate(dates):
+        price = start_price + i * step_per_day
+        prices[d] = price
+        rows.append((d.strftime("%Y-%m-%d"), id_value, price, price, 1000))
+    con.executemany(f"INSERT INTO {table} VALUES (?, ?, ?, ?, ?)", rows)
+    return prices
+
+
+def nearest_price_on_or_before(prices, target_date):
+    candidates = [d for d in prices if d <= target_date]
+    return prices[max(candidates)]
+
+
+class TestComputeIndexMomentum:
+    def test_12m_window_matches_get_universe_metrics_convention(self):
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2025-12-31", "NASDAQ100", 50.0, 50.0),    # przed poczatkiem roku -> pominiete
-            ("2026-01-02", "NASDAQ100", 100.0, 100.0),  # pierwszy dzien sesyjny roku
-            ("2026-03-15", "NASDAQ100", 120.0, 120.0),  # ref_date
-        ])
-        out = compute_index_ytd_return(con, "NASDAQ100", "2026-03-15")
-        assert out["price_start"] == pytest.approx(100.0)
-        assert out["date_start"] == "2026-01-02"
-        assert out["return_pct"] == pytest.approx(20.0)
+        ref_date = pd.Timestamp("2026-03-16")
+        prices = insert_daily_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                                      "2024-06-01", "2026-03-16", 100.0, 0.1)
+        out = compute_index_momentum(con, "NASDAQ100", "2026-03-16")
+        assert out is not None
+        assert out["momentum_window"] == "12M"
+        price_m2 = nearest_price_on_or_before(prices, ref_date - pd.DateOffset(months=2))
+        price_m14 = nearest_price_on_or_before(prices, ref_date - pd.DateOffset(months=14))
+        assert out["momentum_value"] == pytest.approx(price_m2 / price_m14 - 1)
+
+    def test_falls_back_to_9m_window_when_no_14m_history(self):
+        con = make_gem_con()
+        ref_date = pd.Timestamp("2026-03-16")
+        # Historia siega do 2025-03-01: dalej niz M-11 (2025-04-16), ale krocej niz
+        # M-14 (2025-01-16) -> brak M-14, jest M-11 -> fallback do okna 9M.
+        prices = insert_daily_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                                      "2025-03-01", "2026-03-16", 100.0, 0.1)
+        out = compute_index_momentum(con, "NASDAQ100", "2026-03-16")
+        assert out is not None
+        assert out["momentum_window"] == "9M (fallback)"
+        price_m2 = nearest_price_on_or_before(prices, ref_date - pd.DateOffset(months=2))
+        price_m11 = nearest_price_on_or_before(prices, ref_date - pd.DateOffset(months=11))
+        assert out["momentum_value"] == pytest.approx(price_m2 / price_m11 - 1)
 
     def test_no_table_returns_none(self):
         con = duckdb.connect(":memory:")
-        assert compute_index_ytd_return(con, "NASDAQ100", "2026-03-15") is None
+        assert compute_index_momentum(con, "NASDAQ100", "2026-03-16") is None
 
-    def test_no_data_since_start_of_year_returns_none(self):
+    def test_insufficient_history_returns_none(self):
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2025-06-01", "NASDAQ100", 100.0, 100.0),  # tylko sprzed poczatku roku
-        ])
-        assert compute_index_ytd_return(con, "NASDAQ100", "2026-03-15") is None
+        insert_daily_series(con, "index_prices", "Index_Name", "NASDAQ100", "2026-02-01", "2026-03-16", 100.0, 0.1)
+        assert compute_index_momentum(con, "NASDAQ100", "2026-03-16") is None
 
 
 class TestComputeRelativeStrengthLeaders:
-    def test_only_stocks_beating_index_are_included_and_sorted_by_edge(self):
+    def test_only_stocks_beating_index_momentum_are_included_and_sorted_by_edge(self):
         con = make_gem_con()
         con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', 100.0)", [
             ("WINNER",), ("LOSER",), ("BARELY",),
         ])
-        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, 0)", [
-            ("2026-01-02", "WINNER", 100.0, 100.0), ("2026-03-15", "WINNER", 150.0, 150.0),  # +50%
-            ("2026-01-02", "LOSER", 100.0, 100.0), ("2026-03-15", "LOSER", 105.0, 105.0),    # +5%
-            ("2026-01-02", "BARELY", 100.0, 100.0), ("2026-03-15", "BARELY", 130.0, 130.0),  # +30%
-        ])
-        # index_return_pct = 20%: WINNER (+50%) i BARELY (+30%) go biją, LOSER (+5%) nie.
-        out = compute_relative_strength_leaders(con, "NASDAQ100", "2026-03-15", index_return_pct=20.0)
+        # Wszystkie maja pelne 14 mies. historii (okno 12M), ale rozny step_per_day ->
+        # rozny surowy zwrot: WINNER najszybszy, BARELY srednio, LOSER ledwo rosnie.
+        insert_daily_series(con, "prices", "Ticker", "WINNER", "2024-06-01", "2026-03-16", 100.0, 0.30)
+        insert_daily_series(con, "prices", "Ticker", "LOSER", "2024-06-01", "2026-03-16", 100.0, 0.02)
+        insert_daily_series(con, "prices", "Ticker", "BARELY", "2024-06-01", "2026-03-16", 100.0, 0.15)
+
+        out = compute_relative_strength_leaders(con, "NASDAQ100", "2026-03-16", index_return_pct=20.0,
+                                                  min_trading_days=5, max_staleness_days=10)
         assert [r["ticker"] for r in out] == ["WINNER", "BARELY"]
-        assert out[0]["relative_strength_pct"] == pytest.approx(30.0)
-        assert out[1]["relative_strength_pct"] == pytest.approx(10.0)
+        assert out[0]["relative_strength_pct"] > out[1]["relative_strength_pct"] > 0
 
     def test_missing_price_data_returns_empty_list(self):
         con = make_gem_con()
-        assert compute_relative_strength_leaders(con, "NASDAQ100", "2026-03-15", index_return_pct=10.0) == []
+        assert compute_relative_strength_leaders(con, "NASDAQ100", "2026-03-16", index_return_pct=10.0,
+                                                   min_trading_days=150, max_staleness_days=10) == []
 
 
 class TestExportRelativeStrength:
     def test_writes_only_nasdaq100_and_dowjones_and_auto_derives_ref_date(self, tmp_path):
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2026-01-02", "SP500", 100.0, 100.0), ("2026-03-15", "SP500", 110.0, 110.0),
-            ("2026-01-02", "NASDAQ100", 100.0, 100.0), ("2026-03-15", "NASDAQ100", 120.0, 120.0),
-            ("2026-01-02", "DOWJONES", 100.0, 100.0), ("2026-03-15", "DOWJONES", 105.0, 105.0),
-        ])
+        prices_by_universe = {
+            universe: insert_daily_series(con, "index_prices", "Index_Name", universe,
+                                           "2024-06-01", "2026-03-16", 100.0, 0.05)
+            for universe in ["SP500", "NASDAQ100", "DOWJONES"]
+        }
+        actual_ref_date = max(prices_by_universe["NASDAQ100"]).strftime("%Y-%m-%d")
+
         con.executemany("INSERT INTO index_constituents VALUES ('WIN', ?, 'Tech', 100.0)", [
             ("NASDAQ100",), ("DOWJONES",),
         ])
-        con.executemany("INSERT INTO prices VALUES (?, 'WIN', ?, ?, 0)", [
-            ("2026-01-02", 100.0, 100.0), ("2026-03-15", 200.0, 200.0),  # +100%, bije oba indeksy
-        ])
+        insert_daily_series(con, "prices", "Ticker", "WIN", "2024-06-01", "2026-03-16", 100.0, 1.0)  # bije oba indeksy
+
         export_relative_strength(con, str(tmp_path))
 
         payload = json.loads((tmp_path / "relative_strength.json").read_text())
-        assert payload["ref_date"] == "2026-03-15"
+        assert payload["ref_date"] == actual_ref_date
         assert set(payload["universes"].keys()) == {"NASDAQ100", "DOWJONES"}  # SP500 celowo pominiety
         assert payload["universes"]["NASDAQ100"]["leaders"][0]["ticker"] == "WIN"
         assert payload["universes"]["DOWJONES"]["leaders"][0]["ticker"] == "WIN"
+        assert payload["universes"]["NASDAQ100"]["leaders"][0]["weekly_chart"] is not None
 
     def test_no_index_prices_writes_nothing(self, tmp_path):
         con = duckdb.connect(":memory:")
@@ -562,7 +596,7 @@ class TestExportRelativeStrength:
 
 # ---------------------------------------------------------------------------
 # compute_relative_strength_chart: tygodniowy wykres (nie-TradingView) dla panelu
-# Siły Relatywnej — cena spółki i indeksu, oba w % YTD.
+# Siły Relatywnej — cena spółki i indeksu, oba indeksowane do 0% na start_date.
 # ---------------------------------------------------------------------------
 
 def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks, start_price, weekly_step):
@@ -580,15 +614,15 @@ def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks,
 
 
 class TestComputeRelativeStrengthChart:
-    def test_returns_pct_series_indexed_to_first_week_of_year(self):
+    def test_returns_pct_series_indexed_to_start_date(self):
         con = make_gem_con()
         insert_weekly_series(con, "prices", "Ticker", "AAA", "2026-01-05", 11, 100.0, 2.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2026-01-05", 11, 200.0, 1.0)
 
-        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16")
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16", "2026-01-05")
         assert out is not None
-        assert out["dates"][0] == "2026-01-05"  # pierwszy poniedzialek W ROKU
-        assert out["close_pct"][0] == pytest.approx(0.0)   # baza YTD = 0%
+        assert out["dates"][0] == "2026-01-05"
+        assert out["close_pct"][0] == pytest.approx(0.0)   # baza = 0% na start_date
         assert out["index_pct"][0] == pytest.approx(0.0)
         # Cena rosnie liniowo -> pozniejszy tydzien ma wyzszy % niz wczesniejszy.
         assert out["close_pct"][-1] > out["close_pct"][0]
@@ -596,9 +630,9 @@ class TestComputeRelativeStrengthChart:
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2026-01-05", 11, 200.0, 1.0)
-        assert compute_relative_strength_chart(con, "NOPE", "NASDAQ100", "2026-03-16") is None
+        assert compute_relative_strength_chart(con, "NOPE", "NASDAQ100", "2026-03-16", "2026-01-05") is None
 
     def test_no_index_history_returns_none(self):
         con = make_gem_con()
         insert_weekly_series(con, "prices", "Ticker", "AAA", "2026-01-05", 11, 100.0, 2.0)
-        assert compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16") is None
+        assert compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16", "2026-01-05") is None

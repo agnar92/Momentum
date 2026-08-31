@@ -149,10 +149,12 @@ function renderGemPanel() {
     }
 }
 
-// Siła relatywna (YTD): dla NASDAQ100/DOWJONES (docs/data/relative_strength.json /
-// run_query.py::compute_relative_strength_leaders) pokazuje spółki, które od
-// początku roku rosną szybciej niż sam indeks, posortowane malejąco po przewadze
-// (zwrot spółki - zwrot indeksu). Kafelki łączą oba uniwersy w jedną listę.
+// Siła relatywna: dla NASDAQ100/DOWJONES (docs/data/relative_strength.json /
+// run_query.py::compute_relative_strength_leaders) pokazuje spółki, których
+// momentum (to samo okno co momentum_value 3 głównych uniwersów, M-14/M-2 z
+// fallbackiem M-11/M-2) przebiło momentum samego indeksu, posortowane malejąco
+// po przewadze (zwrot spółki - zwrot indeksu). Kafelki łączą oba uniwersy w
+// jedną listę.
 function renderRelativeStrengthPanel() {
     const container = document.getElementById("tiles-RS");
     if (!container) return;
@@ -175,7 +177,7 @@ function renderRelativeStrengthPanel() {
             const row = document.createElement("div");
             row.className = "gem-index-row";
             row.innerHTML = `
-                <span>${UNIVERSE_LABELS[universe].replace(" Momentum", "")} (YTD)</span>
+                <span>${UNIVERSE_LABELS[universe].replace(" Momentum", "")} (${u.momentum_window})</span>
                 <span class="${u.index_return_pct >= 0 ? "positive" : "negative"}">${u.index_return_pct >= 0 ? "+" : ""}${u.index_return_pct.toFixed(2)}%</span>
             `;
             returnsEl.appendChild(row);
@@ -187,7 +189,7 @@ function renderRelativeStrengthPanel() {
         const tile = document.createElement("div");
         tile.className = "ticker-tile";
         tile.textContent = c.ticker;
-        tile.title = `${c.ticker} — ${UNIVERSE_LABELS[c.universe].replace(" Momentum", "")} · zwrot YTD `
+        tile.title = `${c.ticker} — ${UNIVERSE_LABELS[c.universe].replace(" Momentum", "")} · zwrot `
             + `${c.return_pct.toFixed(2)}% vs indeks ${c.index_return_pct.toFixed(2)}% · przewaga +${c.relative_strength_pct.toFixed(2)}pp`;
         tile.dataset.ticker = c.ticker;
         tile.dataset.universe = c.universe;
@@ -237,9 +239,10 @@ function jumpToTicker(ticker, universe) {
 
 // ============================================================
 // OBSZAR WYKRESU: TradingView LUB własny tygodniowy wykres Siły Relatywnej
-// (cena spółki vs. indeks, oba w % YTD — patrz renderRelativeStrengthChart).
-// Przełącznik (#chartModeToggle) jest aktywny tylko gdy state.currentRsEntry ma
-// weekly_chart; w przeciwnym razie zawsze pokazujemy TradingView jak wcześniej.
+// (cena spółki vs. indeks, oba w % od początku tego samego okna momentum —
+// patrz renderRelativeStrengthChart). Przełącznik (#chartModeToggle) jest
+// aktywny tylko gdy state.currentRsEntry ma weekly_chart; w przeciwnym razie
+// zawsze pokazujemy TradingView jak wcześniej.
 // ============================================================
 let rsChartInstance = null;
 
@@ -424,7 +427,7 @@ function showDrawerTable(universe) {
     document.getElementById("drawerTitle").textContent = isGem
         ? "Pełna tabela — Global Equity Momentum"
         : isRs
-            ? "Pełna tabela — Siła Relatywna (YTD)"
+            ? "Pełna tabela — Siła Relatywna"
             : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     if (isGem) {
         renderGemTable();

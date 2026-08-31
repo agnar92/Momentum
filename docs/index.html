@@ -65,8 +65,8 @@
         </div>
 
         <div class="sidebar-group" id="rsGroup">
-            <div class="sidebar-group-label" title="Siła relatywna (YTD, od początku roku): zwrot każdej spółki NASDAQ100/DOWJONES od pierwszej dostępnej ceny w tym roku, zestawiony ze zwrotem YTD samego indeksu. Pokazane są TYLKO spółki bijące swój indeks w tym roku, posortowane malejąco po przewadze (zwrot spółki - zwrot indeksu). SP500 celowo pominięty.">
-                💪 Siła Relatywna (YTD)
+            <div class="sidebar-group-label" title="Siła relatywna: momentum każdej spółki NASDAQ100/DOWJONES w TYM SAMYM oknie co momentum_value 3 głównych uniwersów (M-14/M-2, fallback M-11/M-2), zestawione z momentum samego indeksu w tym oknie. Pokazane są TYLKO spółki bijące swój indeks, posortowane malejąco po przewadze (zwrot spółki - zwrot indeksu). SP500 celowo pominięty.">
+                💪 Siła Relatywna
             </div>
             <div class="sidebar-group-meta" id="rsMeta"></div>
             <div class="gem-index-returns" id="rsIndexReturns"></div>
@@ -85,7 +85,7 @@
                 <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
                 <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
                 <button class="drawer-tab" data-universe="GEM" title="Global Equity Momentum — top 10 spółek zwycięskiego indeksu (SP500/NASDAQ100/DOWJONES, wg zwrotu 12M) wg wkładu w jego zwrot.">🚀 GEM</button>
-                <button class="drawer-tab" data-universe="RS" title="Siła relatywna (YTD) — spółki NASDAQ100/DOWJONES, które w tym roku rosną szybciej niż sam indeks, posortowane malejąco po przewadze.">💪 RS</button>
+                <button class="drawer-tab" data-universe="RS" title="Siła relatywna — spółki NASDAQ100/DOWJONES, których momentum (to samo okno co momentum_value 3 głównych uniwersów) przebiło momentum samego indeksu, posortowane malejąco po przewadze.">💪 RS</button>
             </div>
         </div>
         <div class="table-scroll">
@@ -125,8 +125,9 @@
                 <tbody id="gemTableBody"></tbody>
             </table>
 
-            <!-- Siła relatywna (YTD): spółki NASDAQ100/DOWJONES bijące swój indeks
-                 od początku roku, posortowane malejąco po przewadze. -->
+            <!-- Siła relatywna: spółki NASDAQ100/DOWJONES bijące swój indeks w tym
+                 samym oknie co momentum_value 3 głównych uniwersów, posortowane
+                 malejąco po przewadze. -->
             <table class="momentum-table" id="rsTable" hidden>
                 <thead>
                     <tr>
@@ -135,8 +136,8 @@
                         <th>Uniwersum</th>
                         <th>Sektor</th>
                         <th>Cena</th>
-                        <th>Zwrot YTD</th>
-                        <th>Zwrot indeksu YTD</th>
+                        <th>Zwrot</th>
+                        <th>Zwrot indeksu</th>
                         <th>Przewaga</th>
                     </tr>
                 </thead>
@@ -151,7 +152,7 @@
         <div class="chart-mode-toggle" id="chartModeToggle">
             <button class="chart-mode-btn active" data-mode="TV" id="chartModeTvBtn">📈 TradingView</button>
             <button class="chart-mode-btn" data-mode="RS" id="chartModeRsBtn" disabled
-                    title="Własny wykres tygodniowy (cena spółki vs. indeks, % YTD) — dostępny dla spółek z panelu Siła Relatywna.">
+                    title="Własny wykres tygodniowy (cena spółki vs. indeks, % od początku okna momentum) — dostępny dla spółek z panelu Siła Relatywna.">
                 💪 Siła Relatywna
             </button>
         </div>
