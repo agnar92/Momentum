@@ -1,10 +1,11 @@
 """
 Testy jednostkowe dla czystych funkcji obliczeniowych w run_query.py
 (z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve,
-Global Equity Momentum) na lokalnej bazie DuckDB :memory:, bez sieci. Wiekszosc
-funkcji operuje wylacznie na DataFrame'ach; compute_equity_curve/compute_index_returns/
-compute_index_leaders czytaja z portfolio_history/prices/index_constituents/index_prices,
-wiec ich testy uzywaja polaczenia DuckDB ":memory:".
+Global Equity Momentum, sila relatywna YTD) na lokalnej bazie DuckDB :memory:, bez
+sieci. Wiekszosc funkcji operuje wylacznie na DataFrame'ach; compute_equity_curve/
+compute_index_returns/compute_index_leaders/compute_index_ytd_return/
+compute_relative_strength_leaders czytaja z portfolio_history/prices/
+index_constituents/index_prices, wiec ich testy uzywaja polaczenia DuckDB ":memory:".
 """
 import json
 
@@ -19,8 +20,11 @@ from run_query import (
     compute_equity_curve,
     compute_index_leaders,
     compute_index_returns,
+    compute_index_ytd_return,
+    compute_relative_strength_leaders,
     compute_weights,
     export_global_equity_momentum,
+    export_relative_strength,
     select_with_buffer,
 )
 
@@ -473,3 +477,83 @@ class TestExportGlobalEquityMomentum:
         con = duckdb.connect(":memory:")
         export_global_equity_momentum(con, str(tmp_path))
         assert not (tmp_path / "global_equity_momentum.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# compute_index_ytd_return / compute_relative_strength_leaders / export_relative_strength
+# (Siła relatywna YTD, NASDAQ100 + DOWJONES)
+# ---------------------------------------------------------------------------
+
+class TestComputeIndexYtdReturn:
+    def test_uses_first_trading_day_of_year_not_earlier_data(self):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-12-31", "NASDAQ100", 50.0, 50.0),    # przed poczatkiem roku -> pominiete
+            ("2026-01-02", "NASDAQ100", 100.0, 100.0),  # pierwszy dzien sesyjny roku
+            ("2026-03-15", "NASDAQ100", 120.0, 120.0),  # ref_date
+        ])
+        out = compute_index_ytd_return(con, "NASDAQ100", "2026-03-15")
+        assert out["price_start"] == pytest.approx(100.0)
+        assert out["date_start"] == "2026-01-02"
+        assert out["return_pct"] == pytest.approx(20.0)
+
+    def test_no_table_returns_none(self):
+        con = duckdb.connect(":memory:")
+        assert compute_index_ytd_return(con, "NASDAQ100", "2026-03-15") is None
+
+    def test_no_data_since_start_of_year_returns_none(self):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-06-01", "NASDAQ100", 100.0, 100.0),  # tylko sprzed poczatku roku
+        ])
+        assert compute_index_ytd_return(con, "NASDAQ100", "2026-03-15") is None
+
+
+class TestComputeRelativeStrengthLeaders:
+    def test_only_stocks_beating_index_are_included_and_sorted_by_edge(self):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', 100.0)", [
+            ("WINNER",), ("LOSER",), ("BARELY",),
+        ])
+        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, 0)", [
+            ("2026-01-02", "WINNER", 100.0, 100.0), ("2026-03-15", "WINNER", 150.0, 150.0),  # +50%
+            ("2026-01-02", "LOSER", 100.0, 100.0), ("2026-03-15", "LOSER", 105.0, 105.0),    # +5%
+            ("2026-01-02", "BARELY", 100.0, 100.0), ("2026-03-15", "BARELY", 130.0, 130.0),  # +30%
+        ])
+        # index_return_pct = 20%: WINNER (+50%) i BARELY (+30%) go biją, LOSER (+5%) nie.
+        out = compute_relative_strength_leaders(con, "NASDAQ100", "2026-03-15", index_return_pct=20.0)
+        assert [r["ticker"] for r in out] == ["WINNER", "BARELY"]
+        assert out[0]["relative_strength_pct"] == pytest.approx(30.0)
+        assert out[1]["relative_strength_pct"] == pytest.approx(10.0)
+
+    def test_missing_price_data_returns_empty_list(self):
+        con = make_gem_con()
+        assert compute_relative_strength_leaders(con, "NASDAQ100", "2026-03-15", index_return_pct=10.0) == []
+
+
+class TestExportRelativeStrength:
+    def test_writes_only_nasdaq100_and_dowjones_and_auto_derives_ref_date(self, tmp_path):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2026-01-02", "SP500", 100.0, 100.0), ("2026-03-15", "SP500", 110.0, 110.0),
+            ("2026-01-02", "NASDAQ100", 100.0, 100.0), ("2026-03-15", "NASDAQ100", 120.0, 120.0),
+            ("2026-01-02", "DOWJONES", 100.0, 100.0), ("2026-03-15", "DOWJONES", 105.0, 105.0),
+        ])
+        con.executemany("INSERT INTO index_constituents VALUES ('WIN', ?, 'Tech', 100.0)", [
+            ("NASDAQ100",), ("DOWJONES",),
+        ])
+        con.executemany("INSERT INTO prices VALUES (?, 'WIN', ?, ?, 0)", [
+            ("2026-01-02", 100.0, 100.0), ("2026-03-15", 200.0, 200.0),  # +100%, bije oba indeksy
+        ])
+        export_relative_strength(con, str(tmp_path))
+
+        payload = json.loads((tmp_path / "relative_strength.json").read_text())
+        assert payload["ref_date"] == "2026-03-15"
+        assert set(payload["universes"].keys()) == {"NASDAQ100", "DOWJONES"}  # SP500 celowo pominiety
+        assert payload["universes"]["NASDAQ100"]["leaders"][0]["ticker"] == "WIN"
+        assert payload["universes"]["DOWJONES"]["leaders"][0]["ticker"] == "WIN"
+
+    def test_no_index_prices_writes_nothing(self, tmp_path):
+        con = duckdb.connect(":memory:")
+        export_relative_strength(con, str(tmp_path))
+        assert not (tmp_path / "relative_strength.json").exists()

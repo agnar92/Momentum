@@ -9,6 +9,7 @@ const UNIVERSE_LABELS = {
 const state = {
     data: {},
     gem: { indices: [], leaders: [] },
+    rs: { universes: {} },
     selectedTicker: null,
     drawerOpen: false,
     drawerUniverse: "SP500",
@@ -35,6 +36,29 @@ async function loadData() {
         console.error("Nie udało się wczytać danych Global Equity Momentum:", e);
         state.gem = { ref_date: null, indices: [], winner: null, leaders: [] };
     }
+    try {
+        const res = await fetch("data/relative_strength.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        state.rs = await res.json();
+    } catch (e) {
+        console.error("Nie udało się wczytać danych siły relatywnej:", e);
+        state.rs = { ref_date: null, universes: {} };
+    }
+}
+
+// Łączy liderów siły relatywnej z obu uniwersów (NASDAQ100 + DOWJONES) w jedną
+// listę, każdego z dopisanym uniwersum i zwrotem JEGO indeksu, posortowaną
+// malejąco po przewadze (relative_strength_pct) — tak jak prosił użytkownik:
+// "posortuję po różnicy procentowej index - akcji".
+function combinedRelativeStrengthLeaders() {
+    const combined = [];
+    Object.entries(state.rs.universes || {}).forEach(([universe, u]) => {
+        (u.leaders || []).forEach(r => {
+            combined.push({ ...r, universe, index_return_pct: u.index_return_pct });
+        });
+    });
+    combined.sort((a, b) => b.relative_strength_pct - a.relative_strength_pct);
+    return combined;
 }
 
 // ============================================================
@@ -123,12 +147,66 @@ function renderGemPanel() {
     }
 }
 
+// Siła relatywna (YTD): dla NASDAQ100/DOWJONES (docs/data/relative_strength.json /
+// run_query.py::compute_relative_strength_leaders) pokazuje spółki, które od
+// początku roku rosną szybciej niż sam indeks, posortowane malejąco po przewadze
+// (zwrot spółki - zwrot indeksu). Kafelki łączą oba uniwersy w jedną listę.
+function renderRelativeStrengthPanel() {
+    const container = document.getElementById("tiles-RS");
+    if (!container) return;
+
+    const rs = state.rs;
+    const combined = combinedRelativeStrengthLeaders();
+
+    const meta = document.getElementById("rsMeta");
+    if (meta) {
+        meta.textContent = rs.ref_date
+            ? `Stan na: ${rs.ref_date} · ${combined.length} spółek bijących swój indeks`
+            : "Brak danych — uruchom pipeline.";
+        meta.title = rs.note || "";
+    }
+
+    const returnsEl = document.getElementById("rsIndexReturns");
+    if (returnsEl) {
+        returnsEl.innerHTML = "";
+        Object.entries(rs.universes || {}).forEach(([universe, u]) => {
+            const row = document.createElement("div");
+            row.className = "gem-index-row";
+            row.innerHTML = `
+                <span>${UNIVERSE_LABELS[universe].replace(" Momentum", "")} (YTD)</span>
+                <span class="${u.index_return_pct >= 0 ? "positive" : "negative"}">${u.index_return_pct >= 0 ? "+" : ""}${u.index_return_pct.toFixed(2)}%</span>
+            `;
+            returnsEl.appendChild(row);
+        });
+    }
+
+    container.innerHTML = "";
+    combined.forEach(c => {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+        tile.textContent = c.ticker;
+        tile.title = `${c.ticker} — ${UNIVERSE_LABELS[c.universe].replace(" Momentum", "")} · zwrot YTD `
+            + `${c.return_pct.toFixed(2)}% vs indeks ${c.index_return_pct.toFixed(2)}% · przewaga +${c.relative_strength_pct.toFixed(2)}pp`;
+        tile.dataset.ticker = c.ticker;
+        tile.dataset.universe = c.universe;
+        if (c.ticker === state.selectedTicker) tile.classList.add("selected");
+        tile.addEventListener("click", () => selectTicker(c.ticker, c.universe));
+        container.appendChild(tile);
+    });
+    if (combined.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
+        empty.textContent = "brak danych";
+        container.appendChild(empty);
+    }
+}
+
 function selectTicker(ticker, universe) {
     state.selectedTicker = ticker;
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr, #rsTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     updateChart(ticker);
@@ -253,13 +331,19 @@ function compareRows(a, b, sortKey, sortDir) {
 // jedyny sposób dotarcia do GEM w pionie.
 function showDrawerTable(universe) {
     const isGem = universe === "GEM";
-    document.getElementById("momentumTable").hidden = isGem;
+    const isRs = universe === "RS";
+    document.getElementById("momentumTable").hidden = isGem || isRs;
     document.getElementById("gemTable").hidden = !isGem;
+    document.getElementById("rsTable").hidden = !isRs;
     document.getElementById("drawerTitle").textContent = isGem
         ? "Pełna tabela — Global Equity Momentum"
-        : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+        : isRs
+            ? "Pełna tabela — Siła Relatywna (YTD)"
+            : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     if (isGem) {
         renderGemTable();
+    } else if (isRs) {
+        renderRelativeStrengthTable();
     } else {
         renderTable();
     }
@@ -301,6 +385,47 @@ function renderGemTable() {
             <td>${r.contribution_pct.toFixed(2)}pp</td>
         `;
         tr.addEventListener("click", () => selectTicker(r.ticker, g.winner));
+        tbody.appendChild(tr);
+    });
+}
+
+function renderRelativeStrengthTable() {
+    const rs = state.rs;
+    const rows = combinedRelativeStrengthLeaders();
+    const meta = document.getElementById("drawerMeta");
+    if (rs.ref_date) {
+        meta.textContent = `Stan na: ${rs.ref_date} · ${rows.length} spółek bijących swój indeks`;
+        meta.title = rs.note || "";
+    } else {
+        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
+        meta.title = "";
+    }
+
+    const tbody = document.getElementById("rsTableBody");
+    tbody.innerHTML = "";
+
+    if (rows.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="8" class="empty-state">Brak danych.</td>`;
+        tbody.appendChild(tr);
+        return;
+    }
+
+    rows.forEach((r, i) => {
+        const tr = document.createElement("tr");
+        tr.dataset.ticker = r.ticker;
+        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
+        tr.innerHTML = `
+            <td><span class="rank-badge">${i + 1}</span></td>
+            <td class="ticker-cell">${r.ticker}</td>
+            <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+            <td>${r.sector}</td>
+            <td>$${r.price.toFixed(2)}</td>
+            <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct.toFixed(2)}%</td>
+            <td class="${r.index_return_pct >= 0 ? "positive" : "negative"}">${r.index_return_pct.toFixed(2)}%</td>
+            <td class="positive">+${r.relative_strength_pct.toFixed(2)}pp</td>
+        `;
+        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         tbody.appendChild(tr);
     });
 }
@@ -486,6 +611,7 @@ if (typeof document !== "undefined") {
         await loadData();
         renderSidebarTiles();
         renderGemPanel();
+        renderRelativeStrengthPanel();
         initDrawer();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem

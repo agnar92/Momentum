@@ -1,10 +1,11 @@
 name: Daily Global Equity Momentum Update
 
-# Global Equity Momentum (docs/data/global_equity_momentum.json) porownuje POZIOM
-# INDEKSU (^GSPC/^NDX/^DJI, tylko 3 symbole) — w przeciwienstwie do pelnego
-# przeliczenia 3 glownych uniwersow (main.yml, raz w miesiacu: setki tickerow z
-# yfinance), to odswiezenie jest tanie, wiec robimy je codziennie, zeby zwyciezca
-# i lista liderow faktycznie odzwierciedlaly biezacy trend, a nie sprzed miesiaca.
+# Global Equity Momentum (docs/data/global_equity_momentum.json) i sila relatywna
+# YTD (docs/data/relative_strength.json) porownuja POZIOM INDEKSU (^GSPC/^NDX/^DJI,
+# tylko 3 symbole) — w przeciwienstwie do pelnego przeliczenia 3 glownych uniwersow
+# (main.yml, raz w miesiacu: setki tickerow z yfinance), to odswiezenie jest tanie,
+# wiec robimy je codziennie, zeby zwyciezca/liderzy faktycznie odzwierciedlali
+# biezacy trend, a nie sprzed miesiaca.
 on:
   schedule:
     # Codziennie o 22:30 UTC (po zamknieciu sesji na NYSE/NASDAQ)
@@ -45,11 +46,12 @@ jobs:
 
       # docs/data/*.json jest gitignorowane (patrz .gitignore) — normalnie istnieje
       # tylko lokalnie po pełnym przebiegu run_query.py (main.yml). Ten workflow
-      # przelicza WYŁĄCZNIE global_equity_momentum.json, więc żeby "Upload artifact"
-      # niżej nie podmieniło całej opublikowanej strony samym plikiem GEM (i nie
+      # przelicza WYŁĄCZNIE global_equity_momentum.json + relative_strength.json
+      # (oba --gem-only, patrz niżej), więc żeby "Upload artifact" niżej nie
+      # podmieniło całej opublikowanej strony tylko tymi dwoma plikami (i nie
       # skasowało tabel momentum/rebalansu), najpierw ściągamy resztę plików z
-      # aktualnie opublikowanej strony — global_equity_momentum.json i tak zostanie
-      # zaraz nadpisany świeżym przeliczeniem.
+      # aktualnie opublikowanej strony — oba przeliczane pliki i tak zostaną
+      # zaraz nadpisane świeżym przeliczeniem.
       - name: Restore currently published data files
         run: |
           mkdir -p docs/data
@@ -68,7 +70,7 @@ jobs:
         run: |
           python fetch_data.py --indices-only
 
-      - name: Recompute Global Equity Momentum only
+      - name: Recompute Global Equity Momentum + relative strength YTD only
         run: |
           python run_query.py --gem-only
 

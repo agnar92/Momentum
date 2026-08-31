@@ -31,6 +31,9 @@ metodologii S&P Momentum Indices):
    fetch_data.py) dla SP500/NASDAQ100/DOWJONES w oknie GEM_LOOKBACK_MONTHS,
    wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N liderow zwycieskiego
    indeksu wg wkladu w jego zwrot — patrz export_global_equity_momentum.
+10. Sila relatywna (YTD) dla NASDAQ100/DOWJONES: zwrot kazdej spolki od
+    poczatku roku vs. zwrot YTD samego indeksu, tylko spolki bijace indeks,
+    posortowane malejaco po przewadze — patrz export_relative_strength.
 """
 
 import argparse
@@ -675,6 +678,145 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
           f"({index_returns[0]['return_pct']:+.2f}%), {len(leaders)} liderów.")
 
 
+# ============================================================================
+# SIŁA RELATYWNA WZGLĘDEM INDEKSU (YTD, od początku roku) — dla NASDAQ100 i
+# DOWJONES (SP500 celowo pominięty). Liczy zwrot każdej spółki i samego indeksu
+# od pierwszej dostępnej ceny w danym roku kalendarzowym do ref_date, i zostawia
+# tylko te spółki, które w tym roku rosną SZYBCIEJ niż sam indeks — posortowane
+# malejąco po przewadze (relative_strength_pct = zwrot spółki - zwrot indeksu).
+# ============================================================================
+RELATIVE_STRENGTH_UNIVERSES = ["NASDAQ100", "DOWJONES"]
+
+
+def compute_index_ytd_return(con, universe, ref_date):
+    has_table = con.execute("""
+        SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
+    """).fetchone()[0] > 0
+    if not has_table:
+        return None
+
+    row = con.execute(f"""
+        WITH params AS (
+            SELECT DATE '{ref_date}' AS ref_date, DATE_TRUNC('year', DATE '{ref_date}') AS year_start
+        )
+        SELECT
+            ARGMAX(Close, Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS price_now,
+            MAX(Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS date_now,
+            ARGMIN(Close, Date) FILTER (WHERE Date >= (SELECT year_start FROM params)) AS price_start,
+            MIN(Date) FILTER (WHERE Date >= (SELECT year_start FROM params)) AS date_start
+        FROM index_prices
+        WHERE Index_Name = '{universe}'
+    """).fetchone()
+    if row is None:
+        return None
+    price_now, date_now, price_start, date_start = row
+    if price_now is None or price_start is None or price_start == 0:
+        return None
+    return {
+        "return_pct": round(float(price_now / price_start - 1) * 100, 2),
+        "price_now": round(float(price_now), 2),
+        "date_now": str(date_now),
+        "price_start": round(float(price_start), 2),
+        "date_start": str(date_start),
+    }
+
+
+def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct):
+    """Zwraca spółki `universe`, których zwrot YTD przebił zwrot YTD samego indeksu
+    (index_return_pct, patrz compute_index_ytd_return), posortowane malejąco po
+    przewadze (relative_strength_pct)."""
+    df = con.execute(f"""
+        WITH params AS (
+            SELECT DATE '{ref_date}' AS ref_date, DATE_TRUNC('year', DATE '{ref_date}') AS year_start
+        ),
+        uni AS (
+            SELECT Ticker, Sector FROM index_constituents WHERE Index_Name = '{universe}'
+        ),
+        px AS (
+            SELECT p.Ticker,
+                   ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= (SELECT ref_date FROM params)) AS price_now,
+                   ARGMIN(p.Close, p.Date) FILTER (
+                       WHERE p.Date >= (SELECT year_start FROM params)
+                   ) AS price_start
+            FROM prices p
+            JOIN uni u ON p.Ticker = u.Ticker
+            GROUP BY p.Ticker
+        )
+        SELECT u.Ticker, u.Sector, px.price_now, px.price_start
+        FROM uni u JOIN px ON px.Ticker = u.Ticker
+        WHERE px.price_now IS NOT NULL AND px.price_start IS NOT NULL AND px.price_start > 0
+    """).df()
+    if df.empty:
+        return []
+
+    df["return_pct"] = (df["price_now"] / df["price_start"] - 1) * 100
+    df["relative_strength_pct"] = df["return_pct"] - index_return_pct
+    df = df[df["relative_strength_pct"] > 0]
+    df = df.sort_values("relative_strength_pct", ascending=False).reset_index(drop=True)
+
+    records = []
+    for i, r in df.iterrows():
+        records.append({
+            "rank": i + 1,
+            "ticker": r["Ticker"],
+            "sector": r["Sector"],
+            "price": round(float(r["price_now"]), 2),
+            "return_pct": round(float(r["return_pct"]), 2),
+            "relative_strength_pct": round(float(r["relative_strength_pct"]), 2),
+        })
+    return records
+
+
+def export_relative_strength(con, docs_data_dir, ref_date=None):
+    """ref_date=None: jak w export_global_equity_momentum — najświeższa data w
+    index_prices (odświeżane codziennie), niezależnie od miesięcznego ref_date
+    pipeline'u 3 głównych uniwersów."""
+    if ref_date is None:
+        has_table = con.execute("""
+            SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
+        """).fetchone()[0] > 0
+        watermark = con.execute("SELECT MAX(Date) FROM index_prices").fetchone()[0] if has_table else None
+        if watermark is None:
+            print("❌ Brak danych siły relatywnej (index_prices) — uruchom najpierw fetch_data.py.")
+            return
+        ref_date = pd.Timestamp(watermark).strftime("%Y-%m-%d")
+
+    universes_payload = {}
+    for universe in RELATIVE_STRENGTH_UNIVERSES:
+        index_ytd = compute_index_ytd_return(con, universe, ref_date)
+        if index_ytd is None:
+            continue
+        leaders = compute_relative_strength_leaders(con, universe, ref_date, index_ytd["return_pct"])
+        universes_payload[universe] = {
+            "index_return_pct": index_ytd["return_pct"],
+            "ytd_start_date": index_ytd["date_start"],
+            "n_outperformers": len(leaders),
+            "leaders": leaders,
+        }
+
+    if not universes_payload:
+        print("❌ Brak danych siły relatywnej YTD dla NASDAQ100/DOWJONES.")
+        return
+
+    payload = {
+        "ref_date": ref_date,
+        "universes": universes_payload,
+        "note": ("Siła relatywna względem indeksu (YTD, od początku roku kalendarzowego) dla NASDAQ100 "
+                 "i DOWJONES: zwrot każdej spółki od pierwszej dostępnej ceny w tym roku do ref_date, "
+                 "zestawiony ze zwrotem YTD samego indeksu (poziom indeksu, nie średnia składników). "
+                 "Lista 'leaders' w każdym uniwersum zawiera TYLKO spółki, które w tym roku rosną "
+                 "szybciej niż sam indeks, posortowane malejąco po przewadze (relative_strength_pct = "
+                 "zwrot spółki - zwrot indeksu). Dane informacyjne, NIE porada inwestycyjna."),
+    }
+    out_path = Path(docs_data_dir) / "relative_strength.json"
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    summary = ", ".join(
+        f"{u}: {v['n_outperformers']} (indeks {v['index_return_pct']:+.2f}%)"
+        for u, v in universes_payload.items()
+    )
+    print(f"💾 Wyeksportowano {out_path} — {summary}.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES "
@@ -687,7 +829,8 @@ def main():
     parser.add_argument("--docs-dir", type=str, default="docs",
                          help="Katalog strony pod GitHub Pages (domyślnie 'docs' obok run_query.py).")
     parser.add_argument("--gem-only", action="store_true",
-                         help="Przelicz WYŁĄCZNIE Global Equity Momentum (docs/data/global_equity_momentum.json), "
+                         help="Przelicz WYŁĄCZNIE dane zależne od indeksu na poziomie codziennym "
+                              "(docs/data/global_equity_momentum.json + docs/data/relative_strength.json), "
                               "pomijając pełne przeliczenie 3 głównych uniwersów — do użycia w codziennym "
                               "workflow (patrz daily_gem.yml) po `fetch_data.py --indices-only`.")
     args = parser.parse_args()
@@ -702,6 +845,7 @@ def main():
         docs_data_dir = str(Path(args.docs_dir) / "data")
         Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
         export_global_equity_momentum(con, docs_data_dir)
+        export_relative_strength(con, docs_data_dir)
         con.close()
         return
 
@@ -725,6 +869,7 @@ def main():
     export_all_prices(con, ref_date, docs_data_dir)
     export_equity_curve(con, docs_data_dir)
     export_global_equity_momentum(con, docs_data_dir)
+    export_relative_strength(con, docs_data_dir)
     con.close()
 
 
