@@ -38,7 +38,8 @@ metodologii S&P Momentum Indices):
     glownych uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
     po przewadze — patrz export_relative_strength. Kazdy lider ma tez tygodniowy
-    wykres (cena/indeks w %, od poczatku tego okna, patrz
+    wykres (cena/indeks w %, od poczatku tego okna, plus klasyczna Relative
+    Strength Line Weinsteina (surowy stosunek cena/indeks) — patrz
     compute_relative_strength_chart) do wykresu innego niz TradingView.
 
 WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
@@ -801,7 +802,10 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     momentum_value co reszta pipeline'u (M-14 albo M-11 przy fallbacku, patrz
     compute_index_momentum) — aż do ref_date (dziś), żeby wykres pokazywał cały
     bieżący trend, a nie tylko do M-2 (na czym kończy się sama metryka momentum_value).
-    Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii cen)."""
+    Zwraca też 'rs_line': klasyczna Relative Strength Line Stana Weinsteina — SUROWY
+    stosunek cena_spółki / poziom_indeksu tydzień po tygodniu, BEZ przeskalowania
+    (jak w oryginalnej metodologii: liczy się trend linii, nie jej bezwzględna
+    wartość). Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii)."""
     stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, start_date, ref_date)
     index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, start_date, ref_date)
     if stock_df.empty or index_df.empty:
@@ -814,17 +818,19 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     def to_pct(value, baseline):
         return round(float(value / baseline - 1) * 100, 2) if pd.notna(value) else None
 
-    dates, close_pct, index_pct = [], [], []
+    dates, close_pct, index_pct, rs_line = [], [], [], []
     for _, r in stock_df.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close_pct.append(to_pct(r["close"], stock_baseline))
         index_val = index_by_week.get(r["week_start"])
         index_pct.append(to_pct(index_val, index_baseline) if index_val is not None else None)
+        rs_line.append(round(float(r["close"] / index_val), 4) if index_val else None)
 
     return {
         "dates": dates,
         "close_pct": close_pct,
         "index_pct": index_pct,
+        "rs_line": rs_line,
     }
 
 
@@ -875,8 +881,10 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "indeksu, nie średnia składników), posortowane malejąco po przewadze "
                  "(relative_strength_pct = zwrot spółki - zwrot indeksu). Każdy lider ma też "
                  "'weekly_chart': tygodniowy wykres cena/indeks w %, indeksowany do 0% na początku "
-                 "tego samego okna (patrz compute_relative_strength_chart), do wykresu innego niż "
-                 "TradingView na dashboardzie. Dane informacyjne, NIE porada inwestycyjna."),
+                 "tego samego okna, plus klasyczna Relative Strength Line Stana Weinsteina "
+                 "('rs_line' — surowy stosunek cena_spółki/poziom_indeksu, bez przeskalowania; liczy "
+                 "się trend linii, nie jej wartość) — patrz compute_relative_strength_chart. Do wykresu "
+                 "innego niż TradingView na dashboardzie. Dane informacyjne, NIE porada inwestycyjna."),
     }
     out_path = Path(docs_data_dir) / "relative_strength.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -150,7 +150,10 @@ Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`):
 from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` + `ARGMAX`) for the stock and
 its index, both indexed to 0% at the start of that same momentum window (M-14 or M-11) through to `ref_date`
 — a stock-vs-its-index comparison the free TradingView widget embed can't reliably chart (adding a compare
-symbol can hit free-tier account limits). See `renderRelativeStrengthChart()` below for how it's rendered.
+symbol can hit free-tier account limits). It also carries `rs_line`: Stan Weinstein's classic Relative
+Strength Line — the raw, unscaled `stock_close / index_close` ratio per week (the trend of the line is
+what matters, not its absolute value) — computed from the same two weekly series with no extra query. See
+`renderRelativeStrengthChart()` below for how both are rendered.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -174,16 +177,17 @@ it only exists after the pipeline has run.
   their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
   per-universe tables. The chart area itself has a TradingView/"💪 Siła Relatywna" toggle
   (`#chartModeToggle`, `updateChartArea()` in `app.js`): clicking a ticker from the relative-strength panel
-  or table (the only two call sites passing `preferMode="RS"` to `selectTicker()`) defaults to the custom
-  Chart.js line chart (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
-  ticker's `weekly_chart` (see above) — the RS toggle button is disabled whenever the selected ticker has
-  no such data. Every other ticker click (per-universe tables, GEM, Ctrl+K search) still defaults to the
-  TradingView widget as before; the toggle lets you switch either way for the current ticker. WIG20/mWIG40
-  are PLN-denominated and GPW-listed, unlike the rest (USD, NYSE/Nasdaq): prices render via `formatPrice()`
-  (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol gets a `GPW:` prefix via
-  `tvSymbolFor()` (tracked through `state.selectedUniverse`, set alongside `state.selectedTicker` in
-  `selectTicker()`) so the chart resolves to the correct Warsaw-listed instrument instead of clashing with
-  an unrelated ticker on another exchange.
+  or table (the only two call sites passing `preferMode="RS"` to `selectTicker()`) defaults to two stacked
+  Chart.js charts (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
+  ticker's `weekly_chart` (see above) — the price-vs-index % comparison on top, Weinstein's `rs_line` in a
+  shorter panel underneath (`.rs-chart-container` in `style.css`) — the RS toggle button is disabled
+  whenever the selected ticker has no such data. Every other ticker click (per-universe tables, GEM, Ctrl+K
+  search) still defaults to the TradingView widget as before; the toggle lets you switch either way for the
+  current ticker. WIG20/mWIG40 are PLN-denominated and GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
+  prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
+  gets a `GPW:` prefix via `tvSymbolFor()` (tracked through `state.selectedUniverse`, set alongside
+  `state.selectedTicker` in `selectTicker()`) so the chart resolves to the correct Warsaw-listed instrument
+  instead of clashing with an unrelated ticker on another exchange.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`

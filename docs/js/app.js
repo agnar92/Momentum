@@ -301,17 +301,26 @@ function initChartModeToggle() {
     });
 }
 
+let rsLineChartInstance = null;
+
+// Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css):
+// 1. Cena spółki vs. indeks, oba w % od początku okna momentum (jak wcześniej).
+// 2. Klasyczna Relative Strength Line Stana Weinsteina — surowy stosunek
+//    cena_spółki / poziom_indeksu, BEZ przeskalowania (liczy się trend linii,
+//    nie jej wartość bezwzględna — rosnąca linia = spółka silniejsza od rynku).
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = rsEntry.weekly_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
-    if (!canvas || !chartData) return;
+    const rsLineCanvas = document.getElementById("rsLineCanvas");
+    if (!canvas || !rsLineCanvas || !chartData) return;
 
     if (typeof Chart === "undefined") {
         if (rsContainer) rsContainer.innerHTML = '<div class="empty-state">Nie udało się załadować biblioteki wykresu (sprawdź połączenie z internetem).</div>';
         return;
     }
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
+    if (rsLineChartInstance) { rsLineChartInstance.destroy(); rsLineChartInstance = null; }
 
     const indexLabel = UNIVERSE_LABELS[rsEntry.universe] ? UNIVERSE_LABELS[rsEntry.universe].replace(" Momentum", "") : "Indeks";
     rsChartInstance = new Chart(canvas, {
@@ -334,6 +343,29 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                 y: { ticks: { color: "#8a8f9c", callback: (v) => `${v}%` }, grid: { color: "#262a35" } },
+            },
+        },
+    });
+
+    rsLineChartInstance = new Chart(rsLineCanvas, {
+        type: "line",
+        data: {
+            labels: chartData.dates,
+            datasets: [
+                { label: `RS Line (Weinstein): ${symbol} / ${indexLabel}`, data: chartData.rs_line, borderColor: "#c99bf5", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(4)}` } },
+            },
+            scales: {
+                x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
+                y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
             },
         },
     });
