@@ -1,7 +1,6 @@
 
-const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
+const UNIVERSES = ["NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
 const UNIVERSE_LABELS = {
-    SP500: "S&P 500 Momentum",
     NASDAQ100: "Nasdaq 100 Momentum",
     DOWJONES: "Dow Jones Momentum",
     WIG20: "WIG20 Momentum",
@@ -28,7 +27,7 @@ const state = {
     currentRsEntry: null,
     chartMode: "TV",
     drawerOpen: false,
-    drawerUniverse: "SP500",
+    drawerUniverse: "NASDAQ100",
     sortKey: "rank",
     sortDir: "asc"
 };
@@ -106,7 +105,7 @@ function renderSidebarTiles() {
 }
 
 // Global Equity Momentum: porownanie zwrotu POZIOMU INDEKSU (nie skladnikow)
-// SP500/NASDAQ100/DOWJONES w oknie 12M (docs/data/global_equity_momentum.json /
+// NASDAQ100/DOWJONES w oknie 12M (docs/data/global_equity_momentum.json /
 // run_query.py::compute_index_returns) — wygrywa indeks o najsilniejszym trendzie.
 // Kafelki ponizej to top 10 spolek zwycieskiego indeksu wg wkladu w jego zwrot
 // (waga w indeksie x zwrot spolki w tym samym oknie), czyli te, ktore realnie
@@ -725,8 +724,8 @@ if (typeof document !== "undefined") {
         document.getElementById("chartBackBtn").addEventListener("click", () => {
             document.querySelector(".workspace").classList.remove("mobile-chart-view");
         });
-        state.selectedTicker = "SPY";
-        state.selectedUniverse = "SP500";
+        state.selectedTicker = "QQQ";
+        state.selectedUniverse = "NASDAQ100";
         updateChartArea();
     })();
 
