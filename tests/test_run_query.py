@@ -21,6 +21,7 @@ from run_query import (
     compute_index_leaders,
     compute_index_returns,
     compute_index_ytd_return,
+    compute_relative_strength_chart,
     compute_relative_strength_leaders,
     compute_weights,
     export_global_equity_momentum,
@@ -557,3 +558,63 @@ class TestExportRelativeStrength:
         con = duckdb.connect(":memory:")
         export_relative_strength(con, str(tmp_path))
         assert not (tmp_path / "relative_strength.json").exists()
+
+
+# ---------------------------------------------------------------------------
+# compute_relative_strength_chart: tygodniowy wykres (nie-TradingView) dla panelu
+# Siły Relatywnej — cena spółki i indeksu w % YTD + SMA10/SMA30 na cenie spółki.
+# ---------------------------------------------------------------------------
+
+def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks, start_price, weekly_step):
+    """Wstawia n_weeks kolejnych poniedziałkowych cen (start_price, +weekly_step co
+    tydzień) do `table` (prices albo index_prices) — DATE_TRUNC('week', ...) na
+    dacie poniedziałkowej jest no-opem, więc unikamy niejednoznaczności co do
+    konwencji początku tygodnia w DuckDB."""
+    mondays = pd.date_range(start=start_monday, periods=n_weeks, freq="7D")
+    rows = [
+        (d.strftime("%Y-%m-%d"), id_value, start_price + i * weekly_step, start_price + i * weekly_step, 0)
+        for i, d in enumerate(mondays)
+    ]
+    con.executemany(f"INSERT INTO {table} VALUES (?, ?, ?, ?, ?)", rows)
+    return mondays
+
+
+class TestComputeRelativeStrengthChart:
+    def test_returns_pct_series_with_sma_when_enough_lookback(self):
+        con = make_gem_con()
+        # 35 tygodni przed 2026-01-05 (pierwszy poniedzialek roku) + tygodnie w roku,
+        # az do ref_date -> wystarczajacy zapas dla SMA30 (RS_SMA_LONG_WEEKS) juz od
+        # pierwszego wyswietlanego tygodnia.
+        insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-05-05", 50, 100.0, 2.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2025-05-05", 50, 200.0, 1.0)
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16")
+        assert out is not None
+        assert out["dates"][0] == "2026-01-05"  # pierwszy poniedzialek W ROKU
+        assert out["close_pct"][0] == pytest.approx(0.0)   # baza YTD = 0%
+        assert out["index_pct"][0] == pytest.approx(0.0)
+        assert out["sma10_pct"][0] is not None
+        assert out["sma30_pct"][0] is not None
+        # Cena rosnie liniowo -> pozniejszy tydzien ma wyzszy % niz wczesniejszy.
+        assert out["close_pct"][-1] > out["close_pct"][0]
+
+    def test_insufficient_lookback_leaves_early_sma_as_none(self):
+        con = make_gem_con()
+        # Tylko 5 tygodni historii PRZED poczatkiem roku -> za malo na pelne 30-tyg.
+        # SMA przy pierwszym tygodniu roku (musi byc None, nie blad/0).
+        insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-12-01", 20, 100.0, 2.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2025-12-01", 20, 200.0, 1.0)
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16")
+        assert out is not None
+        assert out["sma30_pct"][0] is None
+
+    def test_no_stock_history_returns_none(self):
+        con = make_gem_con()
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2025-05-05", 50, 200.0, 1.0)
+        assert compute_relative_strength_chart(con, "NOPE", "NASDAQ100", "2026-03-16") is None
+
+    def test_no_index_history_returns_none(self):
+        con = make_gem_con()
+        insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-05-05", 50, 100.0, 2.0)
+        assert compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-16") is None

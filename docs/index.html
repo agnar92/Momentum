@@ -145,17 +145,28 @@
         </div>
     </div>
 
-    <!-- ====================== WYKRES TRADINGVIEW (pełny ekran, przełącznik TF w widgecie) ====================== -->
+    <!-- ====================== WYKRES: TradingView LUB własny (Siła Relatywna) ====================== -->
     <div class="charts-area">
         <button class="chart-back-btn" id="chartBackBtn">&larr; Lista spółek</button>
+        <div class="chart-mode-toggle" id="chartModeToggle">
+            <button class="chart-mode-btn active" data-mode="TV" id="chartModeTvBtn">📈 TradingView</button>
+            <button class="chart-mode-btn" data-mode="RS" id="chartModeRsBtn" disabled
+                    title="Własny wykres tygodniowy (cena, indeks, SMA10/SMA30, % YTD) — dostępny dla spółek z panelu Siła Relatywna.">
+                💪 Siła Relatywna
+            </button>
+        </div>
         <div class="chart-panel">
             <div class="chart-container" id="tv_chart"></div>
+            <div class="chart-container rs-chart-container" id="rs_chart" hidden>
+                <canvas id="rsChartCanvas"></canvas>
+            </div>
         </div>
     </div>
 
 </div>
 
 <script src="https://s3.tradingview.com/tv.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
