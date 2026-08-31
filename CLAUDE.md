@@ -101,6 +101,21 @@ ref_date)` even though the per-constituent `prices` table itself is only as fres
 `fetch_data.py --indices-only` and `run_query.py --gem-only` are the two flags that make this cheap daily
 refresh possible without touching the (expensive, rate-limited) per-constituent price fetch.
 
+### Relative strength YTD (`compute_index_ytd_return` / `compute_relative_strength_leaders`)
+
+A screener for NASDAQ100 and DOWJONES only (SP500 deliberately excluded): for each constituent, compares
+its return since the first available trading day of the current calendar year to the *same* YTD return
+computed for the index level (`index_prices`, like GEM). Only constituents that are currently
+**outperforming their own index** this year are kept — `relative_strength_pct = constituent_return_pct -
+index_return_pct`, always positive by construction — sorted descending, so the biggest current outperformers
+come first. `export_relative_strength()` writes per-universe results (index YTD return, YTD start date,
+outperformer list) to `docs/data/relative_strength.json`; the frontend (`combinedRelativeStrengthLeaders()`
+in `app.js`) merges both universes into one ranked list for display. Like GEM, its `ref_date` defaults to
+`index_prices`'s own watermark (not the monthly constituent-pipeline `ref_date`), and it's recomputed by
+the same `run_query.py --gem-only` daily path as GEM (see `daily_gem.yml`) since it only needs
+`index_prices` (daily) + `prices`/`index_constituents` (gracefully stale-tolerant, same as
+`compute_index_leaders`).
+
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
 Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worker caching the app shell,
@@ -113,10 +128,14 @@ it only exists after the pipeline has run.
   tiles for the winner's top-10 contribution leaders), a full sortable constituents table per universe
   (`added_tickers`/`dropped_tickers` are exported in the JSON but not currently rendered), a Ctrl+K
   command-palette ticker search, and a full-screen TradingView chart widget (loaded from
-  `s3.tradingview.com`, mounted via `TradingView.widget(...)`). The sidebar is hidden on phones in
-  portrait (`@media max-width:640px`), so the drawer table has a 4th "🚀 GEM" tab (`showDrawerTable()` /
-  `renderGemTable()`) rendering the same leader list as its own table — the only way to reach it on
-  mobile, since it isn't otherwise duplicated by the per-universe tables.
+  `s3.tradingview.com`, mounted via `TradingView.widget(...)`), plus a fifth sidebar group for
+  **relative strength YTD** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
+  index's own YTD return, and tiles merging NASDAQ100+DOWJONES outperformers via
+  `combinedRelativeStrengthLeaders()`, sorted by edge over their index). The sidebar is hidden on phones
+  in portrait (`@media max-width:640px`), so the drawer table has a 4th "🚀 GEM" tab (`showDrawerTable()` /
+  `renderGemTable()`) and a 5th "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as
+  their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
+  per-universe tables.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`
