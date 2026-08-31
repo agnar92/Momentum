@@ -237,7 +237,7 @@ function jumpToTicker(ticker, universe) {
 
 // ============================================================
 // OBSZAR WYKRESU: TradingView LUB własny tygodniowy wykres Siły Relatywnej
-// (cena spółki, indeks, SMA10/SMA30 w % YTD — patrz renderRelativeStrengthChart).
+// (cena spółki vs. indeks, oba w % YTD — patrz renderRelativeStrengthChart).
 // Przełącznik (#chartModeToggle) jest aktywny tylko gdy state.currentRsEntry ma
 // weekly_chart; w przeciwnym razie zawsze pokazujemy TradingView jak wcześniej.
 // ============================================================
@@ -302,8 +302,6 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             labels: chartData.dates,
             datasets: [
                 { label: `${symbol} (zamknięcie)`, data: chartData.close_pct, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
-                { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#e0455a", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
                 { label: indexLabel, data: chartData.index_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
             ],
         },
