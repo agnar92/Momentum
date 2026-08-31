@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 from fetch_data import (
+    INDEX_LEVEL_SYMBOLS,
     PRICES_SCHEMA,
     _download_price_rows,
     _find_column,
@@ -17,6 +18,7 @@ from fetch_data import (
     _upsert_price_rows,
     get_full_refresh_range,
     load_index_constituents,
+    update_index_prices,
     update_prices_incremental,
 )
 
@@ -324,3 +326,36 @@ class TestUpdatePricesIncremental:
         dates_left = [r[0] for r in con.execute("SELECT Date FROM prices").fetchall()]
         assert len(dates_left) == 1
         assert str(dates_left[0]) != old_date
+
+
+# ---------------------------------------------------------------------------
+# update_index_prices: ceny poziomu indeksu (^GSPC/^NDX/^DJI) dla Global
+# Equity Momentum — mapowanie symbolu yfinance z powrotem na nazwe uniwersum.
+# ---------------------------------------------------------------------------
+
+class TestUpdateIndexPrices:
+    def test_maps_yfinance_symbols_back_to_universe_names(self, monkeypatch):
+        con = duckdb.connect(":memory:")
+
+        def fake_download(tickers, start_date, end_date):
+            rows = [(end_date, t, 100.0, 100.0, 0) for t in tickers]
+            return rows, set(tickers), []
+
+        monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
+        update_index_prices(con, lookback_months=12)
+
+        rows = con.execute("SELECT Index_Name, Close FROM index_prices ORDER BY Index_Name").fetchall()
+        assert {r[0] for r in rows} == set(INDEX_LEVEL_SYMBOLS.keys())
+        assert "^GSPC" not in {r[0] for r in rows}  # zapisana kanoniczna nazwa uniwersum, nie symbol yf
+
+    def test_failed_downloads_leave_table_without_those_rows(self, monkeypatch):
+        con = duckdb.connect(":memory:")
+        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), list(t)))
+
+        update_index_prices(con, lookback_months=12)
+
+        count = con.execute("""
+            SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
+        """).fetchone()[0]
+        assert count == 1  # tabela stworzona
+        assert con.execute("SELECT COUNT(*) FROM index_prices").fetchone()[0] == 0

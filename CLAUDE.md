@@ -67,41 +67,29 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
      positions that aren't in the current momentum selection).
    - Reference date defaults to `MAX(Date)` in the `prices` table; pass `--ref-date YYYY-MM-DD` to
      recompute for a specific historical date.
-   - Also builds a small, low-turnover **"top momentum" basket** (`docs/data/top_basket.json`) — see
-     below.
+   - Also computes **Global Equity Momentum** (`docs/data/global_equity_momentum.json`) — see below.
 
 Monthly (not semi-annual, as the official S&P 500 Momentum index does) rebalancing is an intentional
 choice here — it matches the cadence used in most academic momentum-return literature — not an attempt
 at a literal 1:1 replication of S&P's own rebalance calendar.
 
-### Top-momentum basket (`build_top_basket` / `select_top_basket`)
+### Global Equity Momentum (`compute_index_returns` / `compute_index_leaders`)
 
-A separate, deliberately concentrated "consistent compounders" basket — SP500 top `TOP_BASKET_SP500_N`
-(20) + NASDAQ100 top `TOP_BASKET_NASDAQ100_N` (5), DOWJONES excluded (no quintile selection there),
-overlapping tickers deduplicated. It's a *quality proxy* without fetching any fundamental data — but
-ranking the already-selected top-quintile-by-momentum pool by raw `momentum_score` just re-selects the
-most volatile/extreme movers within an already momentum-tilted pool (i.e. "who returned the most", not
-quality). `_stable_growth_candidates()` filters that pool first — drops names with non-positive raw
-`momentum_value` (could be in the quintile only because the rest of the universe did even worse) and the
-more volatile half by `annualized_volatility` (`TOP_BASKET_MAX_VOLATILITY_PERCENTILE`, 0.5) — and only
-*then* ranks the calmer, genuinely-growing remainder by `momentum_score`. Falls back to the unfiltered
-positive-momentum set if the volatility cut would leave nothing.
+Compares the **index level** (not constituents) of SP500/NASDAQ100/DOWJONES against each other over a
+trailing `GEM_LOOKBACK_MONTHS` (12) window — the classic dual/global-momentum idea of picking whichever
+market currently has the strongest trend. `fetch_data.py::update_index_prices` pulls daily closes for
+`^GSPC`/`^NDX`/`^DJI` (`INDEX_LEVEL_SYMBOLS`) into a small `index_prices` table (`Date, Index_Name,
+Close, ...`), fully replaced on every run since it's only 3 symbols (no incremental logic needed, unlike
+the per-constituent `prices` table). `compute_index_returns()` reads that table and returns each
+universe's return over the window, sorted descending; the top one is the `winner`.
 
-Like the three main universes, this basket's membership is recomputed **every month** — there is no
-separate "rebalance event" on a slower calendar. Turnover is instead damped by the *same buffer rule* as
-the quintile selection (`select_with_buffer`, now generalized to accept an explicit `target_count` instead
-of always deriving it from `TARGET_QUINTILE * n`): a currently-held ticker isn't dropped just because a
-slightly-better-ranked newcomer showed up — it stays as long as it's still within the buffer band and still
-passes `_stable_growth_candidates()` (positive momentum + calmer half). It only drops out when it's clearly
-been overtaken or, more commonly, when it no longer qualifies as a stable grower at all (buffer only ever
-retains names still present in that month's filtered candidate pool — it cannot rescue one that fell out).
-- `select_top_basket()` reads each universe's current membership from `top_basket_history` (as of the
-  most recent earlier `ref_date`, mirroring how `process_universe` reads `portfolio_history` for the three
-  main universes' own buffer), passes it into `build_top_basket()` as `current_sp500_tickers`/
-  `current_nasdaq100_tickers`, then persists the new selection (`persist_top_basket_history`) and computes
-  an `added`/`dropped` changelog vs. last month.
-- `docs/data/top_basket.json` carries `added_tickers`/`dropped_tickers` (exported like the three main
-  universes, not currently rendered in the UI either — see the note on that changelog below).
+For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
+**pushing the index to its new highs** — ranked by *contribution to the index's return*
+(`weight_in_index_pct * return_pct`, where the weight is the constituent's `fmc_etf` share of the
+winning universe and the return is computed over the *same* window as the index return), not by raw
+momentum score — a small-cap mover with an extreme return but negligible index weight should not outrank
+a mega-cap that is dragging the whole index up. `export_global_equity_momentum()` writes both the ranked
+index list and the winner's leader list to `docs/data/global_equity_momentum.json`.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -109,16 +97,16 @@ Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worke
 network-first for `docs/data/*.json`). `docs/data/` is generated by `run_query.py` and is gitignored —
 it only exists after the pipeline has run.
 
-- **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe plus a
-  fourth sidebar group for the "Stabilny Wzrost" top-momentum basket (`docs/data/top_basket.json`,
-  `renderTopBasketTiles()` — shows the current `ref_date` and ticker count, same phrasing as the three
-  main universes), a full sortable constituents table per universe (`added_tickers`/`dropped_tickers` are
-  exported in the JSON but not currently rendered), a Ctrl+K command-palette ticker search, and a
-  full-screen TradingView chart widget (loaded from `s3.tradingview.com`, mounted via
-  `TradingView.widget(...)`). The sidebar is hidden on phones in portrait (`@media max-width:640px`), so
-  the drawer table has a 4th "🏆 Top" tab (`showDrawerTable()` / `renderTopBasketTable()`) rendering the
-  same basket as its own table — the only way to reach it on mobile, since it isn't otherwise duplicated
-  by the per-universe tables.
+- **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe plus a fourth
+  sidebar group for **Global Equity Momentum** (`docs/data/global_equity_momentum.json`,
+  `renderGemPanel()` — shows the winning index + its return, a ranked list of all 3 indices' returns, and
+  tiles for the winner's top-10 contribution leaders), a full sortable constituents table per universe
+  (`added_tickers`/`dropped_tickers` are exported in the JSON but not currently rendered), a Ctrl+K
+  command-palette ticker search, and a full-screen TradingView chart widget (loaded from
+  `s3.tradingview.com`, mounted via `TradingView.widget(...)`). The sidebar is hidden on phones in
+  portrait (`@media max-width:640px`), so the drawer table has a 4th "🚀 GEM" tab (`showDrawerTable()` /
+  `renderGemTable()`) rendering the same leader list as its own table — the only way to reach it on
+  mobile, since it isn't otherwise duplicated by the per-universe tables.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`

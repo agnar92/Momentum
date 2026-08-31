@@ -8,7 +8,7 @@ const UNIVERSE_LABELS = {
 
 const state = {
     data: {},
-    topBasket: { constituents: [] },
+    gem: { indices: [], leaders: [] },
     selectedTicker: null,
     drawerOpen: false,
     drawerUniverse: "SP500",
@@ -28,12 +28,12 @@ async function loadData() {
         }
     }
     try {
-        const res = await fetch("data/top_basket.json", { cache: "no-store" });
+        const res = await fetch("data/global_equity_momentum.json", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        state.topBasket = await res.json();
+        state.gem = await res.json();
     } catch (e) {
-        console.error("Nie udało się wczytać koszyka top-momentum:", e);
-        state.topBasket = { ref_date: null, n_tickers: 0, constituents: [] };
+        console.error("Nie udało się wczytać danych Global Equity Momentum:", e);
+        state.gem = { ref_date: null, indices: [], winner: null, leaders: [] };
     }
 }
 
@@ -65,34 +65,54 @@ function renderSidebarTiles() {
     });
 }
 
-// Koncentrowany koszyk "top momentum" (SP500 top 20 + NASDAQ100 top 5 wg
-// momentum score, patrz docs/data/top_basket.json / run_query.py::build_top_basket).
-// Kafelki dzialaja tak samo jak w gornych 3 grupach — klik podmienia wykres.
-function renderTopBasketTiles() {
-    const container = document.getElementById("tiles-TOPBASKET");
+// Global Equity Momentum: porownanie zwrotu POZIOMU INDEKSU (nie skladnikow)
+// SP500/NASDAQ100/DOWJONES w oknie 12M (docs/data/global_equity_momentum.json /
+// run_query.py::compute_index_returns) — wygrywa indeks o najsilniejszym trendzie.
+// Kafelki ponizej to top 10 spolek zwycieskiego indeksu wg wkladu w jego zwrot
+// (waga w indeksie x zwrot spolki w tym samym oknie), czyli te, ktore realnie
+// pchaja cene indeksu w gore. Klik dziala tak samo jak w gornych 3 grupach.
+function renderGemPanel() {
+    const container = document.getElementById("tiles-GEM");
     if (!container) return;
 
-    const meta = document.getElementById("topBasketMeta");
+    const g = state.gem;
+    const meta = document.getElementById("gemMeta");
     if (meta) {
-        const b = state.topBasket;
-        meta.textContent = b.ref_date
-            ? `Rebalans: ${b.ref_date} · ${b.n_tickers || 0} spółek`
+        const winnerReturn = (g.indices || []).find(i => i.universe === g.winner);
+        meta.textContent = g.ref_date && g.winner
+            ? `Zwycięzca: ${UNIVERSE_LABELS[g.winner].replace(" Momentum", "")} `
+              + `${winnerReturn ? (winnerReturn.return_pct >= 0 ? "+" : "") + winnerReturn.return_pct.toFixed(2) + "%" : ""} `
+              + `(${g.lookback_months || 12}M) · ${(g.leaders || []).length} liderów`
             : "Brak danych — uruchom pipeline.";
+        meta.title = g.note || "";
+    }
+
+    const returnsEl = document.getElementById("gemIndexReturns");
+    if (returnsEl) {
+        returnsEl.innerHTML = "";
+        (g.indices || []).forEach(i => {
+            const row = document.createElement("div");
+            row.className = "gem-index-row" + (i.universe === g.winner ? " gem-index-winner" : "");
+            row.innerHTML = `
+                <span>${i.universe === g.winner ? "🏆 " : ""}${UNIVERSE_LABELS[i.universe].replace(" Momentum", "")}</span>
+                <span class="${i.return_pct >= 0 ? "positive" : "negative"}">${i.return_pct >= 0 ? "+" : ""}${i.return_pct.toFixed(2)}%</span>
+            `;
+            returnsEl.appendChild(row);
+        });
     }
 
     container.innerHTML = "";
-    const items = state.topBasket.constituents || [];
+    const items = g.leaders || [];
     items.forEach(c => {
         const tile = document.createElement("div");
         tile.className = "ticker-tile";
         tile.textContent = c.ticker;
-        const sources = c.universes.map(u => UNIVERSE_LABELS[u].replace(" Momentum", "")).join(" + ");
-        tile.title = `${c.ticker} — #${c.rank} · momentum ${c.momentum_pct != null ? c.momentum_pct.toFixed(2) + "%" : "brak danych"} · ${sources}`;
-        if (c.universes.length > 1) tile.classList.add("ticker-tile-overlap");
+        tile.title = `${c.ticker} — #${c.rank} · zwrot ${c.return_pct.toFixed(2)}% · waga w indeksie `
+            + `${c.weight_in_index_pct.toFixed(2)}% · wkład w zwrot ${c.contribution_pct.toFixed(2)}pp`;
         tile.dataset.ticker = c.ticker;
-        tile.dataset.universe = c.universes[0];
+        tile.dataset.universe = g.winner;
         if (c.ticker === state.selectedTicker) tile.classList.add("selected");
-        tile.addEventListener("click", () => selectTicker(c.ticker, c.universes[0]));
+        tile.addEventListener("click", () => selectTicker(c.ticker, g.winner));
         container.appendChild(tile);
     });
     if (items.length === 0) {
@@ -108,7 +128,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #topBasketTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     updateChart(ticker);
@@ -227,37 +247,37 @@ function compareRows(a, b, sortKey, sortDir) {
 }
 
 // Przełącza, która z dwóch tabel w drawerze jest widoczna (pełna tabela
-// uniwersum vs. koszyk top-momentum — mają inny zestaw kolumn, patrz
-// renderTopBasketTable) i renderuje jej zawartość. Na telefonie sidebar
-// z kafelkami jest ukryty (patrz CSS @media max-width:640px), więc to
-// jedyny sposób dotarcia do koszyka top-momentum w pionie.
+// uniwersum vs. Global Equity Momentum — mają inny zestaw kolumn, patrz
+// renderGemTable) i renderuje jej zawartość. Na telefonie sidebar z
+// kafelkami jest ukryty (patrz CSS @media max-width:640px), więc to
+// jedyny sposób dotarcia do GEM w pionie.
 function showDrawerTable(universe) {
-    const isTopBasket = universe === "TOPBASKET";
-    document.getElementById("momentumTable").hidden = isTopBasket;
-    document.getElementById("topBasketTable").hidden = !isTopBasket;
-    document.getElementById("drawerTitle").textContent = isTopBasket
-        ? "Pełna tabela — Stabilny Wzrost (quality proxy)"
+    const isGem = universe === "GEM";
+    document.getElementById("momentumTable").hidden = isGem;
+    document.getElementById("gemTable").hidden = !isGem;
+    document.getElementById("drawerTitle").textContent = isGem
+        ? "Pełna tabela — Global Equity Momentum"
         : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
-    if (isTopBasket) {
-        renderTopBasketTable();
+    if (isGem) {
+        renderGemTable();
     } else {
         renderTable();
     }
 }
 
-function renderTopBasketTable() {
-    const b = state.topBasket;
+function renderGemTable() {
+    const g = state.gem;
     const meta = document.getElementById("drawerMeta");
-    if (b.ref_date) {
-        meta.textContent = `Rebalans: ${b.ref_date} · ${b.n_tickers || 0} spółek`;
-        meta.title = b.note || "";
+    if (g.ref_date && g.winner) {
+        meta.textContent = `Rebalans: ${g.ref_date} · zwycięzca ${UNIVERSE_LABELS[g.winner].replace(" Momentum", "")} · ${(g.leaders || []).length} liderów`;
+        meta.title = g.note || "";
     } else {
         meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
         meta.title = "";
     }
 
-    const rows = b.constituents || [];
-    const tbody = document.getElementById("topBasketTableBody");
+    const rows = g.leaders || [];
+    const tbody = document.getElementById("gemTableBody");
     tbody.innerHTML = "";
 
     if (rows.length === 0) {
@@ -271,18 +291,16 @@ function renderTopBasketTable() {
         const tr = document.createElement("tr");
         tr.dataset.ticker = r.ticker;
         if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
-        const sources = r.universes.map(u => UNIVERSE_LABELS[u].replace(" Momentum", "")).join(" + ");
-        const momentumClass = r.momentum_pct == null ? "" : (r.momentum_pct >= 0 ? "positive" : "negative");
         tr.innerHTML = `
             <td><span class="rank-badge">${r.rank}</span></td>
             <td class="ticker-cell">${r.ticker}</td>
             <td>${r.sector}</td>
-            <td>${r.price != null ? "$" + r.price.toFixed(2) : "—"}</td>
-            <td class="${momentumClass}">${r.momentum_pct != null ? r.momentum_pct.toFixed(2) + "%" : "—"}</td>
-            <td>${r.volatility_pct != null ? r.volatility_pct.toFixed(2) + "%" : "—"}</td>
-            <td>${sources}</td>
+            <td>$${r.price.toFixed(2)}</td>
+            <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct.toFixed(2)}%</td>
+            <td>${r.weight_in_index_pct.toFixed(2)}%</td>
+            <td>${r.contribution_pct.toFixed(2)}pp</td>
         `;
-        tr.addEventListener("click", () => selectTicker(r.ticker, r.universes[0]));
+        tr.addEventListener("click", () => selectTicker(r.ticker, g.winner));
         tbody.appendChild(tr);
     });
 }
@@ -467,7 +485,7 @@ if (typeof document !== "undefined") {
     (async function init() {
         await loadData();
         renderSidebarTiles();
-        renderTopBasketTiles();
+        renderGemPanel();
         initDrawer();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem

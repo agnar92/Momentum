@@ -55,12 +55,13 @@
             <div class="ticker-grid" id="tiles-DOWJONES"></div>
         </div>
 
-        <div class="sidebar-group" id="topBasketGroup">
-            <div class="sidebar-group-label" title="Consistent compounders: z top-kwintylowej puli SP500/NASDAQ100 odrzucamy najbardziej zmienna polowe i spolki z ujemnym momentum, wsrod spokojniejszej reszty wybieramy liderow momentum score — blue chips z solidnym, niekoniecznie ekstremalnym wzrostem, proxy quality bez dodatkowych danych fundamentalnych. Sklad przeliczany co miesiac z regula bufora (jak w 3 glownych uniwersach) — dampuje rotacje zamiast ja sztywno blokowac.">
-                🏆 Stabilny Wzrost (quality proxy)
+        <div class="sidebar-group" id="gemGroup">
+            <div class="sidebar-group-label" title="Global Equity Momentum: porownanie zwrotu POZIOMU INDEKSU (nie skladnikow) SP500/NASDAQ100/DOWJONES w oknie 12 mies. — wygrywa indeks o najsilniejszym trendzie. Kafelki ponizej to top 10 spolek zwycieskiego indeksu wg wkladu w jego zwrot (waga w indeksie x zwrot spolki w tym samym oknie) — czyli te, ktore realnie pchaja cene indeksu w gore/na nowe szczyty, a nie po prostu spolki o najwyzszym wlasnym zwrocie.">
+                🚀 Global Equity Momentum
             </div>
-            <div class="sidebar-group-meta" id="topBasketMeta"></div>
-            <div class="ticker-grid" id="tiles-TOPBASKET"></div>
+            <div class="sidebar-group-meta" id="gemMeta"></div>
+            <div class="gem-index-returns" id="gemIndexReturns"></div>
+            <div class="ticker-grid" id="tiles-GEM"></div>
         </div>
     </div>
 
@@ -74,7 +75,7 @@
                 <button class="drawer-tab active" data-universe="SP500">S&amp;P 500</button>
                 <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
                 <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
-                <button class="drawer-tab" data-universe="TOPBASKET" title="Stabilny Wzrost (quality proxy) — consistent compounders z SP500 top 20 + NASDAQ100 top 5, przeliczane co miesiąc z regułą bufora.">🏆 Top</button>
+                <button class="drawer-tab" data-universe="GEM" title="Global Equity Momentum — top 10 spółek zwycięskiego indeksu (SP500/NASDAQ100/DOWJONES, wg zwrotu 12M) wg wkładu w jego zwrot.">🚀 GEM</button>
             </div>
         </div>
         <div class="table-scroll">
@@ -96,23 +97,22 @@
                 <tbody id="momentumTableBody"></tbody>
             </table>
 
-            <!-- Koszyk "stabilny wzrost" (consistent compounders, SP500 top20 + NASDAQ100 top5,
-                 przeliczany co miesiąc z regułą bufora) — osobna, prostsza tabela: nie ma tu
-                 portfelowej wagi/z-score/momentum score, tylko surowe metryki + z których
-                 uniwersów pochodzi. -->
-            <table class="momentum-table" id="topBasketTable" hidden>
+            <!-- Global Equity Momentum: top 10 spolek zwycieskiego indeksu wg wkladu
+                 w jego zwrot (waga w indeksie x zwrot w tym samym oknie 12M) — osobna,
+                 prostsza tabela: nie ma tu portfelowej wagi/z-score/momentum score. -->
+            <table class="momentum-table" id="gemTable" hidden>
                 <thead>
                     <tr>
                         <th>#</th>
                         <th>Ticker</th>
                         <th>Sektor</th>
                         <th>Cena</th>
-                        <th>Momentum (12M-1M)</th>
-                        <th>Zmienność</th>
-                        <th>Indeksy</th>
+                        <th>Zwrot 12M</th>
+                        <th>Waga w indeksie</th>
+                        <th>Wkład w zwrot</th>
                     </tr>
                 </thead>
-                <tbody id="topBasketTableBody"></tbody>
+                <tbody id="gemTableBody"></tbody>
             </table>
         </div>
     </div>

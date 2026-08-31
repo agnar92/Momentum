@@ -27,6 +27,10 @@ metodologii S&P Momentum Indices):
    jako zrodlo docelowych wag dla panelu rebalansu na stronie.
 8. Eksport JSON dla strony (docs/data/*.json) + wygenerowanie statycznych
    plikow strony (docs/index.html, docs/rebalance.html, docs/css/*, docs/js/*).
+9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
+   fetch_data.py) dla SP500/NASDAQ100/DOWJONES w oknie GEM_LOOKBACK_MONTHS,
+   wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N liderow zwycieskiego
+   indeksu wg wkladu w jego zwrot — patrz export_global_equity_momentum.
 """
 
 import argparse
@@ -46,11 +50,9 @@ BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
 MAX_WEIGHT = 0.09        # 9% max na spolke
 CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
 MAX_HOLDINGS = 100
-TOP_BASKET_SP500_N = 20      # ile najsilniejszych spolek wg momentum score z SP500 w koszyku
-TOP_BASKET_NASDAQ100_N = 5   # jw. dla NASDAQ100 (DOWJONES pominiety - tam nie ma selekcji)
-TOP_BASKET_MAX_VOLATILITY_PERCENTILE = 0.5   # koszyk celuje w "consistent compounders", nie w
-                                              # najgwaltowniejsze ruchy cenowe -> przed rankingiem po
-                                              # momentum odrzucamy gorna (bardziej zmienna) polowe puli
+GEM_LOOKBACK_MONTHS = 12   # okno zwrotu poziomu indeksu dla Global Equity Momentum
+GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy dla zwycieskiego indeksu
+INDEX_LEVEL_SYMBOLS = {"SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI"}
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
@@ -159,15 +161,9 @@ def add_zscore_and_momentum_score(df):
 # ============================================================================
 # 5: SELEKCJA Z REGUŁĄ BUFORA (sekcja "Constituent Selection")
 # ============================================================================
-def select_with_buffer(df_ranked, current_tickers, target_count=None):
-    """target_count=None: domyslny tryb 3 glownych uniwersow (top kwintyl,
-    target = round(20% * n), capowany MAX_HOLDINGS). Podanie jawnego
-    target_count pozwala uzyc tej samej reguly bufora przy stalej,
-    niezaleznej-od-n liczbie miejsc (np. koszyk top-momentum, patrz
-    build_top_basket) — bufor dziala identycznie w obu przypadkach."""
+def select_with_buffer(df_ranked, current_tickers):
     n = len(df_ranked)
-    if target_count is None:
-        target_count = min(round(TARGET_QUINTILE * n), MAX_HOLDINGS)
+    target_count = min(round(TARGET_QUINTILE * n), MAX_HOLDINGS)
     if target_count <= 0 or n == 0:
         return set(), target_count
 
@@ -260,196 +256,6 @@ def compute_weights(df_selected, universe=None):
     weights = weights / weights.sum()  # bezpieczna normalizacja końcowa
     df["weight"] = weights
     return df
-
-
-# ============================================================================
-# MAŁY KOSZYK "TOP MOMENTUM" (proxy dla quality bez pobierania danych
-# fundamentalnych) — łączy najsilniejsze spółki z SP500 i NASDAQ100 (DOWJONES
-# pominięty: tam nie ma selekcji kwintylowej, wszystkie 30 spółek ma równą
-# wagę). Celem NIE jest "kto urósł najgwałtowniej" (to najzwyczajniej faworyzuje
-# najbardziej spekulacyjne/zmienne nazwy w puli) — celem są "consistent
-# compounders": duże, spokojne spółki z solidnym, ale niekoniecznie ekstremalnym
-# momentum. Dlatego z puli już wyselekcjonowanej top-kwintylowo po momentum
-# najpierw odrzucamy najbardziej zmienną (górną) połowę wg annualized_volatility
-# i spółki z ujemnym surowym momentum (mogły trafić do kwintyla tylko dlatego,
-# że reszta uniwersum radziła sobie jeszcze gorzej — to nie jest "wzrost"),
-# a dopiero wśród spokojniejszej reszty rankingujemy po momentum score. Skład
-# przeliczany jest co miesiąc (nie raz na pół roku) — regułę bufora
-# (select_with_buffer, ta sama co dla 3 głównych uniwersów) dampuje rotację
-# zamiast sztywno zamrażać skład na pół roku kalendarza.
-# ============================================================================
-def _stable_growth_candidates(df, max_volatility_percentile=TOP_BASKET_MAX_VOLATILITY_PERCENTILE):
-    candidates = df[df["momentum_value"] > 0]
-    if candidates.empty:
-        return candidates
-    vol_cutoff = candidates["annualized_volatility"].quantile(max_volatility_percentile)
-    stable = candidates[candidates["annualized_volatility"] <= vol_cutoff]
-    return stable if not stable.empty else candidates
-
-
-def _rank_by_momentum_score(df):
-    """Sortuje po momentum_score malejaco (Ticker jako tie-break, tak jak w
-    add_zscore_and_momentum_score) i dopisuje kolumne 'rank' wymagana przez
-    select_with_buffer."""
-    ranked = df.sort_values(["momentum_score", "Ticker"], ascending=[False, True]).reset_index(drop=True)
-    ranked["rank"] = np.arange(1, len(ranked) + 1)
-    return ranked
-
-
-def build_top_basket(df_sp500, df_nasdaq100, sp500_n=TOP_BASKET_SP500_N, nasdaq100_n=TOP_BASKET_NASDAQ100_N,
-                      current_sp500_tickers=frozenset(), current_nasdaq100_tickers=frozenset()):
-    """Comiesieczna selekcja (nie tylko raz na pol roku): tak jak w 3 glownych
-    uniwersach, sklad przelicza sie co miesiac, ale reguly bufora (select_with_buffer,
-    ten sam mechanizm co dla top-kwintyla SP500/NASDAQ100/DOWJONES) dampuja rotacje —
-    obecnie trzymana spolka nie wypada tylko dlatego, ze pojawil sie ktos nieznacznie
-    lepiej rankowany, tylko gdy realnie przestala spelniac kryteria stabilnego wzrostu
-    (patrz _stable_growth_candidates) albo zostala wyraznie zdystansowana."""
-    sources = []
-    for universe_name, df, n, current_tickers in [
-        ("SP500", df_sp500, sp500_n, current_sp500_tickers),
-        ("NASDAQ100", df_nasdaq100, nasdaq100_n, current_nasdaq100_tickers),
-    ]:
-        if df is None or df.empty:
-            continue
-        stable = _stable_growth_candidates(df)
-        if stable.empty:
-            continue
-        ranked = _rank_by_momentum_score(stable)
-        selected_tickers, _ = select_with_buffer(ranked, current_tickers, target_count=n)
-        sources.append((universe_name, ranked[ranked["Ticker"].isin(selected_tickers)]))
-
-    combined = {}
-    for universe_name, df in sources:
-        for _, r in df.iterrows():
-            ticker = r["Ticker"]
-            entry = combined.get(ticker)
-            if entry is None:
-                combined[ticker] = {
-                    "ticker": ticker,
-                    "sector": r["Sector"],
-                    "price": float(r["price_now"]),
-                    "momentum_pct": float(r["momentum_value"]) * 100,
-                    "volatility_pct": float(r["annualized_volatility"]) * 100,
-                    "universes": [universe_name],
-                }
-            else:
-                entry["universes"].append(universe_name)
-
-    records = sorted(combined.values(), key=lambda x: x["momentum_pct"], reverse=True)
-    for i, rec in enumerate(records, start=1):
-        rec["rank"] = i
-        rec["price"] = round(rec["price"], 2)
-        rec["momentum_pct"] = round(rec["momentum_pct"], 2)
-        rec["volatility_pct"] = round(rec["volatility_pct"], 2)
-    return records
-
-
-def _ensure_top_basket_history_table(con):
-    # Migracja z poprzedniego (kalendarzowego, "rebalans raz na 6 mies.") mechanizmu —
-    # ten sam efekt jaki mial dawac rebalans osiagamy teraz co miesiac reguła bufora
-    # (select_with_buffer), wiec stara tabela zdarzen-rebalansu nie jest juz potrzebna.
-    con.execute("DROP TABLE IF EXISTS top_basket_rebalances")
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS top_basket_history (
-            ref_date DATE, universe VARCHAR, ticker VARCHAR, sector VARCHAR,
-            price DOUBLE, momentum_pct DOUBLE, volatility_pct DOUBLE, rank INTEGER,
-            PRIMARY KEY (ref_date, universe, ticker)
-        )
-    """)
-
-
-def _get_current_top_basket_tickers(con, universe, ref_date):
-    """current_tickers dla select_with_buffer: sklad koszyka w danym uniwersum
-    (SP500/NASDAQ100 osobno — bufor dziala niezaleznie na kazdej puli) na ostatni
-    ref_date sprzed biezacego, dokladnie jak current_tickers dla 3 glownych
-    uniwersow w process_universe (patrz portfolio_history)."""
-    _ensure_top_basket_history_table(con)
-    prev_ref_date = con.execute(f"""
-        SELECT MAX(ref_date) FROM top_basket_history
-        WHERE universe = '{universe}' AND ref_date < DATE '{ref_date}'
-    """).fetchone()[0]
-    if prev_ref_date is None:
-        return set()
-    df = con.execute(f"""
-        SELECT ticker FROM top_basket_history
-        WHERE universe = '{universe}' AND ref_date = DATE '{prev_ref_date}'
-    """).df()
-    return set(df["ticker"])
-
-
-def persist_top_basket_history(con, ref_date, records):
-    """Trwaly zapis comiesiecznej selekcji (jak portfolio_history) — to on jest
-    zrodlem current_tickers dla bufora w kolejnym miesiacu. Jedna spolka wybrana
-    w obu uniwersach dostaje po jednym wierszu na kazdy z nich, bo bufor liczony
-    jest osobno per uniwersum."""
-    _ensure_top_basket_history_table(con)
-    con.execute(f"DELETE FROM top_basket_history WHERE ref_date = DATE '{ref_date}'")
-    rows = [{
-        "ref_date": pd.Timestamp(ref_date).date(),
-        "universe": universe_name,
-        "ticker": r["ticker"],
-        "sector": r["sector"],
-        "price": r["price"],
-        "momentum_pct": r["momentum_pct"],
-        "volatility_pct": r["volatility_pct"],
-        "rank": r["rank"],
-    } for r in records for universe_name in r["universes"]]
-    if not rows:
-        return
-    df = pd.DataFrame(rows)  # noqa: F841 -- referenced by name in the SQL string below (duckdb frame scan)
-    con.execute("INSERT INTO top_basket_history SELECT * FROM df")
-
-
-def select_top_basket(con, ref_date, df_sp500, df_nasdaq100, sp500_n=TOP_BASKET_SP500_N,
-                       nasdaq100_n=TOP_BASKET_NASDAQ100_N):
-    """Comiesieczny przebieg koszyka top-momentum: przelicza sklad na kazdym uruchomieniu
-    run_query.py (tak jak 3 glowne uniwersa), z regula bufora zamiast sztywnego rebalansu
-    co pol roku — patrz build_top_basket."""
-    current_sp500 = _get_current_top_basket_tickers(con, "SP500", ref_date)
-    current_nasdaq100 = _get_current_top_basket_tickers(con, "NASDAQ100", ref_date)
-    records = build_top_basket(df_sp500, df_nasdaq100, sp500_n, nasdaq100_n,
-                                current_sp500_tickers=current_sp500,
-                                current_nasdaq100_tickers=current_nasdaq100)
-
-    new_tickers = {r["ticker"] for r in records}
-    prev_tickers = current_sp500 | current_nasdaq100
-    added = sorted(new_tickers - prev_tickers)
-    dropped = sorted(prev_tickers - new_tickers)
-
-    persist_top_basket_history(con, ref_date, records)
-    print(f"🏆 Koszyk top-momentum ({ref_date}): {len(records)} spółek "
-          f"({len(added)} nowych, {len(dropped)} wypadło z {len(prev_tickers)} poprzednich).")
-
-    return records, added, dropped
-
-
-def export_top_basket(records, ref_date, docs_data_dir, added, dropped,
-                       sp500_n=TOP_BASKET_SP500_N, nasdaq100_n=TOP_BASKET_NASDAQ100_N):
-    n_overlap = sum(1 for r in records if len(r["universes"]) > 1)
-    payload = {
-        "ref_date": ref_date,
-        "sp500_top_n": sp500_n,
-        "nasdaq100_top_n": nasdaq100_n,
-        "n_tickers": len(records),
-        "n_overlap": n_overlap,
-        "added_tickers": added,
-        "dropped_tickers": dropped,
-        "note": (f"Koncentrowany koszyk \"consistent compounders\": z puli już wyselekcjonowanej "
-                 f"top-kwintylowo po momentum (SP500 top {sp500_n}, NASDAQ100 top {nasdaq100_n}; bez "
-                 "DOWJONES — tam nie ma selekcji kwintylowej) odrzuca najbardziej zmienną połowę "
-                 "spółek oraz te z ujemnym surowym momentum, a dopiero wśród spokojniejszej reszty "
-                 "wybiera liderów momentum score. To nie jest strategia \"kto urósł najgwałtowniej\" "
-                 "— celem są duże, stabilne, powoli ale konsekwentnie rosnące spółki (blue chips) z "
-                 "solidnym momentum, bez pobierania dodatkowych danych fundamentalnych. Skład "
-                 "przeliczany jest co miesiąc, ale — tak jak w 3 głównych uniwersach — z regułą "
-                 "bufora: obecnie trzymana spółka nie wypada tylko dlatego, że pojawił się ktoś "
-                 "nieznacznie lepszy, tylko gdy realnie przestała spełniać kryteria (ujemne momentum "
-                 "/ zbyt duża zmienność) albo została wyraźnie zdystansowana."),
-        "constituents": records,
-    }
-    out_path = Path(docs_data_dir) / "top_basket.json"
-    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"💾 Wyeksportowano {out_path} ({len(records)} spółek, {n_overlap} pokrywających się w obu indeksach).")
 
 
 # ============================================================================
@@ -725,6 +531,133 @@ def export_equity_curve(con, docs_data_dir):
     print(f"💾 Wyeksportowano {out_path} ({len(payload)} uniwersów z wystarczającą historią).")
 
 
+# ============================================================================
+# GLOBAL EQUITY MOMENTUM: porównanie zwrotu POZIOMU INDEKSU (nie składników,
+# tabela `index_prices` z fetch_data.py) między SP500/NASDAQ100/DOWJONES w
+# oknie GEM_LOOKBACK_MONTHS — klasyczna idea "dual/global equity momentum":
+# spośród kilku rynków akcji wybierz ten z najsilniejszym trendem. Zwycięzcą
+# jest indeks o najwyższym zwrocie; dla niego liczymy TOP liderów — spółki,
+# których wzrost ceny realnie "pchnął" indeks w górę (wkład = waga w indeksie
+# wg fmc_etf x zwrot spółki w TYM SAMYM oknie), a nie po prostu najsilniejsze
+# momentum_score (to faworyzowałoby małe, skrajnie zmienne nazwy bez względu
+# na ich realny wpływ na indeks).
+# ============================================================================
+def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
+    has_table = con.execute("""
+        SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
+    """).fetchone()[0] > 0
+    if not has_table:
+        return []
+
+    df = con.execute(f"""
+        WITH params AS (SELECT DATE '{ref_date}' AS ref_date)
+        SELECT
+            Index_Name,
+            ARGMAX(Close, Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS price_now,
+            MAX(Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS date_now,
+            ARGMAX(Close, Date) FILTER (
+                WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '{lookback_months} MONTHS'
+            ) AS price_start,
+            MAX(Date) FILTER (
+                WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '{lookback_months} MONTHS'
+            ) AS date_start
+        FROM index_prices
+        GROUP BY Index_Name
+    """).df()
+
+    records = []
+    for _, r in df.iterrows():
+        if pd.isna(r["price_now"]) or pd.isna(r["price_start"]) or r["price_start"] == 0:
+            continue
+        records.append({
+            "universe": r["Index_Name"],
+            "yf_symbol": INDEX_LEVEL_SYMBOLS.get(r["Index_Name"], ""),
+            "price_now": round(float(r["price_now"]), 2),
+            "date_now": str(r["date_now"]),
+            "price_start": round(float(r["price_start"]), 2),
+            "date_start": str(r["date_start"]),
+            "return_pct": round(float(r["price_now"] / r["price_start"] - 1) * 100, 2),
+        })
+    return sorted(records, key=lambda r: r["return_pct"], reverse=True)
+
+
+def compute_index_leaders(con, universe, ref_date, lookback_months=GEM_LOOKBACK_MONTHS, top_n=GEM_TOP_N):
+    """Top `top_n` spółek zwycięskiego indeksu wg wkładu w jego zwrot
+    (waga_w_indeksie x zwrot_spółki w tym samym oknie co compute_index_returns) —
+    to one w tym momencie "pchają" cenę indeksu na nowe szczyty."""
+    df = con.execute(f"""
+        WITH params AS (SELECT DATE '{ref_date}' AS ref_date),
+        uni AS (
+            SELECT Ticker, Sector, fmc_etf FROM index_constituents
+            WHERE Index_Name = '{universe}' AND fmc_etf IS NOT NULL
+        ),
+        px AS (
+            SELECT p.Ticker,
+                   ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= (SELECT ref_date FROM params)) AS price_now,
+                   ARGMAX(p.Close, p.Date) FILTER (
+                       WHERE p.Date <= (SELECT ref_date FROM params) - INTERVAL '{lookback_months} MONTHS'
+                   ) AS price_start
+            FROM prices p
+            JOIN uni u ON p.Ticker = u.Ticker
+            GROUP BY p.Ticker
+        )
+        SELECT u.Ticker, u.Sector, u.fmc_etf, px.price_now, px.price_start
+        FROM uni u JOIN px ON px.Ticker = u.Ticker
+        WHERE px.price_now IS NOT NULL AND px.price_start IS NOT NULL AND px.price_start > 0
+    """).df()
+    if df.empty:
+        return []
+
+    total_fmc = df["fmc_etf"].sum()
+    df["weight_in_index_pct"] = df["fmc_etf"] / total_fmc * 100
+    df["return_pct"] = (df["price_now"] / df["price_start"] - 1) * 100
+    df["contribution_pct"] = df["fmc_etf"] / total_fmc * (df["price_now"] / df["price_start"] - 1) * 100
+    df = df.sort_values("contribution_pct", ascending=False).head(top_n).reset_index(drop=True)
+
+    records = []
+    for i, r in df.iterrows():
+        records.append({
+            "rank": i + 1,
+            "ticker": r["Ticker"],
+            "sector": r["Sector"],
+            "price": round(float(r["price_now"]), 2),
+            "return_pct": round(float(r["return_pct"]), 2),
+            "weight_in_index_pct": round(float(r["weight_in_index_pct"]), 3),
+            "contribution_pct": round(float(r["contribution_pct"]), 3),
+        })
+    return records
+
+
+def export_global_equity_momentum(con, ref_date, docs_data_dir,
+                                   lookback_months=GEM_LOOKBACK_MONTHS, top_n=GEM_TOP_N):
+    index_returns = compute_index_returns(con, ref_date, lookback_months)
+    if not index_returns:
+        print("❌ Brak danych Global Equity Momentum (index_prices) — uruchom najpierw fetch_data.py.")
+        return
+
+    winner = index_returns[0]["universe"]
+    leaders = compute_index_leaders(con, winner, ref_date, lookback_months, top_n)
+
+    payload = {
+        "ref_date": ref_date,
+        "lookback_months": lookback_months,
+        "indices": index_returns,
+        "winner": winner,
+        "leaders": leaders,
+        "note": (f"Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie {lookback_months} mies. "
+                 "dla SP500/NASDAQ100/DOWJONES — klasyczna idea Global/Dual Equity Momentum: spośród "
+                 "kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym "
+                 f"zwrocie. Lista 'leaders' to top {top_n} spółek zwycięskiego indeksu wg wkładu w jego "
+                 "zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które "
+                 "realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. "
+                 "Dane informacyjne, NIE porada inwestycyjna."),
+    }
+    out_path = Path(docs_data_dir) / "global_equity_momentum.json"
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"💾 Wyeksportowano {out_path} — zwycięzca: {winner} "
+          f"({index_returns[0]['return_pct']:+.2f}%), {len(leaders)} liderów.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES "
@@ -739,6 +672,10 @@ def main():
     args = parser.parse_args()
 
     con = duckdb.connect("momentum_data.duckdb")
+    # Migracja jednorazowa: koszyk top-momentum zostal usuniety (patrz historia
+    # gita) — porzucona tabela z poprzednich uruchomien nie jest juz tworzona
+    # ani czytana przez zaden kod, wiec usuwamy ja z trwalej bazy.
+    con.execute("DROP TABLE IF EXISTS top_basket_history")
 
     if args.ref_date:
         ref_date = args.ref_date
@@ -754,18 +691,12 @@ def main():
     docs_data_dir = str(Path(args.docs_dir) / "data")
     Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
 
-    results = {}
     for universe in UNIVERSES:
-        results[universe] = process_universe(con, universe, ref_date, args, docs_data_dir)
-
-    top_basket_records, top_basket_added, top_basket_dropped = select_top_basket(
-        con, ref_date, results.get("SP500"), results.get("NASDAQ100")
-    )
-    export_top_basket(top_basket_records, ref_date, docs_data_dir,
-                       added=top_basket_added, dropped=top_basket_dropped)
+        process_universe(con, universe, ref_date, args, docs_data_dir)
 
     export_all_prices(con, ref_date, docs_data_dir)
     export_equity_curve(con, docs_data_dir)
+    export_global_equity_momentum(con, ref_date, docs_data_dir)
     con.close()
 
 
