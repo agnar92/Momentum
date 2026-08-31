@@ -248,15 +248,32 @@ html, body {
     border-color: var(--green-bright);
 }
 
-/* Koszyk top-momentum: spolka obecna jednoczesnie w SP500 top 20 i NASDAQ100
-   top 5 (patrz build_top_basket w run_query.py) */
-.ticker-tile-overlap {
-    border-color: var(--accent-line);
+/* Global Equity Momentum: zwroty poziomu indeksu (SP500/NASDAQ100/DOWJONES),
+   zwycięzca wyróżniony (patrz renderGemPanel w app.js) */
+.gem-index-returns {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 8px;
 }
 
-.ticker-tile-overlap.selected {
-    border-color: var(--green-bright);
+.gem-index-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    color: var(--text-dim);
 }
+
+.gem-index-row.gem-index-winner {
+    background: var(--panel-alt);
+    color: var(--text);
+    font-weight: 700;
+}
+
+.gem-index-row .positive { color: var(--green-bright); }
+.gem-index-row .negative { color: var(--red); }
 
 /* ============================================================
    PANEL TABEL (rozwijany, ~80% szerokości ekranu)

@@ -32,6 +32,16 @@ YFINANCE_TICKER_OVERRIDES = {
     "BFB": "BF-B",    # Brown-Forman Class B
 }
 
+# Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum — porownanie
+# zwrotu calego SP500/NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
+# compute_index_returns). ^GSPC/^NDX/^DJI to standardowe symbole yfinance
+# dla tych indeksow.
+INDEX_LEVEL_SYMBOLS = {
+    "SP500": "^GSPC",
+    "NASDAQ100": "^NDX",
+    "DOWJONES": "^DJI",
+}
+
 
 def _to_yf_symbol(ticker):
     return YFINANCE_TICKER_OVERRIDES.get(ticker, ticker)
@@ -257,6 +267,39 @@ def _upsert_price_rows(con, rows, tickers, start_date):
         con.execute("INSERT INTO prices SELECT * FROM df_insert")
 
 
+def update_index_prices(con, lookback_months):
+    """Ceny POZIOMU INDEKSU (^GSPC/^NDX/^DJI, nie skladnikow) dla Global Equity
+    Momentum — tylko 3 symbole, wiec zamiast przyrostowego smart-refreshu jak
+    dla tysiaca tickerow akcji, przy kazdym uruchomieniu podmieniamy caly
+    zakres na nowo (koszt pomijalny), reuzywajac _download_price_rows (ta sama
+    logika batchowania/retry co ceny akcji)."""
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS index_prices (
+            Date DATE, Index_Name VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+            PRIMARY KEY (Date, Index_Name)
+        )
+    """)
+    start_date, end_date = get_full_refresh_range(lookback_months)
+    yf_symbols = list(INDEX_LEVEL_SYMBOLS.values())
+    print(f"🔄 Ceny poziomu indeksów (Global Equity Momentum): {start_date} → {end_date} dla {yf_symbols}...")
+
+    rows, fetched, failed = _download_price_rows(yf_symbols, start_date, end_date)
+    if failed:
+        print(f"⚠️  Brak danych poziomu indeksu dla: {sorted(set(failed))}")
+    if not rows:
+        print("❌ Nie pobrano żadnych danych poziomu indeksów.")
+        return
+
+    symbol_to_index = {v: k for k, v in INDEX_LEVEL_SYMBOLS.items()}
+    df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+    df_insert["Index_Name"] = df_insert["Ticker"].map(symbol_to_index)
+    df_insert = df_insert[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
+
+    con.execute(f"DELETE FROM index_prices WHERE Date >= DATE '{start_date}'")
+    con.execute("INSERT INTO index_prices SELECT * FROM df_insert")
+    print(f"✅ Zapisano {len(df_insert)} wierszy danych poziomu indeksów ({start_date} → {end_date}).")
+
+
 def update_prices_incremental(con, tickers, retention_months):
     """Odświeżenie przyrostowe: dogrywa tylko nowe dni dla znanych tickerów (od
     ostatniej znanej ceny wstecz o CATCHUP_OVERLAP_DAYS), robi pełny backfill
@@ -304,8 +347,18 @@ def _prices_table_has_rows(con):
     return con.execute("SELECT COUNT(*) FROM prices").fetchone()[0] > 0
 
 
-def update_duckdb(lookback_months=15, min_coverage=0.8):
+def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
     con = duckdb.connect("momentum_data.duckdb")
+
+    if indices_only:
+        # Tylko poziom indeksu (^GSPC/^NDX/^DJI, 3 symbole) dla Global Equity Momentum —
+        # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc odswiezac to
+        # codziennie bez kosztu/limitow pelnego pobrania cen akcji (patrz workflow
+        # daily_gem.yml — GEM ma byc aktualny codziennie, nie tylko raz w miesiacu).
+        update_index_prices(con, lookback_months)
+        con.close()
+        return
+
     load_index_constituents(con)
     tickers = get_unique_tickers(con)
     if not tickers:
@@ -317,6 +370,8 @@ def update_duckdb(lookback_months=15, min_coverage=0.8):
         update_prices_incremental(con, tickers, retention_months=lookback_months)
     else:
         bootstrap_prices(con, tickers, lookback_months, min_coverage)
+
+    update_index_prices(con, lookback_months)
 
     con.close()
 
@@ -331,5 +386,11 @@ if __name__ == "__main__":
                               "pierwszego pełnego pobrania / backfillu nowych spółek.")
     parser.add_argument("--min-coverage", type=float, default=0.8,
                          help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
+    parser.add_argument("--indices-only", action="store_true",
+                         help="Odśwież WYŁĄCZNIE ceny poziomu indeksu (^GSPC/^NDX/^DJI) dla Global Equity "
+                              "Momentum — pomija skład indeksów i ceny wszystkich składników. Do użycia w "
+                              "codziennym workflow (patrz daily_gem.yml), osobno od pełnego miesięcznego "
+                              "odświeżenia.")
     args = parser.parse_args()
-    update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage)
+    update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage,
+                  indices_only=args.indices_only)

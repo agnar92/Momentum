@@ -1,12 +1,13 @@
 """
 Testy jednostkowe dla czystych funkcji obliczeniowych w run_query.py
-(z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve) oraz
-integracyjne testy comiesiecznej selekcji koszyka top-momentum (na lokalnej bazie
-DuckDB :memory:, bez sieci). Wiekszosc funkcji operuje wylacznie na DataFrame'ach;
-compute_equity_curve czyta z portfolio_history/prices/index_constituents, a
-select_top_basket z top_basket_history, wiec ich testy uzywaja polaczenia
-DuckDB ":memory:".
+(z-score/momentum score, selekcja z regula bufora, wagi z capami, equity curve,
+Global Equity Momentum) na lokalnej bazie DuckDB :memory:, bez sieci. Wiekszosc
+funkcji operuje wylacznie na DataFrame'ach; compute_equity_curve/compute_index_returns/
+compute_index_leaders czytaja z portfolio_history/prices/index_constituents/index_prices,
+wiec ich testy uzywaja polaczenia DuckDB ":memory:".
 """
+import json
+
 import duckdb
 import pandas as pd
 import pytest
@@ -15,10 +16,11 @@ from run_query import (
     MAX_HOLDINGS,
     MAX_WEIGHT,
     add_zscore_and_momentum_score,
-    build_top_basket,
     compute_equity_curve,
+    compute_index_leaders,
+    compute_index_returns,
     compute_weights,
-    select_top_basket,
+    export_global_equity_momentum,
     select_with_buffer,
 )
 
@@ -229,184 +231,6 @@ class TestComputeWeights:
 
 
 # ---------------------------------------------------------------------------
-# build_top_basket
-# ---------------------------------------------------------------------------
-
-def make_weighted_df(rows):
-    """rows: list of (ticker, sector, price_now, momentum_value, annualized_volatility, momentum_score)."""
-    return pd.DataFrame(rows, columns=[
-        "Ticker", "Sector", "price_now", "momentum_value", "annualized_volatility", "momentum_score",
-    ])
-
-
-class TestBuildTopBasket:
-    def test_takes_top_n_by_momentum_score_from_each_universe(self):
-        sp500 = make_weighted_df([
-            ("A", "Tech", 100.0, 0.30, 0.20, 2.5),
-            ("B", "Tech", 50.0, 0.10, 0.20, 1.2),
-            ("C", "Health", 20.0, -0.05, 0.20, 0.8),
-        ])
-        nasdaq = make_weighted_df([
-            ("D", "Tech", 200.0, 0.40, 0.25, 3.0),
-        ])
-        out = build_top_basket(sp500, nasdaq, sp500_n=2, nasdaq100_n=1)
-        tickers = [r["ticker"] for r in out]
-        assert tickers == ["D", "A", "B"]  # posortowane po momentum_pct malejaco
-        assert "C" not in tickers  # spoza top 2 wg momentum_score w SP500
-
-    def test_overlapping_ticker_merges_universes_without_duplicate(self):
-        sp500 = make_weighted_df([("AAPL", "Tech", 100.0, 0.20, 0.20, 2.0)])
-        nasdaq = make_weighted_df([("AAPL", "Tech", 100.0, 0.20, 0.20, 2.2)])
-        out = build_top_basket(sp500, nasdaq, sp500_n=5, nasdaq100_n=5)
-        assert len(out) == 1
-        assert sorted(out[0]["universes"]) == ["NASDAQ100", "SP500"]
-
-    def test_rank_is_assigned_sequentially(self):
-        sp500 = make_weighted_df([
-            ("A", "Tech", 10.0, 0.10, 0.20, 1.0),
-            ("B", "Tech", 10.0, 0.20, 0.20, 2.0),
-        ])
-        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
-        assert [r["rank"] for r in out] == [1, 2]
-        assert out[0]["ticker"] == "B"  # wyzszy momentum_pct -> rank 1
-
-    def test_handles_missing_universe_gracefully(self):
-        sp500 = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
-        out = build_top_basket(sp500, None)
-        assert len(out) == 1
-        assert out[0]["universes"] == ["SP500"]
-
-        out_empty = build_top_basket(None, None)
-        assert out_empty == []
-
-    def test_excludes_negative_raw_momentum_even_if_score_is_positive(self):
-        # momentum_score jest zawsze > 0 (1+Z albo 1/(1-Z)) i moze byc wysoki nawet
-        # dla spolki z ujemnym surowym momentum_value, jesli reszta uniwersum radzila
-        # sobie jeszcze gorzej (Z>0 wzgledem grupy) -> to nie jest "wzrost", ma byc odciete.
-        sp500 = make_weighted_df([
-            ("A", "Tech", 100.0, -0.05, 0.15, 1.5),
-            ("B", "Tech", 90.0, 0.05, 0.15, 1.0),
-        ])
-        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
-        assert [r["ticker"] for r in out] == ["B"]
-
-    def test_prefers_calmer_names_over_the_single_most_volatile_mover(self):
-        # HOT ma najwyzszy momentum_score (najbardziej spekulacyjny ruch), ale jest
-        # w gornej (bardziej zmiennej) polowie puli po annualized_volatility -> odciety
-        # filtrem stabilnosci. CALM1/CALM2 sa spokojniejsze (dolna polowa) i mimo
-        # nizszego surowego score powinny wygrac ranking "consistent compounders".
-        sp500 = make_weighted_df([
-            ("HOT", "Tech", 100.0, 0.50, 0.60, 3.0),
-            ("MID", "Tech", 100.0, 0.20, 0.30, 1.8),
-            ("CALM1", "Tech", 100.0, 0.15, 0.10, 1.5),
-            ("CALM2", "Tech", 100.0, 0.12, 0.12, 1.3),
-        ])
-        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
-        tickers = [r["ticker"] for r in out]
-        assert "HOT" not in tickers
-        assert tickers == ["CALM1", "CALM2"]
-
-    def test_falls_back_to_unfiltered_positive_momentum_if_stability_filter_empties_pool(self):
-        # Brakujaca zmiennosc (NaN, np. za krotka historia cen) sprawia, ze filtr
-        # stabilnosci (vol <= mediana) nie przepuszcza nikogo (NaN <= cokolwiek jest
-        # zawsze False) -> zamiast pustego koszyka, funkcja wycofuje sie do calej puli
-        # z dodatnim momentum, bez filtra zmiennosci.
-        sp500 = make_weighted_df([
-            ("A", "Tech", 100.0, 0.10, float("nan"), 1.0),
-            ("B", "Tech", 90.0, 0.05, float("nan"), 0.8),
-        ])
-        out = build_top_basket(sp500, None, sp500_n=5, nasdaq100_n=5)
-        assert {r["ticker"] for r in out} == {"A", "B"}
-
-    def test_buffer_retains_currently_held_ticker_over_marginally_better_newcomer(self):
-        # Y jest trzymany od poprzedniego miesiaca; X ma nieco lepszy momentum_score
-        # i rankuje wyzej, ale reguła bufora (jak w select_with_buffer dla 3 glownych
-        # uniwersow) chroni istniejacy holding przed odrzuceniem tylko dlatego, ze
-        # pojawil sie ktos nieznacznie lepszy — comiesieczna selekcja ma dampowac
-        # rotacje, nie sztywno zamrazac sklad na pol roku.
-        sp500 = make_weighted_df([
-            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
-            ("Y", "Tech", 90.0, 0.15, 0.15, 1.5),
-        ])
-        out = build_top_basket(sp500, None, sp500_n=1, nasdaq100_n=1,
-                                current_sp500_tickers={"Y"})
-        assert [r["ticker"] for r in out] == ["Y"]
-
-    def test_without_prior_holding_top_ranked_candidate_wins(self):
-        # Ten sam scenariusz co wyzej, ale bez current_sp500_tickers (zimny start,
-        # jak w poprzednim tescie bez bufora) -> wygrywa X, lepiej rankowany.
-        sp500 = make_weighted_df([
-            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
-            ("Y", "Tech", 90.0, 0.15, 0.15, 1.5),
-        ])
-        out = build_top_basket(sp500, None, sp500_n=1, nasdaq100_n=1)
-        assert [r["ticker"] for r in out] == ["X"]
-
-    def test_buffer_cannot_retain_a_holding_that_lost_positive_momentum(self):
-        # Y byl trzymany, ale jego momentum spadlo ponizej zera -> odpada juz na
-        # etapie _stable_growth_candidates, wiec bufor (ktory dziala tylko na
-        # spolkach obecnych w puli stabilnego wzrostu) nie moze go zatrzymac.
-        sp500 = make_weighted_df([
-            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
-            ("Y", "Tech", 90.0, -0.05, 0.15, 1.5),
-        ])
-        out = build_top_basket(sp500, None, sp500_n=1, nasdaq100_n=1,
-                                current_sp500_tickers={"Y"})
-        assert [r["ticker"] for r in out] == ["X"]
-
-
-# ---------------------------------------------------------------------------
-# select_top_basket (comiesieczna selekcja z regula bufora, persystencja w
-# top_basket_history — current_tickers dla nastepnego miesiaca)
-# ---------------------------------------------------------------------------
-
-class TestSelectTopBasket:
-    def test_first_run_selects_and_persists(self):
-        con = duckdb.connect(":memory:")
-        sp500 = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
-        records, added, dropped = select_top_basket(con, "2026-01-01", sp500, None)
-        assert [r["ticker"] for r in records] == ["A"]
-        assert added == ["A"]
-        assert dropped == []
-        stored = con.execute(
-            "SELECT ticker FROM top_basket_history WHERE ref_date = DATE '2026-01-01' AND universe = 'SP500'"
-        ).df()
-        assert stored["ticker"].tolist() == ["A"]
-
-    def test_buffer_carries_through_the_db_layer_across_months(self):
-        # Styczen: Y wygrywa (jedyny kandydat). Luty: pojawia sie X, nieco lepszy
-        # niz Y, ale target_count=1 i Y jest juz trzymany -> bufor (odczytany z
-        # top_basket_history) ma go zatrzymac zamiast od razu podmieniac na X.
-        con = duckdb.connect(":memory:")
-        sp500_jan = make_weighted_df([("Y", "Tech", 90.0, 0.15, 0.15, 1.5)])
-        select_top_basket(con, "2026-01-01", sp500_jan, None, sp500_n=1, nasdaq100_n=1)
-
-        sp500_feb = make_weighted_df([
-            ("X", "Tech", 100.0, 0.20, 0.15, 2.0),
-            ("Y", "Tech", 90.0, 0.15, 0.15, 1.5),
-        ])
-        records, added, dropped = select_top_basket(con, "2026-02-01", sp500_feb, None,
-                                                      sp500_n=1, nasdaq100_n=1)
-        assert [r["ticker"] for r in records] == ["Y"]
-        assert added == []
-        assert dropped == []
-
-    def test_added_and_dropped_reflect_real_turnover(self):
-        con = duckdb.connect(":memory:")
-        sp500_jan = make_weighted_df([("A", "Tech", 10.0, 0.10, 0.20, 1.0)])
-        select_top_basket(con, "2026-01-01", sp500_jan, None, sp500_n=1, nasdaq100_n=1)
-
-        # Luty: A stracil dodatnie momentum (odpada z puli stabilnego wzrostu, bufor
-        # nie moze go uratowac), B jest jedynym kandydatem -> realny turnover.
-        sp500_feb = make_weighted_df([("B", "Tech", 20.0, 0.10, 0.20, 1.0)])
-        records, added, dropped = select_top_basket(con, "2026-02-01", sp500_feb, None,
-                                                      sp500_n=1, nasdaq100_n=1)
-        assert [r["ticker"] for r in records] == ["B"]
-        assert added == ["B"]
-        assert dropped == ["A"]
-
-
-# ---------------------------------------------------------------------------
 # compute_equity_curve
 # ---------------------------------------------------------------------------
 
@@ -528,3 +352,124 @@ class TestComputeEquityCurve:
         # Tylko AAA liczony: 0.5*(110/100-1) = +5%
         assert curve["momentum_index"][1] == pytest.approx(105.0)
         assert curve["approximated_periods"] == [False, True]
+
+
+# ---------------------------------------------------------------------------
+# compute_index_returns / compute_index_leaders (Global Equity Momentum)
+# ---------------------------------------------------------------------------
+
+def make_gem_con():
+    con = duckdb.connect(":memory:")
+    con.execute("""
+        CREATE TABLE index_prices (
+            Date DATE, Index_Name VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+            PRIMARY KEY (Date, Index_Name)
+        )
+    """)
+    con.execute("""
+        CREATE TABLE prices (
+            Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+            PRIMARY KEY (Date, Ticker)
+        )
+    """)
+    con.execute("""
+        CREATE TABLE index_constituents (
+            Ticker VARCHAR, Index_Name VARCHAR, Sector VARCHAR, fmc_etf DOUBLE,
+            PRIMARY KEY (Ticker, Index_Name)
+        )
+    """)
+    return con
+
+
+class TestComputeIndexReturns:
+    def test_no_table_returns_empty_list(self):
+        con = duckdb.connect(":memory:")
+        assert compute_index_returns(con, "2026-02-01") == []
+
+    def test_ranks_universes_by_return_descending(self):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-02-01", "SP500", 100.0, 100.0),
+            ("2026-02-01", "SP500", 110.0, 110.0),       # +10%
+            ("2025-02-01", "NASDAQ100", 100.0, 100.0),
+            ("2026-02-01", "NASDAQ100", 130.0, 130.0),   # +30%
+            ("2025-02-01", "DOWJONES", 100.0, 100.0),
+            ("2026-02-01", "DOWJONES", 105.0, 105.0),    # +5%
+        ])
+        out = compute_index_returns(con, "2026-02-01", lookback_months=12)
+        assert [r["universe"] for r in out] == ["NASDAQ100", "SP500", "DOWJONES"]
+        assert out[0]["return_pct"] == pytest.approx(30.0)
+
+    def test_universe_missing_lookback_data_is_skipped(self):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2026-01-15", "SP500", 100.0, 100.0),  # brak ceny sprzed 12 mies. -> pominiete
+        ])
+        out = compute_index_returns(con, "2026-02-01", lookback_months=12)
+        assert out == []
+
+
+class TestComputeIndexLeaders:
+    def test_ranks_by_contribution_not_raw_return(self):
+        # SMALL ma wyzszy zwrot, ale znikoma wage w indeksie -> BIG (nizszy zwrot,
+        # ale dominujaca waga) powinien miec wiekszy wklad w zwrot indeksu i wygrac.
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_constituents VALUES (?, 'SP500', 'Tech', ?)", [
+            ("BIG", 900.0), ("SMALL", 10.0),
+        ])
+        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-02-01", "BIG", 100.0, 100.0),
+            ("2026-02-01", "BIG", 120.0, 120.0),     # +20%, waga ~98.9%
+            ("2025-02-01", "SMALL", 100.0, 100.0),
+            ("2026-02-01", "SMALL", 300.0, 300.0),   # +200%, waga ~1.1%
+        ])
+        out = compute_index_leaders(con, "SP500", "2026-02-01", lookback_months=12, top_n=10)
+        assert out[0]["ticker"] == "BIG"
+        assert out[0]["rank"] == 1
+
+    def test_top_n_limits_result_count(self):
+        con = make_gem_con()
+        rows_const = [(f"T{i}", "SP500", "Tech", 10.0) for i in range(15)]
+        con.executemany("INSERT INTO index_constituents VALUES (?, ?, ?, ?)", rows_const)
+        rows_px = []
+        for i in range(15):
+            rows_px.append(("2025-02-01", f"T{i}", 100.0, 100.0, 0))
+            rows_px.append(("2026-02-01", f"T{i}", 100.0 + i, 100.0 + i, 0))
+        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, ?)", rows_px)
+        out = compute_index_leaders(con, "SP500", "2026-02-01", lookback_months=12, top_n=5)
+        assert len(out) == 5
+
+    def test_missing_price_data_returns_empty_list(self):
+        con = make_gem_con()
+        assert compute_index_leaders(con, "SP500", "2026-02-01") == []
+
+
+# ---------------------------------------------------------------------------
+# export_global_equity_momentum: ref_date=None musi sam wziac najswiezsza date
+# z index_prices, NIEZALEZNIE od ref_date pipeline'u 3 glownych uniwersow (ktory
+# pochodzi z tabeli `prices` skladnikow i odswieza sie tylko raz w miesiacu) —
+# to jest to, co pozwala codziennemu workflow (fetch_data.py --indices-only +
+# run_query.py --gem-only) faktycznie odswiezac wynik codziennie.
+# ---------------------------------------------------------------------------
+
+class TestExportGlobalEquityMomentum:
+    def test_auto_derives_ref_date_from_index_prices_watermark(self, tmp_path):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-03-15", "SP500", 100.0, 100.0),
+            ("2026-03-15", "SP500", 120.0, 120.0),   # +20%, najswiezsza data w index_prices
+            ("2025-03-15", "NASDAQ100", 100.0, 100.0),
+            ("2026-03-15", "NASDAQ100", 110.0, 110.0),
+            ("2025-03-15", "DOWJONES", 100.0, 100.0),
+            ("2026-03-15", "DOWJONES", 105.0, 105.0),
+        ])
+        export_global_equity_momentum(con, str(tmp_path))
+
+        payload = json.loads((tmp_path / "global_equity_momentum.json").read_text())
+        assert payload["ref_date"] == "2026-03-15"  # nie jakas inna data pipeline'u
+        assert payload["winner"] == "SP500"
+
+    def test_no_index_prices_data_writes_nothing(self, tmp_path):
+        con = duckdb.connect(":memory:")
+        export_global_equity_momentum(con, str(tmp_path))
+        assert not (tmp_path / "global_equity_momentum.json").exists()

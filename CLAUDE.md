@@ -67,41 +67,39 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
      positions that aren't in the current momentum selection).
    - Reference date defaults to `MAX(Date)` in the `prices` table; pass `--ref-date YYYY-MM-DD` to
      recompute for a specific historical date.
-   - Also builds a small, low-turnover **"top momentum" basket** (`docs/data/top_basket.json`) — see
-     below.
+   - Also computes **Global Equity Momentum** (`docs/data/global_equity_momentum.json`) — see below.
 
 Monthly (not semi-annual, as the official S&P 500 Momentum index does) rebalancing is an intentional
 choice here — it matches the cadence used in most academic momentum-return literature — not an attempt
 at a literal 1:1 replication of S&P's own rebalance calendar.
 
-### Top-momentum basket (`build_top_basket` / `select_top_basket`)
+### Global Equity Momentum (`compute_index_returns` / `compute_index_leaders`)
 
-A separate, deliberately concentrated "consistent compounders" basket — SP500 top `TOP_BASKET_SP500_N`
-(20) + NASDAQ100 top `TOP_BASKET_NASDAQ100_N` (5), DOWJONES excluded (no quintile selection there),
-overlapping tickers deduplicated. It's a *quality proxy* without fetching any fundamental data — but
-ranking the already-selected top-quintile-by-momentum pool by raw `momentum_score` just re-selects the
-most volatile/extreme movers within an already momentum-tilted pool (i.e. "who returned the most", not
-quality). `_stable_growth_candidates()` filters that pool first — drops names with non-positive raw
-`momentum_value` (could be in the quintile only because the rest of the universe did even worse) and the
-more volatile half by `annualized_volatility` (`TOP_BASKET_MAX_VOLATILITY_PERCENTILE`, 0.5) — and only
-*then* ranks the calmer, genuinely-growing remainder by `momentum_score`. Falls back to the unfiltered
-positive-momentum set if the volatility cut would leave nothing.
+Compares the **index level** (not constituents) of SP500/NASDAQ100/DOWJONES against each other over a
+trailing `GEM_LOOKBACK_MONTHS` (12) window — the classic dual/global-momentum idea of picking whichever
+market currently has the strongest trend. `fetch_data.py::update_index_prices` pulls daily closes for
+`^GSPC`/`^NDX`/`^DJI` (`INDEX_LEVEL_SYMBOLS`) into a small `index_prices` table (`Date, Index_Name,
+Close, ...`), fully replaced on every run since it's only 3 symbols (no incremental logic needed, unlike
+the per-constituent `prices` table). `compute_index_returns()` reads that table and returns each
+universe's return over the window, sorted descending; the top one is the `winner`.
 
-Like the three main universes, this basket's membership is recomputed **every month** — there is no
-separate "rebalance event" on a slower calendar. Turnover is instead damped by the *same buffer rule* as
-the quintile selection (`select_with_buffer`, now generalized to accept an explicit `target_count` instead
-of always deriving it from `TARGET_QUINTILE * n`): a currently-held ticker isn't dropped just because a
-slightly-better-ranked newcomer showed up — it stays as long as it's still within the buffer band and still
-passes `_stable_growth_candidates()` (positive momentum + calmer half). It only drops out when it's clearly
-been overtaken or, more commonly, when it no longer qualifies as a stable grower at all (buffer only ever
-retains names still present in that month's filtered candidate pool — it cannot rescue one that fell out).
-- `select_top_basket()` reads each universe's current membership from `top_basket_history` (as of the
-  most recent earlier `ref_date`, mirroring how `process_universe` reads `portfolio_history` for the three
-  main universes' own buffer), passes it into `build_top_basket()` as `current_sp500_tickers`/
-  `current_nasdaq100_tickers`, then persists the new selection (`persist_top_basket_history`) and computes
-  an `added`/`dropped` changelog vs. last month.
-- `docs/data/top_basket.json` carries `added_tickers`/`dropped_tickers` (exported like the three main
-  universes, not currently rendered in the UI either — see the note on that changelog below).
+For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
+**pushing the index to its new highs** — ranked by *contribution to the index's return*
+(`weight_in_index_pct * return_pct`, where the weight is the constituent's `fmc_etf` share of the
+winning universe and the return is computed over the *same* window as the index return), not by raw
+momentum score — a small-cap mover with an extreme return but negligible index weight should not outrank
+a mega-cap that is dragging the whole index up. `export_global_equity_momentum()` writes both the ranked
+index list and the winner's leader list to `docs/data/global_equity_momentum.json`.
+
+Unlike the three main universes, GEM is refreshed **daily**, not monthly (`daily_gem.yml`, see CI
+section) — so `export_global_equity_momentum()`'s `ref_date` is *not* threaded through from the
+constituent-price pipeline's `ref_date` (that only moves once a month). When called with `ref_date=None`
+(the default), it derives its own from `MAX(Date)` in `index_prices` instead, so a same-day
+`fetch_data.py --indices-only` refresh is actually reflected in the output — `compute_index_leaders()`
+still gracefully falls back to each constituent's last known price via `ARGMAX(... FILTER WHERE Date <=
+ref_date)` even though the per-constituent `prices` table itself is only as fresh as the last monthly run.
+`fetch_data.py --indices-only` and `run_query.py --gem-only` are the two flags that make this cheap daily
+refresh possible without touching the (expensive, rate-limited) per-constituent price fetch.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -109,16 +107,16 @@ Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worke
 network-first for `docs/data/*.json`). `docs/data/` is generated by `run_query.py` and is gitignored —
 it only exists after the pipeline has run.
 
-- **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe plus a
-  fourth sidebar group for the "Stabilny Wzrost" top-momentum basket (`docs/data/top_basket.json`,
-  `renderTopBasketTiles()` — shows the current `ref_date` and ticker count, same phrasing as the three
-  main universes), a full sortable constituents table per universe (`added_tickers`/`dropped_tickers` are
-  exported in the JSON but not currently rendered), a Ctrl+K command-palette ticker search, and a
-  full-screen TradingView chart widget (loaded from `s3.tradingview.com`, mounted via
-  `TradingView.widget(...)`). The sidebar is hidden on phones in portrait (`@media max-width:640px`), so
-  the drawer table has a 4th "🏆 Top" tab (`showDrawerTable()` / `renderTopBasketTable()`) rendering the
-  same basket as its own table — the only way to reach it on mobile, since it isn't otherwise duplicated
-  by the per-universe tables.
+- **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe plus a fourth
+  sidebar group for **Global Equity Momentum** (`docs/data/global_equity_momentum.json`,
+  `renderGemPanel()` — shows the winning index + its return, a ranked list of all 3 indices' returns, and
+  tiles for the winner's top-10 contribution leaders), a full sortable constituents table per universe
+  (`added_tickers`/`dropped_tickers` are exported in the JSON but not currently rendered), a Ctrl+K
+  command-palette ticker search, and a full-screen TradingView chart widget (loaded from
+  `s3.tradingview.com`, mounted via `TradingView.widget(...)`). The sidebar is hidden on phones in
+  portrait (`@media max-width:640px`), so the drawer table has a 4th "🚀 GEM" tab (`showDrawerTable()` /
+  `renderGemTable()`) rendering the same leader list as its own table — the only way to reach it on
+  mobile, since it isn't otherwise duplicated by the per-universe tables.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`
@@ -142,6 +140,9 @@ python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh pric
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
                                    # compute momentum + regenerate docs/data/*.json
 
+python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices (^GSPC/^NDX/^DJI), skip constituents
+python run_query.py --gem-only        # daily_gem.yml only: regenerate global_equity_momentum.json only
+
 pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)
 ruff check .                      # linter
 ```
@@ -156,5 +157,14 @@ serve `docs/` with any static file server) after `docs/data/*.json` has been gen
   above), then **commits `momentum_data.duckdb` back to the repo** (`contents: write` permission; the
   commit message ends in `[skip ci]` to avoid re-triggering itself via the `push: main` trigger) before
   deploying `docs/` to GitHub Pages.
+- **`daily_gem.yml`** — runs daily (`cron: '30 22 * * *'`) and manually. Unlike `main.yml`, does **not**
+  run the full constituent pipeline: `fetch_data.py --indices-only` refreshes just `index_prices` (3
+  symbols), then `run_query.py --gem-only` regenerates only `docs/data/global_equity_momentum.json`.
+  Because `docs/data/` is gitignored and this job never runs the full `run_query.py`, it first curls the
+  other `docs/data/*.json` files off the *currently published* Pages site (`https://<owner>.github.io/
+  <repo>/data/...`) before regenerating the GEM file and uploading `docs/` as the Pages artifact —
+  otherwise the deploy would replace the whole live site with only the one regenerated file. Also commits
+  `momentum_data.duckdb` back (same `[skip ci]` convention as `main.yml`, to avoid triggering a full
+  monthly run on every daily push).
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
   no effect on the deployed site) on pushes/PRs.
