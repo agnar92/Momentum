@@ -37,10 +37,11 @@ metodologii S&P Momentum Indices):
     UNIVERSES): momentum kazdej spolki (TO SAMO okno co momentum_value 3
     glownych uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
-    po przewadze — patrz export_relative_strength. Kazdy lider ma tez tygodniowy
-    wykres (cena/indeks w %, od poczatku tego okna, plus klasyczna Relative
-    Strength Line Weinsteina (surowy stosunek cena/indeks) — patrz
-    compute_relative_strength_chart) do wykresu innego niz TradingView.
+    po przewadze — patrz export_relative_strength. Kazdy lider ma tez, od poczatku
+    tego samego okna, dwa wykresy w stylu stage analysis (Weinstein/Dr Eric Wish):
+    "wykres 10:30" (cena spolki + SMA 10-tyg./30-tyg.) i Mansfield Relative Strength
+    (oscylator wokol zera, RSM = (RS/SMA(RS,52tyg)-1)*100, RS = cena/indeks) — patrz
+    compute_relative_strength_chart — do wykresu innego niz TradingView.
 
 WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
 innego powodu: nie ma ETF-u z publikowanymi holdings dla indeksow GPW, wiec
@@ -796,41 +797,65 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date):
     """).df()
 
 
+RS_PRICE_SMA_SHORT_WEEKS = 10   # "wykres 10:30" (Dr Eric Wish / stage analysis): 10-tyg. SMA ceny
+RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinsteina)
+RS_MANSFIELD_SMA_WEEKS = 52     # standardowy okres wygladzania dla Mansfield RS (52 tyg. = ok. rok)
+
+
 def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date):
-    """Tygodniowy wykres 'nie-TradingView' dla panelu Siły Relatywnej: cena zamknięcia
-    spółki i indeksu, oba indeksowane do 0% na start_date — początek TEGO SAMEGO okna
+    """Dwa wykresy 'nie-TradingView' dla panelu Siły Relatywnej, w stylu klasycznej
+    metodologii stage analysis (Stan Weinstein / Dr. Eric Wish):
+    1. Tygodniowa cena spółki (surowa, NIE %) + SMA 10-tyg. i 30-tyg. — "wykres 10:30".
+    2. Mansfield Relative Strength: oscylator wokół zera,
+       RSM = (RS / SMA(RS, 52-tyg.) - 1) * 100, gdzie RS = cena_spółki / poziom_indeksu
+       (surowa linia RS Weinsteina) — RSM > 0 oznacza siłę relatywną PRZYSPIESZAJĄCĄ
+       względem własnej 52-tygodniowej średniej, RSM < 0 spowalniającą/słabnącą.
+
+    Pobiera dodatkowy zapas RS_MANSFIELD_SMA_WEEKS tygodni PRZED start_date (margines
+    na "rozgrzanie" obu średnich, żeby miały już wartość od pierwszego wyświetlanego
+    tygodnia), ale zwraca dane WYŁĄCZNIE od start_date — początek TEGO SAMEGO okna
     momentum_value co reszta pipeline'u (M-14 albo M-11 przy fallbacku, patrz
-    compute_index_momentum) — aż do ref_date (dziś), żeby wykres pokazywał cały
-    bieżący trend, a nie tylko do M-2 (na czym kończy się sama metryka momentum_value).
-    Zwraca też 'rs_line': klasyczna Relative Strength Line Stana Weinsteina — SUROWY
-    stosunek cena_spółki / poziom_indeksu tydzień po tygodniu, BEZ przeskalowania
-    (jak w oryginalnej metodologii: liczy się trend linii, nie jej bezwzględna
-    wartość). Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii)."""
-    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, start_date, ref_date)
-    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, start_date, ref_date)
+    compute_index_momentum) — do ref_date (dziś). Zwraca None gdy brakuje danych
+    (np. spółka bez wystarczającej historii cen)."""
+    lookback_weeks = max(RS_PRICE_SMA_LONG_WEEKS, RS_MANSFIELD_SMA_WEEKS) + 2
+    extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
+
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, extended_start, ref_date)
     if stock_df.empty or index_df.empty:
         return None
 
-    stock_baseline = float(stock_df.iloc[0]["close"])
-    index_baseline = float(index_df.iloc[0]["close"])
+    stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
+    stock_df["sma10"] = stock_df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
+    stock_df["sma30"] = stock_df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
+
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
+    stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
+    stock_df["rs_raw"] = stock_df["close"] / stock_df["index_close"]
+    stock_df["rs_sma"] = stock_df["rs_raw"].rolling(RS_MANSFIELD_SMA_WEEKS).mean()
+    stock_df["mansfield_rs"] = (stock_df["rs_raw"] / stock_df["rs_sma"] - 1) * 100
 
-    def to_pct(value, baseline):
-        return round(float(value / baseline - 1) * 100, 2) if pd.notna(value) else None
+    in_window = stock_df[stock_df["week_start"] >= pd.Timestamp(start_date)]
+    if in_window.empty:
+        return None
 
-    dates, close_pct, index_pct, rs_line = [], [], [], []
-    for _, r in stock_df.iterrows():
+    def safe(value, digits):
+        return round(float(value), digits) if pd.notna(value) else None
+
+    dates, close, sma10, sma30, mansfield_rs = [], [], [], [], []
+    for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
-        close_pct.append(to_pct(r["close"], stock_baseline))
-        index_val = index_by_week.get(r["week_start"])
-        index_pct.append(to_pct(index_val, index_baseline) if index_val is not None else None)
-        rs_line.append(round(float(r["close"] / index_val), 4) if index_val else None)
+        close.append(safe(r["close"], 2))
+        sma10.append(safe(r["sma10"], 2))
+        sma30.append(safe(r["sma30"], 2))
+        mansfield_rs.append(safe(r["mansfield_rs"], 2))
 
     return {
         "dates": dates,
-        "close_pct": close_pct,
-        "index_pct": index_pct,
-        "rs_line": rs_line,
+        "close": close,
+        "sma10": sma10,
+        "sma30": sma30,
+        "mansfield_rs": mansfield_rs,
     }
 
 
@@ -873,18 +898,19 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
     payload = {
         "ref_date": ref_date,
         "universes": universes_payload,
-        "note": ("Siła relatywna względem indeksu dla NASDAQ100 i DOWJONES, w TYM SAMYM oknie co "
-                 "momentum_value 3 głównych uniwersów (M-14/M-2, fallback M-11/M-2 przy krótszej "
+        "note": ("Siła relatywna względem indeksu dla NASDAQ100/DOWJONES/WIG20/mWIG40, w TYM SAMYM "
+                 "oknie co momentum_value głównych uniwersów (M-14/M-2, fallback M-11/M-2 przy krótszej "
                  "historii — patrz get_universe_metrics), zamiast osobnego okna YTD, które tuż po "
                  "Nowym Roku miałoby za mało danych. Lista 'leaders' w każdym uniwersum zawiera TYLKO "
                  "spółki, których momentum w tym oknie przebiło momentum samego indeksu (poziom "
                  "indeksu, nie średnia składników), posortowane malejąco po przewadze "
                  "(relative_strength_pct = zwrot spółki - zwrot indeksu). Każdy lider ma też "
-                 "'weekly_chart': tygodniowy wykres cena/indeks w %, indeksowany do 0% na początku "
-                 "tego samego okna, plus klasyczna Relative Strength Line Stana Weinsteina "
-                 "('rs_line' — surowy stosunek cena_spółki/poziom_indeksu, bez przeskalowania; liczy "
-                 "się trend linii, nie jej wartość) — patrz compute_relative_strength_chart. Do wykresu "
-                 "innego niż TradingView na dashboardzie. Dane informacyjne, NIE porada inwestycyjna."),
+                 "'weekly_chart': od początku tego samego okna, dwa wykresy w stylu stage analysis "
+                 "(Weinstein/Dr Eric Wish) — 'wykres 10:30' (cena spółki + SMA 10-tyg./30-tyg., pola "
+                 "close/sma10/sma30) i Mansfield Relative Strength (oscylator wokół zera, pole "
+                 "mansfield_rs = (RS/SMA(RS,52tyg)-1)*100, RS = cena spółki/poziom indeksu) — patrz "
+                 "compute_relative_strength_chart. Do wykresu innego niż TradingView na dashboardzie. "
+                 "Dane informacyjne, NIE porada inwestycyjna."),
     }
     out_path = Path(docs_data_dir) / "relative_strength.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")

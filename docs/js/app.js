@@ -252,11 +252,11 @@ function jumpToTicker(ticker, universe) {
 }
 
 // ============================================================
-// OBSZAR WYKRESU: TradingView LUB własny tygodniowy wykres Siły Relatywnej
-// (cena spółki vs. indeks, oba w % od początku tego samego okna momentum —
-// patrz renderRelativeStrengthChart). Przełącznik (#chartModeToggle) jest
-// aktywny tylko gdy state.currentRsEntry ma weekly_chart; w przeciwnym razie
-// zawsze pokazujemy TradingView jak wcześniej.
+// OBSZAR WYKRESU: TradingView LUB własne wykresy tygodniowe Siły Relatywnej
+// w stylu stage analysis — "wykres 10:30" + Mansfield RS (patrz
+// renderRelativeStrengthChart). Przełącznik (#chartModeToggle) jest aktywny
+// tylko gdy state.currentRsEntry ma weekly_chart; w przeciwnym razie zawsze
+// pokazujemy TradingView jak wcześniej.
 // ============================================================
 let rsChartInstance = null;
 
@@ -302,11 +302,13 @@ function initChartModeToggle() {
 
 let rsLineChartInstance = null;
 
-// Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css):
-// 1. Cena spółki vs. indeks, oba w % od początku okna momentum (jak wcześniej).
-// 2. Klasyczna Relative Strength Line Stana Weinsteina — surowy stosunek
-//    cena_spółki / poziom_indeksu, BEZ przeskalowania (liczy się trend linii,
-//    nie jej wartość bezwzględna — rosnąca linia = spółka silniejsza od rynku).
+// Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
+// stage analysis (Stan Weinstein / Dr Eric Wish):
+// 1. "Wykres 10:30" — cena tygodniowa spółki (surowa, nie %) + SMA 10-tyg. i
+//    30-tyg. — klasyczne progi stage analysis.
+// 2. Mansfield Relative Strength — oscylator wokół zera: RSM = (RS/SMA(RS,52tyg)-1)*100,
+//    gdzie RS = cena_spółki/poziom_indeksu. RSM > 0 = siła relatywna PRZYSPIESZA
+//    względem własnej 52-tyg. średniej (zielono), RSM < 0 = słabnie (czerwono).
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = rsEntry.weekly_chart;
     const rsContainer = document.getElementById("rs_chart");
@@ -321,14 +323,15 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
     if (rsLineChartInstance) { rsLineChartInstance.destroy(); rsLineChartInstance = null; }
 
-    const indexLabel = UNIVERSE_LABELS[rsEntry.universe] ? UNIVERSE_LABELS[rsEntry.universe].replace(" Momentum", "") : "Indeks";
+    const priceFmt = (v) => (v == null ? "—" : formatPrice(v, rsEntry.universe));
     rsChartInstance = new Chart(canvas, {
         type: "line",
         data: {
             labels: chartData.dates,
             datasets: [
-                { label: `${symbol} (zamknięcie)`, data: chartData.close_pct, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                { label: indexLabel, data: chartData.index_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
+                { label: `${symbol} (cena)`, data: chartData.close, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                { label: "SMA 10-tyg.", data: chartData.sma10, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
+                { label: "SMA 30-tyg.", data: chartData.sma30, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
             ],
         },
         options: {
@@ -337,21 +340,31 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             interaction: { mode: "index", intersect: false },
             plugins: {
                 legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
-                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2) + "%"}` } },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${priceFmt(ctx.parsed.y)}` } },
             },
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
-                y: { ticks: { color: "#8a8f9c", callback: (v) => `${v}%` }, grid: { color: "#262a35" } },
+                y: { ticks: { color: "#8a8f9c", callback: priceFmt }, grid: { color: "#262a35" } },
             },
         },
     });
 
+    const zeroLine = chartData.dates.map(() => 0);
     rsLineChartInstance = new Chart(rsLineCanvas, {
         type: "line",
         data: {
             labels: chartData.dates,
             datasets: [
-                { label: `RS Line (Weinstein): ${symbol} / ${indexLabel}`, data: chartData.rs_line, borderColor: "#c99bf5", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                {
+                    label: "Mansfield RS",
+                    data: chartData.mansfield_rs,
+                    borderColor: "#2ecc71",
+                    backgroundColor: "transparent",
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    segment: { borderColor: (ctx) => (ctx.p1.parsed.y >= 0 ? "#2ecc71" : "#e0455a") },
+                },
+                { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3] },
             ],
         },
         options: {
@@ -359,8 +372,11 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             maintainAspectRatio: false,
             interaction: { mode: "index", intersect: false },
             plugins: {
-                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
-                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(4)}` } },
+                legend: { display: false },
+                tooltip: {
+                    filter: (ctx) => ctx.datasetIndex === 0,
+                    callbacks: { label: (ctx) => `Mansfield RS: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2)}` },
+                },
             },
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
