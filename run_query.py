@@ -8,8 +8,9 @@ katalogu docs/ pod GitHub Pages.
 
 Zgodnie z ustaleniami: fetch_data.py odpowiada WYŁĄCZNIE za pobieranie
 danych (ceny z yfinance, skład indeksów + FMC z kolumny 'Market Value'
-w plikach CSV holdings ETF-ów CSPX/CNDX/CIND). Ten plik odpowiada za
-WSZYSTKO inne: obliczenia + generowanie strony.
+w plikach CSV holdings ETF-ów CSPX/CNDX/CIND; skład WIG20/mWIG40 z ręcznie
+utrzymywanych plików JSON, bez FMC — patrz fetch_data.py::JSON_INDEX_MAP).
+Ten plik odpowiada za WSZYSTKO inne: obliczenia + generowanie strony.
 
 Kroki obliczeniowe (Appendix A, B, sekcje Constituent Selection/Weightings
 metodologii S&P Momentum Indices):
@@ -28,15 +29,24 @@ metodologii S&P Momentum Indices):
 8. Eksport JSON dla strony (docs/data/*.json) + wygenerowanie statycznych
    plikow strony (docs/index.html, docs/rebalance.html, docs/css/*, docs/js/*).
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
-   fetch_data.py) dla SP500/NASDAQ100/DOWJONES w oknie GEM_LOOKBACK_MONTHS,
-   wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N liderow zwycieskiego
-   indeksu wg wkladu w jego zwrot — patrz export_global_equity_momentum.
-10. Sila relatywna dla NASDAQ100/DOWJONES: momentum kazdej spolki (TO SAMO okno
-    co momentum_value 3 glownych uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs.
-    momentum samego indeksu w tym samym oknie, tylko spolki bijace indeks,
-    posortowane malejaco po przewadze — patrz export_relative_strength. Kazdy
-    lider ma tez tygodniowy wykres (cena/indeks w %, od poczatku tego okna, patrz
+   fetch_data.py) dla SP500/NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez
+   WIG20/mWIG40) w oknie GEM_LOOKBACK_MONTHS, wybor zwyciezcy (najwyzszy zwrot)
+   i top GEM_TOP_N liderow zwycieskiego indeksu wg wkladu w jego zwrot — patrz
+   export_global_equity_momentum.
+10. Sila relatywna dla NASDAQ100/DOWJONES/WIG20/MWIG40 (RELATIVE_STRENGTH_
+    UNIVERSES): momentum kazdej spolki (TO SAMO okno co momentum_value 3
+    glownych uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
+    indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
+    po przewadze — patrz export_relative_strength. Kazdy lider ma tez tygodniowy
+    wykres (cena/indeks w %, od poczatku tego okna, patrz
     compute_relative_strength_chart) do wykresu innego niz TradingView.
+
+WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
+innego powodu: nie ma ETF-u z publikowanymi holdings dla indeksow GPW, wiec
+skladniki pochodza z reczne utrzymywanego JSON-a bez wag kapitalizacyjnych
+(patrz EQUAL_WEIGHT_UNIVERSES, fetch_data.py::JSON_INDEX_MAP). Wszystkie
+kwalifikujace sie skladniki sa uzywane bez selekcji kwintylowej (jak DOWJONES),
+rownomiernie wazone.
 """
 
 import argparse
@@ -49,16 +59,30 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"]
+UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
 TARGET_QUINTILE = 0.20   # top 20% wg momentum score
 BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
 BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
 MAX_WEIGHT = 0.09        # 9% max na spolke
 CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
 MAX_HOLDINGS = 100
+# Uniwersa bez realnych wag kapitalizacyjnych (fmc_etf) — DOWJONES bo DJIA jest
+# indeksem wazonym cena (nie kapitalizacja), WIG20/MWIG40 bo nie ma ETF-u z
+# publikowanymi holdings dla indeksow GPW (skladniki wczytywane z reczne
+# utrzymywanego JSON, patrz fetch_data.py::JSON_INDEX_MAP) — wszystkie trzy sa
+# wiec wazone rownomiernie zamiast FMC x momentum_score, patrz compute_weights.
+EQUAL_WEIGHT_UNIVERSES = {"DOWJONES", "WIG20", "MWIG40"}
 GEM_LOOKBACK_MONTHS = 12   # okno zwrotu poziomu indeksu dla Global Equity Momentum
 GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy dla zwycieskiego indeksu
-INDEX_LEVEL_SYMBOLS = {"SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI"}
+# Global Equity Momentum porownuje TYLKO te 3 uniwersa (rynek USA) miedzy soba —
+# WIG20/MWIG40 maja wlasne dane w index_prices (potrzebne do Sily Relatywnej),
+# ale celowo NIE uczestnicza w tym wyscigu, zeby nie zmieniac istniejacego
+# zachowania GEM bez wyraznej decyzji o rozszerzeniu go na rynek polski.
+GEM_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"]
+INDEX_LEVEL_SYMBOLS = {
+    "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
+    "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
+}
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
@@ -217,7 +241,7 @@ def compute_weights(df_selected, universe=None):
     df = df_selected.copy()
     n = len(df)
 
-    if universe == "DOWJONES":
+    if universe in EQUAL_WEIGHT_UNIVERSES:
        df["weight"] = 1.0/n
        df["cap_scaled_due_to_infeasibility"] = False
        return df
@@ -304,17 +328,11 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
             SELECT ticker FROM portfolio_history
             WHERE universe = '{universe}' AND ref_date = DATE '{prev_ref_date}'
         """).df()["ticker"])
-    # Przed zmianą:
-    # selected_tickers, target_count = select_with_buffer(df_ranked, current_tickers)
-
-    # PO ZMIANIE:
-    if universe == "DOWJONES":
+    if universe in EQUAL_WEIGHT_UNIVERSES:
         selected_tickers = set(df_ranked["Ticker"])
         target_count = len(selected_tickers)
     else:
         selected_tickers, target_count = select_with_buffer(df_ranked, current_tickers)
-
-    #selected_tickers, target_count = select_with_buffer(df_ranked, current_tickers)
     print(f"Uniwersum: {len(df_ranked)} spółek kwalifikowanych. Target (kwintyl 20%): "
           f"{target_count}. Wybrano: {len(selected_tickers)}.")
 
@@ -372,11 +390,16 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "weight_pct": round(float(r["weight"]) * 100, 3),
         })
     cap_scaled = bool(df_weighted["cap_scaled_due_to_infeasibility"].iloc[0]) if len(df_weighted) else False
-    fmc_note = ("DJIA jest ważona ceną, nie kapitalizacją — wagi FMC odzwierciedlają wagę cenową "
-                "spółki w indeksie (za funduszem CIND), nie jej kapitalizację rynkową."
-                if universe == "DOWJONES" else
-                "FMC pochodzi z kolumny 'Market Value' funduszu ETF replikującego ten indeks "
-                "(realna, publikowana waga float-adjusted market cap).")
+    if universe == "DOWJONES":
+        fmc_note = ("DJIA jest ważona ceną, nie kapitalizacją — wagi FMC odzwierciedlają wagę cenową "
+                     "spółki w indeksie (za funduszem CIND), nie jej kapitalizację rynkową.")
+    elif universe in EQUAL_WEIGHT_UNIVERSES:
+        fmc_note = ("Brak publicznie dostępnych wag kapitalizacyjnych dla tego indeksu (skład wczytany "
+                     "z ręcznie dostarczonej listy tickerów, bez ETF-a referencyjnego z publikowanym "
+                     "Market Value) — spółki są więc ważone równomiernie, tak jak DOWJONES.")
+    else:
+        fmc_note = ("FMC pochodzi z kolumny 'Market Value' funduszu ETF replikującego ten indeks "
+                     "(realna, publikowana waga float-adjusted market cap).")
     payload = {
         "universe": universe,
         "ref_date": ref_date,
@@ -555,6 +578,7 @@ def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
     if not has_table:
         return []
 
+    gem_universes_sql = ",".join(f"'{u}'" for u in GEM_UNIVERSES)
     df = con.execute(f"""
         WITH params AS (SELECT DATE '{ref_date}' AS ref_date)
         SELECT
@@ -568,6 +592,7 @@ def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
                 WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '{lookback_months} MONTHS'
             ) AS date_start
         FROM index_prices
+        WHERE Index_Name IN ({gem_universes_sql})
         GROUP BY Index_Name
     """).df()
 
@@ -691,7 +716,7 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
 # momentum samego indeksu — posortowane malejąco po przewadze
 # (relative_strength_pct = zwrot spółki - zwrot indeksu).
 # ============================================================================
-RELATIVE_STRENGTH_UNIVERSES = ["NASDAQ100", "DOWJONES"]
+RELATIVE_STRENGTH_UNIVERSES = ["NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
 
 
 def compute_index_momentum(con, universe, ref_date):

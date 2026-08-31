@@ -18,7 +18,7 @@
 
 <div class="topbar">
     <div class="topbar-left">
-        <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA</span></div>
+        <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA · WIG20 · mWIG40</span></div>
         <button class="cmdk-trigger" id="cmdkTrigger">🔍 Szukaj <span class="cmdk-kbd">Ctrl+K</span></button>
     </div>
     <nav>
@@ -55,6 +55,16 @@
             <div class="ticker-grid" id="tiles-DOWJONES"></div>
         </div>
 
+        <div class="sidebar-group">
+            <div class="sidebar-group-label">WIG20</div>
+            <div class="ticker-grid" id="tiles-WIG20"></div>
+        </div>
+
+        <div class="sidebar-group">
+            <div class="sidebar-group-label">mWIG40</div>
+            <div class="ticker-grid" id="tiles-MWIG40"></div>
+        </div>
+
         <div class="sidebar-group" id="gemGroup">
             <div class="sidebar-group-label" title="Global Equity Momentum: porownanie zwrotu POZIOMU INDEKSU (nie skladnikow) SP500/NASDAQ100/DOWJONES w oknie 12 mies. — wygrywa indeks o najsilniejszym trendzie. Kafelki ponizej to top 10 spolek zwycieskiego indeksu wg wkladu w jego zwrot (waga w indeksie x zwrot spolki w tym samym oknie) — czyli te, ktore realnie pchaja cene indeksu w gore/na nowe szczyty, a nie po prostu spolki o najwyzszym wlasnym zwrocie.">
                 🚀 Global Equity Momentum
@@ -65,7 +75,7 @@
         </div>
 
         <div class="sidebar-group" id="rsGroup">
-            <div class="sidebar-group-label" title="Siła relatywna: momentum każdej spółki NASDAQ100/DOWJONES w TYM SAMYM oknie co momentum_value 3 głównych uniwersów (M-14/M-2, fallback M-11/M-2), zestawione z momentum samego indeksu w tym oknie. Pokazane są TYLKO spółki bijące swój indeks, posortowane malejąco po przewadze (zwrot spółki - zwrot indeksu). SP500 celowo pominięty.">
+            <div class="sidebar-group-label" title="Siła relatywna: momentum każdej spółki NASDAQ100/DOWJONES/WIG20/mWIG40 w TYM SAMYM oknie co momentum_value głównych uniwersów (M-14/M-2, fallback M-11/M-2), zestawione z momentum samego indeksu w tym oknie. Pokazane są TYLKO spółki bijące swój indeks, posortowane malejąco po przewadze (zwrot spółki - zwrot indeksu). SP500 celowo pominięty.">
                 💪 Siła Relatywna
             </div>
             <div class="sidebar-group-meta" id="rsMeta"></div>
@@ -84,8 +94,10 @@
                 <button class="drawer-tab active" data-universe="SP500">S&amp;P 500</button>
                 <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
                 <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
+                <button class="drawer-tab" data-universe="WIG20">WIG20</button>
+                <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
                 <button class="drawer-tab" data-universe="GEM" title="Global Equity Momentum — top 10 spółek zwycięskiego indeksu (SP500/NASDAQ100/DOWJONES, wg zwrotu 12M) wg wkładu w jego zwrot.">🚀 GEM</button>
-                <button class="drawer-tab" data-universe="RS" title="Siła relatywna — spółki NASDAQ100/DOWJONES, których momentum (to samo okno co momentum_value 3 głównych uniwersów) przebiło momentum samego indeksu, posortowane malejąco po przewadze.">💪 RS</button>
+                <button class="drawer-tab" data-universe="RS" title="Siła relatywna — spółki NASDAQ100/DOWJONES/WIG20/mWIG40, których momentum (to samo okno co momentum_value głównych uniwersów) przebiło momentum samego indeksu, posortowane malejąco po przewadze.">💪 RS</button>
             </div>
         </div>
         <div class="table-scroll">
