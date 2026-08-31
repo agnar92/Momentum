@@ -1,9 +1,9 @@
 name: Daily Global Equity Momentum Update
 
 # Global Equity Momentum (docs/data/global_equity_momentum.json) i sila relatywna
-# (docs/data/relative_strength.json) porownuja POZIOM INDEKSU (^GSPC/^NDX/^DJI,
-# tylko 3 symbole) — w przeciwienstwie do pelnego przeliczenia 3 glownych uniwersow
-# (main.yml, raz w miesiacu: setki tickerow z yfinance), to odswiezenie jest tanie,
+# (docs/data/relative_strength.json) porownuja POZIOM INDEKSU (^NDX/^DJI/WIG20.WA/
+# MWIG40.WA, tylko 4 symbole) — w przeciwienstwie do pelnego przeliczenia glownych
+# uniwersow (main.yml, raz w miesiacu: setki tickerow z yfinance), to odswiezenie jest tanie,
 # wiec robimy je codziennie, zeby zwyciezca/liderzy faktycznie odzwierciedlali
 # biezacy trend, a nie sprzed miesiaca.
 on:
@@ -57,7 +57,7 @@ jobs:
           mkdir -p docs/data
           REPO_NAME="${GITHUB_REPOSITORY#*/}"
           BASE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/data"
-          for f in sp500.json nasdaq100.json dowjones.json all_prices.json equity_curve.json; do
+          for f in nasdaq100.json dowjones.json wig20.json mwig40.json all_prices.json equity_curve.json; do
             if curl -fsS -o "docs/data/$f" "$BASE_URL/$f"; then
               echo "✅ Pobrano $f z opublikowanej strony."
             else
@@ -83,7 +83,23 @@ jobs:
             # [skip ci]: bez tego ten commit odpaliłby workflow main.yml (trigger "push: main")
             # i uruchomił pełne, kosztowne miesięczne odświeżenie codziennie.
             git commit -m "chore: update momentum_data.duckdb (daily index_prices refresh) [skip ci]"
-            git push
+            # Retry na wypadek wyścigu z innym workflowem (np. main.yml) pushującym do
+            # main w tym samym momencie — patrz analogiczny komentarz w main.yml.
+            for attempt in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — pobieram najnowszy main i próbuję ponownie..."
+              sleep $((attempt * 3))
+              git fetch origin main
+              git reset --soft origin/main
+              git add momentum_data.duckdb
+              git commit -m "chore: update momentum_data.duckdb (daily index_prices refresh) [skip ci]"
+            done
           else
             echo "Brak zmian w momentum_data.duckdb — pomijam commit."
           fi
