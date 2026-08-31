@@ -91,6 +91,16 @@ momentum score — a small-cap mover with an extreme return but negligible index
 a mega-cap that is dragging the whole index up. `export_global_equity_momentum()` writes both the ranked
 index list and the winner's leader list to `docs/data/global_equity_momentum.json`.
 
+Unlike the three main universes, GEM is refreshed **daily**, not monthly (`daily_gem.yml`, see CI
+section) — so `export_global_equity_momentum()`'s `ref_date` is *not* threaded through from the
+constituent-price pipeline's `ref_date` (that only moves once a month). When called with `ref_date=None`
+(the default), it derives its own from `MAX(Date)` in `index_prices` instead, so a same-day
+`fetch_data.py --indices-only` refresh is actually reflected in the output — `compute_index_leaders()`
+still gracefully falls back to each constituent's last known price via `ARGMAX(... FILTER WHERE Date <=
+ref_date)` even though the per-constituent `prices` table itself is only as fresh as the last monthly run.
+`fetch_data.py --indices-only` and `run_query.py --gem-only` are the two flags that make this cheap daily
+refresh possible without touching the (expensive, rate-limited) per-constituent price fetch.
+
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
 Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worker caching the app shell,
@@ -130,6 +140,9 @@ python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh pric
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
                                    # compute momentum + regenerate docs/data/*.json
 
+python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices (^GSPC/^NDX/^DJI), skip constituents
+python run_query.py --gem-only        # daily_gem.yml only: regenerate global_equity_momentum.json only
+
 pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)
 ruff check .                      # linter
 ```
@@ -144,5 +157,14 @@ serve `docs/` with any static file server) after `docs/data/*.json` has been gen
   above), then **commits `momentum_data.duckdb` back to the repo** (`contents: write` permission; the
   commit message ends in `[skip ci]` to avoid re-triggering itself via the `push: main` trigger) before
   deploying `docs/` to GitHub Pages.
+- **`daily_gem.yml`** — runs daily (`cron: '30 22 * * *'`) and manually. Unlike `main.yml`, does **not**
+  run the full constituent pipeline: `fetch_data.py --indices-only` refreshes just `index_prices` (3
+  symbols), then `run_query.py --gem-only` regenerates only `docs/data/global_equity_momentum.json`.
+  Because `docs/data/` is gitignored and this job never runs the full `run_query.py`, it first curls the
+  other `docs/data/*.json` files off the *currently published* Pages site (`https://<owner>.github.io/
+  <repo>/data/...`) before regenerating the GEM file and uploading `docs/` as the Pages artifact —
+  otherwise the deploy would replace the whole live site with only the one regenerated file. Also commits
+  `momentum_data.duckdb` back (same `[skip ci]` convention as `main.yml`, to avoid triggering a full
+  monthly run on every daily push).
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
   no effect on the deployed site) on pushes/PRs.

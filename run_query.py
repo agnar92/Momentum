@@ -628,8 +628,25 @@ def compute_index_leaders(con, universe, ref_date, lookback_months=GEM_LOOKBACK_
     return records
 
 
-def export_global_equity_momentum(con, ref_date, docs_data_dir,
+def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
                                    lookback_months=GEM_LOOKBACK_MONTHS, top_n=GEM_TOP_N):
+    """ref_date=None: uzyj najswiezszej daty w index_prices, NIE ref_date z pipeline'u
+    3 glownych uniwersow (ktory pochodzi z tabeli `prices` skladnikow i odswieza sie
+    tylko raz w miesiacu). GEM ma wlasne, codzienne zrodlo danych (fetch_data.py
+    --indices-only + run_query.py --gem-only, patrz .github/workflows/daily_gem.yml),
+    wiec jego swiezosc nie powinna byc uwiazana do miesiecznego rebalansu skladnikow —
+    compute_index_leaders i tak gracefully sięgnie po ostatnią znaną cenę skladnika
+    (ARGMAX ... FILTER WHERE Date <= ref_date), nawet jesli `prices` jest starsze."""
+    if ref_date is None:
+        has_table = con.execute("""
+            SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
+        """).fetchone()[0] > 0
+        watermark = con.execute("SELECT MAX(Date) FROM index_prices").fetchone()[0] if has_table else None
+        if watermark is None:
+            print("❌ Brak danych Global Equity Momentum (index_prices) — uruchom najpierw fetch_data.py.")
+            return
+        ref_date = pd.Timestamp(watermark).strftime("%Y-%m-%d")
+
     index_returns = compute_index_returns(con, ref_date, lookback_months)
     if not index_returns:
         print("❌ Brak danych Global Equity Momentum (index_prices) — uruchom najpierw fetch_data.py.")
@@ -669,6 +686,10 @@ def main():
     parser.add_argument("--max-staleness-days", type=int, default=10)
     parser.add_argument("--docs-dir", type=str, default="docs",
                          help="Katalog strony pod GitHub Pages (domyślnie 'docs' obok run_query.py).")
+    parser.add_argument("--gem-only", action="store_true",
+                         help="Przelicz WYŁĄCZNIE Global Equity Momentum (docs/data/global_equity_momentum.json), "
+                              "pomijając pełne przeliczenie 3 głównych uniwersów — do użycia w codziennym "
+                              "workflow (patrz daily_gem.yml) po `fetch_data.py --indices-only`.")
     args = parser.parse_args()
 
     con = duckdb.connect("momentum_data.duckdb")
@@ -676,6 +697,13 @@ def main():
     # gita) — porzucona tabela z poprzednich uruchomien nie jest juz tworzona
     # ani czytana przez zaden kod, wiec usuwamy ja z trwalej bazy.
     con.execute("DROP TABLE IF EXISTS top_basket_history")
+
+    if args.gem_only:
+        docs_data_dir = str(Path(args.docs_dir) / "data")
+        Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
+        export_global_equity_momentum(con, docs_data_dir)
+        con.close()
+        return
 
     if args.ref_date:
         ref_date = args.ref_date
@@ -696,7 +724,7 @@ def main():
 
     export_all_prices(con, ref_date, docs_data_dir)
     export_equity_curve(con, docs_data_dir)
-    export_global_equity_momentum(con, ref_date, docs_data_dir)
+    export_global_equity_momentum(con, docs_data_dir)
     con.close()
 
 

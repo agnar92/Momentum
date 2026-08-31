@@ -347,8 +347,18 @@ def _prices_table_has_rows(con):
     return con.execute("SELECT COUNT(*) FROM prices").fetchone()[0] > 0
 
 
-def update_duckdb(lookback_months=15, min_coverage=0.8):
+def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
     con = duckdb.connect("momentum_data.duckdb")
+
+    if indices_only:
+        # Tylko poziom indeksu (^GSPC/^NDX/^DJI, 3 symbole) dla Global Equity Momentum —
+        # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc odswiezac to
+        # codziennie bez kosztu/limitow pelnego pobrania cen akcji (patrz workflow
+        # daily_gem.yml — GEM ma byc aktualny codziennie, nie tylko raz w miesiacu).
+        update_index_prices(con, lookback_months)
+        con.close()
+        return
+
     load_index_constituents(con)
     tickers = get_unique_tickers(con)
     if not tickers:
@@ -376,5 +386,11 @@ if __name__ == "__main__":
                               "pierwszego pełnego pobrania / backfillu nowych spółek.")
     parser.add_argument("--min-coverage", type=float, default=0.8,
                          help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
+    parser.add_argument("--indices-only", action="store_true",
+                         help="Odśwież WYŁĄCZNIE ceny poziomu indeksu (^GSPC/^NDX/^DJI) dla Global Equity "
+                              "Momentum — pomija skład indeksów i ceny wszystkich składników. Do użycia w "
+                              "codziennym workflow (patrz daily_gem.yml), osobno od pełnego miesięcznego "
+                              "odświeżenia.")
     args = parser.parse_args()
-    update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage)
+    update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage,
+                  indices_only=args.indices_only)

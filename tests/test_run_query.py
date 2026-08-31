@@ -6,6 +6,8 @@ funkcji operuje wylacznie na DataFrame'ach; compute_equity_curve/compute_index_r
 compute_index_leaders czytaja z portfolio_history/prices/index_constituents/index_prices,
 wiec ich testy uzywaja polaczenia DuckDB ":memory:".
 """
+import json
+
 import duckdb
 import pandas as pd
 import pytest
@@ -18,6 +20,7 @@ from run_query import (
     compute_index_leaders,
     compute_index_returns,
     compute_weights,
+    export_global_equity_momentum,
     select_with_buffer,
 )
 
@@ -439,3 +442,34 @@ class TestComputeIndexLeaders:
     def test_missing_price_data_returns_empty_list(self):
         con = make_gem_con()
         assert compute_index_leaders(con, "SP500", "2026-02-01") == []
+
+
+# ---------------------------------------------------------------------------
+# export_global_equity_momentum: ref_date=None musi sam wziac najswiezsza date
+# z index_prices, NIEZALEZNIE od ref_date pipeline'u 3 glownych uniwersow (ktory
+# pochodzi z tabeli `prices` skladnikow i odswieza sie tylko raz w miesiacu) —
+# to jest to, co pozwala codziennemu workflow (fetch_data.py --indices-only +
+# run_query.py --gem-only) faktycznie odswiezac wynik codziennie.
+# ---------------------------------------------------------------------------
+
+class TestExportGlobalEquityMomentum:
+    def test_auto_derives_ref_date_from_index_prices_watermark(self, tmp_path):
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-03-15", "SP500", 100.0, 100.0),
+            ("2026-03-15", "SP500", 120.0, 120.0),   # +20%, najswiezsza data w index_prices
+            ("2025-03-15", "NASDAQ100", 100.0, 100.0),
+            ("2026-03-15", "NASDAQ100", 110.0, 110.0),
+            ("2025-03-15", "DOWJONES", 100.0, 100.0),
+            ("2026-03-15", "DOWJONES", 105.0, 105.0),
+        ])
+        export_global_equity_momentum(con, str(tmp_path))
+
+        payload = json.loads((tmp_path / "global_equity_momentum.json").read_text())
+        assert payload["ref_date"] == "2026-03-15"  # nie jakas inna data pipeline'u
+        assert payload["winner"] == "SP500"
+
+    def test_no_index_prices_data_writes_nothing(self, tmp_path):
+        con = duckdb.connect(":memory:")
+        export_global_equity_momentum(con, str(tmp_path))
+        assert not (tmp_path / "global_equity_momentum.json").exists()
