@@ -238,7 +238,7 @@ function showDrawerTable(universe) {
     document.getElementById("momentumTable").hidden = isTopBasket;
     document.getElementById("topBasketTable").hidden = !isTopBasket;
     document.getElementById("drawerTitle").textContent = isTopBasket
-        ? "Pełna tabela — Top Momentum (quality proxy)"
+        ? "Pełna tabela — Stabilny Wzrost (quality proxy)"
         : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     if (isTopBasket) {
         renderTopBasketTable();
