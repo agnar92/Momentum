@@ -301,10 +301,11 @@ function initChartModeToggle() {
 }
 
 // "Wykres 10:30" (patrz .rs-chart-container w style.css), w stylu stage analysis
-// (Stan Weinstein / Dr Eric Wish): cena tygodniowa spółki (surowa, nie %) + SMA
-// 10-tyg. i 30-tyg. — klasyczne progi stage analysis — razem z poziomem własnego
-// indeksu (osobna skala po prawej, bo poziom indeksu i cena spółki są w zupełnie
-// innej skali) — żeby widać było trend spółki na tle trendu indeksu.
+// (Stan Weinstein / Dr Eric Wish): cena tygodniowa spółki + SMA 10-tyg./30-tyg. i
+// poziom własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
+// wyświetlanego tygodnia (patrz compute_relative_strength_chart) — jedna wspólna
+// skala zamiast dwóch osobnych, żeby jednym spojrzeniem było widać, która linia
+// rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku w tym oknie.
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = rsEntry.weekly_chart;
     const rsContainer = document.getElementById("rs_chart");
@@ -317,17 +318,16 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     }
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
 
-    const priceFmt = (v) => (v == null ? "—" : formatPrice(v, rsEntry.universe));
-    const indexFmt = (v) => (v == null ? "—" : v.toLocaleString("pl-PL", { maximumFractionDigits: 2 }));
+    const pctFmt = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
     rsChartInstance = new Chart(canvas, {
         type: "line",
         data: {
             labels: chartData.dates,
             datasets: [
-                { label: `${symbol} (cena)`, data: chartData.close, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, yAxisID: "y" },
-                { label: "SMA 10-tyg.", data: chartData.sma10, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2], yAxisID: "y" },
-                { label: "SMA 30-tyg.", data: chartData.sma30, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], yAxisID: "y" },
-                { label: `${rsEntry.universe} (indeks)`, data: chartData.index_close, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, yAxisID: "y1" },
+                { label: `${symbol} (zmiana %)`, data: chartData.close_pct, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
+                { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
+                { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
             ],
         },
         options: {
@@ -336,16 +336,11 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             interaction: { mode: "index", intersect: false },
             plugins: {
                 legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
-                tooltip: {
-                    callbacks: {
-                        label: (ctx) => `${ctx.dataset.label}: ${ctx.dataset.yAxisID === "y1" ? indexFmt(ctx.parsed.y) : priceFmt(ctx.parsed.y)}`,
-                    },
-                },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}` } },
             },
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
-                y: { position: "left", ticks: { color: "#8a8f9c", callback: priceFmt }, grid: { color: "#262a35" } },
-                y1: { position: "right", ticks: { color: "#4fa6e0", callback: indexFmt }, grid: { display: false } },
+                y: { ticks: { color: "#8a8f9c", callback: pctFmt }, grid: { color: "#262a35" } },
             },
         },
     });
