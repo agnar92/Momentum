@@ -213,7 +213,11 @@ it only exists after the pipeline has run.
   WIG20/mWIG40) plus a sidebar group for **Global Equity Momentum** (`docs/data/global_equity_momentum.json`,
   `renderGemPanel()` — shows the winning index + its return, a ranked list of the (US-only) indices'
   returns, and tiles for the winner's top-10 contribution leaders), a full sortable constituents table per
-  universe (`added_tickers`/`dropped_tickers` are exported in the JSON but not currently rendered), a Ctrl+K
+  universe (`renderTable()` — `added_tickers`/`dropped_tickers` are exported in the JSON but not currently
+  rendered; a **GLB column** renders each row's top-level `glb_status` via `glbBadge()` — ✅ for
+  `"confirmed"`, 🚀 ATH for `"ath"`, ❌ for `"none"`, — with a `#glbFilterSelect` dropdown above the table
+  (hidden for the GEM/RS tabs, which don't have this column) that filters `renderTable()`'s rows to a single
+  status via `state.glbFilter`), a Ctrl+K
   command-palette ticker search, and a full-screen TradingView chart widget (loaded from
   `s3.tradingview.com`, mounted via `TradingView.widget(...)`), plus a sidebar group for
   **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
