@@ -159,14 +159,19 @@
         <div class="chart-mode-toggle" id="chartModeToggle">
             <button class="chart-mode-btn active" data-mode="TV" id="chartModeTvBtn">📈 TradingView</button>
             <button class="chart-mode-btn" data-mode="RS" id="chartModeRsBtn" disabled
-                    title="Wykres tygodniowy w stylu stage analysis (Weinstein/Dr Eric Wish): 'wykres 10:30' (cena + SMA 10-tyg./30-tyg.) i poziom własnego indeksu, oba przeliczone na % zmiany względem początku okna — dostępny dla spółek z panelu Siła Relatywna.">
+                    title="Wykresy tygodniowe w stylu stage analysis (Weinstein/Dr Eric Wish): 'wykres 10:30' (cena + SMA 10-tyg./30-tyg.) i poziom własnego indeksu, przeliczone na % zmiany względem początku okna momentum, plus oscylator Mansfield RS krótko-/średnioterminowy — dostępne dla spółek z panelu Siła Relatywna.">
                 💪 Siła Relatywna
             </button>
         </div>
         <div class="chart-panel">
             <div class="chart-container" id="tv_chart"></div>
             <div class="chart-container rs-chart-container" id="rs_chart" hidden>
-                <canvas id="rsChartCanvas"></canvas>
+                <div class="rs-chart-panel">
+                    <canvas id="rsChartCanvas"></canvas>
+                </div>
+                <div class="rs-chart-panel rs-chart-panel-small">
+                    <canvas id="rsMansfieldCanvas"></canvas>
+                </div>
             </div>
         </div>
     </div>
