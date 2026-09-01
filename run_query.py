@@ -883,10 +883,10 @@ STAGE_FLAT_SLOPE_PCT = 1.0           # próg nachylenia SMA30 (w % za STAGE_SLOP
 STAGE_VOLUME_LOOKBACK_WEEKS = 10     # okno sredniego tyg. WOLUMENU KUPUJACYCH (CLV) do oceny potwierdzenia wybicia
 STAGE_BREAKOUT_VOLUME_RATIO = 1.5    # wybicie bazy (2A) potwierdzone gdy tyg. wolumen KUPUJACYCH >= 1.5x sredniej
 STAGE_PULLBACK_VOLUME_RATIO = 1.2    # dla kolejnych baz w trakcie Etapu 2 (2B) wystarczy slabszy wzrost wolumenu kupujacych
-STAGE_BASE_LOOKBACK_WEEKS = 8        # okno, w ktorym szukamy "strefy oporu" (max) lokalnej bazy/trading range
-STAGE_BASE_MAX_RANGE_PCT = 15.0      # (max-min)/min w tym oknie musi byc <= tyle %, zeby uznac je za "cisna baze"
-STAGE_MIN_BASE_GAP_WEEKS = 6         # min. odstep miedzy kolejnymi bazami — bez tego gladki trend bez realnych
-                                      # przystankow wybijalby sie z definicji co 1-2 tyg. (zawsze > max z 8 tyg.)
+DARVAS_BOX_CONFIRM_WEEKS = 3         # ile tyg. BEZ nowego szczytu/dolka potwierdza gorna/dolna krawedz pudelka
+                                      # Darvasa (patrz docstring _compute_weinstein_stage_series) — sam mechanizm
+                                      # pudelka pilnuje odstepu miedzy kolejnymi bazami (min. 2x tyle tygodni na
+                                      # potwierdzenie szczytu+dolka), wiec nie ma juz osobnej stalej na "min. gap".
 STAGE_LATE_BASE_WARNING_COUNT = 4    # 4., 5. baza w tej samej fali Etapu 2 sa bardziej podatne na niepowodzenie (ksiazka)
 STAGE_STOP_NEAR_HIGH_PCT = 3.0       # stop podnosimy tylko gdy cena wrocila w te % okolice poprzedniego szczytu fali
 STAGE_MA_SLOWDOWN_RATIO = 0.5        # ostrzezenie "SMA30 traci tempo": biezace nachylenie < tyle x szczytowe w tej fali
@@ -911,12 +911,34 @@ def _compute_weinstein_stage_series(stock_df):
                                   jeszcze nie opada (dystrybucja/wyplaszczenie trendu).
       Etap 4 (spadek)          — cena pod opadajaca SMA30.
 
-    Baza/opor: w kazdym tygodniu patrzymy na max/min zamkniec z poprzednich
-    STAGE_BASE_LOOKBACK_WEEKS tygodni (BEZ biezacego) — jesli (max-min)/min miesci
-    sie w STAGE_BASE_MAX_RANGE_PCT, to okno liczy sie za "cisna baze", a jej "opor"
-    to max tego okna. Wybicie = biezace zamkniecie > ten opor. STAGE_MIN_BASE_GAP_WEEKS
-    pilnuje, zeby kolejna baza faktycznie zdazyla sie uformowac (patrz komentarz przy
-    stalej) zamiast liczyc kazdy tydzien plynnego trendu za nowa baze.
+    Baza/opor = prawdziwe pudelko Darvasa (Nicolas Darvas, "How I Made
+    $2,000,000 in the Stock Market"), liczone WYLACZNIE z cen zamkniecia —
+    NIE z High/Low OHLC, dokladnie jak u Darvasa. WERSJA 3 tego mechanizmu:
+    poprzednia (wersja 2, patrz nizej) upraszczala baze do "ostatnie
+    STAGE_BASE_LOOKBACK_WEEKS tyg. miesci sie w STAGE_BASE_MAX_RANGE_PCT" —
+    po uwadze, ze to nie jest prawdziwe pudelko Darvasa (ktore wymaga
+    POTWIERDZONEGO szczytu i dolka, nie tylko "ostatnio bylo cisno"),
+    zastapiona ponizsza, wierniejsza ksiazce wersja:
+      1. SEEKING_TOP: sledzimy najwyzsze zamkniecie od czasu ostatniego
+         wybicia/zalamania. Kazdy NOWY (scisle wiekszy) rekord zeruje licznik
+         tygodni; DARVAS_BOX_CONFIRM_WEEKS tygodni BEZ nowego rekordu
+         potwierdza go jako gorna krawedz pudelka ("box top") i przechodzimy
+         do szukania dolka.
+      2. SEEKING_BOTTOM: analogicznie w dol — sledzimy najnizsze zamkniecie,
+         DARVAS_BOX_CONFIRM_WEEKS tyg. bez nowego minimum potwierdza dolna
+         krawedz ("box bottom") i pudelko jest KOMPLETNE (oba brzegi znane).
+         Nowe, WYZSZE od juz potwierdzonego szczytu zamkniecie w tej fazie
+         oznacza, ze szczyt jeszcze nie byl prawdziwy — wracamy do (1) od tego
+         tygodnia.
+      3. BOXED: pudelko trwa, dopoki cena sie w nim miesci. Zamkniecie
+         POWYZEJ gornej krawedzi = wybicie (patrz "breakout" nizej) — konczy
+         to pudelko i od razu zaczyna sledzenie kolejnego, wyzszego (krok 1,
+         od tego samego tygodnia). Zamkniecie PONIZEJ dolnej krawedzi = pudelko
+         nie wytrzymalo (zalamanie) — rowniez wraca do (1), bez wybicia.
+    Wybicie = biezace zamkniecie > gorna krawedz KOMPLETNEGO pudelka. Odstep
+    miedzy kolejnymi bazami wynika wprost z mechanizmu (min. 2x
+    DARVAS_BOX_CONFIRM_WEEKS na potwierdzenie szczytu+dolka), wiec nie
+    potrzeba juz osobnej stalej pilnujacej minimalnego odstepu.
 
     Trailing stop-loss (pole "stop_level", w jednostkach ceny — compute_relative_
     strength_chart rebase'uje go do "stop_level_pct" tak samo jak close_pct):
@@ -958,9 +980,10 @@ def _compute_weinstein_stage_series(stock_df):
     Zwraca liste dictow {"stage", "signal", "buying_volume_ratio", "stop_level",
     "base_count", "base_event"} rownolegla do stock_df. Wszystkie pola (poza
     "base_event") to None dopoki SMA30 (wzglednie STAGE_VOLUME_LOOKBACK_WEEKS tyg.
-    historii wolumenu kupujacych, wzglednie STAGE_BASE_LOOKBACK_WEEKS tyg. do
-    wyznaczenia bazy) nie sa jeszcze dostepne — ten sam, udokumentowany juz wyzej
-    limit plytkiej historii co reszta wykresu 10:30. "base_count" to numer
+    historii wolumenu kupujacych) nie sa jeszcze dostepne — ten sam, udokumentowany
+    juz wyzej limit plytkiej historii co reszta wykresu 10:30. Pudelko Darvasa samo
+    zaczyna sledzenie od pierwszego dostepnego tygodnia (nie wymaga dodatkowego
+    zapasu historii jak stara wersja z rolling lookback). "base_count" to numer
     biezacej bazy w trwajacej fali Etapu 2 (None poza Etapem 2).
 
     "base_event" (domyslnie None, wypelniony WYLACZNIE w tygodniu faktycznego
@@ -989,7 +1012,6 @@ def _compute_weinstein_stage_series(stock_df):
     run_peak_slope = None
     high_since_raise = None
     ma_slowdown_flagged = False
-    weeks_since_last_base = None
     # Czy Etap 4 (spadek) pojawil sie od czasu ostatniego zuzycia tej flagi (przy
     # ENTRY_2A) — rozstrzyga, czy nadchodzaca baza denna liczy sie jako prawdziwy
     # "stage1" (po spadku) czy jako "stage2" (kontynuacja/wybicie bez potwierdzonego
@@ -999,13 +1021,36 @@ def _compute_weinstein_stage_series(stock_df):
     saw_stage4 = False
 
     def reset_run_state():
-        nonlocal stop_level, base_count, run_peak_slope, high_since_raise, ma_slowdown_flagged, weeks_since_last_base
+        nonlocal stop_level, base_count, run_peak_slope, high_since_raise, ma_slowdown_flagged
         stop_level = None
         base_count = 0
         run_peak_slope = None
         high_since_raise = None
         ma_slowdown_flagged = False
-        weeks_since_last_base = None
+
+    # --- Stan pudelka Darvasa (patrz docstring "Baza/opor" wyzej) — sledzony
+    # NIEPRZERWANIE, niezaleznie od Etapu/fali stop-lossu powyzej. "SEEKING_TOP"
+    # szuka potwierdzonego szczytu, "SEEKING_BOTTOM" potwierdzonego dolka PO
+    # szczycie, "BOXED" to kompletne pudelko czekajace na wybicie/zalamanie.
+    dv_phase = "SEEKING_TOP"
+    dv_top = None
+    dv_top_age = 0
+    dv_bottom = None
+    dv_bottom_age = 0
+    dv_box_top = None
+    dv_box_bottom = None
+    dv_box_start_idx = None
+
+    def reset_darvas_box():
+        nonlocal dv_phase, dv_top, dv_top_age, dv_bottom, dv_bottom_age, dv_box_top, dv_box_bottom, dv_box_start_idx
+        dv_phase = "SEEKING_TOP"
+        dv_top = None
+        dv_top_age = 0
+        dv_bottom = None
+        dv_bottom_age = 0
+        dv_box_top = None
+        dv_box_bottom = None
+        dv_box_start_idx = None
 
     for i in range(n):
         if pd.isna(sma30s[i]) or pd.isna(closes[i]):
@@ -1013,6 +1058,7 @@ def _compute_weinstein_stage_series(stock_df):
                            "base_count": None, "base_event": None}
             prev_stage = None
             reset_run_state()
+            reset_darvas_box()
             continue
 
         j = i - STAGE_SLOPE_LOOKBACK_WEEKS
@@ -1029,22 +1075,49 @@ def _compute_weinstein_stage_series(stock_df):
             direction = "FLAT"
 
         above = closes[i] > sma30s[i]
+        close = closes[i]
 
-        # Opor lokalnej bazy: max/min zamkniec z STAGE_BASE_LOOKBACK_WEEKS tyg. PRZED
-        # biezacym tygodniem (bez niego) — musi byc "cisny" (patrz stala), inaczej to
-        # nie baza tylko szeroki, chaotyczny ruch i wybicie sie nie liczy.
-        base_start = i - STAGE_BASE_LOOKBACK_WEEKS
+        # Pudelko Darvasa: patrz docstring "Baza/opor" wyzej. "breakout" =
+        # zamkniecie zamyka sie POWYZEJ gornej krawedzi juz KOMPLETNEGO
+        # (potwierdzonego szczyt+dolek) pudelka.
         breakout = False
+        base_high = None
         base_low_val = None
-        if base_start >= 0:
-            window = closes[base_start:i]
-            base_high = max(window)
-            base_low_val = min(window)
-            if base_low_val > 0 and (base_high - base_low_val) / base_low_val <= STAGE_BASE_MAX_RANGE_PCT / 100.0:
-                if closes[i] > base_high:
-                    breakout = True
-        if breakout and weeks_since_last_base is not None and weeks_since_last_base < STAGE_MIN_BASE_GAP_WEEKS:
-            breakout = False
+        base_start = dv_box_start_idx
+        if dv_phase == "BOXED":
+            if close > dv_box_top:
+                breakout = True
+                base_high, base_low_val, base_start = dv_box_top, dv_box_bottom, dv_box_start_idx
+                dv_phase, dv_top, dv_top_age = "SEEKING_TOP", close, 0
+                dv_box_top = dv_box_bottom = None
+                dv_box_start_idx = i
+            elif close < dv_box_bottom:
+                # Zalamanie pudelka (cena zeszla ponizej wsparcia) — bez wybicia,
+                # zaczynamy szukac nowego szczytu od tego tygodnia.
+                dv_phase, dv_top, dv_top_age = "SEEKING_TOP", close, 0
+                dv_box_top = dv_box_bottom = None
+                dv_box_start_idx = i
+        elif dv_phase == "SEEKING_TOP":
+            if dv_top is None or close > dv_top:
+                dv_top, dv_top_age, dv_box_start_idx = close, 0, i
+            else:
+                dv_top_age += 1
+                if dv_top_age >= DARVAS_BOX_CONFIRM_WEEKS:
+                    dv_box_top = dv_top
+                    dv_phase, dv_bottom, dv_bottom_age = "SEEKING_BOTTOM", close, 0
+        elif dv_phase == "SEEKING_BOTTOM":
+            if close > dv_box_top:
+                # Nowy, wyzszy szczyt zanim dolek zdazyl sie potwierdzic — poprzedni
+                # szczyt nie byl prawdziwy, zaczynamy od tego tygodnia od nowa.
+                dv_phase, dv_top, dv_top_age = "SEEKING_TOP", close, 0
+                dv_box_top, dv_box_start_idx = None, i
+            elif dv_bottom is None or close < dv_bottom:
+                dv_bottom, dv_bottom_age = close, 0
+            else:
+                dv_bottom_age += 1
+                if dv_bottom_age >= DARVAS_BOX_CONFIRM_WEEKS:
+                    dv_box_bottom = dv_bottom
+                    dv_phase = "BOXED"
 
         vol_ratio = None
         vol_start = i - STAGE_VOLUME_LOOKBACK_WEEKS
@@ -1107,9 +1180,6 @@ def _compute_weinstein_stage_series(stock_df):
                 high_since_raise = closes[i]
             if vol_ratio is None or vol_ratio >= STAGE_PULLBACK_VOLUME_RATIO:
                 signal = "ENTRY_2B_LATE" if base_count >= STAGE_LATE_BASE_WARNING_COUNT else "ENTRY_2B"
-
-        weeks_since_last_base = 0 if new_base_event else (
-            weeks_since_last_base + 1 if weeks_since_last_base is not None else None)
 
         if not new_base_event and stage in ("2A", "2B"):
             if high_since_raise is not None and closes[i] > high_since_raise:

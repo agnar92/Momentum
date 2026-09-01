@@ -648,6 +648,31 @@ def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks,
     return mondays
 
 
+def insert_weekly_close_list(con, table, id_column, id_value, start_monday, closes):
+    """Jak insert_weekly_series, ale przyjmuje jawna liste zamkniec zamiast liniowego
+    kroku — potrzebne tam, gdzie fixture musi zawierac prawdziwa pauze (pudelko
+    Darvasa nigdy sie nie potwierdza w czysto monotonicznym wzroscie, patrz
+    _compute_weinstein_stage_series)."""
+    mondays = pd.date_range(start=start_monday, periods=len(closes), freq="7D")
+    rows = [(d.strftime("%Y-%m-%d"), id_value, c, c, 0) for d, c in zip(mondays, closes)]
+    con.executemany(f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows)
+    return mondays
+
+
+def darvas_breakout_closes():
+    """80 tyg.: 55 tyg. gladkiego wzrostu (NIGDY nie tworzy pudelka — kazdy tydzien
+    to nowy rekord, wiec dv_top_age nigdy nie dobija do DARVAS_BOX_CONFIRM_WEEKS),
+    potem 10 tyg. ciasnej oscylacji 153/154 tygodnia (tworzy prawdziwe pudelko:
+    szczyt potwierdzony po 3 tyg. bez nowego rekordu w tyg. 57, dolek po kolejnych
+    3 w tyg. 60), wybicie w tyg. 65 (>= tyg. 60 = start_date, wiec widoczne w
+    wyswietlanym oknie), dalszy wzrost do konca 80-tygodniowej serii."""
+    closes = [100.0 + i for i in range(55)]
+    closes += [153.0, 154.0] * 5
+    closes += [160.0]
+    closes += [161.0 + i for i in range(14)]
+    return closes
+
+
 class TestComputeRelativeStrengthChart:
     def test_10_30_and_index_pct_have_values_from_first_displayed_week(self):
         con = make_gem_con()
@@ -708,12 +733,17 @@ class TestComputeRelativeStrengthChart:
     def test_output_carries_stage_analysis_fields(self):
         # Integracyjny check: compute_relative_strength_chart faktycznie dolacza
         # wolumen + klasyfikacje etapow (_compute_weinstein_stage_series) do kazdego
-        # wyswietlanego tygodnia, nie tylko linie ceny/SMA.
+        # wyswietlanego tygodnia, nie tylko linie ceny/SMA. Uzywa darvas_breakout_
+        # closes() (nie czystego liniowego wzrostu z insert_weekly_series) — prawdziwe
+        # pudelko Darvasa nigdy sie nie potwierdza w monotonicznym wzroscie (kazdy
+        # tydzien to nowy rekord), wiec bez pauzy w danych "breakout" nigdy by sie
+        # nie pojawil i etap zostalby na "1" do konca okna.
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
         ref_date = pd.Timestamp("2026-03-30")
         fixture_start = start_date - pd.Timedelta(weeks=60)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 80, 100.0, 1.0)
+        insert_weekly_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"),
+                                  darvas_breakout_closes())
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
                               fixture_start.strftime("%Y-%m-%d"), 80, 200.0, 0.3)
 
@@ -724,10 +754,10 @@ class TestComputeRelativeStrengthChart:
                     "stop_level_pct", "base_count"):
             assert key in out
             assert len(out[key]) == len(out["dates"])
-        # Trend jest tu jednostajnie rosnacy przez cale okno -> ostatni tydzien
-        # powinien byc sklasyfikowany jako etap zaawansowania (2A/2B), nie 1/3/4.
+        # Wybicie z pudelka nastepuje w tyg. 65 (patrz darvas_breakout_closes) -> do
+        # ref_date spolka powinna byc juz w etapie zaawansowania (2A/2B), nie 1/3/4.
         assert out["current_stage"] in ("2A", "2B")
-        # Wolumen jest tu zawsze 0 (insert_weekly_series) -> buying_volume=0 i
+        # Wolumen jest tu zawsze 0 (insert_weekly_close_list) -> buying_volume=0 i
         # buying_volume_ratio zawsze None (0/0 pominiete w _compute_weinstein_
         # stage_series) -> ENTRY_2A (wymaga jawnego potwierdzenia wolumenem
         # kupujacych) nigdy sie nie pojawia, ale ENTRY_2B (akceptuje brak danych
@@ -745,11 +775,14 @@ class TestComputeRelativeStrengthChart:
         # "bases" (patrz docstring compute_relative_strength_chart) to geometria
         # wykrytych baz do narysowania jako prostokat/trendlinia na wykresie —
         # integracyjny check, ze faktycznie sie eksportuje i ma sensowny ksztalt.
+        # darvas_breakout_closes() zawiera dokladnie jedno potwierdzone pudelko
+        # (wybicie w tyg. 65, patrz jego docstring) widoczne w wyswietlanym oknie.
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
         ref_date = pd.Timestamp("2026-03-30")
         fixture_start = start_date - pd.Timedelta(weeks=60)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 80, 100.0, 1.0)
+        insert_weekly_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"),
+                                  darvas_breakout_closes())
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
                               fixture_start.strftime("%Y-%m-%d"), 80, 200.0, 0.3)
 
@@ -757,7 +790,7 @@ class TestComputeRelativeStrengthChart:
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
         assert "bases" in out
-        assert out["bases"], "spodziewano sie co najmniej jednej wykrytej bazy w jednostajnym trendzie"
+        assert out["bases"], "spodziewano sie co najmniej jednej wykrytej bazy (pudelka Darvasa)"
         for base in out["bases"]:
             assert base["kind"] in ("stage1", "stage2")
             assert base["start_date"] in out["dates"]
@@ -939,8 +972,14 @@ class TestComputeWeinsteinStageSeries:
             val = 48 + 40 * (1 - math.exp(-w / 15))
             closes.append(val + (1.0 if w % 2 == 0 else -1.0))
             volumes.append(1000)
-        closes += [closes[-1] - 2, closes[-1] - 6, closes[-1] - 12, closes[-1] - 20, closes[-1] - 30]
-        volumes += [1000] * 5
+        # Prawdziwe pudelko Darvasa (patrz _compute_weinstein_stage_series) nigdy tu
+        # nie podnosi stopu ponad poziom z pierwszego wybicia (bazy 1) — wygladzajacy
+        # sie wzrost przez 60 tyg. nigdy nie tworzy DRUGIEGO potwierdzonego pudelka
+        # (kazdy szczyt jest bity w ciagu <3 tyg.), wiec spadek musi byc dosc gleboki,
+        # zeby faktycznie zlamac ten pierwotny stop.
+        closes += [closes[-1] - 2, closes[-1] - 6, closes[-1] - 12, closes[-1] - 20, closes[-1] - 30,
+                   closes[-1] - 45, closes[-1] - 60]
+        volumes += [1000] * 7
 
         rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
         warning_weeks = [i for i, r in enumerate(rows) if r["signal"] == "WARNING_MA_SLOWING"]

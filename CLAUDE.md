@@ -242,21 +242,53 @@ from well-established, public trading knowledge plus book diagrams the user shar
 crossing of SMA30 and had one flat exit rule ("price below SMA30"). After the user showed the actual book
 diagrams (a bottoming base with a **resistance zone**, a "1st/2nd/3rd base" sequence within a Stage 2 advance,
 and a dedicated "Trailing Stop Loss — Weekly Chart" diagram with a progressively-raised stop), that version
-was replaced with the one described below — it was too coarse a simplification of what the book actually
-shows. Read this section, not the git history, for the current design.
+was replaced with a second version (below) that detected a base as "closes over the trailing 8 weeks stay
+within a 15% range" — too coarse a simplification of what a real base looks like, but good enough to get the
+rest of the stage/signal/stop-loss machinery working. Once the user pointed out that a real base should be a
+proper **Darvas box** (Nicolas Darvas, *How I Made $2,000,000 in the Stock Market*) — closing prices only, a
+box top confirmed after a fixed number of weeks *without* a new high, a box bottom confirmed the same way
+*after* the top — that second version was replaced by the one described below. Read this section, not the
+git history, for the current design.
 
-**Base/resistance detection** (the mechanism entries are built on): in every week, look at the trailing
-`STAGE_BASE_LOOKBACK_WEEKS` (8) weeks of closes (excluding the current week). If `(max-min)/min` over that
-window is within `STAGE_BASE_MAX_RANGE_PCT` (15%), it counts as a **tight base** (the book's "trading range" /
-"resistance zone"), and its `max` is that base's resistance. A **breakout** is the current week's close
-closing above that resistance. `STAGE_MIN_BASE_GAP_WEEKS` (6) enforces a minimum gap since the last counted
-base — without it, a smooth, gently-rising trend with no real pause would trivially "break out" every 1-2
-weeks purely because a slowly climbing 8-week rolling high is easy to clear, which is not what the book means
-by a base. This intentionally does **not** use a multi-year high/support (a `resistance above the prior ATH`)
-— same reasoning as the removed GLB line above: the rolling ~15-month `prices` retention can support a local,
-several-week base, not a multi-year one. Relative strength vs. the index is still deliberately excluded from
-the classification itself (rejected earlier as too hard to implement reliably) — the index stays a plain
-comparison line on the chart, unchanged.
+**Base/resistance detection = a real Darvas box** (the mechanism entries are built on), tracked continuously
+week-to-week by a small state machine in `_compute_weinstein_stage_series()` (`SEEKING_TOP` → `SEEKING_BOTTOM`
+→ `BOXED` → back to `SEEKING_TOP` on breakout or breakdown), using closing prices only — **not** High/Low
+OHLC, matching Darvas's own method rather than a "true" chartist's swing-high/swing-low box:
+  - **`SEEKING_TOP`**: track the highest close since the last breakout/breakdown. Every *strictly higher*
+    close resets the candidate and a "weeks since new high" counter to 0; `DARVAS_BOX_CONFIRM_WEEKS` (3)
+    weeks *without* a new high confirms that candidate as the box's top and moves to `SEEKING_BOTTOM`.
+  - **`SEEKING_BOTTOM`**: same idea downward, tracking the lowest close since the top was confirmed. A close
+    *back above* the confirmed top before the bottom itself confirms means the "box" wasn't real yet — the
+    top candidate wasn't actually a peak, so this restarts `SEEKING_TOP` from that week instead of forcing a
+    premature box. Otherwise, `DARVAS_BOX_CONFIRM_WEEKS` weeks without a new low confirms the bottom — the
+    box is now complete (both edges known) and moves to `BOXED`.
+  - **`BOXED`**: the box holds as long as price stays inside it. A close **above** the top is a **breakout**
+    (closes this box, immediately starts tracking a new, higher one from that same week — Darvas boxes stack
+    upward as a stock makes new highs). A close **below** the bottom is a **breakdown** (the box didn't hold;
+    no breakout, restart `SEEKING_TOP` from that week — no separate "minimum gap between bases" constant is
+    needed any more, since the box's own top+bottom confirmation cadence already enforces one).
+
+This intentionally does **not** use a multi-year high/support (a `resistance above the prior ATH`) — same
+reasoning as the removed GLB line above: the rolling ~15-month `prices` retention can support a box that
+spans a handful of months, not a multi-year one. It also does **not** require High/Low OHLC data (unlike the
+buying-volume CLV split below, which does use it) — Darvas himself worked from closing prices only, and a
+close-only box is simpler to reason about and test than one requiring confirmed intraday/daily swing
+extremes. Relative strength vs. the index is still deliberately excluded from the classification itself
+(rejected earlier as too hard to implement reliably) — the index stays a plain comparison line on the chart,
+unchanged.
+
+Each base is exported once, at the week it gets consumed by a breakout, as a `base_event`
+(`base_start_idx`/`base_end_idx`, `resistance`/`support` — the confirmed box top/bottom — `base_count`,
+`kind`) — this is what `compute_relative_strength_chart()` turns into the `bases` list (`start_date`/
+`end_date`/`resistance_pct`/`support_pct`/`base_count`/`kind`, rebased to the same `close0`-relative % as
+`close_pct`) that the frontend draws as rectangles (see `renderRelativeStrengthChart()` below). `kind`
+distinguishes the two flavors of base shown in the book's diagrams: `"stage1"` is a genuine bottoming base —
+one that actually formed *after* a real Stage 4 decline — versus `"stage2"`, which is every other base:
+continuation bases within an already-running Stage 2 advance (2nd/3rd/4th base, "pyramiding" entries), *and*
+a first base whose breakout wasn't preceded by a real Stage 4 (e.g. a re-breakout straight out of a Stage 3
+top that never fully rolled over into a decline) — treated as a continuation rather than a fresh bottom, per
+the same book logic (a `saw_stage4` flag, set on every week actually classified `"4"` and consumed/cleared
+the moment a fresh `ENTRY_2A` base is recorded, tracks this).
 
 **Stages**, derived from that breakout signal plus price's position/slope relative to SMA30:
   - **Stage 1** (base): price near/below a not-yet-broken-out base, or (cautiously) above SMA30 while SMA30
@@ -386,31 +418,47 @@ every run (see CI section below) — it isn't hand-maintained.
   no `weekly_chart` at all (e.g. one whose momentum fell back to the 9-month window with too little extra
   history), the chart panels are hidden and `#noChartMessage` is shown instead, pointing at the "Otwórz w
   TradingView" button as the fallback; that button itself is never disabled, since it works for every ticker
-  regardless of chart-data availability. When shown, it's two stacked Chart.js charts
-  (`renderRelativeStrengthChart()`, loaded via CDN): the "10:30" price+SMA10/SMA30 chart
-  on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to 0%
-  at the momentum window's start) so the stock's trend can be read directly against its index's trend —
-  whichever line is on top is the outperformer. That same panel also renders the Weinstein stage
-  classification described above: a `#stageBadge` above the chart shows the ticker's `current_stage`
-  (`renderStageBadge()`, colored per `STAGE_COLORS`, with a one-line plain-language description of what that
-  stage means), weekly volume bars on a hidden secondary axis at the bottom of the price chart — stacked
-  (Chart.js `stack: "volume"`) into two segments so buying/selling pressure is visible directly, not just
-  total turnover: `buying_volume` on the bottom (brighter green when `buying_volume_ratio` clears
-  `STAGE_BREAKOUT_VOLUME_RATIO`, i.e. a confirmed breakout week — this constant is duplicated client-side in
-  `app.js` and must stay in sync with the same constant in `run_query.py`) and `volume - buying_volume`
-  (selling) on top in red, a **trailing stop-loss line** plotted directly from `stop_level_pct` (a dashed red line,
-  mirroring the book's own "Trailing Stop Loss" diagram — Chart.js breaks the line wherever the value is
-  `null`, i.e. outside an active Stage 2 run, with no extra handling needed), and entry/exit markers on the
-  price line itself: triangle-up (green) for `ENTRY_2A`/`ENTRY_2B`, triangle-up (amber) for `ENTRY_2B_LATE`
-  (a 4th-or-later base in the same run — see `SIGNAL_MARKER_COLORS`), a small square (amber) for
-  `WARNING_MA_SLOWING`, triangle-down (red) for `EXIT_STOP` — with the signal's plain-language description
-  (`SIGNAL_LABELS`) appended to that week's tooltip, including which base number it was for `ENTRY_2B`/
-  `ENTRY_2B_LATE` (`base_count`). A static legend line under the chart explains the marker/bar/line meanings
-  once, rather than repeating them per-chart. None of this reads relative strength vs. the index — that stays
-  a separate, purely visual comparison line on the same chart, unchanged from before. Below that is the
-  Mansfield RS oscillator (short-term + medium-
-  term lines, its own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container`
-  / `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`). WIG20/mWIG40 are PLN-denominated and
+  regardless of chart-data availability. When shown, it's **three stacked Chart.js panels**
+  (`renderRelativeStrengthChart()`, loaded via CDN, along with `chartjs-plugin-zoom` and
+  `chartjs-plugin-annotation` — same CDN, pinned versions):
+  1. The "10:30" price+SMA10/SMA30 chart, with the stock's own index level plotted alongside it on the
+     *same* % axis (both rebased to 0% at the momentum window's start) so the stock's trend can be read
+     directly against its index's trend — whichever line is on top is the outperformer. Darvas boxes (see
+     `bases` above) are drawn directly on this chart as rectangles via `chartjs-plugin-annotation`
+     (`BASE_BOX_COLORS` — purple for `"stage1"`, gray for `"stage2"`, labeled "Etap 1 (dno)"/"Baza N"), and
+     the whole chart is interactive (`chartjs-plugin-zoom`: mouse wheel/pinch to zoom, drag to pan,
+     `#resetZoomBtn`/`initResetZoomButton()` to reset). A `#stageBadge` above the chart shows the ticker's
+     `current_stage` (`renderStageBadge()`, colored per `STAGE_COLORS`, with a one-line plain-language
+     description of what that stage means).
+  2. A separate, smaller **volume panel** below it (`#rsVolumePanel`/`rsVolumeChartInstance`) — weekly
+     volume as a stacked bar chart (Chart.js `stack: "volume"`) split into `buying_volume` (bottom, brighter
+     green when `buying_volume_ratio` clears `STAGE_BREAKOUT_VOLUME_RATIO` — this constant is duplicated
+     client-side in `app.js` and must stay in sync with the same constant in `run_query.py`) and
+     `volume - buying_volume` (selling, top, red), on its own fully-visible axis. Its X range is kept in
+     sync with panel 1 (`syncVolumeXRange()`, called from the zoom/pan plugin's `onZoomComplete`/
+     `onPanComplete` callbacks) so both panels always show the same weeks.
+  3. The Mansfield RS oscillator (short-term + medium-term lines, its own separate ~6-month window, see
+     above) in the shortest panel underneath. Non-interactive — its own short window doesn't need zoom/pan.
+
+  (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-volume` / `.rs-chart-panel-small` in
+  `style.css`.) **Version history**: an earlier version put entry/exit signal markers (`ENTRY_2A`/`ENTRY_2B`/
+  `ENTRY_2B_LATE`/`WARNING_MA_SLOWING`/`EXIT_STOP`) and a dashed `stop_level_pct` trailing-stop line directly
+  on panel 1, and volume as bars on a *hidden* secondary axis at the bottom of that same chart — removed
+  after user feedback that panel 1 had too many overlapping elements (5 line datasets + 2 bar datasets +
+  markers on one canvas). Signal markers and the stop-loss line are gone from the chart entirely (the
+  backend still computes and exports `signal`/`stop_level_pct` per week — unused by the chart now, but cheap
+  to keep and not worth a breaking schema change); volume got its own panel (2 above); Darvas boxes (1
+  above) replaced markers as the visual way to see *why* a stage transition happened. **Mobile rendering
+  gotcha**: each chart panel needs a CSS `min-height` of at least ~160-200px — below that, Chart.js's own
+  automatic Y-axis tick/range computation degenerates (measured empirically: a canvas ≤120px tall on a
+  narrow-range dataset like the Mansfield oscillator can lock onto a nonsensical fixed range like `[-100,
+  100]` with a single tick instead of autoscaling to the actual data). On phones, `.charts-area` has a fixed
+  `height: calc(100vh - 48px)` (see the mobile media query below) shared across the badge + 3 chart panels +
+  legend text, so without generous `min-height` floors on each panel, three stacked charts plus a stage
+  badge and legend can squeeze one or more panels below that threshold and render as a flat, broken-looking
+  line — `.rs-chart-container` also has `overflow-y: auto` as a safety net (scroll rather than squeeze, on
+  the shortest phones) since even a floor that's *usually* enough can't be a hard guarantee for every device.
+  WIG20/mWIG40 are PLN-denominated and
   GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
   prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
   used by `tvUrlFor()`/`tvRowButtonHtml()` gets a `GPW:` prefix via `tvSymbolFor()` (tracked through
