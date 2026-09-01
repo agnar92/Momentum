@@ -17,6 +17,10 @@ const {
     fmtMoney,
     fmtQty,
     fmtPct,
+    classifyTicker,
+    defaultTagFor,
+    syncSlotsFromHoldings,
+    slotValue,
 } = portfolio;
 
 test("fmtMoney formats with 2 decimals and thousands separators", () => {
@@ -145,4 +149,83 @@ test("computeSatelliteTargets prefers manualPrice over priceMap when both are se
     const slots = [{ ticker: "AAA", weightPct: 1, manualPrice: 99 }];
     const { rows } = computeSatelliteTargets(100, slots, 100, 1000, { AAA: { price: 10 } });
     assert.equal(rows.AAA.price, 99);
+});
+
+// ---------- SYNC Z HOLDINGAMI REBALANSU (tagi Core/Satelita) ----------
+
+test("classifyTicker returns the universe a ticker belongs to, or null", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] }, DOWJONES: { constituents: [{ ticker: "GS" }] } };
+    assert.equal(classifyTicker("AAPL", univData), "NASDAQ100");
+    assert.equal(classifyTicker("GS", univData), "DOWJONES");
+    assert.equal(classifyTicker("XLK", univData), null);
+});
+
+test("defaultTagFor tags tracked-universe tickers as core and everything else as satellite", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] } };
+    assert.equal(defaultTagFor("AAPL", univData), "core");
+    assert.equal(defaultTagFor("XLK", univData), "satellite");
+});
+
+test("slotValue prices a holding-derived slot from shares * price, and returns weightPct for a manual slot", () => {
+    const holdingSlot = { fromHolding: true, shares: 3 };
+    assert.equal(slotValue(holdingSlot, "AAPL", { AAPL: { price: 10 } }), 30);
+    assert.equal(slotValue({ fromHolding: true, shares: 3 }, "ZZZ", {}), 0); // brak ceny -> 0
+    assert.equal(slotValue({ weightPct: 42 }, "AAPL", {}), 42);
+});
+
+test("syncSlotsFromHoldings builds slots from holdings, classifying by tracked universe, and preserves manual (non-holding) slots", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] }, DOWJONES: { constituents: [] } };
+    const holdings = [{ ticker: "AAPL", shares: 2 }, { ticker: "XLK", shares: 5 }];
+    const prevCore = [{ type: "universe", id: "NASDAQ100", weightPct: 1 }]; // manualny slot, nie holding
+    const result = syncSlotsFromHoldings(holdings, prevCore, [], {}, univData, {});
+
+    assert.equal(result.coreSlots.length, 2); // manualny koszyk momentum + AAPL z holdingu
+    assert.ok(result.coreSlots.some(s => s.type === "universe" && s.id === "NASDAQ100"));
+    const aapl = result.coreSlots.find(s => s.id === "AAPL");
+    assert.equal(aapl.fromHolding, true);
+    assert.equal(aapl.shares, 2);
+
+    assert.equal(result.satelliteSlots.length, 1);
+    assert.equal(result.satelliteSlots[0].ticker, "XLK");
+    assert.equal(result.satelliteSlots[0].fromHolding, true);
+
+    assert.equal(result.tags.AAPL, "core");
+    assert.equal(result.tags.XLK, "satellite");
+});
+
+test("syncSlotsFromHoldings respects an existing user tag instead of re-classifying by default", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] } };
+    const holdings = [{ ticker: "AAPL", shares: 1 }];
+    // AAPL is a NASDAQ100 constituent (default "core"), but the user tagged it "satellite".
+    const result = syncSlotsFromHoldings(holdings, [], [], { AAPL: "satellite" }, univData, {});
+    assert.equal(result.tags.AAPL, "satellite");
+    assert.equal(result.coreSlots.length, 0);
+    assert.equal(result.satelliteSlots.length, 1);
+});
+
+test("syncSlotsFromHoldings preserves a previously-entered manualPrice for a ticker still held", () => {
+    const holdings = [{ ticker: "XLK", shares: 5 }];
+    const prevSatellite = [{ ticker: "XLK", shares: 5, manualPrice: 210.5, fromHolding: true }];
+    const result = syncSlotsFromHoldings(holdings, [], prevSatellite, { XLK: "satellite" }, {}, {});
+    assert.equal(result.satelliteSlots[0].manualPrice, 210.5);
+});
+
+test("syncSlotsFromHoldings drops tags for tickers no longer held (sold)", () => {
+    const result = syncSlotsFromHoldings([], [], [], { OLD: "core" }, {}, {});
+    assert.deepEqual(result.tags, {});
+    assert.deepEqual(result.coreSlots, []);
+});
+
+test("computeCoreTargets and computeSatelliteTargets weight holding-derived slots by current price * shares", () => {
+    const coreSlots = [{ type: "ticker", id: "AAPL", shares: 2, fromHolding: true }, { type: "ticker", id: "MSFT", shares: 1, fromHolding: true }];
+    const prices = { AAPL: { price: 100 }, MSFT: { price: 200 } }; // wartosci rowne (200 kazdy) -> 50/50 split
+    const raw = computeCoreTargets(1000, coreSlots, {}, prices);
+    assert.ok(Math.abs(raw.AAPL.target_value - 500) < 1e-9);
+    assert.ok(Math.abs(raw.MSFT.target_value - 500) < 1e-9);
+    assert.ok(raw.AAPL.sources.includes("Twoja pozycja"));
+
+    const satSlots = [{ ticker: "XLK", shares: 1, fromHolding: true }];
+    const { rows } = computeSatelliteTargets(100, satSlots, 100, 1000, { XLK: { price: 50 } });
+    assert.equal(rows.XLK.target_value, 100);
+    assert.ok(rows.XLK.sources.includes("Twoja pozycja"));
 });
