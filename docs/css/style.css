@@ -405,6 +405,27 @@ td.negative { color: var(--red); }
     color: var(--text-faint);
 }
 
+/* Kolumna "TV" w tabelach dashboardu — przycisk otwierający tradingview.com
+   dla danego wiersza w nowej karcie, bez zaznaczania wiersza (patrz
+   tvRowButtonHtml/bindTvRowButtons w app.js). */
+th.tv-col { width: 1%; }
+
+.tv-row-btn {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.tv-row-btn:hover {
+    color: var(--green-bright);
+    border-color: var(--green-bright);
+}
+
 .weight-bar-bg {
     background: var(--border);
     border-radius: 3px;
@@ -422,7 +443,8 @@ td.negative { color: var(--red); }
 }
 
 /* ============================================================
-   OBSZAR WYKRESÓW (3x TradingView stacked)
+   OBSZAR WYKRESU (wlasny wykres 10:30 + Mansfield RS, przycisk "Otworz w
+   TradingView" zamiast osadzonego widgetu — patrz updateChartArea w app.js)
    ============================================================ */
 .charts-area {
     flex: 1;
@@ -457,25 +479,18 @@ td.negative { color: var(--red); }
 }
 
 .chart-container { flex: 1; }
-.chart-container iframe { border: none; width: 100%; height: 100%; }
 /* Dwa wykresy jeden pod drugim: "wykres 10:30" (cena + SMA10/SMA30 + poziom
    indeksu, wszystko w % zmiany względem początku okna momentum, duży, u góry)
    + oscylator Mansfield RS krótko-/średnioterminowy (mniejszy pasek u dołu,
-   patrz renderRelativeStrengthChart w app.js). */
+   patrz renderRelativeStrengthChart w app.js). Panel jest teraz zawsze widoczny
+   (nie ma juz przelacznika z osadzonym widgetem TradingView) — gdy dany ticker
+   nie ma wlasnego wykresu, JS chowa oba panele i pokazuje #noChartMessage
+   zamiast calego kontenera (patrz updateChartArea). */
 .rs-chart-container {
     display: flex;
     flex-direction: column;
     gap: 12px;
     padding: 12px;
-}
-
-/* [hidden] to zwykla regula user-agent (nie autorska), wiec bez tego nadpisania
-   powyzsze `display: flex` zawsze by wygrywalo — #rs_chart nigdy nie chowalby
-   sie realnie (mimo atrybutu hidden ustawianego w JS), tylko dzielil miejsce
-   z #tv_chart w tym samym .chart-panel (stad TradingView "nie na cały ekran"
-   i oba widoki widoczne naraz przy przełączaniu trybu wykresu). */
-.rs-chart-container[hidden] {
-    display: none;
 }
 
 .rs-chart-panel {
@@ -528,8 +543,9 @@ td.negative { color: var(--red); }
     line-height: 1.5;
 }
 
-/* Przełącznik TradingView / Siła Relatywna (widoczny nad panelem wykresu, gdy
-   wybrany ticker ma własny tygodniowy wykres RS — patrz updateChartArea w app.js) */
+/* Pasek nad panelem wykresu — dziś tylko przycisk "Otwórz w TradingView"
+   (#openTvBtn, patrz initOpenTvButton w app.js), otwierający pełną stronę
+   tradingview.com w nowej karcie zamiast osadzonego widgetu. */
 .chart-mode-toggle {
     display: flex;
     gap: 6px;
@@ -552,11 +568,6 @@ td.negative { color: var(--red); }
     background: var(--green);
     color: #fff;
     border-color: var(--green-bright);
-}
-
-.chart-mode-btn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
 }
 
 .chart-back-btn {

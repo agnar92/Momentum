@@ -20,7 +20,7 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return; // nie ruszamy CDN (TradingView, SheetJS)
+  if (url.origin !== location.origin) return; // nie ruszamy CDN (Chart.js, SheetJS)
 
   if (url.pathname.includes("/data/")) {
     // Dane momentum: najpierw sieć (mają być świeże), offline -> ostatnia znana wersja z cache.
