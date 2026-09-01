@@ -162,11 +162,19 @@ own market right now" (`close_pct`/`sma10_pct`/`sma30_pct`/`index_pct`/`glb_pct`
 computed on the raw weekly price first, then rebased by the same stock-price base as `close_pct` so they
 still read as a smoothed/overlaid version of the price line). The GLB line is the classic "green line"
 resistance level: **one single flat horizontal line for the whole chart** (not a stepped history of every
-past breakout) drawn at the highest weekly close reached across the *entire fetched* series (including the
-SMA warm-up buffer, for the longest available "old high" context) — `float(stock_df["close"].max())`,
-rebased and repeated for every displayed date — so unlike the SMAs it's always available regardless of
-buffer shortfall; the point where the price line touches the GLB line is the breakout moment, everywhere
-else the price sits below it. All series are resampled from the daily
+past breakout), but it is only drawn once the highest weekly close reached across the *entire fetched*
+series (including the SMA warm-up buffer, for the longest available "old high" context) has gone at least
+`RS_GLB_MIN_CONSOLIDATION_WEEKS` (13 weeks, ~3 months) **without being exceeded again** — a peak set more
+recently than that hasn't had time to prove it's holding as resistance yet, so `glb_pct` is `None`
+everywhere in that case (no line at all) rather than showing an unconfirmed level. Implementation: find the
+*first* occurrence of the series max (`stock_df["close"].idxmax()`, which for a plateau is provably the
+only value that can ever satisfy "never exceeded afterward" — see the reasoning in
+`compute_relative_strength_chart`'s docstring/commit history if this looks non-obvious) and check
+`ref_date` is at least 13 weeks past that date; if so `glb_price` = that peak, rebased and repeated for
+every displayed date, otherwise `None`. Unlike the SMAs its availability doesn't depend on the SMA
+warm-up buffer, but it does depend on there having been a genuine multi-month pause since the last new
+high — a stock currently making fresh highs right up to `ref_date` will show no GLB line at all until a
+new base has had time to form. All series are resampled from the daily
 `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` + `ARGMAX`, fetching
 `RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's start purely so
 SMA30 already has a value at the first displayed (in-window) point, and the series returned is trimmed to
@@ -175,8 +183,7 @@ retains a rolling `--lookback-months` (15) window (see above) and the momentum w
 consumes ~14 of those months, there is little to no actual buffer before `start_date` in production, so
 `sma10_pct`/`sma30_pct` can still show `null` for their first several in-window weeks for many tickers — a
 known, deliberately deferred limitation, not a bug to "fix" by widening `RS_PRICE_SMA_LONG_WEEKS`'s lookback
-further. The same short-history limitation also means the GLB line's "old high" is only as deep as the
-retained history allows — it self-improves as more history accumulates over time, same as the SMA gaps.
+further.
 
 Each leader also carries a `mansfield_chart` (`compute_mansfield_rs_chart()`) — the classic Mansfield
 Relative Strength oscillator, `RSM = (RS / SMA(RS, N weeks) - 1) * 100` where `RS = stock_close /
@@ -232,9 +239,10 @@ it only exists after the pipeline has run.
   (`renderRelativeStrengthChart()`, loaded via CDN like TradingView): the "10:30" price+SMA10/SMA30+GLB
   chart on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to
   0% at the momentum window's start) so the stock's trend can be read directly against its index's trend —
-  whichever line is on top is the outperformer — plus a single flat, dashed GLB (Green Line Breakout) line
-  (`chartData.glb_pct`, distinct bright-green color so it doesn't blend into the stock's own price line)
-  marking the prior-high resistance level a breakout needs to clear — and the Mansfield RS oscillator
+  whichever line is on top is the outperformer — plus, when there's a confirmed one (see above — a stock at
+  fresh highs won't have one yet), a single flat, dashed GLB (Green Line Breakout) line (`chartData.glb_pct`,
+  distinct bright-green color so it doesn't blend into the stock's own price line) marking the prior-high
+  resistance level a breakout needs to clear — and the Mansfield RS oscillator
   (short-term + medium-term lines, its own separate ~6-month window, see above) in a shorter panel
   underneath (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`).
   WIG20/mWIG40 are PLN-denominated and

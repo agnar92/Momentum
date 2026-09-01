@@ -643,11 +643,10 @@ class TestComputeRelativeStrengthChart:
         assert out["index_pct"][-1] > out["index_pct"][0]
         # Spolka silniejsza od rynku w tym oknie -> konczy powyzej linii indeksu.
         assert out["close_pct"][-1] > out["index_pct"][-1]
-        # AAA rosnie caly czas -> najwyzsza cena w calej pobranej historii to
-        # ostatni wyswietlany tydzien -> JEDNA plaska linia GLB rowna close_pct[-1]
-        # przez cale okno (nie schodkowa historia kolejnych szczytow).
-        assert len(set(out["glb_pct"])) == 1
-        assert out["glb_pct"][0] == out["close_pct"][-1]
+        # AAA rosnie caly czas az do ref_date -> najwyzszy szczyt (ostatni tydzien)
+        # jest za swiezy (< RS_GLB_MIN_CONSOLIDATION_WEEKS od ref_date, brak
+        # potwierdzonej konsolidacji) -> GLB = None wszedzie, nie blad.
+        assert all(v is None for v in out["glb_pct"])
 
     def test_insufficient_lookback_leaves_first_week_sma30_as_none(self):
         con = make_gem_con()
@@ -665,24 +664,25 @@ class TestComputeRelativeStrengthChart:
         assert out is not None
         assert out["sma30_pct"][0] is None
         assert out["index_pct"][0] == 0.0
-        # GLB nie zalezy od zapasu SMA30 -> dostepna od razu, w przeciwienstwie do SMA.
-        assert out["glb_pct"][0] is not None
+        # Szczyt tez za swiezy tutaj (fixture konczy sie tuz przed ref_date) ->
+        # GLB = None, spojnie z regula min. 3 mies. od szczytu bez przebicia.
+        assert out["glb_pct"][0] is None
 
-    def test_glb_is_a_single_flat_line_at_the_highest_price_reached(self):
+    def test_glb_is_a_single_flat_line_at_a_confirmed_prior_peak(self):
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
-        ref_date = pd.Timestamp("2026-03-30")
+        # ref_date odlegly od start_date na tyle, zeby szczyt z tyg. 2 mial juz
+        # >= RS_GLB_MIN_CONSOLIDATION_WEEKS (13) "ciszy" bez przebicia.
+        ref_date = start_date + pd.Timedelta(weeks=17)
         fixture_start = start_date - pd.Timedelta(weeks=60)
         # Tlo niezaleznie od wzorca w oknie (nizsze ceny, zeby nie ingerowac w
-        # szczyty ustawiane ponizej) — samo zapewnia zapas dla SMA30.
+        # szczyt ustawiany ponizej) — samo zapewnia zapas dla SMA30.
         insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 60, 50.0, 0.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 70, 200.0, 0.3)
-        # Jawny wzorzec w oknie wyswietlanym: wzrost do 110 (tydz. 2), spadek/baza
-        # (tydz. 3-6), nowy szczyt 111 (tydz. 7), NAJWYZSZY szczyt 115 (tydz. 8),
-        # lekki odwrot (tydz. 9) — GLB to JEDNA linia na poziomie 115 (nie
-        # schodkowa historia kazdego kolejnego przebicia po drodze).
-        pattern = [100, 105, 110, 108, 106, 104, 107, 111, 115, 112]
+                              fixture_start.strftime("%Y-%m-%d"), 90, 200.0, 0.3)
+        # Jawny wzorzec w oknie wyswietlanym: wzrost do szczytu 110 (tydz. 2), potem
+        # NIGDY wiecej nie przebity az do konca (tydz. 17) — >= 13 tyg. "ciszy".
+        pattern = [100, 105, 110, 108, 106, 104, 107, 109, 105, 103, 108, 106, 104, 102, 107, 105, 103, 106]
         mondays = pd.date_range(start=start_date, periods=len(pattern), freq="7D")
         rows = [(d.strftime("%Y-%m-%d"), "AAA", p, p, 0) for d, p in zip(mondays, pattern)]
         con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, ?)", rows)
@@ -692,13 +692,29 @@ class TestComputeRelativeStrengthChart:
         assert out is not None
         # JEDNA stala linia (ta sama wartosc) przez caly wyswietlany zakres.
         assert len(set(out["glb_pct"])) == 1
-        # Poziom linii = najwyzsza cena w calym oknie (115, tydz. 8), zrebase'owana.
-        assert out["glb_pct"][0] == out["close_pct"][8]
-        # W kazdym innym tygodniu cena jest PONIZEJ (albo rowna, dokladnie w
-        # szczycie) linii GLB, nigdy powyzej.
-        assert out["close_pct"][2] < out["glb_pct"][2]
-        assert out["close_pct"][6] < out["glb_pct"][6]
-        assert out["close_pct"][9] < out["glb_pct"][9]
+        # Poziom linii = szczyt z tyg. 2 (110), zrebase'owany, bo nigdy pozniej
+        # nie przebity i ma juz >= 13 tyg. "ciszy".
+        assert out["glb_pct"][0] == out["close_pct"][2]
+        # Kazdy inny tydzien ma cene PONIZEJ linii GLB (nigdy powyzej, nigdy nie
+        # przebity).
+        for i in (0, 1, 5, 10, 17):
+            assert out["close_pct"][i] < out["glb_pct"][i]
+
+    def test_glb_is_none_when_the_highest_peak_is_too_recent(self):
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")
+        ref_date = pd.Timestamp("2026-03-30")
+        fixture_start = start_date - pd.Timedelta(weeks=60)
+        # AAA rosnie caly czas az do ref_date -> najwyzszy szczyt jest "dzisiaj",
+        # wiec za swiezy na potwierdzona linie GLB (brak min. 3 mies. konsolidacji).
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 80, 100.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 80, 200.0, 0.3)
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                                start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert all(v is None for v in out["glb_pct"])
 
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
