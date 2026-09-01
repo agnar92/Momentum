@@ -41,9 +41,11 @@ metodologii S&P Momentum Indices):
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
     po przewadze — patrz export_relative_strength. Kazdy lider ma tez, od poczatku
     tego samego okna, "wykres 10:30" w stylu stage analysis (Weinstein/Dr Eric Wish):
-    cena spolki + SMA 10-tyg./30-tyg. i poziom wlasnego indeksu, wszystko przeliczone
-    na % zmiany wzgledem poczatku okna (close_pct/sma10_pct/sma30_pct/index_pct), zeby
-    jednym spojrzeniem bylo widac czy spolka rosnie szybciej niz jej rynek — patrz
+    cena spolki + SMA 10-tyg./30-tyg., poziom wlasnego indeksu i JEDNA pozioma linia
+    GLB (Green Line Breakout — najwyzsza cena zamkniecia w calej pobranej historii),
+    wszystko przeliczone na % zmiany wzgledem poczatku okna
+    (close_pct/sma10_pct/sma30_pct/index_pct/glb_pct), zeby jednym spojrzeniem
+    bylo widac czy spolka rosnie szybciej niz jej rynek — patrz
     compute_relative_strength_chart — oraz "mansfield_chart": oscylator Mansfield RS
     w dwoch wygladzeniach (krotkoterminowym ~3 mies. i srednioterminowym ~6 mies.) na
     WLASNYM, znacznie krotszym oknie (ostatnie ~6 mies., odczepione od okna momentum) —
@@ -829,12 +831,22 @@ RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinste
 def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date):
     """Wykres 'nie-TradingView' dla panelu Siły Relatywnej, w stylu klasycznej
     metodologii stage analysis (Stan Weinstein / Dr. Eric Wish) — "wykres 10:30":
-    tygodniowa cena spółki + SMA 10-tyg. i 30-tyg., razem z poziomem własnego indeksu,
-    wszystko przeliczone na % zmiany WZGLĘDEM pierwszego wyświetlanego tygodnia
-    (start_date) — nie surowe wartości na osobnych skalach, bo dwie osie utrudniają
-    ocenę wzrokiem, która linia rośnie szybciej. Po rebase'owaniu obie linie (spółka
-    i indeks) startują z 0% i rozjeżdżają się — spółka POWYŻEJ linii indeksu w danym
-    tygodniu = silniejsza od rynku w tym oknie, PONIŻEJ = słabsza.
+    tygodniowa cena spółki + SMA 10-tyg. i 30-tyg., razem z poziomem własnego indeksu
+    i linią GLB (Green Line Breakout, patrz niżej), wszystko przeliczone na % zmiany
+    WZGLĘDEM pierwszego wyświetlanego tygodnia (start_date) — nie surowe wartości na
+    osobnych skalach, bo dwie osie utrudniają ocenę wzrokiem, która linia rośnie
+    szybciej. Po rebase'owaniu obie linie (spółka i indeks) startują z 0% i
+    rozjeżdżają się — spółka POWYŻEJ linii indeksu w danym tygodniu = silniejsza od
+    rynku w tym oknie, PONIŻEJ = słabsza.
+
+    GLB (Green Line Breakout, Dr. Eric Wish) — JEDNA pozioma "zielona linia" oporu,
+    stała przez cały wykres (NIE schodkowa historia kolejnych przebić): poziom
+    najwyższej tygodniowej ceny zamknięcia w całej POBRANEJ historii (łącznie z
+    zapasem RS_PRICE_SMA_LONG_WEEKS+2 tyg. przed start_date — im dłuższe tło, tym
+    bardziej wiarygodny "ostatni/aktualny szczyt"), więc zawsze dostępna (w
+    przeciwieństwie do sma10/sma30). Dopóki cena jest poniżej tej linii, spółka jest
+    w bazie/korekcie; miejsce, w którym linia ceny DOTYKA linii GLB, to właśnie
+    przebicie.
 
     Pobiera dodatkowy zapas RS_PRICE_SMA_LONG_WEEKS tygodni PRZED start_date (margines
     na "rozgrzanie" obu średnich, żeby miały już wartość od pierwszego wyświetlanego
@@ -854,6 +866,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
     stock_df["sma10"] = stock_df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
     stock_df["sma30"] = stock_df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
+    glb_price = float(stock_df["close"].max())
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
@@ -871,13 +884,15 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
             return None
         return round((float(value) / base - 1) * 100, 2)
 
-    dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
+    glb_line_pct = pct(glb_price, close0)
+    dates, close_pct, sma10_pct, sma30_pct, index_pct, glb_pct = [], [], [], [], [], []
     for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
         sma10_pct.append(pct(r["sma10"], close0))
         sma30_pct.append(pct(r["sma30"], close0))
         index_pct.append(pct(r["index_close"], index0))
+        glb_pct.append(glb_line_pct)
 
     return {
         "dates": dates,
@@ -885,6 +900,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "sma10_pct": sma10_pct,
         "sma30_pct": sma30_pct,
         "index_pct": index_pct,
+        "glb_pct": glb_pct,
     }
 
 
@@ -998,9 +1014,10 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "indeksu, nie średnia składników), posortowane malejąco po przewadze "
                  "(relative_strength_pct = zwrot spółki - zwrot indeksu). Każdy lider ma też "
                  "'weekly_chart': od początku tego samego okna, 'wykres 10:30' w stylu stage analysis "
-                 "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg. i poziom własnego indeksu, "
-                 "wszystko przeliczone na % zmiany względem początku okna (pola close_pct/sma10_pct/"
-                 "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
+                 "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg., poziom własnego indeksu "
+                 "i JEDNA pozioma linia GLB (Green Line Breakout — najwyższa cena w okresie), wszystko przeliczone na % "
+                 "zmiany względem początku okna (pola close_pct/sma10_pct/sma30_pct/index_pct/glb_pct) "
+                 "— patrz compute_relative_strength_chart. Każdy lider ma też "
                  "'mansfield_chart': oscylator Mansfield Relative Strength w DWÓCH wygładzeniach "
                  "(rsm_short ~3 mies., rsm_medium ~6 mies.), na WŁASNYM ostatnim ~6-miesięcznym oknie "
                  "(nie tym samym co momentum_value/weekly_chart) — patrz compute_mansfield_rs_chart. "

@@ -318,11 +318,15 @@ let rsMansfieldChartInstance = null;
 
 // Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
 // stage analysis (Stan Weinstein / Dr Eric Wish):
-// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. i poziom
-//    własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
-//    wyświetlanego tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart)
-//    — jedna wspólna skala, żeby jednym spojrzeniem było widać, która linia
-//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku.
+// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg., poziom
+//    własnego indeksu i JEDNA pozioma linia GLB (Green Line Breakout, Dr Eric
+//    Wish — najwyższa cena zamknięcia w całej pobranej historii, stała przez
+//    cały wykres, NIE schodkowa historia kolejnych przebić); punkt, w którym
+//    linia ceny DOTYKA linii GLB, to moment przebicia, wszystko przeliczone na
+//    % zmiany względem pierwszego wyświetlanego tygodnia OKNA MOMENTUM (patrz
+//    compute_relative_strength_chart) — jedna wspólna skala, żeby jednym
+//    spojrzeniem było widać, która linia rośnie szybciej: spółka POWYŻEJ linii
+//    indeksu = silniejsza od rynku.
 // 2. Oscylator Mansfield RS w dwóch wygładzeniach — krótkoterminowym (~3 mies.)
 //    i średnioterminowym (~6 mies.) — na WŁASNYM, znacznie krótszym ostatnim
 //    ~6-miesięcznym oknie (patrz compute_mansfield_rs_chart), celowo NIE tym
@@ -354,6 +358,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
                 { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
                 { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
+                { label: "GLB (Green Line Breakout)", data: chartData.glb_pct, borderColor: "#39ff14", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 3] },
             ],
         },
         options: {
