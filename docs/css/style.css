@@ -562,13 +562,15 @@ th.tv-col { width: 1%; }
 }
 
 .chart-container { flex: 1; }
-/* Dwa wykresy jeden pod drugim: "wykres 10:30" (cena + SMA10/SMA30 + poziom
-   indeksu, wszystko w % zmiany względem początku okna momentum, duży, u góry)
-   + oscylator Mansfield RS krótko-/średnioterminowy (mniejszy pasek u dołu,
-   patrz renderRelativeStrengthChart w app.js). Panel jest teraz zawsze widoczny
-   (nie ma juz przelacznika z osadzonym widgetem TradingView) — gdy dany ticker
-   nie ma wlasnego wykresu, JS chowa oba panele i pokazuje #noChartMessage
-   zamiast calego kontenera (patrz updateChartArea). */
+/* Trzy wykresy jeden pod drugim: "wykres 10:30" (cena + SMA10/SMA30 + poziom
+   indeksu, wszystko w % zmiany względem początku okna momentum, duży, u góry,
+   interaktywny — zoom/pan przez chartjs-plugin-zoom) + wolumen tygodniowy
+   (własny panel, osobna widoczna oś) + oscylator Mansfield RS krótko-/
+   średnioterminowy (najmniejszy pasek u dołu) — patrz renderRelativeStrengthChart
+   w app.js. Panel jest zawsze widoczny (nie ma juz przelacznika z osadzonym
+   widgetem TradingView) — gdy dany ticker nie ma wlasnego wykresu, JS chowa
+   wszystkie panele i pokazuje #noChartMessage zamiast calego kontenera (patrz
+   updateChartArea). */
 .rs-chart-container {
     display: flex;
     flex-direction: column;
@@ -584,6 +586,15 @@ th.tv-col { width: 1%; }
 
 .rs-chart-panel-small {
     flex: 1;
+}
+
+/* Wolumen tygodniowy w oddzielnym panelu pod wykresem 10:30 (wcześniej ukryte
+   słupki na dolnej krawędzi tego samego wykresu) — własna, w pełni widoczna
+   oś, żeby wysokość słupka faktycznie było widać, a nie tylko zgadywać z
+   proporcji dolnego paska. */
+.rs-chart-panel-volume {
+    flex: 1;
+    min-height: 0;
 }
 
 /* Odznaka aktualnego etapu Weinsteina (1/2A/2B/3/4) nad wykresem 10:30 — patrz
@@ -618,7 +629,7 @@ th.tv-col { width: 1%; }
     font-size: 11px;
 }
 
-/* Legenda znaczników wejścia/wyjścia + wolumenu pod wykresem 10:30. */
+/* Legenda baz (prostokąty Etapu 1/2) + wolumenu + interakcji pod wykresem 10:30. */
 .stage-legend {
     font-size: 10.5px;
     color: var(--text-faint);
@@ -626,9 +637,10 @@ th.tv-col { width: 1%; }
     line-height: 1.5;
 }
 
-/* Pasek nad panelem wykresu — dziś tylko przycisk "Otwórz w TradingView"
-   (#openTvBtn, patrz initOpenTvButton w app.js), otwierający pełną stronę
-   tradingview.com w nowej karcie zamiast osadzonego widgetu. */
+/* Pasek nad panelem wykresu — "Otwórz w TradingView" (#openTvBtn, patrz
+   initOpenTvButton w app.js), otwierający pełną stronę tradingview.com w nowej
+   karcie zamiast osadzonego widgetu, oraz "Resetuj zoom" (#resetZoomBtn, patrz
+   initResetZoomButton) do cofnięcia interaktywnego zoom/pan wykresu 10:30. */
 .chart-mode-toggle {
     display: flex;
     gap: 6px;

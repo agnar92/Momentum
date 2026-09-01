@@ -300,10 +300,12 @@ function updateChartArea() {
 
     const noChartMsg = document.getElementById("noChartMessage");
     const rsChartPanel = document.getElementById("rsChartPanel");
+    const rsVolumePanel = document.getElementById("rsVolumePanel");
     const rsMansfieldPanel = document.getElementById("rsMansfieldPanel");
     const stageLegend = document.getElementById("stageLegend");
     if (noChartMsg) noChartMsg.hidden = hasRsChart;
     if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
+    if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart;
     if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart;
     if (stageLegend) stageLegend.hidden = !hasRsChart;
 
@@ -312,6 +314,7 @@ function updateChartArea() {
     } else {
         renderStageBadge(null);
         if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
+        if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
         if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
     }
 }
@@ -325,7 +328,38 @@ function initOpenTvButton() {
     });
 }
 
+// Resetuje interaktywny zoom/pan (chartjs-plugin-zoom) wykresu 10:30. Panel
+// wolumenu nie ma wlasnego stanu zoom/pan (patrz syncVolumeXRange) — jego os X
+// jest tylko RECZNIE dopasowywana do wykresu 10:30, wiec reset polega na
+// wyczyszczeniu tego recznego min/max, nie na resetZoom().
+function initResetZoomButton() {
+    const btn = document.getElementById("resetZoomBtn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+        if (rsChartInstance) rsChartInstance.resetZoom();
+        if (rsVolumeChartInstance) {
+            rsVolumeChartInstance.options.scales.x.min = undefined;
+            rsVolumeChartInstance.options.scales.x.max = undefined;
+            rsVolumeChartInstance.update();
+        }
+    });
+}
+
+let rsVolumeChartInstance = null;
 let rsMansfieldChartInstance = null;
+
+// Przesuwa widoczny zakres osi X panelu wolumenu tak, zeby dokladnie odpowiadal
+// aktualnemu zoom/pan wykresu 10:30 (patrz onZoomComplete/onPanComplete w
+// renderRelativeStrengthChart) — oba wykresy dziela dokladnie te sama tablice
+// etykiet (chartData.dates), wiec pozycje na osi X (indeksy kategorii) sa
+// bezposrednio przenaszalne miedzy nimi bez przeliczania dat.
+function syncVolumeXRange(sourceChart) {
+    if (!rsVolumeChartInstance) return;
+    const xScale = sourceChart.scales.x;
+    rsVolumeChartInstance.options.scales.x.min = xScale.min;
+    rsVolumeChartInstance.options.scales.x.max = xScale.max;
+    rsVolumeChartInstance.update("none");
+}
 
 // Klasyfikacja etapow Weinsteina (Stage Analysis) dolaczona przez run_query.py
 // (_compute_weinstein_stage_series) do kazdego tygodnia wykresu 10:30 — patrz
@@ -346,22 +380,12 @@ const STAGE_DESCRIPTIONS = {
     "4": "Cena pod opadającą SMA30 — trend spadkowy, poza rynkiem / bez nowych pozycji.",
 };
 const STAGE_COLORS = { "1": "#8a8f9c", "2A": "#2ecc71", "2B": "#26a65b", "3": "#e0a72e", "4": "#e0455a" };
-// Sygnaly odzwierciedlaja ksiazkowy wykres "Trailing Stop Loss": kazda kolejna
-// baza w tej samej fali Etapu 2 podnosi stop, 4./5. baza jest oznaczona jako
-// bardziej ryzykowna, a WARNING_MA_SLOWING ostrzega o slabnacym tempie SMA30
-// ZANIM stop faktycznie zostanie zlamany (EXIT_STOP).
-const SIGNAL_LABELS = {
-    ENTRY_2A: "Wejście (2A): wybicie z bazy potwierdzone wolumenem",
-    ENTRY_2B: "Wejście (2B): wybicie kolejnej bazy w trwającym trendzie",
-    ENTRY_2B_LATE: "Wejście (2B, późna baza): 4.+ baza w tym trendzie — podwyższone ryzyko niepowodzenia",
-    WARNING_MA_SLOWING: "Ostrzeżenie: SMA30 traci tempo wzrostu — zacieśnij stop-loss",
-    EXIT_STOP: "Wyjście: cena złamała trailing stop-loss",
-};
-const SIGNAL_MARKER_COLORS = {
-    ENTRY_2A: "#2ecc71", ENTRY_2B: "#26a65b", ENTRY_2B_LATE: "#e0a72e",
-    WARNING_MA_SLOWING: "#e0a72e", EXIT_STOP: "#e0455a",
-};
 const STAGE_BREAKOUT_VOLUME_RATIO = 1.5; // musi byc zgodne z STAGE_BREAKOUT_VOLUME_RATIO w run_query.py — koloruje slupki wolumenu
+// Kolory prostokatow bazy na wykresie 10:30 (patrz "bases" w weekly_chart,
+// _compute_weinstein_stage_series) — "stage1" to prawdziwe dno POWYZEJ Etapu 4,
+// "stage2" to kazda inna baza (kontynuacja trwajacej fali Etapu 2, patrz
+// docstring w run_query.py).
+const BASE_BOX_COLORS = { stage1: "#8b6dd6", stage2: "#565c6b" };
 
 // Mala kropka + skrot etapu do kolumny "Etap" w glownej tabeli momentum (patrz
 // renderTable) — ten sam STAGE_COLORS/STAGE_LABELS co odznaka nad wykresem.
@@ -408,25 +432,36 @@ function renderStageBadge(stage) {
 //    własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
 //    wyświetlanego tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart)
 //    — jedna wspólna skala, żeby jednym spojrzeniem było widać, która linia
-//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku. Dokłada
-//    się do niego tygodniowy wolumen (słupki na osobnej, ukrytej skali u dołu —
-//    klasyczny układ "cena + wolumen") oraz znaczniki wejścia/wyjścia na linii
-//    ceny, wyliczone backendowo (patrz STAGE_LABELS/SIGNAL_LABELS wyżej i
-//    _compute_weinstein_stage_series w run_query.py). Siła relatywna względem
-//    indeksu NIE wchodzi w tę klasyfikację etapów (pomysł odrzucony wcześniej ze
+//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku. NIE ma
+//    tu już znaczników wejścia/wyjścia ani linii trailing stop-loss (usunięte —
+//    zbyt duzo nakładających się elementów na jednym wykresie) — zamiast tego
+//    same BAZY (patrz "bases" w weekly_chart, _compute_weinstein_stage_series)
+//    są rysowane jako prostokąty (chartjs-plugin-annotation): fioletowy = baza
+//    Etapu 1 (prawdziwe dno po Etapie 4), szary = baza kontynuacji Etapu 2 —
+//    patrz BASE_BOX_COLORS. Wykres jest interaktywny (chartjs-plugin-zoom):
+//    kółko myszy/uszczypnięcie = zoom, przeciąganie = przesuwanie w poziomie,
+//    #resetZoomBtn cofa (patrz initResetZoomButton). Siła relatywna względem
+//    indeksu NIE wchodzi w klasyfikację etapów (pomysł odrzucony wcześniej ze
 //    względu na trudność implementacji) — indeks tu służy tylko jako linia
 //    porównawcza na wykresie, tak jak wcześniej.
-// 2. Oscylator Mansfield RS w dwóch wygładzeniach — krótkoterminowym (~3 mies.)
+// 2. Wolumen tygodniowy — osobny, mniejszy panel pod wykresem 10:30 (wcześniej
+//    ukryte słupki na dolnej krawędzi tego samego wykresu), z osią X przesuwaną/
+//    powiększaną razem z wykresem 10:30 (patrz syncVolumeXRange) — dwa segmenty
+//    (stack: "volume") pokazują PROPORCJE kupujący/sprzedający, nie tylko
+//    wysokość słupka, patrz komentarz przy buyingColors niżej.
+// 3. Oscylator Mansfield RS w dwóch wygładzeniach — krótkoterminowym (~3 mies.)
 //    i średnioterminowym (~6 mies.) — na WŁASNYM, znacznie krótszym ostatnim
 //    ~6-miesięcznym oknie (patrz compute_mansfield_rs_chart), celowo NIE tym
 //    samym co panel 1: dwa różne horyzonty tego samego sygnału, które mogą się
 //    rozjeżdżać (krótkoterminowe przyspieszenie/spowolnienie może wyprzedzać
-//    średnioterminowy trend).
+//    średnioterminowy trend). Nieinteraktywny — własne, krótkie okno nie
+//    wymaga zoom/pan.
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = rsEntry.weekly_chart;
     const mansfieldData = rsEntry.mansfield_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
+    const volumeCanvas = document.getElementById("rsVolumeCanvas");
     const mansfieldCanvas = document.getElementById("rsMansfieldCanvas");
     if (!canvas || !chartData) return;
 
@@ -435,12 +470,12 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         return;
     }
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
+    if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
     if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
 
     renderStageBadge(chartData.current_stage);
 
     const pctFmt = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
-    const signals = chartData.signal || [];
     const volumes = chartData.volume || [];
     // "buying_volume" to CZESC tygodniowego wolumenu przypisana kupujacym metoda
     // Close Location Value (patrz _weekly_close_series w run_query.py — NIE jest to
@@ -454,30 +489,26 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     const sellingVolumes = volumes.map((v, i) => (
         v != null && buyingVolumes[i] != null ? Math.max(0, v - buyingVolumes[i]) : null
     ));
-    const baseCounts = chartData.base_count || [];
 
-    // Znaczniki wejscia/wyjscia na linii ceny: trojkat w gore (zielony/bursztynowy
-    // dla pozniejszej, bardziej ryzykownej bazy) dla wejsc 2A/2B/2B_LATE, trojkat
-    // w dol (czerwony) dla EXIT_STOP, kwadrat (bursztynowy) dla ostrzezenia o
-    // slabnacym tempie SMA30. Reszta tygodni: bez punktu (radius 0), jak wczesniej.
-    const pointStyles = signals.map((s) => (s === "WARNING_MA_SLOWING" ? "rect" : "triangle"));
-    const pointRadii = signals.map((s) => (s ? 7 : 0));
-    const pointColors = signals.map((s) => SIGNAL_MARKER_COLORS[s] || "#2ecc71");
-    const pointRotations = signals.map((s) => (s === "EXIT_STOP" ? 180 : 0));
-
-    // Slupki tygodniowego wolumenu na wlasnej, ukrytej skali (max ustawiony na
-    // wielokrotnosc szczytu wolumenu, zeby slupki zajmowaly tylko dolny pasek
-    // wykresu — nie konkurowaly wizualnie z liniami % zmiany), skladane z dwoch
-    // segmentow (stack: "volume") — dol = wolumen kupujacych, gora = sprzedajacych,
-    // zeby od razu bylo widac PROPORCJE, nie tylko wysokosc calego slupka. Segment
-    // kupujacych jest jasniejszy, gdy buying_volume_ratio >= STAGE_BREAKOUT_VOLUME_RATIO
-    // (potwierdzone wybicie wolumenem KUPUJACYCH — patrz run_query.py).
-    const maxVolume = Math.max(1, ...volumes.filter((v) => v != null));
-    const buyingColors = buyingVolumes.map((v, i) => {
-        const ratio = buyingVolumeRatios[i];
-        return (ratio != null && ratio >= STAGE_BREAKOUT_VOLUME_RATIO) ? "rgba(46, 204, 113, 0.85)" : "rgba(46, 204, 113, 0.35)";
+    // Prostokaty baz (patrz "bases" w compute_relative_strength_chart) — kluczowane
+    // po indeksie, bo chartjs-plugin-annotation wymaga unikalnych kluczy w obiekcie
+    // "annotations". xMin/xMax to daty z tej samej tablicy co etykiety osi X
+    // (chartData.dates), wiec pozycjonuja sie dokladnie na tych samych tygodniach
+    // co linia ceny.
+    const baseAnnotations = {};
+    (chartData.bases || []).forEach((base, idx) => {
+        const color = BASE_BOX_COLORS[base.kind] || BASE_BOX_COLORS.stage2;
+        baseAnnotations[`base${idx}`] = {
+            type: "box",
+            xMin: base.start_date, xMax: base.end_date,
+            yMin: base.support_pct, yMax: base.resistance_pct,
+            backgroundColor: `${color}26`, borderColor: color, borderWidth: 1.5, borderDash: [4, 2],
+            label: {
+                display: true, content: base.kind === "stage1" ? "Etap 1 (dno)" : `Baza ${base.base_count}`,
+                position: "start", color, font: { size: 9, weight: "normal" }, backgroundColor: "transparent",
+            },
+        };
     });
-    const sellingColor = "rgba(224, 69, 90, 0.35)";
 
     rsChartInstance = new Chart(canvas, {
         type: "line",
@@ -486,29 +517,11 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             datasets: [
                 {
                     label: `${symbol} (zmiana %)`, data: chartData.close_pct, borderColor: "#2ecc71",
-                    backgroundColor: "transparent", pointRadius: pointRadii, pointStyle: pointStyles,
-                    pointBackgroundColor: pointColors, pointBorderColor: pointColors, pointRotation: pointRotations,
-                    borderWidth: 2, order: 1,
+                    backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, order: 1,
                 },
                 { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2], order: 1 },
                 { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
                 { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, order: 1 },
-                {
-                    // Trailing stop-loss (patrz "stop_level_pct" w compute_relative_strength_chart) —
-                    // ten sam pomysl co ksiazkowy wykres "Trailing Stop Loss": linia podnoszona
-                    // wraz z kolejnymi bazami, nigdy obnizana; None poza aktywna fala Etapu 2
-                    // (Chart.js domyslnie NIE laczy linii przez null, wiec przerywa sie sama).
-                    label: "Trailing stop-loss", data: chartData.stop_level_pct, borderColor: "#e0455a",
-                    backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 3], order: 1,
-                },
-                {
-                    type: "bar", label: "Wolumen kupujących (tyg.)", data: buyingVolumes, backgroundColor: buyingColors,
-                    yAxisID: "yVolume", stack: "volume", order: 2, barPercentage: 0.7, categoryPercentage: 0.9,
-                },
-                {
-                    type: "bar", label: "Wolumen sprzedających (tyg.)", data: sellingVolumes, backgroundColor: sellingColor,
-                    yAxisID: "yVolume", stack: "volume", order: 2, barPercentage: 0.7, categoryPercentage: 0.9,
-                },
             ],
         },
         options: {
@@ -516,41 +529,76 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             maintainAspectRatio: false,
             interaction: { mode: "index", intersect: false },
             plugins: {
-                legend: {
-                    position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } },
-                    filter: (item) => item.text !== "Wolumen kupujących (tyg.)" && item.text !== "Wolumen sprzedających (tyg.)",
-                },
-                tooltip: {
-                    callbacks: {
-                        label: (ctx) => {
-                            if (ctx.dataset.label === "Wolumen kupujących (tyg.)") {
-                                const ratio = buyingVolumeRatios[ctx.dataIndex];
-                                const ratioTxt = ratio != null ? ` (${ratio.toFixed(2)}x śr.)` : "";
-                                return `Kupujący: ${ctx.parsed.y.toLocaleString("pl-PL")}${ratioTxt}`;
-                            }
-                            if (ctx.dataset.label === "Wolumen sprzedających (tyg.)") {
-                                return `Sprzedający: ${ctx.parsed.y.toLocaleString("pl-PL")}`;
-                            }
-                            const base = `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}`;
-                            if (ctx.datasetIndex === 0 && signals[ctx.dataIndex]) {
-                                const sig = signals[ctx.dataIndex];
-                                const bc = baseCounts[ctx.dataIndex];
-                                const sigTxt = (bc != null && (sig === "ENTRY_2B" || sig === "ENTRY_2B_LATE"))
-                                    ? `${SIGNAL_LABELS[sig]} (${bc}. baza)` : SIGNAL_LABELS[sig];
-                                return [base, sigTxt];
-                            }
-                            return base;
-                        },
+                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}` } },
+                annotation: { annotations: baseAnnotations },
+                // Interaktywny zoom/pan (chartjs-plugin-zoom) — tylko oś X, zeby nie
+                // wypaczac skali % na osi Y. onZoomComplete/onPanComplete przesuwaja
+                // zakres wolumenu razem z cena (patrz syncVolumeXRange), zeby oba
+                // panele zawsze pokazywaly te same tygodnie.
+                zoom: {
+                    limits: { x: { min: "original", max: "original" } },
+                    pan: { enabled: true, mode: "x", onPanComplete: ({ chart }) => syncVolumeXRange(chart) },
+                    zoom: {
+                        wheel: { enabled: true }, pinch: { enabled: true }, mode: "x",
+                        onZoomComplete: ({ chart }) => syncVolumeXRange(chart),
                     },
                 },
             },
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                 y: { ticks: { color: "#8a8f9c", callback: pctFmt }, grid: { color: "#262a35" } },
-                yVolume: { display: false, stacked: true, min: 0, max: maxVolume * 4 },
             },
         },
     });
+
+    // Slupki tygodniowego wolumenu, skladane z dwoch segmentow (stack: "volume")
+    // — dol = wolumen kupujacych, gora = sprzedajacych, zeby od razu bylo widac
+    // PROPORCJE, nie tylko wysokosc calego slupka. Segment kupujacych jest
+    // jasniejszy, gdy buying_volume_ratio >= STAGE_BREAKOUT_VOLUME_RATIO
+    // (potwierdzone wybicie wolumenem KUPUJACYCH — patrz run_query.py). Wlasna,
+    // W PELNI WIDOCZNA os (wczesniej ukryta na dolnym pasku wykresu 10:30).
+    if (volumeCanvas) {
+        const buyingColors = buyingVolumes.map((v, i) => {
+            const ratio = buyingVolumeRatios[i];
+            return (ratio != null && ratio >= STAGE_BREAKOUT_VOLUME_RATIO) ? "rgba(46, 204, 113, 0.85)" : "rgba(46, 204, 113, 0.35)";
+        });
+        const sellingColor = "rgba(224, 69, 90, 0.55)";
+        rsVolumeChartInstance = new Chart(volumeCanvas, {
+            type: "bar",
+            data: {
+                labels: chartData.dates,
+                datasets: [
+                    { label: "Wolumen kupujących (tyg.)", data: buyingVolumes, backgroundColor: buyingColors, stack: "volume", barPercentage: 0.8, categoryPercentage: 0.9 },
+                    { label: "Wolumen sprzedających (tyg.)", data: sellingVolumes, backgroundColor: sellingColor, stack: "volume", barPercentage: 0.8, categoryPercentage: 0.9 },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                    legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                if (ctx.datasetIndex === 0) {
+                                    const ratio = buyingVolumeRatios[ctx.dataIndex];
+                                    const ratioTxt = ratio != null ? ` (${ratio.toFixed(2)}x śr.)` : "";
+                                    return `Kupujący: ${ctx.parsed.y.toLocaleString("pl-PL")}${ratioTxt}`;
+                                }
+                                return `Sprzedający: ${ctx.parsed.y.toLocaleString("pl-PL")}`;
+                            },
+                        },
+                    },
+                },
+                scales: {
+                    x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
+                    y: { stacked: true, ticks: { color: "#8a8f9c", maxTicksLimit: 4 }, grid: { color: "#262a35" } },
+                },
+            },
+        });
+    }
 
     if (mansfieldCanvas && mansfieldData) {
         const zeroLine = mansfieldData.dates.map(() => 0);
@@ -956,6 +1004,7 @@ if (typeof document !== "undefined") {
         renderRelativeStrengthPanel();
         initDrawer();
         initOpenTvButton();
+        initResetZoomButton();
         initStageFilter();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
