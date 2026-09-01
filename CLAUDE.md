@@ -108,26 +108,44 @@ at a literal 1:1 replication of S&P's own rebalance calendar.
 Compares the **index level** (not constituents) of NASDAQ100/DOWJONES (`GEM_UNIVERSES` — deliberately
 **not** WIG20/mWIG40, see below) against each other over a trailing `GEM_LOOKBACK_MONTHS` (12) window —
 the classic dual/global-momentum idea of picking whichever market currently has the strongest trend.
-`fetch_data.py::update_index_prices` pulls daily closes for every universe in `INDEX_LEVEL_SYMBOLS`
-(`^NDX`/`^DJI` for the two US universes, `WIG20.WA`/`MWIG40.WA` for WIG20/mWIG40) into a shared
-`index_prices` table (`Date, Index_Name, Close, ...`), fully replaced on every run (no incremental logic
-needed, unlike the per-constituent `prices` table), via a single multi-ticker `_download_price_rows(['^NDX',
-'^DJI', 'WIG20.WA', 'MWIG40.WA'], ...)` call. That mixed batch (two different exchanges/currencies in one
-`yf.download(..., group_by="ticker")` request) hit a real, consistently-reproducing yfinance quirk in
-production: yfinance reported `WIG20.WA`/`MWIG40.WA` as "possibly delisted; no price data found" in every
-run, even though the same two symbols do have data when requested alone — leaving `index_prices` with zero
-rows for WIG20/mWIG40 and silently breaking every WIG20/mWIG40 stock's `weekly_chart`/`mansfield_chart`
-(`compute_relative_strength_chart`/`compute_mansfield_rs_chart` both need their own index's rows and return
-`None` without them — the dashboard showed correct WIG20/mWIG40 constituent data but no chart for any of
-their tickers). Fixed generically in `_download_price_rows()` itself, not by special-casing these two
-symbols: any ticker still missing after a batch call is retried once more on its own (single-ticker
-`yf.download`) before it's finally counted as failed — this fixes the WIG20/mWIG40 case (and any other
-future mixed-batch false negative) without needing to guess which symbol combination yfinance will
-mis-report next. `compute_index_returns()` reads that table — filtered
-to `GEM_UNIVERSES` only — and returns each universe's return over the window, sorted descending; the top
-one is the `winner`. WIG20/mWIG40 price data still lands in `index_prices` (needed for their own Relative
-Strength, below) but is excluded from this specific cross-market race by that filter, so adding them
-didn't silently change who can win Global Equity Momentum.
+`fetch_data.py::update_index_prices` maintains a shared `index_prices` table (`Date, Index_Name, Close,
+...`), fully replaced on every run (no incremental logic needed, unlike the per-constituent `prices`
+table) — but NASDAQ100/DOWJONES and WIG20/mWIG40 get their rows two entirely different ways:
+
+- **NASDAQ100/DOWJONES** (`^NDX`/`^DJI`, `INDEX_LEVEL_SYMBOLS`): fetched from yfinance via
+  `_download_price_rows`, same as before — these two symbols do have full historical daily data there.
+- **WIG20/mWIG40**: **not** fetched from yfinance at all — `WIG20.WA`/`MWIG40.WA` were tried first (a
+  single multi-ticker `_download_price_rows(['^NDX', '^DJI', 'WIG20.WA', 'MWIG40.WA'], ...)` call, then a
+  per-symbol solo retry added to `_download_price_rows()` itself to rule out a batching quirk), and both
+  consistently came back "possibly delisted; no price data found" — confirmed, via a throwaway diagnostic
+  GitHub Actions run, to be a real Yahoo data-availability gap and not a yfinance/batching bug:
+  `yf.download`/`Ticker.history` for these two tickers return **at most one row (today's)** no matter the
+  requested range or interval (`period="1y"`, `period="1mo"`, `interval="1wk"` over 2 years — all gave 1
+  row), while `Ticker(...).fast_info` works fine (current quote, `quoteType: "INDEX"`) and the exact same
+  call for an individual constituent (e.g. `PKN.WA`) returns full multi-month history without issue. So
+  Yahoo's chart API has no historical series for the WIG20/mWIG40 **index tickers themselves** — only a
+  live quote — while it has full history for every individual GPW-listed **stock**, retry or no retry.
+  `update_index_prices` instead calls `_compute_synthetic_equal_weight_index()`: an equal-weighted (same
+  convention as `EQUAL_WEIGHT_UNIVERSES`) synthetic index level, base 100, built purely from the *already
+  fetched* per-constituent closes in `prices` for that universe's tickers in `index_constituents` — daily
+  equal-weighted average return across constituents, compounded from the base. This is not a literal
+  WIG20/mWIG40 replica, but every consumer (`compute_index_momentum`, `compute_relative_strength_chart`,
+  `compute_mansfield_rs_chart`) only ever reads **% change relative to a window's start**, never the
+  absolute level, so an arbitrary base is fine. It also works under `--indices-only` (`daily_gem.yml`):
+  `index_constituents`/`prices` aren't refreshed there, but persist from the last full run, so the
+  synthetic series just doesn't gain new days between monthly runs instead of being empty. Returns an
+  empty frame (no exception) when `index_constituents`/`prices` don't exist yet (fresh bootstrap) or have
+  no rows for that universe in the window.
+
+Before this fix, `weekly_chart`/`mansfield_chart` were silently `None` for every WIG20/mWIG40 stock
+(`compute_relative_strength_chart`/`compute_mansfield_rs_chart` both need their own index's rows and
+return `None` without them) — the dashboard showed correct WIG20/mWIG40 constituent/momentum data but no
+chart for any of their tickers, with no error anywhere in the pipeline. `compute_index_returns()` reads
+`index_prices` — filtered to `GEM_UNIVERSES` only — and returns each universe's return over the window,
+sorted descending; the top one is the `winner`. WIG20/mWIG40 price data still lands in `index_prices`
+(needed for their own Relative Strength, below) but is excluded from this specific cross-market race by
+that filter, so adding them didn't silently change who can win Global Equity Momentum — and their
+synthetic (not real-index) nature is one more reason they should stay out of that race.
 
 For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
 **pushing the index to its new highs** — ranked by *contribution to the index's return*
@@ -415,7 +433,9 @@ python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh pric
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
                                    # compute momentum + regenerate docs/data/*.json
 
-python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices (^NDX/^DJI/WIG20.WA/MWIG40.WA), skip constituents
+python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices (^NDX/^DJI from yfinance;
+                                   # WIG20/mWIG40 synthetic level rebuilt from last-known constituent prices,
+                                   # not fetched — see Global Equity Momentum section), skip constituents
 python run_query.py --gem-only        # daily_gem.yml only: regenerate global_equity_momentum.json only
 
 pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)

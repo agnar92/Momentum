@@ -378,12 +378,86 @@ def _upsert_price_rows(con, rows, tickers, start_date):
         con.execute("INSERT INTO prices SELECT * FROM df_insert")
 
 
+def _table_exists(con, table_name):
+    return con.execute(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ?", [table_name]
+    ).fetchone()[0] > 0
+
+
+WIG_SYNTHETIC_INDEX_BASE = 100.0  # dowolna baza — konsumenci licza wylacznie % zmiany wzgledem okna
+
+
+def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date):
+    """WIG20.WA/MWIG40.WA (INDEX_LEVEL_SYMBOLS) NIE MAJA u yfinance zadnej historycznej
+    danej poziomu indeksu — ustalone recznie (yf.download z dowolnym zakresem/okresem
+    dla tych dwoch tickerow, w tym period="1y" i Ticker().history(period="2y",
+    interval="1wk"), zwraca co najwyzej JEDEN wiersz: dzisiejszy; tylko
+    Ticker().fast_info dziala, dajac biezacy kurs). Ten sam zakres dla pojedynczej
+    spolki-skladnika (np. PKN.WA) zwraca pelna, wielomiesieczna historie bez
+    problemu — to ograniczenie dotyczy WYLACZNIE samych tickerow-indeksow w chart
+    API Yahoo, nie calej gieldy warszawskiej. "possibly delisted" to mylacy
+    komunikat dla "brak historii dla TEGO tickera w tym API", nie faktyczny
+    delisting (fast_info nadal dziala, kwoteType='INDEX'). Retry pojedynczego
+    tickera (patrz _download_price_rows) nie pomaga, bo to nie jest fluktuacja
+    sieciowa/batchowa — potwierdzone wielokrotnie, w tym w osobnych przebiegach
+    workflow.
+
+    Zamiast dalej polegac na yfinance dla tych dwoch tickerow, budujemy WLASNY,
+    syntetyczny poziom indeksu z cen WLASNYCH skladnikow (ktore MAJA pelna
+    historie w `prices`): rownowazony (spojnie z EQUAL_WEIGHT_UNIVERSES w
+    run_query.py) sredni dzienny zwrot wszystkich skladnikow z
+    index_constituents, skladany od dowolnej bazy (WIG_SYNTHETIC_INDEX_BASE) —
+    nie prawdziwy poziom WIG20/mWIG40, ale poprawnie oddaje KIERUNEK i SKALE
+    ruchu rynku, a to jedyne, czego potrzebuja compute_index_momentum/
+    compute_relative_strength_chart/compute_mansfield_rs_chart (licza wylacznie
+    % zmiany wzgledem okna, nigdy bezwzglednego poziomu).
+
+    Dziala tez w trybie --indices-only (daily_gem.yml): index_constituents/prices
+    nie sa tam odswiezane (patrz update_duckdb), ale zostaja z ostatniego pelnego
+    (miesiecznego) przebiegu — syntetyczny poziom po prostu nie przybywa mu nowych
+    dni az do kolejnego pelnego przebiegu, zamiast byc calkowicie pusty jak
+    dotychczas. Zwraca pusty DataFrame (bez rzucania wyjatku), gdy
+    index_constituents/prices jeszcze nie istnieja (swiezy bootstrap) albo nie
+    maja danych dla tego uniwersum w podanym oknie."""
+    if not _table_exists(con, "index_constituents") or not _table_exists(con, "prices"):
+        return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
+
+    tickers = con.execute(
+        "SELECT Ticker FROM index_constituents WHERE Index_Name = ?", [index_name]
+    ).fetchdf()["Ticker"].tolist()
+    if not tickers:
+        return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
+
+    con.register("_synth_tickers_tmp", pd.DataFrame({"Ticker": tickers}))
+    prices_df = con.execute(f"""
+        SELECT Date, Ticker, Close FROM prices
+        WHERE Ticker IN (SELECT Ticker FROM _synth_tickers_tmp)
+          AND Date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
+        ORDER BY Date
+    """).fetchdf()
+    con.unregister("_synth_tickers_tmp")
+    if prices_df.empty:
+        return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
+
+    pivot = prices_df.pivot(index="Date", columns="Ticker", values="Close").sort_index()
+    equal_weight_return = pivot.pct_change().mean(axis=1, skipna=True).fillna(0.0)
+    level = (1.0 + equal_weight_return).cumprod() * WIG_SYNTHETIC_INDEX_BASE
+
+    return pd.DataFrame({
+        "Date": level.index, "Index_Name": index_name,
+        "Close": level.values, "Adj_Close": level.values, "Volume": 0,
+    })
+
+
 def update_index_prices(con, lookback_months):
-    """Ceny POZIOMU INDEKSU (^NDX/^DJI/WIG20.WA/MWIG40.WA, nie skladnikow) dla Global
-    Equity Momentum i Sily Relatywnej — tylko 4 symbole, wiec zamiast przyrostowego smart-refreshu jak
-    dla tysiaca tickerow akcji, przy kazdym uruchomieniu podmieniamy caly
-    zakres na nowo (koszt pomijalny), reuzywajac _download_price_rows (ta sama
-    logika batchowania/retry co ceny akcji)."""
+    """Ceny POZIOMU INDEKSU dla Global Equity Momentum i Sily Relatywnej. NASDAQ100/
+    DOWJONES (^NDX/^DJI) MAJA pelna historyczna dana u yfinance — pobierane jak
+    dotychczas: tylko 2 symbole, wiec zamiast przyrostowego smart-refreshu jak dla
+    tysiaca tickerow akcji, przy kazdym uruchomieniu podmieniamy caly zakres na nowo
+    (koszt pomijalny), reuzywajac _download_price_rows (ta sama logika
+    batchowania/retry co ceny akcji). WIG20/MWIG40 NIE MAJA takiej danej u yfinance
+    (patrz _compute_synthetic_equal_weight_index) — budowane syntetycznie z
+    wlasnych skladnikow zamiast pobierane."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS index_prices (
             Date DATE, Index_Name VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
@@ -391,24 +465,36 @@ def update_index_prices(con, lookback_months):
         )
     """)
     start_date, end_date = get_full_refresh_range(lookback_months)
-    yf_symbols = list(INDEX_LEVEL_SYMBOLS.values())
+
+    us_symbols = {"NASDAQ100": INDEX_LEVEL_SYMBOLS["NASDAQ100"], "DOWJONES": INDEX_LEVEL_SYMBOLS["DOWJONES"]}
+    yf_symbols = list(us_symbols.values())
     print(f"🔄 Ceny poziomu indeksów (Global Equity Momentum): {start_date} → {end_date} dla {yf_symbols}...")
 
     rows, fetched, failed = _download_price_rows(yf_symbols, start_date, end_date)
     if failed:
         print(f"⚠️  Brak danych poziomu indeksu dla: {sorted(set(failed))}")
-    if not rows:
-        print("❌ Nie pobrano żadnych danych poziomu indeksów.")
-        return
 
-    symbol_to_index = {v: k for k, v in INDEX_LEVEL_SYMBOLS.items()}
-    df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
-    df_insert["Index_Name"] = df_insert["Ticker"].map(symbol_to_index)
-    df_insert = df_insert[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
+    symbol_to_index = {v: k for k, v in us_symbols.items()}
+    con.execute(f"""
+        DELETE FROM index_prices
+        WHERE Index_Name IN ('NASDAQ100', 'DOWJONES') AND Date >= DATE '{start_date}'
+    """)
+    if rows:
+        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+        df_insert["Index_Name"] = df_insert["Ticker"].map(symbol_to_index)
+        df_insert = df_insert[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
+        con.execute("INSERT INTO index_prices SELECT * FROM df_insert")
+    print(f"✅ Zapisano {len(rows)} wierszy danych poziomu indeksów NASDAQ100/DOWJONES ({start_date} → {end_date}).")
 
-    con.execute(f"DELETE FROM index_prices WHERE Date >= DATE '{start_date}'")
-    con.execute("INSERT INTO index_prices SELECT * FROM df_insert")
-    print(f"✅ Zapisano {len(df_insert)} wierszy danych poziomu indeksów ({start_date} → {end_date}).")
+    for index_name in ("WIG20", "MWIG40"):
+        synth = _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)  # noqa: F841
+        con.execute(f"DELETE FROM index_prices WHERE Index_Name = '{index_name}' AND Date >= DATE '{start_date}'")
+        if synth.empty:
+            print(f"⚠️  Brak danych składników do zbudowania syntetycznego indeksu {index_name}.")
+            continue
+        con.execute("INSERT INTO index_prices SELECT * FROM synth")
+        print(f"✅ Zbudowano syntetyczny poziom indeksu {index_name}: {len(synth)} dni "
+              f"(równoważony zwrot składników, baza={WIG_SYNTHETIC_INDEX_BASE}).")
 
 
 def _ensure_prices_ohlc_columns(con):
