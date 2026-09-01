@@ -1,6 +1,7 @@
 
-const UNIVERSES = ["NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
+const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
 const UNIVERSE_LABELS = {
+    SP500: "S&P 500 Momentum",
     NASDAQ100: "Nasdaq 100 Momentum",
     DOWJONES: "Dow Jones Momentum",
     WIG20: "WIG20 Momentum",
@@ -49,7 +50,7 @@ const state = {
     selectedUniverse: null,
     currentRsEntry: null,
     drawerOpen: false,
-    drawerUniverse: "NASDAQ100",
+    drawerUniverse: "SP500",
     stageFilter: "ALL",
     sortKey: "rank",
     sortDir: "asc"
@@ -963,8 +964,8 @@ if (typeof document !== "undefined") {
         document.getElementById("chartBackBtn").addEventListener("click", () => {
             document.querySelector(".workspace").classList.remove("mobile-chart-view");
         });
-        state.selectedTicker = "QQQ";
-        state.selectedUniverse = "NASDAQ100";
+        state.selectedTicker = "SPY";
+        state.selectedUniverse = "SP500";
         updateChartArea();
     })();
 

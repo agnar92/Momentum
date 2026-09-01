@@ -15,11 +15,15 @@ import pandas as pd
 import pytest
 
 from run_query import (
+    EQUAL_WEIGHT_UNIVERSES,
+    GEM_UNIVERSES,
     MAX_HOLDINGS,
     MAX_WEIGHT,
+    RELATIVE_STRENGTH_UNIVERSES,
     RS_PRICE_SMA_LONG_WEEKS,
     RS_PRICE_SMA_SHORT_WEEKS,
     STAGE_BREAKOUT_VOLUME_RATIO,
+    UNIVERSES,
     add_zscore_and_momentum_score,
     compute_equity_curve,
     compute_index_leaders,
@@ -35,6 +39,24 @@ from run_query import (
     select_with_buffer,
     _compute_weinstein_stage_series,
 )
+
+
+# ---------------------------------------------------------------------------
+# SP500 scope: przywrocony jako pelne uniwersum momentum + ekran Sily
+# Relatywnej (stage-analysis charts), ale CELOWO NIE uczestniczy w Global
+# Equity Momentum (nie zmienia istniejacego zachowania GEM) ani w
+# rebalance.js's UNIVERSES (rebalance.html/rebalance.js, poza zasiegiem tego
+# pliku) — dokladnie tak samo jak WIG20/mWIG40 sa dzis scoped.
+# ---------------------------------------------------------------------------
+
+class TestSP500Scope:
+    def test_sp500_is_a_full_weighted_momentum_universe(self):
+        assert "SP500" in UNIVERSES
+        assert "SP500" not in EQUAL_WEIGHT_UNIVERSES  # ma realne wagi z CSPX_holdings.csv
+
+    def test_sp500_is_in_relative_strength_but_not_gem(self):
+        assert "SP500" in RELATIVE_STRENGTH_UNIVERSES
+        assert "SP500" not in GEM_UNIVERSES
 
 
 def make_metrics_df(rows):

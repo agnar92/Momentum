@@ -7,17 +7,18 @@ import yfinance as yf
 
 # ============================================================================
 # HOLDINGS: wyłącznie z ręcznie podmienianych plików CSV (holdings ETF-ów
-# CNDX/CIND). Próba użycia biblioteki etf_scraper została porzucona —
+# CSPX/CNDX/CIND). Próba użycia biblioteki etf_scraper została porzucona —
 # pakiet okazał się niewspierany/niedziałający, więc zostajemy przy CSV jako
 # jedynym, sprawdzonym źródle.
 # ============================================================================
 INDEX_MAP = {
+    "CSPX_holdings.csv": "SP500",
     "CNDX_holdings.csv": "NASDAQ100",
     "CIND_holdings.csv": "DOWJONES"
 }
 
 # WIG20/mWIG40 (GPW): brak globalnie dostępnego ETF-a z publikowanymi holdings
-# w formacie iShares (jak CNDX/CIND) dla indeksów warszawskiej giełdy, więc
+# w formacie iShares (jak CSPX/CNDX/CIND) dla indeksów warszawskiej giełdy, więc
 # te dwa uniwersa są zasilane ręcznie utrzymywanym plikiem JSON z samą listą
 # tickerów (bez wag kapitałowych) — patrz _load_json_constituents. Tak jak
 # DOWJONES, są ważone równomiernie (patrz run_query.py::EQUAL_WEIGHT_UNIVERSES).
@@ -48,14 +49,21 @@ YFINANCE_TICKER_OVERRIDES = {
 # budowany dynamicznie przy wczytywaniu — patrz _load_json_constituents.
 GPW_TICKERS = set()
 
-# Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum — porownanie
-# zwrotu calego NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
-# compute_index_returns). ^NDX/^DJI to standardowe symbole yfinance
-# dla tych indeksow. WIG20/mWIG40 maja wlasne symbole (WIG20.WA/MWIG40.WA) —
-# potrzebne do liczenia Sily Relatywnej tych uniwersow (run_query.py::
-# compute_index_momentum), nie uczestnicza natomiast w wyscigu Global Equity
-# Momentum (patrz run_query.py::GEM_UNIVERSES).
+# Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum i Sily Relatywnej —
+# porownanie zwrotu calego NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
+# compute_index_returns). ^NDX/^DJI to standardowe symbole yfinance dla tych
+# indeksow, MAJACE pelna historyczna dana tam (patrz update_index_prices). SP500
+# (^GSPC) rowniez ma pelna historie u yfinance, ale — tak jak WIG20/mWIG40 —
+# celowo NIE uczestniczy w wyscigu Global Equity Momentum (patrz
+# run_query.py::GEM_UNIVERSES): dodany z powrotem WYLACZNIE jako uniwersum
+# momentum + ekran Sily Relatywnej (run_query.py::compute_index_momentum), bez
+# zmiany istniejacego zachowania GEM. WIG20/mWIG40 maja wlasne symbole
+# (WIG20.WA/MWIG40.WA) w tym slowniku wylacznie dla dokumentacji/run_query.py's
+# metadanych "yf_symbol" — NIE sa nimi faktycznie pobierane (patrz
+# _compute_synthetic_equal_weight_index: yfinance nie ma dla nich zadnej
+# historycznej danej poziomu indeksu, w odroznieniu od SP500/NASDAQ100/DOWJONES).
 INDEX_LEVEL_SYMBOLS = {
+    "SP500": "^GSPC",
     "NASDAQ100": "^NDX",
     "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA",
@@ -89,7 +97,7 @@ def _parse_money(series):
 def _load_json_constituents():
     """Wczytuje skład WIG20/mWIG40 z ręcznie utrzymywanych plików JSON (patrz
     JSON_INDEX_MAP) — sama lista tickerów GPW, bez wag kapitałowych (brak ETF-a
-    z publikowanymi holdings dla tych indeksów, w odróżnieniu od CNDX/CIND).
+    z publikowanymi holdings dla tych indeksów, w odróżnieniu od CSPX/CNDX/CIND).
     fmc_etf ustawiane na stałą wartość 1.0 dla każdej spółki — nieużywana
     realnie do wagowania (WIG20/mWIG40 są ważone równomiernie, tak jak DOWJONES —
     patrz run_query.py::EQUAL_WEIGHT_UNIVERSES), a get_universe_metrics wymaga
@@ -132,11 +140,11 @@ def _load_json_constituents():
 
 def load_index_constituents(con):
     """
-    Wczytuje skład indeksów z plików holdings funduszy ETF (CNDX/CIND),
+    Wczytuje skład indeksów z plików holdings funduszy ETF (CSPX/CNDX/CIND),
     które podmieniasz ręcznie. Oprócz tickera i sektora, wyciąga 'Market
     Value' — realną, publikowaną wagę kapitałową danej spółki w funduszu
     replikującym dany indeks (substytut FMC — patrz wcześniejsze wyjaśnienie
-    w rozmowie: dla NASDAQ100 to float-adjusted market cap, dla
+    w rozmowie: dla SP500/NASDAQ100 to float-adjusted market cap, dla
     DOWJONES to waga cenowa, bo DJIA jest indeksem ważonym ceną).
     """
     con.execute("""
@@ -449,13 +457,21 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
     })
 
 
+# SP500/NASDAQ100/DOWJONES MAJA pelna historyczna dana poziomu indeksu u yfinance
+# (^GSPC/^NDX/^DJI) — pobierane stamtad jak dotychczas. WIG20/MWIG40 NIE MAJA
+# (patrz _compute_synthetic_equal_weight_index) — budowane syntetycznie.
+YFINANCE_BACKED_INDEX_UNIVERSES = ("SP500", "NASDAQ100", "DOWJONES")
+SYNTHETIC_INDEX_UNIVERSES = ("WIG20", "MWIG40")
+
+
 def update_index_prices(con, lookback_months):
-    """Ceny POZIOMU INDEKSU dla Global Equity Momentum i Sily Relatywnej. NASDAQ100/
-    DOWJONES (^NDX/^DJI) MAJA pelna historyczna dana u yfinance — pobierane jak
-    dotychczas: tylko 2 symbole, wiec zamiast przyrostowego smart-refreshu jak dla
-    tysiaca tickerow akcji, przy kazdym uruchomieniu podmieniamy caly zakres na nowo
-    (koszt pomijalny), reuzywajac _download_price_rows (ta sama logika
-    batchowania/retry co ceny akcji). WIG20/MWIG40 NIE MAJA takiej danej u yfinance
+    """Ceny POZIOMU INDEKSU dla Global Equity Momentum i Sily Relatywnej.
+    SP500/NASDAQ100/DOWJONES (YFINANCE_BACKED_INDEX_UNIVERSES) MAJA pelna
+    historyczna dana u yfinance — pobierane jak dotychczas: zamiast
+    przyrostowego smart-refreshu jak dla tysiaca tickerow akcji, przy kazdym
+    uruchomieniu podmieniamy caly zakres na nowo (koszt pomijalny), reuzywajac
+    _download_price_rows (ta sama logika batchowania/retry co ceny akcji).
+    WIG20/MWIG40 (SYNTHETIC_INDEX_UNIVERSES) NIE MAJA takiej danej u yfinance
     (patrz _compute_synthetic_equal_weight_index) — budowane syntetycznie z
     wlasnych skladnikow zamiast pobierane."""
     con.execute("""
@@ -466,27 +482,29 @@ def update_index_prices(con, lookback_months):
     """)
     start_date, end_date = get_full_refresh_range(lookback_months)
 
-    us_symbols = {"NASDAQ100": INDEX_LEVEL_SYMBOLS["NASDAQ100"], "DOWJONES": INDEX_LEVEL_SYMBOLS["DOWJONES"]}
-    yf_symbols = list(us_symbols.values())
+    yf_backed = {name: INDEX_LEVEL_SYMBOLS[name] for name in YFINANCE_BACKED_INDEX_UNIVERSES}
+    yf_symbols = list(yf_backed.values())
     print(f"🔄 Ceny poziomu indeksów (Global Equity Momentum): {start_date} → {end_date} dla {yf_symbols}...")
 
     rows, fetched, failed = _download_price_rows(yf_symbols, start_date, end_date)
     if failed:
         print(f"⚠️  Brak danych poziomu indeksu dla: {sorted(set(failed))}")
 
-    symbol_to_index = {v: k for k, v in us_symbols.items()}
+    symbol_to_index = {v: k for k, v in yf_backed.items()}
+    yfinance_backed_sql = ", ".join(f"'{name}'" for name in YFINANCE_BACKED_INDEX_UNIVERSES)
     con.execute(f"""
         DELETE FROM index_prices
-        WHERE Index_Name IN ('NASDAQ100', 'DOWJONES') AND Date >= DATE '{start_date}'
+        WHERE Index_Name IN ({yfinance_backed_sql}) AND Date >= DATE '{start_date}'
     """)
     if rows:
         df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
         df_insert["Index_Name"] = df_insert["Ticker"].map(symbol_to_index)
         df_insert = df_insert[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
         con.execute("INSERT INTO index_prices SELECT * FROM df_insert")
-    print(f"✅ Zapisano {len(rows)} wierszy danych poziomu indeksów NASDAQ100/DOWJONES ({start_date} → {end_date}).")
+    print(f"✅ Zapisano {len(rows)} wierszy danych poziomu indeksów "
+          f"{'/'.join(YFINANCE_BACKED_INDEX_UNIVERSES)} ({start_date} → {end_date}).")
 
-    for index_name in ("WIG20", "MWIG40"):
+    for index_name in SYNTHETIC_INDEX_UNIVERSES:
         synth = _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)  # noqa: F841
         con.execute(f"DELETE FROM index_prices WHERE Index_Name = '{index_name}' AND Date >= DATE '{start_date}'")
         if synth.empty:
@@ -561,7 +579,8 @@ def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
     con = duckdb.connect("momentum_data.duckdb")
 
     if indices_only:
-        # Tylko poziom indeksu (^NDX/^DJI/WIG20.WA/MWIG40.WA, 4 symbole) dla Global Equity Momentum —
+        # Tylko poziom indeksu (^GSPC/^NDX/^DJI z yfinance + WIG20/MWIG40 syntetycznie
+        # z ostatnich znanych cen skladnikow) dla Global Equity Momentum i Sily Relatywnej —
         # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc odswiezac to
         # codziennie bez kosztu/limitow pelnego pobrania cen akcji (patrz workflow
         # daily_gem.yml — GEM ma byc aktualny codziennie, nie tylko raz w miesiacu).
@@ -597,7 +616,8 @@ if __name__ == "__main__":
     parser.add_argument("--min-coverage", type=float, default=0.8,
                          help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
     parser.add_argument("--indices-only", action="store_true",
-                         help="Odśwież WYŁĄCZNIE ceny poziomu indeksu (^NDX/^DJI/WIG20.WA/MWIG40.WA) dla Global Equity "
+                         help="Odśwież WYŁĄCZNIE ceny poziomu indeksu (^GSPC/^NDX/^DJI z yfinance, WIG20/MWIG40 "
+                              "syntetycznie) dla Global Equity "
                               "Momentum — pomija skład indeksów i ceny wszystkich składników. Do użycia w "
                               "codziennym workflow (patrz daily_gem.yml), osobno od pełnego miesięcznego "
                               "odświeżenia.")

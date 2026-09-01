@@ -8,7 +8,7 @@ katalogu docs/ pod GitHub Pages.
 
 Zgodnie z ustaleniami: fetch_data.py odpowiada WYŁĄCZNIE za pobieranie
 danych (ceny z yfinance, skład indeksów + FMC z kolumny 'Market Value'
-w plikach CSV holdings ETF-ów CNDX/CIND; skład WIG20/mWIG40 z ręcznie
+w plikach CSV holdings ETF-ów CSPX/CNDX/CIND; skład WIG20/mWIG40 z ręcznie
 utrzymywanych plików JSON, bez FMC — patrz fetch_data.py::JSON_INDEX_MAP).
 Ten plik odpowiada za WSZYSTKO inne: obliczenia + generowanie strony.
 
@@ -31,13 +31,13 @@ metodologii S&P Momentum Indices):
    Kazda spolka w KAZDYM uniwersum (nie tylko liderzy Sily Relatywnej, patrz pkt
    10) ma tez wlasny "weekly_chart"/"mansfield_chart" — patrz process_universe.
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
-   fetch_data.py) dla NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez
-   WIG20/mWIG40) w oknie GEM_LOOKBACK_MONTHS, wybor zwyciezcy (najwyzszy zwrot)
-   i top GEM_TOP_N liderow zwycieskiego indeksu wg wkladu w jego zwrot — patrz
-   export_global_equity_momentum.
-10. Sila relatywna dla NASDAQ100/DOWJONES/WIG20/MWIG40 (RELATIVE_STRENGTH_
-    UNIVERSES): momentum kazdej spolki (TO SAMO okno co momentum_value 3
-    glownych uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
+   fetch_data.py) dla NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez SP500/
+   WIG20/mWIG40, patrz komentarz przy GEM_UNIVERSES) w oknie GEM_LOOKBACK_MONTHS,
+   wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N liderow zwycieskiego indeksu
+   wg wkladu w jego zwrot — patrz export_global_equity_momentum.
+10. Sila relatywna dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 (RELATIVE_STRENGTH_
+    UNIVERSES): momentum kazdej spolki (TO SAMO okno co momentum_value glownych
+    uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
     po przewadze — patrz export_relative_strength. Kazdy lider ma tez, od poczatku
     tego samego okna, "wykres 10:30" w stylu stage analysis (Weinstein/Dr Eric Wish):
@@ -73,7 +73,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-UNIVERSES = ["NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
+UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
 TARGET_QUINTILE = 0.20   # top 20% wg momentum score
 BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
 BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
@@ -85,16 +85,21 @@ MAX_HOLDINGS = 100
 # publikowanymi holdings dla indeksow GPW (skladniki wczytywane z reczne
 # utrzymywanego JSON, patrz fetch_data.py::JSON_INDEX_MAP) — wszystkie trzy sa
 # wiec wazone rownomiernie zamiast FMC x momentum_score, patrz compute_weights.
+# SP500 (jak NASDAQ100) ma realne wagi z 'Market Value' (CSPX_holdings.csv),
+# wiec NIE jest tutaj — kwintylowa selekcja + wagi FMC x momentum_score.
 EQUAL_WEIGHT_UNIVERSES = {"DOWJONES", "WIG20", "MWIG40"}
 GEM_LOOKBACK_MONTHS = 12   # okno zwrotu poziomu indeksu dla Global Equity Momentum
 GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy dla zwycieskiego indeksu
-# Global Equity Momentum porownuje TYLKO te 2 uniwersa (rynek USA) miedzy soba —
-# WIG20/MWIG40 maja wlasne dane w index_prices (potrzebne do Sily Relatywnej),
-# ale celowo NIE uczestnicza w tym wyscigu, zeby nie zmieniac istniejacego
-# zachowania GEM bez wyraznej decyzji o rozszerzeniu go na rynek polski.
+# Global Equity Momentum porownuje TYLKO te 2 uniwersa (rynek USA, rdzen
+# pierwotnego zestawu) miedzy soba — SP500/WIG20/MWIG40 maja wlasne dane w
+# index_prices (potrzebne do Sily Relatywnej), ale celowo NIE uczestnicza w tym
+# wyscigu: SP500 zostal przywrocony do narzedzia WYLACZNIE jako uniwersum
+# momentum + ekran Sily Relatywnej (na zyczenie), bez zmiany istniejacego
+# zachowania GEM; WIG20/MWIG40 z tego samego powodu, co dodatkowo nie zmienia
+# zachowania GEM przy rozszerzeniu na rynek polski.
 GEM_UNIVERSES = ["NASDAQ100", "DOWJONES"]
 INDEX_LEVEL_SYMBOLS = {
-    "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
+    "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
 }
 
@@ -738,16 +743,18 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
 
 
 # ============================================================================
-# SIŁA RELATYWNA WZGLĘDEM INDEKSU — dla NASDAQ100, DOWJONES, WIG20 i mWIG40.
-# Zamiast osobnego okna YTD (za mało danych tuż po Nowym Roku),
-# używa DOKŁADNIE tego samego okna co momentum_value 3 głównych uniwersów
+# SIŁA RELATYWNA WZGLĘDEM INDEKSU — dla SP500, NASDAQ100, DOWJONES, WIG20 i
+# mWIG40 (w odróżnieniu od GEM_UNIVERSES, SP500/WIG20/mWIG40 TU są objęte —
+# ten ekran nie ma tego samego "nie zmieniaj istniejącego zachowania GEM"
+# ograniczenia). Zamiast osobnego okna YTD (za mało danych tuż po Nowym Roku),
+# używa DOKŁADNIE tego samego okna co momentum_value głównych uniwersów
 # (get_universe_metrics: M-14/M-2, fallback M-11/M-2 przy krótszej historii) —
 # nie trzeba więc liczyć/pobierać danych dla osobnego okna tylko na potrzeby
 # tego ekranu. Zostają tylko spółki, których momentum w tym oknie przebiło
 # momentum samego indeksu — posortowane malejąco po przewadze
 # (relative_strength_pct = zwrot spółki - zwrot indeksu).
 # ============================================================================
-RELATIVE_STRENGTH_UNIVERSES = ["NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
+RELATIVE_STRENGTH_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
 
 
 def compute_index_momentum(con, universe, ref_date):
@@ -1306,13 +1313,13 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
         }
 
     if not universes_payload:
-        print("❌ Brak danych siły relatywnej dla NASDAQ100/DOWJONES.")
+        print("❌ Brak danych siły relatywnej dla żadnego uniwersum.")
         return
 
     payload = {
         "ref_date": ref_date,
         "universes": universes_payload,
-        "note": ("Siła relatywna względem indeksu dla NASDAQ100/DOWJONES/WIG20/mWIG40, w TYM SAMYM "
+        "note": ("Siła relatywna względem indeksu dla SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, w TYM SAMYM "
                  "oknie co momentum_value głównych uniwersów (M-14/M-2, fallback M-11/M-2 przy krótszej "
                  "historii — patrz get_universe_metrics), zamiast osobnego okna YTD, które tuż po "
                  "Nowym Roku miałoby za mało danych. Lista 'leaders' w każdym uniwersum zawiera TYLKO "
@@ -1340,7 +1347,7 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Oblicza S&P-style Momentum dla NASDAQ100/DOWJONES/WIG20/MWIG40 "
+        description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 "
                      "i generuje statyczną stronę (docs/) pod GitHub Pages."
     )
     parser.add_argument("--ref-date", type=str, default=None,

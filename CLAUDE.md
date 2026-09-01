@@ -4,19 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this repo is
 
-A momentum-investing tool for NASDAQ100, DOWJONES, WIG20, and mWIG40: a Python pipeline computes
+A momentum-investing tool for SP500, NASDAQ100, DOWJONES, WIG20, and mWIG40: a Python pipeline computes
 an S&P-style Momentum Index selection/weighting for each universe and publishes the results as a static
 dashboard (`docs/`) to GitHub Pages. There is a second page (`rebalance.html`) that lets a user paste in
 their current brokerage holdings (or import an XTB export) and get buy/sell suggestions to move toward
-the computed target weights. WIG20/mWIG40 are momentum + relative-strength screener universes only —
-they are **not** wired into the rebalance calculator's target-allocation split (`rebalance.js`'s own
-`UNIVERSES` stays NASDAQ100/DOWJONES), since mixing a PLN-denominated capital bucket into a
-USD-denominated allocation split would need FX handling that hasn't been built; a WIG20/mWIG40 position
-pasted into holdings is still priced correctly via `docs/data/all_prices.json`, which is universe-agnostic.
+the computed target weights. SP500/WIG20/mWIG40 are momentum + relative-strength screener universes
+only — they are **not** wired into the rebalance calculator's target-allocation split (`rebalance.js`'s
+own `UNIVERSES` stays NASDAQ100/DOWJONES): WIG20/mWIG40 because mixing a PLN-denominated capital bucket
+into a USD-denominated allocation split would need FX handling that hasn't been built; SP500 because it
+was brought back specifically as a screener (see below) — a position in either is still priced correctly
+via `docs/data/all_prices.json`, which is universe-agnostic, if pasted into holdings.
 
-SP500 was deliberately removed from this tool (dashboard, rebalance calculator, GEM, all pipeline
-tables/data) — the user already holds a dedicated S&P 500 ETF elsewhere, so this tool now only tracks
-the universes above.
+SP500 was removed once (dashboard, rebalance calculator, GEM, all pipeline tables/data) because the user
+held a dedicated S&P 500 ETF elsewhere and didn't need this tool tracking it too — then brought back
+later, once the tool grew the Weinstein stage-analysis 10:30/Mansfield charts, specifically to get those
+charts and the Relative Strength screener for S&P names, **not** to resume rebalancing against it. So
+this second pass is deliberately narrower than the original: SP500 is back in `UNIVERSES` (full
+momentum selection/weighting, its own dashboard tab) and `RELATIVE_STRENGTH_UNIVERSES` (screener + 10:30/
+Mansfield charts), exactly like WIG20/mWIG40 are scoped — but it stays **out** of `GEM_UNIVERSES` (Global
+Equity Momentum keeps comparing only NASDAQ100/DOWJONES, unchanged from before this second pass) and
+**out** of `rebalance.js`'s `UNIVERSES` (see above). `CSPX_holdings.csv` (iShares Core S&P 500 UCITS ETF
+holdings, same format/convention as `CNDX_holdings.csv`/`CIND_holdings.csv`) was restored from git
+history (the exact file present right before the original removal) as the starting holdings snapshot —
+replace it by hand like the other two CSVs when the index composition changes.
 
 Code comments and CLI print messages are written in Polish; keep that convention when editing existing
 files (English is fine for new, unrelated code).
@@ -31,8 +41,8 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
 "previous rebalance" to compare against in production.
 
 1. **`fetch_data.py`** — data acquisition only.
-   - Loads index composition + weights from the two manually-maintained CSV files at repo root
-     (`CNDX_holdings.csv` → NASDAQ100, `CIND_holdings.csv` → DOWJONES;
+   - Loads index composition + weights from the three manually-maintained CSV files at repo root
+     (`CSPX_holdings.csv` → SP500, `CNDX_holdings.csv` → NASDAQ100, `CIND_holdings.csv` → DOWJONES;
      these are iShares ETF holdings exports and must be replaced by hand when the index composition
      changes) into the `index_constituents` table. The `Market Value` column from each CSV is stored
      as `fmc_etf` and used as a real-world float-adjusted-market-cap substitute for weighting.
@@ -70,7 +80,7 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
        (`DELETE FROM prices WHERE Date < cutoff`), so the table is a rolling window and does not grow
        without bound — it always holds just enough history for the M-14 momentum window plus a margin.
 2. **`run_query.py`** — all the calculation logic and static site generation. Nothing about data
-   fetching lives here. For each universe (`NASDAQ100`, `DOWJONES`, `WIG20`, `MWIG40` —
+   fetching lives here. For each universe (`SP500`, `NASDAQ100`, `DOWJONES`, `WIG20`, `MWIG40` —
    `UNIVERSES`):
    - Computes momentum value `(price[M-2] / price[M-14]) - 1` (falls back to a 9-month window
      `price[M-2]/price[M-11] - 1` when 14 months of history isn't available), annualized volatility
@@ -106,15 +116,21 @@ at a literal 1:1 replication of S&P's own rebalance calendar.
 ### Global Equity Momentum (`compute_index_returns` / `compute_index_leaders`)
 
 Compares the **index level** (not constituents) of NASDAQ100/DOWJONES (`GEM_UNIVERSES` — deliberately
-**not** WIG20/mWIG40, see below) against each other over a trailing `GEM_LOOKBACK_MONTHS` (12) window —
-the classic dual/global-momentum idea of picking whichever market currently has the strongest trend.
+**not** SP500/WIG20/mWIG40, see below) against each other over a trailing `GEM_LOOKBACK_MONTHS` (12)
+window — the classic dual/global-momentum idea of picking whichever market currently has the strongest
+trend. SP500 stays out of `GEM_UNIVERSES` even though it (unlike WIG20/mWIG40) has full yfinance history
+and could technically join: it was brought back specifically as a momentum + Relative Strength screener
+universe (see "What this repo is" above), and widening the GEM race was never asked for, so `GEM_UNIVERSES`
+stays exactly `["NASDAQ100", "DOWJONES"]`, unchanged since before SP500 came back.
 `fetch_data.py::update_index_prices` maintains a shared `index_prices` table (`Date, Index_Name, Close,
 ...`), fully replaced on every run (no incremental logic needed, unlike the per-constituent `prices`
-table) — but NASDAQ100/DOWJONES and WIG20/mWIG40 get their rows two entirely different ways:
+table) — but SP500/NASDAQ100/DOWJONES and WIG20/mWIG40 get their rows two entirely different ways:
 
-- **NASDAQ100/DOWJONES** (`^NDX`/`^DJI`, `INDEX_LEVEL_SYMBOLS`): fetched from yfinance via
-  `_download_price_rows`, same as before — these two symbols do have full historical daily data there.
-- **WIG20/mWIG40**: **not** fetched from yfinance at all — `WIG20.WA`/`MWIG40.WA` were tried first (a
+- **SP500/NASDAQ100/DOWJONES** (`^GSPC`/`^NDX`/`^DJI`, `INDEX_LEVEL_SYMBOLS`,
+  `fetch_data.py::YFINANCE_BACKED_INDEX_UNIVERSES`): fetched from yfinance via `_download_price_rows`,
+  same as before — these three symbols do have full historical daily data there.
+- **WIG20/mWIG40** (`fetch_data.py::SYNTHETIC_INDEX_UNIVERSES`): **not** fetched from yfinance at all —
+  `WIG20.WA`/`MWIG40.WA` were tried first (a
   single multi-ticker `_download_price_rows(['^NDX', '^DJI', 'WIG20.WA', 'MWIG40.WA'], ...)` call, then a
   per-symbol solo retry added to `_download_price_rows()` itself to rule out a batching quirk), and both
   consistently came back "possibly delisted; no price data found" — confirmed, via a throwaway diagnostic
@@ -137,15 +153,16 @@ table) — but NASDAQ100/DOWJONES and WIG20/mWIG40 get their rows two entirely d
   empty frame (no exception) when `index_constituents`/`prices` don't exist yet (fresh bootstrap) or have
   no rows for that universe in the window.
 
-Before this fix, `weekly_chart`/`mansfield_chart` were silently `None` for every WIG20/mWIG40 stock
-(`compute_relative_strength_chart`/`compute_mansfield_rs_chart` both need their own index's rows and
-return `None` without them) — the dashboard showed correct WIG20/mWIG40 constituent/momentum data but no
-chart for any of their tickers, with no error anywhere in the pipeline. `compute_index_returns()` reads
-`index_prices` — filtered to `GEM_UNIVERSES` only — and returns each universe's return over the window,
-sorted descending; the top one is the `winner`. WIG20/mWIG40 price data still lands in `index_prices`
-(needed for their own Relative Strength, below) but is excluded from this specific cross-market race by
-that filter, so adding them didn't silently change who can win Global Equity Momentum — and their
-synthetic (not real-index) nature is one more reason they should stay out of that race.
+Before the synthetic-index fix, `weekly_chart`/`mansfield_chart` were silently `None` for every WIG20/
+mWIG40 stock (`compute_relative_strength_chart`/`compute_mansfield_rs_chart` both need their own index's
+rows and return `None` without them) — the dashboard showed correct WIG20/mWIG40 constituent/momentum
+data but no chart for any of their tickers, with no error anywhere in the pipeline. `compute_index_returns()`
+reads `index_prices` — filtered to `GEM_UNIVERSES` only — and returns each universe's return over the
+window, sorted descending; the top one is the `winner`. SP500/WIG20/mWIG40 price data still lands in
+`index_prices` (needed for their own Relative Strength, below) but is excluded from this specific
+cross-market race by that filter, so adding any of them didn't silently change who can win Global Equity
+Momentum — and WIG20/mWIG40's synthetic (not real-index) nature is one more reason they in particular
+should stay out of that race.
 
 For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
 **pushing the index to its new highs** — ranked by *contribution to the index's return*
@@ -155,7 +172,7 @@ momentum score — a small-cap mover with an extreme return but negligible index
 a mega-cap that is dragging the whole index up. `export_global_equity_momentum()` writes both the ranked
 index list and the winner's leader list to `docs/data/global_equity_momentum.json`.
 
-Unlike the three main universes, GEM is refreshed **daily**, not monthly (`daily_gem.yml`, see CI
+Unlike the main constituent-selection universes (`UNIVERSES`), GEM is refreshed **daily**, not monthly (`daily_gem.yml`, see CI
 section) — so `export_global_equity_momentum()`'s `ref_date` is *not* threaded through from the
 constituent-price pipeline's `ref_date` (that only moves once a month). When called with `ref_date=None`
 (the default), it derives its own from `MAX(Date)` in `index_prices` instead, so a same-day
@@ -167,7 +184,7 @@ refresh possible without touching the (expensive, rate-limited) per-constituent 
 
 ### Relative strength (`compute_index_momentum` / `compute_relative_strength_leaders`)
 
-A screener for NASDAQ100, DOWJONES, WIG20, and mWIG40 (`RELATIVE_STRENGTH_UNIVERSES`): for each
+A screener for SP500, NASDAQ100, DOWJONES, WIG20, and mWIG40 (`RELATIVE_STRENGTH_UNIVERSES`): for each
 constituent, compares its momentum to the *same-window* momentum of the index level
 (`index_prices`). Deliberately uses the exact same window as the main universes' `momentum_value`
 (`get_universe_metrics`: M-14/M-2, falling
@@ -330,7 +347,7 @@ immediately servable without having to run the pipeline first. CI still regenera
 every run (see CI section below) — it isn't hand-maintained.
 
 - **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe (`UNIVERSES` in
-  `app.js`, kept in sync with `run_query.py`'s own `UNIVERSES` — currently NASDAQ100/DOWJONES/
+  `app.js`, kept in sync with `run_query.py`'s own `UNIVERSES` — currently SP500/NASDAQ100/DOWJONES/
   WIG20/mWIG40) plus a sidebar group for **Global Equity Momentum** (`docs/data/global_equity_momentum.json`,
   `renderGemPanel()` — shows the winning index + its return, a ranked list of the (US-only) indices'
   returns, and tiles for the winner's top-10 contribution leaders), a full sortable constituents table per
@@ -353,7 +370,7 @@ every run (see CI section below) — it isn't hand-maintained.
   also carries its own small "TV" button doing the same, independent of selecting the row (it stops click
   propagation so it doesn't also call `selectTicker()`); plus a sidebar group for
   **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
-  index's own return, and tiles merging NASDAQ100+DOWJONES+WIG20+mWIG40 outperformers via
+  index's own return, and tiles merging SP500+NASDAQ100+DOWJONES+WIG20+mWIG40 outperformers via
   `combinedRelativeStrengthLeaders()`, sorted by edge over their index). The sidebar is hidden on phones
   in portrait (`@media max-width:640px`), so the drawer table has a "🚀 GEM" tab (`showDrawerTable()` /
   `renderGemTable()`) and a "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as
