@@ -18,6 +18,29 @@ function tvSymbolFor(ticker, universe) {
     return PLN_UNIVERSES.has(universe) ? `GPW:${ticker}` : ticker;
 }
 
+// Link do PEŁNEJ strony TradingView (nie osadzony widget) dla danego tickera —
+// otwierany w nowej karcie przyciskiem "Otwórz w TradingView" (patrz
+// initOpenTvButton/updateChartArea) i przyciskami "TV" w wierszach tabel.
+function tvUrlFor(ticker, universe) {
+    return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbolFor(ticker, universe))}`;
+}
+
+// Mały przycisk-link "TV" do wiersza tabeli — otwiera tradingview.com w nowej
+// karcie, bez zaznaczania wiersza (stopPropagation, zeby klik nie odpalal tez
+// selectTicker na <tr>).
+function tvRowButtonHtml(ticker, universe) {
+    return `<button type="button" class="tv-row-btn" data-ticker="${ticker}" data-universe="${universe}" title="Otwórz ${ticker} w TradingView (nowa karta)">TV</button>`;
+}
+
+function bindTvRowButtons(container) {
+    container.querySelectorAll(".tv-row-btn").forEach(btn => {
+        btn.addEventListener("click", (ev) => {
+            ev.stopPropagation();
+            window.open(tvUrlFor(btn.dataset.ticker, btn.dataset.universe), "_blank", "noopener");
+        });
+    });
+}
+
 const state = {
     data: {},
     gem: { indices: [], leaders: [] },
@@ -25,7 +48,6 @@ const state = {
     selectedTicker: null,
     selectedUniverse: null,
     currentRsEntry: null,
-    chartMode: "TV",
     drawerOpen: false,
     drawerUniverse: "NASDAQ100",
     sortKey: "rank",
@@ -207,7 +229,7 @@ function renderRelativeStrengthPanel() {
         tile.dataset.ticker = c.ticker;
         tile.dataset.universe = c.universe;
         if (c.ticker === state.selectedTicker) tile.classList.add("selected");
-        tile.addEventListener("click", () => selectTicker(c.ticker, c.universe, "RS"));
+        tile.addEventListener("click", () => selectTicker(c.ticker, c.universe));
         container.appendChild(tile);
     });
     if (combined.length === 0) {
@@ -231,12 +253,7 @@ function findRsEntry(ticker, universe) {
     return (universeEntry && universeEntry.weekly_chart) ? { ...universeEntry, universe } : null;
 }
 
-// preferMode="RS": wywolywane z kafelka/wiersza w panelu Sily Relatywnej — jesli
-// ten ticker ma wlasny tygodniowy wykres (weekly_chart), pokaz go od razu zamiast
-// TradingView. Kazde inne wywolanie (tabele uniwersow, GEM, Ctrl+K) domyslnie
-// pokazuje TradingView jak wczesniej — ale przelacznik "Sila Relatywna" jest teraz
-// dostepny dla kazdej spolki z glownych uniwersow, nie tylko liderow RS.
-function selectTicker(ticker, universe, preferMode) {
+function selectTicker(ticker, universe) {
     state.selectedTicker = ticker;
     state.selectedUniverse = universe;
     document.querySelectorAll(".ticker-tile").forEach(t => {
@@ -245,9 +262,7 @@ function selectTicker(ticker, universe, preferMode) {
     document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr, #rsTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
-    const rsEntry = findRsEntry(ticker, universe);
-    state.currentRsEntry = rsEntry;
-    state.chartMode = (preferMode === "RS" && rsEntry && rsEntry.weekly_chart) ? "RS" : "TV";
+    state.currentRsEntry = findRsEntry(ticker, universe);
     updateChartArea();
     // Na telefonie nie ma miejsca na tabelę i wykres naraz — wybranie spółki
     // przełącza widok na pełnoekranowy wykres (jak w apce TradingView).
@@ -266,11 +281,13 @@ function jumpToTicker(ticker, universe) {
 }
 
 // ============================================================
-// OBSZAR WYKRESU: TradingView LUB własne wykresy tygodniowe Siły Relatywnej
-// w stylu stage analysis — "wykres 10:30" + oscylator Mansfield RS (patrz
-// renderRelativeStrengthChart). Przełącznik (#chartModeToggle) jest aktywny
-// tylko gdy state.currentRsEntry ma weekly_chart; w przeciwnym razie zawsze
-// pokazujemy TradingView jak wcześniej.
+// OBSZAR WYKRESU: zawsze własny wykres tygodniowy Siły Relatywnej (stage
+// analysis — "wykres 10:30" + oscylator Mansfield RS, patrz
+// renderRelativeStrengthChart), z jednym przyciskiem "Otwórz w TradingView"
+// (#openTvBtn) do pełnej strony tradingview.com w nowej karcie zamiast
+// osadzonego widgetu — patrz initOpenTvButton. Gdy dana spółka nie ma
+// własnego wykresu (np. za mało historii cen), pokazujemy #noChartMessage
+// zamiast pustych paneli — przycisk TV dziala zawsze, niezaleznie od tego.
 // ============================================================
 let rsChartInstance = null;
 
@@ -279,38 +296,30 @@ function updateChartArea() {
     const rsEntry = state.currentRsEntry;
     const hasRsChart = !!(rsEntry && rsEntry.weekly_chart);
 
-    const label = document.getElementById("symbolLabel");
-    if (label) label.textContent = symbol;
+    const noChartMsg = document.getElementById("noChartMessage");
+    const rsChartPanel = document.getElementById("rsChartPanel");
+    const rsMansfieldPanel = document.getElementById("rsMansfieldPanel");
+    const stageLegend = document.getElementById("stageLegend");
+    if (noChartMsg) noChartMsg.hidden = hasRsChart;
+    if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
+    if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart;
+    if (stageLegend) stageLegend.hidden = !hasRsChart;
 
-    const tvBtn = document.getElementById("chartModeTvBtn");
-    const rsBtn = document.getElementById("chartModeRsBtn");
-    if (rsBtn) rsBtn.disabled = !hasRsChart;
-    if (!hasRsChart) state.chartMode = "TV";
-
-    const tvContainer = document.getElementById("tv_chart");
-    const rsContainer = document.getElementById("rs_chart");
-    const showRs = state.chartMode === "RS" && hasRsChart;
-
-    if (tvContainer) tvContainer.hidden = showRs;
-    if (rsContainer) rsContainer.hidden = !showRs;
-    if (tvBtn) tvBtn.classList.toggle("active", !showRs);
-    if (rsBtn) rsBtn.classList.toggle("active", showRs);
-
-    if (showRs) {
+    if (hasRsChart) {
         renderRelativeStrengthChart(symbol, rsEntry);
     } else {
-        mountWidget("tv_chart", tvSymbolFor(symbol, state.selectedUniverse));
+        renderStageBadge(null);
+        if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
+        if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
     }
 }
 
-function initChartModeToggle() {
-    const tvBtn = document.getElementById("chartModeTvBtn");
-    const rsBtn = document.getElementById("chartModeRsBtn");
-    if (tvBtn) tvBtn.addEventListener("click", () => { state.chartMode = "TV"; updateChartArea(); });
-    if (rsBtn) rsBtn.addEventListener("click", () => {
-        if (rsBtn.disabled) return;
-        state.chartMode = "RS";
-        updateChartArea();
+function initOpenTvButton() {
+    const btn = document.getElementById("openTvBtn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+        if (!state.selectedTicker) return;
+        window.open(tvUrlFor(state.selectedTicker, state.selectedUniverse), "_blank", "noopener");
     });
 }
 
@@ -526,37 +535,6 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     }
 }
 
-function mountWidget(containerId, symbol) {
-    const el = document.getElementById(containerId);
-    if (!el) return;
-    el.innerHTML = "";
-    if (typeof TradingView === "undefined") {
-        el.innerHTML = '<div class="empty-state">Nie udało się załadować widgetu TradingView (sprawdź połączenie z internetem).</div>';
-        return;
-    }
-    // eslint-disable-next-line no-new
-    new TradingView.widget({
-        autosize: true,
-        symbol: symbol,
-        details: true,
-        interval: "W",              // domyślny interwał — przełączasz w toolbarze widgetu (1D/1W/1M itd.)
-        timezone: "Etc/UTC",
-        theme: "dark",
-        style: "1",
-        locale: "pl",
-        toolbar_bg: "#14161c",
-        enable_publishing: false,
-        hide_top_toolbar: false,    // toolbar widgetu zawiera przełącznik interwału
-        hide_side_toolbar: false,   // pasek z narzędziami do rysowania (linie, fibo itd.) — domyślnie bywa ukryty
-        hide_legend: false,
-        save_image: true,
-        studies: [                  // domyślnie dograne wskaźniki - użytkownik może dodać kolejne ręcznie w UI
-            "STD;MA%Ribbon"
-        ],
-        container_id: containerId
-    });
-}
-
 // ============================================================
 // SZUFLADA TABEL (>>> rozwiń / <<< zwiń)
 // ============================================================
@@ -657,7 +635,7 @@ function renderGemTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="7" class="empty-state">Brak danych.</td>`;
+        tr.innerHTML = `<td colspan="8" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -674,10 +652,12 @@ function renderGemTable() {
             <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct.toFixed(2)}%</td>
             <td>${r.weight_in_index_pct.toFixed(2)}%</td>
             <td>${r.contribution_pct.toFixed(2)}pp</td>
+            <td>${tvRowButtonHtml(r.ticker, g.winner)}</td>
         `;
         tr.addEventListener("click", () => selectTicker(r.ticker, g.winner));
         tbody.appendChild(tr);
     });
+    bindTvRowButtons(tbody);
 }
 
 function renderRelativeStrengthTable() {
@@ -697,7 +677,7 @@ function renderRelativeStrengthTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="8" class="empty-state">Brak danych.</td>`;
+        tr.innerHTML = `<td colspan="9" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -715,10 +695,12 @@ function renderRelativeStrengthTable() {
             <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct.toFixed(2)}%</td>
             <td class="${r.index_return_pct >= 0 ? "positive" : "negative"}">${r.index_return_pct.toFixed(2)}%</td>
             <td class="positive">+${r.relative_strength_pct.toFixed(2)}pp</td>
+            <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
         `;
-        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe, "RS"));
+        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         tbody.appendChild(tr);
     });
+    bindTvRowButtons(tbody);
 }
 
 function renderTable() {
@@ -748,7 +730,7 @@ function renderTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="10" class="empty-state">Brak danych.</td>`;
+        tr.innerHTML = `<td colspan="11" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -771,10 +753,12 @@ function renderTable() {
                 <span class="weight-bar-bg"><span class="weight-bar-fill" style="width:${(r.weight_pct / maxWeight * 100).toFixed(0)}%"></span></span>
                 ${r.weight_pct.toFixed(2)}%
             </td>
+            <td>${tvRowButtonHtml(r.ticker, state.drawerUniverse)}</td>
         `;
         tr.addEventListener("click", () => selectTicker(r.ticker, state.drawerUniverse));
         tbody.appendChild(tr);
     });
+    bindTvRowButtons(tbody);
 }
 
 // ============================================================
@@ -904,7 +888,7 @@ if (typeof document !== "undefined") {
         renderGemPanel();
         renderRelativeStrengthPanel();
         initDrawer();
-        initChartModeToggle();
+        initOpenTvButton();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
         buildSearchIndex();

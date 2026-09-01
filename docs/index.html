@@ -109,6 +109,7 @@
                         <th data-key="z_score">Z-score</th>
                         <th data-key="momentum_score">Momentum Score</th>
                         <th data-key="weight_pct">Waga</th>
+                        <th class="tv-col">TV</th>
                     </tr>
                 </thead>
                 <tbody id="momentumTableBody"></tbody>
@@ -127,6 +128,7 @@
                         <th>Zwrot 12M</th>
                         <th>Waga w indeksie</th>
                         <th>Wkład w zwrot</th>
+                        <th class="tv-col">TV</th>
                     </tr>
                 </thead>
                 <tbody id="gemTableBody"></tbody>
@@ -146,6 +148,7 @@
                         <th>Zwrot</th>
                         <th>Zwrot indeksu</th>
                         <th>Przewaga</th>
+                        <th class="tv-col">TV</th>
                     </tr>
                 </thead>
                 <tbody id="rsTableBody"></tbody>
@@ -153,27 +156,29 @@
         </div>
     </div>
 
-    <!-- ====================== WYKRES: TradingView LUB własny (Siła Relatywna) ====================== -->
+    <!-- ====================== WYKRES: własny (Siła Relatywna) + przycisk do TradingView ====================== -->
     <div class="charts-area">
         <button class="chart-back-btn" id="chartBackBtn">&larr; Lista spółek</button>
         <div class="chart-mode-toggle" id="chartModeToggle">
-            <button class="chart-mode-btn active" data-mode="TV" id="chartModeTvBtn">📈 TradingView</button>
-            <button class="chart-mode-btn" data-mode="RS" id="chartModeRsBtn" disabled
-                    title="Wykresy tygodniowe w stylu stage analysis (Weinstein): 'wykres 10:30' (cena + SMA 10-tyg./30-tyg., poziom własnego indeksu i wolumen), z klasyfikacją etapów 1/2A/2B/3/4 opartą o wybicia z lokalnych baz (trading range), trailing stop-lossem podnoszonym przy każdej kolejnej bazie i potwierdzeniem wybicia wolumenem, plus oscylator Mansfield RS krótko-/średnioterminowy — dostępne dla każdej spółki z głównych uniwersów.">
-                💪 Siła Relatywna
+            <button class="chart-mode-btn active" id="openTvBtn"
+                    title="Otwiera ten ticker na tradingview.com w nowej karcie (pełny widget TradingView, z narzędziami do rysowania itd.)">
+                📈 Otwórz w TradingView ↗
             </button>
         </div>
         <div class="chart-panel">
-            <div class="chart-container" id="tv_chart"></div>
-            <div class="chart-container rs-chart-container" id="rs_chart" hidden>
+            <div class="chart-container rs-chart-container" id="rs_chart">
                 <div class="stage-badge" id="stageBadge"></div>
-                <div class="rs-chart-panel">
+                <div class="empty-state" id="noChartMessage" hidden>
+                    Brak własnego wykresu tygodniowego dla tej spółki (za mało historii cen) — użyj przycisku
+                    „Otwórz w TradingView” powyżej.
+                </div>
+                <div class="rs-chart-panel" id="rsChartPanel">
                     <canvas id="rsChartCanvas"></canvas>
                 </div>
-                <div class="rs-chart-panel rs-chart-panel-small">
+                <div class="rs-chart-panel rs-chart-panel-small" id="rsMansfieldPanel">
                     <canvas id="rsMansfieldCanvas"></canvas>
                 </div>
-                <div class="stage-legend">
+                <div class="stage-legend" id="stageLegend">
                     ▲ zielony = wejście 2A/2B &nbsp;·&nbsp; ▲ bursztynowy = wejście na 4.+ bazie (ryzykowniejsze) &nbsp;·&nbsp;
                     ▼ czerwony = wyjście (złamany trailing stop) &nbsp;·&nbsp;
                     ■ bursztynowy = ostrzeżenie: SMA30 traci tempo &nbsp;·&nbsp;
@@ -186,7 +191,6 @@
 
 </div>
 
-<script src="https://s3.tradingview.com/tv.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="js/app.js"></script>
 </body>

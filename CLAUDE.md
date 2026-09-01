@@ -283,30 +283,34 @@ it only exists after the pipeline has run.
   `renderGemPanel()` — shows the winning index + its return, a ranked list of the (US-only) indices'
   returns, and tiles for the winner's top-10 contribution leaders), a full sortable constituents table per
   universe (`renderTable()` — `added_tickers`/`dropped_tickers` are exported in the JSON but not currently
-  rendered), a Ctrl+K
-  command-palette ticker search, and a full-screen TradingView chart widget (loaded from
-  `s3.tradingview.com`, mounted via `TradingView.widget(...)`), plus a sidebar group for
+  rendered), and a Ctrl+K command-palette ticker search. There is **no embedded TradingView chart widget** —
+  it was tried and then removed in favor of always showing the own weekly stage-analysis chart (below) for
+  whichever ticker is selected, with a single `#openTvBtn` button ("📈 Otwórz w TradingView ↗",
+  `initOpenTvButton()` in `app.js`) that opens the *full* tradingview.com chart page for that ticker in a new
+  tab instead (`tvUrlFor()`, built from `tvSymbolFor()` — `https://www.tradingview.com/chart/?symbol=...`) —
+  no `s3.tradingview.com` widget script is loaded at all any more. Every ticker row across the dashboard's
+  tables (the main per-universe table, the GEM table, the RS table — `tvRowButtonHtml()`/`bindTvRowButtons()`)
+  also carries its own small "TV" button doing the same, independent of selecting the row (it stops click
+  propagation so it doesn't also call `selectTicker()`); plus a sidebar group for
   **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
   index's own return, and tiles merging NASDAQ100+DOWJONES+WIG20+mWIG40 outperformers via
   `combinedRelativeStrengthLeaders()`, sorted by edge over their index). The sidebar is hidden on phones
   in portrait (`@media max-width:640px`), so the drawer table has a "🚀 GEM" tab (`showDrawerTable()` /
   `renderGemTable()`) and a "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as
   their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
-  per-universe tables. The chart area itself has a TradingView/"💪 Siła Relatywna" toggle
-  (`#chartModeToggle`, `updateChartArea()` in `app.js`): every ticker in the main per-universe exports
-  (`docs/data/{universe}.json`'s `constituents`, see `process_universe`/`export_json` above) now carries
-  its own `weekly_chart`/`mansfield_chart` too, not just the relative-strength panel's leaders — so the RS
-  toggle is available for any stock, however it was selected (per-universe tables, GEM, Ctrl+K search,
-  the relative-strength panel/table). `findRsEntry()` in `app.js` looks a ticker up first in
+  per-universe tables. Every ticker in the main per-universe exports
+  (`docs/data/{universe}.json`'s `constituents`, see `process_universe`/`export_json` above) carries its own
+  `weekly_chart`/`mansfield_chart` too, not just the relative-strength panel's leaders — so the own chart is
+  available for any stock, however it was selected (per-universe tables, GEM, Ctrl+K search, the
+  relative-strength panel/table). `findRsEntry()` in `app.js` looks a ticker up first in
   `combinedRelativeStrengthLeaders()` (an RS-leader entry also carries `relative_strength_pct`/
   `index_return_pct`) and falls back to its own record in `state.data[universe].constituents`; whichever
-  it finds becomes `state.currentRsEntry` and drives `hasRsChart` in `updateChartArea()`. Only clicking a
-  ticker from the relative-strength panel or table (the two call sites passing `preferMode="RS"` to
-  `selectTicker()`) *defaults* to showing it; everywhere else still opens TradingView by default, same as
-  before — the toggle just lets you switch either way for the current ticker if it has one, and stays
-  disabled when it doesn't (e.g. a ticker whose momentum fell back to the 9-month window with too little
-  extra history for even the short-term chart). When shown, it's two stacked Chart.js charts
-  (`renderRelativeStrengthChart()`, loaded via CDN like TradingView): the "10:30" price+SMA10/SMA30 chart
+  it finds becomes `state.currentRsEntry` and drives `hasRsChart` in `updateChartArea()` — when a ticker has
+  no `weekly_chart` at all (e.g. one whose momentum fell back to the 9-month window with too little extra
+  history), the chart panels are hidden and `#noChartMessage` is shown instead, pointing at the "Otwórz w
+  TradingView" button as the fallback; that button itself is never disabled, since it works for every ticker
+  regardless of chart-data availability. When shown, it's two stacked Chart.js charts
+  (`renderRelativeStrengthChart()`, loaded via CDN): the "10:30" price+SMA10/SMA30 chart
   on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to 0%
   at the momentum window's start) so the stock's trend can be read directly against its index's trend —
   whichever line is on top is the outperformer. That same panel also renders the Weinstein stage
@@ -330,9 +334,10 @@ it only exists after the pipeline has run.
   / `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`). WIG20/mWIG40 are PLN-denominated and
   GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
   prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
-  gets a `GPW:` prefix via `tvSymbolFor()` (tracked through `state.selectedUniverse`, set alongside
-  `state.selectedTicker` in `selectTicker()`) so the chart resolves to the correct Warsaw-listed instrument
-  instead of clashing with an unrelated ticker on another exchange.
+  used by `tvUrlFor()`/`tvRowButtonHtml()` gets a `GPW:` prefix via `tvSymbolFor()` (tracked through
+  `state.selectedUniverse`, set alongside `state.selectedTicker` in `selectTicker()`) so the "Otwórz w
+  TradingView" link resolves to the correct Warsaw-listed instrument instead of clashing with an unrelated
+  ticker on another exchange.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
   exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
   - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`
