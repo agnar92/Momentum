@@ -591,9 +591,10 @@ class TestExportRelativeStrength:
 
 
 # ---------------------------------------------------------------------------
-# compute_relative_strength_chart: dwa wykresy (nie-TradingView) dla panelu Siły
+# compute_relative_strength_chart: wykres (nie-TradingView) dla panelu Siły
 # Relatywnej w stylu stage analysis (Weinstein/Dr Eric Wish) — "wykres 10:30"
-# (cena + SMA10/SMA30 tygodniowo) i Mansfield Relative Strength (oscylator).
+# (cena + SMA10/SMA30 tygodniowo) razem z poziomem wlasnego indeksu, wszystko
+# przeliczone na % zmiany wzgledem pierwszego wyswietlanego tygodnia.
 # ---------------------------------------------------------------------------
 
 def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks, start_price, weekly_step):
@@ -611,15 +612,17 @@ def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks,
 
 
 class TestComputeRelativeStrengthChart:
-    def test_10_30_and_mansfield_rs_have_values_from_first_displayed_week(self):
+    def test_10_30_and_index_pct_have_values_from_first_displayed_week(self):
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
         ref_date = pd.Timestamp("2026-03-30")
         # Dane siegaja 60 tyg. PRZED start_date -> wiecej niz potrzebny zapas
-        # (max(30, 52) + 2 = 54 tyg.), zeby SMA30 i Mansfield SMA52 mialy juz
-        # wartosc na pierwszym WYSWIETLANYM tygodniu (start_date), nie dopiero
-        # pare miesiecy pozniej.
+        # (RS_PRICE_SMA_LONG_WEEKS + 2 = 32 tyg.), zeby SMA30 miala juz wartosc
+        # na pierwszym WYSWIETLANYM tygodniu (start_date), nie dopiero pare
+        # miesiecy pozniej.
         fixture_start = start_date - pd.Timedelta(weeks=60)
+        # AAA rosnie proporcjonalnie szybciej niz NASDAQ100 (1/100 vs 0.3/200
+        # tygodniowo) -> po rebase'owaniu do % powinna konczyc wyzej niz indeks.
         insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 80, 100.0, 1.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
                               fixture_start.strftime("%Y-%m-%d"), 80, 200.0, 0.3)
@@ -628,22 +631,22 @@ class TestComputeRelativeStrengthChart:
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
         assert out["dates"][0] == "2026-01-05"
-        assert out["sma10"][0] is not None
-        assert out["sma30"][0] is not None
-        assert out["mansfield_rs"][0] is not None
-        # Cena rosnie liniowo -> pozniejszy tydzien ma wyzsza cene niz wczesniejszy.
-        assert out["close"][-1] > out["close"][0]
-        # AAA rosnie proporcjonalnie znacznie szybciej niz NASDAQ100 (1/100 vs 0.3/200
-        # tygodniowo) -> linia RS (cena/indeks) systematycznie przyspiesza -> pod koniec
-        # okna jest WYZEJ niz jej wlasna 52-tyg. srednia -> Mansfield RS dodatni.
-        assert out["mansfield_rs"][-1] > 0
+        assert out["sma10_pct"][0] is not None
+        assert out["sma30_pct"][0] is not None
+        # Pierwszy wyswietlany tydzien to punkt odniesienia (rebase) -> 0% dla obu.
+        assert out["close_pct"][0] == 0.0
+        assert out["index_pct"][0] == 0.0
+        assert out["close_pct"][-1] > out["close_pct"][0]
+        assert out["index_pct"][-1] > out["index_pct"][0]
+        # Spolka silniejsza od rynku w tym oknie -> konczy powyzej linii indeksu.
+        assert out["close_pct"][-1] > out["index_pct"][-1]
 
-    def test_insufficient_lookback_leaves_first_week_smas_as_none(self):
+    def test_insufficient_lookback_leaves_first_week_sma30_as_none(self):
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
         ref_date = pd.Timestamp("2026-03-30")
-        # Tylko 5 tygodni historii PRZED start_date -> za malo na SMA30/Mansfield
-        # SMA52 przy pierwszym wyswietlanym tygodniu (musza byc None, nie blad).
+        # Tylko 5 tygodni historii PRZED start_date -> za malo na SMA30 przy
+        # pierwszym wyswietlanym tygodniu (musi byc None, nie blad).
         fixture_start = start_date - pd.Timedelta(weeks=5)
         insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 17, 100.0, 1.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
@@ -652,8 +655,8 @@ class TestComputeRelativeStrengthChart:
         out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
-        assert out["sma30"][0] is None
-        assert out["mansfield_rs"][0] is None
+        assert out["sma30_pct"][0] is None
+        assert out["index_pct"][0] == 0.0
 
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()

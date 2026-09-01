@@ -252,9 +252,9 @@ function jumpToTicker(ticker, universe) {
 }
 
 // ============================================================
-// OBSZAR WYKRESU: TradingView LUB własne wykresy tygodniowe Siły Relatywnej
-// w stylu stage analysis — "wykres 10:30" + Mansfield RS (patrz
-// renderRelativeStrengthChart). Przełącznik (#chartModeToggle) jest aktywny
+// OBSZAR WYKRESU: TradingView LUB własny wykres tygodniowy Siły Relatywnej
+// w stylu stage analysis — "wykres 10:30" (patrz renderRelativeStrengthChart).
+// Przełącznik (#chartModeToggle) jest aktywny
 // tylko gdy state.currentRsEntry ma weekly_chart; w przeciwnym razie zawsze
 // pokazujemy TradingView jak wcześniej.
 // ============================================================
@@ -300,38 +300,34 @@ function initChartModeToggle() {
     });
 }
 
-let rsLineChartInstance = null;
-
-// Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
-// stage analysis (Stan Weinstein / Dr Eric Wish):
-// 1. "Wykres 10:30" — cena tygodniowa spółki (surowa, nie %) + SMA 10-tyg. i
-//    30-tyg. — klasyczne progi stage analysis.
-// 2. Mansfield Relative Strength — oscylator wokół zera: RSM = (RS/SMA(RS,52tyg)-1)*100,
-//    gdzie RS = cena_spółki/poziom_indeksu. RSM > 0 = siła relatywna PRZYSPIESZA
-//    względem własnej 52-tyg. średniej (zielono), RSM < 0 = słabnie (czerwono).
+// "Wykres 10:30" (patrz .rs-chart-container w style.css), w stylu stage analysis
+// (Stan Weinstein / Dr Eric Wish): cena tygodniowa spółki + SMA 10-tyg./30-tyg. i
+// poziom własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
+// wyświetlanego tygodnia (patrz compute_relative_strength_chart) — jedna wspólna
+// skala zamiast dwóch osobnych, żeby jednym spojrzeniem było widać, która linia
+// rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku w tym oknie.
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = rsEntry.weekly_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
-    const rsLineCanvas = document.getElementById("rsLineCanvas");
-    if (!canvas || !rsLineCanvas || !chartData) return;
+    if (!canvas || !chartData) return;
 
     if (typeof Chart === "undefined") {
         if (rsContainer) rsContainer.innerHTML = '<div class="empty-state">Nie udało się załadować biblioteki wykresu (sprawdź połączenie z internetem).</div>';
         return;
     }
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
-    if (rsLineChartInstance) { rsLineChartInstance.destroy(); rsLineChartInstance = null; }
 
-    const priceFmt = (v) => (v == null ? "—" : formatPrice(v, rsEntry.universe));
+    const pctFmt = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
     rsChartInstance = new Chart(canvas, {
         type: "line",
         data: {
             labels: chartData.dates,
             datasets: [
-                { label: `${symbol} (cena)`, data: chartData.close, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                { label: "SMA 10-tyg.", data: chartData.sma10, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
-                { label: "SMA 30-tyg.", data: chartData.sma30, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
+                { label: `${symbol} (zmiana %)`, data: chartData.close_pct, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
+                { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
+                { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
             ],
         },
         options: {
@@ -340,47 +336,11 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             interaction: { mode: "index", intersect: false },
             plugins: {
                 legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
-                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${priceFmt(ctx.parsed.y)}` } },
+                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}` } },
             },
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
-                y: { ticks: { color: "#8a8f9c", callback: priceFmt }, grid: { color: "#262a35" } },
-            },
-        },
-    });
-
-    const zeroLine = chartData.dates.map(() => 0);
-    rsLineChartInstance = new Chart(rsLineCanvas, {
-        type: "line",
-        data: {
-            labels: chartData.dates,
-            datasets: [
-                {
-                    label: "Mansfield RS",
-                    data: chartData.mansfield_rs,
-                    borderColor: "#2ecc71",
-                    backgroundColor: "transparent",
-                    pointRadius: 0,
-                    borderWidth: 2,
-                    segment: { borderColor: (ctx) => (ctx.p1.parsed.y >= 0 ? "#2ecc71" : "#e0455a") },
-                },
-                { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3] },
-            ],
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: "index", intersect: false },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    filter: (ctx) => ctx.datasetIndex === 0,
-                    callbacks: { label: (ctx) => `Mansfield RS: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2)}` },
-                },
-            },
-            scales: {
-                x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
-                y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
+                y: { ticks: { color: "#8a8f9c", callback: pctFmt }, grid: { color: "#262a35" } },
             },
         },
     });

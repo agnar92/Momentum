@@ -150,18 +150,26 @@ watermark (not the monthly constituent-pipeline `ref_date`), and it's recomputed
 `run_query.py --gem-only` daily path as GEM (see `daily_gem.yml`) since it only needs `index_prices`
 (daily) + `prices`/`index_constituents` (gracefully stale-tolerant, same as `compute_index_leaders`).
 
-Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`) with two classic stage
--analysis views (Stan Weinstein / Dr Eric Wish) the free TradingView widget can't reliably replicate
-(adding a compare symbol can hit free-tier account limits): a **"10:30" chart** (`close`/`sma10`/`sma30` —
-the stock's own weekly price plus its 10-week and 30-week SMA) and **Mansfield Relative Strength**
-(`mansfield_rs` — an oscillator around zero: `RSM = (RS / SMA(RS, 52 weeks) - 1) * 100`, where
-`RS = stock_close / index_close` is the classic Weinstein RS ratio; positive means the stock's relative
-strength is currently accelerating above its own 52-week trend, negative means it's fading). Both are
-resampled from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` + `ARGMAX`, fetch
-`max(30, 52) + 2` extra weeks of history *before* the momentum window's start purely so both SMAs already
-have a value at the first displayed (in-window) point, and the series returned is trimmed to start exactly
-at that window's start (M-14 or M-11) through to `ref_date`. See `renderRelativeStrengthChart()` below for
-how both are rendered.
+Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`) with a classic stage
+-analysis view (Stan Weinstein / Dr Eric Wish) the free TradingView widget can't reliably replicate
+(adding a compare symbol can hit free-tier account limits): the **"10:30" chart** — the stock's own weekly
+price plus its 10-week and 30-week SMA, together with its own index level over the same weeks — with every
+series expressed as **% change relative to the first displayed (in-window) week**, not raw values on
+separate scales: two raw series on different axes make it hard to judge by eye which one is actually
+growing faster, while rebasing both to 0% at the window's start means whichever line ends up higher *is*
+the outperformer — directly answering "is this stock stronger than its own market right now" (`close_pct`/
+`sma10_pct`/`sma30_pct`/`index_pct`; the SMAs are computed on the raw weekly price first, then rebased by
+the same stock-price base as `close_pct` so they still read as a smoothed version of the price line). All
+series are resampled from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` +
+`ARGMAX`, fetching `RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's
+start purely so SMA30 already has a value at the first displayed (in-window) point, and the series returned
+is trimmed to start exactly at that window's start (M-14 or M-11) through to `ref_date`. Note: since `prices`
+only retains a rolling `--lookback-months` (15) window (see above) and the momentum window itself already
+consumes ~14 of those months, there is little to no actual buffer before `start_date` in production, so
+`sma10_pct`/`sma30_pct` can still show `null` for their first several in-window weeks for many tickers — a
+known, deliberately deferred limitation, not a bug to "fix" by widening `RS_PRICE_SMA_LONG_WEEKS`'s lookback
+further. See `renderRelativeStrengthChart()` below for how
+it's rendered.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -185,11 +193,12 @@ it only exists after the pipeline has run.
   their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
   per-universe tables. The chart area itself has a TradingView/"💪 Siła Relatywna" toggle
   (`#chartModeToggle`, `updateChartArea()` in `app.js`): clicking a ticker from the relative-strength panel
-  or table (the only two call sites passing `preferMode="RS"` to `selectTicker()`) defaults to two stacked
-  Chart.js charts (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
-  ticker's `weekly_chart` (see above) — the "10:30" price+SMA chart on top, Mansfield RS in a shorter
-  oscillator panel underneath (`.rs-chart-container` in `style.css`, zero line drawn as a reference dataset,
-  the line segment-colored green/red above/below zero) — the RS toggle button is disabled whenever the
+  or table (the only two call sites passing `preferMode="RS"` to `selectTicker()`) defaults to a single
+  Chart.js chart (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
+  ticker's `weekly_chart` (see above) — the "10:30" price+SMA10/SMA30 chart, with the stock's own index
+  level plotted alongside it on the *same* % axis (both rebased to 0% at the window's start, see above) so
+  the stock's trend can be read directly against its index's trend — whichever line is on top is the
+  outperformer (`.rs-chart-container` in `style.css`) — the RS toggle button is disabled whenever the
   selected ticker has no such data. Every other ticker click (per-universe tables, GEM, Ctrl+K search)
   still defaults to the TradingView widget as before; the toggle lets you switch either way for the
   current ticker. WIG20/mWIG40 are PLN-denominated and GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
