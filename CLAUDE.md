@@ -161,11 +161,12 @@ whichever line ends up higher *is* the outperformer — directly answering "is t
 own market right now" (`close_pct`/`sma10_pct`/`sma30_pct`/`index_pct`/`glb_pct`; the SMAs and GLB line are
 computed on the raw weekly price first, then rebased by the same stock-price base as `close_pct` so they
 still read as a smoothed/overlaid version of the price line). The GLB line is the classic "green line"
-resistance level: a flat horizontal line drawn at the stock's prior high that only jumps up once price
-closes a week above it (a breakout) — computed as a running maximum (`cummax()`) of the weekly close over
-the *entire fetched* series (including the SMA warm-up buffer, for the longest available "old high"
-context), so unlike the SMAs it's always available regardless of buffer shortfall; the point where the
-price line touches the GLB line is the breakout moment. All series are resampled from the daily
+resistance level: **one single flat horizontal line for the whole chart** (not a stepped history of every
+past breakout) drawn at the highest weekly close reached across the *entire fetched* series (including the
+SMA warm-up buffer, for the longest available "old high" context) — `float(stock_df["close"].max())`,
+rebased and repeated for every displayed date — so unlike the SMAs it's always available regardless of
+buffer shortfall; the point where the price line touches the GLB line is the breakout moment, everywhere
+else the price sits below it. All series are resampled from the daily
 `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` + `ARGMAX`, fetching
 `RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's start purely so
 SMA30 already has a value at the first displayed (in-window) point, and the series returned is trimmed to
@@ -231,7 +232,7 @@ it only exists after the pipeline has run.
   (`renderRelativeStrengthChart()`, loaded via CDN like TradingView): the "10:30" price+SMA10/SMA30+GLB
   chart on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to
   0% at the momentum window's start) so the stock's trend can be read directly against its index's trend —
-  whichever line is on top is the outperformer — plus a stepped, dashed GLB (Green Line Breakout) line
+  whichever line is on top is the outperformer — plus a single flat, dashed GLB (Green Line Breakout) line
   (`chartData.glb_pct`, distinct bright-green color so it doesn't blend into the stock's own price line)
   marking the prior-high resistance level a breakout needs to clear — and the Mansfield RS oscillator
   (short-term + medium-term lines, its own separate ~6-month window, see above) in a shorter panel
