@@ -38,10 +38,9 @@ metodologii S&P Momentum Indices):
     glownych uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
     po przewadze — patrz export_relative_strength. Kazdy lider ma tez, od poczatku
-    tego samego okna, dwa wykresy w stylu stage analysis (Weinstein/Dr Eric Wish):
-    "wykres 10:30" (cena spolki + SMA 10-tyg./30-tyg.) i Mansfield Relative Strength
-    (oscylator wokol zera, RSM = (RS/SMA(RS,52tyg)-1)*100, RS = cena/indeks) — patrz
-    compute_relative_strength_chart — do wykresu innego niz TradingView.
+    tego samego okna, "wykres 10:30" w stylu stage analysis (Weinstein/Dr Eric Wish):
+    cena spolki + SMA 10-tyg./30-tyg., razem z poziomem wlasnego indeksu (index_close)
+    — patrz compute_relative_strength_chart — do wykresu innego niz TradingView.
 
 WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
 innego powodu: nie ma ETF-u z publikowanymi holdings dla indeksow GPW, wiec
@@ -799,25 +798,22 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date):
 
 RS_PRICE_SMA_SHORT_WEEKS = 10   # "wykres 10:30" (Dr Eric Wish / stage analysis): 10-tyg. SMA ceny
 RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinsteina)
-RS_MANSFIELD_SMA_WEEKS = 52     # standardowy okres wygladzania dla Mansfield RS (52 tyg. = ok. rok)
 
 
 def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date):
-    """Dwa wykresy 'nie-TradingView' dla panelu Siły Relatywnej, w stylu klasycznej
-    metodologii stage analysis (Stan Weinstein / Dr. Eric Wish):
-    1. Tygodniowa cena spółki (surowa, NIE %) + SMA 10-tyg. i 30-tyg. — "wykres 10:30".
-    2. Mansfield Relative Strength: oscylator wokół zera,
-       RSM = (RS / SMA(RS, 52-tyg.) - 1) * 100, gdzie RS = cena_spółki / poziom_indeksu
-       (surowa linia RS Weinsteina) — RSM > 0 oznacza siłę relatywną PRZYSPIESZAJĄCĄ
-       względem własnej 52-tygodniowej średniej, RSM < 0 spowalniającą/słabnącą.
+    """Wykres 'nie-TradingView' dla panelu Siły Relatywnej, w stylu klasycznej
+    metodologii stage analysis (Stan Weinstein / Dr. Eric Wish) — "wykres 10:30":
+    tygodniowa cena spółki (surowa, NIE %) + SMA 10-tyg. i 30-tyg., razem z poziomem
+    własnego indeksu (index_close) narysowanym obok na osobnej skali, żeby widać było
+    trend spółki na tle trendu indeksu.
 
-    Pobiera dodatkowy zapas RS_MANSFIELD_SMA_WEEKS tygodni PRZED start_date (margines
+    Pobiera dodatkowy zapas RS_PRICE_SMA_LONG_WEEKS tygodni PRZED start_date (margines
     na "rozgrzanie" obu średnich, żeby miały już wartość od pierwszego wyświetlanego
     tygodnia), ale zwraca dane WYŁĄCZNIE od start_date — początek TEGO SAMEGO okna
     momentum_value co reszta pipeline'u (M-14 albo M-11 przy fallbacku, patrz
     compute_index_momentum) — do ref_date (dziś). Zwraca None gdy brakuje danych
     (np. spółka bez wystarczającej historii cen)."""
-    lookback_weeks = max(RS_PRICE_SMA_LONG_WEEKS, RS_MANSFIELD_SMA_WEEKS) + 2
+    lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
     stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
@@ -831,9 +827,6 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
-    stock_df["rs_raw"] = stock_df["close"] / stock_df["index_close"]
-    stock_df["rs_sma"] = stock_df["rs_raw"].rolling(RS_MANSFIELD_SMA_WEEKS).mean()
-    stock_df["mansfield_rs"] = (stock_df["rs_raw"] / stock_df["rs_sma"] - 1) * 100
 
     in_window = stock_df[stock_df["week_start"] >= pd.Timestamp(start_date)]
     if in_window.empty:
@@ -842,20 +835,20 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     def safe(value, digits):
         return round(float(value), digits) if pd.notna(value) else None
 
-    dates, close, sma10, sma30, mansfield_rs = [], [], [], [], []
+    dates, close, sma10, sma30, index_close = [], [], [], [], []
     for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close.append(safe(r["close"], 2))
         sma10.append(safe(r["sma10"], 2))
         sma30.append(safe(r["sma30"], 2))
-        mansfield_rs.append(safe(r["mansfield_rs"], 2))
+        index_close.append(safe(r["index_close"], 2))
 
     return {
         "dates": dates,
         "close": close,
         "sma10": sma10,
         "sma30": sma30,
-        "mansfield_rs": mansfield_rs,
+        "index_close": index_close,
     }
 
 
@@ -905,11 +898,10 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "spółki, których momentum w tym oknie przebiło momentum samego indeksu (poziom "
                  "indeksu, nie średnia składników), posortowane malejąco po przewadze "
                  "(relative_strength_pct = zwrot spółki - zwrot indeksu). Każdy lider ma też "
-                 "'weekly_chart': od początku tego samego okna, dwa wykresy w stylu stage analysis "
-                 "(Weinstein/Dr Eric Wish) — 'wykres 10:30' (cena spółki + SMA 10-tyg./30-tyg., pola "
-                 "close/sma10/sma30) i Mansfield Relative Strength (oscylator wokół zera, pole "
-                 "mansfield_rs = (RS/SMA(RS,52tyg)-1)*100, RS = cena spółki/poziom indeksu) — patrz "
-                 "compute_relative_strength_chart. Do wykresu innego niż TradingView na dashboardzie. "
+                 "'weekly_chart': od początku tego samego okna, 'wykres 10:30' w stylu stage analysis "
+                 "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg. (pola close/sma10/sma30) "
+                 "razem z poziomem własnego indeksu (index_close) — patrz compute_relative_strength_chart. "
+                 "Do wykresu innego niż TradingView na dashboardzie. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
     }
     out_path = Path(docs_data_dir) / "relative_strength.json"

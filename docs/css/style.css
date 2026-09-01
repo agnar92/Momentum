@@ -458,13 +458,12 @@ td.negative { color: var(--red); }
 
 .chart-container { flex: 1; }
 .chart-container iframe { border: none; width: 100%; height: 100%; }
-/* Dwa wykresy jeden pod drugim: "wykres 10:30" (cena + SMA10/SMA30, duży, u góry)
-   + Mansfield Relative Strength (oscylator, mniejszy pasek u dołu, patrz
+/* "Wykres 10:30" (cena + SMA10/SMA30 + poziom indeksu na osobnej skali, patrz
    renderRelativeStrengthChart w app.js). */
 .rs-chart-container {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    position: relative;
     padding: 12px;
 }
 
@@ -477,14 +476,9 @@ td.negative { color: var(--red); }
     display: none;
 }
 
-.rs-chart-panel {
-    position: relative;
-    flex: 3;
-    min-height: 0;
-}
-
-.rs-chart-panel-small {
+.rs-chart-container canvas {
     flex: 1;
+    min-height: 0;
 }
 
 /* Przełącznik TradingView / Siła Relatywna (widoczny nad panelem wykresu, gdy
