@@ -35,6 +35,10 @@
             <input type="file" id="xtbFile" accept=".xlsx">
             <span class="settings-hint" id="importStatus"></span>
         </div>
+        <div class="import-row">
+            <button class="add-row-btn" id="exportTvBtn">📤 Eksportuj do TradingView Portfolio (.csv)</button>
+            <span class="settings-hint">Zapisuje obecne pozycje jako plik CSV do importu transakcji w TradingView (Paper Trading / Portfolio). Ponieważ raport XTB nie zawiera prawdziwej daty/ceny otwarcia, każda pozycja jest eksportowana jako pojedynczy zakup "dziś" po obecnej cenie rynkowej — odtwarza to Twój bieżący stan posiadania, nie prawdziwą historię transakcji.</span>
+        </div>
         <div class="table-wrap">
         <table class="holdings-table" id="holdingsTable">
             <thead>
