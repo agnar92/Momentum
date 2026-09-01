@@ -328,8 +328,8 @@ let rsMansfieldChartInstance = null;
 
 // Klasyfikacja etapow Weinsteina (Stage Analysis) dolaczona przez run_query.py
 // (_compute_weinstein_stage_series) do kazdego tygodnia wykresu 10:30 — patrz
-// weekly_chart.stage/signal/volume/volume_ratio. Etykiety/kolory tylko do
-// wyswietlania, logika klasyfikacji zyje wylacznie w backendzie.
+// weekly_chart.stage/signal/volume/buying_volume/buying_volume_ratio. Etykiety/
+// kolory tylko do wyswietlania, logika klasyfikacji zyje wylacznie w backendzie.
 const STAGE_LABELS = {
     "1": "Etap 1 — Baza",
     "2A": "Etap 2A — Świeże wybicie",
@@ -441,7 +441,18 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     const pctFmt = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
     const signals = chartData.signal || [];
     const volumes = chartData.volume || [];
-    const volumeRatios = chartData.volume_ratio || [];
+    // "buying_volume" to CZESC tygodniowego wolumenu przypisana kupujacym metoda
+    // Close Location Value (patrz _weekly_close_series w run_query.py — NIE jest to
+    // prawdziwy podzial zlecen kupna/sprzedazy, ktorego zwykle OHLCV nie daje, tylko
+    // standardowe przyblizenie: im blizej szczytu tygodnia zamkniecie, tym wiekszy
+    // udzial wolumenu liczy sie jako "kupujacy"). Potwierdzenie wybicia patrzy
+    // WYLACZNIE na ten wolumen, nie na total — wysoki total wolumen przy dominujacej
+    // sprzedazy (dystrybucja) NIE powinien wygladac jak potwierdzone wybicie.
+    const buyingVolumes = chartData.buying_volume || [];
+    const buyingVolumeRatios = chartData.buying_volume_ratio || [];
+    const sellingVolumes = volumes.map((v, i) => (
+        v != null && buyingVolumes[i] != null ? Math.max(0, v - buyingVolumes[i]) : null
+    ));
     const baseCounts = chartData.base_count || [];
 
     // Znaczniki wejscia/wyjscia na linii ceny: trojkat w gore (zielony/bursztynowy
@@ -455,15 +466,17 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
 
     // Slupki tygodniowego wolumenu na wlasnej, ukrytej skali (max ustawiony na
     // wielokrotnosc szczytu wolumenu, zeby slupki zajmowaly tylko dolny pasek
-    // wykresu — nie konkurowaly wizualnie z liniami % zmiany). Jasniejszy slupek =
-    // wolumen >= STAGE_BREAKOUT_VOLUME_RATIO sredniej z poprzednich tygodni
-    // (potwierdzenie wybicia wolumenem, patrz STAGE_BREAKOUT_VOLUME_RATIO w
-    // run_query.py).
+    // wykresu — nie konkurowaly wizualnie z liniami % zmiany), skladane z dwoch
+    // segmentow (stack: "volume") — dol = wolumen kupujacych, gora = sprzedajacych,
+    // zeby od razu bylo widac PROPORCJE, nie tylko wysokosc calego slupka. Segment
+    // kupujacych jest jasniejszy, gdy buying_volume_ratio >= STAGE_BREAKOUT_VOLUME_RATIO
+    // (potwierdzone wybicie wolumenem KUPUJACYCH — patrz run_query.py).
     const maxVolume = Math.max(1, ...volumes.filter((v) => v != null));
-    const volumeColors = volumes.map((v, i) => {
-        const ratio = volumeRatios[i];
-        return (ratio != null && ratio >= STAGE_BREAKOUT_VOLUME_RATIO) ? "rgba(46, 204, 113, 0.55)" : "rgba(138, 143, 156, 0.3)";
+    const buyingColors = buyingVolumes.map((v, i) => {
+        const ratio = buyingVolumeRatios[i];
+        return (ratio != null && ratio >= STAGE_BREAKOUT_VOLUME_RATIO) ? "rgba(46, 204, 113, 0.85)" : "rgba(46, 204, 113, 0.35)";
     });
+    const sellingColor = "rgba(224, 69, 90, 0.35)";
 
     rsChartInstance = new Chart(canvas, {
         type: "line",
@@ -488,8 +501,12 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                     backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 3], order: 1,
                 },
                 {
-                    type: "bar", label: "Wolumen (tyg.)", data: volumes, backgroundColor: volumeColors,
-                    yAxisID: "yVolume", order: 2, barPercentage: 0.7, categoryPercentage: 0.9,
+                    type: "bar", label: "Wolumen kupujących (tyg.)", data: buyingVolumes, backgroundColor: buyingColors,
+                    yAxisID: "yVolume", stack: "volume", order: 2, barPercentage: 0.7, categoryPercentage: 0.9,
+                },
+                {
+                    type: "bar", label: "Wolumen sprzedających (tyg.)", data: sellingVolumes, backgroundColor: sellingColor,
+                    yAxisID: "yVolume", stack: "volume", order: 2, barPercentage: 0.7, categoryPercentage: 0.9,
                 },
             ],
         },
@@ -500,15 +517,18 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             plugins: {
                 legend: {
                     position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } },
-                    filter: (item) => item.text !== "Wolumen (tyg.)",
+                    filter: (item) => item.text !== "Wolumen kupujących (tyg.)" && item.text !== "Wolumen sprzedających (tyg.)",
                 },
                 tooltip: {
                     callbacks: {
                         label: (ctx) => {
-                            if (ctx.dataset.label === "Wolumen (tyg.)") {
-                                const ratio = volumeRatios[ctx.dataIndex];
+                            if (ctx.dataset.label === "Wolumen kupujących (tyg.)") {
+                                const ratio = buyingVolumeRatios[ctx.dataIndex];
                                 const ratioTxt = ratio != null ? ` (${ratio.toFixed(2)}x śr.)` : "";
-                                return `Wolumen: ${ctx.parsed.y.toLocaleString("pl-PL")}${ratioTxt}`;
+                                return `Kupujący: ${ctx.parsed.y.toLocaleString("pl-PL")}${ratioTxt}`;
+                            }
+                            if (ctx.dataset.label === "Wolumen sprzedających (tyg.)") {
+                                return `Sprzedający: ${ctx.parsed.y.toLocaleString("pl-PL")}`;
                             }
                             const base = `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}`;
                             if (ctx.datasetIndex === 0 && signals[ctx.dataIndex]) {
@@ -526,7 +546,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                 y: { ticks: { color: "#8a8f9c", callback: pctFmt }, grid: { color: "#262a35" } },
-                yVolume: { display: false, min: 0, max: maxVolume * 4 },
+                yVolume: { display: false, stacked: true, min: 0, max: maxVolume * 4 },
             },
         },
     });

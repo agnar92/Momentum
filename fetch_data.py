@@ -236,8 +236,14 @@ def get_full_refresh_range(lookback_months):
 
 PRICES_SCHEMA = """
     Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+    High DOUBLE, Low DOUBLE,
     PRIMARY KEY (Date, Ticker)
 """
+# High/Low: dolozone do wolumenu/ceny zamkniecia po to, zeby run_query.py moglo
+# rozbic tygodniowy wolumen na "kupujacych"/"sprzedajacych" metoda Close Location
+# Value (klasyka Chaikina, ta sama co Accumulation/Distribution Line) — patrz
+# _weekly_close_series(include_buying_volume=True). yfinance i tak zwraca High/Low
+# w kazdym pobraniu OHLCV, wczesniej byly po prostu odrzucane.
 
 # Ile dni wstecz od ostatniej znanej ceny dogrywać przy odświeżeniu przyrostowym —
 # łapie ewentualne korekty/opóźnienia danych z yfinance, bez ryzyka luk przy
@@ -245,11 +251,18 @@ PRICES_SCHEMA = """
 CATCHUP_OVERLAP_DAYS = 7
 
 
-def _download_price_rows(tickers, start_date, end_date):
+def _download_price_rows(tickers, start_date, end_date, include_ohlc=False):
     """Pobiera OHLC z yfinance w paczkach po 50 tickerów dla zadanego zakresu dat.
     Zwraca (rows, fetched_tickers, failed_tickers) — sama logika sieciowa/parsująca,
     bez dotykania DuckDB, żeby dało się jej użyć zarówno przy pełnym bootstrapie,
-    jak i przy przyrostowym doszacowaniu/backfillu nowych spółek."""
+    jak i przy przyrostowym doszacowaniu/backfillu nowych spółek, jak i przy
+    (5-kolumnowych, bez High/Low) cenach poziomu indeksu (update_index_prices).
+
+    include_ohlc=True dokłada High/Low na końcu każdego wiersza (7-krotka zamiast
+    5-krotki) — używane tylko dla tabeli `prices` (per-spółka), do wyliczenia w
+    run_query.py wolumenu kupujących/sprzedających metodą Close Location Value.
+    `index_prices` tego nie potrzebuje, stąd domyślnie False (żeby nie zaburzać
+    jej dotychczasowego, 5-kolumnowego schematu)."""
     rows = []
     failed_tickers, fetched_tickers = [], set()
     if not tickers:
@@ -273,9 +286,15 @@ def _download_price_rows(tickers, start_date, end_date):
                     continue
                 for date, row in df_t.iterrows():
                     if pd.notna(row.get("Close")):
-                        rows.append((date.strftime('%Y-%m-%d'), ticker, float(row["Close"]),
+                        row_tuple = (date.strftime('%Y-%m-%d'), ticker, float(row["Close"]),
                                      float(row.get("Adj Close", row["Close"])),
-                                     int(row["Volume"]) if pd.notna(row.get("Volume")) else 0))
+                                     int(row["Volume"]) if pd.notna(row.get("Volume")) else 0)
+                        if include_ohlc:
+                            row_tuple += (
+                                float(row["High"]) if pd.notna(row.get("High")) else None,
+                                float(row["Low"]) if pd.notna(row.get("Low")) else None,
+                            )
+                        rows.append(row_tuple)
                         fetched_tickers.add(ticker)
         except Exception as e:
             print(f"❌ Błąd pobierania cen dla paczki {batch}: {e}")
@@ -294,7 +313,7 @@ def bootstrap_prices(con, tickers, lookback_months, min_coverage):
     con.execute("DROP TABLE IF EXISTS prices_staging")
     con.execute(f"CREATE TABLE prices_staging ({PRICES_SCHEMA})")
 
-    rows, fetched_tickers, failed_tickers = _download_price_rows(tickers, start_date, end_date)
+    rows, fetched_tickers, failed_tickers = _download_price_rows(tickers, start_date, end_date, include_ohlc=True)
 
     coverage = len(fetched_tickers) / len(tickers) if tickers else 0
     if coverage < min_coverage:
@@ -305,7 +324,7 @@ def bootstrap_prices(con, tickers, lookback_months, min_coverage):
     if rows:
         # df_insert wyglada jak niewykorzystana zmienna dla lintera, ale
         # DuckDB odwoluje sie do niej po nazwie wewnatrz zapytania SQL ponizej.
-        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
+        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume", "High", "Low"])  # noqa: F841
         con.execute("INSERT INTO prices_staging SELECT * FROM df_insert")
 
     con.execute("DROP TABLE IF EXISTS prices")
@@ -331,7 +350,7 @@ def _upsert_price_rows(con, rows, tickers, start_date):
     """)
     con.unregister("_tickers_tmp")
     if rows:
-        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
+        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume", "High", "Low"])  # noqa: F841
         con.execute("INSERT INTO prices SELECT * FROM df_insert")
 
 
@@ -368,6 +387,18 @@ def update_index_prices(con, lookback_months):
     print(f"✅ Zapisano {len(df_insert)} wierszy danych poziomu indeksów ({start_date} → {end_date}).")
 
 
+def _ensure_prices_ohlc_columns(con):
+    """Migracja dla baz zapisanych PRZED dodaniem High/Low do `prices` (PRICES_SCHEMA
+    ma je od poczatku dla nowych/bootstrapowanych baz — to dotyczy tylko istniejacej,
+    zakomitowanej momentum_data.duckdb). Idempotentne: ADD COLUMN IF NOT EXISTS. Stare
+    wiersze dostaja NULL w High/Low, dopoki nie wypadna z rolling okna retencji i nie
+    zostana zastapione swiezymi danymi — run_query.py's CLV liczy wtedy neutralny
+    (50/50) rozklad kupujacych/sprzedajacych zamiast sie wywalac (patrz
+    _weekly_close_series w run_query.py)."""
+    con.execute("ALTER TABLE prices ADD COLUMN IF NOT EXISTS High DOUBLE")
+    con.execute("ALTER TABLE prices ADD COLUMN IF NOT EXISTS Low DOUBLE")
+
+
 def update_prices_incremental(con, tickers, retention_months):
     """Odświeżenie przyrostowe: dogrywa tylko nowe dni dla znanych tickerów (od
     ostatniej znanej ceny wstecz o CATCHUP_OVERLAP_DAYS), robi pełny backfill
@@ -375,6 +406,7 @@ def update_prices_incremental(con, tickers, retention_months):
     po podmianie CSV), a na końcu przycina historię do ostatnich retention_months
     miesięcy — tak żeby baza nie rosła w nieskończoność, mając zawsze tyle
     historii, ile potrzebuje momentum_value (M-14) + margines na fallback/staleness."""
+    _ensure_prices_ohlc_columns(con)
     existing_tickers = set(con.execute("SELECT DISTINCT Ticker FROM prices").df()["Ticker"]) & set(tickers)
     new_tickers = [t for t in tickers if t not in existing_tickers]
     watermark = con.execute("SELECT MAX(Date) FROM prices").fetchone()[0]
@@ -383,7 +415,7 @@ def update_prices_incremental(con, tickers, retention_months):
     if existing_tickers:
         catchup_start = (pd.Timestamp(watermark) - pd.Timedelta(days=CATCHUP_OVERLAP_DAYS)).strftime('%Y-%m-%d')
         print(f"🔄 Doszacowanie cen: {catchup_start} → {end_date} dla {len(existing_tickers)} znanych tickerów...")
-        rows, fetched, failed = _download_price_rows(sorted(existing_tickers), catchup_start, end_date)
+        rows, fetched, failed = _download_price_rows(sorted(existing_tickers), catchup_start, end_date, include_ohlc=True)
         _upsert_price_rows(con, rows, sorted(fetched), catchup_start)
         if failed:
             print(f"⚠️  Brak świeżych cen dla: {sorted(set(failed))} — stare dane pozostają w bazie "
@@ -393,7 +425,7 @@ def update_prices_incremental(con, tickers, retention_months):
         backfill_start, _ = get_full_refresh_range(retention_months)
         print(f"🆕 Pełny backfill historii dla {len(new_tickers)} nowych spółek w indeksie "
               f"({backfill_start} → {end_date})...")
-        rows, fetched, failed = _download_price_rows(new_tickers, backfill_start, end_date)
+        rows, fetched, failed = _download_price_rows(new_tickers, backfill_start, end_date, include_ohlc=True)
         _upsert_price_rows(con, rows, sorted(fetched), backfill_start)
         if failed:
             print(f"⚠️  Brak historii dla nowych spółek: {sorted(set(failed))}.")

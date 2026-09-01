@@ -810,17 +810,41 @@ def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct,
     return records
 
 
-def _weekly_close_series(con, table, id_column, id_value, start_date, end_date):
+def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, include_buying_volume=False):
     """Tygodniowe zamknięcia (ostatnia cena w tygodniu, DATE_TRUNC('week', Date)) dla
     id_column=id_value (Ticker w `prices` albo Index_Name w `index_prices`), od
     start_date do end_date (włącznie). Dolicza też SUM(Volume) w tygodniu — używane
     tylko przez compute_relative_strength_chart (potwierdzenie wybicia wolumenem,
     patrz _compute_weinstein_stage_series), ignorowane przez pozostałych wywołujących
-    (compute_mansfield_rs_chart, wywołania dla index_prices)."""
+    (compute_mansfield_rs_chart, wywołania dla index_prices).
+
+    include_buying_volume=True dolicza tez SUM(buying_volume) — DZIENNY rozklad
+    tygodniowego wolumenu na "kupujacych"/"sprzedajacych" metoda Close Location
+    Value (CLV, klasyka Chaikina — ta sama, na ktorej opiera sie Accumulation/
+    Distribution Line): dla kazdego dnia buying_share = ((Close-Low)-(High-Close))
+    / (High-Low), przeskalowane do [0,1] jako (CLV+1)/2, i buying_volume_dnia =
+    Volume * ten udzial. Liczymy PO DNIACH i sumujemy do tygodnia (nie raz na
+    tygodniowym High/Low) — dokladniej oddaje to, ile z tygodniowego wolumenu
+    faktycznie towarzyszylo cenie zamykajacej sie blisko szczytu dnia (kupujacy
+    "wygrali" ten dzien) wzgledem blisko dolka (sprzedajacy "wygrali"), zamiast
+    jednego zgrubnego wyliczenia z zakresu calego tygodnia. Gdy High/Low brakuje
+    (NULL — stare wiersze sprzed migracji schematu, patrz fetch_data.py
+    _ensure_prices_ohlc_columns) albo High=Low (zerowy zakres, martwy handel),
+    dzien dostaje neutralny podzial 50/50, zeby SUM(buying_volume) nigdy nie byl
+    NULL i zawsze sumowal sie mniej wiecej do SUM(Volume) (uzywane WYLACZNIE dla
+    tabeli `prices` — TYLKO tam sa kolumny High/Low; wywolanie dla `index_prices`
+    (bez tego flaga) by sie wywalilo, bo tam ich nie ma)."""
+    buying_volume_select = ""
+    if include_buying_volume:
+        buying_volume_select = """,
+               SUM(CASE
+                     WHEN High IS NULL OR Low IS NULL OR High <= Low THEN Volume * 0.5
+                     ELSE Volume * ((2 * Close - High - Low) / (High - Low) + 1) / 2.0
+                   END) AS buying_volume"""
     return con.execute(f"""
         SELECT DATE_TRUNC('week', Date) AS week_start,
                ARGMAX(Close, Date) AS close,
-               SUM(Volume) AS volume
+               SUM(Volume) AS volume{buying_volume_select}
         FROM {table}
         WHERE {id_column} = '{id_value}'
           AND Date >= DATE '{start_date}'
@@ -849,9 +873,9 @@ RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinste
 # klasyfikacje (pomysl odrzucony wczesniej ze wzgledu na trudnosc implementacji).
 STAGE_SLOPE_LOOKBACK_WEEKS = 4       # ile tyg. wstecz porownujemy SMA30 przy ocenie kierunku
 STAGE_FLAT_SLOPE_PCT = 1.0           # próg nachylenia SMA30 (w % za STAGE_SLOPE_LOOKBACK_WEEKS) uznawany za "plaskie"
-STAGE_VOLUME_LOOKBACK_WEEKS = 10     # okno sredniego tyg. wolumenu do oceny potwierdzenia wybicia
-STAGE_BREAKOUT_VOLUME_RATIO = 1.5    # wybicie bazy (2A) potwierdzone wolumenem gdy tyg. wolumen >= 1.5x sredniej
-STAGE_PULLBACK_VOLUME_RATIO = 1.2    # dla kolejnych baz w trakcie Etapu 2 (2B) wystarczy slabszy wzrost wolumenu
+STAGE_VOLUME_LOOKBACK_WEEKS = 10     # okno sredniego tyg. WOLUMENU KUPUJACYCH (CLV) do oceny potwierdzenia wybicia
+STAGE_BREAKOUT_VOLUME_RATIO = 1.5    # wybicie bazy (2A) potwierdzone gdy tyg. wolumen KUPUJACYCH >= 1.5x sredniej
+STAGE_PULLBACK_VOLUME_RATIO = 1.2    # dla kolejnych baz w trakcie Etapu 2 (2B) wystarczy slabszy wzrost wolumenu kupujacych
 STAGE_BASE_LOOKBACK_WEEKS = 8        # okno, w ktorym szukamy "strefy oporu" (max) lokalnej bazy/trading range
 STAGE_BASE_MAX_RANGE_PCT = 15.0      # (max-min)/min w tym oknie musi byc <= tyle %, zeby uznac je za "cisna baze"
 STAGE_MIN_BASE_GAP_WEEKS = 6         # min. odstep miedzy kolejnymi bazami — bez tego gladki trend bez realnych
@@ -898,14 +922,20 @@ def _compute_weinstein_stage_series(stock_df):
         your stop loss until the price moves back near to the prior swing high").
       - Stop nigdy nie jest obnizany, tylko podnoszony/trzymany.
 
-    Sygnaly (pole "signal", tylko w tygodniu w ktorym faktycznie sie pojawiaja):
+    Sygnaly (pole "signal", tylko w tygodniu w ktorym faktycznie sie pojawiaja).
+    Potwierdzenie wolumenem liczy sie WYLACZNIE z wolumenu KUPUJACYCH (pole
+    "buying_volume" w stock_df — patrz _weekly_close_series(include_buying_volume=True)
+    / CLV), NIE z calkowitego wolumenu: prawdziwe wybicie napedza agresywne kupowanie,
+    a tydzien z wysokim LACZNYM wolumenem moze byc w wiekszosci dystrybucja
+    (sprzedaz) — taki tydzien nie powinien wygladac jak potwierdzone wybicie:
       ENTRY_2A        — tydzien pierwszego wybicia bazy z potwierdzeniem wolumenem
-                         (>= STAGE_BREAKOUT_VOLUME_RATIO sredniej z STAGE_VOLUME_
-                         LOOKBACK_WEEKS tyg.) — bez potwierdzenia wolumenem etap
-                         nadal jest "2A", ale sygnal wejscia nie jest oznaczany.
+                         KUPUJACYCH (>= STAGE_BREAKOUT_VOLUME_RATIO sredniej z
+                         STAGE_VOLUME_LOOKBACK_WEEKS tyg. wolumenu kupujacych) —
+                         bez potwierdzenia etap nadal jest "2A", ale sygnal wejscia
+                         nie jest oznaczany.
       ENTRY_2B        — tydzien wybicia 2., 3. (< STAGE_LATE_BASE_WARNING_COUNT) bazy
                          w tej samej fali Etapu 2, z lagodniejszym potwierdzeniem
-                         wolumenem (STAGE_PULLBACK_VOLUME_RATIO).
+                         wolumenem kupujacych (STAGE_PULLBACK_VOLUME_RATIO).
       ENTRY_2B_LATE   — to samo, ale to juz 4. lub kolejna baza w tej fali — ksiazka:
                          "4th & 5th bases within the Stage 2 advance are more prone
                          to failure. So watch for warning signs" — dalej to sygnal
@@ -918,16 +948,17 @@ def _compute_weinstein_stage_series(stock_df):
       EXIT_STOP       — biezace zamkniecie zlamalo trailing stop_level opisany wyzej
                          ("Exit Trade: Stop Loss hit as price breaks below support").
 
-    Zwraca liste dictow {"stage", "signal", "volume_ratio", "stop_level", "base_count"}
-    rownolegla do stock_df. Wszystkie pola to None dopoki SMA30 (wzglednie
-    STAGE_VOLUME_LOOKBACK_WEEKS tyg. historii wolumenu, wzglednie STAGE_BASE_LOOKBACK_
-    WEEKS tyg. do wyznaczenia bazy) nie sa jeszcze dostepne — ten sam, udokumentowany
-    juz wyzej limit plytkiej historii co reszta wykresu 10:30. "base_count" to numer
-    biezacej bazy w trwajacej fali Etapu 2 (None poza Etapem 2)."""
+    Zwraca liste dictow {"stage", "signal", "buying_volume_ratio", "stop_level",
+    "base_count"} rownolegla do stock_df. Wszystkie pola to None dopoki SMA30
+    (wzglednie STAGE_VOLUME_LOOKBACK_WEEKS tyg. historii wolumenu kupujacych,
+    wzglednie STAGE_BASE_LOOKBACK_WEEKS tyg. do wyznaczenia bazy) nie sa jeszcze
+    dostepne — ten sam, udokumentowany juz wyzej limit plytkiej historii co reszta
+    wykresu 10:30. "base_count" to numer biezacej bazy w trwajacej fali Etapu 2
+    (None poza Etapem 2)."""
     n = len(stock_df)
     closes = stock_df["close"].tolist()
     sma30s = stock_df["sma30"].tolist()
-    volumes = stock_df["volume"].tolist()
+    buying_volumes = stock_df["buying_volume"].tolist()
 
     results = [None] * n
     prev_stage = None
@@ -949,7 +980,7 @@ def _compute_weinstein_stage_series(stock_df):
 
     for i in range(n):
         if pd.isna(sma30s[i]) or pd.isna(closes[i]):
-            results[i] = {"stage": None, "signal": None, "volume_ratio": None, "stop_level": None, "base_count": None}
+            results[i] = {"stage": None, "signal": None, "buying_volume_ratio": None, "stop_level": None, "base_count": None}
             prev_stage = None
             reset_run_state()
             continue
@@ -987,12 +1018,12 @@ def _compute_weinstein_stage_series(stock_df):
 
         vol_ratio = None
         vol_start = i - STAGE_VOLUME_LOOKBACK_WEEKS
-        if vol_start >= 0 and volumes[i] is not None and not pd.isna(volumes[i]):
-            window_vols = [v for v in volumes[vol_start:i] if v is not None and not pd.isna(v)]
+        if vol_start >= 0 and buying_volumes[i] is not None and not pd.isna(buying_volumes[i]):
+            window_vols = [v for v in buying_volumes[vol_start:i] if v is not None and not pd.isna(v)]
             if len(window_vols) == STAGE_VOLUME_LOOKBACK_WEEKS:
                 avg_vol = sum(window_vols) / len(window_vols)
                 if avg_vol > 0:
-                    vol_ratio = volumes[i] / avg_vol
+                    vol_ratio = buying_volumes[i] / avg_vol
 
         if not above:
             if direction == "FALLING":
@@ -1052,7 +1083,7 @@ def _compute_weinstein_stage_series(stock_df):
         results[i] = {
             "stage": stage,
             "signal": signal,
-            "volume_ratio": round(vol_ratio, 2) if vol_ratio is not None else None,
+            "buying_volume_ratio": round(vol_ratio, 2) if vol_ratio is not None else None,
             "stop_level": stop_level,
             "base_count": base_count if stage in ("2A", "2B") else None,
         }
@@ -1090,16 +1121,24 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
 
     Zwraca też, oprócz linii ceny, klasyfikację etapów Weinsteina + potwierdzenie
     wolumenem + trailing stop-loss dla KAŻDEGO wyświetlanego tygodnia ("volume"/
-    "volume_ratio"/"stage"/"signal"/"stop_level_pct"/"base_count", patrz
-    _compute_weinstein_stage_series) oraz "current_stage" — wygodny skrót do etapu
-    ostatniego (najnowszego) tygodnia, do odznaki na dashboardzie. "stop_level_pct"
-    to trailing stop w tych samych jednostkach % co close_pct (rebase'owany tym
-    samym close0) — do narysowania linii stopu na wykresie, tak jak w książkowym
-    "Trailing Stop Loss" — None poza aktywną falą Etapu 2."""
+    "buying_volume"/"buying_volume_ratio"/"stage"/"signal"/"stop_level_pct"/
+    "base_count", patrz _compute_weinstein_stage_series) oraz "current_stage" —
+    wygodny skrót do etapu ostatniego (najnowszego) tygodnia, do odznaki na
+    dashboardzie. "volume" to CAŁKOWITY tygodniowy wolumen (do wysokości słupka na
+    wykresie), "buying_volume" to jego część przypisana kupującym metodą Close
+    Location Value (patrz _weekly_close_series) — różnica volume-buying_volume to
+    wolumen sprzedających (do podziału tego samego słupka na wykresie: dół =
+    kupujący, góra = sprzedający). Potwierdzenie wybicia ("buying_volume_ratio")
+    patrzy WYŁĄCZNIE na wolumen kupujących, nie na wolumen łączny — patrz
+    _compute_weinstein_stage_series. "stop_level_pct" to trailing stop w tych samych
+    jednostkach % co close_pct (rebase'owany tym samym close0) — do narysowania
+    linii stopu na wykresie, tak jak w książkowym "Trailing Stop Loss" — None poza
+    aktywną falą Etapu 2."""
     lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
-    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date,
+                                     include_buying_volume=True)
     index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, extended_start, ref_date)
     if stock_df.empty or index_df.empty:
         return None
@@ -1111,7 +1150,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stage_rows = _compute_weinstein_stage_series(stock_df)
     stock_df["stage"] = [row["stage"] for row in stage_rows]
     stock_df["signal"] = [row["signal"] for row in stage_rows]
-    stock_df["vol_ratio"] = [row["volume_ratio"] for row in stage_rows]
+    stock_df["buying_vol_ratio"] = [row["buying_volume_ratio"] for row in stage_rows]
     stock_df["stop_level_raw"] = [row["stop_level"] for row in stage_rows]
     stock_df["base_count_raw"] = [row["base_count"] for row in stage_rows]
 
@@ -1132,7 +1171,8 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         return round((float(value) / base - 1) * 100, 2)
 
     dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
-    volume, volume_ratio, stage, signal, stop_level_pct, base_count = [], [], [], [], [], []
+    volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
+    stop_level_pct, base_count = [], []
     for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
@@ -1140,13 +1180,14 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         sma30_pct.append(pct(r["sma30"], close0))
         index_pct.append(pct(r["index_close"], index0))
         volume.append(int(r["volume"]) if pd.notna(r["volume"]) else None)
+        buying_volume.append(int(round(r["buying_volume"])) if pd.notna(r["buying_volume"]) else None)
         # UWAGA: r pochodzi z in_window.iterrows() — wiersz miesza kolumny float
         # (close/sma10/...) z object (stage/signal), a pandas przy budowaniu Series
         # per-wiersz potrafi wtedy po cichu zamienic None na NaN (znany quirk
         # iterrows() dla niejednorodnych typow w wierszu). Bez jawnego pd.notna
         # trafiloby to do JSON jako literal `NaN` — niepoprawny JSON (JSON.parse
         # w przegladarce by go odrzucil), zamiast `null`.
-        volume_ratio.append(r["vol_ratio"] if pd.notna(r["vol_ratio"]) else None)
+        buying_volume_ratio.append(r["buying_vol_ratio"] if pd.notna(r["buying_vol_ratio"]) else None)
         stage.append(r["stage"] if pd.notna(r["stage"]) else None)
         signal.append(r["signal"] if pd.notna(r["signal"]) else None)
         stop_level_pct.append(pct(r["stop_level_raw"], close0) if pd.notna(r["stop_level_raw"]) else None)
@@ -1159,7 +1200,8 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "sma30_pct": sma30_pct,
         "index_pct": index_pct,
         "volume": volume,
-        "volume_ratio": volume_ratio,
+        "buying_volume": buying_volume,
+        "buying_volume_ratio": buying_volume_ratio,
         "stop_level_pct": stop_level_pct,
         "base_count": base_count,
         "stage": stage,

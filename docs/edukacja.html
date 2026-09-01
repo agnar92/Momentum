@@ -121,10 +121,11 @@
             bazą), a potencjał zysku wciąż w większości przed nami.
         </p>
         <p>
-            W tym narzędziu wybicie bez potwierdzenia wolumenem (wolumen &lt; 1.5× średniej z 10 poprzednich
-            tygodni) nadal jest oznaczone jako Etap 2A, ale <strong>bez</strong> zielonego znacznika
-            wejścia na wykresie — sam fakt przebicia oporu to za mało, jeśli nikt realnie tego ruchu nie
-            "kupił".
+            W tym narzędziu wybicie bez potwierdzenia wolumenem <strong>kupujących</strong> (poniżej 1.5×
+            średniej z 10 poprzednich tygodni — patrz sekcja o wolumenie niżej, dlaczego liczy się tylko
+            wolumen kupujących, nie cały) nadal jest oznaczone jako Etap 2A, ale <strong>bez</strong>
+            zielonego znacznika wejścia na wykresie — sam fakt przebicia oporu to za mało, jeśli nikt
+            realnie tego ruchu nie "kupił".
         </p>
 
         <h3 class="edu-h3" style="color:#26a65b">Etap 2B — Kontynuacja trendu</h3>
@@ -192,20 +193,45 @@
 
     <div class="panel-card edu-section">
         <div class="edu-kicker">Potwierdzenie</div>
-        <h2>Wolumen — dlaczego wybicie bez niego jest podejrzane</h2>
+        <h2>Wolumen — dlaczego liczy się tylko wolumen kupujących</h2>
         <p>
-            Cena mówi <em>co</em> się dzieje, wolumen mówi <em>jak bardzo to jest realne</em>. Wybicie z
-            bazy na niskim, przeciętnym wolumenie łatwo się cofa — może to być pojedynczy gracz, przypadkowa
-            transakcja albo brak realnego zainteresowania. Wybicie na wolumenie <strong>wyraźnie wyższym</strong>
-            niż przeciętny (w tym narzędziu: co najmniej 1.5× średniej z 10 poprzednich tygodni dla
-            pierwszego wybicia z bazy, 1.2× dla kolejnych baz w trwającym trendzie) to znak, że wielu
-            uczestników rynku jednocześnie zdecydowało się działać w tym samym kierunku — to trudniej
-            odwrócić.
+            Cena mówi <em>co</em> się dzieje, wolumen mówi <em>jak bardzo to jest realne</em>. Ale sam,
+            surowy, <strong>łączny</strong> wolumen tygodnia to za mało — każda transakcja ma kupującego
+            i sprzedającego, więc wysoki łączny wolumen może równie dobrze oznaczać silne kupowanie, jak i
+            silną <strong>dystrybucję</strong> (duzi gracze wyprzedają się w tłum kupujących). Prawdziwe
+            wybicie z bazy napędza <strong>przewaga kupujących</strong>, nie sam fakt, że dużo akcji
+            zmieniło właściciela.
         </p>
         <p>
-            Na wykresie 10:30 wolumen jest pokazany jako słupki u dołu — jaśniejszy (zielony) słupek
-            oznacza tydzień z potwierdzonym wolumenem, szary — zwykły tydzień. Warto samodzielnie
-            porównywać wysokość słupków przy każdym wybiciu, nie tylko polegać na kolorze.
+            Zwykłe dane cenowe (OHLCV z giełdy) nie mówią wprost, ile wolumenu było po stronie kupna, a ile
+            sprzedaży — to wymagałoby dostępu do zleceń z arkusza zleceń (tzw. Level 2), którego to
+            narzędzie nie ma. Zamiast tego stosuje standardowe, dobrze znane w analizie technicznej
+            przybliżenie (<strong>Close Location Value</strong>, na tej samej zasadzie działa klasyczny
+            wskaźnik Accumulation/Distribution Line Marca Chaikina): każdego dnia patrzymy, <strong>gdzie w
+            obrębie dziennego zakresu (od minimum do maksimum) zamknęła się cena</strong>. Zamknięcie blisko
+            szczytu dnia → większość tego dnia wolumenu liczy się jako "kupujący"; zamknięcie blisko dołka →
+            większość liczy się jako "sprzedający". Tygodniowy wolumen kupujących to suma takich dziennych
+            szacunków w danym tygodniu.
+        </p>
+        <p>
+            Wybicie z bazy jest oznaczone jako potwierdzone tylko wtedy, gdy wolumen <strong>kupujących</strong>
+            (nie łączny) jest wyraźnie wyższy niż przeciętny (w tym narzędziu: co najmniej 1.5× średniej z 10
+            poprzednich tygodni dla pierwszego wybicia z bazy, 1.2× dla kolejnych baz w trwającym trendzie) —
+            to dopiero jest znak, że przewaga kupujących nad sprzedającymi jest realna i trudna do odwrócenia.
+        </p>
+        <div class="edu-callout">
+            To wciąż przybliżenie, nie dokładny odczyt zleceń z rynku — bardzo płynna spółka może mieć dzień,
+            w którym zamknięcie blisko szczytu wcale nie oznacza przewagi kupujących (np. gwałtowna korekta
+            w dół, a potem odbicie w tym samym dniu). Traktuj to jako mocniejszy, bardziej wiarygodny sygnał
+            niż sam łączny wolumen — nie jako świętą prawdę.
+        </div>
+        <p>
+            Na wykresie 10:30 wolumen jest pokazany jako słupki u dołu, <strong>podzielone na dwa
+            segmenty</strong>: dolny (zielony) to wolumen kupujących, górny (czerwony) to wolumen
+            sprzedających — od razu widać proporcję, nie tylko wysokość całego słupka. Jaśniejszy zielony
+            segment oznacza tydzień z potwierdzonym wolumenem kupujących; ciemniejszy — zwykły tydzień, bez
+            potwierdzenia. Warto samodzielnie porównywać te proporcje przy każdym wybiciu, nie tylko polegać
+            na kolorze.
         </p>
     </div>
 
@@ -316,6 +342,12 @@
                 wieloletniego, historycznego oporu — takiego, jaki widać na pełnym wykresie w TradingView.
                 Z tego samego powodu w tym narzędziu <strong>nie ma</strong> linii Green Line Breakout
                 (Dr. Eric Wish) — wymagałaby dokładnie takiej wieloletniej historii.
+            </li>
+            <li>
+                <strong>Wolumen kupujących/sprzedających to szacunek, nie dane z arkusza zleceń</strong> —
+                liczony metodą Close Location Value z dziennej ceny zamknięcia względem dziennego zakresu
+                (patrz sekcja o wolumenie wyżej), nie z faktycznego kierunku poszczególnych transakcji,
+                którego zwykłe dane giełdowe (OHLCV) nie zawierają.
             </li>
             <li>
                 <strong>Siła relatywna nie wpływa na etap</strong> — mimo że narzędzie liczy osobno siłę
