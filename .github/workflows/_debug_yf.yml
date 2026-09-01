@@ -1,5 +1,7 @@
 name: Debug yfinance WIG20/MWIG40
 on:
+  push:
+    branches: [debug/yf-wig20-diagnostic]
   workflow_dispatch:
 jobs:
   debug:
