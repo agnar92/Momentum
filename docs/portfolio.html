@@ -36,13 +36,24 @@
             wysokiego przekonania (sektorowe ETF-y, pojedyncze spółki), z limitem na pojedynczą pozycję, żeby jedna
             obstawiona spółka nie zdominowała ryzyka całego portfela.
         </p>
+        <div class="import-row">
+            <label class="add-row-btn file-btn" for="xtbFile">📄 Zainicjalizuj portfel importem z XTB (.xlsx)</label>
+            <input type="file" id="xtbFile" accept=".xlsx">
+            <button class="add-row-btn danger" id="resetPortfolioBtn">↺ Resetuj portfolio</button>
+        </div>
+        <div class="settings-hint" id="importStatus"></div>
+        <div class="settings-hint" id="importSummary"></div>
         <div class="settings-row">
-            <label>Kapitał do zainwestowania ($)</label>
-            <input type="number" id="pfCapital" min="0" step="100" placeholder="np. 10000">
+            <label>Wartość obecnego portfela — pozycje + wolna gotówka ($)</label>
+            <input type="number" id="pfBaseValue" min="0" step="100" placeholder="uzupełnia import z XTB, albo wpisz ręcznie">
+        </div>
+        <div class="settings-row">
+            <label>Dopłata w tym miesiącu ($)</label>
+            <input type="number" id="pfContribution" min="0" step="50" placeholder="np. 500">
         </div>
         <div class="settings-row">
             <label>Podział Core / Satelita: <span id="pfSplitLabel"></span></label>
-            <input type="range" id="pfCoreSlider" min="50" max="100" step="5">
+            <input type="range" id="pfCoreSlider" min="0" max="100" step="1">
         </div>
         <div class="settings-row">
             <label>Cap pojedynczej pozycji w Satelicie (% całego kapitału)</label>
@@ -135,6 +146,7 @@
 
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="js/portfolio.js"></script>
 </body>

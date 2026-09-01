@@ -24,11 +24,16 @@ const SETTINGS_KEY = "momentum_portfolio_settings";
 const CORE_KEY = "momentum_portfolio_core_slots";
 const SATELLITE_KEY = "momentum_portfolio_satellite_slots";
 
-const DEFAULT_SETTINGS = { capital: 10000, corePct: 80, satelliteCapPct: 5 };
+// baseValue = wartość portfela w chwili ostatniego importu z XTB (pozycje +
+// wolna gotówka) — albo wpisana ręcznie, jeśli nie importujesz. contribution
+// = dopłata, którą wpisujesz na bieżąco (jak w Rebalansie) — to jedyne pole,
+// które w praktyce dotykasz po pierwszym imporcie.
+const DEFAULT_SETTINGS = { baseValue: 0, contribution: 10000, corePct: 80, satelliteCapPct: 5 };
 const DEFAULT_CORE_SLOTS = [
     { type: "universe", id: "NASDAQ100", weightPct: 1 },
     { type: "universe", id: "DOWJONES", weightPct: 1 },
 ];
+const IMPORT_META_KEY = "momentum_portfolio_import_meta";
 
 let universeData = {}; // { NASDAQ100: {...json}, DOWJONES: {...json} }
 let priceMap = {};     // ticker -> { price, sources: [universe,...] }
@@ -47,10 +52,15 @@ function loadCoreSlots() { return loadJSON(CORE_KEY, DEFAULT_CORE_SLOTS.map(s =>
 function saveCoreSlots(s) { saveJSON(CORE_KEY, s); }
 function loadSatelliteSlots() { return loadJSON(SATELLITE_KEY, []); }
 function saveSatelliteSlots(s) { saveJSON(SATELLITE_KEY, s); }
+function loadImportMeta() { return loadJSON(IMPORT_META_KEY, null); }
+function saveImportMeta(m) { saveJSON(IMPORT_META_KEY, m); }
 
 let settings = loadSettings();
 let coreSlots = loadCoreSlots();
 let satelliteSlots = loadSatelliteSlots();
+let importMeta = loadImportMeta(); // { importedAt, positionsCount, positionsValue, cash, unresolvedTickers } | null
+
+function totalCapital() { return (settings.baseValue || 0) + (settings.contribution || 0); }
 
 async function loadPortfolioData() {
     universeData = {};
@@ -216,33 +226,181 @@ function computeSatelliteTargets(satelliteCapital, slots, satelliteCapPct, total
 }
 
 // ============================================================
+// IMPORT Z RAPORTU XTB — inicjalizuje CAŁY portfel (Core + Satelita) z
+// realnych pozycji zamiast budować go od zera: arkusz "Open Positions" daje
+// tickery/wolumeny (+ wartość/cenę, jeśli raport ją zawiera), reszta arkuszy
+// jest przeszukiwana pod kątem wolnej gotówki (etykiety typu "Free funds",
+// "Wolne środki", "Balance"). Każdy import ZASTĘPUJE obecne sloty Core/
+// Satelita — jak import w Rebalansie zastępuje listę pozycji.
+// ============================================================
+function findColIndex(header, patterns) {
+    for (const p of patterns) {
+        const idx = header.findIndex(h => p.test(String(h || "")));
+        if (idx !== -1) return idx;
+    }
+    return -1;
+}
+
+// Wiersze transakcji składowych (Type = "BUY"/"SELL") są pomijane — ich suma
+// to właśnie wiersz podsumowania pozycji (pusta kolumna "Type").
+function parseXtbOpenPositions(workbook) {
+    const sheetName = workbook.SheetNames.find(n => /open positions/i.test(n));
+    if (!sheetName) throw new Error('Nie znaleziono arkusza "Open Positions" w pliku.');
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
+
+    const headerIdx = rows.findIndex(r => r.includes("Ticker") && r.includes("Volume") && r.includes("Type"));
+    if (headerIdx === -1) throw new Error('Nie znaleziono nagłówka z kolumnami Ticker/Volume/Type w arkuszu "Open Positions".');
+    const header = rows[headerIdx];
+    const idxTicker = header.indexOf("Ticker");
+    const idxVolume = header.indexOf("Volume");
+    const idxType = header.indexOf("Type");
+    // Wartość/cena pozycji — różne warianty raportu XTB nazywają te kolumny
+    // różnie; próbujemy po kolei najbardziej wiarygodne źródło wyceny.
+    const idxMarketValue = findColIndex(header, [/market\s*value/i, /wartość\s*rynkowa/i]);
+    const idxMarketPrice = findColIndex(header, [/market\s*price/i, /cena\s*rynkowa/i, /current\s*price/i]);
+    const idxOpenPrice = findColIndex(header, [/open\s*price/i, /cena\s*otwarcia/i, /purchase\s*price/i]);
+
+    const imported = [];
+    for (let i = headerIdx + 1; i < rows.length; i++) {
+        const r = rows[i];
+        const ticker = String(r[idxTicker] || "").trim();
+        const type = String(r[idxType] || "").trim();
+        const volume = parseFloat(r[idxVolume]);
+        if (!ticker || type || !volume) continue; // pomijamy wiersze transakcji i puste
+
+        let value = null;
+        if (idxMarketValue !== -1 && !isNaN(parseFloat(r[idxMarketValue]))) {
+            value = parseFloat(r[idxMarketValue]);
+        } else if (idxMarketPrice !== -1 && !isNaN(parseFloat(r[idxMarketPrice]))) {
+            value = parseFloat(r[idxMarketPrice]) * volume;
+        } else if (idxOpenPrice !== -1 && !isNaN(parseFloat(r[idxOpenPrice]))) {
+            value = parseFloat(r[idxOpenPrice]) * volume;
+        }
+        imported.push({ ticker: ticker.split(".")[0].toUpperCase(), shares: volume, value });
+    }
+    return imported;
+}
+
+// Skanuje WSZYSTKIE arkusze raportu w poszukiwaniu etykiety wolnej gotówki
+// (np. "Free funds" / "Wolne środki" / "Balance") i bierze pierwszą liczbę
+// na prawo od niej. Heurystyka — różne eksporty XTB różnie nazywają i
+// rozmieszczają to pole, dlatego wynik jest zawsze pokazywany do potwierdzenia
+// / ręcznej korekty, nigdy wpisywany po cichu.
+const CASH_LABEL_RE = /free\s*funds|available\s*funds|wolne\s*środki|dostępne\s*środki|cash\b|gotówka|balance\b|saldo/i;
+function parseXtbCash(workbook) {
+    for (const sheetName of workbook.SheetNames) {
+        const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: "" });
+        for (const row of rows) {
+            for (let c = 0; c < row.length; c++) {
+                if (!CASH_LABEL_RE.test(String(row[c] || ""))) continue;
+                for (let k = c + 1; k < row.length; k++) {
+                    if (row[k] === "") continue;
+                    const v = parseFloat(row[k]);
+                    if (!isNaN(v)) return v;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+function classifyTicker(ticker, univData) {
+    for (const u of CORE_UNIVERSES) {
+        if (((univData[u] || {}).constituents || []).some(c => c.ticker === ticker)) return u;
+    }
+    return null;
+}
+
+// Buduje sloty Core/Satelita wprost z zaimportowanych pozycji: waga każdego
+// slotu = jego wyceniona wartość $ (relatywne wagi normalizują się same, więc
+// to od razu odwzorowuje realny obecny podział). Tickery ze śledzonych
+// indeksów (Nasdaq 100 / Dow Jones) trafiają do Core, reszta do Satelity —
+// user może to później ręcznie poprawić (przenieść, dodać, usunąć).
+function buildSlotsFromImport(positions, univData, prices) {
+    const core = [];
+    const satellite = [];
+    const unresolvedTickers = [];
+    let totalValue = 0;
+
+    positions.forEach(p => {
+        const trackedPrice = prices[p.ticker]?.price;
+        let value = p.value;
+        if (value === null || value === undefined) {
+            value = trackedPrice != null ? trackedPrice * p.shares : null;
+        }
+        if (value === null) unresolvedTickers.push(p.ticker);
+        totalValue += value || 0;
+
+        // Cena znana z priceMap -> zostawiamy jej bieżące śledzenie (manualPrice
+        // pominięty). Cena wynika tylko z wartości podanej w raporcie XTB (ticker
+        // spoza śledzonych indeksów) -> zapisujemy ją jako manualPrice, żeby dało
+        // się policzyć liczbę sztuk. Brak jakiejkolwiek wyceny -> user uzupełni ręcznie.
+        let manualPrice;
+        if (trackedPrice != null) manualPrice = undefined;
+        else if (value !== null) manualPrice = value / p.shares;
+        else manualPrice = null;
+
+        const weightPct = value !== null ? value : Math.max(p.shares, 0.01);
+        if (classifyTicker(p.ticker, univData)) {
+            core.push({ type: "ticker", id: p.ticker, weightPct, manualPrice });
+        } else {
+            satellite.push({ ticker: p.ticker, weightPct, manualPrice });
+        }
+    });
+    return { core, satellite, totalValue, unresolvedTickers };
+}
+
+function resetPortfolio() {
+    settings = { ...DEFAULT_SETTINGS };
+    coreSlots = DEFAULT_CORE_SLOTS.map(s => ({ ...s }));
+    satelliteSlots = [];
+    importMeta = null;
+    saveSettings(settings);
+    saveCoreSlots(coreSlots);
+    saveSatelliteSlots(satelliteSlots);
+    saveImportMeta(importMeta);
+}
+
+// ============================================================
 // UI
 // ============================================================
 function initSettingsForm() {
-    document.getElementById("pfCapital").value = settings.capital || "";
+    document.getElementById("pfBaseValue").value = settings.baseValue || "";
+    document.getElementById("pfContribution").value = settings.contribution || "";
     document.getElementById("pfCoreSlider").value = settings.corePct;
     document.getElementById("pfSatCap").value = settings.satelliteCapPct;
     updateSplitLabel();
+    renderImportSummary();
 
     const onChange = () => {
-        settings.capital = parseFloat(document.getElementById("pfCapital").value) || 0;
+        settings.baseValue = parseFloat(document.getElementById("pfBaseValue").value) || 0;
+        settings.contribution = parseFloat(document.getElementById("pfContribution").value) || 0;
         settings.corePct = parseInt(document.getElementById("pfCoreSlider").value, 10);
         settings.satelliteCapPct = parseFloat(document.getElementById("pfSatCap").value) || 0;
         saveSettings(settings);
         updateSplitLabel();
         renderAll();
     };
-    document.getElementById("pfCapital").addEventListener("input", onChange);
+    document.getElementById("pfBaseValue").addEventListener("input", onChange);
+    document.getElementById("pfContribution").addEventListener("input", onChange);
     document.getElementById("pfCoreSlider").addEventListener("input", onChange);
     document.getElementById("pfSatCap").addEventListener("input", onChange);
 }
 
 function updateSplitLabel() {
-    const capital = settings.capital || 0;
+    const capital = totalCapital();
     const corePct = settings.corePct;
     const satPct = 100 - corePct;
     document.getElementById("pfSplitLabel").textContent =
         `Core: ${corePct}% (${fmtMoney(capital * corePct / 100)}) · Satelita: ${satPct}% (${fmtMoney(capital * satPct / 100)})`;
+}
+
+function renderImportSummary() {
+    const el = document.getElementById("importSummary");
+    if (!importMeta) { el.textContent = ""; return; }
+    el.textContent = `Ostatni import: ${importMeta.importedAt} — ${importMeta.positionsCount} pozycji `
+        + `(~${fmtMoney(importMeta.positionsValue)}) + gotówka ${fmtMoney(importMeta.cash)}`
+        + (importMeta.unresolvedTickers.length ? `. Brak ceny dla: ${importMeta.unresolvedTickers.join(", ")} — uzupełnij ręcznie w tabelach poniżej.` : "");
 }
 
 // ---------- CORE SLOTS ----------
@@ -385,11 +543,89 @@ function initSatelliteForm() {
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("satellitePickAddBtn").click(); } });
 }
 
+// ---------- IMPORT XTB / RESET ----------
+function initXtbImport() {
+    document.getElementById("xtbFile").addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        const status = document.getElementById("importStatus");
+        if (!file) return;
+        try {
+            const buf = await file.arrayBuffer();
+            const workbook = XLSX.read(buf, { type: "array" });
+            const positions = parseXtbOpenPositions(workbook);
+            if (positions.length === 0) throw new Error("Nie znaleziono żadnych otwartych pozycji w raporcie.");
+            const cash = parseXtbCash(workbook);
+            const cashValue = cash ?? 0;
+
+            const { core, satellite, totalValue, unresolvedTickers } = buildSlotsFromImport(positions, universeData, priceMap);
+            const baseValue = totalValue + cashValue;
+            const coreValue = core.reduce((s, x) => s + x.weightPct, 0);
+            const satValue = satellite.reduce((s, x) => s + x.weightPct, 0);
+            const observedCorePct = (coreValue + satValue) > 0 ? Math.round(coreValue / (coreValue + satValue) * 100) : settings.corePct;
+
+            const summaryLines = [
+                `${positions.length} pozycji, wartość ~${fmtMoney(totalValue)}`,
+                cash !== null ? `wolna gotówka: ${fmtMoney(cash)} (wykryta automatycznie — sprawdź, czy się zgadza)` : "wolnej gotówki NIE wykryto automatycznie — dopisz ją ręcznie po imporcie",
+                `obserwowany podział Core/Satelita: ${observedCorePct}% / ${100 - observedCorePct}%`,
+            ];
+            if (unresolvedTickers.length) summaryLines.push(`brak ceny dla: ${unresolvedTickers.join(", ")} — uzupełnisz ręcznie w tabeli`);
+
+            const ok = confirm(`Zaimportować z XTB? To ZASTĄPI obecne pozycje Core/Satelita.\n\n${summaryLines.join("\n")}`);
+            if (!ok) { status.textContent = "Import anulowany."; return; }
+
+            coreSlots = core;
+            satelliteSlots = satellite;
+            settings.baseValue = Math.round(baseValue * 100) / 100;
+            settings.contribution = 0;
+            settings.corePct = observedCorePct;
+            importMeta = {
+                importedAt: new Date().toLocaleDateString("pl-PL"),
+                positionsCount: positions.length,
+                positionsValue: totalValue,
+                cash: cashValue,
+                unresolvedTickers,
+            };
+            saveSettings(settings);
+            saveCoreSlots(coreSlots);
+            saveSatelliteSlots(satelliteSlots);
+            saveImportMeta(importMeta);
+
+            document.getElementById("pfBaseValue").value = settings.baseValue;
+            document.getElementById("pfContribution").value = settings.contribution;
+            document.getElementById("pfCoreSlider").value = settings.corePct;
+            updateSplitLabel();
+            renderImportSummary();
+            renderAll();
+            status.textContent = `Zaimportowano ${positions.length} pozycji z XTB — od teraz wystarczy uzupełniać tylko dopłatę.`;
+        } catch (err) {
+            status.textContent = `Błąd importu: ${err.message}`;
+        } finally {
+            e.target.value = "";
+        }
+    });
+}
+
+function initResetButton() {
+    document.getElementById("resetPortfolioBtn").addEventListener("click", () => {
+        const ok = confirm("Zresetować portfolio? Usunie to obecny import, wszystkie pozycje Core/Satelita i wagi — wrócisz do stanu początkowego.");
+        if (!ok) return;
+        resetPortfolio();
+        document.getElementById("pfBaseValue").value = settings.baseValue || "";
+        document.getElementById("pfContribution").value = settings.contribution || "";
+        document.getElementById("pfCoreSlider").value = settings.corePct;
+        document.getElementById("pfSatCap").value = settings.satelliteCapPct;
+        document.getElementById("importStatus").textContent = "Portfolio zresetowane.";
+        updateSplitLabel();
+        renderImportSummary();
+        renderAll();
+    });
+}
+
 // ---------- WYNIK ----------
 let portfolioChart = null;
 
 function renderResults() {
-    const capital = settings.capital || 0;
+    const capital = totalCapital();
     const coreCapital = capital * settings.corePct / 100;
     const satelliteCapital = capital * (100 - settings.corePct) / 100;
 
@@ -480,6 +716,8 @@ if (typeof document !== "undefined") {
         initSettingsForm();
         initCoreForm();
         initSatelliteForm();
+        initXtbImport();
+        initResetButton();
         renderAll();
     })();
 
@@ -494,5 +732,6 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         normalizeWeights, computeCoreTargets, capAndRedistribute, computeSatelliteTargets,
         fmtMoney, fmtQty, fmtPct,
+        parseXtbOpenPositions, parseXtbCash, classifyTicker, buildSlotsFromImport,
     };
 }

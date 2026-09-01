@@ -17,6 +17,10 @@ const {
     fmtMoney,
     fmtQty,
     fmtPct,
+    parseXtbOpenPositions,
+    parseXtbCash,
+    classifyTicker,
+    buildSlotsFromImport,
 } = portfolio;
 
 test("fmtMoney formats with 2 decimals and thousands separators", () => {
@@ -145,4 +149,129 @@ test("computeSatelliteTargets prefers manualPrice over priceMap when both are se
     const slots = [{ ticker: "AAA", weightPct: 1, manualPrice: 99 }];
     const { rows } = computeSatelliteTargets(100, slots, 100, 1000, { AAA: { price: 10 } });
     assert.equal(rows.AAA.price, 99);
+});
+
+// ---------- IMPORT XTB (inicjalizacja portfela) ----------
+
+test("parseXtbOpenPositions extracts value from a Market value column when present", () => {
+    const workbook = {
+        SheetNames: ["Open Positions"],
+        Sheets: {
+            "Open Positions": [
+                ["Ticker", "Type", "Volume", "Market value"],
+                ["AAPL.US", "", "2", "500"],
+            ],
+        },
+    };
+    global.XLSX = { utils: { sheet_to_json: (sheet) => sheet } };
+    const imported = parseXtbOpenPositions(workbook);
+    assert.deepEqual(imported, [{ ticker: "AAPL", shares: 2, value: 500 }]);
+    delete global.XLSX;
+});
+
+test("parseXtbOpenPositions falls back to Market price * Volume, then Open price * Volume", () => {
+    const workbook = {
+        SheetNames: ["Open Positions"],
+        Sheets: {
+            "Open Positions": [
+                ["Ticker", "Type", "Volume", "Market price"],
+                ["AAPL.US", "", "2", "250"],
+            ],
+        },
+    };
+    global.XLSX = { utils: { sheet_to_json: (sheet) => sheet } };
+    assert.deepEqual(parseXtbOpenPositions(workbook), [{ ticker: "AAPL", shares: 2, value: 500 }]);
+
+    const workbook2 = {
+        SheetNames: ["Open Positions"],
+        Sheets: {
+            "Open Positions": [
+                ["Ticker", "Type", "Volume", "Open price"],
+                ["MSFT.US", "", "3", "100"],
+            ],
+        },
+    };
+    assert.deepEqual(parseXtbOpenPositions(workbook2), [{ ticker: "MSFT", shares: 3, value: 300 }]);
+    delete global.XLSX;
+});
+
+test("parseXtbOpenPositions returns a null value when no price/value column is present", () => {
+    const workbook = {
+        SheetNames: ["Open Positions"],
+        Sheets: {
+            "Open Positions": [
+                ["Ticker", "Type", "Volume"],
+                ["XLK.US", "", "5"],
+            ],
+        },
+    };
+    global.XLSX = { utils: { sheet_to_json: (sheet) => sheet } };
+    assert.deepEqual(parseXtbOpenPositions(workbook), [{ ticker: "XLK", shares: 5, value: null }]);
+    delete global.XLSX;
+});
+
+test("parseXtbCash finds the first number to the right of a recognized cash label, scanning all sheets", () => {
+    const workbook = {
+        SheetNames: ["Open Positions", "Summary"],
+        Sheets: {
+            "Open Positions": [["Ticker", "Type", "Volume"], ["AAPL.US", "", "1"]],
+            Summary: [["Label", "Value"], ["Free funds", "1234.56"]],
+        },
+    };
+    global.XLSX = { utils: { sheet_to_json: (sheet) => sheet } };
+    assert.equal(parseXtbCash(workbook), 1234.56);
+    delete global.XLSX;
+});
+
+test("parseXtbCash recognizes Polish labels too and returns null when nothing matches", () => {
+    const workbook = {
+        SheetNames: ["Summary"],
+        Sheets: { Summary: [["Wolne środki", "", "777"]] },
+    };
+    global.XLSX = { utils: { sheet_to_json: (sheet) => sheet } };
+    assert.equal(parseXtbCash(workbook), 777);
+
+    const emptyWorkbook = { SheetNames: ["Summary"], Sheets: { Summary: [["Nothing here", "1"]] } };
+    assert.equal(parseXtbCash(emptyWorkbook), null);
+    delete global.XLSX;
+});
+
+test("classifyTicker returns the universe a ticker belongs to, or null", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] }, DOWJONES: { constituents: [{ ticker: "GS" }] } };
+    assert.equal(classifyTicker("AAPL", univData), "NASDAQ100");
+    assert.equal(classifyTicker("GS", univData), "DOWJONES");
+    assert.equal(classifyTicker("XLK", univData), null);
+});
+
+test("buildSlotsFromImport classifies tracked-universe tickers as Core and everything else as Satellite", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] }, DOWJONES: { constituents: [] } };
+    const positions = [
+        { ticker: "AAPL", shares: 2, value: 500 },
+        { ticker: "XLK", shares: 5, value: 250 },
+    ];
+    const { core, satellite, totalValue, unresolvedTickers } = buildSlotsFromImport(positions, univData, {});
+    assert.equal(core.length, 1);
+    assert.equal(core[0].id, "AAPL");
+    assert.equal(core[0].weightPct, 500);
+    assert.equal(satellite.length, 1);
+    assert.equal(satellite[0].ticker, "XLK");
+    assert.equal(totalValue, 750);
+    assert.deepEqual(unresolvedTickers, []);
+});
+
+test("buildSlotsFromImport prices a position from priceMap when the XTB row itself has no value", () => {
+    const positions = [{ ticker: "AAPL", shares: 2, value: null }];
+    const { core, totalValue, unresolvedTickers } = buildSlotsFromImport(positions, {}, { AAPL: { price: 100 } });
+    assert.equal(totalValue, 200);
+    assert.equal(core.length, 0); // AAPL non tracked in the empty univData passed here -> satellite
+    assert.deepEqual(unresolvedTickers, []);
+});
+
+test("buildSlotsFromImport flags a position as unresolved and falls back to a shares-based placeholder weight when no price is available anywhere", () => {
+    const positions = [{ ticker: "ZZZ", shares: 3, value: null }];
+    const { satellite, totalValue, unresolvedTickers } = buildSlotsFromImport(positions, {}, {});
+    assert.deepEqual(unresolvedTickers, ["ZZZ"]);
+    assert.equal(totalValue, 0);
+    assert.equal(satellite[0].weightPct, 3);
+    assert.equal(satellite[0].manualPrice, null);
 });
