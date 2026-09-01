@@ -208,18 +208,26 @@ it only exists after the pipeline has run.
   `renderGemTable()`) and a "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as
   their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
   per-universe tables. The chart area itself has a TradingView/"💪 Siła Relatywna" toggle
-  (`#chartModeToggle`, `updateChartArea()` in `app.js`): clicking a ticker from the relative-strength panel
-  or table (the only two call sites passing `preferMode="RS"` to `selectTicker()`) defaults to two stacked
-  Chart.js charts (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
-  ticker's `weekly_chart` and `mansfield_chart` (see above): the "10:30" price+SMA10/SMA30 chart on top,
-  with the stock's own index level plotted alongside it on the *same* % axis (both rebased to 0% at the
-  momentum window's start) so the stock's trend can be read directly against its index's trend — whichever
-  line is on top is the outperformer — and the Mansfield RS oscillator (short-term + medium-term lines, its
-  own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container` /
-  `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`) — the RS toggle button is disabled whenever the
-  selected ticker has no such data. Every other ticker click (per-universe tables, GEM, Ctrl+K search)
-  still defaults to the TradingView widget as before; the toggle lets you switch either way for the
-  current ticker. WIG20/mWIG40 are PLN-denominated and GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
+  (`#chartModeToggle`, `updateChartArea()` in `app.js`): every ticker in the main per-universe exports
+  (`docs/data/{universe}.json`'s `constituents`, see `process_universe`/`export_json` above) now carries
+  its own `weekly_chart`/`mansfield_chart` too, not just the relative-strength panel's leaders — so the RS
+  toggle is available for any stock, however it was selected (per-universe tables, GEM, Ctrl+K search,
+  the relative-strength panel/table). `findRsEntry()` in `app.js` looks a ticker up first in
+  `combinedRelativeStrengthLeaders()` (an RS-leader entry also carries `relative_strength_pct`/
+  `index_return_pct`) and falls back to its own record in `state.data[universe].constituents`; whichever
+  it finds becomes `state.currentRsEntry` and drives `hasRsChart` in `updateChartArea()`. Only clicking a
+  ticker from the relative-strength panel or table (the two call sites passing `preferMode="RS"` to
+  `selectTicker()`) *defaults* to showing it; everywhere else still opens TradingView by default, same as
+  before — the toggle just lets you switch either way for the current ticker if it has one, and stays
+  disabled when it doesn't (e.g. a ticker whose momentum fell back to the 9-month window with too little
+  extra history for even the short-term chart). When shown, it's two stacked Chart.js charts
+  (`renderRelativeStrengthChart()`, loaded via CDN like TradingView): the "10:30" price+SMA10/SMA30 chart
+  on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to 0%
+  at the momentum window's start) so the stock's trend can be read directly against its index's trend —
+  whichever line is on top is the outperformer — and the Mansfield RS oscillator (short-term + medium-term
+  lines, its own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container` /
+  `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`). WIG20/mWIG40 are PLN-denominated and
+  GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
   prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
   gets a `GPW:` prefix via `tvSymbolFor()` (tracked through `state.selectedUniverse`, set alongside
   `state.selectedTicker` in `selectTicker()`) so the chart resolves to the correct Warsaw-listed instrument

@@ -26,6 +26,7 @@ from run_query import (
     compute_relative_strength_leaders,
     compute_weights,
     export_global_equity_momentum,
+    export_json,
     export_relative_strength,
     select_with_buffer,
 )
@@ -731,3 +732,48 @@ class TestComputeMansfieldRsChart:
         con = make_gem_con()
         insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-01-06", 60, 100.0, 1.0)
         assert compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", "2026-03-30") is None
+
+
+# ---------------------------------------------------------------------------
+# export_json: kazda spolka w GLOWNYM eksporcie per-uniwersum (docs/data/*.json)
+# dostaje teraz wlasny weekly_chart/mansfield_chart (patrz process_universe) —
+# nie tylko liderzy panelu Sily Relatywnej (export_relative_strength).
+# ---------------------------------------------------------------------------
+
+def make_weighted_df_fixture():
+    return pd.DataFrame([
+        {"rank_in_universe": 1, "Ticker": "AAA", "Sector": "Tech", "price_now": 123.45,
+         "momentum_value": 0.20, "momentum_window": "12M", "annualized_volatility": 0.30,
+         "z_score": 1.0, "momentum_score": 2.0, "weight": 0.05,
+         "cap_scaled_due_to_infeasibility": False},
+        {"rank_in_universe": 2, "Ticker": "BBB", "Sector": "Health", "price_now": 50.0,
+         "momentum_value": 0.10, "momentum_window": "9M (fallback)", "annualized_volatility": 0.25,
+         "z_score": 0.5, "momentum_score": 1.5, "weight": 0.03,
+         "cap_scaled_due_to_infeasibility": False},
+    ])
+
+
+class TestExportJson:
+    def test_attaches_weekly_and_mansfield_charts_per_ticker(self, tmp_path):
+        df = make_weighted_df_fixture()
+        weekly_charts = {"AAA": {"dates": ["2026-01-05"], "close_pct": [0.0]}}
+        mansfield_charts = {"AAA": {"dates": ["2026-01-05"], "rsm_short": [1.0], "rsm_medium": [2.0]}}
+
+        export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0,
+                    weekly_charts=weekly_charts, mansfield_charts=mansfield_charts)
+
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        by_ticker = {c["ticker"]: c for c in payload["constituents"]}
+        assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
+        assert by_ticker["AAA"]["mansfield_chart"] == mansfield_charts["AAA"]
+        # BBB nie ma wpisu w slownikach (np. brak danych indeksu dla tego tickera w
+        # danym momencie) -> None w JSON, nie blad.
+        assert by_ticker["BBB"]["weekly_chart"] is None
+        assert by_ticker["BBB"]["mansfield_chart"] is None
+
+    def test_defaults_to_none_when_charts_not_provided(self, tmp_path):
+        df = make_weighted_df_fixture()
+        export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0)
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None
+                   for c in payload["constituents"])

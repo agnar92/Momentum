@@ -28,6 +28,8 @@ metodologii S&P Momentum Indices):
    jako zrodlo docelowych wag dla panelu rebalansu na stronie.
 8. Eksport JSON dla strony (docs/data/*.json) + wygenerowanie statycznych
    plikow strony (docs/index.html, docs/rebalance.html, docs/css/*, docs/js/*).
+   Kazda spolka w KAZDYM uniwersum (nie tylko liderzy Sily Relatywnej, patrz pkt
+   10) ma tez wlasny "weekly_chart"/"mansfield_chart" — patrz process_universe.
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
    fetch_data.py) dla NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez
    WIG20/mWIG40) w oknie GEM_LOOKBACK_MONTHS, wybor zwyciezcy (najwyzszy zwrot)
@@ -45,7 +47,10 @@ metodologii S&P Momentum Indices):
     compute_relative_strength_chart — oraz "mansfield_chart": oscylator Mansfield RS
     w dwoch wygladzeniach (krotkoterminowym ~3 mies. i srednioterminowym ~6 mies.) na
     WLASNYM, znacznie krotszym oknie (ostatnie ~6 mies., odczepione od okna momentum) —
-    patrz compute_mansfield_rs_chart — do wykresu innego niz TradingView.
+    patrz compute_mansfield_rs_chart — do wykresu innego niz TradingView. Te same dwa
+    pola sa tez doliczane KAZDEJ spolce w glownym eksporcie per-uniwersum (nie tylko
+    liderom RS, patrz pkt 8/process_universe) — na dashboardzie przelacznik "Sila
+    Relatywna" jest wiec dostepny dla kazdej spolki, nie tylko tych z panelu RS.
 
 WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
 innego powodu: nie ma ETF-u z publikowanymi holdings dla indeksow GPW, wiec
@@ -372,15 +377,29 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
         print(f"🔁 Turnover vs {prev_ref_date}: {len(added_tickers)} nowych, {len(dropped_tickers)} wypadło "
               f"(z {len(current_tickers)} poprzednich).")
 
+    # --- Wykresy "10:30" + Mansfield RS dla KAŻDEJ spółki w uniwersum (nie tylko
+    # liderów panelu Siły Relatywnej) — to samo okno co index_mom w
+    # export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się okna. ---
+    weekly_charts, mansfield_charts = {}, {}
+    index_mom = compute_index_momentum(con, universe, ref_date)
+    if index_mom is not None:
+        for ticker in df_weighted["Ticker"]:
+            weekly_charts[ticker] = compute_relative_strength_chart(con, ticker, universe,
+                                                                       ref_date, index_mom["date_start"])
+            mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe, ref_date)
+
     # --- Eksport JSON dla strony ---
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
-                prev_ref_date, added_tickers, dropped_tickers)
+                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts)
 
     return df_weighted
 
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
-                 prev_ref_date=None, added_tickers=None, dropped_tickers=None):
+                 prev_ref_date=None, added_tickers=None, dropped_tickers=None,
+                 weekly_charts=None, mansfield_charts=None):
+    weekly_charts = weekly_charts or {}
+    mansfield_charts = mansfield_charts or {}
     records = []
     for _, r in df_weighted.iterrows():
         records.append({
@@ -394,6 +413,8 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "z_score": round(float(r["z_score"]), 3),
             "momentum_score": round(float(r["momentum_score"]), 3),
             "weight_pct": round(float(r["weight"]) * 100, 3),
+            "weekly_chart": weekly_charts.get(r["Ticker"]),
+            "mansfield_chart": mansfield_charts.get(r["Ticker"]),
         })
     cap_scaled = bool(df_weighted["cap_scaled_due_to_infeasibility"].iloc[0]) if len(df_weighted) else False
     if universe == "DOWJONES":
