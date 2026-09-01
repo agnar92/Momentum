@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 from fetch_data import (
-    INDEX_LEVEL_SYMBOLS,
     PRICES_SCHEMA,
+    _compute_synthetic_equal_weight_index,
     _download_price_rows,
     _ensure_prices_ohlc_columns,
     _find_column,
@@ -425,8 +425,12 @@ class TestUpdatePricesIncremental:
 
 
 # ---------------------------------------------------------------------------
-# update_index_prices: ceny poziomu indeksu (^GSPC/^NDX/^DJI) dla Global
-# Equity Momentum — mapowanie symbolu yfinance z powrotem na nazwe uniwersum.
+# update_index_prices: ceny poziomu indeksu dla Global Equity Momentum / Sily
+# Relatywnej. NASDAQ100/DOWJONES (^NDX/^DJI) MAJA pelna historie u yfinance —
+# pobierane i mapowane z powrotem na nazwe uniwersum jak dotychczas. WIG20/
+# MWIG40 NIE MAJA zadnej historycznej danej poziomu indeksu u yfinance
+# (potwierdzone recznie — patrz docstring _compute_synthetic_equal_weight_index)
+# — budowane syntetycznie z wlasnych skladnikow zamiast pobierane.
 # ---------------------------------------------------------------------------
 
 class TestUpdateIndexPrices:
@@ -441,7 +445,7 @@ class TestUpdateIndexPrices:
         update_index_prices(con, lookback_months=12)
 
         rows = con.execute("SELECT Index_Name, Close FROM index_prices ORDER BY Index_Name").fetchall()
-        assert {r[0] for r in rows} == set(INDEX_LEVEL_SYMBOLS.keys())
+        assert {r[0] for r in rows} == {"NASDAQ100", "DOWJONES"}
         assert "^GSPC" not in {r[0] for r in rows}  # zapisana kanoniczna nazwa uniwersum, nie symbol yf
 
     def test_failed_downloads_leave_table_without_those_rows(self, monkeypatch):
@@ -454,4 +458,51 @@ class TestUpdateIndexPrices:
             SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
         """).fetchone()[0]
         assert count == 1  # tabela stworzona
+        # NASDAQ100/DOWJONES: brak danych z yfinance -> brak wierszy. WIG20/MWIG40:
+        # brak index_constituents/prices w tym swiezym con -> synteza tez nic nie da.
         assert con.execute("SELECT COUNT(*) FROM index_prices").fetchone()[0] == 0
+
+    def test_wig20_mwig40_build_synthetic_equal_weight_index_from_constituents(self, monkeypatch):
+        # yfinance nie ma historii dla WIG20.WA/MWIG40.WA (patrz docstring
+        # _compute_synthetic_equal_weight_index) — te dwa uniwersa NIE polegaja
+        # na _download_price_rows w ogole, tylko na wlasnych skladnikach.
+        # Daty musza wpasc w okno wyliczane przez get_full_refresh_range(lookback_months)
+        # (konczy sie na ostatnim dniu POPRZEDNIEGO miesiaca, nie dzisiaj), inaczej
+        # filtr Date BETWEEN w _compute_synthetic_equal_weight_index odetnie wszystko.
+        _, end_date_str = get_full_refresh_range(12)
+        d1 = end_date_str
+        d0 = (pd.Timestamp(end_date_str) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+        con = duckdb.connect(":memory:")
+        con.execute("CREATE TABLE index_constituents (Ticker VARCHAR, Index_Name VARCHAR)")
+        con.execute("INSERT INTO index_constituents VALUES ('AAA', 'WIG20'), ('BBB', 'WIG20')")
+        con.execute(f"CREATE TABLE prices ({PRICES_SCHEMA})")
+        con.execute(f"""
+            INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES
+                ('{d0}', 'AAA', 10.0, 10.0, 100),
+                ('{d1}', 'AAA', 11.0, 11.0, 100),
+                ('{d0}', 'BBB', 20.0, 20.0, 100),
+                ('{d1}', 'BBB', 19.0, 19.0, 100)
+        """)
+        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), list(t)))
+
+        update_index_prices(con, lookback_months=12)
+
+        rows = con.execute(
+            "SELECT Date, Close FROM index_prices WHERE Index_Name = 'WIG20' ORDER BY Date"
+        ).fetchall()
+        assert len(rows) == 2
+        # dzien 1: baza = 100 (pierwszy dzien w oknie, brak wczesniejszego zwrotu)
+        assert rows[0][1] == pytest.approx(100.0)
+        # dzien 2: AAA +10%, BBB -5% -> rownowazony zwrot = +2.5% -> 100 * 1.025
+        assert rows[1][1] == pytest.approx(102.5)
+        # MWIG40 nie ma skladnikow w index_constituents w tym tescie -> brak wierszy, bez wyjatku
+        assert con.execute(
+            "SELECT COUNT(*) FROM index_prices WHERE Index_Name = 'MWIG40'"
+        ).fetchone()[0] == 0
+
+    def test_synthetic_index_returns_empty_without_crashing_when_tables_missing(self):
+        # Swiezy bootstrap: index_constituents/prices jeszcze nie istnieja. Musi
+        # sie zachowac łagodnie (pusty wynik), nie rzucic wyjatku katalogowego duckdb.
+        con = duckdb.connect(":memory:")
+        result = _compute_synthetic_equal_weight_index(con, "WIG20", "2024-01-01", "2024-01-31")
+        assert result.empty
