@@ -1,5 +1,25 @@
 {
   "_instructions": "Lista tickerow GPW (bez sufiksu .WA) wchodzacych w sklad WIG20. Uzupelnij recznie i podmieniaj przy kazdej rewizji indeksu (GPW Benchmark: rewizja roczna w styczniu + korekty kwartalne w kwietniu/lipcu/pazdzierniku). Kazdy element listy 'tickers' moze byc albo samym tickerem jako string (np. \"PKN\"), albo obiektem {\"ticker\": \"PKN\", \"sector\": \"Energy\"} jesli chcesz podac tez sektor. Brak wag kapitalowych jest zamierzony — WIG20 jest tu wazony rownomiernie (tak jak DOWJONES), patrz run_query.py::EQUAL_WEIGHT_UNIVERSES.",
   "as_of": null,
-  "tickers": []
+  "tickers": [
+    "ALE",
+    "ALR",
+    "CDR",
+    "DNP",
+    "EBP",
+    "KGH",
+    "KRU",
+    "KTY",
+    "LPP",
+    "MBK",
+    "MDV",
+    "PCO",
+    "PEO",
+    "PGE",
+    "PKN",
+    "PKO",
+    "PZU",
+    "TPE",
+    "ZAB"
+  ]
 }
