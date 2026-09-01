@@ -252,6 +252,48 @@ class TestDownloadPriceRows:
 
         assert rows == [("2024-01-02", "AAA", 10.0, 10.0, 100, None, None)]
 
+    def test_ticker_missing_from_batch_is_retried_individually_and_recovered(self, monkeypatch):
+        # Real bug this covers: update_index_prices() requests
+        # ['^NDX', '^DJI', 'WIG20.WA', 'MWIG40.WA'] in ONE multi-ticker call —
+        # yfinance consistently reported "possibly delisted" for WIG20.WA/MWIG40.WA
+        # in that mixed-exchange batch even though the same symbols have data when
+        # fetched alone, leaving index_prices empty for WIG20/MWIG40 and breaking
+        # every WIG20/MWIG40 stock's weekly_chart (compute_relative_strength_chart
+        # returns None when its own index has no rows). A ticker missing from the
+        # batch result must be retried alone and recovered if that single-symbol
+        # call actually has data.
+        dates = pd.to_datetime(["2024-01-02"])
+        batch_columns = pd.MultiIndex.from_product([["AAA"], ["Close", "Adj Close", "Volume"]])
+        batch_data = pd.DataFrame([[10.0, 10.0, 100]], index=dates, columns=batch_columns)
+        single_data = pd.DataFrame([[5.0, 5.0, 50]], index=dates, columns=["Close", "Adj Close", "Volume"])
+        calls = []
+
+        def fake_download(tickers, **kwargs):
+            calls.append(list(tickers))
+            if len(tickers) > 1:
+                return batch_data  # "BBB" missing entirely from the batch result
+            return single_data
+
+        monkeypatch.setattr("fetch_data.yf.download", fake_download)
+        monkeypatch.setattr("fetch_data.time.sleep", lambda _: None)
+
+        rows, fetched, failed = _download_price_rows(["AAA", "BBB"], "2024-01-02", "2024-01-03")
+
+        assert calls == [["AAA", "BBB"], ["BBB"]]  # batch, then a solo retry for the missing one
+        assert fetched == {"AAA", "BBB"}
+        assert failed == []
+        assert ("2024-01-02", "BBB", 5.0, 5.0, 50) in rows
+
+    def test_ticker_still_missing_after_solo_retry_ends_up_failed(self, monkeypatch):
+        monkeypatch.setattr("fetch_data.yf.download", lambda tickers, **kwargs: pd.DataFrame())
+        monkeypatch.setattr("fetch_data.time.sleep", lambda _: None)
+
+        rows, fetched, failed = _download_price_rows(["CCC"], "2024-01-02", "2024-01-03")
+
+        assert rows == []
+        assert fetched == set()
+        assert failed == ["CCC"]
+
 
 def _make_prices_con(rows):
     """rows: lista (date_str, ticker, close, adj_close, volume) — 5-krotki, mimo ze

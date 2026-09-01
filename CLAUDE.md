@@ -111,7 +111,19 @@ the classic dual/global-momentum idea of picking whichever market currently has 
 `fetch_data.py::update_index_prices` pulls daily closes for every universe in `INDEX_LEVEL_SYMBOLS`
 (`^NDX`/`^DJI` for the two US universes, `WIG20.WA`/`MWIG40.WA` for WIG20/mWIG40) into a shared
 `index_prices` table (`Date, Index_Name, Close, ...`), fully replaced on every run (no incremental logic
-needed, unlike the per-constituent `prices` table). `compute_index_returns()` reads that table — filtered
+needed, unlike the per-constituent `prices` table), via a single multi-ticker `_download_price_rows(['^NDX',
+'^DJI', 'WIG20.WA', 'MWIG40.WA'], ...)` call. That mixed batch (two different exchanges/currencies in one
+`yf.download(..., group_by="ticker")` request) hit a real, consistently-reproducing yfinance quirk in
+production: yfinance reported `WIG20.WA`/`MWIG40.WA` as "possibly delisted; no price data found" in every
+run, even though the same two symbols do have data when requested alone — leaving `index_prices` with zero
+rows for WIG20/mWIG40 and silently breaking every WIG20/mWIG40 stock's `weekly_chart`/`mansfield_chart`
+(`compute_relative_strength_chart`/`compute_mansfield_rs_chart` both need their own index's rows and return
+`None` without them — the dashboard showed correct WIG20/mWIG40 constituent data but no chart for any of
+their tickers). Fixed generically in `_download_price_rows()` itself, not by special-casing these two
+symbols: any ticker still missing after a batch call is retried once more on its own (single-ticker
+`yf.download`) before it's finally counted as failed — this fixes the WIG20/mWIG40 case (and any other
+future mixed-batch false negative) without needing to guess which symbol combination yfinance will
+mis-report next. `compute_index_returns()` reads that table — filtered
 to `GEM_UNIVERSES` only — and returns each universe's return over the window, sorted descending; the top
 one is the `winner`. WIG20/mWIG40 price data still lands in `index_prices` (needed for their own Relative
 Strength, below) but is excluded from this specific cross-market race by that filter, so adding them
