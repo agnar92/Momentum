@@ -177,48 +177,82 @@ the line (and an ATH/confirmed status derived from it) diverged from reality rat
 signal, so don't reintroduce it without first fixing the underlying retention-window limitation.
 
 `weekly_chart` also carries a full, mechanized **Weinstein stage classification** for every displayed week
-(`stage`/`signal`/`volume`/`volume_ratio`, plus a `current_stage` convenience field) — `_compute_weinstein_
-stage_series()` in `run_query.py`. This is a deliberate, documented simplification of the book's discretionary
-method ("Secrets for Profiting in Bull and Bear Markets"), not a literal transcription of it (the book itself
-was never available to build this — its methodology is well-established, public trading knowledge; see also
-the "book file" question below): stages are classified from price's position **relative to SMA30 and SMA30's
-own slope** only —
-  - **Stage 1** (base): price near a flat SMA30, no confirmed trend.
-  - **Stage 2A** (fresh breakout): price crosses above SMA30 (flat/rising) within `STAGE_BREAKOUT_
-    LOOKBACK_WEEKS` (4) weeks of the cross — the classic first entry.
-  - **Stage 2B** (continuation): price has been above a rising SMA30 for longer than that — room for later,
-    secondary entries on pullbacks to SMA10 (the book's "pyramiding" buy points).
+(`stage`/`signal`/`volume`/`volume_ratio`/`stop_level_pct`/`base_count`, plus a `current_stage` convenience
+field) — `_compute_weinstein_stage_series()` in `run_query.py`. This is a deliberate, documented
+simplification of the book's discretionary method ("Secrets for Profiting in Bull and Bear Markets"), not a
+literal transcription of it (the book's own text was never available to build this — the methodology comes
+from well-established, public trading knowledge plus book diagrams the user shared directly, see also the
+"book file" question below).
+
+**Version history matters here**: a first version of this classification identified breakouts purely from a
+crossing of SMA30 and had one flat exit rule ("price below SMA30"). After the user showed the actual book
+diagrams (a bottoming base with a **resistance zone**, a "1st/2nd/3rd base" sequence within a Stage 2 advance,
+and a dedicated "Trailing Stop Loss — Weekly Chart" diagram with a progressively-raised stop), that version
+was replaced with the one described below — it was too coarse a simplification of what the book actually
+shows. Read this section, not the git history, for the current design.
+
+**Base/resistance detection** (the mechanism entries are built on): in every week, look at the trailing
+`STAGE_BASE_LOOKBACK_WEEKS` (8) weeks of closes (excluding the current week). If `(max-min)/min` over that
+window is within `STAGE_BASE_MAX_RANGE_PCT` (15%), it counts as a **tight base** (the book's "trading range" /
+"resistance zone"), and its `max` is that base's resistance. A **breakout** is the current week's close
+closing above that resistance. `STAGE_MIN_BASE_GAP_WEEKS` (6) enforces a minimum gap since the last counted
+base — without it, a smooth, gently-rising trend with no real pause would trivially "break out" every 1-2
+weeks purely because a slowly climbing 8-week rolling high is easy to clear, which is not what the book means
+by a base. This intentionally does **not** use a multi-year high/support (a `resistance above the prior ATH`)
+— same reasoning as the removed GLB line above: the rolling ~15-month `prices` retention can support a local,
+several-week base, not a multi-year one. Relative strength vs. the index is still deliberately excluded from
+the classification itself (rejected earlier as too hard to implement reliably) — the index stays a plain
+comparison line on the chart, unchanged.
+
+**Stages**, derived from that breakout signal plus price's position/slope relative to SMA30:
+  - **Stage 1** (base): price near/below a not-yet-broken-out base, or (cautiously) above SMA30 while SMA30
+    is still falling — not a confirmed advance yet.
+  - **Stage 2A** (fresh breakout): the first base breakout since the stock was last *not* in Stage 2.
+  - **Stage 2B** (continuation): every subsequent base breakout while already in Stage 2 — the book's
+    "1st base / 2nd base / 3rd base..." sequence within one advance (secondary/"pyramiding" entries).
   - **Stage 3** (topping): price dips back under SMA30 after an advance, before SMA30 itself turns down
     (distribution).
   - **Stage 4** (decline): price under a falling SMA30.
 
-Deliberately **excluded**: any long-term base resistance/support level (a "breakout above the prior high"),
-for the exact same reason the GLB line above was removed — the rolling ~15-month `prices` retention can't
-back a multi-year resistance level, so stages are inferred purely from the SMA30 relationship, which the
-retention window can actually support. Also deliberately excluded: relative strength vs. the index as an
-input to the stage/signal classification itself — that idea was tried and rejected earlier as too hard to
-implement reliably; the index level still appears on the chart as a comparison line, unchanged from before,
-just not read by the stage engine.
+**Trailing stop-loss** (`stop_level`, rebased to `stop_level_pct` in the exported chart data the same way
+`close_pct` is — same close0 base — so it can be drawn as a line on the price chart): mirrors the book's own
+"Trailing Stop Loss — Weekly Chart" diagram.
+  - On `ENTRY_2A`: stop = `min(SMA30, breakout base's low)` — below both the whole base and the rising MA
+    ("the stop loss should remain below the rising 30-week MA and each significant weekly swing low").
+  - On each later base breakout (`ENTRY_2B`/`ENTRY_2B_LATE`): the stop is a *candidate* to raise to
+    `min(SMA30, new base's low)`, but it is only actually raised — and only then — once price has already
+    moved back within `STAGE_STOP_NEAR_HIGH_PCT` (3%) of the run's swing high since the last raise ("don't
+    raise your stop loss until the price moves back near to the prior swing high of the most recent
+    advance"). The stop is only ever raised or held, never lowered.
+  - `base_count` tracks which base number this is within the current Stage 2 run; from `STAGE_LATE_BASE_
+    WARNING_COUNT` (4) onward the entry signal becomes `ENTRY_2B_LATE` instead of `ENTRY_2B` — "4th & 5th
+    bases within the Stage 2 advance are more prone to failure. So watch for warning signs."
+  - `WARNING_MA_SLOWING` fires once per Stage 2 run, the first week SMA30's own slope (still positive/rising)
+    falls under `STAGE_MA_SLOWDOWN_RATIO` (0.5x) of its own peak slope during that run — "30 week MA starting
+    to lose momentum. Tactic change to more aggressive SL placement." It is a warning, not an exit.
+  - `EXIT_STOP` fires the week price actually closes below the current `stop_level` — "Exit Trade: Stop Loss
+    hit as price breaks below support." Firing it resets all run state (`stop_level`/`base_count`/etc. back
+    to `None`/0) so the next fresh base breakout starts a clean new run.
 
-Entry/exit **signals** (`signal`, fired only on the specific week they occur, not every week of a stage):
-  - `ENTRY_2A` — the Stage 2A breakout week, but *only* if weekly volume is at least `STAGE_BREAKOUT_
-    VOLUME_RATIO` (1.5x) the trailing `STAGE_VOLUME_LOOKBACK_WEEKS` (10) average — the book's volume
-    confirmation of a breakout; without it, the stage is still called 2A but no entry signal fires.
-  - `ENTRY_2B` — inside Stage 2B, the week price closes back above SMA10 after the prior week closed at or
-    below it (a pullback-and-bounce), softer-confirmed by `STAGE_PULLBACK_VOLUME_RATIO` (1.2x).
-  - `EXIT_STOP` — the week price closes back below SMA30 after being in Stage 2A/2B — Weinstein's primary,
-    mechanical sell rule ("sell on violation of the 30-week MA").
-  - `EXIT_CLIMAX` — a non-mechanical warning (not a hard stop): price is `STAGE_CLIMAX_EXTENSION_PCT` (30%)
-    or more above SMA30 while still in Stage 2 — the book's "don't chase, take some profit into strength"
-    caveat for an overextended advance.
+Volume confirmation, mostly unchanged from the first version: `ENTRY_2A` additionally requires weekly volume
+`>= STAGE_BREAKOUT_VOLUME_RATIO` (1.5x) the trailing `STAGE_VOLUME_LOOKBACK_WEEKS` (10) average — without it
+the stage is still called 2A but no entry signal fires. `ENTRY_2B`/`ENTRY_2B_LATE` accept a softer
+`STAGE_PULLBACK_VOLUME_RATIO` (1.2x), or no volume data at all. Weekly `volume` (`SUM(Volume)` per week,
+added to `_weekly_close_series`) and `volume_ratio` (that week's volume vs. the trailing 10-week average) are
+exported for every week regardless, so the frontend can render volume bars colored by confirmation strength,
+not just at breakout weeks.
 
-Weekly `volume` (`SUM(Volume)` per week, added to `_weekly_close_series`) and `volume_ratio` (that week's
-volume vs. the trailing 10-week average, `None` until enough history exists) are exported for every week so
-the frontend can render volume bars alongside price, colored by whether that week's volume actually confirms
-a move — not just at breakout weeks. All of the above shares the exact same shallow-history caveat already
-documented for `sma10_pct`/`sma30_pct` above: `stage`/`signal`/`volume_ratio` are `None` until SMA30 (and,
-separately, `STAGE_VOLUME_LOOKBACK_WEEKS` weeks of volume) are available, which in production may not be
-until partway through the displayed window.
+All of the above shares the exact same shallow-history caveat already documented for `sma10_pct`/`sma30_pct`
+above: every field is `None` until SMA30 (and, separately, `STAGE_VOLUME_LOOKBACK_WEEKS`/`STAGE_BASE_
+LOOKBACK_WEEKS` weeks of volume/price history) are available, which in production may not be until partway
+through the displayed window.
+
+One more thing worth knowing if you touch `compute_relative_strength_chart`: `pd.DataFrame.iterrows()`
+silently coerces `None` to `NaN` in an object-dtype column (`stage`/`signal`/`stop_level`/`base_count`) when
+the same row also has float columns (`close`/`sma10`/...) — a real bug hit once during development, because
+a raw `NaN` (not `null`) in the exported JSON is invalid per strict JSON and `JSON.parse` in the browser would
+reject the whole file. Every field read off an `in_window.iterrows()` row is therefore guarded with an
+explicit `pd.notna(...)` check before being appended, even where it looks redundant.
 
 Each leader also carries a `mansfield_chart` (`compute_mansfield_rs_chart()`) — the classic Mansfield
 Relative Strength oscillator, `RSM = (RS / SMA(RS, N weeks) - 1) * 100` where `RS = stock_close /
@@ -281,12 +315,17 @@ it only exists after the pipeline has run.
   stage means), weekly `volume` bars on a hidden secondary axis at the bottom of the price chart (brighter
   green when `volume_ratio` clears `STAGE_BREAKOUT_VOLUME_RATIO`, i.e. a confirmed breakout week — this
   constant is duplicated client-side in `app.js` and must stay in sync with the same constant in
-  `run_query.py`), and entry/exit markers plotted directly on the price line (triangle-up for
-  `ENTRY_2A`/`ENTRY_2B`, triangle-down for `EXIT_STOP`, star for `EXIT_CLIMAX` — see `SIGNAL_MARKER_COLORS`),
-  with the signal's plain-language description (`SIGNAL_LABELS`) appended to that week's tooltip. A static
-  legend line under the chart explains the marker/bar meanings once, rather than repeating them per-chart.
-  None of this reads relative strength vs. the index — that stays a separate, purely visual comparison line
-  on the same chart, unchanged from before. Below that is the Mansfield RS oscillator (short-term + medium-
+  `run_query.py`), a **trailing stop-loss line** plotted directly from `stop_level_pct` (a dashed red line,
+  mirroring the book's own "Trailing Stop Loss" diagram — Chart.js breaks the line wherever the value is
+  `null`, i.e. outside an active Stage 2 run, with no extra handling needed), and entry/exit markers on the
+  price line itself: triangle-up (green) for `ENTRY_2A`/`ENTRY_2B`, triangle-up (amber) for `ENTRY_2B_LATE`
+  (a 4th-or-later base in the same run — see `SIGNAL_MARKER_COLORS`), a small square (amber) for
+  `WARNING_MA_SLOWING`, triangle-down (red) for `EXIT_STOP` — with the signal's plain-language description
+  (`SIGNAL_LABELS`) appended to that week's tooltip, including which base number it was for `ENTRY_2B`/
+  `ENTRY_2B_LATE` (`base_count`). A static legend line under the chart explains the marker/bar/line meanings
+  once, rather than repeating them per-chart. None of this reads relative strength vs. the index — that stays
+  a separate, purely visual comparison line on the same chart, unchanged from before. Below that is the
+  Mansfield RS oscillator (short-term + medium-
   term lines, its own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container`
   / `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`). WIG20/mWIG40 are PLN-denominated and
   GPW-listed, unlike the rest (USD, NYSE/Nasdaq):

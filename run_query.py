@@ -835,73 +835,123 @@ RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinste
 
 # --- Klasyfikacja etapow Weinsteina (Stage Analysis, "Secrets for Profiting in
 # Bull and Bear Markets") na wykresie 10:30 — patrz _compute_weinstein_stage_series.
-# Uproszczenie ROZMYSLNE: ksiazka wyznacza opor/wsparcie bazy z wieloletniego
-# wykresu (typowo widac to na TradingView), a rolling ~15-miesieczne okno `prices`
-# na to nie pozwala — dokladnie ten sam powod, dla ktorego linie GLB usunieto z
-# tego samego wykresu (patrz docstring compute_relative_strength_chart). Zamiast
-# tego etap wyznaczamy WYLACZNIE z pozycji ceny wzgledem SMA30 i jej nachylenia —
-# jedyne dane, na ktore rolling okno realnie starcza. Sila relatywna CELOWO nie
-# wchodzi w te klasyfikacje (pomysl odrzucony wczesniej ze wzgledu na trudnosc
-# implementacji — patrz historia commitow / CLAUDE.md).
+# WERSJA 2: pierwsza wersja tej klasyfikacji wyznaczala wybicie WYLACZNIE z
+# przeciecia SMA30 (bez lokalnego oporu bazy) i miala pojedyncza, plaska regule
+# wyjscia ("cena ponizej SMA30"). Po pokazaniu oryginalnych rysunkow z ksiazki
+# (trading range / resistance zone przy wybiciu, wielokrotne bazy 1./2./3.
+# w trakcie Etapu 2, oraz osobny wykres "Trailing Stop Loss" z podnoszonym stopem)
+# okazalo sie to za grubym uproszczeniem — ponizsza wersja liczy realny opor
+# lokalnej bazy (trading range) i prowadzi trailing stop-loss zamiast plaskiej
+# reguly SMA30. Nadal ROZMYSLNIE pominieta jest wieloletnia baza/ATH (jak przy
+# usunietej linii GLB, patrz docstring compute_relative_strength_chart) — lokalna
+# baza z ostatnich kilku-kilkunastu tygodni miesci sie w rolling ~15-miesiecznym
+# oknie `prices`, wieloletni opor juz nie. Sila relatywna CELOWO nie wchodzi w te
+# klasyfikacje (pomysl odrzucony wczesniej ze wzgledu na trudnosc implementacji).
 STAGE_SLOPE_LOOKBACK_WEEKS = 4       # ile tyg. wstecz porownujemy SMA30 przy ocenie kierunku
 STAGE_FLAT_SLOPE_PCT = 1.0           # próg nachylenia SMA30 (w % za STAGE_SLOPE_LOOKBACK_WEEKS) uznawany za "plaskie"
-STAGE_BREAKOUT_LOOKBACK_WEEKS = 4    # tyle tyg. od przebicia SMA30 w gore to jeszcze "swieze" wybicie (Etap 2A)
 STAGE_VOLUME_LOOKBACK_WEEKS = 10     # okno sredniego tyg. wolumenu do oceny potwierdzenia wybicia
-STAGE_BREAKOUT_VOLUME_RATIO = 1.5    # wybicie (2A) potwierdzone wolumenem gdy tyg. wolumen >= 1.5x sredniej
-STAGE_PULLBACK_VOLUME_RATIO = 1.2    # dla wejscia kontynuacyjnego (2B) wystarczy slabszy wzrost wolumenu na odbiciu
-STAGE_CLIMAX_EXTENSION_PCT = 30.0    # ostrzezenie "wykupienia": cena > tyle % nad SMA30 w trakcie Etapu 2
+STAGE_BREAKOUT_VOLUME_RATIO = 1.5    # wybicie bazy (2A) potwierdzone wolumenem gdy tyg. wolumen >= 1.5x sredniej
+STAGE_PULLBACK_VOLUME_RATIO = 1.2    # dla kolejnych baz w trakcie Etapu 2 (2B) wystarczy slabszy wzrost wolumenu
+STAGE_BASE_LOOKBACK_WEEKS = 8        # okno, w ktorym szukamy "strefy oporu" (max) lokalnej bazy/trading range
+STAGE_BASE_MAX_RANGE_PCT = 15.0      # (max-min)/min w tym oknie musi byc <= tyle %, zeby uznac je za "cisna baze"
+STAGE_MIN_BASE_GAP_WEEKS = 6         # min. odstep miedzy kolejnymi bazami — bez tego gladki trend bez realnych
+                                      # przystankow wybijalby sie z definicji co 1-2 tyg. (zawsze > max z 8 tyg.)
+STAGE_LATE_BASE_WARNING_COUNT = 4    # 4., 5. baza w tej samej fali Etapu 2 sa bardziej podatne na niepowodzenie (ksiazka)
+STAGE_STOP_NEAR_HIGH_PCT = 3.0       # stop podnosimy tylko gdy cena wrocila w te % okolice poprzedniego szczytu fali
+STAGE_MA_SLOWDOWN_RATIO = 0.5        # ostrzezenie "SMA30 traci tempo": biezace nachylenie < tyle x szczytowe w tej fali
 
 
 def _compute_weinstein_stage_series(stock_df):
     """Klasyfikuje KAZDY tydzien stock_df (posortowany chronologicznie, kolumny
-    close/sma10/sma30/volume — patrz compute_relative_strength_chart) na etap wg
-    uproszczonych, zmechanizowanych regul stage analysis Weinsteina:
+    close/sma30/volume — patrz compute_relative_strength_chart) na etap Weinsteina
+    i prowadzi trailing stop-loss dokladnie w stylu ksiazkowego wykresu "Stage
+    Analysis Investor method — Trailing Stop Loss":
 
-      Etap 1 (baza)            — cena w poblizu plaskiej SMA30, brak potwierdzonego trendu.
-      Etap 2A (swieze wybicie) — cena przebija SMA30 w gore (SMA30 plaska/rosnaca),
-                                  w oknie STAGE_BREAKOUT_LOOKBACK_WEEKS tyg. od przebicia.
-      Etap 2B (kontynuacja)    — cena od dawna nad rosnaca SMA30 (poza oknem "swiezosci"
-                                  powyzej) — pole na kolejne, pozniejsze wejscia na
-                                  korektach do SMA10/SMA30 (tzw. "pyramiding" w ksiazce).
+      Etap 1 (baza)            — cena w poblizu plaskiej SMA30, brak potwierdzonego trendu
+                                  (rowniez: cena chwilowo nad JESZCZE opadajaca SMA30 —
+                                  traktowana ostroznie, to NIE potwierdzony Etap 2).
+      Etap 2A (swieze wybicie) — PIERWSZE wybicie ponad opor cisnej bazy (patrz nizej)
+                                  od czasu, gdy spolka nie byla juz w Etapie 2.
+      Etap 2B (kontynuacja)    — KAZDE kolejne wybicie ponad opor nowej, cisnej bazy,
+                                  gdy spolka jest juz w Etapie 2 — "1. baza", "2. baza"...
+                                  z ksiazkowego rysunku (pozniejsze/sekundarne wejscia,
+                                  "pyramiding").
       Etap 3 (szczyt)          — po Etapie 2 cena zaczyna schodzic pod SMA30, ktora
                                   jeszcze nie opada (dystrybucja/wyplaszczenie trendu).
       Etap 4 (spadek)          — cena pod opadajaca SMA30.
 
-    Sygnaly (pole "signal", tylko w tygodniu w ktorym faktycznie sie pojawiaja):
-      ENTRY_2A      — tydzien przebicia SMA30 w gore z wolumenem >= STAGE_BREAKOUT_VOLUME_RATIO
-                       sredniej z STAGE_VOLUME_LOOKBACK_WEEKS poprzednich tygodni (klasyczne
-                       "wybicie na wolumenie" z ksiazki — bez potwierdzenia wolumenem NIE
-                       oznaczamy sygnalu, tylko sam etap).
-      ENTRY_2B      — w Etapie 2B: tydzien odbicia znad/z SMA10 (poprzedni tydzien <= SMA10,
-                       biezacy > SMA10) po lagodniejszym wzroscie wolumenu (sekundarny/
-                       pozniejszy punkt wejscia w istniejacym trendzie z ksiazki).
-      EXIT_STOP     — tydzien przebicia SMA30 w dol, gdy poprzedni etap to 2A/2B (glowna,
-                       mechaniczna regula wyjscia Weinsteina: "sprzedaj przy zlamaniu 30-tyg.
-                       sredniej").
-      EXIT_CLIMAX   — cena > STAGE_CLIMAX_EXTENSION_PCT nad SMA30 w trakcie Etapu 2 —
-                       ostrzezenie o wykupieniu ("sprzedaz w sile"), NIE twardy stop.
+    Baza/opor: w kazdym tygodniu patrzymy na max/min zamkniec z poprzednich
+    STAGE_BASE_LOOKBACK_WEEKS tygodni (BEZ biezacego) — jesli (max-min)/min miesci
+    sie w STAGE_BASE_MAX_RANGE_PCT, to okno liczy sie za "cisna baze", a jej "opor"
+    to max tego okna. Wybicie = biezace zamkniecie > ten opor. STAGE_MIN_BASE_GAP_WEEKS
+    pilnuje, zeby kolejna baza faktycznie zdazyla sie uformowac (patrz komentarz przy
+    stalej) zamiast liczyc kazdy tydzien plynnego trendu za nowa baze.
 
-    Zwraca liste dictow {"stage", "signal", "volume_ratio"} rownolegla do stock_df
-    (stage/signal/volume_ratio to None dopoki SMA30 wzglednie STAGE_VOLUME_LOOKBACK_WEEKS
-    tyg. historii wolumenu nie sa jeszcze dostepne — ten sam, udokumentowany juz wyzej
-    limit plytkiej historii co reszta wykresu 10:30)."""
+    Trailing stop-loss (pole "stop_level", w jednostkach ceny — compute_relative_
+    strength_chart rebase'uje go do "stop_level_pct" tak samo jak close_pct):
+      - Przy ENTRY_2A: stop = min(SMA30, dolna granica bazy wybicia) — pod caloscia
+        bazy i pod SMA30 rownoczesnie (ksiazka: "stop loss should remain below the
+        rising 30-week MA and each significant weekly swing low").
+      - Przy kazdej kolejnej bazie (2B): stop PODNOSZONY do min(SMA30, dolna granica
+        NOWEJ bazy) — ale TYLKO jesli cena zdazyla juz wrocic w okolice
+        (STAGE_STOP_NEAR_HIGH_PCT) poprzedniego szczytu fali (ksiazka: "don't raise
+        your stop loss until the price moves back near to the prior swing high").
+      - Stop nigdy nie jest obnizany, tylko podnoszony/trzymany.
+
+    Sygnaly (pole "signal", tylko w tygodniu w ktorym faktycznie sie pojawiaja):
+      ENTRY_2A        — tydzien pierwszego wybicia bazy z potwierdzeniem wolumenem
+                         (>= STAGE_BREAKOUT_VOLUME_RATIO sredniej z STAGE_VOLUME_
+                         LOOKBACK_WEEKS tyg.) — bez potwierdzenia wolumenem etap
+                         nadal jest "2A", ale sygnal wejscia nie jest oznaczany.
+      ENTRY_2B        — tydzien wybicia 2., 3. (< STAGE_LATE_BASE_WARNING_COUNT) bazy
+                         w tej samej fali Etapu 2, z lagodniejszym potwierdzeniem
+                         wolumenem (STAGE_PULLBACK_VOLUME_RATIO).
+      ENTRY_2B_LATE   — to samo, ale to juz 4. lub kolejna baza w tej fali — ksiazka:
+                         "4th & 5th bases within the Stage 2 advance are more prone
+                         to failure. So watch for warning signs" — dalej to sygnal
+                         wejscia, ale z ostrzezeniem podwyzszonego ryzyka.
+      WARNING_MA_SLOWING — nachylenie SMA30 spadlo ponizej STAGE_MA_SLOWDOWN_RATIO
+                         swojego szczytu w tej fali Etapu 2, cigle rosnace (nie
+                         plaskie/spadajace) — ksiazka: "30 week MA starting to lose
+                         momentum. Tactic change to more aggressive SL placement".
+                         Odpala sie raz na fale, NIE jest twardym sygnalem wyjscia.
+      EXIT_STOP       — biezace zamkniecie zlamalo trailing stop_level opisany wyzej
+                         ("Exit Trade: Stop Loss hit as price breaks below support").
+
+    Zwraca liste dictow {"stage", "signal", "volume_ratio", "stop_level", "base_count"}
+    rownolegla do stock_df. Wszystkie pola to None dopoki SMA30 (wzglednie
+    STAGE_VOLUME_LOOKBACK_WEEKS tyg. historii wolumenu, wzglednie STAGE_BASE_LOOKBACK_
+    WEEKS tyg. do wyznaczenia bazy) nie sa jeszcze dostepne — ten sam, udokumentowany
+    juz wyzej limit plytkiej historii co reszta wykresu 10:30. "base_count" to numer
+    biezacej bazy w trwajacej fali Etapu 2 (None poza Etapem 2)."""
     n = len(stock_df)
     closes = stock_df["close"].tolist()
-    sma10s = stock_df["sma10"].tolist()
     sma30s = stock_df["sma30"].tolist()
     volumes = stock_df["volume"].tolist()
 
     results = [None] * n
-    above_prev = None
-    weeks_since_breakout = None
     prev_stage = None
+    stop_level = None
+    base_count = 0
+    run_peak_slope = None
+    high_since_raise = None
+    ma_slowdown_flagged = False
+    weeks_since_last_base = None
+
+    def reset_run_state():
+        nonlocal stop_level, base_count, run_peak_slope, high_since_raise, ma_slowdown_flagged, weeks_since_last_base
+        stop_level = None
+        base_count = 0
+        run_peak_slope = None
+        high_since_raise = None
+        ma_slowdown_flagged = False
+        weeks_since_last_base = None
 
     for i in range(n):
         if pd.isna(sma30s[i]) or pd.isna(closes[i]):
-            results[i] = {"stage": None, "signal": None, "volume_ratio": None}
-            above_prev = None
+            results[i] = {"stage": None, "signal": None, "volume_ratio": None, "stop_level": None, "base_count": None}
             prev_stage = None
-            weeks_since_breakout = None
+            reset_run_state()
             continue
 
         j = i - STAGE_SLOPE_LOOKBACK_WEEKS
@@ -918,8 +968,22 @@ def _compute_weinstein_stage_series(stock_df):
             direction = "FLAT"
 
         above = closes[i] > sma30s[i]
-        crossed_up = bool(above and above_prev is False)
-        crossed_down = bool(not above and above_prev is True)
+
+        # Opor lokalnej bazy: max/min zamkniec z STAGE_BASE_LOOKBACK_WEEKS tyg. PRZED
+        # biezacym tygodniem (bez niego) — musi byc "cisny" (patrz stala), inaczej to
+        # nie baza tylko szeroki, chaotyczny ruch i wybicie sie nie liczy.
+        base_start = i - STAGE_BASE_LOOKBACK_WEEKS
+        breakout = False
+        base_low_val = None
+        if base_start >= 0:
+            window = closes[base_start:i]
+            base_high = max(window)
+            base_low_val = min(window)
+            if base_low_val > 0 and (base_high - base_low_val) / base_low_val <= STAGE_BASE_MAX_RANGE_PCT / 100.0:
+                if closes[i] > base_high:
+                    breakout = True
+        if breakout and weeks_since_last_base is not None and weeks_since_last_base < STAGE_MIN_BASE_GAP_WEEKS:
+            breakout = False
 
         vol_ratio = None
         vol_start = i - STAGE_VOLUME_LOOKBACK_WEEKS
@@ -930,13 +994,6 @@ def _compute_weinstein_stage_series(stock_df):
                 if avg_vol > 0:
                     vol_ratio = volumes[i] / avg_vol
 
-        if crossed_up:
-            weeks_since_breakout = 0
-        elif above and weeks_since_breakout is not None:
-            weeks_since_breakout += 1
-        elif not above:
-            weeks_since_breakout = None
-
         if not above:
             if direction == "FALLING":
                 stage = "4"
@@ -945,37 +1002,60 @@ def _compute_weinstein_stage_series(stock_df):
             else:
                 stage = "1"
         else:
-            if direction == "FALLING":
-                stage = "1"  # cena chwilowo nad opadajaca SMA30 — traktujemy ostroznie, to NIE potwierdzony Etap 2
-            elif weeks_since_breakout is not None and weeks_since_breakout <= STAGE_BREAKOUT_LOOKBACK_WEEKS:
+            if breakout and prev_stage not in ("2A", "2B"):
                 stage = "2A"
-            else:
+            elif prev_stage in ("2A", "2B"):
                 stage = "2B"
+            else:
+                stage = "1"
 
         signal = None
-        if crossed_up and stage == "2A":
+        new_base_event = False
+
+        if stage == "2A" and breakout and prev_stage not in ("2A", "2B"):
+            new_base_event = True
+            base_count = 1
+            run_peak_slope = slope_pct
+            stop_level = min(sma30s[i], base_low_val) if base_low_val is not None else sma30s[i]
+            high_since_raise = closes[i]
+            ma_slowdown_flagged = False
             if vol_ratio is not None and vol_ratio >= STAGE_BREAKOUT_VOLUME_RATIO:
                 signal = "ENTRY_2A"
-        elif stage == "2B" and i > 0:
-            sma10_prev = sma10s[i - 1]
-            close_prev = closes[i - 1]
-            if (not pd.isna(sma10_prev) and not pd.isna(sma10s[i]) and close_prev <= sma10_prev
-                    and closes[i] > sma10s[i]
-                    and (vol_ratio is None or vol_ratio >= STAGE_PULLBACK_VOLUME_RATIO)):
-                signal = "ENTRY_2B"
-        if crossed_down and prev_stage in ("2A", "2B"):
+        elif stage == "2B" and breakout and prev_stage in ("2A", "2B"):
+            new_base_event = True
+            base_count += 1
+            candidate_stop = min(sma30s[i], base_low_val) if base_low_val is not None else sma30s[i]
+            if high_since_raise is not None and closes[i] >= high_since_raise * (1 - STAGE_STOP_NEAR_HIGH_PCT / 100.0):
+                if stop_level is None or candidate_stop > stop_level:
+                    stop_level = candidate_stop
+                high_since_raise = closes[i]
+            if vol_ratio is None or vol_ratio >= STAGE_PULLBACK_VOLUME_RATIO:
+                signal = "ENTRY_2B_LATE" if base_count >= STAGE_LATE_BASE_WARNING_COUNT else "ENTRY_2B"
+
+        weeks_since_last_base = 0 if new_base_event else (
+            weeks_since_last_base + 1 if weeks_since_last_base is not None else None)
+
+        if not new_base_event and stage in ("2A", "2B"):
+            if high_since_raise is not None and closes[i] > high_since_raise:
+                high_since_raise = closes[i]
+            if run_peak_slope is not None and slope_pct is not None:
+                run_peak_slope = max(run_peak_slope, slope_pct)
+                if (not ma_slowdown_flagged and direction == "RISING" and run_peak_slope > 0
+                        and slope_pct < run_peak_slope * STAGE_MA_SLOWDOWN_RATIO):
+                    signal = "WARNING_MA_SLOWING"
+                    ma_slowdown_flagged = True
+
+        if stage in ("1", "3", "4") and stop_level is not None and closes[i] < stop_level:
             signal = "EXIT_STOP"
-        elif signal is None and stage in ("2A", "2B"):
-            extension_pct = (closes[i] / sma30s[i] - 1) * 100
-            if extension_pct >= STAGE_CLIMAX_EXTENSION_PCT:
-                signal = "EXIT_CLIMAX"
+            reset_run_state()
 
         results[i] = {
             "stage": stage,
             "signal": signal,
             "volume_ratio": round(vol_ratio, 2) if vol_ratio is not None else None,
+            "stop_level": stop_level,
+            "base_count": base_count if stage in ("2A", "2B") else None,
         }
-        above_prev = above
         prev_stage = stage
 
     return results
@@ -1009,9 +1089,13 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     nie na wieloletnim oporze bazy, z tego samego powodu.
 
     Zwraca też, oprócz linii ceny, klasyfikację etapów Weinsteina + potwierdzenie
-    wolumenem dla KAŻDEGO wyświetlanego tygodnia ("volume"/"volume_ratio"/"stage"/
-    "signal", patrz _compute_weinstein_stage_series) oraz "current_stage" — wygodny
-    skrót do etapu ostatniego (najnowszego) tygodnia, do odznaki na dashboardzie."""
+    wolumenem + trailing stop-loss dla KAŻDEGO wyświetlanego tygodnia ("volume"/
+    "volume_ratio"/"stage"/"signal"/"stop_level_pct"/"base_count", patrz
+    _compute_weinstein_stage_series) oraz "current_stage" — wygodny skrót do etapu
+    ostatniego (najnowszego) tygodnia, do odznaki na dashboardzie. "stop_level_pct"
+    to trailing stop w tych samych jednostkach % co close_pct (rebase'owany tym
+    samym close0) — do narysowania linii stopu na wykresie, tak jak w książkowym
+    "Trailing Stop Loss" — None poza aktywną falą Etapu 2."""
     lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
@@ -1028,6 +1112,8 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stock_df["stage"] = [row["stage"] for row in stage_rows]
     stock_df["signal"] = [row["signal"] for row in stage_rows]
     stock_df["vol_ratio"] = [row["volume_ratio"] for row in stage_rows]
+    stock_df["stop_level_raw"] = [row["stop_level"] for row in stage_rows]
+    stock_df["base_count_raw"] = [row["base_count"] for row in stage_rows]
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
@@ -1046,7 +1132,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         return round((float(value) / base - 1) * 100, 2)
 
     dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
-    volume, volume_ratio, stage, signal = [], [], [], []
+    volume, volume_ratio, stage, signal, stop_level_pct, base_count = [], [], [], [], [], []
     for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
@@ -1063,6 +1149,8 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         volume_ratio.append(r["vol_ratio"] if pd.notna(r["vol_ratio"]) else None)
         stage.append(r["stage"] if pd.notna(r["stage"]) else None)
         signal.append(r["signal"] if pd.notna(r["signal"]) else None)
+        stop_level_pct.append(pct(r["stop_level_raw"], close0) if pd.notna(r["stop_level_raw"]) else None)
+        base_count.append(int(r["base_count_raw"]) if pd.notna(r["base_count_raw"]) else None)
 
     return {
         "dates": dates,
@@ -1072,6 +1160,8 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "index_pct": index_pct,
         "volume": volume,
         "volume_ratio": volume_ratio,
+        "stop_level_pct": stop_level_pct,
+        "base_count": base_count,
         "stage": stage,
         "signal": signal,
         "current_stage": stage[-1] if stage else None,
