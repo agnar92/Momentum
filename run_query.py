@@ -43,7 +43,10 @@ metodologii S&P Momentum Indices):
     tego samego okna, "wykres 10:30" w stylu stage analysis (Weinstein/Dr Eric Wish):
     cena spolki + SMA 10-tyg./30-tyg. i poziom wlasnego indeksu, wszystko przeliczone
     na % zmiany wzgledem poczatku okna (close_pct/sma10_pct/sma30_pct/index_pct), zeby
-    jednym spojrzeniem bylo widac czy spolka rosnie szybciej niz jej rynek — patrz
+    jednym spojrzeniem bylo widac czy spolka rosnie szybciej niz jej rynek — plus
+    KAZDY wyswietlany tydzien niesie tez wlasna klasyfikacje etapu Weinsteina (Etap
+    1/2A/2B/3/4), sygnal wejscia/wyjscia i potwierdzenie wolumenem (volume/
+    volume_ratio/stage/signal — patrz _compute_weinstein_stage_series) — patrz
     compute_relative_strength_chart — oraz "mansfield_chart": oscylator Mansfield RS
     w dwoch wygladzeniach (krotkoterminowym ~3 mies. i srednioterminowym ~6 mies.) na
     WLASNYM, znacznie krotszym oknie (ostatnie ~6 mies., odczepione od okna momentum) —
@@ -810,10 +813,14 @@ def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct,
 def _weekly_close_series(con, table, id_column, id_value, start_date, end_date):
     """Tygodniowe zamknięcia (ostatnia cena w tygodniu, DATE_TRUNC('week', Date)) dla
     id_column=id_value (Ticker w `prices` albo Index_Name w `index_prices`), od
-    start_date do end_date (włącznie)."""
+    start_date do end_date (włącznie). Dolicza też SUM(Volume) w tygodniu — używane
+    tylko przez compute_relative_strength_chart (potwierdzenie wybicia wolumenem,
+    patrz _compute_weinstein_stage_series), ignorowane przez pozostałych wywołujących
+    (compute_mansfield_rs_chart, wywołania dla index_prices)."""
     return con.execute(f"""
         SELECT DATE_TRUNC('week', Date) AS week_start,
-               ARGMAX(Close, Date) AS close
+               ARGMAX(Close, Date) AS close,
+               SUM(Volume) AS volume
         FROM {table}
         WHERE {id_column} = '{id_value}'
           AND Date >= DATE '{start_date}'
@@ -825,6 +832,153 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date):
 
 RS_PRICE_SMA_SHORT_WEEKS = 10   # "wykres 10:30" (Dr Eric Wish / stage analysis): 10-tyg. SMA ceny
 RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinsteina)
+
+# --- Klasyfikacja etapow Weinsteina (Stage Analysis, "Secrets for Profiting in
+# Bull and Bear Markets") na wykresie 10:30 — patrz _compute_weinstein_stage_series.
+# Uproszczenie ROZMYSLNE: ksiazka wyznacza opor/wsparcie bazy z wieloletniego
+# wykresu (typowo widac to na TradingView), a rolling ~15-miesieczne okno `prices`
+# na to nie pozwala — dokladnie ten sam powod, dla ktorego linie GLB usunieto z
+# tego samego wykresu (patrz docstring compute_relative_strength_chart). Zamiast
+# tego etap wyznaczamy WYLACZNIE z pozycji ceny wzgledem SMA30 i jej nachylenia —
+# jedyne dane, na ktore rolling okno realnie starcza. Sila relatywna CELOWO nie
+# wchodzi w te klasyfikacje (pomysl odrzucony wczesniej ze wzgledu na trudnosc
+# implementacji — patrz historia commitow / CLAUDE.md).
+STAGE_SLOPE_LOOKBACK_WEEKS = 4       # ile tyg. wstecz porownujemy SMA30 przy ocenie kierunku
+STAGE_FLAT_SLOPE_PCT = 1.0           # próg nachylenia SMA30 (w % za STAGE_SLOPE_LOOKBACK_WEEKS) uznawany za "plaskie"
+STAGE_BREAKOUT_LOOKBACK_WEEKS = 4    # tyle tyg. od przebicia SMA30 w gore to jeszcze "swieze" wybicie (Etap 2A)
+STAGE_VOLUME_LOOKBACK_WEEKS = 10     # okno sredniego tyg. wolumenu do oceny potwierdzenia wybicia
+STAGE_BREAKOUT_VOLUME_RATIO = 1.5    # wybicie (2A) potwierdzone wolumenem gdy tyg. wolumen >= 1.5x sredniej
+STAGE_PULLBACK_VOLUME_RATIO = 1.2    # dla wejscia kontynuacyjnego (2B) wystarczy slabszy wzrost wolumenu na odbiciu
+STAGE_CLIMAX_EXTENSION_PCT = 30.0    # ostrzezenie "wykupienia": cena > tyle % nad SMA30 w trakcie Etapu 2
+
+
+def _compute_weinstein_stage_series(stock_df):
+    """Klasyfikuje KAZDY tydzien stock_df (posortowany chronologicznie, kolumny
+    close/sma10/sma30/volume — patrz compute_relative_strength_chart) na etap wg
+    uproszczonych, zmechanizowanych regul stage analysis Weinsteina:
+
+      Etap 1 (baza)            — cena w poblizu plaskiej SMA30, brak potwierdzonego trendu.
+      Etap 2A (swieze wybicie) — cena przebija SMA30 w gore (SMA30 plaska/rosnaca),
+                                  w oknie STAGE_BREAKOUT_LOOKBACK_WEEKS tyg. od przebicia.
+      Etap 2B (kontynuacja)    — cena od dawna nad rosnaca SMA30 (poza oknem "swiezosci"
+                                  powyzej) — pole na kolejne, pozniejsze wejscia na
+                                  korektach do SMA10/SMA30 (tzw. "pyramiding" w ksiazce).
+      Etap 3 (szczyt)          — po Etapie 2 cena zaczyna schodzic pod SMA30, ktora
+                                  jeszcze nie opada (dystrybucja/wyplaszczenie trendu).
+      Etap 4 (spadek)          — cena pod opadajaca SMA30.
+
+    Sygnaly (pole "signal", tylko w tygodniu w ktorym faktycznie sie pojawiaja):
+      ENTRY_2A      — tydzien przebicia SMA30 w gore z wolumenem >= STAGE_BREAKOUT_VOLUME_RATIO
+                       sredniej z STAGE_VOLUME_LOOKBACK_WEEKS poprzednich tygodni (klasyczne
+                       "wybicie na wolumenie" z ksiazki — bez potwierdzenia wolumenem NIE
+                       oznaczamy sygnalu, tylko sam etap).
+      ENTRY_2B      — w Etapie 2B: tydzien odbicia znad/z SMA10 (poprzedni tydzien <= SMA10,
+                       biezacy > SMA10) po lagodniejszym wzroscie wolumenu (sekundarny/
+                       pozniejszy punkt wejscia w istniejacym trendzie z ksiazki).
+      EXIT_STOP     — tydzien przebicia SMA30 w dol, gdy poprzedni etap to 2A/2B (glowna,
+                       mechaniczna regula wyjscia Weinsteina: "sprzedaj przy zlamaniu 30-tyg.
+                       sredniej").
+      EXIT_CLIMAX   — cena > STAGE_CLIMAX_EXTENSION_PCT nad SMA30 w trakcie Etapu 2 —
+                       ostrzezenie o wykupieniu ("sprzedaz w sile"), NIE twardy stop.
+
+    Zwraca liste dictow {"stage", "signal", "volume_ratio"} rownolegla do stock_df
+    (stage/signal/volume_ratio to None dopoki SMA30 wzglednie STAGE_VOLUME_LOOKBACK_WEEKS
+    tyg. historii wolumenu nie sa jeszcze dostepne — ten sam, udokumentowany juz wyzej
+    limit plytkiej historii co reszta wykresu 10:30)."""
+    n = len(stock_df)
+    closes = stock_df["close"].tolist()
+    sma10s = stock_df["sma10"].tolist()
+    sma30s = stock_df["sma30"].tolist()
+    volumes = stock_df["volume"].tolist()
+
+    results = [None] * n
+    above_prev = None
+    weeks_since_breakout = None
+    prev_stage = None
+
+    for i in range(n):
+        if pd.isna(sma30s[i]) or pd.isna(closes[i]):
+            results[i] = {"stage": None, "signal": None, "volume_ratio": None}
+            above_prev = None
+            prev_stage = None
+            weeks_since_breakout = None
+            continue
+
+        j = i - STAGE_SLOPE_LOOKBACK_WEEKS
+        slope_pct = None
+        if j >= 0 and not pd.isna(sma30s[j]) and sma30s[j] != 0:
+            slope_pct = (sma30s[i] / sma30s[j] - 1) * 100
+        if slope_pct is None:
+            direction = "UNKNOWN"
+        elif slope_pct > STAGE_FLAT_SLOPE_PCT:
+            direction = "RISING"
+        elif slope_pct < -STAGE_FLAT_SLOPE_PCT:
+            direction = "FALLING"
+        else:
+            direction = "FLAT"
+
+        above = closes[i] > sma30s[i]
+        crossed_up = bool(above and above_prev is False)
+        crossed_down = bool(not above and above_prev is True)
+
+        vol_ratio = None
+        vol_start = i - STAGE_VOLUME_LOOKBACK_WEEKS
+        if vol_start >= 0 and volumes[i] is not None and not pd.isna(volumes[i]):
+            window_vols = [v for v in volumes[vol_start:i] if v is not None and not pd.isna(v)]
+            if len(window_vols) == STAGE_VOLUME_LOOKBACK_WEEKS:
+                avg_vol = sum(window_vols) / len(window_vols)
+                if avg_vol > 0:
+                    vol_ratio = volumes[i] / avg_vol
+
+        if crossed_up:
+            weeks_since_breakout = 0
+        elif above and weeks_since_breakout is not None:
+            weeks_since_breakout += 1
+        elif not above:
+            weeks_since_breakout = None
+
+        if not above:
+            if direction == "FALLING":
+                stage = "4"
+            elif prev_stage in ("2A", "2B", "3"):
+                stage = "3"
+            else:
+                stage = "1"
+        else:
+            if direction == "FALLING":
+                stage = "1"  # cena chwilowo nad opadajaca SMA30 — traktujemy ostroznie, to NIE potwierdzony Etap 2
+            elif weeks_since_breakout is not None and weeks_since_breakout <= STAGE_BREAKOUT_LOOKBACK_WEEKS:
+                stage = "2A"
+            else:
+                stage = "2B"
+
+        signal = None
+        if crossed_up and stage == "2A":
+            if vol_ratio is not None and vol_ratio >= STAGE_BREAKOUT_VOLUME_RATIO:
+                signal = "ENTRY_2A"
+        elif stage == "2B" and i > 0:
+            sma10_prev = sma10s[i - 1]
+            close_prev = closes[i - 1]
+            if (not pd.isna(sma10_prev) and not pd.isna(sma10s[i]) and close_prev <= sma10_prev
+                    and closes[i] > sma10s[i]
+                    and (vol_ratio is None or vol_ratio >= STAGE_PULLBACK_VOLUME_RATIO)):
+                signal = "ENTRY_2B"
+        if crossed_down and prev_stage in ("2A", "2B"):
+            signal = "EXIT_STOP"
+        elif signal is None and stage in ("2A", "2B"):
+            extension_pct = (closes[i] / sma30s[i] - 1) * 100
+            if extension_pct >= STAGE_CLIMAX_EXTENSION_PCT:
+                signal = "EXIT_CLIMAX"
+
+        results[i] = {
+            "stage": stage,
+            "signal": signal,
+            "volume_ratio": round(vol_ratio, 2) if vol_ratio is not None else None,
+        }
+        above_prev = above
+        prev_stage = stage
+
+    return results
 
 
 def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date):
@@ -849,7 +1003,15 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     ~15-miesięczne okno `prices` daje za mało historii, żeby "najwyższy szczyt"
     liczony z pobranych danych faktycznie odpowiadał prawdziwemu, wieloletniemu
     szczytowi widocznemu np. na TradingView, więc linia (i status ATH/potwierdzony)
-    rozjeżdżała się z rzeczywistością zamiast być wiarygodnym sygnałem."""
+    rozjeżdżała się z rzeczywistością zamiast być wiarygodnym sygnałem. Ten sam limit
+    płytkiej historii dotyczy klasyfikacji etapów (Stage 1-4/2A/2B, patrz
+    _compute_weinstein_stage_series) — działa wyłącznie na pozycji/nachyleniu SMA30,
+    nie na wieloletnim oporze bazy, z tego samego powodu.
+
+    Zwraca też, oprócz linii ceny, klasyfikację etapów Weinsteina + potwierdzenie
+    wolumenem dla KAŻDEGO wyświetlanego tygodnia ("volume"/"volume_ratio"/"stage"/
+    "signal", patrz _compute_weinstein_stage_series) oraz "current_stage" — wygodny
+    skrót do etapu ostatniego (najnowszego) tygodnia, do odznaki na dashboardzie."""
     lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
@@ -861,6 +1023,11 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
     stock_df["sma10"] = stock_df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
     stock_df["sma30"] = stock_df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
+
+    stage_rows = _compute_weinstein_stage_series(stock_df)
+    stock_df["stage"] = [row["stage"] for row in stage_rows]
+    stock_df["signal"] = [row["signal"] for row in stage_rows]
+    stock_df["vol_ratio"] = [row["volume_ratio"] for row in stage_rows]
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
@@ -879,12 +1046,23 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         return round((float(value) / base - 1) * 100, 2)
 
     dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
+    volume, volume_ratio, stage, signal = [], [], [], []
     for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
         sma10_pct.append(pct(r["sma10"], close0))
         sma30_pct.append(pct(r["sma30"], close0))
         index_pct.append(pct(r["index_close"], index0))
+        volume.append(int(r["volume"]) if pd.notna(r["volume"]) else None)
+        # UWAGA: r pochodzi z in_window.iterrows() — wiersz miesza kolumny float
+        # (close/sma10/...) z object (stage/signal), a pandas przy budowaniu Series
+        # per-wiersz potrafi wtedy po cichu zamienic None na NaN (znany quirk
+        # iterrows() dla niejednorodnych typow w wierszu). Bez jawnego pd.notna
+        # trafiloby to do JSON jako literal `NaN` — niepoprawny JSON (JSON.parse
+        # w przegladarce by go odrzucil), zamiast `null`.
+        volume_ratio.append(r["vol_ratio"] if pd.notna(r["vol_ratio"]) else None)
+        stage.append(r["stage"] if pd.notna(r["stage"]) else None)
+        signal.append(r["signal"] if pd.notna(r["signal"]) else None)
 
     return {
         "dates": dates,
@@ -892,6 +1070,11 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "sma10_pct": sma10_pct,
         "sma30_pct": sma30_pct,
         "index_pct": index_pct,
+        "volume": volume,
+        "volume_ratio": volume_ratio,
+        "stage": stage,
+        "signal": signal,
+        "current_stage": stage[-1] if stage else None,
     }
 
 
