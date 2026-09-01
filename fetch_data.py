@@ -262,45 +262,69 @@ def _download_price_rows(tickers, start_date, end_date, include_ohlc=False):
     5-krotki) — używane tylko dla tabeli `prices` (per-spółka), do wyliczenia w
     run_query.py wolumenu kupujących/sprzedających metodą Close Location Value.
     `index_prices` tego nie potrzebuje, stąd domyślnie False (żeby nie zaburzać
-    jej dotychczasowego, 5-kolumnowego schematu)."""
-    rows = []
-    failed_tickers, fetched_tickers = [], set()
-    if not tickers:
-        return rows, fetched_tickers, failed_tickers
-    batch_size = 50
-    n_batches = (len(tickers) - 1) // batch_size + 1
+    jej dotychczasowego, 5-kolumnowego schematu).
 
-    for i in range(0, len(tickers), batch_size):
-        batch = tickers[i:i + batch_size]
+    Każdy ticker, który po paczkowym pobraniu nadal nie ma żadnego wiersza, jest
+    dogrywany jeszcze raz POJEDYNCZO (zapytanie o jeden symbol) zanim ostatecznie
+    trafi do failed_tickers. Realny przypadek, który to wykrył: update_index_prices
+    prosi o ['^NDX', '^DJI', 'WIG20.WA', 'MWIG40.WA'] w JEDNYM multi-ticker zapytaniu
+    — yfinance konsekwentnie zwracał "possibly delisted; no price data found" dla
+    WIG20.WA/MWIG40.WA w tej mieszance (różne giełdy/waluty), mimo że te same
+    symbole, pobrane osobno, mają dane — co zostawiało index_prices bez żadnego
+    wiersza dla WIG20/MWIG40 i przez to wykres 10:30 (compute_relative_strength_chart,
+    patrz run_query.py) zwracał None dla KAŻDEJ spółki z tych dwóch uniwersów (pusty
+    index_df). Pojedyncze zapytanie per ticker to obejście tego znanego zachowania
+    yfinance przy mieszanych multi-ticker requestach."""
+    rows = []
+    fetched_tickers = set()
+    if not tickers:
+        return rows, fetched_tickers, []
+
+    def _fetch_batch(batch):
+        """Pobiera jedną paczkę (może być pojedynczy ticker) i dopisuje trafienia
+        do rows/fetched_tickers z otaczającego zasięgu."""
         yf_batch = [_to_yf_symbol(t) for t in batch]
-        print(f"  Ceny — paczka {i // batch_size + 1}/{n_batches} ({start_date} → {end_date})...")
         try:
             data = yf.download(tickers=yf_batch, start=start_date, end=end_date, interval="1d",
                                 group_by="ticker", auto_adjust=False, threads=True)
-            for ticker, yf_symbol in zip(batch, yf_batch):
-                df_t = data.copy() if len(yf_batch) == 1 else (
-                    data[yf_symbol].dropna(how="all") if yf_symbol in data.columns.levels[0] else pd.DataFrame()
-                )
-                if df_t.empty:
-                    failed_tickers.append(ticker)
-                    continue
-                for date, row in df_t.iterrows():
-                    if pd.notna(row.get("Close")):
-                        row_tuple = (date.strftime('%Y-%m-%d'), ticker, float(row["Close"]),
-                                     float(row.get("Adj Close", row["Close"])),
-                                     int(row["Volume"]) if pd.notna(row.get("Volume")) else 0)
-                        if include_ohlc:
-                            row_tuple += (
-                                float(row["High"]) if pd.notna(row.get("High")) else None,
-                                float(row["Low"]) if pd.notna(row.get("Low")) else None,
-                            )
-                        rows.append(row_tuple)
-                        fetched_tickers.add(ticker)
         except Exception as e:
             print(f"❌ Błąd pobierania cen dla paczki {batch}: {e}")
-            failed_tickers.extend(batch)
+            return
+        for ticker, yf_symbol in zip(batch, yf_batch):
+            df_t = data.copy() if len(yf_batch) == 1 else (
+                data[yf_symbol].dropna(how="all") if yf_symbol in data.columns.levels[0] else pd.DataFrame()
+            )
+            if df_t.empty:
+                continue
+            for date, row in df_t.iterrows():
+                if pd.notna(row.get("Close")):
+                    row_tuple = (date.strftime('%Y-%m-%d'), ticker, float(row["Close"]),
+                                 float(row.get("Adj Close", row["Close"])),
+                                 int(row["Volume"]) if pd.notna(row.get("Volume")) else 0)
+                    if include_ohlc:
+                        row_tuple += (
+                            float(row["High"]) if pd.notna(row.get("High")) else None,
+                            float(row["Low"]) if pd.notna(row.get("Low")) else None,
+                        )
+                    rows.append(row_tuple)
+                    fetched_tickers.add(ticker)
+
+    batch_size = 50
+    n_batches = (len(tickers) - 1) // batch_size + 1
+    for i in range(0, len(tickers), batch_size):
+        batch = tickers[i:i + batch_size]
+        print(f"  Ceny — paczka {i // batch_size + 1}/{n_batches} ({start_date} → {end_date})...")
+        _fetch_batch(batch)
         time.sleep(2)
 
+    missing = [t for t in tickers if t not in fetched_tickers]
+    if missing:
+        print(f"  🔁 Ponawiam pojedynczo {len(missing)} tickerów bez danych z paczki: {missing}...")
+        for ticker in missing:
+            time.sleep(1)
+            _fetch_batch([ticker])
+
+    failed_tickers = [t for t in tickers if t not in fetched_tickers]
     return rows, fetched_tickers, failed_tickers
 
 
