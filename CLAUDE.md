@@ -168,8 +168,24 @@ only retains a rolling `--lookback-months` (15) window (see above) and the momen
 consumes ~14 of those months, there is little to no actual buffer before `start_date` in production, so
 `sma10_pct`/`sma30_pct` can still show `null` for their first several in-window weeks for many tickers — a
 known, deliberately deferred limitation, not a bug to "fix" by widening `RS_PRICE_SMA_LONG_WEEKS`'s lookback
-further. See `renderRelativeStrengthChart()` below for how
-it's rendered.
+further.
+
+Each leader also carries a `mansfield_chart` (`compute_mansfield_rs_chart()`) — the classic Mansfield
+Relative Strength oscillator, `RSM = (RS / SMA(RS, N weeks) - 1) * 100` where `RS = stock_close /
+index_close`, in **two smoothing variants plotted together**: short-term (`rsm_short`,
+`RS_MANSFIELD_SHORT_WEEKS` = 13 weeks, ~3 months) and medium-term (`rsm_medium`,
+`RS_MANSFIELD_MEDIUM_WEEKS` = 26 weeks, ~6 months) — two deliberately different, non-overlapping horizons
+of the same signal (a short-term acceleration/deceleration can lead or diverge from the medium-term trend).
+Unlike `weekly_chart` above, this is **deliberately decoupled from the momentum window** — its own display
+range is just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6 months) from `ref_date`, not the 12-14
+month momentum window. This is why: an earlier version tried the standard 52-week Mansfield smoothing on
+top of the momentum window's own ~12-14 months, which needed ~26.5 months of price history in total — far
+more than the rolling 15-month `prices` retention provides, so the oscillator came back empty for most of
+the range in production (verified against real data: 51 of 61 weeks null for one ticker). Restricting the
+display window to a short recent slice instead means the total history needed
+(`RS_MANSFIELD_DISPLAY_WEEKS + RS_MANSFIELD_MEDIUM_WEEKS` ≈ 52 weeks, ~1 year) comfortably fits inside the
+15-month retention with margin. See `renderRelativeStrengthChart()` below for how both charts are
+rendered.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -193,12 +209,14 @@ it only exists after the pipeline has run.
   their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
   per-universe tables. The chart area itself has a TradingView/"💪 Siła Relatywna" toggle
   (`#chartModeToggle`, `updateChartArea()` in `app.js`): clicking a ticker from the relative-strength panel
-  or table (the only two call sites passing `preferMode="RS"` to `selectTicker()`) defaults to a single
-  Chart.js chart (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
-  ticker's `weekly_chart` (see above) — the "10:30" price+SMA10/SMA30 chart, with the stock's own index
-  level plotted alongside it on the *same* % axis (both rebased to 0% at the window's start, see above) so
-  the stock's trend can be read directly against its index's trend — whichever line is on top is the
-  outperformer (`.rs-chart-container` in `style.css`) — the RS toggle button is disabled whenever the
+  or table (the only two call sites passing `preferMode="RS"` to `selectTicker()`) defaults to two stacked
+  Chart.js charts (`renderRelativeStrengthChart()`, loaded via CDN like TradingView) built from that
+  ticker's `weekly_chart` and `mansfield_chart` (see above): the "10:30" price+SMA10/SMA30 chart on top,
+  with the stock's own index level plotted alongside it on the *same* % axis (both rebased to 0% at the
+  momentum window's start) so the stock's trend can be read directly against its index's trend — whichever
+  line is on top is the outperformer — and the Mansfield RS oscillator (short-term + medium-term lines, its
+  own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container` /
+  `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`) — the RS toggle button is disabled whenever the
   selected ticker has no such data. Every other ticker click (per-universe tables, GEM, Ctrl+K search)
   still defaults to the TradingView widget as before; the toggle lets you switch either way for the
   current ticker. WIG20/mWIG40 are PLN-denominated and GPW-listed, unlike the rest (USD, NYSE/Nasdaq):

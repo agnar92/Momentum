@@ -42,7 +42,10 @@ metodologii S&P Momentum Indices):
     cena spolki + SMA 10-tyg./30-tyg. i poziom wlasnego indeksu, wszystko przeliczone
     na % zmiany wzgledem poczatku okna (close_pct/sma10_pct/sma30_pct/index_pct), zeby
     jednym spojrzeniem bylo widac czy spolka rosnie szybciej niz jej rynek — patrz
-    compute_relative_strength_chart — do wykresu innego niz TradingView.
+    compute_relative_strength_chart — oraz "mansfield_chart": oscylator Mansfield RS
+    w dwoch wygladzeniach (krotkoterminowym ~3 mies. i srednioterminowym ~6 mies.) na
+    WLASNYM, znacznie krotszym oknie (ostatnie ~6 mies., odczepione od okna momentum) —
+    patrz compute_mansfield_rs_chart — do wykresu innego niz TradingView.
 
 WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
 innego powodu: nie ma ETF-u z publikowanymi holdings dla indeksow GPW, wiec
@@ -864,6 +867,68 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     }
 
 
+RS_MANSFIELD_DISPLAY_WEEKS = 26   # oscylator pokazuje ostatnie ~6 mies. (NIE okno momentum_value)
+RS_MANSFIELD_SHORT_WEEKS = 13     # wygladzanie krotkoterminowe, ~3 mies.
+RS_MANSFIELD_MEDIUM_WEEKS = 26    # wygladzanie srednioterminowe, ~6 mies.
+
+
+def compute_mansfield_rs_chart(con, ticker, universe, ref_date):
+    """Oscylator Mansfield Relative Strength (RSM = (RS / SMA(RS, N tyg.) - 1) * 100,
+    gdzie RS = cena_spółki / poziom_indeksu — surowa linia RS Weinsteina) w DWÓCH
+    wariantach wygładzania na jednym wykresie: krótkoterminowym
+    (RS_MANSFIELD_SHORT_WEEKS, ~3 mies.) i średnioterminowym (RS_MANSFIELD_MEDIUM_WEEKS,
+    ~6 mies.) — dwa RÓŻNE, celowo NIE nakładające się na siebie horyzonty tego samego
+    sygnału (krótkoterminowe przyspieszenie/spowolnienie potrafi wyprzedzać albo
+    rozjeżdżać się ze średnioterminowym trendem, więc warto widzieć oba naraz).
+
+    Celowo ODCZEPIONY od okna momentum_value (M-14/M-2) używanego w
+    compute_relative_strength_chart: wyświetlany zakres to własne, znacznie krótsze
+    ostatnie RS_MANSFIELD_DISPLAY_WEEKS (~6 mies.) liczone od ref_date, żeby oba
+    wygładzenia (zwłaszcza 26-tyg.) miały realny zapas historii PRZED pierwszym
+    wyświetlanym tygodniem — łącznie potrzeba tylko
+    RS_MANSFIELD_DISPLAY_WEEKS + RS_MANSFIELD_MEDIUM_WEEKS (~52 tyg. = ok. rok), co
+    mieści się w rolling ~15-miesięcznym oknie `prices` z zapasem. Gdyby ten oscylator
+    używał (jak wcześniej) 52-tygodniowego wygładzania na tle 12-14-miesięcznego okna
+    momentum, potrzebowałby ~26,5 miesiąca historii — dlatego usunięto tamtą wersję
+    (patrz commit historia) i tutaj świadomie użyto krótszych, własnych okien.
+
+    Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii cen)."""
+    lookback_weeks = RS_MANSFIELD_DISPLAY_WEEKS + RS_MANSFIELD_MEDIUM_WEEKS + 2
+    extended_start = (pd.Timestamp(ref_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
+
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, extended_start, ref_date)
+    if stock_df.empty or index_df.empty:
+        return None
+
+    stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
+    index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
+    stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
+    stock_df["rs_raw"] = stock_df["close"] / stock_df["index_close"]
+    stock_df["rsm_short"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_SHORT_WEEKS).mean() - 1) * 100
+    stock_df["rsm_medium"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_MEDIUM_WEEKS).mean() - 1) * 100
+
+    display_start = pd.Timestamp(ref_date) - pd.Timedelta(weeks=RS_MANSFIELD_DISPLAY_WEEKS)
+    in_window = stock_df[stock_df["week_start"] >= display_start]
+    if in_window.empty:
+        return None
+
+    def safe(value, digits=2):
+        return round(float(value), digits) if pd.notna(value) else None
+
+    dates, rsm_short, rsm_medium = [], [], []
+    for _, r in in_window.iterrows():
+        dates.append(r["week_start"].strftime("%Y-%m-%d"))
+        rsm_short.append(safe(r["rsm_short"]))
+        rsm_medium.append(safe(r["rsm_medium"]))
+
+    return {
+        "dates": dates,
+        "rsm_short": rsm_short,
+        "rsm_medium": rsm_medium,
+    }
+
+
 def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days=150, max_staleness_days=10):
     """ref_date=None: jak w export_global_equity_momentum — najświeższa data w
     index_prices (odświeżane codziennie), niezależnie od miesięcznego ref_date
@@ -889,6 +954,7 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
         for leader in leaders:
             leader["weekly_chart"] = compute_relative_strength_chart(con, leader["ticker"], universe,
                                                                        ref_date, index_mom["date_start"])
+            leader["mansfield_chart"] = compute_mansfield_rs_chart(con, leader["ticker"], universe, ref_date)
         universes_payload[universe] = {
             "index_return_pct": index_return_pct,
             "momentum_window": index_mom["momentum_window"],
@@ -913,7 +979,10 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "'weekly_chart': od początku tego samego okna, 'wykres 10:30' w stylu stage analysis "
                  "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg. i poziom własnego indeksu, "
                  "wszystko przeliczone na % zmiany względem początku okna (pola close_pct/sma10_pct/"
-                 "sma30_pct/index_pct) — patrz compute_relative_strength_chart. "
+                 "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
+                 "'mansfield_chart': oscylator Mansfield Relative Strength w DWÓCH wygładzeniach "
+                 "(rsm_short ~3 mies., rsm_medium ~6 mies.), na WŁASNYM ostatnim ~6-miesięcznym oknie "
+                 "(nie tym samym co momentum_value/weekly_chart) — patrz compute_mansfield_rs_chart. "
                  "Do wykresu innego niż TradingView na dashboardzie. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
     }

@@ -252,9 +252,9 @@ function jumpToTicker(ticker, universe) {
 }
 
 // ============================================================
-// OBSZAR WYKRESU: TradingView LUB własny wykres tygodniowy Siły Relatywnej
-// w stylu stage analysis — "wykres 10:30" (patrz renderRelativeStrengthChart).
-// Przełącznik (#chartModeToggle) jest aktywny
+// OBSZAR WYKRESU: TradingView LUB własne wykresy tygodniowe Siły Relatywnej
+// w stylu stage analysis — "wykres 10:30" + oscylator Mansfield RS (patrz
+// renderRelativeStrengthChart). Przełącznik (#chartModeToggle) jest aktywny
 // tylko gdy state.currentRsEntry ma weekly_chart; w przeciwnym razie zawsze
 // pokazujemy TradingView jak wcześniej.
 // ============================================================
@@ -300,16 +300,27 @@ function initChartModeToggle() {
     });
 }
 
-// "Wykres 10:30" (patrz .rs-chart-container w style.css), w stylu stage analysis
-// (Stan Weinstein / Dr Eric Wish): cena tygodniowa spółki + SMA 10-tyg./30-tyg. i
-// poziom własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
-// wyświetlanego tygodnia (patrz compute_relative_strength_chart) — jedna wspólna
-// skala zamiast dwóch osobnych, żeby jednym spojrzeniem było widać, która linia
-// rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku w tym oknie.
+let rsMansfieldChartInstance = null;
+
+// Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
+// stage analysis (Stan Weinstein / Dr Eric Wish):
+// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. i poziom
+//    własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
+//    wyświetlanego tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart)
+//    — jedna wspólna skala, żeby jednym spojrzeniem było widać, która linia
+//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku.
+// 2. Oscylator Mansfield RS w dwóch wygładzeniach — krótkoterminowym (~3 mies.)
+//    i średnioterminowym (~6 mies.) — na WŁASNYM, znacznie krótszym ostatnim
+//    ~6-miesięcznym oknie (patrz compute_mansfield_rs_chart), celowo NIE tym
+//    samym co panel 1: dwa różne horyzonty tego samego sygnału, które mogą się
+//    rozjeżdżać (krótkoterminowe przyspieszenie/spowolnienie może wyprzedzać
+//    średnioterminowy trend).
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = rsEntry.weekly_chart;
+    const mansfieldData = rsEntry.mansfield_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
+    const mansfieldCanvas = document.getElementById("rsMansfieldCanvas");
     if (!canvas || !chartData) return;
 
     if (typeof Chart === "undefined") {
@@ -317,6 +328,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         return;
     }
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
+    if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
 
     const pctFmt = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
     rsChartInstance = new Chart(canvas, {
@@ -344,6 +356,40 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             },
         },
     });
+
+    if (mansfieldCanvas && mansfieldData) {
+        const zeroLine = mansfieldData.dates.map(() => 0);
+        rsMansfieldChartInstance = new Chart(mansfieldCanvas, {
+            type: "line",
+            data: {
+                labels: mansfieldData.dates,
+                datasets: [
+                    { label: "RSM krótkoterminowy (~3M)", data: mansfieldData.rsm_short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
+                    { label: "RSM średnioterminowy (~6M)", data: mansfieldData.rsm_medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                    { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3] },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                    legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                    tooltip: {
+                        filter: (ctx) => ctx.datasetIndex !== 2,
+                        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2)}` },
+                    },
+                },
+                scales: {
+                    x: { ticks: { color: "#8a8f9c", maxTicksLimit: 8 }, grid: { color: "#262a35" } },
+                    y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
+                },
+            },
+        });
+    } else if (mansfieldCanvas) {
+        const ctx = mansfieldCanvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, mansfieldCanvas.width, mansfieldCanvas.height);
+    }
 }
 
 function mountWidget(containerId, symbol) {
