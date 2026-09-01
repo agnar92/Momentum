@@ -14,6 +14,8 @@ const browserGlobals = {
     Chart: "readonly",
     XLSX: "readonly",
     TradingView: "readonly",
+    getComputedStyle: "readonly",
+    location: "readonly",
     module: "readonly",
     Blob: "readonly",
     URL: "readonly",
