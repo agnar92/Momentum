@@ -263,11 +263,48 @@ function initHoldingsForm() {
     });
 }
 
+// Różne warianty raportu XTB nazywają kolumnę z ceną/datą otwarcia inaczej
+// (PL/EN) — szukamy po dopasowaniu wzorca, nie dokładnej nazwy, tak jak
+// findColIndex w portfolio.js (ten sam problem, osobna implementacja, bo
+// oba moduły są ładowane jako niezależne pliki bez wspólnego bundlera).
+function findColIndex(header, patterns) {
+    for (const p of patterns) {
+        const idx = header.findIndex(h => p.test(String(h || "")));
+        if (idx !== -1) return idx;
+    }
+    return -1;
+}
+
+// Excel przechowuje daty jako liczbę dni od 1899-12-30 (SheetJS nie
+// konwertuje ich automatycznie na Date przy header:1 bez opcji cellDates) —
+// obsługujemy zarówno tę liczbę, jak i typowe formaty tekstowe raportu XTB
+// ("2024-09-17 0:00:00", "17.09.2024"). Zwraca "YYYY-MM-DD" albo null.
+function xtbDateToIso(v) {
+    if (v === null || v === undefined || v === "") return null;
+    if (typeof v === "number" && !isNaN(v)) {
+        const ms = Math.round((v - 25569) * 86400 * 1000);
+        const d = new Date(ms);
+        return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+    }
+    const s = String(v).trim();
+    const iso = s.match(/^(\d{4})[-.](\d{2})[-.](\d{2})/);
+    if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+    const dmy = s.match(/^(\d{2})[.\/](\d{2})[.\/](\d{4})/);
+    if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
 // ============================================================
 // IMPORT Z RAPORTU XTB (arkusz "Open Positions") — wiersze podsumowania
 // pozycji (jeden na ticker) mają pustą kolumnę "Type"; pojedyncze transakcje
 // składowe (Type = "BUY"/"SELL") są pomijane, bo ich suma to właśnie wiersz
-// podsumowania.
+// podsumowania. Jeśli raport zawiera kolumny z ceną/datą otwarcia, zapisujemy
+// je też (openPrice/openDate) — używane przy eksporcie do TradingView
+// Portfolio, żeby nie podstawiać wszędzie dzisiejszej daty/ceny (patrz
+// buildTvPortfolioCsv niżej). Gdy raport ich nie ma, pola po prostu nie
+// występują w obiekcie (nie ustawiamy undefined) — eksport wtedy spada na
+// dotychczasowy fallback.
 function parseXtbOpenPositions(workbook) {
     const sheetName = workbook.SheetNames.find(n => /open positions/i.test(n));
     if (!sheetName) throw new Error('Nie znaleziono arkusza "Open Positions" w pliku.');
@@ -279,6 +316,8 @@ function parseXtbOpenPositions(workbook) {
     const idxTicker = header.indexOf("Ticker");
     const idxVolume = header.indexOf("Volume");
     const idxType = header.indexOf("Type");
+    const idxOpenPrice = findColIndex(header, [/open\s*price/i, /cena\s*otwarcia/i, /purchase\s*price/i]);
+    const idxOpenTime = findColIndex(header, [/open\s*time/i, /czas\s*otwarcia/i, /data\s*otwarcia/i, /open\s*date/i]);
 
     const imported = [];
     for (let i = headerIdx + 1; i < rows.length; i++) {
@@ -287,7 +326,17 @@ function parseXtbOpenPositions(workbook) {
         const type = String(r[idxType] || "").trim();
         const volume = parseFloat(r[idxVolume]);
         if (!ticker || type || !volume) continue; // pomijamy wiersze transakcji i puste
-        imported.push({ ticker: ticker.split(".")[0].toUpperCase(), shares: volume });
+
+        const position = { ticker: ticker.split(".")[0].toUpperCase(), shares: volume };
+        if (idxOpenPrice !== -1) {
+            const openPrice = parseFloat(r[idxOpenPrice]);
+            if (!isNaN(openPrice)) position.openPrice = openPrice;
+        }
+        if (idxOpenTime !== -1) {
+            const openDate = xtbDateToIso(r[idxOpenTime]);
+            if (openDate) position.openDate = openDate;
+        }
+        imported.push(position);
     }
     return imported;
 }
@@ -322,11 +371,13 @@ function initXtbImport() {
 // ============================================================
 // EKSPORT DO TRADINGVIEW PORTFOLIO — zapisuje obecne pozycje jako CSV w
 // formacie importu transakcji TradingView (Symbol,Side,Qty,Fill Price,
-// Commission,Closing Time). Import z XTB (i ręcznie dodane pozycje) dają
-// nam tylko obecny stan (ticker + liczba akcji), nie prawdziwą historię
-// transakcji (data/cena otwarcia) — więc każdą pozycję eksportujemy jako
-// pojedynczy zakup "dziś" po obecnej cenie rynkowej, żeby po prostu
-// odtworzyć w TV portfolio Twój bieżący stan posiadania, bez fikcyjnego P&L.
+// Commission,Closing Time). Gdy pozycja pochodzi z importu XTB i raport
+// zawierał kolumny ceny/daty otwarcia (patrz parseXtbOpenPositions wyżej),
+// używamy ich — każda pozycja dostaje wtedy swoją prawdziwą datę/cenę
+// zakupu zamiast dzisiejszej. Dla pozycji bez tych danych (ręcznie dodane,
+// albo starszy import z raportu bez tych kolumn) spadamy na fallback:
+// pojedynczy zakup "dziś" po obecnej cenie rynkowej, żeby chociaż odtworzyć
+// w TV portfolio Twój bieżący stan posiadania bez fikcyjnego P&L.
 const PLN_SOURCE_UNIVERSES = new Set(["WIG20", "MWIG40"]);
 
 // WIG20/mWIG40 są notowane na GPW w TradingView (prefiks "GPW:", tak jak
@@ -345,11 +396,12 @@ function csvEscape(v) {
 
 function buildTvPortfolioCsv() {
     const header = ["Symbol", "Side", "Qty", "Fill Price", "Commission", "Closing Time"];
-    const closingTime = `${new Date().toISOString().slice(0, 10)} 0:00:00`;
+    const todayIso = new Date().toISOString().slice(0, 10);
     const rows = holdings
         .filter(h => h.ticker && h.shares)
         .map(h => {
-            const price = priceMap[h.ticker]?.price;
+            const price = h.openPrice ?? priceMap[h.ticker]?.price;
+            const closingTime = `${h.openDate || todayIso} 0:00:00`;
             return [tvSymbolFor(h.ticker), "Buy", h.shares, price ?? "", "0", closingTime];
         });
     return [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\n");
@@ -796,7 +848,7 @@ if (typeof module !== "undefined" && module.exports) {
         weightedMuSigma, simulateMonteCarlo, randNormal,
         blendEquityCurves,
         isCoreTagged, coreTaggedTickers,
-        tvSymbolFor, buildTvPortfolioCsv,
+        tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded)
         // bez importu przez window — to jedyny sposób bez przepisywania modułu na klasę.
         _setState(s) {

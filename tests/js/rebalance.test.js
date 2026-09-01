@@ -26,6 +26,7 @@ const {
     coreTaggedTickers,
     tvSymbolFor,
     buildTvPortfolioCsv,
+    xtbDateToIso,
     _setState,
 } = rebalance;
 
@@ -153,6 +154,57 @@ test("parseXtbOpenPositions skips transaction rows (non-empty Type) and zero/emp
 test("parseXtbOpenPositions throws when the Open Positions sheet is missing", () => {
     const workbook = { SheetNames: ["Closed Positions"], Sheets: {} };
     assert.throws(() => parseXtbOpenPositions(workbook), /Open Positions/);
+});
+
+test("parseXtbOpenPositions captures Open price / Open time when the report has those columns", () => {
+    const workbook = {
+        SheetNames: ["Open Positions"],
+        Sheets: {
+            "Open Positions": [
+                ["Ticker", "Type", "Volume", "Open price", "Open time"],
+                ["AAPL.US", "", "10", "217", "2024-09-17 0:00:00"],
+                ["MSFT.US", "", "2", "410.5", "15.03.2023 9:30:00"],
+            ],
+        },
+    };
+    global.XLSX = { utils: { sheet_to_json: (sheet) => sheet } };
+
+    const imported = parseXtbOpenPositions(workbook);
+    assert.deepEqual(imported, [
+        { ticker: "AAPL", shares: 10, openPrice: 217, openDate: "2024-09-17" },
+        { ticker: "MSFT", shares: 2, openPrice: 410.5, openDate: "2023-03-15" },
+    ]);
+
+    delete global.XLSX;
+});
+
+test("parseXtbOpenPositions recognizes Polish column names for open price/date", () => {
+    const workbook = {
+        SheetNames: ["Open Positions"],
+        Sheets: {
+            "Open Positions": [
+                ["Ticker", "Type", "Volume", "Cena otwarcia", "Data otwarcia"],
+                ["AAPL.US", "", "1", "150", "2022-01-05"],
+            ],
+        },
+    };
+    global.XLSX = { utils: { sheet_to_json: (sheet) => sheet } };
+
+    const imported = parseXtbOpenPositions(workbook);
+    assert.deepEqual(imported, [{ ticker: "AAPL", shares: 1, openPrice: 150, openDate: "2022-01-05" }]);
+
+    delete global.XLSX;
+});
+
+test("xtbDateToIso converts an Excel serial date number to YYYY-MM-DD", () => {
+    // 45552 = 2024-09-17 (dni od 1899-12-30, standardowe liczenie Excela)
+    assert.equal(xtbDateToIso(45552), "2024-09-17");
+});
+
+test("xtbDateToIso returns null for unparseable values", () => {
+    assert.equal(xtbDateToIso(""), null);
+    assert.equal(xtbDateToIso(null), null);
+    assert.equal(xtbDateToIso("not a date"), null);
 });
 
 test("computeTargets allocates capital across universes by settings.pct, skipping 0% buckets", () => {
@@ -337,6 +389,28 @@ test("buildTvPortfolioCsv leaves Fill Price blank when the ticker has no known p
     const csv = buildTvPortfolioCsv();
     const lines = csv.split("\n");
     assert.match(lines[1], /^NASDAQ:MYSTERY,Buy,2,,0,\d{4}-\d{2}-\d{2} 0:00:00$/);
+
+    _setState({ holdings: [], priceMap: {} });
+});
+
+test("buildTvPortfolioCsv uses each holding's own openDate/openPrice from the XTB import instead of today", () => {
+    _setState({
+        holdings: [
+            // Pochodzi z importu XTB z kolumnami Open price/Open time -> prawdziwa data/cena zakupu.
+            { ticker: "AAPL", shares: 10, openPrice: 217, openDate: "2024-09-17" },
+            // Dodana recznie (albo import ze starszego raportu bez tych kolumn) -> fallback na dzis/obecna cene.
+            { ticker: "MSFT", shares: 3 },
+        ],
+        priceMap: {
+            AAPL: { price: 240, sources: ["NASDAQ100"] }, // obecna cena rynkowa - NIE powinna byc uzyta dla AAPL
+            MSFT: { price: 410, sources: ["NASDAQ100"] },
+        },
+    });
+
+    const csv = buildTvPortfolioCsv();
+    const lines = csv.split("\n");
+    assert.equal(lines[1], "NASDAQ:AAPL,Buy,10,217,0,2024-09-17 0:00:00");
+    assert.match(lines[2], /^NASDAQ:MSFT,Buy,3,410,0,\d{4}-\d{2}-\d{2} 0:00:00$/);
 
     _setState({ holdings: [], priceMap: {} });
 });
