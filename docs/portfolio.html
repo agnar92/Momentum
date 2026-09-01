@@ -1,0 +1,141 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio — Momentum Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Momentum">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">MOMENTUM<span class="brand-sub"> // NASDAQ100 · DJIA</span></div>
+    <nav>
+        <a href="index.html">Dashboard</a>
+        <a href="rebalance.html">Rebalans</a>
+        <a href="portfolio.html" class="active">Portfolio</a>
+    </nav>
+</div>
+
+<div class="rebalance-page">
+
+    <div class="panel-card" id="capitalCard">
+        <h3>Kapitał i podział Core / Satelita</h3>
+        <p class="panel-hint">
+            Core-Satellite to konwencja portfelowa (tak budują sugestie m.in. Google Finance i Trading 212 w swoich
+            "pie" portfelach): Core to stabilny, szeroko zdywersyfikowany rdzeń — zwykle 70–90% kapitału, niska
+            rotacja. Satelita to mniejsza, bardziej skoncentrowana część — zwykle 10–30% — na taktyczne zakłady
+            wysokiego przekonania (sektorowe ETF-y, pojedyncze spółki), z limitem na pojedynczą pozycję, żeby jedna
+            obstawiona spółka nie zdominowała ryzyka całego portfela.
+        </p>
+        <div class="settings-row">
+            <label>Kapitał do zainwestowania ($)</label>
+            <input type="number" id="pfCapital" min="0" step="100" placeholder="np. 10000">
+        </div>
+        <div class="settings-row">
+            <label>Podział Core / Satelita: <span id="pfSplitLabel"></span></label>
+            <input type="range" id="pfCoreSlider" min="50" max="100" step="5">
+        </div>
+        <div class="settings-row">
+            <label>Cap pojedynczej pozycji w Satelicie (% całego kapitału)</label>
+            <input type="number" id="pfSatCap" min="1" max="100" step="1" style="width:80px">
+            <div class="settings-hint" id="satCapNote"></div>
+        </div>
+    </div>
+
+    <div class="panel-card" id="coreCard">
+        <h3>Core — rdzeń portfela</h3>
+        <p class="panel-hint">
+            Wybierz całe koszyki momentum (ważone wewnętrznie tak jak w Rebalansie) i/lub dopisz pojedyncze
+            "blue chipy", które chcesz trzymać długoterminowo. Każda pozycja to jedna relatywna waga — jak w
+            Trading 212 Pies — automatycznie znormalizowana do 100% budżetu Core.
+        </p>
+        <div class="import-row">
+            <label><input type="checkbox" id="coreUniverseNASDAQ100"> Nasdaq 100 (momentum)</label>
+            <label><input type="checkbox" id="coreUniverseDOWJONES"> Dow Jones (momentum)</label>
+        </div>
+        <div class="import-row">
+            <input type="text" id="corePickInput" placeholder="np. AAPL" class="exclude-input">
+            <button class="add-row-btn" id="corePickAddBtn">+ Dodaj blue chipa</button>
+            <span class="settings-hint" id="corePickStatus"></span>
+        </div>
+        <div class="table-wrap">
+        <table class="holdings-table" id="coreSlotsTable">
+            <thead><tr><th>Pozycja</th><th>Cena</th><th>Waga (relatywna)</th><th>% budżetu Core</th><th></th></tr></thead>
+            <tbody id="coreSlotsBody"></tbody>
+        </table>
+        </div>
+        <div class="empty-state" id="coreEmpty" style="display:none;">Dodaj przynajmniej jedną pozycję do Core.</div>
+    </div>
+
+    <div class="panel-card" id="satelliteCard">
+        <h3>Satelita — taktyczne zakłady</h3>
+        <p class="panel-hint">
+            Dowolny ticker — sektorowy ETF albo pojedyncza spółka. Jeśli jest w śledzonych indeksach, cena podciąga
+            się automatycznie; jeśli nie, wpisujesz ją ręcznie. Waga liczona jest tak jak w Core, ale dodatkowo
+            ograniczona capem z góry (% całego kapitału) — nadwyżka rozkłada się na pozostałe satelity.
+        </p>
+        <div class="import-row">
+            <input type="text" id="satellitePickInput" placeholder="np. XLK" class="exclude-input">
+            <button class="add-row-btn" id="satellitePickAddBtn">+ Dodaj satelitę</button>
+            <span class="settings-hint" id="satellitePickStatus"></span>
+        </div>
+        <div class="table-wrap">
+        <table class="holdings-table" id="satelliteSlotsTable">
+            <thead><tr><th>Ticker</th><th>Cena</th><th>Waga (relatywna)</th><th>% budżetu Satelity</th><th></th></tr></thead>
+            <tbody id="satelliteSlotsBody"></tbody>
+        </table>
+        </div>
+        <div class="empty-state" id="satelliteEmpty" style="display:none;">Dodaj przynajmniej jedną pozycję do Satelity (albo zostaw pusty, jeśli chcesz 100% w Core).</div>
+    </div>
+
+    <div class="stat-cards" id="summaryCards">
+        <div class="stat-card">
+            <div class="label">Kapitał całkowity</div>
+            <div class="value" id="statCapital">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Core</div>
+            <div class="value" id="statCoreValue">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Satelita</div>
+            <div class="value" id="statSatelliteValue">—</div>
+        </div>
+        <div class="stat-card">
+            <div class="label">Pozycji w portfelu</div>
+            <div class="value" id="statPositionsCount">—</div>
+        </div>
+    </div>
+
+    <div class="panel-card" id="resultCard">
+        <h3>Twój docelowy portfel</h3>
+        <p class="panel-hint">To sugestia wag i kwot, nie porada inwestycyjna — Ty decydujesz, co i kiedy kupić.</p>
+        <div class="donut-wrap"><canvas id="portfolioChart"></canvas></div>
+        <div class="table-wrap">
+        <table class="holdings-table" id="portfolioTable">
+            <thead>
+                <tr><th>Ticker</th><th>Segment</th><th>Źródło</th><th>Waga</th><th>Kwota</th><th>Cena</th><th>Sztuk</th></tr>
+            </thead>
+            <tbody id="portfolioBody"></tbody>
+        </table>
+        </div>
+        <div class="empty-state" id="portfolioEmpty" style="display:none;">
+            Podaj kapitał i dodaj przynajmniej jedną pozycję do Core lub Satelity, żeby zobaczyć docelowy portfel.
+        </div>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="js/portfolio.js"></script>
+</body>
+</html>

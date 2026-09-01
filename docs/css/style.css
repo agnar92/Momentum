@@ -809,6 +809,27 @@ table.holdings-table td, table.rebalance-table td {
     text-align: center;
 }
 
+/* ============================================================
+   PORTFOLIO (Core / Satelita)
+   ============================================================ */
+.action-badge.core { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
+.action-badge.satellite { background: rgba(224, 161, 59, 0.15); color: #e0a13b; }
+
+.import-row label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+
+.donut-wrap {
+    height: 260px;
+    margin-bottom: 18px;
+}
+.donut-wrap canvas { width: 100% !important; height: 100% !important; }
+
 /* Scrollbars */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--panel); }
