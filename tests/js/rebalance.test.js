@@ -22,6 +22,8 @@ const {
     simulateMonteCarlo,
     randNormal,
     blendEquityCurves,
+    isCoreTagged,
+    coreTaggedTickers,
     _setState,
 } = rebalance;
 
@@ -246,4 +248,38 @@ test("blendEquityCurves intersects dates when universes have mismatched history"
     const blended = blendEquityCurves(curveData, { NASDAQ100: 50, DOWJONES: 50 });
     // Tylko wspolne daty (od 2026-02-01) -> 2 punkty, nie 3.
     assert.deepEqual(blended.dates, ["2026-02-01", "2026-03-01"]);
+});
+
+// ---------- TAGI CORE Z PORTFOLIO (momentum_portfolio_tags) ----------
+
+test("isCoreTagged / coreTaggedTickers read the shared portfolio tags", () => {
+    _setState({ portfolioTags: { AAPL: "core", XLK: "satellite" } });
+    assert.equal(isCoreTagged("AAPL"), true);
+    assert.equal(isCoreTagged("XLK"), false);
+    assert.equal(isCoreTagged("MSFT"), false);
+    assert.deepEqual([...coreTaggedTickers()], ["AAPL"]);
+    _setState({ portfolioTags: {} });
+});
+
+test("computeTargets excludes a Core-tagged ticker from the momentum pool, same as a manual exclusion", () => {
+    _setState({
+        universeData: {
+            NASDAQ100: {
+                constituents: [
+                    { ticker: "AAA", weight_pct: 50, price: 10 },
+                    { ticker: "CORE_PICK", weight_pct: 50, price: 10 },
+                ],
+            },
+            DOWJONES: { constituents: [] },
+        },
+        settings: { pct: { NASDAQ100: 100, DOWJONES: 0 }, maxHoldings: 20 },
+        excluded: [],
+        portfolioTags: { CORE_PICK: "core" },
+    });
+
+    const { targets } = computeTargets(1000);
+    assert.equal("CORE_PICK" in targets, false);
+    // Cala pula trafia do AAA, tak jakby CORE_PICK nigdy nie bylo w indeksie.
+    assert.ok(Math.abs(targets.AAA.target_value - 1000) < 1e-9);
+    _setState({ portfolioTags: {} });
 });

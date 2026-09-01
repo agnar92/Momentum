@@ -34,15 +34,27 @@
             "pie" portfelach): Core to stabilny, szeroko zdywersyfikowany rdzeń — zwykle 70–90% kapitału, niska
             rotacja. Satelita to mniejsza, bardziej skoncentrowana część — zwykle 10–30% — na taktyczne zakłady
             wysokiego przekonania (sektorowe ETF-y, pojedyncze spółki), z limitem na pojedynczą pozycję, żeby jedna
-            obstawiona spółka nie zdominowała ryzyka całego portfela.
+            obstawiona spółka nie zdominowała ryzyka całego portfela. Twoje realne pozycje pochodzą z Rebalansu
+            (tam robisz import z XTB) — otaguj je poniżej, a tag Core jest widoczny też w Rebalansie: spółki
+            oznaczone jako Core są automatycznie wykluczone z jego sugestii kupna/sprzedaży, dokładnie tak jak
+            ręczne wykluczenie.
         </p>
+        <div class="import-row">
+            <button class="add-row-btn" id="refreshHoldingsBtn">🔄 Odśwież z Rebalansu</button>
+            <button class="add-row-btn danger" id="resetPortfolioBtn">↺ Resetuj portfolio</button>
+        </div>
+        <div class="settings-hint" id="importStatus"></div>
         <div class="settings-row">
-            <label>Kapitał do zainwestowania ($)</label>
-            <input type="number" id="pfCapital" min="0" step="100" placeholder="np. 10000">
+            <label>Obecna wartość portfela (z otagowanych pozycji)</label>
+            <div class="settings-hint" id="statCurrentHoldingsValue">—</div>
+        </div>
+        <div class="settings-row">
+            <label>Dopłata w tym miesiącu ($)</label>
+            <input type="number" id="pfContribution" min="0" step="50" placeholder="np. 500">
         </div>
         <div class="settings-row">
             <label>Podział Core / Satelita: <span id="pfSplitLabel"></span></label>
-            <input type="range" id="pfCoreSlider" min="50" max="100" step="5">
+            <input type="range" id="pfCoreSlider" min="0" max="100" step="1">
         </div>
         <div class="settings-row">
             <label>Cap pojedynczej pozycji w Satelicie (% całego kapitału)</label>
@@ -51,12 +63,30 @@
         </div>
     </div>
 
-    <div class="panel-card" id="coreCard">
-        <h3>Core — rdzeń portfela</h3>
+    <div class="panel-card" id="holdingsTagCard">
+        <h3>Twoje pozycje (z Rebalansu)</h3>
         <p class="panel-hint">
-            Wybierz całe koszyki momentum (ważone wewnętrznie tak jak w Rebalansie) i/lub dopisz pojedyncze
-            "blue chipy", które chcesz trzymać długoterminowo. Każda pozycja to jedna relatywna waga — jak w
-            Trading 212 Pies — automatycznie znormalizowana do 100% budżetu Core.
+            Zaimportuj lub edytuj pozycje w Rebalansie (przycisk "Importuj otwarte pozycje z raportu XTB") — tutaj
+            tylko je otaguj jako Core lub Satelitę. Kliknij "Odśwież z Rebalansu" po zmianach tam.
+        </p>
+        <div class="table-wrap">
+        <table class="holdings-table" id="holdingsTagTable">
+            <thead><tr><th>Ticker</th><th>Ilość</th><th>Cena</th><th>Wartość</th><th>Segment</th></tr></thead>
+            <tbody id="holdingsTagBody"></tbody>
+        </table>
+        </div>
+        <div class="empty-state" id="holdingsTagEmpty" style="display:none;">
+            Brak pozycji — zaimportuj je w Rebalansie, potem wróć tu i kliknij "Odśwież z Rebalansu".
+        </div>
+    </div>
+
+    <div class="panel-card" id="coreCard">
+        <h3>Core — dodatkowe planowane pozycje</h3>
+        <p class="panel-hint">
+            Tu dopisujesz całe koszyki momentum (ważone wewnętrznie tak jak w Rebalansie) i/lub pojedyncze
+            "blue chipy", których jeszcze NIE masz, ale chcesz uwzględnić w planie. Każda pozycja to jedna
+            relatywna waga — jak w Trading 212 Pies — automatycznie znormalizowana do 100% budżetu Core
+            (razem z Twoimi otagowanymi jako Core pozycjami powyżej).
         </p>
         <div class="import-row">
             <label><input type="checkbox" id="coreUniverseNASDAQ100"> Nasdaq 100 (momentum)</label>
@@ -77,11 +107,12 @@
     </div>
 
     <div class="panel-card" id="satelliteCard">
-        <h3>Satelita — taktyczne zakłady</h3>
+        <h3>Satelita — dodatkowe planowane pozycje</h3>
         <p class="panel-hint">
-            Dowolny ticker — sektorowy ETF albo pojedyncza spółka. Jeśli jest w śledzonych indeksach, cena podciąga
-            się automatycznie; jeśli nie, wpisujesz ją ręcznie. Waga liczona jest tak jak w Core, ale dodatkowo
-            ograniczona capem z góry (% całego kapitału) — nadwyżka rozkłada się na pozostałe satelity.
+            Dowolny ticker, którego jeszcze NIE masz — sektorowy ETF albo pojedyncza spółka. Jeśli jest w
+            śledzonych indeksach, cena podciąga się automatycznie; jeśli nie, wpisujesz ją ręcznie. Waga liczona
+            jest tak jak w Core, ale dodatkowo ograniczona capem z góry (% całego kapitału) — nadwyżka rozkłada
+            się na pozostałe satelity (razem z Twoimi otagowanymi jako Satelita pozycjami powyżej).
         </p>
         <div class="import-row">
             <input type="text" id="satellitePickInput" placeholder="np. XLK" class="exclude-input">

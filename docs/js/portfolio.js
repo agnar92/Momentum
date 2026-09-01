@@ -8,13 +8,23 @@
 // standardowa konwencja tej strategii (por. Google Finance/Trading 212
 // "pies": relatywne wagi w obrębie koszyka, znormalizowane do 100%).
 //
+// Pozycje NIE są importowane tu osobno — Portfolio czyta te same holdingi
+// (ticker + liczba akcji), które już zaimportowałeś/aś z XTB w Rebalansie
+// (localStorage klucz momentum_rebalance_holdings, WŁASNOŚĆ rebalance.js —
+// portfolio.js go tylko czyta, nigdy nie zapisuje). Każdy holding dostaje tu
+// tag Core/Satelita (momentum_portfolio_tags), który rebalance.js z kolei
+// odczytuje, żeby wykluczyć Core-owe pozycje z sugestii kupna/sprzedaży
+// momentum — dokładnie tak samo jak ręczne wykluczenie w Rebalansie, bo
+// semantyka jest ta sama: "to trzymam długoterminowo, nie ruszaj tego".
+//
 // Core ograniczony do Nasdaq 100 / Dow Jones (USD) z tego samego powodu co
 // w rebalance.js — WIG20/mWIG40 nie mają realnej wagi fmc_etf do selekcji/
 // ważenia całym uniwersum, a mieszanie PLN w USD-owy split wymagałoby FX,
-// którego tu nie ma. Pojedyncze tickery (Core "blue chip" i Satelita) mogą
-// być dowolne — jeśli są w priceMap (all_prices.json), cena podciąga się
-// automatycznie; jeśli nie (np. sektorowy ETF spoza śledzonych indeksów),
-// user wpisuje cenę ręcznie.
+// którego tu nie ma — to dotyczy tylko domyślnej klasyfikacji nowych
+// holdingów i całych koszyków momentum; pojedyncze tickery (blue chip,
+// satelita) mogą być dowolne. Jeśli są w priceMap (all_prices.json), cena
+// podciąga się automatycznie; jeśli nie (np. sektorowy ETF albo GPW-owa
+// spółka spoza śledzonych indeksów), user wpisuje cenę ręcznie.
 
 const CORE_UNIVERSES = ["NASDAQ100", "DOWJONES"];
 const UNIVERSE_LABELS = { NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
@@ -23,8 +33,12 @@ const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
 const SETTINGS_KEY = "momentum_portfolio_settings";
 const CORE_KEY = "momentum_portfolio_core_slots";
 const SATELLITE_KEY = "momentum_portfolio_satellite_slots";
+const TAGS_KEY = "momentum_portfolio_tags";
+const HOLDINGS_KEY = "momentum_rebalance_holdings"; // własność rebalance.js — tu tylko odczyt
 
-const DEFAULT_SETTINGS = { capital: 10000, corePct: 80, satelliteCapPct: 5 };
+// contribution = dopłata, którą wpisujesz na bieżąco (jak w Rebalansie);
+// wartość obecnego portfela liczy się automatycznie z otagowanych holdingów.
+const DEFAULT_SETTINGS = { contribution: 10000, corePct: 80, satelliteCapPct: 5 };
 const DEFAULT_CORE_SLOTS = [
     { type: "universe", id: "NASDAQ100", weightPct: 1 },
     { type: "universe", id: "DOWJONES", weightPct: 1 },
@@ -47,10 +61,34 @@ function loadCoreSlots() { return loadJSON(CORE_KEY, DEFAULT_CORE_SLOTS.map(s =>
 function saveCoreSlots(s) { saveJSON(CORE_KEY, s); }
 function loadSatelliteSlots() { return loadJSON(SATELLITE_KEY, []); }
 function saveSatelliteSlots(s) { saveJSON(SATELLITE_KEY, s); }
+function loadTags() { return loadJSON(TAGS_KEY, {}); }
+function saveTags(t) { saveJSON(TAGS_KEY, t); }
+function loadHoldings() { return loadJSON(HOLDINGS_KEY, []); }
 
 let settings = loadSettings();
 let coreSlots = loadCoreSlots();
 let satelliteSlots = loadSatelliteSlots();
+let tags = loadTags();
+
+// Wartość slotu pochodzącego z realnego holdingu liczymy zawsze na bieżąco
+// z ceny*sztuk (nigdy nie zapisujemy jej jako static weightPct, żeby nie
+// robiła się nieaktualna) — ręcznie dodane "planowane" pozycje mają wprost
+// wpisaną relatywną wagę, bo nie mają liczby sztuk.
+function slotValue(slot, ticker, prices) {
+    if (slot.fromHolding) {
+        const price = slot.manualPrice ?? prices[ticker]?.price ?? null;
+        return price != null ? price * (slot.shares || 0) : 0;
+    }
+    return Math.max(0, slot.weightPct || 0);
+}
+
+function currentHoldingsValue() {
+    return [...coreSlots, ...satelliteSlots]
+        .filter(s => s.fromHolding)
+        .reduce((sum, s) => sum + slotValue(s, s.id || s.ticker, priceMap), 0);
+}
+
+function totalCapital() { return currentHoldingsValue() + (settings.contribution || 0); }
 
 async function loadPortfolioData() {
     universeData = {};
@@ -116,7 +154,7 @@ function computeCoreTargets(coreCapital, slots, univData, prices) {
     const raw = {};
     if (coreCapital <= 0 || !slots || slots.length === 0) return raw;
 
-    const norm = normalizeWeights(slots.map(s => s.weightPct));
+    const norm = normalizeWeights(slots.map(s => slotValue(s, s.id, prices)));
     slots.forEach((slot, i) => {
         const slotCapital = coreCapital * norm[i];
         if (slotCapital <= 0) return;
@@ -137,9 +175,10 @@ function computeCoreTargets(coreCapital, slots, univData, prices) {
         } else if (slot.type === "ticker" && slot.id) {
             const ticker = slot.id;
             const price = slot.manualPrice ?? prices[ticker]?.price ?? null;
+            const label = slot.fromHolding ? "Twoja pozycja" : "blue chip";
             if (!raw[ticker]) raw[ticker] = { ticker, price, target_value: 0, sources: [], bucket: "core" };
             raw[ticker].target_value += slotCapital;
-            if (!raw[ticker].sources.includes("blue chip")) raw[ticker].sources.push("blue chip");
+            if (!raw[ticker].sources.includes(label)) raw[ticker].sources.push(label);
         }
     });
     return raw;
@@ -200,7 +239,7 @@ function computeSatelliteTargets(satelliteCapital, slots, satelliteCapPct, total
 
     const ids = validSlots.map(s => s.ticker);
     const weightOf = {};
-    validSlots.forEach(s => { weightOf[s.ticker] = Math.max(0, s.weightPct || 0); });
+    validSlots.forEach(s => { weightOf[s.ticker] = slotValue(s, s.ticker, prices); });
 
     const capValue = totalCapital * (satelliteCapPct / 100);
     const { values, cappedIds, infeasible } = capAndRedistribute(ids, weightOf, satelliteCapital, capValue);
@@ -209,51 +248,195 @@ function computeSatelliteTargets(satelliteCapital, slots, satelliteCapPct, total
         const price = s.manualPrice ?? prices[s.ticker]?.price ?? null;
         rows[s.ticker] = {
             ticker: s.ticker, price, target_value: values[s.ticker] || 0,
-            sources: [s.label || "satelita"], bucket: "satellite", capped: cappedIds.has(s.ticker),
+            sources: [s.fromHolding ? "Twoja pozycja" : "satelita"], bucket: "satellite", capped: cappedIds.has(s.ticker),
         };
     });
     return { rows, infeasible };
 }
 
 // ============================================================
+// SYNC Z REBALANSEM — holdingi (ticker + liczba akcji) są własnością
+// rebalance.js (import z XTB dzieje się tam); tu tylko czytamy je i
+// utrzymujemy dla każdego swój slot Core/Satelita zgodnie z tagiem usera.
+// Ręcznie dodane "planowane" pozycje (jeszcze nie kupione blue chipy/
+// satelity — patrz initCoreForm/initSatelliteForm) są oznaczone brakiem
+// `fromHolding` i sync ich nie rusza.
+// ============================================================
+function classifyTicker(ticker, univData) {
+    for (const u of CORE_UNIVERSES) {
+        if (((univData[u] || {}).constituents || []).some(c => c.ticker === ticker)) return u;
+    }
+    return null;
+}
+function defaultTagFor(ticker, univData) { return classifyTicker(ticker, univData) ? "core" : "satellite"; }
+
+// Zwraca nowe { coreSlots, satelliteSlots, tags } — czyste, testowalne bez
+// dotykania modułowego stanu ani localStorage.
+function syncSlotsFromHoldings(holdings, prevCoreSlots, prevSatelliteSlots, prevTags, univData, prices) {
+    const existingByTicker = {};
+    [...prevCoreSlots, ...prevSatelliteSlots].forEach(s => {
+        if (s.fromHolding) existingByTicker[s.id || s.ticker] = s;
+    });
+
+    const manualCore = prevCoreSlots.filter(s => !s.fromHolding);
+    const manualSatellite = prevSatelliteSlots.filter(s => !s.fromHolding);
+    const newTags = { ...prevTags };
+    const currentTickers = new Set();
+    const newCore = [];
+    const newSatellite = [];
+
+    holdings.forEach(h => {
+        if (!h.ticker) return;
+        currentTickers.add(h.ticker);
+        const prev = existingByTicker[h.ticker];
+        const manualPrice = prev ? prev.manualPrice : (prices[h.ticker]?.price != null ? undefined : null);
+        if (!newTags[h.ticker]) newTags[h.ticker] = defaultTagFor(h.ticker, univData);
+
+        if (newTags[h.ticker] === "core") {
+            newCore.push({ type: "ticker", id: h.ticker, shares: h.shares || 0, manualPrice, fromHolding: true });
+        } else {
+            newSatellite.push({ ticker: h.ticker, shares: h.shares || 0, manualPrice, fromHolding: true });
+        }
+    });
+
+    // Tagi pozycji, których już nie ma w Rebalansie (sprzedane) — usuwamy,
+    // to martwe wpisy bez żadnego holdingu za sobą.
+    Object.keys(newTags).forEach(t => { if (!currentTickers.has(t)) delete newTags[t]; });
+
+    return { coreSlots: [...manualCore, ...newCore], satelliteSlots: [...manualSatellite, ...newSatellite], tags: newTags };
+}
+
+function refreshFromHoldings() {
+    const result = syncSlotsFromHoldings(loadHoldings(), coreSlots, satelliteSlots, tags, universeData, priceMap);
+    coreSlots = result.coreSlots;
+    satelliteSlots = result.satelliteSlots;
+    tags = result.tags;
+    saveCoreSlots(coreSlots);
+    saveSatelliteSlots(satelliteSlots);
+    saveTags(tags);
+}
+
+function setHoldingTag(ticker, tag) {
+    tags[ticker] = tag;
+    saveTags(tags);
+    refreshFromHoldings();
+}
+
+function setHoldingManualPrice(ticker, price) {
+    [...coreSlots, ...satelliteSlots].forEach(s => {
+        if ((s.id || s.ticker) === ticker && s.fromHolding) s.manualPrice = price;
+    });
+    saveCoreSlots(coreSlots);
+    saveSatelliteSlots(satelliteSlots);
+}
+
+// Resetuje tagi i "planowane" pozycje do stanu początkowego — Twoje
+// rzeczywiste holdingi (z Rebalansu) zostają nietknięte, dostają tylko
+// domyślną klasyfikację Core/Satelita od nowa.
+function resetPortfolio() {
+    settings = { ...DEFAULT_SETTINGS };
+    tags = {};
+    coreSlots = DEFAULT_CORE_SLOTS.map(s => ({ ...s }));
+    satelliteSlots = [];
+    saveSettings(settings);
+    saveTags(tags);
+    saveCoreSlots(coreSlots);
+    saveSatelliteSlots(satelliteSlots);
+    refreshFromHoldings();
+}
+
+// ============================================================
 // UI
 // ============================================================
 function initSettingsForm() {
-    document.getElementById("pfCapital").value = settings.capital || "";
+    document.getElementById("pfContribution").value = settings.contribution || "";
     document.getElementById("pfCoreSlider").value = settings.corePct;
     document.getElementById("pfSatCap").value = settings.satelliteCapPct;
     updateSplitLabel();
 
     const onChange = () => {
-        settings.capital = parseFloat(document.getElementById("pfCapital").value) || 0;
+        settings.contribution = parseFloat(document.getElementById("pfContribution").value) || 0;
         settings.corePct = parseInt(document.getElementById("pfCoreSlider").value, 10);
         settings.satelliteCapPct = parseFloat(document.getElementById("pfSatCap").value) || 0;
         saveSettings(settings);
         updateSplitLabel();
         renderAll();
     };
-    document.getElementById("pfCapital").addEventListener("input", onChange);
+    document.getElementById("pfContribution").addEventListener("input", onChange);
     document.getElementById("pfCoreSlider").addEventListener("input", onChange);
     document.getElementById("pfSatCap").addEventListener("input", onChange);
 }
 
 function updateSplitLabel() {
-    const capital = settings.capital || 0;
+    const capital = totalCapital();
     const corePct = settings.corePct;
     const satPct = 100 - corePct;
+    document.getElementById("statCurrentHoldingsValue").textContent = fmtMoney(currentHoldingsValue());
     document.getElementById("pfSplitLabel").textContent =
         `Core: ${corePct}% (${fmtMoney(capital * corePct / 100)}) · Satelita: ${satPct}% (${fmtMoney(capital * satPct / 100)})`;
 }
 
-// ---------- CORE SLOTS ----------
+// ---------- TWOJE POZYCJE (z Rebalansu) ----------
+function renderHoldingsTagTable() {
+    const holdings = loadHoldings().filter(h => h.ticker);
+    const tbody = document.getElementById("holdingsTagBody");
+    tbody.innerHTML = "";
+    document.getElementById("holdingsTagEmpty").style.display = holdings.length === 0 ? "block" : "none";
+
+    holdings.forEach(h => {
+        const slot = [...coreSlots, ...satelliteSlots].find(s => (s.id || s.ticker) === h.ticker && s.fromHolding);
+        const tag = tags[h.ticker] || "satellite";
+        const priceKnown = priceMap[h.ticker]?.price != null;
+        const price = slot?.manualPrice ?? priceMap[h.ticker]?.price ?? null;
+        const value = price != null ? price * (h.shares || 0) : null;
+        const priceCell = priceKnown
+            ? fmtPrice(h.ticker, priceMap[h.ticker].price)
+            : `<input type="number" class="slot-manual-price" min="0" step="0.01" value="${slot?.manualPrice ?? ""}" placeholder="cena $">`;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td class="ticker-cell">${h.ticker}${isPln(h.ticker) ? ' <span class="text-faint">(PLN)</span>' : ""}</td>
+            <td>${fmtQty(h.shares || 0)}</td>
+            <td class="slot-price">${priceCell}</td>
+            <td>${value !== null ? fmtMoney(value) : "—"}</td>
+            <td>
+                <button class="tag-btn core ${tag === "core" ? "active" : ""}" data-tag="core">CORE</button>
+                <button class="tag-btn satellite ${tag === "satellite" ? "active" : ""}" data-tag="satellite">SATELITA</button>
+            </td>
+        `;
+        if (!priceKnown) {
+            tr.querySelector(".slot-manual-price").addEventListener("input", (e) => {
+                setHoldingManualPrice(h.ticker, parseFloat(e.target.value) || null);
+                renderResults();
+            });
+        }
+        tr.querySelectorAll(".tag-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                setHoldingTag(h.ticker, btn.dataset.tag);
+                renderAll();
+            });
+        });
+        tbody.appendChild(tr);
+    });
+}
+
+function initRefreshButton() {
+    document.getElementById("refreshHoldingsBtn").addEventListener("click", () => {
+        refreshFromHoldings();
+        document.getElementById("importStatus").textContent = "Zaktualizowano z Rebalansu.";
+        renderAll();
+    });
+}
+
+// ---------- CORE SLOTS (ręcznie dodane "planowane" pozycje) ----------
 function renderCoreSlots() {
     document.getElementById("coreUniverseNASDAQ100").checked = coreSlots.some(s => s.type === "universe" && s.id === "NASDAQ100");
     document.getElementById("coreUniverseDOWJONES").checked = coreSlots.some(s => s.type === "universe" && s.id === "DOWJONES");
 
-    const norm = normalizeWeights(coreSlots.map(s => s.weightPct));
+    const manualSlots = coreSlots.filter(s => !s.fromHolding);
+    const norm = normalizeWeights(manualSlots.map(s => s.weightPct));
     const tbody = document.getElementById("coreSlotsBody");
     tbody.innerHTML = "";
-    coreSlots.forEach((slot, i) => {
+    manualSlots.forEach((slot, i) => {
         const label = slot.type === "universe" ? `${UNIVERSE_LABELS[slot.id]} (cały koszyk momentum)` : slot.id;
         const priceKnown = slot.type === "universe" || priceMap[slot.id]?.price != null;
         const priceCell = slot.type === "universe"
@@ -271,24 +454,24 @@ function renderCoreSlots() {
         `;
         if (slot.type === "ticker" && !priceKnown) {
             tr.querySelector(".slot-manual-price").addEventListener("input", (e) => {
-                coreSlots[i].manualPrice = parseFloat(e.target.value) || null;
+                slot.manualPrice = parseFloat(e.target.value) || null;
                 saveCoreSlots(coreSlots);
                 renderResults();
             });
         }
         tr.querySelector(".slot-weight").addEventListener("input", (e) => {
-            coreSlots[i].weightPct = parseFloat(e.target.value) || 0;
+            slot.weightPct = parseFloat(e.target.value) || 0;
             saveCoreSlots(coreSlots);
             renderAll();
         });
         tr.querySelector(".remove-row-btn").addEventListener("click", () => {
-            coreSlots.splice(i, 1);
+            coreSlots.splice(coreSlots.indexOf(slot), 1);
             saveCoreSlots(coreSlots);
             renderAll();
         });
         tbody.appendChild(tr);
     });
-    document.getElementById("coreEmpty").style.display = coreSlots.length === 0 ? "block" : "none";
+    document.getElementById("coreEmpty").style.display = manualSlots.length === 0 ? "block" : "none";
 }
 
 function toggleCoreUniverse(universe, checked) {
@@ -314,6 +497,10 @@ function initCoreForm() {
         input.value = "";
         status.textContent = "";
         if (!ticker) return;
+        if (loadHoldings().some(h => h.ticker === ticker)) {
+            status.textContent = `${ticker} jest już w Twoich pozycjach — otaguj go w tabeli "Twoje pozycje" powyżej.`;
+            return;
+        }
         if (coreSlots.some(s => s.type === "ticker" && s.id === ticker)) {
             status.textContent = `${ticker} jest już w Core.`;
             return;
@@ -326,12 +513,13 @@ function initCoreForm() {
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("corePickAddBtn").click(); } });
 }
 
-// ---------- SATELLITE SLOTS ----------
+// ---------- SATELLITE SLOTS (ręcznie dodane "planowane" pozycje) ----------
 function renderSatelliteSlots() {
-    const norm = normalizeWeights(satelliteSlots.map(s => s.weightPct));
+    const manualSlots = satelliteSlots.filter(s => !s.fromHolding);
+    const norm = normalizeWeights(manualSlots.map(s => s.weightPct));
     const tbody = document.getElementById("satelliteSlotsBody");
     tbody.innerHTML = "";
-    satelliteSlots.forEach((slot, i) => {
+    manualSlots.forEach((slot, i) => {
         const priceKnown = priceMap[slot.ticker]?.price != null;
         const priceCell = priceKnown
             ? fmtPrice(slot.ticker, priceMap[slot.ticker].price)
@@ -346,24 +534,24 @@ function renderSatelliteSlots() {
         `;
         if (!priceKnown) {
             tr.querySelector(".slot-manual-price").addEventListener("input", (e) => {
-                satelliteSlots[i].manualPrice = parseFloat(e.target.value) || null;
+                slot.manualPrice = parseFloat(e.target.value) || null;
                 saveSatelliteSlots(satelliteSlots);
                 renderResults();
             });
         }
         tr.querySelector(".slot-weight").addEventListener("input", (e) => {
-            satelliteSlots[i].weightPct = parseFloat(e.target.value) || 0;
+            slot.weightPct = parseFloat(e.target.value) || 0;
             saveSatelliteSlots(satelliteSlots);
             renderAll();
         });
         tr.querySelector(".remove-row-btn").addEventListener("click", () => {
-            satelliteSlots.splice(i, 1);
+            satelliteSlots.splice(satelliteSlots.indexOf(slot), 1);
             saveSatelliteSlots(satelliteSlots);
             renderAll();
         });
         tbody.appendChild(tr);
     });
-    document.getElementById("satelliteEmpty").style.display = satelliteSlots.length === 0 ? "block" : "none";
+    document.getElementById("satelliteEmpty").style.display = manualSlots.length === 0 ? "block" : "none";
 }
 
 function initSatelliteForm() {
@@ -374,6 +562,10 @@ function initSatelliteForm() {
         input.value = "";
         status.textContent = "";
         if (!ticker) return;
+        if (loadHoldings().some(h => h.ticker === ticker)) {
+            status.textContent = `${ticker} jest już w Twoich pozycjach — otaguj go w tabeli "Twoje pozycje" powyżej.`;
+            return;
+        }
         if (satelliteSlots.some(s => s.ticker === ticker)) {
             status.textContent = `${ticker} jest już w Satelicie.`;
             return;
@@ -385,11 +577,25 @@ function initSatelliteForm() {
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); document.getElementById("satellitePickAddBtn").click(); } });
 }
 
+function initResetButton() {
+    document.getElementById("resetPortfolioBtn").addEventListener("click", () => {
+        const ok = confirm("Zresetować portfolio? Usunie to tagi Core/Satelita i wszystkie ręcznie dodane planowane pozycje — Twoje holdingi z Rebalansu zostaną nietknięte, dostaną tylko domyślną klasyfikację od nowa.");
+        if (!ok) return;
+        resetPortfolio();
+        document.getElementById("pfContribution").value = settings.contribution || "";
+        document.getElementById("pfCoreSlider").value = settings.corePct;
+        document.getElementById("pfSatCap").value = settings.satelliteCapPct;
+        document.getElementById("importStatus").textContent = "Portfolio zresetowane.";
+        updateSplitLabel();
+        renderAll();
+    });
+}
+
 // ---------- WYNIK ----------
 let portfolioChart = null;
 
 function renderResults() {
-    const capital = settings.capital || 0;
+    const capital = totalCapital();
     const coreCapital = capital * settings.corePct / 100;
     const satelliteCapital = capital * (100 - settings.corePct) / 100;
 
@@ -467,8 +673,10 @@ function renderPortfolioChart(rows, capital) {
 }
 
 function renderAll() {
+    renderHoldingsTagTable();
     renderCoreSlots();
     renderSatelliteSlots();
+    updateSplitLabel();
     renderResults();
 }
 
@@ -477,9 +685,12 @@ function renderAll() {
 if (typeof document !== "undefined") {
     (async function init() {
         await loadPortfolioData();
+        refreshFromHoldings(); // podciąga aktualne holdingi z Rebalansu przy każdym otwarciu strony
         initSettingsForm();
         initCoreForm();
         initSatelliteForm();
+        initRefreshButton();
+        initResetButton();
         renderAll();
     })();
 
@@ -494,5 +705,6 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         normalizeWeights, computeCoreTargets, capAndRedistribute, computeSatelliteTargets,
         fmtMoney, fmtQty, fmtPct,
+        classifyTicker, defaultTagFor, syncSlotsFromHoldings, slotValue,
     };
 }
