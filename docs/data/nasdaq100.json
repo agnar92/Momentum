@@ -786,7 +786,17 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": [
+          {
+            "start_date": "2025-11-17",
+            "end_date": "2026-01-05",
+            "resistance_pct": 82.3,
+            "support_pct": 65.97,
+            "base_count": 1,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -1272,7 +1282,7 @@
           108759900,
           96694100,
           116146800,
-          33450000
+          33493600
         ],
         "buying_volume": [
           75051000,
@@ -1336,7 +1346,7 @@
           54379950,
           48347050,
           61586654,
-          9859442
+          9872293
         ],
         "buying_volume_ratio": [
           null,
@@ -1658,7 +1668,25 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": [
+          {
+            "start_date": "2025-11-17",
+            "end_date": "2026-01-05",
+            "resistance_pct": 83.02,
+            "support_pct": 66.91,
+            "base_count": 1,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-02-09",
+            "end_date": "2026-03-30",
+            "resistance_pct": 75.45,
+            "support_pct": 52.81,
+            "base_count": 1,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -2144,7 +2172,7 @@
           639888800,
           498179700,
           441239400,
-          65015500
+          65188200
         ],
         "buying_volume": [
           177809300,
@@ -2208,7 +2236,7 @@
           319944400,
           249089850,
           223562667,
-          12190439
+          12222820
         ],
         "buying_volume_ratio": [
           null,
@@ -2272,7 +2300,7 @@
           1.1,
           0.85,
           0.8,
-          0.04
+          0.05
         ],
         "stop_level_pct": [
           null,
@@ -2530,7 +2558,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -3402,7 +3431,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -3888,7 +3918,7 @@
           158647600,
           144674000,
           119626100,
-          22460000
+          22569500
         ],
         "buying_volume": [
           45088600,
@@ -3952,7 +3982,7 @@
           79323800,
           72337000,
           64480768,
-          21505573
+          21610420
         ],
         "buying_volume_ratio": [
           null,
@@ -4274,7 +4304,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -5146,7 +5177,25 @@
           null,
           null
         ],
-        "current_stage": "2B"
+        "current_stage": "2B",
+        "bases": [
+          {
+            "start_date": "2025-11-17",
+            "end_date": "2026-01-05",
+            "resistance_pct": 62.04,
+            "support_pct": 47.32,
+            "base_count": 1,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-02-02",
+            "end_date": "2026-03-23",
+            "resistance_pct": 51.14,
+            "support_pct": 39.53,
+            "base_count": 1,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -6018,7 +6067,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -6890,7 +6940,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -7119,7 +7170,7 @@
           75.05,
           60.99,
           60.07,
-          58.47,
+          61.67,
           59.28
         ],
         "sma10_pct": [
@@ -7183,8 +7234,8 @@
           69.18,
           67.74,
           66.29,
-          64.91,
-          64.43
+          65.23,
+          64.75
         ],
         "sma30_pct": [
           null,
@@ -7247,8 +7298,8 @@
           40.33,
           42.09,
           43.84,
-          45.36,
-          46.59
+          45.47,
+          46.7
         ],
         "index_pct": [
           0.0,
@@ -7375,7 +7426,7 @@
           92833300,
           164708300,
           91919600,
-          61348800,
+          48308200,
           20842200
         ],
         "buying_volume": [
@@ -7439,7 +7490,7 @@
           46416650,
           82354150,
           45959800,
-          24748125,
+          23719828,
           10362211
         ],
         "buying_volume_ratio": [
@@ -7503,7 +7554,7 @@
           0.82,
           1.47,
           0.8,
-          0.44,
+          0.42,
           0.19
         ],
         "stop_level_pct": [
@@ -7762,7 +7813,33 @@
           null,
           null
         ],
-        "current_stage": "2B"
+        "current_stage": "2B",
+        "bases": [
+          {
+            "start_date": "2025-12-08",
+            "end_date": "2026-01-26",
+            "resistance_pct": 13.05,
+            "support_pct": 6.5,
+            "base_count": 1,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-02-09",
+            "end_date": "2026-03-30",
+            "resistance_pct": 15.21,
+            "support_pct": 10.78,
+            "base_count": 2,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-06-08",
+            "end_date": "2026-07-27",
+            "resistance_pct": 74.87,
+            "support_pct": 61.37,
+            "base_count": 3,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -7820,7 +7897,7 @@
           1.53,
           -7.02,
           -4.68,
-          -6.22,
+          -4.47,
           null
         ],
         "rsm_medium": [
@@ -7849,7 +7926,7 @@
           12.35,
           1.56,
           2.85,
-          0.13,
+          2.07,
           null
         ]
       }
@@ -8634,7 +8711,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -9506,7 +9584,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -10378,7 +10457,33 @@
           null,
           null
         ],
-        "current_stage": "3"
+        "current_stage": "3",
+        "bases": [
+          {
+            "start_date": "2025-10-27",
+            "end_date": "2025-12-15",
+            "resistance_pct": 34.73,
+            "support_pct": 18.66,
+            "base_count": 1,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-02-09",
+            "end_date": "2026-03-30",
+            "resistance_pct": 64.89,
+            "support_pct": 45.42,
+            "base_count": 2,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-04-13",
+            "end_date": "2026-06-01",
+            "resistance_pct": 109.28,
+            "support_pct": 86.71,
+            "base_count": 3,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -11250,7 +11355,17 @@
           null,
           null
         ],
-        "current_stage": "2B"
+        "current_stage": "2B",
+        "bases": [
+          {
+            "start_date": "2026-01-05",
+            "end_date": "2026-02-23",
+            "resistance_pct": 10.69,
+            "support_pct": 4.56,
+            "base_count": 1,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -12122,7 +12237,33 @@
           null,
           null
         ],
-        "current_stage": "2B"
+        "current_stage": "2B",
+        "bases": [
+          {
+            "start_date": "2025-11-03",
+            "end_date": "2025-12-22",
+            "resistance_pct": 38.39,
+            "support_pct": 21.66,
+            "base_count": 1,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-02-09",
+            "end_date": "2026-03-30",
+            "resistance_pct": 84.97,
+            "support_pct": 62.72,
+            "base_count": 2,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-04-06",
+            "end_date": "2026-05-25",
+            "resistance_pct": 105.53,
+            "support_pct": 79.61,
+            "base_count": 3,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -12994,7 +13135,25 @@
           null,
           null
         ],
-        "current_stage": "3"
+        "current_stage": "3",
+        "bases": [
+          {
+            "start_date": "2025-11-24",
+            "end_date": "2026-01-12",
+            "resistance_pct": 22.49,
+            "support_pct": 8.0,
+            "base_count": 1,
+            "kind": "stage2"
+          },
+          {
+            "start_date": "2026-04-13",
+            "end_date": "2026-06-01",
+            "resistance_pct": 69.93,
+            "support_pct": 51.19,
+            "base_count": 2,
+            "kind": "stage2"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -13223,7 +13382,7 @@
           859.75,
           898.53,
           834.46,
-          864.96,
+          930.88,
           886.26
         ],
         "sma10_pct": [
@@ -13287,8 +13446,8 @@
           771.42,
           778.16,
           772.25,
-          777.1,
-          787.64
+          783.69,
+          794.23
         ],
         "sma30_pct": [
           null,
@@ -13351,8 +13510,8 @@
           702.78,
           724.41,
           743.37,
-          761.45,
-          774.49
+          763.65,
+          776.69
         ],
         "index_pct": [
           0.0,
@@ -13479,7 +13638,7 @@
           24222200,
           32813200,
           23731200,
-          19232700,
+          15790600,
           3206500
         ],
         "buying_volume": [
@@ -13543,7 +13702,7 @@
           12111100,
           16406600,
           11865600,
-          13195231,
+          13100900,
           2797733
         ],
         "buying_volume_ratio": [
@@ -13866,7 +14025,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -13924,7 +14084,7 @@
           5.16,
           8.97,
           5.27,
-          6.9,
+          13.56,
           null
         ],
         "rsm_medium": [
@@ -13953,7 +14113,7 @@
           2.86,
           4.75,
           0.12,
-          1.94,
+          8.62,
           null
         ]
       }
@@ -14738,7 +14898,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -15610,7 +15771,17 @@
           null,
           null
         ],
-        "current_stage": "2B"
+        "current_stage": "2B",
+        "bases": [
+          {
+            "start_date": "2026-06-15",
+            "end_date": "2026-08-03",
+            "resistance_pct": 139.48,
+            "support_pct": 129.68,
+            "base_count": 1,
+            "kind": "stage1"
+          }
+        ]
       },
       "mansfield_chart": {
         "dates": [
@@ -16482,7 +16653,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
@@ -17354,7 +17526,8 @@
           null,
           null
         ],
-        "current_stage": "1"
+        "current_stage": "1",
+        "bases": []
       },
       "mansfield_chart": {
         "dates": [
