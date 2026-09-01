@@ -121,9 +121,24 @@ class TestLoadIndexConstituents:
         assert by_ticker["AAA"][1] == "NASDAQ100"
         assert by_ticker["AAA"][2] == "Technology"
 
+    def test_cspx_csv_maps_to_sp500(self, tmp_path, monkeypatch):
+        # CSPX_holdings.csv -> SP500 (INDEX_MAP), tak samo jak CNDX -> NASDAQ100
+        # i CIND -> DOWJONES — SP500 jest wazonym uniwersum (real fmc_etf z
+        # 'Market Value'), NIE rownowaznym jak WIG20/mWIG40.
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "CSPX_holdings.csv").write_text(CNDX_CSV)
+
+        con = duckdb.connect(":memory:")
+        load_index_constituents(con)
+
+        row = con.execute(
+            "SELECT Index_Name, fmc_etf FROM index_constituents WHERE Ticker = 'AAA'"
+        ).fetchone()
+        assert row == ("SP500", pytest.approx(1234.50))
+
     def test_missing_csv_file_is_skipped_without_raising(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
-        # Zaden z dwoch plikow CNDX/CIND nie istnieje w tmp_path.
+        # Zaden z trzech plikow CSPX/CNDX/CIND nie istnieje w tmp_path.
         con = duckdb.connect(":memory:")
         load_index_constituents(con)  # nie powinno rzucic wyjatku
 
@@ -426,9 +441,9 @@ class TestUpdatePricesIncremental:
 
 # ---------------------------------------------------------------------------
 # update_index_prices: ceny poziomu indeksu dla Global Equity Momentum / Sily
-# Relatywnej. NASDAQ100/DOWJONES (^NDX/^DJI) MAJA pelna historie u yfinance —
-# pobierane i mapowane z powrotem na nazwe uniwersum jak dotychczas. WIG20/
-# MWIG40 NIE MAJA zadnej historycznej danej poziomu indeksu u yfinance
+# Relatywnej. SP500/NASDAQ100/DOWJONES (^GSPC/^NDX/^DJI) MAJA pelna historie u
+# yfinance — pobierane i mapowane z powrotem na nazwe uniwersum jak dotychczas.
+# WIG20/MWIG40 NIE MAJA zadnej historycznej danej poziomu indeksu u yfinance
 # (potwierdzone recznie — patrz docstring _compute_synthetic_equal_weight_index)
 # — budowane syntetycznie z wlasnych skladnikow zamiast pobierane.
 # ---------------------------------------------------------------------------
@@ -445,7 +460,7 @@ class TestUpdateIndexPrices:
         update_index_prices(con, lookback_months=12)
 
         rows = con.execute("SELECT Index_Name, Close FROM index_prices ORDER BY Index_Name").fetchall()
-        assert {r[0] for r in rows} == {"NASDAQ100", "DOWJONES"}
+        assert {r[0] for r in rows} == {"SP500", "NASDAQ100", "DOWJONES"}
         assert "^GSPC" not in {r[0] for r in rows}  # zapisana kanoniczna nazwa uniwersum, nie symbol yf
 
     def test_failed_downloads_leave_table_without_those_rows(self, monkeypatch):

@@ -18,7 +18,7 @@
 
 <div class="topbar">
     <div class="topbar-left">
-        <div class="brand">MOMENTUM<span class="brand-sub"> // NASDAQ100 · DJIA · WIG20 · mWIG40</span></div>
+        <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA · WIG20 · mWIG40</span></div>
         <button class="cmdk-trigger" id="cmdkTrigger">🔍 Szukaj <span class="cmdk-kbd">Ctrl+K</span></button>
     </div>
     <nav>
@@ -41,6 +41,11 @@
     <!-- ====================== LEWA KOLUMNA / SZUFLADA TABEL ====================== -->
     <div class="sidebar" id="sidebar">
         <button class="expand-btn" id="toggleDrawerBtn">&gt;&gt;&gt;</button>
+
+        <div class="sidebar-group">
+            <div class="sidebar-group-label">S&amp;P 500</div>
+            <div class="ticker-grid" id="tiles-SP500"></div>
+        </div>
 
         <div class="sidebar-group">
             <div class="sidebar-group-label">Nasdaq 100</div>
@@ -72,7 +77,7 @@
         </div>
 
         <div class="sidebar-group" id="rsGroup">
-            <div class="sidebar-group-label" title="Siła relatywna: momentum każdej spółki NASDAQ100/DOWJONES/WIG20/mWIG40 w TYM SAMYM oknie co momentum_value głównych uniwersów (M-14/M-2, fallback M-11/M-2), zestawione z momentum samego indeksu w tym oknie. Pokazane są TYLKO spółki bijące swój indeks, posortowane malejąco po przewadze (zwrot spółki - zwrot indeksu).">
+            <div class="sidebar-group-label" title="Siła relatywna: momentum każdej spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 w TYM SAMYM oknie co momentum_value głównych uniwersów (M-14/M-2, fallback M-11/M-2), zestawione z momentum samego indeksu w tym oknie. Pokazane są TYLKO spółki bijące swój indeks, posortowane malejąco po przewadze (zwrot spółki - zwrot indeksu).">
                 💪 Siła Relatywna
             </div>
             <div class="sidebar-group-meta" id="rsMeta"></div>
@@ -84,16 +89,17 @@
     <div class="table-drawer" id="tableDrawer">
         <div class="drawer-header">
             <div class="drawer-header-title">
-                <h2 id="drawerTitle">Pełna tabela — Nasdaq 100 Momentum</h2>
+                <h2 id="drawerTitle">Pełna tabela — S&amp;P 500 Momentum</h2>
                 <div class="drawer-meta" id="drawerMeta"></div>
             </div>
             <div class="drawer-tabs">
-                <button class="drawer-tab active" data-universe="NASDAQ100">Nasdaq 100</button>
+                <button class="drawer-tab active" data-universe="SP500">S&amp;P 500</button>
+                <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
                 <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
                 <button class="drawer-tab" data-universe="WIG20">WIG20</button>
                 <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
                 <button class="drawer-tab" data-universe="GEM" title="Global Equity Momentum — top 10 spółek zwycięskiego indeksu (NASDAQ100/DOWJONES, wg zwrotu 12M) wg wkładu w jego zwrot.">🚀 GEM</button>
-                <button class="drawer-tab" data-universe="RS" title="Siła relatywna — spółki NASDAQ100/DOWJONES/WIG20/mWIG40, których momentum (to samo okno co momentum_value głównych uniwersów) przebiło momentum samego indeksu, posortowane malejąco po przewadze.">💪 RS</button>
+                <button class="drawer-tab" data-universe="RS" title="Siła relatywna — spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, których momentum (to samo okno co momentum_value głównych uniwersów) przebiło momentum samego indeksu, posortowane malejąco po przewadze.">💪 RS</button>
             </div>
         </div>
         <div class="stage-filter-bar" id="stageFilterBar">
