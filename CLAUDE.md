@@ -153,37 +153,28 @@ watermark (not the monthly constituent-pipeline `ref_date`), and it's recomputed
 Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`) with a classic stage
 -analysis view (Stan Weinstein / Dr Eric Wish) the free TradingView widget can't reliably replicate
 (adding a compare symbol can hit free-tier account limits): the **"10:30" chart** — the stock's own weekly
-price plus its 10-week and 30-week SMA, its own index level over the same weeks, and a **GLB (Green Line
-Breakout, Dr. Eric Wish) line** — with every series expressed as **% change relative to the first displayed
-(in-window) week**, not raw values on separate scales: two raw series on different axes make it hard to
-judge by eye which one is actually growing faster, while rebasing both to 0% at the window's start means
-whichever line ends up higher *is* the outperformer — directly answering "is this stock stronger than its
-own market right now" (`close_pct`/`sma10_pct`/`sma30_pct`/`index_pct`/`glb_pct`; the SMAs and GLB line are
-computed on the raw weekly price first, then rebased by the same stock-price base as `close_pct` so they
-still read as a smoothed/overlaid version of the price line). The GLB line is the classic "green line"
-resistance level: **one single flat horizontal line for the whole chart** (not a stepped history of every
-past breakout), but it is only drawn once the highest weekly close reached across the *entire fetched*
-series (including the SMA warm-up buffer, for the longest available "old high" context) has gone at least
-`RS_GLB_MIN_CONSOLIDATION_WEEKS` (13 weeks, ~3 months) **without being exceeded again** — a peak set more
-recently than that hasn't had time to prove it's holding as resistance yet, so `glb_pct` is `None`
-everywhere in that case (no line at all) rather than showing an unconfirmed level. Implementation: find the
-*first* occurrence of the series max (`stock_df["close"].idxmax()`, which for a plateau is provably the
-only value that can ever satisfy "never exceeded afterward" — see the reasoning in
-`compute_relative_strength_chart`'s docstring/commit history if this looks non-obvious) and check
-`ref_date` is at least 13 weeks past that date; if so `glb_price` = that peak, rebased and repeated for
-every displayed date, otherwise `None`. Unlike the SMAs its availability doesn't depend on the SMA
-warm-up buffer, but it does depend on there having been a genuine multi-month pause since the last new
-high — a stock currently making fresh highs right up to `ref_date` will show no GLB line at all until a
-new base has had time to form. All series are resampled from the daily
-`prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` + `ARGMAX`, fetching
-`RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's start purely so
-SMA30 already has a value at the first displayed (in-window) point, and the series returned is trimmed to
-start exactly at that window's start (M-14 or M-11) through to `ref_date`. Note: since `prices` only
-retains a rolling `--lookback-months` (15) window (see above) and the momentum window itself already
+price plus its 10-week and 30-week SMA, together with its own index level over the same weeks — with every
+series expressed as **% change relative to the first displayed (in-window) week**, not raw values on
+separate scales: two raw series on different axes make it hard to judge by eye which one is actually
+growing faster, while rebasing both to 0% at the window's start means whichever line ends up higher *is*
+the outperformer — directly answering "is this stock stronger than its own market right now" (`close_pct`/
+`sma10_pct`/`sma30_pct`/`index_pct`; the SMAs are computed on the raw weekly price first, then rebased by
+the same stock-price base as `close_pct` so they still read as a smoothed version of the price line). All
+series are resampled from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` +
+`ARGMAX`, fetching `RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's
+start purely so SMA30 already has a value at the first displayed (in-window) point, and the series returned
+is trimmed to start exactly at that window's start (M-14 or M-11) through to `ref_date`. Note: since `prices`
+only retains a rolling `--lookback-months` (15) window (see above) and the momentum window itself already
 consumes ~14 of those months, there is little to no actual buffer before `start_date` in production, so
 `sma10_pct`/`sma30_pct` can still show `null` for their first several in-window weeks for many tickers — a
 known, deliberately deferred limitation, not a bug to "fix" by widening `RS_PRICE_SMA_LONG_WEEKS`'s lookback
 further.
+
+A GLB (Green Line Breakout, Dr. Eric Wish) reference line was tried here and then removed: the rolling
+~15-month `prices` retention isn't deep enough for a "highest price reached" computed from the retained
+data to actually correspond to a stock's real, often multi-year, prior high the way TradingView shows it —
+the line (and an ATH/confirmed status derived from it) diverged from reality rather than being a trustworthy
+signal, so don't reintroduce it without first fixing the underlying retention-window limitation.
 
 Each leader also carries a `mansfield_chart` (`compute_mansfield_rs_chart()`) — the classic Mansfield
 Relative Strength oscillator, `RSM = (RS / SMA(RS, N weeks) - 1) * 100` where `RS = stock_close /
@@ -214,10 +205,7 @@ it only exists after the pipeline has run.
   `renderGemPanel()` — shows the winning index + its return, a ranked list of the (US-only) indices'
   returns, and tiles for the winner's top-10 contribution leaders), a full sortable constituents table per
   universe (`renderTable()` — `added_tickers`/`dropped_tickers` are exported in the JSON but not currently
-  rendered; a **GLB column** renders each row's top-level `glb_status` via `glbBadge()` — ✅ for
-  `"confirmed"`, 🚀 ATH for `"ath"`, ❌ for `"none"`, — with a `#glbFilterSelect` dropdown above the table
-  (hidden for the GEM/RS tabs, which don't have this column) that filters `renderTable()`'s rows to a single
-  status via `state.glbFilter`), a Ctrl+K
+  rendered), a Ctrl+K
   command-palette ticker search, and a full-screen TradingView chart widget (loaded from
   `s3.tradingview.com`, mounted via `TradingView.widget(...)`), plus a sidebar group for
   **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
@@ -240,16 +228,12 @@ it only exists after the pipeline has run.
   before — the toggle just lets you switch either way for the current ticker if it has one, and stays
   disabled when it doesn't (e.g. a ticker whose momentum fell back to the 9-month window with too little
   extra history for even the short-term chart). When shown, it's two stacked Chart.js charts
-  (`renderRelativeStrengthChart()`, loaded via CDN like TradingView): the "10:30" price+SMA10/SMA30+GLB
-  chart on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to
-  0% at the momentum window's start) so the stock's trend can be read directly against its index's trend —
-  whichever line is on top is the outperformer — plus, when there's a confirmed one (see above — a stock at
-  fresh highs won't have one yet), a single flat, dashed GLB (Green Line Breakout) line (`chartData.glb_pct`,
-  distinct bright-green color so it doesn't blend into the stock's own price line) marking the prior-high
-  resistance level a breakout needs to clear — and the Mansfield RS oscillator
-  (short-term + medium-term lines, its own separate ~6-month window, see above) in a shorter panel
-  underneath (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`).
-  WIG20/mWIG40 are PLN-denominated and
+  (`renderRelativeStrengthChart()`, loaded via CDN like TradingView): the "10:30" price+SMA10/SMA30 chart
+  on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to 0%
+  at the momentum window's start) so the stock's trend can be read directly against its index's trend —
+  whichever line is on top is the outperformer — and the Mansfield RS oscillator (short-term + medium-term
+  lines, its own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container` /
+  `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`). WIG20/mWIG40 are PLN-denominated and
   GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
   prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
   gets a `GPW:` prefix via `tvSymbolFor()` (tracked through `state.selectedUniverse`, set alongside

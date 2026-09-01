@@ -643,12 +643,6 @@ class TestComputeRelativeStrengthChart:
         assert out["index_pct"][-1] > out["index_pct"][0]
         # Spolka silniejsza od rynku w tym oknie -> konczy powyzej linii indeksu.
         assert out["close_pct"][-1] > out["index_pct"][-1]
-        # AAA rosnie caly czas az do ref_date -> najwyzszy szczyt (ostatni tydzien)
-        # jest za swiezy (< RS_GLB_MIN_CONSOLIDATION_WEEKS od ref_date, brak
-        # potwierdzonej konsolidacji) -> GLB = None wszedzie, nie blad, status "ath"
-        # (spolka robi nowy szczyt WLASNIE teraz).
-        assert all(v is None for v in out["glb_pct"])
-        assert out["glb_status"] == "ath"
 
     def test_insufficient_lookback_leaves_first_week_sma30_as_none(self):
         con = make_gem_con()
@@ -666,82 +660,6 @@ class TestComputeRelativeStrengthChart:
         assert out is not None
         assert out["sma30_pct"][0] is None
         assert out["index_pct"][0] == 0.0
-        # Szczyt tez za swiezy tutaj (fixture konczy sie tuz przed ref_date) ->
-        # GLB = None, spojnie z regula min. 3 mies. od szczytu bez przebicia.
-        assert out["glb_pct"][0] is None
-        assert out["glb_status"] == "ath"
-
-    def test_glb_is_a_single_flat_line_at_a_confirmed_prior_peak(self):
-        con = make_gem_con()
-        start_date = pd.Timestamp("2026-01-05")
-        # ref_date odlegly od start_date na tyle, zeby szczyt z tyg. 2 mial juz
-        # >= RS_GLB_MIN_CONSOLIDATION_WEEKS (13) "ciszy" bez przebicia.
-        ref_date = start_date + pd.Timedelta(weeks=17)
-        fixture_start = start_date - pd.Timedelta(weeks=60)
-        # Tlo niezaleznie od wzorca w oknie (nizsze ceny, zeby nie ingerowac w
-        # szczyt ustawiany ponizej) — samo zapewnia zapas dla SMA30.
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 60, 50.0, 0.0)
-        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 90, 200.0, 0.3)
-        # Jawny wzorzec w oknie wyswietlanym: wzrost do szczytu 110 (tydz. 2), potem
-        # NIGDY wiecej nie przebity az do konca (tydz. 17) — >= 13 tyg. "ciszy".
-        pattern = [100, 105, 110, 108, 106, 104, 107, 109, 105, 103, 108, 106, 104, 102, 107, 105, 103, 106]
-        mondays = pd.date_range(start=start_date, periods=len(pattern), freq="7D")
-        rows = [(d.strftime("%Y-%m-%d"), "AAA", p, p, 0) for d, p in zip(mondays, pattern)]
-        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, ?)", rows)
-
-        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
-                                                start_date.strftime("%Y-%m-%d"))
-        assert out is not None
-        # JEDNA stala linia (ta sama wartosc) przez caly wyswietlany zakres.
-        assert len(set(out["glb_pct"])) == 1
-        # Poziom linii = szczyt z tyg. 2 (110), zrebase'owany, bo nigdy pozniej
-        # nie przebity i ma juz >= 13 tyg. "ciszy".
-        assert out["glb_pct"][0] == out["close_pct"][2]
-        # Kazdy inny tydzien ma cene PONIZEJ linii GLB (nigdy powyzej, nigdy nie
-        # przebity).
-        for i in (0, 1, 5, 10, 17):
-            assert out["close_pct"][i] < out["glb_pct"][i]
-        assert out["glb_status"] == "confirmed"
-
-    def test_glb_is_none_when_the_highest_peak_is_too_recent(self):
-        con = make_gem_con()
-        start_date = pd.Timestamp("2026-01-05")
-        ref_date = pd.Timestamp("2026-03-30")
-        fixture_start = start_date - pd.Timedelta(weeks=60)
-        # AAA rosnie caly czas az do ref_date -> najwyzszy szczyt jest "dzisiaj",
-        # wiec za swiezy na potwierdzona linie GLB (brak min. 3 mies. konsolidacji).
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 80, 100.0, 1.0)
-        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 80, 200.0, 0.3)
-
-        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
-                                                start_date.strftime("%Y-%m-%d"))
-        assert out is not None
-        assert all(v is None for v in out["glb_pct"])
-
-    def test_glb_status_is_none_when_peak_is_recent_and_price_has_pulled_back(self):
-        con = make_gem_con()
-        start_date = pd.Timestamp("2026-01-05")
-        # ref_date tylko 6 tyg. po szczycie (tydz. 2) -> za swiezy na "confirmed",
-        # ale cena juz zdazyla zejsc ponizej szczytu -> nie jest tez "ath".
-        ref_date = start_date + pd.Timedelta(weeks=8)
-        fixture_start = start_date - pd.Timedelta(weeks=60)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 60, 50.0, 0.0)
-        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 70, 200.0, 0.3)
-        # Szczyt 110 w tyg. 2, potem lekki odwrot — cena na koniec (105, tydz. 8)
-        # jest ponizej szczytu, wiec spolka nie robi wlasnie nowego szczytu.
-        pattern = [100, 105, 110, 108, 106, 104, 107, 109, 105]
-        mondays = pd.date_range(start=start_date, periods=len(pattern), freq="7D")
-        rows = [(d.strftime("%Y-%m-%d"), "AAA", p, p, 0) for d, p in zip(mondays, pattern)]
-        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, ?)", rows)
-
-        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
-                                                start_date.strftime("%Y-%m-%d"))
-        assert out is not None
-        assert all(v is None for v in out["glb_pct"])
-        assert out["glb_status"] == "none"
 
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
@@ -838,7 +756,7 @@ def make_weighted_df_fixture():
 class TestExportJson:
     def test_attaches_weekly_and_mansfield_charts_per_ticker(self, tmp_path):
         df = make_weighted_df_fixture()
-        weekly_charts = {"AAA": {"dates": ["2026-01-05"], "close_pct": [0.0], "glb_status": "confirmed"}}
+        weekly_charts = {"AAA": {"dates": ["2026-01-05"], "close_pct": [0.0]}}
         mansfield_charts = {"AAA": {"dates": ["2026-01-05"], "rsm_short": [1.0], "rsm_medium": [2.0]}}
 
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0,
@@ -848,18 +766,14 @@ class TestExportJson:
         by_ticker = {c["ticker"]: c for c in payload["constituents"]}
         assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
         assert by_ticker["AAA"]["mansfield_chart"] == mansfield_charts["AAA"]
-        # glb_status skopiowany na wierzch rekordu (nie tylko w nested weekly_chart)
-        # — do kolumny/filtra GLB w tabeli spolek na stronie.
-        assert by_ticker["AAA"]["glb_status"] == "confirmed"
         # BBB nie ma wpisu w slownikach (np. brak danych indeksu dla tego tickera w
         # danym momencie) -> None w JSON, nie blad.
         assert by_ticker["BBB"]["weekly_chart"] is None
         assert by_ticker["BBB"]["mansfield_chart"] is None
-        assert by_ticker["BBB"]["glb_status"] is None
 
     def test_defaults_to_none_when_charts_not_provided(self, tmp_path):
         df = make_weighted_df_fixture()
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0)
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
-        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None and c["glb_status"] is None
+        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None
                    for c in payload["constituents"])
