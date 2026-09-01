@@ -7,13 +7,13 @@
     ],
     "momentum_index": [
       100.0,
-      101.921,
-      102.202
+      101.955,
+      102.236
     ],
     "benchmark_index": [
       100.0,
-      104.894,
-      104.978
+      105.264,
+      104.982
     ],
     "approximated_periods": [
       false,
@@ -35,8 +35,8 @@
     ],
     "benchmark_index": [
       100.0,
-      103.01,
-      102.285
+      103.331,
+      102.284
     ],
     "approximated_periods": [
       false,

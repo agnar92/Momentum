@@ -2,15 +2,15 @@
   "MSFT": {
     "price": 507.29,
     "universes": [
-      "NASDAQ100",
-      "DOWJONES"
+      "DOWJONES",
+      "NASDAQ100"
     ]
   },
   "GOOGL": {
     "price": 339.35,
     "universes": [
-      "NASDAQ100",
-      "DOWJONES"
+      "DOWJONES",
+      "NASDAQ100"
     ]
   },
   "PLTR": {
@@ -223,18 +223,370 @@
       "MWIG40"
     ]
   },
-  "AAPL": {
-    "price": 316.85,
+  "NVDA": {
+    "price": 220.78,
+    "universes": [
+      "DOWJONES",
+      "NASDAQ100"
+    ]
+  },
+  "AVGO": {
+    "price": 370.34,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "META": {
+    "price": 572.34,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "MU": {
+    "price": 958.73,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "CSCO": {
+    "price": 110.49,
     "universes": [
       "NASDAQ100",
       "DOWJONES"
     ]
   },
-  "AMZN": {
-    "price": 259.77,
+  "COST": {
+    "price": 943.89,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "LRCX": {
+    "price": 301.49,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "AMAT": {
+    "price": 458.39,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "CVX": {
+    "price": 206.14,
+    "universes": [
+      "DOWJONES"
+    ]
+  },
+  "NFLX": {
+    "price": 81.05,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "HD": {
+    "price": 327.83,
+    "universes": [
+      "DOWJONES"
+    ]
+  },
+  "KLAC": {
+    "price": 175.45,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "LIN": {
+    "price": 489.58,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "PEP": {
+    "price": 54.4,
+    "universes": [
+      "MWIG40",
+      "NASDAQ100"
+    ]
+  },
+  "CRWD": {
+    "price": 231.0,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "GILD": {
+    "price": 146.34,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "ADI": {
+    "price": 362.14,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "QCOM": {
+    "price": 170.48,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "CRM": {
+    "price": 257.54,
+    "universes": [
+      "DOWJONES"
+    ]
+  },
+  "APP": {
+    "price": 312.06,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "SHW": {
+    "price": 338.81,
+    "universes": [
+      "DOWJONES"
+    ]
+  },
+  "TRV": {
+    "price": 365.93,
+    "universes": [
+      "DOWJONES"
+    ]
+  },
+  "MAR": {
+    "price": 341.76,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "DDOG": {
+    "price": 237.04,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "CTAS": {
+    "price": 201.79,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "HON": {
+    "price": 213.53,
     "universes": [
       "NASDAQ100",
       "DOWJONES"
+    ]
+  },
+  "PCAR": {
+    "price": 124.13,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "PYPL": {
+    "price": 52.67,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "NKE": {
+    "price": 39.06,
+    "universes": [
+      "DOWJONES"
+    ]
+  },
+  "EXC": {
+    "price": 43.72,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "MCHP": {
+    "price": 73.45,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "WDAY": {
+    "price": 197.45,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "FANG": {
+    "price": 200.48,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "KHC": {
+    "price": 25.67,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "ASML": {
+    "price": 1696.01,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "ARM": {
+    "price": 241.91,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "MELI": {
+    "price": 1936.2,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "CCEP": {
+    "price": 108.02,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "NBIS": {
+    "price": 206.32,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "MSTR": {
+    "price": 132.94,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "RKLB": {
+    "price": 63.92,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "EBP": {
+    "price": 720.2,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "MBK": {
+    "price": 1363.0,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "PCO": {
+    "price": 43.33,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "TPE": {
+    "price": 8.47,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "ZAB": {
+    "price": 31.58,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "ASB": {
+    "price": 133.1,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "ATT": {
+    "price": 23.18,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "BNP": {
+    "price": 150.6,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "DVL": {
+    "price": 10.6,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "EAT": {
+    "price": 10.6,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "GPP": {
+    "price": 57.7,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "ING": {
+    "price": 443.2,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "MBR": {
+    "price": 390.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "NWG": {
+    "price": 90.9,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "OPL": {
+    "price": 13.69,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "SNT": {
+    "price": 335.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "TXT": {
+    "price": 42.76,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "AAPL": {
+    "price": 316.85,
+    "universes": [
+      "DOWJONES",
+      "NASDAQ100"
+    ]
+  },
+  "AMZN": {
+    "price": 259.77,
+    "universes": [
+      "DOWJONES",
+      "NASDAQ100"
     ]
   },
   "GOOG": {
@@ -459,358 +811,6 @@
       "MWIG40"
     ]
   },
-  "NVDA": {
-    "price": 220.78,
-    "universes": [
-      "NASDAQ100",
-      "DOWJONES"
-    ]
-  },
-  "AVGO": {
-    "price": 370.34,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "META": {
-    "price": 572.34,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "MU": {
-    "price": 958.73,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "CSCO": {
-    "price": 110.49,
-    "universes": [
-      "DOWJONES",
-      "NASDAQ100"
-    ]
-  },
-  "COST": {
-    "price": 943.89,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "LRCX": {
-    "price": 301.49,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "AMAT": {
-    "price": 458.39,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "CVX": {
-    "price": 206.14,
-    "universes": [
-      "DOWJONES"
-    ]
-  },
-  "NFLX": {
-    "price": 81.05,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "HD": {
-    "price": 327.83,
-    "universes": [
-      "DOWJONES"
-    ]
-  },
-  "KLAC": {
-    "price": 175.45,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "LIN": {
-    "price": 489.58,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "PEP": {
-    "price": 54.4,
-    "universes": [
-      "MWIG40",
-      "NASDAQ100"
-    ]
-  },
-  "CRWD": {
-    "price": 231.0,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "GILD": {
-    "price": 146.34,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "ADI": {
-    "price": 362.14,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "QCOM": {
-    "price": 170.48,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "CRM": {
-    "price": 257.54,
-    "universes": [
-      "DOWJONES"
-    ]
-  },
-  "APP": {
-    "price": 312.06,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "SHW": {
-    "price": 338.81,
-    "universes": [
-      "DOWJONES"
-    ]
-  },
-  "TRV": {
-    "price": 365.93,
-    "universes": [
-      "DOWJONES"
-    ]
-  },
-  "MAR": {
-    "price": 341.76,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "DDOG": {
-    "price": 237.04,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "CTAS": {
-    "price": 201.79,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "HON": {
-    "price": 213.53,
-    "universes": [
-      "DOWJONES",
-      "NASDAQ100"
-    ]
-  },
-  "PCAR": {
-    "price": 124.13,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "PYPL": {
-    "price": 52.67,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "NKE": {
-    "price": 39.06,
-    "universes": [
-      "DOWJONES"
-    ]
-  },
-  "EXC": {
-    "price": 43.72,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "MCHP": {
-    "price": 73.45,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "WDAY": {
-    "price": 197.45,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "FANG": {
-    "price": 200.48,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "KHC": {
-    "price": 25.67,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "ASML": {
-    "price": 1696.01,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "ARM": {
-    "price": 241.91,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "MELI": {
-    "price": 1936.2,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "CCEP": {
-    "price": 108.02,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "NBIS": {
-    "price": 206.32,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "MSTR": {
-    "price": 132.94,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "RKLB": {
-    "price": 63.92,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "EBP": {
-    "price": 720.2,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "MBK": {
-    "price": 1363.0,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "PCO": {
-    "price": 43.33,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "TPE": {
-    "price": 8.47,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "ZAB": {
-    "price": 31.58,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "ASB": {
-    "price": 133.1,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "ATT": {
-    "price": 23.18,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "BNP": {
-    "price": 150.6,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "DVL": {
-    "price": 10.6,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "EAT": {
-    "price": 10.6,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "GPP": {
-    "price": 57.7,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "ING": {
-    "price": 443.2,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "MBR": {
-    "price": 390.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "NWG": {
-    "price": 90.9,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "OPL": {
-    "price": 13.69,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "SNT": {
-    "price": 335.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "TXT": {
-    "price": 42.76,
-    "universes": [
-      "MWIG40"
-    ]
-  },
   "AMD": {
     "price": 470.72,
     "universes": [
@@ -832,8 +832,8 @@
   "WMT": {
     "price": 104.87,
     "universes": [
-      "DOWJONES",
-      "NASDAQ100"
+      "NASDAQ100",
+      "DOWJONES"
     ]
   },
   "CAT": {
@@ -851,8 +851,8 @@
   "AMGN": {
     "price": 429.88,
     "universes": [
-      "DOWJONES",
-      "NASDAQ100"
+      "NASDAQ100",
+      "DOWJONES"
     ]
   },
   "IBM": {
