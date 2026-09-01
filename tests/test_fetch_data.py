@@ -11,6 +11,7 @@ from fetch_data import (
     INDEX_LEVEL_SYMBOLS,
     PRICES_SCHEMA,
     _download_price_rows,
+    _ensure_prices_ohlc_columns,
     _find_column,
     _parse_money,
     _prices_table_has_rows,
@@ -218,16 +219,69 @@ class TestDownloadPriceRows:
         assert {r[1] for r in rows} == {"AAA", "BRKB"}  # ale zapisany pod kanonicznym tickerem z CSV
         assert fetched == {"AAA", "BRKB"}
         assert failed == []
+        # domyslnie (include_ohlc=False, jak dla index_prices) wiersze zostaja 5-krotkami
+        assert all(len(r) == 5 for r in rows)
+
+    def test_include_ohlc_appends_high_low(self, monkeypatch):
+        # High/Low sa potrzebne w run_query.py do rozbicia wolumenu na kupujacych/
+        # sprzedajacych (CLV) — tylko dla tabeli `prices`, wiec include_ohlc=True
+        # dopisuje je na koncu kazdego wiersza zamiast zmieniac domyslny ksztalt.
+        # UWAGA: dla pojedynczego tickera w paczce yfinance zwraca PLASKIE kolumny
+        # (nie MultiIndex) — tak samo jak w prawdziwym _download_price_rows (patrz
+        # galaz `len(yf_batch) == 1` uzywajaca `data.copy()` bez rozpakowywania).
+        dates = pd.to_datetime(["2024-01-02"])
+        fake_data = pd.DataFrame(
+            [[10.0, 10.0, 100, 12.0, 9.0]], index=dates,
+            columns=["Close", "Adj Close", "Volume", "High", "Low"],
+        )
+        monkeypatch.setattr("fetch_data.yf.download", lambda tickers, **kwargs: fake_data)
+
+        rows, fetched, failed = _download_price_rows(["AAA"], "2024-01-02", "2024-01-03", include_ohlc=True)
+
+        assert rows == [("2024-01-02", "AAA", 10.0, 10.0, 100, 12.0, 9.0)]
+
+    def test_include_ohlc_uses_none_when_high_low_missing(self, monkeypatch):
+        # yfinance moze czasem nie zwrocic High/Low dla danego dnia — nie powinno
+        # to wywalac calego pobrania, tylko dac None (patrz CLV fallback na 50/50
+        # w run_query.py, gdy High/Low brakuje).
+        dates = pd.to_datetime(["2024-01-02"])
+        fake_data = pd.DataFrame([[10.0, 10.0, 100]], index=dates, columns=["Close", "Adj Close", "Volume"])
+        monkeypatch.setattr("fetch_data.yf.download", lambda tickers, **kwargs: fake_data)
+
+        rows, fetched, failed = _download_price_rows(["AAA"], "2024-01-02", "2024-01-03", include_ohlc=True)
+
+        assert rows == [("2024-01-02", "AAA", 10.0, 10.0, 100, None, None)]
 
 
 def _make_prices_con(rows):
-    """rows: lista (date_str, ticker, close, adj_close, volume)."""
+    """rows: lista (date_str, ticker, close, adj_close, volume) — 5-krotki, mimo ze
+    PRICES_SCHEMA ma tez High/Low: wstawiamy po nazwach kolumn, wiec High/Low
+    zostaja NULL, co dla tych testow (nieliczacych CLV) jest wystarczajace."""
     con = duckdb.connect(":memory:")
     con.execute(f"CREATE TABLE prices ({PRICES_SCHEMA})")
     if rows:
         df = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])  # noqa: F841
-        con.execute("INSERT INTO prices SELECT * FROM df")
+        con.execute("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) SELECT * FROM df")
     return con
+
+
+class TestEnsurePricesOhlcColumns:
+    def test_adds_missing_columns_without_touching_data(self):
+        con = duckdb.connect(":memory:")
+        con.execute("CREATE TABLE prices (Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT)")
+        con.execute("INSERT INTO prices VALUES ('2024-01-02', 'AAA', 10.0, 10.0, 100)")
+
+        _ensure_prices_ohlc_columns(con)
+
+        cols = {r[1] for r in con.execute("PRAGMA table_info('prices')").fetchall()}
+        assert {"High", "Low"} <= cols
+        row = con.execute("SELECT Close, High, Low FROM prices").fetchone()
+        assert row == (10.0, None, None)
+
+    def test_idempotent_on_already_migrated_table(self):
+        con = duckdb.connect(":memory:")
+        con.execute(f"CREATE TABLE prices ({PRICES_SCHEMA})")
+        _ensure_prices_ohlc_columns(con)  # nie powinno rzucic bledu "column already exists"
 
 
 class TestPricesTableHasRows:
@@ -250,7 +304,7 @@ class TestUpsertPriceRows:
             ("2024-01-02", "AAA", 10.0, 10.0, 100),
             ("2024-01-03", "AAA", 11.0, 11.0, 100),
         ])
-        new_rows = [("2024-01-03", "AAA", 99.0, 99.0, 999)]
+        new_rows = [("2024-01-03", "AAA", 99.0, 99.0, 999, None, None)]
         _upsert_price_rows(con, new_rows, ["AAA"], "2024-01-03")
 
         out = con.execute("SELECT Date, Close FROM prices ORDER BY Date").df()
@@ -263,7 +317,7 @@ class TestUpsertPriceRows:
             ("2024-01-03", "AAA", 11.0, 11.0, 100),
             ("2024-01-03", "BBB", 22.0, 22.0, 100),
         ])
-        _upsert_price_rows(con, [("2024-01-03", "AAA", 99.0, 99.0, 999)], ["AAA"], "2024-01-01")
+        _upsert_price_rows(con, [("2024-01-03", "AAA", 99.0, 99.0, 999, None, None)], ["AAA"], "2024-01-01")
 
         bbb = con.execute("SELECT Close FROM prices WHERE Ticker = 'BBB'").fetchone()[0]
         assert bbb == pytest.approx(22.0)
@@ -281,7 +335,7 @@ class TestUpdatePricesIncremental:
         recent_date = (pd.Timestamp.today() - pd.Timedelta(days=10)).strftime('%Y-%m-%d')
         con = _make_prices_con([(recent_date, "AAA", 10.0, 10.0, 100)])
 
-        def fake_download(tickers, start_date, end_date):
+        def fake_download(tickers, start_date, end_date, include_ohlc=False):
             return [], set(), list(tickers)  # wszystko sie nie udalo
 
         monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
@@ -295,10 +349,10 @@ class TestUpdatePricesIncremental:
         con = _make_prices_con([(recent_date, "AAA", 10.0, 10.0, 100)])
         calls = []
 
-        def fake_download(tickers, start_date, end_date):
+        def fake_download(tickers, start_date, end_date, include_ohlc=False):
             calls.append((tuple(sorted(tickers)), start_date, end_date))
             return (
-                [(end_date, t, 1.0, 1.0, 1) for t in tickers],
+                [(end_date, t, 1.0, 1.0, 1, None, None) for t in tickers],
                 set(tickers),
                 [],
             )
@@ -319,7 +373,7 @@ class TestUpdatePricesIncremental:
             (old_date, "AAA", 10.0, 10.0, 100),
             (recent_date, "AAA", 11.0, 11.0, 100),
         ])
-        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), []))
+        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e, include_ohlc=False: ([], set(), []))
 
         update_prices_incremental(con, ["AAA"], retention_months=15)
 

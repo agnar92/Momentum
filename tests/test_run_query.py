@@ -381,6 +381,7 @@ def make_gem_con():
     con.execute("""
         CREATE TABLE prices (
             Date DATE, Ticker VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+            High DOUBLE, Low DOUBLE,
             PRIMARY KEY (Date, Ticker)
         )
     """)
@@ -427,7 +428,7 @@ class TestComputeIndexLeaders:
         con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', ?)", [
             ("BIG", 900.0), ("SMALL", 10.0),
         ])
-        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, 0)", [
+        con.executemany("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, 0)", [
             ("2025-02-01", "BIG", 100.0, 100.0),
             ("2026-02-01", "BIG", 120.0, 120.0),     # +20%, waga ~98.9%
             ("2025-02-01", "SMALL", 100.0, 100.0),
@@ -445,7 +446,7 @@ class TestComputeIndexLeaders:
         for i in range(15):
             rows_px.append(("2025-02-01", f"T{i}", 100.0, 100.0, 0))
             rows_px.append(("2026-02-01", f"T{i}", 100.0 + i, 100.0 + i, 0))
-        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, ?)", rows_px)
+        con.executemany("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows_px)
         out = compute_index_leaders(con, "NASDAQ100", "2026-02-01", lookback_months=12, top_n=5)
         assert len(out) == 5
 
@@ -491,14 +492,16 @@ class TestExportGlobalEquityMomentum:
 def insert_daily_series(con, table, id_column, id_value, start_date, end_date, start_price, step_per_day):
     """Wstawia ciag dziennych cen (dni robocze), rosnacych liniowo o step_per_day
     kazdego kolejnego dnia sesyjnego, od start_price w start_date. Zwraca
-    {Timestamp: price} do wyliczenia oczekiwanych wartosci w asercjach."""
+    {Timestamp: price} do wyliczenia oczekiwanych wartosci w asercjach. Wstawia
+    po nazwach kolumn (nie pozycyjnie): `prices` ma tez High/Low (patrz
+    make_gem_con), ktorych ta funkcja nie ustawia — zostaja NULL."""
     dates = pd.bdate_range(start=start_date, end=end_date)
     prices, rows = {}, []
     for i, d in enumerate(dates):
         price = start_price + i * step_per_day
         prices[d] = price
         rows.append((d.strftime("%Y-%m-%d"), id_value, price, price, 1000))
-    con.executemany(f"INSERT INTO {table} VALUES (?, ?, ?, ?, ?)", rows)
+    con.executemany(f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows)
     return prices
 
 
@@ -615,7 +618,11 @@ def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks,
         (d.strftime("%Y-%m-%d"), id_value, start_price + i * weekly_step, start_price + i * weekly_step, 0)
         for i, d in enumerate(mondays)
     ]
-    con.executemany(f"INSERT INTO {table} VALUES (?, ?, ?, ?, ?)", rows)
+    # Kolumny po nazwie (nie pozycyjnie): `prices` ma tez High/Low (patrz make_gem_con),
+    # ktorych te testy nie ustawiaja — zostaja NULL, buying_volume liczy sie wtedy
+    # na neutralnym 50/50 (patrz CASE w _weekly_close_series), co przy Volume=0 w tych
+    # fixture'ach i tak daje buying_volume=0, bez zmiany zachowania testow.
+    con.executemany(f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows)
     return mondays
 
 
@@ -691,17 +698,20 @@ class TestComputeRelativeStrengthChart:
         out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
-        for key in ("volume", "volume_ratio", "stage", "signal", "stop_level_pct", "base_count"):
+        for key in ("volume", "buying_volume", "buying_volume_ratio", "stage", "signal",
+                    "stop_level_pct", "base_count"):
             assert key in out
             assert len(out[key]) == len(out["dates"])
         # Trend jest tu jednostajnie rosnacy przez cale okno -> ostatni tydzien
         # powinien byc sklasyfikowany jako etap zaawansowania (2A/2B), nie 1/3/4.
         assert out["current_stage"] in ("2A", "2B")
-        # Wolumen jest tu zawsze 0 (insert_weekly_series) -> volume_ratio zawsze None
-        # (0/0 pominiete w _compute_weinstein_stage_series) -> ENTRY_2A (wymaga
-        # jawnego potwierdzenia wolumenem) nigdy sie nie pojawia, ale ENTRY_2B
-        # (akceptuje brak danych o wolumenie) owszem, przy kolejnych bazach.
-        assert all(v is None for v in out["volume_ratio"])
+        # Wolumen jest tu zawsze 0 (insert_weekly_series) -> buying_volume=0 i
+        # buying_volume_ratio zawsze None (0/0 pominiete w _compute_weinstein_
+        # stage_series) -> ENTRY_2A (wymaga jawnego potwierdzenia wolumenem
+        # kupujacych) nigdy sie nie pojawia, ale ENTRY_2B (akceptuje brak danych
+        # o wolumenie) owszem, przy kolejnych bazach.
+        assert all(v == 0 for v in out["buying_volume"])
+        assert all(v is None for v in out["buying_volume_ratio"])
         assert all(s != "ENTRY_2A" for s in out["signal"])
         # Regresja na quirk pandas iterrows(), ktory potrafi po cichu zamienic None
         # na NaN przy mieszaniu kolumn float/object w jednym wierszu (patrz komentarz
@@ -717,9 +727,16 @@ class TestComputeRelativeStrengthChart:
 # GLB/dlugoterminowego oporu bazy, z tego samego powodu co reszta wykresu 10:30).
 # ---------------------------------------------------------------------------
 
-def make_stage_df(closes, volumes=None):
+def make_stage_df(closes, volumes=None, buying_volumes=None):
+    """buying_volumes domyslnie = volumes (caly wolumen "kupujacy") — wiekszosc
+    testow nie testuje samego rozbicia kupujacy/sprzedajacy tylko reszte logiki
+    etapow, wiec to zachowuje ich zamierzona semantyke (STAGE_BREAKOUT_VOLUME_RATIO
+    etc. licza sie teraz z buying_volume, patrz run_query.py). Testy, ktore
+    faktycznie sprawdzaja rozbicie na kupujacych/sprzedajacych, podaja
+    buying_volumes jawnie (mniejsze niz volumes)."""
     volumes = volumes if volumes is not None else [1000] * len(closes)
-    df = pd.DataFrame({"close": closes, "volume": volumes})
+    buying_volumes = buying_volumes if buying_volumes is not None else volumes
+    df = pd.DataFrame({"close": closes, "volume": volumes, "buying_volume": buying_volumes})
     df["sma10"] = df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
     df["sma30"] = df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
     return df
@@ -737,7 +754,7 @@ class TestComputeWeinsteinStageSeries:
         assert rows[39]["stage"] == "1"
         assert rows[40]["stage"] == "2A"
         assert rows[40]["signal"] == "ENTRY_2A"
-        assert rows[40]["volume_ratio"] == pytest.approx(3.0)
+        assert rows[40]["buying_volume_ratio"] == pytest.approx(3.0)
 
     def test_breakout_without_volume_confirmation_has_no_entry_signal(self):
         # Ten sam breakout, ale wolumen ledwo powyzej sredniej (1.1x < próg 1.5x)
@@ -750,7 +767,40 @@ class TestComputeWeinsteinStageSeries:
         rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
         assert rows[40]["stage"] == "2A"
         assert rows[40]["signal"] is None
-        assert rows[40]["volume_ratio"] < STAGE_BREAKOUT_VOLUME_RATIO
+        assert rows[40]["buying_volume_ratio"] < STAGE_BREAKOUT_VOLUME_RATIO
+
+    def test_breakout_dominated_by_selling_volume_has_no_entry_signal(self):
+        # Sedno zgloszonego problemu: TOTAL wolumen moze byc wysoki mimo ze
+        # tydzien byl w wiekszosci dystrybucja (sprzedaz), nie akumulacja. Taki
+        # tydzien NIE powinien potwierdzac wybicia, mimo ze surowy wolumen
+        # przebijalby prog 1.5x — bo liczy sie tylko wolumen KUPUJACYCH.
+        closes = [100.0] * 41
+        closes[-1] = 130.0
+        volumes = [1000] * 41
+        volumes[-1] = 3000            # total wolumen 3x sredniej...
+        buying_volumes = [1000] * 41
+        buying_volumes[-1] = 900      # ...ale wolumen KUPUJACYCH ponizej sredniej (dystrybucja, nie akumulacja)
+
+        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes, buying_volumes))
+        assert rows[40]["stage"] == "2A"
+        assert rows[40]["signal"] is None
+        assert rows[40]["buying_volume_ratio"] < STAGE_BREAKOUT_VOLUME_RATIO
+
+    def test_breakout_confirmed_by_buying_volume_even_if_total_volume_is_unremarkable(self):
+        # Odwrotny przypadek: total wolumen ledwo rusza sie od sredniej, ale
+        # niemal caly ten wolumen to kupujacy (bardzo mocna akumulacja) ->
+        # powinno to potwierdzic wybicie, mimo ze "surowy" wolumen by nie wystarczyl.
+        closes = [100.0] * 41
+        closes[-1] = 130.0
+        volumes = [1000] * 41
+        volumes[-1] = 1600             # total wolumen tylko 1.6x sredniej
+        buying_volumes = [1000] * 41
+        buying_volumes[-1] = 1600      # ale caly ten wolumen to kupujacy -> 1.6x >= progu 1.5x
+
+        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes, buying_volumes))
+        assert rows[40]["stage"] == "2A"
+        assert rows[40]["signal"] == "ENTRY_2A"
+        assert rows[40]["buying_volume_ratio"] == pytest.approx(1.6)
 
     @staticmethod
     def _zigzag_base(level, weeks, amplitude=1.5):
@@ -854,7 +904,7 @@ class TestComputeWeinsteinStageSeries:
 
     def test_insufficient_history_yields_none_stage(self):
         rows = _compute_weinstein_stage_series(make_stage_df([100.0] * 10))
-        assert all(r["stage"] is None and r["signal"] is None and r["volume_ratio"] is None
+        assert all(r["stage"] is None and r["signal"] is None and r["buying_volume_ratio"] is None
                    and r["stop_level"] is None and r["base_count"] is None for r in rows)
 
 

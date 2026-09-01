@@ -48,7 +48,14 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
      (e.g. `PKN` → `PKN.WA`) — every other ticker only gets translated via the small, explicit
      `YFINANCE_TICKER_OVERRIDES` dict (dual-class US shares like `BRKB` → `BRK-B`).
    - Downloads daily prices for every constituent ticker via `yfinance`, in batches of 50, into the
-     `prices` table (PK `(Date, Ticker)`). Two modes, chosen automatically by `update_duckdb()`:
+     `prices` table (PK `(Date, Ticker)`, columns `Close, Adj_Close, Volume, High, Low` — High/Low were
+     always present in yfinance's OHLCV response but discarded until `run_query.py` needed them to split
+     weekly volume into buying/selling, see below; `_download_price_rows(..., include_ohlc=True)` is what
+     appends them, `index_prices` still doesn't carry them since nothing needs them there).
+     `_ensure_prices_ohlc_columns()` runs an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+     migration before every incremental refresh, since the already-committed `momentum_data.duckdb` predates
+     these columns — old rows get `NULL` High/Low until they age out of the retention window and get
+     replaced by freshly-fetched rows that have them. Two modes, chosen automatically by `update_duckdb()`:
      - **Bootstrap** (`bootstrap_prices`) — used only when `prices` doesn't exist yet or is empty.
        Downloads the full `--lookback-months` (default 15) window for every ticker via a
        `prices_staging` table renamed into place. If fetched ticker coverage falls below
@@ -234,13 +241,25 @@ comparison line on the chart, unchanged.
     hit as price breaks below support." Firing it resets all run state (`stop_level`/`base_count`/etc. back
     to `None`/0) so the next fresh base breakout starts a clean new run.
 
-Volume confirmation, mostly unchanged from the first version: `ENTRY_2A` additionally requires weekly volume
-`>= STAGE_BREAKOUT_VOLUME_RATIO` (1.5x) the trailing `STAGE_VOLUME_LOOKBACK_WEEKS` (10) average — without it
-the stage is still called 2A but no entry signal fires. `ENTRY_2B`/`ENTRY_2B_LATE` accept a softer
-`STAGE_PULLBACK_VOLUME_RATIO` (1.2x), or no volume data at all. Weekly `volume` (`SUM(Volume)` per week,
-added to `_weekly_close_series`) and `volume_ratio` (that week's volume vs. the trailing 10-week average) are
-exported for every week regardless, so the frontend can render volume bars colored by confirmation strength,
-not just at breakout weeks.
+**Volume confirmation reads BUYING volume, not total volume** — this is a deliberate refinement made after
+the first version used raw `SUM(Volume)`: every trade has a buyer and a seller, so a high-total-volume week
+can just as easily be heavy *distribution* (selling) as accumulation, and a breakout should be confirmed by
+buying pressure specifically, not by how many shares merely changed hands. `_weekly_close_series(...,
+include_buying_volume=True)` computes, per DAY (then sums to the week — more accurate than computing it once
+off the aggregated weekly bar), a **Close Location Value** split — the same idea behind Chaikin's
+Accumulation/Distribution Line: `buying_share = ((Close-Low) - (High-Close)) / (High-Low)`, rescaled to
+`[0,1]` as `(CLV+1)/2`, so a close near the day's high counts most of that day's volume as buying pressure
+and a close near the low counts most of it as selling; `High <= Low` or missing High/Low (old pre-migration
+rows, see above) falls back to a neutral 50/50 split so `buying_volume` is never `None` and roughly sums to
+`Volume`. `ENTRY_2A` requires weekly *buying* volume `>= STAGE_BREAKOUT_VOLUME_RATIO` (1.5x) the trailing
+`STAGE_VOLUME_LOOKBACK_WEEKS` (10) average of buying volume — without it the stage is still called 2A but no
+entry signal fires. `ENTRY_2B`/`ENTRY_2B_LATE` accept a softer `STAGE_PULLBACK_VOLUME_RATIO` (1.2x) of the
+same buying-volume series, or no volume data at all. This is a real, honest approximation, not order-flow/tape
+data (yfinance's OHLCV has no per-trade direction) — documented as such on `edukacja.html`. Exported fields:
+`volume` (total, `SUM(Volume)` per week — still the bar's total height) and `buying_volume`/
+`buying_volume_ratio` (the CLV-derived buying portion and its ratio to trailing average) for every week
+regardless of confirmation, so the frontend can render a split bar (buying vs. `volume - buying_volume` as
+selling) rather than a single flat-colored one.
 
 All of the above shares the exact same shallow-history caveat already documented for `sma10_pct`/`sma30_pct`
 above: every field is `None` until SMA30 (and, separately, `STAGE_VOLUME_LOOKBACK_WEEKS`/`STAGE_BASE_
@@ -324,10 +343,12 @@ it only exists after the pipeline has run.
   whichever line is on top is the outperformer. That same panel also renders the Weinstein stage
   classification described above: a `#stageBadge` above the chart shows the ticker's `current_stage`
   (`renderStageBadge()`, colored per `STAGE_COLORS`, with a one-line plain-language description of what that
-  stage means), weekly `volume` bars on a hidden secondary axis at the bottom of the price chart (brighter
-  green when `volume_ratio` clears `STAGE_BREAKOUT_VOLUME_RATIO`, i.e. a confirmed breakout week — this
-  constant is duplicated client-side in `app.js` and must stay in sync with the same constant in
-  `run_query.py`), a **trailing stop-loss line** plotted directly from `stop_level_pct` (a dashed red line,
+  stage means), weekly volume bars on a hidden secondary axis at the bottom of the price chart — stacked
+  (Chart.js `stack: "volume"`) into two segments so buying/selling pressure is visible directly, not just
+  total turnover: `buying_volume` on the bottom (brighter green when `buying_volume_ratio` clears
+  `STAGE_BREAKOUT_VOLUME_RATIO`, i.e. a confirmed breakout week — this constant is duplicated client-side in
+  `app.js` and must stay in sync with the same constant in `run_query.py`) and `volume - buying_volume`
+  (selling) on top in red, a **trailing stop-loss line** plotted directly from `stop_level_pct` (a dashed red line,
   mirroring the book's own "Trailing Stop Loss" diagram — Chart.js breaks the line wherever the value is
   `null`, i.e. outside an active Stage 2 run, with no extra handling needed), and entry/exit markers on the
   price line itself: triangle-up (green) for `ENTRY_2A`/`ENTRY_2B`, triangle-up (amber) for `ENTRY_2B_LATE`
