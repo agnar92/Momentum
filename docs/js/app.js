@@ -29,8 +29,7 @@ const state = {
     drawerOpen: false,
     drawerUniverse: "NASDAQ100",
     sortKey: "rank",
-    sortDir: "asc",
-    glbFilter: "all"
+    sortDir: "asc"
 };
 
 async function loadData() {
@@ -319,17 +318,11 @@ let rsMansfieldChartInstance = null;
 
 // Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
 // stage analysis (Stan Weinstein / Dr Eric Wish):
-// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg., poziom
-//    własnego indeksu i JEDNA pozioma linia GLB (Green Line Breakout, Dr Eric
-//    Wish — najwyższy szczyt w całej pobranej historii, ale TYLKO jeśli od
-//    niego minęło >= 3 mies. bez ponownego przebicia; inaczej glb_pct = null
-//    wszędzie, czyli brak linii — świeży szczyt jeszcze nie jest potwierdzonym
-//    oporem); punkt, w którym linia ceny DOTYKA linii GLB, to moment przebicia,
-//    wszystko przeliczone na % zmiany względem pierwszego wyświetlanego
-//    tygodnia OKNA MOMENTUM (patrz
-//    compute_relative_strength_chart) — jedna wspólna skala, żeby jednym
-//    spojrzeniem było widać, która linia rośnie szybciej: spółka POWYŻEJ linii
-//    indeksu = silniejsza od rynku.
+// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. i poziom
+//    własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
+//    wyświetlanego tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart)
+//    — jedna wspólna skala, żeby jednym spojrzeniem było widać, która linia
+//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku.
 // 2. Oscylator Mansfield RS w dwóch wygładzeniach — krótkoterminowym (~3 mies.)
 //    i średnioterminowym (~6 mies.) — na WŁASNYM, znacznie krótszym ostatnim
 //    ~6-miesięcznym oknie (patrz compute_mansfield_rs_chart), celowo NIE tym
@@ -361,7 +354,6 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
                 { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
                 { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
-                { label: "GLB (Green Line Breakout)", data: chartData.glb_pct, borderColor: "#39ff14", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 3] },
             ],
         },
         options: {
@@ -467,14 +459,6 @@ function initDrawer() {
         });
     });
 
-    const glbFilterSelect = document.getElementById("glbFilterSelect");
-    if (glbFilterSelect) {
-        glbFilterSelect.addEventListener("change", () => {
-            state.glbFilter = glbFilterSelect.value;
-            renderTable();
-        });
-    }
-
     document.querySelectorAll("table.momentum-table thead th").forEach(th => {
         th.addEventListener("click", () => {
             const key = th.dataset.key;
@@ -522,8 +506,6 @@ function showDrawerTable(universe) {
     document.getElementById("momentumTable").hidden = isGem || isRs;
     document.getElementById("gemTable").hidden = !isGem;
     document.getElementById("rsTable").hidden = !isRs;
-    const glbFilter = document.getElementById("glbFilter");
-    if (glbFilter) glbFilter.hidden = isGem || isRs;
     document.getElementById("drawerTitle").textContent = isGem
         ? "Pełna tabela — Global Equity Momentum"
         : isRs
@@ -619,18 +601,6 @@ function renderRelativeStrengthTable() {
     });
 }
 
-// Odznaka statusu GLB (patrz compute_relative_strength_chart w run_query.py):
-// "confirmed" = potwierdzona linia oporu (min. 3 mies. bez przebicia), "ath" =
-// spółka robi nowy szczyt WŁAŚNIE teraz (za świeży, żeby liczyć się jako
-// potwierdzony), "none" = szczyt niedawno przebity, ale jeszcze bez
-// wystarczającej ciszy, null = brak danych (np. za krótka historia cen).
-function glbBadge(status) {
-    if (status === "confirmed") return '<span class="glb-badge glb-confirmed" title="Potwierdzona linia GLB (min. 3 mies. bez przebicia)">✅</span>';
-    if (status === "ath") return '<span class="glb-badge glb-ath" title="Spółka robi nowy szczyt właśnie teraz">🚀 ATH</span>';
-    if (status === "none") return '<span class="glb-badge glb-none" title="Brak potwierdzonej linii GLB (szczyt niedawno przebity)">❌</span>';
-    return '<span class="glb-badge glb-unknown" title="Brak danych">—</span>';
-}
-
 function renderTable() {
     const d = state.data[state.drawerUniverse];
     const meta = document.getElementById("drawerMeta");
@@ -649,9 +619,6 @@ function renderTable() {
     }
 
     let rows = (d.constituents || []).slice();
-    if (state.glbFilter !== "all") {
-        rows = rows.filter(r => r.glb_status === state.glbFilter);
-    }
 
     rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
 
@@ -661,7 +628,7 @@ function renderTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="11" class="empty-state">Brak danych.</td>`;
+        tr.innerHTML = `<td colspan="10" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -684,7 +651,6 @@ function renderTable() {
                 <span class="weight-bar-bg"><span class="weight-bar-fill" style="width:${(r.weight_pct / maxWeight * 100).toFixed(0)}%"></span></span>
                 ${r.weight_pct.toFixed(2)}%
             </td>
-            <td>${glbBadge(r.glb_status)}</td>
         `;
         tr.addEventListener("click", () => selectTicker(r.ticker, state.drawerUniverse));
         tbody.appendChild(tr);
@@ -839,6 +805,6 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — nie ładowany
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { compareRows, glbBadge };
+    module.exports = { compareRows };
 }
 

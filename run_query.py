@@ -29,9 +29,7 @@ metodologii S&P Momentum Indices):
 8. Eksport JSON dla strony (docs/data/*.json) + wygenerowanie statycznych
    plikow strony (docs/index.html, docs/rebalance.html, docs/css/*, docs/js/*).
    Kazda spolka w KAZDYM uniwersum (nie tylko liderzy Sily Relatywnej, patrz pkt
-   10) ma tez wlasny "weekly_chart"/"mansfield_chart" oraz skrotowy top-level
-   "glb_status" ("confirmed"/"ath"/"none", do kolumny/filtra GLB w tabeli
-   spolek na stronie) — patrz process_universe/export_json.
+   10) ma tez wlasny "weekly_chart"/"mansfield_chart" — patrz process_universe.
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
    fetch_data.py) dla NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez
    WIG20/mWIG40) w oknie GEM_LOOKBACK_MONTHS, wybor zwyciezcy (najwyzszy zwrot)
@@ -43,11 +41,9 @@ metodologii S&P Momentum Indices):
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
     po przewadze — patrz export_relative_strength. Kazdy lider ma tez, od poczatku
     tego samego okna, "wykres 10:30" w stylu stage analysis (Weinstein/Dr Eric Wish):
-    cena spolki + SMA 10-tyg./30-tyg., poziom wlasnego indeksu i JEDNA pozioma linia
-    GLB (Green Line Breakout — najwyzszy szczyt, min. 3 mies. bez ponownego
-    przebicia), wszystko przeliczone na % zmiany wzgledem poczatku okna
-    (close_pct/sma10_pct/sma30_pct/index_pct/glb_pct), zeby jednym spojrzeniem
-    bylo widac czy spolka rosnie szybciej niz jej rynek — patrz
+    cena spolki + SMA 10-tyg./30-tyg. i poziom wlasnego indeksu, wszystko przeliczone
+    na % zmiany wzgledem poczatku okna (close_pct/sma10_pct/sma30_pct/index_pct), zeby
+    jednym spojrzeniem bylo widac czy spolka rosnie szybciej niz jej rynek — patrz
     compute_relative_strength_chart — oraz "mansfield_chart": oscylator Mansfield RS
     w dwoch wygladzeniach (krotkoterminowym ~3 mies. i srednioterminowym ~6 mies.) na
     WLASNYM, znacznie krotszym oknie (ostatnie ~6 mies., odczepione od okna momentum) —
@@ -418,10 +414,6 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "z_score": round(float(r["z_score"]), 3),
             "momentum_score": round(float(r["momentum_score"]), 3),
             "weight_pct": round(float(r["weight"]) * 100, 3),
-            # Skopiowane z weekly_chart na wierzch rekordu — zeby lista/tabela
-            # spolek (i filtr po statusie GLB) nie musiala schodzic w nested
-            # weekly_chart, ktory bywa None (brak danych dla tickera).
-            "glb_status": weekly_chart.get("glb_status") if weekly_chart else None,
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
         })
@@ -833,34 +825,17 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date):
 
 RS_PRICE_SMA_SHORT_WEEKS = 10   # "wykres 10:30" (Dr Eric Wish / stage analysis): 10-tyg. SMA ceny
 RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinsteina)
-RS_GLB_MIN_CONSOLIDATION_WEEKS = 13   # min. "cisza" po szczycie (~3 mies.) zanim linia GLB jest wazna
 
 
 def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date):
     """Wykres 'nie-TradingView' dla panelu Siły Relatywnej, w stylu klasycznej
     metodologii stage analysis (Stan Weinstein / Dr. Eric Wish) — "wykres 10:30":
-    tygodniowa cena spółki + SMA 10-tyg. i 30-tyg., razem z poziomem własnego indeksu
-    i linią GLB (Green Line Breakout, patrz niżej), wszystko przeliczone na % zmiany
-    WZGLĘDEM pierwszego wyświetlanego tygodnia (start_date) — nie surowe wartości na
-    osobnych skalach, bo dwie osie utrudniają ocenę wzrokiem, która linia rośnie
-    szybciej. Po rebase'owaniu obie linie (spółka i indeks) startują z 0% i
-    rozjeżdżają się — spółka POWYŻEJ linii indeksu w danym tygodniu = silniejsza od
-    rynku w tym oknie, PONIŻEJ = słabsza.
-
-    GLB (Green Line Breakout, Dr. Eric Wish) — JEDNA pozioma "zielona linia" oporu,
-    stała przez cały wykres (NIE schodkowa historia kolejnych przebić): najwyższa
-    tygodniowa cena zamknięcia w całej POBRANEJ historii (łącznie z zapasem
-    RS_PRICE_SMA_LONG_WEEKS+2 tyg. przed start_date), ale TYLKO jeśli od tego
-    szczytu minęło co najmniej RS_GLB_MIN_CONSOLIDATION_WEEKS (~3 mies.) BEZ
-    ponownego przebicia — inaczej ten szczyt jest za świeży, żeby liczyć się jako
-    potwierdzony poziom oporu (dopiero zaczyna się ewentualna konsolidacja pod
-    nim), więc `glb_pct` wtedy = None (brak linii, nie błąd). Dopóki cena jest
-    poniżej tej linii, spółka jest w bazie/korekcie; miejsce, w którym linia ceny
-    DOTYKA linii GLB, to właśnie przebicie. Zwraca też skrótowy 'glb_status' —
-    "confirmed" (potwierdzona linia), "ath" (spółka WŁAŚNIE robi nowy szczyt —
-    ostatnia cena to maksimum całej serii, więc jeszcze za świeże na potwierdzony
-    opór) albo "none" (szczyt niedawno przebity, ale bez jeszcze wystarczającej
-    ciszy) — do kolumny/filtra GLB w tabeli spółek (patrz export_json).
+    tygodniowa cena spółki + SMA 10-tyg. i 30-tyg., razem z poziomem własnego indeksu,
+    wszystko przeliczone na % zmiany WZGLĘDEM pierwszego wyświetlanego tygodnia
+    (start_date) — nie surowe wartości na osobnych skalach, bo dwie osie utrudniają
+    ocenę wzrokiem, która linia rośnie szybciej. Po rebase'owaniu obie linie (spółka
+    i indeks) startują z 0% i rozjeżdżają się — spółka POWYŻEJ linii indeksu w danym
+    tygodniu = silniejsza od rynku w tym oknie, PONIŻEJ = słabsza.
 
     Pobiera dodatkowy zapas RS_PRICE_SMA_LONG_WEEKS tygodni PRZED start_date (margines
     na "rozgrzanie" obu średnich, żeby miały już wartość od pierwszego wyświetlanego
@@ -868,7 +843,13 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     % co linia ceny), ale zwraca dane WYŁĄCZNIE od start_date — początek TEGO SAMEGO
     okna momentum_value co reszta pipeline'u (M-14 albo M-11 przy fallbacku, patrz
     compute_index_momentum) — do ref_date (dziś). Zwraca None gdy brakuje danych
-    (np. spółka bez wystarczającej historii cen)."""
+    (np. spółka bez wystarczającej historii cen).
+
+    Nie ma tu linii GLB (Green Line Breakout) — usunięta celowo: rolling
+    ~15-miesięczne okno `prices` daje za mało historii, żeby "najwyższy szczyt"
+    liczony z pobranych danych faktycznie odpowiadał prawdziwemu, wieloletniemu
+    szczytowi widocznemu np. na TradingView, więc linia (i status ATH/potwierdzony)
+    rozjeżdżała się z rzeczywistością zamiast być wiarygodnym sygnałem."""
     lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
@@ -880,29 +861,6 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
     stock_df["sma10"] = stock_df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
     stock_df["sma30"] = stock_df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
-
-    # GLB: najwyzszy szczyt w calej pobranej historii, ale tylko jesli od jego
-    # PIERWSZEGO wystapienia minelo >= RS_GLB_MIN_CONSOLIDATION_WEEKS bez ponownego
-    # przebicia (idxmax zwraca PIERWSZE wystapienie maksimum) — inaczej za swiezy.
-    max_idx = stock_df["close"].idxmax()
-    max_date = stock_df.loc[max_idx, "week_start"]
-    weeks_since_peak = (pd.Timestamp(ref_date) - max_date).days / 7
-    is_confirmed = weeks_since_peak >= RS_GLB_MIN_CONSOLIDATION_WEEKS
-    glb_price = float(stock_df.loc[max_idx, "close"]) if is_confirmed else None
-
-    # Status do listy/filtra spolek: "confirmed" (potwierdzona linia GLB),
-    # "ath" (spolka WLASNIE robi nowy szczyt — ostatnia dostepna cena = maksimum
-    # calej serii, wiec za swiezy zeby liczyc sie jako potwierdzony opor), albo
-    # "none" (szczyt niedawno przebity/w trakcie konsolidacji, ale jeszcze bez
-    # >= 3 mies. ciszy). Sa sie wzajemnie wykluczajace: "ath" implikuje szczyt
-    # z tygodnia ostatniej dostepnej ceny, czyli 0 tyg. "ciszy" (nigdy confirmed).
-    is_at_high = bool(stock_df["close"].iloc[-1] == stock_df["close"].max())
-    if is_confirmed:
-        glb_status = "confirmed"
-    elif is_at_high:
-        glb_status = "ath"
-    else:
-        glb_status = "none"
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
@@ -920,15 +878,13 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
             return None
         return round((float(value) / base - 1) * 100, 2)
 
-    glb_line_pct = pct(glb_price, close0)
-    dates, close_pct, sma10_pct, sma30_pct, index_pct, glb_pct = [], [], [], [], [], []
+    dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
     for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
         sma10_pct.append(pct(r["sma10"], close0))
         sma30_pct.append(pct(r["sma30"], close0))
         index_pct.append(pct(r["index_close"], index0))
-        glb_pct.append(glb_line_pct)
 
     return {
         "dates": dates,
@@ -936,8 +892,6 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "sma10_pct": sma10_pct,
         "sma30_pct": sma30_pct,
         "index_pct": index_pct,
-        "glb_pct": glb_pct,
-        "glb_status": glb_status,
     }
 
 
@@ -1051,11 +1005,9 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "indeksu, nie średnia składników), posortowane malejąco po przewadze "
                  "(relative_strength_pct = zwrot spółki - zwrot indeksu). Każdy lider ma też "
                  "'weekly_chart': od początku tego samego okna, 'wykres 10:30' w stylu stage analysis "
-                 "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg., poziom własnego indeksu "
-                 "i JEDNA pozioma linia GLB (Green Line Breakout — najwyższy szczyt, min. 3 mies. bez ponownego przebicia, "
-                 "inaczej None), wszystko przeliczone na % "
-                 "zmiany względem początku okna (pola close_pct/sma10_pct/sma30_pct/index_pct/glb_pct) "
-                 "— patrz compute_relative_strength_chart. Każdy lider ma też "
+                 "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg. i poziom własnego indeksu, "
+                 "wszystko przeliczone na % zmiany względem początku okna (pola close_pct/sma10_pct/"
+                 "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
                  "'mansfield_chart': oscylator Mansfield Relative Strength w DWÓCH wygładzeniach "
                  "(rsm_short ~3 mies., rsm_medium ~6 mies.), na WŁASNYM ostatnim ~6-miesięcznym oknie "
                  "(nie tym samym co momentum_value/weekly_chart) — patrz compute_mansfield_rs_chart. "
