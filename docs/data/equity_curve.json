@@ -1,0 +1,48 @@
+{
+  "NASDAQ100": {
+    "dates": [
+      "2026-07-30",
+      "2026-08-28",
+      "2026-08-31"
+    ],
+    "momentum_index": [
+      100.0,
+      101.921,
+      102.202
+    ],
+    "benchmark_index": [
+      100.0,
+      104.894,
+      104.978
+    ],
+    "approximated_periods": [
+      false,
+      false,
+      false
+    ],
+    "note": "Wynik historyczny (zrealizowany) selekcji momentum na bazie zapisów po kazdym rebalansie, zestawiony z 'kup i trzymaj caly indeks' (wazony biezacym FMC). Dane informacyjne, NIE prognoza ani porada inwestycyjna — wyniki z przeszlosci nie gwarantuja przyszlych zwrotow. Okresy 'approximated' obejmuja spolki, dla ktorych brakuje juz historycznej ceny (rolling window w `prices`)."
+  },
+  "DOWJONES": {
+    "dates": [
+      "2026-07-30",
+      "2026-08-28",
+      "2026-08-31"
+    ],
+    "momentum_index": [
+      100.0,
+      103.217,
+      102.629
+    ],
+    "benchmark_index": [
+      100.0,
+      103.01,
+      102.285
+    ],
+    "approximated_periods": [
+      false,
+      false,
+      false
+    ],
+    "note": "Wynik historyczny (zrealizowany) selekcji momentum na bazie zapisów po kazdym rebalansie, zestawiony z 'kup i trzymaj caly indeks' (wazony biezacym FMC). Dane informacyjne, NIE prognoza ani porada inwestycyjna — wyniki z przeszlosci nie gwarantuja przyszlych zwrotow. Okresy 'approximated' obejmuja spolki, dla ktorych brakuje juz historycznej ceny (rolling window w `prices`)."
+  }
+}
