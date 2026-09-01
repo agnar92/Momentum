@@ -6,11 +6,6 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
-// Własność portfolio.js — tu tylko odczyt. Spółki otagowane tam jako "core"
-// (trzymane długoterminowo poza logiką momentum) są traktowane dokładnie
-// tak jak ręczne wykluczenie: nie dostają sugestii kupna/sprzedaży, a ich
-// wartość nie wchodzi do puli inwestowalnego kapitału — patrz isCoreTagged().
-const PORTFOLIO_TAGS_KEY = "momentum_portfolio_tags";
 const DEFAULT_SETTINGS = { contribution: 0, pct: { NASDAQ100: 75, DOWJONES: 25 }, maxHoldings: 20 };
 
 let universeData = {};   // { NASDAQ100: {...json}, ... }
@@ -38,21 +33,9 @@ function loadExcluded() {
 }
 function saveExcluded() { localStorage.setItem(EXCLUDED_KEY, JSON.stringify(excluded)); }
 
-function loadPortfolioTags() {
-    try {
-        return JSON.parse(localStorage.getItem(PORTFOLIO_TAGS_KEY)) || {};
-    } catch (e) { return {}; }
-}
-
 let settings = loadSettings();
 let holdings = loadHoldings();
 let excluded = loadExcluded();
-let portfolioTags = loadPortfolioTags();
-
-function coreTaggedTickers() {
-    return new Set(Object.keys(portfolioTags).filter(t => portfolioTags[t] === "core"));
-}
-function isCoreTagged(ticker) { return portfolioTags[ticker] === "core"; }
 
 async function loadUniverseData() {
     for (const u of UNIVERSES) {
@@ -118,11 +101,9 @@ function targetCapital() {
 
 // Wartość pozycji wykluczonych z rebalansu — ten kapitał zostaje "poza
 // systemem": nie liczy się do puli, którą alokujemy na spółki momentum.
-// Obejmuje też pozycje otagowane jako Core w Portfolio — ta sama semantyka
-// ("trzymam długoterminowo, nie ruszaj tego"), tylko zarządzana z drugiej strony.
 function excludedHoldingsValue() {
     return holdings.reduce((sum, h) => {
-        if (!h.ticker || (!excluded.includes(h.ticker) && !isCoreTagged(h.ticker))) return sum;
+        if (!h.ticker || !excluded.includes(h.ticker)) return sum;
         const price = priceMap[h.ticker]?.price;
         return sum + (price ? price * (h.shares || 0) : 0);
     }, 0);
@@ -145,16 +126,6 @@ function renderExcludedList() {
             renderSuggestions();
         });
     });
-}
-
-// Spółki otagowane jako Core w Portfolio — wykluczone tak samo jak powyżej,
-// ale zarządzane po drugiej stronie, więc bez przycisku usuwania tutaj.
-function renderCoreTaggedList() {
-    const wrap = document.getElementById("coreTaggedList");
-    const coreTagged = [...coreTaggedTickers()];
-    wrap.innerHTML = coreTagged.length
-        ? coreTagged.map(t => `<span class="exclude-chip core-chip">${t}</span>`).join("")
-        : `<span class="text-faint">Brak.</span>`;
 }
 
 function initExcludeForm() {
@@ -344,10 +315,9 @@ function computeTargets(totalCapital) {
         if (pctAllocation <= 0) return; // Pomijamy indeksy z wagą 0%
 
         const bucketTarget = totalCapital * (pctAllocation / 100);
-        // Wykluczone spółki (ręcznie albo otagowane jako Core w Portfolio)
-        // znikają z puli momentum całkowicie — ich waga rozkłada się na
-        // resztę, tak jakby nigdy nie były w indeksie.
-        const constituents = (universeData[u].constituents || []).filter(c => !excluded.includes(c.ticker) && !isCoreTagged(c.ticker));
+        // Wykluczone spółki znikają z puli momentum całkowicie — ich waga
+        // rozkłada się na resztę, tak jakby nigdy nie były w indeksie.
+        const constituents = (universeData[u].constituents || []).filter(c => !excluded.includes(c.ticker));
 
         // 1. Liczymy sumę wag surowych w pliku JSON dla tego indeksu
         const totalRawWeight = constituents.reduce((sum, c) => sum + (c.weight_pct || 0), 0);
@@ -432,14 +402,6 @@ function renderSuggestions() {
             });
             return;
         }
-        if (isCoreTagged(ticker)) {
-            rows.push({
-                ticker, note: "Core w Portfolio", target_value: 0, weight_pct: 0,
-                current_value: currentValue, diff: null, coreRow: true,
-                price, shares_held: holdingShares[ticker],
-            });
-            return;
-        }
         const note = momentumSelected.has(ticker) ? `ponad limit ${settings.maxHoldings} spółek` : "poza selekcją momentum";
         rows.push({
             ticker, note, target_value: 0, weight_pct: 0,
@@ -458,8 +420,6 @@ function renderSuggestions() {
         let actionHtml;
         if (r.excludedRow) {
             actionHtml = `<span class="action-badge excluded">WYKLUCZONE — bez zmian</span>`;
-        } else if (r.coreRow) {
-            actionHtml = `<span class="action-badge core">CORE (Portfolio) — bez zmian</span>`;
         } else if (r.diff === null) {
             actionHtml = `<span class="action-badge unknown">brak ceny — sprawdź ręcznie</span>`;
         } else if (r.dropped) {
@@ -708,13 +668,11 @@ function renderAll() {
 if (typeof document !== "undefined") {
     (async function init() {
         await loadUniverseData();
-        portfolioTags = loadPortfolioTags(); // świeże tagi z Portfolio przy każdym otwarciu strony
         initSettingsForm();
         initHoldingsForm();
         initXtbImport();
         initExcludeForm();
         renderExcludedList();
-        renderCoreTaggedList();
         document.getElementById("mcHorizon").addEventListener("change", renderMonteCarlo);
         renderAll();
     })();
@@ -732,14 +690,12 @@ if (typeof module !== "undefined" && module.exports) {
         computeTargets, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         blendEquityCurves,
-        isCoreTagged, coreTaggedTickers,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded)
         // bez importu przez window — to jedyny sposób bez przepisywania modułu na klasę.
         _setState(s) {
             if (s.universeData !== undefined) universeData = s.universeData;
             if (s.settings !== undefined) settings = s.settings;
             if (s.excluded !== undefined) excluded = s.excluded;
-            if (s.portfolioTags !== undefined) portfolioTags = s.portfolioTags;
         },
     };
 }
