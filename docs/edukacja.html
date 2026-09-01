@@ -1,0 +1,363 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Edukacja: Stage Analysis — Momentum Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Momentum">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
+</head>
+<body>
+
+<div class="topbar">
+    <div class="brand">MOMENTUM<span class="brand-sub"> // NASDAQ100 · DJIA · WIG20 · mWIG40</span></div>
+    <nav>
+        <a href="index.html">Dashboard</a>
+        <a href="rebalance.html">Rebalans</a>
+        <a href="portfolio.html">Portfolio</a>
+        <a href="edukacja.html" class="active">Edukacja</a>
+    </nav>
+</div>
+
+<div class="rebalance-page edu-page">
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Wprowadzenie</div>
+        <h2>Stage Analysis — jak czytać wykres jak Stan Weinstein</h2>
+        <p class="edu-lead">
+            Ta strona tłumaczy metodę, na której oparty jest wykres <strong>10:30</strong> w Dashboardzie
+            (cena + SMA 10-tyg./30-tyg.) oraz filtr etapów w tabeli spółek. To nie jest reklama ani skrót —
+            to pełny, uczciwy opis tego, <em>co</em> narzędzie liczy i <em>dlaczego</em>, żebyś mógł
+            samodzielnie ocenić sygnały, a nie tylko im ufać.
+        </p>
+        <p>
+            Stage Analysis to metoda analizy technicznej opisana przez <strong>Stana Weinsteina</strong>
+            w książce <em>„Secrets for Profiting in Bull and Bear Markets”</em>. Centralna idea: każdy
+            instrument finansowy — akcja, indeks, surowiec — porusza się w powtarzalnym, czteroetapowym
+            cyklu: <strong>baza → wzrost → szczyt → spadek</strong> → z powrotem do bazy. Etapy nie są
+            losowe — odzwierciedlają walkę popytu z podażą, którą widać na wykresie <strong>tygodniowym</strong>
+            (nie dziennym — dzienne wahania to szum, tygodniowe pokazują trend) przez pryzmat dwóch narzędzi:
+            <strong>30-tygodniowej średniej kroczącej (SMA30)</strong> jako głównego wyznacznika trendu i
+            <strong>wolumenu</strong> jako potwierdzenia, że ruch ceny ma za sobą realne zaangażowanie
+            kapitału, a nie przypadkowe wahnięcie.
+        </p>
+        <div class="edu-callout">
+            Filozofia Weinsteina w jednym zdaniu: <strong>kupuj tylko w Etapie 2</strong> (potwierdzonym
+            trendzie wzrostowym), <strong>nigdy w Etapie 1 czy 4</strong> (baza/spadek — zbyt wcześnie albo
+            zbyt późno) i <strong>sprzedawaj, gdy trend się łamie</strong> — niezależnie od tego, jak bardzo
+            "wierzysz" w spółkę.
+        </div>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Cztery etapy</div>
+        <h2>Cykl 1 → 2 → 3 → 4 → 1...</h2>
+        <p>
+            Poniżej etapy w kolejności, w jakiej realnie po sobie następują. Kolory odpowiadają dokładnie
+            odznace i wykresowi w Dashboardzie — jeśli widzisz tam bursztynowy „Etap 3”, to jest ten sam
+            kolor co tutaj.
+        </p>
+        <div class="edu-cycle">
+            <div class="edu-cycle-stage" style="border-top-color:#8a8f9c">
+                <div class="num" style="color:#8a8f9c">1</div>
+                <div class="name">Baza</div>
+            </div>
+            <div class="edu-cycle-arrow">→</div>
+            <div class="edu-cycle-stage" style="border-top-color:#2ecc71">
+                <div class="num" style="color:#2ecc71">2A</div>
+                <div class="name">Świeże wybicie</div>
+            </div>
+            <div class="edu-cycle-arrow">→</div>
+            <div class="edu-cycle-stage" style="border-top-color:#26a65b">
+                <div class="num" style="color:#26a65b">2B</div>
+                <div class="name">Kontynuacja</div>
+            </div>
+            <div class="edu-cycle-arrow">→</div>
+            <div class="edu-cycle-stage" style="border-top-color:#e0a72e">
+                <div class="num" style="color:#e0a72e">3</div>
+                <div class="name">Szczyt</div>
+            </div>
+            <div class="edu-cycle-arrow">→</div>
+            <div class="edu-cycle-stage" style="border-top-color:#e0455a">
+                <div class="num" style="color:#e0455a">4</div>
+                <div class="name">Spadek</div>
+            </div>
+            <div class="edu-cycle-arrow">→</div>
+            <div class="edu-cycle-stage" style="border-top-color:#8a8f9c">
+                <div class="num" style="color:#8a8f9c">1</div>
+                <div class="name">Nowa baza</div>
+            </div>
+        </div>
+
+        <h3 class="edu-h3" style="color:#8a8f9c">Etap 1 — Baza (Basing Area)</h3>
+        <p>
+            Po spadku (Etap 4) cena przestaje robić nowe minima i zaczyna poruszać się <strong>na boki</strong>
+            w wąskim przedziale (tzw. <em>trading range</em>). SMA30 przestaje opadać i się wypłaszcza.
+            Wolumen zwykle jest niski i nierówny — nikt nie ma przekonania co do kierunku. To strefa
+            <strong>niepewności</strong>: część inwestorów, którzy kupili za wysoko w poprzednim cyklu,
+            sprzedaje z ulgą przy powrocie do ceny zakupu ("wracam na zero i wychodzę"), a nowi kupujący
+            dopiero zaczynają się pojawiać.
+        </p>
+        <div class="edu-callout warn">
+            <strong>Nie kupuj w Etapie 1.</strong> Cena może tkwić w bazie tygodniami albo miesiącami, a baza
+            może się też <em>rozpaść w dół</em> zamiast wybić w górę. Etap 1 to sygnał: „obserwuj, przygotuj
+            listę”, nie „kupuj”.
+        </div>
+
+        <h3 class="edu-h3" style="color:#2ecc71">Etap 2A — Świeże wybicie (Breakout)</h3>
+        <p>
+            Cena w końcu <strong>zamyka się powyżej górnej granicy bazy</strong> (oporu wyznaczonego przez
+            szczyty z okresu konsolidacji) i robi to na <strong>wyraźnie podwyższonym wolumenie</strong> —
+            to znak, że duzi gracze (fundusze, insiderzy) zaczęli akumulować pozycję. SMA30 zaczyna się
+            wypłaszczać albo delikatnie zakręcać w górę. To jest <strong>klasyczny, najlepszy punkt
+            wejścia</strong> w całej metodzie: ryzyko jest relatywnie niskie (stop można postawić tuż pod
+            bazą), a potencjał zysku wciąż w większości przed nami.
+        </p>
+        <p>
+            W tym narzędziu wybicie bez potwierdzenia wolumenem (wolumen &lt; 1.5× średniej z 10 poprzednich
+            tygodni) nadal jest oznaczone jako Etap 2A, ale <strong>bez</strong> zielonego znacznika
+            wejścia na wykresie — sam fakt przebicia oporu to za mało, jeśli nikt realnie tego ruchu nie
+            "kupił".
+        </p>
+
+        <h3 class="edu-h3" style="color:#26a65b">Etap 2B — Kontynuacja trendu</h3>
+        <p>
+            Trend już trwa. Cena rośnie, robi kolejne, coraz wyższe konsolidacje ("1. baza", "2. baza",
+            "3. baza" w trendzie) i za każdym razem, gdy wybija nową bazę w górę, to kolejna okazja do
+            <strong>dokupienia</strong> (ang. <em>pyramiding</em>) — nie pierwsze wejście, ale rozbudowa
+            pozycji w potwierdzonym trendzie. Ryzyko jest tu wyższe niż przy 2A (kupujesz drożej, bliżej
+            szczytu dotychczasowego ruchu), dlatego książka wprost ostrzega: <strong>4. i 5. baza w tej
+            samej fali wzrostowej są znacznie bardziej podatne na niepowodzenie</strong> niż 1., 2. czy 3. —
+            trend "się starzeje". W tym narzędziu taka spóźniona baza jest specjalnie oznaczona
+            (bursztynowy trójkąt zamiast zielonego, patrz sekcja o wykresie 10:30 niżej).
+        </p>
+
+        <h3 class="edu-h3" style="color:#e0a72e">Etap 3 — Szczyt / dystrybucja (Topping)</h3>
+        <p>
+            Po dłuższym wzroście trend zaczyna się <strong>wypłaszczać</strong>. Cena robi coraz bardziej
+            chaotyczne, szerokie wahania, przestaje z łatwością robić nowe szczyty, a SMA30 traci tempo
+            wzrostu (nadal rośnie, ale wolniej) — to sygnał, że duzi gracze zaczynają <strong>dystrybuować</strong>
+            (sprzedawać w siłę) zamiast akumulować. To lustrzane odbicie Etapu 1, tylko na górze cyklu.
+        </p>
+        <div class="edu-callout warn">
+            <strong>Nie kupuj w Etapie 3</strong> — nawet jeśli spółka "wygląda dobrze" po ostatnich
+            miesiącach, statystycznie jesteś bliżej szczytu niż nowego wzrostu. To moment na realizację
+            zysków i zacieśnianie stop-lossów, nie na nowe pozycje.
+        </div>
+
+        <h3 class="edu-h3" style="color:#e0455a">Etap 4 — Spadek (Declining Phase)</h3>
+        <p>
+            Cena przebija dolną granicę poprzedniej dystrybucji i spada poniżej <strong>opadającej</strong>
+            SMA30. Trend spadkowy zwykle trwa dłużej i mocniej, niż wynikałoby z intuicji ("przecież jest
+            już tak tanio") — łapanie dołka w Etapie 4 to jeden z najczęstszych błędów początkujących.
+            Weinstein: trzymaj się z dala, dopóki nie zobaczysz oznak nowej bazy (powrót do Etapu 1).
+        </p>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Narzędzia</div>
+        <h2>SMA 10-tyg., SMA 30-tyg. i baza/opór</h2>
+        <p>
+            <strong>SMA30 (30-tygodniowa średnia krocząca)</strong> to główny wyznacznik trendu w tej
+            metodzie — odpowiednik ok. 150-dniowej średniej na wykresie dziennym, ale liczonej na
+            świecach tygodniowych (mniej szumu, mniej fałszywych sygnałów). Zasada podstawowa: cena
+            powyżej rosnącej SMA30 = trend wzrostowy (Etap 2), cena poniżej opadającej SMA30 = trend
+            spadkowy (Etap 4). Samo położenie ceny względem SMA30 to jednak za mało — potrzebny jest
+            jeszcze fakt <strong>wybicia z bazy</strong>, żeby odróżnić prawdziwy Etap 2 od przypadkowego
+            , chwilowego wychylenia ceny ponad wciąż opadającą średnią.
+        </p>
+        <p>
+            <strong>SMA10 (10-tygodniowa)</strong> to szybszy, krótkoterminowy trend — w klasycznej metodzie
+            służy do lokalizowania miejsc korekt w trakcie Etapu 2 (cena często "oddycha" z powrotem w
+            stronę SMA10 zanim ruszy dalej). Na wykresie 10:30 w tym narzędziu widzisz obie średnie naraz —
+            SMA10 jako krótsza, bardziej "przyklejona" do ceny linia, SMA30 jako wolniejsza, gładsza.
+        </p>
+        <p>
+            <strong>Baza (trading range) i opór</strong>: to okres, w którym cena porusza się w wąskim
+            przedziale — górna granica tego przedziału to <strong>opór</strong>. W tym narzędziu bazę
+            wykrywamy mechanicznie: patrzymy na ostatnie 8 tygodni — jeśli różnica między najwyższym a
+            najniższym zamknięciem w tym oknie jest mniejsza niż 15% (licząc od dołu), uznajemy to za
+            "ciasną bazę", a jej szczyt za opór. <strong>Wybicie</strong> to zamknięcie tygodnia powyżej
+            tego oporu. To właśnie ten mechanizm, a nie samo przecięcie SMA30, jest podstawą sygnałów
+            wejścia w tym narzędziu — dokładnie tak, jak w oryginalnych wykresach z książki.
+        </p>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Potwierdzenie</div>
+        <h2>Wolumen — dlaczego wybicie bez niego jest podejrzane</h2>
+        <p>
+            Cena mówi <em>co</em> się dzieje, wolumen mówi <em>jak bardzo to jest realne</em>. Wybicie z
+            bazy na niskim, przeciętnym wolumenie łatwo się cofa — może to być pojedynczy gracz, przypadkowa
+            transakcja albo brak realnego zainteresowania. Wybicie na wolumenie <strong>wyraźnie wyższym</strong>
+            niż przeciętny (w tym narzędziu: co najmniej 1.5× średniej z 10 poprzednich tygodni dla
+            pierwszego wybicia z bazy, 1.2× dla kolejnych baz w trwającym trendzie) to znak, że wielu
+            uczestników rynku jednocześnie zdecydowało się działać w tym samym kierunku — to trudniej
+            odwrócić.
+        </p>
+        <p>
+            Na wykresie 10:30 wolumen jest pokazany jako słupki u dołu — jaśniejszy (zielony) słupek
+            oznacza tydzień z potwierdzonym wolumenem, szary — zwykły tydzień. Warto samodzielnie
+            porównywać wysokość słupków przy każdym wybiciu, nie tylko polegać na kolorze.
+        </p>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Zarządzanie ryzykiem</div>
+        <h2>Trailing stop-loss — jak i kiedy podnosić stop</h2>
+        <p>
+            Sama umiejętność rozpoznania dobrego wejścia to połowa metody — druga połowa to
+            <strong>zdyscyplinowane wyjście</strong>, zanim mały spadek zamieni się w duży. Weinstein
+            opisuje to jako <em>trailing stop-loss</em> (podążający stop) — poziom, poniżej którego
+            zamykasz pozycję, podnoszony w miarę rozwoju trendu, ale <strong>nigdy nie obniżany</strong>.
+        </p>
+        <ol>
+            <li>
+                <strong>Stop początkowy</strong> — w momencie wejścia (Etap 2A) stop stawiasz poniżej
+                <em>dolnej granicy bazy</em>, z której nastąpiło wybicie, oraz poniżej SMA30 — który z tych
+                dwóch poziomów jest niższy. To daje pozycji miejsce na normalne, tygodniowe wahania, ale
+                zamyka ją, jeśli wybicie okaże się fałszywe.
+            </li>
+            <li>
+                <strong>Podnoszenie stopu</strong> — przy każdej kolejnej bazie w trakcie Etapu 2 (2B) masz
+                nowy, wyższy kandydat na stop (dolna granica nowej bazy). Ale — kluczowa zasada z książki —
+                <strong>nie podnoś stopu od razu</strong>. Poczekaj, aż cena wróci w okolice poprzedniego
+                szczytu fali (w tym narzędziu: w granicach 3%) — dopiero to potwierdza, że korekta się
+                skończyła i trend faktycznie kontynuuje, a nie że łapiesz przypadkowe, chwilowe wahnięcie.
+            </li>
+            <li>
+                <strong>Bądź bardziej agresywny bliżej szczytu</strong> — gdy widzisz oznaki Etapu 3
+                (SMA30 traci tempo wzrostu), zacieśnij stop — nie czekaj biernie na formalne wejście w Etap 4.
+                W tym narzędziu ten moment jest oznaczony osobnym ostrzeżeniem (patrz niżej).
+            </li>
+            <li>
+                <strong>Wyjście</strong> — gdy cena faktycznie zamknie tydzień poniżej aktualnego poziomu
+                stopu, pozycja jest zamykana — bez wyjątków, bez "jeszcze tydzień poczekam". To jest
+                mechaniczna, najważniejsza reguła sprzedaży w całej metodzie.
+            </li>
+        </ol>
+        <p>
+            Na wykresie 10:30 ten poziom jest narysowany jako <strong>czerwona przerywana linia</strong>,
+            dokładnie w stylu oryginalnego wykresu z książki — widzisz, jak faktycznie "wędruje" w górę
+            razem z ceną, zamiast być stałą wartością.
+        </p>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Sygnały ostrzegawcze</div>
+        <h2>Późna baza i słabnące SMA30</h2>
+        <p>
+            Dwa sygnały w tym narzędziu nie mówią „kupuj” ani „sprzedawaj” — mówią „<strong>zwróć uwagę,
+            ryzyko rośnie</strong>”:
+        </p>
+        <ul>
+            <li>
+                <strong>Wejście na 4.+ bazie</strong> (bursztynowy trójkąt) — jak wyżej: 4. i 5. baza w tej
+                samej fali wzrostowej statystycznie częściej kończą się niepowodzeniem niż wcześniejsze.
+                Nadal można kupić, ale z mniejszą pozycją i ciaśniejszym stopem.
+            </li>
+            <li>
+                <strong>Ostrzeżenie o słabnącym tempie SMA30</strong> (bursztynowy kwadrat) — SMA30 wciąż
+                rośnie, ale wyraźnie wolniej niż w szczytowym momencie tego trendu (spadek nachylenia
+                poniżej połowy jego maksimum w tej fali). To zwykle poprzedza formalne przejście w Etap 3 —
+                widzisz je na wykresie, zanim jeszcze pojawi się na odznadze etapu.
+            </li>
+        </ul>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">W praktyce</div>
+        <h2>Jak korzystać z tego w Dashboardzie</h2>
+        <ol>
+            <li>
+                W tabeli pełnej listy spółek (rozwiń strzałką <strong>&gt;&gt;&gt;</strong> po lewej) użyj
+                filtra <strong>„Etap Weinsteina”</strong> nad tabelą, żeby zawęzić listę do <strong>Etapu 1</strong>
+                (kandydaci do obserwacji — czekają na wybicie) albo <strong>Etapu 2</strong> (potwierdzone
+                trendy — kandydaci do kupna). Kolumna „Etap” w tabeli pokazuje aktualny etap każdej spółki.
+            </li>
+            <li>
+                Kliknij tickera, żeby zobaczyć jego wykres 10:30: odznaka nad wykresem pokazuje aktualny
+                etap z opisem, sam wykres — cenę, obie średnie, poziom indeksu, wolumen, trailing stop
+                i znaczniki sygnałów z tooltipami (najedź myszą na trójkąt/kwadrat, żeby zobaczyć opis).
+            </li>
+            <li>
+                Przycisk <strong>„Otwórz w TradingView”</strong> (nad wykresem i przy każdym wierszu w
+                tabeli) otwiera pełny, interaktywny wykres na tradingview.com — przydatny, gdy chcesz
+                samodzielnie narysować linie trendu, dodać własne wskaźniki albo po prostu zobaczyć
+                dłuższą historię niż ta dostępna w tym narzędziu.
+            </li>
+            <li>
+                Etap 2A/2B to kandydaci do <strong>kupna</strong>, Etap 1 to <strong>lista obserwacyjna</strong>
+                (jeszcze nie kupuj — czekaj na wybicie z potwierdzeniem wolumenem), Etap 3 to sygnał
+                <strong>ostrożności</strong> dla już posiadanych pozycji, Etap 4 to <strong>trzymaj się z
+                dala</strong>.
+            </li>
+        </ol>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Uczciwie o ograniczeniach</div>
+        <h2>Czego ta implementacja NIE robi (i dlaczego)</h2>
+        <p>
+            Żeby dobrze się nauczyć tej metody, warto też wiedzieć, gdzie to narzędzie <strong>upraszcza</strong>
+            oryginalną, w pełni dyskrecjonalną metodę z książki:
+        </p>
+        <ul>
+            <li>
+                <strong>Krótka historia cen</strong> — dane cenowe w tym narzędziu sięgają tylko ok. 15
+                miesięcy wstecz. Baza/opór wykrywane są więc wyłącznie z ostatnich ~8 tygodni, nigdy z
+                wieloletniego, historycznego oporu — takiego, jaki widać na pełnym wykresie w TradingView.
+                Z tego samego powodu w tym narzędziu <strong>nie ma</strong> linii Green Line Breakout
+                (Dr. Eric Wish) — wymagałaby dokładnie takiej wieloletniej historii.
+            </li>
+            <li>
+                <strong>Siła relatywna nie wpływa na etap</strong> — mimo że narzędzie liczy osobno siłę
+                relatywną spółki względem jej indeksu (panel „💪 Siła Relatywna”), ten sygnał celowo
+                <strong>nie</strong> wchodzi do klasyfikacji etapów ani sygnałów wejścia/wyjścia — to
+                osobna, równoległa analiza, nie składnik tej.
+            </li>
+            <li>
+                <strong>To mechaniczne przybliżenie, nie osąd analityka</strong> — Weinstein w książce
+                patrzy też na kształt formacji, linie trendu, zachowanie sektora i szerokiego rynku. To
+                narzędzie liczy tylko to, co da się jednoznacznie zmierzyć z ceny i wolumenu — traktuj
+                sygnały jako punkt wyjścia do własnej analizy, nie jako gotową rekomendację.
+            </li>
+        </ul>
+    </div>
+
+    <div class="panel-card edu-section">
+        <div class="edu-kicker">Dyscyplina</div>
+        <h2>Kilka ogólnych zasad, które łączą się z tą metodą</h2>
+        <ul>
+            <li><strong>Nie łap spadającego noża</strong> — "tanio" w Etapie 4 często robi się jeszcze
+                tańsze. Czekaj na potwierdzony Etap 2.</li>
+            <li><strong>Wielkość pozycji ma znaczenie</strong> — nawet dobry sygnał wejścia nie usprawiedliwia
+                obstawienia zbyt dużej części kapitału na jedną spółkę; dywersyfikacja między kilkoma
+                pozycjami w Etapie 2 ogranicza wpływ jednego nieudanego wybicia.</li>
+            <li><strong>Stop-loss to nie sugestia</strong> — jeśli poziom zostanie złamany, wychodzisz.
+                Racjonalizowanie ("to na pewno się odbije") jest dokładnie tym, przed czym ta metoda ma
+                cię chronić.</li>
+            <li><strong>Trend jest ważniejszy niż opinia</strong> — spółka może mieć świetne fundamenty i
+                nadal być w Etapie 4, jeśli rynek jeszcze w to nie wierzy. Metoda każe podążać za ceną, nie
+                z nią walczyć.</li>
+        </ul>
+        <div class="edu-callout">
+            To narzędzie i ta strona mają charakter edukacyjny — nie są poradą inwestycyjną. Każda decyzja
+            inwestycyjna niesie ryzyko utraty kapitału; podejmujesz ją na własną odpowiedzialność.
+        </div>
+        <p class="edu-hint">
+            Źródło metody: Stan Weinstein, <em>„Secrets for Profiting in Bull and Bear Markets”</em>.
+        </p>
+    </div>
+
+</div>
+
+</body>
+</html>

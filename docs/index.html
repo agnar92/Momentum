@@ -25,6 +25,7 @@
         <a href="index.html" class="active">Dashboard</a>
         <a href="rebalance.html">Rebalans</a>
         <a href="portfolio.html">Portfolio</a>
+        <a href="edukacja.html">Edukacja</a>
     </nav>
 </div>
 
@@ -95,6 +96,15 @@
                 <button class="drawer-tab" data-universe="RS" title="Siła relatywna — spółki NASDAQ100/DOWJONES/WIG20/mWIG40, których momentum (to samo okno co momentum_value głównych uniwersów) przebiło momentum samego indeksu, posortowane malejąco po przewadze.">💪 RS</button>
             </div>
         </div>
+        <div class="stage-filter-bar" id="stageFilterBar">
+            <span class="stage-filter-label">Etap Weinsteina:</span>
+            <button class="stage-filter-btn active" data-stage="ALL">Wszystkie</button>
+            <button class="stage-filter-btn" data-stage="1" title="Baza — cena w ciasnej konsolidacji, brak potwierdzonego trendu.">Etap 1</button>
+            <button class="stage-filter-btn" data-stage="2" title="Etap 2A (świeże wybicie) + 2B (kontynuacja) — spółki w potwierdzonym trendzie wzrostowym, kandydaci do kupna.">Etap 2</button>
+            <button class="stage-filter-btn" data-stage="3" title="Szczyt / dystrybucja — trend się wypłaszcza, rozważ realizację zysków.">Etap 3</button>
+            <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą SMA30, unikaj nowych pozycji.">Etap 4</button>
+            <a class="stage-filter-help" href="edukacja.html" target="_blank" title="Pełny opis metody Stage Analysis — czym są etapy, jak czytać wykres 10:30, jak działa trailing stop-loss.">📚 Jak to czytać?</a>
+        </div>
         <div class="table-scroll">
             <table class="momentum-table" id="momentumTable">
                 <thead>
@@ -109,6 +119,7 @@
                         <th data-key="z_score">Z-score</th>
                         <th data-key="momentum_score">Momentum Score</th>
                         <th data-key="weight_pct">Waga</th>
+                        <th>Etap</th>
                         <th class="tv-col">TV</th>
                     </tr>
                 </thead>

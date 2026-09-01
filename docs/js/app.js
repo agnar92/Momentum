@@ -50,6 +50,7 @@ const state = {
     currentRsEntry: null,
     drawerOpen: false,
     drawerUniverse: "NASDAQ100",
+    stageFilter: "ALL",
     sortKey: "rank",
     sortDir: "asc"
 };
@@ -361,6 +362,36 @@ const SIGNAL_MARKER_COLORS = {
 };
 const STAGE_BREAKOUT_VOLUME_RATIO = 1.5; // musi byc zgodne z STAGE_BREAKOUT_VOLUME_RATIO w run_query.py — koloruje slupki wolumenu
 
+// Mala kropka + skrot etapu do kolumny "Etap" w glownej tabeli momentum (patrz
+// renderTable) — ten sam STAGE_COLORS/STAGE_LABELS co odznaka nad wykresem.
+function stageCellHtml(stage) {
+    if (!stage || !STAGE_LABELS[stage]) return '<span class="stage-cell" style="color:var(--text-faint)">—</span>';
+    return `<span class="stage-cell" style="color:${STAGE_COLORS[stage]}" title="${STAGE_LABELS[stage]}">`
+        + `<span class="stage-dot" style="background:${STAGE_COLORS[stage]}"></span>${stage}</span>`;
+}
+
+// Filtr etapow nad glowna tabela (#stageFilterBar) — "2" obejmuje zarowno 2A
+// jak i 2B (uzytkownik mysli o "Etapie 2" jako calosci, nie osobno o
+// swiezym wybiciu vs kontynuacji), reszta to dokladne dopasowanie.
+function matchesStageFilter(stage) {
+    if (state.stageFilter === "ALL") return true;
+    if (!stage) return false;
+    if (state.stageFilter === "2") return stage === "2A" || stage === "2B";
+    return stage === state.stageFilter;
+}
+
+function initStageFilter() {
+    const bar = document.getElementById("stageFilterBar");
+    if (!bar) return;
+    bar.querySelectorAll(".stage-filter-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            state.stageFilter = btn.dataset.stage;
+            bar.querySelectorAll(".stage-filter-btn").forEach(b => b.classList.toggle("active", b === btn));
+            renderTable();
+        });
+    });
+}
+
 function renderStageBadge(stage) {
     const badge = document.getElementById("stageBadge");
     if (!badge) return;
@@ -560,6 +591,7 @@ function initDrawer() {
     document.querySelectorAll("table.momentum-table thead th").forEach(th => {
         th.addEventListener("click", () => {
             const key = th.dataset.key;
+            if (!key) return; // kolumny bez sortowania (Etap, TV)
             if (state.sortKey === key) {
                 state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
             } else {
@@ -604,6 +636,10 @@ function showDrawerTable(universe) {
     document.getElementById("momentumTable").hidden = isGem || isRs;
     document.getElementById("gemTable").hidden = !isGem;
     document.getElementById("rsTable").hidden = !isRs;
+    // Filtr etapow ma sens tylko dla pelnej listy skladnikow jednego uniwersum
+    // (GEM/RS to juz odfiltrowane, wybrane podzbiory).
+    const stageFilterBar = document.getElementById("stageFilterBar");
+    if (stageFilterBar) stageFilterBar.hidden = isGem || isRs;
     document.getElementById("drawerTitle").textContent = isGem
         ? "Pełna tabela — Global Equity Momentum"
         : isRs
@@ -706,8 +742,16 @@ function renderRelativeStrengthTable() {
 function renderTable() {
     const d = state.data[state.drawerUniverse];
     const meta = document.getElementById("drawerMeta");
+    const allRows = d.constituents || [];
+    let rows = state.stageFilter === "ALL"
+        ? allRows.slice()
+        : allRows.filter(r => matchesStageFilter(r.weekly_chart && r.weekly_chart.current_stage));
+
     if (d.ref_date) {
-        let text = `Rebalans: ${d.ref_date} · ${d.n_constituents} spółek`;
+        let text = `Rebalans: ${d.ref_date} · `;
+        text += state.stageFilter === "ALL"
+            ? `${d.n_constituents} spółek`
+            : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
         if (d.cap_scaled_due_to_infeasibility) {
             text += " · ⚠ cap 9% przeskalowany (za mało spółek by cap był wykonalny)";
         }
@@ -720,8 +764,6 @@ function renderTable() {
         meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
     }
 
-    let rows = (d.constituents || []).slice();
-
     rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
 
     const tbody = document.getElementById("momentumTableBody");
@@ -730,7 +772,10 @@ function renderTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="11" class="empty-state">Brak danych.</td>`;
+        const msg = allRows.length === 0
+            ? "Brak danych."
+            : "Żadna spółka nie pasuje do wybranego etapu.";
+        tr.innerHTML = `<td colspan="12" class="empty-state">${msg}</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -753,6 +798,7 @@ function renderTable() {
                 <span class="weight-bar-bg"><span class="weight-bar-fill" style="width:${(r.weight_pct / maxWeight * 100).toFixed(0)}%"></span></span>
                 ${r.weight_pct.toFixed(2)}%
             </td>
+            <td>${stageCellHtml(r.weekly_chart && r.weekly_chart.current_stage)}</td>
             <td>${tvRowButtonHtml(r.ticker, state.drawerUniverse)}</td>
         `;
         tr.addEventListener("click", () => selectTicker(r.ticker, state.drawerUniverse));
@@ -889,6 +935,7 @@ if (typeof document !== "undefined") {
         renderRelativeStrengthPanel();
         initDrawer();
         initOpenTvButton();
+        initStageFilter();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
         buildSearchIndex();

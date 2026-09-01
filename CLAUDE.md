@@ -283,7 +283,15 @@ it only exists after the pipeline has run.
   `renderGemPanel()` — shows the winning index + its return, a ranked list of the (US-only) indices'
   returns, and tiles for the winner's top-10 contribution leaders), a full sortable constituents table per
   universe (`renderTable()` — `added_tickers`/`dropped_tickers` are exported in the JSON but not currently
-  rendered), and a Ctrl+K command-palette ticker search. There is **no embedded TradingView chart widget** —
+  rendered), and a Ctrl+K command-palette ticker search. That per-universe table also carries an "Etap"
+  (Stage) column (`stageCellHtml()`, reading `constituent.weekly_chart.current_stage`) and a **stage filter
+  bar** above it (`#stageFilterBar`, `initStageFilter()`/`matchesStageFilter()`) — "Wszystkie" (all),
+  "Etap 1", "Etap 2" (matches *both* `2A` and `2B` — a user thinks of Stage 2 as one thing, not two), "Etap 3",
+  "Etap 4"; `state.stageFilter` persists across universe tabs but the bar itself is hidden for the GEM/RS tabs
+  (`showDrawerTable()`) since those are already-filtered, different-shaped lists, not a full per-universe
+  constituent table. The drawer meta line reports `N z M spółek (etap ...)` when a filter is active, and the
+  empty-state row distinguishes "no data at all" from "no constituent matches this stage". There is
+  **no embedded TradingView chart widget** —
   it was tried and then removed in favor of always showing the own weekly stage-analysis chart (below) for
   whichever ticker is selected, with a single `#openTvBtn` button ("📈 Otwórz w TradingView ↗",
   `initOpenTvButton()` in `app.js`) that opens the *full* tradingview.com chart page for that ticker in a new
@@ -350,6 +358,16 @@ it only exists after the pipeline has run.
   - A client-side Monte Carlo simulation (`simulateMonteCarlo`, Chart.js) projects portfolio value
     using the capital-weighted average momentum (capped at ±30%/yr) and volatility of the currently
     targeted names — explicitly labeled as illustrative, not a forecast.
+- **`edukacja.html`** — static, JS-free educational write-up of Stage Analysis in Polish: the 4-stage cycle
+  (with a colored `.edu-cycle` diagram matching `STAGE_COLORS` from `app.js`), the role of SMA10/SMA30 and
+  the base/resistance breakout mechanism, volume confirmation, the trailing stop-loss rules, the two warning
+  signals, a practical "how to use this dashboard" walkthrough (stage filter, the chart, the TradingView
+  button), and — deliberately — a section on what this implementation simplifies away from the book (shallow
+  price history, relative strength excluded from the stage engine) so the reader can calibrate trust rather
+  than take the tool's output as gospel. Written prose, not reference docs — exists because a user asked to
+  actually learn the method, not just see it applied. Linked from every page's topbar `<nav>`. Uses `.edu-*`
+  CSS classes on top of the existing `.rebalance-page`/`.panel-card` layout (`style.css`) rather than
+  `.panel-card h3`'s tiny all-caps settings-label style, which doesn't fit long-form paragraphs.
 
 ## Commands
 
