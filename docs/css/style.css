@@ -349,6 +349,32 @@ html, body {
     color: var(--text-faint);
 }
 
+/* Filtr statusu GLB (Green Line Breakout) nad tabelą glownych uniwersow —
+   chowany dla zakladek GEM/RS, patrz showDrawerTable w app.js. */
+.glb-filter {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.glb-filter select {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 12px;
+    padding: 5px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.glb-badge {
+    font-size: 12px;
+    white-space: nowrap;
+}
+.glb-badge.glb-unknown { color: var(--text-faint); }
+
 .table-scroll {
     overflow: auto;
     flex: 1;

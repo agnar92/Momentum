@@ -94,6 +94,17 @@
                 <button class="drawer-tab" data-universe="GEM" title="Global Equity Momentum — top 10 spółek zwycięskiego indeksu (NASDAQ100/DOWJONES, wg zwrotu 12M) wg wkładu w jego zwrot.">🚀 GEM</button>
                 <button class="drawer-tab" data-universe="RS" title="Siła relatywna — spółki NASDAQ100/DOWJONES/WIG20/mWIG40, których momentum (to samo okno co momentum_value głównych uniwersów) przebiło momentum samego indeksu, posortowane malejąco po przewadze.">💪 RS</button>
             </div>
+            <!-- Filtr statusu GLB (Green Line Breakout) — tylko dla glownych tabel
+                 uniwersow (chowany dla zakladek GEM/RS, patrz showDrawerTable w app.js). -->
+            <div class="glb-filter" id="glbFilter">
+                <label for="glbFilterSelect">GLB:</label>
+                <select id="glbFilterSelect">
+                    <option value="all">Wszystkie</option>
+                    <option value="confirmed">✅ Potwierdzony</option>
+                    <option value="ath">🚀 ATH</option>
+                    <option value="none">❌ Brak</option>
+                </select>
+            </div>
         </div>
         <div class="table-scroll">
             <table class="momentum-table" id="momentumTable">
@@ -109,6 +120,7 @@
                         <th data-key="z_score">Z-score</th>
                         <th data-key="momentum_score">Momentum Score</th>
                         <th data-key="weight_pct">Waga</th>
+                        <th data-key="glb_status" title="Green Line Breakout (Dr Eric Wish): ✅ potwierdzona linia oporu (min. 3 mies. bez przebicia), 🚀 spółka robi nowy szczyt właśnie teraz, ❌ brak potwierdzonej linii (szczyt niedawno przebity, za krótka konsolidacja).">GLB</th>
                     </tr>
                 </thead>
                 <tbody id="momentumTableBody"></tbody>

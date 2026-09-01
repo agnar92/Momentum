@@ -29,7 +29,8 @@ const state = {
     drawerOpen: false,
     drawerUniverse: "NASDAQ100",
     sortKey: "rank",
-    sortDir: "asc"
+    sortDir: "asc",
+    glbFilter: "all"
 };
 
 async function loadData() {
@@ -466,6 +467,14 @@ function initDrawer() {
         });
     });
 
+    const glbFilterSelect = document.getElementById("glbFilterSelect");
+    if (glbFilterSelect) {
+        glbFilterSelect.addEventListener("change", () => {
+            state.glbFilter = glbFilterSelect.value;
+            renderTable();
+        });
+    }
+
     document.querySelectorAll("table.momentum-table thead th").forEach(th => {
         th.addEventListener("click", () => {
             const key = th.dataset.key;
@@ -513,6 +522,8 @@ function showDrawerTable(universe) {
     document.getElementById("momentumTable").hidden = isGem || isRs;
     document.getElementById("gemTable").hidden = !isGem;
     document.getElementById("rsTable").hidden = !isRs;
+    const glbFilter = document.getElementById("glbFilter");
+    if (glbFilter) glbFilter.hidden = isGem || isRs;
     document.getElementById("drawerTitle").textContent = isGem
         ? "Pełna tabela — Global Equity Momentum"
         : isRs
@@ -608,6 +619,18 @@ function renderRelativeStrengthTable() {
     });
 }
 
+// Odznaka statusu GLB (patrz compute_relative_strength_chart w run_query.py):
+// "confirmed" = potwierdzona linia oporu (min. 3 mies. bez przebicia), "ath" =
+// spółka robi nowy szczyt WŁAŚNIE teraz (za świeży, żeby liczyć się jako
+// potwierdzony), "none" = szczyt niedawno przebity, ale jeszcze bez
+// wystarczającej ciszy, null = brak danych (np. za krótka historia cen).
+function glbBadge(status) {
+    if (status === "confirmed") return '<span class="glb-badge glb-confirmed" title="Potwierdzona linia GLB (min. 3 mies. bez przebicia)">✅</span>';
+    if (status === "ath") return '<span class="glb-badge glb-ath" title="Spółka robi nowy szczyt właśnie teraz">🚀 ATH</span>';
+    if (status === "none") return '<span class="glb-badge glb-none" title="Brak potwierdzonej linii GLB (szczyt niedawno przebity)">❌</span>';
+    return '<span class="glb-badge glb-unknown" title="Brak danych">—</span>';
+}
+
 function renderTable() {
     const d = state.data[state.drawerUniverse];
     const meta = document.getElementById("drawerMeta");
@@ -626,6 +649,9 @@ function renderTable() {
     }
 
     let rows = (d.constituents || []).slice();
+    if (state.glbFilter !== "all") {
+        rows = rows.filter(r => r.glb_status === state.glbFilter);
+    }
 
     rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
 
@@ -635,7 +661,7 @@ function renderTable() {
 
     if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="10" class="empty-state">Brak danych.</td>`;
+        tr.innerHTML = `<td colspan="11" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
@@ -658,6 +684,7 @@ function renderTable() {
                 <span class="weight-bar-bg"><span class="weight-bar-fill" style="width:${(r.weight_pct / maxWeight * 100).toFixed(0)}%"></span></span>
                 ${r.weight_pct.toFixed(2)}%
             </td>
+            <td>${glbBadge(r.glb_status)}</td>
         `;
         tr.addEventListener("click", () => selectTicker(r.ticker, state.drawerUniverse));
         tbody.appendChild(tr);
@@ -812,6 +839,6 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — nie ładowany
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { compareRows };
+    module.exports = { compareRows, glbBadge };
 }
 

@@ -29,7 +29,9 @@ metodologii S&P Momentum Indices):
 8. Eksport JSON dla strony (docs/data/*.json) + wygenerowanie statycznych
    plikow strony (docs/index.html, docs/rebalance.html, docs/css/*, docs/js/*).
    Kazda spolka w KAZDYM uniwersum (nie tylko liderzy Sily Relatywnej, patrz pkt
-   10) ma tez wlasny "weekly_chart"/"mansfield_chart" — patrz process_universe.
+   10) ma tez wlasny "weekly_chart"/"mansfield_chart" oraz skrotowy top-level
+   "glb_status" ("confirmed"/"ath"/"none", do kolumny/filtra GLB w tabeli
+   spolek na stronie) — patrz process_universe/export_json.
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
    fetch_data.py) dla NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez
    WIG20/mWIG40) w oknie GEM_LOOKBACK_MONTHS, wybor zwyciezcy (najwyzszy zwrot)
@@ -404,6 +406,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
     mansfield_charts = mansfield_charts or {}
     records = []
     for _, r in df_weighted.iterrows():
+        weekly_chart = weekly_charts.get(r["Ticker"])
         records.append({
             "rank": int(r["rank_in_universe"]),
             "ticker": r["Ticker"],
@@ -415,7 +418,11 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "z_score": round(float(r["z_score"]), 3),
             "momentum_score": round(float(r["momentum_score"]), 3),
             "weight_pct": round(float(r["weight"]) * 100, 3),
-            "weekly_chart": weekly_charts.get(r["Ticker"]),
+            # Skopiowane z weekly_chart na wierzch rekordu — zeby lista/tabela
+            # spolek (i filtr po statusie GLB) nie musiala schodzic w nested
+            # weekly_chart, ktory bywa None (brak danych dla tickera).
+            "glb_status": weekly_chart.get("glb_status") if weekly_chart else None,
+            "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
         })
     cap_scaled = bool(df_weighted["cap_scaled_due_to_infeasibility"].iloc[0]) if len(df_weighted) else False
@@ -849,7 +856,11 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     potwierdzony poziom oporu (dopiero zaczyna się ewentualna konsolidacja pod
     nim), więc `glb_pct` wtedy = None (brak linii, nie błąd). Dopóki cena jest
     poniżej tej linii, spółka jest w bazie/korekcie; miejsce, w którym linia ceny
-    DOTYKA linii GLB, to właśnie przebicie.
+    DOTYKA linii GLB, to właśnie przebicie. Zwraca też skrótowy 'glb_status' —
+    "confirmed" (potwierdzona linia), "ath" (spółka WŁAŚNIE robi nowy szczyt —
+    ostatnia cena to maksimum całej serii, więc jeszcze za świeże na potwierdzony
+    opór) albo "none" (szczyt niedawno przebity, ale bez jeszcze wystarczającej
+    ciszy) — do kolumny/filtra GLB w tabeli spółek (patrz export_json).
 
     Pobiera dodatkowy zapas RS_PRICE_SMA_LONG_WEEKS tygodni PRZED start_date (margines
     na "rozgrzanie" obu średnich, żeby miały już wartość od pierwszego wyświetlanego
@@ -876,7 +887,22 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     max_idx = stock_df["close"].idxmax()
     max_date = stock_df.loc[max_idx, "week_start"]
     weeks_since_peak = (pd.Timestamp(ref_date) - max_date).days / 7
-    glb_price = float(stock_df.loc[max_idx, "close"]) if weeks_since_peak >= RS_GLB_MIN_CONSOLIDATION_WEEKS else None
+    is_confirmed = weeks_since_peak >= RS_GLB_MIN_CONSOLIDATION_WEEKS
+    glb_price = float(stock_df.loc[max_idx, "close"]) if is_confirmed else None
+
+    # Status do listy/filtra spolek: "confirmed" (potwierdzona linia GLB),
+    # "ath" (spolka WLASNIE robi nowy szczyt — ostatnia dostepna cena = maksimum
+    # calej serii, wiec za swiezy zeby liczyc sie jako potwierdzony opor), albo
+    # "none" (szczyt niedawno przebity/w trakcie konsolidacji, ale jeszcze bez
+    # >= 3 mies. ciszy). Sa sie wzajemnie wykluczajace: "ath" implikuje szczyt
+    # z tygodnia ostatniej dostepnej ceny, czyli 0 tyg. "ciszy" (nigdy confirmed).
+    is_at_high = bool(stock_df["close"].iloc[-1] == stock_df["close"].max())
+    if is_confirmed:
+        glb_status = "confirmed"
+    elif is_at_high:
+        glb_status = "ath"
+    else:
+        glb_status = "none"
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
@@ -911,6 +937,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "sma30_pct": sma30_pct,
         "index_pct": index_pct,
         "glb_pct": glb_pct,
+        "glb_status": glb_status,
     }
 
 
