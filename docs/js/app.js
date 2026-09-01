@@ -320,10 +320,12 @@ let rsMansfieldChartInstance = null;
 // stage analysis (Stan Weinstein / Dr Eric Wish):
 // 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg., poziom
 //    własnego indeksu i JEDNA pozioma linia GLB (Green Line Breakout, Dr Eric
-//    Wish — najwyższa cena zamknięcia w całej pobranej historii, stała przez
-//    cały wykres, NIE schodkowa historia kolejnych przebić); punkt, w którym
-//    linia ceny DOTYKA linii GLB, to moment przebicia, wszystko przeliczone na
-//    % zmiany względem pierwszego wyświetlanego tygodnia OKNA MOMENTUM (patrz
+//    Wish — najwyższy szczyt w całej pobranej historii, ale TYLKO jeśli od
+//    niego minęło >= 3 mies. bez ponownego przebicia; inaczej glb_pct = null
+//    wszędzie, czyli brak linii — świeży szczyt jeszcze nie jest potwierdzonym
+//    oporem); punkt, w którym linia ceny DOTYKA linii GLB, to moment przebicia,
+//    wszystko przeliczone na % zmiany względem pierwszego wyświetlanego
+//    tygodnia OKNA MOMENTUM (patrz
 //    compute_relative_strength_chart) — jedna wspólna skala, żeby jednym
 //    spojrzeniem było widać, która linia rośnie szybciej: spółka POWYŻEJ linii
 //    indeksu = silniejsza od rynku.
