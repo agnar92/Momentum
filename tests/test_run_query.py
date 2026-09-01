@@ -741,6 +741,31 @@ class TestComputeRelativeStrengthChart:
         # do JSON jako niepoprawny literal `NaN`.
         assert "NaN" not in json.dumps(out)
 
+    def test_output_carries_base_boxes_for_frontend_trendlines(self):
+        # "bases" (patrz docstring compute_relative_strength_chart) to geometria
+        # wykrytych baz do narysowania jako prostokat/trendlinia na wykresie —
+        # integracyjny check, ze faktycznie sie eksportuje i ma sensowny ksztalt.
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")
+        ref_date = pd.Timestamp("2026-03-30")
+        fixture_start = start_date - pd.Timedelta(weeks=60)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 80, 100.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 80, 200.0, 0.3)
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                                start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert "bases" in out
+        assert out["bases"], "spodziewano sie co najmniej jednej wykrytej bazy w jednostajnym trendzie"
+        for base in out["bases"]:
+            assert base["kind"] in ("stage1", "stage2")
+            assert base["start_date"] in out["dates"]
+            assert base["end_date"] in out["dates"]
+            assert out["dates"].index(base["start_date"]) <= out["dates"].index(base["end_date"])
+            assert base["resistance_pct"] >= base["support_pct"]
+        assert "NaN" not in json.dumps(out)
+
 
 # ---------------------------------------------------------------------------
 # _compute_weinstein_stage_series: klasyfikacja etapow Weinsteina (1/2A/2B/3/4)
@@ -928,6 +953,33 @@ class TestComputeWeinsteinStageSeries:
         rows = _compute_weinstein_stage_series(make_stage_df([100.0] * 10))
         assert all(r["stage"] is None and r["signal"] is None and r["buying_volume_ratio"] is None
                    and r["stop_level"] is None and r["base_count"] is None for r in rows)
+
+    def test_base_after_genuine_stage4_decline_is_tagged_stage1(self):
+        # Rysunek 'multi-base uptrend' zaczyna sie od realnego 40-tyg. spadku
+        # (Etap 4) przed pierwsza baza -> ta baza to prawdziwe dno, "stage1".
+        rows = _compute_weinstein_stage_series(self._multi_base_uptrend_fixture())
+        assert rows[49]["stage"] == "4"
+        assert rows[50]["base_event"]["kind"] == "stage1"
+        assert rows[50]["base_event"]["base_count"] == 1
+
+    def test_subsequent_bases_in_same_run_are_tagged_stage2_continuation(self):
+        rows = _compute_weinstein_stage_series(self._multi_base_uptrend_fixture())
+        for i in (59, 68, 77):
+            assert rows[i]["base_event"]["kind"] == "stage2"
+
+    def test_breakout_without_prior_stage4_is_tagged_stage2_not_stage1(self):
+        # Baza plaska bez zadnego wczesniejszego Etapu 4 w historii (wybicie od
+        # razu na 41. tygodniu, patrz test_flat_base_then_breakout_on_volume_is_
+        # entry_2a) -> nie ma potwierdzonego dna, wiec liczy sie jako kontynuacja
+        # ("stage2"), nie prawdziwy Etap 1, zgodnie z zasada "Etap 1 tylko po
+        # Etapie 4, reszta to kontynuacja Etapu 2".
+        closes = [100.0] * 41
+        closes[-1] = 130.0
+        volumes = [1000] * 41
+        volumes[-1] = 3000
+        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
+        assert rows[40]["base_event"]["kind"] == "stage2"
+        assert not any(r["stage"] == "4" for r in rows if r)
 
 
 # ---------------------------------------------------------------------------

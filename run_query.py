@@ -956,12 +956,27 @@ def _compute_weinstein_stage_series(stock_df):
                          ("Exit Trade: Stop Loss hit as price breaks below support").
 
     Zwraca liste dictow {"stage", "signal", "buying_volume_ratio", "stop_level",
-    "base_count"} rownolegla do stock_df. Wszystkie pola to None dopoki SMA30
-    (wzglednie STAGE_VOLUME_LOOKBACK_WEEKS tyg. historii wolumenu kupujacych,
-    wzglednie STAGE_BASE_LOOKBACK_WEEKS tyg. do wyznaczenia bazy) nie sa jeszcze
-    dostepne — ten sam, udokumentowany juz wyzej limit plytkiej historii co reszta
-    wykresu 10:30. "base_count" to numer biezacej bazy w trwajacej fali Etapu 2
-    (None poza Etapem 2)."""
+    "base_count", "base_event"} rownolegla do stock_df. Wszystkie pola (poza
+    "base_event") to None dopoki SMA30 (wzglednie STAGE_VOLUME_LOOKBACK_WEEKS tyg.
+    historii wolumenu kupujacych, wzglednie STAGE_BASE_LOOKBACK_WEEKS tyg. do
+    wyznaczenia bazy) nie sa jeszcze dostepne — ten sam, udokumentowany juz wyzej
+    limit plytkiej historii co reszta wykresu 10:30. "base_count" to numer
+    biezacej bazy w trwajacej fali Etapu 2 (None poza Etapem 2).
+
+    "base_event" (domyslnie None, wypelniony WYLACZNIE w tygodniu faktycznego
+    wybicia bazy, patrz "new_base_event" nizej) opisuje geometrie tej bazy do
+    narysowania jej na wykresie jako prostokat/trendlinia zamiast pojedynczego
+    znacznika: {"base_start_idx", "base_end_idx" (indeksy w stock_df, baza konczy
+    sie tydzien PRZED wybiciem), "resistance", "support" (surowe ceny — opor/dolna
+    granica bazy), "base_count", "kind"}. "kind" rozroznia dwa rodzaje bazy z
+    ksiazkowych diagramow: "stage1" to baza denna, ktora faktycznie uformowala sie
+    PO Etapie 4 (spadku) — prawdziwe dno przed swiezym wybiciem; "stage2" to
+    KAZDA inna baza — zarowno kolejne bazy kontynuacji w trakcie trwajacej juz
+    fali Etapu 2 (2., 3., 4. baza), jak i pierwsza baza fali, ktora NIE byla
+    poprzedzona Etapem 4 (np. wybicie od razu po Etapie 3/szczycie, bez
+    potwierdzonego spadku) — taka traktujemy jako kontynuacje, nie nowe dno.
+    Pilnuje tego flaga "saw_stage4" (patrz nizej), zerowana przy kazdym
+    zuzyciu (ENTRY_2A)."""
     n = len(stock_df)
     closes = stock_df["close"].tolist()
     sma30s = stock_df["sma30"].tolist()
@@ -975,6 +990,13 @@ def _compute_weinstein_stage_series(stock_df):
     high_since_raise = None
     ma_slowdown_flagged = False
     weeks_since_last_base = None
+    # Czy Etap 4 (spadek) pojawil sie od czasu ostatniego zuzycia tej flagi (przy
+    # ENTRY_2A) — rozstrzyga, czy nadchodzaca baza denna liczy sie jako prawdziwy
+    # "stage1" (po spadku) czy jako "stage2" (kontynuacja/wybicie bez potwierdzonego
+    # dna, patrz docstring). Celowo NIE zerowana w reset_run_state: Etap 4 i
+    # EXIT_STOP moga wystapic w tym samym tygodniu (patrz petla nizej), a flaga ma
+    # przetrwac az do kolejnego ENTRY_2A, niezaleznie od resetu stanu fali.
+    saw_stage4 = False
 
     def reset_run_state():
         nonlocal stop_level, base_count, run_peak_slope, high_since_raise, ma_slowdown_flagged, weeks_since_last_base
@@ -987,7 +1009,8 @@ def _compute_weinstein_stage_series(stock_df):
 
     for i in range(n):
         if pd.isna(sma30s[i]) or pd.isna(closes[i]):
-            results[i] = {"stage": None, "signal": None, "buying_volume_ratio": None, "stop_level": None, "base_count": None}
+            results[i] = {"stage": None, "signal": None, "buying_volume_ratio": None, "stop_level": None,
+                           "base_count": None, "base_event": None}
             prev_stage = None
             reset_run_state()
             continue
@@ -1047,8 +1070,12 @@ def _compute_weinstein_stage_series(stock_df):
             else:
                 stage = "1"
 
+        if stage == "4":
+            saw_stage4 = True
+
         signal = None
         new_base_event = False
+        base_event = None
 
         if stage == "2A" and breakout and prev_stage not in ("2A", "2B"):
             new_base_event = True
@@ -1057,11 +1084,22 @@ def _compute_weinstein_stage_series(stock_df):
             stop_level = min(sma30s[i], base_low_val) if base_low_val is not None else sma30s[i]
             high_since_raise = closes[i]
             ma_slowdown_flagged = False
+            base_event = {
+                "base_start_idx": base_start, "base_end_idx": i - 1,
+                "resistance": base_high, "support": base_low_val,
+                "base_count": base_count, "kind": "stage1" if saw_stage4 else "stage2",
+            }
+            saw_stage4 = False
             if vol_ratio is not None and vol_ratio >= STAGE_BREAKOUT_VOLUME_RATIO:
                 signal = "ENTRY_2A"
         elif stage == "2B" and breakout and prev_stage in ("2A", "2B"):
             new_base_event = True
             base_count += 1
+            base_event = {
+                "base_start_idx": base_start, "base_end_idx": i - 1,
+                "resistance": base_high, "support": base_low_val,
+                "base_count": base_count, "kind": "stage2",
+            }
             candidate_stop = min(sma30s[i], base_low_val) if base_low_val is not None else sma30s[i]
             if high_since_raise is not None and closes[i] >= high_since_raise * (1 - STAGE_STOP_NEAR_HIGH_PCT / 100.0):
                 if stop_level is None or candidate_stop > stop_level:
@@ -1093,6 +1131,7 @@ def _compute_weinstein_stage_series(stock_df):
             "buying_volume_ratio": round(vol_ratio, 2) if vol_ratio is not None else None,
             "stop_level": stop_level,
             "base_count": base_count if stage in ("2A", "2B") else None,
+            "base_event": base_event,
         }
         prev_stage = stage
 
@@ -1140,7 +1179,15 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     _compute_weinstein_stage_series. "stop_level_pct" to trailing stop w tych samych
     jednostkach % co close_pct (rebase'owany tym samym close0) — do narysowania
     linii stopu na wykresie, tak jak w książkowym "Trailing Stop Loss" — None poza
-    aktywną falą Etapu 2."""
+    aktywną falą Etapu 2.
+
+    "bases" — lista wykrytych baz (patrz "base_event" w _compute_weinstein_stage_
+    series) do narysowania jako prostokąty/trendlinie zamiast pojedynczych
+    znaczników wybicia: [{"start_date", "end_date", "resistance_pct", "support_pct",
+    "base_count", "kind"}], gdzie *_pct to ten sam close0-relatywny % co close_pct.
+    Tylko bazy, których tydzień wybicia mieści się w wyświetlanym oknie (start_date
+    może sięgać wstecz w bufor rozgrzewkowy SMA — wtedy przycinana do pierwszego
+    wyświetlanego tygodnia)."""
     lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
@@ -1160,6 +1207,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stock_df["buying_vol_ratio"] = [row["buying_volume_ratio"] for row in stage_rows]
     stock_df["stop_level_raw"] = [row["stop_level"] for row in stage_rows]
     stock_df["base_count_raw"] = [row["base_count"] for row in stage_rows]
+    stock_df["base_event_raw"] = [row["base_event"] for row in stage_rows]
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
@@ -1171,6 +1219,13 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     close0 = float(in_window["close"].iloc[0])
     index_available = in_window["index_close"].dropna()
     index0 = float(index_available.iloc[0]) if not index_available.empty else None
+    # Przesuniecie miedzy indeksami stock_df (pelen szereg z buforem rozgrzewkowym
+    # SMA przed start_date) a in_window (tylko wyswietlane tygodnie) — in_window
+    # jest zawsze koncowka posortowanego chronologicznie stock_df, wiec to zwykle
+    # odejmowanie dlugosci wystarcza do przeliczenia "base_start_idx"/"base_end_idx"
+    # (indeksy w stock_df, patrz _compute_weinstein_stage_series) na pozycje w
+    # dates/close_pct ponizej.
+    stock_to_window_offset = len(stock_df) - len(in_window)
 
     def pct(value, base):
         if base is None or pd.isna(value):
@@ -1180,6 +1235,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
     volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
     stop_level_pct, base_count = [], []
+    raw_base_events = []
     for _, r in in_window.iterrows():
         dates.append(r["week_start"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
@@ -1199,6 +1255,28 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         signal.append(r["signal"] if pd.notna(r["signal"]) else None)
         stop_level_pct.append(pct(r["stop_level_raw"], close0) if pd.notna(r["stop_level_raw"]) else None)
         base_count.append(int(r["base_count_raw"]) if pd.notna(r["base_count_raw"]) else None)
+        # Ten sam quirk iterrows() co przy stage/signal wyzej (kolumna miesza
+        # object z float) — "base_event_raw" to albo None, albo dict; dict
+        # przezywa NIETKNIETY (tylko None ryzykuje ciche zamienienie na NaN), wiec
+        # isinstance jest tu wystarczajacym, prostszym straznikiem niz pd.notna.
+        be = r["base_event_raw"] if isinstance(r["base_event_raw"], dict) else None
+        if be is not None:
+            raw_base_events.append(be)
+
+    bases = []
+    for be in raw_base_events:
+        start_pos = max(be["base_start_idx"] - stock_to_window_offset, 0)
+        end_pos = be["base_end_idx"] - stock_to_window_offset
+        if end_pos < 0 or start_pos > end_pos:
+            continue
+        bases.append({
+            "start_date": dates[start_pos],
+            "end_date": dates[end_pos],
+            "resistance_pct": pct(be["resistance"], close0),
+            "support_pct": pct(be["support"], close0),
+            "base_count": be["base_count"],
+            "kind": be["kind"],
+        })
 
     return {
         "dates": dates,
@@ -1214,6 +1292,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "stage": stage,
         "signal": signal,
         "current_stage": stage[-1] if stage else None,
+        "bases": bases,
     }
 
 
