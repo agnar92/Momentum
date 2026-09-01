@@ -218,10 +218,24 @@ function renderRelativeStrengthPanel() {
     }
 }
 
+// Kazdy ticker z glownego uniwersum (state.data[u].constituents) ma teraz wlasny
+// weekly_chart/mansfield_chart (patrz process_universe/export_json w run_query.py) —
+// nie tylko liderzy panelu Sily Relatywnej. Lider RS ma pierwszenstwo (niesie tez
+// relative_strength_pct/index_return_pct), ale dla kazdego innego tickera spadamy
+// do jego wlasnego wpisu w state.data[universe].constituents.
+function findRsEntry(ticker, universe) {
+    const rsLeader = combinedRelativeStrengthLeaders().find(r => r.ticker === ticker);
+    if (rsLeader) return rsLeader;
+    const universeEntry = ((state.data[universe] && state.data[universe].constituents) || [])
+        .find(c => c.ticker === ticker);
+    return (universeEntry && universeEntry.weekly_chart) ? { ...universeEntry, universe } : null;
+}
+
 // preferMode="RS": wywolywane z kafelka/wiersza w panelu Sily Relatywnej — jesli
 // ten ticker ma wlasny tygodniowy wykres (weekly_chart), pokaz go od razu zamiast
 // TradingView. Kazde inne wywolanie (tabele uniwersow, GEM, Ctrl+K) domyslnie
-// pokazuje TradingView, tak jak wczesniej.
+// pokazuje TradingView jak wczesniej — ale przelacznik "Sila Relatywna" jest teraz
+// dostepny dla kazdej spolki z glownych uniwersow, nie tylko liderow RS.
 function selectTicker(ticker, universe, preferMode) {
     state.selectedTicker = ticker;
     state.selectedUniverse = universe;
@@ -231,7 +245,7 @@ function selectTicker(ticker, universe, preferMode) {
     document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr, #rsTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
-    const rsEntry = combinedRelativeStrengthLeaders().find(r => r.ticker === ticker) || null;
+    const rsEntry = findRsEntry(ticker, universe);
     state.currentRsEntry = rsEntry;
     state.chartMode = (preferMode === "RS" && rsEntry && rsEntry.weekly_chart) ? "RS" : "TV";
     updateChartArea();
