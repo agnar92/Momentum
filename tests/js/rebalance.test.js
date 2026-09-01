@@ -24,6 +24,8 @@ const {
     blendEquityCurves,
     isCoreTagged,
     coreTaggedTickers,
+    tvSymbolFor,
+    buildTvPortfolioCsv,
     _setState,
 } = rebalance;
 
@@ -282,4 +284,59 @@ test("computeTargets excludes a Core-tagged ticker from the momentum pool, same 
     // Cala pula trafia do AAA, tak jakby CORE_PICK nigdy nie bylo w indeksie.
     assert.ok(Math.abs(targets.AAA.target_value - 1000) < 1e-9);
     _setState({ portfolioTags: {} });
+});
+
+// ---------- EKSPORT DO TRADINGVIEW PORTFOLIO ----------
+
+test("tvSymbolFor prefixes GPW: for WIG20/mWIG40-sourced tickers, NASDAQ: otherwise", () => {
+    _setState({
+        priceMap: {
+            AAPL: { price: 200, sources: ["NASDAQ100"] },
+            PKN: { price: 70, sources: ["WIG20"] },
+            KGH: { price: 100, sources: ["MWIG40"] },
+            UNKNOWN: { price: 1, sources: [] },
+        },
+    });
+    assert.equal(tvSymbolFor("AAPL"), "NASDAQ:AAPL");
+    assert.equal(tvSymbolFor("PKN"), "GPW:PKN");
+    assert.equal(tvSymbolFor("KGH"), "GPW:KGH");
+    assert.equal(tvSymbolFor("UNKNOWN"), "NASDAQ:UNKNOWN");
+    _setState({ priceMap: {} });
+});
+
+test("buildTvPortfolioCsv exports one Buy row per holding at the current price, skipping empty rows", () => {
+    _setState({
+        holdings: [
+            { ticker: "AAPL", shares: 10 },
+            { ticker: "PKN", shares: 5 },
+            { ticker: "", shares: 3 },      // brak tickera -> pomijany
+            { ticker: "NOPRICE", shares: 0 }, // brak ilosci -> pomijany
+        ],
+        priceMap: {
+            AAPL: { price: 217, sources: ["NASDAQ100"] },
+            PKN: { price: 70.5, sources: ["WIG20"] },
+        },
+    });
+
+    const csv = buildTvPortfolioCsv();
+    const lines = csv.split("\n");
+    assert.equal(lines[0], "Symbol,Side,Qty,Fill Price,Commission,Closing Time");
+    assert.equal(lines.length, 3);
+    assert.match(lines[1], /^NASDAQ:AAPL,Buy,10,217,0,\d{4}-\d{2}-\d{2} 0:00:00$/);
+    assert.match(lines[2], /^GPW:PKN,Buy,5,70\.5,0,\d{4}-\d{2}-\d{2} 0:00:00$/);
+
+    _setState({ holdings: [], priceMap: {} });
+});
+
+test("buildTvPortfolioCsv leaves Fill Price blank when the ticker has no known price", () => {
+    _setState({
+        holdings: [{ ticker: "MYSTERY", shares: 2 }],
+        priceMap: {},
+    });
+
+    const csv = buildTvPortfolioCsv();
+    const lines = csv.split("\n");
+    assert.match(lines[1], /^NASDAQ:MYSTERY,Buy,2,,0,\d{4}-\d{2}-\d{2} 0:00:00$/);
+
+    _setState({ holdings: [], priceMap: {} });
 });

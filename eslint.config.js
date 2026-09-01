@@ -15,6 +15,8 @@ const browserGlobals = {
     XLSX: "readonly",
     TradingView: "readonly",
     module: "readonly",
+    Blob: "readonly",
+    URL: "readonly",
 };
 
 const nodeGlobals = {

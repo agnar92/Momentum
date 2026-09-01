@@ -319,6 +319,68 @@ function initXtbImport() {
     });
 }
 
+// ============================================================
+// EKSPORT DO TRADINGVIEW PORTFOLIO — zapisuje obecne pozycje jako CSV w
+// formacie importu transakcji TradingView (Symbol,Side,Qty,Fill Price,
+// Commission,Closing Time). Import z XTB (i ręcznie dodane pozycje) dają
+// nam tylko obecny stan (ticker + liczba akcji), nie prawdziwą historię
+// transakcji (data/cena otwarcia) — więc każdą pozycję eksportujemy jako
+// pojedynczy zakup "dziś" po obecnej cenie rynkowej, żeby po prostu
+// odtworzyć w TV portfolio Twój bieżący stan posiadania, bez fikcyjnego P&L.
+const PLN_SOURCE_UNIVERSES = new Set(["WIG20", "MWIG40"]);
+
+// WIG20/mWIG40 są notowane na GPW w TradingView (prefiks "GPW:", tak jak
+// tvSymbolFor w app.js) — reszta domyślnie na NASDAQ. Dla spółek z DOWJONES
+// notowanych faktycznie na NYSE prefiks może być niepoprawny; kreator
+// importu transakcji w TradingView pozwala wtedy ręcznie dopasować symbol.
+function tvSymbolFor(ticker) {
+    const sources = priceMap[ticker]?.sources || [];
+    return sources.some(u => PLN_SOURCE_UNIVERSES.has(u)) ? `GPW:${ticker}` : `NASDAQ:${ticker}`;
+}
+
+function csvEscape(v) {
+    const s = String(v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function buildTvPortfolioCsv() {
+    const header = ["Symbol", "Side", "Qty", "Fill Price", "Commission", "Closing Time"];
+    const closingTime = `${new Date().toISOString().slice(0, 10)} 0:00:00`;
+    const rows = holdings
+        .filter(h => h.ticker && h.shares)
+        .map(h => {
+            const price = priceMap[h.ticker]?.price;
+            return [tvSymbolFor(h.ticker), "Buy", h.shares, price ?? "", "0", closingTime];
+        });
+    return [header, ...rows].map(r => r.map(csvEscape).join(",")).join("\n");
+}
+
+function exportTvPortfolioCsv() {
+    const csv = buildTvPortfolioCsv();
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `tv_portfolio_${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+}
+
+function initTvExport() {
+    const btn = document.getElementById("exportTvBtn");
+    const status = document.getElementById("importStatus");
+    btn.addEventListener("click", () => {
+        if (holdings.filter(h => h.ticker && h.shares).length === 0) {
+            status.textContent = "Brak pozycji do wyeksportowania.";
+            return;
+        }
+        exportTvPortfolioCsv();
+        status.textContent = "Wyeksportowano pozycje do pliku CSV (format TradingView Portfolio).";
+    });
+}
+
 function renderCapitalHint() {
     const current = currentHoldingsValue();
     const contribution = settings.contribution || 0;
@@ -712,6 +774,7 @@ if (typeof document !== "undefined") {
         initSettingsForm();
         initHoldingsForm();
         initXtbImport();
+        initTvExport();
         initExcludeForm();
         renderExcludedList();
         renderCoreTaggedList();
@@ -733,6 +796,7 @@ if (typeof module !== "undefined" && module.exports) {
         weightedMuSigma, simulateMonteCarlo, randNormal,
         blendEquityCurves,
         isCoreTagged, coreTaggedTickers,
+        tvSymbolFor, buildTvPortfolioCsv,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded)
         // bez importu przez window — to jedyny sposób bez przepisywania modułu na klasę.
         _setState(s) {
@@ -740,6 +804,8 @@ if (typeof module !== "undefined" && module.exports) {
             if (s.settings !== undefined) settings = s.settings;
             if (s.excluded !== undefined) excluded = s.excluded;
             if (s.portfolioTags !== undefined) portfolioTags = s.portfolioTags;
+            if (s.holdings !== undefined) holdings = s.holdings;
+            if (s.priceMap !== undefined) priceMap = s.priceMap;
         },
     };
 }
