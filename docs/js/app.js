@@ -328,20 +328,28 @@ const STAGE_LABELS = {
     "4": "Etap 4 — Spadek",
 };
 const STAGE_DESCRIPTIONS = {
-    "1": "Cena w pobliżu płaskiej SMA30 — brak potwierdzonego trendu, obserwuj wybicie.",
-    "2A": "Świeże przebicie SMA30 w górę na wolumenie — klasyczny punkt wejścia.",
-    "2B": "Trend już trwa nad rosnącą SMA30 — dokupowanie na korektach do SMA10/SMA30.",
+    "1": "Cena w ciasnej bazie (trading range) w pobliżu SMA30 — czekaj na wybicie ponad opór bazy.",
+    "2A": "Świeże wybicie ponad opór bazy, potwierdzone wolumenem — klasyczny punkt wejścia.",
+    "2B": "Trend trwa — kolejne wybicia kolejnych baz to punkty dokupienia (\"pyramiding\").",
     "3": "Trend się wypłaszcza po wzroście — rozważ realizację zysków, unikaj nowych wejść.",
     "4": "Cena pod opadającą SMA30 — trend spadkowy, poza rynkiem / bez nowych pozycji.",
 };
 const STAGE_COLORS = { "1": "#8a8f9c", "2A": "#2ecc71", "2B": "#26a65b", "3": "#e0a72e", "4": "#e0455a" };
+// Sygnaly odzwierciedlaja ksiazkowy wykres "Trailing Stop Loss": kazda kolejna
+// baza w tej samej fali Etapu 2 podnosi stop, 4./5. baza jest oznaczona jako
+// bardziej ryzykowna, a WARNING_MA_SLOWING ostrzega o slabnacym tempie SMA30
+// ZANIM stop faktycznie zostanie zlamany (EXIT_STOP).
 const SIGNAL_LABELS = {
     ENTRY_2A: "Wejście (2A): wybicie z bazy potwierdzone wolumenem",
-    ENTRY_2B: "Wejście (2B): odbicie od SMA10 w istniejącym trendzie",
-    EXIT_STOP: "Wyjście: zamknięcie poniżej SMA30",
-    EXIT_CLIMAX: "Ostrzeżenie: cena mocno wykupiona nad SMA30",
+    ENTRY_2B: "Wejście (2B): wybicie kolejnej bazy w trwającym trendzie",
+    ENTRY_2B_LATE: "Wejście (2B, późna baza): 4.+ baza w tym trendzie — podwyższone ryzyko niepowodzenia",
+    WARNING_MA_SLOWING: "Ostrzeżenie: SMA30 traci tempo wzrostu — zacieśnij stop-loss",
+    EXIT_STOP: "Wyjście: cena złamała trailing stop-loss",
 };
-const SIGNAL_MARKER_COLORS = { ENTRY_2A: "#2ecc71", ENTRY_2B: "#26a65b", EXIT_STOP: "#e0455a", EXIT_CLIMAX: "#e0a72e" };
+const SIGNAL_MARKER_COLORS = {
+    ENTRY_2A: "#2ecc71", ENTRY_2B: "#26a65b", ENTRY_2B_LATE: "#e0a72e",
+    WARNING_MA_SLOWING: "#e0a72e", EXIT_STOP: "#e0455a",
+};
 const STAGE_BREAKOUT_VOLUME_RATIO = 1.5; // musi byc zgodne z STAGE_BREAKOUT_VOLUME_RATIO w run_query.py — koloruje slupki wolumenu
 
 function renderStageBadge(stage) {
@@ -394,11 +402,13 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     const signals = chartData.signal || [];
     const volumes = chartData.volume || [];
     const volumeRatios = chartData.volume_ratio || [];
+    const baseCounts = chartData.base_count || [];
 
-    // Znaczniki wejscia/wyjscia na linii ceny: trojkat w gore (zielony) dla
-    // wejsc 2A/2B, trojkat w dol (czerwony) dla EXIT_STOP, gwiazdka (pomaranczowa)
-    // dla ostrzezenia o wykupieniu. Reszta tygodni: bez punktu (radius 0), jak wczesniej.
-    const pointStyles = signals.map((s) => (s === "EXIT_CLIMAX" ? "star" : "triangle"));
+    // Znaczniki wejscia/wyjscia na linii ceny: trojkat w gore (zielony/bursztynowy
+    // dla pozniejszej, bardziej ryzykownej bazy) dla wejsc 2A/2B/2B_LATE, trojkat
+    // w dol (czerwony) dla EXIT_STOP, kwadrat (bursztynowy) dla ostrzezenia o
+    // slabnacym tempie SMA30. Reszta tygodni: bez punktu (radius 0), jak wczesniej.
+    const pointStyles = signals.map((s) => (s === "WARNING_MA_SLOWING" ? "rect" : "triangle"));
     const pointRadii = signals.map((s) => (s ? 7 : 0));
     const pointColors = signals.map((s) => SIGNAL_MARKER_COLORS[s] || "#2ecc71");
     const pointRotations = signals.map((s) => (s === "EXIT_STOP" ? 180 : 0));
@@ -430,6 +440,14 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
                 { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, order: 1 },
                 {
+                    // Trailing stop-loss (patrz "stop_level_pct" w compute_relative_strength_chart) —
+                    // ten sam pomysl co ksiazkowy wykres "Trailing Stop Loss": linia podnoszona
+                    // wraz z kolejnymi bazami, nigdy obnizana; None poza aktywna fala Etapu 2
+                    // (Chart.js domyslnie NIE laczy linii przez null, wiec przerywa sie sama).
+                    label: "Trailing stop-loss", data: chartData.stop_level_pct, borderColor: "#e0455a",
+                    backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 3], order: 1,
+                },
+                {
                     type: "bar", label: "Wolumen (tyg.)", data: volumes, backgroundColor: volumeColors,
                     yAxisID: "yVolume", order: 2, barPercentage: 0.7, categoryPercentage: 0.9,
                 },
@@ -454,7 +472,11 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                             }
                             const base = `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}`;
                             if (ctx.datasetIndex === 0 && signals[ctx.dataIndex]) {
-                                return [base, SIGNAL_LABELS[signals[ctx.dataIndex]]];
+                                const sig = signals[ctx.dataIndex];
+                                const bc = baseCounts[ctx.dataIndex];
+                                const sigTxt = (bc != null && (sig === "ENTRY_2B" || sig === "ENTRY_2B_LATE"))
+                                    ? `${SIGNAL_LABELS[sig]} (${bc}. baza)` : SIGNAL_LABELS[sig];
+                                return [base, sigTxt];
                             }
                             return base;
                         },

@@ -159,7 +159,7 @@
         <div class="chart-mode-toggle" id="chartModeToggle">
             <button class="chart-mode-btn active" data-mode="TV" id="chartModeTvBtn">📈 TradingView</button>
             <button class="chart-mode-btn" data-mode="RS" id="chartModeRsBtn" disabled
-                    title="Wykresy tygodniowe w stylu stage analysis (Weinstein/Dr Eric Wish): 'wykres 10:30' (cena + SMA 10-tyg./30-tyg., poziom własnego indeksu i wolumen), z klasyfikacją etapów 1/2A/2B/3/4, sygnałami wejścia/wyjścia i potwierdzeniem wybicia wolumenem, plus oscylator Mansfield RS krótko-/średnioterminowy — dostępne dla każdej spółki z głównych uniwersów.">
+                    title="Wykresy tygodniowe w stylu stage analysis (Weinstein): 'wykres 10:30' (cena + SMA 10-tyg./30-tyg., poziom własnego indeksu i wolumen), z klasyfikacją etapów 1/2A/2B/3/4 opartą o wybicia z lokalnych baz (trading range), trailing stop-lossem podnoszonym przy każdej kolejnej bazie i potwierdzeniem wybicia wolumenem, plus oscylator Mansfield RS krótko-/średnioterminowy — dostępne dla każdej spółki z głównych uniwersów.">
                 💪 Siła Relatywna
             </button>
         </div>
@@ -174,9 +174,10 @@
                     <canvas id="rsMansfieldCanvas"></canvas>
                 </div>
                 <div class="stage-legend">
-                    ▲ zielony = wejście (2A wybicie / 2B kontynuacja) &nbsp;·&nbsp;
-                    ▼ czerwony = wyjście (zamknięcie poniżej SMA30) &nbsp;·&nbsp;
-                    ★ pomarańczowy = ostrzeżenie o wykupieniu &nbsp;·&nbsp;
+                    ▲ zielony = wejście 2A/2B &nbsp;·&nbsp; ▲ bursztynowy = wejście na 4.+ bazie (ryzykowniejsze) &nbsp;·&nbsp;
+                    ▼ czerwony = wyjście (złamany trailing stop) &nbsp;·&nbsp;
+                    ■ bursztynowy = ostrzeżenie: SMA30 traci tempo &nbsp;·&nbsp;
+                    czerwona przerywana linia = trailing stop-loss &nbsp;·&nbsp;
                     słupki u dołu = tygodniowy wolumen (jaśniejszy = potwierdzone wybicie)
                 </div>
             </div>

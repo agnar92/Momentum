@@ -8,6 +8,7 @@ compute_relative_strength_leaders czytaja z portfolio_history/prices/
 index_constituents/index_prices, wiec ich testy uzywaja polaczenia DuckDB ":memory:".
 """
 import json
+import math
 
 import duckdb
 import pandas as pd
@@ -690,20 +691,22 @@ class TestComputeRelativeStrengthChart:
         out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
-        for key in ("volume", "volume_ratio", "stage", "signal"):
+        for key in ("volume", "volume_ratio", "stage", "signal", "stop_level_pct", "base_count"):
             assert key in out
             assert len(out[key]) == len(out["dates"])
         # Trend jest tu jednostajnie rosnacy przez cale okno -> ostatni tydzien
         # powinien byc sklasyfikowany jako etap zaawansowania (2A/2B), nie 1/3/4.
         assert out["current_stage"] in ("2A", "2B")
         # Wolumen jest tu zawsze 0 (insert_weekly_series) -> volume_ratio zawsze None
-        # (0/0 pominiete w _compute_weinstein_stage_series) i signal tez zawsze None
-        # (brak potwierdzenia wolumenem) -> regresja na quirk pandas iterrows(),
-        # ktory potrafi po cichu zamienic None na NaN przy mieszaniu kolumn
-        # float/object w jednym wierszu (patrz komentarz w compute_relative_strength_chart)
-        # — NaN w miejsce None wyeksportowalby sie do JSON jako niepoprawny literal `NaN`.
+        # (0/0 pominiete w _compute_weinstein_stage_series) -> ENTRY_2A (wymaga
+        # jawnego potwierdzenia wolumenem) nigdy sie nie pojawia, ale ENTRY_2B
+        # (akceptuje brak danych o wolumenie) owszem, przy kolejnych bazach.
         assert all(v is None for v in out["volume_ratio"])
-        assert all(s is None for s in out["signal"])
+        assert all(s != "ENTRY_2A" for s in out["signal"])
+        # Regresja na quirk pandas iterrows(), ktory potrafi po cichu zamienic None
+        # na NaN przy mieszaniu kolumn float/object w jednym wierszu (patrz komentarz
+        # w compute_relative_strength_chart) — NaN w miejsce None wyeksportowalby sie
+        # do JSON jako niepoprawny literal `NaN`.
         assert "NaN" not in json.dumps(out)
 
 
@@ -749,21 +752,75 @@ class TestComputeWeinsteinStageSeries:
         assert rows[40]["signal"] is None
         assert rows[40]["volume_ratio"] < STAGE_BREAKOUT_VOLUME_RATIO
 
-    def test_established_uptrend_pullback_to_sma10_is_entry_2b(self):
-        # Dlugi jednostajny trend wzrostowy (Etap 2B, poza oknem "swiezosci" 2A),
-        # potem 2-tygodniowa korekta dotykajaca SMA10 i odbicie na wzroscie wolumenu
-        # -> klasyczny, pozniejszy punkt dokupienia z ksiazki Weinsteina.
-        n_pre = 45
-        closes = [100.0 + i for i in range(n_pre)]
-        closes += [closes[-1] + 0.3, closes[-1] - 1.5, closes[-1] - 2.5, closes[-1] - 1.0,
-                   closes[-1] + 2.0, closes[-1] + 3.5]
-        volumes = [1000] * len(closes)
-        volumes[48] = 1400  # tydzien odbicia ponad SMA10
+    @staticmethod
+    def _zigzag_base(level, weeks, amplitude=1.5):
+        """Ciasna, oscylujaca 'baza' (trading range) w stylu ksiazkowych rysunkow —
+        NIE plaska linia, zeby base_high/base_low mialy realny rozstep."""
+        return [level + (amplitude if w % 2 == 0 else -amplitude) for w in range(weeks)]
 
-        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
-        assert rows[44]["stage"] == "2B"
-        assert rows[48]["stage"] == "2B"
-        assert rows[48]["signal"] == "ENTRY_2B"
+    def _multi_base_uptrend_fixture(self):
+        """Odtwarza ksiazkowy rysunek 'Stage Analysis Investor method — Trailing
+        Stop Loss': 40-tyg. rozgrzewka (spadek, zeby SMA30 mialo juz historie),
+        potem baza (Etap 1) -> wybicie na wolumenie (2A, tydz. 50) -> 2. baza (2B,
+        tydz. 59) -> 3. baza (2B, tydz. 68) -> 4. baza (2B_LATE, tydz. 77, wg
+        ksiazki bardziej podatna na niepowodzenie) -> zalamanie przez trailing stop."""
+        closes = [60.0 - i * 0.5 for i in range(40)]
+        volumes = [1000] * 40
+        closes += self._zigzag_base(40, 10)
+        volumes += [1000] * 10
+        closes += [48]
+        volumes += [3000]  # wybicie 1. bazy na wolumenie
+        closes += self._zigzag_base(48.5, 8, 1.2)
+        volumes += [1000] * 8
+        closes += [55]
+        volumes += [1600]  # wybicie 2. bazy
+        closes += self._zigzag_base(66, 8, 2.5)
+        volumes += [1000] * 8
+        closes += [78]
+        volumes += [1500]  # wybicie 3. bazy
+        closes += self._zigzag_base(88, 8, 2.5)
+        volumes += [1000] * 8
+        closes += [95]
+        volumes += [1400]  # wybicie 4. bazy (late)
+        closes += [90, 80, 68, 55, 45]  # zalamanie -> przez trailing stop
+        volumes += [1000] * 5
+        return make_stage_df(closes, volumes)
+
+    def test_first_base_breakout_after_decline_is_entry_2a_with_stop_below_base(self):
+        rows = _compute_weinstein_stage_series(self._multi_base_uptrend_fixture())
+        assert rows[49]["stage"] == "4"
+        assert rows[50]["stage"] == "2A"
+        assert rows[50]["signal"] == "ENTRY_2A"
+        assert rows[50]["base_count"] == 1
+        # Stop musi byc POD baza wybicia (baza oscylowala ok. 38.5-41.5).
+        assert rows[50]["stop_level"] == pytest.approx(38.5)
+
+    def test_subsequent_bases_in_same_run_are_entry_2b_with_rising_stop(self):
+        rows = _compute_weinstein_stage_series(self._multi_base_uptrend_fixture())
+        assert rows[59]["signal"] == "ENTRY_2B"
+        assert rows[59]["base_count"] == 2
+        assert rows[68]["signal"] == "ENTRY_2B"
+        assert rows[68]["base_count"] == 3
+        # Trailing stop tylko PODNOSZONY, nigdy obnizany, w miare kolejnych baz.
+        assert rows[59]["stop_level"] > rows[50]["stop_level"]
+        assert rows[68]["stop_level"] > rows[59]["stop_level"]
+
+    def test_fourth_base_in_same_run_is_flagged_late(self):
+        # Ksiazka: "4th & 5th bases within the Stage 2 advance are more prone to
+        # failure. So watch for warning signs."
+        rows = _compute_weinstein_stage_series(self._multi_base_uptrend_fixture())
+        assert rows[77]["base_count"] == 4
+        assert rows[77]["signal"] == "ENTRY_2B_LATE"
+
+    def test_trailing_stop_break_after_late_base_triggers_exit_stop(self):
+        rows = _compute_weinstein_stage_series(self._multi_base_uptrend_fixture())
+        # Trend traci sile (Etap 3) zanim faktycznie zlamie stop.
+        assert rows[80]["stage"] == "3"
+        assert rows[80]["signal"] is None
+        assert rows[81]["signal"] == "EXIT_STOP"
+        # Po wyjsciu stan fali jest resetowany.
+        assert rows[81]["stop_level"] is None
+        assert rows[81]["base_count"] is None
 
     def test_downtrend_below_falling_sma30_is_stage_4(self):
         closes = [200.0 - i for i in range(60)]
@@ -771,18 +828,34 @@ class TestComputeWeinsteinStageSeries:
         assert rows[59]["stage"] == "4"
         assert rows[59]["signal"] is None
 
-    def test_reversal_from_uptrend_crossing_below_sma30_triggers_exit_stop(self):
-        n_pre = 45
-        closes = [100.0 + i for i in range(n_pre)]
-        closes += [closes[-1] - 3, closes[-1] - 8, closes[-1] - 14, closes[-1] - 20]
-        rows = _compute_weinstein_stage_series(make_stage_df(closes))
-        assert rows[46]["stage"] == "2B"
-        assert rows[47]["stage"] == "3"
-        assert rows[47]["signal"] == "EXIT_STOP"
+    def test_ma_losing_momentum_warns_before_stop_is_hit(self):
+        # Spolka po wybiciu rosnie w tempie wygaszajacym sie (klasyczny wzorzec
+        # szczytu) -> WARNING_MA_SLOWING powinno pojawic sie WYRAZNIE wczesniej
+        # niz faktyczne zlamanie trailing stopu (EXIT_STOP).
+        closes = [60.0 - i * 0.5 for i in range(40)]
+        volumes = [1000] * 40
+        closes += self._zigzag_base(40, 10)
+        volumes += [1000] * 10
+        closes += [48]
+        volumes += [3000]
+        for w in range(60):
+            val = 48 + 40 * (1 - math.exp(-w / 15))
+            closes.append(val + (1.0 if w % 2 == 0 else -1.0))
+            volumes.append(1000)
+        closes += [closes[-1] - 2, closes[-1] - 6, closes[-1] - 12, closes[-1] - 20, closes[-1] - 30]
+        volumes += [1000] * 5
+
+        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
+        warning_weeks = [i for i, r in enumerate(rows) if r["signal"] == "WARNING_MA_SLOWING"]
+        exit_weeks = [i for i, r in enumerate(rows) if r["signal"] == "EXIT_STOP"]
+        assert warning_weeks, "WARNING_MA_SLOWING nigdy sie nie pojawilo"
+        assert exit_weeks, "EXIT_STOP nigdy sie nie pojawilo"
+        assert warning_weeks[0] < exit_weeks[0]
 
     def test_insufficient_history_yields_none_stage(self):
         rows = _compute_weinstein_stage_series(make_stage_df([100.0] * 10))
-        assert all(r["stage"] is None and r["signal"] is None and r["volume_ratio"] is None for r in rows)
+        assert all(r["stage"] is None and r["signal"] is None and r["volume_ratio"] is None
+                   and r["stop_level"] is None and r["base_count"] is None for r in rows)
 
 
 # ---------------------------------------------------------------------------
