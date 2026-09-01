@@ -13,7 +13,8 @@ on:
   workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
 
 # contents: write jest potrzebne, by workflow mógł commitować z powrotem
-# momentum_data.duckdb (nowe wiersze w tabeli index_prices).
+# momentum_data.duckdb (nowe wiersze w tabeli index_prices) oraz
+# docs/data/global_equity_momentum.json + docs/data/relative_strength.json.
 permissions:
   contents: write
   pages: write
@@ -44,28 +45,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # docs/data/*.json jest gitignorowane (patrz .gitignore) — normalnie istnieje
-      # tylko lokalnie po pełnym przebiegu run_query.py (main.yml). Ten workflow
-      # przelicza WYŁĄCZNIE global_equity_momentum.json + relative_strength.json
-      # (oba --gem-only, patrz niżej), więc żeby "Upload artifact" niżej nie
-      # podmieniło całej opublikowanej strony tylko tymi dwoma plikami (i nie
-      # skasowało tabel momentum/rebalansu), najpierw ściągamy resztę plików z
-      # aktualnie opublikowanej strony — oba przeliczane pliki i tak zostaną
-      # zaraz nadpisane świeżym przeliczeniem.
-      - name: Restore currently published data files
-        run: |
-          mkdir -p docs/data
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          BASE_URL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}/data"
-          for f in nasdaq100.json dowjones.json wig20.json mwig40.json all_prices.json equity_curve.json; do
-            if curl -fsS -o "docs/data/$f" "$BASE_URL/$f"; then
-              echo "✅ Pobrano $f z opublikowanej strony."
-            else
-              echo "⚠️  Nie udało się pobrać $f (pierwszy deploy?) — pomijam."
-              rm -f "docs/data/$f"
-            fi
-          done
-
+      # docs/data/*.json jest teraz commitowane do repo (patrz .gitignore / krok
+      # "Persist generated data" w main.yml), więc świeży checkout wyżej już zawiera
+      # nasdaq100.json/dowjones.json/wig20.json/mwig40.json/all_prices.json z
+      # ostatniego pełnego przebiegu (main.yml) — nie trzeba ich już ściągać z
+      # opublikowanej strony. Ten workflow przelicza WYŁĄCZNIE
+      # global_equity_momentum.json + relative_strength.json (oba --gem-only,
+      # patrz niżej) i commituje z powrotem tylko te dwa pliki; "Upload artifact"
+      # niżej pakuje cały katalog docs/ (te przeliczone + resztę z checkoutu), więc
+      # opublikowana strona nigdy nie traci tabel momentum/rebalansu.
       - name: Fetch index-level data only (^GSPC/^NDX/^DJI)
         run: |
           python fetch_data.py --indices-only
@@ -74,15 +62,16 @@ jobs:
         run: |
           python run_query.py --gem-only
 
-      - name: Persist momentum_data.duckdb
+      - name: Persist generated data (momentum_data.duckdb + daily GEM/RS json)
         run: |
-          if [ -n "$(git status --porcelain momentum_data.duckdb)" ]; then
+          FILES="momentum_data.duckdb docs/data/global_equity_momentum.json docs/data/relative_strength.json"
+          if [ -n "$(git status --porcelain $FILES)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add momentum_data.duckdb
+            git add $FILES
             # [skip ci]: bez tego ten commit odpaliłby workflow main.yml (trigger "push: main")
             # i uruchomił pełne, kosztowne miesięczne odświeżenie codziennie.
-            git commit -m "chore: update momentum_data.duckdb (daily index_prices refresh) [skip ci]"
+            git commit -m "chore: update momentum_data.duckdb + daily GEM/RS json (daily index_prices refresh) [skip ci]"
             # Retry na wypadek wyścigu z innym workflowem (np. main.yml) pushującym do
             # main w tym samym momencie — patrz analogiczny komentarz w main.yml.
             for attempt in 1 2 3 4 5; do
@@ -97,11 +86,11 @@ jobs:
               sleep $((attempt * 3))
               git fetch origin main
               git reset --soft origin/main
-              git add momentum_data.duckdb
-              git commit -m "chore: update momentum_data.duckdb (daily index_prices refresh) [skip ci]"
+              git add $FILES
+              git commit -m "chore: update momentum_data.duckdb + daily GEM/RS json (daily index_prices refresh) [skip ci]"
             done
           else
-            echo "Brak zmian w momentum_data.duckdb — pomijam commit."
+            echo "Brak zmian w momentum_data.duckdb ani w docs/data/ — pomijam commit."
           fi
 
       - name: Setup Pages

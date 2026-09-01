@@ -9,8 +9,8 @@ on:
   workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
 
 # contents: write jest potrzebne, by workflow mógł commitować z powrotem
-# momentum_data.duckdb (rolling okno cen + trwała historia portfolio_history —
-# patrz krok "Persist momentum_data.duckdb" niżej).
+# momentum_data.duckdb (rolling okno cen + trwała historia portfolio_history) oraz
+# docs/data/*.json (wygenerowane dane dla strony — patrz krok "Persist generated data" niżej).
 permissions:
   contents: write
   pages: write
@@ -49,15 +49,15 @@ jobs:
         run: |
           python run_query.py
 
-      - name: Persist momentum_data.duckdb
+      - name: Persist generated data (momentum_data.duckdb + docs/data/*.json)
         run: |
-          if [ -n "$(git status --porcelain momentum_data.duckdb)" ]; then
+          if [ -n "$(git status --porcelain momentum_data.duckdb docs/data/)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add momentum_data.duckdb
+            git add momentum_data.duckdb docs/data/
             # [skip ci]: bez tego ten commit odpaliłby workflow ponownie (trigger "push: main"),
             # tworząc pętlę.
-            git commit -m "chore: update momentum_data.duckdb (rolling price window + portfolio_history) [skip ci]"
+            git commit -m "chore: update momentum_data.duckdb + docs/data (rolling price window + portfolio_history) [skip ci]"
             # Retry na wypadek wyścigu z innym workflowem (np. daily_gem.yml) pushującym
             # do main w tym samym momencie: zwykły "git push" dostałby "fetch first"
             # (rejected), co failowałoby cały job i pomijało Deploy to GitHub Pages
@@ -76,11 +76,11 @@ jobs:
               sleep $((attempt * 3))
               git fetch origin main
               git reset --soft origin/main
-              git add momentum_data.duckdb
-              git commit -m "chore: update momentum_data.duckdb (rolling price window + portfolio_history) [skip ci]"
+              git add momentum_data.duckdb docs/data/
+              git commit -m "chore: update momentum_data.duckdb + docs/data (rolling price window + portfolio_history) [skip ci]"
             done
           else
-            echo "Brak zmian w momentum_data.duckdb — pomijam commit."
+            echo "Brak zmian w momentum_data.duckdb ani docs/data/ — pomijam commit."
           fi
 
       - name: Setup Pages
