@@ -16,6 +16,9 @@ import pytest
 from run_query import (
     MAX_HOLDINGS,
     MAX_WEIGHT,
+    RS_PRICE_SMA_LONG_WEEKS,
+    RS_PRICE_SMA_SHORT_WEEKS,
+    STAGE_BREAKOUT_VOLUME_RATIO,
     add_zscore_and_momentum_score,
     compute_equity_curve,
     compute_index_leaders,
@@ -29,6 +32,7 @@ from run_query import (
     export_json,
     export_relative_strength,
     select_with_buffer,
+    _compute_weinstein_stage_series,
 )
 
 
@@ -670,6 +674,115 @@ class TestComputeRelativeStrengthChart:
         con = make_gem_con()
         insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-01-06", 60, 100.0, 1.0)
         assert compute_relative_strength_chart(con, "AAA", "NASDAQ100", "2026-03-30", "2026-01-05") is None
+
+    def test_output_carries_stage_analysis_fields(self):
+        # Integracyjny check: compute_relative_strength_chart faktycznie dolacza
+        # wolumen + klasyfikacje etapow (_compute_weinstein_stage_series) do kazdego
+        # wyswietlanego tygodnia, nie tylko linie ceny/SMA.
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")
+        ref_date = pd.Timestamp("2026-03-30")
+        fixture_start = start_date - pd.Timedelta(weeks=60)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 80, 100.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 80, 200.0, 0.3)
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                                start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        for key in ("volume", "volume_ratio", "stage", "signal"):
+            assert key in out
+            assert len(out[key]) == len(out["dates"])
+        # Trend jest tu jednostajnie rosnacy przez cale okno -> ostatni tydzien
+        # powinien byc sklasyfikowany jako etap zaawansowania (2A/2B), nie 1/3/4.
+        assert out["current_stage"] in ("2A", "2B")
+        # Wolumen jest tu zawsze 0 (insert_weekly_series) -> volume_ratio zawsze None
+        # (0/0 pominiete w _compute_weinstein_stage_series) i signal tez zawsze None
+        # (brak potwierdzenia wolumenem) -> regresja na quirk pandas iterrows(),
+        # ktory potrafi po cichu zamienic None na NaN przy mieszaniu kolumn
+        # float/object w jednym wierszu (patrz komentarz w compute_relative_strength_chart)
+        # — NaN w miejsce None wyeksportowalby sie do JSON jako niepoprawny literal `NaN`.
+        assert all(v is None for v in out["volume_ratio"])
+        assert all(s is None for s in out["signal"])
+        assert "NaN" not in json.dumps(out)
+
+
+# ---------------------------------------------------------------------------
+# _compute_weinstein_stage_series: klasyfikacja etapow Weinsteina (1/2A/2B/3/4)
+# + sygnaly wejscia/wyjscia + potwierdzenie wolumenem, na podstawie samej pozycji
+# i nachylenia SMA30 wzgledem ceny (patrz uzasadnienie w run_query.py — bez linii
+# GLB/dlugoterminowego oporu bazy, z tego samego powodu co reszta wykresu 10:30).
+# ---------------------------------------------------------------------------
+
+def make_stage_df(closes, volumes=None):
+    volumes = volumes if volumes is not None else [1000] * len(closes)
+    df = pd.DataFrame({"close": closes, "volume": volumes})
+    df["sma10"] = df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
+    df["sma30"] = df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
+    return df
+
+
+class TestComputeWeinsteinStageSeries:
+    def test_flat_base_then_breakout_on_volume_is_entry_2a(self):
+        # 40 plaskich tygodni (baza, Etap 1) + tydzien wybicia na 3x sredniego wolumenu.
+        closes = [100.0] * 41
+        closes[-1] = 130.0
+        volumes = [1000] * 41
+        volumes[-1] = 3000
+
+        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
+        assert rows[39]["stage"] == "1"
+        assert rows[40]["stage"] == "2A"
+        assert rows[40]["signal"] == "ENTRY_2A"
+        assert rows[40]["volume_ratio"] == pytest.approx(3.0)
+
+    def test_breakout_without_volume_confirmation_has_no_entry_signal(self):
+        # Ten sam breakout, ale wolumen ledwo powyzej sredniej (1.1x < próg 1.5x)
+        # -> etap 2A rozpoznany, ale BEZ sygnalu wejscia (brak potwierdzenia).
+        closes = [100.0] * 41
+        closes[-1] = 130.0
+        volumes = [1000] * 41
+        volumes[-1] = 1100
+
+        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
+        assert rows[40]["stage"] == "2A"
+        assert rows[40]["signal"] is None
+        assert rows[40]["volume_ratio"] < STAGE_BREAKOUT_VOLUME_RATIO
+
+    def test_established_uptrend_pullback_to_sma10_is_entry_2b(self):
+        # Dlugi jednostajny trend wzrostowy (Etap 2B, poza oknem "swiezosci" 2A),
+        # potem 2-tygodniowa korekta dotykajaca SMA10 i odbicie na wzroscie wolumenu
+        # -> klasyczny, pozniejszy punkt dokupienia z ksiazki Weinsteina.
+        n_pre = 45
+        closes = [100.0 + i for i in range(n_pre)]
+        closes += [closes[-1] + 0.3, closes[-1] - 1.5, closes[-1] - 2.5, closes[-1] - 1.0,
+                   closes[-1] + 2.0, closes[-1] + 3.5]
+        volumes = [1000] * len(closes)
+        volumes[48] = 1400  # tydzien odbicia ponad SMA10
+
+        rows = _compute_weinstein_stage_series(make_stage_df(closes, volumes))
+        assert rows[44]["stage"] == "2B"
+        assert rows[48]["stage"] == "2B"
+        assert rows[48]["signal"] == "ENTRY_2B"
+
+    def test_downtrend_below_falling_sma30_is_stage_4(self):
+        closes = [200.0 - i for i in range(60)]
+        rows = _compute_weinstein_stage_series(make_stage_df(closes))
+        assert rows[59]["stage"] == "4"
+        assert rows[59]["signal"] is None
+
+    def test_reversal_from_uptrend_crossing_below_sma30_triggers_exit_stop(self):
+        n_pre = 45
+        closes = [100.0 + i for i in range(n_pre)]
+        closes += [closes[-1] - 3, closes[-1] - 8, closes[-1] - 14, closes[-1] - 20]
+        rows = _compute_weinstein_stage_series(make_stage_df(closes))
+        assert rows[46]["stage"] == "2B"
+        assert rows[47]["stage"] == "3"
+        assert rows[47]["signal"] == "EXIT_STOP"
+
+    def test_insufficient_history_yields_none_stage(self):
+        rows = _compute_weinstein_stage_series(make_stage_df([100.0] * 10))
+        assert all(r["stage"] is None and r["signal"] is None and r["volume_ratio"] is None for r in rows)
 
 
 # ---------------------------------------------------------------------------

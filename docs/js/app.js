@@ -316,13 +316,57 @@ function initChartModeToggle() {
 
 let rsMansfieldChartInstance = null;
 
+// Klasyfikacja etapow Weinsteina (Stage Analysis) dolaczona przez run_query.py
+// (_compute_weinstein_stage_series) do kazdego tygodnia wykresu 10:30 — patrz
+// weekly_chart.stage/signal/volume/volume_ratio. Etykiety/kolory tylko do
+// wyswietlania, logika klasyfikacji zyje wylacznie w backendzie.
+const STAGE_LABELS = {
+    "1": "Etap 1 — Baza",
+    "2A": "Etap 2A — Świeże wybicie",
+    "2B": "Etap 2B — Kontynuacja trendu",
+    "3": "Etap 3 — Szczyt / dystrybucja",
+    "4": "Etap 4 — Spadek",
+};
+const STAGE_DESCRIPTIONS = {
+    "1": "Cena w pobliżu płaskiej SMA30 — brak potwierdzonego trendu, obserwuj wybicie.",
+    "2A": "Świeże przebicie SMA30 w górę na wolumenie — klasyczny punkt wejścia.",
+    "2B": "Trend już trwa nad rosnącą SMA30 — dokupowanie na korektach do SMA10/SMA30.",
+    "3": "Trend się wypłaszcza po wzroście — rozważ realizację zysków, unikaj nowych wejść.",
+    "4": "Cena pod opadającą SMA30 — trend spadkowy, poza rynkiem / bez nowych pozycji.",
+};
+const STAGE_COLORS = { "1": "#8a8f9c", "2A": "#2ecc71", "2B": "#26a65b", "3": "#e0a72e", "4": "#e0455a" };
+const SIGNAL_LABELS = {
+    ENTRY_2A: "Wejście (2A): wybicie z bazy potwierdzone wolumenem",
+    ENTRY_2B: "Wejście (2B): odbicie od SMA10 w istniejącym trendzie",
+    EXIT_STOP: "Wyjście: zamknięcie poniżej SMA30",
+    EXIT_CLIMAX: "Ostrzeżenie: cena mocno wykupiona nad SMA30",
+};
+const SIGNAL_MARKER_COLORS = { ENTRY_2A: "#2ecc71", ENTRY_2B: "#26a65b", EXIT_STOP: "#e0455a", EXIT_CLIMAX: "#e0a72e" };
+const STAGE_BREAKOUT_VOLUME_RATIO = 1.5; // musi byc zgodne z STAGE_BREAKOUT_VOLUME_RATIO w run_query.py — koloruje slupki wolumenu
+
+function renderStageBadge(stage) {
+    const badge = document.getElementById("stageBadge");
+    if (!badge) return;
+    if (!stage || !STAGE_LABELS[stage]) { badge.innerHTML = ""; return; }
+    badge.innerHTML = `<span class="stage-dot" style="background:${STAGE_COLORS[stage]}"></span>`
+        + `<span style="color:${STAGE_COLORS[stage]}">${STAGE_LABELS[stage]}</span>`
+        + `<span class="stage-desc">${STAGE_DESCRIPTIONS[stage]}</span>`;
+}
+
 // Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
 // stage analysis (Stan Weinstein / Dr Eric Wish):
 // 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. i poziom
 //    własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
 //    wyświetlanego tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart)
 //    — jedna wspólna skala, żeby jednym spojrzeniem było widać, która linia
-//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku.
+//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku. Dokłada
+//    się do niego tygodniowy wolumen (słupki na osobnej, ukrytej skali u dołu —
+//    klasyczny układ "cena + wolumen") oraz znaczniki wejścia/wyjścia na linii
+//    ceny, wyliczone backendowo (patrz STAGE_LABELS/SIGNAL_LABELS wyżej i
+//    _compute_weinstein_stage_series w run_query.py). Siła relatywna względem
+//    indeksu NIE wchodzi w tę klasyfikację etapów (pomysł odrzucony wcześniej ze
+//    względu na trudność implementacji) — indeks tu służy tylko jako linia
+//    porównawcza na wykresie, tak jak wcześniej.
 // 2. Oscylator Mansfield RS w dwóch wygładzeniach — krótkoterminowym (~3 mies.)
 //    i średnioterminowym (~6 mies.) — na WŁASNYM, znacznie krótszym ostatnim
 //    ~6-miesięcznym oknie (patrz compute_mansfield_rs_chart), celowo NIE tym
@@ -344,16 +388,51 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
     if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
 
+    renderStageBadge(chartData.current_stage);
+
     const pctFmt = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
+    const signals = chartData.signal || [];
+    const volumes = chartData.volume || [];
+    const volumeRatios = chartData.volume_ratio || [];
+
+    // Znaczniki wejscia/wyjscia na linii ceny: trojkat w gore (zielony) dla
+    // wejsc 2A/2B, trojkat w dol (czerwony) dla EXIT_STOP, gwiazdka (pomaranczowa)
+    // dla ostrzezenia o wykupieniu. Reszta tygodni: bez punktu (radius 0), jak wczesniej.
+    const pointStyles = signals.map((s) => (s === "EXIT_CLIMAX" ? "star" : "triangle"));
+    const pointRadii = signals.map((s) => (s ? 7 : 0));
+    const pointColors = signals.map((s) => SIGNAL_MARKER_COLORS[s] || "#2ecc71");
+    const pointRotations = signals.map((s) => (s === "EXIT_STOP" ? 180 : 0));
+
+    // Slupki tygodniowego wolumenu na wlasnej, ukrytej skali (max ustawiony na
+    // wielokrotnosc szczytu wolumenu, zeby slupki zajmowaly tylko dolny pasek
+    // wykresu — nie konkurowaly wizualnie z liniami % zmiany). Jasniejszy slupek =
+    // wolumen >= STAGE_BREAKOUT_VOLUME_RATIO sredniej z poprzednich tygodni
+    // (potwierdzenie wybicia wolumenem, patrz STAGE_BREAKOUT_VOLUME_RATIO w
+    // run_query.py).
+    const maxVolume = Math.max(1, ...volumes.filter((v) => v != null));
+    const volumeColors = volumes.map((v, i) => {
+        const ratio = volumeRatios[i];
+        return (ratio != null && ratio >= STAGE_BREAKOUT_VOLUME_RATIO) ? "rgba(46, 204, 113, 0.55)" : "rgba(138, 143, 156, 0.3)";
+    });
+
     rsChartInstance = new Chart(canvas, {
         type: "line",
         data: {
             labels: chartData.dates,
             datasets: [
-                { label: `${symbol} (zmiana %)`, data: chartData.close_pct, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2] },
-                { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
-                { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
+                {
+                    label: `${symbol} (zmiana %)`, data: chartData.close_pct, borderColor: "#2ecc71",
+                    backgroundColor: "transparent", pointRadius: pointRadii, pointStyle: pointStyles,
+                    pointBackgroundColor: pointColors, pointBorderColor: pointColors, pointRotation: pointRotations,
+                    borderWidth: 2, order: 1,
+                },
+                { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2], order: 1 },
+                { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
+                { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, order: 1 },
+                {
+                    type: "bar", label: "Wolumen (tyg.)", data: volumes, backgroundColor: volumeColors,
+                    yAxisID: "yVolume", order: 2, barPercentage: 0.7, categoryPercentage: 0.9,
+                },
             ],
         },
         options: {
@@ -361,12 +440,31 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             maintainAspectRatio: false,
             interaction: { mode: "index", intersect: false },
             plugins: {
-                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
-                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}` } },
+                legend: {
+                    position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } },
+                    filter: (item) => item.text !== "Wolumen (tyg.)",
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            if (ctx.dataset.label === "Wolumen (tyg.)") {
+                                const ratio = volumeRatios[ctx.dataIndex];
+                                const ratioTxt = ratio != null ? ` (${ratio.toFixed(2)}x śr.)` : "";
+                                return `Wolumen: ${ctx.parsed.y.toLocaleString("pl-PL")}${ratioTxt}`;
+                            }
+                            const base = `${ctx.dataset.label}: ${pctFmt(ctx.parsed.y)}`;
+                            if (ctx.datasetIndex === 0 && signals[ctx.dataIndex]) {
+                                return [base, SIGNAL_LABELS[signals[ctx.dataIndex]]];
+                            }
+                            return base;
+                        },
+                    },
+                },
             },
             scales: {
                 x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                 y: { ticks: { color: "#8a8f9c", callback: pctFmt }, grid: { color: "#262a35" } },
+                yVolume: { display: false, min: 0, max: maxVolume * 4 },
             },
         },
     });

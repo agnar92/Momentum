@@ -488,6 +488,46 @@ td.negative { color: var(--red); }
     flex: 1;
 }
 
+/* Odznaka aktualnego etapu Weinsteina (1/2A/2B/3/4) nad wykresem 10:30 — patrz
+   renderStageBadge w app.js. */
+.stage-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+
+.stage-badge:empty {
+    display: none;
+}
+
+.stage-badge .stage-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.stage-badge .stage-desc {
+    color: var(--text-dim);
+    font-weight: 400;
+    font-size: 11px;
+}
+
+/* Legenda znaczników wejścia/wyjścia + wolumenu pod wykresem 10:30. */
+.stage-legend {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    flex-shrink: 0;
+    line-height: 1.5;
+}
+
 /* Przełącznik TradingView / Siła Relatywna (widoczny nad panelem wykresu, gdy
    wybrany ticker ma własny tygodniowy wykres RS — patrz updateChartArea w app.js) */
 .chart-mode-toggle {

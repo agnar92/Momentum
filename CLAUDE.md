@@ -176,6 +176,50 @@ data to actually correspond to a stock's real, often multi-year, prior high the 
 the line (and an ATH/confirmed status derived from it) diverged from reality rather than being a trustworthy
 signal, so don't reintroduce it without first fixing the underlying retention-window limitation.
 
+`weekly_chart` also carries a full, mechanized **Weinstein stage classification** for every displayed week
+(`stage`/`signal`/`volume`/`volume_ratio`, plus a `current_stage` convenience field) — `_compute_weinstein_
+stage_series()` in `run_query.py`. This is a deliberate, documented simplification of the book's discretionary
+method ("Secrets for Profiting in Bull and Bear Markets"), not a literal transcription of it (the book itself
+was never available to build this — its methodology is well-established, public trading knowledge; see also
+the "book file" question below): stages are classified from price's position **relative to SMA30 and SMA30's
+own slope** only —
+  - **Stage 1** (base): price near a flat SMA30, no confirmed trend.
+  - **Stage 2A** (fresh breakout): price crosses above SMA30 (flat/rising) within `STAGE_BREAKOUT_
+    LOOKBACK_WEEKS` (4) weeks of the cross — the classic first entry.
+  - **Stage 2B** (continuation): price has been above a rising SMA30 for longer than that — room for later,
+    secondary entries on pullbacks to SMA10 (the book's "pyramiding" buy points).
+  - **Stage 3** (topping): price dips back under SMA30 after an advance, before SMA30 itself turns down
+    (distribution).
+  - **Stage 4** (decline): price under a falling SMA30.
+
+Deliberately **excluded**: any long-term base resistance/support level (a "breakout above the prior high"),
+for the exact same reason the GLB line above was removed — the rolling ~15-month `prices` retention can't
+back a multi-year resistance level, so stages are inferred purely from the SMA30 relationship, which the
+retention window can actually support. Also deliberately excluded: relative strength vs. the index as an
+input to the stage/signal classification itself — that idea was tried and rejected earlier as too hard to
+implement reliably; the index level still appears on the chart as a comparison line, unchanged from before,
+just not read by the stage engine.
+
+Entry/exit **signals** (`signal`, fired only on the specific week they occur, not every week of a stage):
+  - `ENTRY_2A` — the Stage 2A breakout week, but *only* if weekly volume is at least `STAGE_BREAKOUT_
+    VOLUME_RATIO` (1.5x) the trailing `STAGE_VOLUME_LOOKBACK_WEEKS` (10) average — the book's volume
+    confirmation of a breakout; without it, the stage is still called 2A but no entry signal fires.
+  - `ENTRY_2B` — inside Stage 2B, the week price closes back above SMA10 after the prior week closed at or
+    below it (a pullback-and-bounce), softer-confirmed by `STAGE_PULLBACK_VOLUME_RATIO` (1.2x).
+  - `EXIT_STOP` — the week price closes back below SMA30 after being in Stage 2A/2B — Weinstein's primary,
+    mechanical sell rule ("sell on violation of the 30-week MA").
+  - `EXIT_CLIMAX` — a non-mechanical warning (not a hard stop): price is `STAGE_CLIMAX_EXTENSION_PCT` (30%)
+    or more above SMA30 while still in Stage 2 — the book's "don't chase, take some profit into strength"
+    caveat for an overextended advance.
+
+Weekly `volume` (`SUM(Volume)` per week, added to `_weekly_close_series`) and `volume_ratio` (that week's
+volume vs. the trailing 10-week average, `None` until enough history exists) are exported for every week so
+the frontend can render volume bars alongside price, colored by whether that week's volume actually confirms
+a move — not just at breakout weeks. All of the above shares the exact same shallow-history caveat already
+documented for `sma10_pct`/`sma30_pct` above: `stage`/`signal`/`volume_ratio` are `None` until SMA30 (and,
+separately, `STAGE_VOLUME_LOOKBACK_WEEKS` weeks of volume) are available, which in production may not be
+until partway through the displayed window.
+
 Each leader also carries a `mansfield_chart` (`compute_mansfield_rs_chart()`) — the classic Mansfield
 Relative Strength oscillator, `RSM = (RS / SMA(RS, N weeks) - 1) * 100` where `RS = stock_close /
 index_close`, in **two smoothing variants plotted together**: short-term (`rsm_short`,
@@ -231,9 +275,20 @@ it only exists after the pipeline has run.
   (`renderRelativeStrengthChart()`, loaded via CDN like TradingView): the "10:30" price+SMA10/SMA30 chart
   on top, with the stock's own index level plotted alongside it on the *same* % axis (both rebased to 0%
   at the momentum window's start) so the stock's trend can be read directly against its index's trend —
-  whichever line is on top is the outperformer — and the Mansfield RS oscillator (short-term + medium-term
-  lines, its own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container` /
-  `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`). WIG20/mWIG40 are PLN-denominated and
+  whichever line is on top is the outperformer. That same panel also renders the Weinstein stage
+  classification described above: a `#stageBadge` above the chart shows the ticker's `current_stage`
+  (`renderStageBadge()`, colored per `STAGE_COLORS`, with a one-line plain-language description of what that
+  stage means), weekly `volume` bars on a hidden secondary axis at the bottom of the price chart (brighter
+  green when `volume_ratio` clears `STAGE_BREAKOUT_VOLUME_RATIO`, i.e. a confirmed breakout week — this
+  constant is duplicated client-side in `app.js` and must stay in sync with the same constant in
+  `run_query.py`), and entry/exit markers plotted directly on the price line (triangle-up for
+  `ENTRY_2A`/`ENTRY_2B`, triangle-down for `EXIT_STOP`, star for `EXIT_CLIMAX` — see `SIGNAL_MARKER_COLORS`),
+  with the signal's plain-language description (`SIGNAL_LABELS`) appended to that week's tooltip. A static
+  legend line under the chart explains the marker/bar meanings once, rather than repeating them per-chart.
+  None of this reads relative strength vs. the index — that stays a separate, purely visual comparison line
+  on the same chart, unchanged from before. Below that is the Mansfield RS oscillator (short-term + medium-
+  term lines, its own separate ~6-month window, see above) in a shorter panel underneath (`.rs-chart-container`
+  / `.rs-chart-panel` / `.rs-chart-panel-small` in `style.css`). WIG20/mWIG40 are PLN-denominated and
   GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
   prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
   gets a `GPW:` prefix via `tvSymbolFor()` (tracked through `state.selectedUniverse`, set alongside
