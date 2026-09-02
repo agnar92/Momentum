@@ -85,13 +85,15 @@
         <h3>Core — dodatkowe planowane pozycje</h3>
         <p class="panel-hint">
             Tu dopisujesz całe koszyki momentum (ważone wewnętrznie tak jak w Rebalansie) i/lub pojedyncze
-            "blue chipy", których jeszcze NIE masz, ale chcesz uwzględnić w planie. Każda pozycja to jedna
-            relatywna waga — jak w Trading 212 Pies — automatycznie znormalizowana do 100% budżetu Core
-            (razem z Twoimi otagowanymi jako Core pozycjami powyżej).
+            "blue chipy", których jeszcze NIE masz, ale chcesz uwzględnić w planie. Koszyk momentum = dokładnie
+            te spółki, które Rebalans faktycznie sugerowałby kupić (jego własny podział % Nasdaq/Dow,
+            wykluczenia i limit liczby pozycji) — nie każda spółka, która w ogóle przeszła selekcję momentum
+            danego indeksu. Każda pozycja to jedna relatywna waga — jak w Trading 212 Pies — automatycznie
+            znormalizowana do 100% budżetu Core (razem z Twoimi otagowanymi jako Core pozycjami powyżej).
         </p>
         <div class="import-row">
-            <label><input type="checkbox" id="coreUniverseNASDAQ100"> Nasdaq 100 (momentum)</label>
-            <label><input type="checkbox" id="coreUniverseDOWJONES"> Dow Jones (momentum)</label>
+            <label><input type="checkbox" id="coreUniverseNASDAQ100"> Nasdaq 100 (wybrane w Rebalansie)</label>
+            <label><input type="checkbox" id="coreUniverseDOWJONES"> Dow Jones (wybrane w Rebalansie)</label>
         </div>
         <div class="import-row">
             <input type="text" id="corePickInput" placeholder="np. AAPL" class="exclude-input">
