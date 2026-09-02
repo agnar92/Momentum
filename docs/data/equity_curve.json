@@ -1,21 +1,44 @@
 {
+  "SP500": {
+    "dates": [
+      "2026-08-31",
+      "2026-09-01"
+    ],
+    "momentum_index": [
+      100.0,
+      98.982
+    ],
+    "benchmark_index": [
+      100.0,
+      99.305
+    ],
+    "approximated_periods": [
+      false,
+      false
+    ],
+    "note": "Wynik historyczny (zrealizowany) selekcji momentum na bazie zapisów po kazdym rebalansie, zestawiony z 'kup i trzymaj caly indeks' (wazony biezacym FMC). Dane informacyjne, NIE prognoza ani porada inwestycyjna — wyniki z przeszlosci nie gwarantuja przyszlych zwrotow. Okresy 'approximated' obejmuja spolki, dla ktorych brakuje juz historycznej ceny (rolling window w `prices`)."
+  },
   "NASDAQ100": {
     "dates": [
       "2026-07-30",
       "2026-08-28",
-      "2026-08-31"
+      "2026-08-31",
+      "2026-09-01"
     ],
     "momentum_index": [
       100.0,
       101.955,
-      102.236
+      102.236,
+      100.258
     ],
     "benchmark_index": [
       100.0,
-      105.201,
-      104.987
+      105.264,
+      104.982,
+      103.654
     ],
     "approximated_periods": [
+      false,
       false,
       false,
       false
@@ -26,20 +49,62 @@
     "dates": [
       "2026-07-30",
       "2026-08-28",
-      "2026-08-31"
+      "2026-08-31",
+      "2026-09-01"
     ],
     "momentum_index": [
       100.0,
       103.217,
-      102.629
+      102.629,
+      102.063
     ],
     "benchmark_index": [
       100.0,
       103.331,
-      102.284
+      102.284,
+      101.464
     ],
     "approximated_periods": [
       false,
+      false,
+      false,
+      false
+    ],
+    "note": "Wynik historyczny (zrealizowany) selekcji momentum na bazie zapisów po kazdym rebalansie, zestawiony z 'kup i trzymaj caly indeks' (wazony biezacym FMC). Dane informacyjne, NIE prognoza ani porada inwestycyjna — wyniki z przeszlosci nie gwarantuja przyszlych zwrotow. Okresy 'approximated' obejmuja spolki, dla ktorych brakuje juz historycznej ceny (rolling window w `prices`)."
+  },
+  "WIG20": {
+    "dates": [
+      "2026-08-31",
+      "2026-09-01"
+    ],
+    "momentum_index": [
+      100.0,
+      100.0
+    ],
+    "benchmark_index": [
+      100.0,
+      100.0
+    ],
+    "approximated_periods": [
+      false,
+      false
+    ],
+    "note": "Wynik historyczny (zrealizowany) selekcji momentum na bazie zapisów po kazdym rebalansie, zestawiony z 'kup i trzymaj caly indeks' (wazony biezacym FMC). Dane informacyjne, NIE prognoza ani porada inwestycyjna — wyniki z przeszlosci nie gwarantuja przyszlych zwrotow. Okresy 'approximated' obejmuja spolki, dla ktorych brakuje juz historycznej ceny (rolling window w `prices`)."
+  },
+  "MWIG40": {
+    "dates": [
+      "2026-08-31",
+      "2026-09-01"
+    ],
+    "momentum_index": [
+      100.0,
+      100.0
+    ],
+    "benchmark_index": [
+      100.0,
+      100.0
+    ],
+    "approximated_periods": [
       false,
       false
     ],
