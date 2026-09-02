@@ -1173,6 +1173,35 @@ def insert_price_rows(con, rows):
 
 
 class TestProcessUniverseChartsOnly:
+    def test_migrates_pre_existing_portfolio_history_missing_cap_scaled_column(self, tmp_path):
+        # Regresja: pierwsze uruchomienie weekly_charts.yml w produkcji wywalilo sie
+        # duckdb.BinderException'em, bo juz-skomitowany momentum_data.duckdb mial
+        # portfolio_history BEZ kolumny cap_scaled_due_to_infeasibility (dodanej w
+        # tej samej zmianie co process_universe_charts_only), a migracja (ALTER
+        # TABLE ... ADD COLUMN IF NOT EXISTS) byla wywolywana WYLACZNIE wewnatrz
+        # process_universe (pelny miesieczny przebieg) — --charts-only nigdy tamtedy
+        # nie przechodzi, wiec SELECT na nowej kolumnie trafial na stara tabele.
+        con = make_gem_con()
+        con.execute("""
+            CREATE TABLE portfolio_history (
+                ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
+                ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
+                momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
+                z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
+                PRIMARY KEY (ref_date, universe, ticker)
+            )
+        """)
+        con.execute(
+            "INSERT INTO portfolio_history VALUES ('2026-05-01', 'NASDAQ100', 1, 'AAA', 'Tech', "
+            "100.0, 0.1, '12M', 0.2, 1.0, 1.5, 1.0)"
+        )
+        insert_price_rows(con, [("2026-06-01", "AAA", 110.0)])
+
+        out = process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
+        assert out is not None
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        assert payload["constituents"][0]["ticker"] == "AAA"
+
     def test_no_saved_selection_returns_none_and_writes_nothing(self, tmp_path):
         con = make_charts_only_con()
         out = process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))

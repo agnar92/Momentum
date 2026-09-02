@@ -311,6 +311,31 @@ def compute_weights(df_selected, universe=None):
 # ============================================================================
 # GŁÓWNY PRZEBIEG DLA JEDNEGO UNIWERSUM
 # ============================================================================
+def _ensure_portfolio_history_schema(con):
+    """Tworzy portfolio_history (jeśli jeszcze nie istnieje) i dokłada kolumny
+    dodane PO utworzeniu tabeli w już-skomitowanym momentum_data.duckdb (patrz
+    _ensure_prices_ohlc_columns w fetch_data.py po ten sam idiom, idempotentny
+    ALTER TABLE ... ADD COLUMN IF NOT EXISTS). MUSI być wywoływane na początku
+    KAŻDEJ ścieżki, która czyta/pisze portfolio_history — nie tylko
+    process_universe (pełny miesięczny przebieg), ale też
+    process_universe_charts_only (--charts-only, patrz weekly_charts.yml),
+    która może zostać uruchomiona samodzielnie, bez uprzedniego pełnego
+    przebiegu w tym samym procesie — inaczej SELECT na nowej kolumnie rzuca
+    duckdb.BinderException na starej, jeszcze niezmigrowanej bazie (dokładnie
+    to wydarzyło się przy pierwszym uruchomieniu weekly_charts.yml)."""
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS portfolio_history (
+            ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
+            ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
+            momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
+            z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
+            cap_scaled_due_to_infeasibility BOOLEAN,
+            PRIMARY KEY (ref_date, universe, ticker)
+        )
+    """)
+    con.execute("ALTER TABLE portfolio_history ADD COLUMN IF NOT EXISTS cap_scaled_due_to_infeasibility BOOLEAN")
+
+
 def process_universe(con, universe, ref_date, args, docs_data_dir):
     print(f"\n{'=' * 70}\n▶ {universe}\n{'=' * 70}")
 
@@ -329,21 +354,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
 
     df_ranked = add_zscore_and_momentum_score(df_metrics)
 
-    con.execute("""
-        CREATE TABLE IF NOT EXISTS portfolio_history (
-            ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
-            ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
-            momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
-            z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
-            cap_scaled_due_to_infeasibility BOOLEAN,
-            PRIMARY KEY (ref_date, universe, ticker)
-        )
-    """)
-    # Migracja jednorazowa: kolumna dodana pozniej niz tabela sama w sobie (patrz
-    # _ensure_prices_ohlc_columns w fetch_data.py po ten sam idiom) — potrzebna,
-    # zeby process_universe_charts_only mogla odtworzyc ten flag bez ponownego
-    # liczenia wag przy cotygodniowym odswiezeniu samych wykresow (patrz nizej).
-    con.execute("ALTER TABLE portfolio_history ADD COLUMN IF NOT EXISTS cap_scaled_due_to_infeasibility BOOLEAN")
+    _ensure_portfolio_history_schema(con)
     prev_ref_date = con.execute(f"""
         SELECT MAX(ref_date) FROM portfolio_history
         WHERE universe = '{universe}' AND ref_date < DATE '{ref_date}'
@@ -424,6 +435,13 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
 # ============================================================================
 def process_universe_charts_only(con, universe, ref_date, docs_data_dir):
     print(f"\n{'=' * 70}\n▶ {universe} (tylko wykresy — bez zmiany selekcji/wag)\n{'=' * 70}")
+
+    # Patrz docstring _ensure_portfolio_history_schema: ta ścieżka może być
+    # uruchomiona samodzielnie (weekly_charts.yml), bez uprzedniego pełnego
+    # przebiegu process_universe w tym samym procesie — bez tego wywołania
+    # SELECT niżej rzuca BinderException na starej, jeszcze niezmigrowanej
+    # bazie (dokładnie tak wywaliło się pierwsze uruchomienie weekly_charts.yml).
+    _ensure_portfolio_history_schema(con)
 
     last_ref_date = con.execute(f"""
         SELECT MAX(ref_date) FROM portfolio_history WHERE universe = '{universe}'
@@ -525,7 +543,16 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
         })
-    cap_scaled = bool(df_weighted["cap_scaled_due_to_infeasibility"].iloc[0]) if len(df_weighted) else False
+    # pd.notna guard: przy odswiezeniu --charts-only (process_universe_charts_only)
+    # tuz PO migracji kolumny (ALTER TABLE ... ADD COLUMN, patrz
+    # _ensure_portfolio_history_schema) wiersze portfolio_history zapisane PRZED
+    # dodaniem tej kolumny maja tu NULL (pandas <NA>), dopoki nastepny pelny
+    # miesieczny process_universe ich nie nadpisze — bool(pd.NA) rzuca
+    # TypeError ("boolean value of NA is ambiguous"), wiec traktujemy NULL jak
+    # False (brak przeskalowania capow), tak samo jak domyslna wartosc w
+    # compute_weights zanim faktyczne przeskalowanie w ogole nastapi.
+    cap_scaled_raw = df_weighted["cap_scaled_due_to_infeasibility"].iloc[0] if len(df_weighted) else False
+    cap_scaled = bool(cap_scaled_raw) if pd.notna(cap_scaled_raw) else False
     if universe == "DOWJONES":
         fmc_note = ("DJIA jest ważona ceną, nie kapitalizacją — wagi FMC odzwierciedlają wagę cenową "
                      "spółki w indeksie (za funduszem CIND), nie jej kapitalizację rynkową.")
