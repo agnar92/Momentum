@@ -5,20 +5,20 @@
     {
       "universe": "NASDAQ100",
       "yf_symbol": "^NDX",
-      "price_now": 29433.43,
-      "date_now": "2026-08-28 00:00:00",
+      "price_now": 29641.56,
+      "date_now": "2026-08-27 00:00:00",
       "price_start": 23415.42,
       "date_start": "2025-08-29 00:00:00",
-      "return_pct": 25.7
+      "return_pct": 26.59
     },
     {
       "universe": "DOWJONES",
       "yf_symbol": "^DJI",
-      "price_now": 53559.99,
-      "date_now": "2026-08-28 00:00:00",
+      "price_now": 53569.44,
+      "date_now": "2026-08-27 00:00:00",
       "price_start": 45544.88,
       "date_start": "2025-08-29 00:00:00",
-      "return_pct": 17.6
+      "return_pct": 17.62
     }
   ],
   "winner": "NASDAQ100",
