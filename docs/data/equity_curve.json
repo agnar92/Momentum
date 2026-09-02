@@ -7,13 +7,13 @@
     ],
     "momentum_index": [
       100.0,
-      99.77,
-      98.755
+      99.721,
+      98.646
     ],
     "benchmark_index": [
       100.0,
-      100.0,
-      100.0
+      99.594,
+      98.888
     ],
     "approximated_periods": [
       false,
@@ -31,15 +31,15 @@
     ],
     "momentum_index": [
       100.0,
-      101.921,
-      102.202,
-      100.266
+      101.955,
+      102.236,
+      100.258
     ],
     "benchmark_index": [
       100.0,
-      105.31,
-      105.31,
-      105.31
+      105.536,
+      105.397,
+      104.059
     ],
     "approximated_periods": [
       false,
@@ -64,9 +64,9 @@
     ],
     "benchmark_index": [
       100.0,
-      103.01,
-      103.01,
-      103.01
+      103.053,
+      102.287,
+      101.468
     ],
     "approximated_periods": [
       false,
@@ -89,8 +89,8 @@
     ],
     "benchmark_index": [
       100.0,
-      100.0,
-      100.0
+      100.423,
+      99.85
     ],
     "approximated_periods": [
       false,
@@ -112,8 +112,8 @@
     ],
     "benchmark_index": [
       100.0,
-      100.0,
-      100.0
+      99.182,
+      98.509
     ],
     "approximated_periods": [
       false,
