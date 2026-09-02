@@ -11,11 +11,23 @@
 // Pozycje NIE są importowane tu osobno — Portfolio czyta te same holdingi
 // (ticker + liczba akcji), które już zaimportowałeś/aś z XTB w Rebalansie
 // (localStorage klucz momentum_rebalance_holdings, WŁASNOŚĆ rebalance.js —
-// portfolio.js go tylko czyta, nigdy nie zapisuje). Każdy holding dostaje tu
-// tag Core/Satelita (momentum_portfolio_tags), który rebalance.js z kolei
-// odczytuje, żeby wykluczyć Core-owe pozycje z sugestii kupna/sprzedaży
-// momentum — dokładnie tak samo jak ręczne wykluczenie w Rebalansie, bo
-// semantyka jest ta sama: "to trzymam długoterminowo, nie ruszaj tego".
+// portfolio.js go tylko czyta, nigdy nie zapisuje). Każdy NOWY (jeszcze bez
+// tagu) holding dostaje tu domyślny tag Core/Satelita — patrz
+// rebalanceWeightedSplit() niżej: to NIE jest "każda spółka z Rebalansu to
+// Core" (pierwsza wersja tej funkcji tak właśnie robiła — patrz
+// defaultTagFor/classifyTicker w historii gita — co dawało pusty Satelitę,
+// bo Rebalans z definicji trzyma wyłącznie spółki momentum z NASDAQ100/
+// DOWJONES), tylko podział wg wagi pozycji w selekcji Rebalansu: największe
+// pozycje (razem do corePct% wagi, patrz settings.corePct) trafiają do
+// Core, mniejsze/"ogonowe" do Satelity — dopiero to faktycznie DZIELI
+// portfel z Rebalansu na dwie części, zamiast wrzucać wszystko do jednej.
+// Tag jest trwały (localStorage momentum_portfolio_tags) — raz nadany
+// (domyślnie albo ręcznie) NIE jest przeliczany na nowo przy zmianie
+// corePct, user może go zawsze ręcznie nadpisać przyciskami w tabeli.
+// rebalance.js z kolei odczytuje ten sam tag, żeby wykluczyć Core-owe
+// pozycje z sugestii kupna/sprzedaży momentum — dokładnie tak samo jak
+// ręczne wykluczenie w Rebalansie, bo semantyka jest ta sama: "to trzymam
+// długoterminowo, nie ruszaj tego".
 //
 // Core ograniczony do Nasdaq 100 / Dow Jones (USD) z tego samego powodu co
 // w rebalance.js — WIG20/mWIG40 nie mają realnej wagi fmc_etf do selekcji/
@@ -170,17 +182,22 @@ function normalizeWeights(relWeights) {
 }
 
 // ============================================================
-// SELEKCJA REBALANSU — replika ticker-selekcji z rebalance.js::computeTargets
-// (jego własny podział pct między NASDAQ100/DOWJONES, wykluczenia ręczne,
-// tagi Core i limit maxHoldings — POMIJA jedynie samo przeliczenie na kwoty
-// dolarowe, którego tu nie potrzebujemy). Duplikacja zamiast importu — oba
-// moduły są ładowane niezależnie, bez wspólnego bundlera (patrz komentarz
-// przy findColIndex w rebalance.js). Zwraca Set tickerów, które Rebalans
-// faktycznie by zasugerował kupić — to jest "koszyk momentum" w Core,
-// NIE cała top-kwintylowa/equal-weight selekcja z {universe}.json (dla
-// DOWJONES — EQUAL_WEIGHT_UNIVERSES bez selekcji kwintylowej — to bez tego
-// filtra było praktycznie CAŁYM indeksem, patrz run_query.py).
-function rebalanceSelectedTickers(univData, rebalSettings, rebalExcluded, portfolioTags) {
+// SELEKCJA + WAGI REBALANSU — replika ticker-selekcji z
+// rebalance.js::computeTargets (jego własny podział pct między
+// NASDAQ100/DOWJONES, wykluczenia ręczne, tagi Core i limit maxHoldings —
+// POMIJA jedynie samo przeliczenie na kwoty dolarowe, którego tu nie
+// potrzebujemy). Duplikacja zamiast importu — oba moduły są ładowane
+// niezależnie, bez wspólnego bundlera (patrz komentarz przy findColIndex w
+// rebalance.js). Zwraca [ticker, relativeWeight][] posortowane malejąco i
+// przycięte do maxHoldings — dokładnie te spółki (i w tych proporcjach),
+// które Rebalans faktycznie by zasugerował kupić, NIE cała top-kwintylowa/
+// equal-weight selekcja z {universe}.json (dla DOWJONES — EQUAL_WEIGHT_
+// UNIVERSES bez selekcji kwintylowej — to bez tego filtra było praktycznie
+// CAŁYM indeksem, patrz run_query.py). Wspólny rdzeń dla
+// rebalanceSelectedTickers (koszyk "cały koszyk momentum" w Core) i
+// rebalanceWeightedSplit (auto-podział nowych holdingów na Core/Satelitę
+// wg wagi pozycji) poniżej.
+function rebalanceWeightedRaw(univData, rebalSettings, rebalExcluded, portfolioTags) {
     const raw = {};
     CORE_UNIVERSES.forEach(u => {
         const pctAllocation = (rebalSettings.pct || {})[u] || 0;
@@ -195,8 +212,36 @@ function rebalanceSelectedTickers(univData, rebalSettings, rebalExcluded, portfo
         });
     });
     const maxHoldings = rebalSettings.maxHoldings || DEFAULT_REBAL_SETTINGS.maxHoldings;
-    const sorted = Object.entries(raw).sort((a, b) => b[1] - a[1]);
-    return new Set(sorted.slice(0, maxHoldings).map(([ticker]) => ticker));
+    return Object.entries(raw).sort((a, b) => b[1] - a[1]).slice(0, maxHoldings);
+}
+
+function rebalanceSelectedTickers(univData, rebalSettings, rebalExcluded, portfolioTags) {
+    const sorted = rebalanceWeightedRaw(univData, rebalSettings, rebalExcluded, portfolioTags);
+    return new Set(sorted.map(([ticker]) => ticker));
+}
+
+// Auto-podział NOWYCH holdingów (jeszcze bez tagu) między Core i Satelitę wg
+// wagi pozycji w selekcji Rebalansu — standardowa konwencja core-satellite:
+// rdzeń to WIĘKSZOŚĆ kapitału w mniejszej liczbie większych, stabilniejszych
+// pozycji, satelita to "ogon" mniejszych/nowszych pozycji. Idąc od
+// największej wagi w dół, pozycje trafiają do Core, dopóki suma narastająca
+// nie osiągnie `corePct`% sumy wag całej selekcji — od tego momentu reszta
+// (mniejsze pozycje) trafia do Satelity. Używane przez syncSlotsFromHoldings
+// (patrz niżej) — raz nadany tag jest trwały (user może go ręcznie zmienić),
+// więc to nie przelicza się na nowo przy każdym renderze, tylko przy
+// pierwszym zobaczeniu danego tickera.
+function rebalanceWeightedSplit(univData, rebalSettings, rebalExcluded, portfolioTags, corePct) {
+    const sorted = rebalanceWeightedRaw(univData, rebalSettings, rebalExcluded, portfolioTags);
+    const total = sorted.reduce((s, [, w]) => s + w, 0);
+    const coreSet = new Set();
+    const satelliteSet = new Set();
+    const threshold = total * ((corePct ?? 100) / 100);
+    let cumulative = 0;
+    sorted.forEach(([ticker, w]) => {
+        if (cumulative < threshold) coreSet.add(ticker); else satelliteSet.add(ticker);
+        cumulative += w;
+    });
+    return { coreSet, satelliteSet, selectedSet: new Set(sorted.map(([t]) => t)) };
 }
 
 // ============================================================
@@ -320,17 +365,16 @@ function computeSatelliteTargets(satelliteCapital, slots, satelliteCapPct, total
 // satelity — patrz initCoreForm/initSatelliteForm) są oznaczone brakiem
 // `fromHolding` i sync ich nie rusza.
 // ============================================================
-function classifyTicker(ticker, univData) {
-    for (const u of CORE_UNIVERSES) {
-        if (((univData[u] || {}).constituents || []).some(c => c.ticker === ticker)) return u;
-    }
-    return null;
-}
-function defaultTagFor(ticker, univData) { return classifyTicker(ticker, univData) ? "core" : "satellite"; }
+// weightSplit = wynik rebalanceWeightedSplit() (patrz wyżej) — ticker w
+// coreSet (największe pozycje, razem do corePct% wagi selekcji) -> "core";
+// wszystko inne (mniejsze pozycje w selekcji ORAZ tickery w ogóle spoza
+// selekcji Rebalansu — np. spadłe z selekcji momentum albo ręcznie
+// dokupione spoza śledzonych indeksów) -> "satellite".
+function defaultTagFor(ticker, weightSplit) { return weightSplit.coreSet.has(ticker) ? "core" : "satellite"; }
 
 // Zwraca nowe { coreSlots, satelliteSlots, tags } — czyste, testowalne bez
 // dotykania modułowego stanu ani localStorage.
-function syncSlotsFromHoldings(holdings, prevCoreSlots, prevSatelliteSlots, prevTags, univData, prices) {
+function syncSlotsFromHoldings(holdings, prevCoreSlots, prevSatelliteSlots, prevTags, weightSplit, prices) {
     const existingByTicker = {};
     [...prevCoreSlots, ...prevSatelliteSlots].forEach(s => {
         if (s.fromHolding) existingByTicker[s.id || s.ticker] = s;
@@ -348,7 +392,7 @@ function syncSlotsFromHoldings(holdings, prevCoreSlots, prevSatelliteSlots, prev
         currentTickers.add(h.ticker);
         const prev = existingByTicker[h.ticker];
         const manualPrice = prev ? prev.manualPrice : (prices[h.ticker]?.price != null ? undefined : null);
-        if (!newTags[h.ticker]) newTags[h.ticker] = defaultTagFor(h.ticker, univData);
+        if (!newTags[h.ticker]) newTags[h.ticker] = defaultTagFor(h.ticker, weightSplit);
 
         if (newTags[h.ticker] === "core") {
             newCore.push({ type: "ticker", id: h.ticker, shares: h.shares || 0, manualPrice, fromHolding: true });
@@ -365,7 +409,8 @@ function syncSlotsFromHoldings(holdings, prevCoreSlots, prevSatelliteSlots, prev
 }
 
 function refreshFromHoldings() {
-    const result = syncSlotsFromHoldings(loadHoldings(), coreSlots, satelliteSlots, tags, universeData, priceMap);
+    const weightSplit = rebalanceWeightedSplit(universeData, loadRebalanceSettings(), loadRebalanceExcluded(), tags, settings.corePct);
+    const result = syncSlotsFromHoldings(loadHoldings(), coreSlots, satelliteSlots, tags, weightSplit, priceMap);
     coreSlots = result.coreSlots;
     satelliteSlots = result.satelliteSlots;
     tags = result.tags;
@@ -763,8 +808,8 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         normalizeWeights, computeCoreTargets, capAndRedistribute, computeSatelliteTargets,
-        rebalanceSelectedTickers,
+        rebalanceSelectedTickers, rebalanceWeightedSplit,
         fmtMoney, fmtQty, fmtPct,
-        classifyTicker, defaultTagFor, syncSlotsFromHoldings, slotValue,
+        defaultTagFor, syncSlotsFromHoldings, slotValue,
     };
 }
