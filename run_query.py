@@ -335,9 +335,15 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
             ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
             momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
             z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
+            cap_scaled_due_to_infeasibility BOOLEAN,
             PRIMARY KEY (ref_date, universe, ticker)
         )
     """)
+    # Migracja jednorazowa: kolumna dodana pozniej niz tabela sama w sobie (patrz
+    # _ensure_prices_ohlc_columns w fetch_data.py po ten sam idiom) — potrzebna,
+    # zeby process_universe_charts_only mogla odtworzyc ten flag bez ponownego
+    # liczenia wag przy cotygodniowym odswiezeniu samych wykresow (patrz nizej).
+    con.execute("ALTER TABLE portfolio_history ADD COLUMN IF NOT EXISTS cap_scaled_due_to_infeasibility BOOLEAN")
     prev_ref_date = con.execute(f"""
         SELECT MAX(ref_date) FROM portfolio_history
         WHERE universe = '{universe}' AND ref_date < DATE '{ref_date}'
@@ -368,7 +374,8 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     # --- Zapis do trwałej tabeli portfolio_history (universe-aware) ---
     df_hist = df_weighted[[
         "Ticker", "Sector", "price_now", "momentum_value", "momentum_window",
-        "annualized_volatility", "z_score", "momentum_score", "weight", "rank_in_universe"
+        "annualized_volatility", "z_score", "momentum_score", "weight", "rank_in_universe",
+        "cap_scaled_due_to_infeasibility",
     ]].rename(columns={"Ticker": "ticker", "Sector": "sector", "price_now": "price_at_rebalance"})
     df_hist.insert(0, "universe", universe)
     df_hist.insert(0, "ref_date", pd.Timestamp(ref_date).date())
@@ -376,7 +383,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     con.execute(f"DELETE FROM portfolio_history WHERE ref_date = DATE '{ref_date}' AND universe = '{universe}'")
     con.execute("INSERT INTO portfolio_history SELECT ref_date, universe, rank_in_universe, ticker, sector, "
                 "price_at_rebalance, momentum_value, momentum_window, annualized_volatility, z_score, "
-                "momentum_score, weight FROM df_hist")
+                "momentum_score, weight, cap_scaled_due_to_infeasibility FROM df_hist")
 
     # --- Turnover (do changeloga na dashboardzie) ---
     added_tickers, dropped_tickers = [], []
@@ -403,6 +410,97 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts)
 
     return df_weighted
+
+
+# ============================================================================
+# TRYB "TYLKO WYKRESY" (--charts-only, patrz weekly_charts.yml) — odswieza
+# WYLACZNIE ceny biezace + weekly_chart/mansfield_chart dla ostatniej JUZ
+# ZAPISANEJ miesiecznej selekcji z portfolio_history, bez ponownego liczenia
+# selekcji/wag/portfolio_history (to zostaje wylacznie miesieczne, main.yml —
+# uzytkownik chcial swiezsze wykresy/RSM co tydzien, ale rebalans/selekcje
+# bez zmian co miesiac). Uzywa TEJ SAMEJ export_json co pelny przebieg, wiec
+# schemat docs/data/{universe}.json (i cap_scaled_due_to_infeasibility, patrz
+# migracja kolumny w portfolio_history wyzej) zostaje identyczny.
+# ============================================================================
+def process_universe_charts_only(con, universe, ref_date, docs_data_dir):
+    print(f"\n{'=' * 70}\n▶ {universe} (tylko wykresy — bez zmiany selekcji/wag)\n{'=' * 70}")
+
+    last_ref_date = con.execute(f"""
+        SELECT MAX(ref_date) FROM portfolio_history WHERE universe = '{universe}'
+    """).fetchone()[0]
+    if last_ref_date is None:
+        print(f"⚠️  Brak zapisanej miesiecznej selekcji w portfolio_history dla {universe} — "
+              f"pomijam (najpierw potrzebny co najmniej jeden pelny przebieg run_query.py).")
+        return None
+    # DuckDB zwraca kolumny DATE jako datetime.date, nie str — znormalizuj od razu,
+    # zeby SQL string-interpolation nizej i pole "ref_date" w eksportowanym JSON-ie
+    # (patrz export_json) dostaly spojny, JSON-serializowalny format YYYY-MM-DD
+    # (dokladnie taki jak main() ustawia dla pelnego przebiegu).
+    last_ref_date = pd.Timestamp(last_ref_date).strftime("%Y-%m-%d")
+
+    df_sel = con.execute(f"""
+        SELECT rank_in_universe, ticker AS "Ticker", sector AS "Sector",
+               momentum_value, momentum_window, annualized_volatility, z_score,
+               momentum_score, weight, cap_scaled_due_to_infeasibility
+        FROM portfolio_history
+        WHERE universe = '{universe}' AND ref_date = DATE '{last_ref_date}'
+        ORDER BY rank_in_universe
+    """).df()
+    if df_sel.empty:
+        print(f"⚠️  Pusta zapisana selekcja dla {universe} @ {last_ref_date}.")
+        return None
+
+    # Biezaca cena (nie ta sprzed miesiaca z chwili rebalansu) — do wyswietlenia
+    # oraz jako punkt koncowy okien wykresow nizej.
+    tickers_sql = ",".join(f"'{t}'" for t in df_sel["Ticker"])
+    prices_df = con.execute(f"""
+        SELECT Ticker, ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{ref_date}') AS price_now
+        FROM prices WHERE Ticker IN ({tickers_sql}) GROUP BY Ticker
+    """).df()
+    price_by_ticker = dict(zip(prices_df["Ticker"], prices_df["price_now"]))
+    df_sel["price_now"] = df_sel["Ticker"].map(price_by_ticker)
+    n_before = len(df_sel)
+    df_sel = df_sel.dropna(subset=["price_now"]).reset_index(drop=True)
+    if len(df_sel) < n_before:
+        print(f"⚠️  {n_before - len(df_sel)} spolek z ostatniej selekcji bez swiezej ceny @ {ref_date} "
+              f"— pominiete w tym odswiezeniu wykresow.")
+    if df_sel.empty:
+        return None
+
+    n_missing_fmc = con.execute(f"""
+        SELECT COUNT(*) FROM index_constituents
+        WHERE Index_Name = '{universe}' AND fmc_etf IS NULL
+    """).fetchone()[0]
+
+    prev_ref_date = con.execute(f"""
+        SELECT MAX(ref_date) FROM portfolio_history
+        WHERE universe = '{universe}' AND ref_date < DATE '{last_ref_date}'
+    """).fetchone()[0]
+    added_tickers, dropped_tickers = [], []
+    if prev_ref_date is not None:
+        prev_tickers = set(con.execute(f"""
+            SELECT ticker FROM portfolio_history
+            WHERE universe = '{universe}' AND ref_date = DATE '{prev_ref_date}'
+        """).df()["ticker"])
+        added_tickers = sorted(set(df_sel["Ticker"]) - prev_tickers)
+        dropped_tickers = sorted(prev_tickers - set(df_sel["Ticker"]))
+
+    weekly_charts, mansfield_charts = {}, {}
+    index_mom = compute_index_momentum(con, universe, ref_date)
+    if index_mom is not None:
+        for ticker in df_sel["Ticker"]:
+            weekly_charts[ticker] = compute_relative_strength_chart(con, ticker, universe,
+                                                                       ref_date, index_mom["date_start"])
+            mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
+                                                                     ref_date, index_mom["date_start"])
+
+    # ref_date przekazywany do export_json to last_ref_date (data OSTATNIEGO
+    # rebalansu, nie dzisiejsza) — pole "ref_date" w JSON-ie zasila etykiete
+    # "Rebalans: ..." na dashboardzie (patrz app.js), ktora ma nadal pokazywac
+    # date faktycznej (miesiecznej) selekcji, nie date odswiezenia wykresow.
+    export_json(df_sel, universe, last_ref_date, docs_data_dir, n_missing_fmc,
+                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts)
+    return df_sel
 
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
@@ -1516,6 +1614,12 @@ def main():
                               "(docs/data/global_equity_momentum.json + docs/data/relative_strength.json), "
                               "pomijając pełne przeliczenie 3 głównych uniwersów — do użycia w codziennym "
                               "workflow (patrz daily_gem.yml) po `fetch_data.py --indices-only`.")
+    parser.add_argument("--charts-only", action="store_true",
+                         help="Odśwież WYŁĄCZNIE bieżące ceny + weekly_chart/mansfield_chart dla OSTATNIEJ "
+                              "już zapisanej miesięcznej selekcji z portfolio_history (+ all_prices.json) — "
+                              "bez ponownego liczenia selekcji/wag/portfolio_history, które zostają wyłącznie "
+                              "miesięczne (main.yml). Do użycia w cotygodniowym workflow (patrz "
+                              "weekly_charts.yml) po pełnym `fetch_data.py` (nie --indices-only).")
     args = parser.parse_args()
 
     con = duckdb.connect("momentum_data.duckdb")
@@ -1530,6 +1634,27 @@ def main():
         export_global_equity_momentum(con, docs_data_dir)
         export_relative_strength(con, docs_data_dir, min_trading_days=args.min_trading_days,
                                   max_staleness_days=args.max_staleness_days)
+        con.close()
+        return
+
+    if args.charts_only:
+        if args.ref_date:
+            ref_date = args.ref_date
+        else:
+            result = con.execute("SELECT MAX(Date) FROM prices").fetchone()[0]
+            if result is None:
+                print("❌ Brak danych cenowych. Uruchom najpierw fetch_data.py.")
+                sys.exit(1)
+            ref_date = pd.to_datetime(result).strftime("%Y-%m-%d")
+        print(f"📅 Data odświeżenia wykresów (selekcja/wagi zostają z ostatniego rebalansu): {ref_date}")
+
+        docs_data_dir = str(Path(args.docs_dir) / "data")
+        Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
+
+        for universe in UNIVERSES:
+            process_universe_charts_only(con, universe, ref_date, docs_data_dir)
+
+        export_all_prices(con, ref_date, docs_data_dir)
         con.close()
         return
 

@@ -46,9 +46,33 @@ files (English is fine for new, unrelated code).
 There are two Python scripts, run in this order, all operating on a local DuckDB file
 `momentum_data.duckdb`. Since a recent change, this file **is committed to git** (repo root, tracked —
 not under `docs/`, so it has no effect on the GitHub Pages deployment) and persists across scheduled
-runs; `main.yml` commits it back after each run (see CI section below). This is what keeps
-`portfolio_history` alive across separate monthly workflow runs, so the buffer rule actually has a
-"previous rebalance" to compare against in production.
+runs; `main.yml`/`weekly_charts.yml`/`daily_gem.yml` all commit it back after each run (see CI section
+below). This is what keeps `portfolio_history` alive across separate monthly workflow runs, so the buffer
+rule actually has a "previous rebalance" to compare against in production.
+
+**Selection/weighting is monthly; price/chart freshness is now weekly** — these are two deliberately
+decoupled cadences, not one. `fetch_data.py` (full, not `--indices-only`) and `run_query.py --charts-only`
+both now also run weekly (`weekly_charts.yml`, see CI section below), on top of `main.yml`'s existing
+monthly full run — but `--charts-only` (`process_universe_charts_only()`) recomputes ONLY the current
+price + `weekly_chart`/`mansfield_chart` for each ticker in the LAST already-saved `portfolio_history`
+snapshot; it never touches selection, weights, or `portfolio_history` itself, which stay exactly as
+computed by the last monthly `process_universe()` run. This was a deliberate choice (confirmed with the
+user) after establishing that `fetch_data.py` alone never touches `docs/data/*.json` — only `run_query.py`
+does — so simply fetching prices more often would not, by itself, have made the SMA10/30/Darvas-box/
+Mansfield-oscillator/RSM-screener data on the dashboard any fresher; `--charts-only` is what actually
+closes that gap while leaving the monthly rebalance cadence untouched. `portfolio_history` gained a new
+persisted `cap_scaled_due_to_infeasibility BOOLEAN` column (added via an idempotent
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, same idiom as `_ensure_prices_ohlc_columns` in `fetch_data.py`)
+specifically so `--charts-only` can re-export this display flag for the JSON payload without recomputing
+weights. The `docs/data/{universe}.json` `"ref_date"` field written by a `--charts-only` run is
+deliberately still the LAST MONTHLY REBALANCE date (not today) — it's what the dashboard's "Rebalans: ..."
+label reads, and that label is meant to keep showing the actual selection date, not the date the charts
+happened to refresh; only the per-constituent `"price"` and chart fields reflect the fresher data. No new
+code was needed to keep `prices` from growing unbounded under the new weekly cadence:
+`update_prices_incremental()`'s retention trim (`DELETE FROM prices WHERE Date < cutoff`, see below) already
+runs unconditionally on every `fetch_data.py` invocation, so a weekly full fetch keeps the rolling window at
+exactly `--lookback-months` (22) regardless of how often it's called — this was verified, not assumed, before
+being left alone.
 
 1. **`fetch_data.py`** — data acquisition only.
    - Loads index composition + weights from the three manually-maintained CSV files at repo root
@@ -568,6 +592,12 @@ python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices
                                    # not fetched — see Global Equity Momentum section), skip constituents
 python run_query.py --gem-only        # daily_gem.yml only: regenerate global_equity_momentum.json only
 
+python fetch_data.py                  # weekly_charts.yml: SAME full fetch as main.yml (not --indices-only)
+python run_query.py --charts-only     # weekly_charts.yml: refresh ONLY current price + weekly_chart/
+                                   # mansfield_chart for each ticker in the LAST already-saved monthly
+                                   # portfolio_history selection (+ all_prices.json) — selection/weights/
+                                   # portfolio_history stay untouched, see Pipeline architecture above
+
 pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)
 ruff check .                      # linter
 ```
@@ -597,5 +627,25 @@ genuinely fresh numbers.
   checkout itself carries them.) Also commits `momentum_data.duckdb` plus the two regenerated JSON files
   back (same `[skip ci]` convention as `main.yml`, to avoid triggering a full monthly run on every daily
   push).
+- **`weekly_charts.yml`** — runs weekly (`cron: '0 7 * * 6'`, Saturday mornings) and manually. Unlike
+  `daily_gem.yml`, this one DOES run the full `fetch_data.py` (not `--indices-only` — real per-constituent
+  price data, hundreds of yfinance tickers, same call as `main.yml`), then `run_query.py --charts-only`
+  (see Commands above / Pipeline architecture above) to refresh only prices + `weekly_chart`/
+  `mansfield_chart` for the already-saved monthly selection, plus `docs/data/all_prices.json`. It
+  deliberately does **not** call the full `process_universe()`/selection path, `export_equity_curve()` (its
+  output only changes when a NEW `portfolio_history` snapshot is written, which only happens monthly — so
+  recomputing it weekly would just reproduce the same numbers), or `export_global_equity_momentum()`/
+  `export_relative_strength()` (already handled independently by the daily `daily_gem.yml` path). Commits
+  `momentum_data.duckdb` plus `docs/data/*.json` back (same `[skip ci]` convention, to avoid triggering
+  `main.yml`'s full monthly rebalance on every weekly push) before deploying `docs/` to GitHub Pages, same
+  as the other two workflows. Exists because `fetch_data.py` alone never regenerates `docs/data/*.json` —
+  only `run_query.py` does — so a weekly `fetch_data.py` run by itself would not have made the dashboard's
+  SMA10/30, Darvas boxes, Mansfield oscillator, or RSM screener any fresher without this second step; the
+  `07:00 UTC` Saturday schedule (a weekend morning, matching the user's preference) was picked to fall
+  well clear of `daily_gem.yml`'s `22:30 UTC` daily run and `main.yml`'s `06:00 UTC` monthly run, avoiding
+  avoidable overlap on the shared `"pages"` concurrency group (a genuine overlap isn't fatal — the group
+  just serializes the deploys — but avoiding it means neither run waits on the other). GitHub Actions cron
+  is always evaluated in UTC with no daylight-saving shift, so this lands at 08:00 Polish time in winter
+  (CET) and 09:00 in summer (CEST).
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
   no effect on the deployed site) on pushes/PRs.
