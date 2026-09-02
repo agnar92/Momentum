@@ -450,6 +450,14 @@ function renderCapitalHint() {
 // Zwraca: { targets: {ticker: {...}} przycięte do maxHoldings i przeskalowane
 // tak, by sumowały się do totalCapital, oraz momentumSelected: Set tickerów
 // wybranych przez strategię momentum (przed przycięciem limitem).
+//
+// Ticker-selekcja tego algorytmu (pct/maxHoldings/wykluczenia, bez samego
+// przeliczenia na kwoty) jest zduplikowana w portfolio.js jako
+// rebalanceSelectedTickers() — Core "cały koszyk momentum" tam ma pokazywać
+// dokładnie te spółki, które ten rebalans faktycznie by zasugerował, nie
+// każdą spółkę z surowej selekcji {universe}.json. Zmiana logiki selekcji
+// tutaj (pct, maxHoldings, wykluczenia, tagi Core) wymaga tej samej zmiany
+// tam.
 function computeTargets(totalCapital) {
     const raw = {}; // ticker -> { ticker, price, target_value, universes: [] }
 

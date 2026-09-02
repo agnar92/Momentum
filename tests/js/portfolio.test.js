@@ -14,6 +14,7 @@ const {
     computeCoreTargets,
     capAndRedistribute,
     computeSatelliteTargets,
+    rebalanceSelectedTickers,
     fmtMoney,
     fmtQty,
     fmtPct,
@@ -95,6 +96,79 @@ test("computeCoreTargets prices a manual ticker pick from priceMap when no manua
 test("computeCoreTargets returns nothing for zero or negative capital", () => {
     const slots = [{ type: "ticker", id: "XYZ", weightPct: 1 }];
     assert.deepEqual(computeCoreTargets(0, slots, {}, {}), {});
+});
+
+test("computeCoreTargets restricts a universe slot to rebalanceSelected when provided, instead of every constituent", () => {
+    const univData = {
+        DOWJONES: { constituents: [
+            { ticker: "AAA", weight_pct: 50, price: 10 },
+            { ticker: "BBB", weight_pct: 50, price: 20 },
+        ] },
+    };
+    const slots = [{ type: "universe", id: "DOWJONES", weightPct: 1 }];
+    // Bez filtra: caly EQUAL_WEIGHT koszyk (jak DOWJONES) wchodzi do Core.
+    const unfiltered = computeCoreTargets(1000, slots, univData, {});
+    assert.ok(unfiltered.AAA);
+    assert.ok(unfiltered.BBB);
+    // Z filtrem rebalanceSelected: tylko AAA (BBB odpadloby np. przez limit
+    // maxHoldings albo wykluczenie w Rebalansie) - dokladnie ten bug, ktory
+    // rebalanceSelectedTickers ma naprawiac.
+    const filtered = computeCoreTargets(1000, slots, univData, {}, new Set(["AAA"]));
+    assert.equal(filtered.AAA.target_value, 1000);
+    assert.equal(filtered.BBB, undefined);
+});
+
+// ---------- REBALANCE SELECTION (naprawa buga: Core "caly koszyk momentum"
+// pokazywal WSZYSTKIE spolki indeksu, nie te faktycznie wybrane w Rebalansie) ----------
+
+test("rebalanceSelectedTickers reproduces rebalance.js::computeTargets' own pct-weighted maxHoldings truncation", () => {
+    const univData = {
+        NASDAQ100: { constituents: [
+            { ticker: "AAA", weight_pct: 90 },
+            { ticker: "BBB", weight_pct: 10 },
+        ] },
+        DOWJONES: { constituents: [
+            { ticker: "CCC", weight_pct: 50 },
+            { ticker: "DDD", weight_pct: 50 },
+        ] },
+    };
+    const rebalSettings = { pct: { NASDAQ100: 75, DOWJONES: 25 }, maxHoldings: 3 };
+    const selected = rebalanceSelectedTickers(univData, rebalSettings, [], {});
+    // Dolarowe udzialy (nominalne, wzgledne): AAA=67.5 BBB=7.5 CCC=12.5 DDD=12.5
+    // -> top 3 to AAA, CCC, DDD (kolejnosc miedzy CCC/DDD nieistotna, oba > BBB).
+    assert.equal(selected.size, 3);
+    assert.ok(selected.has("AAA"));
+    assert.ok(!selected.has("BBB"));
+    assert.ok(selected.has("CCC"));
+    assert.ok(selected.has("DDD"));
+});
+
+test("rebalanceSelectedTickers excludes manually-excluded and Core-tagged tickers, same as rebalance.js::isCoreTagged", () => {
+    const univData = { NASDAQ100: { constituents: [
+        { ticker: "AAA", weight_pct: 50 }, { ticker: "BBB", weight_pct: 50 },
+    ] } };
+    const rebalSettings = { pct: { NASDAQ100: 100, DOWJONES: 0 }, maxHoldings: 20 };
+    const selected = rebalanceSelectedTickers(univData, rebalSettings, ["AAA"], { BBB: "core" });
+    assert.equal(selected.size, 0);
+});
+
+test("rebalanceSelectedTickers skips a universe with 0% allocation entirely", () => {
+    const univData = { DOWJONES: { constituents: [{ ticker: "AAA", weight_pct: 100 }] } };
+    const rebalSettings = { pct: { NASDAQ100: 100, DOWJONES: 0 }, maxHoldings: 20 };
+    const selected = rebalanceSelectedTickers(univData, rebalSettings, [], {});
+    assert.equal(selected.size, 0);
+});
+
+test("rebalanceSelectedTickers falls back to a default maxHoldings of 20 when rebalSettings omits it", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 100 }] } };
+    const selected = rebalanceSelectedTickers(univData, { pct: { NASDAQ100: 100 } }, [], {});
+    assert.ok(selected.has("AAA"));
+});
+
+test("rebalanceSelectedTickers treats a universe missing from rebalSettings.pct as 0% (no tickers selected)", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 100 }] } };
+    const selected = rebalanceSelectedTickers(univData, {}, [], {});
+    assert.equal(selected.size, 0);
 });
 
 test("capAndRedistribute splits by weight when nobody exceeds the cap", () => {

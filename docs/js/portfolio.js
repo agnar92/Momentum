@@ -25,6 +25,18 @@
 // satelita) mogą być dowolne. Jeśli są w priceMap (all_prices.json), cena
 // podciąga się automatycznie; jeśli nie (np. sektorowy ETF albo GPW-owa
 // spółka spoza śledzonych indeksów), user wpisuje cenę ręcznie.
+//
+// "Cały koszyk momentum" (universe slot w Core) NIE bierze wszystkich
+// tickerów z {universe}.json — to byłaby cała top-kwintylowa selekcja
+// (NASDAQ100) albo, gorzej, praktycznie CAŁY indeks dla DOWJONES (należy do
+// EQUAL_WEIGHT_UNIVERSES w run_query.py — brak selekcji kwintylowej, więc
+// {universe}.json zawiera niemal wszystkie spółki indeksu). Zamiast tego
+// rebalanceSelectedTickers() replikuje selekcję tickerów z
+// rebalance.js::computeTargets (jego własny podział pct między
+// NASDAQ100/DOWJONES, wykluczenia ręczne, tagi Core i limit maxHoldings) —
+// koszyk pokazuje dokładnie te spółki, które Rebalans faktycznie
+// zasugerowałby kupić, a nie każdą spółkę, która przeszła selekcję momentum
+// samego indeksu.
 
 const CORE_UNIVERSES = ["NASDAQ100", "DOWJONES"];
 const UNIVERSE_LABELS = { NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
@@ -35,6 +47,16 @@ const CORE_KEY = "momentum_portfolio_core_slots";
 const SATELLITE_KEY = "momentum_portfolio_satellite_slots";
 const TAGS_KEY = "momentum_portfolio_tags";
 const HOLDINGS_KEY = "momentum_rebalance_holdings"; // własność rebalance.js — tu tylko odczyt
+// Własność rebalance.js — tu tylko odczyt. Potrzebne do rebalanceSelectedTickers()
+// poniżej: koszyk "cały koszyk momentum" w Core ma pokazywać dokładnie te
+// spółki, które Rebalans faktycznie sugeruje kupić (po jego własnym podziale
+// pct/maxHoldings i wykluczeniach) — NIE surową top-kwintylową selekcję z
+// {universe}.json. Bez tego DOWJONES (EQUAL_WEIGHT_UNIVERSES, brak selekcji
+// kwintylowej — patrz run_query.py) dodawał do Core praktycznie WSZYSTKIE
+// spółki indeksu, nawet te, których Rebalans by nigdy nie zasugerował.
+const REBAL_SETTINGS_KEY = "momentum_rebalance_settings";
+const REBAL_EXCLUDED_KEY = "momentum_rebalance_excluded";
+const DEFAULT_REBAL_SETTINGS = { pct: { NASDAQ100: 75, DOWJONES: 25 }, maxHoldings: 20 };
 
 // contribution = dopłata, którą wpisujesz na bieżąco (jak w Rebalansie);
 // wartość obecnego portfela liczy się automatycznie z otagowanych holdingów.
@@ -64,6 +86,8 @@ function saveSatelliteSlots(s) { saveJSON(SATELLITE_KEY, s); }
 function loadTags() { return loadJSON(TAGS_KEY, {}); }
 function saveTags(t) { saveJSON(TAGS_KEY, t); }
 function loadHoldings() { return loadJSON(HOLDINGS_KEY, []); }
+function loadRebalanceSettings() { return { ...DEFAULT_REBAL_SETTINGS, ...loadJSON(REBAL_SETTINGS_KEY, {}) }; }
+function loadRebalanceExcluded() { return loadJSON(REBAL_EXCLUDED_KEY, []); }
 
 let settings = loadSettings();
 let coreSlots = loadCoreSlots();
@@ -146,11 +170,44 @@ function normalizeWeights(relWeights) {
 }
 
 // ============================================================
+// SELEKCJA REBALANSU — replika ticker-selekcji z rebalance.js::computeTargets
+// (jego własny podział pct między NASDAQ100/DOWJONES, wykluczenia ręczne,
+// tagi Core i limit maxHoldings — POMIJA jedynie samo przeliczenie na kwoty
+// dolarowe, którego tu nie potrzebujemy). Duplikacja zamiast importu — oba
+// moduły są ładowane niezależnie, bez wspólnego bundlera (patrz komentarz
+// przy findColIndex w rebalance.js). Zwraca Set tickerów, które Rebalans
+// faktycznie by zasugerował kupić — to jest "koszyk momentum" w Core,
+// NIE cała top-kwintylowa/equal-weight selekcja z {universe}.json (dla
+// DOWJONES — EQUAL_WEIGHT_UNIVERSES bez selekcji kwintylowej — to bez tego
+// filtra było praktycznie CAŁYM indeksem, patrz run_query.py).
+function rebalanceSelectedTickers(univData, rebalSettings, rebalExcluded, portfolioTags) {
+    const raw = {};
+    CORE_UNIVERSES.forEach(u => {
+        const pctAllocation = (rebalSettings.pct || {})[u] || 0;
+        if (pctAllocation <= 0) return;
+        const constituents = ((univData[u] || {}).constituents || [])
+            .filter(c => !rebalExcluded.includes(c.ticker) && (portfolioTags || {})[c.ticker] !== "core");
+        const totalRawWeight = constituents.reduce((s, c) => s + (c.weight_pct || 0), 0);
+        if (totalRawWeight <= 0) return;
+        constituents.forEach(c => {
+            const contrib = pctAllocation * ((c.weight_pct || 0) / totalRawWeight);
+            raw[c.ticker] = (raw[c.ticker] || 0) + contrib;
+        });
+    });
+    const maxHoldings = rebalSettings.maxHoldings || DEFAULT_REBAL_SETTINGS.maxHoldings;
+    const sorted = Object.entries(raw).sort((a, b) => b[1] - a[1]);
+    return new Set(sorted.slice(0, maxHoldings).map(([ticker]) => ticker));
+}
+
+// ============================================================
 // CORE — całe uniwersa momentum (ważone wewnętrznie ich własną wagą
 // momentum, jak w rebalance.js::computeTargets) i/lub pojedyncze
 // "blue chip" tickery, każdy jako jeden slot o relatywnej wadze.
+// `rebalanceSelected`, gdy podane, ogranicza koszyk "cały koszyk momentum"
+// do tickerów faktycznie wybranych w Rebalansie (patrz wyżej) — undefined
+// oznacza brak filtra (wsteczna zgodność, np. dla starszych wywołań/testów).
 // ============================================================
-function computeCoreTargets(coreCapital, slots, univData, prices) {
+function computeCoreTargets(coreCapital, slots, univData, prices, rebalanceSelected) {
     const raw = {};
     if (coreCapital <= 0 || !slots || slots.length === 0) return raw;
 
@@ -160,7 +217,8 @@ function computeCoreTargets(coreCapital, slots, univData, prices) {
         if (slotCapital <= 0) return;
 
         if (slot.type === "universe") {
-            const constituents = ((univData[slot.id] || {}).constituents || []);
+            let constituents = ((univData[slot.id] || {}).constituents || []);
+            if (rebalanceSelected) constituents = constituents.filter(c => rebalanceSelected.has(c.ticker));
             const totalRawWeight = constituents.reduce((s, c) => s + (c.weight_pct || 0), 0);
             if (totalRawWeight <= 0) return;
             constituents.forEach(c => {
@@ -599,7 +657,8 @@ function renderResults() {
     const coreCapital = capital * settings.corePct / 100;
     const satelliteCapital = capital * (100 - settings.corePct) / 100;
 
-    const coreTargets = computeCoreTargets(coreCapital, coreSlots, universeData, priceMap);
+    const rebalSelected = rebalanceSelectedTickers(universeData, loadRebalanceSettings(), loadRebalanceExcluded(), tags);
+    const coreTargets = computeCoreTargets(coreCapital, coreSlots, universeData, priceMap, rebalSelected);
     const { rows: satelliteTargets, infeasible } = computeSatelliteTargets(satelliteCapital, satelliteSlots, settings.satelliteCapPct, capital, priceMap);
 
     const allRows = [...Object.values(coreTargets), ...Object.values(satelliteTargets)]
@@ -704,6 +763,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         normalizeWeights, computeCoreTargets, capAndRedistribute, computeSatelliteTargets,
+        rebalanceSelectedTickers,
         fmtMoney, fmtQty, fmtPct,
         classifyTicker, defaultTagFor, syncSlotsFromHoldings, slotValue,
     };
