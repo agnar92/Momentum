@@ -1,24 +1,24 @@
 {
-  "ref_date": "2026-08-31",
+  "ref_date": "2026-08-28",
   "lookback_months": 12,
   "indices": [
     {
       "universe": "NASDAQ100",
       "yf_symbol": "^NDX",
-      "price_now": 29641.56,
-      "date_now": "2026-08-27 00:00:00",
-      "price_start": 23415.42,
-      "date_start": "2025-08-29 00:00:00",
-      "return_pct": 26.59
+      "price_now": 29433.43,
+      "date_now": "2026-08-28 00:00:00",
+      "price_start": 23703.45,
+      "date_start": "2025-08-28 00:00:00",
+      "return_pct": 24.17
     },
     {
       "universe": "DOWJONES",
       "yf_symbol": "^DJI",
-      "price_now": 53569.44,
-      "date_now": "2026-08-27 00:00:00",
-      "price_start": 45544.88,
-      "date_start": "2025-08-29 00:00:00",
-      "return_pct": 17.62
+      "price_now": 53559.99,
+      "date_now": "2026-08-28 00:00:00",
+      "price_start": 45636.9,
+      "date_start": "2025-08-28 00:00:00",
+      "return_pct": 17.36
     }
   ],
   "winner": "NASDAQ100",
@@ -27,91 +27,91 @@
       "rank": 1,
       "ticker": "MU",
       "sector": "Information Technology",
-      "price": 958.73,
-      "return_pct": 705.59,
+      "price": 932.86,
+      "return_pct": 664.64,
       "weight_in_index_pct": 4.741,
-      "contribution_pct": 33.452
+      "contribution_pct": 31.51
     },
     {
       "rank": 2,
       "ticker": "SNDK",
       "sector": "Information Technology",
-      "price": 1566.7,
-      "return_pct": 2885.9,
+      "price": 1484.98,
+      "return_pct": 2819.17,
       "weight_in_index_pct": 0.989,
-      "contribution_pct": 28.53
+      "contribution_pct": 27.87
     },
     {
       "rank": 3,
       "ticker": "AMD",
       "sector": "Information Technology",
-      "price": 470.72,
-      "return_pct": 189.44,
+      "price": 465.58,
+      "return_pct": 176.18,
       "weight_in_index_pct": 3.521,
-      "contribution_pct": 6.67
+      "contribution_pct": 6.203
     },
     {
       "rank": 4,
       "ticker": "INTC",
       "sector": "Information Technology",
-      "price": 89.51,
-      "return_pct": 267.6,
+      "price": 89.47,
+      "return_pct": 258.88,
       "weight_in_index_pct": 1.981,
-      "contribution_pct": 5.302
+      "contribution_pct": 5.129
     },
     {
       "rank": 5,
       "ticker": "LRCX",
       "sector": "Information Technology",
-      "price": 301.49,
-      "return_pct": 201.04,
+      "price": 301.9,
+      "return_pct": 190.04,
       "weight_in_index_pct": 1.773,
-      "contribution_pct": 3.565
+      "contribution_pct": 3.369
     },
     {
       "rank": 6,
-      "ticker": "STX",
+      "ticker": "WDC",
       "sector": "Information Technology",
-      "price": 828.38,
-      "return_pct": 394.85,
-      "weight_in_index_pct": 0.83,
-      "contribution_pct": 3.278
+      "price": 459.45,
+      "return_pct": 460.03,
+      "weight_in_index_pct": 0.7,
+      "contribution_pct": 3.22
     },
     {
       "rank": 7,
-      "ticker": "WDC",
+      "ticker": "STX",
       "sector": "Information Technology",
-      "price": 450.55,
-      "return_pct": 460.8,
-      "weight_in_index_pct": 0.7,
-      "contribution_pct": 3.225
+      "price": 829.76,
+      "return_pct": 381.36,
+      "weight_in_index_pct": 0.83,
+      "contribution_pct": 3.166
     },
     {
       "rank": 8,
       "ticker": "AMAT",
       "sector": "Information Technology",
-      "price": 458.39,
-      "return_pct": 185.14,
+      "price": 461.67,
+      "return_pct": 179.34,
       "weight_in_index_pct": 1.717,
-      "contribution_pct": 3.179
+      "contribution_pct": 3.08
     },
     {
       "rank": 9,
       "ticker": "AAPL",
       "sector": "Information Technology",
-      "price": 316.85,
-      "return_pct": 36.49,
+      "price": 319.7,
+      "return_pct": 37.47,
       "weight_in_index_pct": 7.429,
-      "contribution_pct": 2.711
+      "contribution_pct": 2.783
     },
     {
       "rank": 10,
-      "ticker": "NVDA",
-      "sector": "Information Technology",
-      "price": 220.78,
-      "return_pct": 26.75,
-      "weight_in_index_pct": 8.415,
-      "contribution_pct": 2.251
+      "ticker": "GOOGL",
+      "sector": "Communication",
+      "price": 346.59,
+      "return_pct": 63.76,
+      "weight_in_index_pct": 3.298,
+      "contribution_pct": 2.103
     }
   ],
   "note": "Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie 12 mies. dla NASDAQ100/DOWJONES — klasyczna idea Global/Dual Equity Momentum: spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym zwrocie. Lista 'leaders' to top 10 spółek zwycięskiego indeksu wg wkładu w jego zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. Dane informacyjne, NIE porada inwestycyjna."
