@@ -36,6 +36,7 @@ from run_query import (
     export_global_equity_momentum,
     export_json,
     export_relative_strength,
+    process_universe_charts_only,
     select_with_buffer,
     _compute_weinstein_stage_series,
 )
@@ -1130,3 +1131,106 @@ class TestExportJson:
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
         assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None
                    for c in payload["constituents"])
+
+
+# ---------------------------------------------------------------------------
+# process_universe_charts_only: tryb "--charts-only" (patrz weekly_charts.yml,
+# uruchamiany COTYGODNIOWO) — odswieza WYLACZNIE biezaca cene +
+# weekly_chart/mansfield_chart dla OSTATNIEJ juz zapisanej miesiecznej
+# selekcji w portfolio_history, bez ponownego liczenia selekcji/wag/
+# portfolio_history (to zostaje wylacznie miesieczne, main.yml/process_universe).
+# ---------------------------------------------------------------------------
+
+def make_charts_only_con():
+    con = make_gem_con()
+    con.execute("""
+        CREATE TABLE portfolio_history (
+            ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
+            ticker VARCHAR, sector VARCHAR, price_at_rebalance DOUBLE,
+            momentum_value DOUBLE, momentum_window VARCHAR, annualized_volatility DOUBLE,
+            z_score DOUBLE, momentum_score DOUBLE, weight DOUBLE,
+            cap_scaled_due_to_infeasibility BOOLEAN,
+            PRIMARY KEY (ref_date, universe, ticker)
+        )
+    """)
+    return con
+
+
+def insert_ph_row(con, ref_date, universe, rank, ticker, price, weight, cap_scaled=False):
+    con.execute(
+        "INSERT INTO portfolio_history VALUES (?, ?, ?, ?, 'Tech', ?, 0.1, '12M', 0.2, 1.0, 1.5, ?, ?)",
+        (ref_date, universe, rank, ticker, price, weight, cap_scaled),
+    )
+
+
+def insert_price_rows(con, rows):
+    """rows: (date, ticker, close) — INSERT po nazwie kolumny, zeby dzialalo na
+    schemacie prices z make_gem_con (ma tez High/Low, ktorych tu nie ustawiamy)."""
+    con.executemany(
+        "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, 0)",
+        [(d, t, c, c) for d, t, c in rows],
+    )
+
+
+class TestProcessUniverseChartsOnly:
+    def test_no_saved_selection_returns_none_and_writes_nothing(self, tmp_path):
+        con = make_charts_only_con()
+        out = process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
+        assert out is None
+        assert not (tmp_path / "nasdaq100.json").exists()
+
+    def test_keeps_last_selection_but_refreshes_price_and_ref_date_label(self, tmp_path):
+        # Selekcja/wagi/momentum zapisane przy rebalansie 2026-05-01 MAJA zostac
+        # bez zmian — jedynie cena (i pole "ref_date" w JSON, ktore MA nadal
+        # pokazywac date rebalansu, nie date odswiezenia wykresow) sie zmieniaja.
+        con = make_charts_only_con()
+        insert_ph_row(con, "2026-05-01", "NASDAQ100", 1, "AAA", 100.0, 1.0)
+        insert_price_rows(con, [("2026-05-01", "AAA", 100.0), ("2026-06-01", "AAA", 115.0)])
+
+        out = process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
+        assert out is not None
+
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        assert payload["ref_date"] == "2026-05-01"
+        assert len(payload["constituents"]) == 1
+        c = payload["constituents"][0]
+        assert c["ticker"] == "AAA"
+        assert c["price"] == pytest.approx(115.0)
+        assert c["weight_pct"] == pytest.approx(100.0)
+        assert c["momentum_pct"] == pytest.approx(10.0)
+
+    def test_ticker_without_fresh_price_is_dropped(self, tmp_path):
+        con = make_charts_only_con()
+        insert_ph_row(con, "2026-05-01", "NASDAQ100", 1, "AAA", 100.0, 0.5)
+        insert_ph_row(con, "2026-05-01", "NASDAQ100", 2, "BBB", 50.0, 0.5)
+        # Tylko AAA ma swieza cene do ref_date -> BBB wypada z odswiezenia
+        # (nie z selekcji — portfolio_history nie jest ruszany).
+        insert_price_rows(con, [("2026-06-01", "AAA", 110.0)])
+
+        process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        tickers = [c["ticker"] for c in payload["constituents"]]
+        assert tickers == ["AAA"]
+
+    def test_turnover_reflects_last_two_saved_rebalances_not_todays_prices(self, tmp_path):
+        con = make_charts_only_con()
+        insert_ph_row(con, "2026-04-01", "NASDAQ100", 1, "AAA", 100.0, 0.5)
+        insert_ph_row(con, "2026-04-01", "NASDAQ100", 2, "BBB", 50.0, 0.5)
+        insert_ph_row(con, "2026-05-01", "NASDAQ100", 1, "AAA", 105.0, 0.6)
+        insert_ph_row(con, "2026-05-01", "NASDAQ100", 2, "CCC", 20.0, 0.4)
+        insert_price_rows(con, [("2026-06-01", "AAA", 110.0), ("2026-06-01", "CCC", 22.0)])
+
+        process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        assert payload["prev_ref_date"] == "2026-04-01"
+        assert payload["added_tickers"] == ["CCC"]
+        assert payload["dropped_tickers"] == ["BBB"]
+
+    def test_cap_scaled_flag_is_carried_over_from_last_rebalance(self, tmp_path):
+        con = make_charts_only_con()
+        insert_ph_row(con, "2026-05-01", "NASDAQ100", 1, "AAA", 100.0, 1.0, cap_scaled=True)
+        insert_price_rows(con, [("2026-06-01", "AAA", 100.0)])
+
+        process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        assert payload["cap_scaled_due_to_infeasibility"] is True
