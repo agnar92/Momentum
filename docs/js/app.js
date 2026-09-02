@@ -45,7 +45,6 @@ function bindTvRowButtons(container) {
 const state = {
     data: {},
     gem: { indices: [], leaders: [] },
-    rs: { universes: {} },
     selectedTicker: null,
     selectedUniverse: null,
     currentRsEntry: null,
@@ -75,29 +74,98 @@ async function loadData() {
         console.error("Nie udało się wczytać danych Global Equity Momentum:", e);
         state.gem = { ref_date: null, indices: [], winner: null, leaders: [] };
     }
-    try {
-        const res = await fetch("data/relative_strength.json", { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        state.rs = await res.json();
-    } catch (e) {
-        console.error("Nie udało się wczytać danych siły relatywnej:", e);
-        state.rs = { ref_date: null, universes: {} };
-    }
+    // docs/data/relative_strength.json NIE jest już tu wczytywany — panel RSM
+    // poniżej (combinedRsmCandidates) buduje się bezpośrednio z mansfield_chart
+    // dołączonego do KAŻDEGO constituenta w state.data (patrz process_universe/
+    // export_json w run_query.py), więc nie potrzebuje osobnego leaderboardu.
 }
 
-// Łączy liderów siły relatywnej z obu uniwersów (NASDAQ100 + DOWJONES) w jedną
-// listę, każdego z dopisanym uniwersum i zwrotem JEGO indeksu, posortowaną
-// malejąco po przewadze (relative_strength_pct) — tak jak prosił użytkownik:
-// "posortuję po różnicy procentowej index - akcji".
-function combinedRelativeStrengthLeaders() {
-    const combined = [];
-    Object.entries(state.rs.universes || {}).forEach(([universe, u]) => {
-        (u.leaders || []).forEach(r => {
-            combined.push({ ...r, universe, index_return_pct: u.index_return_pct });
+// ============================================================
+// RSM (oscylator Mansfield Relative Strength) — SCREENER: dla KAŻDEJ spółki w
+// KAŻDYM uniwersum (mansfield_chart jest już eksportowany per-constituent w
+// {universe}.json, patrz run_query.py::compute_mansfield_rs_chart — nie tylko
+// dla wybranych liderów), porównujemy AKTUALNĄ wartość rsm_short (~3M) i
+// rsm_medium (~6M) oraz ich trend w ostatnich RSM_TREND_LOOKBACK_WEEKS
+// tygodniach, żeby wyłapać dwa różne setupy:
+//
+// - "Stabilny wzrost": rsm_medium > rsm_short > 0 — spółka trwale silniejsza
+//   od swojego indeksu w dłuższym (6-miesięcznym) horyzoncie, bez świeżego,
+//   gwałtownego skoku w krótszym (3-miesięcznym) — bardziej wiarygodny,
+//   utrzymujący się sygnał niż pojedynczy zryw. To GŁÓWNY cel tego screenera
+//   (użytkownik: "głównie szukamy stabilnych wzrostów 6 > 3").
+// - "Nagła zmiana trendu": rsm_short > rsm_medium, i OBA wygładzenia rosną od
+//   RSM_TREND_LOOKBACK_WEEKS tygodni — krótszy horyzont właśnie przyspiesza
+//   szybciej niż dłuższy, przy jednoczesnym wzroście obu — świeże
+//   przyspieszenie, nie tylko szum w jedną stronę.
+//
+// Te dwa zbiory się wzajemnie wykluczają (mediumNow > shortNow vs
+// shortNow > mediumNow), więc żadna spółka nie pojawia się w obu naraz.
+// Cokolwiek nie pasuje do żadnego z nich (np. oba ujemne, albo krótszy >
+// dłuższy ale nie oba rosną) po prostu nie trafia na listę — to celowo
+// wyselekcjonowany screener, nie pełna lista wszystkich spółek.
+// ============================================================
+const RSM_TREND_LOOKBACK_WEEKS = 4; // ~1 miesiąc — kompromis między szumem a opóźnieniem sygnału
+const RSM_TREND_LABELS = { rising: "Rosnący ↑", fresh_cross: "Świeże wybicie na plus", mixed: "Mieszany" };
+
+// Klasyfikuje jedną spółkę na podstawie jej mansfield_chart (patrz wyżej).
+// Zwraca null gdy brakuje danych (za mało historii — patrz shallow-history
+// caveat w CLAUDE.md) albo gdy najnowszy tydzień akurat nie ma jeszcze
+// wartości (np. tuż po rozszerzeniu okna retencji, przed pełnym re-bootstrapem).
+function classifyRsm(ticker, universe, c) {
+    const m = c.mansfield_chart;
+    if (!m || !m.rsm_short || !m.rsm_medium || !m.dates || m.dates.length === 0) return null;
+    // Ostatni element tablicy jest CZĘSTO null (aktualny, jeszcze niedomknięty
+    // tydzień bywa null zanim run_query.py doliczy pełne dane — znany,
+    // istniejący wcześniej charakter danych, nie błąd) — więc "teraz" to
+    // ostatni tydzień, który FAKTYCZNIE ma obie wartości, nie literalnie
+    // ostatni indeks tablicy. Bez tego cofnięcia większość, czasem WSZYSTKIE,
+    // spółki danego uniwersum (zwłaszcza uniwersów USA — patrz git history)
+    // wypadałyby z ekranu tylko dlatego, że najświeższy tydzień jeszcze się
+    // nie domknął, nie dlatego, że faktycznie nie spełniają kryteriów.
+    let nowIdx = m.dates.length - 1;
+    while (nowIdx >= 0 && (m.rsm_short[nowIdx] == null || m.rsm_medium[nowIdx] == null)) nowIdx--;
+    if (nowIdx < 0) return null;
+    const shortNow = m.rsm_short[nowIdx];
+    const mediumNow = m.rsm_medium[nowIdx];
+
+    const pastIdx = Math.max(0, nowIdx - RSM_TREND_LOOKBACK_WEEKS);
+    const shortPast = m.rsm_short[pastIdx];
+    const mediumPast = m.rsm_medium[pastIdx];
+    const shortRising = shortPast != null && shortNow > shortPast;
+    const mediumRising = mediumPast != null && mediumNow > mediumPast;
+    const bothRising = shortRising && mediumRising;
+    // "Świeże wybicie": którekolwiek z wygładzeń było <= 0 na początku okna
+    // patrzenia wstecz i jest > 0 teraz — niekoniecznie monotonicznie, to tylko
+    // prosty, tani do policzenia proxy dla "przecięło zero w ostatnim miesiącu".
+    const freshCross = (shortPast != null && shortPast <= 0 && shortNow > 0)
+                     || (mediumPast != null && mediumPast <= 0 && mediumNow > 0);
+    const trend = bothRising ? "rising" : (freshCross ? "fresh_cross" : "mixed");
+
+    return {
+        ticker, universe, sector: c.sector, price: c.price,
+        shortNow, mediumNow, trend,
+        isStable: mediumNow > 0 && mediumNow > shortNow,
+        isAccelerating: shortNow > mediumNow && bothRising,
+    };
+}
+
+// Zwraca { stable: [...], accelerating: [...] } połączone ze WSZYSTKICH 5
+// uniwersów, każde posortowane malejąco po swojej definiującej metryce
+// (mediumNow dla stabilnego wzrostu — najsilniejsze utrzymujące się przewagi
+// na górze; shortNow dla nagłej zmiany trendu — najgorętsze świeże ruchy).
+function combinedRsmCandidates() {
+    const stable = [], accelerating = [];
+    UNIVERSES.forEach(u => {
+        (state.data[u].constituents || []).forEach(c => {
+            const r = classifyRsm(c.ticker, u, c);
+            if (!r) return;
+            if (r.isStable) stable.push(r);
+            else if (r.isAccelerating) accelerating.push(r);
         });
     });
-    combined.sort((a, b) => b.relative_strength_pct - a.relative_strength_pct);
-    return combined;
+    stable.sort((a, b) => b.mediumNow - a.mediumNow);
+    accelerating.sort((a, b) => b.shortNow - a.shortNow);
+    return { stable, accelerating };
 }
 
 // ============================================================
@@ -186,70 +254,52 @@ function renderGemPanel() {
     }
 }
 
-// Siła relatywna: dla NASDAQ100/DOWJONES (docs/data/relative_strength.json /
-// run_query.py::compute_relative_strength_leaders) pokazuje spółki, których
-// momentum (to samo okno co momentum_value 3 głównych uniwersów, M-14/M-2 z
-// fallbackiem M-11/M-2) przebiło momentum samego indeksu, posortowane malejąco
-// po przewadze (zwrot spółki - zwrot indeksu). Kafelki łączą oba uniwersy w
-// jedną listę.
-function renderRelativeStrengthPanel() {
-    const container = document.getElementById("tiles-RS");
-    if (!container) return;
+// Sidebar: dwie osobne siatki kafelków w jednym panelu (patrz
+// combinedRsmCandidates powyżej) — "Stabilny wzrost" i "Nagła zmiana trendu",
+// każda ze swoim mini-nagłówkiem w HTML (patrz index.html #rsmGroup).
+function renderRsmPanel() {
+    const stableContainer = document.getElementById("tiles-RSM-stable");
+    const accelContainer = document.getElementById("tiles-RSM-accel");
+    if (!stableContainer || !accelContainer) return;
 
-    const rs = state.rs;
-    const combined = combinedRelativeStrengthLeaders();
+    const { stable, accelerating } = combinedRsmCandidates();
 
-    const meta = document.getElementById("rsMeta");
+    const meta = document.getElementById("rsmMeta");
     if (meta) {
-        meta.textContent = rs.ref_date
-            ? `Stan na: ${rs.ref_date} · ${combined.length} spółek bijących swój indeks`
-            : "Brak danych — uruchom pipeline.";
-        meta.title = rs.note || "";
+        meta.textContent = `${stable.length} stabilny wzrost · ${accelerating.length} nagła zmiana trendu`;
     }
 
-    const returnsEl = document.getElementById("rsIndexReturns");
-    if (returnsEl) {
-        returnsEl.innerHTML = "";
-        Object.entries(rs.universes || {}).forEach(([universe, u]) => {
-            const row = document.createElement("div");
-            row.className = "gem-index-row";
-            row.innerHTML = `
-                <span>${UNIVERSE_LABELS[universe].replace(" Momentum", "")} (${u.momentum_window})</span>
-                <span class="${u.index_return_pct >= 0 ? "positive" : "negative"}">${u.index_return_pct >= 0 ? "+" : ""}${u.index_return_pct.toFixed(2)}%</span>
-            `;
-            returnsEl.appendChild(row);
+    const fillTiles = (container, rows) => {
+        container.innerHTML = "";
+        rows.forEach(r => {
+            const tile = document.createElement("div");
+            tile.className = "ticker-tile";
+            tile.textContent = r.ticker;
+            tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
+                + `RSM 3M ${r.shortNow.toFixed(1)} / RSM 6M ${r.mediumNow.toFixed(1)} · ${RSM_TREND_LABELS[r.trend]}`;
+            tile.dataset.ticker = r.ticker;
+            tile.dataset.universe = r.universe;
+            if (r.ticker === state.selectedTicker) tile.classList.add("selected");
+            tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+            container.appendChild(tile);
         });
-    }
-
-    container.innerHTML = "";
-    combined.forEach(c => {
-        const tile = document.createElement("div");
-        tile.className = "ticker-tile";
-        tile.textContent = c.ticker;
-        tile.title = `${c.ticker} — ${UNIVERSE_LABELS[c.universe].replace(" Momentum", "")} · zwrot `
-            + `${c.return_pct.toFixed(2)}% vs indeks ${c.index_return_pct.toFixed(2)}% · przewaga +${c.relative_strength_pct.toFixed(2)}pp`;
-        tile.dataset.ticker = c.ticker;
-        tile.dataset.universe = c.universe;
-        if (c.ticker === state.selectedTicker) tile.classList.add("selected");
-        tile.addEventListener("click", () => selectTicker(c.ticker, c.universe));
-        container.appendChild(tile);
-    });
-    if (combined.length === 0) {
-        const empty = document.createElement("div");
-        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
-        empty.textContent = "brak danych";
-        container.appendChild(empty);
-    }
+        if (rows.length === 0) {
+            const empty = document.createElement("div");
+            empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
+            empty.textContent = "brak danych";
+            container.appendChild(empty);
+        }
+    };
+    fillTiles(stableContainer, stable);
+    fillTiles(accelContainer, accelerating);
 }
 
-// Kazdy ticker z glownego uniwersum (state.data[u].constituents) ma teraz wlasny
-// weekly_chart/mansfield_chart (patrz process_universe/export_json w run_query.py) —
-// nie tylko liderzy panelu Sily Relatywnej. Lider RS ma pierwszenstwo (niesie tez
-// relative_strength_pct/index_return_pct), ale dla kazdego innego tickera spadamy
-// do jego wlasnego wpisu w state.data[universe].constituents.
+// Kazdy ticker z glownego uniwersum (state.data[u].constituents) ma wlasny
+// weekly_chart/mansfield_chart (patrz process_universe/export_json w
+// run_query.py) — wystarczy odczytac go wprost stamtad. Screener RSM
+// (combinedRsmCandidates powyzej) to osobny, wyselekcjonowany widok, nie
+// zrodlo danych do samego wykresu.
 function findRsEntry(ticker, universe) {
-    const rsLeader = combinedRelativeStrengthLeaders().find(r => r.ticker === ticker);
-    if (rsLeader) return rsLeader;
     const universeEntry = ((state.data[universe] && state.data[universe].constituents) || [])
         .find(c => c.ticker === ticker);
     return (universeEntry && universeEntry.weekly_chart) ? { ...universeEntry, universe } : null;
@@ -261,7 +311,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr, #rsTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr, #rsmTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
@@ -819,23 +869,23 @@ function compareRows(a, b, sortKey, sortDir) {
 // jedyny sposób dotarcia do GEM w pionie.
 function showDrawerTable(universe) {
     const isGem = universe === "GEM";
-    const isRs = universe === "RS";
-    document.getElementById("momentumTable").hidden = isGem || isRs;
+    const isRsm = universe === "RSM";
+    document.getElementById("momentumTable").hidden = isGem || isRsm;
     document.getElementById("gemTable").hidden = !isGem;
-    document.getElementById("rsTable").hidden = !isRs;
+    document.getElementById("rsmTable").hidden = !isRsm;
     // Filtr etapow ma sens tylko dla pelnej listy skladnikow jednego uniwersum
-    // (GEM/RS to juz odfiltrowane, wybrane podzbiory).
+    // (GEM/RSM to juz odfiltrowane, wybrane podzbiory).
     const stageFilterBar = document.getElementById("stageFilterBar");
-    if (stageFilterBar) stageFilterBar.hidden = isGem || isRs;
+    if (stageFilterBar) stageFilterBar.hidden = isGem || isRsm;
     document.getElementById("drawerTitle").textContent = isGem
         ? "Pełna tabela — Global Equity Momentum"
-        : isRs
-            ? "Pełna tabela — Siła Relatywna"
+        : isRsm
+            ? "Pełna tabela — RSM"
             : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     if (isGem) {
         renderGemTable();
-    } else if (isRs) {
-        renderRelativeStrengthTable();
+    } else if (isRsm) {
+        renderRsmTable();
     } else {
         renderTable();
     }
@@ -883,46 +933,81 @@ function renderGemTable() {
     bindTvRowButtons(tbody);
 }
 
-function renderRelativeStrengthTable() {
-    const rs = state.rs;
-    const rows = combinedRelativeStrengthLeaders();
+function rsmBadgeHtml(type) {
+    return type === "stable"
+        ? '<span class="rsm-badge rsm-badge-stable">Stabilny</span>'
+        : '<span class="rsm-badge rsm-badge-accel">Przyspiesza</span>';
+}
+
+function rsmTrendHtml(trend) {
+    const cls = trend === "rising" ? "rsm-trend-rising" : trend === "fresh_cross" ? "rsm-trend-cross" : "rsm-trend-mixed";
+    return `<span class="rsm-trend ${cls}">${RSM_TREND_LABELS[trend]}</span>`;
+}
+
+function rsmRowHtml(r, rank, type) {
+    return `
+        <td><span class="rank-badge">${rank}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${r.sector}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td class="${r.shortNow >= 0 ? "positive" : "negative"}">${r.shortNow.toFixed(2)}</td>
+        <td class="${r.mediumNow >= 0 ? "positive" : "negative"}">${r.mediumNow.toFixed(2)}</td>
+        <td>${rsmBadgeHtml(type)}</td>
+        <td>${rsmTrendHtml(r.trend)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+// Jedna tabela, DWIE sekcje jedna pod drugą (wiersz-nagłówek z colspan między
+// nimi) — "Stabilny wzrost" i "Nagła zmiana trendu" (patrz combinedRsmCandidates
+// powyżej) — użytkownik chciał je widzieć rozdzielone, nie w jednej wspólnej
+// liście posortowanej po jednym kryterium.
+function renderRsmTable() {
+    const { stable, accelerating } = combinedRsmCandidates();
     const meta = document.getElementById("drawerMeta");
-    if (rs.ref_date) {
-        meta.textContent = `Stan na: ${rs.ref_date} · ${rows.length} spółek bijących swój indeks`;
-        meta.title = rs.note || "";
+    const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
+    if (refDates.length) {
+        meta.textContent = `Rebalans: ${refDates[0]} · ${stable.length} stabilny wzrost · ${accelerating.length} nagła zmiana trendu`;
+        meta.title = "";
     } else {
         meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
         meta.title = "";
     }
 
-    const tbody = document.getElementById("rsTableBody");
+    const tbody = document.getElementById("rsmTableBody");
     tbody.innerHTML = "";
 
-    if (rows.length === 0) {
+    if (stable.length === 0 && accelerating.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="9" class="empty-state">Brak danych.</td>`;
+        tr.innerHTML = `<td colspan="10" class="empty-state">Brak danych.</td>`;
         tbody.appendChild(tr);
         return;
     }
 
-    rows.forEach((r, i) => {
-        const tr = document.createElement("tr");
-        tr.dataset.ticker = r.ticker;
-        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
-        tr.innerHTML = `
-            <td><span class="rank-badge">${i + 1}</span></td>
-            <td class="ticker-cell">${r.ticker}</td>
-            <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
-            <td>${r.sector}</td>
-            <td>${formatPrice(r.price, r.universe)}</td>
-            <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct.toFixed(2)}%</td>
-            <td class="${r.index_return_pct >= 0 ? "positive" : "negative"}">${r.index_return_pct.toFixed(2)}%</td>
-            <td class="positive">+${r.relative_strength_pct.toFixed(2)}pp</td>
-            <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
-        `;
-        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
-        tbody.appendChild(tr);
-    });
+    const appendSection = (label, rows, type) => {
+        const header = document.createElement("tr");
+        header.className = "rsm-section-row";
+        header.innerHTML = `<td colspan="10">${label} (${rows.length})</td>`;
+        tbody.appendChild(header);
+        if (rows.length === 0) {
+            const empty = document.createElement("tr");
+            empty.innerHTML = `<td colspan="10" class="empty-state">Brak spółek spełniających kryteria.</td>`;
+            tbody.appendChild(empty);
+            return;
+        }
+        rows.forEach((r, i) => {
+            const tr = document.createElement("tr");
+            tr.dataset.ticker = r.ticker;
+            if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
+            tr.innerHTML = rsmRowHtml(r, i + 1, type);
+            tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+            tbody.appendChild(tr);
+        });
+    };
+
+    appendSection("📈 Stabilny wzrost (6M > 3M)", stable, "stable");
+    appendSection("⚡ Nagła zmiana trendu (3M > 6M, oba rosną)", accelerating, "accel");
     bindTvRowButtons(tbody);
 }
 
@@ -1119,7 +1204,7 @@ if (typeof document !== "undefined") {
         await loadData();
         renderSidebarTiles();
         renderGemPanel();
-        renderRelativeStrengthPanel();
+        renderRsmPanel();
         initDrawer();
         initOpenTvButton();
         initResetZoomButton();
@@ -1144,6 +1229,9 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — nie ładowany
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { compareRows, rollingMean, alignMansfieldToDates, fmtPlDate };
+    module.exports = {
+        compareRows, rollingMean, alignMansfieldToDates, fmtPlDate,
+        classifyRsm, combinedRsmCandidates, state,
+    };
 }
 

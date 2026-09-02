@@ -275,6 +275,50 @@ html, body {
 .gem-index-row .positive { color: var(--green-bright); }
 .gem-index-row .negative { color: var(--red); }
 
+/* RSM (Mansfield Relative Strength): mini-nagłówek nad każdą z dwóch siatek
+   kafelków w panelu sidebara (Stabilny wzrost / Nagła zmiana trendu — patrz
+   renderRsmPanel w app.js) — mniejszy/przygaszony niż .sidebar-group-label,
+   żeby było jasne, że to podsekcja tego samego panelu, nie kolejny panel. */
+.sidebar-subgroup-label {
+    font-size: 9px;
+    color: var(--text-faint);
+    margin: 8px 0 5px 2px;
+}
+.sidebar-subgroup-label:first-of-type { margin-top: 0; }
+
+/* Kolumna "Typ" w tabeli RSM (patrz rsmBadgeHtml w app.js) — zielony dla
+   stabilnego wzrostu (główny cel screenera), bursztynowy dla nagłej zmiany
+   trendu (świeże przyspieszenie, drugorzędny sygnał). */
+.rsm-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 5px;
+}
+.rsm-badge-stable { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
+.rsm-badge-accel { background: rgba(224, 167, 46, 0.15); color: #e0a72e; }
+
+/* Kolumna "Trend" w tabeli RSM (patrz rsmTrendHtml/classifyRsm w app.js) —
+   czy oba wygładzenia (3M/6M) rosną od RSM_TREND_LOOKBACK_WEEKS tygodni,
+   czy któreś właśnie przecięło zero, czy żadne z powyższych. */
+.rsm-trend { font-size: 10.5px; font-weight: 600; }
+.rsm-trend-rising { color: var(--green-bright); }
+.rsm-trend-cross { color: #4fa6e0; }
+.rsm-trend-mixed { color: var(--text-faint); font-weight: 400; }
+
+/* Wiersz-nagłówek sekcji w tabeli RSM (patrz appendSection w renderRsmTable) —
+   rozdziela "Stabilny wzrost" i "Nagłą zmianę trendu" w obrębie jednej tabeli. */
+tr.rsm-section-row td {
+    background: var(--panel-alt);
+    color: var(--text-dim);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 10px;
+}
+
 /* ============================================================
    PANEL TABEL (rozwijany, ~80% szerokości ekranu)
    ============================================================ */
