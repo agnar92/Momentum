@@ -575,7 +575,27 @@ def _prices_table_has_rows(con):
     return con.execute("SELECT COUNT(*) FROM prices").fetchone()[0] > 0
 
 
-def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
+def _prices_history_is_shallow(con, lookback_months):
+    """True gdy najstarszy zachowany dzień w `prices` NIE sięga wystarczająco daleko
+    wstecz dla aktualnie skonfigurowanego --lookback-months — np. baza zapisana PRZED
+    wydłużeniem retencji (patrz run_query.py::RS_PRICE_SMA_LONG_WEEKS/RS_MANSFIELD_*:
+    SMA30 i oscylator Mansfield potrzebują realnego zapasu historii PRZED początkiem
+    okna momentum, nie tylko samego okna). Zwykłe przyrostowe doszacowanie
+    (update_prices_incremental) dogrywa dni WYŁĄCZNIE od watermarka w przód, nigdy w
+    tył — więc samo podniesienie --lookback-months nie pogłębi już zapisanej historii
+    bez jednorazowego pełnego re-bootstrapu, do którego ta funkcja jest sygnałem.
+    Samoograniczające się: po jednym pełnym bootstrapie z nową głębią kolejne
+    uruchomienia znów dostają False i wracają na zwykłą ścieżkę przyrostową. Margines
+    14 dni, żeby nie re-bootstrapować przy różnicy rzędu pojedynczych dni (np. z
+    powodu weekendu/święta na granicy okna)."""
+    oldest = con.execute("SELECT MIN(Date) FROM prices").fetchone()[0]
+    if oldest is None:
+        return True
+    needed_start = pd.Timestamp.today() - pd.DateOffset(months=lookback_months)
+    return pd.Timestamp(oldest) > needed_start + pd.Timedelta(days=14)
+
+
+def update_duckdb(lookback_months=22, min_coverage=0.8, indices_only=False):
     con = duckdb.connect("momentum_data.duckdb")
 
     if indices_only:
@@ -595,9 +615,13 @@ def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
         con.close()
         return
 
-    if _prices_table_has_rows(con):
+    if _prices_table_has_rows(con) and not _prices_history_is_shallow(con, lookback_months):
         update_prices_incremental(con, tickers, retention_months=lookback_months)
     else:
+        if _prices_table_has_rows(con):
+            print(f"⏳ Zachowana historia cen nie sięga {lookback_months} mies. wstecz "
+                  f"(rozszerzono retencję) — jednorazowy pełny re-bootstrap zamiast "
+                  f"przyrostowego doszacowania (bootstrap_prices sam podmienia całą tabelę).")
         bootstrap_prices(con, tickers, lookback_months, min_coverage)
 
     update_index_prices(con, lookback_months)
@@ -610,9 +634,11 @@ if __name__ == "__main__":
         description="Odświeża bazę cen (bootstrap za pierwszym razem, potem przyrostowo: "
                      "dogrywa nowe dni + przycina historię do --lookback-months) i skład indeksów (CSV)."
     )
-    parser.add_argument("--lookback-months", type=int, default=15,
+    parser.add_argument("--lookback-months", type=int, default=22,
                          help="Ile miesięcy historii cen trzymać w bazie (retencja) oraz zakres "
-                              "pierwszego pełnego pobrania / backfillu nowych spółek.")
+                              "pierwszego pełnego pobrania / backfillu nowych spółek. 22 (nie 15) "
+                              "daje SMA30/oscylatorowi Mansfield realny zapas historii PRZED "
+                              "początkiem ~14-miesięcznego okna momentum, patrz run_query.py.")
     parser.add_argument("--min-coverage", type=float, default=0.8,
                          help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
     parser.add_argument("--indices-only", action="store_true",

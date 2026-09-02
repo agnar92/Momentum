@@ -76,19 +76,36 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
      migration before every incremental refresh, since the already-committed `momentum_data.duckdb` predates
      these columns — old rows get `NULL` High/Low until they age out of the retention window and get
      replaced by freshly-fetched rows that have them. Two modes, chosen automatically by `update_duckdb()`:
-     - **Bootstrap** (`bootstrap_prices`) — used only when `prices` doesn't exist yet or is empty.
-       Downloads the full `--lookback-months` (default 15) window for every ticker via a
-       `prices_staging` table renamed into place. If fetched ticker coverage falls below
-       `--min-coverage` (default 80%), the refresh is aborted and nothing is written.
-     - **Incremental** (`update_prices_incremental`) — used on every subsequent run, since the DB now
-       persists. Tickers already present in `prices` only get a short "catch-up" fetch back to their
-       last known date (minus `CATCHUP_OVERLAP_DAYS` for safety); tickers with no rows yet (e.g. a new
-       constituent after an index-composition CSV swap) get a full `--lookback-months` backfill.
-       Fetched data is upserted (`_upsert_price_rows`: delete-then-insert the affected date range for
-       the tickers that actually got fresh data — a ticker whose fetch failed keeps its old rows rather
-       than losing them). After fetching, rows older than `--lookback-months` are deleted
-       (`DELETE FROM prices WHERE Date < cutoff`), so the table is a rolling window and does not grow
-       without bound — it always holds just enough history for the M-14 momentum window plus a margin.
+     - **Bootstrap** (`bootstrap_prices`) — used when `prices` doesn't exist yet, is empty, or (see
+       `_prices_history_is_shallow()` below) doesn't reach back far enough for the currently configured
+       `--lookback-months`. Downloads the full `--lookback-months` (default **22**, raised from an
+       original 15 — see below) window for every ticker via a `prices_staging` table renamed into place.
+       If fetched ticker coverage falls below `--min-coverage` (default 80%), the refresh is aborted and
+       nothing is written.
+     - **Incremental** (`update_prices_incremental`) — used on every subsequent run once `prices` already
+       has deep-enough history, since the DB now persists. Tickers already present in `prices` only get a
+       short "catch-up" fetch back to their last known date (minus `CATCHUP_OVERLAP_DAYS` for safety);
+       tickers with no rows yet (e.g. a new constituent after an index-composition CSV swap) get a full
+       `--lookback-months` backfill. Fetched data is upserted (`_upsert_price_rows`: delete-then-insert
+       the affected date range for the tickers that actually got fresh data — a ticker whose fetch failed
+       keeps its old rows rather than losing them). After fetching, rows older than `--lookback-months`
+       are deleted (`DELETE FROM prices WHERE Date < cutoff`), so the table is a rolling window and does
+       not grow without bound — it always holds just enough history for the M-14 momentum window plus a
+       margin (see below for why that margin was widened).
+     - **`_prices_history_is_shallow(con, lookback_months)`** — the check that routes a run to Bootstrap
+       instead of Incremental even when `prices` already has rows: true when the oldest retained `Date` is
+       more than `lookback_months` (plus a 14-day slack for weekend/holiday edge cases) in the past. This
+       exists because Incremental only ever fetches *forward* from the watermark — it can never backfill
+       older history a raised `--lookback-months` newly requires. It's self-limiting: the one full
+       bootstrap this triggers after a `--lookback-months` bump gives `prices` the new depth, so every
+       run after that sees a deep-enough table again and returns to the normal Incremental path.
+       **`--lookback-months` was raised from 15 to 22** specifically so the ~14-month momentum window
+       (`M-14`) leaves a real ~7-8-month buffer in front of its own `start_date` for `SMA30` (Weinstein
+       stage analysis) and the Mansfield RS oscillator's 26-week smoothing to warm up in — at 15 months
+       there was next to no buffer left once the momentum window itself was subtracted, so those series
+       were `null` for a chunk of the displayed window (see `sma10_pct`/`sma30_pct` and `mansfield_chart`
+       under Relative strength below). The already-committed `momentum_data.duckdb` predates this bump, so
+       its first refresh under the new default goes through exactly this one-time full re-bootstrap.
 2. **`run_query.py`** — all the calculation logic and static site generation. Nothing about data
    fetching lives here. For each universe (`SP500`, `NASDAQ100`, `DOWJONES`, `WIG20`, `MWIG40` —
    `UNIVERSES`):
@@ -227,15 +244,17 @@ the same stock-price base as `close_pct` so they still read as a smoothed versio
 series are resampled from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` +
 `ARGMAX`, fetching `RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's
 start purely so SMA30 already has a value at the first displayed (in-window) point, and the series returned
-is trimmed to start exactly at that window's start (M-14 or M-11) through to `ref_date`. Note: since `prices`
-only retains a rolling `--lookback-months` (15) window (see above) and the momentum window itself already
-consumes ~14 of those months, there is little to no actual buffer before `start_date` in production, so
-`sma10_pct`/`sma30_pct` can still show `null` for their first several in-window weeks for many tickers — a
-known, deliberately deferred limitation, not a bug to "fix" by widening `RS_PRICE_SMA_LONG_WEEKS`'s lookback
-further.
+is trimmed to start exactly at that window's start (M-14 or M-11) through to `ref_date`. `prices` retains a
+rolling `--lookback-months` window — **22 by default** (bumped up from an original 15; see
+`fetch_data.py --lookback-months` below), specifically so the ~14-month momentum window still leaves a real
+~7-8-month buffer in front of `start_date` for SMA30 to warm up in — before this bump, the momentum window
+alone (~14 months) nearly exhausted the entire retained 15 months, leaving `sma10_pct`/`sma30_pct` (and the
+Mansfield oscillator below) `null` for a chunk of the displayed weeks. A `prices` table written under the
+old 15-month retention won't retroactively have the deeper history the new default expects — see
+`_prices_history_is_shallow()`/the one-time full re-bootstrap it triggers, under `fetch_data.py` below.
 
-A GLB (Green Line Breakout, Dr. Eric Wish) reference line was tried here and then removed: the rolling
-~15-month `prices` retention isn't deep enough for a "highest price reached" computed from the retained
+A GLB (Green Line Breakout, Dr. Eric Wish) reference line was tried here and then removed: even the current
+~22-month `prices` retention isn't deep enough for a "highest price reached" computed from the retained
 data to actually correspond to a stock's real, often multi-year, prior high the way TradingView shows it —
 the line (and an ATH/confirmed status derived from it) diverged from reality rather than being a trustworthy
 signal, so don't reintroduce it without first fixing the underlying retention-window limitation.
@@ -279,9 +298,10 @@ OHLC, matching Darvas's own method rather than a "true" chartist's swing-high/sw
     needed any more, since the box's own top+bottom confirmation cadence already enforces one).
 
 This intentionally does **not** use a multi-year high/support (a `resistance above the prior ATH`) — same
-reasoning as the removed GLB line above: the rolling ~15-month `prices` retention can support a box that
-spans a handful of months, not a multi-year one. It also does **not** require High/Low OHLC data (unlike the
-buying-volume CLV split below, which does use it) — Darvas himself worked from closing prices only, and a
+reasoning as the removed GLB line above: the rolling ~22-month `prices` retention can support a box that
+spans several months to just under two years, not a genuine multi-year one. It also does **not** require
+High/Low OHLC data (unlike the buying-volume CLV split below, which does use it) — Darvas himself worked
+from closing prices only, and a
 close-only box is simpler to reason about and test than one requiring confirmed intraday/daily swing
 extremes. Relative strength vs. the index is still deliberately excluded from the classification itself
 (rejected earlier as too hard to implement reliably) — the index stays a plain comparison line on the chart,
@@ -350,10 +370,13 @@ data (yfinance's OHLCV has no per-trade direction) — documented as such on `ed
 regardless of confirmation, so the frontend can render a split bar (buying vs. `volume - buying_volume` as
 selling) rather than a single flat-colored one.
 
-All of the above shares the exact same shallow-history caveat already documented for `sma10_pct`/`sma30_pct`
-above: every field is `None` until SMA30 (and, separately, `STAGE_VOLUME_LOOKBACK_WEEKS`/`STAGE_BASE_
-LOOKBACK_WEEKS` weeks of volume/price history) are available, which in production may not be until partway
-through the displayed window.
+All of the above shares the exact same history-buffer dependency already documented for `sma10_pct`/
+`sma30_pct` above: every field is `None` until SMA30 (and, separately, `STAGE_VOLUME_LOOKBACK_WEEKS`/
+`STAGE_BASE_LOOKBACK_WEEKS` weeks of volume/price history) are available. With the ~22-month `prices`
+retention (see above) this is now rare in practice for the primary M-14 window — there's a real buffer in
+front of `start_date` — but it can still happen for the M-11 fallback window (less buffer to spare) or
+during the one-time transition after a `--lookback-months` bump, before the full re-bootstrap it triggers
+has actually completed (see `_prices_history_is_shallow()` in `fetch_data.py`).
 
 One more thing worth knowing if you touch `compute_relative_strength_chart`: `pd.DataFrame.iterrows()`
 silently coerces `None` to `NaN` in an object-dtype column (`stage`/`signal`/`stop_level`/`base_count`) when
@@ -368,16 +391,24 @@ index_close`, in **two smoothing variants plotted together**: short-term (`rsm_s
 `RS_MANSFIELD_SHORT_WEEKS` = 13 weeks, ~3 months) and medium-term (`rsm_medium`,
 `RS_MANSFIELD_MEDIUM_WEEKS` = 26 weeks, ~6 months) — two deliberately different, non-overlapping horizons
 of the same signal (a short-term acceleration/deceleration can lead or diverge from the medium-term trend).
-Unlike `weekly_chart` above, this is **deliberately decoupled from the momentum window** — its own display
-range is just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6 months) from `ref_date`, not the 12-14
-month momentum window. This is why: an earlier version tried the standard 52-week Mansfield smoothing on
-top of the momentum window's own ~12-14 months, which needed ~26.5 months of price history in total — far
-more than the rolling 15-month `prices` retention provides, so the oscillator came back empty for most of
-the range in production (verified against real data: 51 of 61 weeks null for one ticker). Restricting the
-display window to a short recent slice instead means the total history needed
-(`RS_MANSFIELD_DISPLAY_WEEKS + RS_MANSFIELD_MEDIUM_WEEKS` ≈ 52 weeks, ~1 year) comfortably fits inside the
-15-month retention with margin. See `renderRelativeStrengthChart()` below for how both charts are
-rendered.
+It now displays over **the exact same window as `weekly_chart`** — `start_date` (the M-14/M-2, or M-11
+fallback, momentum window) through `ref_date` — taking `start_date` as a parameter exactly like
+`compute_relative_strength_chart` does, and fetching its own `RS_MANSFIELD_MEDIUM_WEEKS + 2` weeks of
+buffer before it so the 26-week smoothing already has a value at the first displayed point.
+
+**Version history matters here too**: an earlier version deliberately decoupled this chart from the
+momentum window — its own display range was just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6
+months) from `ref_date`, a completely different (and shorter) span than `weekly_chart` above it, so the two
+stacked charts didn't even share an x-axis scale. That was a workaround for the same shallow-retention
+problem documented throughout this section: at the original 15-month `prices` retention, the standard
+52-week Mansfield smoothing on top of the ~12-14-month momentum window would have needed ~26.5 months of
+price history in total, and came back empty for most of the range in production (verified against real
+data: 51 of 61 weeks null for one ticker). Once `--lookback-months` was raised to 22 specifically to fix
+this (and the parallel `sma10_pct`/`sma30_pct` gaps above), the full momentum-window + buffer requirement
+(~14 months + 26 weeks ≈ 20 months) fit comfortably, so the short decoupled window was no longer needed and
+was replaced by the current same-window design — both charts now share one x-axis scale, which is also
+what makes the frontend's synced crosshair between the two panels line up correctly (see
+`renderRelativeStrengthChart()`/`syncChartsCrosshair()` below).
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
