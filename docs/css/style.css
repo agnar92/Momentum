@@ -1062,20 +1062,12 @@ table.holdings-table td, table.rebalance-table td {
 }
 .exclude-chip-remove:hover { background: var(--red); color: #fff; }
 
-.exclude-chip.core-chip { border-color: var(--green); color: var(--green-bright); }
-
 .empty-state {
     color: var(--text-faint);
     font-size: 13px;
     padding: 40px;
     text-align: center;
 }
-
-/* ============================================================
-   PORTFOLIO (Core / Satelita)
-   ============================================================ */
-.action-badge.core { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
-.action-badge.satellite { background: rgba(224, 161, 59, 0.15); color: #e0a13b; }
 
 .import-row label {
     display: inline-flex;
@@ -1091,20 +1083,6 @@ table.holdings-table td, table.rebalance-table td {
     margin-bottom: 18px;
 }
 .donut-wrap canvas { width: 100% !important; height: 100% !important; }
-
-.tag-btn {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-faint);
-    border-radius: 5px;
-    padding: 4px 9px;
-    font-size: 11px;
-    font-weight: 700;
-    cursor: pointer;
-}
-.tag-btn + .tag-btn { margin-left: 4px; }
-.tag-btn.core.active { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); border-color: var(--green); }
-.tag-btn.satellite.active { background: rgba(224, 161, 59, 0.15); color: #e0a13b; border-color: #e0a13b; }
 
 /* Scrollbars */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
