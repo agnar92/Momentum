@@ -648,6 +648,18 @@ function initDrawer() {
         toggleBtn.textContent = state.drawerOpen ? "<<<" : ">>>";
     });
 
+    // Kliknięcie gdziekolwiek poza rozwiniętą szufladą (np. w obszar wykresu)
+    // ją zwija — tak jak zwykle zachowują się nakładane panele w nowoczesnych
+    // aplikacjach. Sam przycisk >>>/<<< ma już własną obsługę kliknięcia
+    // powyżej, więc jest tu wykluczony, żeby nie zwijać i od razu rozwijać.
+    document.addEventListener("click", (ev) => {
+        if (!state.drawerOpen) return;
+        if (drawer.contains(ev.target) || toggleBtn.contains(ev.target)) return;
+        state.drawerOpen = false;
+        drawer.classList.remove("open");
+        toggleBtn.textContent = ">>>";
+    });
+
     document.querySelectorAll(".drawer-tab").forEach(tab => {
         tab.addEventListener("click", () => {
             document.querySelectorAll(".drawer-tab").forEach(t => t.classList.remove("active"));
