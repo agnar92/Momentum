@@ -8,12 +8,21 @@ A momentum-investing tool for SP500, NASDAQ100, DOWJONES, WIG20, and mWIG40: a P
 an S&P-style Momentum Index selection/weighting for each universe and publishes the results as a static
 dashboard (`docs/`) to GitHub Pages. There is a second page (`rebalance.html`) that lets a user paste in
 their current brokerage holdings (or import an XTB export) and get buy/sell suggestions to move toward
-the computed target weights. SP500/WIG20/mWIG40 are momentum + relative-strength screener universes
-only — they are **not** wired into the rebalance calculator's target-allocation split (`rebalance.js`'s
-own `UNIVERSES` stays NASDAQ100/DOWJONES): WIG20/mWIG40 because mixing a PLN-denominated capital bucket
-into a USD-denominated allocation split would need FX handling that hasn't been built; SP500 because it
-was brought back specifically as a screener (see below) — a position in either is still priced correctly
-via `docs/data/all_prices.json`, which is universe-agnostic, if pasted into holdings.
+the computed target weights. SP500 is a momentum + relative-strength screener universe only — it is
+**not** wired into the rebalance calculator (`rebalance.js`'s `REGIONS` doesn't reference it) — it was
+brought back specifically as a screener (see below), not to resume rebalancing against it. WIG20/mWIG40
+**are** wired into the rebalance calculator, but as their own separate region, not merged with NASDAQ100/
+DOWJONES: `rebalance.js`'s `REGIONS` splits the whole calculator into two fully independent halves — `USA`
+(NASDAQ100 + DOWJONES, USD) and `GPW` (WIG20 + MWIG40, PLN) — each with its own contribution amount, own
+TOP N picker per index, own suggestion table, own Monte Carlo simulation, own historical-equity-curve
+chart, and own portfolio-analysis donut chart. This sidesteps the FX problem that originally kept WIG20/
+mWIG40 out entirely (mixing a PLN-denominated capital bucket into a USD-denominated allocation/weighting
+pool would need an FX rate this tool doesn't fetch): nothing ever sums a PLN amount and a USD amount
+together, because the two regions never share a capital pool, only the underlying holdings list and
+exclusion list (both currency-agnostic — see `rebalance.js` below). A position in any of the five
+universes is still priced correctly via `docs/data/all_prices.json`, which is universe-agnostic, if
+pasted into holdings — `regionOf(ticker)` (in `rebalance.js`) then buckets it into USA or GPW for display
+and rebalancing purposes based on which universe(s) its price was sourced from.
 
 SP500 was removed once (dashboard, rebalance calculator, GEM, all pipeline tables/data) because the user
 held a dedicated S&P 500 ETF elsewhere and didn't need this tool tracking it too — then brought back
@@ -21,9 +30,10 @@ later, once the tool grew the Weinstein stage-analysis 10:30/Mansfield charts, s
 charts and the Relative Strength screener for S&P names, **not** to resume rebalancing against it. So
 this second pass is deliberately narrower than the original: SP500 is back in `UNIVERSES` (full
 momentum selection/weighting, its own dashboard tab) and `RELATIVE_STRENGTH_UNIVERSES` (screener + 10:30/
-Mansfield charts), exactly like WIG20/mWIG40 are scoped — but it stays **out** of `GEM_UNIVERSES` (Global
-Equity Momentum keeps comparing only NASDAQ100/DOWJONES, unchanged from before this second pass) and
-**out** of `rebalance.js`'s `UNIVERSES` (see above). `CSPX_holdings.csv` (iShares Core S&P 500 UCITS ETF
+Mansfield charts) — but it stays **out** of `GEM_UNIVERSES` (Global Equity Momentum keeps comparing only
+NASDAQ100/DOWJONES, unchanged from before this second pass) and **out** of `rebalance.js`'s `REGIONS` (see
+above) — unlike WIG20/mWIG40, which did later get wired into `rebalance.js` as their own `GPW` region.
+`CSPX_holdings.csv` (iShares Core S&P 500 UCITS ETF
 holdings, same format/convention as `CNDX_holdings.csv`/`CIND_holdings.csv`) was restored from git
 history (the exact file present right before the original removal) as the starting holdings snapshot —
 replace it by hand like the other two CSVs when the index composition changes.
@@ -466,17 +476,41 @@ every run (see CI section below) — it isn't hand-maintained.
   TradingView" link resolves to the correct Warsaw-listed instrument instead of clashing with an unrelated
   ticker on another exchange.
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
-  exclusions, allocation settings) lives in `localStorage` only — there is no backend. Key pieces:
-  - `computeTargets()` allocates target dollar capital per universe by the user's `settings.pct`
-    split, normalizes each universe's momentum weights to that bucket, merges tickers across
-    universes, then truncates to `settings.maxHoldings` and rescales.
+  exclusions, per-region settings) lives in `localStorage` only — there is no backend. The page is split
+  into two fully independent regions (`REGIONS`/`REGION_LIST` — `USA`: NASDAQ100+DOWJONES/USD, `GPW`:
+  WIG20+MWIG40/PLN — see "What this repo is" above for why they're kept separate rather than merged), each
+  rendered as its own repeated block of panel-cards (settings, stat-cards, suggestion table, Monte Carlo,
+  equity curve, portfolio-analysis donut) with DOM ids suffixed `-USA`/`-GPW` (`renderRegion(region)`,
+  called for both by `renderRegions()`/`renderAll()`). Key pieces:
+  - **No more manual capital-split %.** An earlier version had the user set a `settings.pct` split
+    between Nasdaq/Dow (and a global `settings.maxHoldings` cap) — both were removed in favor of
+    `settings.regions[region].topN[universe]`: the user just says how many top-momentum names to take
+    from each index (e.g. "top 5 from Nasdaq 100, top 5 from Dow Jones"); `selectedConstituents(region, u)`
+    slices the already momentum-sorted `{universe}.json` constituents list to that count (after removing
+    manually excluded tickers first, so TOP N is filled from what remains). `computeTargets(region,
+    totalCapital)` then merges the TOP N from every universe in that region into one pool and weights each
+    ticker by its own raw `weight_pct` normalized across that whole pool (not per-universe) — an index
+    whose TOP N picks currently have stronger momentum naturally gets a bigger share of the region's
+    capital, with no separate % dial. `universeWeightSharePct(region)` derives the equivalent per-universe
+    split (purely for weighting the "Wynik historyczny" equity-curve blend below) from that same TOP N
+    selection.
+  - **Holdings and exclusions are shared across both regions** — one flat `holdings` list (ticker +
+    shares) and one `excluded` list of tickers, exactly as before; `regionOf(ticker)` (via
+    `priceMap[ticker].sources`, defaulting to `USA` for an unrecognized ticker) is what buckets a given
+    holding into the USA or GPW section for display and rebalancing math. `regionHoldingsValue`/
+    `regionExcludedValue`/`regionHoldingShares` are the per-region filtered views over that shared state.
+  - **Currency-aware formatting**: `fmtMoney` (USD, `$`) and `fmtMoneyPln` (PLN, `zł`, `pl-PL` locale) are
+    two separate formatters — `moneyFmtFor(region)` picks the right one, threaded through every per-region
+    render function (suggestion table, stat-cards, Monte Carlo axis/tooltip/caption, portfolio-analysis
+    donut tooltip) and through the shared holdings table's price/value cells (via `regionOf(ticker)`) so a
+    GPW position always reads in złoty even though the table itself isn't split.
   - Positions can be excluded (`excluded` list) so they're priced but never suggested for
-    buy/sell — their value is carved out of the investable capital.
+    buy/sell — their value is carved out of the investable capital of whichever region they belong to.
   - `parseXtbOpenPositions()` imports an XTB "Open Positions" `.xlsx` export via SheetJS
     (`XLSX.read`, loaded from a CDN in `rebalance.html`) as a one-shot replacement of the holdings list.
-  - A client-side Monte Carlo simulation (`simulateMonteCarlo`, Chart.js) projects portfolio value
-    using the capital-weighted average momentum (capped at ±30%/yr) and volatility of the currently
-    targeted names — explicitly labeled as illustrative, not a forecast.
+  - A client-side Monte Carlo simulation (`simulateMonteCarlo`, Chart.js), run separately per region, projects
+    that region's portfolio value using the capital-weighted average momentum (capped at ±30%/yr) and
+    volatility of that region's currently targeted names — explicitly labeled as illustrative, not a forecast.
 - **`edukacja.html`** — static, JS-free educational write-up of Stage Analysis in Polish: the 4-stage cycle
   (with a colored `.edu-cycle` diagram matching `STAGE_COLORS` from `app.js`), the role of SMA10/SMA30 and
   the base/resistance breakout mechanism, volume confirmation, the trailing stop-loss rules, the two warning

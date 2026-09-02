@@ -867,7 +867,7 @@ th.tv-col { width: 1%; }
     margin-bottom: 6px;
 }
 
-#contribution {
+.contribution-input {
     background: var(--panel-alt);
     border: 1px solid var(--border);
     color: var(--text);
@@ -876,6 +876,20 @@ th.tv-col { width: 1%; }
     font-size: 14px;
     width: 200px;
 }
+
+.region-heading {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 28px 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent-line);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+}
+.region-heading:first-of-type { margin-top: 4px; }
+.region-heading .region-sub { font-size: 12px; font-weight: 400; color: var(--text-dim); }
 
 .bucket-inputs { display: flex; gap: 18px; flex-wrap: wrap; }
 .bucket-input {
@@ -1142,7 +1156,7 @@ table.holdings-table td, table.rebalance-table td {
     .stat-cards { gap: 10px; margin-bottom: 16px; }
     .stat-card { min-width: 0; flex: 1 1 45%; padding: 12px 14px; }
     .stat-card .value { font-size: 18px; }
-    #contribution { width: 100%; max-width: 220px; }
+    .contribution-input { width: 100%; max-width: 220px; }
     .bucket-inputs { gap: 8px; }
 
     /* Cena / Waga docelowa — zbędne obok Wartości, znikają żeby zmieścić resztę bez przewijania */
