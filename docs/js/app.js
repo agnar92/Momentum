@@ -426,6 +426,81 @@ function renderStageBadge(stage) {
         + `<span class="stage-desc">${STAGE_DESCRIPTIONS[stage]}</span>`;
 }
 
+// Średnia krocząca wolumenu — ~50 sesji dziennych przełożone na tygodnie
+// (dane są tygodniowe, patrz weekly_chart, więc 50 dni sesyjnych ≈ 10 tygodni
+// przy 5 sesjach/tydzień). Zwraca tablicę tej samej długości co `values` —
+// dla pierwszych punktów okno jest krótsze (średnia z tego, co dostępne), a
+// nie `null`, żeby linia zaczynała się od razu, nie dopiero po 10 tygodniach.
+const VOLUME_SMA_WEEKS = 10; // ~50 dni sesyjnych
+function rollingMean(values, window) {
+    return values.map((_, i) => {
+        const slice = values.slice(Math.max(0, i - window + 1), i + 1).filter(v => v != null);
+        return slice.length ? slice.reduce((s, v) => s + v, 0) / slice.length : null;
+    });
+}
+
+// Wykres Mansfield RS ma WŁASNE, znacznie krótsze okno niż wykres 10:30/
+// wolumen (patrz compute_mansfield_rs_chart w run_query.py — RS_MANSFIELD_
+// DISPLAY_WEEKS = 26 tyg. vs 12-14-miesięczne okno momentum) — bez tego dwa
+// wykresy jeden pod drugim mają RÓŻNĄ liczbę tygodni na tej samej szerokości
+// canvasu, więc ten sam piksel X odpowiada innej dacie na każdym z nich, i nie
+// wiadomo, jakiego okresu w ogóle dotyczy dolny wykres. Zamiast poszerzać samo
+// okno Mansfielda (próbowane wcześniej — ponad połowa tygodni wychodziła
+// `null` z powodu płytkiej ~15-miesięcznej retencji `prices`, patrz CLAUDE.md),
+// dopełniamy go do TEJ SAMEJ tablicy dat co wykres 10:30 (`fullDates`)
+// wartościami `null` przed startem własnego okna Mansfielda — obie serie mają
+// wtedy identyczną liczbę kategorii na osi X, więc skala (piksele na tydzień)
+// jest dokładnie ta sama na obu wykresach, a pusty odcinek z lewej strony
+// samej linii RSM od razu pokazuje, od kiedy zaczynają się dane (potwierdzone
+// słownie w #rsMansfieldCaption, patrz niżej). mansfieldData.dates to zawsze
+// dokładny podzbiór (sufiks) fullDates — sam sposób ich liczenia w backendzie
+// resampluje z tych samych dziennych tabel tym samym `DATE_TRUNC('week', ...)`.
+function alignMansfieldToDates(mansfieldData, fullDates) {
+    const idxByDate = new Map(mansfieldData.dates.map((d, i) => [d, i]));
+    const pick = (series) => fullDates.map(d => (idxByDate.has(d) ? series[idxByDate.get(d)] : null));
+    return { short: pick(mansfieldData.rsm_short), medium: pick(mansfieldData.rsm_medium) };
+}
+
+function fmtPlDate(iso) {
+    const [y, m, d] = iso.split("-");
+    return `${d}.${m}.${y}`;
+}
+
+// Współdzielony "crosshair" między wykresem 10:30, wolumenem i Mansfieldem —
+// najechanie na dowolny z nich podświetla ten sam tydzień na pozostałych.
+// Działa jako zwykłe dopasowanie po indeksie (nie po dacie), bo wszystkie
+// trzy wykresy dzielą teraz dokładnie tę samą tablicę etykiet (chartData.dates
+// — patrz alignMansfieldToDates powyżej dla Mansfielda). Datasety oznaczone
+// `_syncExempt` (linia zera Mansfielda — czysto wizualna, nie ma sensu jej
+// podświetlać) są pomijane; jeśli po odfiltrowaniu nic nie zostanie (np.
+// najechanie na tydzień sprzed startu okna Mansfielda, same `null`), wykres
+// po prostu nie pokazuje własnego tooltipa — to uczciwie sygnalizuje "tu nie
+// ma jeszcze danych", zamiast pokazywać pusty dymek.
+function syncChartsCrosshair(charts) {
+    const applyToOthers = (sourceChart, dataIndex) => {
+        charts.forEach(chart => {
+            if (chart === sourceChart) return;
+            let elements = [];
+            if (dataIndex !== null) {
+                elements = chart.data.datasets
+                    .map((ds, datasetIndex) => ({ ds, datasetIndex }))
+                    .filter(({ ds }) => !ds._syncExempt && ds.data[dataIndex] != null)
+                    .map(({ datasetIndex }) => ({ datasetIndex, index: dataIndex }));
+            }
+            chart.setActiveElements(elements);
+            chart.tooltip.setActiveElements(elements, { x: 0, y: 0 });
+            chart.update("none");
+        });
+    };
+    charts.forEach(chart => {
+        chart.canvas.addEventListener("mousemove", (evt) => {
+            const points = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
+            applyToOthers(chart, points.length ? points[0].index : null);
+        });
+        chart.canvas.addEventListener("mouseleave", () => applyToOthers(chart, null));
+    });
+}
+
 // Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
 // stage analysis (Stan Weinstein / Dr Eric Wish):
 // 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. i poziom
@@ -564,13 +639,19 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             return (ratio != null && ratio >= STAGE_BREAKOUT_VOLUME_RATIO) ? "rgba(46, 204, 113, 0.85)" : "rgba(46, 204, 113, 0.35)";
         });
         const sellingColor = "rgba(224, 69, 90, 0.55)";
+        const volumeSma = rollingMean(volumes, VOLUME_SMA_WEEKS);
         rsVolumeChartInstance = new Chart(volumeCanvas, {
             type: "bar",
             data: {
                 labels: chartData.dates,
                 datasets: [
-                    { label: "Wolumen kupujących (tyg.)", data: buyingVolumes, backgroundColor: buyingColors, stack: "volume", barPercentage: 0.8, categoryPercentage: 0.9 },
-                    { label: "Wolumen sprzedających (tyg.)", data: sellingVolumes, backgroundColor: sellingColor, stack: "volume", barPercentage: 0.8, categoryPercentage: 0.9 },
+                    { label: "Wolumen kupujących (tyg.)", data: buyingVolumes, backgroundColor: buyingColors, stack: "volume", barPercentage: 0.8, categoryPercentage: 0.9, order: 1 },
+                    { label: "Wolumen sprzedających (tyg.)", data: sellingVolumes, backgroundColor: sellingColor, stack: "volume", barPercentage: 0.8, categoryPercentage: 0.9, order: 1 },
+                    {
+                        type: "line", label: `Śr. wolumenu (${VOLUME_SMA_WEEKS} tyg. ≈ 50 dni)`, data: volumeSma,
+                        borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5,
+                        borderDash: [3, 2], order: 0,
+                    },
                 ],
             },
             options: {
@@ -587,29 +668,46 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                                     const ratioTxt = ratio != null ? ` (${ratio.toFixed(2)}x śr.)` : "";
                                     return `Kupujący: ${ctx.parsed.y.toLocaleString("pl-PL")}${ratioTxt}`;
                                 }
-                                return `Sprzedający: ${ctx.parsed.y.toLocaleString("pl-PL")}`;
+                                if (ctx.datasetIndex === 1) return `Sprzedający: ${ctx.parsed.y.toLocaleString("pl-PL")}`;
+                                return `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toLocaleString("pl-PL", { maximumFractionDigits: 0 })}`;
                             },
                         },
                     },
                 },
                 scales: {
+                    // maxTicksLimit taki sam jak wykres 10:30 — z tymi samymi datami na
+                    // osi X (patrz alignMansfieldToDates dla trzeciego panelu) daje to
+                    // wizualnie spójne, dopasowane skalowanie między panelami.
                     x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
-                    y: { stacked: true, ticks: { color: "#8a8f9c", maxTicksLimit: 4 }, grid: { color: "#262a35" } },
+                    // Same wartości osi Y (miliony akcji) niosą mało informacji i zabierają
+                    // sporo poziomego miejsca na wąskich panelach (np. telefon) — słupki i
+                    // tak czytelne są proporcjonalnie (patrz tooltip dla dokładnych liczb).
+                    y: { stacked: true, ticks: { display: false }, grid: { color: "#262a35" } },
                 },
             },
         });
     }
 
+    const mansfieldCaption = document.getElementById("rsMansfieldCaption");
     if (mansfieldCanvas && mansfieldData) {
-        const zeroLine = mansfieldData.dates.map(() => 0);
+        // Dopasowane do PEŁNEJ tablicy dat wykresu 10:30 (nie własnej, krótszej
+        // mansfieldData.dates) — patrz alignMansfieldToDates: dzięki temu oś X
+        // (skala: piksele na tydzień) jest identyczna na obu wykresach, a pusty
+        // odcinek z lewej strony samych linii RSM pokazuje, od kiedy faktycznie
+        // zaczynają się dane.
+        const aligned = alignMansfieldToDates(mansfieldData, chartData.dates);
+        const zeroLine = chartData.dates.map(() => 0);
+        if (mansfieldCaption) {
+            mansfieldCaption.textContent = `${fmtPlDate(mansfieldData.dates[0])} – ${fmtPlDate(mansfieldData.dates[mansfieldData.dates.length - 1])}`;
+        }
         rsMansfieldChartInstance = new Chart(mansfieldCanvas, {
             type: "line",
             data: {
-                labels: mansfieldData.dates,
+                labels: chartData.dates,
                 datasets: [
-                    { label: "RSM krótkoterminowy (~3M)", data: mansfieldData.rsm_short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
-                    { label: "RSM średnioterminowy (~6M)", data: mansfieldData.rsm_medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                    { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3] },
+                    { label: "RSM krótkoterminowy (~3M)", data: aligned.short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
+                    { label: "RSM średnioterminowy (~6M)", data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                    { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
                 ],
             },
             options: {
@@ -624,7 +722,10 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                     },
                 },
                 scales: {
-                    x: { ticks: { color: "#8a8f9c", maxTicksLimit: 8 }, grid: { color: "#262a35" } },
+                    // Ta sama liczba etykiet co panel 10:30/wolumen (patrz komentarz
+                    // przy tamtych skalach) — wspólna tablica dat + ten sam
+                    // maxTicksLimit dają spójne, wyrównane skale między panelami.
+                    x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                     y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
                 },
             },
@@ -632,7 +733,12 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     } else if (mansfieldCanvas) {
         const ctx = mansfieldCanvas.getContext("2d");
         if (ctx) ctx.clearRect(0, 0, mansfieldCanvas.width, mansfieldCanvas.height);
+        if (mansfieldCaption) mansfieldCaption.textContent = "";
     }
+
+    // Wspólny crosshair (patrz syncChartsCrosshair) — tylko między wykresami,
+    // które faktycznie istnieją (Mansfield może być null przy braku danych).
+    syncChartsCrosshair([rsChartInstance, rsVolumeChartInstance, rsMansfieldChartInstance].filter(Boolean));
 }
 
 // ============================================================
@@ -1038,6 +1144,6 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — nie ładowany
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { compareRows };
+    module.exports = { compareRows, rollingMean, alignMansfieldToDates, fmtPlDate };
 }
 
