@@ -106,6 +106,23 @@ runs; `main.yml` commits it back after each run (see CI section below). This is 
        were `null` for a chunk of the displayed window (see `sma10_pct`/`sma30_pct` and `mansfield_chart`
        under Relative strength below). The already-committed `momentum_data.duckdb` predates this bump, so
        its first refresh under the new default goes through exactly this one-time full re-bootstrap.
+   - `update_earnings()` fetches quarterly earnings history (report date, consensus EPS estimate, reported
+     EPS, surprise %) into the `earnings` table (PK `(Ticker, Report_Date)`) — feeds the EPS chart in
+     `run_query.py` (`compute_eps_chart`), styled after MarketSmith/IBD's EPS line. Unlike prices, yfinance
+     has **no batched call** for this — `yf.Ticker(symbol).get_earnings_dates()` is one network request
+     per ticker, so this is `len(tickers)` sequential requests with a short sleep between them
+     (`EARNINGS_FETCH_SLEEP_SECONDS`), noticeably lengthening the monthly full run; `--skip-earnings` skips
+     it entirely (e.g. for a quick local pipeline test) and `--indices-only` (the daily GEM workflow) always
+     skips it regardless, since it only needs `index_prices`. Upserted **per ticker** (delete then insert
+     that ticker's rows) so a ticker whose fetch fails this run keeps its previously-fetched history instead
+     of losing it — same failure-tolerance convention as `prices`. Unlike `prices`, there's **no rolling
+     retention/trim** here: the table is tiny (a handful of rows per ticker) and, unlike price history, more
+     history is exactly what the EPS chart wants (multi-year context, like MarketSmith/IBD show) rather than
+     something to bound. Each ticker's fetch keeps every historical row with a `Reported EPS` value, plus —
+     separately — only the single *nearest upcoming* row that has an estimate but no report yet (Yahoo
+     publishes the next scheduled earnings date/consensus ahead of time); older/farther future rows
+     `get_earnings_dates()` may also return are dropped, since only the next date is surfaced on the
+     dashboard (`next_earnings_date`/`next_eps_estimate`).
 2. **`run_query.py`** — all the calculation logic and static site generation. Nothing about data
    fetching lives here. For each universe (`SP500`, `NASDAQ100`, `DOWJONES`, `WIG20`, `MWIG40` —
    `UNIVERSES`):
@@ -410,6 +427,22 @@ was replaced by the current same-window design — both charts now share one x-a
 what makes the frontend's synced crosshair between the two panels line up correctly (see
 `renderRelativeStrengthChart()`/`syncChartsCrosshair()` below).
 
+Each ticker (not just Relative Strength leaders — same "every constituent gets one" pattern as
+`weekly_chart`/`mansfield_chart`, see `process_universe`) also carries an `eps_chart`
+(`compute_eps_chart()`) — a MarketSmith/IBD-style EPS chart: the line of **reported EPS** across recent
+quarters, with each reported quarter tagged `beat` (`Reported EPS > EPS Estimate`, `None` when Yahoo has no
+consensus for that quarter — common for less-covered names) so the frontend can color-code it (see
+`renderEpsChart()` below). Deliberately **not** clipped to the momentum window like `weekly_chart`/
+`mansfield_chart` — earnings are quarterly (4/year), so a 12-14 month momentum window would only ever show
+4-5 points; `EPS_CHART_MAX_QUARTERS` (12, ~3 years) instead gives the multi-year context MarketSmith/IBD
+charts are known for, independent of `start_date`. Also independent of `index_prices`/`compute_index_momentum`
+entirely (unlike every other per-ticker chart here) — it's computed straight off the `earnings` table, so it
+populates even when `index_mom` comes back `None` (e.g. before `index_prices` has any rows for that universe
+yet). Returns `None` when the `earnings` table doesn't exist yet (a checkout/DB predating this feature) or
+the ticker has no reported rows in it (yfinance coverage gap, or genuinely no earnings history yet). Also
+carries `next_earnings_date`/`next_eps_estimate` — the nearest *upcoming* scheduled report Yahoo already
+publishes an estimate for, `None` when unknown — surfaced as a small "next earnings" caption above the chart.
+
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
 Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worker caching the app shell,
@@ -450,16 +483,19 @@ every run (see CI section below) — it isn't hand-maintained.
   their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
   per-universe tables. Every ticker in the main per-universe exports
   (`docs/data/{universe}.json`'s `constituents`, see `process_universe`/`export_json` above) carries its own
-  `weekly_chart`/`mansfield_chart` too, not just the relative-strength panel's leaders — so the own chart is
-  available for any stock, however it was selected (per-universe tables, GEM, Ctrl+K search, the
-  relative-strength panel/table). `findRsEntry()` in `app.js` looks a ticker up first in
-  `combinedRelativeStrengthLeaders()` (an RS-leader entry also carries `relative_strength_pct`/
-  `index_return_pct`) and falls back to its own record in `state.data[universe].constituents`; whichever
-  it finds becomes `state.currentRsEntry` and drives `hasRsChart` in `updateChartArea()` — when a ticker has
-  no `weekly_chart` at all (e.g. one whose momentum fell back to the 9-month window with too little extra
-  history), the chart panels are hidden and `#noChartMessage` is shown instead, pointing at the "Otwórz w
+  `weekly_chart`/`mansfield_chart`/`eps_chart` too, not just the relative-strength panel's leaders — so the
+  own chart is available for any stock, however it was selected (per-universe tables, GEM, Ctrl+K search,
+  the relative-strength panel/table). `findRsEntry()` in `app.js` just looks a ticker up in its own record in
+  `state.data[universe].constituents` — it used to gate on `weekly_chart` being present (returning `null`
+  otherwise), but that gate was removed once `eps_chart` needed to work independently of `weekly_chart` (see
+  `compute_eps_chart` above — different data source, `earnings` vs. `prices`/`index_prices`, so one can be
+  present without the other). Whatever `findRsEntry()` finds becomes `state.currentRsEntry`;
+  `updateChartArea()` then computes `hasRsChart` and `hasEpsChart` **separately** from it (`.weekly_chart`/
+  `.eps_chart` presence) and shows/hides each chart's panels independently — when NEITHER is present (e.g. a
+  ticker whose momentum fell back to the 9-month window with too little extra price history, and whose
+  `earnings` table has no rows either), `#noChartMessage` is shown instead, pointing at the "Otwórz w
   TradingView" button as the fallback; that button itself is never disabled, since it works for every ticker
-  regardless of chart-data availability. When shown, it's **three stacked Chart.js panels**
+  regardless of chart-data availability. When `hasRsChart` is true, it's **three stacked Chart.js panels**
   (`renderRelativeStrengthChart()`, loaded via CDN, along with `chartjs-plugin-zoom` and
   `chartjs-plugin-annotation` — same CDN, pinned versions):
   1. The "10:30" price+SMA10/SMA30 chart, with the stock's own index level plotted alongside it on the
@@ -481,8 +517,21 @@ every run (see CI section below) — it isn't hand-maintained.
   3. The Mansfield RS oscillator (short-term + medium-term lines, its own separate ~6-month window, see
      above) in the shortest panel underneath. Non-interactive — its own short window doesn't need zoom/pan.
 
+  A 4th panel, `#rsEpsPanel`/`renderEpsChart()`, renders independently whenever `hasEpsChart` is true
+  (regardless of whether panels 1-3 above are shown) — the MarketSmith/IBD-style EPS chart: a line of
+  `eps_reported` across quarters, each point colored green/red/gray by that quarter's `beat` flag
+  (`EPS_BEAT_COLOR`/`EPS_MISS_COLOR`/`EPS_UNKNOWN_COLOR` — must stay visually distinct from, but doesn't need
+  to literally match, `STAGE_COLORS`), plus a full-height dashed vertical line (`chartjs-plugin-annotation`,
+  same mechanism as the Darvas boxes in panel 1) at each report date in that same color — the "pionowe kreski
+  kiedy były earnings" the feature was asked for. A `#rsEpsCaption` above the canvas shows
+  `next_earnings_date`/`next_eps_estimate` when known ("Najbliższe wyniki: ..."). Its x-axis is its own
+  quarterly date list (`eps_chart.dates`), **not** shared with panels 1-3's weekly dates, so it is
+  deliberately left out of `syncChartsCrosshair()` (a shared crosshair would highlight unrelated
+  weeks/quarters against each other) and has no zoom/pan (a handful of points doesn't need it).
+
   (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-volume` / `.rs-chart-panel-small` in
-  `style.css`.) **Version history**: an earlier version put entry/exit signal markers (`ENTRY_2A`/`ENTRY_2B`/
+  `style.css` — the EPS panel reuses `.rs-chart-panel-small`, same as the Mansfield panel, rather than
+  adding a new CSS class.) **Version history**: an earlier version put entry/exit signal markers (`ENTRY_2A`/`ENTRY_2B`/
   `ENTRY_2B_LATE`/`WARNING_MA_SLOWING`/`EXIT_STOP`) and a dashed `stop_level_pct` trailing-stop line directly
   on panel 1, and volume as bars on a *hidden* secondary axis at the bottom of that same chart — removed
   after user feedback that panel 1 had too many overlapping elements (5 line datasets + 2 bar datasets +
@@ -494,11 +543,12 @@ every run (see CI section below) — it isn't hand-maintained.
   automatic Y-axis tick/range computation degenerates (measured empirically: a canvas ≤120px tall on a
   narrow-range dataset like the Mansfield oscillator can lock onto a nonsensical fixed range like `[-100,
   100]` with a single tick instead of autoscaling to the actual data). On phones, `.charts-area` has a fixed
-  `height: calc(100vh - 48px)` (see the mobile media query below) shared across the badge + 3 chart panels +
-  legend text, so without generous `min-height` floors on each panel, three stacked charts plus a stage
-  badge and legend can squeeze one or more panels below that threshold and render as a flat, broken-looking
-  line — `.rs-chart-container` also has `overflow-y: auto` as a safety net (scroll rather than squeeze, on
-  the shortest phones) since even a floor that's *usually* enough can't be a hard guarantee for every device.
+  `height: calc(100vh - 48px)` (see the mobile media query below) shared across the badge + up to 4 chart
+  panels + legend text, so without generous `min-height` floors on each panel, four stacked charts plus a
+  stage badge and legend can squeeze one or more panels below that threshold and render as a flat,
+  broken-looking line — `.rs-chart-container` also has `overflow-y: auto` as a safety net (scroll rather
+  than squeeze, on the shortest phones) since even a floor that's *usually* enough can't be a hard guarantee
+  for every device.
   WIG20/mWIG40 are PLN-denominated and
   GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
   prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
@@ -559,7 +609,11 @@ every run (see CI section below) — it isn't hand-maintained.
 pip install -r requirements.txt   # NOTE: this file is UTF-16-encoded; edit with a UTF-16-aware tool
                                    # or regenerate it, don't hand-append plain-ASCII lines
 
-python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh prices (bootstrap or incremental) + index composition
+python fetch_data.py [--lookback-months N] [--min-coverage 0.8] [--skip-earnings]
+                                   # refresh prices (bootstrap or incremental) + index composition + quarterly
+                                   # earnings history (`earnings` table, feeds the EPS chart); --skip-earnings
+                                   # skips only the earnings fetch (one yfinance request per ticker, no
+                                   # batching — noticeably slower), for a quicker local pipeline run
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
                                    # compute momentum + regenerate docs/data/*.json
 

@@ -515,6 +515,110 @@ def update_index_prices(con, lookback_months):
               f"(równoważony zwrot składników, baza={WIG_SYNTHETIC_INDEX_BASE}).")
 
 
+EARNINGS_SCHEMA = """
+    Ticker VARCHAR, Report_Date DATE, EPS_Estimate DOUBLE, EPS_Reported DOUBLE, Surprise_Pct DOUBLE,
+    PRIMARY KEY (Ticker, Report_Date)
+"""
+# 20 (nie 4-8) zeby wykres EPS (run_query.py::compute_eps_chart) mial realny,
+# wieloletni kontekst w stylu MarketSmith/IBD, nie tylko ostatni rok — yfinance
+# i tak nie ma wiecej historii wynikow niz to dla wiekszosci spolek.
+EARNINGS_HISTORY_LIMIT = 20
+# Throttling miedzy KAZDYM pojedynczym zapytaniem o daty wynikow (patrz
+# update_earnings) — w odroznieniu od cen, get_earnings_dates() nie wspiera
+# batchowania wielu tickerow w jednym zapytaniu, wiec to setki osobnych zapytan;
+# krotka pauza zmniejsza ryzyko throttlingu/blokady po stronie Yahoo.
+EARNINGS_FETCH_SLEEP_SECONDS = 0.3
+
+
+def _fetch_earnings_rows_for_ticker(yf_symbol):
+    """Pobiera historię dat/EPS wyników kwartalnych DLA JEDNEGO tickera przez
+    yf.Ticker(...).get_earnings_dates() — w odróżnieniu od cen (_download_price_rows),
+    yfinance NIE wspiera tu batchowania wielu tickerów w jednym zapytaniu, więc każda
+    spółka to osobne zapytanie sieciowe (throttling — patrz update_earnings).
+
+    get_earnings_dates() zwraca wiersze zarówno dla PRZESZŁYCH wyników (z Reported
+    EPS) jak i NADCHODZĄCYCH, wciąż tylko szacowanych terminów (Reported EPS puste) —
+    zwracamy WSZYSTKIE przeszłe wiersze z realnym EPS, plus WYŁĄCZNIE najbliższy
+    nadchodzący termin (jeśli Yahoo go już publikuje), żeby run_query.py mogło pokazać
+    datę kolejnych wyników bez osobnego zapytania.
+
+    Zwraca listę krotek (Report_Date jako 'YYYY-MM-DD' string, EPS_Estimate,
+    EPS_Reported, Surprise_Pct) posortowaną rosnąco po dacie. Zwraca [] przy
+    błędzie/braku danych (spółka bez pokrycia tego API, np. wiele tickerów GPW) —
+    nie rzuca wyjątku, żeby pojedyncza spółka bez danych nie przerywała całego
+    przebiegu (spójne z resztą pipeline'u)."""
+    try:
+        df = yf.Ticker(yf_symbol).get_earnings_dates(limit=EARNINGS_HISTORY_LIMIT)
+    except Exception as e:
+        print(f"  ⚠️  Brak dat wyników dla {yf_symbol}: {e}")
+        return []
+    if df is None or df.empty:
+        return []
+
+    reported_rows = []
+    future_candidates = []
+    now = pd.Timestamp.today().normalize()
+    for report_date, row in df.iterrows():
+        ts = pd.Timestamp(report_date)
+        if ts.tzinfo is not None:
+            ts = ts.tz_localize(None)
+        date_str = ts.strftime("%Y-%m-%d")
+        eps_est = row.get("EPS Estimate")
+        eps_rep = row.get("Reported EPS")
+        surprise = row.get("Surprise(%)")
+        eps_est = float(eps_est) if pd.notna(eps_est) else None
+        eps_rep = float(eps_rep) if pd.notna(eps_rep) else None
+        surprise = float(surprise) if pd.notna(surprise) else None
+        if eps_rep is not None:
+            reported_rows.append((date_str, eps_est, eps_rep, surprise))
+        elif ts.normalize() > now:
+            future_candidates.append((ts, date_str, eps_est))
+
+    rows = reported_rows
+    if future_candidates:
+        future_candidates.sort(key=lambda t: t[0])
+        _, date_str, eps_est = future_candidates[0]
+        rows.append((date_str, eps_est, None, None))
+    return sorted(rows, key=lambda r: r[0])
+
+
+def update_earnings(con, tickers):
+    """Pobiera i zapisuje historię dat/EPS wyników kwartalnych (tabela `earnings`) —
+    zasila wykres EPS w stylu MarketSmith/IBD (linia raportowanego EPS + pionowe
+    znaczniki dat wyników, patrz run_query.py::compute_eps_chart). Wywoływane
+    WYŁĄCZNIE z pełnego (nie --indices-only) przebiegu — ceny poziomu indeksu
+    odświeżane codziennie (daily_gem.yml) nie potrzebują danych o wynikach.
+
+    Upsert PER TICKER (usuń stare wiersze tego tickera, wstaw świeże) — spółka, dla
+    której fetch akurat zawiódł, ZACHOWUJE swoje stare dane zamiast je tracić, tak
+    samo jak przy cenach. W odróżnieniu od `prices` NIE MA tu rolling
+    retencji/przycinania — tabela jest mała (garstka wierszy na spółkę), a dłuższa
+    historia wyników jest tu wartością (wieloletni kontekst wykresu), nie balastem.
+
+    yfinance nie wspiera batchowania tego zapytania (patrz
+    _fetch_earnings_rows_for_ticker), więc to len(tickers) osobnych zapytań
+    sieciowych z krótkim throttlingiem między nimi — zauważalnie wydłuża pełny
+    (miesięczny) przebieg fetch_data.py, ale to jednorazowy koszt per uruchomienie
+    workflow, nie per dzień."""
+    con.execute(f"CREATE TABLE IF NOT EXISTS earnings ({EARNINGS_SCHEMA})")
+    n_ok, n_failed = 0, 0
+    print(f"🔄 Daty/EPS wyników kwartalnych dla {len(tickers)} tickerów (osobne zapytania, może to chwilę potrwać)...")
+    for i, ticker in enumerate(tickers, start=1):
+        rows = _fetch_earnings_rows_for_ticker(_to_yf_symbol(ticker))
+        if rows:
+            con.execute(f"DELETE FROM earnings WHERE Ticker = '{ticker}'")
+            df_insert = pd.DataFrame(rows, columns=["Report_Date", "EPS_Estimate", "EPS_Reported", "Surprise_Pct"])
+            df_insert.insert(0, "Ticker", ticker)  # noqa: F841
+            con.execute("INSERT INTO earnings SELECT * FROM df_insert")
+            n_ok += 1
+        else:
+            n_failed += 1
+        if i % 50 == 0 or i == len(tickers):
+            print(f"  ...{i}/{len(tickers)} tickerów (wyniki: {n_ok} ok, {n_failed} bez danych)")
+        time.sleep(EARNINGS_FETCH_SLEEP_SECONDS)
+    print(f"✅ Wyniki kwartalne: {n_ok}/{len(tickers)} spółek z danymi ({n_failed} bez pokrycia/błędu).")
+
+
 def _ensure_prices_ohlc_columns(con):
     """Migracja dla baz zapisanych PRZED dodaniem High/Low do `prices` (PRICES_SCHEMA
     ma je od poczatku dla nowych/bootstrapowanych baz — to dotyczy tylko istniejacej,
@@ -595,7 +699,7 @@ def _prices_history_is_shallow(con, lookback_months):
     return pd.Timestamp(oldest) > needed_start + pd.Timedelta(days=14)
 
 
-def update_duckdb(lookback_months=22, min_coverage=0.8, indices_only=False):
+def update_duckdb(lookback_months=22, min_coverage=0.8, indices_only=False, skip_earnings=False):
     con = duckdb.connect("momentum_data.duckdb")
 
     if indices_only:
@@ -626,6 +730,11 @@ def update_duckdb(lookback_months=22, min_coverage=0.8, indices_only=False):
 
     update_index_prices(con, lookback_months)
 
+    if skip_earnings:
+        print("⏭️  Pomijam pobranie dat/EPS wyników kwartalnych (--skip-earnings).")
+    else:
+        update_earnings(con, tickers)
+
     con.close()
 
 
@@ -647,6 +756,11 @@ if __name__ == "__main__":
                               "Momentum — pomija skład indeksów i ceny wszystkich składników. Do użycia w "
                               "codziennym workflow (patrz daily_gem.yml), osobno od pełnego miesięcznego "
                               "odświeżenia.")
+    parser.add_argument("--skip-earnings", action="store_true",
+                         help="Pomiń pobranie dat/EPS wyników kwartalnych (tabela `earnings`, zasila wykres EPS "
+                              "w run_query.py). Przydatne przy lokalnym/szybkim teście pipeline'u — get_earnings_dates() "
+                              "to osobne zapytanie PER TICKER (bez batchowania), więc zauważalnie wydłuża przebieg. "
+                              "Bez wpływu na --indices-only, który i tak zawsze pomija wyniki.")
     args = parser.parse_args()
     update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage,
-                  indices_only=args.indices_only)
+                  indices_only=args.indices_only, skip_earnings=args.skip_earnings)
