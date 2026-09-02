@@ -15,10 +15,10 @@ const {
     capAndRedistribute,
     computeSatelliteTargets,
     rebalanceSelectedTickers,
+    rebalanceWeightedSplit,
     fmtMoney,
     fmtQty,
     fmtPct,
-    classifyTicker,
     defaultTagFor,
     syncSlotsFromHoldings,
     slotValue,
@@ -227,17 +227,43 @@ test("computeSatelliteTargets prefers manualPrice over priceMap when both are se
 
 // ---------- SYNC Z HOLDINGAMI REBALANSU (tagi Core/Satelita) ----------
 
-test("classifyTicker returns the universe a ticker belongs to, or null", () => {
-    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] }, DOWJONES: { constituents: [{ ticker: "GS" }] } };
-    assert.equal(classifyTicker("AAPL", univData), "NASDAQ100");
-    assert.equal(classifyTicker("GS", univData), "DOWJONES");
-    assert.equal(classifyTicker("XLK", univData), null);
+// ---------- PODZIAL WAGOWY REBALANSU (naprawa buga: WSZYSTKO z Rebalansu
+// ladowalo sie jako Core, Satelita nigdy nie dostawala zadnych sugestii,
+// bo Rebalans z definicji trzyma tylko spolki momentum NASDAQ100/DOWJONES
+// -> stara "czy to w ogole spolka momentum" klasyfikacja zawsze mowila core) ----------
+
+test("rebalanceWeightedSplit puts the largest positions (up to corePct% of total weight) in coreSet, the tail in satelliteSet", () => {
+    const univData = { NASDAQ100: { constituents: [
+        { ticker: "AAA", weight_pct: 70 }, { ticker: "BBB", weight_pct: 20 }, { ticker: "CCC", weight_pct: 10 },
+    ] } };
+    const rebalSettings = { pct: { NASDAQ100: 100 }, maxHoldings: 20 };
+    // corePct=80: idac malejaco, AAA wchodzi (cumulative 0 < 80), BBB tez wchodzi (cumulative
+    // przed nim = 70 < 80 -> to on "przekracza" prog, wiec ide do core; po nim cumulative=90).
+    // CCC zostaje jako "ogon" (cumulative przed nim = 90, juz nie < 80) -> satelita.
+    const { coreSet, satelliteSet } = rebalanceWeightedSplit(univData, rebalSettings, [], {}, 80);
+    assert.deepEqual([...coreSet], ["AAA", "BBB"]);
+    assert.deepEqual([...satelliteSet], ["CCC"]);
 });
 
-test("defaultTagFor tags tracked-universe tickers as core and everything else as satellite", () => {
-    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] } };
-    assert.equal(defaultTagFor("AAPL", univData), "core");
-    assert.equal(defaultTagFor("XLK", univData), "satellite");
+test("rebalanceWeightedSplit puts everything in coreSet when corePct is 100", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 60 }, { ticker: "BBB", weight_pct: 40 }] } };
+    const { coreSet, satelliteSet } = rebalanceWeightedSplit(univData, { pct: { NASDAQ100: 100 }, maxHoldings: 20 }, [], {}, 100);
+    assert.deepEqual([...coreSet].sort(), ["AAA", "BBB"]);
+    assert.equal(satelliteSet.size, 0);
+});
+
+test("rebalanceWeightedSplit puts everything in satelliteSet when corePct is 0", () => {
+    const univData = { NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 60 }, { ticker: "BBB", weight_pct: 40 }] } };
+    const { coreSet, satelliteSet } = rebalanceWeightedSplit(univData, { pct: { NASDAQ100: 100 }, maxHoldings: 20 }, [], {}, 0);
+    assert.equal(coreSet.size, 0);
+    assert.deepEqual([...satelliteSet].sort(), ["AAA", "BBB"]);
+});
+
+test("defaultTagFor tags a ticker in coreSet as core, and everything else (tail of the selection or outside it entirely) as satellite", () => {
+    const weightSplit = { coreSet: new Set(["AAPL"]), satelliteSet: new Set(["MSFT"]), selectedSet: new Set(["AAPL", "MSFT"]) };
+    assert.equal(defaultTagFor("AAPL", weightSplit), "core");
+    assert.equal(defaultTagFor("MSFT", weightSplit), "satellite"); // ogon selekcji Rebalansu
+    assert.equal(defaultTagFor("XLK", weightSplit), "satellite"); // spoza selekcji Rebalansu w ogole
 });
 
 test("slotValue prices a holding-derived slot from shares * price, and returns weightPct for a manual slot", () => {
@@ -247,11 +273,13 @@ test("slotValue prices a holding-derived slot from shares * price, and returns w
     assert.equal(slotValue({ weightPct: 42 }, "AAPL", {}), 42);
 });
 
-test("syncSlotsFromHoldings builds slots from holdings, classifying by tracked universe, and preserves manual (non-holding) slots", () => {
-    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] }, DOWJONES: { constituents: [] } };
+const emptyWeightSplit = () => ({ coreSet: new Set(), satelliteSet: new Set(), selectedSet: new Set() });
+
+test("syncSlotsFromHoldings builds slots from holdings, tagging by weightSplit.coreSet, and preserves manual (non-holding) slots", () => {
+    const weightSplit = { coreSet: new Set(["AAPL"]), satelliteSet: new Set(), selectedSet: new Set(["AAPL"]) };
     const holdings = [{ ticker: "AAPL", shares: 2 }, { ticker: "XLK", shares: 5 }];
     const prevCore = [{ type: "universe", id: "NASDAQ100", weightPct: 1 }]; // manualny slot, nie holding
-    const result = syncSlotsFromHoldings(holdings, prevCore, [], {}, univData, {});
+    const result = syncSlotsFromHoldings(holdings, prevCore, [], {}, weightSplit, {});
 
     assert.equal(result.coreSlots.length, 2); // manualny koszyk momentum + AAPL z holdingu
     assert.ok(result.coreSlots.some(s => s.type === "universe" && s.id === "NASDAQ100"));
@@ -264,14 +292,14 @@ test("syncSlotsFromHoldings builds slots from holdings, classifying by tracked u
     assert.equal(result.satelliteSlots[0].fromHolding, true);
 
     assert.equal(result.tags.AAPL, "core");
-    assert.equal(result.tags.XLK, "satellite");
+    assert.equal(result.tags.XLK, "satellite"); // XLK nie jest w coreSet -> domyslnie satelita
 });
 
 test("syncSlotsFromHoldings respects an existing user tag instead of re-classifying by default", () => {
-    const univData = { NASDAQ100: { constituents: [{ ticker: "AAPL" }] } };
+    const weightSplit = { coreSet: new Set(["AAPL"]), satelliteSet: new Set(), selectedSet: new Set(["AAPL"]) };
     const holdings = [{ ticker: "AAPL", shares: 1 }];
-    // AAPL is a NASDAQ100 constituent (default "core"), but the user tagged it "satellite".
-    const result = syncSlotsFromHoldings(holdings, [], [], { AAPL: "satellite" }, univData, {});
+    // AAPL is in weightSplit.coreSet (default "core"), but the user tagged it "satellite".
+    const result = syncSlotsFromHoldings(holdings, [], [], { AAPL: "satellite" }, weightSplit, {});
     assert.equal(result.tags.AAPL, "satellite");
     assert.equal(result.coreSlots.length, 0);
     assert.equal(result.satelliteSlots.length, 1);
@@ -280,12 +308,12 @@ test("syncSlotsFromHoldings respects an existing user tag instead of re-classify
 test("syncSlotsFromHoldings preserves a previously-entered manualPrice for a ticker still held", () => {
     const holdings = [{ ticker: "XLK", shares: 5 }];
     const prevSatellite = [{ ticker: "XLK", shares: 5, manualPrice: 210.5, fromHolding: true }];
-    const result = syncSlotsFromHoldings(holdings, [], prevSatellite, { XLK: "satellite" }, {}, {});
+    const result = syncSlotsFromHoldings(holdings, [], prevSatellite, { XLK: "satellite" }, emptyWeightSplit(), {});
     assert.equal(result.satelliteSlots[0].manualPrice, 210.5);
 });
 
 test("syncSlotsFromHoldings drops tags for tickers no longer held (sold)", () => {
-    const result = syncSlotsFromHoldings([], [], [], { OLD: "core" }, {}, {});
+    const result = syncSlotsFromHoldings([], [], [], { OLD: "core" }, emptyWeightSplit(), {});
     assert.deepEqual(result.tags, {});
     assert.deepEqual(result.coreSlots, []);
 });
