@@ -877,12 +877,6 @@ th.tv-col { width: 1%; }
     width: 200px;
 }
 
-input[type="range"] {
-    width: 100%;
-    max-width: 420px;
-    accent-color: var(--green);
-}
-
 .bucket-inputs { display: flex; gap: 18px; flex-wrap: wrap; }
 .bucket-input {
     display: flex;
@@ -903,10 +897,6 @@ input[type="range"] {
     text-align: right;
 }
 .bucket-input input:focus { outline: none; }
-
-.bucket-sum { font-size: 11.5px; margin-top: 8px; color: var(--text-faint); }
-.bucket-sum.ok { color: var(--green-bright); }
-.bucket-sum.warn { color: var(--red); }
 
 .stat-cards {
     display: flex;

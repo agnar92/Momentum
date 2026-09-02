@@ -17,6 +17,7 @@ const {
     fmtQty,
     sharesSuggestion,
     computeTargets,
+    universeWeightSharePct,
     parseXtbOpenPositions,
     weightedMuSigma,
     simulateMonteCarlo,
@@ -205,68 +206,105 @@ test("xtbDateToIso returns null for unparseable values", () => {
     assert.equal(xtbDateToIso("not a date"), null);
 });
 
-test("computeTargets allocates capital across universes by settings.pct, skipping 0% buckets", () => {
-    _setState({
-        universeData: {
-            NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 100, price: 10 }] },
-            DOWJONES: { constituents: [{ ticker: "BBB", weight_pct: 100, price: 20 }] },
-        },
-        settings: { pct: { NASDAQ100: 70, DOWJONES: 30 }, maxHoldings: 20 },
-        excluded: [],
-    });
-
-    const { targets, momentumSelected } = computeTargets(1000);
-    assert.equal(momentumSelected.has("AAA"), true);
-    assert.equal(momentumSelected.has("BBB"), true);
-    assert.ok(Math.abs(targets.AAA.target_value - 700) < 1e-9);
-    assert.ok(Math.abs(targets.BBB.target_value - 300) < 1e-9);
-});
-
-test("computeTargets excludes tickers in the excluded list entirely", () => {
-    _setState({
-        universeData: {
-            NASDAQ100: {
-                constituents: [
-                    { ticker: "AAA", weight_pct: 50, price: 10 },
-                    { ticker: "EXCLUDED", weight_pct: 50, price: 10 },
-                ],
-            },
-            DOWJONES: { constituents: [] },
-        },
-        settings: { pct: { NASDAQ100: 100, DOWJONES: 0 }, maxHoldings: 20 },
-        excluded: ["EXCLUDED"],
-    });
-
-    const { targets } = computeTargets(1000);
-    assert.equal("EXCLUDED" in targets, false);
-    // Cala pula 1000 trafia do AAA, skoro EXCLUDED zniknal z koszyka calkowicie.
-    assert.ok(Math.abs(targets.AAA.target_value - 1000) < 1e-9);
-});
-
-test("computeTargets truncates to maxHoldings and rescales survivors back to 100%", () => {
+test("computeTargets takes the TOP N constituents per universe (already sorted by weight_pct) and weights the combined pool by raw weight_pct", () => {
     _setState({
         universeData: {
             NASDAQ100: {
                 constituents: [
                     { ticker: "BIG", weight_pct: 60, price: 10 },
                     { ticker: "MID", weight_pct: 30, price: 10 },
-                    { ticker: "SMALL", weight_pct: 10, price: 10 },
+                    { ticker: "SMALL", weight_pct: 10, price: 10 }, // poza TOP 2
                 ],
             },
-            DOWJONES: { constituents: [] },
+            DOWJONES: { constituents: [{ ticker: "BBB", weight_pct: 100, price: 20 }] },
         },
-        settings: { pct: { NASDAQ100: 100, DOWJONES: 0 }, maxHoldings: 2 },
+        settings: { topN: { NASDAQ100: 2, DOWJONES: 1 } },
         excluded: [],
     });
 
     const { targets } = computeTargets(1000);
-    assert.equal(Object.keys(targets).length, 2);
-    assert.equal("SMALL" in targets, false); // najmniejsza pozycja odrzucona limitem
+    assert.equal("SMALL" in targets, false);
+    // Suma surowych wag wybranych: 60 + 30 + 100 = 190.
+    assert.ok(Math.abs(targets.BIG.target_value - 1000 * 60 / 190) < 1e-6);
+    assert.ok(Math.abs(targets.MID.target_value - 1000 * 30 / 190) < 1e-6);
+    assert.ok(Math.abs(targets.BBB.target_value - 1000 * 100 / 190) < 1e-6);
     const total = Object.values(targets).reduce((s, t) => s + t.target_value, 0);
-    assert.ok(Math.abs(total - 1000) < 1e-6); // przeskalowane z powrotem do 100% kapitalu
+    assert.ok(Math.abs(total - 1000) < 1e-6);
 });
 
-test("blendEquityCurves weights universes by settings.pct", () => {
+test("computeTargets skips a universe with topN 0 or missing", () => {
+    _setState({
+        universeData: {
+            NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 100, price: 10 }] },
+            DOWJONES: { constituents: [{ ticker: "BBB", weight_pct: 100, price: 20 }] },
+        },
+        settings: { topN: { NASDAQ100: 5 } }, // brak DOWJONES -> traktowane jak 0
+        excluded: [],
+    });
+
+    const { targets } = computeTargets(1000);
+    assert.equal("AAA" in targets, true);
+    assert.equal("BBB" in targets, false);
+    assert.ok(Math.abs(targets.AAA.target_value - 1000) < 1e-9);
+});
+
+test("computeTargets excludes tickers in the excluded list entirely, so TOP N is filled from what remains", () => {
+    _setState({
+        universeData: {
+            NASDAQ100: {
+                constituents: [
+                    { ticker: "EXCLUDED", weight_pct: 60, price: 10 },
+                    { ticker: "AAA", weight_pct: 30, price: 10 },
+                    { ticker: "NEXT", weight_pct: 10, price: 10 },
+                ],
+            },
+            DOWJONES: { constituents: [] },
+        },
+        settings: { topN: { NASDAQ100: 2, DOWJONES: 0 } },
+        excluded: ["EXCLUDED"],
+    });
+
+    const { targets } = computeTargets(1000);
+    assert.equal("EXCLUDED" in targets, false);
+    // TOP 2 z tego, co zostaje po wykluczeniu: AAA i NEXT (nie AAA sam).
+    assert.equal("AAA" in targets, true);
+    assert.equal("NEXT" in targets, true);
+});
+
+test("universeWeightSharePct splits by the combined raw weight_pct of each universe's TOP N selection", () => {
+    _setState({
+        universeData: {
+            NASDAQ100: {
+                constituents: [
+                    { ticker: "AAA", weight_pct: 40, price: 10 },
+                    { ticker: "BBB", weight_pct: 20, price: 10 },
+                ],
+            },
+            DOWJONES: { constituents: [{ ticker: "CCC", weight_pct: 40, price: 10 }] },
+        },
+        settings: { topN: { NASDAQ100: 2, DOWJONES: 1 } },
+        excluded: [],
+    });
+
+    const pct = universeWeightSharePct();
+    // NASDAQ100: 40+20=60, DOWJONES: 40 -> suma 100 -> 60% / 40%.
+    assert.ok(Math.abs(pct.NASDAQ100 - 60) < 1e-9);
+    assert.ok(Math.abs(pct.DOWJONES - 40) < 1e-9);
+});
+
+test("universeWeightSharePct returns 0/0 when nothing is selected", () => {
+    _setState({
+        universeData: { NASDAQ100: { constituents: [] }, DOWJONES: { constituents: [] } },
+        settings: { topN: { NASDAQ100: 0, DOWJONES: 0 } },
+        excluded: [],
+    });
+
+    const pct = universeWeightSharePct();
+    assert.equal(pct.NASDAQ100, 0);
+    assert.equal(pct.DOWJONES, 0);
+});
+
+test("blendEquityCurves weights universes by the given pct split", () => {
     const curveData = {
         NASDAQ100: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
         DOWJONES: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 90], benchmark_index: [100, 95] },
@@ -285,7 +323,7 @@ test("blendEquityCurves returns null when no allocated universe has enough histo
     assert.equal(blendEquityCurves(curveData, pct), null);
 });
 
-test("blendEquityCurves returns null when settings.pct sums to zero", () => {
+test("blendEquityCurves returns null when the pct split sums to zero", () => {
     const curveData = {
         NASDAQ100: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
     };
