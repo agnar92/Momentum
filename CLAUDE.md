@@ -369,6 +369,71 @@ display window to a short recent slice instead means the total history needed
 15-month retention with margin. See `renderRelativeStrengthChart()` below for how both charts are
 rendered.
 
+### Watchlist RLC (`watchlist.py`, `compute_rlc_series` / `export_watchlist`)
+
+A small, **manually maintained watchlist** (`watchlist.json` at repo root, format documented in
+`watchlist.py`'s docstring — same "you edit it by hand" convention as `WIG20_holdings.json`) tracks daily
+**RLC (Red Line Count, Dr. Eric Wish)** for whatever tickers you actually hold. This exists because the
+backend has **zero visibility into your real holdings** — `rebalance.html` keeps them exclusively in
+browser `localStorage` (see Frontend section below), nothing round-trips to the repo — so there is no way
+to derive "the tickers I currently hold" server-side without a manually synced list.
+
+RLC is Dr. Wish's own simplification of his RWB (Red-White-Blue) ribbon system, which is itself GMMA
+(Guppy Multiple Moving Average, Daryl Guppy) repainted: 6 short-term EMAs (3/5/8/10/12/15 periods, "red")
+and 6 long-term EMAs (30/35/40/45/50/60 periods, "blue") — a fully separated red-above-blue ribbon (RWB)
+confirms a Stage 2 uptrend, red-below-blue (BWR) confirms Stage 4. This project deliberately implements
+**only RLC, not the full RWB ribbon**: RLC = how many of the 6 short-term EMAs (`RLC_EMA_DAYS`) the price
+is currently above (0-6) — a fast, secondary read on momentary strength/weakness, cheap to keep honest.
+The full ribbon was rejected for the same reason the GLB line was rejected (see `compute_relative_strength_
+chart` above): the long EMAs run up to 60 *periods*, and at the *weekly* granularity the rest of the 10:30
+chart uses, that's over a year of warm-up against a rolling ~15-month `prices` retention — the ribbon would
+be just as unreliable as the rejected GLB line. RLC sidesteps this two ways: it only needs the *short* EMAs
+(max 15 periods), and — critically — it is computed on **daily**, not weekly, closes, exactly as Dr. Wish
+originally does it. Daily granularity is also the point, not just a technical convenience: it's what lets
+RLC react to momentary weakness *within* a week, which a weekly-smoothed indicator would blur away.
+
+`prices` is already a daily table (see Pipeline architecture above — the weekly resampling only happens at
+query time, in `_weekly_close_series`), so no new retention or schema was needed — `RLC_WARMUP_DAYS` (45
+days) comfortably covers EMA15's warm-up. What *is* new: per-constituent `prices` is normally refreshed
+only once a month (`main.yml`), which would make RLC just as stale as everything else and defeat its whole
+"catch momentary weakness" purpose. So the watchlist gets its **own daily fetch**, wired into the existing
+daily job instead of the monthly one:
+
+- `fetch_data.py --watchlist-only` (`daily_gem.yml`, same `30 22 * * *` cron as the `--indices-only` GEM
+  refresh) loads `watchlist.json` via `load_watchlist_tickers()` and calls the existing
+  `update_prices_incremental()`/`bootstrap_prices()` on just those tickers — reusing the same shared
+  `prices` table and the same incremental-catchup/backfill/retention-trim logic already built for the main
+  universes, no new fetch code. A `yf_symbol` override in a watchlist entry (e.g. a GPW ticker needing the
+  `.WA` suffix) is registered into the existing `YFINANCE_TICKER_OVERRIDES` dict at load time, so
+  `_to_yf_symbol` picks it up without any new branching.
+- `run_query.py --watchlist-only` recomputes and exports `docs/data/watchlist.json` only.
+- The full monthly pipeline (`main.yml`) also calls `export_watchlist()` unconditionally (same pattern as
+  `export_global_equity_momentum`/`export_relative_strength`), so watchlist.json stays consistent even if
+  the daily job were ever skipped.
+
+`watchlist.py` is a small module **shared** by `fetch_data.py` and `run_query.py` (`load_watchlist_entries`)
+— the one deliberate exception to "fetch_data.py only fetches, run_query.py only computes": it's pure
+JSON-parsing config, not fetch or compute logic, so sharing it doesn't blur that boundary. `fetch_data.py`
+needs just the tickers (+ optional `yf_symbol`); `run_query.py` additionally needs `currency` (`"USD"` or
+`"PLN"`) to format prices in the export, mirroring `PLN_UNIVERSES` in the frontend.
+
+`docs/data/watchlist.json` (`export_watchlist`) carries, per ticker, `current_rlc` (0-6) plus a
+`RLC_DISPLAY_DAYS` (60 trading days)-long `dates`/`close`/`rlc` series — a short trend, not just the latest
+point — so the dashboard can show whether RLC is freshly weakening or has been low for a while. `ref_date`
+defaults to `MAX(Date)` in `prices` itself (not `index_prices`, unlike GEM/RS) — since that's the same
+table RLC reads from, and it's a *shared* table, a fresh `--watchlist-only` fetch moves that watermark even
+when the full monthly universes weren't touched today.
+
+On the dashboard, this is a self-contained sidebar group (`#watchlistGroup`, `renderWatchlistPanel()` in
+`app.js`) with a show/hide checkbox (`#watchlistToggle`, the "toggle" the feature was originally asked
+for) — each row is just a ticker + a colored RLC badge (`rlcColor()`, red→amber→green, matching
+`STAGE_COLORS`' palette). Deliberately **not** wired into the big 10:30/Mansfield chart click-through
+(`selectTicker`/`findRsEntry`): a watchlist ticker may not belong to any of the 5 momentum universes at
+all, so it has no reliable `universe` value for `formatPrice`/`tvSymbolFor`, and often no `weekly_chart`/
+`mansfield_chart` either. The RLC badge is meant to stand on its own. Not currently surfaced in the mobile
+drawer (unlike GEM/RS, which get their own drawer tabs) — a known, deliberately deferred gap, consistent
+with how this file documents other scoped-down-for-now decisions elsewhere.
+
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
 Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worker caching the app shell,
@@ -503,7 +568,11 @@ python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices
                                    # not fetched — see Global Equity Momentum section), skip constituents
 python run_query.py --gem-only        # daily_gem.yml only: regenerate global_equity_momentum.json only
 
-pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)
+python fetch_data.py --watchlist-only # daily_gem.yml only: refresh prices for watchlist.json only (RLC —
+                                   # see Watchlist RLC section)
+python run_query.py --watchlist-only  # daily_gem.yml only: regenerate watchlist.json only
+
+pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py, tests/test_watchlist.py)
 ruff check .                      # linter
 ```
 
@@ -522,14 +591,17 @@ genuinely fresh numbers.
 - **`daily_gem.yml`** — runs daily (`cron: '30 22 * * *'`) and manually. Unlike `main.yml`, does **not**
   run the full constituent pipeline: `fetch_data.py --indices-only` refreshes just `index_prices` (4
   symbols), then `run_query.py --gem-only` regenerates only `docs/data/global_equity_momentum.json` and
-  `docs/data/relative_strength.json`. Since `docs/data/` is git-tracked (see above), the checkout at the
+  `docs/data/relative_strength.json`. It also runs `fetch_data.py --watchlist-only` + `run_query.py
+  --watchlist-only` to refresh `docs/data/watchlist.json` (RLC — see Watchlist RLC section) for whatever
+  small set of tickers `watchlist.json` lists — cheap for the same reason as the GEM/RS refresh (a handful
+  of tickers, not hundreds). Since `docs/data/` is git-tracked (see above), the checkout at the
   start of the job already has the other `docs/data/*.json` files (`nasdaq100.json`, `dowjones.json`,
   `wig20.json`, `mwig40.json`, `all_prices.json`, `equity_curve.json`) from the last full `main.yml` run —
   no need to fetch them from anywhere else before uploading `docs/` as the Pages artifact, so the deploy
-  never replaces the whole live site with just the two regenerated files. (An earlier version of this
+  never replaces the whole live site with just the regenerated files. (An earlier version of this
   workflow curled those files from the *currently published* Pages site instead, back when `docs/data/`
   was gitignored and a `--gem-only` checkout wouldn't have had them; that workaround is gone now that the
-  checkout itself carries them.) Also commits `momentum_data.duckdb` plus the two regenerated JSON files
+  checkout itself carries them.) Also commits `momentum_data.duckdb` plus the three regenerated JSON files
   back (same `[skip ci]` convention as `main.yml`, to avoid triggering a full monthly run on every daily
   push).
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,

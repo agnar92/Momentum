@@ -7,6 +7,7 @@ import duckdb
 import pandas as pd
 import pytest
 
+import fetch_data
 from fetch_data import (
     PRICES_SCHEMA,
     _compute_synthetic_equal_weight_index,
@@ -19,6 +20,7 @@ from fetch_data import (
     _upsert_price_rows,
     get_full_refresh_range,
     load_index_constituents,
+    load_watchlist_tickers,
     update_index_prices,
     update_prices_incremental,
 )
@@ -210,6 +212,25 @@ class TestToYfSymbol:
 
     def test_unmapped_ticker_passes_through_unchanged(self):
         assert _to_yf_symbol("AAPL") == "AAPL"
+
+
+class TestLoadWatchlistTickers:
+    def test_returns_tickers_and_registers_custom_yf_symbol_override(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(fetch_data, "YFINANCE_TICKER_OVERRIDES", dict(fetch_data.YFINANCE_TICKER_OVERRIDES))
+        (tmp_path / "watchlist.json").write_text(
+            '{"tickers": ["AAPL", {"ticker": "PKN", "yf_symbol": "PKN.WA", "currency": "PLN"}]}'
+        )
+
+        tickers = load_watchlist_tickers()
+
+        assert tickers == ["AAPL", "PKN"]
+        assert fetch_data.YFINANCE_TICKER_OVERRIDES["PKN"] == "PKN.WA"
+        assert "AAPL" not in fetch_data.YFINANCE_TICKER_OVERRIDES  # yf_symbol == ticker, brak potrzeby override'u
+
+    def test_empty_watchlist_returns_empty_list(self, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert load_watchlist_tickers() == []
 
 
 class TestDownloadPriceRows:

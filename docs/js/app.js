@@ -46,6 +46,7 @@ const state = {
     data: {},
     gem: { indices: [], leaders: [] },
     rs: { universes: {} },
+    watchlist: { ref_date: null, items: [] },
     selectedTicker: null,
     selectedUniverse: null,
     currentRsEntry: null,
@@ -82,6 +83,16 @@ async function loadData() {
     } catch (e) {
         console.error("Nie udało się wczytać danych siły relatywnej:", e);
         state.rs = { ref_date: null, universes: {} };
+    }
+    try {
+        const res = await fetch("data/watchlist.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        state.watchlist = await res.json();
+    } catch (e) {
+        // Plik jest opcjonalny — brakuje, dopóki watchlist.json (patrz watchlist.py)
+        // jest puste albo pipeline jeszcze nie wygenerował docs/data/watchlist.json.
+        console.warn("Watchlist RLC niedostępna (brak danych lub pusta watchlista):", e);
+        state.watchlist = { ref_date: null, items: [] };
     }
 }
 
@@ -240,6 +251,67 @@ function renderRelativeStrengthPanel() {
         empty.textContent = "brak danych";
         container.appendChild(empty);
     }
+}
+
+// RLC (Red Line Count, dr Eric Wish) — ile z 6 krótkoterminowych EMA GMMA
+// Guppy'ego (0-6) cena aktualnie przebija (patrz run_query.py::compute_rlc_series).
+// Gradient czerwony→zielony, ten sam zestaw kolorów co STAGE_COLORS niżej
+// (spójność wizualna: czerwony = słabość/Etap 4, zielony = siła/Etap 2).
+function rlcColor(rlc) {
+    if (rlc <= 1) return "#e0455a";
+    if (rlc <= 3) return "#e0a72e";
+    if (rlc <= 5) return "#26a65b";
+    return "#2ecc71";
+}
+
+// Watchlist RLC: dzienny wskaźnik chwilowej siły/słabości dla ręcznie
+// utrzymywanej listy (docs/data/watchlist.json / watchlist.py), NIEZALEŻNEJ od
+// uniwersów momentum — patrz run_query.py::export_watchlist. W odróżnieniu od
+// GEM/RS ta lista nie jest klikalna w duży wykres 10:30 (watchlista może
+// zawierać tickery spoza wszystkich 5 uniwersów, więc nie ma dla nich
+// weekly_chart/mansfield_chart ani jednoznacznego "universe" do formatPrice/
+// tvSymbolFor — sama informacja o RLC ma tu wystarczyć, bez integracji z
+// resztą dashboardu).
+function renderWatchlistPanel() {
+    const group = document.getElementById("watchlistGroup");
+    const container = document.getElementById("watchlistItems");
+    if (!group || !container) return;
+
+    const w = state.watchlist;
+    const meta = document.getElementById("watchlistMeta");
+    if (meta) {
+        meta.textContent = w.ref_date
+            ? `Stan na: ${w.ref_date} · ${(w.items || []).length} spółek`
+            : "Brak danych — uzupełnij watchlist.json i uruchom pipeline.";
+        meta.title = w.note || "";
+    }
+
+    // Sekcja jest bezcelowa (i myląca), gdy watchlist.json jest puste — chowamy
+    // ją całkowicie zamiast pokazywać pusty panel z samym przełącznikiem.
+    group.style.display = (w.items || []).length === 0 ? "none" : "";
+
+    container.innerHTML = "";
+    (w.items || []).forEach(item => {
+        const row = document.createElement("div");
+        row.className = "watchlist-item";
+        const priceText = item.currency === "PLN" ? `${item.current_close.toFixed(2)} zł` : `$${item.current_close.toFixed(2)}`;
+        row.innerHTML = `
+            <span class="watchlist-item-ticker">${item.ticker}<span class="watchlist-item-price">${priceText}</span></span>
+            <span class="rlc-badge" style="background:${rlcColor(item.current_rlc)}" title="RLC ${item.current_rlc}/6 — ile z 6 krótkoterminowych EMA cena przebija">${item.current_rlc}/6</span>
+        `;
+        container.appendChild(row);
+    });
+}
+
+function initWatchlistToggle() {
+    const toggle = document.getElementById("watchlistToggle");
+    const body = document.getElementById("watchlistItems");
+    const meta = document.getElementById("watchlistMeta");
+    if (!toggle || !body) return;
+    toggle.addEventListener("change", () => {
+        body.style.display = toggle.checked ? "" : "none";
+        if (meta) meta.style.display = toggle.checked ? "" : "none";
+    });
 }
 
 // Kazdy ticker z glownego uniwersum (state.data[u].constituents) ma teraz wlasny
@@ -1014,6 +1086,8 @@ if (typeof document !== "undefined") {
         renderSidebarTiles();
         renderGemPanel();
         renderRelativeStrengthPanel();
+        renderWatchlistPanel();
+        initWatchlistToggle();
         initDrawer();
         initOpenTvButton();
         initResetZoomButton();

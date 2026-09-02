@@ -275,6 +275,63 @@ html, body {
 .gem-index-row .positive { color: var(--green-bright); }
 .gem-index-row .negative { color: var(--red); }
 
+/* Watchlist RLC (Red Line Count, dr Eric Wish) — patrz renderWatchlistPanel w app.js */
+.watchlist-toggle {
+    float: right;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    text-transform: none;
+    letter-spacing: normal;
+    color: var(--text-faint);
+    cursor: pointer;
+    user-select: none;
+}
+
+.watchlist-toggle input { cursor: pointer; }
+
+.watchlist-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.watchlist-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    padding: 6px 8px;
+    cursor: default;
+}
+
+.watchlist-item-ticker {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-dim);
+}
+
+.watchlist-item-price {
+    font-size: 9.5px;
+    color: var(--text-faint);
+    margin-left: 4px;
+    font-weight: 400;
+}
+
+.rlc-badge {
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
+    border-radius: 4px;
+    padding: 2px 6px;
+    min-width: 28px;
+    text-align: center;
+}
+
 /* ============================================================
    PANEL TABEL (rozwijany, ~80% szerokości ekranu)
    ============================================================ */

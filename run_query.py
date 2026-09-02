@@ -73,6 +73,8 @@ import duckdb
 import numpy as np
 import pandas as pd
 
+from watchlist import load_watchlist_entries
+
 UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
 TARGET_QUINTILE = 0.20   # top 20% wg momentum score
 BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
@@ -1494,6 +1496,114 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
     print(f"💾 Wyeksportowano {out_path} — {summary}.")
 
 
+# --- RLC (Red Line Count, dr Eric Wish) dla ręcznie utrzymywanej watchlisty
+# (patrz watchlist.py) — NIE część żadnego uniwersum, zupełnie osobny, dzienny
+# eksport. RLC to ile z 6 "czerwonych" (krótkoterminowych) EMA GMMA Guppy'ego
+# (3/5/8/10/12/15) cena aktualnie przebija (0 = pod wszystkimi, silna słabość;
+# 6 = nad wszystkimi, pełna siła) — u dr Wisha to szybki wskaźnik chwilowej
+# słabości/siły, uzupełniający pełny układ RWB (którego tu celowo NIE rysujemy —
+# wymagałby też 6 "niebieskich" EMA do 60-okresowej włącznie, a przy rolling
+# ~15-miesięcznej retencji `prices` linia byłaby równie niewiarygodna jak
+# odrzucona wcześniej linia GLB, patrz docstring compute_relative_strength_chart;
+# RLC tego problemu nie ma, bo najdłuższa EMA to tylko 15 OKRESÓW).
+#
+# DZIENNY, nie tygodniowy jak reszta wykresu 10:30 — u dr Wisha RLC z definicji
+# liczony jest z dziennych zamknięć, i to celowe: dzienna granulacja łapie
+# chwilową słabość szybciej, niż pozwoliłoby na to tygodniowe wygładzenie. Nie
+# wymaga to żadnej dodatkowej retencji/fetchu ponad to, co już jest w `prices`
+# (tabela jest i tak dzienna, patrz fetch_data.py) — tylko krótkiego zapasu na
+# "rozgrzanie" najdłuższej (15-okresowej) EMA. Świeżość jest jednak inna niż dla
+# reszty `prices`: WYŁĄCZNIE tickery z watchlist.json są odświeżane codziennie
+# (fetch_data.py --watchlist-only, patrz daily_gem.yml) — pozostałe tickery w
+# `prices` (składniki uniwersów momentum) mają dane sprzed ostatniego pełnego,
+# miesięcznego przebiegu (main.yml), tak jak dotychczas.
+RLC_EMA_DAYS = [3, 5, 8, 10, 12, 15]  # 6 krótkoterminowych EMA GMMA (Guppy) — te same okresy co "czerwone" linie RWB
+RLC_DISPLAY_DAYS = 60   # ile dni handlowych wstecz eksportujemy do mini-wykresu trendu RLC (nie tylko bieżący punkt)
+RLC_WARMUP_DAYS = 45    # dodatkowy zapas PRZED oknem wyświetlania, żeby EMA15 zdążyła się częściowo "rozgrzać"
+                         # (EMA nie ma twardego okna jak SMA — to zapas jakościowy, nie ścisły wymóg)
+
+
+def compute_rlc_series(con, ticker, ref_date):
+    """Liczy dzienny RLC dla ostatnich RLC_DISPLAY_DAYS dni handlowych do ref_date
+    (plus RLC_WARMUP_DAYS zapasu przed oknem, odcinany przed zwróceniem — patrz
+    stałe wyżej). Zwraca None, gdy w `prices` brak jakichkolwiek danych cenowych
+    dla tego tickera w pobieranym zakresie (np. świeży wpis w watchlist.json,
+    zanim fetch_data.py --watchlist-only zdążył go pobrać)."""
+    display_start = pd.Timestamp(ref_date) - pd.Timedelta(days=RLC_DISPLAY_DAYS)
+    fetch_start = (display_start - pd.Timedelta(days=RLC_WARMUP_DAYS)).strftime("%Y-%m-%d")
+    df = con.execute(f"""
+        SELECT Date, Close FROM prices
+        WHERE Ticker = '{ticker}' AND Date >= DATE '{fetch_start}' AND Date <= DATE '{ref_date}'
+        ORDER BY Date
+    """).df()
+    if df.empty:
+        return None
+
+    for n in RLC_EMA_DAYS:
+        df[f"ema{n}"] = df["Close"].ewm(span=n, adjust=False).mean()
+    ema_cols = [f"ema{n}" for n in RLC_EMA_DAYS]
+    df["rlc"] = df[ema_cols].lt(df["Close"], axis=0).sum(axis=1)
+
+    in_window = df[df["Date"] >= display_start].reset_index(drop=True)
+    if in_window.empty:
+        return None
+
+    return {
+        "dates": [d.strftime("%Y-%m-%d") for d in in_window["Date"]],
+        "close": [round(float(c), 4) for c in in_window["Close"]],
+        "rlc": [int(v) for v in in_window["rlc"]],
+        "current_rlc": int(in_window["rlc"].iloc[-1]),
+        "current_close": round(float(in_window["Close"].iloc[-1]), 4),
+    }
+
+
+def export_watchlist(con, docs_data_dir, ref_date=None):
+    """Eksportuje docs/data/watchlist.json — dzienny RLC dla ręcznie utrzymywanej
+    listy obserwowanych spółek (patrz watchlist.py), niezależnej od uniwersów
+    momentum. ref_date domyślnie MAX(Date) w `prices` — tej samej tabeli, z
+    której RLC jest liczony (patrz compute_rlc_series) — więc świeży dzienny
+    fetch watchlisty (fetch_data.py --watchlist-only) jest widoczny od razu,
+    nawet gdy pełne miesięczne uniwersa nie były dziś odświeżane (aktualizuje
+    globalny watermark `prices`, bo to jedna, wspólna tabela dla wszystkich
+    tickerów)."""
+    if ref_date is None:
+        has_table = con.execute("""
+            SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'prices'
+        """).fetchone()[0] > 0
+        watermark = con.execute("SELECT MAX(Date) FROM prices").fetchone()[0] if has_table else None
+        if watermark is None:
+            print("❌ Brak danych cenowych (prices) — pomijam eksport watchlisty.")
+            return
+        ref_date = pd.Timestamp(watermark).strftime("%Y-%m-%d")
+
+    entries = load_watchlist_entries()
+    if not entries:
+        print("ℹ️  Watchlist pusta (brak/pusty watchlist.json) — pomijam eksport.")
+        return
+
+    items = []
+    for entry in entries:
+        series = compute_rlc_series(con, entry["ticker"], ref_date)
+        if series is None:
+            print(f"⚠️  Brak danych cenowych dla watchlisty: {entry['ticker']} — pomijam "
+                  f"(uruchom najpierw fetch_data.py --watchlist-only).")
+            continue
+        items.append({"ticker": entry["ticker"], "currency": entry["currency"], **series})
+
+    payload = {
+        "ref_date": ref_date,
+        "items": items,
+        "note": ("RLC (Red Line Count, dr Eric Wish) — ile z 6 krótkoterminowych EMA GMMA Guppy'ego "
+                 "(3/5/8/10/12/15 dni) cena aktualnie przebija (0-6). DZIENNY (nie tygodniowy jak reszta "
+                 "wykresu 10:30) — łapie chwilową słabość/siłę szybciej. Lista ręcznie utrzymywana w "
+                 "watchlist.json, niezależna od uniwersów momentum. Dane informacyjne, NIE porada "
+                 "inwestycyjna."),
+    }
+    out_path = Path(docs_data_dir) / "watchlist.json"
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"💾 Wyeksportowano {out_path} — {len(items)}/{len(entries)} tickerów.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 "
@@ -1510,6 +1620,10 @@ def main():
                               "(docs/data/global_equity_momentum.json + docs/data/relative_strength.json), "
                               "pomijając pełne przeliczenie 3 głównych uniwersów — do użycia w codziennym "
                               "workflow (patrz daily_gem.yml) po `fetch_data.py --indices-only`.")
+    parser.add_argument("--watchlist-only", action="store_true",
+                         help="Przelicz WYŁĄCZNIE docs/data/watchlist.json (dzienny RLC dla ręcznie utrzymywanej "
+                              "watchlisty, patrz watchlist.py) — do użycia w codziennym workflow (patrz "
+                              "daily_gem.yml) po `fetch_data.py --watchlist-only`.")
     args = parser.parse_args()
 
     con = duckdb.connect("momentum_data.duckdb")
@@ -1524,6 +1638,13 @@ def main():
         export_global_equity_momentum(con, docs_data_dir)
         export_relative_strength(con, docs_data_dir, min_trading_days=args.min_trading_days,
                                   max_staleness_days=args.max_staleness_days)
+        con.close()
+        return
+
+    if args.watchlist_only:
+        docs_data_dir = str(Path(args.docs_dir) / "data")
+        Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
+        export_watchlist(con, docs_data_dir)
         con.close()
         return
 
@@ -1547,6 +1668,7 @@ def main():
     export_all_prices(con, ref_date, docs_data_dir)
     export_equity_curve(con, docs_data_dir)
     export_global_equity_momentum(con, docs_data_dir)
+    export_watchlist(con, docs_data_dir)
     export_relative_strength(con, docs_data_dir, min_trading_days=args.min_trading_days,
                               max_staleness_days=args.max_staleness_days)
     con.close()

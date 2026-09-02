@@ -5,6 +5,8 @@ import pandas as pd
 import duckdb
 import yfinance as yf
 
+from watchlist import load_watchlist_entries
+
 # ============================================================================
 # HOLDINGS: wyłącznie z ręcznie podmienianych plików CSV (holdings ETF-ów
 # CSPX/CNDX/CIND). Próba użycia biblioteki etf_scraper została porzucona —
@@ -136,6 +138,21 @@ def _load_json_constituents():
                 rows.append((t, index_name, sec, 1.0))
         print(f"✅ {filepath}: wczytano {len(rows) - n_before} pozycji jako {index_name}.")
     return rows
+
+
+def load_watchlist_tickers():
+    """Wczytuje watchlist.json (patrz watchlist.py) i zwraca samą listę tickerów do
+    pobrania — NIEZALEŻNĄ od index_constituents (to Twoje ręcznie zsynchronizowane
+    holdingi, nie skład żadnego uniwersum momentum). Dla wpisów z jawnym "yf_symbol"
+    (spółki, których yfinance nie zna pod samym tickerem — np. GPW: "PKN" → "PKN.WA")
+    dopisuje mapowanie do YFINANCE_TICKER_OVERRIDES, żeby _to_yf_symbol użył go bez
+    żadnej dodatkowej logiki/gałęzi — ten sam mechanizm co dla BRKB/BFB, tyle że
+    zasilany z watchlist.json zamiast wpisany na sztywno w kod."""
+    entries = load_watchlist_entries()
+    for entry in entries:
+        if entry["yf_symbol"] != entry["ticker"]:
+            YFINANCE_TICKER_OVERRIDES[entry["ticker"]] = entry["yf_symbol"]
+    return [entry["ticker"] for entry in entries]
 
 
 def load_index_constituents(con):
@@ -575,7 +592,7 @@ def _prices_table_has_rows(con):
     return con.execute("SELECT COUNT(*) FROM prices").fetchone()[0] > 0
 
 
-def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
+def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False, watchlist_only=False):
     con = duckdb.connect("momentum_data.duckdb")
 
     if indices_only:
@@ -585,6 +602,31 @@ def update_duckdb(lookback_months=15, min_coverage=0.8, indices_only=False):
         # codziennie bez kosztu/limitow pelnego pobrania cen akcji (patrz workflow
         # daily_gem.yml — GEM ma byc aktualny codziennie, nie tylko raz w miesiacu).
         update_index_prices(con, lookback_months)
+        con.close()
+        return
+
+    if watchlist_only:
+        # Codzienny fetch WYLACZNIE dla recznie utrzymywanej watchlisty (patrz
+        # watchlist.py) — do RLC (Red Line Count, dr Eric Wish, patrz run_query.py),
+        # ktory z definicji potrzebuje SWIEZYCH danych dziennych, w odroznieniu od
+        # reszty wykresu 10:30 (tygodniowy, aktualizowany tylko raz w miesiacu przez
+        # pelny przebieg main.yml). Reuzywa update_prices_incremental na WSPOLNEJ
+        # tabeli `prices` — dla tickerow, ktore sa tez skladnikami ktoregos uniwersum
+        # (juz w prices z ostatniego pelnego przebiegu), to zwykle tanie doszacowanie
+        # ostatnich dni; dla tickerow SPOZA wszystkich uniwersow to pelny backfill
+        # lookback_months przy pierwszym uruchomieniu, potem juz tylko doszacowanie.
+        # Przycinanie retencji (patrz update_prices_incremental) dziala wiec teraz
+        # NIECO CZESCIEJ niz raz w miesiac dla calej tabeli `prices` — nieszkodliwe,
+        # bo cutoff liczony jest z tego samego lookback_months co pelny przebieg.
+        tickers = load_watchlist_tickers()
+        if not tickers:
+            print("ℹ️  Watchlist pusta (brak/pusty watchlist.json) — pomijam.")
+            con.close()
+            return
+        if _prices_table_has_rows(con):
+            update_prices_incremental(con, tickers, retention_months=lookback_months)
+        else:
+            bootstrap_prices(con, tickers, lookback_months, min_coverage)
         con.close()
         return
 
@@ -621,6 +663,11 @@ if __name__ == "__main__":
                               "Momentum — pomija skład indeksów i ceny wszystkich składników. Do użycia w "
                               "codziennym workflow (patrz daily_gem.yml), osobno od pełnego miesięcznego "
                               "odświeżenia.")
+    parser.add_argument("--watchlist-only", action="store_true",
+                         help="Odśwież WYŁĄCZNIE ceny dla ręcznie utrzymywanej watchlisty (patrz watchlist.py/"
+                              "watchlist.json) — do dziennego RLC (Red Line Count, dr Eric Wish, patrz run_query.py). "
+                              "Do użycia w codziennym workflow (patrz daily_gem.yml), osobno od pełnego "
+                              "miesięcznego odświeżenia.")
     args = parser.parse_args()
     update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage,
-                  indices_only=args.indices_only)
+                  indices_only=args.indices_only, watchlist_only=args.watchlist_only)

@@ -6,6 +6,12 @@ name: Daily Global Equity Momentum Update
 # uniwersow (main.yml, raz w miesiacu: setki tickerow z yfinance), to odswiezenie jest tanie,
 # wiec robimy je codziennie, zeby zwyciezca/liderzy faktycznie odzwierciedlali
 # biezacy trend, a nie sprzed miesiaca.
+#
+# Ten sam workflow odswieza tez docs/data/watchlist.json — dzienny RLC (Red Line
+# Count, dr Eric Wish) dla malej, recznie utrzymywanej listy tickerow (patrz
+# watchlist.py/watchlist.json), NIEZALEZNEJ od uniwersow momentum. RLC z definicji
+# potrzebuje SWIEZYCH danych dziennych (w odroznieniu od reszty wykresu 10:30,
+# tygodniowego), dlatego dolaczony tu, a nie do main.yml.
 on:
   schedule:
     # Codziennie o 22:30 UTC (po zamknieciu sesji na NYSE/NASDAQ)
@@ -58,13 +64,21 @@ jobs:
         run: |
           python fetch_data.py --indices-only
 
+      - name: Fetch watchlist prices only (RLC — dr Eric Wish)
+        run: |
+          python fetch_data.py --watchlist-only
+
       - name: Recompute Global Equity Momentum + relative strength only
         run: |
           python run_query.py --gem-only
 
-      - name: Persist generated data (momentum_data.duckdb + daily GEM/RS json)
+      - name: Recompute watchlist RLC only
         run: |
-          FILES="momentum_data.duckdb docs/data/global_equity_momentum.json docs/data/relative_strength.json"
+          python run_query.py --watchlist-only
+
+      - name: Persist generated data (momentum_data.duckdb + daily GEM/RS/watchlist json)
+        run: |
+          FILES="momentum_data.duckdb docs/data/global_equity_momentum.json docs/data/relative_strength.json docs/data/watchlist.json"
           if [ -n "$(git status --porcelain $FILES)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"

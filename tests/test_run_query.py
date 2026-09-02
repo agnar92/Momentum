@@ -14,12 +14,15 @@ import duckdb
 import pandas as pd
 import pytest
 
+import run_query
 from run_query import (
     EQUAL_WEIGHT_UNIVERSES,
     GEM_UNIVERSES,
     MAX_HOLDINGS,
     MAX_WEIGHT,
     RELATIVE_STRENGTH_UNIVERSES,
+    RLC_DISPLAY_DAYS,
+    RLC_EMA_DAYS,
     RS_PRICE_SMA_LONG_WEEKS,
     RS_PRICE_SMA_SHORT_WEEKS,
     STAGE_BREAKOUT_VOLUME_RATIO,
@@ -32,10 +35,12 @@ from run_query import (
     compute_mansfield_rs_chart,
     compute_relative_strength_chart,
     compute_relative_strength_leaders,
+    compute_rlc_series,
     compute_weights,
     export_global_equity_momentum,
     export_json,
     export_relative_strength,
+    export_watchlist,
     select_with_buffer,
     _compute_weinstein_stage_series,
 )
@@ -1126,3 +1131,95 @@ class TestExportJson:
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
         assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None
                    for c in payload["constituents"])
+
+
+# ---------------------------------------------------------------------------
+# compute_rlc_series / export_watchlist — RLC (Red Line Count, dr Eric Wish):
+# ile z 6 krotkoterminowych EMA GMMA Guppy'ego (RLC_EMA_DAYS, DZIENNE) cena
+# aktualnie przebija, dla recznie utrzymywanej watchlisty (watchlist.py),
+# NIEZALEZNEJ od uniwersow momentum.
+# ---------------------------------------------------------------------------
+
+class TestComputeRlcSeries:
+    def test_strictly_rising_prices_eventually_reach_full_rlc(self):
+        con = make_gem_con()
+        insert_daily_series(con, "prices", "Ticker", "AAA", "2025-01-01", "2025-06-30",
+                             start_price=100.0, step_per_day=0.5)
+        ref_date = "2025-06-30"
+
+        series = compute_rlc_series(con, "AAA", ref_date)
+
+        assert series is not None
+        assert series["current_rlc"] == len(RLC_EMA_DAYS)  # cena stale rosnie -> nad wszystkimi EMA
+        assert len(series["dates"]) == len(series["rlc"]) == len(series["close"])
+        assert all(0 <= v <= len(RLC_EMA_DAYS) for v in series["rlc"])
+        # Okno wyswietlania nie siega dalej niz RLC_DISPLAY_DAYS kalendarzowych wstecz od ref_date.
+        assert pd.Timestamp(series["dates"][0]) >= pd.Timestamp(ref_date) - pd.Timedelta(days=RLC_DISPLAY_DAYS)
+
+    def test_strictly_falling_prices_reach_zero_rlc(self):
+        con = make_gem_con()
+        insert_daily_series(con, "prices", "Ticker", "AAA", "2025-01-01", "2025-06-30",
+                             start_price=200.0, step_per_day=-0.5)
+        series = compute_rlc_series(con, "AAA", "2025-06-30")
+        assert series["current_rlc"] == 0
+
+    def test_missing_ticker_returns_none(self):
+        con = make_gem_con()
+        assert compute_rlc_series(con, "NOPE", "2025-06-30") is None
+
+
+class TestExportWatchlist:
+    def test_writes_current_rlc_and_currency_per_entry(self, tmp_path, monkeypatch):
+        con = make_gem_con()
+        insert_daily_series(con, "prices", "Ticker", "AAPL", "2025-01-01", "2025-06-30",
+                             start_price=150.0, step_per_day=0.3)
+        insert_daily_series(con, "prices", "Ticker", "PKN", "2025-01-01", "2025-06-30",
+                             start_price=60.0, step_per_day=0.1)
+        monkeypatch.setattr(run_query, "load_watchlist_entries", lambda: [
+            {"ticker": "AAPL", "yf_symbol": "AAPL", "currency": "USD"},
+            {"ticker": "PKN", "yf_symbol": "PKN.WA", "currency": "PLN"},
+        ])
+
+        export_watchlist(con, str(tmp_path), ref_date="2025-06-30")
+
+        payload = json.loads((tmp_path / "watchlist.json").read_text())
+        assert payload["ref_date"] == "2025-06-30"
+        by_ticker = {i["ticker"]: i for i in payload["items"]}
+        assert by_ticker["AAPL"]["currency"] == "USD"
+        assert by_ticker["PKN"]["currency"] == "PLN"
+        assert by_ticker["AAPL"]["current_rlc"] == len(RLC_EMA_DAYS)
+
+    def test_ticker_without_price_data_is_skipped_not_fatal(self, tmp_path, monkeypatch):
+        con = make_gem_con()
+        insert_daily_series(con, "prices", "Ticker", "AAPL", "2025-01-01", "2025-06-30",
+                             start_price=150.0, step_per_day=0.3)
+        monkeypatch.setattr(run_query, "load_watchlist_entries", lambda: [
+            {"ticker": "AAPL", "yf_symbol": "AAPL", "currency": "USD"},
+            {"ticker": "NOPE", "yf_symbol": "NOPE", "currency": "USD"},
+        ])
+
+        export_watchlist(con, str(tmp_path), ref_date="2025-06-30")
+
+        payload = json.loads((tmp_path / "watchlist.json").read_text())
+        assert [i["ticker"] for i in payload["items"]] == ["AAPL"]
+
+    def test_empty_watchlist_writes_nothing(self, tmp_path, monkeypatch):
+        con = make_gem_con()
+        monkeypatch.setattr(run_query, "load_watchlist_entries", lambda: [])
+
+        export_watchlist(con, str(tmp_path), ref_date="2025-06-30")
+
+        assert not (tmp_path / "watchlist.json").exists()
+
+    def test_auto_derives_ref_date_from_prices_watermark(self, tmp_path, monkeypatch):
+        con = make_gem_con()
+        insert_daily_series(con, "prices", "Ticker", "AAPL", "2025-01-01", "2025-06-30",
+                             start_price=150.0, step_per_day=0.3)
+        monkeypatch.setattr(run_query, "load_watchlist_entries", lambda: [
+            {"ticker": "AAPL", "yf_symbol": "AAPL", "currency": "USD"},
+        ])
+
+        export_watchlist(con, str(tmp_path))  # ref_date=None -> MAX(Date) w prices
+
+        payload = json.loads((tmp_path / "watchlist.json").read_text())
+        assert payload["ref_date"] == "2025-06-30"

@@ -1,0 +1,4 @@
+{
+  "_instructions": "Recznie utrzymywana lista spolek do CODZIENNEGO sledzenia RLC (Red Line Count, dr Eric Wish) - patrz watchlist.py. Backend nie widzi Twoich realnych holdingow z rebalance.html (localStorage), wiec uzupelnij ta liste sama recznie i podmieniaj, gdy zmieniasz pozycje. Kazdy element listy 'tickers' to albo sam ticker jako string (np. \"AAPL\"), albo obiekt {\"ticker\": \"PKN\", \"yf_symbol\": \"PKN.WA\", \"currency\": \"PLN\"} - yf_symbol tylko gdy rozni sie od ticker (np. spolki GPW), currency domyslnie USD.",
+  "tickers": []
+}
