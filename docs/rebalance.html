@@ -75,16 +75,12 @@
             <div class="settings-hint" id="capitalHint"></div>
         </div>
         <div class="settings-row buckets-row">
-            <label>Podział dopłaty między strategie (musi sumować się do 100%)</label>
+            <label>Ile najlepszych spółek (TOP N wg momentum) wziąć z każdego indeksu</label>
             <div class="bucket-inputs">
-                <div class="bucket-input"><span>Nasdaq 100</span><input type="number" id="pct-NASDAQ100" min="0" max="100" step="1"><span>%</span></div>
-                <div class="bucket-input"><span>Dow Jones</span><input type="number" id="pct-DOWJONES" min="0" max="100" step="1"><span>%</span></div>
+                <div class="bucket-input"><span>Nasdaq 100</span><input type="number" id="topn-NASDAQ100" min="0" max="100" step="1"><span>szt.</span></div>
+                <div class="bucket-input"><span>Dow Jones</span><input type="number" id="topn-DOWJONES" min="0" max="100" step="1"><span>szt.</span></div>
             </div>
-            <div class="bucket-sum" id="bucketSum"></div>
-        </div>
-        <div class="settings-row">
-            <label>Maksymalna liczba spółek w portfelu: <span id="maxHoldingsValue"></span></label>
-            <input type="range" id="maxHoldings" min="3" max="60" step="1">
+            <p class="panel-hint" style="margin-top:8px;">Wagi poszczególnych spółek w portfelu dobierane są automatycznie na podstawie ich wagi momentum — nie ustawiasz ich ręcznie.</p>
         </div>
     </div>
 

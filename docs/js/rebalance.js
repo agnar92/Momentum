@@ -6,7 +6,7 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
-const DEFAULT_SETTINGS = { contribution: 0, pct: { NASDAQ100: 75, DOWJONES: 25 }, maxHoldings: 20 };
+const DEFAULT_SETTINGS = { contribution: 0, topN: { NASDAQ100: 5, DOWJONES: 5 } };
 
 let universeData = {};   // { NASDAQ100: {...json}, ... }
 let priceMap = {};       // ticker -> { price, sources: [universe,...] }
@@ -148,33 +148,19 @@ function initExcludeForm() {
 // ============================================================
 function initSettingsForm() {
     document.getElementById("contribution").value = settings.contribution || "";
-    UNIVERSES.forEach(u => { document.getElementById(`pct-${u}`).value = settings.pct[u]; });
-    document.getElementById("maxHoldings").value = settings.maxHoldings;
-    document.getElementById("maxHoldingsValue").textContent = settings.maxHoldings;
+    UNIVERSES.forEach(u => { document.getElementById(`topn-${u}`).value = settings.topN[u]; });
 
     const onChange = () => {
         settings.contribution = parseFloat(document.getElementById("contribution").value) || 0;
         UNIVERSES.forEach(u => {
-            settings.pct[u] = parseFloat(document.getElementById(`pct-${u}`).value) || 0;
+            settings.topN[u] = parseInt(document.getElementById(`topn-${u}`).value, 10) || 0;
         });
-        settings.maxHoldings = parseInt(document.getElementById("maxHoldings").value, 10) || DEFAULT_SETTINGS.maxHoldings;
-        document.getElementById("maxHoldingsValue").textContent = settings.maxHoldings;
         saveSettings(settings);
-        renderBucketSum();
         renderSuggestions();
         renderEquityCurve();
     };
     document.getElementById("contribution").addEventListener("input", onChange);
-    UNIVERSES.forEach(u => document.getElementById(`pct-${u}`).addEventListener("input", onChange));
-    document.getElementById("maxHoldings").addEventListener("input", onChange);
-}
-
-function renderBucketSum() {
-    const sum = UNIVERSES.reduce((a, u) => a + (settings.pct[u] || 0), 0);
-    const el = document.getElementById("bucketSum");
-    el.textContent = `Suma: ${sum}%`;
-    el.className = "bucket-sum" + (sum === 100 ? " ok" : " warn");
-    if (sum !== 100) el.textContent += " — powinno wynosić 100%, żeby wykorzystać cały kapitał docelowy.";
+    UNIVERSES.forEach(u => document.getElementById(`topn-${u}`).addEventListener("input", onChange));
 }
 
 // ============================================================
@@ -416,61 +402,62 @@ function renderCapitalHint() {
 // ============================================================
 // SUGESTIA REBALANSU (to tylko sugestia — Ty decydujesz co i kiedy kupić/sprzedać)
 // ============================================================
-// Zwraca: { targets: {ticker: {...}} przycięte do maxHoldings i przeskalowane
-// tak, by sumowały się do totalCapital, oraz momentumSelected: Set tickerów
-// wybranych przez strategię momentum (przed przycięciem limitem).
+// TOP N spółek indeksu `u` wg wagi momentum ({universe}.json jest już
+// posortowany malejąco wg weight_pct, patrz run_query.py::export_json) —
+// ręcznie wykluczone znikają z listy całkowicie, więc TOP N liczy się z
+// tego, co zostaje (tak jakby wykluczone nigdy nie były w indeksie).
+function selectedConstituents(u) {
+    const topN = settings.topN[u] || 0;
+    if (topN <= 0) return [];
+    return (universeData[u].constituents || [])
+        .filter(c => !excluded.includes(c.ticker))
+        .slice(0, topN);
+}
+
+// Udział każdego indeksu w łącznej wadze momentum wszystkich wybranych TOP N
+// spółek razem — używany tylko do wagowania wykresu "Wynik historyczny"
+// (blendEquityCurves), tak żeby odzwierciedlał faktyczny podział kapitału
+// wynikający z TOP N + wag momentum, skoro nie ma już osobno ustawianego %.
+function universeWeightSharePct() {
+    const totals = {};
+    let grandTotal = 0;
+    UNIVERSES.forEach(u => {
+        totals[u] = selectedConstituents(u).reduce((s, c) => s + (c.weight_pct || 0), 0);
+        grandTotal += totals[u];
+    });
+    const pct = {};
+    UNIVERSES.forEach(u => { pct[u] = grandTotal > 0 ? (totals[u] / grandTotal) * 100 : 0; });
+    return pct;
+}
+
+// Zwraca: { targets: {ticker: {...}} }. Portfel = TOP N spółek z każdego
+// indeksu (patrz selectedConstituents), bez osobnego globalnego limitu —
+// wagi dobierane są automatycznie z ich wagi momentum w pliku JSON,
+// znormalizowanej do 100% łącznie (nie osobno per indeks), więc indeks z
+// silniejszym momentum swoich TOP N spółek dostaje większą część kapitału
+// bez ręcznego ustawiania podziału %.
 function computeTargets(totalCapital) {
-    const raw = {}; // ticker -> { ticker, price, target_value, universes: [] }
+    const raw = {}; // ticker -> { ticker, price, target_value, raw_weight, universes: [] }
 
     UNIVERSES.forEach(u => {
-        const pctAllocation = settings.pct[u] || 0;
-        if (pctAllocation <= 0) return; // Pomijamy indeksy z wagą 0%
-
-        const bucketTarget = totalCapital * (pctAllocation / 100);
-        // Ręcznie wykluczone spółki znikają z puli momentum całkowicie —
-        // ich waga rozkłada się na resztę, tak jakby nigdy nie były w indeksie.
-        const constituents = (universeData[u].constituents || []).filter(c => !excluded.includes(c.ticker));
-
-        // 1. Liczymy sumę wag surowych w pliku JSON dla tego indeksu
-        const totalRawWeight = constituents.reduce((sum, c) => sum + (c.weight_pct || 0), 0);
-
-        if (totalRawWeight > 0) {
-            constituents.forEach(c => {
-                // 2. Normalizujemy wagę spółki wewnątrz jej własnego koszyka do 100%
-                const normalizedWeightInBucket = (c.weight_pct || 0) / totalRawWeight;
-                // 3. Obliczamy jej realny przydział dolarowy z alokacji tego koszyka
-                const contrib = bucketTarget * normalizedWeightInBucket;
-
-                if (!raw[c.ticker]) {
-                    raw[c.ticker] = {
-                        ticker: c.ticker, price: c.price, target_value: 0, universes: [],
-                        momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
-                    };
-                }
-                raw[c.ticker].target_value += contrib;
-                raw[c.ticker].universes.push(u);
-            });
-        }
+        selectedConstituents(u).forEach(c => {
+            if (!raw[c.ticker]) {
+                raw[c.ticker] = {
+                    ticker: c.ticker, price: c.price, target_value: 0, raw_weight: 0, universes: [],
+                    momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
+                };
+            }
+            raw[c.ticker].raw_weight += (c.weight_pct || 0);
+            raw[c.ticker].universes.push(u);
+        });
     });
 
-    const momentumSelected = new Set(Object.keys(raw));
-    const maxHoldings = settings.maxHoldings || DEFAULT_SETTINGS.maxHoldings;
-    
-    // Sortujemy spółki wg obliczonej docelowej wartości dolarowej
-    const sorted = Object.values(raw).sort((a, b) => b.target_value - a.target_value);
-    const kept = sorted.slice(0, maxHoldings);
-
-    // Jeśli limit maxHoldings odrzucił jakieś spółki, skalujemy zachowane,
-    // aby całkowita suma alokacji nadal stanowiła 100% kapitału docelowego
-    const keptSum = kept.reduce((s, t) => s + t.target_value, 0);
-    if (keptSum > 0 && totalCapital > 0) {
-        const scale = totalCapital / keptSum;
-        kept.forEach(t => { t.target_value *= scale; });
+    const totalRawWeight = Object.values(raw).reduce((s, t) => s + t.raw_weight, 0);
+    if (totalRawWeight > 0 && totalCapital > 0) {
+        Object.values(raw).forEach(t => { t.target_value = totalCapital * (t.raw_weight / totalRawWeight); });
     }
 
-    const targets = {};
-    kept.forEach(t => { targets[t.ticker] = t; });
-    return { targets, momentumSelected };
+    return { targets: raw };
 }
 
 
@@ -478,7 +465,7 @@ function renderSuggestions() {
     const totalCapital = targetCapital();
     const excludedValue = excludedHoldingsValue();
     const investableCapital = Math.max(0, totalCapital - excludedValue);
-    const { targets, momentumSelected } = computeTargets(investableCapital);
+    const { targets } = computeTargets(investableCapital);
     const threshold = Math.max(investableCapital * TRADE_THRESHOLD_PCT, 5);
 
     const holdingShares = {};
@@ -501,7 +488,8 @@ function renderSuggestions() {
     });
 
     // Pozycje, które trzymasz, ale nie mieszczą się w aktualnej sugestii —
-    // wykluczone ręcznie, wypadły z selekcji momentum, albo są ponad limit.
+    // wykluczone ręcznie, albo poza TOP N (w indeksie, ale niżej w rankingu
+    // momentum niż ustawione TOP N), albo w ogóle poza śledzonymi indeksami.
     Object.keys(holdingShares).forEach(ticker => {
         if (targets[ticker]) return;
         const price = priceMap[ticker]?.price;
@@ -514,7 +502,10 @@ function renderSuggestions() {
             });
             return;
         }
-        const note = momentumSelected.has(ticker) ? `ponad limit ${settings.maxHoldings} spółek` : "poza selekcją momentum";
+        const homeUniverse = UNIVERSES.find(u => (universeData[u].constituents || []).some(c => c.ticker === ticker));
+        const note = homeUniverse
+            ? `poza TOP ${settings.topN[homeUniverse] || 0} (${UNIVERSE_LABELS[homeUniverse]})`
+            : "poza selekcją momentum";
         rows.push({
             ticker, note, target_value: 0, weight_pct: 0,
             current_value: currentValue, diff: currentValue !== null ? -currentValue : null, dropped: true,
@@ -616,10 +607,11 @@ function renderPortfolioAnalysisChart() {
 // ============================================================
 // WYNIK HISTORYCZNY PORTFOLIA — łączy per-uniwersowe equity curves
 // (patrz run_query.py::compute_equity_curve, zbudowane z realnych zapisów
-// portfolio_history) wg Twojego podziału kapitału między indeksy
-// (settings.pct). To NIE jest historia Twoich konkretnych pozycji (tych nie
-// śledzimy wstecz) — to przybliżenie: "gdybyś trzymał/a kapitał w tych
-// proporcjach między indeksami przez ten okres, wybierając spółki momentum".
+// portfolio_history) wg podziału kapitału między indeksy wynikającego z TOP N
+// + wag momentum (universeWeightSharePct — nie ma już osobno ustawianego %).
+// To NIE jest historia Twoich konkretnych pozycji (tych nie śledzimy wstecz)
+// — to przybliżenie: "gdybyś trzymał/a kapitał w tych proporcjach między
+// indeksami przez ten okres, wybierając spółki momentum".
 // ============================================================
 function blendEquityCurves(curveData, pct) {
     const included = UNIVERSES.filter(u => (pct[u] || 0) > 0 && (curveData[u]?.dates?.length || 0) >= 2);
@@ -658,7 +650,7 @@ let equityChart = null;
 function renderEquityCurve() {
     const caption = document.getElementById("equityCurveCaption");
     const noteEl = document.getElementById("equityCurveNote");
-    const blended = blendEquityCurves(equityCurveData, settings.pct);
+    const blended = blendEquityCurves(equityCurveData, universeWeightSharePct());
 
     if (equityChart) { equityChart.destroy(); equityChart = null; }
 
@@ -812,7 +804,6 @@ function renderMonteCarlo() {
 }
 
 function renderAll() {
-    renderBucketSum();
     renderHoldingsTable();
     renderSuggestions(); // wywołuje też renderMonteCarlo() i renderPortfolioAnalysisChart()
     renderEquityCurve();
@@ -844,7 +835,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         fmtMoney, fmtQty, sharesSuggestion,
-        computeTargets, parseXtbOpenPositions,
+        computeTargets, universeWeightSharePct, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         blendEquityCurves,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
