@@ -627,7 +627,7 @@ genuinely fresh numbers.
   checkout itself carries them.) Also commits `momentum_data.duckdb` plus the two regenerated JSON files
   back (same `[skip ci]` convention as `main.yml`, to avoid triggering a full monthly run on every daily
   push).
-- **`weekly_charts.yml`** — runs weekly (`cron: '0 5 * * 3'`, Wednesdays) and manually. Unlike
+- **`weekly_charts.yml`** — runs weekly (`cron: '0 7 * * 6'`, Saturday mornings) and manually. Unlike
   `daily_gem.yml`, this one DOES run the full `fetch_data.py` (not `--indices-only` — real per-constituent
   price data, hundreds of yfinance tickers, same call as `main.yml`), then `run_query.py --charts-only`
   (see Commands above / Pipeline architecture above) to refresh only prices + `weekly_chart`/
@@ -641,9 +641,11 @@ genuinely fresh numbers.
   as the other two workflows. Exists because `fetch_data.py` alone never regenerates `docs/data/*.json` —
   only `run_query.py` does — so a weekly `fetch_data.py` run by itself would not have made the dashboard's
   SMA10/30, Darvas boxes, Mansfield oscillator, or RSM screener any fresher without this second step; the
-  `05:00 UTC` Wednesday schedule was picked to fall well clear of `daily_gem.yml`'s `22:30 UTC` daily run
-  and `main.yml`'s `06:00 UTC` monthly run, avoiding avoidable overlap on the shared `"pages"` concurrency
-  group (a genuine overlap isn't fatal — the group just serializes the deploys — but avoiding it means
-  neither run waits on the other).
+  `07:00 UTC` Saturday schedule (a weekend morning, matching the user's preference) was picked to fall
+  well clear of `daily_gem.yml`'s `22:30 UTC` daily run and `main.yml`'s `06:00 UTC` monthly run, avoiding
+  avoidable overlap on the shared `"pages"` concurrency group (a genuine overlap isn't fatal — the group
+  just serializes the deploys — but avoiding it means neither run waits on the other). GitHub Actions cron
+  is always evaluated in UTC with no daylight-saving shift, so this lands at 08:00 Polish time in winter
+  (CET) and 09:00 in summer (CEST).
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
   no effect on the deployed site) on pushes/PRs.

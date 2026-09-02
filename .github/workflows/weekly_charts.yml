@@ -16,9 +16,10 @@ name: Weekly Charts Refresh
 # tylko o różnicę nowych dni minus przycięte stare, nie kumulatywnie.
 on:
   schedule:
-    # Co środę o 05:00 UTC (poza kolizją z main.yml — 1. dnia miesiąca 06:00 UTC —
-    # i daily_gem.yml — codziennie 22:30 UTC)
-    - cron: '0 5 * * 3'
+    # W sobotę rano, 07:00 UTC (poza kolizją z main.yml — 1. dnia miesiąca 06:00 UTC —
+    # i daily_gem.yml — codziennie 22:30 UTC). GitHub Actions cron jest zawsze w UTC
+    # (bez przejścia na czas letni) — 07:00 UTC to 08:00 czasu polskiego zimą / 09:00 latem.
+    - cron: '0 7 * * 6'
   workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
 
 # contents: write jest potrzebne, by workflow mógł commitować z powrotem
