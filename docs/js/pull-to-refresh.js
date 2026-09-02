@@ -5,9 +5,9 @@
 // domyślny system Chrome), spójny na wszystkich stronach.
 //
 // Działa na CAŁYM dokumencie, nie na jednym konkretnym kontenerze: ten sam
-// plik jest ładowany na index.html/rebalance.html/portfolio.html, a każda z
-// tych stron ma inny scrollowany element (tabela w szufladzie, panel wykresów,
-// karta ustawień...). Zamiast wpinać się osobno w layout każdej strony, przy
+// plik jest ładowany na index.html/rebalance.html, a każda z tych stron ma
+// inny scrollowany element (tabela w szufladzie, panel wykresów, karta
+// ustawień...). Zamiast wpinać się osobno w layout każdej strony, przy
 // każdym dotknięciu szukamy najbliższego przewijalnego przodka punktu dotyku
 // i pozwalamy pociągnąć tylko wtedy, gdy jest on już przewinięty na sam górę.
 function nearestScrollable(el) {

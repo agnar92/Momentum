@@ -21,7 +21,6 @@
     <nav>
         <a href="index.html">Dashboard</a>
         <a href="rebalance.html" class="active">Rebalans</a>
-        <a href="portfolio.html">Portfolio</a>
         <a href="edukacja.html">Edukacja</a>
     </nav>
 </div>
@@ -51,6 +50,13 @@
         <button class="add-row-btn" id="addHoldingBtn">+ Dodaj pozycję</button>
     </div>
 
+    <div class="panel-card" id="portfolioAnalysisCard">
+        <h3>Analiza portfela</h3>
+        <p class="panel-hint">Podział Twoich obecnych pozycji wg wartości — szybki podgląd, jak dziś wygląda portfel.</p>
+        <div class="donut-wrap"><canvas id="portfolioAnalysisChart"></canvas></div>
+        <div class="empty-state" id="portfolioAnalysisEmpty" style="display:none;">Dodaj pozycje ze znaną ceną, żeby zobaczyć podział portfela.</div>
+    </div>
+
     <div class="panel-card" id="excludeCard">
         <h3>Wyklucz z rebalansu</h3>
         <p class="panel-hint">Tickery na tej liście nigdy nie dostaną sugestii kupna/sprzedaży — nawet jeśli je zaimportujesz z XTB albo wybierze je momentum. Dla pozycji, które chcesz po prostu zatrzymać.</p>
@@ -59,8 +65,6 @@
             <button class="add-row-btn" id="excludeAddBtn">+ Wyklucz</button>
         </div>
         <div class="exclude-list" id="excludedList"></div>
-        <p class="panel-hint" style="margin-top:14px;">Spółki otagowane jako Core w Portfolio są też automatycznie wykluczone (zarządzasz nimi tam):</p>
-        <div class="exclude-list" id="coreTaggedList"></div>
     </div>
 
     <div class="panel-card" id="settingsCard">
