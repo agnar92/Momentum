@@ -611,6 +611,24 @@ th.tv-col { width: 1%; }
     min-height: 200px;
 }
 
+/* Zakres dat panelu Mansfield RS — nakładka w rogu canvasu (nie zajmuje
+   własnego wiersza w flex-layoucie, żeby nie zepchnąć canvasu poniżej progu
+   degenerowania się skali Chart.js, patrz komentarz przy .rs-chart-container
+   powyżej) — patrz alignMansfieldToDates w app.js: wykres Mansfield dzieli
+   teraz oś X z wykresem 10:30/wolumenu (te same daty, dopełnione null przed
+   startem własnego, krótszego okna Mansfielda), więc pusty odcinek z lewej
+   strony linii RSM już sam pokazuje, od kiedy zaczynają się dane — ten napis
+   tylko to potwierdza słowami. */
+.rs-chart-caption {
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 10px;
+    color: var(--text-faint);
+    z-index: 2;
+    pointer-events: none;
+}
+
 /* Odznaka aktualnego etapu Weinsteina (1/2A/2B/3/4) nad wykresem 10:30 — patrz
    renderStageBadge w app.js. */
 .stage-badge {
