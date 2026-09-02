@@ -13,9 +13,14 @@ const path = require("node:path");
 const rebalance = require(path.join("..", "..", "docs", "js", "rebalance.js"));
 
 const {
+    REGIONS,
+    REGION_LIST,
     fmtMoney,
+    fmtMoneyPln,
+    moneyFmtFor,
     fmtQty,
     sharesSuggestion,
+    regionOf,
     computeTargets,
     universeWeightSharePct,
     parseXtbOpenPositions,
@@ -29,6 +34,14 @@ const {
     _setState,
 } = rebalance;
 
+test("REGIONS groups Nasdaq 100 + Dow Jones under USA and WIG20 + mWIG40 under GPW", () => {
+    assert.deepEqual(REGION_LIST, ["USA", "GPW"]);
+    assert.deepEqual(REGIONS.USA.universes, ["NASDAQ100", "DOWJONES"]);
+    assert.deepEqual(REGIONS.GPW.universes, ["WIG20", "MWIG40"]);
+    assert.equal(REGIONS.USA.currency, "USD");
+    assert.equal(REGIONS.GPW.currency, "PLN");
+});
+
 test("fmtMoney formats with 2 decimals and thousands separators", () => {
     assert.equal(fmtMoney(1234.5), "$1,234.50");
     assert.equal(fmtMoney(0), "$0.00");
@@ -40,19 +53,60 @@ test("fmtMoney returns an em dash for null/undefined/NaN", () => {
     assert.equal(fmtMoney(NaN), "—");
 });
 
+test("fmtMoneyPln formats with 2 decimals, pl-PL separators, and a zł suffix", () => {
+    assert.equal(fmtMoneyPln(1234.5), "1234,50 zł");
+    assert.equal(fmtMoneyPln(0), "0,00 zł");
+});
+
+test("fmtMoneyPln returns an em dash for null/undefined/NaN", () => {
+    assert.equal(fmtMoneyPln(null), "—");
+    assert.equal(fmtMoneyPln(undefined), "—");
+    assert.equal(fmtMoneyPln(NaN), "—");
+});
+
+test("moneyFmtFor picks fmtMoneyPln for GPW and fmtMoney for USA", () => {
+    assert.equal(moneyFmtFor("GPW"), fmtMoneyPln);
+    assert.equal(moneyFmtFor("USA"), fmtMoney);
+});
+
 test("fmtQty rounds to 3 decimals and uses a comma decimal separator", () => {
     assert.equal(fmtQty(1.23456), "1,235");
     assert.equal(fmtQty(2), "2");
 });
 
-test("sharesSuggestion divides dollar amount by price", () => {
+test("sharesSuggestion divides dollar amount by price, defaulting to fmtMoney", () => {
     const out = sharesSuggestion(1000, 50);
     assert.match(out, /^20 szt\./);
+    assert.match(out, /\$1,000\.00/);
+});
+
+test("sharesSuggestion accepts an explicit money formatter (e.g. fmtMoneyPln for GPW)", () => {
+    const out = sharesSuggestion(1000, 50, fmtMoneyPln);
+    assert.match(out, /^20 szt\./);
+    assert.match(out, /1000,00 zł/);
 });
 
 test("sharesSuggestion reports missing price instead of dividing by zero/undefined", () => {
     const out = sharesSuggestion(1000, 0);
     assert.match(out, /brak ceny/);
+});
+
+test("regionOf resolves USA for Nasdaq/Dow-sourced tickers, GPW for WIG20/mWIG40-sourced, USA for unknown", () => {
+    _setState({
+        priceMap: {
+            AAPL: { price: 200, sources: ["NASDAQ100"] },
+            CAT: { price: 300, sources: ["DOWJONES"] },
+            PKN: { price: 70, sources: ["WIG20"] },
+            KGH: { price: 100, sources: ["MWIG40"] },
+            UNKNOWN: { price: 1, sources: [] },
+        },
+    });
+    assert.equal(regionOf("AAPL"), "USA");
+    assert.equal(regionOf("CAT"), "USA");
+    assert.equal(regionOf("PKN"), "GPW");
+    assert.equal(regionOf("KGH"), "GPW");
+    assert.equal(regionOf("UNKNOWN"), "USA");
+    _setState({ priceMap: {} });
 });
 
 test("weightedMuSigma caps blended momentum at +/-30%/yr", () => {
@@ -206,9 +260,24 @@ test("xtbDateToIso returns null for unparseable values", () => {
     assert.equal(xtbDateToIso("not a date"), null);
 });
 
+// ---------- computeTargets / universeWeightSharePct (region-aware) ----------
+
+function stateWithTopN(universeData, topN, excluded = []) {
+    return {
+        universeData,
+        settings: {
+            regions: {
+                USA: { contribution: 0, topN: { NASDAQ100: topN.NASDAQ100 || 0, DOWJONES: topN.DOWJONES || 0 } },
+                GPW: { contribution: 0, topN: { WIG20: topN.WIG20 || 0, MWIG40: topN.MWIG40 || 0 } },
+            },
+        },
+        excluded,
+    };
+}
+
 test("computeTargets takes the TOP N constituents per universe (already sorted by weight_pct) and weights the combined pool by raw weight_pct", () => {
-    _setState({
-        universeData: {
+    _setState(stateWithTopN(
+        {
             NASDAQ100: {
                 constituents: [
                     { ticker: "BIG", weight_pct: 60, price: 10 },
@@ -218,11 +287,10 @@ test("computeTargets takes the TOP N constituents per universe (already sorted b
             },
             DOWJONES: { constituents: [{ ticker: "BBB", weight_pct: 100, price: 20 }] },
         },
-        settings: { topN: { NASDAQ100: 2, DOWJONES: 1 } },
-        excluded: [],
-    });
+        { NASDAQ100: 2, DOWJONES: 1 },
+    ));
 
-    const { targets } = computeTargets(1000);
+    const { targets } = computeTargets("USA", 1000);
     assert.equal("SMALL" in targets, false);
     // Suma surowych wag wybranych: 60 + 30 + 100 = 190.
     assert.ok(Math.abs(targets.BIG.target_value - 1000 * 60 / 190) < 1e-6);
@@ -233,24 +301,23 @@ test("computeTargets takes the TOP N constituents per universe (already sorted b
 });
 
 test("computeTargets skips a universe with topN 0 or missing", () => {
-    _setState({
-        universeData: {
+    _setState(stateWithTopN(
+        {
             NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 100, price: 10 }] },
             DOWJONES: { constituents: [{ ticker: "BBB", weight_pct: 100, price: 20 }] },
         },
-        settings: { topN: { NASDAQ100: 5 } }, // brak DOWJONES -> traktowane jak 0
-        excluded: [],
-    });
+        { NASDAQ100: 5 }, // brak DOWJONES -> traktowane jak 0
+    ));
 
-    const { targets } = computeTargets(1000);
+    const { targets } = computeTargets("USA", 1000);
     assert.equal("AAA" in targets, true);
     assert.equal("BBB" in targets, false);
     assert.ok(Math.abs(targets.AAA.target_value - 1000) < 1e-9);
 });
 
 test("computeTargets excludes tickers in the excluded list entirely, so TOP N is filled from what remains", () => {
-    _setState({
-        universeData: {
+    _setState(stateWithTopN(
+        {
             NASDAQ100: {
                 constituents: [
                     { ticker: "EXCLUDED", weight_pct: 60, price: 10 },
@@ -260,20 +327,59 @@ test("computeTargets excludes tickers in the excluded list entirely, so TOP N is
             },
             DOWJONES: { constituents: [] },
         },
-        settings: { topN: { NASDAQ100: 2, DOWJONES: 0 } },
-        excluded: ["EXCLUDED"],
-    });
+        { NASDAQ100: 2, DOWJONES: 0 },
+        ["EXCLUDED"],
+    ));
 
-    const { targets } = computeTargets(1000);
+    const { targets } = computeTargets("USA", 1000);
     assert.equal("EXCLUDED" in targets, false);
     // TOP 2 z tego, co zostaje po wykluczeniu: AAA i NEXT (nie AAA sam).
     assert.equal("AAA" in targets, true);
     assert.equal("NEXT" in targets, true);
 });
 
-test("universeWeightSharePct splits by the combined raw weight_pct of each universe's TOP N selection", () => {
-    _setState({
-        universeData: {
+test("computeTargets works the same way for the GPW region (WIG20/mWIG40)", () => {
+    _setState(stateWithTopN(
+        {
+            WIG20: {
+                constituents: [
+                    { ticker: "KGH", weight_pct: 50, price: 100 },
+                    { ticker: "PKN", weight_pct: 50, price: 70 },
+                ],
+            },
+            MWIG40: { constituents: [{ ticker: "ALE", weight_pct: 100, price: 40 }] },
+        },
+        { WIG20: 2, MWIG40: 1 },
+    ));
+
+    const { targets } = computeTargets("GPW", 2000);
+    assert.deepEqual(Object.keys(targets).sort(), ["ALE", "KGH", "PKN"]);
+    // Suma surowych wag: 50+50+100 = 200 -> po 25% na KGH/PKN, 50% na ALE.
+    assert.ok(Math.abs(targets.KGH.target_value - 500) < 1e-6);
+    assert.ok(Math.abs(targets.PKN.target_value - 500) < 1e-6);
+    assert.ok(Math.abs(targets.ALE.target_value - 1000) < 1e-6);
+});
+
+test("computeTargets for one region ignores the other region's universes entirely", () => {
+    _setState(stateWithTopN(
+        {
+            NASDAQ100: { constituents: [{ ticker: "AAA", weight_pct: 100, price: 10 }] },
+            DOWJONES: { constituents: [] },
+            WIG20: { constituents: [{ ticker: "KGH", weight_pct: 100, price: 100 }] },
+            MWIG40: { constituents: [] },
+        },
+        { NASDAQ100: 5, WIG20: 5 },
+    ));
+
+    const usa = computeTargets("USA", 1000).targets;
+    const gpw = computeTargets("GPW", 1000).targets;
+    assert.deepEqual(Object.keys(usa), ["AAA"]);
+    assert.deepEqual(Object.keys(gpw), ["KGH"]);
+});
+
+test("universeWeightSharePct splits by the combined raw weight_pct of each universe's TOP N selection, within one region", () => {
+    _setState(stateWithTopN(
+        {
             NASDAQ100: {
                 constituents: [
                     { ticker: "AAA", weight_pct: 40, price: 10 },
@@ -282,24 +388,22 @@ test("universeWeightSharePct splits by the combined raw weight_pct of each unive
             },
             DOWJONES: { constituents: [{ ticker: "CCC", weight_pct: 40, price: 10 }] },
         },
-        settings: { topN: { NASDAQ100: 2, DOWJONES: 1 } },
-        excluded: [],
-    });
+        { NASDAQ100: 2, DOWJONES: 1 },
+    ));
 
-    const pct = universeWeightSharePct();
+    const pct = universeWeightSharePct("USA");
     // NASDAQ100: 40+20=60, DOWJONES: 40 -> suma 100 -> 60% / 40%.
     assert.ok(Math.abs(pct.NASDAQ100 - 60) < 1e-9);
     assert.ok(Math.abs(pct.DOWJONES - 40) < 1e-9);
 });
 
 test("universeWeightSharePct returns 0/0 when nothing is selected", () => {
-    _setState({
-        universeData: { NASDAQ100: { constituents: [] }, DOWJONES: { constituents: [] } },
-        settings: { topN: { NASDAQ100: 0, DOWJONES: 0 } },
-        excluded: [],
-    });
+    _setState(stateWithTopN(
+        { NASDAQ100: { constituents: [] }, DOWJONES: { constituents: [] } },
+        { NASDAQ100: 0, DOWJONES: 0 },
+    ));
 
-    const pct = universeWeightSharePct();
+    const pct = universeWeightSharePct("USA");
     assert.equal(pct.NASDAQ100, 0);
     assert.equal(pct.DOWJONES, 0);
 });
@@ -338,6 +442,19 @@ test("blendEquityCurves intersects dates when universes have mismatched history"
     const blended = blendEquityCurves(curveData, { NASDAQ100: 50, DOWJONES: 50 });
     // Tylko wspolne daty (od 2026-02-01) -> 2 punkty, nie 3.
     assert.deepEqual(blended.dates, ["2026-02-01", "2026-03-01"]);
+});
+
+test("blendEquityCurves only blends the GPW universes when given a GPW-shaped pct split", () => {
+    const curveData = {
+        NASDAQ100: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 200], benchmark_index: [100, 200] }, // powinno byc pominiete
+        WIG20: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 110], benchmark_index: [100, 105] },
+        MWIG40: { dates: ["2026-01-01", "2026-02-01"], momentum_index: [100, 90], benchmark_index: [100, 95] },
+    };
+    const pct = { WIG20: 60, MWIG40: 40 }; // brak kluczy NASDAQ100/DOWJONES -> traktowane jak 0
+    const blended = blendEquityCurves(curveData, pct);
+    assert.deepEqual(blended.dates, ["2026-01-01", "2026-02-01"]);
+    // 0.6*110 + 0.4*90 = 102 (nie ma wpływu NASDAQ100's 200)
+    assert.ok(Math.abs(blended.portfolio[1] - 102) < 1e-9);
 });
 
 // ---------- EKSPORT DO TRADINGVIEW PORTFOLIO ----------
