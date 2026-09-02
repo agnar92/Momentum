@@ -299,10 +299,14 @@ function renderRsmPanel() {
 // run_query.py) — wystarczy odczytac go wprost stamtad. Screener RSM
 // (combinedRsmCandidates powyzej) to osobny, wyselekcjonowany widok, nie
 // zrodlo danych do samego wykresu.
+// Nie warunkujemy juz obecnoscia weekly_chart — eps_chart (patrz renderEpsChart)
+// moze istniec niezaleznie od niego (inne zrodlo danych, tabela `earnings`, patrz
+// compute_eps_chart w run_query.py), wiec updateChartArea samo decyduje, ktore
+// panele pokazac na podstawie tego, co faktycznie jest w zwroconym rekordzie.
 function findRsEntry(ticker, universe) {
     const universeEntry = ((state.data[universe] && state.data[universe].constituents) || [])
         .find(c => c.ticker === ticker);
-    return (universeEntry && universeEntry.weekly_chart) ? { ...universeEntry, universe } : null;
+    return universeEntry ? { ...universeEntry, universe } : null;
 }
 
 function selectTicker(ticker, universe) {
@@ -347,16 +351,23 @@ function updateChartArea() {
     const symbol = state.selectedTicker;
     const rsEntry = state.currentRsEntry;
     const hasRsChart = !!(rsEntry && rsEntry.weekly_chart);
+    const hasEpsChart = !!(rsEntry && rsEntry.eps_chart);
 
     const noChartMsg = document.getElementById("noChartMessage");
     const rsChartPanel = document.getElementById("rsChartPanel");
     const rsVolumePanel = document.getElementById("rsVolumePanel");
     const rsMansfieldPanel = document.getElementById("rsMansfieldPanel");
+    const rsEpsPanel = document.getElementById("rsEpsPanel");
     const stageLegend = document.getElementById("stageLegend");
-    if (noChartMsg) noChartMsg.hidden = hasRsChart;
+    // noChartMsg ("brak wlasnego wykresu tygodniowego") ukrywamy, gdy jest
+    // CHOCIAZBY jeden z paneli do pokazania — wykres 10:30 i wykres EPS maja
+    // niezalezne zrodla danych (ceny tygodniowe vs. tabela `earnings`), wiec
+    // spolka moze miec jeden bez drugiego.
+    if (noChartMsg) noChartMsg.hidden = hasRsChart || hasEpsChart;
     if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
     if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart;
     if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart;
+    if (rsEpsPanel) rsEpsPanel.hidden = !hasEpsChart;
     if (stageLegend) stageLegend.hidden = !hasRsChart;
 
     if (hasRsChart) {
@@ -366,6 +377,13 @@ function updateChartArea() {
         if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
         if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
         if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
+    }
+
+    if (hasEpsChart) {
+        renderEpsChart(symbol, rsEntry.eps_chart);
+    } else if (rsEpsChartInstance) {
+        rsEpsChartInstance.destroy();
+        rsEpsChartInstance = null;
     }
 }
 
@@ -397,6 +415,7 @@ function initResetZoomButton() {
 
 let rsVolumeChartInstance = null;
 let rsMansfieldChartInstance = null;
+let rsEpsChartInstance = null;
 
 // Przesuwa widoczny zakres osi X panelu wolumenu tak, zeby dokladnie odpowiadal
 // aktualnemu zoom/pan wykresu 10:30 (patrz onZoomComplete/onPanComplete w
@@ -788,7 +807,100 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
 
     // Wspólny crosshair (patrz syncChartsCrosshair) — tylko między wykresami,
     // które faktycznie istnieją (Mansfield może być null przy braku danych).
+    // Wykres EPS (renderEpsChart) NIE wchodzi tutaj — ma własną, dużo rzadszą
+    // (kwartalną, nie tygodniową) siatkę dat, więc synchronizacja po indeksie
+    // wskazywałaby zupełnie inne tygodnie/kwartały na obu wykresach naraz.
     syncChartsCrosshair([rsChartInstance, rsVolumeChartInstance, rsMansfieldChartInstance].filter(Boolean));
+}
+
+// ============================================================
+// WYKRES EPS (styl MarketSmith/IBD): linia raportowanego EPS w kolejnych
+// kwartałach, punkt na każdym raporcie kolorowany wg tego, czy spółka
+// pobiła/nie pobiła konsensusu analityków ("beat" — patrz compute_eps_chart w
+// run_query.py, tabela `earnings` zasilana fetch_data.py::update_earnings), plus
+// pionowa przerywana kreska w tym samym kolorze na dacie każdego raportu
+// (chartjs-plugin-annotation) — dokładnie ten efekt, o który chodzi w klasycznym
+// wykresie EPS z MarketSmith/IBD: od razu widać, KIEDY były wyniki i jak
+// wyglądał trend EPS wokół nich. Własny, niezależny wykres (inna, dużo rzadsza
+// siatka dat niż wykres 10:30/wolumen/Mansfield) — bez zoom/pan (garstka
+// punktów tego nie potrzebuje) i poza wspólnym crosshairem (syncChartsCrosshair).
+// ============================================================
+const EPS_BEAT_COLOR = "#2ecc71";
+const EPS_MISS_COLOR = "#e0455a";
+const EPS_UNKNOWN_COLOR = "#8a8f9c";
+
+function epsBeatColor(beat) {
+    if (beat === true) return EPS_BEAT_COLOR;
+    if (beat === false) return EPS_MISS_COLOR;
+    return EPS_UNKNOWN_COLOR;
+}
+
+function renderEpsChart(symbol, epsChart) {
+    const canvas = document.getElementById("rsEpsCanvas");
+    const caption = document.getElementById("rsEpsCaption");
+    if (rsEpsChartInstance) { rsEpsChartInstance.destroy(); rsEpsChartInstance = null; }
+    if (!canvas || typeof Chart === "undefined") return;
+
+    const pointColors = epsChart.beat.map(epsBeatColor);
+    // Pionowa kreska (chartjs-plugin-annotation, ten sam mechanizm co prostokąty
+    // baz na wykresie 10:30 — patrz baseAnnotations powyżej) na dacie KAŻDEGO
+    // raportu, na całej wysokości wykresu — to jest dosłownie "kreska pionowa
+    // kiedy były earnings" z MarketSmith/IBD.
+    const earningsAnnotations = {};
+    epsChart.dates.forEach((date, idx) => {
+        earningsAnnotations[`eps${idx}`] = {
+            type: "line", scaleID: "x", value: date,
+            borderColor: epsBeatColor(epsChart.beat[idx]), borderWidth: 1.5, borderDash: [4, 3],
+        };
+    });
+
+    if (caption) {
+        caption.textContent = epsChart.next_earnings_date
+            ? `Najbliższe wyniki: ${fmtPlDate(epsChart.next_earnings_date)}`
+                + (epsChart.next_eps_estimate != null ? ` (konsensus EPS: ${epsChart.next_eps_estimate})` : "")
+            : "";
+    }
+
+    rsEpsChartInstance = new Chart(canvas, {
+        type: "line",
+        data: {
+            labels: epsChart.dates,
+            datasets: [
+                {
+                    label: `${symbol} — EPS (raportowany)`, data: epsChart.eps_reported,
+                    borderColor: "#4fa6e0", backgroundColor: "transparent", borderWidth: 1.5,
+                    pointRadius: 4, pointHoverRadius: 6,
+                    pointBackgroundColor: pointColors, pointBorderColor: pointColors,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: "index", intersect: false },
+            plugins: {
+                legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => {
+                            const i = ctx.dataIndex;
+                            const est = epsChart.eps_estimate[i];
+                            const surprise = epsChart.surprise_pct[i];
+                            const parts = [`EPS: ${ctx.parsed.y}`];
+                            if (est != null) parts.push(`konsensus: ${est}`);
+                            if (surprise != null) parts.push(`niespodzianka: ${surprise > 0 ? "+" : ""}${surprise}%`);
+                            return parts.join(" · ");
+                        },
+                    },
+                },
+                annotation: { annotations: earningsAnnotations },
+            },
+            scales: {
+                x: { ticks: { color: "#8a8f9c", maxTicksLimit: 8 }, grid: { color: "#262a35" } },
+                y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
+            },
+        },
+    });
 }
 
 // ============================================================

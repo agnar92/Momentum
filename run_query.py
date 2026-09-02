@@ -29,7 +29,8 @@ metodologii S&P Momentum Indices):
 8. Eksport JSON dla strony (docs/data/*.json) + wygenerowanie statycznych
    plikow strony (docs/index.html, docs/rebalance.html, docs/css/*, docs/js/*).
    Kazda spolka w KAZDYM uniwersum (nie tylko liderzy Sily Relatywnej, patrz pkt
-   10) ma tez wlasny "weekly_chart"/"mansfield_chart" — patrz process_universe.
+   10) ma tez wlasny "weekly_chart"/"mansfield_chart"/"eps_chart" (pkt 11) —
+   patrz process_universe.
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
    fetch_data.py) dla NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez SP500/
    WIG20/mWIG40, patrz komentarz przy GEM_UNIVERSES) w oknie GEM_LOOKBACK_MONTHS,
@@ -55,6 +56,15 @@ metodologii S&P Momentum Indices):
     pola sa tez doliczane KAZDEJ spolce w glownym eksporcie per-uniwersum (nie tylko
     liderom RS, patrz pkt 8/process_universe) — na dashboardzie przelacznik "Sila
     Relatywna" jest wiec dostepny dla kazdej spolki, nie tylko tych z panelu RS.
+11. Wykres EPS w stylu MarketSmith/IBD: linia raportowanego EPS w kolejnych
+    kwartalach (do EPS_CHART_MAX_QUARTERS, ~3 lata) + dla kazdego terminu wynikow
+    znacznik kolorowany wg tego, czy spolka pobila/nie pobila konsensusu
+    analitykow ("beat") — patrz compute_eps_chart. Zrodlo: tabela `earnings`
+    (fetch_data.py::update_earnings, yf.Ticker(...).get_earnings_dates() per
+    ticker — bez batchowania, wiec odswiezane tylko w pelnym miesiecznym
+    przebiegu). W odroznieniu od pkt 10 NIE jest przycinany do okna momentum —
+    wyniki kwartalne sa z natury rzadkie, wiec liczy sie wieloletni kontekst.
+    Doliczany KAZDEJ spolce w glownym eksporcie per-uniwersum ("eps_chart", pkt 8).
 
 WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
 innego powodu: nie ma ETF-u z publikowanymi holdings dla indeksow GPW, wiec
@@ -405,9 +415,13 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
             mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
 
+    # --- Wykres EPS (styl MarketSmith/IBD) dla KAŻDEJ spółki — niezależny od
+    # index_mom (nie potrzebuje poziomu indeksu, tylko tabeli `earnings`). ---
+    eps_charts = {ticker: compute_eps_chart(con, ticker, ref_date) for ticker in df_weighted["Ticker"]}
+
     # --- Eksport JSON dla strony ---
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
-                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts)
+                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts, eps_charts)
 
     return df_weighted
 
@@ -505,9 +519,10 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir):
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                  prev_ref_date=None, added_tickers=None, dropped_tickers=None,
-                 weekly_charts=None, mansfield_charts=None):
+                 weekly_charts=None, mansfield_charts=None, eps_charts=None):
     weekly_charts = weekly_charts or {}
     mansfield_charts = mansfield_charts or {}
+    eps_charts = eps_charts or {}
     records = []
     for _, r in df_weighted.iterrows():
         weekly_chart = weekly_charts.get(r["Ticker"])
@@ -524,6 +539,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "weight_pct": round(float(r["weight"]) * 100, 3),
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
+            "eps_chart": eps_charts.get(r["Ticker"]),
         })
     cap_scaled = bool(df_weighted["cap_scaled_due_to_infeasibility"].iloc[0]) if len(df_weighted) else False
     if universe == "DOWJONES":
@@ -1531,6 +1547,82 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     }
 
 
+# 12 (~3 lata) zamiast przycinania do okna momentum (M-14/M-11, jak weekly_chart/
+# mansfield_chart) — wyniki kwartalne sa z natury rzadkie (4/rok), wiec wieloletni
+# kontekst jest tu wartoscia (jak w MarketSmith/IBD), nie balastem.
+EPS_CHART_MAX_QUARTERS = 12
+
+
+def compute_eps_chart(con, ticker, ref_date):
+    """Wykres EPS w stylu MarketSmith/IBD: linia RAPORTOWANEGO EPS w kolejnych
+    kwartałach + dla każdego terminu wyników osobny znacznik (kolorowany wg tego, czy
+    spółka pobiła/nie pobiła konsensusu analityków) do narysowania jako pionowe kreski
+    na wykresie (patrz renderEpsChart w app.js). W odróżnieniu od weekly_chart/
+    mansfield_chart NIE jest przycinany do okna momentum_value (M-14/M-11, patrz
+    start_date w compute_relative_strength_chart/compute_mansfield_rs_chart) — wyniki
+    kwartalne są z natury rzadkie, więc pokazujemy do EPS_CHART_MAX_QUARTERS (12,
+    ~3 lata) ostatnich raportów niezależnie od długości okna momentum.
+
+    Źródło danych: tabela `earnings` (fetch_data.py::update_earnings), zasilana
+    yf.Ticker(...).get_earnings_dates() — pojedyncze zapytanie PER TICKER (yfinance
+    nie wspiera tu batchowania jak przy cenach), więc ta tabela jest odświeżana
+    wyłącznie w pełnym (miesięcznym) przebiegu fetch_data.py, nie w --indices-only.
+
+    Zwraca None gdy tabela `earnings` jeszcze nie istnieje (świeży checkout/baza
+    sprzed tej funkcji) albo spółka nie ma w niej żadnych zaraportowanych wyników.
+
+    Pola:
+    - dates/eps_reported/eps_estimate/surprise_pct/beat: równoległe listy, po jednym
+      wpisie na KAŻDY faktycznie zaraportowany kwartał (Report_Date <= ref_date),
+      posortowane rosnąco po dacie. "beat" = Reported > Estimate (None, gdy Yahoo nie
+      ma konsensusu dla tej spółki — zdarza się dla mniej śledzonych nazw).
+    - next_earnings_date/next_eps_estimate: najbliższy NADCHODZĄCY (Report_Date >
+      ref_date) termin wyników, jeśli Yahoo go już publikuje — do napisu "najbliższe
+      wyniki: ..." nad wykresem. None, gdy nieznany."""
+    has_table = con.execute("""
+        SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'earnings'
+    """).fetchone()[0] > 0
+    if not has_table:
+        return None
+
+    df = con.execute(f"""
+        SELECT Report_Date, EPS_Estimate, EPS_Reported, Surprise_Pct
+        FROM earnings
+        WHERE Ticker = '{ticker}' AND Report_Date <= DATE '{ref_date}' AND EPS_Reported IS NOT NULL
+        ORDER BY Report_Date DESC
+        LIMIT {EPS_CHART_MAX_QUARTERS}
+    """).df()
+    if df.empty:
+        return None
+    df = df.sort_values("Report_Date")
+
+    dates, eps_reported, eps_estimate, surprise_pct, beat = [], [], [], [], []
+    for _, r in df.iterrows():
+        est = float(r["EPS_Estimate"]) if pd.notna(r["EPS_Estimate"]) else None
+        surprise = float(r["Surprise_Pct"]) if pd.notna(r["Surprise_Pct"]) else None
+        dates.append(pd.Timestamp(r["Report_Date"]).strftime("%Y-%m-%d"))
+        eps_reported.append(round(float(r["EPS_Reported"]), 2))
+        eps_estimate.append(round(est, 2) if est is not None else None)
+        surprise_pct.append(round(surprise, 2) if surprise is not None else None)
+        beat.append(bool(r["EPS_Reported"] > est) if est is not None else None)
+
+    next_row = con.execute(f"""
+        SELECT Report_Date, EPS_Estimate FROM earnings
+        WHERE Ticker = '{ticker}' AND Report_Date > DATE '{ref_date}' AND EPS_Reported IS NULL
+        ORDER BY Report_Date ASC LIMIT 1
+    """).fetchone()
+
+    return {
+        "dates": dates,
+        "eps_reported": eps_reported,
+        "eps_estimate": eps_estimate,
+        "surprise_pct": surprise_pct,
+        "beat": beat,
+        "next_earnings_date": str(next_row[0]) if next_row else None,
+        "next_eps_estimate": round(float(next_row[1]), 2) if next_row and pd.notna(next_row[1]) else None,
+    }
+
+
 def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days=150, max_staleness_days=10):
     """ref_date=None: jak w export_global_equity_momentum — najświeższa data w
     index_prices (odświeżane codziennie), niezależnie od miesięcznego ref_date
@@ -1558,6 +1650,7 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                                                                        ref_date, index_mom["date_start"])
             leader["mansfield_chart"] = compute_mansfield_rs_chart(con, leader["ticker"], universe,
                                                                      ref_date, index_mom["date_start"])
+            leader["eps_chart"] = compute_eps_chart(con, leader["ticker"], ref_date)
         universes_payload[universe] = {
             "index_return_pct": index_return_pct,
             "momentum_window": index_mom["momentum_window"],

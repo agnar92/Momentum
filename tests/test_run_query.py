@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 from run_query import (
+    EPS_CHART_MAX_QUARTERS,
     EQUAL_WEIGHT_UNIVERSES,
     GEM_UNIVERSES,
     MAX_HOLDINGS,
@@ -25,6 +26,7 @@ from run_query import (
     STAGE_BREAKOUT_VOLUME_RATIO,
     UNIVERSES,
     add_zscore_and_momentum_score,
+    compute_eps_chart,
     compute_equity_curve,
     compute_index_leaders,
     compute_index_momentum,
@@ -1089,6 +1091,103 @@ class TestComputeMansfieldRsChart:
 
 
 # ---------------------------------------------------------------------------
+# compute_eps_chart: wykres EPS w stylu MarketSmith/IBD (tabela `earnings`,
+# fetch_data.py::update_earnings) — niezalezny od okna momentum/index_prices,
+# w odroznieniu od compute_relative_strength_chart/compute_mansfield_rs_chart.
+# ---------------------------------------------------------------------------
+
+def make_earnings_con():
+    con = duckdb.connect(":memory:")
+    con.execute("""
+        CREATE TABLE earnings (
+            Ticker VARCHAR, Report_Date DATE, EPS_Estimate DOUBLE, EPS_Reported DOUBLE,
+            Surprise_Pct DOUBLE, PRIMARY KEY (Ticker, Report_Date)
+        )
+    """)
+    return con
+
+
+def insert_earnings_rows(con, ticker, rows):
+    """rows: list of (report_date, eps_estimate, eps_reported, surprise_pct)."""
+    df = pd.DataFrame(rows, columns=["Report_Date", "EPS_Estimate", "EPS_Reported", "Surprise_Pct"])
+    df.insert(0, "Ticker", ticker)  # noqa: F841
+    con.execute("INSERT INTO earnings SELECT * FROM df")
+
+
+class TestComputeEpsChart:
+    def test_missing_earnings_table_returns_none(self):
+        con = duckdb.connect(":memory:")
+        assert compute_eps_chart(con, "AAA", "2026-03-30") is None
+
+    def test_ticker_with_no_rows_returns_none(self):
+        con = make_earnings_con()
+        insert_earnings_rows(con, "BBB", [("2026-01-15", 1.0, 1.1, 10.0)])
+        assert compute_eps_chart(con, "AAA", "2026-03-30") is None
+
+    def test_returns_reported_quarters_sorted_ascending_with_beat_flags(self):
+        con = make_earnings_con()
+        insert_earnings_rows(con, "AAA", [
+            ("2025-07-15", 1.00, 1.10, 10.0),   # beat
+            ("2025-10-15", 1.20, 1.05, -12.5),  # miss
+            ("2026-01-15", 1.10, None, None),   # not yet reported -> excluded from the line
+        ])
+        out = compute_eps_chart(con, "AAA", "2026-01-01")
+        assert out is not None
+        assert out["dates"] == ["2025-07-15", "2025-10-15"]
+        assert out["eps_reported"] == [1.10, 1.05]
+        assert out["eps_estimate"] == [1.00, 1.20]
+        assert out["surprise_pct"] == [10.0, -12.5]
+        assert out["beat"] == [True, False]
+
+    def test_future_report_beyond_ref_date_is_excluded_from_reported_series(self):
+        con = make_earnings_con()
+        insert_earnings_rows(con, "AAA", [
+            ("2025-07-15", 1.00, 1.10, 10.0),
+            ("2026-06-15", 1.30, 1.40, 7.7),  # after ref_date -> should not appear in the past line
+        ])
+        out = compute_eps_chart(con, "AAA", "2026-01-01")
+        assert out["dates"] == ["2025-07-15"]
+
+    def test_missing_estimate_yields_beat_none(self):
+        con = make_earnings_con()
+        insert_earnings_rows(con, "AAA", [("2025-07-15", None, 1.10, None)])
+        out = compute_eps_chart(con, "AAA", "2026-01-01")
+        assert out["eps_estimate"] == [None]
+        assert out["beat"] == [None]
+
+    def test_limits_to_max_quarters_keeping_most_recent(self):
+        con = make_earnings_con()
+        rows = [
+            (pd.Timestamp("2020-01-01") + pd.DateOffset(months=3 * i), 1.0, 1.0 + i * 0.01, 1.0)
+            for i in range(EPS_CHART_MAX_QUARTERS + 5)
+        ]
+        insert_earnings_rows(con, "AAA", [(d.strftime("%Y-%m-%d"), e, r, s) for d, e, r, s in rows])
+        out = compute_eps_chart(con, "AAA", "2030-01-01")
+        assert len(out["dates"]) == EPS_CHART_MAX_QUARTERS
+        # Najstarsze wiersze odciete, zostaja te NAJNOWSZE, ale nadal posortowane rosnaco.
+        assert out["dates"] == sorted(out["dates"])
+        assert out["dates"][-1] == rows[-1][0].strftime("%Y-%m-%d")
+
+    def test_next_earnings_date_picks_nearest_future_estimate_only_row(self):
+        con = make_earnings_con()
+        insert_earnings_rows(con, "AAA", [
+            ("2025-07-15", 1.00, 1.10, 10.0),
+            ("2026-04-15", 1.25, None, None),
+            ("2026-07-15", 1.30, None, None),
+        ])
+        out = compute_eps_chart(con, "AAA", "2026-01-01")
+        assert out["next_earnings_date"] == "2026-04-15"
+        assert out["next_eps_estimate"] == 1.25
+
+    def test_no_future_row_leaves_next_earnings_date_none(self):
+        con = make_earnings_con()
+        insert_earnings_rows(con, "AAA", [("2025-07-15", 1.00, 1.10, 10.0)])
+        out = compute_eps_chart(con, "AAA", "2026-01-01")
+        assert out["next_earnings_date"] is None
+        assert out["next_eps_estimate"] is None
+
+
+# ---------------------------------------------------------------------------
 # export_json: kazda spolka w GLOWNYM eksporcie per-uniwersum (docs/data/*.json)
 # dostaje teraz wlasny weekly_chart/mansfield_chart (patrz process_universe) —
 # nie tylko liderzy panelu Sily Relatywnej (export_relative_strength).
@@ -1112,24 +1211,27 @@ class TestExportJson:
         df = make_weighted_df_fixture()
         weekly_charts = {"AAA": {"dates": ["2026-01-05"], "close_pct": [0.0]}}
         mansfield_charts = {"AAA": {"dates": ["2026-01-05"], "rsm_short": [1.0], "rsm_medium": [2.0]}}
+        eps_charts = {"AAA": {"dates": ["2025-10-15"], "eps_reported": [1.1]}}
 
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0,
-                    weekly_charts=weekly_charts, mansfield_charts=mansfield_charts)
+                    weekly_charts=weekly_charts, mansfield_charts=mansfield_charts, eps_charts=eps_charts)
 
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
         by_ticker = {c["ticker"]: c for c in payload["constituents"]}
         assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
         assert by_ticker["AAA"]["mansfield_chart"] == mansfield_charts["AAA"]
+        assert by_ticker["AAA"]["eps_chart"] == eps_charts["AAA"]
         # BBB nie ma wpisu w slownikach (np. brak danych indeksu dla tego tickera w
         # danym momencie) -> None w JSON, nie blad.
         assert by_ticker["BBB"]["weekly_chart"] is None
         assert by_ticker["BBB"]["mansfield_chart"] is None
+        assert by_ticker["BBB"]["eps_chart"] is None
 
     def test_defaults_to_none_when_charts_not_provided(self, tmp_path):
         df = make_weighted_df_fixture()
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0)
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
-        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None
+        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None and c["eps_chart"] is None
                    for c in payload["constituents"])
 
 

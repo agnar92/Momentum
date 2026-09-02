@@ -8,10 +8,12 @@ import pandas as pd
 import pytest
 
 from fetch_data import (
+    EARNINGS_SCHEMA,
     PRICES_SCHEMA,
     _compute_synthetic_equal_weight_index,
     _download_price_rows,
     _ensure_prices_ohlc_columns,
+    _fetch_earnings_rows_for_ticker,
     _find_column,
     _parse_money,
     _prices_history_is_shallow,
@@ -20,6 +22,7 @@ from fetch_data import (
     _upsert_price_rows,
     get_full_refresh_range,
     load_index_constituents,
+    update_earnings,
     update_index_prices,
     update_prices_incremental,
 )
@@ -309,6 +312,128 @@ class TestDownloadPriceRows:
         assert rows == []
         assert fetched == set()
         assert failed == ["CCC"]
+
+
+# ---------------------------------------------------------------------------
+# _fetch_earnings_rows_for_ticker / update_earnings — tabela `earnings`, zasila
+# wykres EPS w run_query.py (compute_eps_chart). W odroznieniu od cen, yfinance
+# nie wspiera tu batchowania (yf.Ticker(...).get_earnings_dates() jest per-ticker).
+# ---------------------------------------------------------------------------
+
+def _fake_ticker_class(df):
+    class FakeTicker:
+        def __init__(self, symbol):
+            self.symbol = symbol
+
+        def get_earnings_dates(self, limit):
+            return df
+
+    return FakeTicker
+
+
+class TestFetchEarningsRowsForTicker:
+    def test_separates_reported_from_nearest_future_estimate_and_sorts_ascending(self, monkeypatch):
+        # yfinance zwraca wiersze malejaco po dacie (najnowszy/najblizszy pierwszy) —
+        # daty naumyslnie daleko w przeszlosci/przyszlosci wzgledem "dzisiaj", zeby
+        # test byl deterministyczny niezaleznie od faktycznej daty uruchomienia.
+        idx = pd.to_datetime(["2099-01-15", "2020-10-15", "2020-07-15"])
+        df = pd.DataFrame({
+            "EPS Estimate": [1.25, 1.20, 1.00],
+            "Reported EPS": [None, 1.05, 1.10],
+            "Surprise(%)": [None, -12.5, 10.0],
+        }, index=idx)
+        monkeypatch.setattr("fetch_data.yf.Ticker", _fake_ticker_class(df))
+
+        rows = _fetch_earnings_rows_for_ticker("AAA")
+
+        assert rows == [
+            ("2020-07-15", 1.00, 1.10, 10.0),
+            ("2020-10-15", 1.20, 1.05, -12.5),
+            ("2099-01-15", 1.25, None, None),
+        ]
+
+    def test_multiple_future_rows_keeps_only_nearest(self, monkeypatch):
+        idx = pd.to_datetime(["2099-06-15", "2099-01-15"])
+        df = pd.DataFrame({
+            "EPS Estimate": [1.40, 1.25],
+            "Reported EPS": [None, None],
+            "Surprise(%)": [None, None],
+        }, index=idx)
+        monkeypatch.setattr("fetch_data.yf.Ticker", _fake_ticker_class(df))
+
+        rows = _fetch_earnings_rows_for_ticker("AAA")
+
+        assert rows == [("2099-01-15", 1.25, None, None)]
+
+    def test_no_future_rows_returns_only_reported(self, monkeypatch):
+        idx = pd.to_datetime(["2020-10-15", "2020-07-15"])
+        df = pd.DataFrame({
+            "EPS Estimate": [1.20, 1.00],
+            "Reported EPS": [1.05, 1.10],
+            "Surprise(%)": [-12.5, 10.0],
+        }, index=idx)
+        monkeypatch.setattr("fetch_data.yf.Ticker", _fake_ticker_class(df))
+
+        rows = _fetch_earnings_rows_for_ticker("AAA")
+
+        assert rows == [("2020-07-15", 1.00, 1.10, 10.0), ("2020-10-15", 1.20, 1.05, -12.5)]
+
+    def test_empty_dataframe_returns_empty_list(self, monkeypatch):
+        monkeypatch.setattr("fetch_data.yf.Ticker", _fake_ticker_class(pd.DataFrame()))
+        assert _fetch_earnings_rows_for_ticker("AAA") == []
+
+    def test_none_dataframe_returns_empty_list(self, monkeypatch):
+        monkeypatch.setattr("fetch_data.yf.Ticker", _fake_ticker_class(None))
+        assert _fetch_earnings_rows_for_ticker("AAA") == []
+
+    def test_exception_returns_empty_list_without_raising(self, monkeypatch):
+        def boom(symbol):
+            raise RuntimeError("network error")
+        monkeypatch.setattr("fetch_data.yf.Ticker", boom)
+        assert _fetch_earnings_rows_for_ticker("AAA") == []
+
+
+class TestUpdateEarnings:
+    def test_creates_table_and_stores_rows_only_for_tickers_with_data(self, monkeypatch):
+        con = duckdb.connect(":memory:")
+        fake_rows = {"AAA": [("2025-07-15", 1.0, 1.1, 10.0)], "BBB": []}
+        monkeypatch.setattr("fetch_data._fetch_earnings_rows_for_ticker", lambda symbol: fake_rows.get(symbol, []))
+        monkeypatch.setattr("fetch_data.time.sleep", lambda _: None)
+
+        update_earnings(con, ["AAA", "BBB"])
+
+        df = con.execute("SELECT * FROM earnings").df()
+        assert list(df["Ticker"]) == ["AAA"]
+        assert df.iloc[0]["EPS_Reported"] == pytest.approx(1.1)
+
+    def test_preserves_existing_rows_when_fetch_fails(self, monkeypatch):
+        con = duckdb.connect(":memory:")
+        con.execute(f"CREATE TABLE earnings ({EARNINGS_SCHEMA})")
+        con.execute("INSERT INTO earnings VALUES ('AAA', '2025-01-15', 1.0, 1.1, 10.0)")
+        monkeypatch.setattr("fetch_data._fetch_earnings_rows_for_ticker", lambda symbol: [])
+        monkeypatch.setattr("fetch_data.time.sleep", lambda _: None)
+
+        update_earnings(con, ["AAA"])
+
+        df = con.execute("SELECT * FROM earnings").df()
+        assert len(df) == 1  # stare dane zachowane — fetch "zawiodl", jak przy cenach
+
+    def test_translates_ticker_for_yfinance_lookup_but_stores_canonical_name(self, monkeypatch):
+        captured = []
+
+        def fake_fetch(symbol):
+            captured.append(symbol)
+            return [("2025-07-15", 1.0, 1.1, 10.0)]
+
+        monkeypatch.setattr("fetch_data._fetch_earnings_rows_for_ticker", fake_fetch)
+        monkeypatch.setattr("fetch_data.time.sleep", lambda _: None)
+        con = duckdb.connect(":memory:")
+
+        update_earnings(con, ["BRKB"])
+
+        assert captured == ["BRK-B"]  # yfinance dostaje przetlumaczony symbol
+        df = con.execute("SELECT * FROM earnings").df()
+        assert list(df["Ticker"]) == ["BRKB"]  # ale zapisany pod kanonicznym tickerem
 
 
 def _make_prices_con(rows):
