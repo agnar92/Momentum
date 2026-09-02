@@ -14,6 +14,7 @@ from fetch_data import (
     _ensure_prices_ohlc_columns,
     _find_column,
     _parse_money,
+    _prices_history_is_shallow,
     _prices_table_has_rows,
     _to_yf_symbol,
     _upsert_price_rows,
@@ -353,6 +354,31 @@ class TestPricesTableHasRows:
     def test_true_when_table_has_rows(self):
         con = _make_prices_con([("2024-01-02", "AAA", 10.0, 10.0, 100)])
         assert _prices_table_has_rows(con) is True
+
+
+class TestPricesHistoryIsShallow:
+    def test_true_when_table_is_empty(self):
+        con = _make_prices_con([])
+        assert _prices_history_is_shallow(con, lookback_months=22) is True
+
+    def test_true_when_oldest_row_does_not_reach_the_requested_lookback(self):
+        # Baza ma tylko ~15 mies. historii, ale skonfigurowano 22 mies. retencji
+        # (np. baza zapisana przed wydluzeniem --lookback-months) -> plytka.
+        oldest = (pd.Timestamp.today() - pd.DateOffset(months=15)).strftime('%Y-%m-%d')
+        con = _make_prices_con([(oldest, "AAA", 10.0, 10.0, 100)])
+        assert _prices_history_is_shallow(con, lookback_months=22) is True
+
+    def test_false_when_oldest_row_reaches_the_requested_lookback(self):
+        oldest = (pd.Timestamp.today() - pd.DateOffset(months=23)).strftime('%Y-%m-%d')
+        con = _make_prices_con([(oldest, "AAA", 10.0, 10.0, 100)])
+        assert _prices_history_is_shallow(con, lookback_months=22) is False
+
+    def test_false_within_the_14_day_margin_of_the_requested_lookback(self):
+        # Rozjazd rzedu pojedynczych dni (np. weekend/swieto na granicy okna) nie
+        # powinien wywolywac pelnego re-bootstrapu.
+        oldest = (pd.Timestamp.today() - pd.DateOffset(months=22) + pd.Timedelta(days=5)).strftime('%Y-%m-%d')
+        con = _make_prices_con([(oldest, "AAA", 10.0, 10.0, 100)])
+        assert _prices_history_is_shallow(con, lookback_months=22) is False
 
 
 class TestUpsertPriceRows:

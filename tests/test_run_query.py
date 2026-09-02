@@ -1033,21 +1033,24 @@ class TestComputeMansfieldRsChart:
     def test_short_and_medium_rsm_have_values_from_first_displayed_week(self):
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
-        display_start = ref_date - pd.Timedelta(weeks=26)
-        # Dane siegaja 44 tyg. PRZED display_start -> wiecej niz potrzebny zapas
+        # start_date jest teraz PRZEKAZYWANY (to samo okno momentum co
+        # compute_relative_strength_chart), nie liczony wewnetrznie z ref_date.
+        start_date = ref_date - pd.Timedelta(weeks=26)
+        # Dane siegaja 44 tyg. PRZED start_date -> wiecej niz potrzebny zapas
         # (RS_MANSFIELD_MEDIUM_WEEKS - 1 = 25 tyg.), zeby oba wygladzenia mialy juz
-        # wartosc na pierwszym WYSWIETLANYM tygodniu (display_start), nie dopiero
+        # wartosc na pierwszym WYSWIETLANYM tygodniu (start_date), nie dopiero
         # pare miesiecy pozniej.
-        fixture_start = display_start - pd.Timedelta(weeks=44)
+        fixture_start = start_date - pd.Timedelta(weeks=44)
         # AAA rosnie proporcjonalnie szybciej niz NASDAQ100 (1/100 vs 0.3/200
         # tygodniowo) -> RS (cena/indeks) systematycznie przyspiesza.
         insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 75, 100.0, 1.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
                               fixture_start.strftime("%Y-%m-%d"), 75, 200.0, 0.3)
 
-        out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"))
+        out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                          start_date.strftime("%Y-%m-%d"))
         assert out is not None
-        assert out["dates"][0] == display_start.strftime("%Y-%m-%d")
+        assert out["dates"][0] == start_date.strftime("%Y-%m-%d")
         assert out["rsm_short"][0] is not None
         assert out["rsm_medium"][0] is not None
         # RS przyspiesza -> pod koniec okna oba wygladzenia sa dodatnie (RS powyzej
@@ -1058,16 +1061,17 @@ class TestComputeMansfieldRsChart:
     def test_insufficient_lookback_leaves_medium_none_but_short_populated(self):
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
-        display_start = ref_date - pd.Timedelta(weeks=26)
-        # 15 tyg. historii PRZED display_start: wystarczy na krotkoterminowe
+        start_date = ref_date - pd.Timedelta(weeks=26)
+        # 15 tyg. historii PRZED start_date: wystarczy na krotkoterminowe
         # wygladzenie (potrzeba RS_MANSFIELD_SHORT_WEEKS - 1 = 12 tyg.), za malo na
         # srednioterminowe (potrzeba RS_MANSFIELD_MEDIUM_WEEKS - 1 = 25 tyg.).
-        fixture_start = display_start - pd.Timedelta(weeks=15)
+        fixture_start = start_date - pd.Timedelta(weeks=15)
         insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 42, 100.0, 1.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
                               fixture_start.strftime("%Y-%m-%d"), 42, 200.0, 0.3)
 
-        out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"))
+        out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                          start_date.strftime("%Y-%m-%d"))
         assert out is not None
         assert out["rsm_short"][0] is not None
         assert out["rsm_medium"][0] is None
@@ -1075,12 +1079,12 @@ class TestComputeMansfieldRsChart:
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100", "2025-01-06", 60, 200.0, 0.3)
-        assert compute_mansfield_rs_chart(con, "NOPE", "NASDAQ100", "2026-03-30") is None
+        assert compute_mansfield_rs_chart(con, "NOPE", "NASDAQ100", "2026-03-30", "2025-10-06") is None
 
     def test_no_index_history_returns_none(self):
         con = make_gem_con()
         insert_weekly_series(con, "prices", "Ticker", "AAA", "2025-01-06", 60, 100.0, 1.0)
-        assert compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", "2026-03-30") is None
+        assert compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", "2026-03-30", "2025-10-06") is None
 
 
 # ---------------------------------------------------------------------------

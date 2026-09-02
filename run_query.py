@@ -48,9 +48,10 @@ metodologii S&P Momentum Indices):
     1/2A/2B/3/4), sygnal wejscia/wyjscia i potwierdzenie wolumenem (volume/
     volume_ratio/stage/signal — patrz _compute_weinstein_stage_series) — patrz
     compute_relative_strength_chart — oraz "mansfield_chart": oscylator Mansfield RS
-    w dwoch wygladzeniach (krotkoterminowym ~3 mies. i srednioterminowym ~6 mies.) na
-    WLASNYM, znacznie krotszym oknie (ostatnie ~6 mies., odczepione od okna momentum) —
-    patrz compute_mansfield_rs_chart — do wykresu innego niz TradingView. Te same dwa
+    w dwoch wygladzeniach (krotkoterminowym ~3 mies. i srednioterminowym ~6 mies.), od
+    poczatku TEGO SAMEGO okna momentum co "wykres 10:30" (patrz compute_mansfield_rs_chart
+    i fetch_data.py --lookback-months o retencji `prices` wystarczajacej na zapas
+    rozgrzewkowy przed poczatkiem okna) — do wykresu innego niz TradingView. Te same dwa
     pola sa tez doliczane KAZDEJ spolce w glownym eksporcie per-uniwersum (nie tylko
     liderom RS, patrz pkt 8/process_universe) — na dashboardzie przelacznik "Sila
     Relatywna" jest wiec dostepny dla kazdej spolki, nie tylko tych z panelu RS.
@@ -394,7 +395,8 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
         for ticker in df_weighted["Ticker"]:
             weekly_charts[ticker] = compute_relative_strength_chart(con, ticker, universe,
                                                                        ref_date, index_mom["date_start"])
-            mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe, ref_date)
+            mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
+                                                                     ref_date, index_mom["date_start"])
 
     # --- Eksport JSON dla strony ---
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
@@ -1366,12 +1368,11 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     }
 
 
-RS_MANSFIELD_DISPLAY_WEEKS = 26   # oscylator pokazuje ostatnie ~6 mies. (NIE okno momentum_value)
 RS_MANSFIELD_SHORT_WEEKS = 13     # wygladzanie krotkoterminowe, ~3 mies.
 RS_MANSFIELD_MEDIUM_WEEKS = 26    # wygladzanie srednioterminowe, ~6 mies.
 
 
-def compute_mansfield_rs_chart(con, ticker, universe, ref_date):
+def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     """Oscylator Mansfield Relative Strength (RSM = (RS / SMA(RS, N tyg.) - 1) * 100,
     gdzie RS = cena_spółki / poziom_indeksu — surowa linia RS Weinsteina) w DWÓCH
     wariantach wygładzania na jednym wykresie: krótkoterminowym
@@ -1380,20 +1381,25 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date):
     sygnału (krótkoterminowe przyspieszenie/spowolnienie potrafi wyprzedzać albo
     rozjeżdżać się ze średnioterminowym trendem, więc warto widzieć oba naraz).
 
-    Celowo ODCZEPIONY od okna momentum_value (M-14/M-2) używanego w
-    compute_relative_strength_chart: wyświetlany zakres to własne, znacznie krótsze
-    ostatnie RS_MANSFIELD_DISPLAY_WEEKS (~6 mies.) liczone od ref_date, żeby oba
-    wygładzenia (zwłaszcza 26-tyg.) miały realny zapas historii PRZED pierwszym
-    wyświetlanym tygodniem — łącznie potrzeba tylko
-    RS_MANSFIELD_DISPLAY_WEEKS + RS_MANSFIELD_MEDIUM_WEEKS (~52 tyg. = ok. rok), co
-    mieści się w rolling ~15-miesięcznym oknie `prices` z zapasem. Gdyby ten oscylator
-    używał (jak wcześniej) 52-tygodniowego wygładzania na tle 12-14-miesięcznego okna
-    momentum, potrzebowałby ~26,5 miesiąca historii — dlatego usunięto tamtą wersję
-    (patrz commit historia) i tutaj świadomie użyto krótszych, własnych okien.
+    Wyświetlany zakres to TERAZ dokładnie to samo okno momentum_value (M-14/M-2, albo
+    M-11 przy fallbacku — `start_date`, patrz compute_index_momentum) co
+    compute_relative_strength_chart, nie własne, krótsze ostatnie ~6 mies. jak w
+    poprzedniej wersji (patrz historia gita) — to poprzednie ograniczenie było
+    konsekwencją płytkiej ~15-miesięcznej retencji `prices`: 52-tygodniowe
+    wygładzanie na tle 12-14-miesięcznego okna momentum potrzebowało ~26,5 miesiąca
+    historii, więc oscylator wychodził pusty dla większości okna w produkcji. Od
+    momentu wydłużenia retencji `prices` (patrz fetch_data.py --lookback-months,
+    domyślnie 22 mies. = 14-miesięczne okno + ~7-miesięczny zapas rozgrzewkowy) to
+    się już mieści, więc oba wykresy ("10:30" i Mansfield) pokazują dokładnie ten
+    sam zakres dat, zamiast dwóch różnych skal jak wcześniej.
+
+    Pobiera dodatkowy zapas RS_MANSFIELD_MEDIUM_WEEKS + 2 tygodni PRZED start_date
+    (analogicznie do RS_PRICE_SMA_LONG_WEEKS w compute_relative_strength_chart), żeby
+    26-tygodniowe wygładzanie miało już wartość od pierwszego wyświetlanego tygodnia.
 
     Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii cen)."""
-    lookback_weeks = RS_MANSFIELD_DISPLAY_WEEKS + RS_MANSFIELD_MEDIUM_WEEKS + 2
-    extended_start = (pd.Timestamp(ref_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
+    lookback_weeks = RS_MANSFIELD_MEDIUM_WEEKS + 2
+    extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
     stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
     index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, extended_start, ref_date)
@@ -1407,8 +1413,7 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date):
     stock_df["rsm_short"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_SHORT_WEEKS).mean() - 1) * 100
     stock_df["rsm_medium"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_MEDIUM_WEEKS).mean() - 1) * 100
 
-    display_start = pd.Timestamp(ref_date) - pd.Timedelta(weeks=RS_MANSFIELD_DISPLAY_WEEKS)
-    in_window = stock_df[stock_df["week_start"] >= display_start]
+    in_window = stock_df[stock_df["week_start"] >= pd.Timestamp(start_date)]
     if in_window.empty:
         return None
 
@@ -1453,7 +1458,8 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
         for leader in leaders:
             leader["weekly_chart"] = compute_relative_strength_chart(con, leader["ticker"], universe,
                                                                        ref_date, index_mom["date_start"])
-            leader["mansfield_chart"] = compute_mansfield_rs_chart(con, leader["ticker"], universe, ref_date)
+            leader["mansfield_chart"] = compute_mansfield_rs_chart(con, leader["ticker"], universe,
+                                                                     ref_date, index_mom["date_start"])
         universes_payload[universe] = {
             "index_return_pct": index_return_pct,
             "momentum_window": index_mom["momentum_window"],
@@ -1480,8 +1486,8 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "wszystko przeliczone na % zmiany względem początku okna (pola close_pct/sma10_pct/"
                  "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
                  "'mansfield_chart': oscylator Mansfield Relative Strength w DWÓCH wygładzeniach "
-                 "(rsm_short ~3 mies., rsm_medium ~6 mies.), na WŁASNYM ostatnim ~6-miesięcznym oknie "
-                 "(nie tym samym co momentum_value/weekly_chart) — patrz compute_mansfield_rs_chart. "
+                 "(rsm_short ~3 mies., rsm_medium ~6 mies.), od początku TEGO SAMEGO okna co weekly_chart "
+                 "— patrz compute_mansfield_rs_chart. "
                  "Do wykresu innego niż TradingView na dashboardzie. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
     }
