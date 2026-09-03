@@ -719,9 +719,27 @@ th.tv-col { width: 1%; }
    initResetZoomButton) do cofnięcia interaktywnego zoom/pan wykresu 10:30. */
 .chart-mode-toggle {
     display: flex;
+    align-items: center;
     gap: 6px;
     margin-bottom: 8px;
     flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+/* Ticker + uniwersum (+ sektor) aktualnie wybranej spółki — po prawo od
+   przycisków TV / Resetuj zoom, żeby na PWA/mobile było od razu widać, na
+   który wykres się patrzy (patrz updateChartTickerLabel w app.js). */
+.chart-ticker-label {
+    margin-left: auto;
+    padding-left: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    text-align: right;
 }
 
 .chart-mode-btn {
