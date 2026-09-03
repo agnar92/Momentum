@@ -156,6 +156,27 @@ being left alone.
    - Exports `docs/data/{universe}.json` (per-universe constituent list) and `docs/data/all_prices.json`
      (latest price for every ticker across all indices, so the rebalance panel can price
      positions that aren't in the current momentum selection).
+   - Each `docs/data/{universe}.json` also carries an `all_constituents` list (`FULL_COVERAGE_UNIVERSES`,
+     `_build_full_universe_records`) — for **SP500 and NASDAQ100** specifically (`set(UNIVERSES) -
+     EQUAL_WEIGHT_UNIVERSES`), this is every constituent that passes `get_universe_metrics`' eligibility
+     filter, each with its own `weekly_chart`/`mansfield_chart`, not just the ones that made the current
+     top-quintile `constituents` list. This exists because the dashboard's Ctrl+K search
+     (`buildSearchIndex()`) and own-chart lookup (`findRsEntry()`) originally only read `constituents`, so
+     a real S&P 500 name outside the current decile (and not currently an outperformer on the Relative
+     Strength screener either — that list is *also* narrower, see `compute_relative_strength_leaders`
+     below) was simply unfindable anywhere on the site, with no error, no matter how a user tried to look
+     it up — the user explicitly asked for every SP500/NASDAQ100 constituent to be searchable/chartable
+     regardless of decile membership. `EQUAL_WEIGHT_UNIVERSES` (DOWJONES/WIG20/MWIG40) are excluded from
+     this because their `constituents` is already the full universe (no quintile selection to begin with)
+     — `export_json`'s `all_constituents` param defaults to the same records as `constituents` for them,
+     so the frontend can always read `all_constituents` unconditionally, with a `|| constituents` fallback
+     kept only for an older, not-yet-migrated cached JSON. `process_universe_charts_only` (`--charts-only`,
+     see below) does the equivalent full-universe `get_universe_metrics` call too, so the weekly chart
+     refresh keeps `all_constituents` in step with the monthly `process_universe` run rather than shrinking
+     it back down to just the last saved decile selection between rebalances. This roughly 5x's the
+     `weekly_chart`/`mansfield_chart` computation (and JSON payload size) for SP500 specifically (~500
+     constituents vs. ~100 in the decile) — an accepted, deliberate cost of full searchability, not an
+     oversight.
    - Reference date defaults to `MAX(Date)` in the `prices` table; pass `--ref-date YYYY-MM-DD` to
      recompute for a specific historical date.
    - Also computes **Global Equity Momentum** (`docs/data/global_equity_momentum.json`) — see below.

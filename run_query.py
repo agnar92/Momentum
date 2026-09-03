@@ -89,6 +89,15 @@ MAX_HOLDINGS = 100
 # SP500 (jak NASDAQ100) ma realne wagi z 'Market Value' (CSPX_holdings.csv),
 # wiec NIE jest tutaj — kwintylowa selekcja + wagi FMC x momentum_score.
 EQUAL_WEIGHT_UNIVERSES = {"DOWJONES", "WIG20", "MWIG40"}
+# Uniwersa, dla ktorych "docs/data/{universe}.json" eksportuje wykresy (weekly_chart/
+# mansfield_chart) i metryki dla KAZDEJ kwalifikujacej sie spolki (get_universe_metrics),
+# nie tylko tych wybranych do decyla/portfela — na zyczenie uzytkownika, zeby wyszukiwarka
+# (Ctrl+K) i wlasny wykres/RSM dzialaly dla dowolnej spolki z SP500/NASDAQ100, a nie tylko
+# dla aktualnego top-20% momentum albo biezacych liderow ekranu Sily Relatywnej (ktory i tak
+# pokazuje wylacznie biezacych outperformerow, patrz compute_relative_strength_leaders).
+# EQUAL_WEIGHT_UNIVERSES sa tu wykluczone bo dla nich "constituents" JUZ jest calym
+# uniwersum (brak selekcji kwintylowej) — nie ma czego rozszerzac.
+FULL_COVERAGE_UNIVERSES = set(UNIVERSES) - EQUAL_WEIGHT_UNIVERSES
 GEM_LOOKBACK_MONTHS = 12   # okno zwrotu poziomu indeksu dla Global Equity Momentum
 GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy dla zwycieskiego indeksu
 # Global Equity Momentum porownuje TYLKO te 2 uniwersa (rynek USA, rdzen
@@ -404,21 +413,37 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
         print(f"🔁 Turnover vs {prev_ref_date}: {len(added_tickers)} nowych, {len(dropped_tickers)} wypadło "
               f"(z {len(current_tickers)} poprzednich).")
 
-    # --- Wykresy "10:30" + Mansfield RS dla KAŻDEJ spółki w uniwersum (nie tylko
-    # liderów panelu Siły Relatywnej) — to samo okno co index_mom w
-    # export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się okna. ---
+    # --- Wykresy "10:30" + Mansfield RS. Domyślnie dla spółek wybranych do portfela
+    # (df_weighted); dla FULL_COVERAGE_UNIVERSES (SP500/NASDAQ100) DODATKOWO dla KAŻDEJ
+    # kwalifikującej się spółki w całym uniwersum (df_ranked) — na życzenie użytkownika,
+    # żeby wyszukiwarka/własny wykres/RSM działały dla dowolnej spółki, nie tylko
+    # aktualnego decyla albo bieżących liderów ekranu Siły Relatywnej (patrz
+    # FULL_COVERAGE_UNIVERSES/_build_full_universe_records powyżej). To samo okno co
+    # index_mom w export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się
+    # okna. ---
     weekly_charts, mansfield_charts = {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
+    chart_tickers = set(df_weighted["Ticker"])
+    if universe in FULL_COVERAGE_UNIVERSES:
+        chart_tickers |= set(df_ranked["Ticker"])
     if index_mom is not None:
-        for ticker in df_weighted["Ticker"]:
+        for ticker in chart_tickers:
             weekly_charts[ticker] = compute_relative_strength_chart(con, ticker, universe,
                                                                        ref_date, index_mom["date_start"])
             mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
 
+    all_constituents = None
+    if universe in FULL_COVERAGE_UNIVERSES:
+        all_constituents = _build_full_universe_records(df_ranked, selected_tickers,
+                                                          weekly_charts, mansfield_charts)
+        print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked)} spółek "
+              f"(nie tylko {len(selected_tickers)} w decylu).")
+
     # --- Eksport JSON dla strony ---
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
-                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts)
+                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
+                all_constituents=all_constituents)
 
     return df_weighted
 
@@ -433,7 +458,8 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
 # schemat docs/data/{universe}.json (i cap_scaled_due_to_infeasibility, patrz
 # migracja kolumny w portfolio_history wyzej) zostaje identyczny.
 # ============================================================================
-def process_universe_charts_only(con, universe, ref_date, docs_data_dir):
+def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
+                                  min_trading_days=150, max_staleness_days=10):
     print(f"\n{'=' * 70}\n▶ {universe} (tylko wykresy — bez zmiany selekcji/wag)\n{'=' * 70}")
 
     # Patrz docstring _ensure_portfolio_history_schema: ta ścieżka może być
@@ -503,27 +529,77 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir):
         added_tickers = sorted(set(df_sel["Ticker"]) - prev_tickers)
         dropped_tickers = sorted(prev_tickers - set(df_sel["Ticker"]))
 
+    # Dla FULL_COVERAGE_UNIVERSES (SP500/NASDAQ100) dolicz TEZ pelne, biezace uniwersum
+    # (get_universe_metrics @ ref_date — dzisiejsze ceny, nie last_ref_date rebalansu),
+    # zeby cotygodniowe odswiezenie wykresow (weekly_charts.yml) trzymalo w rowni
+    # "all_constituents" z pelnym miesiecznym przebiegiem process_universe, a nie tylko
+    # zawezalo je z powrotem do samej zapisanej selekcji az do nastepnego rebalansu.
+    df_ranked_full = None
+    if universe in FULL_COVERAGE_UNIVERSES:
+        df_metrics_full = get_universe_metrics(con, universe, ref_date, min_trading_days, max_staleness_days)
+        if not df_metrics_full.empty:
+            df_ranked_full = add_zscore_and_momentum_score(df_metrics_full)
+
     weekly_charts, mansfield_charts = {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
+    chart_tickers = set(df_sel["Ticker"])
+    if df_ranked_full is not None:
+        chart_tickers |= set(df_ranked_full["Ticker"])
     if index_mom is not None:
-        for ticker in df_sel["Ticker"]:
+        for ticker in chart_tickers:
             weekly_charts[ticker] = compute_relative_strength_chart(con, ticker, universe,
                                                                        ref_date, index_mom["date_start"])
             mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
+
+    all_constituents = None
+    if df_ranked_full is not None:
+        all_constituents = _build_full_universe_records(df_ranked_full, set(df_sel["Ticker"]),
+                                                          weekly_charts, mansfield_charts)
+        print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked_full)} spółek "
+              f"(nie tylko {len(df_sel)} w ostatniej zapisanej selekcji).")
 
     # ref_date przekazywany do export_json to last_ref_date (data OSTATNIEGO
     # rebalansu, nie dzisiejsza) — pole "ref_date" w JSON-ie zasila etykiete
     # "Rebalans: ..." na dashboardzie (patrz app.js), ktora ma nadal pokazywac
     # date faktycznej (miesiecznej) selekcji, nie date odswiezenia wykresow.
     export_json(df_sel, universe, last_ref_date, docs_data_dir, n_missing_fmc,
-                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts)
+                prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
+                all_constituents=all_constituents)
     return df_sel
+
+
+def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts):
+    """Rekord dla KAZDEJ kwalifikujacej sie spolki w uniwersum (df_ranked — wynik
+    get_universe_metrics + add_zscore_and_momentum_score), nie tylko tych wybranych do
+    decyla/portfela — patrz FULL_COVERAGE_UNIVERSES. Zasila "all_constituents" w
+    docs/data/{universe}.json: wyszukiwarke (Ctrl+K) i wlasny wykres/RSM dla dowolnej
+    spolki. "rank" to miejsce w rankingu momentum_score CALEGO uniwersum (kolumna "rank"
+    z add_zscore_and_momentum_score) — inne pojecie niz "rank"/"rank_in_universe" w
+    "constituents", ktore liczy sie tylko wsrod wybranych/wazonych. "in_selection" mowi,
+    czy dany ticker jest akurat w biezacym decylu (te same tickery co "constituents")."""
+    records = []
+    for _, r in df_ranked.iterrows():
+        records.append({
+            "rank": int(r["rank"]),
+            "ticker": r["Ticker"],
+            "sector": r["Sector"],
+            "price": round(float(r["price_now"]), 2),
+            "momentum_pct": round(float(r["momentum_value"]) * 100, 2),
+            "momentum_window": r["momentum_window"],
+            "volatility_pct": round(float(r["annualized_volatility"]) * 100, 2),
+            "z_score": round(float(r["z_score"]), 3),
+            "momentum_score": round(float(r["momentum_score"]), 3),
+            "in_selection": bool(r["Ticker"] in selected_tickers),
+            "weekly_chart": weekly_charts.get(r["Ticker"]),
+            "mansfield_chart": mansfield_charts.get(r["Ticker"]),
+        })
+    return records
 
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                  prev_ref_date=None, added_tickers=None, dropped_tickers=None,
-                 weekly_charts=None, mansfield_charts=None):
+                 weekly_charts=None, mansfield_charts=None, all_constituents=None):
     weekly_charts = weekly_charts or {}
     mansfield_charts = mansfield_charts or {}
     records = []
@@ -571,6 +647,12 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
         "n_missing_fmc": int(n_missing_fmc),
         "cap_scaled_due_to_infeasibility": cap_scaled,
         "constituents": records,
+        # Pelne uniwersum (patrz FULL_COVERAGE_UNIVERSES/_build_full_universe_records) —
+        # gdy nie przekazano jawnie (bo universe nie jest w FULL_COVERAGE_UNIVERSES),
+        # domyslnie rowne "constituents", bo dla EQUAL_WEIGHT_UNIVERSES to juz i tak jest
+        # cale uniwersum (brak selekcji kwintylowej). Front-end (wyszukiwarka Ctrl+K,
+        # wlasny wykres/RSM) moze wiec zawsze czytac "all_constituents" bez fallbacku.
+        "all_constituents": all_constituents if all_constituents is not None else records,
         "prev_ref_date": str(prev_ref_date) if prev_ref_date is not None else None,
         "added_tickers": added_tickers or [],
         "dropped_tickers": dropped_tickers or [],
@@ -1729,7 +1811,9 @@ def main():
         Path(docs_data_dir).mkdir(parents=True, exist_ok=True)
 
         for universe in UNIVERSES:
-            process_universe_charts_only(con, universe, ref_date, docs_data_dir)
+            process_universe_charts_only(con, universe, ref_date, docs_data_dir,
+                                          min_trading_days=args.min_trading_days,
+                                          max_staleness_days=args.max_staleness_days)
 
         export_all_prices(con, ref_date, docs_data_dir)
         con.close()
