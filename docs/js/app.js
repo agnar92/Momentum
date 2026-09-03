@@ -367,6 +367,25 @@ function updateChartArea() {
         if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
         if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
     }
+    updateChartTickerLabel();
+}
+
+// Ticker + uniwersum (+ sektor, gdy znany) wybranej spółki, wyświetlane po
+// prawo od przycisków "Otwórz w TradingView" / "Resetuj zoom" — na telefonie
+// (PWA) wykres zajmuje cały ekran i bez tego nie widać, na co się patrzy.
+function updateChartTickerLabel() {
+    const label = document.getElementById("chartTickerLabel");
+    if (!label) return;
+    const ticker = state.selectedTicker;
+    if (!ticker) {
+        label.textContent = "";
+        return;
+    }
+    const parts = [ticker];
+    const universe = state.selectedUniverse;
+    if (universe && UNIVERSE_LABELS[universe]) parts.push(UNIVERSE_LABELS[universe].replace(" Momentum", ""));
+    if (state.currentRsEntry && state.currentRsEntry.sector) parts.push(state.currentRsEntry.sector);
+    label.textContent = parts.join(" · ");
 }
 
 function initOpenTvButton() {
