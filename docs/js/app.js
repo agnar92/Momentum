@@ -572,10 +572,12 @@ function syncChartsCrosshair(charts) {
 
 // Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
 // stage analysis (Stan Weinstein / Dr Eric Wish):
-// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. i poziom
-//    własnego indeksu, wszystko przeliczone na % zmiany względem pierwszego
-//    wyświetlanego tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart)
-//    — jedna wspólna skala, żeby jednym spojrzeniem było widać, która linia
+// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. + VWAP
+//    zakotwiczony na początku okna (fioletowa przerywana linia, patrz
+//    "vwap_pct" w compute_relative_strength_chart) i poziom własnego indeksu,
+//    wszystko przeliczone na % zmiany względem pierwszego wyświetlanego
+//    tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart) — jedna
+//    wspólna skala, żeby jednym spojrzeniem było widać, która linia
 //    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku. NIE ma
 //    tu już znaczników wejścia/wyjścia ani linii trailing stop-loss (usunięte —
 //    zbyt duzo nakładających się elementów na jednym wykresie) — zamiast tego
@@ -665,6 +667,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 },
                 { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2], order: 1 },
                 { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
+                { label: "VWAP (od początku okna)", data: chartData.vwap_pct, borderColor: "#c084fc", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 2], order: 1 },
                 { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, order: 1 },
             ],
         },
