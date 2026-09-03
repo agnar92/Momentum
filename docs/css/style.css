@@ -591,6 +591,11 @@ th.tv-col { width: 1%; }
     flex-direction: column;
 }
 
+/* [hidden] jawnie, z tego samego powodu co .stage-filter-bar[hidden] powyżej
+   (dwie zakładki .chart-panel — własny wykres / TradingView — dzielą to samo
+   ".chart-panel { display: flex }", które inaczej biłoby regułę UA). */
+.chart-panel[hidden] { display: none; }
+
 .chart-panel-header {
     padding: 6px 12px;
     font-size: 11px;
@@ -774,6 +779,53 @@ th.tv-col { width: 1%; }
     flex-shrink: 0;
 }
 .chart-back-btn:hover { border-color: var(--green); }
+
+/* Zakładki przełączające obszar wykresu między własnym wykresem stage-analysis
+   (domyślny) a osadzonymi widgetami TradingView (notowanie, profil spółki,
+   dane fundamentalne) — patrz initChartViewTabs/renderTvOverviewPanel w app.js. */
+.chart-view-tabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.chart-view-tab {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.chart-view-tab.active {
+    background: var(--panel);
+    color: var(--green-bright);
+    border-color: var(--green);
+}
+
+/* Trzy widgety TradingView jeden pod drugim (notowanie, profil spółki, dane
+   fundamentalne) — każdy w osobnym tradingview-widget-container, patrz
+   renderTvOverviewPanel w app.js. overflow-y: auto z tego samego powodu co
+   .rs-chart-container powyżej (widgety mają stałą wysokość, telefon ma
+   sztywną wysokość .charts-area). */
+.tv-overview-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    overflow-y: auto;
+}
+
+.tv-widget-block {
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+}
 
 /* Pełnoekranowy tryb wykresu 10:30 (#chartFullscreenBtn, patrz
    initChartFullscreen w app.js) — świadomie CSS-owy nakładany kontener

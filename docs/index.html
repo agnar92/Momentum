@@ -193,7 +193,11 @@
             </button>
             <div class="chart-ticker-label" id="chartTickerLabel"></div>
         </div>
-        <div class="chart-panel">
+        <div class="chart-view-tabs" id="chartViewTabs">
+            <button class="chart-view-tab active" id="chartViewTabOwn" data-view="own">📊 Wykres własny</button>
+            <button class="chart-view-tab" id="chartViewTabTv" data-view="tv">🏢 Dane spółki (TradingView)</button>
+        </div>
+        <div class="chart-panel" id="chartPanelOwn">
             <div class="chart-container rs-chart-container" id="rs_chart">
                 <div class="stage-badge" id="stageBadge"></div>
                 <div class="chart-fullscreen-extras" id="chartFullscreenExtras" hidden>
@@ -222,6 +226,11 @@
                     jaśniejszy zielony słupek = wybicie potwierdzone wolumenem kupujących &nbsp;·&nbsp;
                     kółko myszy / uszczypnięcie = zoom, przeciąganie = przesuwanie
                 </div>
+            </div>
+        </div>
+        <div class="chart-panel" id="chartPanelTv" hidden>
+            <div class="chart-container tv-overview-container" id="tvOverviewContainer">
+                <div class="empty-state" id="tvOverviewEmpty" hidden>Wybierz spółkę, żeby zobaczyć jej dane na TradingView.</div>
             </div>
         </div>
     </div>

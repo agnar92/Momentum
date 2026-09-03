@@ -26,6 +26,89 @@ function tvUrlFor(ticker, universe) {
     return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbolFor(ticker, universe))}`;
 }
 
+// ============================================================
+// PANEL "Dane spółki (TradingView)" — trzy darmowe, osadzone widgety
+// TradingView (notowanie, profil spółki, dane fundamentalne), osobne od
+// widgetu Advanced Chart, który był kiedyś testowany i usunięty (patrz
+// CLAUDE.md: limity konta darmowego przy dodawaniu symbolu porównawczego).
+// Te widgety nie dodają symbolu porównawczego, więc ten problem ich nie
+// dotyczy — ale to nadal zewnętrzny <script>, ładowany od nowa przy każdej
+// zmianie tickera (embed TradingView nie ma API do podmiany symbolu w locie),
+// patrz renderTvOverviewPanel.
+// ============================================================
+const TV_WIDGET_SPECS = [
+    { src: "https://s3.tradingview.com/external-embedding/embed-widget-symbol-info.js", height: null },
+    { src: "https://s3.tradingview.com/external-embedding/embed-widget-symbol-profile.js", height: 400 },
+    { src: "https://s3.tradingview.com/external-embedding/embed-widget-financials.js", height: 550 },
+];
+
+function buildTvWidgetBlock(spec, tvSymbol) {
+    const block = document.createElement("div");
+    block.className = "tv-widget-block";
+    const container = document.createElement("div");
+    container.className = "tradingview-widget-container";
+    const widgetDiv = document.createElement("div");
+    widgetDiv.className = "tradingview-widget-container__widget";
+    container.appendChild(widgetDiv);
+
+    const config = {
+        symbol: tvSymbol,
+        width: "100%",
+        locale: "pl",
+        colorTheme: "dark",
+        isTransparent: false,
+    };
+    if (spec.height) config.height = spec.height;
+
+    const script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src = spec.src;
+    script.async = true;
+    script.textContent = JSON.stringify(config);
+    container.appendChild(script);
+
+    block.appendChild(container);
+    return block;
+}
+
+// Przebudowuje CAŁĄ zawartość panelu TV (nie da się podmienić symbolu w już
+// zainicjalizowanym widgecie TradingView) — wołane przy przełączeniu na
+// zakładkę "Dane spółki" i przy każdej zmianie wybranego tickera, o ile ta
+// zakładka jest akurat aktywna (patrz updateChartArea/state.chartView).
+function renderTvOverviewPanel(ticker, universe) {
+    const container = document.getElementById("tvOverviewContainer");
+    const empty = document.getElementById("tvOverviewEmpty");
+    if (!container) return;
+    container.querySelectorAll(".tv-widget-block").forEach(el => el.remove());
+    if (!ticker) {
+        if (empty) empty.hidden = false;
+        return;
+    }
+    if (empty) empty.hidden = true;
+    const tvSymbol = tvSymbolFor(ticker, universe);
+    TV_WIDGET_SPECS.forEach(spec => container.appendChild(buildTvWidgetBlock(spec, tvSymbol)));
+}
+
+function initChartViewTabs() {
+    const tabOwn = document.getElementById("chartViewTabOwn");
+    const tabTv = document.getElementById("chartViewTabTv");
+    const panelOwn = document.getElementById("chartPanelOwn");
+    const panelTv = document.getElementById("chartPanelTv");
+    if (!tabOwn || !tabTv || !panelOwn || !panelTv) return;
+
+    function setView(view) {
+        state.chartView = view;
+        tabOwn.classList.toggle("active", view === "own");
+        tabTv.classList.toggle("active", view === "tv");
+        panelOwn.hidden = view !== "own";
+        panelTv.hidden = view !== "tv";
+        if (view === "tv") renderTvOverviewPanel(state.selectedTicker, state.selectedUniverse);
+    }
+
+    tabOwn.addEventListener("click", () => setView("own"));
+    tabTv.addEventListener("click", () => setView("tv"));
+}
+
 // Mały przycisk-link "TV" do wiersza tabeli — otwiera tradingview.com w nowej
 // karcie, bez zaznaczania wiersza (stopPropagation, zeby klik nie odpalal tez
 // selectTicker na <tr>).
@@ -50,6 +133,7 @@ const state = {
     currentRsEntry: null,
     drawerOpen: false,
     drawerUniverse: "SP500",
+    chartView: "own",
     stageFilter: "ALL",
     sortKey: "rank",
     sortDir: "asc"
@@ -377,6 +461,7 @@ function updateChartArea() {
         if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
     }
     updateChartTickerLabel();
+    if (state.chartView === "tv") renderTvOverviewPanel(symbol, state.selectedUniverse);
 }
 
 // Ticker + uniwersum (+ sektor, gdy znany) wybranej spółki, wyświetlane po
@@ -1318,6 +1403,7 @@ if (typeof document !== "undefined") {
         initDrawer();
         initOpenTvButton();
         initResetZoomButton();
+        initChartViewTabs();
         initChartFullscreen();
         initStageFilter();
         updateSortHeaderClasses();
