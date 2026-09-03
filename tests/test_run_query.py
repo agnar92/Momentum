@@ -704,6 +704,50 @@ class TestComputeRelativeStrengthChart:
         # Spolka silniejsza od rynku w tym oknie -> konczy powyzej linii indeksu.
         assert out["close_pct"][-1] > out["index_pct"][-1]
 
+    def test_vwap_pct_is_anchored_at_window_start_not_the_sma_warmup_buffer(self):
+        # VWAP jest ZAKOTWICZONY (anchored) na start_date, celowo inaczej niz
+        # sma10_pct/sma30_pct, ktore licza sie na buforze SPRZED start_date (patrz
+        # docstring compute_relative_strength_chart) -> pierwszy wyswietlany
+        # tydzien musi dawac 0% (VWAP tego tygodnia = jego wlasne zamkniecie =
+        # close0), niezaleznie od tego, co dzialo sie w buforze rozgrzewkowym.
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")
+        ref_date = pd.Timestamp("2026-01-26")
+        fixture_start = start_date - pd.Timedelta(weeks=32)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 36, 200.0, 0.3)
+        # Bufor rozgrzewkowy (przed start_date) ma inna cene/wolumen niz okno
+        # wyswietlane, zeby test faktycznie wykryl, gdyby VWAP przez pomylke
+        # wciagnal dane sprzed start_date.
+        con.executemany(
+            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)",
+            [(d.strftime("%Y-%m-%d"), "AAA", 500.0, 500.0, 999)
+             for d in pd.date_range(fixture_start, periods=32, freq="7D")],
+        )
+        # Okno wyswietlane: 4 tygodnie o roznych cenach/wolumenach -> VWAP liczony
+        # recznie do porownania.
+        window_closes = [100.0, 110.0, 90.0, 120.0]
+        window_volumes = [10, 20, 5, 15]
+        con.executemany(
+            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)",
+            [(d.strftime("%Y-%m-%d"), "AAA", c, c, v)
+             for d, c, v in zip(pd.date_range(start_date, periods=4, freq="7D"), window_closes, window_volumes)],
+        )
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                                start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert len(out["vwap_pct"]) == 4
+        # Tydzien 1: VWAP = wlasne zamkniecie = close0 -> 0%.
+        assert out["vwap_pct"][0] == 0.0
+        # Reczne wyliczenie anchored VWAP (narastajaco od start_date, BEZ bufora):
+        cum_pv, cum_vol, expected = 0.0, 0.0, []
+        for c, v in zip(window_closes, window_volumes):
+            cum_pv += c * v
+            cum_vol += v
+            expected.append(round((cum_pv / cum_vol / window_closes[0] - 1) * 100, 2))
+        assert out["vwap_pct"] == expected
+
     def test_insufficient_lookback_leaves_first_week_sma30_as_none(self):
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")

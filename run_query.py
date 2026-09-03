@@ -1384,7 +1384,21 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     "base_count", "kind"}], gdzie *_pct to ten sam close0-relatywny % co close_pct.
     Tylko bazy, których tydzień wybicia mieści się w wyświetlanym oknie (start_date
     może sięgać wstecz w bufor rozgrzewkowy SMA — wtedy przycinana do pierwszego
-    wyświetlanego tygodnia)."""
+    wyświetlanego tygodnia).
+
+    "vwap_pct" — Volume-Weighted Average Price ZAKOTWICZONY (anchored) na
+    początku WYŚWIETLANEGO okna (start_date), nie na buforze rozgrzewkowym SMA:
+    to świadomie inny punkt startowy niż sma10_pct/sma30_pct — anchored VWAP z
+    definicji zaczyna kumulację dokładnie w punkcie zakotwiczenia, więc liczony
+    jest wyłącznie na in_window (te same tygodnie co close_pct), narastająco
+    tydzień po tygodniu: `cumsum(close*volume) / cumsum(volume)`, rebase'owany
+    tym samym close0 co pozostałe linie. Skoro okno momentum (M-14/M-2, rzadziej
+    M-11/M-2) mieści się całe w rolling ~22-miesięcznym `prices` (patrz
+    fetch_data.py --lookback-months), ten anchored VWAP ma dane na CAŁĄ
+    szerokość wykresu, od pierwszego do ostatniego wyświetlanego tygodnia — nie
+    trzeba dodatkowego bufora. Cena = tygodniowe zamknięcie (nie
+    (High+Low+Close)/3) — spójnie z resztą modułu (pudełko Darvasa też celowo
+    pracuje wyłącznie na cenach zamknięcia, nie OHLC)."""
     lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
@@ -1414,6 +1428,18 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         return None
 
     close0 = float(in_window["close"].iloc[0])
+    # VWAP zakotwiczony na poczatku WYSWIETLANEGO okna (start_date), nie na
+    # buforze rozgrzewkowym SMA jak stock_df — to swiadomie inny punkt startowy
+    # niz sma10/sma30 (ktore licza sie na buforze, zeby miec wartosc juz od
+    # pierwszego wyswietlanego tygodnia). Anchored VWAP z definicji zaczyna
+    # akumulacje od swojego punktu zakotwiczenia, wiec liczony jest WYLACZNIE
+    # na in_window (te same tygodnie co close_pct), a nie na stock_df. Cena =
+    # tygodniowe zamkniecie (nie (High+Low+Close)/3) — spojnie z reszta modulu,
+    # ktory (jak pudelko Darvasa) celowo pracuje tylko na cenach zamkniecia.
+    in_window = in_window.copy()
+    cum_pv = (in_window["close"] * in_window["volume"]).cumsum()
+    cum_vol = in_window["volume"].cumsum()
+    in_window["vwap"] = cum_pv / cum_vol.mask(cum_vol == 0)
     index_available = in_window["index_close"].dropna()
     index0 = float(index_available.iloc[0]) if not index_available.empty else None
     # Przesuniecie miedzy indeksami stock_df (pelen szereg z buforem rozgrzewkowym
@@ -1429,7 +1455,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
             return None
         return round((float(value) / base - 1) * 100, 2)
 
-    dates, close_pct, sma10_pct, sma30_pct, index_pct = [], [], [], [], []
+    dates, close_pct, sma10_pct, sma30_pct, index_pct, vwap_pct = [], [], [], [], [], []
     volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
     stop_level_pct, base_count = [], []
     raw_base_events = []
@@ -1439,6 +1465,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         sma10_pct.append(pct(r["sma10"], close0))
         sma30_pct.append(pct(r["sma30"], close0))
         index_pct.append(pct(r["index_close"], index0))
+        vwap_pct.append(pct(r["vwap"], close0))
         volume.append(int(r["volume"]) if pd.notna(r["volume"]) else None)
         buying_volume.append(int(round(r["buying_volume"])) if pd.notna(r["buying_volume"]) else None)
         # UWAGA: r pochodzi z in_window.iterrows() — wiersz miesza kolumny float
@@ -1481,6 +1508,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "sma10_pct": sma10_pct,
         "sma30_pct": sma30_pct,
         "index_pct": index_pct,
+        "vwap_pct": vwap_pct,
         "volume": volume,
         "buying_volume": buying_volume,
         "buying_volume_ratio": buying_volume_ratio,
