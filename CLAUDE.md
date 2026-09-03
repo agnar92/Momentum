@@ -456,14 +456,25 @@ every run (see CI section below) — it isn't hand-maintained.
   "Etap 4"; `state.stageFilter` persists across universe tabs but the bar itself is hidden for the GEM/RS tabs
   (`showDrawerTable()`) since those are already-filtered, different-shaped lists, not a full per-universe
   constituent table. The drawer meta line reports `N z M spółek (etap ...)` when a filter is active, and the
-  empty-state row distinguishes "no data at all" from "no constituent matches this stage". There is
-  **no embedded TradingView chart widget** —
-  it was tried and then removed in favor of always showing the own weekly stage-analysis chart (below) for
-  whichever ticker is selected, with a single `#openTvBtn` button ("📈 Otwórz w TradingView ↗",
-  `initOpenTvButton()` in `app.js`) that opens the *full* tradingview.com chart page for that ticker in a new
-  tab instead (`tvUrlFor()`, built from `tvSymbolFor()` — `https://www.tradingview.com/chart/?symbol=...`) —
-  no `s3.tradingview.com` widget script is loaded at all any more. Every ticker row across the dashboard's
-  tables (the main per-universe table, the GEM table, the RS table — `tvRowButtonHtml()`/`bindTvRowButtons()`)
+  empty-state row distinguishes "no data at all" from "no constituent matches this stage". The chart area is
+  split into two tabs (`#chartViewTabs`/`initChartViewTabs()` in `app.js`): **"📊 Wykres własny"** (default) —
+  the own weekly stage-analysis chart described below, with a single `#openTvBtn` button ("📈 Otwórz w
+  TradingView ↗", `initOpenTvButton()`) that opens the *full* tradingview.com chart page for that ticker in a
+  new tab (`tvUrlFor()`, built from `tvSymbolFor()` — `https://www.tradingview.com/chart/?symbol=...`) — and
+  **"🏢 Dane spółki (TradingView)"** — a full, 1:1 recreation of TradingView's own official "build a page"
+  tutorial layout (`tradingview.com/widget-docs/tutorials/iframe/build-page/demo/`, at the user's explicit
+  request), stacking free `s3.tradingview.com/external-embedding/embed-widget-*.js` widgets top to bottom —
+  Ticker Tape (a fixed benchmark list: `AMEX:SPY`/`NASDAQ:QQQ`/`AMEX:DIA`/`GPW:WIG20`, independent of the
+  selected ticker), Symbol Info, **Advanced Chart**, Company Profile, Financials, then a bottom row (Technical
+  Analysis + a symbol-scoped news Timeline) side by side — see `TV_PAGE_WIDGETS`/`TV_PAGE_WIDGETS_ROW`/
+  `renderTvOverviewPanel()`. Advanced Chart is deliberately back here even though it (as a *different*,
+  standalone widget instance) was tried once before on the main chart panel and removed — that removal was
+  specifically because adding a *compare* symbol to it could hit free-tier account limits; this instance's
+  config never adds a compare symbol, so that failure mode doesn't apply. Since an embedded widget's `<script>`
+  has no API to swap its symbol live, `renderTvOverviewPanel()` tears down and rebuilds every block from
+  scratch on each ticker change (and each tab switch) rather than trying to update one in place. Every ticker
+  row across the dashboard's tables (the main per-universe table, the GEM table, the RS table —
+  `tvRowButtonHtml()`/`bindTvRowButtons()`)
   also carries its own small "TV" button doing the same, independent of selecting the row (it stops click
   propagation so it doesn't also call `selectTicker()`); plus a sidebar group for
   **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each

@@ -827,6 +827,25 @@ th.tv-col { width: 1%; }
     overflow: hidden;
 }
 
+/* Advanced Chart — wyraźnie wyższy niż pozostałe bloki (odpowiednik "duzego"
+   wykresu ze wzorca TradingVista), żeby MACD pod cena mial gdzie oddychac. */
+.tv-widget-block-tall { min-height: 560px; }
+
+/* Dolny wiersz wzorca (Analiza techniczna + oś czasu newsów) obok siebie —
+   flex zamiast media query, żeby responsywność zależała od realnej
+   szerokości panelu wykresu (zmienia się z rozwinięciem/schowaniem
+   sidebara), a nie tylko od szerokości viewportu. */
+.tv-widget-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.tv-widget-row .tv-widget-block {
+    flex: 1 1 340px;
+    min-width: 0;
+}
+
 /* Pełnoekranowy tryb wykresu 10:30 (#chartFullscreenBtn, patrz
    initChartFullscreen w app.js) — świadomie CSS-owy nakładany kontener
    (position: fixed na już istniejącym .rs-chart-container), NIE prawdziwe
