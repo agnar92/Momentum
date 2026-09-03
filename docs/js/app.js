@@ -427,6 +427,15 @@ function jumpToTicker(ticker, universe) {
 // ============================================================
 let rsChartInstance = null;
 
+// Tryb pełnoekranowy wykresu 10:30 (patrz initChartFullscreen) — poza nim
+// wolumen i RSM są zawsze widoczne (jak dotychczas); w środku są domyślnie
+// schowane i włączane osobno przez #toggleVolumeBtn/#toggleMansfieldBtn, żeby
+// na wąskim ekranie telefonu dać głównemu wykresowi (cena + SMA + bazy
+// Darvasa) jak najwięcej miejsca zamiast trzymać wszystkie trzy panele
+// zawsze włączone.
+let chartFullscreenActive = false;
+const chartFullscreenExtras = { volume: false, mansfield: false };
+
 function updateChartArea() {
     const symbol = state.selectedTicker;
     const rsEntry = state.currentRsEntry;
@@ -439,8 +448,8 @@ function updateChartArea() {
     const stageLegend = document.getElementById("stageLegend");
     if (noChartMsg) noChartMsg.hidden = hasRsChart;
     if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
-    if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart;
-    if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart;
+    if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.volume);
+    if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.mansfield);
     if (stageLegend) stageLegend.hidden = !hasRsChart;
 
     if (hasRsChart) {
@@ -485,18 +494,97 @@ function initOpenTvButton() {
 // Resetuje interaktywny zoom/pan (chartjs-plugin-zoom) wykresu 10:30. Panel
 // wolumenu nie ma wlasnego stanu zoom/pan (patrz syncVolumeXRange) — jego os X
 // jest tylko RECZNIE dopasowywana do wykresu 10:30, wiec reset polega na
-// wyczyszczeniu tego recznego min/max, nie na resetZoom().
+// wyczyszczeniu tego recznego min/max, nie na resetZoom(). Wydzielone z
+// initResetZoomButton, żeby ten sam reset dało się wywołać zarówno z
+// #resetZoomBtn (widok normalny) jak i #fsResetZoomBtn (widok pełnoekranowy,
+// patrz initChartFullscreen) — #resetZoomBtn jest niedostępny pod nakładką
+// pełnoekranową, więc potrzebny jest tam własny przycisk.
+function resetChartZoom() {
+    if (rsChartInstance) rsChartInstance.resetZoom();
+    if (rsVolumeChartInstance) {
+        rsVolumeChartInstance.options.scales.x.min = undefined;
+        rsVolumeChartInstance.options.scales.x.max = undefined;
+        rsVolumeChartInstance.update();
+    }
+}
+
 function initResetZoomButton() {
     const btn = document.getElementById("resetZoomBtn");
-    if (!btn) return;
-    btn.addEventListener("click", () => {
-        if (rsChartInstance) rsChartInstance.resetZoom();
-        if (rsVolumeChartInstance) {
-            rsVolumeChartInstance.options.scales.x.min = undefined;
-            rsVolumeChartInstance.options.scales.x.max = undefined;
-            rsVolumeChartInstance.update();
+    if (btn) btn.addEventListener("click", resetChartZoom);
+    const fsBtn = document.getElementById("fsResetZoomBtn");
+    if (fsBtn) fsBtn.addEventListener("click", resetChartZoom);
+}
+
+// Tryb pełnoekranowy — świadomie CSS-owa nakładka (position: fixed na
+// #rs_chart) zamiast prawdziwego Element.requestFullscreen(): w PWA
+// uruchomionym z ekranu głównego na iOS ta przeglądarkowa API bywa
+// niedostępna/rzuca błędem (apka i tak już działa bez chrome'u przeglądarki),
+// więc nakładka position:fixed działa spójnie wszędzie, patrz .chart-fullscreen
+// w style.css. Wolumen/RSM są w tym trybie domyślnie schowane (patrz
+// updateChartArea) i włączane osobno przez #toggleVolumeBtn/#toggleMansfieldBtn.
+//
+// #rs_chart normalnie siedzi wewnątrz .chart-panel/.charts-area, oba z
+// "overflow: hidden" — a to CZYŚCI (przycina) każdego potomka, NAWET z
+// position:fixed, do granic tego przodka (to nie jest kwestia pozycjonowania,
+// tylko malowania). Samo position:fixed + z-index NIE wystarczyłoby więc do
+// prawdziwego pełnego ekranu — dlatego kontener jest tu fizycznie
+// przenoszony do document.body na czas trybu pełnoekranowego (i wracany na
+// dokładnie to samo miejsce przy wyjściu) zamiast polegać na przycinaniu się
+// przodków. Przenoszenie węzła <canvas> w DOM nie czyści jego zawartości ani
+// nie niszczy instancji Chart.js podpiętej do niego.
+function initChartFullscreen() {
+    const container = document.getElementById("rs_chart");
+    const enterBtn = document.getElementById("chartFullscreenBtn");
+    const closeBtn = document.getElementById("chartFullscreenCloseBtn");
+    const extrasBar = document.getElementById("chartFullscreenExtras");
+    const volBtn = document.getElementById("toggleVolumeBtn");
+    const mansfieldBtn = document.getElementById("toggleMansfieldBtn");
+    if (!container || !enterBtn) return;
+
+    const originalParent = container.parentElement;
+    const originalNextSibling = container.nextElementSibling;
+
+    function setFullscreen(active) {
+        chartFullscreenActive = active;
+        if (active) {
+            document.body.appendChild(container);
+        } else {
+            originalParent.insertBefore(container, originalNextSibling);
         }
+        container.classList.toggle("chart-fullscreen", active);
+        if (extrasBar) extrasBar.hidden = !active;
+        enterBtn.hidden = active;
+        updateChartArea();
+        // Chart.js ma responsive:true + maintainAspectRatio:false, więc
+        // ResizeObserver na canvasie sam łapie zmianę rozmiaru kontenera —
+        // to ręczne .resize() to tylko zabezpieczenie na wypadek nierównego
+        // timingu tego observera na iOS Safari zaraz po przeniesieniu węzła.
+        window.requestAnimationFrame(() => {
+            if (rsChartInstance) rsChartInstance.resize();
+            if (rsVolumeChartInstance) rsVolumeChartInstance.resize();
+            if (rsMansfieldChartInstance) rsMansfieldChartInstance.resize();
+        });
+    }
+
+    enterBtn.addEventListener("click", () => setFullscreen(true));
+    if (closeBtn) closeBtn.addEventListener("click", () => setFullscreen(false));
+    document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && chartFullscreenActive) setFullscreen(false);
     });
+    if (volBtn) {
+        volBtn.addEventListener("click", () => {
+            chartFullscreenExtras.volume = !chartFullscreenExtras.volume;
+            volBtn.classList.toggle("active", chartFullscreenExtras.volume);
+            updateChartArea();
+        });
+    }
+    if (mansfieldBtn) {
+        mansfieldBtn.addEventListener("click", () => {
+            chartFullscreenExtras.mansfield = !chartFullscreenExtras.mansfield;
+            mansfieldBtn.classList.toggle("active", chartFullscreenExtras.mansfield);
+            updateChartArea();
+        });
+    }
 }
 
 let rsVolumeChartInstance = null;
@@ -1316,6 +1404,7 @@ if (typeof document !== "undefined") {
         initOpenTvButton();
         initResetZoomButton();
         initChartViewTabs();
+        initChartFullscreen();
         initStageFilter();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem

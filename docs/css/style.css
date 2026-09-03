@@ -827,6 +827,74 @@ th.tv-col { width: 1%; }
     overflow: hidden;
 }
 
+/* Pełnoekranowy tryb wykresu 10:30 (#chartFullscreenBtn, patrz
+   initChartFullscreen w app.js) — świadomie CSS-owy nakładany kontener
+   (position: fixed na już istniejącym .rs-chart-container), NIE prawdziwe
+   Element.requestFullscreen(): w PWA uruchomionym z ekranu głównego na iOS
+   ta przeglądarkowa Fullscreen API bywa niedostępna/rzuca błędem (apka i tak
+   już działa bez chrome'u przeglądarki), więc nakładka position:fixed działa
+   spójnie wszędzie. Chart.js ma responsive:true + maintainAspectRatio:false
+   na wszystkich trzech wykresach, więc ResizeObserver na canvasie sam łapie
+   zmianę rozmiaru kontenera — dodatkowe ręczne .resize() w JS to tylko
+   zabezpieczenie przed nierównym timingiem na iOS Safari. */
+.rs-chart-container.chart-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    background: var(--bg);
+    border-radius: 0;
+    padding: 12px;
+}
+
+/* Pasek przełączników "Wolumen"/"RSM", widoczny tylko w trybie pełnoekranowym
+   (poza nim oba panele są zawsze widoczne, jak dotychczas) — pozwala dołożyć
+   je do widoku na żądanie zamiast trzymać je zawsze włączone i zabierać
+   miejsce głównemu wykresowi cenowemu z bazami Darvasa. */
+.chart-fullscreen-extras {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+    margin-bottom: 8px;
+}
+
+/* [hidden] jawnie: `display:flex` powyzej ma ta sama specyficznosc co regula
+   UA `[hidden]{display:none}`, a autorska wygrywa — bez tego pasek nigdy by
+   sie realnie nie chowal poza trybem pelnoekranowym (ten sam gotcha co przy
+   .stage-filter-bar[hidden] powyzej w tym pliku). */
+.chart-fullscreen-extras[hidden] { display: none; }
+
+.chart-fullscreen-extras-label {
+    font-size: 11px;
+    color: var(--text-faint);
+    margin-right: 2px;
+}
+
+.chart-extra-toggle {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 999px;
+    cursor: pointer;
+}
+
+.chart-extra-toggle.active {
+    background: var(--green);
+    color: #fff;
+    border-color: var(--green-bright);
+}
+
+/* Zamknięcie pełnego ekranu — #chartFullscreenBtn (poza kontenerem) staje się
+   niedostępny pod nakładką position:fixed, więc jedyne wyjście musi żyć
+   wewnątrz samego .chart-fullscreen-extras. */
+.chart-fullscreen-close {
+    margin-left: auto;
+    color: var(--text);
+}
+
 /* ============================================================
    STRONA REBALANS
    ============================================================ */
