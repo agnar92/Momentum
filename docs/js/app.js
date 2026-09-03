@@ -41,6 +41,12 @@ function tvUrlFor(ticker, universe) {
 // konta. Tutaj configu NIE rozszerzamy o compare — to inny, osobny widget na
 // osobnej zakładce, więc tamten problem go nie dotyczy.
 //
+// Configi widgetów są 1:1 ze źródłem tego samego tutoriala (użytkownik
+// dostarczył plik), poza `colorTheme`/`theme: "dark"` i `isTransparent: true`
+// (tam gdzie ten widget to wspiera) — dzięki temu każdy blok pokazuje się na
+// tle .tv-widget-block/.chart-panel (var(--panel)) zamiast rysować własne,
+// osobne tło, więc wygląda spójnie z resztą apki bez dodatkowego CSS.
+//
 // Każdy config bierze symbol jako funkcję (ticker-tape ma stałą, niezależną
 // od wybranej spółki listę indeksów/benchmarków — stąd konfigFn, która
 // argument po prostu ignoruje). Osadzone <script> nie mają API do podmiany
@@ -71,7 +77,7 @@ const TV_PAGE_WIDGETS = [
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-symbol-info.js`,
-        config: symbol => ({ symbol, width: "100%", locale: "pl", colorTheme: "dark", isTransparent: false }),
+        config: symbol => ({ symbol, width: "100%", locale: "pl", colorTheme: "dark", isTransparent: true }),
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-advanced-chart.js`,
@@ -85,20 +91,18 @@ const TV_PAGE_WIDGETS = [
             theme: "dark",
             style: "1",
             locale: "pl",
-            withdateranges: true,
-            hide_side_toolbar: false,
             allow_symbol_change: true,
-            studies: ["MACD@tv-basicstudies"],
+            calendar: false,
             support_host: "https://www.tradingview.com",
         }),
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-symbol-profile.js`,
-        config: symbol => ({ symbol, width: "100%", height: 400, locale: "pl", colorTheme: "dark", isTransparent: false }),
+        config: symbol => ({ symbol, width: "100%", height: 400, locale: "pl", colorTheme: "dark", isTransparent: true }),
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-financials.js`,
-        config: symbol => ({ symbol, width: "100%", height: 550, colorTheme: "dark", isTransparent: false, displayMode: "regular", locale: "pl" }),
+        config: symbol => ({ symbol, width: "100%", height: 550, colorTheme: "dark", isTransparent: true, displayMode: "adaptive", locale: "pl" }),
     },
 ];
 
@@ -110,8 +114,8 @@ const TV_PAGE_WIDGETS_ROW = [
             symbol,
             width: "100%",
             height: 450,
-            interval: "1m",
-            isTransparent: false,
+            interval: "15m",
+            isTransparent: true,
             showIntervalTabs: true,
             displayMode: "single",
             locale: "pl",
@@ -126,7 +130,7 @@ const TV_PAGE_WIDGETS_ROW = [
             width: "100%",
             height: 450,
             colorTheme: "dark",
-            isTransparent: false,
+            isTransparent: true,
             displayMode: "regular",
             locale: "pl",
         }),
