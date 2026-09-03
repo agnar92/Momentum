@@ -638,6 +638,22 @@ th.tv-col { width: 1%; }
     min-height: 220px;
 }
 
+/* Bez tego na iOS Safari (i innych mobilnych przeglądarkach) dwa palce na
+   canvasie są przechwytywane jako natywne powiększenie CAŁEJ STRONY, zanim
+   dotkną w ogóle JS-a — chartjs-plugin-zoom nie dostaje wtedy zdarzenia do
+   obsłużenia (patrz jego własna dokumentacja: wymaga touch-action na
+   canvasie). "pan-y" (nie "none") świadomie zostawia pionowe przewijanie
+   przeglądarce — .rs-chart-container ma overflow-y:auto na wypadek gdy
+   odznaka+3 panele+legenda się nie zmieszczą (patrz komentarz tam) — a samo
+   tylko pionowe przewijanie nie koliduje z zoom/pan wykresu 10:30, który i
+   tak działa wyłącznie w poziomie (mode: "x", patrz renderRelativeStrengthChart
+   w app.js). Na wszystkich trzech panelach (nie tylko #rsChartCanvas), żeby
+   uszczypnięcie zaczęte kciukiem na wolumenie/RSM też nie odpalało zoomu
+   strony. */
+.rs-chart-panel canvas {
+    touch-action: pan-y;
+}
+
 .rs-chart-panel-small {
     flex: 1;
     min-height: 200px;
