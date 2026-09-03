@@ -42,16 +42,6 @@
         <button class="expand-btn" id="toggleDrawerBtn">&gt;&gt;&gt;</button>
 
         <div class="sidebar-group">
-            <div class="sidebar-group-label">S&amp;P 500</div>
-            <div class="ticker-grid" id="tiles-SP500"></div>
-        </div>
-
-        <div class="sidebar-group">
-            <div class="sidebar-group-label">Nasdaq 100</div>
-            <div class="ticker-grid" id="tiles-NASDAQ100"></div>
-        </div>
-
-        <div class="sidebar-group">
             <div class="sidebar-group-label">Dow Jones</div>
             <div class="ticker-grid" id="tiles-DOWJONES"></div>
         </div>
@@ -66,23 +56,19 @@
             <div class="ticker-grid" id="tiles-MWIG40"></div>
         </div>
 
-        <div class="sidebar-group" id="gemGroup">
-            <div class="sidebar-group-label" title="Global Equity Momentum: porownanie zwrotu POZIOMU INDEKSU (nie skladnikow) NASDAQ100/DOWJONES w oknie 12 mies. — wygrywa indeks o najsilniejszym trendzie. Kafelki ponizej to top 10 spolek zwycieskiego indeksu wg wkladu w jego zwrot (waga w indeksie x zwrot spolki w tym samym oknie) — czyli te, ktore realnie pchaja cene indeksu w gore/na nowe szczyty, a nie po prostu spolki o najwyzszym wlasnym zwrocie.">
-                🚀 Global Equity Momentum
+        <div class="sidebar-group" id="rsmStableGroup">
+            <div class="sidebar-group-label" title="Oscylator Mansfield Relative Strength (RSM = (RS/SMA(RS,N tyg.)-1)*100, gdzie RS = cena spółki / poziom indeksu). Stabilne: RSM 6M > RSM 3M > 0 — spółka trwale silniejsza od swojego indeksu w dłuższym (6-miesięcznym) horyzoncie, bez świeżego gwałtownego skoku. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, nie tylko dzisiejszą selekcję portfela.">
+                📈 RSM Stabilne
             </div>
-            <div class="sidebar-group-meta" id="gemMeta"></div>
-            <div class="gem-index-returns" id="gemIndexReturns"></div>
-            <div class="ticker-grid" id="tiles-GEM"></div>
+            <div class="sidebar-group-meta" id="rsmStableMeta"></div>
+            <div class="ticker-grid" id="tiles-RSM-stable"></div>
         </div>
 
-        <div class="sidebar-group" id="rsmGroup">
-            <div class="sidebar-group-label" title="Oscylator Mansfield Relative Strength (RSM = (RS/SMA(RS,N tyg.)-1)*100, gdzie RS = cena spółki / poziom indeksu) w dwóch wygładzeniach — krótkoterminowym ~3 mies. i średnioterminowym ~6 mies. — dla każdej spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40. Stabilny wzrost: RSM 6M > RSM 3M > 0, sygnał utrzymującej się przewagi bez świeżego gwałtownego skoku. Nagła zmiana trendu: RSM 3M > RSM 6M i oba wygładzenia rosną od 4 tygodni — świeże przyspieszenie.">
-                📈 RSM (Mansfield)
+        <div class="sidebar-group" id="rsmGrowthGroup">
+            <div class="sidebar-group-label" title="Oscylator Mansfield Relative Strength w dwóch wygładzeniach — krótkoterminowym ~3 mies. i średnioterminowym ~6 mies. Wzrostowe: RSM 3M > RSM 6M i oba wygładzenia rosną od 4 tygodni — świeże przyspieszenie trendu. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, nie tylko dzisiejszą selekcję portfela.">
+                🚀 RSM Wzrostowe
             </div>
-            <div class="sidebar-group-meta" id="rsmMeta"></div>
-            <div class="sidebar-subgroup-label">Stabilny wzrost (6M &gt; 3M)</div>
-            <div class="ticker-grid" id="tiles-RSM-stable"></div>
-            <div class="sidebar-subgroup-label">Nagła zmiana trendu (3M &gt; 6M, oba rosną)</div>
+            <div class="sidebar-group-meta" id="rsmGrowthMeta"></div>
             <div class="ticker-grid" id="tiles-RSM-accel"></div>
         </div>
     </div>
@@ -90,17 +76,15 @@
     <div class="table-drawer" id="tableDrawer">
         <div class="drawer-header">
             <div class="drawer-header-title">
-                <h2 id="drawerTitle">Pełna tabela — S&amp;P 500 Momentum</h2>
+                <h2 id="drawerTitle">Pełna tabela — Dow Jones Momentum</h2>
                 <div class="drawer-meta" id="drawerMeta"></div>
             </div>
             <div class="drawer-tabs">
-                <button class="drawer-tab active" data-universe="SP500">S&amp;P 500</button>
-                <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
-                <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
+                <button class="drawer-tab active" data-universe="DOWJONES">Dow Jones</button>
                 <button class="drawer-tab" data-universe="WIG20">WIG20</button>
                 <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
-                <button class="drawer-tab" data-universe="GEM" title="Global Equity Momentum — top 10 spółek zwycięskiego indeksu (NASDAQ100/DOWJONES, wg zwrotu 12M) wg wkładu w jego zwrot.">🚀 GEM</button>
-                <button class="drawer-tab" data-universe="RSM" title="RSM (oscylator Mansfield Relative Strength) — spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 podzielone na stabilny wzrost (RSM 6M > RSM 3M > 0) i nagłą zmianę trendu (RSM 3M > RSM 6M, oba rosnące od 4 tyg.).">📈 RSM</button>
+                <button class="drawer-tab" data-universe="RSM_STABLE" title="RSM Stabilne — spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 trwale silniejsze od swojego indeksu (RSM 6M > RSM 3M > 0), CAŁE uniwersa, nie tylko dzisiejsza selekcja portfela.">📈 RSM Stabilne</button>
+                <button class="drawer-tab" data-universe="RSM_GROWTH" title="RSM Wzrostowe — spółki ze świeżym przyspieszeniem trendu (RSM 3M > RSM 6M, oba wygładzenia rosnące od 4 tyg.), CAŁE uniwersa, nie tylko dzisiejsza selekcja portfela.">🚀 RSM Wzrostowe</button>
             </div>
         </div>
         <div class="stage-filter-bar" id="stageFilterBar">
@@ -133,44 +117,47 @@
                 <tbody id="momentumTableBody"></tbody>
             </table>
 
-            <!-- Global Equity Momentum: top 10 spolek zwycieskiego indeksu wg wkladu
-                 w jego zwrot (waga w indeksie x zwrot w tym samym oknie 12M) — osobna,
-                 prostsza tabela: nie ma tu portfelowej wagi/z-score/momentum score. -->
-            <table class="momentum-table" id="gemTable" hidden>
+            <!-- RSM Stabilne: spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 trwale
+                 silniejsze od swojego indeksu (RSM 6M > RSM 3M > 0) — CAŁE uniwersa
+                 (patrz combinedRsmCandidates w app.js), sortowalna i filtrowalna po
+                 etapie tak jak pełna tabela uniwersum. -->
+            <table class="momentum-table" id="rsmStableTable" hidden>
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Ticker</th>
-                        <th>Sektor</th>
-                        <th>Cena</th>
-                        <th>Zwrot 12M</th>
-                        <th>Waga w indeksie</th>
-                        <th>Wkład w zwrot</th>
+                        <th data-key="ticker">Ticker</th>
+                        <th data-key="universe">Uniwersum</th>
+                        <th data-key="sector">Sektor</th>
+                        <th data-key="price">Cena</th>
+                        <th data-key="shortNow">RSM 3M</th>
+                        <th data-key="mediumNow">RSM 6M</th>
+                        <th data-key="trend">Trend</th>
+                        <th>Etap</th>
                         <th class="tv-col">TV</th>
                     </tr>
                 </thead>
-                <tbody id="gemTableBody"></tbody>
+                <tbody id="rsmStableTableBody"></tbody>
             </table>
 
-            <!-- RSM (oscylator Mansfield Relative Strength): spółki SP500/NASDAQ100/
-                 DOWJONES/WIG20/mWIG40 podzielone na dwie sekcje — stabilny wzrost i
-                 nagła zmiana trendu (patrz combinedRsmCandidates w app.js). -->
-            <table class="momentum-table" id="rsmTable" hidden>
+            <!-- RSM Wzrostowe: spółki ze świeżym przyspieszeniem trendu (RSM 3M > RSM
+                 6M, oba wygładzenia rosnące od 4 tyg.) — CAŁE uniwersa, tak samo jak
+                 wyżej. -->
+            <table class="momentum-table" id="rsmGrowthTable" hidden>
                 <thead>
                     <tr>
                         <th>#</th>
-                        <th>Ticker</th>
-                        <th>Uniwersum</th>
-                        <th>Sektor</th>
-                        <th>Cena</th>
-                        <th>RSM 3M</th>
-                        <th>RSM 6M</th>
-                        <th>Typ</th>
-                        <th>Trend</th>
+                        <th data-key="ticker">Ticker</th>
+                        <th data-key="universe">Uniwersum</th>
+                        <th data-key="sector">Sektor</th>
+                        <th data-key="price">Cena</th>
+                        <th data-key="shortNow">RSM 3M</th>
+                        <th data-key="mediumNow">RSM 6M</th>
+                        <th data-key="trend">Trend</th>
+                        <th>Etap</th>
                         <th class="tv-col">TV</th>
                     </tr>
                 </thead>
-                <tbody id="rsmTableBody"></tbody>
+                <tbody id="rsmGrowthTableBody"></tbody>
             </table>
         </div>
     </div>
