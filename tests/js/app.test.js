@@ -9,6 +9,7 @@ const path = require("node:path");
 const {
     compareRows, rollingMean, alignMansfieldToDates, fmtPlDate,
     classifyRsm, combinedRsmCandidates, state,
+    findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
 
 test("compareRows sorts numerically ascending", () => {
@@ -193,4 +194,59 @@ test("combinedRsmCandidates sorts the accelerating bucket by 3M descending", () 
     ];
     const { accelerating } = combinedRsmCandidates();
     assert.deepEqual(accelerating.map(r => r.ticker), ["HOT", "MILD"]);
+});
+
+// findRsEntry / buildSearchIndex: od zmiany na zyczenie uzytkownika ("wszystkie
+// spolki z SP500, Nasdaq100" do wyszukiwania/wykresow/RSM) oba czytaja
+// all_constituents (CALE uniwersum, patrz run_query.py FULL_COVERAGE_UNIVERSES),
+// nie tylko constituents (biezacy decyl) — z fallbackiem na constituents dla
+// starszego, jeszcze niezmigrowanego JSON-a w cache service workera.
+
+test("findRsEntry finds a ticker that is only in all_constituents, not in constituents (outside the decile)", () => {
+    state.data = emptyStateData();
+    state.data.SP500.constituents = [
+        { ticker: "AAA", weekly_chart: { dates: [] } },
+    ];
+    state.data.SP500.all_constituents = [
+        { ticker: "AAA", weekly_chart: { dates: [] } },
+        { ticker: "TYL", in_selection: false, weekly_chart: { dates: ["2026-01-05"] } },
+    ];
+
+    const entry = findRsEntry("TYL", "SP500");
+    assert.ok(entry);
+    assert.equal(entry.ticker, "TYL");
+    assert.equal(entry.universe, "SP500");
+});
+
+test("findRsEntry falls back to constituents when all_constituents is absent (equal-weight universe / stale cache)", () => {
+    state.data = emptyStateData();
+    state.data.DOWJONES.constituents = [
+        { ticker: "BBB", weekly_chart: { dates: [] } },
+    ];
+
+    const entry = findRsEntry("BBB", "DOWJONES");
+    assert.ok(entry);
+    assert.equal(entry.ticker, "BBB");
+});
+
+test("findRsEntry returns null when the ticker has no weekly_chart", () => {
+    state.data = emptyStateData();
+    state.data.SP500.all_constituents = [{ ticker: "NOCHART", weekly_chart: null }];
+    assert.equal(findRsEntry("NOCHART", "SP500"), null);
+});
+
+test("buildSearchIndex indexes tickers from all_constituents, not just the current decile", () => {
+    state.data = emptyStateData();
+    state.data.SP500.constituents = [
+        { ticker: "AAA", sector: "Tech" },
+    ];
+    state.data.SP500.all_constituents = [
+        { ticker: "AAA", sector: "Tech" },
+        { ticker: "TYL", sector: "Technology" },
+    ];
+
+    buildSearchIndex();
+    const tickers = getCmdkIndex().map(i => i.ticker);
+    assert.ok(tickers.includes("TYL"), "TYL powinien byc w indeksie, mimo ze jest poza constituents");
+    assert.ok(tickers.includes("AAA"));
 });

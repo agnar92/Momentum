@@ -492,14 +492,16 @@ function renderRsmPanel() {
     fillTiles(accelContainer, accelerating);
 }
 
-// Kazdy ticker z glownego uniwersum (state.data[u].constituents) ma wlasny
-// weekly_chart/mansfield_chart (patrz process_universe/export_json w
-// run_query.py) — wystarczy odczytac go wprost stamtad. Screener RSM
-// (combinedRsmCandidates powyzej) to osobny, wyselekcjonowany widok, nie
-// zrodlo danych do samego wykresu.
+// Kazdy ticker z glownego uniwersum (state.data[u].all_constituents — CALE
+// uniwersum, nie tylko decyl, patrz FULL_COVERAGE_UNIVERSES/_build_full_universe_records
+// w run_query.py; dla uniwersow rownowazonych rowne "constituents") ma wlasny
+// weekly_chart/mansfield_chart — wystarczy odczytac go wprost stamtad. Screener RS
+// (combinedRelativeStrengthLeaders powyzej) to osobny, wyselekcjonowany widok
+// (tylko biezacy outperformerzy), nie zrodlo danych do samego wykresu.
 function findRsEntry(ticker, universe) {
-    const universeEntry = ((state.data[universe] && state.data[universe].constituents) || [])
-        .find(c => c.ticker === ticker);
+    const universeData = state.data[universe];
+    const list = (universeData && (universeData.all_constituents || universeData.constituents)) || [];
+    const universeEntry = list.find(c => c.ticker === ticker);
     return (universeEntry && universeEntry.weekly_chart) ? { ...universeEntry, universe } : null;
 }
 
@@ -1396,10 +1398,15 @@ let cmdkIndex = [];
 let cmdkMatches = [];
 let cmdkSelectedIndex = 0;
 
+// Indeks szukania obejmuje CALE uniwersum (all_constituents), nie tylko biezacy
+// decyl — patrz FULL_COVERAGE_UNIVERSES/_build_full_universe_records w run_query.py.
+// Dla uniwersow rownowazonych (DOWJONES/WIG20/MWIG40) all_constituents jest rowne
+// constituents, wiec fallback ponizej jest tylko zabezpieczeniem na starszy,
+// jeszcze niezmigrowany JSON w cache service workera.
 function buildSearchIndex() {
     const byTicker = {};
     UNIVERSES.forEach(u => {
-        (state.data[u].constituents || []).forEach(c => {
+        (state.data[u].all_constituents || state.data[u].constituents || []).forEach(c => {
             if (!byTicker[c.ticker]) byTicker[c.ticker] = { ticker: c.ticker, sector: c.sector, universes: [] };
             byTicker[c.ticker].universes.push(u);
         });
@@ -1448,6 +1455,13 @@ function renderCmdkResults(query) {
         });
         el.addEventListener("click", () => confirmCmdkSelection());
     });
+}
+
+// Getter wylacznie dla test runnera Node (tests/js/) — `cmdkIndex` jest
+// modulowym `let`, wiec samo wyeksportowanie jego wartosci przy starcie
+// modulu nie odzwierciedlaloby pozniejszych wywolan buildSearchIndex().
+function getCmdkIndex() {
+    return cmdkIndex;
 }
 
 function updateCmdkSelectionHighlight() {
@@ -1543,6 +1557,7 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         compareRows, rollingMean, alignMansfieldToDates, fmtPlDate,
         classifyRsm, combinedRsmCandidates, state,
+        findRsEntry, buildSearchIndex, getCmdkIndex,
     };
 }
 

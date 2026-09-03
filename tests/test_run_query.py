@@ -16,6 +16,7 @@ import pytest
 
 from run_query import (
     EQUAL_WEIGHT_UNIVERSES,
+    FULL_COVERAGE_UNIVERSES,
     GEM_UNIVERSES,
     MAX_HOLDINGS,
     MAX_WEIGHT,
@@ -38,6 +39,7 @@ from run_query import (
     export_relative_strength,
     process_universe_charts_only,
     select_with_buffer,
+    _build_full_universe_records,
     _compute_weinstein_stage_series,
 )
 
@@ -58,6 +60,21 @@ class TestSP500Scope:
     def test_sp500_is_in_relative_strength_but_not_gem(self):
         assert "SP500" in RELATIVE_STRENGTH_UNIVERSES
         assert "SP500" not in GEM_UNIVERSES
+
+
+# ---------------------------------------------------------------------------
+# FULL_COVERAGE_UNIVERSES: SP500/NASDAQ100 eksportuja wykresy (weekly_chart/
+# mansfield_chart) + metryki dla CALEGO kwalifikujacego sie uniwersum
+# ("all_constituents" w docs/data/{universe}.json), nie tylko dla spolek
+# wybranych do decyla — na zyczenie uzytkownika (wyszukiwarka Ctrl+K + wlasny
+# wykres/RSM maja dzialac dla dowolnej spolki). EQUAL_WEIGHT_UNIVERSES sa
+# wykluczone, bo tam "constituents" juz jest calym uniwersum.
+# ---------------------------------------------------------------------------
+
+class TestFullCoverageUniverses:
+    def test_is_exactly_the_non_equal_weight_universes(self):
+        assert FULL_COVERAGE_UNIVERSES == {"SP500", "NASDAQ100"}
+        assert FULL_COVERAGE_UNIVERSES == set(UNIVERSES) - EQUAL_WEIGHT_UNIVERSES
 
 
 def make_metrics_df(rows):
@@ -1222,6 +1239,49 @@ class TestExportJson:
         assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None
                    for c in payload["constituents"])
 
+    def test_all_constituents_defaults_to_same_records_as_constituents(self, tmp_path):
+        # Uniwersa spoza FULL_COVERAGE_UNIVERSES (patrz process_universe) nie
+        # przekazuja jawnie all_constituents — front-end (buildSearchIndex/
+        # findRsEntry w app.js) ma wiec zawsze cos do przeczytania pod tym kluczem,
+        # bez osobnej logiki fallbacku dla kazdego uniwersum z osobna.
+        df = make_weighted_df_fixture()
+        export_json(df, "DOWJONES", "2026-03-30", str(tmp_path), n_missing_fmc=0)
+        payload = json.loads((tmp_path / "dowjones.json").read_text())
+        assert payload["all_constituents"] == payload["constituents"]
+
+    def test_all_constituents_explicit_override_is_used_verbatim(self, tmp_path):
+        df = make_weighted_df_fixture()
+        all_constituents = [{"ticker": "AAA", "in_selection": True}, {"ticker": "ZZZ", "in_selection": False}]
+        export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0,
+                    all_constituents=all_constituents)
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+        assert payload["all_constituents"] == all_constituents
+        assert [c["ticker"] for c in payload["constituents"]] == ["AAA", "BBB"]  # bez zmian
+
+
+class TestBuildFullUniverseRecords:
+    def test_marks_in_selection_and_keeps_universe_wide_momentum_rank(self):
+        df_ranked = make_ranked_df(["AAA", "BBB", "CCC"])  # rank/Ticker
+        df_ranked["Sector"] = "Tech"
+        df_ranked["price_now"] = 100.0
+        df_ranked["momentum_value"] = 0.1
+        df_ranked["momentum_window"] = "12M"
+        df_ranked["annualized_volatility"] = 0.2
+        df_ranked["z_score"] = 0.5
+        df_ranked["momentum_score"] = 1.5
+
+        weekly_charts = {"AAA": {"dates": []}}
+        mansfield_charts = {"AAA": {"dates": []}}
+        records = _build_full_universe_records(df_ranked, {"AAA"}, weekly_charts, mansfield_charts)
+
+        by_ticker = {r["ticker"]: r for r in records}
+        assert by_ticker["AAA"]["in_selection"] is True
+        assert by_ticker["BBB"]["in_selection"] is False
+        assert by_ticker["CCC"]["in_selection"] is False
+        assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
+        assert by_ticker["BBB"]["weekly_chart"] is None
+        assert {r["rank"] for r in records} == {1, 2, 3}
+
 
 # ---------------------------------------------------------------------------
 # process_universe_charts_only: tryb "--charts-only" (patrz weekly_charts.yml,
@@ -1353,3 +1413,43 @@ class TestProcessUniverseChartsOnly:
         process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
         assert payload["cap_scaled_due_to_infeasibility"] is True
+
+    def test_all_constituents_covers_whole_universe_not_just_saved_selection(self, tmp_path):
+        # NASDAQ100 jest w FULL_COVERAGE_UNIVERSES: --charts-only ma wiec dolaczyc
+        # wykresy/metryki rowniez dla BBB, choc BBB nigdy nie trafil do zapisanej
+        # (miesiecznej) selekcji w portfolio_history — patrz user request "wszystkie
+        # spolki z SP500, Nasdaq100" do wyszukiwania/wykresow/RSM.
+        con = make_charts_only_con()
+        insert_ph_row(con, "2026-05-01", "NASDAQ100", 1, "AAA", 100.0, 1.0)
+        con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', 100.0)", [
+            ("AAA",), ("BBB",),
+        ])
+        insert_daily_series(con, "prices", "Ticker", "AAA", "2024-06-01", "2026-06-01", 100.0, 0.05)
+        insert_daily_series(con, "prices", "Ticker", "BBB", "2024-06-01", "2026-06-01", 50.0, 0.03)
+        insert_daily_series(con, "index_prices", "Index_Name", "NASDAQ100", "2024-06-01", "2026-06-01", 100.0, 0.02)
+
+        process_universe_charts_only(con, "NASDAQ100", "2026-06-01", str(tmp_path))
+        payload = json.loads((tmp_path / "nasdaq100.json").read_text())
+
+        # Zapisana selekcja (portfolio_history) zostaje bez zmian — tylko AAA.
+        assert [c["ticker"] for c in payload["constituents"]] == ["AAA"]
+
+        # Ale all_constituents obejmuje CALE uniwersum, wlacznie z BBB spoza decyla.
+        all_by_ticker = {c["ticker"]: c for c in payload["all_constituents"]}
+        assert set(all_by_ticker) == {"AAA", "BBB"}
+        assert all_by_ticker["AAA"]["in_selection"] is True
+        assert all_by_ticker["BBB"]["in_selection"] is False
+        assert all_by_ticker["BBB"]["weekly_chart"] is not None
+        assert all_by_ticker["BBB"]["mansfield_chart"] is not None
+
+    def test_equal_weight_universe_all_constituents_equals_constituents(self, tmp_path):
+        # DOWJONES nie jest w FULL_COVERAGE_UNIVERSES: "constituents" jest juz calym
+        # uniwersum (bez selekcji kwintylowej), wiec all_constituents nie jest liczone
+        # osobno.
+        con = make_charts_only_con()
+        insert_ph_row(con, "2026-05-01", "DOWJONES", 1, "AAA", 100.0, 1.0)
+        insert_price_rows(con, [("2026-06-01", "AAA", 110.0)])
+
+        process_universe_charts_only(con, "DOWJONES", "2026-06-01", str(tmp_path))
+        payload = json.loads((tmp_path / "dowjones.json").read_text())
+        assert payload["all_constituents"] == payload["constituents"]
