@@ -27,13 +27,27 @@ function tvUrlFor(ticker, universe) {
 }
 
 // ============================================================
-// PANEL "Dane spółki (TradingView)" — pełna, jednostronicowa "wizytówka"
-// spółki złożona z darmowych, osadzonych widgetów TradingView, 1:1 wg wzorca
-// z oficjalnego tutoriala TradingView "Build a page"
-// (tradingview.com/widget-docs/tutorials/iframe/build-page/demo/): pasek
-// Ticker Tape, nagłówek Symbol Info, pełny interaktywny Advanced Chart,
-// Profil spółki, Dane fundamentalne, a na dole dwie kolumny — Analiza
-// techniczna (gauge) i oś czasu newsów.
+// PANEL "Dane spółki (TradingView)" — dokładna kopia strony z oficjalnego
+// tutoriala TradingView "Build a page"
+// (tradingview.com/widget-docs/tutorials/iframe/build-page/demo/), ze
+// źródłowego pliku HTML dostarczonego przez użytkownika: ta sama struktura
+// (nav#ticker-tape + main z sekcjami #symbol-info/#advanced-chart/
+// #company-profile/#fundamental-data/#technical-analysis/#top-stories), ten
+// sam CSS grid (2 kolumny, te same `grid-column: span`, te same wysokości
+// sekcji w px — patrz .tv-overview-container w style.css), te same pola JSON
+// configu każdego widgetu. Jedyne dwie świadome zmiany względem źródła:
+//   1. `symbol` — zamiast wpisanego na sztywno "NASDAQ:AAPL", dynamicznie
+//      wybrany ticker (`tvSymbolFor(ticker, universe)`).
+//   2. `colorTheme`/`theme`: "light" -> "dark" (i strona pod spodem —
+//      .tv-overview-container w style.css). Wszystkie pozostałe pola
+//      (isTransparent, displayMode, calendar, interval, locale...) są
+//      przepisane bez zmian.
+// Pominięte ze źródła: `<header>` (logo "TradingVista" + pole wyszukiwania)
+// i `<footer>` (tekst o tutorialu) — to chrome demo-strony z tutoriala, nie
+// widget, i dublowałby już istniejący topbar/Ctrl+K tej apki niepodłączonym,
+// nic-nie-robiącym polem wyszukiwania. `largeChartUrl` w ticker-tape też
+// pominięte — w źródle wskazuje na stronę tutoriala TradingView, co byłoby
+// mylącym linkiem wewnątrz tej apki.
 //
 // Advanced Chart wraca tu świadomie — wcześniej był usunięty z GŁÓWNEGO
 // panelu wykresu (patrz CLAUDE.md) wyłącznie dlatego, że dołożenie do niego
@@ -41,56 +55,53 @@ function tvUrlFor(ticker, universe) {
 // konta. Tutaj configu NIE rozszerzamy o compare — to inny, osobny widget na
 // osobnej zakładce, więc tamten problem go nie dotyczy.
 //
-// Configi i wysokości bloków są 1:1 ze źródłem tego samego tutoriala, który
-// użytkownik dostarczył jako gotowy plik HTML — przepisane stąd co do pola:
-// per-widget `heightPx` odpowiada tamtejszym CSS regułom `#advanced-chart{
-// height:500px}` itd. (symbol-info celowo BEZ wymuszonej wysokości, tak jak
-// tam), `height:"100%"` w configu zamiast twardej liczby pikseli (rozmiar
-// nadaje kontener, nie sam widget), a Advanced Chart zachowuje tamtejszą
-// specjalną budowę DOM: `autosize:true` + wewnętrzny
-// `.tradingview-widget-container__widget` na `calc(100% - 32px)` (te 32px to
-// pasek atrybucji TradingView u dołu widgetu). Jedyna świadoma zmiana wobec
-// źródła to `colorTheme`/`theme:"dark"` + `isTransparent:true` (tam gdzie
-// widget to wspiera) — dzięki temu każdy blok pokazuje się na tle
-// .tv-widget-block/.chart-panel (var(--panel)) zamiast rysować własne,
-// osobne tło, więc wygląda spójnie z resztą apki bez dodatkowego CSS.
-//
-// Każdy config bierze symbol jako funkcję (ticker-tape ma stałą, niezależną
-// od wybranej spółki listę indeksów/benchmarków — stąd konfigFn, która
-// argument po prostu ignoruje). Osadzone <script> nie mają API do podmiany
-// symbolu w locie, więc renderTvOverviewPanel przy każdej zmianie tickera
-// buduje WSZYSTKIE bloki od zera.
+// Nie da się wstawić <script> przez innerHTML (przeglądarka go wtedy nie
+// wykonuje) — dlatego statyczny szkielet (nav/main/sekcje/puste
+// .tradingview-widget-container(__widget) divy, dokładnie jak w źródle)
+// leci jednym innerHTML (tvPageSkeletonHtml), a każdy <script> jest tworzony
+// osobno przez createElement i doklejany do swojej sekcji
+// (appendTvSectionScript). Osadzone widgety nie mają API do podmiany symbolu
+// w locie, więc renderTvOverviewPanel przy każdej zmianie tickera buduje
+// wszystko od zera.
 // ============================================================
 const TV_EMBED_BASE = "https://s3.tradingview.com/external-embedding/";
 
-const TV_TICKER_TAPE_SYMBOLS = [
-    { proName: "AMEX:SPY", title: "S&P 500" },
-    { proName: "NASDAQ:QQQ", title: "Nasdaq 100" },
-    { proName: "AMEX:DIA", title: "Dow Jones" },
-    { proName: "GPW:WIG20", title: "WIG20" },
-];
-
-// Widgety pełnej szerokości, w kolejności od góry.
-const TV_PAGE_WIDGETS = [
+// Sekcje 1:1 ze źródłem — id, plik widgetu i JSON config (symbol i theme
+// podmieniane przez tvSymbol/"dark", reszta pól przepisana bez zmian).
+const TV_PAGE_SECTIONS = [
     {
+        id: "ticker-tape",
         src: `${TV_EMBED_BASE}embed-widget-ticker-tape.js`,
         config: () => ({
-            symbols: TV_TICKER_TAPE_SYMBOLS,
+            symbols: [
+                { description: "", proName: "NASDAQ:TSLA" },
+                { description: "", proName: "NASDAQ:AAPL" },
+                { description: "", proName: "NASDAQ:NVDA" },
+                { description: "", proName: "NASDAQ:MSFT" },
+                { description: "", proName: "NASDAQ:AMZN" },
+                { description: "", proName: "NASDAQ:GOOGL" },
+                { description: "", proName: "NASDAQ:META" },
+                { description: "", proName: "NYSE:BRK.B" },
+                { description: "", proName: "NYSE:LLY" },
+                { description: "", proName: "NYSE:UNH" },
+                { description: "", proName: "NYSE:V" },
+                { description: "", proName: "NYSE:WMT" },
+            ],
             showSymbolLogo: true,
+            colorTheme: "dark",
             isTransparent: false,
             displayMode: "adaptive",
-            colorTheme: "dark",
-            locale: "pl",
+            locale: "en",
         }),
     },
     {
-        // Bez heightPx — jak w źródle, symbol-info sizuje się naturalnie.
+        id: "symbol-info",
         src: `${TV_EMBED_BASE}embed-widget-symbol-info.js`,
-        config: symbol => ({ symbol, width: "100%", locale: "pl", colorTheme: "dark", isTransparent: true }),
+        config: symbol => ({ symbol, width: "100%", locale: "en", colorTheme: "dark", isTransparent: true }),
     },
     {
+        id: "advanced-chart",
         src: `${TV_EMBED_BASE}embed-widget-advanced-chart.js`,
-        heightPx: 500,
         autosizeFill: true,
         config: symbol => ({
             autosize: true,
@@ -99,86 +110,72 @@ const TV_PAGE_WIDGETS = [
             timezone: "Etc/UTC",
             theme: "dark",
             style: "1",
-            locale: "pl",
+            locale: "en",
             allow_symbol_change: true,
             calendar: false,
             support_host: "https://www.tradingview.com",
         }),
     },
     {
+        id: "company-profile",
         src: `${TV_EMBED_BASE}embed-widget-symbol-profile.js`,
-        heightPx: 390,
-        config: symbol => ({ symbol, width: "100%", height: "100%", locale: "pl", colorTheme: "dark", isTransparent: true }),
+        config: symbol => ({ width: "100%", height: "100%", colorTheme: "dark", isTransparent: true, symbol, locale: "en" }),
     },
     {
+        id: "fundamental-data",
         src: `${TV_EMBED_BASE}embed-widget-financials.js`,
-        heightPx: 490,
-        config: symbol => ({ symbol, width: "100%", height: "100%", colorTheme: "dark", isTransparent: true, displayMode: "adaptive", locale: "pl" }),
+        config: symbol => ({ colorTheme: "dark", isTransparent: true, largeChartUrl: "", displayMode: "adaptive", width: "100%", height: "100%", symbol, locale: "en" }),
     },
-];
-
-// Dolny wiersz — dwie kolumny obok siebie (patrz .tv-widget-row w style.css).
-const TV_PAGE_WIDGETS_ROW = [
     {
+        id: "technical-analysis",
         src: `${TV_EMBED_BASE}embed-widget-technical-analysis.js`,
-        heightPx: 425,
-        config: symbol => ({
-            symbol,
-            width: "100%",
-            height: "100%",
-            interval: "15m",
-            isTransparent: true,
-            showIntervalTabs: true,
-            displayMode: "single",
-            locale: "pl",
-            colorTheme: "dark",
-        }),
+        config: symbol => ({ interval: "15m", width: "100%", isTransparent: true, height: "100%", symbol, showIntervalTabs: true, displayMode: "single", locale: "en", colorTheme: "dark" }),
     },
     {
+        id: "top-stories",
         src: `${TV_EMBED_BASE}embed-widget-timeline.js`,
-        heightPx: 425,
-        config: symbol => ({
-            feedMode: "symbol",
-            symbol,
-            width: "100%",
-            height: "100%",
-            colorTheme: "dark",
-            isTransparent: true,
-            displayMode: "regular",
-            locale: "pl",
-        }),
+        config: symbol => ({ feedMode: "symbol", symbol, colorTheme: "dark", isTransparent: true, displayMode: "regular", width: "100%", height: "100%", locale: "en" }),
     },
 ];
 
-function buildTvWidgetBlock(spec, tvSymbol) {
-    const block = document.createElement("div");
-    block.className = "tv-widget-block";
-    if (spec.heightPx) block.style.height = `${spec.heightPx}px`;
+// Szkielet 1:1 z <nav id="ticker-tape">...</nav><main>...</main> źródła —
+// bez <script> (patrz komentarz wyżej o innerHTML), te są doklejane osobno
+// przez appendTvSectionScript.
+function tvPageSkeletonHtml() {
+    const widgetDivHtml = '<div class="tradingview-widget-container"><div class="tradingview-widget-container__widget"></div></div>';
+    return `
+        <nav id="ticker-tape">${widgetDivHtml}</nav>
+        <main id="tvPageMain">
+            <section id="symbol-info">${widgetDivHtml}</section>
+            <section id="advanced-chart">${widgetDivHtml}</section>
+            <section id="company-profile">${widgetDivHtml}</section>
+            <section id="fundamental-data">${widgetDivHtml}</section>
+            <section id="technical-analysis">${widgetDivHtml}</section>
+            <section id="top-stories">${widgetDivHtml}</section>
+        </main>
+    `;
+}
 
-    const container = document.createElement("div");
-    container.className = "tradingview-widget-container";
-    const widgetDiv = document.createElement("div");
-    widgetDiv.className = "tradingview-widget-container__widget";
+function appendTvSectionScript(root, spec, tvSymbol) {
+    const section = root.querySelector(`#${spec.id}`);
+    const widgetContainer = section && section.querySelector(".tradingview-widget-container");
+    if (!widgetContainer) return;
     if (spec.autosizeFill) {
         // Jak w źródle: kontener na 100%/100%, wewnętrzny div na
         // calc(100% - 32px) — te 32px rezerwują miejsce na pasek atrybucji
         // TradingView u dołu widgetu, inaczej autosize go przykrywa.
-        container.style.height = "100%";
-        container.style.width = "100%";
+        widgetContainer.style.height = "100%";
+        widgetContainer.style.width = "100%";
+        const widgetDiv = widgetContainer.querySelector(".tradingview-widget-container__widget");
         widgetDiv.style.height = "calc(100% - 32px)";
         widgetDiv.style.width = "100%";
     }
-    container.appendChild(widgetDiv);
-
     const script = document.createElement("script");
     script.type = "text/javascript";
     script.src = spec.src;
     script.async = true;
     script.textContent = JSON.stringify(spec.config(tvSymbol));
-    container.appendChild(script);
-
-    block.appendChild(container);
-    return block;
+    widgetContainer.appendChild(script);
 }
 
 // Przebudowuje CAŁĄ zawartość panelu TV (nie da się podmienić symbolu w już
@@ -189,18 +186,15 @@ function renderTvOverviewPanel(ticker, universe) {
     const container = document.getElementById("tvOverviewContainer");
     const empty = document.getElementById("tvOverviewEmpty");
     if (!container) return;
-    container.querySelectorAll(".tv-widget-block, .tv-widget-row").forEach(el => el.remove());
+    container.querySelectorAll("#tvPageMain, #ticker-tape").forEach(el => el.remove());
     if (!ticker) {
         if (empty) empty.hidden = false;
         return;
     }
     if (empty) empty.hidden = true;
+    container.insertAdjacentHTML("beforeend", tvPageSkeletonHtml());
     const tvSymbol = tvSymbolFor(ticker, universe);
-    TV_PAGE_WIDGETS.forEach(spec => container.appendChild(buildTvWidgetBlock(spec, tvSymbol)));
-    const row = document.createElement("div");
-    row.className = "tv-widget-row";
-    TV_PAGE_WIDGETS_ROW.forEach(spec => row.appendChild(buildTvWidgetBlock(spec, tvSymbol)));
-    container.appendChild(row);
+    TV_PAGE_SECTIONS.forEach(spec => appendTvSectionScript(container, spec, tvSymbol));
 }
 
 function initChartViewTabs() {

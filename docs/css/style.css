@@ -807,43 +807,62 @@ th.tv-col { width: 1%; }
     border-color: var(--green);
 }
 
-/* Widgety TradingView jeden pod drugim (ticker tape, notowanie, Advanced
-   Chart, profil spółki, dane fundamentalne) — każdy w osobnym
-   tradingview-widget-container, patrz renderTvOverviewPanel w app.js.
-   overflow-y: auto z tego samego powodu co .rs-chart-container powyżej
-   (widgety mają stałą wysokość, telefon ma sztywną wysokość .charts-area). */
+/* Panel "Dane spółki (TradingView)" — CSS 1:1 przepisany ze źródłowego pliku
+   HTML tutoriala TradingView "Build a page" dostarczonego przez użytkownika
+   (ten sam grid 2-kolumnowy, te same `grid-column: span`, te same wysokości
+   sekcji w px), jedyna zmiana to kolory pod ciemny motyw tej apki zamiast
+   białego tła/czarnego tekstu źródła — patrz nagłówek komentarza przy
+   TV_PAGE_SECTIONS w app.js po pełną listę różnic (dynamiczny symbol +
+   colorTheme "dark"; header/footer/#powered-by-tv ze źródła pominięte, to
+   chrome demo-strony tutoriala, nie widget). overflow-y: auto z tego samego
+   powodu co .rs-chart-container powyżej (telefon ma sztywną wysokość
+   .charts-area). */
 .tv-overview-container {
+    --gap-size: 32px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 12px;
+    align-items: center;
+    padding: 16px;
     overflow-y: auto;
+    background: var(--bg);
 }
 
-/* Wysokość każdego bloku to inline style ustawiany z spec.heightPx w
-   buildTvWidgetBlock (app.js) — 1:1 z per-sekcyjnymi CSS regułami źródłowego
-   tutoriala TradingView (np. `#advanced-chart{height:500px}`), tylko
-   przeniesione do JS bo tu nie mamy tych samych id-ów co tamten plik. */
-.tv-widget-block {
-    flex-shrink: 0;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
+.tv-overview-container #ticker-tape {
+    width: 100%;
+    margin-bottom: var(--gap-size);
 }
 
-/* Dolny wiersz wzorca (Analiza techniczna + oś czasu newsów) obok siebie —
-   flex zamiast media query, żeby responsywność zależała od realnej
-   szerokości panelu wykresu (zmienia się z rozwinięciem/schowaniem
-   sidebara), a nie tylko od szerokości viewportu. */
-.tv-widget-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
+.tv-overview-container #tvPageMain {
+    display: grid;
+    width: 100%;
+    max-width: 960px;
+    grid-template-columns: 1fr 1fr;
+    grid-gap: var(--gap-size);
 }
 
-.tv-widget-row .tv-widget-block {
-    flex: 1 1 340px;
-    min-width: 0;
+.tv-overview-container #symbol-info,
+.tv-overview-container #advanced-chart,
+.tv-overview-container #company-profile,
+.tv-overview-container #fundamental-data {
+    grid-column: span 2;
+}
+
+.tv-overview-container #technical-analysis,
+.tv-overview-container #top-stories {
+    grid-column: span 1;
+}
+
+.tv-overview-container #advanced-chart { height: 500px; }
+.tv-overview-container #company-profile { height: 390px; }
+.tv-overview-container #fundamental-data { height: 490px; }
+.tv-overview-container #technical-analysis,
+.tv-overview-container #top-stories { height: 425px; }
+
+@media (max-width: 800px) {
+    .tv-overview-container #technical-analysis,
+    .tv-overview-container #top-stories {
+        grid-column: span 2;
+    }
 }
 
 /* Pełnoekranowy tryb wykresu 10:30 (#chartFullscreenBtn, patrz
