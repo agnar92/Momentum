@@ -46,10 +46,10 @@ from run_query import (
 
 # ---------------------------------------------------------------------------
 # SP500 scope: przywrocony jako pelne uniwersum momentum + ekran Sily
-# Relatywnej (stage-analysis charts), ale CELOWO NIE uczestniczy w Global
-# Equity Momentum (nie zmienia istniejacego zachowania GEM) ani w
-# rebalance.js's UNIVERSES (rebalance.html/rebalance.js, poza zasiegiem tego
-# pliku) — dokladnie tak samo jak WIG20/mWIG40 sa dzis scoped.
+# Relatywnej (stage-analysis charts). GEM_UNIVERSES obejmuje teraz WSZYSTKIE 5
+# uniwersow (rebalance.js bierze TOP N wylacznie ze zwycieskiego indeksu GEM,
+# patrz docs/js/rebalance.js) — SP500/WIG20/MWIG40 sa wiec w GEM_UNIVERSES na
+# rowni z NASDAQ100/DOWJONES.
 # ---------------------------------------------------------------------------
 
 class TestSP500Scope:
@@ -57,9 +57,9 @@ class TestSP500Scope:
         assert "SP500" in UNIVERSES
         assert "SP500" not in EQUAL_WEIGHT_UNIVERSES  # ma realne wagi z CSPX_holdings.csv
 
-    def test_sp500_is_in_relative_strength_but_not_gem(self):
+    def test_sp500_is_in_relative_strength_and_gem(self):
         assert "SP500" in RELATIVE_STRENGTH_UNIVERSES
-        assert "SP500" not in GEM_UNIVERSES
+        assert "SP500" in GEM_UNIVERSES
 
 
 # ---------------------------------------------------------------------------
@@ -458,6 +458,27 @@ class TestComputeIndexReturns:
         ])
         out = compute_index_returns(con, "2026-02-01", lookback_months=12)
         assert out == []
+
+    def test_ranks_all_5_gem_universes_when_present(self):
+        # GEM_UNIVERSES obejmuje teraz SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 (rebalanser
+        # bierze TOP N wylacznie ze zwycieskiego indeksu, patrz docs/js/rebalance.js) —
+        # sprawdzamy, ze wszystkie 5 (nie tylko NASDAQ100/DOWJONES) sa uwzglednione w wyscigu.
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-02-01", "SP500", 100.0, 100.0),
+            ("2026-02-01", "SP500", 110.0, 110.0),        # +10%
+            ("2025-02-01", "NASDAQ100", 100.0, 100.0),
+            ("2026-02-01", "NASDAQ100", 130.0, 130.0),    # +30%
+            ("2025-02-01", "DOWJONES", 100.0, 100.0),
+            ("2026-02-01", "DOWJONES", 105.0, 105.0),     # +5%
+            ("2025-02-01", "WIG20", 100.0, 100.0),
+            ("2026-02-01", "WIG20", 140.0, 140.0),        # +40%, zwyciezca
+            ("2025-02-01", "MWIG40", 100.0, 100.0),
+            ("2026-02-01", "MWIG40", 108.0, 108.0),       # +8%
+        ])
+        out = compute_index_returns(con, "2026-02-01", lookback_months=12)
+        assert [r["universe"] for r in out] == ["WIG20", "NASDAQ100", "SP500", "MWIG40", "DOWJONES"]
+        assert out[0]["return_pct"] == pytest.approx(40.0)
 
 
 class TestComputeIndexLeaders:

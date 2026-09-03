@@ -8,35 +8,29 @@ A momentum-investing tool for SP500, NASDAQ100, DOWJONES, WIG20, and mWIG40: a P
 an S&P-style Momentum Index selection/weighting for each universe and publishes the results as a static
 dashboard (`docs/`) to GitHub Pages. There is a second page (`rebalance.html`) that lets a user paste in
 their current brokerage holdings (or import an XTB export) and get buy/sell suggestions to move toward
-the computed target weights. SP500 is a momentum + relative-strength screener universe only — it is
-**not** wired into the rebalance calculator (`rebalance.js`'s `REGIONS` doesn't reference it) — it was
-brought back specifically as a screener (see below), not to resume rebalancing against it. WIG20/mWIG40
-**are** wired into the rebalance calculator, but as their own separate region, not merged with NASDAQ100/
-DOWJONES: `rebalance.js`'s `REGIONS` splits the whole calculator into two fully independent halves — `USA`
-(NASDAQ100 + DOWJONES, USD) and `GPW` (WIG20 + MWIG40, PLN) — each with its own contribution amount, own
-TOP N picker per index, own suggestion table, own Monte Carlo simulation, own historical-equity-curve
-chart, and own portfolio-analysis donut chart. This sidesteps the FX problem that originally kept WIG20/
-mWIG40 out entirely (mixing a PLN-denominated capital bucket into a USD-denominated allocation/weighting
-pool would need an FX rate this tool doesn't fetch): nothing ever sums a PLN amount and a USD amount
-together, because the two regions never share a capital pool, only the underlying holdings list and
-exclusion list (both currency-agnostic — see `rebalance.js` below). A position in any of the five
-universes is still priced correctly via `docs/data/all_prices.json`, which is universe-agnostic, if
-pasted into holdings — `regionOf(ticker)` (in `rebalance.js`) then buckets it into USA or GPW for display
-and rebalancing purposes based on which universe(s) its price was sourced from.
+the computed target weights. `CSPX_holdings.csv` (iShares Core S&P 500 UCITS ETF holdings, same format/
+convention as `CNDX_holdings.csv`/`CIND_holdings.csv`) was restored from git history (the exact file
+present right before an earlier, temporary removal of SP500 from the tool — see git history) as the
+starting holdings snapshot — replace it by hand like the other two CSVs when the index composition
+changes.
 
-SP500 was removed once (dashboard, rebalance calculator, GEM, all pipeline tables/data) because the user
-held a dedicated S&P 500 ETF elsewhere and didn't need this tool tracking it too — then brought back
-later, once the tool grew the Weinstein stage-analysis 10:30/Mansfield charts, specifically to get those
-charts and the Relative Strength screener for S&P names, **not** to resume rebalancing against it. So
-this second pass is deliberately narrower than the original: SP500 is back in `UNIVERSES` (full
-momentum selection/weighting, its own dashboard tab) and `RELATIVE_STRENGTH_UNIVERSES` (screener + 10:30/
-Mansfield charts) — but it stays **out** of `GEM_UNIVERSES` (Global Equity Momentum keeps comparing only
-NASDAQ100/DOWJONES, unchanged from before this second pass) and **out** of `rebalance.js`'s `REGIONS` (see
-above) — unlike WIG20/mWIG40, which did later get wired into `rebalance.js` as their own `GPW` region.
-`CSPX_holdings.csv` (iShares Core S&P 500 UCITS ETF
-holdings, same format/convention as `CNDX_holdings.csv`/`CIND_holdings.csv`) was restored from git
-history (the exact file present right before the original removal) as the starting holdings snapshot —
-replace it by hand like the other two CSVs when the index composition changes.
+**The rebalance calculator has no regions any more.** An earlier design split `rebalance.js` into two
+fully independent halves — `USA` (NASDAQ100+DOWJONES, USD) and `GPW` (WIG20+MWIG40, PLN), each with its
+own contribution amount, own TOP N picker per index, own suggestion table, Monte Carlo, equity curve, and
+portfolio donut — specifically to avoid ever summing a PLN amount and a USD amount together (this tool
+doesn't fetch an FX rate). That design is gone: the user found running two side-by-side panels more
+complex than needed once the dashboard grew a full RSM screener (see below), and asked instead for one
+single flow driven directly by Global Equity Momentum (GEM, see the dedicated section below) — the user
+picks a total capital contribution and a single "how many companies" (TOP N) number; the calculator itself
+decides WHICH ONE of the 5 universes to draw from (whichever is this month's GEM winner) and takes that
+universe's own TOP N constituents by momentum. Because only one universe is ever the active source at a
+time, there is only one currency in play for the suggestion table/Monte Carlo/equity curve/donut at once
+(picked dynamically from the winner via `PLN_UNIVERSES`) — the FX problem never had to be solved, it was
+sidestepped again, just via "one universe active at a time" instead of "two separate capital pools."
+Existing holdings from a universe that ISN'T the current winner are still priced and shown (so they can be
+flagged for sale) — `currencyOf(ticker)` (in `rebalance.js`, the direct replacement for the older,
+region-returning `regionOf`) is only used for formatting an individual holding-table row in its own native
+currency, independent of which universe currently drives new buy suggestions.
 
 Code comments and CLI print messages are written in Polish; keep that convention when editing existing
 files (English is fine for new, unrelated code).
@@ -187,13 +181,18 @@ at a literal 1:1 replication of S&P's own rebalance calendar.
 
 ### Global Equity Momentum (`compute_index_returns` / `compute_index_leaders`)
 
-Compares the **index level** (not constituents) of NASDAQ100/DOWJONES (`GEM_UNIVERSES` — deliberately
-**not** SP500/WIG20/mWIG40, see below) against each other over a trailing `GEM_LOOKBACK_MONTHS` (12)
-window — the classic dual/global-momentum idea of picking whichever market currently has the strongest
-trend. SP500 stays out of `GEM_UNIVERSES` even though it (unlike WIG20/mWIG40) has full yfinance history
-and could technically join: it was brought back specifically as a momentum + Relative Strength screener
-universe (see "What this repo is" above), and widening the GEM race was never asked for, so `GEM_UNIVERSES`
-stays exactly `["NASDAQ100", "DOWJONES"]`, unchanged since before SP500 came back.
+Compares the **index level** (not constituents) of ALL FIVE universes — `GEM_UNIVERSES` is now
+`["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]`, the same set as `UNIVERSES` — against each other
+over a trailing `GEM_LOOKBACK_MONTHS` (12) window — the classic dual/global-momentum idea of picking
+whichever market currently has the strongest trend. This used to compare only NASDAQ100/DOWJONES
+(SP500/WIG20/mWIG40 were deliberately excluded from the race, even though their index-level data was
+already being fetched for Relative Strength) — widened to all 5 specifically because GEM stopped being a
+dashboard-only curiosity and became the selection engine for the rebalance calculator (`rebalance.js`, see
+"What this repo is" above and the Frontend section below): the calculator needs a winner drawn from the
+full set of universes it can rebalance against, not just two of them. `compute_index_returns()` (below)
+already computed a straight full-window `price_now/price_start - 1` return — not momentum's M-14/M-2
+skip-most-recent-2-months convention, which is reserved for individual stocks — so widening `GEM_UNIVERSES`
+required no change to that computation, only to the constant itself.
 `fetch_data.py::update_index_prices` maintains a shared `index_prices` table (`Date, Index_Name, Close,
 ...`), fully replaced on every run (no incremental logic needed, unlike the per-constituent `prices`
 table) — but SP500/NASDAQ100/DOWJONES and WIG20/mWIG40 get their rows two entirely different ways:
@@ -229,12 +228,10 @@ Before the synthetic-index fix, `weekly_chart`/`mansfield_chart` were silently `
 mWIG40 stock (`compute_relative_strength_chart`/`compute_mansfield_rs_chart` both need their own index's
 rows and return `None` without them) — the dashboard showed correct WIG20/mWIG40 constituent/momentum
 data but no chart for any of their tickers, with no error anywhere in the pipeline. `compute_index_returns()`
-reads `index_prices` — filtered to `GEM_UNIVERSES` only — and returns each universe's return over the
-window, sorted descending; the top one is the `winner`. SP500/WIG20/mWIG40 price data still lands in
-`index_prices` (needed for their own Relative Strength, below) but is excluded from this specific
-cross-market race by that filter, so adding any of them didn't silently change who can win Global Equity
-Momentum — and WIG20/mWIG40's synthetic (not real-index) nature is one more reason they in particular
-should stay out of that race.
+reads `index_prices` filtered to `GEM_UNIVERSES` (now all 5) and returns each universe's return over the
+window, sorted descending; the top one is the `winner`. WIG20/mWIG40's synthetic (not real-index) level is
+still good enough here, same reasoning as for Relative Strength below: every consumer only ever reads %
+change relative to a window's start.
 
 For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
 **pushing the index to its new highs** — ranked by *contribution to the index's return*
@@ -242,7 +239,14 @@ For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constit
 winning universe and the return is computed over the *same* window as the index return), not by raw
 momentum score — a small-cap mover with an extreme return but negligible index weight should not outrank
 a mega-cap that is dragging the whole index up. `export_global_equity_momentum()` writes both the ranked
-index list and the winner's leader list to `docs/data/global_equity_momentum.json`.
+index list and the winner's leader list to `docs/data/global_equity_momentum.json`. **This `leaders` list
+is purely informational** (shown in the small GEM widget on `rebalance.html`, see Frontend section below)
+— it is NOT what the rebalance calculator buys. The calculator's own TOP N selection
+(`rebalance.js::selectedConstituents`) re-ranks the winning universe's full constituent list by its own
+`momentum_score`/`rank` (the same per-constituent momentum ranking `get_universe_metrics` computes for
+every universe's selection, exposed on every `all_constituents` record) — a deliberately different,
+simpler ranking than `compute_index_leaders`'s index-contribution weighting, chosen because the user
+wants TOP N to mean "strongest own momentum," not "biggest driver of the index's return."
 
 Unlike the main constituent-selection universes (`UNIVERSES`), GEM is refreshed **daily**, not monthly (`daily_gem.yml`, see CI
 section) — so `export_global_equity_momentum()`'s `ref_date` is *not* threaded through from the
@@ -253,6 +257,14 @@ still gracefully falls back to each constituent's last known price via `ARGMAX(.
 ref_date)` even though the per-constituent `prices` table itself is only as fresh as the last monthly run.
 `fetch_data.py --indices-only` and `run_query.py --gem-only` are the two flags that make this cheap daily
 refresh possible without touching the (expensive, rate-limited) per-constituent price fetch.
+
+**GEM has no dashboard tab any more** (`index.html`/`app.js` — it used to have its own sidebar group,
+drawer tab, and table, all reading `docs/data/global_equity_momentum.json` via `state.gem`). It was
+removed once the rebalance calculator became its actual consumer: a "just to look at" panel on the
+dashboard was no longer the point, since the winner it computes now directly drives what the calculator
+buys. `global_equity_momentum.json` is still generated by the pipeline exactly as before (daily,
+`--gem-only`) — only `app.js` stopped fetching/rendering it; `rebalance.js` fetches it instead (see
+Frontend section below).
 
 ### Relative strength (`compute_index_momentum` / `compute_relative_strength_leaders`)
 
@@ -268,13 +280,15 @@ constituents currently **outperforming their own index** in that window are kept
 `relative_strength_pct = constituent_return_pct - index_return_pct`, always positive by construction —
 sorted descending, so the biggest current outperformers come first. `export_relative_strength()` writes
 per-universe results (index return, `momentum_window` label, outperformer list) to
-`docs/data/relative_strength.json`; the frontend (`combinedRelativeStrengthLeaders()` in `app.js`) merges
-all universes into one ranked list for display, tagging each row with its own currency-aware price
-formatting (`formatPrice()` — WIG20/mWIG40 render `zł`, the rest `$`). Like GEM, its `ref_date` defaults
-to `index_prices`'s own
-watermark (not the monthly constituent-pipeline `ref_date`), and it's recomputed by the same
-`run_query.py --gem-only` daily path as GEM (see `daily_gem.yml`) since it only needs `index_prices`
-(daily) + `prices`/`index_constituents` (gracefully stale-tolerant, same as `compute_index_leaders`).
+`docs/data/relative_strength.json`. **The frontend no longer fetches this file at all** — the dashboard's
+RSM screener (see Frontend section below, `combinedRsmCandidates()` in `app.js`) builds its own two lists
+directly from the `mansfield_chart` already embedded in every constituent record, rather than from this
+outperformers-only export; `docs/data/relative_strength.json` keeps being generated by the daily pipeline
+(nothing currently reads it, but it's cheap to keep and not worth a breaking pipeline change to drop).
+Like GEM, its `ref_date` defaults to `index_prices`'s own watermark (not the monthly constituent-pipeline
+`ref_date`), and it's recomputed by the same `run_query.py --gem-only` daily path as GEM (see
+`daily_gem.yml`) since it only needs `index_prices` (daily) + `prices`/`index_constituents` (gracefully
+stale-tolerant, same as `compute_index_leaders`).
 
 Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`) with a classic stage
 -analysis view (Stan Weinstein / Dr Eric Wish) the free TradingView widget can't reliably replicate
@@ -464,20 +478,56 @@ site's data survives independently of any given Pages deploy and a fresh checkou
 immediately servable without having to run the pipeline first. CI still regenerates and re-commits it on
 every run (see CI section below) — it isn't hand-maintained.
 
-- **`index.html` / `js/app.js`** — main dashboard: sidebar of top-10 tickers per universe (`UNIVERSES` in
-  `app.js`, kept in sync with `run_query.py`'s own `UNIVERSES` — currently SP500/NASDAQ100/DOWJONES/
-  WIG20/mWIG40) plus a sidebar group for **Global Equity Momentum** (`docs/data/global_equity_momentum.json`,
-  `renderGemPanel()` — shows the winning index + its return, a ranked list of the (US-only) indices'
-  returns, and tiles for the winner's top-10 contribution leaders), a full sortable constituents table per
-  universe (`renderTable()` — `added_tickers`/`dropped_tickers` are exported in the JSON but not currently
-  rendered), and a Ctrl+K command-palette ticker search. That per-universe table also carries an "Etap"
-  (Stage) column (`stageCellHtml()`, reading `constituent.weekly_chart.current_stage`) and a **stage filter
-  bar** above it (`#stageFilterBar`, `initStageFilter()`/`matchesStageFilter()`) — "Wszystkie" (all),
-  "Etap 1", "Etap 2" (matches *both* `2A` and `2B` — a user thinks of Stage 2 as one thing, not two), "Etap 3",
-  "Etap 4"; `state.stageFilter` persists across universe tabs but the bar itself is hidden for the GEM/RS tabs
-  (`showDrawerTable()`) since those are already-filtered, different-shaped lists, not a full per-universe
-  constituent table. The drawer meta line reports `N z M spółek (etap ...)` when a filter is active, and the
-  empty-state row distinguishes "no data at all" from "no constituent matches this stage". The chart area is
+- **`index.html` / `js/app.js`** — main dashboard. `UNIVERSES` in `app.js` (kept in sync with
+  `run_query.py`'s own `UNIVERSES`) stays the full SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 five — every
+  universe's JSON is always loaded (`loadData()`), it drives Ctrl+K search and the RSM screener below
+  regardless of what has a dashboard tab — but **SP500 and NASDAQ100 no longer have their own sidebar
+  group/table/drawer tab**. `SIDEBAR_TAB_UNIVERSES = ["DOWJONES", "WIG20", "MWIG40"]` is the separate,
+  smaller list that actually drives sidebar tiles (`renderSidebarTiles()`) and the per-universe drawer
+  tabs — removed on the user's request once the dashboard's RSM screener (below) grew broad enough that a
+  dedicated SP500/NASDAQ100 momentum table felt redundant; their momentum data is still fully computed by
+  the pipeline (`UNIVERSES` unchanged there) and still fully reachable via Ctrl+K search or the RSM
+  screener, just not through a dedicated tab. `jumpToTicker()` (used by Ctrl+K's `confirmCmdkSelection()`)
+  guards against this: jumping to an SP500/NASDAQ100 ticker updates the chart/selection but does not try to
+  switch the drawer to a tab that doesn't exist. **Global Equity Momentum has no dashboard panel/tab at
+  all any more** — it moved to being the rebalance calculator's selection engine instead of a
+  look-only screen (see the dedicated GEM section above and the `rebalance.html`/`rebalance.js` bullet
+  below); `app.js` no longer fetches `global_equity_momentum.json`.
+
+  **RSM (Mansfield Relative Strength) is now two separate, full dashboard tabs** — "📈 RSM Stabilne" and
+  "🚀 RSM Wzrostowe" (`data-universe="RSM_STABLE"`/`"RSM_GROWTH"`) — replacing an earlier single "RSM" tab
+  that only showed lightweight sidebar-tile previews plus one small, non-sortable, non-stage-filterable
+  table. `classifyRsm(ticker, universe, c)` classifies a constituent from its `mansfield_chart`
+  (`rsm_short`/`rsm_medium`, the same fields the chart panel plots) into **stable** (`mediumNow > 0 &&
+  mediumNow > shortNow` — a durable edge over its own index without a fresh spike) or **accelerating**
+  (`shortNow > mediumNow` and both smoothings have been rising for `RSM_TREND_LOOKBACK_WEEKS`, ~1 month —
+  a fresh trend acceleration); a constituent can only ever land in one bucket or neither, never both.
+  `combinedRsmCandidates()` runs this over **`all_constituents`** (the CALE, full qualifying universe —
+  `FULL_COVERAGE_UNIVERSES`/`_build_full_universe_records` in `run_query.py` — not just today's top-decile
+  selection or today's Relative Strength outperformers) for all 5 universes and merges into `{stable,
+  accelerating}`, each sorted by its own defining metric (`mediumNow`/`shortNow` descending). Each of the
+  two new tabs is a real sortable table (`<th data-key="...">` on `ticker`/`universe`/`sector`/`price`/
+  `shortNow`/`mediumNow`/`trend`, reusing the generic `compareRows()`) with its own "Etap" column
+  (`stageCellHtml()`, now reading `current_stage` — added onto `classifyRsm`'s return value alongside the
+  existing RSM fields) **and** the same stage-filter bar as the per-universe tables (see below) — this is
+  exactly what the user asked for when requesting the split ("dzięki temu mógłbym filtrować po kolumnach").
+  `renderRsmScreenerTable(kind)` is the shared implementation behind both tabs (`renderRsmStableTable`/
+  `renderRsmGrowthTable`); rows carry their own real `universe`, so clicking one still calls
+  `selectTicker(ticker, universe)` exactly like every other table — the whole chart-rendering pipeline
+  below is completely unaware that a click came from an RSM tab rather than a per-universe one.
+
+  The per-universe momentum table (`renderTable()` — `added_tickers`/`dropped_tickers` are exported in the
+  JSON but not currently rendered) carries an "Etap" (Stage) column (`stageCellHtml()`, reading
+  `constituent.weekly_chart.current_stage`) and a **stage filter bar** above it (`#stageFilterBar`,
+  `initStageFilter()`/`matchesStageFilter()`) — "Wszystkie" (all), "Etap 1", "Etap 2" (matches *both* `2A`
+  and `2B` — a user thinks of Stage 2 as one thing, not two), "Etap 3", "Etap 4". Since the RSM
+  Stabilne/Wzrostowe tabs also cover full universes with a real `current_stage` per row, the stage filter
+  bar is now shown for those two tabs too (previously hidden for the single old RSM/GEM tabs, which were
+  already-filtered, differently-shaped lists) — `initStageFilter()`'s click handler dispatches to whichever
+  table is currently active (`renderActiveDrawerTable()`) rather than always calling `renderTable()`.
+  `state.stageFilter` persists across all drawer tabs. The drawer meta line reports `N z M spółek (etap
+  ...)` when a filter is active, and the empty-state row distinguishes "no data at all" from "no
+  constituent matches this stage". The chart area is
   split into two tabs (`#chartViewTabs`/`initChartViewTabs()` in `app.js`): **"📊 Wykres własny"** (default) —
   the own weekly stage-analysis chart described below, with a single `#openTvBtn` button ("📈 Otwórz w
   TradingView ↗", `initOpenTvButton()`) that opens the *full* tradingview.com chart page for that ticker in a
@@ -494,28 +544,25 @@ every run (see CI section below) — it isn't hand-maintained.
   config never adds a compare symbol, so that failure mode doesn't apply. Since an embedded widget's `<script>`
   has no API to swap its symbol live, `renderTvOverviewPanel()` tears down and rebuilds every block from
   scratch on each ticker change (and each tab switch) rather than trying to update one in place. Every ticker
-  row across the dashboard's tables (the main per-universe table, the GEM table, the RS table —
-  `tvRowButtonHtml()`/`bindTvRowButtons()`)
-  also carries its own small "TV" button doing the same, independent of selecting the row (it stops click
-  propagation so it doesn't also call `selectTicker()`); plus a sidebar group for
-  **relative strength** (`docs/data/relative_strength.json`, `renderRelativeStrengthPanel()` — each
-  index's own return, and tiles merging SP500+NASDAQ100+DOWJONES+WIG20+mWIG40 outperformers via
-  `combinedRelativeStrengthLeaders()`, sorted by edge over their index). The sidebar is hidden on phones
-  in portrait (`@media max-width:640px`), so the drawer table has a "🚀 GEM" tab (`showDrawerTable()` /
-  `renderGemTable()`) and a "💪 RS" tab (`renderRelativeStrengthTable()`) rendering the same lists as
-  their own tables — the only way to reach them on mobile, since neither is otherwise duplicated by the
-  per-universe tables. Every ticker in the main per-universe exports
-  (`docs/data/{universe}.json`'s `constituents`, see `process_universe`/`export_json` above) carries its own
-  `weekly_chart`/`mansfield_chart` too, not just the relative-strength panel's leaders — so the own chart is
-  available for any stock, however it was selected (per-universe tables, GEM, Ctrl+K search, the
-  relative-strength panel/table). `findRsEntry()` in `app.js` looks a ticker up first in
-  `combinedRelativeStrengthLeaders()` (an RS-leader entry also carries `relative_strength_pct`/
-  `index_return_pct`) and falls back to its own record in `state.data[universe].constituents`; whichever
-  it finds becomes `state.currentRsEntry` and drives `hasRsChart` in `updateChartArea()` — when a ticker has
-  no `weekly_chart` at all (e.g. one whose momentum fell back to the 9-month window with too little extra
-  history), the chart panels are hidden and `#noChartMessage` is shown instead, pointing at the "Otwórz w
-  TradingView" button as the fallback; that button itself is never disabled, since it works for every ticker
-  regardless of chart-data availability. When shown, it's **three stacked Chart.js panels**
+  row across the dashboard's tables (the per-universe momentum tables and both RSM tables —
+  `tvRowButtonHtml()`/`bindTvRowButtons()`) also carries its own small "TV" button doing the same,
+  independent of selecting the row (it stops click propagation so it doesn't also call `selectTicker()`).
+  The sidebar is hidden on phones in portrait (`@media max-width:640px`), so the drawer's per-universe
+  tabs (`DOWJONES`/`WIG20`/`MWIG40`) plus the two RSM tabs are the only way to reach any of this on
+  mobile — `showDrawerTable(universe)` dispatches on the tab key. Every ticker in the main per-universe
+  exports (`docs/data/{universe}.json`'s `all_constituents`, see `process_universe`/`export_json` above)
+  carries its own `weekly_chart`/`mansfield_chart` — so the own chart is available for any stock, however
+  it was selected (per-universe tables, either RSM tab, Ctrl+K search). `findRsEntry()` in `app.js` looks
+  a ticker up directly in `state.data[universe].all_constituents` (falling back to `.constituents` for an
+  older, not-yet-migrated cached JSON) — a simple, single lookup, no separate outperformers-only
+  leaderboard to check first (that leaderboard concept, `combinedRelativeStrengthLeaders()`/
+  `relative_strength.json`, doesn't exist client-side any more — see the Relative Strength section above).
+  Whichever record it finds becomes `state.currentRsEntry` and drives `hasRsChart` in `updateChartArea()`
+  — when a ticker has no `weekly_chart` at all (e.g. one whose momentum fell back to the 9-month window
+  with too little extra history), the chart panels are hidden and `#noChartMessage` is shown instead,
+  pointing at the "Otwórz w TradingView" button as the fallback; that button itself is never disabled,
+  since it works for every ticker regardless of chart-data availability. When shown, it's **three stacked
+  Chart.js panels**
   (`renderRelativeStrengthChart()`, loaded via CDN, along with `chartjs-plugin-zoom` and
   `chartjs-plugin-annotation` — same CDN, pinned versions):
   1. The "10:30" price+SMA10/SMA30 chart, with the stock's own index level plotted alongside it on the
@@ -562,42 +609,60 @@ every run (see CI section below) — it isn't hand-maintained.
   `state.selectedUniverse`, set alongside `state.selectedTicker` in `selectTicker()`) so the "Otwórz w
   TradingView" link resolves to the correct Warsaw-listed instrument instead of clashing with an unrelated
   ticker on another exchange.
-- **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings,
-  exclusions, per-region settings) lives in `localStorage` only — there is no backend. The page is split
-  into two fully independent regions (`REGIONS`/`REGION_LIST` — `USA`: NASDAQ100+DOWJONES/USD, `GPW`:
-  WIG20+MWIG40/PLN — see "What this repo is" above for why they're kept separate rather than merged), each
-  rendered as its own repeated block of panel-cards (settings, stat-cards, suggestion table, Monte Carlo,
-  equity curve, portfolio-analysis donut) with DOM ids suffixed `-USA`/`-GPW` (`renderRegion(region)`,
-  called for both by `renderRegions()`/`renderAll()`). Key pieces:
-  - **No more manual capital-split %.** An earlier version had the user set a `settings.pct` split
-    between Nasdaq/Dow (and a global `settings.maxHoldings` cap) — both were removed in favor of
-    `settings.regions[region].topN[universe]`: the user just says how many top-momentum names to take
-    from each index (e.g. "top 5 from Nasdaq 100, top 5 from Dow Jones"); `selectedConstituents(region, u)`
-    slices the already momentum-sorted `{universe}.json` constituents list to that count (after removing
-    manually excluded tickers first, so TOP N is filled from what remains). `computeTargets(region,
-    totalCapital)` then merges the TOP N from every universe in that region into one pool and weights each
-    ticker by its own raw `weight_pct` normalized across that whole pool (not per-universe) — an index
-    whose TOP N picks currently have stronger momentum naturally gets a bigger share of the region's
-    capital, with no separate % dial. `universeWeightSharePct(region)` derives the equivalent per-universe
-    split (purely for weighting the "Wynik historyczny" equity-curve blend below) from that same TOP N
-    selection.
-  - **Holdings and exclusions are shared across both regions** — one flat `holdings` list (ticker +
-    shares) and one `excluded` list of tickers, exactly as before; `regionOf(ticker)` (via
-    `priceMap[ticker].sources`, defaulting to `USA` for an unrecognized ticker) is what buckets a given
-    holding into the USA or GPW section for display and rebalancing math. `regionHoldingsValue`/
-    `regionExcludedValue`/`regionHoldingShares` are the per-region filtered views over that shared state.
-  - **Currency-aware formatting**: `fmtMoney` (USD, `$`) and `fmtMoneyPln` (PLN, `zł`, `pl-PL` locale) are
-    two separate formatters — `moneyFmtFor(region)` picks the right one, threaded through every per-region
-    render function (suggestion table, stat-cards, Monte Carlo axis/tooltip/caption, portfolio-analysis
-    donut tooltip) and through the shared holdings table's price/value cells (via `regionOf(ticker)`) so a
-    GPW position always reads in złoty even though the table itself isn't split.
-  - Positions can be excluded (`excluded` list) so they're priced but never suggested for
-    buy/sell — their value is carved out of the investable capital of whichever region they belong to.
+- **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings, exclusions,
+  settings) lives in `localStorage` only — there is no backend. **There are no regions any more** — an
+  earlier version split the whole page into two independent halves (`REGIONS`/`REGION_LIST`, `USA`:
+  NASDAQ100+DOWJONES/USD vs. `GPW`: WIG20+MWIG40/PLN, each with its own contribution/TOP-N/suggestion
+  table/Monte Carlo/equity curve/donut, DOM ids suffixed `-USA`/`-GPW`) specifically to avoid ever summing
+  a PLN amount and a USD amount together. That's gone, replaced by one single flow driven by Global Equity
+  Momentum (see the dedicated GEM section above): the user sets one capital contribution and one TOP N
+  count; the calculator itself decides which ONE of the 5 universes to draw from. Key pieces:
+  - **`gemData`** (`loadUniverseData()` fetches `docs/data/global_equity_momentum.json`, now covering all
+    5 universes — see GEM section above) is the calculator's selection engine. `renderGemWidget()` renders
+    a small, read-only panel (`#gemWidget` in `rebalance.html`) showing the current winner + its 12M
+    return and the ranked list of all 5 — this is the direct replacement for the GEM panel that used to
+    live on the dashboard (`app.js`, removed — see above): it moved here because this is where the winner
+    actually matters now, not just somewhere to look at it.
+  - **`selectedConstituents(topN)`** (replacing the old, per-region, per-universe
+    `selectedConstituents(region, u)`) reads `universeData[gemData.winner].all_constituents` (the FULL
+    qualifying universe of whichever index is this month's GEM winner, not just its current top-decile
+    selection — the winner can change month to month, and TOP N is meant to track the winner's own
+    momentum ranking directly), filters out manually-excluded tickers, sorts by `rank` (the same
+    momentum-score ranking `get_universe_metrics` computes for every universe), and slices to `topN`.
+    **`computeTargets(topN, totalCapital)`** then weights that TOP N selection by each constituent's own
+    `momentum_score` (not the pipeline's `weight_pct` — deliberately: `weight_pct` is meaningless as a
+    momentum signal for `EQUAL_WEIGHT_UNIVERSES`, since it's just `1/n` there, and isn't exported at all
+    for tickers outside the pipeline's own current selection). This is a conscious simplification vs. the
+    pipeline's own cap-weighting (`compute_weights`'s 9%/3x cap-weight logic) — one simple, consistent
+    weighting rule that behaves the same for every universe regardless of how the pipeline itself weights
+    it internally, in the same "don't need all that complexity" spirit as dropping the regions.
+  - **Holdings and exclusions are one flat, universe-agnostic list**, exactly as before — one `holdings`
+    array (ticker + shares) and one `excluded` array of tickers. `currencyOf(ticker)` (via
+    `priceMap[ticker].sources`, defaulting to USD for an unrecognized ticker) replaces the old
+    region-returning `regionOf` — it's used ONLY to format an individual holding-table row (price/value
+    cells) in its own native currency; it has nothing to do with which universe is the active GEM winner,
+    so a held position from a non-winning universe still displays correctly. `holdingsValue()`/
+    `excludedValue()`/`holdingShares()`/`targetCapital()` are the (now region-less, unfiltered) views over
+    that shared state.
+  - **Currency-aware formatting for the calculator's own output** (suggestion table, stat-cards, Monte
+    Carlo, equity curve, donut, the contribution input's unit label) all comes from **`moneyFmtFor()`**
+    (no argument any more) — it picks `fmtMoneyPln` vs. `fmtMoney` from `PLN_UNIVERSES.has(gemData.winner)`,
+    i.e. from whichever universe currently wins GEM, not from a region. `moneyFmtForCurrency(currency)` is
+    the separate, explicit-currency formatter used for holdings-table rows (via `currencyOf`), since those
+    can span both currencies at once even though the calculator's own suggestion output never does.
+  - A held position whose own universe is not the current GEM winner is flagged in the suggestion table as
+    "poza aktywnym indeksem GEM (obecnie: ...)" rather than "poza TOP N" — it isn't that it fell out of a
+    ranking, it's that its whole universe isn't the one being drawn from this month.
+  - The "Wynik historyczny" equity-curve panel no longer blends multiple universes by TOP-N-derived weight
+    share (`universeWeightSharePct`/`blendEquityCurves` are gone) — with only ever one active universe,
+    it's simply that universe's own `docs/data/equity_curve.json` entry, unblended.
   - `parseXtbOpenPositions()` imports an XTB "Open Positions" `.xlsx` export via SheetJS
-    (`XLSX.read`, loaded from a CDN in `rebalance.html`) as a one-shot replacement of the holdings list.
-  - A client-side Monte Carlo simulation (`simulateMonteCarlo`, Chart.js), run separately per region, projects
-    that region's portfolio value using the capital-weighted average momentum (capped at ±30%/yr) and
-    volatility of that region's currently targeted names — explicitly labeled as illustrative, not a forecast.
+    (`XLSX.read`, loaded from a CDN in `rebalance.html`) as a one-shot replacement of the holdings list —
+    unchanged by any of the above.
+  - A client-side Monte Carlo simulation (`simulateMonteCarlo`, Chart.js) projects the portfolio's value
+    using the capital-weighted average momentum (capped at ±30%/yr) and volatility of the currently
+    targeted TOP N names — explicitly labeled as illustrative, not a forecast; unchanged in spirit, just
+    run once instead of once per region.
 - **`edukacja.html`** — static, JS-free educational write-up of Stage Analysis in Polish: the 4-stage cycle
   (with a colored `.edu-cycle` diagram matching `STAGE_COLORS` from `app.js`), the role of SMA10/SMA30 and
   the base/resistance breakout mechanism, volume confirmation, the trailing stop-loss rules, the two warning

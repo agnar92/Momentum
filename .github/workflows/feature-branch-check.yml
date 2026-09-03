@@ -1,0 +1,77 @@
+name: Feature Branch Check (rebalancer/portfolio restructure)
+
+# Tymczasowy workflow, tylko dla brancha budującego duże przeprojektowanie dashboardu +
+# rebalansera (usunięcie regionów USA/GPW, GEM na 5 uniwersów, zakładki RSM Stabilne/
+# Wzrostowe) — patrz plan w opisie zadania. Celowo NIE triggeruje się na main/push innych
+# branchy/cron, żeby dawać szybki feedback przy każdym pushu tutaj bez czekania na PR i bez
+# jakiegokolwiek ryzyka dla main.yml/daily_gem.yml/weekly_charts.yml (te triggerują się
+# wyłącznie na main + harmonogram, więc push na ten branch ich w ogóle nie dotyka).
+#
+# Do usunięcia (albo pozostawienia jako trwały krok — do decyzji) przy mergu do main, bo
+# `tests.yml` przejmuje wtedy tę rolę.
+on:
+  push:
+    branches: [claude/rebalancer-portfolio-restructure-s5r1ef]
+
+permissions:
+  contents: read
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Unit tests (pytest)
+        run: python -m pytest -v
+
+      - name: Pipeline dry-run (no fetch, no commit, no deploy)
+        run: |
+          # Bez --ref-date: run_query.py sam bierze MAX(Date) z już zacommitowanej
+          # momentum_data.duckdb (patrz main(), brak args.ref_date). --docs-dir poza
+          # docs/ więc nic tu nie nadpisuje śledzonych plików.
+          python run_query.py --docs-dir /tmp/docs_dryrun
+          echo "--- global_equity_momentum.json indices ---"
+          python -c "
+          import json
+          data = json.load(open('/tmp/docs_dryrun/data/global_equity_momentum.json'))
+          print('winner:', data.get('winner'))
+          print('n_indices:', len(data.get('indices', [])))
+          for i in data.get('indices', []):
+              print(i['universe'], i['return_pct'])
+          "
+
+  javascript:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (eslint)
+        run: npm run lint
+
+      - name: Unit tests (node --test)
+        run: npm test

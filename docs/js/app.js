@@ -10,6 +10,12 @@ const UNIVERSE_LABELS = {
 // WIG20/mWIG40 są notowane w PLN (a nie USD jak reszta uniwersów) — patrz
 // formatPrice — oraz na GPW w TradingView, stąd sufiks "GPW:" w tvSymbolFor.
 const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
+// Uniwersa z WŁASNĄ zakładką/tabelą momentum w dashboardzie (sidebar + drawer).
+// SP500/NASDAQ100 zostały z niej usunięte na życzenie użytkownika (dashboard ma
+// już ekran RSM Stabilne/Wzrostowe, który je i tak obejmuje) — ale ZOSTAJĄ w
+// UNIVERSES: dalej są ładowane, przeszukiwalne (Ctrl+K) i widoczne na ekranach
+// RSM (patrz combinedRsmCandidates), tylko bez własnej, dedykowanej tabeli.
+const SIDEBAR_TAB_UNIVERSES = ["DOWJONES", "WIG20", "MWIG40"];
 
 function formatPrice(price, universe) {
     return PLN_UNIVERSES.has(universe) ? `${price.toFixed(2)} zł` : `$${price.toFixed(2)}`;
@@ -241,12 +247,11 @@ function bindTvRowButtons(container) {
 
 const state = {
     data: {},
-    gem: { indices: [], leaders: [] },
     selectedTicker: null,
     selectedUniverse: null,
     currentRsEntry: null,
     drawerOpen: false,
-    drawerUniverse: "SP500",
+    drawerUniverse: "DOWJONES",
     chartView: "own",
     stageFilter: "ALL",
     sortKey: "rank",
@@ -264,16 +269,10 @@ async function loadData() {
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
     }
-    try {
-        const res = await fetch("data/global_equity_momentum.json", { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        state.gem = await res.json();
-    } catch (e) {
-        console.error("Nie udało się wczytać danych Global Equity Momentum:", e);
-        state.gem = { ref_date: null, indices: [], winner: null, leaders: [] };
-    }
-    // docs/data/relative_strength.json NIE jest już tu wczytywany — panel RSM
-    // poniżej (combinedRsmCandidates) buduje się bezpośrednio z mansfield_chart
+    // docs/data/global_equity_momentum.json i docs/data/relative_strength.json NIE
+    // są już tu wczytywane — GEM przestał być czymś do oglądania na dashboardzie
+    // (przeniesiony jako silnik wyboru do rebalance.js, patrz CLAUDE.md), a panel
+    // RSM poniżej (combinedRsmCandidates) buduje się bezpośrednio z mansfield_chart
     // dołączonego do KAŻDEGO constituenta w state.data (patrz process_universe/
     // export_json w run_query.py), więc nie potrzebuje osobnego leaderboardu.
 }
@@ -342,6 +341,7 @@ function classifyRsm(ticker, universe, c) {
     return {
         ticker, universe, sector: c.sector, price: c.price,
         shortNow, mediumNow, trend,
+        current_stage: c.weekly_chart && c.weekly_chart.current_stage,
         isStable: mediumNow > 0 && mediumNow > shortNow,
         isAccelerating: shortNow > mediumNow && bothRising,
     };
@@ -351,10 +351,16 @@ function classifyRsm(ticker, universe, c) {
 // uniwersów, każde posortowane malejąco po swojej definiującej metryce
 // (mediumNow dla stabilnego wzrostu — najsilniejsze utrzymujące się przewagi
 // na górze; shortNow dla nagłej zmiany trendu — najgorętsze świeże ruchy).
+// Czyta "all_constituents" (CAŁE kwalifikujące się uniwersum, nie tylko
+// bieżący top-decyl dla SP500/NASDAQ100 — patrz FULL_COVERAGE_UNIVERSES w
+// run_query.py) — to jest właśnie zakres, o który prosił użytkownik przy
+// rozbiciu tego screenera na zakładki "RSM Stabilne"/"RSM Wzrostowe": WSZYSTKIE
+// kwalifikujące się spółki, nie tylko te aktualnie wybrane do portfela.
 function combinedRsmCandidates() {
     const stable = [], accelerating = [];
     UNIVERSES.forEach(u => {
-        (state.data[u].constituents || []).forEach(c => {
+        const universeData = state.data[u] || {};
+        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
             const r = classifyRsm(c.ticker, u, c);
             if (!r) return;
             if (r.isStable) stable.push(r);
@@ -370,7 +376,7 @@ function combinedRsmCandidates() {
 // SIDEBAR (kwadraty z top 10 tickerów na indeks)
 // ============================================================
 function renderSidebarTiles() {
-    UNIVERSES.forEach(u => {
+    SIDEBAR_TAB_UNIVERSES.forEach(u => {
         const container = document.getElementById(`tiles-${u}`);
         container.innerHTML = "";
         const top10 = (state.data[u].constituents || []).slice(0, 10);
@@ -394,78 +400,22 @@ function renderSidebarTiles() {
     });
 }
 
-// Global Equity Momentum: porownanie zwrotu POZIOMU INDEKSU (nie skladnikow)
-// NASDAQ100/DOWJONES w oknie 12M (docs/data/global_equity_momentum.json /
-// run_query.py::compute_index_returns) — wygrywa indeks o najsilniejszym trendzie.
-// Kafelki ponizej to top 10 spolek zwycieskiego indeksu wg wkladu w jego zwrot
-// (waga w indeksie x zwrot spolki w tym samym oknie), czyli te, ktore realnie
-// pchaja cene indeksu w gore. Klik dziala tak samo jak w gornych 3 grupach.
-function renderGemPanel() {
-    const container = document.getElementById("tiles-GEM");
-    if (!container) return;
-
-    const g = state.gem;
-    const meta = document.getElementById("gemMeta");
-    if (meta) {
-        const winnerReturn = (g.indices || []).find(i => i.universe === g.winner);
-        meta.textContent = g.ref_date && g.winner
-            ? `Zwycięzca: ${UNIVERSE_LABELS[g.winner].replace(" Momentum", "")} `
-              + `${winnerReturn ? (winnerReturn.return_pct >= 0 ? "+" : "") + winnerReturn.return_pct.toFixed(2) + "%" : ""} `
-              + `(${g.lookback_months || 12}M) · ${(g.leaders || []).length} liderów`
-            : "Brak danych — uruchom pipeline.";
-        meta.title = g.note || "";
-    }
-
-    const returnsEl = document.getElementById("gemIndexReturns");
-    if (returnsEl) {
-        returnsEl.innerHTML = "";
-        (g.indices || []).forEach(i => {
-            const row = document.createElement("div");
-            row.className = "gem-index-row" + (i.universe === g.winner ? " gem-index-winner" : "");
-            row.innerHTML = `
-                <span>${i.universe === g.winner ? "🏆 " : ""}${UNIVERSE_LABELS[i.universe].replace(" Momentum", "")}</span>
-                <span class="${i.return_pct >= 0 ? "positive" : "negative"}">${i.return_pct >= 0 ? "+" : ""}${i.return_pct.toFixed(2)}%</span>
-            `;
-            returnsEl.appendChild(row);
-        });
-    }
-
-    container.innerHTML = "";
-    const items = g.leaders || [];
-    items.forEach(c => {
-        const tile = document.createElement("div");
-        tile.className = "ticker-tile";
-        tile.textContent = c.ticker;
-        tile.title = `${c.ticker} — #${c.rank} · zwrot ${c.return_pct.toFixed(2)}% · waga w indeksie `
-            + `${c.weight_in_index_pct.toFixed(2)}% · wkład w zwrot ${c.contribution_pct.toFixed(2)}pp`;
-        tile.dataset.ticker = c.ticker;
-        tile.dataset.universe = g.winner;
-        if (c.ticker === state.selectedTicker) tile.classList.add("selected");
-        tile.addEventListener("click", () => selectTicker(c.ticker, g.winner));
-        container.appendChild(tile);
-    });
-    if (items.length === 0) {
-        const empty = document.createElement("div");
-        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
-        empty.textContent = "brak danych";
-        container.appendChild(empty);
-    }
-}
-
-// Sidebar: dwie osobne siatki kafelków w jednym panelu (patrz
-// combinedRsmCandidates powyżej) — "Stabilny wzrost" i "Nagła zmiana trendu",
-// każda ze swoim mini-nagłówkiem w HTML (patrz index.html #rsmGroup).
+// Sidebar: dwie OSOBNE zakładki/grupy (patrz combinedRsmCandidates powyżej) —
+// "RSM Stabilne" i "RSM Wzrostowe" — każda z własnym mini-nagłówkiem i licznikiem
+// w HTML (patrz index.html #rsmStableGroup/#rsmGrowthGroup). Global Equity
+// Momentum nie ma już własnego panelu na dashboardzie — przeniesiony jako
+// silnik wyboru do rebalance.js (mały wskaźnik zwycięzcy w rebalance.html).
 function renderRsmPanel() {
     const stableContainer = document.getElementById("tiles-RSM-stable");
     const accelContainer = document.getElementById("tiles-RSM-accel");
-    if (!stableContainer || !accelContainer) return;
+    if (!stableContainer && !accelContainer) return;
 
     const { stable, accelerating } = combinedRsmCandidates();
 
-    const meta = document.getElementById("rsmMeta");
-    if (meta) {
-        meta.textContent = `${stable.length} stabilny wzrost · ${accelerating.length} nagła zmiana trendu`;
-    }
+    const stableMeta = document.getElementById("rsmStableMeta");
+    if (stableMeta) stableMeta.textContent = `${stable.length} spółek`;
+    const growthMeta = document.getElementById("rsmGrowthMeta");
+    if (growthMeta) growthMeta.textContent = `${accelerating.length} spółek`;
 
     const fillTiles = (container, rows) => {
         container.innerHTML = "";
@@ -488,16 +438,16 @@ function renderRsmPanel() {
             container.appendChild(empty);
         }
     };
-    fillTiles(stableContainer, stable);
-    fillTiles(accelContainer, accelerating);
+    if (stableContainer) fillTiles(stableContainer, stable);
+    if (accelContainer) fillTiles(accelContainer, accelerating);
 }
 
 // Kazdy ticker z glownego uniwersum (state.data[u].all_constituents — CALE
 // uniwersum, nie tylko decyl, patrz FULL_COVERAGE_UNIVERSES/_build_full_universe_records
 // w run_query.py; dla uniwersow rownowazonych rowne "constituents") ma wlasny
-// weekly_chart/mansfield_chart — wystarczy odczytac go wprost stamtad. Screener RS
-// (combinedRelativeStrengthLeaders powyzej) to osobny, wyselekcjonowany widok
-// (tylko biezacy outperformerzy), nie zrodlo danych do samego wykresu.
+// weekly_chart/mansfield_chart — wystarczy odczytac go wprost stamtad. Screener RSM
+// (combinedRsmCandidates powyzej) to osobny, wyselekcjonowany widok (tylko
+// spolki spelniajace kryteria stabilne/wzrostowe), nie zrodlo danych do samego wykresu.
 function findRsEntry(ticker, universe) {
     const universeData = state.data[universe];
     const list = (universeData && (universeData.all_constituents || universeData.constituents)) || [];
@@ -511,7 +461,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #gemTableBody tr, #rsmTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #rsmStableTableBody tr, #rsmGrowthTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
@@ -524,11 +474,18 @@ function selectTicker(ticker, universe) {
 }
 
 // Przełącza zakładkę drawer na uniwersum danego tickera (żeby podświetlenie
-// w tabeli/kafelkach było spójne) i pokazuje jego wykres.
+// w tabeli/kafelkach było spójne) i pokazuje jego wykres. SP500/NASDAQ100 nie
+// mają już własnej zakładki (patrz SIDEBAR_TAB_UNIVERSES) — wynik wyszukiwania
+// Ctrl+K dla ich tickera wtedy tylko aktualizuje wybór/wykres, bez przełączania
+// drawera na nieistniejącą zakładkę (żaden .drawer-tab nie ma takiego
+// data-universe, więc poniższy toggle i tak nie podświetli żadnego taba).
 function jumpToTicker(ticker, universe) {
+    const hasTab = !!document.querySelector(`.drawer-tab[data-universe="${universe}"]`);
     document.querySelectorAll(".drawer-tab").forEach(t => t.classList.toggle("active", t.dataset.universe === universe));
-    state.drawerUniverse = universe;
-    showDrawerTable(universe);
+    if (hasTab) {
+        state.drawerUniverse = universe;
+        showDrawerTable(universe);
+    }
     selectTicker(ticker, universe);
 }
 
@@ -770,7 +727,7 @@ function initStageFilter() {
         btn.addEventListener("click", () => {
             state.stageFilter = btn.dataset.stage;
             bar.querySelectorAll(".stage-filter-btn").forEach(b => b.classList.toggle("active", b === btn));
-            renderTable();
+            renderActiveDrawerTable();
         });
     });
 }
@@ -1173,81 +1130,45 @@ function compareRows(a, b, sortKey, sortDir) {
     return 0;
 }
 
-// Przełącza, która z dwóch tabel w drawerze jest widoczna (pełna tabela
-// uniwersum vs. Global Equity Momentum — mają inny zestaw kolumn, patrz
-// renderGemTable) i renderuje jej zawartość. Na telefonie sidebar z
-// kafelkami jest ukryty (patrz CSS @media max-width:640px), więc to
-// jedyny sposób dotarcia do GEM w pionie.
+// Przełącza, która z trzech tabel w drawerze jest widoczna (pełna tabela
+// uniwersum, albo jedna z dwóch pełnych, sortowalnych, filtrowalnych po etapie
+// tabel screenera RSM — Stabilne/Wzrostowe, patrz renderRsmStableTable/
+// renderRsmGrowthTable) i renderuje jej zawartość. Na telefonie sidebar z
+// kafelkami jest ukryty (patrz CSS @media max-width:640px), więc to jedyny
+// sposób dotarcia do RSM Stabilne/Wzrostowe w pionie. Global Equity Momentum
+// nie ma już własnej tabeli tutaj — przeniesiony jako silnik wyboru do
+// rebalance.js.
 function showDrawerTable(universe) {
-    const isGem = universe === "GEM";
-    const isRsm = universe === "RSM";
-    document.getElementById("momentumTable").hidden = isGem || isRsm;
-    document.getElementById("gemTable").hidden = !isGem;
-    document.getElementById("rsmTable").hidden = !isRsm;
-    // Filtr etapow ma sens tylko dla pelnej listy skladnikow jednego uniwersum
-    // (GEM/RSM to juz odfiltrowane, wybrane podzbiory).
+    const isRsmStable = universe === "RSM_STABLE";
+    const isRsmGrowth = universe === "RSM_GROWTH";
+    const isRsm = isRsmStable || isRsmGrowth;
+    document.getElementById("momentumTable").hidden = isRsm;
+    document.getElementById("rsmStableTable").hidden = !isRsmStable;
+    document.getElementById("rsmGrowthTable").hidden = !isRsmGrowth;
+    // W przeciwienstwie do starego jednego ekranu RSM (tylko biezaci
+    // liderzy), RSM Stabilne/Wzrostowe obejmuja teraz CALE uniwersa i kazda
+    // spolka niesie wlasny current_stage (patrz classifyRsm) — filtr etapow
+    // ma tu wiec sens tak samo jak w pelnej tabeli uniwersum, dzieki czemu
+    // mozna filtrowac po kolumnach (etap wlacznie) tak jak wszedzie indziej.
     const stageFilterBar = document.getElementById("stageFilterBar");
-    if (stageFilterBar) stageFilterBar.hidden = isGem || isRsm;
-    document.getElementById("drawerTitle").textContent = isGem
-        ? "Pełna tabela — Global Equity Momentum"
-        : isRsm
-            ? "Pełna tabela — RSM"
+    if (stageFilterBar) stageFilterBar.hidden = false;
+    document.getElementById("drawerTitle").textContent = isRsmStable
+        ? "Pełna tabela — RSM Stabilne"
+        : isRsmGrowth
+            ? "Pełna tabela — RSM Wzrostowe"
             : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
-    if (isGem) {
-        renderGemTable();
-    } else if (isRsm) {
-        renderRsmTable();
-    } else {
-        renderTable();
-    }
+    renderActiveDrawerTable();
 }
 
-function renderGemTable() {
-    const g = state.gem;
-    const meta = document.getElementById("drawerMeta");
-    if (g.ref_date && g.winner) {
-        meta.textContent = `Rebalans: ${g.ref_date} · zwycięzca ${UNIVERSE_LABELS[g.winner].replace(" Momentum", "")} · ${(g.leaders || []).length} liderów`;
-        meta.title = g.note || "";
-    } else {
-        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
-        meta.title = "";
-    }
-
-    const rows = g.leaders || [];
-    const tbody = document.getElementById("gemTableBody");
-    tbody.innerHTML = "";
-
-    if (rows.length === 0) {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="8" class="empty-state">Brak danych.</td>`;
-        tbody.appendChild(tr);
-        return;
-    }
-
-    rows.forEach(r => {
-        const tr = document.createElement("tr");
-        tr.dataset.ticker = r.ticker;
-        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
-        tr.innerHTML = `
-            <td><span class="rank-badge">${r.rank}</span></td>
-            <td class="ticker-cell">${r.ticker}</td>
-            <td>${r.sector}</td>
-            <td>$${r.price.toFixed(2)}</td>
-            <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct.toFixed(2)}%</td>
-            <td>${r.weight_in_index_pct.toFixed(2)}%</td>
-            <td>${r.contribution_pct.toFixed(2)}pp</td>
-            <td>${tvRowButtonHtml(r.ticker, g.winner)}</td>
-        `;
-        tr.addEventListener("click", () => selectTicker(r.ticker, g.winner));
-        tbody.appendChild(tr);
-    });
-    bindTvRowButtons(tbody);
-}
-
-function rsmBadgeHtml(type) {
-    return type === "stable"
-        ? '<span class="rsm-badge rsm-badge-stable">Stabilny</span>'
-        : '<span class="rsm-badge rsm-badge-accel">Przyspiesza</span>';
+// Dispatcher wywolywany zarowno po przelaczeniu zakladki (showDrawerTable) jak
+// i po zmianie filtra etapu (initStageFilter) — zeby zmiana filtra odswiezala
+// WLASNIE aktywna tabele, a nie zawsze renderTable() (co bylo poprawne, gdy
+// istnial tylko jeden typ tabeli poza momentum, ale juz nie po rozbiciu RSM
+// na dwie pelne, filtrowalne zakladki).
+function renderActiveDrawerTable() {
+    if (state.drawerUniverse === "RSM_STABLE") renderRsmStableTable();
+    else if (state.drawerUniverse === "RSM_GROWTH") renderRsmGrowthTable();
+    else renderTable();
 }
 
 function rsmTrendHtml(trend) {
@@ -1255,72 +1176,75 @@ function rsmTrendHtml(trend) {
     return `<span class="rsm-trend ${cls}">${RSM_TREND_LABELS[trend]}</span>`;
 }
 
-function rsmRowHtml(r, rank, type) {
+function rsmScreenerRowHtml(r, position) {
     return `
-        <td><span class="rank-badge">${rank}</span></td>
+        <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
         <td>${r.sector}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
         <td class="${r.shortNow >= 0 ? "positive" : "negative"}">${r.shortNow.toFixed(2)}</td>
         <td class="${r.mediumNow >= 0 ? "positive" : "negative"}">${r.mediumNow.toFixed(2)}</td>
-        <td>${rsmBadgeHtml(type)}</td>
         <td>${rsmTrendHtml(r.trend)}</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
 }
 
-// Jedna tabela, DWIE sekcje jedna pod drugą (wiersz-nagłówek z colspan między
-// nimi) — "Stabilny wzrost" i "Nagła zmiana trendu" (patrz combinedRsmCandidates
-// powyżej) — użytkownik chciał je widzieć rozdzielone, nie w jednej wspólnej
-// liście posortowanej po jednym kryterium.
-function renderRsmTable() {
+// Wspólna implementacja dla obu zakładek RSM (Stabilne/Wzrostowe) — sortowalna
+// (compareRows po data-key z index.html, patrz initDrawer) i filtrowalna po
+// etapie (matchesStageFilter/#stageFilterBar), tak jak pełna tabela uniwersum
+// (renderTable), tylko na płaskiej, wielo-uniwersalnej liście z
+// combinedRsmCandidates() zamiast na state.data[state.drawerUniverse].
+function renderRsmScreenerTable(kind) {
     const { stable, accelerating } = combinedRsmCandidates();
+    const allRows = kind === "stable" ? stable : accelerating;
+    const bodyId = kind === "stable" ? "rsmStableTableBody" : "rsmGrowthTableBody";
     const meta = document.getElementById("drawerMeta");
+
+    let rows = state.stageFilter === "ALL"
+        ? allRows.slice()
+        : allRows.filter(r => matchesStageFilter(r.current_stage));
+
     const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
     if (refDates.length) {
-        meta.textContent = `Rebalans: ${refDates[0]} · ${stable.length} stabilny wzrost · ${accelerating.length} nagła zmiana trendu`;
+        let text = `Rebalans: ${refDates[0]} · `;
+        text += state.stageFilter === "ALL"
+            ? `${allRows.length} spółek`
+            : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
+        meta.textContent = text;
         meta.title = "";
     } else {
         meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
         meta.title = "";
     }
 
-    const tbody = document.getElementById("rsmTableBody");
+    rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
+
+    const tbody = document.getElementById(bodyId);
     tbody.innerHTML = "";
 
-    if (stable.length === 0 && accelerating.length === 0) {
+    if (rows.length === 0) {
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td colspan="10" class="empty-state">Brak danych.</td>`;
+        const msg = allRows.length === 0 ? "Brak danych." : "Żadna spółka nie pasuje do wybranego etapu.";
+        tr.innerHTML = `<td colspan="10" class="empty-state">${msg}</td>`;
         tbody.appendChild(tr);
         return;
     }
 
-    const appendSection = (label, rows, type) => {
-        const header = document.createElement("tr");
-        header.className = "rsm-section-row";
-        header.innerHTML = `<td colspan="10">${label} (${rows.length})</td>`;
-        tbody.appendChild(header);
-        if (rows.length === 0) {
-            const empty = document.createElement("tr");
-            empty.innerHTML = `<td colspan="10" class="empty-state">Brak spółek spełniających kryteria.</td>`;
-            tbody.appendChild(empty);
-            return;
-        }
-        rows.forEach((r, i) => {
-            const tr = document.createElement("tr");
-            tr.dataset.ticker = r.ticker;
-            if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
-            tr.innerHTML = rsmRowHtml(r, i + 1, type);
-            tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
-            tbody.appendChild(tr);
-        });
-    };
-
-    appendSection("📈 Stabilny wzrost (6M > 3M)", stable, "stable");
-    appendSection("⚡ Nagła zmiana trendu (3M > 6M, oba rosną)", accelerating, "accel");
+    rows.forEach((r, i) => {
+        const tr = document.createElement("tr");
+        tr.dataset.ticker = r.ticker;
+        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
+        tr.innerHTML = rsmScreenerRowHtml(r, i + 1);
+        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        tbody.appendChild(tr);
+    });
     bindTvRowButtons(tbody);
 }
+
+function renderRsmStableTable() { renderRsmScreenerTable("stable"); }
+function renderRsmGrowthTable() { renderRsmScreenerTable("growth"); }
 
 function renderTable() {
     const d = state.data[state.drawerUniverse];
@@ -1526,7 +1450,6 @@ if (typeof document !== "undefined") {
     (async function init() {
         await loadData();
         renderSidebarTiles();
-        renderGemPanel();
         renderRsmPanel();
         initDrawer();
         initOpenTvButton();
@@ -1541,8 +1464,14 @@ if (typeof document !== "undefined") {
         document.getElementById("chartBackBtn").addEventListener("click", () => {
             document.querySelector(".workspace").classList.remove("mobile-chart-view");
         });
-        state.selectedTicker = "SPY";
-        state.selectedUniverse = "SP500";
+        // Domyslnie wybrana spolka: pierwsza z domyslnej zakladki drawera
+        // (state.drawerUniverse, dzis DOWJONES) — SP500 nie ma juz wlasnej
+        // zakladki, wiec nie mozemy juz na sztywno wskazywac "SPY"/"SP500".
+        const defaultRows = (state.data[state.drawerUniverse] || {}).constituents || [];
+        if (defaultRows.length > 0) {
+            state.selectedTicker = defaultRows[0].ticker;
+            state.selectedUniverse = state.drawerUniverse;
+        }
         updateChartArea();
     })();
 

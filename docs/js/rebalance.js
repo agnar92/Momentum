@@ -1,54 +1,39 @@
 
-const UNIVERSES = ["NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
-const UNIVERSE_LABELS = { NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones", WIG20: "WIG20", MWIG40: "mWIG40" };
+const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
+const UNIVERSE_LABELS = {
+    SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones", WIG20: "WIG20", MWIG40: "mWIG40",
+};
+// WIG20/mWIG40 są notowane w PLN — patrz moneyFmtFor/currencyOf/tvSymbolFor.
+const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
 const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
 
-// Rebalans liczy DWA niezależne portfele obok siebie: USA (Nasdaq 100 + Dow
-// Jones, USD) i GPW (WIG20 + mWIG40, PLN) — patrz CLAUDE.md: mieszanie
-// PLN-owego kapitału z USD-owym w jednej puli/wadze wymagałoby FX, którego
-// tu nie ma. Trzymając je jako dwie osobne sekcje (osobna dopłata, TOP N,
-// sugestia, Monte Carlo, wykres historyczny — każde po swojej stronie)
-// unikamy w ogóle potrzeby przewalutowania: nic nigdy nie sumuje PLN i USD
-// razem. Holdingi (ticker + liczba akcji) i lista wykluczeń zostają
-// WSPÓLNE — to jedna lista pozycji użytkownika, tylko dzielona wg
-// regionOf(ticker) na potrzeby każdej sekcji z osobna.
-const REGIONS = {
-    USA: { label: "USA", currency: "USD", universes: ["NASDAQ100", "DOWJONES"] },
-    GPW: { label: "GPW", currency: "PLN", universes: ["WIG20", "MWIG40"] },
-};
-const REGION_LIST = ["USA", "GPW"];
-
+// Rebalanser to teraz JEDEN wspólny przepływ, bez podziału na regiony USA/GPW
+// (wcześniejsza architektura — patrz git history / CLAUDE.md). Użytkownik
+// podaje tylko kapitał (dopłatę) i liczbę spółek (TOP N); rebalanser sam
+// wybiera, KTÓRY z 5 uniwersów (SP500/NASDAQ100/DOWJONES/WIG20/MWIG40) brać —
+// zwycięzca Global Equity Momentum (docs/data/global_equity_momentum.json,
+// patrz gemData/renderGemWidget), zwrot % w pełnym 12-miesięcznym oknie — a z
+// niego TOP N spółek wg tej samej logiki momentum, którą liczy pipeline
+// (momentum_score/rank z get_universe_metrics, patrz selectedConstituents).
+// Waluta wyświetlania (USD/PLN) wynika z tego, który indeks akurat wygrywa —
+// patrz moneyFmtFor. Holdingi (ticker + liczba akcji) i lista wykluczeń
+// pozostają WSPÓLNE i niezależne od zwycięzcy: stara pozycja z uniwersum, które
+// akurat nie wygrywa, jest nadal poprawnie wyceniona i widoczna (do
+// sprzedania) — tylko nowe sugestie kupna celują wyłącznie w zwycięzcę.
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
-const DEFAULT_SETTINGS = {
-    regions: {
-        USA: { contribution: 0, topN: { NASDAQ100: 5, DOWJONES: 5 } },
-        GPW: { contribution: 0, topN: { WIG20: 5, MWIG40: 5 } },
-    },
-};
+const DEFAULT_SETTINGS = { contribution: 0, topN: 10 };
 
-let universeData = {};   // { NASDAQ100: {...json}, ... }
-let priceMap = {};       // ticker -> { price, sources: [universe,...] }
+let universeData = {};    // { SP500: {...json}, NASDAQ100: {...}, ... }
+let priceMap = {};        // ticker -> { price, sources: [universe,...] }
 let equityCurveData = {}; // { NASDAQ100: {dates, momentum_index, benchmark_index, ...}, ... }
+let gemData = { ref_date: null, indices: [], winner: null, leaders: [] };
 
-// Scala zapisane ustawienia z DEFAULT_SETTINGS per-region (nie płytkim spread
-// na całym obiekcie) — inaczej brakujący klucz `regions.GPW` w starym zapisie
-// (sprzed dodania sekcji GPW) zgubiłby też domyślny `topN` dla NASDAQ100/
-// DOWJONES, zamiast tylko dostać świeże wartości domyślne dla GPW.
 function loadSettings() {
     let stored = {};
     try { stored = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { stored = {}; }
-    const merged = { regions: {} };
-    REGION_LIST.forEach(region => {
-        const storedRegion = (stored.regions && stored.regions[region]) || {};
-        merged.regions[region] = {
-            ...DEFAULT_SETTINGS.regions[region],
-            ...storedRegion,
-            topN: { ...DEFAULT_SETTINGS.regions[region].topN, ...(storedRegion.topN || {}) },
-        };
-    });
-    return merged;
+    return { ...DEFAULT_SETTINGS, ...stored };
 }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
@@ -76,12 +61,13 @@ async function loadUniverseData() {
             const res = await fetch(`data/${u.toLowerCase()}.json`, { cache: "no-store" });
             universeData[u] = await res.json();
         } catch (e) {
-            universeData[u] = { universe: u, ref_date: null, constituents: [] };
+            universeData[u] = { universe: u, ref_date: null, constituents: [], all_constituents: [] };
         }
     }
 
     // Ceny dla WSZYSTKICH spółek w indeksach (nie tylko wybranych do portfela
-    // momentum) — żeby móc wycenić dowolną pozycję użytkownika.
+    // momentum) — żeby móc wycenić dowolną pozycję użytkownika, nawet jedną z
+    // uniwersum, które akurat nie wygrywa w GEM.
     priceMap = {};
     try {
         const res = await fetch("data/all_prices.json", { cache: "no-store" });
@@ -103,6 +89,14 @@ async function loadUniverseData() {
     } catch (e) {
         equityCurveData = {};
     }
+
+    try {
+        const res = await fetch("data/global_equity_momentum.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        gemData = await res.json();
+    } catch (e) {
+        gemData = { ref_date: null, indices: [], winner: null, leaders: [] };
+    }
 }
 
 function fmtMoney(v) {
@@ -115,58 +109,63 @@ function fmtMoneyPln(v) {
     return v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " zł";
 }
 
-function moneyFmtFor(region) { return REGIONS[region]?.currency === "PLN" ? fmtMoneyPln : fmtMoney; }
+// Waluta wyświetlania wynika z tego, KTÓRY indeks akurat wygrywa w GEM (patrz
+// gemData.winner) — nie z regionu (regiony już nie istnieją). Gdy nie ma
+// jeszcze danych GEM, domyślnie USD.
+function moneyFmtFor() { return PLN_UNIVERSES.has(gemData.winner) ? fmtMoneyPln : fmtMoney; }
+
+// Formatter dla KONKRETNEGO tickera niezależnie od zwycięzcy GEM — używany w
+// tabeli holdingów, bo tam pozycje mogą być z różnych uniwersów/walut naraz
+// (patrz currencyOf).
+function moneyFmtForCurrency(currency) { return currency === "PLN" ? fmtMoneyPln : fmtMoney; }
 
 function fmtQty(n) {
     return (Math.round(n * 1000) / 1000).toString().replace(".", ",");
 }
 
-// Ile sztuk (ułamkowo) kupić/sprzedać za daną kwotę. `moneyFmt` domyślnie $
-// (fmtMoney) — sekcja GPW przekazuje fmtMoneyPln, żeby kwota w opisie
-// sugestii pokazywała się w złotówkach, nie dolarach.
+// Ile sztuk (ułamkowo) kupić/sprzedać za daną kwotę.
 function sharesSuggestion(dollarAmount, price, moneyFmt = fmtMoney) {
     if (!price) return `~${moneyFmt(dollarAmount)} (brak ceny do przeliczenia na sztuki)`;
     const qty = dollarAmount / price;
     return `${fmtQty(qty)} szt. (~${moneyFmt(dollarAmount)})`;
 }
 
-// Region (USA/GPW) danego tickera — na podstawie tego, w jakim uniwersum go
-// znaleziono (patrz priceMap/all_prices.json). Nieznany ticker (spoza
-// śledzonych indeksów) domyślnie trafia do USA — tak jak wcześniej
-// tvSymbolFor domyślnie zakładał NASDAQ dla nierozpoznanych tickerów.
-function regionOf(ticker) {
+// Waluta danego tickera (do formatowania ceny/wartości w tabeli holdingów,
+// niezależnie od tego, który indeks akurat wygrywa w GEM) — na podstawie
+// tego, w jakim uniwersum go znaleziono (patrz priceMap/all_prices.json).
+// Nieznany ticker (spoza śledzonych indeksów) domyślnie USD.
+function currencyOf(ticker) {
     const sources = priceMap[ticker]?.sources || [];
-    return sources.some(u => REGIONS.GPW.universes.includes(u)) ? "GPW" : "USA";
+    return sources.some(u => PLN_UNIVERSES.has(u)) ? "PLN" : "USD";
 }
 
-function regionHoldingsValue(region) {
+function holdingsValue() {
     return holdings.reduce((sum, h) => {
-        if (!h.ticker || regionOf(h.ticker) !== region) return sum;
+        if (!h.ticker) return sum;
         const price = priceMap[h.ticker]?.price;
         return sum + (price ? price * (h.shares || 0) : 0);
     }, 0);
 }
 
-function regionTargetCapital(region) {
-    return regionHoldingsValue(region) + (settings.regions[region].contribution || 0);
+function targetCapital() {
+    return holdingsValue() + (settings.contribution || 0);
 }
 
-// Wartość pozycji wykluczonych z rebalansu w danym regionie — ten kapitał
-// zostaje "poza systemem": nie liczy się do puli, którą alokujemy na spółki
-// momentum tego regionu.
-function regionExcludedValue(region) {
+// Wartość pozycji wykluczonych z rebalansu — ten kapitał zostaje "poza
+// systemem": nie liczy się do puli, którą alokujemy na TOP N spółek.
+function excludedValue() {
     return holdings.reduce((sum, h) => {
-        if (!h.ticker || regionOf(h.ticker) !== region || !excluded.includes(h.ticker)) return sum;
+        if (!h.ticker || !excluded.includes(h.ticker)) return sum;
         const price = priceMap[h.ticker]?.price;
         return sum + (price ? price * (h.shares || 0) : 0);
     }, 0);
 }
 
-// Liczba akcji trzymanych w danym regionie, zgrupowana po tickerze.
-function regionHoldingShares(region) {
+// Liczba akcji trzymanych, zgrupowana po tickerze.
+function holdingShares() {
     const shares = {};
     holdings.forEach(h => {
-        if (h.ticker && regionOf(h.ticker) === region) shares[h.ticker] = (shares[h.ticker] || 0) + (h.shares || 0);
+        if (h.ticker) shares[h.ticker] = (shares[h.ticker] || 0) + (h.shares || 0);
     });
     return shares;
 }
@@ -174,7 +173,6 @@ function regionHoldingShares(region) {
 // ============================================================
 // WYKLUCZENIA — spółki, których panel nigdy nie ma sugerować kupić ani
 // sprzedać, nawet jeśli je importujesz z XTB albo wybierze je momentum.
-// Lista jest WSPÓLNA dla obu regionów (to zbiór tickerów, nie kwot).
 // ============================================================
 function renderExcludedList() {
     const wrap = document.getElementById("excludedList");
@@ -186,7 +184,7 @@ function renderExcludedList() {
             excluded = excluded.filter(t => t !== btn.dataset.ticker);
             saveExcluded();
             renderExcludedList();
-            renderRegions();
+            refreshOutputs();
         });
     });
 }
@@ -200,43 +198,53 @@ function initExcludeForm() {
         excluded.push(t);
         saveExcluded();
         renderExcludedList();
-        renderRegions();
+        refreshOutputs();
     };
     document.getElementById("excludeAddBtn").addEventListener("click", addTicker);
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addTicker(); } });
 }
 
 // ============================================================
-// USTAWIENIA (per region — osobna dopłata i TOP N dla USA i GPW)
+// GLOBAL EQUITY MOMENTUM — mały, tylko-do-odczytu widget: który indeks
+// (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40) akurat wygrywa i jaki jest jego
+// zwrot, plus ranking pozostałych 4. To jest silnik wyboru dla TOP N poniżej
+// (patrz selectedConstituents) — kiedyś była to osobna zakładka na
+// dashboardzie (app.js), teraz przeniesiona tutaj.
 // ============================================================
-function initSettingsForm(region) {
-    const regionSettings = settings.regions[region];
-    document.getElementById(`contribution-${region}`).value = regionSettings.contribution || "";
-    REGIONS[region].universes.forEach(u => { document.getElementById(`topn-${u}`).value = regionSettings.topN[u]; });
-
-    const onChange = () => {
-        regionSettings.contribution = parseFloat(document.getElementById(`contribution-${region}`).value) || 0;
-        REGIONS[region].universes.forEach(u => {
-            regionSettings.topN[u] = parseInt(document.getElementById(`topn-${u}`).value, 10) || 0;
-        });
-        saveSettings(settings);
-        renderRegion(region);
-    };
-    document.getElementById(`contribution-${region}`).addEventListener("input", onChange);
-    REGIONS[region].universes.forEach(u => document.getElementById(`topn-${u}`).addEventListener("input", onChange));
+function renderGemWidget() {
+    const el = document.getElementById("gemWidget");
+    if (!el) return;
+    if (!gemData.winner) {
+        el.innerHTML = `<span class="text-faint">Brak danych — uruchom pipeline (fetch_data.py + run_query.py).</span>`;
+        return;
+    }
+    const winnerReturn = (gemData.indices || []).find(i => i.universe === gemData.winner);
+    const rows = (gemData.indices || []).map(i => `
+        <div class="gem-index-row${i.universe === gemData.winner ? " gem-index-winner" : ""}">
+            <span>${i.universe === gemData.winner ? "🏆 " : ""}${UNIVERSE_LABELS[i.universe]}</span>
+            <span class="${i.return_pct >= 0 ? "positive" : "negative"}">${i.return_pct >= 0 ? "+" : ""}${i.return_pct.toFixed(2)}%</span>
+        </div>
+    `).join("");
+    el.innerHTML = `
+        <div class="sidebar-group-meta">
+            Zwycięzca: ${UNIVERSE_LABELS[gemData.winner]}
+            ${winnerReturn ? (winnerReturn.return_pct >= 0 ? "+" : "") + winnerReturn.return_pct.toFixed(2) + "%" : ""}
+            (${gemData.lookback_months || 12}M) — z niego bierzemy TOP N spółek poniżej.
+        </div>
+        <div class="gem-index-returns">${rows}</div>
+    `;
 }
 
 // ============================================================
 // POZYCJE (holdings) — dodajesz/usuwasz akcje kiedy chcesz, bez ograniczeń.
-// WSPÓLNA lista dla USA i GPW: jeden ticker, jedna liczba akcji, region
-// wynika z regionOf(ticker) — nie ma osobnego pola "region" na wierszu.
+// Jedna wspólna lista, niezależna od tego, który indeks akurat wygrywa w GEM.
 // ============================================================
 // Odświeża tylko kolumny Cena/Wartość dla jednego wiersza — bez przebudowy
 // inputów, żeby nie tracić fokusu/kursora w trakcie pisania.
 function refreshHoldingRowCells(tr, h) {
     const price = priceMap[h.ticker]?.price ?? null;
     const value = price !== null ? price * (h.shares || 0) : null;
-    const moneyFmt = moneyFmtFor(regionOf(h.ticker));
+    const moneyFmt = moneyFmtForCurrency(currencyOf(h.ticker));
     tr.querySelector(".h-price").innerHTML = price !== null ? moneyFmt(price) : '<span class="text-faint">brak</span>';
     tr.querySelector(".h-value").textContent = value !== null ? moneyFmt(value) : "—";
 }
@@ -259,13 +267,13 @@ function renderHoldingsTable() {
             e.target.value = holdings[i].ticker;
             saveHoldings(holdings);
             refreshHoldingRowCells(tr, holdings[i]);
-            renderRegions();
+            refreshOutputs();
         });
         tr.querySelector(".h-shares").addEventListener("input", (e) => {
             holdings[i].shares = parseFloat(e.target.value) || 0;
             saveHoldings(holdings);
             refreshHoldingRowCells(tr, holdings[i]);
-            renderRegions();
+            refreshOutputs();
         });
         tr.querySelector(".remove-row-btn").addEventListener("click", () => {
             holdings.splice(i, 1);
@@ -403,7 +411,7 @@ function initXtbImport() {
 // notowanych faktycznie na NYSE prefiks może być niepoprawny; kreator
 // importu transakcji w TradingView pozwala wtedy ręcznie dopasować symbol.
 function tvSymbolFor(ticker) {
-    return regionOf(ticker) === "GPW" ? `GPW:${ticker}` : `NASDAQ:${ticker}`;
+    return currencyOf(ticker) === "PLN" ? `GPW:${ticker}` : `NASDAQ:${ticker}`;
 }
 
 function csvEscape(v) {
@@ -450,70 +458,62 @@ function initTvExport() {
     });
 }
 
-function renderCapitalHint(region) {
-    const moneyFmt = moneyFmtFor(region);
-    const current = regionHoldingsValue(region);
-    const contribution = settings.regions[region].contribution || 0;
+function renderCapitalHint() {
+    const moneyFmt = moneyFmtFor();
+    const current = holdingsValue();
+    const contribution = settings.contribution || 0;
     let text = `Masz teraz ${moneyFmt(current)} w akcjach + dopłata ${moneyFmt(contribution)} = kapitał docelowy ${moneyFmt(current + contribution)}`;
-    const excludedValue = regionExcludedValue(region);
-    if (excludedValue > 0) {
-        text += ` (z czego ${moneyFmt(excludedValue)} w wykluczonych pozycjach — nie bierze udziału w rebalansie)`;
+    const excludedVal = excludedValue();
+    if (excludedVal > 0) {
+        text += ` (z czego ${moneyFmt(excludedVal)} w wykluczonych pozycjach — nie bierze udziału w rebalansie)`;
     }
-    document.getElementById(`capitalHint-${region}`).textContent = text;
+    const hint = document.getElementById("capitalHint");
+    if (hint) hint.textContent = text;
 }
 
 // ============================================================
 // SUGESTIA REBALANSU (to tylko sugestia — Ty decydujesz co i kiedy kupić/sprzedać)
 // ============================================================
-// TOP N spółek indeksu `u` wg wagi momentum ({universe}.json jest już
-// posortowany malejąco wg weight_pct, patrz run_query.py::export_json) —
-// ręcznie wykluczone znikają z listy całkowicie, więc TOP N liczy się z
-// tego, co zostaje (tak jakby wykluczone nigdy nie były w indeksie).
-function selectedConstituents(region, u) {
-    const topN = settings.regions[region].topN[u] || 0;
-    if (topN <= 0) return [];
-    return (universeData[u].constituents || [])
+// TOP N spółek WYŁĄCZNIE ze zwycięskiego w GEM indeksu (gemData.winner),
+// posortowanych po `rank` (ranking wg momentum_score z get_universe_metrics,
+// ta sama logika, którą pipeline liczy dla selekcji portfela — patrz
+// run_query.py::_build_full_universe_records/export_json). Czyta
+// "all_constituents" (CAŁE kwalifikujące się uniwersum, nie tylko dzisiejszą
+// selekcję kwintylową) — winner może się zmieniać miesiąc do miesiąca, a
+// TOP N ma wynikać bezpośrednio z rankingu momentum, nie z przynależności do
+// bieżącej selekcji pipeline'u. Ręcznie wykluczone znikają z listy
+// całkowicie, więc TOP N liczy się z tego, co zostaje.
+function selectedConstituents(topN) {
+    const winner = gemData.winner;
+    if (!winner || topN <= 0) return [];
+    const data = universeData[winner] || {};
+    const rows = data.all_constituents || data.constituents || [];
+    return rows
         .filter(c => !excluded.includes(c.ticker))
+        .slice()
+        .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
         .slice(0, topN);
 }
 
-// Udział każdego indeksu w łącznej wadze momentum wszystkich wybranych TOP N
-// spółek tego regionu razem — używany tylko do wagowania wykresu "Wynik
-// historyczny" (blendEquityCurves), tak żeby odzwierciedlał faktyczny
-// podział kapitału wynikający z TOP N + wag momentum, skoro nie ma osobno
-// ustawianego %.
-function universeWeightSharePct(region) {
-    const totals = {};
-    let grandTotal = 0;
-    REGIONS[region].universes.forEach(u => {
-        totals[u] = selectedConstituents(region, u).reduce((s, c) => s + (c.weight_pct || 0), 0);
-        grandTotal += totals[u];
-    });
-    const pct = {};
-    REGIONS[region].universes.forEach(u => { pct[u] = grandTotal > 0 ? (totals[u] / grandTotal) * 100 : 0; });
-    return pct;
-}
-
-// Zwraca: { targets: {ticker: {...}} }. Portfel danego regionu = TOP N
-// spółek z każdego jego indeksu (patrz selectedConstituents), bez osobnego
-// globalnego limitu — wagi dobierane są automatycznie z ich wagi momentum w
-// pliku JSON, znormalizowanej do 100% łącznie w obrębie regionu (nie osobno
-// per indeks), więc indeks z silniejszym momentum swoich TOP N spółek
-// dostaje większą część kapitału tego regionu bez ręcznego ustawiania %.
-function computeTargets(region, totalCapital) {
-    const raw = {}; // ticker -> { ticker, price, target_value, raw_weight, universes: [] }
-
-    REGIONS[region].universes.forEach(u => {
-        selectedConstituents(region, u).forEach(c => {
-            if (!raw[c.ticker]) {
-                raw[c.ticker] = {
-                    ticker: c.ticker, price: c.price, target_value: 0, raw_weight: 0, universes: [],
-                    momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
-                };
-            }
-            raw[c.ticker].raw_weight += (c.weight_pct || 0);
-            raw[c.ticker].universes.push(u);
-        });
+// Zwraca: { targets: {ticker: {...}} }. Wagi ważone `momentum_score` (zawsze
+// > 0 z konstrukcji — patrz add_zscore_and_momentum_score w run_query.py),
+// znormalizowane do 100% w obrębie wybranego TOP N. To jest ŚWIADOME
+// uproszczenie względem cap-ważenia z pipeline'u (9%/3x cap-weight, patrz
+// compute_weights) — `weight_pct` z pipeline'u NIE jest tu użyte, bo dla
+// uniwersów równoważonych (DOWJONES/WIG20/MWIG40) to i tak tylko równa waga
+// 1/n (nie wg momentum), a `all_constituents` w ogóle nie eksportuje
+// `weight_pct` dla spółek poza bieżącą selekcją pipeline'u. Ważenie po
+// momentum_score jest więc jedną, spójną metodą działającą identycznie dla
+// każdego z 5 uniwersów, niezależnie od tego, jak pipeline waży go u siebie.
+function computeTargets(topN, totalCapital) {
+    const rows = selectedConstituents(topN);
+    const raw = {};
+    rows.forEach(c => {
+        raw[c.ticker] = {
+            ticker: c.ticker, price: c.price, target_value: 0,
+            raw_weight: c.momentum_score || 0,
+            momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
+        };
     });
 
     const totalRawWeight = Object.values(raw).reduce((s, t) => s + t.raw_weight, 0);
@@ -524,65 +524,74 @@ function computeTargets(region, totalCapital) {
     return { targets: raw };
 }
 
+function updateContributionUnit() {
+    const unitEl = document.getElementById("contributionUnit");
+    if (unitEl) unitEl.textContent = PLN_UNIVERSES.has(gemData.winner) ? "zł" : "$";
+    const activeEl = document.getElementById("topnActiveUniverse");
+    if (activeEl) activeEl.textContent = gemData.winner ? `(aktualnie: ${UNIVERSE_LABELS[gemData.winner]})` : "";
+}
 
-function renderSuggestions(region) {
-    const moneyFmt = moneyFmtFor(region);
-    const totalCapital = regionTargetCapital(region);
-    const excludedValue = regionExcludedValue(region);
-    const investableCapital = Math.max(0, totalCapital - excludedValue);
-    const { targets } = computeTargets(region, investableCapital);
+function renderSuggestions() {
+    updateContributionUnit();
+    const moneyFmt = moneyFmtFor();
+    const winner = gemData.winner;
+    const totalCapital = targetCapital();
+    const excludedVal = excludedValue();
+    const investableCapital = Math.max(0, totalCapital - excludedVal);
+    const topN = settings.topN || 0;
+    const { targets } = computeTargets(topN, investableCapital);
     const threshold = Math.max(investableCapital * TRADE_THRESHOLD_PCT, 5);
 
-    const holdingShares = regionHoldingShares(region);
+    const shares = holdingShares();
 
     const rows = [];
     Object.values(targets).forEach(t => {
-        const shares = holdingShares[t.ticker] || 0;
-        const currentValue = t.price ? t.price * shares : 0;
+        const heldShares = shares[t.ticker] || 0;
+        const currentValue = t.price ? t.price * heldShares : 0;
         rows.push({
             ticker: t.ticker,
-            note: t.universes.map(u => UNIVERSE_LABELS[u]).join(" + "),
+            note: winner ? UNIVERSE_LABELS[winner] : "",
             target_value: t.target_value,
             weight_pct: investableCapital ? (t.target_value / investableCapital * 100) : 0,
             current_value: currentValue,
             diff: t.target_value - currentValue,
             price: t.price,
-            shares_held: shares,
+            shares_held: heldShares,
         });
     });
 
-    // Pozycje (tego regionu), które trzymasz, ale nie mieszczą się w
-    // aktualnej sugestii — wykluczone ręcznie, albo poza TOP N (w indeksie,
-    // ale niżej w rankingu momentum niż ustawione TOP N), albo w ogóle poza
-    // śledzonymi indeksami tego regionu.
-    Object.keys(holdingShares).forEach(ticker => {
+    // Pozycje, które trzymasz, ale nie mieszczą się w aktualnej sugestii —
+    // wykluczone ręcznie, poza TOP N w zwycięskim indeksie, albo z uniwersum,
+    // które akurat NIE jest tegomiesięcznym zwycięzcą GEM (a więc nie brane
+    // pod uwagę w ogóle, niezależnie od TOP N).
+    Object.keys(shares).forEach(ticker => {
         if (targets[ticker]) return;
         const price = priceMap[ticker]?.price;
-        const currentValue = price ? price * holdingShares[ticker] : null;
+        const currentValue = price ? price * shares[ticker] : null;
         if (excluded.includes(ticker)) {
             rows.push({
                 ticker, note: "wykluczone ręcznie", target_value: 0, weight_pct: 0,
                 current_value: currentValue, diff: null, excludedRow: true,
-                price, shares_held: holdingShares[ticker],
+                price, shares_held: shares[ticker],
             });
             return;
         }
-        const homeUniverse = REGIONS[region].universes.find(u => (universeData[u].constituents || []).some(c => c.ticker === ticker));
-        const note = homeUniverse
-            ? `poza TOP ${settings.regions[region].topN[homeUniverse] || 0} (${UNIVERSE_LABELS[homeUniverse]})`
-            : "poza selekcją momentum";
+        const tickerUniverses = priceMap[ticker]?.sources || [];
+        const note = (winner && tickerUniverses.includes(winner))
+            ? `poza TOP ${topN}`
+            : `poza aktywnym indeksem GEM (obecnie: ${winner ? UNIVERSE_LABELS[winner] : "—"})`;
         rows.push({
             ticker, note, target_value: 0, weight_pct: 0,
             current_value: currentValue, diff: currentValue !== null ? -currentValue : null, dropped: true,
-            price, shares_held: holdingShares[ticker],
+            price, shares_held: shares[ticker],
         });
     });
 
     rows.sort((a, b) => b.target_value - a.target_value);
 
-    const tbody = document.getElementById(`rebalanceBody-${region}`);
+    const tbody = document.getElementById("rebalanceBody");
     tbody.innerHTML = "";
-    document.getElementById(`rebalanceEmpty-${region}`).style.display = (investableCapital <= 0 || rows.length === 0) ? "block" : "none";
+    document.getElementById("rebalanceEmpty").style.display = (investableCapital <= 0 || rows.length === 0) ? "block" : "none";
 
     rows.forEach(r => {
         let actionHtml;
@@ -613,46 +622,46 @@ function renderSuggestions(region) {
         tbody.appendChild(tr);
     });
 
-    document.getElementById(`statCurrentValue-${region}`).textContent = moneyFmt(regionHoldingsValue(region));
-    document.getElementById(`statTargetValue-${region}`).textContent = moneyFmt(totalCapital);
-    document.getElementById(`statHoldingsCount-${region}`).textContent = Object.keys(targets).length;
+    document.getElementById("statCurrentValue").textContent = moneyFmt(holdingsValue());
+    document.getElementById("statTargetValue").textContent = moneyFmt(totalCapital);
+    document.getElementById("statHoldingsCount").textContent = Object.keys(targets).length;
 
-    const refDates = REGIONS[region].universes.map(u => universeData[u].ref_date).filter(Boolean);
-    document.getElementById(`refDateNote-${region}`).textContent = refDates.length
-        ? `(wg rebalansu z ${refDates[0]} — kolejny automatycznie 1. dnia miesiąca)` : "";
+    const refDate = winner ? universeData[winner]?.ref_date : null;
+    document.getElementById("refDateNote").textContent = refDate
+        ? `(wg rebalansu z ${refDate} — kolejny automatycznie 1. dnia miesiąca)` : "";
 
-    renderCapitalHint(region);
-    renderMonteCarlo(region);
-    renderPortfolioAnalysisChart(region);
+    renderCapitalHint();
+    renderMonteCarlo();
+    renderPortfolioAnalysisChart();
 }
 
 // ============================================================
-// ANALIZA PORTFELA — donut wykres podziału OBECNYCH pozycji tego regionu
-// (nie sugestii docelowej) wg wartości, tak żeby na pierwszy rzut oka było
-// widać, co faktycznie waży najwięcej w portfelu. Osobny wykres per region
-// (USD i PLN nie da się zsumować w jednym bez FX) — pozycje bez znanej ceny
-// (i bez ręcznie wpisanej) są pomijane, bo nie da się policzyć ich wartości.
+// ANALIZA PORTFELA — donut wykres podziału OBECNYCH pozycji (nie sugestii
+// docelowej) wg wartości, tak żeby na pierwszy rzut oka było widać, co
+// faktycznie waży najwięcej w portfelu. Miesza USD/PLN wartościowo bez
+// przewalutowania (to tylko wizualny podział wg surowej wartości liczbowej w
+// natywnej walucie każdej pozycji) — pozycje bez znanej ceny są pomijane.
 // ============================================================
-const portfolioAnalysisCharts = { USA: null, GPW: null };
+let portfolioAnalysisChart = null;
 
-function renderPortfolioAnalysisChart(region) {
-    const canvas = document.getElementById(`portfolioAnalysisChart-${region}`);
-    if (portfolioAnalysisCharts[region]) { portfolioAnalysisCharts[region].destroy(); portfolioAnalysisCharts[region] = null; }
+function renderPortfolioAnalysisChart() {
+    const canvas = document.getElementById("portfolioAnalysisChart");
+    if (portfolioAnalysisChart) { portfolioAnalysisChart.destroy(); portfolioAnalysisChart = null; }
     if (!canvas) return;
 
-    const moneyFmt = moneyFmtFor(region);
-    const holdingShares = regionHoldingShares(region);
-    const rows = Object.entries(holdingShares)
-        .map(([ticker, shares]) => ({ ticker, value: (priceMap[ticker]?.price || 0) * shares }))
+    const moneyFmt = moneyFmtFor();
+    const shares = holdingShares();
+    const rows = Object.entries(shares)
+        .map(([ticker, qty]) => ({ ticker, value: (priceMap[ticker]?.price || 0) * qty }))
         .filter(r => r.value > 0)
         .sort((a, b) => b.value - a.value);
 
     const total = rows.reduce((s, r) => s + r.value, 0);
-    document.getElementById(`portfolioAnalysisEmpty-${region}`).style.display = rows.length === 0 ? "block" : "none";
+    document.getElementById("portfolioAnalysisEmpty").style.display = rows.length === 0 ? "block" : "none";
     if (rows.length === 0 || total <= 0) return;
 
     const shades = ["#2ecc71", "#26a65b", "#1f8b4d", "#3fd98a", "#17693b", "#5be8a4", "#0f4d2c", "#7bf0bb", "#0a3a20", "#9df5cf"];
-    portfolioAnalysisCharts[region] = new Chart(canvas, {
+    portfolioAnalysisChart = new Chart(canvas, {
         type: "doughnut",
         data: {
             labels: rows.map(r => r.ticker),
@@ -670,74 +679,40 @@ function renderPortfolioAnalysisChart(region) {
 }
 
 // ============================================================
-// WYNIK HISTORYCZNY PORTFOLIA — łączy per-uniwersowe equity curves (patrz
-// run_query.py::compute_equity_curve, zbudowane z realnych zapisów
-// portfolio_history) wg podziału kapitału między indeksy TEGO REGIONU,
-// wynikającego z TOP N + wag momentum (universeWeightSharePct — nie ma
-// osobno ustawianego %). blendEquityCurves() sam przefiltrowuje UNIVERSES do
-// tych z pct > 0 — pct z universeWeightSharePct(region) ma klucze tylko dla
-// indeksów tego regionu, więc indeksy drugiego regionu naturalnie wypadają
-// (pct[u] undefined -> 0), bez potrzeby przekazywania osobnej listy
-// uniwersów. To NIE jest historia Twoich konkretnych pozycji (tych nie
-// śledzimy wstecz) — to przybliżenie: "gdybyś trzymał/a kapitał w tych
-// proporcjach między indeksami przez ten okres, wybierając spółki momentum".
+// WYNIK HISTORYCZNY PORTFOLIA — equity curve DOKŁADNIE zwycięskiego w GEM
+// indeksu (docs/data/equity_curve.json, patrz run_query.py::compute_equity_curve,
+// zbudowane z realnych zapisów portfolio_history). Bez regionów/blendowania
+// wielu uniwersów naraz (to była logika dwuregionowej architektury) — z
+// JEDNYM aktywnym uniwersum na raz krzywa to po prostu jego własna historia.
+// To NIE jest historia Twoich konkretnych pozycji (tych nie śledzimy wstecz)
+// — to przybliżenie: "gdybyś trzymał/a kapitał w spółkach momentum tego
+// indeksu przez ten okres".
 // ============================================================
-function blendEquityCurves(curveData, pct) {
-    const included = UNIVERSES.filter(u => (pct[u] || 0) > 0 && (curveData[u]?.dates?.length || 0) >= 2);
-    if (included.length === 0) return null;
+let equityChart = null;
 
-    const pctSum = included.reduce((s, u) => s + pct[u], 0);
-    if (pctSum <= 0) return null;
+function renderEquityCurve() {
+    const caption = document.getElementById("equityCurveCaption");
+    const noteEl = document.getElementById("equityCurveNote");
+    const winner = gemData.winner;
+    const curve = winner ? equityCurveData[winner] : null;
 
-    // Przecięcie dat wszystkich uwzględnionych uniwersów — w praktyce
-    // identyczne (ten sam miesięczny przebieg pipeline'u), ale przecięcie
-    // zabezpiecza przed rozjazdem, gdyby kiedyś jeden uniwersum miał lukę.
-    let dates = curveData[included[0]].dates;
-    included.slice(1).forEach(u => {
-        const set = new Set(curveData[u].dates);
-        dates = dates.filter(d => set.has(d));
-    });
-    if (dates.length < 2) return null;
+    if (equityChart) { equityChart.destroy(); equityChart = null; }
 
-    const portfolio = [], benchmark = [];
-    dates.forEach(d => {
-        let pVal = 0, bVal = 0;
-        included.forEach(u => {
-            const w = pct[u] / pctSum;
-            const idx = curveData[u].dates.indexOf(d);
-            pVal += w * curveData[u].momentum_index[idx];
-            bVal += w * curveData[u].benchmark_index[idx];
-        });
-        portfolio.push(pVal);
-        benchmark.push(bVal);
-    });
-    return { dates, portfolio, benchmark };
-}
-
-const equityCharts = { USA: null, GPW: null };
-
-function renderEquityCurve(region) {
-    const caption = document.getElementById(`equityCurveCaption-${region}`);
-    const noteEl = document.getElementById(`equityCurveNote-${region}`);
-    const blended = blendEquityCurves(equityCurveData, universeWeightSharePct(region));
-
-    if (equityCharts[region]) { equityCharts[region].destroy(); equityCharts[region] = null; }
-
-    if (!blended) {
+    if (!curve || !curve.dates || curve.dates.length < 2) {
         noteEl.textContent = "";
         caption.textContent = "Za mało zapisanej historii rebalansów, żeby pokazać wykres — rośnie z każdym miesięcznym uruchomieniem pipeline'u.";
         return;
     }
 
-    noteEl.textContent = `${blended.dates[0]} → ${blended.dates[blended.dates.length - 1]}`;
+    noteEl.textContent = `${curve.dates[0]} → ${curve.dates[curve.dates.length - 1]}`;
 
-    equityCharts[region] = new Chart(document.getElementById(`equityCurveChart-${region}`), {
+    equityChart = new Chart(document.getElementById("equityCurveChart"), {
         type: "line",
         data: {
-            labels: blended.dates,
+            labels: curve.dates,
             datasets: [
-                { label: "Twoje portfolio (wg podziału na indeksy)", data: blended.portfolio, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                { label: "Kup i trzymaj te same indeksy", data: blended.benchmark, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
+                { label: "Selekcja momentum", data: curve.momentum_index, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                { label: "Kup i trzymaj indeks", data: curve.benchmark_index, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [4, 3] },
             ],
         },
         options: {
@@ -755,20 +730,20 @@ function renderEquityCurve(region) {
         },
     });
 
-    caption.textContent = "Wynik historyczny (zrealizowany) selekcji momentum w podziale kapitału między indeksy tego regionu, "
-        + "vs. 'kup i trzymaj' te same indeksy. To NIE jest historia konkretnie Twoich pozycji (tych nie śledzimy wstecz), "
-        + "tylko przybliżenie na bazie zapisanych rebalansów. Dane informacyjne, NIE prognoza ani porada inwestycyjna — "
-        + "wyniki z przeszłości nie gwarantują przyszłych zwrotów.";
+    caption.textContent = `Wynik historyczny (zrealizowany) selekcji momentum indeksu ${UNIVERSE_LABELS[winner]} `
+        + "(aktualny zwycięzca GEM) vs. 'kup i trzymaj' ten sam indeks. To NIE jest historia konkretnie Twoich pozycji "
+        + "(tych nie śledzimy wstecz), tylko przybliżenie na bazie zapisanych rebalansów. Dane informacyjne, NIE prognoza "
+        + "ani porada inwestycyjna — wyniki z przeszłości nie gwarantują przyszłych zwrotów.";
 }
 
 // ============================================================
-// MONTE CARLO — statystyczny rozrzut możliwych wartości portfela (osobno per
-// region — inna waluta, inny kapitał), NIE prognoza. mu/sigma to ważona
-// średnia (wagą = target_value) 12M momentum i rocznej zmienności obecnie
-// wybranych spółek — uproszczenie ignorujące korelacje między nimi (zwykle
-// zawyża pokazaną zmienność, więc pasmo jest raczej szersze niż węższe).
+// MONTE CARLO — statystyczny rozrzut możliwych wartości portfela, NIE
+// prognoza. mu/sigma to ważona średnia (wagą = target_value) 12M momentum i
+// rocznej zmienności obecnie wybranych spółek — uproszczenie ignorujące
+// korelacje między nimi (zwykle zawyża pokazaną zmienność, więc pasmo jest
+// raczej szersze niż węższe).
 // ============================================================
-const mcCharts = { USA: null, GPW: null };
+let mcChart = null;
 
 // Surowe trailing 12M momentum bywa ekstremalne (np. spółka po skoku o
 // kilkaset %) i wprost jako roczny "oczekiwany zwrot" byłoby wprowadzające
@@ -818,18 +793,18 @@ function simulateMonteCarlo(startValue, mu, sigma, horizonMonths, nPaths) {
     return { p10, p50, p90 };
 }
 
-function renderMonteCarlo(region) {
-    const moneyFmt = moneyFmtFor(region);
+function renderMonteCarlo() {
+    const moneyFmt = moneyFmtFor();
     // Symulacja obejmuje tylko część aktywnie zarządzaną przez momentum —
     // wykluczone pozycje mają inną charakterystykę ryzyka/zwrotu, więc
     // nie da się ich uczciwie opisać tym samym mu/sigma.
-    const investableCapital = Math.max(0, regionTargetCapital(region) - regionExcludedValue(region));
-    const { targets } = computeTargets(region, investableCapital);
-    const horizon = parseInt(document.getElementById(`mcHorizon-${region}`).value, 10) || 12;
-    const caption = document.getElementById(`mcCaption-${region}`);
+    const investableCapital = Math.max(0, targetCapital() - excludedValue());
+    const { targets } = computeTargets(settings.topN || 0, investableCapital);
+    const horizon = parseInt(document.getElementById("mcHorizon").value, 10) || 12;
+    const caption = document.getElementById("mcCaption");
 
     if (investableCapital <= 0 || Object.keys(targets).length === 0) {
-        if (mcCharts[region]) { mcCharts[region].destroy(); mcCharts[region] = null; }
+        if (mcChart) { mcChart.destroy(); mcChart = null; }
         caption.textContent = "Ustaw dopłatę / dodaj pozycje, żeby zobaczyć symulację.";
         return;
     }
@@ -838,8 +813,8 @@ function renderMonteCarlo(region) {
     const { p10, p50, p90 } = simulateMonteCarlo(investableCapital, mu, sigma, horizon, 300);
     const labels = p50.map((_, i) => i === 0 ? "dziś" : `+${i} mies.`);
 
-    if (mcCharts[region]) mcCharts[region].destroy();
-    mcCharts[region] = new Chart(document.getElementById(`monteCarloChart-${region}`), {
+    if (mcChart) mcChart.destroy();
+    mcChart = new Chart(document.getElementById("monteCarloChart"), {
         type: "line",
         data: {
             labels,
@@ -864,29 +839,39 @@ function renderMonteCarlo(region) {
         },
     });
 
-    let caption_text = `Symulacja obejmuje kapitał zarządzany przez momentum: ${moneyFmt(investableCapital)}. `
+    caption.textContent = `Symulacja obejmuje kapitał zarządzany przez momentum: ${moneyFmt(investableCapital)}. `
         + `Założenia: oczekiwany zwrot ${(mu * 100).toFixed(1)}%/rok `
         + `(śr. ważona 12M momentum wybranych spółek, ograniczona do ±${MC_MU_CAP * 100}%/rok żeby uniknąć ekstrapolacji `
         + `chwilowych skoków), zmienność ${(sigma * 100).toFixed(1)}%/rok (śr. ważona zmienności rocznej), 300 symulowanych `
         + `ścieżek. Pasmo = zakres 10.–90. percentyla. To NIE jest prognoza ani porada inwestycyjna — pokazuje statystyczny `
         + `rozrzut przy założeniu, że przeszła zmienność i momentum się utrzymają, co nie jest gwarantowane.`;
-    caption.textContent = caption_text;
 }
 
-// Odświeża całą sekcję jednego regionu (sugestia + Monte Carlo + analiza
-// portfela + wykres historyczny — renderSuggestions woła te pierwsze trzy).
-function renderRegion(region) {
-    renderSuggestions(region);
-    renderEquityCurve(region);
+function initSettingsForm() {
+    document.getElementById("contribution").value = settings.contribution || "";
+    document.getElementById("topn").value = settings.topN;
+
+    const onChange = () => {
+        settings.contribution = parseFloat(document.getElementById("contribution").value) || 0;
+        settings.topN = parseInt(document.getElementById("topn").value, 10) || 0;
+        saveSettings(settings);
+        refreshOutputs();
+    };
+    document.getElementById("contribution").addEventListener("input", onChange);
+    document.getElementById("topn").addEventListener("input", onChange);
 }
 
-function renderRegions() {
-    REGION_LIST.forEach(renderRegion);
+// Odświeża sugestię + Monte Carlo + analizę portfela + wykres historyczny
+// (renderSuggestions woła te pierwsze trzy) — wołane po każdej zmianie
+// ustawień/holdingów/wykluczeń.
+function refreshOutputs() {
+    renderSuggestions();
+    renderEquityCurve();
 }
 
 function renderAll() {
     renderHoldingsTable();
-    renderRegions();
+    refreshOutputs();
 }
 
 // typeof document check: pozwala wczytać ten plik przez `require()` w testach
@@ -895,15 +880,14 @@ function renderAll() {
 if (typeof document !== "undefined") {
     (async function init() {
         await loadUniverseData();
-        REGION_LIST.forEach(initSettingsForm);
+        initSettingsForm();
         initHoldingsForm();
         initXtbImport();
         initTvExport();
         initExcludeForm();
         renderExcludedList();
-        REGION_LIST.forEach(region => {
-            document.getElementById(`mcHorizon-${region}`).addEventListener("change", () => renderMonteCarlo(region));
-        });
+        document.getElementById("mcHorizon").addEventListener("change", () => renderMonteCarlo());
+        renderGemWidget();
         renderAll();
     })();
 
@@ -916,20 +900,21 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        REGIONS, REGION_LIST,
-        fmtMoney, fmtMoneyPln, moneyFmtFor, fmtQty, sharesSuggestion,
-        regionOf, computeTargets, universeWeightSharePct, parseXtbOpenPositions,
+        UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES,
+        fmtMoney, fmtMoneyPln, moneyFmtFor, moneyFmtForCurrency, fmtQty, sharesSuggestion,
+        currencyOf, selectedConstituents, computeTargets, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
-        blendEquityCurves,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
-        // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded)
-        // bez importu przez window — to jedyny sposób bez przepisywania modułu na klasę.
+        // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded/
+        // gemData) bez importu przez window — to jedyny sposób bez przepisywania modułu
+        // na klasę.
         _setState(s) {
             if (s.universeData !== undefined) universeData = s.universeData;
             if (s.settings !== undefined) settings = s.settings;
             if (s.excluded !== undefined) excluded = s.excluded;
             if (s.holdings !== undefined) holdings = s.holdings;
             if (s.priceMap !== undefined) priceMap = s.priceMap;
+            if (s.gemData !== undefined) gemData = s.gemData;
         },
     };
 }

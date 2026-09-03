@@ -100,14 +100,18 @@ EQUAL_WEIGHT_UNIVERSES = {"DOWJONES", "WIG20", "MWIG40"}
 FULL_COVERAGE_UNIVERSES = set(UNIVERSES) - EQUAL_WEIGHT_UNIVERSES
 GEM_LOOKBACK_MONTHS = 12   # okno zwrotu poziomu indeksu dla Global Equity Momentum
 GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy dla zwycieskiego indeksu
-# Global Equity Momentum porownuje TYLKO te 2 uniwersa (rynek USA, rdzen
-# pierwotnego zestawu) miedzy soba — SP500/WIG20/MWIG40 maja wlasne dane w
-# index_prices (potrzebne do Sily Relatywnej), ale celowo NIE uczestnicza w tym
-# wyscigu: SP500 zostal przywrocony do narzedzia WYLACZNIE jako uniwersum
-# momentum + ekran Sily Relatywnej (na zyczenie), bez zmiany istniejacego
-# zachowania GEM; WIG20/MWIG40 z tego samego powodu, co dodatkowo nie zmienia
-# zachowania GEM przy rozszerzeniu na rynek polski.
-GEM_UNIVERSES = ["NASDAQ100", "DOWJONES"]
+# Global Equity Momentum porownuje WSZYSTKIE 5 uniwersow miedzy soba (na zyczenie
+# uzytkownika — GEM jest teraz silnikiem wyboru dla rebalansera: rebalanser bierze
+# TOP N spolek WYLACZNIE ze zwycieskiego tu indeksu, patrz docs/js/rebalance.js).
+# Wczesniej ten wyscig obejmowal tylko NASDAQ100/DOWJONES (rynek USA) — SP500/
+# WIG20/MWIG40 mialy wlasne dane w index_prices (potrzebne do Sily Relatywnej),
+# ale byly z niego celowo wykluczone. `compute_index_returns` juz liczy zwrot
+# jako pelny zwrot ceny w oknie GEM_LOOKBACK_MONTHS (`price_now/price_start - 1`,
+# NIE konwencja momentum M-14/M-2 zarezerwowana dla akcji — indeksy/ETF-y licza
+# sie w calym oknie), co jest wlasnie metodologia, jakiej ten wyscig potrzebuje,
+# wiec rozszerzenie na 5 uniwersow jest czysto zmiana tej listy, bez zmiany
+# `compute_index_returns`/`compute_index_leaders`.
+GEM_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
@@ -807,7 +811,7 @@ def export_equity_curve(con, docs_data_dir):
 
 # ============================================================================
 # GLOBAL EQUITY MOMENTUM: porównanie zwrotu POZIOMU INDEKSU (nie składników,
-# tabela `index_prices` z fetch_data.py) między NASDAQ100/DOWJONES w
+# tabela `index_prices` z fetch_data.py) między wszystkimi 5 uniwersami (GEM_UNIVERSES) w
 # oknie GEM_LOOKBACK_MONTHS — klasyczna idea "dual/global equity momentum":
 # spośród kilku rynków akcji wybierz ten z najsilniejszym trendem. Zwycięzcą
 # jest indeks o najwyższym zwrocie; dla niego liczymy TOP liderów — spółki,
@@ -938,8 +942,8 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
         "winner": winner,
         "leaders": leaders,
         "note": (f"Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie {lookback_months} mies. "
-                 "dla NASDAQ100/DOWJONES — klasyczna idea Global/Dual Equity Momentum: spośród "
-                 "kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym "
+                 "dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 — klasyczna idea Global/Dual Equity Momentum: "
+                 "spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym "
                  f"zwrocie. Lista 'leaders' to top {top_n} spółek zwycięskiego indeksu wg wkładu w jego "
                  "zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które "
                  "realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. "

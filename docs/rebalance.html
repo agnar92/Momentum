@@ -17,7 +17,7 @@
 <body>
 
 <div class="topbar">
-    <div class="brand">MOMENTUM<span class="brand-sub"> // NASDAQ100 · DJIA</span></div>
+    <div class="brand">MOMENTUM<span class="brand-sub"> // GEM: SP500 · NASDAQ100 · DJIA · WIG20 · mWIG40</span></div>
     <nav>
         <a href="index.html">Dashboard</a>
         <a href="rebalance.html" class="active">Rebalans</a>
@@ -29,7 +29,7 @@
 
     <div class="panel-card" id="holdingsCard">
         <h3>Obecne pozycje</h3>
-        <p class="panel-hint">Dodawaj i usuwaj dowolne akcje kiedy chcesz — to Twoje rzeczywiste pozycje (USA i GPW razem), niezależnie od tego, co sugeruje strategia. Każda pozycja trafia do właściwej sekcji (USA/GPW) niżej automatycznie, wg tickera.</p>
+        <p class="panel-hint">Dodawaj i usuwaj dowolne akcje kiedy chcesz — to Twoje rzeczywiste pozycje, niezależnie od tego, co akurat sugeruje strategia. Każda pozycja jest wyceniona i pokazana w swojej natywnej walucie (USD/PLN, wg tickera), niezależnie od tego, który indeks akurat wygrywa w Global Equity Momentum poniżej.</p>
         <div class="import-row">
             <label class="add-row-btn file-btn" for="xtbFile">📄 Importuj otwarte pozycje z raportu XTB (.xlsx)</label>
             <input type="file" id="xtbFile" accept=".xlsx">
@@ -52,7 +52,7 @@
 
     <div class="panel-card" id="excludeCard">
         <h3>Wyklucz z rebalansu</h3>
-        <p class="panel-hint">Tickery na tej liście nigdy nie dostaną sugestii kupna/sprzedaży — nawet jeśli je zaimportujesz z XTB albo wybierze je momentum. Dotyczy obu sekcji (USA i GPW) — wpisz sam ticker, bez giełdy.</p>
+        <p class="panel-hint">Tickery na tej liście nigdy nie dostaną sugestii kupna/sprzedaży — nawet jeśli je zaimportujesz z XTB albo wybierze je momentum. Wpisz sam ticker, bez giełdy.</p>
         <div class="import-row">
             <input type="text" id="excludeInput" placeholder="np. AAPL" class="exclude-input">
             <button class="add-row-btn" id="excludeAddBtn">+ Wyklucz</button>
@@ -60,158 +60,84 @@
         <div class="exclude-list" id="excludedList"></div>
     </div>
 
-    <div class="region-heading">🇺🇸 USA <span class="region-sub">Nasdaq 100 + Dow Jones · USD</span></div>
-
-    <div class="panel-card" id="portfolioAnalysisCard-USA">
-        <h3>Analiza portfela</h3>
-        <p class="panel-hint">Podział Twoich obecnych pozycji USA wg wartości — szybki podgląd, jak dziś wygląda ta część portfela.</p>
-        <div class="donut-wrap"><canvas id="portfolioAnalysisChart-USA"></canvas></div>
-        <div class="empty-state" id="portfolioAnalysisEmpty-USA" style="display:none;">Dodaj pozycje ze znaną ceną, żeby zobaczyć podział portfela.</div>
+    <div class="panel-card" id="gemWidgetCard">
+        <h3 title="Global Equity Momentum: porównanie zwrotu POZIOMU INDEKSU (nie składników) SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 w oknie 12 mies. — wygrywa indeks o najsilniejszym trendzie. Rebalanser bierze TOP N spółek WYŁĄCZNIE ze zwycięskiego tu indeksu, patrz ustawienia poniżej.">🚀 Global Equity Momentum</h3>
+        <p class="panel-hint">Rebalanser sam wybiera, z którego indeksu brać spółki — ten z najsilniejszym trendem w ostatnich 12 miesiącach. To jedyny "silnik decyzji" tej strony; nie ustawiasz indeksu ręcznie.</p>
+        <div id="gemWidget"></div>
     </div>
 
-    <div class="panel-card" id="settingsCard-USA">
-        <h3>Ile dopłacasz w tym miesiącu? (USD)</h3>
+    <div class="panel-card" id="portfolioAnalysisCard">
+        <h3>Analiza portfela</h3>
+        <p class="panel-hint">Podział Twoich obecnych pozycji wg wartości — szybki podgląd, jak dziś wygląda portfel (USD i PLN razem, bez przewalutowania — to tylko wizualny podział wg surowej wartości liczbowej).</p>
+        <div class="donut-wrap"><canvas id="portfolioAnalysisChart"></canvas></div>
+        <div class="empty-state" id="portfolioAnalysisEmpty" style="display:none;">Dodaj pozycje ze znaną ceną, żeby zobaczyć podział portfela.</div>
+    </div>
+
+    <div class="panel-card" id="settingsCard">
+        <h3>Ustawienia rebalansu</h3>
         <div class="settings-row">
-            <label>Kwota dopłaty ($)</label>
-            <input type="number" id="contribution-USA" class="contribution-input" min="0" step="50" placeholder="np. 500">
-            <div class="settings-hint" id="capitalHint-USA"></div>
+            <label>Kwota dopłaty w tym miesiącu (<span id="contributionUnit">$</span>)</label>
+            <input type="number" id="contribution" class="contribution-input" min="0" step="50" placeholder="np. 500">
+            <div class="settings-hint" id="capitalHint"></div>
         </div>
         <div class="settings-row buckets-row">
-            <label>Ile najlepszych spółek (TOP N wg momentum) wziąć z każdego indeksu</label>
+            <label>Ile najlepszych spółek (TOP N wg momentum) wziąć ze zwycięskiego indeksu GEM <span class="settings-hint" id="topnActiveUniverse"></span></label>
             <div class="bucket-inputs">
-                <div class="bucket-input"><span>Nasdaq 100</span><input type="number" id="topn-NASDAQ100" min="0" max="100" step="1"><span>szt.</span></div>
-                <div class="bucket-input"><span>Dow Jones</span><input type="number" id="topn-DOWJONES" min="0" max="100" step="1"><span>szt.</span></div>
+                <div class="bucket-input"><input type="number" id="topn" min="0" max="500" step="1"><span>szt.</span></div>
             </div>
-            <p class="panel-hint" style="margin-top:8px;">Wagi poszczególnych spółek w portfelu dobierane są automatycznie na podstawie ich wagi momentum — nie ustawiasz ich ręcznie.</p>
+            <p class="panel-hint" style="margin-top:8px;">Wagi poszczególnych spółek w portfelu dobierane są automatycznie na podstawie ich momentum score — nie ustawiasz ich ręcznie.</p>
         </div>
     </div>
 
-    <div class="stat-cards" id="summaryCards-USA">
+    <div class="stat-cards" id="summaryCards">
         <div class="stat-card">
             <div class="label">Masz teraz w akcjach</div>
-            <div class="value" id="statCurrentValue-USA">—</div>
+            <div class="value" id="statCurrentValue">—</div>
         </div>
         <div class="stat-card">
             <div class="label">Kapitał docelowy (po dopłacie)</div>
-            <div class="value" id="statTargetValue-USA">—</div>
+            <div class="value" id="statTargetValue">—</div>
         </div>
         <div class="stat-card">
             <div class="label">Spółek w sugestii</div>
-            <div class="value" id="statHoldingsCount-USA">—</div>
+            <div class="value" id="statHoldingsCount">—</div>
         </div>
     </div>
 
-    <div class="panel-card" id="suggestionsCard-USA">
-        <h3>Sugerowany rebalans — USA <span class="ref-date-note" id="refDateNote-USA"></span></h3>
+    <div class="panel-card" id="suggestionsCard">
+        <h3>Sugerowany rebalans <span class="ref-date-note" id="refDateNote"></span></h3>
         <p class="panel-hint">To tylko sugestia, tak jak tabele na dashboardzie — Ty decydujesz, co, kiedy i ile kupić lub sprzedać.</p>
         <div class="table-wrap">
-        <table class="rebalance-table" id="rebalanceTable-USA">
+        <table class="rebalance-table" id="rebalanceTable">
             <thead>
                 <tr><th>Ticker</th><th>Indeks / uwaga</th><th>Waga docelowa</th><th>Wartość docelowa</th><th>Masz teraz</th><th>Sugestia</th></tr>
             </thead>
-            <tbody id="rebalanceBody-USA"></tbody>
+            <tbody id="rebalanceBody"></tbody>
         </table>
         </div>
-        <div class="empty-state" id="rebalanceEmpty-USA" style="display:none;">
+        <div class="empty-state" id="rebalanceEmpty" style="display:none;">
             Podaj kwotę dopłaty, żeby zobaczyć sugestię rebalansu.
         </div>
     </div>
 
-    <div class="panel-card" id="monteCarloCard-USA">
+    <div class="panel-card" id="monteCarloCard">
         <h3>
             Prognoza Monte Carlo
-            <select id="mcHorizon-USA" class="mc-horizon">
+            <select id="mcHorizon" class="mc-horizon">
                 <option value="6">6 miesięcy</option>
                 <option value="12" selected>12 miesięcy</option>
                 <option value="24">24 miesiące</option>
                 <option value="36">36 miesięcy</option>
             </select>
         </h3>
-        <div class="mc-chart-wrap"><canvas id="monteCarloChart-USA"></canvas></div>
-        <p class="panel-hint" id="mcCaption-USA"></p>
+        <div class="mc-chart-wrap"><canvas id="monteCarloChart"></canvas></div>
+        <p class="panel-hint" id="mcCaption"></p>
     </div>
 
-    <div class="panel-card" id="equityCurveCard-USA">
-        <h3>Wynik historyczny — USA <span class="ref-date-note" id="equityCurveNote-USA"></span></h3>
-        <div class="mc-chart-wrap"><canvas id="equityCurveChart-USA"></canvas></div>
-        <p class="panel-hint" id="equityCurveCaption-USA"></p>
-    </div>
-
-    <div class="region-heading">🇵🇱 GPW <span class="region-sub">WIG20 + mWIG40 · PLN</span></div>
-
-    <div class="panel-card" id="portfolioAnalysisCard-GPW">
-        <h3>Analiza portfela</h3>
-        <p class="panel-hint">Podział Twoich obecnych pozycji GPW wg wartości — szybki podgląd, jak dziś wygląda ta część portfela.</p>
-        <div class="donut-wrap"><canvas id="portfolioAnalysisChart-GPW"></canvas></div>
-        <div class="empty-state" id="portfolioAnalysisEmpty-GPW" style="display:none;">Dodaj pozycje ze znaną ceną, żeby zobaczyć podział portfela.</div>
-    </div>
-
-    <div class="panel-card" id="settingsCard-GPW">
-        <h3>Ile dopłacasz w tym miesiącu? (PLN)</h3>
-        <div class="settings-row">
-            <label>Kwota dopłaty (zł)</label>
-            <input type="number" id="contribution-GPW" class="contribution-input" min="0" step="50" placeholder="np. 2000">
-            <div class="settings-hint" id="capitalHint-GPW"></div>
-        </div>
-        <div class="settings-row buckets-row">
-            <label>Ile najlepszych spółek (TOP N wg momentum) wziąć z każdego indeksu</label>
-            <div class="bucket-inputs">
-                <div class="bucket-input"><span>WIG20</span><input type="number" id="topn-WIG20" min="0" max="100" step="1"><span>szt.</span></div>
-                <div class="bucket-input"><span>mWIG40</span><input type="number" id="topn-MWIG40" min="0" max="100" step="1"><span>szt.</span></div>
-            </div>
-            <p class="panel-hint" style="margin-top:8px;">Wagi poszczególnych spółek w portfelu dobierane są automatycznie na podstawie ich wagi momentum — nie ustawiasz ich ręcznie.</p>
-        </div>
-    </div>
-
-    <div class="stat-cards" id="summaryCards-GPW">
-        <div class="stat-card">
-            <div class="label">Masz teraz w akcjach</div>
-            <div class="value" id="statCurrentValue-GPW">—</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">Kapitał docelowy (po dopłacie)</div>
-            <div class="value" id="statTargetValue-GPW">—</div>
-        </div>
-        <div class="stat-card">
-            <div class="label">Spółek w sugestii</div>
-            <div class="value" id="statHoldingsCount-GPW">—</div>
-        </div>
-    </div>
-
-    <div class="panel-card" id="suggestionsCard-GPW">
-        <h3>Sugerowany rebalans — GPW <span class="ref-date-note" id="refDateNote-GPW"></span></h3>
-        <p class="panel-hint">To tylko sugestia, tak jak tabele na dashboardzie — Ty decydujesz, co, kiedy i ile kupić lub sprzedać.</p>
-        <div class="table-wrap">
-        <table class="rebalance-table" id="rebalanceTable-GPW">
-            <thead>
-                <tr><th>Ticker</th><th>Indeks / uwaga</th><th>Waga docelowa</th><th>Wartość docelowa</th><th>Masz teraz</th><th>Sugestia</th></tr>
-            </thead>
-            <tbody id="rebalanceBody-GPW"></tbody>
-        </table>
-        </div>
-        <div class="empty-state" id="rebalanceEmpty-GPW" style="display:none;">
-            Podaj kwotę dopłaty, żeby zobaczyć sugestię rebalansu.
-        </div>
-    </div>
-
-    <div class="panel-card" id="monteCarloCard-GPW">
-        <h3>
-            Prognoza Monte Carlo
-            <select id="mcHorizon-GPW" class="mc-horizon">
-                <option value="6">6 miesięcy</option>
-                <option value="12" selected>12 miesięcy</option>
-                <option value="24">24 miesiące</option>
-                <option value="36">36 miesięcy</option>
-            </select>
-        </h3>
-        <div class="mc-chart-wrap"><canvas id="monteCarloChart-GPW"></canvas></div>
-        <p class="panel-hint" id="mcCaption-GPW"></p>
-    </div>
-
-    <div class="panel-card" id="equityCurveCard-GPW">
-        <h3>Wynik historyczny — GPW <span class="ref-date-note" id="equityCurveNote-GPW"></span></h3>
-        <div class="mc-chart-wrap"><canvas id="equityCurveChart-GPW"></canvas></div>
-        <p class="panel-hint" id="equityCurveCaption-GPW"></p>
+    <div class="panel-card" id="equityCurveCard">
+        <h3>Wynik historyczny <span class="ref-date-note" id="equityCurveNote"></span></h3>
+        <div class="mc-chart-wrap"><canvas id="equityCurveChart"></canvas></div>
+        <p class="panel-hint" id="equityCurveCaption"></p>
     </div>
 
 </div>
