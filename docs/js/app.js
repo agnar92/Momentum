@@ -41,10 +41,18 @@ function tvUrlFor(ticker, universe) {
 // konta. Tutaj configu NIE rozszerzamy o compare — to inny, osobny widget na
 // osobnej zakładce, więc tamten problem go nie dotyczy.
 //
-// Configi widgetów są 1:1 ze źródłem tego samego tutoriala (użytkownik
-// dostarczył plik), poza `colorTheme`/`theme: "dark"` i `isTransparent: true`
-// (tam gdzie ten widget to wspiera) — dzięki temu każdy blok pokazuje się na
-// tle .tv-widget-block/.chart-panel (var(--panel)) zamiast rysować własne,
+// Configi i wysokości bloków są 1:1 ze źródłem tego samego tutoriala, który
+// użytkownik dostarczył jako gotowy plik HTML — przepisane stąd co do pola:
+// per-widget `heightPx` odpowiada tamtejszym CSS regułom `#advanced-chart{
+// height:500px}` itd. (symbol-info celowo BEZ wymuszonej wysokości, tak jak
+// tam), `height:"100%"` w configu zamiast twardej liczby pikseli (rozmiar
+// nadaje kontener, nie sam widget), a Advanced Chart zachowuje tamtejszą
+// specjalną budowę DOM: `autosize:true` + wewnętrzny
+// `.tradingview-widget-container__widget` na `calc(100% - 32px)` (te 32px to
+// pasek atrybucji TradingView u dołu widgetu). Jedyna świadoma zmiana wobec
+// źródła to `colorTheme`/`theme:"dark"` + `isTransparent:true` (tam gdzie
+// widget to wspiera) — dzięki temu każdy blok pokazuje się na tle
+// .tv-widget-block/.chart-panel (var(--panel)) zamiast rysować własne,
 // osobne tło, więc wygląda spójnie z resztą apki bez dodatkowego CSS.
 //
 // Każdy config bierze symbol jako funkcję (ticker-tape ma stałą, niezależną
@@ -76,16 +84,17 @@ const TV_PAGE_WIDGETS = [
         }),
     },
     {
+        // Bez heightPx — jak w źródle, symbol-info sizuje się naturalnie.
         src: `${TV_EMBED_BASE}embed-widget-symbol-info.js`,
         config: symbol => ({ symbol, width: "100%", locale: "pl", colorTheme: "dark", isTransparent: true }),
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-advanced-chart.js`,
-        tall: true,
+        heightPx: 500,
+        autosizeFill: true,
         config: symbol => ({
+            autosize: true,
             symbol,
-            width: "100%",
-            height: 550,
             interval: "D",
             timezone: "Etc/UTC",
             theme: "dark",
@@ -98,11 +107,13 @@ const TV_PAGE_WIDGETS = [
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-symbol-profile.js`,
-        config: symbol => ({ symbol, width: "100%", height: 400, locale: "pl", colorTheme: "dark", isTransparent: true }),
+        heightPx: 390,
+        config: symbol => ({ symbol, width: "100%", height: "100%", locale: "pl", colorTheme: "dark", isTransparent: true }),
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-financials.js`,
-        config: symbol => ({ symbol, width: "100%", height: 550, colorTheme: "dark", isTransparent: true, displayMode: "adaptive", locale: "pl" }),
+        heightPx: 490,
+        config: symbol => ({ symbol, width: "100%", height: "100%", colorTheme: "dark", isTransparent: true, displayMode: "adaptive", locale: "pl" }),
     },
 ];
 
@@ -110,10 +121,11 @@ const TV_PAGE_WIDGETS = [
 const TV_PAGE_WIDGETS_ROW = [
     {
         src: `${TV_EMBED_BASE}embed-widget-technical-analysis.js`,
+        heightPx: 425,
         config: symbol => ({
             symbol,
             width: "100%",
-            height: 450,
+            height: "100%",
             interval: "15m",
             isTransparent: true,
             showIntervalTabs: true,
@@ -124,11 +136,12 @@ const TV_PAGE_WIDGETS_ROW = [
     },
     {
         src: `${TV_EMBED_BASE}embed-widget-timeline.js`,
+        heightPx: 425,
         config: symbol => ({
             feedMode: "symbol",
             symbol,
             width: "100%",
-            height: 450,
+            height: "100%",
             colorTheme: "dark",
             isTransparent: true,
             displayMode: "regular",
@@ -139,11 +152,22 @@ const TV_PAGE_WIDGETS_ROW = [
 
 function buildTvWidgetBlock(spec, tvSymbol) {
     const block = document.createElement("div");
-    block.className = "tv-widget-block" + (spec.tall ? " tv-widget-block-tall" : "");
+    block.className = "tv-widget-block";
+    if (spec.heightPx) block.style.height = `${spec.heightPx}px`;
+
     const container = document.createElement("div");
     container.className = "tradingview-widget-container";
     const widgetDiv = document.createElement("div");
     widgetDiv.className = "tradingview-widget-container__widget";
+    if (spec.autosizeFill) {
+        // Jak w źródle: kontener na 100%/100%, wewnętrzny div na
+        // calc(100% - 32px) — te 32px rezerwują miejsce na pasek atrybucji
+        // TradingView u dołu widgetu, inaczej autosize go przykrywa.
+        container.style.height = "100%";
+        container.style.width = "100%";
+        widgetDiv.style.height = "calc(100% - 32px)";
+        widgetDiv.style.width = "100%";
+    }
     container.appendChild(widgetDiv);
 
     const script = document.createElement("script");

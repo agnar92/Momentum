@@ -807,11 +807,11 @@ th.tv-col { width: 1%; }
     border-color: var(--green);
 }
 
-/* Trzy widgety TradingView jeden pod drugim (notowanie, profil spółki, dane
-   fundamentalne) — każdy w osobnym tradingview-widget-container, patrz
-   renderTvOverviewPanel w app.js. overflow-y: auto z tego samego powodu co
-   .rs-chart-container powyżej (widgety mają stałą wysokość, telefon ma
-   sztywną wysokość .charts-area). */
+/* Widgety TradingView jeden pod drugim (ticker tape, notowanie, Advanced
+   Chart, profil spółki, dane fundamentalne) — każdy w osobnym
+   tradingview-widget-container, patrz renderTvOverviewPanel w app.js.
+   overflow-y: auto z tego samego powodu co .rs-chart-container powyżej
+   (widgety mają stałą wysokość, telefon ma sztywną wysokość .charts-area). */
 .tv-overview-container {
     display: flex;
     flex-direction: column;
@@ -820,16 +820,16 @@ th.tv-col { width: 1%; }
     overflow-y: auto;
 }
 
+/* Wysokość każdego bloku to inline style ustawiany z spec.heightPx w
+   buildTvWidgetBlock (app.js) — 1:1 z per-sekcyjnymi CSS regułami źródłowego
+   tutoriala TradingView (np. `#advanced-chart{height:500px}`), tylko
+   przeniesione do JS bo tu nie mamy tych samych id-ów co tamten plik. */
 .tv-widget-block {
     flex-shrink: 0;
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
 }
-
-/* Advanced Chart — wyraźnie wyższy niż pozostałe bloki (odpowiednik "duzego"
-   wykresu ze wzorca TradingVista), żeby MACD pod cena mial gdzie oddychac. */
-.tv-widget-block-tall { min-height: 560px; }
 
 /* Dolny wiersz wzorca (Analiza techniczna + oś czasu newsów) obok siebie —
    flex zamiast media query, żeby responsywność zależała od realnej
