@@ -967,18 +967,25 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, 
     dzien dostaje neutralny podzial 50/50, zeby SUM(buying_volume) nigdy nie byl
     NULL i zawsze sumowal sie mniej wiecej do SUM(Volume) (uzywane WYLACZNIE dla
     tabeli `prices` — TYLKO tam sa kolumny High/Low; wywolanie dla `index_prices`
-    (bez tego flaga) by sie wywalilo, bo tam ich nie ma)."""
-    buying_volume_select = ""
+    (bez tego flaga) by sie wywalilo, bo tam ich nie ma).
+
+    Ta sama flaga dolicza tez tygodniowe MAX(High)/MIN(Low) — potrzebne przez
+    compute_relative_strength_chart do policzenia VWAP na Typical Price
+    ((High+Low+Close)/3), standardowej definicji VWAP (nie na samym Close, jak
+    w pierwszej wersji tego wykresu — patrz "vwap"/"typical_price" nizej)."""
+    ohlc_select = ""
     if include_buying_volume:
-        buying_volume_select = """,
+        ohlc_select = """,
                SUM(CASE
                      WHEN High IS NULL OR Low IS NULL OR High <= Low THEN Volume * 0.5
                      ELSE Volume * ((2 * Close - High - Low) / (High - Low) + 1) / 2.0
-                   END) AS buying_volume"""
+                   END) AS buying_volume,
+               MAX(High) AS high,
+               MIN(Low) AS low"""
     return con.execute(f"""
         SELECT DATE_TRUNC('week', Date) AS week_start,
                ARGMAX(Close, Date) AS close,
-               SUM(Volume) AS volume{buying_volume_select}
+               SUM(Volume) AS volume{ohlc_select}
         FROM {table}
         WHERE {id_column} = '{id_value}'
           AND Date >= DATE '{start_date}'
@@ -1391,14 +1398,19 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     to świadomie inny punkt startowy niż sma10_pct/sma30_pct — anchored VWAP z
     definicji zaczyna kumulację dokładnie w punkcie zakotwiczenia, więc liczony
     jest wyłącznie na in_window (te same tygodnie co close_pct), narastająco
-    tydzień po tygodniu: `cumsum(close*volume) / cumsum(volume)`, rebase'owany
-    tym samym close0 co pozostałe linie. Skoro okno momentum (M-14/M-2, rzadziej
-    M-11/M-2) mieści się całe w rolling ~22-miesięcznym `prices` (patrz
-    fetch_data.py --lookback-months), ten anchored VWAP ma dane na CAŁĄ
-    szerokość wykresu, od pierwszego do ostatniego wyświetlanego tygodnia — nie
-    trzeba dodatkowego bufora. Cena = tygodniowe zamknięcie (nie
-    (High+Low+Close)/3) — spójnie z resztą modułu (pudełko Darvasa też celowo
-    pracuje wyłącznie na cenach zamknięcia, nie OHLC)."""
+    tydzień po tygodniu: `cumsum(typical_price*volume) / cumsum(volume)`, gdzie
+    typical_price = (High+Low+Close)/3 — standardowa definicja VWAP (NIE samo
+    Close: pierwsza wersja tego liczyła VWAP na samym Close dla "spójności"
+    z resztą modułu, ale to była błędna uproszczenie — VWAP z definicji wymaga
+    Typical Price, to nie jest opcjonalny detal, tylko sama formuła). Spada z
+    powrotem do Close gdy High/Low brakuje dla całego tygodnia (stare wiersze
+    sprzed migracji schematu, patrz _ensure_prices_ohlc_columns w fetch_data.py)
+    — patrz _weekly_close_series/"ohlc_select". Wynik rebase'owany tym samym
+    close0 co pozostałe linie. Skoro okno momentum (M-14/M-2, rzadziej M-11/M-2)
+    mieści się całe w rolling ~22-miesięcznym `prices` (patrz fetch_data.py
+    --lookback-months), ten anchored VWAP ma dane na CAŁĄ szerokość wykresu, od
+    pierwszego do ostatniego wyświetlanego tygodnia — nie trzeba dodatkowego
+    bufora."""
     lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
@@ -1433,11 +1445,21 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     # niz sma10/sma30 (ktore licza sie na buforze, zeby miec wartosc juz od
     # pierwszego wyswietlanego tygodnia). Anchored VWAP z definicji zaczyna
     # akumulacje od swojego punktu zakotwiczenia, wiec liczony jest WYLACZNIE
-    # na in_window (te same tygodnie co close_pct), a nie na stock_df. Cena =
-    # tygodniowe zamkniecie (nie (High+Low+Close)/3) — spojnie z reszta modulu,
-    # ktory (jak pudelko Darvasa) celowo pracuje tylko na cenach zamkniecia.
+    # na in_window (te same tygodnie co close_pct), a nie na stock_df.
+    # Cena = Typical Price (High+Low+Close)/3, standardowa definicja VWAP
+    # (NIE samo Close — pierwsza wersja tego liczyla na samym Close dla
+    # spojnosci z reszta modulu, ale to bledna uproszczenie: VWAP z definicji
+    # wymaga Typical Price, to nie jest opcjonalny detal). Gdy High/Low
+    # brakuje dla calego tygodnia (NULL — stare wiersze sprzed migracji
+    # schematu, patrz _ensure_prices_ohlc_columns w fetch_data.py), typical
+    # price spada z powrotem do Close (ten sam duch fallbacku co przy
+    # buying_volume w _weekly_close_series).
     in_window = in_window.copy()
-    cum_pv = (in_window["close"] * in_window["volume"]).cumsum()
+    typical_price = in_window["close"].where(
+        in_window["high"].isna() | in_window["low"].isna(),
+        (in_window["high"] + in_window["low"] + in_window["close"]) / 3.0,
+    )
+    cum_pv = (typical_price * in_window["volume"]).cumsum()
     cum_vol = in_window["volume"].cumsum()
     in_window["vwap"] = cum_pv / cum_vol.mask(cum_vol == 0)
     index_available = in_window["index_close"].dropna()

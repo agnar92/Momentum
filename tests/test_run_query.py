@@ -710,6 +710,9 @@ class TestComputeRelativeStrengthChart:
         # docstring compute_relative_strength_chart) -> pierwszy wyswietlany
         # tydzien musi dawac 0% (VWAP tego tygodnia = jego wlasne zamkniecie =
         # close0), niezaleznie od tego, co dzialo sie w buforze rozgrzewkowym.
+        # Ta fixture NIE ustawia High/Low (zostaja NULL) -> cwiczy fallback
+        # typical_price -> Close (patrz test ponizej na WLASCIWA formule VWAP
+        # na Typical Price, gdy High/Low sa faktycznie dostepne).
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
         ref_date = pd.Timestamp("2026-01-26")
@@ -747,6 +750,49 @@ class TestComputeRelativeStrengthChart:
             cum_vol += v
             expected.append(round((cum_pv / cum_vol / window_closes[0] - 1) * 100, 2))
         assert out["vwap_pct"] == expected
+
+    def test_vwap_pct_uses_typical_price_not_close_alone(self):
+        # VWAP jest z DEFINICJI liczony na Typical Price (High+Low+Close)/3, nie
+        # na samym Close — regresja na blad, w ktorym pierwsza wersja tego kodu
+        # uzywala Close jako "uproszczenia" (patrz historia w docstring
+        # compute_relative_strength_chart). High/Low sa tu CELOWO dalekie od
+        # Close (np. tydz. 1: Close=100 ale High=120/Low=90 -> Typical=103.33,
+        # NIE 100), zeby test faktycznie odrozniac obie formuly: gdyby kod
+        # przez pomylke wrocil do liczenia na samym Close, ta asercja by padla.
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")
+        ref_date = pd.Timestamp("2026-01-19")
+        fixture_start = start_date - pd.Timedelta(weeks=32)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 36, 200.0, 0.3)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 32, 500.0, 1.0)
+
+        window_closes = [100.0, 110.0, 90.0]
+        window_highs = [120.0, 130.0, 100.0]
+        window_lows = [90.0, 100.0, 80.0]
+        window_volumes = [10, 20, 5]
+        con.executemany(
+            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume, High, Low) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(d.strftime("%Y-%m-%d"), "AAA", c, c, v, h, lo)
+             for d, c, h, lo, v in zip(pd.date_range(start_date, periods=3, freq="7D"),
+                                        window_closes, window_highs, window_lows, window_volumes)],
+        )
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                                start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert len(out["vwap_pct"]) == 3
+        close0 = window_closes[0]
+        cum_pv, cum_vol, expected = 0.0, 0.0, []
+        for c, h, lo, v in zip(window_closes, window_highs, window_lows, window_volumes):
+            typical = (h + lo + c) / 3.0
+            cum_pv += typical * v
+            cum_vol += v
+            expected.append(round((cum_pv / cum_vol / close0 - 1) * 100, 2))
+        assert out["vwap_pct"] == expected
+        # Sanity: pierwszy tydzien NIE moze byc 0% tutaj (w przeciwienstwie do
+        # testu wyzej), bo Typical != Close gdy High/Low sa asymetryczne.
+        assert out["vwap_pct"][0] != 0.0
 
     def test_insufficient_lookback_leaves_first_week_sma30_as_none(self):
         con = make_gem_con()
