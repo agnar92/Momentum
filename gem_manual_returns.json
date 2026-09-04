@@ -1,0 +1,11 @@
+{
+  "_instructions": "Recznie wpisywane zwroty 12-miesieczne dla WIG20/mWIG40, uzywane WYLACZNIE w wyscigu Global Equity Momentum (docs/data/global_equity_momentum.json), NIE w Sile Relatywnej/wykresie 10:30 (te dalej czytaja syntetyczny indeks liczony ze skladnikow, patrz fetch_data.py). Dlaczego recznie: yfinance nigdy nie mial historii dla tickerow-indeksow WIG20.WA/MWIG40.WA (tylko zywa cena), a darmowy CSV ze stooq.pl (probowany, potem usuniety) zablokowal automatyczne pobieranie od 2026 - obie automatyczne drogi sprawdzone i odrzucone, patrz CLAUDE.md. Wypelnij oba pola co miesiac, najlepiej po ostatnim dniu handlowym miesiaca - wejdz na stooq.pl (np. stooq.pl/q/?s=wig20), sekcja 'Stopy zwrotu: 1 rok', i wpisz dokladnie ta wartosc jako liczbe (np. 44.84, nie '44.84%' ani '+44.84%'). 'as_of' to data, na ktora sprawdziles - tylko informacyjne, nie wplywa na obliczenia. Puste/null pole (albo caly brakujacy plik) -> run_query.py samo spada z powrotem na syntetyczny indeks liczony ze skladnikow (patrz compute_index_returns/_load_gem_manual_returns w run_query.py) - wiec nic sie nie wywali, jesli zapomnisz zaktualizowac.",
+  "WIG20": {
+    "return_pct": null,
+    "as_of": null
+  },
+  "MWIG40": {
+    "return_pct": null,
+    "as_of": null
+  }
+}

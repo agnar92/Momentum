@@ -6,14 +6,12 @@ na tymczasowych plikach CSV zamiast prawdziwych holdings ETF-ow.
 import duckdb
 import pandas as pd
 import pytest
-import requests
 
 from fetch_data import (
     PRICES_SCHEMA,
     _compute_synthetic_equal_weight_index,
     _download_price_rows,
     _ensure_prices_ohlc_columns,
-    _fetch_stooq_index_history,
     _find_column,
     _parse_money,
     _prices_history_is_shallow,
@@ -473,12 +471,11 @@ class TestUpdatePricesIncremental:
 # yfinance — pobierane i mapowane z powrotem na nazwe uniwersum jak dotychczas.
 # WIG20/MWIG40 NIE MAJA zadnej historycznej danej poziomu indeksu u yfinance
 # (potwierdzone recznie — patrz docstring _compute_synthetic_equal_weight_index)
-# — pobierane najpierw ze stooq.pl (_fetch_stooq_index_history, realny poziom),
-# a syntetyzowane z wlasnych skladnikow TYLKO jako fallback gdy stooq zawiedzie.
-# Wszystkie testy w tej klasie, ktore NIE testuja explicite zachowania stooq,
-# monkeypatchuja _fetch_stooq_index_history na "zawsze None", zeby (a) nie robic
-# prawdziwych polaczen sieciowych w testach i (b) deterministycznie wymuszac
-# sciezke syntetyczna, ktora testuja.
+# — budowane syntetycznie z wlasnych skladnikow zamiast pobierane. (Proba
+# pobierania realnego poziomu ze stooq.pl byla dodana, a potem usunieta —
+# stooq zablokowal automatyczne pobieranie od 2026, patrz git history/
+# CLAUDE.md — GEM czyta teraz recznie wpisywany gem_manual_returns.json dla
+# tych dwoch uniwersow, patrz tests/test_run_query.py.)
 # ---------------------------------------------------------------------------
 
 class TestUpdateIndexPrices:
@@ -490,7 +487,6 @@ class TestUpdateIndexPrices:
             return rows, set(tickers), []
 
         monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
-        monkeypatch.setattr("fetch_data._fetch_stooq_index_history", lambda *a, **k: None)
         update_index_prices(con, lookback_months=12)
 
         rows = con.execute("SELECT Index_Name, Close FROM index_prices ORDER BY Index_Name").fetchall()
@@ -500,7 +496,6 @@ class TestUpdateIndexPrices:
     def test_failed_downloads_leave_table_without_those_rows(self, monkeypatch):
         con = duckdb.connect(":memory:")
         monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), list(t)))
-        monkeypatch.setattr("fetch_data._fetch_stooq_index_history", lambda *a, **k: None)
 
         update_index_prices(con, lookback_months=12)
 
@@ -509,42 +504,13 @@ class TestUpdateIndexPrices:
         """).fetchone()[0]
         assert count == 1  # tabela stworzona
         # NASDAQ100/DOWJONES: brak danych z yfinance -> brak wierszy. WIG20/MWIG40:
-        # stooq zwraca None (zamockowane) i brak index_constituents/prices w tym
-        # swiezym con -> synteza tez nic nie da.
+        # brak index_constituents/prices w tym swiezym con -> synteza tez nic nie da.
         assert con.execute("SELECT COUNT(*) FROM index_prices").fetchone()[0] == 0
-
-    def test_wig20_mwig40_prefer_real_stooq_data_over_synthetic_when_available(self, monkeypatch):
-        # Gdy stooq.pl faktycznie odda dane, maja one PIERWSZENSTWO nad
-        # syntetycznym equal-weight indeksem — nawet jesli skladniki (prices/
-        # index_constituents) tez sa dostepne, nie powinny byc uzyte.
-        con = duckdb.connect(":memory:")
-        con.execute("CREATE TABLE index_constituents (Ticker VARCHAR, Index_Name VARCHAR)")
-        con.execute("INSERT INTO index_constituents VALUES ('AAA', 'WIG20')")
-        con.execute(f"CREATE TABLE prices ({PRICES_SCHEMA})")
-        con.execute("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES "
-                    "('2026-01-01', 'AAA', 10.0, 10.0, 100)")
-        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), list(t)))
-
-        def fake_stooq(index_name, start_date, end_date):
-            if index_name != "WIG20":
-                return None
-            return pd.DataFrame({
-                "Date": [pd.Timestamp("2026-01-01")], "Index_Name": ["WIG20"],
-                "Close": [12345.0], "Adj_Close": [12345.0], "Volume": [0],
-            })
-
-        monkeypatch.setattr("fetch_data._fetch_stooq_index_history", fake_stooq)
-        update_index_prices(con, lookback_months=12)
-
-        rows = con.execute("SELECT Close FROM index_prices WHERE Index_Name = 'WIG20'").fetchall()
-        assert rows == [(12345.0,)]  # realna wartosc ze stooq, NIE syntetyczna baza=100
 
     def test_wig20_mwig40_build_synthetic_equal_weight_index_from_constituents(self, monkeypatch):
         # yfinance nie ma historii dla WIG20.WA/MWIG40.WA (patrz docstring
         # _compute_synthetic_equal_weight_index) — te dwa uniwersa NIE polegaja
-        # na _download_price_rows w ogole, tylko na wlasnych skladnikach. Stooq
-        # jest tu zamockowany na "zawsze None", zeby wymusic wlasnie te sciezke
-        # (test dotyczy fallbacku, nie stooq — patrz test wyzej dla stooq).
+        # na _download_price_rows w ogole, tylko na wlasnych skladnikach.
         # Daty musza wpasc w okno wyliczane przez get_full_refresh_range(lookback_months)
         # (konczy sie na ostatnim dniu POPRZEDNIEGO miesiaca, nie dzisiaj), inaczej
         # filtr Date BETWEEN w _compute_synthetic_equal_weight_index odetnie wszystko.
@@ -563,7 +529,6 @@ class TestUpdateIndexPrices:
                 ('{d1}', 'BBB', 19.0, 19.0, 100)
         """)
         monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), list(t)))
-        monkeypatch.setattr("fetch_data._fetch_stooq_index_history", lambda *a, **k: None)
 
         update_index_prices(con, lookback_months=12)
 
@@ -586,77 +551,3 @@ class TestUpdateIndexPrices:
         con = duckdb.connect(":memory:")
         result = _compute_synthetic_equal_weight_index(con, "WIG20", "2024-01-01", "2024-01-31")
         assert result.empty
-
-
-# ---------------------------------------------------------------------------
-# _fetch_stooq_index_history: realny poziom WIG20/mWIG40 ze stooq.pl (CSV),
-# owiniete tak, by NIGDY nie rzucic wyjatku — kazdy blad (siec, HTTP, format)
-# ma zwrocic None, zeby update_index_prices moglo bezpiecznie spadac na
-# syntetyczny fallback. requests.get jest zamockowane w kazdym tescie — brak
-# prawdziwych polaczen sieciowych.
-# ---------------------------------------------------------------------------
-
-class _FakeStooqResponse:
-    def __init__(self, text, status=200):
-        self.text = text
-        self.status_code = status
-
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise requests.HTTPError(f"HTTP {self.status_code}")
-
-
-class TestFetchStooqIndexHistory:
-    def test_parses_polish_header_csv_positionally(self, monkeypatch):
-        csv_text = (
-            "Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen\n"
-            "2025-01-30,100,105,99,101.5,123456\n"
-            "2026-01-30,120,125,118,123.4,234567\n"
-        )
-        monkeypatch.setattr("fetch_data.requests.get", lambda *a, **k: _FakeStooqResponse(csv_text))
-
-        out = _fetch_stooq_index_history("WIG20", "2025-01-01", "2026-12-31")
-
-        assert list(out["Close"]) == [101.5, 123.4]
-        assert list(out["Index_Name"]) == ["WIG20", "WIG20"]
-        assert list(out["Volume"]) == [123456, 234567]
-
-    def test_filters_rows_outside_the_requested_window(self, monkeypatch):
-        csv_text = (
-            "Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen\n"
-            "2020-01-01,1,1,1,1.0,0\n"
-            "2026-01-30,120,125,118,123.4,0\n"
-        )
-        monkeypatch.setattr("fetch_data.requests.get", lambda *a, **k: _FakeStooqResponse(csv_text))
-
-        out = _fetch_stooq_index_history("WIG20", "2026-01-01", "2026-12-31")
-
-        assert len(out) == 1
-        assert out.iloc[0]["Close"] == 123.4
-
-    def test_returns_none_for_unknown_index_name(self):
-        assert _fetch_stooq_index_history("NASDAQ100", "2026-01-01", "2026-12-31") is None
-
-    def test_returns_none_on_http_error(self, monkeypatch):
-        monkeypatch.setattr("fetch_data.requests.get", lambda *a, **k: _FakeStooqResponse("", status=403))
-        assert _fetch_stooq_index_history("WIG20", "2026-01-01", "2026-12-31") is None
-
-    def test_returns_none_on_network_exception(self, monkeypatch):
-        def raise_conn_error(*a, **k):
-            raise requests.ConnectionError("boom")
-
-        monkeypatch.setattr("fetch_data.requests.get", raise_conn_error)
-        assert _fetch_stooq_index_history("WIG20", "2026-01-01", "2026-12-31") is None
-
-    def test_returns_none_on_empty_or_malformed_csv(self, monkeypatch):
-        monkeypatch.setattr("fetch_data.requests.get", lambda *a, **k: _FakeStooqResponse(""))
-        assert _fetch_stooq_index_history("WIG20", "2026-01-01", "2026-12-31") is None
-
-    def test_returns_none_when_no_rows_survive_the_window_filter(self, monkeypatch):
-        csv_text = (
-            "Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen\n"
-            "2020-01-01,1,1,1,1.0,0\n"
-        )
-        monkeypatch.setattr("fetch_data.requests.get", lambda *a, **k: _FakeStooqResponse(csv_text))
-
-        assert _fetch_stooq_index_history("WIG20", "2026-01-01", "2026-12-31") is None

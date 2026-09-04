@@ -31,10 +31,12 @@ metodologii S&P Momentum Indices):
    Kazda spolka w KAZDYM uniwersum (nie tylko liderzy Sily Relatywnej, patrz pkt
    10) ma tez wlasny "weekly_chart"/"mansfield_chart" — patrz process_universe.
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
-   fetch_data.py) dla NASDAQ100/DOWJONES (GEM_UNIVERSES — celowo bez SP500/
-   WIG20/mWIG40, patrz komentarz przy GEM_UNIVERSES) w oknie GEM_LOOKBACK_MONTHS,
-   wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N liderow zwycieskiego indeksu
-   wg wkladu w jego zwrot — patrz export_global_equity_momentum.
+   fetch_data.py) dla WSZYSTKICH 5 uniwersow (GEM_UNIVERSES) w oknie
+   GEM_LOOKBACK_MONTHS, wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N
+   liderow zwycieskiego indeksu wg wkladu w jego zwrot — patrz
+   export_global_equity_momentum. WIG20/MWIG40 moga miec ten zwrot recznie
+   nadpisany z gem_manual_returns.json — patrz GEM_MANUAL_OVERRIDE_UNIVERSES
+   i _load_gem_manual_returns.
 10. Sila relatywna dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 (RELATIVE_STRENGTH_
     UNIVERSES): momentum kazdej spolki (TO SAMO okno co momentum_value glownych
     uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
@@ -116,6 +118,19 @@ INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
 }
+# Reczne nadpisanie zwrotu 12-miesiecznego w wyscigu GEM dla WIG20/MWIG40 —
+# patrz gem_manual_returns.json (plik i jego "_instructions"). Zarowno
+# yfinance (brak historii dla tickerow-indeksow WIG20.WA/MWIG40.WA, tylko
+# zywa cena) jak i darmowy CSV ze stooq.pl (probowany, potem usuniety —
+# stooq zablokowal automatyczne pobieranie od 2026) zostaly sprawdzone i
+# odrzucone jako zrodlo realnego, kapitalizacyjnego zwrotu tych dwoch
+# indeksow — patrz CLAUDE.md. Uzytkownik woli raz w miesiacu sam sprawdzic
+# wartosc na stooq.pl i wpisac ja recznie do tego pliku niz dostawac
+# syntetyczny (equal-weight, dziennie rebalansowany) zwrot liczony ze
+# skladnikow, ktory dla tych dwoch indeksow systematycznie nie zgadza sie
+# z realnymi, publikowanymi danymi (patrz _gem_month_end_anchor_dates).
+GEM_MANUAL_RETURNS_PATH = Path(__file__).resolve().parent / "gem_manual_returns.json"
+GEM_MANUAL_OVERRIDE_UNIVERSES = {"WIG20", "MWIG40"}
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
@@ -887,6 +902,30 @@ def _gem_month_end_anchor_dates(con, ref_date, lookback_months):
             str(start_date) if start_date is not None else None)
 
 
+def _load_gem_manual_returns(path=GEM_MANUAL_RETURNS_PATH):
+    """Wczytuje reczne nadpisania 12-miesiecznego zwrotu GEM dla WIG20/MWIG40
+    z gem_manual_returns.json (patrz plik i jego "_instructions" oraz komentarz
+    przy GEM_MANUAL_OVERRIDE_UNIVERSES powyzej). Zwraca dict {universe:
+    return_pct} — tylko dla wpisow z niepustym, liczbowym `return_pct`.
+    Brakujacy plik, bledny JSON, albo pole `null`/brakujace — po prostu nie
+    ma tego uniwersum w wyniku, wiec compute_index_returns spada z powrotem
+    na syntetyczny zwrot liczony z index_prices; nic sie nie wywala, jesli
+    plik nie zostal (jeszcze) recznie uzupelniony."""
+    try:
+        raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    result = {}
+    for universe in GEM_MANUAL_OVERRIDE_UNIVERSES:
+        entry = raw.get(universe)
+        if not isinstance(entry, dict):
+            continue
+        value = entry.get("return_pct")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            result[universe] = float(value)
+    return result
+
+
 def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
     has_table = con.execute("""
         SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
@@ -897,6 +936,8 @@ def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
     anchor_date, start_date = _gem_month_end_anchor_dates(con, ref_date, lookback_months)
     if anchor_date is None or start_date is None:
         return []
+
+    manual_returns = _load_gem_manual_returns()
 
     gem_universes_sql = ",".join(f"'{u}'" for u in GEM_UNIVERSES)
     df = con.execute(f"""
@@ -913,17 +954,25 @@ def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
 
     records = []
     for _, r in df.iterrows():
+        universe = r["Index_Name"]
         if pd.isna(r["price_now"]) or pd.isna(r["price_start"]) or r["price_start"] == 0:
             continue
-        records.append({
-            "universe": r["Index_Name"],
-            "yf_symbol": INDEX_LEVEL_SYMBOLS.get(r["Index_Name"], ""),
+        record = {
+            "universe": universe,
+            "yf_symbol": INDEX_LEVEL_SYMBOLS.get(universe, ""),
             "price_now": round(float(r["price_now"]), 2),
             "date_now": str(r["date_now"]),
             "price_start": round(float(r["price_start"]), 2),
             "date_start": str(r["date_start"]),
             "return_pct": round(float(r["price_now"] / r["price_start"] - 1) * 100, 2),
-        })
+        }
+        if universe in manual_returns:
+            # Zastepujemy TYLKO return_pct — price_now/price_start zostaja z
+            # syntetycznego indeksu (informacyjne, patrz fetch_data.py), zeby
+            # nie udawac realnej ceny indeksu, ktorej i tak nigdzie nie mamy.
+            record["return_pct"] = round(manual_returns[universe], 2)
+            record["manual_entry"] = True
+        records.append(record)
     return sorted(records, key=lambda r: r["return_pct"], reverse=True)
 
 
@@ -1021,6 +1070,8 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
                  f"Lista 'leaders' to top {top_n} spółek zwycięskiego indeksu wg wkładu w jego "
                  "zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które "
                  "realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. "
+                 "WIG20/MWIG40 mogą mieć zwrot ('return_pct', flaga 'manual_entry') wpisany ręcznie z "
+                 "gem_manual_returns.json zamiast liczonego z syntetycznego indeksu — patrz ten plik. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
     }
     out_path = Path(docs_data_dir) / "global_equity_momentum.json"
