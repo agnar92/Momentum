@@ -23,12 +23,25 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
+const GEM_MANUAL_KEY = "momentum_rebalance_gem_manual";
 const DEFAULT_SETTINGS = { contribution: 0, topN: 10 };
+// Te dwa uniwersa nie mają realnego, kapitalizacyjnego zwrotu poziomu indeksu
+// z zewnętrznego źródła (yfinance nie ma historii dla WIG20.WA/MWIG40.WA,
+// a stooq.pl zablokował automatyczne pobieranie od 2026 — patrz CLAUDE.md) —
+// jedyne dwa, dla których pole ręcznego zwrotu w widgecie GEM ma sens.
+// Musi się zgadzać z run_query.py::GEM_MANUAL_OVERRIDE_UNIVERSES.
+const GEM_MANUAL_OVERRIDE_UNIVERSES = ["WIG20", "MWIG40"];
 
 let universeData = {};    // { SP500: {...json}, NASDAQ100: {...}, ... }
 let priceMap = {};        // ticker -> { price, sources: [universe,...] }
 let equityCurveData = {}; // { NASDAQ100: {dates, momentum_index, benchmark_index, ...}, ... }
 let gemData = { ref_date: null, indices: [], winner: null, leaders: [] };
+// Kopia gemData.indices TAK JAK PRZYSZŁA z global_equity_momentum.json, przed
+// zastosowaniem lokalnego (localStorage) nadpisania z widgetu GEM — potrzebna,
+// żeby "wyczyść" mogło wrócić do wartości z pipeline'u, i żeby powtórne
+// applyManualGemOverrides() (np. po zapisaniu nowej wartości) nie nadpisywało
+// już-nadpisanych danych. Patrz applyManualGemOverrides.
+let gemPristineIndices = [];
 
 function loadSettings() {
     let stored = {};
@@ -36,6 +49,45 @@ function loadSettings() {
     return { ...DEFAULT_SETTINGS, ...stored };
 }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
+
+// Ręczne nadpisanie zwrotu 12M dla WIG20/mWIG40 w wyścigu GEM — TYLKO w tej
+// przeglądarce (localStorage, tak jak holdingi/wykluczenia), bo rebalance.html
+// jest stroną statyczną (GitHub Pages, bez backendu) i nie ma sposobu, żeby
+// stąd zapisać coś do repo/pipeline'u. To jest odpowiednik po stronie klienta
+// tego, co run_query.py::_load_gem_manual_returns robi po stronie pipeline'u
+// z gem_manual_returns.json — niezależny mechanizm, nie zapisuje do tego pliku
+// i nie jest przez niego czytany. Patrz applyManualGemOverrides/renderGemWidget.
+function loadManualGemReturns() {
+    try { return JSON.parse(localStorage.getItem(GEM_MANUAL_KEY)) || {}; } catch (e) { return {}; }
+}
+function saveManualGemReturns(overrides) { localStorage.setItem(GEM_MANUAL_KEY, JSON.stringify(overrides)); }
+
+// Nakłada lokalnie zapisane nadpisania (loadManualGemReturns) na gemPristineIndices
+// (dane TAK JAK je zwrócił pipeline) — zastępuje return_pct, oznacza wpis flagą
+// manual_entry (ten sam klucz co po stronie backendu, patrz run_query.py — więc
+// UI-owy label "(ręcznie)" w renderGemWidget działa identycznie niezależnie od
+// tego, czy wartość jest ręczna z pipeline'u czy z tej przeglądarki), po czym
+// na nowo sortuje malejąco po return_pct i wyznacza winnera z TYCH wartości —
+// więc ręcznie wpisany zwrot realnie decyduje, który uniwersum wygrywa wyścig,
+// tak jak po stronie backendu. Wołane po każdym (re)wczytaniu gemData i po
+// każdym zapisaniu/wyczyszczeniu wartości w widgecie.
+function applyManualGemOverrides() {
+    const overrides = loadManualGemReturns();
+    const indices = gemPristineIndices.map(rec => {
+        const copy = { ...rec };
+        if (GEM_MANUAL_OVERRIDE_UNIVERSES.includes(copy.universe)) {
+            const ov = overrides[copy.universe];
+            if (ov && typeof ov.return_pct === "number" && !isNaN(ov.return_pct)) {
+                copy.return_pct = ov.return_pct;
+                copy.manual_entry = true;
+            }
+        }
+        return copy;
+    });
+    indices.sort((a, b) => b.return_pct - a.return_pct);
+    gemData.indices = indices;
+    gemData.winner = indices.length ? indices[0].universe : null;
+}
 
 function loadHoldings() {
     try {
@@ -97,6 +149,8 @@ async function loadUniverseData() {
     } catch (e) {
         gemData = { ref_date: null, indices: [], winner: null, leaders: [] };
     }
+    gemPristineIndices = (gemData.indices || []).map(rec => ({ ...rec }));
+    applyManualGemOverrides();
 }
 
 function fmtMoney(v) {
@@ -220,15 +274,45 @@ function renderGemWidget() {
     }
     const winnerReturn = (gemData.indices || []).find(i => i.universe === gemData.winner);
     // manual_entry: WIG20/MWIG40 moga miec return_pct recznie wpisany z gem_manual_returns.json
-    // (patrz CLAUDE.md / run_query.py::_load_gem_manual_returns) zamiast liczonego z syntetycznego
-    // indeksu — "(ręcznie)" to zwykla transparentnosc pochodzenia danych, tak jak fmc_note gdzie
-    // indziej w aplikacji, nie ostrzezenie.
+    // (patrz CLAUDE.md / run_query.py::_load_gem_manual_returns) LUB z pola nizej w tym widgecie
+    // (applyManualGemOverrides, TYLKO ta przeglądarka) zamiast liczonego z syntetycznego indeksu —
+    // "(ręcznie)" to zwykla transparentnosc pochodzenia danych, tak jak fmc_note gdzie indziej w
+    // aplikacji, nie ostrzezenie. Nie rozróżniamy tu która z tych dwóch dróg to ustawiła — obie
+    // znaczą to samo dla użytkownika ("to nie jest syntetyczny wskaźnik").
     const rows = (gemData.indices || []).map(i => `
         <div class="gem-index-row${i.universe === gemData.winner ? " gem-index-winner" : ""}">
             <span>${i.universe === gemData.winner ? "🏆 " : ""}${UNIVERSE_LABELS[i.universe]}${i.manual_entry ? ' <span class="text-faint">(ręcznie)</span>' : ""}</span>
             <span class="${i.return_pct >= 0 ? "positive" : "negative"}">${i.return_pct >= 0 ? "+" : ""}${i.return_pct.toFixed(2)}%</span>
         </div>
     `).join("");
+
+    // Pola do wpisania zwrotu WIG20/mWIG40 sprawdzonego ręcznie (np. na stooq.pl) — TYLKO dla
+    // uniwersów bez realnego zwrotu z automatycznego źródła (GEM_MANUAL_OVERRIDE_UNIVERSES;
+    // SP500/NASDAQ100/DOWJONES mają realne dane z yfinance i nie potrzebują tego pola) i tylko
+    // jeśli GEM w ogóle je liczy (są w gemData.indices). Zapisane WYŁĄCZNIE w localStorage tej
+    // przeglądarki (patrz saveManualGemReturns) — strona jest statyczna, nie ma jak zapisać tego
+    // do repo/gem_manual_returns.json stąd; działa od razu (applyManualGemOverrides), ale tylko na
+    // tym urządzeniu, aż wpiszesz to samo gdzie indziej.
+    const overrides = loadManualGemReturns();
+    const manualFields = (gemData.indices || [])
+        .filter(i => GEM_MANUAL_OVERRIDE_UNIVERSES.includes(i.universe))
+        .map(i => {
+            const ov = overrides[i.universe];
+            const hasOverride = ov && typeof ov.return_pct === "number" && !isNaN(ov.return_pct);
+            return `
+                <div class="gem-manual-row">
+                    <label for="gemManual_${i.universe}">${UNIVERSE_LABELS[i.universe]} zwrot 12M (%)</label>
+                    <div class="gem-manual-input-group">
+                        <input type="number" step="0.01" id="gemManual_${i.universe}" class="gem-manual-input"
+                               data-universe="${i.universe}" placeholder="np. 44.84"
+                               value="${hasOverride ? ov.return_pct : ""}">
+                        <button type="button" class="gem-manual-save-btn add-row-btn" data-universe="${i.universe}">Zapisz</button>
+                        ${hasOverride ? `<button type="button" class="gem-manual-clear-btn remove-row-btn" data-universe="${i.universe}" title="Usuń ręczną wartość, wróć do wskaźnika syntetycznego">✕</button>` : ""}
+                    </div>
+                </div>
+            `;
+        }).join("");
+
     el.innerHTML = `
         <div class="sidebar-group-meta">
             Zwycięzca: ${UNIVERSE_LABELS[gemData.winner]}
@@ -236,7 +320,45 @@ function renderGemWidget() {
             (${gemData.lookback_months || 12}M) — z niego bierzemy TOP N spółek poniżej.
         </div>
         <div class="gem-index-returns">${rows}</div>
+        <div class="gem-manual-fields">
+            <div class="sidebar-group-meta">
+                WIG20/mWIG40 nie mają realnego zwrotu z automatycznego źródła (patrz CLAUDE.md) —
+                sprawdź sam na stooq.pl (Stopy zwrotu: 1 rok) i wpisz tu, tylko w tej przeglądarce.
+            </div>
+            ${manualFields}
+        </div>
     `;
+
+    const applyAndRerender = () => {
+        applyManualGemOverrides();
+        renderGemWidget();
+        renderAll();
+    };
+    const saveFromInput = (universe) => {
+        const input = document.getElementById(`gemManual_${universe}`);
+        const value = parseFloat(input.value);
+        if (isNaN(value)) return;
+        const stored = loadManualGemReturns();
+        stored[universe] = { return_pct: value, as_of: new Date().toISOString().slice(0, 10) };
+        saveManualGemReturns(stored);
+        applyAndRerender();
+    };
+    el.querySelectorAll(".gem-manual-save-btn").forEach(btn => {
+        btn.addEventListener("click", () => saveFromInput(btn.dataset.universe));
+    });
+    el.querySelectorAll(".gem-manual-clear-btn").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const stored = loadManualGemReturns();
+            delete stored[btn.dataset.universe];
+            saveManualGemReturns(stored);
+            applyAndRerender();
+        });
+    });
+    el.querySelectorAll(".gem-manual-input").forEach(input => {
+        input.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") { e.preventDefault(); saveFromInput(input.dataset.universe); }
+        });
+    });
 }
 
 // ============================================================
@@ -904,14 +1026,15 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES,
+        UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES, GEM_MANUAL_OVERRIDE_UNIVERSES,
         fmtMoney, fmtMoneyPln, moneyFmtFor, moneyFmtForCurrency, fmtQty, sharesSuggestion,
         currencyOf, selectedConstituents, computeTargets, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
+        loadManualGemReturns, saveManualGemReturns, applyManualGemOverrides,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded/
-        // gemData) bez importu przez window — to jedyny sposób bez przepisywania modułu
-        // na klasę.
+        // gemData/gemPristineIndices) bez importu przez window — to jedyny sposób bez
+        // przepisywania modułu na klasę.
         _setState(s) {
             if (s.universeData !== undefined) universeData = s.universeData;
             if (s.settings !== undefined) settings = s.settings;
@@ -919,6 +1042,7 @@ if (typeof module !== "undefined" && module.exports) {
             if (s.holdings !== undefined) holdings = s.holdings;
             if (s.priceMap !== undefined) priceMap = s.priceMap;
             if (s.gemData !== undefined) gemData = s.gemData;
+            if (s.gemPristineIndices !== undefined) gemPristineIndices = s.gemPristineIndices;
         },
     };
 }

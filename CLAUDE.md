@@ -277,6 +277,50 @@ WIG20 return" fix should apply everywhere it's used. `rebalance.js::renderGemWid
 "(ręcznie)" label next to any universe whose record carries `manual_entry: true`, for the same data-
 provenance transparency the app already uses elsewhere (e.g. `fmc_note`).
 
+**There is also a second, independent, client-side-only manual override** — a small input field per
+universe directly inside the GEM widget on `rebalance.html`, added after the user found editing
+`gem_manual_returns.json` on GitHub every month more friction than they wanted ("no to ja chce pole na
+stronie w rebalanserze do zatwierdzenia"). Since `rebalance.html` is a static page with no backend, this
+field cannot write back to the repo file — the only two real options were a `localStorage`-only override
+(same pattern already used for holdings/exclusions/settings) or calling the GitHub API with a
+write-scoped personal token embedded in client-side JS, which the user was asked about directly and
+rejected for the obvious reason: a repo-write credential sitting in code that runs in anyone's browser is
+a real security liability, not a hypothetical one. So `rebalance.js` implements the `localStorage` route:
+  - `GEM_MANUAL_KEY` (`momentum_rebalance_gem_manual`) holds `{ [universe]: { return_pct, as_of } }`,
+    written by `saveManualGemReturns()`/read by `loadManualGemReturns()` — same shape as
+    `gem_manual_returns.json`, but a totally separate store; neither reads nor writes the other.
+  - `loadUniverseData()` snapshots the freshly-fetched `gemData.indices` into module-level
+    `gemPristineIndices` (a plain copy, before any override) right after fetching
+    `global_equity_momentum.json`, then calls `applyManualGemOverrides()` — which rebuilds `gemData.indices`
+    from that pristine snapshot plus whatever is currently in `loadManualGemReturns()`, replacing
+    `return_pct` and setting `manual_entry: true` for any of `GEM_MANUAL_OVERRIDE_UNIVERSES` ("WIG20"/
+    "MWIG40" — must stay in sync with the same-named constant in `run_query.py`) that has a stored
+    override, then **re-sorts and re-derives `gemData.winner` from those overridden numbers** — exactly
+    like the backend's `compute_index_returns()` does with `gem_manual_returns.json`, just entirely in the
+    browser. Rebuilding from the untouched `gemPristineIndices` snapshot every time (rather than mutating
+    `gemData.indices` in place) is what makes clearing an override actually restore the original
+    pipeline/synthetic value, and makes repeated saves idempotent.
+  - `renderGemWidget()` renders one number input + "Zapisz" button per `GEM_MANUAL_OVERRIDE_UNIVERSES`
+    entry present in `gemData.indices`, plus a "✕" clear button only when an override is currently stored
+    for that universe. Saving parses the input, writes it via `saveManualGemReturns()`, calls
+    `applyManualGemOverrides()`, and re-renders both the widget and the whole page (`renderAll()`) — since
+    a changed winner can change the display currency (`moneyFmtFor()`), the TOP N selection, and every
+    downstream suggestion/Monte-Carlo/equity-curve panel. Clearing does the same after deleting that
+    universe's key. Enter in the input triggers the same save as clicking the button. The `(ręcznie)` label
+    in the index list doesn't distinguish which of the two manual mechanisms (this field vs.
+    `gem_manual_returns.json`) set `manual_entry` — both mean the same thing to the user ("this isn't the
+    synthetic number"), and if both happen to be set, this client-side one wins simply because
+    `applyManualGemOverrides()` runs after the fetch and rewrites `return_pct` again regardless of what the
+    backend already put there.
+  - This override is **per-browser, not shared** — unlike `gem_manual_returns.json` (which, once filled in
+    and committed, affects the pipeline's output for every viewer/device), a value typed into this field
+    only changes what the calculator shows and buys on that one browser profile. A different device, a
+    cleared browser profile, or another person opening the same page will still see whatever
+    `gem_manual_returns.json`/the synthetic index computed. The two mechanisms are intentionally
+    independent rather than one replacing the other: the repo file is the "everyone, every device" fix (but
+    needs a GitHub edit + pipeline run to take effect); this field is the "just for me, right now, no
+    GitHub round-trip" fix.
+
 **The GEM window is anchored to month-end trading days, not to "today".** `_gem_month_end_anchor_dates()`
 resolves both endpoints (`date_now`/`date_start` on each index record) to the last trading day of a
 *completed* calendar month — e.g. "31.08" this year vs. "31.08"/whatever the last trading day near there
@@ -695,10 +739,13 @@ every run (see CI section below) — it isn't hand-maintained.
   count; the calculator itself decides which ONE of the 5 universes to draw from. Key pieces:
   - **`gemData`** (`loadUniverseData()` fetches `docs/data/global_equity_momentum.json`, now covering all
     5 universes — see GEM section above) is the calculator's selection engine. `renderGemWidget()` renders
-    a small, read-only panel (`#gemWidget` in `rebalance.html`) showing the current winner + its 12M
-    return and the ranked list of all 5 — this is the direct replacement for the GEM panel that used to
-    live on the dashboard (`app.js`, removed — see above): it moved here because this is where the winner
-    actually matters now, not just somewhere to look at it.
+    a small panel (`#gemWidget` in `rebalance.html`) showing the current winner + its 12M return and the
+    ranked list of all 5 — this is the direct replacement for the GEM panel that used to live on the
+    dashboard (`app.js`, removed — see above): it moved here because this is where the winner actually
+    matters now, not just somewhere to look at it. It is NOT purely read-only any more: it also carries a
+    per-browser manual-override input for WIG20/mWIG40's return (`applyManualGemOverrides()`,
+    `localStorage`-only, independent of the pipeline's own `gem_manual_returns.json`) — see the dedicated
+    write-up in the GEM section above for why and how.
   - **`selectedConstituents(topN)`** (replacing the old, per-region, per-universe
     `selectedConstituents(region, u)`) reads `universeData[gemData.winner].all_constituents` (the FULL
     qualifying universe of whichever index is this month's GEM winner, not just its current top-decile

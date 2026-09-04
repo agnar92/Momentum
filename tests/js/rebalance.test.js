@@ -9,7 +9,19 @@ const path = require("node:path");
 
 // rebalance.js odwoluje sie do localStorage na poziomie modulu (przy pierwszym
 // wczytaniu ustawien/holdingow) — w Node go nie ma, ale loadSettings/loadHoldings
-// maja try/catch i bezpiecznie spadaja na wartosci domyslne.
+// maja try/catch i bezpiecznie spadaja na wartosci domyslne. loadManualGemReturns/
+// applyManualGemOverrides (rowniez uzywane przy pierwszym wczytaniu) maja ten sam
+// fallback — ale zeby faktycznie PRZETESTOWAC zapis/odczyt recznego zwrotu GEM
+// (patrz testy nizej), podstawiamy minimalna, w-pamieci implementacje localStorage
+// PRZED require() modulu (ten sam globalny obiekt, ktory uzywalaby prawdziwa
+// przegladarka — patrz saveManualGemReturns w rebalance.js).
+global.localStorage = {
+    _store: {},
+    getItem(key) { return Object.prototype.hasOwnProperty.call(this._store, key) ? this._store[key] : null; },
+    setItem(key, value) { this._store[key] = String(value); },
+    removeItem(key) { delete this._store[key]; },
+};
+
 const rebalance = require(path.join("..", "..", "docs", "js", "rebalance.js"));
 
 const {
@@ -29,6 +41,9 @@ const {
     tvSymbolFor,
     buildTvPortfolioCsv,
     xtbDateToIso,
+    loadManualGemReturns,
+    saveManualGemReturns,
+    applyManualGemOverrides,
     _setState,
 } = rebalance;
 
@@ -452,4 +467,71 @@ test("buildTvPortfolioCsv uses each holding's own openDate/openPrice from the XT
     assert.match(lines[2], /^NASDAQ:MSFT,Buy,3,410,0,\d{4}-\d{2}-\d{2} 0:00:00$/);
 
     _setState({ holdings: [], priceMap: {} });
+});
+
+// applyManualGemOverrides: recznie wpisany (w widgecie GEM na rebalance.html,
+// zapisany w localStorage TEJ przegladarki — patrz renderGemWidget/saveManualGemReturns
+// w rebalance.js) zwrot 12M dla WIG20/mWIG40 podmienia return_pct w gemData.indices i
+// przelicza winnera z nadpisanych wartosci — analogicznie do run_query.py::
+// _load_gem_manual_returns po stronie backendu, tylko po stronie klienta (bez zapisu
+// do repo/gem_manual_returns.json, bo strona jest statyczna).
+test("applyManualGemOverrides leaves gemData.indices/winner unchanged when no manual override is stored", () => {
+    saveManualGemReturns({});
+    _setState({
+        gemPristineIndices: [
+            { universe: "NASDAQ100", return_pct: 30.0 },
+            { universe: "WIG20", return_pct: 8.0 },
+        ],
+        gemData: { winner: null, indices: [] },
+    });
+
+    applyManualGemOverrides();
+
+    // rebalance.js nie eksportuje bezposrednio zmiennej gemData do odczytu — sprawdzamy
+    // wiec przez efekt uboczny, ktory JEST publiczny: moneyFmtFor czyta gemData.winner.
+    assert.equal(moneyFmtFor(), fmtMoney); // NASDAQ100 (USD) zostaje zwyciezca, bez zmian
+});
+
+test("applyManualGemOverrides overrides return_pct for WIG20/mWIG40 and re-ranks the winner", () => {
+    _setState({
+        gemPristineIndices: [
+            { universe: "NASDAQ100", return_pct: 30.0 },
+            { universe: "WIG20", return_pct: 8.0 }, // syntetyczny, niedoszacowany zwrot
+        ],
+        gemData: { winner: null, indices: [] },
+    });
+    saveManualGemReturns({ WIG20: { return_pct: 44.84, as_of: "2026-08-31" } });
+
+    applyManualGemOverrides();
+
+    assert.equal(moneyFmtFor(), fmtMoneyPln); // WIG20 (recznie 44.84%) wygrywa nad NASDAQ100 (30%)
+
+    saveManualGemReturns({});
+});
+
+test("applyManualGemOverrides ignores a stored override for a universe outside GEM_MANUAL_OVERRIDE_UNIVERSES", () => {
+    _setState({
+        gemPristineIndices: [
+            { universe: "NASDAQ100", return_pct: 5.0 },
+            { universe: "WIG20", return_pct: 8.0 },
+        ],
+        gemData: { winner: null, indices: [] },
+    });
+    // SP500 nie jest w GEM_MANUAL_OVERRIDE_UNIVERSES (tylko WIG20/MWIG40) -> ignorowane,
+    // nawet gdyby jakims sposobem znalazlo sie w localStorage.
+    saveManualGemReturns({ SP500: { return_pct: 999.0 } });
+
+    applyManualGemOverrides();
+
+    assert.equal(moneyFmtFor(), fmtMoneyPln); // WIG20 (8%, bez nadpisania) wygrywa nad NASDAQ100 (5%)
+
+    saveManualGemReturns({});
+});
+
+test("loadManualGemReturns returns an empty object when nothing is stored, or after clearing", () => {
+    saveManualGemReturns({ WIG20: { return_pct: 10 } });
+    assert.deepEqual(loadManualGemReturns(), { WIG20: { return_pct: 10 } });
+
+    saveManualGemReturns({});
+    assert.deepEqual(loadManualGemReturns(), {});
 });

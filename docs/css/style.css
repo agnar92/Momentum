@@ -278,6 +278,24 @@ html, body {
 .gem-index-row .positive { color: var(--green-bright); }
 .gem-index-row .negative { color: var(--red); }
 
+/* Pola do ręcznego wpisania zwrotu WIG20/mWIG40 (patrz renderGemWidget/
+   applyManualGemOverrides w rebalance.js) — zapisane tylko w localStorage tej
+   przeglądarki, bo strona jest statyczna i nie może zapisać nic do repo. */
+.gem-manual-fields { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.gem-manual-row { display: flex; flex-direction: column; gap: 4px; }
+.gem-manual-row label { font-size: 10.5px; color: var(--text-dim); }
+.gem-manual-input-group { display: flex; align-items: center; gap: 6px; }
+.gem-manual-input {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 6px;
+    font-size: 12.5px;
+    width: 90px;
+}
+.gem-manual-input-group .add-row-btn { margin-top: 0; padding: 6px 10px; }
+
 /* Kolumna "Trend" w tabelach RSM Stabilne/Wzrostowe (patrz rsmTrendHtml/
    classifyRsm w app.js) — czy oba wygładzenia (3M/6M) rosną od
    RSM_TREND_LOOKBACK_WEEKS tygodni, czy któreś właśnie przecięło zero, czy
