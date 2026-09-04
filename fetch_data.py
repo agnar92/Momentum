@@ -49,19 +49,17 @@ YFINANCE_TICKER_OVERRIDES = {
 # budowany dynamicznie przy wczytywaniu — patrz _load_json_constituents.
 GPW_TICKERS = set()
 
-# Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum i Sily Relatywnej —
-# porownanie zwrotu calego NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
-# compute_index_returns). ^NDX/^DJI to standardowe symbole yfinance dla tych
-# indeksow, MAJACE pelna historyczna dana tam (patrz update_index_prices). SP500
-# (^GSPC) rowniez ma pelna historie u yfinance, ale — tak jak WIG20/mWIG40 —
-# celowo NIE uczestniczy w wyscigu Global Equity Momentum (patrz
-# run_query.py::GEM_UNIVERSES): dodany z powrotem WYLACZNIE jako uniwersum
-# momentum + ekran Sily Relatywnej (run_query.py::compute_index_momentum), bez
-# zmiany istniejacego zachowania GEM. WIG20/mWIG40 maja wlasne symbole
-# (WIG20.WA/MWIG40.WA) w tym slowniku wylacznie dla dokumentacji/run_query.py's
-# metadanych "yf_symbol" — NIE sa nimi faktycznie pobierane (patrz
-# _compute_synthetic_equal_weight_index: yfinance nie ma dla nich zadnej
-# historycznej danej poziomu indeksu, w odroznieniu od SP500/NASDAQ100/DOWJONES).
+# Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum (run_query.py::
+# compute_index_returns, teraz porownujace WSZYSTKIE 5 uniwersow miedzy soba —
+# patrz run_query.py::GEM_UNIVERSES) i Sily Relatywnej. ^GSPC/^NDX/^DJI to
+# standardowe symbole yfinance dla SP500/NASDAQ100/DOWJONES, MAJACE pelna
+# historyczna dana tam (patrz update_index_prices). WIG20/mWIG40 maja wlasne
+# symbole (WIG20.WA/MWIG40.WA) w tym slowniku wylacznie dla dokumentacji/
+# run_query.py's metadanych "yf_symbol" — NIE sa nimi faktycznie pobierane
+# (yfinance nie ma dla nich zadnej historycznej danej poziomu indeksu, patrz
+# _compute_synthetic_equal_weight_index nizej; realny zwrot WIG20/MWIG40 dla
+# GEM pochodzi zamiast tego z recznie wypelnianego gem_manual_returns.json —
+# patrz run_query.py::_load_gem_manual_returns i CLAUDE.md).
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC",
     "NASDAQ100": "^NDX",
@@ -460,6 +458,16 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
 # SP500/NASDAQ100/DOWJONES MAJA pelna historyczna dana poziomu indeksu u yfinance
 # (^GSPC/^NDX/^DJI) — pobierane stamtad jak dotychczas. WIG20/MWIG40 NIE MAJA
 # (patrz _compute_synthetic_equal_weight_index) — budowane syntetycznie.
+# Zewnetrzne "realne" zrodla zostaly sprawdzone i odrzucone: yfinance nigdy nie
+# mial historii dla tych dwoch tickerow-indeksow (patrz docstring
+# _compute_synthetic_equal_weight_index), a proba uzycia darmowego CSV ze
+# stooq.pl (dodana, potem usunieta — patrz git history) okazala sie
+# niedostepna od 2026 (uzytkownik potwierdzil recznie). GEM (run_query.py::
+# compute_index_returns) czyta wiec zamiast tego recznie wpisywany
+# gem_manual_returns.json dla tych dwoch uniwersow, gdy jest wypelniony — ten
+# syntetyczny szereg tutaj zostaje jako input dla Sily Relatywnej (ktora
+# potrzebuje calego, gestego szeregu tygodniowego, nie dwoch punktow) i jako
+# fallback dla GEM, gdy gem_manual_returns.json jest pusty/nie wypelniony.
 YFINANCE_BACKED_INDEX_UNIVERSES = ("SP500", "NASDAQ100", "DOWJONES")
 SYNTHETIC_INDEX_UNIVERSES = ("WIG20", "MWIG40")
 

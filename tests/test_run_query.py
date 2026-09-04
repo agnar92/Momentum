@@ -41,7 +41,9 @@ from run_query import (
     select_with_buffer,
     _build_full_universe_records,
     _compute_weinstein_stage_series,
+    _load_gem_manual_returns,
 )
+import run_query
 
 
 # ---------------------------------------------------------------------------
@@ -520,6 +522,78 @@ class TestComputeIndexReturns:
         assert out[0]["return_pct"] == pytest.approx(40.0)
         assert out[0]["date_now"] == "2026-08-31 00:00:00"
         assert out[0]["date_start"] == "2025-08-31 00:00:00"
+
+    def test_manual_override_replaces_return_pct_for_wig20_mwig40_only(self, monkeypatch):
+        # Uzytkownik recznie sprawdza WIG20/MWIG40 na stooq.pl i wpisuje do
+        # gem_manual_returns.json (patrz _load_gem_manual_returns) — reczna
+        # wartosc powinna zastapic return_pct TYLKO dla tych dwoch uniwersow,
+        # inne (np. NASDAQ100) zostaja liczone jak dotychczas z index_prices.
+        monkeypatch.setattr(run_query, "_load_gem_manual_returns", lambda: {"WIG20": 44.84})
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-01-31", "NASDAQ100", 100.0, 100.0),
+            ("2026-01-31", "NASDAQ100", 130.0, 130.0),   # +30% (syntetyczny, bez nadpisania)
+            ("2025-01-31", "WIG20", 100.0, 100.0),
+            ("2026-01-31", "WIG20", 108.0, 108.0),       # +8% syntetyczny -> nadpisane na 44.84%
+        ])
+        out = compute_index_returns(con, "2026-02-15", lookback_months=12)
+        wig20 = next(r for r in out if r["universe"] == "WIG20")
+        nasdaq = next(r for r in out if r["universe"] == "NASDAQ100")
+        assert wig20["return_pct"] == pytest.approx(44.84)
+        assert wig20["manual_entry"] is True
+        assert nasdaq["return_pct"] == pytest.approx(30.0)
+        assert "manual_entry" not in nasdaq
+        # Ranking uzywa juz nadpisanej wartosci -> WIG20 (44.84%) wygrywa nad NASDAQ100 (30%).
+        assert out[0]["universe"] == "WIG20"
+
+    def test_no_manual_override_falls_back_to_synthetic_return(self, monkeypatch):
+        monkeypatch.setattr(run_query, "_load_gem_manual_returns", lambda: {})
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-01-31", "WIG20", 100.0, 100.0),
+            ("2026-01-31", "WIG20", 108.0, 108.0),
+        ])
+        out = compute_index_returns(con, "2026-02-15", lookback_months=12)
+        assert out[0]["return_pct"] == pytest.approx(8.0)
+        assert "manual_entry" not in out[0]
+
+
+class TestLoadGemManualReturns:
+    def test_missing_file_returns_empty_dict(self, tmp_path):
+        assert _load_gem_manual_returns(path=tmp_path / "does_not_exist.json") == {}
+
+    def test_invalid_json_returns_empty_dict(self, tmp_path):
+        path = tmp_path / "gem_manual_returns.json"
+        path.write_text("not valid json {{{", encoding="utf-8")
+        assert _load_gem_manual_returns(path=path) == {}
+
+    def test_null_fields_are_excluded(self, tmp_path):
+        path = tmp_path / "gem_manual_returns.json"
+        path.write_text(json.dumps({
+            "WIG20": {"return_pct": None, "as_of": None},
+            "MWIG40": {"return_pct": None, "as_of": None},
+        }), encoding="utf-8")
+        assert _load_gem_manual_returns(path=path) == {}
+
+    def test_valid_numeric_fields_are_loaded(self, tmp_path):
+        path = tmp_path / "gem_manual_returns.json"
+        path.write_text(json.dumps({
+            "WIG20": {"return_pct": 44.84, "as_of": "2026-08-31"},
+            "MWIG40": {"return_pct": 38.2, "as_of": "2026-08-31"},
+        }), encoding="utf-8")
+        assert _load_gem_manual_returns(path=path) == {"WIG20": 44.84, "MWIG40": 38.2}
+
+    def test_universes_outside_override_set_are_ignored(self, tmp_path):
+        # Plik teoretycznie mogliby recznie rozszerzyc na inny uniwersum (np.
+        # SP500) — _load_gem_manual_returns ma to ignorowac, bo tylko WIG20/
+        # MWIG40 sa w GEM_MANUAL_OVERRIDE_UNIVERSES (nie ma potrzeby recznego
+        # nadpisania dla uniwersow, ktore juz maja realne dane z yfinance).
+        path = tmp_path / "gem_manual_returns.json"
+        path.write_text(json.dumps({
+            "SP500": {"return_pct": 12.3, "as_of": "2026-08-31"},
+            "WIG20": {"return_pct": 44.84, "as_of": "2026-08-31"},
+        }), encoding="utf-8")
+        assert _load_gem_manual_returns(path=path) == {"WIG20": 44.84}
 
 
 class TestComputeIndexLeaders:

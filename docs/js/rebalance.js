@@ -219,9 +219,13 @@ function renderGemWidget() {
         return;
     }
     const winnerReturn = (gemData.indices || []).find(i => i.universe === gemData.winner);
+    // manual_entry: WIG20/MWIG40 moga miec return_pct recznie wpisany z gem_manual_returns.json
+    // (patrz CLAUDE.md / run_query.py::_load_gem_manual_returns) zamiast liczonego z syntetycznego
+    // indeksu — "(ręcznie)" to zwykla transparentnosc pochodzenia danych, tak jak fmc_note gdzie
+    // indziej w aplikacji, nie ostrzezenie.
     const rows = (gemData.indices || []).map(i => `
         <div class="gem-index-row${i.universe === gemData.winner ? " gem-index-winner" : ""}">
-            <span>${i.universe === gemData.winner ? "🏆 " : ""}${UNIVERSE_LABELS[i.universe]}</span>
+            <span>${i.universe === gemData.winner ? "🏆 " : ""}${UNIVERSE_LABELS[i.universe]}${i.manual_entry ? ' <span class="text-faint">(ręcznie)</span>' : ""}</span>
             <span class="${i.return_pct >= 0 ? "positive" : "negative"}">${i.return_pct >= 0 ? "+" : ""}${i.return_pct.toFixed(2)}%</span>
         </div>
     `).join("");

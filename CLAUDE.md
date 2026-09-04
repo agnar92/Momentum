@@ -212,26 +212,70 @@ table) — but SP500/NASDAQ100/DOWJONES and WIG20/mWIG40 get their rows two enti
   call for an individual constituent (e.g. `PKN.WA`) returns full multi-month history without issue. So
   Yahoo's chart API has no historical series for the WIG20/mWIG40 **index tickers themselves** — only a
   live quote — while it has full history for every individual GPW-listed **stock**, retry or no retry.
-  `update_index_prices` instead calls `_compute_synthetic_equal_weight_index()`: an equal-weighted (same
+
+  `update_index_prices` builds `_compute_synthetic_equal_weight_index()`: an equal-weighted (same
   convention as `EQUAL_WEIGHT_UNIVERSES`) synthetic index level, base 100, built purely from the *already
   fetched* per-constituent closes in `prices` for that universe's tickers in `index_constituents` — daily
   equal-weighted average return across constituents, compounded from the base. This is not a literal
-  WIG20/mWIG40 replica, but every consumer (`compute_index_momentum`, `compute_relative_strength_chart`,
-  `compute_mansfield_rs_chart`) only ever reads **% change relative to a window's start**, never the
-  absolute level, so an arbitrary base is fine. It also works under `--indices-only` (`daily_gem.yml`):
-  `index_constituents`/`prices` aren't refreshed there, but persist from the last full run, so the
-  synthetic series just doesn't gain new days between monthly runs instead of being empty. Returns an
-  empty frame (no exception) when `index_constituents`/`prices` don't exist yet (fresh bootstrap) or have
-  no rows for that universe in the window.
+  WIG20/mWIG40 replica (real WIG20 is float-cap-weighted, not equal-weighted, and not rebalanced daily —
+  see the GEM section below for how much that actually mattered), but every consumer
+  (`compute_index_momentum`, `compute_relative_strength_chart`, `compute_mansfield_rs_chart`) only ever
+  reads **% change relative to a window's start**, never the absolute level, so an arbitrary base is fine.
+  It also works under `--indices-only` (`daily_gem.yml`): `index_constituents`/`prices` aren't refreshed
+  there, but persist from the last full run, so the synthetic series just doesn't gain new days between
+  monthly runs instead of being empty. Returns an empty frame (no exception) when `index_constituents`/
+  `prices` don't exist yet (fresh bootstrap) or have no rows for that universe in the window.
+
+  **A real, historical, cap-weighted WIG20/mWIG40 level was tried twice and abandoned both times** — this
+  matters because it's exactly why GEM (below) ended up needing a manually-entered field instead. First,
+  yfinance itself: `WIG20.WA`/`MWIG40.WA` were tried (a single multi-ticker `_download_price_rows([...])`
+  call, then a per-symbol solo retry added to `_download_price_rows()` itself to rule out a batching
+  quirk), and both consistently came back "possibly delisted; no price data found" — confirmed, via a
+  throwaway diagnostic GitHub Actions run, to be a real Yahoo data-availability gap and not a yfinance/
+  batching bug: `yf.download`/`Ticker.history` for these two tickers return **at most one row (today's)**
+  no matter the requested range or interval, while the exact same call for an individual constituent (e.g.
+  `PKN.WA`) returns full multi-month history without issue — Yahoo's chart API simply has no historical
+  series for the WIG20/mWIG40 **index tickers themselves**, only a live quote. Second, after that was
+  confirmed, a `_fetch_stooq_index_history()` helper was added to pull the same real level from stooq.pl's
+  free CSV endpoint (`stooq.pl/q/d/l/?s=<wig20|mwig40>&i=d`) — the same source the user checks these
+  numbers against by hand — wrapped to never raise so a fetch failure would just fall back to the
+  synthetic index above. This was reverted almost immediately: the user confirmed stooq.pl itself stopped
+  allowing automated downloads starting in 2026, so the endpoint this relied on no longer works at all —
+  not a transient failure to fall back from, but the whole approach being closed off by the source itself.
+  Both automated paths are dead ends; see `gem_manual_returns.json` below for what replaced them.
 
 Before the synthetic-index fix, `weekly_chart`/`mansfield_chart` were silently `None` for every WIG20/
 mWIG40 stock (`compute_relative_strength_chart`/`compute_mansfield_rs_chart` both need their own index's
 rows and return `None` without them) — the dashboard showed correct WIG20/mWIG40 constituent/momentum
 data but no chart for any of their tickers, with no error anywhere in the pipeline. `compute_index_returns()`
 reads `index_prices` filtered to `GEM_UNIVERSES` (now all 5) and returns each universe's return over the
-window, sorted descending; the top one is the `winner`. WIG20/mWIG40's synthetic (not real-index) level is
-still good enough here, same reasoning as for Relative Strength below: every consumer only ever reads %
-change relative to a window's start.
+window, sorted descending; the top one is the `winner`. For Relative Strength (below), which only ever
+reads % change relative to a window's start, the synthetic level is good enough and is all WIG20/mWIG40
+ever get there — but for GEM's cross-market race the real level matters (see below for why), which is
+what the manual-entry mechanism exists to fix.
+
+**`gem_manual_returns.json`** (repo root) is the actual fix, replacing both abandoned automated attempts
+above: a small, manually-maintained JSON file — same "manually-edited data file" pattern as
+`WIG20_holdings.json`/`MWIG40_holdings.json` — with a `WIG20`/`MWIG40` entry each holding `return_pct`
+(a plain number, e.g. `44.84`, not a string or a `%`-suffixed value) and an informational `as_of` date.
+The user checks stooq.pl by hand once a month (its own UI still shows the number even though its CSV
+export no longer allows automated downloads) and fills these two fields in directly — the file's own
+`_instructions` field documents the exact steps and why this is manual now. `_load_gem_manual_returns()`
+in `run_query.py` reads it, returning `{universe: return_pct}` only for entries with a non-null numeric
+`return_pct` (`GEM_MANUAL_OVERRIDE_UNIVERSES = {"WIG20", "MWIG40"}` — the only two universes this applies
+to; SP500/NASDAQ100/DOWJONES already have real yfinance data and don't need it) — a missing file, invalid
+JSON, or a still-`null` field all just yield `{}` rather than raising, so forgetting to update it for a
+month degrades gracefully back to the synthetic fallback rather than breaking the pipeline.
+`compute_index_returns()` calls this and, for any universe present in the result, replaces only that
+record's `return_pct` with the manual value and adds `"manual_entry": true` — `price_now`/`price_start`/
+`date_now`/`date_start` stay as the synthetic index computed them (informational only; there's no real
+index price to show instead). This override is scoped to `compute_index_returns()` alone — it does NOT
+touch `compute_index_leaders()` (which ranks the *winning universe's own constituents* by their own
+`prices` data, unaffected either way) or Relative Strength/the 10:30 chart (still synthetic-only, as
+above) — the file's own `_instructions` says this explicitly, since it would be easy to assume a "real
+WIG20 return" fix should apply everywhere it's used. `rebalance.js::renderGemWidget()` shows a small
+"(ręcznie)" label next to any universe whose record carries `manual_entry: true`, for the same data-
+provenance transparency the app already uses elsewhere (e.g. `fmc_note`).
 
 **The GEM window is anchored to month-end trading days, not to "today".** `_gem_month_end_anchor_dates()`
 resolves both endpoints (`date_now`/`date_start` on each index record) to the last trading day of a
@@ -245,19 +289,25 @@ is already present in the data (covers month-ends that fall on a weekend/holiday
 day isn't the last *calendar* day) — `_gem_month_end_anchor_dates()`'s docstring has the exact rule. The
 practical effect: the GEM numbers stay identical all month long (recomputing daily just reproduces the
 same anchor dates) and only move once, when the calendar rolls into a new completed month — a deliberate
-trade-off for stability/comparability over intra-month freshness. **Important caveat, told to the user
-directly**: this anchoring fix does NOT close the gap against stooq.pl's own WIG20/mWIG40 figures — it
-was verified (before vs. after, same underlying data) that the GEM winner didn't change. The real source
-of that gap is the synthetic index construction itself, described just above: it is equal-weighted and
-rebalanced daily, while the real WIG20 is float-cap-weighted and not rebalanced daily, which understates
-WIG20's return specifically whenever a few large, heavily-weighted constituents (its biggest banks/miners/
-refiners) outperform the rest of the index by a wide margin, as they did this year — equal-weighting
-dilutes their pull, and daily rebalancing trims winners/adds to laggards every day, both of which drag
-the computed return down relative to the real, buy-and-hold, cap-weighted index. Fixing that (if ever
-wanted) would mean either weighting the synthetic index by real market cap instead of equally, or sourcing
-real historical WIG20/mWIG40 index levels from an external provider (e.g. stooq.pl) instead of synthesizing
-them — both bigger changes than this one, deliberately not done here since the user asked specifically for
-the month-end anchoring fix, not a methodology change to the synthetic index itself.
+trade-off for stability/comparability over intra-month freshness.
+
+**Version history matters here**: the anchoring fix above was tried first (at the user's specific
+request) as a standalone fix for a GEM winner mismatch against stooq.pl's own WIG20/mWIG40 figures for
+the same day — it was verified (before vs. after, same underlying data) that the GEM winner did NOT
+change; the anchor date wasn't the problem. The real source of the gap was the synthetic index
+construction itself (equal-weighted, rebalanced daily), understating WIG20's return specifically whenever
+a few large, heavily-weighted constituents (its biggest banks/miners/refiners) outperform the rest of the
+index by a wide margin, as they did this year — equal-weighting dilutes their pull, and daily rebalancing
+trims winners/adds to laggards every day, both dragging the computed return down relative to the real,
+buy-and-hold, cap-weighted index. Measured directly (same window, real data): daily-rebalanced
+equal-weight gave WIG20 ~32%/mWIG40 ~34%; switching to a buy-and-hold equal-weight average (no daily
+rebalancing) alone moved those to ~35%/~38% — matching mWIG40 almost exactly, but leaving WIG20 still far
+below its real ~45%, **and still ranked below mWIG40** — proving equal-weighting (not the daily
+rebalancing) was the dominant error, since removing just the rebalancing didn't fix the ordering. That's
+what motivated trying to fetch the real level automatically (from yfinance, then stooq.pl — both dead
+ends, see above) before landing on `gem_manual_returns.json` (also above) as the actual fix: rather than
+keep refining an approximation that structurally can't match a cap-weighted, non-rebalanced index, the
+user checks the real number by hand once a month.
 
 For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
 **pushing the index to its new highs** — ranked by *contribution to the index's return*
@@ -710,9 +760,11 @@ python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh pric
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
                                    # compute momentum + regenerate docs/data/*.json
 
-python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices (^NDX/^DJI from yfinance;
-                                   # WIG20/mWIG40 synthetic level rebuilt from last-known constituent prices,
-                                   # not fetched — see Global Equity Momentum section), skip constituents
+python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices (^GSPC/^NDX/^DJI from
+                                   # yfinance; WIG20/mWIG40 synthetic level rebuilt from last-known
+                                   # constituent prices, not fetched — see Global Equity Momentum section
+                                   # and gem_manual_returns.json for how WIG20/mWIG40's GEM return is
+                                   # actually sourced), skip constituents
 python run_query.py --gem-only        # daily_gem.yml only: regenerate global_equity_momentum.json only
 
 python fetch_data.py                  # weekly_charts.yml: SAME full fetch as main.yml (not --indices-only)

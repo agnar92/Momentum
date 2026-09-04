@@ -471,7 +471,11 @@ class TestUpdatePricesIncremental:
 # yfinance — pobierane i mapowane z powrotem na nazwe uniwersum jak dotychczas.
 # WIG20/MWIG40 NIE MAJA zadnej historycznej danej poziomu indeksu u yfinance
 # (potwierdzone recznie — patrz docstring _compute_synthetic_equal_weight_index)
-# — budowane syntetycznie z wlasnych skladnikow zamiast pobierane.
+# — budowane syntetycznie z wlasnych skladnikow zamiast pobierane. (Proba
+# pobierania realnego poziomu ze stooq.pl byla dodana, a potem usunieta —
+# stooq zablokowal automatyczne pobieranie od 2026, patrz git history/
+# CLAUDE.md — GEM czyta teraz recznie wpisywany gem_manual_returns.json dla
+# tych dwoch uniwersow, patrz tests/test_run_query.py.)
 # ---------------------------------------------------------------------------
 
 class TestUpdateIndexPrices:
