@@ -233,6 +233,32 @@ window, sorted descending; the top one is the `winner`. WIG20/mWIG40's synthetic
 still good enough here, same reasoning as for Relative Strength below: every consumer only ever reads %
 change relative to a window's start.
 
+**The GEM window is anchored to month-end trading days, not to "today".** `_gem_month_end_anchor_dates()`
+resolves both endpoints (`date_now`/`date_start` on each index record) to the last trading day of a
+*completed* calendar month — e.g. "31.08" this year vs. "31.08"/whatever the last trading day near there
+was a year earlier — instead of "today vs. today minus 12 months". This is a deliberate choice by the
+user, made after they noticed our GEM winner (see below) didn't match stooq.pl's own trailing-12-month
+figures for the same day and asked to anchor to month-end instead of an arbitrary day. A month counts as
+"completed" the moment EITHER its last known date is literally the last calendar day of that month (so
+e.g. 31.08 itself is immediately valid — no need to wait for a September row to exist), OR a later month
+is already present in the data (covers month-ends that fall on a weekend/holiday, where the last *trading*
+day isn't the last *calendar* day) — `_gem_month_end_anchor_dates()`'s docstring has the exact rule. The
+practical effect: the GEM numbers stay identical all month long (recomputing daily just reproduces the
+same anchor dates) and only move once, when the calendar rolls into a new completed month — a deliberate
+trade-off for stability/comparability over intra-month freshness. **Important caveat, told to the user
+directly**: this anchoring fix does NOT close the gap against stooq.pl's own WIG20/mWIG40 figures — it
+was verified (before vs. after, same underlying data) that the GEM winner didn't change. The real source
+of that gap is the synthetic index construction itself, described just above: it is equal-weighted and
+rebalanced daily, while the real WIG20 is float-cap-weighted and not rebalanced daily, which understates
+WIG20's return specifically whenever a few large, heavily-weighted constituents (its biggest banks/miners/
+refiners) outperform the rest of the index by a wide margin, as they did this year — equal-weighting
+dilutes their pull, and daily rebalancing trims winners/adds to laggards every day, both of which drag
+the computed return down relative to the real, buy-and-hold, cap-weighted index. Fixing that (if ever
+wanted) would mean either weighting the synthetic index by real market cap instead of equally, or sourcing
+real historical WIG20/mWIG40 index levels from an external provider (e.g. stooq.pl) instead of synthesizing
+them — both bigger changes than this one, deliberately not done here since the user asked specifically for
+the month-end anchoring fix, not a methodology change to the synthetic index itself.
+
 For the winner, `compute_index_leaders()` finds the top `GEM_TOP_N` (10) constituents that are actually
 **pushing the index to its new highs** — ranked by *contribution to the index's return*
 (`weight_in_index_pct * return_pct`, where the weight is the constituent's `fmc_etf` share of the

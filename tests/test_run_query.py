@@ -442,21 +442,26 @@ class TestComputeIndexReturns:
     def test_ranks_universes_by_return_descending(self):
         con = make_gem_con()
         con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2025-02-01", "NASDAQ100", 100.0, 100.0),
-            ("2026-02-01", "NASDAQ100", 130.0, 130.0),   # +30%
-            ("2025-02-01", "DOWJONES", 100.0, 100.0),
-            ("2026-02-01", "DOWJONES", 105.0, 105.0),    # +5%
+            ("2025-01-31", "NASDAQ100", 100.0, 100.0),
+            ("2026-01-31", "NASDAQ100", 130.0, 130.0),   # +30%, ostatni dzien stycznia -> kotwica
+            ("2025-01-31", "DOWJONES", 100.0, 100.0),
+            ("2026-01-31", "DOWJONES", 105.0, 105.0),    # +5%
         ])
-        out = compute_index_returns(con, "2026-02-01", lookback_months=12)
+        # ref_date w lutym -> kotwiczy do ostatniego dnia STYCZNIA (ostatni
+        # zakonczony miesiac), nie do samej daty ref_date (patrz
+        # _gem_month_end_anchor_dates) — stad ref_date != data uzyta w liczeniu.
+        out = compute_index_returns(con, "2026-02-15", lookback_months=12)
         assert [r["universe"] for r in out] == ["NASDAQ100", "DOWJONES"]
         assert out[0]["return_pct"] == pytest.approx(30.0)
+        assert out[0]["date_now"] == "2026-01-31 00:00:00"
+        assert out[0]["date_start"] == "2025-01-31 00:00:00"
 
     def test_universe_missing_lookback_data_is_skipped(self):
         con = make_gem_con()
         con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2026-01-15", "NASDAQ100", 100.0, 100.0),  # brak ceny sprzed 12 mies. -> pominiete
+            ("2026-01-31", "NASDAQ100", 100.0, 100.0),  # brak ceny sprzed 12 mies. -> pominiete
         ])
-        out = compute_index_returns(con, "2026-02-01", lookback_months=12)
+        out = compute_index_returns(con, "2026-02-15", lookback_months=12)
         assert out == []
 
     def test_ranks_all_5_gem_universes_when_present(self):
@@ -465,50 +470,96 @@ class TestComputeIndexReturns:
         # sprawdzamy, ze wszystkie 5 (nie tylko NASDAQ100/DOWJONES) sa uwzglednione w wyscigu.
         con = make_gem_con()
         con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2025-02-01", "SP500", 100.0, 100.0),
-            ("2026-02-01", "SP500", 110.0, 110.0),        # +10%
-            ("2025-02-01", "NASDAQ100", 100.0, 100.0),
-            ("2026-02-01", "NASDAQ100", 130.0, 130.0),    # +30%
-            ("2025-02-01", "DOWJONES", 100.0, 100.0),
-            ("2026-02-01", "DOWJONES", 105.0, 105.0),     # +5%
-            ("2025-02-01", "WIG20", 100.0, 100.0),
-            ("2026-02-01", "WIG20", 140.0, 140.0),        # +40%, zwyciezca
-            ("2025-02-01", "MWIG40", 100.0, 100.0),
-            ("2026-02-01", "MWIG40", 108.0, 108.0),       # +8%
+            ("2025-01-31", "SP500", 100.0, 100.0),
+            ("2026-01-31", "SP500", 110.0, 110.0),        # +10%
+            ("2025-01-31", "NASDAQ100", 100.0, 100.0),
+            ("2026-01-31", "NASDAQ100", 130.0, 130.0),    # +30%
+            ("2025-01-31", "DOWJONES", 100.0, 100.0),
+            ("2026-01-31", "DOWJONES", 105.0, 105.0),     # +5%
+            ("2025-01-31", "WIG20", 100.0, 100.0),
+            ("2026-01-31", "WIG20", 140.0, 140.0),        # +40%, zwyciezca
+            ("2025-01-31", "MWIG40", 100.0, 100.0),
+            ("2026-01-31", "MWIG40", 108.0, 108.0),       # +8%
         ])
-        out = compute_index_returns(con, "2026-02-01", lookback_months=12)
+        out = compute_index_returns(con, "2026-02-15", lookback_months=12)
         assert [r["universe"] for r in out] == ["WIG20", "NASDAQ100", "SP500", "MWIG40", "DOWJONES"]
         assert out[0]["return_pct"] == pytest.approx(40.0)
+
+    def test_anchors_to_last_trading_day_of_previous_completed_month_not_ref_date_itself(self):
+        # Na zyczenie uzytkownika: okno GEM ma byc stabilne w obrebie miesiaca —
+        # kotwiczone do konca ostatniego ZAKONCZONEGO miesiaca, nie do "dzisiaj".
+        # Swiezsza cena w BIEZACYM (jeszcze niezakonczonym) miesiacu nie powinna
+        # wplywac na wynik, ani zmieniac sie zaleznie od tego, kiedy w miesiacu
+        # ref_date akurat wypada.
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', ?, ?, 0)", [
+            ("2025-01-31", 100.0, 100.0),
+            ("2026-01-31", 130.0, 130.0),   # ostatni dzien stycznia -> kotwica
+            ("2026-02-10", 999.0, 999.0),   # luty jeszcze trwa -> NIE powinno byc uzyte jako "teraz"
+        ])
+        out_early = compute_index_returns(con, "2026-02-02", lookback_months=12)
+        out_late = compute_index_returns(con, "2026-02-27", lookback_months=12)
+        assert out_early == out_late
+        assert out_early[0]["return_pct"] == pytest.approx(30.0)
+        assert out_early[0]["date_now"] == "2026-01-31 00:00:00"
+
+    def test_ref_date_exactly_on_calendar_month_end_counts_that_month_as_complete(self):
+        # Przypadek z produkcji, ktory pierwsza (naiwna) wersja tej logiki
+        # psula: gdy ref_date/watermark w index_prices to AKURAT ostatni dzien
+        # kalendarzowy miesiaca (np. 31.08), a nastepny miesiac (wrzesien)
+        # jeszcze nie ma ZADNEGO wiersza (bo fetch_data.py --indices-only nie
+        # zdazyl jeszcze go dopisac) — sierpien i tak liczy sie jako
+        # zakonczony (31. to z definicji ostatni dzien sierpnia), nie trzeba
+        # czekac na dane z wrzesnia.
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', ?, ?, 0)", [
+            ("2025-08-31", 100.0, 100.0),
+            ("2026-08-31", 140.0, 140.0),   # ostatni dzien SIERPNIA, brak jakichkolwiek danych z wrzesnia
+        ])
+        out = compute_index_returns(con, "2026-08-31", lookback_months=12)
+        assert out[0]["return_pct"] == pytest.approx(40.0)
+        assert out[0]["date_now"] == "2026-08-31 00:00:00"
+        assert out[0]["date_start"] == "2025-08-31 00:00:00"
 
 
 class TestComputeIndexLeaders:
     def test_ranks_by_contribution_not_raw_return(self):
         # SMALL ma wyzszy zwrot, ale znikoma wage w indeksie -> BIG (nizszy zwrot,
         # ale dominujaca waga) powinien miec wiekszy wklad w zwrot indeksu i wygrac.
+        # index_prices dostarcza tylko kalendarz kotwic (patrz
+        # _gem_month_end_anchor_dates) — musi byc obecne, zeby anchor/start_date
+        # sie rozwiazaly, tak jak w prawdziwym pipeline (compute_index_leaders
+        # jest wolane tylko dla juz-wygranego w compute_index_returns uniwersum).
         con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', 100.0, 100.0, 0)", [
+            ("2025-01-31",), ("2026-01-31",),
+        ])
         con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', ?)", [
             ("BIG", 900.0), ("SMALL", 10.0),
         ])
         con.executemany("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, 0)", [
-            ("2025-02-01", "BIG", 100.0, 100.0),
-            ("2026-02-01", "BIG", 120.0, 120.0),     # +20%, waga ~98.9%
-            ("2025-02-01", "SMALL", 100.0, 100.0),
-            ("2026-02-01", "SMALL", 300.0, 300.0),   # +200%, waga ~1.1%
+            ("2025-01-31", "BIG", 100.0, 100.0),
+            ("2026-01-31", "BIG", 120.0, 120.0),     # +20%, waga ~98.9%
+            ("2025-01-31", "SMALL", 100.0, 100.0),
+            ("2026-01-31", "SMALL", 300.0, 300.0),   # +200%, waga ~1.1%
         ])
-        out = compute_index_leaders(con, "NASDAQ100", "2026-02-01", lookback_months=12, top_n=10)
+        out = compute_index_leaders(con, "NASDAQ100", "2026-02-15", lookback_months=12, top_n=10)
         assert out[0]["ticker"] == "BIG"
         assert out[0]["rank"] == 1
 
     def test_top_n_limits_result_count(self):
         con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', 100.0, 100.0, 0)", [
+            ("2025-01-31",), ("2026-01-31",),
+        ])
         rows_const = [(f"T{i}", "NASDAQ100", "Tech", 10.0) for i in range(15)]
         con.executemany("INSERT INTO index_constituents VALUES (?, ?, ?, ?)", rows_const)
         rows_px = []
         for i in range(15):
-            rows_px.append(("2025-02-01", f"T{i}", 100.0, 100.0, 0))
-            rows_px.append(("2026-02-01", f"T{i}", 100.0 + i, 100.0 + i, 0))
+            rows_px.append(("2025-01-31", f"T{i}", 100.0, 100.0, 0))
+            rows_px.append(("2026-01-31", f"T{i}", 100.0 + i, 100.0 + i, 0))
         con.executemany("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows_px)
-        out = compute_index_leaders(con, "NASDAQ100", "2026-02-01", lookback_months=12, top_n=5)
+        out = compute_index_leaders(con, "NASDAQ100", "2026-02-15", lookback_months=12, top_n=5)
         assert len(out) == 5
 
     def test_missing_price_data_returns_empty_list(self):
@@ -528,16 +579,23 @@ class TestExportGlobalEquityMomentum:
     def test_auto_derives_ref_date_from_index_prices_watermark(self, tmp_path):
         con = make_gem_con()
         con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
-            ("2025-03-15", "NASDAQ100", 100.0, 100.0),
-            ("2026-03-15", "NASDAQ100", 120.0, 120.0),   # +20%, najswiezsza data w index_prices
-            ("2025-03-15", "DOWJONES", 100.0, 100.0),
-            ("2026-03-15", "DOWJONES", 105.0, 105.0),
+            ("2025-02-27", "NASDAQ100", 100.0, 100.0),
+            ("2026-02-27", "NASDAQ100", 120.0, 120.0),   # +20%, ostatni dzien LUTEGO -> kotwica
+            ("2025-02-27", "DOWJONES", 100.0, 100.0),
+            ("2026-02-27", "DOWJONES", 105.0, 105.0),
+            # Najswiezsza data w index_prices (marzec) — uzyta TYLKO jako "ref_date"
+            # (zeby wiedziec, ze luty juz sie zakonczyl), NIE jako punkt "teraz" w
+            # liczeniu zwrotu (patrz _gem_month_end_anchor_dates) — stad ceny 999.0
+            # tutaj NIE powinny miec wplywu na wynik.
+            ("2026-03-15", "NASDAQ100", 999.0, 999.0),
+            ("2026-03-15", "DOWJONES", 999.0, 999.0),
         ])
         export_global_equity_momentum(con, str(tmp_path))
 
         payload = json.loads((tmp_path / "global_equity_momentum.json").read_text())
-        assert payload["ref_date"] == "2026-03-15"  # nie jakas inna data pipeline'u
+        assert payload["ref_date"] == "2026-03-15"  # nie jakas inna data pipeline'u — to wciaz watermark
         assert payload["winner"] == "NASDAQ100"
+        assert payload["indices"][0]["date_now"] == "2026-02-27 00:00:00"  # kotwica, nie watermark
 
     def test_no_index_prices_data_writes_nothing(self, tmp_path):
         con = duckdb.connect(":memory:")
