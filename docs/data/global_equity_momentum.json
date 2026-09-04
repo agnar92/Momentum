@@ -141,5 +141,5 @@
       "contribution_pct": 1.23
     }
   ],
-  "note": "Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie 12 mies. dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 — klasyczna idea Global/Dual Equity Momentum: spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym zwrocie. Lista 'leaders' to top 10 spółek zwycięskiego indeksu wg wkładu w jego zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. Dane informacyjne, NIE porada inwestycyjna."
+  "note": "Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie 12 mies. dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 — klasyczna idea Global/Dual Equity Momentum: spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym zwrocie. Okno kotwiczone jest do ostatniego dnia handlowego zakończonego miesiąca (nie do dzisiejszej daty) — 'date_now'/'date_start' każdego indeksu to zawsze koniec miesiąca, żeby wynik był stabilny w ciągu miesiąca. Lista 'leaders' to top 10 spółek zwycięskiego indeksu wg wkładu w jego zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. Dane informacyjne, NIE porada inwestycyjna."
 }

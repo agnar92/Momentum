@@ -1,1737 +1,4 @@
 {
-  "A": {
-    "price": 151.39,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ABE": {
-    "price": 152.6,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "ABNB": {
-    "price": 183.26,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "ACGL": {
-    "price": 98.21,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ADBE": {
-    "price": 279.79,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "ADM": {
-    "price": 85.38,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ADSK": {
-    "price": 241.73,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "AEE": {
-    "price": 105.89,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AFL": {
-    "price": 117.24,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AIZ": {
-    "price": 284.07,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AKAM": {
-    "price": 105.09,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ALB": {
-    "price": 137.75,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ALGN": {
-    "price": 159.15,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AMD": {
-    "price": 457.06,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "AMGN": {
-    "price": 442.84,
-    "universes": [
-      "DOWJONES",
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "AMT": {
-    "price": 172.92,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ANET": {
-    "price": 186.1,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AON": {
-    "price": 330.88,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ATO": {
-    "price": 167.68,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AVY": {
-    "price": 174.42,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AWK": {
-    "price": 139.49,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "AZO": {
-    "price": 2934.52,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BA": {
-    "price": 208.87,
-    "universes": [
-      "SP500",
-      "DOWJONES"
-    ]
-  },
-  "BAC": {
-    "price": 62.6,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BDX": {
-    "price": 187.52,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BG": {
-    "price": 122.86,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BKNG": {
-    "price": 199.6,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "BKR": {
-    "price": 64.63,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "BNY": {
-    "price": 162.04,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BRKB": {
-    "price": 505.24,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CAT": {
-    "price": 792.28,
-    "universes": [
-      "SP500",
-      "DOWJONES"
-    ]
-  },
-  "CB": {
-    "price": 339.42,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CBF": {
-    "price": 190.8,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "CCI": {
-    "price": 75.38,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CEG": {
-    "price": 290.04,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "CFG": {
-    "price": 69.78,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CHD": {
-    "price": 99.32,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CI": {
-    "price": 282.84,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CL": {
-    "price": 90.1,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CRI": {
-    "price": 695.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "D": {
-    "price": 66.05,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DASH": {
-    "price": 226.24,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "DECK": {
-    "price": 83.76,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DELL": {
-    "price": 492.2,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DHI": {
-    "price": 142.26,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DHR": {
-    "price": 209.91,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DLR": {
-    "price": 183.76,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DOC": {
-    "price": 21.03,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DOM": {
-    "price": 240.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "DPZ": {
-    "price": 346.68,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DVA": {
-    "price": 179.39,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DVN": {
-    "price": 49.03,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EFX": {
-    "price": 185.48,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EOG": {
-    "price": 148.96,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ESS": {
-    "price": 277.29,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EXPD": {
-    "price": 186.16,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FAST": {
-    "price": 47.93,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "FDS": {
-    "price": 306.07,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FIS": {
-    "price": 41.87,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FIX": {
-    "price": 1560.13,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FOXA": {
-    "price": 67.52,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FTNT": {
-    "price": 154.54,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "FTV": {
-    "price": 56.6,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "GNRC": {
-    "price": 180.76,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "GPW": {
-    "price": 96.65,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "GS": {
-    "price": 1004.42,
-    "universes": [
-      "SP500",
-      "DOWJONES"
-    ]
-  },
-  "HAS": {
-    "price": 93.5,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HLT": {
-    "price": 311.51,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HONA": {
-    "price": 152.55,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "IBM": {
-    "price": 231.7,
-    "universes": [
-      "SP500",
-      "DOWJONES"
-    ]
-  },
-  "IDXX": {
-    "price": 538.99,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "INCY": {
-    "price": 128.83,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "IP": {
-    "price": 36.3,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "JBL": {
-    "price": 299.39,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "JNJ": {
-    "price": 275.21,
-    "universes": [
-      "DOWJONES",
-      "SP500"
-    ]
-  },
-  "KEYS": {
-    "price": 321.58,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "KGH": {
-    "price": 344.15,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "KR": {
-    "price": 58.22,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "KTY": {
-    "price": 1214.0,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "LH": {
-    "price": 331.66,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "LOW": {
-    "price": 199.84,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "LPP": {
-    "price": 20900.0,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "MAA": {
-    "price": 128.61,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MCK": {
-    "price": 924.78,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MDV": {
-    "price": 85.92,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "MPC": {
-    "price": 387.0,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MRB": {
-    "price": 12.79,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "MS": {
-    "price": 211.82,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MSI": {
-    "price": 478.92,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MUR": {
-    "price": 37.4,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "NEM": {
-    "price": 125.16,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "NTAP": {
-    "price": 180.77,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "NUE": {
-    "price": 263.97,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "NWS": {
-    "price": 34.41,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "NXPI": {
-    "price": 228.5,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "ORLY": {
-    "price": 86.97,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "PAYX": {
-    "price": 124.0,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "PCG": {
-    "price": 13.33,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PDD": {
-    "price": 82.25,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "PEG": {
-    "price": 73.32,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PKO": {
-    "price": 114.24,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "PNR": {
-    "price": 59.84,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PTC": {
-    "price": 149.13,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PWR": {
-    "price": 610.78,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PZU": {
-    "price": 74.3,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "Q": {
-    "price": 117.69,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ROP": {
-    "price": 415.79,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "ROST": {
-    "price": 230.85,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "SHOP": {
-    "price": 141.87,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "SJM": {
-    "price": 131.44,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SLB": {
-    "price": 58.13,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SRE": {
-    "price": 83.79,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "STX": {
-    "price": 808.54,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "SWK": {
-    "price": 96.89,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TER": {
-    "price": 341.62,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "TKO": {
-    "price": 189.79,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TSCO": {
-    "price": 34.86,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TT": {
-    "price": 439.02,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TYL": {
-    "price": 374.88,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "UBER": {
-    "price": 76.45,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "UNP": {
-    "price": 289.73,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "V": {
-    "price": 378.4,
-    "universes": [
-      "DOWJONES",
-      "SP500"
-    ]
-  },
-  "VLO": {
-    "price": 366.09,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "VMRK": {
-    "price": 64.91,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "VRC": {
-    "price": 130.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "VRT": {
-    "price": 256.7,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "VRTX": {
-    "price": 556.75,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "WDC": {
-    "price": 448.9,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "WELL": {
-    "price": 238.59,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "WMT": {
-    "price": 106.09,
-    "universes": [
-      "DOWJONES",
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "WRB": {
-    "price": 68.12,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "WTW": {
-    "price": 337.73,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "XTB": {
-    "price": 174.3,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "ZBRA": {
-    "price": 351.11,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ZTS": {
-    "price": 76.17,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "APH": {
-    "price": 80.04,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ACP": {
-    "price": 231.1,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "ADP": {
-    "price": 281.16,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "AEP": {
-    "price": 123.57,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "ALAB": {
-    "price": 274.13,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "ALL": {
-    "price": 259.34,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ALNY": {
-    "price": 267.4,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "APD": {
-    "price": 309.45,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "APO": {
-    "price": 132.29,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "APR": {
-    "price": 30.65,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "BALL": {
-    "price": 63.3,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BAX": {
-    "price": 25.7,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BEN": {
-    "price": 33.01,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BFT": {
-    "price": 5310.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "BHW": {
-    "price": 117.6,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "BIIB": {
-    "price": 222.67,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BR": {
-    "price": 178.06,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "BRO": {
-    "price": 72.04,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CAH": {
-    "price": 245.49,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CAR": {
-    "price": 978.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "CDNS": {
-    "price": 306.67,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "CF": {
-    "price": 139.27,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CIEN": {
-    "price": 354.16,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CINF": {
-    "price": 171.69,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CLX": {
-    "price": 94.27,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CMCSA": {
-    "price": 26.81,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "CMI": {
-    "price": 550.9,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CNP": {
-    "price": 39.51,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "COHR": {
-    "price": 268.64,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "COIN": {
-    "price": 174.96,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "COP": {
-    "price": 137.2,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CPT": {
-    "price": 105.54,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CRL": {
-    "price": 291.76,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "CRWV": {
-    "price": 80.93,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "CVNA": {
-    "price": 74.16,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DD": {
-    "price": 132.93,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DE": {
-    "price": 698.37,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DG": {
-    "price": 130.89,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DGX": {
-    "price": 240.8,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "DIA": {
-    "price": 168.4,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "DNP": {
-    "price": 35.57,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "DTE": {
-    "price": 136.05,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EBAY": {
-    "price": 106.7,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ED": {
-    "price": 107.67,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EME": {
-    "price": 734.26,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ENA": {
-    "price": 19.82,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "ERIE": {
-    "price": 258.41,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ETN": {
-    "price": 390.85,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EVRG": {
-    "price": 80.77,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EW": {
-    "price": 90.82,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EXE": {
-    "price": 99.32,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "EXPE": {
-    "price": 308.06,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FDX": {
-    "price": 316.54,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FICO": {
-    "price": 1099.45,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "FITB": {
-    "price": 54.4,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "GDDY": {
-    "price": 101.87,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "GEHC": {
-    "price": 70.56,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "GEN": {
-    "price": 30.65,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "GOOGL": {
-    "price": 337.12,
-    "universes": [
-      "SP500",
-      "NASDAQ100",
-      "DOWJONES"
-    ]
-  },
-  "GPN": {
-    "price": 92.81,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "GRMN": {
-    "price": 276.04,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HOOD": {
-    "price": 106.99,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HPE": {
-    "price": 51.83,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HPQ": {
-    "price": 31.99,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HST": {
-    "price": 22.11,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HSY": {
-    "price": 177.43,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "HWM": {
-    "price": 252.96,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "IBKR": {
-    "price": 89.12,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "IEX": {
-    "price": 224.61,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "IFF": {
-    "price": 86.94,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "INTU": {
-    "price": 342.94,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "ITW": {
-    "price": 269.09,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "JBHT": {
-    "price": 260.22,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "JKHY": {
-    "price": 167.03,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "KKR": {
-    "price": 106.43,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "KMB": {
-    "price": 109.29,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "KO": {
-    "price": 88.24,
-    "universes": [
-      "DOWJONES",
-      "SP500"
-    ]
-  },
-  "LITE": {
-    "price": 870.58,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "LMT": {
-    "price": 531.55,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "LULU": {
-    "price": 120.07,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "LVS": {
-    "price": 44.54,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "LYB": {
-    "price": 66.57,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MA": {
-    "price": 588.14,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MCO": {
-    "price": 490.0,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MDLZ": {
-    "price": 62.45,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "MKC": {
-    "price": 53.8,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MLM": {
-    "price": 517.07,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MMM": {
-    "price": 168.75,
-    "universes": [
-      "SP500",
-      "DOWJONES"
-    ]
-  },
-  "MNST": {
-    "price": 44.42,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "MSCI": {
-    "price": 560.63,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "MSFT": {
-    "price": 496.82,
-    "universes": [
-      "SP500",
-      "NASDAQ100",
-      "DOWJONES"
-    ]
-  },
-  "NEE": {
-    "price": 83.1,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "NEU": {
-    "price": 773.0,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "NI": {
-    "price": 41.15,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "NOC": {
-    "price": 523.82,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "NRG": {
-    "price": 111.09,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "O": {
-    "price": 61.5,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ODFL": {
-    "price": 187.61,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "OKE": {
-    "price": 96.01,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "OTIS": {
-    "price": 70.83,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "OXY": {
-    "price": 60.91,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PFE": {
-    "price": 29.02,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PKN": {
-    "price": 158.0,
-    "universes": [
-      "WIG20"
-    ]
-  },
-  "PLTR": {
-    "price": 169.46,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "PNW": {
-    "price": 97.38,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PSA": {
-    "price": 301.33,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "PSKY": {
-    "price": 10.97,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "RDDT": {
-    "price": 158.1,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "REG": {
-    "price": 75.81,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "REGN": {
-    "price": 852.03,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "RJF": {
-    "price": 175.95,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "RMD": {
-    "price": 230.87,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "RSG": {
-    "price": 222.52,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "RVTY": {
-    "price": 130.94,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SCHW": {
-    "price": 108.24,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SO": {
-    "price": 88.31,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SPCX": {
-    "price": 140.71,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "SPG": {
-    "price": 210.2,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SPGI": {
-    "price": 431.71,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "STLD": {
-    "price": 247.64,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "STT": {
-    "price": 190.04,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SW": {
-    "price": 45.36,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SWKS": {
-    "price": 71.67,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "SYF": {
-    "price": 78.39,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TGT": {
-    "price": 163.36,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TMUS": {
-    "price": 187.3,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "TPL": {
-    "price": 367.32,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TPR": {
-    "price": 123.14,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TRI": {
-    "price": 105.87,
-    "universes": [
-      "NASDAQ100"
-    ]
-  },
-  "TROW": {
-    "price": 109.38,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TSN": {
-    "price": 55.81,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "TXN": {
-    "price": 254.8,
-    "universes": [
-      "SP500",
-      "NASDAQ100"
-    ]
-  },
-  "UHS": {
-    "price": 167.49,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "ULTA": {
-    "price": 551.74,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "UNH": {
-    "price": 399.66,
-    "universes": [
-      "SP500",
-      "DOWJONES"
-    ]
-  },
-  "USB": {
-    "price": 62.77,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "VEEV": {
-    "price": 280.72,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "VOX": {
-    "price": 136.4,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "WAT": {
-    "price": 412.2,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "WEC": {
-    "price": 105.73,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "WFC": {
-    "price": 89.27,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "WPL": {
-    "price": 61.4,
-    "universes": [
-      "MWIG40"
-    ]
-  },
-  "WY": {
-    "price": 23.19,
-    "universes": [
-      "SP500"
-    ]
-  },
-  "XEL": {
-    "price": 75.51,
-    "universes": [
-      "NASDAQ100",
-      "SP500"
-    ]
-  },
-  "YUM": {
-    "price": 151.27,
-    "universes": [
-      "SP500"
-    ]
-  },
   "KIM": {
     "price": 24.08,
     "universes": [
@@ -1933,8 +200,8 @@
   "AAPL": {
     "price": 324.96,
     "universes": [
-      "SP500",
       "NASDAQ100",
+      "SP500",
       "DOWJONES"
     ]
   },
@@ -1965,16 +232,16 @@
   "AMZN": {
     "price": 254.98,
     "universes": [
-      "SP500",
       "NASDAQ100",
+      "SP500",
       "DOWJONES"
     ]
   },
   "AXON": {
     "price": 506.98,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "AXP": {
@@ -2060,8 +327,8 @@
   "CSX": {
     "price": 48.65,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "CTSH": {
@@ -2098,8 +365,8 @@
   "DXCM": {
     "price": 89.69,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "ECL": {
@@ -2188,7 +455,7 @@
     ]
   },
   "HUBB": {
-    "price": 450.08,
+    "price": 460.15,
     "universes": [
       "SP500"
     ]
@@ -2202,8 +469,8 @@
   "INTC": {
     "price": 90.05,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "IR": {
@@ -2221,8 +488,8 @@
   "ISRG": {
     "price": 371.88,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "J": {
@@ -2247,8 +514,8 @@
   "KDP": {
     "price": 32.59,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "L": {
@@ -2366,8 +633,8 @@
   "PANW": {
     "price": 328.48,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "PG": {
@@ -2461,8 +728,8 @@
   "TSLA": {
     "price": 357.01,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "TTWO": {
@@ -2523,8 +790,8 @@
   "WBD": {
     "price": 28.39,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "WM": {
@@ -2547,6 +814,1739 @@
   },
   "ZBH": {
     "price": 99.5,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ACP": {
+    "price": 231.1,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "ADP": {
+    "price": 281.16,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "AEP": {
+    "price": 123.57,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "ALAB": {
+    "price": 274.13,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "ALL": {
+    "price": 259.34,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ALNY": {
+    "price": 267.4,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "APD": {
+    "price": 309.45,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "APO": {
+    "price": 132.29,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "APR": {
+    "price": 30.65,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "BALL": {
+    "price": 63.3,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BAX": {
+    "price": 25.7,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BEN": {
+    "price": 33.01,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BFT": {
+    "price": 5310.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "BHW": {
+    "price": 117.6,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "BIIB": {
+    "price": 222.67,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BR": {
+    "price": 178.06,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BRO": {
+    "price": 72.04,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CAH": {
+    "price": 245.49,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CAR": {
+    "price": 978.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "CDNS": {
+    "price": 306.67,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "CF": {
+    "price": 139.27,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CIEN": {
+    "price": 354.16,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CINF": {
+    "price": 171.69,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CLX": {
+    "price": 94.27,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CMCSA": {
+    "price": 26.81,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "CMI": {
+    "price": 550.9,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CNP": {
+    "price": 39.51,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "COHR": {
+    "price": 268.64,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "COIN": {
+    "price": 174.96,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "COP": {
+    "price": 137.2,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CPT": {
+    "price": 105.54,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CRL": {
+    "price": 291.76,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CRWV": {
+    "price": 80.93,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "CVNA": {
+    "price": 74.16,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DD": {
+    "price": 132.93,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DE": {
+    "price": 698.37,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DG": {
+    "price": 130.89,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DGX": {
+    "price": 240.8,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DIA": {
+    "price": 168.4,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "DNP": {
+    "price": 35.57,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "DTE": {
+    "price": 136.05,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EBAY": {
+    "price": 106.7,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ED": {
+    "price": 107.67,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EME": {
+    "price": 734.26,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ENA": {
+    "price": 19.82,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "ERIE": {
+    "price": 258.41,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ETN": {
+    "price": 390.85,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EVRG": {
+    "price": 80.77,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EW": {
+    "price": 90.82,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EXE": {
+    "price": 99.32,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EXPE": {
+    "price": 308.06,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FDX": {
+    "price": 316.54,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FICO": {
+    "price": 1099.45,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FITB": {
+    "price": 54.4,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "GDDY": {
+    "price": 101.87,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "GEHC": {
+    "price": 70.56,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "GEN": {
+    "price": 30.65,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "GOOGL": {
+    "price": 337.12,
+    "universes": [
+      "NASDAQ100",
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "GPN": {
+    "price": 92.81,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "GRMN": {
+    "price": 276.04,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HOOD": {
+    "price": 106.99,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HPE": {
+    "price": 51.83,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HPQ": {
+    "price": 31.99,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HST": {
+    "price": 22.11,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HSY": {
+    "price": 177.43,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HWM": {
+    "price": 252.96,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "IBKR": {
+    "price": 89.12,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "IEX": {
+    "price": 224.61,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "IFF": {
+    "price": 86.94,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "INTU": {
+    "price": 342.94,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "ITW": {
+    "price": 269.09,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "JBHT": {
+    "price": 260.22,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "JKHY": {
+    "price": 167.03,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "KKR": {
+    "price": 106.43,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "KMB": {
+    "price": 109.29,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "KO": {
+    "price": 88.24,
+    "universes": [
+      "DOWJONES",
+      "SP500"
+    ]
+  },
+  "LITE": {
+    "price": 870.58,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "LMT": {
+    "price": 531.55,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "LULU": {
+    "price": 120.07,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "LVS": {
+    "price": 44.54,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "LYB": {
+    "price": 66.57,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MA": {
+    "price": 588.14,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MCO": {
+    "price": 490.0,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MDLZ": {
+    "price": 62.45,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "MKC": {
+    "price": 53.8,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MLM": {
+    "price": 517.07,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MMM": {
+    "price": 168.75,
+    "universes": [
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "MNST": {
+    "price": 44.42,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "MSCI": {
+    "price": 560.63,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MSFT": {
+    "price": 496.82,
+    "universes": [
+      "NASDAQ100",
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "NEE": {
+    "price": 83.1,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "NEU": {
+    "price": 773.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "NI": {
+    "price": 41.15,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "NOC": {
+    "price": 523.82,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "NRG": {
+    "price": 111.09,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "O": {
+    "price": 61.5,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ODFL": {
+    "price": 187.61,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "OKE": {
+    "price": 96.01,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "OTIS": {
+    "price": 70.83,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "OXY": {
+    "price": 60.91,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PFE": {
+    "price": 29.02,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PKN": {
+    "price": 158.0,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "PLTR": {
+    "price": 169.46,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "PNW": {
+    "price": 97.38,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PSA": {
+    "price": 301.33,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PSKY": {
+    "price": 10.97,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "RDDT": {
+    "price": 158.1,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "REG": {
+    "price": 75.81,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "REGN": {
+    "price": 852.03,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "RJF": {
+    "price": 175.95,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "RMD": {
+    "price": 230.87,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "RSG": {
+    "price": 222.52,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "RVTY": {
+    "price": 130.94,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SCHW": {
+    "price": 108.24,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SO": {
+    "price": 88.31,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SPCX": {
+    "price": 140.71,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "SPG": {
+    "price": 210.2,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SPGI": {
+    "price": 431.71,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "STLD": {
+    "price": 247.64,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "STT": {
+    "price": 190.04,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SW": {
+    "price": 45.36,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SWKS": {
+    "price": 71.67,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SYF": {
+    "price": 78.39,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TGT": {
+    "price": 163.36,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TMUS": {
+    "price": 187.3,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "TPL": {
+    "price": 367.32,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TPR": {
+    "price": 123.14,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TRI": {
+    "price": 105.87,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "TROW": {
+    "price": 109.38,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TSN": {
+    "price": 55.81,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TXN": {
+    "price": 254.8,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "UHS": {
+    "price": 167.49,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ULTA": {
+    "price": 551.74,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "UNH": {
+    "price": 399.66,
+    "universes": [
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "USB": {
+    "price": 62.77,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "VEEV": {
+    "price": 280.72,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "VOX": {
+    "price": 136.4,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "WAT": {
+    "price": 412.2,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "WEC": {
+    "price": 105.73,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "WFC": {
+    "price": 89.27,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "WPL": {
+    "price": 61.4,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "WY": {
+    "price": 23.19,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "XEL": {
+    "price": 75.51,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "YUM": {
+    "price": 151.27,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "A": {
+    "price": 151.39,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ABE": {
+    "price": 152.6,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "ABNB": {
+    "price": 183.26,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "ACGL": {
+    "price": 98.21,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ADBE": {
+    "price": 279.79,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "ADM": {
+    "price": 85.38,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ADSK": {
+    "price": 241.73,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "AEE": {
+    "price": 105.89,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AFL": {
+    "price": 117.24,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AIZ": {
+    "price": 284.07,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AKAM": {
+    "price": 105.09,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ALB": {
+    "price": 137.75,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ALGN": {
+    "price": 159.15,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AMD": {
+    "price": 457.06,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "AMGN": {
+    "price": 442.84,
+    "universes": [
+      "DOWJONES",
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "AMT": {
+    "price": 172.92,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ANET": {
+    "price": 186.1,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AON": {
+    "price": 330.88,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ATO": {
+    "price": 167.68,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AVY": {
+    "price": 174.42,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AWK": {
+    "price": 139.49,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "AZO": {
+    "price": 2934.52,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BA": {
+    "price": 208.87,
+    "universes": [
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "BAC": {
+    "price": 62.6,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BDX": {
+    "price": 187.52,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BG": {
+    "price": 122.86,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BKNG": {
+    "price": 199.6,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "BKR": {
+    "price": 64.63,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "BNY": {
+    "price": 162.04,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "BRKB": {
+    "price": 505.24,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CAT": {
+    "price": 792.28,
+    "universes": [
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "CB": {
+    "price": 339.42,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CBF": {
+    "price": 190.8,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "CCI": {
+    "price": 75.38,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CEG": {
+    "price": 290.04,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "CFG": {
+    "price": 69.78,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CHD": {
+    "price": 99.32,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CI": {
+    "price": 282.84,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CL": {
+    "price": 90.1,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "CRI": {
+    "price": 695.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "D": {
+    "price": 66.05,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DASH": {
+    "price": 226.24,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "DECK": {
+    "price": 83.76,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DELL": {
+    "price": 492.2,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DHI": {
+    "price": 142.26,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DHR": {
+    "price": 209.91,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DLR": {
+    "price": 183.76,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DOC": {
+    "price": 21.03,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DOM": {
+    "price": 240.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "DPZ": {
+    "price": 346.68,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DVA": {
+    "price": 179.39,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "DVN": {
+    "price": 49.03,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EFX": {
+    "price": 185.48,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EOG": {
+    "price": 148.96,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ESS": {
+    "price": 277.29,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "EXPD": {
+    "price": 186.16,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FAST": {
+    "price": 47.93,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "FDS": {
+    "price": 306.07,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FIS": {
+    "price": 41.87,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FIX": {
+    "price": 1560.13,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FOXA": {
+    "price": 67.52,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "FTNT": {
+    "price": 154.54,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "FTV": {
+    "price": 56.6,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "GNRC": {
+    "price": 180.76,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "GPW": {
+    "price": 96.65,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "GS": {
+    "price": 1004.42,
+    "universes": [
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "HAS": {
+    "price": 93.5,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HLT": {
+    "price": 311.51,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "HONA": {
+    "price": 152.55,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "IBM": {
+    "price": 231.7,
+    "universes": [
+      "SP500",
+      "DOWJONES"
+    ]
+  },
+  "IDXX": {
+    "price": 538.99,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "INCY": {
+    "price": 128.83,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "IP": {
+    "price": 36.3,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "JBL": {
+    "price": 299.39,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "JNJ": {
+    "price": 275.21,
+    "universes": [
+      "DOWJONES",
+      "SP500"
+    ]
+  },
+  "KEYS": {
+    "price": 321.58,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "KGH": {
+    "price": 344.15,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "KR": {
+    "price": 58.22,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "KTY": {
+    "price": 1214.0,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "LH": {
+    "price": 331.66,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "LOW": {
+    "price": 199.84,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "LPP": {
+    "price": 20900.0,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "MAA": {
+    "price": 128.61,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MCK": {
+    "price": 924.78,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MDV": {
+    "price": 85.92,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "MPC": {
+    "price": 387.0,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MRB": {
+    "price": 12.79,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "MS": {
+    "price": 211.82,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MSI": {
+    "price": 478.92,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "MUR": {
+    "price": 37.4,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "NEM": {
+    "price": 125.16,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "NTAP": {
+    "price": 180.77,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "NUE": {
+    "price": 263.97,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "NWS": {
+    "price": 34.41,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "NXPI": {
+    "price": 228.5,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "ORLY": {
+    "price": 86.97,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "PAYX": {
+    "price": 124.0,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "PCG": {
+    "price": 13.33,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PDD": {
+    "price": 82.25,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "PEG": {
+    "price": 73.32,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PKO": {
+    "price": 114.24,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "PNR": {
+    "price": 59.84,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PTC": {
+    "price": 149.13,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PWR": {
+    "price": 610.78,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "PZU": {
+    "price": 74.3,
+    "universes": [
+      "WIG20"
+    ]
+  },
+  "Q": {
+    "price": 117.69,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ROP": {
+    "price": 415.79,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "ROST": {
+    "price": 230.85,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "SHOP": {
+    "price": 141.87,
+    "universes": [
+      "NASDAQ100"
+    ]
+  },
+  "SJM": {
+    "price": 131.44,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SLB": {
+    "price": 58.13,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "SRE": {
+    "price": 83.79,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "STX": {
+    "price": 808.54,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "SWK": {
+    "price": 96.89,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TER": {
+    "price": 341.62,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "TKO": {
+    "price": 189.79,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TSCO": {
+    "price": 34.86,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TT": {
+    "price": 439.02,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "TYL": {
+    "price": 374.88,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "UBER": {
+    "price": 76.45,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "UNP": {
+    "price": 289.73,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "V": {
+    "price": 378.4,
+    "universes": [
+      "DOWJONES",
+      "SP500"
+    ]
+  },
+  "VLO": {
+    "price": 366.09,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "VMRK": {
+    "price": 64.91,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "VRC": {
+    "price": 130.0,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "VRT": {
+    "price": 256.7,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "VRTX": {
+    "price": 556.75,
+    "universes": [
+      "SP500",
+      "NASDAQ100"
+    ]
+  },
+  "WDC": {
+    "price": 448.9,
+    "universes": [
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "WELL": {
+    "price": 238.59,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "WMT": {
+    "price": 106.09,
+    "universes": [
+      "DOWJONES",
+      "NASDAQ100",
+      "SP500"
+    ]
+  },
+  "WRB": {
+    "price": 68.12,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "WTW": {
+    "price": 337.73,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "XTB": {
+    "price": 174.3,
+    "universes": [
+      "MWIG40"
+    ]
+  },
+  "ZBRA": {
+    "price": 351.11,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "ZTS": {
+    "price": 76.17,
+    "universes": [
+      "SP500"
+    ]
+  },
+  "APH": {
+    "price": 82.07,
     "universes": [
       "SP500"
     ]
@@ -2585,8 +2585,8 @@
   "AMAT": {
     "price": 438.46,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "AME": {
@@ -2647,8 +2647,8 @@
   "AVGO": {
     "price": 367.24,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "BBY": {
@@ -2764,8 +2764,8 @@
   "CRWD": {
     "price": 203.42,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "CSCO": {
@@ -2779,8 +2779,8 @@
   "CTAS": {
     "price": 198.09,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "CVS": {
@@ -2799,8 +2799,8 @@
   "DDOG": {
     "price": 209.23,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "DLTR": {
@@ -2896,8 +2896,8 @@
   "EXC": {
     "price": 43.97,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "FANG": {
@@ -3109,15 +3109,15 @@
   "LRCX": {
     "price": 288.32,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "MAR": {
     "price": 333.14,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "MAS": {
@@ -3160,8 +3160,8 @@
   "META": {
     "price": 592.85,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "MGM": {
@@ -3191,8 +3191,8 @@
   "MU": {
     "price": 956.08,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "NBIS": {
@@ -3210,8 +3210,8 @@
   "NFLX": {
     "price": 82.73,
     "universes": [
-      "SP500",
-      "NASDAQ100"
+      "NASDAQ100",
+      "SP500"
     ]
   },
   "NKE": {
@@ -3236,8 +3236,8 @@
   "NVDA": {
     "price": 224.41,
     "universes": [
-      "NASDAQ100",
       "SP500",
+      "NASDAQ100",
       "DOWJONES"
     ]
   },
@@ -3274,8 +3274,8 @@
   "PCAR": {
     "price": 122.13,
     "universes": [
-      "NASDAQ100",
-      "SP500"
+      "SP500",
+      "NASDAQ100"
     ]
   },
   "PCO": {
@@ -3485,8 +3485,8 @@
   "TXT": {
     "price": 41.0,
     "universes": [
-      "SP500",
-      "MWIG40"
+      "MWIG40",
+      "SP500"
     ]
   },
   "UAL": {
