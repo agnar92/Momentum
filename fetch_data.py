@@ -1,8 +1,10 @@
 import argparse
+import io
 import json
 import time
 import pandas as pd
 import duckdb
+import requests
 import yfinance as yf
 
 # ============================================================================
@@ -49,19 +51,15 @@ YFINANCE_TICKER_OVERRIDES = {
 # budowany dynamicznie przy wczytywaniu — patrz _load_json_constituents.
 GPW_TICKERS = set()
 
-# Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum i Sily Relatywnej —
-# porownanie zwrotu calego NASDAQ100/DOWJONES miedzy soba (patrz run_query.py::
-# compute_index_returns). ^NDX/^DJI to standardowe symbole yfinance dla tych
-# indeksow, MAJACE pelna historyczna dana tam (patrz update_index_prices). SP500
-# (^GSPC) rowniez ma pelna historie u yfinance, ale — tak jak WIG20/mWIG40 —
-# celowo NIE uczestniczy w wyscigu Global Equity Momentum (patrz
-# run_query.py::GEM_UNIVERSES): dodany z powrotem WYLACZNIE jako uniwersum
-# momentum + ekran Sily Relatywnej (run_query.py::compute_index_momentum), bez
-# zmiany istniejacego zachowania GEM. WIG20/mWIG40 maja wlasne symbole
-# (WIG20.WA/MWIG40.WA) w tym slowniku wylacznie dla dokumentacji/run_query.py's
-# metadanych "yf_symbol" — NIE sa nimi faktycznie pobierane (patrz
-# _compute_synthetic_equal_weight_index: yfinance nie ma dla nich zadnej
-# historycznej danej poziomu indeksu, w odroznieniu od SP500/NASDAQ100/DOWJONES).
+# Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum (run_query.py::
+# compute_index_returns, teraz porownujace WSZYSTKIE 5 uniwersow miedzy soba —
+# patrz run_query.py::GEM_UNIVERSES) i Sily Relatywnej. ^GSPC/^NDX/^DJI to
+# standardowe symbole yfinance dla SP500/NASDAQ100/DOWJONES, MAJACE pelna
+# historyczna dana tam (patrz update_index_prices). WIG20/mWIG40 maja wlasne
+# symbole (WIG20.WA/MWIG40.WA) w tym slowniku wylacznie dla dokumentacji/
+# run_query.py's metadanych "yf_symbol" — NIE sa nimi faktycznie pobierane
+# (yfinance nie ma dla nich zadnej historycznej danej poziomu indeksu, patrz
+# _fetch_stooq_index_history/_compute_synthetic_equal_weight_index nizej).
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC",
     "NASDAQ100": "^NDX",
@@ -457,9 +455,73 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
     })
 
 
+# WIG20/mWIG40: stooq.pl publikuje REALNY, historyczny poziom tych dwoch
+# indeksow jako darmowy plik CSV (/q/d/l/?s=<symbol>&i=d) — do tego samego
+# zrodla porownuje sie uzytkownik przy weryfikacji zwrotu GEM (patrz
+# CLAUDE.md). W odroznieniu od yfinance (ktore nie ma dla tych dwoch tickerow
+# ZADNEJ historii, patrz _compute_synthetic_equal_weight_index nizej), to jest
+# prawdziwy, kapitalizacyjnie wazony poziom indeksu — nie przyblizenie.
+# NIEOFICJALNY, nieudokumentowany endpoint (bez opisanego SLA/limitow) —
+# dlatego kazde uzycie jest owiniete w _fetch_stooq_index_history, ktore
+# NIGDY nie rzuca wyjatku: przy jakimkolwiek problemie (siec, HTTP, format
+# CSV) zwraca None, a wolajacy (update_index_prices) spada z powrotem na
+# syntetyczny equal-weight indeks — wiec nawet calkowita niedostepnosc
+# stooq.pl nie psuje pipeline'u, tylko cofa go do wczesniejszej, mniej
+# dokladnej metody. Nie moglo byc przetestowane na zywo z sandboxa, w ktorym
+# to pisano (polityka sieciowa tego srodowiska blokuje polaczenia do
+# stooq.pl) — pierwsze uruchomienie w GitHub Actions (pelny dostep do
+# internetu) jest wiec pierwsza faktyczna weryfikacja; fallback zabezpiecza
+# pipeline nawet jesli parsing/dostep zawiedzie w produkcji.
+STOOQ_INDEX_SYMBOLS = {"WIG20": "wig20", "MWIG40": "mwig40"}
+
+
+def _fetch_stooq_index_history(index_name, start_date, end_date):
+    """Realny, historyczny poziom indeksu WIG20/mWIG40 ze stooq.pl — patrz
+    komentarz przy STOOQ_INDEX_SYMBOLS. Zwraca DataFrame (Date, Index_Name,
+    Close, Adj_Close, Volume) przyciety do [start_date, end_date], albo None
+    przy JAKIMKOLWIEK problemie (siec, HTTP, parsing) — nigdy nie rzuca
+    wyjatku, zeby wolajacy mogl bezpiecznie spadac na syntetyczny fallback.
+    Kolumny CSV stooq czytane POZYCYJNIE (1. = Data, 5. = Zamkniecie/Close,
+    ostatnia = Wolumen), nie po nazwie — endpoint zwraca nazwy po polsku
+    (stooq.pl), a pozycje sa stabilniejsze niz jezyk naglowka."""
+    symbol = STOOQ_INDEX_SYMBOLS.get(index_name)
+    if not symbol:
+        return None
+    url = f"https://stooq.pl/q/d/l/?s={symbol}&i=d"
+    try:
+        resp = requests.get(
+            url, timeout=15,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; momentum-pipeline/1.0)"},
+        )
+        resp.raise_for_status()
+        df = pd.read_csv(io.StringIO(resp.text))
+        if df.empty or df.shape[1] < 5:
+            return None
+        dates = pd.to_datetime(df.iloc[:, 0], errors="coerce")
+        closes = pd.to_numeric(df.iloc[:, 4], errors="coerce")
+        volumes = pd.to_numeric(df.iloc[:, -1], errors="coerce").fillna(0)
+        valid = dates.notna() & closes.notna()
+        if not valid.any():
+            return None
+        out = pd.DataFrame({
+            "Date": dates[valid].values,
+            "Index_Name": index_name,
+            "Close": closes[valid].values,
+            "Adj_Close": closes[valid].values,
+            "Volume": volumes[valid].astype("int64").values,
+        })
+        start_ts, end_ts = pd.Timestamp(start_date), pd.Timestamp(end_date)
+        out = out[(out["Date"] >= start_ts) & (out["Date"] <= end_ts)].sort_values("Date").reset_index(drop=True)
+        return out if not out.empty else None
+    except Exception as e:
+        print(f"⚠️  Nie udało się pobrać realnego poziomu {index_name} ze stooq.pl ({e}) — fallback na syntetyczny.")
+        return None
+
+
 # SP500/NASDAQ100/DOWJONES MAJA pelna historyczna dana poziomu indeksu u yfinance
 # (^GSPC/^NDX/^DJI) — pobierane stamtad jak dotychczas. WIG20/MWIG40 NIE MAJA
-# (patrz _compute_synthetic_equal_weight_index) — budowane syntetycznie.
+# (patrz _compute_synthetic_equal_weight_index) tam, ale MAJA u stooq.pl (patrz
+# _fetch_stooq_index_history) — synthetic zostaje wylacznie jako fallback.
 YFINANCE_BACKED_INDEX_UNIVERSES = ("SP500", "NASDAQ100", "DOWJONES")
 SYNTHETIC_INDEX_UNIVERSES = ("WIG20", "MWIG40")
 
@@ -505,14 +567,18 @@ def update_index_prices(con, lookback_months):
           f"{'/'.join(YFINANCE_BACKED_INDEX_UNIVERSES)} ({start_date} → {end_date}).")
 
     for index_name in SYNTHETIC_INDEX_UNIVERSES:
-        synth = _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)  # noqa: F841
+        real = _fetch_stooq_index_history(index_name, start_date, end_date)
+        if real is not None:
+            data, source_desc = real, "realny poziom ze stooq.pl"  # noqa: F841
+        else:
+            data = _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)  # noqa: F841
+            source_desc = f"syntetyczny fallback — równoważony zwrot składników, baza={WIG_SYNTHETIC_INDEX_BASE}"
         con.execute(f"DELETE FROM index_prices WHERE Index_Name = '{index_name}' AND Date >= DATE '{start_date}'")
-        if synth.empty:
-            print(f"⚠️  Brak danych składników do zbudowania syntetycznego indeksu {index_name}.")
+        if data.empty:
+            print(f"⚠️  Brak danych do zbudowania poziomu indeksu {index_name} (ani stooq.pl, ani fallback).")
             continue
-        con.execute("INSERT INTO index_prices SELECT * FROM synth")
-        print(f"✅ Zbudowano syntetyczny poziom indeksu {index_name}: {len(synth)} dni "
-              f"(równoważony zwrot składników, baza={WIG_SYNTHETIC_INDEX_BASE}).")
+        con.execute("INSERT INTO index_prices SELECT * FROM data")
+        print(f"✅ Zapisano poziom indeksu {index_name}: {len(data)} dni ({source_desc}).")
 
 
 def _ensure_prices_ohlc_columns(con):
