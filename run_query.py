@@ -820,6 +820,73 @@ def export_equity_curve(con, docs_data_dir):
 # momentum_score (to faworyzowałoby małe, skrajnie zmienne nazwy bez względu
 # na ich realny wpływ na indeks).
 # ============================================================================
+
+def _gem_month_end_anchor_dates(con, ref_date, lookback_months):
+    """Kotwiczy okno GEM do ostatnich dni HANDLOWYCH zakończonych miesięcy, nie
+    do konkretnego dnia (np. "dzisiaj") — zwrot liczony jest jako ostatni dzień
+    handlowy ostatniego zakończonego miesiąca (np. 31.08) vs ostatni dzień
+    handlowy tego samego miesiąca `lookback_months` wcześniej (np. 31.08 rok
+    wcześniej), a NIE "dzisiaj vs dzisiaj-12mies" jak wcześniej. Na życzenie
+    użytkownika, po tym jak zauważył, że nasz WIG20/mWIG40 (patrz
+    SYNTHETIC_INDEX_UNIVERSES w fetch_data.py) w wyścigu GEM dawał inny wynik/
+    zwycięzcę niż publiczne serwisy (np. stooq.pl) dla tego samego okna —
+    kotwiczenie do końca miesiąca jest świadomym wyborem użytkownika, NIE
+    naprawia samej metody liczenia syntetycznego indeksu (equal-weight,
+    dzienne rebalansowanie — patrz CLAUDE.md), tylko zmienia OKNO, w którym
+    liczymy zwrot, żeby było stabilne i porównywalne między dniami tego
+    samego miesiąca.
+
+    Kalendarz dni handlowych brany jest z `index_prices` (ta sama, codziennie
+    odświeżana tabela, którą i tak czyta cała reszta GEM) — te same dwie daty
+    są potem używane zarówno do zwrotu poziomu indeksu (`compute_index_returns`)
+    jak i do liderów zwycięskiego indeksu (`compute_index_leaders`), żeby
+    zachować niezmiennik "to samo okno co zwrot indeksu".
+
+    Zwraca `(anchor_date, start_date)` — string YYYY-MM-DD albo `None`, gdy w
+    `index_prices` nie ma jeszcze wystarczającej historii (np. świeży bootstrap).
+
+    "Zakończony miesiąc" jest tu wykrywany wprost z danych, nie z kalendarza z
+    góry (żadna świąteczna/giełdowa lista dni wolnych) — miesiąc M liczy się
+    jako zakończony, gdy zajdzie CHOCIAŻ JEDEN z dwóch warunków:
+      1. jego ostatnia znana data jest LITERALNIE ostatnim dniem kalendarzowym
+         tego miesiąca (dodanie 1 dnia przechodzi do kolejnego miesiąca) — to
+         wystarcza samo w sobie, bez czekania na dane z następnego miesiąca
+         (np. gdy `ref_date` to akurat 31.08, sierpień jest już kompletny,
+         mimo że wrzesień jeszcze nie ma żadnego wiersza);
+      2. w danych (do `ref_date`) istnieje już jakiś PÓŹNIEJSZY miesiąc — to
+         dowód, że miesiąc M musiał się zakończyć, przydatny gdy koniec
+         miesiąca wypada w weekend/święto i ostatni dzień handlowy nie jest
+         literalnie ostatnim dniem kalendarzowym.
+    """
+    row = con.execute(f"""
+        WITH params AS (SELECT DATE '{ref_date}' AS ref_date),
+        month_ends AS (
+            SELECT DATE_TRUNC('month', Date) AS month, MAX(Date) AS month_end_date
+            FROM index_prices
+            WHERE Date <= (SELECT ref_date FROM params)
+            GROUP BY DATE_TRUNC('month', Date)
+        ),
+        completed AS (
+            SELECT me.month, me.month_end_date
+            FROM month_ends me
+            WHERE DATE_TRUNC('month', me.month_end_date + INTERVAL '1 DAY') != me.month
+               OR EXISTS (SELECT 1 FROM month_ends later WHERE later.month > me.month)
+        ),
+        anchor AS (
+            SELECT month, month_end_date FROM completed ORDER BY month_end_date DESC LIMIT 1
+        ),
+        target AS (
+            SELECT month - INTERVAL '{lookback_months} MONTHS' AS target_month FROM anchor
+        )
+        SELECT
+            (SELECT month_end_date FROM anchor),
+            (SELECT month_end_date FROM month_ends WHERE month = (SELECT target_month FROM target))
+    """).fetchone()
+    anchor_date, start_date = row
+    return (str(anchor_date) if anchor_date is not None else None,
+            str(start_date) if start_date is not None else None)
+
+
 def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
     has_table = con.execute("""
         SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
@@ -827,19 +894,18 @@ def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
     if not has_table:
         return []
 
+    anchor_date, start_date = _gem_month_end_anchor_dates(con, ref_date, lookback_months)
+    if anchor_date is None or start_date is None:
+        return []
+
     gem_universes_sql = ",".join(f"'{u}'" for u in GEM_UNIVERSES)
     df = con.execute(f"""
-        WITH params AS (SELECT DATE '{ref_date}' AS ref_date)
         SELECT
             Index_Name,
-            ARGMAX(Close, Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS price_now,
-            MAX(Date) FILTER (WHERE Date <= (SELECT ref_date FROM params)) AS date_now,
-            ARGMAX(Close, Date) FILTER (
-                WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '{lookback_months} MONTHS'
-            ) AS price_start,
-            MAX(Date) FILTER (
-                WHERE Date <= (SELECT ref_date FROM params) - INTERVAL '{lookback_months} MONTHS'
-            ) AS date_start
+            ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{anchor_date}') AS price_now,
+            MAX(Date) FILTER (WHERE Date <= DATE '{anchor_date}') AS date_now,
+            ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{start_date}') AS price_start,
+            MAX(Date) FILTER (WHERE Date <= DATE '{start_date}') AS date_start
         FROM index_prices
         WHERE Index_Name IN ({gem_universes_sql})
         GROUP BY Index_Name
@@ -865,18 +931,19 @@ def compute_index_leaders(con, universe, ref_date, lookback_months=GEM_LOOKBACK_
     """Top `top_n` spółek zwycięskiego indeksu wg wkładu w jego zwrot
     (waga_w_indeksie x zwrot_spółki w tym samym oknie co compute_index_returns) —
     to one w tym momencie "pchają" cenę indeksu na nowe szczyty."""
+    anchor_date, start_date = _gem_month_end_anchor_dates(con, ref_date, lookback_months)
+    if anchor_date is None or start_date is None:
+        return []
+
     df = con.execute(f"""
-        WITH params AS (SELECT DATE '{ref_date}' AS ref_date),
-        uni AS (
+        WITH uni AS (
             SELECT Ticker, Sector, fmc_etf FROM index_constituents
             WHERE Index_Name = '{universe}' AND fmc_etf IS NOT NULL
         ),
         px AS (
             SELECT p.Ticker,
-                   ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= (SELECT ref_date FROM params)) AS price_now,
-                   ARGMAX(p.Close, p.Date) FILTER (
-                       WHERE p.Date <= (SELECT ref_date FROM params) - INTERVAL '{lookback_months} MONTHS'
-                   ) AS price_start
+                   ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= DATE '{anchor_date}') AS price_now,
+                   ARGMAX(p.Close, p.Date) FILTER (WHERE p.Date <= DATE '{start_date}') AS price_start
             FROM prices p
             JOIN uni u ON p.Ticker = u.Ticker
             GROUP BY p.Ticker
@@ -915,8 +982,12 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
     tylko raz w miesiacu). GEM ma wlasne, codzienne zrodlo danych (fetch_data.py
     --indices-only + run_query.py --gem-only, patrz .github/workflows/daily_gem.yml),
     wiec jego swiezosc nie powinna byc uwiazana do miesiecznego rebalansu skladnikow —
-    compute_index_leaders i tak gracefully sięgnie po ostatnią znaną cenę skladnika
-    (ARGMAX ... FILTER WHERE Date <= ref_date), nawet jesli `prices` jest starsze."""
+    compute_index_leaders i tak gracefully siegnie po ostatnia znana cene skladnika
+    (ARGMAX ... FILTER WHERE Date <= anchor_date, patrz _gem_month_end_anchor_dates),
+    nawet jesli `prices` jest starsze. `ref_date` tu tylko wskazuje, KTORY miesiac ma
+    zostac pominiety przy szukaniu ostatniego zakonczonego miesiaca (patrz
+    _gem_month_end_anchor_dates) — nie jest juz bezposrednio uzywany jako punkt
+    "teraz" w liczeniu zwrotu."""
     if ref_date is None:
         has_table = con.execute("""
             SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
@@ -944,7 +1015,10 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
         "note": (f"Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie {lookback_months} mies. "
                  "dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 — klasyczna idea Global/Dual Equity Momentum: "
                  "spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym "
-                 f"zwrocie. Lista 'leaders' to top {top_n} spółek zwycięskiego indeksu wg wkładu w jego "
+                 f"zwrocie. Okno kotwiczone jest do ostatniego dnia handlowego zakończonego miesiąca (nie do "
+                 "dzisiejszej daty) — 'date_now'/'date_start' każdego indeksu to zawsze koniec miesiąca, żeby "
+                 "wynik był stabilny w ciągu miesiąca. "
+                 f"Lista 'leaders' to top {top_n} spółek zwycięskiego indeksu wg wkładu w jego "
                  "zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które "
                  "realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
