@@ -5,18 +5,18 @@
     {
       "universe": "MWIG40",
       "yf_symbol": "MWIG40.WA",
-      "price_now": 171.0,
+      "price_now": 172.37,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 127.34,
+      "price_start": 128.36,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 34.28
     },
     {
       "universe": "WIG20",
       "yf_symbol": "WIG20.WA",
-      "price_now": 172.17,
+      "price_now": 173.75,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 130.47,
+      "price_start": 131.66,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 31.96
     },
