@@ -40,29 +40,33 @@ files (English is fine for new, unrelated code).
 There are two Python scripts, run in this order, all operating on a local DuckDB file
 `momentum_data.duckdb`. Since a recent change, this file **is committed to git** (repo root, tracked —
 not under `docs/`, so it has no effect on the GitHub Pages deployment) and persists across scheduled
-runs; `main.yml`/`weekly_charts.yml`/`daily_gem.yml` all commit it back after each run (see CI section
-below). This is what keeps `portfolio_history` alive across separate monthly workflow runs, so the buffer
-rule actually has a "previous rebalance" to compare against in production.
+runs; the single CI workflow (`weekly_full_refresh.yml`, see CI section below) commits it back after
+each run. This is what keeps `portfolio_history` alive across separate weekly workflow runs, so the
+buffer rule actually has a "previous rebalance" to compare against in production.
 
-**Selection/weighting is monthly; price/chart freshness is now weekly** — these are two deliberately
-decoupled cadences, not one. `fetch_data.py` (full, not `--indices-only`) and `run_query.py --charts-only`
-both now also run weekly (`weekly_charts.yml`, see CI section below), on top of `main.yml`'s existing
-monthly full run — but `--charts-only` (`process_universe_charts_only()`) recomputes ONLY the current
-price + `weekly_chart`/`mansfield_chart` for each ticker in the LAST already-saved `portfolio_history`
-snapshot; it never touches selection, weights, or `portfolio_history` itself, which stay exactly as
-computed by the last monthly `process_universe()` run. This was a deliberate choice (confirmed with the
-user) after establishing that `fetch_data.py` alone never touches `docs/data/*.json` — only `run_query.py`
-does — so simply fetching prices more often would not, by itself, have made the SMA10/30/Darvas-box/
-Mansfield-oscillator/RSM-screener data on the dashboard any fresher; `--charts-only` is what actually
-closes that gap while leaving the monthly rebalance cadence untouched. `portfolio_history` gained a new
-persisted `cap_scaled_due_to_infeasibility BOOLEAN` column (added via an idempotent
+**Everything now runs on ONE cadence: weekly, in a single CI workflow.** An earlier design deliberately
+split things into three separate cadences/workflows — monthly selection/weights (`main.yml`), weekly
+price/chart-only refresh (`weekly_charts.yml`), and daily GEM/Relative-Strength-only refresh
+(`daily_gem.yml`) — each calling a different narrow flag (`--charts-only`, `--gem-only`,
+`--indices-only`) specifically to avoid re-running the expensive full pipeline more often than each
+piece of data actually needed to change. The user found three separate schedules to reason about (and a
+scheduled run that silently never fired — see below) more complex than it was worth, and asked instead
+for one single workflow that fetches and recomputes *everything* — constituents, per-ticker prices,
+index levels, selection/weights/`portfolio_history`, charts, GEM, and Relative Strength — once a week,
+Saturday morning. `weekly_full_refresh.yml` now just calls plain `fetch_data.py` (no flags — this already
+fetches constituents + prices + index levels, see `update_duckdb()`) followed by plain `run_query.py` (no
+flags — this already recomputes selection/weights/`portfolio_history`, all the JSON exports, GEM, and
+Relative Strength). The narrower `--indices-only` / `--charts-only` / `--gem-only` flags described
+throughout this document still exist in the code (kept for manual/local use — e.g. a cheap local check of
+just the GEM winner without a full yfinance fetch) but **CI no longer invokes any of them**; every mention
+below of "daily"/"monthly" cadence for GEM, Relative Strength, or the main selection describes the
+*previous* design's reasoning for splitting the work that way — useful context for why the code has these
+separate code paths at all — not the schedule CI actually runs today. `portfolio_history` still carries
+the `cap_scaled_due_to_infeasibility BOOLEAN` column (added via an idempotent
 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`, same idiom as `_ensure_prices_ohlc_columns` in `fetch_data.py`)
-specifically so `--charts-only` can re-export this display flag for the JSON payload without recomputing
-weights. The `docs/data/{universe}.json` `"ref_date"` field written by a `--charts-only` run is
-deliberately still the LAST MONTHLY REBALANCE date (not today) — it's what the dashboard's "Rebalans: ..."
-label reads, and that label is meant to keep showing the actual selection date, not the date the charts
-happened to refresh; only the per-constituent `"price"` and chart fields reflect the fresher data. No new
-code was needed to keep `prices` from growing unbounded under the new weekly cadence:
+that the old `--charts-only` path relied on to re-export the display flag without recomputing weights;
+now that the full `run_query.py` always recomputes weights, the column is just an ordinary persisted
+field again. No new code was needed to keep `prices` from growing unbounded under the weekly cadence:
 `update_prices_incremental()`'s retention trim (`DELETE FROM prices WHERE Date < cutoff`, see below) already
 runs unconditionally on every `fetch_data.py` invocation, so a weekly full fetch keeps the rolling window at
 exactly `--lookback-months` (22) regardless of how often it's called — this was verified, not assumed, before
@@ -165,9 +169,10 @@ being left alone.
      — `export_json`'s `all_constituents` param defaults to the same records as `constituents` for them,
      so the frontend can always read `all_constituents` unconditionally, with a `|| constituents` fallback
      kept only for an older, not-yet-migrated cached JSON. `process_universe_charts_only` (`--charts-only`,
-     see below) does the equivalent full-universe `get_universe_metrics` call too, so the weekly chart
-     refresh keeps `all_constituents` in step with the monthly `process_universe` run rather than shrinking
-     it back down to just the last saved decile selection between rebalances. This roughly 5x's the
+     no longer called by CI — see Pipeline architecture above / CI section below) does the equivalent
+     full-universe `get_universe_metrics` call too, for the same reason: keep `all_constituents` in step
+     rather than shrinking it back down to just the last saved decile selection between the (now weekly)
+     `process_universe` runs. This roughly 5x's the
      `weekly_chart`/`mansfield_chart` computation (and JSON payload size) for SP500 specifically (~500
      constituents vs. ~100 in the decile) — an accepted, deliberate cost of full searchability, not an
      oversight.
@@ -175,9 +180,15 @@ being left alone.
      recompute for a specific historical date.
    - Also computes **Global Equity Momentum** (`docs/data/global_equity_momentum.json`) — see below.
 
-Monthly (not semi-annual, as the official S&P 500 Momentum index does) rebalancing is an intentional
-choice here — it matches the cadence used in most academic momentum-return literature — not an attempt
-at a literal 1:1 replication of S&P's own rebalance calendar.
+A monthly (not semi-annual, as the official S&P 500 Momentum index does) rebalance cadence was the
+original intentional choice here — it matched the cadence used in most academic momentum-return
+literature, not an attempt at a literal 1:1 replication of S&P's own rebalance calendar. CI now actually
+reruns `process_universe()` (and therefore recomputes selection/weights and appends a new
+`portfolio_history` snapshot) **weekly** instead of monthly (see the cadence-consolidation note under
+Pipeline architecture above and the CI section below) — a further deliberate choice by the user, not an
+accident: the buffer rule (`select_with_buffer`, 20%) and the weight caps still work exactly the same way
+regardless of how often a new snapshot lands, they just now compare against last Saturday's selection
+instead of last month's.
 
 ### Global Equity Momentum (`compute_index_returns` / `compute_index_leaders`)
 
@@ -221,10 +232,12 @@ table) — but SP500/NASDAQ100/DOWJONES and WIG20/mWIG40 get their rows two enti
   see the GEM section below for how much that actually mattered), but every consumer
   (`compute_index_momentum`, `compute_relative_strength_chart`, `compute_mansfield_rs_chart`) only ever
   reads **% change relative to a window's start**, never the absolute level, so an arbitrary base is fine.
-  It also works under `--indices-only` (`daily_gem.yml`): `index_constituents`/`prices` aren't refreshed
-  there, but persist from the last full run, so the synthetic series just doesn't gain new days between
-  monthly runs instead of being empty. Returns an empty frame (no exception) when `index_constituents`/
-  `prices` don't exist yet (fresh bootstrap) or have no rows for that universe in the window.
+  It also works under `--indices-only` (a flag still supported by `fetch_data.py` for manual/local use,
+  though CI itself no longer calls it — see Pipeline architecture above): `index_constituents`/`prices`
+  aren't refreshed in that mode, but persist from the last full run, so the synthetic series just doesn't
+  gain new days between full runs instead of being empty. Returns an empty frame (no exception) when
+  `index_constituents`/`prices` don't exist yet (fresh bootstrap) or have no rows for that universe in the
+  window.
 
   **A real, historical, cap-weighted WIG20/mWIG40 level was tried twice and abandoned both times** — this
   matters because it's exactly why GEM (below) ended up needing a manually-entered field instead. First,
@@ -368,23 +381,26 @@ every universe's selection, exposed on every `all_constituents` record) — a de
 simpler ranking than `compute_index_leaders`'s index-contribution weighting, chosen because the user
 wants TOP N to mean "strongest own momentum," not "biggest driver of the index's return."
 
-Unlike the main constituent-selection universes (`UNIVERSES`), GEM is refreshed **daily**, not monthly (`daily_gem.yml`, see CI
-section) — so `export_global_equity_momentum()`'s `ref_date` is *not* threaded through from the
-constituent-price pipeline's `ref_date` (that only moves once a month). When called with `ref_date=None`
-(the default), it derives its own from `MAX(Date)` in `index_prices` instead, so a same-day
-`fetch_data.py --indices-only` refresh is actually reflected in the output — `compute_index_leaders()`
-still gracefully falls back to each constituent's last known price via `ARGMAX(... FILTER WHERE Date <=
-ref_date)` even though the per-constituent `prices` table itself is only as fresh as the last monthly run.
-`fetch_data.py --indices-only` and `run_query.py --gem-only` are the two flags that make this cheap daily
-refresh possible without touching the (expensive, rate-limited) per-constituent price fetch.
+`export_global_equity_momentum()`'s `ref_date` is *not* threaded through from the constituent-price
+pipeline's `ref_date` parameter — it's independently derived from `MAX(Date)` in `index_prices` when
+called with `ref_date=None` (the default). This design predates the current all-weekly cadence: it used to
+matter because GEM was refreshed **daily** via a separate `daily_gem.yml` workflow (`fetch_data.py
+--indices-only` + `run_query.py --gem-only`) while the main constituent pipeline only ran monthly, so GEM's
+own watermark needed to move independently and more often than the constituent pipeline's `ref_date` did.
+CI now runs everything together, weekly (see Pipeline architecture above / CI section below), so in
+practice both watermarks advance together on every run — but the code still computes them independently,
+and `compute_index_leaders()` still gracefully falls back to each constituent's last known price via
+`ARGMAX(... FILTER WHERE Date <= ref_date)`, which is worth keeping: nothing stops someone from running
+`fetch_data.py --indices-only` + `run_query.py --gem-only` locally between the weekly CI runs for a cheap,
+targeted GEM check, and this fallback is what makes that still work correctly.
 
 **GEM has no dashboard tab any more** (`index.html`/`app.js` — it used to have its own sidebar group,
 drawer tab, and table, all reading `docs/data/global_equity_momentum.json` via `state.gem`). It was
 removed once the rebalance calculator became its actual consumer: a "just to look at" panel on the
 dashboard was no longer the point, since the winner it computes now directly drives what the calculator
-buys. `global_equity_momentum.json` is still generated by the pipeline exactly as before (daily,
-`--gem-only`) — only `app.js` stopped fetching/rendering it; `rebalance.js` fetches it instead (see
-Frontend section below).
+buys. `global_equity_momentum.json` is still generated by the pipeline exactly as before (now weekly, as
+part of the single consolidated `run_query.py` run — see above) — only `app.js` stopped fetching/rendering
+it; `rebalance.js` fetches it instead (see Frontend section below).
 
 ### Relative strength (`compute_index_momentum` / `compute_relative_strength_leaders`)
 
@@ -405,10 +421,13 @@ RSM screener (see Frontend section below, `combinedRsmCandidates()` in `app.js`)
 directly from the `mansfield_chart` already embedded in every constituent record, rather than from this
 outperformers-only export; `docs/data/relative_strength.json` keeps being generated by the daily pipeline
 (nothing currently reads it, but it's cheap to keep and not worth a breaking pipeline change to drop).
-Like GEM, its `ref_date` defaults to `index_prices`'s own watermark (not the monthly constituent-pipeline
-`ref_date`), and it's recomputed by the same `run_query.py --gem-only` daily path as GEM (see
-`daily_gem.yml`) since it only needs `index_prices` (daily) + `prices`/`index_constituents` (gracefully
-stale-tolerant, same as `compute_index_leaders`).
+Like GEM, its `ref_date` defaults to `index_prices`'s own watermark (independent of the constituent
+pipeline's own `ref_date` parameter) and it's recomputed by the same `run_query.py --gem-only` code path as
+GEM. As with GEM above, this independent-watermark design dates from when a separate `daily_gem.yml`
+workflow refreshed GEM/Relative Strength daily while the main pipeline only ran monthly; CI now runs
+everything together weekly (see Pipeline architecture above / CI section below), but the code path — and
+its graceful tolerance of a `prices`/`index_constituents` staleness gap — is unchanged and still exercised
+whenever `run_query.py --gem-only` is run manually/locally between weekly CI runs.
 
 Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`) with a classic stage
 -analysis view (Stan Weinstein / Dr Eric Wish) the free TradingView widget can't reliably replicate
@@ -803,22 +822,27 @@ every run (see CI section below) — it isn't hand-maintained.
 pip install -r requirements.txt   # NOTE: this file is UTF-16-encoded; edit with a UTF-16-aware tool
                                    # or regenerate it, don't hand-append plain-ASCII lines
 
-python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh prices (bootstrap or incremental) + index composition
+python fetch_data.py [--lookback-months N] [--min-coverage 0.8]   # refresh prices (bootstrap or incremental)
+                                   # + index composition + index levels — this is what weekly_full_refresh.yml
+                                   # calls, no flags, see CI section below
 python run_query.py [--ref-date YYYY-MM-DD] [--min-trading-days 150] [--max-staleness-days 10] [--docs-dir docs]
-                                   # compute momentum + regenerate docs/data/*.json
+                                   # compute momentum + regenerate docs/data/*.json (selection/weights/
+                                   # portfolio_history, charts, GEM, Relative Strength — everything) — this is
+                                   # what weekly_full_refresh.yml calls, no flags, see CI section below
 
-python fetch_data.py --indices-only   # daily_gem.yml only: refresh index_prices (^GSPC/^NDX/^DJI from
-                                   # yfinance; WIG20/mWIG40 synthetic level rebuilt from last-known
-                                   # constituent prices, not fetched — see Global Equity Momentum section
-                                   # and gem_manual_returns.json for how WIG20/mWIG40's GEM return is
-                                   # actually sourced), skip constituents
-python run_query.py --gem-only        # daily_gem.yml only: regenerate global_equity_momentum.json only
+python fetch_data.py --indices-only   # manual/local use only, CI no longer calls this — refresh index_prices
+                                   # (^GSPC/^NDX/^DJI from yfinance; WIG20/mWIG40 synthetic level rebuilt from
+                                   # last-known constituent prices, not fetched — see Global Equity Momentum
+                                   # section and gem_manual_returns.json for how WIG20/mWIG40's GEM return is
+                                   # actually sourced), skip constituents — a cheap way to get a fresh GEM
+                                   # winner locally without a full yfinance fetch
+python run_query.py --gem-only        # manual/local use only, CI no longer calls this — regenerate
+                                   # global_equity_momentum.json + relative_strength.json only
 
-python fetch_data.py                  # weekly_charts.yml: SAME full fetch as main.yml (not --indices-only)
-python run_query.py --charts-only     # weekly_charts.yml: refresh ONLY current price + weekly_chart/
-                                   # mansfield_chart for each ticker in the LAST already-saved monthly
-                                   # portfolio_history selection (+ all_prices.json) — selection/weights/
-                                   # portfolio_history stay untouched, see Pipeline architecture above
+python run_query.py --charts-only     # manual/local use only, CI no longer calls this — refresh ONLY current
+                                   # price + weekly_chart/mansfield_chart for each ticker in the LAST
+                                   # already-saved portfolio_history selection (+ all_prices.json) —
+                                   # selection/weights/portfolio_history stay untouched
 
 pytest                            # unit tests (tests/test_fetch_data.py, tests/test_run_query.py)
 ruff check .                      # linter
@@ -831,43 +855,40 @@ genuinely fresh numbers.
 
 ## CI (`.github/workflows/`)
 
-- **`main.yml`** — runs monthly (`cron: '0 6 1 * *'`), on push to `main`, and manually. Installs
-  `requirements.txt`, runs `fetch_data.py` then `run_query.py` against the persisted DuckDB file (see
-  above), then **commits `momentum_data.duckdb` and `docs/data/*.json` back to the repo**
-  (`contents: write` permission; the commit message ends in `[skip ci]` to avoid re-triggering itself via
-  the `push: main` trigger) before deploying `docs/` to GitHub Pages.
-- **`daily_gem.yml`** — runs daily (`cron: '30 22 * * *'`) and manually. Unlike `main.yml`, does **not**
-  run the full constituent pipeline: `fetch_data.py --indices-only` refreshes just `index_prices` (4
-  symbols), then `run_query.py --gem-only` regenerates only `docs/data/global_equity_momentum.json` and
-  `docs/data/relative_strength.json`. Since `docs/data/` is git-tracked (see above), the checkout at the
-  start of the job already has the other `docs/data/*.json` files (`nasdaq100.json`, `dowjones.json`,
-  `wig20.json`, `mwig40.json`, `all_prices.json`, `equity_curve.json`) from the last full `main.yml` run —
-  no need to fetch them from anywhere else before uploading `docs/` as the Pages artifact, so the deploy
-  never replaces the whole live site with just the two regenerated files. (An earlier version of this
-  workflow curled those files from the *currently published* Pages site instead, back when `docs/data/`
-  was gitignored and a `--gem-only` checkout wouldn't have had them; that workaround is gone now that the
-  checkout itself carries them.) Also commits `momentum_data.duckdb` plus the two regenerated JSON files
-  back (same `[skip ci]` convention as `main.yml`, to avoid triggering a full monthly run on every daily
-  push).
-- **`weekly_charts.yml`** — runs weekly (`cron: '0 7 * * 6'`, Saturday mornings) and manually. Unlike
-  `daily_gem.yml`, this one DOES run the full `fetch_data.py` (not `--indices-only` — real per-constituent
-  price data, hundreds of yfinance tickers, same call as `main.yml`), then `run_query.py --charts-only`
-  (see Commands above / Pipeline architecture above) to refresh only prices + `weekly_chart`/
-  `mansfield_chart` for the already-saved monthly selection, plus `docs/data/all_prices.json`. It
-  deliberately does **not** call the full `process_universe()`/selection path, `export_equity_curve()` (its
-  output only changes when a NEW `portfolio_history` snapshot is written, which only happens monthly — so
-  recomputing it weekly would just reproduce the same numbers), or `export_global_equity_momentum()`/
-  `export_relative_strength()` (already handled independently by the daily `daily_gem.yml` path). Commits
-  `momentum_data.duckdb` plus `docs/data/*.json` back (same `[skip ci]` convention, to avoid triggering
-  `main.yml`'s full monthly rebalance on every weekly push) before deploying `docs/` to GitHub Pages, same
-  as the other two workflows. Exists because `fetch_data.py` alone never regenerates `docs/data/*.json` —
-  only `run_query.py` does — so a weekly `fetch_data.py` run by itself would not have made the dashboard's
-  SMA10/30, Darvas boxes, Mansfield oscillator, or RSM screener any fresher without this second step; the
-  `07:00 UTC` Saturday schedule (a weekend morning, matching the user's preference) was picked to fall
-  well clear of `daily_gem.yml`'s `22:30 UTC` daily run and `main.yml`'s `06:00 UTC` monthly run, avoiding
-  avoidable overlap on the shared `"pages"` concurrency group (a genuine overlap isn't fatal — the group
-  just serializes the deploys — but avoiding it means neither run waits on the other). GitHub Actions cron
-  is always evaluated in UTC with no daylight-saving shift, so this lands at 08:00 Polish time in winter
-  (CET) and 09:00 in summer (CEST).
+- **`weekly_full_refresh.yml`** — the single workflow that does everything, replacing three earlier
+  separate ones (`main.yml` — monthly selection/weights, `weekly_charts.yml` — weekly charts-only,
+  `daily_gem.yml` — daily GEM/Relative-Strength-only; see the version-history notes throughout Pipeline
+  architecture above for why that split existed and why it was collapsed). Runs weekly, Saturday mornings
+  (`cron: '0 7 * * 6'`, evaluated in UTC — 08:00 Polish time in winter/CET, 09:00 in summer/CEST — GitHub
+  Actions cron has no daylight-saving shift), and manually via `workflow_dispatch`. It deliberately has
+  **no `push: main` trigger** — unlike the old `main.yml`, a push to `main` does not by itself kick off a
+  full yfinance fetch; only the weekly schedule or a manual run does, since the pipeline is now the
+  expensive full one every single time it runs (constituents + prices + index levels +
+  selection/weights/`portfolio_history` + charts + GEM + Relative Strength), not a cheap `--indices-only`/
+  `--gem-only`/`--charts-only` variant. Installs `requirements.txt`, runs plain `fetch_data.py` (no flags
+  — fetches index composition, every constituent's prices, *and* the index-level `index_prices` table in
+  one call, see `update_duckdb()`) then plain `run_query.py` (no flags — recomputes selection/weights,
+  appends a new `portfolio_history` snapshot, and regenerates every `docs/data/*.json` file including
+  `global_equity_momentum.json` and `relative_strength.json`), then **commits `momentum_data.duckdb` and
+  `docs/data/*.json` back to the repo** (`contents: write` permission; the commit message ends in
+  `[skip ci]` so the commit doesn't loop back into a trigger — moot now that there's no `push: main`
+  trigger left to loop into, but kept as a harmless safety net) before deploying `docs/` to GitHub Pages.
+  If a push races this job's own push, it retries with a `git fetch` + `git reset --soft origin/main` +
+  re-commit, same pattern the three predecessor workflows used.
+
+  **Why a scheduled run can silently never fire, and how to tell**: `weekly_charts.yml` (the predecessor
+  to this workflow) was created mid-week and its very first Saturday cron slot appeared to not have fired
+  — checking `actions_list(method="list_workflow_runs", ...)` for that workflow showed only two
+  `workflow_dispatch` (manual) runs and zero `schedule`-triggered ones. This is a known GitHub Actions
+  behavior worth remembering when a schedule seems to be missing a run: (1) a workflow's first scheduled
+  trigger can simply not have arrived yet if today *is* the day the cron is supposed to fire but the
+  cron's time-of-day hasn't passed yet; (2) GitHub explicitly documents that scheduled workflow runs are
+  "best effort" and can be delayed, especially during periods of high GitHub Actions load, with no
+  guarantee of exact-time execution; (3) GitHub automatically **disables** the scheduled trigger on a
+  workflow after 60 days of no repository activity at all (not the case here, but worth ruling out on a
+  quiet repo). None of these mean the workflow file itself is broken — check `actions_list(method=
+  "list_workflow_runs", ..., workflow_runs_filter={"event": "schedule"})` (or the Actions tab's "This
+  workflow has a schedule trigger" / "Disable workflow" state) before assuming the cron expression itself
+  is wrong.
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
   no effect on the deployed site) on pushes/PRs.

@@ -1437,11 +1437,12 @@ class TestBuildFullUniverseRecords:
 
 
 # ---------------------------------------------------------------------------
-# process_universe_charts_only: tryb "--charts-only" (patrz weekly_charts.yml,
-# uruchamiany COTYGODNIOWO) — odswieza WYLACZNIE biezaca cene +
-# weekly_chart/mansfield_chart dla OSTATNIEJ juz zapisanej miesiecznej
-# selekcji w portfolio_history, bez ponownego liczenia selekcji/wag/
-# portfolio_history (to zostaje wylacznie miesieczne, main.yml/process_universe).
+# process_universe_charts_only: tryb "--charts-only" (flaga do manualnego/
+# lokalnego uzycia — CI od konsolidacji w jeden cotygodniowy workflow
+# (weekly_full_refresh.yml) juz jej nie wola, patrz CLAUDE.md/CI) — odswieza
+# WYLACZNIE biezaca cene + weekly_chart/mansfield_chart dla OSTATNIEJ juz
+# zapisanej selekcji w portfolio_history, bez ponownego liczenia
+# selekcji/wag/portfolio_history.
 # ---------------------------------------------------------------------------
 
 def make_charts_only_con():
@@ -1477,7 +1478,7 @@ def insert_price_rows(con, rows):
 
 class TestProcessUniverseChartsOnly:
     def test_migrates_pre_existing_portfolio_history_missing_cap_scaled_column(self, tmp_path):
-        # Regresja: pierwsze uruchomienie weekly_charts.yml w produkcji wywalilo sie
+        # Regresja: pierwsze uruchomienie dawnego workflow weekly_charts.yml w produkcji wywalilo sie
         # duckdb.BinderException'em, bo juz-skomitowany momentum_data.duckdb mial
         # portfolio_history BEZ kolumny cap_scaled_due_to_infeasibility (dodanej w
         # tej samej zmianie co process_universe_charts_only), a migracja (ALTER

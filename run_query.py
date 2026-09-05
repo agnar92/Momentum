@@ -346,11 +346,13 @@ def _ensure_portfolio_history_schema(con):
     ALTER TABLE ... ADD COLUMN IF NOT EXISTS). MUSI być wywoływane na początku
     KAŻDEJ ścieżki, która czyta/pisze portfolio_history — nie tylko
     process_universe (pełny miesięczny przebieg), ale też
-    process_universe_charts_only (--charts-only, patrz weekly_charts.yml),
+    process_universe_charts_only (--charts-only — flaga do manualnego/lokalnego
+    użycia, CI już jej nie woła, patrz CLAUDE.md/CI),
     która może zostać uruchomiona samodzielnie, bez uprzedniego pełnego
     przebiegu w tym samym procesie — inaczej SELECT na nowej kolumnie rzuca
     duckdb.BinderException na starej, jeszcze niezmigrowanej bazie (dokładnie
-    to wydarzyło się przy pierwszym uruchomieniu weekly_charts.yml)."""
+    to wydarzyło się przy pierwszym uruchomieniu dawnego workflow
+    weekly_charts.yml, od tego czasu skonsolidowanego w weekly_full_refresh.yml)."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS portfolio_history (
             ref_date DATE, universe VARCHAR, rank_in_universe INTEGER,
@@ -468,12 +470,13 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
 
 
 # ============================================================================
-# TRYB "TYLKO WYKRESY" (--charts-only, patrz weekly_charts.yml) — odswieza
+# TRYB "TYLKO WYKRESY" (--charts-only) — flaga do manualnego/lokalnego uzycia
+# (CI od konsolidacji w jeden cotygodniowy workflow, weekly_full_refresh.yml,
+# zawsze woła pelny run_query.py bez flag, patrz CLAUDE.md/CI). Odswieza
 # WYLACZNIE ceny biezace + weekly_chart/mansfield_chart dla ostatniej JUZ
-# ZAPISANEJ miesiecznej selekcji z portfolio_history, bez ponownego liczenia
-# selekcji/wag/portfolio_history (to zostaje wylacznie miesieczne, main.yml —
-# uzytkownik chcial swiezsze wykresy/RSM co tydzien, ale rebalans/selekcje
-# bez zmian co miesiac). Uzywa TEJ SAMEJ export_json co pelny przebieg, wiec
+# ZAPISANEJ selekcji z portfolio_history, bez ponownego liczenia
+# selekcji/wag/portfolio_history — pierwotnie istniala, zeby odswiezyc
+# wykresy/RSM czesciej niz sam (wtedy miesieczny) rebalans. Uzywa TEJ SAMEJ export_json co pelny przebieg, wiec
 # schemat docs/data/{universe}.json (i cap_scaled_due_to_infeasibility, patrz
 # migracja kolumny w portfolio_history wyzej) zostaje identyczny.
 # ============================================================================
@@ -482,10 +485,11 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
     print(f"\n{'=' * 70}\n▶ {universe} (tylko wykresy — bez zmiany selekcji/wag)\n{'=' * 70}")
 
     # Patrz docstring _ensure_portfolio_history_schema: ta ścieżka może być
-    # uruchomiona samodzielnie (weekly_charts.yml), bez uprzedniego pełnego
-    # przebiegu process_universe w tym samym procesie — bez tego wywołania
-    # SELECT niżej rzuca BinderException na starej, jeszcze niezmigrowanej
-    # bazie (dokładnie tak wywaliło się pierwsze uruchomienie weekly_charts.yml).
+    # uruchomiona samodzielnie (manualnie/lokalnie — CI już tego nie robi, patrz
+    # CLAUDE.md/CI), bez uprzedniego pełnego przebiegu process_universe w tym
+    # samym procesie — bez tego wywołania SELECT niżej rzuca BinderException na
+    # starej, jeszcze niezmigrowanej bazie (dokładnie tak wywaliło się pierwsze
+    # uruchomienie dawnego workflow weekly_charts.yml).
     _ensure_portfolio_history_schema(con)
 
     last_ref_date = con.execute(f"""
@@ -550,9 +554,9 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
 
     # Dla FULL_COVERAGE_UNIVERSES (SP500/NASDAQ100) dolicz TEZ pelne, biezace uniwersum
     # (get_universe_metrics @ ref_date — dzisiejsze ceny, nie last_ref_date rebalansu),
-    # zeby cotygodniowe odswiezenie wykresow (weekly_charts.yml) trzymalo w rowni
-    # "all_constituents" z pelnym miesiecznym przebiegiem process_universe, a nie tylko
-    # zawezalo je z powrotem do samej zapisanej selekcji az do nastepnego rebalansu.
+    # zeby to odswiezenie wykresow trzymalo w rowni "all_constituents" z pelnym
+    # przebiegiem process_universe, a nie tylko zawezalo je z powrotem do samej
+    # zapisanej selekcji az do nastepnego rebalansu.
     df_ranked_full = None
     if universe in FULL_COVERAGE_UNIVERSES:
         df_metrics_full = get_universe_metrics(con, universe, ref_date, min_trading_days, max_staleness_days)
@@ -1027,10 +1031,12 @@ def compute_index_leaders(con, universe, ref_date, lookback_months=GEM_LOOKBACK_
 def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
                                    lookback_months=GEM_LOOKBACK_MONTHS, top_n=GEM_TOP_N):
     """ref_date=None: uzyj najswiezszej daty w index_prices, NIE ref_date z pipeline'u
-    3 glownych uniwersow (ktory pochodzi z tabeli `prices` skladnikow i odswieza sie
-    tylko raz w miesiacu). GEM ma wlasne, codzienne zrodlo danych (fetch_data.py
-    --indices-only + run_query.py --gem-only, patrz .github/workflows/daily_gem.yml),
-    wiec jego swiezosc nie powinna byc uwiazana do miesiecznego rebalansu skladnikow —
+    3 glownych uniwersow (ktory pochodzi z tabeli `prices` skladnikow). GEM ma wlasny,
+    niezalezny watermark — pierwotnie po to, zeby dalo sie go odswiezac codziennie
+    (fetch_data.py --indices-only + run_query.py --gem-only) niezaleznie od wtedy
+    miesiecznego pelnego przebiegu; CI od konsolidacji w jeden cotygodniowy workflow
+    (weekly_full_refresh.yml, patrz CLAUDE.md/CI) woła oba razem, ale te dwie flagi
+    nadal dzialaja samodzielnie do manualnego/lokalnego uzycia —
     compute_index_leaders i tak gracefully siegnie po ostatnia znana cene skladnika
     (ARGMAX ... FILTER WHERE Date <= anchor_date, patrz _gem_month_end_anchor_dates),
     nawet jesli `prices` jest starsze. `ref_date` tu tylko wskazuje, KTORY miesiac ma
@@ -1898,16 +1904,17 @@ def main():
     parser.add_argument("--docs-dir", type=str, default="docs",
                          help="Katalog strony pod GitHub Pages (domyślnie 'docs' obok run_query.py).")
     parser.add_argument("--gem-only", action="store_true",
-                         help="Przelicz WYŁĄCZNIE dane zależne od indeksu na poziomie codziennym "
+                         help="Przelicz WYŁĄCZNIE dane zależne od poziomu indeksu "
                               "(docs/data/global_equity_momentum.json + docs/data/relative_strength.json), "
-                              "pomijając pełne przeliczenie 3 głównych uniwersów — do użycia w codziennym "
-                              "workflow (patrz daily_gem.yml) po `fetch_data.py --indices-only`.")
+                              "pomijając pełne przeliczenie 5 głównych uniwersów — flaga do manualnego/"
+                              "lokalnego użycia (tani, częsty check GEM-a), po `fetch_data.py --indices-only`. "
+                              "CI (weekly_full_refresh.yml) już tej flagi nie woła — patrz CLAUDE.md/CI.")
     parser.add_argument("--charts-only", action="store_true",
                          help="Odśwież WYŁĄCZNIE bieżące ceny + weekly_chart/mansfield_chart dla OSTATNIEJ "
-                              "już zapisanej miesięcznej selekcji z portfolio_history (+ all_prices.json) — "
-                              "bez ponownego liczenia selekcji/wag/portfolio_history, które zostają wyłącznie "
-                              "miesięczne (main.yml). Do użycia w cotygodniowym workflow (patrz "
-                              "weekly_charts.yml) po pełnym `fetch_data.py` (nie --indices-only).")
+                              "już zapisanej selekcji z portfolio_history (+ all_prices.json) — "
+                              "bez ponownego liczenia selekcji/wag/portfolio_history. Flaga do manualnego/"
+                              "lokalnego użycia, po pełnym `fetch_data.py` (nie --indices-only). CI "
+                              "(weekly_full_refresh.yml) już tej flagi nie woła — patrz CLAUDE.md/CI.")
     args = parser.parse_args()
 
     con = duckdb.connect("momentum_data.duckdb")
