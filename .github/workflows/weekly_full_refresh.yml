@@ -1,0 +1,114 @@
+name: Weekly Full Data Refresh
+
+# Jeden workflow zastępujący trzy poprzednie (main.yml — miesięczny rebalans,
+# daily_gem.yml — codzienny GEM/RS, weekly_charts.yml — cotygodniowe wykresy):
+# na życzenie użytkownika CAŁY pipeline (skład indeksów, ceny wszystkich
+# składników, selekcja/wagi/portfolio_history, wykresy 10:30/Mansfield,
+# Global Equity Momentum, Siła Relatywna) liczy się teraz RAZ W TYGODNIU,
+# w sobotę rano, zamiast osobnych cykli miesięcznego/tygodniowego/dziennego.
+#
+# fetch_data.py bez żadnej flagi pobiera WSZYSTKO: skład indeksów (CSV/JSON),
+# ceny wszystkich składników (setki tickerów z yfinance) ORAZ poziom indeksów
+# (index_prices — ^GSPC/^NDX/^DJI z yfinance, WIG20/MWIG40 syntetycznie) —
+# patrz update_duckdb() w fetch_data.py (indices_only=False woła
+# update_index_prices() na końcu tak samo jak load_index_constituents()).
+# run_query.py bez żadnej flagi liczy WSZYSTKO: pełną selekcję/wagi/
+# portfolio_history dla każdego uniwersum, docs/data/{universe}.json,
+# docs/data/all_prices.json, docs/data/equity_curve.json,
+# docs/data/global_equity_momentum.json i docs/data/relative_strength.json.
+# Żadna z osobnych flag (--indices-only / --charts-only / --gem-only) nie
+# jest tu już potrzebna.
+on:
+  schedule:
+    # W sobotę rano, 07:00 UTC — 08:00 czasu polskiego zimą (CET) / 09:00 latem
+    # (CEST); GitHub Actions cron jest zawsze liczony w UTC, bez przejścia na
+    # czas letni.
+    - cron: '0 7 * * 6'
+  workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
+
+# contents: write jest potrzebne, by workflow mógł commitować z powrotem
+# momentum_data.duckdb (ceny + index_prices + portfolio_history) oraz
+# docs/data/*.json (wygenerowane dane dla strony).
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Zapobiega nakładaniu się równoległych wdrożeń Pages.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  weekly-refresh:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch Market Data (constituents + prices + index levels)
+        run: |
+          python fetch_data.py
+
+      - name: Run Momentum Query and Generate json data for page
+        run: |
+          python run_query.py
+
+      - name: Persist generated data (momentum_data.duckdb + docs/data/*.json)
+        run: |
+          if [ -n "$(git status --porcelain momentum_data.duckdb docs/data/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add momentum_data.duckdb docs/data/
+            # [skip ci]: bez tego ten commit odpaliłby workflow ponownie (trigger "push: main"),
+            # tworząc pętlę.
+            git commit -m "chore: weekly full refresh (prices + index levels + selection/weights + docs/data) [skip ci]"
+            # Retry na wypadek wyścigu z innym workflowem pushującym do main w tym
+            # samym momencie: zwykły "git push" dostałby "fetch first" (rejected),
+            # co failowałoby cały job i pomijało Deploy to GitHub Pages niżej.
+            # Zamiast tego: ściągamy najnowszy main i przestawiamy nasz commit na
+            # jego szczyt (--soft, wygrywa nasza wersja pliku — to tylko
+            # wygenerowane dane, kolejny przebieg i tak je odświeży).
+            for attempt in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — pobieram najnowszy main i próbuję ponownie..."
+              sleep $((attempt * 3))
+              git fetch origin main
+              git reset --soft origin/main
+              git add momentum_data.duckdb docs/data/
+              git commit -m "chore: weekly full refresh (prices + index levels + selection/weights + docs/data) [skip ci]"
+            done
+          else
+            echo "Brak zmian w momentum_data.duckdb ani docs/data/ — pomijam commit."
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

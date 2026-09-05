@@ -418,10 +418,11 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
     compute_relative_strength_chart/compute_mansfield_rs_chart (licza wylacznie
     % zmiany wzgledem okna, nigdy bezwzglednego poziomu).
 
-    Dziala tez w trybie --indices-only (daily_gem.yml): index_constituents/prices
-    nie sa tam odswiezane (patrz update_duckdb), ale zostaja z ostatniego pelnego
-    (miesiecznego) przebiegu — syntetyczny poziom po prostu nie przybywa mu nowych
-    dni az do kolejnego pelnego przebiegu, zamiast byc calkowicie pusty jak
+    Dziala tez w trybie --indices-only (flaga do manualnego/lokalnego uzycia — CI
+    juz jej nie wola, patrz CLAUDE.md/CI): index_constituents/prices nie sa tam
+    odswiezane (patrz update_duckdb), ale zostaja z ostatniego pelnego przebiegu —
+    syntetyczny poziom po prostu nie przybywa mu nowych dni az do kolejnego
+    pelnego przebiegu, zamiast byc calkowicie pusty jak
     dotychczas. Zwraca pusty DataFrame (bez rzucania wyjatku), gdy
     index_constituents/prices jeszcze nie istnieja (swiezy bootstrap) albo nie
     maja danych dla tego uniwersum w podanym oknie."""
@@ -609,9 +610,10 @@ def update_duckdb(lookback_months=22, min_coverage=0.8, indices_only=False):
     if indices_only:
         # Tylko poziom indeksu (^GSPC/^NDX/^DJI z yfinance + WIG20/MWIG40 syntetycznie
         # z ostatnich znanych cen skladnikow) dla Global Equity Momentum i Sily Relatywnej —
-        # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc odswiezac to
-        # codziennie bez kosztu/limitow pelnego pobrania cen akcji (patrz workflow
-        # daily_gem.yml — GEM ma byc aktualny codziennie, nie tylko raz w miesiacu).
+        # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc tanio odswiezac to
+        # osobno bez kosztu/limitow pelnego pobrania cen akcji. Flaga do manualnego/
+        # lokalnego uzycia — CI (weekly_full_refresh.yml) zawsze wola pelny fetch_data.py
+        # bez flag, patrz CLAUDE.md/CI.
         update_index_prices(con, lookback_months)
         con.close()
         return
@@ -652,9 +654,10 @@ if __name__ == "__main__":
     parser.add_argument("--indices-only", action="store_true",
                          help="Odśwież WYŁĄCZNIE ceny poziomu indeksu (^GSPC/^NDX/^DJI z yfinance, WIG20/MWIG40 "
                               "syntetycznie) dla Global Equity "
-                              "Momentum — pomija skład indeksów i ceny wszystkich składników. Do użycia w "
-                              "codziennym workflow (patrz daily_gem.yml), osobno od pełnego miesięcznego "
-                              "odświeżenia.")
+                              "Momentum — pomija skład indeksów i ceny wszystkich składników. Flaga do "
+                              "manualnego/lokalnego użycia (tani, częsty check GEM-a), osobno od pełnego "
+                              "odświeżenia. CI (weekly_full_refresh.yml) już tej flagi nie woła — patrz "
+                              "CLAUDE.md/CI.")
     args = parser.parse_args()
     update_duckdb(lookback_months=args.lookback_months, min_coverage=args.min_coverage,
                   indices_only=args.indices_only)
