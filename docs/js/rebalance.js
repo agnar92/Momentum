@@ -24,7 +24,27 @@ const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
 const GEM_MANUAL_KEY = "momentum_rebalance_gem_manual";
-const DEFAULT_SETTINGS = { contribution: 0, topN: 10 };
+
+// STRATEGIA doboru indeksu(-ów) — dropdown w Ustawieniach rebalansu:
+// - STRATEGY_GEM (domyślna): jak opisano wyżej — jeden zwycięzca Global Equity
+//   Momentum, TOP N bierzemy wyłącznie z niego.
+// - STRATEGY_WEIGHTED ("Wagowo"): użytkownik sam ustala procentowy udział
+//   KAŻDEGO z 5 uniwersów (patrz DEFAULT_WEIGHTS/normalizeWeights) — to
+//   bezpośredni powrót do sposobu, w jaki dawna architektura regionów dzieliła
+//   kapitał między Nasdaq100/DowJones (50/50), tylko bez osobnych regionów/
+//   osobnych kapitałów/osobnych paneli (patrz CLAUDE.md "Wagowo (procentowy
+//   podział między indeksami)"). Kapitał dzieli się wg wag (znormalizowanych
+//   do 100%, patrz normalizeWeights), a z KAŻDEGO ważonego uniwersum brane
+//   jest jego WŁASNE TOP N spółek wg jego własnego rankingu momentum — patrz
+//   computeWeightedTargets. GEM nadal się liczy i widget zostaje widoczny,
+//   ale w tym trybie jest już tylko informacyjny (nie steruje selekcją).
+const STRATEGY_GEM = "GEM";
+const STRATEGY_WEIGHTED = "WEIGHTED";
+// Domyślne wagi w trybie Wagowo odtwarzają dokładnie dawny podział USA
+// (Nasdaq100/DowJones 50/50) — patrz CLAUDE.md, sekcja "Global Equity
+// Momentum" / wersja historyczna z regionami USA/GPW.
+const DEFAULT_WEIGHTS = { SP500: 0, NASDAQ100: 50, DOWJONES: 50, WIG20: 0, MWIG40: 0 };
+const DEFAULT_SETTINGS = { contribution: 0, topN: 10, strategy: STRATEGY_GEM, weights: { ...DEFAULT_WEIGHTS } };
 // Te dwa uniwersa nie mają realnego, kapitalizacyjnego zwrotu poziomu indeksu
 // z zewnętrznego źródła (yfinance nie ma historii dla WIG20.WA/MWIG40.WA,
 // a stooq.pl zablokował automatyczne pobieranie od 2026 — patrz CLAUDE.md) —
@@ -46,7 +66,14 @@ let gemPristineIndices = [];
 function loadSettings() {
     let stored = {};
     try { stored = JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { stored = {}; }
-    return { ...DEFAULT_SETTINGS, ...stored };
+    // weights scalone PO KLUCZU (nie całym obiektem) — żeby stary zapis z
+    // przeglądarki sprzed dodania nowego uniwersum do UNIVERSES/DEFAULT_WEIGHTS
+    // (albo w ogóle sprzed tej funkcji) nie zgubił reszty domyślnych wag.
+    return {
+        ...DEFAULT_SETTINGS,
+        ...stored,
+        weights: { ...DEFAULT_WEIGHTS, ...(stored.weights || {}) },
+    };
 }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
 
@@ -168,6 +195,23 @@ function fmtMoneyPln(v) {
 // jeszcze danych GEM, domyślnie USD.
 function moneyFmtFor() { return PLN_UNIVERSES.has(gemData.winner) ? fmtMoneyPln : fmtMoney; }
 
+// Formatter faktycznie używany w sugestiach/statach/Monte Carlo/krzywej —
+// w trybie GEM to dokładnie moneyFmtFor() (wg zwycięzcy). W trybie Wagowo
+// nie ma jednego "zwycięzcy", więc: jeśli WSZYSTKIE ważone uniwersa są w PLN
+// (WIG20/mWIG40) -> fmtMoneyPln, jeśli WSZYSTKIE są poza PLN -> fmtMoney,
+// a przy realnym miksie obu walut naraz (np. Nasdaq100 + WIG20 ważone razem)
+// spadamy na fmtMoney (USD) jako wspólny mianownik. To ta sama, już wcześniej
+// przyjęta w aplikacji uproszczona konwencja "miksuj surowe liczby bez
+// przewalutowania" co holdingsValue()/donut portfela (patrz CLAUDE.md) — nie
+// nowy kompromis wymyślony tylko dla tego trybu.
+function currentMoneyFmt() {
+    if (settings.strategy !== STRATEGY_WEIGHTED) return moneyFmtFor();
+    const activeUniverses = Object.keys(normalizeWeights(settings.weights));
+    if (activeUniverses.length === 0) return fmtMoney;
+    if (activeUniverses.every(u => PLN_UNIVERSES.has(u))) return fmtMoneyPln;
+    return fmtMoney;
+}
+
 // Formatter dla KONKRETNEGO tickera niezależnie od zwycięzcy GEM — używany w
 // tabeli holdingów, bo tam pozycje mogą być z różnych uniwersów/walut naraz
 // (patrz currencyOf).
@@ -261,9 +305,13 @@ function initExcludeForm() {
 // ============================================================
 // GLOBAL EQUITY MOMENTUM — mały, tylko-do-odczytu widget: który indeks
 // (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40) akurat wygrywa i jaki jest jego
-// zwrot, plus ranking pozostałych 4. To jest silnik wyboru dla TOP N poniżej
-// (patrz selectedConstituents) — kiedyś była to osobna zakładka na
-// dashboardzie (app.js), teraz przeniesiona tutaj.
+// zwrot, plus ranking pozostałych 4. W trybie GEM (domyślnym) to silnik
+// wyboru dla TOP N poniżej (patrz selectedConstituents) — kiedyś była to
+// osobna zakładka na dashboardzie (app.js), teraz przeniesiona tutaj. W
+// trybie Wagowo (STRATEGY_WEIGHTED, patrz Ustawienia rebalansu) ten widget
+// zostaje widoczny (GEM nadal się liczy — nic nie przestaje działać w
+// pipeline), ale jest już tylko informacyjny: selekcję steruje wtedy
+// computeWeightedTargets na bazie ręcznie ustawionych wag, nie ten ranking.
 // ============================================================
 function renderGemWidget() {
     const el = document.getElementById("gemWidget");
@@ -313,12 +361,14 @@ function renderGemWidget() {
             `;
         }).join("");
 
-    el.innerHTML = `
-        <div class="sidebar-group-meta">
-            Zwycięzca: ${UNIVERSE_LABELS[gemData.winner]}
+    const engineNote = settings.strategy === STRATEGY_WEIGHTED
+        ? `Tryb Wagowo jest aktywny — ten widget jest teraz tylko informacyjny. TOP N bierzesz z indeksów ważonych ręcznie w Ustawieniach rebalansu poniżej, nie z tego zwycięzcy.`
+        : `Zwycięzca: ${UNIVERSE_LABELS[gemData.winner]}
             ${winnerReturn ? (winnerReturn.return_pct >= 0 ? "+" : "") + winnerReturn.return_pct.toFixed(2) + "%" : ""}
-            (${gemData.lookback_months || 12}M) — z niego bierzemy TOP N spółek poniżej.
-        </div>
+            (${gemData.lookback_months || 12}M) — z niego bierzemy TOP N spółek poniżej.`;
+
+    el.innerHTML = `
+        <div class="sidebar-group-meta">${engineNote}</div>
         <div class="gem-index-returns">${rows}</div>
         <div class="gem-manual-fields">
             <div class="sidebar-group-meta">
@@ -609,10 +659,9 @@ function renderCapitalHint() {
 // TOP N ma wynikać bezpośrednio z rankingu momentum, nie z przynależności do
 // bieżącej selekcji pipeline'u. Ręcznie wykluczone znikają z listy
 // całkowicie, więc TOP N liczy się z tego, co zostaje.
-function selectedConstituents(topN) {
-    const winner = gemData.winner;
-    if (!winner || topN <= 0) return [];
-    const data = universeData[winner] || {};
+function selectedConstituentsFor(universe, topN) {
+    if (!universe || topN <= 0) return [];
+    const data = universeData[universe] || {};
     const rows = data.all_constituents || data.constituents || [];
     return rows
         .filter(c => !excluded.includes(c.ticker))
@@ -620,6 +669,7 @@ function selectedConstituents(topN) {
         .sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity))
         .slice(0, topN);
 }
+function selectedConstituents(topN) { return selectedConstituentsFor(gemData.winner, topN); }
 
 // Zwraca: { targets: {ticker: {...}} }. Wagi ważone `momentum_score` (zawsze
 // > 0 z konstrukcji — patrz add_zscore_and_momentum_score w run_query.py),
@@ -631,14 +681,15 @@ function selectedConstituents(topN) {
 // `weight_pct` dla spółek poza bieżącą selekcją pipeline'u. Ważenie po
 // momentum_score jest więc jedną, spójną metodą działającą identycznie dla
 // każdego z 5 uniwersów, niezależnie od tego, jak pipeline waży go u siebie.
-function computeTargets(topN, totalCapital) {
-    const rows = selectedConstituents(topN);
+function computeTargetsForUniverse(universe, topN, totalCapital) {
+    const rows = selectedConstituentsFor(universe, topN);
     const raw = {};
     rows.forEach(c => {
         raw[c.ticker] = {
             ticker: c.ticker, price: c.price, target_value: 0,
             raw_weight: c.momentum_score || 0,
             momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
+            universe,
         };
     });
 
@@ -649,34 +700,134 @@ function computeTargets(topN, totalCapital) {
 
     return { targets: raw };
 }
+function computeTargets(topN, totalCapital) { return computeTargetsForUniverse(gemData.winner, topN, totalCapital); }
+
+// Wagi (%) wpisane w Ustawieniach -> ułamki sumujące się do 1, tylko dla
+// uniwersów z wagą > 0 (reszta pomijana). Suma wag nie musi wynosić 100 —
+// jest normalizowana tutaj, więc np. 30/30 (suma 60) daje efektywnie 50/50.
+// Zwraca {} gdy żadna waga nie jest dodatnia (np. świeże ustawienia = same 0).
+function normalizeWeights(weights) {
+    const entries = UNIVERSES
+        .map(u => [u, Math.max(0, Number(weights?.[u]) || 0)])
+        .filter(([, w]) => w > 0);
+    const total = entries.reduce((s, [, w]) => s + w, 0);
+    if (total <= 0) return {};
+    const out = {};
+    entries.forEach(([u, w]) => { out[u] = w / total; });
+    return out;
+}
+
+// Strategia "Wagowo": zamiast jednego zwycięzcy GEM, dzieli totalCapital na
+// wycinki wg znormalizowanych wag (normalizeWeights) i w KAŻDYM ważonym
+// uniwersum niezależnie wybiera jego własne TOP N spółek po jego własnym
+// rankingu momentum (dokładnie ta sama logika co computeTargetsForUniverse,
+// wywołana raz na uniwersum z jego wycinkiem kapitału). Jeśli ten sam ticker
+// wypadnie z dwóch ważonych uniwersów naraz (np. spółka należąca i do SP500,
+// i do NASDAQ100 — realny przypadek dla dużych spółek), jego docelowe wartości
+// się sumują, a `universes` zbiera nazwy wszystkich uniwersów, z których
+// pochodzi (do wyświetlenia w kolumnie "Indeks / uwaga").
+function computeWeightedTargets(topN, weights, totalCapital) {
+    const fractions = normalizeWeights(weights);
+    const merged = {};
+    Object.entries(fractions).forEach(([universe, fraction]) => {
+        const { targets } = computeTargetsForUniverse(universe, topN, totalCapital * fraction);
+        Object.values(targets).forEach(t => {
+            const existing = merged[t.ticker];
+            if (existing) {
+                existing.target_value += t.target_value;
+                existing.raw_weight += t.raw_weight;
+                if (!existing.universes.includes(universe)) existing.universes.push(universe);
+            } else {
+                merged[t.ticker] = { ...t, universes: [universe] };
+            }
+        });
+    });
+    return { targets: merged };
+}
+
+// Blenduje krzywe equity_curve.json kilku uniwersów wg tych samych
+// znormalizowanych wag co computeWeightedTargets — MOŻLIWE bez żadnej
+// konwersji walut, bo każda krzywa jest już znormalizowana do bazy 100
+// (patrz run_query.py::compute_equity_curve), więc uśrednianie wg wagi
+// procentowej to czysta matematyka indeksów, nie sumowanie kwot w różnych
+// walutach. Blenduje tylko po datach WSPÓLNYCH dla wszystkich ważonych
+// krzywych (te same tygodnie w każdym z nich, skoro wszystkie liczy ten sam
+// cotygodniowy pipeline) — zwraca null gdy brak ważonych uniwersów z danymi
+// albo za mało wspólnych dat, tak samo jak brak/za krótka krzywa w trybie GEM.
+function blendEquityCurves(weights) {
+    const fractions = normalizeWeights(weights);
+    const entries = Object.entries(fractions).filter(([u]) => {
+        const c = equityCurveData[u];
+        return c && Array.isArray(c.dates) && c.dates.length >= 2;
+    });
+    if (entries.length === 0) return null;
+
+    const totalFraction = entries.reduce((s, [, f]) => s + f, 0);
+    const dateSets = entries.map(([u]) => new Set(equityCurveData[u].dates));
+    const commonDates = equityCurveData[entries[0][0]].dates.filter(d => dateSets.every(s => s.has(d)));
+    if (commonDates.length < 2) return null;
+
+    const blendSeries = (field) => commonDates.map(date => (
+        entries.reduce((sum, [u, f]) => {
+            const idx = equityCurveData[u].dates.indexOf(date);
+            return sum + (f / totalFraction) * equityCurveData[u][field][idx];
+        }, 0)
+    ));
+
+    return { dates: commonDates, momentum_index: blendSeries("momentum_index"), benchmark_index: blendSeries("benchmark_index") };
+}
 
 function updateContributionUnit() {
     const unitEl = document.getElementById("contributionUnit");
-    if (unitEl) unitEl.textContent = PLN_UNIVERSES.has(gemData.winner) ? "zł" : "$";
     const activeEl = document.getElementById("topnActiveUniverse");
-    if (activeEl) activeEl.textContent = gemData.winner ? `(aktualnie: ${UNIVERSE_LABELS[gemData.winner]})` : "";
+    if (settings.strategy === STRATEGY_WEIGHTED) {
+        const activeUniverses = Object.keys(normalizeWeights(settings.weights));
+        if (unitEl) {
+            const allPln = activeUniverses.length > 0 && activeUniverses.every(u => PLN_UNIVERSES.has(u));
+            const allUsd = activeUniverses.length > 0 && activeUniverses.every(u => !PLN_UNIVERSES.has(u));
+            unitEl.textContent = allPln ? "zł" : allUsd ? "$" : "$ / zł";
+        }
+        if (activeEl) {
+            activeEl.textContent = activeUniverses.length
+                ? `(ważone: ${activeUniverses.map(u => UNIVERSE_LABELS[u]).join(", ")})`
+                : "(ustaw wagi indeksów poniżej)";
+        }
+    } else {
+        if (unitEl) unitEl.textContent = PLN_UNIVERSES.has(gemData.winner) ? "zł" : "$";
+        if (activeEl) activeEl.textContent = gemData.winner ? `(aktualnie: ${UNIVERSE_LABELS[gemData.winner]})` : "";
+    }
 }
 
 function renderSuggestions() {
     updateContributionUnit();
-    const moneyFmt = moneyFmtFor();
+    const moneyFmt = currentMoneyFmt();
+    const isWeighted = settings.strategy === STRATEGY_WEIGHTED;
     const winner = gemData.winner;
     const totalCapital = targetCapital();
     const excludedVal = excludedValue();
     const investableCapital = Math.max(0, totalCapital - excludedVal);
     const topN = settings.topN || 0;
-    const { targets } = computeTargets(topN, investableCapital);
+    const { targets } = isWeighted
+        ? computeWeightedTargets(topN, settings.weights, investableCapital)
+        : computeTargets(topN, investableCapital);
     const threshold = Math.max(investableCapital * TRADE_THRESHOLD_PCT, 5);
 
     const shares = holdingShares();
+    // Zbiór uniwersów aktualnie "w grze" (dla noty "poza aktywnym indeksem"
+    // poniżej) — w Wagowo to wszystkie ważone uniwersa naraz, w GEM tylko
+    // pojedynczy zwycięzca.
+    const activeUniverses = isWeighted ? new Set(Object.keys(normalizeWeights(settings.weights))) : new Set(winner ? [winner] : []);
 
     const rows = [];
     Object.values(targets).forEach(t => {
         const heldShares = shares[t.ticker] || 0;
         const currentValue = t.price ? t.price * heldShares : 0;
+        const note = isWeighted
+            ? t.universes.map(u => UNIVERSE_LABELS[u]).join(" + ")
+            : (winner ? UNIVERSE_LABELS[winner] : "");
         rows.push({
             ticker: t.ticker,
-            note: winner ? UNIVERSE_LABELS[winner] : "",
+            note,
             target_value: t.target_value,
             weight_pct: investableCapital ? (t.target_value / investableCapital * 100) : 0,
             current_value: currentValue,
@@ -687,9 +838,9 @@ function renderSuggestions() {
     });
 
     // Pozycje, które trzymasz, ale nie mieszczą się w aktualnej sugestii —
-    // wykluczone ręcznie, poza TOP N w zwycięskim indeksie, albo z uniwersum,
-    // które akurat NIE jest tegomiesięcznym zwycięzcą GEM (a więc nie brane
-    // pod uwagę w ogóle, niezależnie od TOP N).
+    // wykluczone ręcznie, poza TOP N w jednym z aktywnych indeksów, albo z
+    // uniwersum, które w ogóle nie jest brane pod uwagę (nie jest zwycięzcą
+    // GEM / nie ma dodatniej wagi w trybie Wagowo).
     Object.keys(shares).forEach(ticker => {
         if (targets[ticker]) return;
         const price = priceMap[ticker]?.price;
@@ -703,9 +854,16 @@ function renderSuggestions() {
             return;
         }
         const tickerUniverses = priceMap[ticker]?.sources || [];
-        const note = (winner && tickerUniverses.includes(winner))
-            ? `poza TOP ${topN}`
-            : `poza aktywnym indeksem GEM (obecnie: ${winner ? UNIVERSE_LABELS[winner] : "—"})`;
+        const inActiveUniverse = tickerUniverses.some(u => activeUniverses.has(u));
+        let note;
+        if (inActiveUniverse) {
+            note = `poza TOP ${topN}`;
+        } else if (isWeighted) {
+            const activeLabels = [...activeUniverses].map(u => UNIVERSE_LABELS[u]).join(", ");
+            note = `poza ważonymi indeksami (aktywne: ${activeLabels || "—"})`;
+        } else {
+            note = `poza aktywnym indeksem GEM (obecnie: ${winner ? UNIVERSE_LABELS[winner] : "—"})`;
+        }
         rows.push({
             ticker, note, target_value: 0, weight_pct: 0,
             current_value: currentValue, diff: currentValue !== null ? -currentValue : null, dropped: true,
@@ -752,9 +910,17 @@ function renderSuggestions() {
     document.getElementById("statTargetValue").textContent = moneyFmt(totalCapital);
     document.getElementById("statHoldingsCount").textContent = Object.keys(targets).length;
 
-    const refDate = winner ? universeData[winner]?.ref_date : null;
-    document.getElementById("refDateNote").textContent = refDate
-        ? `(wg rebalansu z ${refDate} — kolejny automatycznie 1. dnia miesiąca)` : "";
+    let refDateNote = "";
+    if (isWeighted) {
+        const parts = [...activeUniverses]
+            .map(u => (universeData[u]?.ref_date ? `${UNIVERSE_LABELS[u]}: ${universeData[u].ref_date}` : null))
+            .filter(Boolean);
+        refDateNote = parts.length ? `(wg rebalansów z ${parts.join(", ")})` : "";
+    } else {
+        const refDate = winner ? universeData[winner]?.ref_date : null;
+        refDateNote = refDate ? `(wg rebalansu z ${refDate} — kolejny automatycznie 1. dnia miesiąca)` : "";
+    }
+    document.getElementById("refDateNote").textContent = refDateNote;
 
     renderCapitalHint();
     renderMonteCarlo();
@@ -775,7 +941,7 @@ function renderPortfolioAnalysisChart() {
     if (portfolioAnalysisChart) { portfolioAnalysisChart.destroy(); portfolioAnalysisChart = null; }
     if (!canvas) return;
 
-    const moneyFmt = moneyFmtFor();
+    const moneyFmt = currentMoneyFmt();
     const shares = holdingShares();
     const rows = Object.entries(shares)
         .map(([ticker, qty]) => ({ ticker, value: (priceMap[ticker]?.price || 0) * qty }))
@@ -805,22 +971,25 @@ function renderPortfolioAnalysisChart() {
 }
 
 // ============================================================
-// WYNIK HISTORYCZNY PORTFOLIA — equity curve DOKŁADNIE zwycięskiego w GEM
-// indeksu (docs/data/equity_curve.json, patrz run_query.py::compute_equity_curve,
-// zbudowane z realnych zapisów portfolio_history). Bez regionów/blendowania
-// wielu uniwersów naraz (to była logika dwuregionowej architektury) — z
-// JEDNYM aktywnym uniwersum na raz krzywa to po prostu jego własna historia.
-// To NIE jest historia Twoich konkretnych pozycji (tych nie śledzimy wstecz)
-// — to przybliżenie: "gdybyś trzymał/a kapitał w spółkach momentum tego
-// indeksu przez ten okres".
+// WYNIK HISTORYCZNY PORTFOLIA — equity curve aktywnej strategii
+// (docs/data/equity_curve.json, patrz run_query.py::compute_equity_curve,
+// zbudowane z realnych zapisów portfolio_history). W trybie GEM to po prostu
+// własna historia jedynego zwycięzcy. W trybie Wagowo (patrz
+// blendEquityCurves) to zblendowana, ważona wg tych samych % co sugestie,
+// krzywa kilku uniwersów naraz — możliwe bez konwersji walut, bo obie krzywe
+// są już znormalizowane do bazy 100. To NIE jest historia Twoich konkretnych
+// pozycji (tych nie śledzimy wstecz) — to przybliżenie: "gdybyś trzymał/a
+// kapitał w spółkach momentum tego indeksu (lub tej mieszanki) przez ten
+// okres".
 // ============================================================
 let equityChart = null;
 
 function renderEquityCurve() {
     const caption = document.getElementById("equityCurveCaption");
     const noteEl = document.getElementById("equityCurveNote");
+    const isWeighted = settings.strategy === STRATEGY_WEIGHTED;
     const winner = gemData.winner;
-    const curve = winner ? equityCurveData[winner] : null;
+    const curve = isWeighted ? blendEquityCurves(settings.weights) : (winner ? equityCurveData[winner] : null);
 
     if (equityChart) { equityChart.destroy(); equityChart = null; }
 
@@ -856,10 +1025,19 @@ function renderEquityCurve() {
         },
     });
 
-    caption.textContent = `Wynik historyczny (zrealizowany) selekcji momentum indeksu ${UNIVERSE_LABELS[winner]} `
-        + "(aktualny zwycięzca GEM) vs. 'kup i trzymaj' ten sam indeks. To NIE jest historia konkretnie Twoich pozycji "
-        + "(tych nie śledzimy wstecz), tylko przybliżenie na bazie zapisanych rebalansów. Dane informacyjne, NIE prognoza "
-        + "ani porada inwestycyjna — wyniki z przeszłości nie gwarantują przyszłych zwrotów.";
+    if (isWeighted) {
+        const activeLabels = Object.keys(normalizeWeights(settings.weights)).map(u => UNIVERSE_LABELS[u]).join(", ");
+        caption.textContent = `Wynik historyczny (zrealizowany) ważonej mieszanki indeksów (${activeLabels}) wg ustawionych wag `
+            + "vs. 'kup i trzymaj' te same indeksy w tych samych proporcjach. Krzywe każdego indeksu są już znormalizowane do "
+            + "bazy 100, więc blendowanie wg wagi procentowej nie wymaga przewalutowania. To NIE jest historia konkretnie "
+            + "Twoich pozycji (tych nie śledzimy wstecz), tylko przybliżenie na bazie zapisanych rebalansów. Dane informacyjne, "
+            + "NIE prognoza ani porada inwestycyjna — wyniki z przeszłości nie gwarantują przyszłych zwrotów.";
+    } else {
+        caption.textContent = `Wynik historyczny (zrealizowany) selekcji momentum indeksu ${UNIVERSE_LABELS[winner]} `
+            + "(aktualny zwycięzca GEM) vs. 'kup i trzymaj' ten sam indeks. To NIE jest historia konkretnie Twoich pozycji "
+            + "(tych nie śledzimy wstecz), tylko przybliżenie na bazie zapisanych rebalansów. Dane informacyjne, NIE prognoza "
+            + "ani porada inwestycyjna — wyniki z przeszłości nie gwarantują przyszłych zwrotów.";
+    }
 }
 
 // ============================================================
@@ -920,12 +1098,16 @@ function simulateMonteCarlo(startValue, mu, sigma, horizonMonths, nPaths) {
 }
 
 function renderMonteCarlo() {
-    const moneyFmt = moneyFmtFor();
+    const moneyFmt = currentMoneyFmt();
     // Symulacja obejmuje tylko część aktywnie zarządzaną przez momentum —
     // wykluczone pozycje mają inną charakterystykę ryzyka/zwrotu, więc
-    // nie da się ich uczciwie opisać tym samym mu/sigma.
+    // nie da się ich uczciwie opisać tym samym mu/sigma. mu/sigma same są
+    // procentowe (nie kwotowe), więc działają identycznie w Wagowo — miks
+    // walut w investableCapital (patrz currentMoneyFmt) nie wpływa na wynik.
     const investableCapital = Math.max(0, targetCapital() - excludedValue());
-    const { targets } = computeTargets(settings.topN || 0, investableCapital);
+    const { targets } = settings.strategy === STRATEGY_WEIGHTED
+        ? computeWeightedTargets(settings.topN || 0, settings.weights, investableCapital)
+        : computeTargets(settings.topN || 0, investableCapital);
     const horizon = parseInt(document.getElementById("mcHorizon").value, 10) || 12;
     const caption = document.getElementById("mcCaption");
 
@@ -973,9 +1155,52 @@ function renderMonteCarlo() {
         + `rozrzut przy założeniu, że przeszła zmienność i momentum się utrzymają, co nie jest gwarantowane.`;
 }
 
+// Pokazuje/ukrywa wiersz z wagami indeksów zależnie od wybranej strategii —
+// wołane raz przy starcie i po każdej zmianie dropdownu strategii.
+function updateStrategyUi() {
+    const weightsRow = document.getElementById("weightsRow");
+    if (weightsRow) weightsRow.style.display = settings.strategy === STRATEGY_WEIGHTED ? "" : "none";
+}
+
+// Buduje 5 pól procentowych (jedno na uniwersum, patrz UNIVERSES) w trybie
+// Wagowo — reużywa istniejącego stylu .bucket-input/.bucket-inputs (ta sama
+// klasa co pole TOP N niżej). Suma nie musi wynosić dokładnie 100 — jest
+// normalizowana w normalizeWeights, ale pokazujemy sumę jako podpowiedź
+// (updateWeightsSumHint), żeby użytkownik wiedział, jak realnie rozkłada się
+// jego wpisany podział.
+function renderWeightInputs() {
+    const wrap = document.getElementById("weightInputs");
+    if (!wrap) return;
+    wrap.innerHTML = UNIVERSES.map(u => `
+        <div class="bucket-input">
+            <input type="number" min="0" max="100" step="1" class="weight-input" data-universe="${u}" value="${settings.weights?.[u] ?? 0}">
+            <span>% ${UNIVERSE_LABELS[u]}</span>
+        </div>
+    `).join("");
+    wrap.querySelectorAll(".weight-input").forEach(input => {
+        input.addEventListener("input", () => {
+            settings.weights[input.dataset.universe] = Math.max(0, parseFloat(input.value) || 0);
+            saveSettings(settings);
+            updateWeightsSumHint();
+            refreshOutputs();
+        });
+    });
+    updateWeightsSumHint();
+}
+
+function updateWeightsSumHint() {
+    const hint = document.getElementById("weightsSumHint");
+    if (!hint) return;
+    const sum = UNIVERSES.reduce((s, u) => s + Math.max(0, Number(settings.weights?.[u]) || 0), 0);
+    hint.textContent = sum === 100 ? "(suma: 100%)" : `(suma: ${sum}% — zostanie znormalizowana do 100%)`;
+}
+
 function initSettingsForm() {
     document.getElementById("contribution").value = settings.contribution || "";
     document.getElementById("topn").value = settings.topN;
+    document.getElementById("strategySelect").value = settings.strategy || STRATEGY_GEM;
+    renderWeightInputs();
+    updateStrategyUi();
 
     const onChange = () => {
         settings.contribution = parseFloat(document.getElementById("contribution").value) || 0;
@@ -985,6 +1210,14 @@ function initSettingsForm() {
     };
     document.getElementById("contribution").addEventListener("input", onChange);
     document.getElementById("topn").addEventListener("input", onChange);
+
+    document.getElementById("strategySelect").addEventListener("change", (e) => {
+        settings.strategy = e.target.value === STRATEGY_WEIGHTED ? STRATEGY_WEIGHTED : STRATEGY_GEM;
+        saveSettings(settings);
+        updateStrategyUi();
+        renderGemWidget();
+        refreshOutputs();
+    });
 }
 
 // Odświeża sugestię + Monte Carlo + analizę portfela + wykres historyczny
@@ -1027,14 +1260,16 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES, GEM_MANUAL_OVERRIDE_UNIVERSES,
-        fmtMoney, fmtMoneyPln, moneyFmtFor, moneyFmtForCurrency, fmtQty, sharesSuggestion,
-        currencyOf, selectedConstituents, computeTargets, parseXtbOpenPositions,
+        STRATEGY_GEM, STRATEGY_WEIGHTED, DEFAULT_WEIGHTS,
+        fmtMoney, fmtMoneyPln, moneyFmtFor, moneyFmtForCurrency, currentMoneyFmt, fmtQty, sharesSuggestion,
+        currencyOf, selectedConstituents, selectedConstituentsFor, computeTargets, computeTargetsForUniverse,
+        normalizeWeights, computeWeightedTargets, blendEquityCurves, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
         loadManualGemReturns, saveManualGemReturns, applyManualGemOverrides,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded/
-        // gemData/gemPristineIndices) bez importu przez window — to jedyny sposób bez
-        // przepisywania modułu na klasę.
+        // gemData/gemPristineIndices/equityCurveData) bez importu przez window — to
+        // jedyny sposób bez przepisywania modułu na klasę.
         _setState(s) {
             if (s.universeData !== undefined) universeData = s.universeData;
             if (s.settings !== undefined) settings = s.settings;
@@ -1043,6 +1278,7 @@ if (typeof module !== "undefined" && module.exports) {
             if (s.priceMap !== undefined) priceMap = s.priceMap;
             if (s.gemData !== undefined) gemData = s.gemData;
             if (s.gemPristineIndices !== undefined) gemPristineIndices = s.gemPristineIndices;
+            if (s.equityCurveData !== undefined) equityCurveData = s.equityCurveData;
         },
     };
 }

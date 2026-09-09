@@ -25,15 +25,21 @@ global.localStorage = {
 const rebalance = require(path.join("..", "..", "docs", "js", "rebalance.js"));
 
 const {
+    STRATEGY_GEM,
+    STRATEGY_WEIGHTED,
     fmtMoney,
     fmtMoneyPln,
     moneyFmtFor,
     moneyFmtForCurrency,
+    currentMoneyFmt,
     fmtQty,
     sharesSuggestion,
     currencyOf,
     selectedConstituents,
     computeTargets,
+    normalizeWeights,
+    computeWeightedTargets,
+    blendEquityCurves,
     parseXtbOpenPositions,
     weightedMuSigma,
     simulateMonteCarlo,
@@ -534,4 +540,127 @@ test("loadManualGemReturns returns an empty object when nothing is stored, or af
 
     saveManualGemReturns({});
     assert.deepEqual(loadManualGemReturns(), {});
+});
+
+// ---------- Strategia "Wagowo" (STRATEGY_WEIGHTED) ----------
+
+test("normalizeWeights normalizes positive weights to fractions summing to 1, dropping zero/negative entries", () => {
+    assert.deepEqual(normalizeWeights({ NASDAQ100: 50, DOWJONES: 50 }), { NASDAQ100: 0.5, DOWJONES: 0.5 });
+    assert.deepEqual(normalizeWeights({ NASDAQ100: 30, DOWJONES: 30 }), { NASDAQ100: 0.5, DOWJONES: 0.5 });
+    assert.deepEqual(normalizeWeights({ NASDAQ100: 100, DOWJONES: 0, WIG20: -5 }), { NASDAQ100: 1 });
+});
+
+test("normalizeWeights returns {} when no weight is positive (fresh/all-zero settings)", () => {
+    assert.deepEqual(normalizeWeights({}), {});
+    assert.deepEqual(normalizeWeights({ SP500: 0, NASDAQ100: 0 }), {});
+});
+
+test("computeWeightedTargets splits capital across weighted universes and ranks each one's own TOP N independently", () => {
+    _setState({
+        universeData: {
+            NASDAQ100: {
+                all_constituents: [
+                    { ticker: "AAA", rank: 1, momentum_score: 2, price: 10, momentum_pct: 20, volatility_pct: 15 },
+                    { ticker: "BBB", rank: 2, momentum_score: 2, price: 10, momentum_pct: 20, volatility_pct: 15 },
+                ],
+            },
+            DOWJONES: {
+                all_constituents: [
+                    { ticker: "CCC", rank: 1, momentum_score: 1, price: 20, momentum_pct: 10, volatility_pct: 10 },
+                ],
+            },
+        },
+        excluded: [],
+    });
+
+    const { targets } = computeWeightedTargets(1, { NASDAQ100: 50, DOWJONES: 50 }, 1000);
+    // NASDAQ100 dostaje 500 (TOP 1 = AAA po rank), DOWJONES dostaje 500 (TOP 1 = CCC).
+    assert.deepEqual(Object.keys(targets).sort(), ["AAA", "CCC"]);
+    assert.ok(Math.abs(targets.AAA.target_value - 500) < 1e-6);
+    assert.ok(Math.abs(targets.CCC.target_value - 500) < 1e-6);
+    assert.deepEqual(targets.AAA.universes, ["NASDAQ100"]);
+    assert.deepEqual(targets.CCC.universes, ["DOWJONES"]);
+});
+
+test("computeWeightedTargets sums target_value and merges universes for a ticker shared by two weighted universes", () => {
+    _setState({
+        universeData: {
+            SP500: {
+                all_constituents: [{ ticker: "AAPL", rank: 1, momentum_score: 1, price: 200, momentum_pct: 10, volatility_pct: 20 }],
+            },
+            NASDAQ100: {
+                all_constituents: [{ ticker: "AAPL", rank: 1, momentum_score: 1, price: 200, momentum_pct: 10, volatility_pct: 20 }],
+            },
+        },
+        excluded: [],
+    });
+
+    const { targets } = computeWeightedTargets(1, { SP500: 50, NASDAQ100: 50 }, 1000);
+    assert.deepEqual(Object.keys(targets), ["AAPL"]);
+    assert.ok(Math.abs(targets.AAPL.target_value - 1000) < 1e-6);
+    assert.deepEqual(targets.AAPL.universes.sort(), ["NASDAQ100", "SP500"]);
+});
+
+test("computeWeightedTargets returns no targets when every weight is zero", () => {
+    _setState({ universeData: {}, excluded: [] });
+    assert.deepEqual(computeWeightedTargets(5, {}, 1000).targets, {});
+});
+
+test("currentMoneyFmt falls back to moneyFmtFor (GEM winner) when strategy is not WEIGHTED", () => {
+    _setState({ settings: { strategy: STRATEGY_GEM, weights: {} }, gemData: { winner: "WIG20" } });
+    assert.equal(currentMoneyFmt(), fmtMoneyPln);
+    _setState({ settings: { strategy: STRATEGY_GEM, weights: {} }, gemData: { winner: "NASDAQ100" } });
+    assert.equal(currentMoneyFmt(), fmtMoney);
+});
+
+test("currentMoneyFmt in WEIGHTED mode: PLN only when every weighted universe is PLN, USD otherwise (including a mix)", () => {
+    _setState({ settings: { strategy: STRATEGY_WEIGHTED, weights: { WIG20: 50, MWIG40: 50 } } });
+    assert.equal(currentMoneyFmt(), fmtMoneyPln);
+
+    _setState({ settings: { strategy: STRATEGY_WEIGHTED, weights: { NASDAQ100: 50, DOWJONES: 50 } } });
+    assert.equal(currentMoneyFmt(), fmtMoney);
+
+    _setState({ settings: { strategy: STRATEGY_WEIGHTED, weights: { NASDAQ100: 50, WIG20: 50 } } });
+    assert.equal(currentMoneyFmt(), fmtMoney);
+
+    _setState({ settings: { strategy: STRATEGY_WEIGHTED, weights: {} } });
+    assert.equal(currentMoneyFmt(), fmtMoney);
+});
+
+test("blendEquityCurves returns a weighted average over dates common to all weighted universes' curves", () => {
+    _setState({
+        equityCurveData: {
+            NASDAQ100: { dates: ["2026-01-01", "2026-01-08"], momentum_index: [100, 110], benchmark_index: [100, 105] },
+            DOWJONES: { dates: ["2026-01-01", "2026-01-08"], momentum_index: [100, 90], benchmark_index: [100, 95] },
+        },
+    });
+
+    const curve = blendEquityCurves({ NASDAQ100: 50, DOWJONES: 50 });
+    assert.deepEqual(curve.dates, ["2026-01-01", "2026-01-08"]);
+    assert.deepEqual(curve.momentum_index, [100, 100]);
+    assert.deepEqual(curve.benchmark_index, [100, 100]);
+});
+
+test("blendEquityCurves only uses dates present in every weighted curve, and returns null when fewer than 2 remain", () => {
+    _setState({
+        equityCurveData: {
+            NASDAQ100: { dates: ["2026-01-01", "2026-01-08", "2026-01-15"], momentum_index: [100, 110, 120], benchmark_index: [100, 105, 110] },
+            DOWJONES: { dates: ["2026-01-01", "2026-01-15"], momentum_index: [100, 130], benchmark_index: [100, 120] },
+        },
+    });
+
+    const curve = blendEquityCurves({ NASDAQ100: 50, DOWJONES: 50 });
+    assert.deepEqual(curve.dates, ["2026-01-01", "2026-01-15"]);
+    assert.deepEqual(curve.momentum_index, [100, 125]);
+
+    _setState({ equityCurveData: { NASDAQ100: { dates: ["2026-01-01"], momentum_index: [100], benchmark_index: [100] } } });
+    assert.equal(blendEquityCurves({ NASDAQ100: 100 }), null);
+
+    _setState({ equityCurveData: {} });
+});
+
+test("blendEquityCurves returns null when no weighted universe has usable equity-curve data", () => {
+    _setState({ equityCurveData: {} });
+    assert.equal(blendEquityCurves({ NASDAQ100: 50, DOWJONES: 50 }), null);
+    assert.equal(blendEquityCurves({}), null);
 });
