@@ -753,9 +753,36 @@ every run (see CI section below) — it isn't hand-maintained.
   earlier version split the whole page into two independent halves (`REGIONS`/`REGION_LIST`, `USA`:
   NASDAQ100+DOWJONES/USD vs. `GPW`: WIG20+MWIG40/PLN, each with its own contribution/TOP-N/suggestion
   table/Monte Carlo/equity curve/donut, DOM ids suffixed `-USA`/`-GPW`) specifically to avoid ever summing
-  a PLN amount and a USD amount together. That's gone, replaced by one single flow driven by Global Equity
-  Momentum (see the dedicated GEM section above): the user sets one capital contribution and one TOP N
-  count; the calculator itself decides which ONE of the 5 universes to draw from. Key pieces:
+  a PLN amount and a USD amount together. That's gone, replaced by one single flow with a **strategy
+  dropdown** (`#strategySelect` in the Ustawienia rebalansu panel) choosing HOW the calculator picks which
+  universe(s) to draw TOP N from:
+  - **`STRATEGY_GEM`** (default) — driven by Global Equity Momentum (see the dedicated GEM section above):
+    the user sets one capital contribution and one TOP N count; the calculator itself decides which ONE of
+    the 5 universes to draw from (this month's GEM winner).
+  - **`STRATEGY_WEIGHTED`** ("Wagowo") — added back on user request for a percentage-based split "like it
+    used to be for Nasdaq/DJIA", but WITHOUT reintroducing the old two-region architecture (no separate
+    contribution/TOP-N/panels per universe). The user assigns a % weight to each of the 5 universes
+    (`settings.weights`, `DEFAULT_WEIGHTS` = `{NASDAQ100: 50, DOWJONES: 50}`, the rest 0 — deliberately
+    reproducing the old region default) via 5 number inputs (`renderWeightInputs()`, reusing the
+    `.bucket-input` styling already used for the TOP N field). Weights don't need to sum to exactly 100 —
+    `normalizeWeights()` normalizes whatever's entered (only positive entries count) to fractions summing
+    to 1, so e.g. 30/30 behaves as 50/50; `updateWeightsSumHint()` shows the raw sum as a hint. Capital is
+    split into a slice per weighted universe (`totalCapital * its normalized fraction`), and EACH weighted
+    universe independently picks its OWN TOP N by its OWN momentum ranking (`computeWeightedTargets()`,
+    which calls the same per-universe `computeTargetsForUniverse()` the GEM path uses, once per weighted
+    universe, then merges the results by ticker — summing `target_value` and collecting all contributing
+    universe names into a `universes` array for the rare case the same ticker is picked from two weighted
+    universes at once, e.g. a large-cap that's in both SP500 and NASDAQ100). The GEM widget stays visible
+    and keeps computing normally in this mode (nothing about the pipeline/GEM computation changes) but
+    becomes purely informational — `renderGemWidget()` swaps its top line for a note that Wagowo is active
+    and this widget isn't driving selection. Mixing currencies (e.g. weighting NASDAQ100 together with
+    WIG20) is an accepted, explicitly non-goal-seeking simplification, not a new problem solved: it reuses
+    the same "sum raw numbers across currencies without FX conversion" convention the app already applies
+    elsewhere (`holdingsValue()`, the portfolio donut) — see `currentMoneyFmt()` below. The equity curve
+    (`blendEquityCurves()`, see further down) sidesteps the currency question entirely, since it blends
+    base-100 index curves, not money amounts.
+
+  Key pieces (shared by both strategies unless noted):
   - **`gemData`** (`loadUniverseData()` fetches `docs/data/global_equity_momentum.json`, now covering all
     5 universes — see GEM section above) is the calculator's selection engine. `renderGemWidget()` renders
     a small panel (`#gemWidget` in `rebalance.html`) showing the current winner + its 12M return and the
@@ -765,19 +792,22 @@ every run (see CI section below) — it isn't hand-maintained.
     per-browser manual-override input for WIG20/mWIG40's return (`applyManualGemOverrides()`,
     `localStorage`-only, independent of the pipeline's own `gem_manual_returns.json`) — see the dedicated
     write-up in the GEM section above for why and how.
-  - **`selectedConstituents(topN)`** (replacing the old, per-region, per-universe
-    `selectedConstituents(region, u)`) reads `universeData[gemData.winner].all_constituents` (the FULL
-    qualifying universe of whichever index is this month's GEM winner, not just its current top-decile
-    selection — the winner can change month to month, and TOP N is meant to track the winner's own
+  - **`selectedConstituentsFor(universe, topN)`** (the universe-parameterized core; `selectedConstituents(topN)`
+    is a thin wrapper calling it with `gemData.winner`, kept for the GEM path/tests) reads
+    `universeData[universe].all_constituents` (the FULL qualifying universe, not just its current
+    top-decile selection — the winner/weights can change month to month, and TOP N is meant to track
     momentum ranking directly), filters out manually-excluded tickers, sorts by `rank` (the same
     momentum-score ranking `get_universe_metrics` computes for every universe), and slices to `topN`.
-    **`computeTargets(topN, totalCapital)`** then weights that TOP N selection by each constituent's own
-    `momentum_score` (not the pipeline's `weight_pct` — deliberately: `weight_pct` is meaningless as a
-    momentum signal for `EQUAL_WEIGHT_UNIVERSES`, since it's just `1/n` there, and isn't exported at all
-    for tickers outside the pipeline's own current selection). This is a conscious simplification vs. the
-    pipeline's own cap-weighting (`compute_weights`'s 9%/3x cap-weight logic) — one simple, consistent
-    weighting rule that behaves the same for every universe regardless of how the pipeline itself weights
-    it internally, in the same "don't need all that complexity" spirit as dropping the regions.
+    **`computeTargetsForUniverse(universe, topN, totalCapital)`** then weights that TOP N selection by each
+    constituent's own `momentum_score` (not the pipeline's `weight_pct` — deliberately: `weight_pct` is
+    meaningless as a momentum signal for `EQUAL_WEIGHT_UNIVERSES`, since it's just `1/n` there, and isn't
+    exported at all for tickers outside the pipeline's own current selection); `computeTargets(topN,
+    totalCapital)` wraps it for the GEM path (`universe = gemData.winner`), `computeWeightedTargets(topN,
+    weights, totalCapital)` calls it once per weighted universe for the Wagowo path (see above). This is a
+    conscious simplification vs. the pipeline's own cap-weighting (`compute_weights`'s 9%/3x cap-weight
+    logic) — one simple, consistent weighting rule that behaves the same for every universe regardless of
+    how the pipeline itself weights it internally, in the same "don't need all that complexity" spirit as
+    dropping the regions.
   - **Holdings and exclusions are one flat, universe-agnostic list**, exactly as before — one `holdings`
     array (ticker + shares) and one `excluded` array of tickers. `currencyOf(ticker)` (via
     `priceMap[ticker].sources`, defaulting to USD for an unrecognized ticker) replaces the old
@@ -787,17 +817,28 @@ every run (see CI section below) — it isn't hand-maintained.
     `excludedValue()`/`holdingShares()`/`targetCapital()` are the (now region-less, unfiltered) views over
     that shared state.
   - **Currency-aware formatting for the calculator's own output** (suggestion table, stat-cards, Monte
-    Carlo, equity curve, donut, the contribution input's unit label) all comes from **`moneyFmtFor()`**
-    (no argument any more) — it picks `fmtMoneyPln` vs. `fmtMoney` from `PLN_UNIVERSES.has(gemData.winner)`,
-    i.e. from whichever universe currently wins GEM, not from a region. `moneyFmtForCurrency(currency)` is
-    the separate, explicit-currency formatter used for holdings-table rows (via `currencyOf`), since those
-    can span both currencies at once even though the calculator's own suggestion output never does.
-  - A held position whose own universe is not the current GEM winner is flagged in the suggestion table as
-    "poza aktywnym indeksem GEM (obecnie: ...)" rather than "poza TOP N" — it isn't that it fell out of a
-    ranking, it's that its whole universe isn't the one being drawn from this month.
-  - The "Wynik historyczny" equity-curve panel no longer blends multiple universes by TOP-N-derived weight
-    share (`universeWeightSharePct`/`blendEquityCurves` are gone) — with only ever one active universe,
-    it's simply that universe's own `docs/data/equity_curve.json` entry, unblended.
+    Carlo, equity curve, donut, the contribution input's unit label) all comes from **`currentMoneyFmt()`**
+    — in `STRATEGY_GEM` this is exactly `moneyFmtFor()` (picks `fmtMoneyPln` vs. `fmtMoney` from
+    `PLN_UNIVERSES.has(gemData.winner)`, i.e. from whichever universe currently wins GEM). In
+    `STRATEGY_WEIGHTED` there's no single winner, so: all weighted universes in PLN → `fmtMoneyPln`; all
+    in USD (or nothing weighted yet) → `fmtMoney`; a real mix of both → `fmtMoney` as a shared denominator
+    (the accepted mixing simplification noted above). `moneyFmtForCurrency(currency)` is the separate,
+    explicit-currency formatter used for holdings-table rows (via `currencyOf`), since those can span both
+    currencies at once regardless of strategy.
+  - A held position whose own universe isn't currently drawn from is flagged in the suggestion table —
+    "poza aktywnym indeksem GEM (obecnie: ...)" in `STRATEGY_GEM`, or "poza ważonymi indeksami (aktywne:
+    ...)" in `STRATEGY_WEIGHTED` (listing every universe with a positive weight) — rather than "poza TOP N"
+    when it's inside an active universe but just ranked too low; it isn't that it fell out of a ranking,
+    it's that its whole universe isn't one being drawn from this month.
+  - The "Wynik historyczny" equity-curve panel is that universe's own `docs/data/equity_curve.json` entry,
+    unblended, in `STRATEGY_GEM` (only one active universe). In `STRATEGY_WEIGHTED`, **`blendEquityCurves(weights)`**
+    is back — a direct-purpose reimplementation of the old two-region blending this file used to say was
+    "gone", now driven by the SAME normalized weights as the suggestion table (not a separately-tracked
+    `universeWeightSharePct`) — it averages `momentum_index`/`benchmark_index` across every weighted
+    universe's curve, restricted to dates common to ALL of them (all universes run on the same weekly
+    pipeline cadence now, so this is normally every date). This needs no FX conversion at all: each curve
+    is already normalized to a base of 100 by `compute_equity_curve`, so blending by % weight is pure index
+    arithmetic, not money.
   - `parseXtbOpenPositions()` imports an XTB "Open Positions" `.xlsx` export via SheetJS
     (`XLSX.read`, loaded from a CDN in `rebalance.html`) as a one-shot replacement of the holdings list —
     unchanged by any of the above.
