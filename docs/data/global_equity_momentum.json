@@ -1,51 +1,51 @@
 {
-  "ref_date": "2026-08-31",
+  "ref_date": "2026-09-11",
   "lookback_months": 12,
   "indices": [
     {
       "universe": "MWIG40",
       "yf_symbol": "MWIG40.WA",
-      "price_now": 169.82,
+      "price_now": 169.88,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 126.47,
+      "price_start": 126.51,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 34.28
     },
     {
       "universe": "WIG20",
       "yf_symbol": "WIG20.WA",
-      "price_now": 172.17,
+      "price_now": 172.08,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 130.47,
+      "price_start": 130.4,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 31.96
     },
     {
       "universe": "NASDAQ100",
       "yf_symbol": "^NDX",
-      "price_now": 29433.43,
-      "date_now": "2026-08-28 00:00:00",
+      "price_now": 29456.97,
+      "date_now": "2026-08-31 00:00:00",
       "price_start": 23415.42,
       "date_start": "2025-08-29 00:00:00",
-      "return_pct": 25.7
+      "return_pct": 25.8
     },
     {
       "universe": "SP500",
       "yf_symbol": "^GSPC",
-      "price_now": 7711.76,
-      "date_now": "2026-08-28 00:00:00",
+      "price_now": 7686.14,
+      "date_now": "2026-08-31 00:00:00",
       "price_start": 6460.26,
       "date_start": "2025-08-29 00:00:00",
-      "return_pct": 19.37
+      "return_pct": 18.98
     },
     {
       "universe": "DOWJONES",
       "yf_symbol": "^DJI",
-      "price_now": 53559.99,
-      "date_now": "2026-08-28 00:00:00",
+      "price_now": 53185.9,
+      "date_now": "2026-08-31 00:00:00",
       "price_start": 45544.88,
       "date_start": "2025-08-29 00:00:00",
-      "return_pct": 17.6
+      "return_pct": 16.78
     }
   ],
   "winner": "MWIG40",
