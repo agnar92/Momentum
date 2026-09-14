@@ -1060,6 +1060,46 @@ class TestComputeRelativeStrengthChart:
             assert base["resistance_pct"] >= base["support_pct"]
         assert "NaN" not in json.dumps(out)
 
+    def test_dates_use_last_trading_day_of_week_not_monday(self):
+        # Realny bug zgloszony przez uzytkownika: wykres pokazywal poniedzialek
+        # (DATE_TRUNC('week', Date), zwracany jako "week_start") jako date danego
+        # punktu, mimo ze cena/wskazniki w nim ("close" = ARGMAX(Close, Date))
+        # pochodzily z ostatniej sesji tygodnia (zwykle piatku) — patrz
+        # _weekly_close_series w run_query.py. Ta fixture, w przeciwienstwie do
+        # insert_weekly_series/insert_weekly_close_list powyzej (celowo TYLKO
+        # poniedzialki, zeby uniknac niejednoznacznosci konwencji tygodnia), dla
+        # OSTATNIEGO wyswietlanego tygodnia wstawia caly tydzien roboczy (pon-pt),
+        # zeby odroznic week_start (pon.) od week_end (pt.) w asercji.
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")  # poniedzialek -> pierwszy wyswietlany tydzien
+        ref_date = pd.Timestamp("2026-01-16")    # piatek DRUGIEGO wyswietlanego tygodnia
+        fixture_start = start_date - pd.Timedelta(weeks=32)
+        # 32 tyg. bufora rozgrzewkowego SMA KONCZACE SIE PRZED start_date (ostatni
+        # z nich to start_date - 1 tydzien) + jeden dodatkowy wiersz DOKLADNIE na
+        # start_date ponizej -> pierwszy wyswietlany tydzien = pojedyncza sesja.
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 32, 100.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 32, 200.0, 0.3)
+        con.execute("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES "
+                    "('2026-01-05', 'AAA', 131.0, 131.0, 0)")
+        con.execute("INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume) VALUES "
+                    "('2026-01-05', 'NASDAQ100', 209.3, 209.3, 0)")
+        week_days = pd.date_range(start="2026-01-12", periods=5, freq="1D")  # pon..pt, drugi wyswietlany tydzien
+        con.executemany(
+            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, 'AAA', ?, ?, 0)",
+            [(d.strftime("%Y-%m-%d"), 132.0 + i, 132.0 + i) for i, d in enumerate(week_days)],
+        )
+        con.executemany(
+            "INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume) VALUES (?, 'NASDAQ100', ?, ?, 0)",
+            [(d.strftime("%Y-%m-%d"), 209.6 + i * 0.3, 209.6 + i * 0.3) for i, d in enumerate(week_days)],
+        )
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                                start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["dates"] == ["2026-01-05", "2026-01-16"]  # 16.01 (piatek) NIE 12.01 (poniedzialek)
+        assert out["close_pct"][-1] == pytest.approx((136.0 / 131.0 - 1) * 100, abs=0.01)
+
 
 # ---------------------------------------------------------------------------
 # _compute_weinstein_stage_series: klasyfikacja etapow Weinsteina (1/2A/2B/3/4)
@@ -1336,6 +1376,36 @@ class TestComputeMansfieldRsChart:
         assert out is not None
         assert out["rsm_short"][0] is not None
         assert out["rsm_medium"][0] is None
+
+    def test_dates_use_last_trading_day_of_week_not_monday(self):
+        # Ten sam bug/fix co w TestComputeRelativeStrengthChart powyzej (patrz
+        # jego docstring) — compute_mansfield_rs_chart buduje "dates" z tego
+        # samego _weekly_close_series, wiec cierpial na dokladnie ten sam blad.
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")  # poniedzialek -> pierwszy wyswietlany tydzien
+        ref_date = pd.Timestamp("2026-01-16")    # piatek DRUGIEGO wyswietlanego tygodnia
+        fixture_start = start_date - pd.Timedelta(weeks=32)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 32, 100.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 32, 200.0, 0.3)
+        con.execute("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES "
+                    "('2026-01-05', 'AAA', 131.0, 131.0, 0)")
+        con.execute("INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume) VALUES "
+                    "('2026-01-05', 'NASDAQ100', 209.3, 209.3, 0)")
+        week_days = pd.date_range(start="2026-01-12", periods=5, freq="1D")  # pon..pt, drugi wyswietlany tydzien
+        con.executemany(
+            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, 'AAA', ?, ?, 0)",
+            [(d.strftime("%Y-%m-%d"), 132.0 + i, 132.0 + i) for i, d in enumerate(week_days)],
+        )
+        con.executemany(
+            "INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume) VALUES (?, 'NASDAQ100', ?, ?, 0)",
+            [(d.strftime("%Y-%m-%d"), 209.6 + i * 0.3, 209.6 + i * 0.3) for i, d in enumerate(week_days)],
+        )
+
+        out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                          start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["dates"] == ["2026-01-05", "2026-01-16"]  # 16.01 (piatek) NIE 12.01 (poniedzialek)
 
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
