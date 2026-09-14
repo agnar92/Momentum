@@ -1189,7 +1189,18 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, 
     Ta sama flaga dolicza tez tygodniowe MAX(High)/MIN(Low) — potrzebne przez
     compute_relative_strength_chart do policzenia VWAP na Typical Price
     ((High+Low+Close)/3), standardowej definicji VWAP (nie na samym Close, jak
-    w pierwszej wersji tego wykresu — patrz "vwap"/"typical_price" nizej)."""
+    w pierwszej wersji tego wykresu — patrz "vwap"/"typical_price" nizej).
+
+    Zwraca tez "week_end" = MAX(Date) w danym tygodniu, czyli faktyczna data
+    sesji, z ktorej pochodzi "close" (ARGMAX(Close, Date) — ostatnia znana cena
+    w tygodniu, zwykle piatek). "week_start" (poniedzialek z DATE_TRUNC) zostaje
+    kluczem do grupowania/joinowania (index_by_week, filtr okna momentum wzgledem
+    start_date) — te operacje dotycza KALENDARZOWEGO tygodnia, nie konkretnej
+    sesji. Ale do WYSWIETLANIA (pole "dates" w compute_relative_strength_chart/
+    compute_mansfield_rs_chart) uzywane jest "week_end": realny bug zglosony przez
+    uzytkownika — dymek na wykresie pokazywal poniedzialek (np. 2026-09-07), mimo
+    ze cena/wskazniki w nim byly z piatkowego zamkniecia (2026-09-11), bo "dates"
+    budowalo sie z "week_start" zamiast z faktycznej daty ostatniej sesji."""
     ohlc_select = ""
     if include_buying_volume:
         ohlc_select = """,
@@ -1201,6 +1212,7 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, 
                MIN(Low) AS low"""
     return con.execute(f"""
         SELECT DATE_TRUNC('week', Date) AS week_start,
+               MAX(Date) AS week_end,
                ARGMAX(Close, Date) AS close,
                SUM(Volume) AS volume{ohlc_select}
         FROM {table}
@@ -1699,7 +1711,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stop_level_pct, base_count = [], []
     raw_base_events = []
     for _, r in in_window.iterrows():
-        dates.append(r["week_start"].strftime("%Y-%m-%d"))
+        dates.append(r["week_end"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
         sma10_pct.append(pct(r["sma10"], close0))
         sma30_pct.append(pct(r["sma30"], close0))
@@ -1814,7 +1826,7 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
 
     dates, rsm_short, rsm_medium = [], [], []
     for _, r in in_window.iterrows():
-        dates.append(r["week_start"].strftime("%Y-%m-%d"))
+        dates.append(r["week_end"].strftime("%Y-%m-%d"))
         rsm_short.append(safe(r["rsm_short"]))
         rsm_medium.append(safe(r["rsm_medium"]))
 
