@@ -233,9 +233,25 @@ def get_unique_tickers(con):
 
 
 def get_full_refresh_range(lookback_months):
+    """Zwraca (start_date, end_date) jako `lookback_months` wstecz od DZISIAJ.
+    Do 2026-09 end_date był liczony jako ostatni dzień POPRZEDNIEGO miesiąca
+    kalendarzowego — poprawne dla starej, miesięcznej architektury pipeline'u
+    (pełny refresh odpalany raz na początku miesiąca, więc "koniec poprzedniego
+    miesiąca" i "dzisiaj" praktycznie się pokrywały), ale nigdy nie zaktualizowane
+    po przejściu na cotygodniowy cykl (patrz CLAUDE.md/Pipeline architecture).
+    Efekt: update_index_prices() (pełna podmiana index_prices przy KAŻDYM
+    uruchomieniu, bez watermarka) permanentnie ucinał poziom indeksu na koniec
+    poprzedniego miesiąca, mimo że update_prices_incremental() (ceny spółek,
+    już wtedy end_date=dzisiaj) dociągała dane aż do najnowszej sesji — realny
+    dryf wykryty na żywych danych: index_prices utknęło na 2026-08-28/31, prices
+    na 2026-09-11, czyli wykres "10:30" pokazywał świeżą cenę spółki na tle
+    martwej, sprzed ~2 tygodni linii indeksu. bootstrap_prices() (pierwsze
+    pełne pobranie prices) miało ten sam błąd, ale samonaprawiał się przy
+    następnym, zwykłym przebiegu przyrostowym (który zawsze dogrywa do
+    dzisiaj) — update_index_prices() nie ma takiego mechanizmu, stąd
+    rozjazd narastał w nieskończoność."""
     today = pd.Timestamp.today()
-    first_day_current_month = today.replace(day=1)
-    end_date = first_day_current_month - pd.Timedelta(days=1)
+    end_date = today
     start_date = end_date - pd.DateOffset(months=lookback_months)
     return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
 

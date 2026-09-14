@@ -74,12 +74,17 @@ class TestFindColumn:
 # ---------------------------------------------------------------------------
 
 class TestGetFullRefreshRange:
-    def test_end_date_is_last_day_of_previous_month(self):
+    def test_end_date_is_today(self):
+        # Do 2026-09 end_date byl "koniec poprzedniego miesiaca" — poprawne dla
+        # starej, miesiecznej architektury, ale pod cotygodniowym cyklem trwale
+        # ucinalo update_index_prices() (pelna podmiana bez watermarka, w
+        # przeciwienstwie do update_prices_incremental()) na koniec poprzedniego
+        # miesiaca, mimo ze ceny spolek dociagaly do dzisiaj — patrz docstring
+        # get_full_refresh_range w fetch_data.py.
         _, end = get_full_refresh_range(lookback_months=12)
         end_ts = pd.Timestamp(end)
         today = pd.Timestamp.today()
-        expected_end = today.replace(day=1) - pd.Timedelta(days=1)
-        assert end_ts.normalize() == expected_end.normalize()
+        assert end_ts.normalize() == today.normalize()
 
     def test_start_date_is_lookback_months_before_end_date(self):
         start, end = get_full_refresh_range(lookback_months=15)
@@ -512,8 +517,8 @@ class TestUpdateIndexPrices:
         # _compute_synthetic_equal_weight_index) — te dwa uniwersa NIE polegaja
         # na _download_price_rows w ogole, tylko na wlasnych skladnikach.
         # Daty musza wpasc w okno wyliczane przez get_full_refresh_range(lookback_months)
-        # (konczy sie na ostatnim dniu POPRZEDNIEGO miesiaca, nie dzisiaj), inaczej
-        # filtr Date BETWEEN w _compute_synthetic_equal_weight_index odetnie wszystko.
+        # (konczy sie dzisiaj), inaczej filtr Date BETWEEN w
+        # _compute_synthetic_equal_weight_index odetnie wszystko.
         _, end_date_str = get_full_refresh_range(12)
         d1 = end_date_str
         d0 = (pd.Timestamp(end_date_str) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
