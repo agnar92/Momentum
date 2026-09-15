@@ -1,0 +1,46 @@
+name: Deploy Pages (bez pobierania danych)
+
+# Zwykły deploy strony — publikuje aktualną zawartość docs/ na GitHub Pages,
+# BEZ uruchamiania fetch_data.py/run_query.py. Dane w docs/data/*.json (i
+# momentum_data.duckdb) są już zacommitowane w repo (patrz sekcja Frontend w
+# CLAUDE.md), więc do wypchnięcia samej zmiany w kodzie strony (HTML/CSS/JS)
+# nie trzeba czekać na cotygodniowy pełny fetch z weekly_full_refresh.yml ani
+# odpalać go ręcznie — ten workflow tylko pakuje i wdraża to, co już jest w
+# docs/.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Ta sama grupa co w weekly_full_refresh.yml, żeby wdrożenia Pages się nie
+# nakładały.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

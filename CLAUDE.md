@@ -931,5 +931,16 @@ genuinely fresh numbers.
   "list_workflow_runs", ..., workflow_runs_filter={"event": "schedule"})` (or the Actions tab's "This
   workflow has a schedule trigger" / "Disable workflow" state) before assuming the cron expression itself
   is wrong.
+- **`deploy.yml`** — a plain, cheap Pages deploy with no data fetch at all: no `fetch_data.py`, no
+  `run_query.py`, just `actions/upload-pages-artifact` + `actions/deploy-pages` on whatever is currently
+  checked into `docs/`. This exists because `docs/data/*.json` (and `momentum_data.duckdb`) are
+  committed to git (see Frontend section above) — a frontend-only change (HTML/CSS/JS) doesn't need a
+  fresh yfinance fetch to go live, it just needs the already-committed `docs/` republished. Triggers on
+  every push to `main` (any path — cheap enough not to bother filtering to `docs/**`) plus
+  `workflow_dispatch`; a push whose commit message contains `[skip ci]` (e.g.
+  `weekly_full_refresh.yml`'s own data-refresh commit) is skipped by GitHub automatically, so this
+  workflow does NOT double-deploy right after that one already deployed. Shares the same `concurrency:
+  group: "pages"` as `weekly_full_refresh.yml` so the two can never race each other's Pages deployment.
+  `permissions` is `contents: read` (not `write` — this workflow never commits anything back).
 - **`tests.yml`** — runs `pytest`/`ruff` (Python) and an ESLint check (`docs/js/*.js`, Node-only tooling,
   no effect on the deployed site) on pushes/PRs.
