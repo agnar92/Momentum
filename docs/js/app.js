@@ -253,6 +253,7 @@ const state = {
     drawerOpen: false,
     drawerUniverse: "DOWJONES",
     chartView: "own",
+    chartRangeMode: "3m", // "3m" (domyślnie) lub "full" — patrz initChartRangeToggle/sliceWeeklyChartToRange
     stageFilter: "ALL",
     sortKey: "rank",
     sortDir: "asc"
@@ -588,6 +589,26 @@ function initResetZoomButton() {
     if (fsBtn) fsBtn.addEventListener("click", resetChartZoom);
 }
 
+// Przełącznik zakresu wykresu 10:30/wolumenu/RSM: domyślnie tylko ostatnie 3
+// miesiące (backend eksportuje do ~14 miesięcy historii — patrz weekly_chart w
+// run_query.py — ale na co dzień interesuje nas głównie świeży ruch), z opcją
+// przełączenia na cały dostępny zakres. Sama zmiana state.chartRangeMode +
+// ponowne renderowanie (patrz sliceWeeklyChartToRange w renderRelativeStrengthChart)
+// — nie trzeba nic doczytywać, dane i tak są już w pamięci.
+function initChartRangeToggle() {
+    const btn3m = document.getElementById("chartRange3mBtn");
+    const btnFull = document.getElementById("chartRangeFullBtn");
+    if (!btn3m || !btnFull) return;
+    const setMode = (mode) => {
+        state.chartRangeMode = mode;
+        btn3m.classList.toggle("active", mode === "3m");
+        btnFull.classList.toggle("active", mode === "full");
+        updateChartArea();
+    };
+    btn3m.addEventListener("click", () => setMode("3m"));
+    btnFull.addEventListener("click", () => setMode("full"));
+}
+
 // Tryb pełnoekranowy — świadomie CSS-owa nakładka (position: fixed na
 // #rs_chart) zamiast prawdziwego Element.requestFullscreen(): w PWA
 // uruchomionym z ekranu głównego na iOS ta przeglądarkowa API bywa
@@ -776,6 +797,44 @@ function alignMansfieldToDates(mansfieldData, fullDates) {
     return { short: pick(mansfieldData.rsm_short), medium: pick(mansfieldData.rsm_medium) };
 }
 
+// Przycina weekly_chart do ostatnich CHART_RANGE_SHORT_MONTHS miesięcy (tryb
+// "3m", domyślny — patrz initChartRangeToggle) albo zwraca dane bez zmian
+// (tryb "full"). Działa na już wczytanych danych (backend i tak zawsze
+// eksportuje cały ~14-miesięczny zakres) — nie ma tu żadnego dociągania z
+// sieci, to czysto wizualne okno. "bases" (prostokąty Darvasa) są filtrowane
+// do tych, które choć trochę zachodzą na przycięty zakres, a te, które zaczęły
+// się wcześniej, mają start_date przycięty do początku okna — inaczej lewa
+// krawędź prostokąta wskazywałaby na datę spoza tablicy `dates`/etykiet osi X
+// (kategorycznej), co chartjs-plugin-annotation nie potrafiłby poprawnie
+// umiejscowić.
+const CHART_RANGE_SHORT_MONTHS = 3;
+function sliceWeeklyChartToRange(chartData, mode) {
+    if (mode !== "3m" || !chartData || !chartData.dates || !chartData.dates.length) return chartData;
+    const lastDate = new Date(chartData.dates[chartData.dates.length - 1]);
+    const cutoff = new Date(lastDate);
+    cutoff.setMonth(cutoff.getMonth() - CHART_RANGE_SHORT_MONTHS);
+    const cutoffIso = cutoff.toISOString().slice(0, 10);
+    const startIdx = chartData.dates.findIndex(d => d >= cutoffIso);
+    if (startIdx <= 0) return chartData;
+    const sliceArr = (arr) => (Array.isArray(arr) ? arr.slice(startIdx) : arr);
+    const rangeStart = chartData.dates[startIdx];
+    return {
+        ...chartData,
+        dates: sliceArr(chartData.dates),
+        close_pct: sliceArr(chartData.close_pct),
+        sma10_pct: sliceArr(chartData.sma10_pct),
+        sma30_pct: sliceArr(chartData.sma30_pct),
+        vwap_pct: sliceArr(chartData.vwap_pct),
+        index_pct: sliceArr(chartData.index_pct),
+        volume: sliceArr(chartData.volume),
+        buying_volume: sliceArr(chartData.buying_volume),
+        buying_volume_ratio: sliceArr(chartData.buying_volume_ratio),
+        bases: (chartData.bases || [])
+            .filter(b => b.end_date >= rangeStart)
+            .map(b => (b.start_date < rangeStart ? { ...b, start_date: rangeStart } : b)),
+    };
+}
+
 function fmtPlDate(iso) {
     const [y, m, d] = iso.split("-");
     return `${d}.${m}.${y}`;
@@ -849,7 +908,7 @@ function syncChartsCrosshair(charts) {
 //    średnioterminowy trend). Nieinteraktywny — własne, krótkie okno nie
 //    wymaga zoom/pan.
 function renderRelativeStrengthChart(symbol, rsEntry) {
-    const chartData = rsEntry.weekly_chart;
+    const chartData = sliceWeeklyChartToRange(rsEntry.weekly_chart, state.chartRangeMode);
     const mansfieldData = rsEntry.mansfield_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
@@ -1016,7 +1075,11 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         const aligned = alignMansfieldToDates(mansfieldData, chartData.dates);
         const zeroLine = chartData.dates.map(() => 0);
         if (mansfieldCaption) {
-            mansfieldCaption.textContent = `${fmtPlDate(mansfieldData.dates[0])} – ${fmtPlDate(mansfieldData.dates[mansfieldData.dates.length - 1])}`;
+            // Zakres FAKTYCZNIE wyświetlanych tygodni (chartData.dates, ewentualnie
+            // przycięte przez sliceWeeklyChartToRange do trybu "3m") — nie własny,
+            // pełny zakres mansfieldData, który przy trybie "3m" byłby mylący
+            // (sugerowałby dłuższe okno niż to, co faktycznie widać na wykresie).
+            mansfieldCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
         rsMansfieldChartInstance = new Chart(mansfieldCanvas, {
             type: "line",
@@ -1454,6 +1517,7 @@ if (typeof document !== "undefined") {
         initDrawer();
         initOpenTvButton();
         initResetZoomButton();
+        initChartRangeToggle();
         initChartViewTabs();
         initChartFullscreen();
         initStageFilter();
