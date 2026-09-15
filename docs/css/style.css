@@ -267,13 +267,21 @@ html, body {
     padding: 3px 6px;
     border-radius: 4px;
     color: var(--text-dim);
+    cursor: pointer;
+    border: 1px solid transparent;
 }
+.gem-index-row:hover { border-color: var(--border); }
 
 .gem-index-row.gem-index-winner {
     background: var(--panel-alt);
     color: var(--text);
     font-weight: 700;
 }
+
+/* Krok 1 (rebalance.js::renderGemWidget) — uniwersum aktualnie przeglądane w
+   Kroku 2 (settings.browsingUniverse), niezależnie od tego, kto akurat
+   wygrywa w GEM (gem-index-winner powyżej to osobna, nakładająca się flaga). */
+.gem-index-row.gem-index-active { border-color: var(--green-bright); }
 
 .gem-index-row .positive { color: var(--green-bright); }
 .gem-index-row .negative { color: var(--red); }
