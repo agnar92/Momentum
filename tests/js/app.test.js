@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    compareRows, rollingMean, alignMansfieldToDates, fmtPlDate,
+    compareRows, rollingMean, alignMansfieldToDates, alignGrowthToDates, fmtPlDate,
     classifyRsm, combinedRsmCandidates, state,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
@@ -67,6 +67,24 @@ test("alignMansfieldToDates returns an all-null series when no Mansfield date ma
     const aligned = alignMansfieldToDates(mansfieldData, fullDates);
     assert.deepEqual(aligned.short, [null, null]);
     assert.deepEqual(aligned.medium, [null, null]);
+});
+
+test("alignGrowthToDates pads with null before the growth window's own start date", () => {
+    const fullDates = ["2026-01-01", "2026-01-08", "2026-01-15", "2026-01-22"];
+    const growthData = { dates: ["2026-01-15", "2026-01-22"], growth_1m: [1, 2], growth_3m: [3, 4], growth_6m: [5, 6] };
+    const aligned = alignGrowthToDates(growthData, fullDates);
+    assert.deepEqual(aligned.m1, [null, null, 1, 2]);
+    assert.deepEqual(aligned.m3, [null, null, 3, 4]);
+    assert.deepEqual(aligned.m6, [null, null, 5, 6]);
+});
+
+test("alignGrowthToDates returns an all-null series when no growth date matches", () => {
+    const fullDates = ["2025-01-01", "2025-01-08"];
+    const growthData = { dates: ["2026-01-15"], growth_1m: [1], growth_3m: [3], growth_6m: [5] };
+    const aligned = alignGrowthToDates(growthData, fullDates);
+    assert.deepEqual(aligned.m1, [null, null]);
+    assert.deepEqual(aligned.m3, [null, null]);
+    assert.deepEqual(aligned.m6, [null, null]);
 });
 
 test("fmtPlDate converts an ISO date to dd.mm.yyyy", () => {

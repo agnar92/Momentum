@@ -442,7 +442,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     # FULL_COVERAGE_UNIVERSES/_build_full_universe_records powyżej). To samo okno co
     # index_mom w export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się
     # okna. ---
-    weekly_charts, mansfield_charts = {}, {}
+    weekly_charts, mansfield_charts, growth_charts = {}, {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_weighted["Ticker"])
     if universe in FULL_COVERAGE_UNIVERSES:
@@ -453,18 +453,20 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                                                                        ref_date, index_mom["date_start"])
             mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
+            growth_charts[ticker] = compute_growth_chart(con, ticker, universe,
+                                                           ref_date, index_mom["date_start"])
 
     all_constituents = None
     if universe in FULL_COVERAGE_UNIVERSES:
         all_constituents = _build_full_universe_records(df_ranked, selected_tickers,
-                                                          weekly_charts, mansfield_charts)
+                                                          weekly_charts, mansfield_charts, growth_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked)} spółek "
               f"(nie tylko {len(selected_tickers)} w decylu).")
 
     # --- Eksport JSON dla strony ---
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
-                all_constituents=all_constituents)
+                all_constituents=all_constituents, growth_charts=growth_charts)
 
     return df_weighted
 
@@ -563,7 +565,7 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
         if not df_metrics_full.empty:
             df_ranked_full = add_zscore_and_momentum_score(df_metrics_full)
 
-    weekly_charts, mansfield_charts = {}, {}
+    weekly_charts, mansfield_charts, growth_charts = {}, {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_sel["Ticker"])
     if df_ranked_full is not None:
@@ -574,11 +576,13 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
                                                                        ref_date, index_mom["date_start"])
             mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
+            growth_charts[ticker] = compute_growth_chart(con, ticker, universe,
+                                                           ref_date, index_mom["date_start"])
 
     all_constituents = None
     if df_ranked_full is not None:
         all_constituents = _build_full_universe_records(df_ranked_full, set(df_sel["Ticker"]),
-                                                          weekly_charts, mansfield_charts)
+                                                          weekly_charts, mansfield_charts, growth_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked_full)} spółek "
               f"(nie tylko {len(df_sel)} w ostatniej zapisanej selekcji).")
 
@@ -588,11 +592,11 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
     # date faktycznej (miesiecznej) selekcji, nie date odswiezenia wykresow.
     export_json(df_sel, universe, last_ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
-                all_constituents=all_constituents)
+                all_constituents=all_constituents, growth_charts=growth_charts)
     return df_sel
 
 
-def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts):
+def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts, growth_charts=None):
     """Rekord dla KAZDEJ kwalifikujacej sie spolki w uniwersum (df_ranked — wynik
     get_universe_metrics + add_zscore_and_momentum_score), nie tylko tych wybranych do
     decyla/portfela — patrz FULL_COVERAGE_UNIVERSES. Zasila "all_constituents" w
@@ -601,6 +605,7 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
     z add_zscore_and_momentum_score) — inne pojecie niz "rank"/"rank_in_universe" w
     "constituents", ktore liczy sie tylko wsrod wybranych/wazonych. "in_selection" mowi,
     czy dany ticker jest akurat w biezacym decylu (te same tickery co "constituents")."""
+    growth_charts = growth_charts or {}
     records = []
     for _, r in df_ranked.iterrows():
         records.append({
@@ -616,15 +621,17 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
             "in_selection": bool(r["Ticker"] in selected_tickers),
             "weekly_chart": weekly_charts.get(r["Ticker"]),
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
+            "growth_chart": growth_charts.get(r["Ticker"]),
         })
     return records
 
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                  prev_ref_date=None, added_tickers=None, dropped_tickers=None,
-                 weekly_charts=None, mansfield_charts=None, all_constituents=None):
+                 weekly_charts=None, mansfield_charts=None, all_constituents=None, growth_charts=None):
     weekly_charts = weekly_charts or {}
     mansfield_charts = mansfield_charts or {}
+    growth_charts = growth_charts or {}
     records = []
     for _, r in df_weighted.iterrows():
         weekly_chart = weekly_charts.get(r["Ticker"])
@@ -641,6 +648,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "weight_pct": round(float(r["weight"]) * 100, 3),
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
+            "growth_chart": growth_charts.get(r["Ticker"]),
         })
     # pd.notna guard: przy odswiezeniu --charts-only (process_universe_charts_only)
     # tuz PO migracji kolumny (ALTER TABLE ... ADD COLUMN, patrz
@@ -1837,6 +1845,63 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     }
 
 
+GROWTH_1M_WEEKS = 4   # ~1 miesiac (dane sa tygodniowe — 4 tyg. zamiast kalendarzowego 1M)
+# 3M/6M celowo reuzywaja RS_MANSFIELD_SHORT_WEEKS/RS_MANSFIELD_MEDIUM_WEEKS (13/26 tyg.)
+# zamiast wlasnych stalych — to te same horyzonty co oscylator Mansfielda obok, wiec
+# "3 miesiace" znaczy to samo na obu wykresach.
+
+
+def compute_growth_chart(con, ticker, universe, ref_date, start_date):
+    """Kolejny wykres obok "10:30" i oscylatora Mansfielda — na zyczenie uzytkownika
+    ("czysty wzrost procentowy 1, 3 i 6 miesiecy" obok istniejacego RSM 3/6-miesiecznego).
+    W odroznieniu od close_pct (wykres 10:30 — zawsze rebazowany do 0% na POCZATKU
+    wyswietlanego okna) i rsm_short/rsm_medium (sila WZGLEDEM indeksu, patrz
+    compute_mansfield_rs_chart), to jest surowy, KROCZACY zwrot samej spolki, bez
+    odniesienia do indeksu i bez rebazowania do jednego wspolnego punktu startowego:
+    dla kazdego wyswietlanego tygodnia growth_Nm = (close_teraz / close_sprzed_N_tyg. - 1) * 100,
+    gdzie N to GROWTH_1M_WEEKS (~1 mies.), RS_MANSFIELD_SHORT_WEEKS (~3 mies.) i
+    RS_MANSFIELD_MEDIUM_WEEKS (~6 mies.) — "ile spolka urosla/spadla w ostatnim
+    miesiacu/kwartale/polroczu, patrzac z tego konkretnego tygodnia", niezaleznie od
+    tego, kiedy zaczyna sie wyswietlane okno.
+
+    Pobiera dodatkowy zapas RS_MANSFIELD_MEDIUM_WEEKS tygodni PRZED start_date, zeby
+    najdluzszy (6-miesieczny) wzrost mial juz wartosc od pierwszego wyswietlanego
+    tygodnia — analogicznie do zapasu w compute_mansfield_rs_chart.
+
+    Zwraca None gdy brakuje danych (np. spolka bez wystarczajacej historii cen)."""
+    extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=RS_MANSFIELD_MEDIUM_WEEKS)).strftime("%Y-%m-%d")
+
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+    if stock_df.empty:
+        return None
+
+    stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
+    stock_df["growth_1m"] = (stock_df["close"] / stock_df["close"].shift(GROWTH_1M_WEEKS) - 1) * 100
+    stock_df["growth_3m"] = (stock_df["close"] / stock_df["close"].shift(RS_MANSFIELD_SHORT_WEEKS) - 1) * 100
+    stock_df["growth_6m"] = (stock_df["close"] / stock_df["close"].shift(RS_MANSFIELD_MEDIUM_WEEKS) - 1) * 100
+
+    in_window = stock_df[stock_df["week_start"] >= pd.Timestamp(start_date)]
+    if in_window.empty:
+        return None
+
+    def safe(value, digits=2):
+        return round(float(value), digits) if pd.notna(value) else None
+
+    dates, growth_1m, growth_3m, growth_6m = [], [], [], []
+    for _, r in in_window.iterrows():
+        dates.append(r["week_end"].strftime("%Y-%m-%d"))
+        growth_1m.append(safe(r["growth_1m"]))
+        growth_3m.append(safe(r["growth_3m"]))
+        growth_6m.append(safe(r["growth_6m"]))
+
+    return {
+        "dates": dates,
+        "growth_1m": growth_1m,
+        "growth_3m": growth_3m,
+        "growth_6m": growth_6m,
+    }
+
+
 def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days=150, max_staleness_days=10):
     """ref_date=None: jak w export_global_equity_momentum — najświeższa data w
     index_prices (odświeżane codziennie), niezależnie od miesięcznego ref_date
@@ -1864,6 +1929,8 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                                                                        ref_date, index_mom["date_start"])
             leader["mansfield_chart"] = compute_mansfield_rs_chart(con, leader["ticker"], universe,
                                                                      ref_date, index_mom["date_start"])
+            leader["growth_chart"] = compute_growth_chart(con, leader["ticker"], universe,
+                                                            ref_date, index_mom["date_start"])
         universes_payload[universe] = {
             "index_return_pct": index_return_pct,
             "momentum_window": index_mom["momentum_window"],
@@ -1891,7 +1958,9 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
                  "'mansfield_chart': oscylator Mansfield Relative Strength w DWÓCH wygładzeniach "
                  "(rsm_short ~3 mies., rsm_medium ~6 mies.), od początku TEGO SAMEGO okna co weekly_chart "
-                 "— patrz compute_mansfield_rs_chart. "
+                 "— patrz compute_mansfield_rs_chart. Każdy lider ma też 'growth_chart': surowy, kroczący "
+                 "zwrot % samej spółki (bez odniesienia do indeksu) w 3 horyzontach — growth_1m (~1 mies.), "
+                 "growth_3m (~3 mies.), growth_6m (~6 mies.) — patrz compute_growth_chart. "
                  "Do wykresu innego niż TradingView na dashboardzie. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
     }
