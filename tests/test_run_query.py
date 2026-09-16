@@ -30,6 +30,7 @@ from run_query import (
     compute_index_leaders,
     compute_index_momentum,
     compute_index_returns,
+    compute_growth_chart,
     compute_mansfield_rs_chart,
     compute_relative_strength_chart,
     compute_relative_strength_leaders,
@@ -787,6 +788,7 @@ class TestExportRelativeStrength:
         assert payload["universes"]["DOWJONES"]["leaders"][0]["ticker"] == "WIN"
         assert payload["universes"]["NASDAQ100"]["leaders"][0]["weekly_chart"] is not None
         assert payload["universes"]["NASDAQ100"]["leaders"][0]["mansfield_chart"] is not None
+        assert payload["universes"]["NASDAQ100"]["leaders"][0]["growth_chart"] is not None
 
     def test_no_index_prices_writes_nothing(self, tmp_path):
         con = duckdb.connect(":memory:")
@@ -1419,6 +1421,79 @@ class TestComputeMansfieldRsChart:
 
 
 # ---------------------------------------------------------------------------
+# compute_growth_chart: surowy, kroczacy zwrot % spolki (bez indeksu) w 3
+# horyzontach — 1/3/6 mies. — trzeci wykres obok "10:30" i Mansfielda, na tym
+# samym oknie momentum co oba pozostale (start_date przekazywany, nie liczony
+# wewnetrznie).
+# ---------------------------------------------------------------------------
+
+class TestComputeGrowthChart:
+    def test_all_three_horizons_have_values_from_first_displayed_week(self):
+        con = make_gem_con()
+        ref_date = pd.Timestamp("2026-06-29")
+        start_date = ref_date - pd.Timedelta(weeks=26)
+        # Zapas >= RS_MANSFIELD_MEDIUM_WEEKS (26 tyg.) PRZED start_date, zeby
+        # nawet najdluzszy (6-mies.) wzrost mial juz wartosc na pierwszym
+        # wyswietlanym tygodniu.
+        fixture_start = start_date - pd.Timedelta(weeks=30)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 60, 100.0, 1.0)
+
+        out = compute_growth_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                    start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["dates"][0] == start_date.strftime("%Y-%m-%d")
+        assert out["growth_1m"][0] is not None
+        assert out["growth_3m"][0] is not None
+        assert out["growth_6m"][0] is not None
+        # Cena rosnie liniowo +1/tydzien -> wszystkie trzy horyzonty dodatnie.
+        assert out["growth_1m"][-1] > 0
+        assert out["growth_3m"][-1] > 0
+        assert out["growth_6m"][-1] > 0
+        # Dluzszy horyzont skumulowal wiecej wzrostu (liniowo rosnaca cena).
+        assert out["growth_6m"][-1] > out["growth_3m"][-1] > out["growth_1m"][-1]
+
+    def test_insufficient_lookback_leaves_longer_horizons_none_but_1m_populated(self):
+        con = make_gem_con()
+        ref_date = pd.Timestamp("2026-06-29")
+        start_date = ref_date - pd.Timedelta(weeks=26)
+        # Tylko 5 tyg. historii PRZED start_date: wystarczy na 1-mies. (potrzeba
+        # GROWTH_1M_WEEKS = 4 tyg.), za malo na 3-mies. (potrzeba
+        # RS_MANSFIELD_SHORT_WEEKS = 13 tyg.) i 6-mies. (26 tyg.).
+        fixture_start = start_date - pd.Timedelta(weeks=5)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 32, 100.0, 1.0)
+
+        out = compute_growth_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                    start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["growth_1m"][0] is not None
+        assert out["growth_3m"][0] is None
+        assert out["growth_6m"][0] is None
+
+    def test_dates_use_last_trading_day_of_week_not_monday(self):
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")  # poniedzialek -> pierwszy wyswietlany tydzien
+        ref_date = pd.Timestamp("2026-01-16")    # piatek DRUGIEGO wyswietlanego tygodnia
+        fixture_start = start_date - pd.Timedelta(weeks=32)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 32, 100.0, 1.0)
+        con.execute("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES "
+                    "('2026-01-05', 'AAA', 131.0, 131.0, 0)")
+        week_days = pd.date_range(start="2026-01-12", periods=5, freq="1D")  # pon..pt, drugi wyswietlany tydzien
+        con.executemany(
+            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, 'AAA', ?, ?, 0)",
+            [(d.strftime("%Y-%m-%d"), 132.0 + i, 132.0 + i) for i, d in enumerate(week_days)],
+        )
+
+        out = compute_growth_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                    start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["dates"] == ["2026-01-05", "2026-01-16"]  # 16.01 (piatek) NIE 12.01 (poniedzialek)
+
+    def test_no_stock_history_returns_none(self):
+        con = make_gem_con()
+        assert compute_growth_chart(con, "NOPE", "NASDAQ100", "2026-03-30", "2025-10-06") is None
+
+
+# ---------------------------------------------------------------------------
 # export_json: kazda spolka w GLOWNYM eksporcie per-uniwersum (docs/data/*.json)
 # dostaje teraz wlasny weekly_chart/mansfield_chart (patrz process_universe) —
 # nie tylko liderzy panelu Sily Relatywnej (export_relative_strength).
@@ -1442,24 +1517,27 @@ class TestExportJson:
         df = make_weighted_df_fixture()
         weekly_charts = {"AAA": {"dates": ["2026-01-05"], "close_pct": [0.0]}}
         mansfield_charts = {"AAA": {"dates": ["2026-01-05"], "rsm_short": [1.0], "rsm_medium": [2.0]}}
+        growth_charts = {"AAA": {"dates": ["2026-01-05"], "growth_1m": [1.0], "growth_3m": [2.0], "growth_6m": [3.0]}}
 
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0,
-                    weekly_charts=weekly_charts, mansfield_charts=mansfield_charts)
+                    weekly_charts=weekly_charts, mansfield_charts=mansfield_charts, growth_charts=growth_charts)
 
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
         by_ticker = {c["ticker"]: c for c in payload["constituents"]}
         assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
         assert by_ticker["AAA"]["mansfield_chart"] == mansfield_charts["AAA"]
+        assert by_ticker["AAA"]["growth_chart"] == growth_charts["AAA"]
         # BBB nie ma wpisu w slownikach (np. brak danych indeksu dla tego tickera w
         # danym momencie) -> None w JSON, nie blad.
         assert by_ticker["BBB"]["weekly_chart"] is None
         assert by_ticker["BBB"]["mansfield_chart"] is None
+        assert by_ticker["BBB"]["growth_chart"] is None
 
     def test_defaults_to_none_when_charts_not_provided(self, tmp_path):
         df = make_weighted_df_fixture()
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0)
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
-        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None
+        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None and c["growth_chart"] is None
                    for c in payload["constituents"])
 
     def test_all_constituents_defaults_to_same_records_as_constituents(self, tmp_path):
@@ -1495,12 +1573,15 @@ class TestBuildFullUniverseRecords:
 
         weekly_charts = {"AAA": {"dates": []}}
         mansfield_charts = {"AAA": {"dates": []}}
-        records = _build_full_universe_records(df_ranked, {"AAA"}, weekly_charts, mansfield_charts)
+        growth_charts = {"AAA": {"dates": []}}
+        records = _build_full_universe_records(df_ranked, {"AAA"}, weekly_charts, mansfield_charts, growth_charts)
 
         by_ticker = {r["ticker"]: r for r in records}
         assert by_ticker["AAA"]["in_selection"] is True
         assert by_ticker["BBB"]["in_selection"] is False
         assert by_ticker["CCC"]["in_selection"] is False
+        assert by_ticker["AAA"]["growth_chart"] == growth_charts["AAA"]
+        assert by_ticker["BBB"]["growth_chart"] is None
         assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
         assert by_ticker["BBB"]["weekly_chart"] is None
         assert {r["rank"] for r in records} == {1, 2, 3}
@@ -1665,6 +1746,7 @@ class TestProcessUniverseChartsOnly:
         assert all_by_ticker["BBB"]["in_selection"] is False
         assert all_by_ticker["BBB"]["weekly_chart"] is not None
         assert all_by_ticker["BBB"]["mansfield_chart"] is not None
+        assert all_by_ticker["BBB"]["growth_chart"] is not None
 
     def test_equal_weight_universe_all_constituents_equals_constituents(self, tmp_path):
         # DOWJONES nie jest w FULL_COVERAGE_UNIVERSES: "constituents" jest juz calym

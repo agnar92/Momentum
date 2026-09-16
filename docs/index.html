@@ -175,11 +175,11 @@
                 ↺ Resetuj zoom
             </button>
             <button class="chart-mode-btn" id="chartFullscreenBtn"
-                    title="Pełny ekran — wykres 10:30 na cały ekran, z opcjonalnym wolumenem i RSM">
+                    title="Pełny ekran — wykres 10:30 na cały ekran, z opcjonalnym wolumenem, RSM i wzrostem %">
                 ⤢ Pełny ekran
             </button>
             <button class="chart-mode-btn active" id="chartRange3mBtn"
-                    title="Pokaż tylko ostatnie 3 miesiące na wykresie 10:30, wolumenie i RSM">
+                    title="Pokaż tylko ostatnie 3 miesiące na wykresie 10:30, wolumenie, RSM i wzroście %">
                 🗓️ 3 mies.
             </button>
             <button class="chart-mode-btn" id="chartRangeFullBtn"
@@ -199,6 +199,7 @@
                     <span class="chart-fullscreen-extras-label">Dodaj do widoku:</span>
                     <button class="chart-extra-toggle" id="toggleVolumeBtn" type="button">📊 Wolumen</button>
                     <button class="chart-extra-toggle" id="toggleMansfieldBtn" type="button">📉 RSM</button>
+                    <button class="chart-extra-toggle" id="toggleGrowthBtn" type="button">📈 Wzrost %</button>
                     <button class="chart-extra-toggle" id="fsResetZoomBtn" type="button">↺ Zoom</button>
                     <button class="chart-extra-toggle chart-fullscreen-close" id="chartFullscreenCloseBtn" type="button">✕ Zamknij</button>
                 </div>
@@ -215,6 +216,10 @@
                 <div class="rs-chart-panel rs-chart-panel-small" id="rsMansfieldPanel">
                     <div class="rs-chart-caption" id="rsMansfieldCaption"></div>
                     <canvas id="rsMansfieldCanvas"></canvas>
+                </div>
+                <div class="rs-chart-panel rs-chart-panel-small" id="rsGrowthPanel">
+                    <div class="rs-chart-caption" id="rsGrowthCaption"></div>
+                    <canvas id="rsGrowthCanvas"></canvas>
                 </div>
                 <div class="stage-legend" id="stageLegend">
                     fioletowy prostokąt = baza Etapu 1 (dno), szary = kontynuacja Etapu 2 &nbsp;·&nbsp;

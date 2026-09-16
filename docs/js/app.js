@@ -508,7 +508,7 @@ let rsChartInstance = null;
 // Darvasa) jak najwięcej miejsca zamiast trzymać wszystkie trzy panele
 // zawsze włączone.
 let chartFullscreenActive = false;
-const chartFullscreenExtras = { volume: false, mansfield: false };
+const chartFullscreenExtras = { volume: false, mansfield: false, growth: false };
 
 function updateChartArea() {
     const symbol = state.selectedTicker;
@@ -519,11 +519,13 @@ function updateChartArea() {
     const rsChartPanel = document.getElementById("rsChartPanel");
     const rsVolumePanel = document.getElementById("rsVolumePanel");
     const rsMansfieldPanel = document.getElementById("rsMansfieldPanel");
+    const rsGrowthPanel = document.getElementById("rsGrowthPanel");
     const stageLegend = document.getElementById("stageLegend");
     if (noChartMsg) noChartMsg.hidden = hasRsChart;
     if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
     if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.volume);
     if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.mansfield);
+    if (rsGrowthPanel) rsGrowthPanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.growth);
     if (stageLegend) stageLegend.hidden = !hasRsChart;
 
     if (hasRsChart) {
@@ -533,6 +535,7 @@ function updateChartArea() {
         if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
         if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
         if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
+        if (rsGrowthChartInstance) { rsGrowthChartInstance.destroy(); rsGrowthChartInstance = null; }
     }
     updateChartTickerLabel();
     if (state.chartView === "tv") renderTvOverviewPanel(symbol, state.selectedUniverse);
@@ -633,6 +636,7 @@ function initChartFullscreen() {
     const extrasBar = document.getElementById("chartFullscreenExtras");
     const volBtn = document.getElementById("toggleVolumeBtn");
     const mansfieldBtn = document.getElementById("toggleMansfieldBtn");
+    const growthBtn = document.getElementById("toggleGrowthBtn");
     if (!container || !enterBtn) return;
 
     const originalParent = container.parentElement;
@@ -657,6 +661,7 @@ function initChartFullscreen() {
             if (rsChartInstance) rsChartInstance.resize();
             if (rsVolumeChartInstance) rsVolumeChartInstance.resize();
             if (rsMansfieldChartInstance) rsMansfieldChartInstance.resize();
+            if (rsGrowthChartInstance) rsGrowthChartInstance.resize();
         });
     }
 
@@ -679,10 +684,18 @@ function initChartFullscreen() {
             updateChartArea();
         });
     }
+    if (growthBtn) {
+        growthBtn.addEventListener("click", () => {
+            chartFullscreenExtras.growth = !chartFullscreenExtras.growth;
+            growthBtn.classList.toggle("active", chartFullscreenExtras.growth);
+            updateChartArea();
+        });
+    }
 }
 
 let rsVolumeChartInstance = null;
 let rsMansfieldChartInstance = null;
+let rsGrowthChartInstance = null;
 
 // Przesuwa widoczny zakres osi X panelu wolumenu tak, zeby dokladnie odpowiadal
 // aktualnemu zoom/pan wykresu 10:30 (patrz onZoomComplete/onPanComplete w
@@ -797,6 +810,16 @@ function alignMansfieldToDates(mansfieldData, fullDates) {
     return { short: pick(mansfieldData.rsm_short), medium: pick(mansfieldData.rsm_medium) };
 }
 
+// Czwarty panel: czysty (nie wzgledem indeksu) kroczacy wzrost % spolki w 1/3/6
+// mies. (growth_chart, patrz compute_growth_chart w run_query.py) — dopelniany do
+// tej samej pelnej tablicy dat co wykres 10:30/Mansfield, dokladnie tak samo jak
+// alignMansfieldToDates powyzej (ten sam powod: wspolna skala X miedzy panelami).
+function alignGrowthToDates(growthData, fullDates) {
+    const idxByDate = new Map(growthData.dates.map((d, i) => [d, i]));
+    const pick = (series) => fullDates.map(d => (idxByDate.has(d) ? series[idxByDate.get(d)] : null));
+    return { m1: pick(growthData.growth_1m), m3: pick(growthData.growth_3m), m6: pick(growthData.growth_6m) };
+}
+
 // Przycina weekly_chart do ostatnich CHART_RANGE_SHORT_MONTHS miesięcy (tryb
 // "3m", domyślny — patrz initChartRangeToggle) albo zwraca dane bez zmian
 // (tryb "full"). Działa na już wczytanych danych (backend i tak zawsze
@@ -907,13 +930,21 @@ function syncChartsCrosshair(charts) {
 //    rozjeżdżać (krótkoterminowe przyspieszenie/spowolnienie może wyprzedzać
 //    średnioterminowy trend). Nieinteraktywny — własne, krótkie okno nie
 //    wymaga zoom/pan.
+// 4. Czysty wzrost % (growth_chart, patrz compute_growth_chart) w 3 horyzontach
+//    kroczących — 1/3/6 mies. — obok Mansfielda (na życzenie użytkownika): w
+//    odróżnieniu od panelu 1 (rebazowanego do 0% na POCZĄTKU okna) i Mansfielda
+//    (siła WZGLĘDEM indeksu), to surowy zwrot samej spółki liczony z KAŻDEGO
+//    wyświetlanego tygodnia wstecz, niezależny od indeksu i od dnia startu okna.
+//    Nieinteraktywny, tak jak panel Mansfielda.
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = sliceWeeklyChartToRange(rsEntry.weekly_chart, state.chartRangeMode);
     const mansfieldData = rsEntry.mansfield_chart;
+    const growthData = rsEntry.growth_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
     const volumeCanvas = document.getElementById("rsVolumeCanvas");
     const mansfieldCanvas = document.getElementById("rsMansfieldCanvas");
+    const growthCanvas = document.getElementById("rsGrowthCanvas");
     if (!canvas || !chartData) return;
 
     if (typeof Chart === "undefined") {
@@ -923,6 +954,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
     if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
     if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
+    if (rsGrowthChartInstance) { rsGrowthChartInstance.destroy(); rsGrowthChartInstance = null; }
 
     renderStageBadge(chartData.current_stage);
 
@@ -1117,9 +1149,55 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         if (mansfieldCaption) mansfieldCaption.textContent = "";
     }
 
+    const growthCaption = document.getElementById("rsGrowthCaption");
+    if (growthCanvas && growthData) {
+        // Ta sama logika dopasowania co panel Mansfielda powyżej (patrz
+        // alignGrowthToDates) — wspólna, pełna tablica dat daje spójną skalę X
+        // między wszystkimi panelami.
+        const alignedGrowth = alignGrowthToDates(growthData, chartData.dates);
+        const zeroLineGrowth = chartData.dates.map(() => 0);
+        if (growthCaption) {
+            growthCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+        }
+        rsGrowthChartInstance = new Chart(growthCanvas, {
+            type: "line",
+            data: {
+                labels: chartData.dates,
+                datasets: [
+                    { label: "Wzrost 1M", data: alignedGrowth.m1, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
+                    { label: "Wzrost 3M", data: alignedGrowth.m3, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
+                    { label: "Wzrost 6M", data: alignedGrowth.m6, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                    { label: "0", data: zeroLineGrowth, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                    legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                    tooltip: {
+                        filter: (ctx) => ctx.datasetIndex !== 3,
+                        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : pctFmt(ctx.parsed.y)}` },
+                    },
+                },
+                scales: {
+                    // Ta sama liczba etykiet/skala X co pozostałe panele — patrz
+                    // komentarz przy panelu Mansfielda powyżej.
+                    x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
+                    y: { ticks: { color: "#8a8f9c", callback: pctFmt }, grid: { color: "#262a35" } },
+                },
+            },
+        });
+    } else if (growthCanvas) {
+        const ctx = growthCanvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, growthCanvas.width, growthCanvas.height);
+        if (growthCaption) growthCaption.textContent = "";
+    }
+
     // Wspólny crosshair (patrz syncChartsCrosshair) — tylko między wykresami,
-    // które faktycznie istnieją (Mansfield może być null przy braku danych).
-    syncChartsCrosshair([rsChartInstance, rsVolumeChartInstance, rsMansfieldChartInstance].filter(Boolean));
+    // które faktycznie istnieją (Mansfield/wzrost % mogą być null przy braku danych).
+    syncChartsCrosshair([rsChartInstance, rsVolumeChartInstance, rsMansfieldChartInstance, rsGrowthChartInstance].filter(Boolean));
 }
 
 // ============================================================
@@ -1548,7 +1626,7 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        compareRows, rollingMean, alignMansfieldToDates, fmtPlDate,
+        compareRows, rollingMean, alignMansfieldToDates, alignGrowthToDates, fmtPlDate,
         classifyRsm, combinedRsmCandidates, state,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };
