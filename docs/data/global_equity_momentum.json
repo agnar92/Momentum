@@ -1,22 +1,22 @@
 {
-  "ref_date": "2026-09-14",
+  "ref_date": "2026-09-15",
   "lookback_months": 12,
   "indices": [
     {
       "universe": "MWIG40",
       "yf_symbol": "MWIG40.WA",
-      "price_now": 171.19,
+      "price_now": 170.29,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 127.49,
+      "price_start": 126.81,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 34.28
     },
     {
       "universe": "WIG20",
       "yf_symbol": "WIG20.WA",
-      "price_now": 176.08,
+      "price_now": 176.31,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 133.43,
+      "price_start": 133.61,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 31.96
     },
