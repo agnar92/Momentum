@@ -649,15 +649,18 @@ function renderPickerTable() {
         if (isPicked(c.ticker, universe)) tr.classList.add("row-selected");
         tr.innerHTML = pickerRowHtml(c, universe);
         // Klik w wiersz (poza przyciskiem "+ Dodaj"/"✓ W portfelu", patrz
-        // stopPropagation nizej) przekierowuje na Dashboard z wykresem tej
-        // spolki od razu otwartym w trybie pelnoekranowym — patrz obsluga
-        // ?ticker=&universe=&fullscreen=1 w app.js::init(). Zadnego
-        // duplikowania kodu wykresu na tej stronie (byl tu wczesniej pelny
-        // port renderRelativeStrengthChart — usuniety, bo dashboard juz ma
-        // dokladnie ten sam wykres).
+        // stopPropagation nizej) przekierowuje na chart.html — osobna strona
+        // z jednym, pelnoekranowym wykresem tej spolki (patrz komentarz na
+        // gorze js/chart.js). "back" niesie adres powrotny wprost w query
+        // stringu (przetrwa odswiezenie chart.html), zeby przycisk "Powrót"
+        // tam zawsze wracal dokladnie tutaj, do Kroku 2 — nie do samego
+        // dashboardu jak we wczesniejszej wersji. Zero duplikowania kodu
+        // wykresu na tej stronie (byl tu wczesniej pelny port
+        // renderRelativeStrengthChart — usuniety na rzecz wspoldzielonego
+        // js/chart-render.js, patrz CLAUDE.md).
         tr.addEventListener("click", () => {
-            const params = new URLSearchParams({ ticker: c.ticker, universe, fullscreen: "1" });
-            window.location.href = `index.html?${params.toString()}`;
+            const params = new URLSearchParams({ ticker: c.ticker, universe, back: "rebalance.html" });
+            window.location.href = `chart.html?${params.toString()}`;
         });
         tbody.appendChild(tr);
     });

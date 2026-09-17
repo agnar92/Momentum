@@ -21,7 +21,6 @@
     <nav>
         <a href="index.html">Dashboard</a>
         <a href="rebalance.html" class="active">Rebalans</a>
-        <a href="edukacja.html">Edukacja</a>
     </nav>
 </div>
 
@@ -35,7 +34,7 @@
 
     <div class="panel-card" id="pickerCard">
         <h3>Krok 2 — wybierz spółki z <span id="pickerUniverseLabel">—</span> <span class="ref-date-note" id="pickerMeta"></span></h3>
-        <p class="panel-hint">Pełna tabela momentum tego uniwersum, jak na dashboardzie — sortuj po dowolnej kolumnie, filtruj po etapie Weinsteina (możesz zaznaczyć kilka etapów naraz, np. 1 i 2) i ręcznie dodawaj spółki do portfela przyciskiem "+ Dodaj". Kliknij wiersz, żeby otworzyć jej wykres na Dashboardzie (pełny ekran) — przycisk "+ Dodaj" działa niezależnie od tego kliknięcia. Wybór kumuluje się w czasie: raz dodana spółka zostaje w portfelu, dopóki jej ręcznie nie usuniesz (patrz "Twój portfel" poniżej), nawet jeśli w kolejnym miesiącu przeglądasz inne uniwersum.</p>
+        <p class="panel-hint">Pełna tabela momentum tego uniwersum, jak na dashboardzie — sortuj po dowolnej kolumnie, filtruj po etapie Weinsteina (możesz zaznaczyć kilka etapów naraz, np. 1 i 2) i ręcznie dodawaj spółki do portfela przyciskiem "+ Dodaj". Kliknij wiersz, żeby otworzyć jej wykres na osobnej stronie — przycisk "+ Dodaj" działa niezależnie od tego kliknięcia. Wybór kumuluje się w czasie: raz dodana spółka zostaje w portfelu, dopóki jej ręcznie nie usuniesz (patrz "Twój portfel" poniżej), nawet jeśli w kolejnym miesiącu przeglądasz inne uniwersum.</p>
         <div class="stage-filter-bar" id="pickerStageFilterBar">
             <span class="stage-filter-label">Etap Weinsteina (można zaznaczyć kilka):</span>
             <button class="stage-filter-btn active" data-stage="ALL">Wszystkie</button>
@@ -43,7 +42,6 @@
             <button class="stage-filter-btn" data-stage="2" title="Etap 2A (świeże wybicie) + 2B (kontynuacja) — spółki w potwierdzonym trendzie wzrostowym, kandydaci do kupna.">Etap 2</button>
             <button class="stage-filter-btn" data-stage="3" title="Szczyt / dystrybucja — trend się wypłaszcza, rozważ realizację zysków.">Etap 3</button>
             <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą SMA30, unikaj nowych pozycji.">Etap 4</button>
-            <a class="stage-filter-help" href="edukacja.html" target="_blank" title="Pełny opis metody Stage Analysis — czym są etapy, jak czytać wykres 10:30, jak działa trailing stop-loss.">📚 Jak to czytać?</a>
         </div>
         <div class="table-wrap">
         <table class="momentum-table" id="pickerTable">

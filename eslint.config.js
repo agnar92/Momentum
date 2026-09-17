@@ -21,6 +21,21 @@ const browserGlobals = {
     URL: "readonly",
     URLSearchParams: "readonly",
     history: "readonly",
+    // Zdefiniowane w docs/js/chart-render.js, wspoldzielonym przez zwykly
+    // <script> tag (bez modulow/bundlera) z docs/js/app.js i docs/js/chart.js
+    // — patrz komentarz na gorze chart-render.js. Ten sam wzorzec co
+    // Chart/XLSX/TradingView powyzej (globalne, dostarczone przez inny plik
+    // <script>, nie zdefiniowane lokalnie w pliku, ktory je uzywa).
+    renderRelativeStrengthChart: "readonly",
+    renderStageBadge: "readonly",
+    destroyChartInstances: "readonly",
+    resetChartZoom: "readonly",
+    rsChartInstance: "readonly",
+    rsVolumeChartInstance: "readonly",
+    rsMansfieldChartInstance: "readonly",
+    rsSqueezeChartInstance: "readonly",
+    STAGE_LABELS: "readonly",
+    STAGE_COLORS: "readonly",
 };
 
 const nodeGlobals = {
