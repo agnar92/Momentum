@@ -705,6 +705,19 @@ site's data survives independently of any given Pages deploy and a fresh checkou
 immediately servable without having to run the pipeline first. CI still regenerates and re-commits it on
 every run (see CI section below) — it isn't hand-maintained.
 
+Every page shares the same `.topbar` (brand + `<nav>` linking Dashboard/Rebalans — see `chart.html` below
+for why it doesn't also link Rebalans↔chart pages) — on narrow phones the user reported the nav links
+themselves getting "lekko ukryty" (slightly cut off): `.brand`'s wordmark (plus, on `index.html`, the
+Ctrl+K search trigger next to it) didn't actually shrink below its own content width by default (flex
+items' implicit `min-width: auto`), so on a narrow enough viewport it could push `nav` past the edge of
+`.topbar` — and since `html`/`body` are `overflow: hidden` (deliberately, so the page itself never
+scrolls), anything pushed outside was simply unreachable, not just visually squeezed. Fixed with `.topbar
+.brand { min-width: 0; text-overflow: ellipsis; }` (so the wordmark truncates instead of forcing extra
+width) and `.topbar nav { flex-shrink: 0; }` (so the nav — what the user actually needs to click — is
+never what gives way first); `.topbar-left` on `index.html` already had `min-width: 0`; this closes the
+same gap for `.brand` inside it and for `rebalance.html`/`chart.html`, where `.brand` is `.topbar`'s direct
+flex child (no `.topbar-left` wrapper there).
+
 - **`index.html` / `js/app.js`** — main dashboard. `UNIVERSES` in `app.js` (kept in sync with
   `run_query.py`'s own `UNIVERSES`) stays the full SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 five — every
   universe's JSON is always loaded (`loadData()`), it drives Ctrl+K search and the RSM screener below
@@ -812,7 +825,8 @@ every run (see CI section below) — it isn't hand-maintained.
   pointing at the "Otwórz w TradingView" button as the fallback; that button itself is never disabled,
   since it works for every ticker regardless of chart-data availability. When shown, it's **four stacked
   Chart.js panels**
-  (`renderRelativeStrengthChart()`, loaded via CDN, along with `chartjs-plugin-zoom` and
+  (`renderRelativeStrengthChart()` — lives in `js/chart-render.js`, not `app.js` itself, see the dedicated
+  `chart.html`/`chart-render.js` bullet below for why — loaded via CDN, along with `chartjs-plugin-zoom` and
   `chartjs-plugin-annotation` — same CDN, pinned versions):
   1. The "10:30" price+SMA10/SMA30 chart, with the stock's own index level plotted alongside it on the
      *same* % axis (both rebased to 0% at the momentum window's start) so the stock's trend can be read
@@ -903,20 +917,28 @@ every run (see CI section below) — it isn't hand-maintained.
     rather than leaving an empty, all-filtered-out table with no visual explanation why). `.stage-filter-btn`
     CSS already keys each button's `.active` color off its own `data-stage`, so multiple buttons showing
     `.active` at once needed no CSS change.
-  - **Clicking a table row (not the "+ Dodaj"/"✓ W portfelu" button) REDIRECTS to the dashboard with that
-    ticker's chart open in fullscreen** — `?ticker=<ticker>&universe=<universe>&fullscreen=1` on
-    `index.html`, read by a small deep-link block at the end of `app.js::init()`: when both params are
-    present and `state.data[universe]` exists, it calls `jumpToTicker(ticker, universe)` (same function
-    Ctrl+K search uses) and then, if `fullscreen=1`, simulates a click on `#chartFullscreenBtn` to enter
-    the existing fullscreen chart mode (`initChartFullscreen()`) — then `history.replaceState()`s the URL
-    clean so a page refresh doesn't repeat the deep-link. A first version of this instead ported the whole
-    four-panel chart-rendering pipeline (`renderRelativeStrengthChart` and everything it depends on) into
-    `rebalance.js` as a second in-page view — reverted at the user's explicit request ("nie baw się w
-    kopiowanie tego samego kodu poprostu przekieruj na full screen i tyle"): a plain redirect into the
-    dashboard's own already-working chart, not a duplicate implementation to keep in sync. The "+ Dodaj"
-    button keeps working exactly as before and does NOT trigger the redirect — its click handler calls
-    `e.stopPropagation()` before the row's own click listener (added per row in `renderPickerTable()`)
-    can fire.
+  - **Clicking a table row (not the "+ Dodaj"/"✓ W portfelu" button) REDIRECTS to `chart.html`** — a
+    dedicated, standalone page with just that one ticker's own stage-analysis chart, full-page (see the
+    dedicated `chart.html` bullet below for what's on it and why it's a separate page rather than a
+    dashboard "mode"). The redirect passes `?ticker=<ticker>&universe=<universe>&back=rebalance.html`
+    (`window.location.href`, a real navigation, not a nested view inside the Krok 2 card) — `back` is what
+    lets `chart.html`'s own "← Powrót" button return here specifically, not just to the dashboard (see
+    `resolveBackHref()` in `chart.js`). The "+ Dodaj" button keeps working exactly as before and does NOT
+    trigger the redirect — its click handler calls `e.stopPropagation()` before the row's own click
+    listener (added per row in `renderPickerTable()`) can fire.
+    **Version history**: this went through three designs before landing here. First, the whole four-panel
+    chart-rendering pipeline (`renderRelativeStrengthChart` and everything it depends on) was ported
+    verbatim into `rebalance.js` as a second in-page view — rejected by the user as pointless duplication
+    ("nie baw się w kopiowanie tego samego kodu"). Second attempt: delete that copy and instead redirect to
+    `index.html?ticker=&universe=&fullscreen=1`, letting the dashboard's own existing fullscreen chart mode
+    (`initChartFullscreen()`) handle it — this avoided duplicating the chart code, but the user rejected it
+    too: landing on `index.html` still visually "went back to the Dashboard" first (sidebar/table briefly
+    the surrounding page), and a CSS-overlay "fullscreen" bolted onto a multi-purpose page isn't the same
+    as an actually separate page, nor did it remember where to return to (closing it always meant leaving
+    the dashboard entirely, with no path back to Krok 2). The current design (third) is what actually
+    satisfies both asks at once — a real separate page (`chart.html`) *and* zero duplicated chart code —
+    by extracting the chart engine itself into `js/chart-render.js`, a plain shared `<script>` file loaded
+    by both `index.html` and `chart.html` (see that bullet for the extraction details).
   - **`picks`** (`loadPicks()`/`savePicks()`, `localStorage` key `momentum_rebalance_picks`) is a flat,
     ACCUMULATING array of `{ ticker, universe, added_date }` — `isPicked()`/`togglePick()` are the only
     mutators. A pick made in one week's Step 2 session stays until manually removed (via the toggle button
@@ -983,16 +1005,53 @@ every run (see CI section below) — it isn't hand-maintained.
     using the capital-weighted average momentum (capped at ±30%/yr) and volatility of the currently
     computed `picks` targets — explicitly labeled as illustrative, not a forecast; unchanged in spirit,
     just driven by `computeTargetsFromPicks()` now.
-- **`edukacja.html`** — static, JS-free educational write-up of Stage Analysis in Polish: the 4-stage cycle
-  (with a colored `.edu-cycle` diagram matching `STAGE_COLORS` from `app.js`), the role of SMA10/SMA30 and
-  the base/resistance breakout mechanism, volume confirmation, the trailing stop-loss rules, the two warning
-  signals, a practical "how to use this dashboard" walkthrough (stage filter, the chart, the TradingView
-  button), and — deliberately — a section on what this implementation simplifies away from the book (shallow
-  price history, relative strength excluded from the stage engine) so the reader can calibrate trust rather
-  than take the tool's output as gospel. Written prose, not reference docs — exists because a user asked to
-  actually learn the method, not just see it applied. Linked from every page's topbar `<nav>`. Uses `.edu-*`
-  CSS classes on top of the existing `.rebalance-page`/`.panel-card` layout (`style.css`) rather than
-  `.panel-card h3`'s tiny all-caps settings-label style, which doesn't fit long-form paragraphs.
+- **`edukacja.html` was REMOVED** at the user's explicit request ("Usuń edukacje nie potrzebuje tego juz")
+  — it used to be a static, JS-free educational write-up of Stage Analysis in Polish (the 4-stage cycle,
+  SMA10/SMA30, base/resistance breakouts, volume confirmation, trailing stop-loss, and a section on what
+  the implementation simplifies away from the book). Its topbar `<nav>` link and the "📚 Jak to czytać?"
+  links that pointed to it from both stage-filter bars (`index.html`, `rebalance.html`) were removed along
+  with it, and its `.edu-*` CSS block in `style.css` was deleted too — nothing else referenced it.
+- **`chart.html` / `js/chart.js`** — a standalone, single-purpose page showing ONE ticker's own weekly
+  stage-analysis chart (the same "10:30" + volume + Mansfield RS + TTM Squeeze panels the dashboard shows),
+  full-page, with no sidebar/table/other-page chrome around it. Exists because `rebalance.js`'s Krok 2 row
+  click needed to open a chart (see that bullet above) and the user explicitly wanted a real separate page
+  for it, not a mode bolted onto another page — see the version-history note on the rebalance.js bullet for
+  the two earlier designs this replaced. `chart.js` reads `?ticker=<ticker>&universe=<universe>&back=<url>`
+  from the query string (`URLSearchParams`) — `ticker`/`universe` select what to show (fetches only that
+  one universe's `data/{universe}.json`, unlike `app.js::loadData()` which loads all 5 — this page only
+  ever needs one), and `back` is the literal href the "← Powrót" button navigates to when clicked
+  (`resolveBackHref()`: falls back to `document.referrer` when same-origin, then to `index.html`, if `back`
+  is missing — so the button is never a dead end even if the page is opened directly). Keeping the target
+  in the URL itself (rather than `sessionStorage` or similar) is *how* the page "remembers" where to return
+  even across a reload — the whole point of a real URL instead of in-memory page state. `renderChartPanel()`
+  is this page's own small equivalent of `app.js::updateChartArea()` — page-specific glue (which ticker is
+  currently shown, toggling the `#noChartMessage` fallback) that calls into the SAME shared chart engine
+  (below) the dashboard uses; it deliberately has no fullscreen mode (the whole page already is one) and no
+  "Dane spółki (TradingView)" tab (a wider dashboard feature, out of scope here). `PLN_UNIVERSES`/
+  `tvSymbolFor()`/`tvUrlFor()`/`UNIVERSE_LABELS` are duplicated here as tiny (3-6 line) local copies rather
+  than pulled from a shared file — deliberately different from the chart engine itself (below): these are
+  one-line lookup helpers with no real logic to keep in sync, not the ~500-line renderer the "don't
+  duplicate" request above was actually about.
+- **`js/chart-render.js`** — the shared chart-rendering ENGINE itself (`renderRelativeStrengthChart()` and
+  everything it depends on: `STAGE_LABELS`/`STAGE_DESCRIPTIONS`/`STAGE_COLORS`/`STAGE_BREAKOUT_VOLUME_RATIO`/
+  `BASE_BOX_COLORS`, `renderStageBadge()`, `rollingMean()`/`alignMansfieldToDates()`/`alignSqueezeToDates()`/
+  `fmtPlDate()`/`sliceWeeklyChartToRange()`/`syncChartsCrosshair()`/`syncVolumeXRange()`, `resetChartZoom()`,
+  `destroyChartInstances()`, and the four `rs*ChartInstance` module-level `let`s) — extracted out of `app.js`
+  into its own plain `<script>` file, loaded by BOTH `index.html` (before `js/app.js`) and `chart.html`
+  (before `js/chart.js`). Since this repo has no build step (see Frontend intro above), "shared" here just
+  means an ordinary global-scope script both pages load — no modules/bundler, the same pattern
+  `js/pull-to-refresh.js` already used for its own (smaller, self-contained) cross-page utility. This is
+  what actually makes `chart.html` NOT a duplicate of the dashboard's chart code (see the version-history
+  note on the rebalance.js bullet above for the two rejected designs that came before this one) —
+  `app.js`/`chart.js` each keep only their own thin, page-specific "which ticker, where do I get the data,
+  what does the toolbar look like" glue (`updateChartArea()`/`renderChartPanel()` respectively) and both
+  call the exact same `renderRelativeStrengthChart(symbol, rsEntry, rangeMode)`. Note the signature: the
+  extraction turned `rangeMode` into an explicit third parameter (mechanically renaming the one internal
+  `state.chartRangeMode` read) instead of leaving the function coupled to `app.js`'s own `state` object —
+  `chart.js` has no such object at all, just a local `chartRangeMode` variable. `tests/js/chart-render.test.js`
+  covers the pure-function pieces (`rollingMean`/`alignMansfieldToDates`/`alignSqueezeToDates`/`fmtPlDate`)
+  the same way `tests/js/app.test.js` used to before the move; `renderRelativeStrengthChart()` itself
+  (DOM/Chart.js-coupled) stays untested either way, consistent with the rest of this codebase's JS tests.
 
 ## Commands
 
