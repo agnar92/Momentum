@@ -1857,7 +1857,7 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
 TTM_SQUEEZE_BB_WEEKS = 20          # dlugosc SMA/odchylenia standardowego Bollinger Bands
 TTM_SQUEEZE_BB_MULT = 2.0          # mnoznik odchylenia standardowego (BB gorna/dolna)
 TTM_SQUEEZE_KC_WEEKS = 20          # dlugosc EMA/ATR kanalu Kellera (ta sama dlugosc co BB — standard)
-TTM_SQUEEZE_KC_ATR_MULT = 1.5      # mnoznik ATR kanalu Kellera (gorna/dolna)
+TTM_SQUEEZE_KC_ATR_MULT = 2.0      # mnoznik ATR kanalu Kellera (gorna/dolna)
 # Uzytkownik: "akcje ktore mialy wiecej niz 5 tygodni konsolidacji" — kwalifikuje sie
 # squeeze, ktory trwal SCISLE WIECEJ niz tyle tygodni (czyli min. 6 tygodni z rzedu).
 TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5
@@ -1865,6 +1865,29 @@ TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5
 # konsolidacji" (screener na dashboardzie, patrz combinedTtmSqueezeCandidates w
 # app.js) — starsze wybicia to juz rozwiniety ruch, nie swiezy sygnal wejscia.
 TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3
+
+
+def _rolling_linreg_endpoint(series, window):
+    """Standardowy "linear regression value" (jak `ta.linreg(source, length, 0)` w
+    Pine Script) — dla kazdego okna dlugosci `window` dopasowuje prosta OLS do
+    ostatnich `window` punktow (x = 0..window-1) i zwraca jej wartosc w OSTATNIM
+    punkcie okna (x = window-1), czyli "dokad zmierza" biezaca cena wedlug lokalnego
+    trendu, nie sama surowa wartosc. To DOKLADNIE ten krok uzywany w oryginalnym
+    wskazniku TTM Squeeze (John Carter) do wygladzenia histogramu momentum —
+    patrz compute_ttm_squeeze_chart."""
+    x = np.arange(window, dtype=float)
+    x_mean = x.mean()
+    x_var = ((x - x_mean) ** 2).sum()
+
+    def _linreg(y):
+        if np.isnan(y).any():
+            return np.nan
+        y_mean = y.mean()
+        slope = ((x - x_mean) * (y - y_mean)).sum() / x_var
+        intercept = y_mean - slope * x_mean
+        return intercept + slope * (window - 1)
+
+    return series.rolling(window).apply(_linreg, raw=True)
 
 
 def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
@@ -1885,13 +1908,15 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     wyszly poza kanal Kellera) po tym, jak byl wlaczony tydzien wczesniej — to jest
     "wybicie z konsolidacji", poczatek nowego ruchu.
 
-    "histogram" to uproszczony momentum-oscylator tego samego wskaznika (bez
-    regresji liniowej uzywanej w oryginalnym wskazniku Cartera — swiadome, udokumen-
-    towane uproszczenie, w tym samym duchu co reszta modulu, np. _compute_weinstein_
-    stage_series): close - srednia( (max_High + min_Low)/2 uśredniona z SMA(close) ),
-    obie liczone na TTM_SQUEEZE_KC_WEEKS tygodniach — dodatni/rosnacy = momentum w
-    gore, ujemny/malejacy = momentum w dol; znak i kierunek tej wartosci sluza do
-    pokolorowania histogramu na wykresie.
+    "histogram" to PELNY momentum-oscylator oryginalnego wskaznika Cartera (nie
+    uproszczony): najpierw `diff = close - srednia( (max_High + min_Low)/2 uśredniona
+    z SMA(close) )` (wszystko liczone na TTM_SQUEEZE_KC_WEEKS tygodniach), a nastepnie
+    `diff` przepuszczony przez rolling regresje liniowa (`_rolling_linreg_endpoint`,
+    ten sam krok co `ta.linreg(source, length, 0)` w Pine Script) — wartosc w kazdym
+    tygodniu to NIE surowe `diff`, tylko dokad "celuje" lokalny trend tego `diff`
+    wedlug dopasowanej prostej. Dodatni/rosnacy = momentum w gore, ujemny/malejacy =
+    momentum w dol; znak i kierunek tej wartosci sluza do pokolorowania histogramu na
+    wykresie.
 
     "weeks_since_fire"/"fire_consolidation_weeks" to wygodne, WYPELNIONE DO PRZODU
     (forward-filled) pola: dla kazdego wyswietlanego tygodnia mowia, ile tygodni
@@ -1901,14 +1926,19 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     frontu (classifyTtmSqueeze w app.js), zeby nie trzeba tam bylo samemu przechodzic
     calej tablicy w poszukiwaniu ostatniego "fired".
 
-    Pobiera dodatkowy zapas TTM_SQUEEZE_KC_WEEKS+2 tygodni PRZED start_date (rozgrzewka
-    SMA/EMA/ATR — ta sama konwencja co reszta wykresow w tym module), zwraca dane
-    WYLACZNIE od start_date do ref_date. Bez High/Low (stare wiersze `prices` sprzed
-    migracji schematu, patrz _ensure_prices_ohlc_columns w fetch_data.py) ATR/kanal
-    Kellera nie da sie policzyc — te tygodnie dostaja None zamiast bledy liczonej
-    wartosci, dokladnie jak reszta pol zaleznych od plytkiej historii w tym module.
+    Pobiera dodatkowy zapas 2*TTM_SQUEEZE_KC_WEEKS+2 tygodni PRZED start_date — SMA/EMA/
+    ATR/`diff` same potrzebuja TTM_SQUEEZE_KC_WEEKS tygodni rozgrzewki, a rolling
+    regresja liniowa nad `diff` (patrz "histogram" nizej) potrzebuje kolejnych
+    TTM_SQUEEZE_KC_WEEKS JUZ POLICZONYCH (nie-None) wartosci `diff`, wiec podwojny
+    zapas jest tu konieczny, zeby histogram mial juz wartosc na pierwszym
+    wyswietlanym tygodniu (ta sama zasada co RS_PRICE_SMA_LONG_WEEKS+2/
+    RS_MANSFIELD_MEDIUM_WEEKS+2 gdzie indziej w tym module). Zwraca dane WYLACZNIE
+    od start_date do ref_date. Bez High/Low (stare wiersze `prices` sprzed migracji
+    schematu, patrz _ensure_prices_ohlc_columns w fetch_data.py) ATR/kanal Kellera
+    nie da sie policzyc — te tygodnie dostaja None zamiast bledy liczonej wartosci,
+    dokladnie jak reszta pol zaleznych od plytkiej historii w tym module.
     Zwraca None gdy brakuje danych (np. spolka bez wystarczajacej historii cen)."""
-    lookback_weeks = TTM_SQUEEZE_KC_WEEKS + 2
+    lookback_weeks = 2 * TTM_SQUEEZE_KC_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
     stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date,
@@ -1941,7 +1971,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     highest_high = high.rolling(TTM_SQUEEZE_KC_WEEKS).max()
     lowest_low = low.rolling(TTM_SQUEEZE_KC_WEEKS).min()
     midline = ((highest_high + lowest_low) / 2 + sma) / 2
-    histogram = close - midline
+    histogram = _rolling_linreg_endpoint(close - midline, TTM_SQUEEZE_KC_WEEKS)
 
     # squeeze_count: kolejne tygodnie TRUE od ostatniego wylaczenia (grupowanie po
     # licznikowi False'ow — standardowy trik na "consecutive True run length" bez
