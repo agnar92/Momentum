@@ -30,7 +30,7 @@ from run_query import (
     compute_index_leaders,
     compute_index_momentum,
     compute_index_returns,
-    compute_growth_chart,
+    compute_ttm_squeeze_chart,
     compute_mansfield_rs_chart,
     compute_relative_strength_chart,
     compute_relative_strength_leaders,
@@ -788,7 +788,7 @@ class TestExportRelativeStrength:
         assert payload["universes"]["DOWJONES"]["leaders"][0]["ticker"] == "WIN"
         assert payload["universes"]["NASDAQ100"]["leaders"][0]["weekly_chart"] is not None
         assert payload["universes"]["NASDAQ100"]["leaders"][0]["mansfield_chart"] is not None
-        assert payload["universes"]["NASDAQ100"]["leaders"][0]["growth_chart"] is not None
+        assert payload["universes"]["NASDAQ100"]["leaders"][0]["ttm_squeeze_chart"] is not None
 
     def test_no_index_prices_writes_nothing(self, tmp_path):
         con = duckdb.connect(":memory:")
@@ -829,6 +829,20 @@ def insert_weekly_close_list(con, table, id_column, id_value, start_monday, clos
     mondays = pd.date_range(start=start_monday, periods=len(closes), freq="7D")
     rows = [(d.strftime("%Y-%m-%d"), id_value, c, c, 0) for d, c in zip(mondays, closes)]
     con.executemany(f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows)
+    return mondays
+
+
+def insert_weekly_ohlc_close_list(con, table, id_column, id_value, start_monday, closes, half_range=0.5):
+    """Jak insert_weekly_close_list, ale dolicza tez High/Low (Close +/- half_range) —
+    compute_ttm_squeeze_chart potrzebuje prawdziwego zakresu (True Range/ATR kanalu
+    Kellera), ktorego insert_weekly_close_list (same NULL High/Low) nie daje."""
+    mondays = pd.date_range(start=start_monday, periods=len(closes), freq="7D")
+    rows = [(d.strftime("%Y-%m-%d"), id_value, c, c, 1000, c + half_range, c - half_range)
+            for d, c in zip(mondays, closes)]
+    con.executemany(
+        f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume, High, Low) "
+        f"VALUES (?, ?, ?, ?, ?, ?, ?)", rows,
+    )
     return mondays
 
 
@@ -1421,76 +1435,78 @@ class TestComputeMansfieldRsChart:
 
 
 # ---------------------------------------------------------------------------
-# compute_growth_chart: surowy, kroczacy zwrot % spolki (bez indeksu) w 3
-# horyzontach — 1/3/6 mies. — trzeci wykres obok "10:30" i Mansfielda, na tym
-# samym oknie momentum co oba pozostale (start_date przekazywany, nie liczony
-# wewnetrznie).
+# compute_ttm_squeeze_chart: wskaznik TTM Squeeze (Bollinger Bands wewnatrz
+# kanalu Kellera = konsolidacja), czwarty wykres obok "10:30" i Mansfielda —
+# ZASTEPUJE dawny compute_growth_chart (surowy wzrost % 1/3/6 mies., usuniety
+# na zyczenie uzytkownika) na tym samym oknie momentum co oba pozostale
+# (start_date przekazywany, nie liczony wewnetrznie).
 # ---------------------------------------------------------------------------
 
-class TestComputeGrowthChart:
-    def test_all_three_horizons_have_values_from_first_displayed_week(self):
+class TestComputeTtmSqueezeChart:
+    def test_long_consolidation_then_breakout_is_detected(self):
         con = make_gem_con()
-        ref_date = pd.Timestamp("2026-06-29")
-        start_date = ref_date - pd.Timedelta(weeks=26)
-        # Zapas >= RS_MANSFIELD_MEDIUM_WEEKS (26 tyg.) PRZED start_date, zeby
-        # nawet najdluzszy (6-mies.) wzrost mial juz wartosc na pierwszym
-        # wyswietlanym tygodniu.
-        fixture_start = start_date - pd.Timedelta(weeks=30)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 60, 100.0, 1.0)
+        # 26 tyg. bardzo ciasnej konsolidacji (+/-0.3 wokol 100) — dluzej niz
+        # TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS (5) tyg. — potem gwaltowne wybicie
+        # (+3/tydzien) przez 14 tyg.
+        closes = [100.0 + (0.3 if i % 2 == 0 else -0.3) for i in range(26)]
+        closes += [100.0 + (i + 1) * 3.0 for i in range(14)]
+        fixture_start = pd.Timestamp("2025-01-06")
+        insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
 
-        out = compute_growth_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
-                                    start_date.strftime("%Y-%m-%d"))
+        # Okno wyswietlane zaczyna sie w trakcie konsolidacji (tydzien 20) — do tego
+        # momentu jest juz dokladnie TTM_SQUEEZE_KC_WEEKS (20) tyg. historii, wiec
+        # BB/KC sa w pelni "rozgrzane" od pierwszego wyswietlanego tygodnia.
+        start_date = fixture_start + pd.Timedelta(weeks=20)
+        ref_date = fixture_start + pd.Timedelta(weeks=39)
+        out = compute_ttm_squeeze_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                         start_date.strftime("%Y-%m-%d"))
         assert out is not None
-        assert out["dates"][0] == start_date.strftime("%Y-%m-%d")
-        assert out["growth_1m"][0] is not None
-        assert out["growth_3m"][0] is not None
-        assert out["growth_6m"][0] is not None
-        # Cena rosnie liniowo +1/tydzien -> wszystkie trzy horyzonty dodatnie.
-        assert out["growth_1m"][-1] > 0
-        assert out["growth_3m"][-1] > 0
-        assert out["growth_6m"][-1] > 0
-        # Dluzszy horyzont skumulowal wiecej wzrostu (liniowo rosnaca cena).
-        assert out["growth_6m"][-1] > out["growth_3m"][-1] > out["growth_1m"][-1]
+        assert out["squeeze_on"][0] is True
+        max_count = max(c for c in out["squeeze_count"] if c is not None)
+        assert max_count > run_query.TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS
 
-    def test_insufficient_lookback_leaves_longer_horizons_none_but_1m_populated(self):
+        assert True in out["fired"]
+        fire_idx = out["fired"].index(True)
+        assert out["fire_consolidation_weeks"][fire_idx] > run_query.TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS
+
+        # Po wybiciu squeeze jest wylaczony, a histogram (momentum) mocno rosnie.
+        assert out["squeeze_on"][-1] is False
+        assert out["squeeze_count"][-1] == 0
+        assert out["histogram"][-1] > out["histogram"][fire_idx]
+        assert out["weeks_since_fire"][-1] == len(out["dates"]) - 1 - fire_idx
+
+    def test_insufficient_history_leaves_squeeze_fields_none(self):
         con = make_gem_con()
-        ref_date = pd.Timestamp("2026-06-29")
-        start_date = ref_date - pd.Timedelta(weeks=26)
-        # Tylko 5 tyg. historii PRZED start_date: wystarczy na 1-mies. (potrzeba
-        # GROWTH_1M_WEEKS = 4 tyg.), za malo na 3-mies. (potrzeba
-        # RS_MANSFIELD_SHORT_WEEKS = 13 tyg.) i 6-mies. (26 tyg.).
-        fixture_start = start_date - pd.Timedelta(weeks=5)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 32, 100.0, 1.0)
+        fixture_start = pd.Timestamp("2025-01-06")
+        # Tylko 10 tyg. — za malo na 20-tyg. BB/KC (TTM_SQUEEZE_KC_WEEKS).
+        closes = [100.0 + i * 0.1 for i in range(10)]
+        insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
 
-        out = compute_growth_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
-                                    start_date.strftime("%Y-%m-%d"))
+        ref_date = fixture_start + pd.Timedelta(weeks=9)
+        out = compute_ttm_squeeze_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                         fixture_start.strftime("%Y-%m-%d"))
         assert out is not None
-        assert out["growth_1m"][0] is not None
-        assert out["growth_3m"][0] is None
-        assert out["growth_6m"][0] is None
+        assert all(v is None for v in out["squeeze_on"])
+        assert all(v is None for v in out["squeeze_count"])
+        assert all(v is None for v in out["weeks_since_fire"])
 
-    def test_dates_use_last_trading_day_of_week_not_monday(self):
+    def test_missing_high_low_leaves_squeeze_none(self):
+        # insert_weekly_series (bez High/Low, patrz jej docstring) — stare wiersze
+        # `prices` sprzed migracji schematu (_ensure_prices_ohlc_columns) — bez
+        # nich nie da sie policzyc ATR/kanalu Kellera, wiec squeeze_on zostaje
+        # None zamiast bledy policzonej wartosci, tak jak reszta modulu.
         con = make_gem_con()
-        start_date = pd.Timestamp("2026-01-05")  # poniedzialek -> pierwszy wyswietlany tydzien
-        ref_date = pd.Timestamp("2026-01-16")    # piatek DRUGIEGO wyswietlanego tygodnia
-        fixture_start = start_date - pd.Timedelta(weeks=32)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 32, 100.0, 1.0)
-        con.execute("INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES "
-                    "('2026-01-05', 'AAA', 131.0, 131.0, 0)")
-        week_days = pd.date_range(start="2026-01-12", periods=5, freq="1D")  # pon..pt, drugi wyswietlany tydzien
-        con.executemany(
-            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume) VALUES (?, 'AAA', ?, ?, 0)",
-            [(d.strftime("%Y-%m-%d"), 132.0 + i, 132.0 + i) for i, d in enumerate(week_days)],
-        )
-
-        out = compute_growth_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
-                                    start_date.strftime("%Y-%m-%d"))
+        fixture_start = pd.Timestamp("2025-01-06")
+        mondays = insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"),
+                                        30, 100.0, 0.1)
+        out = compute_ttm_squeeze_chart(con, "AAA", "NASDAQ100", mondays[-1].strftime("%Y-%m-%d"),
+                                         mondays[10].strftime("%Y-%m-%d"))
         assert out is not None
-        assert out["dates"] == ["2026-01-05", "2026-01-16"]  # 16.01 (piatek) NIE 12.01 (poniedzialek)
+        assert all(v is None for v in out["squeeze_on"])
 
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
-        assert compute_growth_chart(con, "NOPE", "NASDAQ100", "2026-03-30", "2025-10-06") is None
+        assert compute_ttm_squeeze_chart(con, "NOPE", "NASDAQ100", "2026-03-30", "2025-10-06") is None
 
 
 # ---------------------------------------------------------------------------
@@ -1517,27 +1533,28 @@ class TestExportJson:
         df = make_weighted_df_fixture()
         weekly_charts = {"AAA": {"dates": ["2026-01-05"], "close_pct": [0.0]}}
         mansfield_charts = {"AAA": {"dates": ["2026-01-05"], "rsm_short": [1.0], "rsm_medium": [2.0]}}
-        growth_charts = {"AAA": {"dates": ["2026-01-05"], "growth_1m": [1.0], "growth_3m": [2.0], "growth_6m": [3.0]}}
+        ttm_squeeze_charts = {"AAA": {"dates": ["2026-01-05"], "histogram": [1.0], "squeeze_on": [True]}}
 
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0,
-                    weekly_charts=weekly_charts, mansfield_charts=mansfield_charts, growth_charts=growth_charts)
+                    weekly_charts=weekly_charts, mansfield_charts=mansfield_charts,
+                    ttm_squeeze_charts=ttm_squeeze_charts)
 
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
         by_ticker = {c["ticker"]: c for c in payload["constituents"]}
         assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
         assert by_ticker["AAA"]["mansfield_chart"] == mansfield_charts["AAA"]
-        assert by_ticker["AAA"]["growth_chart"] == growth_charts["AAA"]
+        assert by_ticker["AAA"]["ttm_squeeze_chart"] == ttm_squeeze_charts["AAA"]
         # BBB nie ma wpisu w slownikach (np. brak danych indeksu dla tego tickera w
         # danym momencie) -> None w JSON, nie blad.
         assert by_ticker["BBB"]["weekly_chart"] is None
         assert by_ticker["BBB"]["mansfield_chart"] is None
-        assert by_ticker["BBB"]["growth_chart"] is None
+        assert by_ticker["BBB"]["ttm_squeeze_chart"] is None
 
     def test_defaults_to_none_when_charts_not_provided(self, tmp_path):
         df = make_weighted_df_fixture()
         export_json(df, "NASDAQ100", "2026-03-30", str(tmp_path), n_missing_fmc=0)
         payload = json.loads((tmp_path / "nasdaq100.json").read_text())
-        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None and c["growth_chart"] is None
+        assert all(c["weekly_chart"] is None and c["mansfield_chart"] is None and c["ttm_squeeze_chart"] is None
                    for c in payload["constituents"])
 
     def test_all_constituents_defaults_to_same_records_as_constituents(self, tmp_path):
@@ -1573,15 +1590,16 @@ class TestBuildFullUniverseRecords:
 
         weekly_charts = {"AAA": {"dates": []}}
         mansfield_charts = {"AAA": {"dates": []}}
-        growth_charts = {"AAA": {"dates": []}}
-        records = _build_full_universe_records(df_ranked, {"AAA"}, weekly_charts, mansfield_charts, growth_charts)
+        ttm_squeeze_charts = {"AAA": {"dates": []}}
+        records = _build_full_universe_records(df_ranked, {"AAA"}, weekly_charts, mansfield_charts,
+                                                ttm_squeeze_charts)
 
         by_ticker = {r["ticker"]: r for r in records}
         assert by_ticker["AAA"]["in_selection"] is True
         assert by_ticker["BBB"]["in_selection"] is False
         assert by_ticker["CCC"]["in_selection"] is False
-        assert by_ticker["AAA"]["growth_chart"] == growth_charts["AAA"]
-        assert by_ticker["BBB"]["growth_chart"] is None
+        assert by_ticker["AAA"]["ttm_squeeze_chart"] == ttm_squeeze_charts["AAA"]
+        assert by_ticker["BBB"]["ttm_squeeze_chart"] is None
         assert by_ticker["AAA"]["weekly_chart"] == weekly_charts["AAA"]
         assert by_ticker["BBB"]["weekly_chart"] is None
         assert {r["rank"] for r in records} == {1, 2, 3}
@@ -1746,7 +1764,7 @@ class TestProcessUniverseChartsOnly:
         assert all_by_ticker["BBB"]["in_selection"] is False
         assert all_by_ticker["BBB"]["weekly_chart"] is not None
         assert all_by_ticker["BBB"]["mansfield_chart"] is not None
-        assert all_by_ticker["BBB"]["growth_chart"] is not None
+        assert all_by_ticker["BBB"]["ttm_squeeze_chart"] is not None
 
     def test_equal_weight_universe_all_constituents_equals_constituents(self, tmp_path):
         # DOWJONES nie jest w FULL_COVERAGE_UNIVERSES: "constituents" jest juz calym

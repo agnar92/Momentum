@@ -313,6 +313,14 @@ html, body {
 .rsm-trend-cross { color: #4fa6e0; }
 .rsm-trend-mixed { color: var(--text-faint); font-weight: 400; }
 
+/* Kolumna "Status" w tabeli TTM Squeeze (patrz ttmSqueezeStatusHtml/
+   classifyTtmSqueeze w app.js) — te same kolory co kropki squeeze na czwartym
+   panelu wykresu (patrz dotColors w renderRelativeStrengthChart): złoty =
+   świeże wybicie z konsolidacji, czerwonawy = konsolidacja wciąż trwa. */
+.squeeze-status { font-size: 10.5px; font-weight: 600; }
+.squeeze-status-fired { color: #ffd23f; }
+.squeeze-status-consolidating { color: #e74c3c; }
+
 /* ============================================================
    PANEL TABEL (rozwijany, ~80% szerokości ekranu)
    ============================================================ */

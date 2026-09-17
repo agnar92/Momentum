@@ -641,6 +641,30 @@ was replaced by the current same-window design — both charts now share one x-a
 what makes the frontend's synced crosshair between the two panels line up correctly (see
 `renderRelativeStrengthChart()`/`syncChartsCrosshair()` below).
 
+Each leader (and every `all_constituents` record for `FULL_COVERAGE_UNIVERSES`, same as `weekly_chart`/
+`mansfield_chart`) also carries a `ttm_squeeze_chart` (`compute_ttm_squeeze_chart()`) — the TTM Squeeze
+indicator (John Carter, *Mastering the Trade*), computed on **weekly** bars. This is the fourth chart panel
+next to "10:30" and Mansfield, and it **replaces an earlier panel** that showed a stock's own raw, rolling
+1/3/6-month % growth (`compute_growth_chart`, `growth_1m`/`growth_3m`/`growth_6m` — removed) — the user
+explicitly changed direction away from plain performance numbers toward finding stocks that already have
+momentum but are sitting through a multi-week **consolidation** ("squeeze"), specifically to catch names
+just starting to break out of one. `squeeze_on` is true for a given week when the Bollinger Bands
+(`TTM_SQUEEZE_BB_WEEKS` = 20-week SMA ± `TTM_SQUEEZE_BB_MULT` = 2.0 standard deviations) sit entirely
+**inside** the Keltner Channel (`TTM_SQUEEZE_KC_WEEKS` = 20-week EMA ± `TTM_SQUEEZE_KC_ATR_MULT` = 1.5×
+ATR) — the classic low-volatility/consolidation signature. `squeeze_count` is the number of *consecutive*
+weeks the squeeze has been on (0 when off); `fired` marks the single week the squeeze just turned off after
+being on — the breakout out of consolidation. `weeks_since_fire`/`fire_consolidation_weeks` are
+forward-filled for every week: how long ago the most recent fire happened, and how many weeks of
+consolidation led up to it — this is what lets the frontend classify a ticker without having to walk the
+whole array itself (see `classifyTtmSqueeze()` below). `histogram` is a deliberately simplified momentum
+oscillator (`close` minus a blend of the `TTM_SQUEEZE_KC_WEEKS`-week high/low midpoint and SMA) — the
+original indicator runs a linear-regression forecast over that same series, dropped here in the same spirit
+as `_compute_weinstein_stage_series`'s own documented simplifications elsewhere in this file. Needs weekly
+High/Low (via `_weekly_close_series(..., include_buying_volume=True)`, which also carries them) for the ATR/
+Keltner Channel — old pre-migration `prices` rows without them (see `_ensure_prices_ohlc_columns` in
+`fetch_data.py`) leave every squeeze field `None` for that stretch rather than a wrong value, the same
+graceful-degradation convention used throughout this module.
+
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
 Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worker caching the app shell,
@@ -688,14 +712,36 @@ every run (see CI section below) — it isn't hand-maintained.
   `selectTicker(ticker, universe)` exactly like every other table — the whole chart-rendering pipeline
   below is completely unaware that a click came from an RSM tab rather than a per-universe one.
 
+  **A third full, sortable, stage-filterable screener tab, "🧨 TTM Squeeze"**, sits next to the two RSM
+  tabs (`data-universe="TTM_SQUEEZE"`) — the user's own redirect away from plain performance numbers
+  (see the removed `growth_chart` panel, above) toward stocks that already have momentum but are sitting
+  through a multi-week consolidation. `classifyTtmSqueeze(ticker, universe, c)` requires
+  `momentum_score > 0` ("mają Momentum") and reads the constituent's `ttm_squeeze_chart` (see
+  `compute_ttm_squeeze_chart()` above), walking back from the newest week to the latest one that actually
+  has a computed `squeeze_on` (the same "current week often still null" caveat as `classifyRsm`), then
+  classifies into **consolidating** (`squeeze_on === true` and `squeeze_count > TTM_SQUEEZE_MIN_
+  CONSOLIDATION_WEEKS`, 5 — "akcje które miały więcej niż 5 tygodni konsolidacji") or **fired**
+  (`weeks_since_fire <= TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS`, 3, AND `fire_consolidation_weeks >
+  TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS` — a breakout out of a long-enough squeeze within the last 3 weeks,
+  literally "akcje które zaczynają ruszać po takiej konsolidacji"); these constants are duplicated
+  client-side and must stay in sync with the same-named constants in `run_query.py`. Neither bucket, and
+  the ticker doesn't appear — same "selected screener, not a full list" philosophy as RSM.
+  `combinedTtmSqueezeCandidates()` runs this over all 5 universes' `all_constituents` and returns one flat,
+  pre-sorted list (fired first — most recent breakout on top — then consolidating, longest squeeze on top);
+  `renderTtmSqueezeTable()`/`ttmSqueezeRowHtml()` render it with a "Status" column
+  (`ttmSqueezeStatusHtml()` — 🔥 for fired, 🌀 for consolidating) and a "Konsolidacja" column (weeks). The
+  sidebar also gets a matching `🧨 TTM Squeeze` tile group (`renderTtmSqueezePanel()`, `#tiles-TTM-squeeze`),
+  same pattern as the RSM groups.
+
   The per-universe momentum table (`renderTable()` — `added_tickers`/`dropped_tickers` are exported in the
   JSON but not currently rendered) carries an "Etap" (Stage) column (`stageCellHtml()`, reading
   `constituent.weekly_chart.current_stage`) and a **stage filter bar** above it (`#stageFilterBar`,
   `initStageFilter()`/`matchesStageFilter()`) — "Wszystkie" (all), "Etap 1", "Etap 2" (matches *both* `2A`
   and `2B` — a user thinks of Stage 2 as one thing, not two), "Etap 3", "Etap 4". Since the RSM
-  Stabilne/Wzrostowe tabs also cover full universes with a real `current_stage` per row, the stage filter
-  bar is now shown for those two tabs too (previously hidden for the single old RSM/GEM tabs, which were
-  already-filtered, differently-shaped lists) — `initStageFilter()`'s click handler dispatches to whichever
+  Stabilne/Wzrostowe tabs (and now TTM Squeeze too) also cover full universes with a real `current_stage`
+  per row, the stage filter bar is shown for all three of those tabs too (previously hidden for the single
+  old RSM/GEM tabs, which were already-filtered, differently-shaped lists) — `initStageFilter()`'s click
+  handler, and the sortable `<th>` click handler in `initDrawer()`, both dispatch to whichever
   table is currently active (`renderActiveDrawerTable()`) rather than always calling `renderTable()`.
   `state.stageFilter` persists across all drawer tabs. The drawer meta line reports `N z M spółek (etap
   ...)` when a filter is active, and the empty-state row distinguishes "no data at all" from "no
@@ -720,8 +766,8 @@ every run (see CI section below) — it isn't hand-maintained.
   `tvRowButtonHtml()`/`bindTvRowButtons()`) also carries its own small "TV" button doing the same,
   independent of selecting the row (it stops click propagation so it doesn't also call `selectTicker()`).
   The sidebar is hidden on phones in portrait (`@media max-width:640px`), so the drawer's per-universe
-  tabs (`DOWJONES`/`WIG20`/`MWIG40`) plus the two RSM tabs are the only way to reach any of this on
-  mobile — `showDrawerTable(universe)` dispatches on the tab key. Every ticker in the main per-universe
+  tabs (`DOWJONES`/`WIG20`/`MWIG40`) plus the two RSM tabs and the TTM Squeeze tab are the only way to
+  reach any of this on mobile — `showDrawerTable(universe)` dispatches on the tab key. Every ticker in the main per-universe
   exports (`docs/data/{universe}.json`'s `all_constituents`, see `process_universe`/`export_json` above)
   carries its own `weekly_chart`/`mansfield_chart` — so the own chart is available for any stock, however
   it was selected (per-universe tables, either RSM tab, Ctrl+K search). `findRsEntry()` in `app.js` looks
@@ -733,7 +779,7 @@ every run (see CI section below) — it isn't hand-maintained.
   — when a ticker has no `weekly_chart` at all (e.g. one whose momentum fell back to the 9-month window
   with too little extra history), the chart panels are hidden and `#noChartMessage` is shown instead,
   pointing at the "Otwórz w TradingView" button as the fallback; that button itself is never disabled,
-  since it works for every ticker regardless of chart-data availability. When shown, it's **three stacked
+  since it works for every ticker regardless of chart-data availability. When shown, it's **four stacked
   Chart.js panels**
   (`renderRelativeStrengthChart()`, loaded via CDN, along with `chartjs-plugin-zoom` and
   `chartjs-plugin-annotation` — same CDN, pinned versions):
@@ -754,7 +800,19 @@ every run (see CI section below) — it isn't hand-maintained.
      sync with panel 1 (`syncVolumeXRange()`, called from the zoom/pan plugin's `onZoomComplete`/
      `onPanComplete` callbacks) so both panels always show the same weeks.
   3. The Mansfield RS oscillator (short-term + medium-term lines, its own separate ~6-month window, see
-     above) in the shortest panel underneath. Non-interactive — its own short window doesn't need zoom/pan.
+     above) in a small panel underneath. Non-interactive — its own short window doesn't need zoom/pan.
+  4. The TTM Squeeze panel (`ttm_squeeze_chart`, see `compute_ttm_squeeze_chart()` above) — replaces an
+     earlier panel that plotted the stock's own raw 1/3/6-month rolling % growth (`growth_chart`, removed
+     at the user's request in favor of finding momentum names coming out of consolidation). A Chart.js
+     mixed chart (`type: "bar"` with one `type: "line"` dataset overlaid): the histogram bars are the
+     momentum oscillator, colored with the classic 4-color TTM Squeeze scheme (bright/dark green above
+     zero, bright/dark red below, by sign and whether the bar is rising or falling vs. the previous one —
+     see `histColors` in `renderRelativeStrengthChart()`); a row of dots pinned to the zero line
+     (`dotColors`) marks the squeeze state per week — red while the squeeze is on (consolidating), gold on
+     the single week it fires (breaks out), gray afterward, transparent while not yet computed (BB/KC
+     warmup). Non-interactive, same as the Mansfield panel. `alignSqueezeToDates()` pads it to the same
+     full date array as panel 1, exactly like `alignMansfieldToDates()` does, so all panels share one X
+     scale.
 
   (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-volume` / `.rs-chart-panel-small` in
   `style.css`.) **Version history**: an earlier version put entry/exit signal markers (`ENTRY_2A`/`ENTRY_2B`/

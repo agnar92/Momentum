@@ -442,7 +442,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     # FULL_COVERAGE_UNIVERSES/_build_full_universe_records powyżej). To samo okno co
     # index_mom w export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się
     # okna. ---
-    weekly_charts, mansfield_charts, growth_charts = {}, {}, {}
+    weekly_charts, mansfield_charts, ttm_squeeze_charts = {}, {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_weighted["Ticker"])
     if universe in FULL_COVERAGE_UNIVERSES:
@@ -453,20 +453,20 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                                                                        ref_date, index_mom["date_start"])
             mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
-            growth_charts[ticker] = compute_growth_chart(con, ticker, universe,
-                                                           ref_date, index_mom["date_start"])
+            ttm_squeeze_charts[ticker] = compute_ttm_squeeze_chart(con, ticker, universe,
+                                                                     ref_date, index_mom["date_start"])
 
     all_constituents = None
     if universe in FULL_COVERAGE_UNIVERSES:
         all_constituents = _build_full_universe_records(df_ranked, selected_tickers,
-                                                          weekly_charts, mansfield_charts, growth_charts)
+                                                          weekly_charts, mansfield_charts, ttm_squeeze_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked)} spółek "
               f"(nie tylko {len(selected_tickers)} w decylu).")
 
     # --- Eksport JSON dla strony ---
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
-                all_constituents=all_constituents, growth_charts=growth_charts)
+                all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts)
 
     return df_weighted
 
@@ -565,7 +565,7 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
         if not df_metrics_full.empty:
             df_ranked_full = add_zscore_and_momentum_score(df_metrics_full)
 
-    weekly_charts, mansfield_charts, growth_charts = {}, {}, {}
+    weekly_charts, mansfield_charts, ttm_squeeze_charts = {}, {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_sel["Ticker"])
     if df_ranked_full is not None:
@@ -576,13 +576,13 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
                                                                        ref_date, index_mom["date_start"])
             mansfield_charts[ticker] = compute_mansfield_rs_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
-            growth_charts[ticker] = compute_growth_chart(con, ticker, universe,
-                                                           ref_date, index_mom["date_start"])
+            ttm_squeeze_charts[ticker] = compute_ttm_squeeze_chart(con, ticker, universe,
+                                                                     ref_date, index_mom["date_start"])
 
     all_constituents = None
     if df_ranked_full is not None:
         all_constituents = _build_full_universe_records(df_ranked_full, set(df_sel["Ticker"]),
-                                                          weekly_charts, mansfield_charts, growth_charts)
+                                                          weekly_charts, mansfield_charts, ttm_squeeze_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked_full)} spółek "
               f"(nie tylko {len(df_sel)} w ostatniej zapisanej selekcji).")
 
@@ -592,11 +592,11 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
     # date faktycznej (miesiecznej) selekcji, nie date odswiezenia wykresow.
     export_json(df_sel, universe, last_ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
-                all_constituents=all_constituents, growth_charts=growth_charts)
+                all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts)
     return df_sel
 
 
-def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts, growth_charts=None):
+def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts, ttm_squeeze_charts=None):
     """Rekord dla KAZDEJ kwalifikujacej sie spolki w uniwersum (df_ranked — wynik
     get_universe_metrics + add_zscore_and_momentum_score), nie tylko tych wybranych do
     decyla/portfela — patrz FULL_COVERAGE_UNIVERSES. Zasila "all_constituents" w
@@ -605,7 +605,7 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
     z add_zscore_and_momentum_score) — inne pojecie niz "rank"/"rank_in_universe" w
     "constituents", ktore liczy sie tylko wsrod wybranych/wazonych. "in_selection" mowi,
     czy dany ticker jest akurat w biezacym decylu (te same tickery co "constituents")."""
-    growth_charts = growth_charts or {}
+    ttm_squeeze_charts = ttm_squeeze_charts or {}
     records = []
     for _, r in df_ranked.iterrows():
         records.append({
@@ -621,17 +621,17 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
             "in_selection": bool(r["Ticker"] in selected_tickers),
             "weekly_chart": weekly_charts.get(r["Ticker"]),
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
-            "growth_chart": growth_charts.get(r["Ticker"]),
+            "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
         })
     return records
 
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                  prev_ref_date=None, added_tickers=None, dropped_tickers=None,
-                 weekly_charts=None, mansfield_charts=None, all_constituents=None, growth_charts=None):
+                 weekly_charts=None, mansfield_charts=None, all_constituents=None, ttm_squeeze_charts=None):
     weekly_charts = weekly_charts or {}
     mansfield_charts = mansfield_charts or {}
-    growth_charts = growth_charts or {}
+    ttm_squeeze_charts = ttm_squeeze_charts or {}
     records = []
     for _, r in df_weighted.iterrows():
         weekly_chart = weekly_charts.get(r["Ticker"])
@@ -648,7 +648,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "weight_pct": round(float(r["weight"]) * 100, 3),
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
-            "growth_chart": growth_charts.get(r["Ticker"]),
+            "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
         })
     # pd.notna guard: przy odswiezeniu --charts-only (process_universe_charts_only)
     # tuz PO migracji kolumny (ALTER TABLE ... ADD COLUMN, patrz
@@ -1845,60 +1845,163 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     }
 
 
-GROWTH_1M_WEEKS = 4   # ~1 miesiac (dane sa tygodniowe — 4 tyg. zamiast kalendarzowego 1M)
-# 3M/6M celowo reuzywaja RS_MANSFIELD_SHORT_WEEKS/RS_MANSFIELD_MEDIUM_WEEKS (13/26 tyg.)
-# zamiast wlasnych stalych — to te same horyzonty co oscylator Mansfielda obok, wiec
-# "3 miesiace" znaczy to samo na obu wykresach.
+# --- TTM Squeeze (John Carter, "Mastering the Trade") — CZWARTY panel obok "10:30"
+# i oscylatora Mansfielda, ZASTEPUJACY dawny wykres surowego wzrostu % 1/3/6 mies.
+# (compute_growth_chart, patrz git history) na wyrazne zyczenie uzytkownika: zamiast
+# czystej stopy zwrotu szukamy teraz spolek z Momentum, ktore przechodza przez
+# WIELOTYGODNIOWA konsolidacje (Bollinger Bands scisnięte WEWNATRZ kanalu Kellera —
+# "squeeze") i dopiero zaczynaja z niej wychodzic ("fire") — klasyczny setup na
+# poczatek nowego ruchu po fazie niskiej zmiennosci. Liczone na TYGODNIOWYCH
+# swiecach (High/Low/Close z _weekly_close_series), nie dziennych — ten sam rytm co
+# reszta wykresow stage-analysis w tym module.
+TTM_SQUEEZE_BB_WEEKS = 20          # dlugosc SMA/odchylenia standardowego Bollinger Bands
+TTM_SQUEEZE_BB_MULT = 2.0          # mnoznik odchylenia standardowego (BB gorna/dolna)
+TTM_SQUEEZE_KC_WEEKS = 20          # dlugosc EMA/ATR kanalu Kellera (ta sama dlugosc co BB — standard)
+TTM_SQUEEZE_KC_ATR_MULT = 1.5      # mnoznik ATR kanalu Kellera (gorna/dolna)
+# Uzytkownik: "akcje ktore mialy wiecej niz 5 tygodni konsolidacji" — kwalifikuje sie
+# squeeze, ktory trwal SCISLE WIECEJ niz tyle tygodni (czyli min. 6 tygodni z rzedu).
+TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5
+# Ile tygodni wstecz od ref_date liczy sie jeszcze jako "wlasnie zaczyna ruszac po
+# konsolidacji" (screener na dashboardzie, patrz combinedTtmSqueezeCandidates w
+# app.js) — starsze wybicia to juz rozwiniety ruch, nie swiezy sygnal wejscia.
+TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3
 
 
-def compute_growth_chart(con, ticker, universe, ref_date, start_date):
-    """Kolejny wykres obok "10:30" i oscylatora Mansfielda — na zyczenie uzytkownika
-    ("czysty wzrost procentowy 1, 3 i 6 miesiecy" obok istniejacego RSM 3/6-miesiecznego).
-    W odroznieniu od close_pct (wykres 10:30 — zawsze rebazowany do 0% na POCZATKU
-    wyswietlanego okna) i rsm_short/rsm_medium (sila WZGLEDEM indeksu, patrz
-    compute_mansfield_rs_chart), to jest surowy, KROCZACY zwrot samej spolki, bez
-    odniesienia do indeksu i bez rebazowania do jednego wspolnego punktu startowego:
-    dla kazdego wyswietlanego tygodnia growth_Nm = (close_teraz / close_sprzed_N_tyg. - 1) * 100,
-    gdzie N to GROWTH_1M_WEEKS (~1 mies.), RS_MANSFIELD_SHORT_WEEKS (~3 mies.) i
-    RS_MANSFIELD_MEDIUM_WEEKS (~6 mies.) — "ile spolka urosla/spadla w ostatnim
-    miesiacu/kwartale/polroczu, patrzac z tego konkretnego tygodnia", niezaleznie od
-    tego, kiedy zaczyna sie wyswietlane okno.
+def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
+    """Czwarty wykres obok "10:30" i oscylatora Mansfielda — wskaznik TTM Squeeze
+    (John Carter, "Mastering the Trade"), na wyrazne zyczenie uzytkownika: zamiast
+    dawnego surowego wzrostu % w 3 horyzontach (compute_growth_chart, usuniety)
+    szukamy teraz faz NISKIEJ zmiennosci (konsolidacji) i momentu, w ktorym spolka
+    zaczyna z nich wychodzic.
 
-    Pobiera dodatkowy zapas RS_MANSFIELD_MEDIUM_WEEKS tygodni PRZED start_date, zeby
-    najdluzszy (6-miesieczny) wzrost mial juz wartosc od pierwszego wyswietlanego
-    tygodnia — analogicznie do zapasu w compute_mansfield_rs_chart.
+    Squeeze WLACZONY w danym tygodniu, gdy wstegi Bollingera (SMA +/- TTM_SQUEEZE_
+    BB_MULT * odchylenie std., TTM_SQUEEZE_BB_WEEKS tyg.) mieszcza sie CALKOWICIE
+    WEWNATRZ kanalu Kellera (EMA +/- TTM_SQUEEZE_KC_ATR_MULT * ATR, TTM_SQUEEZE_
+    KC_WEEKS tyg.) — klasyczna definicja "squeeze" (niska zmiennosc, cena w wąskiej
+    konsolidacji). "squeeze_count" to liczba KOLEJNYCH tygodni, w ktorych squeeze byl
+    wlaczony (0, gdy akurat jest wylaczony) — to na niej opiera sie proba uzytkownika
+    "wiecej niz 5 tygodni konsolidacji" (TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS).
+    "fired" oznacza tydzien, w ktorym squeeze WLASNIE sie wylaczyl (wstegi Bollingera
+    wyszly poza kanal Kellera) po tym, jak byl wlaczony tydzien wczesniej — to jest
+    "wybicie z konsolidacji", poczatek nowego ruchu.
 
+    "histogram" to uproszczony momentum-oscylator tego samego wskaznika (bez
+    regresji liniowej uzywanej w oryginalnym wskazniku Cartera — swiadome, udokumen-
+    towane uproszczenie, w tym samym duchu co reszta modulu, np. _compute_weinstein_
+    stage_series): close - srednia( (max_High + min_Low)/2 uśredniona z SMA(close) ),
+    obie liczone na TTM_SQUEEZE_KC_WEEKS tygodniach — dodatni/rosnacy = momentum w
+    gore, ujemny/malejacy = momentum w dol; znak i kierunek tej wartosci sluza do
+    pokolorowania histogramu na wykresie.
+
+    "weeks_since_fire"/"fire_consolidation_weeks" to wygodne, WYPELNIONE DO PRZODU
+    (forward-filled) pola: dla kazdego wyswietlanego tygodnia mowia, ile tygodni
+    temu nastapilo OSTATNIE wybicie z konsolidacji i ile tygodni trwala konsolidacja,
+    ktora do niego doprowadzila (None, gdy w dostepnej historii nie bylo jeszcze
+    zadnego wybicia) — to na nich opiera sie klasyfikacja screenera po stronie
+    frontu (classifyTtmSqueeze w app.js), zeby nie trzeba tam bylo samemu przechodzic
+    calej tablicy w poszukiwaniu ostatniego "fired".
+
+    Pobiera dodatkowy zapas TTM_SQUEEZE_KC_WEEKS+2 tygodni PRZED start_date (rozgrzewka
+    SMA/EMA/ATR — ta sama konwencja co reszta wykresow w tym module), zwraca dane
+    WYLACZNIE od start_date do ref_date. Bez High/Low (stare wiersze `prices` sprzed
+    migracji schematu, patrz _ensure_prices_ohlc_columns w fetch_data.py) ATR/kanal
+    Kellera nie da sie policzyc — te tygodnie dostaja None zamiast bledy liczonej
+    wartosci, dokladnie jak reszta pol zaleznych od plytkiej historii w tym module.
     Zwraca None gdy brakuje danych (np. spolka bez wystarczajacej historii cen)."""
-    extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=RS_MANSFIELD_MEDIUM_WEEKS)).strftime("%Y-%m-%d")
+    lookback_weeks = TTM_SQUEEZE_KC_WEEKS + 2
+    extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
-    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date,
+                                     include_buying_volume=True)
     if stock_df.empty:
         return None
 
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
-    stock_df["growth_1m"] = (stock_df["close"] / stock_df["close"].shift(GROWTH_1M_WEEKS) - 1) * 100
-    stock_df["growth_3m"] = (stock_df["close"] / stock_df["close"].shift(RS_MANSFIELD_SHORT_WEEKS) - 1) * 100
-    stock_df["growth_6m"] = (stock_df["close"] / stock_df["close"].shift(RS_MANSFIELD_MEDIUM_WEEKS) - 1) * 100
+    close, high, low = stock_df["close"], stock_df["high"], stock_df["low"]
 
-    in_window = stock_df[stock_df["week_start"] >= pd.Timestamp(start_date)]
-    if in_window.empty:
+    sma = close.rolling(TTM_SQUEEZE_BB_WEEKS).mean()
+    std = close.rolling(TTM_SQUEEZE_BB_WEEKS).std()
+    bb_upper = sma + TTM_SQUEEZE_BB_MULT * std
+    bb_lower = sma - TTM_SQUEEZE_BB_MULT * std
+
+    prev_close = close.shift(1)
+    true_range = pd.concat([
+        high - low,
+        (high - prev_close).abs(),
+        (low - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    atr = true_range.rolling(TTM_SQUEEZE_KC_WEEKS).mean()
+    ema = close.ewm(span=TTM_SQUEEZE_KC_WEEKS, adjust=False).mean()
+    kc_upper = ema + TTM_SQUEEZE_KC_ATR_MULT * atr
+    kc_lower = ema - TTM_SQUEEZE_KC_ATR_MULT * atr
+
+    squeeze_on = (bb_lower > kc_lower) & (bb_upper < kc_upper)
+    squeeze_on = squeeze_on.where(bb_upper.notna() & kc_upper.notna())  # None (NA) w rozgrzewce, nie False
+
+    highest_high = high.rolling(TTM_SQUEEZE_KC_WEEKS).max()
+    lowest_low = low.rolling(TTM_SQUEEZE_KC_WEEKS).min()
+    midline = ((highest_high + lowest_low) / 2 + sma) / 2
+    histogram = close - midline
+
+    # squeeze_count: kolejne tygodnie TRUE od ostatniego wylaczenia (grupowanie po
+    # licznikowi False'ow — standardowy trik na "consecutive True run length" bez
+    # petli po wierszach), None tam, gdzie squeeze_on samo jest jeszcze nieznane
+    # (rozgrzewka BB/KC). .astype(bool) po fillna jest tu wazne — squeeze_on ma
+    # dtype "object" (przez wstawione NaN w .where() powyzej), a `~` na obiektowym
+    # Series z Pythonowymi bool robi bitowa negacje (~True == -2, prawda logicznie!),
+    # nie logiczne "nie" — bez jawnego rzutowania na bool reset_groups/fired nizej
+    # liczylyby sie blednie.
+    squeeze_bool = squeeze_on.fillna(False).astype(bool)
+    reset_groups = (~squeeze_bool).cumsum()
+    squeeze_count = squeeze_bool.groupby(reset_groups).cumcount() + 1
+    squeeze_count = squeeze_count.where(squeeze_bool, 0)
+    squeeze_count = squeeze_count.where(squeeze_on.notna())
+
+    prev_squeeze_on = squeeze_on.shift(1)
+    prev_squeeze_bool = prev_squeeze_on.fillna(False).astype(bool)
+    fired = squeeze_on.notna() & prev_squeeze_on.notna() & (~squeeze_bool) & prev_squeeze_bool
+
+    n = len(stock_df)
+    week_idx = pd.Series(range(n))
+    fire_week_idx = week_idx.where(fired)
+    last_fire_week_idx = fire_week_idx.ffill()
+    weeks_since_fire = (week_idx - last_fire_week_idx)
+
+    fire_len_at_fire = squeeze_count.shift(1).where(fired)  # dlugosc konsolidacji TUZ PRZED wybiciem
+    fire_consolidation_weeks = fire_len_at_fire.ffill()
+
+    in_window_mask = stock_df["week_start"] >= pd.Timestamp(start_date)
+    if not in_window_mask.any():
         return None
 
-    def safe(value, digits=2):
+    def safe_float(value, digits=3):
         return round(float(value), digits) if pd.notna(value) else None
 
-    dates, growth_1m, growth_3m, growth_6m = [], [], [], []
-    for _, r in in_window.iterrows():
-        dates.append(r["week_end"].strftime("%Y-%m-%d"))
-        growth_1m.append(safe(r["growth_1m"]))
-        growth_3m.append(safe(r["growth_3m"]))
-        growth_6m.append(safe(r["growth_6m"]))
+    def safe_int(value):
+        return int(value) if pd.notna(value) else None
+
+    def safe_bool(value):
+        return bool(value) if pd.notna(value) else None
+
+    dates, histogram_out, squeeze_on_out, squeeze_count_out = [], [], [], []
+    fired_out, weeks_since_fire_out, fire_consolidation_weeks_out = [], [], []
+    for i in stock_df.index[in_window_mask]:
+        dates.append(stock_df["week_end"].iloc[i].strftime("%Y-%m-%d"))
+        histogram_out.append(safe_float(histogram.iloc[i], 4))
+        squeeze_on_out.append(safe_bool(squeeze_on.iloc[i]))
+        squeeze_count_out.append(safe_int(squeeze_count.iloc[i]))
+        fired_out.append(bool(fired.iloc[i]))
+        weeks_since_fire_out.append(safe_int(weeks_since_fire.iloc[i]))
+        fire_consolidation_weeks_out.append(safe_int(fire_consolidation_weeks.iloc[i]))
 
     return {
         "dates": dates,
-        "growth_1m": growth_1m,
-        "growth_3m": growth_3m,
-        "growth_6m": growth_6m,
+        "histogram": histogram_out,
+        "squeeze_on": squeeze_on_out,
+        "squeeze_count": squeeze_count_out,
+        "fired": fired_out,
+        "weeks_since_fire": weeks_since_fire_out,
+        "fire_consolidation_weeks": fire_consolidation_weeks_out,
     }
 
 
@@ -1929,8 +2032,8 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                                                                        ref_date, index_mom["date_start"])
             leader["mansfield_chart"] = compute_mansfield_rs_chart(con, leader["ticker"], universe,
                                                                      ref_date, index_mom["date_start"])
-            leader["growth_chart"] = compute_growth_chart(con, leader["ticker"], universe,
-                                                            ref_date, index_mom["date_start"])
+            leader["ttm_squeeze_chart"] = compute_ttm_squeeze_chart(con, leader["ticker"], universe,
+                                                                      ref_date, index_mom["date_start"])
         universes_payload[universe] = {
             "index_return_pct": index_return_pct,
             "momentum_window": index_mom["momentum_window"],
@@ -1958,9 +2061,9 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
                  "'mansfield_chart': oscylator Mansfield Relative Strength w DWÓCH wygładzeniach "
                  "(rsm_short ~3 mies., rsm_medium ~6 mies.), od początku TEGO SAMEGO okna co weekly_chart "
-                 "— patrz compute_mansfield_rs_chart. Każdy lider ma też 'growth_chart': surowy, kroczący "
-                 "zwrot % samej spółki (bez odniesienia do indeksu) w 3 horyzontach — growth_1m (~1 mies.), "
-                 "growth_3m (~3 mies.), growth_6m (~6 mies.) — patrz compute_growth_chart. "
+                 "— patrz compute_mansfield_rs_chart. Każdy lider ma też 'ttm_squeeze_chart': wskaźnik TTM "
+                 "Squeeze (Bollinger Bands wewnątrz kanału Kellera = konsolidacja) z licznikiem kolejnych "
+                 "tygodni konsolidacji i momentem wybicia z niej — patrz compute_ttm_squeeze_chart. "
                  "Do wykresu innego niż TradingView na dashboardzie. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
     }
