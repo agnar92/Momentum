@@ -871,6 +871,38 @@ every run (see CI section below) — it isn't hand-maintained.
     exclusion list — replacing what used to be an automatic TOP N cutoff. `STAGE_LABELS`/`STAGE_COLORS`/
     `stageCellHtml()` are duplicated here from `app.js` (same intentional duplication pattern as
     `STAGE_BREAKOUT_VOLUME_RATIO` — there's no shared module between the two pages).
+    **`pickerStageFilter` is MULTI-SELECT here, deliberately unlike the dashboard's own single-select
+    `state.stageFilter`** — the user explicitly asked for "spółki z stage 1 i stage 2" at once, since
+    picking is a manual, company-by-company decision where a base (Etap 1, about to break out) is just as
+    relevant to look at alongside an already-confirmed Etap 2 as either alone. It's a sentinel `"ALL"`
+    (no filter, the default — matches every row, same as before) or a `Set` of one or more of `"1"`/`"2"`
+    (both `2A` and `2B`)/`"3"`/`"4"` once at least one specific stage button has been clicked
+    (`initPickerStageFilter()`/`updatePickerStageFilterButtons()` toggle membership per click; clicking
+    "Wszystkie" always resets to `"ALL"`; toggling off the last selected stage also falls back to `"ALL"`
+    rather than leaving an empty, all-filtered-out table with no visual explanation why). `.stage-filter-btn`
+    CSS already keys each button's `.active` color off its own `data-stage`, so multiple buttons showing
+    `.active` at once needed no CSS change.
+  - **Clicking a table row (not the "+ Dodaj"/"✓ W portfelu" button) opens the same own weekly
+    stage-analysis chart the dashboard shows** — "wykres 10:30" (price + SMA10/SMA30 + VWAP + the
+    constituent's own index level, all in % change from the window's start, with Darvas boxes,
+    interactive zoom/pan), a weekly buying/selling volume panel, the Mansfield RS oscillator, and the TTM
+    Squeeze panel — added at the user's explicit request ("jak w Dashboard"), since Krok 2 already reads
+    each row's full `weekly_chart`/`mansfield_chart`/`ttm_squeeze_chart` (same fields the dashboard's
+    `all_constituents` records carry) without needing to fetch anything extra. `showPickerChart(ticker,
+    universe)` swaps a `#pickerTableView`/`#pickerChartView` pair (table+filter bar vs. chart, one panel
+    hidden at a time) inside the Krok 2 card rather than navigating away, and `renderPickerChartArea()`/
+    `renderPickerRelativeStrengthChart()` are a deliberate near-verbatim port of `updateChartArea()`/
+    `renderRelativeStrengthChart()` from `app.js` (same duplication rationale as `STAGE_LABELS` above) —
+    `findPickerRsEntry(ticker, universe)` looks the ticker up in ITS OWN universe's `all_constituents`
+    (a pick's `universe` field, same convention as `computeTargetsFromPicks`), not necessarily the one
+    currently browsed. The "+ Dodaj" button keeps working exactly as before and does NOT trigger the chart
+    view — its click handler calls `e.stopPropagation()` before the row's own click listener (added per
+    row in `renderPickerTable()`) can fire. Deliberately left out of this port, since this screen doesn't
+    have the dashboard's phone "one screen at a time" pressure: the fullscreen chart mode and the 3-month/
+    full-range toggle — Krok 2's chart always shows the full available window. "↺ Resetuj zoom" and
+    "📈 Otwórz w TradingView ↗" (`pickerTvUrlFor`, same `GPW:`-prefix convention as `app.js::tvSymbolFor`)
+    plus a "← Powrót do listy spółek" back button (`hidePickerChart()`) round out the chart view's own
+    small toolbar.
   - **`picks`** (`loadPicks()`/`savePicks()`, `localStorage` key `momentum_rebalance_picks`) is a flat,
     ACCUMULATING array of `{ ticker, universe, added_date }` — `isPicked()`/`togglePick()` are the only
     mutators. A pick made in one week's Step 2 session stays until manually removed (via the toggle button
