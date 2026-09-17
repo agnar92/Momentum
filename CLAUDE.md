@@ -650,18 +650,28 @@ explicitly changed direction away from plain performance numbers toward finding 
 momentum but are sitting through a multi-week **consolidation** ("squeeze"), specifically to catch names
 just starting to break out of one. `squeeze_on` is true for a given week when the Bollinger Bands
 (`TTM_SQUEEZE_BB_WEEKS` = 20-week SMA ± `TTM_SQUEEZE_BB_MULT` = 2.0 standard deviations) sit entirely
-**inside** the Keltner Channel (`TTM_SQUEEZE_KC_WEEKS` = 20-week EMA ± `TTM_SQUEEZE_KC_ATR_MULT` = 1.5×
-ATR) — the classic low-volatility/consolidation signature. `squeeze_count` is the number of *consecutive*
-weeks the squeeze has been on (0 when off); `fired` marks the single week the squeeze just turned off after
-being on — the breakout out of consolidation. `weeks_since_fire`/`fire_consolidation_weeks` are
-forward-filled for every week: how long ago the most recent fire happened, and how many weeks of
-consolidation led up to it — this is what lets the frontend classify a ticker without having to walk the
-whole array itself (see `classifyTtmSqueeze()` below). `histogram` is a deliberately simplified momentum
-oscillator (`close` minus a blend of the `TTM_SQUEEZE_KC_WEEKS`-week high/low midpoint and SMA) — the
-original indicator runs a linear-regression forecast over that same series, dropped here in the same spirit
-as `_compute_weinstein_stage_series`'s own documented simplifications elsewhere in this file. Needs weekly
-High/Low (via `_weekly_close_series(..., include_buying_volume=True)`, which also carries them) for the ATR/
-Keltner Channel — old pre-migration `prices` rows without them (see `_ensure_prices_ohlc_columns` in
+**inside** the Keltner Channel (`TTM_SQUEEZE_KC_WEEKS` = 20-week EMA ± `TTM_SQUEEZE_KC_ATR_MULT` = 2.0×
+ATR — raised from an initial 1.5× at the user's request, a wider channel that needs the Bollinger Bands to
+contract more before calling it a squeeze) — the classic low-volatility/consolidation signature.
+`squeeze_count` is the number of *consecutive* weeks the squeeze has been on (0 when off); `fired` marks
+the single week the squeeze just turned off after being on — the breakout out of consolidation.
+`weeks_since_fire`/`fire_consolidation_weeks` are forward-filled for every week: how long ago the most
+recent fire happened, and how many weeks of consolidation led up to it — this is what lets the frontend
+classify a ticker without having to walk the whole array itself (see `classifyTtmSqueeze()` below).
+`histogram` is the **full** momentum oscillator from the original indicator, not a simplified stand-in: a
+`diff = close` minus a blend of the `TTM_SQUEEZE_KC_WEEKS`-week high/low midpoint and SMA, then run through
+`_rolling_linreg_endpoint(diff, TTM_SQUEEZE_KC_WEEKS)` — the same rolling linear-regression-endpoint step
+as `ta.linreg(source, length, 0)` in Pine Script (fits an OLS line to the trailing `TTM_SQUEEZE_KC_WEEKS`
+points of `diff` and evaluates it at the most recent one, rather than plotting the raw `diff`). An earlier
+version skipped this regression step as a documented simplification (in the spirit of
+`_compute_weinstein_stage_series`'s own simplifications elsewhere in this file); replaced with the full
+version at the user's explicit request ("weź pełne momentum nie uproszczone"). Because the regression needs
+its own `TTM_SQUEEZE_KC_WEEKS` weeks of already-computed `diff` on top of `diff`'s own warmup, the buffer
+fetched before `start_date` is `2*TTM_SQUEEZE_KC_WEEKS+2` weeks (not `+2` alone) so `histogram` still has a
+value at the first displayed week — same "warm up before the window starts" convention as
+`RS_PRICE_SMA_LONG_WEEKS+2`/`RS_MANSFIELD_MEDIUM_WEEKS+2` elsewhere in this module. Needs weekly High/Low
+(via `_weekly_close_series(..., include_buying_volume=True)`, which also carries them) for the ATR/Keltner
+Channel — old pre-migration `prices` rows without them (see `_ensure_prices_ohlc_columns` in
 `fetch_data.py`) leave every squeeze field `None` for that stretch rather than a wrong value, the same
 graceful-degradation convention used throughout this module.
 
