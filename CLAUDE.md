@@ -836,14 +836,20 @@ every run (see CI section below) — it isn't hand-maintained.
      earlier panel that plotted the stock's own raw 1/3/6-month rolling % growth (`growth_chart`, removed
      at the user's request in favor of finding momentum names coming out of consolidation). A Chart.js
      mixed chart (`type: "bar"` with one `type: "line"` dataset overlaid): the histogram bars are the
-     momentum oscillator, colored with the classic 4-color TTM Squeeze scheme (bright/dark green above
-     zero, bright/dark red below, by sign and whether the bar is rising or falling vs. the previous one —
-     see `histColors` in `renderRelativeStrengthChart()`); a row of dots pinned to the zero line
-     (`dotColors`) marks the squeeze state per week — red while the squeeze is on (consolidating), gold on
-     the single week it fires (breaks out), gray afterward, transparent while not yet computed (BB/KC
-     warmup). Non-interactive, same as the Mansfield panel. `alignSqueezeToDates()` pads it to the same
-     full date array as panel 1, exactly like `alignMansfieldToDates()` does, so all panels share one X
-     scale.
+     momentum oscillator, all plotted in a single flat gray (`histColors` in
+     `renderRelativeStrengthChart()` — `#8a8f9c`, transparent only where `histogram` is still `null` during
+     BB/KC warmup) — an earlier version colored bars by sign/direction (the LazyBear 4-color scheme), but
+     the user explicitly asked for plain gray bars to match the classic/built-in TTM Squeeze look, where
+     color is carried by the squeeze markers, not the histogram. A row of `pointStyle: "cross"` markers
+     (`dotColors`) pinned to the zero line marks the squeeze state per week — **red** while `squeeze_on`
+     is true (consolidating), **green** while it's false ("release" — bands have expanded back outside the
+     Keltner Channel), transparent while not yet computed. This is a simple two-color scheme (no separate
+     highlight for the single week `fired` is true) — also per explicit user request, again matching the
+     classic TTM Squeeze look rather than the richer LazyBear coloring. `fired` is still exported per week
+     by the backend and still read by `classifyTtmSqueeze()`/the screener tab (`weeks_since_fire`/
+     `fire_consolidation_weeks` are derived from it), just no longer given its own marker color on this
+     chart. Non-interactive, same as the Mansfield panel. `alignSqueezeToDates()` pads it to the same full
+     date array as panel 1, exactly like `alignMansfieldToDates()` does, so all panels share one X scale.
 
   (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-volume` / `.rs-chart-panel-small` in
   `style.css`.) **Version history**: an earlier version put entry/exit signal markers (`ENTRY_2A`/`ENTRY_2B`/

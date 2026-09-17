@@ -314,9 +314,11 @@ html, body {
 .rsm-trend-mixed { color: var(--text-faint); font-weight: 400; }
 
 /* Kolumna "Status" w tabeli TTM Squeeze (patrz ttmSqueezeStatusHtml/
-   classifyTtmSqueeze w app.js) — te same kolory co kropki squeeze na czwartym
-   panelu wykresu (patrz dotColors w renderRelativeStrengthChart): złoty =
-   świeże wybicie z konsolidacji, czerwonawy = konsolidacja wciąż trwa. */
+   classifyTtmSqueeze w app.js) — WŁASNE kolory tabeli (złoty = świeże wybicie z
+   konsolidacji, czerwonawy = konsolidacja wciąż trwa), NIEZALEŻNE od dwukolorowych
+   (czerwony/zielony) krzyżyków squeeze na czwartym panelu wykresu (patrz dotColors
+   w renderRelativeStrengthChart) — tabela rozróżnia "fired" jako osobny, wyróżniony
+   stan (świeże wybicie warte uwagi), wykres celowo nie, na życzenie użytkownika. */
 .squeeze-status { font-size: 10.5px; font-weight: 600; }
 .squeeze-status-fired { color: #ffd23f; }
 .squeeze-status-consolidating { color: #e74c3c; }

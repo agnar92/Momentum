@@ -1276,26 +1276,20 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         if (squeezeCaption) {
             squeezeCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
-        // Klasyczne 4 kolory histogramu TTM Squeeze: dodatni/rosnący (jaśniejszy
-        // zielony) vs dodatni/malejący (ciemniejszy zielony), ujemny/malejący
-        // (jaśniejszy czerwony) vs ujemny/rosnący (ciemniejszy czerwony) —
-        // kierunek liczony względem poprzedniego SŁUPKA (nie tygodnia
-        // kalendarzowego — przy null-ach w rozgrzewce po prostu brak koloru).
-        const histColors = aligned.histogram.map((v, i) => {
-            if (v == null) return "transparent";
-            const prev = i > 0 ? aligned.histogram[i - 1] : null;
-            const rising = prev == null || v >= prev;
-            if (v >= 0) return rising ? "#2ecc71" : "#1f7a4d";
-            return rising ? "#7a2020" : "#ff4d4f";
-        });
-        // Kropki squeeze na poziomie zera: czerwona = squeeze wlaczony (trwajaca
-        // konsolidacja), zlota = tydzien wybicia (fired), szara = squeeze
-        // wylaczony poza tygodniem wybicia (ruch juz trwa), przezroczysta = brak
-        // danych (rozgrzewka BB/KC).
-        const dotColors = aligned.squeezeOn.map((on, i) => {
-            if (aligned.fired[i]) return "#ffd23f";
+        // Histogram momentum — JEDNOLITY szary słupek (nie kolorowany kierunkiem/
+        // znakiem) — na wyrazne zyczenie uzytkownika, zeby wygladalo dokladnie jak
+        // klasyczny wskaznik TTM Squeeze na TradingView: sama WYSOKOSC slupka niesie
+        // informacje o momentum, kolor sluzy tylko kropkom/krzyzykom nizej.
+        // Przezroczysty tam, gdzie histogram jeszcze nie ma wartosci (rozgrzewka BB/KC).
+        const histColors = aligned.histogram.map(v => (v == null ? "transparent" : "#8a8f9c"));
+        // Kropki/krzyzyki squeeze na poziomie zera: CZERWONA = squeeze wlaczony
+        // (BB 20,2 wewnatrz KC 20,2 — trwajaca konsolidacja), ZIELONA = squeeze
+        // wylaczony ("release" — wstegi wyszly poza kanal, ruch/wybicie), przezroczysta
+        // = brak danych (rozgrzewka BB/KC). Dwustanowy schemat (bez osobnego koloru na
+        // sam tydzien wybicia) — dokladnie jak w klasycznym wskazniku TTM Squeeze.
+        const dotColors = aligned.squeezeOn.map(on => {
             if (on === true) return "#e74c3c";
-            if (on === false) return "#565c6b";
+            if (on === false) return "#2ecc71";
             return "transparent";
         });
         rsSqueezeChartInstance = new Chart(squeezeCanvas, {
@@ -1309,8 +1303,9 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                     },
                     {
                         type: "line", label: "Squeeze", data: zeroLineSqueeze, showLine: false,
-                        pointRadius: 4, pointHoverRadius: 5, pointBackgroundColor: dotColors,
-                        pointBorderWidth: 0, order: 1,
+                        pointStyle: "cross", pointRadius: 5, pointHoverRadius: 6,
+                        pointBackgroundColor: dotColors, pointBorderColor: dotColors, pointBorderWidth: 2,
+                        order: 1,
                     },
                 ],
             },
@@ -1324,9 +1319,8 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                         callbacks: {
                             label: (ctx) => {
                                 if (ctx.datasetIndex === 1) {
-                                    if (aligned.fired[ctx.dataIndex]) return "Squeeze: wybicie z konsolidacji";
                                     if (aligned.squeezeOn[ctx.dataIndex] === true) return "Squeeze: włączony (konsolidacja)";
-                                    if (aligned.squeezeOn[ctx.dataIndex] === false) return "Squeeze: wyłączony";
+                                    if (aligned.squeezeOn[ctx.dataIndex] === false) return "Squeeze: wyłączony (release)";
                                     return "Squeeze: brak danych";
                                 }
                                 return `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(3)}`;
