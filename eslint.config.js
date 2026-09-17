@@ -19,6 +19,8 @@ const browserGlobals = {
     module: "readonly",
     Blob: "readonly",
     URL: "readonly",
+    URLSearchParams: "readonly",
+    history: "readonly",
 };
 
 const nodeGlobals = {

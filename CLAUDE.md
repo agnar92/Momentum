@@ -882,27 +882,20 @@ every run (see CI section below) — it isn't hand-maintained.
     rather than leaving an empty, all-filtered-out table with no visual explanation why). `.stage-filter-btn`
     CSS already keys each button's `.active` color off its own `data-stage`, so multiple buttons showing
     `.active` at once needed no CSS change.
-  - **Clicking a table row (not the "+ Dodaj"/"✓ W portfelu" button) opens the same own weekly
-    stage-analysis chart the dashboard shows** — "wykres 10:30" (price + SMA10/SMA30 + VWAP + the
-    constituent's own index level, all in % change from the window's start, with Darvas boxes,
-    interactive zoom/pan), a weekly buying/selling volume panel, the Mansfield RS oscillator, and the TTM
-    Squeeze panel — added at the user's explicit request ("jak w Dashboard"), since Krok 2 already reads
-    each row's full `weekly_chart`/`mansfield_chart`/`ttm_squeeze_chart` (same fields the dashboard's
-    `all_constituents` records carry) without needing to fetch anything extra. `showPickerChart(ticker,
-    universe)` swaps a `#pickerTableView`/`#pickerChartView` pair (table+filter bar vs. chart, one panel
-    hidden at a time) inside the Krok 2 card rather than navigating away, and `renderPickerChartArea()`/
-    `renderPickerRelativeStrengthChart()` are a deliberate near-verbatim port of `updateChartArea()`/
-    `renderRelativeStrengthChart()` from `app.js` (same duplication rationale as `STAGE_LABELS` above) —
-    `findPickerRsEntry(ticker, universe)` looks the ticker up in ITS OWN universe's `all_constituents`
-    (a pick's `universe` field, same convention as `computeTargetsFromPicks`), not necessarily the one
-    currently browsed. The "+ Dodaj" button keeps working exactly as before and does NOT trigger the chart
-    view — its click handler calls `e.stopPropagation()` before the row's own click listener (added per
-    row in `renderPickerTable()`) can fire. Deliberately left out of this port, since this screen doesn't
-    have the dashboard's phone "one screen at a time" pressure: the fullscreen chart mode and the 3-month/
-    full-range toggle — Krok 2's chart always shows the full available window. "↺ Resetuj zoom" and
-    "📈 Otwórz w TradingView ↗" (`pickerTvUrlFor`, same `GPW:`-prefix convention as `app.js::tvSymbolFor`)
-    plus a "← Powrót do listy spółek" back button (`hidePickerChart()`) round out the chart view's own
-    small toolbar.
+  - **Clicking a table row (not the "+ Dodaj"/"✓ W portfelu" button) REDIRECTS to the dashboard with that
+    ticker's chart open in fullscreen** — `?ticker=<ticker>&universe=<universe>&fullscreen=1` on
+    `index.html`, read by a small deep-link block at the end of `app.js::init()`: when both params are
+    present and `state.data[universe]` exists, it calls `jumpToTicker(ticker, universe)` (same function
+    Ctrl+K search uses) and then, if `fullscreen=1`, simulates a click on `#chartFullscreenBtn` to enter
+    the existing fullscreen chart mode (`initChartFullscreen()`) — then `history.replaceState()`s the URL
+    clean so a page refresh doesn't repeat the deep-link. A first version of this instead ported the whole
+    four-panel chart-rendering pipeline (`renderRelativeStrengthChart` and everything it depends on) into
+    `rebalance.js` as a second in-page view — reverted at the user's explicit request ("nie baw się w
+    kopiowanie tego samego kodu poprostu przekieruj na full screen i tyle"): a plain redirect into the
+    dashboard's own already-working chart, not a duplicate implementation to keep in sync. The "+ Dodaj"
+    button keeps working exactly as before and does NOT trigger the redirect — its click handler calls
+    `e.stopPropagation()` before the row's own click listener (added per row in `renderPickerTable()`)
+    can fire.
   - **`picks`** (`loadPicks()`/`savePicks()`, `localStorage` key `momentum_rebalance_picks`) is a flat,
     ACCUMULATING array of `{ ticker, universe, added_date }` — `isPicked()`/`togglePick()` are the only
     mutators. A pick made in one week's Step 2 session stays until manually removed (via the toggle button

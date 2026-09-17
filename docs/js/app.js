@@ -1849,6 +1849,24 @@ if (typeof document !== "undefined") {
             state.selectedUniverse = state.drawerUniverse;
         }
         updateChartArea();
+
+        // Deep-link z Kroku 2 rebalansera (?ticker=&universe=&fullscreen=1) —
+        // klik w wiersz tabeli tam PRZEKIEROWUJE tutaj zamiast duplikowac caly
+        // kod wykresu na tamtej stronie (patrz rebalance.js). Jesli obecny,
+        // nadpisuje domyslny wybor powyzej i (opcjonalnie) od razu wchodzi w
+        // tryb pelnoekranowy wykresu 10:30 (#chartFullscreenBtn, patrz
+        // initChartFullscreen). replaceState czysci URL, zeby odswiezenie
+        // strony nie powtarzalo deep-linku w kolko.
+        const deepLinkParams = new URLSearchParams(window.location.search);
+        const dlTicker = deepLinkParams.get("ticker");
+        const dlUniverse = deepLinkParams.get("universe");
+        if (dlTicker && dlUniverse && state.data[dlUniverse]) {
+            jumpToTicker(dlTicker, dlUniverse);
+            if (deepLinkParams.get("fullscreen") === "1") {
+                document.getElementById("chartFullscreenBtn").click();
+            }
+            window.history.replaceState({}, "", window.location.pathname);
+        }
     })();
 
     if ("serviceWorker" in navigator) {

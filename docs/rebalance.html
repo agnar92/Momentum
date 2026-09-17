@@ -35,8 +35,7 @@
 
     <div class="panel-card" id="pickerCard">
         <h3>Krok 2 — wybierz spółki z <span id="pickerUniverseLabel">—</span> <span class="ref-date-note" id="pickerMeta"></span></h3>
-        <p class="panel-hint">Pełna tabela momentum tego uniwersum, jak na dashboardzie — sortuj po dowolnej kolumnie, filtruj po etapie Weinsteina (możesz zaznaczyć kilka etapów naraz, np. 1 i 2) i ręcznie dodawaj spółki do portfela przyciskiem "+ Dodaj". Kliknij wiersz, żeby zobaczyć własny wykres spółki (jak na dashboardzie) — przycisk "+ Dodaj" działa niezależnie od tego kliknięcia. Wybór kumuluje się w czasie: raz dodana spółka zostaje w portfelu, dopóki jej ręcznie nie usuniesz (patrz "Twój portfel" poniżej), nawet jeśli w kolejnym miesiącu przeglądasz inne uniwersum.</p>
-        <div id="pickerTableView">
+        <p class="panel-hint">Pełna tabela momentum tego uniwersum, jak na dashboardzie — sortuj po dowolnej kolumnie, filtruj po etapie Weinsteina (możesz zaznaczyć kilka etapów naraz, np. 1 i 2) i ręcznie dodawaj spółki do portfela przyciskiem "+ Dodaj". Kliknij wiersz, żeby otworzyć jej wykres na Dashboardzie (pełny ekran) — przycisk "+ Dodaj" działa niezależnie od tego kliknięcia. Wybór kumuluje się w czasie: raz dodana spółka zostaje w portfelu, dopóki jej ręcznie nie usuniesz (patrz "Twój portfel" poniżej), nawet jeśli w kolejnym miesiącu przeglądasz inne uniwersum.</p>
         <div class="stage-filter-bar" id="pickerStageFilterBar">
             <span class="stage-filter-label">Etap Weinsteina (można zaznaczyć kilka):</span>
             <button class="stage-filter-btn active" data-stage="ALL">Wszystkie</button>
@@ -64,49 +63,6 @@
             </thead>
             <tbody id="pickerTableBody"></tbody>
         </table>
-        </div>
-        </div>
-
-        <div id="pickerChartView" hidden>
-            <button class="chart-back-btn" id="pickerChartBackBtn" style="display:inline-block;">&larr; Powrót do listy spółek</button>
-            <div class="chart-mode-toggle">
-                <button class="chart-mode-btn active" id="pickerOpenTvBtn"
-                        title="Otwiera ten ticker na tradingview.com w nowej karcie (pełny widget TradingView, z narzędziami do rysowania itd.)">
-                    📈 Otwórz w TradingView ↗
-                </button>
-                <button class="chart-mode-btn" id="pickerResetZoomBtn"
-                        title="Kółko myszy / uszczypnięcie = powiększanie, przeciąganie = przesuwanie">
-                    ↺ Resetuj zoom
-                </button>
-                <div class="chart-ticker-label" id="pickerChartTickerLabel"></div>
-            </div>
-            <div class="chart-container rs-chart-container" id="picker_rs_chart">
-                <div class="stage-badge" id="pickerStageBadge"></div>
-                <div class="empty-state" id="pickerNoChartMessage" hidden>
-                    Brak własnego wykresu tygodniowego dla tej spółki (za mało historii cen) — użyj przycisku
-                    „Otwórz w TradingView” powyżej.
-                </div>
-                <div class="rs-chart-panel" id="pickerRsChartPanel">
-                    <canvas id="pickerRsChartCanvas"></canvas>
-                </div>
-                <div class="rs-chart-panel rs-chart-panel-volume" id="pickerRsVolumePanel">
-                    <canvas id="pickerRsVolumeCanvas"></canvas>
-                </div>
-                <div class="rs-chart-panel rs-chart-panel-small" id="pickerRsMansfieldPanel">
-                    <div class="rs-chart-caption" id="pickerRsMansfieldCaption"></div>
-                    <canvas id="pickerRsMansfieldCanvas"></canvas>
-                </div>
-                <div class="rs-chart-panel rs-chart-panel-small" id="pickerRsSqueezePanel">
-                    <div class="rs-chart-caption" id="pickerRsSqueezeCaption"></div>
-                    <canvas id="pickerRsSqueezeCanvas"></canvas>
-                </div>
-                <div class="stage-legend" id="pickerStageLegend">
-                    fioletowy prostokąt = baza Etapu 1 (dno), szary = kontynuacja Etapu 2 &nbsp;·&nbsp;
-                    jaśniejszy zielony słupek = wybicie potwierdzone wolumenem kupujących &nbsp;·&nbsp;
-                    czerwona kropka (TTM Squeeze) = konsolidacja, złota = wybicie z niej &nbsp;·&nbsp;
-                    kółko myszy / uszczypnięcie = zoom, przeciąganie = przesuwanie
-                </div>
-            </div>
         </div>
     </div>
 
@@ -221,8 +177,6 @@
 
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="js/pull-to-refresh.js"></script>
 <script src="js/rebalance.js"></script>
 </body>
