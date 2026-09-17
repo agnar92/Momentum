@@ -7,8 +7,8 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    compareRows, rollingMean, alignMansfieldToDates, alignGrowthToDates, fmtPlDate,
-    classifyRsm, combinedRsmCandidates, state,
+    compareRows, rollingMean, alignMansfieldToDates, alignSqueezeToDates, fmtPlDate,
+    classifyRsm, combinedRsmCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
 
@@ -69,22 +69,25 @@ test("alignMansfieldToDates returns an all-null series when no Mansfield date ma
     assert.deepEqual(aligned.medium, [null, null]);
 });
 
-test("alignGrowthToDates pads with null before the growth window's own start date", () => {
+test("alignSqueezeToDates pads with null before the squeeze window's own start date", () => {
     const fullDates = ["2026-01-01", "2026-01-08", "2026-01-15", "2026-01-22"];
-    const growthData = { dates: ["2026-01-15", "2026-01-22"], growth_1m: [1, 2], growth_3m: [3, 4], growth_6m: [5, 6] };
-    const aligned = alignGrowthToDates(growthData, fullDates);
-    assert.deepEqual(aligned.m1, [null, null, 1, 2]);
-    assert.deepEqual(aligned.m3, [null, null, 3, 4]);
-    assert.deepEqual(aligned.m6, [null, null, 5, 6]);
+    const squeezeData = {
+        dates: ["2026-01-15", "2026-01-22"],
+        histogram: [1, 2], squeeze_on: [true, false], fired: [false, true],
+    };
+    const aligned = alignSqueezeToDates(squeezeData, fullDates);
+    assert.deepEqual(aligned.histogram, [null, null, 1, 2]);
+    assert.deepEqual(aligned.squeezeOn, [null, null, true, false]);
+    assert.deepEqual(aligned.fired, [null, null, false, true]);
 });
 
-test("alignGrowthToDates returns an all-null series when no growth date matches", () => {
+test("alignSqueezeToDates returns an all-null series when no squeeze date matches", () => {
     const fullDates = ["2025-01-01", "2025-01-08"];
-    const growthData = { dates: ["2026-01-15"], growth_1m: [1], growth_3m: [3], growth_6m: [5] };
-    const aligned = alignGrowthToDates(growthData, fullDates);
-    assert.deepEqual(aligned.m1, [null, null]);
-    assert.deepEqual(aligned.m3, [null, null]);
-    assert.deepEqual(aligned.m6, [null, null]);
+    const squeezeData = { dates: ["2026-01-15"], histogram: [1], squeeze_on: [true], fired: [false] };
+    const aligned = alignSqueezeToDates(squeezeData, fullDates);
+    assert.deepEqual(aligned.histogram, [null, null]);
+    assert.deepEqual(aligned.squeezeOn, [null, null]);
+    assert.deepEqual(aligned.fired, [null, null]);
 });
 
 test("fmtPlDate converts an ISO date to dd.mm.yyyy", () => {
@@ -212,6 +215,139 @@ test("combinedRsmCandidates sorts the accelerating bucket by 3M descending", () 
     ];
     const { accelerating } = combinedRsmCandidates();
     assert.deepEqual(accelerating.map(r => r.ticker), ["HOT", "MILD"]);
+});
+
+// ---------- classifyTtmSqueeze / combinedTtmSqueezeCandidates (TTM Squeeze screener) ----------
+
+function ttmSqueezeConstituent(overrides) {
+    return {
+        sector: "Tech", price: 100, momentum_score: 1.5, momentum_pct: 20,
+        ttm_squeeze_chart: { dates: [], histogram: [], squeeze_on: [], squeeze_count: [], fired: [], weeks_since_fire: [], fire_consolidation_weeks: [] },
+        ...overrides,
+    };
+}
+
+test("classifyTtmSqueeze returns null when the ticker has no ttm_squeeze_chart", () => {
+    assert.equal(classifyTtmSqueeze("AAA", "NASDAQ100", { momentum_score: 1 }), null);
+});
+
+test("classifyTtmSqueeze returns null when momentum_score is not positive", () => {
+    const c = ttmSqueezeConstituent({
+        momentum_score: -0.5,
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [1], squeeze_on: [true], squeeze_count: [6],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    assert.equal(classifyTtmSqueeze("AAA", "NASDAQ100", c), null);
+});
+
+test("classifyTtmSqueeze marks a ticker consolidating when squeeze is on for more than 5 weeks", () => {
+    const c = ttmSqueezeConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [7],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    const r = classifyTtmSqueeze("AAA", "NASDAQ100", c);
+    assert.equal(r.status, "consolidating");
+    assert.equal(r.consolidation_weeks, 7);
+    assert.equal(r.weeks_since_fire, null);
+});
+
+test("classifyTtmSqueeze does not flag a squeeze that has lasted 5 weeks or fewer", () => {
+    const c = ttmSqueezeConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    assert.equal(classifyTtmSqueeze("AAA", "NASDAQ100", c), null);
+});
+
+test("classifyTtmSqueeze marks a ticker fired when it broke out of a long squeeze within the lookback window", () => {
+    const c = ttmSqueezeConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [3.5], squeeze_on: [false], squeeze_count: [0],
+            fired: [false], weeks_since_fire: [2], fire_consolidation_weeks: [9],
+        },
+    });
+    const r = classifyTtmSqueeze("AAA", "NASDAQ100", c);
+    assert.equal(r.status, "fired");
+    assert.equal(r.consolidation_weeks, 9);
+    assert.equal(r.weeks_since_fire, 2);
+});
+
+test("classifyTtmSqueeze ignores a fire that is too old (outside the lookback window)", () => {
+    const c = ttmSqueezeConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [3.5], squeeze_on: [false], squeeze_count: [0],
+            fired: [false], weeks_since_fire: [10], fire_consolidation_weeks: [9],
+        },
+    });
+    assert.equal(classifyTtmSqueeze("AAA", "NASDAQ100", c), null);
+});
+
+test("classifyTtmSqueeze ignores a fire that followed too short a consolidation", () => {
+    const c = ttmSqueezeConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [3.5], squeeze_on: [false], squeeze_count: [0],
+            fired: [false], weeks_since_fire: [1], fire_consolidation_weeks: [3],
+        },
+    });
+    assert.equal(classifyTtmSqueeze("AAA", "NASDAQ100", c), null);
+});
+
+test("classifyTtmSqueeze falls back to the latest week that actually has squeeze_on when the newest week is still null", () => {
+    const c = ttmSqueezeConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01", "2026-01-08"], histogram: [0.2, null], squeeze_on: [true, null],
+            squeeze_count: [7, null], fired: [false, null], weeks_since_fire: [null, null],
+            fire_consolidation_weeks: [null, null],
+        },
+    });
+    const r = classifyTtmSqueeze("AAA", "NASDAQ100", c);
+    assert.equal(r.status, "consolidating");
+    assert.equal(r.consolidation_weeks, 7);
+});
+
+test("combinedTtmSqueezeCandidates merges candidates across universes, fired first (most recent), then longest consolidations", () => {
+    state.data = emptyStateData();
+    state.data.NASDAQ100.constituents = [
+        ttmSqueezeConstituent({
+            ticker: "FIRED_OLD",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [1], squeeze_on: [false], squeeze_count: [0],
+                fired: [false], weeks_since_fire: [3], fire_consolidation_weeks: [8],
+            },
+        }),
+        ttmSqueezeConstituent({
+            ticker: "COIL_SHORT",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [6],
+                fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+            },
+        }),
+    ];
+    state.data.WIG20.constituents = [
+        ttmSqueezeConstituent({
+            ticker: "FIRED_FRESH",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [2], squeeze_on: [false], squeeze_count: [0],
+                fired: [false], weeks_since_fire: [0], fire_consolidation_weeks: [12],
+            },
+        }),
+        ttmSqueezeConstituent({
+            ticker: "COIL_LONG",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [10],
+                fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+            },
+        }),
+    ];
+
+    const rows = combinedTtmSqueezeCandidates();
+    assert.deepEqual(rows.map(r => r.ticker), ["FIRED_FRESH", "FIRED_OLD", "COIL_LONG", "COIL_SHORT"]);
 });
 
 // findRsEntry / buildSearchIndex: od zmiany na zyczenie uzytkownika ("wszystkie

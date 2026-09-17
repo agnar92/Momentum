@@ -374,6 +374,81 @@ function combinedRsmCandidates() {
 }
 
 // ============================================================
+// TTM SQUEEZE — SCREENER: szuka spółek z Momentum (momentum_score > 0),
+// które przeszły przez WIELOTYGODNIOWĄ konsolidację (Bollinger Bands ściśnięte
+// wewnątrz kanału Kellera — "squeeze", patrz compute_ttm_squeeze_chart w
+// run_query.py) i albo WCIĄŻ w niej trwają dłużej niż TTM_SQUEEZE_MIN_
+// CONSOLIDATION_WEEKS tygodni (status "consolidating" — kandydat do
+// obserwacji), albo WŁAŚNIE z takiej konsolidacji wybiły się w ostatnich
+// TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS tygodniach (status "fired" — świeży
+// początek nowego ruchu, dokładnie to, o co prosił użytkownik: "akcje, które
+// zaczynają ruszać po takiej konsolidacji"). Stałe MUSZĄ być zsynchronizowane
+// z tymi samymi stałymi w run_query.py.
+// ============================================================
+const TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5;
+const TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3;
+
+// Klasyfikuje jedną spółkę na podstawie jej ttm_squeeze_chart. Zwraca null gdy
+// brakuje danych, gdy spółka akurat nie ma Momentum (momentum_score <= 0), albo
+// gdy nie pasuje do żadnego z dwóch statusów (squeeze trwający zbyt krótko,
+// dawno wygasłe wybicie itd.) — celowo wyselekcjonowany screener, nie pełna
+// lista wszystkich spółek.
+function classifyTtmSqueeze(ticker, universe, c) {
+    if (!(c.momentum_score > 0)) return null;
+    const t = c.ttm_squeeze_chart;
+    if (!t || !t.dates || t.dates.length === 0) return null;
+    // Ostatni element bywa jeszcze niedomknięty (patrz ten sam caveat przy
+    // classifyRsm) — cofamy się do ostatniego tygodnia, który faktycznie ma
+    // policzony squeeze_on.
+    let nowIdx = t.dates.length - 1;
+    while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
+    if (nowIdx < 0) return null;
+
+    const squeezeOn = t.squeeze_on[nowIdx];
+    const squeezeCount = t.squeeze_count[nowIdx];
+    const weeksSinceFire = t.weeks_since_fire[nowIdx];
+    const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
+    const histNow = t.histogram[nowIdx];
+
+    const isConsolidating = squeezeOn === true && squeezeCount > TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS;
+    const isFired = weeksSinceFire != null && weeksSinceFire <= TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS
+        && fireConsolidationWeeks != null && fireConsolidationWeeks > TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS;
+    if (!isConsolidating && !isFired) return null;
+
+    return {
+        ticker, universe, sector: c.sector, price: c.price,
+        momentum_pct: c.momentum_pct,
+        current_stage: c.weekly_chart && c.weekly_chart.current_stage,
+        status: isFired ? "fired" : "consolidating",
+        consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
+        weeks_since_fire: isFired ? weeksSinceFire : null,
+        histNow,
+    };
+}
+
+// Zwraca listę połączoną ze WSZYSTKICH 5 uniwersów (patrz combinedRsmCandidates
+// powyżej — ten sam wzorzec: całe kwalifikujące się uniwersa, nie tylko
+// bieżący top-decyl dla SP500/NASDAQ100), posortowaną: najpierw świeże
+// wybicia (najnowsze na górze), potem trwające konsolidacje (najdłuższe na
+// górze — najbardziej "ściśnięte").
+function combinedTtmSqueezeCandidates() {
+    const rows = [];
+    UNIVERSES.forEach(u => {
+        const universeData = state.data[u] || {};
+        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
+            const r = classifyTtmSqueeze(c.ticker, u, c);
+            if (r) rows.push(r);
+        });
+    });
+    rows.sort((a, b) => {
+        if (a.status !== b.status) return a.status === "fired" ? -1 : 1;
+        if (a.status === "fired") return a.weeks_since_fire - b.weeks_since_fire;
+        return b.consolidation_weeks - a.consolidation_weeks;
+    });
+    return rows;
+}
+
+// ============================================================
 // SIDEBAR (kwadraty z top 10 tickerów na indeks)
 // ============================================================
 function renderSidebarTiles() {
@@ -443,6 +518,41 @@ function renderRsmPanel() {
     if (accelContainer) fillTiles(accelContainer, accelerating);
 }
 
+// Sidebar: kafelki screenera TTM Squeeze (patrz combinedTtmSqueezeCandidates
+// powyżej) — ten sam wzorzec co renderRsmPanel, jedna wspólna, już posortowana
+// lista (świeże wybicia przed trwającymi konsolidacjami).
+function renderTtmSqueezePanel() {
+    const container = document.getElementById("tiles-TTM-squeeze");
+    if (!container) return;
+
+    const rows = combinedTtmSqueezeCandidates();
+    const meta = document.getElementById("ttmSqueezeMeta");
+    if (meta) meta.textContent = `${rows.length} spółek`;
+
+    container.innerHTML = "";
+    rows.forEach(r => {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+        tile.textContent = r.ticker;
+        tile.title = r.status === "fired"
+            ? `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
+                + `wybicie ${r.weeks_since_fire} tyg. temu, po ${r.consolidation_weeks} tyg. konsolidacji`
+            : `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
+                + `w konsolidacji od ${r.consolidation_weeks} tyg.`;
+        tile.dataset.ticker = r.ticker;
+        tile.dataset.universe = r.universe;
+        if (r.ticker === state.selectedTicker) tile.classList.add("selected");
+        tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        container.appendChild(tile);
+    });
+    if (rows.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
+        empty.textContent = "brak danych";
+        container.appendChild(empty);
+    }
+}
+
 // Kazdy ticker z glownego uniwersum (state.data[u].all_constituents — CALE
 // uniwersum, nie tylko decyl, patrz FULL_COVERAGE_UNIVERSES/_build_full_universe_records
 // w run_query.py; dla uniwersow rownowazonych rowne "constituents") ma wlasny
@@ -462,7 +572,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #rsmStableTableBody tr, #rsmGrowthTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #rsmStableTableBody tr, #rsmGrowthTableBody tr, #ttmSqueezeTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
@@ -508,7 +618,7 @@ let rsChartInstance = null;
 // Darvasa) jak najwięcej miejsca zamiast trzymać wszystkie trzy panele
 // zawsze włączone.
 let chartFullscreenActive = false;
-const chartFullscreenExtras = { volume: false, mansfield: false, growth: false };
+const chartFullscreenExtras = { volume: false, mansfield: false, squeeze: false };
 
 function updateChartArea() {
     const symbol = state.selectedTicker;
@@ -519,13 +629,13 @@ function updateChartArea() {
     const rsChartPanel = document.getElementById("rsChartPanel");
     const rsVolumePanel = document.getElementById("rsVolumePanel");
     const rsMansfieldPanel = document.getElementById("rsMansfieldPanel");
-    const rsGrowthPanel = document.getElementById("rsGrowthPanel");
+    const rsSqueezePanel = document.getElementById("rsSqueezePanel");
     const stageLegend = document.getElementById("stageLegend");
     if (noChartMsg) noChartMsg.hidden = hasRsChart;
     if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
     if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.volume);
     if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.mansfield);
-    if (rsGrowthPanel) rsGrowthPanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.growth);
+    if (rsSqueezePanel) rsSqueezePanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.squeeze);
     if (stageLegend) stageLegend.hidden = !hasRsChart;
 
     if (hasRsChart) {
@@ -535,7 +645,7 @@ function updateChartArea() {
         if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
         if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
         if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
-        if (rsGrowthChartInstance) { rsGrowthChartInstance.destroy(); rsGrowthChartInstance = null; }
+        if (rsSqueezeChartInstance) { rsSqueezeChartInstance.destroy(); rsSqueezeChartInstance = null; }
     }
     updateChartTickerLabel();
     if (state.chartView === "tv") renderTvOverviewPanel(symbol, state.selectedUniverse);
@@ -636,7 +746,7 @@ function initChartFullscreen() {
     const extrasBar = document.getElementById("chartFullscreenExtras");
     const volBtn = document.getElementById("toggleVolumeBtn");
     const mansfieldBtn = document.getElementById("toggleMansfieldBtn");
-    const growthBtn = document.getElementById("toggleGrowthBtn");
+    const squeezeBtn = document.getElementById("toggleSqueezeBtn");
     if (!container || !enterBtn) return;
 
     const originalParent = container.parentElement;
@@ -661,7 +771,7 @@ function initChartFullscreen() {
             if (rsChartInstance) rsChartInstance.resize();
             if (rsVolumeChartInstance) rsVolumeChartInstance.resize();
             if (rsMansfieldChartInstance) rsMansfieldChartInstance.resize();
-            if (rsGrowthChartInstance) rsGrowthChartInstance.resize();
+            if (rsSqueezeChartInstance) rsSqueezeChartInstance.resize();
         });
     }
 
@@ -684,10 +794,10 @@ function initChartFullscreen() {
             updateChartArea();
         });
     }
-    if (growthBtn) {
-        growthBtn.addEventListener("click", () => {
-            chartFullscreenExtras.growth = !chartFullscreenExtras.growth;
-            growthBtn.classList.toggle("active", chartFullscreenExtras.growth);
+    if (squeezeBtn) {
+        squeezeBtn.addEventListener("click", () => {
+            chartFullscreenExtras.squeeze = !chartFullscreenExtras.squeeze;
+            squeezeBtn.classList.toggle("active", chartFullscreenExtras.squeeze);
             updateChartArea();
         });
     }
@@ -695,7 +805,7 @@ function initChartFullscreen() {
 
 let rsVolumeChartInstance = null;
 let rsMansfieldChartInstance = null;
-let rsGrowthChartInstance = null;
+let rsSqueezeChartInstance = null;
 
 // Przesuwa widoczny zakres osi X panelu wolumenu tak, zeby dokladnie odpowiadal
 // aktualnemu zoom/pan wykresu 10:30 (patrz onZoomComplete/onPanComplete w
@@ -810,14 +920,19 @@ function alignMansfieldToDates(mansfieldData, fullDates) {
     return { short: pick(mansfieldData.rsm_short), medium: pick(mansfieldData.rsm_medium) };
 }
 
-// Czwarty panel: czysty (nie wzgledem indeksu) kroczacy wzrost % spolki w 1/3/6
-// mies. (growth_chart, patrz compute_growth_chart w run_query.py) — dopelniany do
-// tej samej pelnej tablicy dat co wykres 10:30/Mansfield, dokladnie tak samo jak
+// Czwarty panel: wskaznik TTM Squeeze (ttm_squeeze_chart, patrz
+// compute_ttm_squeeze_chart w run_query.py) — ZASTEPUJE dawny wykres surowego
+// wzrostu % 1/3/6 mies. (growth_chart, usuniety). Dopelniany do tej samej
+// pelnej tablicy dat co wykres 10:30/Mansfield, dokladnie tak samo jak
 // alignMansfieldToDates powyzej (ten sam powod: wspolna skala X miedzy panelami).
-function alignGrowthToDates(growthData, fullDates) {
-    const idxByDate = new Map(growthData.dates.map((d, i) => [d, i]));
+function alignSqueezeToDates(squeezeData, fullDates) {
+    const idxByDate = new Map(squeezeData.dates.map((d, i) => [d, i]));
     const pick = (series) => fullDates.map(d => (idxByDate.has(d) ? series[idxByDate.get(d)] : null));
-    return { m1: pick(growthData.growth_1m), m3: pick(growthData.growth_3m), m6: pick(growthData.growth_6m) };
+    return {
+        histogram: pick(squeezeData.histogram),
+        squeezeOn: pick(squeezeData.squeeze_on),
+        fired: pick(squeezeData.fired),
+    };
 }
 
 // Przycina weekly_chart do ostatnich CHART_RANGE_SHORT_MONTHS miesięcy (tryb
@@ -930,21 +1045,23 @@ function syncChartsCrosshair(charts) {
 //    rozjeżdżać (krótkoterminowe przyspieszenie/spowolnienie może wyprzedzać
 //    średnioterminowy trend). Nieinteraktywny — własne, krótkie okno nie
 //    wymaga zoom/pan.
-// 4. Czysty wzrost % (growth_chart, patrz compute_growth_chart) w 3 horyzontach
-//    kroczących — 1/3/6 mies. — obok Mansfielda (na życzenie użytkownika): w
-//    odróżnieniu od panelu 1 (rebazowanego do 0% na POCZĄTKU okna) i Mansfielda
-//    (siła WZGLĘDEM indeksu), to surowy zwrot samej spółki liczony z KAŻDEGO
-//    wyświetlanego tygodnia wstecz, niezależny od indeksu i od dnia startu okna.
-//    Nieinteraktywny, tak jak panel Mansfielda.
+// 4. Wskaznik TTM Squeeze (ttm_squeeze_chart, patrz compute_ttm_squeeze_chart)
+//    obok Mansfielda — ZASTEPUJE dawny wykres surowego wzrostu % 1/3/6 mies.
+//    na zyczenie uzytkownika: zamiast stopy zwrotu pokazuje FAZY KONSOLIDACJI
+//    (Bollinger Bands wewnatrz kanalu Kellera) i moment wybicia z nich. Slupki
+//    histogramu (momentum-oscylator, kolor wg znaku/kierunku) plus rzad
+//    kropek na poziomie zera pod nimi: czerwona = squeeze wlaczony (trwajaca
+//    konsolidacja), zlota = tydzien wybicia, szara = squeeze wylaczony (poza
+//    tygodniem wybicia). Nieinteraktywny, tak jak panel Mansfielda.
 function renderRelativeStrengthChart(symbol, rsEntry) {
     const chartData = sliceWeeklyChartToRange(rsEntry.weekly_chart, state.chartRangeMode);
     const mansfieldData = rsEntry.mansfield_chart;
-    const growthData = rsEntry.growth_chart;
+    const squeezeData = rsEntry.ttm_squeeze_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
     const volumeCanvas = document.getElementById("rsVolumeCanvas");
     const mansfieldCanvas = document.getElementById("rsMansfieldCanvas");
-    const growthCanvas = document.getElementById("rsGrowthCanvas");
+    const squeezeCanvas = document.getElementById("rsSqueezeCanvas");
     if (!canvas || !chartData) return;
 
     if (typeof Chart === "undefined") {
@@ -954,7 +1071,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
     if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
     if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
-    if (rsGrowthChartInstance) { rsGrowthChartInstance.destroy(); rsGrowthChartInstance = null; }
+    if (rsSqueezeChartInstance) { rsSqueezeChartInstance.destroy(); rsSqueezeChartInstance = null; }
 
     renderStageBadge(chartData.current_stage);
 
@@ -1149,25 +1266,52 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         if (mansfieldCaption) mansfieldCaption.textContent = "";
     }
 
-    const growthCaption = document.getElementById("rsGrowthCaption");
-    if (growthCanvas && growthData) {
+    const squeezeCaption = document.getElementById("rsSqueezeCaption");
+    if (squeezeCanvas && squeezeData) {
         // Ta sama logika dopasowania co panel Mansfielda powyżej (patrz
-        // alignGrowthToDates) — wspólna, pełna tablica dat daje spójną skalę X
+        // alignSqueezeToDates) — wspólna, pełna tablica dat daje spójną skalę X
         // między wszystkimi panelami.
-        const alignedGrowth = alignGrowthToDates(growthData, chartData.dates);
-        const zeroLineGrowth = chartData.dates.map(() => 0);
-        if (growthCaption) {
-            growthCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+        const aligned = alignSqueezeToDates(squeezeData, chartData.dates);
+        const zeroLineSqueeze = chartData.dates.map(() => 0);
+        if (squeezeCaption) {
+            squeezeCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
-        rsGrowthChartInstance = new Chart(growthCanvas, {
-            type: "line",
+        // Klasyczne 4 kolory histogramu TTM Squeeze: dodatni/rosnący (jaśniejszy
+        // zielony) vs dodatni/malejący (ciemniejszy zielony), ujemny/malejący
+        // (jaśniejszy czerwony) vs ujemny/rosnący (ciemniejszy czerwony) —
+        // kierunek liczony względem poprzedniego SŁUPKA (nie tygodnia
+        // kalendarzowego — przy null-ach w rozgrzewce po prostu brak koloru).
+        const histColors = aligned.histogram.map((v, i) => {
+            if (v == null) return "transparent";
+            const prev = i > 0 ? aligned.histogram[i - 1] : null;
+            const rising = prev == null || v >= prev;
+            if (v >= 0) return rising ? "#2ecc71" : "#1f7a4d";
+            return rising ? "#7a2020" : "#ff4d4f";
+        });
+        // Kropki squeeze na poziomie zera: czerwona = squeeze wlaczony (trwajaca
+        // konsolidacja), zlota = tydzien wybicia (fired), szara = squeeze
+        // wylaczony poza tygodniem wybicia (ruch juz trwa), przezroczysta = brak
+        // danych (rozgrzewka BB/KC).
+        const dotColors = aligned.squeezeOn.map((on, i) => {
+            if (aligned.fired[i]) return "#ffd23f";
+            if (on === true) return "#e74c3c";
+            if (on === false) return "#565c6b";
+            return "transparent";
+        });
+        rsSqueezeChartInstance = new Chart(squeezeCanvas, {
+            type: "bar",
             data: {
                 labels: chartData.dates,
                 datasets: [
-                    { label: "Wzrost 1M", data: alignedGrowth.m1, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
-                    { label: "Wzrost 3M", data: alignedGrowth.m3, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
-                    { label: "Wzrost 6M", data: alignedGrowth.m6, borderColor: "#2ecc71", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                    { label: "0", data: zeroLineGrowth, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
+                    {
+                        type: "bar", label: "Momentum (histogram)", data: aligned.histogram,
+                        backgroundColor: histColors, borderWidth: 0, order: 2,
+                    },
+                    {
+                        type: "line", label: "Squeeze", data: zeroLineSqueeze, showLine: false,
+                        pointRadius: 4, pointHoverRadius: 5, pointBackgroundColor: dotColors,
+                        pointBorderWidth: 0, order: 1,
+                    },
                 ],
             },
             options: {
@@ -1175,29 +1319,38 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 maintainAspectRatio: false,
                 interaction: { mode: "index", intersect: false },
                 plugins: {
-                    legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                    legend: { display: false },
                     tooltip: {
-                        filter: (ctx) => ctx.datasetIndex !== 3,
-                        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : pctFmt(ctx.parsed.y)}` },
+                        callbacks: {
+                            label: (ctx) => {
+                                if (ctx.datasetIndex === 1) {
+                                    if (aligned.fired[ctx.dataIndex]) return "Squeeze: wybicie z konsolidacji";
+                                    if (aligned.squeezeOn[ctx.dataIndex] === true) return "Squeeze: włączony (konsolidacja)";
+                                    if (aligned.squeezeOn[ctx.dataIndex] === false) return "Squeeze: wyłączony";
+                                    return "Squeeze: brak danych";
+                                }
+                                return `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(3)}`;
+                            },
+                        },
                     },
                 },
                 scales: {
                     // Ta sama liczba etykiet/skala X co pozostałe panele — patrz
                     // komentarz przy panelu Mansfielda powyżej.
                     x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
-                    y: { ticks: { color: "#8a8f9c", callback: pctFmt }, grid: { color: "#262a35" } },
+                    y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
                 },
             },
         });
-    } else if (growthCanvas) {
-        const ctx = growthCanvas.getContext("2d");
-        if (ctx) ctx.clearRect(0, 0, growthCanvas.width, growthCanvas.height);
-        if (growthCaption) growthCaption.textContent = "";
+    } else if (squeezeCanvas) {
+        const ctx = squeezeCanvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, squeezeCanvas.width, squeezeCanvas.height);
+        if (squeezeCaption) squeezeCaption.textContent = "";
     }
 
     // Wspólny crosshair (patrz syncChartsCrosshair) — tylko między wykresami,
     // które faktycznie istnieją (Mansfield/wzrost % mogą być null przy braku danych).
-    syncChartsCrosshair([rsChartInstance, rsVolumeChartInstance, rsMansfieldChartInstance, rsGrowthChartInstance].filter(Boolean));
+    syncChartsCrosshair([rsChartInstance, rsVolumeChartInstance, rsMansfieldChartInstance, rsSqueezeChartInstance].filter(Boolean));
 }
 
 // ============================================================
@@ -1245,7 +1398,7 @@ function initDrawer() {
                 state.sortDir = "asc";
             }
             updateSortHeaderClasses();
-            renderTable();
+            renderActiveDrawerTable();
         });
     });
 }
@@ -1271,44 +1424,51 @@ function compareRows(a, b, sortKey, sortDir) {
     return 0;
 }
 
-// Przełącza, która z trzech tabel w drawerze jest widoczna (pełna tabela
-// uniwersum, albo jedna z dwóch pełnych, sortowalnych, filtrowalnych po etapie
-// tabel screenera RSM — Stabilne/Wzrostowe, patrz renderRsmStableTable/
-// renderRsmGrowthTable) i renderuje jej zawartość. Na telefonie sidebar z
-// kafelkami jest ukryty (patrz CSS @media max-width:640px), więc to jedyny
-// sposób dotarcia do RSM Stabilne/Wzrostowe w pionie. Global Equity Momentum
-// nie ma już własnej tabeli tutaj — przeniesiony jako silnik wyboru do
-// rebalance.js.
+// Przełącza, która tabela w drawerze jest widoczna (pełna tabela uniwersum,
+// jedna z dwóch pełnych, sortowalnych, filtrowalnych po etapie tabel screenera
+// RSM — Stabilne/Wzrostowe, patrz renderRsmStableTable/renderRsmGrowthTable —
+// albo tabela screenera TTM Squeeze, patrz renderTtmSqueezeTable) i renderuje
+// jej zawartość. Na telefonie sidebar z kafelkami jest ukryty (patrz CSS
+// @media max-width:640px), więc to jedyny sposób dotarcia do tych zakładek w
+// pionie. Global Equity Momentum nie ma już własnej tabeli tutaj —
+// przeniesiony jako silnik wyboru do rebalance.js.
 function showDrawerTable(universe) {
     const isRsmStable = universe === "RSM_STABLE";
     const isRsmGrowth = universe === "RSM_GROWTH";
+    const isTtmSqueeze = universe === "TTM_SQUEEZE";
     const isRsm = isRsmStable || isRsmGrowth;
-    document.getElementById("momentumTable").hidden = isRsm;
+    document.getElementById("momentumTable").hidden = isRsm || isTtmSqueeze;
     document.getElementById("rsmStableTable").hidden = !isRsmStable;
     document.getElementById("rsmGrowthTable").hidden = !isRsmGrowth;
+    document.getElementById("ttmSqueezeTable").hidden = !isTtmSqueeze;
     // W przeciwienstwie do starego jednego ekranu RSM (tylko biezaci
-    // liderzy), RSM Stabilne/Wzrostowe obejmuja teraz CALE uniwersa i kazda
-    // spolka niesie wlasny current_stage (patrz classifyRsm) — filtr etapow
-    // ma tu wiec sens tak samo jak w pelnej tabeli uniwersum, dzieki czemu
-    // mozna filtrowac po kolumnach (etap wlacznie) tak jak wszedzie indziej.
+    // liderzy), RSM Stabilne/Wzrostowe i TTM Squeeze obejmuja CALE uniwersa i
+    // kazda spolka niesie wlasny current_stage (patrz classifyRsm/
+    // classifyTtmSqueeze) — filtr etapow ma tu wiec sens tak samo jak w
+    // pelnej tabeli uniwersum, dzieki czemu mozna filtrowac po kolumnach
+    // (etap wlacznie) tak jak wszedzie indziej.
     const stageFilterBar = document.getElementById("stageFilterBar");
     if (stageFilterBar) stageFilterBar.hidden = false;
     document.getElementById("drawerTitle").textContent = isRsmStable
         ? "Pełna tabela — RSM Stabilne"
         : isRsmGrowth
             ? "Pełna tabela — RSM Wzrostowe"
-            : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+            : isTtmSqueeze
+                ? "Pełna tabela — TTM Squeeze"
+                : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     renderActiveDrawerTable();
 }
 
 // Dispatcher wywolywany zarowno po przelaczeniu zakladki (showDrawerTable) jak
-// i po zmianie filtra etapu (initStageFilter) — zeby zmiana filtra odswiezala
-// WLASNIE aktywna tabele, a nie zawsze renderTable() (co bylo poprawne, gdy
-// istnial tylko jeden typ tabeli poza momentum, ale juz nie po rozbiciu RSM
-// na dwie pelne, filtrowalne zakladki).
+// i po zmianie filtra etapu (initStageFilter) i po sortowaniu naglowka
+// (initDrawer) — zeby zmiana filtra/sortowania odswiezala WLASNIE aktywna
+// tabele, a nie zawsze renderTable() (co bylo poprawne, gdy istnial tylko
+// jeden typ tabeli poza momentum, ale juz nie po rozbiciu RSM na dwie pelne,
+// filtrowalne zakladki i dolozeniu TTM Squeeze).
 function renderActiveDrawerTable() {
     if (state.drawerUniverse === "RSM_STABLE") renderRsmStableTable();
     else if (state.drawerUniverse === "RSM_GROWTH") renderRsmGrowthTable();
+    else if (state.drawerUniverse === "TTM_SQUEEZE") renderTtmSqueezeTable();
     else renderTable();
 }
 
@@ -1386,6 +1546,79 @@ function renderRsmScreenerTable(kind) {
 
 function renderRsmStableTable() { renderRsmScreenerTable("stable"); }
 function renderRsmGrowthTable() { renderRsmScreenerTable("growth"); }
+
+function ttmSqueezeStatusHtml(r) {
+    return r.status === "fired"
+        ? `<span class="squeeze-status squeeze-status-fired">🔥 Wybicie (${r.weeks_since_fire} tyg. temu)</span>`
+        : `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
+}
+
+function ttmSqueezeRowHtml(r, position) {
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${r.sector}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td class="${r.momentum_pct >= 0 ? "positive" : "negative"}">${r.momentum_pct.toFixed(2)}%</td>
+        <td>${ttmSqueezeStatusHtml(r)}</td>
+        <td>${r.consolidation_weeks} tyg.</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+// Tabela screenera TTM Squeeze — sortowalna (compareRows po data-key z
+// index.html, patrz initDrawer) i filtrowalna po etapie (matchesStageFilter/
+// #stageFilterBar), tak jak pełna tabela uniwersum (renderTable) i tabele RSM
+// (renderRsmScreenerTable), na płaskiej, wielo-uniwersalnej liście z
+// combinedTtmSqueezeCandidates() (już posortowanej: wybicia przed
+// konsolidacjami — ta kolejność bazowa jest tu nadpisywana sortowaniem
+// użytkownika, jeśli jakieś wybrał, patrz compareRows).
+function renderTtmSqueezeTable() {
+    const allRows = combinedTtmSqueezeCandidates();
+    const meta = document.getElementById("drawerMeta");
+
+    let rows = state.stageFilter === "ALL"
+        ? allRows.slice()
+        : allRows.filter(r => matchesStageFilter(r.current_stage));
+
+    const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
+    if (refDates.length) {
+        let text = `Rebalans: ${refDates[0]} · `;
+        text += state.stageFilter === "ALL"
+            ? `${allRows.length} spółek`
+            : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
+        meta.textContent = text;
+        meta.title = "";
+    } else {
+        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
+        meta.title = "";
+    }
+
+    rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
+
+    const tbody = document.getElementById("ttmSqueezeTableBody");
+    tbody.innerHTML = "";
+
+    if (rows.length === 0) {
+        const tr = document.createElement("tr");
+        const msg = allRows.length === 0 ? "Brak danych." : "Żadna spółka nie pasuje do wybranego etapu.";
+        tr.innerHTML = `<td colspan="10" class="empty-state">${msg}</td>`;
+        tbody.appendChild(tr);
+        return;
+    }
+
+    rows.forEach((r, i) => {
+        const tr = document.createElement("tr");
+        tr.dataset.ticker = r.ticker;
+        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
+        tr.innerHTML = ttmSqueezeRowHtml(r, i + 1);
+        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        tbody.appendChild(tr);
+    });
+    bindTvRowButtons(tbody);
+}
 
 function renderTable() {
     const d = state.data[state.drawerUniverse];
@@ -1592,6 +1825,7 @@ if (typeof document !== "undefined") {
         await loadData();
         renderSidebarTiles();
         renderRsmPanel();
+        renderTtmSqueezePanel();
         initDrawer();
         initOpenTvButton();
         initResetZoomButton();
@@ -1626,8 +1860,8 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        compareRows, rollingMean, alignMansfieldToDates, alignGrowthToDates, fmtPlDate,
-        classifyRsm, combinedRsmCandidates, state,
+        compareRows, rollingMean, alignMansfieldToDates, alignSqueezeToDates, fmtPlDate,
+        classifyRsm, combinedRsmCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };
 }
