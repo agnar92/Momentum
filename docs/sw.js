@@ -1,4 +1,4 @@
-const CACHE = "momentum-shell-v4";
+const CACHE = "momentum-shell-v5";
 const SHELL = [
   "index.html", "rebalance.html", "chart.html",
   "css/style.css",
@@ -19,27 +19,26 @@ self.addEventListener("activate", (e) => {
   self.clients.claim();
 });
 
+// Wszystko na tej samej domenie — dane momentum ORAZ powłoka aplikacji
+// (HTML/CSS/JS) — idzie najpierw przez sieć, offline -> ostatnia znana wersja
+// z cache. Wcześniej powłoka miała ODWROTNĄ strategię (cache natychmiast,
+// sieć w tle "na później") — to spowodowało realny, zgłoszony przez
+// użytkownika bug: rebalance.js przekierowujący do wykresu zmienił swój
+// docelowy adres DWA razy w jeden dzień (najpierw index.html?...&fullscreen=1,
+// potem chart.html), a przeglądarka z już zainstalowanym starym Service
+// Workerem i zacache'owanym starym js/rebalance.js nadal pokazywała stare
+// zachowanie (klik w wiersz prowadził donikąd/"pustej strony") aż nowy SW w
+// końcu przejął kontrolę — co przy tamtej strategii mogło zająć więcej niż
+// jedno odświeżenie. Kod tej strony jest wciąż aktywnie rozwijany (częste
+// zmiany), więc świeżość ma tu większy priorytet niż błyskawiczne ładowanie z
+// cache — offline pozostaje fallbackiem, nie domyślnym zachowaniem.
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return; // nie ruszamy CDN (Chart.js, SheetJS)
 
-  if (url.pathname.includes("/data/")) {
-    // Dane momentum: najpierw sieć (mają być świeże), offline -> ostatnia znana wersja z cache.
-    e.respondWith(
-      fetch(e.request)
-        .then((res) => { caches.open(CACHE).then((c) => c.put(e.request, res.clone())); return res; })
-        .catch(() => caches.match(e.request))
-    );
-    return;
-  }
-
-  // Powłoka aplikacji: cache natychmiast, w tle odśwież na później.
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const fetchPromise = fetch(e.request)
-        .then((res) => { caches.open(CACHE).then((c) => c.put(e.request, res.clone())); return res; })
-        .catch(() => cached);
-      return cached || fetchPromise;
-    })
+    fetch(e.request)
+      .then((res) => { caches.open(CACHE).then((c) => c.put(e.request, res.clone())); return res; })
+      .catch(() => caches.match(e.request))
   );
 });
