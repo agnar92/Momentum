@@ -648,11 +648,32 @@ next to "10:30" and Mansfield, and it **replaces an earlier panel** that showed 
 1/3/6-month % growth (`compute_growth_chart`, `growth_1m`/`growth_3m`/`growth_6m` — removed) — the user
 explicitly changed direction away from plain performance numbers toward finding stocks that already have
 momentum but are sitting through a multi-week **consolidation** ("squeeze"), specifically to catch names
-just starting to break out of one. `squeeze_on` is true for a given week when the Bollinger Bands
-(`TTM_SQUEEZE_BB_WEEKS` = 20-week SMA ± `TTM_SQUEEZE_BB_MULT` = 2.0 standard deviations) sit entirely
-**inside** the Keltner Channel (`TTM_SQUEEZE_KC_WEEKS` = 20-week EMA ± `TTM_SQUEEZE_KC_ATR_MULT` = 2.0×
-ATR — raised from an initial 1.5× at the user's request, a wider channel that needs the Bollinger Bands to
-contract more before calling it a squeeze) — the classic low-volatility/consolidation signature.
+just starting to break out of one.
+
+**The formulas are a deliberate, verified, line-for-line port of "Squeeze Momentum Indicator [LazyBear]"**
+— the specific Pine Script that is *the* de-facto "TTM Squeeze" almost everyone means by that name on
+TradingView (confirmed against its public source) — not a from-first-principles reimplementation. This
+matters because an earlier version of this code took some "textbook Keltner Channel" shortcuts that look
+reasonable but don't match what TradingView actually plots, which the user caught by comparing a few
+tickers against the real chart ("Źle działa ttm i histogram sprawdź kilka z tradingview"). Three concrete
+fixes came out of that check, all still true today:
+  1. **Both bands share ONE multiplier.** In LazyBear's reference script, `dev = multKC *
+     stdev(source, length)` — the Bollinger Band deviation uses the *Keltner* multiplier input, not a
+     separate "BB MultFactor" (which is declared but never actually used in the calculation — a quirk in
+     the original public script, not a typo we should "fix": that quirky formula is exactly what's on
+     everyone's chart). So there is only `TTM_SQUEEZE_KC_ATR_MULT` (2.0, raised from an initial 1.5× at
+     the user's request) — no separate `TTM_SQUEEZE_BB_MULT` constant exists.
+  2. **The Keltner Channel midline is SMA, not EMA.** Reference: `ma = sma(source, lengthKC)`. An earlier
+     version used an EMA here (the more common "textbook" Keltner convention), which shifted the channel
+     center away from what TradingView draws. Since `TTM_SQUEEZE_BB_WEEKS == TTM_SQUEEZE_KC_WEEKS` (both
+     20), this SMA is literally the same `sma` series already computed for the Bollinger Band basis —
+     `compute_ttm_squeeze_chart()` reuses one `sma` variable for both.
+  3. **Standard deviation is population, not sample.** Pine Script's `stdev()` divides by `N` (`ddof=0`)
+     by default, not `N-1` — pandas' `.std()` defaults to `ddof=1`, so the Bollinger Band width (and
+     therefore `squeeze_on`) would be subtly narrower than TradingView's without passing `ddof=0` explicitly.
+
+`squeeze_on` is true for a given week when the Bollinger Bands sit entirely **inside** the Keltner Channel
+(both computed as above) — the classic low-volatility/consolidation signature.
 `squeeze_count` is the number of *consecutive* weeks the squeeze has been on (0 when off); `fired` marks
 the single week the squeeze just turned off after being on — the breakout out of consolidation.
 `weeks_since_fire`/`fire_consolidation_weeks` are forward-filled for every week: how long ago the most
