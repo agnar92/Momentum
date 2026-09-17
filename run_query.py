@@ -1854,10 +1854,31 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
 # poczatek nowego ruchu po fazie niskiej zmiennosci. Liczone na TYGODNIOWYCH
 # swiecach (High/Low/Close z _weekly_close_series), nie dziennych — ten sam rytm co
 # reszta wykresow stage-analysis w tym module.
+#
+# Formuly ponizej celowo, DOSLOWNIE odtwarzaja "Squeeze Momentum Indicator [LazyBear]"
+# — najpopularniejszy, powszechnie uzywany na TradingView skrypt tego wskaznika (i to,
+# co wiekszosc ludzi ma na mysli mowiac "TTM Squeeze na TradingView") — zweryfikowane
+# 1:1 wobec jego publicznego zrodla Pine Script po tym, jak porownanie z prawdziwym
+# wykresem na TradingView wykazalo rozjazdy. Trzy konkretne rozbieznosci wczesniejszej
+# wersji tego kodu naprawione ponizej:
+#   1. Gorna/dolna wstega Bollingera uzywa TEGO SAMEGO mnoznika co kanal Kellera
+#      (`multKC` w oryginale), NIE osobnego "BB MultFactor" — w publicznym skrypcie
+#      LazyBeara `dev = multKC * stdev(source, length)`, wiec wejscie "BB MultFactor"
+#      jest tam faktycznie MARTWE (nigdzie nieuzywane w obliczeniach). To wyglada jak
+#      literowka/blad w oryginale, ale to WLASNIE ta formula rysuje sie na milionach
+#      wykresow na TradingView, wiec odtwarzamy ja doslownie zamiast "poprawiac" —
+#      inaczej nasze liczby nigdy nie zgadzalyby sie z tym, co widac na TradingView.
+#      Dlatego jest tu juz TYLKO JEDEN mnoznik (TTM_SQUEEZE_KC_ATR_MULT), nie dwa.
+#   2. Linia srodkowa kanalu Kellera to SMA(close, dlugosc), NIE EMA — oryginal:
+#      `ma = sma(source, lengthKC)`. Wczesniejsza wersja tego kodu uzywala EMA
+#      (bardziej "podrecznikowa" konwencja Kellera), co dawalo inny srodek kanalu
+#      niz na TradingView.
+#   3. Odchylenie standardowe Pine Script (`stdev()`) domyslnie liczy POPULACYJNE
+#      odchylenie std. (dzielenie przez N), NIE probkowe (N-1) jak domyslnie pandas
+#      `.std()` — stad `ddof=0` ponizej.
 TTM_SQUEEZE_BB_WEEKS = 20          # dlugosc SMA/odchylenia standardowego Bollinger Bands
-TTM_SQUEEZE_BB_MULT = 2.0          # mnoznik odchylenia standardowego (BB gorna/dolna)
-TTM_SQUEEZE_KC_WEEKS = 20          # dlugosc EMA/ATR kanalu Kellera (ta sama dlugosc co BB — standard)
-TTM_SQUEEZE_KC_ATR_MULT = 2.0      # mnoznik ATR kanalu Kellera (gorna/dolna)
+TTM_SQUEEZE_KC_WEEKS = 20          # dlugosc SMA/ATR kanalu Kellera (ta sama dlugosc co BB — standard)
+TTM_SQUEEZE_KC_ATR_MULT = 2.0      # JEDYNY mnoznik — uzywany zarowno dla wstegi Bollingera, jak i kanalu Kellera (patrz wyzej)
 # Uzytkownik: "akcje ktore mialy wiecej niz 5 tygodni konsolidacji" — kwalifikuje sie
 # squeeze, ktory trwal SCISLE WIECEJ niz tyle tygodni (czyli min. 6 tygodni z rzedu).
 TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5
@@ -1898,10 +1919,12 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     zaczyna z nich wychodzic.
 
     Squeeze WLACZONY w danym tygodniu, gdy wstegi Bollingera (SMA +/- TTM_SQUEEZE_
-    BB_MULT * odchylenie std., TTM_SQUEEZE_BB_WEEKS tyg.) mieszcza sie CALKOWICIE
-    WEWNATRZ kanalu Kellera (EMA +/- TTM_SQUEEZE_KC_ATR_MULT * ATR, TTM_SQUEEZE_
-    KC_WEEKS tyg.) — klasyczna definicja "squeeze" (niska zmiennosc, cena w wąskiej
-    konsolidacji). "squeeze_count" to liczba KOLEJNYCH tygodni, w ktorych squeeze byl
+    KC_ATR_MULT * populacyjne odchylenie std., TTM_SQUEEZE_BB_WEEKS tyg.) mieszcza sie
+    CALKOWICIE WEWNATRZ kanalu Kellera (SMA +/- TTM_SQUEEZE_KC_ATR_MULT * ATR,
+    TTM_SQUEEZE_KC_WEEKS tyg.) — klasyczna definicja "squeeze" (niska zmiennosc, cena
+    w wąskiej konsolidacji), zapisana DOSLOWNIE jak w referencyjnym skrypcie LazyBeara
+    (patrz komentarz nad stalymi powyzej — obie wstegi uzywaja TEGO SAMEGO mnoznika).
+    "squeeze_count" to liczba KOLEJNYCH tygodni, w ktorych squeeze byl
     wlaczony (0, gdy akurat jest wylaczony) — to na niej opiera sie proba uzytkownika
     "wiecej niz 5 tygodni konsolidacji" (TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS).
     "fired" oznacza tydzien, w ktorym squeeze WLASNIE sie wylaczyl (wstegi Bollingera
@@ -1949,10 +1972,17 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
     close, high, low = stock_df["close"], stock_df["high"], stock_df["low"]
 
+    # BB_WEEKS == KC_WEEKS (oba 20) w naszych stalych, wiec `sma` ponizej sluzy
+    # ZAROWNO jako baza wstegi Bollingera (`basis` w oryginale), JAK I jako srodek
+    # kanalu Kellera (`ma` w oryginale, rowniez SMA — patrz komentarz nad stalymi) —
+    # dokladnie tak samo jak w referencyjnym skrypcie, gdzie oba to `sma(source, length)`
+    # na tej samej dlugosci.
     sma = close.rolling(TTM_SQUEEZE_BB_WEEKS).mean()
-    std = close.rolling(TTM_SQUEEZE_BB_WEEKS).std()
-    bb_upper = sma + TTM_SQUEEZE_BB_MULT * std
-    bb_lower = sma - TTM_SQUEEZE_BB_MULT * std
+    # ddof=0: Pine Script stdev() liczy odchylenie POPULACYJNE (dzielenie przez N),
+    # nie probkowe (N-1, domyslne w pandas) — patrz komentarz nad stalymi.
+    std = close.rolling(TTM_SQUEEZE_BB_WEEKS).std(ddof=0)
+    bb_upper = sma + TTM_SQUEEZE_KC_ATR_MULT * std
+    bb_lower = sma - TTM_SQUEEZE_KC_ATR_MULT * std
 
     prev_close = close.shift(1)
     true_range = pd.concat([
@@ -1961,9 +1991,8 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
         (low - prev_close).abs(),
     ], axis=1).max(axis=1)
     atr = true_range.rolling(TTM_SQUEEZE_KC_WEEKS).mean()
-    ema = close.ewm(span=TTM_SQUEEZE_KC_WEEKS, adjust=False).mean()
-    kc_upper = ema + TTM_SQUEEZE_KC_ATR_MULT * atr
-    kc_lower = ema - TTM_SQUEEZE_KC_ATR_MULT * atr
+    kc_upper = sma + TTM_SQUEEZE_KC_ATR_MULT * atr
+    kc_lower = sma - TTM_SQUEEZE_KC_ATR_MULT * atr
 
     squeeze_on = (bb_lower > kc_lower) & (bb_upper < kc_upper)
     squeeze_on = squeeze_on.where(bb_upper.notna() & kc_upper.notna())  # None (NA) w rozgrzewce, nie False
