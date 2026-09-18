@@ -1089,11 +1089,27 @@ flex child (no `.topbar-left` wrapper there).
   `STAGE_BREAKOUT_VOLUME_RATIO`/`BASE_BOX_COLORS`, `stageCellHtml()`, and `compareRows()` (previously
   `app.js`'s `compareRows` and `rebalance.js`'s identically-implemented `comparePickerRows` — now one
   function both files call, including from inside `js/table-render.js`'s default comparator, see below).
-  `rebalance.js` keeps its OWN, shorter `UNIVERSE_LABELS` (no " Momentum" suffix, e.g. `"S&P 500"` not
-  `"S&P 500 Momentum"`) as a local `const` — that one was never a copy of the same product to begin with,
-  just a different, more compact label set that happens to share a variable name; unifying it would have
-  changed visible text on one page or the other, which this refactor deliberately avoids (it changes where
-  code lives, not what any page renders). For Node (`tests/js/*.test.js`, `require()` instead of `<script>`
+  `rebalance.js` keeps its OWN, shorter `PICKER_UNIVERSE_LABELS` (no " Momentum" suffix, e.g. `"S&P 500"`
+  not `"S&P 500 Momentum"`) as a local `const` — that one was never a copy of the same product to begin
+  with, just a different, more compact label set; unifying it would have changed visible text on one page
+  or the other, which this refactor deliberately avoids (it changes where code lives, not what any page
+  renders). **This local `const` must NOT be named `UNIVERSE_LABELS`, even though it briefly was** — a
+  real bug shipped in the PR that consolidated `js/table-render.js`+`js/qol.js` into one PR (squash-merged
+  as PR #97): `rebalance.js` still declared its own top-level `const UNIVERSE_LABELS`, and since
+  `rebalance.html` loads it and `js/shared.js` as two sibling classic `<script>` tags — no
+  modules/bundler, see the Frontend intro above — both share ONE top-level lexical scope for `let`/`const`
+  in a browser, so the second `const UNIVERSE_LABELS` threw `SyntaxError: Identifier 'UNIVERSE_LABELS' has
+  already been declared` at parse time. That aborts the ENTIRE script before a single line of it runs —
+  `rebalance.js`'s `init()` never fires, so `hideLoadingOverlay()` (`js/qol.js`) never gets called either,
+  and the user is left staring at the "Ładowanie danych…" overlay forever, with no console visible to a
+  normal user to explain why. (Plain `function` redeclarations across sibling scripts do NOT throw this
+  way — they just silently overwrite each other, same as `var` — which is exactly why `rebalance.js`'s own
+  one-argument `tvSymbolFor(ticker)`, mentioned above, safely shadows `js/shared.js`'s two-argument
+  version without incident. Only `const`/`let`/`class` redeclaration in the shared top-level script scope
+  is a hard error.) Caught after the fact by loading `rebalance.html` with Playwright and checking for a
+  `pageerror` event — worth doing again any time a new file introduces ANOTHER top-level `const`/`let`
+  that could collide with one already declared in a sibling `<script>` loaded on the same page. For Node
+  (`tests/js/*.test.js`, `require()` instead of `<script>`
   tags — Node has no shared global scope across separately-required files the way sibling `<script>` tags
   in a browser do), every consumer file (`app.js`/`rebalance.js`/`chart.js`/`chart-render.js`) opens with
   `if (typeof require === "function" && typeof window === "undefined") { Object.assign(globalThis,

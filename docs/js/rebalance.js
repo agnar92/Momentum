@@ -12,11 +12,18 @@ if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./qol.js"));
 }
 
-// Krótsza wersja UNIVERSE_LABELS (bez dopisku "Momentum") — pasuje lepiej do
-// przycisków/chipów Kroku 1/2 niż pełne etykiety z js/shared.js, których
+// Krótsza wersja etykiet uniwersów (bez dopisku "Momentum") — pasuje lepiej do
+// przycisków/chipów Kroku 1/2 niż pełne UNIVERSE_LABELS z js/shared.js, których
 // używa dashboard/strona wykresu (index.html/chart.html) — celowo INNY
-// produkt, nie kopia tego samego (patrz komentarz na górze shared.js).
-const UNIVERSE_LABELS = {
+// produkt, nie kopia tego samego (patrz komentarz na górze shared.js). Nazwa
+// jest inna niż w shared.js (nie UNIVERSE_LABELS) specjalnie — index.html i
+// chart.html laduja tylko shared.js, ale rebalance.html laduje OBA pliki jako
+// zwykle <script> tagi w jednym globalnym zasiegu, gdzie dwa `const` o tej
+// samej nazwie w siostrzanych <script>ach rzucaja SyntaxError "already been
+// declared" i zatrzymuja caly plik przed wykonaniem (real bug spotkany po
+// zmergowaniu PR #97 — rebalance.html zawieszal sie na nakladce ladowania,
+// bo rebalance.js nigdy sie nie wykonywal).
+const PICKER_UNIVERSE_LABELS = {
     SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones", WIG20: "WIG20", MWIG40: "mWIG40",
 };
 const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
@@ -375,7 +382,7 @@ function renderGemWidget() {
         <div class="gem-index-row${i.universe === gemData.winner ? " gem-index-winner" : ""}${i.universe === browsing ? " gem-index-active" : ""}"
              data-universe="${i.universe}" role="button" tabindex="0"
              title="Kliknij, żeby przeglądać spółki tego indeksu w Kroku 2 poniżej">
-            <span>${i.universe === gemData.winner ? "🏆 " : ""}${UNIVERSE_LABELS[i.universe]}${i.manual_entry ? ' <span class="text-faint">(ręcznie)</span>' : ""}${i.universe === browsing ? ' <span class="text-faint">(przeglądasz)</span>' : ""}</span>
+            <span>${i.universe === gemData.winner ? "🏆 " : ""}${PICKER_UNIVERSE_LABELS[i.universe]}${i.manual_entry ? ' <span class="text-faint">(ręcznie)</span>' : ""}${i.universe === browsing ? ' <span class="text-faint">(przeglądasz)</span>' : ""}</span>
             <span class="${i.return_pct >= 0 ? "positive" : "negative"}">${i.return_pct >= 0 ? "+" : ""}${i.return_pct.toFixed(2)}%</span>
         </div>
     `).join("");
@@ -395,7 +402,7 @@ function renderGemWidget() {
             const hasOverride = ov && typeof ov.return_pct === "number" && !isNaN(ov.return_pct);
             return `
                 <div class="gem-manual-row">
-                    <label for="gemManual_${i.universe}">${UNIVERSE_LABELS[i.universe]} zwrot 12M (%)</label>
+                    <label for="gemManual_${i.universe}">${PICKER_UNIVERSE_LABELS[i.universe]} zwrot 12M (%)</label>
                     <div class="gem-manual-input-group">
                         <input type="number" step="0.01" id="gemManual_${i.universe}" class="gem-manual-input"
                                data-universe="${i.universe}" placeholder="np. 44.84"
@@ -408,7 +415,7 @@ function renderGemWidget() {
         }).join("");
 
     const winnerReturn = (gemData.indices || []).find(i => i.universe === gemData.winner);
-    const engineNote = `Zwycięzca (najsilniejszy trend ${gemData.lookback_months || 12}M): <strong>${UNIVERSE_LABELS[gemData.winner]}</strong>`
+    const engineNote = `Zwycięzca (najsilniejszy trend ${gemData.lookback_months || 12}M): <strong>${PICKER_UNIVERSE_LABELS[gemData.winner]}</strong>`
         + `${winnerReturn ? " " + (winnerReturn.return_pct >= 0 ? "+" : "") + winnerReturn.return_pct.toFixed(2) + "%" : ""}. `
         + `To tylko podpowiedź — kliknij dowolny wiersz poniżej, żeby przeglądać JEGO spółki w Kroku 2, `
         + `niezależnie od tego, kto akurat wygrywa w GEM.`;
@@ -449,7 +456,7 @@ function renderGemWidget() {
         stored[universe] = { return_pct: value, as_of: new Date().toISOString().slice(0, 10) };
         saveManualGemReturns(stored);
         applyAndRerender();
-        showToast(`Zapisano ręczny zwrot ${UNIVERSE_LABELS[universe]}: ${value >= 0 ? "+" : ""}${value.toFixed(2)}%`, { type: "success" });
+        showToast(`Zapisano ręczny zwrot ${PICKER_UNIVERSE_LABELS[universe]}: ${value >= 0 ? "+" : ""}${value.toFixed(2)}%`, { type: "success" });
     };
     el.querySelectorAll(".gem-manual-save-btn").forEach(btn => {
         btn.addEventListener("click", () => saveFromInput(btn.dataset.universe));
@@ -460,7 +467,7 @@ function renderGemWidget() {
             delete stored[btn.dataset.universe];
             saveManualGemReturns(stored);
             applyAndRerender();
-            showToast(`Usunięto ręczny zwrot ${UNIVERSE_LABELS[btn.dataset.universe]} — wracamy do wskaźnika syntetycznego`, { type: "info" });
+            showToast(`Usunięto ręczny zwrot ${PICKER_UNIVERSE_LABELS[btn.dataset.universe]} — wracamy do wskaźnika syntetycznego`, { type: "info" });
         });
     });
     el.querySelectorAll(".gem-manual-input").forEach(input => {
@@ -604,7 +611,7 @@ function initPickerStageFilter() {
 function renderPickerTable() {
     const universe = settings.browsingUniverse;
     const titleEl = document.getElementById("pickerUniverseLabel");
-    if (titleEl) titleEl.textContent = universe ? UNIVERSE_LABELS[universe] : "—";
+    if (titleEl) titleEl.textContent = universe ? PICKER_UNIVERSE_LABELS[universe] : "—";
 
     const allRows = pickerRows();
     const data = universeData[universe] || {};
@@ -666,7 +673,7 @@ function renderPicksList() {
     const wrap = document.getElementById("portfolioPicksList");
     if (!wrap) return;
     wrap.innerHTML = picks.length
-        ? picks.map(p => `<span class="exclude-chip">${p.ticker} <span class="text-faint">(${UNIVERSE_LABELS[p.universe]})</span>`
+        ? picks.map(p => `<span class="exclude-chip">${p.ticker} <span class="text-faint">(${PICKER_UNIVERSE_LABELS[p.universe]})</span>`
             + `<button class="exclude-chip-remove" data-ticker="${p.ticker}" data-universe="${p.universe}" title="Usuń z portfela">✕</button></span>`).join("")
         : `<span class="text-faint">Portfel jest jeszcze pusty — wybierz spółki w Kroku 2 powyżej.</span>`;
     wrap.querySelectorAll(".exclude-chip-remove").forEach(btn => {
@@ -1045,7 +1052,7 @@ function updateContributionUnit() {
     }
     if (activeEl) {
         activeEl.textContent = activeUniverses.length
-            ? `(portfel: ${activeUniverses.map(u => UNIVERSE_LABELS[u]).join(", ")})`
+            ? `(portfel: ${activeUniverses.map(u => PICKER_UNIVERSE_LABELS[u]).join(", ")})`
             : "(portfel pusty — wybierz spółki w Kroku 2 powyżej)";
     }
 }
@@ -1065,7 +1072,7 @@ function renderSuggestions() {
     Object.values(targets).forEach(t => {
         const heldShares = shares[t.ticker] || 0;
         const currentValue = t.price ? t.price * heldShares : 0;
-        const note = t.universes.map(u => UNIVERSE_LABELS[u]).join(" + ") + (t.stale ? " (brak aktualnych danych)" : "");
+        const note = t.universes.map(u => PICKER_UNIVERSE_LABELS[u]).join(" + ") + (t.stale ? " (brak aktualnych danych)" : "");
         rows.push({
             ticker: t.ticker,
             note,
@@ -1140,7 +1147,7 @@ function renderSuggestions() {
 
     const universesInPlay = [...new Set(picks.map(p => p.universe))];
     const parts = universesInPlay
-        .map(u => (universeData[u]?.ref_date ? `${UNIVERSE_LABELS[u]}: ${universeData[u].ref_date}` : null))
+        .map(u => (universeData[u]?.ref_date ? `${PICKER_UNIVERSE_LABELS[u]}: ${universeData[u].ref_date}` : null))
         .filter(Boolean);
     document.getElementById("refDateNote").textContent = parts.length ? `(wg rebalansów z ${parts.join(", ")})` : "";
 
@@ -1249,7 +1256,7 @@ function renderEquityCurve() {
         },
     });
 
-    const activeLabels = Object.keys(deriveUniverseFractionsFromTargets(targets)).map(u => UNIVERSE_LABELS[u]).join(", ") || "—";
+    const activeLabels = Object.keys(deriveUniverseFractionsFromTargets(targets)).map(u => PICKER_UNIVERSE_LABELS[u]).join(", ") || "—";
     caption.textContent = `Wynik historyczny (zrealizowany) portfela wybranego w Kroku 2 (${activeLabels}), ważony dokładnie tak, `
         + "jak dziś waży się Twoja alokacja, vs. 'kup i trzymaj' te same indeksy w tych samych proporcjach. Krzywe każdego indeksu są już "
         + "znormalizowane do bazy 100, więc blendowanie wg wagi nie wymaga przewalutowania. To NIE jest historia konkretnie Twoich pozycji "
@@ -1426,7 +1433,7 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES, GEM_MANUAL_OVERRIDE_UNIVERSES,
+        UNIVERSES, PICKER_UNIVERSE_LABELS, PLN_UNIVERSES, GEM_MANUAL_OVERRIDE_UNIVERSES,
         fmtMoney, fmtMoneyPln, moneyFmtForUniverse, moneyFmtForCurrency, currentMoneyFmt, fmtQty, sharesSuggestion,
         currencyOf, computeTargetsFromPicks, deriveUniverseFractionsFromTargets,
         normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
