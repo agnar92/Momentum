@@ -10,7 +10,11 @@
 // w CLAUDE.md), więc funkcje/zmienne poniżej są zwykłymi globalami dzielonymi
 // między stronami, nigdy zdefiniowanymi dwa razy. `index.html` musi ładować
 // ten plik PRZED `js/app.js` (który dalej odwołuje się do tych globali bez
-// zmian), a `chart.html` PRZED `js/chart.js`.
+// zmian), a `chart.html` PRZED `js/chart.js`. Obie strony ładują też
+// `js/shared.js` PRZED tym plikiem — STAGE_LABELS/STAGE_DESCRIPTIONS/
+// STAGE_COLORS/STAGE_BREAKOUT_VOLUME_RATIO/BASE_BOX_COLORS użyte poniżej
+// (renderStageBadge) żyją tam, żeby dało się je też współdzielić z
+// rebalance.js (patrz komentarz na górze shared.js).
 //
 // Strony różnią się tylko cienką, WŁASNĄ warstwą "spinającą" (który ticker
 // jest wybrany, skąd wziąć dane, jak wygląda przycisk "wstecz") — patrz
@@ -19,6 +23,13 @@
 // duplikacja SAMEGO WYKRESU, tylko nieunikniona różnica w tym, skąd każda
 // strona bierze "aktualnie wybraną spółkę".
 // ============================================================
+
+// Node (tests/js/) nie ładuje <script> tagów — odtwarzamy tu ręcznie to samo
+// współdzielenie globali z js/shared.js, które w przeglądarce daje sam
+// kolejny <script src="js/shared.js"> przed tym plikiem.
+if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./shared.js"));
+}
 
 let rsChartInstance = null;
 
@@ -67,31 +78,9 @@ function destroyChartInstances() {
     if (rsSqueezeChartInstance) { rsSqueezeChartInstance.destroy(); rsSqueezeChartInstance = null; }
 }
 
-// Klasyfikacja etapow Weinsteina (Stage Analysis) dolaczona przez run_query.py
-// (_compute_weinstein_stage_series) do kazdego tygodnia wykresu 10:30 — patrz
-// weekly_chart.stage/signal/volume/buying_volume/buying_volume_ratio. Etykiety/
-// kolory tylko do wyswietlania, logika klasyfikacji zyje wylacznie w backendzie.
-const STAGE_LABELS = {
-    "1": "Etap 1 — Baza",
-    "2A": "Etap 2A — Świeże wybicie",
-    "2B": "Etap 2B — Kontynuacja trendu",
-    "3": "Etap 3 — Szczyt / dystrybucja",
-    "4": "Etap 4 — Spadek",
-};
-const STAGE_DESCRIPTIONS = {
-    "1": "Cena w ciasnej bazie (trading range) w pobliżu SMA30 — czekaj na wybicie ponad opór bazy.",
-    "2A": "Świeże wybicie ponad opór bazy, potwierdzone wolumenem — klasyczny punkt wejścia.",
-    "2B": "Trend trwa — kolejne wybicia kolejnych baz to punkty dokupienia (\"pyramiding\").",
-    "3": "Trend się wypłaszcza po wzroście — rozważ realizację zysków, unikaj nowych wejść.",
-    "4": "Cena pod opadającą SMA30 — trend spadkowy, poza rynkiem / bez nowych pozycji.",
-};
-const STAGE_COLORS = { "1": "#8a8f9c", "2A": "#2ecc71", "2B": "#26a65b", "3": "#e0a72e", "4": "#e0455a" };
-const STAGE_BREAKOUT_VOLUME_RATIO = 1.5; // musi byc zgodne z STAGE_BREAKOUT_VOLUME_RATIO w run_query.py — koloruje slupki wolumenu
-// Kolory prostokatow bazy na wykresie 10:30 (patrz "bases" w weekly_chart,
-// _compute_weinstein_stage_series) — "stage1" to prawdziwe dno POWYZEJ Etapu 4,
-// "stage2" to kazda inna baza (kontynuacja trwajacej fali Etapu 2, patrz
-// docstring w run_query.py).
-const BASE_BOX_COLORS = { stage1: "#8b6dd6", stage2: "#565c6b" };
+// STAGE_LABELS/STAGE_DESCRIPTIONS/STAGE_COLORS/STAGE_BREAKOUT_VOLUME_RATIO/
+// BASE_BOX_COLORS zyja teraz w js/shared.js (patrz komentarz na gorze tego
+// pliku) — wspoldzielone z app.js i rebalance.js, nie tylko z chart.js.
 
 function renderStageBadge(stage) {
     const badge = document.getElementById("stageBadge");
