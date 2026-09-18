@@ -17,11 +17,15 @@
 // otworzy ten link bezpośrednio.
 // ============================================================
 
-// initConnStatus/hideLoadingOverlay/showToast zyja w js/qol.js, ktore
-// chart.html laduje PRZED tym plikiem (patrz komentarz na gorze qol.js) —
+// PLN_UNIVERSES/tvSymbolFor/tvUrlFor/UNIVERSE_LABELS zyja teraz w
+// js/shared.js, ktore chart.html laduje PRZED tym plikiem (patrz komentarz
+// na gorze shared.js) — nie sa juz wlasna kopia tej strony.
+// initConnStatus/hideLoadingOverlay/showToast zyja analogicznie w js/qol.js
+// (patrz komentarz na gorze tamtego pliku), ladowanym tuz po shared.js.
 // Node (tests/js/) nie laduje <script> tagow, wiec odtwarzamy to samo
 // wspoldzielenie globali recznie tutaj (ten sam wzorzec co rebalance.js).
 if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
 }
 
@@ -29,27 +33,6 @@ let selectedTicker = null;
 let selectedUniverse = null;
 let chartRangeMode = "3m";
 let currentRsEntry = null;
-
-// PLN_UNIVERSES/tvSymbolFor/tvUrlFor — celowo WŁASNA, mała kopia (nie z
-// app.js, ktorego ta strona nie laduje) — te same 3 linijki co formatPrice/
-// tvSymbolFor/tvUrlFor w app.js, zbyt drobne, zeby uzasadnialy wspolny plik
-// (patrz komentarz o duplikacji na gorze chart-render.js — TAM chodzi o
-// caly silnik wykresu, nie o pojedyncze jednolinijkowe funkcje pomocnicze).
-const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
-function tvSymbolFor(ticker, universe) {
-    return PLN_UNIVERSES.has(universe) ? `GPW:${ticker}` : ticker;
-}
-function tvUrlFor(ticker, universe) {
-    return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbolFor(ticker, universe))}`;
-}
-
-const UNIVERSE_LABELS = {
-    SP500: "S&P 500 Momentum",
-    NASDAQ100: "Nasdaq 100 Momentum",
-    DOWJONES: "Dow Jones Momentum",
-    WIG20: "WIG20 Momentum",
-    MWIG40: "mWIG40 Momentum",
-};
 
 // Adres, pod ktory wraca przycisk "Powrót" — patrz komentarz na gorze pliku.
 function resolveBackHref(explicitBack) {

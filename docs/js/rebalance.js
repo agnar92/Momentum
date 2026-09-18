@@ -1,19 +1,24 @@
 
-// showToast/initConnStatus/hideLoadingOverlay zyja w js/qol.js, ktore
-// rebalance.html laduje PRZED tym plikiem (patrz komentarz na gorze
-// qol.js) — Node (tests/js/) nie laduje <script> tagow, a togglePick()
-// nizej (ktore woła showToast()) jest wprost jednostkowo testowane, wiec
-// odtwarzamy to samo wspoldzielenie globali recznie tutaj.
+// UNIVERSES/PLN_UNIVERSES/STAGE_LABELS/STAGE_COLORS/stageCellHtml/compareRows
+// żyją teraz w js/shared.js, które rebalance.html ładuje PRZED tym plikiem
+// (patrz komentarz na górze shared.js). showToast/initConnStatus/
+// hideLoadingOverlay żyją analogicznie w js/qol.js (patrz komentarz na górze
+// tamtego pliku), ładowanym tuż po shared.js — togglePick() niżej (które
+// woła showToast()) jest wprost jednostkowo testowane, więc Node (tests/js/,
+// który nie ładuje <script> tagów) potrzebuje tego samego współdzielenia
+// globali odtworzonego ręcznie tutaj.
 if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
 }
 
-const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
+// Krótsza wersja UNIVERSE_LABELS (bez dopisku "Momentum") — pasuje lepiej do
+// przycisków/chipów Kroku 1/2 niż pełne etykiety z js/shared.js, których
+// używa dashboard/strona wykresu (index.html/chart.html) — celowo INNY
+// produkt, nie kopia tego samego (patrz komentarz na górze shared.js).
 const UNIVERSE_LABELS = {
     SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones", WIG20: "WIG20", MWIG40: "mWIG40",
 };
-// WIG20/mWIG40 są notowane w PLN — patrz moneyFmtForUniverse/currencyOf/tvSymbolFor.
-const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
 const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
 
 // Rebalanser to teraz przepływ ETAPOWY, zbudowany tak, żeby dało się go
@@ -50,25 +55,8 @@ const DEFAULT_SETTINGS = { contribution: 0, browsingUniverse: null };
 // Musi się zgadzać z run_query.py::GEM_MANUAL_OVERRIDE_UNIVERSES.
 const GEM_MANUAL_OVERRIDE_UNIVERSES = ["WIG20", "MWIG40"];
 
-// Klasyfikacja etapow Weinsteina — ta sama STAGE_LABELS/STAGE_COLORS co w
-// app.js (celowo zduplikowana: strona nie ma wspolnego modulu miedzy
-// index.html/rebalance.html, tak samo jak STAGE_BREAKOUT_VOLUME_RATIO jest
-// juz zduplikowane wzgledem run_query.py — patrz CLAUDE.md). Tylko do
-// wyswietlania w kolumnie "Etap" tabeli z Kroku 2 (patrz pickerRowHtml).
-const STAGE_LABELS = {
-    "1": "Etap 1 — Baza",
-    "2A": "Etap 2A — Świeże wybicie",
-    "2B": "Etap 2B — Kontynuacja trendu",
-    "3": "Etap 3 — Szczyt / dystrybucja",
-    "4": "Etap 4 — Spadek",
-};
-const STAGE_COLORS = { "1": "#8a8f9c", "2A": "#2ecc71", "2B": "#26a65b", "3": "#e0a72e", "4": "#e0455a" };
-
-function stageCellHtml(stage) {
-    if (!stage || !STAGE_LABELS[stage]) return '<span class="stage-cell" style="color:var(--text-faint)">—</span>';
-    return `<span class="stage-cell" style="color:${STAGE_COLORS[stage]}" title="${STAGE_LABELS[stage]}">`
-        + `<span class="stage-dot" style="background:${STAGE_COLORS[stage]}"></span>${stage}</span>`;
-}
+// STAGE_LABELS/STAGE_COLORS/stageCellHtml — tylko do wyswietlania w kolumnie
+// "Etap" tabeli z Kroku 2 (patrz pickerRowHtml) — zyja teraz w js/shared.js.
 
 let universeData = {};    // { SP500: {...json}, NASDAQ100: {...}, ... }
 let priceMap = {};        // ticker -> { price, sources: [universe,...] }
@@ -526,17 +514,6 @@ function pickerStageFilterLabel() {
     return [...pickerStageFilter].map(s => labels[s]).join(", ");
 }
 
-// Komparator wierszy tabeli Kroku 2: sortowanie tekstowe bez uwzględniania
-// wielkości liter, numeryczne dla reszty pól.
-function comparePickerRows(a, b, sortKey, sortDir) {
-    let va = a[sortKey];
-    let vb = b[sortKey];
-    if (typeof va === "string") { va = va.toLowerCase(); vb = String(vb).toLowerCase(); }
-    if (va < vb) return sortDir === "asc" ? -1 : 1;
-    if (va > vb) return sortDir === "asc" ? 1 : -1;
-    return 0;
-}
-
 function pickerRowHtml(c, universe) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
     const isExcluded = excluded.includes(c.ticker);
@@ -631,7 +608,7 @@ function renderPickerTable() {
 
     const allRows = pickerRows();
     let rows = allRows.filter(c => matchesPickerStageFilter(c.weekly_chart && c.weekly_chart.current_stage));
-    rows.sort((a, b) => comparePickerRows(a, b, pickerSortKey, pickerSortDir));
+    rows.sort((a, b) => compareRows(a, b, pickerSortKey, pickerSortDir));
 
     const meta = document.getElementById("pickerMeta");
     const data = universeData[universe] || {};

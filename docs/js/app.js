@@ -1,45 +1,23 @@
 
-// initConnStatus/hideLoadingOverlay/showToast zyja w js/qol.js, ktore
-// index.html laduje PRZED tym plikiem (patrz komentarz na gorze qol.js) —
-// w Node (tests/js/) te galezie kodu sa dzis nie wywolywane (init() jest w
-// bloku "typeof document !== undefined"), ale dodajemy to samo
-// wspoldzielenie globali co rebalance.js, na wypadek przyszlych testow.
+// UNIVERSES/UNIVERSE_LABELS/PLN_UNIVERSES/formatPrice/tvSymbolFor/tvUrlFor/
+// STAGE_LABELS/STAGE_COLORS/stageCellHtml/compareRows żyją teraz w
+// js/shared.js, współdzielonym przez index.html/rebalance.html/chart.html
+// (patrz komentarz na górze tamtego pliku) — index.html musi ładować
+// js/shared.js PRZED tym plikiem. initConnStatus/hideLoadingOverlay/
+// showToast żyją analogicznie w js/qol.js (patrz komentarz na górze tamtego
+// pliku), ładowanym tuż po shared.js. Node (tests/js/) nie ładuje <script>
+// tagów, więc odtwarzamy to samo współdzielenie globali ręcznie tylko tam.
 if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
 }
 
-const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
-const UNIVERSE_LABELS = {
-    SP500: "S&P 500 Momentum",
-    NASDAQ100: "Nasdaq 100 Momentum",
-    DOWJONES: "Dow Jones Momentum",
-    WIG20: "WIG20 Momentum",
-    MWIG40: "mWIG40 Momentum"
-};
-// WIG20/mWIG40 są notowane w PLN (a nie USD jak reszta uniwersów) — patrz
-// formatPrice — oraz na GPW w TradingView, stąd sufiks "GPW:" w tvSymbolFor.
-const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
 // Uniwersa z WŁASNĄ zakładką/tabelą momentum w dashboardzie (sidebar + drawer).
 // SP500/NASDAQ100 zostały z niej usunięte na życzenie użytkownika (dashboard ma
 // już ekran RSM Stabilne/Wzrostowe, który je i tak obejmuje) — ale ZOSTAJĄ w
 // UNIVERSES: dalej są ładowane, przeszukiwalne (Ctrl+K) i widoczne na ekranach
 // RSM (patrz combinedRsmCandidates), tylko bez własnej, dedykowanej tabeli.
 const SIDEBAR_TAB_UNIVERSES = ["DOWJONES", "WIG20", "MWIG40"];
-
-function formatPrice(price, universe) {
-    return PLN_UNIVERSES.has(universe) ? `${price.toFixed(2)} zł` : `$${price.toFixed(2)}`;
-}
-
-function tvSymbolFor(ticker, universe) {
-    return PLN_UNIVERSES.has(universe) ? `GPW:${ticker}` : ticker;
-}
-
-// Link do PEŁNEJ strony TradingView (nie osadzony widget) dla danego tickera —
-// otwierany w nowej karcie przyciskiem "Otwórz w TradingView" (patrz
-// initOpenTvButton/updateChartArea) i przyciskami "TV" w wierszach tabel.
-function tvUrlFor(ticker, universe) {
-    return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbolFor(ticker, universe))}`;
-}
 
 // ============================================================
 // PANEL "Dane spółki (TradingView)" — pełna, jednostronicowa "wizytówka"
@@ -799,17 +777,10 @@ function initChartFullscreen() {
 }
 
 // STAGE_LABELS/STAGE_DESCRIPTIONS/STAGE_COLORS/STAGE_BREAKOUT_VOLUME_RATIO/
-// BASE_BOX_COLORS (klasyfikacja etapow Weinsteina dolaczona przez run_query.py
-// do kazdego tygodnia wykresu 10:30) zyja teraz w js/chart-render.js,
-// wspoldzielonym z chart.html — patrz komentarz na gorze tamtego pliku.
-
-// Mala kropka + skrot etapu do kolumny "Etap" w glownej tabeli momentum (patrz
-// renderTable) — ten sam STAGE_COLORS/STAGE_LABELS co odznaka nad wykresem.
-function stageCellHtml(stage) {
-    if (!stage || !STAGE_LABELS[stage]) return '<span class="stage-cell" style="color:var(--text-faint)">—</span>';
-    return `<span class="stage-cell" style="color:${STAGE_COLORS[stage]}" title="${STAGE_LABELS[stage]}">`
-        + `<span class="stage-dot" style="background:${STAGE_COLORS[stage]}"></span>${stage}</span>`;
-}
+// BASE_BOX_COLORS/stageCellHtml (klasyfikacja etapow Weinsteina dolaczona
+// przez run_query.py do kazdego tygodnia wykresu 10:30) zyja teraz w
+// js/shared.js, wspoldzielonym przez index.html/rebalance.html/chart.html —
+// patrz komentarz na gorze tamtego pliku.
 
 // Filtr etapow nad glowna tabela (#stageFilterBar) — "2" obejmuje zarowno 2A
 // jak i 2B (uzytkownik mysli o "Etapie 2" jako calosci, nie osobno o
@@ -899,17 +870,8 @@ function updateSortHeaderClasses() {
     });
 }
 
-// Komparator wierszy tabeli: sortowanie tekstowe bez uwzględniania wielkości
-// liter, numeryczne dla reszty pól; wydzielony z renderTable, żeby dało się
-// go przetestować bez DOM.
-function compareRows(a, b, sortKey, sortDir) {
-    let va = a[sortKey];
-    let vb = b[sortKey];
-    if (typeof va === "string") { va = va.toLowerCase(); vb = String(vb).toLowerCase(); }
-    if (va < vb) return sortDir === "asc" ? -1 : 1;
-    if (va > vb) return sortDir === "asc" ? 1 : -1;
-    return 0;
-}
+// compareRows (komparator wierszy tabeli, uzywany tu i przez
+// renderPickerTable w rebalance.js) zyje teraz w js/shared.js.
 
 // Przełącza, która tabela w drawerze jest widoczna (pełna tabela uniwersum,
 // jedna z dwóch pełnych, sortowalnych, filtrowalnych po etapie tabel screenera

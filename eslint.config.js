@@ -23,9 +23,11 @@ const browserGlobals = {
     history: "readonly",
     // require: zwykle NIE jest globalem przegladarki — pojawia sie tylko w
     // gałęzi `typeof require === "function" && typeof window === "undefined"`
-    // na gorze app.js/rebalance.js/chart.js, ktora w Node (tests/js/) recznie
-    // doczepia eksporty js/qol.js do globalThis (bo Node nie laduje <script>
-    // tagow tak jak przegladarka) — w przegladarce ta galaz sie nie wykonuje.
+    // na gorze app.js/rebalance.js/chart.js/chart-render.js, ktora w Node
+    // (tests/js/) recznie doczepia eksporty js/shared.js i/lub js/qol.js do
+    // globalThis (bo Node nie laduje <script> tagow tak jak przegladarka) —
+    // w przegladarce ta galaz sie nie wykonuje. Patrz komentarz na gorze
+    // shared.js/qol.js.
     require: "readonly",
     // Zdefiniowane w docs/js/chart-render.js, wspoldzielonym przez zwykly
     // <script> tag (bez modulow/bundlera) z docs/js/app.js i docs/js/chart.js
@@ -40,11 +42,25 @@ const browserGlobals = {
     rsVolumeChartInstance: "readonly",
     rsMansfieldChartInstance: "readonly",
     rsSqueezeChartInstance: "readonly",
+    // Zdefiniowane w docs/js/shared.js, wspoldzielonym przez zwykly <script>
+    // tag z index.html/rebalance.html/chart.html (patrz komentarz na gorze
+    // tamtego pliku) — ten sam wzorzec co powyzej dla chart-render.js.
+    UNIVERSES: "readonly",
+    UNIVERSE_LABELS: "readonly",
+    PLN_UNIVERSES: "readonly",
+    formatPrice: "readonly",
+    tvSymbolFor: "readonly",
+    tvUrlFor: "readonly",
     STAGE_LABELS: "readonly",
+    STAGE_DESCRIPTIONS: "readonly",
     STAGE_COLORS: "readonly",
+    STAGE_BREAKOUT_VOLUME_RATIO: "readonly",
+    BASE_BOX_COLORS: "readonly",
+    stageCellHtml: "readonly",
+    compareRows: "readonly",
     // Zdefiniowane w docs/js/qol.js, wspoldzielonym przez zwykly <script> tag
     // z index.html/rebalance.html/chart.html — patrz komentarz na gorze
-    // qol.js. Ten sam wzorzec co powyzej dla chart-render.js.
+    // qol.js. Ten sam wzorzec co powyzej dla chart-render.js/shared.js.
     showToast: "readonly",
     initConnStatus: "readonly",
     hideLoadingOverlay: "readonly",
