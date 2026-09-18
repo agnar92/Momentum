@@ -488,6 +488,34 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
 YFINANCE_BACKED_INDEX_UNIVERSES = ("SP500", "NASDAQ100", "DOWJONES")
 SYNTHETIC_INDEX_UNIVERSES = ("WIG20", "MWIG40")
 
+# Mapowanie nazw sektorow GICS DOKLADNIE tak, jak wystepuja w kolumnie "Sector"
+# CSPX_holdings.csv (patrz load_index_constituents), na prawdziwe sektorowe
+# ETF-y SPDR Select Sector — na zyczenie uzytkownika, zeby Sila Relatywna
+# sektorow SP500 (run_query.py::compute_sector_relative_strength) liczyla sie
+# na realnym, plynnym instrumencie zamiast (jak we wczesniejszej wersji)
+# syntetycznego zwrotu wazonego kapitalizacja skladnikow sektora. Kazdy ETF
+# trafia do index_prices z Index_Name = NAZWA SEKTORA (nie ticker ETF-u) —
+# dzieki temu run_query.py::compute_index_momentum (juz sparametryzowany po
+# Index_Name) dziala na tym bez zadnych zmian, dokladnie jak dla
+# SP500/NASDAQ100/DOWJONES powyzej. "Cash and/or Derivatives" (linie
+# gotowki/walut/futures w CSPX, nie prawdziwe spolki — patrz load_index_
+# constituents) celowo nie ma tu wpisu: te "tickery" nigdy nie maja cen w
+# `prices`, wiec nigdy nie trafiaja do wyniku get_universe_metrics i nie sa
+# nigdy grupowane po sektorze w compute_sector_relative_strength.
+SECTOR_ETF_SYMBOLS = {
+    "Information Technology": "XLK",
+    "Health Care": "XLV",
+    "Financials": "XLF",
+    "Consumer Discretionary": "XLY",
+    "Communication": "XLC",
+    "Industrials": "XLI",
+    "Consumer Staples": "XLP",
+    "Energy": "XLE",
+    "Utilities": "XLU",
+    "Real Estate": "XLRE",
+    "Materials": "XLB",
+}
+
 
 def update_index_prices(con, lookback_months):
     """Ceny POZIOMU INDEKSU dla Global Equity Momentum i Sily Relatywnej.
@@ -498,7 +526,10 @@ def update_index_prices(con, lookback_months):
     _download_price_rows (ta sama logika batchowania/retry co ceny akcji).
     WIG20/MWIG40 (SYNTHETIC_INDEX_UNIVERSES) NIE MAJA takiej danej u yfinance
     (patrz _compute_synthetic_equal_weight_index) — budowane syntetycznie z
-    wlasnych skladnikow zamiast pobierane."""
+    wlasnych skladnikow zamiast pobierane. Dolacza tez sektorowe ETF-y SPDR
+    (SECTOR_ETF_SYMBOLS) dla Sily Relatywnej sektorow SP500 — te MAJA pelna
+    historie u yfinance jak zwykle akcje/ETF-y, wiec ten sam
+    _download_price_rows/pelna-podmiana-zakresu dziala tu bez zmian."""
     con.execute("""
         CREATE TABLE IF NOT EXISTS index_prices (
             Date DATE, Index_Name VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
@@ -528,6 +559,27 @@ def update_index_prices(con, lookback_months):
         con.execute("INSERT INTO index_prices SELECT * FROM df_insert")
     print(f"✅ Zapisano {len(rows)} wierszy danych poziomu indeksów "
           f"{'/'.join(YFINANCE_BACKED_INDEX_UNIVERSES)} ({start_date} → {end_date}).")
+
+    sector_symbols = list(SECTOR_ETF_SYMBOLS.values())
+    print(f"🔄 Ceny sektorowych ETF-ów SPDR (Siła Relatywna sektorów SP500): "
+          f"{start_date} → {end_date} dla {sector_symbols}...")
+
+    sector_rows, sector_fetched, sector_failed = _download_price_rows(sector_symbols, start_date, end_date)
+    if sector_failed:
+        print(f"⚠️  Brak danych sektorowego ETF-u dla: {sorted(set(sector_failed))}")
+
+    sector_symbol_to_name = {v: k for k, v in SECTOR_ETF_SYMBOLS.items()}
+    sector_names_sql = ", ".join(f"'{name}'" for name in SECTOR_ETF_SYMBOLS)
+    con.execute(f"""
+        DELETE FROM index_prices
+        WHERE Index_Name IN ({sector_names_sql}) AND Date >= DATE '{start_date}'
+    """)
+    if sector_rows:
+        df_sector = pd.DataFrame(sector_rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+        df_sector["Index_Name"] = df_sector["Ticker"].map(sector_symbol_to_name)
+        df_sector = df_sector[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
+        con.execute("INSERT INTO index_prices SELECT * FROM df_sector")
+    print(f"✅ Zapisano {len(sector_rows)} wierszy danych sektorowych ETF-ów SPDR ({start_date} → {end_date}).")
 
     for index_name in SYNTHETIC_INDEX_UNIVERSES:
         synth = _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)  # noqa: F841

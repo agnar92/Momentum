@@ -2117,6 +2117,7 @@
         "count": 72,
         "momentum_pct": 110.07,
         "rs_vs_index_pct": 89.79,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 1
       },
       {
@@ -2124,6 +2125,7 @@
         "count": 24,
         "momentum_pct": 50.74,
         "rs_vs_index_pct": 30.46,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 2
       },
       {
@@ -2131,6 +2133,7 @@
         "count": 21,
         "momentum_pct": 35.79,
         "rs_vs_index_pct": 15.51,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 3
       },
       {
@@ -2138,6 +2141,7 @@
         "count": 81,
         "momentum_pct": 31.57,
         "rs_vs_index_pct": 11.29,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 4
       },
       {
@@ -2145,6 +2149,7 @@
         "count": 59,
         "momentum_pct": 28.56,
         "rs_vs_index_pct": 8.28,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 5
       },
       {
@@ -2152,6 +2157,7 @@
         "count": 25,
         "momentum_pct": 20.7,
         "rs_vs_index_pct": 0.42,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 6
       },
       {
@@ -2159,6 +2165,7 @@
         "count": 30,
         "momentum_pct": 18.02,
         "rs_vs_index_pct": -2.26,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 7
       },
       {
@@ -2166,6 +2173,7 @@
         "count": 76,
         "momentum_pct": 14.21,
         "rs_vs_index_pct": -6.07,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 8
       },
       {
@@ -2173,6 +2181,7 @@
         "count": 31,
         "momentum_pct": 12.74,
         "rs_vs_index_pct": -7.54,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 9
       },
       {
@@ -2180,6 +2189,7 @@
         "count": 47,
         "momentum_pct": 11.12,
         "rs_vs_index_pct": -9.16,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 10
       },
       {
@@ -2187,6 +2197,7 @@
         "count": 34,
         "momentum_pct": 10.4,
         "rs_vs_index_pct": -9.88,
+        "data_source": "synthetic_fmc_weighted",
         "rank": 11
       }
     ],
@@ -2251,5 +2262,5 @@
       }
     ]
   },
-  "note": "Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB > SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = srednia zwrotow spolek sektora wazona fmc_etf (TO SAMO okno co momentum_value, patrz get_universe_metrics) minus zwrot indeksu SP500 w tym samym oknie; (3) w NAJSILNIEJSZYM sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ sektora, top 10% wg tej przewagi. Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania strategii, NIE porada inwestycyjna."
+  "note": "Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB > SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = zwrot sektorowego ETF-u SPDR (np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS) w TYM SAMYM oknie co momentum_value (patrz get_universe_metrics), minus zwrot indeksu SP500 w tym samym oknie — jesli dany ETF nie ma jeszcze danych, sektor spada na starszy substytut (srednia zwrotow spolek sektora wazona fmc_etf, 'data_source': 'synthetic_fmc_weighted' zamiast 'etf'); (3) w NAJSILNIEJSZYM sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ sektora, top 10% wg tej przewagi. Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania strategii, NIE porada inwestycyjna."
 }

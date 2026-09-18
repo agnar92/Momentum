@@ -1841,7 +1841,10 @@ class TestComputeSectorRelativeStrength:
         insert_daily_series(con, "prices", "Ticker", "TSLOW", "2024-06-01", "2026-03-16", 100.0, 0.10)
         insert_daily_series(con, "prices", "Ticker", "UONE", "2024-06-01", "2026-03-16", 100.0, 0.01)
 
-    def test_ranks_sectors_and_picks_top_10pct_of_strongest_sector(self):
+    def test_falls_back_to_synthetic_fmc_weighted_when_no_sector_etf_data(self):
+        # Brak wierszy w index_prices dla Index_Name='Tech'/'Utilities' (zaden
+        # sektorowy ETF nie zostal jeszcze pobrany) -> spada na starszy substytut:
+        # srednia zwrotow spolek sektora wazona fmc_etf.
         con = make_gem_con()
         self._seed(con)
         out = compute_sector_relative_strength(con, "2026-03-16", min_trading_days=5, max_staleness_days=10)
@@ -1849,11 +1852,30 @@ class TestComputeSectorRelativeStrength:
         assert [s["sector"] for s in out["sectors"]] == ["Tech", "Utilities"]
         assert out["sectors"][0]["rank"] == 1
         assert out["sectors"][0]["count"] == 3
+        assert out["sectors"][0]["data_source"] == "synthetic_fmc_weighted"
+        assert out["sectors"][1]["data_source"] == "synthetic_fmc_weighted"
         assert out["strongest_sector"] == "Tech"
         assert out["top_percent"] == SECTOR_STRATEGY_TOP_PERCENT
         # ceil(3 * 0.10) = 1 -> tylko najsilniejsza spolka sektora (TFAST).
         assert [c["ticker"] for c in out["top_companies"]] == ["TFAST"]
         assert out["top_companies"][0]["rs_vs_sector_pct"] > 0
+
+    def test_uses_real_sector_etf_when_index_prices_has_it(self):
+        # Gdy fetch_data.py juz pobral sektorowy ETF (Index_Name = nazwa sektora
+        # w index_prices, patrz SECTOR_ETF_SYMBOLS), funkcja MUSI go uzyc zamiast
+        # syntetycznej sredniej — tu celowo odwracamy ranking wzgledem tego, co
+        # dalaby synteza (Tech #1 w tescie fallbacku powyzej), zeby dowiesc, ze
+        # faktycznie czyta index_prices, a nie tylko go ignoruje.
+        con = make_gem_con()
+        self._seed(con)
+        insert_daily_series(con, "index_prices", "Index_Name", "Tech", "2024-06-01", "2026-03-16", 100.0, 0.02)
+        insert_daily_series(con, "index_prices", "Index_Name", "Utilities", "2024-06-01", "2026-03-16", 100.0, 0.15)
+
+        out = compute_sector_relative_strength(con, "2026-03-16", min_trading_days=5, max_staleness_days=10)
+        sectors_by_name = {s["sector"]: s for s in out["sectors"]}
+        assert sectors_by_name["Tech"]["data_source"] == "etf"
+        assert sectors_by_name["Utilities"]["data_source"] == "etf"
+        assert out["strongest_sector"] == "Utilities"
 
     def test_missing_price_data_returns_none(self):
         con = make_gem_con()

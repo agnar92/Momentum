@@ -2238,7 +2238,20 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     najsilniejszym sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ
     tego sektora (top 10%). Uzywa get_universe_metrics (TA SAMA pelna,
     kwalifikujaca sie populacja co all_constituents SP500 — nie tylko biezacy
-    top-decyl), wiec kazda spolka z sektora ma szanse trafic do rankingu."""
+    top-decyl), wiec kazda spolka z sektora ma szanse trafic do rankingu.
+
+    Sila kazdego sektora liczona jest PRZEDE WSZYSTKIM na prawdziwym sektorowym
+    ETF-ie SPDR (fetch_data.py::SECTOR_ETF_SYMBOLS, ktorego poziom trafia do
+    index_prices z Index_Name = nazwa sektora) — przez compute_index_momentum,
+    DOKLADNIE tak samo jak liczymy momentum SP500/NASDAQ100/itd. Jesli dany
+    sektorowy ETF nie ma jeszcze danych w index_prices (np. przed pierwszym
+    pelnym uruchomieniem fetch_data.py po tej zmianie), sila sektora spada z
+    powrotem na starszy substytut: srednia zwrotow spolek sektora wazona
+    fmc_etf — ten sam wzorzec 'degraduj sie do przyblizenia zamiast sie
+    wywalic' co gem_manual_returns.json dla WIG20/mWIG40 (patrz CLAUDE.md).
+    Kazdy sektor niesie 'data_source': 'etf' albo 'synthetic_fmc_weighted' dla
+    przejrzystosci pochodzenia danych (ten sam pattern co 'manual_entry'/
+    'fmc_note' gdzie indziej w tym module)."""
     df = get_universe_metrics(con, "SP500", ref_date, min_trading_days, max_staleness_days)
     if df.empty:
         return None
@@ -2253,14 +2266,21 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     sector_momentum = {}
     sector_rows = []
     for sector, g in df.groupby("Sector"):
-        total_fmc = g["fmc"].sum()
-        momentum_pct = float((g["fmc"] * g["return_pct"]).sum() / total_fmc)
+        etf_mom = compute_index_momentum(con, sector, ref_date)
+        if etf_mom is not None:
+            momentum_pct = etf_mom["momentum_value"] * 100
+            data_source = "etf"
+        else:
+            total_fmc = g["fmc"].sum()
+            momentum_pct = float((g["fmc"] * g["return_pct"]).sum() / total_fmc)
+            data_source = "synthetic_fmc_weighted"
         sector_momentum[sector] = momentum_pct
         sector_rows.append({
             "sector": sector,
             "count": int(len(g)),
             "momentum_pct": round(momentum_pct, 2),
             "rs_vs_index_pct": round(momentum_pct - index_return_pct, 2),
+            "data_source": data_source,
         })
     sector_rows.sort(key=lambda r: r["rs_vs_index_pct"], reverse=True)
     for i, r in enumerate(sector_rows):
@@ -2307,9 +2327,12 @@ def export_sector_strategy(con, ref_date, docs_data_dir, min_trading_days, max_s
         "trend": trend,
         "sector_rs": sector_rs,
         "note": ("Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB "
-                 "> SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = srednia zwrotow spolek "
-                 "sektora wazona fmc_etf (TO SAMO okno co momentum_value, patrz get_universe_metrics) "
-                 "minus zwrot indeksu SP500 w tym samym oknie; (3) w NAJSILNIEJSZYM sektorze — sila "
+                 "> SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = zwrot sektorowego ETF-u SPDR "
+                 "(np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS) w TYM "
+                 "SAMYM oknie co momentum_value (patrz get_universe_metrics), minus zwrot indeksu SP500 "
+                 "w tym samym oknie — jesli dany ETF nie ma jeszcze danych, sektor spada na starszy "
+                 "substytut (srednia zwrotow spolek sektora wazona fmc_etf, 'data_source': "
+                 "'synthetic_fmc_weighted' zamiast 'etf'); (3) w NAJSILNIEJSZYM sektorze — sila "
                  "relatywna kazdej spolki wzgledem SREDNIEJ sektora, top 10% wg tej przewagi. "
                  "Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z "
                  "docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania "
