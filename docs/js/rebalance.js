@@ -540,6 +540,7 @@ function pickerRowHtml(c, universe) {
         <td>${c.momentum_score.toFixed(3)}</td>
         <td>${stageCellHtml(stage)}</td>
         <td>${actionHtml}</td>
+        <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" data-universe="${universe}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
     `;
 }
 
@@ -623,7 +624,7 @@ function renderPickerTable() {
         allRows,
         matchesStage: c => matchesPickerStageFilter(c.weekly_chart && c.weekly_chart.current_stage),
         compareFn: (a, b) => compareRows(a, b, pickerSortKey, pickerSortDir),
-        colspan: 10,
+        colspan: 11,
         emptyAllMsg: "Brak danych.",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => {
@@ -635,28 +636,32 @@ function renderPickerTable() {
         },
         isSelected: c => isPicked(c.ticker, universe),
         rowHtml: c => pickerRowHtml(c, universe),
-        // Klik w wiersz (poza przyciskiem "+ Dodaj"/"✓ W portfelu", patrz
-        // stopPropagation w afterRender nizej) przekierowuje na chart.html —
-        // osobna strona z jednym, pelnoekranowym wykresem tej spolki (patrz
-        // komentarz na gorze js/chart.js). "back" niesie adres powrotny
-        // wprost w query stringu (przetrwa odswiezenie chart.html), zeby
-        // przycisk "Powrót" tam zawsze wracal dokladnie tutaj, do Kroku 2 —
-        // nie do samego dashboardu jak we wczesniejszej wersji. Zero
-        // duplikowania kodu wykresu na tej stronie (byl tu wczesniej pelny
-        // port renderRelativeStrengthChart — usuniety na rzecz
-        // wspoldzielonego js/chart-render.js, patrz CLAUDE.md).
-        onRowClick: c => {
-            const params = new URLSearchParams({ ticker: c.ticker, universe, back: "rebalance.html" });
-            window.location.href = `chart.html?${params.toString()}`;
-        },
+        // Caly wiersz NIE jest juz klikalny — poprzednia wersja otwierala
+        // wykres po kliknieciu gdziekolwiek w wierszu, co uzytkownik zglosil
+        // jako zbyt latwe do wywolania mimowolnie (np. klikajac blisko innego
+        // przycisku albo scrollujac na dotyku). Zamiast tego dedykowany
+        // przycisk "📈" (ostatnia kolumna, patrz pickerRowHtml/chart-row-btn)
+        // to jedyny sposob otwarcia wykresu — ten sam wzorzec co przycisk
+        // "TV" w tabelach app.js (tvRowButtonHtml/bindTvRowButtons), tylko
+        // lokalny dla tej strony (rebalance.js nie laduje chart-render.js,
+        // patrz CLAUDE.md). "back" niesie adres powrotny wprost w query
+        // stringu (przetrwa odswiezenie chart.html), zeby przycisk "Powrót"
+        // tam zawsze wracal dokladnie tutaj, do Kroku 2.
         afterRender: (tbody) => {
             tbody.querySelectorAll(".pick-toggle-btn").forEach(btn => {
-                btn.addEventListener("click", (e) => {
-                    e.stopPropagation(); // nie otwieraj wykresu przy klikaniu samego przycisku
+                btn.addEventListener("click", () => {
                     togglePick(btn.dataset.ticker, universe);
                     renderPickerTable();
                     renderPicksList();
                     refreshOutputs();
+                });
+            });
+            tbody.querySelectorAll(".chart-row-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const params = new URLSearchParams({
+                        ticker: btn.dataset.ticker, universe: btn.dataset.universe, back: "rebalance.html",
+                    });
+                    window.location.href = `chart.html?${params.toString()}`;
                 });
             });
         },

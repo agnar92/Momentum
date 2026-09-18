@@ -511,6 +511,13 @@ table.momentum-table tbody tr {
 table.momentum-table tbody tr:hover { background: var(--panel-alt); }
 table.momentum-table tbody tr.row-selected { background: rgba(46, 204, 113, 0.12); }
 
+/* #pickerTable (Krok 2 rebalansera) NIE ma juz calego wiersza klikalnego —
+   otwarcie wykresu to teraz dedykowany przycisk "📈" (patrz chart-row-btn w
+   pickerRowHtml/renderPickerTable, docs/js/rebalance.js) — cursor:pointer
+   odziedziczony z .momentum-table wyzej sugerowalby klikalnosc calego
+   wiersza, ktorej juz nie ma. */
+#pickerTable tbody tr { cursor: default; }
+
 table.momentum-table td {
     padding: 7px 10px;
     white-space: nowrap;
@@ -530,7 +537,7 @@ td.negative { color: var(--red); }
 /* Kolumna "TV" w tabelach dashboardu — przycisk otwierający tradingview.com
    dla danego wiersza w nowej karcie, bez zaznaczania wiersza (patrz
    tvRowButtonHtml/bindTvRowButtons w app.js). */
-th.tv-col { width: 1%; }
+th.tv-col, th.chart-col { width: 1%; }
 
 .tv-row-btn {
     background: var(--panel-alt);

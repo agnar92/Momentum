@@ -929,28 +929,41 @@ flex child (no `.topbar-left` wrapper there).
     rather than leaving an empty, all-filtered-out table with no visual explanation why). `.stage-filter-btn`
     CSS already keys each button's `.active` color off its own `data-stage`, so multiple buttons showing
     `.active` at once needed no CSS change.
-  - **Clicking a table row (not the "+ Dodaj"/"✓ W portfelu" button) REDIRECTS to `chart.html`** — a
-    dedicated, standalone page with just that one ticker's own stage-analysis chart, full-page (see the
+  - **A dedicated "📈" button per row (last column, `chart-row-btn` in `pickerRowHtml()`) opens `chart.html`**
+    — a dedicated, standalone page with just that one ticker's own stage-analysis chart, full-page (see the
     dedicated `chart.html` bullet below for what's on it and why it's a separate page rather than a
-    dashboard "mode"). The redirect passes `?ticker=<ticker>&universe=<universe>&back=rebalance.html`
+    dashboard "mode"). It navigates to `?ticker=<ticker>&universe=<universe>&back=rebalance.html`
     (`window.location.href`, a real navigation, not a nested view inside the Krok 2 card) — `back` is what
     lets `chart.html`'s own "← Powrót" button return here specifically, not just to the dashboard (see
-    `resolveBackHref()` in `chart.js`). The "+ Dodaj" button keeps working exactly as before and does NOT
-    trigger the redirect — its click handler calls `e.stopPropagation()` before the row's own click
-    listener (added per row in `renderPickerTable()`) can fire.
-    **Version history**: this went through three designs before landing here. First, the whole four-panel
-    chart-rendering pipeline (`renderRelativeStrengthChart` and everything it depends on) was ported
-    verbatim into `rebalance.js` as a second in-page view — rejected by the user as pointless duplication
-    ("nie baw się w kopiowanie tego samego kodu"). Second attempt: delete that copy and instead redirect to
-    `index.html?ticker=&universe=&fullscreen=1`, letting the dashboard's own existing fullscreen chart mode
-    (`initChartFullscreen()`) handle it — this avoided duplicating the chart code, but the user rejected it
-    too: landing on `index.html` still visually "went back to the Dashboard" first (sidebar/table briefly
-    the surrounding page), and a CSS-overlay "fullscreen" bolted onto a multi-purpose page isn't the same
-    as an actually separate page, nor did it remember where to return to (closing it always meant leaving
-    the dashboard entirely, with no path back to Krok 2). The current design (third) is what actually
-    satisfies both asks at once — a real separate page (`chart.html`) *and* zero duplicated chart code —
-    by extracting the chart engine itself into `js/chart-render.js`, a plain shared `<script>` file loaded
-    by both `index.html` and `chart.html` (see that bullet for the extraction details).
+    `resolveBackHref()` in `chart.js`). Bound in `renderPickerTable()`'s `afterRender` hook alongside the
+    "+ Dodaj"/"✓ W portfelu" toggle button, same pattern as `tvRowButtonHtml()`/`bindTvRowButtons()` in
+    `app.js` (a small icon-only button in its own narrow last column, `th.chart-col`/`#pickerTable tbody tr
+    { cursor: default }` in `style.css`) — just a locally-defined equivalent here, since `rebalance.js`
+    doesn't load `chart-render.js` and has no other use for that pattern.
+    **Version history**: this went through FOUR designs before landing here — the first three chased "zero
+    duplicated chart code," the fourth (current) chased "don't open the chart by accident." First, the
+    whole four-panel chart-rendering pipeline (`renderRelativeStrengthChart` and everything it depends on)
+    was ported verbatim into `rebalance.js` as a second in-page view — rejected by the user as pointless
+    duplication ("nie baw się w kopiowanie tego samego kodu"). Second attempt: delete that copy and instead
+    redirect to `index.html?ticker=&universe=&fullscreen=1`, letting the dashboard's own existing
+    fullscreen chart mode (`initChartFullscreen()`) handle it — this avoided duplicating the chart code,
+    but the user rejected it too: landing on `index.html` still visually "went back to the Dashboard"
+    first (sidebar/table briefly the surrounding page), and a CSS-overlay "fullscreen" bolted onto a
+    multi-purpose page isn't the same as an actually separate page, nor did it remember where to return to
+    (closing it always meant leaving the dashboard entirely, with no path back to Krok 2). Third design: a
+    real separate page (`chart.html`) *and* zero duplicated chart code, by extracting the chart engine
+    itself into `js/chart-render.js` (see that bullet below) — reached by making the WHOLE table row
+    clickable (everywhere except the "+ Dodaj"/"✓ W portfelu" button, via `e.stopPropagation()` in its own
+    click handler) rather than adding a dedicated control. This satisfied the "no duplicated chart code"
+    goal but created a NEW problem the user reported after using it for a while: opening a chart
+    "mimowolnie" (involuntarily) just from ordinary interaction with the table (e.g. a touch-scroll
+    registering as a tap, or a click landing near — but not on — another control) — a click ANYWHERE in a
+    39+-row table is a large, easy-to-hit target for an action (leaving the page) the user didn't actually
+    intend. The current (fourth) design keeps the third design's "zero duplicated chart code" win
+    (`chart.html` still calls into the same shared `js/chart-render.js`) while shrinking the click target
+    down to the single dedicated "📈" button described above — the row itself does nothing on click any
+    more, and `isSelected`/`.row-selected` (still used to highlight already-picked rows) carries no click
+    behavior of its own.
   - **`picks`** (`loadPicks()`/`savePicks()`, `localStorage` key `momentum_rebalance_picks`) is a flat,
     ACCUMULATING array of `{ ticker, universe, added_date }` — `isPicked()`/`togglePick()` are the only
     mutators. A pick made in one week's Step 2 session stays until manually removed (via the toggle button
