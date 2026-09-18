@@ -696,6 +696,58 @@ Channel — old pre-migration `prices` rows without them (see `_ensure_prices_oh
 `fetch_data.py`) leave every squeeze field `None` for that stretch rather than a wrong value, the same
 graceful-degradation convention used throughout this module.
 
+### Sector strategy screener (`compute_sp500_trend_filter` / `compute_sector_relative_strength`)
+
+A dedicated, standalone screener (`docs/strategy.html`) for a specific, user-requested, wieloetapowa
+(multi-stage) strategy: (1) only look for sector leaders while the **overall market (SP500) is in a
+growth phase** — price above its 200-day SMA OR above its 40-week SMA (the user gave both conventions
+explicitly and they're treated as equivalent/either-sufficient, not requiring both); (2) rank SP500's
+**GICS sectors** by relative strength vs. the SP500 index itself; (3) within the single strongest sector,
+rank its member companies by relative strength vs. that sector's own average, and take the **top 10%**;
+(4) for those top companies, surface their existing Weinstein Stage and TTM Squeeze status so the user can
+judge entry timing manually — this screener does not buy/select anything automatically, same "informational
+only, you decide" philosophy as the rest of the dashboard/rebalance calculator.
+
+This is scoped to **SP500 only** (the user's own description of the strategy names SP500 specifically,
+and SP500 is the one universe whose holdings CSV — `CSPX_holdings.csv`, see `fetch_data.py` — already
+carries a real per-company `Sector` column, propagated into `index_constituents.Sector` and from there into
+every constituent record's `"sector"` field, in `docs/data/sp500.json`, alongside `Ticker`/`fmc_etf`
+already). No new fetch is needed for step (1)/(2)/(3) below — `index_prices` already retains a full daily
+`^GSPC` series for `--lookback-months` (22 by default, see `fetch_data.py`), far more than the 200 trading
+days a SMA200 needs.
+
+- **`compute_sp500_trend_filter(con, ref_date)`** reads `index_prices` for `SP500`, computes a plain
+  rolling 200-day SMA on the daily series and a rolling 40-period SMA on a `DATE_TRUNC('week', Date)`
+  resample (same weekly-bucketing convention as `_weekly_close_series` elsewhere in this file), and
+  returns `above_sma200`/`above_sma40w`/`in_growth_phase` (`above_sma200 OR above_sma40w` — literally "or",
+  matching how the user phrased the two conventions as interchangeable) plus two small trimmed series
+  (`daily_series`/`weekly_series`, `SP500_TREND_CHART_DAYS`/`SP500_TREND_CHART_WEEKS` long) so the frontend
+  can plot a small trend chart without having to expose the whole `index_prices` table as JSON. Returns
+  `None` fields (not an exception) when there isn't yet enough history for a given SMA — same
+  graceful-degradation convention as the rest of this module.
+- **`compute_sector_relative_strength(con, ref_date, ...)`** calls `get_universe_metrics(con, "SP500", ...)`
+  — the SAME full, qualifying-population query that backs `all_constituents` (not just the current
+  top-quintile selection) — and `compute_index_momentum(con, "SP500", ref_date)` for the index's own return
+  in the same M-14/M-2 (fallback M-11/M-2) window. Each **sector's** momentum is the `fmc`-weighted average
+  return of its member stocks (the same float-adjusted-market-cap substitute used everywhere else in this
+  module as a cap-weighting proxy — there is no real GICS sector ETF/index price series fetched anywhere;
+  building one was considered and rejected as unnecessary, since the aggregate can be derived purely from
+  already-fetched per-constituent prices, the same reasoning `_compute_synthetic_equal_weight_index`
+  applies for WIG20/mWIG40's synthetic index level). `rs_vs_index_pct = sector_momentum_pct -
+  index_return_pct`, sectors ranked descending; the top-ranked sector's own members are then ranked again,
+  this time by return vs. THAT sector's own average (`rs_vs_sector_pct`), and the top
+  `ceil(count * SECTOR_STRATEGY_TOP_PERCENT)` (10%, minimum 1) become `top_companies`.
+- **`export_sector_strategy(con, ref_date, docs_data_dir, ...)`** combines both into
+  `docs/data/sector_strategy.json` (`trend`/`sector_rs`/`note`) — called from `run_query.py`'s normal,
+  full (weekly) `main()` path alongside `export_relative_strength`/`export_global_equity_momentum`, so it
+  refreshes on the same cadence as everything else (see Pipeline architecture above). `top_companies`
+  intentionally carries only ticker/price/momentum/RS numbers — it does NOT duplicate `weekly_chart`/
+  `ttm_squeeze_chart` (unlike `export_relative_strength`'s `leaders`, which aren't in `FULL_COVERAGE_
+  UNIVERSES` and so need those charts attached explicitly): since SP500 already exports full per-company
+  chart data via `all_constituents` in `docs/data/sp500.json`, the frontend (`docs/js/strategy.js`) joins
+  `top_companies` tickers against that file by ticker to read `weekly_chart.current_stage` and
+  `ttm_squeeze_chart` for display, rather than re-fetching/duplicating them here.
+
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
 Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worker precaching the app
@@ -1193,6 +1245,44 @@ flex child (no `.topbar-left` wrapper there).
   one-off browser-timer globals to `eslint.config.js`. `tests/js/qol.test.js` covers exactly the
   no-op-without-a-DOM behavior; the DOM-mutating bodies themselves stay untested, consistent with
   `js/chart-render.js`/`js/shared.js` above.
+- **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
+  under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/
+  `export_sector_strategy`, `docs/data/sector_strategy.json`), reached via a third "Strategia" nav link
+  added next to Dashboard/Rebalans on all pages. Three stacked `panel-card`s follow the strategy's own
+  steps: **Krok 1** shows a growth-phase banner (`.trend-banner`, green/red per `trend.in_growth_phase`)
+  plus SP500's close/SMA200/SMA40W as stat-cards and a small Chart.js line chart (toggle button pair,
+  `js/chart-render.js`-independent — this page doesn't load that file, it's a much smaller, page-local
+  chart, same `new Chart({type:"line",...})` pattern `rebalance.js::renderEquityCurve` already uses).
+  **Krok 2** is a plain table of SP500's sectors ranked by RS vs. the index (`sector_rs.sectors`), the
+  strongest one highlighted via the existing `.row-selected` class. **Krok 3** is the top-10%-of-strongest-
+  sector company list (`sector_rs.top_companies`), joined client-side against `docs/data/sp500.json`'s
+  `all_constituents` (fetched alongside `sector_strategy.json` in `loadStrategyData()`) by ticker to read
+  each company's `weekly_chart.current_stage` (rendered via `stageCellHtml()` from `js/shared.js`, same as
+  everywhere else) and `ttm_squeeze_chart`. Both Krok 2/3 tables go through `renderScreenerTable()` (`js/
+  table-render.js`, loaded here too) even though neither has a stage-filter bar — reused purely for its
+  shared empty-state/meta-line/row-building loop, with `compareFn: () => 0` since both lists already come
+  back pre-sorted from the backend. A dedicated "📈" button per Krok 3 row (`chart-row-btn`, exact same
+  pattern as `rebalance.js::pickerRowHtml`) navigates to `chart.html?ticker=&universe=SP500&back=
+  strategy.html` — this page has no chart-rendering engine of its own (doesn't load `js/chart-render.js`),
+  same "redirect to the dedicated chart page" choice `rebalance.js` already made for its own Krok 2 (see
+  that bullet's version-history note above for why a real separate page beats an in-page chart).
+  `squeezeStatusFor()` is a small, LOCAL, ungated re-implementation of the "walk back to the last week with
+  a computed `squeeze_on`, then classify" logic `classifyTtmSqueeze()` (`app.js`) already has — deliberately
+  NOT unified with it, because the semantics differ: `classifyTtmSqueeze` is a SCREENER (drops a stock
+  entirely when it doesn't clear `TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS`/`TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS`, or
+  when `momentum_score <= 0`), while this page already has a fixed, pre-selected list of top companies from
+  Krok 3 and must show SOME status for every one of them, including a "neutral"/"no squeeze data" row
+  rather than silently omitting it. The two consolidating/fired THRESHOLDS themselves are still kept
+  identical (same constants, duplicated here same as they're already duplicated between `run_query.py` and
+  `app.js` — must stay in sync by hand) since they're the actual definition of what "consolidating"/"fired"
+  means everywhere else on the dashboard; only the momentum-score screener gate and the "drop non-matching
+  rows" behavior are intentionally left out. `renderAll()` renders Krok 2/3 BEFORE Krok 1's Chart.js call
+  (`renderTrendChart()` guards on `typeof Chart === "undefined"` and returns early rather than throwing) —
+  same ordering rationale as `rebalance.js::init()` already uses (Chart.js-dependent rendering last): an
+  unavailable/blocked Chart.js CDN script must not cascade into breaking the two tables, which don't depend
+  on it at all. `sw.js`'s `SHELL` list and cache version were updated the same way adding `chart.html` was
+  (new page/script added to `SHELL`, `CACHE` version bumped) — see the PWA shell paragraph at the top of
+  this section for why that bump matters (stale Service Worker serving an old script forever otherwise).
 
 ## Commands
 
