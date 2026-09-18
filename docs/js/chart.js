@@ -17,6 +17,14 @@
 // otworzy ten link bezpośrednio.
 // ============================================================
 
+// initConnStatus/hideLoadingOverlay/showToast zyja w js/qol.js, ktore
+// chart.html laduje PRZED tym plikiem (patrz komentarz na gorze qol.js) —
+// Node (tests/js/) nie laduje <script> tagow, wiec odtwarzamy to samo
+// wspoldzielenie globali recznie tutaj (ten sam wzorzec co rebalance.js).
+if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./qol.js"));
+}
+
 let selectedTicker = null;
 let selectedUniverse = null;
 let chartRangeMode = "3m";
@@ -123,6 +131,7 @@ function initOpenTvButton() {
 }
 
 async function init() {
+    initConnStatus();
     const params = new URLSearchParams(window.location.search);
     selectedTicker = params.get("ticker");
     selectedUniverse = params.get("universe");
@@ -138,6 +147,7 @@ async function init() {
     if (!selectedTicker || !selectedUniverse) {
         const errorState = document.getElementById("chartLoadError");
         if (errorState) errorState.hidden = false;
+        hideLoadingOverlay();
         return;
     }
 
@@ -152,6 +162,7 @@ async function init() {
     }
 
     renderChartPanel();
+    hideLoadingOverlay();
 }
 
 // typeof document check: pozwala wczytać ten plik przez `require()` w testach

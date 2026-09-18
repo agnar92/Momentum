@@ -16,11 +16,17 @@
 </head>
 <body>
 
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p>Ładowanie danych…</p>
+</div>
+
 <div class="topbar">
     <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA · WIG20 · mWIG40</span></div>
     <nav>
         <a href="index.html">Dashboard</a>
         <a href="rebalance.html">Rebalans</a>
+        <span id="connStatus" class="conn-status" title="Brak połączenia z siecią — pokazywane są ostatnie zapisane dane." hidden>⚠ Offline</span>
     </nav>
 </div>
 
@@ -87,6 +93,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="js/pull-to-refresh.js"></script>
+<script src="js/qol.js"></script>
 <script src="js/chart-render.js"></script>
 <script src="js/chart.js"></script>
 </body>

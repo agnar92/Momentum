@@ -21,6 +21,12 @@ const browserGlobals = {
     URL: "readonly",
     URLSearchParams: "readonly",
     history: "readonly",
+    // require: zwykle NIE jest globalem przegladarki — pojawia sie tylko w
+    // gałęzi `typeof require === "function" && typeof window === "undefined"`
+    // na gorze app.js/rebalance.js/chart.js, ktora w Node (tests/js/) recznie
+    // doczepia eksporty js/qol.js do globalThis (bo Node nie laduje <script>
+    // tagow tak jak przegladarka) — w przegladarce ta galaz sie nie wykonuje.
+    require: "readonly",
     // Zdefiniowane w docs/js/chart-render.js, wspoldzielonym przez zwykly
     // <script> tag (bez modulow/bundlera) z docs/js/app.js i docs/js/chart.js
     // — patrz komentarz na gorze chart-render.js. Ten sam wzorzec co
@@ -36,6 +42,12 @@ const browserGlobals = {
     rsSqueezeChartInstance: "readonly",
     STAGE_LABELS: "readonly",
     STAGE_COLORS: "readonly",
+    // Zdefiniowane w docs/js/qol.js, wspoldzielonym przez zwykly <script> tag
+    // z index.html/rebalance.html/chart.html — patrz komentarz na gorze
+    // qol.js. Ten sam wzorzec co powyzej dla chart-render.js.
+    showToast: "readonly",
+    initConnStatus: "readonly",
+    hideLoadingOverlay: "readonly",
 };
 
 const nodeGlobals = {

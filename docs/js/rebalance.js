@@ -1,4 +1,13 @@
 
+// showToast/initConnStatus/hideLoadingOverlay zyja w js/qol.js, ktore
+// rebalance.html laduje PRZED tym plikiem (patrz komentarz na gorze
+// qol.js) — Node (tests/js/) nie laduje <script> tagow, a togglePick()
+// nizej (ktore woła showToast()) jest wprost jednostkowo testowane, wiec
+// odtwarzamy to samo wspoldzielenie globali recznie tutaj.
+if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./qol.js"));
+}
+
 const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
 const UNIVERSE_LABELS = {
     SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones", WIG20: "WIG20", MWIG40: "mWIG40",
@@ -156,8 +165,10 @@ function togglePick(ticker, universe) {
     const idx = picks.findIndex(p => p.ticker === ticker && p.universe === universe);
     if (idx !== -1) {
         picks.splice(idx, 1);
+        showToast(`${ticker} usunięty z portfela`, { type: "info" });
     } else {
         picks.push({ ticker, universe, added_date: new Date().toISOString().slice(0, 10) });
+        showToast(`${ticker} dodany do portfela`, { type: "success" });
     }
     savePicks(picks);
 }
@@ -450,6 +461,7 @@ function renderGemWidget() {
         stored[universe] = { return_pct: value, as_of: new Date().toISOString().slice(0, 10) };
         saveManualGemReturns(stored);
         applyAndRerender();
+        showToast(`Zapisano ręczny zwrot ${UNIVERSE_LABELS[universe]}: ${value >= 0 ? "+" : ""}${value.toFixed(2)}%`, { type: "success" });
     };
     el.querySelectorAll(".gem-manual-save-btn").forEach(btn => {
         btn.addEventListener("click", () => saveFromInput(btn.dataset.universe));
@@ -460,6 +472,7 @@ function renderGemWidget() {
             delete stored[btn.dataset.universe];
             saveManualGemReturns(stored);
             applyAndRerender();
+            showToast(`Usunięto ręczny zwrot ${UNIVERSE_LABELS[btn.dataset.universe]} — wracamy do wskaźnika syntetycznego`, { type: "info" });
         });
     });
     el.querySelectorAll(".gem-manual-input").forEach(input => {
@@ -852,8 +865,10 @@ function initXtbImport() {
             saveHoldings(holdings);
             renderAll();
             status.textContent = `Zaimportowano ${imported.length} pozycji z raportu XTB.`;
+            showToast(`Zaimportowano ${imported.length} pozycji z raportu XTB`, { type: "success" });
         } catch (err) {
             status.textContent = `Błąd importu: ${err.message}`;
+            showToast(`Błąd importu XTB: ${err.message}`, { type: "error", duration: 5000 });
         } finally {
             e.target.value = "";
         }
@@ -1416,6 +1431,7 @@ function renderAll() {
 // document zawsze istnieje, więc zachowanie się nie zmienia.
 if (typeof document !== "undefined") {
     (async function init() {
+        initConnStatus();
         await loadUniverseData();
         initSettingsForm();
         initHoldingsForm();
@@ -1431,6 +1447,7 @@ if (typeof document !== "undefined") {
         renderPickerTable();
         renderPicksList();
         renderAll();
+        hideLoadingOverlay();
     })();
 
     if ("serviceWorker" in navigator) {

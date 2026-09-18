@@ -1,4 +1,13 @@
 
+// initConnStatus/hideLoadingOverlay/showToast zyja w js/qol.js, ktore
+// index.html laduje PRZED tym plikiem (patrz komentarz na gorze qol.js) —
+// w Node (tests/js/) te galezie kodu sa dzis nie wywolywane (init() jest w
+// bloku "typeof document !== undefined"), ale dodajemy to samo
+// wspoldzielenie globali co rebalance.js, na wypadek przyszlych testow.
+if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./qol.js"));
+}
+
 const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
 const UNIVERSE_LABELS = {
     SP500: "S&P 500 Momentum",
@@ -1300,6 +1309,7 @@ function initCmdk() {
 // document zawsze istnieje, więc zachowanie się nie zmienia.
 if (typeof document !== "undefined") {
     (async function init() {
+        initConnStatus();
         await loadData();
         renderSidebarTiles();
         renderRsmPanel();
@@ -1327,6 +1337,7 @@ if (typeof document !== "undefined") {
             state.selectedUniverse = state.drawerUniverse;
         }
         updateChartArea();
+        hideLoadingOverlay();
     })();
 
     if ("serviceWorker" in navigator) {
