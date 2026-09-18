@@ -21,6 +21,13 @@ const browserGlobals = {
     URL: "readonly",
     URLSearchParams: "readonly",
     history: "readonly",
+    // require: zwykle NIE jest globalem przegladarki — pojawia sie tylko w
+    // gałęzi `typeof require === "function" && typeof window === "undefined"`
+    // na gorze app.js/rebalance.js/chart.js/chart-render.js, ktora w Node
+    // (tests/js/) recznie doczepia eksporty js/shared.js do globalThis (bo
+    // Node nie laduje <script> tagow tak jak przegladarka) — w przegladarce ta
+    // galaz sie nie wykonuje. Patrz komentarz na gorze shared.js.
+    require: "readonly",
     // Zdefiniowane w docs/js/chart-render.js, wspoldzielonym przez zwykly
     // <script> tag (bez modulow/bundlera) z docs/js/app.js i docs/js/chart.js
     // — patrz komentarz na gorze chart-render.js. Ten sam wzorzec co
@@ -34,19 +41,32 @@ const browserGlobals = {
     rsVolumeChartInstance: "readonly",
     rsMansfieldChartInstance: "readonly",
     rsSqueezeChartInstance: "readonly",
+    // Zdefiniowane w docs/js/shared.js, wspoldzielonym przez zwykly <script>
+    // tag z index.html/rebalance.html/chart.html (patrz komentarz na gorze
+    // tamtego pliku) — ten sam wzorzec co powyzej dla chart-render.js.
+    UNIVERSES: "readonly",
+    UNIVERSE_LABELS: "readonly",
+    PLN_UNIVERSES: "readonly",
+    formatPrice: "readonly",
+    tvSymbolFor: "readonly",
+    tvUrlFor: "readonly",
     STAGE_LABELS: "readonly",
+    STAGE_DESCRIPTIONS: "readonly",
     STAGE_COLORS: "readonly",
+    STAGE_BREAKOUT_VOLUME_RATIO: "readonly",
+    BASE_BOX_COLORS: "readonly",
+    stageCellHtml: "readonly",
+    compareRows: "readonly",
     // Zdefiniowane w docs/js/table-render.js, wspoldzielonym przez zwykly
     // <script> tag z docs/js/app.js i docs/js/rebalance.js — patrz komentarz
     // na gorze table-render.js. Ten sam wzorzec co powyzej dla
-    // chart-render.js. compareRows samo jest zdefiniowane w app.js i
-    // uzywane jako domyslny komparator wewnatrz table-render.js (odwrotny
-    // kierunek tego samego wzorca — plik zaladowany PRZED app.js odwoluje
-    // sie do funkcji, ktora zdefiniuje ono PO zaladowaniu, ale w praktyce
-    // dopiero przy pierwszym wywolaniu renderScreenerTable(), gdy wszystkie
-    // skrypty juz sa zaladowane).
+    // chart-render.js/shared.js. compareRows (powyzej) jest zdefiniowane w
+    // js/shared.js i uzywane jako domyslny komparator wewnatrz
+    // table-render.js (odwrotny kierunek tego samego wzorca — plik
+    // zaladowany PRZED app.js odwoluje sie do funkcji, ktora zdefiniuje ono
+    // PO zaladowaniu, ale w praktyce dopiero przy pierwszym wywolaniu
+    // renderScreenerTable(), gdy wszystkie skrypty juz sa zaladowane).
     renderScreenerTable: "readonly",
-    compareRows: "readonly",
 };
 
 const nodeGlobals = {
