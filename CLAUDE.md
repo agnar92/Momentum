@@ -728,15 +728,35 @@ days a SMA200 needs.
 - **`compute_sector_relative_strength(con, ref_date, ...)`** calls `get_universe_metrics(con, "SP500", ...)`
   — the SAME full, qualifying-population query that backs `all_constituents` (not just the current
   top-quintile selection) — and `compute_index_momentum(con, "SP500", ref_date)` for the index's own return
-  in the same M-14/M-2 (fallback M-11/M-2) window. Each **sector's** momentum is the `fmc`-weighted average
-  return of its member stocks (the same float-adjusted-market-cap substitute used everywhere else in this
-  module as a cap-weighting proxy — there is no real GICS sector ETF/index price series fetched anywhere;
-  building one was considered and rejected as unnecessary, since the aggregate can be derived purely from
-  already-fetched per-constituent prices, the same reasoning `_compute_synthetic_equal_weight_index`
-  applies for WIG20/mWIG40's synthetic index level). `rs_vs_index_pct = sector_momentum_pct -
-  index_return_pct`, sectors ranked descending; the top-ranked sector's own members are then ranked again,
-  this time by return vs. THAT sector's own average (`rs_vs_sector_pct`), and the top
-  `ceil(count * SECTOR_STRATEGY_TOP_PERCENT)` (10%, minimum 1) become `top_companies`.
+  in the same M-14/M-2 (fallback M-11/M-2) window. Each **sector's** momentum comes from a REAL sector ETF
+  where possible: `fetch_data.py::SECTOR_ETF_SYMBOLS` maps each GICS sector string exactly as it appears in
+  `CSPX_holdings.csv`'s `Sector` column (`"Information Technology"`, `"Financials"`, ... — 11 sectors) to
+  its SPDR Select Sector ETF ticker (`XLK`, `XLF`, ...); `fetch_data.py::update_index_prices` fetches all
+  11 the same way it already fetches `^GSPC`/`^NDX`/`^DJI` (`_download_price_rows`, full-range replace each
+  run) and writes each one into `index_prices` with **`Index_Name` = the sector NAME, not the ETF ticker**
+  — which means `compute_index_momentum(con, sector_name, ref_date)` (the exact same function used for
+  SP500/NASDAQ100/etc.) already works for a sector with zero changes to that function. When a sector's ETF
+  doesn't have data yet in `index_prices` (e.g. right after this was added, before the next full
+  `fetch_data.py` run), `compute_sector_relative_strength` falls back to the older substitute: the
+  `fmc`-weighted average return of the sector's own member stocks (the same float-adjusted-market-cap proxy
+  used everywhere else in this module) — same "degrade to an approximation instead of crashing" convention
+  as `gem_manual_returns.json`'s fallback to the synthetic WIG20/mWIG40 index. Every sector row carries a
+  `"data_source"` field (`"etf"` or `"synthetic_fmc_weighted"`) so this is never silent — the frontend shows
+  a small "(przybliżenie)" note next to any sector still on the fallback (`docs/js/strategy.js`, same
+  data-provenance-transparency pattern as `manual_entry`/`fmc_note` elsewhere). `rs_vs_index_pct =
+  sector_momentum_pct - index_return_pct`, sectors ranked descending; the top-ranked sector's own members
+  are then ranked again, this time by return vs. THAT sector's own average (`rs_vs_sector_pct`), and the
+  top `ceil(count * SECTOR_STRATEGY_TOP_PERCENT)` (10%, minimum 1) become `top_companies`.
+
+  **Version history matters here**: the FIRST version of this screener used ONLY the `fmc`-weighted
+  synthetic average (no sector ETF at all) — the same reasoning `_compute_synthetic_equal_weight_index`
+  uses for WIG20/mWIG40 (build an aggregate from already-fetched constituent prices instead of fetching a
+  new instrument). The user pushed back directly ("Przecież potrzebujemy chyba ETF na sektor?"), pointing
+  out this is exactly the same kind of approximation-vs-real-instrument gap already documented (and already
+  bitten once) for WIG20/mWIG40's own synthetic index under Global Equity Momentum above. Since real SPDR
+  sector ETFs are liquid, standard, and trivially fetchable via the exact same `_download_price_rows`/
+  `index_prices`/`compute_index_momentum` machinery already used for the 5 main universes, the fix was to
+  fetch them for real — keeping the synthetic average only as a graceful fallback, not the primary source.
 - **`export_sector_strategy(con, ref_date, docs_data_dir, ...)`** combines both into
   `docs/data/sector_strategy.json` (`trend`/`sector_rs`/`note`) — called from `run_query.py`'s normal,
   full (weekly) `main()` path alongside `export_relative_strength`/`export_global_equity_momentum`, so it
@@ -1254,7 +1274,10 @@ flex child (no `.topbar-left` wrapper there).
   `js/chart-render.js`-independent — this page doesn't load that file, it's a much smaller, page-local
   chart, same `new Chart({type:"line",...})` pattern `rebalance.js::renderEquityCurve` already uses).
   **Krok 2** is a plain table of SP500's sectors ranked by RS vs. the index (`sector_rs.sectors`), the
-  strongest one highlighted via the existing `.row-selected` class. **Krok 3** is the top-10%-of-strongest-
+  strongest one highlighted via the existing `.row-selected` class — a sector still running on the
+  synthetic `fmc`-weighted fallback (see `compute_sector_relative_strength` above) gets a small
+  "(przybliżenie)" note next to its name (`sectorRowHtml()`'s `sourceNote`), the same data-provenance-
+  transparency convention as the GEM widget's "(ręcznie)" label for `manual_entry`. **Krok 3** is the top-10%-of-strongest-
   sector company list (`sector_rs.top_companies`), joined client-side against `docs/data/sp500.json`'s
   `all_constituents` (fetched alongside `sector_strategy.json` in `loadStrategyData()`) by ticker to read
   each company's `weekly_chart.current_stage` (rendered via `stageCellHtml()` from `js/shared.js`, same as

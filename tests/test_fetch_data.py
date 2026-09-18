@@ -9,6 +9,7 @@ import pytest
 
 from fetch_data import (
     PRICES_SCHEMA,
+    SECTOR_ETF_SYMBOLS,
     _compute_synthetic_equal_weight_index,
     _download_price_rows,
     _ensure_prices_ohlc_columns,
@@ -495,8 +496,32 @@ class TestUpdateIndexPrices:
         update_index_prices(con, lookback_months=12)
 
         rows = con.execute("SELECT Index_Name, Close FROM index_prices ORDER BY Index_Name").fetchall()
-        assert {r[0] for r in rows} == {"SP500", "NASDAQ100", "DOWJONES"}
+        # fake_download zwraca dane dla KAZDEGO zadanego tickera, wiec obejmuje tez
+        # sektorowe ETF-y SPDR (drugie wywolanie _download_price_rows w tej samej
+        # funkcji, patrz SECTOR_ETF_SYMBOLS) — nie tylko trzy uniwersa yfinance-backed.
+        assert {r[0] for r in rows} == {"SP500", "NASDAQ100", "DOWJONES"} | set(SECTOR_ETF_SYMBOLS)
         assert "^GSPC" not in {r[0] for r in rows}  # zapisana kanoniczna nazwa uniwersum, nie symbol yf
+        assert "XLK" not in {r[0] for r in rows}  # zapisana nazwa sektora, nie ticker ETF-u
+
+    def test_sector_etfs_only_fetched_and_mapped_back_to_sector_names(self, monkeypatch):
+        # Izolowany test skupiony wylacznie na sektorowych ETF-ach SPDR: zwraca
+        # dane TYLKO dla tickerow z SECTOR_ETF_SYMBOLS (nie dla ^GSPC/^NDX/^DJI),
+        # zeby dowiesc, ze drugie wywolanie _download_price_rows w
+        # update_index_prices faktycznie dziala niezaleznie od pierwszego.
+        con = duckdb.connect(":memory:")
+        sector_symbols = set(SECTOR_ETF_SYMBOLS.values())
+
+        def fake_download(tickers, start_date, end_date):
+            wanted = [t for t in tickers if t in sector_symbols]
+            rows = [(end_date, t, 55.0, 55.0, 0) for t in wanted]
+            return rows, set(wanted), [t for t in tickers if t not in sector_symbols]
+
+        monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
+        update_index_prices(con, lookback_months=12)
+
+        rows = con.execute("SELECT Index_Name, Close FROM index_prices ORDER BY Index_Name").fetchall()
+        assert {r[0] for r in rows} == set(SECTOR_ETF_SYMBOLS)  # nazwy sektorow, nie tickery ETF-ow
+        assert all(close == 55.0 for _, close in rows)
 
     def test_failed_downloads_leave_table_without_those_rows(self, monkeypatch):
         con = duckdb.connect(":memory:")

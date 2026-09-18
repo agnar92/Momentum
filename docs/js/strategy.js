@@ -169,9 +169,16 @@ function initTrendChartToggle() {
 }
 
 function sectorRowHtml(s, position) {
+    // data_source: "etf" (prawdziwy sektorowy ETF SPDR, patrz SECTOR_ETF_SYMBOLS
+    // w fetch_data.py) albo "synthetic_fmc_weighted" (starszy substytut, gdy ETF
+    // nie ma jeszcze danych w index_prices) — ten sam "(przybliżenie)" wzorzec
+    // przejrzystości co "(ręcznie)" dla GEM-owego manual_entry w rebalance.js.
+    const sourceNote = s.data_source === "synthetic_fmc_weighted"
+        ? ` <span style="color:var(--text-faint)" title="Brak jeszcze danych sektorowego ETF-u w index_prices — przybliżenie: średnia zwrotów spółek sektora ważona kapitalizacją.">(przybliżenie)</span>`
+        : "";
     return `
         <td><span class="rank-badge">${position}</span></td>
-        <td>${s.sector}${s.sector === (strategyData.sector_rs && strategyData.sector_rs.strongest_sector) ? " 🏆" : ""}</td>
+        <td>${s.sector}${s.sector === (strategyData.sector_rs && strategyData.sector_rs.strongest_sector) ? " 🏆" : ""}${sourceNote}</td>
         <td>${s.count}</td>
         <td class="${s.momentum_pct >= 0 ? "positive" : "negative"}">${s.momentum_pct.toFixed(2)}%</td>
         <td class="${s.rs_vs_index_pct >= 0 ? "positive" : "negative"}">${s.rs_vs_index_pct >= 0 ? "+" : ""}${s.rs_vs_index_pct.toFixed(2)}%</td>
