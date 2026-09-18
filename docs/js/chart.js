@@ -20,8 +20,13 @@
 // PLN_UNIVERSES/tvSymbolFor/tvUrlFor/UNIVERSE_LABELS zyja teraz w
 // js/shared.js, ktore chart.html laduje PRZED tym plikiem (patrz komentarz
 // na gorze shared.js) — nie sa juz wlasna kopia tej strony.
+// initConnStatus/hideLoadingOverlay/showToast zyja analogicznie w js/qol.js
+// (patrz komentarz na gorze tamtego pliku), ladowanym tuz po shared.js.
+// Node (tests/js/) nie laduje <script> tagow, wiec odtwarzamy to samo
+// wspoldzielenie globali recznie tutaj (ten sam wzorzec co rebalance.js).
 if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
+    Object.assign(globalThis, require("./qol.js"));
 }
 
 let selectedTicker = null;
@@ -109,6 +114,7 @@ function initOpenTvButton() {
 }
 
 async function init() {
+    initConnStatus();
     const params = new URLSearchParams(window.location.search);
     selectedTicker = params.get("ticker");
     selectedUniverse = params.get("universe");
@@ -124,6 +130,7 @@ async function init() {
     if (!selectedTicker || !selectedUniverse) {
         const errorState = document.getElementById("chartLoadError");
         if (errorState) errorState.hidden = false;
+        hideLoadingOverlay();
         return;
     }
 
@@ -138,6 +145,7 @@ async function init() {
     }
 
     renderChartPanel();
+    hideLoadingOverlay();
 }
 
 // typeof document check: pozwala wczytać ten plik przez `require()` w testach
