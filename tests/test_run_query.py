@@ -40,6 +40,9 @@ from run_query import (
     export_relative_strength,
     process_universe_charts_only,
     select_with_buffer,
+    compute_sp500_trend_filter,
+    compute_sector_relative_strength,
+    SECTOR_STRATEGY_TOP_PERCENT,
     _build_full_universe_records,
     _compute_weinstein_stage_series,
     _load_gem_manual_returns,
@@ -1778,3 +1781,80 @@ class TestProcessUniverseChartsOnly:
         process_universe_charts_only(con, "DOWJONES", "2026-06-01", str(tmp_path))
         payload = json.loads((tmp_path / "dowjones.json").read_text())
         assert payload["all_constituents"] == payload["constituents"]
+
+
+# ---------------------------------------------------------------------------
+# STRATEGIA SEKTOROWA (docs/strategy.html): (1) filtr trendu SP500 (SMA200
+# dzienna LUB SMA40 tygodniowa), (2) sila relatywna sektorow SP500 wzgledem
+# indeksu, (3) w najsilniejszym sektorze - sila relatywna spolek wzgledem
+# sredniej sektora, top 10%.
+# ---------------------------------------------------------------------------
+
+class TestComputeSp500TrendFilter:
+    def test_uptrend_is_above_both_smas(self):
+        con = make_gem_con()
+        insert_daily_series(con, "index_prices", "Index_Name", "SP500", "2024-06-01", "2026-03-16", 100.0, 0.5)
+        out = compute_sp500_trend_filter(con, "2026-03-16")
+        assert out is not None
+        assert out["above_sma200"] is True
+        assert out["above_sma40w"] is True
+        assert out["in_growth_phase"] is True
+        assert out["close"] > out["sma200"] > 0
+        assert out["close"] > out["sma40w"] > 0
+        assert len(out["daily_series"]) > 0
+        assert len(out["weekly_series"]) > 0
+
+    def test_downtrend_is_below_both_smas(self):
+        con = make_gem_con()
+        insert_daily_series(con, "index_prices", "Index_Name", "SP500", "2024-06-01", "2026-03-16", 500.0, -0.3)
+        out = compute_sp500_trend_filter(con, "2026-03-16")
+        assert out is not None
+        assert out["above_sma200"] is False
+        assert out["above_sma40w"] is False
+        assert out["in_growth_phase"] is False
+
+    def test_insufficient_history_returns_none_smas(self):
+        con = make_gem_con()
+        insert_daily_series(con, "index_prices", "Index_Name", "SP500", "2026-02-01", "2026-03-16", 100.0, 0.1)
+        out = compute_sp500_trend_filter(con, "2026-03-16")
+        assert out is not None
+        assert out["sma200"] is None
+        assert out["above_sma200"] is None
+        assert out["sma40w"] is None
+        assert out["above_sma40w"] is None
+        assert out["in_growth_phase"] is None
+
+    def test_no_table_returns_none(self):
+        con = duckdb.connect(":memory:")
+        assert compute_sp500_trend_filter(con, "2026-03-16") is None
+
+
+class TestComputeSectorRelativeStrength:
+    def _seed(self, con):
+        con.executemany("INSERT INTO index_constituents VALUES (?, 'SP500', ?, 100.0)", [
+            ("TFAST", "Tech"), ("TMID", "Tech"), ("TSLOW", "Tech"),
+            ("UONE", "Utilities"),
+        ])
+        insert_daily_series(con, "index_prices", "Index_Name", "SP500", "2024-06-01", "2026-03-16", 100.0, 0.05)
+        insert_daily_series(con, "prices", "Ticker", "TFAST", "2024-06-01", "2026-03-16", 100.0, 0.40)
+        insert_daily_series(con, "prices", "Ticker", "TMID", "2024-06-01", "2026-03-16", 100.0, 0.20)
+        insert_daily_series(con, "prices", "Ticker", "TSLOW", "2024-06-01", "2026-03-16", 100.0, 0.10)
+        insert_daily_series(con, "prices", "Ticker", "UONE", "2024-06-01", "2026-03-16", 100.0, 0.01)
+
+    def test_ranks_sectors_and_picks_top_10pct_of_strongest_sector(self):
+        con = make_gem_con()
+        self._seed(con)
+        out = compute_sector_relative_strength(con, "2026-03-16", min_trading_days=5, max_staleness_days=10)
+        assert out is not None
+        assert [s["sector"] for s in out["sectors"]] == ["Tech", "Utilities"]
+        assert out["sectors"][0]["rank"] == 1
+        assert out["sectors"][0]["count"] == 3
+        assert out["strongest_sector"] == "Tech"
+        assert out["top_percent"] == SECTOR_STRATEGY_TOP_PERCENT
+        # ceil(3 * 0.10) = 1 -> tylko najsilniejsza spolka sektora (TFAST).
+        assert [c["ticker"] for c in out["top_companies"]] == ["TFAST"]
+        assert out["top_companies"][0]["rs_vs_sector_pct"] > 0
+
+    def test_missing_price_data_returns_none(self):
+        con = make_gem_con()
+        assert compute_sector_relative_strength(con, "2026-03-16", min_trading_days=150, max_staleness_days=10) is None

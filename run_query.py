@@ -114,6 +114,15 @@ GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy d
 # wiec rozszerzenie na 5 uniwersow jest czysto zmiana tej listy, bez zmiany
 # `compute_index_returns`/`compute_index_leaders`.
 GEM_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
+# "Strategia sektorowa" (docs/strategy.html): filtr trendu SP500 -> sila
+# relatywna sektorow SP500 wzgledem indeksu -> w najsilniejszym sektorze, sila
+# relatywna spolek wzgledem WLASNEGO sektora, top 10% wg przewagi. Patrz
+# CLAUDE.md dla pelnego opisu strategii i uzasadnienia.
+SP500_TREND_SMA_DAYS = 200    # klasyczny dzienny filtr trendu Weinsteina
+SP500_TREND_SMA_WEEKS = 40    # ten sam filtr w konwencji tygodniowej (200D ~= 40W)
+SP500_TREND_CHART_DAYS = 320  # ile dni pokazujemy na mini-wykresie trendu (SMA200 + margines)
+SP500_TREND_CHART_WEEKS = 130 # odpowiednik dla wykresu tygodniowego (~2.5 roku)
+SECTOR_STRATEGY_TOP_PERCENT = 0.10  # top 10% spolek najsilniejszego sektora wg RS wzgledem sektora
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
@@ -2135,6 +2144,185 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
     print(f"💾 Wyeksportowano {out_path} — {summary}.")
 
 
+# ============================================================================
+# STRATEGIA SEKTOROWA (docs/strategy.html) — wieloetapowa strategia na zyczenie
+# uzytkownika: (1) filtr trendu SP500 (cena > SMA200 dzienna LUB > SMA40 tyg. —
+# dwa rownowazne w praktyce ujecia tego samego filtru Weinsteina: "czy rynek
+# jest w fazie wzrostu"), (2) sila relatywna KAZDEGO sektora SP500 wzgledem
+# indeksu (srednia zwrotow spolek sektora wazona fmc_etf — ten sam substytut
+# kapitalizacji uzywany wszedzie indziej w tym module — minus zwrot indeksu, w
+# TYM SAMYM oknie momentum co get_universe_metrics/compute_index_momentum), (3)
+# w NAJSILNIEJSZYM sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ
+# tego sektora, top 10% wg tej przewagi. Stage/TTM Squeeze dla tych spolek NIE
+# sa tu liczone ani duplikowane — SP500 jest w FULL_COVERAGE_UNIVERSES, wiec
+# frontend czyta je wprost z juz wyeksportowanego docs/data/sp500.json
+# (all_constituents), lacząc po tickerze.
+# ============================================================================
+
+
+def compute_sp500_trend_filter(con, ref_date):
+    """Krok 1: czy SP500 jest w fazie wzrostu — cena powyzej 200-dniowej SMA
+    LUB powyzej 40-tygodniowej SMA (uzytkownik podal oba ujecia tego samego
+    filtru trendu, wiec traktujemy je jako rownowazne/wystarczajace osobno,
+    nie wymagamy obu naraz)."""
+    has_table = con.execute("""
+        SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
+    """).fetchone()[0] > 0
+    if not has_table:
+        return None
+
+    daily = con.execute(f"""
+        SELECT Date, Close FROM index_prices
+        WHERE Index_Name = 'SP500' AND Date <= DATE '{ref_date}'
+        ORDER BY Date
+    """).df()
+    if daily.empty:
+        return None
+
+    daily["sma200"] = daily["Close"].rolling(SP500_TREND_SMA_DAYS).mean()
+    last = daily.iloc[-1]
+    close = float(last["Close"])
+    sma200 = float(last["sma200"]) if pd.notna(last["sma200"]) else None
+    above_sma200 = (close > sma200) if sma200 is not None else None
+
+    weekly = con.execute(f"""
+        WITH d AS (
+            SELECT Date, Close FROM index_prices
+            WHERE Index_Name = 'SP500' AND Date <= DATE '{ref_date}'
+        )
+        SELECT DATE_TRUNC('week', Date) AS week, ARGMAX(Close, Date) AS close
+        FROM d GROUP BY 1 ORDER BY 1
+    """).df()
+    weekly["sma40"] = weekly["close"].rolling(SP500_TREND_SMA_WEEKS).mean()
+    last_w = weekly.iloc[-1]
+    sma40w = float(last_w["sma40"]) if pd.notna(last_w["sma40"]) else None
+    above_sma40w = (close > sma40w) if sma40w is not None else None
+
+    if above_sma200 is None and above_sma40w is None:
+        in_growth_phase = None
+    else:
+        in_growth_phase = bool(above_sma200) or bool(above_sma40w)
+
+    daily_tail = daily.tail(SP500_TREND_CHART_DAYS)
+    weekly_tail = weekly.tail(SP500_TREND_CHART_WEEKS)
+
+    return {
+        "date": str(pd.Timestamp(last["Date"]).date()),
+        "close": round(close, 2),
+        "sma200": round(sma200, 2) if sma200 is not None else None,
+        "above_sma200": above_sma200,
+        "sma40w": round(sma40w, 2) if sma40w is not None else None,
+        "above_sma40w": above_sma40w,
+        "in_growth_phase": in_growth_phase,
+        "daily_series": [
+            {
+                "date": str(pd.Timestamp(r["Date"]).date()),
+                "close": round(float(r["Close"]), 2),
+                "sma200": round(float(r["sma200"]), 2) if pd.notna(r["sma200"]) else None,
+            }
+            for _, r in daily_tail.iterrows()
+        ],
+        "weekly_series": [
+            {
+                "date": str(pd.Timestamp(r["week"]).date()),
+                "close": round(float(r["close"]), 2),
+                "sma40": round(float(r["sma40"]), 2) if pd.notna(r["sma40"]) else None,
+            }
+            for _, r in weekly_tail.iterrows()
+        ],
+    }
+
+
+def compute_sector_relative_strength(con, ref_date, min_trading_days, max_staleness_days):
+    """Krok 2+3: sila relatywna kazdego sektora SP500 wzgledem indeksu, oraz w
+    najsilniejszym sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ
+    tego sektora (top 10%). Uzywa get_universe_metrics (TA SAMA pelna,
+    kwalifikujaca sie populacja co all_constituents SP500 — nie tylko biezacy
+    top-decyl), wiec kazda spolka z sektora ma szanse trafic do rankingu."""
+    df = get_universe_metrics(con, "SP500", ref_date, min_trading_days, max_staleness_days)
+    if df.empty:
+        return None
+    index_mom = compute_index_momentum(con, "SP500", ref_date)
+    if index_mom is None:
+        return None
+    index_return_pct = round(index_mom["momentum_value"] * 100, 2)
+
+    df = df.copy()
+    df["return_pct"] = df["momentum_value"] * 100
+
+    sector_momentum = {}
+    sector_rows = []
+    for sector, g in df.groupby("Sector"):
+        total_fmc = g["fmc"].sum()
+        momentum_pct = float((g["fmc"] * g["return_pct"]).sum() / total_fmc)
+        sector_momentum[sector] = momentum_pct
+        sector_rows.append({
+            "sector": sector,
+            "count": int(len(g)),
+            "momentum_pct": round(momentum_pct, 2),
+            "rs_vs_index_pct": round(momentum_pct - index_return_pct, 2),
+        })
+    sector_rows.sort(key=lambda r: r["rs_vs_index_pct"], reverse=True)
+    for i, r in enumerate(sector_rows):
+        r["rank"] = i + 1
+
+    strongest_sector = sector_rows[0]["sector"] if sector_rows else None
+    top_companies = []
+    if strongest_sector is not None:
+        sub = df[df["Sector"] == strongest_sector].copy()
+        sub["rs_vs_sector_pct"] = sub["return_pct"] - sector_momentum[strongest_sector]
+        sub = sub.sort_values("rs_vs_sector_pct", ascending=False).reset_index(drop=True)
+        top_n = max(1, int(np.ceil(len(sub) * SECTOR_STRATEGY_TOP_PERCENT)))
+        sub = sub.head(top_n)
+        for i, r in sub.iterrows():
+            top_companies.append({
+                "rank_in_sector": i + 1,
+                "ticker": r["Ticker"],
+                "price": round(float(r["price_now"]), 2),
+                "momentum_pct": round(float(r["return_pct"]), 2),
+                "rs_vs_sector_pct": round(float(r["rs_vs_sector_pct"]), 2),
+            })
+
+    return {
+        "index_return_pct": index_return_pct,
+        "momentum_window": index_mom["momentum_window"],
+        "sectors": sector_rows,
+        "strongest_sector": strongest_sector,
+        "top_percent": SECTOR_STRATEGY_TOP_PERCENT,
+        "top_companies": top_companies,
+    }
+
+
+def export_sector_strategy(con, ref_date, docs_data_dir, min_trading_days, max_staleness_days):
+    """Eksportuje docs/data/sector_strategy.json dla docs/strategy.html —
+    patrz sekcja 'STRATEGIA SEKTOROWA' powyzej i CLAUDE.md."""
+    trend = compute_sp500_trend_filter(con, ref_date)
+    sector_rs = compute_sector_relative_strength(con, ref_date, min_trading_days, max_staleness_days)
+    if trend is None and sector_rs is None:
+        print("❌ Brak danych do strategii sektorowej (index_prices/prices) — uruchom najpierw fetch_data.py.")
+        return
+
+    payload = {
+        "ref_date": ref_date,
+        "trend": trend,
+        "sector_rs": sector_rs,
+        "note": ("Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB "
+                 "> SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = srednia zwrotow spolek "
+                 "sektora wazona fmc_etf (TO SAMO okno co momentum_value, patrz get_universe_metrics) "
+                 "minus zwrot indeksu SP500 w tym samym oknie; (3) w NAJSILNIEJSZYM sektorze — sila "
+                 "relatywna kazdej spolki wzgledem SREDNIEJ sektora, top 10% wg tej przewagi. "
+                 "Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z "
+                 "docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania "
+                 "strategii, NIE porada inwestycyjna."),
+    }
+    out_path = Path(docs_data_dir) / "sector_strategy.json"
+    out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
+    phase = "?" if not trend or trend.get("in_growth_phase") is None else (
+        "WZROSTU" if trend["in_growth_phase"] else "poza fazą wzrostu")
+    sector = sector_rs["strongest_sector"] if sector_rs else "?"
+    print(f"💾 Wyeksportowano {out_path} — SP500: faza {phase}, najsilniejszy sektor: {sector}.")
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 "
@@ -2220,6 +2408,8 @@ def main():
     export_global_equity_momentum(con, docs_data_dir)
     export_relative_strength(con, docs_data_dir, min_trading_days=args.min_trading_days,
                               max_staleness_days=args.max_staleness_days)
+    export_sector_strategy(con, ref_date, docs_data_dir, min_trading_days=args.min_trading_days,
+                            max_staleness_days=args.max_staleness_days)
     con.close()
 
 

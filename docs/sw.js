@@ -1,9 +1,9 @@
-const CACHE = "momentum-shell-v7";
+const CACHE = "momentum-shell-v8";
 const SHELL = [
-  "index.html", "rebalance.html", "chart.html",
+  "index.html", "rebalance.html", "chart.html", "strategy.html",
   "css/style.css",
   "js/app.js", "js/rebalance.js", "js/chart.js", "js/chart-render.js", "js/shared.js", "js/table-render.js",
-  "js/qol.js", "js/pull-to-refresh.js",
+  "js/qol.js", "js/pull-to-refresh.js", "js/strategy.js",
   "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png",
 ];
