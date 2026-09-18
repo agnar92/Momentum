@@ -1,9 +1,11 @@
-const CACHE = "momentum-shell-v8";
+const CACHE = "momentum-shell-v9";
 const SHELL = [
   "index.html", "rebalance.html", "chart.html", "strategy.html",
   "css/style.css",
   "js/app.js", "js/rebalance.js", "js/chart.js", "js/chart-render.js", "js/shared.js", "js/table-render.js",
   "js/qol.js", "js/pull-to-refresh.js", "js/strategy.js",
+  "js/vendor/chart.umd.min.js", "js/vendor/chartjs-plugin-zoom.min.js",
+  "js/vendor/chartjs-plugin-annotation.min.js", "js/vendor/xlsx.full.min.js",
   "manifest.webmanifest",
   "icons/icon-192.png", "icons/icon-512.png",
 ];
@@ -35,7 +37,16 @@ self.addEventListener("activate", (e) => {
 // cache — offline pozostaje fallbackiem, nie domyślnym zachowaniem.
 self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return; // nie ruszamy CDN (Chart.js, SheetJS)
+  // Chart.js/wtyczki zoom+annotation/SheetJS byly kiedys ladowane z CDN
+  // (cdn.jsdelivr.net) i celowo pomijane tutaj — teraz sa zvendorowane
+  // lokalnie (js/vendor/*.min.js, patrz SHELL powyzej), wiec faktycznie
+  // dzialaja offline i przechodza przez zwykla siec-najpierw strategie
+  // ponizej jak reszta powloki. Ten guard nadal ma sens dla naprawde
+  // zewnetrznych zasobow, ktore MUSZA zostac zewnetrzne (widgety TradingView,
+  // s3.tradingview.com/external-embedding — patrz app.js::TV_PAGE_WIDGETS) —
+  // te dzialaja tylko online, z ich wlasnej domeny, i nigdy nie beda
+  // vendorowane/cache'owane offline.
+  if (url.origin !== location.origin) return;
 
   e.respondWith(
     fetch(e.request)
