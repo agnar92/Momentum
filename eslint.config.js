@@ -36,6 +36,17 @@ const browserGlobals = {
     rsSqueezeChartInstance: "readonly",
     STAGE_LABELS: "readonly",
     STAGE_COLORS: "readonly",
+    // Zdefiniowane w docs/js/table-render.js, wspoldzielonym przez zwykly
+    // <script> tag z docs/js/app.js i docs/js/rebalance.js — patrz komentarz
+    // na gorze table-render.js. Ten sam wzorzec co powyzej dla
+    // chart-render.js. compareRows samo jest zdefiniowane w app.js i
+    // uzywane jako domyslny komparator wewnatrz table-render.js (odwrotny
+    // kierunek tego samego wzorca — plik zaladowany PRZED app.js odwoluje
+    // sie do funkcji, ktora zdefiniuje ono PO zaladowaniu, ale w praktyce
+    // dopiero przy pierwszym wywolaniu renderScreenerTable(), gdy wszystkie
+    // skrypty juz sa zaladowane).
+    renderScreenerTable: "readonly",
+    compareRows: "readonly",
 };
 
 const nodeGlobals = {

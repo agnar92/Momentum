@@ -617,62 +617,52 @@ function renderPickerTable() {
     if (titleEl) titleEl.textContent = universe ? UNIVERSE_LABELS[universe] : "—";
 
     const allRows = pickerRows();
-    let rows = allRows.filter(c => matchesPickerStageFilter(c.weekly_chart && c.weekly_chart.current_stage));
-    rows.sort((a, b) => comparePickerRows(a, b, pickerSortKey, pickerSortDir));
-
-    const meta = document.getElementById("pickerMeta");
     const data = universeData[universe] || {};
     const filterLabel = pickerStageFilterLabel();
-    if (!universe) {
-        meta.textContent = "Wybierz uniwersum w Kroku 1 powyżej.";
-    } else if (data.ref_date) {
-        meta.textContent = !filterLabel
-            ? `Rebalans: ${data.ref_date} · ${allRows.length} spółek`
-            : `Rebalans: ${data.ref_date} · ${rows.length} z ${allRows.length} spółek (etap ${filterLabel})`;
-    } else {
-        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
-    }
 
-    const tbody = document.getElementById("pickerTableBody");
-    tbody.innerHTML = "";
-
-    if (rows.length === 0) {
-        const tr = document.createElement("tr");
-        const msg = allRows.length === 0 ? "Brak danych." : "Żadna spółka nie pasuje do wybranego etapu.";
-        tr.innerHTML = `<td colspan="10" class="empty-state">${msg}</td>`;
-        tbody.appendChild(tr);
-        return;
-    }
-
-    rows.forEach(c => {
-        const tr = document.createElement("tr");
-        if (isPicked(c.ticker, universe)) tr.classList.add("row-selected");
-        tr.innerHTML = pickerRowHtml(c, universe);
+    renderScreenerTable({
+        tbody: document.getElementById("pickerTableBody"),
+        metaEl: document.getElementById("pickerMeta"),
+        allRows,
+        matchesStage: c => matchesPickerStageFilter(c.weekly_chart && c.weekly_chart.current_stage),
+        compareFn: (a, b) => comparePickerRows(a, b, pickerSortKey, pickerSortDir),
+        colspan: 10,
+        emptyAllMsg: "Brak danych.",
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: (rows) => {
+            if (!universe) return "Wybierz uniwersum w Kroku 1 powyżej.";
+            if (!data.ref_date) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
+            return !filterLabel
+                ? `Rebalans: ${data.ref_date} · ${allRows.length} spółek`
+                : `Rebalans: ${data.ref_date} · ${rows.length} z ${allRows.length} spółek (etap ${filterLabel})`;
+        },
+        isSelected: c => isPicked(c.ticker, universe),
+        rowHtml: c => pickerRowHtml(c, universe),
         // Klik w wiersz (poza przyciskiem "+ Dodaj"/"✓ W portfelu", patrz
-        // stopPropagation nizej) przekierowuje na chart.html — osobna strona
-        // z jednym, pelnoekranowym wykresem tej spolki (patrz komentarz na
-        // gorze js/chart.js). "back" niesie adres powrotny wprost w query
-        // stringu (przetrwa odswiezenie chart.html), zeby przycisk "Powrót"
-        // tam zawsze wracal dokladnie tutaj, do Kroku 2 — nie do samego
-        // dashboardu jak we wczesniejszej wersji. Zero duplikowania kodu
-        // wykresu na tej stronie (byl tu wczesniej pelny port
-        // renderRelativeStrengthChart — usuniety na rzecz wspoldzielonego
-        // js/chart-render.js, patrz CLAUDE.md).
-        tr.addEventListener("click", () => {
+        // stopPropagation w afterRender nizej) przekierowuje na chart.html —
+        // osobna strona z jednym, pelnoekranowym wykresem tej spolki (patrz
+        // komentarz na gorze js/chart.js). "back" niesie adres powrotny
+        // wprost w query stringu (przetrwa odswiezenie chart.html), zeby
+        // przycisk "Powrót" tam zawsze wracal dokladnie tutaj, do Kroku 2 —
+        // nie do samego dashboardu jak we wczesniejszej wersji. Zero
+        // duplikowania kodu wykresu na tej stronie (byl tu wczesniej pelny
+        // port renderRelativeStrengthChart — usuniety na rzecz
+        // wspoldzielonego js/chart-render.js, patrz CLAUDE.md).
+        onRowClick: c => {
             const params = new URLSearchParams({ ticker: c.ticker, universe, back: "rebalance.html" });
             window.location.href = `chart.html?${params.toString()}`;
-        });
-        tbody.appendChild(tr);
-    });
-
-    tbody.querySelectorAll(".pick-toggle-btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            e.stopPropagation(); // nie otwieraj wykresu przy klikaniu samego przycisku
-            togglePick(btn.dataset.ticker, universe);
-            renderPickerTable();
-            renderPicksList();
-            refreshOutputs();
-        });
+        },
+        afterRender: (tbody) => {
+            tbody.querySelectorAll(".pick-toggle-btn").forEach(btn => {
+                btn.addEventListener("click", (e) => {
+                    e.stopPropagation(); // nie otwieraj wykresu przy klikaniu samego przycisku
+                    togglePick(btn.dataset.ticker, universe);
+                    renderPickerTable();
+                    renderPicksList();
+                    refreshOutputs();
+                });
+            });
+        },
     });
 }
 

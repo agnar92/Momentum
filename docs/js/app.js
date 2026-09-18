@@ -970,6 +970,20 @@ function rsmScreenerRowHtml(r, position) {
     `;
 }
 
+// Tekst linijki meta nad tabelą, wspólny dla RSM Stabilne/Wzrostowe i TTM
+// Squeeze — obie płaskie, wielo-uniwersalne listy liczą "brak danych" po
+// tym, czy JAKIKOLWIEK z 5 uniwersów ma już ref_date (a nie po jednym
+// konkretnym uniwersum, jak w renderTable poniżej).
+function flatScreenerMetaText(allRows, rows) {
+    const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
+    if (!refDates.length) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
+    let text = `Rebalans: ${refDates[0]} · `;
+    text += state.stageFilter === "ALL"
+        ? `${allRows.length} spółek`
+        : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
+    return text;
+}
+
 // Wspólna implementacja dla obu zakładek RSM (Stabilne/Wzrostowe) — sortowalna
 // (compareRows po data-key z index.html, patrz initDrawer) i filtrowalna po
 // etapie (matchesStageFilter/#stageFilterBar), tak jak pełna tabela uniwersum
@@ -979,47 +993,23 @@ function renderRsmScreenerTable(kind) {
     const { stable, accelerating } = combinedRsmCandidates();
     const allRows = kind === "stable" ? stable : accelerating;
     const bodyId = kind === "stable" ? "rsmStableTableBody" : "rsmGrowthTableBody";
-    const meta = document.getElementById("drawerMeta");
 
-    let rows = state.stageFilter === "ALL"
-        ? allRows.slice()
-        : allRows.filter(r => matchesStageFilter(r.current_stage));
-
-    const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
-    if (refDates.length) {
-        let text = `Rebalans: ${refDates[0]} · `;
-        text += state.stageFilter === "ALL"
-            ? `${allRows.length} spółek`
-            : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
-        meta.textContent = text;
-        meta.title = "";
-    } else {
-        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
-        meta.title = "";
-    }
-
-    rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
-
-    const tbody = document.getElementById(bodyId);
-    tbody.innerHTML = "";
-
-    if (rows.length === 0) {
-        const tr = document.createElement("tr");
-        const msg = allRows.length === 0 ? "Brak danych." : "Żadna spółka nie pasuje do wybranego etapu.";
-        tr.innerHTML = `<td colspan="10" class="empty-state">${msg}</td>`;
-        tbody.appendChild(tr);
-        return;
-    }
-
-    rows.forEach((r, i) => {
-        const tr = document.createElement("tr");
-        tr.dataset.ticker = r.ticker;
-        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
-        tr.innerHTML = rsmScreenerRowHtml(r, i + 1);
-        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
-        tbody.appendChild(tr);
+    renderScreenerTable({
+        tbody: document.getElementById(bodyId),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 10,
+        emptyAllMsg: "Brak danych.",
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: (rows) => flatScreenerMetaText(allRows, rows),
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => rsmScreenerRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
     });
-    bindTvRowButtons(tbody);
 }
 
 function renderRsmStableTable() { renderRsmScreenerTable("stable"); }
@@ -1055,95 +1045,61 @@ function ttmSqueezeRowHtml(r, position) {
 // użytkownika, jeśli jakieś wybrał, patrz compareRows).
 function renderTtmSqueezeTable() {
     const allRows = combinedTtmSqueezeCandidates();
-    const meta = document.getElementById("drawerMeta");
 
-    let rows = state.stageFilter === "ALL"
-        ? allRows.slice()
-        : allRows.filter(r => matchesStageFilter(r.current_stage));
-
-    const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
-    if (refDates.length) {
-        let text = `Rebalans: ${refDates[0]} · `;
-        text += state.stageFilter === "ALL"
-            ? `${allRows.length} spółek`
-            : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
-        meta.textContent = text;
-        meta.title = "";
-    } else {
-        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
-        meta.title = "";
-    }
-
-    rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
-
-    const tbody = document.getElementById("ttmSqueezeTableBody");
-    tbody.innerHTML = "";
-
-    if (rows.length === 0) {
-        const tr = document.createElement("tr");
-        const msg = allRows.length === 0 ? "Brak danych." : "Żadna spółka nie pasuje do wybranego etapu.";
-        tr.innerHTML = `<td colspan="10" class="empty-state">${msg}</td>`;
-        tbody.appendChild(tr);
-        return;
-    }
-
-    rows.forEach((r, i) => {
-        const tr = document.createElement("tr");
-        tr.dataset.ticker = r.ticker;
-        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
-        tr.innerHTML = ttmSqueezeRowHtml(r, i + 1);
-        tr.addEventListener("click", () => selectTicker(r.ticker, r.universe));
-        tbody.appendChild(tr);
+    renderScreenerTable({
+        tbody: document.getElementById("ttmSqueezeTableBody"),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 10,
+        emptyAllMsg: "Brak danych.",
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: (rows) => flatScreenerMetaText(allRows, rows),
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => ttmSqueezeRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
     });
-    bindTvRowButtons(tbody);
 }
 
 function renderTable() {
     const d = state.data[state.drawerUniverse];
-    const meta = document.getElementById("drawerMeta");
     const allRows = d.constituents || [];
-    let rows = state.stageFilter === "ALL"
-        ? allRows.slice()
-        : allRows.filter(r => matchesStageFilter(r.weekly_chart && r.weekly_chart.current_stage));
+    // Ustawiane przez beforeRender ponizej, PO filtrze/sortowaniu — pasek wagi
+    // skaluje sie wzgledem najwiekszej wagi wsrod AKTUALNIE WIDOCZNYCH wierszy
+    // (po filtrze etapu), nie calego uniwersum.
+    let maxWeight = 1;
 
-    if (d.ref_date) {
-        let text = `Rebalans: ${d.ref_date} · `;
-        text += state.stageFilter === "ALL"
-            ? `${d.n_constituents} spółek`
-            : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
-        if (d.cap_scaled_due_to_infeasibility) {
-            text += " · ⚠ cap 9% przeskalowany (za mało spółek by cap był wykonalny)";
-        }
-        if (d.n_missing_fmc > 0) {
-            text += ` · ${d.n_missing_fmc} pominiętych (brak Market Value w CSV)`;
-        }
-        meta.textContent = text;
-        meta.title = d.fmc_note || "";
-    } else {
-        meta.textContent = "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
-    }
-
-    rows.sort((a, b) => compareRows(a, b, state.sortKey, state.sortDir));
-
-    const tbody = document.getElementById("momentumTableBody");
-    tbody.innerHTML = "";
-    const maxWeight = rows.length ? Math.max(...rows.map(r => r.weight_pct), 0.01) : 1;
-
-    if (rows.length === 0) {
-        const tr = document.createElement("tr");
-        const msg = allRows.length === 0
-            ? "Brak danych."
-            : "Żadna spółka nie pasuje do wybranego etapu.";
-        tr.innerHTML = `<td colspan="12" class="empty-state">${msg}</td>`;
-        tbody.appendChild(tr);
-        return;
-    }
-
-    rows.forEach(r => {
-        const tr = document.createElement("tr");
-        tr.dataset.ticker = r.ticker;
-        if (r.ticker === state.selectedTicker) tr.classList.add("row-selected");
-        tr.innerHTML = `
+    renderScreenerTable({
+        tbody: document.getElementById("momentumTableBody"),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.weekly_chart && r.weekly_chart.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 12,
+        emptyAllMsg: "Brak danych.",
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: (rows) => {
+            if (!d.ref_date) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
+            let text = `Rebalans: ${d.ref_date} · `;
+            text += state.stageFilter === "ALL"
+                ? `${d.n_constituents} spółek`
+                : `${rows.length} z ${allRows.length} spółek (etap ${state.stageFilter === "2" ? "2A/2B" : state.stageFilter})`;
+            if (d.cap_scaled_due_to_infeasibility) {
+                text += " · ⚠ cap 9% przeskalowany (za mało spółek by cap był wykonalny)";
+            }
+            if (d.n_missing_fmc > 0) {
+                text += ` · ${d.n_missing_fmc} pominiętych (brak Market Value w CSV)`;
+            }
+            return text;
+        },
+        metaTitle: () => d.fmc_note || "",
+        beforeRender: (rows) => { maxWeight = rows.length ? Math.max(...rows.map(r => r.weight_pct), 0.01) : 1; },
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r) => `
             <td><span class="rank-badge">${r.rank}</span></td>
             <td class="ticker-cell">${r.ticker}</td>
             <td>${r.sector}</td>
@@ -1159,11 +1115,10 @@ function renderTable() {
             </td>
             <td>${stageCellHtml(r.weekly_chart && r.weekly_chart.current_stage)}</td>
             <td>${tvRowButtonHtml(r.ticker, state.drawerUniverse)}</td>
-        `;
-        tr.addEventListener("click", () => selectTicker(r.ticker, state.drawerUniverse));
-        tbody.appendChild(tr);
+        `,
+        onRowClick: r => selectTicker(r.ticker, state.drawerUniverse),
+        afterRender: bindTvRowButtons,
     });
-    bindTvRowButtons(tbody);
 }
 
 // ============================================================
