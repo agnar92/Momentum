@@ -727,8 +727,7 @@ days a SMA200 needs.
   graceful-degradation convention as the rest of this module.
 - **`compute_sector_relative_strength(con, ref_date, ...)`** calls `get_universe_metrics(con, "SP500", ...)`
   — the SAME full, qualifying-population query that backs `all_constituents` (not just the current
-  top-quintile selection) — and `compute_index_momentum(con, "SP500", ref_date)` for the index's own return
-  in the same M-14/M-2 (fallback M-11/M-2) window. Each **sector's** momentum comes from a REAL sector ETF
+  top-quintile selection) — for company-level data. Each **sector's** momentum comes from a REAL sector ETF
   where possible: `fetch_data.py::SECTOR_ETF_SYMBOLS` maps each GICS sector string exactly as it appears in
   `CSPX_holdings.csv`'s `Sector` column (`"Information Technology"`, `"Financials"`, ... — 11 sectors) to
   its SPDR Select Sector ETF ticker (`XLK`, `XLF`, ...); `fetch_data.py::update_index_prices` fetches all
@@ -737,18 +736,38 @@ days a SMA200 needs.
   — which means `compute_index_momentum(con, sector_name, ref_date)` (the exact same function used for
   SP500/NASDAQ100/etc.) already works for a sector with zero changes to that function. When a sector's ETF
   doesn't have data yet in `index_prices` (e.g. right after this was added, before the next full
-  `fetch_data.py` run), `compute_sector_relative_strength` falls back to the older substitute: the
-  `fmc`-weighted average return of the sector's own member stocks (the same float-adjusted-market-cap proxy
-  used everywhere else in this module) — same "degrade to an approximation instead of crashing" convention
-  as `gem_manual_returns.json`'s fallback to the synthetic WIG20/mWIG40 index. Every sector row carries a
-  `"data_source"` field (`"etf"` or `"synthetic_fmc_weighted"`) so this is never silent — the frontend shows
-  a small "(przybliżenie)" note next to any sector still on the fallback (`docs/js/strategy.js`, same
-  data-provenance-transparency pattern as `manual_entry`/`fmc_note` elsewhere). `rs_vs_index_pct =
-  sector_momentum_pct - index_return_pct`, sectors ranked descending; the top-ranked sector's own members
-  are then ranked again, this time by return vs. THAT sector's own average (`rs_vs_sector_pct`), and the
-  top `ceil(count * SECTOR_STRATEGY_TOP_PERCENT)` (10%, minimum 1) become `top_companies`.
+  `fetch_data.py` run), the sector falls back to the older substitute: the `fmc`-weighted average return of
+  the sector's own member stocks (the same float-adjusted-market-cap proxy used everywhere else in this
+  module) — same "degrade to an approximation instead of crashing" convention as `gem_manual_returns.json`'s
+  fallback to the synthetic WIG20/mWIG40 index. Every sector row carries a `"data_source"` field (`"etf"` or
+  `"synthetic_fmc_weighted"`) so this is never silent — the frontend shows a small "(przybliżenie)" note
+  next to any sector still on the fallback (`docs/js/strategy.js`, same data-provenance-transparency pattern
+  as `manual_entry`/`fmc_note` elsewhere).
 
-  **Version history matters here**: the FIRST version of this screener used ONLY the `fmc`-weighted
+  **Krok 2 and Krok 3 deliberately use TWO DIFFERENT time windows, not one shared window** — this was a
+  real bug the user caught by cross-checking against TradingView/stooq and asking "check if this RS works
+  like IBD's or Weinstein's": Krok 2 (which sector leads *right now*) originally reused
+  `compute_index_momentum`'s M-14/M-2 window (skips the most recent 2 months — the S&P Momentum Index's own
+  convention for *selecting stocks*, used everywhere else in this module) to compare each sector ETF against
+  SP500. Measured directly on real data: under M-14/M-2, Information Technology (+34.52%) barely edged out
+  Energy (+33.12%); under a plain trailing-12-month return to *today* (no skip), Energy (+43.30%) clearly
+  beat Technology (+38.57%) — **the ranking flipped**. Neither IBD's RS Rating (weights the *most recent*
+  quarter more heavily, never skips it) nor Weinstein/Mansfield RS (always current price) skip recent
+  months, so M-14/M-2 was the wrong convention for "who's leading now." Krok 2 now uses a plain
+  trailing-`GEM_LOOKBACK_MONTHS` return anchored to month-end (`_gem_month_end_anchor_dates` — the exact
+  same function and stability rationale `compute_index_returns` already uses for GEM's index-vs-index
+  race, unmodified) instead — `trailing_return_pct()`, a small local helper inside
+  `compute_sector_relative_strength`. On the same real data, this narrows Technology/Energy to a genuine
+  near-tie (+42.12%/+41.52%, a 0.6pp gap) rather than an artifact of stale data — a believable close race,
+  not a bug. **Krok 3 (a company vs. its OWN sector's average) deliberately stays on M-14/M-2** — both
+  sides of that comparison need to be on the identical window to be apples-to-apples, and M-14/M-2 is the
+  window every other per-company ranking in this app already uses (`get_universe_metrics`'s
+  `momentum_value`), so `sector_momentum_windowed` (the M-14/M-2-windowed sector baseline, kept separate
+  from Krok 2's trailing-return `display_pct`) is what `rs_vs_sector_pct` is computed against — Krok 2 and
+  Krok 3 answer genuinely different questions ("which sector to look at" vs. "which company beats its
+  peers"), so there was never a requirement that they share one window.
+
+  **Version history matters here too**: the FIRST version of this screener used ONLY the `fmc`-weighted
   synthetic average (no sector ETF at all) — the same reasoning `_compute_synthetic_equal_weight_index`
   uses for WIG20/mWIG40 (build an aggregate from already-fetched constituent prices instead of fetching a
   new instrument). The user pushed back directly ("Przecież potrzebujemy chyba ETF na sektor?"), pointing
@@ -757,6 +776,8 @@ days a SMA200 needs.
   sector ETFs are liquid, standard, and trivially fetchable via the exact same `_download_price_rows`/
   `index_prices`/`compute_index_momentum` machinery already used for the 5 main universes, the fix was to
   fetch them for real — keeping the synthetic average only as a graceful fallback, not the primary source.
+  The M-14/M-2-for-Krok-2 mistake above shipped in that same fix and was only caught afterward, once real
+  ETF data made the two conventions' numbers actually divergent enough to notice.
 - **`export_sector_strategy(con, ref_date, docs_data_dir, ...)`** combines both into
   `docs/data/sector_strategy.json` (`trend`/`sector_rs`/`note`) — called from `run_query.py`'s normal,
   full (weekly) `main()` path alongside `export_relative_strength`/`export_global_equity_momentum`, so it
