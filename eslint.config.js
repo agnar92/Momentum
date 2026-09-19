@@ -85,6 +85,11 @@ const nodeGlobals = {
 };
 
 module.exports = [
+    // Biblioteki firm trzecich zvendorowane lokalnie (patrz "Chart.js/its two
+    // plugins/SheetJS are vendored locally" w CLAUDE.md) — kopiowane 1:1 z npm,
+    // nie nasz kod, nie ma sensu ich lintowac (i tak zalewaja bledami/ostrzezeniami
+    // reguly pisane pod ten projekt).
+    { ignores: ["docs/js/vendor/**"] },
     {
         files: ["docs/js/**/*.js"],
         languageOptions: {

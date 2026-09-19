@@ -122,10 +122,12 @@ function renderTrendChart() {
     const series = daily ? (trend.daily_series || []) : (trend.weekly_series || []);
     const smaKey = daily ? "sma200" : "sma40";
     const smaLabel = daily ? "SMA200" : "SMA40 (tyg.)";
-    // Chart.js ladowany z CDN (patrz strategy.html) — jego brak (offline, CDN
-    // zablokowany) nie powinien zablokowac reszty strony (banner/stat-cards juz
-    // ustawione w renderTrend PRZED tym wywolaniem) ani rzucic niezlapanym
-    // wyjatkiem z wnetrza async init() w dole tego pliku.
+    // Chart.js jest zvendorowany lokalnie (js/vendor/chart.umd.min.js, patrz
+    // strategy.html) wiec normalnie zawsze jest dostepny — ten guard zostaje
+    // jako ogolny bezpiecznik (np. uszkodzony plik lokalny), zeby jego brak
+    // nie zablokowal reszty strony (banner/stat-cards juz ustawione w
+    // renderTrend PRZED tym wywolaniem) ani nie rzucil niezlapanym wyjatkiem
+    // z wnetrza async init() w dole tego pliku.
     if (series.length === 0 || typeof Chart === "undefined") return;
 
     trendChartInstance = new Chart(document.getElementById("trendChart"), {
@@ -259,7 +261,7 @@ function renderLeadersTable() {
 function renderAll() {
     // Tabele sektorow/liderow NIE zaleza od Chart.js — renderowane PRZED
     // renderTrend() (ktora na koncu tworzy wykres Chart.js), zeby ewentualny
-    // problem z CDN Chart.js (offline, zablokowany hosting) nie zablokowal
+    // problem z lokalnym plikiem Chart.js (patrz js/vendor/) nie zablokowal
     // reszty strony — ten sam porzadek co w rebalance.js::init (wykresy
     // Chart.js na koncu, po tabelach).
     renderSectorTable();
