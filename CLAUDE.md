@@ -1160,6 +1160,21 @@ flex child (no `.topbar-left` wrapper there).
   justified a shared file back when only `js/chart-render.js` existed for the ~500-line chart engine
   itself), but became genuine duplication once the exact same lines also existed in both `app.js` and
   `rebalance.js` — `js/shared.js` is what finally gave all three pages one place for this.
+
+  **`<div class="workspace mobile-chart-view">` in the markup, not toggled by JS, unlike `index.html`.**
+  `.charts-area`'s mobile CSS (`style.css`'s `@media max-width:640px` block) was written entirely around
+  `index.html`'s dual-view dashboard — `.charts-area { display: none; }` by default on a phone, shown only
+  once `app.js::selectTicker()` adds `.mobile-chart-view` to `.workspace` (switching away from the table
+  list the user was just looking at). `chart.html` reuses the same `.workspace`/`.charts-area` container
+  classes but has no table/list to switch away from — it's a permanent, standalone chart page — and never
+  ran any JS that adds that class. Real, user-reported bug: on a phone, this left `.charts-area` stuck at
+  its default `display: none` forever, so the whole page below the topbar was blank (no error, no message
+  — just background) every time `chart.html` was opened from a phone, including via the `chart-row-btn`
+  links from `rebalance.js`'s Krok 2 and `strategy.js`'s Krok 3. Fixed by hardcoding the class directly in
+  `chart.html`'s HTML (`class="workspace mobile-chart-view"`) instead of toggling it — this page has
+  exactly one state to show, so there's nothing to toggle between. Verified at a phone viewport (390×844):
+  all four chart panels render; `index.html`'s own mobile toggle behavior (table first, chart after tapping
+  a row) is unaffected, since that page still adds/removes the class dynamically as before.
 - **`js/chart-render.js`** — the shared chart-rendering ENGINE itself (`renderRelativeStrengthChart()` and
   everything it depends on: `renderStageBadge()`, `rollingMean()`/`alignMansfieldToDates()`/
   `alignSqueezeToDates()`/`fmtPlDate()`/`sliceWeeklyChartToRange()`/`syncChartsCrosshair()`/

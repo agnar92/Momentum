@@ -31,7 +31,15 @@
     </nav>
 </div>
 
-<div class="workspace">
+<!-- "mobile-chart-view" tu na stale: to klasa z css/style.css (mobile media query)
+     napisana pod DWUWIDOKOWY dashboard index.html (tabela LUB wykres na
+     telefonie, przelaczane przez app.js::selectTicker), gdzie ".charts-area"
+     jest domyslnie "display:none" na telefonie i pokazuje sie DOPIERO gdy
+     ".workspace" ma te klase. chart.html nie ma zadnej tabeli do przelaczania
+     -- to zawsze-tylko-wykres strona -- wiec bez tej klasy caly wykres byl
+     niewidoczny na telefonie (sam topbar, reszta pusta), mimo ze desktop
+     dzialal poprawnie. -->
+<div class="workspace mobile-chart-view">
     <div class="charts-area">
         <div class="chart-mode-toggle" id="chartModeToggle">
             <button class="chart-mode-btn" id="chartBackBtn" title="Wróć tam, skąd otwarto ten wykres">
