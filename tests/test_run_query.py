@@ -1857,8 +1857,13 @@ class TestComputeSectorRelativeStrength:
         assert out["strongest_sector"] == "Tech"
         assert out["top_percent"] == SECTOR_STRATEGY_TOP_PERCENT
         # ceil(3 * 0.10) = 1 -> tylko najsilniejsza spolka sektora (TFAST).
-        assert [c["ticker"] for c in out["top_companies"]] == ["TFAST"]
-        assert out["top_companies"][0]["rs_vs_sector_pct"] > 0
+        tech = next(s for s in out["sectors"] if s["sector"] == "Tech")
+        assert [c["ticker"] for c in tech["top_companies"]] == ["TFAST"]
+        assert tech["top_companies"][0]["rs_vs_sector_pct"] > 0
+        # top_companies jest liczone dla KAZDEGO sektora, nie tylko
+        # najsilniejszego — zeby mozna bylo przegladac alternatywny sektor.
+        utilities = next(s for s in out["sectors"] if s["sector"] == "Utilities")
+        assert [c["ticker"] for c in utilities["top_companies"]] == ["UONE"]
 
     def test_uses_real_sector_etf_when_index_prices_has_it(self):
         # Gdy fetch_data.py juz pobral sektorowy ETF (Index_Name = nazwa sektora
