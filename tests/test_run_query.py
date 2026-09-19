@@ -43,6 +43,7 @@ from run_query import (
     compute_sp500_trend_filter,
     compute_sector_relative_strength,
     SECTOR_STRATEGY_TOP_PERCENT,
+    SECTOR_STRATEGY_RSM_WEEKS,
     _build_full_universe_records,
     _compute_weinstein_stage_series,
     _load_gem_manual_returns,
@@ -1841,36 +1842,31 @@ class TestComputeSectorRelativeStrength:
         insert_daily_series(con, "prices", "Ticker", "TSLOW", "2024-06-01", "2026-03-16", 100.0, 0.10)
         insert_daily_series(con, "prices", "Ticker", "UONE", "2024-06-01", "2026-03-16", 100.0, 0.01)
 
-    def test_falls_back_to_synthetic_fmc_weighted_when_no_sector_etf_data(self):
+    def test_sector_without_etf_data_has_no_rs_and_lands_last(self):
         # Brak wierszy w index_prices dla Index_Name='Tech'/'Utilities' (zaden
-        # sektorowy ETF nie zostal jeszcze pobrany) -> spada na starszy substytut:
-        # srednia zwrotow spolek sektora wazona fmc_etf.
+        # sektorowy ETF nie zostal jeszcze pobrany) -> BEZ fallbacku na
+        # przyblizenie (to juz nie bylby "czysty RS", na zyczenie uzytkownika) ->
+        # data_source="no_data", rsm_vs_index_pct=None, top_companies puste.
         con = make_gem_con()
         self._seed(con)
         out = compute_sector_relative_strength(con, "2026-03-16", min_trading_days=5, max_staleness_days=10)
         assert out is not None
-        assert [s["sector"] for s in out["sectors"]] == ["Tech", "Utilities"]
-        assert out["sectors"][0]["rank"] == 1
-        assert out["sectors"][0]["count"] == 3
-        assert out["sectors"][0]["data_source"] == "synthetic_fmc_weighted"
-        assert out["sectors"][1]["data_source"] == "synthetic_fmc_weighted"
-        assert out["strongest_sector"] == "Tech"
+        assert out["rsm_weeks"] == SECTOR_STRATEGY_RSM_WEEKS
+        assert {s["sector"] for s in out["sectors"]} == {"Tech", "Utilities"}
+        for s in out["sectors"]:
+            assert s["data_source"] == "no_data"
+            assert s["rsm_vs_index_pct"] is None
+            assert s["top_companies"] == []
+        assert out["strongest_sector"] is None
         assert out["top_percent"] == SECTOR_STRATEGY_TOP_PERCENT
-        # ceil(3 * 0.10) = 1 -> tylko najsilniejsza spolka sektora (TFAST).
-        tech = next(s for s in out["sectors"] if s["sector"] == "Tech")
-        assert [c["ticker"] for c in tech["top_companies"]] == ["TFAST"]
-        assert tech["top_companies"][0]["rs_vs_sector_pct"] > 0
-        # top_companies jest liczone dla KAZDEGO sektora, nie tylko
-        # najsilniejszego — zeby mozna bylo przegladac alternatywny sektor.
-        utilities = next(s for s in out["sectors"] if s["sector"] == "Utilities")
-        assert [c["ticker"] for c in utilities["top_companies"]] == ["UONE"]
 
-    def test_uses_real_sector_etf_when_index_prices_has_it(self):
+    def test_uses_real_sector_etf_and_ranks_by_mansfield_rs_not_return(self):
         # Gdy fetch_data.py juz pobral sektorowy ETF (Index_Name = nazwa sektora
-        # w index_prices, patrz SECTOR_ETF_SYMBOLS), funkcja MUSI go uzyc zamiast
-        # syntetycznej sredniej — tu celowo odwracamy ranking wzgledem tego, co
-        # dalaby synteza (Tech #1 w tescie fallbacku powyzej), zeby dowiesc, ze
-        # faktycznie czyta index_prices, a nie tylko go ignoruje.
+        # w index_prices, patrz SECTOR_ETF_SYMBOLS), funkcja MUSI go uzyc: Tech
+        # rosnie WOLNIEJ od SP500 (slope 0.02 < 0.05) -> Mansfield RS spada,
+        # Utilities SZYBCIEJ (0.15 > 0.05) -> Mansfield RS rosnie, wiec Utilities
+        # powinien wygrac ranking (dokladnie odwrotnie niz dalby zwykly zwrot
+        # bez wygladzenia RS wobec wlasnej sredniej).
         con = make_gem_con()
         self._seed(con)
         insert_daily_series(con, "index_prices", "Index_Name", "Tech", "2024-06-01", "2026-03-16", 100.0, 0.02)
@@ -1880,7 +1876,23 @@ class TestComputeSectorRelativeStrength:
         sectors_by_name = {s["sector"]: s for s in out["sectors"]}
         assert sectors_by_name["Tech"]["data_source"] == "etf"
         assert sectors_by_name["Utilities"]["data_source"] == "etf"
+        assert sectors_by_name["Tech"]["rsm_vs_index_pct"] is not None
+        assert sectors_by_name["Utilities"]["rsm_vs_index_pct"] is not None
+        assert sectors_by_name["Utilities"]["rsm_vs_index_pct"] > sectors_by_name["Tech"]["rsm_vs_index_pct"]
         assert out["strongest_sector"] == "Utilities"
+
+        # Krok 3: kazda spolka rankowana wzgledem WLASNEGO sektora (mianownik =
+        # cena sektora, NIE SP500) — TFAST rosnie najszybciej w Tech (slope 0.40),
+        # wiec powinien miec dodatnia RSM wzgledem sektora i byc jego liderem.
+        # ceil(3 * 0.10) = 1 -> tylko najsilniejsza spolka sektora.
+        tech = sectors_by_name["Tech"]
+        assert [c["ticker"] for c in tech["top_companies"]] == ["TFAST"]
+        assert tech["top_companies"][0]["rsm_vs_sector_pct"] > 0
+        assert tech["top_companies"][0]["rank_in_sector"] == 1
+        # top_companies jest liczone dla KAZDEGO sektora, nie tylko
+        # najsilniejszego — zeby mozna bylo przegladac alternatywny sektor.
+        utilities = sectors_by_name["Utilities"]
+        assert [c["ticker"] for c in utilities["top_companies"]] == ["UONE"]
 
     def test_missing_price_data_returns_none(self):
         con = make_gem_con()

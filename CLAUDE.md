@@ -702,11 +702,27 @@ A dedicated, standalone screener (`docs/strategy.html`) for a specific, user-req
 (multi-stage) strategy: (1) only look for sector leaders while the **overall market (SP500) is in a
 growth phase** — price above its 200-day SMA OR above its 40-week SMA (the user gave both conventions
 explicitly and they're treated as equivalent/either-sufficient, not requiring both); (2) rank SP500's
-**GICS sectors** by relative strength vs. the SP500 index itself; (3) within the single strongest sector,
-rank its member companies by relative strength vs. that sector's own average, and take the **top 10%**;
-(4) for those top companies, surface their existing Weinstein Stage and TTM Squeeze status so the user can
-judge entry timing manually — this screener does not buy/select anything automatically, same "informational
-only, you decide" philosophy as the rest of the dashboard/rebalance calculator.
+**GICS sectors** by relative strength vs. the SP500 index itself; (3) within a sector, rank its member
+companies by relative strength vs. that sector's own price, and take the **top 10%**; (4) for those top
+companies, surface their existing Weinstein Stage and TTM Squeeze status so the user can judge entry
+timing manually — this screener does not buy/select anything automatically, same "informational only, you
+decide" philosophy as the rest of the dashboard/rebalance calculator.
+
+**This strategy is CZYSTY RS (pure Relative Strength) — there is ZERO momentum/return anywhere in
+`compute_sector_relative_strength`, by the user's explicit instruction** ("Ta strategia bazuje na czystym
+RS" — this strategy is based on pure RS). Both Krok 2 and Krok 3 use exactly the same formula, the classic
+Mansfield Relative Strength oscillator (`RS = price_A / price_B`, `RSM = (RS / SMA(RS, N weeks) - 1) *
+100` — the same oscillator `compute_mansfield_rs_chart` already draws for a single stock vs. its own index,
+see Relative Strength above), just with different numerator/denominator pairs at each step:
+  - **Krok 2** (which sector leads *right now*): `RS = sector ETF price / SP500 price`.
+  - **Krok 3** (which company leads *within* a sector): `RS = company price / THAT SAME sector's ETF
+    price` — the denominator is the sector, **not** SP500, so a company's Krok-3 score answers "does it
+    beat its own sector," a genuinely different question from Krok 2's "does the sector beat the market."
+`SECTOR_STRATEGY_RSM_WEEKS = 52` is this screener's own smoothing window — a classic, full-year Mansfield
+window, **deliberately independent** of `RS_MANSFIELD_SHORT_WEEKS`/`RS_MANSFIELD_MEDIUM_WEEKS` (13/26
+weeks) used by the single-stock chart elsewhere in this module: the user was asked whether ranking should
+use the short/medium/both windows already in the codebase, and explicitly said this strategy's own
+calculation should be independent, on a 52-week window for everything.
 
 This is scoped to **SP500 only** (the user's own description of the strategy names SP500 specifically,
 and SP500 is the one universe whose holdings CSV — `CSPX_holdings.csv`, see `fetch_data.py` — already
@@ -714,7 +730,7 @@ carries a real per-company `Sector` column, propagated into `index_constituents.
 every constituent record's `"sector"` field, in `docs/data/sp500.json`, alongside `Ticker`/`fmc_etf`
 already). No new fetch is needed for step (1)/(2)/(3) below — `index_prices` already retains a full daily
 `^GSPC` series for `--lookback-months` (22 by default, see `fetch_data.py`), far more than the 200 trading
-days a SMA200 needs.
+days a SMA200 needs, or the ~60 weeks (52 + buffer) the 52-week Mansfield window needs.
 
 - **`compute_sp500_trend_filter(con, ref_date)`** reads `index_prices` for `SP500`, computes a plain
   rolling 200-day SMA on the daily series and a rolling 40-period SMA on a `DATE_TRUNC('week', Date)`
@@ -725,67 +741,65 @@ days a SMA200 needs.
   can plot a small trend chart without having to expose the whole `index_prices` table as JSON. Returns
   `None` fields (not an exception) when there isn't yet enough history for a given SMA — same
   graceful-degradation convention as the rest of this module.
+- **`_mansfield_rsm_series(con, table, id_column, id_value, start_date, end_date)`** and
+  **`_mansfield_rsm_current_value(numerator_df, denominator_df, weeks)`** are the two small, generic
+  helpers this screener is built from: the first fetches a sorted weekly close series for any ticker
+  (`prices`) or index/ETF (`index_prices`) — a thin wrapper over `_weekly_close_series`; the second joins
+  two such series by week, computes `RS = numerator.close / denominator.close`, and returns only the
+  single most-recent `RSM = (RS / SMA(RS, weeks).rolling - 1) * 100` value (not a whole chart series like
+  `compute_mansfield_rs_chart` builds — this screener only ever needs "how strong is X vs. Y *right now*"
+  for ranking, not a time series to plot). Returns `None` when there aren't at least `weeks` common weeks
+  of data yet — same graceful-degradation convention as the rest of this module.
 - **`compute_sector_relative_strength(con, ref_date, ...)`** calls `get_universe_metrics(con, "SP500", ...)`
   — the SAME full, qualifying-population query that backs `all_constituents` (not just the current
-  top-quintile selection) — for company-level data. Each **sector's** momentum comes from a REAL sector ETF
-  where possible: `fetch_data.py::SECTOR_ETF_SYMBOLS` maps each GICS sector string exactly as it appears in
-  `CSPX_holdings.csv`'s `Sector` column (`"Information Technology"`, `"Financials"`, ... — 11 sectors) to
-  its SPDR Select Sector ETF ticker (`XLK`, `XLF`, ...); `fetch_data.py::update_index_prices` fetches all
-  11 the same way it already fetches `^GSPC`/`^NDX`/`^DJI` (`_download_price_rows`, full-range replace each
-  run) and writes each one into `index_prices` with **`Index_Name` = the sector NAME, not the ETF ticker**
-  — which means `compute_index_momentum(con, sector_name, ref_date)` (the exact same function used for
-  SP500/NASDAQ100/etc.) already works for a sector with zero changes to that function. When a sector's ETF
-  doesn't have data yet in `index_prices` (e.g. right after this was added, before the next full
-  `fetch_data.py` run), the sector falls back to the older substitute: the `fmc`-weighted average return of
-  the sector's own member stocks (the same float-adjusted-market-cap proxy used everywhere else in this
-  module) — same "degrade to an approximation instead of crashing" convention as `gem_manual_returns.json`'s
-  fallback to the synthetic WIG20/mWIG40 index. Every sector row carries a `"data_source"` field (`"etf"` or
-  `"synthetic_fmc_weighted"`) so this is never silent — the frontend shows a small "(przybliżenie)" note
-  next to any sector still on the fallback (`docs/js/strategy.js`, same data-provenance-transparency pattern
-  as `manual_entry`/`fmc_note` elsewhere).
+  top-quintile selection) — but **only to know which companies/sectors exist and their current price**;
+  `momentum_value` from that frame is completely ignored (pure-RS, see above). Each **sector's** RS comes
+  from a REAL sector ETF: `fetch_data.py::SECTOR_ETF_SYMBOLS` maps each GICS sector string exactly as it
+  appears in `CSPX_holdings.csv`'s `Sector` column (`"Information Technology"`, `"Financials"`, ... — 11
+  sectors) to its SPDR Select Sector ETF ticker (`XLK`, `XLF`, ...); `fetch_data.py::update_index_prices`
+  fetches all 11 the same way it already fetches `^GSPC`/`^NDX`/`^DJI` (`_download_price_rows`, full-range
+  replace each run) and writes each one into `index_prices` with **`Index_Name` = the sector NAME, not the
+  ETF ticker** — which means `_mansfield_rsm_series(con, "index_prices", "Index_Name", sector_name, ...)`
+  already works for a sector with zero new fetch code. When a sector's ETF doesn't have data yet in
+  `index_prices` (e.g. right after this was added, before the next full `fetch_data.py` run), the sector
+  gets `"data_source": "no_data"`, `rsm_vs_index_pct: None`, and an empty `top_companies` — **there is no
+  fallback to an approximated return any more** (an earlier version fell back to the `fmc`-weighted average
+  return of the sector's own member stocks, the same pattern `gem_manual_returns.json` uses for WIG20/
+  mWIG40's synthetic index; that fallback was removed once the strategy became pure-RS, since a return-based
+  approximation would no longer be "czysty RS" — see version history below). Such a sector simply sorts to
+  the bottom of the ranking instead. Every sector row still carries a `"data_source"` field (`"etf"` or
+  `"no_data"`) for transparency, same pattern as `manual_entry`/`fmc_note` elsewhere; the frontend shows a
+  small "(brak danych)" note next to a `"no_data"` sector (`docs/js/strategy.js`).
 
-  **Krok 2 and Krok 3 deliberately use TWO DIFFERENT time windows, not one shared window** — this was a
-  real bug the user caught by cross-checking against TradingView/stooq and asking "check if this RS works
-  like IBD's or Weinstein's": Krok 2 (which sector leads *right now*) originally reused
-  `compute_index_momentum`'s M-14/M-2 window (skips the most recent 2 months — the S&P Momentum Index's own
-  convention for *selecting stocks*, used everywhere else in this module) to compare each sector ETF against
-  SP500. Measured directly on real data: under M-14/M-2, Information Technology (+34.52%) barely edged out
-  Energy (+33.12%); under a plain trailing-12-month return to *today* (no skip), Energy (+43.30%) clearly
-  beat Technology (+38.57%) — **the ranking flipped**. Neither IBD's RS Rating (weights the *most recent*
-  quarter more heavily, never skips it) nor Weinstein/Mansfield RS (always current price) skip recent
-  months, so M-14/M-2 was the wrong convention for "who's leading now." Krok 2 now uses a plain
-  trailing-`GEM_LOOKBACK_MONTHS` return anchored to month-end (`_gem_month_end_anchor_dates` — the exact
-  same function and stability rationale `compute_index_returns` already uses for GEM's index-vs-index
-  race, unmodified) instead — `trailing_return_pct()`, a small local helper inside
-  `compute_sector_relative_strength`. On the same real data, this narrows Technology/Energy to a genuine
-  near-tie (+42.12%/+41.52%, a 0.6pp gap) rather than an artifact of stale data — a believable close race,
-  not a bug. **Krok 3 (a company vs. its OWN sector's average) deliberately stays on M-14/M-2** — both
-  sides of that comparison need to be on the identical window to be apples-to-apples, and M-14/M-2 is the
-  window every other per-company ranking in this app already uses (`get_universe_metrics`'s
-  `momentum_value`), so `sector_momentum_windowed` (the M-14/M-2-windowed sector baseline, kept separate
-  from Krok 2's trailing-return `display_pct`) is what `rs_vs_sector_pct` is computed against — Krok 2 and
-  Krok 3 answer genuinely different questions ("which sector to look at" vs. "which company beats its
-  peers"), so there was never a requirement that they share one window.
+  Krok 3's `top_companies` is computed for **every** sector, not just the strongest one — see the Frontend
+  `strategy.html` bullet below for why: the user wanted to browse an alternative sector when the top-ranked
+  one's own leaders aren't in a good stage that week. For each company in a sector (that has ETF data),
+  `rsm_vs_sector_pct` is the current Mansfield RSM of that company's price against its OWN sector's ETF
+  price (52-week window, same as Krok 2 but with a different denominator) — companies sorted descending,
+  top `SECTOR_STRATEGY_TOP_PERCENT` (10%) kept, `rank_in_sector` assigned.
 
-  **Version history matters here too**: the FIRST version of this screener used ONLY the `fmc`-weighted
-  synthetic average (no sector ETF at all) — the same reasoning `_compute_synthetic_equal_weight_index`
-  uses for WIG20/mWIG40 (build an aggregate from already-fetched constituent prices instead of fetching a
-  new instrument). The user pushed back directly ("Przecież potrzebujemy chyba ETF na sektor?"), pointing
-  out this is exactly the same kind of approximation-vs-real-instrument gap already documented (and already
-  bitten once) for WIG20/mWIG40's own synthetic index under Global Equity Momentum above. Since real SPDR
-  sector ETFs are liquid, standard, and trivially fetchable via the exact same `_download_price_rows`/
-  `index_prices`/`compute_index_momentum` machinery already used for the 5 main universes, the fix was to
-  fetch them for real — keeping the synthetic average only as a graceful fallback, not the primary source.
-  The M-14/M-2-for-Krok-2 mistake above shipped in that same fix and was only caught afterward, once real
-  ETF data made the two conventions' numbers actually divergent enough to notice.
+  **Version history matters here**: this function went through two prior designs before landing on pure
+  RS. The FIRST version used the `fmc`-weighted synthetic average as the sector's whole basis (no ETF at
+  all) — the user pushed back ("Przecież potrzebujemy chyba ETF na sektor?"), so real SPDR sector ETFs
+  were fetched for real, keeping the synthetic average only as a fallback. The SECOND version ranked Krok 2
+  by a **trailing-return** (`compute_index_momentum`'s M-14/M-2 window, then — after a real bug where that
+  window flipped Technology/Energy's ranking vs. what TradingView/stooq showed — a plain trailing-12-month
+  return anchored to month-end, the same convention as Global Equity Momentum) and ranked Krok 3 by each
+  company's own `momentum_value` (M-14/M-2) minus its sector's windowed return. That whole design — return
+  differences on two different windows for the two steps — was replaced by the CURRENT, THIRD design (this
+  section) once the user clarified the strategy was never about momentum/return spreads at all: "siłę
+  sektora mierzysz przez mansfield RS do indeksu, potem to samo robisz dla akcji ale odnośnikiem nie jest
+  indeks tylko sektor. Wszystko to mansfield RS. Zero momentum. Ta strategia bazuje na czystym RS" — both
+  steps are now the identical Mansfield oscillator formula with a swapped denominator, not two different,
+  return-based computations on two different windows. This also simplified away the earlier "Krok 2 and
+  Krok 3 need two different windows to answer two different questions" reasoning entirely: both steps now
+  share one formula and one window (`SECTOR_STRATEGY_RSM_WEEKS`), so there's no window mismatch to reason
+  about any more.
 - **`export_sector_strategy(con, ref_date, docs_data_dir, ...)`** combines both into
   `docs/data/sector_strategy.json` (`trend`/`sector_rs`/`note`) — called from `run_query.py`'s normal,
   full (weekly) `main()` path alongside `export_relative_strength`/`export_global_equity_momentum`, so it
-  refreshes on the same cadence as everything else (see Pipeline architecture above). Each entry in
-  `sector_rs.sectors` carries its OWN `top_companies` list (top 10% of THAT sector, not just the strongest
-  one — see the Frontend `strategy.html` bullet below for why: the user wanted to browse an alternative
-  sector when the top-ranked one's own leaders aren't in a good stage that week). `top_companies`
-  intentionally carries only ticker/price/momentum/RS numbers — it does NOT duplicate `weekly_chart`/
+  refreshes on the same cadence as everything else (see Pipeline architecture above). `top_companies`
+  intentionally carries only ticker/price/RS numbers — it does NOT duplicate `weekly_chart`/
   `ttm_squeeze_chart` (unlike `export_relative_strength`'s `leaders`, which aren't in `FULL_COVERAGE_
   UNIVERSES` and so need those charts attached explicitly): since SP500 already exports full per-company
   chart data via `all_constituents` in `docs/data/sp500.json`, the frontend (`docs/js/strategy.js`) joins
@@ -1342,18 +1356,21 @@ flex child (no `.topbar-left` wrapper there).
   plus SP500's close/SMA200/SMA40W as stat-cards and a small Chart.js line chart (toggle button pair,
   `js/chart-render.js`-independent — this page doesn't load that file, it's a much smaller, page-local
   chart, same `new Chart({type:"line",...})` pattern `rebalance.js::renderEquityCurve` already uses).
-  **Krok 2** is a plain, but CLICKABLE, table of SP500's sectors ranked by RS vs. the index
-  (`sector_rs.sectors`) — the strongest one highlighted 🏆 and pre-selected via the existing
-  `.row-selected` class, but this is only a SUGGESTION, exactly the same "🏆 = suggestion, not a forced
-  pick" philosophy as GEM's Krok 1 universe picker (`rebalance.js::renderGemWidget`): clicking ANY row sets
-  module-level `browsedSector` and re-renders both Krok 2 (to move the highlight) and Krok 3. This exists
-  because the user explicitly asked for it — the strongest sector's own leaders aren't always sitting in a
-  good Weinstein stage that particular week, so being able to check a second- or third-place sector that's
-  also performing well is a real, needed alternative, not a nice-to-have. `currentSectorRow()` resolves
-  which sector row Krok 3 should read (`browsedSector`, falling back to `strongest_sector` before any click)
-  — a sector still running on the synthetic `fmc`-weighted fallback (see `compute_sector_relative_strength`
-  above) gets a small "(przybliżenie)" note next to its name (`sectorRowHtml()`'s `sourceNote`), the same
-  data-provenance-transparency convention as the GEM widget's "(ręcznie)" label for `manual_entry`.
+  **Krok 2** is a plain, but CLICKABLE, table of SP500's sectors ranked by Mansfield RS vs. the index
+  (`sector_rs.sectors`, `rsm_vs_index_pct` — pure RS, zero momentum, see `compute_sector_relative_strength`
+  above) — the strongest one highlighted 🏆 and pre-selected via the existing `.row-selected` class, but
+  this is only a SUGGESTION, exactly the same "🏆 = suggestion, not a forced pick" philosophy as GEM's
+  Krok 1 universe picker (`rebalance.js::renderGemWidget`): clicking ANY row sets module-level
+  `browsedSector` and re-renders both Krok 2 (to move the highlight) and Krok 3. This exists because the
+  user explicitly asked for it — the strongest sector's own leaders aren't always sitting in a good
+  Weinstein stage that particular week, so being able to check a second- or third-place sector that's also
+  performing well is a real, needed alternative, not a nice-to-have. `currentSectorRow()` resolves which
+  sector row Krok 3 should read (`browsedSector`, falling back to `strongest_sector` before any click) — a
+  sector with no ETF data yet (`data_source: "no_data"`, `rsm_vs_index_pct: null` — see
+  `compute_sector_relative_strength` above; there is no return-based fallback any more now that the
+  strategy is pure RS) gets a small "(brak danych)" note next to its name (`sectorRowHtml()`'s
+  `sourceNote`), the same data-provenance-transparency convention as the GEM widget's "(ręcznie)" label for
+  `manual_entry`.
   **Krok 3** is the top-10%-of-*that*-sector company list — `compute_sector_relative_strength` computes
   `top_companies` for EVERY sector now, not just the strongest one (a `"top_companies"` field nested inside
   each entry of `sector_rs.sectors`, rather than one flat top-level list) specifically so Krok 2's click

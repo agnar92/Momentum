@@ -60,7 +60,7 @@
 
     <div class="panel-card" id="sectorCard">
         <h3>Krok 2 — Siła sektorów SP500 <span class="ref-date-note" id="sectorMeta"></span></h3>
-        <p class="panel-hint">Siła relatywna każdego sektora SP500 wobec samego indeksu (zwrot sektorowego ETF-u SPDR minus zwrot indeksu, ten sam sposób co Global Equity Momentum) — najsilniejszy sektor jest podświetlony 🏆, ale to tylko podpowiedź: kliknij dowolny wiersz, żeby przeglądać JEGO spółki w Kroku 3 — liderzy najsilniejszego sektora nie zawsze akurat są w dobrym etapie Weinsteina, więc warto sprawdzić alternatywę wśród innych mocnych sektorów.</p>
+        <p class="panel-hint">Siła relatywna każdego sektora SP500 wobec samego indeksu — czysty oscylator Mansfield RS (RS = cena sektorowego ETF-u SPDR / cena SP500, wygładzone 52-tygodniową średnią, zero momentum/zwrotu) — najsilniejszy sektor jest podświetlony 🏆, ale to tylko podpowiedź: kliknij dowolny wiersz, żeby przeglądać JEGO spółki w Kroku 3 — liderzy najsilniejszego sektora nie zawsze akurat są w dobrym etapie Weinsteina, więc warto sprawdzić alternatywę wśród innych mocnych sektorów.</p>
         <div class="table-wrap">
         <table class="momentum-table" id="sectorTable">
             <thead>
@@ -68,8 +68,7 @@
                     <th>#</th>
                     <th>Sektor</th>
                     <th>Spółek</th>
-                    <th>Momentum sektora</th>
-                    <th>RS vs SP500</th>
+                    <th>Mansfield RS vs SP500</th>
                 </tr>
             </thead>
             <tbody id="sectorTableBody"></tbody>
@@ -79,7 +78,7 @@
 
     <div class="panel-card" id="leadersCard">
         <h3>Krok 3 — Liderzy przeglądanego sektora <span id="leadersSectorLabel"></span> <span class="ref-date-note" id="leadersMeta"></span></h3>
-        <p class="panel-hint">Top 10% spółek przeglądanego sektora (Krok 2 — domyślnie najsilniejszy, kliknij inny wiersz, żeby zmienić) wg siły relatywnej do ŚREDNIEJ tego sektora — z Etapem Weinsteina i statusem TTM Squeeze, do dalszej, ręcznej oceny timingu wejścia. Kliknij "📈", żeby otworzyć pełny wykres spółki.</p>
+        <p class="panel-hint">Top 10% spółek przeglądanego sektora (Krok 2 — domyślnie najsilniejszy, kliknij inny wiersz, żeby zmienić) wg tego samego oscylatora Mansfield RS, tylko z mianownikiem = cena TEGO sektora zamiast SP500 — z Etapem Weinsteina i statusem TTM Squeeze, do dalszej, ręcznej oceny timingu wejścia. Kliknij "📈", żeby otworzyć pełny wykres spółki.</p>
         <div class="table-wrap">
         <table class="momentum-table" id="leadersTable">
             <thead>
@@ -87,8 +86,7 @@
                     <th>#</th>
                     <th>Ticker</th>
                     <th>Cena</th>
-                    <th>Momentum</th>
-                    <th>RS vs sektora</th>
+                    <th>Mansfield RS vs sektora</th>
                     <th>Etap</th>
                     <th>TTM Squeeze</th>
                     <th class="chart-col">Wykres</th>

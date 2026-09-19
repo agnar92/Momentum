@@ -1,15 +1,18 @@
 
 // ============================================================
-// strategy.html — testowanie strategii wieloetapowej (na życzenie
-// użytkownika): (1) filtr trendu SP500 (SMA200 dzienna LUB SMA40 tygodniowa —
-// patrz compute_sp500_trend_filter w run_query.py), (2) siła relatywna
-// sektorów SP500 wobec indeksu, (3) w najsilniejszym sektorze — siła
-// relatywna spółek wobec ŚREDNIEJ sektora, top 10% (patrz
-// compute_sector_relative_strength/export_sector_strategy w run_query.py,
-// docs/data/sector_strategy.json). Strona jest CZYSTO informacyjna/do
-// przeglądu — Etap Weinsteina i TTM Squeeze dla wybranych liderów NIE są tu
-// liczone ponownie, tylko czytane z już wyeksportowanego docs/data/sp500.json
-// (all_constituents), tak jak w reszcie dashboardu.
+// strategy.html — testowanie strategii wieloetapowej opartej na CZYSTYM RS
+// (zero momentum/trailing-return, na wyrazne życzenie użytkownika): (1) filtr
+// trendu SP500 (SMA200 dzienna LUB SMA40 tygodniowa — patrz
+// compute_sp500_trend_filter w run_query.py), (2) siła relatywna sektorów
+// SP500 = oscylator Mansfield RS (RS = cena sektorowego ETF-u SPDR / cena
+// SP500, RSM = (RS/SMA(RS,52 tyg.)-1)*100 — 52-tygodniowe, klasyczne roczne
+// okno), (3) w KAŻDYM sektorze — DOKŁADNIE ten sam oscylator, ale mianownikiem
+// RS jest teraz cena sektora zamiast SP500 (RS = cena_spółki / cena_sektora),
+// top 10% (patrz compute_sector_relative_strength/export_sector_strategy w
+// run_query.py, docs/data/sector_strategy.json). Strona jest CZYSTO
+// informacyjna/do przeglądu — Etap Weinsteina i TTM Squeeze dla wybranych
+// liderów NIE są tu liczone ponownie, tylko czytane z już wyeksportowanego
+// docs/data/sp500.json (all_constituents), tak jak w reszcie dashboardu.
 // ============================================================
 
 // UNIVERSES/formatPrice/stageCellHtml zyja w js/shared.js, showToast/
@@ -189,18 +192,20 @@ function initTrendChartToggle() {
 
 function sectorRowHtml(s, position) {
     // data_source: "etf" (prawdziwy sektorowy ETF SPDR, patrz SECTOR_ETF_SYMBOLS
-    // w fetch_data.py) albo "synthetic_fmc_weighted" (starszy substytut, gdy ETF
-    // nie ma jeszcze danych w index_prices) — ten sam "(przybliżenie)" wzorzec
-    // przejrzystości co "(ręcznie)" dla GEM-owego manual_entry w rebalance.js.
-    const sourceNote = s.data_source === "synthetic_fmc_weighted"
-        ? ` <span style="color:var(--text-faint)" title="Brak jeszcze danych sektorowego ETF-u w index_prices — przybliżenie: średnia zwrotów spółek sektora ważona kapitalizacją.">(przybliżenie)</span>`
+    // w fetch_data.py) albo "no_data" (ETF jeszcze nie pobrany — bez wlasnego
+    // szeregu cenowego nie ma z czego policzyc RS, WIECEJ fallbacku na
+    // przyblizenie momentum/trailing-return nie ma, bo to juz nie bylby
+    // "czysty RS"; sektor po prostu ladu je na koncu rankingu, rsmPct/
+    // top_companies puste).
+    const noData = s.data_source === "no_data" || s.rsm_vs_index_pct == null;
+    const sourceNote = noData
+        ? ` <span style="color:var(--text-faint)" title="Brak jeszcze danych sektorowego ETF-u w index_prices — nie da się policzyć RS dla tego sektora.">(brak danych)</span>`
         : "";
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td>${s.sector}${s.sector === (strategyData.sector_rs && strategyData.sector_rs.strongest_sector) ? " 🏆" : ""}${sourceNote}</td>
         <td>${s.count}</td>
-        <td class="${s.momentum_pct >= 0 ? "positive" : "negative"}">${s.momentum_pct.toFixed(2)}%</td>
-        <td class="${s.rs_vs_index_pct >= 0 ? "positive" : "negative"}">${s.rs_vs_index_pct >= 0 ? "+" : ""}${s.rs_vs_index_pct.toFixed(2)}%</td>
+        <td>${noData ? "—" : `<span class="${s.rsm_vs_index_pct >= 0 ? "positive" : "negative"}">${s.rsm_vs_index_pct >= 0 ? "+" : ""}${s.rsm_vs_index_pct.toFixed(2)}</span>`}</td>
     `;
 }
 
@@ -215,10 +220,10 @@ function renderSectorTable() {
         metaEl,
         allRows: rows,
         compareFn: () => 0, // juz posortowane malejaco po RS w backendzie (run_query.py)
-        colspan: 5,
+        colspan: 4,
         emptyAllMsg: "Brak danych sektorowych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Brak danych.",
-        metaText: () => sectorRs ? `Indeks SP500: ${sectorRs.index_return_pct >= 0 ? "+" : ""}${sectorRs.index_return_pct.toFixed(2)}% (${sectorRs.momentum_window}) · kliknij wiersz, żeby przeglądać jego spółki w Kroku 3` : "",
+        metaText: () => sectorRs ? `Ranking wg oscylatora Mansfield RS (${sectorRs.rsm_weeks} tyg.) wobec SP500 · kliknij wiersz, żeby przeglądać jego spółki w Kroku 3` : "",
         isSelected: s => browsed && s.sector === browsed.sector,
         rowHtml: (s, i) => sectorRowHtml(s, i + 1),
         // Klik w dowolny sektor przelacza, ktorego spolki pokazuje Krok 3 —
@@ -239,8 +244,7 @@ function leaderRowHtml(c, position) {
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${c.ticker}</td>
         <td>$${c.price.toFixed(2)}</td>
-        <td class="${c.momentum_pct >= 0 ? "positive" : "negative"}">${c.momentum_pct.toFixed(2)}%</td>
-        <td class="${c.rs_vs_sector_pct >= 0 ? "positive" : "negative"}">${c.rs_vs_sector_pct >= 0 ? "+" : ""}${c.rs_vs_sector_pct.toFixed(2)}%</td>
+        <td class="${c.rsm_vs_sector_pct >= 0 ? "positive" : "negative"}">${c.rsm_vs_sector_pct >= 0 ? "+" : ""}${c.rsm_vs_sector_pct.toFixed(2)}</td>
         <td>${stageCellHtml(stage)}</td>
         <td>${squeezeStatusHtml(squeeze)}</td>
         <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
@@ -272,7 +276,7 @@ function renderLeadersTable() {
         metaEl: document.getElementById("leadersMeta"),
         allRows: rows,
         compareFn: () => 0, // juz posortowane malejaco po RS vs sektora w backendzie
-        colspan: 8,
+        colspan: 7,
         emptyAllMsg: "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Brak danych.",
         metaText: () => strategyData ? `Rebalans: ${strategyData.ref_date} · top ${rows.length} spółek` : "",
