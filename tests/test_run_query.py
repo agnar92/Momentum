@@ -44,6 +44,7 @@ from run_query import (
     compute_sector_relative_strength,
     SECTOR_STRATEGY_TOP_PERCENT,
     SECTOR_STRATEGY_RSM_WEEKS,
+    SECTOR_STRATEGY_TOP_RS_N,
     _build_full_universe_records,
     _compute_weinstein_stage_series,
     _load_gem_manual_returns,
@@ -1859,6 +1860,14 @@ class TestComputeSectorRelativeStrength:
             assert s["top_companies"] == []
         assert out["strongest_sector"] is None
         assert out["top_percent"] == SECTOR_STRATEGY_TOP_PERCENT
+        # top_rs_companies (spolka wprost vs SP500, bez podzialu na sektory) NIE
+        # potrzebuje sektorowego ETF-u wcale, wiec dziala nawet gdy oba sektory
+        # sa "no_data" powyzej — TFAST rosnie najszybciej (slope 0.40), UONE
+        # najwolniej (0.01), stad ta kolejnosc.
+        assert [c["ticker"] for c in out["top_rs_companies"]] == ["TFAST", "TMID", "TSLOW", "UONE"]
+        assert out["top_rs_companies"][0]["rank"] == 1
+        assert out["top_rs_companies"][0]["sector"] == "Tech"
+        assert out["top_rs_companies"][0]["rsm_vs_index_pct"] > 0
 
     def test_uses_real_sector_etf_and_ranks_by_mansfield_rs_not_return(self):
         # Gdy fetch_data.py juz pobral sektorowy ETF (Index_Name = nazwa sektora
@@ -1893,6 +1902,13 @@ class TestComputeSectorRelativeStrength:
         # najsilniejszego — zeby mozna bylo przegladac alternatywny sektor.
         utilities = sectors_by_name["Utilities"]
         assert [c["ticker"] for c in utilities["top_companies"]] == ["UONE"]
+
+        # top_rs_companies jest niezalezne od tego, ktory sektor wygrywa Krok 2 —
+        # to zawsze spolka wprost vs SP500, wiec kolejnosc jest ta sama jak w
+        # tescie bez danych ETF powyzej (max SECTOR_STRATEGY_TOP_RS_N wpisow).
+        assert [c["ticker"] for c in out["top_rs_companies"]] == ["TFAST", "TMID", "TSLOW", "UONE"]
+        assert len(out["top_rs_companies"]) <= SECTOR_STRATEGY_TOP_RS_N
+        assert [c["rank"] for c in out["top_rs_companies"]] == [1, 2, 3, 4]
 
     def test_missing_price_data_returns_none(self):
         con = make_gem_con()

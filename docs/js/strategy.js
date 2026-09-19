@@ -8,7 +8,10 @@
 // SP500, RSM = (RS/SMA(RS,52 tyg.)-1)*100 — 52-tygodniowe, klasyczne roczne
 // okno), (3) w KAŻDYM sektorze — DOKŁADNIE ten sam oscylator, ale mianownikiem
 // RS jest teraz cena sektora zamiast SP500 (RS = cena_spółki / cena_sektora),
-// top 10% (patrz compute_sector_relative_strength/export_sector_strategy w
+// top 10%, (4) dodatkowo top 10 spółek CAŁEGO SP500 wg tego samego oscylatora,
+// ale ZAWSZE wobec SP500 (bez podziału na sektory, `top_rs_companies`,
+// niezależne od tego, który sektor jest akurat przeglądany w Kroku 2/3) —
+// (patrz compute_sector_relative_strength/export_sector_strategy w
 // run_query.py, docs/data/sector_strategy.json). Strona jest CZYSTO
 // informacyjna/do przeglądu — Etap Weinsteina i TTM Squeeze dla wybranych
 // liderów NIE są tu liczone ponownie, tylko czytane z już wyeksportowanego
@@ -294,6 +297,60 @@ function renderLeadersTable() {
     });
 }
 
+function topRsRowHtml(c, position) {
+    const stage = c._stage;
+    const squeeze = squeezeStatusFor(c._sp500Record || {});
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${c.ticker}</td>
+        <td>${c.sector}</td>
+        <td>$${c.price.toFixed(2)}</td>
+        <td class="${c.rsm_vs_index_pct >= 0 ? "positive" : "negative"}">${c.rsm_vs_index_pct >= 0 ? "+" : ""}${c.rsm_vs_index_pct.toFixed(2)}</td>
+        <td>${stageCellHtml(stage)}</td>
+        <td>${squeezeStatusHtml(squeeze)}</td>
+        <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
+    `;
+}
+
+// Krok 4 — top SECTOR_STRATEGY_TOP_RS_N (10, patrz run_query.py) spolek CALEGO
+// SP500 wg tego samego oscylatora Mansfielda, ale ZAWSZE wobec SP500 (nie
+// przegladanego sektora) — na wyrazne zyczenie uzytkownika ("Dodaj jeszcze
+// top 10 spółek samego RS z sp500 bez sektorów"). Niezalezne od browsedSector
+// — ta lista sie NIE zmienia, kiedy uzytkownik klika inny wiersz w Kroku 2.
+function renderTopRsTable() {
+    const sectorRs = strategyData && strategyData.sector_rs;
+    const byTicker = sp500ByTicker();
+    const rows = ((sectorRs && sectorRs.top_rs_companies) || []).map(c => {
+        const rec = byTicker[c.ticker];
+        return Object.assign({}, c, {
+            _stage: rec && rec.weekly_chart && rec.weekly_chart.current_stage,
+            _sp500Record: rec,
+        });
+    });
+
+    renderScreenerTable({
+        tbody: document.getElementById("topRsTableBody"),
+        metaEl: document.getElementById("topRsMeta"),
+        allRows: rows,
+        compareFn: () => 0, // juz posortowane malejaco po RS vs SP500 w backendzie
+        colspan: 8,
+        emptyAllMsg: "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
+        emptyFilteredMsg: "Brak danych.",
+        metaText: () => strategyData ? `Rebalans: ${strategyData.ref_date} · top ${rows.length} spółek SP500` : "",
+        rowHtml: (c, i) => topRsRowHtml(c, i + 1),
+        afterRender: (tbody) => {
+            tbody.querySelectorAll(".chart-row-btn").forEach(btn => {
+                btn.addEventListener("click", () => {
+                    const params = new URLSearchParams({
+                        ticker: btn.dataset.ticker, universe: "SP500", back: "strategy.html",
+                    });
+                    window.location.href = `chart.html?${params.toString()}`;
+                });
+            });
+        },
+    });
+}
+
 function renderAll() {
     // Tabele sektorow/liderow NIE zaleza od Chart.js — renderowane PRZED
     // renderTrend() (ktora na koncu tworzy wykres Chart.js), zeby ewentualny
@@ -302,6 +359,7 @@ function renderAll() {
     // Chart.js na koncu, po tabelach).
     renderSectorTable();
     renderLeadersTable();
+    renderTopRsTable();
     renderTrend();
 }
 

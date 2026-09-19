@@ -130,6 +130,7 @@ SECTOR_STRATEGY_TOP_PERCENT = 0.10  # top 10% spolek najsilniejszego sektora wg 
 # pojedynczej spolki: ta strategia jest z zalozenia dlugoterminowa (rotacja sektorowa),
 # niezalezna od tamtych krotszych horyzontow (na wyrazne zyczenie uzytkownika).
 SECTOR_STRATEGY_RSM_WEEKS = 52
+SECTOR_STRATEGY_TOP_RS_N = 10  # top N spolek SP500 wg czystego RS wobec SAMEGO SP500, bez podzialu na sektory
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
@@ -2303,6 +2304,20 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     przegladac alternatywny, tez dobrze radzacy sobie sektor. Top 10%
     (SECTOR_STRATEGY_TOP_PERCENT) wg biezacej 'rsm_vs_sector_pct'.
 
+    'top_rs_companies' (top-level, nie zagniezdzone w 'sectors') to DODATKOWA,
+    trzecia lista — top SECTOR_STRATEGY_TOP_RS_N (10) spolek CALEGO SP500 wg
+    tego samego oscylatora Mansfielda, ale mianownikiem jest zawsze SP500,
+    NIGDY sektor — "czysty RS bez podzialu na sektory", na wyrazne zyczenie
+    uzytkownika ("Dodaj jeszcze top 10 spółek samego RS z sp500 bez
+    sektorów"). To NIE jest to samo co zsumowanie/wyplaszczenie 'top_companies'
+    ze wszystkich sektorow — te dwa rankingi licza sie na INNYCH mianownikach
+    (spolka/sektor dla Kroku 3, spolka/SP500 tutaj), wiec kolejnosc moze
+    wyjsc inna: spolka moze byc liderem swojego (slabego) sektora, a mimo to
+    nie zalapac sie do tego ogolnego top 10 wzgledem calego rynku, i odwrotnie.
+    Kazda spolka SP500 trafia do tej puli niezaleznie od tego, czy jej wlasny
+    sektor ma juz dane ETF w index_prices (patrz nizej) — ten ranking nigdy
+    nie potrzebuje sektorowego szeregu cenowego, tylko ceny spolki i SP500.
+
     Gdy dany sektorowy ETF NIE MA jeszcze wierszy w index_prices (np. przed
     pierwszym pelnym uruchomieniem fetch_data.py po dodaniu SECTOR_ETF_SYMBOLS),
     sektor dostaje 'data_source': 'no_data', 'rsm_vs_index_pct': None i pusta
@@ -2312,7 +2327,9 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     wersji) fallbacku na syntetyczna, wazona fmc_etf srednia zwrotow — to
     bylby powrot do momentum/trailing-return, ktorego ta funkcja ma unikac.
     Taki sektor po prostu ladu je na koncu rankingu, zamiast probowac przyblizac
-    liczbe, ktora juz nie bylaby "czystym RS"."""
+    liczbe, ktora juz nie bylaby "czystym RS". (Spolki tego sektora nadal moga
+    trafic do 'top_rs_companies' powyzej — to porownanie nie potrzebuje
+    sektorowego ETF-u wcale.)"""
     df = get_universe_metrics(con, "SP500", ref_date, min_trading_days, max_staleness_days)
     if df.empty:
         return None
@@ -2325,6 +2342,7 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
         return None
 
     sector_rows = []
+    all_company_rsm = []  # "czysty RS bez sektorow" — kazda spolka vs SAM SP500, patrz docstring
     for sector, g in df.groupby("Sector"):
         sector_series = _mansfield_rsm_series(con, "index_prices", "Index_Name", sector, extended_start, ref_date)
         if sector_series is not None:
@@ -2334,22 +2352,36 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
             data_source = "no_data"
             sector_rsm_pct = None
 
-        top_companies = []
-        if sector_series is not None:
-            company_rows = []
-            for _, r in g.iterrows():
-                ticker = r["Ticker"]
-                stock_series = _mansfield_rsm_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
-                rsm_vs_sector = _mansfield_rsm_current_value(stock_series, sector_series)
-                if rsm_vs_sector is None:
-                    continue
-                company_rows.append({
+        company_rows = []
+        for _, r in g.iterrows():
+            ticker = r["Ticker"]
+            # Jedno pobranie tygodniowej serii spolki, uzywane i dla Kroku 3
+            # (vs sektor, ponizej) i dla 'top_rs_companies' (vs SP500) —
+            # zaden dodatkowy zapytania nie sa potrzebne dla drugiego rankingu.
+            stock_series = _mansfield_rsm_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+
+            rsm_vs_index = _mansfield_rsm_current_value(stock_series, sp500_series)
+            if rsm_vs_index is not None:
+                all_company_rsm.append({
                     "ticker": ticker,
+                    "sector": sector,
                     "price": round(float(r["price_now"]), 2),
-                    "rsm_vs_sector_pct": round(rsm_vs_sector, 2),
+                    "rsm_vs_index_pct": round(rsm_vs_index, 2),
                 })
+
+            if sector_series is not None:
+                rsm_vs_sector = _mansfield_rsm_current_value(stock_series, sector_series)
+                if rsm_vs_sector is not None:
+                    company_rows.append({
+                        "ticker": ticker,
+                        "price": round(float(r["price_now"]), 2),
+                        "rsm_vs_sector_pct": round(rsm_vs_sector, 2),
+                    })
+
+        top_companies = []
+        if company_rows:
             company_rows.sort(key=lambda c: c["rsm_vs_sector_pct"], reverse=True)
-            top_n = max(1, int(np.ceil(len(company_rows) * SECTOR_STRATEGY_TOP_PERCENT))) if company_rows else 0
+            top_n = max(1, int(np.ceil(len(company_rows) * SECTOR_STRATEGY_TOP_PERCENT)))
             top_companies = company_rows[:top_n]
             for i, row in enumerate(top_companies):
                 row["rank_in_sector"] = i + 1
@@ -2370,11 +2402,17 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     ranked = [r for r in sector_rows if r["rsm_vs_index_pct"] is not None]
     strongest_sector = ranked[0]["sector"] if ranked else None
 
+    all_company_rsm.sort(key=lambda c: c["rsm_vs_index_pct"], reverse=True)
+    top_rs_companies = all_company_rsm[:SECTOR_STRATEGY_TOP_RS_N]
+    for i, row in enumerate(top_rs_companies):
+        row["rank"] = i + 1
+
     return {
         "rsm_weeks": SECTOR_STRATEGY_RSM_WEEKS,
         "sectors": sector_rows,
         "strongest_sector": strongest_sector,
         "top_percent": SECTOR_STRATEGY_TOP_PERCENT,
+        "top_rs_companies": top_rs_companies,
     }
 
 
@@ -2402,7 +2440,9 @@ def export_sector_strategy(con, ref_date, docs_data_dir, min_trading_days, max_s
                  "bylby czysty RS); (3) w KAZDYM sektorze (nie tylko najsilniejszym, patrz klikalny Krok 2 "
                  "na froncie) — DOKLADNIE ten sam oscylator Mansfielda, ale mianownikiem RS jest teraz "
                  "cena TEGO sektorowego ETF-u zamiast SP500 (RS = cena_spolki / cena_sektora), top 10% "
-                 "wg biezacej wartosci. Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — "
+                 "wg biezacej wartosci; (4) dodatkowo top 10 spolek CALEGO SP500 wg tego samego oscylatora, "
+                 "ale ZAWSZE mianownikiem SP500 (nie sektora) — 'top_rs_companies', czysty RS bez podzialu "
+                 "na sektory. Stage/TTM Squeeze dla top_companies/top_rs_companies NIE sa tu duplikowane — "
                  "czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do "
                  "testowania strategii, NIE porada inwestycyjna."),
     }
