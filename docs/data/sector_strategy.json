@@ -1,19 +1,14 @@
 {
-  "ref_date": "2026-09-16",
+  "ref_date": "2026-09-17",
   "trend": {
-    "date": "2026-09-16",
-    "close": 7551.81,
-    "sma200": 7174.92,
+    "date": "2026-09-17",
+    "close": 7637.76,
+    "sma200": 7178.86,
     "above_sma200": true,
-    "sma40w": 7197.87,
+    "sma40w": 7200.02,
     "above_sma40w": true,
     "in_growth_phase": true,
     "daily_series": [
-      {
-        "date": "2025-06-09",
-        "close": 6005.88,
-        "sma200": null
-      },
       {
         "date": "2025-06-10",
         "close": 6038.81,
@@ -1608,6 +1603,11 @@
         "date": "2026-09-16",
         "close": 7551.81,
         "sma200": 7174.92
+      },
+      {
+        "date": "2026-09-17",
+        "close": 7637.76,
+        "sma200": 7178.86
       }
     ],
     "weekly_series": [
@@ -2103,101 +2103,101 @@
       },
       {
         "date": "2026-09-14",
-        "close": 7551.81,
-        "sma40": 7197.87
+        "close": 7637.76,
+        "sma40": 7200.02
       }
     ]
   },
   "sector_rs": {
-    "index_return_pct": 20.28,
-    "momentum_window": "12M",
+    "index_return_pct": 18.98,
+    "momentum_window": "12M (trailing, jak GEM)",
     "sectors": [
       {
         "sector": "Information Technology",
         "count": 72,
-        "momentum_pct": 110.07,
-        "rs_vs_index_pct": 89.79,
-        "data_source": "synthetic_fmc_weighted",
+        "momentum_pct": 42.12,
+        "rs_vs_index_pct": 23.14,
+        "data_source": "etf",
         "rank": 1
-      },
-      {
-        "sector": "Communication",
-        "count": 24,
-        "momentum_pct": 50.74,
-        "rs_vs_index_pct": 30.46,
-        "data_source": "synthetic_fmc_weighted",
-        "rank": 2
       },
       {
         "sector": "Energy",
         "count": 21,
-        "momentum_pct": 35.79,
-        "rs_vs_index_pct": 15.51,
-        "data_source": "synthetic_fmc_weighted",
+        "momentum_pct": 41.52,
+        "rs_vs_index_pct": 22.54,
+        "data_source": "etf",
+        "rank": 2
+      },
+      {
+        "sector": "Health Care",
+        "count": 59,
+        "momentum_pct": 24.09,
+        "rs_vs_index_pct": 5.11,
+        "data_source": "etf",
         "rank": 3
       },
       {
         "sector": "Industrials",
         "count": 81,
-        "momentum_pct": 31.57,
-        "rs_vs_index_pct": 11.29,
-        "data_source": "synthetic_fmc_weighted",
+        "momentum_pct": 15.21,
+        "rs_vs_index_pct": -3.77,
+        "data_source": "etf",
         "rank": 4
-      },
-      {
-        "sector": "Health Care",
-        "count": 59,
-        "momentum_pct": 28.56,
-        "rs_vs_index_pct": 8.28,
-        "data_source": "synthetic_fmc_weighted",
-        "rank": 5
       },
       {
         "sector": "Materials",
         "count": 25,
-        "momentum_pct": 20.7,
-        "rs_vs_index_pct": 0.42,
-        "data_source": "synthetic_fmc_weighted",
-        "rank": 6
-      },
-      {
-        "sector": "Real Estate",
-        "count": 30,
-        "momentum_pct": 18.02,
-        "rs_vs_index_pct": -2.26,
-        "data_source": "synthetic_fmc_weighted",
-        "rank": 7
+        "momentum_pct": 14.2,
+        "rs_vs_index_pct": -4.78,
+        "data_source": "etf",
+        "rank": 5
       },
       {
         "sector": "Financials",
         "count": 76,
-        "momentum_pct": 14.21,
-        "rs_vs_index_pct": -6.07,
-        "data_source": "synthetic_fmc_weighted",
-        "rank": 8
-      },
-      {
-        "sector": "Utilities",
-        "count": 31,
-        "momentum_pct": 12.74,
-        "rs_vs_index_pct": -7.54,
-        "data_source": "synthetic_fmc_weighted",
-        "rank": 9
-      },
-      {
-        "sector": "Consumer Discretionary",
-        "count": 47,
-        "momentum_pct": 11.12,
-        "rs_vs_index_pct": -9.16,
-        "data_source": "synthetic_fmc_weighted",
-        "rank": 10
+        "momentum_pct": 6.89,
+        "rs_vs_index_pct": -12.09,
+        "data_source": "etf",
+        "rank": 6
       },
       {
         "sector": "Consumer Staples",
         "count": 34,
-        "momentum_pct": 10.4,
-        "rs_vs_index_pct": -9.88,
-        "data_source": "synthetic_fmc_weighted",
+        "momentum_pct": 5.2,
+        "rs_vs_index_pct": -13.78,
+        "data_source": "etf",
+        "rank": 7
+      },
+      {
+        "sector": "Real Estate",
+        "count": 30,
+        "momentum_pct": 4.25,
+        "rs_vs_index_pct": -14.73,
+        "data_source": "etf",
+        "rank": 8
+      },
+      {
+        "sector": "Consumer Discretionary",
+        "count": 47,
+        "momentum_pct": 0.62,
+        "rs_vs_index_pct": -18.36,
+        "data_source": "etf",
+        "rank": 9
+      },
+      {
+        "sector": "Utilities",
+        "count": 31,
+        "momentum_pct": 0.17,
+        "rs_vs_index_pct": -18.81,
+        "data_source": "etf",
+        "rank": 10
+      },
+      {
+        "sector": "Communication",
+        "count": 24,
+        "momentum_pct": 0.06,
+        "rs_vs_index_pct": -18.92,
+        "data_source": "etf",
         "rank": 11
       }
     ],
@@ -2207,60 +2207,60 @@
       {
         "rank_in_sector": 1,
         "ticker": "SNDK",
-        "price": 1519.97,
-        "momentum_pct": 3311.7,
-        "rs_vs_sector_pct": 3201.63
+        "price": 1614.39,
+        "momentum_pct": 3163.05,
+        "rs_vs_sector_pct": 3128.53
       },
       {
         "rank_in_sector": 2,
         "ticker": "MU",
-        "price": 926.55,
-        "momentum_pct": 632.8,
-        "rs_vs_sector_pct": 522.73
+        "price": 977.5,
+        "momentum_pct": 649.56,
+        "rs_vs_sector_pct": 615.04
       },
       {
         "rank_in_sector": 3,
         "ticker": "LITE",
-        "price": 919.4,
-        "momentum_pct": 608.85,
-        "rs_vs_sector_pct": 498.78
+        "price": 893.61,
+        "momentum_pct": 613.97,
+        "rs_vs_sector_pct": 579.45
       },
       {
         "rank_in_sector": 4,
         "ticker": "WDC",
-        "price": 416.97,
-        "momentum_pct": 601.65,
-        "rs_vs_sector_pct": 491.58
+        "price": 423.87,
+        "momentum_pct": 612.06,
+        "rs_vs_sector_pct": 577.54
       },
       {
         "rank_in_sector": 5,
         "ticker": "STX",
-        "price": 783.18,
-        "momentum_pct": 406.72,
-        "rs_vs_sector_pct": 296.65
+        "price": 803.13,
+        "momentum_pct": 436.85,
+        "rs_vs_sector_pct": 402.32
       },
       {
         "rank_in_sector": 6,
         "ticker": "CIEN",
-        "price": 340.5,
-        "momentum_pct": 362.21,
-        "rs_vs_sector_pct": 252.14
+        "price": 344.25,
+        "momentum_pct": 341.47,
+        "rs_vs_sector_pct": 306.95
       },
       {
         "rank_in_sector": 7,
         "ticker": "INTC",
-        "price": 101.05,
-        "momentum_pct": 327.41,
-        "rs_vs_sector_pct": 217.34
+        "price": 108.8,
+        "momentum_pct": 316.84,
+        "rs_vs_sector_pct": 282.32
       },
       {
         "rank_in_sector": 8,
         "ticker": "TER",
-        "price": 341.15,
-        "momentum_pct": 250.4,
-        "rs_vs_sector_pct": 140.33
+        "price": 353.13,
+        "momentum_pct": 247.37,
+        "rs_vs_sector_pct": 212.85
       }
     ]
   },
-  "note": "Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB > SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = zwrot sektorowego ETF-u SPDR (np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS) w TYM SAMYM oknie co momentum_value (patrz get_universe_metrics), minus zwrot indeksu SP500 w tym samym oknie — jesli dany ETF nie ma jeszcze danych, sektor spada na starszy substytut (srednia zwrotow spolek sektora wazona fmc_etf, 'data_source': 'synthetic_fmc_weighted' zamiast 'etf'); (3) w NAJSILNIEJSZYM sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ sektora, top 10% wg tej przewagi. Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania strategii, NIE porada inwestycyjna."
+  "note": "Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB > SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = prosty zwrot trailing-12M sektorowego ETF-u SPDR (np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS), zakotwiczony do konca miesiaca (TA SAMA konwencja co Global Equity Momentum, NIE M-14/M-2 uzywane do wyboru spolek — pokazuje biezacego lidera sektora, nie sprzed 2 miesiecy), minus zwrot indeksu SP500 w tym samym oknie — jesli dany ETF nie ma jeszcze danych, sektor spada na starszy substytut (srednia zwrotow spolek sektora wazona fmc_etf, 'data_source': 'synthetic_fmc_weighted' zamiast 'etf'); (3) w NAJSILNIEJSZYM sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ sektora (obie strony na oknie M-14/M-2, tym samym co reszta apki), top 10% wg tej przewagi. Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania strategii, NIE porada inwestycyjna."
 }

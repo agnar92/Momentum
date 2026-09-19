@@ -2242,44 +2242,94 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
 
     Sila kazdego sektora liczona jest PRZEDE WSZYSTKIM na prawdziwym sektorowym
     ETF-ie SPDR (fetch_data.py::SECTOR_ETF_SYMBOLS, ktorego poziom trafia do
-    index_prices z Index_Name = nazwa sektora) — przez compute_index_momentum,
-    DOKLADNIE tak samo jak liczymy momentum SP500/NASDAQ100/itd. Jesli dany
-    sektorowy ETF nie ma jeszcze danych w index_prices (np. przed pierwszym
-    pelnym uruchomieniem fetch_data.py po tej zmianie), sila sektora spada z
-    powrotem na starszy substytut: srednia zwrotow spolek sektora wazona
-    fmc_etf — ten sam wzorzec 'degraduj sie do przyblizenia zamiast sie
-    wywalic' co gem_manual_returns.json dla WIG20/mWIG40 (patrz CLAUDE.md).
-    Kazdy sektor niesie 'data_source': 'etf' albo 'synthetic_fmc_weighted' dla
-    przejrzystosci pochodzenia danych (ten sam pattern co 'manual_entry'/
-    'fmc_note' gdzie indziej w tym module)."""
+    index_prices z Index_Name = nazwa sektora). Jesli dany sektorowy ETF nie ma
+    jeszcze danych w index_prices (np. przed pierwszym pelnym uruchomieniem
+    fetch_data.py po tej zmianie), sila sektora spada z powrotem na starszy
+    substytut: srednia zwrotow spolek sektora wazona fmc_etf — ten sam wzorzec
+    'degraduj sie do przyblizenia zamiast sie wywalic' co gem_manual_returns.json
+    dla WIG20/mWIG40 (patrz CLAUDE.md). Kazdy sektor niesie 'data_source': 'etf'
+    albo 'synthetic_fmc_weighted' dla przejrzystosci pochodzenia danych (ten sam
+    pattern co 'manual_entry'/'fmc_note' gdzie indziej w tym module).
+
+    KROK 2 (ktory sektor jest TERAZ liderem) i KROK 3 (ktora spolka bije SREDNIA
+    swojego sektora) celowo licza sie na DWOCH ROZNYCH oknach czasowych, nie
+    jednym wspolnym — real bug znaleziony przez uzytkownika po porownaniu z
+    zewnetrznymi narzedziami (TradingView/stooq): Krok 2 pierwotnie uzywal
+    compute_index_momentum (M-14/M-2, celowo POMIJA ostatnie 2 miesiace —
+    konwencja S&P Momentum Index do WYBORU SPOLEK, uzywana wszedzie indziej w
+    tym module), co dawalo lidera "sprzed 2 miesiecy" zamiast biezacego —
+    zmierzone bezposrednio na prawdziwych danych: Information Technology
+    (M-14/M-2: +34.52%) ledwo wygrywal z Energy (+33.12%), podczas gdy prosty
+    zwrot trailing-12M do dzis dawal Energy +43.30% > Technology +38.57% —
+    ranking sie ODWRACAL. Ani IBD (RS Rating wazy NAJSWIEZSZY kwartal mocniej,
+    nie pomija go), ani Weinstein/Mansfield RS (zawsze biezaca cena) nie
+    pomijaja ostatnich miesiecy, wiec Krok 2 przeszedl na TA SAMA konwencje co
+    Global Equity Momentum uzywa do wyscigu indeksow miedzy soba
+    (compute_index_returns/_gem_month_end_anchor_dates — prosty zwrot
+    trailing-GEM_LOOKBACK_MONTHS, zakotwiczony do konca miesiaca dla
+    stabilnosci) — pokazuje wiec biezacego lidera, spojnie z tym, co widac w
+    zewnetrznych narzedziach. Krok 3 zostaje na M-14/M-2 (get_universe_metrics'
+    momentum_value, ten sam co kazda inna spolka w tej apce) — to porownanie
+    spolki do jej wlasnego sektora, wiec obie strony musza byc na TYM SAMYM
+    oknie, zeby bylo apples-to-apples; nie musi to byc to samo okno co Krok 2,
+    ktory odpowiada na zupelnie inne pytanie ("ktory sektor przegladac
+    teraz")."""
     df = get_universe_metrics(con, "SP500", ref_date, min_trading_days, max_staleness_days)
     if df.empty:
         return None
     index_mom = compute_index_momentum(con, "SP500", ref_date)
     if index_mom is None:
         return None
-    index_return_pct = round(index_mom["momentum_value"] * 100, 2)
+
+    anchor_date, start_date = _gem_month_end_anchor_dates(con, ref_date, GEM_LOOKBACK_MONTHS)
+
+    def trailing_return_pct(index_name):
+        """Prosty zwrot trailing-GEM_LOOKBACK_MONTHS, zakotwiczony do konca
+        miesiaca — patrz docstring funkcji nadrzednej. None gdy brak
+        wystarczajacej historii (swiezy bootstrap) albo brak wierszy dla
+        danego index_name."""
+        if anchor_date is None or start_date is None:
+            return None
+        row = con.execute(f"""
+            SELECT
+                ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{anchor_date}') AS price_now,
+                ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{start_date}') AS price_start
+            FROM index_prices WHERE Index_Name = '{index_name}'
+        """).fetchone()
+        price_now, price_start = row
+        if price_now is None or price_start is None or price_start == 0:
+            return None
+        return float(price_now / price_start - 1) * 100
+
+    sp500_trailing = trailing_return_pct("SP500")
+    display_index_return_pct = round(
+        sp500_trailing if sp500_trailing is not None else index_mom["momentum_value"] * 100, 2
+    )
 
     df = df.copy()
-    df["return_pct"] = df["momentum_value"] * 100
+    df["return_pct"] = df["momentum_value"] * 100  # M-14/M-2 — baza dla Kroku 3
 
-    sector_momentum = {}
+    sector_momentum_windowed = {}  # M-14/M-2 — baza dla Kroku 3 (spolka vs sektor)
     sector_rows = []
     for sector, g in df.groupby("Sector"):
         etf_mom = compute_index_momentum(con, sector, ref_date)
         if etf_mom is not None:
-            momentum_pct = etf_mom["momentum_value"] * 100
+            windowed_pct = etf_mom["momentum_value"] * 100
             data_source = "etf"
         else:
             total_fmc = g["fmc"].sum()
-            momentum_pct = float((g["fmc"] * g["return_pct"]).sum() / total_fmc)
+            windowed_pct = float((g["fmc"] * g["return_pct"]).sum() / total_fmc)
             data_source = "synthetic_fmc_weighted"
-        sector_momentum[sector] = momentum_pct
+        sector_momentum_windowed[sector] = windowed_pct
+
+        trailing_pct = trailing_return_pct(sector) if data_source == "etf" else None
+        display_pct = trailing_pct if trailing_pct is not None else windowed_pct
+
         sector_rows.append({
             "sector": sector,
             "count": int(len(g)),
-            "momentum_pct": round(momentum_pct, 2),
-            "rs_vs_index_pct": round(momentum_pct - index_return_pct, 2),
+            "momentum_pct": round(display_pct, 2),
+            "rs_vs_index_pct": round(display_pct - display_index_return_pct, 2),
             "data_source": data_source,
         })
     sector_rows.sort(key=lambda r: r["rs_vs_index_pct"], reverse=True)
@@ -2290,7 +2340,7 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     top_companies = []
     if strongest_sector is not None:
         sub = df[df["Sector"] == strongest_sector].copy()
-        sub["rs_vs_sector_pct"] = sub["return_pct"] - sector_momentum[strongest_sector]
+        sub["rs_vs_sector_pct"] = sub["return_pct"] - sector_momentum_windowed[strongest_sector]
         sub = sub.sort_values("rs_vs_sector_pct", ascending=False).reset_index(drop=True)
         top_n = max(1, int(np.ceil(len(sub) * SECTOR_STRATEGY_TOP_PERCENT)))
         sub = sub.head(top_n)
@@ -2304,8 +2354,8 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
             })
 
     return {
-        "index_return_pct": index_return_pct,
-        "momentum_window": index_mom["momentum_window"],
+        "index_return_pct": display_index_return_pct,
+        "momentum_window": f"{GEM_LOOKBACK_MONTHS}M (trailing, jak GEM)",
         "sectors": sector_rows,
         "strongest_sector": strongest_sector,
         "top_percent": SECTOR_STRATEGY_TOP_PERCENT,
@@ -2327,13 +2377,15 @@ def export_sector_strategy(con, ref_date, docs_data_dir, min_trading_days, max_s
         "trend": trend,
         "sector_rs": sector_rs,
         "note": ("Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB "
-                 "> SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = zwrot sektorowego ETF-u SPDR "
-                 "(np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS) w TYM "
-                 "SAMYM oknie co momentum_value (patrz get_universe_metrics), minus zwrot indeksu SP500 "
-                 "w tym samym oknie — jesli dany ETF nie ma jeszcze danych, sektor spada na starszy "
-                 "substytut (srednia zwrotow spolek sektora wazona fmc_etf, 'data_source': "
-                 "'synthetic_fmc_weighted' zamiast 'etf'); (3) w NAJSILNIEJSZYM sektorze — sila "
-                 "relatywna kazdej spolki wzgledem SREDNIEJ sektora, top 10% wg tej przewagi. "
+                 "> SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = prosty zwrot trailing-12M "
+                 "sektorowego ETF-u SPDR (np. XLK dla Information Technology, patrz fetch_data.py::"
+                 "SECTOR_ETF_SYMBOLS), zakotwiczony do konca miesiaca (TA SAMA konwencja co Global Equity "
+                 "Momentum, NIE M-14/M-2 uzywane do wyboru spolek — pokazuje biezacego lidera sektora, nie "
+                 "sprzed 2 miesiecy), minus zwrot indeksu SP500 w tym samym oknie — jesli dany ETF nie ma "
+                 "jeszcze danych, sektor spada na starszy substytut (srednia zwrotow spolek sektora "
+                 "wazona fmc_etf, 'data_source': 'synthetic_fmc_weighted' zamiast 'etf'); (3) w "
+                 "NAJSILNIEJSZYM sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ sektora "
+                 "(obie strony na oknie M-14/M-2, tym samym co reszta apki), top 10% wg tej przewagi. "
                  "Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z "
                  "docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania "
                  "strategii, NIE porada inwestycyjna."),
