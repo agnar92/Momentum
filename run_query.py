@@ -123,6 +123,13 @@ SP500_TREND_SMA_WEEKS = 40    # ten sam filtr w konwencji tygodniowej (200D ~= 4
 SP500_TREND_CHART_DAYS = 320  # ile dni pokazujemy na mini-wykresie trendu (SMA200 + margines)
 SP500_TREND_CHART_WEEKS = 130 # odpowiednik dla wykresu tygodniowego (~2.5 roku)
 SECTOR_STRATEGY_TOP_PERCENT = 0.10  # top 10% spolek najsilniejszego sektora wg RS wzgledem sektora
+# Ta strategia jest CZYSTO RS (Mansfield), NIEZALEZNA od momentum/trailing-return
+# uzywanego gdzie indziej w tym module — patrz docstring compute_sector_relative_strength.
+# Wlasne, 52-tygodniowe (klasyczne, roczne) okno wygladzania — CELOWO INNE od
+# RS_MANSFIELD_SHORT_WEEKS (13)/RS_MANSFIELD_MEDIUM_WEEKS (26) uzywanych przez wykres
+# pojedynczej spolki: ta strategia jest z zalozenia dlugoterminowa (rotacja sektorowa),
+# niezalezna od tamtych krotszych horyzontow (na wyrazne zyczenie uzytkownika).
+SECTOR_STRATEGY_RSM_WEEKS = 52
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
@@ -2233,138 +2240,138 @@ def compute_sp500_trend_filter(con, ref_date):
     }
 
 
+def _mansfield_rsm_series(con, table, id_column, id_value, start_date, end_date):
+    """Tygodniowe zamkniecia (patrz _weekly_close_series) dla id_value, posortowane
+    chronologicznie — budulec pod oscylator Mansfield RS. None gdy brak wierszy
+    (np. sektorowy ETF jeszcze nie pobrany, patrz funkcja wywolujaca)."""
+    weekly = _weekly_close_series(con, table, id_column, id_value, start_date, end_date)
+    if weekly.empty:
+        return None
+    return weekly.sort_values("week_start").reset_index(drop=True)
+
+
+def _mansfield_rsm_current_value(numerator_df, denominator_df, weeks=SECTOR_STRATEGY_RSM_WEEKS):
+    """Biezaca (najswiezsza) wartosc oscylatora Mansfield RS dla RS = zamkniecie
+    licznika / zamkniecie mianownika (na WSPOLNYCH tygodniach obu serii):
+    RSM = (RS / SMA(RS, weeks) - 1) * 100 — dokladnie ten sam wzor co
+    compute_mansfield_rs_chart, tylko odczytujemy jedna, biezaca wartosc zamiast
+    calej serii do wykresu, i mianownikiem moze byc DOWOLNY drugi szereg cenowy
+    (indeks ALBO sektorowy ETF — patrz compute_sector_relative_strength), nie
+    tylko wlasny indeks uniwersum spolki. Potrzeba co najmniej `weeks` wspolnych
+    tygodni obu serii — inaczej None (za malo historii), ta sama konwencja
+    'degraduj sie do None zamiast rzucic wyjatek' co reszta tego modulu."""
+    if numerator_df is None or denominator_df is None:
+        return None
+    den_by_week = dict(zip(denominator_df["week_start"], denominator_df["close"]))
+    merged = numerator_df.copy()
+    merged["den_close"] = merged["week_start"].map(den_by_week)
+    merged = merged.dropna(subset=["den_close"])
+    if len(merged) < weeks:
+        return None
+    merged["rs_raw"] = merged["close"] / merged["den_close"]
+    rsm = (merged["rs_raw"] / merged["rs_raw"].rolling(weeks).mean() - 1) * 100
+    last = rsm.iloc[-1]
+    return float(last) if pd.notna(last) else None
+
+
 def compute_sector_relative_strength(con, ref_date, min_trading_days, max_staleness_days):
-    """Krok 2+3: sila relatywna kazdego sektora SP500 wzgledem indeksu, oraz w
-    KAZDYM sektorze (nie tylko najsilniejszym — patrz "Klikalne Kroku 2" nizej)
-    — sila relatywna kazdej jego spolki wzgledem SREDNIEJ tego sektora (top
-    10%, w polu 'top_companies' kazdego wiersza 'sectors'). Uzywa
-    get_universe_metrics (TA SAMA pelna, kwalifikujaca sie populacja co
-    all_constituents SP500 — nie tylko biezacy top-decyl), wiec kazda spolka z
-    sektora ma szanse trafic do rankingu.
+    """Krok 2+3: CZYSTA sila relatywna metoda Mansfielda — ZERO momentum/trailing-
+    return gdziekolwiek w tej funkcji (na wyrazne zyczenie uzytkownika: "ta
+    strategia bazuje na czystym RS"). Uzywa get_universe_metrics (TA SAMA pelna,
+    kwalifikujaca sie populacja co all_constituents SP500 — nie tylko biezacy
+    top-decyl) WYLACZNIE po to, zeby wiedziec, jakie spolki/sektory istnieja i
+    jaka jest ich biezaca cena — samo `momentum_value` z tej ramki jest tu
+    calkowicie ignorowane.
 
-    Sila kazdego sektora liczona jest PRZEDE WSZYSTKIM na prawdziwym sektorowym
-    ETF-ie SPDR (fetch_data.py::SECTOR_ETF_SYMBOLS, ktorego poziom trafia do
-    index_prices z Index_Name = nazwa sektora). Jesli dany sektorowy ETF nie ma
-    jeszcze danych w index_prices (np. przed pierwszym pelnym uruchomieniem
-    fetch_data.py po tej zmianie), sila sektora spada z powrotem na starszy
-    substytut: srednia zwrotow spolek sektora wazona fmc_etf — ten sam wzorzec
-    'degraduj sie do przyblizenia zamiast sie wywalic' co gem_manual_returns.json
-    dla WIG20/mWIG40 (patrz CLAUDE.md). Kazdy sektor niesie 'data_source': 'etf'
-    albo 'synthetic_fmc_weighted' dla przejrzystosci pochodzenia danych (ten sam
-    pattern co 'manual_entry'/'fmc_note' gdzie indziej w tym module).
+    Krok 2 (ktory sektor jest TERAZ liderem): RS = cena sektorowego ETF-u SPDR
+    (fetch_data.py::SECTOR_ETF_SYMBOLS, ktorego poziom trafia do index_prices
+    z Index_Name = nazwa sektora) / cena SP500, wygladzone oscylatorem
+    Mansfielda na oknie SECTOR_STRATEGY_RSM_WEEKS (52 tyg., klasyczne roczne
+    okno — NIEZALEZNE od krotszych RS_MANSFIELD_SHORT/MEDIUM_WEEKS uzywanych
+    przez wykres pojedynczej spolki, bo ta strategia jest z zalozenia
+    dlugoterminowa rotacja sektorowa). Sektory ranked malejaco po tej wartosci
+    ('rsm_vs_index_pct' — dodatnia = sektor silniejszy od SP500, ujemna =
+    slabszy, dokladnie jak kazdy inny oscylator Mansfielda w tej apce).
 
-    KROK 2 (ktory sektor jest TERAZ liderem) i KROK 3 (ktora spolka bije SREDNIA
-    swojego sektora) celowo licza sie na DWOCH ROZNYCH oknach czasowych, nie
-    jednym wspolnym — real bug znaleziony przez uzytkownika po porownaniu z
-    zewnetrznymi narzedziami (TradingView/stooq): Krok 2 pierwotnie uzywal
-    compute_index_momentum (M-14/M-2, celowo POMIJA ostatnie 2 miesiace —
-    konwencja S&P Momentum Index do WYBORU SPOLEK, uzywana wszedzie indziej w
-    tym module), co dawalo lidera "sprzed 2 miesiecy" zamiast biezacego —
-    zmierzone bezposrednio na prawdziwych danych: Information Technology
-    (M-14/M-2: +34.52%) ledwo wygrywal z Energy (+33.12%), podczas gdy prosty
-    zwrot trailing-12M do dzis dawal Energy +43.30% > Technology +38.57% —
-    ranking sie ODWRACAL. Ani IBD (RS Rating wazy NAJSWIEZSZY kwartal mocniej,
-    nie pomija go), ani Weinstein/Mansfield RS (zawsze biezaca cena) nie
-    pomijaja ostatnich miesiecy, wiec Krok 2 przeszedl na TA SAMA konwencje co
-    Global Equity Momentum uzywa do wyscigu indeksow miedzy soba
-    (compute_index_returns/_gem_month_end_anchor_dates — prosty zwrot
-    trailing-GEM_LOOKBACK_MONTHS, zakotwiczony do konca miesiaca dla
-    stabilnosci) — pokazuje wiec biezacego lidera, spojnie z tym, co widac w
-    zewnetrznych narzedziach. Krok 3 zostaje na M-14/M-2 (get_universe_metrics'
-    momentum_value, ten sam co kazda inna spolka w tej apce) — to porownanie
-    spolki do jej wlasnego sektora, wiec obie strony musza byc na TYM SAMYM
-    oknie, zeby bylo apples-to-apples; nie musi to byc to samo okno co Krok 2,
-    ktory odpowiada na zupelnie inne pytanie ("ktory sektor przegladac
-    teraz")."""
+    Krok 3 (ktora spolka bije SWOJ WLASNY sektor): DOKLADNIE ten sam wzor, ale
+    mianownikiem RS jest teraz cena SEKTOROWEGO ETF-u (nie SP500!) — RS =
+    cena_spolki / cena_sektora, 'rsm_vs_sector_pct'. Liczone dla KAZDEGO
+    sektora, nie tylko najsilniejszego (pole 'top_companies' kazdego wiersza
+    'sectors') — na zyczenie uzytkownika: liderzy najsilniejszego sektora nie
+    zawsze sa akurat w dobrym etapie Weinsteina/TTM Squeeze, wiec Krok 3 na
+    froncie (docs/js/strategy.js) pozwala kliknac dowolny wiersz Kroku 2 i
+    przegladac alternatywny, tez dobrze radzacy sobie sektor. Top 10%
+    (SECTOR_STRATEGY_TOP_PERCENT) wg biezacej 'rsm_vs_sector_pct'.
+
+    Gdy dany sektorowy ETF NIE MA jeszcze wierszy w index_prices (np. przed
+    pierwszym pelnym uruchomieniem fetch_data.py po dodaniu SECTOR_ETF_SYMBOLS),
+    sektor dostaje 'data_source': 'no_data', 'rsm_vs_index_pct': None i pusta
+    'top_companies' — bez sektorowego szeregu cenowego nie ma czym RS policzyc
+    (ani wzgledem SP500, ani jako mianownik dla wlasnych spolek), a poniewaz ta
+    strategia jest z zalozenia CZYSTYM RS, nie ma tu juz (jak we wczesniejszej
+    wersji) fallbacku na syntetyczna, wazona fmc_etf srednia zwrotow — to
+    bylby powrot do momentum/trailing-return, ktorego ta funkcja ma unikac.
+    Taki sektor po prostu ladu je na koncu rankingu, zamiast probowac przyblizac
+    liczbe, ktora juz nie bylaby "czystym RS"."""
     df = get_universe_metrics(con, "SP500", ref_date, min_trading_days, max_staleness_days)
     if df.empty:
         return None
-    index_mom = compute_index_momentum(con, "SP500", ref_date)
-    if index_mom is None:
+
+    rsm_buffer_weeks = SECTOR_STRATEGY_RSM_WEEKS + 8  # zapas na braki/swieta przy laczeniu tygodni
+    extended_start = (pd.Timestamp(ref_date) - pd.Timedelta(weeks=rsm_buffer_weeks)).strftime("%Y-%m-%d")
+
+    sp500_series = _mansfield_rsm_series(con, "index_prices", "Index_Name", "SP500", extended_start, ref_date)
+    if sp500_series is None:
         return None
-
-    anchor_date, start_date = _gem_month_end_anchor_dates(con, ref_date, GEM_LOOKBACK_MONTHS)
-
-    def trailing_return_pct(index_name):
-        """Prosty zwrot trailing-GEM_LOOKBACK_MONTHS, zakotwiczony do konca
-        miesiaca — patrz docstring funkcji nadrzednej. None gdy brak
-        wystarczajacej historii (swiezy bootstrap) albo brak wierszy dla
-        danego index_name."""
-        if anchor_date is None or start_date is None:
-            return None
-        row = con.execute(f"""
-            SELECT
-                ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{anchor_date}') AS price_now,
-                ARGMAX(Close, Date) FILTER (WHERE Date <= DATE '{start_date}') AS price_start
-            FROM index_prices WHERE Index_Name = '{index_name}'
-        """).fetchone()
-        price_now, price_start = row
-        if price_now is None or price_start is None or price_start == 0:
-            return None
-        return float(price_now / price_start - 1) * 100
-
-    sp500_trailing = trailing_return_pct("SP500")
-    display_index_return_pct = round(
-        sp500_trailing if sp500_trailing is not None else index_mom["momentum_value"] * 100, 2
-    )
-
-    df = df.copy()
-    df["return_pct"] = df["momentum_value"] * 100  # M-14/M-2 — baza dla Kroku 3
 
     sector_rows = []
     for sector, g in df.groupby("Sector"):
-        etf_mom = compute_index_momentum(con, sector, ref_date)
-        if etf_mom is not None:
-            windowed_pct = etf_mom["momentum_value"] * 100
+        sector_series = _mansfield_rsm_series(con, "index_prices", "Index_Name", sector, extended_start, ref_date)
+        if sector_series is not None:
             data_source = "etf"
+            sector_rsm_pct = _mansfield_rsm_current_value(sector_series, sp500_series)
         else:
-            total_fmc = g["fmc"].sum()
-            windowed_pct = float((g["fmc"] * g["return_pct"]).sum() / total_fmc)
-            data_source = "synthetic_fmc_weighted"
+            data_source = "no_data"
+            sector_rsm_pct = None
 
-        trailing_pct = trailing_return_pct(sector) if data_source == "etf" else None
-        display_pct = trailing_pct if trailing_pct is not None else windowed_pct
-
-        # Top 10% spolek TEGO sektora wzgledem JEGO WLASNEJ sredniej (M-14/M-2,
-        # ten sam window co momentum_value kazdej spolki) — liczone dla KAZDEGO
-        # sektora, nie tylko najsilniejszego. Na zyczenie uzytkownika: liderzy
-        # najsilniejszego sektora nie zawsze sa akurat w dobrym etapie
-        # Weinsteina/TTM Squeeze, wiec Krok 3 na froncie (docs/js/strategy.js)
-        # pozwala kliknac dowolny wiersz Kroku 2 i przegladac alternatywny,
-        # tez dobrze radzacy sobie sektor zamiast tylko #1.
-        sub = g.copy()
-        sub["rs_vs_sector_pct"] = sub["return_pct"] - windowed_pct
-        sub = sub.sort_values("rs_vs_sector_pct", ascending=False).reset_index(drop=True)
-        top_n = max(1, int(np.ceil(len(sub) * SECTOR_STRATEGY_TOP_PERCENT)))
-        sub = sub.head(top_n)
-        top_companies = [
-            {
-                "rank_in_sector": i + 1,
-                "ticker": r["Ticker"],
-                "price": round(float(r["price_now"]), 2),
-                "momentum_pct": round(float(r["return_pct"]), 2),
-                "rs_vs_sector_pct": round(float(r["rs_vs_sector_pct"]), 2),
-            }
-            for i, r in sub.iterrows()
-        ]
+        top_companies = []
+        if sector_series is not None:
+            company_rows = []
+            for _, r in g.iterrows():
+                ticker = r["Ticker"]
+                stock_series = _mansfield_rsm_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+                rsm_vs_sector = _mansfield_rsm_current_value(stock_series, sector_series)
+                if rsm_vs_sector is None:
+                    continue
+                company_rows.append({
+                    "ticker": ticker,
+                    "price": round(float(r["price_now"]), 2),
+                    "rsm_vs_sector_pct": round(rsm_vs_sector, 2),
+                })
+            company_rows.sort(key=lambda c: c["rsm_vs_sector_pct"], reverse=True)
+            top_n = max(1, int(np.ceil(len(company_rows) * SECTOR_STRATEGY_TOP_PERCENT))) if company_rows else 0
+            top_companies = company_rows[:top_n]
+            for i, row in enumerate(top_companies):
+                row["rank_in_sector"] = i + 1
 
         sector_rows.append({
             "sector": sector,
             "count": int(len(g)),
-            "momentum_pct": round(display_pct, 2),
-            "rs_vs_index_pct": round(display_pct - display_index_return_pct, 2),
+            "rsm_vs_index_pct": round(sector_rsm_pct, 2) if sector_rsm_pct is not None else None,
             "data_source": data_source,
             "top_companies": top_companies,
         })
-    sector_rows.sort(key=lambda r: r["rs_vs_index_pct"], reverse=True)
+
+    # None (brak danych ETF) zawsze na koniec, reszta malejaco po RSM.
+    sector_rows.sort(key=lambda r: (r["rsm_vs_index_pct"] is None, -(r["rsm_vs_index_pct"] or 0)))
     for i, r in enumerate(sector_rows):
         r["rank"] = i + 1
 
-    strongest_sector = sector_rows[0]["sector"] if sector_rows else None
+    ranked = [r for r in sector_rows if r["rsm_vs_index_pct"] is not None]
+    strongest_sector = ranked[0]["sector"] if ranked else None
 
     return {
-        "index_return_pct": display_index_return_pct,
-        "momentum_window": f"{GEM_LOOKBACK_MONTHS}M (trailing, jak GEM)",
+        "rsm_weeks": SECTOR_STRATEGY_RSM_WEEKS,
         "sectors": sector_rows,
         "strongest_sector": strongest_sector,
         "top_percent": SECTOR_STRATEGY_TOP_PERCENT,
@@ -2384,19 +2391,20 @@ def export_sector_strategy(con, ref_date, docs_data_dir, min_trading_days, max_s
         "ref_date": ref_date,
         "trend": trend,
         "sector_rs": sector_rs,
-        "note": ("Strategia wieloetapowa: (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB "
-                 "> SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = prosty zwrot trailing-12M "
-                 "sektorowego ETF-u SPDR (np. XLK dla Information Technology, patrz fetch_data.py::"
-                 "SECTOR_ETF_SYMBOLS), zakotwiczony do konca miesiaca (TA SAMA konwencja co Global Equity "
-                 "Momentum, NIE M-14/M-2 uzywane do wyboru spolek — pokazuje biezacego lidera sektora, nie "
-                 "sprzed 2 miesiecy), minus zwrot indeksu SP500 w tym samym oknie — jesli dany ETF nie ma "
-                 "jeszcze danych, sektor spada na starszy substytut (srednia zwrotow spolek sektora "
-                 "wazona fmc_etf, 'data_source': 'synthetic_fmc_weighted' zamiast 'etf'); (3) w "
-                 "NAJSILNIEJSZYM sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ sektora "
-                 "(obie strony na oknie M-14/M-2, tym samym co reszta apki), top 10% wg tej przewagi. "
-                 "Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z "
-                 "docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania "
-                 "strategii, NIE porada inwestycyjna."),
+        "note": ("Strategia wieloetapowa oparta na CZYSTYM RS (zero momentum/trailing-return): "
+                 "(1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB > SMA40 (tygodniowa); "
+                 "(2) sila relatywna sektorow SP500 = oscylator Mansfield RS (RS = cena sektorowego "
+                 "ETF-u SPDR [np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS] "
+                 "/ cena SP500, RSM = (RS / SMA(RS, 52 tyg.) - 1) * 100 — klasyczne roczne okno, NIEZALEZNE "
+                 "od krotszych 13/26-tyg. wariantow z wykresu pojedynczej spolki); jesli dany ETF nie ma "
+                 "jeszcze danych w index_prices, sektor dostaje 'data_source': 'no_data' i ladu je na "
+                 "koncu rankingu (bez fallbacku na przyblizenie momentum/trailing-return — to juz nie "
+                 "bylby czysty RS); (3) w KAZDYM sektorze (nie tylko najsilniejszym, patrz klikalny Krok 2 "
+                 "na froncie) — DOKLADNIE ten sam oscylator Mansfielda, ale mianownikiem RS jest teraz "
+                 "cena TEGO sektorowego ETF-u zamiast SP500 (RS = cena_spolki / cena_sektora), top 10% "
+                 "wg biezacej wartosci. Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — "
+                 "czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do "
+                 "testowania strategii, NIE porada inwestycyjna."),
     }
     out_path = Path(docs_data_dir) / "sector_strategy.json"
     out_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
