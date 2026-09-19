@@ -781,7 +781,10 @@ days a SMA200 needs.
 - **`export_sector_strategy(con, ref_date, docs_data_dir, ...)`** combines both into
   `docs/data/sector_strategy.json` (`trend`/`sector_rs`/`note`) — called from `run_query.py`'s normal,
   full (weekly) `main()` path alongside `export_relative_strength`/`export_global_equity_momentum`, so it
-  refreshes on the same cadence as everything else (see Pipeline architecture above). `top_companies`
+  refreshes on the same cadence as everything else (see Pipeline architecture above). Each entry in
+  `sector_rs.sectors` carries its OWN `top_companies` list (top 10% of THAT sector, not just the strongest
+  one — see the Frontend `strategy.html` bullet below for why: the user wanted to browse an alternative
+  sector when the top-ranked one's own leaders aren't in a good stage that week). `top_companies`
   intentionally carries only ticker/price/momentum/RS numbers — it does NOT duplicate `weekly_chart`/
   `ttm_squeeze_chart` (unlike `export_relative_strength`'s `leaders`, which aren't in `FULL_COVERAGE_
   UNIVERSES` and so need those charts attached explicitly): since SP500 already exports full per-company
@@ -1339,20 +1342,36 @@ flex child (no `.topbar-left` wrapper there).
   plus SP500's close/SMA200/SMA40W as stat-cards and a small Chart.js line chart (toggle button pair,
   `js/chart-render.js`-independent — this page doesn't load that file, it's a much smaller, page-local
   chart, same `new Chart({type:"line",...})` pattern `rebalance.js::renderEquityCurve` already uses).
-  **Krok 2** is a plain table of SP500's sectors ranked by RS vs. the index (`sector_rs.sectors`), the
-  strongest one highlighted via the existing `.row-selected` class — a sector still running on the
-  synthetic `fmc`-weighted fallback (see `compute_sector_relative_strength` above) gets a small
-  "(przybliżenie)" note next to its name (`sectorRowHtml()`'s `sourceNote`), the same data-provenance-
-  transparency convention as the GEM widget's "(ręcznie)" label for `manual_entry`. **Krok 3** is the top-10%-of-strongest-
-  sector company list (`sector_rs.top_companies`), joined client-side against `docs/data/sp500.json`'s
-  `all_constituents` (fetched alongside `sector_strategy.json` in `loadStrategyData()`) by ticker to read
-  each company's `weekly_chart.current_stage` (rendered via `stageCellHtml()` from `js/shared.js`, same as
-  everywhere else) and `ttm_squeeze_chart`. Both Krok 2/3 tables go through `renderScreenerTable()` (`js/
-  table-render.js`, loaded here too) even though neither has a stage-filter bar — reused purely for its
-  shared empty-state/meta-line/row-building loop, with `compareFn: () => 0` since both lists already come
-  back pre-sorted from the backend. A dedicated "📈" button per Krok 3 row (`chart-row-btn`, exact same
-  pattern as `rebalance.js::pickerRowHtml`) navigates to `chart.html?ticker=&universe=SP500&back=
-  strategy.html` — this page has no chart-rendering engine of its own (doesn't load `js/chart-render.js`),
+  **Krok 2** is a plain, but CLICKABLE, table of SP500's sectors ranked by RS vs. the index
+  (`sector_rs.sectors`) — the strongest one highlighted 🏆 and pre-selected via the existing
+  `.row-selected` class, but this is only a SUGGESTION, exactly the same "🏆 = suggestion, not a forced
+  pick" philosophy as GEM's Krok 1 universe picker (`rebalance.js::renderGemWidget`): clicking ANY row sets
+  module-level `browsedSector` and re-renders both Krok 2 (to move the highlight) and Krok 3. This exists
+  because the user explicitly asked for it — the strongest sector's own leaders aren't always sitting in a
+  good Weinstein stage that particular week, so being able to check a second- or third-place sector that's
+  also performing well is a real, needed alternative, not a nice-to-have. `currentSectorRow()` resolves
+  which sector row Krok 3 should read (`browsedSector`, falling back to `strongest_sector` before any click)
+  — a sector still running on the synthetic `fmc`-weighted fallback (see `compute_sector_relative_strength`
+  above) gets a small "(przybliżenie)" note next to its name (`sectorRowHtml()`'s `sourceNote`), the same
+  data-provenance-transparency convention as the GEM widget's "(ręcznie)" label for `manual_entry`.
+  **Krok 3** is the top-10%-of-*that*-sector company list — `compute_sector_relative_strength` computes
+  `top_companies` for EVERY sector now, not just the strongest one (a `"top_companies"` field nested inside
+  each entry of `sector_rs.sectors`, rather than one flat top-level list) specifically so Krok 2's click
+  has real per-sector data to switch to instead of only ever being able to show the winner. The company list
+  is joined client-side against `docs/data/sp500.json`'s `all_constituents` (fetched alongside
+  `sector_strategy.json` in `loadStrategyData()`) by ticker to read each company's
+  `weekly_chart.current_stage` (rendered via `stageCellHtml()` from `js/shared.js`, same as everywhere
+  else) and `ttm_squeeze_chart`. The Krok 3 heading (`#leadersSectorLabel`) says which sector is currently
+  browsed and, when it isn't the strongest one, spells that out explicitly ("przeglądasz zamiast lidera
+  X") so it's never ambiguous why the list changed. Both Krok 2/3 tables go through `renderScreenerTable()`
+  (`js/table-render.js`, loaded here too) even though neither has a stage-filter bar — reused purely for
+  its shared empty-state/meta-line/row-building loop, with `compareFn: () => 0` since both lists already
+  come back pre-sorted from the backend; Krok 2 additionally supplies `onRowClick` (Krok 3 doesn't — its
+  rows stay non-clickable, only the dedicated "📈" button navigates, same "don't open something by
+  accident" lesson already learned once for `rebalance.js`'s own Krok 2, see that bullet's version-history
+  note). A dedicated "📈" button per Krok 3 row (`chart-row-btn`, exact same pattern as
+  `rebalance.js::pickerRowHtml`) navigates to `chart.html?ticker=&universe=SP500&back=strategy.html` — this
+  page has no chart-rendering engine of its own (doesn't load `js/chart-render.js`),
   same "redirect to the dedicated chart page" choice `rebalance.js` already made for its own Krok 2 (see
   that bullet's version-history note above for why a real separate page beats an in-page chart).
   `squeezeStatusFor()` is a small, LOCAL, ungated re-implementation of the "walk back to the last week with

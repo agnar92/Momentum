@@ -2235,10 +2235,12 @@ def compute_sp500_trend_filter(con, ref_date):
 
 def compute_sector_relative_strength(con, ref_date, min_trading_days, max_staleness_days):
     """Krok 2+3: sila relatywna kazdego sektora SP500 wzgledem indeksu, oraz w
-    najsilniejszym sektorze — sila relatywna kazdej spolki wzgledem SREDNIEJ
-    tego sektora (top 10%). Uzywa get_universe_metrics (TA SAMA pelna,
-    kwalifikujaca sie populacja co all_constituents SP500 — nie tylko biezacy
-    top-decyl), wiec kazda spolka z sektora ma szanse trafic do rankingu.
+    KAZDYM sektorze (nie tylko najsilniejszym — patrz "Klikalne Kroku 2" nizej)
+    — sila relatywna kazdej jego spolki wzgledem SREDNIEJ tego sektora (top
+    10%, w polu 'top_companies' kazdego wiersza 'sectors'). Uzywa
+    get_universe_metrics (TA SAMA pelna, kwalifikujaca sie populacja co
+    all_constituents SP500 — nie tylko biezacy top-decyl), wiec kazda spolka z
+    sektora ma szanse trafic do rankingu.
 
     Sila kazdego sektora liczona jest PRZEDE WSZYSTKIM na prawdziwym sektorowym
     ETF-ie SPDR (fetch_data.py::SECTOR_ETF_SYMBOLS, ktorego poziom trafia do
@@ -2309,7 +2311,6 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     df = df.copy()
     df["return_pct"] = df["momentum_value"] * 100  # M-14/M-2 — baza dla Kroku 3
 
-    sector_momentum_windowed = {}  # M-14/M-2 — baza dla Kroku 3 (spolka vs sektor)
     sector_rows = []
     for sector, g in df.groupby("Sector"):
         etf_mom = compute_index_momentum(con, sector, ref_date)
@@ -2320,10 +2321,32 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
             total_fmc = g["fmc"].sum()
             windowed_pct = float((g["fmc"] * g["return_pct"]).sum() / total_fmc)
             data_source = "synthetic_fmc_weighted"
-        sector_momentum_windowed[sector] = windowed_pct
 
         trailing_pct = trailing_return_pct(sector) if data_source == "etf" else None
         display_pct = trailing_pct if trailing_pct is not None else windowed_pct
+
+        # Top 10% spolek TEGO sektora wzgledem JEGO WLASNEJ sredniej (M-14/M-2,
+        # ten sam window co momentum_value kazdej spolki) — liczone dla KAZDEGO
+        # sektora, nie tylko najsilniejszego. Na zyczenie uzytkownika: liderzy
+        # najsilniejszego sektora nie zawsze sa akurat w dobrym etapie
+        # Weinsteina/TTM Squeeze, wiec Krok 3 na froncie (docs/js/strategy.js)
+        # pozwala kliknac dowolny wiersz Kroku 2 i przegladac alternatywny,
+        # tez dobrze radzacy sobie sektor zamiast tylko #1.
+        sub = g.copy()
+        sub["rs_vs_sector_pct"] = sub["return_pct"] - windowed_pct
+        sub = sub.sort_values("rs_vs_sector_pct", ascending=False).reset_index(drop=True)
+        top_n = max(1, int(np.ceil(len(sub) * SECTOR_STRATEGY_TOP_PERCENT)))
+        sub = sub.head(top_n)
+        top_companies = [
+            {
+                "rank_in_sector": i + 1,
+                "ticker": r["Ticker"],
+                "price": round(float(r["price_now"]), 2),
+                "momentum_pct": round(float(r["return_pct"]), 2),
+                "rs_vs_sector_pct": round(float(r["rs_vs_sector_pct"]), 2),
+            }
+            for i, r in sub.iterrows()
+        ]
 
         sector_rows.append({
             "sector": sector,
@@ -2331,27 +2354,13 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
             "momentum_pct": round(display_pct, 2),
             "rs_vs_index_pct": round(display_pct - display_index_return_pct, 2),
             "data_source": data_source,
+            "top_companies": top_companies,
         })
     sector_rows.sort(key=lambda r: r["rs_vs_index_pct"], reverse=True)
     for i, r in enumerate(sector_rows):
         r["rank"] = i + 1
 
     strongest_sector = sector_rows[0]["sector"] if sector_rows else None
-    top_companies = []
-    if strongest_sector is not None:
-        sub = df[df["Sector"] == strongest_sector].copy()
-        sub["rs_vs_sector_pct"] = sub["return_pct"] - sector_momentum_windowed[strongest_sector]
-        sub = sub.sort_values("rs_vs_sector_pct", ascending=False).reset_index(drop=True)
-        top_n = max(1, int(np.ceil(len(sub) * SECTOR_STRATEGY_TOP_PERCENT)))
-        sub = sub.head(top_n)
-        for i, r in sub.iterrows():
-            top_companies.append({
-                "rank_in_sector": i + 1,
-                "ticker": r["Ticker"],
-                "price": round(float(r["price_now"]), 2),
-                "momentum_pct": round(float(r["return_pct"]), 2),
-                "rs_vs_sector_pct": round(float(r["rs_vs_sector_pct"]), 2),
-            })
 
     return {
         "index_return_pct": display_index_return_pct,
@@ -2359,7 +2368,6 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
         "sectors": sector_rows,
         "strongest_sector": strongest_sector,
         "top_percent": SECTOR_STRATEGY_TOP_PERCENT,
-        "top_companies": top_companies,
     }
 
 

@@ -29,6 +29,23 @@ let sp500Data = null;      // docs/data/sp500.json (all_constituents, do polacze
 let trendChartInstance = null;
 let trendChartMode = "daily"; // "daily" (SMA200) albo "weekly" (SMA40)
 
+// Ktory sektor Krok 3 pokazuje — null oznacza "jeszcze nie klikniete, uzyj
+// strongest_sector jako podpowiedzi" (dokladnie ten sam wzorzec co
+// settings.browsingUniverse w rebalance.js dla GEM-owej podpowiedzi Kroku 1).
+// Na zyczenie uzytkownika: liderzy najsilniejszego sektora nie zawsze sa akurat
+// w dobrym etapie Weinsteina/TTM Squeeze, wiec kazdy wiersz Kroku 2 jest teraz
+// klikalny i przelacza, ktorego (tez dobrze radzacego sobie) sektora spolki
+// pokazuje Krok 3 — backend juz liczy top_companies dla KAZDEGO sektora, nie
+// tylko #1 (patrz compute_sector_relative_strength w run_query.py).
+let browsedSector = null;
+
+function currentSectorRow() {
+    const sectorRs = strategyData && strategyData.sector_rs;
+    if (!sectorRs || !sectorRs.sectors.length) return null;
+    const wanted = browsedSector || sectorRs.strongest_sector;
+    return sectorRs.sectors.find(s => s.sector === wanted) || sectorRs.sectors[0];
+}
+
 // Te same progi co TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS/TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS
 // w run_query.py i w js/app.js (classifyTtmSqueeze) — MUSZĄ zostać zsynchronizowane.
 // W odróżnieniu od classifyTtmSqueeze (ekran-screener, filtruje spółki OUT gdy nie
@@ -191,6 +208,7 @@ function renderSectorTable() {
     const sectorRs = strategyData && strategyData.sector_rs;
     const rows = (sectorRs && sectorRs.sectors) || [];
     const metaEl = document.getElementById("sectorMeta");
+    const browsed = currentSectorRow();
 
     renderScreenerTable({
         tbody: document.getElementById("sectorTableBody"),
@@ -200,9 +218,17 @@ function renderSectorTable() {
         colspan: 5,
         emptyAllMsg: "Brak danych sektorowych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Brak danych.",
-        metaText: () => sectorRs ? `Indeks SP500: ${sectorRs.index_return_pct >= 0 ? "+" : ""}${sectorRs.index_return_pct.toFixed(2)}% (${sectorRs.momentum_window})` : "",
-        isSelected: s => sectorRs && s.sector === sectorRs.strongest_sector,
+        metaText: () => sectorRs ? `Indeks SP500: ${sectorRs.index_return_pct >= 0 ? "+" : ""}${sectorRs.index_return_pct.toFixed(2)}% (${sectorRs.momentum_window}) · kliknij wiersz, żeby przeglądać jego spółki w Kroku 3` : "",
+        isSelected: s => browsed && s.sector === browsed.sector,
         rowHtml: (s, i) => sectorRowHtml(s, i + 1),
+        // Klik w dowolny sektor przelacza, ktorego spolki pokazuje Krok 3 —
+        // liderzy najsilniejszego sektora nie zawsze sa akurat w dobrym etapie
+        // Weinsteina/TTM Squeeze, wiec uzytkownik moze sprawdzic alternatywe.
+        onRowClick: s => {
+            browsedSector = s.sector;
+            renderSectorTable();
+            renderLeadersTable();
+        },
     });
 }
 
@@ -224,10 +250,16 @@ function leaderRowHtml(c, position) {
 function renderLeadersTable() {
     const sectorRs = strategyData && strategyData.sector_rs;
     const sectorLabelEl = document.getElementById("leadersSectorLabel");
-    sectorLabelEl.textContent = sectorRs && sectorRs.strongest_sector ? `— ${sectorRs.strongest_sector}` : "";
+    const browsed = currentSectorRow();
+    if (browsed) {
+        const isStrongest = browsed.sector === sectorRs.strongest_sector;
+        sectorLabelEl.textContent = isStrongest ? `— ${browsed.sector} 🏆` : `— ${browsed.sector} (przeglądasz zamiast lidera ${sectorRs.strongest_sector})`;
+    } else {
+        sectorLabelEl.textContent = "";
+    }
 
     const byTicker = sp500ByTicker();
-    const rows = ((sectorRs && sectorRs.top_companies) || []).map(c => {
+    const rows = ((browsed && browsed.top_companies) || []).map(c => {
         const rec = byTicker[c.ticker];
         return Object.assign({}, c, {
             _stage: rec && rec.weekly_chart && rec.weekly_chart.current_stage,
