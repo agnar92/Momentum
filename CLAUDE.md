@@ -703,8 +703,11 @@ A dedicated, standalone screener (`docs/strategy.html`) for a specific, user-req
 growth phase** — price above its 200-day SMA OR above its 40-week SMA (the user gave both conventions
 explicitly and they're treated as equivalent/either-sufficient, not requiring both); (2) rank SP500's
 **GICS sectors** by relative strength vs. the SP500 index itself; (3) within a sector, rank its member
-companies by relative strength vs. that sector's own price, and take the **top 10%**; (4) for those top
-companies, surface their existing Weinstein Stage and TTM Squeeze status so the user can judge entry
+companies by relative strength vs. that sector's own price, and take the **top 10%**; (4) **separately**,
+also surface the top 10 companies of the WHOLE SP500 by pure RS vs. SP500 directly, ignoring sector
+membership entirely (`top_rs_companies` — added at the user's explicit follow-up request, "Dodaj jeszcze
+top 10 spółek samego RS z sp500 bez sektorów", after the pure-RS rewrite below landed); for all of the
+above, surface each company's existing Weinstein Stage and TTM Squeeze status so the user can judge entry
 timing manually — this screener does not buy/select anything automatically, same "informational only, you
 decide" philosophy as the rest of the dashboard/rebalance calculator.
 
@@ -778,6 +781,17 @@ days a SMA200 needs, or the ~60 weeks (52 + buffer) the 52-week Mansfield window
   price (52-week window, same as Krok 2 but with a different denominator) — companies sorted descending,
   top `SECTOR_STRATEGY_TOP_PERCENT` (10%) kept, `rank_in_sector` assigned.
 
+  **`top_rs_companies`** (top-level, not nested inside `sectors`) is Krok 4: the top
+  `SECTOR_STRATEGY_TOP_RS_N` (10) companies of the ENTIRE SP500 by the same Mansfield oscillator, but the
+  denominator is ALWAYS SP500 (`rsm_vs_index_pct`), never a sector — a genuinely different ranking from
+  Krok 3's per-sector one, since the two use different denominators; a company can be its own (weak)
+  sector's #1 without cracking this top 10 against the whole market, and vice versa. This list needs no
+  sector ETF at all — it only needs a company's own price and SP500's — so every SP500 company is eligible
+  regardless of whether its sector currently has `"data_source": "no_data"`. Each company's own weekly
+  price series (`_mansfield_rsm_series` for its ticker) is fetched exactly **once** per company inside the
+  per-sector loop and reused for both this calculation (vs. SP500) and Krok 3's (vs. its own sector) — no
+  duplicate query for the same ticker.
+
   **Version history matters here**: this function went through two prior designs before landing on pure
   RS. The FIRST version used the `fmc`-weighted synthetic average as the sector's whole basis (no ETF at
   all) — the user pushed back ("Przecież potrzebujemy chyba ETF na sektor?"), so real SPDR sector ETFs
@@ -798,13 +812,13 @@ days a SMA200 needs, or the ~60 weeks (52 + buffer) the 52-week Mansfield window
 - **`export_sector_strategy(con, ref_date, docs_data_dir, ...)`** combines both into
   `docs/data/sector_strategy.json` (`trend`/`sector_rs`/`note`) — called from `run_query.py`'s normal,
   full (weekly) `main()` path alongside `export_relative_strength`/`export_global_equity_momentum`, so it
-  refreshes on the same cadence as everything else (see Pipeline architecture above). `top_companies`
-  intentionally carries only ticker/price/RS numbers — it does NOT duplicate `weekly_chart`/
-  `ttm_squeeze_chart` (unlike `export_relative_strength`'s `leaders`, which aren't in `FULL_COVERAGE_
-  UNIVERSES` and so need those charts attached explicitly): since SP500 already exports full per-company
-  chart data via `all_constituents` in `docs/data/sp500.json`, the frontend (`docs/js/strategy.js`) joins
-  `top_companies` tickers against that file by ticker to read `weekly_chart.current_stage` and
-  `ttm_squeeze_chart` for display, rather than re-fetching/duplicating them here.
+  refreshes on the same cadence as everything else (see Pipeline architecture above). `top_companies` and
+  `top_rs_companies` both intentionally carry only ticker/price/RS numbers — neither duplicates
+  `weekly_chart`/`ttm_squeeze_chart` (unlike `export_relative_strength`'s `leaders`, which aren't in
+  `FULL_COVERAGE_UNIVERSES` and so need those charts attached explicitly): since SP500 already exports full
+  per-company chart data via `all_constituents` in `docs/data/sp500.json`, the frontend (`docs/js/
+  strategy.js`) joins both lists' tickers against that file by ticker to read `weekly_chart.current_stage`
+  and `ttm_squeeze_chart` for display, rather than re-fetching/duplicating them here.
 
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
@@ -1401,8 +1415,21 @@ flex child (no `.topbar-left` wrapper there).
   identical (same constants, duplicated here same as they're already duplicated between `run_query.py` and
   `app.js` — must stay in sync by hand) since they're the actual definition of what "consolidating"/"fired"
   means everywhere else on the dashboard; only the momentum-score screener gate and the "drop non-matching
-  rows" behavior are intentionally left out. `renderAll()` renders Krok 2/3 BEFORE Krok 1's Chart.js call
-  (`renderTrendChart()` guards on `typeof Chart === "undefined"` and returns early rather than throwing) —
+  rows" behavior are intentionally left out.
+  **Krok 4** (`#topRsCard`/`renderTopRsTable()`) is a fourth panel-card, added at the user's explicit
+  follow-up request ("Dodaj jeszcze top 10 spółek samego RS z sp500 bez sektorów") after the pure-RS
+  rewrite above landed: the top 10 companies of the WHOLE SP500 by Mansfield RS vs. SP500 directly
+  (`sector_rs.top_rs_companies`, see `compute_sector_relative_strength` above), completely independent of
+  `browsedSector` — clicking a different sector in Krok 2 does NOT change this list, unlike Krok 3. Its row
+  (`topRsRowHtml()`) carries one extra "Sektor" column vs. `leaderRowHtml()` (Krok 3's row) since these
+  companies span every sector, not just one; otherwise it's the same shape (ticker/price/RSM/stage/squeeze/
+  chart button), joined against `docs/data/sp500.json` and dispatching to `chart.html` the same way. Its
+  own row/render functions (`topRsRowHtml`/`renderTopRsTable`) are a deliberate near-duplicate of Krok 3's
+  rather than a shared abstraction — same reasoning as `sectorRowHtml`/`leaderRowHtml` already being
+  separate: each table's row shape and click wiring is small and table-specific enough that a shared
+  function would need as many parameters as it saved lines. `renderAll()` calls it right after
+  `renderLeadersTable()`, still before Krok 1's Chart.js call (`renderTrendChart()` guards on
+  `typeof Chart === "undefined"` and returns early rather than throwing) —
   same ordering rationale as `rebalance.js::init()` already uses (Chart.js-dependent rendering last): a
   failure to load Chart.js (now vendored locally, `docs/js/vendor/chart.umd.min.js` — see the Frontend
   intro above; this guard predates that fix and stays as a general defensive measure) must not cascade

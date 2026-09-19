@@ -2548,7 +2548,79 @@
       }
     ],
     "strongest_sector": "Energy",
-    "top_percent": 0.1
+    "top_percent": 0.1,
+    "top_rs_companies": [
+      {
+        "ticker": "MRNA",
+        "sector": "Health Care",
+        "price": 154.04,
+        "rsm_vs_index_pct": 168.64,
+        "rank": 1
+      },
+      {
+        "ticker": "DELL",
+        "sector": "Information Technology",
+        "price": 568.06,
+        "rsm_vs_index_pct": 115.2,
+        "rank": 2
+      },
+      {
+        "ticker": "SNDK",
+        "sector": "Information Technology",
+        "price": 1791.82,
+        "rsm_vs_index_pct": 88.63,
+        "rank": 3
+      },
+      {
+        "ticker": "HPE",
+        "sector": "Information Technology",
+        "price": 60.76,
+        "rsm_vs_index_pct": 74.54,
+        "rank": 4
+      },
+      {
+        "ticker": "MU",
+        "sector": "Information Technology",
+        "price": 1015.8,
+        "rsm_vs_index_pct": 72.67,
+        "rank": 5
+      },
+      {
+        "ticker": "MPC",
+        "sector": "Energy",
+        "price": 424.89,
+        "rsm_vs_index_pct": 65.35,
+        "rank": 6
+      },
+      {
+        "ticker": "VLO",
+        "sector": "Energy",
+        "price": 413.28,
+        "rsm_vs_index_pct": 64.72,
+        "rank": 7
+      },
+      {
+        "ticker": "AMD",
+        "sector": "Information Technology",
+        "price": 559.82,
+        "rsm_vs_index_pct": 59.74,
+        "rank": 8
+      },
+      {
+        "ticker": "MRVL",
+        "sector": "Information Technology",
+        "price": 244.25,
+        "rsm_vs_index_pct": 59.5,
+        "rank": 9
+      },
+      {
+        "ticker": "CRWD",
+        "sector": "Information Technology",
+        "price": 237.65,
+        "rsm_vs_index_pct": 55.51,
+        "rank": 10
+      }
+    ]
   },
-  "note": "Strategia wieloetapowa oparta na CZYSTYM RS (zero momentum/trailing-return): (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB > SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = oscylator Mansfield RS (RS = cena sektorowego ETF-u SPDR [np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS] / cena SP500, RSM = (RS / SMA(RS, 52 tyg.) - 1) * 100 — klasyczne roczne okno, NIEZALEZNE od krotszych 13/26-tyg. wariantow z wykresu pojedynczej spolki); jesli dany ETF nie ma jeszcze danych w index_prices, sektor dostaje 'data_source': 'no_data' i ladu je na koncu rankingu (bez fallbacku na przyblizenie momentum/trailing-return — to juz nie bylby czysty RS); (3) w KAZDYM sektorze (nie tylko najsilniejszym, patrz klikalny Krok 2 na froncie) — DOKLADNIE ten sam oscylator Mansfielda, ale mianownikiem RS jest teraz cena TEGO sektorowego ETF-u zamiast SP500 (RS = cena_spolki / cena_sektora), top 10% wg biezacej wartosci. Stage/TTM Squeeze dla top_companies NIE sa tu duplikowane — czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania strategii, NIE porada inwestycyjna."
+  "note": "Strategia wieloetapowa oparta na CZYSTYM RS (zero momentum/trailing-return): (1) SP500 w fazie wzrostu, gdy cena > SMA200 (dzienna) LUB > SMA40 (tygodniowa); (2) sila relatywna sektorow SP500 = oscylator Mansfield RS (RS = cena sektorowego ETF-u SPDR [np. XLK dla Information Technology, patrz fetch_data.py::SECTOR_ETF_SYMBOLS] / cena SP500, RSM = (RS / SMA(RS, 52 tyg.) - 1) * 100 — klasyczne roczne okno, NIEZALEZNE od krotszych 13/26-tyg. wariantow z wykresu pojedynczej spolki); jesli dany ETF nie ma jeszcze danych w index_prices, sektor dostaje 'data_source': 'no_data' i ladu je na koncu rankingu (bez fallbacku na przyblizenie momentum/trailing-return — to juz nie bylby czysty RS); (3) w KAZDYM sektorze (nie tylko najsilniejszym, patrz klikalny Krok 2 na froncie) — DOKLADNIE ten sam oscylator Mansfielda, ale mianownikiem RS jest teraz cena TEGO sektorowego ETF-u zamiast SP500 (RS = cena_spolki / cena_sektora), top 10% wg biezacej wartosci; (4) dodatkowo top 10 spolek CALEGO SP500 wg tego samego oscylatora, ale ZAWSZE mianownikiem SP500 (nie sektora) — 'top_rs_companies', czysty RS bez podzialu na sektory. Stage/TTM Squeeze dla top_companies/top_rs_companies NIE sa tu duplikowane — czytane sa z docs/data/sp500.json (all_constituents) po tickerze. Dane informacyjne do testowania strategii, NIE porada inwestycyjna."
 }
