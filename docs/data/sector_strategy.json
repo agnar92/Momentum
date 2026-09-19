@@ -1,19 +1,14 @@
 {
-  "ref_date": "2026-09-17",
+  "ref_date": "2026-09-18",
   "trend": {
-    "date": "2026-09-17",
-    "close": 7637.76,
-    "sma200": 7178.86,
+    "date": "2026-09-18",
+    "close": 7650.5,
+    "sma200": 7183.05,
     "above_sma200": true,
-    "sma40w": 7200.02,
+    "sma40w": 7200.34,
     "above_sma40w": true,
     "in_growth_phase": true,
     "daily_series": [
-      {
-        "date": "2025-06-10",
-        "close": 6038.81,
-        "sma200": null
-      },
       {
         "date": "2025-06-11",
         "close": 6022.24,
@@ -1608,6 +1603,11 @@
         "date": "2026-09-17",
         "close": 7637.76,
         "sma200": 7178.86
+      },
+      {
+        "date": "2026-09-18",
+        "close": 7650.5,
+        "sma200": 7183.05
       }
     ],
     "weekly_series": [
@@ -2103,8 +2103,8 @@
       },
       {
         "date": "2026-09-14",
-        "close": 7637.76,
-        "sma40": 7200.02
+        "close": 7650.5,
+        "sma40": 7200.34
       }
     ]
   },
@@ -2122,58 +2122,58 @@
           {
             "rank_in_sector": 1,
             "ticker": "SNDK",
-            "price": 1614.39,
-            "momentum_pct": 3163.05,
-            "rs_vs_sector_pct": 3128.53
+            "price": 1791.82,
+            "momentum_pct": 3111.23,
+            "rs_vs_sector_pct": 3076.63
           },
           {
             "rank_in_sector": 2,
             "ticker": "MU",
-            "price": 977.5,
-            "momentum_pct": 649.56,
-            "rs_vs_sector_pct": 615.04
+            "price": 1015.8,
+            "momentum_pct": 642.15,
+            "rs_vs_sector_pct": 607.55
           },
           {
             "rank_in_sector": 3,
             "ticker": "LITE",
-            "price": 893.61,
-            "momentum_pct": 613.97,
-            "rs_vs_sector_pct": 579.45
+            "price": 930.91,
+            "momentum_pct": 616.9,
+            "rs_vs_sector_pct": 582.3
           },
           {
             "rank_in_sector": 4,
             "ticker": "WDC",
-            "price": 423.87,
-            "momentum_pct": 612.06,
-            "rs_vs_sector_pct": 577.54
+            "price": 441.36,
+            "momentum_pct": 601.79,
+            "rs_vs_sector_pct": 567.19
           },
           {
             "rank_in_sector": 5,
             "ticker": "STX",
-            "price": 803.13,
-            "momentum_pct": 436.85,
-            "rs_vs_sector_pct": 402.32
+            "price": 858.79,
+            "momentum_pct": 428.38,
+            "rs_vs_sector_pct": 393.77
           },
           {
             "rank_in_sector": 6,
             "ticker": "CIEN",
-            "price": 344.25,
-            "momentum_pct": 341.47,
-            "rs_vs_sector_pct": 306.95
+            "price": 348.8,
+            "momentum_pct": 340.59,
+            "rs_vs_sector_pct": 305.98
           },
           {
             "rank_in_sector": 7,
             "ticker": "INTC",
-            "price": 108.8,
-            "momentum_pct": 316.84,
-            "rs_vs_sector_pct": 282.32
+            "price": 108.6,
+            "momentum_pct": 311.43,
+            "rs_vs_sector_pct": 276.82
           },
           {
             "rank_in_sector": 8,
             "ticker": "TER",
-            "price": 353.13,
-            "momentum_pct": 247.37,
-            "rs_vs_sector_pct": 212.85
+            "price": 371.47,
+            "momentum_pct": 243.23,
+            "rs_vs_sector_pct": 208.62
           }
         ],
         "rank": 1
@@ -2188,23 +2188,23 @@
           {
             "rank_in_sector": 1,
             "ticker": "VLO",
-            "price": 412.53,
-            "momentum_pct": 114.04,
-            "rs_vs_sector_pct": 80.92
+            "price": 413.28,
+            "momentum_pct": 111.87,
+            "rs_vs_sector_pct": 77.67
           },
           {
             "rank_in_sector": 2,
             "ticker": "APA",
-            "price": 45.46,
-            "momentum_pct": 86.94,
-            "rs_vs_sector_pct": 53.82
+            "price": 44.87,
+            "momentum_pct": 87.14,
+            "rs_vs_sector_pct": 52.94
           },
           {
             "rank_in_sector": 3,
             "ticker": "MPC",
-            "price": 421.96,
-            "momentum_pct": 79.48,
-            "rs_vs_sector_pct": 46.36
+            "price": 424.89,
+            "momentum_pct": 79.44,
+            "rs_vs_sector_pct": 45.24
           }
         ],
         "rank": 2
@@ -2219,44 +2219,44 @@
           {
             "rank_in_sector": 1,
             "ticker": "CNC",
-            "price": 67.1,
-            "momentum_pct": 128.0,
-            "rs_vs_sector_pct": 106.63
+            "price": 65.11,
+            "momentum_pct": 137.71,
+            "rs_vs_sector_pct": 115.52
           },
           {
             "rank_in_sector": 2,
             "ticker": "MRNA",
-            "price": 158.07,
-            "momentum_pct": 91.99,
-            "rs_vs_sector_pct": 70.61
+            "price": 154.04,
+            "momentum_pct": 97.76,
+            "rs_vs_sector_pct": 75.57
           },
           {
             "rank_in_sector": 3,
             "ticker": "VTRS",
-            "price": 17.13,
-            "momentum_pct": 86.52,
-            "rs_vs_sector_pct": 65.14
+            "price": 16.95,
+            "momentum_pct": 94.71,
+            "rs_vs_sector_pct": 72.52
           },
           {
             "rank_in_sector": 4,
             "ticker": "HUM",
-            "price": 384.52,
-            "momentum_pct": 78.93,
-            "rs_vs_sector_pct": 57.56
+            "price": 386.22,
+            "momentum_pct": 81.48,
+            "rs_vs_sector_pct": 59.29
           },
           {
             "rank_in_sector": 5,
-            "ticker": "INCY",
-            "price": 127.62,
-            "momentum_pct": 70.08,
-            "rs_vs_sector_pct": 48.7
+            "ticker": "CVS",
+            "price": 88.84,
+            "momentum_pct": 73.45,
+            "rs_vs_sector_pct": 51.26
           },
           {
             "rank_in_sector": 6,
-            "ticker": "CVS",
-            "price": 90.27,
-            "momentum_pct": 69.78,
-            "rs_vs_sector_pct": 48.4
+            "ticker": "INCY",
+            "price": 125.31,
+            "momentum_pct": 72.78,
+            "rs_vs_sector_pct": 50.6
           }
         ],
         "rank": 3
@@ -2271,65 +2271,65 @@
           {
             "rank_in_sector": 1,
             "ticker": "FIX",
-            "price": 1573.96,
-            "momentum_pct": 204.1,
-            "rs_vs_sector_pct": 185.91
+            "price": 1651.37,
+            "momentum_pct": 202.08,
+            "rs_vs_sector_pct": 183.63
           },
           {
             "rank_in_sector": 2,
             "ticker": "VRT",
-            "price": 241.49,
-            "momentum_pct": 120.84,
-            "rs_vs_sector_pct": 102.65
+            "price": 249.39,
+            "momentum_pct": 124.36,
+            "rs_vs_sector_pct": 105.91
           },
           {
             "rank_in_sector": 3,
             "ticker": "CHRW",
-            "price": 153.82,
-            "momentum_pct": 111.61,
-            "rs_vs_sector_pct": 93.42
+            "price": 152.99,
+            "momentum_pct": 113.89,
+            "rs_vs_sector_pct": 95.44
           },
           {
             "rank_in_sector": 4,
             "ticker": "CAT",
-            "price": 798.57,
-            "momentum_pct": 110.56,
-            "rs_vs_sector_pct": 92.37
+            "price": 808.99,
+            "momentum_pct": 112.78,
+            "rs_vs_sector_pct": 94.32
           },
           {
             "rank_in_sector": 5,
             "ticker": "JBHT",
-            "price": 236.8,
-            "momentum_pct": 90.85,
-            "rs_vs_sector_pct": 72.66
+            "price": 234.25,
+            "momentum_pct": 95.72,
+            "rs_vs_sector_pct": 77.27
           },
           {
             "rank_in_sector": 6,
             "ticker": "CMI",
-            "price": 523.88,
-            "momentum_pct": 86.25,
-            "rs_vs_sector_pct": 68.07
+            "price": 532.23,
+            "momentum_pct": 85.07,
+            "rs_vs_sector_pct": 66.61
           },
           {
             "rank_in_sector": 7,
             "ticker": "GEV",
-            "price": 924.93,
-            "momentum_pct": 85.53,
-            "rs_vs_sector_pct": 67.34
+            "price": 940.33,
+            "momentum_pct": 84.1,
+            "rs_vs_sector_pct": 65.65
           },
           {
             "rank_in_sector": 8,
             "ticker": "FDX",
-            "price": 305.88,
-            "momentum_pct": 70.08,
-            "rs_vs_sector_pct": 51.89
+            "price": 303.65,
+            "momentum_pct": 71.39,
+            "rs_vs_sector_pct": 52.94
           },
           {
             "rank_in_sector": 9,
             "ticker": "EXPD",
-            "price": 189.08,
-            "momentum_pct": 60.46,
-            "rs_vs_sector_pct": 42.28
+            "price": 190.94,
+            "momentum_pct": 63.7,
+            "rs_vs_sector_pct": 45.24
           }
         ],
         "rank": 4
@@ -2344,23 +2344,23 @@
           {
             "rank_in_sector": 1,
             "ticker": "STLD",
-            "price": 245.35,
-            "momentum_pct": 79.57,
-            "rs_vs_sector_pct": 67.3
+            "price": 235.26,
+            "momentum_pct": 78.92,
+            "rs_vs_sector_pct": 66.9
           },
           {
             "rank_in_sector": 2,
             "ticker": "NUE",
-            "price": 265.14,
-            "momentum_pct": 68.11,
-            "rs_vs_sector_pct": 55.83
+            "price": 248.38,
+            "momentum_pct": 68.25,
+            "rs_vs_sector_pct": 56.23
           },
           {
             "rank_in_sector": 3,
             "ticker": "ALB",
-            "price": 115.05,
-            "momentum_pct": 59.47,
-            "rs_vs_sector_pct": 47.19
+            "price": 110.91,
+            "momentum_pct": 56.71,
+            "rs_vs_sector_pct": 44.7
           }
         ],
         "rank": 5
@@ -2374,59 +2374,59 @@
         "top_companies": [
           {
             "rank_in_sector": 1,
-            "ticker": "IVZ",
-            "price": 30.22,
-            "momentum_pct": 71.47,
-            "rs_vs_sector_pct": 64.33
+            "ticker": "STT",
+            "price": 182.87,
+            "momentum_pct": 68.19,
+            "rs_vs_sector_pct": 61.11
           },
           {
             "rank_in_sector": 2,
-            "ticker": "STT",
-            "price": 183.07,
-            "momentum_pct": 69.8,
-            "rs_vs_sector_pct": 62.66
+            "ticker": "BNY",
+            "price": 153.79,
+            "momentum_pct": 58.97,
+            "rs_vs_sector_pct": 51.89
           },
           {
             "rank_in_sector": 3,
-            "ticker": "BNY",
-            "price": 153.02,
-            "momentum_pct": 60.47,
-            "rs_vs_sector_pct": 53.33
+            "ticker": "MS",
+            "price": 202.58,
+            "momentum_pct": 53.02,
+            "rs_vs_sector_pct": 45.94
           },
           {
             "rank_in_sector": 4,
-            "ticker": "MS",
-            "price": 203.52,
-            "momentum_pct": 52.95,
-            "rs_vs_sector_pct": 45.8
+            "ticker": "GL",
+            "price": 173.42,
+            "momentum_pct": 51.33,
+            "rs_vs_sector_pct": 44.25
           },
           {
             "rank_in_sector": 5,
-            "ticker": "IBKR",
-            "price": 88.38,
-            "momentum_pct": 52.33,
-            "rs_vs_sector_pct": 45.19
+            "ticker": "GS",
+            "price": 942.0,
+            "momentum_pct": 50.4,
+            "rs_vs_sector_pct": 43.32
           },
           {
             "rank_in_sector": 6,
-            "ticker": "GL",
-            "price": 172.26,
-            "momentum_pct": 51.94,
-            "rs_vs_sector_pct": 44.8
+            "ticker": "CFG",
+            "price": 67.04,
+            "momentum_pct": 49.01,
+            "rs_vs_sector_pct": 41.93
           },
           {
             "rank_in_sector": 7,
-            "ticker": "GS",
-            "price": 951.47,
-            "momentum_pct": 50.92,
-            "rs_vs_sector_pct": 43.77
+            "ticker": "IVZ",
+            "price": 30.53,
+            "momentum_pct": 48.74,
+            "rs_vs_sector_pct": 41.66
           },
           {
             "rank_in_sector": 8,
-            "ticker": "CFG",
-            "price": 67.39,
-            "momentum_pct": 48.28,
-            "rs_vs_sector_pct": 41.14
+            "ticker": "AIZ",
+            "price": 282.23,
+            "momentum_pct": 47.2,
+            "rs_vs_sector_pct": 40.12
           }
         ],
         "rank": 6
@@ -2441,30 +2441,30 @@
           {
             "rank_in_sector": 1,
             "ticker": "CASY",
-            "price": 607.45,
-            "momentum_pct": 66.6,
-            "rs_vs_sector_pct": 61.57
+            "price": 597.48,
+            "momentum_pct": 68.37,
+            "rs_vs_sector_pct": 63.06
           },
           {
             "rank_in_sector": 2,
             "ticker": "MNST",
-            "price": 44.51,
-            "momentum_pct": 65.0,
-            "rs_vs_sector_pct": 59.97
+            "price": 44.71,
+            "momentum_pct": 65.25,
+            "rs_vs_sector_pct": 59.94
           },
           {
             "rank_in_sector": 3,
             "ticker": "BG",
-            "price": 119.31,
-            "momentum_pct": 62.86,
-            "rs_vs_sector_pct": 57.83
+            "price": 115.58,
+            "momentum_pct": 60.1,
+            "rs_vs_sector_pct": 54.79
           },
           {
             "rank_in_sector": 4,
             "ticker": "ADM",
-            "price": 88.09,
-            "momentum_pct": 60.44,
-            "rs_vs_sector_pct": 55.41
+            "price": 85.18,
+            "momentum_pct": 57.93,
+            "rs_vs_sector_pct": 52.62
           }
         ],
         "rank": 7
@@ -2479,23 +2479,23 @@
           {
             "rank_in_sector": 1,
             "ticker": "WELL",
-            "price": 232.26,
-            "momentum_pct": 54.32,
-            "rs_vs_sector_pct": 45.45
+            "price": 228.87,
+            "momentum_pct": 52.94,
+            "rs_vs_sector_pct": 44.38
           },
           {
             "rank_in_sector": 2,
             "ticker": "HST",
-            "price": 21.9,
-            "momentum_pct": 49.07,
-            "rs_vs_sector_pct": 40.2
+            "price": 21.84,
+            "momentum_pct": 48.33,
+            "rs_vs_sector_pct": 39.77
           },
           {
             "rank_in_sector": 3,
             "ticker": "VTR",
-            "price": 87.71,
-            "momentum_pct": 47.01,
-            "rs_vs_sector_pct": 38.14
+            "price": 86.69,
+            "momentum_pct": 46.05,
+            "rs_vs_sector_pct": 37.49
           }
         ],
         "rank": 8
@@ -2510,37 +2510,37 @@
           {
             "rank_in_sector": 1,
             "ticker": "ROST",
-            "price": 229.48,
-            "momentum_pct": 78.92,
-            "rs_vs_sector_pct": 74.08
+            "price": 226.61,
+            "momentum_pct": 79.67,
+            "rs_vs_sector_pct": 75.75
           },
           {
             "rank_in_sector": 2,
             "ticker": "EXPE",
-            "price": 284.55,
-            "momentum_pct": 47.61,
-            "rs_vs_sector_pct": 42.77
+            "price": 279.35,
+            "momentum_pct": 45.34,
+            "rs_vs_sector_pct": 41.42
           },
           {
             "rank_in_sector": 3,
             "ticker": "EBAY",
-            "price": 112.9,
-            "momentum_pct": 45.93,
-            "rs_vs_sector_pct": 41.09
+            "price": 111.84,
+            "momentum_pct": 43.41,
+            "rs_vs_sector_pct": 39.49
           },
           {
             "rank_in_sector": 4,
             "ticker": "GM",
-            "price": 86.62,
-            "momentum_pct": 42.96,
-            "rs_vs_sector_pct": 38.12
+            "price": 82.2,
+            "momentum_pct": 42.93,
+            "rs_vs_sector_pct": 39.01
           },
           {
             "rank_in_sector": 5,
             "ticker": "TPR",
-            "price": 116.04,
-            "momentum_pct": 38.47,
-            "rs_vs_sector_pct": 33.63
+            "price": 115.0,
+            "momentum_pct": 36.78,
+            "rs_vs_sector_pct": 32.86
           }
         ],
         "rank": 9
@@ -2555,30 +2555,30 @@
           {
             "rank_in_sector": 1,
             "ticker": "EIX",
-            "price": 55.5,
-            "momentum_pct": 51.24,
-            "rs_vs_sector_pct": 41.56
+            "price": 55.31,
+            "momentum_pct": 51.8,
+            "rs_vs_sector_pct": 43.93
           },
           {
             "rank_in_sector": 2,
             "ticker": "ETR",
-            "price": 103.31,
-            "momentum_pct": 33.95,
-            "rs_vs_sector_pct": 24.27
+            "price": 102.01,
+            "momentum_pct": 31.06,
+            "rs_vs_sector_pct": 23.2
           },
           {
             "rank_in_sector": 3,
             "ticker": "PCG",
-            "price": 13.38,
-            "momentum_pct": 30.62,
-            "rs_vs_sector_pct": 20.94
+            "price": 13.2,
+            "momentum_pct": 28.77,
+            "rs_vs_sector_pct": 20.9
           },
           {
             "rank_in_sector": 4,
             "ticker": "EVRG",
-            "price": 80.84,
-            "momentum_pct": 26.16,
-            "rs_vs_sector_pct": 16.49
+            "price": 79.78,
+            "momentum_pct": 24.22,
+            "rs_vs_sector_pct": 16.35
           }
         ],
         "rank": 10
@@ -2593,23 +2593,23 @@
           {
             "rank_in_sector": 1,
             "ticker": "ECHO",
-            "price": 94.08,
-            "momentum_pct": 218.01,
-            "rs_vs_sector_pct": 214.29
+            "price": 93.46,
+            "momentum_pct": 221.57,
+            "rs_vs_sector_pct": 217.37
           },
           {
             "rank_in_sector": 2,
             "ticker": "WBD",
-            "price": 28.24,
-            "momentum_pct": 109.27,
-            "rs_vs_sector_pct": 105.55
+            "price": 27.8,
+            "momentum_pct": 110.75,
+            "rs_vs_sector_pct": 106.55
           },
           {
             "rank_in_sector": 3,
             "ticker": "GOOGL",
-            "price": 347.33,
-            "momentum_pct": 88.89,
-            "rs_vs_sector_pct": 85.17
+            "price": 349.54,
+            "momentum_pct": 87.38,
+            "rs_vs_sector_pct": 83.18
           }
         ],
         "rank": 11
