@@ -323,34 +323,16 @@ function combinedPoolRows() {
     return [...byTicker.values()].sort((a, b) => (b.momentum_score || 0) - (a.momentum_score || 0));
 }
 
-// Pula bez ręcznie wykluczonych tickerów, z numerem pozycji (pool_rank)
-// przydzielonym PO usunięciu wykluczeń — więc jeśli spółka z wykluczonej
-// listy siedziała w top 5, kolejne spółki "przesuwają się w górę" i TOP N
-// naprawdę oznacza N różnych, kupowalnych spółek.
-function eligiblePoolRows() {
-    return combinedPoolRows()
-        .filter(c => !excluded.includes(c.ticker))
-        .map((c, i) => ({ ...c, pool_rank: i + 1 }));
-}
-
-function autoSelectedRows(n) {
-    if (!n || n <= 0) return [];
-    return eligiblePoolRows().slice(0, n);
-}
-
-// ============================================================
-// RANKING PULI — pełna, sortowalna, filtrowalna po etapie Weinsteina tabela
-// (ta sama tabela co na dashboardzie w duchu, patrz app.js::renderTable) —
-// czysto INFORMACYJNA: pokazuje z czego rebalanser wybiera i które N pozycji
-// dziś realnie wchodzi do portfela. Nie ma tu już przycisku "+ Dodaj" — wybór
-// spółek jest w pełni automatyczny, jedyne co ustawiasz to liczbę spółek
-// (Ustawienia rebalansu poniżej).
-// ============================================================
-let poolSortKey = "pool_rank";
-let poolSortDir = "asc";
-// Filtr etapow — MULTI-SELECT (na zyczenie uzytkownika: "czasem chce spolki
-// z stage 1 i stage 2"), ten sam wzorzec co dawny Krok 2. "ALL" to sentinel
-// oznaczajacy brak filtra.
+// Filtr etapow Weinsteina (Krok 2, patrz stage-filter-bar w rebalance.html) —
+// MULTI-SELECT (na zyczenie uzytkownika: "czasem chce spolki z stage 1 i
+// stage 2"), ten sam wzorzec co dawny, manualny Krok 2. "ALL" to sentinel
+// oznaczajacy brak filtra. **Filtr NIE jest czysto kosmetyczny (samo
+// przeglądanie tabeli)** — na wyraźną prośbę użytkownika ("jak zaznaczę [filtr]
+// to ma TAKI N z tej listy wybrać, po to jest tam to filtrowanie") faktycznie
+// zawęża, z czego rebalanser dobiera TOP N: `eligiblePoolRows()` (i przez to
+// `autoSelectedRows()`/`computeAutoTargets()`) filtruje po nim, więc
+// zaznaczenie np. tylko Etapu 2 realnie oznacza "kupuj tylko spośród spółek w
+// Etapie 2", nie tylko "pokaż mi tylko Etap 2 w tabeli".
 let poolStageFilter = "ALL";
 
 function matchesPoolStageFilter(stage) {
@@ -365,6 +347,36 @@ function poolStageFilterLabel() {
     const labels = { "1": "1", "2": "2A/2B", "3": "3", "4": "4" };
     return [...poolStageFilter].map(s => labels[s]).join(", ");
 }
+
+// Pula bez ręcznie wykluczonych tickerów I (gdy filtr aktywny) bez spółek
+// spoza wybranego etapu Weinsteina (matchesPoolStageFilter, powyżej) — z
+// numerem pozycji (pool_rank) przydzielonym PO obu tych filtrach, więc jeśli
+// spółka z wykluczonej listy/spoza filtra siedziała w top 5, kolejne spółki
+// "przesuwają się w górę" i TOP N naprawdę oznacza N różnych, kupowalnych
+// spółek pasujących do aktualnego filtra.
+function eligiblePoolRows() {
+    return combinedPoolRows()
+        .filter(c => !excluded.includes(c.ticker))
+        .filter(c => matchesPoolStageFilter(c.weekly_chart && c.weekly_chart.current_stage))
+        .map((c, i) => ({ ...c, pool_rank: i + 1 }));
+}
+
+function autoSelectedRows(n) {
+    if (!n || n <= 0) return [];
+    return eligiblePoolRows().slice(0, n);
+}
+
+// ============================================================
+// RANKING PULI — pełna, sortowalna, filtrowalna po etapie Weinsteina tabela
+// (ta sama tabela co na dashboardzie w duchu, patrz app.js::renderTable) —
+// pokazuje z czego rebalanser wybiera i które N pozycji dziś realnie wchodzi
+// do portfela (a przy aktywnym filtrze etapu — patrz poolStageFilter powyżej
+// — N pozycji spośród przefiltrowanej listy). Nie ma tu już przycisku
+// "+ Dodaj" — wybór spółek jest w pełni automatyczny, jedyne co ustawiasz to
+// liczbę spółek (Krok 1 powyżej) i, opcjonalnie, filtr etapu.
+// ============================================================
+let poolSortKey = "pool_rank";
+let poolSortDir = "asc";
 
 function poolRowHtml(c) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
@@ -438,6 +450,11 @@ function initPoolStageFilter() {
             }
             updatePoolStageFilterButtons();
             renderPoolTable();
+            // Filtr etapu teraz realnie zawęża pulę wyboru (patrz komentarz przy
+            // poolStageFilter powyżej), więc zmiana filtra musi też przeliczyć
+            // sugestię/Monte Carlo/krzywą historyczną — nie tylko odświeżyć samą
+            // tabelę rankingu.
+            refreshOutputs();
         });
     });
 }
@@ -475,8 +492,17 @@ function initPoolToggle() {
 }
 
 function renderPoolTable() {
+    // allRows to JUŻ przefiltrowana (wykluczenia + etap) lista — eligiblePoolRows()
+    // sama filtruje po poolStageFilter (patrz jej komentarz powyżej), więc tu nie
+    // ma już osobnego kroku filtrowania (bez `matchesStage` w renderScreenerTable
+    // poniżej) — rows === allRows zawsze. `totalUnfiltered` to ta sama pula bez
+    // filtra etapu (ale wciąż bez wykluczeń), potrzebna tylko żeby pokazać "z ilu
+    // ogółem" w linijce meta, gdy filtr faktycznie coś zawęża.
     const allRows = eligiblePoolRows();
     const filterLabel = poolStageFilterLabel();
+    const totalUnfiltered = filterLabel
+        ? combinedPoolRows().filter(c => !excluded.includes(c.ticker)).length
+        : allRows.length;
     const refDates = poolRefDateNote();
     const n = settings.portfolioSize || 0;
 
@@ -484,15 +510,16 @@ function renderPoolTable() {
         tbody: document.getElementById("poolTableBody"),
         metaEl: document.getElementById("poolMeta"),
         allRows,
-        matchesStage: c => matchesPoolStageFilter(c.weekly_chart && c.weekly_chart.current_stage),
         compareFn: (a, b) => compareRows(a, b, poolSortKey, poolSortDir),
         colspan: 12,
-        emptyAllMsg: "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
+        emptyAllMsg: filterLabel
+            ? "Żadna spółka nie pasuje do wybranego etapu."
+            : "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
-        metaText: (rows) => {
+        metaText: () => {
             if (!refDates) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
             const base = `Pula: ${allRows.length} spółek (TOP ${n} w portfelu) · ${refDates}`;
-            return !filterLabel ? base : `${base} · ${rows.length} z ${allRows.length} pasuje do etapu ${filterLabel}`;
+            return !filterLabel ? base : `${base} · filtr etapu ${filterLabel} zawęża pulę z ${totalUnfiltered} do ${allRows.length}`;
         },
         rowHtml: c => poolRowHtml(c),
         afterRender: (tbody) => {
@@ -855,7 +882,14 @@ function renderSuggestions() {
     const threshold = Math.max(investableCapital * TRADE_THRESHOLD_PCT, 5);
 
     const shares = holdingShares();
+    // Trzy różne zbiory tickerów do rozróżnienia POWODU, dla którego trzymana
+    // pozycja nie jest w dzisiejszym TOP N (patrz notatka niżej): cały pool
+    // (SP500/Nasdaq100/DowJones razem, bez filtra etapu) vs. eligiblePoolRows()
+    // (to samo, ale PO filtrze etapu — patrz poolStageFilter/eligiblePoolRows
+    // powyżej: to realnie ta pula, z której dziś wybiera silnik).
     const poolTickers = new Set(combinedPoolRows().map(c => c.ticker));
+    const eligibleTickers = new Set(eligiblePoolRows().map(c => c.ticker));
+    const stageFilterLabel = poolStageFilterLabel();
 
     const rows = [];
     Object.values(targets).forEach(t => {
@@ -875,8 +909,10 @@ function renderSuggestions() {
     });
 
     // Pozycje, które trzymasz, ale nie są (już) w dzisiejszym automatycznym
-    // TOP N — wykluczone ręcznie, poza TOP N (ranking spadł), albo w ogóle
-    // spoza puli rebalansera (np. stara pozycja z WIG20/mWIG40).
+    // TOP N — cztery możliwe powody, sprawdzane w tej kolejności: wykluczone
+    // ręcznie; w puli i pasuje do filtra etapu, ale ranking spadł poza TOP N;
+    // w puli, ale filtr etapu (jeśli aktywny) ją odrzuca; albo w ogóle spoza
+    // puli rebalansera (np. stara pozycja z WIG20/mWIG40).
     Object.keys(shares).forEach(ticker => {
         if (targets[ticker]) return;
         const price = priceMap[ticker]?.price;
@@ -889,7 +925,14 @@ function renderSuggestions() {
             });
             return;
         }
-        const note = poolTickers.has(ticker) ? `poza TOP ${n}` : "poza pulą rebalansera (SP500 / Nasdaq 100 / Dow Jones)";
+        let note;
+        if (eligibleTickers.has(ticker)) {
+            note = `poza TOP ${n}`;
+        } else if (poolTickers.has(ticker)) {
+            note = `poza filtrem etapu (${stageFilterLabel})`;
+        } else {
+            note = "poza pulą rebalansera (SP500 / Nasdaq 100 / Dow Jones)";
+        }
         rows.push({
             ticker, note, target_value: 0, weight_pct: 0,
             current_value: currentValue, diff: currentValue !== null ? -currentValue : null, dropped: true,
@@ -1223,7 +1266,7 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES, DOWJONES_WEIGHT_MULTIPLIER,
         fmtMoney, fmtMoneyPln, currentMoneyFmt, holdingsMoneyFmt, moneyFmtForCurrency, fmtQty, sharesSuggestion,
-        currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets,
+        currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets, matchesPoolStageFilter,
         deriveUniverseFractionsFromTargets, normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
@@ -1237,6 +1280,7 @@ if (typeof module !== "undefined" && module.exports) {
             if (s.holdings !== undefined) holdings = s.holdings;
             if (s.priceMap !== undefined) priceMap = s.priceMap;
             if (s.equityCurveData !== undefined) equityCurveData = s.equityCurveData;
+            if (s.poolStageFilter !== undefined) poolStageFilter = s.poolStageFilter;
         },
     };
 }

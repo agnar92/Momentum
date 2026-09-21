@@ -1140,17 +1140,43 @@ flex child (no `.topbar-left` wrapper there).
     membership — a lot of Dow's own 30 names are large enough to also qualify for SP500/NASDAQ100, so this
     isn't a rare edge case. Tune the constant directly in `rebalance.js` if the tilt should be
     stronger/weaker.
-  - **Krok 2 — `renderPoolTable()`** renders `eligiblePoolRows()` as a full, sortable (`compareRows()` from
-    `js/shared.js`, click-to-sort `<th data-key>`), stage-filterable (`poolStageFilter`,
-    `#poolStageFilterBar`, MULTI-SELECT — same reasoning the prior manual-picking design already had for
-    this: a user comparing candidates cares about Etap 1 and Etap 2 names side by side, not just one stage
-    at a time — `"ALL"` sentinel or a `Set` of `"1"`/`"2"`(both `2A`/`2B`)/`"3"`/`"4"`) table — the same
-    shape/columns as the dashboard's own tables, through the shared `renderScreenerTable()` engine (see the
-    `js/table-render.js` bullet below). **This table is purely informational now — nothing in it is
-    clickable to change the selection.** `poolRowHtml()`'s last-but-one column is a plain badge ("✓ w
-    portfelu" / "—") showing whether that row's `pool_rank` falls inside the current `portfolioSize`, not a
-    toggle button — there's nothing left to toggle, since the engine picks automatically. `STAGE_LABELS`/
-    `STAGE_COLORS`/`stageCellHtml()`/`compareRows()` live in `js/shared.js` (see that bullet below).
+  - **`poolStageFilter` (`#poolStageFilterBar`) is a REAL SELECTION filter, not just a table display
+    filter** — a later, separate explicit user correction ("jak zaznaczę [filtr] to ma taki N z tej listy
+    wybrać, po to jest tam to filtrowanie" — "when I check [a stage filter], it should pick that N from
+    THAT [filtered] list — that's the whole point of the filtering"): an earlier version applied this
+    filter only inside `renderScreenerTable()`'s row-filtering step (cosmetic — hid non-matching rows from
+    the table, but `pool_rank`/the automatic TOP N were still computed against the FULL, unfiltered pool),
+    which meant checking e.g. "Etap 2" visually narrowed the table without actually changing what the
+    engine would buy — exactly the disconnect the user flagged. **`eligiblePoolRows()` itself now filters
+    by `matchesPoolStageFilter()`** (moved up next to `poolStageFilter`'s own declaration, before
+    `combinedPoolRows()`/`eligiblePoolRows()`, so the dependency reads top-to-bottom) — `pool_rank` is
+    assigned AFTER this filter (same "re-number after narrowing" idiom as the exclusion filter above), and
+    since `autoSelectedRows()`/`computeAutoTargets()` both build on `eligiblePoolRows()`, a stage filter now
+    genuinely means "only ever buy from this stage." MULTI-SELECT (`"ALL"` sentinel or a `Set` of
+    `"1"`/`"2"`(both `2A`/`2B`)/`"3"`/`"4"`) for the same reason the prior manual-picking design already had
+    it: a user comparing candidates cares about Etap 1 and Etap 2 names side by side, not just one stage at
+    a time. **The stage-filter click handler must call `refreshOutputs()`, not just `renderPoolTable()`** —
+    a real bug caught before landing: without it, toggling a stage filter updated the ranking table (and
+    its correct, narrower `pool_rank`s) but left the suggestion table/Monte Carlo/equity curve showing the
+    stale, unfiltered TOP N until some unrelated later interaction (e.g. changing `portfolioSize`)
+    happened to trigger a re-render — verified fixed with Playwright (before the fix, toggling "Etap 2"
+    left the exact same 10 tickers in the suggestion table; after, it correctly dropped every non-2A/2B
+    name and pulled in the next-ranked 2A/2B ones instead).
+  - **Krok 2 — `renderPoolTable()`** renders `eligiblePoolRows()` (already stage-filtered per the bullet
+    above) as a full, sortable (`compareRows()` from `js/shared.js`, click-to-sort `<th data-key>`) table —
+    the same shape/columns as the dashboard's own tables, through the shared `renderScreenerTable()` engine
+    (see the `js/table-render.js` bullet below; it no longer passes that engine a `matchesStage` option,
+    since the rows it receives are pre-filtered already — the meta line separately shows `allRows.length`
+    against a `combinedPoolRows()`-minus-exclusions total so "filter narrowed the pool from X to Y" stays
+    visible). **No ROW in this table is clickable to change the selection** — only the filter bar above it
+    is. `poolRowHtml()`'s last-but-one column is a plain badge ("✓ w portfelu" / "—") showing whether that
+    row's `pool_rank` (already computed within the filtered pool) falls inside the current `portfolioSize`.
+    `STAGE_LABELS`/`STAGE_COLORS`/`stageCellHtml()`/`compareRows()` live in `js/shared.js` (see that bullet
+    below).
+  - A held position that's outside today's TOP N because a stage filter excludes it (rather than because
+    its rank simply fell below N within the filtered pool) is flagged in the suggestion table distinctly —
+    `"poza filtrem etapu ({label})"` vs. plain `"poza TOP {n}"` — see the dedicated note further below on
+    the suggestion table's three-way (four including manual exclusion) reason breakdown.
   - **A dedicated "📈" button per row (`chart-row-btn` in `poolRowHtml()`) still opens `chart.html`** — a
     dedicated, standalone page with just that one ticker's own stage-analysis chart (see the dedicated
     `chart.html` bullet below). It navigates to `?ticker=<ticker>&universe=<universe>&back=rebalance.html`
@@ -1190,11 +1216,16 @@ flex child (no `.topbar-left` wrapper there).
     for this (`holdingsValue()`), kept alive specifically because a legacy WIG20/mWIG40 holding can still
     exist even though the automatic engine will never buy into one again. `moneyFmtForCurrency(currency)`
     remains the explicit-currency formatter for individual holdings-table rows.
-  - A held position that isn't in today's automatic TOP N is flagged in the suggestion table as either
-    `"poza TOP {n}"` (still in the pool, just ranked below N) or `"poza pulą rebalansera (SP500 / Nasdaq 100
-    / Dow Jones)"` (not in the pool at all — most commonly a legacy WIG20/mWIG40 position) — distinguishing
-    the two matters now that "not selected" can mean either "ranked too low" or "not eligible at all,"
-    which a single earlier message didn't need to distinguish.
+  - A held position that isn't in today's automatic TOP N is flagged in the suggestion table with ONE of
+    three notes, checked in this order (`renderSuggestions()`, using `poolTickers` = `combinedPoolRows()`
+    tickers and `eligibleTickers` = `eligiblePoolRows()` tickers, i.e. the SAME stage-filtered set
+    `autoSelectedRows()` draws from): `"poza TOP {n}"` (in the eligible/filtered pool, just ranked below N)
+    — `"poza filtrem etapu ({label})"` (in the raw pool but the active stage filter excludes it — new,
+    added alongside making the stage filter a real selection filter, see above; without this a filtered-out
+    holding would misleadingly read "poza TOP {n}" as if only its RANK were the issue) — or `"poza pulą
+    rebalansera (SP500 / Nasdaq 100 / Dow Jones)"` (not in the pool at all regardless of any filter — most
+    commonly a legacy WIG20/mWIG40 position). Manual exclusion (`"wykluczone ręcznie"`) is still checked
+    first, before any of these three.
   - The "Wynik historyczny" equity-curve panel still goes through **`blendEquityCurves(fractions)`**
     (`fractions` from `deriveUniverseFractionsFromTargets(targets)`, fed by `computeAutoTargets()`'s output
     instead of picks — otherwise unchanged) — with a single-universe TOP N (common when `portfolioSize` is
