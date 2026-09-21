@@ -1380,6 +1380,45 @@ class TestComputeMansfieldRsChart:
         assert out["rsm_short"][-1] > 0
         assert out["rsm_medium"][-1] > 0
 
+    def test_long_rsm_has_value_from_first_displayed_week_with_enough_history(self):
+        # rsm_long (RS_MANSFIELD_LONG_WEEKS=52, dodane na wyrazne zyczenie uzytkownika
+        # -- "ad 52 weeks for that panel so it will have 3 lines") potrzebuje wiecej
+        # zapasu PRZED start_date niz short/medium: RS_MANSFIELD_LONG_WEEKS - 1 = 51 tyg.
+        con = make_gem_con()
+        ref_date = pd.Timestamp("2026-06-29")
+        start_date = ref_date - pd.Timedelta(weeks=26)
+        fixture_start = start_date - pd.Timedelta(weeks=70)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 100, 100.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 100, 200.0, 0.3)
+
+        out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                          start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["rsm_long"][0] is not None
+        assert out["rsm_long"][-1] > 0
+
+    def test_insufficient_lookback_for_long_leaves_it_none_while_short_and_medium_populate(self):
+        # Ten sam zapas (44 tyg.) co w test_short_and_medium_rsm_have_values_from_first_
+        # displayed_week powyzej: wiecej niz potrzeba dla short/medium (12/25 tyg.), ale
+        # za malo dla long (potrzeba RS_MANSFIELD_LONG_WEEKS - 1 = 51 tyg.) -- ten sam
+        # "None dopoki nie ma dosc historii" wzorzec co rsm_medium w drugim tescie tej
+        # klasy, tylko dla trzeciej, dluzszej linii.
+        con = make_gem_con()
+        ref_date = pd.Timestamp("2026-06-29")
+        start_date = ref_date - pd.Timedelta(weeks=26)
+        fixture_start = start_date - pd.Timedelta(weeks=44)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 75, 100.0, 1.0)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), 75, 200.0, 0.3)
+
+        out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                          start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["rsm_short"][0] is not None
+        assert out["rsm_medium"][0] is not None
+        assert out["rsm_long"][0] is None
+
     def test_insufficient_lookback_leaves_medium_none_but_short_populated(self):
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")

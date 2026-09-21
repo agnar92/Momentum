@@ -120,10 +120,24 @@ function rollingMean(values, window) {
 // słownie w #rsMansfieldCaption, patrz niżej). mansfieldData.dates to zawsze
 // dokładny podzbiór (sufiks) fullDates — sam sposób ich liczenia w backendzie
 // resampluje z tych samych dziennych tabel tym samym `DATE_TRUNC('week', ...)`.
+// Trzecia linia, "long" (rsm_long, ~12M wygladzenie, RS_MANSFIELD_LONG_WEEKS=52 w
+// run_query.py), dodana na wyrazne zyczenie uzytkownika. Ten sam padding-do-
+// fullDates dotyczy jej tak samo jak short/medium — z tym ze przy obecnej
+// ~22-miesiecznej retencji prices ten konkretny wariant regularnie zaczyna
+// jako `null` na sporej czesci wyswietlanego okna (52-tyg. zapas rozgrzewkowy
+// nie miesci sie caly przed start_date), patrz komentarz przy
+// RS_MANSFIELD_LONG_WEEKS w run_query.py — to oczekiwane, nie blad.
 function alignMansfieldToDates(mansfieldData, fullDates) {
     const idxByDate = new Map(mansfieldData.dates.map((d, i) => [d, i]));
-    const pick = (series) => fullDates.map(d => (idxByDate.has(d) ? series[idxByDate.get(d)] : null));
-    return { short: pick(mansfieldData.rsm_short), medium: pick(mansfieldData.rsm_medium) };
+    // `series[idx] ?? null` (nie samo `series[idx]`) — dla starszego, jeszcze
+    // niezmigrowanego cache'a bez rsm_long (mansfieldData.rsm_long wtedy `undefined`)
+    // pick() ma zwracac `null`, tak jak dla brakujacego tygodnia, a nie `undefined`.
+    const pick = (series) => fullDates.map(d => (idxByDate.has(d) ? (series[idxByDate.get(d)] ?? null) : null));
+    return {
+        short: pick(mansfieldData.rsm_short || []),
+        medium: pick(mansfieldData.rsm_medium || []),
+        long: pick(mansfieldData.rsm_long || []),
+    };
 }
 
 // Czwarty panel: wskaznik TTM Squeeze (ttm_squeeze_chart, patrz
@@ -460,6 +474,14 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
                 datasets: [
                     { label: `RSM krótkoterminowy vs ${rsEntry.universe} (~3M)`, data: aligned.short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
                     { label: `RSM średnioterminowy vs ${rsEntry.universe} (~6M)`, data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                    // Trzecia, dlugoterminowa linia (rsm_long, ~12M/52-tyg. wygladzenie) —
+                    // dodana na wyrazne zyczenie uzytkownika. Przerywana (borderDash), zeby
+                    // od razu odroznic ja wizualnie od dwoch solidnych linii short/medium —
+                    // czesto zaczyna sie jako `null` (patrz komentarz przy RS_MANSFIELD_LONG_WEEKS
+                    // w run_query.py: obecna retencja prices nie miesci calego 52-tyg. zapasu
+                    // rozgrzewkowego przed poczatkiem okna), co po prostu zostawia pusty
+                    // odcinek z lewej strony tej linii, tak jak short/medium robily wczesniej.
+                    { label: `RSM długoterminowy vs ${rsEntry.universe} (~12M)`, data: aligned.long, borderColor: "#f0a832", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [5, 3] },
                     { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
                 ],
             },
@@ -470,7 +492,7 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
                 plugins: {
                     legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
                     tooltip: {
-                        filter: (ctx) => ctx.datasetIndex !== 2,
+                        filter: (ctx) => ctx.datasetIndex !== 3,
                         callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2)}` },
                     },
                 },
@@ -497,7 +519,13 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
         const aligned = alignSqueezeToDates(squeezeData, chartData.dates);
         const zeroLineSqueeze = chartData.dates.map(() => 0);
         if (squeezeCaption) {
-            squeezeCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+            // Prefiks "TTM Squeeze" na tej samej zasadzie co "Mansfield RS vs
+            // {universe}" w panelu 3 powyżej — ten panel nie ma WŁASNEJ legendy
+            // Chart.js (plugins.legend.display:false, patrz niżej — same słupki
+            // histogramu i kropki nie tłumaczą się same), więc bez podpisu
+            // wyglądał jak nieopisany dodatek pod panelem Mansfielda, a nie jak
+            // czwarty, samodzielny wykres.
+            squeezeCaption.textContent = `TTM Squeeze · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
         // Klasyczne 4 kolory histogramu TTM Squeeze: dodatni/rosnący (jaśniejszy
         // zielony) vs dodatni/malejący (ciemniejszy zielony), ujemny/malejący

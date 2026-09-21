@@ -618,14 +618,28 @@ explicit `pd.notna(...)` check before being appended, even where it looks redund
 
 Each leader also carries a `mansfield_chart` (`compute_mansfield_rs_chart()`) — the classic Mansfield
 Relative Strength oscillator, `RSM = (RS / SMA(RS, N weeks) - 1) * 100` where `RS = stock_close /
-index_close`, in **two smoothing variants plotted together**: short-term (`rsm_short`,
-`RS_MANSFIELD_SHORT_WEEKS` = 13 weeks, ~3 months) and medium-term (`rsm_medium`,
-`RS_MANSFIELD_MEDIUM_WEEKS` = 26 weeks, ~6 months) — two deliberately different, non-overlapping horizons
-of the same signal (a short-term acceleration/deceleration can lead or diverge from the medium-term trend).
-It now displays over **the exact same window as `weekly_chart`** — `start_date` (the M-14/M-2, or M-11
-fallback, momentum window) through `ref_date` — taking `start_date` as a parameter exactly like
-`compute_relative_strength_chart` does, and fetching its own `RS_MANSFIELD_MEDIUM_WEEKS + 2` weeks of
-buffer before it so the 26-week smoothing already has a value at the first displayed point.
+index_close`, in **three smoothing variants plotted together**: short-term (`rsm_short`,
+`RS_MANSFIELD_SHORT_WEEKS` = 13 weeks, ~3 months), medium-term (`rsm_medium`,
+`RS_MANSFIELD_MEDIUM_WEEKS` = 26 weeks, ~6 months), and long-term (`rsm_long`,
+`RS_MANSFIELD_LONG_WEEKS` = 52 weeks, ~12 months, added later at the user's explicit request — "ad 52
+weeks for that panel so it will have 3 lines") — three deliberately different, non-overlapping horizons
+of the same signal (a short-term acceleration/deceleration can lead or diverge from the medium-/
+long-term trend). It now displays over **the exact same window as `weekly_chart`** — `start_date` (the
+M-14/M-2, or M-11 fallback, momentum window) through `ref_date` — taking `start_date` as a parameter
+exactly like `compute_relative_strength_chart` does, and fetching its own `RS_MANSFIELD_LONG_WEEKS + 2`
+weeks of buffer before it (the longest of the three windows, so it decides the buffer size) so each
+smoothing already has a value at the first displayed point, retention permitting (see below — `rsm_long`
+specifically often does NOT have that luxury).
+
+**`rsm_long` deliberately reintroduces the exact 52-week retention shortfall this section already
+describes below as having been fixed** — this is a known, accepted trade-off, not an oversight. With the
+current ~22-month `prices` retention, a ~14-month momentum window plus a 52-week (~12-month) warm-up
+buffer needs ~26 months of history in total; the retention only gives ~8 months (~34 weeks) of buffer
+before `start_date`, so `rsm_long` comes back `null` for roughly the first half of the displayed window
+until someone raises `--lookback-months` further (which triggers a one-time full re-bootstrap of
+`prices`, see `_prices_history_is_shallow()` in `fetch_data.py`) — same graceful-degradation convention
+as `rsm_medium`/`sma10_pct`/`sma30_pct` elsewhere in this module, just guaranteed to bite harder here
+until the retention is deepened again.
 
 **Version history matters here too**: an earlier version deliberately decoupled this chart from the
 momentum window — its own display range was just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6
@@ -1014,11 +1028,12 @@ flex child (no `.topbar-left` wrapper there).
      `volume - buying_volume` (selling, top, red), on its own fully-visible axis. Its X range is kept in
      sync with panel 1 (`syncVolumeXRange()`, called from the zoom/pan plugin's `onZoomComplete`/
      `onPanComplete` callbacks) so both panels always show the same weeks.
-  3. The Mansfield RS oscillator (short-term + medium-term lines, its own separate ~6-month window, see
-     above) in a small panel underneath — now the ONLY panel showing the stock's strength against its own
-     benchmark index (`rsEntry.universe`), since panel 1's index line was removed (see above): above zero
-     means the stock is currently outperforming that index over the given smoothing window, below means
-     it's lagging. Non-interactive — its own short window doesn't need zoom/pan.
+  3. The Mansfield RS oscillator (short-term/medium-term/long-term lines — `rsm_short`/`rsm_medium`/
+     `rsm_long`, see above) in a small panel underneath — now the ONLY panel showing the stock's strength
+     against its own benchmark index (`rsEntry.universe`), since panel 1's index line was removed (see
+     above): above zero means the stock is currently outperforming that index over the given smoothing
+     window, below means it's lagging. The long-term (~12M, dashed) line often starts as a gap — see the
+     `rsm_long` retention caveat above. Non-interactive — its own window doesn't need zoom/pan.
   4. The TTM Squeeze panel (`ttm_squeeze_chart`, see `compute_ttm_squeeze_chart()` above) — replaces an
      earlier panel that plotted the stock's own raw 1/3/6-month rolling % growth (`growth_chart`, removed
      at the user's request in favor of finding momentum names coming out of consolidation). A Chart.js

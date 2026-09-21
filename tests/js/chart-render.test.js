@@ -33,18 +33,29 @@ test("rollingMean returns null only when every value in the window (so far) is n
 
 test("alignMansfieldToDates pads with null before the Mansfield window's own start date", () => {
     const fullDates = ["2026-01-01", "2026-01-08", "2026-01-15", "2026-01-22"];
-    const mansfieldData = { dates: ["2026-01-15", "2026-01-22"], rsm_short: [1, 2], rsm_medium: [10, 20] };
+    const mansfieldData = {
+        dates: ["2026-01-15", "2026-01-22"], rsm_short: [1, 2], rsm_medium: [10, 20], rsm_long: [100, 200],
+    };
     const aligned = alignMansfieldToDates(mansfieldData, fullDates);
     assert.deepEqual(aligned.short, [null, null, 1, 2]);
     assert.deepEqual(aligned.medium, [null, null, 10, 20]);
+    assert.deepEqual(aligned.long, [null, null, 100, 200]);
 });
 
 test("alignMansfieldToDates returns an all-null series when no Mansfield date matches", () => {
     const fullDates = ["2025-01-01", "2025-01-08"];
-    const mansfieldData = { dates: ["2026-01-15"], rsm_short: [1], rsm_medium: [10] };
+    const mansfieldData = { dates: ["2026-01-15"], rsm_short: [1], rsm_medium: [10], rsm_long: [100] };
     const aligned = alignMansfieldToDates(mansfieldData, fullDates);
     assert.deepEqual(aligned.short, [null, null]);
     assert.deepEqual(aligned.medium, [null, null]);
+    assert.deepEqual(aligned.long, [null, null]);
+});
+
+test("alignMansfieldToDates treats a missing rsm_long (older, not-yet-migrated cache) as all-null, not a crash", () => {
+    const fullDates = ["2026-01-01", "2026-01-08"];
+    const mansfieldData = { dates: ["2026-01-01", "2026-01-08"], rsm_short: [1, 2], rsm_medium: [10, 20] };
+    const aligned = alignMansfieldToDates(mansfieldData, fullDates);
+    assert.deepEqual(aligned.long, [null, null]);
 });
 
 test("alignSqueezeToDates pads with null before the squeeze window's own start date", () => {
