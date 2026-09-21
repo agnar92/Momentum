@@ -14,52 +14,93 @@ present right before an earlier, temporary removal of SP500 from the tool — se
 starting holdings snapshot — replace it by hand like the other two CSVs when the index composition
 changes.
 
-**The rebalance calculator has no regions any more, and no more automatic TOP N either.** An earlier
-design split `rebalance.js` into two fully independent halves — `USA` (NASDAQ100+DOWJONES, USD) and `GPW`
-(WIG20+MWIG40, PLN), each with its own contribution amount, own TOP N picker per index, own suggestion
-table, Monte Carlo, equity curve, and portfolio donut — specifically to avoid ever summing a PLN amount
-and a USD amount together (this tool doesn't fetch an FX rate). That design was replaced by a single flow
-with a strategy dropdown (`STRATEGY_GEM`/`STRATEGY_WEIGHTED`) that auto-picked TOP N constituents by
-momentum ranking from whichever universe(s) it decided to draw from. **That auto-picking design is gone
-too, replaced by a STEPWISE, manually-driven flow**, at the user's explicit request: they wanted a ~1h/week
-routine where THEY decide which companies go into the portfolio, using the dashboard's own technical data
-(momentum ranking, Weinstein stage) as input, rather than a number (TOP N) picking for them. The flow is
-now:
-- **Krok 1 (Step 1) — choose a universe.** The Global Equity Momentum ranking (see the dedicated GEM
-  section below) is shown as a clickable list of all 5 universes — the current GEM winner is highlighted
-  (🏆) and pre-selected the first time the page loads, but this is only a SUGGESTION: clicking any other
-  row switches `settings.browsingUniverse` to browse that universe's companies instead, regardless of who
-  is winning GEM this month. `renderGemWidget()` (`rebalance.js`) does double duty here — it's still the
-  informational GEM ranking panel it always was, just now also the Step 1 universe picker.
-- **Krok 2 (Step 2) — pick companies from that universe's table.** `settings.browsingUniverse` drives a
-  full, sortable, stage-filterable momentum table (`renderPickerTable()`) — the same shape and columns as
-  the dashboard's own per-universe table (`app.js::renderTable`), reading `all_constituents` (the FULL
-  qualifying universe, not just today's top-decile pipeline selection) so any company can be picked, not
-  just this month's decile. Each row gets a "+ Dodaj" / "✓ W portfelu" toggle button (`togglePick()`)
-  instead of an automatic ranking cutoff — the user decides company-by-company, using momentum score,
-  volatility, and the same Weinstein stage column/filter bar the dashboard has, to time entries (e.g.
-  preferring Stage 2A/2B breakouts over a Stage 1 base or a Stage 4 decline).
-- **The portfolio ACCUMULATES across weeks/months (`picks`, `localStorage`, see `loadPicks`/`savePicks`).**
-  A company picked once stays in the portfolio — visible in a flat, cross-universe "Twój portfel
-  (skumulowany)" chip list (`renderPicksList()`) with its own quick-remove ✕ — even after the browsed
-  universe or the GEM winner changes in a later week. This is a deliberate design goal, not an accident:
-  the user explicitly asked for a portfolio built "month by month" this way, rather than one that's
-  recomputed from scratch (and could silently drop a held name) every time GEM's winner rotates. Each
-  pick's WEIGHT still re-derives from that company's CURRENT `momentum_score` every time the page loads
-  (`computeTargetsFromPicks()`, weekly pipeline data) — only WHICH companies are in the portfolio is
-  sticky, not their weights, so the allocation still tracks fresh momentum data week to week.
+**The rebalance calculator is fully automatic again, and its pool no longer includes WIG20/mWIG40.** Its
+design history, oldest to newest:
+1. Split into two fully independent halves — `USA` (NASDAQ100+DOWJONES, USD) and `GPW` (WIG20+MWIG40,
+   PLN), each with its own contribution amount, own TOP N picker per index, own suggestion table, Monte
+   Carlo, equity curve, and portfolio donut — specifically to avoid ever summing a PLN amount and a USD
+   amount together (this tool doesn't fetch an FX rate).
+2. Merged into a single flow with a strategy dropdown (`STRATEGY_GEM`/`STRATEGY_WEIGHTED`) that auto-picked
+   TOP N constituents by momentum ranking from whichever of the (then still 5) universes it decided to draw
+   from.
+3. Replaced by a STEPWISE, manually-driven flow (Krok 1 — click a Global Equity Momentum row to pick which
+   universe to browse; Krok 2 — manually "+ Dodaj" individual companies into an accumulating, cross-week
+   `picks` list in `localStorage`), at the user's explicit request: they wanted a ~1h/week routine where
+   THEY decide which companies go into the portfolio, using the dashboard's own technical data (momentum
+   ranking, Weinstein stage) as input, rather than a number (TOP N) picking for them.
+4. **Current design**: back to fully automatic, at a later, separate explicit request — the user found the
+   manual weekly picking more upkeep than they wanted, and asked instead for one number (how many companies)
+   with the rebalancer choosing which ones and at what weight. At the same time, **WIG20/mWIG40 were removed
+   from the rebalancer's pool entirely** — the user monitors those two indices themselves and holds them
+   through a separate ETF outside this tool. They stay fully computed and shown on the dashboard
+   (`index.html`) — only the rebalance calculator stopped drawing from them. Because the pool is now always
+   SP500+NASDAQ100+DOWJONES (all three USD-denominated), the currency-mixing machinery that steps 1-3 each
+   needed (splitting/blending a portfolio that could span PLN and USD at once) is no longer needed for the
+   calculator's own output — see below for what of it survives (for the holdings table specifically) and
+   what does not.
 
-Because the portfolio can (rarely, across several months) span more than one universe/currency at once,
-`currentMoneyFmt()`/`deriveUniverseFractionsFromTargets()`/`blendEquityCurves()` handle a currency-mixed
-portfolio exactly the way the old `STRATEGY_WEIGHTED` mode did (see the dedicated write-up further down) —
-that mixing-without-FX-conversion machinery survived the redesign even though the settings dropdown that
-used to expose it did not, because "picks span 2+ universes" is just as real a scenario under manual
-picking (any month you keep some old picks while adding new ones from a different universe) as it was
-under a percentage-weighted split. Existing holdings from a universe that ISN'T currently browsed, or that
-you never picked at all, are still priced and shown (so they can be flagged for sale) —
-`currencyOf(ticker)` (in `rebalance.js`, the direct replacement for the older, region-returning `regionOf`)
-is only used for formatting an individual holding-table row in its own native currency, independent of the
-portfolio's own picks.
+The current, automatic flow (`rebalance.js`):
+- **Krok 1 — settings.** The only input is `settings.portfolioSize` (TOP N — how many companies should be
+  in the portfolio) plus the monthly contribution amount. Nothing else to configure; no strategy dropdown,
+  no per-universe weights, no manual picking.
+- **The pool** (`REBALANCE_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"]`, `combinedPoolRows()`) is built
+  from:
+  - **SP500**: `constituents` — i.e. the pipeline's own top-quintile momentum selection, NOT
+    `all_constituents`. This is a deliberate, and convenient, coincidence: `select_with_buffer`'s
+    `target_count = min(round(TARGET_QUINTILE * n), MAX_HOLDINGS)` (see Pipeline architecture below)
+    resolves to exactly 100 for SP500 (20% of ~500, capped at `MAX_HOLDINGS = 100` anyway) — the same
+    "top 100 by momentum" sizing the user asked for by name ("top 100 spółek z sp500 jak w SPMO", i.e. like
+    the S&P 500 Momentum Index / the SPMO ETF that tracks it) — with the buffer rule's reduced turnover as
+    a bonus, at no extra implementation cost.
+  - **NASDAQ100**: `all_constituents` — the user explicitly wants "cały nasdaq100" (the WHOLE Nasdaq 100),
+    not just its own much smaller top-quintile selection (~20 names).
+  - **DOWJONES**: `constituents` — already the whole index either way, since DOWJONES is one of
+    `EQUAL_WEIGHT_UNIVERSES` (see Pipeline architecture below) and carries no quintile selection to begin
+    with.
+  Rows from the three are merged into one list (`combinedPoolRows()`), sorted by `momentum_score`
+  descending — comparing `momentum_score` directly ACROSS universes is a deliberate simplification (each
+  universe's z-score/momentum_score is its own cross-sectional computation, not literally a single unified
+  ranking in the pipeline) — the same convention the picks-merging logic in the prior manual design already
+  used. A ticker present in two universes at once (a large-cap can be in both SP500 and NASDAQ100) is
+  deduped to a single row, keeping whichever universe's occurrence has the higher `momentum_score`, so TOP N
+  always means N distinct companies, never two slots for the same one.
+- **Selection and weighting are both automatic.** `eligiblePoolRows()` drops manually-excluded tickers (see
+  "Wyklucz z rebalansu", unchanged from earlier designs) and re-numbers `pool_rank` so exclusions backfill
+  from the next-ranked name rather than shrinking the portfolio below N. `autoSelectedRows(n)` slices the
+  top N of that. `computeAutoTargets(n, totalCapital)` weights the selected N by each company's CURRENT
+  `momentum_score`, normalized to `totalCapital` — the same weighting convention (one simple, consistent
+  rule regardless of which universe(s) contributed) every earlier design in this history also used, still a
+  deliberate simplification vs. the pipeline's own cap-weighting (`compute_weights`'s 9%/3x cap-weight
+  logic).
+- **Krok 2 — ranking table** (`renderPoolTable()`) is purely informational now: the full, sortable,
+  stage-filterable pool (same shape as the dashboard's own tables), with a "W portfelu" column showing
+  which rows fall inside today's TOP N — nothing here is clickable to change the selection, since there's
+  nothing left to manually pick. A dedicated "📈" button per row still opens that company's own chart on
+  `chart.html`, same pattern as the dashboard's own tables.
+- **Nothing accumulates across weeks any more.** Unlike the manual design's `picks` (step 3 above), the
+  portfolio is recomputed FRESH from `portfolioSize` and current momentum data every time the page loads —
+  there is no `localStorage`-persisted list of previously-chosen companies to keep in sync. A company drops
+  out of the portfolio the moment it drops out of the pool's TOP N; if you still hold it, the suggestion
+  table flags it for sale (`"poza TOP {n}"`) same as it always has for a name that fell off a selection.
+- **Global Equity Momentum plays no role here any more.** Its sole purpose in every earlier design (steps
+  2-3 above) was picking which universe(s) to draw from — the pool is now fixed (SP500+NASDAQ100+DOWJONES,
+  always), so there's nothing left for it to decide. `rebalance.js` no longer fetches
+  `global_equity_momentum.json`, no longer renders a GEM widget, and no longer has any per-browser manual
+  GEM-return override field. None of this touches the PIPELINE side — `run_query.py` still computes and
+  exports GEM (still across all 5 universes) exactly as before; it just has no consumer left on this page
+  (it never had a dashboard panel either — see the dedicated GEM section below).
+
+Because the pool is now always SP500+NASDAQ100+DOWJONES (all USD), the calculator's own outputs (ranking,
+suggestion table, stats, Monte Carlo, equity curve) are always USD — `currentMoneyFmt()` is now just a
+constant (`fmtMoney`), kept as a named function only so it's clear in the code *why* it's constant. The
+currency-mixing machinery earlier designs needed (`deriveUniverseFractionsFromTargets()`/
+`blendEquityCurves()`, for blending the equity curve across whichever universe(s) the selection spans, and
+`currencyOf()`, for pricing a holding in its native currency) still exists and is still exercised — but only
+because a user's **holdings** (what they actually own, tracked independently of the pool/picks and never
+purged by a design change) can still include a legacy WIG20/mWIG40 position bought under an earlier design,
+even though the rebalancer itself no longer selects into those universes. `holdingsMoneyFmt()` is the
+formatter for the "Analiza portfela" donut specifically (which reflects actual holdings, not the pool), kept
+separate from `currentMoneyFmt()` for exactly this reason.
 
 Code comments and CLI print messages are written in Polish; keep that convention when editing existing
 files (English is fine for new, unrelated code).
@@ -226,10 +267,14 @@ Compares the **index level** (not constituents) of ALL FIVE universes — `GEM_U
 over a trailing `GEM_LOOKBACK_MONTHS` (12) window — the classic dual/global-momentum idea of picking
 whichever market currently has the strongest trend. This used to compare only NASDAQ100/DOWJONES
 (SP500/WIG20/mWIG40 were deliberately excluded from the race, even though their index-level data was
-already being fetched for Relative Strength) — widened to all 5 specifically because GEM stopped being a
-dashboard-only curiosity and became the selection engine for the rebalance calculator (`rebalance.js`, see
-"What this repo is" above and the Frontend section below): the calculator needs a winner drawn from the
-full set of universes it can rebalance against, not just two of them. `compute_index_returns()` (below)
+already being fetched for Relative Strength) — widened to all 5 at a point when GEM was, for a while, the
+selection engine for the rebalance calculator (`rebalance.js`), which back then needed a winner drawn from
+the full set of universes it could rebalance against. **That is no longer GEM's role** — the rebalance
+calculator is fully automatic today, drawing from a fixed pool (SP500+NASDAQ100+DOWJONES) that GEM has no
+say over (see "What this repo is" above and the Frontend section below) — but `GEM_UNIVERSES` was left at
+all 5 rather than narrowed back down: GEM is still useful, general-purpose market-comparison information in
+its own right, independent of whichever page/feature happens to consume it, and narrowing it back would
+only lose information for no benefit. `compute_index_returns()` (below)
 already computed a straight full-window `price_now/price_start - 1` return — not momentum's M-14/M-2
 skip-most-recent-2-months convention, which is reserved for individual stocks — so widening `GEM_UNIVERSES`
 required no change to that computation, only to the constant itself.
@@ -315,54 +360,24 @@ index price to show instead). This override is scoped to `compute_index_returns(
 touch `compute_index_leaders()` (which ranks the *winning universe's own constituents* by their own
 `prices` data, unaffected either way) or Relative Strength/the 10:30 chart (still synthetic-only, as
 above) — the file's own `_instructions` says this explicitly, since it would be easy to assume a "real
-WIG20 return" fix should apply everywhere it's used. `rebalance.js::renderGemWidget()` shows a small
-"(ręcznie)" label next to any universe whose record carries `manual_entry: true`, for the same data-
-provenance transparency the app already uses elsewhere (e.g. `fmc_note`).
+WIG20 return" fix should apply everywhere it's used. This backend mechanism is entirely unaffected by the
+rebalance-calculator changes described in "What this repo is" above — `_load_gem_manual_returns()`/
+`gem_manual_returns.json` still work exactly as described, `compute_index_returns()` still sets
+`manual_entry: true` on override, and `global_equity_momentum.json` still carries it; there's just no
+frontend page currently rendering that `"(ręcznie)"` provenance label any more (see below).
 
-**There is also a second, independent, client-side-only manual override** — a small input field per
-universe directly inside the GEM widget on `rebalance.html`, added after the user found editing
-`gem_manual_returns.json` on GitHub every month more friction than they wanted ("no to ja chce pole na
-stronie w rebalanserze do zatwierdzenia"). Since `rebalance.html` is a static page with no backend, this
-field cannot write back to the repo file — the only two real options were a `localStorage`-only override
-(same pattern already used for holdings/exclusions/settings) or calling the GitHub API with a
-write-scoped personal token embedded in client-side JS, which the user was asked about directly and
-rejected for the obvious reason: a repo-write credential sitting in code that runs in anyone's browser is
-a real security liability, not a hypothetical one. So `rebalance.js` implements the `localStorage` route:
-  - `GEM_MANUAL_KEY` (`momentum_rebalance_gem_manual`) holds `{ [universe]: { return_pct, as_of } }`,
-    written by `saveManualGemReturns()`/read by `loadManualGemReturns()` — same shape as
-    `gem_manual_returns.json`, but a totally separate store; neither reads nor writes the other.
-  - `loadUniverseData()` snapshots the freshly-fetched `gemData.indices` into module-level
-    `gemPristineIndices` (a plain copy, before any override) right after fetching
-    `global_equity_momentum.json`, then calls `applyManualGemOverrides()` — which rebuilds `gemData.indices`
-    from that pristine snapshot plus whatever is currently in `loadManualGemReturns()`, replacing
-    `return_pct` and setting `manual_entry: true` for any of `GEM_MANUAL_OVERRIDE_UNIVERSES` ("WIG20"/
-    "MWIG40" — must stay in sync with the same-named constant in `run_query.py`) that has a stored
-    override, then **re-sorts and re-derives `gemData.winner` from those overridden numbers** — exactly
-    like the backend's `compute_index_returns()` does with `gem_manual_returns.json`, just entirely in the
-    browser. Rebuilding from the untouched `gemPristineIndices` snapshot every time (rather than mutating
-    `gemData.indices` in place) is what makes clearing an override actually restore the original
-    pipeline/synthetic value, and makes repeated saves idempotent.
-  - `renderGemWidget()` renders one number input + "Zapisz" button per `GEM_MANUAL_OVERRIDE_UNIVERSES`
-    entry present in `gemData.indices`, plus a "✕" clear button only when an override is currently stored
-    for that universe. Saving parses the input, writes it via `saveManualGemReturns()`, calls
-    `applyManualGemOverrides()`, and re-renders both the widget and the whole page (`renderAll()`) — since
-    a changed winner can change which universe is highlighted as Step 1's suggestion (and, if the user
-    hasn't overridden `settings.browsingUniverse` since, which universe Step 2 is browsing) plus every
-    downstream suggestion/Monte-Carlo/equity-curve panel. Clearing does the same after deleting that
-    universe's key. Enter in the input triggers the same save as clicking the button. The `(ręcznie)` label
-    in the index list doesn't distinguish which of the two manual mechanisms (this field vs.
-    `gem_manual_returns.json`) set `manual_entry` — both mean the same thing to the user ("this isn't the
-    synthetic number"), and if both happen to be set, this client-side one wins simply because
-    `applyManualGemOverrides()` runs after the fetch and rewrites `return_pct` again regardless of what the
-    backend already put there.
-  - This override is **per-browser, not shared** — unlike `gem_manual_returns.json` (which, once filled in
-    and committed, affects the pipeline's output for every viewer/device), a value typed into this field
-    only changes what the calculator shows and buys on that one browser profile. A different device, a
-    cleared browser profile, or another person opening the same page will still see whatever
-    `gem_manual_returns.json`/the synthetic index computed. The two mechanisms are intentionally
-    independent rather than one replacing the other: the repo file is the "everyone, every device" fix (but
-    needs a GitHub edit + pipeline run to take effect); this field is the "just for me, right now, no
-    GitHub round-trip" fix.
+**There used to also be a second, independent, client-side-only manual override** — a small input field per
+universe inside a GEM widget on `rebalance.html` (`GEM_MANUAL_KEY`/`saveManualGemReturns`/
+`loadManualGemReturns`/`applyManualGemOverrides`/`renderGemWidget()`, `localStorage`-only since the page has
+no backend to write `gem_manual_returns.json` back to), added after the user found editing that file on
+GitHub every month more friction than they wanted. **It was removed along with the rest of the GEM widget**
+when the rebalance calculator became fully automatic over a fixed SP500+NASDAQ100+DOWJONES pool (see "What
+this repo is" above) — GEM stopped picking anything for the calculator to browse, so the widget it lived in
+had nothing left to do on that page. If a similar "edit a number without a GitHub round-trip" need comes up
+again for `gem_manual_returns.json` specifically, re-read this note (or the pre-removal git history) before
+reinventing the mechanism from scratch — the shape (a `localStorage` mirror of the repo file, applied as an
+override after fetch, re-sorted/re-ranked from the untouched pristine data on every apply so clearing it is
+a clean revert) is still a reasonable one, it just currently has no page to attach to.
 
 **The GEM window is anchored to month-end trading days, not to "today".** `_gem_month_end_anchor_dates()`
 resolves both endpoints (`date_now`/`date_start` on each index record) to the last trading day of a
@@ -403,16 +418,19 @@ winning universe and the return is computed over the *same* window as the index 
 momentum score — a small-cap mover with an extreme return but negligible index weight should not outrank
 a mega-cap that is dragging the whole index up. `export_global_equity_momentum()` writes both the ranked
 index list and the winner's leader list to `docs/data/global_equity_momentum.json`. **This `leaders` list
-is purely informational** (shown in the small GEM widget on `rebalance.html`, see Frontend section below)
-— it is NOT what the rebalance calculator buys. The calculator's own Step 2 table
-(`rebalance.js::renderPickerTable`/`pickerRows`) sorts the browsed universe's full constituent list by its
-own `momentum_score`/`rank` (the same per-constituent momentum ranking `get_universe_metrics` computes for
-every universe's selection, exposed on every `all_constituents` record) — a deliberately different,
-simpler ranking than `compute_index_leaders`'s index-contribution weighting, chosen because the user wants
-this ranking to mean "strongest own momentum," not "biggest driver of the index's return"; which
-companies actually end up weighted in the portfolio is then the user's own manual pick from that list
-(see the dedicated `rebalance.html`/`rebalance.js` write-up in the Frontend section), not an automatic
-cutoff.
+is purely informational and today has no frontend consumer at all** — it used to be shown in a small GEM
+widget on `rebalance.html`, back when GEM still picked which universe the rebalance calculator drew from
+(see "What this repo is" above); that widget is gone now that the calculator is fully automatic over a
+fixed pool, same as the dashboard never had a GEM panel either (see below). The field is cheap to keep
+exporting (same reasoning as `relative_strength.json`, see Relative strength below) in case a future
+feature wants it again. The rebalance calculator's own ranking (`combinedPoolRows()` in `rebalance.js`,
+see the dedicated Frontend write-up below) sorts by each company's own `momentum_score`/`rank` (the same
+per-constituent momentum ranking `get_universe_metrics` computes for every universe's selection, exposed on
+every `all_constituents`/`constituents` record) — a deliberately different, simpler ranking than
+`compute_index_leaders`'s index-contribution weighting, because it answers "strongest own momentum," not
+"biggest driver of the index's return"; this is also, today, what actually gets bought — TOP N of that
+ranking IS the automatically-selected/weighted portfolio, not just an informational list to pick from by
+hand.
 
 `export_global_equity_momentum()`'s `ref_date` is *not* threaded through from the constituent-price
 pipeline's `ref_date` parameter — it's independently derived from `MAX(Date)` in `index_prices` when
@@ -427,13 +445,15 @@ and `compute_index_leaders()` still gracefully falls back to each constituent's 
 `fetch_data.py --indices-only` + `run_query.py --gem-only` locally between the weekly CI runs for a cheap,
 targeted GEM check, and this fallback is what makes that still work correctly.
 
-**GEM has no dashboard tab any more** (`index.html`/`app.js` — it used to have its own sidebar group,
-drawer tab, and table, all reading `docs/data/global_equity_momentum.json` via `state.gem`). It was
-removed once the rebalance calculator became its actual consumer: a "just to look at" panel on the
-dashboard was no longer the point, since the winner it computes now directly drives what the calculator
-buys. `global_equity_momentum.json` is still generated by the pipeline exactly as before (now weekly, as
-part of the single consolidated `run_query.py` run — see above) — only `app.js` stopped fetching/rendering
-it; `rebalance.js` fetches it instead (see Frontend section below).
+**GEM has no dashboard tab, and no rebalancer widget, any more** (`index.html`/`app.js` — it used to have
+its own sidebar group, drawer tab, and table, all reading `docs/data/global_equity_momentum.json` via
+`state.gem`; removed once the rebalance calculator briefly became its actual consumer instead, a "just to
+look at" panel on the dashboard no longer being the point back then). That consumer is gone too now that
+the rebalance calculator is fully automatic over a fixed pool (see "What this repo is" above) —
+`rebalance.js` no longer fetches `global_equity_momentum.json` either. **`global_equity_momentum.json` is
+still generated by the pipeline exactly as before** (now weekly, as part of the single consolidated
+`run_query.py` run — see above), with no frontend page currently reading it at all — the same
+cheap-to-keep, currently-unconsumed situation as `relative_strength.json` (see Relative strength below).
 
 ### Relative strength (`compute_index_momentum` / `compute_relative_strength_leaders`)
 
@@ -909,9 +929,10 @@ flex child (no `.topbar-left` wrapper there).
   screener, just not through a dedicated tab. `jumpToTicker()` (used by Ctrl+K's `confirmCmdkSelection()`)
   guards against this: jumping to an SP500/NASDAQ100 ticker updates the chart/selection but does not try to
   switch the drawer to a tab that doesn't exist. **Global Equity Momentum has no dashboard panel/tab at
-  all any more** — it moved to being the rebalance calculator's selection engine instead of a
-  look-only screen (see the dedicated GEM section above and the `rebalance.html`/`rebalance.js` bullet
-  below); `app.js` no longer fetches `global_equity_momentum.json`.
+  all any more** — it briefly moved to being the rebalance calculator's selection engine instead of a
+  look-only screen, and even that role is gone now that the calculator is fully automatic over a fixed pool
+  (see the dedicated GEM section above and the `rebalance.html`/`rebalance.js` bullet below); `app.js` no
+  longer fetches `global_equity_momentum.json`, and neither does `rebalance.js` any more.
 
   **RSM (Mansfield Relative Strength) is now two separate, full dashboard tabs** — "📈 RSM Stabilne" and
   "🚀 RSM Wzrostowe" (`data-universe="RSM_STABLE"`/`"RSM_GROWTH"`) — replacing an earlier single "RSM" tab
@@ -1072,140 +1093,97 @@ flex child (no `.topbar-left` wrapper there).
   `state.selectedUniverse`, set alongside `state.selectedTicker` in `selectTicker()`) so the "Otwórz w
   TradingView" link resolves to the correct Warsaw-listed instrument instead of clashing with an unrelated
   ticker on another exchange.
-- **`rebalance.html` / `js/rebalance.js`** — rebalance calculator. All user state (holdings, exclusions,
-  picks, settings) lives in `localStorage` only — there is no backend. **There are no regions any more,
-  and no more automatic TOP N ranking either** — see the version history in "What this repo is" above for
-  the two designs this replaced (region split, then a `STRATEGY_GEM`/`STRATEGY_WEIGHTED` dropdown that
-  auto-picked TOP N by momentum). The calculator is now a two-step, manually-driven flow meant to fit a
-  ~1h/week routine:
-  - **Krok 1 — `renderGemWidget()`** still renders the Global Equity Momentum ranking exactly as before
-    (see the dedicated GEM section above for `gemData`/the manual-override fields/`applyManualGemOverrides`
-    — none of that changed), but each ranking row is now also a clickable universe picker: clicking one
-    sets `settings.browsingUniverse` (persisted, defaults to `gemData.winner` only the first time
-    `loadUniverseData()` runs) and re-renders both the widget (to move the "przeglądasz" highlight) and
-    Step 2's table. The GEM winner (🏆) is a suggestion, not an automatic selection — the user can browse
-    (and pick from) any of the 5 universes regardless of who's winning this month.
-  - **Krok 2 — `renderPickerTable()`** renders `universeData[settings.browsingUniverse].all_constituents`
-    (falling back to `.constituents`) as a full, sortable (`comparePickerRows`, click-to-sort headers with
-    `data-key`, mirroring `app.js::compareRows`/`renderTable`), stage-filterable (`pickerStageFilter`,
-    `#pickerStageFilterBar`, reusing the same `.stage-filter-btn` markup/CSS as the dashboard) momentum
-    table. `pickerRowHtml()` adds one action column: a "+ Dodaj" / "✓ W portfelu" toggle button
-    (`togglePick(ticker, universe)`) — or a disabled "WYKLUCZONE" badge when the ticker is on the
-    exclusion list — replacing what used to be an automatic TOP N cutoff. `STAGE_LABELS`/`STAGE_COLORS`/
-    `stageCellHtml()`/`compareRows()` (sortowanie) now live in `js/shared.js` — see the dedicated
-    `js/shared.js` bullet below for why that module exists and exactly what moved into it.
-    **`pickerStageFilter` is MULTI-SELECT here, deliberately unlike the dashboard's own single-select
-    `state.stageFilter`** — the user explicitly asked for "spółki z stage 1 i stage 2" at once, since
-    picking is a manual, company-by-company decision where a base (Etap 1, about to break out) is just as
-    relevant to look at alongside an already-confirmed Etap 2 as either alone. It's a sentinel `"ALL"`
-    (no filter, the default — matches every row, same as before) or a `Set` of one or more of `"1"`/`"2"`
-    (both `2A` and `2B`)/`"3"`/`"4"` once at least one specific stage button has been clicked
-    (`initPickerStageFilter()`/`updatePickerStageFilterButtons()` toggle membership per click; clicking
-    "Wszystkie" always resets to `"ALL"`; toggling off the last selected stage also falls back to `"ALL"`
-    rather than leaving an empty, all-filtered-out table with no visual explanation why). `.stage-filter-btn`
-    CSS already keys each button's `.active` color off its own `data-stage`, so multiple buttons showing
-    `.active` at once needed no CSS change.
-  - **A dedicated "📈" button per row (last column, `chart-row-btn` in `pickerRowHtml()`) opens `chart.html`**
-    — a dedicated, standalone page with just that one ticker's own stage-analysis chart, full-page (see the
-    dedicated `chart.html` bullet below for what's on it and why it's a separate page rather than a
-    dashboard "mode"). It navigates to `?ticker=<ticker>&universe=<universe>&back=rebalance.html`
-    (`window.location.href`, a real navigation, not a nested view inside the Krok 2 card) — `back` is what
-    lets `chart.html`'s own "← Powrót" button return here specifically, not just to the dashboard (see
-    `resolveBackHref()` in `chart.js`). Bound in `renderPickerTable()`'s `afterRender` hook alongside the
-    "+ Dodaj"/"✓ W portfelu" toggle button, same pattern as `tvRowButtonHtml()`/`bindTvRowButtons()` in
-    `app.js` (a small icon-only button in its own narrow last column, `th.chart-col`/`#pickerTable tbody tr
-    { cursor: default }` in `style.css`) — just a locally-defined equivalent here, since `rebalance.js`
-    doesn't load `chart-render.js` and has no other use for that pattern.
-    **Version history**: this went through FOUR designs before landing here — the first three chased "zero
-    duplicated chart code," the fourth (current) chased "don't open the chart by accident." First, the
-    whole four-panel chart-rendering pipeline (`renderRelativeStrengthChart` and everything it depends on)
-    was ported verbatim into `rebalance.js` as a second in-page view — rejected by the user as pointless
-    duplication ("nie baw się w kopiowanie tego samego kodu"). Second attempt: delete that copy and instead
-    redirect to `index.html?ticker=&universe=&fullscreen=1`, letting the dashboard's own existing
-    fullscreen chart mode (`initChartFullscreen()`) handle it — this avoided duplicating the chart code,
-    but the user rejected it too: landing on `index.html` still visually "went back to the Dashboard"
-    first (sidebar/table briefly the surrounding page), and a CSS-overlay "fullscreen" bolted onto a
-    multi-purpose page isn't the same as an actually separate page, nor did it remember where to return to
-    (closing it always meant leaving the dashboard entirely, with no path back to Krok 2). Third design: a
-    real separate page (`chart.html`) *and* zero duplicated chart code, by extracting the chart engine
-    itself into `js/chart-render.js` (see that bullet below) — reached by making the WHOLE table row
-    clickable (everywhere except the "+ Dodaj"/"✓ W portfelu" button, via `e.stopPropagation()` in its own
-    click handler) rather than adding a dedicated control. This satisfied the "no duplicated chart code"
-    goal but created a NEW problem the user reported after using it for a while: opening a chart
-    "mimowolnie" (involuntarily) just from ordinary interaction with the table (e.g. a touch-scroll
-    registering as a tap, or a click landing near — but not on — another control) — a click ANYWHERE in a
-    39+-row table is a large, easy-to-hit target for an action (leaving the page) the user didn't actually
-    intend. The current (fourth) design keeps the third design's "zero duplicated chart code" win
-    (`chart.html` still calls into the same shared `js/chart-render.js`) while shrinking the click target
-    down to the single dedicated "📈" button described above — the row itself does nothing on click any
-    more, and `isSelected`/`.row-selected` (still used to highlight already-picked rows) carries no click
-    behavior of its own.
-  - **`picks`** (`loadPicks()`/`savePicks()`, `localStorage` key `momentum_rebalance_picks`) is a flat,
-    ACCUMULATING array of `{ ticker, universe, added_date }` — `isPicked()`/`togglePick()` are the only
-    mutators. A pick made in one week's Step 2 session stays until manually removed (via the toggle button
-    in Step 2, or the ✕ on its chip in the "Twój portfel (skumulowany)" list, `renderPicksList()`) — this
-    is the literal implementation of "build the portfolio month by month" the user asked for: the set of
-    HELD companies is sticky across GEM-winner/browsing-universe changes, even though their weights are
-    recomputed fresh every time the page loads. The same `(ticker, universe)` pair can theoretically be
-    picked from two different universes at once (e.g. a large-cap present in both SP500 and NASDAQ100) —
-    `computeTargetsFromPicks()` (below) merges that case into one row.
-  - **`computeTargetsFromPicks(totalCapital)`** is the direct successor to the old
-    `computeTargetsForUniverse`/`computeTargets`/`computeWeightedTargets` trio — one function, no strategy
-    branch. For every pick, it looks up that ticker in ITS OWN universe's `all_constituents` (not
-    `constituents` — same reasoning as before: the full qualifying universe, not just today's decile) to
-    get its CURRENT `price`/`momentum_score`/`momentum_pct`/`volatility_pct`, then weights all picks by
-    `momentum_score`, normalized to `totalCapital` — the same conscious simplification vs. the pipeline's
-    own cap-weighting (`compute_weights`'s 9%/3x cap-weight logic) as before: one simple, consistent
-    weighting rule regardless of which/how many universes the picks span. A pick whose ticker is no longer
-    found in its universe's `all_constituents` (e.g. dropped from the index since it was picked) gets
-    `stale: true` and a weight of 0 — it stays visible in the suggestion table (so the user can consciously
-    sell/remove it) rather than silently vanishing. Manually-excluded tickers are dropped from the targets
-    entirely, even if picked. Two picks of the same ticker from different universes merge into one row,
-    summing `raw_weight`/`target_value` and collecting both universe names into a `universes` array (used
-    in the suggestion table's "Indeks / uwaga" column).
-  - **`deriveUniverseFractionsFromTargets(targets)`** turns computed targets back into a `{universe:
-    capital}` map (splitting a merged multi-universe pick's value evenly across its universes) — this
-    replaces the old `settings.weights` as the input to `blendEquityCurves()` for the "Wynik historyczny"
-    panel (see below): instead of a user-set percentage split, the equity curve is now blended by
-    HOW THE PORTFOLIO ACTUALLY WEIGHTS ITSELF across universes today, derived straight from `picks`.
-  - **Holdings and exclusions are one flat, universe-agnostic list**, exactly as before — one `holdings`
-    array (ticker + shares) and one `excluded` array of tickers, entirely independent of `picks`.
-    `currencyOf(ticker)` (via `priceMap[ticker].sources`, defaulting to USD for an unrecognized ticker)
-    replaces the old region-returning `regionOf` — it's used ONLY to format an individual holding-table row
-    (price/value cells) in its own native currency; it has nothing to do with `picks` or the browsed
-    universe, so a held position outside the current portfolio still displays correctly. `holdingsValue()`/
-    `excludedValue()`/`holdingShares()`/`targetCapital()` are unchanged.
-  - **Currency-aware formatting for the calculator's own output** (suggestion table, stat-cards, Monte
-    Carlo, equity curve, donut, the contribution input's unit label) all comes from **`currentMoneyFmt()`**
-    — derived from the DISTINCT set of universes across current `picks` (not a single "strategy winner"
-    any more): all picks in PLN universes → `fmtMoneyPln`; all in USD (or no picks yet) → `fmtMoney`; a
-    real mix of both (rare — accumulated over months from different GEM winners) → `fmtMoney` as a shared
-    denominator, the same "sum raw numbers across currencies without FX conversion" convention the app
-    already applies elsewhere (`holdingsValue()`, the portfolio donut). `moneyFmtForUniverse(universe)` is
-    the separate, explicit-universe formatter used for pricing rows in Step 2's table (native currency of
-    whichever universe is being browsed, independent of what's actually in the portfolio).
-    `moneyFmtForCurrency(currency)` remains the explicit-currency formatter for holdings-table rows (via
-    `currencyOf`).
-  - A held position that isn't (yet) part of the portfolio built in Step 2 is flagged in the suggestion
-    table as "nie w portfelu — dodaj w Kroku 2" (or "wykluczone ręcznie" if it's on the exclusion list) —
-    one single message now, since there's no longer an "active universe(s) this month" concept to
-    distinguish from "ranked too low": either you've picked it, or you haven't yet.
-  - The "Wynik historyczny" equity-curve panel always goes through **`blendEquityCurves(fractions)`**
-    (`fractions` from `deriveUniverseFractionsFromTargets()`, see above) — with the typical one-universe
-    portfolio this just returns that universe's own unmodified `docs/data/equity_curve.json` curve
-    (blending a single 100%-weighted entry is a no-op), and with picks spanning several universes it
-    blends `momentum_index`/`benchmark_index` across them, restricted to dates common to all (all
-    universes run on the same weekly pipeline cadence, so this is normally every date). No FX conversion
-    needed: each curve is already normalized to a base of 100 by `compute_equity_curve`, so blending by
-    weight is pure index arithmetic, not money. `normalizeWeights()` (unchanged) is scale-invariant, so it
-    normalizes these raw capital sums exactly the way it used to normalize hand-entered percentages.
+- **`rebalance.html` / `js/rebalance.js`** — rebalance calculator, **fully automatic**. All user state
+  (holdings, exclusions, settings) lives in `localStorage` only — there is no backend. See the version
+  history in "What this repo is" above for the three designs this replaced (region split; a
+  `STRATEGY_GEM`/`STRATEGY_WEIGHTED` auto-TOP-N dropdown; a manually-driven, GEM-picks-a-universe-then-you-
+  pick-companies stepwise flow). The only thing the user sets is `settings.portfolioSize` (how many
+  companies) and the monthly contribution — the rebalancer decides which companies and at what weight.
+  - **`REBALANCE_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"]`** is `rebalance.js`'s own, deliberately
+    smaller universe list — NOT `UNIVERSES` from `js/shared.js` (which stays all 5, since the dashboard
+    still needs WIG20/mWIG40 in full). `loadUniverseData()` only fetches these three universes'
+    `data/{universe}.json` files (plus `data/all_prices.json` for pricing — see below) — it no longer
+    fetches `global_equity_momentum.json` at all.
+  - **`combinedPoolRows()`** builds the pool the automatic engine draws from, from three DIFFERENT fields
+    per universe (see "What this repo is" above for the exact reasoning behind each): SP500's
+    `constituents` (the pipeline's own top-quintile selection — happens to be exactly the "top 100 like
+    SPMO" size the user asked for), NASDAQ100's `all_constituents` (the WHOLE index, per an explicit "cały
+    nasdaq100" ask), DOWJONES's `constituents` (already the whole index either way). Rows are merged into
+    one list and sorted by `momentum_score` descending — comparing it directly across universes is a
+    deliberate simplification (documented in the code) carried over from the same convention the prior
+    manual-picks design already used when merging picks from different universes. A ticker present in two
+    universes at once is deduped to whichever occurrence has the higher `momentum_score`, so N always means
+    N distinct companies.
+  - **`eligiblePoolRows()`** drops manually-excluded tickers and re-numbers `pool_rank` (1..len) on what's
+    left, so an exclusion BACKFILLS from the next-ranked name rather than shrinking the portfolio below N —
+    excluding a top-ranked name doesn't mean "N-1 companies," it means "the next one in gets its slot."
+    **`autoSelectedRows(n)`** slices the top N of that. **`computeAutoTargets(n, totalCapital)`** is the
+    direct successor to the manual design's `computeTargetsFromPicks` (itself successor to the older
+    `computeTargetsForUniverse`/`computeTargets`/`computeWeightedTargets` trio) — same weighting rule as
+    all of them (weight = each selected company's CURRENT `momentum_score`, normalized to `totalCapital`,
+    a conscious simplification vs. the pipeline's own cap-weighting/`compute_weights`), just fed by
+    `autoSelectedRows(n)` instead of a manually-curated list. There is no `stale` concept any more (no
+    accumulated state to go stale) — a ticker either is in today's fresh TOP N or it isn't.
+  - **Krok 2 — `renderPoolTable()`** renders `eligiblePoolRows()` as a full, sortable (`compareRows()` from
+    `js/shared.js`, click-to-sort `<th data-key>`), stage-filterable (`poolStageFilter`,
+    `#poolStageFilterBar`, MULTI-SELECT — same reasoning the prior manual-picking design already had for
+    this: a user comparing candidates cares about Etap 1 and Etap 2 names side by side, not just one stage
+    at a time — `"ALL"` sentinel or a `Set` of `"1"`/`"2"`(both `2A`/`2B`)/`"3"`/`"4"`) table — the same
+    shape/columns as the dashboard's own tables, through the shared `renderScreenerTable()` engine (see the
+    `js/table-render.js` bullet below). **This table is purely informational now — nothing in it is
+    clickable to change the selection.** `poolRowHtml()`'s last-but-one column is a plain badge ("✓ w
+    portfelu" / "—") showing whether that row's `pool_rank` falls inside the current `portfolioSize`, not a
+    toggle button — there's nothing left to toggle, since the engine picks automatically. `STAGE_LABELS`/
+    `STAGE_COLORS`/`stageCellHtml()`/`compareRows()` live in `js/shared.js` (see that bullet below).
+  - **A dedicated "📈" button per row (`chart-row-btn` in `poolRowHtml()`) still opens `chart.html`** — a
+    dedicated, standalone page with just that one ticker's own stage-analysis chart (see the dedicated
+    `chart.html` bullet below). It navigates to `?ticker=<ticker>&universe=<universe>&back=rebalance.html`
+    (`window.location.href`) — `back` lets `chart.html`'s own "← Powrót" button return here specifically
+    (see `resolveBackHref()` in `chart.js`). This piece is unchanged from the prior manual design, including
+    its own version history (four designs, landing on "a dedicated button, not a clickable row" specifically
+    because a click-anywhere-in-the-row design turned out too easy to trigger by accident — see git history
+    for the full account if you need it) — the pool ranking table inherited it as-is when the manual
+    picker table it replaced was removed, since the "don't open a chart by accident" lesson applies just as
+    much to a read-only ranking table as it did to a table with a pick button in it.
+  - **Holdings and exclusions are one flat, universe-agnostic list**, exactly as in every earlier design —
+    one `holdings` array (ticker + shares) and one `excluded` array of tickers, entirely independent of the
+    pool/selection. `currencyOf(ticker)` (via `priceMap[ticker].sources`, defaulting to USD for an
+    unrecognized ticker) is used ONLY to format an individual holding-table row (price/value cells) in its
+    own native currency — it still works for a legacy WIG20/mWIG40 holding even though the pool itself
+    can't produce one any more, because `priceMap` is still built from `data/all_prices.json`, which the
+    pipeline still exports for all 5 universes regardless of what `rebalance.js` itself fetches.
+    `holdingsValue()`/`excludedValue()`/`holdingShares()`/`targetCapital()` are unchanged.
+  - **Two separate money formatters, not one, unlike every earlier design.** `currentMoneyFmt()` — used for
+    the pool/ranking, suggestion table, stat-cards, Monte Carlo, and equity curve — is now just a constant
+    (`fmtMoney`), because `REBALANCE_UNIVERSES` is always USD; it stays a named function purely so the code
+    reads as "USD on purpose," not "USD because no one got around to it." `holdingsMoneyFmt()` is new and
+    separate: it drives ONLY the "Analiza portfela" donut (which reflects actual holdings, not the pool),
+    deriving PLN-vs-USD-vs-mixed from the currencies of whatever is currently held — the same "mix raw
+    numbers without FX conversion when currencies are mixed" convention every earlier design already used
+    for this (`holdingsValue()`), kept alive specifically because a legacy WIG20/mWIG40 holding can still
+    exist even though the automatic engine will never buy into one again. `moneyFmtForCurrency(currency)`
+    remains the explicit-currency formatter for individual holdings-table rows.
+  - A held position that isn't in today's automatic TOP N is flagged in the suggestion table as either
+    `"poza TOP {n}"` (still in the pool, just ranked below N) or `"poza pulą rebalansera (SP500 / Nasdaq 100
+    / Dow Jones)"` (not in the pool at all — most commonly a legacy WIG20/mWIG40 position) — distinguishing
+    the two matters now that "not selected" can mean either "ranked too low" or "not eligible at all,"
+    which a single earlier message didn't need to distinguish.
+  - The "Wynik historyczny" equity-curve panel still goes through **`blendEquityCurves(fractions)`**
+    (`fractions` from `deriveUniverseFractionsFromTargets(targets)`, fed by `computeAutoTargets()`'s output
+    instead of picks — otherwise unchanged) — with a single-universe TOP N (common when `portfolioSize` is
+    small) this just returns that universe's own unmodified `docs/data/equity_curve.json` curve; with a TOP
+    N spanning two or three of SP500/NASDAQ100/DOWJONES (the normal case at a more typical `portfolioSize`)
+    it blends `momentum_index`/`benchmark_index` across them, restricted to common dates. No FX conversion
+    needed (every curve is already normalized to a base of 100 by `compute_equity_curve`).
+    `normalizeWeights()` only recognizes keys in `REBALANCE_UNIVERSES` now (a stray WIG20/mWIG40 weight,
+    which nothing produces any more anyway, would simply be ignored rather than included).
   - `parseXtbOpenPositions()` imports an XTB "Open Positions" `.xlsx` export via SheetJS
     (`XLSX.read`, vendored locally at `docs/js/vendor/xlsx.full.min.js` — see the Frontend intro above)
     as a one-shot replacement of the holdings list — unchanged by any of the above.
   - A client-side Monte Carlo simulation (`simulateMonteCarlo`, Chart.js) projects the portfolio's value
     using the capital-weighted average momentum (capped at ±30%/yr) and volatility of the currently
-    computed `picks` targets — explicitly labeled as illustrative, not a forecast; unchanged in spirit,
-    just driven by `computeTargetsFromPicks()` now.
+    computed TOP N — explicitly labeled as illustrative, not a forecast; unchanged in spirit, just driven
+    by `computeAutoTargets()` now.
 - **`edukacja.html` was REMOVED** at the user's explicit request ("Usuń edukacje nie potrzebuje tego juz")
   — it used to be a static, JS-free educational write-up of Stage Analysis in Polish (the 4-stage cycle,
   SMA10/SMA30, base/resistance breakouts, volume confirmation, trailing stop-loss, and a section on what
@@ -1214,10 +1192,11 @@ flex child (no `.topbar-left` wrapper there).
   with it, and its `.edu-*` CSS block in `style.css` was deleted too — nothing else referenced it.
 - **`chart.html` / `js/chart.js`** — a standalone, single-purpose page showing ONE ticker's own weekly
   stage-analysis chart (the same "10:30" + volume + Mansfield RS + TTM Squeeze panels the dashboard shows),
-  full-page, with no sidebar/table/other-page chrome around it. Exists because `rebalance.js`'s Krok 2 row
-  click needed to open a chart (see that bullet above) and the user explicitly wanted a real separate page
-  for it, not a mode bolted onto another page — see the version-history note on the rebalance.js bullet for
-  the two earlier designs this replaced. `chart.js` reads `?ticker=<ticker>&universe=<universe>&back=<url>`
+  full-page, with no sidebar/table/other-page chrome around it. Exists because `rebalance.js`'s ranking
+  table needed a way to open a chart per row (see that bullet above) and the user explicitly wanted a real
+  separate page for it, not a mode bolted onto another page — see the version-history note on the
+  rebalance.js bullet for the two earlier designs this replaced. `chart.js` reads
+  `?ticker=<ticker>&universe=<universe>&back=<url>`
   from the query string (`URLSearchParams`) — `ticker`/`universe` select what to show (fetches only that
   one universe's `data/{universe}.json`, unlike `app.js::loadData()` which loads all 5 — this page only
   ever needs one), and `back` is the literal href the "← Powrót" button navigates to when clicked
@@ -1279,8 +1258,8 @@ flex child (no `.topbar-left` wrapper there).
   `js/table-render.js`/`js/rebalance.js` on `rebalance.html` — i.e. on all three pages, unlike
   `js/chart-render.js` above (only `index.html`/`chart.html`) or `js/pull-to-refresh.js` (all three, but a
   smaller, unrelated utility). It exists because `rebalance.html` never loaded `js/chart-render.js` (it has
-  no chart engine of its own to share — Krok 2's row click redirects to `chart.html` instead, see the
-  rebalance.js bullet above) and therefore had no common module with `index.html`/`chart.html` at all until
+  no chart engine of its own to share — its ranking table's chart button redirects to `chart.html` instead,
+  see the rebalance.js bullet above) and therefore had no common module with `index.html`/`chart.html` at all until
   now — every constant/helper genuinely identical across two or more of `app.js`/`rebalance.js`/`chart.js`/
   `chart-render.js` had to be hand-copied into each one, which is exactly the "copy-paste instead of one
   shared product" the user flagged when asking for this cleanup. `js/shared.js` holds only what was
@@ -1293,11 +1272,15 @@ flex child (no `.topbar-left` wrapper there).
   `STAGE_BREAKOUT_VOLUME_RATIO`/`BASE_BOX_COLORS`, `stageCellHtml()`, and `compareRows()` (previously
   `app.js`'s `compareRows` and `rebalance.js`'s identically-implemented `comparePickerRows` — now one
   function both files call, including from inside `js/table-render.js`'s default comparator, see below).
-  `rebalance.js` keeps its OWN, shorter `PICKER_UNIVERSE_LABELS` (no " Momentum" suffix, e.g. `"S&P 500"`
-  not `"S&P 500 Momentum"`) as a local `const` — that one was never a copy of the same product to begin
-  with, just a different, more compact label set; unifying it would have changed visible text on one page
-  or the other, which this refactor deliberately avoids (it changes where code lives, not what any page
-  renders). **This local `const` must NOT be named `UNIVERSE_LABELS`, even though it briefly was** — a
+  `rebalance.js` keeps its OWN, shorter `REBALANCE_UNIVERSE_LABELS` (no " Momentum" suffix, e.g. `"S&P 500"`
+  not `"S&P 500 Momentum"`, and only 3 entries — SP500/NASDAQ100/DOWJONES, since `REBALANCE_UNIVERSES` no
+  longer includes WIG20/mWIG40, see "What this repo is" above) as a local `const` — that one was never a
+  copy of the same product to begin with, just a different, more compact label set; unifying it would have
+  changed visible text on one page or the other, which this refactor deliberately avoids (it changes where
+  code lives, not what any page renders). It was originally named `PICKER_UNIVERSE_LABELS`, back when it
+  labeled the manual-picking design's Krok 1/Krok 2 buttons/chips — renamed once those were replaced by the
+  automatic pool ranking table (same 3-universe label set, just no longer about "picking"). **This local
+  `const` must NOT be named `UNIVERSE_LABELS`, even though it briefly was** — a
   real bug shipped in the PR that consolidated `js/table-render.js`+`js/qol.js` into one PR (squash-merged
   as PR #97): `rebalance.js` still declared its own top-level `const UNIVERSE_LABELS`, and since
   `rebalance.html` loads it and `js/shared.js` as two sibling classic `<script>` tags — no
@@ -1325,13 +1308,17 @@ flex child (no `.topbar-left` wrapper there).
 - **`js/table-render.js`** — a third shared `<script>` file: the generic sortable/stage-filterable table
   ENGINE (`renderScreenerTable(opts)`) behind all four momentum tables — `renderTable()` (per-universe
   drawer table), `renderRsmScreenerTable()` (both RSM Stabilne/Wzrostowe tabs), `renderTtmSqueezeTable()` in
-  `app.js`, and `renderPickerTable()` (Krok 2) in `rebalance.js`. All four used to carry their own,
+  `app.js`, and `renderPoolTable()` (the rebalancer's ranking table) in `rebalance.js` — the last of which
+  is purely informational today (no row click, no toggle button) but still goes through this same engine
+  for its shared filter/sort/empty-state/row-building loop, same as when it was a manually-clickable picker
+  table under the prior design. All four used to carry their own,
   independently-copied version of the same loop — filter rows by stage, build the "N z M spółek (etap ...)"
   meta line, sort (via `js/shared.js`'s `compareRows()`, see above), clear the `<tbody>`, either show an
   empty-state row or build one `<tr>` per row (with `.row-selected`, a click handler, and an optional
   post-render hook like `bindTvRowButtons`) — differing only in what's genuinely specific to each table: its
-  own row-cell HTML, its own meta-line wording, its own empty-state colspan, and what a row click actually
-  does (`selectTicker()` on the dashboard vs. a `chart.html` redirect in Kroku 2). `renderScreenerTable()`
+  own row-cell HTML, its own meta-line wording, its own empty-state colspan, and what (if anything) a row
+  click does (`selectTicker()` on the dashboard; the rebalancer's ranking table sets no `onRowClick` at all
+  today). `renderScreenerTable()`
   factors that shared loop into one function; each call site now supplies only the bits that differ, as
   options (`rowHtml`/`metaText`/`onRowClick`/`afterRender`/etc. — see the doc comment at the top of
   `table-render.js` for the full list). One behavior is worth calling out because it's easy to get wrong
@@ -1350,12 +1337,12 @@ flex child (no `.topbar-left` wrapper there).
   - **`showToast(message, opts)`** — a short, non-blocking toast in the bottom-right corner
     (`#toastContainer`, lazily created on first call) after a user action, with `opts.type` ("info"/
     "success"/"error", colors the toast's left border) and `opts.duration` (default 3200ms). Wired into
-    `rebalance.js`: `togglePick()` (adding/removing a pick previously gave NO feedback beyond the
-    "+ Dodaj"/"✓ W portfelu" button itself changing — easy to miss while clicking through several rows in
-    Krok 2 quickly), the GEM manual-override save/clear handlers in `renderGemWidget()`, and
-    `initXtbImport()`'s success/error paths (in addition to, not instead of, the existing `#importStatus`
-    text — the toast is what a user actually notices; the status text stays as a persistent, re-readable
-    record next to the button).
+    `rebalance.js`'s `initXtbImport()`'s success/error paths (in addition to, not instead of, the existing
+    `#importStatus` text — the toast is what a user actually notices; the status text stays as a persistent,
+    re-readable record next to the button). It used to also fire from `togglePick()` (manual pick/unpick)
+    and the GEM manual-override save/clear handlers — both removed along with the rest of the manual-picking
+    design and the GEM widget once the rebalance calculator became fully automatic (see "What this repo is"
+    above); `showToast()` itself is untouched, it simply has fewer call sites on this page now.
   - **`initConnStatus()`** — an offline badge (`#connStatus`, added as the last child inside each page's
     `<nav>`, hidden by default) shown only when `navigator.onLine` is false, updated on the `online`/
     `offline` window events. Without it, the Service Worker's network-first-with-cache-fallback (see
@@ -1369,9 +1356,14 @@ flex child (no `.topbar-left` wrapper there).
     link). Before this, the first paint of every page was an empty sidebar/table/chart with no indication
     that a fetch was even in progress.
 
-  All three guard on `typeof document === "undefined"` and return immediately rather than throwing —
-  needed because `rebalance.js`'s `togglePick()` (which calls `showToast()`) is exercised directly by
-  `tests/js/rebalance.test.js` under Node, which has no DOM at all. Each consumer file
+  All three guard on `typeof document === "undefined"` and return immediately rather than throwing — a
+  defensive measure for being called outside a real browser DOM at all (Node, `tests/js/*.test.js`, has
+  none). `rebalance.js`'s own top-level `init()` is separately gated behind the same `typeof document !==
+  "undefined"` check, so simply `require()`-ing the module (as `tests/js/rebalance.test.js` does, to reach
+  pure functions like `combinedPoolRows`/`computeAutoTargets`) never runs `init()` and therefore never
+  reaches these three at module-load time either — the guard inside each of them matters if a test (or any
+  other Node caller) ever calls one directly, which is not the case in the test suite today but is cheap
+  insurance against exactly that. Each consumer file
   (`app.js`/`rebalance.js`/`chart.js`) opens with a `typeof require === "function" && typeof window ===
   "undefined"` → `Object.assign(globalThis, require("./shared.js")); Object.assign(globalThis,
   require("./qol.js"))` guard so the cross-file globals from BOTH `js/shared.js` and `js/qol.js` resolve
@@ -1395,8 +1387,9 @@ flex child (no `.topbar-left` wrapper there).
   **Krok 2** is a plain, but CLICKABLE, table of SP500's sectors ranked by Mansfield RS vs. the index
   (`sector_rs.sectors`, `rsm_vs_index_pct` — pure RS, zero momentum, see `compute_sector_relative_strength`
   above) — the strongest one highlighted 🏆 and pre-selected via the existing `.row-selected` class, but
-  this is only a SUGGESTION, exactly the same "🏆 = suggestion, not a forced pick" philosophy as GEM's
-  Krok 1 universe picker (`rebalance.js::renderGemWidget`): clicking ANY row sets module-level
+  this is only a SUGGESTION, exactly the same "🏆 = suggestion, not a forced pick" philosophy the rebalance
+  calculator's old GEM-driven universe picker used to have (`rebalance.js::renderGemWidget`, before the
+  calculator became fully automatic — see "What this repo is" above): clicking ANY row sets module-level
   `browsedSector` and re-renders both Krok 2 (to move the highlight) and Krok 3. This exists because the
   user explicitly asked for it — the strongest sector's own leaders aren't always sitting in a good
   Weinstein stage that particular week, so being able to check a second- or third-place sector that's also
@@ -1405,8 +1398,9 @@ flex child (no `.topbar-left` wrapper there).
   sector with no ETF data yet (`data_source: "no_data"`, `rsm_vs_index_pct: null` — see
   `compute_sector_relative_strength` above; there is no return-based fallback any more now that the
   strategy is pure RS) gets a small "(brak danych)" note next to its name (`sectorRowHtml()`'s
-  `sourceNote`), the same data-provenance-transparency convention as the GEM widget's "(ręcznie)" label for
-  `manual_entry`.
+  `sourceNote`), the same data-provenance-transparency convention used elsewhere in the app (e.g. GEM's own
+  `"(ręcznie)"` `manual_entry` label, back when a frontend page still rendered it — see the GEM section
+  above).
   **Krok 3** is the top-10%-of-*that*-sector company list — `compute_sector_relative_strength` computes
   `top_companies` for EVERY sector now, not just the strongest one (a `"top_companies"` field nested inside
   each entry of `sector_rs.sectors`, rather than one flat top-level list) specifically so Krok 2's click
@@ -1421,12 +1415,12 @@ flex child (no `.topbar-left` wrapper there).
   its shared empty-state/meta-line/row-building loop, with `compareFn: () => 0` since both lists already
   come back pre-sorted from the backend; Krok 2 additionally supplies `onRowClick` (Krok 3 doesn't — its
   rows stay non-clickable, only the dedicated "📈" button navigates, same "don't open something by
-  accident" lesson already learned once for `rebalance.js`'s own Krok 2, see that bullet's version-history
-  note). A dedicated "📈" button per Krok 3 row (`chart-row-btn`, exact same pattern as
-  `rebalance.js::pickerRowHtml`) navigates to `chart.html?ticker=&universe=SP500&back=strategy.html` — this
+  accident" lesson already learned once for `rebalance.js`'s own ranking table, see that bullet's
+  version-history note). A dedicated "📈" button per Krok 3 row (`chart-row-btn`, exact same pattern as
+  `rebalance.js::poolRowHtml`) navigates to `chart.html?ticker=&universe=SP500&back=strategy.html` — this
   page has no chart-rendering engine of its own (doesn't load `js/chart-render.js`),
-  same "redirect to the dedicated chart page" choice `rebalance.js` already made for its own Krok 2 (see
-  that bullet's version-history note above for why a real separate page beats an in-page chart).
+  same "redirect to the dedicated chart page" choice `rebalance.js` already made for its own ranking table
+  (see that bullet's version-history note above for why a real separate page beats an in-page chart).
   `squeezeStatusFor()` is a small, LOCAL, ungated re-implementation of the "walk back to the last week with
   a computed `squeeze_on`, then classify" logic `classifyTtmSqueeze()` (`app.js`) already has — deliberately
   NOT unified with it, because the semantics differ: `classifyTtmSqueeze` is a SCREENER (drops a stock
