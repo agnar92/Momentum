@@ -1,8 +1,10 @@
 // ============================================================
-// DROBNE USPRAWNIENIA UX WSPÓLNE DLA index.html/rebalance.html/chart.html —
-// zwykły <script> tag (bez modułów/bundlera, ładowany PRZED
-// js/app.js/js/rebalance.js/js/chart.js na wszystkich trzech stronach, ten
-// sam wzorzec co js/pull-to-refresh.js) obejmujący trzy niezależne rzeczy:
+// DROBNE USPRAWNIENIA UX WSPÓLNE DLA
+// index.html/rebalance.html/rebalance_pl.html/chart.html — zwykły <script>
+// tag (bez modułów/bundlera, ładowany PRZED
+// js/app.js/js/rebalance.js/js/rebalance_pl.js/js/chart.js na wszystkich
+// czterech stronach, ten sam wzorzec co js/pull-to-refresh.js) obejmujący
+// trzy niezależne rzeczy:
 //
 // 1. `showToast(message, opts)` — krótki, nieblokujący komunikat w rogu
 //    ekranu po akcji użytkownika (dodanie/usunięcie spółki z portfela,

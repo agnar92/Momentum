@@ -14,8 +14,9 @@ present right before an earlier, temporary removal of SP500 from the tool — se
 starting holdings snapshot — replace it by hand like the other two CSVs when the index composition
 changes.
 
-**The rebalance calculator is fully automatic again, and its pool no longer includes WIG20/mWIG40.** Its
-design history, oldest to newest:
+**The rebalance calculator is fully automatic, and now exists as TWO independent pages/pools — "Rebalanser
+USA" (`rebalance.html`/`rebalance.js`, SP500+NASDAQ100+DOWJONES, USD) and "Rebalanser PL"
+(`rebalance_pl.html`/`rebalance_pl.js`, WIG20+MWIG40, PLN).** Its design history, oldest to newest:
 1. Split into two fully independent halves — `USA` (NASDAQ100+DOWJONES, USD) and `GPW` (WIG20+MWIG40,
    PLN), each with its own contribution amount, own TOP N picker per index, own suggestion table, Monte
    Carlo, equity curve, and portfolio donut — specifically to avoid ever summing a PLN amount and a USD
@@ -38,8 +39,22 @@ design history, oldest to newest:
    needed (splitting/blending a portfolio that could span PLN and USD at once) is no longer needed for the
    calculator's own output — see below for what of it survives (for the holdings table specifically) and
    what does not.
+5. **Current design: WIG20/mWIG40 got their own, separate automatic rebalancer instead of staying outside
+   the tool.** A later, separate explicit request — the user no longer wanted to track WIG20/mWIG40
+   manually through an outside ETF (the reasoning behind removing them from the pool in step 4) and instead
+   asked for the exact same fully-automatic mechanism applied to them, as its own dedicated page. Rather
+   than add a pool/currency switch to the existing rebalancer, `rebalance.html`/`rebalance.js` (renamed
+   "Rebalanser USA" in the nav) was left untouched and a byte-for-byte-structural twin,
+   `rebalance_pl.html`/`rebalance_pl.js` ("Rebalanser PL"), was added instead — same reasoning as step 1's
+   original USA/GPW split: never sum a PLN amount and a USD amount together. The two pages share
+   `js/shared.js`/`js/qol.js`/`js/table-render.js` but each has its OWN `localStorage` keys
+   (`momentum_rebalance_pl_*` vs. `momentum_rebalance_*`) — two fully independent portfolios, holdings
+   lists, exclusion lists, and settings, never merged. See the dedicated `rebalance_pl.html`/
+   `rebalance_pl.js` bullet under Frontend below for what's genuinely different (the pool, the money
+   formatter, no `DOWJONES_WEIGHT_MULTIPLIER`-style tilt) vs. what's a deliberate 1:1 port.
 
-The current, automatic flow (`rebalance.js`):
+The current, automatic flow of "Rebalanser USA" (`rebalance.js`) — "Rebalanser PL" (`rebalance_pl.js`)
+works identically, just over WIG20/mWIG40 in PLN instead (see the dedicated bullet under Frontend below):
 - **Krok 1 — settings.** The only input is `settings.portfolioSize` (TOP N — how many companies should be
   in the portfolio) plus the monthly contribution amount. Nothing else to configure; no strategy dropdown,
   no per-universe weights, no manual picking.
@@ -904,8 +919,9 @@ site's data survives independently of any given Pages deploy and a fresh checkou
 immediately servable without having to run the pipeline first. CI still regenerates and re-commits it on
 every run (see CI section below) — it isn't hand-maintained.
 
-Every page shares the same `.topbar` (brand + `<nav>` linking Dashboard/Rebalans — see `chart.html` below
-for why it doesn't also link Rebalans↔chart pages) — on narrow phones the user reported the nav links
+Every page shares the same `.topbar` (brand + `<nav>` linking Dashboard/Rebalanser USA/Rebalanser PL/
+Strategia — see `chart.html` below for why it doesn't also link the rebalancer pages↔chart pages) — on
+narrow phones the user reported the nav links
 themselves getting "lekko ukryty" (slightly cut off): `.brand`'s wordmark (plus, on `index.html`, the
 Ctrl+K search trigger next to it) didn't actually shrink below its own content width by default (flex
 items' implicit `min-width: auto`), so on a narrow enough viewport it could push `nav` past the edge of
@@ -1242,6 +1258,43 @@ flex child (no `.topbar-left` wrapper there).
     using the capital-weighted average momentum (capped at ±30%/yr) and volatility of the currently
     computed TOP N — explicitly labeled as illustrative, not a forecast; unchanged in spirit, just driven
     by `computeAutoTargets()` now.
+- **`rebalance_pl.html` / `js/rebalance_pl.js`** — "Rebalanser PL", a deliberate structural twin of
+  `rebalance.html`/`rebalance.js` ("Rebalanser USA") for WIG20/mWIG40 instead of SP500/NASDAQ100/DOWJONES
+  (see design-history step 5 under "What this repo is" above for why this is a second page rather than a
+  pool switch on the existing one). Loads the same `js/shared.js`/`js/qol.js`/`js/table-render.js` as
+  every other page, then its own script — it does NOT load/share any state with `rebalance.js`. What's
+  actually different from the USA page, function-by-function:
+  - `REBALANCE_UNIVERSES = ["WIG20", "MWIG40"]`, `REBALANCE_UNIVERSE_LABELS = { WIG20: "WIG20", MWIG40:
+    "mWIG40" }`. `poolRowsForUniverse()` is simpler than the USA version's: both WIG20 and MWIG40 are
+    `EQUAL_WEIGHT_UNIVERSES` in `run_query.py` (no quintile selection — see Pipeline architecture below),
+    so `constituents` is already each index's full composition for both, unlike SP500 (quintile) vs.
+    NASDAQ100 (needs `all_constituents`) in the USA version — there's no per-universe special case to make
+    here.
+  - **No `DOWJONES_WEIGHT_MULTIPLIER`-equivalent exists.** `computeAutoTargets()` weights the selected TOP
+    N purely by `momentum_score`, symmetric between WIG20 and mWIG40 — nobody asked for a tilt favoring one
+    index over the other here, so `rebalance_pl.js` doesn't invent one.
+  - **`currentMoneyFmt()` is a constant returning `fmtMoneyPln`, not `fmtMoney`** — the mirror image of the
+    USA page's own always-USD `currentMoneyFmt()`, since this page's pool is always WIG20+MWIG40, i.e.
+    always PLN. `holdingsMoneyFmt()` keeps the same currency-mix-aware logic as the USA page (falls back to
+    `fmtMoney` if a held ticker somehow isn't PLN-sourced) purely as a safety net — nothing in normal use of
+    this page should ever hold a non-PLN ticker, unlike the USA page's own legacy-WIG20/mWIG40-holding
+    rationale for that fallback.
+  - **Entirely separate `localStorage` state**: `momentum_rebalance_pl_settings` /
+    `momentum_rebalance_pl_holdings` / `momentum_rebalance_pl_excluded` /
+    `momentum_rebalance_pl_pool_collapsed`, vs. the USA page's `momentum_rebalance_settings` / etc. — two
+    fully independent portfolios that never interact; importing an XTB report on one page never touches the
+    other's holdings.
+  - Default `portfolioSize` is 10 (vs. 20 for USA) — the combined WIG20+mWIG40 pool is ~55-60 companies
+    total, much smaller than the USA pool (SP500 top 100 + full Nasdaq 100 + full Dow Jones), so a smaller
+    default TOP N keeps the same rough "meaningful slice of the pool" proportion.
+  - The Krok 2 ranking table's "📈" chart button passes `back=rebalance_pl.html` (not `rebalance.html`) so
+    `chart.html`'s "← Powrót" button returns to the correct rebalancer page.
+  - Everything else — the exclusion list, XTB import/export, the suggestion table's reason breakdown (now
+    reading "poza pulą rebalansera (WIG20 / mWIG40)" instead of the USA page's SP500/Nasdaq/Dow Jones
+    wording), the stage filter (same real-selection-filter semantics as the USA page), Monte Carlo, and the
+    equity-curve blend (`blendEquityCurves`, now blending `docs/data/equity_curve.json`'s `WIG20`/`MWIG40`
+    entries instead of `SP500`/`NASDAQ100`/`DOWJONES`) — is a deliberate 1:1 port of the USA page's own
+    logic, described in full under the `rebalance.html`/`rebalance.js` bullet above.
 - **`edukacja.html` was REMOVED** at the user's explicit request ("Usuń edukacje nie potrzebuje tego juz")
   — it used to be a static, JS-free educational write-up of Stage Analysis in Polish (the 4-stage cycle,
   SMA10/SMA30, base/resistance breakouts, volume confirmation, trailing stop-loss, and a section on what
@@ -1270,7 +1323,8 @@ flex child (no `.topbar-left` wrapper there).
   before this file — they used to be a tiny (3-6 line) local copy here (too small, on their own, to have
   justified a shared file back when only `js/chart-render.js` existed for the ~500-line chart engine
   itself), but became genuine duplication once the exact same lines also existed in both `app.js` and
-  `rebalance.js` — `js/shared.js` is what finally gave all three pages one place for this.
+  `rebalance.js` — `js/shared.js` is what finally gave all these pages one place for this (now also loaded
+  by `rebalance_pl.html`, see that bullet above).
 
   **`<div class="workspace mobile-chart-view">` in the markup, not toggled by JS, unlike `index.html`.**
   `.charts-area`'s mobile CSS (`style.css`'s `@media max-width:640px` block) was written entirely around
@@ -1313,8 +1367,9 @@ flex child (no `.topbar-left` wrapper there).
 
 - **`js/shared.js`** — a second, THINNER shared `<script>` file, loaded before `js/chart-render.js`/
   `js/app.js` on `index.html`, before `js/chart-render.js`/`js/chart.js` on `chart.html`, and before
-  `js/table-render.js`/`js/rebalance.js` on `rebalance.html` — i.e. on all three pages, unlike
-  `js/chart-render.js` above (only `index.html`/`chart.html`) or `js/pull-to-refresh.js` (all three, but a
+  `js/table-render.js`/`js/rebalance.js` on `rebalance.html` (and, identically, before
+  `js/table-render.js`/`js/rebalance_pl.js` on `rebalance_pl.html`) — i.e. on all four pages, unlike
+  `js/chart-render.js` above (only `index.html`/`chart.html`) or `js/pull-to-refresh.js` (all four, but a
   smaller, unrelated utility). It exists because `rebalance.html` never loaded `js/chart-render.js` (it has
   no chart engine of its own to share — its ranking table's chart button redirects to `chart.html` instead,
   see the rebalance.js bullet above) and therefore had no common module with `index.html`/`chart.html` at all until
@@ -1353,10 +1408,15 @@ flex child (no `.topbar-left` wrapper there).
   version without incident. Only `const`/`let`/`class` redeclaration in the shared top-level script scope
   is a hard error.) Caught after the fact by loading `rebalance.html` with Playwright and checking for a
   `pageerror` event — worth doing again any time a new file introduces ANOTHER top-level `const`/`let`
-  that could collide with one already declared in a sibling `<script>` loaded on the same page. For Node
+  that could collide with one already declared in a sibling `<script>` loaded on the same page (verified
+  again for `rebalance_pl.html`/`rebalance_pl.js` when that page was added — it has its own, independently
+  declared `REBALANCE_UNIVERSE_LABELS`, `SETTINGS_KEY`, etc., but since it never shares a page with
+  `rebalance.js`, there's no sibling-scope collision to worry about there, only within a single page's own
+  script list). For Node
   (`tests/js/*.test.js`, `require()` instead of `<script>`
   tags — Node has no shared global scope across separately-required files the way sibling `<script>` tags
-  in a browser do), every consumer file (`app.js`/`rebalance.js`/`chart.js`/`chart-render.js`) opens with
+  in a browser do), every consumer file (`app.js`/`rebalance.js`/`rebalance_pl.js`/`chart.js`/
+  `chart-render.js`) opens with
   `if (typeof require === "function" && typeof window === "undefined") { Object.assign(globalThis,
   require("./shared.js")); }` — this re-creates, only under Node, the exact global sharing the browser
   already gives these files for free via script load order; the guard means it's a no-op in the browser,
@@ -1364,9 +1424,10 @@ flex child (no `.topbar-left` wrapper there).
   (`formatPrice`/`tvSymbolFor`/`tvUrlFor`/`stageCellHtml`/`compareRows`); the `compareRows` tests that used
   to live in `tests/js/app.test.js` moved there with the function.
 - **`js/table-render.js`** — a third shared `<script>` file: the generic sortable/stage-filterable table
-  ENGINE (`renderScreenerTable(opts)`) behind all four momentum tables — `renderTable()` (per-universe
+  ENGINE (`renderScreenerTable(opts)`) behind all momentum tables — `renderTable()` (per-universe
   drawer table), `renderRsmScreenerTable()` (both RSM Stabilne/Wzrostowe tabs), `renderTtmSqueezeTable()` in
-  `app.js`, and `renderPoolTable()` (the rebalancer's ranking table) in `rebalance.js` — the last of which
+  `app.js`, and `renderPoolTable()` (the rebalancer's ranking table) in BOTH `rebalance.js` and
+  `rebalance_pl.js` — the last of which
   is purely informational today (no row click, no toggle button) but still goes through this same engine
   for its shared filter/sort/empty-state/row-building loop, same as when it was a manually-clickable picker
   table under the prior design. All four used to carry their own,
@@ -1384,13 +1445,15 @@ flex child (no `.topbar-left` wrapper there).
   VISIBLE after the stage filter, not the whole universe — preserved via a `beforeRender(rows)` hook that
   runs after filtering/sorting but before any row HTML is built, exactly where the original computed it.
   Loaded on `index.html` (after `js/shared.js`/`js/chart-render.js`, before `js/app.js`) and
-  `rebalance.html` (after `js/shared.js`/`js/qol.js`, before `js/rebalance.js`) — not needed on
+  `rebalance.html`/`rebalance_pl.html` (after `js/shared.js`/`js/qol.js`, before
+  `js/rebalance.js`/`js/rebalance_pl.js` respectively) — not needed on
   `chart.html`, which has no tables at all. Like `js/chart-render.js`/`js/shared.js` above,
   `renderScreenerTable()` itself stays untested (DOM-coupled, `document`/`tbody` manipulation) —
   consistent with the rest of this codebase's JS tests, which only cover pure logic.
-- **`js/qol.js`** — a fourth shared `<script>` file, loaded on ALL THREE pages after `js/shared.js`
+- **`js/qol.js`** — a fourth shared `<script>` file, loaded on ALL FOUR pages after `js/shared.js`
   (before `js/app.js`/`js/table-render.js` on `index.html`, before `js/table-render.js`/`js/rebalance.js`
-  on `rebalance.html`, before `js/chart.js` on `chart.html`), holding three independent, user-facing
+  on `rebalance.html`, identically before `js/table-render.js`/`js/rebalance_pl.js` on
+  `rebalance_pl.html`, before `js/chart.js` on `chart.html`), holding three independent, user-facing
   quality-of-life pieces the app didn't have before:
   - **`showToast(message, opts)`** — a short, non-blocking toast in the bottom-right corner
     (`#toastContainer`, lazily created on first call) after a user action, with `opts.type` ("info"/
@@ -1416,13 +1479,15 @@ flex child (no `.topbar-left` wrapper there).
 
   All three guard on `typeof document === "undefined"` and return immediately rather than throwing — a
   defensive measure for being called outside a real browser DOM at all (Node, `tests/js/*.test.js`, has
-  none). `rebalance.js`'s own top-level `init()` is separately gated behind the same `typeof document !==
-  "undefined"` check, so simply `require()`-ing the module (as `tests/js/rebalance.test.js` does, to reach
+  none). `rebalance.js`'s (and identically `rebalance_pl.js`'s) own top-level `init()` is separately gated
+  behind the same `typeof document !==
+  "undefined"` check, so simply `require()`-ing the module (as `tests/js/rebalance.test.js`/
+  `tests/js/rebalance_pl.test.js` do, to reach
   pure functions like `combinedPoolRows`/`computeAutoTargets`) never runs `init()` and therefore never
   reaches these three at module-load time either — the guard inside each of them matters if a test (or any
   other Node caller) ever calls one directly, which is not the case in the test suite today but is cheap
   insurance against exactly that. Each consumer file
-  (`app.js`/`rebalance.js`/`chart.js`) opens with a `typeof require === "function" && typeof window ===
+  (`app.js`/`rebalance.js`/`rebalance_pl.js`/`chart.js`) opens with a `typeof require === "function" && typeof window ===
   "undefined"` → `Object.assign(globalThis, require("./shared.js")); Object.assign(globalThis,
   require("./qol.js"))` guard so the cross-file globals from BOTH `js/shared.js` and `js/qol.js` resolve
   under Node too — the same cross-file-global pattern `js/chart-render.js` already uses for
@@ -1436,8 +1501,8 @@ flex child (no `.topbar-left` wrapper there).
   `js/chart-render.js`/`js/shared.js` above.
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
   under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/
-  `export_sector_strategy`, `docs/data/sector_strategy.json`), reached via a third "Strategia" nav link
-  added next to Dashboard/Rebalans on all pages. Three stacked `panel-card`s follow the strategy's own
+  `export_sector_strategy`, `docs/data/sector_strategy.json`), reached via a "Strategia" nav link
+  added next to Dashboard/Rebalanser USA/Rebalanser PL on all pages. Three stacked `panel-card`s follow the strategy's own
   steps: **Krok 1** shows a growth-phase banner (`.trend-banner`, green/red per `trend.in_growth_phase`)
   plus SP500's close/SMA200/SMA40W as stat-cards and a small Chart.js line chart (toggle button pair,
   `js/chart-render.js`-independent — this page doesn't load that file, it's a much smaller, page-local
