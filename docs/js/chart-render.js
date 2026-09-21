@@ -445,15 +445,21 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
             // przycięte przez sliceWeeklyChartToRange do trybu "3m") — nie własny,
             // pełny zakres mansfieldData, który przy trybie "3m" byłby mylący
             // (sugerowałby dłuższe okno niż to, co faktycznie widać na wykresie).
-            mansfieldCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+            // Prefiks "Mansfield RS vs {universe}" dodany na wyraźną prośbę
+            // użytkownika: odkąd panel 1 przestał rysować poziom indeksu (patrz
+            // wyżej), sam podpis daty pod tym panelem nie mówił jasno, ŻE to jest
+            // wykres siły względem benchmarku, ani WZGLĘDEM KTÓREGO indeksu —
+            // łatwo było go przeoczyć jako "kolejny wykres", a nie jako
+            // zastąpienie usuniętej linii indeksu.
+            mansfieldCaption.textContent = `Mansfield RS vs ${rsEntry.universe} (indeks) · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
         rsMansfieldChartInstance = new Chart(mansfieldCanvas, {
             type: "line",
             data: {
                 labels: chartData.dates,
                 datasets: [
-                    { label: "RSM krótkoterminowy (~3M)", data: aligned.short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
-                    { label: "RSM średnioterminowy (~6M)", data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
+                    { label: `RSM krótkoterminowy vs ${rsEntry.universe} (~3M)`, data: aligned.short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
+                    { label: `RSM średnioterminowy vs ${rsEntry.universe} (~6M)`, data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
                     { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
                 ],
             },
