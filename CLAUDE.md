@@ -994,10 +994,14 @@ flex child (no `.topbar-left` wrapper there).
   `chart.html`/`chart-render.js` bullet below for why — Chart.js itself is vendored locally, along with
   `chartjs-plugin-zoom` and `chartjs-plugin-annotation`, see `docs/js/vendor/` under the Frontend intro
   above for why this is no longer a CDN script):
-  1. The "10:30" price+SMA10/SMA30 chart, with the stock's own index level plotted alongside it on the
-     *same* % axis (both rebased to 0% at the momentum window's start) so the stock's trend can be read
-     directly against its index's trend — whichever line is on top is the outperformer. Darvas boxes (see
-     `bases` above) are drawn directly on this chart as rectangles via `chartjs-plugin-annotation`
+  1. The "10:30" price+SMA10/SMA30+VWAP chart, rebased to 0% at the momentum window's start. **It no
+     longer plots the stock's own index level** — removed at the user's explicit request, since it left
+     two overlapping price-shaped lines competing on one % axis for a comparison the Mansfield RS panel
+     (3, below) already expresses more directly as a single oscillator. The backend still exports
+     `index_pct` on every `weekly_chart` record (nothing downstream needed a schema change) and
+     `sliceWeeklyChartToRange()` still slices it along with every other series — `renderRelativeStrengthChart()`
+     in `js/chart-render.js` is simply the one place that stopped reading it into a dataset. Darvas boxes
+     (see `bases` above) are drawn directly on this chart as rectangles via `chartjs-plugin-annotation`
      (`BASE_BOX_COLORS` — purple for `"stage1"`, gray for `"stage2"`, labeled "Etap 1 (dno)"/"Baza N"), and
      the whole chart is interactive (`chartjs-plugin-zoom`: mouse wheel/pinch to zoom, drag to pan,
      `#resetZoomBtn`/`initResetZoomButton()` to reset). A `#stageBadge` above the chart shows the ticker's
@@ -1011,7 +1015,10 @@ flex child (no `.topbar-left` wrapper there).
      sync with panel 1 (`syncVolumeXRange()`, called from the zoom/pan plugin's `onZoomComplete`/
      `onPanComplete` callbacks) so both panels always show the same weeks.
   3. The Mansfield RS oscillator (short-term + medium-term lines, its own separate ~6-month window, see
-     above) in a small panel underneath. Non-interactive — its own short window doesn't need zoom/pan.
+     above) in a small panel underneath — now the ONLY panel showing the stock's strength against its own
+     benchmark index (`rsEntry.universe`), since panel 1's index line was removed (see above): above zero
+     means the stock is currently outperforming that index over the given smoothing window, below means
+     it's lagging. Non-interactive — its own short window doesn't need zoom/pan.
   4. The TTM Squeeze panel (`ttm_squeeze_chart`, see `compute_ttm_squeeze_chart()` above) — replaces an
      earlier panel that plotted the stock's own raw 1/3/6-month rolling % growth (`growth_chart`, removed
      at the user's request in favor of finding momentum names coming out of consolidation). A Chart.js

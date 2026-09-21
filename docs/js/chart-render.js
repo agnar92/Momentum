@@ -223,12 +223,16 @@ function syncChartsCrosshair(charts) {
 // stage analysis (Stan Weinstein / Dr Eric Wish):
 // 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. + VWAP
 //    zakotwiczony na początku okna (fioletowa przerywana linia, patrz
-//    "vwap_pct" w compute_relative_strength_chart) i poziom własnego indeksu,
-//    wszystko przeliczone na % zmiany względem pierwszego wyświetlanego
-//    tygodnia OKNA MOMENTUM (patrz compute_relative_strength_chart) — jedna
-//    wspólna skala, żeby jednym spojrzeniem było widać, która linia
-//    rośnie szybciej: spółka POWYŻEJ linii indeksu = silniejsza od rynku. NIE ma
-//    tu już znaczników wejścia/wyjścia ani linii trailing stop-loss (usunięte —
+//    "vwap_pct" w compute_relative_strength_chart), wszystko przeliczone na %
+//    zmiany względem pierwszego wyświetlanego tygodnia OKNA MOMENTUM (patrz
+//    compute_relative_strength_chart). Poziom własnego indeksu NIE jest już
+//    tu rysowany (usunięty na wyraźną prośbę użytkownika — zamiast dwóch
+//    nakładających się linii ceny na jednej skali, porównanie spółki z
+//    benchmarkiem przeniosło się w całości do panelu 3 (Mansfield RS)
+//    poniżej, patrz tamten opis; backend nadal eksportuje `index_pct` w
+//    `weekly_chart` — `sliceWeeklyChartToRange()` nadal go przycina razem z
+//    resztą serii — po prostu nic w tym pliku już go nie rysuje). NIE ma tu
+//    też znaczników wejścia/wyjścia ani linii trailing stop-loss (usunięte —
 //    zbyt duzo nakładających się elementów na jednym wykresie) — zamiast tego
 //    same BAZY (patrz "bases" w weekly_chart, _compute_weinstein_stage_series)
 //    są rysowane jako prostokąty (chartjs-plugin-annotation): fioletowy = baza
@@ -237,8 +241,7 @@ function syncChartsCrosshair(charts) {
 //    kółko myszy/uszczypnięcie = zoom, przeciąganie = przesuwanie w poziomie,
 //    #resetZoomBtn cofa (patrz initResetZoomButton). Siła relatywna względem
 //    indeksu NIE wchodzi w klasyfikację etapów (pomysł odrzucony wcześniej ze
-//    względu na trudność implementacji) — indeks tu służy tylko jako linia
-//    porównawcza na wykresie, tak jak wcześniej.
+//    względu na trudność implementacji).
 // 2. Wolumen tygodniowy — osobny, mniejszy panel pod wykresem 10:30 (wcześniej
 //    ukryte słupki na dolnej krawędzi tego samego wykresu), z osią X przesuwaną/
 //    powiększaną razem z wykresem 10:30 (patrz syncVolumeXRange) — dwa segmenty
@@ -249,8 +252,12 @@ function syncChartsCrosshair(charts) {
 //    ~6-miesięcznym oknie (patrz compute_mansfield_rs_chart), celowo NIE tym
 //    samym co panel 1: dwa różne horyzonty tego samego sygnału, które mogą się
 //    rozjeżdżać (krótkoterminowe przyspieszenie/spowolnienie może wyprzedzać
-//    średnioterminowy trend). Nieinteraktywny — własne, krótkie okno nie
-//    wymaga zoom/pan.
+//    średnioterminowy trend). Odkąd panel 1 przestał rysować poziom indeksu
+//    (patrz wyżej), TO jest teraz jedyne miejsce na tym wykresie pokazujące
+//    siłę spółki względem jej własnego benchmarku (indeksu `rsEntry.universe`)
+//    — linia powyżej zera = spółka silniejsza od indeksu w danym oknie,
+//    poniżej = słabsza. Nieinteraktywny — własne, krótkie okno nie wymaga
+//    zoom/pan.
 // 4. Wskaznik TTM Squeeze (ttm_squeeze_chart, patrz compute_ttm_squeeze_chart)
 //    obok Mansfielda — ZASTEPUJE dawny wykres surowego wzrostu % 1/3/6 mies.
 //    na zyczenie uzytkownika: zamiast stopy zwrotu pokazuje FAZY KONSOLIDACJI
@@ -333,7 +340,6 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
                 { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2], order: 1 },
                 { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
                 { label: "VWAP (od początku okna)", data: chartData.vwap_pct, borderColor: "#c084fc", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 2], order: 1 },
-                { label: `${rsEntry.universe} (indeks, zmiana %)`, data: chartData.index_pct, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, order: 1 },
             ],
         },
         options: {
