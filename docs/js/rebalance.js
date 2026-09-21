@@ -44,9 +44,23 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 const REBALANCE_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"];
 const REBALANCE_UNIVERSE_LABELS = { SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
 
+// Na wyraźną prośbę użytkownika ("zwiększ udział stabilnych spółek", "wagi w
+// DJA faworyzuj w stosunku do sp500 i nasdaq100") — Dow Jones to 30 dużych,
+// blue-chipowych, z natury mniej zmiennych spółek niż SP500/Nasdaq100, więc
+// "stabilne spółki" i "spółki z DOWJONES" to tu ten sam ask. Mnożnik działa
+// WYŁĄCZNIE na WAGĘ (ile kapitału trafia do już wybranej spółki w
+// computeAutoTargets), nie na SELEKCJĘ (który ranking/TOP N wchodzi do
+// portfela — combinedPoolRows/eligiblePoolRows nadal sortują po surowym
+// momentum_score, bez tego mnożnika) — bo o to explicité poproszono ("wagi",
+// nie "dobór"). 1.5 = spółka z DOWJONES dostaje 50% większą wagę niż spółka
+// z SP500/NASDAQ100 o identycznym momentum_score; podkręć/przykręć tu, jeśli
+// efekt ma być mocniejszy/słabszy.
+const DOWJONES_WEIGHT_MULTIPLIER = 1.5;
+
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
+const POOL_COLLAPSED_KEY = "momentum_rebalance_pool_collapsed";
 
 // portfolioSize — ile spółek (TOP N z puli, patrz wyżej) ma być w portfelu;
 // jedyny "wybór" jaki użytkownik podejmuje, resztą (który to konkretnie
@@ -78,9 +92,24 @@ function loadExcluded() {
 }
 function saveExcluded() { localStorage.setItem(EXCLUDED_KEY, JSON.stringify(excluded)); }
 
+// Zwinięcie/rozwinięcie rankingu puli (Krok 2, patrz initPoolToggle niżej) —
+// domyślnie ZWINIĘTE: pula ma dziś ~150-250 wierszy (SP500 top 100 +
+// Nasdaq 100 + Dow Jones), a użytkownik zgłosił, że tyle scrollowania po
+// samej tabeli, zanim dotrze do reszty strony (pozycje/sugestia/wykresy),
+// jest uciążliwe. Zapamiętywane w localStorage, więc raz rozwinięta tabela
+// zostaje rozwinięta między wizytami, dopóki ktoś jej znów nie zwinie.
+function loadPoolCollapsed() {
+    try {
+        const v = localStorage.getItem(POOL_COLLAPSED_KEY);
+        return v === null ? true : v === "1"; // brak zapisu -> domyslnie zwinieta
+    } catch (e) { return true; }
+}
+function savePoolCollapsed(v) { localStorage.setItem(POOL_COLLAPSED_KEY, v ? "1" : "0"); }
+
 let settings = loadSettings();
 let holdings = loadHoldings();
 let excluded = loadExcluded();
+let poolCollapsed = loadPoolCollapsed();
 
 async function loadUniverseData() {
     for (const u of REBALANCE_UNIVERSES) {
@@ -264,6 +293,19 @@ function poolRowsForUniverse(universe) {
     return data.constituents || data.all_constituents || [];
 }
 
+// Zbiór tickerów rzeczywiście należących do DOWJONES — używany przez
+// computeAutoTargets do rozstrzygania, kto dostaje DOWJONES_WEIGHT_MULTIPLIER
+// (patrz ta stała). Świadomie NIE bazujemy tu na `row.universe` przypisanym
+// przez combinedPoolRows() (deduplikacja tam wybiera uniwersum z WYŻSZYM
+// momentum_score, nie z "najbardziej wartym boosta") — spora część Dow 30 to
+// jednocześnie duże spółki SP500/Nasdaq100, więc gdyby liczyć tylko po
+// `row.universe`, wiele realnych Dow-owych blue-chipów zostałoby otagowanych
+// jako SP500/NASDAQ100 (bo tam ich momentum_score wypadło wyżej) i boost by
+// je ominął — dokładnie odwrotnie od tego, o co prosił użytkownik.
+function dowjonesTickerSet() {
+    return new Set(poolRowsForUniverse("DOWJONES").map(c => c.ticker));
+}
+
 // Ten sam ticker może teoretycznie wystąpić w dwóch uniwersach naraz (duży
 // large-cap obecny i w SP500, i w NASDAQ100) — żeby TOP N liczył unikalne
 // spółki (a nie dwa sloty dla tej samej firmy), bierzemy tylko wystąpienie z
@@ -405,6 +447,31 @@ function poolRefDateNote() {
         .map(u => (universeData[u]?.ref_date ? `${REBALANCE_UNIVERSE_LABELS[u]}: ${universeData[u].ref_date}` : null))
         .filter(Boolean);
     return parts.join(" · ");
+}
+
+// Zwija/rozwija cały blok pod nagłówkiem Kroku 2 (filtr etapów + tabela) —
+// #poolMeta (liczba spółek/ref date w samym nagłówku) zostaje zawsze
+// widoczny, więc nawet zwinięta karta mówi, ile spółek jest w puli, bez
+// trzeba jej rozwijać. `hidden`, nie `display:none` w CSS — ten sam wzorzec
+// co #loadingOverlay (patrz js/qol.js) i inne ukrywane bloki w tym pliku.
+function updatePoolToggleUi() {
+    const btn = document.getElementById("poolToggleBtn");
+    const content = document.getElementById("poolCollapsibleContent");
+    if (!btn || !content) return;
+    content.hidden = poolCollapsed;
+    btn.textContent = poolCollapsed ? "▼ Rozwiń" : "▲ Zwiń";
+    btn.title = poolCollapsed ? "Pokaż pełną listę spółek" : "Ukryj listę spółek";
+}
+
+function initPoolToggle() {
+    const btn = document.getElementById("poolToggleBtn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+        poolCollapsed = !poolCollapsed;
+        savePoolCollapsed(poolCollapsed);
+        updatePoolToggleUi();
+    });
+    updatePoolToggleUi();
 }
 
 function renderPoolTable() {
@@ -690,14 +757,21 @@ function renderCapitalHint() {
 // wybranego TOP N — to ŚWIADOME uproszczenie względem cap-ważenia z
 // pipeline'u (9%/3x cap-weight, patrz compute_weights): jedna, spójna metoda
 // ważenia, ta sama niezależnie od tego, z którego z 3 uniwersów pochodzi
-// dana spółka.
+// dana spółka — poza jednym, celowym wyjątkiem: spółki należące do DOWJONES
+// (patrz dowjonesTickerSet — CZŁONKOSTWO w Dow 30, nie post-deduplikacyjny
+// `row.universe`) dostają DOWJONES_WEIGHT_MULTIPLIER razy wyższą surową wagę
+// (patrz komentarz przy tej stałej) niż wynikałoby to z samego
+// momentum_score, więc "stabilniejsze" blue-chipy z Dow Jones ważą w portfelu
+// więcej niż SP500/NASDAQ100 spółka o tym samym momentum_score.
 function computeAutoTargets(n, totalCapital) {
     const rows = autoSelectedRows(n);
+    const dowTickers = dowjonesTickerSet();
     const raw = {};
     rows.forEach(c => {
+        const universeBoost = dowTickers.has(c.ticker) ? DOWJONES_WEIGHT_MULTIPLIER : 1;
         raw[c.ticker] = {
             ticker: c.ticker, universes: [c.universe], price: c.price, target_value: 0,
-            raw_weight: c.momentum_score || 0,
+            raw_weight: (c.momentum_score || 0) * universeBoost,
             momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
         };
     });
@@ -1130,6 +1204,7 @@ if (typeof document !== "undefined") {
         renderExcludedList();
         initPoolSort();
         initPoolStageFilter();
+        initPoolToggle();
         updatePoolSortHeaderClasses();
         document.getElementById("mcHorizon").addEventListener("change", () => renderMonteCarlo());
         renderPoolTable();
@@ -1146,7 +1221,7 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES,
+        REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES, DOWJONES_WEIGHT_MULTIPLIER,
         fmtMoney, fmtMoneyPln, currentMoneyFmt, holdingsMoneyFmt, moneyFmtForCurrency, fmtQty, sharesSuggestion,
         currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets,
         deriveUniverseFractionsFromTargets, normalizeWeights, blendEquityCurves, parseXtbOpenPositions,

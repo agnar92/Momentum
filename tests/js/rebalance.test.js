@@ -29,6 +29,7 @@ const {
     fmtQty,
     sharesSuggestion,
     currencyOf,
+    DOWJONES_WEIGHT_MULTIPLIER,
     combinedPoolRows,
     eligiblePoolRows,
     autoSelectedRows,
@@ -388,6 +389,52 @@ test("computeAutoTargets excludes manually-excluded tickers entirely, backfillin
     _setState({ universeData: baseUniverseData(), excluded: ["BBB"] }); // top-ranked ticker excluded
     const { targets } = computeAutoTargets(2, 1000);
     assert.deepEqual(Object.keys(targets).sort(), ["AAA", "CCC"]); // backfilled instead of shrinking to 1
+    _setState({ universeData: {}, excluded: [] });
+});
+
+test("computeAutoTargets favors DOWJONES-sourced picks by DOWJONES_WEIGHT_MULTIPLIER over an equal-momentum_score SP500/NASDAQ100 pick", () => {
+    _setState({
+        universeData: {
+            SP500: { constituents: [{ ticker: "SPX_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+            NASDAQ100: { all_constituents: [] },
+            DOWJONES: { constituents: [{ ticker: "DOW_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+        },
+        excluded: [],
+    });
+
+    const { targets } = computeAutoTargets(2, 1000);
+    // Rowny momentum_score (2 vs 2), ale DOW_A dostaje DOWJONES_WEIGHT_MULTIPLIER
+    // razy wieksza surowa wage -> wieksza wartosc docelowa niz SPX_A.
+    assert.ok(DOWJONES_WEIGHT_MULTIPLIER > 1); // test zakłada, że boost faktycznie faworyzuje DOWJONES
+    const expectedDowShare = DOWJONES_WEIGHT_MULTIPLIER / (DOWJONES_WEIGHT_MULTIPLIER + 1);
+    assert.ok(Math.abs(targets.DOW_A.target_value - 1000 * expectedDowShare) < 1e-6);
+    assert.ok(targets.DOW_A.target_value > targets.SPX_A.target_value);
+
+    _setState({ universeData: {}, excluded: [] });
+});
+
+test("computeAutoTargets still boosts a ticker that is ALSO a DOWJONES member even when combinedPoolRows tagged it to a different universe (higher momentum_score there)", () => {
+    _setState({
+        universeData: {
+            // MEGA is in both SP500 (higher score, so combinedPoolRows dedupes it to SP500) and DOWJONES —
+            // the boost must still apply, since it's a real Dow 30 member regardless of which universe won the tag.
+            SP500: { constituents: [{ ticker: "MEGA", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+            NASDAQ100: { all_constituents: [{ ticker: "OTHER", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+            DOWJONES: { constituents: [{ ticker: "MEGA", momentum_score: 1, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+        },
+        excluded: [],
+    });
+
+    const rows = combinedPoolRows();
+    assert.equal(rows.find(r => r.ticker === "MEGA").universe, "SP500"); // dedup picked the higher-score occurrence
+
+    const { targets } = computeAutoTargets(2, 1000);
+    // Rowny momentum_score w wygranym wystapieniu (5 vs 5), ale MEGA jest tez czlonkiem
+    // DOWJONES (mimo ze row.universe to "SP500") -> dostaje wiekszy udzial niz OTHER.
+    assert.ok(targets.MEGA.target_value > targets.OTHER.target_value);
+    const expectedMegaShare = DOWJONES_WEIGHT_MULTIPLIER / (DOWJONES_WEIGHT_MULTIPLIER + 1);
+    assert.ok(Math.abs(targets.MEGA.target_value - 1000 * expectedMegaShare) < 1e-6);
+
     _setState({ universeData: {}, excluded: [] });
 });
 

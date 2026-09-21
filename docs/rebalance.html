@@ -48,8 +48,11 @@
     </div>
 
     <div class="panel-card" id="poolCard">
-        <h3>Krok 2 — ranking puli <span class="ref-date-note" id="poolMeta"></span></h3>
-        <p class="panel-hint">Pełna, posortowana lista spółek, z której rebalanser wybiera automatycznie — informacyjnie, nic tu nie klikasz ręcznie. Sortuj po dowolnej kolumnie, filtruj po etapie Weinsteina (można zaznaczyć kilka naraz, np. 1 i 2) i sprawdzaj wykres dowolnej spółki przyciskiem 📈. Kolumna "W portfelu" pokazuje, czy dana spółka mieści się w dzisiejszym TOP N.</p>
+        <h3>Krok 2 — ranking puli <span class="ref-date-note" id="poolMeta"></span>
+            <button type="button" class="collapse-toggle-btn" id="poolToggleBtn"></button>
+        </h3>
+        <p class="panel-hint">Pełna, posortowana lista spółek, z której rebalanser wybiera automatycznie — informacyjnie, nic tu nie klikasz ręcznie. Sortuj po dowolnej kolumnie, filtruj po etapie Weinsteina (można zaznaczyć kilka naraz, np. 1 i 2) i sprawdzaj wykres dowolnej spółki przyciskiem 📈. Kolumna "W portfelu" pokazuje, czy dana spółka mieści się w dzisiejszym TOP N. Domyślnie zwinięta — kliknij "Rozwiń", żeby ją zobaczyć.</p>
+        <div id="poolCollapsibleContent">
         <div class="stage-filter-bar" id="poolStageFilterBar">
             <span class="stage-filter-label">Etap Weinsteina (można zaznaczyć kilka):</span>
             <button class="stage-filter-btn active" data-stage="ALL">Wszystkie</button>
@@ -78,6 +81,7 @@
             </thead>
             <tbody id="poolTableBody"></tbody>
         </table>
+        </div>
         </div>
     </div>
 
