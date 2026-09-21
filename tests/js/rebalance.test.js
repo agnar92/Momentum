@@ -338,6 +338,56 @@ test("eligiblePoolRows drops manually-excluded tickers and re-numbers pool_rank 
     _setState({ universeData: {}, excluded: [] });
 });
 
+// The stage filter (poolStageFilter) is not just a display filter for the
+// ranking table — it narrows the pool the automatic engine itself selects
+// from, per the user's explicit request ("jak zaznaczę [filtr] to ma taki N
+// z tej listy wybrać, po to jest tam to filtrowanie").
+function stageUniverseData() {
+    return {
+        SP500: {
+            constituents: [
+                { ticker: "S1", momentum_score: 3, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "1" } },
+                { ticker: "S2A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "2A" } },
+            ],
+        },
+        NASDAQ100: {
+            all_constituents: [
+                { ticker: "S2B", momentum_score: 1, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "2B" } },
+            ],
+        },
+        DOWJONES: {
+            constituents: [
+                { ticker: "S4", momentum_score: 0.5, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "4" } },
+            ],
+        },
+    };
+}
+
+test("eligiblePoolRows filters by the active stage filter, not just the ranking table's display", () => {
+    _setState({ universeData: stageUniverseData(), excluded: [], poolStageFilter: new Set(["2"]) }); // Etap 2 (2A+2B)
+    const rows = eligiblePoolRows();
+    assert.deepEqual(rows.map(r => r.ticker).sort(), ["S2A", "S2B"]);
+    assert.deepEqual(rows.map(r => r.pool_rank), [1, 2]); // re-numbered within the filtered set
+    _setState({ universeData: {}, excluded: [], poolStageFilter: "ALL" });
+});
+
+test("autoSelectedRows/computeAutoTargets only draw from the stage-filtered pool when a filter is active", () => {
+    _setState({ universeData: stageUniverseData(), excluded: [], poolStageFilter: new Set(["1"]) }); // Etap 1 only
+    // S1 (Etap 1) is the ONLY match, even though S2A/S2B/S4 all have higher-or-comparable momentum_score
+    // and would otherwise outrank it in the unfiltered pool.
+    assert.deepEqual(autoSelectedRows(3).map(r => r.ticker), ["S1"]);
+    const { targets } = computeAutoTargets(3, 1000);
+    assert.deepEqual(Object.keys(targets), ["S1"]);
+    assert.equal(targets.S1.target_value, 1000);
+    _setState({ universeData: {}, excluded: [], poolStageFilter: "ALL" });
+});
+
+test("eligiblePoolRows returns everything (no narrowing) when poolStageFilter is the ALL sentinel", () => {
+    _setState({ universeData: stageUniverseData(), excluded: [], poolStageFilter: "ALL" });
+    assert.deepEqual(eligiblePoolRows().map(r => r.ticker), ["S1", "S2A", "S2B", "S4"]); // sorted by momentum_score
+    _setState({ universeData: {}, excluded: [] });
+});
+
 test("autoSelectedRows slices the top N eligible rows, returning [] for N <= 0", () => {
     _setState({ universeData: baseUniverseData(), excluded: [] });
     assert.deepEqual(autoSelectedRows(2).map(r => r.ticker), ["BBB", "AAA"]);
