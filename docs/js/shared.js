@@ -1,11 +1,15 @@
 // ============================================================
-// MODUŁ WSPÓLNY dla index.html/app.js, rebalance.html/rebalance.js i
-// chart.html/chart.js (+ chart-render.js) — zwykły <script> tag ładowany
-// PRZED każdym z tych plików na wszystkich trzech stronach (bez
-// modułów/bundlera, patrz "no build step" w CLAUDE.md), więc stałe/funkcje
-// poniżej są zwykłymi globalami dzielonymi między stronami, tak jak
-// js/chart-render.js już dzieli silnik wykresu między index.html/chart.html
-// (patrz komentarz na górze tamtego pliku).
+// MODUŁ WSPÓLNY dla index.html/app.js, rebalance.html/rebalance.js,
+// rebalance_pl.html/rebalance_pl.js i chart.html/chart.js (+ chart-render.js)
+// — zwykły <script> tag ładowany PRZED każdym z tych plików na wszystkich
+// czterech stronach (bez modułów/bundlera, patrz "no build step" w
+// CLAUDE.md), więc stałe/funkcje poniżej są zwykłymi globalami dzielonymi
+// między stronami, tak jak js/chart-render.js już dzieli silnik wykresu
+// między index.html/chart.html (patrz komentarz na górze tamtego pliku).
+// rebalance_pl.js to bliźniacza kopia rebalance.js dla WIG20/mWIG40 zamiast
+// SP500/Nasdaq100/Dow Jones (osobny, w pełni automatyczny rebalanser PL,
+// patrz komentarz na górze rebalance_pl.js) — korzysta z dokładnie tych
+// samych globali stąd co rebalance.js.
 //
 // Trafia tu WYŁĄCZNIE kod, który był bajt-w-bajt (albo funkcjonalnie)
 // identyczny w co najmniej dwóch z tych plików — np. STAGE_LABELS/

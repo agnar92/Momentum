@@ -1,9 +1,10 @@
 // ============================================================
 // SILNIK TABEL SORTOWALNYCH/FILTROWALNYCH PO ETAPIE — WSPÓLNY dla
 // dashboardu (`renderTable`/`renderRsmScreenerTable`/`renderTtmSqueezeTable`
-// w app.js) i Kroku 2 rebalansera (`renderPickerTable` w rebalance.js).
+// w app.js) i Kroku 2 obu rebalanserów (`renderPoolTable` w rebalance.js i w
+// rebalance_pl.js).
 //
-// Wszystkie cztery miały wcześniej WŁASNĄ, prawie identyczną kopię tej samej
+// Wszystkie miały wcześniej WŁASNĄ, prawie identyczną kopię tej samej
 // pętli: przefiltruj wiersze po etapie -> zbuduj linijkę "meta" nad tabelą ->
 // posortuj -> wyczyść `<tbody>` -> pokaż pusty stan albo wypisz wiersze
 // (z klasą `.row-selected`, klikiem, opcjonalnym hookiem po renderze typu
@@ -11,7 +12,8 @@
 // tej pętli — każde wywołanie dostarcza tylko to, co faktycznie się różni
 // między tabelami (HTML komórek wiersza, co robi klik, jak wygląda tekst
 // linijki meta, ile kolumn ma pusty stan). `index.html` musi ładować ten
-// plik PRZED `js/app.js`, a `rebalance.html` PRZED `js/rebalance.js`.
+// plik PRZED `js/app.js`, a `rebalance.html`/`rebalance_pl.html` PRZED
+// `js/rebalance.js`/`js/rebalance_pl.js` odpowiednio.
 //
 // Nie jest to silnik generycznego "data grid" — celowo nie próbuje obsłużyć
 // niczego, czego żadna z czterech tabel dziś nie robi (np. paginacji).
