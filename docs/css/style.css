@@ -927,6 +927,20 @@ th.tv-col, th.chart-col { width: 1%; }
     flex-wrap: wrap;
 }
 
+.collapse-toggle-btn {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    text-transform: none;
+    letter-spacing: 0;
+    cursor: pointer;
+    margin-left: auto;
+}
+.collapse-toggle-btn:hover { border-color: var(--green-bright); color: var(--text); }
+
 .mc-horizon {
     background: var(--panel-alt);
     border: 1px solid var(--border);

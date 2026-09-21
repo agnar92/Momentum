@@ -1124,6 +1124,22 @@ flex child (no `.topbar-left` wrapper there).
     a conscious simplification vs. the pipeline's own cap-weighting/`compute_weights`), just fed by
     `autoSelectedRows(n)` instead of a manually-curated list. There is no `stale` concept any more (no
     accumulated state to go stale) — a ticker either is in today's fresh TOP N or it isn't.
+  - **`DOWJONES_WEIGHT_MULTIPLIER` (1.5) tilts WEIGHT, not selection, toward Dow Jones** — a later, separate
+    explicit user request ("zwiększ udział stabilnych spółek", "wagi w DJA faworyzuj w stosunku do sp500 i
+    nasdaq100"): Dow Jones's 30 blue-chip constituents are what "stable companies" means here, so
+    `computeAutoTargets()` multiplies a selected company's `raw_weight` by this constant when it's a Dow
+    Jones member, before normalizing to `totalCapital` — a Dow-member company ends up with 1.5x the capital
+    share a non-Dow company with the identical `momentum_score` would get. Deliberately scoped to WEIGHT
+    only, not to WHICH companies make TOP N: `combinedPoolRows()`/`eligiblePoolRows()`/`autoSelectedRows()`
+    still rank/select purely by raw `momentum_score`, unmultiplied — the user asked specifically about
+    "wagi" (weights), not about biasing the ranking itself. Membership is checked via
+    `dowjonesTickerSet()` (built from `poolRowsForUniverse("DOWJONES")`), deliberately NOT via a selected
+    row's own `universe` tag: `combinedPoolRows()`'s dedup (see above) keeps whichever universe scored a
+    ticker higher, so a real Dow 30 name that's also in SP500/NASDAQ100 with a higher score there would get
+    tagged e.g. `"SP500"` and silently miss the boost if it were keyed off that tag instead of true
+    membership — a lot of Dow's own 30 names are large enough to also qualify for SP500/NASDAQ100, so this
+    isn't a rare edge case. Tune the constant directly in `rebalance.js` if the tilt should be
+    stronger/weaker.
   - **Krok 2 — `renderPoolTable()`** renders `eligiblePoolRows()` as a full, sortable (`compareRows()` from
     `js/shared.js`, click-to-sort `<th data-key>`), stage-filterable (`poolStageFilter`,
     `#poolStageFilterBar`, MULTI-SELECT — same reasoning the prior manual-picking design already had for
@@ -1145,6 +1161,17 @@ flex child (no `.topbar-left` wrapper there).
     for the full account if you need it) — the pool ranking table inherited it as-is when the manual
     picker table it replaced was removed, since the "don't open a chart by accident" lesson applies just as
     much to a read-only ranking table as it did to a table with a pick button in it.
+  - **The whole Krok 2 table is collapsible, DEFAULT COLLAPSED** (`poolCollapsed`, `#poolToggleBtn`/
+    `#poolCollapsibleContent`, `localStorage` key `momentum_rebalance_pool_collapsed`) — added after the
+    user reported that with ~150-250 rows in the pool (SP500 top 100 + full Nasdaq 100 + full Dow Jones),
+    scrolling past the whole table just to reach "Obecne pozycje"/"Sugerowany rebalans" further down the
+    page was too much. `#poolCollapsibleContent` wraps the stage-filter bar + `.table-wrap` (NOT the
+    `<h3>`/`#poolMeta`/hint text, which stay visible either way — so a collapsed card still tells you the
+    pool size and TOP N count without expanding it); toggling sets the wrapper's `hidden` attribute (same
+    idiom as `#loadingOverlay` in `js/qol.js`) and flips the button's own label between `"▼ Rozwiń"`/
+    `"▲ Zwiń"`. Persisted per-browser like every other rebalancer preference (holdings/exclusions/settings)
+    — defaults to collapsed only when nothing is stored yet (`localStorage.getItem(...) === null`), so an
+    explicit "rozwiń" choice survives reloads instead of resetting every visit.
   - **Holdings and exclusions are one flat, universe-agnostic list**, exactly as in every earlier design —
     one `holdings` array (ticker + shares) and one `excluded` array of tickers, entirely independent of the
     pool/selection. `currencyOf(ticker)` (via `priceMap[ticker].sources`, defaulting to USD for an
