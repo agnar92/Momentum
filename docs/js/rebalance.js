@@ -3,78 +3,59 @@
 // żyją teraz w js/shared.js, które rebalance.html ładuje PRZED tym plikiem
 // (patrz komentarz na górze shared.js). showToast/initConnStatus/
 // hideLoadingOverlay żyją analogicznie w js/qol.js (patrz komentarz na górze
-// tamtego pliku), ładowanym tuż po shared.js — togglePick() niżej (które
-// woła showToast()) jest wprost jednostkowo testowane, więc Node (tests/js/,
-// który nie ładuje <script> tagów) potrzebuje tego samego współdzielenia
-// globali odtworzonego ręcznie tutaj.
+// tamtego pliku), ładowanym tuż po shared.js.
 if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
 }
 
-// Krótsza wersja etykiet uniwersów (bez dopisku "Momentum") — pasuje lepiej do
-// przycisków/chipów Kroku 1/2 niż pełne UNIVERSE_LABELS z js/shared.js, których
-// używa dashboard/strona wykresu (index.html/chart.html) — celowo INNY
-// produkt, nie kopia tego samego (patrz komentarz na górze shared.js). Nazwa
-// jest inna niż w shared.js (nie UNIVERSE_LABELS) specjalnie — index.html i
-// chart.html laduja tylko shared.js, ale rebalance.html laduje OBA pliki jako
-// zwykle <script> tagi w jednym globalnym zasiegu, gdzie dwa `const` o tej
-// samej nazwie w siostrzanych <script>ach rzucaja SyntaxError "already been
-// declared" i zatrzymuja caly plik przed wykonaniem (real bug spotkany po
-// zmergowaniu PR #97 — rebalance.html zawieszal sie na nakladce ladowania,
-// bo rebalance.js nigdy sie nie wykonywal).
-const PICKER_UNIVERSE_LABELS = {
-    SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones", WIG20: "WIG20", MWIG40: "mWIG40",
-};
 const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
 
-// Rebalanser to teraz przepływ ETAPOWY, zbudowany tak, żeby dało się go
-// obsłużyć w ~1h/tydzień: KROK 1 — przeglądasz ranking Global Equity Momentum
-// (gemData/renderGemWidget) i wybierasz, KTÓREGO z 5 uniwersów (SP500/
-// NASDAQ100/DOWJONES/WIG20/MWIG40) spółki chcesz teraz przejrzeć
-// (settings.browsingUniverse) — zwycięzca GEM jest tylko podpowiedzią
-// (podświetlony 🏆, wybrany domyślnie), można kliknąć dowolny inny wiersz.
-// KROK 2 — ten uniwersum ląduje jako pełna, sortowalna, filtrowalna po etapie
-// Weinsteina tabela (dokładnie ta sama tabela co na dashboardzie, patrz
-// renderPickerTable/pickerRowHtml), a Ty sam RĘCZNIE wybierasz spółki do
-// portfela przyciskiem "+ Dodaj" (togglePick) — nie ma już automatycznego
-// TOP N. Wybrane spółki (picks, patrz loadPicks/savePicks) KUMULUJĄ SIĘ w
-// localStorage niezależnie od tego, które uniwersum jest akurat przeglądane —
-// portfel buduje się miesiąc po miesiącu: raz dodana spółka zostaje, dopóki
-// jej ręcznie nie usuniesz (renderPicksList), nawet jeśli w kolejnym miesiącu
-// przeglądasz inny, akurat wygrywający w GEM uniwersum. Wagi w portfelu
-// (computeTargetsFromPicks) liczą się z AKTUALNEGO momentum_score każdej
-// wybranej spółki (przeliczanego przez pipeline co tydzień), więc portfel się
-// nie "zamraża" — siła każdej pozycji w alokacji odświeża się razem z resztą
-// dashboardu. Holdingi (ticker + liczba akcji) i lista wykluczeń pozostają,
-// jak dawniej, WSPÓLNE i niezależne od picks/przeglądanego uniwersum.
+// ============================================================
+// Rebalanser jest teraz W PEŁNI AUTOMATYCZNY, na wyraźną prośbę użytkownika:
+// wcześniejszy przepływ etapowy (Krok 1 — wybierz uniwersum wg Global Equity
+// Momentum, Krok 2 — ręcznie dodawaj spółki do skumulowanego portfela, patrz
+// git history / CLAUDE.md) został zastąpiony jednym ustawieniem — "ile spółek
+// ma być w portfelu" — z którego rebalanser sam wybiera TOP N wg momentum i
+// sam dobiera wagi. GEM (docs/data/global_equity_momentum.json) nie steruje
+// już niczym tutaj — jego jedyną rolą w rebalanserze było wskazywanie, KTÓRE
+// uniwersum przeglądać w Kroku 2, a tego kroku już nie ma; pipeline nadal go
+// liczy (nic w backendzie się nie zmieniło), po prostu ta strona przestała go
+// czytać.
+//
+// WIG20/mWIG40 zostały usunięte z PULI rebalansera — użytkownik monitoruje
+// je sam i trzyma przez osobny ETF, poza tym narzędziem. Zostają w pełni
+// obliczane i pokazywane na dashboardzie (index.html), tylko rebalance.js już
+// ich nie dotyka. Pula rebalansera to teraz trzy uniwersa, wszystkie w USD
+// (stąd też koniec potrzeby mieszania PLN/USD bez przewalutowania gdziekolwiek
+// w WYNIKACH tego narzędzia — patrz fmtMoney/currentMoneyFmt niżej):
+//  - SP500: `constituents` — to już jest top ~100 spółek wg
+//    select_with_buffer/TARGET_QUINTILE w run_query.py (kwintyl z ~500 to i
+//    tak dokładnie 100, capped przez MAX_HOLDINGS=100) — dokładnie ten sam
+//    rozmiar co S&P 500 Momentum Index/SPMO, o co użytkownik prosił wprost
+//    ("top 100 spółek z sp500 jak w SPMO"), plus bonus w postaci bufora 20%
+//    zmniejszającego rotację względem tygodnia poprzedniego.
+//  - NASDAQ100: `all_constituents` — CAŁY skład (nie tylko kwintyl pipeline'u)
+//    — użytkownik chce "cały nasdaq100", nie tylko jego własny top decyl.
+//  - DOWJONES: `constituents` — i tak już cały zestaw (DOWJONES jest w
+//    EQUAL_WEIGHT_UNIVERSES w run_query.py, bez selekcji kwintylowej), więc
+//    to dokładnie "cały DJIA".
+// ============================================================
+const REBALANCE_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"];
+const REBALANCE_UNIVERSE_LABELS = { SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
+
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
-const PICKS_KEY = "momentum_rebalance_picks";
-const GEM_MANUAL_KEY = "momentum_rebalance_gem_manual";
 
-const DEFAULT_SETTINGS = { contribution: 0, browsingUniverse: null };
-// Te dwa uniwersa nie mają realnego, kapitalizacyjnego zwrotu poziomu indeksu
-// z zewnętrznego źródła (yfinance nie ma historii dla WIG20.WA/MWIG40.WA,
-// a stooq.pl zablokował automatyczne pobieranie od 2026 — patrz CLAUDE.md) —
-// jedyne dwa, dla których pole ręcznego zwrotu w widgecie GEM ma sens.
-// Musi się zgadzać z run_query.py::GEM_MANUAL_OVERRIDE_UNIVERSES.
-const GEM_MANUAL_OVERRIDE_UNIVERSES = ["WIG20", "MWIG40"];
+// portfolioSize — ile spółek (TOP N z puli, patrz wyżej) ma być w portfelu;
+// jedyny "wybór" jaki użytkownik podejmuje, resztą (który to konkretnie
+// spółki, jakie wagi) zajmuje się rebalanser sam.
+const DEFAULT_SETTINGS = { contribution: 0, portfolioSize: 20 };
 
-// STAGE_LABELS/STAGE_COLORS/stageCellHtml — tylko do wyswietlania w kolumnie
-// "Etap" tabeli z Kroku 2 (patrz pickerRowHtml) — zyja teraz w js/shared.js.
-
-let universeData = {};    // { SP500: {...json}, NASDAQ100: {...}, ... }
-let priceMap = {};        // ticker -> { price, sources: [universe,...] }
-let equityCurveData = {}; // { NASDAQ100: {dates, momentum_index, benchmark_index, ...}, ... }
-let gemData = { ref_date: null, indices: [], winner: null, leaders: [] };
-// Kopia gemData.indices TAK JAK PRZYSZŁA z global_equity_momentum.json, przed
-// zastosowaniem lokalnego (localStorage) nadpisania z widgetu GEM — potrzebna,
-// żeby "wyczyść" mogło wrócić do wartości z pipeline'u, i żeby powtórne
-// applyManualGemOverrides() (np. po zapisaniu nowej wartości) nie nadpisywało
-// już-nadpisanych danych. Patrz applyManualGemOverrides.
-let gemPristineIndices = [];
+let universeData = {};    // { SP500: {...json}, NASDAQ100: {...}, DOWJONES: {...} }
+let priceMap = {};        // ticker -> { price, sources: [universe,...] } — dla WSZYSTKICH tickerow (holdingi moga byc z dowolnego indeksu, w tym WIG20/mWIG40)
+let equityCurveData = {}; // { SP500: {dates, momentum_index, benchmark_index, ...}, ... }
 
 function loadSettings() {
     let stored = {};
@@ -82,46 +63,6 @@ function loadSettings() {
     return { ...DEFAULT_SETTINGS, ...stored };
 }
 function saveSettings(s) { localStorage.setItem(SETTINGS_KEY, JSON.stringify(s)); }
-
-// Ręczne nadpisanie zwrotu 12M dla WIG20/mWIG40 w wyścigu GEM — TYLKO w tej
-// przeglądarce (localStorage, tak jak holdingi/wykluczenia/picks), bo
-// rebalance.html jest stroną statyczną (GitHub Pages, bez backendu) i nie ma
-// sposobu, żeby stąd zapisać coś do repo/pipeline'u. To jest odpowiednik po
-// stronie klienta tego, co run_query.py::_load_gem_manual_returns robi po
-// stronie pipeline'u z gem_manual_returns.json — niezależny mechanizm, nie
-// zapisuje do tego pliku i nie jest przez niego czytany. Patrz
-// applyManualGemOverrides/renderGemWidget.
-function loadManualGemReturns() {
-    try { return JSON.parse(localStorage.getItem(GEM_MANUAL_KEY)) || {}; } catch (e) { return {}; }
-}
-function saveManualGemReturns(overrides) { localStorage.setItem(GEM_MANUAL_KEY, JSON.stringify(overrides)); }
-
-// Nakłada lokalnie zapisane nadpisania (loadManualGemReturns) na gemPristineIndices
-// (dane TAK JAK je zwrócił pipeline) — zastępuje return_pct, oznacza wpis flagą
-// manual_entry (ten sam klucz co po stronie backendu, patrz run_query.py — więc
-// UI-owy label "(ręcznie)" w renderGemWidget działa identycznie niezależnie od
-// tego, czy wartość jest ręczna z pipeline'u czy z tej przeglądarki), po czym
-// na nowo sortuje malejąco po return_pct i wyznacza winnera z TYCH wartości —
-// więc ręcznie wpisany zwrot realnie decyduje, który uniwersum wygrywa wyścig,
-// tak jak po stronie backendu. Wołane po każdym (re)wczytaniu gemData i po
-// każdym zapisaniu/wyczyszczeniu wartości w widgecie.
-function applyManualGemOverrides() {
-    const overrides = loadManualGemReturns();
-    const indices = gemPristineIndices.map(rec => {
-        const copy = { ...rec };
-        if (GEM_MANUAL_OVERRIDE_UNIVERSES.includes(copy.universe)) {
-            const ov = overrides[copy.universe];
-            if (ov && typeof ov.return_pct === "number" && !isNaN(ov.return_pct)) {
-                copy.return_pct = ov.return_pct;
-                copy.manual_entry = true;
-            }
-        }
-        return copy;
-    });
-    indices.sort((a, b) => b.return_pct - a.return_pct);
-    gemData.indices = indices;
-    gemData.winner = indices.length ? indices[0].universe : null;
-}
 
 function loadHoldings() {
     try {
@@ -137,44 +78,12 @@ function loadExcluded() {
 }
 function saveExcluded() { localStorage.setItem(EXCLUDED_KEY, JSON.stringify(excluded)); }
 
-// ============================================================
-// PICKS — spółki ręcznie wybrane do portfela w Kroku 2 (patrz
-// renderPickerTable/togglePick). Jeden płaski, kumulujący się w czasie zapis
-// { ticker, universe, added_date } w localStorage — universe zapamiętuje, z
-// KTÓREGO uniwersum dana spółka została dodana (potrzebne do wyceny/momentum
-// tej pozycji, patrz computeTargetsFromPicks), więc ta sama spółka teoretycznie
-// może być dodana osobno z dwóch uniwersów naraz (np. duży large-cap obecny i
-// w SP500, i w NASDAQ100) — computeTargetsFromPicks scala taki przypadek w
-// jeden wiersz wyniku.
-// ============================================================
-function loadPicks() {
-    try { return JSON.parse(localStorage.getItem(PICKS_KEY)) || []; } catch (e) { return []; }
-}
-function savePicks(p) { localStorage.setItem(PICKS_KEY, JSON.stringify(p)); }
-
-function isPicked(ticker, universe) {
-    return picks.some(p => p.ticker === ticker && p.universe === universe);
-}
-
-function togglePick(ticker, universe) {
-    const idx = picks.findIndex(p => p.ticker === ticker && p.universe === universe);
-    if (idx !== -1) {
-        picks.splice(idx, 1);
-        showToast(`${ticker} usunięty z portfela`, { type: "info" });
-    } else {
-        picks.push({ ticker, universe, added_date: new Date().toISOString().slice(0, 10) });
-        showToast(`${ticker} dodany do portfela`, { type: "success" });
-    }
-    savePicks(picks);
-}
-
 let settings = loadSettings();
 let holdings = loadHoldings();
 let excluded = loadExcluded();
-let picks = loadPicks();
 
 async function loadUniverseData() {
-    for (const u of UNIVERSES) {
+    for (const u of REBALANCE_UNIVERSES) {
         try {
             const res = await fetch(`data/${u.toLowerCase()}.json`, { cache: "no-store" });
             universeData[u] = await res.json();
@@ -183,9 +92,10 @@ async function loadUniverseData() {
         }
     }
 
-    // Ceny dla WSZYSTKICH spółek w indeksach (nie tylko wybranych do portfela
-    // momentum) — żeby móc wycenić dowolną pozycję użytkownika, nawet jedną z
-    // uniwersum, które akurat nie jest przeglądane w Kroku 1/2.
+    // Ceny dla WSZYSTKICH spółek we WSZYSTKICH indeksach (nie tylko trzech,
+    // z których dobiera pula rebalansera) — żeby móc wycenić dowolną pozycję
+    // użytkownika, łącznie ze starą pozycją z WIG20/mWIG40, którą nadal może
+    // trzymać nawet jeśli rebalanser już jej nie dobiera.
     priceMap = {};
     try {
         const res = await fetch("data/all_prices.json", { cache: "no-store" });
@@ -195,7 +105,7 @@ async function loadUniverseData() {
         });
     } catch (e) { /* brak pliku — priceMap zostanie uzupełniony niżej z list momentum */ }
 
-    for (const u of UNIVERSES) {
+    for (const u of REBALANCE_UNIVERSES) {
         (universeData[u].constituents || []).forEach(c => {
             if (!priceMap[c.ticker]) priceMap[c.ticker] = { price: c.price, sources: [u] };
         });
@@ -206,26 +116,6 @@ async function loadUniverseData() {
         equityCurveData = res.ok ? await res.json() : {};
     } catch (e) {
         equityCurveData = {};
-    }
-
-    try {
-        const res = await fetch("data/global_equity_momentum.json", { cache: "no-store" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        gemData = await res.json();
-    } catch (e) {
-        gemData = { ref_date: null, indices: [], winner: null, leaders: [] };
-    }
-    gemPristineIndices = (gemData.indices || []).map(rec => ({ ...rec }));
-    applyManualGemOverrides();
-
-    // Domyślne uniwersum przeglądane w Kroku 2 to zwycięzca GEM — tylko przy
-    // pierwszym uruchomieniu / gdy zapisany wybór jest już nieprawidłowy
-    // (stary zapis sprzed dodania/usunięcia uniwersum). Późniejsze kliknięcia
-    // w Kroku 1 (renderGemWidget) nadpisują to niezależnie od tego, kto
-    // akurat wygrywa w GEM.
-    if (!settings.browsingUniverse || !UNIVERSES.includes(settings.browsingUniverse)) {
-        settings.browsingUniverse = gemData.winner;
-        saveSettings(settings);
     }
 }
 
@@ -239,31 +129,31 @@ function fmtMoneyPln(v) {
     return v.toLocaleString("pl-PL", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " zł";
 }
 
-// Formatter dla cen w tabeli Kroku 2 — w NATIVE walucie przeglądanego
-// uniwersum (nie zależy od tego, co akurat jest w portfelu — to tylko
-// wyświetlanie cen konkretnej listy spółek).
-function moneyFmtForUniverse(universe) { return PLN_UNIVERSES.has(universe) ? fmtMoneyPln : fmtMoney; }
+// Formatter dla PULI rebalansera i wszystkiego, co z niej wynika (ranking,
+// sugestia, statystyki, Monte Carlo, krzywa historyczna) — pula to teraz
+// zawsze SP500+NASDAQ100+DOWJONES, czyli zawsze USD, więc nie ma już
+// potrzeby wykrywania miksu walut jak wtedy, gdy portfel mógł kumulować
+// spółki z WIG20/mWIG40. Zostaje jako osobna funkcja (nie wprost fmtMoney w
+// każdym wywołaniu) żeby było jasne w kodzie DLACZEGO to zawsze USD, i żeby
+// testy miały jeden punkt zaczepienia.
+function currentMoneyFmt() { return fmtMoney; }
 
-// Formatter faktycznie używany w sugestiach/statach/Monte Carlo/krzywej —
-// wynika z tego, z JAKICH uniwersów pochodzą AKTUALNIE wybrane spółki (picks),
-// nie z pojedynczego "zwycięzcy" czy z przeglądanego akurat uniwersum: skoro
-// portfel kumuluje się miesiąc po miesiącu, może w danym momencie obejmować
-// spółki z więcej niż jednego uniwersum naraz (np. wybrane w zeszłym miesiącu
-// z NASDAQ100, w tym miesiącu z WIG20). Jeśli wszystkie są w PLN -> fmtMoneyPln,
-// jeśli wszystkie poza PLN -> fmtMoney, a przy realnym miksie obu walut naraz
-// spadamy na fmtMoney (USD) jako wspólny mianownik — ta sama, już wcześniej
-// przyjęta w aplikacji uproszczona konwencja "miksuj surowe liczby bez
-// przewalutowania" co holdingsValue()/donut portfela (patrz CLAUDE.md).
-function currentMoneyFmt() {
-    const activeUniverses = [...new Set(picks.map(p => p.universe))];
-    if (activeUniverses.length === 0) return fmtMoney;
-    if (activeUniverses.every(u => PLN_UNIVERSES.has(u))) return fmtMoneyPln;
+// Formatter dla ANALIZY PORTFELA (donut niżej) — dzieli TWOJE OBECNE pozycje
+// (holdings), które teoretycznie nadal mogą zawierać starą pozycję z
+// WIG20/mWIG40 (rebalanser już ich nie dobiera, ale nie usuwa Ci ich z
+// portfela) — bazuje więc na walutach WSZYSTKICH aktualnie trzymanych
+// tickerów, nie na (zawsze-USD) puli rebalansera. Przy realnym miksie walut
+// spada na fmtMoney (USD), ta sama uproszczona konwencja "miksuj bez
+// przewalutowania" co holdingsValue() (patrz CLAUDE.md).
+function holdingsMoneyFmt() {
+    const tickers = Object.keys(holdingShares());
+    if (tickers.length === 0) return fmtMoney;
+    if (tickers.every(t => currencyOf(t) === "PLN")) return fmtMoneyPln;
     return fmtMoney;
 }
 
-// Formatter dla KONKRETNEGO tickera niezależnie od zawartości portfela —
-// używany w tabeli holdingów, bo tam pozycje mogą być z różnych uniwersów/
-// walut naraz (patrz currencyOf).
+// Formatter dla KONKRETNEGO tickera w tabeli holdingów — pozycje tam mogą
+// być z różnych uniwersów/walut naraz (patrz currencyOf).
 function moneyFmtForCurrency(currency) { return currency === "PLN" ? fmtMoneyPln : fmtMoney; }
 
 function fmtQty(n) {
@@ -277,10 +167,11 @@ function sharesSuggestion(dollarAmount, price, moneyFmt = fmtMoney) {
     return `${fmtQty(qty)} szt. (~${moneyFmt(dollarAmount)})`;
 }
 
-// Waluta danego tickera (do formatowania ceny/wartości w tabeli holdingów,
-// niezależnie od zawartości portfela) — na podstawie tego, w jakim uniwersum
-// go znaleziono (patrz priceMap/all_prices.json). Nieznany ticker (spoza
-// śledzonych indeksów) domyślnie USD.
+// Waluta danego tickera (do formatowania ceny/wartości w tabeli holdingów) —
+// na podstawie tego, w jakim uniwersum go znaleziono (patrz priceMap/
+// all_prices.json, które nadal pokrywa WSZYSTKIE 5 indeksów, nie tylko
+// REBALANCE_UNIVERSES). Nieznany ticker (spoza śledzonych indeksów) domyślnie
+// USD.
 function currencyOf(ticker) {
     const sources = priceMap[ticker]?.sources || [];
     return sources.some(u => PLN_UNIVERSES.has(u)) ? "PLN" : "USD";
@@ -299,7 +190,7 @@ function targetCapital() {
 }
 
 // Wartość pozycji wykluczonych z rebalansu — ten kapitał zostaje "poza
-// systemem": nie liczy się do puli, którą alokujemy na wybrane spółki.
+// systemem": nie liczy się do puli, którą alokujemy na TOP N spółek.
 function excludedValue() {
     return holdings.reduce((sum, h) => {
         if (!h.ticker || !excluded.includes(h.ticker)) return sum;
@@ -319,8 +210,10 @@ function holdingShares() {
 
 // ============================================================
 // WYKLUCZENIA — spółki, których panel nigdy nie ma sugerować kupić ani
-// sprzedać, nawet jeśli je importujesz z XTB albo dodasz do portfela w
-// Kroku 2.
+// sprzedać, nawet jeśli je importujesz z XTB albo wybierze je automatyczny
+// TOP N. Wykluczona spółka znika z puli CAŁKOWICIE (patrz eligiblePoolRows
+// niżej) — jeśli była w TOP N, jej miejsce automatycznie zajmuje kolejna w
+// rankingu (pula "dopełnia się" do N, nie kurczy).
 // ============================================================
 function renderExcludedList() {
     const wrap = document.getElementById("excludedList");
@@ -332,7 +225,7 @@ function renderExcludedList() {
             excluded = excluded.filter(t => t !== btn.dataset.ticker);
             saveExcluded();
             renderExcludedList();
-            renderPickerTable();
+            renderPoolTable();
             refreshOutputs();
         });
     });
@@ -347,7 +240,7 @@ function initExcludeForm() {
         excluded.push(t);
         saveExcluded();
         renderExcludedList();
-        renderPickerTable();
+        renderPoolTable();
         refreshOutputs();
     };
     document.getElementById("excludeAddBtn").addEventListener("click", addTicker);
@@ -355,307 +248,187 @@ function initExcludeForm() {
 }
 
 // ============================================================
-// KROK 1 — GLOBAL EQUITY MOMENTUM: który indeks (SP500/NASDAQ100/DOWJONES/
-// WIG20/mWIG40) ma teraz najsilniejszy trend 12-miesięczny, plus ranking
-// pozostałych 4. To PODPOWIEDŹ, nie automatyczny wybór — kliknięcie
-// dowolnego wiersza ustawia settings.browsingUniverse, czyli które uniwersum
-// ląduje jako tabela w Kroku 2 poniżej (renderPickerTable). Zwycięzca zostaje
-// wybrany domyślnie tylko przy pierwszym uruchomieniu (patrz
-// loadUniverseData) — użytkownik może zawsze ręcznie przeglądać inny indeks,
-// niezależnie od tego, kto akurat wygrywa w GEM.
+// PULA REBALANSERA — SP500 (top ~100) + NASDAQ100 (cały) + DOWJONES (cały),
+// połączone w jedną listę i posortowane wg momentum_score malejąco (patrz
+// komentarz na górze pliku dla dokładnego uzasadnienia każdego uniwersum).
+// Porównywanie momentum_score WPROST między uniwersami to świadome
+// uproszczenie — ten sam wskaźnik, liczony niezależnie w każdym z nich
+// (get_universe_metrics), ale nie ma dziś globalnego, wspólnego dla
+// wszystkich 3 uniwersów rankingu w pipeline; to ta sama konwencja co
+// wcześniejsze łączenie ręcznie wybranych spółek z różnych uniwersów w jeden
+// portfel (patrz git history / CLAUDE.md).
 // ============================================================
-function renderGemWidget() {
-    const el = document.getElementById("gemWidget");
-    if (!el) return;
-    if (!gemData.winner) {
-        el.innerHTML = `<span class="text-faint">Brak danych — uruchom pipeline (fetch_data.py + run_query.py).</span>`;
-        return;
-    }
-    const browsing = settings.browsingUniverse;
-    // manual_entry: WIG20/MWIG40 moga miec return_pct recznie wpisany z gem_manual_returns.json
-    // (patrz CLAUDE.md / run_query.py::_load_gem_manual_returns) LUB z pola nizej w tym widgecie
-    // (applyManualGemOverrides, TYLKO ta przeglądarka) zamiast liczonego z syntetycznego indeksu —
-    // "(ręcznie)" to zwykla transparentnosc pochodzenia danych, tak jak fmc_note gdzie indziej w
-    // aplikacji, nie ostrzezenie. Nie rozróżniamy tu która z tych dwóch dróg to ustawiła — obie
-    // znaczą to samo dla użytkownika ("to nie jest syntetyczny wskaźnik").
-    const rows = (gemData.indices || []).map(i => `
-        <div class="gem-index-row${i.universe === gemData.winner ? " gem-index-winner" : ""}${i.universe === browsing ? " gem-index-active" : ""}"
-             data-universe="${i.universe}" role="button" tabindex="0"
-             title="Kliknij, żeby przeglądać spółki tego indeksu w Kroku 2 poniżej">
-            <span>${i.universe === gemData.winner ? "🏆 " : ""}${PICKER_UNIVERSE_LABELS[i.universe]}${i.manual_entry ? ' <span class="text-faint">(ręcznie)</span>' : ""}${i.universe === browsing ? ' <span class="text-faint">(przeglądasz)</span>' : ""}</span>
-            <span class="${i.return_pct >= 0 ? "positive" : "negative"}">${i.return_pct >= 0 ? "+" : ""}${i.return_pct.toFixed(2)}%</span>
-        </div>
-    `).join("");
+function poolRowsForUniverse(universe) {
+    const data = universeData[universe] || {};
+    if (universe === "NASDAQ100") return data.all_constituents || data.constituents || [];
+    return data.constituents || data.all_constituents || [];
+}
 
-    // Pola do wpisania zwrotu WIG20/mWIG40 sprawdzonego ręcznie (np. na stooq.pl) — TYLKO dla
-    // uniwersów bez realnego zwrotu z automatycznego źródła (GEM_MANUAL_OVERRIDE_UNIVERSES;
-    // SP500/NASDAQ100/DOWJONES mają realne dane z yfinance i nie potrzebują tego pola) i tylko
-    // jeśli GEM w ogóle je liczy (są w gemData.indices). Zapisane WYŁĄCZNIE w localStorage tej
-    // przeglądarki (patrz saveManualGemReturns) — strona jest statyczna, nie ma jak zapisać tego
-    // do repo/gem_manual_returns.json stąd; działa od razu (applyManualGemOverrides), ale tylko na
-    // tym urządzeniu, aż wpiszesz to samo gdzie indziej.
-    const overrides = loadManualGemReturns();
-    const manualFields = (gemData.indices || [])
-        .filter(i => GEM_MANUAL_OVERRIDE_UNIVERSES.includes(i.universe))
-        .map(i => {
-            const ov = overrides[i.universe];
-            const hasOverride = ov && typeof ov.return_pct === "number" && !isNaN(ov.return_pct);
-            return `
-                <div class="gem-manual-row">
-                    <label for="gemManual_${i.universe}">${PICKER_UNIVERSE_LABELS[i.universe]} zwrot 12M (%)</label>
-                    <div class="gem-manual-input-group">
-                        <input type="number" step="0.01" id="gemManual_${i.universe}" class="gem-manual-input"
-                               data-universe="${i.universe}" placeholder="np. 44.84"
-                               value="${hasOverride ? ov.return_pct : ""}">
-                        <button type="button" class="gem-manual-save-btn add-row-btn" data-universe="${i.universe}">Zapisz</button>
-                        ${hasOverride ? `<button type="button" class="gem-manual-clear-btn remove-row-btn" data-universe="${i.universe}" title="Usuń ręczną wartość, wróć do wskaźnika syntetycznego">✕</button>` : ""}
-                    </div>
-                </div>
-            `;
-        }).join("");
-
-    const winnerReturn = (gemData.indices || []).find(i => i.universe === gemData.winner);
-    const engineNote = `Zwycięzca (najsilniejszy trend ${gemData.lookback_months || 12}M): <strong>${PICKER_UNIVERSE_LABELS[gemData.winner]}</strong>`
-        + `${winnerReturn ? " " + (winnerReturn.return_pct >= 0 ? "+" : "") + winnerReturn.return_pct.toFixed(2) + "%" : ""}. `
-        + `To tylko podpowiedź — kliknij dowolny wiersz poniżej, żeby przeglądać JEGO spółki w Kroku 2, `
-        + `niezależnie od tego, kto akurat wygrywa w GEM.`;
-
-    el.innerHTML = `
-        <div class="sidebar-group-meta">${engineNote}</div>
-        <div class="gem-index-returns">${rows}</div>
-        <div class="gem-manual-fields">
-            <div class="sidebar-group-meta">
-                WIG20/mWIG40 nie mają realnego zwrotu z automatycznego źródła (patrz CLAUDE.md) —
-                sprawdź sam na stooq.pl (Stopy zwrotu: 1 rok) i wpisz tu, tylko w tej przeglądarce.
-            </div>
-            ${manualFields}
-        </div>
-    `;
-
-    el.querySelectorAll(".gem-index-row").forEach(row => {
-        const selectRow = () => {
-            settings.browsingUniverse = row.dataset.universe;
-            saveSettings(settings);
-            renderGemWidget();
-            renderPickerTable();
-        };
-        row.addEventListener("click", selectRow);
-        row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectRow(); } });
-    });
-
-    const applyAndRerender = () => {
-        applyManualGemOverrides();
-        renderGemWidget();
-        refreshOutputs();
-    };
-    const saveFromInput = (universe) => {
-        const input = document.getElementById(`gemManual_${universe}`);
-        const value = parseFloat(input.value);
-        if (isNaN(value)) return;
-        const stored = loadManualGemReturns();
-        stored[universe] = { return_pct: value, as_of: new Date().toISOString().slice(0, 10) };
-        saveManualGemReturns(stored);
-        applyAndRerender();
-        showToast(`Zapisano ręczny zwrot ${PICKER_UNIVERSE_LABELS[universe]}: ${value >= 0 ? "+" : ""}${value.toFixed(2)}%`, { type: "success" });
-    };
-    el.querySelectorAll(".gem-manual-save-btn").forEach(btn => {
-        btn.addEventListener("click", () => saveFromInput(btn.dataset.universe));
-    });
-    el.querySelectorAll(".gem-manual-clear-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            const stored = loadManualGemReturns();
-            delete stored[btn.dataset.universe];
-            saveManualGemReturns(stored);
-            applyAndRerender();
-            showToast(`Usunięto ręczny zwrot ${PICKER_UNIVERSE_LABELS[btn.dataset.universe]} — wracamy do wskaźnika syntetycznego`, { type: "info" });
+// Ten sam ticker może teoretycznie wystąpić w dwóch uniwersach naraz (duży
+// large-cap obecny i w SP500, i w NASDAQ100) — żeby TOP N liczył unikalne
+// spółki (a nie dwa sloty dla tej samej firmy), bierzemy tylko wystąpienie z
+// wyższym momentum_score.
+function combinedPoolRows() {
+    const byTicker = new Map();
+    REBALANCE_UNIVERSES.forEach(universe => {
+        poolRowsForUniverse(universe).forEach(c => {
+            const existing = byTicker.get(c.ticker);
+            if (!existing || (c.momentum_score || 0) > (existing.momentum_score || 0)) {
+                byTicker.set(c.ticker, { ...c, universe });
+            }
         });
     });
-    el.querySelectorAll(".gem-manual-input").forEach(input => {
-        input.addEventListener("keydown", (e) => {
-            if (e.key === "Enter") { e.preventDefault(); saveFromInput(input.dataset.universe); }
-        });
-        input.addEventListener("click", (e) => e.stopPropagation());
-    });
+    return [...byTicker.values()].sort((a, b) => (b.momentum_score || 0) - (a.momentum_score || 0));
+}
+
+// Pula bez ręcznie wykluczonych tickerów, z numerem pozycji (pool_rank)
+// przydzielonym PO usunięciu wykluczeń — więc jeśli spółka z wykluczonej
+// listy siedziała w top 5, kolejne spółki "przesuwają się w górę" i TOP N
+// naprawdę oznacza N różnych, kupowalnych spółek.
+function eligiblePoolRows() {
+    return combinedPoolRows()
+        .filter(c => !excluded.includes(c.ticker))
+        .map((c, i) => ({ ...c, pool_rank: i + 1 }));
+}
+
+function autoSelectedRows(n) {
+    if (!n || n <= 0) return [];
+    return eligiblePoolRows().slice(0, n);
 }
 
 // ============================================================
-// KROK 2 — tabela pełnego uniwersum przeglądanego w Kroku 1
-// (settings.browsingUniverse), identyczna w duchu do pełnej tabeli momentum
-// na dashboardzie (app.js::renderTable) — sortowalna po nagłówkach i
-// filtrowalna po etapie Weinsteina — tylko z dodatkową kolumną akcji
-// "+ Dodaj" / "✓ W portfelu" (togglePick) zamiast automatycznego TOP N.
-// Czyta "all_constituents" (CAŁE kwalifikujące się uniwersum, nie tylko
-// bieżącą selekcję kwintylową pipeline'u — patrz CLAUDE.md), więc można
-// wybrać do portfela dowolną spółkę, nie tylko dzisiejszy top decyl.
+// RANKING PULI — pełna, sortowalna, filtrowalna po etapie Weinsteina tabela
+// (ta sama tabela co na dashboardzie w duchu, patrz app.js::renderTable) —
+// czysto INFORMACYJNA: pokazuje z czego rebalanser wybiera i które N pozycji
+// dziś realnie wchodzi do portfela. Nie ma tu już przycisku "+ Dodaj" — wybór
+// spółek jest w pełni automatyczny, jedyne co ustawiasz to liczbę spółek
+// (Ustawienia rebalansu poniżej).
 // ============================================================
-let pickerSortKey = "rank";
-let pickerSortDir = "asc";
-// Filtr etapow Kroku 2 — MULTI-SELECT (na zyczenie uzytkownika: "czasem chce
-// spolki z stage 1 i stage 2"), nie pojedynczy wybor jak na dashboardzie
-// (patrz state.stageFilter w app.js, ktory zostal pojedynczym wyborem celowo
-// nie zmieniony — to zyczenie dotyczylo konkretnie tego ekranu). "ALL" to
-// sentinel oznaczajacy brak filtra (wszystkie etapy, stan startowy); po
-// pierwszym kliknieciu konkretnego etapu zamienia sie w Set zawierajacy
-// zaznaczone kubelki ("1"/"2"/"3"/"4", gdzie "2" obejmuje zarowno 2A jak i
-// 2B — patrz matchesPickerStageFilter). Kliknięcie "Wszystkie" zawsze wraca
-// do sentinela "ALL".
-let pickerStageFilter = "ALL";
+let poolSortKey = "pool_rank";
+let poolSortDir = "asc";
+// Filtr etapow — MULTI-SELECT (na zyczenie uzytkownika: "czasem chce spolki
+// z stage 1 i stage 2"), ten sam wzorzec co dawny Krok 2. "ALL" to sentinel
+// oznaczajacy brak filtra.
+let poolStageFilter = "ALL";
 
-function pickerRows() {
-    const data = universeData[settings.browsingUniverse] || {};
-    return data.all_constituents || data.constituents || [];
-}
-
-function matchesPickerStageFilter(stage) {
-    if (pickerStageFilter === "ALL") return true;
+function matchesPoolStageFilter(stage) {
+    if (poolStageFilter === "ALL") return true;
     if (!stage) return false;
     const bucket = (stage === "2A" || stage === "2B") ? "2" : stage;
-    return pickerStageFilter.has(bucket);
+    return poolStageFilter.has(bucket);
 }
 
-// Etykieta wybranych etapow do linijki meta nad tabela (np. "1, 2A/2B") —
-// null gdy filtr jest w stanie "ALL" (brak etykiety, patrz renderPickerTable).
-function pickerStageFilterLabel() {
-    if (pickerStageFilter === "ALL") return null;
+function poolStageFilterLabel() {
+    if (poolStageFilter === "ALL") return null;
     const labels = { "1": "1", "2": "2A/2B", "3": "3", "4": "4" };
-    return [...pickerStageFilter].map(s => labels[s]).join(", ");
+    return [...poolStageFilter].map(s => labels[s]).join(", ");
 }
 
-function pickerRowHtml(c, universe) {
+function poolRowHtml(c) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
-    const isExcluded = excluded.includes(c.ticker);
-    const picked = isPicked(c.ticker, universe);
-    const moneyFmt = moneyFmtForUniverse(universe);
-    const actionHtml = isExcluded
-        ? `<span class="action-badge excluded" title="Usuń wykluczenie w sekcji &quot;Wyklucz z rebalansu&quot;, żeby móc dodać do portfela">WYKLUCZONE</span>`
-        : `<button class="action-badge ${picked ? "buy" : "skip"} pick-toggle-btn" data-ticker="${c.ticker}">${picked ? "✓ W portfelu" : "+ Dodaj"}</button>`;
+    const inTopN = c.pool_rank <= (settings.portfolioSize || 0);
     return `
-        <td><span class="rank-badge">${c.rank}</span></td>
+        <td><span class="rank-badge">${c.pool_rank}</span></td>
         <td class="ticker-cell">${c.ticker}</td>
+        <td>${REBALANCE_UNIVERSE_LABELS[c.universe]}</td>
         <td>${c.sector}</td>
-        <td>${moneyFmt(c.price)}</td>
+        <td>${fmtMoney(c.price)}</td>
         <td class="${c.momentum_pct >= 0 ? "positive" : "negative"}">${c.momentum_pct.toFixed(2)}%</td>
         <td>${c.momentum_window}</td>
         <td>${c.volatility_pct.toFixed(2)}%</td>
         <td>${c.momentum_score.toFixed(3)}</td>
         <td>${stageCellHtml(stage)}</td>
-        <td>${actionHtml}</td>
-        <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" data-universe="${universe}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
+        <td><span class="action-badge ${inTopN ? "buy" : "skip"}">${inTopN ? "✓ w portfelu" : "—"}</span></td>
+        <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" data-universe="${c.universe}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
     `;
 }
 
-function updateSortHeaderClasses() {
-    document.querySelectorAll("#pickerTable thead th").forEach(th => {
+function updatePoolSortHeaderClasses() {
+    document.querySelectorAll("#poolTable thead th").forEach(th => {
         th.classList.remove("sort-asc", "sort-desc");
-        if (th.dataset.key === pickerSortKey) {
-            th.classList.add(pickerSortDir === "asc" ? "sort-asc" : "sort-desc");
+        if (th.dataset.key === poolSortKey) {
+            th.classList.add(poolSortDir === "asc" ? "sort-asc" : "sort-desc");
         }
     });
 }
 
-function initPickerSort() {
-    document.querySelectorAll("#pickerTable thead th").forEach(th => {
+function initPoolSort() {
+    document.querySelectorAll("#poolTable thead th").forEach(th => {
         th.addEventListener("click", () => {
             const key = th.dataset.key;
-            if (!key) return; // kolumny bez sortowania (Etap, Portfel)
-            if (pickerSortKey === key) {
-                pickerSortDir = pickerSortDir === "asc" ? "desc" : "asc";
+            if (!key) return; // kolumny bez sortowania (Etap, W portfelu, Wykres)
+            if (poolSortKey === key) {
+                poolSortDir = poolSortDir === "asc" ? "desc" : "asc";
             } else {
-                pickerSortKey = key;
-                pickerSortDir = "asc";
+                poolSortKey = key;
+                poolSortDir = "asc";
             }
-            updateSortHeaderClasses();
-            renderPickerTable();
+            updatePoolSortHeaderClasses();
+            renderPoolTable();
         });
     });
 }
 
-// Odswieza klasy .active na przyciskach filtra po kazdej zmianie
-// pickerStageFilter — wiele przyciskow moze byc .active naraz (multi-select),
-// stad brak "znajdz jeden i podswietl" jak przy zwyklym radio.
-function updatePickerStageFilterButtons() {
-    const bar = document.getElementById("pickerStageFilterBar");
+function updatePoolStageFilterButtons() {
+    const bar = document.getElementById("poolStageFilterBar");
     if (!bar) return;
     bar.querySelectorAll(".stage-filter-btn").forEach(b => {
         const stage = b.dataset.stage;
         const active = stage === "ALL"
-            ? pickerStageFilter === "ALL"
-            : (pickerStageFilter !== "ALL" && pickerStageFilter.has(stage));
+            ? poolStageFilter === "ALL"
+            : (poolStageFilter !== "ALL" && poolStageFilter.has(stage));
         b.classList.toggle("active", active);
     });
 }
 
-function initPickerStageFilter() {
-    const bar = document.getElementById("pickerStageFilterBar");
+function initPoolStageFilter() {
+    const bar = document.getElementById("poolStageFilterBar");
     if (!bar) return;
     bar.querySelectorAll(".stage-filter-btn").forEach(btn => {
         btn.addEventListener("click", () => {
             const stage = btn.dataset.stage;
             if (stage === "ALL") {
-                pickerStageFilter = "ALL";
+                poolStageFilter = "ALL";
             } else {
-                // "ALL" -> pierwszy klik konkretnego etapu zaczyna nowy Set tylko z
-                // nim; kolejne kliki togglują przynależność. Odznaczenie ostatniego
-                // wybranego etapu wraca do "ALL" (pusty Set pokazywałby zero wierszy
-                // bez żadnej wizualnej wskazówki dlaczego — "Wszystkie" i tak zawsze
-                // resetuje jednym klikiem).
-                const current = pickerStageFilter === "ALL" ? new Set() : new Set(pickerStageFilter);
+                const current = poolStageFilter === "ALL" ? new Set() : new Set(poolStageFilter);
                 if (current.has(stage)) current.delete(stage); else current.add(stage);
-                pickerStageFilter = current.size ? current : "ALL";
+                poolStageFilter = current.size ? current : "ALL";
             }
-            updatePickerStageFilterButtons();
-            renderPickerTable();
+            updatePoolStageFilterButtons();
+            renderPoolTable();
         });
     });
 }
 
-function renderPickerTable() {
-    const universe = settings.browsingUniverse;
-    const titleEl = document.getElementById("pickerUniverseLabel");
-    if (titleEl) titleEl.textContent = universe ? PICKER_UNIVERSE_LABELS[universe] : "—";
+function poolRefDateNote() {
+    const parts = REBALANCE_UNIVERSES
+        .map(u => (universeData[u]?.ref_date ? `${REBALANCE_UNIVERSE_LABELS[u]}: ${universeData[u].ref_date}` : null))
+        .filter(Boolean);
+    return parts.join(" · ");
+}
 
-    const allRows = pickerRows();
-    const data = universeData[universe] || {};
-    const filterLabel = pickerStageFilterLabel();
+function renderPoolTable() {
+    const allRows = eligiblePoolRows();
+    const filterLabel = poolStageFilterLabel();
+    const refDates = poolRefDateNote();
+    const n = settings.portfolioSize || 0;
 
     renderScreenerTable({
-        tbody: document.getElementById("pickerTableBody"),
-        metaEl: document.getElementById("pickerMeta"),
+        tbody: document.getElementById("poolTableBody"),
+        metaEl: document.getElementById("poolMeta"),
         allRows,
-        matchesStage: c => matchesPickerStageFilter(c.weekly_chart && c.weekly_chart.current_stage),
-        compareFn: (a, b) => compareRows(a, b, pickerSortKey, pickerSortDir),
-        colspan: 11,
-        emptyAllMsg: "Brak danych.",
+        matchesStage: c => matchesPoolStageFilter(c.weekly_chart && c.weekly_chart.current_stage),
+        compareFn: (a, b) => compareRows(a, b, poolSortKey, poolSortDir),
+        colspan: 12,
+        emptyAllMsg: "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => {
-            if (!universe) return "Wybierz uniwersum w Kroku 1 powyżej.";
-            if (!data.ref_date) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
-            return !filterLabel
-                ? `Rebalans: ${data.ref_date} · ${allRows.length} spółek`
-                : `Rebalans: ${data.ref_date} · ${rows.length} z ${allRows.length} spółek (etap ${filterLabel})`;
+            if (!refDates) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
+            const base = `Pula: ${allRows.length} spółek (TOP ${n} w portfelu) · ${refDates}`;
+            return !filterLabel ? base : `${base} · ${rows.length} z ${allRows.length} pasuje do etapu ${filterLabel}`;
         },
-        isSelected: c => isPicked(c.ticker, universe),
-        rowHtml: c => pickerRowHtml(c, universe),
-        // Caly wiersz NIE jest juz klikalny — poprzednia wersja otwierala
-        // wykres po kliknieciu gdziekolwiek w wierszu, co uzytkownik zglosil
-        // jako zbyt latwe do wywolania mimowolnie (np. klikajac blisko innego
-        // przycisku albo scrollujac na dotyku). Zamiast tego dedykowany
-        // przycisk "📈" (ostatnia kolumna, patrz pickerRowHtml/chart-row-btn)
-        // to jedyny sposob otwarcia wykresu — ten sam wzorzec co przycisk
-        // "TV" w tabelach app.js (tvRowButtonHtml/bindTvRowButtons), tylko
-        // lokalny dla tej strony (rebalance.js nie laduje chart-render.js,
-        // patrz CLAUDE.md). "back" niesie adres powrotny wprost w query
-        // stringu (przetrwa odswiezenie chart.html), zeby przycisk "Powrót"
-        // tam zawsze wracal dokladnie tutaj, do Kroku 2.
+        rowHtml: c => poolRowHtml(c),
         afterRender: (tbody) => {
-            tbody.querySelectorAll(".pick-toggle-btn").forEach(btn => {
-                btn.addEventListener("click", () => {
-                    togglePick(btn.dataset.ticker, universe);
-                    renderPickerTable();
-                    renderPicksList();
-                    refreshOutputs();
-                });
-            });
             tbody.querySelectorAll(".chart-row-btn").forEach(btn => {
                 btn.addEventListener("click", () => {
                     const params = new URLSearchParams({
@@ -665,29 +438,6 @@ function renderPickerTable() {
                 });
             });
         },
-    });
-}
-
-// ============================================================
-// TWÓJ PORTFEL (SKUMULOWANY) — płaska lista wszystkich spółek wybranych do
-// tej pory w Kroku 2, niezależnie od tego, które uniwersum jest akurat
-// przeglądane — to jest widok "co zbudowałem miesiąc po miesiącu", z szybkim
-// usunięciem pojedynczej pozycji bez konieczności wracania do jej uniwersum.
-// ============================================================
-function renderPicksList() {
-    const wrap = document.getElementById("portfolioPicksList");
-    if (!wrap) return;
-    wrap.innerHTML = picks.length
-        ? picks.map(p => `<span class="exclude-chip">${p.ticker} <span class="text-faint">(${PICKER_UNIVERSE_LABELS[p.universe]})</span>`
-            + `<button class="exclude-chip-remove" data-ticker="${p.ticker}" data-universe="${p.universe}" title="Usuń z portfela">✕</button></span>`).join("")
-        : `<span class="text-faint">Portfel jest jeszcze pusty — wybierz spółki w Kroku 2 powyżej.</span>`;
-    wrap.querySelectorAll(".exclude-chip-remove").forEach(btn => {
-        btn.addEventListener("click", () => {
-            togglePick(btn.dataset.ticker, btn.dataset.universe);
-            renderPicksList();
-            renderPickerTable();
-            refreshOutputs();
-        });
     });
 }
 
@@ -723,8 +473,9 @@ function xtbDateToIso(v) {
 
 // ============================================================
 // POZYCJE (holdings) — dodajesz/usuwasz akcje kiedy chcesz, bez ograniczeń.
-// Jedna wspólna lista, niezależna od tego, które uniwersum jest akurat
-// przeglądane w Kroku 1/2.
+// Jedna wspólna lista, niezależna od puli rebalansera — nadal może zawierać
+// np. starą pozycję z WIG20/mWIG40, tylko rebalanser już jej nie dobiera na
+// nowo.
 // ============================================================
 // Odświeża tylko kolumny Cena/Wartość dla jednego wiersza — bez przebudowy
 // inputów, żeby nie tracić fokusu/kursora w trakcie pisania.
@@ -933,43 +684,22 @@ function renderCapitalHint() {
 // ============================================================
 // SUGESTIA REBALANSU (to tylko sugestia — Ty decydujesz co i kiedy kupić/sprzedać)
 // ============================================================
-// Zwraca { targets: {ticker: {...}} } dla WSZYSTKICH ręcznie wybranych w
-// Kroku 2 spółek (picks, patrz togglePick) — ręcznie wykluczone znikają
-// całkowicie. Waga = AKTUALNY momentum_score z all_constituents jej własnego
-// uniwersum (świeżo przeliczany przez pipeline co tydzień, patrz
-// get_universe_metrics), znormalizowany do 100% w obrębie wszystkich picks —
-// to ŚWIADOME uproszczenie względem cap-ważenia z pipeline'u (9%/3x
-// cap-weight, patrz compute_weights): jedna, spójna metoda ważenia, ta sama
-// niezależnie od tego, z ilu i jakich uniwersów pochodzą wybrane spółki.
-// Jeśli ta sama spółka została dodana z dwóch różnych uniwersów naraz
-// (rzadkie — duży large-cap obecny i w SP500, i w NASDAQ100), jej wagi się
-// sumują, a `universes` zbiera obie nazwy (do wyświetlenia w kolumnie
-// "Indeks / uwaga"). Spółka, która wypadła z all_constituents swojego
-// uniwersum (np. usunięta z indeksu) dostaje `stale: true` i wagę 0 — nadal
-// widoczna w sugestii (żeby dało się ją świadomie sprzedać/usunąć z picks),
-// ale nie bierze udziału w nowej alokacji.
-function computeTargetsFromPicks(totalCapital) {
+// Zwraca { targets: {ticker: {...}} } dla automatycznie wybranego TOP N
+// (patrz autoSelectedRows). Waga = AKTUALNY momentum_score z puli (świeżo
+// przeliczany przez pipeline co tydzień), znormalizowany do 100% w obrębie
+// wybranego TOP N — to ŚWIADOME uproszczenie względem cap-ważenia z
+// pipeline'u (9%/3x cap-weight, patrz compute_weights): jedna, spójna metoda
+// ważenia, ta sama niezależnie od tego, z którego z 3 uniwersów pochodzi
+// dana spółka.
+function computeAutoTargets(n, totalCapital) {
+    const rows = autoSelectedRows(n);
     const raw = {};
-    picks.forEach(p => {
-        if (excluded.includes(p.ticker)) return;
-        const rows = (universeData[p.universe] && (universeData[p.universe].all_constituents || universeData[p.universe].constituents)) || [];
-        const c = rows.find(r => r.ticker === p.ticker);
-        const price = c ? c.price : (priceMap[p.ticker]?.price ?? null);
-        const rawWeight = c ? (c.momentum_score || 0) : 0;
-        const existing = raw[p.ticker];
-        if (existing) {
-            existing.raw_weight += rawWeight;
-            if (!existing.universes.includes(p.universe)) existing.universes.push(p.universe);
-            if (c) existing.stale = false; // znaleziony w co najmniej jednym uniwersum -> nie jest "stale"
-        } else {
-            raw[p.ticker] = {
-                ticker: p.ticker, universes: [p.universe], price, target_value: 0,
-                raw_weight: rawWeight,
-                momentum_pct: c ? c.momentum_pct : null,
-                volatility_pct: c ? c.volatility_pct : null,
-                stale: !c,
-            };
-        }
+    rows.forEach(c => {
+        raw[c.ticker] = {
+            ticker: c.ticker, universes: [c.universe], price: c.price, target_value: 0,
+            raw_weight: c.momentum_score || 0,
+            momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
+        };
     });
 
     const totalRawWeight = Object.values(raw).reduce((s, t) => s + t.raw_weight, 0);
@@ -983,9 +713,8 @@ function computeTargetsFromPicks(totalCapital) {
 // Odtwarza, jaki % `targets`-owego kapitału pochodzi z KAŻDEGO uniwersum —
 // używane wyłącznie do zblendowania krzywej "Wynik historyczny"
 // (blendEquityCurves, patrz niżej) proporcjonalnie do tego, ile portfel dziś
-// faktycznie waży w danym uniwersum. Rzadki przypadek spółki dodanej z dwóch
-// uniwersów naraz (patrz computeTargetsFromPicks) dzieli jej wartość równo
-// między nie — wystarczające przybliżenie na potrzeby samego wykresu.
+// faktycznie waży w danym uniwersum (zwykle 1-3 uniwersa naraz, w zależności
+// od tego, skąd trafiło dzisiejsze TOP N).
 function deriveUniverseFractionsFromTargets(targets) {
     const sums = {};
     Object.values(targets).forEach(t => {
@@ -996,13 +725,12 @@ function deriveUniverseFractionsFromTargets(targets) {
     return sums;
 }
 
-// Normalizuje dowolną mapę dodatnich "wag" (mogą to być % ustawione ręcznie,
-// albo — jak tutaj — surowe kwoty kapitału z deriveUniverseFractionsFromTargets)
-// do ułamków sumujących się do 1, pomijając wpisy <= 0. Skala wejścia jest
-// bez znaczenia (normalizeWeights sam ją usuwa), więc ta sama funkcja działa
-// identycznie dla wag procentowych i dla surowych kwot kapitału.
+// Normalizuje dowolną mapę dodatnich "wag" (tu: surowe kwoty kapitału z
+// deriveUniverseFractionsFromTargets) do ułamków sumujących się do 1,
+// pomijając wpisy <= 0. Skala wejścia jest bez znaczenia (normalizeWeights
+// sam ją usuwa).
 function normalizeWeights(weights) {
-    const entries = UNIVERSES
+    const entries = REBALANCE_UNIVERSES
         .map(u => [u, Math.max(0, Number(weights?.[u]) || 0)])
         .filter(([, w]) => w > 0);
     const total = entries.reduce((s, [, w]) => s + w, 0);
@@ -1016,13 +744,10 @@ function normalizeWeights(weights) {
 // (znormalizowanych przez normalizeWeights) — MOŻLIWE bez żadnej konwersji
 // walut, bo każda krzywa jest już znormalizowana do bazy 100 (patrz
 // run_query.py::compute_equity_curve), więc uśrednianie wg wagi procentowej
-// to czysta matematyka indeksów, nie sumowanie kwot w różnych walutach.
-// Blenduje tylko po datach WSPÓLNYCH dla wszystkich ważonych krzywych (te
-// same tygodnie w każdym z nich, skoro wszystkie liczy ten sam cotygodniowy
-// pipeline) — zwraca null gdy brak ważonych uniwersów z danymi albo za mało
-// wspólnych dat. Z jednym ważonym uniwersum (typowy przypadek — cały
-// portfel dziś z jednego indeksu) to zwyczajnie jego własna, niezmieniona
-// krzywa.
+// to czysta matematyka indeksów. Blenduje tylko po datach WSPÓLNYCH dla
+// wszystkich ważonych krzywych — zwraca null gdy brak ważonych uniwersów z
+// danymi albo za mało wspólnych dat. Z jednym ważonym uniwersum (typowy
+// przypadek) to zwyczajnie jego własna, niezmieniona krzywa.
 function blendEquityCurves(weights) {
     const fractions = normalizeWeights(weights);
     const entries = Object.entries(fractions).filter(([u]) => {
@@ -1046,38 +771,23 @@ function blendEquityCurves(weights) {
     return { dates: commonDates, momentum_index: blendSeries("momentum_index"), benchmark_index: blendSeries("benchmark_index") };
 }
 
-function updateContributionUnit() {
-    const unitEl = document.getElementById("contributionUnit");
-    const activeEl = document.getElementById("portfolioActiveUniverses");
-    const activeUniverses = [...new Set(picks.map(p => p.universe))];
-    if (unitEl) {
-        const allPln = activeUniverses.length > 0 && activeUniverses.every(u => PLN_UNIVERSES.has(u));
-        const allUsd = activeUniverses.length > 0 && activeUniverses.every(u => !PLN_UNIVERSES.has(u));
-        unitEl.textContent = allPln ? "zł" : allUsd ? "$" : "$ / zł";
-    }
-    if (activeEl) {
-        activeEl.textContent = activeUniverses.length
-            ? `(portfel: ${activeUniverses.map(u => PICKER_UNIVERSE_LABELS[u]).join(", ")})`
-            : "(portfel pusty — wybierz spółki w Kroku 2 powyżej)";
-    }
-}
-
 function renderSuggestions() {
-    updateContributionUnit();
     const moneyFmt = currentMoneyFmt();
     const totalCapital = targetCapital();
     const excludedVal = excludedValue();
     const investableCapital = Math.max(0, totalCapital - excludedVal);
-    const { targets } = computeTargetsFromPicks(investableCapital);
+    const n = settings.portfolioSize || 0;
+    const { targets } = computeAutoTargets(n, investableCapital);
     const threshold = Math.max(investableCapital * TRADE_THRESHOLD_PCT, 5);
 
     const shares = holdingShares();
+    const poolTickers = new Set(combinedPoolRows().map(c => c.ticker));
 
     const rows = [];
     Object.values(targets).forEach(t => {
         const heldShares = shares[t.ticker] || 0;
         const currentValue = t.price ? t.price * heldShares : 0;
-        const note = t.universes.map(u => PICKER_UNIVERSE_LABELS[u]).join(" + ") + (t.stale ? " (brak aktualnych danych)" : "");
+        const note = t.universes.map(u => REBALANCE_UNIVERSE_LABELS[u]).join(" + ");
         rows.push({
             ticker: t.ticker,
             note,
@@ -1090,8 +800,9 @@ function renderSuggestions() {
         });
     });
 
-    // Pozycje, które trzymasz, ale nie są (jeszcze) w portfelu wybranym w
-    // Kroku 2 — wykluczone ręcznie, albo po prostu jeszcze nie dodane.
+    // Pozycje, które trzymasz, ale nie są (już) w dzisiejszym automatycznym
+    // TOP N — wykluczone ręcznie, poza TOP N (ranking spadł), albo w ogóle
+    // spoza puli rebalansera (np. stara pozycja z WIG20/mWIG40).
     Object.keys(shares).forEach(ticker => {
         if (targets[ticker]) return;
         const price = priceMap[ticker]?.price;
@@ -1104,8 +815,9 @@ function renderSuggestions() {
             });
             return;
         }
+        const note = poolTickers.has(ticker) ? `poza TOP ${n}` : "poza pulą rebalansera (SP500 / Nasdaq 100 / Dow Jones)";
         rows.push({
-            ticker, note: "nie w portfelu — dodaj w Kroku 2", target_value: 0, weight_pct: 0,
+            ticker, note, target_value: 0, weight_pct: 0,
             current_value: currentValue, diff: currentValue !== null ? -currentValue : null, dropped: true,
             price, shares_held: shares[ticker],
         });
@@ -1150,11 +862,8 @@ function renderSuggestions() {
     document.getElementById("statTargetValue").textContent = moneyFmt(totalCapital);
     document.getElementById("statHoldingsCount").textContent = Object.keys(targets).length;
 
-    const universesInPlay = [...new Set(picks.map(p => p.universe))];
-    const parts = universesInPlay
-        .map(u => (universeData[u]?.ref_date ? `${PICKER_UNIVERSE_LABELS[u]}: ${universeData[u].ref_date}` : null))
-        .filter(Boolean);
-    document.getElementById("refDateNote").textContent = parts.length ? `(wg rebalansów z ${parts.join(", ")})` : "";
+    const refDates = poolRefDateNote();
+    document.getElementById("refDateNote").textContent = refDates ? `(wg rebalansów z ${refDates})` : "";
 
     renderCapitalHint();
     renderMonteCarlo();
@@ -1175,7 +884,7 @@ function renderPortfolioAnalysisChart() {
     if (portfolioAnalysisChart) { portfolioAnalysisChart.destroy(); portfolioAnalysisChart = null; }
     if (!canvas) return;
 
-    const moneyFmt = currentMoneyFmt();
+    const moneyFmt = holdingsMoneyFmt();
     const shares = holdingShares();
     const rows = Object.entries(shares)
         .map(([ticker, qty]) => ({ ticker, value: (priceMap[ticker]?.price || 0) * qty }))
@@ -1209,13 +918,12 @@ function renderPortfolioAnalysisChart() {
 // patrz run_query.py::compute_equity_curve, zbudowane z realnych zapisów
 // portfolio_history), zblendowana wg tego, ile portfel dziś faktycznie waży
 // w każdym uniwersum (deriveUniverseFractionsFromTargets + blendEquityCurves)
-// — z jednym uniwersum w portfelu to po prostu jego własna, niezmieniona
-// krzywa; z kilkoma naraz (portfel zbudowany na przestrzeni kilku miesięcy z
-// różnych zwycięzców GEM) to ich zblendowana mieszanka, możliwa bez
+// — z jednym uniwersum w TOP N to po prostu jego własna, niezmieniona
+// krzywa; z kilkoma naraz (typowy przypadek — TOP N zwykle łączy nazwy z
+// SP500/NASDAQ100/DOWJONES naraz) to ich zblendowana mieszanka, możliwa bez
 // konwersji walut, bo obie krzywe są już znormalizowane do bazy 100. To NIE
 // jest historia Twoich konkretnych pozycji (tych nie śledzimy wstecz) — to
-// przybliżenie: "gdybyś trzymał/a kapitał w spółkach momentum tej mieszanki
-// przez ten okres".
+// przybliżenie: "gdybyś trzymał/a kapitał w tej mieszance przez ten okres".
 // ============================================================
 let equityChart = null;
 
@@ -1223,7 +931,7 @@ function renderEquityCurve() {
     const caption = document.getElementById("equityCurveCaption");
     const noteEl = document.getElementById("equityCurveNote");
     const investableCapital = Math.max(0, targetCapital() - excludedValue());
-    const { targets } = computeTargetsFromPicks(investableCapital);
+    const { targets } = computeAutoTargets(settings.portfolioSize || 0, investableCapital);
     const fractions = deriveUniverseFractionsFromTargets(targets);
     const curve = blendEquityCurves(fractions);
 
@@ -1231,7 +939,7 @@ function renderEquityCurve() {
 
     if (!curve || !curve.dates || curve.dates.length < 2) {
         noteEl.textContent = "";
-        caption.textContent = "Za mało zapisanej historii rebalansów, żeby pokazać wykres — rośnie z każdym cotygodniowym uruchomieniem pipeline'u, albo wybierz spółki w Kroku 2.";
+        caption.textContent = "Za mało zapisanej historii rebalansów, żeby pokazać wykres — rośnie z każdym cotygodniowym uruchomieniem pipeline'u, albo ustaw liczbę spółek w portfelu powyżej.";
         return;
     }
 
@@ -1261,8 +969,8 @@ function renderEquityCurve() {
         },
     });
 
-    const activeLabels = Object.keys(deriveUniverseFractionsFromTargets(targets)).map(u => PICKER_UNIVERSE_LABELS[u]).join(", ") || "—";
-    caption.textContent = `Wynik historyczny (zrealizowany) portfela wybranego w Kroku 2 (${activeLabels}), ważony dokładnie tak, `
+    const activeLabels = Object.keys(deriveUniverseFractionsFromTargets(targets)).map(u => REBALANCE_UNIVERSE_LABELS[u]).join(", ") || "—";
+    caption.textContent = `Wynik historyczny (zrealizowany) automatycznie dobranego portfela (${activeLabels}), ważony dokładnie tak, `
         + "jak dziś waży się Twoja alokacja, vs. 'kup i trzymaj' te same indeksy w tych samych proporcjach. Krzywe każdego indeksu są już "
         + "znormalizowane do bazy 100, więc blendowanie wg wagi nie wymaga przewalutowania. To NIE jest historia konkretnie Twoich pozycji "
         + "(tych nie śledzimy wstecz), tylko przybliżenie na bazie zapisanych rebalansów. Dane informacyjne, NIE prognoza ani porada "
@@ -1328,19 +1036,17 @@ function simulateMonteCarlo(startValue, mu, sigma, horizonMonths, nPaths) {
 
 function renderMonteCarlo() {
     const moneyFmt = currentMoneyFmt();
-    // Symulacja obejmuje tylko część aktywnie zarządzaną przez portfel z
-    // Kroku 2 — wykluczone pozycje mają inną charakterystykę ryzyka/zwrotu,
-    // więc nie da się ich uczciwie opisać tym samym mu/sigma. mu/sigma same
-    // są procentowe (nie kwotowe), więc miks walut w investableCapital
-    // (patrz currentMoneyFmt) nie wpływa na wynik.
+    // Symulacja obejmuje tylko część aktywnie zarządzaną przez automatyczne
+    // TOP N — wykluczone pozycje mają inną charakterystykę ryzyka/zwrotu,
+    // więc nie da się ich uczciwie opisać tym samym mu/sigma.
     const investableCapital = Math.max(0, targetCapital() - excludedValue());
-    const { targets } = computeTargetsFromPicks(investableCapital);
+    const { targets } = computeAutoTargets(settings.portfolioSize || 0, investableCapital);
     const horizon = parseInt(document.getElementById("mcHorizon").value, 10) || 12;
     const caption = document.getElementById("mcCaption");
 
     if (investableCapital <= 0 || Object.keys(targets).length === 0) {
         if (mcChart) { mcChart.destroy(); mcChart = null; }
-        caption.textContent = "Ustaw dopłatę / dodaj pozycje, żeby zobaczyć symulację.";
+        caption.textContent = "Ustaw dopłatę / liczbę spółek w portfelu, żeby zobaczyć symulację.";
         return;
     }
 
@@ -1374,7 +1080,7 @@ function renderMonteCarlo() {
         },
     });
 
-    caption.textContent = `Symulacja obejmuje kapitał zarządzany przez portfel z Kroku 2: ${moneyFmt(investableCapital)}. `
+    caption.textContent = `Symulacja obejmuje kapitał zarządzany przez automatyczne TOP N: ${moneyFmt(investableCapital)}. `
         + `Założenia: oczekiwany zwrot ${(mu * 100).toFixed(1)}%/rok `
         + `(śr. ważona 12M momentum wybranych spółek, ograniczona do ±${MC_MU_CAP * 100}%/rok żeby uniknąć ekstrapolacji `
         + `chwilowych skoków), zmienność ${(sigma * 100).toFixed(1)}%/rok (śr. ważona zmienności rocznej), 300 symulowanych `
@@ -1384,17 +1090,21 @@ function renderMonteCarlo() {
 
 function initSettingsForm() {
     document.getElementById("contribution").value = settings.contribution || "";
+    document.getElementById("portfolioSize").value = settings.portfolioSize || "";
     const onChange = () => {
         settings.contribution = parseFloat(document.getElementById("contribution").value) || 0;
+        settings.portfolioSize = parseInt(document.getElementById("portfolioSize").value, 10) || 0;
         saveSettings(settings);
+        renderPoolTable();
         refreshOutputs();
     };
     document.getElementById("contribution").addEventListener("input", onChange);
+    document.getElementById("portfolioSize").addEventListener("input", onChange);
 }
 
 // Odświeża sugestię + Monte Carlo + analizę portfela + wykres historyczny
 // (renderSuggestions woła te pierwsze trzy) — wołane po każdej zmianie
-// ustawień/holdingów/wykluczeń/picks.
+// ustawień/holdingów/wykluczeń.
 function refreshOutputs() {
     renderSuggestions();
     renderEquityCurve();
@@ -1418,13 +1128,11 @@ if (typeof document !== "undefined") {
         initTvExport();
         initExcludeForm();
         renderExcludedList();
-        initPickerSort();
-        initPickerStageFilter();
-        updateSortHeaderClasses();
+        initPoolSort();
+        initPoolStageFilter();
+        updatePoolSortHeaderClasses();
         document.getElementById("mcHorizon").addEventListener("change", () => renderMonteCarlo());
-        renderGemWidget();
-        renderPickerTable();
-        renderPicksList();
+        renderPoolTable();
         renderAll();
         hideLoadingOverlay();
     })();
@@ -1438,32 +1146,21 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        UNIVERSES, PICKER_UNIVERSE_LABELS, PLN_UNIVERSES, GEM_MANUAL_OVERRIDE_UNIVERSES,
-        fmtMoney, fmtMoneyPln, moneyFmtForUniverse, moneyFmtForCurrency, currentMoneyFmt, fmtQty, sharesSuggestion,
-        currencyOf, computeTargetsFromPicks, deriveUniverseFractionsFromTargets,
-        normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
+        REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES,
+        fmtMoney, fmtMoneyPln, currentMoneyFmt, holdingsMoneyFmt, moneyFmtForCurrency, fmtQty, sharesSuggestion,
+        currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets,
+        deriveUniverseFractionsFromTargets, normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
-        loadManualGemReturns, saveManualGemReturns, applyManualGemOverrides,
-        isPicked, togglePick,
-        // Testy nie mają innego sposobu odczytać gemData.winner (nie jest
-        // eksportowany bezpośrednio, tylko konsumowany przez renderGemWidget/
-        // loadUniverseData) — potrzebne, żeby faktycznie zweryfikować, że
-        // applyManualGemOverrides poprawnie przelicza zwycięzcę z nadpisanych
-        // wartości, a nie tylko że nie rzuca wyjątku.
-        _getGemWinner() { return gemData.winner; },
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded/
-        // holdings/picks/priceMap/gemData/gemPristineIndices/equityCurveData) bez
-        // importu przez window — to jedyny sposób bez przepisywania modułu na klasę.
+        // holdings/priceMap/equityCurveData) bez importu przez window — to jedyny
+        // sposób bez przepisywania modułu na klasę.
         _setState(s) {
             if (s.universeData !== undefined) universeData = s.universeData;
             if (s.settings !== undefined) settings = s.settings;
             if (s.excluded !== undefined) excluded = s.excluded;
             if (s.holdings !== undefined) holdings = s.holdings;
-            if (s.picks !== undefined) picks = s.picks;
             if (s.priceMap !== undefined) priceMap = s.priceMap;
-            if (s.gemData !== undefined) gemData = s.gemData;
-            if (s.gemPristineIndices !== undefined) gemPristineIndices = s.gemPristineIndices;
             if (s.equityCurveData !== undefined) equityCurveData = s.equityCurveData;
         },
     };

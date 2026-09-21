@@ -36,8 +36,9 @@ let trendChartInstance = null;
 let trendChartMode = "daily"; // "daily" (SMA200) albo "weekly" (SMA40)
 
 // Ktory sektor Krok 3 pokazuje — null oznacza "jeszcze nie klikniete, uzyj
-// strongest_sector jako podpowiedzi" (dokladnie ten sam wzorzec co
-// settings.browsingUniverse w rebalance.js dla GEM-owej podpowiedzi Kroku 1).
+// strongest_sector jako podpowiedzi" (ten sam wzorzec co dawny
+// settings.browsingUniverse w rebalance.js, zanim rebalanser stal sie w pelni
+// automatyczny — patrz CLAUDE.md).
 // Na zyczenie uzytkownika: liderzy najsilniejszego sektora nie zawsze sa akurat
 // w dobrym etapie Weinsteina/TTM Squeeze, wiec kazdy wiersz Kroku 2 jest teraz
 // klikalny i przelacza, ktorego (tez dobrze radzacego sobie) sektora spolki
