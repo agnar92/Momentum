@@ -1799,16 +1799,36 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
 
 RS_MANSFIELD_SHORT_WEEKS = 13     # wygladzanie krotkoterminowe, ~3 mies.
 RS_MANSFIELD_MEDIUM_WEEKS = 26    # wygladzanie srednioterminowe, ~6 mies.
+RS_MANSFIELD_LONG_WEEKS = 52      # wygladzanie dlugoterminowe, ~12 mies. — dodane na
+# wyrazne zyczenie uzytkownika ("ad 52 weeks for that panel so it will have 3 lines"),
+# klasyczne, pelnoroczne wygladzenie Mansfielda (ten sam okres co
+# SECTOR_STRATEGY_RSM_WEEKS w compute_sector_relative_strength, choc to dwie
+# niezalezne od siebie stale — patrz komentarz przy tamtej). WAZNE OGRANICZENIE:
+# to jest DOKLADNIE ten sam 52-tygodniowy wariant, ktory byl w tym module RAZ juz
+# probowany i USUNIETY (patrz docstring nizej / historia gita) wlasnie dlatego, ze
+# przy ~15-miesiecznej retencji prices nie mial gdzie sie rozgrzac. Przy obecnej
+# ~22-miesiecznej retencji (fetch_data.py --lookback-months) tez GO NIE WYSTARCZA
+# na pelne okno: ~14-miesieczne okno momentum + 52-tyg. (~12-miesieczny) zapas
+# rozgrzewkowy to ~26 miesiecy w sumie, a retencja daje ~8 miesiecy (~34 tyg.)
+# zapasu przed start_date — rsm_long bedzie wiec `None` dla mniej wiecej pierwszej
+# polowy wyswietlanego okna, dopoki ktos nie podniesie --lookback-months (co
+# wyzwala jednorazowy pelny re-bootstrap prices, patrz _prices_history_is_shallow
+# w fetch_data.py). To swiadomy, zaakceptowany kompromis, nie przeoczenie — ten
+# sam "None dopoki nie ma dosc historii" wzorzec co rsm_medium/sma10_pct/sma30_pct
+# gdzie indziej w tym module.
 
 
 def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     """Oscylator Mansfield Relative Strength (RSM = (RS / SMA(RS, N tyg.) - 1) * 100,
-    gdzie RS = cena_spółki / poziom_indeksu — surowa linia RS Weinsteina) w DWÓCH
+    gdzie RS = cena_spółki / poziom_indeksu — surowa linia RS Weinsteina) w TRZECH
     wariantach wygładzania na jednym wykresie: krótkoterminowym
-    (RS_MANSFIELD_SHORT_WEEKS, ~3 mies.) i średnioterminowym (RS_MANSFIELD_MEDIUM_WEEKS,
-    ~6 mies.) — dwa RÓŻNE, celowo NIE nakładające się na siebie horyzonty tego samego
-    sygnału (krótkoterminowe przyspieszenie/spowolnienie potrafi wyprzedzać albo
-    rozjeżdżać się ze średnioterminowym trendem, więc warto widzieć oba naraz).
+    (RS_MANSFIELD_SHORT_WEEKS, ~3 mies.), średnioterminowym (RS_MANSFIELD_MEDIUM_WEEKS,
+    ~6 mies.) i długoterminowym (RS_MANSFIELD_LONG_WEEKS, ~12 mies., dodany później —
+    patrz komentarz przy tamtej stałej dla realnego ograniczenia retencji `prices`,
+    które z tym się wiąże) — trzy RÓŻNE, celowo NIE nakładające się na siebie horyzonty
+    tego samego sygnału (krótkoterminowe przyspieszenie/spowolnienie potrafi wyprzedzać
+    albo rozjeżdżać się ze średnio-/długoterminowym trendem, więc warto widzieć wszystkie
+    trzy naraz).
 
     Wyświetlany zakres to TERAZ dokładnie to samo okno momentum_value (M-14/M-2, albo
     M-11 przy fallbacku — `start_date`, patrz compute_index_momentum) co
@@ -1819,15 +1839,20 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     historii, więc oscylator wychodził pusty dla większości okna w produkcji. Od
     momentu wydłużenia retencji `prices` (patrz fetch_data.py --lookback-months,
     domyślnie 22 mies. = 14-miesięczne okno + ~7-miesięczny zapas rozgrzewkowy) to
-    się już mieści, więc oba wykresy ("10:30" i Mansfield) pokazują dokładnie ten
-    sam zakres dat, zamiast dwóch różnych skal jak wcześniej.
+    się już mieści DLA rsm_short/rsm_medium, więc oba (teraz: wszystkie trzy) wykresy
+    ("10:30" i Mansfield) pokazują dokładnie ten sam zakres dat, zamiast dwóch różnych
+    skal jak wcześniej — ALE rsm_long (52 tyg., dodany później) ponownie przekracza tę
+    retencję i będzie `None` dla sporej części okna, patrz komentarz przy
+    RS_MANSFIELD_LONG_WEEKS.
 
-    Pobiera dodatkowy zapas RS_MANSFIELD_MEDIUM_WEEKS + 2 tygodni PRZED start_date
-    (analogicznie do RS_PRICE_SMA_LONG_WEEKS w compute_relative_strength_chart), żeby
-    26-tygodniowe wygładzanie miało już wartość od pierwszego wyświetlanego tygodnia.
+    Pobiera dodatkowy zapas RS_MANSFIELD_LONG_WEEKS + 2 tygodni PRZED start_date
+    (analogicznie do RS_PRICE_SMA_LONG_WEEKS w compute_relative_strength_chart — to
+    NAJDŁUŻSZE z trzech wygładzeń decyduje o potrzebnym zapasie), żeby każde
+    wygładzenie miało już wartość od pierwszego wyświetlanego tygodnia, o ile retencja
+    `prices` na to pozwala.
 
     Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii cen)."""
-    lookback_weeks = RS_MANSFIELD_MEDIUM_WEEKS + 2
+    lookback_weeks = RS_MANSFIELD_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
     stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
@@ -1841,6 +1866,7 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     stock_df["rs_raw"] = stock_df["close"] / stock_df["index_close"]
     stock_df["rsm_short"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_SHORT_WEEKS).mean() - 1) * 100
     stock_df["rsm_medium"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_MEDIUM_WEEKS).mean() - 1) * 100
+    stock_df["rsm_long"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_LONG_WEEKS).mean() - 1) * 100
 
     in_window = stock_df[stock_df["week_start"] >= pd.Timestamp(start_date)]
     if in_window.empty:
@@ -1849,16 +1875,18 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     def safe(value, digits=2):
         return round(float(value), digits) if pd.notna(value) else None
 
-    dates, rsm_short, rsm_medium = [], [], []
+    dates, rsm_short, rsm_medium, rsm_long = [], [], [], []
     for _, r in in_window.iterrows():
         dates.append(r["week_end"].strftime("%Y-%m-%d"))
         rsm_short.append(safe(r["rsm_short"]))
         rsm_medium.append(safe(r["rsm_medium"]))
+        rsm_long.append(safe(r["rsm_long"]))
 
     return {
         "dates": dates,
         "rsm_short": rsm_short,
         "rsm_medium": rsm_medium,
+        "rsm_long": rsm_long,
     }
 
 
@@ -2135,8 +2163,9 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg. i poziom własnego indeksu, "
                  "wszystko przeliczone na % zmiany względem początku okna (pola close_pct/sma10_pct/"
                  "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
-                 "'mansfield_chart': oscylator Mansfield Relative Strength w DWÓCH wygładzeniach "
-                 "(rsm_short ~3 mies., rsm_medium ~6 mies.), od początku TEGO SAMEGO okna co weekly_chart "
+                 "'mansfield_chart': oscylator Mansfield Relative Strength w TRZECH wygładzeniach "
+                 "(rsm_short ~3 mies., rsm_medium ~6 mies., rsm_long ~12 mies.), od początku TEGO SAMEGO "
+                 "okna co weekly_chart "
                  "— patrz compute_mansfield_rs_chart. Każdy lider ma też 'ttm_squeeze_chart': wskaźnik TTM "
                  "Squeeze (Bollinger Bands wewnątrz kanału Kellera = konsolidacja) z licznikiem kolejnych "
                  "tygodni konsolidacji i momentem wybicia z niej — patrz compute_ttm_squeeze_chart. "
