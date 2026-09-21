@@ -497,7 +497,13 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
         const aligned = alignSqueezeToDates(squeezeData, chartData.dates);
         const zeroLineSqueeze = chartData.dates.map(() => 0);
         if (squeezeCaption) {
-            squeezeCaption.textContent = `${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+            // Prefiks "TTM Squeeze" na tej samej zasadzie co "Mansfield RS vs
+            // {universe}" w panelu 3 powyżej — ten panel nie ma WŁASNEJ legendy
+            // Chart.js (plugins.legend.display:false, patrz niżej — same słupki
+            // histogramu i kropki nie tłumaczą się same), więc bez podpisu
+            // wyglądał jak nieopisany dodatek pod panelem Mansfielda, a nie jak
+            // czwarty, samodzielny wykres.
+            squeezeCaption.textContent = `TTM Squeeze · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
         // Klasyczne 4 kolory histogramu TTM Squeeze: dodatni/rosnący (jaśniejszy
         // zielony) vs dodatni/malejący (ciemniejszy zielony), ujemny/malejący
