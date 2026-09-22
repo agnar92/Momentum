@@ -539,6 +539,19 @@ def update_index_prices(con, lookback_months):
             PRIMARY KEY (Date, Index_Name)
         )
     """)
+    # Jawna lista kolumn w kazdym "INSERT INTO index_prices" ponizej (zamiast
+    # pozycyjnego "SELECT *") jest CELOWA, nie kosmetyczna: krotko zyjaca
+    # (i juz zrewertowana) funkcja korekty ATR Sily Relatywnej migrowala ta
+    # tabele o kolumny High/Low (ALTER TABLE ... ADD COLUMN), a ta migracja
+    # przy jednym uruchomieniu w produkcji zdazyla juz trafic do
+    # zacommitowanego momentum_data.duckdb, zanim caly ten kod zostal
+    # zrewertowany — CREATE TABLE IF NOT EXISTS powyzej jest wiec no-opem na
+    # produkcyjnym pliku (tabela juz istnieje, z 7 kolumnami), a pozycyjny
+    # "SELECT * FROM df_insert" (5 kolumn) rzucal
+    # "Binder Error: table index_prices has 7 columns but 5 values were
+    # supplied". Jawne kolumny dzialaja niezaleznie od tego, czy tabela ma
+    # 5 czy 7 kolumn (nadmiarowe High/Low zostaja NULL) — bez tego trzeba by
+    # recznie migrowac/dropowac kolumny w juz zacommitowanym binarnym pliku.
     start_date, end_date = get_full_refresh_range(lookback_months)
 
     yf_backed = {name: INDEX_LEVEL_SYMBOLS[name] for name in YFINANCE_BACKED_INDEX_UNIVERSES}
@@ -559,7 +572,10 @@ def update_index_prices(con, lookback_months):
         df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
         df_insert["Index_Name"] = df_insert["Ticker"].map(symbol_to_index)
         df_insert = df_insert[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
-        con.execute("INSERT INTO index_prices SELECT * FROM df_insert")
+        con.execute("""
+            INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume)
+            SELECT * FROM df_insert
+        """)
     print(f"✅ Zapisano {len(rows)} wierszy danych poziomu indeksów "
           f"{'/'.join(YFINANCE_BACKED_INDEX_UNIVERSES)} ({start_date} → {end_date}).")
 
@@ -581,7 +597,10 @@ def update_index_prices(con, lookback_months):
         df_sector = pd.DataFrame(sector_rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
         df_sector["Index_Name"] = df_sector["Ticker"].map(sector_symbol_to_name)
         df_sector = df_sector[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
-        con.execute("INSERT INTO index_prices SELECT * FROM df_sector")
+        con.execute("""
+            INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume)
+            SELECT * FROM df_sector
+        """)
     print(f"✅ Zapisano {len(sector_rows)} wierszy danych sektorowych ETF-ów SPDR ({start_date} → {end_date}).")
 
     for index_name in SYNTHETIC_INDEX_UNIVERSES:
@@ -590,7 +609,10 @@ def update_index_prices(con, lookback_months):
         if synth.empty:
             print(f"⚠️  Brak danych składników do zbudowania syntetycznego indeksu {index_name}.")
             continue
-        con.execute("INSERT INTO index_prices SELECT * FROM synth")
+        con.execute("""
+            INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume)
+            SELECT * FROM synth
+        """)
         print(f"✅ Zbudowano syntetyczny poziom indeksu {index_name}: {len(synth)} dni "
               f"(równoważony zwrot składników, baza={WIG_SYNTHETIC_INDEX_BASE}).")
 
