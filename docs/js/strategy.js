@@ -16,8 +16,9 @@
 //            z przeciecia MACD w dol (strategyStopFor); wielkosc
 //            pozycji = 1% kapitalu / (cena - stop), maks. 10% kapitalu.
 //   Krok 5 — pozycje satelity uzytkownika: HOLD / podciagnij stop / EXIT.
-// Portfel: Core (50%) = ETF-y, ktore uzytkownik juz ma poza tym narzedziem,
-// Satelita (50%) = ta strategia. Wszystko liczone po stronie klienta z juz
+// Portfel: Core = ETF-y, ktore uzytkownik juz ma poza tym narzedziem,
+// Satelita = ta strategia (domyslnie 50/50, ryzyko 1%, maks. pozycja 10% —
+// wszystkie trzy procenty uzytkownik zmienia polami na stronie). Wszystko liczone po stronie klienta z juz
 // eksportowanych docs/data/*.json — pipeline (run_query.py) bez zmian.
 // Stare Kroki 3/4 strategii sektorowej (liderzy sektora, top 10 RS) zostaja
 // na dole strony jako "Narzedzia pomocnicze" (tylko USA).
@@ -397,6 +398,28 @@ const MARKETS = {
 const FUNNEL_UNIVERSE_LABELS = { WIG20: "WIG20", MWIG40: "mWIG40", SP500: "S&P 500", NASDAQ100: "Nasdaq 100" };
 const STRATEGY_SETTINGS_KEY = "momentum_strategy_settings";
 
+// Procenty kapitalu, ktore uzytkownik ustawia na stronie (pola nad lejkiem),
+// w % kapitalu CALKOWITEGO. Domyslne = STRATEGY_*_PCT wyzej.
+const DEFAULT_ALLOCATION = {
+    satellitePct: STRATEGY_SATELLITE_PCT * 100,
+    riskPct: STRATEGY_RISK_PER_TRADE_PCT * 100,
+    maxPositionPct: STRATEGY_MAX_POSITION_PCT * 100,
+};
+const ALLOCATION_LIMITS = { satellitePct: [0, 100], riskPct: [0.1, 10], maxPositionPct: [1, 100] };
+
+// Poprawne liczby w dozwolonych zakresach; zle/puste wartosci -> domyslne.
+function sanitizeAllocation(a) {
+    const out = Object.assign({}, DEFAULT_ALLOCATION);
+    Object.keys(ALLOCATION_LIMITS).forEach(k => {
+        const v = a && Number(a[k]);
+        if (a && a[k] !== null && a[k] !== "" && isFinite(v)) {
+            const [lo, hi] = ALLOCATION_LIMITS[k];
+            out[k] = Math.min(hi, Math.max(lo, v));
+        }
+    });
+    return out;
+}
+
 function lastNonNullIndex(arr) {
     if (!arr) return -1;
     for (let i = arr.length - 1; i >= 0; i--) if (arr[i] != null) return i;
@@ -745,12 +768,14 @@ function loadSettings() {
     const defaults = {
         market: "USA", capitalUSA: null, capitalPL: null, heldUSA: "", heldPL: "",
         criteria: Object.assign({}, DEFAULT_CRITERIA), focusStep: "base", focusMode: "passed",
+        allocation: Object.assign({}, DEFAULT_ALLOCATION),
     };
     try {
         const raw = typeof localStorage !== "undefined" ? localStorage.getItem(STRATEGY_SETTINGS_KEY) : null;
         const saved = raw ? JSON.parse(raw) : {};
         const out = Object.assign(defaults, saved);
         out.criteria = Object.assign({}, DEFAULT_CRITERIA, saved.criteria || {});
+        out.allocation = sanitizeAllocation(saved.allocation);
         return out;
     } catch (e) {
         return defaults;
@@ -895,10 +920,20 @@ function renderSettings() {
     const input = document.getElementById("capitalInput");
     const cap = capital();
     if (document.activeElement !== input) input.value = cap != null ? cap : "";
-    document.getElementById("coreValue").textContent = cap ? fmtMoneyFor(currency, cap * (1 - STRATEGY_SATELLITE_PCT)) : "—";
-    document.getElementById("satelliteValue").textContent = cap ? fmtMoneyFor(currency, cap * STRATEGY_SATELLITE_PCT) : "—";
-    document.getElementById("riskValue").textContent = cap ? fmtMoneyFor(currency, cap * STRATEGY_RISK_PER_TRADE_PCT) : "—";
-    document.getElementById("maxPositionValue").textContent = cap ? fmtMoneyFor(currency, cap * STRATEGY_MAX_POSITION_PCT) : "—";
+    const al = settings.allocation;
+    const fmtPct = v => `${Number(v.toFixed(2)).toLocaleString("pl-PL")}%`;
+    document.getElementById("coreLabel").textContent = `Core — Twoje ETF-y (${fmtPct(100 - al.satellitePct)})`;
+    document.getElementById("satelliteLabel").textContent = `Satelita — strategia (${fmtPct(al.satellitePct)})`;
+    document.getElementById("riskLabel").textContent = `Ryzyko na pozycję (${fmtPct(al.riskPct)})`;
+    document.getElementById("maxPositionLabel").textContent = `Maks. pozycja (${fmtPct(al.maxPositionPct)})`;
+    [["satellitePctInput", "satellitePct"], ["riskPctInput", "riskPct"], ["maxPositionPctInput", "maxPositionPct"]].forEach(([id, k]) => {
+        const el = document.getElementById(id);
+        if (document.activeElement !== el) el.value = al[k];
+    });
+    document.getElementById("coreValue").textContent = cap ? fmtMoneyFor(currency, cap * (100 - al.satellitePct) / 100) : "—";
+    document.getElementById("satelliteValue").textContent = cap ? fmtMoneyFor(currency, cap * al.satellitePct / 100) : "—";
+    document.getElementById("riskValue").textContent = cap ? fmtMoneyFor(currency, cap * al.riskPct / 100) : "—";
+    document.getElementById("maxPositionValue").textContent = cap ? fmtMoneyFor(currency, cap * al.maxPositionPct / 100) : "—";
     const heldInput = document.getElementById("heldInput");
     if (document.activeElement !== heldInput) heldInput.value = settings[`held${market}`] || "";
 }
@@ -1113,11 +1148,14 @@ function renderEntryTable(evaluated, currency, held, evaluatedByTicker) {
     const heldSet = new Set(held);
     const sectorCounts = heldSectorCounts(held, evaluatedByTicker);
     const rows = evaluated.filter(e => isSignalStatus(e.status)).map(e => Object.assign({}, e, {
-        size: positionSize({ price: e.price, stop: e.stop, capital: cap }),
+        size: positionSize({
+            price: e.price, stop: e.stop, capital: cap,
+            riskPct: settings.allocation.riskPct / 100, maxPositionPct: settings.allocation.maxPositionPct / 100,
+        }),
         alreadyHeld: heldSet.has(e.ticker),
         sectorFull: e.sector && e.sector !== "Unknown" && (sectorCounts[e.sector] || 0) >= STRATEGY_MAX_PER_SECTOR,
     }));
-    const satellite = cap ? cap * STRATEGY_SATELLITE_PCT : null;
+    const satellite = cap ? cap * settings.allocation.satellitePct / 100 : null;
     const totalValue = rows.filter(r => r.status === "ENTRY" && !r.alreadyHeld && r.size).reduce((a, r) => a + r.size.value, 0);
 
     renderScreenerTable({
@@ -1143,7 +1181,7 @@ function renderEntryTable(evaluated, currency, held, evaluatedByTicker) {
                 <td>${stopCellHtml(currency, e.stopInfo)}</td>
                 <td>${e.stop != null ? `${(((e.price - e.stop) / e.price) * 100).toFixed(1)}%` : "—"}</td>
                 <td>${s ? s.shares : "—"}</td>
-                <td>${s ? fmtMoneyFor(currency, s.value) + (s.cappedByMax ? ' <span class="funnel-note" title="Ograniczone limitem 10% kapitału na pozycję.">max</span>' : "") : "—"}</td>
+                <td>${s ? fmtMoneyFor(currency, s.value) + (s.cappedByMax ? ` <span class="funnel-note" title="Ograniczone limitem ${settings.allocation.maxPositionPct}% kapitału na pozycję.">max</span>` : "") : "—"}</td>
                 <td>${s ? fmtMoneyFor(currency, s.risk) : "—"}</td>
                 <td>${macdCellHtml(e.macd)}</td>
                 <td>${e.volumeRatio != null ? `<span class="${e.volumeConfirmed ? "positive" : ""}">${e.volumeRatio.toFixed(1)}×${e.volumeConfirmed ? " ✓" : ""}</span>` : "—"}</td>
@@ -1238,6 +1276,16 @@ function initFunnelControls() {
         saveSettings();
         renderFunnel();
     });
+    [["satellitePctInput", "satellitePct"], ["riskPctInput", "riskPct"], ["maxPositionPctInput", "maxPositionPct"]].forEach(([id, k]) => {
+        const el = document.getElementById(id);
+        el.addEventListener("input", () => {
+            if (el.value === "" || !isFinite(Number(el.value))) return; // w trakcie pisania — nie nadpisuj
+            settings.allocation = sanitizeAllocation(Object.assign({}, settings.allocation, { [k]: Number(el.value) }));
+            saveSettings();
+            renderFunnel();
+        });
+        el.addEventListener("change", () => { el.value = settings.allocation[k]; });
+    });
     const viz = document.getElementById("funnelViz");
     viz.addEventListener("click", (ev) => {
         const chip = ev.target.closest(".funnel-chip");
@@ -1318,6 +1366,6 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
-        evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, evaluateHolding, parseTickerList,
+        evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, sanitizeAllocation, evaluateHolding, parseTickerList,
     };
 }

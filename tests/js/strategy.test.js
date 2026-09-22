@@ -8,7 +8,7 @@ const path = require("node:path");
 
 const {
     squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
-    evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, evaluateHolding, parseTickerList,
+    evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, sanitizeAllocation, evaluateHolding, parseTickerList,
 } = require(path.join("..", "..", "docs", "js", "strategy.js"));
 
 function ttmChart(rows) {
@@ -363,4 +363,18 @@ test("evaluateHolding exits when price falls below the Darvas/MACD stop", () => 
     c.weekly_chart.current_stage = "2B";
     c.weekly_chart.close_pct = [0, 5, 10, 15, 10]; // close0 = 120/1.1 ~ 109.1 -> stop ~ 122.2 > 120
     assert.equal(evaluateHolding(c).action, "EXIT");
+});
+
+test("sanitizeAllocation clamps user percentages and falls back to defaults", () => {
+    assert.deepEqual(sanitizeAllocation(undefined), { satellitePct: 50, riskPct: 1, maxPositionPct: 10 });
+    assert.deepEqual(sanitizeAllocation({ satellitePct: 30, riskPct: 0.5, maxPositionPct: 15 }), { satellitePct: 30, riskPct: 0.5, maxPositionPct: 15 });
+    assert.deepEqual(sanitizeAllocation({ satellitePct: 150, riskPct: 0, maxPositionPct: "abc" }), { satellitePct: 100, riskPct: 0.1, maxPositionPct: 10 });
+    assert.deepEqual(sanitizeAllocation({ satellitePct: "", riskPct: null }), { satellitePct: 50, riskPct: 1, maxPositionPct: 10 });
+});
+
+test("positionSize uses custom risk and max-position percentages", () => {
+    // 2% z 100000 = 2000 ryzyka / 10 na akcje = 200 akcji, limit 30% = 30000/110 = 272 -> 200
+    const s = positionSize({ price: 110, stop: 100, capital: 100000, riskPct: 0.02, maxPositionPct: 0.30 });
+    assert.equal(s.shares, 200);
+    assert.equal(s.cappedByMax, false);
 });

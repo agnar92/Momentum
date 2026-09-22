@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Strategia Stage 2 — Momentum Dashboard</title>
-<link rel="stylesheet" href="css/style.css?v=17">
+<link rel="stylesheet" href="css/style.css?v=18">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e0f13">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -45,11 +45,25 @@
             <label for="capitalInput" id="capitalLabel">Kapitał całkowity (Core + Satelita)</label>
             <input type="number" min="0" step="100" class="contribution-input" id="capitalInput" placeholder="np. 100000">
         </div>
+        <div class="settings-row">
+            <label>Podział kapitału i ryzyko (% kapitału całkowitego)</label>
+            <div class="bucket-inputs" id="allocationInputs">
+                <label class="bucket-input" title="Jaka część kapitału idzie na tę strategię — reszta to Core (Twoje ETF-y).">
+                    <span>Satelita</span><input type="number" id="satellitePctInput" min="0" max="100" step="5" inputmode="decimal"><span>%</span>
+                </label>
+                <label class="bucket-input" title="Ile kapitału ryzykujesz na jednej pozycji (strata, jeśli cena spadnie do stopu).">
+                    <span>Ryzyko na pozycję</span><input type="number" id="riskPctInput" min="0.1" max="10" step="0.1" inputmode="decimal"><span>%</span>
+                </label>
+                <label class="bucket-input" title="Maksymalna wartość jednej pozycji, niezależnie od odległości stopu.">
+                    <span>Maks. pozycja</span><input type="number" id="maxPositionPctInput" min="1" max="100" step="1" inputmode="decimal"><span>%</span>
+                </label>
+            </div>
+        </div>
         <div class="stat-cards" id="allocationCards">
-            <div class="stat-card"><div class="label">Core — Twoje ETF-y (50%)</div><div class="value" id="coreValue">—</div></div>
-            <div class="stat-card"><div class="label">Satelita — strategia (50%)</div><div class="value" id="satelliteValue">—</div></div>
-            <div class="stat-card"><div class="label">Ryzyko na pozycję (1%)</div><div class="value" id="riskValue">—</div></div>
-            <div class="stat-card"><div class="label">Maks. pozycja (10%)</div><div class="value" id="maxPositionValue">—</div></div>
+            <div class="stat-card"><div class="label" id="coreLabel">Core — Twoje ETF-y</div><div class="value" id="coreValue">—</div></div>
+            <div class="stat-card"><div class="label" id="satelliteLabel">Satelita — strategia</div><div class="value" id="satelliteValue">—</div></div>
+            <div class="stat-card"><div class="label" id="riskLabel">Ryzyko na pozycję</div><div class="value" id="riskValue">—</div></div>
+            <div class="stat-card"><div class="label" id="maxPositionLabel">Maks. pozycja</div><div class="value" id="maxPositionValue">—</div></div>
         </div>
     </div>
 
@@ -92,7 +106,7 @@
 
     <div class="panel-card" id="entryCard">
         <h3>🎯 Sygnały wejścia i wielkość pozycji <span class="ref-date-note" id="entryMeta"></span></h3>
-        <p class="panel-hint">Wejście = squeeze odpalił po konsolidacji (progi ustawiasz w lejku), histogram momentum jest dodatni i rośnie, cena nad stopem. Stop: na start połowa ostatniego pudełka Darvasa (½ box), potem po każdym przecięciu tygodniowego MACD w dół linii sygnału stop idzie na low tej świecy — tylko w górę, nigdy w dół. Przecięcie MACD w górę linii sygnału to potwierdzenie wejścia: bez niego status to „⏳ Czekaj na MACD”. Liczba akcji = (1% kapitału) / (cena − stop), ale wartość pozycji najwyżej 10% kapitału. Wolumen kupujących ≥ 1,2× średniej to dodatkowe potwierdzenie, nie warunek.</p>
+        <p class="panel-hint">Wejście = squeeze odpalił po konsolidacji (progi ustawiasz w lejku), histogram momentum jest dodatni i rośnie, cena nad stopem. Stop: na start połowa ostatniego pudełka Darvasa (½ box), potem po każdym przecięciu tygodniowego MACD w dół linii sygnału stop idzie na low tej świecy — tylko w górę, nigdy w dół. Przecięcie MACD w górę linii sygnału to potwierdzenie wejścia: bez niego status to „⏳ Czekaj na MACD”. Liczba akcji = (ryzyko na pozycję × kapitał) / (cena − stop), ale wartość pozycji nie większa niż „maks. pozycja” — oba procenty ustawiasz na górze strony. Wolumen kupujących ≥ 1,2× średniej to dodatkowe potwierdzenie, nie warunek.</p>
         <div class="table-wrap">
         <table class="momentum-table" id="entryTable">
             <thead>
@@ -245,9 +259,9 @@
 
 <script src="js/vendor/chart.umd.min.js"></script>
 <script src="js/pull-to-refresh.js"></script>
-<script src="js/shared.js?v=17"></script>
-<script src="js/qol.js?v=17"></script>
-<script src="js/table-render.js?v=17"></script>
-<script src="js/strategy.js?v=17"></script>
+<script src="js/shared.js?v=18"></script>
+<script src="js/qol.js?v=18"></script>
+<script src="js/table-render.js?v=18"></script>
+<script src="js/strategy.js?v=18"></script>
 </body>
 </html>

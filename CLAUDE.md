@@ -1728,7 +1728,13 @@ flex child (no `.topbar-left` wrapper there).
   or dropped at — that step, sortable by header (`compareListRows`, empty values always last), with `✗ <step>`
   (`failedAt`) as the status of companies that fail later. `strategy.html` loads its CSS/JS with a `?v=`
   query so a phone doesn't keep serving an older cached `style.css` against new markup (what made the first
-  version look broken). Pure logic is covered in
+  version look broken).
+  **The three capital percentages are user-editable** (explicit request: "Daj mi pole do dostosowania ile
+  procent kapitału"): Satellite %, risk per trade %, max position % — inputs above the allocation
+  stat-cards, persisted as `settings.allocation` and clamped by `sanitizeAllocation()` (`ALLOCATION_LIMITS`;
+  bad/empty input falls back to `DEFAULT_ALLOCATION`, i.e. the `STRATEGY_*_PCT` constants 50/1/10). All
+  three are % of TOTAL capital; Core is simply 100 − Satellite. Shared by both markets (USA/PL), unlike the
+  capital amount itself, which is per market/currency. Pure logic is covered in
   `tests/js/strategy.test.js`.
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
   under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/
