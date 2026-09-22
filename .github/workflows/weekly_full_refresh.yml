@@ -72,16 +72,38 @@ jobs:
           if [ -n "$(git status --porcelain momentum_data.duckdb docs/data/)" ]; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
+
+            # Zawsze najpierw przestawiamy się na AKTUALNY szczyt main, ZANIM
+            # zrobimy pierwszy commit — nie tylko reaktywnie, po odrzuconym
+            # pushu (patrz pętla niżej). To naprawia realny incydent
+            # (22.09.2026, commit aedae95/PR #123): ten job wystartował z
+            # NIEAKTUALNEGO checkoutu (ręczne "Re-run jobs" na starym
+            # uruchomieniu w GitHub Actions używa ORYGINALNEGO SHA sprzed
+            # triggera, nie bieżącego main), więc fetch_data.py/run_query.py
+            # policzyły dane starym kodem, i — bez tego resetu — commit
+            # danych miałby też starą zawartość run_query.py/fetch_data.py/
+            # CLAUDE.md/testów w drzewie, mimo poprawnego rodzica (origin/main).
+            # "reset --mixed" (NIE "--soft" — --soft zostawia stary INDEKS,
+            # tylko przesuwa HEAD, więc kolejny "git add momentum_data.duckdb
+            # docs/data/" dokłada świeże dane NA WIERZCHU starego drzewa
+            # zamiast na drzewie origin/main) przestawia HEAD *i* indeks na
+            # origin/main, więc "git add" niżej dokłada tylko zamierzone
+            # ścieżki na poprawnej bazie — wszystko inne (w tym ewentualny
+            # dryf z nieaktualnego checkoutu) zostaje niezastageowane i NIE
+            # trafia do commita.
+            git fetch origin main
+            git reset --mixed origin/main
+
             git add momentum_data.duckdb docs/data/
             # [skip ci]: bez tego ten commit odpaliłby workflow ponownie (trigger "push: main"),
             # tworząc pętlę.
             git commit -m "chore: weekly full refresh (prices + index levels + selection/weights + docs/data) [skip ci]"
-            # Retry na wypadek wyścigu z innym workflowem pushującym do main w tym
-            # samym momencie: zwykły "git push" dostałby "fetch first" (rejected),
-            # co failowałoby cały job i pomijało Deploy to GitHub Pages niżej.
-            # Zamiast tego: ściągamy najnowszy main i przestawiamy nasz commit na
-            # jego szczyt (--soft, wygrywa nasza wersja pliku — to tylko
-            # wygenerowane dane, kolejny przebieg i tak je odświeży).
+
+            # Retry na wypadek wyścigu z innym workflowem pushującym do main
+            # w tym samym momencie: zwykły "git push" dostałby "fetch first"
+            # (rejected), co failowałoby cały job i pomijało Deploy to
+            # GitHub Pages niżej. Ta sama logika (fetch + reset --mixed +
+            # re-add + re-commit) jak wyżej.
             for attempt in 1 2 3 4 5; do
               if git push; then
                 break
@@ -93,7 +115,7 @@ jobs:
               echo "⚠️  Push odrzucony (próba $attempt) — pobieram najnowszy main i próbuję ponownie..."
               sleep $((attempt * 3))
               git fetch origin main
-              git reset --soft origin/main
+              git reset --mixed origin/main
               git add momentum_data.duckdb docs/data/
               git commit -m "chore: weekly full refresh (prices + index levels + selection/weights + docs/data) [skip ci]"
             done
