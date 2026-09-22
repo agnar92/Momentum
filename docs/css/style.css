@@ -616,21 +616,27 @@ th.tv-col, th.chart-col { width: 1%; }
     overflow-y: auto;
 }
 
-/* min-height wartosci ponizej byly kiedys znacznie nizsze (220/200px) — na
-   wyrazne zyczenie uzytkownika podniesione, zeby wykresy nie wygladaly
-   "splaszczone" nawet kosztem wiecej scrollowania w .rs-chart-container
-   (ktory i tak juz ma overflow-y: auto, patrz komentarz powyzej) — czytelnosc
-   linii/slupkow wazniejsza niz zmieszczenie calego stosu paneli bez
-   przewijania na jednym ekranie. */
+/* min-height wartosci ponizej rosly juz raz (z oryginalnych 220/200px do
+   460/300px) na zyczenie uzytkownika, a potem jeszcze raz (do obecnych
+   700/450px) po tym, jak zglosil, ze na duzym, szerokim monitorze (2K, 27")
+   panele o szerokosci ~2400px i wysokosci tylko 460/300px wygladaly jak
+   splaszczona, "waska" (w sensie: pozioma, cienka) wstega, mimo ze same w
+   sobie byly juz szersze niz kiedykolwiek — realny problem byl w PROPORCJI
+   (bardzo szeroki, plaski prostokat), nie w bezwzglednej szerokosci. Kosztem
+   wiecej scrollowania w .rs-chart-container (ktory i tak juz ma
+   overflow-y: auto, patrz komentarz powyzej — na tak duzym ekranie caly stos
+   4 domyslnie widocznych paneli i tak juz nie miescil sie bez przewijania
+   nawet przy 460/300px) — czytelnosc linii/slupkow wazniejsza niz
+   zmieszczenie calego stosu paneli bez przewijania na jednym ekranie. */
 .rs-chart-panel {
     position: relative;
     flex: 3;
-    min-height: 460px;
+    min-height: 700px;
 }
 
 .rs-chart-panel-small {
     flex: 1;
-    min-height: 300px;
+    min-height: 450px;
 }
 
 /* Wolumen tygodniowy w oddzielnym panelu pod wykresem 10:30 (wcześniej ukryte
@@ -643,7 +649,7 @@ th.tv-col, th.chart-col { width: 1%; }
 .rs-chart-panel-volume {
     position: relative;
     flex: 1;
-    min-height: 300px;
+    min-height: 450px;
 }
 
 /* Zakres dat panelu Mansfield RS — nakładka w rogu canvasu (nie zajmuje
