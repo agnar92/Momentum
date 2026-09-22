@@ -11,8 +11,8 @@ const {
     STAGE_LABELS, STAGE_COLORS, stageCellHtml, compareRows,
 } = require(path.join("..", "..", "docs", "js", "shared.js"));
 
-test("UNIVERSES lists all five universes the pipeline computes", () => {
-    assert.deepEqual(UNIVERSES, ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]);
+test("UNIVERSES lists all six universes the pipeline computes", () => {
+    assert.deepEqual(UNIVERSES, ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40", "SWIG80"]);
 });
 
 test("UNIVERSE_LABELS has a label for every universe", () => {
@@ -23,9 +23,10 @@ test("formatPrice renders USD for a non-PLN universe", () => {
     assert.equal(formatPrice(123.4, "SP500"), "$123.40");
 });
 
-test("formatPrice renders PLN (zł suffix) for WIG20/mWIG40", () => {
+test("formatPrice renders PLN (zł suffix) for WIG20/mWIG40/sWIG80", () => {
     assert.equal(formatPrice(123.4, "WIG20"), "123.40 zł");
     assert.equal(formatPrice(55, "MWIG40"), "55.00 zł");
+    assert.equal(formatPrice(12.3, "SWIG80"), "12.30 zł");
 });
 
 test("tvSymbolFor prefixes GPW: only for PLN universes", () => {
@@ -40,8 +41,8 @@ test("tvUrlFor builds a tradingview.com chart URL from tvSymbolFor", () => {
     );
 });
 
-test("PLN_UNIVERSES contains exactly WIG20 and MWIG40", () => {
-    assert.deepEqual([...PLN_UNIVERSES].sort(), ["MWIG40", "WIG20"]);
+test("PLN_UNIVERSES contains exactly WIG20, MWIG40 and SWIG80", () => {
+    assert.deepEqual([...PLN_UNIVERSES].sort(), ["MWIG40", "SWIG80", "WIG20"]);
 });
 
 test("stageCellHtml renders an em dash for a missing/unknown stage", () => {

@@ -23,7 +23,7 @@
 
 <div class="topbar">
     <div class="topbar-left">
-        <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA · WIG20 · mWIG40</span></div>
+        <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA · WIG20 · mWIG40 · sWIG80</span></div>
         <button class="cmdk-trigger" id="cmdkTrigger">🔍 Szukaj <span class="cmdk-kbd">Ctrl+K</span></button>
     </div>
     <nav>
@@ -63,8 +63,13 @@
             <div class="ticker-grid" id="tiles-MWIG40"></div>
         </div>
 
+        <div class="sidebar-group">
+            <div class="sidebar-group-label">sWIG80</div>
+            <div class="ticker-grid" id="tiles-SWIG80"></div>
+        </div>
+
         <div class="sidebar-group" id="rsmStableGroup">
-            <div class="sidebar-group-label" title="Oscylator Mansfield Relative Strength (RSM = (RS/SMA(RS,N tyg.)-1)*100, gdzie RS = cena spółki / poziom indeksu). Stabilne: RSM 6M > RSM 3M > 0 — spółka trwale silniejsza od swojego indeksu w dłuższym (6-miesięcznym) horyzoncie, bez świeżego gwałtownego skoku. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, nie tylko dzisiejszą selekcję portfela.">
+            <div class="sidebar-group-label" title="Oscylator Mansfield Relative Strength (RSM = (RS/SMA(RS,N tyg.)-1)*100, gdzie RS = cena spółki / poziom indeksu). Stabilne: RSM 6M > RSM 3M > 0 — spółka trwale silniejsza od swojego indeksu w dłuższym (6-miesięcznym) horyzoncie, bez świeżego gwałtownego skoku. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80, nie tylko dzisiejszą selekcję portfela.">
                 📈 RSM Stabilne
             </div>
             <div class="sidebar-group-meta" id="rsmStableMeta"></div>
@@ -72,7 +77,7 @@
         </div>
 
         <div class="sidebar-group" id="rsmGrowthGroup">
-            <div class="sidebar-group-label" title="Oscylator Mansfield Relative Strength w dwóch wygładzeniach — krótkoterminowym ~3 mies. i średnioterminowym ~6 mies. Wzrostowe: RSM 3M > RSM 6M i oba wygładzenia rosną od 4 tygodni — świeże przyspieszenie trendu. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, nie tylko dzisiejszą selekcję portfela.">
+            <div class="sidebar-group-label" title="Oscylator Mansfield Relative Strength w dwóch wygładzeniach — krótkoterminowym ~3 mies. i średnioterminowym ~6 mies. Wzrostowe: RSM 3M > RSM 6M i oba wygładzenia rosną od 4 tygodni — świeże przyspieszenie trendu. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80, nie tylko dzisiejszą selekcję portfela.">
                 🚀 RSM Wzrostowe
             </div>
             <div class="sidebar-group-meta" id="rsmGrowthMeta"></div>
@@ -80,7 +85,7 @@
         </div>
 
         <div class="sidebar-group" id="ttmSqueezeGroup">
-            <div class="sidebar-group-label" title="Wskaźnik TTM Squeeze (Bollinger Bands wewnątrz kanału Kellera = konsolidacja). Spółki z Momentum (momentum_score > 0), które przeszły przez konsolidację dłuższą niż 5 tygodni — albo wciąż w niej trwają, albo właśnie się z niej wybiły (ostatnie 3 tygodnie). Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, nie tylko dzisiejszą selekcję portfela.">
+            <div class="sidebar-group-label" title="Wskaźnik TTM Squeeze (Bollinger Bands wewnątrz kanału Kellera = konsolidacja). Spółki z Momentum (momentum_score > 0), które przeszły przez konsolidację dłuższą niż 5 tygodni — albo wciąż w niej trwają, albo właśnie się z niej wybiły (ostatnie 3 tygodnie). Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80, nie tylko dzisiejszą selekcję portfela.">
                 🧨 TTM Squeeze
             </div>
             <div class="sidebar-group-meta" id="ttmSqueezeMeta"></div>
@@ -98,9 +103,10 @@
                 <button class="drawer-tab active" data-universe="DOWJONES">Dow Jones</button>
                 <button class="drawer-tab" data-universe="WIG20">WIG20</button>
                 <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
-                <button class="drawer-tab" data-universe="RSM_STABLE" title="RSM Stabilne — spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 trwale silniejsze od swojego indeksu (RSM 6M > RSM 3M > 0), CAŁE uniwersa, nie tylko dzisiejsza selekcja portfela.">📈 RSM Stabilne</button>
-                <button class="drawer-tab" data-universe="RSM_GROWTH" title="RSM Wzrostowe — spółki ze świeżym przyspieszeniem trendu (RSM 3M > RSM 6M, oba wygładzenia rosnące od 4 tyg.), CAŁE uniwersa, nie tylko dzisiejsza selekcja portfela.">🚀 RSM Wzrostowe</button>
-                <button class="drawer-tab" data-universe="TTM_SQUEEZE" title="TTM Squeeze — spółki z Momentum, które przeszły przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte wewnątrz kanału Kellera) i albo wciąż w niej trwają, albo właśnie się z niej wybiły, CAŁE uniwersa, nie tylko dzisiejsza selekcja portfela.">🧨 TTM Squeeze</button>
+                <button class="drawer-tab" data-universe="SWIG80">sWIG80</button>
+                <button class="drawer-tab" data-universe="RSM_STABLE" title="RSM Stabilne — spółki SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80 trwale silniejsze od swojego indeksu (RSM 6M > RSM 3M > 0), CAŁE uniwersa, nie tylko dzisiejsza selekcja portfela.">📈 RSM Stabilne</button>
+                <button class="drawer-tab" data-universe="RSM_GROWTH" title="RSM Wzrostowe — spółki ze świeżym przyspieszeniem trendu (RSM 3M > RSM 6M, oba wygładzenia rosnące od 4 tyg.), CAŁE uniwersa (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80), nie tylko dzisiejsza selekcja portfela.">🚀 RSM Wzrostowe</button>
+                <button class="drawer-tab" data-universe="TTM_SQUEEZE" title="TTM Squeeze — spółki z Momentum, które przeszły przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte wewnątrz kanału Kellera) i albo wciąż w niej trwają, albo właśnie się z niej wybiły, CAŁE uniwersa (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80), nie tylko dzisiejsza selekcja portfela.">🧨 TTM Squeeze</button>
             </div>
         </div>
         <div class="stage-filter-bar" id="stageFilterBar">

@@ -17,14 +17,15 @@ INDEX_MAP = {
     "CIND_holdings.csv": "DOWJONES"
 }
 
-# WIG20/mWIG40 (GPW): brak globalnie dostępnego ETF-a z publikowanymi holdings
+# WIG20/mWIG40/sWIG80 (GPW): brak globalnie dostępnego ETF-a z publikowanymi holdings
 # w formacie iShares (jak CSPX/CNDX/CIND) dla indeksów warszawskiej giełdy, więc
-# te dwa uniwersa są zasilane ręcznie utrzymywanym plikiem JSON z samą listą
+# te trzy uniwersa są zasilane ręcznie utrzymywanym plikiem JSON z samą listą
 # tickerów (bez wag kapitałowych) — patrz _load_json_constituents. Tak jak
 # DOWJONES, są ważone równomiernie (patrz run_query.py::EQUAL_WEIGHT_UNIVERSES).
 JSON_INDEX_MAP = {
     "WIG20_holdings.json": "WIG20",
     "MWIG40_holdings.json": "MWIG40",
+    "SWIG80_holdings.json": "SWIG80",
 }
 
 TICKER_COL_CANDIDATES = ["Ticker", "Symbol", "Holding Ticker"]
@@ -43,29 +44,31 @@ YFINANCE_TICKER_OVERRIDES = {
     "BFB": "BF-B",    # Brown-Forman Class B
 }
 
-# Tickery GPW (WIG20/mWIG40) wymagają sufiksu ".WA" w yfinance — w odróżnieniu
+# Tickery GPW (WIG20/mWIG40/sWIG80) wymagają sufiksu ".WA" w yfinance — w odróżnieniu
 # od YFINANCE_TICKER_OVERRIDES (rzadkie, pojedyncze wyjątki dla klas akcji USA),
 # to dotyczy WSZYSTKICH tickerów wczytanych z JSON_INDEX_MAP, więc zbiór jest
 # budowany dynamicznie przy wczytywaniu — patrz _load_json_constituents.
 GPW_TICKERS = set()
 
 # Poziom INDEKSU (nie skladnikow) dla Global Equity Momentum (run_query.py::
-# compute_index_returns, teraz porownujace WSZYSTKIE 5 uniwersow miedzy soba —
+# compute_index_returns, teraz porownujace WSZYSTKIE 6 uniwersow miedzy soba —
 # patrz run_query.py::GEM_UNIVERSES) i Sily Relatywnej. ^GSPC/^NDX/^DJI to
 # standardowe symbole yfinance dla SP500/NASDAQ100/DOWJONES, MAJACE pelna
-# historyczna dana tam (patrz update_index_prices). WIG20/mWIG40 maja wlasne
-# symbole (WIG20.WA/MWIG40.WA) w tym slowniku wylacznie dla dokumentacji/
-# run_query.py's metadanych "yf_symbol" — NIE sa nimi faktycznie pobierane
-# (yfinance nie ma dla nich zadnej historycznej danej poziomu indeksu, patrz
-# _compute_synthetic_equal_weight_index nizej; realny zwrot WIG20/MWIG40 dla
-# GEM pochodzi zamiast tego z recznie wypelnianego gem_manual_returns.json —
-# patrz run_query.py::_load_gem_manual_returns i CLAUDE.md).
+# historyczna dana tam (patrz update_index_prices). WIG20/mWIG40/sWIG80 maja
+# wlasne symbole (WIG20.WA/MWIG40.WA/SWIG80.WA) w tym slowniku wylacznie dla
+# dokumentacji/run_query.py's metadanych "yf_symbol" — NIE sa nimi faktycznie
+# pobierane (yfinance nie ma dla nich zadnej historycznej danej poziomu
+# indeksu, patrz _compute_synthetic_equal_weight_index nizej; realny zwrot
+# WIG20/mWIG40/sWIG80 dla GEM pochodzi zamiast tego z recznie wypelnianego
+# gem_manual_returns.json — patrz run_query.py::_load_gem_manual_returns i
+# CLAUDE.md).
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC",
     "NASDAQ100": "^NDX",
     "DOWJONES": "^DJI",
     "WIG20": "WIG20.WA",
     "MWIG40": "MWIG40.WA",
+    "SWIG80": "SWIG80.WA",
 }
 
 
@@ -93,11 +96,11 @@ def _parse_money(series):
 
 
 def _load_json_constituents():
-    """Wczytuje skład WIG20/mWIG40 z ręcznie utrzymywanych plików JSON (patrz
+    """Wczytuje skład WIG20/mWIG40/sWIG80 z ręcznie utrzymywanych plików JSON (patrz
     JSON_INDEX_MAP) — sama lista tickerów GPW, bez wag kapitałowych (brak ETF-a
     z publikowanymi holdings dla tych indeksów, w odróżnieniu od CSPX/CNDX/CIND).
     fmc_etf ustawiane na stałą wartość 1.0 dla każdej spółki — nieużywana
-    realnie do wagowania (WIG20/mWIG40 są ważone równomiernie, tak jak DOWJONES —
+    realnie do wagowania (WIG20/mWIG40/sWIG80 są ważone równomiernie, tak jak DOWJONES —
     patrz run_query.py::EQUAL_WEIGHT_UNIVERSES), a get_universe_metrics wymaga
     tylko, żeby fmc_etf NIE było NULL, by spółka kwalifikowała się do selekcji.
 
@@ -473,20 +476,20 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
 
 
 # SP500/NASDAQ100/DOWJONES MAJA pelna historyczna dana poziomu indeksu u yfinance
-# (^GSPC/^NDX/^DJI) — pobierane stamtad jak dotychczas. WIG20/MWIG40 NIE MAJA
+# (^GSPC/^NDX/^DJI) — pobierane stamtad jak dotychczas. WIG20/MWIG40/sWIG80 NIE MAJA
 # (patrz _compute_synthetic_equal_weight_index) — budowane syntetycznie.
 # Zewnetrzne "realne" zrodla zostaly sprawdzone i odrzucone: yfinance nigdy nie
-# mial historii dla tych dwoch tickerow-indeksow (patrz docstring
+# mial historii dla tych tickerow-indeksow (patrz docstring
 # _compute_synthetic_equal_weight_index), a proba uzycia darmowego CSV ze
 # stooq.pl (dodana, potem usunieta — patrz git history) okazala sie
 # niedostepna od 2026 (uzytkownik potwierdzil recznie). GEM (run_query.py::
 # compute_index_returns) czyta wiec zamiast tego recznie wpisywany
-# gem_manual_returns.json dla tych dwoch uniwersow, gdy jest wypelniony — ten
+# gem_manual_returns.json dla tych uniwersow, gdy jest wypelniony — ten
 # syntetyczny szereg tutaj zostaje jako input dla Sily Relatywnej (ktora
 # potrzebuje calego, gestego szeregu tygodniowego, nie dwoch punktow) i jako
 # fallback dla GEM, gdy gem_manual_returns.json jest pusty/nie wypelniony.
 YFINANCE_BACKED_INDEX_UNIVERSES = ("SP500", "NASDAQ100", "DOWJONES")
-SYNTHETIC_INDEX_UNIVERSES = ("WIG20", "MWIG40")
+SYNTHETIC_INDEX_UNIVERSES = ("WIG20", "MWIG40", "SWIG80")
 
 # Mapowanie nazw sektorow GICS DOKLADNIE tak, jak wystepuja w kolumnie "Sector"
 # CSPX_holdings.csv (patrz load_index_constituents), na prawdziwe sektorowe

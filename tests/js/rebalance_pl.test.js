@@ -333,44 +333,47 @@ test("computeAutoTargets excludes manually-excluded tickers entirely, backfillin
 
 // ---------- Faworyzowanie zwycięskiego indeksu — loadManualReturns/saveManualReturns/
 // winnerUniverseFromManualReturns/computeAutoTargets tilt ----------
-// Na wyraźną prośbę użytkownika: ręcznie wpisany zwrot 12M dla WIG20/mWIG40
-// (bo yfinance nie ma historii dla tych tickerów-indeksów, w przeciwieństwie
-// do SP500/NASDAQ100/DOWJONES w Rebalanserze USA) wskazuje, które spółki
-// faworyzować wagowo — ten sam WINNER_INDEX_WEIGHT_MULTIPLIER co w
-// rebalance.js, tylko z ręcznym źródłem zwrotu zamiast global_equity_momentum.json.
+// Na wyraźną prośbę użytkownika: ręcznie wpisany zwrot 12M dla WIG20/mWIG40/
+// sWIG80 (bo yfinance nie ma historii dla tych tickerów-indeksów, w
+// przeciwieństwie do SP500/NASDAQ100/DOWJONES w Rebalanserze USA) wskazuje,
+// które spółki faworyzować wagowo — ten sam WINNER_INDEX_WEIGHT_MULTIPLIER co
+// w rebalance.js, tylko z ręcznym źródłem zwrotu zamiast global_equity_momentum.json.
 
-test("loadManualReturns defaults to {WIG20: null, MWIG40: null} when nothing is stored", () => {
+test("loadManualReturns defaults to {WIG20: null, MWIG40: null, SWIG80: null} when nothing is stored", () => {
     global.localStorage.removeItem("momentum_rebalance_pl_manual_returns");
-    assert.deepEqual(loadManualReturns(), { WIG20: null, MWIG40: null });
+    assert.deepEqual(loadManualReturns(), { WIG20: null, MWIG40: null, SWIG80: null });
 });
 
 test("saveManualReturns/loadManualReturns round-trips numeric values", () => {
-    saveManualReturns({ WIG20: 31.96, MWIG40: 34.28 });
-    assert.deepEqual(loadManualReturns(), { WIG20: 31.96, MWIG40: 34.28 });
+    saveManualReturns({ WIG20: 31.96, MWIG40: 34.28, SWIG80: 28.5 });
+    assert.deepEqual(loadManualReturns(), { WIG20: 31.96, MWIG40: 34.28, SWIG80: 28.5 });
     global.localStorage.removeItem("momentum_rebalance_pl_manual_returns");
 });
 
 test("loadManualReturns falls back to nulls on corrupt/invalid stored JSON", () => {
     global.localStorage.setItem("momentum_rebalance_pl_manual_returns", "{not json");
-    assert.deepEqual(loadManualReturns(), { WIG20: null, MWIG40: null });
+    assert.deepEqual(loadManualReturns(), { WIG20: null, MWIG40: null, SWIG80: null });
     global.localStorage.removeItem("momentum_rebalance_pl_manual_returns");
 });
 
-test("winnerUniverseFromManualReturns picks the higher of two numeric returns, null when equal, missing, or both blank", () => {
-    _setState({ manualReturns: { WIG20: 31.96, MWIG40: 34.28 } });
+test("winnerUniverseFromManualReturns picks the highest of the entered returns, null when tied, missing, or all blank", () => {
+    _setState({ manualReturns: { WIG20: 31.96, MWIG40: 34.28, SWIG80: null } });
     assert.equal(winnerUniverseFromManualReturns(), "MWIG40");
 
-    _setState({ manualReturns: { WIG20: 40, MWIG40: 10 } });
+    _setState({ manualReturns: { WIG20: 40, MWIG40: 10, SWIG80: null } });
     assert.equal(winnerUniverseFromManualReturns(), "WIG20");
 
-    _setState({ manualReturns: { WIG20: 20, MWIG40: 20 } });
+    _setState({ manualReturns: { WIG20: 20, MWIG40: 20, SWIG80: null } });
     assert.equal(winnerUniverseFromManualReturns(), null); // rowne zwroty -> brak faworyzowania
 
-    _setState({ manualReturns: { WIG20: null, MWIG40: null } });
+    _setState({ manualReturns: { WIG20: null, MWIG40: null, SWIG80: null } });
     assert.equal(winnerUniverseFromManualReturns(), null);
 
-    _setState({ manualReturns: { WIG20: 15, MWIG40: null } }); // tylko jedno pole wypelnione
+    _setState({ manualReturns: { WIG20: 15, MWIG40: null, SWIG80: null } }); // tylko jedno pole wypelnione
     assert.equal(winnerUniverseFromManualReturns(), "WIG20");
+
+    _setState({ manualReturns: { WIG20: 15, MWIG40: 20, SWIG80: 45 } }); // trzeci uniwers wygrywa
+    assert.equal(winnerUniverseFromManualReturns(), "SWIG80");
 });
 
 test("computeAutoTargets tilts weight toward TRUE members of the manually-favored winner universe, not selection", () => {
