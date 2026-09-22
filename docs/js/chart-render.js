@@ -267,7 +267,9 @@ function syncChartsCrosshair(charts) {
 
 // Pięć wykresów jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
 // stage analysis (Stan Weinstein / Dr Eric Wish):
-// 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. + VWAP
+// 1. Wykres główny — cena tygodniowa spółki + EMA 20-tyg. (zastąpiła dawny
+//    "wykres 10:30", SMA 10-tyg./30-tyg. — uproszczenie na prośbę użytkownika;
+//    etapy Weinsteina też liczą się teraz względem EMA20) + VWAP
 //    zakotwiczony na początku okna (fioletowa przerywana linia, patrz
 //    "vwap_pct" w compute_relative_strength_chart), wszystko przeliczone na %
 //    zmiany względem pierwszego wyświetlanego tygodnia OKNA MOMENTUM (patrz
@@ -415,8 +417,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                     label: `${symbol} (zmiana %)`, data: chartData.close_pct, borderColor: "#2ecc71",
                     backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, order: 1,
                 },
-                { label: "SMA 10-tyg.", data: chartData.sma10_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [2, 2], order: 1 },
-                { label: "SMA 30-tyg.", data: chartData.sma30_pct, borderColor: "#8a8f9c", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
+                { label: "EMA 20-tyg.", data: chartData.ema20_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
                 { label: "VWAP (od początku okna)", data: chartData.vwap_pct, borderColor: "#c084fc", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 2], order: 1 },
             ],
         },
