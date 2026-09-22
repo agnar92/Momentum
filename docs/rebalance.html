@@ -36,7 +36,7 @@
 
     <div class="panel-card" id="settingsCard">
         <h3>Krok 1 — Ustawienia automatycznego rebalansu</h3>
-        <p class="panel-hint">Rebalanser jest w pełni automatyczny: podajesz tylko ile spółek ma być w portfelu, a wagi dobiera sam wg aktualnego momentum. Pula, z której wybiera TOP N: <strong>SP500 (top 100 wg momentum, jak w SPMO) + cały Nasdaq 100 + cały Dow Jones</strong> — wszystko w USD. WIG20/mWIG40 mają teraz swój własny, osobny <a href="rebalance_pl.html">Rebalanser PL</a> (osobny portfel, osobne pozycje, PLN) — nadal też w pełni dostępne na dashboardzie.</p>
+        <p class="panel-hint">Rebalanser jest w pełni automatyczny: podajesz tylko ile spółek ma być w portfelu, a wagi dobiera sam wg aktualnego momentum. Pula, z której wybiera TOP N: <strong>SP500 (top 100 wg momentum, jak w SPMO) + cały Nasdaq 100 + cały Dow Jones</strong> — wszystko w USD. WIG20/mWIG40/sWIG80 mają teraz swój własny, osobny <a href="rebalance_pl.html">Rebalanser PL</a> (osobny portfel, osobne pozycje, PLN) — nadal też w pełni dostępne na dashboardzie.</p>
         <p class="panel-hint">Portfel jest podzielony na <strong>Core (60% kapitału)</strong> — stabilne blue chipy z Dow Jones (dobijane z SP500, gdy Dow nie ma ich wystarczająco), z priorytetem dla spółek w Etapie 2 (potwierdzona faza wzrostowa) — i <strong>Satelitę (40% kapitału)</strong> — resztę puli wg czystego momentum, dodatkowo faworyzującą spółki z indeksu, który dziś wygrywa 12-miesięczny wyścig Global Equity Momentum.</p>
         <div class="settings-row">
             <label for="portfolioSize">Liczba spółek w portfelu (TOP N z puli)</label>
@@ -90,7 +90,7 @@
 
     <div class="panel-card" id="holdingsCard">
         <h3>Obecne pozycje</h3>
-        <p class="panel-hint">Dodawaj i usuwaj dowolne akcje kiedy chcesz — to Twoje rzeczywiste pozycje, niezależnie od tego, co akurat wybiera automatyczny TOP N. Każda pozycja jest wyceniona i pokazana w swojej natywnej walucie (USD/PLN, wg tickera) — nadal możesz tu trzymać np. starą pozycję z WIG20/mWIG40, tylko rebalanser już jej na nowo nie dobiera.</p>
+        <p class="panel-hint">Dodawaj i usuwaj dowolne akcje kiedy chcesz — to Twoje rzeczywiste pozycje, niezależnie od tego, co akurat wybiera automatyczny TOP N. Każda pozycja jest wyceniona i pokazana w swojej natywnej walucie (USD/PLN, wg tickera) — nadal możesz tu trzymać np. starą pozycję z WIG20/mWIG40/sWIG80, tylko rebalanser już jej na nowo nie dobiera.</p>
         <div class="import-row">
             <label class="add-row-btn file-btn" for="xtbFile">📄 Importuj otwarte pozycje z raportu XTB (.xlsx)</label>
             <input type="file" id="xtbFile" accept=".xlsx">

@@ -96,7 +96,7 @@ test("classifyRsm flags a fresh cross above zero within the lookback window", ()
 function emptyStateData() {
     return {
         SP500: { constituents: [] }, NASDAQ100: { constituents: [] }, DOWJONES: { constituents: [] },
-        WIG20: { constituents: [] }, MWIG40: { constituents: [] },
+        WIG20: { constituents: [] }, MWIG40: { constituents: [] }, SWIG80: { constituents: [] },
     };
 }
 

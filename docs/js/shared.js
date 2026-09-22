@@ -28,7 +28,7 @@
 // wykonuje (require nie istnieje), więc zachowanie stron się nie zmienia.
 // ============================================================
 
-const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"];
+const UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40", "SWIG80"];
 
 // Pełne etykiety z dopiskiem "Momentum" — używane na dashboardzie/stronie
 // wykresu (tytuły zakładek/drawera, etykieta tickera). rebalance.js ma
@@ -40,11 +40,12 @@ const UNIVERSE_LABELS = {
     DOWJONES: "Dow Jones Momentum",
     WIG20: "WIG20 Momentum",
     MWIG40: "mWIG40 Momentum",
+    SWIG80: "sWIG80 Momentum",
 };
 
-// WIG20/mWIG40 są notowane w PLN (a nie USD jak reszta uniwersów) i na GPW w
+// WIG20/mWIG40/sWIG80 są notowane w PLN (a nie USD jak reszta uniwersów) i na GPW w
 // TradingView (stąd sufiks "GPW:" w tvSymbolFor) — patrz formatPrice.
-const PLN_UNIVERSES = new Set(["WIG20", "MWIG40"]);
+const PLN_UNIVERSES = new Set(["WIG20", "MWIG40", "SWIG80"]);
 
 function formatPrice(price, universe) {
     return PLN_UNIVERSES.has(universe) ? `${price.toFixed(2)} zł` : `$${price.toFixed(2)}`;

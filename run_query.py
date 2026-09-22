@@ -8,7 +8,7 @@ katalogu docs/ pod GitHub Pages.
 
 Zgodnie z ustaleniami: fetch_data.py odpowiada WYŁĄCZNIE za pobieranie
 danych (ceny z yfinance, skład indeksów + FMC z kolumny 'Market Value'
-w plikach CSV holdings ETF-ów CSPX/CNDX/CIND; skład WIG20/mWIG40 z ręcznie
+w plikach CSV holdings ETF-ów CSPX/CNDX/CIND; skład WIG20/mWIG40/sWIG80 z ręcznie
 utrzymywanych plików JSON, bez FMC — patrz fetch_data.py::JSON_INDEX_MAP).
 Ten plik odpowiada za WSZYSTKO inne: obliczenia + generowanie strony.
 
@@ -31,13 +31,13 @@ metodologii S&P Momentum Indices):
    Kazda spolka w KAZDYM uniwersum (nie tylko liderzy Sily Relatywnej, patrz pkt
    10) ma tez wlasny "weekly_chart"/"mansfield_chart" — patrz process_universe.
 9. Global Equity Momentum: zwrot POZIOMU INDEKSU (tabela index_prices z
-   fetch_data.py) dla WSZYSTKICH 5 uniwersow (GEM_UNIVERSES) w oknie
+   fetch_data.py) dla WSZYSTKICH 6 uniwersow (GEM_UNIVERSES) w oknie
    GEM_LOOKBACK_MONTHS, wybor zwyciezcy (najwyzszy zwrot) i top GEM_TOP_N
    liderow zwycieskiego indeksu wg wkladu w jego zwrot — patrz
-   export_global_equity_momentum. WIG20/MWIG40 moga miec ten zwrot recznie
+   export_global_equity_momentum. WIG20/MWIG40/sWIG80 moga miec ten zwrot recznie
    nadpisany z gem_manual_returns.json — patrz GEM_MANUAL_OVERRIDE_UNIVERSES
    i _load_gem_manual_returns.
-10. Sila relatywna dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 (RELATIVE_STRENGTH_
+10. Sila relatywna dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40/sWIG80 (RELATIVE_STRENGTH_
     UNIVERSES): momentum kazdej spolki (TO SAMO okno co momentum_value glownych
     uniwersow, M-14/M-2 z fallbackiem M-11/M-2) vs. momentum samego
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
@@ -58,7 +58,7 @@ metodologii S&P Momentum Indices):
     liderom RS, patrz pkt 8/process_universe) — na dashboardzie przelacznik "Sila
     Relatywna" jest wiec dostepny dla kazdej spolki, nie tylko tych z panelu RS.
 
-WIG20 i mWIG40 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
+WIG20, mWIG40 i sWIG80 (GPW) sa uniwersami "rownowagowymi" — tak jak DOWJONES, ale z
 innego powodu: nie ma ETF-u z publikowanymi holdings dla indeksow GPW, wiec
 skladniki pochodza z reczne utrzymywanego JSON-a bez wag kapitalizacyjnych
 (patrz EQUAL_WEIGHT_UNIVERSES, fetch_data.py::JSON_INDEX_MAP). Wszystkie
@@ -76,7 +76,7 @@ import duckdb
 import numpy as np
 import pandas as pd
 
-UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
+UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40", "SWIG80"]
 TARGET_QUINTILE = 0.20   # top 20% wg momentum score
 BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
 BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
@@ -84,13 +84,13 @@ MAX_WEIGHT = 0.09        # 9% max na spolke
 CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
 MAX_HOLDINGS = 100
 # Uniwersa bez realnych wag kapitalizacyjnych (fmc_etf) — DOWJONES bo DJIA jest
-# indeksem wazonym cena (nie kapitalizacja), WIG20/MWIG40 bo nie ma ETF-u z
+# indeksem wazonym cena (nie kapitalizacja), WIG20/MWIG40/sWIG80 bo nie ma ETF-u z
 # publikowanymi holdings dla indeksow GPW (skladniki wczytywane z reczne
-# utrzymywanego JSON, patrz fetch_data.py::JSON_INDEX_MAP) — wszystkie trzy sa
+# utrzymywanego JSON, patrz fetch_data.py::JSON_INDEX_MAP) — wszystkie cztery sa
 # wiec wazone rownomiernie zamiast FMC x momentum_score, patrz compute_weights.
 # SP500 (jak NASDAQ100) ma realne wagi z 'Market Value' (CSPX_holdings.csv),
 # wiec NIE jest tutaj — kwintylowa selekcja + wagi FMC x momentum_score.
-EQUAL_WEIGHT_UNIVERSES = {"DOWJONES", "WIG20", "MWIG40"}
+EQUAL_WEIGHT_UNIVERSES = {"DOWJONES", "WIG20", "MWIG40", "SWIG80"}
 # Uniwersa, dla ktorych "docs/data/{universe}.json" eksportuje wykresy (weekly_chart/
 # mansfield_chart) i metryki dla KAZDEJ kwalifikujacej sie spolki (get_universe_metrics),
 # nie tylko tych wybranych do decyla/portfela — na zyczenie uzytkownika, zeby wyszukiwarka
@@ -102,7 +102,7 @@ EQUAL_WEIGHT_UNIVERSES = {"DOWJONES", "WIG20", "MWIG40"}
 FULL_COVERAGE_UNIVERSES = set(UNIVERSES) - EQUAL_WEIGHT_UNIVERSES
 GEM_LOOKBACK_MONTHS = 12   # okno zwrotu poziomu indeksu dla Global Equity Momentum
 GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy dla zwycieskiego indeksu
-# Global Equity Momentum porownuje WSZYSTKIE 5 uniwersow miedzy soba (na zyczenie
+# Global Equity Momentum porownuje WSZYSTKIE 6 uniwersow miedzy soba (na zyczenie
 # uzytkownika — GEM jest teraz silnikiem wyboru dla rebalansera: rebalanser bierze
 # TOP N spolek WYLACZNIE ze zwycieskiego tu indeksu, patrz docs/js/rebalance.js).
 # Wczesniej ten wyscig obejmowal tylko NASDAQ100/DOWJONES (rynek USA) — SP500/
@@ -113,7 +113,7 @@ GEM_TOP_N = 10             # ilu liderow (najwiekszy wklad w zwrot) pokazujemy d
 # sie w calym oknie), co jest wlasnie metodologia, jakiej ten wyscig potrzebuje,
 # wiec rozszerzenie na 5 uniwersow jest czysto zmiana tej listy, bez zmiany
 # `compute_index_returns`/`compute_index_leaders`.
-GEM_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
+GEM_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40", "SWIG80"]
 # "Strategia sektorowa" (docs/strategy.html): filtr trendu SP500 -> sila
 # relatywna sektorow SP500 wzgledem indeksu -> w najsilniejszym sektorze, sila
 # relatywna spolek wzgledem WLASNEGO sektora, top 10% wg przewagi. Patrz
@@ -133,21 +133,21 @@ SECTOR_STRATEGY_RSM_WEEKS = 52
 SECTOR_STRATEGY_TOP_RS_N = 10  # top N spolek SP500 wg czystego RS wobec SAMEGO SP500, bez podzialu na sektory
 INDEX_LEVEL_SYMBOLS = {
     "SP500": "^GSPC", "NASDAQ100": "^NDX", "DOWJONES": "^DJI",
-    "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA",
+    "WIG20": "WIG20.WA", "MWIG40": "MWIG40.WA", "SWIG80": "SWIG80.WA",
 }
-# Reczne nadpisanie zwrotu 12-miesiecznego w wyscigu GEM dla WIG20/MWIG40 —
+# Reczne nadpisanie zwrotu 12-miesiecznego w wyscigu GEM dla WIG20/MWIG40/sWIG80 —
 # patrz gem_manual_returns.json (plik i jego "_instructions"). Zarowno
-# yfinance (brak historii dla tickerow-indeksow WIG20.WA/MWIG40.WA, tylko
+# yfinance (brak historii dla tickerow-indeksow WIG20.WA/MWIG40.WA/SWIG80.WA, tylko
 # zywa cena) jak i darmowy CSV ze stooq.pl (probowany, potem usuniety —
 # stooq zablokowal automatyczne pobieranie od 2026) zostaly sprawdzone i
-# odrzucone jako zrodlo realnego, kapitalizacyjnego zwrotu tych dwoch
+# odrzucone jako zrodlo realnego, kapitalizacyjnego zwrotu tych
 # indeksow — patrz CLAUDE.md. Uzytkownik woli raz w miesiacu sam sprawdzic
 # wartosc na stooq.pl i wpisac ja recznie do tego pliku niz dostawac
 # syntetyczny (equal-weight, dziennie rebalansowany) zwrot liczony ze
-# skladnikow, ktory dla tych dwoch indeksow systematycznie nie zgadza sie
+# skladnikow, ktory dla tych indeksow systematycznie nie zgadza sie
 # z realnymi, publikowanymi danymi (patrz _gem_month_end_anchor_dates).
 GEM_MANUAL_RETURNS_PATH = Path(__file__).resolve().parent / "gem_manual_returns.json"
-GEM_MANUAL_OVERRIDE_UNIVERSES = {"WIG20", "MWIG40"}
+GEM_MANUAL_OVERRIDE_UNIVERSES = {"WIG20", "MWIG40", "SWIG80"}
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
@@ -855,7 +855,7 @@ def export_equity_curve(con, docs_data_dir):
 
 # ============================================================================
 # GLOBAL EQUITY MOMENTUM: porównanie zwrotu POZIOMU INDEKSU (nie składników,
-# tabela `index_prices` z fetch_data.py) między wszystkimi 5 uniwersami (GEM_UNIVERSES) w
+# tabela `index_prices` z fetch_data.py) między wszystkimi 6 uniwersami (GEM_UNIVERSES) w
 # oknie GEM_LOOKBACK_MONTHS — klasyczna idea "dual/global equity momentum":
 # spośród kilku rynków akcji wybierz ten z najsilniejszym trendem. Zwycięzcą
 # jest indeks o najwyższym zwrocie; dla niego liczymy TOP liderów — spółki,
@@ -932,7 +932,7 @@ def _gem_month_end_anchor_dates(con, ref_date, lookback_months):
 
 
 def _load_gem_manual_returns(path=GEM_MANUAL_RETURNS_PATH):
-    """Wczytuje reczne nadpisania 12-miesiecznego zwrotu GEM dla WIG20/MWIG40
+    """Wczytuje reczne nadpisania 12-miesiecznego zwrotu GEM dla WIG20/MWIG40/SWIG80
     z gem_manual_returns.json (patrz plik i jego "_instructions" oraz komentarz
     przy GEM_MANUAL_OVERRIDE_UNIVERSES powyzej). Zwraca dict {universe:
     return_pct} — tylko dla wpisow z niepustym, liczbowym `return_pct`.
@@ -1093,7 +1093,7 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
         "winner": winner,
         "leaders": leaders,
         "note": (f"Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie {lookback_months} mies. "
-                 "dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 — klasyczna idea Global/Dual Equity Momentum: "
+                 "dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40/SWIG80 — klasyczna idea Global/Dual Equity Momentum: "
                  "spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym "
                  f"zwrocie. Okno kotwiczone jest do ostatniego dnia handlowego zakończonego miesiąca (nie do "
                  "dzisiejszej daty) — 'date_now'/'date_start' każdego indeksu to zawsze koniec miesiąca, żeby "
@@ -1101,7 +1101,7 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
                  f"Lista 'leaders' to top {top_n} spółek zwycięskiego indeksu wg wkładu w jego "
                  "zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które "
                  "realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. "
-                 "WIG20/MWIG40 mogą mieć zwrot ('return_pct', flaga 'manual_entry') wpisany ręcznie z "
+                 "WIG20/MWIG40/SWIG80 mogą mieć zwrot ('return_pct', flaga 'manual_entry') wpisany ręcznie z "
                  "gem_manual_returns.json zamiast liczonego z syntetycznego indeksu — patrz ten plik. "
                  "Dane informacyjne, NIE porada inwestycyjna."),
     }
@@ -1112,8 +1112,8 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
 
 
 # ============================================================================
-# SIŁA RELATYWNA WZGLĘDEM INDEKSU — dla SP500, NASDAQ100, DOWJONES, WIG20 i
-# mWIG40 (w odróżnieniu od GEM_UNIVERSES, SP500/WIG20/mWIG40 TU są objęte —
+# SIŁA RELATYWNA WZGLĘDEM INDEKSU — dla SP500, NASDAQ100, DOWJONES, WIG20,
+# mWIG40 i sWIG80 (w odróżnieniu od GEM_UNIVERSES, SP500/WIG20/mWIG40/SWIG80 TU są objęte —
 # ten ekran nie ma tego samego "nie zmieniaj istniejącego zachowania GEM"
 # ograniczenia). Zamiast osobnego okna YTD (za mało danych tuż po Nowym Roku),
 # używa DOKŁADNIE tego samego okna co momentum_value głównych uniwersów
@@ -1123,7 +1123,7 @@ def export_global_equity_momentum(con, docs_data_dir, ref_date=None,
 # momentum samego indeksu — posortowane malejąco po przewadze
 # (relative_strength_pct = zwrot spółki - zwrot indeksu).
 # ============================================================================
-RELATIVE_STRENGTH_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40"]
+RELATIVE_STRENGTH_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40", "SWIG80"]
 
 
 def compute_index_momentum(con, universe, ref_date):
@@ -2152,7 +2152,7 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
     payload = {
         "ref_date": ref_date,
         "universes": universes_payload,
-        "note": ("Siła relatywna względem indeksu dla SP500/NASDAQ100/DOWJONES/WIG20/mWIG40, w TYM SAMYM "
+        "note": ("Siła relatywna względem indeksu dla SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80, w TYM SAMYM "
                  "oknie co momentum_value głównych uniwersów (M-14/M-2, fallback M-11/M-2 przy krótszej "
                  "historii — patrz get_universe_metrics), zamiast osobnego okna YTD, które tuż po "
                  "Nowym Roku miałoby za mało danych. Lista 'leaders' w każdym uniwersum zawiera TYLKO "
@@ -2485,7 +2485,7 @@ def export_sector_strategy(con, ref_date, docs_data_dir, min_trading_days, max_s
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 "
+        description="Oblicza S&P-style Momentum dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40/SWIG80 "
                      "i generuje statyczną stronę (docs/) pod GitHub Pages."
     )
     parser.add_argument("--ref-date", type=str, default=None,

@@ -17,7 +17,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // już ekran RSM Stabilne/Wzrostowe, który je i tak obejmuje) — ale ZOSTAJĄ w
 // UNIVERSES: dalej są ładowane, przeszukiwalne (Ctrl+K) i widoczne na ekranach
 // RSM (patrz combinedRsmCandidates), tylko bez własnej, dedykowanej tabeli.
-const SIDEBAR_TAB_UNIVERSES = ["DOWJONES", "WIG20", "MWIG40"];
+const SIDEBAR_TAB_UNIVERSES = ["DOWJONES", "WIG20", "MWIG40", "SWIG80"];
 
 // ============================================================
 // PANEL "Dane spółki (TradingView)" — pełna, jednostronicowa "wizytówka"
@@ -413,7 +413,7 @@ function classifyTtmSqueeze(ticker, universe, c) {
     };
 }
 
-// Zwraca listę połączoną ze WSZYSTKICH 5 uniwersów (patrz combinedRsmCandidates
+// Zwraca listę połączoną ze WSZYSTKICH 6 uniwersów (patrz combinedRsmCandidates
 // powyżej — ten sam wzorzec: całe kwalifikujące się uniwersa, nie tylko
 // bieżący top-decyl dla SP500/NASDAQ100), posortowaną: najpierw świeże
 // wybicia (najnowsze na górze), potem trwające konsolidacje (najdłuższe na
@@ -943,7 +943,7 @@ function rsmScreenerRowHtml(r, position) {
 
 // Tekst linijki meta nad tabelą, wspólny dla RSM Stabilne/Wzrostowe i TTM
 // Squeeze — obie płaskie, wielo-uniwersalne listy liczą "brak danych" po
-// tym, czy JAKIKOLWIEK z 5 uniwersów ma już ref_date (a nie po jednym
+// tym, czy JAKIKOLWIEK z 6 uniwersów ma już ref_date (a nie po jednym
 // konkretnym uniwersum, jak w renderTable poniżej).
 function flatScreenerMetaText(allRows, rows) {
     const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
