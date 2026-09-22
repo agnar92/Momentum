@@ -488,10 +488,8 @@ class TestUpdateIndexPrices:
     def test_maps_yfinance_symbols_back_to_universe_names(self, monkeypatch):
         con = duckdb.connect(":memory:")
 
-        def fake_download(tickers, start_date, end_date, include_ohlc=False):
+        def fake_download(tickers, start_date, end_date):
             rows = [(end_date, t, 100.0, 100.0, 0) for t in tickers]
-            if include_ohlc:
-                rows = [r + (101.0, 99.0) for r in rows]
             return rows, set(tickers), []
 
         monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
@@ -513,11 +511,9 @@ class TestUpdateIndexPrices:
         con = duckdb.connect(":memory:")
         sector_symbols = set(SECTOR_ETF_SYMBOLS.values())
 
-        def fake_download(tickers, start_date, end_date, include_ohlc=False):
+        def fake_download(tickers, start_date, end_date):
             wanted = [t for t in tickers if t in sector_symbols]
             rows = [(end_date, t, 55.0, 55.0, 0) for t in wanted]
-            if include_ohlc:
-                rows = [r + (56.0, 54.0) for r in rows]
             return rows, set(wanted), [t for t in tickers if t not in sector_symbols]
 
         monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
@@ -529,8 +525,7 @@ class TestUpdateIndexPrices:
 
     def test_failed_downloads_leave_table_without_those_rows(self, monkeypatch):
         con = duckdb.connect(":memory:")
-        monkeypatch.setattr("fetch_data._download_price_rows",
-                             lambda t, s, e, include_ohlc=False: ([], set(), list(t)))
+        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), list(t)))
 
         update_index_prices(con, lookback_months=12)
 
@@ -563,8 +558,7 @@ class TestUpdateIndexPrices:
                 ('{d0}', 'BBB', 20.0, 20.0, 100),
                 ('{d1}', 'BBB', 19.0, 19.0, 100)
         """)
-        monkeypatch.setattr("fetch_data._download_price_rows",
-                             lambda t, s, e, include_ohlc=False: ([], set(), list(t)))
+        monkeypatch.setattr("fetch_data._download_price_rows", lambda t, s, e: ([], set(), list(t)))
 
         update_index_prices(con, lookback_months=12)
 
