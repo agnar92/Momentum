@@ -840,10 +840,13 @@ th.tv-col, th.chart-col { width: 1%; }
     padding: 12px;
 }
 
-/* Pasek przełączników "Wolumen"/"RSM", widoczny tylko w trybie pełnoekranowym
-   (poza nim oba panele są zawsze widoczne, jak dotychczas) — pozwala dołożyć
-   je do widoku na żądanie zamiast trzymać je zawsze włączone i zabierać
-   miejsce głównemu wykresowi cenowemu z bazami Darvasa. */
+/* Pasek przełączników "Wolumen"/"MACD"/"TTM Squeeze", widoczny tylko w trybie
+   pełnoekranowym (poza nim panele są zawsze widoczne, jak dotychczas) —
+   pozwala dołożyć je do widoku na żądanie zamiast trzymać je zawsze włączone
+   i zabierać miejsce głównemu wykresowi cenowemu z bazami Darvasa. Mansfield
+   RS NIE jest tu już wymieniony — ma teraz własny, zawsze widoczny przycisk
+   przy swoim panelu (patrz .rs-mansfield-controls niżej), działający tak samo
+   w obu trybach. */
 .chart-fullscreen-extras {
     display: flex;
     align-items: center;
@@ -879,6 +882,24 @@ th.tv-col, th.chart-col { width: 1%; }
     background: var(--green);
     color: #fff;
     border-color: var(--green-bright);
+}
+
+.chart-extra-toggle:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Pasek nad panelem Mansfield RS (patrz applyMansfieldPanelVisibility/
+   initMansfieldControls w chart-render.js) — panel jest teraz OPCJONALNY i na
+   samym dole (przeniesiony na wyraźną prośbę użytkownika), więc przycisk
+   pokazujący/chowający go żyje tuż nad nim zamiast w pasku trybu
+   pełnoekranowego (patrz .chart-fullscreen-extras powyżej) — działa
+   identycznie w widoku normalnym i pełnoekranowym. */
+.rs-mansfield-controls {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    margin-top: 4px;
 }
 
 /* Zamknięcie pełnego ekranu — #chartFullscreenBtn (poza kontenerem) staje się

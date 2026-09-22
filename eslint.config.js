@@ -38,8 +38,10 @@ const browserGlobals = {
     renderStageBadge: "readonly",
     destroyChartInstances: "readonly",
     resetChartZoom: "readonly",
+    initMansfieldControls: "readonly",
     rsChartInstance: "readonly",
     rsVolumeChartInstance: "readonly",
+    rsMacdChartInstance: "readonly",
     rsMansfieldChartInstance: "readonly",
     rsSqueezeChartInstance: "readonly",
     // Zdefiniowane w docs/js/shared.js, wspoldzielonym przez zwykly <script>

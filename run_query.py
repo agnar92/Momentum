@@ -459,7 +459,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     # FULL_COVERAGE_UNIVERSES/_build_full_universe_records powyżej). To samo okno co
     # index_mom w export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się
     # okna. ---
-    weekly_charts, mansfield_charts, ttm_squeeze_charts = {}, {}, {}
+    weekly_charts, mansfield_charts, ttm_squeeze_charts, macd_charts = {}, {}, {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_weighted["Ticker"])
     if universe in FULL_COVERAGE_UNIVERSES:
@@ -472,18 +472,22 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                                                                      ref_date, index_mom["date_start"])
             ttm_squeeze_charts[ticker] = compute_ttm_squeeze_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
+            macd_charts[ticker] = compute_macd_chart(con, ticker, universe,
+                                                       ref_date, index_mom["date_start"])
 
     all_constituents = None
     if universe in FULL_COVERAGE_UNIVERSES:
         all_constituents = _build_full_universe_records(df_ranked, selected_tickers,
-                                                          weekly_charts, mansfield_charts, ttm_squeeze_charts)
+                                                          weekly_charts, mansfield_charts, ttm_squeeze_charts,
+                                                          macd_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked)} spółek "
               f"(nie tylko {len(selected_tickers)} w decylu).")
 
     # --- Eksport JSON dla strony ---
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
-                all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts)
+                all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts,
+                macd_charts=macd_charts)
 
     return df_weighted
 
@@ -582,7 +586,7 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
         if not df_metrics_full.empty:
             df_ranked_full = add_zscore_and_momentum_score(df_metrics_full)
 
-    weekly_charts, mansfield_charts, ttm_squeeze_charts = {}, {}, {}
+    weekly_charts, mansfield_charts, ttm_squeeze_charts, macd_charts = {}, {}, {}, {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_sel["Ticker"])
     if df_ranked_full is not None:
@@ -595,11 +599,14 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
                                                                      ref_date, index_mom["date_start"])
             ttm_squeeze_charts[ticker] = compute_ttm_squeeze_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
+            macd_charts[ticker] = compute_macd_chart(con, ticker, universe,
+                                                       ref_date, index_mom["date_start"])
 
     all_constituents = None
     if df_ranked_full is not None:
         all_constituents = _build_full_universe_records(df_ranked_full, set(df_sel["Ticker"]),
-                                                          weekly_charts, mansfield_charts, ttm_squeeze_charts)
+                                                          weekly_charts, mansfield_charts, ttm_squeeze_charts,
+                                                          macd_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked_full)} spółek "
               f"(nie tylko {len(df_sel)} w ostatniej zapisanej selekcji).")
 
@@ -609,11 +616,13 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
     # date faktycznej (miesiecznej) selekcji, nie date odswiezenia wykresow.
     export_json(df_sel, universe, last_ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
-                all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts)
+                all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts,
+                macd_charts=macd_charts)
     return df_sel
 
 
-def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts, ttm_squeeze_charts=None):
+def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts, ttm_squeeze_charts=None,
+                                  macd_charts=None):
     """Rekord dla KAZDEJ kwalifikujacej sie spolki w uniwersum (df_ranked — wynik
     get_universe_metrics + add_zscore_and_momentum_score), nie tylko tych wybranych do
     decyla/portfela — patrz FULL_COVERAGE_UNIVERSES. Zasila "all_constituents" w
@@ -623,6 +632,7 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
     "constituents", ktore liczy sie tylko wsrod wybranych/wazonych. "in_selection" mowi,
     czy dany ticker jest akurat w biezacym decylu (te same tickery co "constituents")."""
     ttm_squeeze_charts = ttm_squeeze_charts or {}
+    macd_charts = macd_charts or {}
     records = []
     for _, r in df_ranked.iterrows():
         records.append({
@@ -639,16 +649,19 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
             "weekly_chart": weekly_charts.get(r["Ticker"]),
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
             "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
+            "macd_chart": macd_charts.get(r["Ticker"]),
         })
     return records
 
 
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                  prev_ref_date=None, added_tickers=None, dropped_tickers=None,
-                 weekly_charts=None, mansfield_charts=None, all_constituents=None, ttm_squeeze_charts=None):
+                 weekly_charts=None, mansfield_charts=None, all_constituents=None, ttm_squeeze_charts=None,
+                 macd_charts=None):
     weekly_charts = weekly_charts or {}
     mansfield_charts = mansfield_charts or {}
     ttm_squeeze_charts = ttm_squeeze_charts or {}
+    macd_charts = macd_charts or {}
     records = []
     for _, r in df_weighted.iterrows():
         weekly_chart = weekly_charts.get(r["Ticker"])
@@ -666,6 +679,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
             "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
+            "macd_chart": macd_charts.get(r["Ticker"]),
         })
     # pd.notna guard: przy odswiezeniu --charts-only (process_universe_charts_only)
     # tuz PO migracji kolumny (ALTER TABLE ... ADD COLUMN, patrz
@@ -2109,6 +2123,74 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     }
 
 
+# --- MACD (Gerald Appel) — panel dodany pod wolumenem na wyrazne zyczenie
+# uzytkownika jako pomoc przy wejsciu/wyjsciu z pozycji (przeciecia linii MACD/
+# sygnalu, przeciecia histogramu przez zero). Liczony na TYGODNIOWYCH
+# zamknieciach — ten sam rytm co TTM Squeeze/Mansfield RSM w tym module,
+# standardowe okresy 12/26/9 przelozone z dziennych na tygodniowe swiece
+# (klasyczny "weekly MACD" uzywany przez swing traderow, nie proba
+# odtworzenia dziennego MACD na tygodniowej osi).
+MACD_FAST_WEEKS = 12      # szybka EMA
+MACD_SLOW_WEEKS = 26      # wolna EMA
+MACD_SIGNAL_WEEKS = 9     # EMA linii sygnalu (wygladzenie MACD)
+
+
+def compute_macd_chart(con, ticker, universe, ref_date, start_date):
+    """Piaty panel obok "10:30"/wolumenu/TTM Squeeze/Mansfield RSM — klasyczny
+    wskaznik MACD: `macd = EMA(close, MACD_FAST_WEEKS) - EMA(close,
+    MACD_SLOW_WEEKS)`, `signal = EMA(macd, MACD_SIGNAL_WEEKS)`,
+    `histogram = macd - signal`.
+
+    W odroznieniu od compute_ttm_squeeze_chart/compute_mansfield_rs_chart (oparte
+    o `.rolling()`, ktore zwraca NaN dopoki okno sie nie wypelni), pandas
+    `.ewm(..., adjust=False).mean()` NIE zwraca None/NaN z powodu braku
+    rozgrzewki — liczy sie juz od pierwszego dostepnego punktu, tylko mniej
+    "zbiezny" (dokladny) na samym poczatku dostepnej historii. Zapas
+    lookback_weeks PRZED start_date (ten sam idiom co RS_MANSFIELD_LONG_WEEKS+2/
+    2*TTM_SQUEEZE_KC_WEEKS+2 gdzie indziej w tym module) sluzy wiec wylacznie
+    temu, zeby EMA zdazyla sie w miare ustabilizowac PRZED pierwszym
+    wyswietlanym tygodniem — nie temu, zeby uniknac None. Jesli faktycznie
+    dostepnej historii jest mniej niz lookback_weeks (retencja `prices`, patrz
+    fetch_data.py --lookback-months), liczymy po prostu od tego, co jest.
+
+    Zwraca None gdy brakuje danych (np. spolka bez wystarczajacej historii cen)."""
+    lookback_weeks = 4 * MACD_SLOW_WEEKS
+    extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
+
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
+    if stock_df.empty:
+        return None
+
+    stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
+    close = stock_df["close"]
+    ema_fast = close.ewm(span=MACD_FAST_WEEKS, adjust=False).mean()
+    ema_slow = close.ewm(span=MACD_SLOW_WEEKS, adjust=False).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=MACD_SIGNAL_WEEKS, adjust=False).mean()
+    histogram = macd_line - signal_line
+
+    in_window_mask = stock_df["week_start"] >= pd.Timestamp(start_date)
+    if not in_window_mask.any():
+        return None
+
+    def safe(value, digits=4):
+        return round(float(value), digits) if pd.notna(value) else None
+
+    dates, macd_out, signal_out, histogram_out = [], [], [], []
+    for i in stock_df.index[in_window_mask]:
+        dates.append(stock_df["week_end"].iloc[i].strftime("%Y-%m-%d"))
+        macd_out.append(safe(macd_line.iloc[i]))
+        signal_out.append(safe(signal_line.iloc[i]))
+        histogram_out.append(safe(histogram.iloc[i]))
+
+    return {
+        "dates": dates,
+        "macd": macd_out,
+        "signal": signal_out,
+        "histogram": histogram_out,
+    }
+
+
 def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days=150, max_staleness_days=10):
     """ref_date=None: jak w export_global_equity_momentum — najświeższa data w
     index_prices (odświeżane codziennie), niezależnie od miesięcznego ref_date
@@ -2138,6 +2220,8 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                                                                      ref_date, index_mom["date_start"])
             leader["ttm_squeeze_chart"] = compute_ttm_squeeze_chart(con, leader["ticker"], universe,
                                                                       ref_date, index_mom["date_start"])
+            leader["macd_chart"] = compute_macd_chart(con, leader["ticker"], universe,
+                                                        ref_date, index_mom["date_start"])
         universes_payload[universe] = {
             "index_return_pct": index_return_pct,
             "momentum_window": index_mom["momentum_window"],

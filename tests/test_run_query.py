@@ -31,6 +31,7 @@ from run_query import (
     compute_index_momentum,
     compute_index_returns,
     compute_ttm_squeeze_chart,
+    compute_macd_chart,
     compute_mansfield_rs_chart,
     compute_relative_strength_chart,
     compute_relative_strength_leaders,
@@ -1552,6 +1553,55 @@ class TestComputeTtmSqueezeChart:
     def test_no_stock_history_returns_none(self):
         con = make_gem_con()
         assert compute_ttm_squeeze_chart(con, "NOPE", "NASDAQ100", "2026-03-30", "2025-10-06") is None
+
+
+# ---------------------------------------------------------------------------
+# compute_macd_chart: MACD (12/26/9 tyg.) — piaty wykres, pod wolumenem, na
+# wyrazne zyczenie uzytkownika jako pomoc przy wejsciu/wyjsciu z pozycji.
+# ---------------------------------------------------------------------------
+
+class TestComputeMacdChart:
+    def test_uptrend_after_flat_produces_positive_macd_above_signal(self):
+        con = make_gem_con()
+        fixture_start = pd.Timestamp("2025-01-06")
+        # Plaski okres (rozgrzewka EMA), potem wyrazny, dlugi trend wzrostowy —
+        # w takim ukladzie szybka EMA (12 tyg.) powinna wyprzedzic wolna (26 tyg.),
+        # wiec zarowno linia MACD, jak i histogram (MACD - sygnal) powinny wyjsc
+        # wyraznie dodatnie pod koniec okna.
+        closes = [100.0] * 30 + [100.0 + (i + 1) * 2.0 for i in range(40)]
+        insert_weekly_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
+
+        start_date = fixture_start + pd.Timedelta(weeks=30)
+        ref_date = fixture_start + pd.Timedelta(weeks=69)
+        out = compute_macd_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                  start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["dates"][0] == start_date.strftime("%Y-%m-%d")
+        assert out["dates"][-1] == ref_date.strftime("%Y-%m-%d")
+        assert all(v is not None for v in out["macd"])
+        assert all(v is not None for v in out["signal"])
+        assert all(v is not None for v in out["histogram"])
+        assert out["macd"][-1] > 0
+        assert out["macd"][-1] > out["signal"][-1]
+        assert out["histogram"][-1] == round(out["macd"][-1] - out["signal"][-1], 4)
+
+    def test_flat_price_gives_macd_and_signal_near_zero(self):
+        con = make_gem_con()
+        fixture_start = pd.Timestamp("2025-01-06")
+        closes = [100.0] * 40
+        insert_weekly_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
+
+        ref_date = fixture_start + pd.Timedelta(weeks=39)
+        out = compute_macd_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                  fixture_start.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["macd"][-1] == 0.0
+        assert out["signal"][-1] == 0.0
+        assert out["histogram"][-1] == 0.0
+
+    def test_no_stock_history_returns_none(self):
+        con = make_gem_con()
+        assert compute_macd_chart(con, "NOPE", "NASDAQ100", "2026-03-30", "2025-10-06") is None
 
 
 # ---------------------------------------------------------------------------

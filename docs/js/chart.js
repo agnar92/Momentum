@@ -31,7 +31,6 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 let selectedTicker = null;
 let selectedUniverse = null;
-let chartRangeMode = "3m";
 let currentRsEntry = null;
 
 // Adres, pod ktory wraca przycisk "Powrót" — patrz komentarz na gorze pliku.
@@ -59,44 +58,33 @@ function updateChartTickerLabel() {
 // Odpowiednik updateChartArea() z app.js, ale bez trybu pełnoekranowego i bez
 // zakładki "Dane spółki (TradingView)" — tej strony te dwie rzeczy nie
 // dotyczą (cała strona i tak już jest "pełnoekranowa", a TV tab to osobna,
-// szersza funkcja dashboardu, nie potrzebna tu).
+// szersza funkcja dashboardu, nie potrzebna tu). Mansfield RS NIE jest tu
+// twardo pokazywany/chowany razem z resztą paneli — jego widoczność (domyślnie
+// schowany, opcjonalny) ustawia applyMansfieldPanelVisibility() w
+// chart-render.js, wołane z samego renderRelativeStrengthChart() poniżej.
 function renderChartPanel() {
     const hasRsChart = !!(currentRsEntry && currentRsEntry.weekly_chart);
 
     const noChartMsg = document.getElementById("noChartMessage");
     const rsChartPanel = document.getElementById("rsChartPanel");
     const rsVolumePanel = document.getElementById("rsVolumePanel");
-    const rsMansfieldPanel = document.getElementById("rsMansfieldPanel");
+    const rsMacdPanel = document.getElementById("rsMacdPanel");
     const rsSqueezePanel = document.getElementById("rsSqueezePanel");
     const stageLegend = document.getElementById("stageLegend");
     if (noChartMsg) noChartMsg.hidden = hasRsChart;
     if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
     if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart;
-    if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart;
+    if (rsMacdPanel) rsMacdPanel.hidden = !hasRsChart;
     if (rsSqueezePanel) rsSqueezePanel.hidden = !hasRsChart;
     if (stageLegend) stageLegend.hidden = !hasRsChart;
 
     if (hasRsChart) {
-        renderRelativeStrengthChart(selectedTicker, currentRsEntry, chartRangeMode);
+        renderRelativeStrengthChart(selectedTicker, currentRsEntry);
     } else {
         renderStageBadge(null);
         destroyChartInstances();
     }
     updateChartTickerLabel();
-}
-
-function initChartRangeToggle() {
-    const btn3m = document.getElementById("chartRange3mBtn");
-    const btnFull = document.getElementById("chartRangeFullBtn");
-    if (!btn3m || !btnFull) return;
-    const setMode = (mode) => {
-        chartRangeMode = mode;
-        btn3m.classList.toggle("active", mode === "3m");
-        btnFull.classList.toggle("active", mode === "full");
-        renderChartPanel();
-    };
-    btn3m.addEventListener("click", () => setMode("3m"));
-    btnFull.addEventListener("click", () => setMode("full"));
 }
 
 function initResetZoomButton() {
@@ -123,9 +111,9 @@ async function init() {
     const backBtn = document.getElementById("chartBackBtn");
     if (backBtn) backBtn.addEventListener("click", () => { window.location.href = backHref; });
 
-    initChartRangeToggle();
     initResetZoomButton();
     initOpenTvButton();
+    initMansfieldControls();
 
     if (!selectedTicker || !selectedUniverse) {
         const errorState = document.getElementById("chartLoadError");

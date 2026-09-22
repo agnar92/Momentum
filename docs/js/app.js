@@ -240,7 +240,6 @@ const state = {
     drawerOpen: false,
     drawerUniverse: "DOWJONES",
     chartView: "own",
-    chartRangeMode: "3m", // "3m" (domyślnie) lub "full" — patrz initChartRangeToggle/sliceWeeklyChartToRange
     stageFilter: "ALL",
     sortKey: "rank",
     sortDir: "asc"
@@ -601,13 +600,17 @@ function jumpToTicker(ticker, universe) {
 // ============================================================
 
 // Tryb pełnoekranowy wykresu 10:30 (patrz initChartFullscreen) — poza nim
-// wolumen i RSM są zawsze widoczne (jak dotychczas); w środku są domyślnie
-// schowane i włączane osobno przez #toggleVolumeBtn/#toggleMansfieldBtn, żeby
-// na wąskim ekranie telefonu dać głównemu wykresowi (cena + SMA + bazy
-// Darvasa) jak najwięcej miejsca zamiast trzymać wszystkie trzy panele
-// zawsze włączone.
+// wolumen/MACD/Squeeze są zawsze widoczne (jak dotychczas); w środku są
+// domyślnie schowane i włączane osobno przez #toggleVolumeBtn/#toggleMacdBtn/
+// #toggleSqueezeBtn, żeby na wąskim ekranie telefonu dać głównemu wykresowi
+// (cena + SMA + bazy Darvasa) jak najwięcej miejsca zamiast trzymać wszystkie
+// panele zawsze włączone. Mansfield RS NIE jest już tu wymieniony — ma teraz
+// WŁASNY, jeden wspólny przełącznik (#rsMansfieldToggleBtn/
+// initMansfieldControls w chart-render.js), działający identycznie w obu
+// trybach zamiast osobnej wersji tylko na pełny ekran (patrz komentarz przy
+// applyMansfieldPanelVisibility w chart-render.js).
 let chartFullscreenActive = false;
-const chartFullscreenExtras = { volume: false, mansfield: false, squeeze: false };
+const chartFullscreenExtras = { volume: false, macd: false, squeeze: false };
 
 function updateChartArea() {
     const symbol = state.selectedTicker;
@@ -617,18 +620,18 @@ function updateChartArea() {
     const noChartMsg = document.getElementById("noChartMessage");
     const rsChartPanel = document.getElementById("rsChartPanel");
     const rsVolumePanel = document.getElementById("rsVolumePanel");
-    const rsMansfieldPanel = document.getElementById("rsMansfieldPanel");
+    const rsMacdPanel = document.getElementById("rsMacdPanel");
     const rsSqueezePanel = document.getElementById("rsSqueezePanel");
     const stageLegend = document.getElementById("stageLegend");
     if (noChartMsg) noChartMsg.hidden = hasRsChart;
     if (rsChartPanel) rsChartPanel.hidden = !hasRsChart;
     if (rsVolumePanel) rsVolumePanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.volume);
-    if (rsMansfieldPanel) rsMansfieldPanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.mansfield);
+    if (rsMacdPanel) rsMacdPanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.macd);
     if (rsSqueezePanel) rsSqueezePanel.hidden = !hasRsChart || (chartFullscreenActive && !chartFullscreenExtras.squeeze);
     if (stageLegend) stageLegend.hidden = !hasRsChart;
 
     if (hasRsChart) {
-        renderRelativeStrengthChart(symbol, rsEntry, state.chartRangeMode);
+        renderRelativeStrengthChart(symbol, rsEntry);
     } else {
         renderStageBadge(null);
         destroyChartInstances();
@@ -675,33 +678,17 @@ function initResetZoomButton() {
     if (fsBtn) fsBtn.addEventListener("click", resetChartZoom);
 }
 
-// Przełącznik zakresu wykresu 10:30/wolumenu/RSM: domyślnie tylko ostatnie 3
-// miesiące (backend eksportuje do ~14 miesięcy historii — patrz weekly_chart w
-// run_query.py — ale na co dzień interesuje nas głównie świeży ruch), z opcją
-// przełączenia na cały dostępny zakres. Sama zmiana state.chartRangeMode +
-// ponowne renderowanie (patrz sliceWeeklyChartToRange w renderRelativeStrengthChart)
-// — nie trzeba nic doczytywać, dane i tak są już w pamięci.
-function initChartRangeToggle() {
-    const btn3m = document.getElementById("chartRange3mBtn");
-    const btnFull = document.getElementById("chartRangeFullBtn");
-    if (!btn3m || !btnFull) return;
-    const setMode = (mode) => {
-        state.chartRangeMode = mode;
-        btn3m.classList.toggle("active", mode === "3m");
-        btnFull.classList.toggle("active", mode === "full");
-        updateChartArea();
-    };
-    btn3m.addEventListener("click", () => setMode("3m"));
-    btnFull.addEventListener("click", () => setMode("full"));
-}
-
 // Tryb pełnoekranowy — świadomie CSS-owa nakładka (position: fixed na
 // #rs_chart) zamiast prawdziwego Element.requestFullscreen(): w PWA
 // uruchomionym z ekranu głównego na iOS ta przeglądarkowa API bywa
 // niedostępna/rzuca błędem (apka i tak już działa bez chrome'u przeglądarki),
 // więc nakładka position:fixed działa spójnie wszędzie, patrz .chart-fullscreen
-// w style.css. Wolumen/RSM są w tym trybie domyślnie schowane (patrz
-// updateChartArea) i włączane osobno przez #toggleVolumeBtn/#toggleMansfieldBtn.
+// w style.css. Wolumen/MACD/Squeeze są w tym trybie domyślnie schowane (patrz
+// updateChartArea) i włączane osobno przez #toggleVolumeBtn/#toggleMacdBtn/
+// #toggleSqueezeBtn. Mansfield RS ma tu już WŁASNY przycisk
+// (#rsMansfieldToggleBtn tuż nad jego panelem, patrz initMansfieldControls w
+// chart-render.js) — działa tak samo w obu trybach, więc nie jest częścią tego
+// paska.
 //
 // #rs_chart normalnie siedzi wewnątrz .chart-panel/.charts-area, oba z
 // "overflow: hidden" — a to CZYŚCI (przycina) każdego potomka, NAWET z
@@ -718,7 +705,7 @@ function initChartFullscreen() {
     const closeBtn = document.getElementById("chartFullscreenCloseBtn");
     const extrasBar = document.getElementById("chartFullscreenExtras");
     const volBtn = document.getElementById("toggleVolumeBtn");
-    const mansfieldBtn = document.getElementById("toggleMansfieldBtn");
+    const macdBtn = document.getElementById("toggleMacdBtn");
     const squeezeBtn = document.getElementById("toggleSqueezeBtn");
     if (!container || !enterBtn) return;
 
@@ -743,8 +730,9 @@ function initChartFullscreen() {
         window.requestAnimationFrame(() => {
             if (rsChartInstance) rsChartInstance.resize();
             if (rsVolumeChartInstance) rsVolumeChartInstance.resize();
-            if (rsMansfieldChartInstance) rsMansfieldChartInstance.resize();
+            if (rsMacdChartInstance) rsMacdChartInstance.resize();
             if (rsSqueezeChartInstance) rsSqueezeChartInstance.resize();
+            if (rsMansfieldChartInstance) rsMansfieldChartInstance.resize();
         });
     }
 
@@ -760,10 +748,10 @@ function initChartFullscreen() {
             updateChartArea();
         });
     }
-    if (mansfieldBtn) {
-        mansfieldBtn.addEventListener("click", () => {
-            chartFullscreenExtras.mansfield = !chartFullscreenExtras.mansfield;
-            mansfieldBtn.classList.toggle("active", chartFullscreenExtras.mansfield);
+    if (macdBtn) {
+        macdBtn.addEventListener("click", () => {
+            chartFullscreenExtras.macd = !chartFullscreenExtras.macd;
+            macdBtn.classList.toggle("active", chartFullscreenExtras.macd);
             updateChartArea();
         });
     }
@@ -805,11 +793,12 @@ function initStageFilter() {
 }
 
 // renderStageBadge/rollingMean/alignMansfieldToDates/alignSqueezeToDates/
-// sliceWeeklyChartToRange/fmtPlDate/syncChartsCrosshair/renderRelativeStrengthChart
-// zyja teraz w js/chart-render.js, wspoldzielonym z chart.html — patrz
-// komentarz na gorze tamtego pliku. updateChartArea() (nizej, w sekcji
-// OBSZAR WYKRESU) woła renderRelativeStrengthChart(symbol, rsEntry,
-// state.chartRangeMode) i destroyChartInstances() jak dotychczas.
+// alignMacdToDates/fmtPlDate/syncChartsCrosshair/renderRelativeStrengthChart/
+// applyMansfieldPanelVisibility/initMansfieldControls zyja teraz w
+// js/chart-render.js, wspoldzielonym z chart.html — patrz komentarz na gorze
+// tamtego pliku. updateChartArea() (nizej, w sekcji OBSZAR WYKRESU) woła
+// renderRelativeStrengthChart(symbol, rsEntry) i destroyChartInstances() jak
+// dotychczas.
 
 // ============================================================
 // SZUFLADA TABEL (>>> rozwiń / <<< zwiń)
@@ -1234,7 +1223,7 @@ if (typeof document !== "undefined") {
         initDrawer();
         initOpenTvButton();
         initResetZoomButton();
-        initChartRangeToggle();
+        initMansfieldControls();
         initChartViewTabs();
         initChartFullscreen();
         initStageFilter();
