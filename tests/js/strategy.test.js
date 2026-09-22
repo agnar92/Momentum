@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, squeezeMomentum,
+    squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, squeezeMomentum,
     evaluateCandidate, funnelCounts, positionSize, evaluateHolding, parseTickerList,
 } = require(path.join("..", "..", "docs", "js", "strategy.js"));
 
@@ -224,4 +224,70 @@ test("strongSectorSet keeps top sectors with positive RS and ETF data only", () 
 test("parseTickerList splits, uppercases and dedupes", () => {
     assert.deepEqual(parseTickerList(" mu, AMD;nvda  mu\n"), ["MU", "AMD", "NVDA"]);
     assert.deepEqual(parseTickerList(""), []);
+});
+
+// ------------------------------------------------------------
+// Stop strategii: polowa pudelka Darvasa -> low swiecy z przeciecia MACD
+// ------------------------------------------------------------
+
+// close0 = 100 (cena 120, ostatni close_pct = 20). Pudelko: 10%..0% -> polowa = 105.
+function boxedStock(macd, signal, lowPct) {
+    return {
+        ticker: "BOX", price: 120,
+        weekly_chart: {
+            dates: ["d1", "d2", "d3", "d4", "d5"],
+            close_pct: [0, 5, 10, 15, 20],
+            low_pct: lowPct === undefined ? [-2, 3, 8, 12, 17] : lowPct,
+            stop_level_pct: [null, null, null, null, -30],
+            bases: [
+                { start_date: "d0", end_date: "d0", resistance_pct: -20, support_pct: -40 },
+                { start_date: "d1", end_date: "d2", resistance_pct: 10, support_pct: 0 },
+            ],
+        },
+        macd_chart: { dates: ["d1", "d2", "d3", "d4", "d5"], macd, signal },
+    };
+}
+
+test("strategyStopFor starts at the midpoint of the LAST Darvas box", () => {
+    const info = strategyStopFor(boxedStock([1, 1, 1, 1, 1], [2, 2, 2, 2, 2]));
+    assert.equal(info.source, "box");
+    assert.ok(Math.abs(info.stop - 105) < 1e-9);
+});
+
+test("strategyStopFor raises the stop to the low of the MACD bullish-cross week after the box", () => {
+    // przeciecie w gore w d4 (d3: macd<=signal, d4: macd>signal) -> low d4 = 112
+    const info = strategyStopFor(boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2]));
+    assert.equal(info.source, "macd");
+    assert.equal(info.macdDate, "d4");
+    assert.ok(Math.abs(info.stop - 112) < 1e-9);
+    assert.equal(info.lowApprox, false);
+});
+
+test("strategyStopFor ignores crosses inside the box and never lowers the stop", () => {
+    // przeciecie w d2 (koniec pudelka) — ignorowane; przeciecie w d5 z low 104 < 105 — stop zostaje
+    const info = strategyStopFor(boxedStock([1, 3, 1, 1, 3], [2, 2, 2, 2, 2], [-2, 3, 8, 12, 4]));
+    assert.equal(info.source, "box");
+    assert.ok(Math.abs(info.stop - 105) < 1e-9);
+});
+
+test("strategyStopFor falls back to the weekly close when low_pct is missing (old data)", () => {
+    const info = strategyStopFor(boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2], null));
+    assert.equal(info.source, "macd");
+    assert.equal(info.lowApprox, true);
+    assert.ok(Math.abs(info.stop - 115) < 1e-9);
+});
+
+test("strategyStopFor falls back to the Weinstein stop without any Darvas box", () => {
+    const c = boxedStock([1], [2]);
+    c.weekly_chart.bases = [];
+    const info = strategyStopFor(c);
+    assert.equal(info.source, "weinstein");
+    assert.ok(Math.abs(info.stop - 70) < 1e-9);
+});
+
+test("evaluateHolding exits when price falls below the Darvas/MACD stop", () => {
+    const c = boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2]); // stop 112
+    c.weekly_chart.current_stage = "2B";
+    c.weekly_chart.close_pct = [0, 5, 10, 15, 10]; // close0 = 120/1.1 ~ 109.1 -> stop ~ 122.2 > 120
+    assert.equal(evaluateHolding(c).action, "EXIT");
 });

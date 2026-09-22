@@ -11,8 +11,9 @@
 //   Krok 3 — lista obserwacyjna: Etap 2, RS 26 i 52 tyg. > 0, momentum > 0,
 //            baza <= 3.
 //   Krok 4 — wejscie: TTM Squeeze odpalil po konsolidacji, histogram > 0 i
-//            rosnie; wielkosc pozycji = 1% kapitalu / (cena - stop Weinsteina),
-//            maks. 10% kapitalu.
+//            rosnie; stop = polowa ostatniego pudelka Darvasa, podnoszony na
+//            low swiecy z przeciecia MACD w gore (strategyStopFor); wielkosc
+//            pozycji = 1% kapitalu / (cena - stop), maks. 10% kapitalu.
 //   Krok 5 — pozycje satelity uzytkownika: HOLD / podciagnij stop / EXIT.
 // Portfel: Core (50%) = ETF-y, ktore uzytkownik juz ma poza tym narzedziem,
 // Satelita (50%) = ta strategia. Wszystko liczone po stronie klienta z juz
@@ -451,6 +452,59 @@ function stopPriceFor(c) {
     return close0 * (1 + stopPct / 100);
 }
 
+// Stop strategii (na wyrazne zyczenie uzytkownika, zastepuje trailing stop
+// Weinsteina z backendu):
+//   1. start: POLOWA ostatniego pudelka Darvasa (weekly_chart.bases[-1],
+//      (resistance + support) / 2) — pudelko, z ktorego bylo ostatnie wybicie;
+//   2. potem, po kazdym przecieciu MACD W GORE linii sygnalu (tygodniowy MACD,
+//      macd_chart) PO koncu tego pudelka, stop idzie na LOW tej tygodniowej
+//      swiecy (weekly_chart.low_pct) — tylko w gore, nigdy w dol.
+// Bez pudelka w oknie danych -> fallback na stop Weinsteina (source "weinstein").
+// Bez low_pct (stare dane sprzed dodania pola) -> zamkniecie tygodnia
+// zamiast low, oznaczone lowApprox=true.
+function strategyStopFor(c) {
+    const w = c && c.weekly_chart;
+    if (!w || c.price == null) return null;
+    const iClose = lastNonNullIndex(w.close_pct);
+    if (iClose < 0) return null;
+    const close0 = c.price / (1 + w.close_pct[iClose] / 100);
+    const toPrice = pct => close0 * (1 + pct / 100);
+
+    const bases = (w.bases || []).filter(b => b.resistance_pct != null && b.support_pct != null);
+    if (!bases.length) {
+        const wStop = stopPriceFor(c);
+        return wStop == null ? null : { stop: wStop, source: "weinstein" };
+    }
+    const box = bases[bases.length - 1];
+    const boxMid = toPrice((box.resistance_pct + box.support_pct) / 2);
+    const out = { stop: boxMid, source: "box", boxMid, boxEnd: box.end_date, macdDate: null, lowApprox: false };
+
+    const m = c.macd_chart;
+    if (!m || !m.dates || !m.macd || !m.signal) return out;
+    const weekIdx = {};
+    (w.dates || []).forEach((d, i) => { weekIdx[d] = i; });
+    for (let k = 1; k < m.dates.length; k++) {
+        const date = m.dates[k];
+        if (date <= box.end_date) continue;
+        const a0 = m.macd[k - 1], s0 = m.signal[k - 1], a1 = m.macd[k], s1 = m.signal[k];
+        if (a0 == null || s0 == null || a1 == null || s1 == null) continue;
+        if (!(a0 <= s0 && a1 > s1)) continue;
+        const j = weekIdx[date];
+        if (j == null) continue;
+        const hasLow = w.low_pct && w.low_pct[j] != null;
+        const lowPct = hasLow ? w.low_pct[j] : w.close_pct[j];
+        if (lowPct == null) continue;
+        const low = toPrice(lowPct);
+        if (low > out.stop) {
+            out.stop = low;
+            out.source = "macd";
+            out.macdDate = date;
+            out.lowApprox = !hasLow;
+        }
+    }
+    return out;
+}
+
 // Histogram TTM Squeeze w ostatnim policzonym tygodniu: dodatni? rosnacy?
 function squeezeMomentum(c) {
     const t = c && c.ttm_squeeze_chart;
@@ -498,7 +552,8 @@ function evaluateCandidate(c, ctx) {
 
     const squeeze = squeezeStatusFor(c);
     const mom = squeezeMomentum(c);
-    const stop = stopPriceFor(c);
+    const stopInfo = strategyStopFor(c);
+    const stop = stopInfo ? stopInfo.stop : null;
     const volumeRatio = squeeze.status === "fired" ? recentBuyingVolumeRatio(c, Math.max(2, squeeze.weeks + 1)) : null;
 
     let status = null;
@@ -512,7 +567,7 @@ function evaluateCandidate(c, ctx) {
 
     return {
         ticker: c.ticker, universe: c.universe, sector, price: c.price,
-        stage, baseCount, rsMedium, rsLong, squeeze, momentum: mom, stop,
+        stage, baseCount, rsMedium, rsLong, squeeze, momentum: mom, stop, stopInfo,
         volumeRatio, volumeConfirmed: volumeRatio != null && volumeRatio >= STRATEGY_VOLUME_CONFIRM_RATIO,
         gates, passes, status,
     };
@@ -553,7 +608,8 @@ function evaluateHolding(c) {
     const w = c.weekly_chart || {};
     const stage = w.current_stage || null;
     const rsMedium = lastNonNull((c.mansfield_chart || {}).rsm_medium);
-    const stop = stopPriceFor(c);
+    const stopInfo = strategyStopFor(c);
+    const stop = stopInfo ? stopInfo.stop : null;
     const baseCount = lastNonNull(w.base_count);
 
     const exit = [];
@@ -561,16 +617,15 @@ function evaluateHolding(c) {
     if (stage === "3" || stage === "4") exit.push(`Etap ${stage}`);
     if (rsMedium != null && rsMedium < 0) exit.push("RS 26 tyg. < 0");
     const recentSignals = (w.signal || []).slice(-STRATEGY_MA_SLOWING_LOOKBACK_WEEKS);
-    if (recentSignals.includes("EXIT_STOP")) exit.push("stop trafiony (EXIT_STOP)");
-    if (exit.length) return { action: "EXIT", reasons: exit, stop, stage, rsMedium };
+    if (exit.length) return { action: "EXIT", reasons: exit, stop, stopInfo, stage, rsMedium };
 
     const warn = [];
     if (recentSignals.includes("WARNING_MA_SLOWING")) warn.push("SMA30 traci nachylenie");
     if (baseCount != null && baseCount > STRATEGY_MAX_BASE_COUNT) warn.push(`${baseCount}. baza — nie dokładaj`);
     if (stage === "1") warn.push("Etap 1 — brak trendu");
-    if (warn.length) return { action: "TIGHTEN", reasons: warn, stop, stage, rsMedium };
+    if (warn.length) return { action: "TIGHTEN", reasons: warn, stop, stopInfo, stage, rsMedium };
 
-    return { action: "HOLD", reasons: ["trend i RS w porządku"], stop, stage, rsMedium };
+    return { action: "HOLD", reasons: ["trend i RS w porządku"], stop, stopInfo, stage, rsMedium };
 }
 
 function parseTickerList(str) {
@@ -707,6 +762,20 @@ function holdActionHtml(action) {
     }
 }
 
+// Cena stopu + skad pochodzi (polowa pudelka Darvasa / low swiecy z przeciecia MACD).
+function stopCellHtml(currency, info) {
+    if (!info || info.stop == null) return "—";
+    let note;
+    if (info.source === "macd") {
+        note = `<span class="funnel-note" title="Low tygodniowej świecy, w której MACD przeciął linię sygnału w górę (${info.macdDate})${info.lowApprox ? " — przybliżone zamknięciem tygodnia, brak danych low" : ""}.">MACD ${info.macdDate.slice(5)}${info.lowApprox ? " ≈" : ""}</span>`;
+    } else if (info.source === "box") {
+        note = `<span class="funnel-note" title="Połowa ostatniego pudełka Darvasa (zakończonego ${info.boxEnd}) — jeszcze nie było przecięcia MACD w górę po tym pudełku.">½ box</span>`;
+    } else {
+        note = '<span class="funnel-note funnel-note-warn" title="Brak pudełka Darvasa w oknie danych — użyty trailing stop Weinsteina.">Weinstein</span>';
+    }
+    return `${fmtPriceFor(currency, info.stop)} ${note}`;
+}
+
 function chartBtnHtml(ticker, universe) {
     return `<button type="button" class="tv-row-btn chart-row-btn" data-ticker="${ticker}" data-universe="${universe}" title="Otwórz wykres ${ticker} (chart.html)">📈</button>`;
 }
@@ -841,7 +910,7 @@ function renderEntryTable(evaluated, currency, held, evaluatedByTicker) {
                 <td class="ticker-cell">${e.ticker} ${notes.join(" ")}</td>
                 <td>${statusHtml(e.status)}</td>
                 <td>${fmtPriceFor(currency, e.price)}</td>
-                <td>${fmtPriceFor(currency, e.stop)}</td>
+                <td>${stopCellHtml(currency, e.stopInfo)}</td>
                 <td>${e.stop != null ? `${(((e.price - e.stop) / e.price) * 100).toFixed(1)}%` : "—"}</td>
                 <td>${s ? s.shares : "—"}</td>
                 <td>${s ? fmtMoneyFor(currency, s.value) + (s.cappedByMax ? ' <span class="funnel-note" title="Ograniczone limitem 10% kapitału na pozycję.">max</span>' : "") : "—"}</td>
@@ -875,7 +944,7 @@ function renderHoldTable(market, held, currency) {
                 <td class="ticker-cell">${r.ticker}</td>
                 <td>${holdActionHtml(r.action)}</td>
                 <td>${c ? fmtPriceFor(currency, c.price) : "—"}</td>
-                <td>${fmtPriceFor(currency, r.stop)}</td>
+                <td>${stopCellHtml(currency, r.stopInfo)}</td>
                 <td>${c && r.stop != null ? `${(((c.price - r.stop) / c.price) * 100).toFixed(1)}%` : "—"}</td>
                 <td>${c ? stageCellHtml(r.stage) : "—"}</td>
                 <td>${c ? fmtSigned(r.rsMedium) : "—"}</td>
@@ -982,7 +1051,7 @@ if (typeof document !== "undefined") {
 // i bez efektu w przegladarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, squeezeMomentum,
+        squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, squeezeMomentum,
         evaluateCandidate, funnelCounts, positionSize, evaluateHolding, parseTickerList,
     };
 }
