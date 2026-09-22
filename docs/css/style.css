@@ -462,6 +462,18 @@ table.momentum-table tbody tr.row-selected { background: rgba(46, 204, 113, 0.12
    wyzej sugerowalby klikalnosc calego wiersza, ktorej nie ma. */
 #poolTable tbody tr { cursor: default; }
 
+/* #poolTable ma dziś 12 kolumn (doszła kolumna "Grupa" dla core/satelity) i
+   przy typowej szerokości laptopa (~1366px) przelewał się poza .table-wrap,
+   wymuszając poziomy scroll — zgłoszone przez użytkownika ("tabele się nie
+   mieszczą w rebalanserze"). Nieco ciaśniejszy padding/czcionka, SCOPED
+   wyłącznie do tej tabeli (nie dotyka dashboardowych tabel .momentum-table
+   poza rebalanserem, ani innych tabel na tej samej stronie, np. #holdingsTable/
+   #rebalanceTable) — ta sama zmiana obowiązuje na obu rebalanserach (PL i USA
+   dzielą #poolTable id, patrz table-render.js). */
+#poolTable { font-size: 11.5px; }
+#poolTable thead th { padding: 6px 6px; }
+#poolTable td { padding: 5px 6px; }
+
 table.momentum-table td {
     padding: 7px 10px;
     white-space: nowrap;
