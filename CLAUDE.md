@@ -227,11 +227,7 @@ being left alone.
      `prices` table (PK `(Date, Ticker)`, columns `Close, Adj_Close, Volume, High, Low` — High/Low were
      always present in yfinance's OHLCV response but discarded until `run_query.py` needed them to split
      weekly volume into buying/selling, see below; `_download_price_rows(..., include_ohlc=True)` is what
-     appends them). `index_prices` (the index/ETF-level table, see Global Equity Momentum below) gained
-     the same two columns later, at the user's explicit request for an ATR-adjusted Relative Strength (see
-     "RS is now ATR-adjusted" under Relative strength below) — `_ensure_index_prices_ohlc_columns()` is its
-     own idempotent migration, and `update_index_prices()` now fetches SP500/NASDAQ100/DOWJONES and the
-     sector SPDR ETFs with `include_ohlc=True` too.
+     appends them, `index_prices` still doesn't carry them since nothing needs them there).
      `_ensure_prices_ohlc_columns()` runs an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
      migration before every incremental refresh, since the already-committed `momentum_data.duckdb` predates
      these columns — old rows get `NULL` High/Low until they age out of the retention window and get
@@ -729,37 +725,6 @@ until someone raises `--lookback-months` further (which triggers a one-time full
 as `rsm_medium`/`sma10_pct`/`sma30_pct` elsewhere in this module, just guaranteed to bite harder here
 until the retention is deepened again.
 
-**RS is now ATR-adjusted, at the user's explicit request** ("Strategia sily relatywnej musi byc
-skorygowna o ATR z tego samego okresu. czyli cena akcji i cena benchmarku skorygowana o ATR z aktywu")
-— applied here (the dashboard's own-chart Mansfield panel) AND to the sector strategy screener below
-(`compute_sector_relative_strength`), the two places this codebase computes a Mansfield RS oscillator.
-Instead of the classic `RS = stock_close / index_close`, each side is first divided by its OWN ATR
-(Average True Range — the same simple-moving-average-of-True-Range convention already used by the
-Keltner Channel in `compute_ttm_squeeze_chart`, now factored out into a shared `_weekly_atr`/
-`_weekly_true_range` helper so the formula lives in one place) before the ratio is taken: `RS =
-(stock_close / ATR_stock) / (index_close / ATR_index)` — `_atr_adjusted_rs_raw()`. The user was asked,
-and chose explicitly, to match each ATR's period to the smoothing window it feeds rather than use one
-fixed ATR period everywhere — so `rsm_short` uses `ATR(13)`, `rsm_medium` uses `ATR(26)`, `rsm_long`
-uses `ATR(52)` (three separate raw RS series, not one shared series as before this change), and the
-sector screener's single 52-week window uses `ATR(52)`. This requires High/Low on BOTH sides — the
-stock (`prices`, already had it) and the benchmark (`index_prices`, which didn't: `High DOUBLE, Low
-DOUBLE` were added there via an idempotent `_ensure_index_prices_ohlc_columns()` migration, the same
-idiom as `_ensure_prices_ohlc_columns`). `update_index_prices()` now fetches SP500/NASDAQ100/DOWJONES
-and the sector SPDR ETFs with `include_ohlc=True`; WIG20/mWIG40/sWIG80's synthetic equal-weight index
-(see below) gets a synthetic High/Low too — the equal-weighted average of each constituent's own
-High/Close and Low/Close ratio, applied to the synthetic level, since there's no real daily range for
-an index that's itself only a composite of its constituents' closes.
-
-Because ATR itself needs `weeks` of its own warm-up before the RS-smoothing's rolling mean (another
-`weeks`) can start producing values, every consumer of this correction now needs roughly **double** the
-lookback buffer it needed before — `compute_mansfield_rs_chart`'s buffer became `2*RS_MANSFIELD_LONG_WEEKS
-+ 2` (was `RS_MANSFIELD_LONG_WEEKS + 2`), the same "double buffer" idiom `compute_ttm_squeeze_chart`
-already used for its own regression step. This deepens the existing `rsm_long` retention shortfall
-described above (and, for the sector screener, pushes `rsm_vs_index_pct`/`rsm_vs_sector_pct` further
-into "needs deeper `--lookback-months` to have a value at all" territory) — an accepted, direct
-consequence of the correction itself, same graceful-degradation convention (`None` instead of a wrong
-number) as everywhere else in this module.
-
 **Version history matters here too**: an earlier version deliberately decoupled this chart from the
 momentum window — its own display range was just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6
 months) from `ref_date`, a completely different (and shorter) span than `weekly_chart` above it, so the two
@@ -866,10 +831,7 @@ decide" philosophy as the rest of the dashboard/rebalance calculator.
 RS" — this strategy is based on pure RS). Both Krok 2 and Krok 3 use exactly the same formula, the classic
 Mansfield Relative Strength oscillator (`RS = price_A / price_B`, `RSM = (RS / SMA(RS, N weeks) - 1) *
 100` — the same oscillator `compute_mansfield_rs_chart` already draws for a single stock vs. its own index,
-see Relative Strength above, and now, like that oscillator, **ATR-adjusted** — see the "RS is now
-ATR-adjusted" paragraph there for the shared formula/rationale; `price_A`/`price_B` below are each first
-divided by their own `ATR(SECTOR_STRATEGY_RSM_WEEKS)` via the same `_atr_adjusted_rs_raw()` helper before
-the ratio is taken), just with different numerator/denominator pairs at each step:
+see Relative Strength above), just with different numerator/denominator pairs at each step:
   - **Krok 2** (which sector leads *right now*): `RS = sector ETF price / SP500 price`.
   - **Krok 3** (which company leads *within* a sector): `RS = company price / THAT SAME sector's ETF
     price` — the denominator is the sector, **not** SP500, so a company's Krok-3 score answers "does it
@@ -1814,8 +1776,43 @@ genuinely fresh numbers.
   `docs/data/*.json` back to the repo** (`contents: write` permission; the commit message ends in
   `[skip ci]` so the commit doesn't loop back into a trigger — moot now that there's no `push: main`
   trigger left to loop into, but kept as a harmless safety net) before deploying `docs/` to GitHub Pages.
-  If a push races this job's own push, it retries with a `git fetch` + `git reset --soft origin/main` +
-  re-commit, same pattern the three predecessor workflows used.
+  Before it ever commits, it unconditionally rebases onto the current `origin/main` tip (`git fetch` +
+  `git reset --mixed origin/main`, not just reactively after a rejected push) — see the incident below for
+  why this matters even on a completely ordinary run, not just a genuine push race.
+
+  **A real incident (22.09.2026) accidentally un-reverted a already-reverted feature, via this workflow**:
+  an ATR-adjusted-Relative-Strength feature (see the version-history note under Relative strength below,
+  "RS was briefly ATR-adjusted, then reverted") had just been cleanly reverted on `main` (all 5 touched
+  files verified byte-for-byte identical to their pre-feature state) when the user manually re-ran an
+  *older*, already-completed `weekly_full_refresh.yml` run via GitHub's "Re-run jobs" button — a run that
+  had originally been triggered *before* the revert existed. GitHub Actions re-runs a job against its
+  **original triggering commit SHA**, not the current branch tip, so this re-run's checkout silently had
+  the old, pre-revert `run_query.py`/`fetch_data.py`/`CLAUDE.md`/tests again, even though `main` itself was
+  already clean. `fetch_data.py`/`run_query.py` then ran using that stale (ATR-adjusted) code, and when the
+  "Persist generated data" step tried to push, it hit exactly the "another workflow pushed to main
+  meanwhile" race the retry loop exists for — except the retry loop at the time used `git reset --soft
+  origin/main`, which moves **HEAD only**, not the index. The subsequent `git add momentum_data.duckdb
+  docs/data/` + `git commit` therefore committed the *already-staged, stale* tree from the rejected commit
+  (i.e. the old, pre-revert `.py`/`.md`/test files, inherited unchanged from the stale checkout) on top of
+  a now-*correct* parent commit — a commit that looked, from `git log`, like an ordinary child of the
+  clean, reverted history, but silently carried the old ATR code back into `run_query.py`/`fetch_data.py`/
+  `CLAUDE.md`/`tests/test_run_query.py`/`tests/test_fetch_data.py` (confirmed byte-for-byte identical to
+  the pre-revert commit via `git diff`) — and, because the checkout was stale, `run_query.py` had also
+  *computed that run's `docs/data/*.json`/`momentum_data.duckdb` output* using the reintroduced ATR
+  formula, producing genuinely different (not just stale-looking) sector-strategy/Mansfield-RS rankings
+  than the plain, reverted formula would have — which is what actually tipped the user off that something
+  was wrong (a sector-strategy leader that didn't match what they expected right after confirming the
+  revert had merged). **Two independent fixes** came out of diagnosing this: (1) `--soft` → `--mixed` in
+  every `git reset origin/main` in this step, so a retried commit's index (and therefore every file this
+  step doesn't explicitly `git add`) actually reflects `origin/main`'s real tree, not a stale rejected
+  commit's; (2) the rebase-onto-`origin/main` now happens **unconditionally, before the first commit**, not
+  only reactively after a rejected push — so even a run whose *own checkout* was stale (the actual root
+  cause here — a re-run reusing an old trigger SHA) can no longer commit stale non-data files, regardless
+  of whether a push race happens to occur. Neither fix makes a stale re-run compute *correct* data (the
+  underlying `fetch_data.py`/`run_query.py` execution still ran old logic against whatever it was checked
+  out at) — that half is a process fix, not a code one: **never use GitHub's "Re-run jobs" on an old
+  `weekly_full_refresh.yml` run once `main` has moved on; always trigger a fresh `workflow_dispatch` run**,
+  which always checks out the current branch tip.
 
   **Why a scheduled run can silently never fire, and how to tell**: `weekly_charts.yml` (the predecessor
   to this workflow) was created mid-week and its very first Saturday cron slot appeared to not have fired
