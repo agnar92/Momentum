@@ -726,7 +726,7 @@ def _prices_history_is_shallow(con, lookback_months):
     return pd.Timestamp(oldest) > needed_start + pd.Timedelta(days=14)
 
 
-def update_duckdb(lookback_months=22, min_coverage=0.8, indices_only=False):
+def update_duckdb(lookback_months=26, min_coverage=0.8, indices_only=False):
     con = duckdb.connect("momentum_data.duckdb")
 
     if indices_only:
@@ -766,11 +766,16 @@ if __name__ == "__main__":
         description="Odświeża bazę cen (bootstrap za pierwszym razem, potem przyrostowo: "
                      "dogrywa nowe dni + przycina historię do --lookback-months) i skład indeksów (CSV)."
     )
-    parser.add_argument("--lookback-months", type=int, default=22,
+    parser.add_argument("--lookback-months", type=int, default=26,
                          help="Ile miesięcy historii cen trzymać w bazie (retencja) oraz zakres "
-                              "pierwszego pełnego pobrania / backfillu nowych spółek. 22 (nie 15) "
-                              "daje SMA30/oscylatorowi Mansfield realny zapas historii PRZED "
-                              "początkiem ~14-miesięcznego okna momentum, patrz run_query.py.")
+                              "pierwszego pełnego pobrania / backfillu nowych spółek. 26 (nie 22, nie "
+                              "15) daje SMA30/oscylatorowi Mansfield realny zapas historii PRZED "
+                              "początkiem ~14-miesięcznego okna momentum, ORAZ (od dodania korekty ATR "
+                              "do Siły Relatywnej) wystarczające ~113 tyg. dla "
+                              "compute_sector_relative_strength, któremu jego pojedyncza, BIEŻĄCA "
+                              "wartość RSM (2*SECTOR_STRATEGY_RSM_WEEKS-1 = 103 tyg. minimum, nie tylko "
+                              "część wyświetlanego okna jak na wykresie) po prostu wychodziła `None` dla "
+                              "KAŻDEGO sektora przy 22 mies. — patrz run_query.py/CLAUDE.md.")
     parser.add_argument("--min-coverage", type=float, default=0.8,
                          help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
     parser.add_argument("--indices-only", action="store_true",
