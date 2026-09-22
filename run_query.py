@@ -1943,8 +1943,7 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     wygładzanie na tle 12-14-miesięcznego okna momentum potrzebowało ~26,5 miesiąca
     historii, więc oscylator wychodził pusty dla większości okna w produkcji. Od
     momentu wydłużenia retencji `prices` (patrz fetch_data.py --lookback-months,
-    domyślnie 26 mies. — podniesione z 22 właśnie z powodu korekty ATR, patrz niżej —
-    = 14-miesięczne okno + zapas rozgrzewkowy) to
+    domyślnie 22 mies. = 14-miesięczne okno + ~7-miesięczny zapas rozgrzewkowy) to
     się już mieści DLA rsm_short/rsm_medium, więc oba (teraz: wszystkie trzy) wykresy
     ("10:30" i Mansfield) pokazują dokładnie ten sam zakres dat, zamiast dwóch różnych
     skal jak wcześniej — ALE rsm_long (52 tyg., dodany później) ponownie przekracza tę
