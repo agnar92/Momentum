@@ -962,6 +962,38 @@ function renderCoreSatelliteNote() {
     el.textContent = text;
 }
 
+// Tabela z surowymi zwrotami 12M SP500/NASDAQ100/DOWJONES (docs/data/global_equity_momentum.json,
+// patrz loadGemReturns/gemIndexReturns wyżej) — żeby było widać wprost, ile
+// każdy indeks zrobił, nie tylko sam wynik (który wygrywa). Wygrywający wiersz
+// jest podświetlony (`.row-selected`, ten sam wzorzec co zaznaczony wiersz w
+// innych tabelach tej strony) i oznaczony 🏆. Brak danych (np. offline) ->
+// pojedynczy wiersz z informacją, że dane są niedostępne.
+function renderGemReturnsTable() {
+    const tbody = document.getElementById("gemReturnsBody");
+    if (!tbody) return;
+    const winnerUniverse = satelliteWinnerUniverse();
+    const rows = REBALANCE_UNIVERSES
+        .filter(u => gemIndexReturns[u] !== undefined)
+        .sort((a, b) => gemIndexReturns[b] - gemIndexReturns[a]);
+
+    if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="3" class="text-faint">Brak danych Global Equity Momentum (np. offline) — satelita nie faworyzuje dziś żadnego indeksu.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = rows.map(u => {
+        const ret = gemIndexReturns[u];
+        const isWinner = u === winnerUniverse;
+        return `
+            <tr class="${isWinner ? "row-selected" : ""}">
+                <td class="ticker-cell">${REBALANCE_UNIVERSE_LABELS[u]}</td>
+                <td class="${ret >= 0 ? "positive" : "negative"}">${ret >= 0 ? "+" : ""}${ret.toFixed(2)}%</td>
+                <td>${isWinner ? "🏆 faworyzowany w satelicie" : ""}</td>
+            </tr>
+        `;
+    }).join("");
+}
+
 // ============================================================
 // SUGESTIA REBALANSU (to tylko sugestia — Ty decydujesz co i kiedy kupić/sprzedać)
 // ============================================================
@@ -1426,6 +1458,7 @@ function refreshOutputs() {
     renderSuggestions();
     renderEquityCurve();
     renderCoreSatelliteNote();
+    renderGemReturnsTable();
 }
 
 function renderAll() {
