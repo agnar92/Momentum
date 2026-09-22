@@ -10,7 +10,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rollingMean, alignMansfieldToDates, alignSqueezeToDates, fmtPlDate,
+    rollingMean, alignMansfieldToDates, alignSqueezeToDates, alignMacdToDates, fmtPlDate,
 } = require(path.join("..", "..", "docs", "js", "chart-render.js"));
 
 test("rollingMean averages the trailing window, using a shorter window for the first points", () => {
@@ -77,6 +77,26 @@ test("alignSqueezeToDates returns an all-null series when no squeeze date matche
     assert.deepEqual(aligned.histogram, [null, null]);
     assert.deepEqual(aligned.squeezeOn, [null, null]);
     assert.deepEqual(aligned.fired, [null, null]);
+});
+
+test("alignMacdToDates pads with null before the MACD window's own start date", () => {
+    const fullDates = ["2026-01-01", "2026-01-08", "2026-01-15", "2026-01-22"];
+    const macdData = {
+        dates: ["2026-01-15", "2026-01-22"], macd: [1, 2], signal: [0.5, 1.5], histogram: [0.5, 0.5],
+    };
+    const aligned = alignMacdToDates(macdData, fullDates);
+    assert.deepEqual(aligned.macd, [null, null, 1, 2]);
+    assert.deepEqual(aligned.signal, [null, null, 0.5, 1.5]);
+    assert.deepEqual(aligned.histogram, [null, null, 0.5, 0.5]);
+});
+
+test("alignMacdToDates returns an all-null series when no MACD date matches", () => {
+    const fullDates = ["2025-01-01", "2025-01-08"];
+    const macdData = { dates: ["2026-01-15"], macd: [1], signal: [0.5], histogram: [0.5] };
+    const aligned = alignMacdToDates(macdData, fullDates);
+    assert.deepEqual(aligned.macd, [null, null]);
+    assert.deepEqual(aligned.signal, [null, null]);
+    assert.deepEqual(aligned.histogram, [null, null]);
 });
 
 test("fmtPlDate converts an ISO date to dd.mm.yyyy", () => {

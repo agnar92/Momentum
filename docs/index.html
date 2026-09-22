@@ -219,16 +219,8 @@
                 ↺ Resetuj zoom
             </button>
             <button class="chart-mode-btn" id="chartFullscreenBtn"
-                    title="Pełny ekran — wykres 10:30 na cały ekran, z opcjonalnym wolumenem, RSM i TTM Squeeze">
+                    title="Pełny ekran — wykres 10:30 na cały ekran, z opcjonalnym wolumenem, MACD i TTM Squeeze">
                 ⤢ Pełny ekran
-            </button>
-            <button class="chart-mode-btn active" id="chartRange3mBtn"
-                    title="Pokaż tylko ostatnie 3 miesiące na wykresie 10:30, wolumenie, RSM i TTM Squeeze">
-                🗓️ 3 mies.
-            </button>
-            <button class="chart-mode-btn" id="chartRangeFullBtn"
-                    title="Pokaż cały dostępny zakres historii (do ok. 14 miesięcy)">
-                🗓️ Cały zakres
             </button>
             <div class="chart-ticker-label" id="chartTickerLabel"></div>
         </div>
@@ -242,7 +234,7 @@
                 <div class="chart-fullscreen-extras" id="chartFullscreenExtras" hidden>
                     <span class="chart-fullscreen-extras-label">Dodaj do widoku:</span>
                     <button class="chart-extra-toggle" id="toggleVolumeBtn" type="button">📊 Wolumen</button>
-                    <button class="chart-extra-toggle" id="toggleMansfieldBtn" type="button">📉 RSM</button>
+                    <button class="chart-extra-toggle" id="toggleMacdBtn" type="button">📉 MACD</button>
                     <button class="chart-extra-toggle" id="toggleSqueezeBtn" type="button">🧨 TTM Squeeze</button>
                     <button class="chart-extra-toggle" id="fsResetZoomBtn" type="button">↺ Zoom</button>
                     <button class="chart-extra-toggle chart-fullscreen-close" id="chartFullscreenCloseBtn" type="button">✕ Zamknij</button>
@@ -257,13 +249,20 @@
                 <div class="rs-chart-panel rs-chart-panel-volume" id="rsVolumePanel">
                     <canvas id="rsVolumeCanvas"></canvas>
                 </div>
-                <div class="rs-chart-panel rs-chart-panel-small" id="rsMansfieldPanel">
-                    <div class="rs-chart-caption" id="rsMansfieldCaption"></div>
-                    <canvas id="rsMansfieldCanvas"></canvas>
+                <div class="rs-chart-panel rs-chart-panel-small" id="rsMacdPanel">
+                    <div class="rs-chart-caption" id="rsMacdCaption"></div>
+                    <canvas id="rsMacdCanvas"></canvas>
                 </div>
                 <div class="rs-chart-panel rs-chart-panel-small" id="rsSqueezePanel">
                     <div class="rs-chart-caption" id="rsSqueezeCaption"></div>
                     <canvas id="rsSqueezeCanvas"></canvas>
+                </div>
+                <div class="rs-mansfield-controls" id="rsMansfieldControls">
+                    <button class="chart-extra-toggle" id="rsMansfieldToggleBtn" type="button" disabled>📉 Pokaż RSM ▼</button>
+                </div>
+                <div class="rs-chart-panel rs-chart-panel-small" id="rsMansfieldPanel" hidden>
+                    <div class="rs-chart-caption" id="rsMansfieldCaption"></div>
+                    <canvas id="rsMansfieldCanvas"></canvas>
                 </div>
                 <div class="stage-legend" id="stageLegend">
                     fioletowy prostokąt = baza Etapu 1 (dno), szary = kontynuacja Etapu 2 &nbsp;·&nbsp;

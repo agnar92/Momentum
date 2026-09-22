@@ -794,6 +794,23 @@ Channel — old pre-migration `prices` rows without them (see `_ensure_prices_oh
 `fetch_data.py`) leave every squeeze field `None` for that stretch rather than a wrong value, the same
 graceful-degradation convention used throughout this module.
 
+Each leader (and every `all_constituents` record for `FULL_COVERAGE_UNIVERSES`) also carries a `macd_chart`
+(`compute_macd_chart()`) — the classic MACD indicator (Gerald Appel), added directly under the volume panel
+at the user's explicit request as a help with entry/exit timing (crossovers of the MACD/signal lines, the
+histogram crossing zero — see the frontend bullet under Frontend below for how it's drawn).
+`macd = EMA(close, MACD_FAST_WEEKS=12) - EMA(close, MACD_SLOW_WEEKS=26)`,
+`signal = EMA(macd, MACD_SIGNAL_WEEKS=9)`, `histogram = macd - signal` — the standard 12/26/9 periods, just
+computed on **weekly** closes (the same rhythm as `compute_ttm_squeeze_chart`/`compute_mansfield_rs_chart`
+in this module, not the daily-close convention "12/26/9" usually implies elsewhere — a deliberate "weekly
+MACD" for swing-trading entries/exits, not an attempt to reproduce a daily MACD on a weekly axis). Unlike
+`compute_ttm_squeeze_chart`/`compute_mansfield_rs_chart` (built on `.rolling()`, which returns `NaN` until
+its window fully fills), pandas' `.ewm(..., adjust=False).mean()` never returns `None`/`NaN` for lack of
+warm-up — it's defined from the very first available data point, just less "converged" early on — so the
+`lookback_weeks = 4 * MACD_SLOW_WEEKS` fetched before `start_date` exists purely to let the EMAs settle
+before the first displayed week, not to avoid `None` values the way the buffers elsewhere in this module do;
+if less history than that is actually available, the EMA is simply computed from whatever there is, no
+error, no `None`.
+
 ### Sector strategy screener (`compute_sp500_trend_filter` / `compute_sector_relative_strength`)
 
 A dedicated, standalone screener (`docs/strategy.html`) for a specific, user-requested, wieloetapowa
@@ -1088,19 +1105,24 @@ flex child (no `.topbar-left` wrapper there).
   — when a ticker has no `weekly_chart` at all (e.g. one whose momentum fell back to the 9-month window
   with too little extra history), the chart panels are hidden and `#noChartMessage` is shown instead,
   pointing at the "Otwórz w TradingView" button as the fallback; that button itself is never disabled,
-  since it works for every ticker regardless of chart-data availability. When shown, it's **four stacked
-  Chart.js panels**
+  since it works for every ticker regardless of chart-data availability. When shown, it's **five stacked
+  Chart.js panels, the fifth (Mansfield RS) optional/collapsed by default**
   (`renderRelativeStrengthChart()` — lives in `js/chart-render.js`, not `app.js` itself, see the dedicated
   `chart.html`/`chart-render.js` bullet below for why — Chart.js itself is vendored locally, along with
   `chartjs-plugin-zoom` and `chartjs-plugin-annotation`, see `docs/js/vendor/` under the Frontend intro
-  above for why this is no longer a CDN script):
+  above for why this is no longer a CDN script). **There is no "last 3 months" range toggle any more**
+  (`#chartRange3mBtn`/`#chartRangeFullBtn`/`sliceWeeklyChartToRange()`/`state.chartRangeMode` — all
+  REMOVED) — the chart always shows the whole available window (up to ~14 months): the user tried the
+  3-month default for a while and found it actually less readable than the full range, the opposite of
+  the assumption that motivated adding it, so the whole toggle was removed rather than just flipping its
+  default.
   1. The "10:30" price+SMA10/SMA30+VWAP chart, rebased to 0% at the momentum window's start. **It no
      longer plots the stock's own index level** — removed at the user's explicit request, since it left
      two overlapping price-shaped lines competing on one % axis for a comparison the Mansfield RS panel
-     (3, below) already expresses more directly as a single oscillator. The backend still exports
-     `index_pct` on every `weekly_chart` record (nothing downstream needed a schema change) and
-     `sliceWeeklyChartToRange()` still slices it along with every other series — `renderRelativeStrengthChart()`
-     in `js/chart-render.js` is simply the one place that stopped reading it into a dataset. Darvas boxes
+     (5, below) already expresses more directly as a single oscillator. The backend still exports
+     `index_pct` on every `weekly_chart` record (nothing downstream needed a schema change) —
+     `renderRelativeStrengthChart()` in `js/chart-render.js` is simply the one place that stopped reading
+     it into a dataset. Darvas boxes
      (see `bases` above) are drawn directly on this chart as rectangles via `chartjs-plugin-annotation`
      (`BASE_BOX_COLORS` — purple for `"stage1"`, gray for `"stage2"`, labeled "Etap 1 (dno)"/"Baza N"), and
      the whole chart is interactive (`chartjs-plugin-zoom`: mouse wheel/pinch to zoom, drag to pan,
@@ -1114,12 +1136,15 @@ flex child (no `.topbar-left` wrapper there).
      `volume - buying_volume` (selling, top, red), on its own fully-visible axis. Its X range is kept in
      sync with panel 1 (`syncVolumeXRange()`, called from the zoom/pan plugin's `onZoomComplete`/
      `onPanComplete` callbacks) so both panels always show the same weeks.
-  3. The Mansfield RS oscillator (short-term/medium-term/long-term lines — `rsm_short`/`rsm_medium`/
-     `rsm_long`, see above) in a small panel underneath — now the ONLY panel showing the stock's strength
-     against its own benchmark index (`rsEntry.universe`), since panel 1's index line was removed (see
-     above): above zero means the stock is currently outperforming that index over the given smoothing
-     window, below means it's lagging. The long-term (~12M, dashed) line often starts as a gap — see the
-     `rsm_long` retention caveat above. Non-interactive — its own window doesn't need zoom/pan.
+  3. **MACD** (`#rsMacdPanel`/`rsMacdChartInstance`, `macd_chart`, see `compute_macd_chart()` above) —
+     ADDED directly under the volume panel, at the user's explicit request, as a help with entry/exit
+     timing (crossovers of the MACD/signal lines, the histogram crossing zero). Standard 12/26/9 periods,
+     computed on WEEKLY closes (the same rhythm as every other indicator in this stack, not literally the
+     daily-close convention the numbers "12/26/9" usually imply) — a mixed Chart.js chart: a histogram
+     (`macd - signal`, same 4-color scheme as the TTM Squeeze histogram below — `macdHistColors` in
+     `renderRelativeStrengthChart()`) plus the MACD line and the signal line overlaid. Non-interactive,
+     same as the panels below it. `alignMacdToDates()` pads it to the same full date array as panel 1,
+     exactly like `alignSqueezeToDates()`/`alignMansfieldToDates()` do, so all panels share one X scale.
   4. The TTM Squeeze panel (`ttm_squeeze_chart`, see `compute_ttm_squeeze_chart()` above) — replaces an
      earlier panel that plotted the stock's own raw 1/3/6-month rolling % growth (`growth_chart`, removed
      at the user's request in favor of finding momentum names coming out of consolidation). A Chart.js
@@ -1129,9 +1154,27 @@ flex child (no `.topbar-left` wrapper there).
      see `histColors` in `renderRelativeStrengthChart()`); a row of dots pinned to the zero line
      (`dotColors`) marks the squeeze state per week — red while the squeeze is on (consolidating), gold on
      the single week it fires (breaks out), gray afterward, transparent while not yet computed (BB/KC
-     warmup). Non-interactive, same as the Mansfield panel. `alignSqueezeToDates()` pads it to the same
-     full date array as panel 1, exactly like `alignMansfieldToDates()` does, so all panels share one X
-     scale.
+     warmup). Non-interactive, same as the MACD/Mansfield panels.
+  5. The Mansfield RS oscillator (short-term/medium-term/long-term lines — `rsm_short`/`rsm_medium`/
+     `rsm_long`, see above) — the ONLY panel showing the stock's strength against its own benchmark index
+     (`rsEntry.universe`), since panel 1's index line was removed (see above): above zero means the stock
+     is currently outperforming that index over the given smoothing window, below means it's lagging.
+     **Moved to the very bottom and made OPTIONAL** at the user's explicit request (`#rsMansfieldPanel`,
+     `hidden` by default) — `#rsMansfieldToggleBtn` (a small "📉 Pokaż RSM ▼" / "📉 Ukryj RSM ▲" button
+     right above the panel, `rs-mansfield-controls` in `style.css`) shows/hides it, via ONE shared toggle
+     (`mansfieldPanelVisible`/`applyMansfieldPanelVisibility()`/`initMansfieldControls()`, all living in
+     `js/chart-render.js` since both `app.js` and `chart.js` need it) that behaves identically in the
+     normal view and in fullscreen mode — this REPLACED an earlier, fullscreen-only "📉 RSM" opt-in toggle
+     that lived only in `#chartFullscreenExtras`/`chartFullscreenExtras.mansfield` (see `initChartFullscreen()`
+     in `app.js`): now that the panel is optional everywhere, not just in fullscreen, a single toggle
+     covers both cases instead of two separate mechanisms. **Individual lines are also optional** — "along
+     with showing individual lines" was the user's own explicit ask — but this reuses Chart.js's own
+     built-in legend-click-to-toggle behavior (clicking a legend entry already toggles that dataset's
+     visibility) rather than adding bespoke per-line buttons: on every (re)render, only the long-term
+     (~12M/52-week) line starts visible (`hidden: false` in its dataset definition — "zawsze włączaj
+     52-tygodniowy", the user's own explicit ask), short-/medium-term start `hidden: true`, and a click on
+     either's legend entry reveals it. The long-term line often starts as a gap — see the `rsm_long`
+     retention caveat above. Non-interactive — its own window doesn't need zoom/pan.
 
   (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-volume` / `.rs-chart-panel-small` in
   `style.css`.) **Version history**: an earlier version put entry/exit signal markers (`ENTRY_2A`/`ENTRY_2B`/
@@ -1146,11 +1189,13 @@ flex child (no `.topbar-left` wrapper there).
   automatic Y-axis tick/range computation degenerates (measured empirically: a canvas ≤120px tall on a
   narrow-range dataset like the Mansfield oscillator can lock onto a nonsensical fixed range like `[-100,
   100]` with a single tick instead of autoscaling to the actual data). On phones, `.charts-area` has a fixed
-  `height: calc(100vh - 48px)` (see the mobile media query below) shared across the badge + 3 chart panels +
-  legend text, so without generous `min-height` floors on each panel, three stacked charts plus a stage
+  `height: calc(100vh - 48px)` (see the mobile media query below) shared across the badge + chart panels +
+  legend text, so without generous `min-height` floors on each panel, stacked charts plus a stage
   badge and legend can squeeze one or more panels below that threshold and render as a flat, broken-looking
   line — `.rs-chart-container` also has `overflow-y: auto` as a safety net (scroll rather than squeeze, on
-  the shortest phones) since even a floor that's *usually* enough can't be a hard guarantee for every device.
+  the shortest phones) since even a floor that's *usually* enough can't be a hard guarantee for every device;
+  Mansfield RS being collapsed by default now also means one fewer panel's worth of scrolling on a fresh page
+  load, on top of that existing safety net.
   WIG20/mWIG40 are PLN-denominated and
   GPW-listed, unlike the rest (USD, NYSE/Nasdaq):
   prices render via `formatPrice()` (`$` vs `zł` by universe, `PLN_UNIVERSES`) and the TradingView symbol
@@ -1437,24 +1482,27 @@ flex child (no `.topbar-left` wrapper there).
   a row) is unaffected, since that page still adds/removes the class dynamically as before.
 - **`js/chart-render.js`** — the shared chart-rendering ENGINE itself (`renderRelativeStrengthChart()` and
   everything it depends on: `renderStageBadge()`, `rollingMean()`/`alignMansfieldToDates()`/
-  `alignSqueezeToDates()`/`fmtPlDate()`/`sliceWeeklyChartToRange()`/`syncChartsCrosshair()`/
-  `syncVolumeXRange()`, `resetChartZoom()`, `destroyChartInstances()`, and the four `rs*ChartInstance`
-  module-level `let`s) — extracted out of `app.js` into its own plain `<script>` file, loaded by BOTH
-  `index.html` (before `js/app.js`) and `chart.html` (before `js/chart.js`). Since this repo has no build
-  step (see Frontend intro above), "shared" here just means an ordinary global-scope script both pages
-  load — no modules/bundler, the same pattern `js/pull-to-refresh.js` already used for its own (smaller,
-  self-contained) cross-page utility. This is what actually makes `chart.html` NOT a duplicate of the
-  dashboard's chart code (see the version-history note on the rebalance.js bullet above for the two
-  rejected designs that came before this one) — `app.js`/`chart.js` each keep only their own thin,
-  page-specific "which ticker, where do I get the data, what does the toolbar look like" glue
-  (`updateChartArea()`/`renderChartPanel()` respectively) and both call the exact same
-  `renderRelativeStrengthChart(symbol, rsEntry, rangeMode)`. Note the signature: the extraction turned
-  `rangeMode` into an explicit third parameter (mechanically renaming the one internal
-  `state.chartRangeMode` read) instead of leaving the function coupled to `app.js`'s own `state` object —
-  `chart.js` has no such object at all, just a local `chartRangeMode` variable. `tests/js/chart-render.test.js`
-  covers the pure-function pieces (`rollingMean`/`alignMansfieldToDates`/`alignSqueezeToDates`/`fmtPlDate`)
-  the same way `tests/js/app.test.js` used to before the move; `renderRelativeStrengthChart()` itself
-  (DOM/Chart.js-coupled) stays untested either way, consistent with the rest of this codebase's JS tests.
+  `alignSqueezeToDates()`/`alignMacdToDates()`/`fmtPlDate()`/`syncChartsCrosshair()`/
+  `syncVolumeXRange()`, `resetChartZoom()`, `destroyChartInstances()`,
+  `applyMansfieldPanelVisibility()`/`initMansfieldControls()` (see the Mansfield-panel bullet above), and
+  the five `rs*ChartInstance` module-level `let`s) — extracted out of `app.js` into its own plain
+  `<script>` file, loaded by BOTH `index.html` (before `js/app.js`) and `chart.html` (before
+  `js/chart.js`). Since this repo has no build step (see Frontend intro above), "shared" here just means
+  an ordinary global-scope script both pages load — no modules/bundler, the same pattern
+  `js/pull-to-refresh.js` already used for its own (smaller, self-contained) cross-page utility. This is
+  what actually makes `chart.html` NOT a duplicate of the dashboard's chart code (see the version-history
+  note on the rebalance.js bullet above for the two rejected designs that came before this one) —
+  `app.js`/`chart.js` each keep only their own thin, page-specific "which ticker, where do I get the data,
+  what does the toolbar look like" glue (`updateChartArea()`/`renderChartPanel()` respectively) and both
+  call the exact same `renderRelativeStrengthChart(symbol, rsEntry)`. The function used to also take a
+  third `rangeMode` parameter (mechanically renaming `app.js`'s `state.chartRangeMode` read at extraction
+  time, with `chart.js` carrying its own local `chartRangeMode` variable for the same purpose) — REMOVED
+  along with the whole "last 3 months" range toggle (see the Mansfield/MACD panel bullet above for why);
+  the function now always renders the full available window and takes just the two arguments.
+  `tests/js/chart-render.test.js` covers the pure-function pieces (`rollingMean`/`alignMansfieldToDates`/
+  `alignSqueezeToDates`/`alignMacdToDates`/`fmtPlDate`) the same way `tests/js/app.test.js` used to before
+  the move; `renderRelativeStrengthChart()` itself (DOM/Chart.js-coupled) stays untested either way,
+  consistent with the rest of this codebase's JS tests.
   `STAGE_LABELS`/`STAGE_DESCRIPTIONS`/`STAGE_COLORS`/`STAGE_BREAKOUT_VOLUME_RATIO`/`BASE_BOX_COLORS`, which
   `renderStageBadge()` reads, have since moved one level further out, into `js/shared.js` (next bullet) —
   they need to be visible to `rebalance.js` too, which doesn't load this file at all (it never renders the

@@ -1,11 +1,11 @@
 // ============================================================
-// SILNIK WŁASNEGO WYKRESU STAGE-ANALYSIS ("wykres 10:30" + wolumen +
-// Mansfield RS + TTM Squeeze) — WSPÓLNY dla dashboardu (index.html/app.js,
-// wewnątrz #chartPanelOwn) i strony pełnoekranowego wykresu
-// (chart.html/chart.js). Wydzielony do osobnego pliku na wyraźną prośbę
-// użytkownika: pierwsza wersja tego wykresu poza dashboardem (w rebalance.js,
-// zanim istniało chart.html) skopiowała cały ten kod jako drugą, niezależną
-// kopię — zamiast tego obie strony ładują TEN SAM
+// SILNIK WŁASNEGO WYKRESU STAGE-ANALYSIS ("wykres 10:30" + wolumen + MACD +
+// TTM Squeeze + Mansfield RS, opcjonalny) — WSPÓLNY dla dashboardu
+// (index.html/app.js, wewnątrz #chartPanelOwn) i strony pełnoekranowego
+// wykresu (chart.html/chart.js). Wydzielony do osobnego pliku na wyraźną
+// prośbę użytkownika: pierwsza wersja tego wykresu poza dashboardem (w
+// rebalance.js, zanim istniało chart.html) skopiowała cały ten kod jako drugą,
+// niezależną kopię — zamiast tego obie strony ładują TEN SAM
 // plik skryptu (zwykły <script>, bez modułów/bundlera — patrz "no build step"
 // w CLAUDE.md), więc funkcje/zmienne poniżej są zwykłymi globalami dzielonymi
 // między stronami, nigdy zdefiniowanymi dwa razy. `index.html` musi ładować
@@ -18,10 +18,11 @@
 //
 // Strony różnią się tylko cienką, WŁASNĄ warstwą "spinającą" (który ticker
 // jest wybrany, skąd wziąć dane, jak wygląda przycisk "wstecz") — patrz
-// `updateChartArea()`/`initChartRangeToggle()` w app.js i
-// `renderChartPanel()`/`initChartRangeToggle()` w chart.js — to nie jest
+// `updateChartArea()` w app.js i `renderChartPanel()` w chart.js — to nie jest
 // duplikacja SAMEGO WYKRESU, tylko nieunikniona różnica w tym, skąd każda
-// strona bierze "aktualnie wybraną spółkę".
+// strona bierze "aktualnie wybraną spółkę". `initMansfieldControls()`
+// (przełącznik panelu Mansfield RS, patrz niżej) jest już WSPÓLNY — obie
+// strony wołają go raz podczas inicjalizacji.
 // ============================================================
 
 // Node (tests/js/) nie ładuje <script> tagów — odtwarzamy tu ręcznie to samo
@@ -34,8 +35,18 @@ if (typeof require === "function" && typeof window === "undefined") {
 let rsChartInstance = null;
 
 let rsVolumeChartInstance = null;
-let rsMansfieldChartInstance = null;
+let rsMacdChartInstance = null;
 let rsSqueezeChartInstance = null;
+let rsMansfieldChartInstance = null;
+
+// Panel Mansfield RS (RSM) jest teraz OPCJONALNY — przeniesiony na sam dół
+// (patrz komentarz przy renderRelativeStrengthChart) i domyślnie zwinięty,
+// włączany osobnym przyciskiem (#rsMansfieldToggleBtn, patrz
+// initMansfieldControls niżej) zarówno w widoku normalnym, jak i
+// pełnoekranowym (jeden wspólny przełącznik zamiast osobnego dla trybu
+// pełnoekranowego, jak wcześniej — patrz initChartFullscreen w app.js).
+// Domyślnie false: panel jest schowany, dopóki użytkownik go sam nie otworzy.
+let mansfieldPanelVisible = false;
 
 // Przesuwa widoczny zakres osi X panelu wolumenu tak, zeby dokladnie odpowiadal
 // aktualnemu zoom/pan wykresu 10:30 (patrz onZoomComplete/onPanComplete w
@@ -67,15 +78,17 @@ function resetChartZoom() {
     }
 }
 
-// Niszczy wszystkie 4 instancje Chart.js panelu wykresu (wywołujący sam
+// Niszczy wszystkie 5 instancji Chart.js panelu wykresu (wywołujący sam
 // odpowiada za renderStageBadge(null) obok, tak jak dotychczas) — wspólne
 // "wyczyść wykres", używane zarówno przez app.js (gdy wybrana spółka nie ma
 // weekly_chart) jak i chart.js (ten sam przypadek na osobnej stronie).
 function destroyChartInstances() {
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
     if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
-    if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
+    if (rsMacdChartInstance) { rsMacdChartInstance.destroy(); rsMacdChartInstance = null; }
     if (rsSqueezeChartInstance) { rsSqueezeChartInstance.destroy(); rsSqueezeChartInstance = null; }
+    if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
+    applyMansfieldPanelVisibility();
 }
 
 // STAGE_LABELS/STAGE_DESCRIPTIONS/STAGE_COLORS/STAGE_BREAKOUT_VOLUME_RATIO/
@@ -140,11 +153,11 @@ function alignMansfieldToDates(mansfieldData, fullDates) {
     };
 }
 
-// Czwarty panel: wskaznik TTM Squeeze (ttm_squeeze_chart, patrz
-// compute_ttm_squeeze_chart w run_query.py) — ZASTEPUJE dawny wykres surowego
-// wzrostu % 1/3/6 mies. (growth_chart, usuniety). Dopelniany do tej samej
-// pelnej tablicy dat co wykres 10:30/Mansfield, dokladnie tak samo jak
-// alignMansfieldToDates powyzej (ten sam powod: wspolna skala X miedzy panelami).
+// Wskaznik TTM Squeeze (ttm_squeeze_chart, patrz compute_ttm_squeeze_chart w
+// run_query.py) — ZASTEPUJE dawny wykres surowego wzrostu % 1/3/6 mies.
+// (growth_chart, usuniety). Dopelniany do tej samej pelnej tablicy dat co
+// wykres 10:30/wolumen/MACD, dokladnie tak samo jak alignMansfieldToDates
+// powyzej (ten sam powod: wspolna skala X miedzy panelami).
 function alignSqueezeToDates(squeezeData, fullDates) {
     const idxByDate = new Map(squeezeData.dates.map((d, i) => [d, i]));
     const pick = (series) => fullDates.map(d => (idxByDate.has(d) ? series[idxByDate.get(d)] : null));
@@ -155,41 +168,18 @@ function alignSqueezeToDates(squeezeData, fullDates) {
     };
 }
 
-// Przycina weekly_chart do ostatnich CHART_RANGE_SHORT_MONTHS miesięcy (tryb
-// "3m", domyślny — patrz initChartRangeToggle) albo zwraca dane bez zmian
-// (tryb "full"). Działa na już wczytanych danych (backend i tak zawsze
-// eksportuje cały ~14-miesięczny zakres) — nie ma tu żadnego dociągania z
-// sieci, to czysto wizualne okno. "bases" (prostokąty Darvasa) są filtrowane
-// do tych, które choć trochę zachodzą na przycięty zakres, a te, które zaczęły
-// się wcześniej, mają start_date przycięty do początku okna — inaczej lewa
-// krawędź prostokąta wskazywałaby na datę spoza tablicy `dates`/etykiet osi X
-// (kategorycznej), co chartjs-plugin-annotation nie potrafiłby poprawnie
-// umiejscowić.
-const CHART_RANGE_SHORT_MONTHS = 3;
-function sliceWeeklyChartToRange(chartData, mode) {
-    if (mode !== "3m" || !chartData || !chartData.dates || !chartData.dates.length) return chartData;
-    const lastDate = new Date(chartData.dates[chartData.dates.length - 1]);
-    const cutoff = new Date(lastDate);
-    cutoff.setMonth(cutoff.getMonth() - CHART_RANGE_SHORT_MONTHS);
-    const cutoffIso = cutoff.toISOString().slice(0, 10);
-    const startIdx = chartData.dates.findIndex(d => d >= cutoffIso);
-    if (startIdx <= 0) return chartData;
-    const sliceArr = (arr) => (Array.isArray(arr) ? arr.slice(startIdx) : arr);
-    const rangeStart = chartData.dates[startIdx];
+// MACD (macd_chart, patrz compute_macd_chart w run_query.py) — panel dodany
+// pod wolumenem na wyrazne zyczenie uzytkownika jako pomoc przy wejsciu/
+// wyjsciu z pozycji (przeciecia linii MACD/sygnalu, przeciecia histogramu
+// przez zero). Ta sama zasada dopelnienia do pelnej tablicy dat co
+// alignMansfieldToDates/alignSqueezeToDates powyzej.
+function alignMacdToDates(macdData, fullDates) {
+    const idxByDate = new Map(macdData.dates.map((d, i) => [d, i]));
+    const pick = (series) => fullDates.map(d => (idxByDate.has(d) ? series[idxByDate.get(d)] : null));
     return {
-        ...chartData,
-        dates: sliceArr(chartData.dates),
-        close_pct: sliceArr(chartData.close_pct),
-        sma10_pct: sliceArr(chartData.sma10_pct),
-        sma30_pct: sliceArr(chartData.sma30_pct),
-        vwap_pct: sliceArr(chartData.vwap_pct),
-        index_pct: sliceArr(chartData.index_pct),
-        volume: sliceArr(chartData.volume),
-        buying_volume: sliceArr(chartData.buying_volume),
-        buying_volume_ratio: sliceArr(chartData.buying_volume_ratio),
-        bases: (chartData.bases || [])
-            .filter(b => b.end_date >= rangeStart)
-            .map(b => (b.start_date < rangeStart ? { ...b, start_date: rangeStart } : b)),
+        macd: pick(macdData.macd || []),
+        signal: pick(macdData.signal || []),
+        histogram: pick(macdData.histogram || []),
     };
 }
 
@@ -198,11 +188,50 @@ function fmtPlDate(iso) {
     return `${d}.${m}.${y}`;
 }
 
-// Współdzielony "crosshair" między wykresem 10:30, wolumenem i Mansfieldem —
-// najechanie na dowolny z nich podświetla ten sam tydzień na pozostałych.
-// Działa jako zwykłe dopasowanie po indeksie (nie po dacie), bo wszystkie
-// trzy wykresy dzielą teraz dokładnie tę samą tablicę etykiet (chartData.dates
-// — patrz alignMansfieldToDates powyżej dla Mansfielda). Datasety oznaczone
+// Panel Mansfield RS jest teraz opcjonalny (patrz mansfieldPanelVisible
+// powyżej) — ta funkcja jest JEDYNYM miejscem, które ustawia jego widoczność
+// (`#rsMansfieldPanel[hidden]`) i etykietę przycisku, wołana zarówno po każdym
+// (re)renderze wykresu, jak i z samego przycisku — dzięki temu app.js/chart.js
+// nie muszą już same o tym pamiętać (wcześniej robiły to osobno w
+// updateChartArea/renderChartPanel, plus osobna, DRUGA wersja tego przełącznika
+// żyła tylko w trybie pełnoekranowym — patrz initChartFullscreen w app.js;
+// teraz jest już tylko JEDEN wspólny przełącznik, działający tak samo w obu
+// trybach, bo #rs_chart wraz z całą zawartością i tak jest fizycznie
+// przenoszony do document.body na czas pełnego ekranu). "Czy w ogóle jest
+// wykres" ustalamy z samego rsMansfieldChartInstance (null, gdy wybrana spółka
+// nie ma własnego wykresu, patrz destroyChartInstances) — nie trzeba tego
+// przekazywać osobnym parametrem.
+function applyMansfieldPanelVisibility() {
+    const panel = document.getElementById("rsMansfieldPanel");
+    const btn = document.getElementById("rsMansfieldToggleBtn");
+    const hasChart = !!rsMansfieldChartInstance;
+    if (panel) panel.hidden = !hasChart || !mansfieldPanelVisible;
+    if (btn) {
+        btn.disabled = !hasChart;
+        btn.classList.toggle("active", mansfieldPanelVisible);
+        btn.textContent = mansfieldPanelVisible ? "📉 Ukryj RSM ▲" : "📉 Pokaż RSM ▼";
+    }
+}
+
+// Podpina przycisk #rsMansfieldToggleBtn — wołane RAZ przez obie strony
+// (initChartFullscreen-owe app.js::init() i chart.js::init()) podczas
+// inicjalizacji, analogicznie do initResetZoomButton/initOpenTvButton.
+function initMansfieldControls() {
+    const btn = document.getElementById("rsMansfieldToggleBtn");
+    if (!btn) return;
+    btn.addEventListener("click", () => {
+        mansfieldPanelVisible = !mansfieldPanelVisible;
+        applyMansfieldPanelVisibility();
+    });
+    applyMansfieldPanelVisibility();
+}
+
+// Współdzielony "crosshair" między wszystkimi panelami wykresu (10:30,
+// wolumen, MACD, TTM Squeeze, Mansfield RS) — najechanie na dowolny z nich
+// podświetla ten sam tydzień na pozostałych. Działa jako zwykłe dopasowanie po
+// indeksie (nie po dacie), bo wszystkie panele dzielą teraz dokładnie tę samą
+// tablicę etykiet (chartData.dates — patrz alignMansfieldToDates/
+// alignSqueezeToDates/alignMacdToDates powyżej). Datasety oznaczone
 // `_syncExempt` (linia zera Mansfielda — czysto wizualna, nie ma sensu jej
 // podświetlać) są pomijane; jeśli po odfiltrowaniu nic nie zostanie (np.
 // najechanie na tydzień sprzed startu okna Mansfielda, same `null`), wykres
@@ -233,7 +262,7 @@ function syncChartsCrosshair(charts) {
     });
 }
 
-// Dwa wykresy jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
+// Pięć wykresów jeden pod drugim (patrz .rs-chart-container w style.css), w stylu
 // stage analysis (Stan Weinstein / Dr Eric Wish):
 // 1. "Wykres 10:30" — cena tygodniowa spółki + SMA 10-tyg./30-tyg. + VWAP
 //    zakotwiczony na początku okna (fioletowa przerywana linia, patrz
@@ -242,10 +271,9 @@ function syncChartsCrosshair(charts) {
 //    compute_relative_strength_chart). Poziom własnego indeksu NIE jest już
 //    tu rysowany (usunięty na wyraźną prośbę użytkownika — zamiast dwóch
 //    nakładających się linii ceny na jednej skali, porównanie spółki z
-//    benchmarkiem przeniosło się w całości do panelu 3 (Mansfield RS)
+//    benchmarkiem przeniosło się w całości do panelu 5 (Mansfield RS)
 //    poniżej, patrz tamten opis; backend nadal eksportuje `index_pct` w
-//    `weekly_chart` — `sliceWeeklyChartToRange()` nadal go przycina razem z
-//    resztą serii — po prostu nic w tym pliku już go nie rysuje). NIE ma tu
+//    `weekly_chart` — po prostu nic w tym pliku już go nie rysuje). NIE ma tu
 //    też znaczników wejścia/wyjścia ani linii trailing stop-loss (usunięte —
 //    zbyt duzo nakładających się elementów na jednym wykresie) — zamiast tego
 //    same BAZY (patrz "bases" w weekly_chart, _compute_weinstein_stage_series)
@@ -261,39 +289,58 @@ function syncChartsCrosshair(charts) {
 //    powiększaną razem z wykresem 10:30 (patrz syncVolumeXRange) — dwa segmenty
 //    (stack: "volume") pokazują PROPORCJE kupujący/sprzedający, nie tylko
 //    wysokość słupka, patrz komentarz przy buyingColors niżej.
-// 3. Oscylator Mansfield RS w dwóch wygładzeniach — krótkoterminowym (~3 mies.)
-//    i średnioterminowym (~6 mies.) — na WŁASNYM, znacznie krótszym ostatnim
-//    ~6-miesięcznym oknie (patrz compute_mansfield_rs_chart), celowo NIE tym
-//    samym co panel 1: dwa różne horyzonty tego samego sygnału, które mogą się
-//    rozjeżdżać (krótkoterminowe przyspieszenie/spowolnienie może wyprzedzać
-//    średnioterminowy trend). Odkąd panel 1 przestał rysować poziom indeksu
-//    (patrz wyżej), TO jest teraz jedyne miejsce na tym wykresie pokazujące
-//    siłę spółki względem jej własnego benchmarku (indeksu `rsEntry.universe`)
-//    — linia powyżej zera = spółka silniejsza od indeksu w danym oknie,
-//    poniżej = słabsza. Nieinteraktywny — własne, krótkie okno nie wymaga
-//    zoom/pan.
+// 3. MACD (macd_chart, patrz compute_macd_chart) — DODANY pod wolumenem na
+//    wyraźne życzenie użytkownika jako pomoc przy wejściu/wyjściu z pozycji:
+//    linia MACD (szybka EMA 12 tyg. minus wolna EMA 26 tyg.), linia sygnału
+//    (EMA 9 tyg. linii MACD) i histogram ich różnicy, kolorowany tak samo jak
+//    histogram TTM Squeeze (jaśniejszy/ciemniejszy zielony/czerwony wg znaku i
+//    kierunku względem poprzedniego słupka) — przecięcia linii MACD/sygnału i
+//    przejścia histogramu przez zero to klasyczne sygnały wejścia/wyjścia.
+//    Nieinteraktywny, tak jak panele Squeeze/Mansfield niżej.
 // 4. Wskaznik TTM Squeeze (ttm_squeeze_chart, patrz compute_ttm_squeeze_chart)
-//    obok Mansfielda — ZASTEPUJE dawny wykres surowego wzrostu % 1/3/6 mies.
+//    obok MACD — ZASTEPUJE dawny wykres surowego wzrostu % 1/3/6 mies.
 //    na zyczenie uzytkownika: zamiast stopy zwrotu pokazuje FAZY KONSOLIDACJI
 //    (Bollinger Bands wewnatrz kanalu Kellera) i moment wybicia z nich. Slupki
 //    histogramu (momentum-oscylator, kolor wg znaku/kierunku) plus rzad
 //    kropek na poziomie zera pod nimi: czerwona = squeeze wlaczony (trwajaca
 //    konsolidacja), zlota = tydzien wybicia, szara = squeeze wylaczony (poza
-//    tygodniem wybicia). Nieinteraktywny, tak jak panel Mansfielda.
+//    tygodniem wybicia). Nieinteraktywny.
+// 5. Oscylator Mansfield RS w trzech wygładzeniach — krótkoterminowym
+//    (~3 mies.), średnioterminowym (~6 mies.) i długoterminowym (~12 mies./52
+//    tyg.) — jedyne miejsce na tym wykresie pokazujące siłę spółki względem
+//    jej własnego benchmarku (indeksu `rsEntry.universe`, odkąd panel 1
+//    przestał rysować jego poziom, patrz wyżej): linia powyżej zera = spółka
+//    silniejsza od indeksu w danym oknie, poniżej = słabsza. PRZENIESIONY na
+//    sam dół i OPCJONALNY na wyraźne życzenie użytkownika: domyślnie schowany
+//    (patrz mansfieldPanelVisible/applyMansfieldPanelVisibility/
+//    initMansfieldControls powyżej), rozwijany przyciskiem
+//    #rsMansfieldToggleBtn tuż nad panelem. Przy KAŻDYM (re)renderze domyślnie
+//    widoczna jest TYLKO linia długoterminowa (~12 mies./52 tyg., "zawsze
+//    włączaj 52-tygodniowy" — wyraźna prośba użytkownika), krótko-/
+//    średnioterminowa startują schowane (`hidden: true` w definicji datasetu)
+//    — pokazanie poszczególnych linii to już wbudowane, domyślne zachowanie
+//    legendy Chart.js: klik w pozycję legendy przełącza widoczność TEGO
+//    datasetu, więc nie potrzeba tu osobnych przycisków na linię. Nieinteraktywny
+//    — własne okno nie wymaga zoom/pan.
 //
-// `rangeMode` ("3m"/"full", patrz sliceWeeklyChartToRange powyżej) i `symbol`/
-// `rsEntry` (musi zawierać `.universe`) są przekazywane WPROST przez
+// `symbol`/`rsEntry` (musi zawierać `.universe`) są przekazywane WPROST przez
 // wywołującego (app.js::updateChartArea / chart.js::renderChartPanel) —
-// silnik wykresu nie czyta żadnego page-specific `state` sam z siebie.
-function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
-    const chartData = sliceWeeklyChartToRange(rsEntry.weekly_chart, rangeMode);
+// silnik wykresu nie czyta żadnego page-specific `state` sam z siebie. Wykres
+// zawsze pokazuje CAŁY dostępny zakres (dawny, dodatkowy tryb "ostatnie 3
+// miesiące" — sliceWeeklyChartToRange/#chartRange3mBtn — USUNIĘTY na wyraźne
+// życzenie użytkownika: przy ~14-miesięcznym oknie 3 miesiące danych okazały
+// się zbyt mało czytelne, nie warte utrzymywania drugiego trybu).
+function renderRelativeStrengthChart(symbol, rsEntry) {
+    const chartData = rsEntry.weekly_chart;
     const mansfieldData = rsEntry.mansfield_chart;
     const squeezeData = rsEntry.ttm_squeeze_chart;
+    const macdData = rsEntry.macd_chart;
     const rsContainer = document.getElementById("rs_chart");
     const canvas = document.getElementById("rsChartCanvas");
     const volumeCanvas = document.getElementById("rsVolumeCanvas");
-    const mansfieldCanvas = document.getElementById("rsMansfieldCanvas");
+    const macdCanvas = document.getElementById("rsMacdCanvas");
     const squeezeCanvas = document.getElementById("rsSqueezeCanvas");
+    const mansfieldCanvas = document.getElementById("rsMansfieldCanvas");
     if (!canvas || !chartData) return;
 
     if (typeof Chart === "undefined") {
@@ -302,8 +349,9 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
     }
     if (rsChartInstance) { rsChartInstance.destroy(); rsChartInstance = null; }
     if (rsVolumeChartInstance) { rsVolumeChartInstance.destroy(); rsVolumeChartInstance = null; }
-    if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
+    if (rsMacdChartInstance) { rsMacdChartInstance.destroy(); rsMacdChartInstance = null; }
     if (rsSqueezeChartInstance) { rsSqueezeChartInstance.destroy(); rsSqueezeChartInstance = null; }
+    if (rsMansfieldChartInstance) { rsMansfieldChartInstance.destroy(); rsMansfieldChartInstance = null; }
 
     renderStageBadge(chartData.current_stage);
 
@@ -433,8 +481,9 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
                 },
                 scales: {
                     // maxTicksLimit taki sam jak wykres 10:30 — z tymi samymi datami na
-                    // osi X (patrz alignMansfieldToDates dla trzeciego panelu) daje to
-                    // wizualnie spójne, dopasowane skalowanie między panelami.
+                    // osi X (patrz alignMacdToDates/alignSqueezeToDates/alignMansfieldToDates
+                    // dla pozostałych paneli) daje to wizualnie spójne, dopasowane
+                    // skalowanie między panelami.
                     x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                     // Same wartości osi Y (miliony akcji) niosą mało informacji i zabierają
                     // sporo poziomego miejsca na wąskich panelach (np. telefon) — słupki i
@@ -445,44 +494,37 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
         });
     }
 
-    const mansfieldCaption = document.getElementById("rsMansfieldCaption");
-    if (mansfieldCanvas && mansfieldData) {
-        // Dopasowane do PEŁNEJ tablicy dat wykresu 10:30 (nie własnej, krótszej
-        // mansfieldData.dates) — patrz alignMansfieldToDates: dzięki temu oś X
-        // (skala: piksele na tydzień) jest identyczna na obu wykresach, a pusty
-        // odcinek z lewej strony samych linii RSM pokazuje, od kiedy faktycznie
-        // zaczynają się dane.
-        const aligned = alignMansfieldToDates(mansfieldData, chartData.dates);
-        const zeroLine = chartData.dates.map(() => 0);
-        if (mansfieldCaption) {
-            // Zakres FAKTYCZNIE wyświetlanych tygodni (chartData.dates, ewentualnie
-            // przycięte przez sliceWeeklyChartToRange do trybu "3m") — nie własny,
-            // pełny zakres mansfieldData, który przy trybie "3m" byłby mylący
-            // (sugerowałby dłuższe okno niż to, co faktycznie widać na wykresie).
-            // Prefiks "Mansfield RS vs {universe}" dodany na wyraźną prośbę
-            // użytkownika: odkąd panel 1 przestał rysować poziom indeksu (patrz
-            // wyżej), sam podpis daty pod tym panelem nie mówił jasno, ŻE to jest
-            // wykres siły względem benchmarku, ani WZGLĘDEM KTÓREGO indeksu —
-            // łatwo było go przeoczyć jako "kolejny wykres", a nie jako
-            // zastąpienie usuniętej linii indeksu.
-            mansfieldCaption.textContent = `Mansfield RS vs ${rsEntry.universe} (indeks) · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+    const macdCaption = document.getElementById("rsMacdCaption");
+    if (macdCanvas && macdData) {
+        // Ta sama logika dopasowania co panele Squeeze/Mansfield niżej (patrz
+        // alignMacdToDates) — wspólna, pełna tablica dat daje spójną skalę X
+        // między wszystkimi panelami.
+        const aligned = alignMacdToDates(macdData, chartData.dates);
+        const zeroLineMacd = chartData.dates.map(() => 0);
+        if (macdCaption) {
+            macdCaption.textContent = `MACD (12/26/9 tyg.) · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
-        rsMansfieldChartInstance = new Chart(mansfieldCanvas, {
-            type: "line",
+        // Ten sam schemat 4 kolorów co histogram TTM Squeeze (patrz histColors
+        // niżej) — spójny język wizualny "histogram = momentum-oscylator" na obu
+        // panelach.
+        const macdHistColors = aligned.histogram.map((v, i) => {
+            if (v == null) return "transparent";
+            const prev = i > 0 ? aligned.histogram[i - 1] : null;
+            const rising = prev == null || v >= prev;
+            if (v >= 0) return rising ? "#2ecc71" : "#1f7a4d";
+            return rising ? "#7a2020" : "#ff4d4f";
+        });
+        rsMacdChartInstance = new Chart(macdCanvas, {
             data: {
                 labels: chartData.dates,
                 datasets: [
-                    { label: `RSM krótkoterminowy vs ${rsEntry.universe} (~3M)`, data: aligned.short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5 },
-                    { label: `RSM średnioterminowy vs ${rsEntry.universe} (~6M)`, data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2 },
-                    // Trzecia, dlugoterminowa linia (rsm_long, ~12M/52-tyg. wygladzenie) —
-                    // dodana na wyrazne zyczenie uzytkownika. Przerywana (borderDash), zeby
-                    // od razu odroznic ja wizualnie od dwoch solidnych linii short/medium —
-                    // czesto zaczyna sie jako `null` (patrz komentarz przy RS_MANSFIELD_LONG_WEEKS
-                    // w run_query.py: obecna retencja prices nie miesci calego 52-tyg. zapasu
-                    // rozgrzewkowego przed poczatkiem okna), co po prostu zostawia pusty
-                    // odcinek z lewej strony tej linii, tak jak short/medium robily wczesniej.
-                    { label: `RSM długoterminowy vs ${rsEntry.universe} (~12M)`, data: aligned.long, borderColor: "#f0a832", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [5, 3] },
-                    { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
+                    {
+                        type: "bar", label: "Histogram (MACD − sygnał)", data: aligned.histogram,
+                        backgroundColor: macdHistColors, borderWidth: 0, order: 3,
+                    },
+                    { type: "line", label: "MACD (12/26 tyg.)", data: aligned.macd, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, order: 1 },
+                    { type: "line", label: "Sygnał (9 tyg.)", data: aligned.signal, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, order: 2 },
+                    { type: "line", label: "0", data: zeroLineMacd, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], order: 4, _syncExempt: true },
                 ],
             },
             options: {
@@ -493,38 +535,35 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
                     legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
                     tooltip: {
                         filter: (ctx) => ctx.datasetIndex !== 3,
-                        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2)}` },
+                        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(3)}` },
                     },
                 },
                 scales: {
-                    // Ta sama liczba etykiet co panel 10:30/wolumen (patrz komentarz
-                    // przy tamtych skalach) — wspólna tablica dat + ten sam
-                    // maxTicksLimit dają spójne, wyrównane skale między panelami.
+                    // Ta sama liczba etykiet/skala X co pozostałe panele.
                     x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                     y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
                 },
             },
         });
-    } else if (mansfieldCanvas) {
-        const ctx = mansfieldCanvas.getContext("2d");
-        if (ctx) ctx.clearRect(0, 0, mansfieldCanvas.width, mansfieldCanvas.height);
-        if (mansfieldCaption) mansfieldCaption.textContent = "";
+    } else if (macdCanvas) {
+        const ctx = macdCanvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, macdCanvas.width, macdCanvas.height);
+        if (macdCaption) macdCaption.textContent = "";
     }
 
     const squeezeCaption = document.getElementById("rsSqueezeCaption");
     if (squeezeCanvas && squeezeData) {
-        // Ta sama logika dopasowania co panel Mansfielda powyżej (patrz
+        // Ta sama logika dopasowania co panel MACD powyżej (patrz
         // alignSqueezeToDates) — wspólna, pełna tablica dat daje spójną skalę X
         // między wszystkimi panelami.
         const aligned = alignSqueezeToDates(squeezeData, chartData.dates);
         const zeroLineSqueeze = chartData.dates.map(() => 0);
         if (squeezeCaption) {
-            // Prefiks "TTM Squeeze" na tej samej zasadzie co "Mansfield RS vs
-            // {universe}" w panelu 3 powyżej — ten panel nie ma WŁASNEJ legendy
-            // Chart.js (plugins.legend.display:false, patrz niżej — same słupki
+            // Prefiks "TTM Squeeze" na tej samej zasadzie co "MACD" w panelu
+            // powyżej — ten panel nie ma WŁASNEJ legendy Chart.js
+            // (plugins.legend.display:false, patrz niżej — same słupki
             // histogramu i kropki nie tłumaczą się same), więc bez podpisu
-            // wyglądał jak nieopisany dodatek pod panelem Mansfielda, a nie jak
-            // czwarty, samodzielny wykres.
+            // wyglądał jak nieopisany dodatek, a nie jak samodzielny wykres.
             squeezeCaption.textContent = `TTM Squeeze · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
         // Klasyczne 4 kolory histogramu TTM Squeeze: dodatni/rosnący (jaśniejszy
@@ -587,7 +626,7 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
                 },
                 scales: {
                     // Ta sama liczba etykiet/skala X co pozostałe panele — patrz
-                    // komentarz przy panelu Mansfielda powyżej.
+                    // komentarz przy panelu MACD powyżej.
                     x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
                     y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
                 },
@@ -599,9 +638,85 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
         if (squeezeCaption) squeezeCaption.textContent = "";
     }
 
+    // Mansfield RS — PRZENIESIONY na sam dół (patrz numerowany opis paneli
+    // powyżej funkcji) i teraz OPCJONALNY: panel sam w sobie jest budowany
+    // niezależnie od tego, czy jest akurat widoczny (spójnie z tym, jak Volume/
+    // Squeeze/MACD są budowane niezależnie od trybu pełnoekranowego) —
+    // applyMansfieldPanelVisibility() na końcu tej funkcji decyduje o samej
+    // widoczności `#rsMansfieldPanel`. Domyślnie widoczna jest TYLKO linia
+    // długoterminowa (~12M/52 tyg., `hidden: false` — "zawsze włączaj
+    // 52-tygodniowy") — krótko-/średnioterminowa startują jako `hidden: true`;
+    // klik w pozycję legendy Chart.js pokazuje/chowa dowolną z nich.
+    const mansfieldCaption = document.getElementById("rsMansfieldCaption");
+    if (mansfieldCanvas && mansfieldData) {
+        // Dopasowane do PEŁNEJ tablicy dat wykresu 10:30 (nie własnej, krótszej
+        // mansfieldData.dates) — patrz alignMansfieldToDates: dzięki temu oś X
+        // (skala: piksele na tydzień) jest identyczna na wszystkich panelach, a
+        // pusty odcinek z lewej strony samych linii RSM pokazuje, od kiedy
+        // faktycznie zaczynają się dane.
+        const aligned = alignMansfieldToDates(mansfieldData, chartData.dates);
+        const zeroLine = chartData.dates.map(() => 0);
+        if (mansfieldCaption) {
+            // Prefiks "Mansfield RS vs {universe}" dodany na wyraźną prośbę
+            // użytkownika: odkąd panel 1 przestał rysować poziom indeksu (patrz
+            // wyżej), sam podpis daty pod tym panelem nie mówił jasno, ŻE to jest
+            // wykres siły względem benchmarku, ani WZGLĘDEM KTÓREGO indeksu.
+            mansfieldCaption.textContent = `Mansfield RS vs ${rsEntry.universe} (indeks) · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+        }
+        rsMansfieldChartInstance = new Chart(mansfieldCanvas, {
+            type: "line",
+            data: {
+                labels: chartData.dates,
+                datasets: [
+                    { label: `RSM krótkoterminowy vs ${rsEntry.universe} (~3M)`, data: aligned.short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, hidden: true },
+                    { label: `RSM średnioterminowy vs ${rsEntry.universe} (~6M)`, data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, hidden: true },
+                    // Trzecia, dlugoterminowa linia (rsm_long, ~12M/52-tyg. wygladzenie) —
+                    // JEDYNA widoczna domyslnie (patrz komentarz nad panelem powyzej),
+                    // na wyrazne zyczenie uzytkownika. Przerywana (borderDash), zeby
+                    // od razu odroznic ja wizualnie od dwoch pozostalych linii —
+                    // czesto zaczyna sie jako `null` (patrz komentarz przy RS_MANSFIELD_LONG_WEEKS
+                    // w run_query.py: obecna retencja prices nie miesci calego 52-tyg. zapasu
+                    // rozgrzewkowego przed poczatkiem okna), co po prostu zostawia pusty
+                    // odcinek z lewej strony tej linii.
+                    { label: `RSM długoterminowy vs ${rsEntry.universe} (~12M)`, data: aligned.long, borderColor: "#f0a832", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [5, 3], hidden: false },
+                    { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                plugins: {
+                    legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
+                    tooltip: {
+                        filter: (ctx) => ctx.datasetIndex !== 3,
+                        callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2)}` },
+                    },
+                },
+                scales: {
+                    // Ta sama liczba etykiet co pozostałe panele — wspólna tablica dat +
+                    // ten sam maxTicksLimit dają spójne, wyrównane skale między panelami.
+                    x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
+                    y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
+                },
+            },
+        });
+    } else if (mansfieldCanvas) {
+        const ctx = mansfieldCanvas.getContext("2d");
+        if (ctx) ctx.clearRect(0, 0, mansfieldCanvas.width, mansfieldCanvas.height);
+        if (mansfieldCaption) mansfieldCaption.textContent = "";
+    }
+    applyMansfieldPanelVisibility();
+
     // Wspólny crosshair (patrz syncChartsCrosshair) — tylko między wykresami,
-    // które faktycznie istnieją (Mansfield/wzrost % mogą być null przy braku danych).
-    syncChartsCrosshair([rsChartInstance, rsVolumeChartInstance, rsMansfieldChartInstance, rsSqueezeChartInstance].filter(Boolean));
+    // które faktycznie istnieją (MACD/Mansfield/Squeeze mogą być null przy
+    // braku danych) — obejmuje też panele schowane w danym momencie
+    // (Mansfield domyślnie, patrz applyMansfieldPanelVisibility powyżej):
+    // nieszkodliwe, bo taki panel po prostu nie odbiera zdarzeń myszy, dopóki
+    // jest `hidden`.
+    syncChartsCrosshair([
+        rsChartInstance, rsVolumeChartInstance, rsMacdChartInstance, rsSqueezeChartInstance, rsMansfieldChartInstance,
+    ].filter(Boolean));
 }
 
 // Eksport wyłącznie dla test runnera Node (tests/js/chart-render.test.js) —
@@ -610,6 +725,6 @@ function renderRelativeStrengthChart(symbol, rsEntry, rangeMode) {
 // co rysuje na canvasie, nie jest tu testowalne bez pełnego DOM-a.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rollingMean, alignMansfieldToDates, alignSqueezeToDates, fmtPlDate, sliceWeeklyChartToRange,
+        rollingMean, alignMansfieldToDates, alignSqueezeToDates, alignMacdToDates, fmtPlDate,
     };
 }
