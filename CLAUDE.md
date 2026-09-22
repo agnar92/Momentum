@@ -1154,27 +1154,41 @@ flex child (no `.topbar-left` wrapper there).
      see `histColors` in `renderRelativeStrengthChart()`); a row of dots pinned to the zero line
      (`dotColors`) marks the squeeze state per week — red while the squeeze is on (consolidating), gold on
      the single week it fires (breaks out), gray afterward, transparent while not yet computed (BB/KC
-     warmup). Non-interactive, same as the MACD/Mansfield panels.
-  5. The Mansfield RS oscillator (short-term/medium-term/long-term lines — `rsm_short`/`rsm_medium`/
-     `rsm_long`, see above) — the ONLY panel showing the stock's strength against its own benchmark index
-     (`rsEntry.universe`), since panel 1's index line was removed (see above): above zero means the stock
-     is currently outperforming that index over the given smoothing window, below means it's lagging.
-     **Moved to the very bottom and made OPTIONAL** at the user's explicit request (`#rsMansfieldPanel`,
-     `hidden` by default) — `#rsMansfieldToggleBtn` (a small "📉 Pokaż RSM ▼" / "📉 Ukryj RSM ▲" button
-     right above the panel, `rs-mansfield-controls` in `style.css`) shows/hides it, via ONE shared toggle
-     (`mansfieldPanelVisible`/`applyMansfieldPanelVisibility()`/`initMansfieldControls()`, all living in
-     `js/chart-render.js` since both `app.js` and `chart.js` need it) that behaves identically in the
-     normal view and in fullscreen mode — this REPLACED an earlier, fullscreen-only "📉 RSM" opt-in toggle
-     that lived only in `#chartFullscreenExtras`/`chartFullscreenExtras.mansfield` (see `initChartFullscreen()`
-     in `app.js`): now that the panel is optional everywhere, not just in fullscreen, a single toggle
-     covers both cases instead of two separate mechanisms. **Individual lines are also optional** — "along
-     with showing individual lines" was the user's own explicit ask — but this reuses Chart.js's own
-     built-in legend-click-to-toggle behavior (clicking a legend entry already toggles that dataset's
-     visibility) rather than adding bespoke per-line buttons: on every (re)render, only the long-term
-     (~12M/52-week) line starts visible (`hidden: false` in its dataset definition — "zawsze włączaj
-     52-tygodniowy", the user's own explicit ask), short-/medium-term start `hidden: true`, and a click on
-     either's legend entry reveals it. The long-term line often starts as a gap — see the `rsm_long`
-     retention caveat above. Non-interactive — its own window doesn't need zoom/pan.
+     warmup). **Also carries the long-term (~12M/52-week) Mansfield RS line** (`rsm_long`, labeled "RS 52
+     tyg."), MOVED here from panel 5 at the user's explicit later request: both indicators "oscillate
+     around zero," so one combined glance — the histogram (when momentum is accelerating/consolidating)
+     alongside this line (whether the stock is stronger/weaker than its own index over the long term) —
+     reads the trend more clearly than two separate, mostly-collapsed panels did. Drawn in a bright sky
+     blue (`#38bdf8`, `rsLongDataset` in `renderRelativeStrengthChart()`) deliberately not reused from any
+     other color already in this panel (histogram greens/reds, squeeze dot gold/red/gray) or panel 5's own
+     palette (blue/purple for short/medium) — it's meant to visually dominate as the panel's headline trend
+     signal. It's the only dataset here with its own legend entry (`legend.labels.filter` — histogram/dots
+     still have none, same as before); the caption gets a `+ RS 52 tyg. vs {universe}` suffix when present.
+     Non-interactive, same as the MACD/Mansfield panels; `alignMansfieldToDates()` is now computed ONCE,
+     before this panel, and reused by panel 5 below rather than recomputed twice.
+  5. The Mansfield RS oscillator — now just short-term/medium-term lines (`rsm_short`/`rsm_medium`; the
+     long-term line lives in panel 4 now, see above) — the ONLY panel showing the stock's strength against
+     its own benchmark index (`rsEntry.universe`), since panel 1's index line was removed (see above):
+     above zero means the stock is currently outperforming that index over the given smoothing window,
+     below means it's lagging. **Moved to the very bottom and made OPTIONAL** at the user's explicit
+     request (`#rsMansfieldPanel`, `hidden` by default) — `#rsMansfieldToggleBtn` (a small "📉 Pokaż RSM ▼"
+     / "📉 Ukryj RSM ▲" button right above the panel, `rs-mansfield-controls` in `style.css`) shows/hides
+     it, via ONE shared toggle (`mansfieldPanelVisible`/`applyMansfieldPanelVisibility()`/
+     `initMansfieldControls()`, all living in `js/chart-render.js` since both `app.js` and `chart.js` need
+     it) that behaves identically in the normal view and in fullscreen mode — this REPLACED an earlier,
+     fullscreen-only "📉 RSM" opt-in toggle that lived only in
+     `#chartFullscreenExtras`/`chartFullscreenExtras.mansfield` (see `initChartFullscreen()` in `app.js`):
+     now that the panel is optional everywhere, not just in fullscreen, a single toggle covers both cases
+     instead of two separate mechanisms. **Individual lines are also optional** — "along with showing
+     individual lines" was the user's own explicit ask — but this reuses Chart.js's own built-in
+     legend-click-to-toggle behavior (clicking a legend entry already toggles that dataset's visibility)
+     rather than adding bespoke per-line buttons: on every (re)render, only the medium-term line starts
+     visible (`hidden: false`) — short-term starts `hidden: true`, and a click on its legend entry reveals
+     it. Medium-term inherited the "always show one line by default" role from long-term once that line
+     moved to panel 4 (originally "zawsze włączaj 52-tygodniowy," the user's explicit ask when the panel
+     still held all three lines) — medium is the closest remaining approximation of "a stable, less noisy
+     trend line" among what's left, a judgment call made when the long-term line moved out, not a separate
+     explicit request of its own. Non-interactive — its own window doesn't need zoom/pan.
 
   (`.rs-chart-container` / `.rs-chart-panel` / `.rs-chart-panel-volume` / `.rs-chart-panel-small` in
   `style.css`.) **Version history**: an earlier version put entry/exit signal markers (`ENTRY_2A`/`ENTRY_2B`/
