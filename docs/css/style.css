@@ -268,14 +268,8 @@ html, body {
     border-color: var(--green-bright);
 }
 
-/* Kolumna "Trend" w tabelach RSM Stabilne/Wzrostowe (patrz rsmTrendHtml/
-   classifyRsm w app.js) — czy oba wygładzenia (3M/6M) rosną od
-   RSM_TREND_LOOKBACK_WEEKS tygodni, czy któreś właśnie przecięło zero, czy
-   żadne z powyższych. */
-.rsm-trend { font-size: 10.5px; font-weight: 600; }
-.rsm-trend-rising { color: var(--green-bright); }
-.rsm-trend-cross { color: #4fa6e0; }
-.rsm-trend-mixed { color: var(--text-faint); font-weight: 400; }
+/* "(N tyg. temu)" przy MACD/RS 52 tyg. w tabeli Wybicie (patrz wybicieRowHtml w app.js). */
+.cross-age { font-size: 10.5px; color: var(--text-faint); font-weight: 400; }
 
 /* Kolumna "Status" w tabeli TTM Squeeze (patrz ttmSqueezeStatusHtml/
    classifyTtmSqueeze w app.js) — te same kolory co kropki squeeze na czwartym

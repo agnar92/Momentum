@@ -260,104 +260,100 @@ async function loadData() {
     // docs/data/global_equity_momentum.json i docs/data/relative_strength.json NIE
     // są już tu wczytywane — GEM przestał być czymś do oglądania na dashboardzie
     // (przeniesiony jako silnik wyboru do rebalance.js, patrz CLAUDE.md), a panel
-    // RSM poniżej (combinedRsmCandidates) buduje się bezpośrednio z mansfield_chart
-    // dołączonego do KAŻDEGO constituenta w state.data (patrz process_universe/
-    // export_json w run_query.py), więc nie potrzebuje osobnego leaderboardu.
+    // Wybicie/TTM Squeeze poniżej budują się bezpośrednio z wykresów
+    // dołączonych do KAŻDEGO constituenta w state.data (patrz process_universe/
+    // export_json w run_query.py), więc nie potrzebują osobnego leaderboardu.
 }
 
 // ============================================================
-// RSM (oscylator Mansfield Relative Strength) — SCREENER: dla KAŻDEJ spółki w
-// KAŻDYM uniwersum (mansfield_chart jest już eksportowany per-constituent w
-// {universe}.json, patrz run_query.py::compute_mansfield_rs_chart — nie tylko
-// dla wybranych liderów), porównujemy AKTUALNĄ wartość rsm_short (~3M) i
-// rsm_medium (~6M) oraz ich trend w ostatnich RSM_TREND_LOOKBACK_WEEKS
-// tygodniach, żeby wyłapać dwa różne setupy:
-//
-// - "Stabilny wzrost": rsm_medium > rsm_short > 0 — spółka trwale silniejsza
-//   od swojego indeksu w dłuższym (6-miesięcznym) horyzoncie, bez świeżego,
-//   gwałtownego skoku w krótszym (3-miesięcznym) — bardziej wiarygodny,
-//   utrzymujący się sygnał niż pojedynczy zryw. To GŁÓWNY cel tego screenera
-//   (użytkownik: "głównie szukamy stabilnych wzrostów 6 > 3").
-// - "Nagła zmiana trendu": rsm_short > rsm_medium, i OBA wygładzenia rosną od
-//   RSM_TREND_LOOKBACK_WEEKS tygodni — krótszy horyzont właśnie przyspiesza
-//   szybciej niż dłuższy, przy jednoczesnym wzroście obu — świeże
-//   przyspieszenie, nie tylko szum w jedną stronę.
-//
-// Te dwa zbiory się wzajemnie wykluczają (mediumNow > shortNow vs
-// shortNow > mediumNow), więc żadna spółka nie pojawia się w obu naraz.
-// Cokolwiek nie pasuje do żadnego z nich (np. oba ujemne, albo krótszy >
-// dłuższy ale nie oba rosną) po prostu nie trafia na listę — to celowo
-// wyselekcjonowany screener, nie pełna lista wszystkich spółek.
+// WYBICIE — SCREENER (zastąpił dawne zakładki "RSM Stabilne"/"RSM Wzrostowe",
+// na wyraźną prośbę użytkownika): spółki, u których JEDNOCZEŚNIE
+//   1. tygodniowy MACD (macd_chart.macd, patrz compute_macd_chart w
+//      run_query.py) przeciął linię zera W GÓRĘ,
+//   2. linia RS 52 tyg. z panelu TTM Squeeze (mansfield_chart.rsm_long — ta
+//      sama, którą rysuje renderRelativeStrengthChart na panelu TTM Squeeze)
+//      przecięła linię zera W GÓRĘ,
+//   3. histogram TTM Squeeze (ttm_squeeze_chart.histogram) jest dodatni.
+// "Przeciął" = wartość jest TERAZ > 0, a w którymś z ostatnich
+// WYBICIE_CROSS_LOOKBACK_WEEKS tygodni była <= 0 — świeże przecięcie, nie
+// spółka, która jest nad zerem od miesięcy. Każdy wskaźnik ma własną tablicę
+// dat, więc "teraz" to ostatni tydzień z NIE-null wartością w danej serii
+// (ten sam caveat co w classifyTtmSqueeze — najnowszy tydzień bywa null).
 // ============================================================
-const RSM_TREND_LOOKBACK_WEEKS = 4; // ~1 miesiąc — kompromis między szumem a opóźnieniem sygnału
-const RSM_TREND_LABELS = { rising: "Rosnący ↑", fresh_cross: "Świeże wybicie na plus", mixed: "Mieszany" };
+const WYBICIE_CROSS_LOOKBACK_WEEKS = 6; // ~1,5 miesiąca
 
-// Klasyfikuje jedną spółkę na podstawie jej mansfield_chart (patrz wyżej).
-// Zwraca null gdy brakuje danych (za mało historii — patrz shallow-history
-// caveat w CLAUDE.md) albo gdy najnowszy tydzień akurat nie ma jeszcze
-// wartości (np. tuż po rozszerzeniu okna retencji, przed pełnym re-bootstrapem).
-function classifyRsm(ticker, universe, c) {
-    const m = c.mansfield_chart;
-    if (!m || !m.rsm_short || !m.rsm_medium || !m.dates || m.dates.length === 0) return null;
-    // Ostatni element tablicy jest CZĘSTO null (aktualny, jeszcze niedomknięty
-    // tydzień bywa null zanim run_query.py doliczy pełne dane — znany,
-    // istniejący wcześniej charakter danych, nie błąd) — więc "teraz" to
-    // ostatni tydzień, który FAKTYCZNIE ma obie wartości, nie literalnie
-    // ostatni indeks tablicy. Bez tego cofnięcia większość, czasem WSZYSTKIE,
-    // spółki danego uniwersum (zwłaszcza uniwersów USA — patrz git history)
-    // wypadałyby z ekranu tylko dlatego, że najświeższy tydzień jeszcze się
-    // nie domknął, nie dlatego, że faktycznie nie spełniają kryteriów.
-    let nowIdx = m.dates.length - 1;
-    while (nowIdx >= 0 && (m.rsm_short[nowIdx] == null || m.rsm_medium[nowIdx] == null)) nowIdx--;
-    if (nowIdx < 0) return null;
-    const shortNow = m.rsm_short[nowIdx];
-    const mediumNow = m.rsm_medium[nowIdx];
+function latestNonNullIdx(arr) {
+    if (!arr) return -1;
+    let i = arr.length - 1;
+    while (i >= 0 && arr[i] == null) i--;
+    return i;
+}
 
-    const pastIdx = Math.max(0, nowIdx - RSM_TREND_LOOKBACK_WEEKS);
-    const shortPast = m.rsm_short[pastIdx];
-    const mediumPast = m.rsm_medium[pastIdx];
-    const shortRising = shortPast != null && shortNow > shortPast;
-    const mediumRising = mediumPast != null && mediumNow > mediumPast;
-    const bothRising = shortRising && mediumRising;
-    // "Świeże wybicie": którekolwiek z wygładzeń było <= 0 na początku okna
-    // patrzenia wstecz i jest > 0 teraz — niekoniecznie monotonicznie, to tylko
-    // prosty, tani do policzenia proxy dla "przecięło zero w ostatnim miesiącu".
-    const freshCross = (shortPast != null && shortPast <= 0 && shortNow > 0)
-                     || (mediumPast != null && mediumPast <= 0 && mediumNow > 0);
-    const trend = bothRising ? "rising" : (freshCross ? "fresh_cross" : "mixed");
+// Ile tygodni temu seria przecięła zero w górę (1 = w ostatnim tygodniu), albo
+// null, gdy teraz nie jest > 0 albo w oknie lookbacku ani razu nie była <= 0.
+function weeksSinceZeroCrossUp(arr, lookback = WYBICIE_CROSS_LOOKBACK_WEEKS) {
+    const nowIdx = latestNonNullIdx(arr);
+    if (nowIdx < 0 || !(arr[nowIdx] > 0)) return null;
+    for (let k = 1; k <= lookback; k++) {
+        const j = nowIdx - k;
+        if (j < 0) return null;
+        if (arr[j] != null && arr[j] <= 0) return k;
+    }
+    return null;
+}
+
+// Zwraca null, gdy spółka nie spełnia wszystkich trzech warunków (albo brakuje
+// danych) — celowo wyselekcjonowany screener, nie pełna lista.
+function classifyWybicie(ticker, universe, c) {
+    const macd = c.macd_chart && c.macd_chart.macd;
+    const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
+    const hist = c.ttm_squeeze_chart && c.ttm_squeeze_chart.histogram;
+    if (!macd || !rsLong || !hist) return null;
+
+    const macdCrossWeeks = weeksSinceZeroCrossUp(macd);
+    if (macdCrossWeeks == null) return null;
+    const rsCrossWeeks = weeksSinceZeroCrossUp(rsLong);
+    if (rsCrossWeeks == null) return null;
+    const histIdx = latestNonNullIdx(hist);
+    if (histIdx < 0 || !(hist[histIdx] > 0)) return null;
 
     return {
         ticker, universe, sector: c.sector, price: c.price,
-        shortNow, mediumNow, trend,
+        momentum_pct: c.momentum_pct,
         current_stage: c.weekly_chart && c.weekly_chart.current_stage,
-        isStable: mediumNow > 0 && mediumNow > shortNow,
-        isAccelerating: shortNow > mediumNow && bothRising,
+        macdNow: macd[latestNonNullIdx(macd)],
+        macdCrossWeeks,
+        rsLongNow: rsLong[latestNonNullIdx(rsLong)],
+        rsCrossWeeks,
+        histNow: hist[histIdx],
     };
 }
 
-// Zwraca { stable: [...], accelerating: [...] } połączone ze WSZYSTKICH 5
-// uniwersów, każde posortowane malejąco po swojej definiującej metryce
-// (mediumNow dla stabilnego wzrostu — najsilniejsze utrzymujące się przewagi
-// na górze; shortNow dla nagłej zmiany trendu — najgorętsze świeże ruchy).
-// Czyta "all_constituents" (CAŁE kwalifikujące się uniwersum, nie tylko
-// bieżący top-decyl dla SP500/NASDAQ100 — patrz FULL_COVERAGE_UNIVERSES w
-// run_query.py) — to jest właśnie zakres, o który prosił użytkownik przy
-// rozbiciu tego screenera na zakładki "RSM Stabilne"/"RSM Wzrostowe": WSZYSTKIE
-// kwalifikujące się spółki, nie tylko te aktualnie wybrane do portfela.
-function combinedRsmCandidates() {
-    const stable = [], accelerating = [];
+// Lista połączona ze WSZYSTKICH uniwersów (all_constituents — całe uniwersa,
+// nie tylko bieżący top-decyl), bez duplikatów: spółka obecna w dwóch
+// uniwersach naraz (np. SP500 i NASDAQ100) pojawia się raz, z pierwszego
+// uniwersum w kolejności UNIVERSES. Sortowanie: najświeższe przecięcie
+// (późniejsze z dwóch — MACD/RS) na górze, potem mocniejszy histogram.
+function combinedWybicieCandidates() {
+    const rows = [];
+    const seen = new Set();
     UNIVERSES.forEach(u => {
         const universeData = state.data[u] || {};
         (universeData.all_constituents || universeData.constituents || []).forEach(c => {
-            const r = classifyRsm(c.ticker, u, c);
+            if (seen.has(c.ticker)) return;
+            const r = classifyWybicie(c.ticker, u, c);
             if (!r) return;
-            if (r.isStable) stable.push(r);
-            else if (r.isAccelerating) accelerating.push(r);
+            seen.add(c.ticker);
+            rows.push(r);
         });
     });
-    stable.sort((a, b) => b.mediumNow - a.mediumNow);
-    accelerating.sort((a, b) => b.shortNow - a.shortNow);
-    return { stable, accelerating };
+    rows.sort((a, b) => {
+        const fa = Math.max(a.macdCrossWeeks, a.rsCrossWeeks);
+        const fb = Math.max(b.macdCrossWeeks, b.rsCrossWeeks);
+        if (fa !== fb) return fa - fb;
+        return b.histNow - a.histNow;
+    });
+    return rows;
 }
 
 // ============================================================
@@ -384,8 +380,8 @@ function classifyTtmSqueeze(ticker, universe, c) {
     if (!(c.momentum_score > 0)) return null;
     const t = c.ttm_squeeze_chart;
     if (!t || !t.dates || t.dates.length === 0) return null;
-    // Ostatni element bywa jeszcze niedomknięty (patrz ten sam caveat przy
-    // classifyRsm) — cofamy się do ostatniego tygodnia, który faktycznie ma
+    // Ostatni element bywa jeszcze niedomknięty (aktualny tydzień bywa null,
+    // zanim run_query.py doliczy pełne dane) — cofamy się do ostatniego tygodnia, który faktycznie ma
     // policzony squeeze_on.
     let nowIdx = t.dates.length - 1;
     while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
@@ -413,7 +409,7 @@ function classifyTtmSqueeze(ticker, universe, c) {
     };
 }
 
-// Zwraca listę połączoną ze WSZYSTKICH 6 uniwersów (patrz combinedRsmCandidates
+// Zwraca listę połączoną ze WSZYSTKICH 6 uniwersów (patrz combinedWybicieCandidates
 // powyżej — ten sam wzorzec: całe kwalifikujące się uniwersa, nie tylko
 // bieżący top-decyl dla SP500/NASDAQ100), posortowaną: najpierw świeże
 // wybicia (najnowsze na górze), potem trwające konsolidacje (najdłuższe na
@@ -463,50 +459,38 @@ function renderSidebarTiles() {
     });
 }
 
-// Sidebar: dwie OSOBNE zakładki/grupy (patrz combinedRsmCandidates powyżej) —
-// "RSM Stabilne" i "RSM Wzrostowe" — każda z własnym mini-nagłówkiem i licznikiem
-// w HTML (patrz index.html #rsmStableGroup/#rsmGrowthGroup). Global Equity
-// Momentum nie ma już własnego panelu na dashboardzie — przeniesiony jako
-// silnik wyboru do rebalance.js (mały wskaźnik zwycięzcy w rebalance.html).
-function renderRsmPanel() {
-    const stableContainer = document.getElementById("tiles-RSM-stable");
-    const accelContainer = document.getElementById("tiles-RSM-accel");
-    if (!stableContainer && !accelContainer) return;
+// Sidebar: kafelki screenera Wybicie (patrz combinedWybicieCandidates powyżej).
+function renderWybiciePanel() {
+    const container = document.getElementById("tiles-WYBICIE");
+    if (!container) return;
 
-    const { stable, accelerating } = combinedRsmCandidates();
+    const rows = combinedWybicieCandidates();
+    const meta = document.getElementById("wybicieMeta");
+    if (meta) meta.textContent = `${rows.length} spółek`;
 
-    const stableMeta = document.getElementById("rsmStableMeta");
-    if (stableMeta) stableMeta.textContent = `${stable.length} spółek`;
-    const growthMeta = document.getElementById("rsmGrowthMeta");
-    if (growthMeta) growthMeta.textContent = `${accelerating.length} spółek`;
-
-    const fillTiles = (container, rows) => {
-        container.innerHTML = "";
-        rows.forEach(r => {
-            const tile = document.createElement("div");
-            tile.className = "ticker-tile";
-            tile.textContent = r.ticker;
-            tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
-                + `RSM 3M ${r.shortNow.toFixed(1)} / RSM 6M ${r.mediumNow.toFixed(1)} · ${RSM_TREND_LABELS[r.trend]}`;
-            tile.dataset.ticker = r.ticker;
-            tile.dataset.universe = r.universe;
-            if (r.ticker === state.selectedTicker) tile.classList.add("selected");
-            tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
-            container.appendChild(tile);
-        });
-        if (rows.length === 0) {
-            const empty = document.createElement("div");
-            empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
-            empty.textContent = "brak danych";
-            container.appendChild(empty);
-        }
-    };
-    if (stableContainer) fillTiles(stableContainer, stable);
-    if (accelContainer) fillTiles(accelContainer, accelerating);
+    container.innerHTML = "";
+    rows.forEach(r => {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+        tile.textContent = r.ticker;
+        tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
+            + `MACD > 0 od ${r.macdCrossWeeks} tyg. · RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · histogram TTM ${r.histNow.toFixed(2)}`;
+        tile.dataset.ticker = r.ticker;
+        tile.dataset.universe = r.universe;
+        if (r.ticker === state.selectedTicker) tile.classList.add("selected");
+        tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        container.appendChild(tile);
+    });
+    if (rows.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
+        empty.textContent = "brak danych";
+        container.appendChild(empty);
+    }
 }
 
 // Sidebar: kafelki screenera TTM Squeeze (patrz combinedTtmSqueezeCandidates
-// powyżej) — ten sam wzorzec co renderRsmPanel, jedna wspólna, już posortowana
+// powyżej) — ten sam wzorzec co renderWybiciePanel, jedna wspólna, już posortowana
 // lista (świeże wybicia przed trwającymi konsolidacjami).
 function renderTtmSqueezePanel() {
     const container = document.getElementById("tiles-TTM-squeeze");
@@ -543,9 +527,9 @@ function renderTtmSqueezePanel() {
 // Kazdy ticker z glownego uniwersum (state.data[u].all_constituents — CALE
 // uniwersum, nie tylko decyl, patrz FULL_COVERAGE_UNIVERSES/_build_full_universe_records
 // w run_query.py; dla uniwersow rownowazonych rowne "constituents") ma wlasny
-// weekly_chart/mansfield_chart — wystarczy odczytac go wprost stamtad. Screener RSM
-// (combinedRsmCandidates powyzej) to osobny, wyselekcjonowany widok (tylko
-// spolki spelniajace kryteria stabilne/wzrostowe), nie zrodlo danych do samego wykresu.
+// weekly_chart/mansfield_chart — wystarczy odczytac go wprost stamtad. Screenery
+// Wybicie/TTM Squeeze (powyzej) to osobne, wyselekcjonowane widoki, nie zrodlo
+// danych do samego wykresu.
 function findRsEntry(ticker, universe) {
     const universeData = state.data[universe];
     const list = (universeData && (universeData.all_constituents || universeData.constituents)) || [];
@@ -559,7 +543,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #rsmStableTableBody tr, #rsmGrowthTableBody tr, #ttmSqueezeTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #wybicieTableBody tr, #ttmSqueezeTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
@@ -863,77 +847,62 @@ function updateSortHeaderClasses() {
 // renderPickerTable w rebalance.js) zyje teraz w js/shared.js.
 
 // Przełącza, która tabela w drawerze jest widoczna (pełna tabela uniwersum,
-// jedna z dwóch pełnych, sortowalnych, filtrowalnych po etapie tabel screenera
-// RSM — Stabilne/Wzrostowe, patrz renderRsmStableTable/renderRsmGrowthTable —
-// albo tabela screenera TTM Squeeze, patrz renderTtmSqueezeTable) i renderuje
-// jej zawartość. Na telefonie sidebar z kafelkami jest ukryty (patrz CSS
-// @media max-width:640px), więc to jedyny sposób dotarcia do tych zakładek w
-// pionie. Global Equity Momentum nie ma już własnej tabeli tutaj —
-// przeniesiony jako silnik wyboru do rebalance.js.
+// tabela screenera Wybicie — patrz renderWybicieTable — albo tabela screenera
+// TTM Squeeze, patrz renderTtmSqueezeTable) i renderuje jej zawartość. Na
+// telefonie sidebar z kafelkami jest ukryty (patrz CSS @media max-width:640px),
+// więc to jedyny sposób dotarcia do tych zakładek w pionie.
 function showDrawerTable(universe) {
-    const isRsmStable = universe === "RSM_STABLE";
-    const isRsmGrowth = universe === "RSM_GROWTH";
+    const isWybicie = universe === "WYBICIE";
     const isTtmSqueeze = universe === "TTM_SQUEEZE";
-    const isRsm = isRsmStable || isRsmGrowth;
-    document.getElementById("momentumTable").hidden = isRsm || isTtmSqueeze;
-    document.getElementById("rsmStableTable").hidden = !isRsmStable;
-    document.getElementById("rsmGrowthTable").hidden = !isRsmGrowth;
+    document.getElementById("momentumTable").hidden = isWybicie || isTtmSqueeze;
+    document.getElementById("wybicieTable").hidden = !isWybicie;
     document.getElementById("ttmSqueezeTable").hidden = !isTtmSqueeze;
-    // W przeciwienstwie do starego jednego ekranu RSM (tylko biezaci
-    // liderzy), RSM Stabilne/Wzrostowe i TTM Squeeze obejmuja CALE uniwersa i
-    // kazda spolka niesie wlasny current_stage (patrz classifyRsm/
-    // classifyTtmSqueeze) — filtr etapow ma tu wiec sens tak samo jak w
-    // pelnej tabeli uniwersum, dzieki czemu mozna filtrowac po kolumnach
-    // (etap wlacznie) tak jak wszedzie indziej.
+    // Screenery obejmuja CALE uniwersa i kazda spolka niesie wlasny
+    // current_stage — filtr etapow ma tu wiec sens tak samo jak w pelnej
+    // tabeli uniwersum.
     const stageFilterBar = document.getElementById("stageFilterBar");
     if (stageFilterBar) stageFilterBar.hidden = false;
-    document.getElementById("drawerTitle").textContent = isRsmStable
-        ? "Pełna tabela — RSM Stabilne"
-        : isRsmGrowth
-            ? "Pełna tabela — RSM Wzrostowe"
-            : isTtmSqueeze
-                ? "Pełna tabela — TTM Squeeze"
-                : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+    document.getElementById("drawerTitle").textContent = isWybicie
+        ? "Pełna tabela — Wybicie"
+        : isTtmSqueeze
+            ? "Pełna tabela — TTM Squeeze"
+            : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     renderActiveDrawerTable();
 }
 
 // Dispatcher wywolywany zarowno po przelaczeniu zakladki (showDrawerTable) jak
 // i po zmianie filtra etapu (initStageFilter) i po sortowaniu naglowka
 // (initDrawer) — zeby zmiana filtra/sortowania odswiezala WLASNIE aktywna
-// tabele, a nie zawsze renderTable() (co bylo poprawne, gdy istnial tylko
-// jeden typ tabeli poza momentum, ale juz nie po rozbiciu RSM na dwie pelne,
-// filtrowalne zakladki i dolozeniu TTM Squeeze).
+// tabele, a nie zawsze renderTable().
 function renderActiveDrawerTable() {
-    if (state.drawerUniverse === "RSM_STABLE") renderRsmStableTable();
-    else if (state.drawerUniverse === "RSM_GROWTH") renderRsmGrowthTable();
+    if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
     else if (state.drawerUniverse === "TTM_SQUEEZE") renderTtmSqueezeTable();
     else renderTable();
 }
 
-function rsmTrendHtml(trend) {
-    const cls = trend === "rising" ? "rsm-trend-rising" : trend === "fresh_cross" ? "rsm-trend-cross" : "rsm-trend-mixed";
-    return `<span class="rsm-trend ${cls}">${RSM_TREND_LABELS[trend]}</span>`;
+function crossWeeksHtml(weeks) {
+    return weeks === 1 ? "w ost. tyg." : `${weeks} tyg. temu`;
 }
 
-function rsmScreenerRowHtml(r, position) {
+function wybicieRowHtml(r, position) {
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
-        <td>${r.sector}</td>
+        <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
-        <td class="${r.shortNow >= 0 ? "positive" : "negative"}">${r.shortNow.toFixed(2)}</td>
-        <td class="${r.mediumNow >= 0 ? "positive" : "negative"}">${r.mediumNow.toFixed(2)}</td>
-        <td>${rsmTrendHtml(r.trend)}</td>
+        <td class="positive" title="MACD przeciął zero w górę ${crossWeeksHtml(r.macdCrossWeeks)}">${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></td>
+        <td class="positive" title="RS 52 tyg. przeciął zero w górę ${crossWeeksHtml(r.rsCrossWeeks)}">${r.rsLongNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span></td>
+        <td class="positive">${r.histNow.toFixed(2)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
 }
 
-// Tekst linijki meta nad tabelą, wspólny dla RSM Stabilne/Wzrostowe i TTM
-// Squeeze — obie płaskie, wielo-uniwersalne listy liczą "brak danych" po
-// tym, czy JAKIKOLWIEK z 6 uniwersów ma już ref_date (a nie po jednym
-// konkretnym uniwersum, jak w renderTable poniżej).
+// Tekst linijki meta nad tabelą, wspólny dla Wybicia i TTM Squeeze — obie
+// płaskie, wielo-uniwersalne listy liczą "brak danych" po tym, czy
+// JAKIKOLWIEK z uniwersów ma już ref_date (a nie po jednym konkretnym
+// uniwersum, jak w renderTable poniżej).
 function flatScreenerMetaText(allRows, rows) {
     const refDates = UNIVERSES.map(u => state.data[u].ref_date).filter(Boolean);
     if (!refDates.length) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
@@ -944,36 +913,29 @@ function flatScreenerMetaText(allRows, rows) {
     return text;
 }
 
-// Wspólna implementacja dla obu zakładek RSM (Stabilne/Wzrostowe) — sortowalna
-// (compareRows po data-key z index.html, patrz initDrawer) i filtrowalna po
-// etapie (matchesStageFilter/#stageFilterBar), tak jak pełna tabela uniwersum
-// (renderTable), tylko na płaskiej, wielo-uniwersalnej liście z
-// combinedRsmCandidates() zamiast na state.data[state.drawerUniverse].
-function renderRsmScreenerTable(kind) {
-    const { stable, accelerating } = combinedRsmCandidates();
-    const allRows = kind === "stable" ? stable : accelerating;
-    const bodyId = kind === "stable" ? "rsmStableTableBody" : "rsmGrowthTableBody";
+// Tabela screenera Wybicie — sortowalna (compareRows po data-key z
+// index.html, patrz initDrawer) i filtrowalna po etapie, tak jak pozostałe
+// tabele, na płaskiej, wielo-uniwersalnej liście z combinedWybicieCandidates().
+function renderWybicieTable() {
+    const allRows = combinedWybicieCandidates();
 
     renderScreenerTable({
-        tbody: document.getElementById(bodyId),
+        tbody: document.getElementById("wybicieTableBody"),
         metaEl: document.getElementById("drawerMeta"),
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
         colspan: 10,
-        emptyAllMsg: "Brak danych.",
+        emptyAllMsg: `Brak spółek z świeżym (≤ ${WYBICIE_CROSS_LOOKBACK_WEEKS} tyg.) przecięciem zera przez MACD i RS 52 tyg. przy dodatnim histogramie TTM.`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
         isSelected: r => r.ticker === state.selectedTicker,
-        rowHtml: (r, i) => rsmScreenerRowHtml(r, i + 1),
+        rowHtml: (r, i) => wybicieRowHtml(r, i + 1),
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
 }
-
-function renderRsmStableTable() { renderRsmScreenerTable("stable"); }
-function renderRsmGrowthTable() { renderRsmScreenerTable("growth"); }
 
 function ttmSqueezeStatusHtml(r) {
     return r.status === "fired"
@@ -998,8 +960,8 @@ function ttmSqueezeRowHtml(r, position) {
 
 // Tabela screenera TTM Squeeze — sortowalna (compareRows po data-key z
 // index.html, patrz initDrawer) i filtrowalna po etapie (matchesStageFilter/
-// #stageFilterBar), tak jak pełna tabela uniwersum (renderTable) i tabele RSM
-// (renderRsmScreenerTable), na płaskiej, wielo-uniwersalnej liście z
+// #stageFilterBar), tak jak pełna tabela uniwersum (renderTable) i tabela
+// Wybicie (renderWybicieTable), na płaskiej, wielo-uniwersalnej liście z
 // combinedTtmSqueezeCandidates() (już posortowanej: wybicia przed
 // konsolidacjami — ta kolejność bazowa jest tu nadpisywana sortowaniem
 // użytkownika, jeśli jakieś wybrał, patrz compareRows).
@@ -1218,7 +1180,7 @@ if (typeof document !== "undefined") {
         initConnStatus();
         await loadData();
         renderSidebarTiles();
-        renderRsmPanel();
+        renderWybiciePanel();
         renderTtmSqueezePanel();
         initDrawer();
         initOpenTvButton();
@@ -1258,7 +1220,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         compareRows,
-        classifyRsm, combinedRsmCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
+        weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };
 }

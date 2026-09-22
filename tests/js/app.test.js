@@ -1,4 +1,4 @@
-// Testy dla czystej logiki w docs/js/app.js (RSM/TTM Squeeze screener +
+// Testy dla czystej logiki w docs/js/app.js (Wybicie/TTM Squeeze screener +
 // wyszukiwarka Ctrl+K — reszta pliku jest scisle sprzezona z DOM/renderowaniem).
 "use strict";
 
@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    classifyRsm, combinedRsmCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
+    weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
 
@@ -15,82 +15,62 @@ const {
 // rollingMean/alignMansfieldToDates/alignSqueezeToDates/fmtPlDate now live in
 // docs/js/chart-render.js — see tests/js/chart-render.test.js.
 
-// ---------- classifyRsm / combinedRsmCandidates (RSM screener) ----------
+// ---------- weeksSinceZeroCrossUp / classifyWybicie / combinedWybicieCandidates ----------
 
-const RSM_DATES = ["2026-01-01", "2026-01-08", "2026-01-15", "2026-01-22", "2026-01-29", "2026-02-05"];
-
-test("classifyRsm returns null when the ticker has no mansfield_chart", () => {
-    assert.equal(classifyRsm("AAA", "NASDAQ100", {}), null);
+test("weeksSinceZeroCrossUp counts weeks since the series crossed zero upward", () => {
+    assert.equal(weeksSinceZeroCrossUp([-2, -1, 0.5, 1]), 2);
+    assert.equal(weeksSinceZeroCrossUp([-2, -1, 1]), 1);
 });
 
-test("classifyRsm returns null when every week's values are null", () => {
-    const c = { mansfield_chart: { dates: ["2026-01-01"], rsm_short: [null], rsm_medium: [null] } };
-    assert.equal(classifyRsm("AAA", "NASDAQ100", c), null);
+test("weeksSinceZeroCrossUp returns null when the series is not above zero now", () => {
+    assert.equal(weeksSinceZeroCrossUp([1, 2, -1]), null);
+    assert.equal(weeksSinceZeroCrossUp([]), null);
 });
 
-test("classifyRsm falls back to the latest week that actually has both values when the newest week is still null", () => {
-    // Ostatni (najswiezszy) tydzien czesto wychodzi null, zanim run_query.py
-    // dolicza pelne dane dla niego — bez fallbacku spolka znikalaby z ekranu
-    // mimo ze poprzedni tydzien ma kwalifikujace sie dane.
-    const dates = [...RSM_DATES, "2026-02-12"];
-    const c = {
-        sector: "Tech", price: 100,
-        mansfield_chart: {
-            dates,
-            rsm_short: [1, 1, 1, 1, 1, 2, null],
-            rsm_medium: [3, 4, 5, 6, 7, 8, null],
-        },
+test("weeksSinceZeroCrossUp returns null when the cross is older than the lookback", () => {
+    assert.equal(weeksSinceZeroCrossUp([-1, 1, 1, 1, 1], 3), null);
+    assert.equal(weeksSinceZeroCrossUp([-1, 1, 1, 1], 3), 3);
+});
+
+test("weeksSinceZeroCrossUp skips trailing nulls (current week not closed yet)", () => {
+    assert.equal(weeksSinceZeroCrossUp([-1, 2, null]), 1);
+});
+
+function wybicieConstituent(overrides) {
+    return {
+        sector: "Tech", price: 100, momentum_pct: 10,
+        macd_chart: { macd: [-1, -0.5, 0.3, 0.8] },
+        mansfield_chart: { rsm_long: [-3, -1, 2, 4] },
+        ttm_squeeze_chart: { histogram: [-1, 0.5, 1, 2] },
+        ...overrides,
     };
-    const r = classifyRsm("AAA", "NASDAQ100", c);
-    assert.equal(r.shortNow, 2);
-    assert.equal(r.mediumNow, 8);
-    assert.equal(r.isStable, true);
+}
+
+test("classifyWybicie accepts a fresh MACD + RS 52W zero cross with a positive TTM histogram", () => {
+    const r = classifyWybicie("AAA", "SP500", wybicieConstituent({}));
+    assert.ok(r);
+    assert.equal(r.macdCrossWeeks, 2);
+    assert.equal(r.rsCrossWeeks, 2);
+    assert.equal(r.histNow, 2);
 });
 
-test("classifyRsm marks stable growth when 6M leads 3M and is positive", () => {
-    const c = {
-        sector: "Tech", price: 100,
-        mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 1, 1, 1, 1, 2], rsm_medium: [3, 4, 5, 6, 7, 8] },
-    };
-    const r = classifyRsm("AAA", "NASDAQ100", c);
-    assert.equal(r.isStable, true);
-    assert.equal(r.isAccelerating, false);
-    assert.equal(r.shortNow, 2);
-    assert.equal(r.mediumNow, 8);
+test("classifyWybicie rejects when the TTM histogram is not positive", () => {
+    const c = wybicieConstituent({ ttm_squeeze_chart: { histogram: [1, 1, 1, -0.1] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });
 
-test("classifyRsm marks a sudden trend change when 3M overtakes 6M and both are rising", () => {
-    const c = {
-        mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 2, 4, 7, 10, 15], rsm_medium: [1, 1.5, 2, 2.5, 3, 3.5] },
-    };
-    const r = classifyRsm("AAA", "NASDAQ100", c);
-    assert.equal(r.isAccelerating, true);
-    assert.equal(r.isStable, false);
-    assert.equal(r.trend, "rising");
+test("classifyWybicie rejects when MACD did not cross zero recently", () => {
+    const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, 1, 1, 1, 1, 1] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });
 
-test("classifyRsm leaves a ticker unclassified (neither bucket) when 3M leads but neither is rising", () => {
-    const c = {
-        mansfield_chart: { dates: RSM_DATES, rsm_short: [5, 5, 5, 5, 5, 5], rsm_medium: [1, 1, 1, 1, 1, 1] },
-    };
-    const r = classifyRsm("AAA", "NASDAQ100", c);
-    assert.equal(r.isStable, false);
-    assert.equal(r.isAccelerating, false);
-    assert.equal(r.trend, "mixed");
+test("classifyWybicie rejects when RS 52W is still below zero", () => {
+    const c = wybicieConstituent({ mansfield_chart: { rsm_long: [-3, -2, -1, -0.5] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });
 
-test("classifyRsm flags a fresh cross above zero within the lookback window", () => {
-    const c = {
-        mansfield_chart: {
-            dates: RSM_DATES,
-            rsm_short: [-2, -1, -0.5, 0.2, 0.8, 1.5],  // crosses zero, rising
-            rsm_medium: [-1, -1, -1, -1, -1, -2],       // still negative and NOT rising
-        },
-    };
-    const r = classifyRsm("AAA", "NASDAQ100", c);
-    assert.equal(r.trend, "fresh_cross");
-    assert.equal(r.isStable, false);       // medium still negative
-    assert.equal(r.isAccelerating, false); // not both rising
+test("classifyWybicie returns null when chart data is missing", () => {
+    assert.equal(classifyWybicie("AAA", "SP500", { price: 1 }), null);
 });
 
 function emptyStateData() {
@@ -100,41 +80,20 @@ function emptyStateData() {
     };
 }
 
-test("combinedRsmCandidates merges qualifying tickers across all universes into stable/accelerating buckets", () => {
-    state.data = emptyStateData();
-    state.data.NASDAQ100.constituents = [
-        { ticker: "STABLE1", sector: "Tech", price: 100, mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 1, 1, 1, 1, 2], rsm_medium: [3, 4, 5, 6, 7, 8] } },
-        { ticker: "NOPE", sector: "Tech", price: 50, mansfield_chart: { dates: RSM_DATES, rsm_short: [5, 5, 5, 5, 5, 5], rsm_medium: [1, 1, 1, 1, 1, 1] } },
-    ];
-    state.data.WIG20.constituents = [
-        { ticker: "ACCEL1", sector: "Energy", price: 40, mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 2, 4, 7, 10, 15], rsm_medium: [1, 1.5, 2, 2.5, 3, 3.5] } },
-    ];
-
-    const { stable, accelerating } = combinedRsmCandidates();
-    assert.deepEqual(stable.map(r => r.ticker), ["STABLE1"]);
-    assert.deepEqual(accelerating.map(r => r.ticker), ["ACCEL1"]);
-    assert.equal(stable[0].universe, "NASDAQ100");
-    assert.equal(accelerating[0].universe, "WIG20");
-});
-
-test("combinedRsmCandidates sorts the stable bucket by 6M descending", () => {
+test("combinedWybicieCandidates merges universes, dedupes tickers, and sorts freshest cross first", () => {
     state.data = emptyStateData();
     state.data.SP500.constituents = [
-        { ticker: "LOW", mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 1, 1, 1, 1, 1], rsm_medium: [2, 2, 2, 2, 2, 3] } },
-        { ticker: "HIGH", mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 1, 1, 1, 1, 1], rsm_medium: [5, 5, 5, 5, 5, 9] } },
+        wybicieConstituent({ ticker: "OLDER" }),
+        wybicieConstituent({ ticker: "DUP" }),
+        wybicieConstituent({ ticker: "NOPE", ttm_squeeze_chart: { histogram: [-1] } }),
     ];
-    const { stable } = combinedRsmCandidates();
-    assert.deepEqual(stable.map(r => r.ticker), ["HIGH", "LOW"]);
-});
-
-test("combinedRsmCandidates sorts the accelerating bucket by 3M descending", () => {
-    state.data = emptyStateData();
-    state.data.DOWJONES.constituents = [
-        { ticker: "MILD", mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 2, 3, 4, 5, 6], rsm_medium: [1, 1.1, 1.2, 1.3, 1.4, 1.5] } },
-        { ticker: "HOT", mansfield_chart: { dates: RSM_DATES, rsm_short: [1, 3, 6, 9, 12, 15], rsm_medium: [1, 1.1, 1.2, 1.3, 1.4, 1.5] } },
+    state.data.NASDAQ100.constituents = [wybicieConstituent({ ticker: "DUP" })];
+    state.data.WIG20.constituents = [
+        wybicieConstituent({ ticker: "FRESH", macd_chart: { macd: [-1, 1] }, mansfield_chart: { rsm_long: [-1, 1] } }),
     ];
-    const { accelerating } = combinedRsmCandidates();
-    assert.deepEqual(accelerating.map(r => r.ticker), ["HOT", "MILD"]);
+    const rows = combinedWybicieCandidates();
+    assert.deepEqual(rows.map(r => r.ticker), ["FRESH", "OLDER", "DUP"]);
+    assert.equal(rows.find(r => r.ticker === "DUP").universe, "SP500");
 });
 
 // ---------- classifyTtmSqueeze / combinedTtmSqueezeCandidates (TTM Squeeze screener) ----------
