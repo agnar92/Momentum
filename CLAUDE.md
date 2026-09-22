@@ -203,7 +203,7 @@ now that the full `run_query.py` always recomputes weights, the column is just a
 field again. No new code was needed to keep `prices` from growing unbounded under the weekly cadence:
 `update_prices_incremental()`'s retention trim (`DELETE FROM prices WHERE Date < cutoff`, see below) already
 runs unconditionally on every `fetch_data.py` invocation, so a weekly full fetch keeps the rolling window at
-exactly `--lookback-months` (22) regardless of how often it's called — this was verified, not assumed, before
+exactly `--lookback-months` (28) regardless of how often it's called — this was verified, not assumed, before
 being left alone.
 
 1. **`fetch_data.py`** — data acquisition only.
@@ -234,8 +234,8 @@ being left alone.
      replaced by freshly-fetched rows that have them. Two modes, chosen automatically by `update_duckdb()`:
      - **Bootstrap** (`bootstrap_prices`) — used when `prices` doesn't exist yet, is empty, or (see
        `_prices_history_is_shallow()` below) doesn't reach back far enough for the currently configured
-       `--lookback-months`. Downloads the full `--lookback-months` (default **22**, raised from an
-       original 15 — see below) window for every ticker via a `prices_staging` table renamed into place.
+       `--lookback-months`. Downloads the full `--lookback-months` (default **28**, raised from an
+       original 15, then 22 — see below) window for every ticker via a `prices_staging` table renamed into place.
        If fetched ticker coverage falls below `--min-coverage` (default 80%), the refresh is aborted and
        nothing is written.
      - **Incremental** (`update_prices_incremental`) — used on every subsequent run once `prices` already
@@ -262,6 +262,8 @@ being left alone.
        were `null` for a chunk of the displayed window (see `sma10_pct`/`sma30_pct` and `mansfield_chart`
        under Relative strength below). The already-committed `momentum_data.duckdb` predates this bump, so
        its first refresh under the new default goes through exactly this one-time full re-bootstrap.
+       **It was later raised again, from 22 to 28**, so the 52-week Mansfield smoothing (`rsm_long`) also
+       has a full warm-up before `start_date` — see `mansfield_chart` under Relative strength below.
 2. **`run_query.py`** — all the calculation logic and static site generation. Nothing about data
    fetching lives here. For each universe (`SP500`, `NASDAQ100`, `DOWJONES`, `WIG20`, `MWIG40` —
    `UNIVERSES`):
@@ -571,7 +573,7 @@ series are resampled from the daily `prices`/`index_prices` tables via `DATE_TRU
 window's start purely so EMA20 has already converged (not just a value, since an EMA depends on its seed)
 at the first displayed (in-window) point, and the series returned
 is trimmed to start exactly at that window's start (M-14 or M-11) through to `ref_date`. `prices` retains a
-rolling `--lookback-months` window — **22 by default** (bumped up from an original 15; see
+rolling `--lookback-months` window — **28 by default** (bumped up from an original 15, then 22; see
 `fetch_data.py --lookback-months` below), specifically so the ~14-month momentum window still leaves a real
 ~7-8-month buffer in front of `start_date` for SMA30 to warm up in — before this bump, the momentum window
 alone (~14 months) nearly exhausted the entire retained 15 months, leaving `sma10_pct`/`sma30_pct` (and the
@@ -727,15 +729,18 @@ weeks of buffer before it (the longest of the three windows, so it decides the b
 smoothing already has a value at the first displayed point, retention permitting (see below — `rsm_long`
 specifically often does NOT have that luxury).
 
-**`rsm_long` deliberately reintroduces the exact 52-week retention shortfall this section already
-describes below as having been fixed** — this is a known, accepted trade-off, not an oversight. With the
-current ~22-month `prices` retention, a ~14-month momentum window plus a 52-week (~12-month) warm-up
-buffer needs ~26 months of history in total; the retention only gives ~8 months (~34 weeks) of buffer
-before `start_date`, so `rsm_long` comes back `null` for roughly the first half of the displayed window
-until someone raises `--lookback-months` further (which triggers a one-time full re-bootstrap of
-`prices`, see `_prices_history_is_shallow()` in `fetch_data.py`) — same graceful-degradation convention
-as `rsm_medium`/`sma10_pct`/`sma30_pct` elsewhere in this module, just guaranteed to bite harder here
-until the retention is deepened again.
+**`rsm_long` needs ~26 months of price history in total** (a ~14-month momentum window plus a 52-week
+warm-up buffer before `start_date`). It was first added while retention was still 22 months, which left
+it `null` for roughly the first quarter-to-half of the displayed window — the user reported exactly that
+("nie ma pełnej linii, na wykresie jest od połowy"), so **`--lookback-months` was raised again, from 22 to
+28** (26 + ~2 months of margin), which triggers one one-time full re-bootstrap of `prices` via
+`_prices_history_is_shallow()` in `fetch_data.py`. The same report also asked whether the line is
+"too jagged" because of a pandas bug — it isn't: an independent recomputation from `momentum_data.duckdb`
+(daily closes → weekly last close → `RS = stock/index` → `(RS / RS.rolling(52).mean() - 1) * 100`)
+matched the exported values exactly. The jaggedness is inherent to the Mansfield formula: only the
+DENOMINATOR (the SMA) is smoothed, the numerator is the raw weekly RS, so the oscillator moves week to week
+by roughly the stock's weekly relative return (e.g. ~4% std for NVDA) — a longer window shifts the baseline,
+it doesn't smooth the line.
 
 **Version history matters here too**: an earlier version deliberately decoupled this chart from the
 momentum window — its own display range was just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6
@@ -859,7 +864,7 @@ and SP500 is the one universe whose holdings CSV — `CSPX_holdings.csv`, see `f
 carries a real per-company `Sector` column, propagated into `index_constituents.Sector` and from there into
 every constituent record's `"sector"` field, in `docs/data/sp500.json`, alongside `Ticker`/`fmc_etf`
 already). No new fetch is needed for step (1)/(2)/(3) below — `index_prices` already retains a full daily
-`^GSPC` series for `--lookback-months` (22 by default, see `fetch_data.py`), far more than the 200 trading
+`^GSPC` series for `--lookback-months` (28 by default, see `fetch_data.py`), far more than the 200 trading
 days a SMA200 needs, or the ~60 weeks (52 + buffer) the 52-week Mansfield window needs.
 
 - **`compute_sp500_trend_filter(con, ref_date)`** reads `index_prices` for `SP500`, computes a plain
