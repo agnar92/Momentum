@@ -13,7 +13,7 @@
 //   Krok 4 — wejscie: TTM Squeeze odpalil po konsolidacji, histogram > 0 i
 //            rosnie, potwierdzenie: MACD nad linia sygnalu (przeciecie w gore);
 //            stop = polowa ostatniego pudelka Darvasa, podnoszony na low swiecy
-//            z przeciecia MACD w dol przy MACD > 0 (strategyStopFor); wielkosc
+//            z przeciecia MACD w dol (strategyStopFor); wielkosc
 //            pozycji = 1% kapitalu / (cena - stop), maks. 10% kapitalu.
 //   Krok 5 — pozycje satelity uzytkownika: HOLD / podciagnij stop / EXIT.
 // Portfel: Core (50%) = ETF-y, ktore uzytkownik juz ma poza tym narzedziem,
@@ -458,8 +458,8 @@ function stopPriceFor(c) {
 //   1. start: POLOWA ostatniego pudelka Darvasa (weekly_chart.bases[-1],
 //      (resistance + support) / 2) — pudelko, z ktorego bylo ostatnie wybicie;
 //   2. potem, po kazdym przecieciu MACD W DOL linii sygnalu (tygodniowy MACD,
-//      macd_chart) PRZY MACD JUZ WZROSTOWYM (MACD > 0 w tygodniu przeciecia),
-//      PO koncu tego pudelka, stop idzie na LOW tej tygodniowej swiecy
+//      macd_chart) PO koncu tego pudelka (MACD NIE musi byc nad zerem — trend
+//      potwierdzaja juz Etap 2/TTM Squeeze, MACD to tylko dodatkowa polisa), stop idzie na LOW tej tygodniowej swiecy
 //      (weekly_chart.low_pct) — tylko w gore, nigdy w dol.
 // Przeciecie MACD W GORE to NIE jest stop — to potwierdzenie wejscia (patrz
 // macdConfirmation / status WAIT_MACD w evaluateCandidate).
@@ -492,7 +492,7 @@ function strategyStopFor(c) {
         if (date <= box.end_date) continue;
         const a0 = m.macd[k - 1], s0 = m.signal[k - 1], a1 = m.macd[k], s1 = m.signal[k];
         if (a0 == null || s0 == null || a1 == null || s1 == null) continue;
-        if (!(a0 >= s0 && a1 < s1 && a1 > 0)) continue;
+        if (!(a0 >= s0 && a1 < s1)) continue;
         const j = weekIdx[date];
         if (j == null) continue;
         const hasLow = w.low_pct && w.low_pct[j] != null;
@@ -805,9 +805,9 @@ function stopCellHtml(currency, info) {
     if (!info || info.stop == null) return "—";
     let note;
     if (info.source === "macd") {
-        note = `<span class="funnel-note" title="Low tygodniowej świecy, w której MACD (nad zerem) przeciął linię sygnału w dół (${info.macdDate})${info.lowApprox ? " — przybliżone zamknięciem tygodnia, brak danych low" : ""}.">MACD↓ ${info.macdDate.slice(5)}${info.lowApprox ? " ≈" : ""}</span>`;
+        note = `<span class="funnel-note" title="Low tygodniowej świecy, w której MACD przeciął linię sygnału w dół (${info.macdDate})${info.lowApprox ? " — przybliżone zamknięciem tygodnia, brak danych low" : ""}.">MACD↓ ${info.macdDate.slice(5)}${info.lowApprox ? " ≈" : ""}</span>`;
     } else if (info.source === "box") {
-        note = `<span class="funnel-note" title="Połowa ostatniego pudełka Darvasa (zakończonego ${info.boxEnd}) — po tym pudełku nie było jeszcze przecięcia MACD w dół (nad zerem) z wyższym low.">½ box</span>`;
+        note = `<span class="funnel-note" title="Połowa ostatniego pudełka Darvasa (zakończonego ${info.boxEnd}) — po tym pudełku nie było jeszcze przecięcia MACD w dół z wyższym low.">½ box</span>`;
     } else {
         note = '<span class="funnel-note funnel-note-warn" title="Brak pudełka Darvasa w oknie danych — użyty trailing stop Weinsteina.">Weinstein</span>';
     }

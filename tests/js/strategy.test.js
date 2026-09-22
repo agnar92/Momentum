@@ -240,7 +240,7 @@ test("parseTickerList splits, uppercases and dedupes", () => {
 
 // ------------------------------------------------------------
 // Stop strategii: polowa pudelka Darvasa -> low swiecy z przeciecia MACD
-// W DOL linii sygnalu przy MACD > 0 (przeciecie w gore to tylko potwierdzenie wejscia)
+// W DOL linii sygnalu (przeciecie w gore to tylko potwierdzenie wejscia)
 // ------------------------------------------------------------
 
 // close0 = 100 (cena 120, ostatni close_pct = 20). Pudelko: 10%..0% -> polowa = 105.
@@ -267,7 +267,7 @@ test("strategyStopFor starts at the midpoint of the LAST Darvas box", () => {
     assert.ok(Math.abs(info.stop - 105) < 1e-9);
 });
 
-test("strategyStopFor raises the stop to the low of a bearish MACD cross above zero after the box", () => {
+test("strategyStopFor raises the stop to the low of a bearish MACD cross after the box", () => {
     // d3: macd >= signal, d4: macd < signal, macd > 0 -> low d4 = 112
     const info = strategyStopFor(boxedStock([3, 3, 3, 1.5, 1], [2, 2, 2, 2, 2]));
     assert.equal(info.source, "macd");
@@ -281,9 +281,10 @@ test("strategyStopFor ignores bullish MACD crosses (entry confirmation, not a st
     assert.equal(info.source, "box");
 });
 
-test("strategyStopFor ignores bearish crosses with MACD below zero", () => {
+test("strategyStopFor also trails on bearish crosses with MACD below zero", () => {
     const info = strategyStopFor(boxedStock([1, 1, 1, -1, -2], [-0.5, -0.5, -0.5, -0.5, -0.5]));
-    assert.equal(info.source, "box");
+    assert.equal(info.source, "macd");
+    assert.equal(info.macdDate, "d4");
 });
 
 test("strategyStopFor ignores crosses inside the box and never lowers the stop", () => {

@@ -1684,8 +1684,9 @@ flex child (no `.topbar-left` wrapper there).
   **The stop is the user's own rule, NOT the backend's Weinstein trailing stop** (`strategyStopFor()`, used
   by both steps 4 and 5): start at the MIDPOINT of the last Darvas box (`weekly_chart.bases[-1]`,
   `(resistance_pct + support_pct) / 2`), then after every weekly MACD BEARISH cross (MACD crosses BELOW its
-  signal line, `macd_chart`) while MACD is already bullish (MACD > 0 that week), dated after that box's
-  `end_date`, raise the stop to that week's LOW — only ever up. An earlier version of this used the BULLISH
+  signal line, `macd_chart`) dated after that box's `end_date`, raise the stop to that week's LOW — only
+  ever up. No MACD > 0 requirement (briefly added, then removed at the user's request: Stage 2/TTM Squeeze
+  already establish the uptrend, MACD is "tylko dodatkowa polisa"). An earlier version of this used the BULLISH
   cross for the stop; the user corrected it: "przecięcie w dół przy MACD już wzrostowym, przecięcie w górę
   to tylko sygnał potwierdzenia wejścia nie stop loss". The weekly low comes from `weekly_chart.low_pct` (added to `compute_relative_strength_chart` in
   `run_query.py` for exactly this; falls back to the weekly close with `lowApprox` for older JSON). All
