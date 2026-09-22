@@ -34,6 +34,8 @@ const {
     eligiblePoolRows,
     autoSelectedRows,
     computeAutoTargets,
+    loadPoolStageFilter,
+    savePoolStageFilter,
     deriveUniverseFractionsFromTargets,
     normalizeWeights,
     blendEquityCurves,
@@ -386,6 +388,39 @@ test("eligiblePoolRows returns everything (no narrowing) when poolStageFilter is
     _setState({ universeData: stageUniverseData(), excluded: [], poolStageFilter: "ALL" });
     assert.deepEqual(eligiblePoolRows().map(r => r.ticker), ["S1", "S2A", "S2B", "S4"]); // sorted by momentum_score
     _setState({ universeData: {}, excluded: [] });
+});
+
+// ---------- loadPoolStageFilter / savePoolStageFilter (persistence) ----------
+// Real bug: poolStageFilter used to be an in-memory-only `let`, never written
+// to localStorage like settings/holdings/excluded/poolCollapsed — navigating
+// away and back (a fresh page load, fresh module state) silently reset it to
+// "ALL", so the suggestion table/weights after returning were computed from
+// the full, unfiltered pool even though the user still thought a stage
+// filter (e.g. "Etap 2") was active.
+
+test("loadPoolStageFilter defaults to ALL when nothing is stored", () => {
+    global.localStorage.removeItem("momentum_rebalance_stage_filter");
+    assert.equal(loadPoolStageFilter(), "ALL");
+});
+
+test("savePoolStageFilter/loadPoolStageFilter round-trips a Set of stages", () => {
+    savePoolStageFilter(new Set(["1", "2"]));
+    const loaded = loadPoolStageFilter();
+    assert.ok(loaded instanceof Set);
+    assert.deepEqual([...loaded].sort(), ["1", "2"]);
+    global.localStorage.removeItem("momentum_rebalance_stage_filter");
+});
+
+test("savePoolStageFilter/loadPoolStageFilter round-trips the ALL sentinel", () => {
+    savePoolStageFilter(new Set(["1"]));
+    savePoolStageFilter("ALL");
+    assert.equal(loadPoolStageFilter(), "ALL");
+});
+
+test("loadPoolStageFilter falls back to ALL on corrupt/invalid stored JSON", () => {
+    global.localStorage.setItem("momentum_rebalance_stage_filter", "{not json");
+    assert.equal(loadPoolStageFilter(), "ALL");
+    global.localStorage.removeItem("momentum_rebalance_stage_filter");
 });
 
 test("autoSelectedRows slices the top N eligible rows, returning [] for N <= 0", () => {

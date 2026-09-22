@@ -36,6 +36,8 @@ const {
     eligiblePoolRows,
     autoSelectedRows,
     computeAutoTargets,
+    loadPoolStageFilter,
+    savePoolStageFilter,
     deriveUniverseFractionsFromTargets,
     normalizeWeights,
     blendEquityCurves,
@@ -227,6 +229,37 @@ test("eligiblePoolRows filters by the active stage filter, not just the ranking 
     assert.deepEqual(rows.map(r => r.ticker).sort(), ["S2A", "S2B"]);
     assert.deepEqual(rows.map(r => r.pool_rank), [1, 2]); // re-numbered within the filtered set
     _setState({ universeData: {}, excluded: [], poolStageFilter: "ALL" });
+});
+
+// ---------- loadPoolStageFilter / savePoolStageFilter (persistence) ----------
+// Same real bug as rebalance.js's own poolStageFilter: it used to be an
+// in-memory-only `let`, never written to localStorage, so navigating away
+// from this page and back silently reset it to "ALL" and the suggestion
+// table's weights were then computed from the full, unfiltered pool.
+
+test("loadPoolStageFilter defaults to ALL when nothing is stored", () => {
+    global.localStorage.removeItem("momentum_rebalance_pl_stage_filter");
+    assert.equal(loadPoolStageFilter(), "ALL");
+});
+
+test("savePoolStageFilter/loadPoolStageFilter round-trips a Set of stages", () => {
+    savePoolStageFilter(new Set(["1", "2"]));
+    const loaded = loadPoolStageFilter();
+    assert.ok(loaded instanceof Set);
+    assert.deepEqual([...loaded].sort(), ["1", "2"]);
+    global.localStorage.removeItem("momentum_rebalance_pl_stage_filter");
+});
+
+test("savePoolStageFilter/loadPoolStageFilter round-trips the ALL sentinel", () => {
+    savePoolStageFilter(new Set(["1"]));
+    savePoolStageFilter("ALL");
+    assert.equal(loadPoolStageFilter(), "ALL");
+});
+
+test("loadPoolStageFilter falls back to ALL on corrupt/invalid stored JSON", () => {
+    global.localStorage.setItem("momentum_rebalance_pl_stage_filter", "{not json");
+    assert.equal(loadPoolStageFilter(), "ALL");
+    global.localStorage.removeItem("momentum_rebalance_pl_stage_filter");
 });
 
 test("autoSelectedRows/computeAutoTargets only draw from the stage-filtered pool when a filter is active", () => {
