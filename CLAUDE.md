@@ -1707,7 +1707,23 @@ flex child (no `.topbar-left` wrapper there).
   in the data window it falls back to `stopPriceFor()` (the Weinstein stop from `stop_level_pct`, read at
   the LAST week only — after `EXIT_STOP` it's intentionally null). If MACD never dips below its signal after
   the box, the stop stays at the box midpoint — that's the rule as specified, not a bug. The old sector-leaders and
-  top-10-RS tables stay at the bottom as "Narzędzia pomocnicze" (USA only). Pure logic is covered in
+  top-10-RS tables stay at the bottom as "Narzędzia pomocnicze" (USA only).
+  **Interactive funnel + adjustable criteria** (a later, explicit user request after the first version's
+  plain row of count boxes rendered badly on a phone — "zrób to bardziej interaktywne w sensie rzeczywiście
+  lejek. Daj też możliwości wyboru kryterium"): `FUNNEL_GATES` is the ordered list of steps (market →
+  sector (USA only) → stage → RS → momentum → base → squeeze → entry); the market filter is now a real step
+  (a weak market drops everything unless its "Wymagaj" chip is off — the old `WAIT_MARKET` status is gone).
+  `renderFunnelViz()` draws each step as a centered bar whose width is proportional to how many companies
+  passed (`funnelSteps()`), with a red "−N dropped" badge and a row of criteria chips (`CRITERIA_CHIPS`)
+  editing `settings.criteria` (`DEFAULT_CRITERIA` = the agreed strategy; "↺ Przywróć domyślne" resets it).
+  `evaluateCandidate(c, ctx, criteria)` reads every threshold from there (allowed stages, which RS windows
+  must be > 0, max base, top-N sectors + top-10-RS bypass, squeeze consolidation/fire-lookback weeks,
+  MACD/volume entry confirmations → `WAIT_MACD`/`WAIT_VOLUME`). Clicking a step (or its −N badge) sets
+  `settings.focusStep`/`focusMode`, and the list below (`rowsAtStep()`) shows the companies that passed —
+  or dropped at — that step, sortable by header (`compareListRows`, empty values always last), with `✗ <step>`
+  (`failedAt`) as the status of companies that fail later. `strategy.html` loads its CSS/JS with a `?v=`
+  query so a phone doesn't keep serving an older cached `style.css` against new markup (what made the first
+  version look broken). Pure logic is covered in
   `tests/js/strategy.test.js`.
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
   under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/

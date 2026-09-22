@@ -953,28 +953,85 @@ th.tv-col, th.chart-col { width: 1%; }
 
 /* Lejek strategii Stage 2 Continuation (docs/strategy.html, js/strategy.js):
    pasek licznikow kolejnych bramek + znaczniki statusu w tabelach. */
-.funnel-steps {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 6px;
-}
-.funnel-step {
+.funnel-viz {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    min-width: 64px;
-    padding: 6px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    background: var(--panel-alt);
+    gap: 6px;
+    margin-bottom: 12px;
 }
-.funnel-step-n { font-size: 17px; font-weight: 700; color: var(--text); }
-.funnel-step-label { font-size: 10.5px; color: var(--text-faint); white-space: nowrap; }
-.funnel-step-setup { border-color: var(--text-dim); }
-.funnel-step-entry { border-color: var(--green-bright); }
-.funnel-step-entry .funnel-step-n { color: var(--green-bright); }
-.funnel-arrow { color: var(--text-faint); font-size: 12px; }
+.funnel-row {
+    padding: 8px 10px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.funnel-row-top { cursor: default; }
+.funnel-row[data-step]:hover { background: var(--panel-alt); }
+.funnel-row.focused { border-color: var(--green-bright); background: rgba(46, 204, 113, 0.06); }
+.funnel-row:focus-visible { outline: 2px solid var(--green-bright); outline-offset: 1px; }
+.funnel-row-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.funnel-row-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.funnel-row-drop {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--red);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+.funnel-row-drop:hover { background: rgba(224, 69, 90, 0.15); }
+.funnel-row-drop.zero { color: var(--text-faint); }
+.funnel-bar-track { display: flex; justify-content: center; }
+.funnel-bar {
+    height: 26px;
+    border-radius: 5px;
+    background: linear-gradient(90deg, rgba(52, 152, 219, 0.55), rgba(52, 152, 219, 0.85));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    transition: width 0.3s ease;
+}
+.funnel-bar span { font-size: 13px; font-weight: 700; color: #fff; }
+.funnel-bar-all { background: linear-gradient(90deg, rgba(138, 143, 156, 0.45), rgba(138, 143, 156, 0.7)); }
+.funnel-bar-final { background: linear-gradient(90deg, rgba(46, 204, 113, 0.7), var(--green-bright)); }
+.funnel-row-info {
+    font-size: 11px;
+    color: var(--text-faint);
+    text-align: center;
+    margin-top: 4px;
+}
+.funnel-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 5px 10px;
+    margin-top: 6px;
+}
+.funnel-chips:empty { display: none; }
+.funnel-chip-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.funnel-chip-prefix { font-size: 11px; color: var(--text-faint); margin-right: 2px; }
+.funnel-chip {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 4px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    min-height: 28px;
+}
+.funnel-chip:hover { border-color: var(--text-dim); }
+.funnel-chip.active { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); border-color: var(--green-bright); }
+.funnel-reset { margin-top: 4px; }
+.funnel-status-drop { color: var(--text-faint); font-weight: 500; }
 .funnel-status { font-weight: 600; white-space: nowrap; font-size: 12px; }
 .funnel-status-entry { color: var(--green-bright); }
 .funnel-status-wait { color: #e0a72e; }
@@ -1524,3 +1581,13 @@ table.holdings-table td, table.rebalance-table td {
     .toast-container { right: 10px; bottom: 10px; left: 10px; max-width: none; }
 }
 
+
+/* Lista spółek lejka (strategy.html): ticker przyklejony do lewej krawędzi przy
+   przewijaniu tabeli w bok na telefonie. */
+#watchTable th:first-child, #watchTable td:first-child,
+#entryTable th:first-child, #entryTable td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--panel);
+}

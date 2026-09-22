@@ -67,7 +67,8 @@ function currentSectorRow() {
 const STRATEGY_TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5;
 const STRATEGY_TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3;
 
-function squeezeStatusFor(c) {
+function squeezeStatusFor(c, minConsolidationWeeks = STRATEGY_TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS,
+    fireLookbackWeeks = STRATEGY_TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS) {
     const t = c && c.ttm_squeeze_chart;
     if (!t || !t.dates || t.dates.length === 0) return { status: "none" };
     let idx = t.dates.length - 1;
@@ -79,11 +80,11 @@ function squeezeStatusFor(c) {
     const weeksSinceFire = t.weeks_since_fire[idx];
     const fireConsolidationWeeks = t.fire_consolidation_weeks[idx];
 
-    const isFired = weeksSinceFire != null && weeksSinceFire <= STRATEGY_TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS
-        && fireConsolidationWeeks != null && fireConsolidationWeeks > STRATEGY_TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS;
+    const isFired = weeksSinceFire != null && weeksSinceFire <= fireLookbackWeeks
+        && fireConsolidationWeeks != null && fireConsolidationWeeks > minConsolidationWeeks;
     if (isFired) return { status: "fired", weeks: weeksSinceFire };
 
-    const isConsolidating = squeezeOn === true && squeezeCount > STRATEGY_TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS;
+    const isConsolidating = squeezeOn === true && squeezeCount > minConsolidationWeeks;
     if (isConsolidating) return { status: "consolidating", weeks: squeezeCount };
 
     return { status: "neutral" };
@@ -429,11 +430,11 @@ function indexTrendFromRows(rows, weeks) {
 }
 
 // Top N sektorow z RS > 0 (sektory bez danych ETF-u nigdy nie przechodza).
-function strongSectorSet(sectorRs) {
+function strongSectorSet(sectorRs, n = STRATEGY_TOP_SECTORS) {
     const set = new Set();
     ((sectorRs && sectorRs.sectors) || [])
         .filter(s => s.data_source !== "no_data" && s.rsm_vs_index_pct != null && s.rsm_vs_index_pct > 0)
-        .slice(0, STRATEGY_TOP_SECTORS)
+        .slice(0, n)
         .forEach(s => set.add(s.sector));
     return set;
 }
@@ -545,74 +546,124 @@ function recentBuyingVolumeRatio(c, weeks) {
     return vals.length ? Math.max(...vals) : null;
 }
 
+// Kryteria lejka — kazde da sie zmienic na stronie (chipy przy kazdym kroku
+// lejka), zapisywane w localStorage razem z reszta ustawien. Domyslne =
+// strategia uzgodniona z uzytkownikiem.
+const DEFAULT_CRITERIA = {
+    market: true,                 // wymagaj rynku w fazie wzrostu
+    sectorTop: STRATEGY_TOP_SECTORS, // 0 = krok wylaczony (tylko USA)
+    sectorTopRs: true,            // top 10 SP500 wg RS przechodzi zawsze
+    stages: ["2A", "2B"],         // dopuszczalne etapy
+    rsWindows: ["medium", "long"], // okna Mansfield RS, ktore musza byc > 0
+    momentum: true,               // momentum_score > 0
+    maxBase: STRATEGY_MAX_BASE_COUNT, // 0 = bez limitu
+    minConsolidation: STRATEGY_TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS, // squeeze > N tyg.
+    fireLookback: STRATEGY_TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS,         // wybicie <= N tyg. temu
+    requireMacd: true,            // MACD nad linia sygnalu jako potwierdzenie wejscia
+    requireVolume: false,         // wolumen kupujacych >= 1.2x jako warunek wejscia
+};
+
+// Kolejne kroki lejka (od gory). "sector" tylko dla USA.
+const FUNNEL_GATES = [
+    { key: "market", label: "Rynek w fazie wzrostu", icon: "🌐" },
+    { key: "sector", label: "Silny sektor", icon: "🏭", usaOnly: true },
+    { key: "stage", label: "Etap Weinsteina", icon: "📈" },
+    { key: "rs", label: "Mansfield RS > 0", icon: "💪" },
+    { key: "momentum", label: "Momentum > 0", icon: "🚀" },
+    { key: "base", label: "Numer bazy", icon: "📦" },
+    { key: "squeeze", label: "TTM Squeeze", icon: "🌀" },
+    { key: "entry", label: "Sygnał wejścia", icon: "🎯" },
+];
+
+function gatesForMarket(market) {
+    return FUNNEL_GATES.filter(g => !g.usaOnly || market === "USA");
+}
+
 // Ocena jednej spolki przez wszystkie bramki lejka.
-// ctx: { marketOk: bool|null, strongSectors: Set|null (null = krok pominiety),
+// ctx: { marketOk: bool|null, strongSectors: Set|null (null = brak danych sektorowych, np. PL),
 //        topRsTickers: Set, sp500Sectors: {ticker: sector}|null }
-function evaluateCandidate(c, ctx) {
+function evaluateCandidate(c, ctx, criteria = DEFAULT_CRITERIA) {
+    const cr = Object.assign({}, DEFAULT_CRITERIA, criteria);
     const w = c.weekly_chart || {};
     const m = c.mansfield_chart || {};
     const stage = w.current_stage || null;
     const baseCount = lastNonNull(w.base_count);
+    const rsShort = lastNonNull(m.rsm_short);
     const rsMedium = lastNonNull(m.rsm_medium);
     const rsLong = lastNonNull(m.rsm_long);
+    const rsValues = { short: rsShort, medium: rsMedium, long: rsLong };
     const sector = (ctx.sp500Sectors && ctx.sp500Sectors[c.ticker]) || c.sector || null;
 
-    let sectorGate;
-    if (!ctx.strongSectors || ctx.strongSectors.size === 0) sectorGate = null; // krok pominiety
-    else if (ctx.sp500Sectors && !(c.ticker in ctx.sp500Sectors)) sectorGate = null; // spoza SP500 — brak sektora GICS
-    else sectorGate = ctx.strongSectors.has(sector) || (ctx.topRsTickers && ctx.topRsTickers.has(c.ticker));
+    let sectorGate = true;
+    if (cr.sectorTop > 0 && ctx.strongSectors && ctx.strongSectors.size > 0
+        && !(ctx.sp500Sectors && !(c.ticker in ctx.sp500Sectors))) { // spoza SP500 — brak sektora GICS, krok pominiety
+        sectorGate = ctx.strongSectors.has(sector) || (cr.sectorTopRs && !!ctx.topRsTickers && ctx.topRsTickers.has(c.ticker));
+    }
 
-    const gates = {
-        stage: stage === "2A" || stage === "2B",
-        // RS 52 tyg. bywa jeszcze pusty przy krotkiej historii — wtedy nie blokuje.
-        rs: rsMedium != null && rsMedium > 0 && (rsLong == null || rsLong > 0),
-        momentum: c.momentum_score != null && c.momentum_score > 0,
-        base: baseCount == null || baseCount <= STRATEGY_MAX_BASE_COUNT,
-        sector: sectorGate !== false,
-    };
-    const passes = gates.stage && gates.rs && gates.momentum && gates.base && gates.sector;
-
-    const squeeze = squeezeStatusFor(c);
+    const squeeze = squeezeStatusFor(c, cr.minConsolidation, cr.fireLookback);
     const mom = squeezeMomentum(c);
     const stopInfo = strategyStopFor(c);
     const stop = stopInfo ? stopInfo.stop : null;
     const macd = macdConfirmation(c);
     const volumeRatio = squeeze.status === "fired" ? recentBuyingVolumeRatio(c, Math.max(2, squeeze.weeks + 1)) : null;
+    const volumeConfirmed = volumeRatio != null && volumeRatio >= STRATEGY_VOLUME_CONFIRM_RATIO;
+    const triggered = squeeze.status === "fired" && mom.value != null && mom.value > 0 && mom.rising === true
+        && stop != null && c.price > stop;
+    const macdOk = !cr.requireMacd || macd.above === true;
+    const volumeOk = !cr.requireVolume || volumeConfirmed;
+
+    const gates = {
+        market: !cr.market || ctx.marketOk !== false,
+        sector: sectorGate,
+        stage: cr.stages.includes(stage),
+        // RS 52 tyg. bywa jeszcze pusty przy krotkiej historii — wtedy nie blokuje.
+        rs: cr.rsWindows.every(k => (k === "long" && rsValues[k] == null) || (rsValues[k] != null && rsValues[k] > 0)),
+        momentum: !cr.momentum || (c.momentum_score != null && c.momentum_score > 0),
+        base: !(cr.maxBase > 0) || baseCount == null || baseCount <= cr.maxBase,
+        squeeze: squeeze.status === "fired" || squeeze.status === "consolidating",
+        entry: triggered && macdOk && volumeOk,
+    };
+    const passes = gates.market && gates.sector && gates.stage && gates.rs && gates.momentum && gates.base;
+    const failedAt = FUNNEL_GATES.map(g => g.key).find(k => !gates[k]) || null;
 
     let status = null;
     if (passes) {
-        const triggered = squeeze.status === "fired" && mom.value != null && mom.value > 0 && mom.rising === true
-            && stop != null && c.price > stop;
-        if (triggered) {
-            if (ctx.marketOk === false) status = "WAIT_MARKET";
-            else if (macd.above !== true) status = "WAIT_MACD";
-            else status = "ENTRY";
-        }
+        if (triggered) status = !macdOk ? "WAIT_MACD" : !volumeOk ? "WAIT_VOLUME" : "ENTRY";
         else if (squeeze.status === "consolidating") status = "SETUP";
         else status = "WATCH";
     }
 
     return {
         ticker: c.ticker, universe: c.universe, sector, price: c.price,
-        stage, baseCount, rsMedium, rsLong, squeeze, momentum: mom, stop, stopInfo,
-        macd, volumeRatio, volumeConfirmed: volumeRatio != null && volumeRatio >= STRATEGY_VOLUME_CONFIRM_RATIO,
-        gates, passes, status,
+        stage, baseCount, rsShort, rsMedium, rsLong, squeeze, momentum: mom, stop, stopInfo,
+        macd, volumeRatio, volumeConfirmed,
+        gates, passes, failedAt, status,
     };
 }
 
 function isSignalStatus(status) {
-    return status === "ENTRY" || status === "WAIT_MARKET" || status === "WAIT_MACD";
+    return status === "ENTRY" || status === "WAIT_MACD" || status === "WAIT_VOLUME";
 }
 
-// Liczniki kolejnych bramek lejka (kazda liczona na wyniku poprzedniej).
-function funnelCounts(evaluated) {
-    const order = ["stage", "rs", "momentum", "base", "sector"];
-    const counts = { universe: evaluated.length };
+// Kroki lejka: dla kazdej bramki — ile spolek przeszlo (in = weszlo do kroku,
+// out = przeszlo dalej). Kazda bramka liczona na wyniku poprzedniej.
+function funnelSteps(evaluated, market) {
     let rows = evaluated;
-    order.forEach(g => { rows = rows.filter(e => e.gates[g]); counts[g] = rows.length; });
-    counts.setup = rows.filter(e => e.status === "SETUP").length;
-    counts.entry = rows.filter(e => isSignalStatus(e.status)).length;
-    return counts;
+    return gatesForMarket(market).map(g => {
+        const before = rows;
+        rows = rows.filter(e => e.gates[g.key]);
+        return { key: g.key, label: g.label, icon: g.icon, in: before.length, out: rows.length };
+    });
+}
+
+// Spolki, ktore przeszly krok `key` (passed) albo odpadly dokladnie na nim (dropped).
+function rowsAtStep(evaluated, market, key, mode) {
+    const keys = gatesForMarket(market).map(g => g.key);
+    const idx = keys.indexOf(key);
+    if (idx < 0) return [];
+    const upTo = keys.slice(0, idx);
+    const reached = evaluated.filter(e => upTo.every(k => e.gates[k]));
+    return mode === "dropped" ? reached.filter(e => !e.gates[key]) : reached.filter(e => e.gates[key]);
 }
 
 // Wielkosc pozycji od ryzyka: akcje = (ryzyko% * kapital) / (cena - stop),
@@ -691,10 +742,16 @@ const marketData = {};     // { UNIVERSE: json }
 let settings = loadSettings();
 
 function loadSettings() {
-    const defaults = { market: "USA", capitalUSA: null, capitalPL: null, heldUSA: "", heldPL: "" };
+    const defaults = {
+        market: "USA", capitalUSA: null, capitalPL: null, heldUSA: "", heldPL: "",
+        criteria: Object.assign({}, DEFAULT_CRITERIA), focusStep: "base", focusMode: "passed",
+    };
     try {
         const raw = typeof localStorage !== "undefined" ? localStorage.getItem(STRATEGY_SETTINGS_KEY) : null;
-        return raw ? Object.assign(defaults, JSON.parse(raw)) : defaults;
+        const saved = raw ? JSON.parse(raw) : {};
+        const out = Object.assign(defaults, saved);
+        out.criteria = Object.assign({}, DEFAULT_CRITERIA, saved.criteria || {});
+        return out;
     } catch (e) {
         return defaults;
     }
@@ -737,7 +794,7 @@ function marketContext(market) {
         const ok = trend ? trend.in_growth_phase : null;
         return {
             marketOkFor: () => ok,
-            strongSectors: strongSectorSet(sectorRs),
+            strongSectors: strongSectorSet(sectorRs, settings.criteria.sectorTop),
             topRsTickers: new Set(((sectorRs && sectorRs.top_rs_companies) || []).map(c => c.ticker)),
             sp500Sectors,
         };
@@ -760,7 +817,7 @@ function evaluateMarket(market) {
         strongSectors: ctx.strongSectors,
         topRsTickers: ctx.topRsTickers,
         sp500Sectors: ctx.sp500Sectors,
-    }));
+    }, settings.criteria));
     return { ctx, evaluated };
 }
 
@@ -772,13 +829,13 @@ function capital() {
 // ------------------------------------------------------------
 // Render
 // ------------------------------------------------------------
-const STATUS_ORDER = { ENTRY: 0, WAIT_MACD: 1, WAIT_MARKET: 2, SETUP: 3, WATCH: 4 };
+const STATUS_ORDER = { ENTRY: 0, WAIT_MACD: 1, WAIT_VOLUME: 2, SETUP: 3, WATCH: 4 };
 
 function statusHtml(status) {
     switch (status) {
         case "ENTRY": return '<span class="funnel-status funnel-status-entry">🟢 Wejście</span>';
         case "WAIT_MACD": return '<span class="funnel-status funnel-status-wait" title="Squeeze odpalił, ale tygodniowy MACD jest jeszcze pod linią sygnału — czekaj na przecięcie w górę jako potwierdzenie wejścia.">⏳ Czekaj na MACD</span>';
-        case "WAIT_MARKET": return '<span class="funnel-status funnel-status-wait" title="Sygnał jest, ale rynek jest poza fazą wzrostu (Krok 1).">⏸ Czekaj (rynek)</span>';
+        case "WAIT_VOLUME": return '<span class="funnel-status funnel-status-wait" title="Squeeze odpalił, ale wolumen kupujących jest poniżej 1,2× średniej.">⏳ Czekaj na wolumen</span>';
         case "SETUP": return '<span class="funnel-status funnel-status-setup">🌀 Setup</span>';
         case "WATCH": return '<span class="funnel-status funnel-status-watch">👀 Obserwuj</span>';
         default: return "—";
@@ -846,20 +903,115 @@ function renderSettings() {
     if (document.activeElement !== heldInput) heldInput.value = settings[`held${market}`] || "";
 }
 
-function renderFunnelSteps(counts, market) {
-    const steps = [
-        ["Spółki", counts.universe],
-        ["Etap 2", counts.stage],
-        ["RS > 0", counts.rs],
-        ["Momentum > 0", counts.momentum],
-        ["Baza ≤ 3", counts.base],
-        [market === "USA" ? "Silny sektor" : "Sektor (pominięty)", counts.sector],
-    ];
-    const html = steps.map(([label, n]) => `<div class="funnel-step"><span class="funnel-step-n">${n}</span><span class="funnel-step-label">${label}</span></div>`).join('<span class="funnel-arrow">→</span>')
-        + '<span class="funnel-arrow">→</span>'
-        + `<div class="funnel-step funnel-step-setup"><span class="funnel-step-n">${counts.setup}</span><span class="funnel-step-label">Setup</span></div>`
-        + `<div class="funnel-step funnel-step-entry"><span class="funnel-step-n">${counts.entry}</span><span class="funnel-step-label">Wejście</span></div>`;
-    document.getElementById("funnelSteps").innerHTML = html;
+// ------------------------------------------------------------
+// Interaktywny lejek: paski z liczba spolek na kazdym kroku + chipy z
+// kryteriami (zmiana kryterium od razu przelicza lejek). Klik w krok ustawia,
+// ktorych spolek dotyczy lista pod lejkiem (przeszly / odpadly na tym kroku).
+// ------------------------------------------------------------
+const CRITERIA_CHIPS = {
+    market: [{ crit: "market", type: "bool", label: "Wymagaj" }],
+    sector: [
+        { crit: "sectorTop", type: "single", options: [[0, "Wył."], [1, "Top 1"], [2, "Top 2"], [3, "Top 3"], [5, "Top 5"]] },
+        { crit: "sectorTopRs", type: "bool", label: "+ top 10 RS zawsze" },
+    ],
+    stage: [{ crit: "stages", type: "multi", options: [["1", "1"], ["2A", "2A"], ["2B", "2B"], ["3", "3"]] }],
+    rs: [{ crit: "rsWindows", type: "multi", options: [["short", "13 tyg."], ["medium", "26 tyg."], ["long", "52 tyg."]] }],
+    momentum: [{ crit: "momentum", type: "bool", label: "Wymagaj" }],
+    base: [{ crit: "maxBase", type: "single", options: [[1, "≤ 1"], [2, "≤ 2"], [3, "≤ 3"], [4, "≤ 4"], [0, "bez limitu"]] }],
+    squeeze: [
+        { crit: "minConsolidation", type: "single", prefix: "konsolidacja >", options: [[3, "3"], [5, "5"], [8, "8 tyg."]] },
+        { crit: "fireLookback", type: "single", prefix: "wybicie ≤", options: [[1, "1"], [3, "3"], [5, "5 tyg. temu"]] },
+    ],
+    entry: [
+        { crit: "requireMacd", type: "bool", label: "MACD nad sygnałem" },
+        { crit: "requireVolume", type: "bool", label: "Wolumen ≥ 1,2×" },
+    ],
+};
+
+function chipsHtml(key) {
+    const cr = settings.criteria;
+    return (CRITERIA_CHIPS[key] || []).map(group => {
+        if (group.type === "bool") {
+            return `<button type="button" class="funnel-chip${cr[group.crit] ? " active" : ""}" data-crit="${group.crit}" data-type="bool">${cr[group.crit] ? "✓ " : ""}${group.label}</button>`;
+        }
+        const chips = group.options.map(([val, label]) => {
+            const active = group.type === "multi" ? cr[group.crit].includes(val) : cr[group.crit] === val;
+            return `<button type="button" class="funnel-chip${active ? " active" : ""}" data-crit="${group.crit}" data-type="${group.type}" data-val="${val}">${label}</button>`;
+        }).join("");
+        return `<span class="funnel-chip-group">${group.prefix ? `<span class="funnel-chip-prefix">${group.prefix}</span>` : ""}${chips}</span>`;
+    }).join("");
+}
+
+function stepInfoText(key, market, ctx) {
+    const cr = settings.criteria;
+    if (key === "market") {
+        if (market === "USA") {
+            const t = strategyData && strategyData.trend;
+            const ok = t ? t.in_growth_phase : null;
+            return ok == null ? "SP500: brak danych" : `SP500 ${ok ? "🟢 w fazie wzrostu" : "🔴 poza fazą wzrostu"}`;
+        }
+        return MARKETS.PL.universes.map(u => {
+            const t = ctx.trends && ctx.trends[u];
+            return `${FUNNEL_UNIVERSE_LABELS[u]} ${t ? (t.above ? "🟢" : "🔴") : "—"}`;
+        }).join(" · ");
+    }
+    if (key === "sector") {
+        if (!(cr.sectorTop > 0)) return "krok wyłączony";
+        const names = [...(ctx.strongSectors || [])];
+        return names.length ? names.join(", ") : "brak sektorów z RS > 0";
+    }
+    if (key === "squeeze") return "🌀 konsolidacja lub 🔥 świeże wybicie";
+    if (key === "entry") return "wybicie + histogram rośnie + cena nad stopem";
+    return "";
+}
+
+function renderFunnelViz(evaluated, market, ctx) {
+    const steps = funnelSteps(evaluated, market);
+    const total = evaluated.length || 1;
+    const focus = steps.some(st => st.key === settings.focusStep) ? settings.focusStep : "base";
+    const barPct = n => Math.max(6, (n / total) * 100);
+
+    const head = `
+        <div class="funnel-row funnel-row-top">
+            <div class="funnel-row-head"><span class="funnel-row-title">Wszystkie spółki ${market === "USA" ? "SP500 + Nasdaq 100" : "WIG20 + mWIG40"}</span></div>
+            <div class="funnel-bar-track"><div class="funnel-bar funnel-bar-all" style="width:100%"><span>${evaluated.length}</span></div></div>
+        </div>`;
+    const rows = steps.map((st, i) => {
+        const dropped = st.in - st.out;
+        const last = i === steps.length - 1;
+        const info = stepInfoText(st.key, market, ctx);
+        return `
+        <div class="funnel-row${st.key === focus ? " focused" : ""}" data-step="${st.key}" role="button" tabindex="0" title="Kliknij, żeby zobaczyć spółki na tym kroku">
+            <div class="funnel-row-head">
+                <span class="funnel-row-title">${st.icon} ${st.label}</span>
+                <span class="funnel-row-drop${dropped ? "" : " zero"}" data-drop="1" title="Odpadło na tym kroku — kliknij, żeby zobaczyć">−${dropped}</span>
+            </div>
+            <div class="funnel-bar-track"><div class="funnel-bar${last ? " funnel-bar-final" : ""}" style="width:${barPct(st.out)}%"><span>${st.out}</span></div></div>
+            ${info ? `<div class="funnel-row-info">${info}</div>` : ""}
+            <div class="funnel-chips">${chipsHtml(st.key)}</div>
+        </div>`;
+    }).join("");
+    document.getElementById("funnelViz").innerHTML = head + rows;
+    return steps;
+}
+
+function applyCriteriaChip(btn) {
+    const cr = settings.criteria;
+    const crit = btn.dataset.crit;
+    const type = btn.dataset.type;
+    if (type === "bool") {
+        cr[crit] = !cr[crit];
+    } else if (type === "single") {
+        cr[crit] = Number(btn.dataset.val);
+    } else if (type === "multi") {
+        const val = btn.dataset.val;
+        const set = new Set(cr[crit]);
+        if (set.has(val)) set.delete(val); else set.add(val);
+        if (crit === "stages" && set.size === 0) return; // co najmniej jeden etap
+        cr[crit] = [...set];
+    }
+    saveSettings();
+    renderFunnel();
 }
 
 function renderPlTrend(ctx) {
@@ -875,6 +1027,16 @@ function renderPlTrend(ctx) {
     }).join("");
 }
 
+function failedAtLabel(key) {
+    const g = FUNNEL_GATES.find(x => x.key === key);
+    return g ? g.label : key;
+}
+
+function listStatusHtml(e) {
+    if (e.status) return statusHtml(e.status);
+    return `<span class="funnel-status funnel-status-drop" title="Pierwszy krok lejka, którego spółka nie przeszła.">✗ ${failedAtLabel(e.failedAt)}</span>`;
+}
+
 function watchRowHtml(e, currency) {
     return `
         <td class="ticker-cell">${e.ticker}</td>
@@ -883,25 +1045,55 @@ function watchRowHtml(e, currency) {
         <td>${fmtPriceFor(currency, e.price)}</td>
         <td>${stageCellHtml(e.stage)}</td>
         <td>${e.baseCount != null ? e.baseCount : "—"}</td>
+        <td>${fmtSigned(e.rsShort)}</td>
         <td>${fmtSigned(e.rsMedium)}</td>
         <td>${fmtSigned(e.rsLong)}</td>
         <td>${squeezeStatusHtml(e.squeeze)}</td>
-        <td>${statusHtml(e.status)}</td>
+        <td>${listStatusHtml(e)}</td>
         <td>${chartBtnHtml(e.ticker, e.universe)}</td>
     `;
 }
 
-function renderWatchTable(evaluated, currency) {
-    const rows = evaluated.filter(e => e.passes);
+// Sortowanie listy: puste wartosci zawsze na koncu, niezaleznie od kierunku.
+function compareListRows(a, b, key, dir) {
+    const val = r => key === "statusRank"
+        ? (r.status ? STATUS_ORDER[r.status] : 10 + FUNNEL_GATES.findIndex(g => g.key === r.failedAt))
+        : r[key];
+    const va = val(a), vb = val(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    let cmp;
+    if (typeof va === "string") cmp = va.localeCompare(String(vb), "pl");
+    else cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    if (cmp === 0 && key === "statusRank") cmp = (b.rsMedium || 0) - (a.rsMedium || 0);
+    return dir === "asc" ? cmp : -cmp;
+}
+
+function renderWatchTable(evaluated, currency, market) {
+    const focus = gatesForMarket(market).some(g => g.key === settings.focusStep) ? settings.focusStep : "base";
+    const mode = settings.focusMode === "dropped" ? "dropped" : "passed";
+    const rows = rowsAtStep(evaluated, market, focus, mode);
+    const label = failedAtLabel(focus);
+    document.getElementById("watchTitle").textContent = mode === "dropped"
+        ? `Odpadły na kroku: ${label}`
+        : `Przeszły krok: ${label}`;
+    document.querySelectorAll("#listModeToggle .chart-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === mode));
+    const sort = settings.listSort || { key: "statusRank", dir: "asc" };
+    document.querySelectorAll("#watchTable thead th[data-key]").forEach(th => {
+        th.classList.toggle("sort-asc", th.dataset.key === sort.key && sort.dir === "asc");
+        th.classList.toggle("sort-desc", th.dataset.key === sort.key && sort.dir === "desc");
+    });
+
     renderScreenerTable({
         tbody: document.getElementById("watchTableBody"),
         metaEl: document.getElementById("watchMeta"),
         allRows: rows,
-        compareFn: (a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || ((b.rsMedium || 0) - (a.rsMedium || 0)),
-        colspan: 11,
-        emptyAllMsg: "Żadna spółka nie przeszła filtrów lejka.",
+        compareFn: (a, b) => compareListRows(a, b, sort.key, sort.dir),
+        colspan: 12,
+        emptyAllMsg: mode === "dropped" ? "Na tym kroku nic nie odpadło." : "Żadna spółka nie przeszła tego kroku — poluzuj kryteria w lejku.",
         emptyFilteredMsg: "Brak danych.",
-        metaText: () => `${rows.length} spółek · ${rows.filter(e => e.status === "SETUP").length} w konsolidacji`,
+        metaText: () => `${rows.length} spółek · ${rows.filter(e => e.status === "SETUP").length} w konsolidacji · ${rows.filter(e => e.status === "ENTRY").length} z sygnałem`,
         rowHtml: e => watchRowHtml(e, currency),
         afterRender: bindChartButtons,
     });
@@ -1018,8 +1210,8 @@ function renderFunnel() {
         document.getElementById("trendRefDate").textContent = d ? d.ref_date : "";
         document.getElementById("sectorMeta").textContent = "";
     }
-    renderFunnelSteps(funnelCounts(evaluated), market);
-    renderWatchTable(evaluated, currency);
+    renderFunnelViz(evaluated, market, ctx);
+    renderWatchTable(evaluated, currency, market);
     renderEntryTable(evaluated, currency, held, byTicker);
     renderHoldTable(market, held, currency);
 }
@@ -1045,6 +1237,41 @@ function initFunnelControls() {
         settings[`capital${settings.market}`] = isFinite(v) && v > 0 ? v : null;
         saveSettings();
         renderFunnel();
+    });
+    const viz = document.getElementById("funnelViz");
+    viz.addEventListener("click", (ev) => {
+        const chip = ev.target.closest(".funnel-chip");
+        if (chip) { applyCriteriaChip(chip); return; }
+        const row = ev.target.closest(".funnel-row[data-step]");
+        if (!row) return;
+        settings.focusStep = row.dataset.step;
+        settings.focusMode = ev.target.closest("[data-drop]") ? "dropped" : "passed";
+        saveSettings();
+        renderFunnel();
+        const list = document.getElementById("watchCard");
+        if (list && list.scrollIntoView && window.innerWidth <= 640) list.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    viz.addEventListener("keydown", (ev) => {
+        if ((ev.key === "Enter" || ev.key === " ") && ev.target.matches(".funnel-row[data-step]")) { ev.preventDefault(); ev.target.click(); }
+    });
+    document.getElementById("resetCriteriaBtn").addEventListener("click", () => {
+        settings.criteria = Object.assign({}, DEFAULT_CRITERIA);
+        saveSettings();
+        renderFunnel();
+        if (typeof showToast === "function") showToast("Przywrócono domyślne kryteria lejka.", { type: "info" });
+    });
+    document.querySelectorAll("#listModeToggle .chart-mode-btn").forEach(btn => {
+        btn.addEventListener("click", () => { settings.focusMode = btn.dataset.mode; saveSettings(); renderFunnel(); });
+    });
+    document.querySelectorAll("#watchTable thead th[data-key]").forEach(th => {
+        th.addEventListener("click", () => {
+            const cur = settings.listSort || { key: "statusRank", dir: "asc" };
+            const key = th.dataset.key;
+            const textKeys = ["ticker", "universe", "sector", "statusRank", "stage"];
+            settings.listSort = cur.key === key ? { key, dir: cur.dir === "asc" ? "desc" : "asc" } : { key, dir: textKeys.includes(key) ? "asc" : "desc" };
+            saveSettings();
+            renderFunnel();
+        });
     });
     document.getElementById("heldInput").addEventListener("change", (ev) => {
         settings[`held${settings.market}`] = ev.target.value;
@@ -1091,6 +1318,6 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
-        evaluateCandidate, funnelCounts, positionSize, evaluateHolding, parseTickerList,
+        evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, evaluateHolding, parseTickerList,
     };
 }
