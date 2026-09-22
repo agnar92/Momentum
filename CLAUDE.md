@@ -227,7 +227,11 @@ being left alone.
      `prices` table (PK `(Date, Ticker)`, columns `Close, Adj_Close, Volume, High, Low` — High/Low were
      always present in yfinance's OHLCV response but discarded until `run_query.py` needed them to split
      weekly volume into buying/selling, see below; `_download_price_rows(..., include_ohlc=True)` is what
-     appends them, `index_prices` still doesn't carry them since nothing needs them there).
+     appends them). `index_prices` (the index/ETF-level table, see Global Equity Momentum below) gained
+     the same two columns later, at the user's explicit request for an ATR-adjusted Relative Strength (see
+     "RS is now ATR-adjusted" under Relative strength below) — `_ensure_index_prices_ohlc_columns()` is its
+     own idempotent migration, and `update_index_prices()` now fetches SP500/NASDAQ100/DOWJONES and the
+     sector SPDR ETFs with `include_ohlc=True` too.
      `_ensure_prices_ohlc_columns()` runs an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
      migration before every incremental refresh, since the already-committed `momentum_data.duckdb` predates
      these columns — old rows get `NULL` High/Low until they age out of the retention window and get
@@ -725,6 +729,37 @@ until someone raises `--lookback-months` further (which triggers a one-time full
 as `rsm_medium`/`sma10_pct`/`sma30_pct` elsewhere in this module, just guaranteed to bite harder here
 until the retention is deepened again.
 
+**RS is now ATR-adjusted, at the user's explicit request** ("Strategia sily relatywnej musi byc
+skorygowna o ATR z tego samego okresu. czyli cena akcji i cena benchmarku skorygowana o ATR z aktywu")
+— applied here (the dashboard's own-chart Mansfield panel) AND to the sector strategy screener below
+(`compute_sector_relative_strength`), the two places this codebase computes a Mansfield RS oscillator.
+Instead of the classic `RS = stock_close / index_close`, each side is first divided by its OWN ATR
+(Average True Range — the same simple-moving-average-of-True-Range convention already used by the
+Keltner Channel in `compute_ttm_squeeze_chart`, now factored out into a shared `_weekly_atr`/
+`_weekly_true_range` helper so the formula lives in one place) before the ratio is taken: `RS =
+(stock_close / ATR_stock) / (index_close / ATR_index)` — `_atr_adjusted_rs_raw()`. The user was asked,
+and chose explicitly, to match each ATR's period to the smoothing window it feeds rather than use one
+fixed ATR period everywhere — so `rsm_short` uses `ATR(13)`, `rsm_medium` uses `ATR(26)`, `rsm_long`
+uses `ATR(52)` (three separate raw RS series, not one shared series as before this change), and the
+sector screener's single 52-week window uses `ATR(52)`. This requires High/Low on BOTH sides — the
+stock (`prices`, already had it) and the benchmark (`index_prices`, which didn't: `High DOUBLE, Low
+DOUBLE` were added there via an idempotent `_ensure_index_prices_ohlc_columns()` migration, the same
+idiom as `_ensure_prices_ohlc_columns`). `update_index_prices()` now fetches SP500/NASDAQ100/DOWJONES
+and the sector SPDR ETFs with `include_ohlc=True`; WIG20/mWIG40/sWIG80's synthetic equal-weight index
+(see below) gets a synthetic High/Low too — the equal-weighted average of each constituent's own
+High/Close and Low/Close ratio, applied to the synthetic level, since there's no real daily range for
+an index that's itself only a composite of its constituents' closes.
+
+Because ATR itself needs `weeks` of its own warm-up before the RS-smoothing's rolling mean (another
+`weeks`) can start producing values, every consumer of this correction now needs roughly **double** the
+lookback buffer it needed before — `compute_mansfield_rs_chart`'s buffer became `2*RS_MANSFIELD_LONG_WEEKS
++ 2` (was `RS_MANSFIELD_LONG_WEEKS + 2`), the same "double buffer" idiom `compute_ttm_squeeze_chart`
+already used for its own regression step. This deepens the existing `rsm_long` retention shortfall
+described above (and, for the sector screener, pushes `rsm_vs_index_pct`/`rsm_vs_sector_pct` further
+into "needs deeper `--lookback-months` to have a value at all" territory) — an accepted, direct
+consequence of the correction itself, same graceful-degradation convention (`None` instead of a wrong
+number) as everywhere else in this module.
+
 **Version history matters here too**: an earlier version deliberately decoupled this chart from the
 momentum window — its own display range was just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6
 months) from `ref_date`, a completely different (and shorter) span than `weekly_chart` above it, so the two
@@ -831,7 +866,10 @@ decide" philosophy as the rest of the dashboard/rebalance calculator.
 RS" — this strategy is based on pure RS). Both Krok 2 and Krok 3 use exactly the same formula, the classic
 Mansfield Relative Strength oscillator (`RS = price_A / price_B`, `RSM = (RS / SMA(RS, N weeks) - 1) *
 100` — the same oscillator `compute_mansfield_rs_chart` already draws for a single stock vs. its own index,
-see Relative Strength above), just with different numerator/denominator pairs at each step:
+see Relative Strength above, and now, like that oscillator, **ATR-adjusted** — see the "RS is now
+ATR-adjusted" paragraph there for the shared formula/rationale; `price_A`/`price_B` below are each first
+divided by their own `ATR(SECTOR_STRATEGY_RSM_WEEKS)` via the same `_atr_adjusted_rs_raw()` helper before
+the ratio is taken), just with different numerator/denominator pairs at each step:
   - **Krok 2** (which sector leads *right now*): `RS = sector ETF price / SP500 price`.
   - **Krok 3** (which company leads *within* a sector): `RS = company price / THAT SAME sector's ETF
     price` — the denominator is the sector, **not** SP500, so a company's Krok-3 score answers "does it

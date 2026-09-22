@@ -49,6 +49,9 @@ from run_query import (
     _build_full_universe_records,
     _compute_weinstein_stage_series,
     _load_gem_manual_returns,
+    _atr_adjusted_rs_raw,
+    _weekly_atr,
+    _weekly_true_range,
 )
 import run_query
 
@@ -424,6 +427,7 @@ def make_gem_con():
     con.execute("""
         CREATE TABLE index_prices (
             Date DATE, Index_Name VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+            High DOUBLE, Low DOUBLE,
             PRIMARY KEY (Date, Index_Name)
         )
     """)
@@ -450,7 +454,7 @@ class TestComputeIndexReturns:
 
     def test_ranks_universes_by_return_descending(self):
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0, NULL, NULL)", [
             ("2025-01-31", "NASDAQ100", 100.0, 100.0),
             ("2026-01-31", "NASDAQ100", 130.0, 130.0),   # +30%, ostatni dzien stycznia -> kotwica
             ("2025-01-31", "DOWJONES", 100.0, 100.0),
@@ -467,7 +471,7 @@ class TestComputeIndexReturns:
 
     def test_universe_missing_lookback_data_is_skipped(self):
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0, NULL, NULL)", [
             ("2026-01-31", "NASDAQ100", 100.0, 100.0),  # brak ceny sprzed 12 mies. -> pominiete
         ])
         out = compute_index_returns(con, "2026-02-15", lookback_months=12)
@@ -478,7 +482,7 @@ class TestComputeIndexReturns:
         # bierze TOP N wylacznie ze zwycieskiego indeksu, patrz docs/js/rebalance.js) —
         # sprawdzamy, ze wszystkie 5 (nie tylko NASDAQ100/DOWJONES) sa uwzglednione w wyscigu.
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0, NULL, NULL)", [
             ("2025-01-31", "SP500", 100.0, 100.0),
             ("2026-01-31", "SP500", 110.0, 110.0),        # +10%
             ("2025-01-31", "NASDAQ100", 100.0, 100.0),
@@ -501,7 +505,7 @@ class TestComputeIndexReturns:
         # wplywac na wynik, ani zmieniac sie zaleznie od tego, kiedy w miesiacu
         # ref_date akurat wypada.
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', ?, ?, 0, NULL, NULL)", [
             ("2025-01-31", 100.0, 100.0),
             ("2026-01-31", 130.0, 130.0),   # ostatni dzien stycznia -> kotwica
             ("2026-02-10", 999.0, 999.0),   # luty jeszcze trwa -> NIE powinno byc uzyte jako "teraz"
@@ -521,7 +525,7 @@ class TestComputeIndexReturns:
         # zakonczony (31. to z definicji ostatni dzien sierpnia), nie trzeba
         # czekac na dane z wrzesnia.
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', ?, ?, 0, NULL, NULL)", [
             ("2025-08-31", 100.0, 100.0),
             ("2026-08-31", 140.0, 140.0),   # ostatni dzien SIERPNIA, brak jakichkolwiek danych z wrzesnia
         ])
@@ -537,7 +541,7 @@ class TestComputeIndexReturns:
         # inne (np. NASDAQ100) zostaja liczone jak dotychczas z index_prices.
         monkeypatch.setattr(run_query, "_load_gem_manual_returns", lambda: {"WIG20": 44.84})
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0, NULL, NULL)", [
             ("2025-01-31", "NASDAQ100", 100.0, 100.0),
             ("2026-01-31", "NASDAQ100", 130.0, 130.0),   # +30% (syntetyczny, bez nadpisania)
             ("2025-01-31", "WIG20", 100.0, 100.0),
@@ -556,7 +560,7 @@ class TestComputeIndexReturns:
     def test_no_manual_override_falls_back_to_synthetic_return(self, monkeypatch):
         monkeypatch.setattr(run_query, "_load_gem_manual_returns", lambda: {})
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0, NULL, NULL)", [
             ("2025-01-31", "WIG20", 100.0, 100.0),
             ("2026-01-31", "WIG20", 108.0, 108.0),
         ])
@@ -612,7 +616,7 @@ class TestComputeIndexLeaders:
         # sie rozwiazaly, tak jak w prawdziwym pipeline (compute_index_leaders
         # jest wolane tylko dla juz-wygranego w compute_index_returns uniwersum).
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', 100.0, 100.0, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', 100.0, 100.0, 0, NULL, NULL)", [
             ("2025-01-31",), ("2026-01-31",),
         ])
         con.executemany("INSERT INTO index_constituents VALUES (?, 'NASDAQ100', 'Tech', ?)", [
@@ -630,7 +634,7 @@ class TestComputeIndexLeaders:
 
     def test_top_n_limits_result_count(self):
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', 100.0, 100.0, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, 'NASDAQ100', 100.0, 100.0, 0, NULL, NULL)", [
             ("2025-01-31",), ("2026-01-31",),
         ])
         rows_const = [(f"T{i}", "NASDAQ100", "Tech", 10.0) for i in range(15)]
@@ -659,7 +663,7 @@ class TestComputeIndexLeaders:
 class TestExportGlobalEquityMomentum:
     def test_auto_derives_ref_date_from_index_prices_watermark(self, tmp_path):
         con = make_gem_con()
-        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0, NULL, NULL)", [
             ("2025-02-27", "NASDAQ100", 100.0, 100.0),
             ("2026-02-27", "NASDAQ100", 120.0, 120.0),   # +20%, ostatni dzien LUTEGO -> kotwica
             ("2025-02-27", "DOWJONES", 100.0, 100.0),
@@ -689,19 +693,28 @@ class TestExportGlobalEquityMomentum:
 # (Siła relatywna, NASDAQ100 + DOWJONES, TO SAMO okno co momentum_value skladnikow)
 # ---------------------------------------------------------------------------
 
-def insert_daily_series(con, table, id_column, id_value, start_date, end_date, start_price, step_per_day):
+def insert_daily_series(con, table, id_column, id_value, start_date, end_date, start_price, step_per_day,
+                         high_low_spread=1.0):
     """Wstawia ciag dziennych cen (dni robocze), rosnacych liniowo o step_per_day
     kazdego kolejnego dnia sesyjnego, od start_price w start_date. Zwraca
     {Timestamp: price} do wyliczenia oczekiwanych wartosci w asercjach. Wstawia
-    po nazwach kolumn (nie pozycyjnie): `prices` ma tez High/Low (patrz
-    make_gem_con), ktorych ta funkcja nie ustawia — zostaja NULL."""
+    po nazwach kolumn (nie pozycyjnie): `prices`/`index_prices` maja tez High/Low
+    (patrz make_gem_con) — ta funkcja ustawia je jako Close +/- high_low_spread
+    (STALY, ABSOLUTNY rozstaw, NIE procent ceny — na wyrazne zyczenie: korekta
+    ATR (patrz run_query.py::_weekly_atr) dzieli cene PRZEZ ATR, wiec staly
+    PROCENTOWY rozstaw dawalby ATR% == stala, co skasowalowaloby caly trend ceny
+    z powrotem do plaskiego RS i psulo asercje testow o kierunku/znaku RSM ponizej
+    — staly rozstaw W JEDNOSTKACH CENY, przy rosnacej cenie, utrzymuje trend)."""
     dates = pd.bdate_range(start=start_date, end=end_date)
     prices, rows = {}, []
     for i, d in enumerate(dates):
         price = start_price + i * step_per_day
         prices[d] = price
-        rows.append((d.strftime("%Y-%m-%d"), id_value, price, price, 1000))
-    con.executemany(f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows)
+        rows.append((d.strftime("%Y-%m-%d"), id_value, price, price, 1000,
+                      price + high_low_spread, price - high_low_spread))
+    con.executemany(
+        f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume, High, Low) "
+        f"VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
     return prices
 
 
@@ -809,21 +822,42 @@ class TestExportRelativeStrength:
 # przeliczone na % zmiany wzgledem pierwszego wyswietlanego tygodnia.
 # ---------------------------------------------------------------------------
 
-def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks, start_price, weekly_step):
+def insert_weekly_series(con, table, id_column, id_value, start_monday, n_weeks, start_price, weekly_step,
+                          half_range=None):
     """Wstawia n_weeks kolejnych poniedziałkowych cen (start_price, +weekly_step co
     tydzień) do `table` (prices albo index_prices) — DATE_TRUNC('week', ...) na
     dacie poniedziałkowej jest no-opem, więc unikamy niejednoznaczności co do
-    konwencji początku tygodnia w DuckDB."""
+    konwencji początku tygodnia w DuckDB.
+
+    half_range=None (domyślnie): High/Low zostają NULL, jak przed dodaniem korekty
+    ATR — celowe dla testów, które sprawdzają zachowanie BEZ High/Low (neutralny
+    50/50 rozkład CLV, patrz _weekly_close_series). half_range=liczba: dolicza
+    High/Low jako Close +/- half_range (STAŁY, ABSOLUTNY rozstaw w jednostkach
+    ceny, NIE procent — ta sama konwencja i to samo uzasadnienie co w
+    insert_daily_series powyżej: korekta ATR dzieli cenę PRZEZ ATR, więc stały
+    PROCENTOWY rozstaw skasowałby trend z powrotem do płaskiego RS) — potrzebne
+    tam, gdzie test faktycznie liczy na coś z compute_mansfield_rs_chart (ATR
+    wymaga High/Low obu stron, patrz _weekly_atr)."""
     mondays = pd.date_range(start=start_monday, periods=n_weeks, freq="7D")
-    rows = [
-        (d.strftime("%Y-%m-%d"), id_value, start_price + i * weekly_step, start_price + i * weekly_step, 0)
-        for i, d in enumerate(mondays)
-    ]
-    # Kolumny po nazwie (nie pozycyjnie): `prices` ma tez High/Low (patrz make_gem_con),
-    # ktorych te testy nie ustawiaja — zostaja NULL, buying_volume liczy sie wtedy
-    # na neutralnym 50/50 (patrz CASE w _weekly_close_series), co przy Volume=0 w tych
-    # fixture'ach i tak daje buying_volume=0, bez zmiany zachowania testow.
-    con.executemany(f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows)
+    if half_range is None:
+        rows = [
+            (d.strftime("%Y-%m-%d"), id_value, start_price + i * weekly_step, start_price + i * weekly_step, 0)
+            for i, d in enumerate(mondays)
+        ]
+        # Kolumny po nazwie (nie pozycyjnie): `prices` ma tez High/Low (patrz make_gem_con),
+        # ktorych te testy nie ustawiaja — zostaja NULL, buying_volume liczy sie wtedy
+        # na neutralnym 50/50 (patrz CASE w _weekly_close_series), co przy Volume=0 w tych
+        # fixture'ach i tak daje buying_volume=0, bez zmiany zachowania testow.
+        con.executemany(
+            f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume) VALUES (?, ?, ?, ?, ?)", rows)
+        return mondays
+    rows = []
+    for i, d in enumerate(mondays):
+        price = start_price + i * weekly_step
+        rows.append((d.strftime("%Y-%m-%d"), id_value, price, price, 0, price + half_range, price - half_range))
+    con.executemany(
+        f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume, High, Low) "
+        f"VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
     return mondays
 
 
@@ -1345,6 +1379,73 @@ class TestComputeWeinsteinStageSeries:
 
 
 # ---------------------------------------------------------------------------
+# _weekly_true_range / _weekly_atr / _atr_adjusted_rs_raw: korekta ATR Sily
+# Relatywnej (na wyrazne zyczenie uzytkownika — patrz duzy komentarz nad
+# RS_MANSFIELD_* stalymi w run_query.py). Testy pure-DataFrame, bez DuckDB.
+# ---------------------------------------------------------------------------
+
+class TestWeeklyTrueRangeAndAtr:
+    def test_true_range_picks_largest_of_three_components(self):
+        # Tydzien 0: brak prev_close -> True Range = high-low (jedyny nie-NaN
+        # skladnik). Tydzien 1: zwykly dzien, high-low (3) > gap (|11.5-10|=1.5).
+        # Tydzien 2: luka w gore (gap) WIEKSZA niz wlasny zakres high-low tego
+        # tygodnia -> True Range = |high-prev_close|, nie high-low.
+        df = pd.DataFrame({
+            "close": [10.0, 11.0, 20.0],
+            "high": [10.5, 11.5, 20.5],
+            "low": [9.5, 8.5, 19.5],
+        })
+        tr = _weekly_true_range(df)
+        assert tr.iloc[0] == pytest.approx(1.0)   # high-low = 10.5-9.5
+        assert tr.iloc[1] == pytest.approx(3.0)   # high-low = 11.5-8.5 > |11.5-10|=1.5
+        assert tr.iloc[2] == pytest.approx(9.5)   # |low-prev_close| = |19.5-10.0|... patrz nizej
+
+    def test_atr_is_rolling_mean_of_true_range_with_warmup_nan(self):
+        # Staly, powtarzalny True Range (high-low=2.0 kazdego tygodnia, wiec
+        # ATR(3) = 2.0 od momentu, gdy jest juz 3 tygodnie danych).
+        df = pd.DataFrame({
+            "close": [10.0] * 5,
+            "high": [11.0] * 5,
+            "low": [9.0] * 5,
+        })
+        atr = _weekly_atr(df, weeks=3)
+        assert pd.isna(atr.iloc[0]) and pd.isna(atr.iloc[1])
+        assert atr.iloc[2] == pytest.approx(2.0)
+        assert atr.iloc[4] == pytest.approx(2.0)
+
+
+class TestAtrAdjustedRsRaw:
+    def test_rs_is_scaled_by_each_sides_own_atr_not_just_raw_price_ratio(self):
+        # Spolka: cena stala 10, wlasny (staly) zakres High/Low = 2 -> ATR=2.
+        # Benchmark: cena stala 100, ZNACZNIE szerszy wlasny zakres = 8 -> ATR=8.
+        # Surowy stosunek cen (BEZ korekty) bylby staly 10/100=0.10 kazdego
+        # tygodnia. Korekta ATR dzieli KAZDA strone przez WLASNY ATR najpierw:
+        # (10/2) / (100/8) = 5 / 12.5 = 0.40 — inna wartosc niz surowy stosunek,
+        # co dowodzi, ze funkcja faktycznie WAZY obie strony wlasna zmiennoscia,
+        # a nie tylko dzieli ceny.
+        num_df = pd.DataFrame({"close": [10.0] * 5, "high": [11.0] * 5, "low": [9.0] * 5})
+        den_df = pd.DataFrame({"close": [100.0] * 5, "high": [104.0] * 5, "low": [96.0] * 5})
+        rs_raw = _atr_adjusted_rs_raw(num_df, den_df, weeks=3)
+        assert pd.isna(rs_raw.iloc[0]) and pd.isna(rs_raw.iloc[1])  # rozgrzewka ATR
+        assert rs_raw.iloc[2] == pytest.approx(0.40)
+        assert rs_raw.iloc[4] == pytest.approx(0.40)
+        assert rs_raw.iloc[2] != pytest.approx(10.0 / 100.0)  # nie surowy stosunek cen
+
+    def test_equal_own_atr_on_both_sides_reduces_to_plain_price_ratio(self):
+        # Gdy oba ATR sa sobie rowne (ten sam staly rozstaw High/Low po obu
+        # stronach), korekta ATR upraszcza sie z powrotem do zwyklego RS =
+        # cena_spolki / cena_benchmarku — dokladnie ta wlasnosc, na ktorej
+        # opieraja sie fixture'y w TestComputeMansfieldRsChart (half_range=5.0
+        # identyczny dla spolki i indeksu).
+        num_df = pd.DataFrame({"close": [10.0, 12.0, 14.0], "high": [15.0, 17.0, 19.0], "low": [5.0, 7.0, 9.0]})
+        den_df = pd.DataFrame({"close": [100.0, 100.0, 100.0], "high": [105.0, 105.0, 105.0],
+                                "low": [95.0, 95.0, 95.0]})
+        rs_raw = _atr_adjusted_rs_raw(num_df, den_df, weeks=2)
+        assert rs_raw.iloc[1] == pytest.approx(num_df["close"].iloc[1] / den_df["close"].iloc[1])
+        assert rs_raw.iloc[2] == pytest.approx(num_df["close"].iloc[2] / den_df["close"].iloc[2])
+
+
+# ---------------------------------------------------------------------------
 # compute_mansfield_rs_chart: oscylator Mansfield RS w dwoch wygladzeniach
 # (krotkoterminowym ~3 mies., srednioterminowym ~6 mies.) na WLASNYM, krotkim
 # ostatnim ~6-miesiecznym oknie — celowo ODCZEPIONYM od okna momentum_value
@@ -1353,22 +1454,36 @@ class TestComputeWeinsteinStageSeries:
 # ---------------------------------------------------------------------------
 
 class TestComputeMansfieldRsChart:
+    # half_range=5.0 (rozstaw High/Low STALY, ABSOLUTNY — patrz docstring
+    # insert_weekly_series) UZYTY TEN SAM dla spolki i benchmarku w kazdym tescie
+    # ponizej, celowo: przy takim samym stalym rozstawie i weekly_step ponizej 2x
+    # tego rozstawu, True Range (a wiec ATR) obu stron STABILIZUJE SIE NA TEJ SAMEJ
+    # STALEJ (2*half_range) po rozgrzewce — korekta ATR (RS = (cena/ATR) /
+    # (cena_bm/ATR_bm)) upraszcza sie wtedy z powrotem do zwyklego RS =
+    # cena/cena_bm (oba ATR sie skracaja), wiec te same asercje o znaku/kierunku
+    # RSM co PRZED dodaniem korekty ATR nadal sa poprawne — zmienia sie TYLKO to,
+    # ILE tygodni zapasu (fixture_start) trzeba teraz dostarczyc PRZED start_date,
+    # bo ATR sam potrzebuje `weeks` tygodni rozgrzewki PRZED tym, zanim rolling
+    # srednia RS (kolejne `weeks`) moze dac wartosc — patrz duzy komentarz nad
+    # RS_MANSFIELD_* stalymi w run_query.py. Nowy wymagany zapas to (2*weeks - 1)
+    # tygodni PRZED start_date (podwojony wzgledem starego "weeks - 1").
     def test_short_and_medium_rsm_have_values_from_first_displayed_week(self):
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
         # start_date jest teraz PRZEKAZYWANY (to samo okno momentum co
         # compute_relative_strength_chart), nie liczony wewnetrznie z ref_date.
         start_date = ref_date - pd.Timedelta(weeks=26)
-        # Dane siegaja 44 tyg. PRZED start_date -> wiecej niz potrzebny zapas
-        # (RS_MANSFIELD_MEDIUM_WEEKS - 1 = 25 tyg.), zeby oba wygladzenia mialy juz
+        # Dane siegaja 60 tyg. PRZED start_date -> wiecej niz potrzebny zapas
+        # (2*RS_MANSFIELD_MEDIUM_WEEKS - 1 = 51 tyg.), zeby oba wygladzenia mialy juz
         # wartosc na pierwszym WYSWIETLANYM tygodniu (start_date), nie dopiero
         # pare miesiecy pozniej.
-        fixture_start = start_date - pd.Timedelta(weeks=44)
+        fixture_start = start_date - pd.Timedelta(weeks=60)
         # AAA rosnie proporcjonalnie szybciej niz NASDAQ100 (1/100 vs 0.3/200
         # tygodniowo) -> RS (cena/indeks) systematycznie przyspiesza.
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 75, 100.0, 1.0)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 90, 100.0, 1.0,
+                              half_range=5.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 75, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), 90, 200.0, 0.3, half_range=5.0)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -1384,14 +1499,16 @@ class TestComputeMansfieldRsChart:
     def test_long_rsm_has_value_from_first_displayed_week_with_enough_history(self):
         # rsm_long (RS_MANSFIELD_LONG_WEEKS=52, dodane na wyrazne zyczenie uzytkownika
         # -- "ad 52 weeks for that panel so it will have 3 lines") potrzebuje wiecej
-        # zapasu PRZED start_date niz short/medium: RS_MANSFIELD_LONG_WEEKS - 1 = 51 tyg.
+        # zapasu PRZED start_date niz short/medium: 2*RS_MANSFIELD_LONG_WEEKS - 1 =
+        # 103 tyg.
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
         start_date = ref_date - pd.Timedelta(weeks=26)
-        fixture_start = start_date - pd.Timedelta(weeks=70)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 100, 100.0, 1.0)
+        fixture_start = start_date - pd.Timedelta(weeks=115)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 145, 100.0, 1.0,
+                              half_range=5.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 100, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), 145, 200.0, 0.3, half_range=5.0)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -1400,18 +1517,19 @@ class TestComputeMansfieldRsChart:
         assert out["rsm_long"][-1] > 0
 
     def test_insufficient_lookback_for_long_leaves_it_none_while_short_and_medium_populate(self):
-        # Ten sam zapas (44 tyg.) co w test_short_and_medium_rsm_have_values_from_first_
-        # displayed_week powyzej: wiecej niz potrzeba dla short/medium (12/25 tyg.), ale
-        # za malo dla long (potrzeba RS_MANSFIELD_LONG_WEEKS - 1 = 51 tyg.) -- ten sam
-        # "None dopoki nie ma dosc historii" wzorzec co rsm_medium w drugim tescie tej
-        # klasy, tylko dla trzeciej, dluzszej linii.
+        # Ten sam zapas (60 tyg.) co w test_short_and_medium_rsm_have_values_from_first_
+        # displayed_week powyzej: wiecej niz potrzeba dla short/medium (2*13-1=25,
+        # 2*26-1=51 tyg.), ale za malo dla long (potrzeba 2*RS_MANSFIELD_LONG_WEEKS - 1
+        # = 103 tyg.) -- ten sam "None dopoki nie ma dosc historii" wzorzec co
+        # rsm_medium w drugim tescie tej klasy, tylko dla trzeciej, dluzszej linii.
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
         start_date = ref_date - pd.Timedelta(weeks=26)
-        fixture_start = start_date - pd.Timedelta(weeks=44)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 75, 100.0, 1.0)
+        fixture_start = start_date - pd.Timedelta(weeks=60)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 90, 100.0, 1.0,
+                              half_range=5.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 75, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), 90, 200.0, 0.3, half_range=5.0)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -1424,13 +1542,14 @@ class TestComputeMansfieldRsChart:
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
         start_date = ref_date - pd.Timedelta(weeks=26)
-        # 15 tyg. historii PRZED start_date: wystarczy na krotkoterminowe
-        # wygladzenie (potrzeba RS_MANSFIELD_SHORT_WEEKS - 1 = 12 tyg.), za malo na
-        # srednioterminowe (potrzeba RS_MANSFIELD_MEDIUM_WEEKS - 1 = 25 tyg.).
-        fixture_start = start_date - pd.Timedelta(weeks=15)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 42, 100.0, 1.0)
+        # 30 tyg. historii PRZED start_date: wystarczy na krotkoterminowe
+        # wygladzenie (potrzeba 2*RS_MANSFIELD_SHORT_WEEKS - 1 = 25 tyg.), za malo na
+        # srednioterminowe (potrzeba 2*RS_MANSFIELD_MEDIUM_WEEKS - 1 = 51 tyg.).
+        fixture_start = start_date - pd.Timedelta(weeks=30)
+        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 60, 100.0, 1.0,
+                              half_range=5.0)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 42, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), 60, 200.0, 0.3, half_range=5.0)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -1921,16 +2040,23 @@ class TestComputeSp500TrendFilter:
 
 
 class TestComputeSectorRelativeStrength:
+    # "2023-09-01" (nie "2024-06-01" jak przed dodaniem korekty ATR): rsm_buffer_weeks
+    # w compute_sector_relative_strength jest teraz PODWOJNY (2*SECTOR_STRATEGY_RSM_WEEKS+8
+    # = 112 tyg.) — ATR(52) sam potrzebuje 52 tyg. rozgrzewki PRZED tym, zanim rolling
+    # srednia RS (kolejne 52 tyg.) moze dac wartosc na ref_date (patrz komentarz nad
+    # RS_MANSFIELD_* stalymi w run_query.py). Fixture musi wiec siegac dalej wstecz
+    # niz `extended_start`, ktorego uzywa _mansfield_rsm_series, inaczej rsm_vs_index_pct
+    # zostaje None (za malo historii) zamiast policzonej wartosci.
     def _seed(self, con):
         con.executemany("INSERT INTO index_constituents VALUES (?, 'SP500', ?, 100.0)", [
             ("TFAST", "Tech"), ("TMID", "Tech"), ("TSLOW", "Tech"),
             ("UONE", "Utilities"),
         ])
-        insert_daily_series(con, "index_prices", "Index_Name", "SP500", "2024-06-01", "2026-03-16", 100.0, 0.05)
-        insert_daily_series(con, "prices", "Ticker", "TFAST", "2024-06-01", "2026-03-16", 100.0, 0.40)
-        insert_daily_series(con, "prices", "Ticker", "TMID", "2024-06-01", "2026-03-16", 100.0, 0.20)
-        insert_daily_series(con, "prices", "Ticker", "TSLOW", "2024-06-01", "2026-03-16", 100.0, 0.10)
-        insert_daily_series(con, "prices", "Ticker", "UONE", "2024-06-01", "2026-03-16", 100.0, 0.01)
+        insert_daily_series(con, "index_prices", "Index_Name", "SP500", "2023-09-01", "2026-03-16", 100.0, 0.05)
+        insert_daily_series(con, "prices", "Ticker", "TFAST", "2023-09-01", "2026-03-16", 100.0, 0.40)
+        insert_daily_series(con, "prices", "Ticker", "TMID", "2023-09-01", "2026-03-16", 100.0, 0.20)
+        insert_daily_series(con, "prices", "Ticker", "TSLOW", "2023-09-01", "2026-03-16", 100.0, 0.10)
+        insert_daily_series(con, "prices", "Ticker", "UONE", "2023-09-01", "2026-03-16", 100.0, 0.01)
 
     def test_sector_without_etf_data_has_no_rs_and_lands_last(self):
         # Brak wierszy w index_prices dla Index_Name='Tech'/'Utilities' (zaden
@@ -1967,8 +2093,8 @@ class TestComputeSectorRelativeStrength:
         # bez wygladzenia RS wobec wlasnej sredniej).
         con = make_gem_con()
         self._seed(con)
-        insert_daily_series(con, "index_prices", "Index_Name", "Tech", "2024-06-01", "2026-03-16", 100.0, 0.02)
-        insert_daily_series(con, "index_prices", "Index_Name", "Utilities", "2024-06-01", "2026-03-16", 100.0, 0.15)
+        insert_daily_series(con, "index_prices", "Index_Name", "Tech", "2023-09-01", "2026-03-16", 100.0, 0.02)
+        insert_daily_series(con, "index_prices", "Index_Name", "Utilities", "2023-09-01", "2026-03-16", 100.0, 0.15)
 
         out = compute_sector_relative_strength(con, "2026-03-16", min_trading_days=5, max_staleness_days=10)
         sectors_by_name = {s["sector"]: s for s in out["sectors"]}
