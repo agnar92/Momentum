@@ -985,6 +985,9 @@ class TestComputeRelativeStrengthChart:
         # Sanity: pierwszy tydzien NIE moze byc 0% tutaj (w przeciwienstwie do
         # testu wyzej), bo Typical != Close gdy High/Low sa asymetryczne.
         assert out["vwap_pct"][0] != 0.0
+        # low_pct: tygodniowe MIN(Low) wzgledem tego samego close0 co close_pct
+        # (stop strategii na low swiecy z przeciecia MACD, docs/js/strategy.js).
+        assert out["low_pct"] == [round((lo / close0 - 1) * 100, 2) for lo in window_lows]
 
     def test_insufficient_lookback_leaves_first_week_ema20_as_none(self):
         con = make_gem_con()

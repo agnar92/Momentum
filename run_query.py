@@ -1759,7 +1759,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
 
     dates, close_pct, ema20_pct, index_pct, vwap_pct = [], [], [], [], []
     volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
-    stop_level_pct, base_count = [], []
+    stop_level_pct, base_count, low_pct = [], [], []
     raw_base_events = []
     for _, r in in_window.iterrows():
         dates.append(r["week_end"].strftime("%Y-%m-%d"))
@@ -1767,6 +1767,10 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         ema20_pct.append(pct(r["ema20"], close0))
         index_pct.append(pct(r["index_close"], index0))
         vwap_pct.append(pct(r["vwap"], close0))
+        # Tygodniowe MIN(Low) — do stopu strategii (docs/js/strategy.js: stop
+        # przesuwany na low swiecy z przeciecia MACD). None dla starych wierszy
+        # bez High/Low (patrz _ensure_prices_ohlc_columns w fetch_data.py).
+        low_pct.append(pct(r["low"], close0))
         volume.append(int(r["volume"]) if pd.notna(r["volume"]) else None)
         buying_volume.append(int(round(r["buying_volume"])) if pd.notna(r["buying_volume"]) else None)
         # UWAGA: r pochodzi z in_window.iterrows() — wiersz miesza kolumny float
@@ -1809,6 +1813,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "ema20_pct": ema20_pct,
         "index_pct": index_pct,
         "vwap_pct": vwap_pct,
+        "low_pct": low_pct,
         "volume": volume,
         "buying_volume": buying_volume,
         "buying_volume_ratio": buying_volume_ratio,
