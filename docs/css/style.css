@@ -586,24 +586,28 @@ th.tv-col, th.chart-col { width: 1%; }
 }
 
 .chart-container { flex: 1; }
-/* Cztery wykresy jeden pod drugim: "wykres 10:30" (cena + SMA10/SMA30 + poziom
-   indeksu, wszystko w % zmiany względem początku okna momentum, duży, u góry,
+/* Do pieciu wykresow jeden pod drugim: "wykres 10:30" (cena + SMA10/SMA30 +
+   VWAP, wszystko w % zmiany względem początku okna momentum, duży, u góry,
    interaktywny — zoom/pan przez chartjs-plugin-zoom) + wolumen tygodniowy
-   (własny panel, osobna widoczna oś) + oscylator Mansfield RS krótko-/
-   średnioterminowy + czysty wzrost % 1/3/6-miesięczny (dwa najmniejsze paski
-   u dołu) — patrz renderRelativeStrengthChart w app.js. Panel jest zawsze
+   (własny panel, osobna widoczna oś) + MACD + TTM Squeeze + (opcjonalny,
+   domyslnie schowany) oscylator Mansfield RS — patrz
+   renderRelativeStrengthChart w js/chart-render.js. Panel jest zawsze
    widoczny (nie ma juz przelacznika z osadzonym widgetem TradingView) — gdy
    dany ticker nie ma wlasnego wykresu, JS chowa wszystkie panele i pokazuje
    #noChartMessage zamiast calego kontenera (patrz updateChartArea). */
 /* overflow-y: auto — na telefonie ".charts-area" (patrz media query nizej) ma
-   SZTYWNA wysokosc (100vh - topbar), wiec badge + 4 panele wykresow + legenda
-   moga sie NIE zmiescic. Bez tego flexbox scisnalby panele PONIZEJ ich
-   min-height (patrz nizej) zamiast pozwolic przewinac — a Chart.js renderuje
-   sie ZLE (zdegenerowana skala osi Y — np. przy wąskim zakresie danych typu
-   oscylatora Mansfielda, zmierzone empirycznie: canvas <=120px wysokosci ->
-   skala [-100,100] z JEDNYM tickiem zamiast realnego zakresu danych, dopiero
-   >=160px daje poprawna autoskale) w zbyt niskim canvasie, wiec samo
-   scisniecie do zera bez przewijania wygladaloby na "zepsuty" wykres. */
+   SZTYWNA wysokosc (100vh - topbar), wiec badge + panele wykresow + legenda
+   moga sie NIE zmiescic (a NAWET NA DESKTOPIE, po podniesieniu min-height
+   ponizej na wyrazne zyczenie uzytkownika, caly stos zwykle juz przekracza
+   wysokosc widocznego obszaru — to swiadomy kompromis: przewijanie zamiast
+   splaszczonych, malo czytelnych wykresow). Bez tego flexbox scisnalby
+   panele PONIZEJ ich min-height (patrz nizej) zamiast pozwolic przewinac —
+   a Chart.js renderuje sie ZLE (zdegenerowana skala osi Y — np. przy
+   wąskim zakresie danych typu oscylatora Mansfielda, zmierzone empirycznie:
+   canvas <=120px wysokosci -> skala [-100,100] z JEDNYM tickiem zamiast
+   realnego zakresu danych, dopiero >=160px daje poprawna autoskale) w zbyt
+   niskim canvasie, wiec samo scisniecie do zera bez przewijania
+   wygladaloby na "zepsuty" wykres. */
 .rs-chart-container {
     display: flex;
     flex-direction: column;
@@ -612,27 +616,34 @@ th.tv-col, th.chart-col { width: 1%; }
     overflow-y: auto;
 }
 
+/* min-height wartosci ponizej byly kiedys znacznie nizsze (220/200px) — na
+   wyrazne zyczenie uzytkownika podniesione, zeby wykresy nie wygladaly
+   "splaszczone" nawet kosztem wiecej scrollowania w .rs-chart-container
+   (ktory i tak juz ma overflow-y: auto, patrz komentarz powyzej) — czytelnosc
+   linii/slupkow wazniejsza niz zmieszczenie calego stosu paneli bez
+   przewijania na jednym ekranie. */
 .rs-chart-panel {
     position: relative;
     flex: 3;
-    min-height: 220px;
+    min-height: 460px;
 }
 
 .rs-chart-panel-small {
     flex: 1;
-    min-height: 200px;
+    min-height: 300px;
 }
 
 /* Wolumen tygodniowy w oddzielnym panelu pod wykresem 10:30 (wcześniej ukryte
    słupki na dolnej krawędzi tego samego wykresu) — własna, w pełni widoczna
    oś, żeby wysokość słupka faktycznie było widać, a nie tylko zgadywać z
-   proporcji dolnego paska. min-height jak przy .rs-chart-panel-small — patrz
-   komentarz przy .rs-chart-container o degenerowaniu sie skali Chart.js
-   ponizej ok. 160px wysokosci canvasu. */
+   proporcji dolnego paska. min-height podniesiony razem z resztą paneli
+   powyzej — patrz komentarz przy .rs-chart-container o degenerowaniu sie
+   skali Chart.js ponizej ok. 160px wysokosci canvasu (ten floor teraz jest
+   znacznie ponizej faktycznie ustawionej wysokosci, czysto zabezpieczenie). */
 .rs-chart-panel-volume {
     position: relative;
     flex: 1;
-    min-height: 200px;
+    min-height: 300px;
 }
 
 /* Zakres dat panelu Mansfield RS — nakładka w rogu canvasu (nie zajmuje
