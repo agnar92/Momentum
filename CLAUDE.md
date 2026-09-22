@@ -1002,15 +1002,18 @@ flex child (no `.topbar-left` wrapper there).
 - **`index.html` / `js/app.js`** — main dashboard. `UNIVERSES` in `app.js` (kept in sync with
   `run_query.py`'s own `UNIVERSES`) stays the full SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 five — every
   universe's JSON is always loaded (`loadData()`), it drives Ctrl+K search and the RSM screener below
-  regardless of what has a dashboard tab — but **SP500 and NASDAQ100 no longer have their own sidebar
-  group/table/drawer tab**. `SIDEBAR_TAB_UNIVERSES = ["DOWJONES", "WIG20", "MWIG40"]` is the separate,
-  smaller list that actually drives sidebar tiles (`renderSidebarTiles()`) and the per-universe drawer
-  tabs — removed on the user's request once the dashboard's RSM screener (below) grew broad enough that a
-  dedicated SP500/NASDAQ100 momentum table felt redundant; their momentum data is still fully computed by
-  the pipeline (`UNIVERSES` unchanged there) and still fully reachable via Ctrl+K search or the RSM
-  screener, just not through a dedicated tab. `jumpToTicker()` (used by Ctrl+K's `confirmCmdkSelection()`)
-  guards against this: jumping to an SP500/NASDAQ100 ticker updates the chart/selection but does not try to
-  switch the drawer to a tab that doesn't exist. **Global Equity Momentum has no dashboard panel/tab at
+  regardless of what has a dashboard tab. `SIDEBAR_TAB_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES",
+  "WIG20", "MWIG40", "SWIG80"]` is the separate list that actually drives sidebar tiles
+  (`renderSidebarTiles()`) and the per-universe drawer tabs. **Version history**: SP500/NASDAQ100 were
+  once REMOVED from it (the RSM screener below had grown broad enough that a dedicated momentum table felt
+  redundant), then RESTORED at a later, explicit user request ("Dodaj do głównego dashboardu SPMO
+  replikację ... i Nasdaq100") — the SP500 tab is the dashboard's view of the S&P 500 Momentum Index
+  replication (what the SPMO ETF tracks), NASDAQ100 the same for Nasdaq 100 Momentum; both tables read
+  `constituents` (the top-quintile selection with `compute_weights` weights), not `all_constituents`.
+  SP500 is now the default drawer tab (`state.drawerUniverse`) and so also supplies the default selected
+  ticker on first load. `jumpToTicker()` (used by Ctrl+K's `confirmCmdkSelection()`) still guards against
+  a universe without a tab: it updates the chart/selection but does not try to switch the drawer to a tab
+  that doesn't exist. **Global Equity Momentum has no dashboard panel/tab at
   all any more** — it briefly moved to being the rebalance calculator's selection engine instead of a
   look-only screen, and even that role is gone now that the calculator is fully automatic over a fixed pool
   (see the dedicated GEM section above and the `rebalance.html`/`rebalance.js` bullet below); `app.js` no
