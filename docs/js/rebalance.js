@@ -48,14 +48,21 @@ const REBALANCE_UNIVERSE_LABELS = { SP500: "S&P 500", NASDAQ100: "Nasdaq 100", D
 // CORE / SATELITA (60/40) — na wyraźną prośbę użytkownika, zastępuje wcześniejszy
 // DOWJONES_WEIGHT_MULTIPLIER (jeden globalny mnożnik wagi dla każdej spółki z
 // Dow) osobnym, dwuczęściowym podziałem KAPITAŁU:
-//  - CORE (CORE_ALLOCATION_PCT = 60% kapitału) — "stabilne blue chipy w fazie
-//    wzrostowej": kandydaci to spółki z DOWJONES, z priorytetem dla tych w
-//    Etapie 2 (2A/2B — potwierdzony trend wzrostowy, patrz Weinstein stage w
-//    CLAUDE.md), posortowane (faza wzrostowa jako pierwsze kryterium, potem
-//    momentum_score). Jeśli sam Dow (30 spółek) nie wypełni wszystkich slotów
-//    core, DOBIJANE jest z SP500 (tym samym kryterium sortowania) — na
-//    wyraźne życzenie użytkownika, NIE z pozostałych spółek Dow spoza Etapu 2
-//    i NIE zostawiane puste. Patrz coreCandidateRows/selectCoreSatelliteRows.
+//  - CORE (CORE_ALLOCATION_PCT = 60% kapitału) — "stabilne blue chipy":
+//    kandydaci to spółki z DOWJONES, posortowane wg momentum_score. Jeśli sam
+//    Dow (30 spółek) nie wypełni wszystkich slotów core, DOBIJANE jest z
+//    SP500 (tym samym kryterium sortowania) — na wyraźne życzenie
+//    użytkownika, NIE zostawiane puste. Patrz coreCandidateRows/
+//    selectCoreSatelliteRows. "W fazie wzrostowej" NIE jest tu zaszyte na
+//    sztywno jako Etap 2A/2B — o TO, które etapy Weinsteina w ogóle trafiają
+//    do puli (a więc i do core), decyduje sam użytkownik paskiem filtra "Etap
+//    Weinsteina" w Kroku 2 (poolStageFilter/eligiblePoolRows, patrz niżej) —
+//    dokładnie tak samo jak w Rebalanserze PL. Wcześniejsza wersja miała tu
+//    dodatkowy, zaszyty na sztywno priorytet "Etap 2 przed momentum_score"
+//    wewnątrz core niezależnie od tego filtra — usunięty na wyraźną prośbę
+//    użytkownika ("I want to select myself and from that list select core
+//    and satellite"): dublował/mylił się z paskiem filtra, który już i tak
+//    realnie zawęża całą pulę (core+satelitę), nie tylko podgląd tabeli.
 //  - SATELITA (pozostałe 40%) — "dynamicznie rosnące spółki": wszystko, co
 //    zostało z eligiblePoolRows() po odjęciu core, posortowane wg
 //    momentum_score. Dodatkowo faworyzuje spółki z indeksu, który dziś
@@ -72,9 +79,9 @@ const REBALANCE_UNIVERSE_LABELS = { SP500: "S&P 500", NASDAQ100: "Nasdaq 100", D
 // (skrajny przypadek — np. wykluczono ręcznie wszystkie kandydatury), jej
 // kapitał w całości przechodzi do drugiej, wypełnionej grupy zamiast zniknąć.
 // Ten mechanizm dotyczy WYŁĄCZNIE wagi/podziału kapitału — SELEKCJA nadal
-// bazuje wyłącznie na momentum_score (plus priorytet Etapu 2 w core), zgodnie
-// z tą samą zasadą co poprzedni DOWJONES_WEIGHT_MULTIPLIER ("wagi", nie
-// "dobór").
+// bazuje wyłącznie na momentum_score (w obu grupach — core nie ma już
+// własnego, dodatkowego kryterium selekcji poza tym), zgodnie z tą samą
+// zasadą co poprzedni DOWJONES_WEIGHT_MULTIPLIER ("wagi", nie "dobór").
 // ============================================================
 const CORE_ALLOCATION_PCT = 0.6;
 
@@ -458,28 +465,22 @@ function eligiblePoolRows() {
         .map((c, i) => ({ ...c, pool_rank: i + 1 }));
 }
 
-// Czy spółka jest w potwierdzonym trendzie wzrostowym (Etap 2A/2B, patrz
-// Weinstein stage w CLAUDE.md) — kryterium "faza wzrostowa" dla core.
-function isGrowthPhase(c) {
-    const stage = c.weekly_chart && c.weekly_chart.current_stage;
-    return stage === "2A" || stage === "2B";
-}
-
 // Kandydaci do CORE (patrz komentarz przy CORE_ALLOCATION_PCT) — DOWJONES
 // (prawdziwe członkostwo, nie post-deduplikacyjny tag) jako pierwsza warstwa,
-// SP500 jako druga (dobijająca), oba posortowane: faza wzrostowa najpierw,
-// potem momentum_score malejąco. `pool` to już eligiblePoolRows() (po
-// wykluczeniach i filtrze etapu) — core nigdy nie sięga po spółkę spoza tej
-// puli.
+// SP500 jako druga (dobijająca), oba posortowane wg momentum_score malejąco.
+// `pool` to już eligiblePoolRows() (po wykluczeniach I po filtrze etapu
+// Weinsteina — poolStageFilter/matchesPoolStageFilter powyżej) — jeśli
+// użytkownik zaznaczy w Kroku 2 np. tylko Etap 2, core (i satelita) nigdy nie
+// zobaczą żadnej spółki spoza Etapu 2, bo taka spółka odpadła już na poziomie
+// `pool`, zanim core w ogóle zaczyna sortować. To jedyne miejsce, w którym
+// "faza wzrostowa" wpływa na core — nie ma tu żadnego dodatkowego, zaszytego
+// na sztywno warunku etapu.
 function coreCandidateRows(pool) {
     const dowTickers = trueUniverseTickerSet("DOWJONES");
     const sp500Tickers = trueUniverseTickerSet("SP500");
-    const byGrowthThenScore = (a, b) => {
-        const growthDiff = (isGrowthPhase(b) ? 1 : 0) - (isGrowthPhase(a) ? 1 : 0);
-        return growthDiff !== 0 ? growthDiff : (b.momentum_score || 0) - (a.momentum_score || 0);
-    };
-    const dowRows = pool.filter(c => dowTickers.has(c.ticker)).sort(byGrowthThenScore);
-    const sp500Rows = pool.filter(c => sp500Tickers.has(c.ticker) && !dowTickers.has(c.ticker)).sort(byGrowthThenScore);
+    const byScore = (a, b) => (b.momentum_score || 0) - (a.momentum_score || 0);
+    const dowRows = pool.filter(c => dowTickers.has(c.ticker)).sort(byScore);
+    const sp500Rows = pool.filter(c => sp500Tickers.has(c.ticker) && !dowTickers.has(c.ticker)).sort(byScore);
     return [...dowRows, ...sp500Rows];
 }
 
@@ -531,7 +532,7 @@ let poolSortDir = "asc";
 function poolRowHtml(c, sleeve) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
     const sleeveBadge = sleeve === "core"
-        ? '<span class="action-badge buy" title="Core — stabilne blue chipy w fazie wzrostowej (60% kapitału)">Core</span>'
+        ? '<span class="action-badge buy" title="Core — stabilne blue chipy z Dow Jones/SP500 (60% kapitału)">Core</span>'
         : sleeve === "satellite"
             ? '<span class="action-badge buy" title="Satelita — dynamicznie rosnące spółki (40% kapitału)">Satelita</span>'
             : '<span class="action-badge skip">—</span>';
@@ -953,7 +954,7 @@ function renderCoreSatelliteNote() {
     const n = settings.portfolioSize || 0;
     const { coreRows, satelliteRows } = selectCoreSatelliteRows(n);
     const winnerUniverse = satelliteWinnerUniverse();
-    let text = `Core: ${coreRows.length} spółek (${(CORE_ALLOCATION_PCT * 100).toFixed(0)}% kapitału, blue chipy Dow/SP500 w fazie wzrostowej) `
+    let text = `Core: ${coreRows.length} spółek (${(CORE_ALLOCATION_PCT * 100).toFixed(0)}% kapitału, blue chipy Dow/SP500) `
         + `· Satelita: ${satelliteRows.length} spółek (${((1 - CORE_ALLOCATION_PCT) * 100).toFixed(0)}% kapitału, dynamiczny wzrost)`;
     if (winnerUniverse) {
         const ret = gemIndexReturns[winnerUniverse];
