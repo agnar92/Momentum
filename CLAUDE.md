@@ -550,17 +550,28 @@ whenever `run_query.py --gem-only` is run manually/locally between weekly CI run
 
 Each leader also carries a `weekly_chart` (`compute_relative_strength_chart()`) with a classic stage
 -analysis view (Stan Weinstein / Dr Eric Wish) the free TradingView widget can't reliably replicate
-(adding a compare symbol can hit free-tier account limits): the **"10:30" chart** — the stock's own weekly
-price plus its 10-week and 30-week SMA, together with its own index level over the same weeks — with every
+(adding a compare symbol can hit free-tier account limits): the **main price chart** — the stock's own
+weekly price plus its **20-week EMA** (`RS_PRICE_EMA_WEEKS`, `ema20_pct`), together with its own index level
+over the same weeks — with every
 series expressed as **% change relative to the first displayed (in-window) week**, not raw values on
 separate scales: two raw series on different axes make it hard to judge by eye which one is actually
 growing faster, while rebasing both to 0% at the window's start means whichever line ends up higher *is*
 the outperformer — directly answering "is this stock stronger than its own market right now" (`close_pct`/
-`sma10_pct`/`sma30_pct`/`index_pct`; the SMAs are computed on the raw weekly price first, then rebased by
-the same stock-price base as `close_pct` so they still read as a smoothed version of the price line). All
+`ema20_pct`/`index_pct`; the EMA is computed on the raw weekly price first, then rebased by the same
+stock-price base as `close_pct` so it still reads as a smoothed version of the price line). **Version
+history**: this used to be the classic "10:30" chart (10-week + 30-week SMA, `sma10_pct`/`sma30_pct`,
+`RS_PRICE_SMA_SHORT_WEEKS`/`RS_PRICE_SMA_LONG_WEEKS`) — replaced by a single 20-week EMA at the user's
+explicit request to simplify the main chart ("chcę usunąć 10,30 SMA i dodać 20 EMA i bazować stage 2 na
+tej średniej"). Every Weinstein-stage criterion below that used to read SMA30 (price above/below it, its
+slope, the trailing stop's `min(MA, base low)`, `WARNING_MA_SLOWING`) now reads EMA20 instead; all other
+criteria (Darvas box, buying-volume confirmation, stop-raise rules, late-base warning) are unchanged. SMA10
+never took part in the classification. The EMA is `ewm(span=20, adjust=False, min_periods=20)` (recursive,
+like TradingView's `ta.ema`; `None` until 20 weeks of history exist). Mentions of "SMA30"/`sma10_pct`/
+`sma30_pct` in the version-history notes below describe that earlier design. All
 series are resampled from the daily `prices`/`index_prices` tables via `DATE_TRUNC('week', Date)` +
-`ARGMAX`, fetching `RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's
-start purely so SMA30 already has a value at the first displayed (in-window) point, and the series returned
+`ARGMAX`, fetching `RS_PRICE_EMA_BUFFER_WEEKS` (`2*20+2` = 42) extra weeks of history *before* the momentum
+window's start purely so EMA20 has already converged (not just a value, since an EMA depends on its seed)
+at the first displayed (in-window) point, and the series returned
 is trimmed to start exactly at that window's start (M-14 or M-11) through to `ref_date`. `prices` retains a
 rolling `--lookback-months` window — **28 by default** (bumped up from an original 15, then 22; see
 `fetch_data.py --lookback-months` below), specifically so the ~14-month momentum window still leaves a real
@@ -637,30 +648,31 @@ top that never fully rolled over into a decline) — treated as a continuation r
 the same book logic (a `saw_stage4` flag, set on every week actually classified `"4"` and consumed/cleared
 the moment a fresh `ENTRY_2A` base is recorded, tracks this).
 
-**Stages**, derived from that breakout signal plus price's position/slope relative to SMA30:
-  - **Stage 1** (base): price near/below a not-yet-broken-out base, or (cautiously) above SMA30 while SMA30
+**Stages**, derived from that breakout signal plus price's position/slope relative to EMA20 (formerly SMA30,
+see the version-history note on the main chart above):
+  - **Stage 1** (base): price near/below a not-yet-broken-out base, or (cautiously) above EMA20 while EMA20
     is still falling — not a confirmed advance yet.
   - **Stage 2A** (fresh breakout): the first base breakout since the stock was last *not* in Stage 2.
   - **Stage 2B** (continuation): every subsequent base breakout while already in Stage 2 — the book's
     "1st base / 2nd base / 3rd base..." sequence within one advance (secondary/"pyramiding" entries).
-  - **Stage 3** (topping): price dips back under SMA30 after an advance, before SMA30 itself turns down
+  - **Stage 3** (topping): price dips back under EMA20 after an advance, before EMA20 itself turns down
     (distribution).
-  - **Stage 4** (decline): price under a falling SMA30.
+  - **Stage 4** (decline): price under a falling EMA20.
 
 **Trailing stop-loss** (`stop_level`, rebased to `stop_level_pct` in the exported chart data the same way
 `close_pct` is — same close0 base — so it can be drawn as a line on the price chart): mirrors the book's own
 "Trailing Stop Loss — Weekly Chart" diagram.
-  - On `ENTRY_2A`: stop = `min(SMA30, breakout base's low)` — below both the whole base and the rising MA
+  - On `ENTRY_2A`: stop = `min(EMA20, breakout base's low)` — below both the whole base and the rising MA
     ("the stop loss should remain below the rising 30-week MA and each significant weekly swing low").
   - On each later base breakout (`ENTRY_2B`/`ENTRY_2B_LATE`): the stop is a *candidate* to raise to
-    `min(SMA30, new base's low)`, but it is only actually raised — and only then — once price has already
+    `min(EMA20, new base's low)`, but it is only actually raised — and only then — once price has already
     moved back within `STAGE_STOP_NEAR_HIGH_PCT` (3%) of the run's swing high since the last raise ("don't
     raise your stop loss until the price moves back near to the prior swing high of the most recent
     advance"). The stop is only ever raised or held, never lowered.
   - `base_count` tracks which base number this is within the current Stage 2 run; from `STAGE_LATE_BASE_
     WARNING_COUNT` (4) onward the entry signal becomes `ENTRY_2B_LATE` instead of `ENTRY_2B` — "4th & 5th
     bases within the Stage 2 advance are more prone to failure. So watch for warning signs."
-  - `WARNING_MA_SLOWING` fires once per Stage 2 run, the first week SMA30's own slope (still positive/rising)
+  - `WARNING_MA_SLOWING` fires once per Stage 2 run, the first week EMA20's own slope (still positive/rising)
     falls under `STAGE_MA_SLOWDOWN_RATIO` (0.5x) of its own peak slope during that run — "30 week MA starting
     to lose momentum. Tactic change to more aggressive SL placement." It is a warning, not an exit.
   - `EXIT_STOP` fires the week price actually closes below the current `stop_level` — "Exit Trade: Stop Loss
@@ -687,8 +699,8 @@ data (yfinance's OHLCV has no per-trade direction) — documented as such on `ed
 regardless of confirmation, so the frontend can render a split bar (buying vs. `volume - buying_volume` as
 selling) rather than a single flat-colored one.
 
-All of the above shares the exact same history-buffer dependency already documented for `sma10_pct`/
-`sma30_pct` above: every field is `None` until SMA30 (and, separately, `STAGE_VOLUME_LOOKBACK_WEEKS`/
+All of the above shares the exact same history-buffer dependency already documented for `ema20_pct`
+above: every field is `None` until EMA20 (and, separately, `STAGE_VOLUME_LOOKBACK_WEEKS`/
 `STAGE_BASE_LOOKBACK_WEEKS` weeks of volume/price history) are available. With the ~22-month `prices`
 retention (see above) this is now rare in practice for the primary M-14 window — there's a real buffer in
 front of `start_date` — but it can still happen for the M-11 fallback window (less buffer to spare) or
@@ -793,7 +805,7 @@ version at the user's explicit request ("weź pełne momentum nie uproszczone").
 its own `TTM_SQUEEZE_KC_WEEKS` weeks of already-computed `diff` on top of `diff`'s own warmup, the buffer
 fetched before `start_date` is `2*TTM_SQUEEZE_KC_WEEKS+2` weeks (not `+2` alone) so `histogram` still has a
 value at the first displayed week — same "warm up before the window starts" convention as
-`RS_PRICE_SMA_LONG_WEEKS+2`/`RS_MANSFIELD_MEDIUM_WEEKS+2` elsewhere in this module. Needs weekly High/Low
+`RS_PRICE_EMA_BUFFER_WEEKS`/`RS_MANSFIELD_MEDIUM_WEEKS+2` elsewhere in this module. Needs weekly High/Low
 (via `_weekly_close_series(..., include_buying_volume=True)`, which also carries them) for the ATR/Keltner
 Channel — old pre-migration `prices` rows without them (see `_ensure_prices_ohlc_columns` in
 `fetch_data.py`) leave every squeeze field `None` for that stretch rather than a wrong value, the same
@@ -1124,7 +1136,8 @@ flex child (no `.topbar-left` wrapper there).
   3-month default for a while and found it actually less readable than the full range, the opposite of
   the assumption that motivated adding it, so the whole toggle was removed rather than just flipping its
   default.
-  1. The "10:30" price+SMA10/SMA30+VWAP chart, rebased to 0% at the momentum window's start. **It no
+  1. The main price+EMA20+VWAP chart (formerly the "10:30" SMA10/SMA30 chart — see the version-history
+     note under Relative strength above), rebased to 0% at the momentum window's start. **It no
      longer plots the stock's own index level** — removed at the user's explicit request, since it left
      two overlapping price-shaped lines competing on one % axis for a comparison the Mansfield RS panel
      (5, below) already expresses more directly as a single oscillator. The backend still exports
@@ -1664,6 +1677,43 @@ flex child (no `.topbar-left` wrapper there).
   one-off browser-timer globals to `eslint.config.js`. `tests/js/qol.test.js` covers exactly the
   no-op-without-a-DOM behavior; the DOM-mutating bodies themselves stay untested, consistent with
   `js/chart-render.js`/`js/shared.js` above.
+- **`strategy.html` / `js/strategy.js` — "Stage 2 Continuation" FUNNEL (current design, on top of the sector
+  screener below).** At the user's explicit request ("połączyć [strategie] w pełną strategię ... napewno chce
+  inwestować w stage 2 continuation za pomocą rs i Ttm squeez"; "nie zmieniaj całej aplikacji, jedynie ...
+  zakładkę strategia, jako lejek") the page is now one funnel, computed ENTIRELY client-side from already
+  exported `docs/data/*.json` — no pipeline change. A USA/PL toggle (`MARKETS`: USA = SP500 `all_constituents`
+  + NASDAQ100 `all_constituents` deduped, PL = WIG20 + MWIG40); per-market total capital in `localStorage`
+  (`momentum_strategy_settings`). Portfolio: Core = the user's own ETFs held OUTSIDE this tool, Satellite =
+  this funnel, 50/50 (`STRATEGY_SATELLITE_PCT`); risk 1% of TOTAL capital per trade
+  (`STRATEGY_RISK_PER_TRADE_PCT`), position value capped at 10% (`STRATEGY_MAX_POSITION_PCT`) — the user's
+  own explicit choices. Steps: (1) market filter — USA: `sector_strategy.json`'s `trend.in_growth_phase`;
+  PL: synthetic index (`weekly_chart.index_pct`) above its 30-week SMA, per index (`indexTrendFromRows`);
+  a failed filter turns ENTRY into `WAIT_MARKET`, never hides candidates; (2) sector gate (USA only) — top
+  `STRATEGY_TOP_SECTORS` (3) sectors with RS > 0 (`strongSectorSet`) OR the ticker is in
+  `top_rs_companies`; non-SP500 Nasdaq names have no GICS sector and skip the gate; (3) watchlist —
+  `current_stage` 2A/2B, latest `rsm_medium` > 0 and `rsm_long` > 0 (null long passes), `momentum_score` > 0,
+  `base_count` <= 3 (`evaluateCandidate`); (4) entry — `squeezeStatusFor` = fired (same thresholds as the
+  dashboard) AND latest TTM histogram > 0 and rising AND price > stop AND weekly MACD above its signal line
+  (`macdConfirmation()` — the bullish MACD cross is the user's ENTRY CONFIRMATION, not a stop rule; without
+  it the status is `WAIT_MACD`, "⏳ Czekaj na MACD"); size = `positionSize()`;
+  buying-volume >= 1.2x is shown, not required; (5) held satellite tickers (typed by the user) →
+  `evaluateHolding()`: EXIT on price < stop / Stage 3-4 / `rsm_medium` < 0, TIGHTEN on recent
+  `WARNING_MA_SLOWING` / base > 3 / Stage 1.
+  **The stop is the user's own rule, NOT the backend's Weinstein trailing stop** (`strategyStopFor()`, used
+  by both steps 4 and 5): start at the MIDPOINT of the last Darvas box (`weekly_chart.bases[-1]`,
+  `(resistance_pct + support_pct) / 2`), then after every weekly MACD BEARISH cross (MACD crosses BELOW its
+  signal line, `macd_chart`) dated after that box's `end_date`, raise the stop to that week's LOW — only
+  ever up. No MACD > 0 requirement (briefly added, then removed at the user's request: Stage 2/TTM Squeeze
+  already establish the uptrend, MACD is "tylko dodatkowa polisa"). An earlier version of this used the BULLISH
+  cross for the stop; the user corrected it: "przecięcie w dół przy MACD już wzrostowym, przecięcie w górę
+  to tylko sygnał potwierdzenia wejścia nie stop loss". The weekly low comes from `weekly_chart.low_pct` (added to `compute_relative_strength_chart` in
+  `run_query.py` for exactly this; falls back to the weekly close with `lowApprox` for older JSON). All
+  `*_pct` fields convert back to prices via `close0 = price / (1 + close_pct[last]/100)`. With no Darvas box
+  in the data window it falls back to `stopPriceFor()` (the Weinstein stop from `stop_level_pct`, read at
+  the LAST week only — after `EXIT_STOP` it's intentionally null). If MACD never dips below its signal after
+  the box, the stop stays at the box midpoint — that's the rule as specified, not a bug. The old sector-leaders and
+  top-10-RS tables stay at the bottom as "Narzędzia pomocnicze" (USA only). Pure logic is covered in
+  `tests/js/strategy.test.js`.
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
   under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/
   `export_sector_strategy`, `docs/data/sector_strategy.json`), reached via a "Strategia" nav link

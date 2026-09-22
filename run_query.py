@@ -43,8 +43,8 @@ metodologii S&P Momentum Indices):
     indeksu w tym samym oknie, tylko spolki bijace indeks, posortowane malejaco
     po przewadze — patrz export_relative_strength. Kazdy lider ma tez, od poczatku
     tego samego okna, "wykres 10:30" w stylu stage analysis (Weinstein/Dr Eric Wish):
-    cena spolki + SMA 10-tyg./30-tyg. i poziom wlasnego indeksu, wszystko przeliczone
-    na % zmiany wzgledem poczatku okna (close_pct/sma10_pct/sma30_pct/index_pct), zeby
+    cena spolki + EMA 20-tyg. i poziom wlasnego indeksu, wszystko przeliczone
+    na % zmiany wzgledem poczatku okna (close_pct/ema20_pct/index_pct), zeby
     jednym spojrzeniem bylo widac czy spolka rosnie szybciej niz jej rynek — plus
     KAZDY wyswietlany tydzien niesie tez wlasna klasyfikacje etapu Weinsteina (Etap
     1/2A/2B/3/4), sygnal wejscia/wyjscia i potwierdzenie wolumenem (volume/
@@ -1263,8 +1263,15 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, 
     """).df()
 
 
-RS_PRICE_SMA_SHORT_WEEKS = 10   # "wykres 10:30" (Dr Eric Wish / stage analysis): 10-tyg. SMA ceny
-RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinsteina)
+RS_PRICE_EMA_WEEKS = 20         # jedyna srednia wykresu glownego: 20-tyg. EMA ceny. Zastapila
+# wczesniejszy "wykres 10:30" (SMA10 + SMA30, klasyczne progi Weinsteina) na wyrazna
+# prosbe uzytkownika o uproszczenie wykresu — wszystkie kryteria etapow, ktore
+# wczesniej opieraly sie o SMA30 (pozycja ceny, nachylenie, stop-loss, "MA traci
+# tempo"), opieraja sie teraz o te EMA20; SMA10 nie brala udzialu w klasyfikacji.
+RS_PRICE_EMA_BUFFER_WEEKS = 2 * RS_PRICE_EMA_WEEKS + 2  # zapas przed start_date: EMA
+# (ewm) potrzebuje ok. 2x okresu, zeby "zapomniec" punkt startowy i zbiec do wartosci
+# zgodnej z TradingView — samo RS_PRICE_EMA_WEEKS dawaloby wartosc, ale jeszcze
+# wyraznie zalezna od pierwszego tygodnia bufora.
 
 # --- Klasyfikacja etapow Weinsteina (Stage Analysis, "Secrets for Profiting in
 # Bull and Bear Markets") na wykresie 10:30 — patrz _compute_weinstein_stage_series.
@@ -1280,8 +1287,8 @@ RS_PRICE_SMA_LONG_WEEKS = 30    # ...i 30-tyg. SMA ceny (klasyczne progi Weinste
 # baza z ostatnich kilku-kilkunastu tygodni miesci sie w rolling ~15-miesiecznym
 # oknie `prices`, wieloletni opor juz nie. Sila relatywna CELOWO nie wchodzi w te
 # klasyfikacje (pomysl odrzucony wczesniej ze wzgledu na trudnosc implementacji).
-STAGE_SLOPE_LOOKBACK_WEEKS = 4       # ile tyg. wstecz porownujemy SMA30 przy ocenie kierunku
-STAGE_FLAT_SLOPE_PCT = 1.0           # próg nachylenia SMA30 (w % za STAGE_SLOPE_LOOKBACK_WEEKS) uznawany za "plaskie"
+STAGE_SLOPE_LOOKBACK_WEEKS = 4       # ile tyg. wstecz porownujemy EMA20 przy ocenie kierunku
+STAGE_FLAT_SLOPE_PCT = 1.0           # próg nachylenia EMA20 (w % za STAGE_SLOPE_LOOKBACK_WEEKS) uznawany za "plaskie"
 STAGE_VOLUME_LOOKBACK_WEEKS = 10     # okno sredniego tyg. WOLUMENU KUPUJACYCH (CLV) do oceny potwierdzenia wybicia
 STAGE_BREAKOUT_VOLUME_RATIO = 1.5    # wybicie bazy (2A) potwierdzone gdy tyg. wolumen KUPUJACYCH >= 1.5x sredniej
 STAGE_PULLBACK_VOLUME_RATIO = 1.2    # dla kolejnych baz w trakcie Etapu 2 (2B) wystarczy slabszy wzrost wolumenu kupujacych
@@ -1291,17 +1298,17 @@ DARVAS_BOX_CONFIRM_WEEKS = 3         # ile tyg. BEZ nowego szczytu/dolka potwier
                                       # potwierdzenie szczytu+dolka), wiec nie ma juz osobnej stalej na "min. gap".
 STAGE_LATE_BASE_WARNING_COUNT = 4    # 4., 5. baza w tej samej fali Etapu 2 sa bardziej podatne na niepowodzenie (ksiazka)
 STAGE_STOP_NEAR_HIGH_PCT = 3.0       # stop podnosimy tylko gdy cena wrocila w te % okolice poprzedniego szczytu fali
-STAGE_MA_SLOWDOWN_RATIO = 0.5        # ostrzezenie "SMA30 traci tempo": biezace nachylenie < tyle x szczytowe w tej fali
+STAGE_MA_SLOWDOWN_RATIO = 0.5        # ostrzezenie "EMA20 traci tempo": biezace nachylenie < tyle x szczytowe w tej fali
 
 
 def _compute_weinstein_stage_series(stock_df):
     """Klasyfikuje KAZDY tydzien stock_df (posortowany chronologicznie, kolumny
-    close/sma30/volume — patrz compute_relative_strength_chart) na etap Weinsteina
+    close/ema20/volume — patrz compute_relative_strength_chart) na etap Weinsteina
     i prowadzi trailing stop-loss dokladnie w stylu ksiazkowego wykresu "Stage
     Analysis Investor method — Trailing Stop Loss":
 
-      Etap 1 (baza)            — cena w poblizu plaskiej SMA30, brak potwierdzonego trendu
-                                  (rowniez: cena chwilowo nad JESZCZE opadajaca SMA30 —
+      Etap 1 (baza)            — cena w poblizu plaskiej EMA20, brak potwierdzonego trendu
+                                  (rowniez: cena chwilowo nad JESZCZE opadajaca EMA20 —
                                   traktowana ostroznie, to NIE potwierdzony Etap 2).
       Etap 2A (swieze wybicie) — PIERWSZE wybicie ponad opor cisnej bazy (patrz nizej)
                                   od czasu, gdy spolka nie byla juz w Etapie 2.
@@ -1309,9 +1316,9 @@ def _compute_weinstein_stage_series(stock_df):
                                   gdy spolka jest juz w Etapie 2 — "1. baza", "2. baza"...
                                   z ksiazkowego rysunku (pozniejsze/sekundarne wejscia,
                                   "pyramiding").
-      Etap 3 (szczyt)          — po Etapie 2 cena zaczyna schodzic pod SMA30, ktora
+      Etap 3 (szczyt)          — po Etapie 2 cena zaczyna schodzic pod EMA20, ktora
                                   jeszcze nie opada (dystrybucja/wyplaszczenie trendu).
-      Etap 4 (spadek)          — cena pod opadajaca SMA30.
+      Etap 4 (spadek)          — cena pod opadajaca EMA20.
 
     Baza/opor = prawdziwe pudelko Darvasa (Nicolas Darvas, "How I Made
     $2,000,000 in the Stock Market"), liczone WYLACZNIE z cen zamkniecia —
@@ -1344,10 +1351,11 @@ def _compute_weinstein_stage_series(stock_df):
 
     Trailing stop-loss (pole "stop_level", w jednostkach ceny — compute_relative_
     strength_chart rebase'uje go do "stop_level_pct" tak samo jak close_pct):
-      - Przy ENTRY_2A: stop = min(SMA30, dolna granica bazy wybicia) — pod caloscia
-        bazy i pod SMA30 rownoczesnie (ksiazka: "stop loss should remain below the
-        rising 30-week MA and each significant weekly swing low").
-      - Przy kazdej kolejnej bazie (2B): stop PODNOSZONY do min(SMA30, dolna granica
+      - Przy ENTRY_2A: stop = min(EMA20, dolna granica bazy wybicia) — pod caloscia
+        bazy i pod EMA20 rownoczesnie (ksiazka: "stop loss should remain below the
+        rising 30-week MA and each significant weekly swing low" — u nas EMA20
+        zamiast ksiazkowej 30-tyg. SMA).
+      - Przy kazdej kolejnej bazie (2B): stop PODNOSZONY do min(EMA20, dolna granica
         NOWEJ bazy) — ale TYLKO jesli cena zdazyla juz wrocic w okolice
         (STAGE_STOP_NEAR_HIGH_PCT) poprzedniego szczytu fali (ksiazka: "don't raise
         your stop loss until the price moves back near to the prior swing high").
@@ -1371,7 +1379,7 @@ def _compute_weinstein_stage_series(stock_df):
                          "4th & 5th bases within the Stage 2 advance are more prone
                          to failure. So watch for warning signs" — dalej to sygnal
                          wejscia, ale z ostrzezeniem podwyzszonego ryzyka.
-      WARNING_MA_SLOWING — nachylenie SMA30 spadlo ponizej STAGE_MA_SLOWDOWN_RATIO
+      WARNING_MA_SLOWING — nachylenie EMA20 spadlo ponizej STAGE_MA_SLOWDOWN_RATIO
                          swojego szczytu w tej fali Etapu 2, cigle rosnace (nie
                          plaskie/spadajace) — ksiazka: "30 week MA starting to lose
                          momentum. Tactic change to more aggressive SL placement".
@@ -1381,7 +1389,7 @@ def _compute_weinstein_stage_series(stock_df):
 
     Zwraca liste dictow {"stage", "signal", "buying_volume_ratio", "stop_level",
     "base_count", "base_event"} rownolegla do stock_df. Wszystkie pola (poza
-    "base_event") to None dopoki SMA30 (wzglednie STAGE_VOLUME_LOOKBACK_WEEKS tyg.
+    "base_event") to None dopoki EMA20 (wzglednie STAGE_VOLUME_LOOKBACK_WEEKS tyg.
     historii wolumenu kupujacych) nie sa jeszcze dostepne — ten sam, udokumentowany
     juz wyzej limit plytkiej historii co reszta wykresu 10:30. Pudelko Darvasa samo
     zaczyna sledzenie od pierwszego dostepnego tygodnia (nie wymaga dodatkowego
@@ -1404,7 +1412,7 @@ def _compute_weinstein_stage_series(stock_df):
     zuzyciu (ENTRY_2A)."""
     n = len(stock_df)
     closes = stock_df["close"].tolist()
-    sma30s = stock_df["sma30"].tolist()
+    ema20s = stock_df["ema20"].tolist()
     buying_volumes = stock_df["buying_volume"].tolist()
 
     results = [None] * n
@@ -1455,7 +1463,7 @@ def _compute_weinstein_stage_series(stock_df):
         dv_box_start_idx = None
 
     for i in range(n):
-        if pd.isna(sma30s[i]) or pd.isna(closes[i]):
+        if pd.isna(ema20s[i]) or pd.isna(closes[i]):
             results[i] = {"stage": None, "signal": None, "buying_volume_ratio": None, "stop_level": None,
                            "base_count": None, "base_event": None}
             prev_stage = None
@@ -1465,8 +1473,8 @@ def _compute_weinstein_stage_series(stock_df):
 
         j = i - STAGE_SLOPE_LOOKBACK_WEEKS
         slope_pct = None
-        if j >= 0 and not pd.isna(sma30s[j]) and sma30s[j] != 0:
-            slope_pct = (sma30s[i] / sma30s[j] - 1) * 100
+        if j >= 0 and not pd.isna(ema20s[j]) and ema20s[j] != 0:
+            slope_pct = (ema20s[i] / ema20s[j] - 1) * 100
         if slope_pct is None:
             direction = "UNKNOWN"
         elif slope_pct > STAGE_FLAT_SLOPE_PCT:
@@ -1476,7 +1484,7 @@ def _compute_weinstein_stage_series(stock_df):
         else:
             direction = "FLAT"
 
-        above = closes[i] > sma30s[i]
+        above = closes[i] > ema20s[i]
         close = closes[i]
 
         # Pudelko Darvasa: patrz docstring "Baza/opor" wyzej. "breakout" =
@@ -1556,7 +1564,7 @@ def _compute_weinstein_stage_series(stock_df):
             new_base_event = True
             base_count = 1
             run_peak_slope = slope_pct
-            stop_level = min(sma30s[i], base_low_val) if base_low_val is not None else sma30s[i]
+            stop_level = min(ema20s[i], base_low_val) if base_low_val is not None else ema20s[i]
             high_since_raise = closes[i]
             ma_slowdown_flagged = False
             base_event = {
@@ -1575,7 +1583,7 @@ def _compute_weinstein_stage_series(stock_df):
                 "resistance": base_high, "support": base_low_val,
                 "base_count": base_count, "kind": "stage2",
             }
-            candidate_stop = min(sma30s[i], base_low_val) if base_low_val is not None else sma30s[i]
+            candidate_stop = min(ema20s[i], base_low_val) if base_low_val is not None else ema20s[i]
             if high_since_raise is not None and closes[i] >= high_since_raise * (1 - STAGE_STOP_NEAR_HIGH_PCT / 100.0):
                 if stop_level is None or candidate_stop > stop_level:
                     stop_level = candidate_stop
@@ -1612,17 +1620,18 @@ def _compute_weinstein_stage_series(stock_df):
 
 def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date):
     """Wykres 'nie-TradingView' dla panelu Siły Relatywnej, w stylu klasycznej
-    metodologii stage analysis (Stan Weinstein / Dr. Eric Wish) — "wykres 10:30":
-    tygodniowa cena spółki + SMA 10-tyg. i 30-tyg., razem z poziomem własnego indeksu,
+    metodologii stage analysis (Stan Weinstein / Dr. Eric Wish): tygodniowa cena
+    spółki + 20-tyg. EMA (zastąpiła wcześniejszy "wykres 10:30", czyli SMA 10-tyg.
+    i 30-tyg. — uproszczenie na prośbę użytkownika), razem z poziomem własnego indeksu,
     wszystko przeliczone na % zmiany WZGLĘDEM pierwszego wyświetlanego tygodnia
     (start_date) — nie surowe wartości na osobnych skalach, bo dwie osie utrudniają
     ocenę wzrokiem, która linia rośnie szybciej. Po rebase'owaniu obie linie (spółka
     i indeks) startują z 0% i rozjeżdżają się — spółka POWYŻEJ linii indeksu w danym
     tygodniu = silniejsza od rynku w tym oknie, PONIŻEJ = słabsza.
 
-    Pobiera dodatkowy zapas RS_PRICE_SMA_LONG_WEEKS tygodni PRZED start_date (margines
-    na "rozgrzanie" obu średnich, żeby miały już wartość od pierwszego wyświetlanego
-    tygodnia — SMA liczone są na SUROWEJ cenie, potem przeliczane na te same jednostki
+    Pobiera dodatkowy zapas RS_PRICE_EMA_BUFFER_WEEKS tygodni PRZED start_date (margines
+    na "rozgrzanie" EMA20, żeby miała już zbieżną wartość od pierwszego wyświetlanego
+    tygodnia — EMA liczona jest na SUROWEJ cenie, potem przeliczane na te same jednostki
     % co linia ceny), ale zwraca dane WYŁĄCZNIE od start_date — początek TEGO SAMEGO
     okna momentum_value co reszta pipeline'u (M-14 albo M-11 przy fallbacku, patrz
     compute_index_momentum) — do ref_date (dziś). Zwraca None gdy brakuje danych
@@ -1634,7 +1643,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     szczytowi widocznemu np. na TradingView, więc linia (i status ATH/potwierdzony)
     rozjeżdżała się z rzeczywistością zamiast być wiarygodnym sygnałem. Ten sam limit
     płytkiej historii dotyczy klasyfikacji etapów (Stage 1-4/2A/2B, patrz
-    _compute_weinstein_stage_series) — działa wyłącznie na pozycji/nachyleniu SMA30,
+    _compute_weinstein_stage_series) — działa wyłącznie na pozycji/nachyleniu EMA20,
     nie na wieloletnim oporze bazy, z tego samego powodu.
 
     Zwraca też, oprócz linii ceny, klasyfikację etapów Weinsteina + potwierdzenie
@@ -1658,12 +1667,12 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     znaczników wybicia: [{"start_date", "end_date", "resistance_pct", "support_pct",
     "base_count", "kind"}], gdzie *_pct to ten sam close0-relatywny % co close_pct.
     Tylko bazy, których tydzień wybicia mieści się w wyświetlanym oknie (start_date
-    może sięgać wstecz w bufor rozgrzewkowy SMA — wtedy przycinana do pierwszego
+    może sięgać wstecz w bufor rozgrzewkowy EMA — wtedy przycinana do pierwszego
     wyświetlanego tygodnia).
 
     "vwap_pct" — Volume-Weighted Average Price ZAKOTWICZONY (anchored) na
-    początku WYŚWIETLANEGO okna (start_date), nie na buforze rozgrzewkowym SMA:
-    to świadomie inny punkt startowy niż sma10_pct/sma30_pct — anchored VWAP z
+    początku WYŚWIETLANEGO okna (start_date), nie na buforze rozgrzewkowym EMA:
+    to świadomie inny punkt startowy niż ema20_pct — anchored VWAP z
     definicji zaczyna kumulację dokładnie w punkcie zakotwiczenia, więc liczony
     jest wyłącznie na in_window (te same tygodnie co close_pct), narastająco
     tydzień po tygodniu: `cumsum(typical_price*volume) / cumsum(volume)`, gdzie
@@ -1679,7 +1688,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     --lookback-months), ten anchored VWAP ma dane na CAŁĄ szerokość wykresu, od
     pierwszego do ostatniego wyświetlanego tygodnia — nie trzeba dodatkowego
     bufora."""
-    lookback_weeks = RS_PRICE_SMA_LONG_WEEKS + 2
+    lookback_weeks = RS_PRICE_EMA_BUFFER_WEEKS
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
     stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date,
@@ -1689,8 +1698,11 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         return None
 
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
-    stock_df["sma10"] = stock_df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
-    stock_df["sma30"] = stock_df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
+    # adjust=False = rekurencyjna EMA jak w TradingView (ta.ema); min_periods zostawia
+    # None dopoki nie ma RS_PRICE_EMA_WEEKS tygodni historii (ta sama konwencja
+    # "None zamiast wartosci z za krotkiej historii" co reszta modulu).
+    stock_df["ema20"] = stock_df["close"].ewm(span=RS_PRICE_EMA_WEEKS, adjust=False,
+                                              min_periods=RS_PRICE_EMA_WEEKS).mean()
 
     stage_rows = _compute_weinstein_stage_series(stock_df)
     stock_df["stage"] = [row["stage"] for row in stage_rows]
@@ -1709,8 +1721,8 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
 
     close0 = float(in_window["close"].iloc[0])
     # VWAP zakotwiczony na poczatku WYSWIETLANEGO okna (start_date), nie na
-    # buforze rozgrzewkowym SMA jak stock_df — to swiadomie inny punkt startowy
-    # niz sma10/sma30 (ktore licza sie na buforze, zeby miec wartosc juz od
+    # buforze rozgrzewkowym EMA jak stock_df — to swiadomie inny punkt startowy
+    # niz ema20 (ktora liczy sie na buforze, zeby miec wartosc juz od
     # pierwszego wyswietlanego tygodnia). Anchored VWAP z definicji zaczyna
     # akumulacje od swojego punktu zakotwiczenia, wiec liczony jest WYLACZNIE
     # na in_window (te same tygodnie co close_pct), a nie na stock_df.
@@ -1733,7 +1745,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     index_available = in_window["index_close"].dropna()
     index0 = float(index_available.iloc[0]) if not index_available.empty else None
     # Przesuniecie miedzy indeksami stock_df (pelen szereg z buforem rozgrzewkowym
-    # SMA przed start_date) a in_window (tylko wyswietlane tygodnie) — in_window
+    # EMA przed start_date) a in_window (tylko wyswietlane tygodnie) — in_window
     # jest zawsze koncowka posortowanego chronologicznie stock_df, wiec to zwykle
     # odejmowanie dlugosci wystarcza do przeliczenia "base_start_idx"/"base_end_idx"
     # (indeksy w stock_df, patrz _compute_weinstein_stage_series) na pozycje w
@@ -1745,21 +1757,24 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
             return None
         return round((float(value) / base - 1) * 100, 2)
 
-    dates, close_pct, sma10_pct, sma30_pct, index_pct, vwap_pct = [], [], [], [], [], []
+    dates, close_pct, ema20_pct, index_pct, vwap_pct = [], [], [], [], []
     volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
-    stop_level_pct, base_count = [], []
+    stop_level_pct, base_count, low_pct = [], [], []
     raw_base_events = []
     for _, r in in_window.iterrows():
         dates.append(r["week_end"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
-        sma10_pct.append(pct(r["sma10"], close0))
-        sma30_pct.append(pct(r["sma30"], close0))
+        ema20_pct.append(pct(r["ema20"], close0))
         index_pct.append(pct(r["index_close"], index0))
         vwap_pct.append(pct(r["vwap"], close0))
+        # Tygodniowe MIN(Low) — do stopu strategii (docs/js/strategy.js: stop
+        # przesuwany na low swiecy z przeciecia MACD). None dla starych wierszy
+        # bez High/Low (patrz _ensure_prices_ohlc_columns w fetch_data.py).
+        low_pct.append(pct(r["low"], close0))
         volume.append(int(r["volume"]) if pd.notna(r["volume"]) else None)
         buying_volume.append(int(round(r["buying_volume"])) if pd.notna(r["buying_volume"]) else None)
         # UWAGA: r pochodzi z in_window.iterrows() — wiersz miesza kolumny float
-        # (close/sma10/...) z object (stage/signal), a pandas przy budowaniu Series
+        # (close/ema20/...) z object (stage/signal), a pandas przy budowaniu Series
         # per-wiersz potrafi wtedy po cichu zamienic None na NaN (znany quirk
         # iterrows() dla niejednorodnych typow w wierszu). Bez jawnego pd.notna
         # trafiloby to do JSON jako literal `NaN` — niepoprawny JSON (JSON.parse
@@ -1795,10 +1810,10 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     return {
         "dates": dates,
         "close_pct": close_pct,
-        "sma10_pct": sma10_pct,
-        "sma30_pct": sma30_pct,
+        "ema20_pct": ema20_pct,
         "index_pct": index_pct,
         "vwap_pct": vwap_pct,
+        "low_pct": low_pct,
         "volume": volume,
         "buying_volume": buying_volume,
         "buying_volume_ratio": buying_volume_ratio,
@@ -1854,7 +1869,7 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     RS_MANSFIELD_LONG_WEEKS.
 
     Pobiera dodatkowy zapas RS_MANSFIELD_LONG_WEEKS + 2 tygodni PRZED start_date
-    (analogicznie do RS_PRICE_SMA_LONG_WEEKS w compute_relative_strength_chart — to
+    (analogicznie do RS_PRICE_EMA_BUFFER_WEEKS w compute_relative_strength_chart — to
     NAJDŁUŻSZE z trzech wygładzeń decyduje o potrzebnym zapasie), żeby każde
     wygładzenie miało już wartość od pierwszego wyświetlanego tygodnia, o ile retencja
     `prices` na to pozwala.
@@ -2007,7 +2022,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     regresja liniowa nad `diff` (patrz "histogram" nizej) potrzebuje kolejnych
     TTM_SQUEEZE_KC_WEEKS JUZ POLICZONYCH (nie-None) wartosci `diff`, wiec podwojny
     zapas jest tu konieczny, zeby histogram mial juz wartosc na pierwszym
-    wyswietlanym tygodniu (ta sama zasada co RS_PRICE_SMA_LONG_WEEKS+2/
+    wyswietlanym tygodniu (ta sama zasada co RS_PRICE_EMA_BUFFER_WEEKS/
     RS_MANSFIELD_MEDIUM_WEEKS+2 gdzie indziej w tym module). Zwraca dane WYLACZNIE
     od start_date do ref_date. Bez High/Low (stare wiersze `prices` sprzed migracji
     schematu, patrz _ensure_prices_ohlc_columns w fetch_data.py) ATR/kanal Kellera
@@ -2237,10 +2252,10 @@ def export_relative_strength(con, docs_data_dir, ref_date=None, min_trading_days
                  "spółki, których momentum w tym oknie przebiło momentum samego indeksu (poziom "
                  "indeksu, nie średnia składników), posortowane malejąco po przewadze "
                  "(relative_strength_pct = zwrot spółki - zwrot indeksu). Każdy lider ma też "
-                 "'weekly_chart': od początku tego samego okna, 'wykres 10:30' w stylu stage analysis "
-                 "(Weinstein/Dr Eric Wish) — cena spółki + SMA 10-tyg./30-tyg. i poziom własnego indeksu, "
-                 "wszystko przeliczone na % zmiany względem początku okna (pola close_pct/sma10_pct/"
-                 "sma30_pct/index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
+                 "'weekly_chart': od początku tego samego okna, wykres w stylu stage analysis "
+                 "(Weinstein/Dr Eric Wish) — cena spółki + EMA 20-tyg. i poziom własnego indeksu, "
+                 "wszystko przeliczone na % zmiany względem początku okna (pola close_pct/ema20_pct/"
+                 "index_pct) — patrz compute_relative_strength_chart. Każdy lider ma też "
                  "'mansfield_chart': oscylator Mansfield Relative Strength w TRZECH wygładzeniach "
                  "(rsm_short ~3 mies., rsm_medium ~6 mies., rsm_long ~12 mies.), od początku TEGO SAMEGO "
                  "okna co weekly_chart "
