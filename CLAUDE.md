@@ -1036,30 +1036,28 @@ flex child (no `.topbar-left` wrapper there).
   (see the dedicated GEM section above and the `rebalance.html`/`rebalance.js` bullet below); `app.js` no
   longer fetches `global_equity_momentum.json`, and neither does `rebalance.js` any more.
 
-  **RSM (Mansfield Relative Strength) is now two separate, full dashboard tabs** — "📈 RSM Stabilne" and
-  "🚀 RSM Wzrostowe" (`data-universe="RSM_STABLE"`/`"RSM_GROWTH"`) — replacing an earlier single "RSM" tab
-  that only showed lightweight sidebar-tile previews plus one small, non-sortable, non-stage-filterable
-  table. `classifyRsm(ticker, universe, c)` classifies a constituent from its `mansfield_chart`
-  (`rsm_short`/`rsm_medium`, the same fields the chart panel plots) into **stable** (`mediumNow > 0 &&
-  mediumNow > shortNow` — a durable edge over its own index without a fresh spike) or **accelerating**
-  (`shortNow > mediumNow` and both smoothings have been rising for `RSM_TREND_LOOKBACK_WEEKS`, ~1 month —
-  a fresh trend acceleration); a constituent can only ever land in one bucket or neither, never both.
-  `combinedRsmCandidates()` runs this over **`all_constituents`** (the CALE, full qualifying universe —
-  `FULL_COVERAGE_UNIVERSES`/`_build_full_universe_records` in `run_query.py` — not just today's top-decile
-  selection or today's Relative Strength outperformers) for all 5 universes and merges into `{stable,
-  accelerating}`, each sorted by its own defining metric (`mediumNow`/`shortNow` descending). Each of the
-  two new tabs is a real sortable table (`<th data-key="...">` on `ticker`/`universe`/`sector`/`price`/
-  `shortNow`/`mediumNow`/`trend`, reusing the generic `compareRows()`) with its own "Etap" column
-  (`stageCellHtml()`, now reading `current_stage` — added onto `classifyRsm`'s return value alongside the
-  existing RSM fields) **and** the same stage-filter bar as the per-universe tables (see below) — this is
-  exactly what the user asked for when requesting the split ("dzięki temu mógłbym filtrować po kolumnach").
-  `renderRsmScreenerTable(kind)` is the shared implementation behind both tabs (`renderRsmStableTable`/
-  `renderRsmGrowthTable`); rows carry their own real `universe`, so clicking one still calls
-  `selectTicker(ticker, universe)` exactly like every other table — the whole chart-rendering pipeline
-  below is completely unaware that a click came from an RSM tab rather than a per-universe one.
+  **"💥 Wybicie" screener tab** (`data-universe="WYBICIE"`) — REPLACED the two earlier RSM tabs ("📈 RSM
+  Stabilne"/"🚀 RSM Wzrostowe", `classifyRsm`/`combinedRsmCandidates`/`renderRsmPanel`/
+  `renderRsmScreenerTable` — all removed at the user's explicit request, "Usuń z Dashboard RSM wzrostowe i
+  stabilne"). `classifyWybicie(ticker, universe, c)` keeps a constituent only when ALL THREE hold: weekly
+  MACD (`macd_chart.macd`) crossed zero UPWARD, the RS 52-week line shown on the TTM Squeeze panel
+  (`mansfield_chart.rsm_long`) crossed zero UPWARD, and the TTM Squeeze histogram
+  (`ttm_squeeze_chart.histogram`) is currently positive. "Crossed" = `weeksSinceZeroCrossUp()`: the latest
+  non-null value is > 0, counted as weeks since the most recent week it was <= 0 (whole series by default).
+  Two user-controlled sliders above the table (`#wybicieControls`, shown only on this tab, persisted in
+  `localStorage` key `momentum_dashboard_wybicie`, added at an explicit follow-up request): **"Okno wybicia"**
+  (`state.wybicieWindowWeeks`, 0-26, default 6) — max gap in weeks between the MACD cross and the RS 52W
+  cross, so both signals count as ONE breakout; **"Monitoruj po wybiciu"** (`state.wybicieMonitorWeeks`,
+  1-52, default 6) — how many weeks after the breakout (= the LATER of the two crosses, `breakoutWeeks`)
+  the stock stays listed, as long as MACD/RS 52W/TTM histogram are all still > 0 (any of them dropping
+  below zero removes it immediately). `combinedWybicieCandidates()` runs it over every
+  universe's `all_constituents`, dedupes tickers present in two universes (first in `UNIVERSES` order
+  wins), sorts freshest breakout first (`breakoutWeeks`), then by histogram. Same sortable/
+  stage-filterable table shape as TTM Squeeze (`renderWybicieTable()`/`wybicieRowHtml()`), plus a matching
+  sidebar tile group (`renderWybiciePanel()`, `#tiles-WYBICIE`).
 
-  **A third full, sortable, stage-filterable screener tab, "🧨 TTM Squeeze"**, sits next to the two RSM
-  tabs (`data-universe="TTM_SQUEEZE"`) — the user's own redirect away from plain performance numbers
+  **A second full, sortable, stage-filterable screener tab, "🧨 TTM Squeeze"**, sits next to the Wybicie
+  tab (`data-universe="TTM_SQUEEZE"`) — the user's own redirect away from plain performance numbers
   (see the removed `growth_chart` panel, above) toward stocks that already have momentum but are sitting
   through a multi-week consolidation. `classifyTtmSqueeze(ticker, universe, c)` requires
   `momentum_score > 0` ("mają Momentum") and reads the constituent's `ttm_squeeze_chart` (see
