@@ -1675,20 +1675,24 @@ flex child (no `.topbar-left` wrapper there).
   `top_rs_companies`; non-SP500 Nasdaq names have no GICS sector and skip the gate; (3) watchlist —
   `current_stage` 2A/2B, latest `rsm_medium` > 0 and `rsm_long` > 0 (null long passes), `momentum_score` > 0,
   `base_count` <= 3 (`evaluateCandidate`); (4) entry — `squeezeStatusFor` = fired (same thresholds as the
-  dashboard) AND latest TTM histogram > 0 and rising AND price > stop; size = `positionSize()`;
+  dashboard) AND latest TTM histogram > 0 and rising AND price > stop AND weekly MACD above its signal line
+  (`macdConfirmation()` — the bullish MACD cross is the user's ENTRY CONFIRMATION, not a stop rule; without
+  it the status is `WAIT_MACD`, "⏳ Czekaj na MACD"); size = `positionSize()`;
   buying-volume >= 1.2x is shown, not required; (5) held satellite tickers (typed by the user) →
   `evaluateHolding()`: EXIT on price < stop / Stage 3-4 / `rsm_medium` < 0, TIGHTEN on recent
   `WARNING_MA_SLOWING` / base > 3 / Stage 1.
   **The stop is the user's own rule, NOT the backend's Weinstein trailing stop** (`strategyStopFor()`, used
   by both steps 4 and 5): start at the MIDPOINT of the last Darvas box (`weekly_chart.bases[-1]`,
-  `(resistance_pct + support_pct) / 2`), then after every weekly MACD bullish cross (MACD crosses ABOVE its
-  signal line, `macd_chart`) dated after that box's `end_date`, raise the stop to that week's LOW — only
-  ever up. The weekly low comes from `weekly_chart.low_pct` (added to `compute_relative_strength_chart` in
+  `(resistance_pct + support_pct) / 2`), then after every weekly MACD BEARISH cross (MACD crosses BELOW its
+  signal line, `macd_chart`) while MACD is already bullish (MACD > 0 that week), dated after that box's
+  `end_date`, raise the stop to that week's LOW — only ever up. An earlier version of this used the BULLISH
+  cross for the stop; the user corrected it: "przecięcie w dół przy MACD już wzrostowym, przecięcie w górę
+  to tylko sygnał potwierdzenia wejścia nie stop loss". The weekly low comes from `weekly_chart.low_pct` (added to `compute_relative_strength_chart` in
   `run_query.py` for exactly this; falls back to the weekly close with `lowApprox` for older JSON). All
   `*_pct` fields convert back to prices via `close0 = price / (1 + close_pct[last]/100)`. With no Darvas box
   in the data window it falls back to `stopPriceFor()` (the Weinstein stop from `stop_level_pct`, read at
-  the LAST week only — after `EXIT_STOP` it's intentionally null). In a strong trend where MACD stays above
-  its signal for months, the stop can lag far below price — that's the rule as specified, not a bug. The old sector-leaders and
+  the LAST week only — after `EXIT_STOP` it's intentionally null). If MACD never dips below its signal after
+  the box, the stop stays at the box midpoint — that's the rule as specified, not a bug. The old sector-leaders and
   top-10-RS tables stay at the bottom as "Narzędzia pomocnicze" (USA only). Pure logic is covered in
   `tests/js/strategy.test.js`.
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described

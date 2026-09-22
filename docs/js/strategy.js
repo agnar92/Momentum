@@ -11,8 +11,9 @@
 //   Krok 3 — lista obserwacyjna: Etap 2, RS 26 i 52 tyg. > 0, momentum > 0,
 //            baza <= 3.
 //   Krok 4 — wejscie: TTM Squeeze odpalil po konsolidacji, histogram > 0 i
-//            rosnie; stop = polowa ostatniego pudelka Darvasa, podnoszony na
-//            low swiecy z przeciecia MACD w gore (strategyStopFor); wielkosc
+//            rosnie, potwierdzenie: MACD nad linia sygnalu (przeciecie w gore);
+//            stop = polowa ostatniego pudelka Darvasa, podnoszony na low swiecy
+//            z przeciecia MACD w dol przy MACD > 0 (strategyStopFor); wielkosc
 //            pozycji = 1% kapitalu / (cena - stop), maks. 10% kapitalu.
 //   Krok 5 — pozycje satelity uzytkownika: HOLD / podciagnij stop / EXIT.
 // Portfel: Core (50%) = ETF-y, ktore uzytkownik juz ma poza tym narzedziem,
@@ -456,9 +457,12 @@ function stopPriceFor(c) {
 // Weinsteina z backendu):
 //   1. start: POLOWA ostatniego pudelka Darvasa (weekly_chart.bases[-1],
 //      (resistance + support) / 2) — pudelko, z ktorego bylo ostatnie wybicie;
-//   2. potem, po kazdym przecieciu MACD W GORE linii sygnalu (tygodniowy MACD,
-//      macd_chart) PO koncu tego pudelka, stop idzie na LOW tej tygodniowej
-//      swiecy (weekly_chart.low_pct) — tylko w gore, nigdy w dol.
+//   2. potem, po kazdym przecieciu MACD W DOL linii sygnalu (tygodniowy MACD,
+//      macd_chart) PRZY MACD JUZ WZROSTOWYM (MACD > 0 w tygodniu przeciecia),
+//      PO koncu tego pudelka, stop idzie na LOW tej tygodniowej swiecy
+//      (weekly_chart.low_pct) — tylko w gore, nigdy w dol.
+// Przeciecie MACD W GORE to NIE jest stop — to potwierdzenie wejscia (patrz
+// macdConfirmation / status WAIT_MACD w evaluateCandidate).
 // Bez pudelka w oknie danych -> fallback na stop Weinsteina (source "weinstein").
 // Bez low_pct (stare dane sprzed dodania pola) -> zamkniecie tygodnia
 // zamiast low, oznaczone lowApprox=true.
@@ -488,7 +492,7 @@ function strategyStopFor(c) {
         if (date <= box.end_date) continue;
         const a0 = m.macd[k - 1], s0 = m.signal[k - 1], a1 = m.macd[k], s1 = m.signal[k];
         if (a0 == null || s0 == null || a1 == null || s1 == null) continue;
-        if (!(a0 <= s0 && a1 > s1)) continue;
+        if (!(a0 >= s0 && a1 < s1 && a1 > 0)) continue;
         const j = weekIdx[date];
         if (j == null) continue;
         const hasLow = w.low_pct && w.low_pct[j] != null;
@@ -503,6 +507,24 @@ function strategyStopFor(c) {
         }
     }
     return out;
+}
+
+// Potwierdzenie wejscia MACD: tygodniowy MACD powyzej linii sygnalu (czyli
+// przeciecie w gore juz bylo i sie nie odwrocilo) + data ostatniego
+// przeciecia w gore.
+function macdConfirmation(c) {
+    const m = c && c.macd_chart;
+    if (!m || !m.macd || !m.signal) return { above: null, crossUpDate: null };
+    let i = m.macd.length - 1;
+    while (i >= 0 && (m.macd[i] == null || m.signal[i] == null)) i--;
+    if (i < 0) return { above: null, crossUpDate: null };
+    let crossUpDate = null;
+    for (let k = i; k >= 1; k--) {
+        const a0 = m.macd[k - 1], s0 = m.signal[k - 1];
+        if (a0 == null || s0 == null) break;
+        if (a0 <= s0 && m.macd[k] > m.signal[k]) { crossUpDate = m.dates[k]; break; }
+    }
+    return { above: m.macd[i] > m.signal[i], crossUpDate };
 }
 
 // Histogram TTM Squeeze w ostatnim policzonym tygodniu: dodatni? rosnacy?
@@ -554,13 +576,18 @@ function evaluateCandidate(c, ctx) {
     const mom = squeezeMomentum(c);
     const stopInfo = strategyStopFor(c);
     const stop = stopInfo ? stopInfo.stop : null;
+    const macd = macdConfirmation(c);
     const volumeRatio = squeeze.status === "fired" ? recentBuyingVolumeRatio(c, Math.max(2, squeeze.weeks + 1)) : null;
 
     let status = null;
     if (passes) {
         const triggered = squeeze.status === "fired" && mom.value != null && mom.value > 0 && mom.rising === true
             && stop != null && c.price > stop;
-        if (triggered) status = ctx.marketOk === false ? "WAIT_MARKET" : "ENTRY";
+        if (triggered) {
+            if (ctx.marketOk === false) status = "WAIT_MARKET";
+            else if (macd.above !== true) status = "WAIT_MACD";
+            else status = "ENTRY";
+        }
         else if (squeeze.status === "consolidating") status = "SETUP";
         else status = "WATCH";
     }
@@ -568,9 +595,13 @@ function evaluateCandidate(c, ctx) {
     return {
         ticker: c.ticker, universe: c.universe, sector, price: c.price,
         stage, baseCount, rsMedium, rsLong, squeeze, momentum: mom, stop, stopInfo,
-        volumeRatio, volumeConfirmed: volumeRatio != null && volumeRatio >= STRATEGY_VOLUME_CONFIRM_RATIO,
+        macd, volumeRatio, volumeConfirmed: volumeRatio != null && volumeRatio >= STRATEGY_VOLUME_CONFIRM_RATIO,
         gates, passes, status,
     };
+}
+
+function isSignalStatus(status) {
+    return status === "ENTRY" || status === "WAIT_MARKET" || status === "WAIT_MACD";
 }
 
 // Liczniki kolejnych bramek lejka (kazda liczona na wyniku poprzedniej).
@@ -580,7 +611,7 @@ function funnelCounts(evaluated) {
     let rows = evaluated;
     order.forEach(g => { rows = rows.filter(e => e.gates[g]); counts[g] = rows.length; });
     counts.setup = rows.filter(e => e.status === "SETUP").length;
-    counts.entry = rows.filter(e => e.status === "ENTRY" || e.status === "WAIT_MARKET").length;
+    counts.entry = rows.filter(e => isSignalStatus(e.status)).length;
     return counts;
 }
 
@@ -741,11 +772,12 @@ function capital() {
 // ------------------------------------------------------------
 // Render
 // ------------------------------------------------------------
-const STATUS_ORDER = { ENTRY: 0, WAIT_MARKET: 1, SETUP: 2, WATCH: 3 };
+const STATUS_ORDER = { ENTRY: 0, WAIT_MACD: 1, WAIT_MARKET: 2, SETUP: 3, WATCH: 4 };
 
 function statusHtml(status) {
     switch (status) {
         case "ENTRY": return '<span class="funnel-status funnel-status-entry">🟢 Wejście</span>';
+        case "WAIT_MACD": return '<span class="funnel-status funnel-status-wait" title="Squeeze odpalił, ale tygodniowy MACD jest jeszcze pod linią sygnału — czekaj na przecięcie w górę jako potwierdzenie wejścia.">⏳ Czekaj na MACD</span>';
         case "WAIT_MARKET": return '<span class="funnel-status funnel-status-wait" title="Sygnał jest, ale rynek jest poza fazą wzrostu (Krok 1).">⏸ Czekaj (rynek)</span>';
         case "SETUP": return '<span class="funnel-status funnel-status-setup">🌀 Setup</span>';
         case "WATCH": return '<span class="funnel-status funnel-status-watch">👀 Obserwuj</span>';
@@ -762,14 +794,20 @@ function holdActionHtml(action) {
     }
 }
 
+function macdCellHtml(m) {
+    if (!m || m.above == null) return '<span style="color:var(--text-faint)">—</span>';
+    if (m.above) return `<span class="positive" title="MACD nad linią sygnału${m.crossUpDate ? ` — przecięcie w górę ${m.crossUpDate}` : ""}.">✓${m.crossUpDate ? ` ${m.crossUpDate.slice(5)}` : ""}</span>`;
+    return '<span class="negative" title="MACD pod linią sygnału — brak potwierdzenia.">✗</span>';
+}
+
 // Cena stopu + skad pochodzi (polowa pudelka Darvasa / low swiecy z przeciecia MACD).
 function stopCellHtml(currency, info) {
     if (!info || info.stop == null) return "—";
     let note;
     if (info.source === "macd") {
-        note = `<span class="funnel-note" title="Low tygodniowej świecy, w której MACD przeciął linię sygnału w górę (${info.macdDate})${info.lowApprox ? " — przybliżone zamknięciem tygodnia, brak danych low" : ""}.">MACD ${info.macdDate.slice(5)}${info.lowApprox ? " ≈" : ""}</span>`;
+        note = `<span class="funnel-note" title="Low tygodniowej świecy, w której MACD (nad zerem) przeciął linię sygnału w dół (${info.macdDate})${info.lowApprox ? " — przybliżone zamknięciem tygodnia, brak danych low" : ""}.">MACD↓ ${info.macdDate.slice(5)}${info.lowApprox ? " ≈" : ""}</span>`;
     } else if (info.source === "box") {
-        note = `<span class="funnel-note" title="Połowa ostatniego pudełka Darvasa (zakończonego ${info.boxEnd}) — jeszcze nie było przecięcia MACD w górę po tym pudełku.">½ box</span>`;
+        note = `<span class="funnel-note" title="Połowa ostatniego pudełka Darvasa (zakończonego ${info.boxEnd}) — po tym pudełku nie było jeszcze przecięcia MACD w dół (nad zerem) z wyższym low.">½ box</span>`;
     } else {
         note = '<span class="funnel-note funnel-note-warn" title="Brak pudełka Darvasa w oknie danych — użyty trailing stop Weinsteina.">Weinstein</span>';
     }
@@ -882,7 +920,7 @@ function renderEntryTable(evaluated, currency, held, evaluatedByTicker) {
     const cap = capital();
     const heldSet = new Set(held);
     const sectorCounts = heldSectorCounts(held, evaluatedByTicker);
-    const rows = evaluated.filter(e => e.status === "ENTRY" || e.status === "WAIT_MARKET").map(e => Object.assign({}, e, {
+    const rows = evaluated.filter(e => isSignalStatus(e.status)).map(e => Object.assign({}, e, {
         size: positionSize({ price: e.price, stop: e.stop, capital: cap }),
         alreadyHeld: heldSet.has(e.ticker),
         sectorFull: e.sector && e.sector !== "Unknown" && (sectorCounts[e.sector] || 0) >= STRATEGY_MAX_PER_SECTOR,
@@ -895,7 +933,7 @@ function renderEntryTable(evaluated, currency, held, evaluatedByTicker) {
         metaEl: document.getElementById("entryMeta"),
         allRows: rows,
         compareFn: (a, b) => (STATUS_ORDER[a.status] - STATUS_ORDER[b.status]) || ((b.rsMedium || 0) - (a.rsMedium || 0)),
-        colspan: 10,
+        colspan: 11,
         emptyAllMsg: "Brak sygnałów wejścia w tym tygodniu — sprawdź spółki w konsolidacji (🌀 Setup) w Kroku 3.",
         emptyFilteredMsg: "Brak danych.",
         metaText: () => cap
@@ -915,6 +953,7 @@ function renderEntryTable(evaluated, currency, held, evaluatedByTicker) {
                 <td>${s ? s.shares : "—"}</td>
                 <td>${s ? fmtMoneyFor(currency, s.value) + (s.cappedByMax ? ' <span class="funnel-note" title="Ograniczone limitem 10% kapitału na pozycję.">max</span>' : "") : "—"}</td>
                 <td>${s ? fmtMoneyFor(currency, s.risk) : "—"}</td>
+                <td>${macdCellHtml(e.macd)}</td>
                 <td>${e.volumeRatio != null ? `<span class="${e.volumeConfirmed ? "positive" : ""}">${e.volumeRatio.toFixed(1)}×${e.volumeConfirmed ? " ✓" : ""}</span>` : "—"}</td>
                 <td>${chartBtnHtml(e.ticker, e.universe)}</td>
             `;
@@ -1051,7 +1090,7 @@ if (typeof document !== "undefined") {
 // i bez efektu w przegladarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, squeezeMomentum,
+        squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
         evaluateCandidate, funnelCounts, positionSize, evaluateHolding, parseTickerList,
     };
 }

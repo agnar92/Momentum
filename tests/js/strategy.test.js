@@ -7,7 +7,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, squeezeMomentum,
+    squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
     evaluateCandidate, funnelCounts, positionSize, evaluateHolding, parseTickerList,
 } = require(path.join("..", "..", "docs", "js", "strategy.js"));
 
@@ -77,6 +77,8 @@ function stock(overrides = {}) {
         ]),
     };
     base.ttm_squeeze_chart.histogram = [-1, 2, 3];
+    // MACD przecial linie sygnalu w gore w w2 — potwierdzenie wejscia
+    base.macd_chart = { dates: ["w1", "w2", "w3"], macd: [1, 3, 4], signal: [2, 2, 2.5] };
     return Object.assign(base, overrides);
 }
 
@@ -105,6 +107,16 @@ test("evaluateCandidate flags a fired squeeze in Stage 2 with rising momentum as
     assert.equal(e.passes, true);
     assert.equal(e.status, "ENTRY");
     assert.equal(e.volumeConfirmed, true); // 1.4x w oknie ostatnich tygodni
+});
+
+test("evaluateCandidate waits for MACD confirmation when MACD is below its signal line", () => {
+    const c = stock({ macd_chart: { dates: ["w1", "w2", "w3"], macd: [1, 1, 1], signal: [2, 2, 2] } });
+    assert.equal(evaluateCandidate(c, usaCtx()).status, "WAIT_MACD");
+});
+
+test("macdConfirmation reports MACD above signal and the latest bullish cross date", () => {
+    assert.deepEqual(macdConfirmation(stock()), { above: true, crossUpDate: "w2" });
+    assert.deepEqual(macdConfirmation({}), { above: null, crossUpDate: null });
 });
 
 test("evaluateCandidate downgrades ENTRY to WAIT_MARKET when the market filter is off", () => {
@@ -228,6 +240,7 @@ test("parseTickerList splits, uppercases and dedupes", () => {
 
 // ------------------------------------------------------------
 // Stop strategii: polowa pudelka Darvasa -> low swiecy z przeciecia MACD
+// W DOL linii sygnalu przy MACD > 0 (przeciecie w gore to tylko potwierdzenie wejscia)
 // ------------------------------------------------------------
 
 // close0 = 100 (cena 120, ostatni close_pct = 20). Pudelko: 10%..0% -> polowa = 105.
@@ -249,29 +262,39 @@ function boxedStock(macd, signal, lowPct) {
 }
 
 test("strategyStopFor starts at the midpoint of the LAST Darvas box", () => {
-    const info = strategyStopFor(boxedStock([1, 1, 1, 1, 1], [2, 2, 2, 2, 2]));
+    const info = strategyStopFor(boxedStock([3, 3, 3, 3, 3], [2, 2, 2, 2, 2]));
     assert.equal(info.source, "box");
     assert.ok(Math.abs(info.stop - 105) < 1e-9);
 });
 
-test("strategyStopFor raises the stop to the low of the MACD bullish-cross week after the box", () => {
-    // przeciecie w gore w d4 (d3: macd<=signal, d4: macd>signal) -> low d4 = 112
-    const info = strategyStopFor(boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2]));
+test("strategyStopFor raises the stop to the low of a bearish MACD cross above zero after the box", () => {
+    // d3: macd >= signal, d4: macd < signal, macd > 0 -> low d4 = 112
+    const info = strategyStopFor(boxedStock([3, 3, 3, 1.5, 1], [2, 2, 2, 2, 2]));
     assert.equal(info.source, "macd");
     assert.equal(info.macdDate, "d4");
     assert.ok(Math.abs(info.stop - 112) < 1e-9);
     assert.equal(info.lowApprox, false);
 });
 
+test("strategyStopFor ignores bullish MACD crosses (entry confirmation, not a stop)", () => {
+    const info = strategyStopFor(boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2]));
+    assert.equal(info.source, "box");
+});
+
+test("strategyStopFor ignores bearish crosses with MACD below zero", () => {
+    const info = strategyStopFor(boxedStock([1, 1, 1, -1, -2], [-0.5, -0.5, -0.5, -0.5, -0.5]));
+    assert.equal(info.source, "box");
+});
+
 test("strategyStopFor ignores crosses inside the box and never lowers the stop", () => {
-    // przeciecie w d2 (koniec pudelka) — ignorowane; przeciecie w d5 z low 104 < 105 — stop zostaje
-    const info = strategyStopFor(boxedStock([1, 3, 1, 1, 3], [2, 2, 2, 2, 2], [-2, 3, 8, 12, 4]));
+    // przeciecie w dol w d2 (koniec pudelka) — ignorowane; w d5 low 104 < 105 — stop zostaje
+    const info = strategyStopFor(boxedStock([3, 1, 3, 3, 1], [2, 2, 2, 2, 2], [-2, 3, 8, 12, 4]));
     assert.equal(info.source, "box");
     assert.ok(Math.abs(info.stop - 105) < 1e-9);
 });
 
 test("strategyStopFor falls back to the weekly close when low_pct is missing (old data)", () => {
-    const info = strategyStopFor(boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2], null));
+    const info = strategyStopFor(boxedStock([3, 3, 3, 1.5, 1], [2, 2, 2, 2, 2], null));
     assert.equal(info.source, "macd");
     assert.equal(info.lowApprox, true);
     assert.ok(Math.abs(info.stop - 115) < 1e-9);
@@ -286,7 +309,7 @@ test("strategyStopFor falls back to the Weinstein stop without any Darvas box", 
 });
 
 test("evaluateHolding exits when price falls below the Darvas/MACD stop", () => {
-    const c = boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2]); // stop 112
+    const c = boxedStock([3, 3, 3, 1.5, 1], [2, 2, 2, 2, 2]); // cross down d4
     c.weekly_chart.current_stage = "2B";
     c.weekly_chart.close_pct = [0, 5, 10, 15, 10]; // close0 = 120/1.1 ~ 109.1 -> stop ~ 122.2 > 120
     assert.equal(evaluateHolding(c).action, "EXIT");
