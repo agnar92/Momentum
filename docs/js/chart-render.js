@@ -134,11 +134,14 @@ function rollingMean(values, window) {
 // dokładny podzbiór (sufiks) fullDates — sam sposób ich liczenia w backendzie
 // resampluje z tych samych dziennych tabel tym samym `DATE_TRUNC('week', ...)`.
 // Trzecia linia, "long" (rsm_long, ~12M wygladzenie, RS_MANSFIELD_LONG_WEEKS=52 w
-// run_query.py), dodana na wyrazne zyczenie uzytkownika. Ten sam padding-do-
-// fullDates dotyczy jej tak samo jak short/medium — z tym ze przy obecnej
-// ~22-miesiecznej retencji prices ten konkretny wariant regularnie zaczyna
-// jako `null` na sporej czesci wyswietlanego okna (52-tyg. zapas rozgrzewkowy
-// nie miesci sie caly przed start_date), patrz komentarz przy
+// run_query.py) — teraz rysowana w panelu TTM Squeeze, nie w panelu Mansfielda
+// (patrz "RS 52 tyg." w renderRelativeStrengthChart, przeniesiona stamtad na
+// wyrazne zyczenie uzytkownika), ale nadal liczona TUTAJ razem z short/medium,
+// bo to jedna funkcja dopasowania dla calego mansfield_chart. Ten sam
+// padding-do-fullDates dotyczy jej tak samo jak short/medium — z tym ze przy
+// obecnej ~22-miesiecznej retencji prices ten konkretny wariant regularnie
+// zaczyna jako `null` na sporej czesci wyswietlanego okna (52-tyg. zapas
+// rozgrzewkowy nie miesci sie caly przed start_date), patrz komentarz przy
 // RS_MANSFIELD_LONG_WEEKS w run_query.py — to oczekiwane, nie blad.
 function alignMansfieldToDates(mansfieldData, fullDates) {
     const idxByDate = new Map(mansfieldData.dates.map((d, i) => [d, i]));
@@ -304,24 +307,37 @@ function syncChartsCrosshair(charts) {
 //    histogramu (momentum-oscylator, kolor wg znaku/kierunku) plus rzad
 //    kropek na poziomie zera pod nimi: czerwona = squeeze wlaczony (trwajaca
 //    konsolidacja), zlota = tydzien wybicia, szara = squeeze wylaczony (poza
-//    tygodniem wybicia). Nieinteraktywny.
-// 5. Oscylator Mansfield RS w trzech wygładzeniach — krótkoterminowym
-//    (~3 mies.), średnioterminowym (~6 mies.) i długoterminowym (~12 mies./52
-//    tyg.) — jedyne miejsce na tym wykresie pokazujące siłę spółki względem
-//    jej własnego benchmarku (indeksu `rsEntry.universe`, odkąd panel 1
-//    przestał rysować jego poziom, patrz wyżej): linia powyżej zera = spółka
-//    silniejsza od indeksu w danym oknie, poniżej = słabsza. PRZENIESIONY na
-//    sam dół i OPCJONALNY na wyraźne życzenie użytkownika: domyślnie schowany
-//    (patrz mansfieldPanelVisible/applyMansfieldPanelVisibility/
+//    tygodniem wybicia). **DODATKOWO niesie linię "RS 52 tyg." (rsm_long,
+//    Mansfield RS długoterminowy)** — na wyraźne życzenie użytkownika
+//    PRZENIESIONA tutaj z panelu Mansfielda (5, poniżej): oba wskaźniki
+//    "oscylują wokół zera", więc jeden wspólny rzut oka na histogram TTM
+//    Squeeze (KIEDY momentum przyspiesza/hamuje) razem z tą linią (czy spółka
+//    w tym samym oknie jest silniejsza/słabsza od własnego indeksu w długim
+//    terminie) czytelniej pokazuje trend niż dwa osobne, w większości
+//    schowane panele — patrz rsLongDataset w kodzie dla pełnego uzasadnienia
+//    doboru koloru (jasny błękit, żeby nie kolidować z żadnym innym kolorem
+//    już użytym w tym panelu ani w panelu 5). Ma własny wpis w legendzie
+//    (jedyny dataset tego panelu, który ją dostaje) — histogram/kropki nadal
+//    bez legendy, jak dotychczas. Nieinteraktywny.
+// 5. Oscylator Mansfield RS w DWÓCH wygładzeniach — krótkoterminowym
+//    (~3 mies.) i średnioterminowym (~6 mies.) — jedyne miejsce na tym
+//    wykresie pokazujące siłę spółki względem jej własnego benchmarku
+//    (indeksu `rsEntry.universe`, odkąd panel 1 przestał rysować jego
+//    poziom, patrz wyżej): linia powyżej zera = spółka silniejsza od indeksu
+//    w danym oknie, poniżej = słabsza. **Trzecia, długoterminowa linia
+//    (~12 mies./52 tyg.) już tu NIE ŻYJE** — przeniesiona do panelu 4 (TTM
+//    Squeeze) powyżej, patrz tamten opis. PRZENIESIONY na sam dół i
+//    OPCJONALNY na wyraźne życzenie użytkownika: domyślnie schowany (patrz
+//    mansfieldPanelVisible/applyMansfieldPanelVisibility/
 //    initMansfieldControls powyżej), rozwijany przyciskiem
 //    #rsMansfieldToggleBtn tuż nad panelem. Przy KAŻDYM (re)renderze domyślnie
-//    widoczna jest TYLKO linia długoterminowa (~12 mies./52 tyg., "zawsze
-//    włączaj 52-tygodniowy" — wyraźna prośba użytkownika), krótko-/
-//    średnioterminowa startują schowane (`hidden: true` w definicji datasetu)
-//    — pokazanie poszczególnych linii to już wbudowane, domyślne zachowanie
-//    legendy Chart.js: klik w pozycję legendy przełącza widoczność TEGO
-//    datasetu, więc nie potrzeba tu osobnych przycisków na linię. Nieinteraktywny
-//    — własne okno nie wymaga zoom/pan.
+//    widoczna jest TYLKO linia średnioterminowa (dawna rola "zawsze włączonej"
+//    linii spadła na nią, skoro długoterminowa się wyprowadziła) — krótkoterminowa
+//    startuje schowana (`hidden: true` w definicji datasetu) — pokazanie
+//    poszczególnych linii to już wbudowane, domyślne zachowanie legendy
+//    Chart.js: klik w pozycję legendy przełącza widoczność TEGO datasetu, więc
+//    nie potrzeba tu osobnych przycisków na linię. Nieinteraktywny — własne
+//    okno nie wymaga zoom/pan.
 //
 // `symbol`/`rsEntry` (musi zawierać `.universe`) są przekazywane WPROST przez
 // wywołującego (app.js::updateChartArea / chart.js::renderChartPanel) —
@@ -551,6 +567,14 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         if (macdCaption) macdCaption.textContent = "";
     }
 
+    // Dopasowanie Mansfielda do pełnej tablicy dat — liczone RAZ, TUTAJ (przed
+    // panelem Squeeze), bo teraz mają go używać DWA panele: Squeeze poniżej
+    // czyta tylko `.long` (patrz komentarz przy rsLongDataset), a panel
+    // Mansfielda dalej w dół używa `.short`/`.medium` z tego samego obiektu —
+    // stąd zmienna musi żyć na poziomie całej funkcji, nie wewnątrz jednego
+    // bloku `if`.
+    const alignedMansfield = mansfieldData ? alignMansfieldToDates(mansfieldData, chartData.dates) : null;
+
     const squeezeCaption = document.getElementById("rsSqueezeCaption");
     if (squeezeCanvas && squeezeData) {
         // Ta sama logika dopasowania co panel MACD powyżej (patrz
@@ -559,12 +583,13 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
         const aligned = alignSqueezeToDates(squeezeData, chartData.dates);
         const zeroLineSqueeze = chartData.dates.map(() => 0);
         if (squeezeCaption) {
-            // Prefiks "TTM Squeeze" na tej samej zasadzie co "MACD" w panelu
-            // powyżej — ten panel nie ma WŁASNEJ legendy Chart.js
-            // (plugins.legend.display:false, patrz niżej — same słupki
-            // histogramu i kropki nie tłumaczą się same), więc bez podpisu
-            // wyglądał jak nieopisany dodatek, a nie jak samodzielny wykres.
-            squeezeCaption.textContent = `TTM Squeeze · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
+            // Prefiks "TTM Squeeze" (+ "RS 52 tyg." gdy dostepne) na tej samej
+            // zasadzie co "MACD" w panelu powyżej — ten panel od TTM Squeeze
+            // samego w sobie nie ma WŁASNEJ legendy Chart.js (histogram/kropki
+            // sie nie tlumacza same), ale linia RS juz ma wlasny wpis w legendzie
+            // (patrz plugins.legend nizej) — podpis tu tylko potwierdza zakres dat.
+            const suffix = alignedMansfield ? ` + RS 52 tyg. vs ${rsEntry.universe}` : "";
+            squeezeCaption.textContent = `TTM Squeeze${suffix} · ${fmtPlDate(chartData.dates[0])} – ${fmtPlDate(chartData.dates[chartData.dates.length - 1])}`;
         }
         // Klasyczne 4 kolory histogramu TTM Squeeze: dodatni/rosnący (jaśniejszy
         // zielony) vs dodatni/malejący (ciemniejszy zielony), ujemny/malejący
@@ -588,6 +613,24 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
             if (on === false) return "#565c6b";
             return "transparent";
         });
+        // RS 52 tyg. (Mansfield dlugoterminowy) NA WYRAZNE ZYCZENIE UZYTKOWNIKA
+        // przeniesiony tutaj z panelu Mansfielda (ponizej) — wg uzytkownika oba
+        // wskazniki "oscyluja wokol zera" i razem pokazuja trend czytelniej niz
+        // osobno: histogram TTM Squeeze mowi, KIEDY momentum przyspiesza/hamuje
+        // (konsolidacja/wybicie), a ta linia mowi, czy spolka W TYM SAMYM OKNIE
+        // jest silniejsza/slabsza od wlasnego indeksu w DLUGIM terminie — jeden
+        // wspolny rzut oka zamiast przelaczania miedzy dwoma osobnymi, w
+        // wiekszosci schowanymi panelami. Jasny blekit (#38bdf8) celowo NIE
+        // powtarza zadnego koloru juz uzywanego w tym panelu (zielen/czerwien
+        // histogramu, zlota/czerwona/szara kropka squeeze) ani sasiedniego
+        // panelu Mansfielda (niebieski/fioletowy dla short/medium) — ma
+        // odrazu rzucac sie w oczy jako osobny, nadrzedny sygnal trendu na tle
+        // slupkow. Ten sam wspolny obiekt osi X (chartData.dates) co reszta
+        // paneli, wiec linia jest dokladnie wyrownana z histogramem pod nia.
+        const rsLongDataset = alignedMansfield ? [{
+            type: "line", label: `RS 52 tyg. vs ${rsEntry.universe} (długoterminowy)`, data: alignedMansfield.long,
+            borderColor: "#38bdf8", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2.5, order: 0,
+        }] : [];
         rsSqueezeChartInstance = new Chart(squeezeCanvas, {
             type: "bar",
             data: {
@@ -602,6 +645,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                         pointRadius: 4, pointHoverRadius: 5, pointBackgroundColor: dotColors,
                         pointBorderWidth: 0, order: 1,
                     },
+                    ...rsLongDataset,
                 ],
             },
             options: {
@@ -609,7 +653,15 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 maintainAspectRatio: false,
                 interaction: { mode: "index", intersect: false },
                 plugins: {
-                    legend: { display: false },
+                    // Histogram/kropki nadal bez wlasnej legendy (patrz komentarz
+                    // przy squeezeCaption powyzej) — ale linia RS 52 tyg. (jesli
+                    // obecna, zawsze index 2 — ostatni w tablicy datasets powyzej)
+                    // DOSTAJE wlasny wpis, zeby bylo jasne, czym jest ten nowy,
+                    // jasnoniebieski sygnal na tle histogramu.
+                    legend: {
+                        display: !!alignedMansfield, position: "bottom",
+                        labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 }, filter: (item) => item.datasetIndex === 2 },
+                    },
                     tooltip: {
                         callbacks: {
                             label: (ctx) => {
@@ -628,6 +680,10 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                     // Ta sama liczba etykiet/skala X co pozostałe panele — patrz
                     // komentarz przy panelu MACD powyżej.
                     x: { ticks: { color: "#8a8f9c", maxTicksLimit: 10 }, grid: { color: "#262a35" } },
+                    // JEDNA wspolna os Y dla histogramu i linii RS — obie serie sa
+                    // juz z definicji oscylatorami wokol zera (patrz komentarz przy
+                    // rsLongDataset powyzej), wiec nie ma potrzeby osobnej,
+                    // drugiej osi po prawej stronie tylko dla tej jednej linii.
                     y: { ticks: { color: "#8a8f9c" }, grid: { color: "#262a35" } },
                 },
             },
@@ -643,18 +699,22 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     // niezależnie od tego, czy jest akurat widoczny (spójnie z tym, jak Volume/
     // Squeeze/MACD są budowane niezależnie od trybu pełnoekranowego) —
     // applyMansfieldPanelVisibility() na końcu tej funkcji decyduje o samej
-    // widoczności `#rsMansfieldPanel`. Domyślnie widoczna jest TYLKO linia
-    // długoterminowa (~12M/52 tyg., `hidden: false` — "zawsze włączaj
-    // 52-tygodniowy") — krótko-/średnioterminowa startują jako `hidden: true`;
-    // klik w pozycję legendy Chart.js pokazuje/chowa dowolną z nich.
+    // widoczności `#rsMansfieldPanel`. **Linia długoterminowa (rsm_long, ~12M/
+    // 52-tyg.) już tu NIE ŻYJE** — na wyraźne życzenie użytkownika PRZENIESIONA
+    // do panelu TTM Squeeze powyżej (patrz rsLongDataset tam: oba wskaźniki
+    // "oscylują wokół zera" i razem czytelniej pokazują trend niż osobno).
+    // Zostały więc tylko krótko-/średnioterminowa; skoro nic już nie jest tu
+    // "zawsze włączone" z automatu (dawna rola 52-tygodniowej), domyślnie
+    // widoczna jest teraz linia ŚREDNIOterminowa (`hidden: false`) — najbliższy
+    // odpowiednik "solidnego, mniej szumiącego trendu" spośród tego, co zostało
+    // — krótkoterminowa startuje jako `hidden: true`; klik w pozycję legendy
+    // Chart.js pokazuje/chowa dowolną z nich.
     const mansfieldCaption = document.getElementById("rsMansfieldCaption");
     if (mansfieldCanvas && mansfieldData) {
-        // Dopasowane do PEŁNEJ tablicy dat wykresu 10:30 (nie własnej, krótszej
-        // mansfieldData.dates) — patrz alignMansfieldToDates: dzięki temu oś X
-        // (skala: piksele na tydzień) jest identyczna na wszystkich panelach, a
-        // pusty odcinek z lewej strony samych linii RSM pokazuje, od kiedy
-        // faktycznie zaczynają się dane.
-        const aligned = alignMansfieldToDates(mansfieldData, chartData.dates);
+        // alignedMansfield policzone RAZ, wyzej w tej funkcji (patrz komentarz
+        // tam) — wspolne dla tego panelu i panelu TTM Squeeze powyzej, zeby nie
+        // dopasowywac tych samych serii do fullDates dwa razy.
+        const aligned = alignedMansfield;
         const zeroLine = chartData.dates.map(() => 0);
         if (mansfieldCaption) {
             // Prefiks "Mansfield RS vs {universe}" dodany na wyraźną prośbę
@@ -669,16 +729,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 labels: chartData.dates,
                 datasets: [
                     { label: `RSM krótkoterminowy vs ${rsEntry.universe} (~3M)`, data: aligned.short, borderColor: "#4fa6e0", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, hidden: true },
-                    { label: `RSM średnioterminowy vs ${rsEntry.universe} (~6M)`, data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, hidden: true },
-                    // Trzecia, dlugoterminowa linia (rsm_long, ~12M/52-tyg. wygladzenie) —
-                    // JEDYNA widoczna domyslnie (patrz komentarz nad panelem powyzej),
-                    // na wyrazne zyczenie uzytkownika. Przerywana (borderDash), zeby
-                    // od razu odroznic ja wizualnie od dwoch pozostalych linii —
-                    // czesto zaczyna sie jako `null` (patrz komentarz przy RS_MANSFIELD_LONG_WEEKS
-                    // w run_query.py: obecna retencja prices nie miesci calego 52-tyg. zapasu
-                    // rozgrzewkowego przed poczatkiem okna), co po prostu zostawia pusty
-                    // odcinek z lewej strony tej linii.
-                    { label: `RSM długoterminowy vs ${rsEntry.universe} (~12M)`, data: aligned.long, borderColor: "#f0a832", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: [5, 3], hidden: false },
+                    { label: `RSM średnioterminowy vs ${rsEntry.universe} (~6M)`, data: aligned.medium, borderColor: "#c77dff", backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, hidden: false },
                     { label: "0", data: zeroLine, borderColor: "#565c6b", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1, borderDash: [3, 3], _syncExempt: true },
                 ],
             },
@@ -689,7 +740,7 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                 plugins: {
                     legend: { position: "bottom", labels: { color: "#8a8f9c", boxWidth: 12, font: { size: 10 } } },
                     tooltip: {
-                        filter: (ctx) => ctx.datasetIndex !== 3,
+                        filter: (ctx) => ctx.datasetIndex !== 2,
                         callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y == null ? "—" : ctx.parsed.y.toFixed(2)}` },
                     },
                 },
