@@ -203,7 +203,8 @@ now that the full `run_query.py` always recomputes weights, the column is just a
 field again. No new code was needed to keep `prices` from growing unbounded under the weekly cadence:
 `update_prices_incremental()`'s retention trim (`DELETE FROM prices WHERE Date < cutoff`, see below) already
 runs unconditionally on every `fetch_data.py` invocation, so a weekly full fetch keeps the rolling window at
-exactly `--lookback-months` (22) regardless of how often it's called — this was verified, not assumed, before
+exactly `--lookback-months` (26, see below for why this isn't 22 any more) regardless of how often it's
+called — this was verified, not assumed, before
 being left alone.
 
 1. **`fetch_data.py`** — data acquisition only.
@@ -238,8 +239,9 @@ being left alone.
      replaced by freshly-fetched rows that have them. Two modes, chosen automatically by `update_duckdb()`:
      - **Bootstrap** (`bootstrap_prices`) — used when `prices` doesn't exist yet, is empty, or (see
        `_prices_history_is_shallow()` below) doesn't reach back far enough for the currently configured
-       `--lookback-months`. Downloads the full `--lookback-months` (default **22**, raised from an
-       original 15 — see below) window for every ticker via a `prices_staging` table renamed into place.
+       `--lookback-months`. Downloads the full `--lookback-months` (default **26**, raised from an
+       original 15, then 22 — see below) window for every ticker via a `prices_staging` table renamed
+       into place.
        If fetched ticker coverage falls below `--min-coverage` (default 80%), the refresh is aborted and
        nothing is written.
      - **Incremental** (`update_prices_incremental`) — used on every subsequent run once `prices` already
@@ -259,8 +261,10 @@ being left alone.
        older history a raised `--lookback-months` newly requires. It's self-limiting: the one full
        bootstrap this triggers after a `--lookback-months` bump gives `prices` the new depth, so every
        run after that sees a deep-enough table again and returns to the normal Incremental path.
-       **`--lookback-months` was raised from 15 to 22** specifically so the ~14-month momentum window
-       (`M-14`) leaves a real ~7-8-month buffer in front of its own `start_date` for `SMA30` (Weinstein
+       **`--lookback-months` was raised from 15 to 22, then later to 26** (see the "RS is now
+       ATR-adjusted" section under Relative strength below for why the second bump happened) —
+       specifically so the ~14-month momentum window
+       (`M-14`) leaves a real buffer in front of its own `start_date` for `SMA30` (Weinstein
        stage analysis) and the Mansfield RS oscillator's 26-week smoothing to warm up in — at 15 months
        there was next to no buffer left once the momentum window itself was subtracted, so those series
        were `null` for a chunk of the displayed window (see `sma10_pct`/`sma30_pct` and `mansfield_chart`
@@ -564,9 +568,9 @@ series are resampled from the daily `prices`/`index_prices` tables via `DATE_TRU
 `ARGMAX`, fetching `RS_PRICE_SMA_LONG_WEEKS + 2` (32) extra weeks of history *before* the momentum window's
 start purely so SMA30 already has a value at the first displayed (in-window) point, and the series returned
 is trimmed to start exactly at that window's start (M-14 or M-11) through to `ref_date`. `prices` retains a
-rolling `--lookback-months` window — **22 by default** (bumped up from an original 15; see
+rolling `--lookback-months` window — **26 by default** (bumped from 15 to 22, then to 26; see
 `fetch_data.py --lookback-months` below), specifically so the ~14-month momentum window still leaves a real
-~7-8-month buffer in front of `start_date` for SMA30 to warm up in — before this bump, the momentum window
+buffer in front of `start_date` for SMA30 to warm up in — before this bump, the momentum window
 alone (~14 months) nearly exhausted the entire retained 15 months, leaving `sma10_pct`/`sma30_pct` (and the
 Mansfield oscillator below) `null` for a chunk of the displayed weeks. A `prices` table written under the
 old 15-month retention won't retroactively have the deeper history the new default expects — see
@@ -755,10 +759,26 @@ Because ATR itself needs `weeks` of its own warm-up before the RS-smoothing's ro
 lookback buffer it needed before — `compute_mansfield_rs_chart`'s buffer became `2*RS_MANSFIELD_LONG_WEEKS
 + 2` (was `RS_MANSFIELD_LONG_WEEKS + 2`), the same "double buffer" idiom `compute_ttm_squeeze_chart`
 already used for its own regression step. This deepens the existing `rsm_long` retention shortfall
-described above (and, for the sector screener, pushes `rsm_vs_index_pct`/`rsm_vs_sector_pct` further
-into "needs deeper `--lookback-months` to have a value at all" territory) — an accepted, direct
-consequence of the correction itself, same graceful-degradation convention (`None` instead of a wrong
-number) as everywhere else in this module.
+described above.
+
+**Real production incident, fixed same-day**: `_mansfield_rsm_current_value()` (the sector screener's
+helper — unlike the chart, it only ever needs its single LATEST value, not a whole series with room for
+partial `null`s) needs a hard minimum of `2*weeks - 1` total weekly data points for that latest value to
+be non-`None` at all — for `SECTOR_STRATEGY_RSM_WEEKS = 52` that's 103 weeks (~24 months). At the
+then-current 22-month `--lookback-months` default (~96 weeks of `index_prices`/`prices` depth), this fell
+just short — the very first `weekly_full_refresh.yml` run after this feature merged came back with
+`rsm_vs_index_pct: None` for EVERY sector (`compute_sector_relative_strength` logged `najsilniejszy
+sektor: None`), breaking Krok 2/3/4 of `strategy.html` outright (not a partial-window gap like the
+chart's `rsm_long` — a completely empty screener, reported by the user as "brak danych"). Fixed by
+raising `fetch_data.py --lookback-months`'s default from 22 to **26** (~113 weeks, ~10 weeks of margin
+above the 103-week minimum for holiday/gap slack) — `index_prices` gets this depth immediately on the
+next full replace (`update_index_prices()` has no incremental/trim step, it always re-fetches the full
+`get_full_refresh_range(lookback_months)` window), while `prices` picks it up via the same one-time
+`_prices_history_is_shallow()`-triggered re-bootstrap this module already uses whenever
+`--lookback-months` is raised. 26 months does NOT fully close the (already-documented, already-accepted)
+`rsm_long` chart gap — that would need ~38 months in total (14-month momentum window + `2*52+2` weeks of
+buffer) — but it was never broken outright the way the sector screener's single current-value was, so
+that larger bump was judged not worth the extra `prices` table size for now.
 
 **Version history matters here too**: an earlier version deliberately decoupled this chart from the
 momentum window — its own display range was just the last `RS_MANSFIELD_DISPLAY_WEEKS` (26 weeks, ~6
@@ -885,7 +905,7 @@ and SP500 is the one universe whose holdings CSV — `CSPX_holdings.csv`, see `f
 carries a real per-company `Sector` column, propagated into `index_constituents.Sector` and from there into
 every constituent record's `"sector"` field, in `docs/data/sp500.json`, alongside `Ticker`/`fmc_etf`
 already). No new fetch is needed for step (1)/(2)/(3) below — `index_prices` already retains a full daily
-`^GSPC` series for `--lookback-months` (22 by default, see `fetch_data.py`), far more than the 200 trading
+`^GSPC` series for `--lookback-months` (26 by default, see `fetch_data.py`), far more than the 200 trading
 days a SMA200 needs, or the ~60 weeks (52 + buffer) the 52-week Mansfield window needs.
 
 - **`compute_sp500_trend_filter(con, ref_date)`** reads `index_prices` for `SP500`, computes a plain
