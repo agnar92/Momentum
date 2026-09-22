@@ -1,22 +1,22 @@
 {
-  "ref_date": "2026-09-18",
+  "ref_date": "2026-09-21",
   "lookback_months": 12,
   "indices": [
     {
       "universe": "MWIG40",
       "yf_symbol": "MWIG40.WA",
-      "price_now": 173.31,
+      "price_now": 169.13,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 129.07,
+      "price_start": 125.95,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 34.28
     },
     {
       "universe": "WIG20",
       "yf_symbol": "WIG20.WA",
-      "price_now": 180.67,
+      "price_now": 174.47,
       "date_now": "2026-08-31 00:00:00",
-      "price_start": 136.91,
+      "price_start": 132.21,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 31.96
     },
@@ -46,6 +46,15 @@
       "price_start": 45544.88,
       "date_start": "2025-08-29 00:00:00",
       "return_pct": 16.78
+    },
+    {
+      "universe": "SWIG80",
+      "yf_symbol": "SWIG80.WA",
+      "price_now": 145.8,
+      "date_now": "2026-08-31 00:00:00",
+      "price_start": 125.28,
+      "date_start": "2025-08-29 00:00:00",
+      "return_pct": 16.38
     }
   ],
   "winner": "MWIG40",
@@ -141,5 +150,5 @@
       "contribution_pct": 1.23
     }
   ],
-  "note": "Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie 12 mies. dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40 — klasyczna idea Global/Dual Equity Momentum: spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym zwrocie. Okno kotwiczone jest do ostatniego dnia handlowego zakończonego miesiąca (nie do dzisiejszej daty) — 'date_now'/'date_start' każdego indeksu to zawsze koniec miesiąca, żeby wynik był stabilny w ciągu miesiąca. Lista 'leaders' to top 10 spółek zwycięskiego indeksu wg wkładu w jego zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. WIG20/MWIG40 mogą mieć zwrot ('return_pct', flaga 'manual_entry') wpisany ręcznie z gem_manual_returns.json zamiast liczonego z syntetycznego indeksu — patrz ten plik. Dane informacyjne, NIE porada inwestycyjna."
+  "note": "Zwrot POZIOMU INDEKSU (nie pojedynczych składników) w oknie 12 mies. dla SP500/NASDAQ100/DOWJONES/WIG20/MWIG40/SWIG80 — klasyczna idea Global/Dual Equity Momentum: spośród kilku rynków wybierz ten z najsilniejszym trendem. Zwycięzcą jest indeks o najwyższym zwrocie. Okno kotwiczone jest do ostatniego dnia handlowego zakończonego miesiąca (nie do dzisiejszej daty) — 'date_now'/'date_start' każdego indeksu to zawsze koniec miesiąca, żeby wynik był stabilny w ciągu miesiąca. Lista 'leaders' to top 10 spółek zwycięskiego indeksu wg wkładu w jego zwrot (waga spółki w indeksie x jej zwrot w tym samym oknie) — czyli spółki, które realnie pchnęły cenę indeksu w górę, a nie po prostu te o najwyższym własnym zwrocie. WIG20/MWIG40/SWIG80 mogą mieć zwrot ('return_pct', flaga 'manual_entry') wpisany ręcznie z gem_manual_returns.json zamiast liczonego z syntetycznego indeksu — patrz ten plik. Dane informacyjne, NIE porada inwestycyjna."
 }
