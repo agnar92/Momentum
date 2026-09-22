@@ -38,6 +38,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 let strategyData = null;   // docs/data/sector_strategy.json
 let sp500Data = null;      // docs/data/sp500.json (all_constituents, do polaczenia Etap/TTM Squeeze po tickerze)
+let gemData = null;       // docs/data/global_equity_momentum.json (dopłaty do Core -> ETF na zwycięski indeks)
 let trendChartInstance = null;
 let trendChartMode = "daily"; // "daily" (SMA200) albo "weekly" (SMA40)
 
@@ -107,6 +108,11 @@ async function fetchJson(url) {
 async function loadStrategyData() {
     strategyData = await fetchJson("data/sector_strategy.json");
     sp500Data = await fetchJson("data/sp500.json");
+    try {
+        gemData = await fetchJson("data/global_equity_momentum.json");
+    } catch (e) {
+        gemData = null; // karta kapitalu pokaze wtedy "brak danych GEM"
+    }
 }
 
 function sp500ByTicker() {
@@ -759,6 +765,116 @@ function fmtSigned(v) {
 }
 
 // ------------------------------------------------------------
+// ZARZADZANIE KAPITALEM Core / Satelita (karta "💰", wszystko w PLN — na
+// wyrazne zyczenie uzytkownika jeden wspolny Core dla USA i PL, bez kursu
+// walut w aplikacji). Reguly uzgodnione z uzytkownikiem:
+//   - dopłaty ida do czesci ponizej celu (bez sprzedazy = bez podatku);
+//   - sprzedaz tylko po wyjsciu poza pasmo ±STRATEGY_REBALANCE_BAND_PP i
+//     najwyzej raz na kwartal (STRATEGY_REBALANCE_MIN_DAYS);
+//   - nadwyzka Satelity -> najpierw z jej gotowki, zwycieskich pozycji nie
+//     scinamy (zamyka je stop, nie rebalans);
+//   - nie dolewamy do Satelity przy spadku >= STRATEGY_SATELLITE_MAX_DRAWDOWN_PCT
+//     od jej szczytu ani gdy lejek nie ma sygnalow wejscia;
+//   - czesc Core z dopłat -> ETF na indeks wygrywajacy GEM (wszystkie indeksy
+//     z global_equity_momentum.json); gdy wszystkie maja ujemny zwrot 12M
+//     (absolute momentum) -> gotowka/obligacje zamiast akcji.
+// ------------------------------------------------------------
+const STRATEGY_REBALANCE_BAND_PP = 5;
+const STRATEGY_REBALANCE_MIN_DAYS = 90;
+const STRATEGY_SATELLITE_MAX_DRAWDOWN_PCT = 20;
+const GEM_INDEX_LABELS = {
+    SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones",
+    WIG20: "WIG20", MWIG40: "mWIG40", SWIG80: "sWIG80",
+};
+
+// Ranking GEM (malejaco po zwrocie) + zwyciezca; null gdy brak danych.
+function gemRanking(gem) {
+    const rows = ((gem && gem.indices) || []).filter(r => r.return_pct != null)
+        .slice().sort((a, b) => b.return_pct - a.return_pct);
+    if (!rows.length) return null;
+    return { rows, winner: rows[0], allNegative: rows[0].return_pct <= 0 };
+}
+
+// Plan dzialan dla kapitalu. Kwoty w PLN.
+// in: { core, satPositions, satCash, contribution, targetSatPct (0-100),
+//       peak (najwyzsza zapamietana wartosc Satelity), hasEntrySignals,
+//       daysSinceRebalance (null = nigdy), gem: wynik gemRanking() }
+// out: { total, satPct, deviationPp, drawdownPct, contribution: {toCore, toSat},
+//        actions: [{kind, text}] } — kind: ok | contribute | move | sell | hold | warn
+function capitalPlan(inp) {
+    const n = v => (isFinite(v) && v > 0 ? Number(v) : 0);
+    const core = n(inp.core), satPos = n(inp.satPositions), satCash = n(inp.satCash), contrib = n(inp.contribution);
+    const t = Math.min(100, Math.max(0, Number(inp.targetSatPct))) / 100;
+    const sat = satPos + satCash;
+    const drawdownPct = inp.peak > 0 && sat < inp.peak ? (1 - sat / inp.peak) * 100 : 0;
+    const satFrozen = drawdownPct >= STRATEGY_SATELLITE_MAX_DRAWDOWN_PCT;
+    const fmt = v => `${Math.round(v).toLocaleString("pl-PL")} zł`;
+    const gemTarget = () => {
+        if (!inp.gem) return "ETF na indeks wygrywający GEM (brak danych GEM)";
+        if (inp.gem.allNegative) return "gotówkę / obligacje — wszystkie indeksy mają ujemny zwrot 12 mies.";
+        const w = inp.gem.winner;
+        return `ETF na ${GEM_INDEX_LABELS[w.universe] || w.universe} (wygrywa GEM, ${w.return_pct >= 0 ? "+" : ""}${w.return_pct.toFixed(1)}%)`;
+    };
+    const actions = [];
+    const out = { total: core + sat, satPct: null, deviationPp: null, drawdownPct, contribution: { toCore: 0, toSat: 0 }, actions };
+    if (core + sat + contrib <= 0) {
+        actions.push({ kind: "warn", text: "Wpisz wartości Core i Satelity, żeby dostać instrukcję." });
+        return out;
+    }
+
+    // 1) dopłata: najpierw do czesci ponizej celu
+    const totalAfter = core + sat + contrib;
+    let toSat = 0;
+    if (contrib > 0) {
+        const gap = totalAfter * t - sat;
+        if (gap > 0 && !satFrozen) toSat = Math.min(contrib, gap);
+        const toCore = contrib - toSat;
+        out.contribution = { toCore, toSat };
+        if (toSat > 0) actions.push({ kind: "contribute", text: `Dopłata ${fmt(toSat)} → gotówka Satelity (czeka na sygnały wejścia z lejka).` });
+        if (toCore > 0) actions.push({ kind: "contribute", text: `Dopłata ${fmt(toCore)} → Core: ${gemTarget()}.` });
+        if (gap > 0 && satFrozen) actions.push({ kind: "hold", text: `Satelita jest ${drawdownPct.toFixed(0)}% pod szczytem — dopłata w całości do Core, Satelity nie dolewamy.` });
+    }
+
+    // 2) stan po dopłacie vs pasmo
+    const coreAfter = core + out.contribution.toCore;
+    const satAfter = sat + out.contribution.toSat;
+    const cashAfter = satCash + out.contribution.toSat;
+    const satPct = (satAfter / totalAfter) * 100;
+    out.total = totalAfter;
+    out.satPct = satPct;
+    out.deviationPp = satPct - t * 100;
+    const band = STRATEGY_REBALANCE_BAND_PP;
+    const targetSat = totalAfter * t;
+
+    if (out.deviationPp > band) {
+        const excess = satAfter - targetSat;
+        const fromCash = Math.min(cashAfter, excess);
+        if (fromCash > 0) actions.push({ kind: "move", text: `Satelita ma ${satPct.toFixed(1)}% (cel ${(t * 100).toFixed(0)}%) — przenieś ${fmt(fromCash)} z gotówki Satelity do Core: ${gemTarget()}.` });
+        const rest = excess - fromCash;
+        if (rest > 0) actions.push({ kind: "hold", text: `Brakujące ${fmt(rest)}: nie otwieraj nowych pozycji, a gotówkę z kolejnych zamknięć na stopie kieruj do Core. Zyskownych pozycji nie ścinaj.` });
+    } else if (out.deviationPp < -band) {
+        const deficit = targetSat - satAfter;
+        const quarterOk = inp.daysSinceRebalance == null || inp.daysSinceRebalance >= STRATEGY_REBALANCE_MIN_DAYS;
+        if (satFrozen) {
+            actions.push({ kind: "hold", text: `Satelita ma ${satPct.toFixed(1)}%, ale spadła o ${drawdownPct.toFixed(0)}% od szczytu (limit ${STRATEGY_SATELLITE_MAX_DRAWDOWN_PCT}%) — nie dolewaj. Wróć do tego, gdy odrobi straty albo po przeglądzie strategii.` });
+        } else if (!inp.hasEntrySignals) {
+            actions.push({ kind: "hold", text: `Satelita ma ${satPct.toFixed(1)}%, ale lejek nie ma teraz sygnałów wejścia — nie przenoś pieniędzy, żeby leżały jako gotówka. Wróć, gdy pojawi się sygnał.` });
+        } else if (!quarterOk) {
+            actions.push({ kind: "hold", text: `Satelita ma ${satPct.toFixed(1)}%, ale ostatni rebalans ze sprzedażą był ${inp.daysSinceRebalance} dni temu (min. ${STRATEGY_REBALANCE_MIN_DAYS}) — wyrównuj dopłatami.` });
+        } else {
+            actions.push({ kind: "sell", text: `Satelita ma ${satPct.toFixed(1)}% (cel ${(t * 100).toFixed(0)}%) — sprzedaj ${fmt(deficit)} z ETF-ów Core (najpierw z tego, który najsłabiej wypada w GEM) i przenieś do gotówki Satelity pod sygnały z lejka.` });
+        }
+    } else if (!actions.length) {
+        actions.push({ kind: "ok", text: `W paśmie (Satelita ${satPct.toFixed(1)}%, cel ${(t * 100).toFixed(0)}% ±${band} pp) — nic nie rób.` });
+    } else {
+        actions.push({ kind: "ok", text: `Po dopłacie w paśmie (Satelita ${satPct.toFixed(1)}%, cel ${(t * 100).toFixed(0)}% ±${band} pp).` });
+    }
+    out.coreAfter = coreAfter;
+    out.satAfter = satAfter;
+    return out;
+}
+
+// ------------------------------------------------------------
 // Stan strony
 // ------------------------------------------------------------
 const marketData = {};     // { UNIVERSE: json }
@@ -769,6 +885,7 @@ function loadSettings() {
         market: "USA", capitalUSA: null, capitalPL: null, heldUSA: "", heldPL: "",
         criteria: Object.assign({}, DEFAULT_CRITERIA), focusStep: "base", focusMode: "passed",
         allocation: Object.assign({}, DEFAULT_ALLOCATION),
+        capital: { core: null, satPositions: null, satCash: null, contribution: null, peak: null, lastRebalance: null },
     };
     try {
         const raw = typeof localStorage !== "undefined" ? localStorage.getItem(STRATEGY_SETTINGS_KEY) : null;
@@ -776,6 +893,7 @@ function loadSettings() {
         const out = Object.assign(defaults, saved);
         out.criteria = Object.assign({}, DEFAULT_CRITERIA, saved.criteria || {});
         out.allocation = sanitizeAllocation(saved.allocation);
+        out.capital = Object.assign({}, defaults.capital, saved.capital || {});
         return out;
     } catch (e) {
         return defaults;
@@ -1252,6 +1370,72 @@ function renderFunnel() {
     renderWatchTable(evaluated, currency, market);
     renderEntryTable(evaluated, currency, held, byTicker);
     renderHoldTable(market, held, currency);
+    renderCapitalCard(evaluated.some(e => e.status === "ENTRY"), market);
+}
+
+const CAPITAL_FIELDS = [
+    ["capCoreInput", "core"], ["capSatPosInput", "satPositions"],
+    ["capSatCashInput", "satCash"], ["capContribInput", "contribution"],
+];
+
+function daysSince(isoDate) {
+    if (!isoDate) return null;
+    const ms = Date.now() - new Date(isoDate + "T00:00:00").getTime();
+    return isFinite(ms) ? Math.max(0, Math.floor(ms / 86400000)) : null;
+}
+
+function renderCapitalCard(hasEntrySignals, market) {
+    const c = settings.capital;
+    CAPITAL_FIELDS.forEach(([id, k]) => {
+        const el = document.getElementById(id);
+        if (document.activeElement !== el) el.value = c[k] != null ? c[k] : "";
+    });
+    const gem = gemRanking(gemData);
+    const plan = capitalPlan({
+        core: c.core, satPositions: c.satPositions, satCash: c.satCash, contribution: c.contribution,
+        targetSatPct: settings.allocation.satellitePct, peak: c.peak,
+        hasEntrySignals, daysSinceRebalance: daysSince(c.lastRebalance), gem,
+    });
+
+    const fmt = v => `${Math.round(v).toLocaleString("pl-PL")} zł`;
+    const target = settings.allocation.satellitePct;
+    const dev = plan.deviationPp;
+    const stat = (label, value, cls = "") => `<div class="stat-card"><div class="label">${label}</div><div class="value${cls}">${value}</div></div>`;
+    document.getElementById("capitalStats").innerHTML = plan.satPct == null ? "" : [
+        stat("Razem (po dopłacie)", fmt(plan.total)),
+        stat(`Satelita (cel ${target}%)`, `${plan.satPct.toFixed(1)}%`, Math.abs(dev) > STRATEGY_REBALANCE_BAND_PP ? " negative" : " positive"),
+        stat("Odchylenie od celu", `${dev >= 0 ? "+" : ""}${dev.toFixed(1)} pp`),
+        stat(`Spadek Satelity od szczytu`, `${plan.drawdownPct.toFixed(1)}%`, plan.drawdownPct >= STRATEGY_SATELLITE_MAX_DRAWDOWN_PCT ? " negative" : ""),
+    ].join("");
+    const bar = document.getElementById("capitalBar");
+    if (plan.satPct == null) {
+        bar.innerHTML = "";
+    } else {
+        const lo = Math.max(0, target - STRATEGY_REBALANCE_BAND_PP), hi = Math.min(100, target + STRATEGY_REBALANCE_BAND_PP);
+        bar.innerHTML = `
+            <div class="capital-bar-track" title="Zielone pole = pasmo ±${STRATEGY_REBALANCE_BAND_PP} pp wokół celu">
+                <div class="capital-bar-core" style="width:${100 - plan.satPct}%">Core ${(100 - plan.satPct).toFixed(0)}%</div>
+                <div class="capital-bar-sat" style="width:${plan.satPct}%">Satelita ${plan.satPct.toFixed(0)}%</div>
+                <div class="capital-bar-band" style="left:${100 - hi}%;width:${hi - lo}%"></div>
+            </div>`;
+    }
+    const icons = { ok: "✅", contribute: "➕", move: "↔️", sell: "💱", hold: "⏸", warn: "ℹ️" };
+    document.getElementById("capitalActions").innerHTML = plan.actions
+        .map(a => `<li class="capital-action capital-action-${a.kind}">${icons[a.kind] || ""} ${a.text}</li>`).join("");
+    document.getElementById("capitalMeta").textContent = [
+        c.lastRebalance ? `ostatni rebalans: ${c.lastRebalance}` : "rebalansu jeszcze nie było",
+        `sygnały wejścia (${market}): ${hasEntrySignals ? "są" : "brak"}`,
+    ].join(" · ");
+
+    const tbody = document.getElementById("gemTableBody");
+    document.getElementById("gemMeta").textContent = gemData ? `okno do ${String((gem && gem.winner.date_now) || gemData.ref_date).slice(0, 10)}` : "";
+    tbody.innerHTML = gem ? gem.rows.map((r, i) => `
+        <tr${i === 0 ? ' class="row-selected"' : ""}>
+            <td><span class="rank-badge">${i + 1}</span></td>
+            <td>${GEM_INDEX_LABELS[r.universe] || r.universe}${r.manual_entry ? ' <span style="color:var(--text-faint)">(ręcznie)</span>' : ""}</td>
+            <td class="${r.return_pct >= 0 ? "positive" : "negative"}">${r.return_pct >= 0 ? "+" : ""}${r.return_pct.toFixed(1)}%</td>
+            <td>${i === 0 ? (gem.allNegative ? "⚠ wszystkie na minusie — gotówka/obligacje" : "🏆 dopłaty do Core tutaj") : ""}</td>
+        </tr>`).join("") : '<tr><td colspan="4" class="empty-state">Brak danych GEM.</td></tr>';
 }
 
 async function switchMarket(market) {
@@ -1285,6 +1469,39 @@ function initFunnelControls() {
             renderFunnel();
         });
         el.addEventListener("change", () => { el.value = settings.allocation[k]; });
+    });
+    CAPITAL_FIELDS.forEach(([id, k]) => {
+        document.getElementById(id).addEventListener("input", (ev) => {
+            const v = parseFloat(ev.target.value);
+            settings.capital[k] = isFinite(v) && v >= 0 ? v : null;
+            saveSettings();
+            renderFunnel();
+        });
+        // Szczyt Satelity (do limitu spadku) — tylko w gore, aktualizowany
+        // dopiero po zatwierdzeniu pola ("change"), nie przy kazdym znaku:
+        // inaczej poprawianie liczby (50000 -> 40000) chwilowo zawyzaloby szczyt
+        // i falszywie blokowalo dolewanie do Satelity.
+        if (k === "satPositions" || k === "satCash") {
+            document.getElementById(id).addEventListener("change", () => {
+                const c = settings.capital;
+                const sat = (Number(c.satPositions) || 0) + (Number(c.satCash) || 0);
+                if (sat > 0 && !(c.peak >= sat)) { c.peak = sat; saveSettings(); renderFunnel(); }
+            });
+        }
+    });
+    document.getElementById("capRebalancedBtn").addEventListener("click", () => {
+        settings.capital.lastRebalance = new Date().toISOString().slice(0, 10);
+        saveSettings();
+        renderFunnel();
+        if (typeof showToast === "function") showToast("Zapisano datę rebalansu — następny ze sprzedażą najwcześniej za kwartał.", { type: "success" });
+    });
+    document.getElementById("capResetPeakBtn").addEventListener("click", () => {
+        const c = settings.capital;
+        const sat = (Number(c.satPositions) || 0) + (Number(c.satCash) || 0);
+        c.peak = sat > 0 ? sat : null;
+        saveSettings();
+        renderFunnel();
+        if (typeof showToast === "function") showToast("Szczyt Satelity ustawiony na obecną wartość.", { type: "info" });
     });
     const viz = document.getElementById("funnelViz");
     viz.addEventListener("click", (ev) => {
@@ -1366,6 +1583,6 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
-        evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, sanitizeAllocation, evaluateHolding, parseTickerList,
+        evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, sanitizeAllocation, gemRanking, capitalPlan, evaluateHolding, parseTickerList,
     };
 }
