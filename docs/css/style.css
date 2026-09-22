@@ -951,6 +951,55 @@ th.tv-col, th.chart-col { width: 1%; }
 .trend-banner.growth { background: rgba(46, 204, 113, 0.12); color: var(--green-bright); border-color: var(--green-bright); }
 .trend-banner.no-growth { background: rgba(224, 69, 90, 0.12); color: var(--red); border-color: var(--red); }
 
+/* Lejek strategii Stage 2 Continuation (docs/strategy.html, js/strategy.js):
+   pasek licznikow kolejnych bramek + znaczniki statusu w tabelach. */
+.funnel-steps {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.funnel-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 64px;
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-alt);
+}
+.funnel-step-n { font-size: 17px; font-weight: 700; color: var(--text); }
+.funnel-step-label { font-size: 10.5px; color: var(--text-faint); white-space: nowrap; }
+.funnel-step-setup { border-color: var(--text-dim); }
+.funnel-step-entry { border-color: var(--green-bright); }
+.funnel-step-entry .funnel-step-n { color: var(--green-bright); }
+.funnel-arrow { color: var(--text-faint); font-size: 12px; }
+.funnel-status { font-weight: 600; white-space: nowrap; font-size: 12px; }
+.funnel-status-entry { color: var(--green-bright); }
+.funnel-status-wait { color: #e0a72e; }
+.funnel-status-setup { color: var(--text); }
+.funnel-status-watch { color: var(--text-faint); }
+.funnel-status-exit { color: var(--red); }
+.funnel-note {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-faint);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0 4px;
+    white-space: nowrap;
+}
+.funnel-note-warn { color: #e0a72e; border-color: #e0a72e; }
+.held-input { width: 100%; max-width: 420px; }
+.helper-heading {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-faint);
+    margin: 28px 0 12px;
+}
+
 .panel-card {
     background: var(--panel);
     border: 1px solid var(--border);
