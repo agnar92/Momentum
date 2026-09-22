@@ -233,6 +233,11 @@ function bindTvRowButtons(container) {
     });
 }
 
+// Domyślne suwaki screenera Wybicie (patrz opis nad classifyWybicie).
+const WYBICIE_DEFAULT_WINDOW_WEEKS = 6;
+const WYBICIE_DEFAULT_MONITOR_WEEKS = 6;
+const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
+
 const state = {
     data: {},
     selectedTicker: null,
@@ -243,7 +248,9 @@ const state = {
     chartView: "own",
     stageFilter: "ALL",
     sortKey: "rank",
-    sortDir: "asc"
+    sortDir: "asc",
+    wybicieWindowWeeks: WYBICIE_DEFAULT_WINDOW_WEEKS,
+    wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
 };
 
 async function loadData() {
@@ -274,13 +281,22 @@ async function loadData() {
 //      sama, którą rysuje renderRelativeStrengthChart na panelu TTM Squeeze)
 //      przecięła linię zera W GÓRĘ,
 //   3. histogram TTM Squeeze (ttm_squeeze_chart.histogram) jest dodatni.
-// "Przeciął" = wartość jest TERAZ > 0, a w którymś z ostatnich
-// WYBICIE_CROSS_LOOKBACK_WEEKS tygodni była <= 0 — świeże przecięcie, nie
-// spółka, która jest nad zerem od miesięcy. Każdy wskaźnik ma własną tablicę
-// dat, więc "teraz" to ostatni tydzień z NIE-null wartością w danej serii
-// (ten sam caveat co w classifyTtmSqueeze — najnowszy tydzień bywa null).
+// "Przeciął" = wartość jest TERAZ > 0, a wcześniej była <= 0 — liczymy, ile
+// tygodni temu nastąpiło OSTATNIE takie przecięcie (weeksSinceZeroCrossUp).
+// Dwa parametry, każdy z własnym suwakiem nad tabelą (#wybicieControls):
+//   - OKNO WYBICIA (state.wybicieWindowWeeks): maks. odstęp w tygodniach między
+//     przecięciem MACD a przecięciem RS 52 tyg. — oba sygnały muszą przyjść
+//     blisko siebie, żeby liczyć się jako jedno wybicie (0 = ten sam tydzień).
+//   - MONITOROWANIE PO WYBICIU (state.wybicieMonitorWeeks): przez ile tygodni
+//     po wybiciu (= późniejszym z dwóch przecięć, bo dopiero wtedy oba warunki
+//     są spełnione) spółka zostaje na liście — pod warunkiem, że MACD, RS 52
+//     tyg. i histogram TTM wciąż są nad zerem (spadek któregokolwiek pod zero
+//     zdejmuje ją z listy od razu).
+// Każdy wskaźnik ma własną tablicę dat, więc "teraz" to ostatni tydzień z
+// NIE-null wartością w danej serii (ten sam caveat co w classifyTtmSqueeze —
+// najnowszy tydzień bywa null).
 // ============================================================
-const WYBICIE_CROSS_LOOKBACK_WEEKS = 6; // ~1,5 miesiąca
+// WYBICIE_DEFAULT_* / WYBICIE_SETTINGS_KEY — zadeklarowane nad `state` (potrzebne tam jako wartości startowe).
 
 function latestNonNullIdx(arr) {
     if (!arr) return -1;
@@ -290,8 +306,9 @@ function latestNonNullIdx(arr) {
 }
 
 // Ile tygodni temu seria przecięła zero w górę (1 = w ostatnim tygodniu), albo
-// null, gdy teraz nie jest > 0 albo w oknie lookbacku ani razu nie była <= 0.
-function weeksSinceZeroCrossUp(arr, lookback = WYBICIE_CROSS_LOOKBACK_WEEKS) {
+// null, gdy teraz nie jest > 0 albo w oknie lookbacku (domyślnie cała seria)
+// ani razu nie była <= 0.
+function weeksSinceZeroCrossUp(arr, lookback = Infinity) {
     const nowIdx = latestNonNullIdx(arr);
     if (nowIdx < 0 || !(arr[nowIdx] > 0)) return null;
     for (let k = 1; k <= lookback; k++) {
@@ -302,9 +319,11 @@ function weeksSinceZeroCrossUp(arr, lookback = WYBICIE_CROSS_LOOKBACK_WEEKS) {
     return null;
 }
 
-// Zwraca null, gdy spółka nie spełnia wszystkich trzech warunków (albo brakuje
+// Zwraca null, gdy spółka nie spełnia wszystkich warunków (albo brakuje
 // danych) — celowo wyselekcjonowany screener, nie pełna lista.
-function classifyWybicie(ticker, universe, c) {
+function classifyWybicie(ticker, universe, c, opts = {}) {
+    const windowWeeks = opts.windowWeeks ?? state.wybicieWindowWeeks;
+    const monitorWeeks = opts.monitorWeeks ?? state.wybicieMonitorWeeks;
     const macd = c.macd_chart && c.macd_chart.macd;
     const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
     const hist = c.ttm_squeeze_chart && c.ttm_squeeze_chart.histogram;
@@ -314,6 +333,9 @@ function classifyWybicie(ticker, universe, c) {
     if (macdCrossWeeks == null) return null;
     const rsCrossWeeks = weeksSinceZeroCrossUp(rsLong);
     if (rsCrossWeeks == null) return null;
+    if (Math.abs(macdCrossWeeks - rsCrossWeeks) > windowWeeks) return null;
+    const breakoutWeeks = Math.min(macdCrossWeeks, rsCrossWeeks);
+    if (breakoutWeeks > monitorWeeks) return null;
     const histIdx = latestNonNullIdx(hist);
     if (histIdx < 0 || !(hist[histIdx] > 0)) return null;
 
@@ -325,6 +347,7 @@ function classifyWybicie(ticker, universe, c) {
         macdCrossWeeks,
         rsLongNow: rsLong[latestNonNullIdx(rsLong)],
         rsCrossWeeks,
+        breakoutWeeks,
         histNow: hist[histIdx],
     };
 }
@@ -332,27 +355,22 @@ function classifyWybicie(ticker, universe, c) {
 // Lista połączona ze WSZYSTKICH uniwersów (all_constituents — całe uniwersa,
 // nie tylko bieżący top-decyl), bez duplikatów: spółka obecna w dwóch
 // uniwersach naraz (np. SP500 i NASDAQ100) pojawia się raz, z pierwszego
-// uniwersum w kolejności UNIVERSES. Sortowanie: najświeższe przecięcie
-// (późniejsze z dwóch — MACD/RS) na górze, potem mocniejszy histogram.
-function combinedWybicieCandidates() {
+// uniwersum w kolejności UNIVERSES. Sortowanie: najświeższe wybicie na górze,
+// potem mocniejszy histogram.
+function combinedWybicieCandidates(opts = {}) {
     const rows = [];
     const seen = new Set();
     UNIVERSES.forEach(u => {
         const universeData = state.data[u] || {};
         (universeData.all_constituents || universeData.constituents || []).forEach(c => {
             if (seen.has(c.ticker)) return;
-            const r = classifyWybicie(c.ticker, u, c);
+            const r = classifyWybicie(c.ticker, u, c, opts);
             if (!r) return;
             seen.add(c.ticker);
             rows.push(r);
         });
     });
-    rows.sort((a, b) => {
-        const fa = Math.max(a.macdCrossWeeks, a.rsCrossWeeks);
-        const fb = Math.max(b.macdCrossWeeks, b.rsCrossWeeks);
-        if (fa !== fb) return fa - fb;
-        return b.histNow - a.histNow;
-    });
+    rows.sort((a, b) => (a.breakoutWeeks - b.breakoutWeeks) || (b.histNow - a.histNow));
     return rows;
 }
 
@@ -474,7 +492,7 @@ function renderWybiciePanel() {
         tile.className = "ticker-tile";
         tile.textContent = r.ticker;
         tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
-            + `MACD > 0 od ${r.macdCrossWeeks} tyg. · RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · histogram TTM ${r.histNow.toFixed(2)}`;
+            + `wybicie ${r.breakoutWeeks} tyg. temu · MACD > 0 od ${r.macdCrossWeeks} tyg. · RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · histogram TTM ${r.histNow.toFixed(2)}`;
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
         if (r.ticker === state.selectedTicker) tile.classList.add("selected");
@@ -856,6 +874,8 @@ function showDrawerTable(universe) {
     const isTtmSqueeze = universe === "TTM_SQUEEZE";
     document.getElementById("momentumTable").hidden = isWybicie || isTtmSqueeze;
     document.getElementById("wybicieTable").hidden = !isWybicie;
+    const wybicieControls = document.getElementById("wybicieControls");
+    if (wybicieControls) wybicieControls.hidden = !isWybicie;
     document.getElementById("ttmSqueezeTable").hidden = !isTtmSqueeze;
     // Screenery obejmuja CALE uniwersa i kazda spolka niesie wlasny
     // current_stage — filtr etapow ma tu wiec sens tak samo jak w pelnej
@@ -891,6 +911,7 @@ function wybicieRowHtml(r, position) {
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
+        <td>${crossWeeksHtml(r.breakoutWeeks)}</td>
         <td class="positive" title="MACD przeciął zero w górę ${crossWeeksHtml(r.macdCrossWeeks)}">${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></td>
         <td class="positive" title="RS 52 tyg. przeciął zero w górę ${crossWeeksHtml(r.rsCrossWeeks)}">${r.rsLongNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span></td>
         <td class="positive">${r.histNow.toFixed(2)}</td>
@@ -925,8 +946,8 @@ function renderWybicieTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 10,
-        emptyAllMsg: `Brak spółek z świeżym (≤ ${WYBICIE_CROSS_LOOKBACK_WEEKS} tyg.) przecięciem zera przez MACD i RS 52 tyg. przy dodatnim histogramie TTM.`,
+        colspan: 11,
+        emptyAllMsg: `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (MACD i RS 52 tyg. przecięły zero w odstępie ≤ ${state.wybicieWindowWeeks} tyg., histogram TTM dodatni).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
@@ -935,6 +956,41 @@ function renderWybicieTable() {
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
+}
+
+// Suwaki nad tabelą Wybicie (#wybicieControls): okno wybicia i czas
+// monitorowania po wybiciu (patrz opis nad classifyWybicie). Wartości
+// zapamiętywane per przeglądarka w localStorage — tylko wygoda, strona działa
+// też bez niego (try/catch — tryb prywatny itp.).
+function initWybicieControls() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(WYBICIE_SETTINGS_KEY) || "null");
+        if (saved) {
+            if (Number.isFinite(saved.windowWeeks)) state.wybicieWindowWeeks = saved.windowWeeks;
+            if (Number.isFinite(saved.monitorWeeks)) state.wybicieMonitorWeeks = saved.monitorWeeks;
+        }
+    } catch (e) { /* brak localStorage — zostają domyślne */ }
+
+    const bind = (inputId, valueId, stateKey) => {
+        const input = document.getElementById(inputId);
+        const valueEl = document.getElementById(valueId);
+        if (!input) return;
+        input.value = state[stateKey];
+        if (valueEl) valueEl.textContent = `${state[stateKey]} tyg.`;
+        input.addEventListener("input", () => {
+            state[stateKey] = Number(input.value);
+            if (valueEl) valueEl.textContent = `${state[stateKey]} tyg.`;
+            try {
+                localStorage.setItem(WYBICIE_SETTINGS_KEY, JSON.stringify({
+                    windowWeeks: state.wybicieWindowWeeks, monitorWeeks: state.wybicieMonitorWeeks,
+                }));
+            } catch (e) { /* ignoruj */ }
+            renderWybiciePanel();
+            if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
+        });
+    };
+    bind("wybicieWindowInput", "wybicieWindowValue", "wybicieWindowWeeks");
+    bind("wybicieMonitorInput", "wybicieMonitorValue", "wybicieMonitorWeeks");
 }
 
 function ttmSqueezeStatusHtml(r) {
@@ -1179,6 +1235,7 @@ if (typeof document !== "undefined") {
     (async function init() {
         initConnStatus();
         await loadData();
+        initWybicieControls();
         renderSidebarTiles();
         renderWybiciePanel();
         renderTtmSqueezePanel();

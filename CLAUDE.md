@@ -1038,11 +1038,16 @@ flex child (no `.topbar-left` wrapper there).
   MACD (`macd_chart.macd`) crossed zero UPWARD, the RS 52-week line shown on the TTM Squeeze panel
   (`mansfield_chart.rsm_long`) crossed zero UPWARD, and the TTM Squeeze histogram
   (`ttm_squeeze_chart.histogram`) is currently positive. "Crossed" = `weeksSinceZeroCrossUp()`: the latest
-  non-null value is > 0 and some value within the last `WYBICIE_CROSS_LOOKBACK_WEEKS` (6) weeks was <= 0 —
-  a fresh cross, not a stock that's been above zero for months (6 was chosen empirically: ~10 names on the
-  data at the time, vs. ~5 at 4 weeks and ~20 at 8). `combinedWybicieCandidates()` runs it over every
+  non-null value is > 0, counted as weeks since the most recent week it was <= 0 (whole series by default).
+  Two user-controlled sliders above the table (`#wybicieControls`, shown only on this tab, persisted in
+  `localStorage` key `momentum_dashboard_wybicie`, added at an explicit follow-up request): **"Okno wybicia"**
+  (`state.wybicieWindowWeeks`, 0-26, default 6) — max gap in weeks between the MACD cross and the RS 52W
+  cross, so both signals count as ONE breakout; **"Monitoruj po wybiciu"** (`state.wybicieMonitorWeeks`,
+  1-52, default 6) — how many weeks after the breakout (= the LATER of the two crosses, `breakoutWeeks`)
+  the stock stays listed, as long as MACD/RS 52W/TTM histogram are all still > 0 (any of them dropping
+  below zero removes it immediately). `combinedWybicieCandidates()` runs it over every
   universe's `all_constituents`, dedupes tickers present in two universes (first in `UNIVERSES` order
-  wins), sorts freshest cross first (the later of the two crosses), then by histogram. Same sortable/
+  wins), sorts freshest breakout first (`breakoutWeeks`), then by histogram. Same sortable/
   stage-filterable table shape as TTM Squeeze (`renderWybicieTable()`/`wybicieRowHtml()`), plus a matching
   sidebar tile group (`renderWybiciePanel()`, `#tiles-WYBICIE`).
 

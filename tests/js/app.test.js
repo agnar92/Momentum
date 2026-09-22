@@ -27,6 +27,10 @@ test("weeksSinceZeroCrossUp returns null when the series is not above zero now",
     assert.equal(weeksSinceZeroCrossUp([]), null);
 });
 
+test("weeksSinceZeroCrossUp looks through the whole series by default", () => {
+    assert.equal(weeksSinceZeroCrossUp([-1, 1, 1, 1, 1, 1, 1, 1, 1, 1]), 9);
+});
+
 test("weeksSinceZeroCrossUp returns null when the cross is older than the lookback", () => {
     assert.equal(weeksSinceZeroCrossUp([-1, 1, 1, 1, 1], 3), null);
     assert.equal(weeksSinceZeroCrossUp([-1, 1, 1, 1], 3), 3);
@@ -54,12 +58,27 @@ test("classifyWybicie accepts a fresh MACD + RS 52W zero cross with a positive T
     assert.equal(r.histNow, 2);
 });
 
+test("classifyWybicie rejects when the two crosses are further apart than the breakout window", () => {
+    const c = wybicieConstituent({ macd_chart: { macd: [-1, 1, 1, 1, 1, 1] }, mansfield_chart: { rsm_long: [-1, -1, -1, -1, -1, 1] } });
+    // MACD 5 tyg. temu, RS 1 tydz. temu -> odstęp 4
+    assert.equal(classifyWybicie("AAA", "SP500", c, { windowWeeks: 3, monitorWeeks: 10 }), null);
+    const r = classifyWybicie("AAA", "SP500", c, { windowWeeks: 4, monitorWeeks: 10 });
+    assert.equal(r.breakoutWeeks, 1);
+});
+
+test("classifyWybicie drops a breakout older than the monitoring period", () => {
+    const c = wybicieConstituent({ macd_chart: { macd: [-1, 1, 1, 1, 1] }, mansfield_chart: { rsm_long: [-1, 1, 1, 1, 1] } });
+    // oba przecięcia 4 tyg. temu
+    assert.equal(classifyWybicie("AAA", "SP500", c, { windowWeeks: 0, monitorWeeks: 3 }), null);
+    assert.equal(classifyWybicie("AAA", "SP500", c, { windowWeeks: 0, monitorWeeks: 4 }).breakoutWeeks, 4);
+});
+
 test("classifyWybicie rejects when the TTM histogram is not positive", () => {
     const c = wybicieConstituent({ ttm_squeeze_chart: { histogram: [1, 1, 1, -0.1] } });
     assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });
 
-test("classifyWybicie rejects when MACD did not cross zero recently", () => {
+test("classifyWybicie rejects when MACD never crossed zero in the data", () => {
     const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, 1, 1, 1, 1, 1] } });
     assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });

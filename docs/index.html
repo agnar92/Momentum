@@ -79,7 +79,7 @@
         </div>
 
         <div class="sidebar-group" id="wybicieGroup">
-            <div class="sidebar-group-label" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia w ostatnich 6 tygodniach — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">
+            <div class="sidebar-group-label" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia blisko siebie (suwak „Okno wybicia”) i niedawno (suwak „Monitoruj po wybiciu”) — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">
                 💥 Wybicie
             </div>
             <div class="sidebar-group-meta" id="wybicieMeta"></div>
@@ -108,7 +108,7 @@
                 <button class="drawer-tab" data-universe="WIG20">WIG20</button>
                 <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
                 <button class="drawer-tab" data-universe="SWIG80">sWIG80</button>
-                <button class="drawer-tab" data-universe="WYBICIE" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia w ostatnich 6 tygodniach — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">💥 Wybicie</button>
+                <button class="drawer-tab" data-universe="WYBICIE" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia blisko siebie (suwak „Okno wybicia”) i niedawno (suwak „Monitoruj po wybiciu”) — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">💥 Wybicie</button>
                 <button class="drawer-tab" data-universe="TTM_SQUEEZE" title="TTM Squeeze — spółki z Momentum, które przeszły przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte wewnątrz kanału Kellera) i albo wciąż w niej trwają, albo właśnie się z niej wybiły, CAŁE uniwersa (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80), nie tylko dzisiejsza selekcja portfela.">🧨 TTM Squeeze</button>
             </div>
         </div>
@@ -119,6 +119,18 @@
             <button class="stage-filter-btn" data-stage="2" title="Etap 2A (świeże wybicie) + 2B (kontynuacja) — spółki w potwierdzonym trendzie wzrostowym, kandydaci do kupna.">Etap 2</button>
             <button class="stage-filter-btn" data-stage="3" title="Szczyt / dystrybucja — trend się wypłaszcza, rozważ realizację zysków.">Etap 3</button>
             <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą EMA20, unikaj nowych pozycji.">Etap 4</button>
+        </div>
+        <div class="stage-filter-bar wybicie-controls" id="wybicieControls" hidden>
+            <label class="wybicie-slider" title="Maksymalny odstęp (w tygodniach) między przecięciem zera przez MACD a przecięciem zera przez RS 52 tyg. — oba sygnały muszą przyjść blisko siebie. 0 = ten sam tydzień.">
+                <span class="stage-filter-label">Okno wybicia:</span>
+                <input type="range" id="wybicieWindowInput" min="0" max="26" step="1">
+                <span class="wybicie-slider-value" id="wybicieWindowValue"></span>
+            </label>
+            <label class="wybicie-slider" title="Przez ile tygodni po wybiciu (późniejszym z dwóch przecięć) spółka zostaje na liście — o ile MACD, RS 52 tyg. i histogram TTM wciąż są nad zerem.">
+                <span class="stage-filter-label">Monitoruj po wybiciu:</span>
+                <input type="range" id="wybicieMonitorInput" min="1" max="52" step="1">
+                <span class="wybicie-slider-value" id="wybicieMonitorValue"></span>
+            </label>
         </div>
         <div class="table-scroll">
             <table class="momentum-table" id="momentumTable">
@@ -152,6 +164,7 @@
                         <th data-key="universe">Uniwersum</th>
                         <th data-key="sector">Sektor</th>
                         <th data-key="price">Cena</th>
+                        <th data-key="breakoutWeeks">Wybicie</th>
                         <th data-key="macdCrossWeeks">MACD</th>
                         <th data-key="rsCrossWeeks">RS 52 tyg.</th>
                         <th data-key="histNow">Histogram TTM</th>
