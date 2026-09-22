@@ -51,7 +51,34 @@ USA" (`rebalance.html`/`rebalance.js`, SP500+NASDAQ100+DOWJONES, USD) and "Rebal
    (`momentum_rebalance_pl_*` vs. `momentum_rebalance_*`) — two fully independent portfolios, holdings
    lists, exclusion lists, and settings, never merged. See the dedicated `rebalance_pl.html`/
    `rebalance_pl.js` bullet under Frontend below for what's genuinely different (the pool, the money
-   formatter, no `DOWJONES_WEIGHT_MULTIPLIER`-style tilt) vs. what's a deliberate 1:1 port.
+   formatter) vs. what's a deliberate 1:1 port.
+6. **Current design: Rebalanser USA got a Core (60%) / Satellite (40%) split; Rebalanser PL got a
+   manually-entered "favor the winning index" tilt.** A later, separate explicit request — the user wanted
+   the USA portfolio built from two sleeves (a stable "core" and a faster-growing "satellite"), and the
+   same underlying idea ("which index is winning right now, favor its picks") applied to PL. Full mechanism
+   for each is documented in the dedicated `rebalance.html`/`rebalance.js` and `rebalance_pl.html`/
+   `rebalance_pl.js` bullets under Frontend below — in short:
+   - **USA**: `DOWJONES_WEIGHT_MULTIPLIER` (a flat 1.5x weight boost for every Dow pick, from step 4/
+     `computeAutoTargets`) was REMOVED and replaced entirely by `CORE_ALLOCATION_PCT` (60%) — a hard
+     capital split between a CORE sleeve (Dow blue chips, favoring Stage 2/confirmed-growth-phase names,
+     backfilled by SP500 when Dow alone can't fill every core slot — the user's own explicit call, not Dow
+     names outside Stage 2 and not leaving slots empty) and a SATELLITE sleeve (everything else, weighted
+     by momentum_score, additionally tilted via `WINNER_INDEX_WEIGHT_MULTIPLIER` toward whichever of
+     SP500/NASDAQ100/DOWJONES is currently winning the trailing-12-month Global Equity Momentum race).
+     This is GEM's return as an actual consumer of `rebalance.js` (via `docs/data/global_equity_momentum.json`,
+     fetched again after step 4 removed that fetch entirely) — not as the universe-picker it used to be in
+     step 3, but as a pure weight-tilt signal inside the satellite sleeve; real yfinance data for all three
+     universes means no manual entry is needed here (unlike PL, next).
+   - **PL**: WIG20/mWIG40 have no equivalent real trailing-return data (yfinance has never had history for
+     the WIG20.WA/MWIG40.WA index tickers themselves — see the Global Equity Momentum section below), so
+     the same "favor the winner" idea needed a manually-entered number instead of an automatic GEM fetch —
+     reviving the exact shape of the old, removed `GEM_MANUAL_KEY` widget (see step 3's note on it) with a
+     real job this time: two Krok 1 fields for each index's trailing-12-month return, persisted to
+     `localStorage`, whose higher value gets `WINNER_INDEX_WEIGHT_MULTIPLIER` (same constant/value as the
+     USA side) applied to its true members' raw weight in `computeAutoTargets`. Equal or blank fields mean
+     no tilt at all — identical to the pool's behavior before this feature existed.
+   Both mechanisms affect WEIGHT only, never SELECTION (which companies make the pool/TOP N) — the same
+   principle `DOWJONES_WEIGHT_MULTIPLIER` already established and this design carries forward unchanged.
 
 The current, automatic flow of "Rebalanser USA" (`rebalance.js`) — "Rebalanser PL" (`rebalance_pl.js`)
 works identically, just over WIG20/mWIG40 in PLN instead (see the dedicated bullet under Frontend below):
@@ -88,22 +115,26 @@ works identically, just over WIG20/mWIG40 in PLN instead (see the dedicated bull
   deliberate simplification vs. the pipeline's own cap-weighting (`compute_weights`'s 9%/3x cap-weight
   logic).
 - **Krok 2 — ranking table** (`renderPoolTable()`) is purely informational now: the full, sortable,
-  stage-filterable pool (same shape as the dashboard's own tables), with a "W portfelu" column showing
-  which rows fall inside today's TOP N — nothing here is clickable to change the selection, since there's
-  nothing left to manually pick. A dedicated "📈" button per row still opens that company's own chart on
-  `chart.html`, same pattern as the dashboard's own tables.
+  stage-filterable pool (same shape as the dashboard's own tables), with a "Grupa" column showing which
+  sleeve (Core/Satelita/—) each row falls into today (see the CORE/SATELLITE bullet below) — nothing here
+  is clickable to change the selection, since there's nothing left to manually pick. A dedicated "📈" button
+  per row still opens that company's own chart on `chart.html`, same pattern as the dashboard's own tables.
 - **Nothing accumulates across weeks any more.** Unlike the manual design's `picks` (step 3 above), the
   portfolio is recomputed FRESH from `portfolioSize` and current momentum data every time the page loads —
   there is no `localStorage`-persisted list of previously-chosen companies to keep in sync. A company drops
   out of the portfolio the moment it drops out of the pool's TOP N; if you still hold it, the suggestion
   table flags it for sale (`"poza TOP {n}"`) same as it always has for a name that fell off a selection.
-- **Global Equity Momentum plays no role here any more.** Its sole purpose in every earlier design (steps
-  2-3 above) was picking which universe(s) to draw from — the pool is now fixed (SP500+NASDAQ100+DOWJONES,
-  always), so there's nothing left for it to decide. `rebalance.js` no longer fetches
-  `global_equity_momentum.json`, no longer renders a GEM widget, and no longer has any per-browser manual
-  GEM-return override field. None of this touches the PIPELINE side — `run_query.py` still computes and
-  exports GEM (still across all 5 universes) exactly as before; it just has no consumer left on this page
-  (it never had a dashboard panel either — see the dedicated GEM section below).
+- **Global Equity Momentum is a consumer of this page again, but in a narrower role than steps 2-3.** From
+  step 4 through most of this history, GEM played no role here at all (`rebalance.js` had stopped fetching
+  `global_equity_momentum.json` entirely) — its sole earlier purpose (steps 2-3) was picking which
+  universe(s) to draw from, and once the pool became fixed (SP500+NASDAQ100+DOWJONES) there was nothing left
+  for it to decide. Design-history step 6 reintroduced it as a much narrower signal: `loadGemReturns()`
+  fetches `global_equity_momentum.json` again (filtered to `REBALANCE_UNIVERSES`) purely to tilt WEIGHT
+  inside the satellite sleeve toward whichever of the three is currently winning the 12-month race — see the
+  CORE/SATELLITE bullet below for the full mechanism. It still does NOT pick which universe(s) the pool
+  draws from (that stays fixed) and still has no dashboard panel. None of this ever touched the PIPELINE
+  side — `run_query.py` has computed and exported GEM (across all 5 universes) unchanged throughout this
+  entire history.
 
 Because the pool is now always SP500+NASDAQ100+DOWJONES (all USD), the calculator's own outputs (ranking,
 suggestion table, stats, Monte Carlo, equity curve) are always USD — `currentMoneyFmt()` is now just a
@@ -1140,22 +1171,50 @@ flex child (no `.topbar-left` wrapper there).
     a conscious simplification vs. the pipeline's own cap-weighting/`compute_weights`), just fed by
     `autoSelectedRows(n)` instead of a manually-curated list. There is no `stale` concept any more (no
     accumulated state to go stale) — a ticker either is in today's fresh TOP N or it isn't.
-  - **`DOWJONES_WEIGHT_MULTIPLIER` (1.5) tilts WEIGHT, not selection, toward Dow Jones** — a later, separate
-    explicit user request ("zwiększ udział stabilnych spółek", "wagi w DJA faworyzuj w stosunku do sp500 i
-    nasdaq100"): Dow Jones's 30 blue-chip constituents are what "stable companies" means here, so
-    `computeAutoTargets()` multiplies a selected company's `raw_weight` by this constant when it's a Dow
-    Jones member, before normalizing to `totalCapital` — a Dow-member company ends up with 1.5x the capital
-    share a non-Dow company with the identical `momentum_score` would get. Deliberately scoped to WEIGHT
-    only, not to WHICH companies make TOP N: `combinedPoolRows()`/`eligiblePoolRows()`/`autoSelectedRows()`
-    still rank/select purely by raw `momentum_score`, unmultiplied — the user asked specifically about
-    "wagi" (weights), not about biasing the ranking itself. Membership is checked via
-    `dowjonesTickerSet()` (built from `poolRowsForUniverse("DOWJONES")`), deliberately NOT via a selected
-    row's own `universe` tag: `combinedPoolRows()`'s dedup (see above) keeps whichever universe scored a
-    ticker higher, so a real Dow 30 name that's also in SP500/NASDAQ100 with a higher score there would get
-    tagged e.g. `"SP500"` and silently miss the boost if it were keyed off that tag instead of true
-    membership — a lot of Dow's own 30 names are large enough to also qualify for SP500/NASDAQ100, so this
-    isn't a rare edge case. Tune the constant directly in `rebalance.js` if the tilt should be
-    stronger/weaker.
+  - **CORE (60%) / SATELLITE (40%) — `CORE_ALLOCATION_PCT`/`WINNER_INDEX_WEIGHT_MULTIPLIER`/
+    `selectCoreSatelliteRows()`/`computeAutoTargets()`** replaced the earlier `DOWJONES_WEIGHT_MULTIPLIER`
+    (a flat weight boost for every Dow pick) — a later, separate explicit user request for a proper
+    core/satellite portfolio construction, with a "which index is winning" tilt inside the satellite sleeve
+    reusing GEM (see design-history step 6 under "What this repo is" above for the full reasoning). The
+    split is a HARD CAPITAL split (60%/40% of `totalCapital`, not just a company-count split) — the classic
+    core-satellite definition, per the user's own explicit call when asked.
+    - **`autoSelectedRows(n)`/`eligiblePoolRows()`/`combinedPoolRows()`** unchanged from before (still rank
+      purely by raw `momentum_score`) — SELECTION into the pool is untouched; only which SLEEVE a selected
+      company lands in, and how much capital it gets, changed.
+    - **`selectCoreSatelliteRows(n)`** splits `eligiblePoolRows()` into `coreRows` (`round(n *
+      CORE_ALLOCATION_PCT)` slots) and `satelliteRows` (the rest of `n`). `coreCandidateRows()` builds the
+      core candidate list: true DOWJONES members first, true SP500 members second (backfill, only reached
+      once Dow itself can't fill every core slot — an explicit user call: "weź z sp500", not "dopełnij
+      resztą Dow" and not "zostaw core niedopełniony"), each tier sorted by (Stage 2A/2B — confirmed growth
+      phase — first, then `momentum_score` descending) via `isGrowthPhase()`. "Favor," not "require": a
+      core slot Dow/SP500 can't fill with a Stage-2 name still gets filled by the next-best Dow/SP500 name
+      outside Stage 2, rather than left empty or handed to a non-Dow/SP500 name. Satellite is simply
+      whatever's left of the pool after removing core's tickers, sorted by `momentum_score`, sliced to `n -
+      coreRows.length`.
+    - **`trueUniverseTickerSet(universe)`** (generalized from the old `dowjonesTickerSet()`, same
+      reasoning) — core selection and the satellite GEM-winner tilt both need PRAWDZIWE membership in a
+      universe, not `combinedPoolRows()`'s post-dedup `row.universe` tag (which keeps whichever universe
+      scored a ticker higher) — a real Dow 30 name that's also in SP500 with a higher score there would get
+      tagged `"SP500"` and silently miss core/the tilt if keyed off that tag instead of true membership.
+    - **`computeAutoTargets(n, totalCapital)`** splits `totalCapital` into `coreCapital`
+      (`CORE_ALLOCATION_PCT`) and `satelliteCapital` (the rest), each sleeve weighted internally by
+      `momentum_score` exactly like before core/satellite existed (one shared `addSleeve()` helper). If
+      either sleeve came up with zero rows (e.g. every core candidate got manually excluded, or `n` is so
+      small satellite gets 0 slots), that sleeve's capital rolls ENTIRELY into the other rather than
+      silently vanishing from the suggestion table — a real edge case caught while writing this, not a
+      hypothetical one. Every target now also carries a `sleeve: "core"|"satellite"` field, read by
+      `poolRowHtml()` (a "Grupa" column showing Core/Satelita/— instead of the old plain "W portfelu"
+      checkmark) and `renderSuggestions()`'s note text.
+    - **`WINNER_INDEX_WEIGHT_MULTIPLIER` (1.5, same value/spirit as the old `DOWJONES_WEIGHT_MULTIPLIER`)
+      tilts SATELLITE weight only** toward true members of whichever of SP500/NASDAQ100/DOWJONES is
+      currently winning the trailing-12-month Global Equity Momentum race (`satelliteWinnerUniverse()`,
+      reading `gemIndexReturns` — fetched fresh in `loadGemReturns()` from
+      `docs/data/global_equity_momentum.json`, filtered to `REBALANCE_UNIVERSES`). This is GEM as an actual
+      consumer of `rebalance.js` again (it fetches the file once more, after step 4 removed that fetch
+      entirely) — but as a pure weight-tilt signal inside satellite, not as the universe-picker it used to
+      be pre-step-4. `renderCoreSatelliteNote()` (`#coreSatelliteHint`) shows the live split and which
+      index (if any) satellite is favoring, refreshed on every `refreshOutputs()` call. Tune either constant
+      directly in `rebalance.js` if the effect should be stronger/weaker.
   - **`poolStageFilter` (`#poolStageFilterBar`) is a REAL SELECTION filter, not just a table display
     filter** — a later, separate explicit user correction ("jak zaznaczę [filtr] to ma taki N z tej listy
     wybrać, po to jest tam to filtrowanie" — "when I check [a stage filter], it should pick that N from
@@ -1270,9 +1329,22 @@ flex child (no `.topbar-left` wrapper there).
     so `constituents` is already each index's full composition for both, unlike SP500 (quintile) vs.
     NASDAQ100 (needs `all_constituents`) in the USA version — there's no per-universe special case to make
     here.
-  - **No `DOWJONES_WEIGHT_MULTIPLIER`-equivalent exists.** `computeAutoTargets()` weights the selected TOP
-    N purely by `momentum_score`, symmetric between WIG20 and mWIG40 — nobody asked for a tilt favoring one
-    index over the other here, so `rebalance_pl.js` doesn't invent one.
+  - **No CORE/SATELLITE split exists here** (unlike the USA page's design-history step 6) — the whole pool
+    is one flat sleeve, weighted purely by `momentum_score`. What PL DOES share with step 6 is a "favor the
+    winning index" weight tilt, just sourced differently: `manualReturns` (`{WIG20, MWIG40}`, persisted to
+    `localStorage` under `momentum_rebalance_pl_manual_returns`, edited via two Krok 1 number inputs —
+    `#manualReturnWig20`/`#manualReturnMwig40`) holds a user-entered trailing-12-month return for each
+    index, because — unlike SP500/NASDAQ100/DOWJONES — yfinance has never had historical data for the
+    WIG20.WA/MWIG40.WA index tickers themselves (see Global Equity Momentum below), so there's no automatic
+    `global_equity_momentum.json` fetch to lean on here the way `rebalance.js` does. This directly revives
+    the shape of the old, removed `GEM_MANUAL_KEY` widget (see design-history step 3's note on it) with a
+    real job this time. `winnerUniverseFromManualReturns()` picks whichever field is numerically higher
+    (null on a tie or when both are blank); `computeAutoTargets()` multiplies that universe's TRUE members'
+    (`trueUniverseTickerSet()`, same true-membership reasoning as the USA page's Dow/SP500 checks) raw
+    weight by `WINNER_INDEX_WEIGHT_MULTIPLIER` (same constant/value as the USA page's satellite tilt) before
+    normalizing — SELECTION stays untouched, same "weight only" principle as everywhere else this pattern
+    appears. `renderWinnerNote()` (`#winnerHint`) shows which index (if any) is currently favored and its
+    entered return.
   - **`currentMoneyFmt()` is a constant returning `fmtMoneyPln`, not `fmtMoney`** — the mirror image of the
     USA page's own always-USD `currentMoneyFmt()`, since this page's pool is always WIG20+MWIG40, i.e.
     always PLN. `holdingsMoneyFmt()` keeps the same currency-mix-aware logic as the USA page (falls back to

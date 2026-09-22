@@ -29,10 +29,13 @@ const {
     fmtQty,
     sharesSuggestion,
     currencyOf,
-    DOWJONES_WEIGHT_MULTIPLIER,
+    CORE_ALLOCATION_PCT,
+    WINNER_INDEX_WEIGHT_MULTIPLIER,
     combinedPoolRows,
     eligiblePoolRows,
     autoSelectedRows,
+    selectCoreSatelliteRows,
+    satelliteWinnerUniverse,
     computeAutoTargets,
     loadPoolStageFilter,
     savePoolStageFilter,
@@ -423,34 +426,147 @@ test("loadPoolStageFilter falls back to ALL on corrupt/invalid stored JSON", () 
     global.localStorage.removeItem("momentum_rebalance_stage_filter");
 });
 
-test("autoSelectedRows slices the top N eligible rows, returning [] for N <= 0", () => {
+test("autoSelectedRows returns the core+satellite union (core first), [] for N <= 0", () => {
     _setState({ universeData: baseUniverseData(), excluded: [] });
-    assert.deepEqual(autoSelectedRows(2).map(r => r.ticker), ["BBB", "AAA"]);
+    // n=2 -> coreSlots=round(2*0.6)=1: CCC (the only DOWJONES candidate) fills
+    // core; BBB (highest remaining momentum_score) fills the 1 satellite slot.
+    assert.deepEqual(autoSelectedRows(2).map(r => r.ticker), ["CCC", "BBB"]);
     assert.deepEqual(autoSelectedRows(0), []);
     assert.deepEqual(autoSelectedRows(null), []);
     _setState({ universeData: {}, excluded: [] });
 });
 
-// ---------- computeAutoTargets / deriveUniverseFractionsFromTargets ----------
+// ---------- CORE / SATELITA (60/40) — selectCoreSatelliteRows ----------
+// Core (CORE_ALLOCATION_PCT=60%) faworyzuje DOWJONES w Etapie 2 (faza
+// wzrostowa), dobijane z SP500 gdy Dow nie wystarczy; satelita to reszta puli
+// wg momentum_score, faworyzująca dodatkowo zwycięzcę GEM (patrz niżej).
 
-test("computeAutoTargets weights the auto-selected TOP N by CURRENT momentum_score, normalized to totalCapital", () => {
+function coreSatelliteUniverseData() {
+    return {
+        DOWJONES: {
+            constituents: [
+                // Wyzszy momentum_score, ale NIE w fazie wzrostowej — core i tak
+                // powinien preferowac DOW_GROWTH (nizszy score, ale Etap 2A).
+                { ticker: "DOW_FLAT", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "1" } },
+                { ticker: "DOW_GROWTH", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "2A" } },
+            ],
+        },
+        SP500: {
+            constituents: [
+                { ticker: "SPX_BACKUP", momentum_score: 4, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "2A" } },
+            ],
+        },
+        NASDAQ100: {
+            all_constituents: [
+                { ticker: "NDX_HOT", momentum_score: 10, price: 100, momentum_pct: 10, volatility_pct: 10 },
+            ],
+        },
+    };
+}
+
+test("selectCoreSatelliteRows returns empty sleeves for n <= 0", () => {
+    _setState({ universeData: coreSatelliteUniverseData(), excluded: [] });
+    assert.deepEqual(selectCoreSatelliteRows(0), { coreRows: [], satelliteRows: [] });
+    assert.deepEqual(selectCoreSatelliteRows(null), { coreRows: [], satelliteRows: [] });
+    _setState({ universeData: {}, excluded: [] });
+});
+
+test("core prefers Stage-2 (growth-phase) Dow names over a higher-scoring non-Stage-2 Dow name", () => {
+    _setState({ universeData: coreSatelliteUniverseData(), excluded: [] });
+    // n=1 -> coreSlots=round(0.6)=1.
+    const { coreRows } = selectCoreSatelliteRows(1);
+    assert.deepEqual(coreRows.map(r => r.ticker), ["DOW_GROWTH"]);
+    _setState({ universeData: {}, excluded: [] });
+});
+
+test("core backfills from SP500 (favoring Stage 2, same as Dow) once DOWJONES itself can't fill every core slot", () => {
+    _setState({ universeData: coreSatelliteUniverseData(), excluded: [] });
+    // n=5 -> coreSlots=round(3)=3: both Dow names (2) + the one SP500 backup.
+    const { coreRows } = selectCoreSatelliteRows(5);
+    assert.deepEqual(coreRows.map(r => r.ticker).sort(), ["DOW_FLAT", "DOW_GROWTH", "SPX_BACKUP"]);
+    _setState({ universeData: {}, excluded: [] });
+});
+
+test("satellite takes what's left after core, sorted by momentum_score, never re-picking a core ticker", () => {
+    _setState({ universeData: coreSatelliteUniverseData(), excluded: [] });
+    // n=2 -> coreSlots=1 (DOW_GROWTH). Satellite pool excludes DOW_GROWTH and
+    // takes the top-scoring remaining name (NDX_HOT, score 10) for its 1 slot.
+    const { coreRows, satelliteRows } = selectCoreSatelliteRows(2);
+    assert.deepEqual(coreRows.map(r => r.ticker), ["DOW_GROWTH"]);
+    assert.deepEqual(satelliteRows.map(r => r.ticker), ["NDX_HOT"]);
+    _setState({ universeData: {}, excluded: [] });
+});
+
+test("core selection uses TRUE DOWJONES/SP500 membership, not combinedPoolRows' post-dedup universe tag", () => {
     _setState({
         universeData: {
+            // MEGA is a real Dow 30 member but also SP500, with a HIGHER score there,
+            // so combinedPoolRows() tags it "SP500" — core must still recognize it as Dow.
+            SP500: { constituents: [{ ticker: "MEGA", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+            NASDAQ100: { all_constituents: [{ ticker: "OTHER", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+            DOWJONES: { constituents: [{ ticker: "MEGA", momentum_score: 1, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+        },
+        excluded: [],
+    });
+    assert.equal(combinedPoolRows().find(r => r.ticker === "MEGA").universe, "SP500"); // dedup picked the higher-score occurrence
+
+    const { coreRows } = selectCoreSatelliteRows(1); // coreSlots=1
+    assert.deepEqual(coreRows.map(r => r.ticker), ["MEGA"]); // still recognized as Dow, takes the core slot over OTHER
+    _setState({ universeData: {}, excluded: [] });
+});
+
+// ---------- satelliteWinnerUniverse (GEM) ----------
+
+test("satelliteWinnerUniverse returns the REBALANCE_UNIVERSES member with the highest known 12M return", () => {
+    _setState({ gemIndexReturns: { SP500: 18.98, NASDAQ100: 25.8, DOWJONES: 16.78 } });
+    assert.equal(satelliteWinnerUniverse(), "NASDAQ100");
+    _setState({ gemIndexReturns: {} });
+});
+
+test("satelliteWinnerUniverse returns null when no GEM data is known (e.g. offline)", () => {
+    _setState({ gemIndexReturns: {} });
+    assert.equal(satelliteWinnerUniverse(), null);
+});
+
+// ---------- computeAutoTargets / deriveUniverseFractionsFromTargets ----------
+
+test("computeAutoTargets splits capital 60/40 between core and satellite, weighting each sleeve by momentum_score internally", () => {
+    _setState({
+        universeData: {
+            DOWJONES: { constituents: [{ ticker: "D1", momentum_score: 1, price: 10, momentum_pct: 10, volatility_pct: 10 }] },
+            SP500: { constituents: [] },
+            NASDAQ100: { all_constituents: [{ ticker: "N1", momentum_score: 1, price: 10, momentum_pct: 10, volatility_pct: 10 }] },
+        },
+        excluded: [], gemIndexReturns: {},
+    });
+    // n=2 -> coreSlots=round(1.2)=1: D1 (the only Dow candidate) fills core;
+    // N1 fills the 1 satellite slot. Each sleeve has exactly one member, so it
+    // gets its whole sleeve's capital regardless of raw_weight.
+    const { targets } = computeAutoTargets(2, 1000);
+    assert.equal(targets.D1.sleeve, "core");
+    assert.equal(targets.N1.sleeve, "satellite");
+    assert.ok(Math.abs(targets.D1.target_value - 1000 * CORE_ALLOCATION_PCT) < 1e-6);
+    assert.ok(Math.abs(targets.N1.target_value - 1000 * (1 - CORE_ALLOCATION_PCT)) < 1e-6);
+    _setState({ universeData: {}, excluded: [] });
+});
+
+test("computeAutoTargets weights multiple satellite picks by momentum_score, normalized within the satellite's own capital", () => {
+    _setState({
+        universeData: {
+            DOWJONES: { constituents: [] }, // no core candidates -> all capital to satellite (separate test below)
+            SP500: { constituents: [] },
             NASDAQ100: {
-                constituents: [],
                 all_constituents: [
                     { ticker: "BIG", momentum_score: 3, price: 10, momentum_pct: 20, volatility_pct: 15 },
                     { ticker: "MID", momentum_score: 1, price: 10, momentum_pct: 10, volatility_pct: 10 },
                 ],
             },
-            SP500: { constituents: [] },
-            DOWJONES: { constituents: [] },
         },
-        excluded: [],
+        excluded: [], gemIndexReturns: {},
     });
 
     const { targets } = computeAutoTargets(2, 1000);
-    // Suma surowych wag (momentum_score): 3+1=4 -> BIG 75%, MID 25%.
+    // Core empty -> satellite gets 100% of capital. Suma surowych wag: 3+1=4 -> BIG 75%, MID 25%.
     assert.ok(Math.abs(targets.BIG.target_value - 750) < 1e-6);
     assert.ok(Math.abs(targets.MID.target_value - 250) < 1e-6);
     const total = Object.values(targets).reduce((s, t) => s + t.target_value, 0);
@@ -459,68 +575,89 @@ test("computeAutoTargets weights the auto-selected TOP N by CURRENT momentum_sco
     _setState({ universeData: {}, excluded: [] });
 });
 
+test("computeAutoTargets rolls a sleeve's capital into the other sleeve when it comes up empty, so no capital silently vanishes", () => {
+    // Core empty (no Dow/SP500 candidates at all) -> satellite gets 100%.
+    _setState({
+        universeData: {
+            DOWJONES: { constituents: [] },
+            SP500: { constituents: [] },
+            NASDAQ100: { all_constituents: [{ ticker: "N1", momentum_score: 1, price: 10, momentum_pct: 10, volatility_pct: 10 }] },
+        },
+        excluded: [], gemIndexReturns: {},
+    });
+    let { targets } = computeAutoTargets(1, 1000);
+    assert.ok(Math.abs(targets.N1.target_value - 1000) < 1e-6);
+    _setState({ universeData: {}, excluded: [] });
+
+    // Satellite empty (n exactly matches the number of core candidates) -> core gets 100%.
+    _setState({
+        universeData: {
+            DOWJONES: { constituents: [{ ticker: "D1", momentum_score: 1, price: 10, momentum_pct: 10, volatility_pct: 10 }] },
+            SP500: { constituents: [] },
+            NASDAQ100: { all_constituents: [] },
+        },
+        excluded: [], gemIndexReturns: {},
+    });
+    ({ targets } = computeAutoTargets(1, 1000)); // coreSlots=1, D1 fills it, nothing left for satellite
+    assert.ok(Math.abs(targets.D1.target_value - 1000) < 1e-6);
+    _setState({ universeData: {}, excluded: [] });
+});
+
 test("computeAutoTargets returns no targets when N is 0 or totalCapital is 0", () => {
-    _setState({ universeData: baseUniverseData(), excluded: [] });
+    _setState({ universeData: baseUniverseData(), excluded: [], gemIndexReturns: {} });
     assert.deepEqual(computeAutoTargets(0, 1000).targets, {});
 
-    const { targets } = computeAutoTargets(1, 0);
-    assert.ok("BBB" in targets);
-    assert.equal(targets.BBB.target_value, 0); // brak kapitalu -> target_value zostaje na 0
+    const { targets } = computeAutoTargets(1, 0); // coreSlots=1 -> CCC (the only Dow candidate)
+    assert.ok("CCC" in targets);
+    assert.equal(targets.CCC.target_value, 0); // brak kapitalu -> target_value zostaje na 0
 
     _setState({ universeData: {}, excluded: [] });
 });
 
 test("computeAutoTargets excludes manually-excluded tickers entirely, backfilling from the pool", () => {
-    _setState({ universeData: baseUniverseData(), excluded: ["BBB"] }); // top-ranked ticker excluded
+    _setState({ universeData: baseUniverseData(), excluded: ["CCC"], gemIndexReturns: {} }); // the only DOWJONES core candidate excluded
     const { targets } = computeAutoTargets(2, 1000);
-    assert.deepEqual(Object.keys(targets).sort(), ["AAA", "CCC"]); // backfilled instead of shrinking to 1
+    // CCC (Dow) is gone -> core's 1 slot backfills from SP500 (AAA) instead;
+    // BBB (highest remaining momentum_score) still fills the 1 satellite slot.
+    assert.deepEqual(Object.keys(targets).sort(), ["AAA", "BBB"]);
+    assert.equal(targets.AAA.sleeve, "core");
+    assert.equal(targets.BBB.sleeve, "satellite");
     _setState({ universeData: {}, excluded: [] });
 });
 
-test("computeAutoTargets favors DOWJONES-sourced picks by DOWJONES_WEIGHT_MULTIPLIER over an equal-momentum_score SP500/NASDAQ100 pick", () => {
+test("computeAutoTargets tilts satellite weight toward TRUE members of the GEM-winning universe, not selection", () => {
     _setState({
         universeData: {
+            // Two real Dow candidates exactly fill core's slots (coreSlots=2 at n=4
+            // below) so core never needs to backfill from SP500 — otherwise SPX_A
+            // would get swept into core via backfill instead of staying in satellite.
+            DOWJONES: {
+                constituents: [
+                    { ticker: "D1", momentum_score: 1, price: 100, momentum_pct: 10, volatility_pct: 10 },
+                    { ticker: "D2", momentum_score: 1, price: 100, momentum_pct: 10, volatility_pct: 10 },
+                ],
+            },
             SP500: { constituents: [{ ticker: "SPX_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
-            NASDAQ100: { all_constituents: [] },
-            DOWJONES: { constituents: [{ ticker: "DOW_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+            NASDAQ100: { all_constituents: [{ ticker: "NDX_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
         },
         excluded: [],
+        gemIndexReturns: { SP500: 18.98, NASDAQ100: 25.8, DOWJONES: 16.78 }, // NASDAQ100 wins
     });
 
-    const { targets } = computeAutoTargets(2, 1000);
-    // Rowny momentum_score (2 vs 2), ale DOW_A dostaje DOWJONES_WEIGHT_MULTIPLIER
-    // razy wieksza surowa wage -> wieksza wartosc docelowa niz SPX_A.
-    assert.ok(DOWJONES_WEIGHT_MULTIPLIER > 1); // test zakłada, że boost faktycznie faworyzuje DOWJONES
-    const expectedDowShare = DOWJONES_WEIGHT_MULTIPLIER / (DOWJONES_WEIGHT_MULTIPLIER + 1);
-    assert.ok(Math.abs(targets.DOW_A.target_value - 1000 * expectedDowShare) < 1e-6);
-    assert.ok(targets.DOW_A.target_value > targets.SPX_A.target_value);
+    // n=4 -> coreSlots=round(2.4)=2, fully satisfied by D1+D2 -> satelliteSlots=2,
+    // taking both SPX_A and NDX_A.
+    const { targets } = computeAutoTargets(4, 1000);
+    assert.equal(targets.SPX_A.sleeve, "satellite");
+    assert.equal(targets.NDX_A.sleeve, "satellite");
+    // Equal momentum_score (2 vs 2), but NDX_A's universe (NASDAQ100) is winning GEM,
+    // so it gets WINNER_INDEX_WEIGHT_MULTIPLIER times the satellite raw weight -> bigger share.
+    assert.ok(WINNER_INDEX_WEIGHT_MULTIPLIER > 1);
+    assert.ok(targets.NDX_A.target_value > targets.SPX_A.target_value);
+    const satelliteCapital = targets.SPX_A.target_value + targets.NDX_A.target_value;
+    const expectedNdxShare = WINNER_INDEX_WEIGHT_MULTIPLIER / (WINNER_INDEX_WEIGHT_MULTIPLIER + 1);
+    assert.ok(Math.abs(targets.NDX_A.target_value - satelliteCapital * expectedNdxShare) < 1e-6);
 
-    _setState({ universeData: {}, excluded: [] });
-});
-
-test("computeAutoTargets still boosts a ticker that is ALSO a DOWJONES member even when combinedPoolRows tagged it to a different universe (higher momentum_score there)", () => {
-    _setState({
-        universeData: {
-            // MEGA is in both SP500 (higher score, so combinedPoolRows dedupes it to SP500) and DOWJONES —
-            // the boost must still apply, since it's a real Dow 30 member regardless of which universe won the tag.
-            SP500: { constituents: [{ ticker: "MEGA", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
-            NASDAQ100: { all_constituents: [{ ticker: "OTHER", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
-            DOWJONES: { constituents: [{ ticker: "MEGA", momentum_score: 1, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
-        },
-        excluded: [],
-    });
-
-    const rows = combinedPoolRows();
-    assert.equal(rows.find(r => r.ticker === "MEGA").universe, "SP500"); // dedup picked the higher-score occurrence
-
-    const { targets } = computeAutoTargets(2, 1000);
-    // Rowny momentum_score w wygranym wystapieniu (5 vs 5), ale MEGA jest tez czlonkiem
-    // DOWJONES (mimo ze row.universe to "SP500") -> dostaje wiekszy udzial niz OTHER.
-    assert.ok(targets.MEGA.target_value > targets.OTHER.target_value);
-    const expectedMegaShare = DOWJONES_WEIGHT_MULTIPLIER / (DOWJONES_WEIGHT_MULTIPLIER + 1);
-    assert.ok(Math.abs(targets.MEGA.target_value - 1000 * expectedMegaShare) < 1e-6);
-
-    _setState({ universeData: {}, excluded: [] });
+    _setState({ universeData: {}, excluded: [], gemIndexReturns: {} });
 });
 
 test("deriveUniverseFractionsFromTargets sums target_value per universe, splitting a merged multi-universe ticker evenly", () => {

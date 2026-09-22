@@ -32,12 +32,16 @@ const {
     fmtQty,
     sharesSuggestion,
     currencyOf,
+    WINNER_INDEX_WEIGHT_MULTIPLIER,
     combinedPoolRows,
     eligiblePoolRows,
     autoSelectedRows,
     computeAutoTargets,
     loadPoolStageFilter,
     savePoolStageFilter,
+    loadManualReturns,
+    saveManualReturns,
+    winnerUniverseFromManualReturns,
     deriveUniverseFractionsFromTargets,
     normalizeWeights,
     blendEquityCurves,
@@ -285,7 +289,7 @@ test("autoSelectedRows slices the top N eligible rows, returning [] for N <= 0",
 // momentum_score, symetrycznie dla WIG20 i mWIG40.
 
 test("computeAutoTargets weights the auto-selected TOP N by CURRENT momentum_score, normalized to totalCapital, with no per-universe multiplier", () => {
-    _setState({ universeData: baseUniverseData(), excluded: [] });
+    _setState({ universeData: baseUniverseData(), excluded: [], manualReturns: { WIG20: null, MWIG40: null } });
     // Suma surowych wag (momentum_score): XTB 3 + PKN 2 = 5 -> XTB 60%, PKN 40%.
     const { targets } = computeAutoTargets(2, 1000);
     assert.ok(Math.abs(targets.XTB.target_value - 600) < 1e-6);
@@ -295,13 +299,13 @@ test("computeAutoTargets weights the auto-selected TOP N by CURRENT momentum_sco
     _setState({ universeData: {}, excluded: [] });
 });
 
-test("computeAutoTargets gives WIG20 and MWIG40 picks of equal momentum_score an equal share (no DOWJONES-style tilt exists here)", () => {
+test("computeAutoTargets gives WIG20 and MWIG40 picks of equal momentum_score an equal share when no manual return favors either", () => {
     _setState({
         universeData: {
             WIG20: { constituents: [{ ticker: "W_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
             MWIG40: { constituents: [{ ticker: "M_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
         },
-        excluded: [],
+        excluded: [], manualReturns: { WIG20: null, MWIG40: null },
     });
     const { targets } = computeAutoTargets(2, 1000);
     assert.ok(Math.abs(targets.W_A.target_value - 500) < 1e-6);
@@ -310,7 +314,7 @@ test("computeAutoTargets gives WIG20 and MWIG40 picks of equal momentum_score an
 });
 
 test("computeAutoTargets returns no targets when N is 0 or totalCapital is 0", () => {
-    _setState({ universeData: baseUniverseData(), excluded: [] });
+    _setState({ universeData: baseUniverseData(), excluded: [], manualReturns: { WIG20: null, MWIG40: null } });
     assert.deepEqual(computeAutoTargets(0, 1000).targets, {});
 
     const { targets } = computeAutoTargets(1, 0);
@@ -321,10 +325,71 @@ test("computeAutoTargets returns no targets when N is 0 or totalCapital is 0", (
 });
 
 test("computeAutoTargets excludes manually-excluded tickers entirely, backfilling from the pool", () => {
-    _setState({ universeData: baseUniverseData(), excluded: ["XTB"] }); // top-ranked ticker excluded
+    _setState({ universeData: baseUniverseData(), excluded: ["XTB"], manualReturns: { WIG20: null, MWIG40: null } }); // top-ranked ticker excluded
     const { targets } = computeAutoTargets(2, 1000);
     assert.deepEqual(Object.keys(targets).sort(), ["GPW", "PKN"]); // backfilled instead of shrinking to 1
     _setState({ universeData: {}, excluded: [] });
+});
+
+// ---------- Faworyzowanie zwycięskiego indeksu — loadManualReturns/saveManualReturns/
+// winnerUniverseFromManualReturns/computeAutoTargets tilt ----------
+// Na wyraźną prośbę użytkownika: ręcznie wpisany zwrot 12M dla WIG20/mWIG40
+// (bo yfinance nie ma historii dla tych tickerów-indeksów, w przeciwieństwie
+// do SP500/NASDAQ100/DOWJONES w Rebalanserze USA) wskazuje, które spółki
+// faworyzować wagowo — ten sam WINNER_INDEX_WEIGHT_MULTIPLIER co w
+// rebalance.js, tylko z ręcznym źródłem zwrotu zamiast global_equity_momentum.json.
+
+test("loadManualReturns defaults to {WIG20: null, MWIG40: null} when nothing is stored", () => {
+    global.localStorage.removeItem("momentum_rebalance_pl_manual_returns");
+    assert.deepEqual(loadManualReturns(), { WIG20: null, MWIG40: null });
+});
+
+test("saveManualReturns/loadManualReturns round-trips numeric values", () => {
+    saveManualReturns({ WIG20: 31.96, MWIG40: 34.28 });
+    assert.deepEqual(loadManualReturns(), { WIG20: 31.96, MWIG40: 34.28 });
+    global.localStorage.removeItem("momentum_rebalance_pl_manual_returns");
+});
+
+test("loadManualReturns falls back to nulls on corrupt/invalid stored JSON", () => {
+    global.localStorage.setItem("momentum_rebalance_pl_manual_returns", "{not json");
+    assert.deepEqual(loadManualReturns(), { WIG20: null, MWIG40: null });
+    global.localStorage.removeItem("momentum_rebalance_pl_manual_returns");
+});
+
+test("winnerUniverseFromManualReturns picks the higher of two numeric returns, null when equal, missing, or both blank", () => {
+    _setState({ manualReturns: { WIG20: 31.96, MWIG40: 34.28 } });
+    assert.equal(winnerUniverseFromManualReturns(), "MWIG40");
+
+    _setState({ manualReturns: { WIG20: 40, MWIG40: 10 } });
+    assert.equal(winnerUniverseFromManualReturns(), "WIG20");
+
+    _setState({ manualReturns: { WIG20: 20, MWIG40: 20 } });
+    assert.equal(winnerUniverseFromManualReturns(), null); // rowne zwroty -> brak faworyzowania
+
+    _setState({ manualReturns: { WIG20: null, MWIG40: null } });
+    assert.equal(winnerUniverseFromManualReturns(), null);
+
+    _setState({ manualReturns: { WIG20: 15, MWIG40: null } }); // tylko jedno pole wypelnione
+    assert.equal(winnerUniverseFromManualReturns(), "WIG20");
+});
+
+test("computeAutoTargets tilts weight toward TRUE members of the manually-favored winner universe, not selection", () => {
+    _setState({
+        universeData: {
+            WIG20: { constituents: [{ ticker: "W_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+            MWIG40: { constituents: [{ ticker: "M_A", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10 }] },
+        },
+        excluded: [],
+        manualReturns: { WIG20: 40, MWIG40: 10 }, // WIG20 wygrywa
+    });
+    const { targets } = computeAutoTargets(2, 1000);
+    // Rowny momentum_score (2 vs 2), ale W_A nalezy do faworyzowanego WIG20 ->
+    // wieksza surowa waga -> wiekszy udzial kapitalu.
+    assert.ok(WINNER_INDEX_WEIGHT_MULTIPLIER > 1);
+    const expectedShare = WINNER_INDEX_WEIGHT_MULTIPLIER / (WINNER_INDEX_WEIGHT_MULTIPLIER + 1);
+    assert.ok(Math.abs(targets.W_A.target_value - 1000 * expectedShare) < 1e-6);
+    assert.ok(targets.W_A.target_value > targets.M_A.target_value);
+    _setState({ universeData: {}, excluded: [], manualReturns: { WIG20: null, MWIG40: null } });
 });
 
 test("deriveUniverseFractionsFromTargets sums target_value per universe, splitting a merged multi-universe ticker evenly", () => {

@@ -44,18 +44,50 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 const REBALANCE_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES"];
 const REBALANCE_UNIVERSE_LABELS = { SP500: "S&P 500", NASDAQ100: "Nasdaq 100", DOWJONES: "Dow Jones" };
 
-// Na wyraźną prośbę użytkownika ("zwiększ udział stabilnych spółek", "wagi w
-// DJA faworyzuj w stosunku do sp500 i nasdaq100") — Dow Jones to 30 dużych,
-// blue-chipowych, z natury mniej zmiennych spółek niż SP500/Nasdaq100, więc
-// "stabilne spółki" i "spółki z DOWJONES" to tu ten sam ask. Mnożnik działa
-// WYŁĄCZNIE na WAGĘ (ile kapitału trafia do już wybranej spółki w
-// computeAutoTargets), nie na SELEKCJĘ (który ranking/TOP N wchodzi do
-// portfela — combinedPoolRows/eligiblePoolRows nadal sortują po surowym
-// momentum_score, bez tego mnożnika) — bo o to explicité poproszono ("wagi",
-// nie "dobór"). 1.5 = spółka z DOWJONES dostaje 50% większą wagę niż spółka
-// z SP500/NASDAQ100 o identycznym momentum_score; podkręć/przykręć tu, jeśli
-// efekt ma być mocniejszy/słabszy.
-const DOWJONES_WEIGHT_MULTIPLIER = 1.5;
+// ============================================================
+// CORE / SATELITA (60/40) — na wyraźną prośbę użytkownika, zastępuje wcześniejszy
+// DOWJONES_WEIGHT_MULTIPLIER (jeden globalny mnożnik wagi dla każdej spółki z
+// Dow) osobnym, dwuczęściowym podziałem KAPITAŁU:
+//  - CORE (CORE_ALLOCATION_PCT = 60% kapitału) — "stabilne blue chipy w fazie
+//    wzrostowej": kandydaci to spółki z DOWJONES, z priorytetem dla tych w
+//    Etapie 2 (2A/2B — potwierdzony trend wzrostowy, patrz Weinstein stage w
+//    CLAUDE.md), posortowane (faza wzrostowa jako pierwsze kryterium, potem
+//    momentum_score). Jeśli sam Dow (30 spółek) nie wypełni wszystkich slotów
+//    core, DOBIJANE jest z SP500 (tym samym kryterium sortowania) — na
+//    wyraźne życzenie użytkownika, NIE z pozostałych spółek Dow spoza Etapu 2
+//    i NIE zostawiane puste. Patrz coreCandidateRows/selectCoreSatelliteRows.
+//  - SATELITA (pozostałe 40%) — "dynamicznie rosnące spółki": wszystko, co
+//    zostało z eligiblePoolRows() po odjęciu core, posortowane wg
+//    momentum_score. Dodatkowo faworyzuje spółki z indeksu, który dziś
+//    WYGRYWA 12-miesięczny wyścig Global Equity Momentum spośród
+//    DOWJONES/SP500/NASDAQ100 (patrz WINNER_INDEX_WEIGHT_MULTIPLIER/
+//    gemIndexReturns/satelliteWinnerUniverse niżej) — ten sam mechanizm co
+//    dawny GEM-jako-selektor uniwersum (patrz "What this repo is" w
+//    CLAUDE.md), tylko że dziś dogrywa WAGĘ wewnątrz satelity zamiast wybierać
+//    CAŁE uniwersum do przeglądania.
+// Kapitał jest dzielony TWARDO 60/40 między obie grupy (nie tylko liczba
+// spółek) — klasyczna definicja strategii core-satellite: core zawsze dostaje
+// dokładnie 60% zainwestowanego kapitału niezależnie od tego, jak wypadną
+// wagi momentum wewnątrz każdej z grup. Jeśli jedna z grup wyszła pusta
+// (skrajny przypadek — np. wykluczono ręcznie wszystkie kandydatury), jej
+// kapitał w całości przechodzi do drugiej, wypełnionej grupy zamiast zniknąć.
+// Ten mechanizm dotyczy WYŁĄCZNIE wagi/podziału kapitału — SELEKCJA nadal
+// bazuje wyłącznie na momentum_score (plus priorytet Etapu 2 w core), zgodnie
+// z tą samą zasadą co poprzedni DOWJONES_WEIGHT_MULTIPLIER ("wagi", nie
+// "dobór").
+// ============================================================
+const CORE_ALLOCATION_PCT = 0.6;
+
+// Faworyzuje w satelicie spółki z indeksu, który dziś wygrywa 12-miesięczny
+// wyścig GEM (docs/data/global_equity_momentum.json, patrz loadGemReturns
+// niżej) — SP500/NASDAQ100/DOWJONES mają realne dane z yfinance (w
+// przeciwieństwie do WIG20/mWIG40 w Rebalanserze PL, gdzie yfinance nie ma
+// historii dla tickerów-indeksów), więc nie trzeba tu żadnego ręcznego
+// wpisywania zwrotów. Ta sama wartość i ten sam mechanizm co dawny
+// DOWJONES_WEIGHT_MULTIPLIER (usunięty — core/satelita to teraz jedyny,
+// spójny sposób faworyzowania, bez podwójnego nakładania się dwóch
+// mechanizmów) — podkręć/przykręć tu, jeśli efekt ma być mocniejszy/słabszy.
+const WINNER_INDEX_WEIGHT_MULTIPLIER = 1.5;
 
 const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
@@ -71,6 +103,7 @@ const DEFAULT_SETTINGS = { contribution: 0, portfolioSize: 20 };
 let universeData = {};    // { SP500: {...json}, NASDAQ100: {...}, DOWJONES: {...} }
 let priceMap = {};        // ticker -> { price, sources: [universe,...] } — dla WSZYSTKICH tickerow (holdingi moga byc z dowolnego indeksu, w tym WIG20/mWIG40)
 let equityCurveData = {}; // { SP500: {dates, momentum_index, benchmark_index, ...}, ... }
+let gemIndexReturns = {}; // { SP500: 18.98, NASDAQ100: 25.8, DOWJONES: 16.78 } — tylko REBALANCE_UNIVERSES, patrz loadGemReturns/satelliteWinnerUniverse niżej
 
 function loadSettings() {
     let stored = {};
@@ -171,6 +204,41 @@ async function loadUniverseData() {
     } catch (e) {
         equityCurveData = {};
     }
+}
+
+// GEM (docs/data/global_equity_momentum.json) wraca jako konsument tej strony
+// — nie po to, by wskazywać KTÓRE uniwersum przeglądać (jak w dawnym, ręcznym
+// designie, patrz "What this repo is" w CLAUDE.md), tylko żeby wiedzieć, który
+// z trzech uniwersów puli (SP500/NASDAQ100/DOWJONES) dziś WYGRYWA 12-miesięczny
+// wyścig i faworyzować jego spółki wagowo wewnątrz satelity (patrz
+// WINNER_INDEX_WEIGHT_MULTIPLIER/satelliteWinnerUniverse). Brak pliku/offline
+// -> gemIndexReturns zostaje puste, satelliteWinnerUniverse() zwraca null,
+// satelita po prostu nie faworyzuje żadnego konkretnego indeksu (ta sama
+// łagodna degradacja co reszta tego modułu).
+async function loadGemReturns() {
+    gemIndexReturns = {};
+    try {
+        const res = await fetch("data/global_equity_momentum.json", { cache: "no-store" });
+        const data = await res.json();
+        (data.indices || []).forEach(idx => {
+            if (REBALANCE_UNIVERSES.includes(idx.universe) && typeof idx.return_pct === "number") {
+                gemIndexReturns[idx.universe] = idx.return_pct;
+            }
+        });
+    } catch (e) { /* brak pliku/offline — gemIndexReturns zostaje puste */ }
+}
+
+// Który z trzech uniwersów puli aktualnie wygrywa 12-miesięczny wyścig GEM —
+// null gdy brak danych (np. offline) albo żaden zwrot nie jest jeszcze znany.
+function satelliteWinnerUniverse() {
+    let winner = null, best = -Infinity;
+    REBALANCE_UNIVERSES.forEach(u => {
+        if (gemIndexReturns[u] !== undefined && gemIndexReturns[u] > best) {
+            best = gemIndexReturns[u];
+            winner = u;
+        }
+    });
+    return winner;
 }
 
 function fmtMoney(v) {
@@ -318,17 +386,18 @@ function poolRowsForUniverse(universe) {
     return data.constituents || data.all_constituents || [];
 }
 
-// Zbiór tickerów rzeczywiście należących do DOWJONES — używany przez
-// computeAutoTargets do rozstrzygania, kto dostaje DOWJONES_WEIGHT_MULTIPLIER
-// (patrz ta stała). Świadomie NIE bazujemy tu na `row.universe` przypisanym
-// przez combinedPoolRows() (deduplikacja tam wybiera uniwersum z WYŻSZYM
-// momentum_score, nie z "najbardziej wartym boosta") — spora część Dow 30 to
-// jednocześnie duże spółki SP500/Nasdaq100, więc gdyby liczyć tylko po
-// `row.universe`, wiele realnych Dow-owych blue-chipów zostałoby otagowanych
-// jako SP500/NASDAQ100 (bo tam ich momentum_score wypadło wyżej) i boost by
-// je ominął — dokładnie odwrotnie od tego, o co prosił użytkownik.
-function dowjonesTickerSet() {
-    return new Set(poolRowsForUniverse("DOWJONES").map(c => c.ticker));
+// Zbiór tickerów rzeczywiście należących do danego uniwersum — używany przez
+// core/satelitę (coreCandidateRows) i przez faworyzowanie zwycięzcy GEM w
+// satelicie (computeAutoTargets) do rozstrzygania PRAWDZIWEGO członkostwa.
+// Świadomie NIE bazujemy na `row.universe` przypisanym przez combinedPoolRows()
+// (deduplikacja tam wybiera uniwersum z WYŻSZYM momentum_score, nie z
+// "najbardziej wartym boosta/core") — spora część Dow 30 to jednocześnie duże
+// spółki SP500/Nasdaq100, więc gdyby liczyć tylko po `row.universe`, wiele
+// realnych Dow-owych blue-chipów zostałoby otagowanych jako SP500/NASDAQ100
+// (bo tam ich momentum_score wypadło wyżej) i core/faworyzowanie by je ominęło
+// — dokładnie odwrotnie od tego, o co prosił użytkownik.
+function trueUniverseTickerSet(universe) {
+    return new Set(poolRowsForUniverse(universe).map(c => c.ticker));
 }
 
 // Ten sam ticker może teoretycznie wystąpić w dwóch uniwersach naraz (duży
@@ -389,9 +458,59 @@ function eligiblePoolRows() {
         .map((c, i) => ({ ...c, pool_rank: i + 1 }));
 }
 
+// Czy spółka jest w potwierdzonym trendzie wzrostowym (Etap 2A/2B, patrz
+// Weinstein stage w CLAUDE.md) — kryterium "faza wzrostowa" dla core.
+function isGrowthPhase(c) {
+    const stage = c.weekly_chart && c.weekly_chart.current_stage;
+    return stage === "2A" || stage === "2B";
+}
+
+// Kandydaci do CORE (patrz komentarz przy CORE_ALLOCATION_PCT) — DOWJONES
+// (prawdziwe członkostwo, nie post-deduplikacyjny tag) jako pierwsza warstwa,
+// SP500 jako druga (dobijająca), oba posortowane: faza wzrostowa najpierw,
+// potem momentum_score malejąco. `pool` to już eligiblePoolRows() (po
+// wykluczeniach i filtrze etapu) — core nigdy nie sięga po spółkę spoza tej
+// puli.
+function coreCandidateRows(pool) {
+    const dowTickers = trueUniverseTickerSet("DOWJONES");
+    const sp500Tickers = trueUniverseTickerSet("SP500");
+    const byGrowthThenScore = (a, b) => {
+        const growthDiff = (isGrowthPhase(b) ? 1 : 0) - (isGrowthPhase(a) ? 1 : 0);
+        return growthDiff !== 0 ? growthDiff : (b.momentum_score || 0) - (a.momentum_score || 0);
+    };
+    const dowRows = pool.filter(c => dowTickers.has(c.ticker)).sort(byGrowthThenScore);
+    const sp500Rows = pool.filter(c => sp500Tickers.has(c.ticker) && !dowTickers.has(c.ticker)).sort(byGrowthThenScore);
+    return [...dowRows, ...sp500Rows];
+}
+
+// Dzieli eligiblePoolRows() na sloty CORE (round(n * CORE_ALLOCATION_PCT),
+// patrz coreCandidateRows) i SATELITA (reszta z n, wszystko co zostało z puli
+// po odjęciu core, posortowane wg momentum_score) — patrz duży komentarz przy
+// CORE_ALLOCATION_PCT dla pełnego uzasadnienia. Jeśli sam DOWJONES+SP500 nie
+// wypełni wszystkich slotów core (rzadkie — 30+100 kandydatów to zwykle dużo
+// więcej niż round(n*0.6) nawet przy dużym n), core po prostu wychodzi
+// mniejszy — computeAutoTargets ma na to osobny bezpiecznik (patrz tam).
+function selectCoreSatelliteRows(n) {
+    if (!n || n <= 0) return { coreRows: [], satelliteRows: [] };
+    const pool = eligiblePoolRows();
+    const coreSlots = Math.round(n * CORE_ALLOCATION_PCT);
+    const coreRows = coreCandidateRows(pool).slice(0, coreSlots);
+    const coreTickers = new Set(coreRows.map(c => c.ticker));
+    const satelliteSlots = n - coreRows.length;
+    const satelliteRows = pool
+        .filter(c => !coreTickers.has(c.ticker))
+        .sort((a, b) => (b.momentum_score || 0) - (a.momentum_score || 0))
+        .slice(0, satelliteSlots);
+    return { coreRows, satelliteRows };
+}
+
+// Unia core+satelity — N unikalnych spółek dokładnie jak przed wprowadzeniem
+// core/satelity, tylko teraz złożona z dwóch grup zamiast jednej płaskiej
+// listy. Zachowane jako osobna funkcja, bo poolRowHtml/testy nadal chcą po
+// prostu "czy ten ticker jest dziś w portfelu", bez rozróżniania grupy.
 function autoSelectedRows(n) {
-    if (!n || n <= 0) return [];
-    return eligiblePoolRows().slice(0, n);
+    const { coreRows, satelliteRows } = selectCoreSatelliteRows(n);
+    return [...coreRows, ...satelliteRows];
 }
 
 // ============================================================
@@ -406,9 +525,16 @@ function autoSelectedRows(n) {
 let poolSortKey = "pool_rank";
 let poolSortDir = "asc";
 
-function poolRowHtml(c) {
+// `sleeve` — "core"/"satellite"/undefined — wyliczone RAZ na render przez
+// renderPoolTable() (patrz sleeveByTicker tam) z selectCoreSatelliteRows(),
+// żeby nie liczyć core/satelity osobno dla każdego wiersza.
+function poolRowHtml(c, sleeve) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
-    const inTopN = c.pool_rank <= (settings.portfolioSize || 0);
+    const sleeveBadge = sleeve === "core"
+        ? '<span class="action-badge buy" title="Core — stabilne blue chipy w fazie wzrostowej (60% kapitału)">Core</span>'
+        : sleeve === "satellite"
+            ? '<span class="action-badge buy" title="Satelita — dynamicznie rosnące spółki (40% kapitału)">Satelita</span>'
+            : '<span class="action-badge skip">—</span>';
     return `
         <td><span class="rank-badge">${c.pool_rank}</span></td>
         <td class="ticker-cell">${c.ticker}</td>
@@ -420,7 +546,7 @@ function poolRowHtml(c) {
         <td>${c.volatility_pct.toFixed(2)}%</td>
         <td>${c.momentum_score.toFixed(3)}</td>
         <td>${stageCellHtml(stage)}</td>
-        <td><span class="action-badge ${inTopN ? "buy" : "skip"}">${inTopN ? "✓ w portfelu" : "—"}</span></td>
+        <td>${sleeveBadge}</td>
         <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" data-universe="${c.universe}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
     `;
 }
@@ -540,6 +666,13 @@ function renderPoolTable() {
     const refDates = poolRefDateNote();
     const n = settings.portfolioSize || 0;
 
+    // Sleeve (core/satelita) każdego dziś wybranego tickera — liczone RAZ tutaj
+    // (nie osobno w poolRowHtml na każdy wiersz) z selectCoreSatelliteRows(n).
+    const { coreRows, satelliteRows } = selectCoreSatelliteRows(n);
+    const sleeveByTicker = new Map();
+    coreRows.forEach(c => sleeveByTicker.set(c.ticker, "core"));
+    satelliteRows.forEach(c => sleeveByTicker.set(c.ticker, "satellite"));
+
     renderScreenerTable({
         tbody: document.getElementById("poolTableBody"),
         metaEl: document.getElementById("poolMeta"),
@@ -552,10 +685,10 @@ function renderPoolTable() {
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: () => {
             if (!refDates) return "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).";
-            const base = `Pula: ${allRows.length} spółek (TOP ${n} w portfelu) · ${refDates}`;
+            const base = `Pula: ${allRows.length} spółek (Core ${coreRows.length} + Satelita ${satelliteRows.length} = TOP ${n} w portfelu) · ${refDates}`;
             return !filterLabel ? base : `${base} · filtr etapu ${filterLabel} zawęża pulę z ${totalUnfiltered} do ${allRows.length}`;
         },
-        rowHtml: c => poolRowHtml(c),
+        rowHtml: c => poolRowHtml(c, sleeveByTicker.get(c.ticker)),
         afterRender: (tbody) => {
             tbody.querySelectorAll(".chart-row-btn").forEach(btn => {
                 btn.addEventListener("click", () => {
@@ -809,38 +942,70 @@ function renderCapitalHint() {
     if (hint) hint.textContent = text;
 }
 
+// Krótki, informacyjny odczyt dzisiejszego podziału core/satelita + który
+// indeks (jeśli którykolwiek) faworyzuje satelita — patrz CORE_ALLOCATION_PCT/
+// selectCoreSatelliteRows/satelliteWinnerUniverse wyżej dla pełnego
+// mechanizmu. Wołane z refreshOutputs, więc odświeża się przy każdej zmianie
+// ustawień/wykluczeń/filtra etapu, dokładnie jak reszta sugestii.
+function renderCoreSatelliteNote() {
+    const el = document.getElementById("coreSatelliteHint");
+    if (!el) return;
+    const n = settings.portfolioSize || 0;
+    const { coreRows, satelliteRows } = selectCoreSatelliteRows(n);
+    const winnerUniverse = satelliteWinnerUniverse();
+    let text = `Core: ${coreRows.length} spółek (${(CORE_ALLOCATION_PCT * 100).toFixed(0)}% kapitału, blue chipy Dow/SP500 w fazie wzrostowej) `
+        + `· Satelita: ${satelliteRows.length} spółek (${((1 - CORE_ALLOCATION_PCT) * 100).toFixed(0)}% kapitału, dynamiczny wzrost)`;
+    if (winnerUniverse) {
+        const ret = gemIndexReturns[winnerUniverse];
+        text += ` — satelita faworyzuje ${REBALANCE_UNIVERSE_LABELS[winnerUniverse]} (12M: ${ret >= 0 ? "+" : ""}${ret.toFixed(1)}%)`;
+    }
+    el.textContent = text;
+}
+
 // ============================================================
 // SUGESTIA REBALANSU (to tylko sugestia — Ty decydujesz co i kiedy kupić/sprzedać)
 // ============================================================
-// Zwraca { targets: {ticker: {...}} } dla automatycznie wybranego TOP N
-// (patrz autoSelectedRows). Waga = AKTUALNY momentum_score z puli (świeżo
-// przeliczany przez pipeline co tydzień), znormalizowany do 100% w obrębie
-// wybranego TOP N — to ŚWIADOME uproszczenie względem cap-ważenia z
-// pipeline'u (9%/3x cap-weight, patrz compute_weights): jedna, spójna metoda
-// ważenia, ta sama niezależnie od tego, z którego z 3 uniwersów pochodzi
-// dana spółka — poza jednym, celowym wyjątkiem: spółki należące do DOWJONES
-// (patrz dowjonesTickerSet — CZŁONKOSTWO w Dow 30, nie post-deduplikacyjny
-// `row.universe`) dostają DOWJONES_WEIGHT_MULTIPLIER razy wyższą surową wagę
-// (patrz komentarz przy tej stałej) niż wynikałoby to z samego
-// momentum_score, więc "stabilniejsze" blue-chipy z Dow Jones ważą w portfelu
-// więcej niż SP500/NASDAQ100 spółka o tym samym momentum_score.
+// Zwraca { targets: {ticker: {...}} } dla automatycznie wybranego core+satelity
+// (patrz selectCoreSatelliteRows/CORE_ALLOCATION_PCT) — KAPITAŁ jest dzielony
+// TWARDO 60/40 między obie grupy (coreCapital/satelliteCapital), a WEWNĄTRZ
+// każdej grupy wagi liczone są tą samą metodą co przed core/satelitą: surowa
+// waga = momentum_score, znormalizowany do 100% kapitału danej grupy — dalej
+// świadome uproszczenie względem cap-ważenia z pipeline'u (9%/3x cap-weight,
+// patrz compute_weights). Satelita dodatkowo mnoży surową wagę spółek
+// należących (prawdziwe członkostwo, nie post-deduplikacyjny `row.universe`)
+// do aktualnie zwycięskiego w GEM uniwersum przez WINNER_INDEX_WEIGHT_MULTIPLIER
+// (patrz ten mechanizm i satelliteWinnerUniverse wyżej). Jeśli core albo
+// satelita wyszły puste, cały kapitał (100%) idzie do tej drugiej, wypełnionej
+// grupy, żeby żaden kapitał nie "zniknął" tylko dlatego że jedna grupa nie ma
+// dziś żadnych kandydatów.
 function computeAutoTargets(n, totalCapital) {
-    const rows = autoSelectedRows(n);
-    const dowTickers = dowjonesTickerSet();
-    const raw = {};
-    rows.forEach(c => {
-        const universeBoost = dowTickers.has(c.ticker) ? DOWJONES_WEIGHT_MULTIPLIER : 1;
-        raw[c.ticker] = {
-            ticker: c.ticker, universes: [c.universe], price: c.price, target_value: 0,
-            raw_weight: (c.momentum_score || 0) * universeBoost,
-            momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
-        };
-    });
+    const { coreRows, satelliteRows } = selectCoreSatelliteRows(n);
+    const winnerUniverse = satelliteWinnerUniverse();
+    const winnerTickers = winnerUniverse ? trueUniverseTickerSet(winnerUniverse) : new Set();
 
-    const totalRawWeight = Object.values(raw).reduce((s, t) => s + t.raw_weight, 0);
-    if (totalRawWeight > 0 && totalCapital > 0) {
-        Object.values(raw).forEach(t => { t.target_value = totalCapital * (t.raw_weight / totalRawWeight); });
-    }
+    let coreCapital = totalCapital * CORE_ALLOCATION_PCT;
+    let satelliteCapital = totalCapital - coreCapital;
+    if (coreRows.length === 0) { satelliteCapital = totalCapital; coreCapital = 0; }
+    else if (satelliteRows.length === 0) { coreCapital = totalCapital; satelliteCapital = 0; }
+
+    const raw = {};
+    const addSleeve = (rows, sleeveCapital, sleeveName, weightFn) => {
+        const weighted = rows.map(c => ({ c, w: weightFn(c) }));
+        const totalW = weighted.reduce((s, { w }) => s + w, 0);
+        weighted.forEach(({ c, w }) => {
+            raw[c.ticker] = {
+                ticker: c.ticker, universes: [c.universe], price: c.price,
+                target_value: (totalW > 0 && sleeveCapital > 0) ? sleeveCapital * (w / totalW) : 0,
+                raw_weight: w, momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
+                sleeve: sleeveName,
+            };
+        });
+    };
+
+    addSleeve(coreRows, coreCapital, "core", c => c.momentum_score || 0);
+    addSleeve(satelliteRows, satelliteCapital, "satellite", c => (
+        (c.momentum_score || 0) * (winnerTickers.has(c.ticker) ? WINNER_INDEX_WEIGHT_MULTIPLIER : 1)
+    ));
 
     return { targets: raw };
 }
@@ -929,7 +1094,8 @@ function renderSuggestions() {
     Object.values(targets).forEach(t => {
         const heldShares = shares[t.ticker] || 0;
         const currentValue = t.price ? t.price * heldShares : 0;
-        const note = t.universes.map(u => REBALANCE_UNIVERSE_LABELS[u]).join(" + ");
+        const sleeveLabel = t.sleeve === "core" ? "Core" : "Satelita";
+        const note = `${sleeveLabel} · ${t.universes.map(u => REBALANCE_UNIVERSE_LABELS[u]).join(" + ")}`;
         rows.push({
             ticker: t.ticker,
             note,
@@ -1254,11 +1420,12 @@ function initSettingsForm() {
 }
 
 // Odświeża sugestię + Monte Carlo + analizę portfela + wykres historyczny
-// (renderSuggestions woła te pierwsze trzy) — wołane po każdej zmianie
-// ustawień/holdingów/wykluczeń.
+// (renderSuggestions woła te pierwsze trzy) + odczyt core/satelity — wołane
+// po każdej zmianie ustawień/holdingów/wykluczeń.
 function refreshOutputs() {
     renderSuggestions();
     renderEquityCurve();
+    renderCoreSatelliteNote();
 }
 
 function renderAll() {
@@ -1272,7 +1439,7 @@ function renderAll() {
 if (typeof document !== "undefined") {
     (async function init() {
         initConnStatus();
-        await loadUniverseData();
+        await Promise.all([loadUniverseData(), loadGemReturns()]);
         initSettingsForm();
         initHoldingsForm();
         initXtbImport();
@@ -1298,16 +1465,18 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES, DOWJONES_WEIGHT_MULTIPLIER,
+        REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES,
+        CORE_ALLOCATION_PCT, WINNER_INDEX_WEIGHT_MULTIPLIER,
         fmtMoney, fmtMoneyPln, currentMoneyFmt, holdingsMoneyFmt, moneyFmtForCurrency, fmtQty, sharesSuggestion,
-        currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets, matchesPoolStageFilter,
+        currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, selectCoreSatelliteRows,
+        computeAutoTargets, matchesPoolStageFilter, satelliteWinnerUniverse,
         loadPoolStageFilter, savePoolStageFilter,
         deriveUniverseFractionsFromTargets, normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded/
-        // holdings/priceMap/equityCurveData) bez importu przez window — to jedyny
-        // sposób bez przepisywania modułu na klasę.
+        // holdings/priceMap/equityCurveData/gemIndexReturns) bez importu przez window —
+        // to jedyny sposób bez przepisywania modułu na klasę.
         _setState(s) {
             if (s.universeData !== undefined) universeData = s.universeData;
             if (s.settings !== undefined) settings = s.settings;
@@ -1316,6 +1485,7 @@ if (typeof module !== "undefined" && module.exports) {
             if (s.priceMap !== undefined) priceMap = s.priceMap;
             if (s.equityCurveData !== undefined) equityCurveData = s.equityCurveData;
             if (s.poolStageFilter !== undefined) poolStageFilter = s.poolStageFilter;
+            if (s.gemIndexReturns !== undefined) gemIndexReturns = s.gemIndexReturns;
         },
     };
 }
