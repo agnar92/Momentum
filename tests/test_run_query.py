@@ -21,8 +21,7 @@ from run_query import (
     MAX_HOLDINGS,
     MAX_WEIGHT,
     RELATIVE_STRENGTH_UNIVERSES,
-    RS_PRICE_SMA_LONG_WEEKS,
-    RS_PRICE_SMA_SHORT_WEEKS,
+    RS_PRICE_EMA_WEEKS,
     STAGE_BREAKOUT_VOLUME_RATIO,
     UNIVERSES,
     add_zscore_and_momentum_score,
@@ -804,8 +803,8 @@ class TestExportRelativeStrength:
 
 # ---------------------------------------------------------------------------
 # compute_relative_strength_chart: wykres (nie-TradingView) dla panelu Siły
-# Relatywnej w stylu stage analysis (Weinstein/Dr Eric Wish) — "wykres 10:30"
-# (cena + SMA10/SMA30 tygodniowo) razem z poziomem wlasnego indeksu, wszystko
+# Relatywnej w stylu stage analysis (Weinstein/Dr Eric Wish) — cena + EMA20
+# tygodniowo razem z poziomem wlasnego indeksu, wszystko
 # przeliczone na % zmiany wzgledem pierwszego wyswietlanego tygodnia.
 # ---------------------------------------------------------------------------
 
@@ -867,12 +866,12 @@ def darvas_breakout_closes():
 
 
 class TestComputeRelativeStrengthChart:
-    def test_10_30_and_index_pct_have_values_from_first_displayed_week(self):
+    def test_ema20_and_index_pct_have_values_from_first_displayed_week(self):
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
         ref_date = pd.Timestamp("2026-03-30")
         # Dane siegaja 60 tyg. PRZED start_date -> wiecej niz potrzebny zapas
-        # (RS_PRICE_SMA_LONG_WEEKS + 2 = 32 tyg.), zeby SMA30 miala juz wartosc
+        # (RS_PRICE_EMA_BUFFER_WEEKS = 42 tyg.), zeby EMA20 miala juz wartosc
         # na pierwszym WYSWIETLANYM tygodniu (start_date), nie dopiero pare
         # miesiecy pozniej.
         fixture_start = start_date - pd.Timedelta(weeks=60)
@@ -886,8 +885,9 @@ class TestComputeRelativeStrengthChart:
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
         assert out["dates"][0] == "2026-01-05"
-        assert out["sma10_pct"][0] is not None
-        assert out["sma30_pct"][0] is not None
+        assert out["ema20_pct"][0] is not None
+        # Wykres nie niesie juz SMA10/SMA30 (zastapione przez EMA20).
+        assert "sma10_pct" not in out and "sma30_pct" not in out
         # Pierwszy wyswietlany tydzien to punkt odniesienia (rebase) -> 0% dla obu.
         assert out["close_pct"][0] == 0.0
         assert out["index_pct"][0] == 0.0
@@ -898,7 +898,7 @@ class TestComputeRelativeStrengthChart:
 
     def test_vwap_pct_is_anchored_at_window_start_not_the_sma_warmup_buffer(self):
         # VWAP jest ZAKOTWICZONY (anchored) na start_date, celowo inaczej niz
-        # sma10_pct/sma30_pct, ktore licza sie na buforze SPRZED start_date (patrz
+        # ema20_pct, ktora liczy sie na buforze SPRZED start_date (patrz
         # docstring compute_relative_strength_chart) -> pierwszy wyswietlany
         # tydzien musi dawac 0% (VWAP tego tygodnia = jego wlasne zamkniecie =
         # close0), niezaleznie od tego, co dzialo sie w buforze rozgrzewkowym.
@@ -986,11 +986,11 @@ class TestComputeRelativeStrengthChart:
         # testu wyzej), bo Typical != Close gdy High/Low sa asymetryczne.
         assert out["vwap_pct"][0] != 0.0
 
-    def test_insufficient_lookback_leaves_first_week_sma30_as_none(self):
+    def test_insufficient_lookback_leaves_first_week_ema20_as_none(self):
         con = make_gem_con()
         start_date = pd.Timestamp("2026-01-05")
         ref_date = pd.Timestamp("2026-03-30")
-        # Tylko 5 tygodni historii PRZED start_date -> za malo na SMA30 przy
+        # Tylko 5 tygodni historii PRZED start_date -> za malo na EMA20 przy
         # pierwszym wyswietlanym tygodniu (musi byc None, nie blad).
         fixture_start = start_date - pd.Timedelta(weeks=5)
         insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 17, 100.0, 1.0)
@@ -1000,7 +1000,7 @@ class TestComputeRelativeStrengthChart:
         out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
-        assert out["sma30_pct"][0] is None
+        assert out["ema20_pct"][0] is None
         assert out["index_pct"][0] == 0.0
 
     def test_no_stock_history_returns_none(self):
@@ -1126,8 +1126,8 @@ class TestComputeRelativeStrengthChart:
 # ---------------------------------------------------------------------------
 # _compute_weinstein_stage_series: klasyfikacja etapow Weinsteina (1/2A/2B/3/4)
 # + sygnaly wejscia/wyjscia + potwierdzenie wolumenem, na podstawie samej pozycji
-# i nachylenia SMA30 wzgledem ceny (patrz uzasadnienie w run_query.py — bez linii
-# GLB/dlugoterminowego oporu bazy, z tego samego powodu co reszta wykresu 10:30).
+# i nachylenia EMA20 wzgledem ceny (patrz uzasadnienie w run_query.py — bez linii
+# GLB/dlugoterminowego oporu bazy, z tego samego powodu co reszta wykresu glownego).
 # ---------------------------------------------------------------------------
 
 def make_stage_df(closes, volumes=None, buying_volumes=None):
@@ -1140,8 +1140,8 @@ def make_stage_df(closes, volumes=None, buying_volumes=None):
     volumes = volumes if volumes is not None else [1000] * len(closes)
     buying_volumes = buying_volumes if buying_volumes is not None else volumes
     df = pd.DataFrame({"close": closes, "volume": volumes, "buying_volume": buying_volumes})
-    df["sma10"] = df["close"].rolling(RS_PRICE_SMA_SHORT_WEEKS).mean()
-    df["sma30"] = df["close"].rolling(RS_PRICE_SMA_LONG_WEEKS).mean()
+    df["ema20"] = df["close"].ewm(span=RS_PRICE_EMA_WEEKS, adjust=False,
+                                  min_periods=RS_PRICE_EMA_WEEKS).mean()
     return df
 
 
@@ -1213,7 +1213,7 @@ class TestComputeWeinsteinStageSeries:
 
     def _multi_base_uptrend_fixture(self):
         """Odtwarza ksiazkowy rysunek 'Stage Analysis Investor method — Trailing
-        Stop Loss': 40-tyg. rozgrzewka (spadek, zeby SMA30 mialo juz historie),
+        Stop Loss': 40-tyg. rozgrzewka (spadek, zeby EMA20 miala juz historie),
         potem baza (Etap 1) -> wybicie na wolumenie (2A, tydz. 50) -> 2. baza (2B,
         tydz. 59) -> 3. baza (2B, tydz. 68) -> 4. baza (2B_LATE, tydz. 77, wg
         ksiazki bardziej podatna na niepowodzenie) -> zalamanie przez trailing stop."""
@@ -1221,7 +1221,10 @@ class TestComputeWeinsteinStageSeries:
         volumes = [1000] * 40
         closes += self._zigzag_base(40, 10)
         volumes += [1000] * 10
-        closes += [48]
+        # Wybicie MUSI przebic pierwsze zamkniecie, od ktorego pudelko Darvasa
+        # zaczyna sledzenie (tydz. 19 = pierwszy tydzien z EMA20, close 50.5):
+        # w czystym spadku gorna krawedz pudelka to wlasnie ten tydzien.
+        closes += [51]
         volumes += [3000]  # wybicie 1. bazy na wolumenie
         closes += self._zigzag_base(48.5, 8, 1.2)
         volumes += [1000] * 8
@@ -1235,8 +1238,11 @@ class TestComputeWeinsteinStageSeries:
         volumes += [1000] * 8
         closes += [95]
         volumes += [1400]  # wybicie 4. bazy (late)
-        closes += [90, 80, 68, 55, 45]  # zalamanie -> przez trailing stop
-        volumes += [1000] * 5
+        # Zalamanie -> przez trailing stop. Tydz. 80 (77.5) schodzi juz pod EMA20
+        # (Etap 3), ale jeszcze NAD stopem (= EMA20 z tyg. wybicia 4. bazy, ~76.9);
+        # dopiero tydz. 81 go lamie.
+        closes += [90, 80, 77.5, 68, 55, 45]
+        volumes += [1000] * 6
         return make_stage_df(closes, volumes)
 
     def test_first_base_breakout_after_decline_is_entry_2a_with_stop_below_base(self):

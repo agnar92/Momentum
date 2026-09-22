@@ -72,11 +72,11 @@ const STAGE_LABELS = {
     "4": "Etap 4 — Spadek",
 };
 const STAGE_DESCRIPTIONS = {
-    "1": "Cena w ciasnej bazie (trading range) w pobliżu SMA30 — czekaj na wybicie ponad opór bazy.",
+    "1": "Cena w ciasnej bazie (trading range) w pobliżu EMA20 — czekaj na wybicie ponad opór bazy.",
     "2A": "Świeże wybicie ponad opór bazy, potwierdzone wolumenem — klasyczny punkt wejścia.",
     "2B": "Trend trwa — kolejne wybicia kolejnych baz to punkty dokupienia (\"pyramiding\").",
     "3": "Trend się wypłaszcza po wzroście — rozważ realizację zysków, unikaj nowych wejść.",
-    "4": "Cena pod opadającą SMA30 — trend spadkowy, poza rynkiem / bez nowych pozycji.",
+    "4": "Cena pod opadającą EMA20 — trend spadkowy, poza rynkiem / bez nowych pozycji.",
 };
 const STAGE_COLORS = { "1": "#8a8f9c", "2A": "#2ecc71", "2B": "#26a65b", "3": "#e0a72e", "4": "#e0455a" };
 // Musi byc zgodne z STAGE_BREAKOUT_VOLUME_RATIO w run_query.py — koloruje slupki wolumenu.

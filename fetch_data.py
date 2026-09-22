@@ -680,7 +680,7 @@ def _prices_table_has_rows(con):
 def _prices_history_is_shallow(con, lookback_months):
     """True gdy najstarszy zachowany dzień w `prices` NIE sięga wystarczająco daleko
     wstecz dla aktualnie skonfigurowanego --lookback-months — np. baza zapisana PRZED
-    wydłużeniem retencji (patrz run_query.py::RS_PRICE_SMA_LONG_WEEKS/RS_MANSFIELD_*:
+    wydłużeniem retencji (patrz run_query.py::RS_PRICE_EMA_BUFFER_WEEKS/RS_MANSFIELD_*:
     SMA30 i oscylator Mansfield potrzebują realnego zapasu historii PRZED początkiem
     okna momentum, nie tylko samego okna). Zwykłe przyrostowe doszacowanie
     (update_prices_incremental) dogrywa dni WYŁĄCZNIE od watermarka w przód, nigdy w
