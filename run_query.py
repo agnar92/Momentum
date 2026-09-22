@@ -1832,19 +1832,13 @@ RS_MANSFIELD_LONG_WEEKS = 52      # wygladzanie dlugoterminowe, ~12 mies. — do
 # wyrazne zyczenie uzytkownika ("ad 52 weeks for that panel so it will have 3 lines"),
 # klasyczne, pelnoroczne wygladzenie Mansfielda (ten sam okres co
 # SECTOR_STRATEGY_RSM_WEEKS w compute_sector_relative_strength, choc to dwie
-# niezalezne od siebie stale — patrz komentarz przy tamtej). WAZNE OGRANICZENIE:
-# to jest DOKLADNIE ten sam 52-tygodniowy wariant, ktory byl w tym module RAZ juz
-# probowany i USUNIETY (patrz docstring nizej / historia gita) wlasnie dlatego, ze
-# przy ~15-miesiecznej retencji prices nie mial gdzie sie rozgrzac. Przy obecnej
-# ~22-miesiecznej retencji (fetch_data.py --lookback-months) tez GO NIE WYSTARCZA
-# na pelne okno: ~14-miesieczne okno momentum + 52-tyg. (~12-miesieczny) zapas
-# rozgrzewkowy to ~26 miesiecy w sumie, a retencja daje ~8 miesiecy (~34 tyg.)
-# zapasu przed start_date — rsm_long bedzie wiec `None` dla mniej wiecej pierwszej
-# polowy wyswietlanego okna, dopoki ktos nie podniesie --lookback-months (co
-# wyzwala jednorazowy pelny re-bootstrap prices, patrz _prices_history_is_shallow
-# w fetch_data.py). To swiadomy, zaakceptowany kompromis, nie przeoczenie — ten
-# sam "None dopoki nie ma dosc historii" wzorzec co rsm_medium/ema20_pct
-# gdzie indziej w tym module.
+# niezalezne od siebie stale — patrz komentarz przy tamtej). Wymaga ~26 miesiecy
+# historii cen w sumie (~14-miesieczne okno momentum + 52-tyg. zapas rozgrzewkowy
+# przed start_date). Przy dawnej ~22-miesiecznej retencji prices rsm_long byl `None`
+# dla ~1/4-1/2 wyswietlanego okna (zgloszone przez uzytkownika: "nie ma pelnej linii,
+# na wykresie jest od polowy") — dlatego fetch_data.py --lookback-months podniesiono
+# do 28 (26 + ~2 mies. marginesu), co przy pierwszym uruchomieniu wyzwala jednorazowy
+# pelny re-bootstrap prices (patrz _prices_history_is_shallow w fetch_data.py).
 
 
 def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
