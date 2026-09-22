@@ -437,18 +437,22 @@ test("autoSelectedRows returns the core+satellite union (core first), [] for N <
 });
 
 // ---------- CORE / SATELITA (60/40) — selectCoreSatelliteRows ----------
-// Core (CORE_ALLOCATION_PCT=60%) faworyzuje DOWJONES w Etapie 2 (faza
-// wzrostowa), dobijane z SP500 gdy Dow nie wystarczy; satelita to reszta puli
-// wg momentum_score, faworyzująca dodatkowo zwycięzcę GEM (patrz niżej).
+// Core (CORE_ALLOCATION_PCT=60%) bierze DOWJONES wg momentum_score, dobijane
+// z SP500 gdy Dow nie wystarczy; satelita to reszta puli wg momentum_score,
+// faworyzująca dodatkowo zwycięzcę GEM (patrz niżej). Core NIE ma własnego,
+// zaszytego na sztywno priorytetu etapu Weinsteina — o to, które etapy w
+// ogóle trafiają do puli (i przez to do core), decyduje wyłącznie użytkownik
+// przez poolStageFilter (patrz osobny test niżej: "core respects the user's
+// own stage filter...").
 
 function coreSatelliteUniverseData() {
     return {
         DOWJONES: {
             constituents: [
-                // Wyzszy momentum_score, ale NIE w fazie wzrostowej — core i tak
-                // powinien preferowac DOW_GROWTH (nizszy score, ale Etap 2A).
-                { ticker: "DOW_FLAT", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "1" } },
-                { ticker: "DOW_GROWTH", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "2A" } },
+                // Wyzszy momentum_score wygrywa w core niezaleznie od etapu —
+                // nie ma juz zaszytego priorytetu "faza wzrostowa najpierw".
+                { ticker: "DOW_HOT", momentum_score: 5, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "1" } },
+                { ticker: "DOW_MILD", momentum_score: 2, price: 100, momentum_pct: 10, volatility_pct: 10, weekly_chart: { current_stage: "2A" } },
             ],
         },
         SP500: {
@@ -471,30 +475,42 @@ test("selectCoreSatelliteRows returns empty sleeves for n <= 0", () => {
     _setState({ universeData: {}, excluded: [] });
 });
 
-test("core prefers Stage-2 (growth-phase) Dow names over a higher-scoring non-Stage-2 Dow name", () => {
+test("core ranks Dow candidates by momentum_score alone, ignoring Weinstein stage", () => {
     _setState({ universeData: coreSatelliteUniverseData(), excluded: [] });
-    // n=1 -> coreSlots=round(0.6)=1.
+    // n=1 -> coreSlots=round(0.6)=1. DOW_HOT (score 5, Etap 1) beats
+    // DOW_MILD (score 2, Etap 2A) — no growth-phase tiebreak any more.
     const { coreRows } = selectCoreSatelliteRows(1);
-    assert.deepEqual(coreRows.map(r => r.ticker), ["DOW_GROWTH"]);
+    assert.deepEqual(coreRows.map(r => r.ticker), ["DOW_HOT"]);
     _setState({ universeData: {}, excluded: [] });
 });
 
-test("core backfills from SP500 (favoring Stage 2, same as Dow) once DOWJONES itself can't fill every core slot", () => {
+test("core backfills from SP500 by momentum_score once DOWJONES itself can't fill every core slot", () => {
     _setState({ universeData: coreSatelliteUniverseData(), excluded: [] });
     // n=5 -> coreSlots=round(3)=3: both Dow names (2) + the one SP500 backup.
     const { coreRows } = selectCoreSatelliteRows(5);
-    assert.deepEqual(coreRows.map(r => r.ticker).sort(), ["DOW_FLAT", "DOW_GROWTH", "SPX_BACKUP"]);
+    assert.deepEqual(coreRows.map(r => r.ticker).sort(), ["DOW_HOT", "DOW_MILD", "SPX_BACKUP"]);
     _setState({ universeData: {}, excluded: [] });
 });
 
 test("satellite takes what's left after core, sorted by momentum_score, never re-picking a core ticker", () => {
     _setState({ universeData: coreSatelliteUniverseData(), excluded: [] });
-    // n=2 -> coreSlots=1 (DOW_GROWTH). Satellite pool excludes DOW_GROWTH and
-    // takes the top-scoring remaining name (NDX_HOT, score 10) for its 1 slot.
+    // n=2 -> coreSlots=1 (DOW_HOT, highest score). Satellite pool excludes
+    // DOW_HOT and takes the top-scoring remaining name (NDX_HOT, score 10).
     const { coreRows, satelliteRows } = selectCoreSatelliteRows(2);
-    assert.deepEqual(coreRows.map(r => r.ticker), ["DOW_GROWTH"]);
+    assert.deepEqual(coreRows.map(r => r.ticker), ["DOW_HOT"]);
     assert.deepEqual(satelliteRows.map(r => r.ticker), ["NDX_HOT"]);
     _setState({ universeData: {}, excluded: [] });
+});
+
+test("core respects the user's own stage filter — selecting Etap 2 keeps a Stage-1 name (even with a higher score) out of core entirely", () => {
+    _setState({ universeData: coreSatelliteUniverseData(), excluded: [], poolStageFilter: new Set(["2"]) });
+    // With the Etap 2 filter active, DOW_HOT (Etap 1) never reaches
+    // eligiblePoolRows() at all, so core falls through to DOW_MILD (Etap 2A)
+    // even though DOW_HOT has the higher raw momentum_score — the user's own
+    // filter selection, not a hardcoded stage check, is what decides this.
+    const { coreRows } = selectCoreSatelliteRows(1);
+    assert.deepEqual(coreRows.map(r => r.ticker), ["DOW_MILD"]);
+    _setState({ universeData: {}, excluded: [], poolStageFilter: "ALL" });
 });
 
 test("core selection uses TRUE DOWJONES/SP500 membership, not combinedPoolRows' post-dedup universe tag", () => {

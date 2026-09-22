@@ -79,6 +79,24 @@ USA" (`rebalance.html`/`rebalance.js`, SP500+NASDAQ100+DOWJONES, USD) and "Rebal
      no tilt at all — identical to the pool's behavior before this feature existed.
    Both mechanisms affect WEIGHT only, never SELECTION (which companies make the pool/TOP N) — the same
    principle `DOWJONES_WEIGHT_MULTIPLIER` already established and this design carries forward unchanged.
+7. **Current design: Core's "growth phase" no longer means a hardcoded Stage 2A/2B check — it means
+   whatever the user has selected in the Krok 2 stage-filter bar, exactly like every other part of the
+   pool.** A later, separate explicit user correction: step 6's original Core mechanism sorted
+   `coreCandidateRows()` by "Stage 2A/2B first, then `momentum_score`" regardless of what (if anything) the
+   user had selected in `poolStageFilter` — the user pointed out this meant Core silently applied its own,
+   separate notion of "growth phase" on top of (and independent from) the filter bar they were already
+   using to control the rest of the pool ("oh wait you are taking only stage 2, I was thinking that will
+   take that what I select like in PL rebalanser" — "I want to select myself and from that list select core
+   and satellite"). The fix removed the growth-phase tiebreak from `coreCandidateRows()` entirely (it now
+   sorts Dow-then-SP500 candidates by `momentum_score` alone, same as satellite) rather than adding a
+   *second* place to configure stage preference — `poolStageFilter`/`eligiblePoolRows()` (see the dedicated
+   `rebalance.html`/`rebalance.js` bullet under Frontend below) already narrows the ENTIRE pool, Core
+   included, to whichever Etap(s) the user has checked, before Core or Satellite ever sees it. So selecting
+   "Etap 2" in the filter bar now does exactly what it already did on Rebalanser PL, and does to Satellite:
+   Core only ever sees Stage-2 names too, because nothing else survives `eligiblePoolRows()` — there's no
+   longer a second, hardcoded stage rule living only inside Core that the filter bar doesn't touch. Leaving
+   the filter on "Wszystkie" (the default) means Core simply ranks Dow/SP500 candidates by raw
+   `momentum_score`, same as before step 6 ever added a stage concept to Core at all.
 
 The current, automatic flow of "Rebalanser USA" (`rebalance.js`) — "Rebalanser PL" (`rebalance_pl.js`)
 works identically, just over WIG20/mWIG40 in PLN instead (see the dedicated bullet under Frontend below):
@@ -1185,12 +1203,17 @@ flex child (no `.topbar-left` wrapper there).
       CORE_ALLOCATION_PCT)` slots) and `satelliteRows` (the rest of `n`). `coreCandidateRows()` builds the
       core candidate list: true DOWJONES members first, true SP500 members second (backfill, only reached
       once Dow itself can't fill every core slot — an explicit user call: "weź z sp500", not "dopełnij
-      resztą Dow" and not "zostaw core niedopełniony"), each tier sorted by (Stage 2A/2B — confirmed growth
-      phase — first, then `momentum_score` descending) via `isGrowthPhase()`. "Favor," not "require": a
-      core slot Dow/SP500 can't fill with a Stage-2 name still gets filled by the next-best Dow/SP500 name
-      outside Stage 2, rather than left empty or handed to a non-Dow/SP500 name. Satellite is simply
-      whatever's left of the pool after removing core's tickers, sorted by `momentum_score`, sliced to `n -
-      coreRows.length`.
+      resztą Dow" and not "zostaw core niedopełniony"), each tier sorted purely by `momentum_score`
+      descending — **no separate, hardcoded Weinstein-stage preference lives inside Core any more** (see
+      design-history step 7 under "What this repo is" above): an earlier version sorted Core by "Stage
+      2A/2B first, then `momentum_score`" via a since-removed `isGrowthPhase()` helper, which the user
+      pointed out duplicated/bypassed the Krok 2 stage-filter bar they were already using to control the
+      rest of the pool. `coreCandidateRows()`'s own `pool` argument is already `eligiblePoolRows()` — i.e.
+      already filtered by `poolStageFilter` — so selecting a stage in that filter bar narrows Core exactly
+      as it narrows Satellite and everything else; leaving it on "Wszystkie" means Core just takes the
+      highest-`momentum_score` Dow (then SP500 backfill) names, with stage playing no special role. Satellite
+      is simply whatever's left of the pool after removing core's tickers, sorted by `momentum_score`,
+      sliced to `n - coreRows.length`.
     - **`trueUniverseTickerSet(universe)`** (generalized from the old `dowjonesTickerSet()`, same
       reasoning) — core selection and the satellite GEM-winner tilt both need PRAWDZIWE membership in a
       universe, not `combinedPoolRows()`'s post-dedup `row.universe` tag (which keeps whichever universe
