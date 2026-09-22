@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Strategia Stage 2 — Momentum Dashboard</title>
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=18">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e0f13">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -45,17 +45,118 @@
             <label for="capitalInput" id="capitalLabel">Kapitał całkowity (Core + Satelita)</label>
             <input type="number" min="0" step="100" class="contribution-input" id="capitalInput" placeholder="np. 100000">
         </div>
-        <div class="stat-cards" id="allocationCards">
-            <div class="stat-card"><div class="label">Core — Twoje ETF-y (50%)</div><div class="value" id="coreValue">—</div></div>
-            <div class="stat-card"><div class="label">Satelita — strategia (50%)</div><div class="value" id="satelliteValue">—</div></div>
-            <div class="stat-card"><div class="label">Ryzyko na pozycję (1%)</div><div class="value" id="riskValue">—</div></div>
-            <div class="stat-card"><div class="label">Maks. pozycja (10%)</div><div class="value" id="maxPositionValue">—</div></div>
+        <div class="settings-row">
+            <label>Podział kapitału i ryzyko (% kapitału całkowitego)</label>
+            <div class="bucket-inputs" id="allocationInputs">
+                <label class="bucket-input" title="Jaka część kapitału idzie na tę strategię — reszta to Core (Twoje ETF-y).">
+                    <span>Satelita</span><input type="number" id="satellitePctInput" min="0" max="100" step="5" inputmode="decimal"><span>%</span>
+                </label>
+                <label class="bucket-input" title="Ile kapitału ryzykujesz na jednej pozycji (strata, jeśli cena spadnie do stopu).">
+                    <span>Ryzyko na pozycję</span><input type="number" id="riskPctInput" min="0.1" max="10" step="0.1" inputmode="decimal"><span>%</span>
+                </label>
+                <label class="bucket-input" title="Maksymalna wartość jednej pozycji, niezależnie od odległości stopu.">
+                    <span>Maks. pozycja</span><input type="number" id="maxPositionPctInput" min="1" max="100" step="1" inputmode="decimal"><span>%</span>
+                </label>
+            </div>
         </div>
-        <div class="funnel-steps" id="funnelSteps"></div>
+        <div class="stat-cards" id="allocationCards">
+            <div class="stat-card"><div class="label" id="coreLabel">Core — Twoje ETF-y</div><div class="value" id="coreValue">—</div></div>
+            <div class="stat-card"><div class="label" id="satelliteLabel">Satelita — strategia</div><div class="value" id="satelliteValue">—</div></div>
+            <div class="stat-card"><div class="label" id="riskLabel">Ryzyko na pozycję</div><div class="value" id="riskValue">—</div></div>
+            <div class="stat-card"><div class="label" id="maxPositionLabel">Maks. pozycja</div><div class="value" id="maxPositionValue">—</div></div>
+        </div>
+    </div>
+
+    <div class="panel-card" id="funnelCard">
+        <h3>Lejek <span class="ref-date-note" id="funnelMeta"></span></h3>
+        <p class="panel-hint">Każdy pasek to krok strategii — jego szerokość to liczba spółek, które przez niego przeszły. Kliknij krok, żeby zobaczyć te spółki poniżej, albo czerwone „−N”, żeby zobaczyć, co na nim odpadło. Chipy pod paskiem zmieniają kryterium tego kroku — lejek przelicza się od razu.</p>
+        <div class="funnel-viz" id="funnelViz"></div>
+        <button type="button" class="chart-mode-btn funnel-reset" id="resetCriteriaBtn">↺ Przywróć domyślne kryteria</button>
+    </div>
+
+    <div class="panel-card" id="watchCard">
+        <h3><span id="watchTitle">Spółki</span> <span class="ref-date-note" id="watchMeta"></span></h3>
+        <div class="chart-mode-toggle" id="listModeToggle">
+            <button type="button" class="chart-mode-btn" data-mode="passed">✓ Przeszły ten krok</button>
+            <button type="button" class="chart-mode-btn" data-mode="dropped">✗ Odpadły na tym kroku</button>
+        </div>
+        <p class="panel-hint">Status: 🟢 Wejście / ⏳ czeka na potwierdzenie (MACD, wolumen) / 🌀 Setup = konsolidacja trwa, czekaj na wybicie / 👀 Obserwuj = trend OK, brak konsolidacji / ✗ = pierwszy krok, którego spółka nie przeszła. Kliknij nagłówek kolumny, żeby sortować.</p>
+        <div class="table-wrap">
+        <table class="momentum-table" id="watchTable">
+            <thead>
+                <tr>
+                    <th data-key="ticker">Ticker</th>
+                    <th data-key="universe">Indeks</th>
+                    <th data-key="sector">Sektor</th>
+                    <th data-key="price">Cena</th>
+                    <th data-key="stage">Etap</th>
+                    <th data-key="baseCount">Baza</th>
+                    <th data-key="rsShort">RS 13</th>
+                    <th data-key="rsMedium">RS 26</th>
+                    <th data-key="rsLong">RS 52</th>
+                    <th>TTM Squeeze</th>
+                    <th data-key="statusRank">Status</th>
+                    <th class="chart-col">Wykres</th>
+                </tr>
+            </thead>
+            <tbody id="watchTableBody"></tbody>
+        </table>
+        </div>
+    </div>
+
+    <div class="panel-card" id="entryCard">
+        <h3>🎯 Sygnały wejścia i wielkość pozycji <span class="ref-date-note" id="entryMeta"></span></h3>
+        <p class="panel-hint">Wejście = squeeze odpalił po konsolidacji (progi ustawiasz w lejku), histogram momentum jest dodatni i rośnie, cena nad stopem. Stop: na start połowa ostatniego pudełka Darvasa (½ box), potem po każdym przecięciu tygodniowego MACD w dół linii sygnału stop idzie na low tej świecy — tylko w górę, nigdy w dół. Przecięcie MACD w górę linii sygnału to potwierdzenie wejścia: bez niego status to „⏳ Czekaj na MACD”. Liczba akcji = (ryzyko na pozycję × kapitał) / (cena − stop), ale wartość pozycji nie większa niż „maks. pozycja” — oba procenty ustawiasz na górze strony. Wolumen kupujących ≥ 1,2× średniej to dodatkowe potwierdzenie, nie warunek.</p>
+        <div class="table-wrap">
+        <table class="momentum-table" id="entryTable">
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Status</th>
+                    <th>Cena</th>
+                    <th>Stop</th>
+                    <th>Do stopu</th>
+                    <th>Akcji</th>
+                    <th>Wartość</th>
+                    <th>Ryzyko</th>
+                    <th>MACD</th>
+                    <th>Wolumen</th>
+                    <th class="chart-col">Wykres</th>
+                </tr>
+            </thead>
+            <tbody id="entryTableBody"></tbody>
+        </table>
+        </div>
+    </div>
+
+    <div class="panel-card" id="holdCard">
+        <h3>💼 Twoje pozycje satelity: trzymać czy wyjść? <span class="ref-date-note" id="holdMeta"></span></h3>
+        <p class="panel-hint">Wpisz tickery, które masz w satelicie (tylko satelita, bez ETF-ów z Core). Stop liczony tak samo jak przy sygnałach wejścia (½ pudełka Darvasa → low świecy z przecięcia MACD w dół). Wyjście: cena zamknęła się pod stopem, spółka przeszła w Etap 3/4 albo Mansfield RS 26 tyg. spadł poniżej zera. Ostrzeżenie „podciągnij stop”: SMA30 traci nachylenie albo to już 4.+ baza. Lista zapisuje się tylko w tej przeglądarce.</p>
+        <div class="settings-row">
+            <input type="text" class="contribution-input held-input" id="heldInput" placeholder="np. MU, AMD, NVDA">
+        </div>
+        <div class="table-wrap">
+        <table class="momentum-table" id="holdTable">
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Akcja</th>
+                    <th>Cena</th>
+                    <th>Stop</th>
+                    <th>Do stopu</th>
+                    <th>Etap</th>
+                    <th>RS 26 tyg.</th>
+                    <th>Powód</th>
+                    <th class="chart-col">Wykres</th>
+                </tr>
+            </thead>
+            <tbody id="holdTableBody"></tbody>
+        </table>
+        </div>
     </div>
 
     <div class="panel-card" id="trendCard">
-        <h3 id="trendTitle">Krok 1 — Rynek w fazie wzrostu? <span class="ref-date-note" id="trendRefDate"></span></h3>
+        <h3 id="trendTitle">Szczegóły: rynek <span class="ref-date-note" id="trendRefDate"></span></h3>
         <div id="marketUsa">
             <p class="panel-hint">SP500 powyżej 200-dniowej SMA LUB 40-tygodniowej SMA. Gdy rynek jest poza fazą wzrostu, lejek NIE daje sygnałów wejścia (status „Czekaj”), otwarte pozycje trzymasz dalej pod stopem.</p>
             <div class="trend-banner" id="trendBanner">Ładowanie…</div>
@@ -86,9 +187,9 @@
     </div>
 
     <div class="panel-card" id="sectorCard">
-        <h3>Krok 2 — Gdzie szukać: siła sektorów <span class="ref-date-note" id="sectorMeta"></span></h3>
+        <h3>Szczegóły: siła sektorów <span class="ref-date-note" id="sectorMeta"></span></h3>
         <div id="sectorUsa">
-            <p class="panel-hint">Mansfield RS sektorowego ETF-u SPDR wobec SP500 (52 tyg.). Do lejka wchodzą spółki z 3 najsilniejszych sektorów z RS powyżej zera (✓), plus każda spółka z top 10 całego SP500 wg RS (niezależnie od sektora). Spółki z Nasdaq 100 spoza SP500 nie mają sektora GICS, więc ten krok je pomija. Kliknij wiersz, żeby w narzędziach pomocniczych na dole zobaczyć liderów tego sektora.</p>
+            <p class="panel-hint">Mansfield RS sektorowego ETF-u SPDR wobec SP500 (52 tyg.). Do lejka wchodzą spółki z najsilniejszych sektorów z RS powyżej zera (✓ — ile, wybierasz w lejku), plus opcjonalnie każda spółka z top 10 całego SP500 wg RS. Spółki z Nasdaq 100 spoza SP500 nie mają sektora GICS, więc ten krok je pomija. Kliknij wiersz, żeby w narzędziach pomocniczych na dole zobaczyć liderów tego sektora.</p>
             <div class="table-wrap">
             <table class="momentum-table" id="sectorTable">
                 <thead>
@@ -104,83 +205,7 @@
             </table>
             </div>
         </div>
-        <p class="panel-hint" id="sectorPl" hidden>Dla GPW nie ma danych sektorowych (brak sektorowych ETF-ów i sektorów GICS w składach WIG20/mWIG40), więc ten krok jest pomijany — do Kroku 3 przechodzą wszystkie spółki obu indeksów.</p>
-    </div>
-
-    <div class="panel-card" id="watchCard">
-        <h3>Krok 3 — Lista obserwacyjna <span class="ref-date-note" id="watchMeta"></span></h3>
-        <p class="panel-hint">Spółki, które przeszły wszystkie filtry: Etap 2 (2A/2B), Mansfield RS 26 tyg. &gt; 0 i 52 tyg. &gt; 0, momentum &gt; 0, najwyżej 3. baza w bieżącej fali Etapu 2 (od 4. bazy ryzyko porażki rośnie). Status mówi, na jakim etapie TTM Squeeze jest spółka: 🌀 Setup = konsolidacja trwa ponad 5 tygodni (czekaj na wybicie), 👀 Obserwuj = trend OK, ale brak konsolidacji.</p>
-        <div class="table-wrap">
-        <table class="momentum-table" id="watchTable">
-            <thead>
-                <tr>
-                    <th>Ticker</th>
-                    <th>Indeks</th>
-                    <th>Sektor</th>
-                    <th>Cena</th>
-                    <th>Etap</th>
-                    <th>Baza</th>
-                    <th>RS 26 tyg.</th>
-                    <th>RS 52 tyg.</th>
-                    <th>TTM Squeeze</th>
-                    <th>Status</th>
-                    <th class="chart-col">Wykres</th>
-                </tr>
-            </thead>
-            <tbody id="watchTableBody"></tbody>
-        </table>
-        </div>
-    </div>
-
-    <div class="panel-card" id="entryCard">
-        <h3>Krok 4 — Sygnały wejścia i wielkość pozycji <span class="ref-date-note" id="entryMeta"></span></h3>
-        <p class="panel-hint">Wejście = squeeze odpalił w ostatnich 3 tygodniach po ponad 5 tygodniach konsolidacji, histogram momentum jest dodatni i rośnie, cena nad stopem. Stop: na start połowa ostatniego pudełka Darvasa (½ box), potem po każdym przecięciu tygodniowego MACD w dół linii sygnału stop idzie na low tej świecy — tylko w górę, nigdy w dół. Przecięcie MACD w górę linii sygnału to potwierdzenie wejścia: bez niego status to „⏳ Czekaj na MACD”. Liczba akcji = (1% kapitału) / (cena − stop), ale wartość pozycji najwyżej 10% kapitału. Wolumen kupujących ≥ 1,2× średniej to dodatkowe potwierdzenie, nie warunek.</p>
-        <div class="table-wrap">
-        <table class="momentum-table" id="entryTable">
-            <thead>
-                <tr>
-                    <th>Ticker</th>
-                    <th>Status</th>
-                    <th>Cena</th>
-                    <th>Stop</th>
-                    <th>Do stopu</th>
-                    <th>Akcji</th>
-                    <th>Wartość</th>
-                    <th>Ryzyko</th>
-                    <th>MACD</th>
-                    <th>Wolumen</th>
-                    <th class="chart-col">Wykres</th>
-                </tr>
-            </thead>
-            <tbody id="entryTableBody"></tbody>
-        </table>
-        </div>
-    </div>
-
-    <div class="panel-card" id="holdCard">
-        <h3>Krok 5 — Twoje pozycje satelity: trzymać czy wyjść? <span class="ref-date-note" id="holdMeta"></span></h3>
-        <p class="panel-hint">Wpisz tickery, które masz w satelicie (tylko satelita, bez ETF-ów z Core). Stop liczony tak samo jak w Kroku 4 (½ pudełka Darvasa → low świecy z przecięcia MACD w dół). Wyjście: cena zamknęła się pod stopem, spółka przeszła w Etap 3/4 albo Mansfield RS 26 tyg. spadł poniżej zera. Ostrzeżenie „podciągnij stop”: SMA30 traci nachylenie albo to już 4.+ baza. Lista zapisuje się tylko w tej przeglądarce.</p>
-        <div class="settings-row">
-            <input type="text" class="contribution-input held-input" id="heldInput" placeholder="np. MU, AMD, NVDA">
-        </div>
-        <div class="table-wrap">
-        <table class="momentum-table" id="holdTable">
-            <thead>
-                <tr>
-                    <th>Ticker</th>
-                    <th>Akcja</th>
-                    <th>Cena</th>
-                    <th>Stop</th>
-                    <th>Do stopu</th>
-                    <th>Etap</th>
-                    <th>RS 26 tyg.</th>
-                    <th>Powód</th>
-                    <th class="chart-col">Wykres</th>
-                </tr>
-            </thead>
-            <tbody id="holdTableBody"></tbody>
-        </table>
-        </div>
+        <p class="panel-hint" id="sectorPl" hidden>Dla GPW nie ma danych sektorowych (brak sektorowych ETF-ów i sektorów GICS w składach WIG20/mWIG40), więc ten krok jest pomijany — dalej przechodzą wszystkie spółki obu indeksów.</p>
     </div>
 
     <div id="helperCards">
@@ -188,7 +213,7 @@
 
     <div class="panel-card" id="leadersCard">
         <h3>Liderzy przeglądanego sektora <span id="leadersSectorLabel"></span> <span class="ref-date-note" id="leadersMeta"></span></h3>
-        <p class="panel-hint">Top 10% spółek sektora wybranego w Kroku 2 wg Mansfield RS wobec ceny TEGO sektora (a nie SP500) — z Etapem Weinsteina i statusem TTM Squeeze. Kliknij "📈", żeby otworzyć pełny wykres spółki.</p>
+        <p class="panel-hint">Top 10% spółek sektora klikniętego w „Szczegóły: siła sektorów” wg Mansfield RS wobec ceny TEGO sektora (a nie SP500) — z Etapem Weinsteina i statusem TTM Squeeze. Kliknij "📈", żeby otworzyć pełny wykres spółki.</p>
         <div class="table-wrap">
         <table class="momentum-table" id="leadersTable">
             <thead>
@@ -209,7 +234,7 @@
 
     <div class="panel-card" id="topRsCard">
         <h3>Top 10 SP500 wg czystego RS (bez podziału na sektory) <span class="ref-date-note" id="topRsMeta"></span></h3>
-        <p class="panel-hint">Mansfield RS wobec SP500, niezależnie od sektora. Te spółki przechodzą filtr sektora w Kroku 2 zawsze. Kliknij "📈", żeby otworzyć pełny wykres spółki.</p>
+        <p class="panel-hint">Mansfield RS wobec SP500, niezależnie od sektora. Te spółki przechodzą krok „Silny sektor” zawsze, o ile w lejku zaznaczone jest „+ top 10 RS zawsze”. Kliknij "📈", żeby otworzyć pełny wykres spółki.</p>
         <div class="table-wrap">
         <table class="momentum-table" id="topRsTable">
             <thead>
@@ -234,9 +259,9 @@
 
 <script src="js/vendor/chart.umd.min.js"></script>
 <script src="js/pull-to-refresh.js"></script>
-<script src="js/shared.js"></script>
-<script src="js/qol.js"></script>
-<script src="js/table-render.js"></script>
-<script src="js/strategy.js"></script>
+<script src="js/shared.js?v=18"></script>
+<script src="js/qol.js?v=18"></script>
+<script src="js/table-render.js?v=18"></script>
+<script src="js/strategy.js?v=18"></script>
 </body>
 </html>

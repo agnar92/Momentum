@@ -8,7 +8,7 @@ const path = require("node:path");
 
 const {
     squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
-    evaluateCandidate, funnelCounts, positionSize, evaluateHolding, parseTickerList,
+    evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, sanitizeAllocation, evaluateHolding, parseTickerList,
 } = require(path.join("..", "..", "docs", "js", "strategy.js"));
 
 function ttmChart(rows) {
@@ -119,8 +119,41 @@ test("macdConfirmation reports MACD above signal and the latest bullish cross da
     assert.deepEqual(macdConfirmation({}), { above: null, crossUpDate: null });
 });
 
-test("evaluateCandidate downgrades ENTRY to WAIT_MARKET when the market filter is off", () => {
-    assert.equal(evaluateCandidate(stock(), usaCtx({ marketOk: false })).status, "WAIT_MARKET");
+test("evaluateCandidate drops everything at the market step when the market is weak (unless disabled)", () => {
+    const weak = evaluateCandidate(stock(), usaCtx({ marketOk: false }));
+    assert.equal(weak.gates.market, false);
+    assert.equal(weak.failedAt, "market");
+    assert.equal(weak.status, null);
+    const ignored = evaluateCandidate(stock(), usaCtx({ marketOk: false }), Object.assign({}, DEFAULT_CRITERIA, { market: false }));
+    assert.equal(ignored.status, "ENTRY");
+});
+
+test("evaluateCandidate honours adjustable criteria (stages, RS windows, base limit, squeeze thresholds)", () => {
+    const cr = (o) => Object.assign({}, DEFAULT_CRITERIA, o);
+    assert.equal(evaluateCandidate(stock(), usaCtx(), cr({ stages: ["2A"] })).gates.stage, false);
+    // RS 13 tyg. brak w fixture -> wymaganie go odrzuca spolke
+    assert.equal(evaluateCandidate(stock(), usaCtx(), cr({ rsWindows: ["short"] })).gates.rs, false);
+    assert.equal(evaluateCandidate(stock(), usaCtx(), cr({ rsWindows: [] })).gates.rs, true);
+    assert.equal(evaluateCandidate(stock(), usaCtx(), cr({ maxBase: 1 })).gates.base, false);
+    assert.equal(evaluateCandidate(stock(), usaCtx(), cr({ maxBase: 0 })).gates.base, true);
+    // konsolidacja 8 tyg. nie przekracza progu 8 -> brak wybicia
+    assert.equal(evaluateCandidate(stock(), usaCtx(), cr({ minConsolidation: 8 })).gates.squeeze, false);
+    assert.equal(evaluateCandidate(stock(), usaCtx(), cr({ fireLookback: 0 })).gates.squeeze, false);
+});
+
+test("evaluateCandidate sector step: top N sectors, optional top-RS bypass, off switch", () => {
+    const cr = (o) => Object.assign({}, DEFAULT_CRITERIA, o);
+    const ctx = usaCtx({ strongSectors: new Set(["Energy"]), topRsTickers: new Set(["AAA"]) });
+    assert.equal(evaluateCandidate(stock(), ctx).gates.sector, true);
+    assert.equal(evaluateCandidate(stock(), ctx, cr({ sectorTopRs: false })).gates.sector, false);
+    assert.equal(evaluateCandidate(stock(), ctx, cr({ sectorTopRs: false, sectorTop: 0 })).gates.sector, true);
+});
+
+test("evaluateCandidate can require buying-volume confirmation", () => {
+    const c = stock();
+    c.weekly_chart.buying_volume_ratio = [1.0, 1.0, 1.0];
+    assert.equal(evaluateCandidate(c, usaCtx()).status, "ENTRY");
+    assert.equal(evaluateCandidate(c, usaCtx(), Object.assign({}, DEFAULT_CRITERIA, { requireVolume: true })).status, "WAIT_VOLUME");
 });
 
 test("evaluateCandidate marks an ongoing long squeeze as SETUP", () => {
@@ -164,16 +197,32 @@ test("evaluateCandidate skips the sector gate when strongSectors is null (PL)", 
     assert.equal(evaluateCandidate(c, { marketOk: true, strongSectors: null, topRsTickers: new Set(), sp500Sectors: null }).passes, true);
 });
 
-test("funnelCounts narrows step by step", () => {
+test("funnelSteps narrows step by step and rowsAtStep lists passed/dropped companies", () => {
     const pass = evaluateCandidate(stock(), usaCtx());
     const s3 = stock({ ticker: "BBB" }); s3.weekly_chart.current_stage = "3";
     const fail = evaluateCandidate(s3, usaCtx());
-    const counts = funnelCounts([pass, fail]);
-    assert.equal(counts.universe, 2);
-    assert.equal(counts.stage, 1);
-    assert.equal(counts.sector, 1);
-    assert.equal(counts.entry, 1);
-    assert.equal(counts.setup, 0);
+    const steps = funnelSteps([pass, fail], "USA");
+    assert.deepEqual(steps.map(st => st.key), ["market", "sector", "stage", "rs", "momentum", "base", "squeeze", "entry"]);
+    const byKey = Object.fromEntries(steps.map(st => [st.key, st]));
+    assert.deepEqual([byKey.market.in, byKey.market.out], [2, 2]);
+    assert.deepEqual([byKey.stage.in, byKey.stage.out], [2, 1]);
+    assert.equal(byKey.entry.out, 1);
+    assert.equal(funnelSteps([pass], "PL").some(st => st.key === "sector"), false);
+
+    assert.deepEqual(rowsAtStep([pass, fail], "USA", "stage", "dropped").map(e => e.ticker), ["BBB"]);
+    assert.deepEqual(rowsAtStep([pass, fail], "USA", "stage", "passed").map(e => e.ticker), ["AAA"]);
+    assert.equal(fail.failedAt, "stage");
+});
+
+test("compareListRows sorts by status then RS, with empty values always last", () => {
+    const rows = [
+        { ticker: "A", status: "WATCH", rsMedium: 5, rsLong: null },
+        { ticker: "B", status: "ENTRY", rsMedium: 1, rsLong: 3 },
+        { ticker: "C", status: null, failedAt: "stage", rsMedium: 9, rsLong: 1 },
+    ];
+    assert.deepEqual(rows.slice().sort((a, b) => compareListRows(a, b, "statusRank", "asc")).map(r => r.ticker), ["B", "A", "C"]);
+    assert.deepEqual(rows.slice().sort((a, b) => compareListRows(a, b, "rsLong", "desc")).map(r => r.ticker), ["B", "C", "A"]);
+    assert.deepEqual(rows.slice().sort((a, b) => compareListRows(a, b, "rsLong", "asc")).map(r => r.ticker), ["C", "B", "A"]);
 });
 
 test("positionSize risks 1% of capital against the stop distance", () => {
@@ -314,4 +363,18 @@ test("evaluateHolding exits when price falls below the Darvas/MACD stop", () => 
     c.weekly_chart.current_stage = "2B";
     c.weekly_chart.close_pct = [0, 5, 10, 15, 10]; // close0 = 120/1.1 ~ 109.1 -> stop ~ 122.2 > 120
     assert.equal(evaluateHolding(c).action, "EXIT");
+});
+
+test("sanitizeAllocation clamps user percentages and falls back to defaults", () => {
+    assert.deepEqual(sanitizeAllocation(undefined), { satellitePct: 50, riskPct: 1, maxPositionPct: 10 });
+    assert.deepEqual(sanitizeAllocation({ satellitePct: 30, riskPct: 0.5, maxPositionPct: 15 }), { satellitePct: 30, riskPct: 0.5, maxPositionPct: 15 });
+    assert.deepEqual(sanitizeAllocation({ satellitePct: 150, riskPct: 0, maxPositionPct: "abc" }), { satellitePct: 100, riskPct: 0.1, maxPositionPct: 10 });
+    assert.deepEqual(sanitizeAllocation({ satellitePct: "", riskPct: null }), { satellitePct: 50, riskPct: 1, maxPositionPct: 10 });
+});
+
+test("positionSize uses custom risk and max-position percentages", () => {
+    // 2% z 100000 = 2000 ryzyka / 10 na akcje = 200 akcji, limit 30% = 30000/110 = 272 -> 200
+    const s = positionSize({ price: 110, stop: 100, capital: 100000, riskPct: 0.02, maxPositionPct: 0.30 });
+    assert.equal(s.shares, 200);
+    assert.equal(s.cappedByMax, false);
 });
