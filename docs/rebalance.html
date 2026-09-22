@@ -37,6 +37,7 @@
     <div class="panel-card" id="settingsCard">
         <h3>Krok 1 — Ustawienia automatycznego rebalansu</h3>
         <p class="panel-hint">Rebalanser jest w pełni automatyczny: podajesz tylko ile spółek ma być w portfelu, a wagi dobiera sam wg aktualnego momentum. Pula, z której wybiera TOP N: <strong>SP500 (top 100 wg momentum, jak w SPMO) + cały Nasdaq 100 + cały Dow Jones</strong> — wszystko w USD. WIG20/mWIG40 mają teraz swój własny, osobny <a href="rebalance_pl.html">Rebalanser PL</a> (osobny portfel, osobne pozycje, PLN) — nadal też w pełni dostępne na dashboardzie.</p>
+        <p class="panel-hint">Portfel jest podzielony na <strong>Core (60% kapitału)</strong> — stabilne blue chipy z Dow Jones (dobijane z SP500, gdy Dow nie ma ich wystarczająco), z priorytetem dla spółek w Etapie 2 (potwierdzona faza wzrostowa) — i <strong>Satelitę (40% kapitału)</strong> — resztę puli wg czystego momentum, dodatkowo faworyzującą spółki z indeksu, który dziś wygrywa 12-miesięczny wyścig Global Equity Momentum.</p>
         <div class="settings-row">
             <label for="portfolioSize">Liczba spółek w portfelu (TOP N z puli)</label>
             <input type="number" id="portfolioSize" class="contribution-input" min="1" step="1" placeholder="np. 20">
@@ -45,6 +46,7 @@
             <label>Kwota dopłaty w tym miesiącu ($)</label>
             <input type="number" id="contribution" class="contribution-input" min="0" step="50" placeholder="np. 500">
             <div class="settings-hint" id="capitalHint"></div>
+            <div class="settings-hint" id="coreSatelliteHint"></div>
         </div>
     </div>
 
@@ -52,7 +54,7 @@
         <h3>Krok 2 — ranking puli <span class="ref-date-note" id="poolMeta"></span>
             <button type="button" class="collapse-toggle-btn" id="poolToggleBtn"></button>
         </h3>
-        <p class="panel-hint">Pełna, posortowana lista spółek, z której rebalanser wybiera automatycznie — nic tu nie klikasz ręcznie, żeby dodać spółkę do portfela. Sortuj po dowolnej kolumnie i sprawdzaj wykres dowolnej spółki przyciskiem 📈. Filtr etapu Weinsteina poniżej (można zaznaczyć kilka naraz, np. 1 i 2) <strong>realnie zawęża pulę, z której dobierany jest TOP N</strong> — nie jest tylko podglądem: zaznaczenie np. samego Etapu 2 oznacza "kupuj tylko spośród spółek w Etapie 2". Kolumna "W portfelu" pokazuje, czy dana spółka mieści się w dzisiejszym TOP N (po uwzględnieniu filtra). Domyślnie zwinięta — kliknij "Rozwiń", żeby ją zobaczyć.</p>
+        <p class="panel-hint">Pełna, posortowana lista spółek, z której rebalanser wybiera automatycznie — nic tu nie klikasz ręcznie, żeby dodać spółkę do portfela. Sortuj po dowolnej kolumnie i sprawdzaj wykres dowolnej spółki przyciskiem 📈. Filtr etapu Weinsteina poniżej (można zaznaczyć kilka naraz, np. 1 i 2) <strong>realnie zawęża pulę, z której dobierany jest TOP N</strong> — nie jest tylko podglądem: zaznaczenie np. samego Etapu 2 oznacza "kupuj tylko spośród spółek w Etapie 2". Kolumna "Grupa" pokazuje, czy dana spółka mieści się dziś w Core, Satelicie, czy poza portfelem (po uwzględnieniu filtra). Domyślnie zwinięta — kliknij "Rozwiń", żeby ją zobaczyć.</p>
         <div id="poolCollapsibleContent">
         <div class="stage-filter-bar" id="poolStageFilterBar">
             <span class="stage-filter-label">Etap Weinsteina (można zaznaczyć kilka):</span>
@@ -76,7 +78,7 @@
                     <th data-key="volatility_pct">Zmienność</th>
                     <th data-key="momentum_score">Momentum Score</th>
                     <th>Etap</th>
-                    <th>W portfelu</th>
+                    <th>Grupa</th>
                     <th class="chart-col">Wykres</th>
                 </tr>
             </thead>

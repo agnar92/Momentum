@@ -26,25 +26,44 @@ const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapit
 // historii projektowej rebalansera) rozdzielił USA/PL na dwie niezależne
 // połówki: żeby nigdy nie zsumować kwoty w PLN z kwotą w USD. Ten plik ma
 // więc WŁASNE klucze localStorage (holdingi/wykluczenia/ustawienia — osobny
-// portfel od Rebalansera USA), a jego pula jest zawsze w 100% PLN, więc —
-// w przeciwieństwie do rebalance.js — nie potrzeba tu żadnego mnożnika
-// faworyzującego jeden indeks nad drugim (DOWJONES_WEIGHT_MULTIPLIER w
-// rebalance.js), bo o coś takiego nikt dla WIG20/mWIG40 nie prosił.
+// portfel od Rebalansera USA).
 //
 // Pula (REBALANCE_UNIVERSES niżej) to WIG20 + mWIG40, oba w CAŁOŚCI: oba są
 // EQUAL_WEIGHT_UNIVERSES w run_query.py (bez selekcji kwintylowej — patrz
 // CLAUDE.md), więc ich `constituents` to już cały skład indeksu, tak samo
 // jak DOWJONES w rebalance.js — nie ma tu odpowiednika NASDAQ100's
 // `all_constituents` (które musiało sięgać PO ZA kwintylową selekcję).
+//
+// FAWORYZOWANIE ZWYCIĘSKIEGO INDEKSU — na wyraźną prośbę użytkownika, ten sam
+// mechanizm co "satelita faworyzuje zwycięzcę GEM" w rebalance.js (patrz
+// WINNER_INDEX_WEIGHT_MULTIPLIER tam), ale z RĘCZNIE wpisywanym zwrotem
+// 12-miesięcznym zamiast automatycznych danych z pipeline'u — bo, w
+// przeciwieństwie do SP500/NASDAQ100/DOWJONES, yfinance nigdy nie miał
+// historii dla tickerów-indeksów WIG20.WA/mWIG40.WA (tylko żywa cena, patrz
+// CLAUDE.md/"Global Equity Momentum"), więc nie ma tu skąd automatycznie
+// wziąć prawdziwego zwrotu. To ten sam pomysł co dawny, usunięty
+// GEM_MANUAL_KEY widget na tej stronie (patrz CLAUDE.md — "jeśli podobna
+// potrzeba wróci, re-read this note") — teraz ma realną robotę do wykonania:
+// Krok 1 dostaje dwa pola liczbowe (zwrot 12M dla WIG20/mWIG40), a ten z
+// wyższą wartością dostaje WINNER_INDEX_WEIGHT_MULTIPLIER razy większą surową
+// wagę w computeAutoTargets — sama SELEKCJA (które spółki wchodzą do TOP N)
+// nadal bazuje wyłącznie na momentum_score, bez tego mnożnika (ta sama zasada
+// co w rebalance.js: "wagi", nie "dobór"). Puste/równe pola -> brak
+// faworyzowania, zachowanie identyczne jak przed tą zmianą.
 // ============================================================
 const REBALANCE_UNIVERSES = ["WIG20", "MWIG40"];
 const REBALANCE_UNIVERSE_LABELS = { WIG20: "WIG20", MWIG40: "mWIG40" };
+
+// Ta sama wartość i ten sam mechanizm co WINNER_INDEX_WEIGHT_MULTIPLIER w
+// rebalance.js — podkręć/przykręć tu, jeśli efekt ma być mocniejszy/słabszy.
+const WINNER_INDEX_WEIGHT_MULTIPLIER = 1.5;
 
 const SETTINGS_KEY = "momentum_rebalance_pl_settings";
 const HOLDINGS_KEY = "momentum_rebalance_pl_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_pl_excluded";
 const POOL_COLLAPSED_KEY = "momentum_rebalance_pl_pool_collapsed";
 const STAGE_FILTER_KEY = "momentum_rebalance_pl_stage_filter";
+const MANUAL_RETURNS_KEY = "momentum_rebalance_pl_manual_returns";
 
 // portfolioSize — ile spółek (TOP N z puli, patrz wyżej) ma być w portfelu;
 // jedyny "wybór" jaki użytkownik podejmuje, resztą (który to konkretnie
@@ -108,10 +127,33 @@ function savePoolStageFilter(v) {
     localStorage.setItem(STAGE_FILTER_KEY, JSON.stringify(v === "ALL" ? "ALL" : [...v]));
 }
 
+// Ręcznie wpisane zwroty 12-miesięczne dla WIG20/mWIG40 (patrz duży komentarz
+// na górze pliku) — { WIG20: number|null, MWIG40: number|null }. Puste pole ->
+// null -> winnerUniverseFromManualReturns() go po prostu ignoruje.
+function loadManualReturns() {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(MANUAL_RETURNS_KEY));
+        return { WIG20: null, MWIG40: null, ...(parsed || {}) };
+    } catch (e) { return { WIG20: null, MWIG40: null }; }
+}
+function saveManualReturns(v) { localStorage.setItem(MANUAL_RETURNS_KEY, JSON.stringify(v)); }
+
 let settings = loadSettings();
 let holdings = loadHoldings();
 let excluded = loadExcluded();
 let poolCollapsed = loadPoolCollapsed();
+let manualReturns = loadManualReturns();
+
+// Który z dwóch indeksów dziś "wygrywa" wg ręcznie wpisanych zwrotów 12M —
+// null gdy oba pola puste albo równe (brak faworyzowania).
+function winnerUniverseFromManualReturns() {
+    const wig20 = manualReturns.WIG20;
+    const mwig40 = manualReturns.MWIG40;
+    if (typeof wig20 !== "number" && typeof mwig40 !== "number") return null;
+    if (typeof wig20 === "number" && (typeof mwig40 !== "number" || wig20 > mwig40)) return "WIG20";
+    if (typeof mwig40 === "number" && (typeof wig20 !== "number" || mwig40 > wig20)) return "MWIG40";
+    return null; // rowne zwroty -> brak faworyzowania
+}
 
 async function loadUniverseData() {
     for (const u of REBALANCE_UNIVERSES) {
@@ -302,6 +344,15 @@ function combinedPoolRows() {
         });
     });
     return [...byTicker.values()].sort((a, b) => (b.momentum_score || 0) - (a.momentum_score || 0));
+}
+
+// Zbiór tickerów rzeczywiście należących do danego uniwersum — używane przez
+// faworyzowanie zwycięzcy (computeAutoTargets) do rozstrzygania PRAWDZIWEGO
+// członkostwa zamiast post-deduplikacyjnego `row.universe` z combinedPoolRows()
+// (deduplikacja wybiera uniwersum z WYŻSZYM momentum_score, nie z "wartym
+// faworyzowania") — ten sam wzorzec/uzasadnienie co w rebalance.js.
+function trueUniverseTickerSet(universe) {
+    return new Set(poolRowsForUniverse(universe).map(c => c.ticker));
 }
 
 // Filtr etapow Weinsteina (Krok 2, patrz stage-filter-bar w rebalance_pl.html) —
@@ -732,17 +783,22 @@ function renderCapitalHint() {
 // Zwraca { targets: {ticker: {...}} } dla automatycznie wybranego TOP N
 // (patrz autoSelectedRows). Waga = AKTUALNY momentum_score z puli, znormalizowany
 // do 100% w obrębie wybranego TOP N — to samo świadome uproszczenie względem
-// cap-ważenia z pipeline'u co w rebalance.js (patrz tamten komentarz), bez
-// żadnego dodatkowego mnożnika (WIG20/mWIG40 traktowane symetrycznie, w
-// przeciwieństwie do DOWJONES_WEIGHT_MULTIPLIER w Rebalanserze USA — nikt o
-// taki tilt tutaj nie prosił).
+// cap-ważenia z pipeline'u co w rebalance.js (patrz tamten komentarz) — poza
+// jednym, celowym wyjątkiem: spółki należące (prawdziwe członkostwo, patrz
+// trueUniverseTickerSet) do indeksu wskazanego przez winnerUniverseFromManualReturns()
+// (patrz duży komentarz na górze pliku i WINNER_INDEX_WEIGHT_MULTIPLIER) dostają
+// WINNER_INDEX_WEIGHT_MULTIPLIER razy wyższą surową wagę. Bez wpisanych zwrotów
+// (albo przy równych) winner to null i wszystko wraca do symetrycznego ważenia.
 function computeAutoTargets(n, totalCapital) {
     const rows = autoSelectedRows(n);
+    const winnerUniverse = winnerUniverseFromManualReturns();
+    const winnerTickers = winnerUniverse ? trueUniverseTickerSet(winnerUniverse) : new Set();
     const raw = {};
     rows.forEach(c => {
+        const boost = winnerTickers.has(c.ticker) ? WINNER_INDEX_WEIGHT_MULTIPLIER : 1;
         raw[c.ticker] = {
             ticker: c.ticker, universes: [c.universe], price: c.price, target_value: 0,
-            raw_weight: c.momentum_score || 0,
+            raw_weight: (c.momentum_score || 0) * boost,
             momentum_pct: c.momentum_pct, volatility_pct: c.volatility_pct,
         };
     });
@@ -1139,12 +1195,54 @@ function initSettingsForm() {
     document.getElementById("portfolioSize").addEventListener("input", onChange);
 }
 
+// Krok 1 — dwa pola do ręcznego wpisania zwrotu 12-miesięcznego dla WIG20/
+// mWIG40 (patrz duży komentarz na górze pliku dla pełnego uzasadnienia). Puste
+// pole -> null -> winnerUniverseFromManualReturns() je ignoruje.
+function initManualReturnsForm() {
+    const wig20Input = document.getElementById("manualReturnWig20");
+    const mwig40Input = document.getElementById("manualReturnMwig40");
+    if (!wig20Input || !mwig40Input) return;
+    wig20Input.value = manualReturns.WIG20 ?? "";
+    mwig40Input.value = manualReturns.MWIG40 ?? "";
+    const onChange = () => {
+        const wig20Val = wig20Input.value.trim();
+        const mwig40Val = mwig40Input.value.trim();
+        manualReturns = {
+            WIG20: wig20Val === "" ? null : parseFloat(wig20Val),
+            MWIG40: mwig40Val === "" ? null : parseFloat(mwig40Val),
+        };
+        saveManualReturns(manualReturns);
+        renderPoolTable();
+        refreshOutputs();
+    };
+    wig20Input.addEventListener("input", onChange);
+    mwig40Input.addEventListener("input", onChange);
+}
+
+// Krótki, informacyjny odczyt, który indeks (jeśli którykolwiek) jest dziś
+// faworyzowany wg ręcznie wpisanych zwrotów — ten sam wzorzec co
+// renderCoreSatelliteNote w rebalance.js.
+function renderWinnerNote() {
+    const el = document.getElementById("winnerHint");
+    if (!el) return;
+    const winnerUniverse = winnerUniverseFromManualReturns();
+    if (!winnerUniverse) {
+        el.textContent = manualReturns.WIG20 === null && manualReturns.MWIG40 === null
+            ? "Wpisz zwroty 12M obu indeksów, żeby faworyzować spółki z tego, który dziś wygrywa."
+            : "Równe zwroty — brak faworyzowania.";
+        return;
+    }
+    const ret = manualReturns[winnerUniverse];
+    el.textContent = `🏆 ${REBALANCE_UNIVERSE_LABELS[winnerUniverse]} faworyzowany (${ret >= 0 ? "+" : ""}${ret.toFixed(2)}%)`;
+}
+
 // Odświeża sugestię + Monte Carlo + analizę portfela + wykres historyczny
-// (renderSuggestions woła te pierwsze trzy) — wołane po każdej zmianie
-// ustawień/holdingów/wykluczeń.
+// (renderSuggestions woła te pierwsze trzy) + odczyt zwycięzcy — wołane po
+// każdej zmianie ustawień/holdingów/wykluczeń/ręcznych zwrotów.
 function refreshOutputs() {
     renderSuggestions();
     renderEquityCurve();
+    renderWinnerNote();
 }
 
 function renderAll() {
@@ -1160,6 +1258,7 @@ if (typeof document !== "undefined") {
         initConnStatus();
         await loadUniverseData();
         initSettingsForm();
+        initManualReturnsForm();
         initHoldingsForm();
         initXtbImport();
         initTvExport();
@@ -1184,16 +1283,16 @@ if (typeof document !== "undefined") {
 // i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES,
+        REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES, WINNER_INDEX_WEIGHT_MULTIPLIER,
         fmtMoney, fmtMoneyPln, currentMoneyFmt, holdingsMoneyFmt, moneyFmtForCurrency, fmtQty, sharesSuggestion,
         currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets, matchesPoolStageFilter,
-        loadPoolStageFilter, savePoolStageFilter,
+        loadPoolStageFilter, savePoolStageFilter, loadManualReturns, saveManualReturns, winnerUniverseFromManualReturns,
         deriveUniverseFractionsFromTargets, normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
         // Testy potrzebują ustawić moduł-poziomu stan (universeData/settings/excluded/
-        // holdings/priceMap/equityCurveData) bez importu przez window — to jedyny
-        // sposób bez przepisywania modułu na klasę.
+        // holdings/priceMap/equityCurveData/manualReturns) bez importu przez window —
+        // to jedyny sposób bez przepisywania modułu na klasę.
         _setState(s) {
             if (s.universeData !== undefined) universeData = s.universeData;
             if (s.settings !== undefined) settings = s.settings;
@@ -1202,6 +1301,7 @@ if (typeof module !== "undefined" && module.exports) {
             if (s.priceMap !== undefined) priceMap = s.priceMap;
             if (s.equityCurveData !== undefined) equityCurveData = s.equityCurveData;
             if (s.poolStageFilter !== undefined) poolStageFilter = s.poolStageFilter;
+            if (s.manualReturns !== undefined) manualReturns = s.manualReturns;
         },
     };
 }
