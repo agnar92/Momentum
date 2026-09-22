@@ -13,11 +13,12 @@ if (typeof require === "function" && typeof window === "undefined") {
 }
 
 // Uniwersa z WŁASNĄ zakładką/tabelą momentum w dashboardzie (sidebar + drawer).
-// SP500/NASDAQ100 zostały z niej usunięte na życzenie użytkownika (dashboard ma
-// już ekran RSM Stabilne/Wzrostowe, który je i tak obejmuje) — ale ZOSTAJĄ w
-// UNIVERSES: dalej są ładowane, przeszukiwalne (Ctrl+K) i widoczne na ekranach
-// RSM (patrz combinedRsmCandidates), tylko bez własnej, dedykowanej tabeli.
-const SIDEBAR_TAB_UNIVERSES = ["DOWJONES", "WIG20", "MWIG40", "SWIG80"];
+// SP500/NASDAQ100 były stąd kiedyś usunięte (ekran RSM je i tak obejmował), ale
+// wróciły na życzenie użytkownika jako pełne replikacje indeksów momentum —
+// SP500 to replikacja S&P 500 Momentum Index (ETF SPMO), NASDAQ100 analogicznie
+// Nasdaq 100 Momentum. Tabela pokazuje `constituents` (selekcja top-kwintyla z
+// wagami z compute_weights), nie `all_constituents`.
+const SIDEBAR_TAB_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES", "WIG20", "MWIG40", "SWIG80"];
 
 // ============================================================
 // PANEL "Dane spółki (TradingView)" — pełna, jednostronicowa "wizytówka"
@@ -238,7 +239,7 @@ const state = {
     selectedUniverse: null,
     currentRsEntry: null,
     drawerOpen: false,
-    drawerUniverse: "DOWJONES",
+    drawerUniverse: "SP500",
     chartView: "own",
     stageFilter: "ALL",
     sortKey: "rank",
@@ -571,11 +572,10 @@ function selectTicker(ticker, universe) {
 }
 
 // Przełącza zakładkę drawer na uniwersum danego tickera (żeby podświetlenie
-// w tabeli/kafelkach było spójne) i pokazuje jego wykres. SP500/NASDAQ100 nie
-// mają już własnej zakładki (patrz SIDEBAR_TAB_UNIVERSES) — wynik wyszukiwania
-// Ctrl+K dla ich tickera wtedy tylko aktualizuje wybór/wykres, bez przełączania
-// drawera na nieistniejącą zakładkę (żaden .drawer-tab nie ma takiego
-// data-universe, więc poniższy toggle i tak nie podświetli żadnego taba).
+// w tabeli/kafelkach było spójne) i pokazuje jego wykres. Gdy uniwersum nie ma
+// własnej zakładki (patrz SIDEBAR_TAB_UNIVERSES), wynik wyszukiwania Ctrl+K
+// tylko aktualizuje wybór/wykres, bez przełączania drawera na nieistniejącą
+// zakładkę.
 function jumpToTicker(ticker, universe) {
     const hasTab = !!document.querySelector(`.drawer-tab[data-universe="${universe}"]`);
     document.querySelectorAll(".drawer-tab").forEach(t => t.classList.toggle("active", t.dataset.universe === universe));
@@ -1235,12 +1235,14 @@ if (typeof document !== "undefined") {
             document.querySelector(".workspace").classList.remove("mobile-chart-view");
         });
         // Domyslnie wybrana spolka: pierwsza z domyslnej zakladki drawera
-        // (state.drawerUniverse, dzis DOWJONES) — SP500 nie ma juz wlasnej
-        // zakladki, wiec nie mozemy juz na sztywno wskazywac "SPY"/"SP500".
+        // (state.drawerUniverse, dzis SP500 — replikacja SPMO).
         const defaultRows = (state.data[state.drawerUniverse] || {}).constituents || [];
         if (defaultRows.length > 0) {
             state.selectedTicker = defaultRows[0].ticker;
             state.selectedUniverse = state.drawerUniverse;
+            // Bez tego domyslna spolka zawsze pokazywala "Brak wlasnego
+            // wykresu" — currentRsEntry ustawial dotad tylko selectTicker().
+            state.currentRsEntry = findRsEntry(state.selectedTicker, state.selectedUniverse);
         }
         updateChartArea();
         hideLoadingOverlay();

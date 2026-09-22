@@ -49,6 +49,16 @@
         <button class="expand-btn" id="toggleDrawerBtn">&gt;&gt;&gt;</button>
 
         <div class="sidebar-group">
+            <div class="sidebar-group-label" title="Replikacja S&amp;P 500 Momentum Index (jak ETF SPMO): top kwintyl SP500 wg momentum (~100 spółek), wagi fmc × momentum_score z capem 9%.">S&amp;P 500 Momentum (SPMO)</div>
+            <div class="ticker-grid" id="tiles-SP500"></div>
+        </div>
+
+        <div class="sidebar-group">
+            <div class="sidebar-group-label" title="Replikacja Nasdaq 100 Momentum: top kwintyl NASDAQ100 wg momentum, wagi fmc × momentum_score z capem 9%.">Nasdaq 100 Momentum</div>
+            <div class="ticker-grid" id="tiles-NASDAQ100"></div>
+        </div>
+
+        <div class="sidebar-group">
             <div class="sidebar-group-label">Dow Jones</div>
             <div class="ticker-grid" id="tiles-DOWJONES"></div>
         </div>
@@ -96,11 +106,13 @@
     <div class="table-drawer" id="tableDrawer">
         <div class="drawer-header">
             <div class="drawer-header-title">
-                <h2 id="drawerTitle">Pełna tabela — Dow Jones Momentum</h2>
+                <h2 id="drawerTitle">Pełna tabela — S&amp;P 500 Momentum</h2>
                 <div class="drawer-meta" id="drawerMeta"></div>
             </div>
             <div class="drawer-tabs">
-                <button class="drawer-tab active" data-universe="DOWJONES">Dow Jones</button>
+                <button class="drawer-tab active" data-universe="SP500" title="Replikacja S&amp;P 500 Momentum Index (ETF SPMO)">S&amp;P 500 (SPMO)</button>
+                <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
+                <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
                 <button class="drawer-tab" data-universe="WIG20">WIG20</button>
                 <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
                 <button class="drawer-tab" data-universe="SWIG80">sWIG80</button>
