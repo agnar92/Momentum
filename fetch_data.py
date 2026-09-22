@@ -281,13 +281,18 @@ def _download_price_rows(tickers, start_date, end_date, include_ohlc=False):
     Zwraca (rows, fetched_tickers, failed_tickers) — sama logika sieciowa/parsująca,
     bez dotykania DuckDB, żeby dało się jej użyć zarówno przy pełnym bootstrapie,
     jak i przy przyrostowym doszacowaniu/backfillu nowych spółek, jak i przy
-    (5-kolumnowych, bez High/Low) cenach poziomu indeksu (update_index_prices).
+    cenach poziomu indeksu (update_index_prices, teraz też z High/Low — patrz
+    include_ohlc niżej).
 
     include_ohlc=True dokłada High/Low na końcu każdego wiersza (7-krotka zamiast
-    5-krotki) — używane tylko dla tabeli `prices` (per-spółka), do wyliczenia w
-    run_query.py wolumenu kupujących/sprzedających metodą Close Location Value.
-    `index_prices` tego nie potrzebuje, stąd domyślnie False (żeby nie zaburzać
-    jej dotychczasowego, 5-kolumnowego schematu).
+    5-krotki) — używane dla tabeli `prices` (per-spółka), do wyliczenia w run_query.py
+    wolumenu kupujących/sprzedających metodą Close Location Value, ORAZ (od
+    dodania korekty ATR do Siły Relatywnej, na wyraźne życzenie użytkownika) dla
+    `index_prices` — update_index_prices woła to z include_ohlc=True dla
+    YFINANCE_BACKED_INDEX_UNIVERSES i SECTOR_ETF_SYMBOLS, żeby run_query.py::
+    _weekly_atr miał High/Low również dla BENCHMARKU, nie tylko dla spółki.
+    Domyślnie False tylko dlatego, że nie każdy wywołujący tego potrzebuje (np.
+    testy/proste odświeżenia poziomu indeksu bez ATR).
 
     Każdy ticker, który po paczkowym pobraniu nadal nie ma żadnego wiersza, jest
     dogrywany jeszcze raz POJEDYNCZO (zapytanie o jeden symbol) zanim ostatecznie
@@ -445,33 +450,55 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
     dotychczas. Zwraca pusty DataFrame (bez rzucania wyjatku), gdy
     index_constituents/prices jeszcze nie istnieja (swiezy bootstrap) albo nie
     maja danych dla tego uniwersum w podanym oknie."""
+    empty_cols = ["Date", "Index_Name", "Close", "Adj_Close", "Volume", "High", "Low"]
     if not _table_exists(con, "index_constituents") or not _table_exists(con, "prices"):
-        return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
+        return pd.DataFrame(columns=empty_cols)
 
     tickers = con.execute(
         "SELECT Ticker FROM index_constituents WHERE Index_Name = ?", [index_name]
     ).fetchdf()["Ticker"].tolist()
     if not tickers:
-        return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
+        return pd.DataFrame(columns=empty_cols)
 
     con.register("_synth_tickers_tmp", pd.DataFrame({"Ticker": tickers}))
     prices_df = con.execute(f"""
-        SELECT Date, Ticker, Close FROM prices
+        SELECT Date, Ticker, Close, High, Low FROM prices
         WHERE Ticker IN (SELECT Ticker FROM _synth_tickers_tmp)
           AND Date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
         ORDER BY Date
     """).fetchdf()
     con.unregister("_synth_tickers_tmp")
     if prices_df.empty:
-        return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
+        return pd.DataFrame(columns=empty_cols)
 
     pivot = prices_df.pivot(index="Date", columns="Ticker", values="Close").sort_index()
     equal_weight_return = pivot.pct_change().mean(axis=1, skipna=True).fillna(0.0)
     level = (1.0 + equal_weight_return).cumprod() * WIG_SYNTHETIC_INDEX_BASE
 
+    # Syntetyczne High/Low: nie ma "prawdziwego" dziennego zakresu dla indeksu, ktory
+    # sam jest skladany ze skladnikow (patrz docstring powyzej) — na wyrazne zyczenie
+    # uzytkownika ("Strategia sily relatywnej musi byc skorygowana o ATR") potrzeba
+    # jednak JAKIEGOS zakresu, zeby run_query.py::_weekly_atr mial co policzyc dla
+    # WIG20/mWIG40/sWIG80 jako benchmarku. Budujemy go analogicznie do samego poziomu:
+    # sredni (rownowazony) dzienny stosunek High/Close i Low/Close WSROD skladnikow,
+    # zastosowany do syntetycznego poziomu — zachowuje wlasciwa SKALE dziennej
+    # zmiennosci (nie prawdziwy zakres konkretnego dnia, ktorego syntetyczny indeks
+    # nie ma), spojnie z tym, jak syntetyczny poziom sam jest juz tylko przyblizeniem
+    # kierunku/skali ruchu, nie realnym indeksem. Brakujace High/Low skladnika (NULL,
+    # stare wiersze `prices` sprzed migracji OHLC) sa pomijane per-dzien (skipna) —
+    # dzien bez ZADNEGO skladnika z High/Low dostaje stosunek 1.0 (High=Low=Close),
+    # czyli zerowy zakres tego dnia, zamiast NaN kaskadujacego w ATR.
+    high_ratio = (prices_df.pivot(index="Date", columns="Ticker", values="High") / pivot)
+    low_ratio = (prices_df.pivot(index="Date", columns="Ticker", values="Low") / pivot)
+    avg_high_ratio = high_ratio.mean(axis=1, skipna=True).reindex(level.index).fillna(1.0)
+    avg_low_ratio = low_ratio.mean(axis=1, skipna=True).reindex(level.index).fillna(1.0)
+    high = level * avg_high_ratio
+    low = level * avg_low_ratio
+
     return pd.DataFrame({
         "Date": level.index, "Index_Name": index_name,
         "Close": level.values, "Adj_Close": level.values, "Volume": 0,
+        "High": high.values, "Low": low.values,
     })
 
 
@@ -536,16 +563,22 @@ def update_index_prices(con, lookback_months):
     con.execute("""
         CREATE TABLE IF NOT EXISTS index_prices (
             Date DATE, Index_Name VARCHAR, Close DOUBLE, Adj_Close DOUBLE, Volume BIGINT,
+            High DOUBLE, Low DOUBLE,
             PRIMARY KEY (Date, Index_Name)
         )
     """)
+    _ensure_index_prices_ohlc_columns(con)
     start_date, end_date = get_full_refresh_range(lookback_months)
 
+    # include_ohlc=True: na wyrazne zyczenie uzytkownika ATR (Strategia sily
+    # relatywnej skorygowana o ATR — patrz run_query.py::_weekly_atr) potrzebuje
+    # High/Low BENCHMARKU (indeksu/ETF-u sektorowego), nie tylko spolki — patrz
+    # _ensure_index_prices_ohlc_columns powyzej.
     yf_backed = {name: INDEX_LEVEL_SYMBOLS[name] for name in YFINANCE_BACKED_INDEX_UNIVERSES}
     yf_symbols = list(yf_backed.values())
     print(f"🔄 Ceny poziomu indeksów (Global Equity Momentum): {start_date} → {end_date} dla {yf_symbols}...")
 
-    rows, fetched, failed = _download_price_rows(yf_symbols, start_date, end_date)
+    rows, fetched, failed = _download_price_rows(yf_symbols, start_date, end_date, include_ohlc=True)
     if failed:
         print(f"⚠️  Brak danych poziomu indeksu dla: {sorted(set(failed))}")
 
@@ -556,9 +589,9 @@ def update_index_prices(con, lookback_months):
         WHERE Index_Name IN ({yfinance_backed_sql}) AND Date >= DATE '{start_date}'
     """)
     if rows:
-        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+        df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume", "High", "Low"])
         df_insert["Index_Name"] = df_insert["Ticker"].map(symbol_to_index)
-        df_insert = df_insert[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
+        df_insert = df_insert[["Date", "Index_Name", "Close", "Adj_Close", "Volume", "High", "Low"]]  # noqa: F841
         con.execute("INSERT INTO index_prices SELECT * FROM df_insert")
     print(f"✅ Zapisano {len(rows)} wierszy danych poziomu indeksów "
           f"{'/'.join(YFINANCE_BACKED_INDEX_UNIVERSES)} ({start_date} → {end_date}).")
@@ -567,7 +600,8 @@ def update_index_prices(con, lookback_months):
     print(f"🔄 Ceny sektorowych ETF-ów SPDR (Siła Relatywna sektorów SP500): "
           f"{start_date} → {end_date} dla {sector_symbols}...")
 
-    sector_rows, sector_fetched, sector_failed = _download_price_rows(sector_symbols, start_date, end_date)
+    sector_rows, sector_fetched, sector_failed = _download_price_rows(sector_symbols, start_date, end_date,
+                                                                       include_ohlc=True)
     if sector_failed:
         print(f"⚠️  Brak danych sektorowego ETF-u dla: {sorted(set(sector_failed))}")
 
@@ -578,9 +612,10 @@ def update_index_prices(con, lookback_months):
         WHERE Index_Name IN ({sector_names_sql}) AND Date >= DATE '{start_date}'
     """)
     if sector_rows:
-        df_sector = pd.DataFrame(sector_rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+        df_sector = pd.DataFrame(sector_rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume",
+                                                         "High", "Low"])
         df_sector["Index_Name"] = df_sector["Ticker"].map(sector_symbol_to_name)
-        df_sector = df_sector[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
+        df_sector = df_sector[["Date", "Index_Name", "Close", "Adj_Close", "Volume", "High", "Low"]]  # noqa: F841
         con.execute("INSERT INTO index_prices SELECT * FROM df_sector")
     print(f"✅ Zapisano {len(sector_rows)} wierszy danych sektorowych ETF-ów SPDR ({start_date} → {end_date}).")
 
@@ -593,6 +628,22 @@ def update_index_prices(con, lookback_months):
         con.execute("INSERT INTO index_prices SELECT * FROM synth")
         print(f"✅ Zbudowano syntetyczny poziom indeksu {index_name}: {len(synth)} dni "
               f"(równoważony zwrot składników, baza={WIG_SYNTHETIC_INDEX_BASE}).")
+
+
+def _ensure_index_prices_ohlc_columns(con):
+    """Migracja analogiczna do _ensure_prices_ohlc_columns, ale dla `index_prices` —
+    High/Low dodane tam na wyrazne zyczenie uzytkownika ("Strategia sily relatywnej
+    musi byc skorygowana o ATR"), zeby run_query.py mogl policzyc ATR rowniez dla
+    BENCHMARKU (indeksu/ETF-u sektorowego), nie tylko dla samej spolki. Idempotentne
+    (ADD COLUMN IF NOT EXISTS), tak samo jak dla `prices`. Stare wiersze dostaja NULL
+    w High/Low, dopoki nie wypadna z rolling okna retencji i nie zostana zastapione
+    swiezymi danymi (fetch_data.py teraz pobiera je z include_ohlc=True dla
+    YFINANCE_BACKED_INDEX_UNIVERSES i SECTOR_ETF_SYMBOLS, i syntetyzuje dla
+    SYNTHETIC_INDEX_UNIVERSES — patrz update_index_prices/_compute_synthetic_equal_
+    weight_index) — run_query.py's ATR liczy wtedy None zamiast sie wywalac, ta sama
+    konwencja co CLV w _weekly_close_series."""
+    con.execute("ALTER TABLE index_prices ADD COLUMN IF NOT EXISTS High DOUBLE")
+    con.execute("ALTER TABLE index_prices ADD COLUMN IF NOT EXISTS Low DOUBLE")
 
 
 def _ensure_prices_ohlc_columns(con):
@@ -675,7 +726,7 @@ def _prices_history_is_shallow(con, lookback_months):
     return pd.Timestamp(oldest) > needed_start + pd.Timedelta(days=14)
 
 
-def update_duckdb(lookback_months=22, min_coverage=0.8, indices_only=False):
+def update_duckdb(lookback_months=26, min_coverage=0.8, indices_only=False):
     con = duckdb.connect("momentum_data.duckdb")
 
     if indices_only:
@@ -715,11 +766,16 @@ if __name__ == "__main__":
         description="Odświeża bazę cen (bootstrap za pierwszym razem, potem przyrostowo: "
                      "dogrywa nowe dni + przycina historię do --lookback-months) i skład indeksów (CSV)."
     )
-    parser.add_argument("--lookback-months", type=int, default=22,
+    parser.add_argument("--lookback-months", type=int, default=26,
                          help="Ile miesięcy historii cen trzymać w bazie (retencja) oraz zakres "
-                              "pierwszego pełnego pobrania / backfillu nowych spółek. 22 (nie 15) "
-                              "daje SMA30/oscylatorowi Mansfield realny zapas historii PRZED "
-                              "początkiem ~14-miesięcznego okna momentum, patrz run_query.py.")
+                              "pierwszego pełnego pobrania / backfillu nowych spółek. 26 (nie 22, nie "
+                              "15) daje SMA30/oscylatorowi Mansfield realny zapas historii PRZED "
+                              "początkiem ~14-miesięcznego okna momentum, ORAZ (od dodania korekty ATR "
+                              "do Siły Relatywnej) wystarczające ~113 tyg. dla "
+                              "compute_sector_relative_strength, któremu jego pojedyncza, BIEŻĄCA "
+                              "wartość RSM (2*SECTOR_STRATEGY_RSM_WEEKS-1 = 103 tyg. minimum, nie tylko "
+                              "część wyświetlanego okna jak na wykresie) po prostu wychodziła `None` dla "
+                              "KAŻDEGO sektora przy 22 mies. — patrz run_query.py/CLAUDE.md.")
     parser.add_argument("--min-coverage", type=float, default=0.8,
                          help="Minimalne pokrycie tickerów wymagane przy PIERWSZYM (bootstrap) pobraniu.")
     parser.add_argument("--indices-only", action="store_true",

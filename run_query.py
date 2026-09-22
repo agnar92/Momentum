@@ -1200,7 +1200,8 @@ def compute_relative_strength_leaders(con, universe, ref_date, index_return_pct,
     return records
 
 
-def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, include_buying_volume=False):
+def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, include_buying_volume=False,
+                          include_high_low=False):
     """Tygodniowe zamknięcia (ostatnia cena w tygodniu, DATE_TRUNC('week', Date)) dla
     id_column=id_value (Ticker w `prices` albo Index_Name w `index_prices`), od
     start_date do end_date (włącznie). Dolicza też SUM(Volume) w tygodniu — używane
@@ -1239,7 +1240,18 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, 
     compute_mansfield_rs_chart) uzywane jest "week_end": realny bug zglosony przez
     uzytkownika — dymek na wykresie pokazywal poniedzialek (np. 2026-09-07), mimo
     ze cena/wskazniki w nim byly z piatkowego zamkniecia (2026-09-11), bo "dates"
-    budowalo sie z "week_start" zamiast z faktycznej daty ostatniej sesji."""
+    budowalo sie z "week_start" zamiast z faktycznej daty ostatniej sesji.
+
+    include_high_low=True dolicza SAMO tygodniowe MAX(High)/MIN(Low), NIEZALEZNIE
+    od include_buying_volume — potrzebne przez _weekly_atr (korekta ATR Sily
+    Relatywnej, na wyrazne zyczenie uzytkownika) dla serii, ktore nie potrzebuja
+    (albo, jak `index_prices`, nie MAJA sensownego) podzialu wolumenu na kupujacych/
+    sprzedajacych, tylko sam zakres High/Low do policzenia True Range. Dziala
+    zarowno dla `prices` (spolka), jak i `index_prices` (benchmark — indeks/ETF
+    sektorowy/syntetyczny poziom WIG20/mWIG40/sWIG80, wszystkie maja teraz
+    kolumny High/Low, patrz fetch_data.py::_ensure_index_prices_ohlc_columns).
+    include_buying_volume=True juz i tak dolicza High/Low (potrzebne do CLV) —
+    include_high_low nie dublowuje tych kolumn, gdy oba flagi sa prawdziwe naraz."""
     ohlc_select = ""
     if include_buying_volume:
         ohlc_select = """,
@@ -1247,6 +1259,10 @@ def _weekly_close_series(con, table, id_column, id_value, start_date, end_date, 
                      WHEN High IS NULL OR Low IS NULL OR High <= Low THEN Volume * 0.5
                      ELSE Volume * ((2 * Close - High - Low) / (High - Low) + 1) / 2.0
                    END) AS buying_volume,
+               MAX(High) AS high,
+               MIN(Low) AS low"""
+    elif include_high_low:
+        ohlc_select = """,
                MAX(High) AS high,
                MIN(Low) AS low"""
     return con.execute(f"""
@@ -1811,6 +1827,81 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     }
 
 
+# --- Korekta ATR Sily Relatywnej (Mansfield RS) — na wyrazne zyczenie uzytkownika:
+# "Strategia sily relatywnej musi byc skorygowna o ATR z tego samego okresu. czyli
+# cena akcji i cena benchmarku skorygowana o ATR z aktywu." Zamiast klasycznego
+# RS = cena_spolki / cena_benchmarku (ktory czysto porownuje POZIOMY cen, bez
+# wzgledu na to, jak zmienny jest kazdy z nich), kazda strona jest NAJPIERW
+# skalowana WLASNYM ATR (spolka przez swoj ATR, benchmark przez swoj — nie jeden
+# wspolny ATR dla obu), a dopiero potem brany jest stosunek:
+#   RS = (cena_spolki / ATR_spolki) / (cena_benchmarku / ATR_benchmarku)
+# ATR kazdej strony liczony jest na TYM SAMYM oknie (`weeks`), co wygladzanie
+# Mansfielda, ktore z tego RS potem korzysta (dopiero na TAK policzonym RS
+# nakladane jest RSM = (RS / SMA(RS, weeks) - 1) * 100, formula bez zmian) — a
+# nie na jednym, stalym okresie ATR dla wszystkich okien naraz (uzytkownik
+# wybral to jawnie: krotki panel 13-tyg. dostaje ATR(13), sredni 26-tyg. ATR(26),
+# dlugi/sektorowy 52-tyg. ATR(52)). Zastosowane wszedzie, gdzie liczy sie
+# oscylator Mansfielda: compute_mansfield_rs_chart (wykres na dashboardzie/
+# chart.html) i _mansfield_rsm_current_value (Krok 2/3/4 Strategii sily
+# relatywnej, compute_sector_relative_strength) — druga z nich przez ten sam
+# wspolny helper (_atr_adjusted_rs_raw nizej), zeby formula nie zyla w dwoch
+# miejscach.
+#
+# ATR = prosta srednia ruchoma (NIE wygladzanie Wildera) True Range na `weeks`
+# tygodniach — ta sama konwencja co kanal Kellera w TTM Squeeze (patrz komentarz
+# nad TTM_SQUEEZE_* stalymi nizej), _weekly_atr jest teraz WSPOLNYM helperem dla
+# obu (compute_ttm_squeeze_chart woła go zamiast wlasnej, zduplikowanej kopii tej
+# samej formuly).
+#
+# Wymaga High/Low OBU stron (spolki i benchmarku — patrz _weekly_close_series
+# include_high_low=True i fetch_data.py::_ensure_index_prices_ohlc_columns, ktora
+# dodala High/Low rowniez do `index_prices`, nie tylko `prices`) — bez nich ATR
+# wychodzi NaN i caly RS/RSM dla danego tygodnia jest None, ta sama konwencja
+# "None zamiast bledu przy brakujacych danych" co reszta tego modulu. Poniewaz
+# ATR sam potrzebuje `weeks` tygodni rozgrzewki PRZED tym, zanim rolling srednia
+# RS (kolejne `weeks` tygodni) moze zaczac dawac wartosci, KAZDY konsument tej
+# korekty potrzebuje PODWOJNEGO zapasu (2*weeks) przed pierwszym wyswietlanym/
+# liczonym tygodniem — dokladnie ta sama "podwojny zapas" zasada, co juz ma
+# histogram w compute_ttm_squeeze_chart (2*TTM_SQUEEZE_KC_WEEKS+2), z tego
+# samego powodu (regresja/rolling-srednia nad juz-wygladzona seria).
+
+
+def _weekly_true_range(df):
+    """True Range tygodniowy: max(high-low, |high-prev_close|, |low-prev_close|) —
+    klasyczna definicja, na kolumnach close/high/low ramki `df` (posortowanej
+    chronologicznie, patrz _weekly_close_series). Wspolny budulec dla ATR korekty
+    Sily Relatywnej (_weekly_atr nizej) i kanalu Kellera w TTM Squeeze
+    (compute_ttm_squeeze_chart) — jeden wzor zamiast dwoch niezaleznych kopii."""
+    prev_close = df["close"].shift(1)
+    return pd.concat([
+        df["high"] - df["low"],
+        (df["high"] - prev_close).abs(),
+        (df["low"] - prev_close).abs(),
+    ], axis=1).max(axis=1)
+
+
+def _weekly_atr(df, weeks):
+    """ATR (Average True Range) na `weeks` tygodniach: prosta srednia ruchoma
+    (NIE wygladzanie Wildera) True Range (_weekly_true_range) — ta sama
+    konwencja co kanal Kellera w TTM Squeeze (patrz komentarz nad TTM_SQUEEZE_*
+    stalymi). NaN dopoki `df` nie ma `weeks` tygodni z policzonym True Range
+    (rozgrzewka/brak High-Low)."""
+    return _weekly_true_range(df).rolling(weeks).mean()
+
+
+def _atr_adjusted_rs_raw(num_df, den_df, weeks):
+    """Sila relatywna SUROWA (przed wygladzeniem Mansfielda), SKORYGOWANA O ATR —
+    patrz komentarz nad ta sekcja dla pelnego uzasadnienia. RS = (num.close /
+    ATR(num, weeks)) / (den.close / ATR(den, weeks)); num_df/den_df musza miec
+    identyczny indeks (ta sama dlugosc/kolejnosc tygodni — patrz wywolujacy, ktory
+    dopasowuje benchmark do tygodni spolki PRZED wywolaniem tej funkcji) i kolumny
+    close/high/low. Zwraca None (poprzez NaN) dla kazdego tygodnia bez pelnego
+    zapasu `weeks` tygodni ATR obu stron — ta sama konwencja co reszta modulu."""
+    num_atr = _weekly_atr(num_df, weeks)
+    den_atr = _weekly_atr(den_df, weeks)
+    return (num_df["close"] / num_atr) / (den_df["close"] / den_atr)
+
+
 RS_MANSFIELD_SHORT_WEEKS = 13     # wygladzanie krotkoterminowe, ~3 mies.
 RS_MANSFIELD_MEDIUM_WEEKS = 26    # wygladzanie srednioterminowe, ~6 mies.
 RS_MANSFIELD_LONG_WEEKS = 52      # wygladzanie dlugoterminowe, ~12 mies. — dodane na
@@ -1852,35 +1943,64 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
     wygładzanie na tle 12-14-miesięcznego okna momentum potrzebowało ~26,5 miesiąca
     historii, więc oscylator wychodził pusty dla większości okna w produkcji. Od
     momentu wydłużenia retencji `prices` (patrz fetch_data.py --lookback-months,
-    domyślnie 22 mies. = 14-miesięczne okno + ~7-miesięczny zapas rozgrzewkowy) to
+    domyślnie 26 mies. — podniesione z 22 właśnie z powodu korekty ATR, patrz niżej —
+    = 14-miesięczne okno + zapas rozgrzewkowy) to
     się już mieści DLA rsm_short/rsm_medium, więc oba (teraz: wszystkie trzy) wykresy
     ("10:30" i Mansfield) pokazują dokładnie ten sam zakres dat, zamiast dwóch różnych
     skal jak wcześniej — ALE rsm_long (52 tyg., dodany później) ponownie przekracza tę
     retencję i będzie `None` dla sporej części okna, patrz komentarz przy
     RS_MANSFIELD_LONG_WEEKS.
 
-    Pobiera dodatkowy zapas RS_MANSFIELD_LONG_WEEKS + 2 tygodni PRZED start_date
-    (analogicznie do RS_PRICE_SMA_LONG_WEEKS w compute_relative_strength_chart — to
-    NAJDŁUŻSZE z trzech wygładzeń decyduje o potrzebnym zapasie), żeby każde
-    wygładzenie miało już wartość od pierwszego wyświetlanego tygodnia, o ile retencja
-    `prices` na to pozwala.
+    RS jest teraz SKORYGOWANY O ATR (na wyraźne życzenie użytkownika — patrz duży
+    komentarz nad _weekly_atr/_atr_adjusted_rs_raw powyżej): zamiast RS = cena_spółki
+    / poziom_indeksu, każda strona jest najpierw podzielona przez WŁASNY ATR liczony
+    na TYM SAMYM oknie co dane wygładzenie (rsm_short → ATR(13), rsm_medium →
+    ATR(26), rsm_long → ATR(52)) — stąd TRZY różne, osobno liczone surowe serie RS
+    (jedna na okno), nie jedna wspólna jak przed tą zmianą.
+
+    Pobiera dodatkowy zapas 2*RS_MANSFIELD_LONG_WEEKS + 2 tygodni PRZED start_date —
+    PODWÓJNY (nie pojedynczy jak przed dodaniem korekty ATR): najdłuższe z trzech
+    wygładzeń (RS_MANSFIELD_LONG_WEEKS) samo w sobie decyduje o potrzebnym zapasie
+    (jak poprzednio, analogicznie do RS_PRICE_SMA_LONG_WEEKS w
+    compute_relative_strength_chart), ALE teraz ATR(52) sam potrzebuje 52 tygodni
+    rozgrzewki PRZED tym, zanim rolling średnia RS (kolejne 52 tygodnie) może zacząć
+    dawać wartości — ta sama "podwójny zapas" zasada co histogram w
+    compute_ttm_squeeze_chart (2*TTM_SQUEEZE_KC_WEEKS+2). Przy obecnej
+    ~22-miesięcznej retencji `prices` (fetch_data.py --lookback-months) to jeszcze
+    bardziej pogłębia ograniczenie już opisane przy RS_MANSFIELD_LONG_WEEKS —
+    rsm_long będzie `None` dla jeszcze większej części wyświetlanego okna niż przed
+    tą zmianą, dopóki retencja nie zostanie dalej podniesiona; rsm_short/rsm_medium
+    mieszczą się wygodniej (krótsze okna ATR+RS).
 
     Zwraca None gdy brakuje danych (np. spółka bez wystarczającej historii cen)."""
-    lookback_weeks = RS_MANSFIELD_LONG_WEEKS + 2
+    lookback_weeks = 2 * RS_MANSFIELD_LONG_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
-    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date)
-    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, extended_start, ref_date)
+    stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date,
+                                     include_high_low=True)
+    index_df = _weekly_close_series(con, "index_prices", "Index_Name", universe, extended_start, ref_date,
+                                     include_high_low=True)
     if stock_df.empty or index_df.empty:
         return None
 
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
-    index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
-    stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
-    stock_df["rs_raw"] = stock_df["close"] / stock_df["index_close"]
-    stock_df["rsm_short"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_SHORT_WEEKS).mean() - 1) * 100
-    stock_df["rsm_medium"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_MEDIUM_WEEKS).mean() - 1) * 100
-    stock_df["rsm_long"] = (stock_df["rs_raw"] / stock_df["rs_raw"].rolling(RS_MANSFIELD_LONG_WEEKS).mean() - 1) * 100
+    index_df = index_df.sort_values("week_start").reset_index(drop=True)
+    index_by_week_close = dict(zip(index_df["week_start"], index_df["close"]))
+    index_by_week_high = dict(zip(index_df["week_start"], index_df["high"]))
+    index_by_week_low = dict(zip(index_df["week_start"], index_df["low"]))
+    stock_df["index_close"] = stock_df["week_start"].map(index_by_week_close)
+    stock_df["index_high"] = stock_df["week_start"].map(index_by_week_high)
+    stock_df["index_low"] = stock_df["week_start"].map(index_by_week_low)
+    index_aligned = stock_df[["index_close", "index_high", "index_low"]].rename(
+        columns={"index_close": "close", "index_high": "high", "index_low": "low"})
+
+    for weeks, col in (
+        (RS_MANSFIELD_SHORT_WEEKS, "rsm_short"),
+        (RS_MANSFIELD_MEDIUM_WEEKS, "rsm_medium"),
+        (RS_MANSFIELD_LONG_WEEKS, "rsm_long"),
+    ):
+        rs_raw = _atr_adjusted_rs_raw(stock_df, index_aligned, weeks)
+        stock_df[col] = (rs_raw / rs_raw.rolling(weeks).mean() - 1) * 100
 
     in_window = stock_df[stock_df["week_start"] >= pd.Timestamp(start_date)]
     if in_window.empty:
@@ -2043,13 +2163,9 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     bb_upper = sma + TTM_SQUEEZE_KC_ATR_MULT * std
     bb_lower = sma - TTM_SQUEEZE_KC_ATR_MULT * std
 
-    prev_close = close.shift(1)
-    true_range = pd.concat([
-        high - low,
-        (high - prev_close).abs(),
-        (low - prev_close).abs(),
-    ], axis=1).max(axis=1)
-    atr = true_range.rolling(TTM_SQUEEZE_KC_WEEKS).mean()
+    # _weekly_atr: wspolny helper z korekta ATR Sily Relatywnej (patrz duzy komentarz
+    # nad nim, przy RS_MANSFIELD_* stalych) — ten sam wzor True Range/ATR, jedna kopia.
+    atr = _weekly_atr(stock_df, TTM_SQUEEZE_KC_WEEKS)
     kc_upper = sma + TTM_SQUEEZE_KC_ATR_MULT * atr
     kc_lower = sma - TTM_SQUEEZE_KC_ATR_MULT * atr
 
@@ -2355,35 +2471,51 @@ def compute_sp500_trend_filter(con, ref_date):
 
 
 def _mansfield_rsm_series(con, table, id_column, id_value, start_date, end_date):
-    """Tygodniowe zamkniecia (patrz _weekly_close_series) dla id_value, posortowane
-    chronologicznie — budulec pod oscylator Mansfield RS. None gdy brak wierszy
-    (np. sektorowy ETF jeszcze nie pobrany, patrz funkcja wywolujaca)."""
-    weekly = _weekly_close_series(con, table, id_column, id_value, start_date, end_date)
+    """Tygodniowe zamkniecia + High/Low (patrz _weekly_close_series
+    include_high_low=True — potrzebne od dodania korekty ATR, patrz duzy komentarz
+    nad RS_MANSFIELD_* stalymi) dla id_value, posortowane chronologicznie — budulec
+    pod oscylator Mansfield RS. None gdy brak wierszy (np. sektorowy ETF jeszcze
+    nie pobrany, patrz funkcja wywolujaca)."""
+    weekly = _weekly_close_series(con, table, id_column, id_value, start_date, end_date, include_high_low=True)
     if weekly.empty:
         return None
     return weekly.sort_values("week_start").reset_index(drop=True)
 
 
 def _mansfield_rsm_current_value(numerator_df, denominator_df, weeks=SECTOR_STRATEGY_RSM_WEEKS):
-    """Biezaca (najswiezsza) wartosc oscylatora Mansfield RS dla RS = zamkniecie
-    licznika / zamkniecie mianownika (na WSPOLNYCH tygodniach obu serii):
-    RSM = (RS / SMA(RS, weeks) - 1) * 100 — dokladnie ten sam wzor co
-    compute_mansfield_rs_chart, tylko odczytujemy jedna, biezaca wartosc zamiast
-    calej serii do wykresu, i mianownikiem moze byc DOWOLNY drugi szereg cenowy
-    (indeks ALBO sektorowy ETF — patrz compute_sector_relative_strength), nie
-    tylko wlasny indeks uniwersum spolki. Potrzeba co najmniej `weeks` wspolnych
-    tygodni obu serii — inaczej None (za malo historii), ta sama konwencja
-    'degraduj sie do None zamiast rzucic wyjatek' co reszta tego modulu."""
+    """Biezaca (najswiezsza) wartosc oscylatora Mansfield RS, SKORYGOWANEGO O ATR
+    (na WSPOLNYCH tygodniach obu serii — patrz _atr_adjusted_rs_raw i duzy komentarz
+    nad RS_MANSFIELD_* stalymi dla pelnego uzasadnienia formuly): RSM = (RS /
+    SMA(RS, weeks) - 1) * 100, gdzie RS = (close_licznika / ATR_licznika) /
+    (close_mianownika / ATR_mianownika), oba ATR na tym samym oknie `weeks` — ten
+    sam wzor co compute_mansfield_rs_chart, tylko odczytujemy jedna, biezaca
+    wartosc zamiast calej serii do wykresu, i mianownikiem moze byc DOWOLNY drugi
+    szereg cenowy (indeks ALBO sektorowy ETF — patrz compute_sector_relative_strength),
+    nie tylko wlasny indeks uniwersum spolki. Potrzeba co najmniej `weeks` wspolnych
+    tygodni obu serii (szybki wstepny check nizej) — ale poniewaz ATR sam
+    potrzebuje `weeks` tygodni rozgrzewki PRZED tym, zanim rolling srednia RS
+    (kolejne `weeks`) moze dac wartosc, faktycznie potrzeba bliżej 2*weeks tygodni,
+    zeby ostatni tydzien miał policzoną (nie-NaN) wartość — stąd końcowy
+    pd.notna(last) jest właściwą bramką, wstępny check to tylko tani skrót.
+    Inaczej None (za malo historii), ta sama konwencja 'degraduj sie do None
+    zamiast rzucic wyjatek' co reszta tego modulu."""
     if numerator_df is None or denominator_df is None:
         return None
-    den_by_week = dict(zip(denominator_df["week_start"], denominator_df["close"]))
+    den_close_by_week = dict(zip(denominator_df["week_start"], denominator_df["close"]))
+    den_high_by_week = dict(zip(denominator_df["week_start"], denominator_df["high"]))
+    den_low_by_week = dict(zip(denominator_df["week_start"], denominator_df["low"]))
     merged = numerator_df.copy()
-    merged["den_close"] = merged["week_start"].map(den_by_week)
+    merged["den_close"] = merged["week_start"].map(den_close_by_week)
+    merged["den_high"] = merged["week_start"].map(den_high_by_week)
+    merged["den_low"] = merged["week_start"].map(den_low_by_week)
     merged = merged.dropna(subset=["den_close"])
     if len(merged) < weeks:
         return None
-    merged["rs_raw"] = merged["close"] / merged["den_close"]
-    rsm = (merged["rs_raw"] / merged["rs_raw"].rolling(weeks).mean() - 1) * 100
+    merged = merged.reset_index(drop=True)
+    den_aligned = merged[["den_close", "den_high", "den_low"]].rename(
+        columns={"den_close": "close", "den_high": "high", "den_low": "low"})
+    rs_raw = _atr_adjusted_rs_raw(merged, den_aligned, weeks)
+    rsm = (rs_raw / rs_raw.rolling(weeks).mean() - 1) * 100
     last = rsm.iloc[-1]
     return float(last) if pd.notna(last) else None
 
@@ -2399,13 +2531,17 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
 
     Krok 2 (ktory sektor jest TERAZ liderem): RS = cena sektorowego ETF-u SPDR
     (fetch_data.py::SECTOR_ETF_SYMBOLS, ktorego poziom trafia do index_prices
-    z Index_Name = nazwa sektora) / cena SP500, wygladzone oscylatorem
+    z Index_Name = nazwa sektora) / cena SP500, OBIE STRONY SKORYGOWANE O ATR
+    (na wyrazne zyczenie uzytkownika — patrz _atr_adjusted_rs_raw i duzy
+    komentarz nad RS_MANSFIELD_* stalymi w tym module), wygladzone oscylatorem
     Mansfielda na oknie SECTOR_STRATEGY_RSM_WEEKS (52 tyg., klasyczne roczne
     okno — NIEZALEZNE od krotszych RS_MANSFIELD_SHORT/MEDIUM_WEEKS uzywanych
     przez wykres pojedynczej spolki, bo ta strategia jest z zalozenia
-    dlugoterminowa rotacja sektorowa). Sektory ranked malejaco po tej wartosci
-    ('rsm_vs_index_pct' — dodatnia = sektor silniejszy od SP500, ujemna =
-    slabszy, dokladnie jak kazdy inny oscylator Mansfielda w tej apce).
+    dlugoterminowa rotacja sektorowa; ATR uzywany tu ma jednak TEN SAM okres,
+    52 tyg., co samo wygladzenie — patrz komentarz nad RS_MANSFIELD_* stalymi).
+    Sektory ranked malejaco po tej wartosci ('rsm_vs_index_pct' — dodatnia =
+    sektor silniejszy od SP500, ujemna = slabszy, dokladnie jak kazdy inny
+    oscylator Mansfielda w tej apce).
 
     Krok 3 (ktora spolka bije SWOJ WLASNY sektor): DOKLADNIE ten sam wzor, ale
     mianownikiem RS jest teraz cena SEKTOROWEGO ETF-u (nie SP500!) — RS =
@@ -2447,7 +2583,12 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
     if df.empty:
         return None
 
-    rsm_buffer_weeks = SECTOR_STRATEGY_RSM_WEEKS + 8  # zapas na braki/swieta przy laczeniu tygodni
+    # PODWOJNY zapas (2*SECTOR_STRATEGY_RSM_WEEKS), nie pojedynczy jak przed dodaniem
+    # korekty ATR: ATR(52) sam potrzebuje 52 tyg. rozgrzewki PRZED tym, zanim rolling
+    # srednia RS (kolejne 52 tyg.) moze dac wartosc dla ostatniego tygodnia — patrz
+    # duzy komentarz nad RS_MANSFIELD_* stalymi / _mansfield_rsm_current_value.
+    # +8 tygodni zapasu na braki/swieta przy laczeniu tygodni, jak poprzednio.
+    rsm_buffer_weeks = 2 * SECTOR_STRATEGY_RSM_WEEKS + 8
     extended_start = (pd.Timestamp(ref_date) - pd.Timedelta(weeks=rsm_buffer_weeks)).strftime("%Y-%m-%d")
 
     sp500_series = _mansfield_rsm_series(con, "index_prices", "Index_Name", "SP500", extended_start, ref_date)
