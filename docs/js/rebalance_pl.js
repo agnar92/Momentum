@@ -44,6 +44,7 @@ const SETTINGS_KEY = "momentum_rebalance_pl_settings";
 const HOLDINGS_KEY = "momentum_rebalance_pl_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_pl_excluded";
 const POOL_COLLAPSED_KEY = "momentum_rebalance_pl_pool_collapsed";
+const STAGE_FILTER_KEY = "momentum_rebalance_pl_stage_filter";
 
 // portfolioSize — ile spółek (TOP N z puli, patrz wyżej) ma być w portfelu;
 // jedyny "wybór" jaki użytkownik podejmuje, resztą (który to konkretnie
@@ -87,6 +88,25 @@ function loadPoolCollapsed() {
     } catch (e) { return true; }
 }
 function savePoolCollapsed(v) { localStorage.setItem(POOL_COLLAPSED_KEY, v ? "1" : "0"); }
+
+// Filtr etapu Weinsteina (poolStageFilter, patrz niżej) — zapisywany tym samym
+// wzorcem co reszta rebalanserowego stanu, ten sam fix/uzasadnienie co w
+// rebalance.js (brak zapisu był realny bug: wyjście ze strony i powrót
+// cichcem resetowało filtr do "ALL", więc sugestia/wagi po powrocie były
+// policzone z całej, nieprzefiltrowanej puli).
+function loadPoolStageFilter() {
+    try {
+        const raw = localStorage.getItem(STAGE_FILTER_KEY);
+        if (raw === null) return "ALL";
+        const parsed = JSON.parse(raw);
+        if (parsed === "ALL") return "ALL";
+        if (Array.isArray(parsed) && parsed.length) return new Set(parsed);
+        return "ALL";
+    } catch (e) { return "ALL"; }
+}
+function savePoolStageFilter(v) {
+    localStorage.setItem(STAGE_FILTER_KEY, JSON.stringify(v === "ALL" ? "ALL" : [...v]));
+}
 
 let settings = loadSettings();
 let holdings = loadHoldings();
@@ -289,8 +309,9 @@ function combinedPoolRows() {
 // sentinel oznaczajacy brak filtra. Filtr NIE jest czysto kosmetyczny —
 // `eligiblePoolRows()` (i przez to `autoSelectedRows()`/`computeAutoTargets()`)
 // filtruje po nim, więc zaznaczenie np. tylko Etapu 2 realnie oznacza "kupuj
-// tylko spośród spółek w Etapie 2".
-let poolStageFilter = "ALL";
+// tylko spośród spółek w Etapie 2". Persystowany w localStorage
+// (loadPoolStageFilter/savePoolStageFilter, patrz wyżej).
+let poolStageFilter = loadPoolStageFilter();
 
 function matchesPoolStageFilter(stage) {
     if (poolStageFilter === "ALL") return true;
@@ -390,6 +411,9 @@ function updatePoolStageFilterButtons() {
 function initPoolStageFilter() {
     const bar = document.getElementById("poolStageFilterBar");
     if (!bar) return;
+    // Odzwierciedla filtr wczytany z localStorage w przyciskach już przy
+    // starcie strony — patrz analogiczny komentarz w rebalance.js.
+    updatePoolStageFilterButtons();
     bar.querySelectorAll(".stage-filter-btn").forEach(btn => {
         btn.addEventListener("click", () => {
             const stage = btn.dataset.stage;
@@ -400,6 +424,7 @@ function initPoolStageFilter() {
                 if (current.has(stage)) current.delete(stage); else current.add(stage);
                 poolStageFilter = current.size ? current : "ALL";
             }
+            savePoolStageFilter(poolStageFilter);
             updatePoolStageFilterButtons();
             renderPoolTable();
             // Filtr etapu teraz realnie zawęża pulę wyboru (patrz komentarz przy
@@ -1162,6 +1187,7 @@ if (typeof module !== "undefined" && module.exports) {
         REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES,
         fmtMoney, fmtMoneyPln, currentMoneyFmt, holdingsMoneyFmt, moneyFmtForCurrency, fmtQty, sharesSuggestion,
         currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets, matchesPoolStageFilter,
+        loadPoolStageFilter, savePoolStageFilter,
         deriveUniverseFractionsFromTargets, normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,

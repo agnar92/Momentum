@@ -61,6 +61,7 @@ const SETTINGS_KEY = "momentum_rebalance_settings";
 const HOLDINGS_KEY = "momentum_rebalance_holdings";
 const EXCLUDED_KEY = "momentum_rebalance_excluded";
 const POOL_COLLAPSED_KEY = "momentum_rebalance_pool_collapsed";
+const STAGE_FILTER_KEY = "momentum_rebalance_stage_filter";
 
 // portfolioSize — ile spółek (TOP N z puli, patrz wyżej) ma być w portfelu;
 // jedyny "wybór" jaki użytkownik podejmuje, resztą (który to konkretnie
@@ -105,6 +106,30 @@ function loadPoolCollapsed() {
     } catch (e) { return true; }
 }
 function savePoolCollapsed(v) { localStorage.setItem(POOL_COLLAPSED_KEY, v ? "1" : "0"); }
+
+// Filtr etapu Weinsteina (poolStageFilter, patrz niżej) — zapisywany tym samym
+// wzorcem co reszta rebalanserowego stanu (settings/holdings/excluded/
+// poolCollapsed), bo skoro filtr REALNIE zawęża, z czego dobierany jest TOP N
+// (patrz komentarz przy poolStageFilter), brak zapisu oznaczał realny bug:
+// wyjście ze strony i powrót cichcem resetowało filtr do "ALL", więc sugestia/
+// wagi po powrocie były policzone z całej, nieprzefiltrowanej puli — mimo że
+// użytkownik wciąż widział zaznaczony przycisk filtra sprzed wyjścia (a po
+// przeładowaniu strony nawet tego już nie widział, bo UI też wracał do "ALL").
+// "ALL" (string) albo lista stage'ów (np. ["1","2"]) — Set nie serializuje się
+// do JSON wprost, więc na zapisie/odczycie konwertujemy go do/z tablicy.
+function loadPoolStageFilter() {
+    try {
+        const raw = localStorage.getItem(STAGE_FILTER_KEY);
+        if (raw === null) return "ALL";
+        const parsed = JSON.parse(raw);
+        if (parsed === "ALL") return "ALL";
+        if (Array.isArray(parsed) && parsed.length) return new Set(parsed);
+        return "ALL";
+    } catch (e) { return "ALL"; }
+}
+function savePoolStageFilter(v) {
+    localStorage.setItem(STAGE_FILTER_KEY, JSON.stringify(v === "ALL" ? "ALL" : [...v]));
+}
 
 let settings = loadSettings();
 let holdings = loadHoldings();
@@ -332,8 +357,11 @@ function combinedPoolRows() {
 // zawęża, z czego rebalanser dobiera TOP N: `eligiblePoolRows()` (i przez to
 // `autoSelectedRows()`/`computeAutoTargets()`) filtruje po nim, więc
 // zaznaczenie np. tylko Etapu 2 realnie oznacza "kupuj tylko spośród spółek w
-// Etapie 2", nie tylko "pokaż mi tylko Etap 2 w tabeli".
-let poolStageFilter = "ALL";
+// Etapie 2", nie tylko "pokaż mi tylko Etap 2 w tabeli". Persystowany w
+// localStorage (loadPoolStageFilter/savePoolStageFilter, patrz wyżej) —
+// inaczej niż settings/holdings/excluded/poolCollapsed, to pole kiedyś NIE
+// przetrwało nawigacji między stronami, co był realny, zgłoszony bug.
+let poolStageFilter = loadPoolStageFilter();
 
 function matchesPoolStageFilter(stage) {
     if (poolStageFilter === "ALL") return true;
@@ -438,6 +466,11 @@ function updatePoolStageFilterButtons() {
 function initPoolStageFilter() {
     const bar = document.getElementById("poolStageFilterBar");
     if (!bar) return;
+    // Odzwierciedla filtr wczytany z localStorage (poolStageFilter mógł być
+    // != "ALL" już przy starcie strony) w przyciskach — inaczej UI pokazywał
+    // "Wszystkie" jako aktywne mimo że silnik w tle już liczył po zapisanym
+    // filtrze, myląco sugerując, że nic nie jest zawężone.
+    updatePoolStageFilterButtons();
     bar.querySelectorAll(".stage-filter-btn").forEach(btn => {
         btn.addEventListener("click", () => {
             const stage = btn.dataset.stage;
@@ -448,6 +481,7 @@ function initPoolStageFilter() {
                 if (current.has(stage)) current.delete(stage); else current.add(stage);
                 poolStageFilter = current.size ? current : "ALL";
             }
+            savePoolStageFilter(poolStageFilter);
             updatePoolStageFilterButtons();
             renderPoolTable();
             // Filtr etapu teraz realnie zawęża pulę wyboru (patrz komentarz przy
@@ -1267,6 +1301,7 @@ if (typeof module !== "undefined" && module.exports) {
         REBALANCE_UNIVERSES, REBALANCE_UNIVERSE_LABELS, PLN_UNIVERSES, DOWJONES_WEIGHT_MULTIPLIER,
         fmtMoney, fmtMoneyPln, currentMoneyFmt, holdingsMoneyFmt, moneyFmtForCurrency, fmtQty, sharesSuggestion,
         currencyOf, combinedPoolRows, eligiblePoolRows, autoSelectedRows, computeAutoTargets, matchesPoolStageFilter,
+        loadPoolStageFilter, savePoolStageFilter,
         deriveUniverseFractionsFromTargets, normalizeWeights, blendEquityCurves, parseXtbOpenPositions,
         weightedMuSigma, simulateMonteCarlo, randNormal,
         tvSymbolFor, buildTvPortfolioCsv, xtbDateToIso,
