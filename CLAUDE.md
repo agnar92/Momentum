@@ -1122,6 +1122,31 @@ flex child (no `.topbar-left` wrapper there).
   stage-filterable table shape as TTM Squeeze (`renderWybicieTable()`/`wybicieRowHtml()`), plus a matching
   sidebar tile group (`renderWybiciePanel()`, `#tiles-WYBICIE`).
 
+  **A "Tryb" (mode) selector** — two buttons above the table (`#wybicieModeMacdRsBtn`/
+  `#wybicieModeMacdOnlyBtn`, styled like `.stage-filter-btn`, persisted alongside the two sliders in the
+  same `momentum_dashboard_wybicie` `localStorage` key as `mode`) — was added at the user's explicit
+  request ("do panelu wybicia dodaj selector bez wybicia RS 52 tygodnie, samo MACD tygodniowe"):
+  **"MACD + RS 52 tyg."** (`state.wybicieMode = "MACD_RS"`, the default — unchanged behavior, exactly as
+  described above) vs. **"Samo MACD tygodniowe"** (`"MACD_ONLY"`) — which drops condition 2 (the RS 52-week
+  zero-cross) ENTIRELY: only the MACD zero-cross-up (condition 1) and a positive TTM histogram (condition 3)
+  are required. `classifyWybicie(ticker, universe, c, opts)` takes `opts.mode` (defaulting to
+  `state.wybicieMode`, same pattern as `opts.windowWeeks`/`opts.monitorWeeks`); in `"MACD_ONLY"` mode
+  `breakoutWeeks` is simply `macdCrossWeeks` — there's no second cross to compare it against, so **"Okno
+  wybicia" has no meaning in this mode and its slider (`#wybicieWindowRow`) is hidden** (via
+  `applyWybicieModeVisibility()`) while it's active; "Monitoruj po wybiciu" still applies, gating on
+  `macdCrossWeeks` alone. The RS 52-week line is NOT dropped from the constituent requirement or the table —
+  it's simply no longer a FILTER: `rsLong` is read if present (a missing `mansfield_chart`/`rsm_long` no
+  longer disqualifies a row in this mode, unlike `"MACD_RS"` mode, which still requires it), `rsLongNow`/
+  `mini_rs` are populated whenever available and shown in the "RS 52 tyg." column purely as information (its
+  cell color now reflects the ACTUAL sign, `positive`/`negative`, rather than always `positive` as before,
+  since a row in this mode is not guaranteed to have a recent/any upward RS cross), and `rsCrossWeeks`/
+  `mini_rs_cross` stay `null` when there wasn't one (the column then shows the current value with no
+  "(N tyg. temu)" age suffix, or a plain "—" when RS data itself is entirely missing for a constituent).
+  Switching modes re-renders both the table and the sidebar tile group immediately
+  (`renderWybiciePanel()`/`renderWybicieTable()` from the button's click handler, same as the two sliders'
+  own `input` handlers) and widens the result set considerably (roughly 20→38 constituents in a spot check)
+  since one of the three original AND-conditions is gone.
+
   **"🚀 Continuation" screener tab** (`data-universe="CONTINUATION"`, explicit user request: a stock
   ALREADY in a dynamic Stage 2 that takes a SHORT pause on the DAILY chart, to join the trend for ~10-20% —
   filter only, the user decides entries/exits). The only screener built on DAILY data:
