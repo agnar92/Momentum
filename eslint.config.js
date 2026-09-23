@@ -95,6 +95,7 @@ const browserGlobals = {
     stageBreakdown: "readonly",
     PULLBACK_BAND_PCT: "readonly",
     pullbackHtml: "readonly",
+    initMiniChartHoverPreview: "readonly",
     showToast: "readonly",
     initConnStatus: "readonly",
     hideLoadingOverlay: "readonly",

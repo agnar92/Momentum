@@ -1688,10 +1688,68 @@ table.holdings-table td, table.rebalance-table td {
 .toast.toast-success { border-left-color: var(--green-bright); }
 .toast.toast-error { border-left-color: var(--red); }
 
+/* Podglad "na hover" mini-wykresu (patrz initMiniChartHoverPreview w
+   minicharts.js) — wieksza wersja tego samego mini-wykresu + krotkie
+   podsumowanie spolki, po ~2s najechania. Nieinteraktywny
+   (pointer-events: none), znika natychmiast przy opuszczeniu elementu. */
+.mini-preview {
+    position: fixed;
+    z-index: 1200;
+    pointer-events: none;
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+    width: 260px;
+    opacity: 0;
+    transform: translateY(4px);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.mini-preview.mini-preview-visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.mini-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.mini-preview-ticker {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text);
+}
+
+.mini-preview-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 2px;
+}
+
+.mini-preview-visual { margin-top: 10px; }
+
+.mini-preview-visual-label {
+    font-size: 10.5px;
+    color: var(--text-faint);
+    margin-bottom: 3px;
+}
+
+.mini-preview-visual svg.spark { width: 100%; height: 60px; display: block; }
+.mini-preview-visual .rs-bar { display: flex; align-items: center; gap: 8px; }
+.mini-preview-visual .rs-bar svg { flex: 1; height: 20px; }
+
 @media (max-width: 640px) {
     .loading-overlay p { font-size: 12px; padding: 0 24px; text-align: center; }
     .conn-status { margin-left: 8px; padding: 3px 7px; font-size: 11px; }
     .toast-container { right: 10px; bottom: 10px; left: 10px; max-width: none; }
+    /* Bez kursora/hover na dotyku sensownego nie ma tu co pokazywac —
+       chowamy zamiast zostawiac przyklejone okienko po dotknieciu. */
+    .mini-preview { display: none; }
 }
 
 

@@ -241,6 +241,147 @@ function bulletHtml(current, target) {
         + `</svg><span class="bullet-label">${label}</span></span>`;
 }
 
+// ============================================================
+// PODGLĄD "NA HOVER": najechanie na dowolny mini-wykres (.spark/.rs-bar) w
+// tabeli i przytrzymanie przez MINI_PREVIEW_HOVER_DELAY_MS pokazuje pływające
+// okienko z WIĘKSZĄ wersją TEGO SAMEGO wykresu, a przy okazji też każdego
+// INNEGO mini-wykresu dostępnego w tym samym wierszu (np. najechanie na sam
+// pasek RS pokazuje też tygodniowy sparkline i TTM Squeeze tej spółki, jeśli
+// wiersz je ma) — krótkie podsumowanie spółki w jednym miejscu, bez klikania
+// (na dashboardzie klik w wiersz i tak już otwiera pełny wykres w oknie
+// modalnym — to osobny, szybszy "podgląd bez opuszczania tabeli").
+// Włączane tylko tam, gdzie się je wywoła (patrz initMiniChartHoverPreview()
+// w app.js) — samo dodanie tego pliku do strony nic nie aktywuje.
+// Wymaga tr._rowData (patrz renderScreenerTable w table-render.js) — pełnego
+// obiektu wiersza, nie tylko tekstowego dataset.ticker, żeby odczytać
+// mini_closes/mini_hist/rs_long/daily_* bez osobnego wyszukiwania po tickerze.
+// ============================================================
+const MINI_PREVIEW_HOVER_DELAY_MS = 2000;
+let miniPreviewEl = null;
+let miniPreviewTimer = null;
+let miniPreviewHoveredEl = null;
+
+function getMiniPreviewEl() {
+    if (!miniPreviewEl) {
+        miniPreviewEl = document.createElement("div");
+        miniPreviewEl.className = "mini-preview";
+        document.body.appendChild(miniPreviewEl);
+    }
+    return miniPreviewEl;
+}
+
+function hideMiniPreview() {
+    if (miniPreviewTimer) { window.clearTimeout(miniPreviewTimer); miniPreviewTimer = null; }
+    miniPreviewHoveredEl = null;
+    if (miniPreviewEl) miniPreviewEl.classList.remove("mini-preview-visible");
+}
+
+function miniPreviewSectionHtml(label, html) {
+    return html ? `<div class="mini-preview-visual"><div class="mini-preview-visual-label">${label}</div>${html}</div>` : "";
+}
+
+// Buduje HTML podglądu z SUROWEGO wiersza tabeli (tr._rowData) — czyta
+// najpierw miniVisualFields()-owe nazwy (mini_closes/mini_ema/mini_hist/...),
+// z fallbackiem na inne nazwy uzywane przez "Tygodniowych zwyciezcow"
+// (weekly_closes/weekly_ema — patrz classifyWeeklyWinner w app.js), zeby
+// dzialac na kazdej tabeli dashboardu bez wiedzy, ktora to konkretnie
+// tabela. Zwraca null, gdy wiersz nie ma ZADNEGO rozpoznanego pola
+// wizualnego (np. rzad w tabeli Continuation, ktora nie ma sparklinow).
+function buildMiniPreviewHtml(row) {
+    const closes = row.mini_closes || row.weekly_closes;
+    const ema = row.mini_ema || row.weekly_ema;
+    const hist = row.mini_hist;
+    const stage = row.current_stage || (row.weekly_chart && row.weekly_chart.current_stage);
+    const universe = row.universe;
+    const universeLabel = universe && UNIVERSE_LABELS[universe] ? UNIVERSE_LABELS[universe].replace(" Momentum", "") : "";
+
+    let sections = "";
+    if (closes && closes.length) {
+        sections += miniPreviewSectionHtml(`Tydzień (${closes.length} tyg.)`, weeklySparkSvg(closes, ema || [], row.mini_sq_flags || []));
+    }
+    if (hist && hist.length) {
+        sections += miniPreviewSectionHtml("TTM Squeeze", ttmMiniSvg(hist, row.mini_sq_on || [], row.mini_fired || []));
+    }
+    if (typeof row.rs_long === "number") {
+        sections += miniPreviewSectionHtml(`RS 52 tyg.${universeLabel ? ` vs ${universeLabel}` : ""}`, rsBarHtml(row.rs_long));
+    }
+    if (row.daily_closes && row.daily_closes.length) {
+        sections += miniPreviewSectionHtml(`Dzień (${row.daily_closes.length} ses.)`, dailySparkSvg(row.daily_closes, row.daily_squeeze || [], row.daily_ema || []));
+    }
+    if (!sections) return null;
+
+    const momentum = typeof row.momentum_pct === "number"
+        ? `<span class="${row.momentum_pct >= 0 ? "positive" : "negative"}">${row.momentum_pct >= 0 ? "+" : ""}${row.momentum_pct.toFixed(1)}%</span>` : "";
+    const price = typeof row.price === "number" && universe ? formatPrice(row.price, universe) : "";
+    const subline = [universeLabel, price, momentum].filter(Boolean).join(" · ");
+
+    return `<div class="mini-preview-header"><span class="mini-preview-ticker">${row.ticker}</span>${stageCellHtml(stage)}</div>`
+        + (subline ? `<div class="mini-preview-sub">${subline}</div>` : "")
+        + sections;
+}
+
+// Pozycjonuje okienko obok elementu, na ktorym stoi kursor — po prawej,
+// chyba ze nie mieści się w oknie (wtedy po lewej), przycięte do widocznego
+// obszaru z każdej strony.
+function positionMiniPreview(el, targetEl) {
+    const rect = targetEl.getBoundingClientRect();
+    el.style.left = "0px";
+    el.style.top = "0px";
+    const elRect = el.getBoundingClientRect();
+    let left = rect.right + 12;
+    if (left + elRect.width > window.innerWidth - 8) left = rect.left - elRect.width - 12;
+    if (left < 8) left = 8;
+    let top = rect.top;
+    if (top + elRect.height > window.innerHeight - 8) top = window.innerHeight - elRect.height - 8;
+    if (top < 8) top = 8;
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+}
+
+function showMiniPreview(row, targetEl) {
+    const html = buildMiniPreviewHtml(row);
+    if (!html) return;
+    const el = getMiniPreviewEl();
+    el.innerHTML = html;
+    el.classList.add("mini-preview-visible");
+    positionMiniPreview(el, targetEl);
+}
+
+function initMiniChartHoverPreview() {
+    if (typeof document === "undefined") return;
+    const findTarget = el => el && el.closest && el.closest(".spark, .rs-bar");
+
+    // mouseover/mouseout (delegowane na document), nie mouseenter/mouseleave —
+    // te ostatnie nie bąbelkują, więc nie dałoby się ich powiesić raz na
+    // document dla wierszy, które są tworzone/niszczone przy każdym renderze
+    // tabeli. e.relatedTarget odróżnia "wciąż w tym samym elemencie" (np.
+    // przejście między <path>/<rect> wewnątrz tego samego <svg class="spark">)
+    // od faktycznego opuszczenia go.
+    document.addEventListener("mouseover", (e) => {
+        const target = findTarget(e.target);
+        if (!target || target === miniPreviewHoveredEl) return;
+        hideMiniPreview();
+        miniPreviewHoveredEl = target;
+        const tr = target.closest("tr");
+        const row = tr && tr._rowData;
+        if (!row || !row.ticker) return;
+        miniPreviewTimer = window.setTimeout(() => showMiniPreview(row, target), MINI_PREVIEW_HOVER_DELAY_MS);
+    });
+
+    document.addEventListener("mouseout", (e) => {
+        const target = findTarget(e.target);
+        if (!target || target !== miniPreviewHoveredEl) return;
+        if (target.contains(e.relatedTarget)) return;
+        hideMiniPreview();
+    });
+
+    // Zabezpieczenie: scroll/klik gdziekolwiek chowa podglad na wszelki
+    // wypadek, gdyby mouseout sie nie odpalil (np. scroll kolkiem myszy bez
+    // ruchu kursora zostawiajacy okienko "przyklejone" w starym miejscu).
+    document.addEventListener("scroll", hideMiniPreview, true);
+    document.addEventListener("click", hideMiniPreview, true);
+}
+
 // Eksport wyłącznie dla test runnera Node (tests/js/) — bez efektu w przeglądarce.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {

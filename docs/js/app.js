@@ -1757,7 +1757,12 @@ function renderBreadthBar() {
 
 function renderTable() {
     const d = state.data[state.drawerUniverse];
-    const allRows = (d.constituents || []).map(c => ({ ...c, ...miniVisualFields(c) }));
+    // universe: r.universe — jedyna z wszystkich tabel dashboardu, ktora go
+    // wczesniej nie ustawiala (bo w kontekscie jednej zakladki byl caly czas
+    // taki sam, wiec niepotrzebny) — teraz potrzebny w initMiniChartHoverPreview
+    // (minicharts.js), zeby dobrac walute (formatPrice) i etykiete "RS vs X"
+    // bez tamtego pliku siegajacego do globalnego state.
+    const allRows = (d.constituents || []).map(c => ({ ...c, ...miniVisualFields(c), universe: state.drawerUniverse }));
     renderBreadthBar();
     // Ustawiane przez beforeRender ponizej, PO filtrze/sortowaniu — pasek wagi
     // skaluje sie wzgledem najwiekszej wagi wsrod AKTUALNIE WIDOCZNYCH wierszy
@@ -1967,6 +1972,7 @@ if (typeof document !== "undefined") {
         initChartModal();
         initChartFullscreen();
         initStageFilter();
+        initMiniChartHoverPreview();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
         buildSearchIndex();
