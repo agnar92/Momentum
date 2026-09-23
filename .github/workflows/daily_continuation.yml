@@ -1,0 +1,90 @@
+name: Daily Continuation Refresh
+
+# Lekkie, DZIENNE odświeżenie sygnału "Continuation" (dashboard → 🚀 Continuation)
+# — uruchamiane NA ŻĄDANIE przyciskiem "🔄 Odśwież dane D1" na stronie (albo
+# "Run workflow" w GitHubie), bez pełnego sobotniego pipeline'u
+# (weekly_full_refresh.yml). refresh_daily.py pobiera z Yahoo Finance dzienne
+# świece TYLKO tygodniowych zwycięzców (~100 spółek) i zapisuje wyłącznie
+# docs/data/continuation.json — momentum_data.duckdb NIE jest tu ani czytany,
+# ani commitowany.
+#
+# Nazwy kroków (name:) są pokazywane na stronie jako postęp zadania (app.js::
+# pollRefreshRun) — przy zmianie nazw nic się nie psuje, po prostu inaczej się
+# wyświetlą.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Ta sama grupa co weekly_full_refresh.yml/deploy.yml — wdrożenia Pages nigdy
+# się nie nakładają (jeśli akurat trwa sobotni refresh, ten poczeka).
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  daily-continuation:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Pobranie repozytorium
+        uses: actions/checkout@v4
+
+      - name: Przygotowanie Pythona
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Instalacja bibliotek
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Pobieranie cen dziennych (Yahoo) i liczenie squeeze D1
+        run: |
+          python refresh_daily.py
+
+      - name: Zapis danych
+        run: |
+          if [ -n "$(git status --porcelain docs/data/continuation.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # Ta sama ochrona co w weekly_full_refresh.yml: zawsze na AKTUALNYM
+            # main i "reset --mixed" (nie --soft), żeby commit zawierał wyłącznie
+            # continuation.json na drzewie origin/main.
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              git reset --mixed origin/main
+              git add docs/data/continuation.json
+              git commit -m "chore: daily continuation refresh [skip ci]"
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — ponawiam..."
+              sleep $((attempt * 3))
+            done
+          else
+            echo "Brak zmian w continuation.json — pomijam commit."
+          fi
+
+      - name: Przygotowanie publikacji
+        uses: actions/configure-pages@v5
+
+      - name: Pakowanie strony
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Publikacja strony
+        id: deployment
+        uses: actions/deploy-pages@v4

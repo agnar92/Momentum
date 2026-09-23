@@ -1056,6 +1056,47 @@ flex child (no `.topbar-left` wrapper there).
   stage-filterable table shape as TTM Squeeze (`renderWybicieTable()`/`wybicieRowHtml()`), plus a matching
   sidebar tile group (`renderWybiciePanel()`, `#tiles-WYBICIE`).
 
+  **"🚀 Continuation" screener tab** (`data-universe="CONTINUATION"`, explicit user request: a stock
+  ALREADY in a dynamic Stage 2 that takes a SHORT pause on the DAILY chart, to join the trend for ~10-20% —
+  filter only, the user decides entries/exits). The only screener built on DAILY data:
+  `run_query.py::compute_daily_squeeze()` exports a compact `daily_squeeze` summary (not a chart) on every
+  constituent record — TTM Squeeze on daily bars via `_ttm_squeeze_series()` (the SAME LazyBeara core the
+  weekly `compute_ttm_squeeze_chart` now also calls, `DAILY_SQUEEZE_LENGTH` = 20 sessions):
+  `squeeze_on`/`squeeze_days`/`days_since_fire`/`fire_consolidation_days`/`histogram`/`histogram_prev`/
+  `recent_squeeze` (last 20 sessions, drawn as TradingView-style dots) plus `sma50_pct`/`ema21_pct`/
+  `return_1m_pct`/`high_20d_pct`. `classifyContinuation()` in `app.js`: weekly `current_stage` 2A/2B,
+  `momentum_pct > 0` (and `>=` slider), latest `rsm_long > 0` (classic 52-week Mansfield RS — the user's
+  explicit call, it was `rsm_medium`/26 weeks at first; NOT `momentum_score > 0`, which is always true since
+  the score is `1+Z`/`1/(1-Z)`), daily `sma50_pct > 0`; then
+  🌀 "squeeze" (on for `CONTINUATION_MIN_SQUEEZE_DAYS` (3) .. slider max sessions) or 🔥 "fired" (fired
+  within slider sessions, after a 3..max-session squeeze, daily histogram > 0). Three sliders
+  (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): max squeeze length
+  (default 30), fire lookback (5), min 12M momentum (0% — the user: "powyżej zera jest ok"). Sidebar tile group `#tiles-CONTINUATION`.
+  **"🏆 Tygodniowi zwycięzcy" sub-table** under the signals table (`#continuationWinnersSection`,
+  `combinedWeeklyWinners()`/`renderWinnersTable()`): EVERY stock passing the weekly gate
+  (`continuationWeeklyGate()`), with its D1 status (signal / squeeze outside the thresholds / no setup) and
+  two inline-SVG sparklines (no Chart.js — dozens per table): weekly `close_pct` + dashed `ema20_pct`
+  (last 26 weeks) and daily closes with red bars on squeeze days (`daily_squeeze.spark`, last
+  `DAILY_SPARK_DAYS` = 60 sessions).
+  **On-demand daily refresh ("🔄 Odśwież dane D1")** — explicit user request for fresher D1 data without
+  a daily cron on a static site. The button calls the GitHub REST API from the browser
+  (`runDailyRefresh()`): `workflow_dispatch` of `.github/workflows/daily_continuation.yml`, finds the run
+  (`pickDispatchedRun()`), polls `/actions/runs/{id}/jobs` every 4 s and shows the current step name + a
+  progress bar (`refreshProgressFromJobs()`; step `name:`s in the workflow are the labels), then reads the
+  fresh `docs/data/continuation.json` through the contents API (bypasses the Pages CDN cache) and
+  re-renders. The workflow runs `refresh_daily.py`: weekly winners from the committed `docs/data/*.json`
+  (same gate at momentum slider = 0, i.e. a superset for higher slider values, ~90 tickers) → `fetch_data._download_price_rows`
+  for only those tickers/last `DAILY_SQUEEZE_LOOKBACK_DAYS` → `run_query.compute_daily_squeeze` on an
+  in-memory DuckDB → `continuation.json` (~80 KB). It never touches/commits `momentum_data.duckdb`.
+  `effectiveDaily(c)` uses the `continuation.json` summary when its `date` is newer than the weekly
+  export's `daily_squeeze.date`. Auth: a fine-grained PAT the user pastes once (⚙️ form; only this repo,
+  Actions read/write + Contents read), stored ONLY in that browser's `localStorage`
+  (`momentum_gh_token`); an in-flight run id is kept in `momentum_daily_refresh_run` so a reload resumes
+  polling. `workflow_dispatch` only works once the workflow file is on the default branch (`main`).
+  Note: `squeeze_count` (and so `fire_consolidation_weeks`) had an off-by-one (the resetting non-squeeze
+  bar was counted as the run's first bar) — fixed by using a grouped `cumsum`; weekly counts now match
+  TradingView.
+
   **A second full, sortable, stage-filterable screener tab, "🧨 TTM Squeeze"**, sits next to the Wybicie
   tab (`data-universe="TTM_SQUEEZE"`) — the user's own redirect away from plain performance numbers
   (see the removed `growth_chart` panel, above) toward stocks that already have momentum but are sitting
