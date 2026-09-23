@@ -256,6 +256,16 @@ const state = {
     stageFilter: "ALL",
     sortKey: "rank",
     sortDir: "asc",
+    // Osobny stan sortowania dla podtabeli "🏆 Tygodniowi zwycięzcy" (#winnersTable) —
+    // widoczna JEDNOCZEŚNIE z główną tabelą Continuation (renderContinuationTable
+    // renderuje obie), ale ma inny ksztalt wierszy (np. data-key="status_order"
+    // zamiast "status", brak squeeze_days/histogram/high_20d_pct). Dzielenie
+    // jednego globalnego sortKey/sortDir między nimi po cichu zerowało sortowanie
+    // głównej tabeli (compareRows porównuje undefined===undefined -> zawsze 0) po
+    // kliknięciu nagłówka specyficznego dla zwycięzców, bez żadnej wskazówki, że
+    // coś przestało działać.
+    winnersSortKey: "momentum_pct",
+    winnersSortDir: "desc",
     wybicieWindowWeeks: WYBICIE_DEFAULT_WINDOW_WEEKS,
     wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
     contMaxSqueezeDays: CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS,
@@ -1119,11 +1129,17 @@ function initDrawer() {
         th.addEventListener("click", () => {
             const key = th.dataset.key;
             if (!key) return; // kolumny bez sortowania (Etap, TV)
-            if (state.sortKey === key) {
-                state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
+            // #winnersTable ma wlasny sortKey/sortDir (patrz komentarz przy
+            // state.winnersSortKey) — jest widoczna jednoczesnie z glowna tabela
+            // Continuation, ktora ma inny ksztalt wierszy.
+            const isWinners = th.closest("#winnersTable") != null;
+            const sortKeyProp = isWinners ? "winnersSortKey" : "sortKey";
+            const sortDirProp = isWinners ? "winnersSortDir" : "sortDir";
+            if (state[sortKeyProp] === key) {
+                state[sortDirProp] = state[sortDirProp] === "asc" ? "desc" : "asc";
             } else {
-                state.sortKey = key;
-                state.sortDir = "asc";
+                state[sortKeyProp] = key;
+                state[sortDirProp] = "asc";
             }
             updateSortHeaderClasses();
             renderActiveDrawerTable();
@@ -1134,8 +1150,11 @@ function initDrawer() {
 function updateSortHeaderClasses() {
     document.querySelectorAll("table.momentum-table thead th").forEach(th => {
         th.classList.remove("sort-asc", "sort-desc");
-        if (th.dataset.key === state.sortKey) {
-            th.classList.add(state.sortDir === "asc" ? "sort-asc" : "sort-desc");
+        const isWinners = th.closest("#winnersTable") != null;
+        const sortKey = isWinners ? state.winnersSortKey : state.sortKey;
+        const sortDir = isWinners ? state.winnersSortDir : state.sortDir;
+        if (th.dataset.key === sortKey) {
+            th.classList.add(sortDir === "asc" ? "sort-asc" : "sort-desc");
         }
     });
 }
@@ -1470,7 +1489,7 @@ function renderWinnersTable() {
         metaEl: meta,
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
-        sortKey: state.sortKey, sortDir: state.sortDir,
+        sortKey: state.winnersSortKey, sortDir: state.winnersSortDir,
         colspan: 13,
         emptyAllMsg: `Brak spółek w Etapie 2 z momentum > 0 (≥ ${state.contMinMomentumPct}%) i RS 52 tyg. > 0.`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",

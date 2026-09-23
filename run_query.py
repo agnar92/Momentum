@@ -82,6 +82,7 @@ BUFFER_LOWER = 0.80      # automatyczna selekcja top 80% targetu
 BUFFER_UPPER = 1.20      # obecne skladniki reselekcjonowane do 120% targetu
 MAX_WEIGHT = 0.09        # 9% max na spolke
 CAP_MULTIPLE = 3.0       # nie wiecej niz 3x waga kapitalizacyjna w uniwersum
+WEIGHT_CAP_MAX_ITERATIONS = 50  # iteracyjna redystrybucja nadwyzki ponad cap w compute_weights
 MAX_HOLDINGS = 100
 # Uniwersa bez realnych wag kapitalizacyjnych (fmc_etf) — DOWJONES bo DJIA jest
 # indeksem wazonym cena (nie kapitalizacja), WIG20/MWIG40/sWIG80 bo nie ma ETF-u z
@@ -337,7 +338,7 @@ def compute_weights(df_selected, universe=None):
     df["cap_scaled_due_to_infeasibility"] = cap_scaled
 
     weights = weights.values.astype(float)
-    for _ in range(50):
+    for _ in range(WEIGHT_CAP_MAX_ITERATIONS):
         over = weights > caps + 1e-10
         if not over.any():
             break
@@ -347,6 +348,14 @@ def compute_weights(df_selected, universe=None):
         if not uncapped.any() or weights[uncapped].sum() == 0:
             break
         weights[uncapped] += excess * (weights[uncapped] / weights[uncapped].sum())
+    else:
+        # Nie powinno sie zdarzyc przy normalnych rozkladach (patrz test
+        # test_compute_weights_cap_redistribution), ale gdyby WEIGHT_CAP_MAX_ITERATIONS
+        # nie wystarczylo do zbiegniecia, informujemy o tym tak samo jawnie jak przy
+        # niewykonalnosci capow powyzej, zamiast po cichu zwracac wagi wciaz > cap.
+        still_over = (weights > caps + 1e-10).sum()
+        print(f"⚠️  Redystrybucja wag nie zbiegła się po {WEIGHT_CAP_MAX_ITERATIONS} iteracjach "
+              f"({still_over} spółek wciąż > cap).")
 
     weights = weights / weights.sum()  # bezpieczna normalizacja końcowa
     df["weight"] = weights
@@ -1004,9 +1013,13 @@ def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
     """).df()
 
     records = []
+    seen_universes = set()
     for _, r in df.iterrows():
         universe = r["Index_Name"]
         if pd.isna(r["price_now"]) or pd.isna(r["price_start"]) or r["price_start"] == 0:
+            # Brak/za mala historia syntetycznego indeksu w oknie (np. tuz po
+            # bootstrapie) NIE powinna po cichu wywalac uniwersum z wyscigu, jesli
+            # ma ono waznwy manualny return_pct — patrz fallback ponizej po petli.
             continue
         record = {
             "universe": universe,
@@ -1024,6 +1037,25 @@ def compute_index_returns(con, ref_date, lookback_months=GEM_LOOKBACK_MONTHS):
             record["return_pct"] = round(manual_returns[universe], 2)
             record["manual_entry"] = True
         records.append(record)
+        seen_universes.add(universe)
+
+    for universe, return_pct in manual_returns.items():
+        if universe in seen_universes:
+            continue
+        # Uniwersum z waznym manualnym returnem, ktore w ogole nie mialo wiersza
+        # w index_prices w tym oknie (np. syntetyczny indeks jeszcze nie zbudowany) —
+        # bez tego fallbacku znikaloby cicho z wyscigu GEM zamiast korzystac z
+        # jedynych danych, jakie faktycznie mamy dla niego.
+        records.append({
+            "universe": universe,
+            "yf_symbol": INDEX_LEVEL_SYMBOLS.get(universe, ""),
+            "price_now": None,
+            "date_now": None,
+            "price_start": None,
+            "date_start": None,
+            "return_pct": round(return_pct, 2),
+            "manual_entry": True,
+        })
     return sorted(records, key=lambda r: r["return_pct"], reverse=True)
 
 
@@ -2538,7 +2570,13 @@ def _mansfield_rsm_values(numerator_df, denominator_df, weeks=SECTOR_STRATEGY_RS
     den_by_week = dict(zip(denominator_df["week_start"], denominator_df["close"]))
     merged = numerator_df.copy()
     merged["den_close"] = merged["week_start"].map(den_by_week)
-    merged = merged.dropna(subset=["den_close"])
+    # NIE usuwamy wierszy bez dopasowania w mianowniku (np. pojedynczy tydzien
+    # przerwy w notowaniach sektorowego ETF-u) — usuniecie ich przesunieloby
+    # rolling(weeks) na niezgodna z kalendarzem, nieciagla sekwencje tygodni,
+    # po cichu mieszajac w jedno okno dane rozciagniete na WIECEJ niz `weeks`
+    # realnych tygodni. Zamiast tego zostawiamy NaN w tym miejscu — rs_raw i
+    # rolling().mean() naturalnie je pomijaja/propagujа przy liczeniu (ta sama
+    # konwencja co compute_mansfield_rs_chart/compute_relative_strength_chart).
     if len(merged) < weeks:
         return None
     rs_raw = merged["close"] / merged["den_close"]

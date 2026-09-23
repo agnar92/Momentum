@@ -123,6 +123,9 @@ def _load_json_constituents():
             continue
 
         entries = data.get("tickers", []) if isinstance(data, dict) else data
+        if not isinstance(entries, list):
+            print(f"❌ {filepath}: oczekiwano listy tickerów, dostałem {type(entries).__name__} — pomijam {index_name}.")
+            continue
         n_before = len(rows)
         for entry in entries:
             if isinstance(entry, str):
@@ -393,11 +396,13 @@ def _upsert_price_rows(con, rows, tickers, start_date):
     if not tickers:
         return
     con.register("_tickers_tmp", pd.DataFrame({"Ticker": tickers}))
-    con.execute(f"""
-        DELETE FROM prices
-        WHERE Date >= DATE '{start_date}' AND Ticker IN (SELECT Ticker FROM _tickers_tmp)
-    """)
-    con.unregister("_tickers_tmp")
+    try:
+        con.execute(f"""
+            DELETE FROM prices
+            WHERE Date >= DATE '{start_date}' AND Ticker IN (SELECT Ticker FROM _tickers_tmp)
+        """)
+    finally:
+        con.unregister("_tickers_tmp")
     if rows:
         df_insert = pd.DataFrame(rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume", "High", "Low"])  # noqa: F841
         con.execute("INSERT INTO prices SELECT * FROM df_insert")
@@ -455,13 +460,15 @@ def _compute_synthetic_equal_weight_index(con, index_name, start_date, end_date)
         return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
 
     con.register("_synth_tickers_tmp", pd.DataFrame({"Ticker": tickers}))
-    prices_df = con.execute(f"""
-        SELECT Date, Ticker, Close FROM prices
-        WHERE Ticker IN (SELECT Ticker FROM _synth_tickers_tmp)
-          AND Date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
-        ORDER BY Date
-    """).fetchdf()
-    con.unregister("_synth_tickers_tmp")
+    try:
+        prices_df = con.execute(f"""
+            SELECT Date, Ticker, Close FROM prices
+            WHERE Ticker IN (SELECT Ticker FROM _synth_tickers_tmp)
+              AND Date BETWEEN DATE '{start_date}' AND DATE '{end_date}'
+            ORDER BY Date
+        """).fetchdf()
+    finally:
+        con.unregister("_synth_tickers_tmp")
     if prices_df.empty:
         return pd.DataFrame(columns=["Date", "Index_Name", "Close", "Adj_Close", "Volume"])
 
@@ -639,10 +646,25 @@ def update_prices_incremental(con, tickers, retention_months):
     _ensure_prices_ohlc_columns(con)
     existing_tickers = set(con.execute("SELECT DISTINCT Ticker FROM prices").df()["Ticker"]) & set(tickers)
     new_tickers = [t for t in tickers if t not in existing_tickers]
-    watermark = con.execute("SELECT MAX(Date) FROM prices").fetchone()[0]
     end_date = pd.Timestamp.today().strftime('%Y-%m-%d')
 
     if existing_tickers:
+        # Watermark PER TICKERZE (najstarszy z ostatnich znanych dni wsrod
+        # existing_tickers), nie globalny MAX(Date) po wszystkich tickerach —
+        # ticker, ktory nie pobral sie przez kilka kolejnych przebiegow (podczas
+        # gdy setki innych pomyslnie posuwaly globalny watermark naprzod), mialby
+        # inaczej catchup_start liczony wzgledem cudzego, swiezszego watermarka i
+        # nigdy nie doganialby swojej realnej luki (dziura starsza niz
+        # CATCHUP_OVERLAP_DAYS zostalaby juz na zawsze niedoszacowana).
+        con.register("_existing_tickers_tmp", pd.DataFrame({"Ticker": sorted(existing_tickers)}))
+        watermark = con.execute("""
+            SELECT MIN(last_date) FROM (
+                SELECT Ticker, MAX(Date) AS last_date FROM prices
+                WHERE Ticker IN (SELECT Ticker FROM _existing_tickers_tmp)
+                GROUP BY Ticker
+            )
+        """).fetchone()[0]
+        con.unregister("_existing_tickers_tmp")
         catchup_start = (pd.Timestamp(watermark) - pd.Timedelta(days=CATCHUP_OVERLAP_DAYS)).strftime('%Y-%m-%d')
         print(f"🔄 Doszacowanie cen: {catchup_start} → {end_date} dla {len(existing_tickers)} znanych tickerów...")
         rows, fetched, failed = _download_price_rows(sorted(existing_tickers), catchup_start, end_date, include_ohlc=True)
@@ -698,38 +720,47 @@ def _prices_history_is_shallow(con, lookback_months):
 
 
 def update_duckdb(lookback_months=28, min_coverage=0.8, indices_only=False):
+    # try/finally zamiast pojedynczego con.close() na koncu — wyjatek wewnatrz
+    # ktoregokolwiek z ponizszych krokow (np. blad DuckDB przy uszkodzonym
+    # CSV/JSON) zamykal by polaczenie w ogole, zostawiajac je otwarte.
     con = duckdb.connect("momentum_data.duckdb")
+    try:
+        if indices_only:
+            # Tylko poziom indeksu (^GSPC/^NDX/^DJI z yfinance + WIG20/MWIG40 syntetycznie
+            # z ostatnich znanych cen skladnikow) dla Global Equity Momentum i Sily Relatywnej —
+            # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc tanio odswiezac to
+            # osobno bez kosztu/limitow pelnego pobrania cen akcji. Flaga do manualnego/
+            # lokalnego uzycia — CI (weekly_full_refresh.yml) zawsze wola pelny fetch_data.py
+            # bez flag, patrz CLAUDE.md/CI.
+            update_index_prices(con, lookback_months)
+            return
 
-    if indices_only:
-        # Tylko poziom indeksu (^GSPC/^NDX/^DJI z yfinance + WIG20/MWIG40 syntetycznie
-        # z ostatnich znanych cen skladnikow) dla Global Equity Momentum i Sily Relatywnej —
-        # pomija skladniki (CSV + setki tickerow z yfinance), zeby moc tanio odswiezac to
-        # osobno bez kosztu/limitow pelnego pobrania cen akcji. Flaga do manualnego/
-        # lokalnego uzycia — CI (weekly_full_refresh.yml) zawsze wola pelny fetch_data.py
-        # bez flag, patrz CLAUDE.md/CI.
+        load_index_constituents(con)
+        tickers = get_unique_tickers(con)
+        if not tickers:
+            print("❌ Brak tickerów. Przerywam.")
+            return
+
+        if _prices_table_has_rows(con) and not _prices_history_is_shallow(con, lookback_months):
+            update_prices_incremental(con, tickers, retention_months=lookback_months)
+        else:
+            if _prices_table_has_rows(con):
+                print(f"⏳ Zachowana historia cen nie sięga {lookback_months} mies. wstecz "
+                      f"(rozszerzono retencję) — jednorazowy pełny re-bootstrap zamiast "
+                      f"przyrostowego doszacowania (bootstrap_prices sam podmienia całą tabelę).")
+            if not bootstrap_prices(con, tickers, lookback_months, min_coverage):
+                # Pokrycie za niskie -> bootstrap_prices NIE podmienil tabeli prices (a przy
+                # calkiem swiezej/pustej bazie w ogole jej nie utworzyl). Kontynuowanie tutaj
+                # (update_index_prices + zwykle wyjscie 0) wygladaloby na udany przebieg CI,
+                # ktory po cichu zakomitowalby baze bez zadnych cen — przerywamy zamiast tego
+                # z niezerowym kodem wyjscia, zeby CI faktycznie zaczerwienilo sie na tym.
+                print("❌ Bootstrap cen nie powiodl sie (zbyt niskie pokrycie). Przerywam bez "
+                      "aktualizacji poziomow indeksow ani zapisu.")
+                raise SystemExit(1)
+
         update_index_prices(con, lookback_months)
+    finally:
         con.close()
-        return
-
-    load_index_constituents(con)
-    tickers = get_unique_tickers(con)
-    if not tickers:
-        print("❌ Brak tickerów. Przerywam.")
-        con.close()
-        return
-
-    if _prices_table_has_rows(con) and not _prices_history_is_shallow(con, lookback_months):
-        update_prices_incremental(con, tickers, retention_months=lookback_months)
-    else:
-        if _prices_table_has_rows(con):
-            print(f"⏳ Zachowana historia cen nie sięga {lookback_months} mies. wstecz "
-                  f"(rozszerzono retencję) — jednorazowy pełny re-bootstrap zamiast "
-                  f"przyrostowego doszacowania (bootstrap_prices sam podmienia całą tabelę).")
-        bootstrap_prices(con, tickers, lookback_months, min_coverage)
-
-    update_index_prices(con, lookback_months)
-
-    con.close()
 
 
 if __name__ == "__main__":

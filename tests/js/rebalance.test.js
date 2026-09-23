@@ -544,6 +544,12 @@ test("satelliteWinnerUniverse returns null when no GEM data is known (e.g. offli
     assert.equal(satelliteWinnerUniverse(), null);
 });
 
+test("satelliteWinnerUniverse returns null on an exact tie between the top two universes, rather than silently favoring whichever comes first in REBALANCE_UNIVERSES", () => {
+    _setState({ gemIndexReturns: { SP500: 11.23, NASDAQ100: 11.23, DOWJONES: 9.0 } });
+    assert.equal(satelliteWinnerUniverse(), null);
+    _setState({ gemIndexReturns: {} });
+});
+
 // ---------- computeAutoTargets / deriveUniverseFractionsFromTargets ----------
 
 test("computeAutoTargets splits capital 60/40 between core and satellite, weighting each sleeve by momentum_score internally", () => {

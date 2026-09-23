@@ -239,14 +239,23 @@ async function loadGemReturns() {
 // Który z trzech uniwersów puli aktualnie wygrywa 12-miesięczny wyścig GEM —
 // null gdy brak danych (np. offline) albo żaden zwrot nie jest jeszcze znany.
 function satelliteWinnerUniverse() {
-    let winner = null, best = -Infinity;
+    // Bez obsługi remisu, samo ">" po cichu "wygrywałoby" dla pierwszego uniwersum
+    // w REBALANCE_UNIVERSES (SP500) przy dokładnie równym zwrocie GEM — realny
+    // przypadek, bo run_query.py zaokrągla return_pct do 2 miejsc. Ta sama logika
+    // "remis = brak faworyta" co winnerUniverseFromManualReturns w rebalance_pl.js.
+    let winner = null, best = -Infinity, tie = false;
     REBALANCE_UNIVERSES.forEach(u => {
-        if (gemIndexReturns[u] !== undefined && gemIndexReturns[u] > best) {
-            best = gemIndexReturns[u];
+        const v = gemIndexReturns[u];
+        if (v === undefined) return;
+        if (v > best) {
+            best = v;
             winner = u;
+            tie = false;
+        } else if (v === best) {
+            tie = true;
         }
     });
-    return winner;
+    return tie ? null : winner;
 }
 
 function fmtMoney(v) {
@@ -1228,7 +1237,11 @@ function renderSuggestions() {
 
     document.getElementById("statCurrentValue").textContent = moneyFmt(holdingsValue());
     document.getElementById("statTargetValue").textContent = moneyFmt(totalCapital);
-    document.getElementById("statHoldingsCount").textContent = Object.keys(targets).length;
+    // computeAutoTargets zwraca N wpisów (wszystkie po 0 zl) nawet przy
+    // investableCapital <= 0 (np. nowy uzytkownik bez zaimportowanych holdingow) —
+    // bez tej samej strazniczki co #rebalanceEmpty powyzej, ta karta pokazywalaby
+    // "20", a tabela pod nia jednoczesnie mowila "brak sugestii".
+    document.getElementById("statHoldingsCount").textContent = investableCapital > 0 ? Object.keys(targets).length : 0;
     const statBuy = document.getElementById("statBuy");
     if (statBuy) statBuy.textContent = buyCount ? `${buyCount} · ${moneyFmt(buySum)}` : "0";
     const statSell = document.getElementById("statSell");

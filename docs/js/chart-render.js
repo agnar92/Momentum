@@ -240,9 +240,25 @@ function initMansfieldControls() {
 // najechanie na tydzień sprzed startu okna Mansfielda, same `null`), wykres
 // po prostu nie pokazuje własnego tooltipa — to uczciwie sygnalizuje "tu nie
 // ma jeszcze danych", zamiast pokazywać pusty dymek.
+// canvas -> aktualna żywa instancja Chart.js na nim (patrz Map poniżej) i canvas ->
+// "już mam podpięte listenery" (Set) — ten moduł-poziomowy stan przetrwa między
+// wywołaniami syncChartsCrosshair. Bez tego, skoro renderRelativeStrengthChart
+// (a więc i ta funkcja) odpala się przy KAŻDEJ zmianie tickera, każde przełączenie
+// dokładałoby kolejny komplet mousemove/mouseleave listenerów na tych samych,
+// statycznych <canvas> (patrz docs/index.html — nigdy nie są tworzone od nowa),
+// z zamkniętymi referencjami do już zniszczonych instancji sprzed przełączenia —
+// nieograniczony wyciek pamięci/listenerów rosnący z liczbą obejrzanych tickerów
+// w jednej sesji. Listenery są więc podpinane raz na canvas (crosshairBoundCanvases),
+// a zawsze czytają BIEŻĄCY wykres z crosshairChartByCanvas, aktualizowanej przy
+// każdym wywołaniu — stąd trzeba kluczować po elemencie <canvas>, nie po indeksie
+// w tablicy: `charts` bywa krótsza niż 5 (MACD/Mansfield/Squeeze mogą wypaść przy
+// braku danych na danym tickerze), więc pozycja w tablicy nie jest stabilna.
+const crosshairChartByCanvas = new Map();
+const crosshairBoundCanvases = new Set();
+
 function syncChartsCrosshair(charts) {
     const applyToOthers = (sourceChart, dataIndex) => {
-        charts.forEach(chart => {
+        crosshairChartByCanvas.forEach(chart => {
             // Wykres mógł już zostać zniszczony (destroy() zeruje canvas) —
             // np. zamknięcie okienka z wykresem ukrywa canvas i przeglądarka
             // wysyła wtedy "mouseleave" do kursora stojącego nad wykresem.
@@ -259,12 +275,23 @@ function syncChartsCrosshair(charts) {
             chart.update("none");
         });
     };
+
+    charts.forEach(chart => crosshairChartByCanvas.set(chart.canvas, chart));
+
     charts.forEach(chart => {
-        chart.canvas.addEventListener("mousemove", (evt) => {
-            const points = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
-            applyToOthers(chart, points.length ? points[0].index : null);
+        const canvas = chart.canvas;
+        if (crosshairBoundCanvases.has(canvas)) return;
+        crosshairBoundCanvases.add(canvas);
+        canvas.addEventListener("mousemove", (evt) => {
+            const liveChart = crosshairChartByCanvas.get(canvas);
+            if (!liveChart || !liveChart.canvas) return;
+            const points = liveChart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
+            applyToOthers(liveChart, points.length ? points[0].index : null);
         });
-        chart.canvas.addEventListener("mouseleave", () => applyToOthers(chart, null));
+        canvas.addEventListener("mouseleave", () => {
+            const liveChart = crosshairChartByCanvas.get(canvas);
+            if (liveChart) applyToOthers(liveChart, null);
+        });
     });
 }
 
