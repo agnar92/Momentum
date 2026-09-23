@@ -256,7 +256,7 @@ function bulletHtml(current, target) {
 // obiektu wiersza, nie tylko tekstowego dataset.ticker, żeby odczytać
 // mini_closes/mini_hist/rs_long/daily_* bez osobnego wyszukiwania po tickerze.
 // ============================================================
-const MINI_PREVIEW_HOVER_DELAY_MS = 2000;
+const MINI_PREVIEW_HOVER_DELAY_MS = 700;
 let miniPreviewEl = null;
 let miniPreviewTimer = null;
 let miniPreviewHoveredEl = null;
@@ -320,20 +320,28 @@ function buildMiniPreviewHtml(row) {
         + sections;
 }
 
-// Pozycjonuje okienko obok elementu, na ktorym stoi kursor — po prawej,
-// chyba ze nie mieści się w oknie (wtedy po lewej), przycięte do widocznego
-// obszaru z każdej strony.
+// Pozycjonuje okienko NAD (albo pod, gdy nad nie ma miejsca) najechaną
+// komórką, wyśrodkowane poziomo względem niej — CELOWO nie "po prawej od
+// kursora" jak w pierwszej wersji: wiersz tabeli ciągnie się dalej w prawo
+// (kolejne kolumny — np. RS/TTM obok sparklinu), więc okienko wystawione w
+// prawo lądowało dokładnie na nich, zasłaniając to, co użytkownik akurat
+// chciał zobaczyć OBOK podglądu. Nad/pod wierszem nie ma tego problemu —
+// zasłania co najwyżej sąsiednie wiersze, nie tę samą linię danych.
 function positionMiniPreview(el, targetEl) {
     const rect = targetEl.getBoundingClientRect();
     el.style.left = "0px";
     el.style.top = "0px";
     const elRect = el.getBoundingClientRect();
-    let left = rect.right + 12;
-    if (left + elRect.width > window.innerWidth - 8) left = rect.left - elRect.width - 12;
+
+    let left = rect.left + rect.width / 2 - elRect.width / 2;
     if (left < 8) left = 8;
-    let top = rect.top;
+    if (left + elRect.width > window.innerWidth - 8) left = window.innerWidth - elRect.width - 8;
+
+    const gap = 10;
+    let top = rect.top - elRect.height - gap; // domyślnie nad wierszem
+    if (top < 8) top = rect.bottom + gap; // za mało miejsca nad -> pod wierszem
     if (top + elRect.height > window.innerHeight - 8) top = window.innerHeight - elRect.height - 8;
-    if (top < 8) top = 8;
+
     el.style.left = `${left}px`;
     el.style.top = `${top}px`;
 }
