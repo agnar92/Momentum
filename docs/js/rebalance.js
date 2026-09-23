@@ -7,6 +7,7 @@
 if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
+    Object.assign(globalThis, require("./minicharts.js"));
 }
 
 const TRADE_THRESHOLD_PCT = 0.005; // pomijamy sugestie mniejsze niż 0.5% kapitału docelowego
@@ -531,6 +532,7 @@ let poolSortDir = "asc";
 // żeby nie liczyć core/satelity osobno dla każdego wiersza.
 function poolRowHtml(c, sleeve) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
+    const mini = miniVisualFields(c);
     const sleeveBadge = sleeve === "core"
         ? '<span class="action-badge buy" title="Core — stabilne blue chipy z Dow Jones/SP500 (60% kapitału)">Core</span>'
         : sleeve === "satellite"
@@ -546,6 +548,8 @@ function poolRowHtml(c, sleeve) {
         <td>${c.momentum_window}</td>
         <td>${c.volatility_pct.toFixed(2)}%</td>
         <td>${c.momentum_score.toFixed(3)}</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(mini.mini_closes, mini.mini_ema)}</td>
+        <td>${rsBarHtml(mini.rs_long)}</td>
         <td>${stageCellHtml(stage)}</td>
         <td>${sleeveBadge}</td>
         <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" data-universe="${c.universe}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
@@ -679,7 +683,7 @@ function renderPoolTable() {
         metaEl: document.getElementById("poolMeta"),
         allRows,
         compareFn: (a, b) => compareRows(a, b, poolSortKey, poolSortDir),
-        colspan: 12,
+        colspan: 14,
         emptyAllMsg: filterLabel
             ? "Żadna spółka nie pasuje do wybranego etapu."
             : "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
@@ -747,6 +751,12 @@ function refreshHoldingRowCells(tr, h) {
     const moneyFmt = moneyFmtForCurrency(currencyOf(h.ticker));
     tr.querySelector(".h-price").innerHTML = price !== null ? moneyFmt(price) : '<span class="text-faint">brak</span>';
     tr.querySelector(".h-value").textContent = value !== null ? moneyFmt(value) : "—";
+    // Mini-wykres i etap pozycji — z danych dashboardu (tylko spółki z
+    // wczytanych uniwersów tej strony; inne dostają "—").
+    const c = findConstituent(universeData, h.ticker);
+    const mini = c ? miniVisualFields(c) : null;
+    tr.querySelector(".h-spark").innerHTML = mini ? weeklySparkSvg(mini.mini_closes, mini.mini_ema) : '<span class="spark-empty">—</span>';
+    tr.querySelector(".h-stage").innerHTML = c ? stageCellHtml(c.weekly_chart && c.weekly_chart.current_stage) : '<span class="spark-empty">—</span>';
 }
 
 function renderHoldingsTable() {
@@ -759,6 +769,8 @@ function renderHoldingsTable() {
             <td><input type="number" class="h-shares" min="0" step="any" value="${h.shares ?? ""}"></td>
             <td class="h-price"></td>
             <td class="h-value"></td>
+            <td class="h-spark"></td>
+            <td class="h-stage"></td>
             <td><button class="remove-row-btn" title="Usuń">✕</button></td>
         `;
         refreshHoldingRowCells(tr, h);
@@ -1179,7 +1191,12 @@ function renderSuggestions() {
     tbody.innerHTML = "";
     document.getElementById("rebalanceEmpty").style.display = (investableCapital <= 0 || rows.length === 0) ? "block" : "none";
 
+    let buyCount = 0, buySum = 0, sellCount = 0, sellSum = 0;
     rows.forEach(r => {
+        if (!r.excludedRow && r.diff !== null) {
+            if (r.dropped || r.diff < -threshold) { sellCount += 1; sellSum += r.dropped ? (r.current_value || 0) : -r.diff; }
+            else if (r.diff > threshold) { buyCount += 1; buySum += r.diff; }
+        }
         let actionHtml;
         if (r.excludedRow) {
             actionHtml = `<span class="action-badge excluded">WYKLUCZONE — bez zmian</span>`;
@@ -1203,6 +1220,7 @@ function renderSuggestions() {
             <td>${r.weight_pct.toFixed(2)}%</td>
             <td>${moneyFmt(r.target_value)}</td>
             <td>${r.current_value !== null ? moneyFmt(r.current_value) : "—"}</td>
+            <td>${r.excludedRow ? '<span class="spark-empty">—</span>' : bulletHtml(r.current_value || 0, r.target_value)}</td>
             <td>${actionHtml}</td>
         `;
         tbody.appendChild(tr);
@@ -1211,6 +1229,10 @@ function renderSuggestions() {
     document.getElementById("statCurrentValue").textContent = moneyFmt(holdingsValue());
     document.getElementById("statTargetValue").textContent = moneyFmt(totalCapital);
     document.getElementById("statHoldingsCount").textContent = Object.keys(targets).length;
+    const statBuy = document.getElementById("statBuy");
+    if (statBuy) statBuy.textContent = buyCount ? `${buyCount} · ${moneyFmt(buySum)}` : "0";
+    const statSell = document.getElementById("statSell");
+    if (statSell) statSell.textContent = sellCount ? `${sellCount} · ${moneyFmt(sellSum)}` : "0";
 
     const refDates = poolRefDateNote();
     document.getElementById("refDateNote").textContent = refDates ? `(wg rebalansów z ${refDates})` : "";

@@ -2190,6 +2190,18 @@
         "sector": "Information Technology",
         "count": 72,
         "rsm_vs_index_pct": 12.14,
+        "rsm_series": [
+          9.17,
+          7.44,
+          10.86,
+          11.29,
+          8.58,
+          9.1,
+          9.55,
+          10.29,
+          11.14,
+          12.14
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2247,6 +2259,18 @@
         "sector": "Energy",
         "count": 21,
         "rsm_vs_index_pct": 6.36,
+        "rsm_series": [
+          9.71,
+          8.14,
+          0.61,
+          7.56,
+          11.74,
+          9.2,
+          11.06,
+          13.32,
+          11.47,
+          6.36
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2274,6 +2298,18 @@
         "sector": "Health Care",
         "count": 59,
         "rsm_vs_index_pct": -0.13,
+        "rsm_series": [
+          1.41,
+          0.29,
+          -1.4,
+          -0.79,
+          4.88,
+          2.22,
+          2.22,
+          -0.67,
+          1.11,
+          -0.13
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2319,6 +2355,18 @@
         "sector": "Financials",
         "count": 76,
         "rsm_vs_index_pct": -4.48,
+        "rsm_series": [
+          -0.9,
+          -0.67,
+          -2.82,
+          -2.07,
+          -1.61,
+          -0.83,
+          -0.75,
+          -1.24,
+          -3.35,
+          -4.48
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2376,6 +2424,18 @@
         "sector": "Industrials",
         "count": 81,
         "rsm_vs_index_pct": -7.52,
+        "rsm_series": [
+          3.87,
+          1.21,
+          0.59,
+          0.9,
+          -1.06,
+          -3.19,
+          -4.25,
+          -5.04,
+          -6.35,
+          -7.52
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2439,6 +2499,18 @@
         "sector": "Materials",
         "count": 25,
         "rsm_vs_index_pct": -7.57,
+        "rsm_series": [
+          -0.73,
+          -3.3,
+          -2.11,
+          -2.99,
+          0.33,
+          -0.76,
+          -2.15,
+          -4.08,
+          -5.73,
+          -7.57
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2466,6 +2538,18 @@
         "sector": "Communication",
         "count": 24,
         "rsm_vs_index_pct": -8.01,
+        "rsm_series": [
+          -13.41,
+          -12.48,
+          -12.9,
+          -11.6,
+          -11.27,
+          -10.17,
+          -10.67,
+          -9.16,
+          -10.16,
+          -8.01
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2493,6 +2577,18 @@
         "sector": "Real Estate",
         "count": 30,
         "rsm_vs_index_pct": -9.15,
+        "rsm_series": [
+          0.62,
+          -2.14,
+          -5.52,
+          -5.08,
+          -3.9,
+          -5.4,
+          -6.42,
+          -6.53,
+          -8.16,
+          -9.15
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2520,6 +2616,18 @@
         "sector": "Consumer Staples",
         "count": 34,
         "rsm_vs_index_pct": -9.39,
+        "rsm_series": [
+          -4.59,
+          -4.31,
+          -7.25,
+          -6.28,
+          -4.79,
+          -5.63,
+          -6.44,
+          -6.82,
+          -7.23,
+          -9.39
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2553,6 +2661,18 @@
         "sector": "Consumer Discretionary",
         "count": 47,
         "rsm_vs_index_pct": -12.2,
+        "rsm_series": [
+          -12.94,
+          -8.39,
+          -8.47,
+          -9.8,
+          -8.35,
+          -9.14,
+          -10.67,
+          -11.13,
+          -12.21,
+          -12.2
+        ],
         "data_source": "etf",
         "top_companies": [
           {
@@ -2592,6 +2712,18 @@
         "sector": "Utilities",
         "count": 31,
         "rsm_vs_index_pct": -16.69,
+        "rsm_series": [
+          -3.36,
+          -8.11,
+          -12.47,
+          -11.13,
+          -12.69,
+          -12.94,
+          -12.08,
+          -12.53,
+          -14.87,
+          -16.69
+        ],
         "data_source": "etf",
         "top_companies": [
           {

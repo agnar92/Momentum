@@ -10,11 +10,14 @@ const {
     weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     classifyContinuation, combinedContinuationCandidates,
     effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
-    sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
-    rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
     githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
+const {
+    sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
+    rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
+    zeroLineSparkSvg, crossIndexInTail, findConstituent, bulletHtml,
+} = require(path.join("..", "..", "docs", "js", "minicharts.js"));
 
 // compareRows now lives in docs/js/shared.js — see tests/js/shared.test.js.
 // rollingMean/alignMansfieldToDates/alignSqueezeToDates/fmtPlDate now live in
@@ -569,4 +572,38 @@ test("stageBreakdown groups 2A/2B into stage 2 and counts missing stages", () =>
 test("weeklySparkSvg draws squeeze bars only when a squeeze series is passed", () => {
     assert.equal((weeklySparkSvg([0, 1, 2], [0, 0.5, 1], [0, 1, 1]).match(/spark-sq/g) || []).length, 2);
     assert.doesNotMatch(weeklySparkSvg([0, 1, 2], [0, 0.5, 1]), /spark-sq/);
+});
+
+test("zeroLineSparkSvg draws a zero line, colors by the last value and marks a point", () => {
+    const up = zeroLineSparkSvg([-2, -1, 1, 2], 2);
+    assert.match(up, /spark-zero/);
+    assert.match(up, /class="spark-up"/);
+    assert.match(up, /spark-mark/);
+    assert.match(zeroLineSparkSvg([2, 1, -1]), /class="spark-down"/);
+    assert.doesNotMatch(zeroLineSparkSvg([2, 1, -1]), /spark-mark/);
+    assert.match(zeroLineSparkSvg([1]), /spark-empty/);
+});
+
+test("crossIndexInTail maps a zero-cross 'weeks ago' onto the last n points", () => {
+    const arr = [-1, -1, -1, 1, 2, 3, null];   // cross up 3 weeks ago (index 3)
+    assert.equal(crossIndexInTail(arr, 3, 5), 1); // tail starts at index 2
+    assert.equal(crossIndexInTail(arr, 3, 7), 3);
+    assert.equal(crossIndexInTail(arr, 3, 2), null, "cross before the window");
+    assert.equal(crossIndexInTail(arr, null, 5), null);
+});
+
+test("findConstituent searches all_constituents across universes", () => {
+    const data = { A: { all_constituents: [{ ticker: "X" }] }, B: { constituents: [{ ticker: "Y" }] } };
+    assert.equal(findConstituent(data, "Y").ticker, "Y");
+    assert.equal(findConstituent(data, "Z"), null);
+    assert.equal(findConstituent(data, ""), null);
+});
+
+test("bulletHtml colors under/at/over target and shows the % of target", () => {
+    assert.match(bulletHtml(50, 100), /bullet-under/);
+    assert.match(bulletHtml(50, 100), />50%</);
+    assert.match(bulletHtml(101, 100), /bullet-ok/);
+    assert.match(bulletHtml(150, 100), /bullet-over/);
+    assert.match(bulletHtml(80, 0), /poza celem/);
+    assert.match(bulletHtml(0, 0), /spark-empty/);
 });

@@ -2523,6 +2523,16 @@ def _mansfield_rsm_current_value(numerator_df, denominator_df, weeks=SECTOR_STRA
     tylko wlasny indeks uniwersum spolki. Potrzeba co najmniej `weeks` wspolnych
     tygodni obu serii — inaczej None (za malo historii), ta sama konwencja
     'degraduj sie do None zamiast rzucic wyjatek' co reszta tego modulu."""
+    rsm = _mansfield_rsm_values(numerator_df, denominator_df, weeks)
+    if rsm is None:
+        return None
+    last = rsm.iloc[-1]
+    return float(last) if pd.notna(last) else None
+
+
+def _mansfield_rsm_values(numerator_df, denominator_df, weeks=SECTOR_STRATEGY_RSM_WEEKS):
+    """Cala seria RSM (pandas Series, tygodniowo) dla _mansfield_rsm_current_value/
+    _mansfield_rsm_tail — None przy braku danych albo < `weeks` wspolnych tygodni."""
     if numerator_df is None or denominator_df is None:
         return None
     den_by_week = dict(zip(denominator_df["week_start"], denominator_df["close"]))
@@ -2531,10 +2541,21 @@ def _mansfield_rsm_current_value(numerator_df, denominator_df, weeks=SECTOR_STRA
     merged = merged.dropna(subset=["den_close"])
     if len(merged) < weeks:
         return None
-    merged["rs_raw"] = merged["close"] / merged["den_close"]
-    rsm = (merged["rs_raw"] / merged["rs_raw"].rolling(weeks).mean() - 1) * 100
-    last = rsm.iloc[-1]
-    return float(last) if pd.notna(last) else None
+    rs_raw = merged["close"] / merged["den_close"]
+    return (rs_raw / rs_raw.rolling(weeks).mean() - 1) * 100
+
+
+SECTOR_STRATEGY_RSM_TAIL_WEEKS = 26  # ile ostatnich tygodni RSM sektora eksportujemy (mini-wykres trendu na stronie Strategia)
+
+
+def _mansfield_rsm_tail(numerator_df, denominator_df, n=SECTOR_STRATEGY_RSM_TAIL_WEEKS,
+                        weeks=SECTOR_STRATEGY_RSM_WEEKS):
+    """Ostatnie `n` wartosci RSM (zaokraglone, bez NaN z rozgrzewki) — trend
+    sily relatywnej do mini-wykresu; [] gdy brak danych."""
+    rsm = _mansfield_rsm_values(numerator_df, denominator_df, weeks)
+    if rsm is None:
+        return []
+    return [round(float(v), 2) for v in rsm.dropna().iloc[-n:]]
 
 
 def compute_sector_relative_strength(con, ref_date, min_trading_days, max_staleness_days):
@@ -2610,9 +2631,11 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
         if sector_series is not None:
             data_source = "etf"
             sector_rsm_pct = _mansfield_rsm_current_value(sector_series, sp500_series)
+            sector_rsm_tail = _mansfield_rsm_tail(sector_series, sp500_series)
         else:
             data_source = "no_data"
             sector_rsm_pct = None
+            sector_rsm_tail = []
 
         company_rows = []
         for _, r in g.iterrows():
@@ -2652,6 +2675,7 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
             "sector": sector,
             "count": int(len(g)),
             "rsm_vs_index_pct": round(sector_rsm_pct, 2) if sector_rsm_pct is not None else None,
+            "rsm_series": sector_rsm_tail,
             "data_source": data_source,
             "top_companies": top_companies,
         })

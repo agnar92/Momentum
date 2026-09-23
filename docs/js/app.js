@@ -10,6 +10,7 @@
 if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
+    Object.assign(globalThis, require("./minicharts.js"));
 }
 
 // Uniwersa z WŁASNĄ zakładką/tabelą momentum w dashboardzie (sidebar + drawer).
@@ -314,12 +315,7 @@ async function loadData() {
 // ============================================================
 // WYBICIE_DEFAULT_* / WYBICIE_SETTINGS_KEY — zadeklarowane nad `state` (potrzebne tam jako wartości startowe).
 
-function latestNonNullIdx(arr) {
-    if (!arr) return -1;
-    let i = arr.length - 1;
-    while (i >= 0 && arr[i] == null) i--;
-    return i;
-}
+// latestNonNullIdx żyje w js/minicharts.js (współdzielone z rebalanserami i Strategią).
 
 // Ile tygodni temu seria przecięła zero w górę (1 = w ostatnim tygodniu), albo
 // null, gdy teraz nie jest > 0 albo w oknie lookbacku (domyślnie cała seria)
@@ -365,6 +361,11 @@ function classifyWybicie(ticker, universe, c, opts = {}) {
         rsCrossWeeks,
         breakoutWeeks,
         histNow: hist[histIdx],
+        ...miniVisualFields(c),
+        mini_macd: macd.slice(-MINI_WEEKS),
+        mini_macd_cross: crossIndexInTail(macd, macdCrossWeeks, MINI_WEEKS),
+        mini_rs: rsLong.slice(-MINI_WEEKS),
+        mini_rs_cross: crossIndexInTail(rsLong, rsCrossWeeks, MINI_WEEKS),
     };
 }
 
@@ -621,169 +622,6 @@ function latestDailyDate() {
     return best;
 }
 
-// ---------- Mini-wykresy (inline SVG, bez Chart.js — dziesiątki na raz) ----------
-// Punkty [x, y] dla serii (null = przerwa), skalowane do w×h z marginesem pad.
-function sparkPoints(values, w, h, pad = 2, range = null) {
-    const nums = (values || []).filter(v => v != null && Number.isFinite(v));
-    if (nums.length < 2) return [];
-    const lo = range ? range[0] : Math.min(...nums);
-    const hi = range ? range[1] : Math.max(...nums);
-    const span = hi - lo || 1;
-    const n = values.length;
-    return values.map((v, i) => (v == null || !Number.isFinite(v)) ? null : [
-        +(pad + (i * (w - 2 * pad)) / (n - 1)).toFixed(1),
-        +(h - pad - ((v - lo) / span) * (h - 2 * pad)).toFixed(1),
-    ]);
-}
-
-function sparkPath(points) {
-    let d = "";
-    let pen = false;
-    points.forEach(p => {
-        if (!p) { pen = false; return; }
-        d += `${pen ? "L" : "M"}${p[0]},${p[1]}`;
-        pen = true;
-    });
-    return d;
-}
-
-function seriesRange(...series) {
-    const nums = series.flat().filter(v => v != null && Number.isFinite(v));
-    return nums.length ? [Math.min(...nums), Math.max(...nums)] : null;
-}
-
-// Kreski u dołu mini-wykresu w okresach squeeze'a (1 = squeeze), wyrównane do
-// tej samej osi X co n punktów ceny.
-function sparkSqueezeBars(squeeze, n, w, h, barH) {
-    const step = (w - 4) / Math.max(n - 1, 1);
-    return (squeeze || []).map((v, i) => v === 1
-        ? `<rect x="${(2 + i * step - step / 2).toFixed(1)}" y="${h - barH}" width="${Math.max(step, 1).toFixed(1)}" height="${barH}" class="spark-sq"/>`
-        : "").join("");
-}
-
-// Tydzień: cena (% od startu okna) + EMA20 przerywaną linią; opcjonalnie
-// czerwone kreski u dołu w tygodniach squeeze'a (zakładka TTM Squeeze).
-function weeklySparkSvg(closes, ema, squeeze = []) {
-    const w = 110, h = 30, barH = squeeze.length ? 3 : 0;
-    const range = seriesRange(closes, ema);
-    if (!range) return '<span class="spark-empty">—</span>';
-    const plotH = barH ? h - barH - 1 : h;
-    const pts = sparkPoints(closes, w, plotH, 2, range);
-    const up = closes.length && closes[closes.length - 1] >= closes[0];
-    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + (barH ? sparkSqueezeBars(squeeze, closes.length, w, h, barH) : "")
-        + `<path d="${sparkPath(sparkPoints(ema, w, plotH, 2, range))}" class="spark-ema"/>`
-        + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
-}
-
-// Dzień: cena z 60 sesji + EMA20 (przerywana) + czerwone kreski u dołu w dni
-// squeeze'a (jak kropki TV). Cena i EMA na wspólnej skali, żeby było widać pullback.
-function dailySparkSvg(closes, squeeze, ema = []) {
-    const w = 130, h = 30, barH = 3;
-    const range = seriesRange(closes, ema);
-    const pts = range ? sparkPoints(closes, w, h - barH - 1, 2, range) : [];
-    if (!pts.length) return '<span class="spark-empty">—</span>';
-    const n = closes.length;
-    const step = (w - 4) / Math.max(n - 1, 1);
-    const bars = (squeeze || []).map((v, i) => v === 1
-        ? `<rect x="${(2 + i * step - step / 2).toFixed(1)}" y="${h - barH}" width="${Math.max(step, 1).toFixed(1)}" height="${barH}" class="spark-sq"/>`
-        : "").join("");
-    const up = closes[n - 1] >= closes[0];
-    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + bars
-        + (ema.length ? `<path d="${sparkPath(sparkPoints(ema, w, h - barH - 1, 2, range))}" class="spark-ema"/>` : "")
-        + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
-}
-
-// Słupek RS wokół zera (Mansfield RS 52 tyg.): zielony w prawo = mocniejsza od
-// swojego indeksu, czerwony w lewo = słabsza. Skala ucięta na ±RS_BAR_CAP, żeby
-// kilka skrajnych wartości (>100) nie spłaszczało reszty.
-const RS_BAR_CAP = 50;
-
-function rsBarHtml(v) {
-    if (v == null || !Number.isFinite(v)) return '<span class="spark-empty">—</span>';
-    const w = 64, h = 12, half = w / 2;
-    const len = (Math.min(Math.abs(v), RS_BAR_CAP) / RS_BAR_CAP) * half;
-    const x = v >= 0 ? half : half - len;
-    return `<span class="rs-bar" title="Mansfield RS 52 tyg.: ${v.toFixed(1)}">`
-        + `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + `<rect x="0" y="${h / 2 - 1}" width="${w}" height="2" class="rs-bar-track"/>`
-        + `<rect x="${x.toFixed(1)}" y="1" width="${Math.max(len, 1).toFixed(1)}" height="${h - 2}" rx="2" class="${v >= 0 ? "rs-bar-pos" : "rs-bar-neg"}"/>`
-        + `<rect x="${half - 0.5}" y="0" width="1" height="${h}" class="rs-bar-zero"/></svg>`
-        + `<span class="${v >= 0 ? "positive" : "negative"}">${v >= 0 ? "+" : ""}${v.toFixed(1)}</span></span>`;
-}
-
-// Mini-wskaźnik TTM Squeeze jak na TradingView: słupki histogramu wokół zera
-// (4 kolory: jasna/ciemna zieleń nad zerem, jasna/ciemna czerwień pod — ten sam
-// schemat co histColors w chart-render.js) + kropki na linii zera (czerwona =
-// squeeze, złota = wybicie, szara = brak squeeze'a).
-function ttmMiniSvg(hist, squeezeOn, fired = []) {
-    const n = (hist || []).length;
-    const vals = (hist || []).filter(v => v != null && Number.isFinite(v));
-    if (!vals.length) return '<span class="spark-empty">—</span>';
-    const w = 130, h = 30, mid = h / 2, maxAbs = Math.max(...vals.map(Math.abs)) || 1;
-    const step = (w - 4) / n, barW = Math.max(step - 1, 1);
-    let out = "";
-    hist.forEach((v, i) => {
-        if (v == null) return;
-        const prev = i > 0 ? hist[i - 1] : null;
-        const rising = prev == null || v >= prev;
-        const cls = v >= 0 ? (rising ? "ttm-up" : "ttm-up-fade") : (rising ? "ttm-dn-fade" : "ttm-dn");
-        const len = (Math.abs(v) / maxAbs) * (mid - 3);
-        out += `<rect x="${(2 + i * step).toFixed(1)}" y="${(v >= 0 ? mid - len : mid).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(len, 0.5).toFixed(1)}" class="${cls}"/>`;
-    });
-    (squeezeOn || []).forEach((on, i) => {
-        if (on == null) return;
-        const cls = fired[i] ? "ttm-dot-fired" : on ? "ttm-dot-on" : "ttm-dot-off";
-        out += `<circle cx="${(2 + i * step + barW / 2).toFixed(1)}" cy="${mid}" r="1.6" class="${cls}"/>`;
-    });
-    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${out}</svg>`;
-}
-
-// Wspólne pola "mini-wizualizacji" wyciągane z tygodniowych wykresów spółki
-// (ostatnie MINI_WEEKS tygodni) — tabele uniwersów i zakładka TTM Squeeze.
-const MINI_WEEKS = 26;
-
-function miniVisualFields(c) {
-    const wc = c.weekly_chart || {};
-    const t = c.ttm_squeeze_chart || {};
-    const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
-    const rsIdx = latestNonNullIdx(rsLong);
-    const sqOn = (t.squeeze_on || []).slice(-MINI_WEEKS);
-    return {
-        rs_long: rsIdx >= 0 ? rsLong[rsIdx] : null,
-        mini_closes: (wc.close_pct || []).slice(-MINI_WEEKS),
-        mini_ema: (wc.ema20_pct || []).slice(-MINI_WEEKS),
-        mini_hist: (t.histogram || []).slice(-MINI_WEEKS),
-        mini_sq_on: sqOn,
-        mini_sq_flags: sqOn.map(v => v == null ? null : (v ? 1 : 0)),
-        mini_fired: (t.fired || []).slice(-MINI_WEEKS),
-    };
-}
-
-// Rozkład etapów Weinsteina w całym uniwersum (pasek nad tabelą):
-// { "1": n, "2": n (2A+2B), "3": n, "4": n, none: n, total }.
-function stageBreakdown(rows) {
-    const out = { "1": 0, "2": 0, "3": 0, "4": 0, none: 0, total: 0 };
-    (rows || []).forEach(c => {
-        const st = c.weekly_chart && c.weekly_chart.current_stage;
-        const key = st === "2A" || st === "2B" ? "2" : (st === "1" || st === "3" || st === "4") ? st : "none";
-        out[key] += 1;
-        out.total += 1;
-    });
-    return out;
-}
-
-// Pullback do EMA20 D1: cena 0..PULLBACK_BAND_PCT % nad średnią = klasyczne miejsce
-// dołączenia do trendu; daleko nad nią = rozciągnięta, pod nią = trend słabnie.
-const PULLBACK_BAND_PCT = 2;
-
-function pullbackHtml(pct) {
-    if (pct == null) return "—";
-    const txt = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
-    if (pct >= 0 && pct <= PULLBACK_BAND_PCT) return `<span class="pullback-badge" title="Cena przy EMA20 D1 — pullback">🎯 ${txt}</span>`;
-    return `<span class="${pct >= 0 ? "cross-age" : "negative"}">${txt}</span>`;
-}
 
 // Wszystkie uniwersa, bez duplikatów (pierwsze wystąpienie w kolejności
 // UNIVERSES wygrywa — jak combinedWybicieCandidates). Kolejność: świeże
@@ -811,6 +649,29 @@ function combinedContinuationCandidates(opts = {}) {
 // ============================================================
 // SIDEBAR (kwadraty z top 10 tickerów na indeks)
 // ============================================================
+// Kafelek sidebara "mówi" bez klikania: pasek u dołu w kolorze etapu
+// Weinsteina + kropka w rogu — zielona, gdy RS 52 tyg. > 0 (mocniejsza od
+// swojego indeksu), czerwona, gdy < 0.
+function decorateTile(tile, stage, rsLong) {
+    const color = stage && STAGE_COLORS[stage];
+    if (color) tile.style.boxShadow = `inset 0 -3px 0 ${color}`;
+    const extra = [];
+    if (stage) extra.push(`Etap ${stage}`);
+    if (rsLong != null && Number.isFinite(rsLong)) {
+        const dot = document.createElement("span");
+        dot.className = `tile-rs-dot ${rsLong >= 0 ? "tile-rs-up" : "tile-rs-down"}`;
+        tile.appendChild(dot);
+        extra.push(`RS 52 tyg. ${rsLong >= 0 ? "+" : ""}${rsLong.toFixed(1)}`);
+    }
+    if (extra.length) tile.title += ` · ${extra.join(" · ")}`;
+}
+
+function latestRsLong(c) {
+    const arr = c && c.mansfield_chart && c.mansfield_chart.rsm_long;
+    const i = latestNonNullIdx(arr);
+    return i >= 0 ? arr[i] : null;
+}
+
 function renderSidebarTiles() {
     SIDEBAR_TAB_UNIVERSES.forEach(u => {
         const container = document.getElementById(`tiles-${u}`);
@@ -823,6 +684,7 @@ function renderSidebarTiles() {
             tile.title = `${c.ticker} — ${UNIVERSE_LABELS[u]} #${c.rank} · waga ${c.weight_pct.toFixed(2)}%`;
             tile.dataset.ticker = c.ticker;
             tile.dataset.universe = u;
+            decorateTile(tile, c.weekly_chart && c.weekly_chart.current_stage, latestRsLong(c));
             if (c.ticker === state.selectedTicker) tile.classList.add("selected");
             tile.addEventListener("click", () => selectTicker(c.ticker, u));
             container.appendChild(tile);
@@ -854,6 +716,7 @@ function renderWybiciePanel() {
             + `wybicie ${r.breakoutWeeks} tyg. temu · MACD > 0 od ${r.macdCrossWeeks} tyg. · RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · histogram TTM ${r.histNow.toFixed(2)}`;
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, r.rsLongNow);
         if (r.ticker === state.selectedTicker) tile.classList.add("selected");
         tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         container.appendChild(tile);
@@ -889,6 +752,7 @@ function renderTtmSqueezePanel() {
                 + `w konsolidacji od ${r.consolidation_weeks} tyg.`;
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, r.rs_long);
         if (r.ticker === state.selectedTicker) tile.classList.add("selected");
         tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         container.appendChild(tile);
@@ -921,6 +785,7 @@ function renderContinuationPanel() {
                 : `D1 squeeze od ${r.squeeze_days} sesji`);
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, r.rs_long);
         if (r.ticker === state.selectedTicker) tile.classList.add("selected");
         tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         container.appendChild(tile);
@@ -1336,9 +1201,10 @@ function wybicieRowHtml(r, position) {
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
         <td>${crossWeeksHtml(r.breakoutWeeks)}</td>
-        <td class="positive" title="MACD przeciął zero w górę ${crossWeeksHtml(r.macdCrossWeeks)}">${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></td>
-        <td class="positive" title="RS 52 tyg. przeciął zero w górę ${crossWeeksHtml(r.rsCrossWeeks)}">${r.rsLongNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span></td>
-        <td class="positive">${r.histNow.toFixed(2)}</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
+        <td class="positive" title="MACD tygodniowy (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.macdCrossWeeks)}"><span class="cell-spark">${zeroLineSparkSvg(r.mini_macd, r.mini_macd_cross)}<span>${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></span></span></td>
+        <td class="positive" title="RS 52 tyg. (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.rsCrossWeeks)}"><span class="cell-spark">${zeroLineSparkSvg(r.mini_rs, r.mini_rs_cross)}<span>${r.rsLongNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span></span></span></td>
+        <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.)">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
@@ -1370,7 +1236,7 @@ function renderWybicieTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 11,
+        colspan: 12,
         emptyAllMsg: `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (MACD i RS 52 tyg. przecięły zero w odstępie ≤ ${state.wybicieWindowWeeks} tyg., histogram TTM dodatni).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
@@ -2104,8 +1970,6 @@ if (typeof module !== "undefined" && module.exports) {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
         effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
-        sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
-        rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
         githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };
