@@ -85,7 +85,12 @@
             <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą EMA20, unikaj nowych pozycji.">Etap 4</button>
         </div>
         <div class="stage-filter-bar wybicie-controls" id="wybicieControls">
-            <label class="wybicie-slider" title="Maksymalny odstęp (w tygodniach) między przecięciem zera przez MACD a przecięciem zera przez RS 52 tyg. — oba sygnały muszą przyjść blisko siebie. 0 = ten sam tydzień.">
+            <span class="stage-filter-label">Tryb:</span>
+            <button type="button" class="stage-filter-btn active" id="wybicieModeMacdRsBtn" data-mode="MACD_RS"
+                    title="Wymaga jednoczesnego przecięcia zera w górę przez tygodniowy MACD i linię RS 52 tyg. (blisko siebie, patrz „Okno wybicia”) — dotychczasowe zachowanie.">MACD + RS 52 tyg.</button>
+            <button type="button" class="stage-filter-btn" id="wybicieModeMacdOnlyBtn" data-mode="MACD_ONLY"
+                    title="Wymaga wyłącznie przecięcia zera w górę przez tygodniowy MACD — bez warunku na RS 52 tyg. Linia RS 52 tyg. jest nadal pokazywana informacyjnie w tabeli.">Samo MACD tygodniowe</button>
+            <label class="wybicie-slider" id="wybicieWindowRow" title="Maksymalny odstęp (w tygodniach) między przecięciem zera przez MACD a przecięciem zera przez RS 52 tyg. — oba sygnały muszą przyjść blisko siebie. 0 = ten sam tydzień. (nieaktywne w trybie „Samo MACD tygodniowe”)">
                 <span class="stage-filter-label">Okno wybicia:</span>
                 <input type="range" id="wybicieWindowInput" min="0" max="26" step="1">
                 <span class="wybicie-slider-value" id="wybicieWindowValue"></span>

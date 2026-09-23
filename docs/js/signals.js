@@ -28,6 +28,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const WYBICIE_DEFAULT_WINDOW_WEEKS = 6;
 const WYBICIE_DEFAULT_MONITOR_WEEKS = 6;
+const WYBICIE_DEFAULT_MODE = "MACD_RS";
 const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
 
 const CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS = 30;
@@ -51,6 +52,7 @@ const state = {
     winnersSortDir: "desc",
     wybicieWindowWeeks: WYBICIE_DEFAULT_WINDOW_WEEKS,
     wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
+    wybicieMode: WYBICIE_DEFAULT_MODE,
     contMaxSqueezeDays: CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS,
     contFireLookbackDays: CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS,
     contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
@@ -99,6 +101,21 @@ async function loadData() {
 // Każdy wskaźnik ma własną tablicę dat, więc "teraz" to ostatni tydzień z
 // NIE-null wartością w danej serii (ten sam caveat co w classifyTtmSqueeze —
 // najnowszy tydzień bywa null).
+//
+// TRYB (state.wybicieMode, przełącznik nad tabelą, #wybicieModeMacdRsBtn /
+// #wybicieModeMacdOnlyBtn) — dodany na wyraźną prośbę użytkownika ("dodaj
+// selector bez wybicia RS 52 tygodnie, samo MACD tygodniowe"):
+//   - "MACD_RS" (domyślny, jak opisano wyżej) — wymaga WSZYSTKICH TRZECH
+//     warunków 1-3, włącznie z przecięciem RS 52 tyg. blisko przecięcia MACD
+//     (OKNO WYBICIA ma tu sens i suwak jest widoczny).
+//   - "MACD_ONLY" — pomija warunek 2 (RS 52 tyg.) CAŁKOWICIE: liczy się
+//     wyłącznie przecięcie zera w górę przez tygodniowy MACD (warunek 1) i
+//     dodatni histogram TTM (warunek 3, bez zmian). OKNO WYBICIA nie ma tu
+//     zastosowania (nie ma drugiego przecięcia, z którym porównywać odstęp) —
+//     suwak jest wtedy ukryty, breakoutWeeks = macdCrossWeeks wprost. Linia
+//     RS 52 tyg. jest nadal liczona i pokazywana w tabeli/kafelkach jako
+//     informacja (może być dodatnia bez świeżego przecięcia, ujemna, albo
+//     brakująca), po prostu przestaje być warunkiem WEJŚCIA na listę.
 // ============================================================
 
 // Ile tygodni temu seria przecięła zero w górę (1 = w ostatnim tygodniu), albo
@@ -118,19 +135,28 @@ function weeksSinceZeroCrossUp(arr, lookback = Infinity) {
 // Zwraca null, gdy spółka nie spełnia wszystkich warunków (albo brakuje
 // danych) — celowo wyselekcjonowany screener, nie pełna lista.
 function classifyWybicie(ticker, universe, c, opts = {}) {
+    const mode = opts.mode ?? state.wybicieMode;
     const windowWeeks = opts.windowWeeks ?? state.wybicieWindowWeeks;
     const monitorWeeks = opts.monitorWeeks ?? state.wybicieMonitorWeeks;
     const macd = c.macd_chart && c.macd_chart.macd;
     const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
     const hist = c.ttm_squeeze_chart && c.ttm_squeeze_chart.histogram;
-    if (!macd || !rsLong || !hist) return null;
+    if (!macd || !hist) return null;
 
     const macdCrossWeeks = weeksSinceZeroCrossUp(macd);
     if (macdCrossWeeks == null) return null;
-    const rsCrossWeeks = weeksSinceZeroCrossUp(rsLong);
-    if (rsCrossWeeks == null) return null;
-    if (Math.abs(macdCrossWeeks - rsCrossWeeks) > windowWeeks) return null;
-    const breakoutWeeks = Math.min(macdCrossWeeks, rsCrossWeeks);
+
+    let rsCrossWeeks = null;
+    let breakoutWeeks;
+    if (mode === "MACD_ONLY") {
+        breakoutWeeks = macdCrossWeeks;
+    } else {
+        if (!rsLong) return null;
+        rsCrossWeeks = weeksSinceZeroCrossUp(rsLong);
+        if (rsCrossWeeks == null) return null;
+        if (Math.abs(macdCrossWeeks - rsCrossWeeks) > windowWeeks) return null;
+        breakoutWeeks = Math.min(macdCrossWeeks, rsCrossWeeks);
+    }
     if (breakoutWeeks > monitorWeeks) return null;
     const histIdx = latestNonNullIdx(hist);
     if (histIdx < 0 || !(hist[histIdx] > 0)) return null;
@@ -141,15 +167,15 @@ function classifyWybicie(ticker, universe, c, opts = {}) {
         current_stage: c.weekly_chart && c.weekly_chart.current_stage,
         macdNow: macd[latestNonNullIdx(macd)],
         macdCrossWeeks,
-        rsLongNow: rsLong[latestNonNullIdx(rsLong)],
+        rsLongNow: rsLong && latestNonNullIdx(rsLong) >= 0 ? rsLong[latestNonNullIdx(rsLong)] : null,
         rsCrossWeeks,
         breakoutWeeks,
         histNow: hist[histIdx],
         ...miniVisualFields(c),
         mini_macd: macd.slice(-MINI_WEEKS),
         mini_macd_cross: crossIndexInTail(macd, macdCrossWeeks, MINI_WEEKS),
-        mini_rs: rsLong.slice(-MINI_WEEKS),
-        mini_rs_cross: crossIndexInTail(rsLong, rsCrossWeeks, MINI_WEEKS),
+        mini_rs: rsLong ? rsLong.slice(-MINI_WEEKS) : [],
+        mini_rs_cross: rsCrossWeeks != null ? crossIndexInTail(rsLong, rsCrossWeeks, MINI_WEEKS) : null,
     };
 }
 
@@ -448,7 +474,9 @@ function renderWybiciePanel() {
         tile.className = "ticker-tile";
         tile.textContent = r.ticker;
         tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
-            + `wybicie ${r.breakoutWeeks} tyg. temu · MACD > 0 od ${r.macdCrossWeeks} tyg. · RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · histogram TTM ${r.histNow.toFixed(2)}`;
+            + `wybicie ${r.breakoutWeeks} tyg. temu · MACD > 0 od ${r.macdCrossWeeks} tyg. · `
+            + (r.rsCrossWeeks != null ? `RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · ` : "")
+            + `histogram TTM ${r.histNow.toFixed(2)}`;
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
         decorateTile(tile, r.current_stage, r.rsLongNow);
@@ -628,6 +656,20 @@ function crossWeeksHtml(weeks) {
 }
 
 function wybicieRowHtml(r, position) {
+    // W trybie "MACD_ONLY" (patrz classifyWybicie) RS 52 tyg. nie jest warunkiem
+    // wejścia na listę — rsLongNow/rsCrossWeeks bywają wtedy null (brak danych
+    // albo po prostu brak świeżego przecięcia). Kolumna pozostaje informacyjna:
+    // pokazuje aktualną wartość gdy jest dostępna (kolor wg znaku, nie zawsze
+    // "positive"), bez wieku przecięcia gdy go nie ma.
+    const rsCell = r.rsLongNow != null
+        ? `<span class="cell-spark">${zeroLineSparkSvg(r.mini_rs, r.mini_rs_cross)}<span>${r.rsLongNow.toFixed(2)}`
+            + (r.rsCrossWeeks != null ? ` <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span>` : "")
+            + `</span></span>`
+        : `<span class="spark-empty">—</span>`;
+    const rsCellClass = r.rsLongNow == null ? "" : r.rsLongNow >= 0 ? "positive" : "negative";
+    const rsTitle = r.rsCrossWeeks != null
+        ? `RS 52 tyg. (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.rsCrossWeeks)}`
+        : `RS 52 tyg. (${MINI_WEEKS} tyg.) — informacyjnie, nie jest wymagane w trybie „Samo MACD tygodniowe”`;
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
@@ -637,7 +679,7 @@ function wybicieRowHtml(r, position) {
         <td>${crossWeeksHtml(r.breakoutWeeks)}</td>
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
         <td class="positive" title="MACD tygodniowy (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.macdCrossWeeks)}"><span class="cell-spark">${zeroLineSparkSvg(r.mini_macd, r.mini_macd_cross)}<span>${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></span></span></td>
-        <td class="positive" title="RS 52 tyg. (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.rsCrossWeeks)}"><span class="cell-spark">${zeroLineSparkSvg(r.mini_rs, r.mini_rs_cross)}<span>${r.rsLongNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span></span></span></td>
+        <td class="${rsCellClass}" title="${rsTitle}">${rsCell}</td>
         <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.)">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
@@ -663,6 +705,9 @@ function flatScreenerMetaText(allRows, rows) {
 // combinedWybicieCandidates().
 function renderWybicieTable() {
     const allRows = combinedWybicieCandidates();
+    const emptyAllMsg = state.wybicieMode === "MACD_ONLY"
+        ? `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (tygodniowy MACD przeciął zero w górę, histogram TTM dodatni).`
+        : `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (MACD i RS 52 tyg. przecięły zero w odstępie ≤ ${state.wybicieWindowWeeks} tyg., histogram TTM dodatni).`;
 
     renderScreenerTable({
         tbody: document.getElementById("wybicieTableBody"),
@@ -671,7 +716,7 @@ function renderWybicieTable() {
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
         colspan: 12,
-        emptyAllMsg: `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (MACD i RS 52 tyg. przecięły zero w odstępie ≤ ${state.wybicieWindowWeeks} tyg., histogram TTM dodatni).`,
+        emptyAllMsg,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
@@ -682,7 +727,19 @@ function renderWybicieTable() {
     });
 }
 
-// Suwaki nad tabelą Wybicie (#wybicieControls): okno wybicia i czas
+// Pokazuje/ukrywa suwak "Okno wybicia" — nie ma zastosowania w trybie
+// "MACD_ONLY" (nie ma drugiego przecięcia, z którym porównywać odstęp).
+function applyWybicieModeVisibility() {
+    const row = document.getElementById("wybicieWindowRow");
+    if (row) row.hidden = state.wybicieMode === "MACD_ONLY";
+    const macdRsBtn = document.getElementById("wybicieModeMacdRsBtn");
+    const macdOnlyBtn = document.getElementById("wybicieModeMacdOnlyBtn");
+    if (macdRsBtn) macdRsBtn.classList.toggle("active", state.wybicieMode !== "MACD_ONLY");
+    if (macdOnlyBtn) macdOnlyBtn.classList.toggle("active", state.wybicieMode === "MACD_ONLY");
+}
+
+// Przełącznik trybu (#wybicieModeMacdRsBtn/#wybicieModeMacdOnlyBtn) i suwaki
+// nad tabelą Wybicie (#wybicieControls): tryb, okno wybicia i czas
 // monitorowania po wybiciu (patrz opis nad classifyWybicie). Wartości
 // zapamiętywane per przeglądarka w localStorage — tylko wygoda, strona działa
 // też bez niego (try/catch — tryb prywatny itp.).
@@ -692,8 +749,32 @@ function initWybicieControls() {
         if (saved) {
             if (Number.isFinite(saved.windowWeeks)) state.wybicieWindowWeeks = saved.windowWeeks;
             if (Number.isFinite(saved.monitorWeeks)) state.wybicieMonitorWeeks = saved.monitorWeeks;
+            if (saved.mode === "MACD_ONLY" || saved.mode === "MACD_RS") state.wybicieMode = saved.mode;
         }
     } catch (e) { /* brak localStorage — zostają domyślne */ }
+
+    const saveMode = () => {
+        try {
+            localStorage.setItem(WYBICIE_SETTINGS_KEY, JSON.stringify({
+                windowWeeks: state.wybicieWindowWeeks, monitorWeeks: state.wybicieMonitorWeeks,
+                mode: state.wybicieMode,
+            }));
+        } catch (e) { /* ignoruj */ }
+    };
+
+    applyWybicieModeVisibility();
+    [document.getElementById("wybicieModeMacdRsBtn"), document.getElementById("wybicieModeMacdOnlyBtn")]
+        .forEach(btn => {
+            if (!btn) return;
+            btn.addEventListener("click", () => {
+                if (state.wybicieMode === btn.dataset.mode) return;
+                state.wybicieMode = btn.dataset.mode;
+                applyWybicieModeVisibility();
+                saveMode();
+                renderWybiciePanel();
+                if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
+            });
+        });
 
     const bind = (inputId, valueId, stateKey) => {
         const input = document.getElementById(inputId);
@@ -704,11 +785,7 @@ function initWybicieControls() {
         input.addEventListener("input", () => {
             state[stateKey] = Number(input.value);
             if (valueEl) valueEl.textContent = `${state[stateKey]} tyg.`;
-            try {
-                localStorage.setItem(WYBICIE_SETTINGS_KEY, JSON.stringify({
-                    windowWeeks: state.wybicieWindowWeeks, monitorWeeks: state.wybicieMonitorWeeks,
-                }));
-            } catch (e) { /* ignoruj */ }
+            saveMode();
             renderWybiciePanel();
             if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
         });

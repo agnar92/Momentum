@@ -92,6 +92,45 @@ test("classifyWybicie returns null when chart data is missing", () => {
     assert.equal(classifyWybicie("AAA", "SP500", { price: 1 }), null);
 });
 
+// ---------- tryb "MACD_ONLY" (selector "Samo MACD tygodniowe", bez warunku RS 52 tyg.) ----------
+
+test("classifyWybicie MACD_ONLY mode accepts a fresh MACD cross even when RS 52W never crossed", () => {
+    const c = wybicieConstituent({ mansfield_chart: { rsm_long: [-3, -2, -1, -0.5] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c), null); // domyślny tryb MACD_RS nadal odrzuca
+    const r = classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY", monitorWeeks: 10 });
+    assert.ok(r);
+    assert.equal(r.breakoutWeeks, r.macdCrossWeeks);
+    assert.equal(r.rsCrossWeeks, null);
+    assert.equal(r.rsLongNow, -0.5);
+});
+
+test("classifyWybicie MACD_ONLY mode ignores the breakout window entirely", () => {
+    // MACD skrzyżował 5 tyg. temu, RS wcale — w trybie MACD_RS okno by to odrzuciło niezależnie od RS.
+    const c = wybicieConstituent({ macd_chart: { macd: [-1, 1, 1, 1, 1, 1] }, mansfield_chart: { rsm_long: [-1, -1, -1, -1, -1, -1] } });
+    const r = classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY", windowWeeks: 0, monitorWeeks: 10 });
+    assert.ok(r);
+    assert.equal(r.breakoutWeeks, 5);
+});
+
+test("classifyWybicie MACD_ONLY mode still requires a positive TTM histogram", () => {
+    const c = wybicieConstituent({ ttm_squeeze_chart: { histogram: [1, 1, 1, -0.1] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY" }), null);
+});
+
+test("classifyWybicie MACD_ONLY mode still requires a fresh MACD cross", () => {
+    const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, 1, 1, 1, 1, 1] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY" }), null);
+});
+
+test("classifyWybicie MACD_ONLY mode tolerates missing RS 52W data entirely", () => {
+    const c = wybicieConstituent({ mansfield_chart: null });
+    const r = classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY", monitorWeeks: 10 });
+    assert.ok(r);
+    assert.equal(r.rsLongNow, null);
+    assert.equal(r.rsCrossWeeks, null);
+    assert.deepEqual(r.mini_rs, []);
+});
+
 function emptyStateData() {
     return {
         SP500: { constituents: [] }, NASDAQ100: { constituents: [] }, DOWJONES: { constituents: [] },
