@@ -386,6 +386,12 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
         histNow,
         breakout_volume_ratio: breakoutVolumeRatio,
         breakout_volume_confirmed: breakoutVolumeConfirmed,
+        // Poziom oporu/wsparcia "do obserwowania" (breakoutLevelFor(), js/
+        // minicharts.js) — na wyraźną prośbę użytkownika, żeby nie trzeba było
+        // zgadywać przy jakiej cenie wypatrywać wybicia na 1-minutowym wykresie
+        // (zakładka "⚡ 1 min + VWAP", chart-modal.js). Ten sam pomocnik liczy to
+        // dla obu miejsc, z tych samych pól (weekly_chart.pending_base/bases).
+        breakout_level: breakoutLevelFor(c),
         ...miniVisualFields(c),
     };
 }
@@ -1047,6 +1053,20 @@ function qmStatusHtml(r) {
     return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
 }
 
+// Poziom "do obserwowania" (breakoutLevelFor(), js/minicharts.js): opór
+// (▲, zielony) + wsparcie (▼, czerwony) gdy znane. `pending: false` (box już
+// skonsumowany przez wcześniejsze wybicie, patrz breakoutLevelFor) obniża
+// opacity — to referencyjny, nie aktualny poziom.
+function qmLevelCellHtml(r) {
+    const lvl = r.breakout_level;
+    if (!lvl) return `<span class="spark-empty">—</span>`;
+    const style = lvl.pending ? "" : ' style="opacity:0.6"';
+    const support = lvl.support != null
+        ? ` <span class="orb-level-value negative">▼ ${formatPrice(lvl.support, r.universe)}</span>` : "";
+    return `<span${style} title="${lvl.pending ? "Poziom konsolidacji, w której spółka wciąż siedzi" : "Opór ostatniej przełamanej bazy (referencyjnie)"}${lvl.startDate ? ` — baza od ${lvl.startDate}` : ""}">`
+        + `<span class="orb-level-value positive">▲ ${formatPrice(lvl.resistance, r.universe)}</span>${support}</span>`;
+}
+
 function qmRowHtml(r, position) {
     return `
         <td><span class="rank-badge">${position}</span></td>
@@ -1057,6 +1077,7 @@ function qmRowHtml(r, position) {
         <td title="Największy z trzech zwrotów: 1, 3 i 6 miesięcy">${qmPerfCellHtml(r)}</td>
         <td>${qmStatusHtml(r)}</td>
         <td>${r.consolidation_weeks} tyg.</td>
+        <td title="Cena, przy której warto obserwować 1-minutowy wykres (zakładka „⚡ 1 min + VWAP” po kliknięciu w wiersz)">${qmLevelCellHtml(r)}</td>
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
         <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
@@ -1076,7 +1097,7 @@ function renderQullamaggieTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 12,
+        colspan: 13,
         emptyAllMsg: `Brak spółek z ruchem ≥ ${state.qmMinPerfPct}% (1/3/6M) i konsolidacją ${state.qmMinConsolidationWeeks}-${state.qmMaxConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),

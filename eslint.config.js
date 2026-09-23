@@ -124,6 +124,7 @@ const browserGlobals = {
     stageBreakdown: "readonly",
     PULLBACK_BAND_PCT: "readonly",
     pullbackHtml: "readonly",
+    breakoutLevelFor: "readonly",
     initMiniChartHoverPreview: "readonly",
     showToast: "readonly",
     initConnStatus: "readonly",

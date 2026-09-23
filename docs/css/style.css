@@ -944,6 +944,25 @@ th.tv-col, th.chart-col { width: 1%; }
     min-width: 0;
 }
 
+/* Pasek "poziom do obserwowania" nad wykresem 1-minutowym (zakładka "⚡ 1 min
+   + VWAP", renderOrbLevelInfo w js/chart-modal.js) — osadzony widget
+   TradingView "Advanced Chart" (wersja bez konta) nie ma API do narysowania
+   własnej poziomej linii, więc to jawna liczba tekstowa nad wykresem, nie
+   linia na nim. Umieszczony wewnątrz .tv-overview-container, więc dziedziczy
+   jej padding/gap. */
+.orb-level-info {
+    flex-shrink: 0;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-alt);
+    font-size: 13px;
+}
+.orb-level-label { color: var(--text-dim); margin-right: 6px; }
+.orb-level-value { font-weight: 700; margin-right: 10px; }
+.orb-level-value.positive { color: var(--green-bright); }
+.orb-level-value.negative { color: var(--red); }
+
 /* Pełnoekranowy tryb wykresu 10:30 (#chartFullscreenBtn, patrz
    initChartFullscreen w app.js) — świadomie CSS-owy nakładany kontener
    (position: fixed na już istniejącym .rs-chart-container), NIE prawdziwe

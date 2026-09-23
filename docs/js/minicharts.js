@@ -218,6 +218,45 @@ function findConstituent(dataByUniverse, ticker) {
     return null;
 }
 
+// Poziom oporu/wsparcia "do obserwowania" na wykresie 1-minutowym (zakładka
+// "⚡ 1 min + VWAP" w js/chart-modal.js) i w screenerze Qullamaggie
+// (signals.js) — na wyraźną prośbę użytkownika: bez tego nie było wiadomo,
+// jakiego poziomu ceny w ogóle wypatrywać przy wybiciu z konsolidacji.
+// Preferuje `weekly_chart.pending_base` (patrz compute_relative_strength_chart
+// w run_query.py) — pudełko, w którym spółka siedzi TERAZ, niezależnie od tego
+// czy już przełamane; gdy go brak (np. box został już skonsumowany przez
+// świeże wybicie, więc przestał być "pending"), spada do OSTATNIEGO wpisu w
+// `weekly_chart.bases` (box, który doprowadził do najświeższego wybicia) jako
+// informacyjny punkt odniesienia — `pending: false` odróżnia ten przypadek.
+// `resistance_pct`/`support_pct` są zawsze close0-relatywne (ten sam close0 co
+// `close_pct`), więc przeliczenie na realną cenę wymaga bieżącej ceny (`c.price`)
+// i ostatniej wartości `close_pct` — dokładnie ta sama konwencja co
+// `strategyStopFor()` w js/strategy.js. Zwraca null, gdy brak jakichkolwiek
+// danych o bazie (np. za mało historii cen).
+function breakoutLevelFor(c) {
+    const wc = c && c.weekly_chart;
+    if (!wc || !wc.close_pct || !wc.close_pct.length || !(c.price > 0)) return null;
+    const lastPct = wc.close_pct[wc.close_pct.length - 1];
+    if (lastPct == null) return null;
+    const close0 = c.price / (1 + lastPct / 100);
+
+    let base = wc.pending_base;
+    let pending = true;
+    if (!base && wc.bases && wc.bases.length) {
+        base = wc.bases[wc.bases.length - 1];
+        pending = false;
+    }
+    if (!base || base.resistance_pct == null) return null;
+
+    return {
+        resistance: close0 * (1 + base.resistance_pct / 100),
+        support: base.support_pct != null ? close0 * (1 + base.support_pct / 100) : null,
+        startDate: base.start_date,
+        pending,
+        phase: base.phase || null,
+    };
+}
+
 // "Mam vs cel": pasek obecnej wartości pozycji na tle docelowej (pionowa kreska
 // = cel). Zielony = poniżej celu (do dokupienia), pomarańczowy = powyżej
 // (za dużo), szary = w granicach ±BULLET_TOLERANCE_PCT.
@@ -418,6 +457,6 @@ function initMiniChartHoverPreview() {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — bez efektu w przeglądarce.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, dailySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml,
+        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, dailySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, breakoutLevelFor,
     };
 }

@@ -185,6 +185,36 @@ const TV_ORB_WIDGET = {
     }),
 };
 
+// Pasek nad wykresem z poziomem oporu/wsparcia "do obserwowania"
+// (breakoutLevelFor(), js/minicharts.js) — na wyraźną prośbę użytkownika: samo
+// osadzenie widgetu TradingView na 1 min nie mówi, PRZY JAKIEJ CENIE w ogóle
+// wypatrywać wybicia z konsolidacji, więc bez tego trzeba było zgadywać/
+// przełączać się na tygodniowy wykres, żeby odczytać poziom bazy. Osadzony
+// widget "Advanced Chart" (wersja bez konta/Charting Library) nie ma API do
+// narysowania własnej poziomej linii na żywym wykresie, więc to jawna liczba
+// tekstowa, nie linia na samym wykresie — ten sam "informacyjny numer, nie
+// automatyczna decyzja" duch co reszta apki.
+function renderOrbLevelInfo(rsEntry) {
+    const el = document.getElementById("orbLevelInfo");
+    if (!el) return;
+    const level = rsEntry ? breakoutLevelFor(rsEntry) : null;
+    if (!level) {
+        el.hidden = true;
+        el.innerHTML = "";
+        return;
+    }
+    el.hidden = false;
+    const universe = rsEntry.universe || state.selectedUniverse;
+    const resistanceTxt = formatPrice(level.resistance, universe);
+    const supportTxt = level.support != null ? formatPrice(level.support, universe) : null;
+    const label = level.pending
+        ? (level.phase === "BOXED" ? "Opór/wsparcie konsolidacji (jeszcze nieprzełamane)" : "Opór konsolidacji (wsparcie jeszcze nieustalone)")
+        : "Opór ostatniej przełamanej bazy (referencyjnie)";
+    el.innerHTML = `<span class="orb-level-label">${label}${level.startDate ? ` od ${level.startDate}` : ""}:</span> `
+        + `<span class="orb-level-value positive">▲ ${resistanceTxt}</span>`
+        + (supportTxt ? ` <span class="orb-level-value negative">▼ ${supportTxt}</span>` : "");
+}
+
 // Ten sam wzorzec przebudowy panelu od zera co renderTvOverviewPanel (osadzony
 // widget TradingView nie ma API do podmiany symbolu w locie).
 function renderOrbPanel(ticker, universe) {
@@ -192,6 +222,7 @@ function renderOrbPanel(ticker, universe) {
     const empty = document.getElementById("orbEmpty");
     if (!container) return;
     container.querySelectorAll(".tv-widget-block").forEach(el => el.remove());
+    renderOrbLevelInfo(ticker ? state.currentRsEntry : null);
     if (!ticker) {
         if (empty) empty.hidden = false;
         return;

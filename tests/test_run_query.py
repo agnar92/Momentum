@@ -1107,6 +1107,37 @@ class TestComputeRelativeStrengthChart:
             assert base["resistance_pct"] >= base["support_pct"]
         assert "NaN" not in json.dumps(out)
 
+    def test_pending_base_exposes_resistance_while_still_consolidating(self):
+        # Meme przecinamy darvas_breakout_closes() TUZ PRZED wybiciem (tyg. 65) —
+        # box jest kompletny (BOXED) ale nigdy przelamany w wyswietlanym oknie, wiec
+        # "bases" powinno byc PUSTE (base_event tylko na tydzien wybicia), a
+        # "pending_base" powinno miec dokladnie ten opor/wsparcie do obserwowania —
+        # dokladnie problem zgloszony przez uzytkownika (screener "Qullamaggie":
+        # nie bylo wiadomo jakiego poziomu ceny wypatrywac na wykresie 1-minutowym
+        # dla spolki, ktora jeszcze nie wybila sie z konsolidacji).
+        con = make_gem_con()
+        start_date = pd.Timestamp("2026-01-05")
+        fixture_start = start_date - pd.Timedelta(weeks=60)
+        closes = darvas_breakout_closes()[:65]  # do tyg. 64 wlacznie, przed wybiciem w tyg. 65
+        ref_date = fixture_start + pd.Timedelta(weeks=len(closes) - 1)
+        insert_weekly_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
+        insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
+                              fixture_start.strftime("%Y-%m-%d"), len(closes) + 5, 200.0, 0.3)
+
+        out = compute_relative_strength_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                                start_date.strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["bases"] == []
+        assert out["pending_base"] is not None
+        assert out["pending_base"]["phase"] == "BOXED"
+        # close0 = closes[60] = 154.0 (the close at start_date, week index 60 in the
+        # fixture) — resistance (154.0) and support (153.0) rebase against that same
+        # close0, same convention as close_pct/bases elsewhere in this module.
+        assert out["pending_base"]["resistance_pct"] == pytest.approx(0.0, abs=0.01)
+        assert out["pending_base"]["support_pct"] == pytest.approx((153.0 / 154.0 - 1) * 100, abs=0.01)
+        assert out["pending_base"]["start_date"] in out["dates"]
+        assert "NaN" not in json.dumps(out)
+
     def test_dates_use_last_trading_day_of_week_not_monday(self):
         # Realny bug zgloszony przez uzytkownika: wykres pokazywal poniedzialek
         # (DATE_TRUNC('week', Date), zwracany jako "week_start") jako date danego
@@ -1345,7 +1376,33 @@ class TestComputeWeinsteinStageSeries:
     def test_insufficient_history_yields_none_stage(self):
         rows = _compute_weinstein_stage_series(make_stage_df([100.0] * 10))
         assert all(r["stage"] is None and r["signal"] is None and r["buying_volume_ratio"] is None
-                   and r["stop_level"] is None and r["base_count"] is None for r in rows)
+                   and r["stop_level"] is None and r["base_count"] is None and r["pending_box"] is None
+                   for r in rows)
+
+    def test_pending_box_resistance_known_before_bottom_confirms(self):
+        # darvas_breakout_closes(): box top confirms at week 57 (SEEKING_BOTTOM
+        # starts that same week), bottom only confirms at week 60 — "pending_box"
+        # should already expose the resistance level the moment the top confirms,
+        # well before the box itself is complete or broken out of (this is the
+        # whole point of the field: a screener can show "the level to watch" for
+        # a stock that's still mid-consolidation, not just after a breakout).
+        rows = _compute_weinstein_stage_series(make_stage_df(darvas_breakout_closes()))
+        assert rows[56]["pending_box"] is None  # jeszcze SEEKING_TOP
+        assert rows[57]["pending_box"] == {
+            "resistance": 154.0, "support": None, "start_idx": 54, "phase": "SEEKING_BOTTOM",
+        }
+
+    def test_pending_box_gets_support_once_boxed_still_unbroken(self):
+        # Do tygodnia 64 wlacznie (przed wybiciem w tyg. 65) pudelko jest
+        # KOMPLETNE (oba brzegi znane) ale NIE przelamane — "base_event" (patrz
+        # inne testy tej klasy) jest wtedy None az do faktycznego wybicia, wiec
+        # "pending_box" to jedyne miejsce, gdzie poziom oporu/wsparcia jest
+        # widoczny dla wciaz trwajacej konsolidacji.
+        rows = _compute_weinstein_stage_series(make_stage_df(darvas_breakout_closes()[:65]))
+        assert rows[64]["pending_box"] == {
+            "resistance": 154.0, "support": 153.0, "start_idx": 54, "phase": "BOXED",
+        }
+        assert rows[64]["base_event"] is None
 
     def test_base_after_genuine_stage4_decline_is_tagged_stage1(self):
         # Rysunek 'multi-base uptrend' zaczyna sie od realnego 40-tyg. spadku
