@@ -75,6 +75,13 @@ function renderScreenerTable(opts) {
         if (rowKey) tr.dataset.ticker = rowKey(row);
         if (isSelected && isSelected(row)) tr.classList.add("row-selected");
         tr.innerHTML = rowHtml(row, i);
+        // Pelny obiekt wiersza, nie tylko tekstowy dataset.ticker — pozwala
+        // konsumentom poza silnikiem tabeli (patrz initMiniChartHoverPreview w
+        // minicharts.js) odczytac dowolne pole surowego wiersza (mini_closes,
+        // rs_long, weekly_chart itd.) bez osobnego rejestru/ponownego
+        // wyszukiwania po tickerze. Zwykla wlasciwosc JS na wezle DOM, bez
+        // efektu ubocznego dla niczego innego w tym silniku.
+        tr._rowData = row;
         if (onRowClick) tr.addEventListener("click", () => onRowClick(row));
         tbody.appendChild(tr);
     });
