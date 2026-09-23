@@ -1005,7 +1005,11 @@ function renderSuggestions() {
 
     document.getElementById("statCurrentValue").textContent = moneyFmt(holdingsValue());
     document.getElementById("statTargetValue").textContent = moneyFmt(totalCapital);
-    document.getElementById("statHoldingsCount").textContent = Object.keys(targets).length;
+    // computeAutoTargets zwraca N wpisow (wszystkie po 0 zl) nawet przy
+    // investableCapital <= 0 (np. nowy uzytkownik bez zaimportowanych holdingow) —
+    // bez tej samej strazniczki co #rebalanceEmpty powyzej, ta karta pokazywalaby
+    // "10", a tabela pod nia jednoczesnie mowila "brak sugestii".
+    document.getElementById("statHoldingsCount").textContent = investableCapital > 0 ? Object.keys(targets).length : 0;
     const statBuy = document.getElementById("statBuy");
     if (statBuy) statBuy.textContent = buyCount ? `${buyCount} · ${moneyFmt(buySum)}` : "0";
     const statSell = document.getElementById("statSell");
@@ -1259,7 +1263,14 @@ function initManualReturnsForm() {
         REBALANCE_UNIVERSES.forEach(u => {
             if (!inputs[u]) { next[u] = manualReturns[u] ?? null; return; }
             const val = inputs[u].value.trim();
-            next[u] = val === "" ? null : parseFloat(val);
+            // parseFloat("abc") = NaN, nie null — bez tej strazy NaN plynalby dalej
+            // jako "number" (typeof NaN === "number") i tylko przypadkiem nigdy nie
+            // wygrywalby/remisowal w winnerUniverseFromManualReturns (kazde
+            // porownanie z NaN jest false), samo-naprawiajac sie dopiero przy
+            // kolejnym JSON.stringify (NaN -> null). Jawne odrzucenie w miejscu
+            // wpisania jest wprost zamiast polegac na tym zbiegu okolicznosci.
+            const parsed = val === "" ? null : parseFloat(val);
+            next[u] = parsed === null || Number.isNaN(parsed) ? null : parsed;
         });
         manualReturns = next;
         saveManualReturns(manualReturns);

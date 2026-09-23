@@ -552,6 +552,28 @@ class TestComputeIndexReturns:
         # Ranking uzywa juz nadpisanej wartosci -> WIG20 (44.84%) wygrywa nad NASDAQ100 (30%).
         assert out[0]["universe"] == "WIG20"
 
+    def test_manual_override_survives_when_synthetic_index_has_no_data_at_all(self, monkeypatch):
+        # WIG20 nie ma ANI JEDNEGO wiersza w index_prices w oknie (np. tuz po
+        # bootstrapie, zanim syntetyczny indeks zdazyl sie zbudowac) — bez
+        # fallbacku po petli w compute_index_returns, WIG20 znikaloby cicho z
+        # wyscigu GEM mimo waznego, recznie wpisanego return_pct.
+        monkeypatch.setattr(run_query, "_load_gem_manual_returns", lambda: {"WIG20": 44.84})
+        con = make_gem_con()
+        con.executemany("INSERT INTO index_prices VALUES (?, ?, ?, ?, 0)", [
+            ("2025-01-31", "NASDAQ100", 100.0, 100.0),
+            ("2026-01-31", "NASDAQ100", 130.0, 130.0),   # +30%
+            # Brak jakichkolwiek wierszy WIG20.
+        ])
+        out = compute_index_returns(con, "2026-02-15", lookback_months=12)
+        universes = [r["universe"] for r in out]
+        assert "WIG20" in universes
+        wig20 = next(r for r in out if r["universe"] == "WIG20")
+        assert wig20["return_pct"] == pytest.approx(44.84)
+        assert wig20["manual_entry"] is True
+        assert wig20["price_now"] is None
+        # 44.84% > 30% -> WIG20 nadal wygrywa wyscig mimo braku syntetycznych cen.
+        assert out[0]["universe"] == "WIG20"
+
     def test_no_manual_override_falls_back_to_synthetic_return(self, monkeypatch):
         monkeypatch.setattr(run_query, "_load_gem_manual_returns", lambda: {})
         con = make_gem_con()
@@ -2093,3 +2115,30 @@ class TestMansfieldRsmTail:
         df = pd.DataFrame({"week_start": weeks, "close": [100.0] * 10})
         assert run_query._mansfield_rsm_tail(df, df, n=26, weeks=52) == []
         assert run_query._mansfield_rsm_tail(None, df) == []
+
+    def test_scattered_denominator_gap_does_not_misalign_the_rolling_window(self):
+        # Jeden brakujacy tydzien w mianowniku (np. przerwa w notowaniach ETF-u
+        # sektorowego) NIE powinien byc po prostu USUNIETY z serii — usuniecie
+        # calego wiersza przesuwa rolling(weeks) na pozycyjnie kolejny wiersz
+        # zamiast kalendarzowo kolejny tydzien, wiec okno po cichu zaczyna
+        # obejmowac WIECEJ niz `weeks` realnych tygodni na zawsze po luce (nigdy
+        # sie nie "wyrownuje"). Zamiast tego luka powinna zostac jako NaN.
+        weeks = pd.date_range("2025-01-06", periods=115, freq="7D")
+        num = pd.DataFrame({"week_start": weeks, "close": [100.0] * 115})
+        gap_idx = 60
+        den_weeks = weeks.delete(gap_idx)  # mianownik NIE ma wiersza dla tego tygodnia
+        den = pd.DataFrame({"week_start": den_weeks, "close": [100.0] * len(den_weeks)})
+
+        rsm = run_query._mansfield_rsm_values(num, den, weeks=52)
+
+        # Seria nie jest skrocona przez brakujacy tydzien -> pozycja w serii
+        # dalej odpowiada pozycji w numerator_df (kalendarzowo poprawne
+        # wyrownanie), co NIE byloby prawda, gdyby luka po prostu usuwala wiersz.
+        assert len(rsm) == len(num)
+        assert pd.isna(rsm.iloc[gap_idx])  # sam tydzien luki: brak RS do policzenia
+        # Okno wciaz obejmujace luke (mniej niz `weeks` tygodni po niej) -> NaN,
+        # a nie cicho policzona wartosc z przesunietego/nieciaglego okna.
+        assert pd.isna(rsm.iloc[gap_idx + 51])
+        # Gdy luka calkowicie wypadnie z okna 52-tygodniowego, seria wraca do
+        # poprawnej wartosci (RS stale plaskie = 1.0 -> RSM = 0).
+        assert rsm.iloc[gap_idx + 52] == pytest.approx(0.0)

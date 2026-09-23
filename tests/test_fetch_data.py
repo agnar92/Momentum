@@ -455,6 +455,37 @@ class TestUpdatePricesIncremental:
         # Backfill nowej spolki siega dalej wstecz niz zwykle doszacowanie.
         assert backfill_call[1] < catchup_call[1]
 
+    def test_catchup_start_uses_the_stalest_existing_tickers_own_watermark_not_the_global_max(self, monkeypatch):
+        """Watermark do wyliczenia catchup_start MUSI byc liczony per tickerze
+        (a dokladniej: najstarszy z ostatnich znanych dni WSROD existing_tickers),
+        nie jako globalny MAX(Date) po WSZYSTKICH tickerach. Gdyby STALE nie
+        pobral sie przez kilka kolejnych przebiegow, podczas gdy FRESH (i setki
+        innych) normalnie posuwaly globalny watermark naprzod, catchup_start
+        liczony z globalnego MAX(Date) nigdy nie siegalby dosc daleko wstecz, zeby
+        dogonic realna luke w historii STALE (patrz tez
+        test_failed_catchup_fetch_preserves_existing_data — to inny scenariusz:
+        tu obie ceny SA juz w bazie, tylko z bardzo rozjezdzonymi datami)."""
+        fresh_date = (pd.Timestamp.today() - pd.Timedelta(days=2)).strftime('%Y-%m-%d')
+        stale_date = (pd.Timestamp.today() - pd.Timedelta(days=20)).strftime('%Y-%m-%d')
+        con = _make_prices_con([
+            (fresh_date, "FRESH", 10.0, 10.0, 100),
+            (stale_date, "STALE", 20.0, 20.0, 100),
+        ])
+        calls = []
+
+        def fake_download(tickers, start_date, end_date, include_ohlc=False):
+            calls.append(start_date)
+            return [], set(), list(tickers)
+
+        monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
+        update_prices_incremental(con, ["FRESH", "STALE"], retention_months=15)
+
+        # catchup_start musi siegac (co najmniej) do stale_date - CATCHUP_OVERLAP_DAYS,
+        # nie tylko do fresh_date - CATCHUP_OVERLAP_DAYS (co zostawiloby ~11-dniowa
+        # dziure w historii STALE na zawsze niedoszacowana).
+        expected_latest_start = (pd.Timestamp(stale_date) - pd.Timedelta(days=7)).strftime('%Y-%m-%d')
+        assert calls[0] <= expected_latest_start
+
     def test_trims_history_older_than_retention_window(self, monkeypatch):
         old_date = (pd.Timestamp.today() - pd.DateOffset(months=20)).strftime('%Y-%m-%d')
         recent_date = pd.Timestamp.today().strftime('%Y-%m-%d')
