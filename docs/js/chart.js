@@ -97,7 +97,7 @@ function initOpenTvButton() {
     if (!btn) return;
     btn.addEventListener("click", () => {
         if (!selectedTicker) return;
-        window.open(tvUrlFor(selectedTicker, selectedUniverse), "_blank", "noopener");
+        openTradingView(selectedTicker, selectedUniverse);
     });
 }
 

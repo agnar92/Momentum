@@ -217,18 +217,19 @@ function initChartViewTabs() {
     tabTv.addEventListener("click", () => setView("tv"));
 }
 
-// Mały przycisk-link "TV" do wiersza tabeli — otwiera tradingview.com w nowej
-// karcie, bez zaznaczania wiersza (stopPropagation, zeby klik nie odpalal tez
+// Mały przycisk-link "TV" do wiersza tabeli — otwiera TradingView (na telefonie
+// aplikacje mobilna, patrz openTradingView w shared.js; na komputerze nowa
+// karta), bez zaznaczania wiersza (stopPropagation, zeby klik nie odpalal tez
 // selectTicker na <tr>).
 function tvRowButtonHtml(ticker, universe) {
-    return `<button type="button" class="tv-row-btn" data-ticker="${ticker}" data-universe="${universe}" title="Otwórz ${ticker} w TradingView (nowa karta)">TV</button>`;
+    return `<button type="button" class="tv-row-btn" data-ticker="${ticker}" data-universe="${universe}" title="Otwórz ${ticker} w TradingView (na telefonie w aplikacji)">TV</button>`;
 }
 
 function bindTvRowButtons(container) {
     container.querySelectorAll(".tv-row-btn").forEach(btn => {
         btn.addEventListener("click", (ev) => {
             ev.stopPropagation();
-            window.open(tvUrlFor(btn.dataset.ticker, btn.dataset.universe), "_blank", "noopener");
+            openTradingView(btn.dataset.ticker, btn.dataset.universe);
         });
     });
 }
@@ -665,7 +666,7 @@ function initOpenTvButton() {
     if (!btn) return;
     btn.addEventListener("click", () => {
         if (!state.selectedTicker) return;
-        window.open(tvUrlFor(state.selectedTicker, state.selectedUniverse), "_blank", "noopener");
+        openTradingView(state.selectedTicker, state.selectedUniverse);
     });
 }
 

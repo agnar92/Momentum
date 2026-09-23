@@ -1109,6 +1109,12 @@ flex child (no `.topbar-left` wrapper there).
   row across the dashboard's tables (the per-universe momentum tables and both RSM tables —
   `tvRowButtonHtml()`/`bindTvRowButtons()`) also carries its own small "TV" button doing the same,
   independent of selecting the row (it stops click propagation so it doesn't also call `selectTicker()`).
+  **On a phone, every TradingView button opens the mobile APP instead of the website** (explicit user
+  request): all three call sites (`#openTvBtn` on `index.html`/`chart.html`, the row "TV" buttons) go
+  through `openTradingView()` in `js/shared.js` — Android gets an `intent://…;package=com.tradingview.
+  tradingviewapp;S.browser_fallback_url=…` link (app if installed, tradingview.com otherwise), iOS gets the
+  same https URL navigated in the SAME tab (a Universal Link only hands off to the app on a same-tab
+  navigation, never from `window.open(_blank)`), desktop keeps `window.open` in a new tab.
   The sidebar is hidden on phones in portrait (`@media max-width:640px`), so the drawer's per-universe
   tabs (`DOWJONES`/`WIG20`/`MWIG40`) plus the two RSM tabs and the TTM Squeeze tab are the only way to
   reach any of this on mobile — `showDrawerTable(universe)` dispatches on the tab key. Every ticker in the main per-universe
