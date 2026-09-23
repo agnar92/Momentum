@@ -260,6 +260,14 @@ const MINI_PREVIEW_HOVER_DELAY_MS = 700;
 let miniPreviewEl = null;
 let miniPreviewTimer = null;
 let miniPreviewHoveredEl = null;
+// Natywny tooltip przeglądarki (atrybut title na <td>, np. "Cena tygodniowa
+// (26 tyg.) + EMA20") potrafi wyskoczyć szybciej niż nasze okienko (np.
+// ~500ms w Firefoksie) i wtedy oba nachodzą na siebie na ekranie — patrz
+// zrzut ekranu w zgłoszeniu. Skoro nasze okienko i tak pokazuje to samo (i
+// więcej), na czas hovera nad .spark/.rs-bar wycinamy title z najbliższego
+// przodka, który go ma, i przywracamy go przy opuszczeniu elementu.
+let miniPreviewSuppressedTitleEl = null;
+let miniPreviewSuppressedTitleValue = null;
 
 function getMiniPreviewEl() {
     if (!miniPreviewEl) {
@@ -274,6 +282,22 @@ function hideMiniPreview() {
     if (miniPreviewTimer) { window.clearTimeout(miniPreviewTimer); miniPreviewTimer = null; }
     miniPreviewHoveredEl = null;
     if (miniPreviewEl) miniPreviewEl.classList.remove("mini-preview-visible");
+    restoreSuppressedTitle();
+}
+
+function suppressNativeTitle(target) {
+    const titledEl = target.closest("[title]");
+    if (!titledEl) return;
+    miniPreviewSuppressedTitleEl = titledEl;
+    miniPreviewSuppressedTitleValue = titledEl.getAttribute("title");
+    titledEl.removeAttribute("title");
+}
+
+function restoreSuppressedTitle() {
+    if (!miniPreviewSuppressedTitleEl) return;
+    miniPreviewSuppressedTitleEl.setAttribute("title", miniPreviewSuppressedTitleValue);
+    miniPreviewSuppressedTitleEl = null;
+    miniPreviewSuppressedTitleValue = null;
 }
 
 function miniPreviewSectionHtml(label, html) {
@@ -373,6 +397,7 @@ function initMiniChartHoverPreview() {
         const tr = target.closest("tr");
         const row = tr && tr._rowData;
         if (!row || !row.ticker) return;
+        suppressNativeTitle(target);
         miniPreviewTimer = window.setTimeout(() => showMiniPreview(row, target), MINI_PREVIEW_HOVER_DELAY_MS);
     });
 
