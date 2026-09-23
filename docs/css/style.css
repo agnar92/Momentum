@@ -286,6 +286,25 @@ html, body {
 .sq-dot-on { background: #e74c3c; }
 .sq-dot-off { background: #5c6370; }
 .sq-dot-na { background: transparent; border: 1px solid #5c6370; }
+.spark { display: block; overflow: visible; }
+.spark path { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.spark .spark-up { stroke: var(--green-bright); }
+.spark .spark-down { stroke: #e74c3c; }
+.spark .spark-ema { stroke: #8b93a1; stroke-width: 1; stroke-dasharray: 3 2; }
+.spark .spark-sq { fill: #e74c3c; }
+.spark-empty { color: var(--text-faint); }
+.subtable-title { font-size: 13px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
+.subtable-meta { font-size: 11px; font-weight: 400; color: var(--text-faint); margin-left: 6px; }
+.daily-refresh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1 1 260px; }
+.daily-refresh-btn:disabled { opacity: 0.7; cursor: progress; }
+.daily-refresh-status { font-size: 11px; color: var(--text-faint); }
+.daily-refresh-status a { color: var(--green-bright); }
+.daily-refresh-progress { flex-basis: 100%; height: 4px; background: rgba(255,255,255,0.08); border-radius: 2px; overflow: hidden; }
+.daily-refresh-bar { height: 100%; width: 0; background: var(--green-bright); transition: width 0.6s ease; }
+.daily-refresh-token { flex-basis: 100%; font-size: 11.5px; color: var(--text-faint); line-height: 1.5; }
+.daily-refresh-token p { margin: 4px 0 6px; }
+.daily-refresh-token a { color: var(--green-bright); }
+.daily-refresh-token input { background: var(--bg, #111); color: var(--text); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 5px 8px; width: 260px; max-width: 100%; margin-right: 6px; }
 
 /* ============================================================
    PANEL TABEL (rozwijany, ~80% szerokości ekranu)

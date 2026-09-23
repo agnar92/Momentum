@@ -9,6 +9,9 @@ const path = require("node:path");
 const {
     weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     classifyContinuation, combinedContinuationCandidates,
+    effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
+    sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg,
+    githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
 
@@ -383,4 +386,120 @@ test("combinedContinuationCandidates dedupes tickers and puts fresh fires first"
     } finally {
         state.data = saved;
     }
+});
+
+// ---------- dzienne odświeżenie (continuation.json) / tygodniowi zwycięzcy ----------
+
+test("effectiveDaily prefers the newer continuation.json summary over the weekly export", () => {
+    const saved = state.dailyOverride;
+    try {
+        const c = { ticker: "AAA", daily_squeeze: { date: "2026-09-21", squeeze_days: 4 } };
+        state.dailyOverride = { tickers: { AAA: { date: "2026-09-23", squeeze_days: 6 } } };
+        assert.equal(effectiveDaily(c).squeeze_days, 6);
+        state.dailyOverride = { tickers: { AAA: { date: "2026-09-18", squeeze_days: 1 } } };
+        assert.equal(effectiveDaily(c).squeeze_days, 4);
+        state.dailyOverride = null;
+        assert.equal(effectiveDaily(c).squeeze_days, 4);
+        assert.equal(effectiveDaily({ ticker: "BBB" }), null);
+    } finally {
+        state.dailyOverride = saved;
+    }
+});
+
+test("classifyContinuation uses the fresh daily close as price when available", () => {
+    const r = classifyContinuation("AAA", "SP500", continuationConstituent({}, { close: 123.45 }), CONT_OPTS);
+    assert.equal(r.price, 123.45);
+});
+
+test("classifyWeeklyWinner keeps every weekly winner and marks the daily signal", () => {
+    const withSignal = classifyWeeklyWinner("AAA", "SP500", continuationConstituent({
+        weekly_chart: { current_stage: "2A", close_pct: [0, 5, 10], ema20_pct: [0, 2, 4] },
+    }, { spark: { closes: [1, 2, 3], squeeze: [0, 1, 1] } }), CONT_OPTS);
+    assert.equal(withSignal.signal, "squeeze");
+    assert.equal(withSignal.status_order, 1);
+    assert.deepEqual(withSignal.weekly_closes, [0, 5, 10]);
+    assert.deepEqual(withSignal.daily_squeeze, [0, 1, 1]);
+
+    const noSetup = classifyWeeklyWinner("BBB", "SP500", continuationConstituent({}, { squeeze_on: false, days_since_fire: 30 }), CONT_OPTS);
+    assert.ok(noSetup);
+    assert.equal(noSetup.signal, null);
+    assert.equal(noSetup.status_order, 2);
+
+    const belowSma = classifyWeeklyWinner("CCC", "SP500", continuationConstituent({}, { sma50_pct: -2 }), CONT_OPTS);
+    assert.equal(belowSma.signal, null, "setup below daily SMA50 is not a signal");
+
+    assert.equal(classifyWeeklyWinner("DDD", "SP500", continuationConstituent({ weekly_chart: { current_stage: "3" } }), CONT_OPTS), null);
+});
+
+test("combinedWeeklyWinners puts signals first and latestDailyDate finds the newest session", () => {
+    const savedData = state.data;
+    const savedOverride = state.dailyOverride;
+    state.data = { SP500: { all_constituents: [
+        { ticker: "NONE", ...continuationConstituent({ momentum_pct: 90 }, { squeeze_on: false, days_since_fire: 30, date: "2026-09-21" }) },
+        { ticker: "SQZ", ...continuationConstituent({}, { date: "2026-09-21" }) },
+    ] } };
+    state.dailyOverride = null;
+    try {
+        assert.deepEqual(combinedWeeklyWinners(CONT_OPTS).map(r => r.ticker), ["SQZ", "NONE"]);
+        assert.equal(latestDailyDate(), "2026-09-21");
+        state.dailyOverride = { ref_date: "2026-09-23", tickers: {} };
+        assert.equal(latestDailyDate(), "2026-09-23");
+    } finally {
+        state.data = savedData;
+        state.dailyOverride = savedOverride;
+    }
+});
+
+test("sparkPoints scales a series into the box and keeps null gaps", () => {
+    const pts = sparkPoints([0, null, 10], 102, 22, 1);
+    assert.deepEqual(pts[0], [1, 21]);
+    assert.equal(pts[1], null);
+    assert.deepEqual(pts[2], [101, 1]);
+    assert.equal(sparkPath(pts), "M1,21M101,1");
+    assert.equal(sparkPath(sparkPoints([1, 2, 3], 10, 10, 0)), "M0,10L5,5L10,0");
+    assert.deepEqual(sparkPoints([5], 10, 10), []);
+});
+
+test("spark SVG helpers render a path, squeeze bars and a placeholder without data", () => {
+    assert.match(weeklySparkSvg([0, 3, 6], [0, 1, 2]), /class="spark-up"/);
+    assert.match(weeklySparkSvg([6, 3, 0], [2, 1, 0]), /class="spark-down"/);
+    assert.match(weeklySparkSvg([], []), /spark-empty/);
+    const daily = dailySparkSvg([1, 2, 3, 4], [0, 1, 1, 0]);
+    assert.equal((daily.match(/class="spark-sq"/g) || []).length, 2);
+    assert.match(dailySparkSvg([], []), /spark-empty/);
+});
+
+test("githubRepoFromLocation reads owner/repo from a GitHub Pages URL", () => {
+    assert.deepEqual(githubRepoFromLocation({ hostname: "agnar92.github.io", pathname: "/Momentum/index.html" }),
+        { owner: "agnar92", repo: "Momentum" });
+    assert.deepEqual(githubRepoFromLocation({ hostname: "localhost", pathname: "/index.html" }),
+        { owner: "agnar92", repo: "Momentum" });
+});
+
+test("pickDispatchedRun picks the newest run created after the click", () => {
+    const since = Date.parse("2026-09-23T18:00:00Z");
+    const runs = [
+        { id: 1, created_at: "2026-09-23T10:00:00Z" },
+        { id: 2, created_at: "2026-09-23T18:00:05Z" },
+        { id: 3, created_at: "2026-09-23T18:00:20Z" },
+    ];
+    assert.equal(pickDispatchedRun(runs, since).id, 3);
+    assert.equal(pickDispatchedRun([runs[0]], since), null);
+});
+
+test("refreshProgressFromJobs reports queued, running step and final result", () => {
+    assert.equal(refreshProgressFromJobs({ jobs: [] }).phase, "queued");
+    const running = refreshProgressFromJobs({ jobs: [{ status: "in_progress", html_url: "u", steps: [
+        { name: "Set up job", status: "completed" },
+        { name: "Pobieranie cen dziennych (Yahoo) i liczenie squeeze D1", status: "in_progress" },
+        { name: "Zapis danych", status: "queued" },
+    ] }] });
+    assert.equal(running.phase, "running");
+    assert.equal(running.done, 1);
+    assert.equal(running.total, 3);
+    assert.match(running.current, /Pobieranie cen/);
+    assert.equal(refreshProgressFromJobs({ jobs: [{ status: "completed", conclusion: "success", steps: [] }] }).phase, "success");
+    assert.equal(refreshProgressFromJobs({ jobs: [{ status: "completed", conclusion: "failure", steps: [] }] }).phase, "failure");
+    assert.equal(refreshStepLabel("Set up job"), "Start maszyny");
+    assert.equal(refreshStepLabel("Post Pobranie repozytorium"), "Sprzątanie");
 });

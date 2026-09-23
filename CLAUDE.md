@@ -1070,6 +1070,27 @@ flex child (no `.topbar-left` wrapper there).
   within slider sessions, after a 3..max-session squeeze, daily histogram > 0). Three sliders
   (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): max squeeze length
   (default 30), fire lookback (5), min 12M momentum (20%). Sidebar tile group `#tiles-CONTINUATION`.
+  **"🏆 Tygodniowi zwycięzcy" sub-table** under the signals table (`#continuationWinnersSection`,
+  `combinedWeeklyWinners()`/`renderWinnersTable()`): EVERY stock passing the weekly gate
+  (`continuationWeeklyGate()`), with its D1 status (signal / squeeze outside the thresholds / no setup) and
+  two inline-SVG sparklines (no Chart.js — dozens per table): weekly `close_pct` + dashed `ema20_pct`
+  (last 26 weeks) and daily closes with red bars on squeeze days (`daily_squeeze.spark`, last
+  `DAILY_SPARK_DAYS` = 60 sessions).
+  **On-demand daily refresh ("🔄 Odśwież dane D1")** — explicit user request for fresher D1 data without
+  a daily cron on a static site. The button calls the GitHub REST API from the browser
+  (`runDailyRefresh()`): `workflow_dispatch` of `.github/workflows/daily_continuation.yml`, finds the run
+  (`pickDispatchedRun()`), polls `/actions/runs/{id}/jobs` every 4 s and shows the current step name + a
+  progress bar (`refreshProgressFromJobs()`; step `name:`s in the workflow are the labels), then reads the
+  fresh `docs/data/continuation.json` through the contents API (bypasses the Pages CDN cache) and
+  re-renders. The workflow runs `refresh_daily.py`: weekly winners from the committed `docs/data/*.json`
+  (same gate minus the momentum-% slider, i.e. a superset, ~100 tickers) → `fetch_data._download_price_rows`
+  for only those tickers/last `DAILY_SQUEEZE_LOOKBACK_DAYS` → `run_query.compute_daily_squeeze` on an
+  in-memory DuckDB → `continuation.json` (~80 KB). It never touches/commits `momentum_data.duckdb`.
+  `effectiveDaily(c)` uses the `continuation.json` summary when its `date` is newer than the weekly
+  export's `daily_squeeze.date`. Auth: a fine-grained PAT the user pastes once (⚙️ form; only this repo,
+  Actions read/write + Contents read), stored ONLY in that browser's `localStorage`
+  (`momentum_gh_token`); an in-flight run id is kept in `momentum_daily_refresh_run` so a reload resumes
+  polling. `workflow_dispatch` only works once the workflow file is on the default branch (`main`).
   Note: `squeeze_count` (and so `fire_consolidation_weeks`) had an off-by-one (the resetting non-squeeze
   bar was counted as the run's first bar) — fixed by using a grouped `cumsum`; weekly counts now match
   TradingView.

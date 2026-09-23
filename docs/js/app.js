@@ -260,6 +260,7 @@ const state = {
     contMaxSqueezeDays: CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS,
     contFireLookbackDays: CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS,
     contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
+    dailyOverride: null,
 };
 
 async function loadData() {
@@ -273,6 +274,12 @@ async function loadData() {
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
     }
+    // Opcjonalne, świeższe dane D1 dla zakładki Continuation (refresh_daily.py).
+    // Brak pliku (404) jest normalny — wtedy zostaje daily_squeeze z sobotniego eksportu.
+    try {
+        const res = await fetch("data/continuation.json", { cache: "no-store" });
+        if (res.ok) state.dailyOverride = await res.json();
+    } catch (e) { /* brak dziennego odświeżenia — OK */ }
     // docs/data/global_equity_momentum.json i docs/data/relative_strength.json NIE
     // są już tu wczytywane — GEM przestał być czymś do oglądania na dashboardzie
     // (przeniesiony jako silnik wyboru do rebalance.js, patrz CLAUDE.md), a panel
@@ -477,45 +484,194 @@ function combinedTtmSqueezeCandidates() {
 // ============================================================
 const CONTINUATION_MIN_SQUEEZE_DAYS = 3;
 
-function classifyContinuation(ticker, universe, c, opts = {}) {
-    const maxSqueezeDays = opts.maxSqueezeDays ?? state.contMaxSqueezeDays;
-    const fireLookbackDays = opts.fireLookbackDays ?? state.contFireLookbackDays;
-    const minMomentumPct = opts.minMomentumPct ?? state.contMinMomentumPct;
+// Dzienne podsumowanie spółki: świeższe z docs/data/continuation.json (dzienne
+// odświeżenie na żądanie — refresh_daily.py, przycisk "Odśwież dane D1"),
+// a gdy go nie ma albo jest starsze — to z sobotniego eksportu (c.daily_squeeze).
+function effectiveDaily(c) {
+    const override = state.dailyOverride && state.dailyOverride.tickers && state.dailyOverride.tickers[c.ticker];
+    const base = c.daily_squeeze;
+    if (override && (!base || (override.date || "") > (base.date || ""))) return override;
+    return base || null;
+}
 
+// Bramka TYGODNIOWA ("tygodniowi zwycięzcy"): Etap 2A/2B, momentum_score > 0,
+// momentum 12M >= suwak, RS 26 tyg. > 0. Zwraca null albo { stage, rsMed }.
+// refresh_daily.py stosuje tę samą bramkę bez progu momentum (nadzbiór).
+function continuationWeeklyGate(c, minMomentumPct) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
     if (stage !== "2A" && stage !== "2B") return null;
     if (!(c.momentum_score > 0) || !(c.momentum_pct >= minMomentumPct)) return null;
     const rsMed = c.mansfield_chart && c.mansfield_chart.rsm_medium;
     const rsIdx = latestNonNullIdx(rsMed);
     if (rsIdx < 0 || !(rsMed[rsIdx] > 0)) return null;
-    const d = c.daily_squeeze;
-    if (!d || !(d.sma50_pct > 0)) return null;
+    return { stage, rsMed: rsMed[rsIdx] };
+}
 
-    let status = null;
+// Status setupu D1 niezależnie od SMA50: "squeeze" / "fired" / null.
+function continuationDailyStatus(d, maxSqueezeDays, fireLookbackDays) {
+    if (!d) return null;
     if (d.squeeze_on && d.squeeze_days >= CONTINUATION_MIN_SQUEEZE_DAYS && d.squeeze_days <= maxSqueezeDays) {
-        status = "squeeze";
-    } else if (!d.squeeze_on && d.days_since_fire != null && d.days_since_fire <= fireLookbackDays
+        return "squeeze";
+    }
+    if (!d.squeeze_on && d.days_since_fire != null && d.days_since_fire <= fireLookbackDays
         && d.fire_consolidation_days != null && d.fire_consolidation_days >= CONTINUATION_MIN_SQUEEZE_DAYS
         && d.fire_consolidation_days <= maxSqueezeDays && d.histogram > 0) {
-        status = "fired";
+        return "fired";
     }
-    if (!status) return null;
+    return null;
+}
 
+function continuationOpts(opts) {
     return {
-        ticker, universe, sector: c.sector, price: c.price,
+        maxSqueezeDays: opts.maxSqueezeDays ?? state.contMaxSqueezeDays,
+        fireLookbackDays: opts.fireLookbackDays ?? state.contFireLookbackDays,
+        minMomentumPct: opts.minMomentumPct ?? state.contMinMomentumPct,
+    };
+}
+
+function continuationRowBase(ticker, universe, c, gate, d) {
+    return {
+        ticker, universe, sector: c.sector,
+        price: d && d.close != null ? d.close : c.price,
         momentum_pct: c.momentum_pct,
-        current_stage: stage,
-        rs_medium: rsMed[rsIdx],
+        current_stage: gate.stage,
+        rs_medium: gate.rsMed,
+        daily_date: d ? d.date : null,
+        histogram: d ? d.histogram : null,
+        histogram_rising: !!(d && d.histogram_prev != null && d.histogram > d.histogram_prev),
+        recent_squeeze: (d && d.recent_squeeze) || [],
+        sma50_pct: d ? d.sma50_pct : null,
+        high_20d_pct: d ? d.high_20d_pct : null,
+        return_1m_pct: d ? d.return_1m_pct : null,
+    };
+}
+
+function classifyContinuation(ticker, universe, c, opts = {}) {
+    const o = continuationOpts(opts);
+    const gate = continuationWeeklyGate(c, o.minMomentumPct);
+    if (!gate) return null;
+    const d = effectiveDaily(c);
+    if (!d || !(d.sma50_pct > 0)) return null;
+    const status = continuationDailyStatus(d, o.maxSqueezeDays, o.fireLookbackDays);
+    if (!status) return null;
+    return {
+        ...continuationRowBase(ticker, universe, c, gate, d),
         status,
         squeeze_days: status === "squeeze" ? d.squeeze_days : d.fire_consolidation_days,
         days_since_fire: status === "fired" ? d.days_since_fire : null,
-        histogram: d.histogram,
-        histogram_rising: d.histogram_prev != null && d.histogram > d.histogram_prev,
-        recent_squeeze: d.recent_squeeze || [],
-        sma50_pct: d.sma50_pct,
-        high_20d_pct: d.high_20d_pct,
-        return_1m_pct: d.return_1m_pct,
     };
+}
+
+// Wiersz podtabeli "Tygodniowi zwycięzcy": KAŻDA spółka po bramce tygodniowej,
+// z dziennym statusem (także "brak setupu") i danymi mini-wykresów.
+const WINNERS_WEEKLY_SPARK_WEEKS = 26;
+
+function classifyWeeklyWinner(ticker, universe, c, opts = {}) {
+    const o = continuationOpts(opts);
+    const gate = continuationWeeklyGate(c, o.minMomentumPct);
+    if (!gate) return null;
+    const d = effectiveDaily(c);
+    const setup = continuationDailyStatus(d, o.maxSqueezeDays, o.fireLookbackDays);
+    const signal = setup && d && d.sma50_pct > 0 ? setup : null;
+    const wc = c.weekly_chart || {};
+    return {
+        ...continuationRowBase(ticker, universe, c, gate, d),
+        signal,
+        status_order: signal === "fired" ? 0 : signal === "squeeze" ? 1 : 2,
+        squeeze_on: !!(d && d.squeeze_on),
+        squeeze_days: d ? d.squeeze_days : null,
+        weekly_closes: (wc.close_pct || []).slice(-WINNERS_WEEKLY_SPARK_WEEKS),
+        weekly_ema: (wc.ema20_pct || []).slice(-WINNERS_WEEKLY_SPARK_WEEKS),
+        daily_closes: (d && d.spark && d.spark.closes) || [],
+        daily_squeeze: (d && d.spark && d.spark.squeeze) || [],
+    };
+}
+
+function combinedWeeklyWinners(opts = {}) {
+    const rows = [];
+    const seen = new Set();
+    UNIVERSES.forEach(u => {
+        const universeData = state.data[u] || {};
+        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
+            if (seen.has(c.ticker)) return;
+            const r = classifyWeeklyWinner(c.ticker, u, c, opts);
+            if (r) { rows.push(r); seen.add(c.ticker); }
+        });
+    });
+    rows.sort((a, b) => a.status_order - b.status_order || b.momentum_pct - a.momentum_pct);
+    return rows;
+}
+
+// Najświeższa sesja dzienna w danych (override z continuation.json albo
+// sobotni eksport) — do etykiety "Dane D1 z sesji: ...".
+function latestDailyDate() {
+    let best = (state.dailyOverride && state.dailyOverride.ref_date) || null;
+    UNIVERSES.forEach(u => {
+        const universeData = state.data[u] || {};
+        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
+            const d = c.daily_squeeze;
+            if (d && d.date && (!best || d.date > best)) best = d.date;
+        });
+    });
+    return best;
+}
+
+// ---------- Mini-wykresy (inline SVG, bez Chart.js — dziesiątki na raz) ----------
+// Punkty [x, y] dla serii (null = przerwa), skalowane do w×h z marginesem pad.
+function sparkPoints(values, w, h, pad = 2, range = null) {
+    const nums = (values || []).filter(v => v != null && Number.isFinite(v));
+    if (nums.length < 2) return [];
+    const lo = range ? range[0] : Math.min(...nums);
+    const hi = range ? range[1] : Math.max(...nums);
+    const span = hi - lo || 1;
+    const n = values.length;
+    return values.map((v, i) => (v == null || !Number.isFinite(v)) ? null : [
+        +(pad + (i * (w - 2 * pad)) / (n - 1)).toFixed(1),
+        +(h - pad - ((v - lo) / span) * (h - 2 * pad)).toFixed(1),
+    ]);
+}
+
+function sparkPath(points) {
+    let d = "";
+    let pen = false;
+    points.forEach(p => {
+        if (!p) { pen = false; return; }
+        d += `${pen ? "L" : "M"}${p[0]},${p[1]}`;
+        pen = true;
+    });
+    return d;
+}
+
+function seriesRange(...series) {
+    const nums = series.flat().filter(v => v != null && Number.isFinite(v));
+    return nums.length ? [Math.min(...nums), Math.max(...nums)] : null;
+}
+
+// Tydzień: cena (% od startu okna) + EMA20 przerywaną linią.
+function weeklySparkSvg(closes, ema) {
+    const w = 110, h = 30;
+    const range = seriesRange(closes, ema);
+    if (!range) return '<span class="spark-empty">—</span>';
+    const pts = sparkPoints(closes, w, h, 2, range);
+    const up = closes.length && closes[closes.length - 1] >= closes[0];
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
+        + `<path d="${sparkPath(sparkPoints(ema, w, h, 2, range))}" class="spark-ema"/>`
+        + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
+}
+
+// Dzień: cena z 60 sesji + czerwone kreski u dołu w dni squeeze'a (jak kropki TV).
+function dailySparkSvg(closes, squeeze) {
+    const w = 130, h = 30, barH = 3;
+    const pts = sparkPoints(closes, w, h - barH - 1, 2);
+    if (!pts.length) return '<span class="spark-empty">—</span>';
+    const n = closes.length;
+    const step = (w - 4) / Math.max(n - 1, 1);
+    const bars = (squeeze || []).map((v, i) => v === 1
+        ? `<rect x="${(2 + i * step - step / 2).toFixed(1)}" y="${h - barH}" width="${Math.max(step, 1).toFixed(1)}" height="${barH}" class="spark-sq"/>`
+        : "").join("");
+    const up = closes[n - 1] >= closes[0];
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
+        + bars + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
 }
 
 // Wszystkie uniwersa, bez duplikatów (pierwsze wystąpienie w kolejności
@@ -685,7 +841,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #wybicieTableBody tr, #ttmSqueezeTableBody tr, #continuationTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #wybicieTableBody tr, #ttmSqueezeTableBody tr, #continuationTableBody tr, #winnersTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
@@ -1003,6 +1159,8 @@ function showDrawerTable(universe) {
     if (wybicieControls) wybicieControls.hidden = !isWybicie;
     document.getElementById("ttmSqueezeTable").hidden = !isTtmSqueeze;
     document.getElementById("continuationTable").hidden = !isContinuation;
+    const winnersSection = document.getElementById("continuationWinnersSection");
+    if (winnersSection) winnersSection.hidden = !isContinuation;
     const continuationControls = document.getElementById("continuationControls");
     if (continuationControls) continuationControls.hidden = !isContinuation;
     // Screenery obejmuja CALE uniwersa i kazda spolka niesie wlasny
@@ -1232,6 +1390,7 @@ function renderContinuationTable() {
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
+    renderWinnersTable();
 }
 
 // Suwaki nad tabelą Continuation (#continuationControls) — ten sam wzorzec co
@@ -1269,6 +1428,279 @@ function initContinuationControls() {
     bind("contMaxSqueezeInput", "contMaxSqueezeValue", "contMaxSqueezeDays", " ses.");
     bind("contFireLookbackInput", "contFireLookbackValue", "contFireLookbackDays", " ses.");
     bind("contMinMomentumInput", "contMinMomentumValue", "contMinMomentumPct", "%");
+}
+
+function winnerStatusHtml(r) {
+    if (r.signal === "fired") return `<span class="squeeze-status squeeze-status-fired">🔥 Odpalił</span>`;
+    if (r.signal === "squeeze") return `<span class="squeeze-status squeeze-status-consolidating">🌀 Squeeze ${r.squeeze_days} ses.</span>`;
+    if (r.squeeze_on) return `<span class="cross-age">squeeze ${r.squeeze_days} ses. (poza progiem)</span>`;
+    return `<span class="cross-age">brak setupu</span>`;
+}
+
+function winnerRowHtml(r, position) {
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
+        <td class="positive">${r.rs_medium.toFixed(1)}</td>
+        <td title="Cena tygodniowa (ostatnie ${WINNERS_WEEKLY_SPARK_WEEKS} tyg.) + EMA20 (przerywana)">${weeklySparkSvg(r.weekly_closes, r.weekly_ema)}</td>
+        <td title="Cena dzienna (ostatnie ${r.daily_closes.length} sesji), czerwone kreski = dni squeeze'a D1">${dailySparkSvg(r.daily_closes, r.daily_squeeze)}</td>
+        <td>${winnerStatusHtml(r)}</td>
+        <td>${signedPctHtml(r.sma50_pct)}</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+// Podtabela pod sygnałami Continuation: wszyscy tygodniowi zwycięzcy (bramka
+// tygodniowa), z mini-wykresami — czytelny przegląd "kto jest w trendzie",
+// niezależnie od tego, czy akurat ma setup na D1.
+function renderWinnersTable() {
+    const allRows = combinedWeeklyWinners();
+    const meta = document.getElementById("winnersMeta");
+    renderScreenerTable({
+        tbody: document.getElementById("winnersTableBody"),
+        metaEl: meta,
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 12,
+        emptyAllMsg: `Brak spółek w Etapie 2 z momentum ≥ ${state.contMinMomentumPct}% i RS 26 tyg. > 0.`,
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: (rows) => {
+            const withSignal = rows.filter(r => r.signal).length;
+            return `${rows.length} spółek · ${withSignal} z sygnałem D1`;
+        },
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => winnerRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
+    });
+}
+
+// ============================================================
+// ODŚWIEŻANIE DANYCH D1 NA ŻĄDANIE (przycisk w zakładce Continuation)
+// Strona jest statyczna, więc przycisk uruchamia workflow GitHub Actions
+// (.github/workflows/daily_continuation.yml → refresh_daily.py) przez API
+// GitHuba i śledzi jego kroki. Wymaga tokenu GitHub (fine-grained, tylko to
+// repo: Actions read/write + Contents read), który użytkownik wkleja raz —
+// trzymany WYŁĄCZNIE w localStorage tej przeglądarki, nigdy w repo/na stronie.
+// ============================================================
+const GH_API = "https://api.github.com";
+const DAILY_WORKFLOW_FILE = "daily_continuation.yml";
+const GH_TOKEN_KEY = "momentum_gh_token";
+const DAILY_REFRESH_RUN_KEY = "momentum_daily_refresh_run";
+const DEFAULT_GH_REPO = { owner: "agnar92", repo: "Momentum" };
+const REFRESH_POLL_MS = 4000;
+const REFRESH_TIMEOUT_MS = 20 * 60 * 1000;
+
+// Repo z adresu strony GitHub Pages (https://<owner>.github.io/<repo>/...).
+function githubRepoFromLocation(loc) {
+    const host = (loc && loc.hostname) || "";
+    const m = host.match(/^([^.]+)\.github\.io$/i);
+    const seg = ((loc && loc.pathname) || "").split("/").filter(Boolean)[0];
+    if (m && seg && !seg.includes(".")) return { owner: m[1], repo: seg };
+    return DEFAULT_GH_REPO;
+}
+
+// Uruchomienie, które MY właśnie zleciliśmy: najnowsze z utworzonych nie
+// wcześniej niż minutę przed kliknięciem (margines na różnicę zegarów).
+function pickDispatchedRun(runs, sinceMs) {
+    return (runs || [])
+        .filter(r => Date.parse(r.created_at) >= sinceMs - 60000)
+        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] || null;
+}
+
+function refreshStepLabel(name) {
+    if (!name) return "";
+    if (name === "Set up job") return "Start maszyny";
+    if (name === "Complete job") return "Zakończenie";
+    if (name.startsWith("Post ")) return "Sprzątanie";
+    return name;
+}
+
+// Postęp z odpowiedzi /actions/runs/{id}/jobs: ile kroków zakończonych,
+// który trwa, czy całość się skończyła i jak.
+function refreshProgressFromJobs(jobsResponse) {
+    const job = jobsResponse && jobsResponse.jobs && jobsResponse.jobs[0];
+    if (!job) return { phase: "queued", done: 0, total: 0, current: "W kolejce…" };
+    const steps = job.steps || [];
+    const done = steps.filter(st => st.status === "completed").length;
+    const running = steps.find(st => st.status === "in_progress") || steps.find(st => st.status !== "completed");
+    if (job.status === "completed") {
+        return { phase: job.conclusion === "success" ? "success" : "failure", done: steps.length, total: steps.length,
+            current: job.conclusion === "success" ? "Gotowe" : `Błąd (${job.conclusion})`, url: job.html_url };
+    }
+    return { phase: job.status === "queued" ? "queued" : "running", done, total: steps.length,
+        current: running ? refreshStepLabel(running.name) : "Start…", url: job.html_url };
+}
+
+function getGhToken() {
+    try { return localStorage.getItem(GH_TOKEN_KEY) || ""; } catch (e) { return ""; }
+}
+
+function setGhToken(token) {
+    try {
+        if (token) localStorage.setItem(GH_TOKEN_KEY, token);
+        else localStorage.removeItem(GH_TOKEN_KEY);
+    } catch (e) { /* brak localStorage */ }
+}
+
+async function ghRequest(path, token, opts = {}) {
+    const res = await fetch(GH_API + path, {
+        method: opts.method || "GET",
+        headers: {
+            "Accept": opts.accept || "application/vnd.github+json",
+            "Authorization": `Bearer ${token}`,
+            "X-GitHub-Api-Version": "2022-11-28",
+            ...(opts.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: opts.body ? JSON.stringify(opts.body) : undefined,
+        cache: "no-store",
+    });
+    if (!res.ok) {
+        const err = new Error(`GitHub API ${res.status}`);
+        err.status = res.status;
+        throw err;
+    }
+    return res;
+}
+
+function ghErrorMessage(e) {
+    if (e.status === 401) return "Token nieprawidłowy albo wygasł — wklej nowy (⚙️).";
+    if (e.status === 403) return "Token nie ma uprawnień (Actions: Read and write, Contents: Read).";
+    if (e.status === 404) return "Nie znaleziono repo/workflow — czy token obejmuje to repozytorium?";
+    return `Błąd połączenia z GitHubem (${e.status || e.message}).`;
+}
+
+const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms));
+
+function setRefreshUi({ busy, status, pct, url }) {
+    const btn = document.getElementById("dailyRefreshBtn");
+    const statusEl = document.getElementById("dailyRefreshStatus");
+    const progress = document.getElementById("dailyRefreshProgress");
+    const bar = document.getElementById("dailyRefreshBar");
+    if (btn && busy != null) {
+        btn.disabled = busy;
+        btn.textContent = busy ? "⏳ Odświeżanie…" : "🔄 Odśwież dane D1";
+    }
+    if (statusEl && status != null) {
+        statusEl.innerHTML = url ? `${status} · <a href="${url}" target="_blank" rel="noopener">log</a>` : status;
+    }
+    if (progress) progress.hidden = pct == null;
+    if (bar && pct != null) bar.style.width = `${Math.max(3, Math.min(100, pct))}%`;
+}
+
+function dailyDataLabel() {
+    const d = latestDailyDate();
+    return d ? `Dane D1 z sesji: ${d}` : "Brak danych D1";
+}
+
+function refreshContinuationViews() {
+    renderContinuationPanel();
+    if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
+}
+
+async function loadFreshContinuationJson(token) {
+    const { owner, repo } = githubRepoFromLocation(window.location);
+    const res = await ghRequest(`/repos/${owner}/${repo}/contents/docs/data/continuation.json?ref=main`, token,
+        { accept: "application/vnd.github.raw+json" });
+    state.dailyOverride = await res.json();
+}
+
+async function pollRefreshRun(runId, token) {
+    const { owner, repo } = githubRepoFromLocation(window.location);
+    const deadline = Date.now() + REFRESH_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+        const jobs = await (await ghRequest(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, token)).json();
+        const p = refreshProgressFromJobs(jobs);
+        const pct = p.total ? (p.done / p.total) * 100 : 2;
+        const stepInfo = p.total ? `Krok ${Math.min(p.done + 1, p.total)}/${p.total}: ` : "";
+        if (p.phase === "success" || p.phase === "failure") return p;
+        setRefreshUi({ busy: true, status: `${stepInfo}${p.current}`, pct, url: p.url });
+        await sleep(REFRESH_POLL_MS);
+    }
+    return { phase: "failure", current: "Przekroczono czas oczekiwania" };
+}
+
+async function runDailyRefresh(resumeRunId = null) {
+    const token = getGhToken();
+    if (!token) { toggleTokenForm(true); return; }
+    const { owner, repo } = githubRepoFromLocation(window.location);
+    setRefreshUi({ busy: true, status: "Uruchamiam zadanie…", pct: 2 });
+    try {
+        let runId = resumeRunId;
+        if (!runId) {
+            const since = Date.now();
+            await ghRequest(`/repos/${owner}/${repo}/actions/workflows/${DAILY_WORKFLOW_FILE}/dispatches`, token,
+                { method: "POST", body: { ref: "main" } });
+            for (let i = 0; i < 20 && !runId; i++) {
+                await sleep(3000);
+                const list = await (await ghRequest(
+                    `/repos/${owner}/${repo}/actions/workflows/${DAILY_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=5`, token)).json();
+                const run = pickDispatchedRun(list.workflow_runs, since);
+                if (run) runId = run.id;
+            }
+            if (!runId) throw new Error("Nie znalazłem uruchomionego zadania");
+            try { localStorage.setItem(DAILY_REFRESH_RUN_KEY, JSON.stringify({ runId, startedAt: since })); } catch (e) { /* ignoruj */ }
+        }
+        const result = await pollRefreshRun(runId, token);
+        if (result.phase !== "success") {
+            setRefreshUi({ busy: false, status: `❌ ${result.current}`, pct: null, url: result.url });
+            showToast("Odświeżanie danych D1 nie powiodło się", { type: "error" });
+            return;
+        }
+        setRefreshUi({ busy: true, status: "Wczytuję nowe dane…", pct: 100 });
+        await loadFreshContinuationJson(token);
+        refreshContinuationViews();
+        setRefreshUi({ busy: false, status: `✅ ${dailyDataLabel()}`, pct: null });
+        showToast("Dane D1 odświeżone", { type: "success" });
+    } catch (e) {
+        setRefreshUi({ busy: false, status: `❌ ${e.status ? ghErrorMessage(e) : e.message}`, pct: null });
+        if (e.status === 401) setGhToken("");
+    } finally {
+        try { localStorage.removeItem(DAILY_REFRESH_RUN_KEY); } catch (e) { /* ignoruj */ }
+    }
+}
+
+function toggleTokenForm(show) {
+    const form = document.getElementById("dailyRefreshTokenForm");
+    if (!form) return;
+    form.hidden = show == null ? !form.hidden : !show;
+    const input = document.getElementById("dailyRefreshTokenInput");
+    if (input) input.value = "";
+    const clearBtn = document.getElementById("dailyRefreshTokenClear");
+    if (clearBtn) clearBtn.hidden = !getGhToken();
+}
+
+function initDailyRefresh() {
+    const btn = document.getElementById("dailyRefreshBtn");
+    if (!btn) return;
+    setRefreshUi({ busy: false, status: dailyDataLabel(), pct: null });
+    btn.addEventListener("click", () => runDailyRefresh());
+    document.getElementById("dailyRefreshTokenBtn").addEventListener("click", () => toggleTokenForm());
+    document.getElementById("dailyRefreshTokenSave").addEventListener("click", () => {
+        const value = document.getElementById("dailyRefreshTokenInput").value.trim();
+        if (!value) return;
+        setGhToken(value);
+        toggleTokenForm(false);
+        showToast("Token zapisany w tej przeglądarce", { type: "success" });
+    });
+    document.getElementById("dailyRefreshTokenClear").addEventListener("click", () => {
+        setGhToken("");
+        toggleTokenForm(false);
+        showToast("Token usunięty", { type: "info" });
+    });
+    // Przeładowanie strony w trakcie zadania — wznawiamy śledzenie tego samego uruchomienia.
+    try {
+        const saved = JSON.parse(localStorage.getItem(DAILY_REFRESH_RUN_KEY) || "null");
+        if (saved && saved.runId && Date.now() - saved.startedAt < REFRESH_TIMEOUT_MS && getGhToken()) {
+            runDailyRefresh(saved.runId);
+        }
+    } catch (e) { /* ignoruj */ }
 }
 
 function renderTable() {
@@ -1466,6 +1898,7 @@ if (typeof document !== "undefined") {
         await loadData();
         initWybicieControls();
         initContinuationControls();
+        initDailyRefresh();
         renderSidebarTiles();
         renderWybiciePanel();
         renderTtmSqueezePanel();
@@ -1510,6 +1943,9 @@ if (typeof module !== "undefined" && module.exports) {
         compareRows,
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
+        effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
+        sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg,
+        githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };
 }

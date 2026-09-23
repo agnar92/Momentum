@@ -157,6 +157,22 @@
                 <input type="range" id="contMinMomentumInput" min="0" max="150" step="5">
                 <span class="wybicie-slider-value" id="contMinMomentumValue"></span>
             </label>
+            <div class="daily-refresh">
+                <button class="stage-filter-btn daily-refresh-btn" id="dailyRefreshBtn"
+                        title="Uruchamia na GitHubie lekkie zadanie: pobiera z Yahoo Finance dzienne świece tygodniowych zwycięzców i przelicza squeeze D1 (ok. 1–2 min).">🔄 Odśwież dane D1</button>
+                <button class="stage-filter-btn" id="dailyRefreshTokenBtn" title="Token GitHub potrzebny do uruchomienia zadania">⚙️</button>
+                <span class="daily-refresh-status" id="dailyRefreshStatus"></span>
+                <div class="daily-refresh-progress" id="dailyRefreshProgress" hidden><div class="daily-refresh-bar" id="dailyRefreshBar"></div></div>
+            </div>
+            <div class="daily-refresh-token" id="dailyRefreshTokenForm" hidden>
+                <p>Przycisk uruchamia zadanie w GitHub Actions, więc potrzebuje <b>Twojego</b> tokenu GitHub.
+                   Utwórz go na <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Fine-grained token</a>:
+                   <i>Repository access</i> → tylko repozytorium z tą stroną; <i>Permissions</i> → <b>Actions: Read and write</b>, <b>Contents: Read-only</b>.
+                   Token zostaje tylko w tej przeglądarce (localStorage) — nie trafia do repo ani na stronę.</p>
+                <input type="password" id="dailyRefreshTokenInput" placeholder="github_pat_…" autocomplete="off">
+                <button class="stage-filter-btn active" id="dailyRefreshTokenSave">Zapisz</button>
+                <button class="stage-filter-btn" id="dailyRefreshTokenClear" hidden>Usuń zapisany token</button>
+            </div>
         </div>
         <div class="table-scroll">
             <table class="momentum-table" id="momentumTable">
@@ -249,6 +265,32 @@
                 </thead>
                 <tbody id="continuationTableBody"></tbody>
             </table>
+
+            <!-- Tygodniowi zwycięzcy: wszyscy po bramce tygodniowej Continuation
+                 (Etap 2, momentum, RS 26 tyg.), z mini-wykresami tydzień/dzień —
+                 patrz combinedWeeklyWinners/renderWinnersTable w app.js. -->
+            <div id="continuationWinnersSection" hidden>
+                <h3 class="subtable-title">🏆 Tygodniowi zwycięzcy <span class="subtable-meta" id="winnersMeta"></span></h3>
+                <table class="momentum-table" id="winnersTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th data-key="ticker">Ticker</th>
+                            <th data-key="universe">Uniwersum</th>
+                            <th data-key="price">Cena</th>
+                            <th data-key="momentum_pct">Momentum 12M</th>
+                            <th data-key="rs_medium">RS 26 tyg.</th>
+                            <th>Tydzień (26 tyg.)</th>
+                            <th>Dzień (60 sesji)</th>
+                            <th data-key="status_order">Status D1</th>
+                            <th data-key="sma50_pct">vs SMA50</th>
+                            <th>Etap</th>
+                            <th class="tv-col">TV</th>
+                        </tr>
+                    </thead>
+                    <tbody id="winnersTableBody"></tbody>
+                </table>
+            </div>
         </div>
     </div>
 

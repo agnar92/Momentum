@@ -2176,6 +2176,7 @@ DAILY_SQUEEZE_LENGTH = 20             # okno BB/KC/regresji w SESJACH (standard 
 DAILY_SQUEEZE_LOOKBACK_DAYS = 200     # dni KALENDARZOWE pobierane wstecz (~135 sesji): 2*20+2 na
                                       # rozgrzewke histogramu + SMA50 + zapas na swieta
 DAILY_SQUEEZE_RECENT_DAYS = 20        # ile ostatnich sesji squeeze_on eksportujemy (kropki w tabeli)
+DAILY_SPARK_DAYS = 60                 # ile ostatnich sesji ceny + squeeze_on dla mini-wykresu D1
 DAILY_SMA_DAYS = 50
 DAILY_EMA_DAYS = 21
 DAILY_RETURN_1M_DAYS = 21             # ~1 miesiac sesji
@@ -2193,6 +2194,11 @@ def compute_daily_squeeze(con, ticker, ref_date):
       ruch w gore przyspiesza),
     - recent_squeeze — squeeze_on z ostatnich DAILY_SQUEEZE_RECENT_DAYS sesji
       (1/0/None), zeby front mogl narysowac pasek kropek jak na TradingView,
+    - close — ostatnie zamkniecie (swiezsze niz "price" z tygodniowego eksportu,
+      gdy podsumowanie pochodzi z refresh_daily.py),
+    - spark — {"closes", "squeeze"} z ostatnich DAILY_SPARK_DAYS sesji: dane
+      mini-wykresu D1 (linia ceny + zaznaczone dni squeeze'a) w tabeli
+      "Tygodniowi zwyciezcy" na dashboardzie,
     - sma50_pct / ema21_pct — % nad dzienna SMA50/EMA21 (czy cena trzyma trend
       na D1), return_1m_pct — zmiana ceny za ~21 sesji (dynamika),
       high_20d_pct — % od najwyzszego High z 20 sesji (<= 0; blisko 0 = cena
@@ -2236,6 +2242,9 @@ def compute_daily_squeeze(con, ticker, ref_date):
     high_20d = high.iloc[-DAILY_SQUEEZE_LENGTH:].max()
     recent = sq["squeeze_on"].iloc[-DAILY_SQUEEZE_RECENT_DAYS:]
 
+    def flags(series):
+        return [(1 if v else 0) if pd.notna(v) else None for v in series]
+
     return {
         "date": pd.Timestamp(df["Date"].iloc[last]).strftime("%Y-%m-%d"),
         "squeeze_on": bool(sq["squeeze_on"].iloc[last]),
@@ -2244,7 +2253,12 @@ def compute_daily_squeeze(con, ticker, ref_date):
         "fire_consolidation_days": safe_int(sq["fire_consolidation"].iloc[last]),
         "histogram": safe_float(sq["histogram"].iloc[last], 4),
         "histogram_prev": safe_float(sq["histogram"].iloc[last - 1], 4),
-        "recent_squeeze": [(1 if v else 0) if pd.notna(v) else None for v in recent],
+        "close": safe_float(close.iloc[last]),
+        "recent_squeeze": flags(recent),
+        "spark": {
+            "closes": [safe_float(v) for v in close.iloc[-DAILY_SPARK_DAYS:]],
+            "squeeze": flags(sq["squeeze_on"].iloc[-DAILY_SPARK_DAYS:]),
+        },
         "sma50_pct": pct_vs(sma50),
         "ema21_pct": pct_vs(ema21),
         "return_1m_pct": pct_vs(past_close),
