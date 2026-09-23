@@ -215,6 +215,16 @@ test("classifyTtmSqueeze marks a ticker fired when it broke out of a long squeez
     assert.equal(r.weeks_since_fire, 2);
 });
 
+test("classifyTtmSqueeze ignores a fire with a negative (bearish) histogram", () => {
+    const c = ttmSqueezeConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [-3.5], squeeze_on: [false], squeeze_count: [0],
+            fired: [false], weeks_since_fire: [2], fire_consolidation_weeks: [9],
+        },
+    });
+    assert.equal(classifyTtmSqueeze("AAA", "NASDAQ100", c), null);
+});
+
 test("classifyTtmSqueeze ignores a fire that is too old (outside the lookback window)", () => {
     const c = ttmSqueezeConstituent({
         ttm_squeeze_chart: {

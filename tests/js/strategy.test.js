@@ -12,13 +12,14 @@ const {
 } = require(path.join("..", "..", "docs", "js", "strategy.js"));
 
 function ttmChart(rows) {
-    // rows: [{squeeze_on, squeeze_count, weeks_since_fire, fire_consolidation_weeks}]
+    // rows: [{squeeze_on, squeeze_count, weeks_since_fire, fire_consolidation_weeks, histogram}]
     return {
         dates: rows.map((_, i) => `2026-01-${i + 1}`),
         squeeze_on: rows.map(r => r.squeeze_on),
         squeeze_count: rows.map(r => r.squeeze_count),
         weeks_since_fire: rows.map(r => r.weeks_since_fire),
         fire_consolidation_weeks: rows.map(r => r.fire_consolidation_weeks),
+        histogram: rows.map(r => (r.histogram === undefined ? 1 : r.histogram)),
     };
 }
 
@@ -31,6 +32,13 @@ test("squeezeStatusFor classifies a fresh breakout as fired", () => {
         { squeeze_on: false, squeeze_count: 0, weeks_since_fire: 2, fire_consolidation_weeks: 8 },
     ]) };
     assert.deepEqual(squeezeStatusFor(c), { status: "fired", weeks: 2 });
+});
+
+test("squeezeStatusFor does not treat a bearish breakout (negative histogram) as fired", () => {
+    const c = { ttm_squeeze_chart: ttmChart([
+        { squeeze_on: false, squeeze_count: 0, weeks_since_fire: 2, fire_consolidation_weeks: 8, histogram: -1.5 },
+    ]) };
+    assert.deepEqual(squeezeStatusFor(c), { status: "neutral" });
 });
 
 test("squeezeStatusFor classifies an ongoing long squeeze as consolidating", () => {

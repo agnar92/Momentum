@@ -1232,10 +1232,20 @@ flex child (no `.topbar-left` wrapper there).
   classifies into **consolidating** (`squeeze_on === true` and `squeeze_count > TTM_SQUEEZE_MIN_
   CONSOLIDATION_WEEKS`, 5 — "akcje które miały więcej niż 5 tygodni konsolidacji") or **fired**
   (`weeks_since_fire <= TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS`, 3, AND `fire_consolidation_weeks >
-  TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS` — a breakout out of a long-enough squeeze within the last 3 weeks,
-  literally "akcje które zaczynają ruszać po takiej konsolidacji"); these constants are duplicated
-  client-side and must stay in sync with the same-named constants in `run_query.py`. Neither bucket, and
-  the ticker doesn't appear — same "selected screener, not a full list" philosophy as RSM.
+  TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS`, AND the current histogram value (`histNow`) is **positive** — a
+  breakout, to the UPSIDE, out of a long-enough squeeze within the last 3 weeks, literally "akcje które
+  zaczynają ruszać po takiej konsolidacji"); these constants are duplicated client-side and must stay in
+  sync with the same-named constants in `run_query.py`. **The `histNow > 0` condition on "fired" was added
+  after the user pointed out the screener wasn't checking which way the histogram actually broke** — the
+  backend's `fired`/`weeks_since_fire`/`fire_consolidation_weeks` fields (`compute_ttm_squeeze_chart()`)
+  only mark the week a squeeze turned off, with no opinion on direction, so without this check a stock that
+  broke DOWN out of a consolidation (negative histogram) was being listed as "fired" right alongside a
+  genuine bullish breakout — the opposite of what "akcje, które zaczynają ruszać" (stocks starting to move
+  [up]) asks for. `squeezeStatusFor()` in `js/strategy.js` (used by the Krok 3/Krok 4 tables' "🔥 Wybicie"
+  badge, and duplicating these same two constants — see that bullet below) got the identical fix for the
+  same reason and must stay in sync on this condition too, even though the funnel's own `evaluateCandidate`
+  ENTRY gate was already separately requiring `mom.value > 0` and did not mis-signal an actual buy. Neither
+  bucket, and the ticker doesn't appear — same "selected screener, not a full list" philosophy as RSM.
   `combinedTtmSqueezeCandidates()` runs this over all 5 universes' `all_constituents` and returns one flat,
   pre-sorted list (fired first — most recent breakout on top — then consolidating, longest squeeze on top);
   `renderTtmSqueezeTable()`/`ttmSqueezeRowHtml()` render it with a "Status" column

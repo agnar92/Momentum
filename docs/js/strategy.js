@@ -82,9 +82,14 @@ function squeezeStatusFor(c, minConsolidationWeeks = STRATEGY_TTM_SQUEEZE_MIN_CO
     const squeezeCount = t.squeeze_count[idx];
     const weeksSinceFire = t.weeks_since_fire[idx];
     const fireConsolidationWeeks = t.fire_consolidation_weeks[idx];
+    const histNow = t.histogram[idx];
 
+    // "fired" wymaga histogramu > 0 — bez tego liczyłyby się też wybicia w
+    // dół (histogram ujemny), patrz ta sama poprawka i uzasadnienie przy
+    // TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS w signals.js.
     const isFired = weeksSinceFire != null && weeksSinceFire <= fireLookbackWeeks
-        && fireConsolidationWeeks != null && fireConsolidationWeeks > minConsolidationWeeks;
+        && fireConsolidationWeeks != null && fireConsolidationWeeks > minConsolidationWeeks
+        && histNow != null && histNow > 0;
     if (isFired) return { status: "fired", weeks: weeksSinceFire };
 
     const isConsolidating = squeezeOn === true && squeezeCount > minConsolidationWeeks;
