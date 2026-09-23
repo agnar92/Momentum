@@ -34,6 +34,7 @@ if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
     Object.assign(globalThis, require("./table-render.js"));
+    Object.assign(globalThis, require("./minicharts.js"));
 }
 
 let strategyData = null;   // docs/data/sector_strategy.json
@@ -212,6 +213,14 @@ function initTrendChartToggle() {
     });
 }
 
+// Mini-wykres tygodniowy (26 tyg. + EMA20) spółki z rekordu sp500.json/
+// uniwersum — wspólny dla tabel liderów, top 10 RS i listy lejka.
+function weeklySparkHtmlFor(rec) {
+    if (!rec) return '<span class="spark-empty">—</span>';
+    const m = miniVisualFields(rec);
+    return `<span title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(m.mini_closes, m.mini_ema)}</span>`;
+}
+
 function sectorRowHtml(s, position) {
     // data_source: "etf" (prawdziwy sektorowy ETF SPDR, patrz SECTOR_ETF_SYMBOLS
     // w fetch_data.py) albo "no_data" (ETF jeszcze nie pobrany — bez wlasnego
@@ -227,7 +236,8 @@ function sectorRowHtml(s, position) {
         <td><span class="rank-badge">${position}</span></td>
         <td>${s.sector}${s.sector === (strategyData.sector_rs && strategyData.sector_rs.strongest_sector) ? " 🏆" : ""}${sourceNote}</td>
         <td>${s.count}</td>
-        <td>${noData ? "—" : `<span class="${s.rsm_vs_index_pct >= 0 ? "positive" : "negative"}">${s.rsm_vs_index_pct >= 0 ? "+" : ""}${s.rsm_vs_index_pct.toFixed(2)}</span>`}</td>
+        <td>${noData ? "—" : rsBarHtml(s.rsm_vs_index_pct)}</td>
+        <td title="Mansfield RS sektora vs SP500, ostatnie ${(s.rsm_series || []).length} tyg.">${zeroLineSparkSvg(s.rsm_series || [])}</td>
         <td>${strongSectorSet(strategyData.sector_rs).has(s.sector) ? '<span class="positive">✓</span>' : '<span style="color:var(--text-faint)">—</span>'}</td>
     `;
 }
@@ -243,7 +253,7 @@ function renderSectorTable() {
         metaEl,
         allRows: rows,
         compareFn: () => 0, // juz posortowane malejaco po RS w backendzie (run_query.py)
-        colspan: 5,
+        colspan: 6,
         emptyAllMsg: "Brak danych sektorowych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Brak danych.",
         metaText: () => sectorRs ? `Mansfield RS (${sectorRs.rsm_weeks} tyg.) wobec SP500 · top ${STRATEGY_TOP_SECTORS} z RS > 0 w lejku` : "",
@@ -267,7 +277,8 @@ function leaderRowHtml(c, position) {
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${c.ticker}</td>
         <td>$${c.price.toFixed(2)}</td>
-        <td class="${c.rsm_vs_sector_pct >= 0 ? "positive" : "negative"}">${c.rsm_vs_sector_pct >= 0 ? "+" : ""}${c.rsm_vs_sector_pct.toFixed(2)}</td>
+        <td>${weeklySparkHtmlFor(c._sp500Record)}</td>
+        <td>${rsBarHtml(c.rsm_vs_sector_pct)}</td>
         <td>${stageCellHtml(stage)}</td>
         <td>${squeezeStatusHtml(squeeze)}</td>
         <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
@@ -299,7 +310,7 @@ function renderLeadersTable() {
         metaEl: document.getElementById("leadersMeta"),
         allRows: rows,
         compareFn: () => 0, // juz posortowane malejaco po RS vs sektora w backendzie
-        colspan: 7,
+        colspan: 8,
         emptyAllMsg: "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Brak danych.",
         metaText: () => strategyData ? `Rebalans: ${strategyData.ref_date} · top ${rows.length} spółek` : "",
@@ -325,7 +336,8 @@ function topRsRowHtml(c, position) {
         <td class="ticker-cell">${c.ticker}</td>
         <td>${c.sector}</td>
         <td>$${c.price.toFixed(2)}</td>
-        <td class="${c.rsm_vs_index_pct >= 0 ? "positive" : "negative"}">${c.rsm_vs_index_pct >= 0 ? "+" : ""}${c.rsm_vs_index_pct.toFixed(2)}</td>
+        <td>${weeklySparkHtmlFor(c._sp500Record)}</td>
+        <td>${rsBarHtml(c.rsm_vs_index_pct)}</td>
         <td>${stageCellHtml(stage)}</td>
         <td>${squeezeStatusHtml(squeeze)}</td>
         <td><button type="button" class="tv-row-btn chart-row-btn" data-ticker="${c.ticker}" title="Otwórz wykres ${c.ticker} (chart.html)">📈</button></td>
@@ -353,7 +365,7 @@ function renderTopRsTable() {
         metaEl: document.getElementById("topRsMeta"),
         allRows: rows,
         compareFn: () => 0, // juz posortowane malejaco po RS vs SP500 w backendzie
-        colspan: 8,
+        colspan: 9,
         emptyAllMsg: "Brak danych — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Brak danych.",
         metaText: () => strategyData ? `Rebalans: ${strategyData.ref_date} · top ${rows.length} spółek SP500` : "",
@@ -663,7 +675,7 @@ function evaluateCandidate(c, ctx, criteria = DEFAULT_CRITERIA) {
     }
 
     return {
-        ticker: c.ticker, universe: c.universe, sector, price: c.price,
+        ticker: c.ticker, universe: c.universe, sector, price: c.price, record: c,
         stage, baseCount, rsShort, rsMedium, rsLong, squeeze, momentum: mom, stop, stopInfo,
         macd, volumeRatio, volumeConfirmed,
         gates, passes, failedAt, status,
@@ -1196,6 +1208,7 @@ function watchRowHtml(e, currency) {
         <td>${FUNNEL_UNIVERSE_LABELS[e.universe] || e.universe}</td>
         <td>${e.sector && e.sector !== "Unknown" ? e.sector : '<span style="color:var(--text-faint)">—</span>'}</td>
         <td>${fmtPriceFor(currency, e.price)}</td>
+        <td>${weeklySparkHtmlFor(e.record)}</td>
         <td>${stageCellHtml(e.stage)}</td>
         <td>${e.baseCount != null ? e.baseCount : "—"}</td>
         <td>${fmtSigned(e.rsShort)}</td>
@@ -1243,7 +1256,7 @@ function renderWatchTable(evaluated, currency, market) {
         metaEl: document.getElementById("watchMeta"),
         allRows: rows,
         compareFn: (a, b) => compareListRows(a, b, sort.key, sort.dir),
-        colspan: 12,
+        colspan: 13,
         emptyAllMsg: mode === "dropped" ? "Na tym kroku nic nie odpadło." : "Żadna spółka nie przeszła tego kroku — poluzuj kryteria w lejku.",
         emptyFilteredMsg: "Brak danych.",
         metaText: () => `${rows.length} spółek · ${rows.filter(e => e.status === "SETUP").length} w konsolidacji · ${rows.filter(e => e.status === "ENTRY").length} z sygnałem`,

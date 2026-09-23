@@ -952,6 +952,20 @@ days a SMA200 needs, or the ~60 weeks (52 + buffer) the 52-week Mansfield window
   strategy.js`) joins both lists' tickers against that file by ticker to read `weekly_chart.current_stage`
   and `ttm_squeeze_chart` for display, rather than re-fetching/duplicating them here.
 
+**`js/minicharts.js`** — a fifth shared `<script>` file (after `shared.js`/`qol.js`/`table-render.js`),
+loaded on `index.html`/`rebalance.html`/`rebalance_pl.html`/`strategy.html` (not `chart.html`, which has no
+tables), holding the inline-SVG mini-visualization building blocks originally written for the Continuation
+tab and now reused across the dashboard/rebalancers/strategy page: `sparkPoints`/`sparkPath`/`seriesRange`,
+`weeklySparkSvg(closes, ema, squeeze?)`, `dailySparkSvg`, `pullbackHtml`, `rsBarHtml` (diverging bar around
+zero, capped at `RS_BAR_CAP`=50), `ttmMiniSvg` (TradingView-style 4-color histogram + dots),
+`zeroLineSparkSvg`/`crossIndexInTail` (oscillator mini-chart with a gold dot at a zero-cross, for MACD/RS in
+the Wybicie tab), `miniVisualFields(c)` (last `MINI_WEEKS`=26 weeks of `close_pct`/`ema20_pct`/TTM
+histogram/squeeze/fired + latest `rsm_long`), `stageBreakdown`, `findConstituent` (ticker lookup across a
+`{universe: json}` map, for the rebalancers' holdings table), `bulletHtml` (current-vs-target bar for the
+rebalancers' suggestion table). Extracted out of `app.js` at the point `rebalance.js`/`rebalance_pl.js`/
+`strategy.js` all needed the same visuals — same "genuinely shared, not copy-pasted" reasoning as
+`js/shared.js`. `tests/js/app.test.js` still covers it (imported from `minicharts.js` there).
+
 ## Frontend (`docs/`) — deployed as-is to GitHub Pages, no build step
 
 Plain HTML/CSS/vanilla JS, a PWA (`manifest.webmanifest` + `sw.js` service worker precaching the app
@@ -1076,8 +1090,19 @@ flex child (no `.topbar-left` wrapper there).
   `combinedWeeklyWinners()`/`renderWinnersTable()`): EVERY stock passing the weekly gate
   (`continuationWeeklyGate()`), with its D1 status (signal / squeeze outside the thresholds / no setup) and
   two inline-SVG sparklines (no Chart.js — dozens per table): weekly `close_pct` + dashed `ema20_pct`
-  (last 26 weeks) and daily closes with red bars on squeeze days (`daily_squeeze.spark`, last
-  `DAILY_SPARK_DAYS` = 60 sessions).
+  (last 26 weeks) and daily closes + dashed daily EMA20 (`spark.ema20`) with red bars on squeeze days
+  (`daily_squeeze.spark`, last `DAILY_SPARK_DAYS` = 60 sessions); plus a "vs EMA20 D1" column
+  (`daily_squeeze.ema20_pct`, `pullbackHtml()`: 🎯 when 0..`PULLBACK_BAND_PCT` (2) % above EMA20 = pullback).
+  **"💥 Wybicie" mini-charts** (later addition, same request as the universe-table/TTM-Squeeze visuals
+  below): a price sparkline column, plus `zeroLineSparkSvg`/`crossIndexInTail` (js/minicharts.js) turn the
+  raw MACD/RS-52W numbers into small oscillator charts with a gold dot marking the zero-cross week —
+  `crossWeeksHtml` text stays as the tooltip/inline label, the chart is what you glance at.
+
+  **Sidebar tiles get a stage color + RS direction dot** (`decorateTile()`, called from
+  `renderSidebarTiles()`/`renderWybiciePanel()`/`renderTtmSqueezePanel()`/`renderContinuationPanel()`): a
+  bottom inset border in the ticker's Weinstein-stage color (`STAGE_COLORS`) plus a small green/red dot
+  (RS 52-week ≥ 0 / < 0) in the corner — a tile now says something without being clicked.
+
   **On-demand daily refresh ("🔄 Odśwież dane D1")** — explicit user request for fresher D1 data without
   a daily cron on a static site. The button calls the GitHub REST API from the browser
   (`runDailyRefresh()`): `workflow_dispatch` of `.github/workflows/daily_continuation.yml`, finds the run
@@ -1096,6 +1121,28 @@ flex child (no `.topbar-left` wrapper there).
   Note: `squeeze_count` (and so `fire_consolidation_weeks`) had an off-by-one (the resetting non-squeeze
   bar was counted as the run's first bar) — fixed by using a grouped `cumsum`; weekly counts now match
   TradingView.
+
+  **Layout: full-screen table + chart in a pop-up** (explicit user request: "rozwijaj tabele na cały ekran",
+  chart "jako pop up window a nie za tabelą", "z X do zamknięcia", "nie potrzebuje tego otwierać w tle").
+  `.table-drawer` is now static and always open (fills the width next to the sidebar; the old `>>>` toggle
+  and click-outside-to-collapse are gone). `.charts-area` lives inside `#chartModal`
+  (`.chart-modal-backdrop`, hidden by default): `selectTicker()` calls `openChartModal()` BEFORE
+  `updateChartArea()` (Chart.js measures the canvas at creation — a hidden modal would give 0×0), and
+  `closeChartModal()` (✕ `#chartModalClose`, Esc, click on the backdrop) destroys the charts BEFORE hiding.
+  Nothing is pre-selected on load. The Esc listener is registered before `initChartFullscreen()` so Esc in
+  chart fullscreen only leaves fullscreen. `syncChartsCrosshair()` skips charts whose `canvas` is null —
+  hiding the modal fires `mouseleave` under a hovering cursor, which used to update already-destroyed
+  charts ("ownerDocument"/"fullSize" errors). On phones the modal is simply full-screen; `chart.html`'s
+  standalone `.charts-area` is untouched.
+  **Mini visuals in the universe tables and the TTM Squeeze tab** (same inline-SVG building blocks as
+  Continuation): `miniVisualFields(c)` (last `MINI_WEEKS` = 26 weeks of `close_pct`/`ema20_pct`, TTM
+  `histogram`/`squeeze_on`/`fired`, latest `rsm_long` → sortable `rs_long`), `weeklySparkSvg(closes, ema,
+  squeeze?)` (optional red squeeze bars), `rsBarHtml()` (diverging bar around 0, capped at `RS_BAR_CAP` = 50),
+  `ttmMiniSvg()` (TradingView-style 4-color histogram + red/gold/gray dots). Universe tables add "Tydzień
+  (26 tyg.)", "RS 52 tyg.", "TTM (26 tyg.)"; TTM Squeeze adds "Cena (26 tyg.)" (with squeeze bars), "TTM
+  (26 tyg.)", "RS 52 tyg.". `#breadthBar`/`renderBreadthBar()`/`stageBreakdown()`: stacked bar of the
+  WHOLE universe's (`all_constituents`) Weinstein stages above universe tables; clicking a segment clicks the
+  matching `#stageFilterBar` button.
 
   **A second full, sortable, stage-filterable screener tab, "🧨 TTM Squeeze"**, sits next to the Wybicie
   tab (`data-universe="TTM_SQUEEZE"`) — the user's own redirect away from plain performance numbers
@@ -1277,6 +1324,16 @@ flex child (no `.topbar-left` wrapper there).
   `state.selectedUniverse`, set alongside `state.selectedTicker` in `selectTicker()`) so the "Otwórz w
   TradingView" link resolves to the correct Warsaw-listed instrument instead of clashing with an unrelated
   ticker on another exchange.
+**Universe tables and the "🧨 TTM Squeeze" tab get the same mini-visuals**: a stage-breadth bar above
+universe tables (`#breadthBar`/`renderBreadthBar()`/`stageBreakdown()` — clicking a segment clicks the
+matching stage-filter button), plus three new columns built from `miniVisualFields()`/`js/minicharts.js`:
+a weekly price+EMA20 sparkline, an `rsBarHtml()` RS-52W bar, and a `ttmMiniSvg()` mini TTM Squeeze
+indicator (4-color histogram + squeeze/fire dots). TTM Squeeze's own sparkline also marks squeeze weeks
+with red bars (`weeklySparkSvg`'s optional `squeeze` argument).
+
+**Layout: full-screen table + chart pop-up, not stacked side by side** — same section as above, see that
+bullet for the mechanism (`#chartModal`/`openChartModal`/`closeChartModal`).
+
 - **`rebalance.html` / `js/rebalance.js`** — rebalance calculator, **fully automatic**. All user state
   (holdings, exclusions, settings) lives in `localStorage` only — there is no backend. See the version
   history in "What this repo is" above for the three designs this replaced (region split; a
@@ -1459,6 +1516,14 @@ flex child (no `.topbar-left` wrapper there).
     using the capital-weighted average momentum (capped at ±30%/yr) and volatility of the currently
     computed TOP N — explicitly labeled as illustrative, not a forecast; unchanged in spirit, just driven
     by `computeAutoTargets()` now.
+  **Pool/holdings/suggestion tables also carry the mini-visuals** (`js/minicharts.js`, same as the
+  dashboard): Krok 2's pool table gets a weekly sparkline + RS-52W bar column before "Etap"; the holdings
+  table gets a sparkline + stage column (`findConstituent()` looks the ticker up across
+  `universeData`, "—" for a ticker outside this page's own universes, e.g. a legacy WIG20/mWIG40 position on
+  the USA page); the suggestion table gets a "Mam vs cel" `bulletHtml()` bar (current value vs. target, a
+  tick at the target) plus two new stat-cards ("Do kupienia"/"Do sprzedania": count + total $ from the same
+  loop that already builds each row's action badge).
+
 - **`rebalance_pl.html` / `js/rebalance_pl.js`** — "Rebalanser PL", a deliberate structural twin of
   `rebalance.html`/`rebalance.js` ("Rebalanser USA") for WIG20/mWIG40 instead of SP500/NASDAQ100/DOWJONES
   (see design-history step 5 under "What this repo is" above for why this is a second page rather than a
@@ -1791,6 +1856,14 @@ flex child (no `.topbar-left` wrapper there).
   winning GEM across ALL indices in `global_equity_momentum.json` (`gemRanking()`; the user picks the actual
   ETF themselves) — or to cash/bonds when every index has a negative 12M return (absolute momentum). The
   card also shows the GEM ranking table.
+**Krok 2/3/Krok-4 tables also carry mini-visuals**: `rsBarHtml()` replaces the plain ±number for
+`rsm_vs_index_pct`/`rsm_vs_sector_pct`; Krok 2 gets a "Trend RS (26 tyg.)" sparkline
+(`zeroLineSparkSvg(sector.rsm_series)`) — `_mansfield_rsm_tail()` in `run_query.py` (a thin wrapper over the
+same `_mansfield_rsm_values()` the existing `_mansfield_rsm_current_value()` already computed) exports the
+last `SECTOR_STRATEGY_RSM_TAIL_WEEKS`=26 RSM values per sector into `sector_rs.sectors[].rsm_series`;
+Krok 3/Krok 4/the funnel's watchlist rows get a weekly price+EMA20 sparkline
+(`weeklySparkHtmlFor(rec)`, `rec` = the joined `sp500.json` record already used for stage/TTM Squeeze).
+
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
   under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/
   `export_sector_strategy`, `docs/data/sector_strategy.json`), reached via a "Strategia" nav link

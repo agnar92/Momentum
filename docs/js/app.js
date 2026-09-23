@@ -10,6 +10,7 @@
 if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
+    Object.assign(globalThis, require("./minicharts.js"));
 }
 
 // Uniwersa z WŁASNĄ zakładką/tabelą momentum w dashboardzie (sidebar + drawer).
@@ -314,12 +315,7 @@ async function loadData() {
 // ============================================================
 // WYBICIE_DEFAULT_* / WYBICIE_SETTINGS_KEY — zadeklarowane nad `state` (potrzebne tam jako wartości startowe).
 
-function latestNonNullIdx(arr) {
-    if (!arr) return -1;
-    let i = arr.length - 1;
-    while (i >= 0 && arr[i] == null) i--;
-    return i;
-}
+// latestNonNullIdx żyje w js/minicharts.js (współdzielone z rebalanserami i Strategią).
 
 // Ile tygodni temu seria przecięła zero w górę (1 = w ostatnim tygodniu), albo
 // null, gdy teraz nie jest > 0 albo w oknie lookbacku (domyślnie cała seria)
@@ -365,6 +361,11 @@ function classifyWybicie(ticker, universe, c, opts = {}) {
         rsCrossWeeks,
         breakoutWeeks,
         histNow: hist[histIdx],
+        ...miniVisualFields(c),
+        mini_macd: macd.slice(-MINI_WEEKS),
+        mini_macd_cross: crossIndexInTail(macd, macdCrossWeeks, MINI_WEEKS),
+        mini_rs: rsLong.slice(-MINI_WEEKS),
+        mini_rs_cross: crossIndexInTail(rsLong, rsCrossWeeks, MINI_WEEKS),
     };
 }
 
@@ -440,6 +441,7 @@ function classifyTtmSqueeze(ticker, universe, c) {
         consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         histNow,
+        ...miniVisualFields(c),
     };
 }
 
@@ -543,6 +545,7 @@ function continuationRowBase(ticker, universe, c, gate, d) {
         histogram_rising: !!(d && d.histogram_prev != null && d.histogram > d.histogram_prev),
         recent_squeeze: (d && d.recent_squeeze) || [],
         sma50_pct: d ? d.sma50_pct : null,
+        ema20_pct: d && d.ema20_pct != null ? d.ema20_pct : null,
         high_20d_pct: d ? d.high_20d_pct : null,
         return_1m_pct: d ? d.return_1m_pct : null,
     };
@@ -586,6 +589,7 @@ function classifyWeeklyWinner(ticker, universe, c, opts = {}) {
         weekly_ema: (wc.ema20_pct || []).slice(-WINNERS_WEEKLY_SPARK_WEEKS),
         daily_closes: (d && d.spark && d.spark.closes) || [],
         daily_squeeze: (d && d.spark && d.spark.squeeze) || [],
+        daily_ema: (d && d.spark && d.spark.ema20) || [],
     };
 }
 
@@ -618,63 +622,6 @@ function latestDailyDate() {
     return best;
 }
 
-// ---------- Mini-wykresy (inline SVG, bez Chart.js — dziesiątki na raz) ----------
-// Punkty [x, y] dla serii (null = przerwa), skalowane do w×h z marginesem pad.
-function sparkPoints(values, w, h, pad = 2, range = null) {
-    const nums = (values || []).filter(v => v != null && Number.isFinite(v));
-    if (nums.length < 2) return [];
-    const lo = range ? range[0] : Math.min(...nums);
-    const hi = range ? range[1] : Math.max(...nums);
-    const span = hi - lo || 1;
-    const n = values.length;
-    return values.map((v, i) => (v == null || !Number.isFinite(v)) ? null : [
-        +(pad + (i * (w - 2 * pad)) / (n - 1)).toFixed(1),
-        +(h - pad - ((v - lo) / span) * (h - 2 * pad)).toFixed(1),
-    ]);
-}
-
-function sparkPath(points) {
-    let d = "";
-    let pen = false;
-    points.forEach(p => {
-        if (!p) { pen = false; return; }
-        d += `${pen ? "L" : "M"}${p[0]},${p[1]}`;
-        pen = true;
-    });
-    return d;
-}
-
-function seriesRange(...series) {
-    const nums = series.flat().filter(v => v != null && Number.isFinite(v));
-    return nums.length ? [Math.min(...nums), Math.max(...nums)] : null;
-}
-
-// Tydzień: cena (% od startu okna) + EMA20 przerywaną linią.
-function weeklySparkSvg(closes, ema) {
-    const w = 110, h = 30;
-    const range = seriesRange(closes, ema);
-    if (!range) return '<span class="spark-empty">—</span>';
-    const pts = sparkPoints(closes, w, h, 2, range);
-    const up = closes.length && closes[closes.length - 1] >= closes[0];
-    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + `<path d="${sparkPath(sparkPoints(ema, w, h, 2, range))}" class="spark-ema"/>`
-        + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
-}
-
-// Dzień: cena z 60 sesji + czerwone kreski u dołu w dni squeeze'a (jak kropki TV).
-function dailySparkSvg(closes, squeeze) {
-    const w = 130, h = 30, barH = 3;
-    const pts = sparkPoints(closes, w, h - barH - 1, 2);
-    if (!pts.length) return '<span class="spark-empty">—</span>';
-    const n = closes.length;
-    const step = (w - 4) / Math.max(n - 1, 1);
-    const bars = (squeeze || []).map((v, i) => v === 1
-        ? `<rect x="${(2 + i * step - step / 2).toFixed(1)}" y="${h - barH}" width="${Math.max(step, 1).toFixed(1)}" height="${barH}" class="spark-sq"/>`
-        : "").join("");
-    const up = closes[n - 1] >= closes[0];
-    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + bars + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
-}
 
 // Wszystkie uniwersa, bez duplikatów (pierwsze wystąpienie w kolejności
 // UNIVERSES wygrywa — jak combinedWybicieCandidates). Kolejność: świeże
@@ -702,6 +649,29 @@ function combinedContinuationCandidates(opts = {}) {
 // ============================================================
 // SIDEBAR (kwadraty z top 10 tickerów na indeks)
 // ============================================================
+// Kafelek sidebara "mówi" bez klikania: pasek u dołu w kolorze etapu
+// Weinsteina + kropka w rogu — zielona, gdy RS 52 tyg. > 0 (mocniejsza od
+// swojego indeksu), czerwona, gdy < 0.
+function decorateTile(tile, stage, rsLong) {
+    const color = stage && STAGE_COLORS[stage];
+    if (color) tile.style.boxShadow = `inset 0 -3px 0 ${color}`;
+    const extra = [];
+    if (stage) extra.push(`Etap ${stage}`);
+    if (rsLong != null && Number.isFinite(rsLong)) {
+        const dot = document.createElement("span");
+        dot.className = `tile-rs-dot ${rsLong >= 0 ? "tile-rs-up" : "tile-rs-down"}`;
+        tile.appendChild(dot);
+        extra.push(`RS 52 tyg. ${rsLong >= 0 ? "+" : ""}${rsLong.toFixed(1)}`);
+    }
+    if (extra.length) tile.title += ` · ${extra.join(" · ")}`;
+}
+
+function latestRsLong(c) {
+    const arr = c && c.mansfield_chart && c.mansfield_chart.rsm_long;
+    const i = latestNonNullIdx(arr);
+    return i >= 0 ? arr[i] : null;
+}
+
 function renderSidebarTiles() {
     SIDEBAR_TAB_UNIVERSES.forEach(u => {
         const container = document.getElementById(`tiles-${u}`);
@@ -714,6 +684,7 @@ function renderSidebarTiles() {
             tile.title = `${c.ticker} — ${UNIVERSE_LABELS[u]} #${c.rank} · waga ${c.weight_pct.toFixed(2)}%`;
             tile.dataset.ticker = c.ticker;
             tile.dataset.universe = u;
+            decorateTile(tile, c.weekly_chart && c.weekly_chart.current_stage, latestRsLong(c));
             if (c.ticker === state.selectedTicker) tile.classList.add("selected");
             tile.addEventListener("click", () => selectTicker(c.ticker, u));
             container.appendChild(tile);
@@ -745,6 +716,7 @@ function renderWybiciePanel() {
             + `wybicie ${r.breakoutWeeks} tyg. temu · MACD > 0 od ${r.macdCrossWeeks} tyg. · RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · histogram TTM ${r.histNow.toFixed(2)}`;
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, r.rsLongNow);
         if (r.ticker === state.selectedTicker) tile.classList.add("selected");
         tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         container.appendChild(tile);
@@ -780,6 +752,7 @@ function renderTtmSqueezePanel() {
                 + `w konsolidacji od ${r.consolidation_weeks} tyg.`;
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, r.rs_long);
         if (r.ticker === state.selectedTicker) tile.classList.add("selected");
         tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         container.appendChild(tile);
@@ -812,6 +785,7 @@ function renderContinuationPanel() {
                 : `D1 squeeze od ${r.squeeze_days} sesji`);
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, r.rs_long);
         if (r.ticker === state.selectedTicker) tile.classList.add("selected");
         tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
         container.appendChild(tile);
@@ -847,12 +821,46 @@ function selectTicker(ticker, universe) {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
+    // Okienko najpierw, render potem — Chart.js mierzy canvas przy tworzeniu,
+    // a w ukrytym (display:none) okienku miałby zerowy rozmiar.
+    openChartModal();
     updateChartArea();
-    // Na telefonie nie ma miejsca na tabelę i wykres naraz — wybranie spółki
-    // przełącza widok na pełnoekranowy wykres (jak w apce TradingView).
-    if (window.matchMedia("(max-width: 640px)").matches) {
-        document.querySelector(".workspace").classList.add("mobile-chart-view");
-    }
+}
+
+// ============================================================
+// OKIENKO Z WYKRESEM (pop-up nad pełnoekranową tabelą) — na prośbę
+// użytkownika zamiast wykresu na stałe obok/pod tabelą: klik w spółkę otwiera
+// okienko, ✕ / Esc / klik w przyciemnione tło zamyka.
+// ============================================================
+function openChartModal() {
+    const modal = document.getElementById("chartModal");
+    if (modal) modal.hidden = false;
+}
+
+function closeChartModal() {
+    const modal = document.getElementById("chartModal");
+    if (!modal || modal.hidden) return;
+    // Wykresy niszczymy PRZED ukryciem okienka: ukrycie żywego wykresu
+    // planuje w Chart.js resize (ResizeObserver + rAF), a zniszczenie go
+    // chwilę później (ponowne otwarcie) rzucało błędy "ownerDocument"/"fullSize".
+    destroyChartInstances();
+    modal.hidden = true;
+}
+
+function initChartModal() {
+    const modal = document.getElementById("chartModal");
+    if (!modal) return;
+    document.getElementById("chartModalClose").addEventListener("click", closeChartModal);
+    modal.addEventListener("click", (ev) => { if (ev.target === modal) closeChartModal(); });
+    // Rejestrowane PRZED initChartFullscreen: przy włączonym pełnym ekranie
+    // wykresu Esc najpierw zamyka tylko pełny ekran (tamten handler), a nie
+    // całe okienko.
+    document.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Escape" || chartFullscreenActive) return;
+        const cmdk = document.getElementById("cmdkOverlay");
+        if (cmdk && cmdk.style.display !== "none") return;
+        closeChartModal();
+    });
 }
 
 // Przełącza zakładkę drawer na uniwersum danego tickera (żeby podświetlenie
@@ -1091,23 +1099,12 @@ function initDrawer() {
     const toggleBtn = document.getElementById("toggleDrawerBtn");
     const drawer = document.getElementById("tableDrawer");
 
-    toggleBtn.addEventListener("click", () => {
-        state.drawerOpen = !state.drawerOpen;
-        drawer.classList.toggle("open", state.drawerOpen);
-        toggleBtn.textContent = state.drawerOpen ? "<<<" : ">>>";
-    });
-
-    // Kliknięcie gdziekolwiek poza rozwiniętą szufladą (np. w obszar wykresu)
-    // ją zwija — tak jak zwykle zachowują się nakładane panele w nowoczesnych
-    // aplikacjach. Sam przycisk >>>/<<< ma już własną obsługę kliknięcia
-    // powyżej, więc jest tu wykluczony, żeby nie zwijać i od razu rozwijać.
-    document.addEventListener("click", (ev) => {
-        if (!state.drawerOpen) return;
-        if (drawer.contains(ev.target) || toggleBtn.contains(ev.target)) return;
-        state.drawerOpen = false;
-        drawer.classList.remove("open");
-        toggleBtn.textContent = ">>>";
-    });
+    // Tabela jest teraz ZAWSZE rozwinięta na cały ekran (wykres otwiera się w
+    // okienku — patrz openChartModal), więc dawne rozwijanie/zwijanie
+    // przyciskiem >>> i klikiem poza szufladą zniknęło.
+    state.drawerOpen = true;
+    if (drawer) drawer.classList.add("open");
+    if (toggleBtn) toggleBtn.hidden = true;
 
     document.querySelectorAll(".drawer-tab").forEach(tab => {
         tab.addEventListener("click", () => {
@@ -1177,6 +1174,7 @@ function showDrawerTable(universe) {
             : isContinuation
                 ? "Continuation — Etap 2 + krótki squeeze D1"
                 : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+    renderBreadthBar();
     renderActiveDrawerTable();
 }
 
@@ -1203,9 +1201,10 @@ function wybicieRowHtml(r, position) {
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
         <td>${crossWeeksHtml(r.breakoutWeeks)}</td>
-        <td class="positive" title="MACD przeciął zero w górę ${crossWeeksHtml(r.macdCrossWeeks)}">${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></td>
-        <td class="positive" title="RS 52 tyg. przeciął zero w górę ${crossWeeksHtml(r.rsCrossWeeks)}">${r.rsLongNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span></td>
-        <td class="positive">${r.histNow.toFixed(2)}</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
+        <td class="positive" title="MACD tygodniowy (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.macdCrossWeeks)}"><span class="cell-spark">${zeroLineSparkSvg(r.mini_macd, r.mini_macd_cross)}<span>${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></span></span></td>
+        <td class="positive" title="RS 52 tyg. (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.rsCrossWeeks)}"><span class="cell-spark">${zeroLineSparkSvg(r.mini_rs, r.mini_rs_cross)}<span>${r.rsLongNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span></span></span></td>
+        <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.)">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
@@ -1237,7 +1236,7 @@ function renderWybicieTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 11,
+        colspan: 12,
         emptyAllMsg: `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (MACD i RS 52 tyg. przecięły zero w odstępie ≤ ${state.wybicieWindowWeeks} tyg., histogram TTM dodatni).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
@@ -1300,6 +1299,9 @@ function ttmSqueezeRowHtml(r, position) {
         <td class="${r.momentum_pct >= 0 ? "positive" : "negative"}">${r.momentum_pct.toFixed(2)}%</td>
         <td>${ttmSqueezeStatusHtml(r)}</td>
         <td>${r.consolidation_weeks} tyg.</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
+        <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
+        <td>${rsBarHtml(r.rs_long)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
@@ -1321,7 +1323,7 @@ function renderTtmSqueezeTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 10,
+        colspan: 13,
         emptyAllMsg: "Brak danych.",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
@@ -1448,8 +1450,9 @@ function winnerRowHtml(r, position) {
         <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
         <td class="positive">${r.rs_long.toFixed(1)}</td>
         <td title="Cena tygodniowa (ostatnie ${WINNERS_WEEKLY_SPARK_WEEKS} tyg.) + EMA20 (przerywana)">${weeklySparkSvg(r.weekly_closes, r.weekly_ema)}</td>
-        <td title="Cena dzienna (ostatnie ${r.daily_closes.length} sesji), czerwone kreski = dni squeeze'a D1">${dailySparkSvg(r.daily_closes, r.daily_squeeze)}</td>
+        <td title="Cena dzienna (ostatnie ${r.daily_closes.length} sesji), przerywana = EMA20, czerwone kreski = dni squeeze'a D1">${dailySparkSvg(r.daily_closes, r.daily_squeeze, r.daily_ema)}</td>
         <td>${winnerStatusHtml(r)}</td>
+        <td>${pullbackHtml(r.ema20_pct)}</td>
         <td>${signedPctHtml(r.sma50_pct)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
@@ -1468,12 +1471,13 @@ function renderWinnersTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 12,
+        colspan: 13,
         emptyAllMsg: `Brak spółek w Etapie 2 z momentum > 0 (≥ ${state.contMinMomentumPct}%) i RS 52 tyg. > 0.`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => {
             const withSignal = rows.filter(r => r.signal).length;
-            return `${rows.length} spółek · ${withSignal} z sygnałem D1`;
+            const atEma = rows.filter(r => r.ema20_pct != null && r.ema20_pct >= 0 && r.ema20_pct <= PULLBACK_BAND_PCT).length;
+            return `${rows.length} spółek · ${withSignal} z sygnałem D1 · ${atEma} przy EMA20`;
         },
         rowKey: r => r.ticker,
         isSelected: r => r.ticker === state.selectedTicker,
@@ -1705,9 +1709,37 @@ function initDailyRefresh() {
     } catch (e) { /* ignoruj */ }
 }
 
+function renderBreadthBar() {
+    const el = document.getElementById("breadthBar");
+    if (!el) return;
+    const isUniverse = SIDEBAR_TAB_UNIVERSES.includes(state.drawerUniverse);
+    el.hidden = !isUniverse;
+    if (!isUniverse) return;
+    const d = state.data[state.drawerUniverse] || {};
+    const rows = d.all_constituents || d.constituents || [];
+    const b = stageBreakdown(rows);
+    if (!b.total) { el.innerHTML = ""; return; }
+    const segs = [["2", "Etap 2"], ["1", "Etap 1"], ["3", "Etap 3"], ["4", "Etap 4"], ["none", "brak danych"]]
+        .filter(([k]) => b[k] > 0)
+        .map(([k, label]) => {
+            const pct = (b[k] / b.total) * 100;
+            const color = k === "none" ? "#3a3f4b" : STAGE_COLORS[k === "2" ? "2A" : k];
+            return `<button type="button" class="breadth-seg" data-stage="${k}" style="flex:${b[k]};background:${color}" title="${label}: ${b[k]} spółek (${pct.toFixed(0)}%)${k !== "none" ? " — kliknij, żeby filtrować" : ""}">${pct >= 7 ? `${label.replace("Etap ", "E")} ${pct.toFixed(0)}%` : ""}</button>`;
+        }).join("");
+    el.innerHTML = `<span class="breadth-label">Całe ${UNIVERSE_LABELS[state.drawerUniverse].replace(" Momentum", "")} (${b.total}):</span><div class="breadth-track">${segs}</div>`;
+    el.querySelectorAll(".breadth-seg").forEach(seg => {
+        if (seg.dataset.stage === "none") return;
+        seg.addEventListener("click", () => {
+            const btn = document.querySelector(`#stageFilterBar .stage-filter-btn[data-stage="${seg.dataset.stage}"]`);
+            if (btn) btn.click();
+        });
+    });
+}
+
 function renderTable() {
     const d = state.data[state.drawerUniverse];
-    const allRows = d.constituents || [];
+    const allRows = (d.constituents || []).map(c => ({ ...c, ...miniVisualFields(c) }));
+    renderBreadthBar();
     // Ustawiane przez beforeRender ponizej, PO filtrze/sortowaniu — pasek wagi
     // skaluje sie wzgledem najwiekszej wagi wsrod AKTUALNIE WIDOCZNYCH wierszy
     // (po filtrze etapu), nie calego uniwersum.
@@ -1719,7 +1751,7 @@ function renderTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.weekly_chart && r.weekly_chart.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 12,
+        colspan: 15,
         emptyAllMsg: "Brak danych.",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => {
@@ -1754,6 +1786,9 @@ function renderTable() {
                 <span class="weight-bar-bg"><span class="weight-bar-fill" style="width:${(r.weight_pct / maxWeight * 100).toFixed(0)}%"></span></span>
                 ${r.weight_pct.toFixed(2)}%
             </td>
+            <td title="Cena tygodniowa (ostatnie ${MINI_WEEKS} tyg.) + EMA20 (przerywana)">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
+            <td>${rsBarHtml(r.rs_long)}</td>
+            <td title="TTM Squeeze tygodniowy (ostatnie ${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
             <td>${stageCellHtml(r.weekly_chart && r.weekly_chart.current_stage)}</td>
             <td>${tvRowButtonHtml(r.ticker, state.drawerUniverse)}</td>
         `,
@@ -1910,26 +1945,15 @@ if (typeof document !== "undefined") {
         initResetZoomButton();
         initMansfieldControls();
         initChartViewTabs();
+        initChartModal();
         initChartFullscreen();
         initStageFilter();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
         buildSearchIndex();
         initCmdk();
-        document.getElementById("chartBackBtn").addEventListener("click", () => {
-            document.querySelector(".workspace").classList.remove("mobile-chart-view");
-        });
-        // Domyslnie wybrana spolka: pierwsza z domyslnej zakladki drawera
-        // (state.drawerUniverse, dzis SP500 — replikacja SPMO).
-        const defaultRows = (state.data[state.drawerUniverse] || {}).constituents || [];
-        if (defaultRows.length > 0) {
-            state.selectedTicker = defaultRows[0].ticker;
-            state.selectedUniverse = state.drawerUniverse;
-            // Bez tego domyslna spolka zawsze pokazywala "Brak wlasnego
-            // wykresu" — currentRsEntry ustawial dotad tylko selectTicker().
-            state.currentRsEntry = findRsEntry(state.selectedTicker, state.selectedUniverse);
-        }
-        updateChartArea();
+        // Żadna spółka nie jest wybrana z góry — wykres pokazuje się dopiero w
+        // okienku po kliknięciu wiersza/kafelka (patrz selectTicker/openChartModal).
         hideLoadingOverlay();
     })();
 
@@ -1946,7 +1970,6 @@ if (typeof module !== "undefined" && module.exports) {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
         effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
-        sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg,
         githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };

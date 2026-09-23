@@ -85,6 +85,8 @@
                     <th data-key="momentum_window">Okno</th>
                     <th data-key="volatility_pct">Zmienność</th>
                     <th data-key="momentum_score" title="Momentum Score">Score</th>
+                    <th>Tydzień (26 tyg.)</th>
+                    <th title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
                     <th>Etap</th>
                     <th>Grupa</th>
                     <th class="chart-col">Wykres</th>
@@ -111,7 +113,7 @@
         <div class="table-wrap">
         <table class="holdings-table" id="holdingsTable">
             <thead>
-                <tr><th>Ticker</th><th>Liczba akcji</th><th>Cena</th><th>Wartość</th><th></th></tr>
+                <tr><th>Ticker</th><th>Liczba akcji</th><th>Cena</th><th>Wartość</th><th>Tydzień (26 tyg.)</th><th>Etap</th><th></th></tr>
             </thead>
             <tbody id="holdingsBody"></tbody>
         </table>
@@ -149,6 +151,14 @@
             <div class="label">Spółek w sugestii</div>
             <div class="value" id="statHoldingsCount">—</div>
         </div>
+        <div class="stat-card stat-card-buy">
+            <div class="label">Do kupienia</div>
+            <div class="value" id="statBuy">—</div>
+        </div>
+        <div class="stat-card stat-card-sell">
+            <div class="label">Do sprzedania</div>
+            <div class="value" id="statSell">—</div>
+        </div>
     </div>
 
     <div class="panel-card" id="suggestionsCard">
@@ -157,7 +167,7 @@
         <div class="table-wrap">
         <table class="rebalance-table" id="rebalanceTable">
             <thead>
-                <tr><th>Ticker</th><th>Indeks / uwaga</th><th>Waga docelowa</th><th>Wartość docelowa</th><th>Masz teraz</th><th>Sugestia</th></tr>
+                <tr><th>Ticker</th><th>Indeks / uwaga</th><th>Waga docelowa</th><th>Wartość docelowa</th><th>Masz teraz</th><th title="Obecna wartość na tle docelowej (kreska = cel)">Mam vs cel</th><th>Sugestia</th></tr>
             </thead>
             <tbody id="rebalanceBody"></tbody>
         </table>
@@ -194,6 +204,7 @@
 <script src="js/pull-to-refresh.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/qol.js"></script>
+<script src="js/minicharts.js"></script>
 <script src="js/table-render.js"></script>
 <script src="js/rebalance.js"></script>
 </body>

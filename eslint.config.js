@@ -73,6 +73,28 @@ const browserGlobals = {
     // Zdefiniowane w docs/js/qol.js, wspoldzielonym przez zwykly <script> tag
     // z index.html/rebalance.html/chart.html — patrz komentarz na gorze
     // qol.js. Ten sam wzorzec co powyzej dla chart-render.js/shared.js.
+    // Zdefiniowane w docs/js/minicharts.js (wspólne mini-wykresy tabel) —
+    // ten sam wzorzec co shared.js/table-render.js powyżej.
+    latestNonNullIdx: "readonly",
+    sparkPoints: "readonly",
+    sparkPath: "readonly",
+    seriesRange: "readonly",
+    sparkSqueezeBars: "readonly",
+    weeklySparkSvg: "readonly",
+    dailySparkSvg: "readonly",
+    RS_BAR_CAP: "readonly",
+    rsBarHtml: "readonly",
+    ttmMiniSvg: "readonly",
+    MINI_WEEKS: "readonly",
+    miniVisualFields: "readonly",
+    zeroLineSparkSvg: "readonly",
+    crossIndexInTail: "readonly",
+    findConstituent: "readonly",
+    BULLET_TOLERANCE_PCT: "readonly",
+    bulletHtml: "readonly",
+    stageBreakdown: "readonly",
+    PULLBACK_BAND_PCT: "readonly",
+    pullbackHtml: "readonly",
     showToast: "readonly",
     initConnStatus: "readonly",
     hideLoadingOverlay: "readonly",

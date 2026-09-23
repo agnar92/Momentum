@@ -2076,3 +2076,20 @@ class TestComputeSectorRelativeStrength:
     def test_missing_price_data_returns_none(self):
         con = make_gem_con()
         assert compute_sector_relative_strength(con, "2026-03-16", min_trading_days=150, max_staleness_days=10) is None
+
+
+class TestMansfieldRsmTail:
+    def test_tail_returns_last_n_rsm_values_without_warmup_nans(self):
+        weeks = pd.date_range("2025-01-06", periods=80, freq="7D")
+        num = pd.DataFrame({"week_start": weeks, "close": [100.0 + i for i in range(80)]})
+        den = pd.DataFrame({"week_start": weeks, "close": [100.0] * 80})
+        tail = run_query._mansfield_rsm_tail(num, den, n=26, weeks=52)
+        assert len(tail) == 26
+        assert tail[-1] == round(run_query._mansfield_rsm_current_value(num, den, weeks=52), 2)
+        assert all(v > 0 for v in tail)  # licznik rosnie szybciej niz mianownik
+
+    def test_tail_is_empty_without_enough_history(self):
+        weeks = pd.date_range("2025-01-06", periods=10, freq="7D")
+        df = pd.DataFrame({"week_start": weeks, "close": [100.0] * 10})
+        assert run_query._mansfield_rsm_tail(df, df, n=26, weeks=52) == []
+        assert run_query._mansfield_rsm_tail(None, df) == []

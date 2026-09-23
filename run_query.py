@@ -2179,6 +2179,7 @@ DAILY_SQUEEZE_RECENT_DAYS = 20        # ile ostatnich sesji squeeze_on eksportuj
 DAILY_SPARK_DAYS = 60                 # ile ostatnich sesji ceny + squeeze_on dla mini-wykresu D1
 DAILY_SMA_DAYS = 50
 DAILY_EMA_DAYS = 21
+DAILY_PULLBACK_EMA_DAYS = 20          # EMA20 D1: linia na mini-wykresie + odleglosc ceny (pullback)
 DAILY_RETURN_1M_DAYS = 21             # ~1 miesiac sesji
 
 
@@ -2196,9 +2197,11 @@ def compute_daily_squeeze(con, ticker, ref_date):
       (1/0/None), zeby front mogl narysowac pasek kropek jak na TradingView,
     - close — ostatnie zamkniecie (swiezsze niz "price" z tygodniowego eksportu,
       gdy podsumowanie pochodzi z refresh_daily.py),
-    - spark — {"closes", "squeeze"} z ostatnich DAILY_SPARK_DAYS sesji: dane
-      mini-wykresu D1 (linia ceny + zaznaczone dni squeeze'a) w tabeli
-      "Tygodniowi zwyciezcy" na dashboardzie,
+    - spark — {"closes", "ema20", "squeeze"} z ostatnich DAILY_SPARK_DAYS sesji:
+      dane mini-wykresu D1 (linia ceny, EMA20, zaznaczone dni squeeze'a) w
+      tabeli "Tygodniowi zwyciezcy" na dashboardzie,
+    - ema20_pct — % ceny nad dzienna EMA20 (maly dodatni = pullback do sredniej
+      w trendzie, klasyczne miejsce dolaczenia),
     - sma50_pct / ema21_pct — % nad dzienna SMA50/EMA21 (czy cena trzyma trend
       na D1), return_1m_pct — zmiana ceny za ~21 sesji (dynamika),
       high_20d_pct — % od najwyzszego High z 20 sesji (<= 0; blisko 0 = cena
@@ -2238,6 +2241,7 @@ def compute_daily_squeeze(con, ticker, ref_date):
 
     sma50 = close.rolling(DAILY_SMA_DAYS).mean().iloc[last]
     ema21 = close.ewm(span=DAILY_EMA_DAYS, adjust=False).mean().iloc[last]
+    ema20_series = close.ewm(span=DAILY_PULLBACK_EMA_DAYS, adjust=False).mean()
     past_close = close.iloc[last - DAILY_RETURN_1M_DAYS] if last >= DAILY_RETURN_1M_DAYS else None
     high_20d = high.iloc[-DAILY_SQUEEZE_LENGTH:].max()
     recent = sq["squeeze_on"].iloc[-DAILY_SQUEEZE_RECENT_DAYS:]
@@ -2257,10 +2261,12 @@ def compute_daily_squeeze(con, ticker, ref_date):
         "recent_squeeze": flags(recent),
         "spark": {
             "closes": [safe_float(v) for v in close.iloc[-DAILY_SPARK_DAYS:]],
+            "ema20": [safe_float(v) for v in ema20_series.iloc[-DAILY_SPARK_DAYS:]],
             "squeeze": flags(sq["squeeze_on"].iloc[-DAILY_SPARK_DAYS:]),
         },
         "sma50_pct": pct_vs(sma50),
         "ema21_pct": pct_vs(ema21),
+        "ema20_pct": pct_vs(ema20_series.iloc[last]),
         "return_1m_pct": pct_vs(past_close),
         "high_20d_pct": pct_vs(high_20d),
     }
@@ -2517,6 +2523,16 @@ def _mansfield_rsm_current_value(numerator_df, denominator_df, weeks=SECTOR_STRA
     tylko wlasny indeks uniwersum spolki. Potrzeba co najmniej `weeks` wspolnych
     tygodni obu serii — inaczej None (za malo historii), ta sama konwencja
     'degraduj sie do None zamiast rzucic wyjatek' co reszta tego modulu."""
+    rsm = _mansfield_rsm_values(numerator_df, denominator_df, weeks)
+    if rsm is None:
+        return None
+    last = rsm.iloc[-1]
+    return float(last) if pd.notna(last) else None
+
+
+def _mansfield_rsm_values(numerator_df, denominator_df, weeks=SECTOR_STRATEGY_RSM_WEEKS):
+    """Cala seria RSM (pandas Series, tygodniowo) dla _mansfield_rsm_current_value/
+    _mansfield_rsm_tail — None przy braku danych albo < `weeks` wspolnych tygodni."""
     if numerator_df is None or denominator_df is None:
         return None
     den_by_week = dict(zip(denominator_df["week_start"], denominator_df["close"]))
@@ -2525,10 +2541,21 @@ def _mansfield_rsm_current_value(numerator_df, denominator_df, weeks=SECTOR_STRA
     merged = merged.dropna(subset=["den_close"])
     if len(merged) < weeks:
         return None
-    merged["rs_raw"] = merged["close"] / merged["den_close"]
-    rsm = (merged["rs_raw"] / merged["rs_raw"].rolling(weeks).mean() - 1) * 100
-    last = rsm.iloc[-1]
-    return float(last) if pd.notna(last) else None
+    rs_raw = merged["close"] / merged["den_close"]
+    return (rs_raw / rs_raw.rolling(weeks).mean() - 1) * 100
+
+
+SECTOR_STRATEGY_RSM_TAIL_WEEKS = 26  # ile ostatnich tygodni RSM sektora eksportujemy (mini-wykres trendu na stronie Strategia)
+
+
+def _mansfield_rsm_tail(numerator_df, denominator_df, n=SECTOR_STRATEGY_RSM_TAIL_WEEKS,
+                        weeks=SECTOR_STRATEGY_RSM_WEEKS):
+    """Ostatnie `n` wartosci RSM (zaokraglone, bez NaN z rozgrzewki) — trend
+    sily relatywnej do mini-wykresu; [] gdy brak danych."""
+    rsm = _mansfield_rsm_values(numerator_df, denominator_df, weeks)
+    if rsm is None:
+        return []
+    return [round(float(v), 2) for v in rsm.dropna().iloc[-n:]]
 
 
 def compute_sector_relative_strength(con, ref_date, min_trading_days, max_staleness_days):
@@ -2604,9 +2631,11 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
         if sector_series is not None:
             data_source = "etf"
             sector_rsm_pct = _mansfield_rsm_current_value(sector_series, sp500_series)
+            sector_rsm_tail = _mansfield_rsm_tail(sector_series, sp500_series)
         else:
             data_source = "no_data"
             sector_rsm_pct = None
+            sector_rsm_tail = []
 
         company_rows = []
         for _, r in g.iterrows():
@@ -2646,6 +2675,7 @@ def compute_sector_relative_strength(con, ref_date, min_trading_days, max_stalen
             "sector": sector,
             "count": int(len(g)),
             "rsm_vs_index_pct": round(sector_rsm_pct, 2) if sector_rsm_pct is not None else None,
+            "rsm_series": sector_rsm_tail,
             "data_source": data_source,
             "top_companies": top_companies,
         })
