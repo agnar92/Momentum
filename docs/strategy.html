@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Strategia Stage 2 — Momentum Dashboard</title>
-<link rel="stylesheet" href="css/style.css?v=18">
+<link rel="stylesheet" href="css/style.css?v=19">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e0f13">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -155,6 +155,31 @@
         </div>
     </div>
 
+    <div class="panel-card" id="capitalCard">
+        <h3>💰 Zarządzanie kapitałem: Core / Satelita (PLN) <span class="ref-date-note" id="capitalMeta"></span></h3>
+        <p class="panel-hint">Wpisz wartości w złotych, tak jak pokazuje je broker. Satelita = otwarte pozycje z lejka + jej gotówka. Reguły: dopłaty idą do części, której jest za mało; sprzedaż tylko po wyjściu poza pasmo ±5 pp i najwyżej raz na kwartał; zwycięskich pozycji nie ścinamy dla rebalansu; nie dolewamy do Satelity, gdy spadła o 20%+ od szczytu albo lejek nie ma sygnałów wejścia. Część Core z dopłat idzie do ETF-u na indeks wygrywający GEM (ETF dobierasz sam). Cel podziału bierze się z pola „Satelita %” wyżej.</p>
+        <div class="bucket-inputs capital-inputs">
+            <label class="bucket-input"><span>Core (ETF-y)</span><input type="number" id="capCoreInput" min="0" step="100" inputmode="decimal"><span>zł</span></label>
+            <label class="bucket-input"><span>Satelita — pozycje</span><input type="number" id="capSatPosInput" min="0" step="100" inputmode="decimal"><span>zł</span></label>
+            <label class="bucket-input"><span>Satelita — gotówka</span><input type="number" id="capSatCashInput" min="0" step="100" inputmode="decimal"><span>zł</span></label>
+            <label class="bucket-input"><span>Planowana dopłata</span><input type="number" id="capContribInput" min="0" step="100" inputmode="decimal"><span>zł</span></label>
+        </div>
+        <div class="stat-cards capital-stats" id="capitalStats"></div>
+        <div class="capital-bar" id="capitalBar"></div>
+        <ul class="capital-actions" id="capitalActions"></ul>
+        <div class="chart-mode-toggle">
+            <button type="button" class="chart-mode-btn" id="capRebalancedBtn" title="Zapisz dzisiejszą datę jako ostatni rebalans ze sprzedażą — następny najwcześniej za kwartał.">✓ Zrobiłem rebalans (sprzedaż)</button>
+            <button type="button" class="chart-mode-btn" id="capResetPeakBtn" title="Ustaw szczyt Satelity na jej obecną wartość (np. po dużej wpłacie lub wypłacie).">↺ Resetuj szczyt Satelity</button>
+        </div>
+        <h4 class="capital-subhead">GEM — dopłaty do Core idą do ETF-u na zwycięski indeks <span class="ref-date-note" id="gemMeta"></span></h4>
+        <div class="table-wrap">
+        <table class="momentum-table" id="gemTable">
+            <thead><tr><th>#</th><th>Indeks</th><th>Zwrot 12 mies.</th><th></th></tr></thead>
+            <tbody id="gemTableBody"></tbody>
+        </table>
+        </div>
+    </div>
+
     <div class="panel-card" id="trendCard">
         <h3 id="trendTitle">Szczegóły: rynek <span class="ref-date-note" id="trendRefDate"></span></h3>
         <div id="marketUsa">
@@ -259,9 +284,9 @@
 
 <script src="js/vendor/chart.umd.min.js"></script>
 <script src="js/pull-to-refresh.js"></script>
-<script src="js/shared.js?v=18"></script>
-<script src="js/qol.js?v=18"></script>
-<script src="js/table-render.js?v=18"></script>
-<script src="js/strategy.js?v=18"></script>
+<script src="js/shared.js?v=19"></script>
+<script src="js/qol.js?v=19"></script>
+<script src="js/table-render.js?v=19"></script>
+<script src="js/strategy.js?v=19"></script>
 </body>
 </html>

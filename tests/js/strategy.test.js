@@ -8,7 +8,7 @@ const path = require("node:path");
 
 const {
     squeezeStatusFor, indexTrendFromRows, strongSectorSet, stopPriceFor, strategyStopFor, macdConfirmation, squeezeMomentum,
-    evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, sanitizeAllocation, evaluateHolding, parseTickerList,
+    evaluateCandidate, funnelSteps, rowsAtStep, compareListRows, DEFAULT_CRITERIA, positionSize, sanitizeAllocation, gemRanking, capitalPlan, evaluateHolding, parseTickerList,
 } = require(path.join("..", "..", "docs", "js", "strategy.js"));
 
 function ttmChart(rows) {
@@ -377,4 +377,65 @@ test("positionSize uses custom risk and max-position percentages", () => {
     const s = positionSize({ price: 110, stop: 100, capital: 100000, riskPct: 0.02, maxPositionPct: 0.30 });
     assert.equal(s.shares, 200);
     assert.equal(s.cappedByMax, false);
+});
+
+// ------------------------------------------------------------
+// Zarzadzanie kapitalem Core / Satelita
+// ------------------------------------------------------------
+const gem = gemRanking({ indices: [
+    { universe: "SP500", return_pct: 19 }, { universe: "MWIG40", return_pct: 34.3 }, { universe: "WIG20", return_pct: 32 },
+] });
+
+const plan = (o) => capitalPlan(Object.assign({
+    core: 50000, satPositions: 40000, satCash: 10000, contribution: 0, targetSatPct: 50,
+    peak: 50000, hasEntrySignals: true, daysSinceRebalance: null, gem,
+}, o));
+
+test("gemRanking sorts by 12M return and flags when every index is negative", () => {
+    assert.equal(gem.winner.universe, "MWIG40");
+    assert.deepEqual(gem.rows.map(r => r.universe), ["MWIG40", "WIG20", "SP500"]);
+    assert.equal(gemRanking({ indices: [{ universe: "SP500", return_pct: -3 }] }).allNegative, true);
+    assert.equal(gemRanking(null), null);
+});
+
+test("capitalPlan: inside the band with no contribution means do nothing", () => {
+    const p = plan({});
+    assert.equal(p.satPct, 50);
+    assert.deepEqual(p.actions.map(a => a.kind), ["ok"]);
+});
+
+test("capitalPlan: contribution fills the underweight side first, rest to the GEM winner", () => {
+    // Satelita 40k/90k -> po dopłacie 10k cel 50k, luka 10k -> cała dopłata do Satelity
+    const p = plan({ core: 50000, satPositions: 30000, satCash: 10000, contribution: 10000 });
+    assert.deepEqual(p.contribution, { toCore: 0, toSat: 10000 });
+    // Core za mały -> dopłata do Core, z nazwą zwycięzcy GEM
+    const q = plan({ core: 40000, contribution: 10000 });
+    assert.equal(q.contribution.toCore, 10000);
+    assert.match(q.actions[0].text, /mWIG40/);
+});
+
+test("capitalPlan: overweight satellite moves cash first and never trims winners", () => {
+    const p = plan({ core: 30000, satPositions: 60000, satCash: 10000 }); // Satelita 70%
+    const kinds = p.actions.map(a => a.kind);
+    assert.deepEqual(kinds, ["move", "hold"]);
+    assert.match(p.actions[0].text, /10\s000 zł/);
+    assert.match(p.actions[1].text, /nie ścinaj/);
+});
+
+test("capitalPlan: underweight satellite sells core only with signals, no drawdown freeze, once a quarter", () => {
+    const base = { core: 70000, satPositions: 20000, satCash: 10000, peak: 30000 }; // Satelita 30%
+    assert.equal(plan(base).actions[0].kind, "sell");
+    assert.equal(plan(Object.assign({}, base, { hasEntrySignals: false })).actions[0].kind, "hold");
+    assert.equal(plan(Object.assign({}, base, { daysSinceRebalance: 30 })).actions[0].kind, "hold");
+    const frozen = plan(Object.assign({}, base, { peak: 50000 })); // 40% pod szczytem
+    assert.ok(frozen.drawdownPct >= 20);
+    assert.equal(frozen.actions[0].kind, "hold");
+});
+
+test("capitalPlan: frozen satellite sends the whole contribution to core; negative GEM -> cash/bonds", () => {
+    const p = plan({ core: 50000, satPositions: 20000, satCash: 5000, peak: 50000, contribution: 5000 });
+    assert.equal(p.contribution.toSat, 0);
+    assert.equal(p.contribution.toCore, 5000);
+    const neg = plan({ core: 40000, contribution: 1000, gem: gemRanking({ indices: [{ universe: "SP500", return_pct: -5 }] }) });
+    assert.match(neg.actions[0].text, /obligacje/);
 });

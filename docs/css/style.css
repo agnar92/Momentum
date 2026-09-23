@@ -1588,3 +1588,45 @@ table.holdings-table td, table.rebalance-table td {
     z-index: 1;
     background: var(--panel);
 }
+
+/* Karta "Zarzadzanie kapitalem" (strategy.html): pasek Core/Satelita z pasmem
+   rebalansu i lista instrukcji. */
+.capital-inputs { margin-bottom: 14px; }
+.capital-inputs .bucket-input input { width: 96px; }
+.capital-stats { margin-bottom: 12px; }
+.capital-bar-track {
+    position: relative;
+    display: flex;
+    height: 28px;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 12px;
+}
+.capital-bar-core, .capital-bar-sat {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11.5px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden;
+}
+.capital-bar-core { background: rgba(138, 143, 156, 0.55); }
+.capital-bar-sat { background: rgba(52, 152, 219, 0.75); }
+.capital-bar-band {
+    position: absolute; top: 0; bottom: 0;
+    border-left: 2px dashed var(--green-bright);
+    border-right: 2px dashed var(--green-bright);
+    background: rgba(46, 204, 113, 0.10);
+    pointer-events: none;
+}
+.capital-actions { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
+.capital-action {
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: var(--panel-alt);
+    border-left: 3px solid var(--border);
+    font-size: 13px;
+    line-height: 1.45;
+}
+.capital-action-ok { border-left-color: var(--green-bright); }
+.capital-action-contribute, .capital-action-move { border-left-color: #3498db; }
+.capital-action-sell { border-left-color: #e0a72e; }
+.capital-action-hold { border-left-color: var(--red); }
+.capital-subhead { margin: 16px 0 8px; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }

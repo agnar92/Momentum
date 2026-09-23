@@ -1734,6 +1734,22 @@ flex child (no `.topbar-left` wrapper there).
   three are % of TOTAL capital; Core is simply 100 − Satellite. Shared by both markets (USA/PL), unlike the
   capital amount itself, which is per market/currency. Pure logic is covered in
   `tests/js/strategy.test.js`.
+  **Capital management card "💰 Zarządzanie kapitałem"** (`#capitalCard`, explicit follow-up: "kiedy dodawać
+  do core a kiedy ujmować na rzecz satelity?"). ONE shared Core for USA and PL, all amounts in **PLN** (the
+  user's call — the app has no FX rate), independent of the per-market capital used for position sizing.
+  The user types Core value, Satellite positions, Satellite cash and a planned contribution
+  (`settings.capital`); `capitalPlan()` (pure, tested) returns the actions under the agreed rules: a
+  contribution goes to whichever side is below target first (no selling = no tax); selling only outside a
+  ±`STRATEGY_REBALANCE_BAND_PP` (5) pp band and at most once per `STRATEGY_REBALANCE_MIN_DAYS` (90, the
+  "✓ Zrobiłem rebalans" button stores the date); an overweight Satellite moves its CASH to Core first and
+  never trims winning positions (remaining excess = "no new entries, stop-exit cash goes to Core"); an
+  underweight Satellite is refilled from Core only if the funnel currently has ENTRY signals (current
+  market) and the Satellite is less than `STRATEGY_SATELLITE_MAX_DRAWDOWN_PCT` (20%) below its peak (peak =
+  highest Satellite value seen, updated only on the input's `change` event so retyping a number can't
+  inflate it; "↺ Resetuj szczyt" resets it). The Core part of contributions goes to "an ETF on" the index
+  winning GEM across ALL indices in `global_equity_momentum.json` (`gemRanking()`; the user picks the actual
+  ETF themselves) — or to cash/bonds when every index has a negative 12M return (absolute momentum). The
+  card also shows the GEM ranking table.
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
   under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/
   `export_sector_strategy`, `docs/data/sector_strategy.json`), reached via a "Strategia" nav link
