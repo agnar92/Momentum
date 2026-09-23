@@ -150,6 +150,56 @@ const TV_PAGE_WIDGETS_ROW = [
     },
 ];
 
+// ============================================================
+// ZAKŁADKA "⚡ 1 min + VWAP" — na wyraźną prośbę użytkownika, jako pomoc przy
+// ręcznym monitorowaniu Opening Range Breakout (ORB) po wybiciu z
+// konsolidacji (np. screener Qullamaggie na stronie Sygnały — patrz
+// CLAUDE.md/signals.js dla pełnego opisu strategii). Świadomie NIE
+// automatyzujemy wykrywania samego ORB: wymagałoby to danych śróddziennych
+// (minutowych), których ten pipeline w ogóle nie pobiera (yfinance daily bars,
+// tygodniowy cykl odświeżania) — dodanie fetchu 1-minutowych świec byłoby
+// osobną, dużo większą zmianą architektury (live/dzienne odświeżanie zamiast
+// cotygodniowego). Zamiast tego jeden osadzony widget TradingView Advanced
+// Chart na interwale 1 min ze studium VWAP (resetuje się co sesję, jak w
+// TradingView) — użytkownik patrzy na zakres z pierwszych minut sesji i sam
+// decyduje o wejściu/stop-lossie. Ten sam wzorzec budowy bloku
+// (buildTvWidgetBlock) co panel "Dane spółki", tylko jeden widget zamiast
+// całej "wizytówki".
+// ============================================================
+const TV_ORB_WIDGET = {
+    src: `${TV_EMBED_BASE}embed-widget-advanced-chart.js`,
+    heightPx: 600,
+    autosizeFill: true,
+    config: symbol => ({
+        autosize: true,
+        symbol,
+        interval: "1",
+        timezone: "Etc/UTC",
+        theme: "dark",
+        style: "1",
+        locale: "pl",
+        allow_symbol_change: true,
+        calendar: false,
+        studies: ["VWAP@tv-basicstudies"],
+        support_host: "https://www.tradingview.com",
+    }),
+};
+
+// Ten sam wzorzec przebudowy panelu od zera co renderTvOverviewPanel (osadzony
+// widget TradingView nie ma API do podmiany symbolu w locie).
+function renderOrbPanel(ticker, universe) {
+    const container = document.getElementById("orbContainer");
+    const empty = document.getElementById("orbEmpty");
+    if (!container) return;
+    container.querySelectorAll(".tv-widget-block").forEach(el => el.remove());
+    if (!ticker) {
+        if (empty) empty.hidden = false;
+        return;
+    }
+    if (empty) empty.hidden = true;
+    container.appendChild(buildTvWidgetBlock(TV_ORB_WIDGET, tvSymbolFor(ticker, universe)));
+}
+
 function buildTvWidgetBlock(spec, tvSymbol) {
     const block = document.createElement("div");
     block.className = "tv-widget-block";
@@ -206,21 +256,27 @@ function renderTvOverviewPanel(ticker, universe) {
 function initChartViewTabs() {
     const tabOwn = document.getElementById("chartViewTabOwn");
     const tabTv = document.getElementById("chartViewTabTv");
+    const tabOrb = document.getElementById("chartViewTabOrb");
     const panelOwn = document.getElementById("chartPanelOwn");
     const panelTv = document.getElementById("chartPanelTv");
+    const panelOrb = document.getElementById("chartPanelOrb");
     if (!tabOwn || !tabTv || !panelOwn || !panelTv) return;
 
     function setView(view) {
         state.chartView = view;
         tabOwn.classList.toggle("active", view === "own");
         tabTv.classList.toggle("active", view === "tv");
+        if (tabOrb) tabOrb.classList.toggle("active", view === "orb");
         panelOwn.hidden = view !== "own";
         panelTv.hidden = view !== "tv";
+        if (panelOrb) panelOrb.hidden = view !== "orb";
         if (view === "tv") renderTvOverviewPanel(state.selectedTicker, state.selectedUniverse);
+        if (view === "orb") renderOrbPanel(state.selectedTicker, state.selectedUniverse);
     }
 
     tabOwn.addEventListener("click", () => setView("own"));
     tabTv.addEventListener("click", () => setView("tv"));
+    if (tabOrb) tabOrb.addEventListener("click", () => setView("orb"));
 }
 
 // Mały przycisk-link "TV" do wiersza tabeli — otwiera tradingview.com w nowej
@@ -385,6 +441,7 @@ function updateChartArea() {
     }
     updateChartTickerLabel();
     if (state.chartView === "tv") renderTvOverviewPanel(symbol, state.selectedUniverse);
+    if (state.chartView === "orb") renderOrbPanel(symbol, state.selectedUniverse);
 }
 
 // Ticker + uniwersum (+ sektor, gdy znany) wybranej spółki, wyświetlane po

@@ -1049,7 +1049,8 @@ flex child (no `.topbar-left` wrapper there).
   "`app.js`"/"the dashboard" in those specific paragraphs as "`signals.js`"/"the Sygnały page". `signals.js`
   has its OWN `loadData()` (same all-6-`UNIVERSES` fetch `app.js` already had, plus the same optional
   `continuation.json` daily-override fetch) and its OWN, smaller `state` (no per-universe drawer concept —
-  `state.drawerUniverse` only ever holds `"WYBICIE"`/`"TTM_SQUEEZE"`/`"CONTINUATION"`, defaulting to
+  `state.drawerUniverse` only ever holds `"WYBICIE"`/`"TTM_SQUEEZE"`/`"CONTINUATION"`/`"QULLAMAGGIE"` (the
+  last added later, see the dedicated "🎯 Qullamaggie" bullet below), defaulting to
   `"WYBICIE"`) — entirely independent of `app.js`'s own `state`, same "two pages, two independent states"
   convention already established by `rebalance.html`/`rebalance_pl.html`. `signals.html` has no Ctrl+K —
   that's a "jump to any ticker to see its chart" convenience that stays specific to Indeksy's full
@@ -1176,8 +1177,53 @@ flex child (no `.topbar-left` wrapper there).
   raw MACD/RS-52W numbers into small oscillator charts with a gold dot marking the zero-cross week —
   `crossWeeksHtml` text stays as the tooltip/inline label, the chart is what you glance at.
 
+  **"🎯 Qullamaggie" screener tab** (`data-universe="QULLAMAGGIE"`, explicit user request: replicate
+  Kristjan Qullamaggie's breakout-scanning approach — screen for a large prior move, wait through a
+  multi-week consolidation, buy the breakout on volume, time the actual entry against an intraday Opening
+  Range Breakout + session VWAP). This is deliberately built from data this pipeline ALREADY has, not a
+  new fetch: performance (`c.daily_squeeze.return_1m_pct`/`return_3m_pct`/`return_6m_pct`, see
+  `compute_daily_squeeze()` under Relative strength above — `return_3m_pct`/`return_6m_pct` were ADDED to
+  that function for this feature, alongside `DAILY_SQUEEZE_LOOKBACK_DAYS` being raised from 200 to 280
+  calendar days so a 126-session/~6-month return actually has enough history behind it; this only widens a
+  SQL read against the already-retained, already-fetched `prices` table, so it costs no extra yfinance
+  call) and consolidation/breakout (the SAME weekly `ttm_squeeze_chart` the "🧨 TTM Squeeze" tab already
+  reads, just with the consolidation-length WINDOW narrowed to a user-adjustable range instead of an
+  open-ended "> 5 weeks" minimum — the user's own description was "4-6 tygodni", i.e. a real base, not the
+  short D1 pause "🚀 Continuation" screens for). `classifyQullamaggie()` in `signals.js`:
+  1. **Performance** — `perfPct = max(return_1m_pct, return_3m_pct, return_6m_pct)` must clear the "Min.
+     wynik (1/3/6M)" slider (default 30%, the same threshold Qullamaggie's own scan uses) — an explicit
+     "OR", not "AND": the user's own correction ("for the performance i think need to be or not and
+     check") was that ONE of the three windows clearing the bar is enough to qualify, matching how the
+     original scan actually filters (any one of the three timeframes showing a 30%+ move is a candidate).
+  2. **Consolidation** — same "walk back to the last week that actually has a computed `squeeze_on`" logic
+     as `classifyTtmSqueeze()` (the current week is often still `null`), but `squeeze_count`/
+     `fire_consolidation_weeks` must fall INSIDE `[state.qmMinConsolidationWeeks,
+     state.qmMaxConsolidationWeeks]` (defaults 4-6, both adjustable sliders) rather than merely exceeding a
+     floor — either still consolidating (🌀) or fired within `state.qmFireLookbackWeeks` (default 3, also a
+     slider) weeks ago (🔥) with a positive current histogram (an upside breakout, not a breakdown — same
+     reasoning `classifyTtmSqueeze`'s own `histNow > 0` check already documents above).
+  3. **Volume confirmation at the breakout week** — the user's "wait for the breakout with volume" step,
+     read from the WEEKLY chart's own `buying_volume_ratio` (the same CLV-derived buying-volume series/
+     `STAGE_BREAKOUT_VOLUME_RATIO` (1.5x) threshold the main stage-analysis chart already uses for its
+     brighter-green volume bars — see Relative strength above) at the specific week the squeeze fired.
+     `ttm_squeeze_chart` and `weekly_chart` are NOT guaranteed to share the same array length/alignment
+     (different warm-up buffers — see `alignSqueezeToDates()` in `js/chart-render.js`), so the breakout
+     week is looked up by DATE (`weekly_chart.dates.indexOf(...)`), not by reusing the TTM array's own
+     index directly. Shown as "· wolumen ✓/✗" next to the fire badge — informational (doesn't drop the row
+     either way; the row already qualified on the squeeze itself), since even Qullamaggie's own volume
+     read is a judgment call a screener shouldn't silently veto.
+  Table/sidebar tiles follow the exact same shape as "🧨 TTM Squeeze" (`qmRowHtml()`/
+  `renderQullamaggieTable()`/`renderQullamaggiePanel()`), plus a "Wynik 1/3/6M" column showing the max
+  return with a tooltip breakdown of all three windows. **Entry timing (the ORB/session-VWAP part of the
+  original strategy) is intentionally NOT computed here at all** — see the dedicated "⚡ 1 min + VWAP"
+  chart-modal tab bullet further below for why (needs intraday data this pipeline doesn't fetch) and how
+  the user actually watches for it (a TradingView 1-minute + VWAP widget in the same chart pop-up every
+  other screener already opens). This tab is purely the "which stocks are worth watching today" filter —
+  same "screener finds candidates, human decides entries/exits" philosophy as every other tab on this page.
+
   **Sidebar tiles get a stage color + RS direction dot** (`decorateTile()`, called from
-  `renderSidebarTiles()`/`renderWybiciePanel()`/`renderTtmSqueezePanel()`/`renderContinuationPanel()`): a
+  `renderSidebarTiles()`/`renderWybiciePanel()`/`renderTtmSqueezePanel()`/`renderContinuationPanel()`/
+  `renderQullamaggiePanel()`): a
   bottom inset border in the ticker's Weinstein-stage color (`STAGE_COLORS`) plus a small green/red dot
   (RS 52-week ≥ 0 / < 0) in the corner — a tile now says something without being clicked.
 
@@ -1310,6 +1356,34 @@ flex child (no `.topbar-left` wrapper there).
   3-month default for a while and found it actually less readable than the full range, the opposite of
   the assumption that motivated adding it, so the whole toggle was removed rather than just flipping its
   default.
+
+  **A THIRD chart-view tab, "⚡ 1 min + VWAP"** (`#chartViewTabOrb`/`#chartPanelOrb`, `TV_ORB_WIDGET`/
+  `renderOrbPanel()` in `js/chart-modal.js` — the file that now actually owns this mechanism, see the
+  dedicated `signals.html`/`signals.js` bullet above for why the "two tabs ... in `app.js`" wording just
+  above is legacy: `initChartViewTabs()`/`renderTvOverviewPanel()` were extracted into shared
+  `js/chart-modal.js` when `signals.html` split off `index.html`, and both pages load it) — added at the
+  user's explicit request while replicating Kristjan Qullamaggie's breakout-scanning approach (see the
+  "🎯 Qullamaggie" screener tab under the dedicated `signals.html`/`signals.js` bullet above): his method
+  times the actual ENTRY with an Opening Range Breakout (ORB) against the session VWAP on a 1-minute
+  chart. That timing is deliberately NOT automated — it would need intraday (minute-level) data and a
+  live/same-day refresh, and this pipeline only ever fetches daily bars on a weekly cadence (see Pipeline
+  architecture above); adding a minute-bar fetch would be a genuinely different architecture, not a tab.
+  Instead this tab is a single embedded TradingView Advanced Chart widget (same `buildTvWidgetBlock()`
+  block-building helper the "🏢 Dane spółki" tab already uses, just one widget instead of a whole
+  "vizytówka" stack) pinned to `interval: "1"` with `studies: ["VWAP@tv-basicstudies"]` — TradingView's own
+  VWAP study resets every SESSION, unlike the existing `vwap_pct` line on panel 1 of the own weekly chart
+  (below), which is anchored once at the momentum window's start and never resets — two genuinely
+  different indicators that happen to share a name; this tab exists specifically because that weekly one
+  is the wrong timeframe for timing an actual intraday breakout — so the user watches the
+  live 1-minute/VWAP picture themselves and decides the actual entry/stop by hand, the same
+  "screener finds candidates, human decides entries/exits" philosophy every other screener in this app
+  already follows. A user-facing decision made explicitly for this feature: a POP-UP tab inside the
+  existing shared chart modal, not a hover preview — a hover would need the TradingView `<script>` to load
+  on `mouseenter` (visibly laggy) and doesn't work on touch at all, which matters since this is a PWA used
+  on phones too; every other "see more for this ticker" affordance in the app (the 📈 chart button, the
+  "🏢 Dane spółki" tab) is already a click/tap-triggered panel, so this follows the same convention rather
+  than inventing a new one. Not present on `chart.html` — same "wider dashboard feature, out of scope
+  here" reasoning `chart.html`'s own bullet below already gives for skipping the "🏢 Dane spółki" tab.
   1. The main price+EMA20+VWAP chart (formerly the "10:30" SMA10/SMA30 chart — see the version-history
      note under Relative strength above), rebased to 0% at the momentum window's start. **It no
      longer plots the stock's own index level** — removed at the user's explicit request, since it left

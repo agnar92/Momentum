@@ -1557,6 +1557,29 @@ class TestComputeDailySqueeze:
         assert run_query.compute_daily_squeeze(con, "AAA", days[-1].strftime("%Y-%m-%d")) is None
         assert run_query.compute_daily_squeeze(con, "NOPE", days[-1].strftime("%Y-%m-%d")) is None
 
+    def test_return_1m_3m_6m_pct(self):
+        # 200 sesji plaskiego kursu, potem podwojenie ceny na ostatniej sesji —
+        # sprawdza, ze return_1m/3m/6m_pct licza sie wzgledem ceny sprzed
+        # dokladnie DAILY_RETURN_1M/3M/6M_DAYS sesji (nie sa ze soba pomylone),
+        # a przy zbyt krotkiej historii (return_6m potrzebuje >= 126 sesji
+        # wstecz) zostaja None zamiast bledu.
+        closes = [100.0] * 199 + [200.0]
+        con = make_gem_con()
+        days = self._insert_daily(con, "AAA", closes)
+        out = run_query.compute_daily_squeeze(con, "AAA", days[-1].strftime("%Y-%m-%d"))
+        assert out is not None
+        assert out["return_1m_pct"] == pytest.approx(100.0)
+        assert out["return_3m_pct"] == pytest.approx(100.0)
+        assert out["return_6m_pct"] == pytest.approx(100.0)
+
+        con2 = make_gem_con()
+        days2 = self._insert_daily(con2, "BBB", [100.0] * 99 + [200.0])
+        out2 = run_query.compute_daily_squeeze(con2, "BBB", days2[-1].strftime("%Y-%m-%d"))
+        assert out2 is not None
+        assert out2["return_1m_pct"] == pytest.approx(100.0)
+        assert out2["return_3m_pct"] == pytest.approx(100.0)
+        assert out2["return_6m_pct"] is None  # tylko 99 sesji wstecz, potrzeba >= 126
+
 
 class TestComputeTtmSqueezeChart:
     def test_long_consolidation_then_breakout_is_detected(self):

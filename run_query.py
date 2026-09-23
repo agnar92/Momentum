@@ -2205,14 +2205,22 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
 # moment dolaczenia do trendu, cel 10-20%. Te same wzory co tygodniowy panel
 # (_ttm_squeeze_series), tylko na dziennych swiecach z `prices`.
 DAILY_SQUEEZE_LENGTH = 20             # okno BB/KC/regresji w SESJACH (standard LazyBeara na D1)
-DAILY_SQUEEZE_LOOKBACK_DAYS = 200     # dni KALENDARZOWE pobierane wstecz (~135 sesji): 2*20+2 na
-                                      # rozgrzewke histogramu + SMA50 + zapas na swieta
+DAILY_SQUEEZE_LOOKBACK_DAYS = 280     # dni KALENDARZOWE pobierane wstecz (~190 sesji): 2*20+2 na
+                                      # rozgrzewke histogramu + SMA50 + DAILY_RETURN_6M_DAYS (126 sesji)
+                                      # + zapas na swieta. Podniesione ze 200 (~135 sesji) kiedy dolozono
+                                      # return_3m_pct/return_6m_pct (screener "Qullamaggie", patrz nizej) —
+                                      # 200 dni starczalo na return_1m ale nie na 126-sesyjny return_6m.
+                                      # Czyta wylacznie juz pobrany, lokalny `prices` (28-miesieczna
+                                      # retencja z fetch_data.py), wiec podniesienie tego okna nie kosztuje
+                                      # dodatkowego fetchu z yfinance.
 DAILY_SQUEEZE_RECENT_DAYS = 20        # ile ostatnich sesji squeeze_on eksportujemy (kropki w tabeli)
 DAILY_SPARK_DAYS = 60                 # ile ostatnich sesji ceny + squeeze_on dla mini-wykresu D1
 DAILY_SMA_DAYS = 50
 DAILY_EMA_DAYS = 21
 DAILY_PULLBACK_EMA_DAYS = 20          # EMA20 D1: linia na mini-wykresie + odleglosc ceny (pullback)
 DAILY_RETURN_1M_DAYS = 21             # ~1 miesiac sesji
+DAILY_RETURN_3M_DAYS = 63             # ~3 miesiace sesji
+DAILY_RETURN_6M_DAYS = 126            # ~6 miesiecy sesji — patrz return_3m_pct/return_6m_pct nizej
 
 
 def compute_daily_squeeze(con, ticker, ref_date):
@@ -2235,7 +2243,11 @@ def compute_daily_squeeze(con, ticker, ref_date):
     - ema20_pct — % ceny nad dzienna EMA20 (maly dodatni = pullback do sredniej
       w trendzie, klasyczne miejsce dolaczenia),
     - sma50_pct / ema21_pct — % nad dzienna SMA50/EMA21 (czy cena trzyma trend
-      na D1), return_1m_pct — zmiana ceny za ~21 sesji (dynamika),
+      na D1), return_1m_pct / return_3m_pct / return_6m_pct — zmiana ceny za
+      ~21/63/126 sesji (dynamika na 3 horyzontach — na wyrazne zyczenie
+      uzytkownika, do screenera "Qullamaggie": kwalifikuje sie spolka, u ktorej
+      CHOCIAZ JEDEN z tych trzech zwrotow jest >= progu z suwaka, taka sama
+      logika OR jak w oryginalnym skanie Kristjana Qullamaggie'go),
       high_20d_pct — % od najwyzszego High z 20 sesji (<= 0; blisko 0 = cena
       przy lokalnym szczycie, wybicie w toku).
 
@@ -2275,6 +2287,8 @@ def compute_daily_squeeze(con, ticker, ref_date):
     ema21 = close.ewm(span=DAILY_EMA_DAYS, adjust=False).mean().iloc[last]
     ema20_series = close.ewm(span=DAILY_PULLBACK_EMA_DAYS, adjust=False).mean()
     past_close = close.iloc[last - DAILY_RETURN_1M_DAYS] if last >= DAILY_RETURN_1M_DAYS else None
+    past_close_3m = close.iloc[last - DAILY_RETURN_3M_DAYS] if last >= DAILY_RETURN_3M_DAYS else None
+    past_close_6m = close.iloc[last - DAILY_RETURN_6M_DAYS] if last >= DAILY_RETURN_6M_DAYS else None
     high_20d = high.iloc[-DAILY_SQUEEZE_LENGTH:].max()
     recent = sq["squeeze_on"].iloc[-DAILY_SQUEEZE_RECENT_DAYS:]
 
@@ -2300,6 +2314,8 @@ def compute_daily_squeeze(con, ticker, ref_date):
         "ema21_pct": pct_vs(ema21),
         "ema20_pct": pct_vs(ema20_series.iloc[last]),
         "return_1m_pct": pct_vs(past_close),
+        "return_3m_pct": pct_vs(past_close_3m),
+        "return_6m_pct": pct_vs(past_close_6m),
         "high_20d_pct": pct_vs(high_20d),
     }
 

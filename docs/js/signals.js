@@ -36,6 +36,15 @@ const CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS = 5;
 const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 0;
 const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
 
+// Domyślne progi screenera Qullamaggie (patrz klasyfikacja niżej) — 30% na
+// wyraźną prośbę użytkownika (ten sam próg co w oryginalnym skanie), 4-6 tyg.
+// konsolidacji, wybicie liczone jeszcze przez 3 tyg. po fakcie.
+const QM_DEFAULT_MIN_PERF_PCT = 30;
+const QM_DEFAULT_MIN_CONSOLIDATION_WEEKS = 4;
+const QM_DEFAULT_MAX_CONSOLIDATION_WEEKS = 6;
+const QM_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
+const QM_SETTINGS_KEY = "momentum_dashboard_qullamaggie";
+
 const state = {
     data: {},
     selectedTicker: null,
@@ -57,6 +66,10 @@ const state = {
     contFireLookbackDays: CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS,
     contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
     dailyOverride: null,
+    qmMinPerfPct: QM_DEFAULT_MIN_PERF_PCT,
+    qmMinConsolidationWeeks: QM_DEFAULT_MIN_CONSOLIDATION_WEEKS,
+    qmMaxConsolidationWeeks: QM_DEFAULT_MAX_CONSOLIDATION_WEEKS,
+    qmFireLookbackWeeks: QM_DEFAULT_FIRE_LOOKBACK_WEEKS,
 };
 
 async function loadData() {
@@ -277,6 +290,127 @@ function combinedTtmSqueezeCandidates() {
     rows.sort((a, b) => {
         if (a.status !== b.status) return a.status === "fired" ? -1 : 1;
         if (a.status === "fired") return a.weeks_since_fire - b.weeks_since_fire;
+        return b.consolidation_weeks - a.consolidation_weeks;
+    });
+    return rows;
+}
+
+// ============================================================
+// QULLAMAGGIE — SCREENER (na wyraźną prośbę użytkownika): replika skanu
+// Kristjana Qullamaggie'go — duży wcześniejszy ruch (30%+ w 1, 3 LUB 6
+// miesięcy — WARUNEK "OR", nie "AND": wystarczy, że JEDEN z trzech zwrotów
+// przekracza próg, dokładnie jak w oryginalnym skanie), po którym spółka
+// wchodzi w kilkutygodniową konsolidację (TTM Squeeze na wykresie
+// TYGODNIOWYM — inaczej niż "Continuation" powyżej, które patrzy na KRÓTKĄ
+// pauzę na D1; tu chodzi o dłuższą, kilkutygodniową bazę, klasyczne "4-6
+// tygodni" ze skanu), a wybicie z niej jest potwierdzone wolumenem
+// KUPUJĄCYCH (ten sam próg STAGE_BREAKOUT_VOLUME_RATIO co reszta apki).
+//
+// Wejście na wykresie 1-minutowym (ORB — Opening Range Breakout — z sesyjnym
+// VWAP) NIE jest tu automatyzowane: to wymagałoby danych śróddziennych,
+// których ten pipeline nie pobiera (tylko dzienne świece, tygodniowy
+// cykl odświeżania — patrz CLAUDE.md). Zamiast tego każdy wiersz otwiera,
+// przez zwykły przycisk wykresu (📈, patrz ttmSqueezeRowHtml/qmRowHtml),
+// tę samą wspólną modalkę wykresu co reszta apki — a w niej trzecią zakładkę
+// "⚡ 1 min + VWAP" (patrz js/chart-modal.js) z osadzonym widgetem
+// TradingView Advanced Chart na interwale 1 min + studium VWAP: użytkownik
+// sam monitoruje wybicie z zakresu otwarcia na żywo, apka tylko wskazuje
+// KTÓRE spółki warto obserwować danego dnia.
+//
+// Performance (perf_pct = max(return_1m_pct, return_3m_pct, return_6m_pct),
+// patrz compute_daily_squeeze w run_query.py) czytamy z c.daily_squeeze —
+// TYM SAMYM polu co "Continuation" (liczone w GŁÓWNYM, tygodniowym pipeline,
+// nie wymaga przycisku "Odśwież dane D1" — ten dostarcza tylko świeższą,
+// tego samego dnia wersję).
+function qullamaggieOpts(opts) {
+    return {
+        minPerfPct: opts.minPerfPct ?? state.qmMinPerfPct,
+        minConsolidationWeeks: opts.minConsolidationWeeks ?? state.qmMinConsolidationWeeks,
+        maxConsolidationWeeks: opts.maxConsolidationWeeks ?? state.qmMaxConsolidationWeeks,
+        fireLookbackWeeks: opts.fireLookbackWeeks ?? state.qmFireLookbackWeeks,
+    };
+}
+
+function classifyQullamaggie(ticker, universe, c, opts = {}) {
+    const o = qullamaggieOpts(opts);
+    const d = c.daily_squeeze;
+    if (!d) return null;
+    const perfCandidates = [d.return_1m_pct, d.return_3m_pct, d.return_6m_pct].filter(v => v != null);
+    if (perfCandidates.length === 0) return null;
+    const perfPct = Math.max(...perfCandidates);
+    if (!(perfPct >= o.minPerfPct)) return null;
+
+    const t = c.ttm_squeeze_chart;
+    if (!t || !t.dates || t.dates.length === 0) return null;
+    // Ostatni tydzień bywa jeszcze niedomknięty — patrz ten sam caveat w classifyTtmSqueeze.
+    let nowIdx = t.dates.length - 1;
+    while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
+    if (nowIdx < 0) return null;
+
+    const squeezeOn = t.squeeze_on[nowIdx];
+    const squeezeCount = t.squeeze_count[nowIdx];
+    const weeksSinceFire = t.weeks_since_fire[nowIdx];
+    const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
+    const histNow = t.histogram[nowIdx];
+
+    const isConsolidating = squeezeOn === true
+        && squeezeCount >= o.minConsolidationWeeks && squeezeCount <= o.maxConsolidationWeeks;
+    const isFired = weeksSinceFire != null && weeksSinceFire <= o.fireLookbackWeeks
+        && fireConsolidationWeeks != null
+        && fireConsolidationWeeks >= o.minConsolidationWeeks && fireConsolidationWeeks <= o.maxConsolidationWeeks
+        && histNow != null && histNow > 0;
+    if (!isConsolidating && !isFired) return null;
+
+    // Potwierdzenie wolumenem kupujących W TYGODNIU WYBICIA — tylko dla
+    // "fired" (przy trwającej konsolidacji nie ma jeszcze wybicia do
+    // potwierdzenia). ttm_squeeze_chart i weekly_chart mają NIEKONIECZNIE tę
+    // samą długość bufora rozgrzewki (patrz alignSqueezeToDates w
+    // chart-render.js), więc łączymy je po DACIE, nie po indeksie wprost.
+    let breakoutVolumeRatio = null;
+    if (isFired) {
+        const breakoutDate = t.dates[nowIdx - weeksSinceFire];
+        const wc = c.weekly_chart;
+        const wcIdx = wc && wc.dates ? wc.dates.indexOf(breakoutDate) : -1;
+        if (wcIdx >= 0 && wc.buying_volume_ratio) breakoutVolumeRatio = wc.buying_volume_ratio[wcIdx];
+    }
+    const breakoutVolumeConfirmed = breakoutVolumeRatio != null && breakoutVolumeRatio >= STAGE_BREAKOUT_VOLUME_RATIO;
+
+    return {
+        ticker, universe, sector: c.sector, price: c.price,
+        return_1m_pct: d.return_1m_pct, return_3m_pct: d.return_3m_pct, return_6m_pct: d.return_6m_pct,
+        perf_pct: perfPct,
+        current_stage: c.weekly_chart && c.weekly_chart.current_stage,
+        status: isFired ? "fired" : "consolidating",
+        consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
+        weeks_since_fire: isFired ? weeksSinceFire : null,
+        histNow,
+        breakout_volume_ratio: breakoutVolumeRatio,
+        breakout_volume_confirmed: breakoutVolumeConfirmed,
+        ...miniVisualFields(c),
+    };
+}
+
+// Zwraca listę połączoną ze WSZYSTKICH 6 uniwersów, bez duplikatów, posortowaną:
+// świeże wybicia (najnowsze na górze, potwierdzone wolumenem pierwsze przy
+// remisie tygodnia), potem trwające konsolidacje (najdłuższe, czyli
+// najbliższe wybicia, na górze).
+function combinedQullamaggieCandidates(opts = {}) {
+    const rows = [];
+    const seen = new Set();
+    UNIVERSES.forEach(u => {
+        const universeData = state.data[u] || {};
+        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
+            if (seen.has(c.ticker)) return;
+            const r = classifyQullamaggie(c.ticker, u, c, opts);
+            if (r) { rows.push(r); seen.add(c.ticker); }
+        });
+    });
+    rows.sort((a, b) => {
+        if (a.status !== b.status) return a.status === "fired" ? -1 : 1;
+        if (a.status === "fired") {
+            if (a.weeks_since_fire !== b.weeks_since_fire) return a.weeks_since_fire - b.weeks_since_fire;
+            return (b.breakout_volume_confirmed ? 1 : 0) - (a.breakout_volume_confirmed ? 1 : 0);
+        }
         return b.consolidation_weeks - a.consolidation_weeks;
     });
     return rows;
@@ -566,12 +700,48 @@ function renderContinuationPanel() {
     }
 }
 
+// Sidebar: kafelki screenera Qullamaggie (patrz combinedQullamaggieCandidates powyżej).
+function renderQullamaggiePanel() {
+    const container = document.getElementById("tiles-QULLAMAGGIE");
+    if (!container) return;
+
+    const rows = combinedQullamaggieCandidates();
+    const meta = document.getElementById("qullamaggieMeta");
+    if (meta) meta.textContent = `${rows.length} spółek`;
+
+    container.innerHTML = "";
+    rows.forEach(r => {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+        tile.textContent = r.ticker;
+        tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
+            + `wynik ${r.perf_pct.toFixed(0)}% (1/3/6M) · `
+            + (r.status === "fired"
+                ? `wybicie ${r.weeks_since_fire} tyg. temu po ${r.consolidation_weeks} tyg. konsolidacji`
+                    + (r.breakout_volume_confirmed ? " · wolumen potwierdzony" : "")
+                : `w konsolidacji od ${r.consolidation_weeks} tyg.`);
+        tile.dataset.ticker = r.ticker;
+        tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, null);
+        if (r.ticker === state.selectedTicker) tile.classList.add("selected");
+        tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        container.appendChild(tile);
+    });
+    if (rows.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
+        empty.textContent = "brak danych";
+        container.appendChild(empty);
+    }
+}
+
 // ============================================================
-// SZUFLADA TABEL: trzy zakładki (Wybicie / TTM Squeeze / Continuation), bez
-// pełnej tabeli per-uniwersum (ta zostaje na "Indeksach", patrz app.js) —
-// stąd prostszy dispatcher niż showDrawerTable/renderActiveDrawerTable w
-// app.js (nie ma tam "if universe is one of SIDEBAR_TAB_UNIVERSES" gałęzi,
-// bo tu każda zakładka to zawsze jeden z tych trzech screenerów).
+// SZUFLADA TABEL: cztery zakładki (Wybicie / TTM Squeeze / Continuation /
+// Qullamaggie), bez pełnej tabeli per-uniwersum (ta zostaje na "Indeksach",
+// patrz app.js) — stąd prostszy dispatcher niż showDrawerTable/
+// renderActiveDrawerTable w app.js (nie ma tam "if universe is one of
+// SIDEBAR_TAB_UNIVERSES" gałęzi, bo tu każda zakładka to zawsze jeden z tych
+// czterech screenerów).
 // ============================================================
 function matchesStageFilter(stage) {
     if (state.stageFilter === "ALL") return true;
@@ -599,18 +769,23 @@ function showSignalsTable(tab) {
     document.getElementById("continuationTable").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationWinnersSection").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationControls").hidden = tab !== "CONTINUATION";
+    document.getElementById("qullamaggieTable").hidden = tab !== "QULLAMAGGIE";
+    document.getElementById("qullamaggieControls").hidden = tab !== "QULLAMAGGIE";
     document.getElementById("drawerTitle").textContent = tab === "WYBICIE"
         ? "Pełna tabela — Wybicie"
         : tab === "TTM_SQUEEZE"
             ? "Pełna tabela — TTM Squeeze"
-            : "Continuation — Etap 2 + krótki squeeze D1";
+            : tab === "CONTINUATION"
+                ? "Continuation — Etap 2 + krótki squeeze D1"
+                : "Qullamaggie — duży ruch + konsolidacja + wybicie z wolumenem";
     renderActiveSignalsTable();
 }
 
 function renderActiveSignalsTable() {
     if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
     else if (state.drawerUniverse === "TTM_SQUEEZE") renderTtmSqueezeTable();
-    else renderContinuationTable();
+    else if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
+    else renderQullamaggieTable();
 }
 
 function initSignalsDrawer() {
@@ -847,6 +1022,114 @@ function renderTtmSqueezeTable() {
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
+}
+
+// Wynik 1/3/6M (max z trzech, patrz classifyQullamaggie) — dymek pokazuje
+// rozbicie na poszczególne okna, żeby było widać KTÓRY z trzech przekroczył próg.
+function qmReturnHtml(v) {
+    return v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`;
+}
+
+function qmPerfCellHtml(r) {
+    const title = `1M: ${qmReturnHtml(r.return_1m_pct)} · 3M: ${qmReturnHtml(r.return_3m_pct)} · 6M: ${qmReturnHtml(r.return_6m_pct)}`;
+    return `<span class="positive" title="${title}">+${r.perf_pct.toFixed(0)}%</span>`;
+}
+
+function qmStatusHtml(r) {
+    if (r.status === "fired") {
+        const volBadge = r.breakout_volume_confirmed
+            ? `<span class="cross-age" title="Wolumen kupujących w tygodniu wybicia ≥ ${STAGE_BREAKOUT_VOLUME_RATIO}x średniej">· wolumen ✓</span>`
+            : r.breakout_volume_ratio != null
+                ? `<span class="cross-age" title="Wolumen kupujących w tygodniu wybicia poniżej ${STAGE_BREAKOUT_VOLUME_RATIO}x średniej">· wolumen ✗</span>`
+                : "";
+        return `<span class="squeeze-status squeeze-status-fired">🔥 Wybicie (${r.weeks_since_fire} tyg. temu)</span> ${volBadge}`;
+    }
+    return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
+}
+
+function qmRowHtml(r, position) {
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${r.sector || ""}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td title="Największy z trzech zwrotów: 1, 3 i 6 miesięcy">${qmPerfCellHtml(r)}</td>
+        <td>${qmStatusHtml(r)}</td>
+        <td>${r.consolidation_weeks} tyg.</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
+        <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+// Tabela screenera Qullamaggie — sortowalna i filtrowalna po etapie, tak jak
+// pozostałe tabele, na płaskiej, wielo-uniwersalnej liście z
+// combinedQullamaggieCandidates().
+function renderQullamaggieTable() {
+    const allRows = combinedQullamaggieCandidates();
+
+    renderScreenerTable({
+        tbody: document.getElementById("qullamaggieTableBody"),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 12,
+        emptyAllMsg: `Brak spółek z ruchem ≥ ${state.qmMinPerfPct}% (1/3/6M) i konsolidacją ${state.qmMinConsolidationWeeks}-${state.qmMaxConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: (rows) => flatScreenerMetaText(allRows, rows),
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => qmRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
+    });
+}
+
+// Suwaki nad tabelą Qullamaggie (#qullamaggieControls) — ten sam wzorzec co
+// initWybicieControls/initContinuationControls, własny klucz localStorage.
+function initQullamaggieControls() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(QM_SETTINGS_KEY) || "null");
+        if (saved) {
+            if (Number.isFinite(saved.minPerfPct)) state.qmMinPerfPct = saved.minPerfPct;
+            if (Number.isFinite(saved.minConsolidationWeeks)) state.qmMinConsolidationWeeks = saved.minConsolidationWeeks;
+            if (Number.isFinite(saved.maxConsolidationWeeks)) state.qmMaxConsolidationWeeks = saved.maxConsolidationWeeks;
+            if (Number.isFinite(saved.fireLookbackWeeks)) state.qmFireLookbackWeeks = saved.fireLookbackWeeks;
+        }
+    } catch (e) { /* brak localStorage — zostają domyślne */ }
+
+    const save = () => {
+        try {
+            localStorage.setItem(QM_SETTINGS_KEY, JSON.stringify({
+                minPerfPct: state.qmMinPerfPct,
+                minConsolidationWeeks: state.qmMinConsolidationWeeks,
+                maxConsolidationWeeks: state.qmMaxConsolidationWeeks,
+                fireLookbackWeeks: state.qmFireLookbackWeeks,
+            }));
+        } catch (e) { /* ignoruj */ }
+    };
+
+    const bind = (inputId, valueId, stateKey, unit) => {
+        const input = document.getElementById(inputId);
+        const valueEl = document.getElementById(valueId);
+        if (!input) return;
+        input.value = state[stateKey];
+        if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
+        input.addEventListener("input", () => {
+            state[stateKey] = Number(input.value);
+            if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
+            save();
+            renderQullamaggiePanel();
+            if (state.drawerUniverse === "QULLAMAGGIE") renderQullamaggieTable();
+        });
+    };
+    bind("qmMinPerfInput", "qmMinPerfValue", "qmMinPerfPct", "%");
+    bind("qmMinConsolidationInput", "qmMinConsolidationValue", "qmMinConsolidationWeeks", " tyg.");
+    bind("qmMaxConsolidationInput", "qmMaxConsolidationValue", "qmMaxConsolidationWeeks", " tyg.");
+    bind("qmFireLookbackInput", "qmFireLookbackValue", "qmFireLookbackWeeks", " tyg.");
 }
 
 // Pasek kropek jak na TradingView: czerwona = squeeze w danej sesji, szara =
@@ -1235,10 +1518,12 @@ if (typeof document !== "undefined") {
         await loadData();
         initWybicieControls();
         initContinuationControls();
+        initQullamaggieControls();
         initDailyRefresh();
         renderWybiciePanel();
         renderTtmSqueezePanel();
         renderContinuationPanel();
+        renderQullamaggiePanel();
         initSignalsDrawer();
         initOpenTvButton();
         initResetZoomButton();
@@ -1266,5 +1551,6 @@ if (typeof module !== "undefined" && module.exports) {
         classifyContinuation, combinedContinuationCandidates, state,
         effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
         githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
+        classifyQullamaggie, combinedQullamaggieCandidates,
     };
 }
