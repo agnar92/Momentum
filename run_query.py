@@ -1427,6 +1427,17 @@ def _compute_weinstein_stage_series(stock_df):
       EXIT_STOP       — biezace zamkniecie zlamalo trailing stop_level opisany wyzej
                          ("Exit Trade: Stop Loss hit as price breaks below support").
 
+    "pending_box" — the CURRENTLY forming/complete Darvas box (resistance/support/
+    start index/phase), continuously updated every week regardless of whether it
+    has been broken out of yet — added specifically so a screener can show "the
+    price level to watch" for a stock that is STILL consolidating (`base_event`
+    above is only ever populated on the week a box actually gets consumed by a
+    breakout, so it's `None` for the whole time a stock sits inside an as-yet-
+    unbroken box). Resistance (`dv_box_top`) is already known once the phase
+    reaches SEEKING_BOTTOM (the top is confirmed the moment the box starts being
+    tracked, even before the bottom itself confirms); support only once BOXED.
+    `None` whenever no top is confirmed yet (still in SEEKING_TOP).
+
     Zwraca liste dictow {"stage", "signal", "buying_volume_ratio", "stop_level",
     "base_count", "base_event"} rownolegla do stock_df. Wszystkie pola (poza
     "base_event") to None dopoki EMA20 (wzglednie STAGE_VOLUME_LOOKBACK_WEEKS tyg.
@@ -1505,7 +1516,7 @@ def _compute_weinstein_stage_series(stock_df):
     for i in range(n):
         if pd.isna(ema20s[i]) or pd.isna(closes[i]):
             results[i] = {"stage": None, "signal": None, "buying_volume_ratio": None, "stop_level": None,
-                           "base_count": None, "base_event": None}
+                           "base_count": None, "base_event": None, "pending_box": None}
             prev_stage = None
             reset_run_state()
             reset_darvas_box()
@@ -1652,6 +1663,11 @@ def _compute_weinstein_stage_series(stock_df):
             "stop_level": stop_level,
             "base_count": base_count if stage in ("2A", "2B") else None,
             "base_event": base_event,
+            "pending_box": (
+                {"resistance": dv_box_top, "support": dv_box_bottom,
+                 "start_idx": dv_box_start_idx, "phase": dv_phase}
+                if dv_box_top is not None else None
+            ),
         }
         prev_stage = stage
 
@@ -1710,6 +1726,18 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     może sięgać wstecz w bufor rozgrzewkowy EMA — wtedy przycinana do pierwszego
     wyświetlanego tygodnia).
 
+    "pending_base" — {"start_date", "resistance_pct", "support_pct", "phase"} albo
+    None: pudełko, w którym spółka siedzi TERAZ (ostatni wyświetlany tydzień),
+    NIEZALEŻNIE od tego, czy zostało już przełamane — patrz "pending_box" w
+    _compute_weinstein_stage_series powyżej. W odróżnieniu od "bases" (które
+    dostaje wpis dopiero w tygodniu faktycznego wybicia) to jest jedyne pole,
+    które mówi "tu jest opór do obserwowania" dla spółki wciąż w konsolidacji —
+    dokładnie ten problem zgłosił użytkownik przy zakładce "🎯 Qullamaggie"
+    (signals.js): patrząc na 1-minutowy wykres TradingView nie było wiadomo, na
+    jakim poziomie ceny w ogóle wypatrywać wybicia. `support_pct` bywa `None`
+    (faza SEEKING_BOTTOM — opór już znany, wsparcie jeszcze nie), `resistance_pct`
+    nigdy nie jest `None` gdy `pending_base` w ogóle istnieje.
+
     "vwap_pct" — Volume-Weighted Average Price ZAKOTWICZONY (anchored) na
     początku WYŚWIETLANEGO okna (start_date), nie na buforze rozgrzewkowym EMA:
     to świadomie inny punkt startowy niż ema20_pct — anchored VWAP z
@@ -1751,6 +1779,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     stock_df["stop_level_raw"] = [row["stop_level"] for row in stage_rows]
     stock_df["base_count_raw"] = [row["base_count"] for row in stage_rows]
     stock_df["base_event_raw"] = [row["base_event"] for row in stage_rows]
+    stock_df["pending_box_raw"] = [row["pending_box"] for row in stage_rows]
 
     index_by_week = dict(zip(index_df["week_start"], index_df["close"]))
     stock_df["index_close"] = stock_df["week_start"].map(index_by_week)
@@ -1847,6 +1876,26 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
             "kind": be["kind"],
         })
 
+    # "pending_base" — the box the stock is sitting inside RIGHT NOW (as of the
+    # last displayed week), whether or not it has been broken out of yet — see
+    # "pending_box" in _compute_weinstein_stage_series's docstring above for why
+    # this is separate from "bases" (which only ever gets a box once a breakout
+    # has consumed it). This is what lets a screener show "the level to watch"
+    # for a stock that's STILL consolidating, not just after the fact.
+    pending_base = None
+    last_pending = in_window["pending_box_raw"].iloc[-1] if not in_window.empty else None
+    if isinstance(last_pending, dict) and last_pending.get("resistance") is not None:
+        start_idx = last_pending.get("start_idx")
+        start_pos = max(start_idx - stock_to_window_offset, 0) if start_idx is not None else 0
+        start_pos = min(start_pos, len(dates) - 1) if dates else 0
+        pending_base = {
+            "start_date": dates[start_pos] if dates else None,
+            "resistance_pct": pct(last_pending["resistance"], close0),
+            "support_pct": (pct(last_pending["support"], close0)
+                             if last_pending.get("support") is not None else None),
+            "phase": last_pending.get("phase"),
+        }
+
     return {
         "dates": dates,
         "close_pct": close_pct,
@@ -1863,6 +1912,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "signal": signal,
         "current_stage": stage[-1] if stage else None,
         "bases": bases,
+        "pending_base": pending_base,
     }
 
 

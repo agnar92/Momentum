@@ -17,7 +17,7 @@ const {
 const {
     sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
     rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
-    zeroLineSparkSvg, crossIndexInTail, findConstituent, bulletHtml,
+    zeroLineSparkSvg, crossIndexInTail, findConstituent, bulletHtml, breakoutLevelFor,
 } = require(path.join("..", "..", "docs", "js", "minicharts.js"));
 
 // compareRows now lives in docs/js/shared.js — see tests/js/shared.test.js.
@@ -168,4 +168,50 @@ test("bulletHtml colors under/at/over target and shows the % of target", () => {
     assert.match(bulletHtml(150, 100), /bullet-over/);
     assert.match(bulletHtml(80, 0), /poza celem/);
     assert.match(bulletHtml(0, 0), /spark-empty/);
+});
+
+// ---------- breakoutLevelFor (poziom "do obserwowania" na wykresie 1-min./w tabeli Qullamaggie) ----------
+
+test("breakoutLevelFor converts pending_base close0-relative % to a real price, preferring it over bases", () => {
+    const c = {
+        price: 110,
+        weekly_chart: {
+            close_pct: [0, 10],  // ostatnia wartosc: cena wzrosla 10% od close0 -> close0 = 110/1.10 = 100
+            pending_base: { resistance_pct: 20, support_pct: 10, start_date: "2026-01-05", phase: "BOXED" },
+            bases: [{ resistance_pct: 5, support_pct: 0, start_date: "2025-12-01" }],
+        },
+    };
+    const lvl = breakoutLevelFor(c);
+    assert.ok(lvl);
+    assert.equal(lvl.pending, true);
+    assert.equal(lvl.phase, "BOXED");
+    assert.equal(lvl.startDate, "2026-01-05");
+    assert.ok(Math.abs(lvl.resistance - 120) < 0.01, `expected ~120, got ${lvl.resistance}`);
+    assert.ok(Math.abs(lvl.support - 110) < 0.01, `expected ~110, got ${lvl.support}`);
+});
+
+test("breakoutLevelFor falls back to the last consumed base when there is no pending box", () => {
+    const c = {
+        price: 100,
+        weekly_chart: {
+            close_pct: [0],  // close0 = price = 100
+            pending_base: null,
+            bases: [
+                { resistance_pct: 5, support_pct: 0, start_date: "2025-12-01" },
+                { resistance_pct: 10, support_pct: 5, start_date: "2026-01-05" },
+            ],
+        },
+    };
+    const lvl = breakoutLevelFor(c);
+    assert.ok(lvl);
+    assert.equal(lvl.pending, false);
+    assert.equal(lvl.startDate, "2026-01-05");  // ostatnia baza, nie pierwsza
+    assert.ok(Math.abs(lvl.resistance - 110) < 0.01);
+});
+
+test("breakoutLevelFor returns null with no base data, no price, or no weekly_chart", () => {
+    assert.equal(breakoutLevelFor({ price: 100, weekly_chart: { close_pct: [0], pending_base: null, bases: [] } }), null);
+    assert.equal(breakoutLevelFor({ price: 0, weekly_chart: { close_pct: [0], pending_base: { resistance_pct: 5 } } }), null);
+    assert.equal(breakoutLevelFor({ price: 100 }), null);
+    assert.equal(breakoutLevelFor(null), null);
 });

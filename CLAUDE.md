@@ -648,6 +648,25 @@ top that never fully rolled over into a decline) — treated as a continuation r
 the same book logic (a `saw_stage4` flag, set on every week actually classified `"4"` and consumed/cleared
 the moment a fresh `ENTRY_2A` base is recorded, tracks this).
 
+**`pending_box`/`pending_base` — the box a stock is sitting in RIGHT NOW, exported continuously, not just
+at consumption.** Added later, at the user's explicit request, after shipping the "🎯 Qullamaggie" screener
+(see Frontend below): `base_event`/`bases` above only ever get a value on the ONE week a box actually gets
+broken out of — a stock that's STILL mid-consolidation (exactly the case that screener flags as
+"consolidating") has no exported resistance/support level at all, so there was no way for the frontend to
+show "the price to watch" for it. `_compute_weinstein_stage_series()` already tracks the box continuously
+in its `dv_box_top`/`dv_box_bottom`/`dv_phase`/`dv_box_start_idx` locals regardless of whether it's been
+broken yet — `pending_box` (per-week field, `{"resistance", "support", "start_idx", "phase"}` or `None`)
+just surfaces that existing state instead of adding new tracking. `resistance` (`dv_box_top`) is already
+known the moment the phase reaches `SEEKING_BOTTOM` (the top confirms before the bottom does); `support`
+only once `BOXED`. `compute_relative_strength_chart()` reads only the LAST displayed week's `pending_box`
+(a `current_stage`-style convenience field, not a per-week series) and rebases it to `pending_base`
+(`{"start_date", "resistance_pct", "support_pct", "phase"}` or `None`) the same `close0`-relative way as
+`bases`. `js/minicharts.js::breakoutLevelFor()` is what the frontend actually calls — it prefers
+`pending_base` (converted back to a real price via `price / (1 + close_pct[last]/100)`, the same convention
+`js/strategy.js::strategyStopFor()` already uses) and falls back to the last entry of `bases` (the box that
+led to the most recent breakout) only when there's no currently-open box at all — see the "🎯 Qullamaggie"
+and "⚡ 1 min + VWAP" bullets under Frontend below for where this actually gets shown.
+
 **Stages**, derived from that breakout signal plus price's position/slope relative to EMA20 (formerly SMA30,
 see the version-history note on the main chart above):
   - **Stage 1** (base): price near/below a not-yet-broken-out base, or (cautiously) above EMA20 while EMA20
@@ -1214,12 +1233,27 @@ flex child (no `.topbar-left` wrapper there).
      read is a judgment call a screener shouldn't silently veto.
   Table/sidebar tiles follow the exact same shape as "🧨 TTM Squeeze" (`qmRowHtml()`/
   `renderQullamaggieTable()`/`renderQullamaggiePanel()`), plus a "Wynik 1/3/6M" column showing the max
-  return with a tooltip breakdown of all three windows. **Entry timing (the ORB/session-VWAP part of the
-  original strategy) is intentionally NOT computed here at all** — see the dedicated "⚡ 1 min + VWAP"
+  return with a tooltip breakdown of all three windows, and a **"Poziom do obserwacji" column**
+  (`qmLevelCellHtml()`) — added right after shipping the tab, when the user pointed out that just opening
+  the "⚡ 1 min + VWAP" chart still didn't say AT WHAT PRICE to watch for the breakout ("when we have
+  consolidation we draw the trend line connecting highs to track when will need to monitor 1 minute. Now
+  is hard to know where and when to look"). Both this column AND the chart-modal tab (see that bullet
+  below) read `breakoutLevelFor(c)` — a shared helper in `js/minicharts.js` — so the same number shows up
+  whether the user is scanning the table or already has the chart open. `breakoutLevelFor()` converts
+  `weekly_chart.pending_base` (see `compute_relative_strength_chart` under Relative strength above — the
+  box a stock is sitting in RIGHT NOW, whether or not it's been broken out of yet; a field that didn't
+  exist before this request, added specifically to fill this gap) back to a real price via the same
+  `close0 = price / (1 + close_pct[last]/100)` convention `js/strategy.js::strategyStopFor()` already uses
+  for its own stop-price conversions. `pending: false` (falls back to the last entry of `weekly_chart.bases`
+  when there's no currently-open box, e.g. a "fired" row whose box already got consumed by the breakout
+  that triggered this row) renders the number at reduced opacity — still shown as a reference point, just
+  not a "wait for this" level any more. **Entry timing (the ORB/session-VWAP part of the
+  original strategy) is intentionally NOT automatically computed at all** — see the dedicated "⚡ 1 min + VWAP"
   chart-modal tab bullet further below for why (needs intraday data this pipeline doesn't fetch) and how
   the user actually watches for it (a TradingView 1-minute + VWAP widget in the same chart pop-up every
-  other screener already opens). This tab is purely the "which stocks are worth watching today" filter —
-  same "screener finds candidates, human decides entries/exits" philosophy as every other tab on this page.
+  other screener already opens). This tab is purely the "which stocks are worth watching today" filter,
+  now WITH the price level that makes that actually actionable — same "screener finds candidates, human
+  decides entries/exits" philosophy as every other tab on this page.
 
   **Sidebar tiles get a stage color + RS direction dot** (`decorateTile()`, called from
   `renderSidebarTiles()`/`renderWybiciePanel()`/`renderTtmSqueezePanel()`/`renderContinuationPanel()`/
@@ -1384,6 +1418,19 @@ flex child (no `.topbar-left` wrapper there).
   "🏢 Dane spółki" tab) is already a click/tap-triggered panel, so this follows the same convention rather
   than inventing a new one. Not present on `chart.html` — same "wider dashboard feature, out of scope
   here" reasoning `chart.html`'s own bullet below already gives for skipping the "🏢 Dane spółki" tab.
+
+  **`#orbLevelInfo` — a real-user-reported gap fixed shortly after shipping the tab**: the embedded
+  TradingView widget alone shows the 1-minute candles + VWAP but says nothing about WHERE the breakout
+  actually is, so the user still had to guess/switch back to the weekly chart to read the base's level —
+  "when we have consolidation we draw the trend line connecting highs to track when will need to monitor 1
+  minute. Now is hard to know where and when to look". TradingView's free "Advanced Chart" embed (no
+  account/Charting Library) has no config option to draw a custom horizontal line onto the live widget, so
+  the fix is a plain text bar (`renderOrbLevelInfo()`) directly above the widget inside `#orbContainer`,
+  showing the resistance (▲, green) and support (▼, red, when known) of `breakoutLevelFor(state.
+  currentRsEntry)` — see the "🎯 Qullamaggie" bullet above for the full mechanism (`weekly_chart.
+  pending_base`, `js/minicharts.js::breakoutLevelFor()`) shared with that tab's own "Poziom do obserwacji"
+  column. Re-rendered from both places `renderOrbPanel()` is called (tab switch and ticker change), same
+  as the widget itself. `.orb-level-info`/`.orb-level-value` in `style.css`.
   1. The main price+EMA20+VWAP chart (formerly the "10:30" SMA10/SMA30 chart — see the version-history
      note under Relative strength above), rebased to 0% at the momentum window's start. **It no
      longer plots the stock's own index level** — removed at the user's explicit request, since it left
