@@ -53,6 +53,7 @@ const browserGlobals = {
     formatPrice: "readonly",
     tvSymbolFor: "readonly",
     tvUrlFor: "readonly",
+    openTradingView: "readonly",
     STAGE_LABELS: "readonly",
     STAGE_DESCRIPTIONS: "readonly",
     STAGE_COLORS: "readonly",

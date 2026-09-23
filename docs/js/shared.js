@@ -60,6 +60,43 @@ function tvUrlFor(ticker, universe) {
     return `https://www.tradingview.com/chart/?symbol=${encodeURIComponent(tvSymbolFor(ticker, universe))}`;
 }
 
+// Na telefonie przyciski "TradingView" maja otwierac APLIKACJE mobilna z tym
+// tickerem zamiast strony w przegladarce:
+// - Android: link `intent://` z pakietem com.tradingview.tradingviewapp — system
+//   otwiera od razu aplikacje, a gdy nie jest zainstalowana, przegladarka
+//   przechodzi na S.browser_fallback_url (zwykla strona tradingview.com).
+// - iOS: Universal Link — ten sam https-owy adres tradingview.com, ale otwarty
+//   w TEJ SAMEJ karcie (location.href), bo iOS przekazuje link do aplikacji
+//   tylko przy nawigacji w biezacej karcie; window.open(_blank) laduje zawsze
+//   Safari. Bez aplikacji po prostu otwiera sie strona (wstecz wraca tutaj).
+// - Desktop: bez zmian — pelny wykres w nowej karcie.
+function tvMobilePlatform(ua, maxTouchPoints) {
+    if (/Android/i.test(ua)) return "android";
+    // iPadOS 13+ przedstawia sie jako "Macintosh", odrozniamy go po dotyku.
+    if (/iPhone|iPad|iPod/i.test(ua) || (/Macintosh/i.test(ua) && maxTouchPoints > 1)) return "ios";
+    return null;
+}
+
+function tvAndroidIntentUrl(ticker, universe) {
+    const webUrl = tvUrlFor(ticker, universe);
+    const path = webUrl.replace(/^https:\/\//, "");
+    return `intent://${path}#Intent;scheme=https;package=com.tradingview.tradingviewapp;` +
+        `S.browser_fallback_url=${encodeURIComponent(webUrl)};end`;
+}
+
+function openTradingView(ticker, universe) {
+    const platform = typeof navigator === "undefined"
+        ? null
+        : tvMobilePlatform(navigator.userAgent || "", navigator.maxTouchPoints || 0);
+    if (platform === "android") {
+        window.location.href = tvAndroidIntentUrl(ticker, universe);
+    } else if (platform === "ios") {
+        window.location.href = tvUrlFor(ticker, universe);
+    } else {
+        window.open(tvUrlFor(ticker, universe), "_blank", "noopener");
+    }
+}
+
 // Klasyfikacja etapow Weinsteina (Stage Analysis) dolaczona przez run_query.py
 // (_compute_weinstein_stage_series) do kazdego tygodnia wykresu 10:30 — patrz
 // weekly_chart.stage/signal/volume/buying_volume/buying_volume_ratio. Etykiety/
@@ -115,6 +152,7 @@ function compareRows(a, b, sortKey, sortDir) {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES, formatPrice, tvSymbolFor, tvUrlFor,
+        tvMobilePlatform, tvAndroidIntentUrl, openTradingView,
         STAGE_LABELS, STAGE_DESCRIPTIONS, STAGE_COLORS, STAGE_BREAKOUT_VOLUME_RATIO, BASE_BOX_COLORS,
         stageCellHtml, compareRows,
     };

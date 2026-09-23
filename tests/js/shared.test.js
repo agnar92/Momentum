@@ -8,6 +8,7 @@ const path = require("node:path");
 
 const {
     UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES, formatPrice, tvSymbolFor, tvUrlFor,
+    tvMobilePlatform, tvAndroidIntentUrl,
     STAGE_LABELS, STAGE_COLORS, stageCellHtml, compareRows,
 } = require(path.join("..", "..", "docs", "js", "shared.js"));
 
@@ -38,6 +39,23 @@ test("tvUrlFor builds a tradingview.com chart URL from tvSymbolFor", () => {
     assert.equal(
         tvUrlFor("PKN", "WIG20"),
         "https://www.tradingview.com/chart/?symbol=GPW%3APKN",
+    );
+});
+
+test("tvMobilePlatform detects Android, iPhone and iPadOS, desktop is null", () => {
+    assert.equal(tvMobilePlatform("Mozilla/5.0 (Linux; Android 14; Pixel 8)", 5), "android");
+    assert.equal(tvMobilePlatform("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", 5), "ios");
+    assert.equal(tvMobilePlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", 5), "ios");
+    assert.equal(tvMobilePlatform("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)", 0), null);
+    assert.equal(tvMobilePlatform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 0), null);
+});
+
+test("tvAndroidIntentUrl targets the TradingView app with a web fallback", () => {
+    assert.equal(
+        tvAndroidIntentUrl("PKN", "WIG20"),
+        "intent://www.tradingview.com/chart/?symbol=GPW%3APKN#Intent;scheme=https;" +
+        "package=com.tradingview.tradingviewapp;" +
+        "S.browser_fallback_url=https%3A%2F%2Fwww.tradingview.com%2Fchart%2F%3Fsymbol%3DGPW%253APKN;end",
     );
 });
 
