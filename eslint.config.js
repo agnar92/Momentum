@@ -44,6 +44,35 @@ const browserGlobals = {
     rsMacdChartInstance: "readonly",
     rsMansfieldChartInstance: "readonly",
     rsSqueezeChartInstance: "readonly",
+    // Zdefiniowane w docs/js/chart-modal.js, wspoldzielonym przez zwykly
+    // <script> tag z docs/js/app.js i docs/js/signals.js — ten sam wzorzec co
+    // chart-render.js powyzej (okienko z wykresem + panel TradingView + tryb
+    // pelnoekranowy, wydzielone z app.js, zeby signals.js moglo je uzyc bez
+    // kopiowania, patrz komentarz na gorze chart-modal.js).
+    findRsEntry: "readonly",
+    selectTicker: "readonly",
+    openChartModal: "readonly",
+    closeChartModal: "readonly",
+    initChartModal: "readonly",
+    updateChartArea: "readonly",
+    updateChartTickerLabel: "readonly",
+    initOpenTvButton: "readonly",
+    initResetZoomButton: "readonly",
+    initChartFullscreen: "readonly",
+    initChartViewTabs: "readonly",
+    renderTvOverviewPanel: "readonly",
+    tvRowButtonHtml: "readonly",
+    bindTvRowButtons: "readonly",
+    decorateTile: "readonly",
+    latestRsLong: "readonly",
+    // `state` samo jest zdefiniowane W KAZDYM z dwoch plikow, ktore
+    // faktycznie laduja chart-modal.js na stronie (app.js/signals.js, kazdy
+    // z wlasnym ksztaltem/danymi) — chart-modal.js go NIE deklaruje, tylko
+    // czyta/pisze jako zwykly global w miejscu uzycia (patrz komentarz na
+    // gorze tego pliku). Global tutaj istnieje wylacznie zeby linter nie
+    // zglaszal no-undef przy analizie SAMEGO chart-modal.js w oderwaniu od
+    // pliku, ktory go laduje.
+    state: "writable",
     // Zdefiniowane w docs/js/shared.js, wspoldzielonym przez zwykly <script>
     // tag z index.html/rebalance.html/chart.html (patrz komentarz na gorze
     // tamtego pliku) — ten sam wzorzec co powyzej dla chart-render.js.
