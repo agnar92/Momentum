@@ -208,10 +208,14 @@ function combinedWybicieCandidates(opts = {}) {
 // run_query.py) i albo WCIĄŻ w niej trwają dłużej niż TTM_SQUEEZE_MIN_
 // CONSOLIDATION_WEEKS tygodni (status "consolidating" — kandydat do
 // obserwacji), albo WŁAŚNIE z takiej konsolidacji wybiły się w ostatnich
-// TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS tygodniach (status "fired" — świeży
+// TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS tygodniach W GÓRĘ (status "fired" — świeży
 // początek nowego ruchu, dokładnie to, o co prosił użytkownik: "akcje, które
-// zaczynają ruszać po takiej konsolidacji"). Stałe MUSZĄ być zsynchronizowane
-// z tymi samymi stałymi w run_query.py.
+// zaczynają ruszać po takiej konsolidacji"). "fired" wymaga TERAZ też
+// histNow > 0 (aktualny histogram TTM dodatni) — samo wygaśnięcie squeeze
+// (`fired` z backendu) nie mówi w którą stronę cena wybiła, więc bez tego
+// warunku do listy trafiały też WYBICIA W DÓŁ (histogram ujemny), czyli
+// dokładnie odwrotność tego, czego szuka ten screener. Stałe MUSZĄ być
+// zsynchronizowane z tymi samymi stałymi w run_query.py.
 // ============================================================
 const TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5;
 const TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3;
@@ -240,7 +244,8 @@ function classifyTtmSqueeze(ticker, universe, c) {
 
     const isConsolidating = squeezeOn === true && squeezeCount > TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS;
     const isFired = weeksSinceFire != null && weeksSinceFire <= TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS
-        && fireConsolidationWeeks != null && fireConsolidationWeeks > TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS;
+        && fireConsolidationWeeks != null && fireConsolidationWeeks > TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS
+        && histNow != null && histNow > 0;
     if (!isConsolidating && !isFired) return null;
 
     return {
