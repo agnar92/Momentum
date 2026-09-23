@@ -2179,6 +2179,7 @@ DAILY_SQUEEZE_RECENT_DAYS = 20        # ile ostatnich sesji squeeze_on eksportuj
 DAILY_SPARK_DAYS = 60                 # ile ostatnich sesji ceny + squeeze_on dla mini-wykresu D1
 DAILY_SMA_DAYS = 50
 DAILY_EMA_DAYS = 21
+DAILY_PULLBACK_EMA_DAYS = 20          # EMA20 D1: linia na mini-wykresie + odleglosc ceny (pullback)
 DAILY_RETURN_1M_DAYS = 21             # ~1 miesiac sesji
 
 
@@ -2196,9 +2197,11 @@ def compute_daily_squeeze(con, ticker, ref_date):
       (1/0/None), zeby front mogl narysowac pasek kropek jak na TradingView,
     - close — ostatnie zamkniecie (swiezsze niz "price" z tygodniowego eksportu,
       gdy podsumowanie pochodzi z refresh_daily.py),
-    - spark — {"closes", "squeeze"} z ostatnich DAILY_SPARK_DAYS sesji: dane
-      mini-wykresu D1 (linia ceny + zaznaczone dni squeeze'a) w tabeli
-      "Tygodniowi zwyciezcy" na dashboardzie,
+    - spark — {"closes", "ema20", "squeeze"} z ostatnich DAILY_SPARK_DAYS sesji:
+      dane mini-wykresu D1 (linia ceny, EMA20, zaznaczone dni squeeze'a) w
+      tabeli "Tygodniowi zwyciezcy" na dashboardzie,
+    - ema20_pct — % ceny nad dzienna EMA20 (maly dodatni = pullback do sredniej
+      w trendzie, klasyczne miejsce dolaczenia),
     - sma50_pct / ema21_pct — % nad dzienna SMA50/EMA21 (czy cena trzyma trend
       na D1), return_1m_pct — zmiana ceny za ~21 sesji (dynamika),
       high_20d_pct — % od najwyzszego High z 20 sesji (<= 0; blisko 0 = cena
@@ -2238,6 +2241,7 @@ def compute_daily_squeeze(con, ticker, ref_date):
 
     sma50 = close.rolling(DAILY_SMA_DAYS).mean().iloc[last]
     ema21 = close.ewm(span=DAILY_EMA_DAYS, adjust=False).mean().iloc[last]
+    ema20_series = close.ewm(span=DAILY_PULLBACK_EMA_DAYS, adjust=False).mean()
     past_close = close.iloc[last - DAILY_RETURN_1M_DAYS] if last >= DAILY_RETURN_1M_DAYS else None
     high_20d = high.iloc[-DAILY_SQUEEZE_LENGTH:].max()
     recent = sq["squeeze_on"].iloc[-DAILY_SQUEEZE_RECENT_DAYS:]
@@ -2257,10 +2261,12 @@ def compute_daily_squeeze(con, ticker, ref_date):
         "recent_squeeze": flags(recent),
         "spark": {
             "closes": [safe_float(v) for v in close.iloc[-DAILY_SPARK_DAYS:]],
+            "ema20": [safe_float(v) for v in ema20_series.iloc[-DAILY_SPARK_DAYS:]],
             "squeeze": flags(sq["squeeze_on"].iloc[-DAILY_SPARK_DAYS:]),
         },
         "sma50_pct": pct_vs(sma50),
         "ema21_pct": pct_vs(ema21),
+        "ema20_pct": pct_vs(ema20_series.iloc[last]),
         "return_1m_pct": pct_vs(past_close),
         "high_20d_pct": pct_vs(high_20d),
     }

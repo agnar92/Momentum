@@ -10,7 +10,7 @@ const {
     weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     classifyContinuation, combinedContinuationCandidates,
     effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
-    sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg,
+    sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
     githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
@@ -469,6 +469,16 @@ test("spark SVG helpers render a path, squeeze bars and a placeholder without da
     const daily = dailySparkSvg([1, 2, 3, 4], [0, 1, 1, 0]);
     assert.equal((daily.match(/class="spark-sq"/g) || []).length, 2);
     assert.match(dailySparkSvg([], []), /spark-empty/);
+    assert.match(dailySparkSvg([1, 2, 3], [0, 0, 1], [1, 1.5, 2]), /class="spark-ema"/);
+    assert.doesNotMatch(dailySparkSvg([1, 2, 3], [0, 0, 1]), /spark-ema/);
+});
+
+test("pullbackHtml flags price 0-2% above daily EMA20 as a pullback", () => {
+    assert.match(pullbackHtml(1.2), /pullback-badge/);
+    assert.match(pullbackHtml(0), /pullback-badge/);
+    assert.doesNotMatch(pullbackHtml(6), /pullback-badge/);
+    assert.match(pullbackHtml(-1.5), /negative/);
+    assert.equal(pullbackHtml(null), "—");
 });
 
 test("githubRepoFromLocation reads owner/repo from a GitHub Pages URL", () => {

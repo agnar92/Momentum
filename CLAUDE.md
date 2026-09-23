@@ -1076,8 +1076,9 @@ flex child (no `.topbar-left` wrapper there).
   `combinedWeeklyWinners()`/`renderWinnersTable()`): EVERY stock passing the weekly gate
   (`continuationWeeklyGate()`), with its D1 status (signal / squeeze outside the thresholds / no setup) and
   two inline-SVG sparklines (no Chart.js — dozens per table): weekly `close_pct` + dashed `ema20_pct`
-  (last 26 weeks) and daily closes with red bars on squeeze days (`daily_squeeze.spark`, last
-  `DAILY_SPARK_DAYS` = 60 sessions).
+  (last 26 weeks) and daily closes + dashed daily EMA20 (`spark.ema20`) with red bars on squeeze days
+  (`daily_squeeze.spark`, last `DAILY_SPARK_DAYS` = 60 sessions); plus a "vs EMA20 D1" column
+  (`daily_squeeze.ema20_pct`, `pullbackHtml()`: 🎯 when 0..`PULLBACK_BAND_PCT` (2) % above EMA20 = pullback).
   **On-demand daily refresh ("🔄 Odśwież dane D1")** — explicit user request for fresher D1 data without
   a daily cron on a static site. The button calls the GitHub REST API from the browser
   (`runDailyRefresh()`): `workflow_dispatch` of `.github/workflows/daily_continuation.yml`, finds the run

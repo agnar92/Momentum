@@ -293,6 +293,7 @@ html, body {
 .spark .spark-ema { stroke: #8b93a1; stroke-width: 1; stroke-dasharray: 3 2; }
 .spark .spark-sq { fill: #e74c3c; }
 .spark-empty { color: var(--text-faint); }
+.pullback-badge { color: #ffd23f; font-weight: 600; font-size: 11px; white-space: nowrap; }
 .subtable-title { font-size: 13px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
 .subtable-meta { font-size: 11px; font-weight: 400; color: var(--text-faint); margin-left: 6px; }
 .daily-refresh { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: 1 1 260px; }

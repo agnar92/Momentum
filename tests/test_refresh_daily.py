@@ -56,6 +56,8 @@ def test_build_payload_computes_daily_squeeze_and_lists_missing():
     assert aaa["close"] == round(rows[-1][2], 2)
     assert len(aaa["spark"]["closes"]) == 60
     assert len(aaa["spark"]["squeeze"]) == 60
+    assert len(aaa["spark"]["ema20"]) == 60
+    assert aaa["ema20_pct"] > 0  # stały wzrost: cena nad EMA20
 
 
 def test_main_writes_continuation_json_with_injected_downloader(tmp_path):

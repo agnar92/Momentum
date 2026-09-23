@@ -543,6 +543,7 @@ function continuationRowBase(ticker, universe, c, gate, d) {
         histogram_rising: !!(d && d.histogram_prev != null && d.histogram > d.histogram_prev),
         recent_squeeze: (d && d.recent_squeeze) || [],
         sma50_pct: d ? d.sma50_pct : null,
+        ema20_pct: d && d.ema20_pct != null ? d.ema20_pct : null,
         high_20d_pct: d ? d.high_20d_pct : null,
         return_1m_pct: d ? d.return_1m_pct : null,
     };
@@ -586,6 +587,7 @@ function classifyWeeklyWinner(ticker, universe, c, opts = {}) {
         weekly_ema: (wc.ema20_pct || []).slice(-WINNERS_WEEKLY_SPARK_WEEKS),
         daily_closes: (d && d.spark && d.spark.closes) || [],
         daily_squeeze: (d && d.spark && d.spark.squeeze) || [],
+        daily_ema: (d && d.spark && d.spark.ema20) || [],
     };
 }
 
@@ -661,10 +663,12 @@ function weeklySparkSvg(closes, ema) {
         + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
 }
 
-// Dzień: cena z 60 sesji + czerwone kreski u dołu w dni squeeze'a (jak kropki TV).
-function dailySparkSvg(closes, squeeze) {
+// Dzień: cena z 60 sesji + EMA20 (przerywana) + czerwone kreski u dołu w dni
+// squeeze'a (jak kropki TV). Cena i EMA na wspólnej skali, żeby było widać pullback.
+function dailySparkSvg(closes, squeeze, ema = []) {
     const w = 130, h = 30, barH = 3;
-    const pts = sparkPoints(closes, w, h - barH - 1, 2);
+    const range = seriesRange(closes, ema);
+    const pts = range ? sparkPoints(closes, w, h - barH - 1, 2, range) : [];
     if (!pts.length) return '<span class="spark-empty">—</span>';
     const n = closes.length;
     const step = (w - 4) / Math.max(n - 1, 1);
@@ -673,7 +677,20 @@ function dailySparkSvg(closes, squeeze) {
         : "").join("");
     const up = closes[n - 1] >= closes[0];
     return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + bars + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
+        + bars
+        + (ema.length ? `<path d="${sparkPath(sparkPoints(ema, w, h - barH - 1, 2, range))}" class="spark-ema"/>` : "")
+        + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
+}
+
+// Pullback do EMA20 D1: cena 0..PULLBACK_BAND_PCT % nad średnią = klasyczne miejsce
+// dołączenia do trendu; daleko nad nią = rozciągnięta, pod nią = trend słabnie.
+const PULLBACK_BAND_PCT = 2;
+
+function pullbackHtml(pct) {
+    if (pct == null) return "—";
+    const txt = `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%`;
+    if (pct >= 0 && pct <= PULLBACK_BAND_PCT) return `<span class="pullback-badge" title="Cena przy EMA20 D1 — pullback">🎯 ${txt}</span>`;
+    return `<span class="${pct >= 0 ? "cross-age" : "negative"}">${txt}</span>`;
 }
 
 // Wszystkie uniwersa, bez duplikatów (pierwsze wystąpienie w kolejności
@@ -1448,8 +1465,9 @@ function winnerRowHtml(r, position) {
         <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
         <td class="positive">${r.rs_long.toFixed(1)}</td>
         <td title="Cena tygodniowa (ostatnie ${WINNERS_WEEKLY_SPARK_WEEKS} tyg.) + EMA20 (przerywana)">${weeklySparkSvg(r.weekly_closes, r.weekly_ema)}</td>
-        <td title="Cena dzienna (ostatnie ${r.daily_closes.length} sesji), czerwone kreski = dni squeeze'a D1">${dailySparkSvg(r.daily_closes, r.daily_squeeze)}</td>
+        <td title="Cena dzienna (ostatnie ${r.daily_closes.length} sesji), przerywana = EMA20, czerwone kreski = dni squeeze'a D1">${dailySparkSvg(r.daily_closes, r.daily_squeeze, r.daily_ema)}</td>
         <td>${winnerStatusHtml(r)}</td>
+        <td>${pullbackHtml(r.ema20_pct)}</td>
         <td>${signedPctHtml(r.sma50_pct)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
@@ -1468,12 +1486,13 @@ function renderWinnersTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 12,
+        colspan: 13,
         emptyAllMsg: `Brak spółek w Etapie 2 z momentum > 0 (≥ ${state.contMinMomentumPct}%) i RS 52 tyg. > 0.`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => {
             const withSignal = rows.filter(r => r.signal).length;
-            return `${rows.length} spółek · ${withSignal} z sygnałem D1`;
+            const atEma = rows.filter(r => r.ema20_pct != null && r.ema20_pct >= 0 && r.ema20_pct <= PULLBACK_BAND_PCT).length;
+            return `${rows.length} spółek · ${withSignal} z sygnałem D1 · ${atEma} przy EMA20`;
         },
         rowKey: r => r.ticker,
         isSelected: r => r.ticker === state.selectedTicker,
@@ -1946,7 +1965,7 @@ if (typeof module !== "undefined" && module.exports) {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
         effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
-        sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg,
+        sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
         githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };
