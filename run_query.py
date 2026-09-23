@@ -2080,7 +2080,11 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     # liczylyby sie blednie.
     squeeze_bool = squeeze_on.fillna(False).astype(bool)
     reset_groups = (~squeeze_bool).cumsum()
-    squeeze_count = squeeze_bool.groupby(reset_groups).cumcount() + 1
+    # cumsum (nie cumcount()+1): tydzien FALSE, ktory resetuje licznik, nalezy do
+    # TEJ SAMEJ grupy co nastepujaca po nim seria TRUE — cumcount()+1 liczyl go
+    # jako pierwszy tydzien squeeze'a, zawyzajac kazda serie (poza startujaca od
+    # indeksu 0) o 1 tydzien wzgledem TradingView.
+    squeeze_count = squeeze_bool.astype(int).groupby(reset_groups).cumsum()
     squeeze_count = squeeze_count.where(squeeze_bool, 0)
     squeeze_count = squeeze_count.where(squeeze_on.notna())
 

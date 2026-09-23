@@ -1530,6 +1530,31 @@ class TestComputeTtmSqueezeChart:
         assert out["histogram"][-1] > out["histogram"][fire_idx]
         assert out["weeks_since_fire"][-1] == len(out["dates"]) - 1 - fire_idx
 
+    def test_squeeze_count_starts_at_one_after_non_squeeze_week(self):
+        # Regresja: squeeze_count liczyl tydzien FALSE poprzedzajacy serie jako jej
+        # pierwszy tydzien (cumcount()+1 po grupach (~squeeze).cumsum()), wiec
+        # squeeze, ktory WLASNIE sie zaczal, mial od razu count == 2.
+        con = make_gem_con()
+        # 45 tyg. silnego trendu (szerokie BB przy waskim ATR — squeeze wylaczony),
+        # potem 30 tyg. ciasnej konsolidacji (squeeze wlacza sie w trakcie).
+        closes = [100.0 + i * 3.0 for i in range(45)]
+        closes += [232.0 + (0.2 if i % 2 == 0 else -0.2) for i in range(30)]
+        fixture_start = pd.Timestamp("2025-01-06")
+        insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
+
+        start_date = fixture_start + pd.Timedelta(weeks=42)
+        ref_date = fixture_start + pd.Timedelta(weeks=74)
+        out = compute_ttm_squeeze_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
+                                         start_date.strftime("%Y-%m-%d"))
+        on, cnt = out["squeeze_on"], out["squeeze_count"]
+        starts = [i for i in range(1, len(on)) if on[i] is True and on[i - 1] is False]
+        assert starts, "fixture powinna zawierac przejscie z braku squeeze'a do squeeze'a"
+        for i in range(1, len(on)):
+            if on[i] is True and on[i - 1] is False:
+                assert cnt[i] == 1
+            elif on[i] is True and on[i - 1] is True:
+                assert cnt[i] == cnt[i - 1] + 1
+
     def test_insufficient_history_leaves_squeeze_fields_none(self):
         con = make_gem_con()
         fixture_start = pd.Timestamp("2025-01-06")
