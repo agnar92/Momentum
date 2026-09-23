@@ -154,6 +154,7 @@
         <div class="chart-view-tabs" id="chartViewTabs">
             <button class="chart-view-tab active" id="chartViewTabOwn" data-view="own">📊 Wykres własny</button>
             <button class="chart-view-tab" id="chartViewTabTv" data-view="tv">🏢 Dane spółki (TradingView)</button>
+            <button class="chart-view-tab" id="chartViewTabOrb" data-view="orb" title="Wykres 1-minutowy z sesyjnym VWAP (TradingView) — do ręcznego monitorowania Opening Range Breakout po wybiciu z konsolidacji (np. screener Qullamaggie na stronie Sygnały).">⚡ 1 min + VWAP</button>
         </div>
         <div class="chart-panel" id="chartPanelOwn">
             <div class="chart-container rs-chart-container" id="rs_chart">
@@ -202,6 +203,11 @@
         <div class="chart-panel" id="chartPanelTv" hidden>
             <div class="chart-container tv-overview-container" id="tvOverviewContainer">
                 <div class="empty-state" id="tvOverviewEmpty" hidden>Wybierz spółkę, żeby zobaczyć jej dane na TradingView.</div>
+            </div>
+        </div>
+        <div class="chart-panel" id="chartPanelOrb" hidden>
+            <div class="chart-container tv-overview-container" id="orbContainer">
+                <div class="empty-state" id="orbEmpty" hidden>Wybierz spółkę, żeby zobaczyć wykres 1-minutowy.</div>
             </div>
         </div>
     </div>

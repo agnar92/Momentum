@@ -13,6 +13,7 @@ const {
     classifyContinuation, combinedContinuationCandidates,
     effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
     githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
+    classifyQullamaggie, combinedQullamaggieCandidates,
 } = require(path.join("..", "..", "docs", "js", "signals.js"));
 
 // ---------- weeksSinceZeroCrossUp / classifyWybicie / combinedWybicieCandidates ----------
@@ -294,6 +295,163 @@ test("combinedTtmSqueezeCandidates merges candidates across universes, fired fir
     ];
 
     const rows = combinedTtmSqueezeCandidates();
+    assert.deepEqual(rows.map(r => r.ticker), ["FIRED_FRESH", "FIRED_OLD", "COIL_LONG", "COIL_SHORT"]);
+});
+
+// ---------- classifyQullamaggie / combinedQullamaggieCandidates (replika skanu Qullamaggie) ----------
+
+const QM_OPTS = { minPerfPct: 30, minConsolidationWeeks: 4, maxConsolidationWeeks: 6, fireLookbackWeeks: 3 };
+
+function qmConstituent(overrides = {}, dailyOverrides = {}) {
+    return {
+        sector: "Tech", price: 100,
+        weekly_chart: { current_stage: "2A", dates: ["2026-01-01"], buying_volume_ratio: [2.0] },
+        daily_squeeze: { return_1m_pct: 10, return_3m_pct: 45, return_6m_pct: 60, ...dailyOverrides },
+        ttm_squeeze_chart: { dates: [], histogram: [], squeeze_on: [], squeeze_count: [], fired: [], weeks_since_fire: [], fire_consolidation_weeks: [] },
+        ...overrides,
+    };
+}
+
+test("classifyQullamaggie returns null without a daily_squeeze summary", () => {
+    assert.equal(classifyQullamaggie("AAA", "SP500", qmConstituent({ daily_squeeze: null }), QM_OPTS), null);
+});
+
+test("classifyQullamaggie returns null when none of 1M/3M/6M clears the performance threshold", () => {
+    const c = qmConstituent({}, { return_1m_pct: 5, return_3m_pct: 10, return_6m_pct: 20 });
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+});
+
+test("classifyQullamaggie accepts when only ONE of 1M/3M/6M clears the threshold (OR, not AND)", () => {
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    }, { return_1m_pct: -5, return_3m_pct: 2, return_6m_pct: 35 });
+    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
+    assert.ok(r);
+    assert.equal(r.perf_pct, 35);
+});
+
+test("classifyQullamaggie marks consolidating when the weekly squeeze is inside the min/max week window", () => {
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
+    assert.equal(r.status, "consolidating");
+    assert.equal(r.consolidation_weeks, 5);
+});
+
+test("classifyQullamaggie ignores a squeeze shorter than the minimum consolidation window", () => {
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [2],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+});
+
+test("classifyQullamaggie ignores a squeeze longer than the maximum consolidation window", () => {
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [9],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+});
+
+test("classifyQullamaggie marks fired and confirms buying volume at the breakout week", () => {
+    const c = qmConstituent({
+        weekly_chart: {
+            current_stage: "2A",
+            dates: ["2025-12-11", "2025-12-18", "2026-01-01"],
+            buying_volume_ratio: [1.0, 1.8, 1.1],
+        },
+        ttm_squeeze_chart: {
+            dates: ["2025-12-11", "2025-12-18", "2026-01-01"],
+            histogram: [0.1, 0.2, 3.5], squeeze_on: [true, false, false], squeeze_count: [5, 0, 0],
+            fired: [false, true, false], weeks_since_fire: [null, 0, 1], fire_consolidation_weeks: [null, 5, 5],
+        },
+    });
+    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
+    assert.equal(r.status, "fired");
+    assert.equal(r.weeks_since_fire, 1);
+    assert.equal(r.consolidation_weeks, 5);
+    // Wybicie nastąpiło w tygodniu 2025-12-18 (buying_volume_ratio 1.8 >= STAGE_BREAKOUT_VOLUME_RATIO 1.5x).
+    assert.equal(r.breakout_volume_ratio, 1.8);
+    assert.equal(r.breakout_volume_confirmed, true);
+});
+
+test("classifyQullamaggie flags an unconfirmed breakout when buying volume is below the ratio threshold", () => {
+    const c = qmConstituent({
+        weekly_chart: {
+            current_stage: "2A",
+            dates: ["2025-12-18", "2026-01-01"],
+            buying_volume_ratio: [0.9, 1.1],
+        },
+        ttm_squeeze_chart: {
+            dates: ["2025-12-18", "2026-01-01"],
+            histogram: [0.2, 3.5], squeeze_on: [false, false], squeeze_count: [0, 0],
+            fired: [true, false], weeks_since_fire: [0, 1], fire_consolidation_weeks: [5, 5],
+        },
+    });
+    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
+    assert.equal(r.status, "fired");
+    assert.equal(r.breakout_volume_ratio, 0.9);
+    assert.equal(r.breakout_volume_confirmed, false);
+});
+
+test("classifyQullamaggie ignores a fire with a bearish (negative) histogram", () => {
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [-3.5], squeeze_on: [false], squeeze_count: [0],
+            fired: [false], weeks_since_fire: [1], fire_consolidation_weeks: [5],
+        },
+    });
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+});
+
+test("combinedQullamaggieCandidates merges universes, dedupes tickers, sorts fired-fresh first then longest consolidation", () => {
+    state.data = emptyStateData();
+    state.data.SP500.constituents = [
+        qmConstituent({
+            ticker: "FIRED_OLD",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [1], squeeze_on: [false], squeeze_count: [0],
+                fired: [false], weeks_since_fire: [3], fire_consolidation_weeks: [5],
+            },
+        }),
+        qmConstituent({
+            ticker: "COIL_SHORT",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [4],
+                fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+            },
+        }),
+    ];
+    state.data.WIG20.constituents = [
+        qmConstituent({
+            ticker: "FIRED_FRESH",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [2], squeeze_on: [false], squeeze_count: [0],
+                fired: [false], weeks_since_fire: [0], fire_consolidation_weeks: [6],
+            },
+        }),
+        qmConstituent({
+            ticker: "COIL_LONG",
+            ttm_squeeze_chart: {
+                dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [6],
+                fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+            },
+        }),
+    ];
+
+    const rows = combinedQullamaggieCandidates(QM_OPTS);
     assert.deepEqual(rows.map(r => r.ticker), ["FIRED_FRESH", "FIRED_OLD", "COIL_LONG", "COIL_SHORT"]);
 });
 
