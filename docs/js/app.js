@@ -440,6 +440,7 @@ function classifyTtmSqueeze(ticker, universe, c) {
         consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         histNow,
+        ...miniVisualFields(c),
     };
 }
 
@@ -651,15 +652,27 @@ function seriesRange(...series) {
     return nums.length ? [Math.min(...nums), Math.max(...nums)] : null;
 }
 
-// Tydzień: cena (% od startu okna) + EMA20 przerywaną linią.
-function weeklySparkSvg(closes, ema) {
-    const w = 110, h = 30;
+// Kreski u dołu mini-wykresu w okresach squeeze'a (1 = squeeze), wyrównane do
+// tej samej osi X co n punktów ceny.
+function sparkSqueezeBars(squeeze, n, w, h, barH) {
+    const step = (w - 4) / Math.max(n - 1, 1);
+    return (squeeze || []).map((v, i) => v === 1
+        ? `<rect x="${(2 + i * step - step / 2).toFixed(1)}" y="${h - barH}" width="${Math.max(step, 1).toFixed(1)}" height="${barH}" class="spark-sq"/>`
+        : "").join("");
+}
+
+// Tydzień: cena (% od startu okna) + EMA20 przerywaną linią; opcjonalnie
+// czerwone kreski u dołu w tygodniach squeeze'a (zakładka TTM Squeeze).
+function weeklySparkSvg(closes, ema, squeeze = []) {
+    const w = 110, h = 30, barH = squeeze.length ? 3 : 0;
     const range = seriesRange(closes, ema);
     if (!range) return '<span class="spark-empty">—</span>';
-    const pts = sparkPoints(closes, w, h, 2, range);
+    const plotH = barH ? h - barH - 1 : h;
+    const pts = sparkPoints(closes, w, plotH, 2, range);
     const up = closes.length && closes[closes.length - 1] >= closes[0];
     return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + `<path d="${sparkPath(sparkPoints(ema, w, h, 2, range))}" class="spark-ema"/>`
+        + (barH ? sparkSqueezeBars(squeeze, closes.length, w, h, barH) : "")
+        + `<path d="${sparkPath(sparkPoints(ema, w, plotH, 2, range))}" class="spark-ema"/>`
         + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
 }
 
@@ -680,6 +693,85 @@ function dailySparkSvg(closes, squeeze, ema = []) {
         + bars
         + (ema.length ? `<path d="${sparkPath(sparkPoints(ema, w, h - barH - 1, 2, range))}" class="spark-ema"/>` : "")
         + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
+}
+
+// Słupek RS wokół zera (Mansfield RS 52 tyg.): zielony w prawo = mocniejsza od
+// swojego indeksu, czerwony w lewo = słabsza. Skala ucięta na ±RS_BAR_CAP, żeby
+// kilka skrajnych wartości (>100) nie spłaszczało reszty.
+const RS_BAR_CAP = 50;
+
+function rsBarHtml(v) {
+    if (v == null || !Number.isFinite(v)) return '<span class="spark-empty">—</span>';
+    const w = 64, h = 12, half = w / 2;
+    const len = (Math.min(Math.abs(v), RS_BAR_CAP) / RS_BAR_CAP) * half;
+    const x = v >= 0 ? half : half - len;
+    return `<span class="rs-bar" title="Mansfield RS 52 tyg.: ${v.toFixed(1)}">`
+        + `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
+        + `<rect x="0" y="${h / 2 - 1}" width="${w}" height="2" class="rs-bar-track"/>`
+        + `<rect x="${x.toFixed(1)}" y="1" width="${Math.max(len, 1).toFixed(1)}" height="${h - 2}" rx="2" class="${v >= 0 ? "rs-bar-pos" : "rs-bar-neg"}"/>`
+        + `<rect x="${half - 0.5}" y="0" width="1" height="${h}" class="rs-bar-zero"/></svg>`
+        + `<span class="${v >= 0 ? "positive" : "negative"}">${v >= 0 ? "+" : ""}${v.toFixed(1)}</span></span>`;
+}
+
+// Mini-wskaźnik TTM Squeeze jak na TradingView: słupki histogramu wokół zera
+// (4 kolory: jasna/ciemna zieleń nad zerem, jasna/ciemna czerwień pod — ten sam
+// schemat co histColors w chart-render.js) + kropki na linii zera (czerwona =
+// squeeze, złota = wybicie, szara = brak squeeze'a).
+function ttmMiniSvg(hist, squeezeOn, fired = []) {
+    const n = (hist || []).length;
+    const vals = (hist || []).filter(v => v != null && Number.isFinite(v));
+    if (!vals.length) return '<span class="spark-empty">—</span>';
+    const w = 130, h = 30, mid = h / 2, maxAbs = Math.max(...vals.map(Math.abs)) || 1;
+    const step = (w - 4) / n, barW = Math.max(step - 1, 1);
+    let out = "";
+    hist.forEach((v, i) => {
+        if (v == null) return;
+        const prev = i > 0 ? hist[i - 1] : null;
+        const rising = prev == null || v >= prev;
+        const cls = v >= 0 ? (rising ? "ttm-up" : "ttm-up-fade") : (rising ? "ttm-dn-fade" : "ttm-dn");
+        const len = (Math.abs(v) / maxAbs) * (mid - 3);
+        out += `<rect x="${(2 + i * step).toFixed(1)}" y="${(v >= 0 ? mid - len : mid).toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(len, 0.5).toFixed(1)}" class="${cls}"/>`;
+    });
+    (squeezeOn || []).forEach((on, i) => {
+        if (on == null) return;
+        const cls = fired[i] ? "ttm-dot-fired" : on ? "ttm-dot-on" : "ttm-dot-off";
+        out += `<circle cx="${(2 + i * step + barW / 2).toFixed(1)}" cy="${mid}" r="1.6" class="${cls}"/>`;
+    });
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">${out}</svg>`;
+}
+
+// Wspólne pola "mini-wizualizacji" wyciągane z tygodniowych wykresów spółki
+// (ostatnie MINI_WEEKS tygodni) — tabele uniwersów i zakładka TTM Squeeze.
+const MINI_WEEKS = 26;
+
+function miniVisualFields(c) {
+    const wc = c.weekly_chart || {};
+    const t = c.ttm_squeeze_chart || {};
+    const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
+    const rsIdx = latestNonNullIdx(rsLong);
+    const sqOn = (t.squeeze_on || []).slice(-MINI_WEEKS);
+    return {
+        rs_long: rsIdx >= 0 ? rsLong[rsIdx] : null,
+        mini_closes: (wc.close_pct || []).slice(-MINI_WEEKS),
+        mini_ema: (wc.ema20_pct || []).slice(-MINI_WEEKS),
+        mini_hist: (t.histogram || []).slice(-MINI_WEEKS),
+        mini_sq_on: sqOn,
+        mini_sq_flags: sqOn.map(v => v == null ? null : (v ? 1 : 0)),
+        mini_fired: (t.fired || []).slice(-MINI_WEEKS),
+    };
+}
+
+// Rozkład etapów Weinsteina w całym uniwersum (pasek nad tabelą):
+// { "1": n, "2": n (2A+2B), "3": n, "4": n, none: n, total }.
+function stageBreakdown(rows) {
+    const out = { "1": 0, "2": 0, "3": 0, "4": 0, none: 0, total: 0 };
+    (rows || []).forEach(c => {
+        const st = c.weekly_chart && c.weekly_chart.current_stage;
+        const key = st === "2A" || st === "2B" ? "2" : (st === "1" || st === "3" || st === "4") ? st : "none";
+        out[key] += 1;
+        out.total += 1;
+    });
+    return out;
 }
 
 // Pullback do EMA20 D1: cena 0..PULLBACK_BAND_PCT % nad średnią = klasyczne miejsce
@@ -864,12 +956,46 @@ function selectTicker(ticker, universe) {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
+    // Okienko najpierw, render potem — Chart.js mierzy canvas przy tworzeniu,
+    // a w ukrytym (display:none) okienku miałby zerowy rozmiar.
+    openChartModal();
     updateChartArea();
-    // Na telefonie nie ma miejsca na tabelę i wykres naraz — wybranie spółki
-    // przełącza widok na pełnoekranowy wykres (jak w apce TradingView).
-    if (window.matchMedia("(max-width: 640px)").matches) {
-        document.querySelector(".workspace").classList.add("mobile-chart-view");
-    }
+}
+
+// ============================================================
+// OKIENKO Z WYKRESEM (pop-up nad pełnoekranową tabelą) — na prośbę
+// użytkownika zamiast wykresu na stałe obok/pod tabelą: klik w spółkę otwiera
+// okienko, ✕ / Esc / klik w przyciemnione tło zamyka.
+// ============================================================
+function openChartModal() {
+    const modal = document.getElementById("chartModal");
+    if (modal) modal.hidden = false;
+}
+
+function closeChartModal() {
+    const modal = document.getElementById("chartModal");
+    if (!modal || modal.hidden) return;
+    // Wykresy niszczymy PRZED ukryciem okienka: ukrycie żywego wykresu
+    // planuje w Chart.js resize (ResizeObserver + rAF), a zniszczenie go
+    // chwilę później (ponowne otwarcie) rzucało błędy "ownerDocument"/"fullSize".
+    destroyChartInstances();
+    modal.hidden = true;
+}
+
+function initChartModal() {
+    const modal = document.getElementById("chartModal");
+    if (!modal) return;
+    document.getElementById("chartModalClose").addEventListener("click", closeChartModal);
+    modal.addEventListener("click", (ev) => { if (ev.target === modal) closeChartModal(); });
+    // Rejestrowane PRZED initChartFullscreen: przy włączonym pełnym ekranie
+    // wykresu Esc najpierw zamyka tylko pełny ekran (tamten handler), a nie
+    // całe okienko.
+    document.addEventListener("keydown", (ev) => {
+        if (ev.key !== "Escape" || chartFullscreenActive) return;
+        const cmdk = document.getElementById("cmdkOverlay");
+        if (cmdk && cmdk.style.display !== "none") return;
+        closeChartModal();
+    });
 }
 
 // Przełącza zakładkę drawer na uniwersum danego tickera (żeby podświetlenie
@@ -1108,23 +1234,12 @@ function initDrawer() {
     const toggleBtn = document.getElementById("toggleDrawerBtn");
     const drawer = document.getElementById("tableDrawer");
 
-    toggleBtn.addEventListener("click", () => {
-        state.drawerOpen = !state.drawerOpen;
-        drawer.classList.toggle("open", state.drawerOpen);
-        toggleBtn.textContent = state.drawerOpen ? "<<<" : ">>>";
-    });
-
-    // Kliknięcie gdziekolwiek poza rozwiniętą szufladą (np. w obszar wykresu)
-    // ją zwija — tak jak zwykle zachowują się nakładane panele w nowoczesnych
-    // aplikacjach. Sam przycisk >>>/<<< ma już własną obsługę kliknięcia
-    // powyżej, więc jest tu wykluczony, żeby nie zwijać i od razu rozwijać.
-    document.addEventListener("click", (ev) => {
-        if (!state.drawerOpen) return;
-        if (drawer.contains(ev.target) || toggleBtn.contains(ev.target)) return;
-        state.drawerOpen = false;
-        drawer.classList.remove("open");
-        toggleBtn.textContent = ">>>";
-    });
+    // Tabela jest teraz ZAWSZE rozwinięta na cały ekran (wykres otwiera się w
+    // okienku — patrz openChartModal), więc dawne rozwijanie/zwijanie
+    // przyciskiem >>> i klikiem poza szufladą zniknęło.
+    state.drawerOpen = true;
+    if (drawer) drawer.classList.add("open");
+    if (toggleBtn) toggleBtn.hidden = true;
 
     document.querySelectorAll(".drawer-tab").forEach(tab => {
         tab.addEventListener("click", () => {
@@ -1194,6 +1309,7 @@ function showDrawerTable(universe) {
             : isContinuation
                 ? "Continuation — Etap 2 + krótki squeeze D1"
                 : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+    renderBreadthBar();
     renderActiveDrawerTable();
 }
 
@@ -1317,6 +1433,9 @@ function ttmSqueezeRowHtml(r, position) {
         <td class="${r.momentum_pct >= 0 ? "positive" : "negative"}">${r.momentum_pct.toFixed(2)}%</td>
         <td>${ttmSqueezeStatusHtml(r)}</td>
         <td>${r.consolidation_weeks} tyg.</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
+        <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
+        <td>${rsBarHtml(r.rs_long)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
@@ -1338,7 +1457,7 @@ function renderTtmSqueezeTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 10,
+        colspan: 13,
         emptyAllMsg: "Brak danych.",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
@@ -1724,9 +1843,37 @@ function initDailyRefresh() {
     } catch (e) { /* ignoruj */ }
 }
 
+function renderBreadthBar() {
+    const el = document.getElementById("breadthBar");
+    if (!el) return;
+    const isUniverse = SIDEBAR_TAB_UNIVERSES.includes(state.drawerUniverse);
+    el.hidden = !isUniverse;
+    if (!isUniverse) return;
+    const d = state.data[state.drawerUniverse] || {};
+    const rows = d.all_constituents || d.constituents || [];
+    const b = stageBreakdown(rows);
+    if (!b.total) { el.innerHTML = ""; return; }
+    const segs = [["2", "Etap 2"], ["1", "Etap 1"], ["3", "Etap 3"], ["4", "Etap 4"], ["none", "brak danych"]]
+        .filter(([k]) => b[k] > 0)
+        .map(([k, label]) => {
+            const pct = (b[k] / b.total) * 100;
+            const color = k === "none" ? "#3a3f4b" : STAGE_COLORS[k === "2" ? "2A" : k];
+            return `<button type="button" class="breadth-seg" data-stage="${k}" style="flex:${b[k]};background:${color}" title="${label}: ${b[k]} spółek (${pct.toFixed(0)}%)${k !== "none" ? " — kliknij, żeby filtrować" : ""}">${pct >= 7 ? `${label.replace("Etap ", "E")} ${pct.toFixed(0)}%` : ""}</button>`;
+        }).join("");
+    el.innerHTML = `<span class="breadth-label">Całe ${UNIVERSE_LABELS[state.drawerUniverse].replace(" Momentum", "")} (${b.total}):</span><div class="breadth-track">${segs}</div>`;
+    el.querySelectorAll(".breadth-seg").forEach(seg => {
+        if (seg.dataset.stage === "none") return;
+        seg.addEventListener("click", () => {
+            const btn = document.querySelector(`#stageFilterBar .stage-filter-btn[data-stage="${seg.dataset.stage}"]`);
+            if (btn) btn.click();
+        });
+    });
+}
+
 function renderTable() {
     const d = state.data[state.drawerUniverse];
-    const allRows = d.constituents || [];
+    const allRows = (d.constituents || []).map(c => ({ ...c, ...miniVisualFields(c) }));
+    renderBreadthBar();
     // Ustawiane przez beforeRender ponizej, PO filtrze/sortowaniu — pasek wagi
     // skaluje sie wzgledem najwiekszej wagi wsrod AKTUALNIE WIDOCZNYCH wierszy
     // (po filtrze etapu), nie calego uniwersum.
@@ -1738,7 +1885,7 @@ function renderTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.weekly_chart && r.weekly_chart.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 12,
+        colspan: 15,
         emptyAllMsg: "Brak danych.",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => {
@@ -1773,6 +1920,9 @@ function renderTable() {
                 <span class="weight-bar-bg"><span class="weight-bar-fill" style="width:${(r.weight_pct / maxWeight * 100).toFixed(0)}%"></span></span>
                 ${r.weight_pct.toFixed(2)}%
             </td>
+            <td title="Cena tygodniowa (ostatnie ${MINI_WEEKS} tyg.) + EMA20 (przerywana)">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
+            <td>${rsBarHtml(r.rs_long)}</td>
+            <td title="TTM Squeeze tygodniowy (ostatnie ${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
             <td>${stageCellHtml(r.weekly_chart && r.weekly_chart.current_stage)}</td>
             <td>${tvRowButtonHtml(r.ticker, state.drawerUniverse)}</td>
         `,
@@ -1929,26 +2079,15 @@ if (typeof document !== "undefined") {
         initResetZoomButton();
         initMansfieldControls();
         initChartViewTabs();
+        initChartModal();
         initChartFullscreen();
         initStageFilter();
         updateSortHeaderClasses();
         renderTable(); // renderowane od razu (nie tylko po rozwinięciu) — na mobile lista jest domyślnym widokiem
         buildSearchIndex();
         initCmdk();
-        document.getElementById("chartBackBtn").addEventListener("click", () => {
-            document.querySelector(".workspace").classList.remove("mobile-chart-view");
-        });
-        // Domyslnie wybrana spolka: pierwsza z domyslnej zakladki drawera
-        // (state.drawerUniverse, dzis SP500 — replikacja SPMO).
-        const defaultRows = (state.data[state.drawerUniverse] || {}).constituents || [];
-        if (defaultRows.length > 0) {
-            state.selectedTicker = defaultRows[0].ticker;
-            state.selectedUniverse = state.drawerUniverse;
-            // Bez tego domyslna spolka zawsze pokazywala "Brak wlasnego
-            // wykresu" — currentRsEntry ustawial dotad tylko selectTicker().
-            state.currentRsEntry = findRsEntry(state.selectedTicker, state.selectedUniverse);
-        }
-        updateChartArea();
+        // Żadna spółka nie jest wybrana z góry — wykres pokazuje się dopiero w
+        // okienku po kliknięciu wiersza/kafelka (patrz selectTicker/openChartModal).
         hideLoadingOverlay();
     })();
 
@@ -1966,6 +2105,7 @@ if (typeof module !== "undefined" && module.exports) {
         classifyContinuation, combinedContinuationCandidates, state,
         effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
         sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
+        rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
         githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };

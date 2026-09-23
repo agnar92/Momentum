@@ -103,7 +103,7 @@
         </div>
     </div>
 
-    <div class="table-drawer" id="tableDrawer">
+    <div class="table-drawer open" id="tableDrawer">
         <div class="drawer-header">
             <div class="drawer-header-title">
                 <h2 id="drawerTitle">Pełna tabela — S&amp;P 500 Momentum</h2>
@@ -129,6 +129,7 @@
             <button class="stage-filter-btn" data-stage="3" title="Szczyt / dystrybucja — trend się wypłaszcza, rozważ realizację zysków.">Etap 3</button>
             <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą EMA20, unikaj nowych pozycji.">Etap 4</button>
         </div>
+        <div class="breadth-bar" id="breadthBar" hidden></div>
         <div class="stage-filter-bar wybicie-controls" id="wybicieControls" hidden>
             <label class="wybicie-slider" title="Maksymalny odstęp (w tygodniach) między przecięciem zera przez MACD a przecięciem zera przez RS 52 tyg. — oba sygnały muszą przyjść blisko siebie. 0 = ten sam tydzień.">
                 <span class="stage-filter-label">Okno wybicia:</span>
@@ -188,6 +189,9 @@
                         <th data-key="z_score">Z-score</th>
                         <th data-key="momentum_score">Momentum Score</th>
                         <th data-key="weight_pct">Waga</th>
+                        <th>Tydzień (26 tyg.)</th>
+                        <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
+                        <th>TTM (26 tyg.)</th>
                         <th>Etap</th>
                         <th class="tv-col">TV</th>
                     </tr>
@@ -233,6 +237,9 @@
                         <th data-key="momentum_pct">Momentum</th>
                         <th data-key="status">Status</th>
                         <th data-key="consolidation_weeks">Konsolidacja</th>
+                        <th>Cena (26 tyg.)</th>
+                        <th>TTM (26 tyg.)</th>
+                        <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
                         <th>Etap</th>
                         <th class="tv-col">TV</th>
                     </tr>
@@ -295,8 +302,9 @@
         </div>
     </div>
 
-    <!-- ====================== WYKRES: własny (Siła Relatywna) + przycisk do TradingView ====================== -->
-    <div class="charts-area">
+    <!-- ====================== WYKRES W OKIENKU (pop-up nad tabelą, ✕ / Esc / klik w tło zamyka) ====================== -->
+    <div class="chart-modal-backdrop" id="chartModal" hidden>
+    <div class="charts-area" role="dialog" aria-modal="true" aria-labelledby="chartTickerLabel">
         <button class="chart-back-btn" id="chartBackBtn">&larr; Lista spółek</button>
         <div class="chart-mode-toggle" id="chartModeToggle">
             <button class="chart-mode-btn active" id="openTvBtn"
@@ -312,6 +320,7 @@
                 ⤢ Pełny ekran
             </button>
             <div class="chart-ticker-label" id="chartTickerLabel"></div>
+            <button class="chart-modal-close" id="chartModalClose" type="button" title="Zamknij wykres (Esc)" aria-label="Zamknij wykres">✕</button>
         </div>
         <div class="chart-view-tabs" id="chartViewTabs">
             <button class="chart-view-tab active" id="chartViewTabOwn" data-view="own">📊 Wykres własny</button>
@@ -366,6 +375,7 @@
                 <div class="empty-state" id="tvOverviewEmpty" hidden>Wybierz spółkę, żeby zobaczyć jej dane na TradingView.</div>
             </div>
         </div>
+    </div>
     </div>
 
 </div>

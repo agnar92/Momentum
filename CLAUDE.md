@@ -1098,6 +1098,28 @@ flex child (no `.topbar-left` wrapper there).
   bar was counted as the run's first bar) — fixed by using a grouped `cumsum`; weekly counts now match
   TradingView.
 
+  **Layout: full-screen table + chart in a pop-up** (explicit user request: "rozwijaj tabele na cały ekran",
+  chart "jako pop up window a nie za tabelą", "z X do zamknięcia", "nie potrzebuje tego otwierać w tle").
+  `.table-drawer` is now static and always open (fills the width next to the sidebar; the old `>>>` toggle
+  and click-outside-to-collapse are gone). `.charts-area` lives inside `#chartModal`
+  (`.chart-modal-backdrop`, hidden by default): `selectTicker()` calls `openChartModal()` BEFORE
+  `updateChartArea()` (Chart.js measures the canvas at creation — a hidden modal would give 0×0), and
+  `closeChartModal()` (✕ `#chartModalClose`, Esc, click on the backdrop) destroys the charts BEFORE hiding.
+  Nothing is pre-selected on load. The Esc listener is registered before `initChartFullscreen()` so Esc in
+  chart fullscreen only leaves fullscreen. `syncChartsCrosshair()` skips charts whose `canvas` is null —
+  hiding the modal fires `mouseleave` under a hovering cursor, which used to update already-destroyed
+  charts ("ownerDocument"/"fullSize" errors). On phones the modal is simply full-screen; `chart.html`'s
+  standalone `.charts-area` is untouched.
+  **Mini visuals in the universe tables and the TTM Squeeze tab** (same inline-SVG building blocks as
+  Continuation): `miniVisualFields(c)` (last `MINI_WEEKS` = 26 weeks of `close_pct`/`ema20_pct`, TTM
+  `histogram`/`squeeze_on`/`fired`, latest `rsm_long` → sortable `rs_long`), `weeklySparkSvg(closes, ema,
+  squeeze?)` (optional red squeeze bars), `rsBarHtml()` (diverging bar around 0, capped at `RS_BAR_CAP` = 50),
+  `ttmMiniSvg()` (TradingView-style 4-color histogram + red/gold/gray dots). Universe tables add "Tydzień
+  (26 tyg.)", "RS 52 tyg.", "TTM (26 tyg.)"; TTM Squeeze adds "Cena (26 tyg.)" (with squeeze bars), "TTM
+  (26 tyg.)", "RS 52 tyg.". `#breadthBar`/`renderBreadthBar()`/`stageBreakdown()`: stacked bar of the
+  WHOLE universe's (`all_constituents`) Weinstein stages above universe tables; clicking a segment clicks the
+  matching `#stageFilterBar` button.
+
   **A second full, sortable, stage-filterable screener tab, "🧨 TTM Squeeze"**, sits next to the Wybicie
   tab (`data-universe="TTM_SQUEEZE"`) — the user's own redirect away from plain performance numbers
   (see the removed `growth_chart` panel, above) toward stocks that already have momentum but are sitting

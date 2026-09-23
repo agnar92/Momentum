@@ -243,7 +243,10 @@ function initMansfieldControls() {
 function syncChartsCrosshair(charts) {
     const applyToOthers = (sourceChart, dataIndex) => {
         charts.forEach(chart => {
-            if (chart === sourceChart) return;
+            // Wykres mógł już zostać zniszczony (destroy() zeruje canvas) —
+            // np. zamknięcie okienka z wykresem ukrywa canvas i przeglądarka
+            // wysyła wtedy "mouseleave" do kursora stojącego nad wykresem.
+            if (chart === sourceChart || !chart.canvas) return;
             let elements = [];
             if (dataIndex !== null) {
                 elements = chart.data.datasets

@@ -11,6 +11,7 @@ const {
     classifyContinuation, combinedContinuationCandidates,
     effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
     sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
+    rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
     githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
@@ -514,4 +515,58 @@ test("refreshProgressFromJobs reports queued, running step and final result", ()
     assert.equal(refreshProgressFromJobs({ jobs: [{ status: "completed", conclusion: "failure", steps: [] }] }).phase, "failure");
     assert.equal(refreshStepLabel("Set up job"), "Start maszyny");
     assert.equal(refreshStepLabel("Post Pobranie repozytorium"), "Sprzątanie");
+});
+
+// ---------- mini-wizualizacje tabel uniwersów / TTM Squeeze ----------
+
+test("rsBarHtml draws a positive/negative bar around zero and caps extreme values", () => {
+    assert.match(rsBarHtml(12.3), /rs-bar-pos/);
+    assert.match(rsBarHtml(12.3), /\+12\.3/);
+    assert.match(rsBarHtml(-4), /rs-bar-neg/);
+    const huge = rsBarHtml(300);
+    const width = Number(huge.match(/class="rs-bar-track"\/><rect x="[\d.]+" y="1" width="([\d.]+)"/)[1]);
+    assert.equal(width, 32, "capped at half of the 64px bar");
+    assert.match(rsBarHtml(null), /spark-empty/);
+});
+
+test("ttmMiniSvg colors histogram bars like TradingView and marks squeeze/fire dots", () => {
+    const svg = ttmMiniSvg([1, 2, 1.5, -1, -2, -1.5], [true, true, false, false, null, false], [false, false, true, false, false, false]);
+    assert.equal((svg.match(/class="ttm-up"/g) || []).length, 2);
+    assert.equal((svg.match(/class="ttm-up-fade"/g) || []).length, 1);
+    assert.equal((svg.match(/class="ttm-dn"/g) || []).length, 2);
+    assert.equal((svg.match(/class="ttm-dn-fade"/g) || []).length, 1);
+    assert.equal((svg.match(/ttm-dot-on/g) || []).length, 2);
+    assert.equal((svg.match(/ttm-dot-fired/g) || []).length, 1);
+    assert.match(ttmMiniSvg([], []), /spark-empty/);
+});
+
+test("miniVisualFields takes the last 26 weeks and the latest RS 52W", () => {
+    const n = 40;
+    const f = miniVisualFields({
+        weekly_chart: { close_pct: Array.from({ length: n }, (_, i) => i), ema20_pct: Array.from({ length: n }, (_, i) => i / 2) },
+        ttm_squeeze_chart: { histogram: Array(n).fill(1), squeeze_on: Array(n).fill(true), fired: Array(n).fill(false) },
+        mansfield_chart: { rsm_long: [1, 2, 7, null] },
+    });
+    assert.equal(f.mini_closes.length, 26);
+    assert.equal(f.mini_closes[25], 39);
+    assert.equal(f.rs_long, 7);
+    assert.equal(f.mini_sq_flags[0], 1);
+    assert.deepEqual(miniVisualFields({}).mini_closes, []);
+    assert.equal(miniVisualFields({}).rs_long, null);
+});
+
+test("stageBreakdown groups 2A/2B into stage 2 and counts missing stages", () => {
+    const b = stageBreakdown([
+        { weekly_chart: { current_stage: "2A" } }, { weekly_chart: { current_stage: "2B" } },
+        { weekly_chart: { current_stage: "4" } }, {},
+    ]);
+    assert.equal(b["2"], 2);
+    assert.equal(b["4"], 1);
+    assert.equal(b.none, 1);
+    assert.equal(b.total, 4);
+});
+
+test("weeklySparkSvg draws squeeze bars only when a squeeze series is passed", () => {
+    assert.equal((weeklySparkSvg([0, 1, 2], [0, 0.5, 1], [0, 1, 1]).match(/spark-sq/g) || []).length, 2);
+    assert.doesNotMatch(weeklySparkSvg([0, 1, 2], [0, 0.5, 1]), /spark-sq/);
 });
