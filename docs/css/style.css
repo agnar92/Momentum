@@ -281,6 +281,11 @@ html, body {
 .squeeze-status { font-size: 10.5px; font-weight: 600; }
 .squeeze-status-fired { color: #ffd23f; }
 .squeeze-status-consolidating { color: #e74c3c; }
+.sq-dots { display: inline-flex; gap: 2px; align-items: center; }
+.sq-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+.sq-dot-on { background: #e74c3c; }
+.sq-dot-off { background: #5c6370; }
+.sq-dot-na { background: transparent; border: 1px solid #5c6370; }
 
 /* ============================================================
    PANEL TABEL (rozwijany, ~80% szerokości ekranu)

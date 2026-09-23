@@ -238,6 +238,12 @@ const WYBICIE_DEFAULT_WINDOW_WEEKS = 6;
 const WYBICIE_DEFAULT_MONITOR_WEEKS = 6;
 const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
 
+// Domyślne suwaki screenera Continuation (patrz opis nad classifyContinuation).
+const CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS = 30;
+const CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS = 5;
+const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 20;
+const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
+
 const state = {
     data: {},
     selectedTicker: null,
@@ -251,6 +257,9 @@ const state = {
     sortDir: "asc",
     wybicieWindowWeeks: WYBICIE_DEFAULT_WINDOW_WEEKS,
     wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
+    contMaxSqueezeDays: CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS,
+    contFireLookbackDays: CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS,
+    contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
 };
 
 async function loadData() {
@@ -450,6 +459,89 @@ function combinedTtmSqueezeCandidates() {
 }
 
 // ============================================================
+// CONTINUATION — SCREENER (na wyraźną prośbę użytkownika): spółka JUŻ jest
+// w dynamicznym Etapie 2 na wykresie TYGODNIOWYM, a na wykresie DZIENNYM
+// robi krótką pauzę (TTM Squeeze na D1) — moment "dołączenia do trendu"
+// z celem ~10-20%. Tylko filtr sygnałów: wejście/wyjście użytkownik
+// decyduje sam.
+// Trend (tydzień): current_stage 2A/2B, momentum_score > 0, momentum 12M-1M
+//   >= suwak "Min. momentum", RS 26 tyg. (mansfield_chart.rsm_medium) > 0
+//   (silniejsza od swojego indeksu), cena nad dzienną SMA50.
+// Setup (dzień, daily_squeeze z run_query.py::compute_daily_squeeze):
+//   - "squeeze" 🌀 — squeeze trwa od CONTINUATION_MIN_SQUEEZE_DAYS do suwaka
+//     "Maks. squeeze" sesji (krótka konsolidacja w trendzie, nie długa baza),
+//   - "fired" 🔥 — squeeze odpalił w ostatnich "Wybicie w ciągu" sesjach po
+//     konsolidacji od CONTINUATION_MIN_SQUEEZE_DAYS do "Maks. squeeze" sesji
+//     (ten sam limit — chodzi o KRÓTKĄ pauzę), a histogram D1 jest
+//     dodatni (wybicie w GÓRĘ, nie w dół).
+// ============================================================
+const CONTINUATION_MIN_SQUEEZE_DAYS = 3;
+
+function classifyContinuation(ticker, universe, c, opts = {}) {
+    const maxSqueezeDays = opts.maxSqueezeDays ?? state.contMaxSqueezeDays;
+    const fireLookbackDays = opts.fireLookbackDays ?? state.contFireLookbackDays;
+    const minMomentumPct = opts.minMomentumPct ?? state.contMinMomentumPct;
+
+    const stage = c.weekly_chart && c.weekly_chart.current_stage;
+    if (stage !== "2A" && stage !== "2B") return null;
+    if (!(c.momentum_score > 0) || !(c.momentum_pct >= minMomentumPct)) return null;
+    const rsMed = c.mansfield_chart && c.mansfield_chart.rsm_medium;
+    const rsIdx = latestNonNullIdx(rsMed);
+    if (rsIdx < 0 || !(rsMed[rsIdx] > 0)) return null;
+    const d = c.daily_squeeze;
+    if (!d || !(d.sma50_pct > 0)) return null;
+
+    let status = null;
+    if (d.squeeze_on && d.squeeze_days >= CONTINUATION_MIN_SQUEEZE_DAYS && d.squeeze_days <= maxSqueezeDays) {
+        status = "squeeze";
+    } else if (!d.squeeze_on && d.days_since_fire != null && d.days_since_fire <= fireLookbackDays
+        && d.fire_consolidation_days != null && d.fire_consolidation_days >= CONTINUATION_MIN_SQUEEZE_DAYS
+        && d.fire_consolidation_days <= maxSqueezeDays && d.histogram > 0) {
+        status = "fired";
+    }
+    if (!status) return null;
+
+    return {
+        ticker, universe, sector: c.sector, price: c.price,
+        momentum_pct: c.momentum_pct,
+        current_stage: stage,
+        rs_medium: rsMed[rsIdx],
+        status,
+        squeeze_days: status === "squeeze" ? d.squeeze_days : d.fire_consolidation_days,
+        days_since_fire: status === "fired" ? d.days_since_fire : null,
+        histogram: d.histogram,
+        histogram_rising: d.histogram_prev != null && d.histogram > d.histogram_prev,
+        recent_squeeze: d.recent_squeeze || [],
+        sma50_pct: d.sma50_pct,
+        high_20d_pct: d.high_20d_pct,
+        return_1m_pct: d.return_1m_pct,
+    };
+}
+
+// Wszystkie uniwersa, bez duplikatów (pierwsze wystąpienie w kolejności
+// UNIVERSES wygrywa — jak combinedWybicieCandidates). Kolejność: świeże
+// wybicia z D1 squeeze'a (najnowsze na górze), potem trwające squeeze'y
+// (najmocniejsze momentum 12M na górze).
+function combinedContinuationCandidates(opts = {}) {
+    const rows = [];
+    const seen = new Set();
+    UNIVERSES.forEach(u => {
+        const universeData = state.data[u] || {};
+        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
+            if (seen.has(c.ticker)) return;
+            const r = classifyContinuation(c.ticker, u, c, opts);
+            if (r) { rows.push(r); seen.add(c.ticker); }
+        });
+    });
+    rows.sort((a, b) => {
+        if (a.status !== b.status) return a.status === "fired" ? -1 : 1;
+        if (a.status === "fired" && a.days_since_fire !== b.days_since_fire) return a.days_since_fire - b.days_since_fire;
+        return b.momentum_pct - a.momentum_pct;
+    });
+    return rows;
+}
+
+// ============================================================
 // SIDEBAR (kwadraty z top 10 tickerów na indeks)
 // ============================================================
 function renderSidebarTiles() {
@@ -542,6 +634,38 @@ function renderTtmSqueezePanel() {
     }
 }
 
+// Sidebar: kafelki screenera Continuation (patrz combinedContinuationCandidates).
+function renderContinuationPanel() {
+    const container = document.getElementById("tiles-CONTINUATION");
+    if (!container) return;
+
+    const rows = combinedContinuationCandidates();
+    const meta = document.getElementById("continuationMeta");
+    if (meta) meta.textContent = `${rows.length} spółek`;
+
+    container.innerHTML = "";
+    rows.forEach(r => {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+        tile.textContent = r.ticker;
+        tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · Etap ${r.current_stage} · `
+            + (r.status === "fired"
+                ? `D1 squeeze odpalił ${r.days_since_fire} sesji temu (po ${r.squeeze_days} sesjach)`
+                : `D1 squeeze od ${r.squeeze_days} sesji`);
+        tile.dataset.ticker = r.ticker;
+        tile.dataset.universe = r.universe;
+        if (r.ticker === state.selectedTicker) tile.classList.add("selected");
+        tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        container.appendChild(tile);
+    });
+    if (rows.length === 0) {
+        const empty = document.createElement("div");
+        empty.style.cssText = "font-size:10px;color:var(--text-faint);grid-column:1/-1;padding:4px 0;";
+        empty.textContent = "brak danych";
+        container.appendChild(empty);
+    }
+}
+
 // Kazdy ticker z glownego uniwersum (state.data[u].all_constituents — CALE
 // uniwersum, nie tylko decyl, patrz FULL_COVERAGE_UNIVERSES/_build_full_universe_records
 // w run_query.py; dla uniwersow rownowazonych rowne "constituents") ma wlasny
@@ -561,7 +685,7 @@ function selectTicker(ticker, universe) {
     document.querySelectorAll(".ticker-tile").forEach(t => {
         t.classList.toggle("selected", t.dataset.ticker === ticker);
     });
-    document.querySelectorAll("#momentumTableBody tr, #wybicieTableBody tr, #ttmSqueezeTableBody tr").forEach(tr => {
+    document.querySelectorAll("#momentumTableBody tr, #wybicieTableBody tr, #ttmSqueezeTableBody tr, #continuationTableBody tr").forEach(tr => {
         tr.classList.toggle("row-selected", tr.dataset.ticker === ticker);
     });
     state.currentRsEntry = findRsEntry(ticker, universe);
@@ -872,11 +996,15 @@ function updateSortHeaderClasses() {
 function showDrawerTable(universe) {
     const isWybicie = universe === "WYBICIE";
     const isTtmSqueeze = universe === "TTM_SQUEEZE";
-    document.getElementById("momentumTable").hidden = isWybicie || isTtmSqueeze;
+    const isContinuation = universe === "CONTINUATION";
+    document.getElementById("momentumTable").hidden = isWybicie || isTtmSqueeze || isContinuation;
     document.getElementById("wybicieTable").hidden = !isWybicie;
     const wybicieControls = document.getElementById("wybicieControls");
     if (wybicieControls) wybicieControls.hidden = !isWybicie;
     document.getElementById("ttmSqueezeTable").hidden = !isTtmSqueeze;
+    document.getElementById("continuationTable").hidden = !isContinuation;
+    const continuationControls = document.getElementById("continuationControls");
+    if (continuationControls) continuationControls.hidden = !isContinuation;
     // Screenery obejmuja CALE uniwersa i kazda spolka niesie wlasny
     // current_stage — filtr etapow ma tu wiec sens tak samo jak w pelnej
     // tabeli uniwersum.
@@ -886,7 +1014,9 @@ function showDrawerTable(universe) {
         ? "Pełna tabela — Wybicie"
         : isTtmSqueeze
             ? "Pełna tabela — TTM Squeeze"
-            : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
+            : isContinuation
+                ? "Continuation — Etap 2 + krótki squeeze D1"
+                : `Pełna tabela — ${UNIVERSE_LABELS[universe]}`;
     renderActiveDrawerTable();
 }
 
@@ -897,6 +1027,7 @@ function showDrawerTable(universe) {
 function renderActiveDrawerTable() {
     if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
     else if (state.drawerUniverse === "TTM_SQUEEZE") renderTtmSqueezeTable();
+    else if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
     else renderTable();
 }
 
@@ -1040,6 +1171,104 @@ function renderTtmSqueezeTable() {
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
+}
+
+// Pasek kropek jak na TradingView: czerwona = squeeze w danej sesji, szara =
+// brak squeeze'a (ostatnie DAILY_SQUEEZE_RECENT_DAYS sesji, najnowsza z prawej).
+function squeezeDotsHtml(recent) {
+    const dots = (recent || []).map(v =>
+        `<span class="sq-dot ${v === 1 ? "sq-dot-on" : v === 0 ? "sq-dot-off" : "sq-dot-na"}"></span>`).join("");
+    return `<span class="sq-dots" title="TTM Squeeze D1, ostatnie ${(recent || []).length} sesji (czerwona = squeeze)">${dots}</span>`;
+}
+
+function continuationStatusHtml(r) {
+    return r.status === "fired"
+        ? `<span class="squeeze-status squeeze-status-fired">🔥 Odpalił ${r.days_since_fire === 0 ? "dziś" : `${r.days_since_fire} ses. temu`}</span>`
+        : `<span class="squeeze-status squeeze-status-consolidating">🌀 Squeeze</span>`;
+}
+
+function signedPctHtml(v) {
+    if (v == null) return "—";
+    return `<span class="${v >= 0 ? "positive" : "negative"}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
+}
+
+function continuationRowHtml(r, position) {
+    const arrow = r.histogram_rising ? "↑" : "↓";
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${r.sector || ""}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
+        <td class="positive">${r.rs_medium.toFixed(1)}</td>
+        <td>${continuationStatusHtml(r)}</td>
+        <td>${r.squeeze_days} ses.</td>
+        <td>${squeezeDotsHtml(r.recent_squeeze)}</td>
+        <td class="${r.histogram >= 0 ? "positive" : "negative"}" title="Histogram TTM D1 ${r.histogram_rising ? "rośnie" : "spada"}">${r.histogram.toFixed(2)} ${arrow}</td>
+        <td>${signedPctHtml(r.sma50_pct)}</td>
+        <td title="Odległość od najwyższego High z 20 sesji">${signedPctHtml(r.high_20d_pct)}</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+function renderContinuationTable() {
+    const allRows = combinedContinuationCandidates();
+
+    renderScreenerTable({
+        tbody: document.getElementById("continuationTableBody"),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 15,
+        emptyAllMsg: `Brak spółek w Etapie 2 (momentum ≥ ${state.contMinMomentumPct}%, RS 26 tyg. > 0, nad SMA50 D1) z krótkim squeeze D1 (≤ ${state.contMaxSqueezeDays} sesji) albo wybiciem z niego w ostatnich ${state.contFireLookbackDays} sesjach.`,
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: (rows) => flatScreenerMetaText(allRows, rows),
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => continuationRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
+    });
+}
+
+// Suwaki nad tabelą Continuation (#continuationControls) — ten sam wzorzec co
+// initWybicieControls, własny klucz localStorage.
+function initContinuationControls() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(CONTINUATION_SETTINGS_KEY) || "null");
+        if (saved) {
+            if (Number.isFinite(saved.maxSqueezeDays)) state.contMaxSqueezeDays = saved.maxSqueezeDays;
+            if (Number.isFinite(saved.fireLookbackDays)) state.contFireLookbackDays = saved.fireLookbackDays;
+            if (Number.isFinite(saved.minMomentumPct)) state.contMinMomentumPct = saved.minMomentumPct;
+        }
+    } catch (e) { /* brak localStorage — zostają domyślne */ }
+
+    const bind = (inputId, valueId, stateKey, unit) => {
+        const input = document.getElementById(inputId);
+        const valueEl = document.getElementById(valueId);
+        if (!input) return;
+        input.value = state[stateKey];
+        if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
+        input.addEventListener("input", () => {
+            state[stateKey] = Number(input.value);
+            if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
+            try {
+                localStorage.setItem(CONTINUATION_SETTINGS_KEY, JSON.stringify({
+                    maxSqueezeDays: state.contMaxSqueezeDays,
+                    fireLookbackDays: state.contFireLookbackDays,
+                    minMomentumPct: state.contMinMomentumPct,
+                }));
+            } catch (e) { /* ignoruj */ }
+            renderContinuationPanel();
+            if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
+        });
+    };
+    bind("contMaxSqueezeInput", "contMaxSqueezeValue", "contMaxSqueezeDays", " ses.");
+    bind("contFireLookbackInput", "contFireLookbackValue", "contFireLookbackDays", " ses.");
+    bind("contMinMomentumInput", "contMinMomentumValue", "contMinMomentumPct", "%");
 }
 
 function renderTable() {
@@ -1236,9 +1465,11 @@ if (typeof document !== "undefined") {
         initConnStatus();
         await loadData();
         initWybicieControls();
+        initContinuationControls();
         renderSidebarTiles();
         renderWybiciePanel();
         renderTtmSqueezePanel();
+        renderContinuationPanel();
         initDrawer();
         initOpenTvButton();
         initResetZoomButton();
@@ -1277,7 +1508,8 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         compareRows,
-        weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
+        weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
+        classifyContinuation, combinedContinuationCandidates, state,
         findRsEntry, buildSearchIndex, getCmdkIndex,
     };
 }

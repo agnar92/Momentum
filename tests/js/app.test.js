@@ -8,6 +8,7 @@ const path = require("node:path");
 
 const {
     weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
+    classifyContinuation, combinedContinuationCandidates,
     findRsEntry, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
 
@@ -301,4 +302,85 @@ test("buildSearchIndex indexes tickers from all_constituents, not just the curre
     const tickers = getCmdkIndex().map(i => i.ticker);
     assert.ok(tickers.includes("TYL"), "TYL powinien byc w indeksie, mimo ze jest poza constituents");
     assert.ok(tickers.includes("AAA"));
+});
+
+// ---------- classifyContinuation / combinedContinuationCandidates ----------
+
+function continuationConstituent(overrides = {}, dailyOverrides = {}) {
+    return {
+        sector: "Tech", price: 100, momentum_pct: 40, momentum_score: 2,
+        weekly_chart: { current_stage: "2B" },
+        mansfield_chart: { rsm_medium: [1, 2, 3, null] },
+        daily_squeeze: {
+            squeeze_on: true, squeeze_days: 8, days_since_fire: 40, fire_consolidation_days: 12,
+            histogram: 1.5, histogram_prev: 1.0, recent_squeeze: [0, 1, 1],
+            sma50_pct: 6, high_20d_pct: -2, return_1m_pct: 5,
+            ...dailyOverrides,
+        },
+        ...overrides,
+    };
+}
+
+const CONT_OPTS = { maxSqueezeDays: 30, fireLookbackDays: 5, minMomentumPct: 20 };
+
+test("classifyContinuation accepts a Stage 2 stock in a short daily squeeze", () => {
+    const r = classifyContinuation("AAA", "SP500", continuationConstituent(), CONT_OPTS);
+    assert.ok(r);
+    assert.equal(r.status, "squeeze");
+    assert.equal(r.squeeze_days, 8);
+    assert.equal(r.rs_medium, 3);
+    assert.equal(r.histogram_rising, true);
+});
+
+test("classifyContinuation accepts a fresh upward fire out of a daily squeeze", () => {
+    const r = classifyContinuation("AAA", "SP500", continuationConstituent({}, {
+        squeeze_on: false, squeeze_days: 0, days_since_fire: 2, fire_consolidation_days: 10, histogram: 0.8,
+    }), CONT_OPTS);
+    assert.equal(r.status, "fired");
+    assert.equal(r.days_since_fire, 2);
+    assert.equal(r.squeeze_days, 10);
+});
+
+test("classifyContinuation applies the max squeeze length to fires too", () => {
+    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, {
+        squeeze_on: false, squeeze_days: 0, days_since_fire: 2, fire_consolidation_days: 42, histogram: 0.8,
+    }), CONT_OPTS), null);
+});
+
+test("classifyContinuation rejects a fire with a negative daily histogram (breakdown)", () => {
+    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, {
+        squeeze_on: false, squeeze_days: 0, days_since_fire: 2, histogram: -0.5,
+    }), CONT_OPTS), null);
+});
+
+test("classifyContinuation rejects squeezes that are too short or too long", () => {
+    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_days: 2 }), CONT_OPTS), null);
+    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_days: 31 }), CONT_OPTS), null);
+});
+
+test("classifyContinuation requires Stage 2, momentum, RS 26W > 0 and price above daily SMA50", () => {
+    const opts = CONT_OPTS;
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ weekly_chart: { current_stage: "1" } }), opts), null);
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ momentum_pct: 10 }), opts), null);
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ mansfield_chart: { rsm_medium: [1, -0.5] } }), opts), null);
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({}, { sma50_pct: -1 }), opts), null);
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ daily_squeeze: null }), opts), null);
+});
+
+test("combinedContinuationCandidates dedupes tickers and puts fresh fires first", () => {
+    const saved = state.data;
+    state.data = {
+        SP500: { all_constituents: [
+            { ticker: "SQZ", ...continuationConstituent() },
+            { ticker: "FIRE", ...continuationConstituent({}, { squeeze_on: false, squeeze_days: 0, days_since_fire: 1 }) },
+        ] },
+        NASDAQ100: { all_constituents: [{ ticker: "SQZ", ...continuationConstituent() }] },
+    };
+    try {
+        const rows = combinedContinuationCandidates(CONT_OPTS);
+        assert.deepEqual(rows.map(r => r.ticker), ["FIRE", "SQZ"]);
+        assert.equal(rows[1].universe, "SP500");
+    } finally {
+        state.data = saved;
+    }
 });

@@ -1056,6 +1056,24 @@ flex child (no `.topbar-left` wrapper there).
   stage-filterable table shape as TTM Squeeze (`renderWybicieTable()`/`wybicieRowHtml()`), plus a matching
   sidebar tile group (`renderWybiciePanel()`, `#tiles-WYBICIE`).
 
+  **"🚀 Continuation" screener tab** (`data-universe="CONTINUATION"`, explicit user request: a stock
+  ALREADY in a dynamic Stage 2 that takes a SHORT pause on the DAILY chart, to join the trend for ~10-20% —
+  filter only, the user decides entries/exits). The only screener built on DAILY data:
+  `run_query.py::compute_daily_squeeze()` exports a compact `daily_squeeze` summary (not a chart) on every
+  constituent record — TTM Squeeze on daily bars via `_ttm_squeeze_series()` (the SAME LazyBeara core the
+  weekly `compute_ttm_squeeze_chart` now also calls, `DAILY_SQUEEZE_LENGTH` = 20 sessions):
+  `squeeze_on`/`squeeze_days`/`days_since_fire`/`fire_consolidation_days`/`histogram`/`histogram_prev`/
+  `recent_squeeze` (last 20 sessions, drawn as TradingView-style dots) plus `sma50_pct`/`ema21_pct`/
+  `return_1m_pct`/`high_20d_pct`. `classifyContinuation()` in `app.js`: weekly `current_stage` 2A/2B,
+  `momentum_score > 0`, `momentum_pct >=` slider, latest `rsm_medium > 0`, daily `sma50_pct > 0`; then
+  🌀 "squeeze" (on for `CONTINUATION_MIN_SQUEEZE_DAYS` (3) .. slider max sessions) or 🔥 "fired" (fired
+  within slider sessions, after a 3..max-session squeeze, daily histogram > 0). Three sliders
+  (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): max squeeze length
+  (default 30), fire lookback (5), min 12M momentum (20%). Sidebar tile group `#tiles-CONTINUATION`.
+  Note: `squeeze_count` (and so `fire_consolidation_weeks`) had an off-by-one (the resetting non-squeeze
+  bar was counted as the run's first bar) — fixed by using a grouped `cumsum`; weekly counts now match
+  TradingView.
+
   **A second full, sortable, stage-filterable screener tab, "🧨 TTM Squeeze"**, sits next to the Wybicie
   tab (`data-universe="TTM_SQUEEZE"`) — the user's own redirect away from plain performance numbers
   (see the removed `growth_chart` panel, above) toward stocks that already have momentum but are sitting
