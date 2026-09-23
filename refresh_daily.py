@@ -5,9 +5,10 @@ ciezkiego pipeline'u (fetch_data.py + run_query.py liczy sie nadal raz w
 tygodniu, w sobote).
 
 1. Wybiera "tygodniowych zwyciezcow" z JUZ wygenerowanych docs/data/{universe}.json
-   (sobotni eksport): Etap 2A/2B, momentum_score > 0, ostatni rsm_medium > 0.
-   To NADZBIOR bramki trendu z app.js::classifyContinuation — prog momentum
-   12M jest suwakiem na stronie, wiec tu go nie stosujemy (front odfiltruje).
+   (sobotni eksport): Etap 2A/2B, momentum 12M (momentum_pct) > 0, ostatni
+   Mansfield RS 52 tyg. (rsm_long) > 0 — ta sama bramka co
+   app.js::continuationWeeklyGate przy suwaku momentum = 0 (NADZBIOR dla
+   wyzszych ustawien suwaka; front odfiltruje).
 2. Pobiera z Yahoo Finance (fetch_data._download_price_rows — ta sama funkcja co
    pelny pipeline) dzienne swiece TYLKO tych spolek (~100 zamiast ~700) i tylko
    za ostatnie run_query.DAILY_SQUEEZE_LOOKBACK_DAYS dni.
@@ -57,9 +58,9 @@ def weekly_winners(docs_data_dir):
             if not ticker or ticker in seen:
                 continue
             stage = (c.get("weekly_chart") or {}).get("current_stage")
-            rs_medium = _latest_non_null((c.get("mansfield_chart") or {}).get("rsm_medium"))
-            if stage in WEEKLY_WINNER_STAGES and (c.get("momentum_score") or 0) > 0 \
-                    and rs_medium is not None and rs_medium > 0:
+            rs_long = _latest_non_null((c.get("mansfield_chart") or {}).get("rsm_long"))
+            if stage in WEEKLY_WINNER_STAGES and (c.get("momentum_pct") or 0) > 0 \
+                    and rs_long is not None and rs_long > 0:
                 winners.append((ticker, universe))
                 seen.add(ticker)
     return winners

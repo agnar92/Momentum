@@ -313,7 +313,7 @@ function continuationConstituent(overrides = {}, dailyOverrides = {}) {
     return {
         sector: "Tech", price: 100, momentum_pct: 40, momentum_score: 2,
         weekly_chart: { current_stage: "2B" },
-        mansfield_chart: { rsm_medium: [1, 2, 3, null] },
+        mansfield_chart: { rsm_medium: [-1, -2, -3], rsm_long: [1, 2, 3, null] },
         daily_squeeze: {
             squeeze_on: true, squeeze_days: 8, days_since_fire: 40, fire_consolidation_days: 12,
             histogram: 1.5, histogram_prev: 1.0, recent_squeeze: [0, 1, 1],
@@ -331,7 +331,7 @@ test("classifyContinuation accepts a Stage 2 stock in a short daily squeeze", ()
     assert.ok(r);
     assert.equal(r.status, "squeeze");
     assert.equal(r.squeeze_days, 8);
-    assert.equal(r.rs_medium, 3);
+    assert.equal(r.rs_long, 3, "gate reads RS 52W (rsm_long), not RS 26W");
     assert.equal(r.histogram_rising, true);
 });
 
@@ -361,11 +361,13 @@ test("classifyContinuation rejects squeezes that are too short or too long", () 
     assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_days: 31 }), CONT_OPTS), null);
 });
 
-test("classifyContinuation requires Stage 2, momentum, RS 26W > 0 and price above daily SMA50", () => {
+test("classifyContinuation requires Stage 2, positive momentum, RS 52W > 0 and price above daily SMA50", () => {
     const opts = CONT_OPTS;
     assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ weekly_chart: { current_stage: "1" } }), opts), null);
     assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ momentum_pct: 10 }), opts), null);
-    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ mansfield_chart: { rsm_medium: [1, -0.5] } }), opts), null);
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ mansfield_chart: { rsm_long: [1, -0.5] } }), opts), null);
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ momentum_pct: -1 }), { ...opts, minMomentumPct: 0 }), null);
+    assert.ok(classifyContinuation("A", "SP500", continuationConstituent({ momentum_pct: 1 }), { ...opts, minMomentumPct: 0 }));
     assert.equal(classifyContinuation("A", "SP500", continuationConstituent({}, { sma50_pct: -1 }), opts), null);
     assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ daily_squeeze: null }), opts), null);
 });

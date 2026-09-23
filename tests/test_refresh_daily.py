@@ -6,12 +6,12 @@ import pandas as pd
 import refresh_daily
 
 
-def _constituent(ticker, stage="2B", score=1.5, rs=(1.0, 2.0)):
+def _constituent(ticker, stage="2B", momentum_pct=12.0, rs=(1.0, 2.0)):
     return {
         "ticker": ticker,
-        "momentum_score": score,
+        "momentum_pct": momentum_pct,
         "weekly_chart": {"current_stage": stage},
-        "mansfield_chart": {"rsm_medium": list(rs) + [None]},
+        "mansfield_chart": {"rsm_long": list(rs) + [None]},
     }
 
 
@@ -24,7 +24,7 @@ def test_weekly_winners_applies_stage_momentum_and_rs_gate(tmp_path):
     _write_universe(tmp_path, "SP500", [
         _constituent("AAA"),
         _constituent("BBB", stage="3"),
-        _constituent("CCC", score=0),
+        _constituent("CCC", momentum_pct=-3.0),
         _constituent("DDD", rs=(2.0, -0.5)),
         _constituent("EEE", stage="2A"),
     ])

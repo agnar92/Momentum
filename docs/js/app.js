@@ -241,7 +241,7 @@ const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
 // Domyślne suwaki screenera Continuation (patrz opis nad classifyContinuation).
 const CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS = 30;
 const CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS = 5;
-const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 20;
+const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 0;
 const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
 
 const state = {
@@ -471,8 +471,8 @@ function combinedTtmSqueezeCandidates() {
 // robi krótką pauzę (TTM Squeeze na D1) — moment "dołączenia do trendu"
 // z celem ~10-20%. Tylko filtr sygnałów: wejście/wyjście użytkownik
 // decyduje sam.
-// Trend (tydzień): current_stage 2A/2B, momentum_score > 0, momentum 12M-1M
-//   >= suwak "Min. momentum", RS 26 tyg. (mansfield_chart.rsm_medium) > 0
+// Trend (tydzień): current_stage 2A/2B, momentum 12M-1M > 0 (i >= suwak "Min.
+//   momentum", domyślnie 0), klasyczny Mansfield RS 52 tyg. (mansfield_chart.rsm_long) > 0
 //   (silniejsza od swojego indeksu), cena nad dzienną SMA50.
 // Setup (dzień, daily_squeeze z run_query.py::compute_daily_squeeze):
 //   - "squeeze" 🌀 — squeeze trwa od CONTINUATION_MIN_SQUEEZE_DAYS do suwaka
@@ -494,17 +494,19 @@ function effectiveDaily(c) {
     return base || null;
 }
 
-// Bramka TYGODNIOWA ("tygodniowi zwycięzcy"): Etap 2A/2B, momentum_score > 0,
-// momentum 12M >= suwak, RS 26 tyg. > 0. Zwraca null albo { stage, rsMed }.
+// Bramka TYGODNIOWA ("tygodniowi zwycięzcy"): Etap 2A/2B, momentum 12M > 0 i
+// >= suwak, Mansfield RS 52 tyg. > 0 — klasyczne okno Weinsteina, na wyraźną
+// prośbę użytkownika (wcześniej było tu RS 26 tyg.). NIE momentum_score: jest
+// zawsze > 0 (1+Z albo 1/(1-Z)), więc nic by nie filtrował. Zwraca null albo { stage, rsLong }.
 // refresh_daily.py stosuje tę samą bramkę bez progu momentum (nadzbiór).
 function continuationWeeklyGate(c, minMomentumPct) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
     if (stage !== "2A" && stage !== "2B") return null;
-    if (!(c.momentum_score > 0) || !(c.momentum_pct >= minMomentumPct)) return null;
-    const rsMed = c.mansfield_chart && c.mansfield_chart.rsm_medium;
-    const rsIdx = latestNonNullIdx(rsMed);
-    if (rsIdx < 0 || !(rsMed[rsIdx] > 0)) return null;
-    return { stage, rsMed: rsMed[rsIdx] };
+    if (!(c.momentum_pct > 0) || !(c.momentum_pct >= minMomentumPct)) return null;
+    const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
+    const rsIdx = latestNonNullIdx(rsLong);
+    if (rsIdx < 0 || !(rsLong[rsIdx] > 0)) return null;
+    return { stage, rsLong: rsLong[rsIdx] };
 }
 
 // Status setupu D1 niezależnie od SMA50: "squeeze" / "fired" / null.
@@ -535,7 +537,7 @@ function continuationRowBase(ticker, universe, c, gate, d) {
         price: d && d.close != null ? d.close : c.price,
         momentum_pct: c.momentum_pct,
         current_stage: gate.stage,
-        rs_medium: gate.rsMed,
+        rs_long: gate.rsLong,
         daily_date: d ? d.date : null,
         histogram: d ? d.histogram : null,
         histogram_rising: !!(d && d.histogram_prev != null && d.histogram > d.histogram_prev),
@@ -1359,7 +1361,7 @@ function continuationRowHtml(r, position) {
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
         <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
-        <td class="positive">${r.rs_medium.toFixed(1)}</td>
+        <td class="positive">${r.rs_long.toFixed(1)}</td>
         <td>${continuationStatusHtml(r)}</td>
         <td>${r.squeeze_days} ses.</td>
         <td>${squeezeDotsHtml(r.recent_squeeze)}</td>
@@ -1381,7 +1383,7 @@ function renderContinuationTable() {
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
         colspan: 15,
-        emptyAllMsg: `Brak spółek w Etapie 2 (momentum ≥ ${state.contMinMomentumPct}%, RS 26 tyg. > 0, nad SMA50 D1) z krótkim squeeze D1 (≤ ${state.contMaxSqueezeDays} sesji) albo wybiciem z niego w ostatnich ${state.contFireLookbackDays} sesjach.`,
+        emptyAllMsg: `Brak spółek w Etapie 2 (momentum > 0 i ≥ ${state.contMinMomentumPct}%, RS 52 tyg. > 0, nad SMA50 D1) z krótkim squeeze D1 (≤ ${state.contMaxSqueezeDays} sesji) albo wybiciem z niego w ostatnich ${state.contFireLookbackDays} sesjach.`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
@@ -1444,7 +1446,7 @@ function winnerRowHtml(r, position) {
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
         <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
-        <td class="positive">${r.rs_medium.toFixed(1)}</td>
+        <td class="positive">${r.rs_long.toFixed(1)}</td>
         <td title="Cena tygodniowa (ostatnie ${WINNERS_WEEKLY_SPARK_WEEKS} tyg.) + EMA20 (przerywana)">${weeklySparkSvg(r.weekly_closes, r.weekly_ema)}</td>
         <td title="Cena dzienna (ostatnie ${r.daily_closes.length} sesji), czerwone kreski = dni squeeze'a D1">${dailySparkSvg(r.daily_closes, r.daily_squeeze)}</td>
         <td>${winnerStatusHtml(r)}</td>
@@ -1467,7 +1469,7 @@ function renderWinnersTable() {
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
         colspan: 12,
-        emptyAllMsg: `Brak spółek w Etapie 2 z momentum ≥ ${state.contMinMomentumPct}% i RS 26 tyg. > 0.`,
+        emptyAllMsg: `Brak spółek w Etapie 2 z momentum > 0 (≥ ${state.contMinMomentumPct}%) i RS 52 tyg. > 0.`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => {
             const withSignal = rows.filter(r => r.signal).length;

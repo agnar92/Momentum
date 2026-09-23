@@ -1065,11 +1065,13 @@ flex child (no `.topbar-left` wrapper there).
   `squeeze_on`/`squeeze_days`/`days_since_fire`/`fire_consolidation_days`/`histogram`/`histogram_prev`/
   `recent_squeeze` (last 20 sessions, drawn as TradingView-style dots) plus `sma50_pct`/`ema21_pct`/
   `return_1m_pct`/`high_20d_pct`. `classifyContinuation()` in `app.js`: weekly `current_stage` 2A/2B,
-  `momentum_score > 0`, `momentum_pct >=` slider, latest `rsm_medium > 0`, daily `sma50_pct > 0`; then
+  `momentum_pct > 0` (and `>=` slider), latest `rsm_long > 0` (classic 52-week Mansfield RS — the user's
+  explicit call, it was `rsm_medium`/26 weeks at first; NOT `momentum_score > 0`, which is always true since
+  the score is `1+Z`/`1/(1-Z)`), daily `sma50_pct > 0`; then
   🌀 "squeeze" (on for `CONTINUATION_MIN_SQUEEZE_DAYS` (3) .. slider max sessions) or 🔥 "fired" (fired
   within slider sessions, after a 3..max-session squeeze, daily histogram > 0). Three sliders
   (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): max squeeze length
-  (default 30), fire lookback (5), min 12M momentum (20%). Sidebar tile group `#tiles-CONTINUATION`.
+  (default 30), fire lookback (5), min 12M momentum (0% — the user: "powyżej zera jest ok"). Sidebar tile group `#tiles-CONTINUATION`.
   **"🏆 Tygodniowi zwycięzcy" sub-table** under the signals table (`#continuationWinnersSection`,
   `combinedWeeklyWinners()`/`renderWinnersTable()`): EVERY stock passing the weekly gate
   (`continuationWeeklyGate()`), with its D1 status (signal / squeeze outside the thresholds / no setup) and
@@ -1083,7 +1085,7 @@ flex child (no `.topbar-left` wrapper there).
   progress bar (`refreshProgressFromJobs()`; step `name:`s in the workflow are the labels), then reads the
   fresh `docs/data/continuation.json` through the contents API (bypasses the Pages CDN cache) and
   re-renders. The workflow runs `refresh_daily.py`: weekly winners from the committed `docs/data/*.json`
-  (same gate minus the momentum-% slider, i.e. a superset, ~100 tickers) → `fetch_data._download_price_rows`
+  (same gate at momentum slider = 0, i.e. a superset for higher slider values, ~90 tickers) → `fetch_data._download_price_rows`
   for only those tickers/last `DAILY_SQUEEZE_LOOKBACK_DAYS` → `run_query.compute_daily_squeeze` on an
   in-memory DuckDB → `continuation.json` (~80 KB). It never touches/commits `momentum_data.duckdb`.
   `effectiveDaily(c)` uses the `continuation.json` summary when its `date` is newer than the weekly
