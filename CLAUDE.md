@@ -1016,7 +1016,7 @@ site's data survives independently of any given Pages deploy and a fresh checkou
 immediately servable without having to run the pipeline first. CI still regenerates and re-commits it on
 every run (see CI section below) — it isn't hand-maintained.
 
-Every page shares the same `.topbar` (brand + `<nav>` linking Dashboard/Rebalanser USA/Rebalanser PL/
+Every page shares the same `.topbar` (brand + `<nav>` linking Indeksy/Sygnały/Rebalanser USA/Rebalanser PL/
 Strategia — see `chart.html` below for why it doesn't also link the rebalancer pages↔chart pages) — on
 narrow phones the user reported the nav links
 themselves getting "lekko ukryty" (slightly cut off): `.brand`'s wordmark (plus, on `index.html`, the
@@ -1030,10 +1030,62 @@ never what gives way first); `.topbar-left` on `index.html` already had `min-wid
 same gap for `.brand` inside it and for `rebalance.html`/`chart.html`, where `.brand` is `.topbar`'s direct
 flex child (no `.topbar-left` wrapper there).
 
-- **`index.html` / `js/app.js`** — main dashboard. `UNIVERSES` in `app.js` (kept in sync with
+- **`index.html` / `js/app.js` ("Indeksy", renamed from "Dashboard") + `signals.html` / `js/signals.js`
+  ("Sygnały") — ONE page split into two, at the user's explicit request ("Zmien nazwe z Dasbort na idexy,
+  i wyciagnij Wybicie, TTM squeez oraz continuation do innej strony").** `index.html`'s topbar link went
+  from "Dashboard" to "Indeksy" (same page, same `js/app.js`, no functional change) — it's the six
+  per-universe momentum tables (SP500…sWIG80) plus Ctrl+K search. The three cross-universe screener tabs
+  that used to live alongside them — **💥 Wybicie**, **🧨 TTM Squeeze**, **🚀 Continuation** (with its
+  "🏆 Tygodniowi zwycięzcy" sub-table and the "🔄 Odśwież dane D1" GitHub Actions button) — moved verbatim
+  to a brand-new page, `signals.html`/`js/signals.js` (name picked freely, since the user only asked for
+  "some other page"; "Sygnały" = "Signals", matching what these three tabs actually are: trading-signal
+  screeners, as opposed to Indeksy's plain per-universe replications). The screeners' own logic
+  (`classifyWybicie`/`combinedWybicieCandidates`/`classifyTtmSqueeze`/`combinedTtmSqueezeCandidates`/
+  `classifyContinuation`/`combinedContinuationCandidates`/`classifyWeeklyWinner`/`combinedWeeklyWinners`/
+  the whole GitHub-Actions daily-refresh mechanism) is an UNCHANGED, direct move — every mechanic described
+  in the next several paragraphs below (thresholds, sliders, sidebar tile wording, the daily-refresh flow)
+  is exactly as documented, just physically living in `signals.js` now instead of `app.js`, and the sidebar
+  groups/drawer tabs/tables/`localStorage` keys living in `signals.html` instead of `index.html` — read any
+  "`app.js`"/"the dashboard" in those specific paragraphs as "`signals.js`"/"the Sygnały page". `signals.js`
+  has its OWN `loadData()` (same all-6-`UNIVERSES` fetch `app.js` already had, plus the same optional
+  `continuation.json` daily-override fetch) and its OWN, smaller `state` (no per-universe drawer concept —
+  `state.drawerUniverse` only ever holds `"WYBICIE"`/`"TTM_SQUEEZE"`/`"CONTINUATION"`, defaulting to
+  `"WYBICIE"`) — entirely independent of `app.js`'s own `state`, same "two pages, two independent states"
+  convention already established by `rebalance.html`/`rebalance_pl.html`. `signals.html` has no Ctrl+K —
+  that's a "jump to any ticker to see its chart" convenience that stays specific to Indeksy's full
+  per-universe tables; Sygnały's own tables are already a short, pre-filtered list, so the shortcut wasn't
+  worth duplicating.
+
+  **`js/chart-modal.js` is a NEW shared file this split required** — both pages need the exact same "click
+  a row/tile → open a modal with the 5-panel stage-analysis chart, optionally switch to the TradingView
+  company-data tab, optionally go fullscreen" experience, so that whole mechanism (`findRsEntry`/
+  `selectTicker`/`openChartModal`/`closeChartModal`/`initChartModal`/`updateChartArea`/
+  `updateChartTickerLabel`/`initOpenTvButton`/`initResetZoomButton`/`initChartFullscreen`/
+  `initChartViewTabs`/`renderTvOverviewPanel`/`tvRowButtonHtml`/`bindTvRowButtons`, plus the small
+  `decorateTile`/`latestRsLong` sidebar-tile helpers) was extracted out of `app.js` into `js/chart-modal.js`
+  — the same "genuinely shared, not copy-pasted" reasoning that already produced `js/shared.js`/
+  `js/chart-render.js`/`js/table-render.js`/`js/qol.js`/`js/minicharts.js`, just one file later. Loaded
+  right after `js/chart-render.js` (which it depends on for `renderRelativeStrengthChart`/
+  `destroyChartInstances`/etc.) and before `js/table-render.js`/`js/app.js`(or `js/signals.js`) on both
+  pages. Unlike every other shared file so far, its functions reach into a `state` global it does NOT
+  itself declare — `state` is declared once per consuming page (`app.js`'s own, or `signals.js`'s own,
+  different shape) and `chart-modal.js`'s functions just read/write it as an ordinary global, the same
+  cross-file-global pattern as always, just with the roles reversed (a file loaded BEFORE the page's own
+  script reaching into something THAT script defines, matching how `js/qol.js` already reaches into
+  nothing of app.js's but is itself reached into — here it's the mirror case). `selectTicker()`'s
+  row-highlight query was generalized from an explicit list of table IDs (`#momentumTableBody`,
+  `#wybicieTableBody`, ...) to a class-based `table.momentum-table tbody tr` selector as part of this move,
+  since the exact set of tables now differs by page and a shared function can't hardcode either page's
+  specific IDs. `tests/js/chart-modal.test.js` covers `findRsEntry` (the only pure-ish piece, given a
+  test-provided global `state`); the rest is DOM-coupled and untested, consistent with `js/chart-render.js`.
+  `tests/js/signals.test.js` carries over every Wybicie/TTM Squeeze/Continuation/daily-refresh test
+  unchanged from the old `tests/js/app.test.js`, now requiring `signals.js`; `tests/js/app.test.js` keeps
+  only the Ctrl+K (`buildSearchIndex`) test and the `minicharts.js` tests it always incidentally covered.
+
+  `UNIVERSES` in `app.js` (kept in sync with
   `run_query.py`'s own `UNIVERSES`) stays the full SP500/NASDAQ100/DOWJONES/WIG20/mWIG40 five — every
-  universe's JSON is always loaded (`loadData()`), it drives Ctrl+K search and the RSM screener below
-  regardless of what has a dashboard tab. `SIDEBAR_TAB_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES",
+  universe's JSON is always loaded (`loadData()`), it drives Ctrl+K search regardless of what has a
+  dashboard tab. `SIDEBAR_TAB_UNIVERSES = ["SP500", "NASDAQ100", "DOWJONES",
   "WIG20", "MWIG40", "SWIG80"]` is the separate list that actually drives sidebar tiles
   (`renderSidebarTiles()`) and the per-universe drawer tabs. **Version history**: SP500/NASDAQ100 were
   once REMOVED from it (the RSM screener below had grown broad enough that a dedicated momentum table felt
@@ -1078,7 +1130,8 @@ flex child (no `.topbar-left` wrapper there).
   weekly `compute_ttm_squeeze_chart` now also calls, `DAILY_SQUEEZE_LENGTH` = 20 sessions):
   `squeeze_on`/`squeeze_days`/`days_since_fire`/`fire_consolidation_days`/`histogram`/`histogram_prev`/
   `recent_squeeze` (last 20 sessions, drawn as TradingView-style dots) plus `sma50_pct`/`ema21_pct`/
-  `return_1m_pct`/`high_20d_pct`. `classifyContinuation()` in `app.js`: weekly `current_stage` 2A/2B,
+  `return_1m_pct`/`high_20d_pct`. `classifyContinuation()` in `signals.js` (moved from `app.js`, see the
+  dedicated `signals.html`/`signals.js` bullet above): weekly `current_stage` 2A/2B,
   `momentum_pct > 0` (and `>=` slider), latest `rsm_long > 0` (classic 52-week Mansfield RS — the user's
   explicit call, it was `rsm_medium`/26 weeks at first; NOT `momentum_score > 0`, which is always true since
   the score is `1+Z`/`1/(1-Z)`), daily `sma50_pct > 0`; then
@@ -1608,7 +1661,8 @@ bullet for the mechanism (`#chartModal`/`openChartModal`/`closeChartModal`).
   **`<div class="workspace mobile-chart-view">` in the markup, not toggled by JS, unlike `index.html`.**
   `.charts-area`'s mobile CSS (`style.css`'s `@media max-width:640px` block) was written entirely around
   `index.html`'s dual-view dashboard — `.charts-area { display: none; }` by default on a phone, shown only
-  once `app.js::selectTicker()` adds `.mobile-chart-view` to `.workspace` (switching away from the table
+  once `selectTicker()` (now `js/chart-modal.js`, shared with `app.js`/`signals.js`) adds `.mobile-chart-view`
+  to `.workspace` (switching away from the table
   list the user was just looking at). `chart.html` reuses the same `.workspace`/`.charts-area` container
   classes but has no table/list to switch away from — it's a permanent, standalone chart page — and never
   ran any JS that adds that class. Real, user-reported bug: on a phone, this left `.charts-area` stuck at
@@ -1867,7 +1921,7 @@ Krok 3/Krok 4/the funnel's watchlist rows get a weekly price+EMA20 sparkline
 - **`strategy.html` / `js/strategy.js`** — a standalone screener page for the "sector strategy" described
   under Pipeline architecture above (`compute_sp500_trend_filter`/`compute_sector_relative_strength`/
   `export_sector_strategy`, `docs/data/sector_strategy.json`), reached via a "Strategia" nav link
-  added next to Dashboard/Rebalanser USA/Rebalanser PL on all pages. Three stacked `panel-card`s follow the strategy's own
+  added next to Indeksy/Sygnały/Rebalanser USA/Rebalanser PL on all pages. Three stacked `panel-card`s follow the strategy's own
   steps: **Krok 1** shows a growth-phase banner (`.trend-banner`, green/red per `trend.in_growth_phase`)
   plus SP500's close/SMA200/SMA40W as stat-cards and a small Chart.js line chart (toggle button pair,
   `js/chart-render.js`-independent — this page doesn't load that file, it's a much smaller, page-local
@@ -1910,14 +1964,15 @@ Krok 3/Krok 4/the funnel's watchlist rows get a weekly price+EMA20 sparkline
   same "redirect to the dedicated chart page" choice `rebalance.js` already made for its own ranking table
   (see that bullet's version-history note above for why a real separate page beats an in-page chart).
   `squeezeStatusFor()` is a small, LOCAL, ungated re-implementation of the "walk back to the last week with
-  a computed `squeeze_on`, then classify" logic `classifyTtmSqueeze()` (`app.js`) already has — deliberately
+  a computed `squeeze_on`, then classify" logic `classifyTtmSqueeze()` (`signals.js`, moved from `app.js`)
+  already has — deliberately
   NOT unified with it, because the semantics differ: `classifyTtmSqueeze` is a SCREENER (drops a stock
   entirely when it doesn't clear `TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS`/`TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS`, or
   when `momentum_score <= 0`), while this page already has a fixed, pre-selected list of top companies from
   Krok 3 and must show SOME status for every one of them, including a "neutral"/"no squeeze data" row
   rather than silently omitting it. The two consolidating/fired THRESHOLDS themselves are still kept
   identical (same constants, duplicated here same as they're already duplicated between `run_query.py` and
-  `app.js` — must stay in sync by hand) since they're the actual definition of what "consolidating"/"fired"
+  `signals.js` — must stay in sync by hand) since they're the actual definition of what "consolidating"/"fired"
   means everywhere else on the dashboard; only the momentum-score screener gate and the "drop non-matching
   rows" behavior are intentionally left out.
   **Krok 4** (`#topRsCard`/`renderTopRsTable()`) is a fourth panel-card, added at the user's explicit

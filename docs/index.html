@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Momentum Dashboard</title>
+<title>Indeksy — Momentum</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e0f13">
@@ -27,7 +27,8 @@
         <button class="cmdk-trigger" id="cmdkTrigger">🔍 Szukaj <span class="cmdk-kbd">Ctrl+K</span></button>
     </div>
     <nav>
-        <a href="index.html" class="active">Dashboard</a>
+        <a href="index.html" class="active">Indeksy</a>
+        <a href="signals.html">Sygnały</a>
         <a href="rebalance.html">Rebalanser USA</a>
         <a href="rebalance_pl.html">Rebalanser PL</a>
         <a href="strategy.html">Strategia</a>
@@ -78,29 +79,6 @@
             <div class="ticker-grid" id="tiles-SWIG80"></div>
         </div>
 
-        <div class="sidebar-group" id="wybicieGroup">
-            <div class="sidebar-group-label" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia blisko siebie (suwak „Okno wybicia”) i niedawno (suwak „Monitoruj po wybiciu”) — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">
-                💥 Wybicie
-            </div>
-            <div class="sidebar-group-meta" id="wybicieMeta"></div>
-            <div class="ticker-grid" id="tiles-WYBICIE"></div>
-        </div>
-
-        <div class="sidebar-group" id="ttmSqueezeGroup">
-            <div class="sidebar-group-label" title="Wskaźnik TTM Squeeze (Bollinger Bands wewnątrz kanału Kellera = konsolidacja). Spółki z Momentum (momentum_score > 0), które przeszły przez konsolidację dłuższą niż 5 tygodni — albo wciąż w niej trwają, albo właśnie się z niej wybiły (ostatnie 3 tygodnie). Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80, nie tylko dzisiejszą selekcję portfela.">
-                🧨 TTM Squeeze
-            </div>
-            <div class="sidebar-group-meta" id="ttmSqueezeMeta"></div>
-            <div class="ticker-grid" id="tiles-TTM-squeeze"></div>
-        </div>
-
-        <div class="sidebar-group" id="continuationGroup">
-            <div class="sidebar-group-label" title="Continuation — spółki już w Etapie 2 (tygodniowo) z dodatnim momentum 12M, Mansfield RS 52 tyg. &gt; 0 i ceną nad SMA50 D1, które na wykresie DZIENNYM robią krótką pauzę: TTM Squeeze na D1 trwa (🌀) albo właśnie z niego wybiły w górę (🔥). Do dołączenia do trendu — tylko filtr sygnałów, wejście/wyjście decydujesz sam.">
-                🚀 Continuation
-            </div>
-            <div class="sidebar-group-meta" id="continuationMeta"></div>
-            <div class="ticker-grid" id="tiles-CONTINUATION"></div>
-        </div>
     </div>
 
     <div class="table-drawer open" id="tableDrawer">
@@ -116,9 +94,6 @@
                 <button class="drawer-tab" data-universe="WIG20">WIG20</button>
                 <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
                 <button class="drawer-tab" data-universe="SWIG80">sWIG80</button>
-                <button class="drawer-tab" data-universe="WYBICIE" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia blisko siebie (suwak „Okno wybicia”) i niedawno (suwak „Monitoruj po wybiciu”) — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">💥 Wybicie</button>
-                <button class="drawer-tab" data-universe="TTM_SQUEEZE" title="TTM Squeeze — spółki z Momentum, które przeszły przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte wewnątrz kanału Kellera) i albo wciąż w niej trwają, albo właśnie się z niej wybiły, CAŁE uniwersa (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80), nie tylko dzisiejsza selekcja portfela.">🧨 TTM Squeeze</button>
-                <button class="drawer-tab" data-universe="CONTINUATION" title="Continuation — spółki już w Etapie 2 (tygodniowo) z dodatnim momentum 12M, Mansfield RS 52 tyg. &gt; 0 i ceną nad SMA50 D1, które na wykresie DZIENNYM robią krótką pauzę: TTM Squeeze na D1 trwa (🌀) albo właśnie z niego wybiły w górę (🔥). Do dołączenia do trendu — tylko filtr sygnałów, wejście/wyjście decydujesz sam.">🚀 Continuation</button>
             </div>
         </div>
         <div class="stage-filter-bar" id="stageFilterBar">
@@ -130,51 +105,6 @@
             <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą EMA20, unikaj nowych pozycji.">Etap 4</button>
         </div>
         <div class="breadth-bar" id="breadthBar" hidden></div>
-        <div class="stage-filter-bar wybicie-controls" id="wybicieControls" hidden>
-            <label class="wybicie-slider" title="Maksymalny odstęp (w tygodniach) między przecięciem zera przez MACD a przecięciem zera przez RS 52 tyg. — oba sygnały muszą przyjść blisko siebie. 0 = ten sam tydzień.">
-                <span class="stage-filter-label">Okno wybicia:</span>
-                <input type="range" id="wybicieWindowInput" min="0" max="26" step="1">
-                <span class="wybicie-slider-value" id="wybicieWindowValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Przez ile tygodni po wybiciu (późniejszym z dwóch przecięć) spółka zostaje na liście — o ile MACD, RS 52 tyg. i histogram TTM wciąż są nad zerem.">
-                <span class="stage-filter-label">Monitoruj po wybiciu:</span>
-                <input type="range" id="wybicieMonitorInput" min="1" max="52" step="1">
-                <span class="wybicie-slider-value" id="wybicieMonitorValue"></span>
-            </label>
-        </div>
-        <div class="stage-filter-bar wybicie-controls" id="continuationControls" hidden>
-            <label class="wybicie-slider" title="Maksymalna długość trwającego squeeze na D1 (w sesjach). Krótki squeeze = pauza w trendzie; długi = raczej nowa baza.">
-                <span class="stage-filter-label">Maks. squeeze D1:</span>
-                <input type="range" id="contMaxSqueezeInput" min="5" max="60" step="1">
-                <span class="wybicie-slider-value" id="contMaxSqueezeValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Przez ile sesji po wybiciu z D1 squeeze (histogram dodatni) spółka zostaje na liście.">
-                <span class="stage-filter-label">Wybicie w ciągu:</span>
-                <input type="range" id="contFireLookbackInput" min="0" max="15" step="1">
-                <span class="wybicie-slider-value" id="contFireLookbackValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Minimalne momentum 12M-1M. Domyślnie 0% — wystarczy dodatnie momentum; podnieś, jeśli chcesz tylko najdynamiczniejsze trendy.">
-                <span class="stage-filter-label">Min. momentum 12M:</span>
-                <input type="range" id="contMinMomentumInput" min="0" max="150" step="5">
-                <span class="wybicie-slider-value" id="contMinMomentumValue"></span>
-            </label>
-            <div class="daily-refresh">
-                <button class="stage-filter-btn daily-refresh-btn" id="dailyRefreshBtn"
-                        title="Uruchamia na GitHubie lekkie zadanie: pobiera z Yahoo Finance dzienne świece tygodniowych zwycięzców i przelicza squeeze D1 (ok. 1–2 min).">🔄 Odśwież dane D1</button>
-                <button class="stage-filter-btn" id="dailyRefreshTokenBtn" title="Token GitHub potrzebny do uruchomienia zadania">⚙️</button>
-                <span class="daily-refresh-status" id="dailyRefreshStatus"></span>
-                <div class="daily-refresh-progress" id="dailyRefreshProgress" hidden><div class="daily-refresh-bar" id="dailyRefreshBar"></div></div>
-            </div>
-            <div class="daily-refresh-token" id="dailyRefreshTokenForm" hidden>
-                <p>Przycisk uruchamia zadanie w GitHub Actions, więc potrzebuje <b>Twojego</b> tokenu GitHub.
-                   Utwórz go na <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com → Fine-grained token</a>:
-                   <i>Repository access</i> → tylko repozytorium z tą stroną; <i>Permissions</i> → <b>Actions: Read and write</b>, <b>Contents: Read-only</b>.
-                   Token zostaje tylko w tej przeglądarce (localStorage) — nie trafia do repo ani na stronę.</p>
-                <input type="password" id="dailyRefreshTokenInput" placeholder="github_pat_…" autocomplete="off">
-                <button class="stage-filter-btn active" id="dailyRefreshTokenSave">Zapisz</button>
-                <button class="stage-filter-btn" id="dailyRefreshTokenClear" hidden>Usuń zapisany token</button>
-            </div>
-        </div>
         <div class="table-scroll">
             <table class="momentum-table" id="momentumTable">
                 <thead>
@@ -198,108 +128,6 @@
                 </thead>
                 <tbody id="momentumTableBody"></tbody>
             </table>
-
-            <!-- Wybicie: MACD i RS 52 tyg. świeżo przecięły zero w górę, histogram
-                 TTM Squeeze dodatni (patrz combinedWybicieCandidates w app.js) —
-                 CAŁE uniwersa, sortowalna i filtrowalna po etapie. -->
-            <table class="momentum-table" id="wybicieTable" hidden>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th data-key="ticker">Ticker</th>
-                        <th data-key="universe">Uniwersum</th>
-                        <th data-key="sector">Sektor</th>
-                        <th data-key="price">Cena</th>
-                        <th data-key="breakoutWeeks">Wybicie</th>
-                        <th>Cena (26 tyg.)</th>
-                        <th data-key="macdCrossWeeks">MACD</th>
-                        <th data-key="rsCrossWeeks">RS 52 tyg.</th>
-                        <th data-key="histNow">TTM (26 tyg.)</th>
-                        <th>Etap</th>
-                        <th class="tv-col">TV</th>
-                    </tr>
-                </thead>
-                <tbody id="wybicieTableBody"></tbody>
-            </table>
-
-            <!-- TTM Squeeze: spółki z Momentum (momentum_score > 0), które przeszły
-                 przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte
-                 wewnątrz kanału Kellera) — albo wciąż w niej trwają, albo właśnie się
-                 z niej wybiły w ostatnich 3 tyg. (patrz combinedTtmSqueezeCandidates
-                 w app.js) — CAŁE uniwersa, tak samo jak tabela Wybicie powyżej. -->
-            <table class="momentum-table" id="ttmSqueezeTable" hidden>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th data-key="ticker">Ticker</th>
-                        <th data-key="universe">Uniwersum</th>
-                        <th data-key="sector">Sektor</th>
-                        <th data-key="price">Cena</th>
-                        <th data-key="momentum_pct">Momentum</th>
-                        <th data-key="status">Status</th>
-                        <th data-key="consolidation_weeks">Konsolidacja</th>
-                        <th>Cena (26 tyg.)</th>
-                        <th>TTM (26 tyg.)</th>
-                        <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
-                        <th>Etap</th>
-                        <th class="tv-col">TV</th>
-                    </tr>
-                </thead>
-                <tbody id="ttmSqueezeTableBody"></tbody>
-            </table>
-
-            <!-- Continuation: Etap 2 (tydzień) + krótki TTM Squeeze na D1 (trwa albo
-                 właśnie odpalił w górę) — patrz combinedContinuationCandidates w app.js
-                 i compute_daily_squeeze w run_query.py. -->
-            <table class="momentum-table" id="continuationTable" hidden>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th data-key="ticker">Ticker</th>
-                        <th data-key="universe">Uniwersum</th>
-                        <th data-key="sector">Sektor</th>
-                        <th data-key="price">Cena</th>
-                        <th data-key="momentum_pct">Momentum 12M</th>
-                        <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
-                        <th data-key="status">Status D1</th>
-                        <th data-key="squeeze_days" title="Długość squeeze na D1 (trwającego albo tego, z którego nastąpiło wybicie)">Squeeze</th>
-                        <th>Ostatnie 20 sesji</th>
-                        <th data-key="histogram" title="Histogram TTM Squeeze D1 (momentum) i jego kierunek">Histogram D1</th>
-                        <th data-key="sma50_pct" title="Cena vs SMA50 dzienna">vs SMA50</th>
-                        <th data-key="high_20d_pct" title="Odległość od najwyższego High z 20 sesji">Od szczytu 20D</th>
-                        <th>Etap</th>
-                        <th class="tv-col">TV</th>
-                    </tr>
-                </thead>
-                <tbody id="continuationTableBody"></tbody>
-            </table>
-
-            <!-- Tygodniowi zwycięzcy: wszyscy po bramce tygodniowej Continuation
-                 (Etap 2, momentum > 0, RS 52 tyg. > 0), z mini-wykresami tydzień/dzień —
-                 patrz combinedWeeklyWinners/renderWinnersTable w app.js. -->
-            <div id="continuationWinnersSection" hidden>
-                <h3 class="subtable-title">🏆 Tygodniowi zwycięzcy <span class="subtable-meta" id="winnersMeta"></span></h3>
-                <table class="momentum-table" id="winnersTable">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th data-key="ticker">Ticker</th>
-                            <th data-key="universe">Uniwersum</th>
-                            <th data-key="price">Cena</th>
-                            <th data-key="momentum_pct">Momentum 12M</th>
-                            <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
-                            <th>Tydzień (26 tyg.)</th>
-                            <th>Dzień (60 sesji)</th>
-                            <th data-key="status_order">Status D1</th>
-                            <th data-key="ema20_pct" title="Cena vs dzienna EMA20. 🎯 = 0–2% nad średnią (pullback w trendzie)">vs EMA20 D1</th>
-                            <th data-key="sma50_pct">vs SMA50</th>
-                            <th>Etap</th>
-                            <th class="tv-col">TV</th>
-                        </tr>
-                    </thead>
-                    <tbody id="winnersTableBody"></tbody>
-                </table>
-            </div>
         </div>
     </div>
 
@@ -389,6 +217,7 @@
 <script src="js/qol.js"></script>
 <script src="js/minicharts.js"></script>
 <script src="js/chart-render.js"></script>
+<script src="js/chart-modal.js"></script>
 <script src="js/table-render.js"></script>
 <script src="js/app.js"></script>
 </body>
