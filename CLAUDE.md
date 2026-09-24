@@ -840,11 +840,30 @@ fixes came out of that check, all still true today:
   2. **The Keltner Channel midline is SMA, not EMA.** Reference: `ma = sma(source, lengthKC)`. An earlier
      version used an EMA here (the more common "textbook" Keltner convention), which shifted the channel
      center away from what TradingView draws. Since `TTM_SQUEEZE_BB_WEEKS == TTM_SQUEEZE_KC_WEEKS` (both
-     20), this SMA is literally the same `sma` series already computed for the Bollinger Band basis —
-     `compute_ttm_squeeze_chart()` reuses one `sma` variable for both.
+     10, see below), this SMA is literally the same `sma` series already computed for the Bollinger Band
+     basis — `compute_ttm_squeeze_chart()` reuses one `sma` variable for both.
   3. **Standard deviation is population, not sample.** Pine Script's `stdev()` divides by `N` (`ddof=0`)
      by default, not `N-1` — pandas' `.std()` defaults to `ddof=1`, so the Bollinger Band width (and
      therefore `squeeze_on`) would be subtly narrower than TradingView's without passing `ddof=0` explicitly.
+
+  **`TTM_SQUEEZE_BB_WEEKS`/`TTM_SQUEEZE_KC_WEEKS` were shortened from 20 to 10 weeks**, at the user's
+  explicit request, after reviewing Qullamaggie's own "Breakout" setup
+  (qullamaggie.com/my-3-timeless-setups-that-have-made-me-tens-of-millions): its consolidation/flag phase
+  is a **daily**-chart structure (higher daily lows, tightening daily range, "surfing" the 10/20/50-*day*
+  MAs) typically lasting only 2-14 weeks, often as short as 2-4. At the original 20-week window,
+  `squeeze_on` asks "is volatility low relative to the trailing 20 weeks" — a genuine 2-4 week compression
+  barely moves a 20-week rolling stdev/ATR, so it routinely failed to flip `bb_upper < kc_upper` for
+  exactly the short, tight flags this setup relies on (on top of the separate weekly-vs-daily resolution
+  gap: a weekly candle can still look wide even when every day inside it tightened — see the
+  "🎯 Qullamaggie" screener bullet under Frontend below, whose own `QM_TIGHT_RANGE_MAX_WEEKS`=2 bolt-on was
+  a workaround for exactly this under-firing, not a fix for it). Halving the window to 10 weeks makes
+  `squeeze_on` react to roughly the last 2.5 months of volatility instead of ~4.5, so it can actually
+  register short flags within the reference setup's 2-14-week range — a simple, deliberate trade-off
+  accepted over a real daily-resolution flag detector (which would mean reintroducing the daily-data layer
+  this repo already removed once for being too much upkeep — see the "🚀 Continuation" version-history note
+  below). `TTM_SQUEEZE_KC_ATR_MULT` (2.0) was left unchanged — halving the window already tightens the
+  squeeze condition considerably on its own, and the multiplier is what keeps this a literal port of
+  LazyBear's reference script (see above), not a value to tune independently of that.
 
 `squeeze_on` is true for a given week when the Bollinger Bands sit entirely **inside** the Keltner Channel
 (both computed as above) — the classic low-volatility/consolidation signature.

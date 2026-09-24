@@ -1587,7 +1587,7 @@ class TestComputeTtmSqueezeChart:
         insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
 
         # Okno wyswietlane zaczyna sie w trakcie konsolidacji (tydzien 45) — do tego
-        # momentu jest juz >= 2*TTM_SQUEEZE_KC_WEEKS+2 (42) tyg. historii, wiec BB/KC
+        # momentu jest juz >= 2*TTM_SQUEEZE_KC_WEEKS+2 (22) tyg. historii, wiec BB/KC
         # ORAZ rolling regresja liniowa histogramu sa juz w pelni "rozgrzane" od
         # pierwszego wyswietlanego tygodnia (patrz docstring compute_ttm_squeeze_chart).
         start_date = fixture_start + pd.Timedelta(weeks=45)
@@ -1637,11 +1637,11 @@ class TestComputeTtmSqueezeChart:
     def test_insufficient_history_leaves_squeeze_fields_none(self):
         con = make_gem_con()
         fixture_start = pd.Timestamp("2025-01-06")
-        # Tylko 10 tyg. — za malo na 20-tyg. BB/KC (TTM_SQUEEZE_KC_WEEKS).
-        closes = [100.0 + i * 0.1 for i in range(10)]
+        # Tylko 5 tyg. — za malo na 10-tyg. BB/KC (TTM_SQUEEZE_KC_WEEKS).
+        closes = [100.0 + i * 0.1 for i in range(5)]
         insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
 
-        ref_date = fixture_start + pd.Timedelta(weeks=9)
+        ref_date = fixture_start + pd.Timedelta(weeks=4)
         out = compute_ttm_squeeze_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                          fixture_start.strftime("%Y-%m-%d"))
         assert out is not None

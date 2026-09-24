@@ -2026,8 +2026,14 @@ def compute_mansfield_rs_chart(con, ticker, universe, ref_date, start_date):
 #   3. Odchylenie standardowe Pine Script (`stdev()`) domyslnie liczy POPULACYJNE
 #      odchylenie std. (dzielenie przez N), NIE probkowe (N-1) jak domyslnie pandas
 #      `.std()` — stad `ddof=0` ponizej.
-TTM_SQUEEZE_BB_WEEKS = 20          # dlugosc SMA/odchylenia standardowego Bollinger Bands
-TTM_SQUEEZE_KC_WEEKS = 20          # dlugosc SMA/ATR kanalu Kellera (ta sama dlugosc co BB — standard)
+TTM_SQUEEZE_BB_WEEKS = 10          # dlugosc SMA/odchylenia standardowego Bollinger Bands — skrocone z 20 na
+                                    # wyrazne zyczenie uzytkownika: 20-tygodniowe okno bylo za dlugie, by
+                                    # zlapac krotkie (2-4-tygodniowe) flagi/zwezajace sie zakresy po duzym
+                                    # ruchu (patrz "Qullamaggie breakout" w historii wersji ponizej) — 10
+                                    # tygodni to nadal ten sam standard co "20" w oryginale (TTM_SQUEEZE_KC_
+                                    # WEEKS ma byc rowne temu polu), tylko krotszy, wiec squeeze reaguje na
+                                    # zmiennosc z ostatnich ~2.5 miesiaca zamiast ~4.5 miesiaca.
+TTM_SQUEEZE_KC_WEEKS = 10          # dlugosc SMA/ATR kanalu Kellera (ta sama dlugosc co BB — standard, patrz wyzej)
 TTM_SQUEEZE_KC_ATR_MULT = 2.0      # JEDYNY mnoznik — uzywany zarowno dla wstegi Bollingera, jak i kanalu Kellera (patrz wyzej)
 # Uzytkownik: "akcje ktore mialy wiecej niz 5 tygodni konsolidacji" — kwalifikuje sie
 # squeeze, ktory trwal SCISLE WIECEJ niz tyle tygodni (czyli min. 6 tygodni z rzedu).
