@@ -1255,23 +1255,47 @@ flex child (no `.topbar-left` wrapper there).
   CLOSING high/low), so it routinely covers completely different weeks than whatever `ttm_squeeze_chart`
   itself flagged as the consolidation — a stock this very screener called "consolidating" would often have
   no `pending_base` at all (explaining the "only two stocks show a level" report), or one describing a
-  stale, unrelated box. **Fixed by `squeezeConsolidationBox(c)`** (`js/minicharts.js`, new primary source,
-  entirely client-side from fields already exported — no pipeline change, works immediately on already-
-  committed `docs/data/*.json`): takes the resistance/support directly from the SAME weeks
-  `ttm_squeeze_chart` itself used to call the row "consolidating" or "fired" — for a still-consolidating
-  row, the last `squeeze_count` weeks (ending at the current week); for a fired row, the
-  `fire_consolidation_weeks` weeks immediately BEFORE the fire week (`fireIdx = nowIdx - weeks_since_fire`,
-  window = `[fireIdx - fire_consolidation_weeks, fireIdx - 1]` — derived from reading `_ttm_squeeze_series()`'s
-  own `fire_consolidation = squeeze_count.shift(1).where(fired)` line) — then takes the highest/lowest
-  WEEKLY CLOSE (`weekly_chart.close_pct`) over exactly that window, joined to `ttm_squeeze_chart.dates` by
-  DATE (not index — same buffer-length-mismatch caveat as the `breakout_volume_ratio` lookup in
-  `classifyQullamaggie()` above). `breakoutLevelFor()` now tries this FIRST and only falls back to
-  `weekly_chart.pending_base`/last `bases` entry when there's no active or just-fired squeeze at all (e.g.
-  a ticker opened from a general table, not from a squeeze screener) — converted back to a real price via
-  the same `close0 = price / (1 + close_pct[last]/100)` convention `js/strategy.js::strategyStopFor()`
-  already uses. `pending: false` (the Darvas-fallback-to-`bases` case, or a squeeze-derived box for a
-  "fired" row) renders the number at reduced opacity — still shown as a reference point, just
-  not a "wait for this" level any more. **Entry timing (the ORB/session-VWAP part of the
+  stale, unrelated box. **Fixed, SECOND version, by `squeezeConsolidationBox(c)`** (`js/minicharts.js`,
+  entirely client-side from fields already exported — no pipeline change): took the resistance/support
+  directly from the SAME weeks `ttm_squeeze_chart` itself used to call the row "consolidating" or "fired" —
+  for a still-consolidating row, the LAST `squeeze_count` weeks (ending at the current week, i.e. the ENTIRE
+  uninterrupted squeeze run since it started); for a fired row, the `fire_consolidation_weeks` weeks
+  immediately before the fire week. This worked for a short squeeze but had a real gap the user caught
+  next: for a LONG squeeze (say 10+ weeks), the box either kept ballooning wider forever (using the whole
+  run since week 1) or — worse, since `classifyQullamaggie()`'s own eligibility check required
+  `squeeze_count`/`fire_consolidation_weeks` to stay `<= maxConsolidationWeeks` (6) — the row simply
+  vanished from the screener PERMANENTLY the moment the squeeze outlasted 6 weeks, never coming back even
+  though the squeeze was still happening.
+
+  **THIRD, current version**: the user specified the exact fix directly — "if there is 4 red dots on TTM
+  squeeze start to monitor the highest/lowest close from that period ... is the squeeze continue until we
+  reach 6 weeks, max box is 6 weeks, if we go below box failed, if we go above is breakout, if there is
+  still squeeze monitor new 4 weeks." `squeezeCyclePosition(length, minWeeks=4, maxWeeks=6)`
+  (`js/minicharts.js`) implements this as a repeating CYCLE, not a running total: divide the uninterrupted
+  squeeze length into consecutive `maxWeeks`-long cycles (`posInCycle = ((length - 1) % maxWeeks) + 1`); a
+  box only exists once `posInCycle >= minWeeks` — so weeks 1-3 of every cycle have NO box (still
+  accumulating), weeks 4-6 have a box spanning just THAT cycle's weeks so far, and week 7 (`posInCycle`
+  wraps back to 1) starts a brand-new cycle with no box again until it too reaches 4 weeks. A squeeze
+  running 10 weeks straight is therefore NOT one 10-week box — it's cycle 1 (weeks 1-6, resolved/expired)
+  then cycle 2 (weeks 7-10, currently a fresh 4-week box), which is exactly "if there is still squeeze
+  monitor new 4 weeks." `squeezeConsolidationBox(c, opts)` now calls `squeezeCyclePosition()` on
+  `squeeze_count` (still-consolidating case) or `fire_consolidation_weeks` (fired case) to get the CURRENT
+  cycle's width, uses THAT (not the raw total) as the window size, and returns `null` whenever a stock sits
+  in one of those "still waiting to reach 4 weeks in this cycle" gaps — matching the "don't see new boxes"
+  report exactly: there genuinely is no box to see during those weeks, by design. `classifyQullamaggie()`
+  in `signals.js` was updated the same way — its own `isConsolidating`/`isFired` checks now test
+  `squeezeCyclePosition(squeeze_count, o.minConsolidationWeeks, o.maxConsolidationWeeks) != null` (reading
+  the screener's own adjustable sliders, not `squeezeConsolidationBox()`'s hardcoded 4/6 defaults) instead
+  of a raw `>= min && <= max` bound on the total run length, so a long-running squeeze now keeps being
+  watched indefinitely, cycling through fresh 4-6-week boxes, rather than dropping off the list forever
+  past 6 weeks. `consolidation_weeks` on the returned row is now the CURRENT cycle's width (`squeezeCyclePosition()`'s
+  result), not the raw total, so the "Konsolidacja"/"Poziom do obserwacji" columns always describe the same
+  box. `weekly_chart.pending_base`/last `bases` entry remains the fallback for a ticker with no active/
+  just-fired squeeze at all (e.g. opened from a general table, not a squeeze screener) — converted back to
+  a real price via the same `close0 = price / (1 + close_pct[last]/100)` convention
+  `js/strategy.js::strategyStopFor()` already uses. `pending: false` (the Darvas-fallback-to-`bases` case,
+  or a squeeze-derived box for a "fired" row) renders the number at reduced opacity — still shown as a
+  reference point, just not a "wait for this" level any more. **Entry timing (the ORB/session-VWAP part of the
   original strategy) is intentionally NOT automatically computed at all** — see the dedicated "⚡ 1 min + VWAP"
   chart-modal tab bullet further below for why (needs intraday data this pipeline doesn't fetch) and how
   the user actually watches for it (a TradingView 1-minute + VWAP widget in the same chart pop-up every

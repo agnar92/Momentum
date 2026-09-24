@@ -365,6 +365,34 @@ test("classifyQullamaggie ignores a squeeze longer than the maximum consolidatio
     assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
 });
 
+test("classifyQullamaggie keeps watching a squeeze that outlasts maxConsolidationWeeks, resetting to a fresh cycle", () => {
+    // 10 tygodni nieprzerwanego squeeze'a: cykl 1 = tyg. 1-6, cykl 2 = tyg. 7-10
+    // (pozycja 4 -> box wlasnie sie otworzyl na nowo) — na wyrazna prosbe
+    // uzytkownika spolka NIE powinna znikac na stale po przekroczeniu 6 tyg.
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [10],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
+    assert.ok(r);
+    assert.equal(r.status, "consolidating");
+    assert.equal(r.consolidation_weeks, 4);  // szerokosc BIEZACEGO cyklu, nie surowe 10 tygodni
+});
+
+test("classifyQullamaggie excludes a squeeze sitting in the gap between two cycles, even though it's still ongoing", () => {
+    // 8 tygodni nieprzerwanego squeeze'a = cykl 2, pozycja 2 (< 4) — box jeszcze
+    // sie nie otworzyl w tym cyklu, wiec spolka chwilowo znika z listy.
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [8],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+});
+
 test("classifyQullamaggie marks fired and confirms buying volume at the breakout week", () => {
     const c = qmConstituent({
         weekly_chart: {

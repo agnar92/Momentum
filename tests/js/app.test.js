@@ -18,7 +18,7 @@ const {
     sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
     rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
     zeroLineSparkSvg, crossIndexInTail, findConstituent, bulletHtml,
-    squeezeConsolidationBox, breakoutLevelFor,
+    squeezeCyclePosition, squeezeConsolidationBox, breakoutLevelFor,
 } = require(path.join("..", "..", "docs", "js", "minicharts.js"));
 
 // compareRows now lives in docs/js/shared.js — see tests/js/shared.test.js.
@@ -241,25 +241,126 @@ test("squeezeConsolidationBox takes top/bottom from the same weeks the TTM squee
 });
 
 test("squeezeConsolidationBox takes the window BEFORE the fire week when the squeeze just turned off", () => {
-    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02"];
+    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02", "2026-02-09"];
     const c = {
-        weekly_chart: { dates, close_pct: [0, 4, 9, 2, 15] },
+        weekly_chart: { dates, close_pct: [0, 4, 9, 2, 6, 15] },
         ttm_squeeze_chart: {
             dates,
-            squeeze_on: [false, true, true, true, false],
-            squeeze_count: [0, 1, 2, 3, 0],
-            weeks_since_fire: [null, null, null, null, 0],
-            fire_consolidation_weeks: [null, null, null, null, 3],
+            squeeze_on: [false, true, true, true, true, false],
+            squeeze_count: [0, 1, 2, 3, 4, 0],  // dokladnie minWeeks (4) tuz przed wybiciem -> box istnial
+            weeks_since_fire: [null, null, null, null, null, 0],
+            fire_consolidation_weeks: [null, null, null, null, null, 4],
         },
     };
     const box = squeezeConsolidationBox(c);
     assert.ok(box);
-    // Konsolidacja to 3 tygodnie TUŻ PRZED tygodniem wybicia (2026-02-02), czyli
-    // 2026-01-12..2026-01-26 — NIE zawiera tygodnia wybicia samego (close_pct=15).
+    // Konsolidacja to 4 tygodnie TUŻ PRZED tygodniem wybicia (2026-02-09), czyli
+    // 2026-01-12..2026-02-02 — NIE zawiera tygodnia wybicia samego (close_pct=15).
     assert.equal(box.resistance_pct, 9);
     assert.equal(box.support_pct, 2);
+    assert.equal(box.start_date, "2026-01-12");
     assert.equal(box.pending, false);
     assert.equal(box.phase, "FIRED");
+});
+
+test("squeezeConsolidationBox returns null for a fire after a consolidation shorter than minWeeks", () => {
+    // Wybicie po zaledwie 3 tygodniach squeeze'a — box nigdy nie zdazyl sie
+    // otworzyc (potrzeba minWeeks=4), wiec nie ma czego pokazac.
+    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26"];
+    const c = {
+        weekly_chart: { dates, close_pct: [0, 4, 9, 15] },
+        ttm_squeeze_chart: {
+            dates,
+            squeeze_on: [false, true, true, false],
+            squeeze_count: [0, 1, 2, 0],
+            weeks_since_fire: [null, null, null, 0],
+            fire_consolidation_weeks: [null, null, null, 2],
+        },
+    };
+    assert.equal(squeezeConsolidationBox(c), null);
+});
+
+test("squeezeCyclePosition opens the box at minWeeks, extends it, then resets for a NEW cycle past maxWeeks", () => {
+    // minWeeks=4, maxWeeks=6 (domyslne): tyg. 1-3 = brak boxa, tyg. 4-6 = box
+    // (pozycja rownolegla dlugosci), tyg. 7-9 (cykl 2) = znowu brak boxa, tyg.
+    // 10 = nowy box (pozycja 4 w cyklu 2) — dokladnie "if there is still
+    // squeeze monitor new 4 weeks" z prosby uzytkownika.
+    assert.equal(squeezeCyclePosition(1), null);
+    assert.equal(squeezeCyclePosition(3), null);
+    assert.equal(squeezeCyclePosition(4), 4);
+    assert.equal(squeezeCyclePosition(5), 5);
+    assert.equal(squeezeCyclePosition(6), 6);
+    assert.equal(squeezeCyclePosition(7), null);   // cykl 2, pozycja 1 — box jeszcze zamkniety
+    assert.equal(squeezeCyclePosition(8), null);   // cykl 2, pozycja 2
+    assert.equal(squeezeCyclePosition(9), null);   // cykl 2, pozycja 3
+    assert.equal(squeezeCyclePosition(10), 4);     // cykl 2, pozycja 4 — nowy box otwarty
+    assert.equal(squeezeCyclePosition(12), 6);     // cykl 2, pozycja 6
+    assert.equal(squeezeCyclePosition(13), null);  // cykl 3, pozycja 1
+});
+
+test("squeezeCyclePosition respects custom min/max windows", () => {
+    assert.equal(squeezeCyclePosition(2, 2, 3), 2);
+    assert.equal(squeezeCyclePosition(4, 2, 3), null);  // cykl 2, pozycja 1
+    assert.equal(squeezeCyclePosition(5, 2, 3), 2);      // cykl 2, pozycja 2
+});
+
+test("squeezeConsolidationBox uses only the CURRENT cycle's weeks for a long-running squeeze, not the whole history", () => {
+    // 10 tygodni squeeze'a nieprzerwanie: cykl 1 = tyg. 1-6, cykl 2 = tyg. 7-10
+    // (pozycja 4, box wlasnie sie otworzyl). Box MUSI brac tylko tyg. 7-10 —
+    // gdyby brac cala historie (stara wersja), zlapalby tez ekstremalne
+    // wartosci z tyg. 1-6 ponizej/powyzej.
+    const dates = Array.from({ length: 10 }, (_, i) => `2026-01-${String(i + 1).padStart(2, "0")}`);
+    const closePct = [100, -100, 50, -50, 80, -80, 3, 9, 2, 15];  // tyg. 1-6 ekstremalne, tyg. 7-10 umiarkowane
+    const c = {
+        weekly_chart: { dates, close_pct: closePct },
+        ttm_squeeze_chart: {
+            dates,
+            squeeze_on: new Array(10).fill(true),
+            squeeze_count: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            weeks_since_fire: new Array(10).fill(null),
+            fire_consolidation_weeks: new Array(10).fill(null),
+        },
+    };
+    const box = squeezeConsolidationBox(c);
+    assert.ok(box);
+    // Okno tyg. 7-10 (indeksy 6-9): close_pct = [3, 9, 2, 15] -> max 15, min 2.
+    assert.equal(box.resistance_pct, 15);
+    assert.equal(box.support_pct, 2);
+    assert.equal(box.start_date, dates[6]);  // tydz. 7, poczatek cyklu 2 — NIE tydz. 1
+});
+
+test("squeezeConsolidationBox returns null mid-way through a new cycle's waiting period, even though the squeeze is ongoing", () => {
+    // 8 tygodni nieprzerwanego squeeze'a = cykl 2, pozycja 2 (< minWeeks) —
+    // box jeszcze nie istnieje w tym cyklu, mimo ze squeeze trwa od dawna.
+    const dates = Array.from({ length: 8 }, (_, i) => `2026-01-${String(i + 1).padStart(2, "0")}`);
+    const c = {
+        weekly_chart: { dates, close_pct: new Array(8).fill(0) },
+        ttm_squeeze_chart: {
+            dates,
+            squeeze_on: new Array(8).fill(true),
+            squeeze_count: [1, 2, 3, 4, 5, 6, 7, 8],
+            weeks_since_fire: new Array(8).fill(null),
+            fire_consolidation_weeks: new Array(8).fill(null),
+        },
+    };
+    assert.equal(squeezeConsolidationBox(c), null);
+});
+
+test("squeezeConsolidationBox returns null for a fire that happened in a between-cycles gap", () => {
+    // Wybicie po 13 tygodniach konsolidacji: cykl 3, pozycja 1 (< minWeeks) —
+    // do wybicia doszlo zanim jakikolwiek box w tym cyklu zdazyl sie otworzyc.
+    const dates = Array.from({ length: 14 }, (_, i) => `2026-01-${String(i + 1).padStart(2, "0")}`);
+    const c = {
+        weekly_chart: { dates, close_pct: new Array(14).fill(0) },
+        ttm_squeeze_chart: {
+            dates,
+            squeeze_on: [...new Array(13).fill(true), false],
+            squeeze_count: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 0],
+            weeks_since_fire: [...new Array(13).fill(null), 0],
+            fire_consolidation_weeks: [...new Array(13).fill(null), 13],
+        },
+    };
+    assert.equal(squeezeConsolidationBox(c), null);
 });
 
 test("squeezeConsolidationBox returns null without an active or just-fired squeeze", () => {
@@ -276,26 +377,26 @@ test("squeezeConsolidationBox returns null without an active or just-fired squee
 });
 
 test("breakoutLevelFor prefers the squeeze-detected box over the independent Darvas pending_base", () => {
-    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26"];
+    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02"];
     const c = {
-        price: 104,
+        price: 106,
         weekly_chart: {
-            dates, close_pct: [0, 4, 8, 4],
+            dates, close_pct: [0, 4, 8, 4, 6],
             // Pudełko Darvasa (niezależny mechanizm) celowo bardzo inne — nie
             // powinno w ogóle zostać użyte, skoro squeeze sam już wskazuje okno.
             pending_base: { resistance_pct: 50, support_pct: 40, start_date: "1999-01-01", phase: "BOXED" },
         },
         ttm_squeeze_chart: {
             dates,
-            squeeze_on: [false, true, true, true],
-            squeeze_count: [0, 1, 2, 3],
-            weeks_since_fire: [null, null, null, null],
-            fire_consolidation_weeks: [null, null, null, null],
+            squeeze_on: [false, true, true, true, true],
+            squeeze_count: [0, 1, 2, 3, 4],  // dokladnie 4 tyg. -> box wlasnie sie otworzyl (cykl 1)
+            weeks_since_fire: [null, null, null, null, null],
+            fire_consolidation_weeks: [null, null, null, null, null],
         },
     };
     const lvl = breakoutLevelFor(c);
     assert.ok(lvl);
-    // close0 = 104 / 1.04 = 100; okno squeeze'a (tyg. 2-4) ma close_pct [4, 8, 4].
+    // close0 = 106 / 1.06 = 100; okno boxa (tyg. 2-5, cykl 1) ma close_pct [4, 8, 4, 6].
     assert.ok(Math.abs(lvl.resistance - 108) < 0.01, `expected ~108, got ${lvl.resistance}`);
     assert.ok(Math.abs(lvl.support - 104) < 0.01, `expected ~104, got ${lvl.support}`);
     assert.equal(lvl.pending, true);

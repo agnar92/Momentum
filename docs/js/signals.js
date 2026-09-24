@@ -353,11 +353,22 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
     const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
     const histNow = t.histogram[nowIdx];
 
-    const isConsolidating = squeezeOn === true
-        && squeezeCount >= o.minConsolidationWeeks && squeezeCount <= o.maxConsolidationWeeks;
+    // squeezeCyclePosition() (js/minicharts.js) dzieli nieprzerwany squeeze na
+    // kolejne cykle o długości maxConsolidationWeeks zamiast liczyć bezpośrednio
+    // z CAŁEJ jego długości — na wyraźną prośbę użytkownika: bez tego spółka w
+    // squeeze'u trwającym dłużej niż maxConsolidationWeeks (np. 10 tyg.) znikała
+    // z listy NA STAŁE (10 > 6), zamiast dalej być obserwowana z odświeżonym,
+    // "zresetowanym" po maxConsolidationWeeks boxem — patrz squeezeCyclePosition
+    // dla pełnego mechanizmu ("4 czerwone kropki -> otwórz box, rośnie do 6
+    // tygodni, jeśli squeeze wciąż trwa -> nowy cykl od zera").
+    const consolidationCyclePos = squeezeOn === true
+        ? squeezeCyclePosition(squeezeCount, o.minConsolidationWeeks, o.maxConsolidationWeeks) : null;
+    const fireCyclePos = fireConsolidationWeeks != null
+        ? squeezeCyclePosition(fireConsolidationWeeks, o.minConsolidationWeeks, o.maxConsolidationWeeks) : null;
+
+    const isConsolidating = consolidationCyclePos != null;
     const isFired = weeksSinceFire != null && weeksSinceFire <= o.fireLookbackWeeks
-        && fireConsolidationWeeks != null
-        && fireConsolidationWeeks >= o.minConsolidationWeeks && fireConsolidationWeeks <= o.maxConsolidationWeeks
+        && fireCyclePos != null
         && histNow != null && histNow > 0;
     if (!isConsolidating && !isFired) return null;
 
@@ -381,7 +392,11 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
         perf_pct: perfPct,
         current_stage: c.weekly_chart && c.weekly_chart.current_stage,
         status: isFired ? "fired" : "consolidating",
-        consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
+        // Szerokość BIEŻĄCEGO cyklu boxa (patrz squeezeCyclePosition powyżej), nie
+        // surowa, nieograniczona długość squeeze'a — to samo, co faktycznie
+        // wyznacza breakout_level poniżej, więc kolumny "Konsolidacja"/"Poziom do
+        // obserwacji" zawsze opisują TEN SAM box.
+        consolidation_weeks: isFired ? fireCyclePos : consolidationCyclePos,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         histNow,
         breakout_volume_ratio: breakoutVolumeRatio,

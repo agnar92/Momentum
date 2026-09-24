@@ -218,6 +218,39 @@ function findConstituent(dataByUniverse, ticker) {
     return null;
 }
 
+// Domyślna szerokość "cyklu" boxa TTM Squeeze (patrz squeezeCyclePosition/
+// squeezeConsolidationBox niżej) — box otwiera się po MIN_WEEKS tygodni
+// squeeze'a, rośnie do MAX_WEEKS, po czym — jeśli squeeze wciąż trwa —
+// zaczyna się NOWY cykl. Fallback dla wołających bez własnych progów (np.
+// renderOrbLevelInfo dla dowolnego tickera spoza screenera Qullamaggie, który
+// ma własne, edytowalne suwaki `state.qmMinConsolidationWeeks`/
+// `qmMaxConsolidationWeeks` — patrz classifyQullamaggie w signals.js, gdzie
+// te same wartości pochodzą stamtąd, nie stąd).
+const SQUEEZE_BOX_MIN_WEEKS = 4;
+const SQUEEZE_BOX_MAX_WEEKS = 6;
+
+// Pozycja w BIEŻĄCYM "cyklu" konsolidacji (1..maxWeeks) dla danej długości
+// nieprzerwanego squeeze'a (squeeze_count albo fire_consolidation_weeks) —
+// albo null, gdy box jeszcze nie jest otwarty w tym cyklu. Na wyraźną prośbę
+// użytkownika ("if there is 4 red dots on TTM squeeze start to monitor
+// highest/lowest close ... is the squeeze continue until we reach 6 weeks ...
+// max box is 6 weeks ... if there is still squeeze monitor new 4 weeks"):
+// zamiast liczyć box z CAŁEJ długości bieżącego squeeze'a (coraz szerszy i
+// coraz mniej użyteczny dla długich konsolidacji — a w screenerze: znikający
+// na stałe, gdy squeeze przekroczy maxWeeks, zamiast dalej być obserwowanym),
+// dzielimy nieprzerwany squeeze na kolejne cykle o długości `maxWeeks`: box
+// otwiera się dopiero po `minWeeks` tygodniach W BIEŻĄCYM CYKLU, rośnie przez
+// kolejne tygodnie aż do `maxWeeks`, a jeśli squeeze wciąż trwa POTEM, zaczyna
+// się nowy cykl — `minWeeks - 1` tygodni bez żadnego boxa (znowu czekając na
+// `minWeeks`), zanim nowy box się otworzy. Przykład (minWeeks=4, maxWeeks=6):
+// tyg. 1-3 squeeze'a = brak boxa, tyg. 4-6 = box z tyg. 1-4/1-5/1-6, tyg. 7-9
+// (cykl 2) = znowu brak boxa, tyg. 10 = nowy box z tyg. 7-10, itd.
+function squeezeCyclePosition(length, minWeeks = SQUEEZE_BOX_MIN_WEEKS, maxWeeks = SQUEEZE_BOX_MAX_WEEKS) {
+    if (!(length >= minWeeks)) return null;
+    const posInCycle = ((length - 1) % maxWeeks) + 1;
+    return posInCycle >= minWeeks ? posInCycle : null;
+}
+
 // Pudełko wyznaczone WPROST z okna, które TTM Squeeze (ttm_squeeze_chart, patrz
 // compute_ttm_squeeze_chart w run_query.py) sam oznaczył jako konsolidację —
 // na wyraźną korektę użytkownika ("wykrywamy squeeze więc czemu nie
@@ -226,24 +259,24 @@ function findConstituent(dataByUniverse, ticker) {
 // (pudełko Darvasa z NIEZALEŻNEGO mechanizmu w `_compute_weinstein_stage_series`
 // — własna definicja szczytu/dołka, 3 tyg. bez nowego rekordu), które mogło
 // wskazywać zupełnie INNE tygodnie niż te, które TTM Squeeze akurat oznaczył
-// jako konsolidację — więc pokazywany poziom często nie miał związku z tym, co
-// użytkownik faktycznie widział jako "squeeze" na ekranie, i większość spółek
-// wychodziła bez żadnego poziomu wcale. To poprawka: bierzemy TE SAME tygodnie
-// co screener ("trwająca konsolidacja" = ostatnie `squeeze_count` tygodni z
-// `squeeze_on`, "świeże wybicie" = `fire_consolidation_weeks` tygodni TUŻ
-// PRZED tygodniem `fired`, patrz `since_fire`/`fire_consolidation` w
-// `_ttm_squeeze_series`) i bierzemy najwyższe/najniższe TYGODNIOWE zamknięcie
-// (`weekly_chart.close_pct`) w tym oknie — dokładnie "narysuj box po X
-// tygodniach konsolidacji, top i bottom" z tamtej prośby. `ttm_squeeze_chart`/
+// jako konsolidację. DRUGA wersja brała CAŁĄ długość bieżącego squeeze'a
+// (`squeeze_count`/`fire_consolidation_weeks` wprost) jako szerokość boxa —
+// poprawne dla krótkich konsolidacji (≤6 tyg.), ale dla dłuższych dawało
+// coraz szerszy, coraz mniej użyteczny box. Ta wersja używa
+// `squeezeCyclePosition()` (patrz tam) do wyznaczenia szerokości BIEŻĄCEGO
+// cyklu zamiast całej historii squeeze'a — box "resetuje się" co
+// `maxWeeks` tygodni, dokładnie jak opisał użytkownik. `ttm_squeeze_chart`/
 // `weekly_chart` mogą mieć inną długość/wyrównanie bufora rozgrzewkowego
 // (patrz alignSqueezeToDates w chart-render.js), więc tygodnie są łączone po
 // DACIE, nie po indeksie wprost — ten sam wzorzec co breakoutVolumeRatio w
 // classifyQullamaggie (signals.js). Zwraca null, gdy nie ma (jeszcze/już)
-// żadnej rozpoznanej konsolidacji.
-function squeezeConsolidationBox(c) {
+// żadnej rozpoznanej konsolidacji w bieżącym cyklu.
+function squeezeConsolidationBox(c, opts = {}) {
     const t = c && c.ttm_squeeze_chart;
     const wc = c && c.weekly_chart;
     if (!t || !t.dates || !t.dates.length || !wc || !wc.dates || !wc.close_pct) return null;
+    const minWeeks = opts.minWeeks || SQUEEZE_BOX_MIN_WEEKS;
+    const maxWeeks = opts.maxWeeks || SQUEEZE_BOX_MAX_WEEKS;
 
     // Ostatni tydzień bywa jeszcze niedomknięty — ten sam caveat co w classifyTtmSqueeze/classifyQullamaggie.
     let nowIdx = t.dates.length - 1;
@@ -256,17 +289,22 @@ function squeezeConsolidationBox(c) {
     const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
 
     let startIdx, endIdx, pending;
-    if (squeezeOn === true && squeezeCount > 0) {
-        // squeeze_count = kolejne tygodnie TRUE KOŃCZĄCE SIĘ na nowIdx (włącznie).
+    if (squeezeOn === true) {
+        const posInCycle = squeezeCyclePosition(squeezeCount, minWeeks, maxWeeks);
+        if (posInCycle == null) return null;  // wciąż czekamy na minWeeks w bieżącym cyklu
+        // Box obejmuje ostatnie `posInCycle` tygodni — czyli TYLKO bieżący cykl,
+        // nie całą historię squeeze'a od jego początku.
         endIdx = nowIdx;
-        startIdx = Math.max(0, nowIdx - squeezeCount + 1);
+        startIdx = Math.max(0, nowIdx - posInCycle + 1);
         pending = true;
-    } else if (weeksSinceFire != null && fireConsolidationWeeks > 0) {
-        // fire_consolidation_weeks = squeeze_count SPRZED tygodnia wybicia (fireIdx),
-        // czyli konsolidacja to [fireIdx - fireConsolidationWeeks, fireIdx - 1].
+    } else if (weeksSinceFire != null) {
+        const posInCycle = squeezeCyclePosition(fireConsolidationWeeks, minWeeks, maxWeeks);
+        if (posInCycle == null) return null;  // wybicie nastąpiło w "martwym" okresie między cyklami
+        // fire_consolidation_weeks = squeeze_count SPRZED tygodnia wybicia (fireIdx);
+        // bierzemy ostatnie `posInCycle` tygodni TEGO cyklu, tuż przed wybiciem.
         const fireIdx = nowIdx - weeksSinceFire;
         endIdx = fireIdx - 1;
-        startIdx = Math.max(0, fireIdx - fireConsolidationWeeks);
+        startIdx = Math.max(0, fireIdx - posInCycle);
         pending = false;
     } else {
         return null;
@@ -535,6 +573,6 @@ function initMiniChartHoverPreview() {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — bez efektu w przeglądarce.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, dailySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, squeezeConsolidationBox, breakoutLevelFor,
+        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, dailySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, SQUEEZE_BOX_MIN_WEEKS, SQUEEZE_BOX_MAX_WEEKS, squeezeCyclePosition, squeezeConsolidationBox, breakoutLevelFor,
     };
 }
