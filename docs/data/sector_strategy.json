@@ -1,19 +1,14 @@
 {
-  "ref_date": "2026-09-21",
+  "ref_date": "2026-09-23",
   "trend": {
-    "date": "2026-09-21",
-    "close": 7764.7,
-    "sma200": 7187.73,
+    "date": "2026-09-23",
+    "close": 7706.03,
+    "sma200": 7192.01,
     "above_sma200": true,
-    "sma40w": 7223.59,
+    "sma40w": 7222.12,
     "above_sma40w": true,
     "in_growth_phase": true,
     "daily_series": [
-      {
-        "date": "2025-06-12",
-        "close": 6045.26,
-        "sma200": 5804.79
-      },
       {
         "date": "2025-06-13",
         "close": 5976.97,
@@ -1608,9 +1603,59 @@
         "date": "2026-09-21",
         "close": 7764.7,
         "sma200": 7187.73
+      },
+      {
+        "date": "2026-09-23",
+        "close": 7706.03,
+        "sma200": 7192.01
       }
     ],
     "weekly_series": [
+      {
+        "date": "2024-05-20",
+        "close": 5304.72,
+        "sma40": null
+      },
+      {
+        "date": "2024-05-27",
+        "close": 5277.51,
+        "sma40": null
+      },
+      {
+        "date": "2024-06-03",
+        "close": 5346.99,
+        "sma40": null
+      },
+      {
+        "date": "2024-06-10",
+        "close": 5431.6,
+        "sma40": null
+      },
+      {
+        "date": "2024-06-17",
+        "close": 5464.62,
+        "sma40": null
+      },
+      {
+        "date": "2024-06-24",
+        "close": 5460.48,
+        "sma40": null
+      },
+      {
+        "date": "2024-07-01",
+        "close": 5567.19,
+        "sma40": null
+      },
+      {
+        "date": "2024-07-08",
+        "close": 5615.35,
+        "sma40": null
+      },
+      {
+        "date": "2024-07-15",
+        "close": 5505.0,
+        "sma40": null
+      },
       {
         "date": "2024-07-22",
         "close": 5459.1,
@@ -1764,47 +1809,47 @@
       {
         "date": "2025-02-17",
         "close": 6013.13,
-        "sma40": null
+        "sma40": 5734.4
       },
       {
         "date": "2025-02-24",
         "close": 5954.5,
-        "sma40": null
+        "sma40": 5750.64
       },
       {
         "date": "2025-03-03",
         "close": 5770.2,
-        "sma40": null
+        "sma40": 5762.96
       },
       {
         "date": "2025-03-10",
         "close": 5638.94,
-        "sma40": null
+        "sma40": 5770.26
       },
       {
         "date": "2025-03-17",
         "close": 5667.56,
-        "sma40": null
+        "sma40": 5776.16
       },
       {
         "date": "2025-03-24",
         "close": 5580.94,
-        "sma40": null
+        "sma40": 5779.07
       },
       {
         "date": "2025-03-31",
         "close": 5074.08,
-        "sma40": null
+        "sma40": 5769.41
       },
       {
         "date": "2025-04-07",
         "close": 5363.36,
-        "sma40": null
+        "sma40": 5764.31
       },
       {
         "date": "2025-04-14",
         "close": 5282.7,
-        "sma40": null
+        "sma40": 5756.0
       },
       {
         "date": "2025-04-21",
@@ -2178,8 +2223,8 @@
       },
       {
         "date": "2026-09-21",
-        "close": 7764.7,
-        "sma40": 7223.59
+        "close": 7706.03,
+        "sma40": 7222.12
       }
     ]
   },
@@ -2189,7 +2234,7 @@
       {
         "sector": "Information Technology",
         "count": 72,
-        "rsm_vs_index_pct": 12.14,
+        "rsm_vs_index_pct": 13.26,
         "rsm_series": [
           9.17,
           7.44,
@@ -2200,56 +2245,56 @@
           9.55,
           10.29,
           11.14,
-          12.14
+          13.26
         ],
         "data_source": "etf",
         "top_companies": [
           {
             "ticker": "DELL",
-            "price": 575.31,
-            "rsm_vs_sector_pct": 91.62,
+            "price": 549.83,
+            "rsm_vs_sector_pct": 82.99,
             "rank_in_sector": 1
           },
           {
             "ticker": "SNDK",
-            "price": 1766.64,
-            "rsm_vs_sector_pct": 64.12,
+            "price": 1816.57,
+            "rsm_vs_sector_pct": 68.2,
             "rank_in_sector": 2
           },
           {
             "ticker": "MU",
-            "price": 1043.96,
-            "rsm_vs_sector_pct": 56.04,
+            "price": 1071.88,
+            "rsm_vs_sector_pct": 59.69,
             "rank_in_sector": 3
           },
           {
             "ticker": "HPE",
-            "price": 61.75,
-            "rsm_vs_sector_pct": 55.8,
+            "price": 62.33,
+            "rsm_vs_sector_pct": 56.83,
             "rank_in_sector": 4
           },
           {
             "ticker": "AMD",
-            "price": 615.52,
-            "rsm_vs_sector_pct": 54.0,
+            "price": 614.61,
+            "rsm_vs_sector_pct": 53.4,
             "rank_in_sector": 5
           },
           {
             "ticker": "MRVL",
-            "price": 257.38,
-            "rsm_vs_sector_pct": 48.47,
+            "price": 260.9,
+            "rsm_vs_sector_pct": 50.07,
             "rank_in_sector": 6
           },
           {
-            "ticker": "INTC",
-            "price": 121.78,
-            "rsm_vs_sector_pct": 45.46,
+            "ticker": "CRWD",
+            "price": 262.49,
+            "rsm_vs_sector_pct": 49.79,
             "rank_in_sector": 7
           },
           {
-            "ticker": "CRWD",
-            "price": 249.35,
-            "rsm_vs_sector_pct": 42.85,
+            "ticker": "INTC",
+            "price": 122.6,
+            "rsm_vs_sector_pct": 46.06,
             "rank_in_sector": 8
           }
         ],
@@ -2258,7 +2303,7 @@
       {
         "sector": "Energy",
         "count": 21,
-        "rsm_vs_index_pct": 6.36,
+        "rsm_vs_index_pct": 7.01,
         "rsm_series": [
           9.71,
           8.14,
@@ -2269,26 +2314,26 @@
           11.06,
           13.32,
           11.47,
-          6.36
+          7.01
         ],
         "data_source": "etf",
         "top_companies": [
           {
-            "ticker": "VLO",
-            "price": 393.27,
-            "rsm_vs_sector_pct": 44.24,
+            "ticker": "MPC",
+            "price": 388.38,
+            "rsm_vs_sector_pct": 39.23,
             "rank_in_sector": 1
           },
           {
-            "ticker": "MPC",
-            "price": 402.38,
-            "rsm_vs_sector_pct": 43.91,
+            "ticker": "VLO",
+            "price": 375.84,
+            "rsm_vs_sector_pct": 38.21,
             "rank_in_sector": 2
           },
           {
             "ticker": "PSX",
-            "price": 261.75,
-            "rsm_vs_sector_pct": 31.96,
+            "price": 256.48,
+            "rsm_vs_sector_pct": 29.55,
             "rank_in_sector": 3
           }
         ],
@@ -2297,7 +2342,7 @@
       {
         "sector": "Health Care",
         "count": 59,
-        "rsm_vs_index_pct": -0.13,
+        "rsm_vs_index_pct": 0.49,
         "rsm_series": [
           1.41,
           0.29,
@@ -2308,197 +2353,53 @@
           2.22,
           -0.67,
           1.11,
-          -0.13
+          0.49
         ],
         "data_source": "etf",
         "top_companies": [
           {
             "ticker": "MRNA",
-            "price": 172.94,
-            "rsm_vs_sector_pct": 183.62,
+            "price": 182.11,
+            "rsm_vs_sector_pct": 198.14,
             "rank_in_sector": 1
           },
           {
-            "ticker": "RVTY",
-            "price": 143.59,
-            "rsm_vs_sector_pct": 27.79,
+            "ticker": "CRL",
+            "price": 277.33,
+            "rsm_vs_sector_pct": 26.99,
             "rank_in_sector": 2
           },
           {
-            "ticker": "CRL",
-            "price": 279.01,
-            "rsm_vs_sector_pct": 27.59,
+            "ticker": "RVTY",
+            "price": 142.11,
+            "rsm_vs_sector_pct": 26.66,
             "rank_in_sector": 3
           },
           {
             "ticker": "HUM",
-            "price": 378.58,
-            "rsm_vs_sector_pct": 21.95,
+            "price": 374.78,
+            "rsm_vs_sector_pct": 20.9,
             "rank_in_sector": 4
           },
           {
-            "ticker": "CNC",
-            "price": 64.99,
-            "rsm_vs_sector_pct": 21.25,
+            "ticker": "IQV",
+            "price": 267.86,
+            "rsm_vs_sector_pct": 19.22,
             "rank_in_sector": 5
           },
           {
-            "ticker": "IQV",
-            "price": 269.88,
-            "rsm_vs_sector_pct": 19.95,
+            "ticker": "MRK",
+            "price": 148.08,
+            "rsm_vs_sector_pct": 17.15,
             "rank_in_sector": 6
           }
         ],
         "rank": 3
       },
       {
-        "sector": "Financials",
-        "count": 76,
-        "rsm_vs_index_pct": -4.48,
-        "rsm_series": [
-          -0.9,
-          -0.67,
-          -2.82,
-          -2.07,
-          -1.61,
-          -0.83,
-          -0.75,
-          -1.24,
-          -3.35,
-          -4.48
-        ],
-        "data_source": "etf",
-        "top_companies": [
-          {
-            "ticker": "STT",
-            "price": 184.4,
-            "rsm_vs_sector_pct": 21.13,
-            "rank_in_sector": 1
-          },
-          {
-            "ticker": "ICE",
-            "price": 59.4,
-            "rsm_vs_sector_pct": 19.13,
-            "rank_in_sector": 2
-          },
-          {
-            "ticker": "HOOD",
-            "price": 123.3,
-            "rsm_vs_sector_pct": 16.09,
-            "rank_in_sector": 3
-          },
-          {
-            "ticker": "BEN",
-            "price": 33.64,
-            "rsm_vs_sector_pct": 15.36,
-            "rank_in_sector": 4
-          },
-          {
-            "ticker": "IBKR",
-            "price": 93.21,
-            "rsm_vs_sector_pct": 14.57,
-            "rank_in_sector": 5
-          },
-          {
-            "ticker": "TRV",
-            "price": 371.13,
-            "rsm_vs_sector_pct": 14.39,
-            "rank_in_sector": 6
-          },
-          {
-            "ticker": "PFG",
-            "price": 116.47,
-            "rsm_vs_sector_pct": 14.38,
-            "rank_in_sector": 7
-          },
-          {
-            "ticker": "CPAY",
-            "price": 397.22,
-            "rsm_vs_sector_pct": 14.32,
-            "rank_in_sector": 8
-          }
-        ],
-        "rank": 4
-      },
-      {
-        "sector": "Industrials",
-        "count": 81,
-        "rsm_vs_index_pct": -7.52,
-        "rsm_series": [
-          3.87,
-          1.21,
-          0.59,
-          0.9,
-          -1.06,
-          -3.19,
-          -4.25,
-          -5.04,
-          -6.35,
-          -7.52
-        ],
-        "data_source": "etf",
-        "top_companies": [
-          {
-            "ticker": "EXPD",
-            "price": 192.15,
-            "rsm_vs_sector_pct": 21.81,
-            "rank_in_sector": 1
-          },
-          {
-            "ticker": "DE",
-            "price": 684.73,
-            "rsm_vs_sector_pct": 21.33,
-            "rank_in_sector": 2
-          },
-          {
-            "ticker": "FIX",
-            "price": 1632.59,
-            "rsm_vs_sector_pct": 15.59,
-            "rank_in_sector": 3
-          },
-          {
-            "ticker": "NDSN",
-            "price": 314.35,
-            "rsm_vs_sector_pct": 13.47,
-            "rank_in_sector": 4
-          },
-          {
-            "ticker": "WAB",
-            "price": 283.38,
-            "rsm_vs_sector_pct": 13.39,
-            "rank_in_sector": 5
-          },
-          {
-            "ticker": "DAL",
-            "price": 82.5,
-            "rsm_vs_sector_pct": 13.07,
-            "rank_in_sector": 6
-          },
-          {
-            "ticker": "ETN",
-            "price": 435.43,
-            "rsm_vs_sector_pct": 12.91,
-            "rank_in_sector": 7
-          },
-          {
-            "ticker": "PWR",
-            "price": 642.61,
-            "rsm_vs_sector_pct": 12.55,
-            "rank_in_sector": 8
-          },
-          {
-            "ticker": "GEV",
-            "price": 946.22,
-            "rsm_vs_sector_pct": 11.48,
-            "rank_in_sector": 9
-          }
-        ],
-        "rank": 5
-      },
-      {
         "sector": "Materials",
         "count": 25,
-        "rsm_vs_index_pct": -7.57,
+        "rsm_vs_index_pct": -5.83,
         "rsm_series": [
           -0.73,
           -3.3,
@@ -2509,113 +2410,179 @@
           -2.15,
           -4.08,
           -5.73,
-          -7.57
+          -5.83
         ],
         "data_source": "etf",
         "top_companies": [
           {
             "ticker": "FCX",
-            "price": 72.16,
-            "rsm_vs_sector_pct": 22.9,
+            "price": 72.58,
+            "rsm_vs_sector_pct": 22.23,
             "rank_in_sector": 1
           },
           {
             "ticker": "NUE",
-            "price": 242.4,
-            "rsm_vs_sector_pct": 21.2,
+            "price": 246.98,
+            "rsm_vs_sector_pct": 22.06,
             "rank_in_sector": 2
           },
           {
-            "ticker": "CF",
-            "price": 123.27,
-            "rsm_vs_sector_pct": 15.66,
+            "ticker": "NEM",
+            "price": 123.55,
+            "rsm_vs_sector_pct": 14.07,
             "rank_in_sector": 3
+          }
+        ],
+        "rank": 4
+      },
+      {
+        "sector": "Financials",
+        "count": 76,
+        "rsm_vs_index_pct": -6.07,
+        "rsm_series": [
+          -0.9,
+          -0.67,
+          -2.82,
+          -2.07,
+          -1.61,
+          -0.83,
+          -0.75,
+          -1.24,
+          -3.35,
+          -6.07
+        ],
+        "data_source": "etf",
+        "top_companies": [
+          {
+            "ticker": "ICE",
+            "price": 61.0,
+            "rsm_vs_sector_pct": 25.23,
+            "rank_in_sector": 1
+          },
+          {
+            "ticker": "STT",
+            "price": 179.95,
+            "rsm_vs_sector_pct": 21.16,
+            "rank_in_sector": 2
+          },
+          {
+            "ticker": "HOOD",
+            "price": 122.7,
+            "rsm_vs_sector_pct": 18.35,
+            "rank_in_sector": 3
+          },
+          {
+            "ticker": "CPAY",
+            "price": 395.16,
+            "rsm_vs_sector_pct": 16.51,
+            "rank_in_sector": 4
+          },
+          {
+            "ticker": "MET",
+            "price": 97.2,
+            "rsm_vs_sector_pct": 15.79,
+            "rank_in_sector": 5
+          },
+          {
+            "ticker": "IBKR",
+            "price": 91.56,
+            "rsm_vs_sector_pct": 15.33,
+            "rank_in_sector": 6
+          },
+          {
+            "ticker": "BEN",
+            "price": 32.71,
+            "rsm_vs_sector_pct": 14.97,
+            "rank_in_sector": 7
+          },
+          {
+            "ticker": "PFG",
+            "price": 113.92,
+            "rsm_vs_sector_pct": 14.66,
+            "rank_in_sector": 8
+          }
+        ],
+        "rank": 5
+      },
+      {
+        "sector": "Industrials",
+        "count": 81,
+        "rsm_vs_index_pct": -6.76,
+        "rsm_series": [
+          3.87,
+          1.21,
+          0.59,
+          0.9,
+          -1.06,
+          -3.19,
+          -4.25,
+          -5.04,
+          -6.35,
+          -6.76
+        ],
+        "data_source": "etf",
+        "top_companies": [
+          {
+            "ticker": "DE",
+            "price": 709.48,
+            "rsm_vs_sector_pct": 25.52,
+            "rank_in_sector": 1
+          },
+          {
+            "ticker": "EXPD",
+            "price": 188.03,
+            "rsm_vs_sector_pct": 19.18,
+            "rank_in_sector": 2
+          },
+          {
+            "ticker": "WAB",
+            "price": 292.22,
+            "rsm_vs_sector_pct": 16.77,
+            "rank_in_sector": 3
+          },
+          {
+            "ticker": "NDSN",
+            "price": 321.42,
+            "rsm_vs_sector_pct": 15.88,
+            "rank_in_sector": 4
+          },
+          {
+            "ticker": "FIX",
+            "price": 1625.9,
+            "rsm_vs_sector_pct": 15.04,
+            "rank_in_sector": 5
+          },
+          {
+            "ticker": "ETN",
+            "price": 438.76,
+            "rsm_vs_sector_pct": 13.67,
+            "rank_in_sector": 6
+          },
+          {
+            "ticker": "IEX",
+            "price": 229.67,
+            "rsm_vs_sector_pct": 13.02,
+            "rank_in_sector": 7
+          },
+          {
+            "ticker": "SWK",
+            "price": 91.76,
+            "rsm_vs_sector_pct": 12.55,
+            "rank_in_sector": 8
+          },
+          {
+            "ticker": "GEV",
+            "price": 951.82,
+            "rsm_vs_sector_pct": 12.05,
+            "rank_in_sector": 9
           }
         ],
         "rank": 6
       },
       {
-        "sector": "Communication",
-        "count": 24,
-        "rsm_vs_index_pct": -8.01,
-        "rsm_series": [
-          -13.41,
-          -12.48,
-          -12.9,
-          -11.6,
-          -11.27,
-          -10.17,
-          -10.67,
-          -9.16,
-          -10.16,
-          -8.01
-        ],
-        "data_source": "etf",
-        "top_companies": [
-          {
-            "ticker": "META",
-            "price": 741.25,
-            "rsm_vs_sector_pct": 16.43,
-            "rank_in_sector": 1
-          },
-          {
-            "ticker": "WBD",
-            "price": 30.8,
-            "rsm_vs_sector_pct": 15.39,
-            "rank_in_sector": 2
-          },
-          {
-            "ticker": "NWSA",
-            "price": 29.7,
-            "rsm_vs_sector_pct": 11.32,
-            "rank_in_sector": 3
-          }
-        ],
-        "rank": 7
-      },
-      {
-        "sector": "Real Estate",
-        "count": 30,
-        "rsm_vs_index_pct": -9.15,
-        "rsm_series": [
-          0.62,
-          -2.14,
-          -5.52,
-          -5.08,
-          -3.9,
-          -5.4,
-          -6.42,
-          -6.53,
-          -8.16,
-          -9.15
-        ],
-        "data_source": "etf",
-        "top_companies": [
-          {
-            "ticker": "EQIX",
-            "price": 1057.26,
-            "rsm_vs_sector_pct": 12.8,
-            "rank_in_sector": 1
-          },
-          {
-            "ticker": "WELL",
-            "price": 232.76,
-            "rsm_vs_sector_pct": 12.76,
-            "rank_in_sector": 2
-          },
-          {
-            "ticker": "DOC",
-            "price": 20.72,
-            "rsm_vs_sector_pct": 11.85,
-            "rank_in_sector": 3
-          }
-        ],
-        "rank": 8
-      },
-      {
         "sector": "Consumer Staples",
         "count": 34,
-        "rsm_vs_index_pct": -9.39,
+        "rsm_vs_index_pct": -8.15,
         "rsm_series": [
           -4.59,
           -4.31,
@@ -2626,33 +2593,111 @@
           -6.44,
           -6.82,
           -7.23,
-          -9.39
+          -8.15
         ],
         "data_source": "etf",
         "top_companies": [
           {
             "ticker": "TGT",
-            "price": 157.71,
-            "rsm_vs_sector_pct": 32.34,
+            "price": 156.26,
+            "rsm_vs_sector_pct": 30.36,
             "rank_in_sector": 1
           },
           {
             "ticker": "ADM",
-            "price": 83.38,
-            "rsm_vs_sector_pct": 18.43,
+            "price": 82.15,
+            "rsm_vs_sector_pct": 16.02,
             "rank_in_sector": 2
           },
           {
-            "ticker": "KO",
-            "price": 87.12,
-            "rsm_vs_sector_pct": 13.09,
+            "ticker": "SJM",
+            "price": 122.41,
+            "rsm_vs_sector_pct": 13.78,
             "rank_in_sector": 3
           },
           {
-            "ticker": "SJM",
-            "price": 119.88,
-            "rsm_vs_sector_pct": 12.16,
+            "ticker": "KO",
+            "price": 88.09,
+            "rsm_vs_sector_pct": 13.63,
             "rank_in_sector": 4
+          }
+        ],
+        "rank": 7
+      },
+      {
+        "sector": "Communication",
+        "count": 24,
+        "rsm_vs_index_pct": -9.06,
+        "rsm_series": [
+          -13.41,
+          -12.48,
+          -12.9,
+          -11.6,
+          -11.27,
+          -10.17,
+          -10.67,
+          -9.16,
+          -10.16,
+          -9.06
+        ],
+        "data_source": "etf",
+        "top_companies": [
+          {
+            "ticker": "META",
+            "price": 744.1,
+            "rsm_vs_sector_pct": 19.09,
+            "rank_in_sector": 1
+          },
+          {
+            "ticker": "WBD",
+            "price": 30.76,
+            "rsm_vs_sector_pct": 17.44,
+            "rank_in_sector": 2
+          },
+          {
+            "ticker": "NWSA",
+            "price": 28.12,
+            "rsm_vs_sector_pct": 7.53,
+            "rank_in_sector": 3
+          }
+        ],
+        "rank": 8
+      },
+      {
+        "sector": "Real Estate",
+        "count": 30,
+        "rsm_vs_index_pct": -10.05,
+        "rsm_series": [
+          0.62,
+          -2.14,
+          -5.52,
+          -5.08,
+          -3.9,
+          -5.4,
+          -6.42,
+          -6.53,
+          -8.16,
+          -10.05
+        ],
+        "data_source": "etf",
+        "top_companies": [
+          {
+            "ticker": "WELL",
+            "price": 229.87,
+            "rsm_vs_sector_pct": 13.35,
+            "rank_in_sector": 1
+          },
+          {
+            "ticker": "EQIX",
+            "price": 1037.66,
+            "rsm_vs_sector_pct": 12.7,
+            "rank_in_sector": 2
+          },
+          {
+            "ticker": "DOC",
+            "price": 20.48,
+            "rsm_vs_sector_pct": 12.52,
+            "rank_in_sector": 3
           }
         ],
         "rank": 9
@@ -2660,7 +2705,7 @@
       {
         "sector": "Consumer Discretionary",
         "count": 47,
-        "rsm_vs_index_pct": -12.2,
+        "rsm_vs_index_pct": -12.77,
         "rsm_series": [
           -12.94,
           -8.39,
@@ -2671,38 +2716,38 @@
           -10.67,
           -11.13,
           -12.21,
-          -12.2
+          -12.77
         ],
         "data_source": "etf",
         "top_companies": [
           {
             "ticker": "BBY",
-            "price": 93.22,
-            "rsm_vs_sector_pct": 31.09,
+            "price": 90.8,
+            "rsm_vs_sector_pct": 29.55,
             "rank_in_sector": 1
           },
           {
-            "ticker": "ABNB",
-            "price": 166.84,
-            "rsm_vs_sector_pct": 24.66,
+            "ticker": "GRMN",
+            "price": 287.58,
+            "rsm_vs_sector_pct": 26.46,
             "rank_in_sector": 2
           },
           {
-            "ticker": "GRMN",
-            "price": 280.31,
-            "rsm_vs_sector_pct": 21.64,
+            "ticker": "ROST",
+            "price": 233.98,
+            "rsm_vs_sector_pct": 19.22,
             "rank_in_sector": 3
           },
           {
-            "ticker": "ROST",
-            "price": 231.25,
-            "rsm_vs_sector_pct": 16.24,
+            "ticker": "WSM",
+            "price": 227.83,
+            "rsm_vs_sector_pct": 17.8,
             "rank_in_sector": 4
           },
           {
-            "ticker": "WSM",
-            "price": 227.16,
-            "rsm_vs_sector_pct": 15.84,
+            "ticker": "EBAY",
+            "price": 109.09,
+            "rsm_vs_sector_pct": 17.45,
             "rank_in_sector": 5
           }
         ],
@@ -2711,7 +2756,7 @@
       {
         "sector": "Utilities",
         "count": 31,
-        "rsm_vs_index_pct": -16.69,
+        "rsm_vs_index_pct": -17.91,
         "rsm_series": [
           -3.36,
           -8.11,
@@ -2722,32 +2767,32 @@
           -12.08,
           -12.53,
           -14.87,
-          -16.69
+          -17.91
         ],
         "data_source": "etf",
         "top_companies": [
           {
             "ticker": "AES",
-            "price": 14.83,
-            "rsm_vs_sector_pct": 11.35,
+            "price": 14.81,
+            "rsm_vs_sector_pct": 13.69,
             "rank_in_sector": 1
           },
           {
             "ticker": "AWK",
-            "price": 133.97,
-            "rsm_vs_sector_pct": 10.45,
+            "price": 133.06,
+            "rsm_vs_sector_pct": 12.17,
             "rank_in_sector": 2
           },
           {
             "ticker": "EVRG",
-            "price": 79.26,
-            "rsm_vs_sector_pct": 8.34,
+            "price": 78.42,
+            "rsm_vs_sector_pct": 9.61,
             "rank_in_sector": 3
           },
           {
-            "ticker": "D",
-            "price": 62.82,
-            "rsm_vs_sector_pct": 8.01,
+            "ticker": "ED",
+            "price": 102.61,
+            "rsm_vs_sector_pct": 8.14,
             "rank_in_sector": 4
           }
         ],
@@ -2760,71 +2805,71 @@
       {
         "ticker": "MRNA",
         "sector": "Health Care",
-        "price": 172.94,
-        "rsm_vs_index_pct": 183.64,
+        "price": 182.11,
+        "rsm_vs_index_pct": 199.96,
         "rank": 1
       },
       {
         "ticker": "DELL",
         "sector": "Information Technology",
-        "price": 575.31,
-        "rsm_vs_index_pct": 108.42,
+        "price": 549.83,
+        "rsm_vs_index_pct": 101.01,
         "rank": 2
       },
       {
         "ticker": "SNDK",
         "sector": "Information Technology",
-        "price": 1766.64,
-        "rsm_vs_index_pct": 77.39,
+        "price": 1816.57,
+        "rsm_vs_index_pct": 83.57,
         "rank": 3
-      },
-      {
-        "ticker": "HPE",
-        "sector": "Information Technology",
-        "price": 61.75,
-        "rsm_vs_index_pct": 71.62,
-        "rank": 4
       },
       {
         "ticker": "MU",
         "sector": "Information Technology",
-        "price": 1043.96,
-        "rsm_vs_index_pct": 70.13,
+        "price": 1071.88,
+        "rsm_vs_index_pct": 75.81,
+        "rank": 4
+      },
+      {
+        "ticker": "HPE",
+        "sector": "Information Technology",
+        "price": 62.33,
+        "rsm_vs_index_pct": 74.46,
         "rank": 5
       },
       {
         "ticker": "AMD",
         "sector": "Information Technology",
-        "price": 615.52,
-        "rsm_vs_index_pct": 69.12,
+        "price": 614.61,
+        "rsm_vs_index_pct": 70.12,
         "rank": 6
-      },
-      {
-        "ticker": "MRVL",
-        "sector": "Information Technology",
-        "price": 257.38,
-        "rsm_vs_index_pct": 62.38,
-        "rank": 7
-      },
-      {
-        "ticker": "INTC",
-        "sector": "Information Technology",
-        "price": 121.78,
-        "rsm_vs_index_pct": 59.37,
-        "rank": 8
       },
       {
         "ticker": "CRWD",
         "sector": "Information Technology",
-        "price": 249.35,
-        "rsm_vs_index_pct": 58.63,
+        "price": 262.49,
+        "rsm_vs_index_pct": 67.95,
+        "rank": 7
+      },
+      {
+        "ticker": "MRVL",
+        "sector": "Information Technology",
+        "price": 260.9,
+        "rsm_vs_index_pct": 65.75,
+        "rank": 8
+      },
+      {
+        "ticker": "INTC",
+        "sector": "Information Technology",
+        "price": 122.6,
+        "rsm_vs_index_pct": 61.6,
         "rank": 9
       },
       {
-        "ticker": "MPC",
-        "sector": "Energy",
-        "price": 402.38,
-        "rsm_vs_index_pct": 52.37,
+        "ticker": "PANW",
+        "sector": "Information Technology",
+        "price": 393.3,
+        "rsm_vs_index_pct": 54.55,
         "rank": 10
       }
     ]

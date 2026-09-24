@@ -14,7 +14,8 @@
       "2026-09-16",
       "2026-09-17",
       "2026-09-18",
-      "2026-09-21"
+      "2026-09-21",
+      "2026-09-23"
     ],
     "momentum_index": [
       100.0,
@@ -30,7 +31,8 @@
       100.029,
       102.224,
       103.656,
-      103.884
+      103.884,
+      103.23
     ],
     "benchmark_index": [
       100.0,
@@ -46,9 +48,11 @@
       97.959,
       99.059,
       99.228,
-      100.611
+      100.611,
+      99.789
     ],
     "approximated_periods": [
+      false,
       false,
       false,
       false,
@@ -82,7 +86,8 @@
       "2026-09-16",
       "2026-09-17",
       "2026-09-18",
-      "2026-09-21"
+      "2026-09-21",
+      "2026-09-23"
     ],
     "momentum_index": [
       100.0,
@@ -99,7 +104,8 @@
       101.466,
       104.691,
       108.214,
-      107.134
+      107.134,
+      107.545
     ],
     "benchmark_index": [
       100.0,
@@ -116,9 +122,11 @@
       103.885,
       105.622,
       106.336,
-      109.214
+      109.214,
+      109.079
     ],
     "approximated_periods": [
+      false,
       false,
       false,
       false,
@@ -153,7 +161,8 @@
       "2026-09-16",
       "2026-09-17",
       "2026-09-18",
-      "2026-09-21"
+      "2026-09-21",
+      "2026-09-23"
     ],
     "momentum_index": [
       100.0,
@@ -170,7 +179,8 @@
       100.056,
       100.486,
       100.156,
-      100.734
+      100.734,
+      100.03
     ],
     "benchmark_index": [
       100.0,
@@ -187,9 +197,11 @@
       98.968,
       99.601,
       99.434,
-      100.157
+      100.157,
+      99.134
     ],
     "approximated_periods": [
+      false,
       false,
       false,
       false,
@@ -223,7 +235,8 @@
       "2026-09-16",
       "2026-09-17",
       "2026-09-18",
-      "2026-09-21"
+      "2026-09-21",
+      "2026-09-23"
     ],
     "momentum_index": [
       100.0,
@@ -239,7 +252,8 @@
       102.361,
       102.363,
       102.898,
-      106.152
+      106.152,
+      105.739
     ],
     "benchmark_index": [
       100.0,
@@ -255,9 +269,11 @@
       102.37,
       103.906,
       103.442,
-      106.165
+      106.165,
+      105.752
     ],
     "approximated_periods": [
+      false,
       false,
       false,
       false,
@@ -290,7 +306,8 @@
       "2026-09-16",
       "2026-09-17",
       "2026-09-18",
-      "2026-09-21"
+      "2026-09-21",
+      "2026-09-23"
     ],
     "momentum_index": [
       100.0,
@@ -306,7 +323,8 @@
       97.142,
       97.174,
       97.694,
-      99.321
+      99.321,
+      99.015
     ],
     "benchmark_index": [
       100.0,
@@ -322,7 +340,8 @@
       97.135,
       98.783,
       97.398,
-      99.321
+      99.321,
+      99.015
     ],
     "approximated_periods": [
       false,
@@ -337,6 +356,26 @@
       false,
       false,
       false,
+      false,
+      false,
+      false
+    ],
+    "note": "Wynik historyczny (zrealizowany) selekcji momentum na bazie zapisów po kazdym rebalansie, zestawiony z 'kup i trzymaj caly indeks' (wazony biezacym FMC). Dane informacyjne, NIE prognoza ani porada inwestycyjna — wyniki z przeszlosci nie gwarantuja przyszlych zwrotow. Okresy 'approximated' obejmuja spolki, dla ktorych brakuje juz historycznej ceny (rolling window w `prices`)."
+  },
+  "SWIG80": {
+    "dates": [
+      "2026-09-21",
+      "2026-09-23"
+    ],
+    "momentum_index": [
+      100.0,
+      99.349
+    ],
+    "benchmark_index": [
+      100.0,
+      99.257
+    ],
+    "approximated_periods": [
       false,
       false
     ],
