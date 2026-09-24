@@ -108,7 +108,7 @@
 
     <div class="panel-card" id="entryCard">
         <h3>🎯 Sygnały wejścia i wielkość pozycji <span class="ref-date-note" id="entryMeta"></span></h3>
-        <p class="panel-hint">Wejście = squeeze odpalił po konsolidacji (progi ustawiasz w lejku), histogram momentum jest dodatni i rośnie, cena nad stopem. Stop: na start połowa ostatniego pudełka Darvasa (½ box), potem po każdym przecięciu tygodniowego MACD w dół linii sygnału stop idzie na low tej świecy — tylko w górę, nigdy w dół. Przecięcie MACD w górę linii sygnału to potwierdzenie wejścia: bez niego status to „⏳ Czekaj na MACD”. Liczba akcji = (ryzyko na pozycję × kapitał) / (cena − stop), ale wartość pozycji nie większa niż „maks. pozycja” — oba procenty ustawiasz na górze strony. Wolumen kupujących ≥ 1,2× średniej to dodatkowe potwierdzenie, nie warunek.</p>
+        <p class="panel-hint">Wejście = squeeze odpalił po konsolidacji (progi ustawiasz w lejku), histogram momentum jest dodatni i rośnie, cena nad stopem, a odległość do stopu ≤ 20%. Stop: na start dolna granica środkowej tercji ostatniego pudełka Darvasa (⅓ box), potem po każdym przecięciu tygodniowego MACD w dół linii sygnału stop idzie na low tej świecy — tylko w górę, nigdy w dół. Przecięcie MACD w górę linii sygnału to potwierdzenie wejścia: bez niego status to „⏳ Czekaj na MACD”. Liczba akcji = (ryzyko na pozycję × kapitał) / (cena − stop), ale wartość pozycji nie większa niż „maks. pozycja” — oba procenty ustawiasz na górze strony. Wolumen kupujących ≥ 1,2× średniej i NATR < 8 to dodatkowe, opcjonalne potwierdzenia (włączasz je w lejku), nie domyślne warunki.</p>
         <div class="table-wrap">
         <table class="momentum-table" id="entryTable">
             <thead>
@@ -123,6 +123,7 @@
                     <th>Ryzyko</th>
                     <th>MACD</th>
                     <th>Wolumen</th>
+                    <th>NATR</th>
                     <th class="chart-col">Wykres</th>
                 </tr>
             </thead>

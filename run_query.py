@@ -2036,6 +2036,12 @@ TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5
 # konsolidacji" (screener na dashboardzie, patrz combinedTtmSqueezeCandidates w
 # app.js) — starsze wybicia to juz rozwiniety ruch, nie swiezy sygnal wejscia.
 TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3
+# Prog NATR (Normalized ATR) z "MY STRATEGY BLUEPRINT" (Gareth Packer/Financial
+# Wisdom) — "I require the metric to be below 8" jako dodatkowy, opcjonalny
+# sygnal jakosci konsolidacji obok TTM Squeeze (patrz "natr" w
+# compute_ttm_squeeze_chart). Musi byc zgodny z STRATEGY_NATR_MAX w
+# docs/js/strategy.js.
+TTM_SQUEEZE_NATR_MAX = 8.0
 
 
 def _rolling_linreg_endpoint(series, window):
@@ -2092,6 +2098,12 @@ def _ttm_squeeze_series(close, high, low, length):
     atr = true_range.rolling(length).mean()
     kc_upper = sma + TTM_SQUEEZE_KC_ATR_MULT * atr
     kc_lower = sma - TTM_SQUEEZE_KC_ATR_MULT * atr
+    # NATR (Normalized ATR) = ATR / close * 100 — dodatkowy, opcjonalny filtr
+    # konsolidacji z "MY STRATEGY BLUEPRINT" (Gareth Packer/Financial Wisdom):
+    # "I require the metric to be below 8" (patrz TTM_SQUEEZE_NATR_MAX). Reuzywa
+    # TEGO SAMEGO ATR co kanal Kellera powyzej (TTM_SQUEEZE_KC_WEEKS okno) —
+    # osobny wskaznik obok (nie zamiast) samego squeeze'u Bollinger/Keltner.
+    natr = (atr / close) * 100
 
     squeeze_on = (bb_lower > kc_lower) & (bb_upper < kc_upper)
     squeeze_on = squeeze_on.where(bb_upper.notna() & kc_upper.notna())  # None (NA) w rozgrzewce, nie False
@@ -2139,6 +2151,7 @@ def _ttm_squeeze_series(close, high, low, length):
         "since_fire": weeks_since_fire,
         "fire_consolidation": fire_consolidation_weeks,
         "histogram": histogram,
+        "natr": natr,
     }
 
 
@@ -2191,6 +2204,15 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     schematu, patrz _ensure_prices_ohlc_columns w fetch_data.py) ATR/kanal Kellera
     nie da sie policzyc — te tygodnie dostaja None zamiast bledy liczonej wartosci,
     dokladnie jak reszta pol zaleznych od plytkiej historii w tym module.
+
+    "natr" (Normalized ATR = ATR/close*100, patrz stale nad _ttm_squeeze_series)
+    to dodatkowy, OPCJONALNY sygnal jakosci konsolidacji z "MY STRATEGY BLUEPRINT"
+    (Gareth Packer/Financial Wisdom) — "I require the metric to be below 8"
+    (TTM_SQUEEZE_NATR_MAX) — obok (nie zamiast) samego squeeze'u Bollinger/
+    Keltner powyzej; frontend (docs/js/strategy.js, STRATEGY_NATR_MAX) go
+    odczytuje jako opcjonalny chip w lejku "Stage 2 Continuation", domyslnie
+    wylaczony.
+
     Zwraca None gdy brakuje danych (np. spolka bez wystarczajacej historii cen)."""
     lookback_weeks = 2 * TTM_SQUEEZE_KC_WEEKS + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
@@ -2205,6 +2227,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     squeeze_on, squeeze_count, fired = sq["squeeze_on"], sq["squeeze_count"], sq["fired"]
     weeks_since_fire, fire_consolidation_weeks = sq["since_fire"], sq["fire_consolidation"]
     histogram = sq["histogram"]
+    natr = sq["natr"]
 
     in_window_mask = stock_df["week_start"] >= pd.Timestamp(start_date)
     if not in_window_mask.any():
@@ -2220,7 +2243,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
         return bool(value) if pd.notna(value) else None
 
     dates, histogram_out, squeeze_on_out, squeeze_count_out = [], [], [], []
-    fired_out, weeks_since_fire_out, fire_consolidation_weeks_out = [], [], []
+    fired_out, weeks_since_fire_out, fire_consolidation_weeks_out, natr_out = [], [], [], []
     for i in stock_df.index[in_window_mask]:
         dates.append(stock_df["week_end"].iloc[i].strftime("%Y-%m-%d"))
         histogram_out.append(safe_float(histogram.iloc[i], 4))
@@ -2229,6 +2252,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
         fired_out.append(bool(fired.iloc[i]))
         weeks_since_fire_out.append(safe_int(weeks_since_fire.iloc[i]))
         fire_consolidation_weeks_out.append(safe_int(fire_consolidation_weeks.iloc[i]))
+        natr_out.append(safe_float(natr.iloc[i], 2))
 
     return {
         "dates": dates,
@@ -2238,6 +2262,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
         "fired": fired_out,
         "weeks_since_fire": weeks_since_fire_out,
         "fire_consolidation_weeks": fire_consolidation_weeks_out,
+        "natr": natr_out,
     }
 
 
