@@ -67,25 +67,6 @@ function weeklySparkSvg(closes, ema, squeeze = []) {
         + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
 }
 
-// Dzień: cena z 60 sesji + EMA20 (przerywana) + czerwone kreski u dołu w dni
-// squeeze'a (jak kropki TV). Cena i EMA na wspólnej skali, żeby było widać pullback.
-function dailySparkSvg(closes, squeeze, ema = []) {
-    const w = 130, h = 30, barH = 3;
-    const range = seriesRange(closes, ema);
-    const pts = range ? sparkPoints(closes, w, h - barH - 1, 2, range) : [];
-    if (!pts.length) return '<span class="spark-empty">—</span>';
-    const n = closes.length;
-    const step = (w - 4) / Math.max(n - 1, 1);
-    const bars = (squeeze || []).map((v, i) => v === 1
-        ? `<rect x="${(2 + i * step - step / 2).toFixed(1)}" y="${h - barH}" width="${Math.max(step, 1).toFixed(1)}" height="${barH}" class="spark-sq"/>`
-        : "").join("");
-    const up = closes[n - 1] >= closes[0];
-    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true">`
-        + bars
-        + (ema.length ? `<path d="${sparkPath(sparkPoints(ema, w, h - barH - 1, 2, range))}" class="spark-ema"/>` : "")
-        + `<path d="${sparkPath(pts)}" class="${up ? "spark-up" : "spark-down"}"/></svg>`;
-}
-
 // Słupek RS wokół zera (Mansfield RS 52 tyg.): zielony w prawo = mocniejsza od
 // swojego indeksu, czerwony w lewo = słabsza. Skala ucięta na ±RS_BAR_CAP, żeby
 // kilka skrajnych wartości (>100) nie spłaszczało reszty.
@@ -326,13 +307,43 @@ function breakoutLevelFor(c) {
     }
     if (!base || base.resistance_pct == null) return null;
 
+    const resistance = close0 * (1 + base.resistance_pct / 100);
+    const support = base.support_pct != null ? close0 * (1 + base.support_pct / 100) : null;
+    // Sugerowany stop = dolna granica ŚRODKOWEJ tercji pudełka (górną i dolną
+    // tercję ignorujemy — górna to "za wcześnie", dolna "za późno") — reguła z
+    // materiału o strategii lateral-consolidation-breakout na tygodniowym
+    // wykresie, którą użytkownik podał jako referencję (patrz CLAUDE.md).
+    // Tylko informacyjne — nic w tej apce nie automatyzuje wejścia/wyjścia.
+    const stop = support != null ? support + (resistance - support) / 3 : null;
+
     return {
-        resistance: close0 * (1 + base.resistance_pct / 100),
-        support: base.support_pct != null ? close0 * (1 + base.support_pct / 100) : null,
+        resistance, support, stop,
         startDate: base.start_date,
         pending,
         phase: base.phase || null,
     };
+}
+
+// Zwrot ceny za ostatnie `weeksBack` tygodni, odtworzony z `weekly_chart.close_pct`
+// (ten sam close0 = c.price / (1 + close_pct[last]/100) co breakoutLevelFor()) —
+// zastępuje dawne `daily_squeeze.return_1m_pct/return_3m_pct/return_6m_pct`
+// (usunięte razem z całą infrastrukturą dziennych danych, patrz CLAUDE.md) bez
+// żadnej nowej danej z backendu: `weekly_chart` już ma znacznie więcej niż
+// potrzebne ~26 tygodni historii (cały ~14-miesięczny okno momentum). Zwraca
+// null, gdy w tablicy nie ma jeszcze tylu tygodni albo brakuje wartości.
+function weeksAgoReturnPct(c, weeksBack) {
+    const wc = c && c.weekly_chart;
+    if (!wc || !wc.close_pct || !wc.close_pct.length || !(c.price > 0)) return null;
+    const lastIdx = wc.close_pct.length - 1;
+    const pastIdx = lastIdx - weeksBack;
+    if (pastIdx < 0) return null;
+    const lastPct = wc.close_pct[lastIdx];
+    const pastPct = wc.close_pct[pastIdx];
+    if (lastPct == null || pastPct == null) return null;
+    const close0 = c.price / (1 + lastPct / 100);
+    const pricePast = close0 * (1 + pastPct / 100);
+    if (!(pricePast > 0)) return null;
+    return (c.price / pricePast - 1) * 100;
 }
 
 // "Mam vs cel": pasek obecnej wartości pozycji na tle docelowej (pionowa kreska
@@ -422,15 +433,13 @@ function miniPreviewSectionHtml(label, html) {
 }
 
 // Buduje HTML podglądu z SUROWEGO wiersza tabeli (tr._rowData) — czyta
-// najpierw miniVisualFields()-owe nazwy (mini_closes/mini_ema/mini_hist/...),
-// z fallbackiem na inne nazwy uzywane przez "Tygodniowych zwyciezcow"
-// (weekly_closes/weekly_ema — patrz classifyWeeklyWinner w app.js), zeby
-// dzialac na kazdej tabeli dashboardu bez wiedzy, ktora to konkretnie
-// tabela. Zwraca null, gdy wiersz nie ma ZADNEGO rozpoznanego pola
-// wizualnego (np. rzad w tabeli Continuation, ktora nie ma sparklinow).
+// miniVisualFields()-owe nazwy (mini_closes/mini_ema/mini_hist/...), żeby
+// działać na każdej tabeli dashboardu bez wiedzy, która to konkretnie
+// tabela. Zwraca null, gdy wiersz nie ma ŻADNEGO rozpoznanego pola
+// wizualnego (np. rząd w tabeli, która nie ma sparklinów).
 function buildMiniPreviewHtml(row) {
-    const closes = row.mini_closes || row.weekly_closes;
-    const ema = row.mini_ema || row.weekly_ema;
+    const closes = row.mini_closes;
+    const ema = row.mini_ema;
     const hist = row.mini_hist;
     const stage = row.current_stage || (row.weekly_chart && row.weekly_chart.current_stage);
     const universe = row.universe;
@@ -445,9 +454,6 @@ function buildMiniPreviewHtml(row) {
     }
     if (typeof row.rs_long === "number") {
         sections += miniPreviewSectionHtml(`RS 52 tyg.${universeLabel ? ` vs ${universeLabel}` : ""}`, rsBarHtml(row.rs_long));
-    }
-    if (row.daily_closes && row.daily_closes.length) {
-        sections += miniPreviewSectionHtml(`Dzień (${row.daily_closes.length} ses.)`, dailySparkSvg(row.daily_closes, row.daily_squeeze || [], row.daily_ema || []));
     }
     if (!sections) return null;
 
@@ -535,6 +541,6 @@ function initMiniChartHoverPreview() {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — bez efektu w przeglądarce.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, dailySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, squeezeConsolidationBox, breakoutLevelFor,
+        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, squeezeConsolidationBox, breakoutLevelFor, weeksAgoReturnPct,
     };
 }

@@ -1575,69 +1575,6 @@ class TestComputeMansfieldRsChart:
 # (start_date przekazywany, nie liczony wewnetrznie).
 # ---------------------------------------------------------------------------
 
-class TestComputeDailySqueeze:
-    @staticmethod
-    def _insert_daily(con, ticker, closes, start="2026-01-01", half_range=0.5):
-        days = pd.bdate_range(start=start, periods=len(closes))
-        con.executemany(
-            "INSERT INTO prices (Date, Ticker, Close, Adj_Close, Volume, High, Low) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [(d.strftime("%Y-%m-%d"), ticker, c, c, 1000, c + half_range, c - half_range)
-             for d, c in zip(days, closes)],
-        )
-        return days
-
-    def test_short_squeeze_after_trend_is_counted_in_sessions(self):
-        con = make_gem_con()
-        # 80 sesji silnego trendu (squeeze wylaczony), potem 30 sesji ciasnej konsolidacji.
-        closes = [100.0 + i * 1.0 for i in range(80)]
-        closes += [180.0 + (0.1 if i % 2 == 0 else -0.1) for i in range(30)]
-        days = self._insert_daily(con, "AAA", closes)
-        out = run_query.compute_daily_squeeze(con, "AAA", days[-1].strftime("%Y-%m-%d"))
-        assert out is not None
-        assert out["date"] == days[-1].strftime("%Y-%m-%d")
-        assert out["squeeze_on"] is True
-        assert 1 <= out["squeeze_days"] <= 30
-        # squeeze_days == liczba koncowych jedynek w recent_squeeze (gdy krotszy niz okno)
-        trailing = 0
-        for v in reversed(out["recent_squeeze"]):
-            if v != 1:
-                break
-            trailing += 1
-        assert trailing == min(out["squeeze_days"], run_query.DAILY_SQUEEZE_RECENT_DAYS)
-        assert len(out["recent_squeeze"]) == run_query.DAILY_SQUEEZE_RECENT_DAYS
-        assert out["sma50_pct"] > 0
-        assert out["high_20d_pct"] <= 0
-
-    def test_insufficient_history_returns_none(self):
-        con = make_gem_con()
-        days = self._insert_daily(con, "AAA", [100.0 + i for i in range(30)])
-        assert run_query.compute_daily_squeeze(con, "AAA", days[-1].strftime("%Y-%m-%d")) is None
-        assert run_query.compute_daily_squeeze(con, "NOPE", days[-1].strftime("%Y-%m-%d")) is None
-
-    def test_return_1m_3m_6m_pct(self):
-        # 200 sesji plaskiego kursu, potem podwojenie ceny na ostatniej sesji —
-        # sprawdza, ze return_1m/3m/6m_pct licza sie wzgledem ceny sprzed
-        # dokladnie DAILY_RETURN_1M/3M/6M_DAYS sesji (nie sa ze soba pomylone),
-        # a przy zbyt krotkiej historii (return_6m potrzebuje >= 126 sesji
-        # wstecz) zostaja None zamiast bledu.
-        closes = [100.0] * 199 + [200.0]
-        con = make_gem_con()
-        days = self._insert_daily(con, "AAA", closes)
-        out = run_query.compute_daily_squeeze(con, "AAA", days[-1].strftime("%Y-%m-%d"))
-        assert out is not None
-        assert out["return_1m_pct"] == pytest.approx(100.0)
-        assert out["return_3m_pct"] == pytest.approx(100.0)
-        assert out["return_6m_pct"] == pytest.approx(100.0)
-
-        con2 = make_gem_con()
-        days2 = self._insert_daily(con2, "BBB", [100.0] * 99 + [200.0])
-        out2 = run_query.compute_daily_squeeze(con2, "BBB", days2[-1].strftime("%Y-%m-%d"))
-        assert out2 is not None
-        assert out2["return_1m_pct"] == pytest.approx(100.0)
-        assert out2["return_3m_pct"] == pytest.approx(100.0)
-        assert out2["return_6m_pct"] is None  # tylko 99 sesji wstecz, potrzeba >= 126
-
-
 class TestComputeTtmSqueezeChart:
     def test_long_consolidation_then_breakout_is_detected(self):
         con = make_gem_con()
@@ -2070,6 +2007,9 @@ class TestComputeSp500TrendFilter:
         assert out["close"] > out["sma40w"] > 0
         assert len(out["daily_series"]) > 0
         assert len(out["weekly_series"]) > 0
+        # Trend jednostajnie w górę -> 10-tyg. EMA (szybsza) musi wyprzedzać 20-tyg.
+        assert out["ema10w"] > out["ema20w"] > 0
+        assert out["weekly_ema_bullish"] is True
 
     def test_downtrend_is_below_both_smas(self):
         con = make_gem_con()
@@ -2079,6 +2019,8 @@ class TestComputeSp500TrendFilter:
         assert out["above_sma200"] is False
         assert out["above_sma40w"] is False
         assert out["in_growth_phase"] is False
+        assert out["ema10w"] < out["ema20w"]
+        assert out["weekly_ema_bullish"] is False
 
     def test_insufficient_history_returns_none_smas(self):
         con = make_gem_con()
@@ -2090,6 +2032,10 @@ class TestComputeSp500TrendFilter:
         assert out["sma40w"] is None
         assert out["above_sma40w"] is None
         assert out["in_growth_phase"] is None
+        # EMA (ewm) nie wymaga pełnego okna jak SMA/rolling -> ma wartość nawet
+        # przy krótkiej historii, w przeciwieństwie do above_sma40w powyżej.
+        assert out["ema10w"] is not None
+        assert out["ema20w"] is not None
 
     def test_no_table_returns_none(self):
         con = duckdb.connect(":memory:")

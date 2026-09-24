@@ -1172,30 +1172,118 @@ flex child (no `.topbar-left` wrapper there).
   own `input` handlers) and widens the result set considerably (roughly 20→38 constituents in a spot check)
   since one of the three original AND-conditions is gone.
 
-  **"🚀 Continuation" screener tab** (`data-universe="CONTINUATION"`, explicit user request: a stock
-  ALREADY in a dynamic Stage 2 that takes a SHORT pause on the DAILY chart, to join the trend for ~10-20% —
-  filter only, the user decides entries/exits). The only screener built on DAILY data:
-  `run_query.py::compute_daily_squeeze()` exports a compact `daily_squeeze` summary (not a chart) on every
-  constituent record — TTM Squeeze on daily bars via `_ttm_squeeze_series()` (the SAME LazyBeara core the
-  weekly `compute_ttm_squeeze_chart` now also calls, `DAILY_SQUEEZE_LENGTH` = 20 sessions):
-  `squeeze_on`/`squeeze_days`/`days_since_fire`/`fire_consolidation_days`/`histogram`/`histogram_prev`/
-  `recent_squeeze` (last 20 sessions, drawn as TradingView-style dots) plus `sma50_pct`/`ema21_pct`/
-  `return_1m_pct`/`high_20d_pct`. `classifyContinuation()` in `signals.js` (moved from `app.js`, see the
-  dedicated `signals.html`/`signals.js` bullet above): weekly `current_stage` 2A/2B,
-  `momentum_pct > 0` (and `>=` slider), latest `rsm_long > 0` (classic 52-week Mansfield RS — the user's
-  explicit call, it was `rsm_medium`/26 weeks at first; NOT `momentum_score > 0`, which is always true since
-  the score is `1+Z`/`1/(1-Z)`), daily `sma50_pct > 0`; then
-  🌀 "squeeze" (on for `CONTINUATION_MIN_SQUEEZE_DAYS` (3) .. slider max sessions) or 🔥 "fired" (fired
-  within slider sessions, after a 3..max-session squeeze, daily histogram > 0). Three sliders
-  (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): max squeeze length
-  (default 30), fire lookback (5), min 12M momentum (0% — the user: "powyżej zera jest ok"). Sidebar tile group `#tiles-CONTINUATION`.
-  **"🏆 Tygodniowi zwycięzcy" sub-table** under the signals table (`#continuationWinnersSection`,
-  `combinedWeeklyWinners()`/`renderWinnersTable()`): EVERY stock passing the weekly gate
-  (`continuationWeeklyGate()`), with its D1 status (signal / squeeze outside the thresholds / no setup) and
-  two inline-SVG sparklines (no Chart.js — dozens per table): weekly `close_pct` + dashed `ema20_pct`
-  (last 26 weeks) and daily closes + dashed daily EMA20 (`spark.ema20`) with red bars on squeeze days
-  (`daily_squeeze.spark`, last `DAILY_SPARK_DAYS` = 60 sessions); plus a "vs EMA20 D1" column
-  (`daily_squeeze.ema20_pct`, `pullbackHtml()`: 🎯 when 0..`PULLBACK_BAND_PCT` (2) % above EMA20 = pullback).
+  **"🚀 Continuation" screener tab** (`data-universe="CONTINUATION"`, PREPROJEKTOWANY NA TYGODNIOWY —
+  a later, separate explicit user request: "rezygnuje z dziennych danych, za duzo zachodu", after the user
+  shared a video about a weekly "lateral consolidation breakout" strategy and asked for a review of how
+  close our own approach already was — see the version-history paragraph below for the full account and
+  what survived from that review vs. what didn't). Current design: a stock ALREADY in a dynamic Stage 2
+  that is consolidating (or just broke out of a consolidation) on the exact same WEEKLY TTM Squeeze
+  (`ttm_squeeze_chart`) that "🧨 TTM Squeeze"/"🎯 Qullamaggie" already read — filter only, the user decides
+  entries/exits. `classifyContinuation()` in `signals.js` (moved from `app.js`, see the dedicated
+  `signals.html`/`signals.js` bullet above):
+  - **Trend gate** (`continuationWeeklyGate()`, unchanged since the D1 version): weekly `current_stage`
+    2A/2B, `momentum_pct > 0` (and `>=` slider), latest `rsm_long > 0` (classic 52-week Mansfield RS).
+  - **Consolidation** (same squeeze-window logic as `classifyQullamaggie()`, just different default
+    thresholds and NO prior-move requirement — this is what still tells the two tabs apart): 🌀
+    "squeeze" when `squeeze_count` falls inside `[state.contMinConsolidationWeeks,
+    state.contMaxConsolidationWeeks]` (default **6-16 weeks** — the reference video states "at least 6
+    weeks, longer is often better," with no stated upper bound; 16 is a practical slider ceiling, not a
+    rule from the video), or 🔥 "fired" when a squeeze inside that same window ended within
+    `state.contFireLookbackWeeks` (default 3) weeks ago with a positive histogram (an upside breakout).
+  - **Weekly MACD confirmation** (`macd_chart`, informational, `fired` only): `macd_confirmed` is
+    `macd.macd > macd.signal` at the fire week, matched by date (same pattern as `breakout_volume_ratio` in
+    Qullamaggie) — modeled on the reference video's own rule ("always want the MACD line above the signal
+    line"). Doesn't reject the row either way, same "quality signal, not a hard gate" philosophy as
+    Qullamaggie's volume badge.
+  - **"Poziom do obserwacji" / sugerowany stop**: `breakout_level: breakoutLevelFor(c)` — the SAME shared
+    helper Qullamaggie uses (`js/minicharts.js`), now also returning a `stop` field (see the version-history
+    paragraph below).
+  Four sliders (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): min/max
+  consolidation weeks (default 6/16), fire lookback (default 3), min 12M momentum (0% — the user:
+  "powyżej zera jest ok"). Sidebar tile group `#tiles-CONTINUATION`.
+
+  **REMOVED along with the move to weekly: the "🏆 Tygodniowi zwycięzcy" sub-table and the whole daily-data
+  layer it and Continuation were built on** (`daily_squeeze`, `run_query.py::compute_daily_squeeze()`,
+  `docs/data/continuation.json`, the "🔄 Odśwież dane D1" GitHub Actions button, `refresh_daily.py`, and
+  `.github/workflows/daily_continuation.yml`) — see the version-history paragraph immediately below for why
+  and what replaced each piece. "🏆 Tygodniowi zwycięzcy" (`combinedWeeklyWinners()`/`renderWinnersTable()`)
+  used to show EVERY stock passing the weekly trend gate regardless of D1 setup, as a superset of
+  Continuation; it lost its reason to exist once Continuation itself became weekly-only (its own table
+  already shows exactly "who passed the gate, with which squeeze status" — there is no separate
+  daily-vs-weekly distinction left to show a superset of).
+
+  **Version history — why Continuation moved off daily data, and what a "lateral consolidation breakout"
+  video changed.** The user shared a video describing a weekly swing-trading strategy — market-trend filter
+  (S&P 500's 10-week EMA above its 20-week EMA), a stock trading above its own 20-week MA, a
+  multi-week ("at least 6 weeks, longer often better") tight consolidation box, a weekly MACD requirement
+  (MACD line above its signal line), specific breakout-candle quality filters (upper wick under 50% of the
+  candle's range, a 10-week closing high, a 5-20% weekly gain), and — the part that mattered most here — a
+  stop-loss rule: split the consolidation box into three equal thirds, ignore the top and bottom thirds
+  (too early / too late), and place the initial stop at the bottom of the MIDDLE third, later raised to that
+  week's low on the first weekly MACD bearish cross (MACD closing below its own signal line) after the box.
+  The user's own read, after reviewing it against this codebase, was that "co robimy jest bardzo podobne na
+  tygodniowym wykresie" (what we already do is very similar on the weekly chart) — and asked, separately, to
+  finally give up on Continuation's daily layer ("rezygnuje z dziennych danych, za duzo zachodu bazuje na
+  weekendowcyh" — too much manual upkeep, and D1 data going stale over a weekend until someone clicks
+  "Odśwież dane D1"). Three concrete, adopted outcomes came out of that review:
+  1. **Continuation's consolidation detection moved from a DAILY TTM Squeeze to the WEEKLY one** (same
+     mechanism `classifyQullamaggie()`/`classifyTtmSqueeze()` already use) — this alone made the whole
+     `daily_squeeze`/D1-refresh layer unnecessary for Continuation, and (see point 3) for Qullamaggie too.
+  2. **A weekly MACD confirmation** was added to Continuation's "fired" case, directly modeled on the
+     video's own MACD-above-signal rule (`macd_confirmed`, informational — see above).
+  3. **`breakoutLevelFor()` (js/minicharts.js) now also returns a `stop` field** — the bottom of the box's
+     middle third (`support + (resistance - support) / 3`), directly modeled on the video's stop-loss rule,
+     computed from the SAME close-only `squeezeConsolidationBox()`/Darvas-style box this helper already
+     builds (see that function's own bullet above) rather than a new, separate notion of a box. This is
+     purely informational, same as the rest of this field — nothing in this app places or manages stops
+     automatically.
+  What the review deliberately did NOT adopt, and why: the video's raised-stop's exact
+  MACD-cross-then-that-week's-low mechanic (kept as a simple informational box-third level here, not a
+  live, continuously-updated trailing stop tied to a specific entry date — this app has no concept of "when
+  you entered a position," being a screener, not a portfolio tracker) and the breakout-candle upper-wick
+  filter (needs weekly Open/High, not just Close/Low — see `low_pct` under `compute_relative_strength_chart`
+  above for what's already exported) were left for a future request rather than folded in speculatively.
+
+  **A SECOND, separate review pass — same video, re-shared by the user with "sprawdz ta strategie i czy
+  czegos nam brakuje w naszej kluczowego" (check this strategy and whether we're missing anything crucial in
+  ours) — added three more pieces from it, all client-side, all from data already exported (no new backend
+  fetch needed):**
+  1. **A market-wide regime filter** (`state.marketTrend`, `#continuationMarketBanner` in `signals.js`) —
+     the video's own "if the index's 10-week EMA isn't above its 20-week EMA, stay in cash" rule, computed
+     as NEW `ema10w`/`ema20w`/`weekly_ema_bullish` fields on `compute_sp500_trend_filter()`'s existing return
+     dict (a cheap addition — that function already fetches and resamples SP500's weekly closes for its
+     40-week SMA, so a 10/20-week EMA pair on the SAME already-fetched series costs nothing extra) — a
+     DIFFERENT signal from that function's own `in_growth_phase` (SMA200-daily/SMA40-week), not a replacement
+     for it; `sector_strategy.json`'s `trend` object (already fetched by `strategy.js`) now carries both.
+     `loadData()` in `signals.js` fetches this same file (new fetch, but a cheap, already-generated static
+     JSON, not a new pipeline computation) purely for this banner. Deliberately INFORMATIONAL, not a row
+     filter — Continuation's own candidates are NOT hidden when the market is bearish, matching the exact
+     same "never hide candidates over a market-level filter" precedent `strategy.js`'s own step 1 already
+     set (see that section) rather than introducing a harsher, inconsistent convention here.
+  2. **A 10-week-closing-high requirement on "fired" rows** (`ten_week_high`, `CONTINUATION_TEN_WEEK_HIGH_WEEKS`
+     = 10) — computed by comparing the fire week's `close_pct` against the trailing 10 weeks of the SAME
+     already-exported array (comparing `close_pct` values directly is valid because they all share one
+     `close0` baseline — no need to reconstruct real prices). Unlike the MACD/volume badges elsewhere in
+     this module, this one is a HARD gate — but only when actually measured false; too little history
+     (`null`) passes through rather than rejecting, the same graceful-degradation convention as everywhere
+     else in this codebase.
+  3. **A breakout-week gain filter in [5%, 20%]** (`breakout_gain_pct`,
+     `CONTINUATION_MIN_BREAKOUT_GAIN_PCT`/`MAX_BREAKOUT_GAIN_PCT`) — the video's own breakout-candle-quality
+     rule, reconstructed from two adjacent `close_pct` values (both relative to the same `close0`, so their
+     ratio gives the real week-over-week % change without reconstructing absolute prices). Same hard-gate
+     rule as point 2: rejects only a real, measured violation, never a `null`.
+  Both new gates are fixed constants, not sliders — the user didn't ask for them to be tunable, and they're
+  meant to mirror the reference strategy's own stated numbers exactly, unlike the consolidation-length
+  window (which already had sliders before this review and stays adjustable). The upper-wick filter and
+  the live raised-stop remain the two pieces genuinely left out (see above) — everything else client-side
+  computable from already-exported data was adopted in this pass.
+  **Removing the daily layer also fixed, as a side effect, a real staleness bug**: `classifyQullamaggie()`'s
+  own `return_1m_pct`/`return_3m_pct`/`return_6m_pct` used to read `c.daily_squeeze` too (see that section's
+  version-history paragraph for the specific incident — the committed `docs/data/*.json` had gone stale
+  relative to those fields) — they now read `weeksAgoReturnPct(c, weeks)` (`js/minicharts.js`), which
+  reconstructs a real historical price purely from the ALREADY-EXPORTED `weekly_chart.close_pct` (no new
+  backend field, no dependency on any pipeline run having ever populated `daily_squeeze`), closing that
+  staleness gap for good rather than just working around it.
   **"💥 Wybicie" mini-charts** (later addition, same request as the universe-table/TTM-Squeeze visuals
   below): a price sparkline column, plus `zeroLineSparkSvg`/`crossIndexInTail` (js/minicharts.js) turn the
   raw MACD/RS-52W numbers into small oscillator charts with a gold dot marking the zero-cross week —
@@ -1205,17 +1293,16 @@ flex child (no `.topbar-left` wrapper there).
   Kristjan Qullamaggie's breakout-scanning approach — screen for a large prior move, wait through a
   multi-week consolidation, buy the breakout on volume, time the actual entry against an intraday Opening
   Range Breakout + session VWAP). This is deliberately built from data this pipeline ALREADY has, not a
-  new fetch: performance (`c.daily_squeeze.return_1m_pct`/`return_3m_pct`/`return_6m_pct`, see
-  `compute_daily_squeeze()` under Relative strength above — `return_3m_pct`/`return_6m_pct` were ADDED to
-  that function for this feature, alongside `DAILY_SQUEEZE_LOOKBACK_DAYS` being raised from 200 to 280
-  calendar days so a 126-session/~6-month return actually has enough history behind it; this only widens a
-  SQL read against the already-retained, already-fetched `prices` table, so it costs no extra yfinance
-  call) and consolidation/breakout (the SAME weekly `ttm_squeeze_chart` the "🧨 TTM Squeeze" tab already
-  reads, just with the consolidation-length WINDOW narrowed to a user-adjustable range instead of an
-  open-ended "> 5 weeks" minimum — the user's own first description was "4-6 tygodni", later corrected to
-  **2-8 tygodni** (see the version-history paragraph below) after reviewing this whole tab against
-  Qullamaggie's own "The Breakout" reference diagram, i.e. a real base, not the short D1 pause "🚀
-  Continuation" screens for). `classifyQullamaggie()` in `signals.js`:
+  new fetch: performance (`return_1m_pct`/`return_3m_pct`/`return_6m_pct` — reconstructed purely from the
+  ALREADY-EXPORTED `weekly_chart.close_pct` via `weeksAgoReturnPct(c, weeks)` in `js/minicharts.js`, NOT
+  from any backend field — see the version-history paragraph under "🚀 Continuation" above for why this
+  moved off the earlier `c.daily_squeeze`/`compute_daily_squeeze()` entirely) and consolidation/breakout
+  (the SAME weekly `ttm_squeeze_chart` the "🧨 TTM Squeeze" tab already reads, just with the
+  consolidation-length WINDOW narrowed to a user-adjustable range instead of an open-ended "> 5 weeks"
+  minimum — the user's own first description was "4-6 tygodni", later corrected to **2-8 tygodni** (see the
+  version-history paragraph below) after reviewing this whole tab against Qullamaggie's own "The Breakout"
+  reference diagram, i.e. a real base, not the short-pause idea "🚀 Continuation" itself moved away from —
+  see that bullet's own version-history paragraph). `classifyQullamaggie()` in `signals.js`:
   1. **Performance** — `perfPct = return_6m_pct` must clear the "Min. wynik (6M)" slider (default 30%, the
      same threshold Qullamaggie's own scan uses). **This replaced an earlier `max(return_1m_pct,
      return_3m_pct, return_6m_pct)` OR-across-three-windows version** (itself the user's own correction to
@@ -1360,24 +1447,14 @@ flex child (no `.topbar-left` wrapper there).
   bottom inset border in the ticker's Weinstein-stage color (`STAGE_COLORS`) plus a small green/red dot
   (RS 52-week ≥ 0 / < 0) in the corner — a tile now says something without being clicked.
 
-  **On-demand daily refresh ("🔄 Odśwież dane D1")** — explicit user request for fresher D1 data without
-  a daily cron on a static site. The button calls the GitHub REST API from the browser
-  (`runDailyRefresh()`): `workflow_dispatch` of `.github/workflows/daily_continuation.yml`, finds the run
-  (`pickDispatchedRun()`), polls `/actions/runs/{id}/jobs` every 4 s and shows the current step name + a
-  progress bar (`refreshProgressFromJobs()`; step `name:`s in the workflow are the labels), then reads the
-  fresh `docs/data/continuation.json` through the contents API (bypasses the Pages CDN cache) and
-  re-renders. The workflow runs `refresh_daily.py`: weekly winners from the committed `docs/data/*.json`
-  (same gate at momentum slider = 0, i.e. a superset for higher slider values, ~90 tickers) → `fetch_data._download_price_rows`
-  for only those tickers/last `DAILY_SQUEEZE_LOOKBACK_DAYS` → `run_query.compute_daily_squeeze` on an
-  in-memory DuckDB → `continuation.json` (~80 KB). It never touches/commits `momentum_data.duckdb`.
-  `effectiveDaily(c)` uses the `continuation.json` summary when its `date` is newer than the weekly
-  export's `daily_squeeze.date`. Auth: a fine-grained PAT the user pastes once (⚙️ form; only this repo,
-  Actions read/write + Contents read), stored ONLY in that browser's `localStorage`
-  (`momentum_gh_token`); an in-flight run id is kept in `momentum_daily_refresh_run` so a reload resumes
-  polling. `workflow_dispatch` only works once the workflow file is on the default branch (`main`).
-  Note: `squeeze_count` (and so `fire_consolidation_weeks`) had an off-by-one (the resetting non-squeeze
-  bar was counted as the run's first bar) — fixed by using a grouped `cumsum`; weekly counts now match
-  TradingView.
+  **REMOVED: on-demand daily refresh ("🔄 Odśwież dane D1")** — this whole mechanism (`runDailyRefresh()`/
+  `pickDispatchedRun()`/`refreshProgressFromJobs()`/`githubRepoFromLocation()` in `signals.js`, the GitHub
+  PAT form, `refresh_daily.py`, `.github/workflows/daily_continuation.yml`, `docs/data/continuation.json`)
+  existed to give "🚀 Continuation" fresher-than-Saturday D1 data via a browser-triggered GitHub Actions
+  workflow_dispatch, without a daily cron on a static site. It was removed entirely once Continuation
+  itself moved to the weekly cadence every other screener already runs on — see the version-history
+  paragraph under "🚀 Continuation" above for the explicit user request and reasoning. Nothing replaced it;
+  there is no longer a "fresher than the weekly export" concept for this tab to refresh.
 
   **Layout: full-screen table + chart in a pop-up** (explicit user request: "rozwijaj tabele na cały ekran",
   chart "jako pop up window a nie za tabelą", "z X do zamknięcia", "nie potrzebuje tego otwierać w tle").

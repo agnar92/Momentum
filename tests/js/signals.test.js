@@ -1,7 +1,7 @@
 // Testy dla czystej logiki w docs/js/signals.js (screenery Wybicie/TTM
-// Squeeze/Continuation + odświeżanie D1 przez GitHub Actions — wydzielone z
-// docs/js/app.js na osobną stronę "Sygnały", patrz CLAUDE.md; reszta pliku
-// jest ściśle sprzężona z DOM/renderowaniem).
+// Squeeze/Continuation/Qullamaggie — wydzielone z docs/js/app.js na osobną
+// stronę "Sygnały", patrz CLAUDE.md; reszta pliku jest ściśle sprzężona z
+// DOM/renderowaniem).
 "use strict";
 
 const test = require("node:test");
@@ -11,8 +11,6 @@ const path = require("node:path");
 const {
     weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     classifyContinuation, combinedContinuationCandidates,
-    effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
-    githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
     classifyQullamaggie, combinedQullamaggieCandidates,
 } = require(path.join("..", "..", "docs", "js", "signals.js"));
 
@@ -302,27 +300,64 @@ test("combinedTtmSqueezeCandidates merges candidates across universes, fired fir
 
 const QM_OPTS = { minPerfPct: 30, minConsolidationWeeks: 4, maxConsolidationWeeks: 6, fireLookbackWeeks: 3 };
 
-function qmConstituent(overrides = {}, dailyOverrides = {}) {
+// Zwroty 1M/3M/6M są teraz czytane z weekly_chart.close_pct (weeksAgoReturnPct(),
+// js/minicharts.js), nie z usuniętego daily_squeeze — patrz komentarz przy
+// classifyQullamaggie w signals.js. qmPastPct() odtwarza dokładnie taki % "N
+// tygodni temu", jaki dałby żądany zwrot względem OSTATNIEJ wartości w
+// tablicy — niezależnie od tego, czym ta ostatnia wartość akurat jest (może
+// być ustawiona przez test na potrzeby squeezeConsolidationBox).
+function qmPastPct(lastPct, returnPct) {
+    return 100 * ((1 + lastPct / 100) / (1 + returnPct / 100) - 1);
+}
+
+const QM_PAD_WEEKS = 30;
+
+function qmPadDates(realDates) {
+    return Array.from({ length: QM_PAD_WEEKS }, (_, i) => `__pad_${i}__`).concat(realDates);
+}
+
+// Tablica close_pct dlugości >= 27 (PAD placeholderów z przodu + `tail` na
+// końcu, dokładnie taki, jaki test faktycznie chce) tak, żeby
+// weeksAgoReturnPct(c, 4/13/26) odtworzył podane zwroty 1/3/6M. `rXm: null`
+// pomija dany zwrot (placeholder 0 w tej pozycji — realny "brak danych"
+// (null) wymaga osobnej, jawnie SKRÓCONEJ tablicy, patrz dedykowany test).
+function qmClosePct({ r1m = 10, r3m = 45, r6m = 60 } = {}, tail = [0]) {
+    const full = new Array(QM_PAD_WEEKS).fill(0).concat(tail);
+    const last = full.length - 1;
+    const lastPct = full[last];
+    if (r1m != null) full[last - 4] = qmPastPct(lastPct, r1m);
+    if (r3m != null) full[last - 13] = qmPastPct(lastPct, r3m);
+    if (r6m != null) full[last - 26] = qmPastPct(lastPct, r6m);
+    return full;
+}
+
+// weekly_chart z realnymi datami (do wyszukiwania buying_volume_ratio po
+// dacie wybicia) plus paddingiem, żeby weeksAgoReturnPct miał czego szukać.
+function qmWeeklyChart(realDates, { buyingVolumeRatio, closeTail, returns } = {}) {
+    return {
+        current_stage: "2A",
+        dates: qmPadDates(realDates),
+        buying_volume_ratio: new Array(QM_PAD_WEEKS).fill(null).concat(buyingVolumeRatio || realDates.map(() => null)),
+        close_pct: qmClosePct(returns || {}, closeTail || realDates.map(() => 0)),
+    };
+}
+
+function qmConstituent(overrides = {}, returns = {}) {
     return {
         sector: "Tech", price: 100,
-        weekly_chart: { current_stage: "2A", dates: ["2026-01-01"], buying_volume_ratio: [2.0] },
-        daily_squeeze: { return_1m_pct: 10, return_3m_pct: 45, return_6m_pct: 60, ...dailyOverrides },
+        weekly_chart: qmWeeklyChart(["2026-01-01"], { buyingVolumeRatio: [2.0], returns }),
         ttm_squeeze_chart: { dates: [], histogram: [], squeeze_on: [], squeeze_count: [], fired: [], weeks_since_fire: [], fire_consolidation_weeks: [] },
         ...overrides,
     };
 }
 
-test("classifyQullamaggie returns null without a daily_squeeze summary", () => {
-    assert.equal(classifyQullamaggie("AAA", "SP500", qmConstituent({ daily_squeeze: null }), QM_OPTS), null);
-});
-
-test("classifyQullamaggie returns null when the 6-month return doesn't clear the performance threshold", () => {
-    const c = qmConstituent({}, { return_1m_pct: 5, return_3m_pct: 10, return_6m_pct: 20 });
+test("classifyQullamaggie returns null without enough weekly price history for a 6-month return", () => {
+    const c = qmConstituent({ weekly_chart: { current_stage: "2A", dates: ["2026-01-01"], close_pct: [0] } });
     assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
 });
 
-test("classifyQullamaggie returns null without a 6-month return, even when 1M/3M are missing entirely", () => {
-    const c = qmConstituent({}, { return_1m_pct: null, return_3m_pct: null, return_6m_pct: null });
+test("classifyQullamaggie returns null when the 6-month return doesn't clear the performance threshold", () => {
+    const c = qmConstituent({}, { r1m: 5, r3m: 10, r6m: 20 });
     assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
 });
 
@@ -336,7 +371,7 @@ test("classifyQullamaggie no longer qualifies on a big 1M/3M move alone when the
             dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
             fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
         },
-    }, { return_1m_pct: 50, return_3m_pct: 45, return_6m_pct: 20 });
+    }, { r1m: 50, r3m: 45, r6m: 20 });
     assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
 });
 
@@ -346,10 +381,10 @@ test("classifyQullamaggie qualifies on the 6-month return alone, even when 1M/3M
             dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
             fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
         },
-    }, { return_1m_pct: -5, return_3m_pct: -2, return_6m_pct: 35 });
+    }, { r1m: -5, r3m: -2, r6m: 35 });
     const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
     assert.ok(r);
-    assert.equal(r.perf_pct, 35);
+    assert.ok(Math.abs(r.perf_pct - 35) < 0.01);
 });
 
 test("classifyQullamaggie marks consolidating when the weekly squeeze is inside the min/max week window", () => {
@@ -385,14 +420,11 @@ test("classifyQullamaggie ignores a squeeze longer than the maximum consolidatio
 });
 
 test("classifyQullamaggie marks fired and confirms buying volume at the breakout week", () => {
+    const realDates = ["2025-12-11", "2025-12-18", "2026-01-01"];
     const c = qmConstituent({
-        weekly_chart: {
-            current_stage: "2A",
-            dates: ["2025-12-11", "2025-12-18", "2026-01-01"],
-            buying_volume_ratio: [1.0, 1.8, 1.1],
-        },
+        weekly_chart: qmWeeklyChart(realDates, { buyingVolumeRatio: [1.0, 1.8, 1.1] }),
         ttm_squeeze_chart: {
-            dates: ["2025-12-11", "2025-12-18", "2026-01-01"],
+            dates: realDates,
             histogram: [0.1, 0.2, 3.5], squeeze_on: [true, false, false], squeeze_count: [5, 0, 0],
             fired: [false, true, false], weeks_since_fire: [null, 0, 1], fire_consolidation_weeks: [null, 5, 5],
         },
@@ -407,14 +439,11 @@ test("classifyQullamaggie marks fired and confirms buying volume at the breakout
 });
 
 test("classifyQullamaggie flags an unconfirmed breakout when buying volume is below the ratio threshold", () => {
+    const realDates = ["2025-12-18", "2026-01-01"];
     const c = qmConstituent({
-        weekly_chart: {
-            current_stage: "2A",
-            dates: ["2025-12-18", "2026-01-01"],
-            buying_volume_ratio: [0.9, 1.1],
-        },
+        weekly_chart: qmWeeklyChart(realDates, { buyingVolumeRatio: [0.9, 1.1] }),
         ttm_squeeze_chart: {
-            dates: ["2025-12-18", "2026-01-01"],
+            dates: realDates,
             histogram: [0.2, 3.5], squeeze_on: [false, false], squeeze_count: [0, 0],
             fired: [true, false], weeks_since_fire: [0, 1], fire_consolidation_weeks: [5, 5],
         },
@@ -446,7 +475,7 @@ const QM_OPTS_WIDE = { minPerfPct: 30, minConsolidationWeeks: 2, maxConsolidatio
 function qmShortSqueezeConstituent(closePctWindow) {
     const dates = ["2025-12-25", "2026-01-01"];
     return qmConstituent({
-        weekly_chart: { current_stage: "2A", dates, close_pct: closePctWindow, buying_volume_ratio: [1.0, 1.0] },
+        weekly_chart: qmWeeklyChart(dates, { closeTail: closePctWindow }),
         ttm_squeeze_chart: {
             dates, histogram: [0.1, 0.1], squeeze_on: [true, true], squeeze_count: [1, 2],
             fired: [false, false], weeks_since_fire: [null, null], fire_consolidation_weeks: [null, null],
@@ -476,7 +505,7 @@ test("classifyQullamaggie rejects a 2-week squeeze when the price range is too t
 
 test("classifyQullamaggie does not require the price-range check once the squeeze is longer than 2 weeks", () => {
     const c = qmConstituent({
-        weekly_chart: { current_stage: "2A", dates: ["2026-01-01"], close_pct: [30], buying_volume_ratio: [1.0] },
+        weekly_chart: qmWeeklyChart(["2026-01-01"], { closeTail: [30] }),
         ttm_squeeze_chart: {
             dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [3],
             fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
@@ -526,69 +555,151 @@ test("combinedQullamaggieCandidates merges universes, dedupes tickers, sorts fir
     assert.deepEqual(rows.map(r => r.ticker), ["FIRED_FRESH", "FIRED_OLD", "COIL_LONG", "COIL_SHORT"]);
 });
 
-// ---------- classifyContinuation / combinedContinuationCandidates ----------
+// ---------- classifyContinuation / combinedContinuationCandidates (przeprojektowany na tygodniowy) ----------
 
-function continuationConstituent(overrides = {}, dailyOverrides = {}) {
+function continuationConstituent(overrides = {}, squeezeOverrides = {}) {
+    const dates = ["2026-01-01"];
     return {
-        sector: "Tech", price: 100, momentum_pct: 40, momentum_score: 2,
-        weekly_chart: { current_stage: "2B" },
-        mansfield_chart: { rsm_medium: [-1, -2, -3], rsm_long: [1, 2, 3, null] },
-        daily_squeeze: {
-            squeeze_on: true, squeeze_days: 8, days_since_fire: 40, fire_consolidation_days: 12,
-            histogram: 1.5, histogram_prev: 1.0, recent_squeeze: [0, 1, 1],
-            sma50_pct: 6, high_20d_pct: -2, return_1m_pct: 5,
-            ...dailyOverrides,
+        sector: "Tech", price: 100, momentum_pct: 40,
+        weekly_chart: { current_stage: "2B", dates, close_pct: [10] },
+        mansfield_chart: { rsm_long: [1, 2, 3] },
+        ttm_squeeze_chart: {
+            dates, histogram: [0.2], squeeze_on: [true], squeeze_count: [8],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+            ...squeezeOverrides,
         },
         ...overrides,
     };
 }
 
-const CONT_OPTS = { maxSqueezeDays: 30, fireLookbackDays: 5, minMomentumPct: 20 };
+const CONT_OPTS = { minConsolidationWeeks: 6, maxConsolidationWeeks: 16, fireLookbackWeeks: 3, minMomentumPct: 20 };
 
-test("classifyContinuation accepts a Stage 2 stock in a short daily squeeze", () => {
+test("classifyContinuation accepts a Stage 2 stock in a weekly squeeze inside the min/max window", () => {
     const r = classifyContinuation("AAA", "SP500", continuationConstituent(), CONT_OPTS);
     assert.ok(r);
     assert.equal(r.status, "squeeze");
-    assert.equal(r.squeeze_days, 8);
-    assert.equal(r.rs_long, 3, "gate reads RS 52W (rsm_long), not RS 26W");
-    assert.equal(r.histogram_rising, true);
+    assert.equal(r.consolidation_weeks, 8);
+    assert.equal(r.rs_long, 3, "gate reads RS 52W (rsm_long)");
+    assert.equal(r.macd_confirmed, null, "no MACD confirmation while still consolidating");
 });
 
-test("classifyContinuation accepts a fresh upward fire out of a daily squeeze", () => {
-    const r = classifyContinuation("AAA", "SP500", continuationConstituent({}, {
-        squeeze_on: false, squeeze_days: 0, days_since_fire: 2, fire_consolidation_days: 10, histogram: 0.8,
-    }), CONT_OPTS);
+test("classifyContinuation accepts a fresh upward fire out of a weekly squeeze, with MACD confirmation", () => {
+    const dates = ["2025-11-30", "2025-12-07", "2025-12-14", "2025-12-21"];
+    // close_pct: 6 -> 15 na tygodniu wybicia = ok. +8.5% (w [5,20]) i za mało
+    // historii (4 tyg.) na sprawdzenie 10-tyg. szczytu, więc ten_week_high
+    // zostaje null (nie odrzuca) — patrz dedykowane testy poniżej dla obu progów.
+    const c = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates, close_pct: [0, 3, 6, 15] },
+        macd_chart: { dates, macd: [-0.1, 0.2, 0.5, 0.8], signal: [0.0, 0.1, 0.3, 0.5] },
+    }, {
+        dates, histogram: [0.1, 0.2, 0.3, 0.8], squeeze_on: [true, true, true, false],
+        squeeze_count: [6, 7, 8, 0], fired: [false, false, false, true],
+        weeks_since_fire: [null, null, null, 0], fire_consolidation_weeks: [null, null, null, 8],
+    });
+    const r = classifyContinuation("AAA", "SP500", c, CONT_OPTS);
+    assert.ok(r);
     assert.equal(r.status, "fired");
-    assert.equal(r.days_since_fire, 2);
-    assert.equal(r.squeeze_days, 10);
+    assert.equal(r.weeks_since_fire, 0);
+    assert.equal(r.consolidation_weeks, 8);
+    assert.equal(r.macd_confirmed, true, "MACD (0.8) > signal (0.5) at the fire week");
+    assert.equal(r.ten_week_high, null, "too little history to verify -> not rejected");
+    assert.ok(Math.abs(r.breakout_gain_pct - 8.49) < 0.01);
 });
 
-test("classifyContinuation applies the max squeeze length to fires too", () => {
+// ---------- dwa TWARDE kryteria świecy wybicia z materiału referencyjnego ----------
+// (CONTINUATION_TEN_WEEK_HIGH_WEEKS/MIN_BREAKOUT_GAIN_PCT/MAX_BREAKOUT_GAIN_PCT) —
+// odrzucają wiersz TYLKO gdy realnie zmierzone i naruszone (== false / poza
+// zakresem), nigdy z powodu braku historii (null przepuszcza, jak zawsze w tym module).
+function continuationFireDates(n) {
+    return Array.from({ length: n }, (_, i) => `2025-${String(10 + Math.floor(i / 4)).padStart(2, "0")}-${String((i % 4) * 7 + 1).padStart(2, "0")}`);
+}
+
+test("classifyContinuation rejects a fire whose close is not a 10-week high", () => {
+    const dates = continuationFireDates(11);
+    // 10 tygodni płasko na 20, potem "wybicie" na 15 — NIE jest nowym szczytem.
+    const closePct = new Array(10).fill(20).concat([15]);
+    const squeezeCount = new Array(10).fill(6).concat([0]);
+    const c = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates, close_pct: closePct },
+    }, {
+        dates, histogram: new Array(10).fill(0.1).concat([0.5]),
+        squeeze_on: new Array(10).fill(true).concat([false]),
+        squeeze_count: squeezeCount,
+        fired: new Array(10).fill(false).concat([true]),
+        weeks_since_fire: new Array(10).fill(null).concat([0]),
+        fire_consolidation_weeks: new Array(10).fill(null).concat([6]),
+    });
+    assert.equal(classifyContinuation("AAA", "SP500", c, CONT_OPTS), null);
+});
+
+test("classifyContinuation accepts a fire that IS a genuine 10-week high", () => {
+    const dates = continuationFireDates(11);
+    const closePct = new Array(10).fill(0).concat([9]); // +9% na wybiciu, ponad 10-tyg. plateau na 0
+    const c = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates, close_pct: closePct },
+    }, {
+        dates, histogram: new Array(10).fill(0.1).concat([0.5]),
+        squeeze_on: new Array(10).fill(true).concat([false]),
+        squeeze_count: new Array(10).fill(6).concat([0]),
+        fired: new Array(10).fill(false).concat([true]),
+        weeks_since_fire: new Array(10).fill(null).concat([0]),
+        fire_consolidation_weeks: new Array(10).fill(null).concat([6]),
+    });
+    const r = classifyContinuation("AAA", "SP500", c, CONT_OPTS);
+    assert.ok(r);
+    assert.equal(r.ten_week_high, true);
+    assert.ok(Math.abs(r.breakout_gain_pct - 9) < 0.01);
+});
+
+test("classifyContinuation rejects a breakout week gain outside 5-20%", () => {
+    const tooSmall = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates: ["2026-01-01", "2026-01-08"], close_pct: [0, 2] },
+    }, {
+        dates: ["2026-01-01", "2026-01-08"], histogram: [0.1, 0.5], squeeze_on: [true, false],
+        squeeze_count: [6, 0], fired: [false, true], weeks_since_fire: [null, 0], fire_consolidation_weeks: [null, 6],
+    });
+    assert.equal(classifyContinuation("AAA", "SP500", tooSmall, CONT_OPTS), null, "2% gain is below the 5% floor");
+
+    const tooBig = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates: ["2026-01-01", "2026-01-08"], close_pct: [0, 30] },
+    }, {
+        dates: ["2026-01-01", "2026-01-08"], histogram: [0.1, 0.5], squeeze_on: [true, false],
+        squeeze_count: [6, 0], fired: [false, true], weeks_since_fire: [null, 0], fire_consolidation_weeks: [null, 6],
+    });
+    assert.equal(classifyContinuation("AAA", "SP500", tooBig, CONT_OPTS), null, "30% gain is above the 20% ceiling");
+});
+
+test("classifyContinuation flags macd_confirmed=false when MACD is below its signal at the fire week", () => {
+    const dates = ["2025-12-21"];
+    const c = continuationConstituent({
+        macd_chart: { dates, macd: [0.1], signal: [0.5] },
+    }, {
+        dates, histogram: [0.8], squeeze_on: [false], squeeze_count: [0], fired: [true],
+        weeks_since_fire: [0], fire_consolidation_weeks: [8],
+    });
+    const r = classifyContinuation("AAA", "SP500", c, CONT_OPTS);
+    assert.equal(r.macd_confirmed, false);
+});
+
+test("classifyContinuation rejects a fire with a negative histogram (breakdown)", () => {
     assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, {
-        squeeze_on: false, squeeze_days: 0, days_since_fire: 2, fire_consolidation_days: 42, histogram: 0.8,
+        squeeze_on: [false], squeeze_count: [0], fired: [true],
+        weeks_since_fire: [1], fire_consolidation_weeks: [8], histogram: [-0.5],
     }), CONT_OPTS), null);
 });
 
-test("classifyContinuation rejects a fire with a negative daily histogram (breakdown)", () => {
-    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, {
-        squeeze_on: false, squeeze_days: 0, days_since_fire: 2, histogram: -0.5,
-    }), CONT_OPTS), null);
+test("classifyContinuation rejects consolidations that are too short or too long", () => {
+    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_count: [3] }), CONT_OPTS), null);
+    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_count: [20] }), CONT_OPTS), null);
 });
 
-test("classifyContinuation rejects squeezes that are too short or too long", () => {
-    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_days: 2 }), CONT_OPTS), null);
-    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_days: 31 }), CONT_OPTS), null);
-});
-
-test("classifyContinuation requires Stage 2, positive momentum, RS 52W > 0 and price above daily SMA50", () => {
+test("classifyContinuation requires Stage 2, positive momentum and RS 52W > 0", () => {
     const opts = CONT_OPTS;
-    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ weekly_chart: { current_stage: "1" } }), opts), null);
+    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ weekly_chart: { current_stage: "1", dates: ["2026-01-01"], close_pct: [10] } }), opts), null);
     assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ momentum_pct: 10 }), opts), null);
     assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ mansfield_chart: { rsm_long: [1, -0.5] } }), opts), null);
     assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ momentum_pct: -1 }), { ...opts, minMomentumPct: 0 }), null);
     assert.ok(classifyContinuation("A", "SP500", continuationConstituent({ momentum_pct: 1 }), { ...opts, minMomentumPct: 0 }));
-    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({}, { sma50_pct: -1 }), opts), null);
-    assert.equal(classifyContinuation("A", "SP500", continuationConstituent({ daily_squeeze: null }), opts), null);
 });
 
 test("combinedContinuationCandidates dedupes tickers and puts fresh fires first", () => {
@@ -596,7 +707,10 @@ test("combinedContinuationCandidates dedupes tickers and puts fresh fires first"
     state.data = {
         SP500: { all_constituents: [
             { ticker: "SQZ", ...continuationConstituent() },
-            { ticker: "FIRE", ...continuationConstituent({}, { squeeze_on: false, squeeze_days: 0, days_since_fire: 1 }) },
+            { ticker: "FIRE", ...continuationConstituent({}, {
+                squeeze_on: [false], squeeze_count: [0], fired: [true],
+                weeks_since_fire: [1], fire_consolidation_weeks: [8],
+            }) },
         ] },
         NASDAQ100: { all_constituents: [{ ticker: "SQZ", ...continuationConstituent() }] },
     };
@@ -607,103 +721,4 @@ test("combinedContinuationCandidates dedupes tickers and puts fresh fires first"
     } finally {
         state.data = saved;
     }
-});
-
-// ---------- dzienne odświeżenie (continuation.json) / tygodniowi zwycięzcy ----------
-
-test("effectiveDaily prefers the newer continuation.json summary over the weekly export", () => {
-    const saved = state.dailyOverride;
-    try {
-        const c = { ticker: "AAA", daily_squeeze: { date: "2026-09-21", squeeze_days: 4 } };
-        state.dailyOverride = { tickers: { AAA: { date: "2026-09-23", squeeze_days: 6 } } };
-        assert.equal(effectiveDaily(c).squeeze_days, 6);
-        state.dailyOverride = { tickers: { AAA: { date: "2026-09-18", squeeze_days: 1 } } };
-        assert.equal(effectiveDaily(c).squeeze_days, 4);
-        state.dailyOverride = null;
-        assert.equal(effectiveDaily(c).squeeze_days, 4);
-        assert.equal(effectiveDaily({ ticker: "BBB" }), null);
-    } finally {
-        state.dailyOverride = saved;
-    }
-});
-
-test("classifyContinuation uses the fresh daily close as price when available", () => {
-    const r = classifyContinuation("AAA", "SP500", continuationConstituent({}, { close: 123.45 }), CONT_OPTS);
-    assert.equal(r.price, 123.45);
-});
-
-test("classifyWeeklyWinner keeps every weekly winner and marks the daily signal", () => {
-    const withSignal = classifyWeeklyWinner("AAA", "SP500", continuationConstituent({
-        weekly_chart: { current_stage: "2A", close_pct: [0, 5, 10], ema20_pct: [0, 2, 4] },
-    }, { spark: { closes: [1, 2, 3], squeeze: [0, 1, 1] } }), CONT_OPTS);
-    assert.equal(withSignal.signal, "squeeze");
-    assert.equal(withSignal.status_order, 1);
-    assert.deepEqual(withSignal.weekly_closes, [0, 5, 10]);
-    assert.deepEqual(withSignal.daily_squeeze, [0, 1, 1]);
-
-    const noSetup = classifyWeeklyWinner("BBB", "SP500", continuationConstituent({}, { squeeze_on: false, days_since_fire: 30 }), CONT_OPTS);
-    assert.ok(noSetup);
-    assert.equal(noSetup.signal, null);
-    assert.equal(noSetup.status_order, 2);
-
-    const belowSma = classifyWeeklyWinner("CCC", "SP500", continuationConstituent({}, { sma50_pct: -2 }), CONT_OPTS);
-    assert.equal(belowSma.signal, null, "setup below daily SMA50 is not a signal");
-
-    assert.equal(classifyWeeklyWinner("DDD", "SP500", continuationConstituent({ weekly_chart: { current_stage: "3" } }), CONT_OPTS), null);
-});
-
-test("combinedWeeklyWinners puts signals first and latestDailyDate finds the newest session", () => {
-    const savedData = state.data;
-    const savedOverride = state.dailyOverride;
-    state.data = { SP500: { all_constituents: [
-        { ticker: "NONE", ...continuationConstituent({ momentum_pct: 90 }, { squeeze_on: false, days_since_fire: 30, date: "2026-09-21" }) },
-        { ticker: "SQZ", ...continuationConstituent({}, { date: "2026-09-21" }) },
-    ] } };
-    state.dailyOverride = null;
-    try {
-        assert.deepEqual(combinedWeeklyWinners(CONT_OPTS).map(r => r.ticker), ["SQZ", "NONE"]);
-        assert.equal(latestDailyDate(), "2026-09-21");
-        state.dailyOverride = { ref_date: "2026-09-23", tickers: {} };
-        assert.equal(latestDailyDate(), "2026-09-23");
-    } finally {
-        state.data = savedData;
-        state.dailyOverride = savedOverride;
-    }
-});
-
-// ---------- odświeżanie D1 przez GitHub Actions ----------
-
-test("githubRepoFromLocation reads owner/repo from a GitHub Pages URL", () => {
-    assert.deepEqual(githubRepoFromLocation({ hostname: "agnar92.github.io", pathname: "/Momentum/index.html" }),
-        { owner: "agnar92", repo: "Momentum" });
-    assert.deepEqual(githubRepoFromLocation({ hostname: "localhost", pathname: "/index.html" }),
-        { owner: "agnar92", repo: "Momentum" });
-});
-
-test("pickDispatchedRun picks the newest run created after the click", () => {
-    const since = Date.parse("2026-09-23T18:00:00Z");
-    const runs = [
-        { id: 1, created_at: "2026-09-23T10:00:00Z" },
-        { id: 2, created_at: "2026-09-23T18:00:05Z" },
-        { id: 3, created_at: "2026-09-23T18:00:20Z" },
-    ];
-    assert.equal(pickDispatchedRun(runs, since).id, 3);
-    assert.equal(pickDispatchedRun([runs[0]], since), null);
-});
-
-test("refreshProgressFromJobs reports queued, running step and final result", () => {
-    assert.equal(refreshProgressFromJobs({ jobs: [] }).phase, "queued");
-    const running = refreshProgressFromJobs({ jobs: [{ status: "in_progress", html_url: "u", steps: [
-        { name: "Set up job", status: "completed" },
-        { name: "Pobieranie cen dziennych (Yahoo) i liczenie squeeze D1", status: "in_progress" },
-        { name: "Zapis danych", status: "queued" },
-    ] }] });
-    assert.equal(running.phase, "running");
-    assert.equal(running.done, 1);
-    assert.equal(running.total, 3);
-    assert.match(running.current, /Pobieranie cen/);
-    assert.equal(refreshProgressFromJobs({ jobs: [{ status: "completed", conclusion: "success", steps: [] }] }).phase, "success");
-    assert.equal(refreshProgressFromJobs({ jobs: [{ status: "completed", conclusion: "failure", steps: [] }] }).phase, "failure");
-    assert.equal(refreshStepLabel("Set up job"), "Start maszyny");
-    assert.equal(refreshStepLabel("Post Pobranie repozytorium"), "Sprzątanie");
 });
