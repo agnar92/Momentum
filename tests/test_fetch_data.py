@@ -14,6 +14,7 @@ from fetch_data import (
     _download_price_rows,
     _ensure_prices_ohlc_columns,
     _find_column,
+    _last_completed_trading_week_friday,
     _parse_money,
     _prices_history_is_shallow,
     _prices_table_has_rows,
@@ -74,18 +75,39 @@ class TestFindColumn:
 # get_full_refresh_range
 # ---------------------------------------------------------------------------
 
+class TestLastCompletedTradingWeekFriday:
+    # Weekday: Mon=0 .. Sun=6. Piatek konkretnego, ustalonego tygodnia to 2026-09-18.
+    def test_saturday_returns_fridays_own_week(self):
+        # Sobota (koniec tygodnia sesje juz sie odbyly) -> piatek TEGO tygodnia.
+        assert _last_completed_trading_week_friday("2026-09-19") == pd.Timestamp("2026-09-18")
+
+    def test_sunday_returns_fridays_own_week(self):
+        assert _last_completed_trading_week_friday("2026-09-20") == pd.Timestamp("2026-09-18")
+
+    def test_monday_returns_previous_weeks_friday(self):
+        # Poniedzialek nowego tygodnia -> tydzien wciaz trwa -> piatek POPRZEDNIEGO.
+        assert _last_completed_trading_week_friday("2026-09-21") == pd.Timestamp("2026-09-18")
+
+    def test_midweek_returns_previous_weeks_friday(self):
+        # Sroda w trakcie tygodnia -> tydzien jeszcze trwa -> piatek poprzedniego.
+        assert _last_completed_trading_week_friday("2026-09-23") == pd.Timestamp("2026-09-18")
+
+    def test_friday_itself_is_still_treated_as_ongoing(self):
+        # Piatek biezacego tygodnia jest CELOWO traktowany jako "wciaz w trakcie"
+        # (moglaby jeszcze nie zamknac sie sesja) -> piatek POPRZEDNIEGO tygodnia.
+        assert _last_completed_trading_week_friday("2026-09-25") == pd.Timestamp("2026-09-18")
+
+
 class TestGetFullRefreshRange:
-    def test_end_date_is_today(self):
-        # Do 2026-09 end_date byl "koniec poprzedniego miesiaca" — poprawne dla
-        # starej, miesiecznej architektury, ale pod cotygodniowym cyklem trwale
-        # ucinalo update_index_prices() (pelna podmiana bez watermarka, w
-        # przeciwienstwie do update_prices_incremental()) na koniec poprzedniego
-        # miesiaca, mimo ze ceny spolek dociagaly do dzisiaj — patrz docstring
-        # get_full_refresh_range w fetch_data.py.
+    def test_end_date_is_never_later_than_last_completed_friday_plus_one(self):
+        # Gorna granica NIE jest "dzisiaj" — to ostatni ZAKONCZONY tydzien (patrz
+        # _last_completed_trading_week_friday), zeby odpalenie w srodku tygodnia
+        # (manualnie/dewelopersko) nigdy nie wciagnelo niepelnych, wciaz trwajacych
+        # dni — patrz docstring get_full_refresh_range w fetch_data.py.
         _, end = get_full_refresh_range(lookback_months=12)
         end_ts = pd.Timestamp(end)
-        today = pd.Timestamp.today()
-        assert end_ts.normalize() == today.normalize()
+        expected = _last_completed_trading_week_friday() + pd.Timedelta(days=1)
+        assert end_ts.normalize() == expected.normalize()
 
     def test_start_date_is_lookback_months_before_end_date(self):
         start, end = get_full_refresh_range(lookback_months=15)
@@ -485,6 +507,41 @@ class TestUpdatePricesIncremental:
         # dziure w historii STALE na zawsze niedoszacowana).
         expected_latest_start = (pd.Timestamp(stale_date) - pd.Timedelta(days=7)).strftime('%Y-%m-%d')
         assert calls[0] <= expected_latest_start
+
+    def test_skips_fetch_entirely_when_watermark_already_covers_last_completed_week(self, monkeypatch):
+        """Gdy znany ticker ma juz cene z ostatniego ZAKONCZONEGO tygodnia (piatek),
+        funkcja nie powinna robic zadnego pobrania sieciowego dla niego — dokladnie
+        zgodnie z prosba "nie pobieraj nowych danych jezeli tydzien trwa"."""
+        last_friday = _last_completed_trading_week_friday()
+        con = _make_prices_con([(last_friday.strftime('%Y-%m-%d'), "AAA", 10.0, 10.0, 100)])
+        calls = []
+
+        def fake_download(tickers, start_date, end_date, include_ohlc=False):
+            calls.append(tickers)
+            return [], set(), list(tickers)
+
+        monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
+        update_prices_incremental(con, ["AAA"], retention_months=15)
+
+        assert calls == []
+
+    def test_catchup_end_date_never_exceeds_last_completed_friday_plus_one(self, monkeypatch):
+        """Gorna granica zapytania do yfinance dla doszacowania NIE moze wyjsc poza
+        ostatni zakonczony tydzien, nawet jesli "dzisiaj" jest w trakcie tygodnia —
+        to jest wlasnie zabezpieczenie przed wciagnieciem niepelnego tygodnia."""
+        old_date = (pd.Timestamp.today() - pd.DateOffset(months=2)).strftime('%Y-%m-%d')
+        con = _make_prices_con([(old_date, "AAA", 10.0, 10.0, 100)])
+        calls = []
+
+        def fake_download(tickers, start_date, end_date, include_ohlc=False):
+            calls.append(end_date)
+            return [], set(), list(tickers)
+
+        monkeypatch.setattr("fetch_data._download_price_rows", fake_download)
+        update_prices_incremental(con, ["AAA"], retention_months=15)
+
+        expected_end = (_last_completed_trading_week_friday() + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
+        assert calls == [expected_end]
 
     def test_trims_history_older_than_retention_window(self, monkeypatch):
         old_date = (pd.Timestamp.today() - pd.DateOffset(months=20)).strftime('%Y-%m-%d')

@@ -248,6 +248,41 @@ being left alone.
        are deleted (`DELETE FROM prices WHERE Date < cutoff`), so the table is a rolling window and does
        not grow without bound — it always holds just enough history for the M-14 momentum window plus a
        margin (see below for why that margin was widened).
+     - **`_last_completed_trading_week_friday()` caps EVERY price fetch (`get_full_refresh_range()`'s
+       `end_date`, and therefore `bootstrap_prices`/`update_index_prices`/the `new_tickers` backfill inside
+       `update_prices_incremental` — plus `update_prices_incremental`'s own existing-ticker catch-up fetch
+       directly) at the last calendar week (Mon-Fri) that has actually finished — never at literal
+       "today".** Added at the user's explicit request, after they noticed the pipeline pulling fresh,
+       same-day data even when manually/dev-triggered mid-week: "nie chcę bazować na świeżych danych z
+       dzisiaj... jeżeli skrypt odpali się wcześniej z różnych powodów developerskich to nie pobieraj
+       nowych danych jeżeli tydzień trwa. Jedynie przelicz dane, które są potrzebne, lub pobierz brakujące
+       dane dla skończonego tygodnia" (I don't want to base this on today's fresh data — the whole point of
+       weekly charts is refreshing once the trading week has actually closed; if the script fires early for
+       dev reasons, don't fetch new data while the week is still open, only recompute what's needed or
+       backfill what's missing for an already-finished week). Without this, `run_query.py`'s weekly
+       resampling (`DATE_TRUNC('week', Date)` + `ARGMAX(..., Date)`, see Relative strength/`_weekly_close_
+       series` below) has no notion of whether a given week is actually *done* — it just takes the latest
+       row inside whatever week-bucket exists, so a `prices` row from a still-open week (e.g. Wednesday,
+       if the pipeline happened to run then) would get silently treated as that week's final close,
+       corrupting momentum/Weinstein-stage/TTM-Squeeze for every ticker until the real Friday close finally
+       lands days later. In production this changes nothing: the weekly cron (`weekly_full_refresh.yml`)
+       runs Saturday morning, by which point the week's last trading day (Friday) is already over, so
+       `_last_completed_trading_week_friday()` resolves to that same Friday either way — this is purely a
+       guard for manual/`workflow_dispatch`/local runs triggered before Saturday. Rule: on a Saturday/Sunday
+       the week just finished (Mon-Fri already traded) counts as complete, so it returns that week's own
+       Friday; on any Monday-Friday the current week is still ongoing (more sessions could still happen,
+       including that same Friday — deliberately treated as "not done yet" even late in the day, since the
+       script can't know whether that day's session has actually closed), so it returns the *previous*
+       week's Friday instead. `get_full_refresh_range()` returns this Friday plus one day as `end_date`
+       (matching yfinance's own exclusive-`end` convention, so the fetched range still includes that Friday's
+       session) — every caller downstream of it (`bootstrap_prices`, `update_index_prices`, the `new_tickers`
+       backfill branch of `update_prices_incremental`) inherits the cap automatically. `update_prices_
+       incremental`'s existing-ticker branch additionally SKIPS the network fetch outright (no call to
+       `_download_price_rows` at all) when a ticker's own watermark already reaches this Friday — there is
+       nothing missing for the last completed week, so there's nothing to fetch; `run_query.py` will simply
+       recompute from what's already in the DB, exactly as asked. Ignores market holidays (same
+       simplification as everywhere else in this module — a holiday just has no yfinance row, as always);
+       only the calendar week boundary is guarded here.
      - **`_prices_history_is_shallow(con, lookback_months)`** — the check that routes a run to Bootstrap
        instead of Incremental even when `prices` already has rows: true when the oldest retained `Date` is
        more than `lookback_months` (plus a 14-day slack for weekend/holiday edge cases) in the past. This
