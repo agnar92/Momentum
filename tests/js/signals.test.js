@@ -572,7 +572,7 @@ function continuationConstituent(overrides = {}, squeezeOverrides = {}) {
     };
 }
 
-const CONT_OPTS = { minConsolidationWeeks: 6, maxConsolidationWeeks: 16, fireLookbackWeeks: 3, minMomentumPct: 20 };
+const CONT_OPTS = { minConsolidationWeeks: 6, fireLookbackWeeks: 3, minMomentumPct: 20 };
 
 test("classifyContinuation accepts a Stage 2 stock in a weekly squeeze inside the min/max window", () => {
     const r = classifyContinuation("AAA", "SP500", continuationConstituent(), CONT_OPTS);
@@ -688,9 +688,10 @@ test("classifyContinuation rejects a fire with a negative histogram (breakdown)"
     }), CONT_OPTS), null);
 });
 
-test("classifyContinuation rejects consolidations that are too short or too long", () => {
+test("classifyContinuation rejects a consolidation shorter than the minimum, but accepts one longer with no upper bound", () => {
     assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_count: [3] }), CONT_OPTS), null);
-    assert.equal(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_count: [20] }), CONT_OPTS), null);
+    assert.ok(classifyContinuation("AAA", "SP500", continuationConstituent({}, { squeeze_count: [40] }), CONT_OPTS),
+        "no max consolidation weeks any more — a very long, still-valid base must not be rejected");
 });
 
 test("classifyContinuation requires Stage 2, positive momentum and RS 52W > 0", () => {

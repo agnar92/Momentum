@@ -32,12 +32,14 @@ const WYBICIE_DEFAULT_MODE = "MACD_RS";
 const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
 
 // Continuation, przeprojektowany na TYGODNIOWY (patrz nagłówek klasyfikacji
-// niżej) — domyślne okno konsolidacji 6-16 tyg.: materiał referencyjny o
-// strategii "lateral consolidation breakout" mówi wprost "co najmniej 6
-// tygodni, dłużej często lepiej", bez górnego limitu — 16 to praktyczny
-// górny sufit (suwak, dostosowywalny), nie reguła z materiału.
+// niżej) — domyślne minimum konsolidacji 6 tyg., BEZ górnego limitu:
+// materiał referencyjny o strategii "lateral consolidation breakout" mówi
+// wprost "co najmniej 6 tygodni, dłużej często lepiej", więc nie ma sensu
+// odcinać dłuższych, wciąż ważnych baz — usunięty na wyraźną prośbę
+// użytkownika (wcześniej był praktyczny górny sufit 16 tyg., suwakiem
+// dostosowywalny do 30, ale to nigdy nie było regułą z materiału, tylko
+// arbitralnym ograniczeniem).
 const CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS = 6;
-const CONTINUATION_DEFAULT_MAX_CONSOLIDATION_WEEKS = 16;
 const CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
 const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 0;
 // Dwa TWARDE kryteria świecy wybicia z materiału referencyjnego (patrz
@@ -97,7 +99,6 @@ const state = {
     wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
     wybicieMode: WYBICIE_DEFAULT_MODE,
     contMinConsolidationWeeks: CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS,
-    contMaxConsolidationWeeks: CONTINUATION_DEFAULT_MAX_CONSOLIDATION_WEEKS,
     contFireLookbackWeeks: CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS,
     contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
     qmMinPerfPct: QM_DEFAULT_MIN_PERF_PCT,
@@ -549,15 +550,17 @@ function combinedQullamaggieCandidates(opts = {}) {
 //   (silniejsza od swojego indeksu).
 // Konsolidacja (tygodniowy TTM Squeeze, ttm_squeeze_chart — TA SAMA logika co
 //   w Qullamaggie/TTM Squeeze, patrz tam, tylko inne domyślne progi):
-//   - "squeeze" 🌀 — squeeze trwa od suwaka "Min. tyg. konsolidacji" do "Maks.
-//     tyg. konsolidacji" tygodni,
+//   - "squeeze" 🌀 — squeeze trwa co najmniej tyle tygodni, ile suwak "Min.
+//     tyg. konsolidacji" — BEZ górnego limitu,
 //   - "fired" 🔥 — squeeze odpalił w ostatnich "Wybicie w ciągu" tygodniach po
-//     konsolidacji w tym samym oknie, a histogram jest dodatni (wybicie w
-//     GÓRĘ, nie w dół).
-//   Domyślne okno to 6-16 tyg., NIE 2-8 jak w Qullamaggie — materiał
+//     konsolidacji spełniającej to samo minimum, a histogram jest dodatni
+//     (wybicie w GÓRĘ, nie w dół).
+//   Domyślne minimum to 6 tyg. (NIE 2 jak w Qullamaggie) — materiał
 //   referencyjny mówi wprost "co najmniej 6 tygodni, dłużej często lepiej",
-//   bez górnego limitu; 16 to praktyczny górny sufit (suwak, dostosowywalny),
-//   nie reguła z materiału.
+//   bez górnego limitu. Wcześniej istniał też praktyczny górny sufit (suwak,
+//   domyślnie 16 tyg.) — usunięty na wyraźną prośbę użytkownika: nigdy nie
+//   był regułą z materiału, tylko arbitralnym ograniczeniem, a dłuższa baza
+//   nie powinna sama w sobie wykluczać spółki z listy.
 // Potwierdzenie tygodniowym MACD (macd_chart) — na wzór materiału
 //   referencyjnego ("linia MACD nad linią sygnału" jako stały wymóg pozycji):
 //   liczone WYŁĄCZNIE dla "fired" (przy trwającej konsolidacji nie ma jeszcze
@@ -581,7 +584,6 @@ function continuationWeeklyGate(c, minMomentumPct) {
 function continuationOpts(opts) {
     return {
         minConsolidationWeeks: opts.minConsolidationWeeks ?? state.contMinConsolidationWeeks,
-        maxConsolidationWeeks: opts.maxConsolidationWeeks ?? state.contMaxConsolidationWeeks,
         fireLookbackWeeks: opts.fireLookbackWeeks ?? state.contFireLookbackWeeks,
         minMomentumPct: opts.minMomentumPct ?? state.contMinMomentumPct,
     };
@@ -605,11 +607,12 @@ function classifyContinuation(ticker, universe, c, opts = {}) {
     const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
     const histNow = t.histogram[nowIdx];
 
-    const isConsolidating = squeezeOn === true
-        && squeezeCount >= o.minConsolidationWeeks && squeezeCount <= o.maxConsolidationWeeks;
+    // BEZ górnego limitu na wyraźną prośbę użytkownika — tylko minimum
+    // konsolidacji, patrz komentarz przy CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS.
+    const isConsolidating = squeezeOn === true && squeezeCount >= o.minConsolidationWeeks;
     const isFired = weeksSinceFire != null && weeksSinceFire <= o.fireLookbackWeeks
         && fireConsolidationWeeks != null
-        && fireConsolidationWeeks >= o.minConsolidationWeeks && fireConsolidationWeeks <= o.maxConsolidationWeeks
+        && fireConsolidationWeeks >= o.minConsolidationWeeks
         && histNow != null && histNow > 0;
     if (!isConsolidating && !isFired) return null;
 
@@ -1321,7 +1324,7 @@ function renderContinuationTable() {
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
         colspan: 13,
-        emptyAllMsg: `Brak spółek w Etapie 2 (momentum > 0 i ≥ ${state.contMinMomentumPct}%, RS 52 tyg. > 0) z konsolidacją tygodniową ${state.contMinConsolidationWeeks}-${state.contMaxConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
+        emptyAllMsg: `Brak spółek w Etapie 2 (momentum > 0 i ≥ ${state.contMinMomentumPct}%, RS 52 tyg. > 0) z konsolidacją tygodniową ≥ ${state.contMinConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
@@ -1339,7 +1342,6 @@ function initContinuationControls() {
         const saved = JSON.parse(localStorage.getItem(CONTINUATION_SETTINGS_KEY) || "null");
         if (saved) {
             if (Number.isFinite(saved.minConsolidationWeeks)) state.contMinConsolidationWeeks = saved.minConsolidationWeeks;
-            if (Number.isFinite(saved.maxConsolidationWeeks)) state.contMaxConsolidationWeeks = saved.maxConsolidationWeeks;
             if (Number.isFinite(saved.fireLookbackWeeks)) state.contFireLookbackWeeks = saved.fireLookbackWeeks;
             if (Number.isFinite(saved.minMomentumPct)) state.contMinMomentumPct = saved.minMomentumPct;
         }
@@ -1357,7 +1359,6 @@ function initContinuationControls() {
             try {
                 localStorage.setItem(CONTINUATION_SETTINGS_KEY, JSON.stringify({
                     minConsolidationWeeks: state.contMinConsolidationWeeks,
-                    maxConsolidationWeeks: state.contMaxConsolidationWeeks,
                     fireLookbackWeeks: state.contFireLookbackWeeks,
                     minMomentumPct: state.contMinMomentumPct,
                 }));
@@ -1367,7 +1368,6 @@ function initContinuationControls() {
         });
     };
     bind("contMinConsolidationInput", "contMinConsolidationValue", "contMinConsolidationWeeks", " tyg.");
-    bind("contMaxConsolidationInput", "contMaxConsolidationValue", "contMaxConsolidationWeeks", " tyg.");
     bind("contFireLookbackInput", "contFireLookbackValue", "contFireLookbackWeeks", " tyg.");
     bind("contMinMomentumInput", "contMinMomentumValue", "contMinMomentumPct", "%");
 }

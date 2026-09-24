@@ -1218,13 +1218,16 @@ flex child (no `.topbar-left` wrapper there).
   `signals.html`/`signals.js` bullet above):
   - **Trend gate** (`continuationWeeklyGate()`, unchanged since the D1 version): weekly `current_stage`
     2A/2B, `momentum_pct > 0` (and `>=` slider), latest `rsm_long > 0` (classic 52-week Mansfield RS).
-  - **Consolidation** (same squeeze-window logic as `classifyQullamaggie()`, just different default
-    thresholds and NO prior-move requirement — this is what still tells the two tabs apart): 🌀
-    "squeeze" when `squeeze_count` falls inside `[state.contMinConsolidationWeeks,
-    state.contMaxConsolidationWeeks]` (default **6-16 weeks** — the reference video states "at least 6
-    weeks, longer is often better," with no stated upper bound; 16 is a practical slider ceiling, not a
-    rule from the video), or 🔥 "fired" when a squeeze inside that same window ended within
-    `state.contFireLookbackWeeks` (default 3) weeks ago with a positive histogram (an upside breakout).
+  - **Consolidation** (same squeeze-window logic as `classifyQullamaggie()`, just a different default
+    threshold and NO prior-move requirement — this is what still tells the two tabs apart): 🌀 "squeeze"
+    when `squeeze_count >= state.contMinConsolidationWeeks` (default **6 weeks**, no upper bound — the
+    reference video states "at least 6 weeks, longer is often better"), or 🔥 "fired" when a squeeze
+    meeting that same minimum ended within `state.contFireLookbackWeeks` (default 3) weeks ago with a
+    positive histogram (an upside breakout). **A practical upper bound (`state.contMaxConsolidationWeeks`,
+    default 16, slider up to 30) existed here until the user explicitly asked for it to be removed** — it
+    was never a rule from the reference video (which states no upper bound at all), just an arbitrary
+    slider ceiling, and it meant a genuinely long, still-valid base could silently drop off the list once
+    it outlasted the slider's own default.
   - **Weekly MACD confirmation** (`macd_chart`, informational, `fired` only): `macd_confirmed` is
     `macd.macd > macd.signal` at the fire week, matched by date (same pattern as `breakout_volume_ratio` in
     Qullamaggie) — modeled on the reference video's own rule ("always want the MACD line above the signal
