@@ -218,19 +218,94 @@ function findConstituent(dataByUniverse, ticker) {
     return null;
 }
 
+// Pudełko wyznaczone WPROST z okna, które TTM Squeeze (ttm_squeeze_chart, patrz
+// compute_ttm_squeeze_chart w run_query.py) sam oznaczył jako konsolidację —
+// na wyraźną korektę użytkownika ("wykrywamy squeeze więc czemu nie
+// narysować boxa po X tygodniach konsolidacji ... to i tak poda top i
+// bottom"): pierwsza wersja tego pomocnika czytała `weekly_chart.pending_base`
+// (pudełko Darvasa z NIEZALEŻNEGO mechanizmu w `_compute_weinstein_stage_series`
+// — własna definicja szczytu/dołka, 3 tyg. bez nowego rekordu), które mogło
+// wskazywać zupełnie INNE tygodnie niż te, które TTM Squeeze akurat oznaczył
+// jako konsolidację — więc pokazywany poziom często nie miał związku z tym, co
+// użytkownik faktycznie widział jako "squeeze" na ekranie, i większość spółek
+// wychodziła bez żadnego poziomu wcale. To poprawka: bierzemy TE SAME tygodnie
+// co screener ("trwająca konsolidacja" = ostatnie `squeeze_count` tygodni z
+// `squeeze_on`, "świeże wybicie" = `fire_consolidation_weeks` tygodni TUŻ
+// PRZED tygodniem `fired`, patrz `since_fire`/`fire_consolidation` w
+// `_ttm_squeeze_series`) i bierzemy najwyższe/najniższe TYGODNIOWE zamknięcie
+// (`weekly_chart.close_pct`) w tym oknie — dokładnie "narysuj box po X
+// tygodniach konsolidacji, top i bottom" z tamtej prośby. `ttm_squeeze_chart`/
+// `weekly_chart` mogą mieć inną długość/wyrównanie bufora rozgrzewkowego
+// (patrz alignSqueezeToDates w chart-render.js), więc tygodnie są łączone po
+// DACIE, nie po indeksie wprost — ten sam wzorzec co breakoutVolumeRatio w
+// classifyQullamaggie (signals.js). Zwraca null, gdy nie ma (jeszcze/już)
+// żadnej rozpoznanej konsolidacji.
+function squeezeConsolidationBox(c) {
+    const t = c && c.ttm_squeeze_chart;
+    const wc = c && c.weekly_chart;
+    if (!t || !t.dates || !t.dates.length || !wc || !wc.dates || !wc.close_pct) return null;
+
+    // Ostatni tydzień bywa jeszcze niedomknięty — ten sam caveat co w classifyTtmSqueeze/classifyQullamaggie.
+    let nowIdx = t.dates.length - 1;
+    while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
+    if (nowIdx < 0) return null;
+
+    const squeezeOn = t.squeeze_on[nowIdx];
+    const squeezeCount = t.squeeze_count[nowIdx];
+    const weeksSinceFire = t.weeks_since_fire[nowIdx];
+    const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
+
+    let startIdx, endIdx, pending;
+    if (squeezeOn === true && squeezeCount > 0) {
+        // squeeze_count = kolejne tygodnie TRUE KOŃCZĄCE SIĘ na nowIdx (włącznie).
+        endIdx = nowIdx;
+        startIdx = Math.max(0, nowIdx - squeezeCount + 1);
+        pending = true;
+    } else if (weeksSinceFire != null && fireConsolidationWeeks > 0) {
+        // fire_consolidation_weeks = squeeze_count SPRZED tygodnia wybicia (fireIdx),
+        // czyli konsolidacja to [fireIdx - fireConsolidationWeeks, fireIdx - 1].
+        const fireIdx = nowIdx - weeksSinceFire;
+        endIdx = fireIdx - 1;
+        startIdx = Math.max(0, fireIdx - fireConsolidationWeeks);
+        pending = false;
+    } else {
+        return null;
+    }
+    if (endIdx < startIdx) return null;
+
+    const wcIndexByDate = new Map(wc.dates.map((d, i) => [d, i]));
+    let resistancePct = null, supportPct = null, startDate = null;
+    for (let i = startIdx; i <= endIdx; i++) {
+        const wi = wcIndexByDate.get(t.dates[i]);
+        const pct = wi != null ? wc.close_pct[wi] : null;
+        if (pct == null) continue;
+        if (startDate == null) startDate = t.dates[i];
+        if (resistancePct == null || pct > resistancePct) resistancePct = pct;
+        if (supportPct == null || pct < supportPct) supportPct = pct;
+    }
+    if (resistancePct == null) return null;
+    return {
+        resistance_pct: resistancePct, support_pct: supportPct, start_date: startDate,
+        phase: pending ? "SQUEEZE" : "FIRED",
+        pending,
+    };
+}
+
 // Poziom oporu/wsparcia "do obserwowania" na wykresie 1-minutowym (zakładka
 // "⚡ 1 min + VWAP" w js/chart-modal.js) i w screenerze Qullamaggie
 // (signals.js) — na wyraźną prośbę użytkownika: bez tego nie było wiadomo,
 // jakiego poziomu ceny w ogóle wypatrywać przy wybiciu z konsolidacji.
-// Preferuje `weekly_chart.pending_base` (patrz compute_relative_strength_chart
-// w run_query.py) — pudełko, w którym spółka siedzi TERAZ, niezależnie od tego
-// czy już przełamane; gdy go brak (np. box został już skonsumowany przez
-// świeże wybicie, więc przestał być "pending"), spada do OSTATNIEGO wpisu w
-// `weekly_chart.bases` (box, który doprowadził do najświeższego wybicia) jako
-// informacyjny punkt odniesienia — `pending: false` odróżnia ten przypadek.
-// `resistance_pct`/`support_pct` są zawsze close0-relatywne (ten sam close0 co
-// `close_pct`), więc przeliczenie na realną cenę wymaga bieżącej ceny (`c.price`)
-// i ostatniej wartości `close_pct` — dokładnie ta sama konwencja co
+// Preferuje `squeezeConsolidationBox()` (powyżej) — bezpośrednio z okna, które
+// screener sam oznaczył jako squeeze; gdy go brak (spółka nie ma akurat ani
+// trwającej, ani świeżo zakończonej konsolidacji — np. otwarta z ogólnej
+// tabeli, nie z zakładki Qullamaggie/TTM Squeeze), spada do
+// `weekly_chart.pending_base` (pudełko Darvasa, wciąż otwarte), a na końcu do
+// OSTATNIEGO wpisu w `weekly_chart.bases` (box, który doprowadził do
+// najświeższego wybicia) jako czysto informacyjny punkt odniesienia —
+// `pending: false` odróżnia ten ostatni przypadek. `resistance_pct`/
+// `support_pct` są zawsze close0-relatywne (ten sam close0 co `close_pct`),
+// więc przeliczenie na realną cenę wymaga bieżącej ceny (`c.price`) i
+// ostatniej wartości `close_pct` — dokładnie ta sama konwencja co
 // `strategyStopFor()` w js/strategy.js. Zwraca null, gdy brak jakichkolwiek
 // danych o bazie (np. za mało historii cen).
 function breakoutLevelFor(c) {
@@ -240,11 +315,14 @@ function breakoutLevelFor(c) {
     if (lastPct == null) return null;
     const close0 = c.price / (1 + lastPct / 100);
 
-    let base = wc.pending_base;
-    let pending = true;
-    if (!base && wc.bases && wc.bases.length) {
-        base = wc.bases[wc.bases.length - 1];
-        pending = false;
+    let base = squeezeConsolidationBox(c);
+    let pending = base ? base.pending : true;
+    if (!base) {
+        base = wc.pending_base;
+        if (!base && wc.bases && wc.bases.length) {
+            base = wc.bases[wc.bases.length - 1];
+            pending = false;
+        }
     }
     if (!base || base.resistance_pct == null) return null;
 
@@ -457,6 +535,6 @@ function initMiniChartHoverPreview() {
 // Eksport wyłącznie dla test runnera Node (tests/js/) — bez efektu w przeglądarce.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, dailySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, breakoutLevelFor,
+        latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, dailySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, squeezeConsolidationBox, breakoutLevelFor,
     };
 }

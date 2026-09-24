@@ -17,7 +17,8 @@ const {
 const {
     sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
     rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
-    zeroLineSparkSvg, crossIndexInTail, findConstituent, bulletHtml, breakoutLevelFor,
+    zeroLineSparkSvg, crossIndexInTail, findConstituent, bulletHtml,
+    squeezeConsolidationBox, breakoutLevelFor,
 } = require(path.join("..", "..", "docs", "js", "minicharts.js"));
 
 // compareRows now lives in docs/js/shared.js — see tests/js/shared.test.js.
@@ -214,4 +215,88 @@ test("breakoutLevelFor returns null with no base data, no price, or no weekly_ch
     assert.equal(breakoutLevelFor({ price: 0, weekly_chart: { close_pct: [0], pending_base: { resistance_pct: 5 } } }), null);
     assert.equal(breakoutLevelFor({ price: 100 }), null);
     assert.equal(breakoutLevelFor(null), null);
+});
+
+// ---------- squeezeConsolidationBox (top/bottom drawn from the TTM squeeze's OWN window, not the independent Darvas box) ----------
+
+test("squeezeConsolidationBox takes top/bottom from the same weeks the TTM squeeze itself is flagging as consolidating", () => {
+    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02"];
+    const c = {
+        weekly_chart: { dates, close_pct: [0, 5, 3, 8, 0] },
+        ttm_squeeze_chart: {
+            dates,
+            squeeze_on: [false, true, true, true, true],
+            squeeze_count: [0, 1, 2, 3, 4],
+            weeks_since_fire: [null, null, null, null, null],
+            fire_consolidation_weeks: [null, null, null, null, null],
+        },
+    };
+    const box = squeezeConsolidationBox(c);
+    assert.ok(box);
+    assert.equal(box.resistance_pct, 8);
+    assert.equal(box.support_pct, 0);
+    assert.equal(box.start_date, "2026-01-12");  // pierwszy tydzień squeeze'a (squeeze_count=1), nie cała historia
+    assert.equal(box.pending, true);
+    assert.equal(box.phase, "SQUEEZE");
+});
+
+test("squeezeConsolidationBox takes the window BEFORE the fire week when the squeeze just turned off", () => {
+    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26", "2026-02-02"];
+    const c = {
+        weekly_chart: { dates, close_pct: [0, 4, 9, 2, 15] },
+        ttm_squeeze_chart: {
+            dates,
+            squeeze_on: [false, true, true, true, false],
+            squeeze_count: [0, 1, 2, 3, 0],
+            weeks_since_fire: [null, null, null, null, 0],
+            fire_consolidation_weeks: [null, null, null, null, 3],
+        },
+    };
+    const box = squeezeConsolidationBox(c);
+    assert.ok(box);
+    // Konsolidacja to 3 tygodnie TUŻ PRZED tygodniem wybicia (2026-02-02), czyli
+    // 2026-01-12..2026-01-26 — NIE zawiera tygodnia wybicia samego (close_pct=15).
+    assert.equal(box.resistance_pct, 9);
+    assert.equal(box.support_pct, 2);
+    assert.equal(box.pending, false);
+    assert.equal(box.phase, "FIRED");
+});
+
+test("squeezeConsolidationBox returns null without an active or just-fired squeeze", () => {
+    const dates = ["2026-01-05", "2026-01-12"];
+    const c = {
+        weekly_chart: { dates, close_pct: [0, 4] },
+        ttm_squeeze_chart: {
+            dates, squeeze_on: [false, false], squeeze_count: [0, 0],
+            weeks_since_fire: [null, null], fire_consolidation_weeks: [null, null],
+        },
+    };
+    assert.equal(squeezeConsolidationBox(c), null);
+    assert.equal(squeezeConsolidationBox({ weekly_chart: { dates, close_pct: [0, 4] } }), null);  // brak ttm_squeeze_chart
+});
+
+test("breakoutLevelFor prefers the squeeze-detected box over the independent Darvas pending_base", () => {
+    const dates = ["2026-01-05", "2026-01-12", "2026-01-19", "2026-01-26"];
+    const c = {
+        price: 104,
+        weekly_chart: {
+            dates, close_pct: [0, 4, 8, 4],
+            // Pudełko Darvasa (niezależny mechanizm) celowo bardzo inne — nie
+            // powinno w ogóle zostać użyte, skoro squeeze sam już wskazuje okno.
+            pending_base: { resistance_pct: 50, support_pct: 40, start_date: "1999-01-01", phase: "BOXED" },
+        },
+        ttm_squeeze_chart: {
+            dates,
+            squeeze_on: [false, true, true, true],
+            squeeze_count: [0, 1, 2, 3],
+            weeks_since_fire: [null, null, null, null],
+            fire_consolidation_weeks: [null, null, null, null],
+        },
+    };
+    const lvl = breakoutLevelFor(c);
+    assert.ok(lvl);
+    // close0 = 104 / 1.04 = 100; okno squeeze'a (tyg. 2-4) ma close_pct [4, 8, 4].
+    assert.ok(Math.abs(lvl.resistance - 108) < 0.01, `expected ~108, got ${lvl.resistance}`);
+    assert.ok(Math.abs(lvl.support - 104) < 0.01, `expected ~104, got ${lvl.support}`);
+    assert.equal(lvl.pending, true);
 });

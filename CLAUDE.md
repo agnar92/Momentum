@@ -661,11 +661,16 @@ known the moment the phase reaches `SEEKING_BOTTOM` (the top confirms before the
 only once `BOXED`. `compute_relative_strength_chart()` reads only the LAST displayed week's `pending_box`
 (a `current_stage`-style convenience field, not a per-week series) and rebases it to `pending_base`
 (`{"start_date", "resistance_pct", "support_pct", "phase"}` or `None`) the same `close0`-relative way as
-`bases`. `js/minicharts.js::breakoutLevelFor()` is what the frontend actually calls — it prefers
-`pending_base` (converted back to a real price via `price / (1 + close_pct[last]/100)`, the same convention
-`js/strategy.js::strategyStopFor()` already uses) and falls back to the last entry of `bases` (the box that
-led to the most recent breakout) only when there's no currently-open box at all — see the "🎯 Qullamaggie"
-and "⚡ 1 min + VWAP" bullets under Frontend below for where this actually gets shown.
+`bases`. **`pending_base`/`bases` (this Darvas-box mechanism) are no longer the PRIMARY source the frontend
+reads for "the level to watch"** — see `js/minicharts.js::squeezeConsolidationBox()`/`breakoutLevelFor()`
+under the "🎯 Qullamaggie" bullet below for why: the Darvas box tracks its OWN, independent notion of
+top/bottom (3 weeks without a new closing high/low), which routinely lands on completely different weeks
+than whatever `ttm_squeeze_chart` itself flagged as the consolidation — so a stock the Qullamaggie screener
+called "consolidating" often had no `pending_base` at all, or one describing an unrelated, stale box.
+`pending_base`/`bases` are kept as a client-side FALLBACK only, for a ticker with no active/just-fired
+squeeze of its own (e.g. opened from a general table, not from a squeeze screener) — the primary path now
+derives the box directly from the SAME weeks the squeeze itself covers, entirely client-side from data
+already exported (no backend change needed for that fix — see below).
 
 **Stages**, derived from that breakout signal plus price's position/slope relative to EMA20 (formerly SMA30,
 see the version-history note on the main chart above):
@@ -1239,14 +1244,33 @@ flex child (no `.topbar-left` wrapper there).
   consolidation we draw the trend line connecting highs to track when will need to monitor 1 minute. Now
   is hard to know where and when to look"). Both this column AND the chart-modal tab (see that bullet
   below) read `breakoutLevelFor(c)` — a shared helper in `js/minicharts.js` — so the same number shows up
-  whether the user is scanning the table or already has the chart open. `breakoutLevelFor()` converts
-  `weekly_chart.pending_base` (see `compute_relative_strength_chart` under Relative strength above — the
-  box a stock is sitting in RIGHT NOW, whether or not it's been broken out of yet; a field that didn't
-  exist before this request, added specifically to fill this gap) back to a real price via the same
-  `close0 = price / (1 + close_pct[last]/100)` convention `js/strategy.js::strategyStopFor()` already uses
-  for its own stop-price conversions. `pending: false` (falls back to the last entry of `weekly_chart.bases`
-  when there's no currently-open box, e.g. a "fired" row whose box already got consumed by the breakout
-  that triggered this row) renders the number at reduced opacity — still shown as a reference point, just
+  whether the user is scanning the table or already has the chart open.
+
+  **`breakoutLevelFor()`'s FIRST version read `weekly_chart.pending_base`** (the independent Darvas-box
+  mechanism, see `compute_relative_strength_chart`/`_compute_weinstein_stage_series` under Relative strength
+  above) — the user immediately caught why that was the wrong source ("wykrywamy squeeze więc czemu nie
+  narysować boxa po X tygodniach konsolidacji ... to i tak poda top i bottom" — "we're already detecting the
+  squeeze, so why not draw the box from those very consolidation weeks — that already gives a top and
+  bottom"): the Darvas box tracks its OWN, unrelated definition of top/bottom (3 weeks without a new
+  CLOSING high/low), so it routinely covers completely different weeks than whatever `ttm_squeeze_chart`
+  itself flagged as the consolidation — a stock this very screener called "consolidating" would often have
+  no `pending_base` at all (explaining the "only two stocks show a level" report), or one describing a
+  stale, unrelated box. **Fixed by `squeezeConsolidationBox(c)`** (`js/minicharts.js`, new primary source,
+  entirely client-side from fields already exported — no pipeline change, works immediately on already-
+  committed `docs/data/*.json`): takes the resistance/support directly from the SAME weeks
+  `ttm_squeeze_chart` itself used to call the row "consolidating" or "fired" — for a still-consolidating
+  row, the last `squeeze_count` weeks (ending at the current week); for a fired row, the
+  `fire_consolidation_weeks` weeks immediately BEFORE the fire week (`fireIdx = nowIdx - weeks_since_fire`,
+  window = `[fireIdx - fire_consolidation_weeks, fireIdx - 1]` — derived from reading `_ttm_squeeze_series()`'s
+  own `fire_consolidation = squeeze_count.shift(1).where(fired)` line) — then takes the highest/lowest
+  WEEKLY CLOSE (`weekly_chart.close_pct`) over exactly that window, joined to `ttm_squeeze_chart.dates` by
+  DATE (not index — same buffer-length-mismatch caveat as the `breakout_volume_ratio` lookup in
+  `classifyQullamaggie()` above). `breakoutLevelFor()` now tries this FIRST and only falls back to
+  `weekly_chart.pending_base`/last `bases` entry when there's no active or just-fired squeeze at all (e.g.
+  a ticker opened from a general table, not from a squeeze screener) — converted back to a real price via
+  the same `close0 = price / (1 + close_pct[last]/100)` convention `js/strategy.js::strategyStopFor()`
+  already uses. `pending: false` (the Darvas-fallback-to-`bases` case, or a squeeze-derived box for a
+  "fired" row) renders the number at reduced opacity — still shown as a reference point, just
   not a "wait for this" level any more. **Entry timing (the ORB/session-VWAP part of the
   original strategy) is intentionally NOT automatically computed at all** — see the dedicated "⚡ 1 min + VWAP"
   chart-modal tab bullet further below for why (needs intraday data this pipeline doesn't fetch) and how
