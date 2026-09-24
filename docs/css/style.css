@@ -1516,15 +1516,30 @@ table.holdings-table td, table.rebalance-table td {
         max-height: none;
         border-right: none;
         border-bottom: 2px solid var(--accent-line);
+        /* Na Sygnałach (drawer-header + opis screenera + filtr etapów + ewentualne
+           suwaki/banner rynkowy) treść NAD tabelą bywa sama w sobie wyższa niż
+           dostępna wysokość telefonu — przy .table-scroll{flex:1} (patrz niżej)
+           to ściskało obszar tabeli do kilku pikseli zamiast pozwolić przewinąć
+           całość, więc widać było tylko maleńki, "urwany" fragment tabeli.
+           Całą szufladę (nagłówek + filtry + tabela) przewijamy teraz jako
+           jedną całość zamiast dzielić ją na "stały nagłówek" + "tabela ze
+           swoim własnym, wewnętrznym scrollem". */
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
     }
 
     /* h2 znika — aktywna zakładka niżej już mówi, który indeks widać */
-    .drawer-header { flex-direction: column-reverse; align-items: stretch; gap: 6px; padding: 8px 12px; }
+    .drawer-header { flex-direction: column-reverse; align-items: stretch; gap: 6px; padding: 8px 12px; flex-shrink: 0; }
     .drawer-header-title h2 { display: none; }
     .drawer-tabs { flex-wrap: wrap; }
     .drawer-tab { padding: 6px 10px; font-size: 11.5px; }
 
-    .table-scroll { padding: 0 8px 8px 8px; }
+    /* Pionowy scroll dzieje się teraz na .table-drawer (patrz wyżej) — .table-scroll
+       już nie konkuruje o wysokość (flex:1 by je ściskało do ~0), tylko rośnie do
+       naturalnej wysokości tabeli; poziomy scroll (dla szerokiej tabeli, patrz
+       min-width niżej) zostaje lokalnie na nim. */
+    .table-scroll { padding: 0 8px 8px 8px; flex: none; overflow-x: auto; overflow-y: visible; }
     table.momentum-table { width: auto; min-width: 640px; }
 
     .chart-back-btn { display: none; }
