@@ -1212,8 +1212,10 @@ flex child (no `.topbar-left` wrapper there).
   SQL read against the already-retained, already-fetched `prices` table, so it costs no extra yfinance
   call) and consolidation/breakout (the SAME weekly `ttm_squeeze_chart` the "🧨 TTM Squeeze" tab already
   reads, just with the consolidation-length WINDOW narrowed to a user-adjustable range instead of an
-  open-ended "> 5 weeks" minimum — the user's own description was "4-6 tygodni", i.e. a real base, not the
-  short D1 pause "🚀 Continuation" screens for). `classifyQullamaggie()` in `signals.js`:
+  open-ended "> 5 weeks" minimum — the user's own first description was "4-6 tygodni", later corrected to
+  **2-8 tygodni** (see the version-history paragraph below) after reviewing this whole tab against
+  Qullamaggie's own "The Breakout" reference diagram, i.e. a real base, not the short D1 pause "🚀
+  Continuation" screens for). `classifyQullamaggie()` in `signals.js`:
   1. **Performance** — `perfPct = max(return_1m_pct, return_3m_pct, return_6m_pct)` must clear the "Min.
      wynik (1/3/6M)" slider (default 30%, the same threshold Qullamaggie's own scan uses) — an explicit
      "OR", not "AND": the user's own correction ("for the performance i think need to be or not and
@@ -1222,10 +1224,14 @@ flex child (no `.topbar-left` wrapper there).
   2. **Consolidation** — same "walk back to the last week that actually has a computed `squeeze_on`" logic
      as `classifyTtmSqueeze()` (the current week is often still `null`), but `squeeze_count`/
      `fire_consolidation_weeks` must fall INSIDE `[state.qmMinConsolidationWeeks,
-     state.qmMaxConsolidationWeeks]` (defaults 4-6, both adjustable sliders) rather than merely exceeding a
+     state.qmMaxConsolidationWeeks]` (defaults 2-8, both adjustable sliders — see the version-history
+     paragraph below for why this was widened from an original 4-6) rather than merely exceeding a
      floor — either still consolidating (🌀) or fired within `state.qmFireLookbackWeeks` (default 3, also a
      slider) weeks ago (🔥) with a positive current histogram (an upside breakout, not a breakdown — same
-     reasoning `classifyTtmSqueeze`'s own `histNow > 0` check already documents above).
+     reasoning `classifyTtmSqueeze`'s own `histNow > 0` check already documents above). Since a squeeze
+     lasting only `QM_TIGHT_RANGE_MAX_WEEKS` (2) weeks or fewer is, on duration alone, weak evidence of a
+     genuine base rather than one ordinary low-volatility week, such a short squeeze needs an ADDITIONAL
+     confirmation — see the version-history paragraph below.
   3. **Volume confirmation at the breakout week** — the user's "wait for the breakout with volume" step,
      read from the WEEKLY chart's own `buying_volume_ratio` (the same CLV-derived buying-volume series/
      `STAGE_BREAKOUT_VOLUME_RATIO` (1.5x) threshold the main stage-analysis chart already uses for its
@@ -1245,6 +1251,43 @@ flex child (no `.topbar-left` wrapper there).
   is hard to know where and when to look"). Both this column AND the chart-modal tab (see that bullet
   below) read `breakoutLevelFor(c)` — a shared helper in `js/minicharts.js` — so the same number shows up
   whether the user is scanning the table or already has the chart open.
+
+  **Consolidation window widened from 4-6 to 2-8 weeks, plus a tight-range confirmation for very short
+  (1-2 week) squeezes — a later, separate explicit user review** against Qullamaggie's own "The Breakout"
+  reference diagram (a whiteboard-style explainer slide the user shared showing the daily setup: a big
+  prior "stair step" move, then 2-8 weeks of tight consolidation, then the breakout). Two concrete findings
+  came out of that review: (1) the tab's own default consolidation window (4-6 weeks) was narrower than
+  the 2-8-week range the reference diagram itself states — `QM_DEFAULT_MIN_CONSOLIDATION_WEEKS`/
+  `QM_DEFAULT_MAX_CONSOLIDATION_WEEKS` were widened accordingly (the sliders already supported this range,
+  1-12/1-20 — only the DEFAULTS were narrower than the textbook figure); (2) a squeeze lasting only 1-2
+  weeks is, on duration alone, too little to reliably tell a genuine tight consolidation from one ordinary
+  low-volatility week that happens to trip the Bollinger-inside-Keltner test — a real gap the 4-8-week case
+  doesn't have, since a squeeze that survives that many weeks is already good evidence of a real base by
+  duration alone. The user's own fix, given directly rather than as an abstract requirement: for a squeeze
+  of `QM_TIGHT_RANGE_MAX_WEEKS` (2) weeks or fewer, additionally require that price actually stayed inside a
+  genuinely tight range during that squeeze — specifically the spread between the consolidation's own
+  high and low must fall within `QM_TIGHT_RANGE_MIN_PCT`-`QM_TIGHT_RANGE_MAX_PCT` (5%-20%) of the low, not
+  wider (not a real squeeze) and not narrower either (the user's own inclusion — a near-zero range this
+  short is more likely a data/rounding artifact than a tradable base). `qmTightRangeConfirmed()` in
+  `signals.js` computes this from the exact same, already-existing `squeezeConsolidationBox(c)` window
+  (`js/minicharts.js` — see the `breakoutLevelFor()` version-history paragraph below for what it already
+  computes: the highest/lowest WEEKLY CLOSE over the squeeze's own weeks) rather than adding a new,
+  separate notion of "high"/"low" — this deliberately reuses the same close-only convention the rest of
+  this module's Darvas-box machinery already uses (see `_compute_weinstein_stage_series` under Relative
+  strength above: Darvas boxes are close-only by design, not real intraday/daily High/Low swings), so no
+  pipeline change or new exported field was needed for this. Weeks above `QM_TIGHT_RANGE_MAX_WEEKS` skip
+  this check entirely — the length of the squeeze is already sufficient confirmation on its own there, per
+  the user's own framing of the fix ("jezeli jest squeez ok 4-8 tygodni to tam [otwieramy] bramkę").
+  This whole review deliberately did NOT add a daily 10/20/50-MA-stack filter or an explicit Weinstein-Stage
+  gate (both considered and offered, matching two other elements visible on the same reference diagram) —
+  the user's own call was that the TTM-Squeeze-duration/tight-range combination above is already a good
+  enough trend/quality confirmation on its own, without duplicating a second, separate trend filter the way
+  `coreCandidateRows()`'s now-removed hardcoded stage tiebreak once did on the rebalancer's Core sleeve (see
+  design-history step 7 under "What this repo is" above for that precedent). The review also reconfirmed,
+  at the user's own explicit acknowledgment, that this screener's universe stays limited to the five
+  dashboard indices rather than a broader pool like the Nasdaq Composite Qullamaggie's own scan actually
+  draws from — a deliberate, accepted trade-off against the extra yfinance fetch that would require, not an
+  oversight.
 
   **`breakoutLevelFor()`'s FIRST version read `weekly_chart.pending_base`** (the independent Darvas-box
   mechanism, see `compute_relative_strength_chart`/`_compute_weinstein_stage_series` under Relative strength

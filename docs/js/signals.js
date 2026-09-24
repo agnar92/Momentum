@@ -37,13 +37,31 @@ const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 0;
 const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
 
 // Domyślne progi screenera Qullamaggie (patrz klasyfikacja niżej) — 30% na
-// wyraźną prośbę użytkownika (ten sam próg co w oryginalnym skanie), 4-6 tyg.
-// konsolidacji, wybicie liczone jeszcze przez 3 tyg. po fakcie.
+// wyraźną prośbę użytkownika (ten sam próg co w oryginalnym skanie), 2-8 tyg.
+// konsolidacji (poprawione z 4-6 po ponownym przeglądzie ze slajdem "The
+// Breakout" — to jest oryginalny zakres bazy Qullamaggiego, nie 4-6), wybicie
+// liczone jeszcze przez 3 tyg. po fakcie.
 const QM_DEFAULT_MIN_PERF_PCT = 30;
-const QM_DEFAULT_MIN_CONSOLIDATION_WEEKS = 4;
-const QM_DEFAULT_MAX_CONSOLIDATION_WEEKS = 6;
+const QM_DEFAULT_MIN_CONSOLIDATION_WEEKS = 2;
+const QM_DEFAULT_MAX_CONSOLIDATION_WEEKS = 8;
 const QM_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
 const QM_SETTINGS_KEY = "momentum_dashboard_qullamaggie";
+
+// Dodatkowe potwierdzenie dla BARDZO KRÓTKIEJ konsolidacji (1-2 tyg.) — na
+// wyraźną prośbę użytkownika po przeglądzie ze slajdem "The Breakout": sama
+// długość squeeze'a 4-8 tyg. jest już wystarczającym potwierdzeniem "prawdziwej"
+// bazy, ale 1-2-tygodniowy squeeze to za mało samej długości, żeby odróżnić
+// realną, ciasną konsolidację od przypadkowego, chwilowego uspokojenia
+// zmienności — więc dla niego DODATKOWO wymagamy, żeby cena w tym okresie
+// faktycznie oscylowała w wąskim, ale nie mikroskopijnym przedziale (5-20%
+// między szczytem a dołkiem konsolidacji, patrz squeezeConsolidationBox() w
+// js/minicharts.js — te same, close-owe granice pudełka, które już liczymy
+// dla "poziomu do obserwacji"). Poza tym oknem (3-8 tyg. w domyślnych progach)
+// długość squeeze'a sama w sobie jest już dobrym potwierdzeniem i nie wymaga
+// tego dodatkowego sprawdzenia.
+const QM_TIGHT_RANGE_MAX_WEEKS = 2;
+const QM_TIGHT_RANGE_MIN_PCT = 5;
+const QM_TIGHT_RANGE_MAX_PCT = 20;
 
 const state = {
     data: {},
@@ -302,9 +320,19 @@ function combinedTtmSqueezeCandidates() {
 // przekracza próg, dokładnie jak w oryginalnym skanie), po którym spółka
 // wchodzi w kilkutygodniową konsolidację (TTM Squeeze na wykresie
 // TYGODNIOWYM — inaczej niż "Continuation" powyżej, które patrzy na KRÓTKĄ
-// pauzę na D1; tu chodzi o dłuższą, kilkutygodniową bazę, klasyczne "4-6
-// tygodni" ze skanu), a wybicie z niej jest potwierdzone wolumenem
-// KUPUJĄCYCH (ten sam próg STAGE_BREAKOUT_VOLUME_RATIO co reszta apki).
+// pauzę na D1; tu chodzi o dłuższą, kilkutygodniową bazę, klasyczne "2-8
+// tygodni" ze skanu — patrz slajd "The Breakout"), a wybicie z niej jest
+// potwierdzone wolumenem KUPUJĄCYCH (ten sam próg STAGE_BREAKOUT_VOLUME_RATIO
+// co reszta apki).
+//
+// Sama długość squeeze'a 3-8 tyg. jest już wystarczającym potwierdzeniem
+// "prawdziwej" bazy (a nie przypadkowego, chwilowego uspokojenia zmienności);
+// dla BARDZO KRÓTKIEJ konsolidacji (1-2 tyg., QM_TIGHT_RANGE_MAX_WEEKS)
+// wymagamy DODATKOWO, żeby cena w tym okresie faktycznie oscylowała w
+// odpowiednio wąskim przedziale (5-20% między szczytem a dołkiem konsolidacji,
+// qmTightRangeConfirmed() poniżej) — inaczej 1-2-tygodniowy "squeeze" zbyt
+// łatwo trafiałby na przypadkowy tydzień niskiej zmienności, nie na realną
+// bazę.
 //
 // Wejście na wykresie 1-minutowym (ORB — Opening Range Breakout — z sesyjnym
 // VWAP) NIE jest tu automatyzowane: to wymagałoby danych śróddziennych,
@@ -329,6 +357,26 @@ function qullamaggieOpts(opts) {
         maxConsolidationWeeks: opts.maxConsolidationWeeks ?? state.qmMaxConsolidationWeeks,
         fireLookbackWeeks: opts.fireLookbackWeeks ?? state.qmFireLookbackWeeks,
     };
+}
+
+// Potwierdzenie dla bardzo krótkiej (<= QM_TIGHT_RANGE_MAX_WEEKS) konsolidacji
+// — patrz komentarz przy tej konstancie. Zakres liczymy z TEGO SAMEGO,
+// close-owego pudełka co breakoutLevelFor() (squeezeConsolidationBox(), js/
+// minicharts.js), nie z realnego dziennego High/Low — Darvas (i cała reszta
+// tego modułu) świadomie pracuje na zamknięciach, patrz CLAUDE.md.
+function qmTightRangeConfirmed(c) {
+    const box = squeezeConsolidationBox(c);
+    const wc = c.weekly_chart;
+    if (!box || box.resistance_pct == null || box.support_pct == null) return false;
+    if (!wc || !wc.close_pct || !wc.close_pct.length || !(c.price > 0)) return false;
+    const lastPct = wc.close_pct[wc.close_pct.length - 1];
+    if (lastPct == null) return false;
+    const close0 = c.price / (1 + lastPct / 100);
+    const resistance = close0 * (1 + box.resistance_pct / 100);
+    const support = close0 * (1 + box.support_pct / 100);
+    if (!(support > 0)) return false;
+    const rangePct = (resistance - support) / support * 100;
+    return rangePct >= QM_TIGHT_RANGE_MIN_PCT && rangePct <= QM_TIGHT_RANGE_MAX_PCT;
 }
 
 function classifyQullamaggie(ticker, universe, c, opts = {}) {
@@ -361,6 +409,13 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
         && histNow != null && histNow > 0;
     if (!isConsolidating && !isFired) return null;
 
+    const consolidationWeeks = isFired ? fireConsolidationWeeks : squeezeCount;
+    // Bardzo krótki squeeze (<= QM_TIGHT_RANGE_MAX_WEEKS) potrzebuje dodatkowego
+    // potwierdzenia zakresem ceny — patrz komentarz przy tej konstancie i
+    // qmTightRangeConfirmed() powyżej. Dłuższy squeeze (typowe 3-8 tyg. w
+    // domyślnych progach) jest już wystarczającym potwierdzeniem samą długością.
+    if (consolidationWeeks <= QM_TIGHT_RANGE_MAX_WEEKS && !qmTightRangeConfirmed(c)) return null;
+
     // Potwierdzenie wolumenem kupujących W TYGODNIU WYBICIA — tylko dla
     // "fired" (przy trwającej konsolidacji nie ma jeszcze wybicia do
     // potwierdzenia). ttm_squeeze_chart i weekly_chart mają NIEKONIECZNIE tę
@@ -381,7 +436,7 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
         perf_pct: perfPct,
         current_stage: c.weekly_chart && c.weekly_chart.current_stage,
         status: isFired ? "fired" : "consolidating",
-        consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
+        consolidation_weeks: consolidationWeeks,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         histNow,
         breakout_volume_ratio: breakoutVolumeRatio,

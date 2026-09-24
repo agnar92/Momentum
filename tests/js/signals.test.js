@@ -416,6 +416,58 @@ test("classifyQullamaggie ignores a fire with a bearish (negative) histogram", (
     assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
 });
 
+// ---------- potwierdzenie zakresem ceny dla bardzo krótkiej (1-2 tyg.) konsolidacji ----------
+// (QM_TIGHT_RANGE_MAX_WEEKS/MIN_PCT/MAX_PCT w signals.js) — na wyraźną prośbę
+// użytkownika po przeglądzie ze slajdem "The Breakout": sama długość squeeze'a
+// 1-2 tyg. to za mało potwierdzenia, więc dla niej dodatkowo wymagamy, żeby
+// szczyt/dołek konsolidacji (squeezeConsolidationBox, close-owy — jak reszta
+// modułu) dały zakres 5-20%.
+const QM_OPTS_WIDE = { minPerfPct: 30, minConsolidationWeeks: 2, maxConsolidationWeeks: 8, fireLookbackWeeks: 3 };
+
+function qmShortSqueezeConstituent(closePctWindow) {
+    const dates = ["2025-12-25", "2026-01-01"];
+    return qmConstituent({
+        weekly_chart: { current_stage: "2A", dates, close_pct: closePctWindow, buying_volume_ratio: [1.0, 1.0] },
+        ttm_squeeze_chart: {
+            dates, histogram: [0.1, 0.1], squeeze_on: [true, true], squeeze_count: [1, 2],
+            fired: [false, false], weeks_since_fire: [null, null], fire_consolidation_weeks: [null, null],
+        },
+    });
+}
+
+test("classifyQullamaggie accepts a 2-week squeeze when the price range is inside 5-20%", () => {
+    // close0 = 100 / 1.10 ≈ 90.91 -> support ≈ 90.91, resistance = 100 -> range ≈ 10%.
+    const c = qmShortSqueezeConstituent([0, 10]);
+    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE);
+    assert.ok(r);
+    assert.equal(r.consolidation_weeks, 2);
+});
+
+test("classifyQullamaggie rejects a 2-week squeeze when the price range is too wide (> 20%)", () => {
+    // close0 = 100 / 1.30 ≈ 76.92 -> range ≈ 30%.
+    const c = qmShortSqueezeConstituent([0, 30]);
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE), null);
+});
+
+test("classifyQullamaggie rejects a 2-week squeeze when the price range is too tight (< 5%)", () => {
+    // close0 = 100 / 1.03 ≈ 97.09 -> range ≈ 3%.
+    const c = qmShortSqueezeConstituent([0, 3]);
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE), null);
+});
+
+test("classifyQullamaggie does not require the price-range check once the squeeze is longer than 2 weeks", () => {
+    const c = qmConstituent({
+        weekly_chart: { current_stage: "2A", dates: ["2026-01-01"], close_pct: [30], buying_volume_ratio: [1.0] },
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [3],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    });
+    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE);
+    assert.ok(r);
+    assert.equal(r.consolidation_weeks, 3);
+});
+
 test("combinedQullamaggieCandidates merges universes, dedupes tickers, sorts fired-fresh first then longest consolidation", () => {
     state.data = emptyStateData();
     state.data.SP500.constituents = [

@@ -149,12 +149,12 @@
                 <input type="range" id="qmMinPerfInput" min="10" max="100" step="5">
                 <span class="wybicie-slider-value" id="qmMinPerfValue"></span>
             </label>
-            <label class="wybicie-slider" title="Minimalna długość konsolidacji (TTM Squeeze tygodniowy), żeby liczyć się jako baza po dużym ruchu.">
+            <label class="wybicie-slider" title="Minimalna długość konsolidacji (TTM Squeeze tygodniowy), żeby liczyć się jako baza po dużym ruchu. Konsolidacja 1-2 tyg. wymaga dodatkowo wąskiego zakresu ceny (5-20% szczyt/dołek) — sama długość to za mało potwierdzenia.">
                 <span class="stage-filter-label">Min. tyg. konsolidacji:</span>
                 <input type="range" id="qmMinConsolidationInput" min="1" max="12" step="1">
                 <span class="wybicie-slider-value" id="qmMinConsolidationValue"></span>
             </label>
-            <label class="wybicie-slider" title="Maksymalna długość konsolidacji — dłuższa baza wychodzi poza klasyczne „4-6 tygodni”.">
+            <label class="wybicie-slider" title="Maksymalna długość konsolidacji — dłuższa baza wychodzi poza klasyczne „2-8 tygodni” ze skanu Qullamaggiego.">
                 <span class="stage-filter-label">Maks. tyg. konsolidacji:</span>
                 <input type="range" id="qmMaxConsolidationInput" min="1" max="20" step="1">
                 <span class="wybicie-slider-value" id="qmMaxConsolidationValue"></span>
@@ -268,8 +268,9 @@
                 </table>
             </div>
 
-            <!-- Qullamaggie: wynik ≥ 30% w 1/3/6M (OR), konsolidacja 4-6 tyg.
-                 (TTM Squeeze tygodniowy) trwająca albo świeżo zakończona wybiciem,
+            <!-- Qullamaggie: wynik ≥ 30% w 1/3/6M (OR), konsolidacja 2-8 tyg.
+                 (TTM Squeeze tygodniowy) trwająca albo świeżo zakończona wybiciem —
+                 konsolidacja 1-2 tyg. wymaga dodatkowo wąskiego zakresu ceny (5-20%),
                  wolumen kupujących sprawdzony przy wybiciu — patrz
                  combinedQullamaggieCandidates w signals.js. Wejście (ORB + sesyjny
                  VWAP) monitorujesz sam, na zakładce „⚡ 1 min + VWAP” wykresu spółki. -->

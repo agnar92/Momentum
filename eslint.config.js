@@ -125,6 +125,7 @@ const browserGlobals = {
     PULLBACK_BAND_PCT: "readonly",
     pullbackHtml: "readonly",
     breakoutLevelFor: "readonly",
+    squeezeConsolidationBox: "readonly",
     initMiniChartHoverPreview: "readonly",
     showToast: "readonly",
     initConnStatus: "readonly",
