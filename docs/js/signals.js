@@ -37,13 +37,31 @@ const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 0;
 const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
 
 // Domyślne progi screenera Qullamaggie (patrz klasyfikacja niżej) — 30% na
-// wyraźną prośbę użytkownika (ten sam próg co w oryginalnym skanie), 4-6 tyg.
-// konsolidacji, wybicie liczone jeszcze przez 3 tyg. po fakcie.
+// wyraźną prośbę użytkownika (ten sam próg co w oryginalnym skanie), 2-8 tyg.
+// konsolidacji (poprawione z 4-6 po ponownym przeglądzie ze slajdem "The
+// Breakout" — to jest oryginalny zakres bazy Qullamaggiego, nie 4-6), wybicie
+// liczone jeszcze przez 3 tyg. po fakcie.
 const QM_DEFAULT_MIN_PERF_PCT = 30;
-const QM_DEFAULT_MIN_CONSOLIDATION_WEEKS = 4;
-const QM_DEFAULT_MAX_CONSOLIDATION_WEEKS = 6;
+const QM_DEFAULT_MIN_CONSOLIDATION_WEEKS = 2;
+const QM_DEFAULT_MAX_CONSOLIDATION_WEEKS = 8;
 const QM_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
 const QM_SETTINGS_KEY = "momentum_dashboard_qullamaggie";
+
+// Dodatkowe potwierdzenie dla BARDZO KRÓTKIEJ konsolidacji (1-2 tyg.) — na
+// wyraźną prośbę użytkownika po przeglądzie ze slajdem "The Breakout": sama
+// długość squeeze'a 4-8 tyg. jest już wystarczającym potwierdzeniem "prawdziwej"
+// bazy, ale 1-2-tygodniowy squeeze to za mało samej długości, żeby odróżnić
+// realną, ciasną konsolidację od przypadkowego, chwilowego uspokojenia
+// zmienności — więc dla niego DODATKOWO wymagamy, żeby cena w tym okresie
+// faktycznie oscylowała w wąskim, ale nie mikroskopijnym przedziale (5-20%
+// między szczytem a dołkiem konsolidacji, patrz squeezeConsolidationBox() w
+// js/minicharts.js — te same, close-owe granice pudełka, które już liczymy
+// dla "poziomu do obserwacji"). Poza tym oknem (3-8 tyg. w domyślnych progach)
+// długość squeeze'a sama w sobie jest już dobrym potwierdzeniem i nie wymaga
+// tego dodatkowego sprawdzenia.
+const QM_TIGHT_RANGE_MAX_WEEKS = 2;
+const QM_TIGHT_RANGE_MIN_PCT = 5;
+const QM_TIGHT_RANGE_MAX_PCT = 20;
 
 const state = {
     data: {},
@@ -297,14 +315,23 @@ function combinedTtmSqueezeCandidates() {
 
 // ============================================================
 // QULLAMAGGIE — SCREENER (na wyraźną prośbę użytkownika): replika skanu
-// Kristjana Qullamaggie'go — duży wcześniejszy ruch (30%+ w 1, 3 LUB 6
-// miesięcy — WARUNEK "OR", nie "AND": wystarczy, że JEDEN z trzech zwrotów
-// przekracza próg, dokładnie jak w oryginalnym skanie), po którym spółka
-// wchodzi w kilkutygodniową konsolidację (TTM Squeeze na wykresie
+// Kristjana Qullamaggie'go — duży wcześniejszy ruch (30%+ w 6 miesięcy — patrz
+// UPROSZCZENIE poniżej: to jeden warunek zamiast osobnego OR po 1/3/6M), po
+// którym spółka wchodzi w kilkutygodniową konsolidację (TTM Squeeze na wykresie
 // TYGODNIOWYM — inaczej niż "Continuation" powyżej, które patrzy na KRÓTKĄ
-// pauzę na D1; tu chodzi o dłuższą, kilkutygodniową bazę, klasyczne "4-6
-// tygodni" ze skanu), a wybicie z niej jest potwierdzone wolumenem
-// KUPUJĄCYCH (ten sam próg STAGE_BREAKOUT_VOLUME_RATIO co reszta apki).
+// pauzę na D1; tu chodzi o dłuższą, kilkutygodniową bazę, klasyczne "2-8
+// tygodni" ze skanu — patrz slajd "The Breakout"), a wybicie z niej jest
+// potwierdzone wolumenem KUPUJĄCYCH (ten sam próg STAGE_BREAKOUT_VOLUME_RATIO
+// co reszta apki).
+//
+// Sama długość squeeze'a 3-8 tyg. jest już wystarczającym potwierdzeniem
+// "prawdziwej" bazy (a nie przypadkowego, chwilowego uspokojenia zmienności);
+// dla BARDZO KRÓTKIEJ konsolidacji (1-2 tyg., QM_TIGHT_RANGE_MAX_WEEKS)
+// wymagamy DODATKOWO, żeby cena w tym okresie faktycznie oscylowała w
+// odpowiednio wąskim przedziale (5-20% między szczytem a dołkiem konsolidacji,
+// qmTightRangeConfirmed() poniżej) — inaczej 1-2-tygodniowy "squeeze" zbyt
+// łatwo trafiałby na przypadkowy tydzień niskiej zmienności, nie na realną
+// bazę.
 //
 // Wejście na wykresie 1-minutowym (ORB — Opening Range Breakout — z sesyjnym
 // VWAP) NIE jest tu automatyzowane: to wymagałoby danych śróddziennych,
@@ -317,8 +344,14 @@ function combinedTtmSqueezeCandidates() {
 // sam monitoruje wybicie z zakresu otwarcia na żywo, apka tylko wskazuje
 // KTÓRE spółki warto obserwować danego dnia.
 //
-// Performance (perf_pct = max(return_1m_pct, return_3m_pct, return_6m_pct),
-// patrz compute_daily_squeeze w run_query.py) czytamy z c.daily_squeeze —
+// UPROSZCZENIE (na wyraźną prośbę użytkownika, po przeglądzie): perf_pct to
+// TERAZ WYŁĄCZNIE return_6m_pct, nie max(1M, 3M, 6M) — 6-miesięczne okno w
+// praktyce OBEJMUJE też ruch, który dopiero co (w 1 lub 3 miesiące) wypchnął
+// cenę o 30%+ (cena z przed 6 miesięcy jest zwykle zbliżona do ceny z przed
+// 1/3 miesięcy, jeśli w tym czasie nie było odwrotnego ruchu), więc osobny OR
+// po trzech oknach był zbędną komplikacją. return_1m_pct/return_3m_pct wciąż
+// czytane i pokazywane (tooltip w qmPerfCellHtml) jako informacja, patrz
+// compute_daily_squeeze w run_query.py, czytamy z c.daily_squeeze —
 // TYM SAMYM polu co "Continuation" (liczone w GŁÓWNYM, tygodniowym pipeline,
 // nie wymaga przycisku "Odśwież dane D1" — ten dostarcza tylko świeższą,
 // tego samego dnia wersję).
@@ -331,13 +364,40 @@ function qullamaggieOpts(opts) {
     };
 }
 
+// Potwierdzenie dla bardzo krótkiej (<= QM_TIGHT_RANGE_MAX_WEEKS) konsolidacji
+// — patrz komentarz przy tej konstancie. Zakres liczymy z TEGO SAMEGO,
+// close-owego pudełka co breakoutLevelFor() (squeezeConsolidationBox(), js/
+// minicharts.js), nie z realnego dziennego High/Low — Darvas (i cała reszta
+// tego modułu) świadomie pracuje na zamknięciach, patrz CLAUDE.md.
+function qmTightRangeConfirmed(c) {
+    const box = squeezeConsolidationBox(c);
+    const wc = c.weekly_chart;
+    if (!box || box.resistance_pct == null || box.support_pct == null) return false;
+    if (!wc || !wc.close_pct || !wc.close_pct.length || !(c.price > 0)) return false;
+    const lastPct = wc.close_pct[wc.close_pct.length - 1];
+    if (lastPct == null) return false;
+    const close0 = c.price / (1 + lastPct / 100);
+    const resistance = close0 * (1 + box.resistance_pct / 100);
+    const support = close0 * (1 + box.support_pct / 100);
+    if (!(support > 0)) return false;
+    const rangePct = (resistance - support) / support * 100;
+    return rangePct >= QM_TIGHT_RANGE_MIN_PCT && rangePct <= QM_TIGHT_RANGE_MAX_PCT;
+}
+
 function classifyQullamaggie(ticker, universe, c, opts = {}) {
     const o = qullamaggieOpts(opts);
     const d = c.daily_squeeze;
     if (!d) return null;
-    const perfCandidates = [d.return_1m_pct, d.return_3m_pct, d.return_6m_pct].filter(v => v != null);
-    if (perfCandidates.length === 0) return null;
-    const perfPct = Math.max(...perfCandidates);
+    // Uproszczone na wyraźną prośbę użytkownika: sam zwrot 6-miesięczny jest
+    // wystarczającym warunkiem (zamiast osobnego OR po 1/3/6M) — 6-miesięczne
+    // okno w praktyce OBEJMUJE też ruch, który dopiero co (w ciągu 1 lub 3
+    // miesięcy) wypchnął cenę o 30%+, bo cena z przed 6 miesięcy jest zwykle
+    // zbliżona do ceny z przed 1/3 miesięcy, jeśli w tym czasie nie było
+    // odwrotnego ruchu. return_1m_pct/return_3m_pct nadal czytane i pokazywane
+    // (tooltip w qmPerfCellHtml) — tylko jako informacja, nie jako osobny
+    // warunek bramki.
+    if (d.return_6m_pct == null) return null;
+    const perfPct = d.return_6m_pct;
     if (!(perfPct >= o.minPerfPct)) return null;
 
     const t = c.ttm_squeeze_chart;
@@ -361,6 +421,13 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
         && histNow != null && histNow > 0;
     if (!isConsolidating && !isFired) return null;
 
+    const consolidationWeeks = isFired ? fireConsolidationWeeks : squeezeCount;
+    // Bardzo krótki squeeze (<= QM_TIGHT_RANGE_MAX_WEEKS) potrzebuje dodatkowego
+    // potwierdzenia zakresem ceny — patrz komentarz przy tej konstancie i
+    // qmTightRangeConfirmed() powyżej. Dłuższy squeeze (typowe 3-8 tyg. w
+    // domyślnych progach) jest już wystarczającym potwierdzeniem samą długością.
+    if (consolidationWeeks <= QM_TIGHT_RANGE_MAX_WEEKS && !qmTightRangeConfirmed(c)) return null;
+
     // Potwierdzenie wolumenem kupujących W TYGODNIU WYBICIA — tylko dla
     // "fired" (przy trwającej konsolidacji nie ma jeszcze wybicia do
     // potwierdzenia). ttm_squeeze_chart i weekly_chart mają NIEKONIECZNIE tę
@@ -381,7 +448,7 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
         perf_pct: perfPct,
         current_stage: c.weekly_chart && c.weekly_chart.current_stage,
         status: isFired ? "fired" : "consolidating",
-        consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
+        consolidation_weeks: consolidationWeeks,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         histNow,
         breakout_volume_ratio: breakoutVolumeRatio,
@@ -721,7 +788,7 @@ function renderQullamaggiePanel() {
         tile.className = "ticker-tile";
         tile.textContent = r.ticker;
         tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
-            + `wynik ${r.perf_pct.toFixed(0)}% (1/3/6M) · `
+            + `wynik ${r.perf_pct.toFixed(0)}% (6M) · `
             + (r.status === "fired"
                 ? `wybicie ${r.weeks_since_fire} tyg. temu po ${r.consolidation_weeks} tyg. konsolidacji`
                     + (r.breakout_volume_confirmed ? " · wolumen potwierdzony" : "")
@@ -1030,14 +1097,15 @@ function renderTtmSqueezeTable() {
     });
 }
 
-// Wynik 1/3/6M (max z trzech, patrz classifyQullamaggie) — dymek pokazuje
-// rozbicie na poszczególne okna, żeby było widać KTÓRY z trzech przekroczył próg.
+// Wynik 6M (= perf_pct, patrz classifyQullamaggie) — dymek dodatkowo pokazuje
+// 1M/3M informacyjnie (nie są już częścią warunku bramki, tylko kontekstem —
+// np. czy większość ruchu przyszła niedawno, czy jest rozłożona równomiernie).
 function qmReturnHtml(v) {
     return v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`;
 }
 
 function qmPerfCellHtml(r) {
-    const title = `1M: ${qmReturnHtml(r.return_1m_pct)} · 3M: ${qmReturnHtml(r.return_3m_pct)} · 6M: ${qmReturnHtml(r.return_6m_pct)}`;
+    const title = `6M: ${qmReturnHtml(r.perf_pct)} · 1M: ${qmReturnHtml(r.return_1m_pct)} · 3M: ${qmReturnHtml(r.return_3m_pct)}`;
     return `<span class="positive" title="${title}">+${r.perf_pct.toFixed(0)}%</span>`;
 }
 
@@ -1074,7 +1142,7 @@ function qmRowHtml(r, position) {
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
-        <td title="Największy z trzech zwrotów: 1, 3 i 6 miesięcy">${qmPerfCellHtml(r)}</td>
+        <td title="Zwrot z ostatnich 6 miesięcy (dymek: także 1M/3M informacyjnie)">${qmPerfCellHtml(r)}</td>
         <td>${qmStatusHtml(r)}</td>
         <td>${r.consolidation_weeks} tyg.</td>
         <td title="Cena, przy której warto obserwować 1-minutowy wykres (zakładka „⚡ 1 min + VWAP” po kliknięciu w wiersz)">${qmLevelCellHtml(r)}</td>
@@ -1098,7 +1166,7 @@ function renderQullamaggieTable() {
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
         colspan: 13,
-        emptyAllMsg: `Brak spółek z ruchem ≥ ${state.qmMinPerfPct}% (1/3/6M) i konsolidacją ${state.qmMinConsolidationWeeks}-${state.qmMaxConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
+        emptyAllMsg: `Brak spółek z ruchem ≥ ${state.qmMinPerfPct}% (6M) i konsolidacją ${state.qmMinConsolidationWeeks}-${state.qmMaxConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
