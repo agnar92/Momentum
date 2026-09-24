@@ -178,14 +178,17 @@ let excluded = loadExcluded();
 let poolCollapsed = loadPoolCollapsed();
 
 async function loadUniverseData() {
-    for (const u of REBALANCE_UNIVERSES) {
+    // Równolegle, nie po kolei — sp500.json sam waży ~20MB (patrz identyczny
+    // komentarz w signals.js::loadData), sekwencyjny fetch blokował NASDAQ100/
+    // DOWJONES za sobą na wolniejszym łączu.
+    await Promise.allSettled(REBALANCE_UNIVERSES.map(async (u) => {
         try {
             const res = await fetch(`data/${u.toLowerCase()}.json`, { cache: "no-store" });
             universeData[u] = await res.json();
         } catch (e) {
             universeData[u] = { universe: u, ref_date: null, constituents: [], all_constituents: [] };
         }
-    }
+    }));
 
     // Ceny dla WSZYSTKICH spółek we WSZYSTKICH indeksach (nie tylko trzech,
     // z których dobiera pula rebalansera) — żeby móc wycenić dowolną pozycję

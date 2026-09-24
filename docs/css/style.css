@@ -1070,6 +1070,22 @@ th.tv-col, th.chart-col { width: 1%; }
 .trend-banner.growth { background: rgba(46, 204, 113, 0.12); color: var(--green-bright); border-color: var(--green-bright); }
 .trend-banner.no-growth { background: rgba(224, 69, 90, 0.12); color: var(--red); border-color: var(--red); }
 
+/* Widoczne, zwykłe (nie tylko hover-title) wyjaśnienie "co pokazuje ta
+   zakładka / czego szukać / kiedy rozważyć kupno" nad każdą tabelą na
+   signals.html — dodane po zgłoszeniu użytkownika, że same zakładki
+   Wybicie/TTM Squeeze/Continuation/Qullamaggie były mało czytelne. */
+.screener-guide {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    margin-bottom: 14px;
+    border: 1px solid var(--border);
+    background: var(--panel-alt);
+    color: var(--text-dim);
+}
+.screener-guide strong { color: var(--text); }
+
 /* Lejek strategii Stage 2 Continuation (docs/strategy.html, js/strategy.js):
    pasek licznikow kolejnych bramek + znaczniki statusu w tabelach. */
 .funnel-viz {

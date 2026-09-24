@@ -85,6 +85,28 @@
                 <button class="drawer-tab" data-universe="QULLAMAGGIE" title="Qullamaggie — spółki z wynikiem ≥ 30% w 1, 3 lub 6 miesięcy, w kilkutygodniowej konsolidacji (TTM Squeeze tygodniowy) albo świeżo z niej wybite, z wolumenem kupujących sprawdzonym przy wybiciu. Wejście (ORB + sesyjny VWAP) monitorujesz sam na zakładce „⚡ 1 min + VWAP” wykresu spółki.">🎯 Qullamaggie</button>
             </div>
         </div>
+        <div class="screener-guide" id="wybicieGuide">
+            <strong>💥 Wybicie</strong> — spółki, u których w ostatnim czasie zapaliły się RAZEM trzy sygnały:
+            tygodniowy MACD przeciął zero w górę, linia siły RS 52 tyg. też weszła na plus, a histogram TTM Squeeze jest dodatni.
+            To NIE jest lista spółek w konsolidacji — jeśli szukasz tego, zobacz zakładkę „🧨 TTM Squeeze”.
+            <br>Czego szukać: kolumna „Wybicie” = ile tygodni temu, im mniej tym świeższy sygnał; najlepiej razem z Etapem 2.
+            <br>Kiedy rozważyć kupno: świeże wybicie (0–2 tyg.) + Etap 2A/2B + rosnący histogram TTM. To screener, nie automatyczna rekomendacja — decyzję i moment wejścia podejmujesz sam.
+        </div>
+        <div class="screener-guide" id="ttmSqueezeGuide" hidden>
+            <strong>🧨 TTM Squeeze</strong> — spółki z dodatnim momentum, które siedzą w wielotygodniowej konsolidacji (zmienność ściśnięta) albo właśnie z niej wyszły.
+            <br>Czego szukać: status 🌀 „konsolidacja” = jeszcze czekaj i obserwuj, nic jeszcze się nie wydarzyło; status 🔥 „wybicie” = konsolidacja skończyła się w ostatnich 3 tyg. ruchem w górę — to jest moment, żeby faktycznie otworzyć wykres spółki.
+            <br>Kiedy rozważyć kupno: dopiero przy/blisko 🔥, z rosnącym histogramem TTM i najlepiej Etapem 2. Samo 🌀 to lista obserwacyjna — jeszcze NIE sygnał kupna.
+        </div>
+        <div class="screener-guide" id="continuationGuide" hidden>
+            <strong>🚀 Continuation</strong> — spółki JUŻ w potwierdzonym Etapie 2, z dodatnim momentum i RS, które teraz robią pauzę (konsolidację) w trakcie trwającego trendu — pod dołączenie do pozycji, nie pod nowe wejście od zera.
+            <br>Czego szukać: to samo 🌀/🔥 co w TTM Squeeze, plus kolumna „Poziom do obserwacji” (górna/dolna granica konsolidacji) i potwierdzenie tygodniowym MACD.
+            <br>Kiedy rozważyć kupno: 🔥 świeże (kolumna „Wybicie w ciągu”) + MACD nad linią sygnału + cena nad „Poziomem do obserwacji”.
+        </div>
+        <div class="screener-guide" id="qullamaggieGuide" hidden>
+            <strong>🎯 Qullamaggie</strong> — spółki z dużym wcześniejszym ruchem (≥30% w 6 mies.), które przeszły przez ciasną, kilkutygodniową konsolidację i się z niej wybiły, z wolumenem kupujących sprawdzonym przy wybiciu.
+            <br>Czego szukać: status 🔥 + „· wolumen ✓” (wybicie potwierdzone realnym wolumenem, nie tylko ceną) + kolumna „Poziom do obserwacji”.
+            <br>Kiedy kupić: ten screener tylko WYTYPOWUJE kandydata i poziom do obserwacji — dokładny moment wejścia (Opening Range Breakout + VWAP) obserwujesz sam na żywo, na zakładce „⚡ 1 min + VWAP” po otwarciu wykresu spółki.
+        </div>
         <div class="stage-filter-bar" id="stageFilterBar">
             <span class="stage-filter-label">Etap Weinsteina:</span>
             <button class="stage-filter-btn active" data-stage="ALL">Wszystkie</button>
@@ -116,11 +138,6 @@
                 <span class="stage-filter-label">Min. tyg. konsolidacji:</span>
                 <input type="range" id="contMinConsolidationInput" min="1" max="20" step="1">
                 <span class="wybicie-slider-value" id="contMinConsolidationValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Maksymalna długość konsolidacji.">
-                <span class="stage-filter-label">Maks. tyg. konsolidacji:</span>
-                <input type="range" id="contMaxConsolidationInput" min="1" max="30" step="1">
-                <span class="wybicie-slider-value" id="contMaxConsolidationValue"></span>
             </label>
             <label class="wybicie-slider" title="Przez ile tygodni po wybiciu z konsolidacji (histogram dodatni) spółka zostaje na liście.">
                 <span class="stage-filter-label">Wybicie w ciągu:</span>
