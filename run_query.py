@@ -2403,7 +2403,18 @@ def compute_sp500_trend_filter(con, ref_date):
     """Krok 1: czy SP500 jest w fazie wzrostu — cena powyzej 200-dniowej SMA
     LUB powyzej 40-tygodniowej SMA (uzytkownik podal oba ujecia tego samego
     filtru trendu, wiec traktujemy je jako rownowazne/wystarczajace osobno,
-    nie wymagamy obu naraz)."""
+    nie wymagamy obu naraz).
+
+    Dodatkowo (na wyrazne zyczenie uzytkownika, po przegladzie materialu o
+    strategii "lateral consolidation breakout" — patrz "🚀 Continuation" w
+    CLAUDE.md): 10-tygodniowa EMA SP500 nad 20-tygodniowa EMA — OSOBNY,
+    prostszy filtr rynku z tego materialu ("jesli 10 EMA nie jest nad 20 EMA,
+    zostajemy w cashu"), NIEZALEZNY od above_sma200/above_sma40w/
+    in_growth_phase powyzej (inna definicja "wzrostu rynku", nie zamiennik).
+    Uzywany przez Continuation (docs/js/signals.js) jako informacyjny
+    banner/znacznik, nie jako twardy filtr chowajacy kandydatow — ta sama
+    "nigdy nie chowaj kandydatow z powodu filtra rynku" konwencja, ktora
+    strategy.js juz stosuje dla swojego wlasnego kroku 1."""
     has_table = con.execute("""
         SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'index_prices'
     """).fetchone()[0] > 0
@@ -2433,9 +2444,14 @@ def compute_sp500_trend_filter(con, ref_date):
         FROM d GROUP BY 1 ORDER BY 1
     """).df()
     weekly["sma40"] = weekly["close"].rolling(SP500_TREND_SMA_WEEKS).mean()
+    weekly["ema10"] = weekly["close"].ewm(span=10, adjust=False).mean()
+    weekly["ema20"] = weekly["close"].ewm(span=20, adjust=False).mean()
     last_w = weekly.iloc[-1]
     sma40w = float(last_w["sma40"]) if pd.notna(last_w["sma40"]) else None
     above_sma40w = (close > sma40w) if sma40w is not None else None
+    ema10w = float(last_w["ema10"]) if pd.notna(last_w["ema10"]) else None
+    ema20w = float(last_w["ema20"]) if pd.notna(last_w["ema20"]) else None
+    weekly_ema_bullish = (ema10w > ema20w) if ema10w is not None and ema20w is not None else None
 
     if above_sma200 is None and above_sma40w is None:
         in_growth_phase = None
@@ -2453,6 +2469,9 @@ def compute_sp500_trend_filter(con, ref_date):
         "sma40w": round(sma40w, 2) if sma40w is not None else None,
         "above_sma40w": above_sma40w,
         "in_growth_phase": in_growth_phase,
+        "ema10w": round(ema10w, 2) if ema10w is not None else None,
+        "ema20w": round(ema20w, 2) if ema20w is not None else None,
+        "weekly_ema_bullish": weekly_ema_bullish,
         "daily_series": [
             {
                 "date": str(pd.Timestamp(r["Date"]).date()),

@@ -1237,12 +1237,46 @@ flex child (no `.topbar-left` wrapper there).
      builds (see that function's own bullet above) rather than a new, separate notion of a box. This is
      purely informational, same as the rest of this field — nothing in this app places or manages stops
      automatically.
-  What the review deliberately did NOT adopt, and why: the video's market-trend filter (index 10-week vs.
-  20-week EMA), the breakout-candle wick/gain/10-week-high quality filters, and its raised-stop's exact
+  What the review deliberately did NOT adopt, and why: the video's raised-stop's exact
   MACD-cross-then-that-week's-low mechanic (kept as a simple informational box-third level here, not a
-  live, continuously-updated trailing stop) would all need weekly OHLC (Open/High, not just Close/Low —
-  see `low_pct` under `compute_relative_strength_chart` above for what's already exported) that this pipeline
-  doesn't currently export, and were left for a future request rather than folded in speculatively.
+  live, continuously-updated trailing stop tied to a specific entry date — this app has no concept of "when
+  you entered a position," being a screener, not a portfolio tracker) and the breakout-candle upper-wick
+  filter (needs weekly Open/High, not just Close/Low — see `low_pct` under `compute_relative_strength_chart`
+  above for what's already exported) were left for a future request rather than folded in speculatively.
+
+  **A SECOND, separate review pass — same video, re-shared by the user with "sprawdz ta strategie i czy
+  czegos nam brakuje w naszej kluczowego" (check this strategy and whether we're missing anything crucial in
+  ours) — added three more pieces from it, all client-side, all from data already exported (no new backend
+  fetch needed):**
+  1. **A market-wide regime filter** (`state.marketTrend`, `#continuationMarketBanner` in `signals.js`) —
+     the video's own "if the index's 10-week EMA isn't above its 20-week EMA, stay in cash" rule, computed
+     as NEW `ema10w`/`ema20w`/`weekly_ema_bullish` fields on `compute_sp500_trend_filter()`'s existing return
+     dict (a cheap addition — that function already fetches and resamples SP500's weekly closes for its
+     40-week SMA, so a 10/20-week EMA pair on the SAME already-fetched series costs nothing extra) — a
+     DIFFERENT signal from that function's own `in_growth_phase` (SMA200-daily/SMA40-week), not a replacement
+     for it; `sector_strategy.json`'s `trend` object (already fetched by `strategy.js`) now carries both.
+     `loadData()` in `signals.js` fetches this same file (new fetch, but a cheap, already-generated static
+     JSON, not a new pipeline computation) purely for this banner. Deliberately INFORMATIONAL, not a row
+     filter — Continuation's own candidates are NOT hidden when the market is bearish, matching the exact
+     same "never hide candidates over a market-level filter" precedent `strategy.js`'s own step 1 already
+     set (see that section) rather than introducing a harsher, inconsistent convention here.
+  2. **A 10-week-closing-high requirement on "fired" rows** (`ten_week_high`, `CONTINUATION_TEN_WEEK_HIGH_WEEKS`
+     = 10) — computed by comparing the fire week's `close_pct` against the trailing 10 weeks of the SAME
+     already-exported array (comparing `close_pct` values directly is valid because they all share one
+     `close0` baseline — no need to reconstruct real prices). Unlike the MACD/volume badges elsewhere in
+     this module, this one is a HARD gate — but only when actually measured false; too little history
+     (`null`) passes through rather than rejecting, the same graceful-degradation convention as everywhere
+     else in this codebase.
+  3. **A breakout-week gain filter in [5%, 20%]** (`breakout_gain_pct`,
+     `CONTINUATION_MIN_BREAKOUT_GAIN_PCT`/`MAX_BREAKOUT_GAIN_PCT`) — the video's own breakout-candle-quality
+     rule, reconstructed from two adjacent `close_pct` values (both relative to the same `close0`, so their
+     ratio gives the real week-over-week % change without reconstructing absolute prices). Same hard-gate
+     rule as point 2: rejects only a real, measured violation, never a `null`.
+  Both new gates are fixed constants, not sliders — the user didn't ask for them to be tunable, and they're
+  meant to mirror the reference strategy's own stated numbers exactly, unlike the consolidation-length
+  window (which already had sliders before this review and stays adjustable). The upper-wick filter and
+  the live raised-stop remain the two pieces genuinely left out (see above) — everything else client-side
+  computable from already-exported data was adopted in this pass.
   **Removing the daily layer also fixed, as a side effect, a real staleness bug**: `classifyQullamaggie()`'s
   own `return_1m_pct`/`return_3m_pct`/`return_6m_pct` used to read `c.daily_squeeze` too (see that section's
   version-history paragraph for the specific incident — the committed `docs/data/*.json` had gone stale

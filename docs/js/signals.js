@@ -40,6 +40,12 @@ const CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS = 6;
 const CONTINUATION_DEFAULT_MAX_CONSOLIDATION_WEEKS = 16;
 const CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
 const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 0;
+// Dwa TWARDE kryteria świecy wybicia z materiału referencyjnego (patrz
+// classifyContinuation) — nie mają swoich sliderów (nie o to prosił
+// użytkownik), tylko fixed constants jak reszta podobnych progów w tym module.
+const CONTINUATION_TEN_WEEK_HIGH_WEEKS = 10;
+const CONTINUATION_MIN_BREAKOUT_GAIN_PCT = 5;
+const CONTINUATION_MAX_BREAKOUT_GAIN_PCT = 20;
 const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
 
 // Domyślne progi screenera Qullamaggie (patrz klasyfikacja niżej) — 30% na
@@ -98,6 +104,7 @@ const state = {
     qmMinConsolidationWeeks: QM_DEFAULT_MIN_CONSOLIDATION_WEEKS,
     qmMaxConsolidationWeeks: QM_DEFAULT_MAX_CONSOLIDATION_WEEKS,
     qmFireLookbackWeeks: QM_DEFAULT_FIRE_LOOKBACK_WEEKS,
+    marketTrend: null,
 };
 
 async function loadData() {
@@ -111,6 +118,18 @@ async function loadData() {
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
     }
+    // Filtr rynku dla Continuation (10-tyg. EMA SP500 nad 20-tyg. EMA) — na
+    // wyraźną prośbę użytkownika po przeglądzie materiału o strategii
+    // "lateral consolidation breakout" (patrz CLAUDE.md). Ten sam
+    // sector_strategy.json, który już zasila zakładkę Strategia — informacyjny
+    // banner, NIE chowa kandydatów (ta sama konwencja co krok 1 w strategy.js).
+    try {
+        const res = await fetch("data/sector_strategy.json", { cache: "no-store" });
+        if (res.ok) {
+            const data = await res.json();
+            state.marketTrend = data.trend || null;
+        }
+    } catch (e) { /* brak danych trendu rynku — OK, banner po prostu się nie pokaże */ }
 }
 
 // ============================================================
@@ -587,17 +606,49 @@ function classifyContinuation(ticker, universe, c, opts = {}) {
 
     const consolidationWeeks = isFired ? fireConsolidationWeeks : squeezeCount;
 
-    // Potwierdzenie tygodniowym MACD w tygodniu wybicia — patrz komentarz nad
-    // blokiem; dopasowane po DACIE, bo macd_chart/ttm_squeeze_chart mogą mieć
-    // różne bufory rozgrzewki (patrz alignSqueezeToDates/alignMacdToDates w
-    // chart-render.js).
+    // Potwierdzenie tygodniowym MACD + dwa TWARDE kryteria świecy wybicia z
+    // materiału referencyjnego (patrz komentarz nad blokiem klasyfikacji) —
+    // wszystkie liczone TYLKO dla "fired", dopasowane po DACIE (macd_chart/
+    // weekly_chart mogą mieć różne bufory rozgrzewki niż ttm_squeeze_chart,
+    // patrz alignSqueezeToDates/alignMacdToDates w chart-render.js):
+    //   - macdConfirmed: informacyjne (jak wolumen w Qullamaggie) — NIE odrzuca wiersza.
+    //   - tenWeekHigh: świeca wybicia musi być NAJWYŻSZYM zamknięciem z ostatnich
+    //     CONTINUATION_TEN_WEEK_HIGH_WEEKS (10) tygodni — TWARDY warunek, ale
+    //     tylko gdy realnie policzony (== false), nie gdy brak historii (null).
+    //   - breakoutGainPct: zysk tygodnia wybicia względem poprzedniego zamknięcia
+    //     musi wypadać w [MIN, MAX] % (5-20) — też TWARDY warunek pod tym samym
+    //     zastrzeżeniem. Oba liczone z już wyeksportowanego weekly_chart.close_pct,
+    //     bez żadnej nowej danej z backendu.
     let macdConfirmed = null;
+    let tenWeekHigh = null;
+    let breakoutGainPct = null;
     if (isFired) {
         const breakoutDate = t.dates[nowIdx - weeksSinceFire];
         const mc = c.macd_chart;
         const mcIdx = mc && mc.dates ? mc.dates.indexOf(breakoutDate) : -1;
         if (mcIdx >= 0 && mc.macd && mc.signal && mc.macd[mcIdx] != null && mc.signal[mcIdx] != null) {
             macdConfirmed = mc.macd[mcIdx] > mc.signal[mcIdx];
+        }
+
+        const wc = c.weekly_chart;
+        const wcIdx = wc && wc.dates ? wc.dates.indexOf(breakoutDate) : -1;
+        if (wcIdx >= 0 && wc.close_pct) {
+            const closeNow = wc.close_pct[wcIdx];
+            if (closeNow != null && wcIdx >= CONTINUATION_TEN_WEEK_HIGH_WEEKS) {
+                const windowVals = wc.close_pct
+                    .slice(wcIdx - CONTINUATION_TEN_WEEK_HIGH_WEEKS, wcIdx + 1)
+                    .filter(v => v != null);
+                tenWeekHigh = closeNow >= Math.max(...windowVals);
+            }
+            const prevPct = wcIdx > 0 ? wc.close_pct[wcIdx - 1] : null;
+            if (closeNow != null && prevPct != null) {
+                breakoutGainPct = ((1 + closeNow / 100) / (1 + prevPct / 100) - 1) * 100;
+            }
+        }
+        if (tenWeekHigh === false) return null;
+        if (breakoutGainPct != null
+            && (breakoutGainPct < CONTINUATION_MIN_BREAKOUT_GAIN_PCT || breakoutGainPct > CONTINUATION_MAX_BREAKOUT_GAIN_PCT)) {
+            return null;
         }
     }
 
@@ -608,6 +659,8 @@ function classifyContinuation(ticker, universe, c, opts = {}) {
         consolidation_weeks: consolidationWeeks,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         macd_confirmed: macdConfirmed,
+        ten_week_high: tenWeekHigh,
+        breakout_gain_pct: breakoutGainPct,
         // Poziom oporu/wsparcia "do obserwowania" + sugerowany stop (dolna
         // granica środkowej tercji pudełka) — ten sam wspólny helper co
         // Qullamaggie, patrz breakoutLevelFor() w js/minicharts.js.
@@ -713,6 +766,28 @@ function renderTtmSqueezePanel() {
     }
 }
 
+// Baner filtra rynku dla Continuation (10-tyg. EMA SP500 nad 20-tyg. EMA) —
+// czysto informacyjny, nie chowa żadnych kandydatów (patrz komentarz przy
+// classifyContinuation/loadData). `state.marketTrend` = pole "trend" z
+// docs/data/sector_strategy.json, ładowane raz w loadData().
+function renderMarketTrendBanner() {
+    const el = document.getElementById("continuationMarketBanner");
+    if (!el) return;
+    const t = state.marketTrend;
+    if (!t || t.weekly_ema_bullish == null) {
+        el.className = "trend-banner";
+        el.textContent = "Filtr rynku (SP500, 10 vs 20 tyg. EMA): za mało historii, żeby policzyć.";
+        return;
+    }
+    if (t.weekly_ema_bullish) {
+        el.className = "trend-banner growth";
+        el.textContent = `🟢 SP500 W TRENDZIE WZROSTOWYM — 10-tyg. EMA (${t.ema10w}) nad 20-tyg. EMA (${t.ema20w}), stan na ${t.date}.`;
+    } else {
+        el.className = "trend-banner no-growth";
+        el.textContent = `🔴 SP500 POZA TRENDEM WZROSTOWYM — 10-tyg. EMA (${t.ema10w}) pod 20-tyg. EMA (${t.ema20w}), stan na ${t.date}. Wg materiału referencyjnego to sygnał, żeby zostać w cashu — kandydaci poniżej wciąż widoczni, decyzja jest Twoja.`;
+    }
+}
+
 // Sidebar: kafelki screenera Continuation (patrz combinedContinuationCandidates).
 function renderContinuationPanel() {
     const container = document.getElementById("tiles-CONTINUATION");
@@ -811,6 +886,7 @@ function showSignalsTable(tab) {
     document.getElementById("ttmSqueezeTable").hidden = tab !== "TTM_SQUEEZE";
     document.getElementById("continuationTable").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationControls").hidden = tab !== "CONTINUATION";
+    document.getElementById("continuationMarketBanner").hidden = tab !== "CONTINUATION";
     document.getElementById("qullamaggieTable").hidden = tab !== "QULLAMAGGIE";
     document.getElementById("qullamaggieControls").hidden = tab !== "QULLAMAGGIE";
     document.getElementById("drawerTitle").textContent = tab === "WYBICIE"
@@ -1195,7 +1271,10 @@ function continuationStatusHtml(r) {
             : r.macd_confirmed === false
                 ? `<span class="cross-age" title="Tygodniowy MACD POD linią sygnału w tygodniu wybicia">· MACD ✗</span>`
                 : "";
-        return `<span class="squeeze-status squeeze-status-fired">🔥 Wybicie (${r.weeks_since_fire} tyg. temu)</span> ${macdBadge}`;
+        const gainBadge = r.breakout_gain_pct != null
+            ? `<span class="cross-age" title="Zysk tygodnia wybicia względem poprzedniego zamknięcia">· +${r.breakout_gain_pct.toFixed(1)}%</span>`
+            : "";
+        return `<span class="squeeze-status squeeze-status-fired">🔥 Wybicie (${r.weeks_since_fire} tyg. temu)</span> ${macdBadge} ${gainBadge}`;
     }
     return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
 }
@@ -1296,6 +1375,7 @@ if (typeof document !== "undefined") {
         renderWybiciePanel();
         renderTtmSqueezePanel();
         renderContinuationPanel();
+        renderMarketTrendBanner();
         renderQullamaggiePanel();
         initSignalsDrawer();
         initOpenTvButton();

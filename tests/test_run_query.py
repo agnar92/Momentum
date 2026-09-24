@@ -2007,6 +2007,9 @@ class TestComputeSp500TrendFilter:
         assert out["close"] > out["sma40w"] > 0
         assert len(out["daily_series"]) > 0
         assert len(out["weekly_series"]) > 0
+        # Trend jednostajnie w górę -> 10-tyg. EMA (szybsza) musi wyprzedzać 20-tyg.
+        assert out["ema10w"] > out["ema20w"] > 0
+        assert out["weekly_ema_bullish"] is True
 
     def test_downtrend_is_below_both_smas(self):
         con = make_gem_con()
@@ -2016,6 +2019,8 @@ class TestComputeSp500TrendFilter:
         assert out["above_sma200"] is False
         assert out["above_sma40w"] is False
         assert out["in_growth_phase"] is False
+        assert out["ema10w"] < out["ema20w"]
+        assert out["weekly_ema_bullish"] is False
 
     def test_insufficient_history_returns_none_smas(self):
         con = make_gem_con()
@@ -2027,6 +2032,10 @@ class TestComputeSp500TrendFilter:
         assert out["sma40w"] is None
         assert out["above_sma40w"] is None
         assert out["in_growth_phase"] is None
+        # EMA (ewm) nie wymaga pełnego okna jak SMA/rolling -> ma wartość nawet
+        # przy krótkiej historii, w przeciwieństwie do above_sma40w powyżej.
+        assert out["ema10w"] is not None
+        assert out["ema20w"] is not None
 
     def test_no_table_returns_none(self):
         con = duckdb.connect(":memory:")

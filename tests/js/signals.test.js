@@ -585,8 +585,11 @@ test("classifyContinuation accepts a Stage 2 stock in a weekly squeeze inside th
 
 test("classifyContinuation accepts a fresh upward fire out of a weekly squeeze, with MACD confirmation", () => {
     const dates = ["2025-11-30", "2025-12-07", "2025-12-14", "2025-12-21"];
+    // close_pct: 6 -> 15 na tygodniu wybicia = ok. +8.5% (w [5,20]) i za mało
+    // historii (4 tyg.) na sprawdzenie 10-tyg. szczytu, więc ten_week_high
+    // zostaje null (nie odrzuca) — patrz dedykowane testy poniżej dla obu progów.
     const c = continuationConstituent({
-        weekly_chart: { current_stage: "2B", dates, close_pct: [0, 3, 6, 9] },
+        weekly_chart: { current_stage: "2B", dates, close_pct: [0, 3, 6, 15] },
         macd_chart: { dates, macd: [-0.1, 0.2, 0.5, 0.8], signal: [0.0, 0.1, 0.3, 0.5] },
     }, {
         dates, histogram: [0.1, 0.2, 0.3, 0.8], squeeze_on: [true, true, true, false],
@@ -599,6 +602,71 @@ test("classifyContinuation accepts a fresh upward fire out of a weekly squeeze, 
     assert.equal(r.weeks_since_fire, 0);
     assert.equal(r.consolidation_weeks, 8);
     assert.equal(r.macd_confirmed, true, "MACD (0.8) > signal (0.5) at the fire week");
+    assert.equal(r.ten_week_high, null, "too little history to verify -> not rejected");
+    assert.ok(Math.abs(r.breakout_gain_pct - 8.49) < 0.01);
+});
+
+// ---------- dwa TWARDE kryteria świecy wybicia z materiału referencyjnego ----------
+// (CONTINUATION_TEN_WEEK_HIGH_WEEKS/MIN_BREAKOUT_GAIN_PCT/MAX_BREAKOUT_GAIN_PCT) —
+// odrzucają wiersz TYLKO gdy realnie zmierzone i naruszone (== false / poza
+// zakresem), nigdy z powodu braku historii (null przepuszcza, jak zawsze w tym module).
+function continuationFireDates(n) {
+    return Array.from({ length: n }, (_, i) => `2025-${String(10 + Math.floor(i / 4)).padStart(2, "0")}-${String((i % 4) * 7 + 1).padStart(2, "0")}`);
+}
+
+test("classifyContinuation rejects a fire whose close is not a 10-week high", () => {
+    const dates = continuationFireDates(11);
+    // 10 tygodni płasko na 20, potem "wybicie" na 15 — NIE jest nowym szczytem.
+    const closePct = new Array(10).fill(20).concat([15]);
+    const squeezeCount = new Array(10).fill(6).concat([0]);
+    const c = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates, close_pct: closePct },
+    }, {
+        dates, histogram: new Array(10).fill(0.1).concat([0.5]),
+        squeeze_on: new Array(10).fill(true).concat([false]),
+        squeeze_count: squeezeCount,
+        fired: new Array(10).fill(false).concat([true]),
+        weeks_since_fire: new Array(10).fill(null).concat([0]),
+        fire_consolidation_weeks: new Array(10).fill(null).concat([6]),
+    });
+    assert.equal(classifyContinuation("AAA", "SP500", c, CONT_OPTS), null);
+});
+
+test("classifyContinuation accepts a fire that IS a genuine 10-week high", () => {
+    const dates = continuationFireDates(11);
+    const closePct = new Array(10).fill(0).concat([9]); // +9% na wybiciu, ponad 10-tyg. plateau na 0
+    const c = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates, close_pct: closePct },
+    }, {
+        dates, histogram: new Array(10).fill(0.1).concat([0.5]),
+        squeeze_on: new Array(10).fill(true).concat([false]),
+        squeeze_count: new Array(10).fill(6).concat([0]),
+        fired: new Array(10).fill(false).concat([true]),
+        weeks_since_fire: new Array(10).fill(null).concat([0]),
+        fire_consolidation_weeks: new Array(10).fill(null).concat([6]),
+    });
+    const r = classifyContinuation("AAA", "SP500", c, CONT_OPTS);
+    assert.ok(r);
+    assert.equal(r.ten_week_high, true);
+    assert.ok(Math.abs(r.breakout_gain_pct - 9) < 0.01);
+});
+
+test("classifyContinuation rejects a breakout week gain outside 5-20%", () => {
+    const tooSmall = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates: ["2026-01-01", "2026-01-08"], close_pct: [0, 2] },
+    }, {
+        dates: ["2026-01-01", "2026-01-08"], histogram: [0.1, 0.5], squeeze_on: [true, false],
+        squeeze_count: [6, 0], fired: [false, true], weeks_since_fire: [null, 0], fire_consolidation_weeks: [null, 6],
+    });
+    assert.equal(classifyContinuation("AAA", "SP500", tooSmall, CONT_OPTS), null, "2% gain is below the 5% floor");
+
+    const tooBig = continuationConstituent({
+        weekly_chart: { current_stage: "2B", dates: ["2026-01-01", "2026-01-08"], close_pct: [0, 30] },
+    }, {
+        dates: ["2026-01-01", "2026-01-08"], histogram: [0.1, 0.5], squeeze_on: [true, false],
+        squeeze_count: [6, 0], fired: [false, true], weeks_since_fire: [null, 0], fire_consolidation_weeks: [null, 6],
+    });
+    assert.equal(classifyContinuation("AAA", "SP500", tooBig, CONT_OPTS), null, "30% gain is above the 20% ceiling");
 });
 
 test("classifyContinuation flags macd_confirmed=false when MACD is below its signal at the fire week", () => {
