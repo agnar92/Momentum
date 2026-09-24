@@ -85,6 +85,33 @@ const QM_RETURN_1M_WEEKS = 4;
 const QM_RETURN_3M_WEEKS = 13;
 const QM_RETURN_6M_WEEKS = 26;
 
+// Przełącznik okna TTM Squeeze (10 tyg. / 20 tyg.) — na wyraźną prośbę
+// użytkownika, PO tym jak TTM_SQUEEZE_BB_WEEKS/TTM_SQUEEZE_KC_WEEKS w
+// run_query.py zostały skrócone z 20 na 10 tyg. (żeby łapać krótkie,
+// 2-4-tygodniowe flagi ze skanu Qullamaggiego — patrz CLAUDE.md), użytkownik
+// czasem wciąż chce poszukać "tego oryginalnego", dłuższego (20-tyg.) squeeze'a
+// zamiast bezpowrotnie stracić do niego dostęp. Backend liczy OBA warianty na
+// każdą spółkę i eksportuje je jako DWA pola na tym samym rekordzie:
+// `ttm_squeeze_chart` (10 tyg., domyślne) i `ttm_squeeze_chart_20w`
+// (oryginalne, 20 tyg.) — squeezeChartFor() niżej wybiera, które z nich czyta
+// dana klasyfikacja, w zależności od state.squeezeWindow ("10"/"20").
+// Obejmuje WSZYSTKIE cztery screenery tej strony (Wybicie/TTM Squeeze/
+// Continuation/Qullamaggie) — każdy z nich w jakiś sposób czyta
+// ttm_squeeze_chart (histogram, squeeze_on/squeeze_count/fired), więc jeden,
+// wspólny przełącznik nad całą szufladą tabel (nie osobny suwak per zakładka)
+// jest tu prostszy i spójniejszy niż duplikowanie go cztery razy.
+const SQUEEZE_WINDOW_DEFAULT = "10";
+const SQUEEZE_WINDOW_SETTINGS_KEY = "momentum_dashboard_squeeze_window";
+
+// Zwraca ttm_squeeze_chart pasujący do aktualnie wybranego okna — z fallbackiem
+// do domyślnego (10-tyg.) pola, gdyby `ttm_squeeze_chart_20w` akurat brakowało
+// (starszy, jeszcze niezmigrowany cache JSON-a, ten sam wzorzec co `|| constituents`
+// gdzie indziej w tej apce) — lepiej pokazać 10-tyg. dane niż nic.
+function squeezeChartFor(c) {
+    if (state.squeezeWindow === "20") return c.ttm_squeeze_chart_20w || c.ttm_squeeze_chart;
+    return c.ttm_squeeze_chart;
+}
+
 const state = {
     data: {},
     selectedTicker: null,
@@ -106,6 +133,7 @@ const state = {
     qmMaxConsolidationWeeks: QM_DEFAULT_MAX_CONSOLIDATION_WEEKS,
     qmFireLookbackWeeks: QM_DEFAULT_FIRE_LOOKBACK_WEEKS,
     marketTrend: null,
+    squeezeWindow: SQUEEZE_WINDOW_DEFAULT,
 };
 
 async function loadData() {
@@ -204,7 +232,8 @@ function classifyWybicie(ticker, universe, c, opts = {}) {
     const monitorWeeks = opts.monitorWeeks ?? state.wybicieMonitorWeeks;
     const macd = c.macd_chart && c.macd_chart.macd;
     const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
-    const hist = c.ttm_squeeze_chart && c.ttm_squeeze_chart.histogram;
+    const squeezeChart = squeezeChartFor(c);
+    const hist = squeezeChart && squeezeChart.histogram;
     if (!macd || !hist) return null;
 
     const macdCrossWeeks = weeksSinceZeroCrossUp(macd);
@@ -235,7 +264,7 @@ function classifyWybicie(ticker, universe, c, opts = {}) {
         rsCrossWeeks,
         breakoutWeeks,
         histNow: hist[histIdx],
-        ...miniVisualFields(c),
+        ...miniVisualFields(c, squeezeChart),
         mini_macd: macd.slice(-MINI_WEEKS),
         mini_macd_cross: crossIndexInTail(macd, macdCrossWeeks, MINI_WEEKS),
         mini_rs: rsLong ? rsLong.slice(-MINI_WEEKS) : [],
@@ -291,7 +320,7 @@ const TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3;
 // lista wszystkich spółek.
 function classifyTtmSqueeze(ticker, universe, c) {
     if (!(c.momentum_score > 0)) return null;
-    const t = c.ttm_squeeze_chart;
+    const t = squeezeChartFor(c);
     if (!t || !t.dates || t.dates.length === 0) return null;
     // Ostatni element bywa jeszcze niedomknięty (aktualny tydzień bywa null,
     // zanim run_query.py doliczy pełne dane) — cofamy się do ostatniego tygodnia, który faktycznie ma
@@ -320,7 +349,7 @@ function classifyTtmSqueeze(ticker, universe, c) {
         consolidation_weeks: isFired ? fireConsolidationWeeks : squeezeCount,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         histNow,
-        ...miniVisualFields(c),
+        ...miniVisualFields(c, t),
     };
 }
 
@@ -402,7 +431,7 @@ function qullamaggieOpts(opts) {
 // minicharts.js), nie z realnego dziennego High/Low — Darvas (i cała reszta
 // tego modułu) świadomie pracuje na zamknięciach, patrz CLAUDE.md.
 function qmTightRangeConfirmed(c) {
-    const box = squeezeConsolidationBox(c);
+    const box = squeezeConsolidationBox(c, squeezeChartFor(c));
     const wc = c.weekly_chart;
     if (!box || box.resistance_pct == null || box.support_pct == null) return false;
     if (!wc || !wc.close_pct || !wc.close_pct.length || !(c.price > 0)) return false;
@@ -433,7 +462,7 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
     const perfPct = return6m;
     if (!(perfPct >= o.minPerfPct)) return null;
 
-    const t = c.ttm_squeeze_chart;
+    const t = squeezeChartFor(c);
     if (!t || !t.dates || t.dates.length === 0) return null;
     // Ostatni tydzień bywa jeszcze niedomknięty — patrz ten sam caveat w classifyTtmSqueeze.
     let nowIdx = t.dates.length - 1;
@@ -493,8 +522,8 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
         // zgadywać przy jakiej cenie wypatrywać wybicia na 1-minutowym wykresie
         // (zakładka "⚡ 1 min + VWAP", chart-modal.js). Ten sam pomocnik liczy to
         // dla obu miejsc, z tych samych pól (weekly_chart.pending_base/bases).
-        breakout_level: breakoutLevelFor(c),
-        ...miniVisualFields(c),
+        breakout_level: breakoutLevelFor(c, t),
+        ...miniVisualFields(c, t),
     };
 }
 
@@ -594,7 +623,7 @@ function classifyContinuation(ticker, universe, c, opts = {}) {
     const gate = continuationWeeklyGate(c, o.minMomentumPct);
     if (!gate) return null;
 
-    const t = c.ttm_squeeze_chart;
+    const t = squeezeChartFor(c);
     if (!t || !t.dates || t.dates.length === 0) return null;
     // Ostatni tydzień bywa jeszcze niedomknięty — patrz ten sam caveat w classifyTtmSqueeze/classifyQullamaggie.
     let nowIdx = t.dates.length - 1;
@@ -676,8 +705,8 @@ function classifyContinuation(ticker, universe, c, opts = {}) {
         // Poziom oporu/wsparcia "do obserwowania" + sugerowany stop (dolna
         // granica środkowej tercji pudełka) — ten sam wspólny helper co
         // Qullamaggie, patrz breakoutLevelFor() w js/minicharts.js.
-        breakout_level: breakoutLevelFor(c),
-        ...miniVisualFields(c),
+        breakout_level: breakoutLevelFor(c, t),
+        ...miniVisualFields(c, t),
     };
 }
 
@@ -1047,6 +1076,43 @@ function applyWybicieModeVisibility() {
     if (macdOnlyBtn) macdOnlyBtn.classList.toggle("active", state.wybicieMode === "MACD_ONLY");
 }
 
+// Przełącznik okna TTM Squeeze (#squeezeWindowBar, 10 tyg./20 tyg. — patrz
+// komentarz przy SQUEEZE_WINDOW_DEFAULT/squeezeChartFor) — WSPÓLNY dla
+// wszystkich czterech screenerów tej strony, więc po zmianie trzeba odświeżyć
+// zarówno kafelki w sidebarze WSZYSTKICH czterech grup, jak i aktualnie
+// otwartą tabelę w szufladzie (renderActiveSignalsTable — dispatchuje po
+// state.drawerUniverse). Zapamiętywane per przeglądarka w localStorage, jak
+// reszta suwaków/przełączników na tej stronie.
+function initSqueezeWindowControls() {
+    try {
+        const saved = localStorage.getItem(SQUEEZE_WINDOW_SETTINGS_KEY);
+        if (saved === "10" || saved === "20") state.squeezeWindow = saved;
+    } catch (e) { /* brak localStorage — zostaje domyślne */ }
+
+    const btn10 = document.getElementById("squeezeWindow10Btn");
+    const btn20 = document.getElementById("squeezeWindow20Btn");
+    const applyActive = () => {
+        if (btn10) btn10.classList.toggle("active", state.squeezeWindow === "10");
+        if (btn20) btn20.classList.toggle("active", state.squeezeWindow === "20");
+    };
+    applyActive();
+
+    [btn10, btn20].forEach(btn => {
+        if (!btn) return;
+        btn.addEventListener("click", () => {
+            if (state.squeezeWindow === btn.dataset.window) return;
+            state.squeezeWindow = btn.dataset.window;
+            applyActive();
+            try { localStorage.setItem(SQUEEZE_WINDOW_SETTINGS_KEY, state.squeezeWindow); } catch (e) { /* ignoruj */ }
+            renderWybiciePanel();
+            renderTtmSqueezePanel();
+            renderContinuationPanel();
+            renderQullamaggiePanel();
+            renderActiveSignalsTable();
+        });
+    });
+}
+
 // Przełącznik trybu (#wybicieModeMacdRsBtn/#wybicieModeMacdOnlyBtn) i suwaki
 // nad tabelą Wybicie (#wybicieControls): tryb, okno wybicia i czas
 // monitorowania po wybiciu (patrz opis nad classifyWybicie). Wartości
@@ -1382,6 +1448,7 @@ if (typeof document !== "undefined") {
     (async function init() {
         initConnStatus();
         await loadData();
+        initSqueezeWindowControls();
         initWybicieControls();
         initContinuationControls();
         initQullamaggieControls();
@@ -1415,6 +1482,6 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
-        classifyQullamaggie, combinedQullamaggieCandidates,
+        classifyQullamaggie, combinedQullamaggieCandidates, squeezeChartFor,
     };
 }

@@ -469,6 +469,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     # index_mom w export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się
     # okna. ---
     weekly_charts, mansfield_charts, ttm_squeeze_charts, macd_charts = {}, {}, {}, {}
+    ttm_squeeze_charts_20w = {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_weighted["Ticker"])
     if universe in FULL_COVERAGE_UNIVERSES:
@@ -481,6 +482,11 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                                                                      ref_date, index_mom["date_start"])
             ttm_squeeze_charts[ticker] = compute_ttm_squeeze_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
+            # Drugi, ORYGINALNY (20-tyg.) wariant do przelacznika na froncie —
+            # patrz komentarz nad TTM_SQUEEZE_KC_WEEKS_ORIGINAL.
+            ttm_squeeze_charts_20w[ticker] = compute_ttm_squeeze_chart(
+                con, ticker, universe, ref_date, index_mom["date_start"],
+                length=TTM_SQUEEZE_KC_WEEKS_ORIGINAL)
             macd_charts[ticker] = compute_macd_chart(con, ticker, universe,
                                                        ref_date, index_mom["date_start"])
 
@@ -488,7 +494,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     if universe in FULL_COVERAGE_UNIVERSES:
         all_constituents = _build_full_universe_records(df_ranked, selected_tickers,
                                                           weekly_charts, mansfield_charts, ttm_squeeze_charts,
-                                                          macd_charts)
+                                                          macd_charts, ttm_squeeze_charts_20w)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked)} spółek "
               f"(nie tylko {len(selected_tickers)} w decylu).")
 
@@ -496,7 +502,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
                 all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts,
-                macd_charts=macd_charts)
+                macd_charts=macd_charts, ttm_squeeze_charts_20w=ttm_squeeze_charts_20w)
 
     return df_weighted
 
@@ -596,6 +602,7 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
             df_ranked_full = add_zscore_and_momentum_score(df_metrics_full)
 
     weekly_charts, mansfield_charts, ttm_squeeze_charts, macd_charts = {}, {}, {}, {}
+    ttm_squeeze_charts_20w = {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_sel["Ticker"])
     if df_ranked_full is not None:
@@ -608,6 +615,9 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
                                                                      ref_date, index_mom["date_start"])
             ttm_squeeze_charts[ticker] = compute_ttm_squeeze_chart(con, ticker, universe,
                                                                      ref_date, index_mom["date_start"])
+            ttm_squeeze_charts_20w[ticker] = compute_ttm_squeeze_chart(
+                con, ticker, universe, ref_date, index_mom["date_start"],
+                length=TTM_SQUEEZE_KC_WEEKS_ORIGINAL)
             macd_charts[ticker] = compute_macd_chart(con, ticker, universe,
                                                        ref_date, index_mom["date_start"])
 
@@ -615,7 +625,7 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
     if df_ranked_full is not None:
         all_constituents = _build_full_universe_records(df_ranked_full, set(df_sel["Ticker"]),
                                                           weekly_charts, mansfield_charts, ttm_squeeze_charts,
-                                                          macd_charts)
+                                                          macd_charts, ttm_squeeze_charts_20w)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked_full)} spółek "
               f"(nie tylko {len(df_sel)} w ostatniej zapisanej selekcji).")
 
@@ -626,12 +636,12 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
     export_json(df_sel, universe, last_ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
                 all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts,
-                macd_charts=macd_charts)
+                macd_charts=macd_charts, ttm_squeeze_charts_20w=ttm_squeeze_charts_20w)
     return df_sel
 
 
 def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts, ttm_squeeze_charts=None,
-                                  macd_charts=None):
+                                  macd_charts=None, ttm_squeeze_charts_20w=None):
     """Rekord dla KAZDEJ kwalifikujacej sie spolki w uniwersum (df_ranked — wynik
     get_universe_metrics + add_zscore_and_momentum_score), nie tylko tych wybranych do
     decyla/portfela — patrz FULL_COVERAGE_UNIVERSES. Zasila "all_constituents" w
@@ -639,8 +649,13 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
     spolki. "rank" to miejsce w rankingu momentum_score CALEGO uniwersum (kolumna "rank"
     z add_zscore_and_momentum_score) — inne pojecie niz "rank"/"rank_in_universe" w
     "constituents", ktore liczy sie tylko wsrod wybranych/wazonych. "in_selection" mowi,
-    czy dany ticker jest akurat w biezacym decylu (te same tickery co "constituents")."""
+    czy dany ticker jest akurat w biezacym decylu (te same tickery co "constituents").
+    "ttm_squeeze_chart_20w" to ORYGINALNY (20-tyg.) wariant TTM Squeeze, obok domyslnego
+    10-tyg. "ttm_squeeze_chart" — patrz komentarz nad TTM_SQUEEZE_KC_WEEKS_ORIGINAL:
+    frontend przelacza sie miedzy nimi (state.squeezeWindow w signals.js), zamiast liczyc
+    tylko jeden z dwoch."""
     ttm_squeeze_charts = ttm_squeeze_charts or {}
+    ttm_squeeze_charts_20w = ttm_squeeze_charts_20w or {}
     macd_charts = macd_charts or {}
     records = []
     for _, r in df_ranked.iterrows():
@@ -658,6 +673,7 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
             "weekly_chart": weekly_charts.get(r["Ticker"]),
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
             "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
+            "ttm_squeeze_chart_20w": ttm_squeeze_charts_20w.get(r["Ticker"]),
             "macd_chart": macd_charts.get(r["Ticker"]),
         })
     return records
@@ -666,10 +682,11 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                  prev_ref_date=None, added_tickers=None, dropped_tickers=None,
                  weekly_charts=None, mansfield_charts=None, all_constituents=None, ttm_squeeze_charts=None,
-                 macd_charts=None):
+                 macd_charts=None, ttm_squeeze_charts_20w=None):
     weekly_charts = weekly_charts or {}
     mansfield_charts = mansfield_charts or {}
     ttm_squeeze_charts = ttm_squeeze_charts or {}
+    ttm_squeeze_charts_20w = ttm_squeeze_charts_20w or {}
     macd_charts = macd_charts or {}
     records = []
     for _, r in df_weighted.iterrows():
@@ -688,6 +705,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
             "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
+            "ttm_squeeze_chart_20w": ttm_squeeze_charts_20w.get(r["Ticker"]),
             "macd_chart": macd_charts.get(r["Ticker"]),
         })
     # pd.notna guard: przy odswiezeniu --charts-only (process_universe_charts_only)
@@ -2035,6 +2053,14 @@ TTM_SQUEEZE_BB_WEEKS = 10          # dlugosc SMA/odchylenia standardowego Bollin
                                     # zmiennosc z ostatnich ~2.5 miesiaca zamiast ~4.5 miesiaca.
 TTM_SQUEEZE_KC_WEEKS = 10          # dlugosc SMA/ATR kanalu Kellera (ta sama dlugosc co BB — standard, patrz wyzej)
 TTM_SQUEEZE_KC_ATR_MULT = 2.0      # JEDYNY mnoznik — uzywany zarowno dla wstegi Bollingera, jak i kanalu Kellera (patrz wyzej)
+# Drugie, ORYGINALNE (dawne domyslne) okno 20 tyg. — na wyrazne zyczenie
+# uzytkownika, zeby moc PRZELACZAC sie miedzy nim a nowym, krotszym 10-tyg.
+# oknem powyzej, zamiast bezpowrotnie stracic dostep do dawnej (dluzszej,
+# "klasycznej") definicji squeeze'a. compute_ttm_squeeze_chart() liczy OBA
+# warianty (parametr `length`) — frontend (signals.js, `state.squeezeWindow`)
+# przelacza, ktory z dwoch wyeksportowanych pol (`ttm_squeeze_chart` = 10 tyg.,
+# `ttm_squeeze_chart_20w` = 20 tyg.) czytaja screenery. Patrz CLAUDE.md.
+TTM_SQUEEZE_KC_WEEKS_ORIGINAL = 20
 # Uzytkownik: "akcje ktore mialy wiecej niz 5 tygodni konsolidacji" — kwalifikuje sie
 # squeeze, ktory trwal SCISLE WIECEJ niz tyle tygodni (czyli min. 6 tygodni z rzedu).
 TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5
@@ -2148,12 +2174,18 @@ def _ttm_squeeze_series(close, high, low, length):
     }
 
 
-def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
+def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date, length=TTM_SQUEEZE_KC_WEEKS):
     """Czwarty wykres obok "10:30" i oscylatora Mansfielda — wskaznik TTM Squeeze
     (John Carter, "Mastering the Trade"), na wyrazne zyczenie uzytkownika: zamiast
     dawnego surowego wzrostu % w 3 horyzontach (compute_growth_chart, usuniety)
     szukamy teraz faz NISKIEJ zmiennosci (konsolidacji) i momentu, w ktorym spolka
     zaczyna z nich wychodzic.
+
+    `length` (domyslnie TTM_SQUEEZE_KC_WEEKS = 10) to dlugosc okna BB/KC w
+    tygodniach — wywolujacy przekazuje TTM_SQUEEZE_KC_WEEKS_ORIGINAL (20), zeby
+    policzyc drugi, dluzszy wariant do przelaczenia na froncie (patrz komentarz
+    nad ta stala). Ponizszy opis uzywa domyslnej wartosci (10) dla konkretnosci,
+    ale caly mechanizm dziala identycznie dla kazdej dlugosci okna.
 
     Squeeze WLACZONY w danym tygodniu, gdy wstegi Bollingera (SMA +/- TTM_SQUEEZE_
     KC_ATR_MULT * populacyjne odchylenie std., TTM_SQUEEZE_BB_WEEKS tyg.) mieszcza sie
@@ -2198,7 +2230,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     nie da sie policzyc — te tygodnie dostaja None zamiast bledy liczonej wartosci,
     dokladnie jak reszta pol zaleznych od plytkiej historii w tym module.
     Zwraca None gdy brakuje danych (np. spolka bez wystarczajacej historii cen)."""
-    lookback_weeks = 2 * TTM_SQUEEZE_KC_WEEKS + 2
+    lookback_weeks = 2 * length + 2
     extended_start = (pd.Timestamp(start_date) - pd.Timedelta(weeks=lookback_weeks)).strftime("%Y-%m-%d")
 
     stock_df = _weekly_close_series(con, "prices", "Ticker", ticker, extended_start, ref_date,
@@ -2207,7 +2239,7 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
         return None
 
     stock_df = stock_df.sort_values("week_start").reset_index(drop=True)
-    sq = _ttm_squeeze_series(stock_df["close"], stock_df["high"], stock_df["low"], TTM_SQUEEZE_KC_WEEKS)
+    sq = _ttm_squeeze_series(stock_df["close"], stock_df["high"], stock_df["low"], length)
     squeeze_on, squeeze_count, fired = sq["squeeze_on"], sq["squeeze_count"], sq["fired"]
     weeks_since_fire, fire_consolidation_weeks = sq["since_fire"], sq["fire_consolidation"]
     histogram = sq["histogram"]

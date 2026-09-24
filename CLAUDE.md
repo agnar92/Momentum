@@ -865,6 +865,41 @@ fixes came out of that check, all still true today:
   squeeze condition considerably on its own, and the multiplier is what keeps this a literal port of
   LazyBear's reference script (see above), not a value to tune independently of that.
 
+  **A later, separate explicit request added a frontend TOGGLE between the two windows**, instead of
+  simply losing access to the pre-existing 20-week definition — the user still sometimes wants to search
+  for "that original squeeze" (longer, multi-month consolidations) rather than the new default. Rather
+  than store the 20-week value only in git history, `compute_ttm_squeeze_chart()` was parameterized with a
+  `length` argument (default `TTM_SQUEEZE_KC_WEEKS` = 10) and is now called TWICE per ticker — once with
+  the default and once with the new `TTM_SQUEEZE_KC_WEEKS_ORIGINAL` (20) constant — from every call site
+  that already computes it (`process_universe`, `process_universe_charts_only`), exporting BOTH results on
+  the same constituent record: `ttm_squeeze_chart` (10-week, unchanged field name) and
+  `ttm_squeeze_chart_20w` (the new field, the original 20-week variant). This doubles the squeeze
+  computation cost per ticker, but it's a cheap, already-fetched-weekly-series rolling calculation (no new
+  yfinance fetch), same "accepted, deliberate cost" reasoning as `all_constituents`' own 5x cost for full
+  searchability elsewhere in this file. `export_relative_strength()`'s `leaders` (relative_strength.json)
+  deliberately did NOT get the second field — that export has no frontend consumer at all (see Relative
+  strength below), so doubling its squeeze computation would have been pure waste.
+
+  On the frontend, `signals.js` gets a single, SHARED toggle (`#squeezeWindowBar`, "10 tyg. (nowe)" /
+  "20 tyg. (oryginalne)", persisted to `localStorage` under `momentum_dashboard_squeeze_window`) shown
+  above the whole table drawer, not per-tab — deliberately, because ALL FOUR screeners on this page
+  (Wybicie/TTM Squeeze/Continuation/Qullamaggie) read `ttm_squeeze_chart` in some form (histogram sign,
+  `squeeze_on`/`squeeze_count`/`fired`), so a single shared switch is simpler and more consistent than
+  duplicating it four times with the risk of them drifting out of sync. `squeezeChartFor(c)` is the one
+  helper every classify function (`classifyWybicie`/`classifyTtmSqueeze`/`classifyQullamaggie`/
+  `classifyContinuation`) and `qmTightRangeConfirmed()` now call instead of reading `c.ttm_squeeze_chart`
+  directly — it returns `c.ttm_squeeze_chart_20w` when `state.squeezeWindow === "20"` (falling back to
+  `c.ttm_squeeze_chart` if the 20-week field happens to be missing, e.g. an older, not-yet-regenerated
+  cached JSON — the same graceful-degradation convention as `all_constituents || constituents` elsewhere),
+  else the default `c.ttm_squeeze_chart`. `js/minicharts.js`'s `squeezeConsolidationBox(c, ttmChart)`,
+  `breakoutLevelFor(c, ttmChart)`, and `miniVisualFields(c, ttmChart)` all gained an optional second
+  parameter for the same reason — `signals.js` passes the already-resolved chart through explicitly so
+  these stay pure, parameterized helpers (their existing design principle: take data from arguments, not
+  from a global `state`) rather than reaching into `signals.js`'s own `state` themselves; every OTHER
+  caller of these three helpers (`rebalance.js`/`rebalance_pl.js`/`app.js`/`strategy.js`, none of which have
+  a squeeze-window concept) keeps calling them with just `(c)`, unaffected, since the new parameter
+  defaults to `c.ttm_squeeze_chart` when omitted.
+
 `squeeze_on` is true for a given week when the Bollinger Bands sit entirely **inside** the Keltner Channel
 (both computed as above) — the classic low-volatility/consolidation signature.
 `squeeze_count` is the number of *consecutive* weeks the squeeze has been on (0 when off); `fired` marks

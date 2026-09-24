@@ -146,9 +146,12 @@ function crossIndexInTail(arr, weeks, n) {
 // (ostatnie MINI_WEEKS tygodni) — tabele uniwersów i zakładka TTM Squeeze.
 const MINI_WEEKS = 26;
 
-function miniVisualFields(c) {
+// `ttmChart` (opcjonalny) pozwala wywołującemu (signals.js, przy przełączonym
+// state.squeezeWindow) podać `c.ttm_squeeze_chart_20w` zamiast domyślnego
+// `c.ttm_squeeze_chart` — patrz komentarz przy squeezeConsolidationBox() niżej.
+function miniVisualFields(c, ttmChart) {
     const wc = c.weekly_chart || {};
-    const t = c.ttm_squeeze_chart || {};
+    const t = ttmChart || c.ttm_squeeze_chart || {};
     const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
     const rsIdx = latestNonNullIdx(rsLong);
     const sqOn = (t.squeeze_on || []).slice(-MINI_WEEKS);
@@ -221,8 +224,16 @@ function findConstituent(dataByUniverse, ticker) {
 // DACIE, nie po indeksie wprost — ten sam wzorzec co breakoutVolumeRatio w
 // classifyQullamaggie (signals.js). Zwraca null, gdy nie ma (jeszcze/już)
 // żadnej rozpoznanej konsolidacji.
-function squeezeConsolidationBox(c) {
-    const t = c && c.ttm_squeeze_chart;
+//
+// `ttmChart` (opcjonalny) pozwala wywołującemu wskazać, KTÓRY wariant TTM
+// Squeeze ma być użyty — domyślnie `c.ttm_squeeze_chart` (10-tyg., patrz
+// TTM_SQUEEZE_KC_WEEKS w run_query.py), ale signals.js przekazuje tu jawnie
+// `c.ttm_squeeze_chart_20w`, gdy użytkownik przełączy się na oryginalne,
+// 20-tygodniowe okno (state.squeezeWindow, squeezeChartFor() w signals.js) —
+// ten helper sam zostaje "czysty"/parametryzowany (bierze dane z argumentów,
+// nie z globalnego `state`), tak jak reszta tego pliku.
+function squeezeConsolidationBox(c, ttmChart) {
+    const t = ttmChart || (c && c.ttm_squeeze_chart);
     const wc = c && c.weekly_chart;
     if (!t || !t.dates || !t.dates.length || !wc || !wc.dates || !wc.close_pct) return null;
 
@@ -289,14 +300,17 @@ function squeezeConsolidationBox(c) {
 // ostatniej wartości `close_pct` — dokładnie ta sama konwencja co
 // `strategyStopFor()` w js/strategy.js. Zwraca null, gdy brak jakichkolwiek
 // danych o bazie (np. za mało historii cen).
-function breakoutLevelFor(c) {
+//
+// `ttmChart` (opcjonalny) jest przekazywany wprost do squeezeConsolidationBox()
+// — patrz komentarz tam o przełączniku 10/20-tygodniowego okna.
+function breakoutLevelFor(c, ttmChart) {
     const wc = c && c.weekly_chart;
     if (!wc || !wc.close_pct || !wc.close_pct.length || !(c.price > 0)) return null;
     const lastPct = wc.close_pct[wc.close_pct.length - 1];
     if (lastPct == null) return null;
     const close0 = c.price / (1 + lastPct / 100);
 
-    let base = squeezeConsolidationBox(c);
+    let base = squeezeConsolidationBox(c, ttmChart);
     let pending = base ? base.pending : true;
     if (!base) {
         base = wc.pending_base;

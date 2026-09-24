@@ -115,6 +115,13 @@
             <button class="stage-filter-btn" data-stage="3" title="Szczyt / dystrybucja — trend się wypłaszcza, rozważ realizację zysków.">Etap 3</button>
             <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą EMA20, unikaj nowych pozycji.">Etap 4</button>
         </div>
+        <div class="stage-filter-bar" id="squeezeWindowBar" title="Dotyczy wszystkich czterech screenerów (Wybicie/TTM Squeeze/Continuation/Qullamaggie) — każdy z nich w jakiś sposób czyta TTM Squeeze.">
+            <span class="stage-filter-label">Okno TTM Squeeze:</span>
+            <button type="button" class="stage-filter-btn active" id="squeezeWindow10Btn" data-window="10"
+                    title="Nowe, krótsze okno (10 tyg.) — lepiej łapie krótkie, 2-4-tygodniowe flagi/zwężające się zakresy po dużym ruchu (setup Qullamaggie).">10 tyg. (nowe)</button>
+            <button type="button" class="stage-filter-btn" id="squeezeWindow20Btn" data-window="20"
+                    title="Oryginalne, dłuższe okno (20 tyg.) — klasyczna definicja squeeze'a sprzed tej zmiany, lepsza do dłuższych, wielomiesięcznych konsolidacji.">20 tyg. (oryginalne)</button>
+        </div>
         <div class="stage-filter-bar wybicie-controls" id="wybicieControls">
             <span class="stage-filter-label">Tryb:</span>
             <button type="button" class="stage-filter-btn active" id="wybicieModeMacdRsBtn" data-mode="MACD_RS"
