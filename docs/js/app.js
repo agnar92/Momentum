@@ -41,7 +41,10 @@ const state = {
 };
 
 async function loadData() {
-    for (const u of UNIVERSES) {
+    // Równolegle, nie po kolei — patrz identyczny komentarz w signals.js::loadData:
+    // sp500.json sam waży ~20MB, sekwencyjny fetch blokował pozostałe uniwersa za
+    // sobą na wolniejszym łączu.
+    await Promise.allSettled(UNIVERSES.map(async (u) => {
         try {
             const res = await fetch(`data/${u.toLowerCase()}.json`, { cache: "no-store" });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -50,7 +53,7 @@ async function loadData() {
             console.error(`Nie udało się wczytać danych dla ${u}:`, e);
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
-    }
+    }));
     // docs/data/global_equity_momentum.json i docs/data/relative_strength.json NIE
     // są już tu wczytywane — GEM przestał być czymś do oglądania na dashboardzie
     // (przeniesiony jako silnik wyboru do rebalance.js, patrz CLAUDE.md).

@@ -108,7 +108,16 @@ const state = {
 };
 
 async function loadData() {
-    for (const u of UNIVERSES) {
+    // Pobierane RÓWNOLEGLE, nie po kolei — sp500.json sam waży ~20MB (pełne
+    // weekly_chart/mansfield_chart/ttm_squeeze_chart/macd_chart dla wszystkich 500
+    // spółek, patrz CLAUDE.md pod FULL_COVERAGE_UNIVERSES), więc sekwencyjny fetch
+    // (jeden `await` w pętli) potrafił na wolniejszym łączu blokować NASDAQ100/
+    // DOWJONES/WIG20/MWIG40/SWIG80 na długo za sobą, zanim ktokolwiek z nich
+    // w ogóle zaczął się pobierać — użytkownik widział pusty ekran/spółki spoza
+    // SP500 mimo że dane SP500 same w sobie ładowały się poprawnie, po prostu
+    // wolno. Promise.allSettled: każdy plik ląduje niezależnie i tak szybko, jak
+    // się pobierze, a błąd jednego (np. timeout na sp500.json) nie opóźnia reszty.
+    await Promise.allSettled(UNIVERSES.map(async (u) => {
         try {
             const res = await fetch(`data/${u.toLowerCase()}.json`, { cache: "no-store" });
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -117,7 +126,7 @@ async function loadData() {
             console.error(`Nie udało się wczytać danych dla ${u}:`, e);
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
-    }
+    }));
     // Filtr rynku dla Continuation (10-tyg. EMA SP500 nad 20-tyg. EMA) — na
     // wyraźną prośbę użytkownika po przeglądzie materiału o strategii
     // "lateral consolidation breakout" (patrz CLAUDE.md). Ten sam
@@ -883,12 +892,16 @@ function updateSortHeaderClasses() {
 function showSignalsTable(tab) {
     document.getElementById("wybicieTable").hidden = tab !== "WYBICIE";
     document.getElementById("wybicieControls").hidden = tab !== "WYBICIE";
+    document.getElementById("wybicieGuide").hidden = tab !== "WYBICIE";
     document.getElementById("ttmSqueezeTable").hidden = tab !== "TTM_SQUEEZE";
+    document.getElementById("ttmSqueezeGuide").hidden = tab !== "TTM_SQUEEZE";
     document.getElementById("continuationTable").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationControls").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationMarketBanner").hidden = tab !== "CONTINUATION";
+    document.getElementById("continuationGuide").hidden = tab !== "CONTINUATION";
     document.getElementById("qullamaggieTable").hidden = tab !== "QULLAMAGGIE";
     document.getElementById("qullamaggieControls").hidden = tab !== "QULLAMAGGIE";
+    document.getElementById("qullamaggieGuide").hidden = tab !== "QULLAMAGGIE";
     document.getElementById("drawerTitle").textContent = tab === "WYBICIE"
         ? "Pełna tabela — Wybicie"
         : tab === "TTM_SQUEEZE"
