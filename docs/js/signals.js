@@ -31,8 +31,14 @@ const WYBICIE_DEFAULT_MONITOR_WEEKS = 6;
 const WYBICIE_DEFAULT_MODE = "MACD_RS";
 const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
 
-const CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS = 30;
-const CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS = 5;
+// Continuation, przeprojektowany na TYGODNIOWY (patrz nagłówek klasyfikacji
+// niżej) — domyślne okno konsolidacji 6-16 tyg.: materiał referencyjny o
+// strategii "lateral consolidation breakout" mówi wprost "co najmniej 6
+// tygodni, dłużej często lepiej", bez górnego limitu — 16 to praktyczny
+// górny sufit (suwak, dostosowywalny), nie reguła z materiału.
+const CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS = 6;
+const CONTINUATION_DEFAULT_MAX_CONSOLIDATION_WEEKS = 16;
+const CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
 const CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT = 0;
 const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
 
@@ -63,6 +69,14 @@ const QM_TIGHT_RANGE_MAX_WEEKS = 2;
 const QM_TIGHT_RANGE_MIN_PCT = 5;
 const QM_TIGHT_RANGE_MAX_PCT = 20;
 
+// Okna 1/3/6M w TYGODNIACH, do weeksAgoReturnPct() (js/minicharts.js) — patrz
+// komentarz przy classifyQullamaggie: zastąpiło dawne daily_squeeze.return_1m_pct/
+// return_3m_pct/return_6m_pct (usunięte razem z całą infrastrukturą dziennych
+// danych) bez żadnej nowej danej z backendu, licząc z weekly_chart.close_pct.
+const QM_RETURN_1M_WEEKS = 4;
+const QM_RETURN_3M_WEEKS = 13;
+const QM_RETURN_6M_WEEKS = 26;
+
 const state = {
     data: {},
     selectedTicker: null,
@@ -73,17 +87,13 @@ const state = {
     stageFilter: "ALL",
     sortKey: "rank",
     sortDir: "asc",
-    // Osobny stan sortowania dla podtabeli "🏆 Tygodniowi zwycięzcy" (#winnersTable) —
-    // patrz ten sam komentarz w app.js (state.winnersSortKey).
-    winnersSortKey: "momentum_pct",
-    winnersSortDir: "desc",
     wybicieWindowWeeks: WYBICIE_DEFAULT_WINDOW_WEEKS,
     wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
     wybicieMode: WYBICIE_DEFAULT_MODE,
-    contMaxSqueezeDays: CONTINUATION_DEFAULT_MAX_SQUEEZE_DAYS,
-    contFireLookbackDays: CONTINUATION_DEFAULT_FIRE_LOOKBACK_DAYS,
+    contMinConsolidationWeeks: CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS,
+    contMaxConsolidationWeeks: CONTINUATION_DEFAULT_MAX_CONSOLIDATION_WEEKS,
+    contFireLookbackWeeks: CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS,
     contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
-    dailyOverride: null,
     qmMinPerfPct: QM_DEFAULT_MIN_PERF_PCT,
     qmMinConsolidationWeeks: QM_DEFAULT_MIN_CONSOLIDATION_WEEKS,
     qmMaxConsolidationWeeks: QM_DEFAULT_MAX_CONSOLIDATION_WEEKS,
@@ -101,12 +111,6 @@ async function loadData() {
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
     }
-    // Opcjonalne, świeższe dane D1 dla zakładki Continuation (refresh_daily.py).
-    // Brak pliku (404) jest normalny — wtedy zostaje daily_squeeze z sobotniego eksportu.
-    try {
-        const res = await fetch("data/continuation.json", { cache: "no-store" });
-        if (res.ok) state.dailyOverride = await res.json();
-    } catch (e) { /* brak dziennego odświeżenia — OK */ }
 }
 
 // ============================================================
@@ -350,11 +354,10 @@ function combinedTtmSqueezeCandidates() {
 // cenę o 30%+ (cena z przed 6 miesięcy jest zwykle zbliżona do ceny z przed
 // 1/3 miesięcy, jeśli w tym czasie nie było odwrotnego ruchu), więc osobny OR
 // po trzech oknach był zbędną komplikacją. return_1m_pct/return_3m_pct wciąż
-// czytane i pokazywane (tooltip w qmPerfCellHtml) jako informacja, patrz
-// compute_daily_squeeze w run_query.py, czytamy z c.daily_squeeze —
-// TYM SAMYM polu co "Continuation" (liczone w GŁÓWNYM, tygodniowym pipeline,
-// nie wymaga przycisku "Odśwież dane D1" — ten dostarcza tylko świeższą,
-// tego samego dnia wersję).
+// czytane i pokazywane (tooltip w qmPerfCellHtml) jako informacja — wszystkie
+// trzy liczone z weekly_chart (weeksAgoReturnPct(), js/minicharts.js), nie z
+// dziennych danych (cała ta infrastruktura, wraz z daily_squeeze/przyciskiem
+// "Odśwież dane D1", została usunięta — patrz CLAUDE.md).
 function qullamaggieOpts(opts) {
     return {
         minPerfPct: opts.minPerfPct ?? state.qmMinPerfPct,
@@ -386,18 +389,19 @@ function qmTightRangeConfirmed(c) {
 
 function classifyQullamaggie(ticker, universe, c, opts = {}) {
     const o = qullamaggieOpts(opts);
-    const d = c.daily_squeeze;
-    if (!d) return null;
     // Uproszczone na wyraźną prośbę użytkownika: sam zwrot 6-miesięczny jest
     // wystarczającym warunkiem (zamiast osobnego OR po 1/3/6M) — 6-miesięczne
     // okno w praktyce OBEJMUJE też ruch, który dopiero co (w ciągu 1 lub 3
     // miesięcy) wypchnął cenę o 30%+, bo cena z przed 6 miesięcy jest zwykle
     // zbliżona do ceny z przed 1/3 miesięcy, jeśli w tym czasie nie było
-    // odwrotnego ruchu. return_1m_pct/return_3m_pct nadal czytane i pokazywane
-    // (tooltip w qmPerfCellHtml) — tylko jako informacja, nie jako osobny
-    // warunek bramki.
-    if (d.return_6m_pct == null) return null;
-    const perfPct = d.return_6m_pct;
+    // odwrotnego ruchu. Liczone z weekly_chart (weeksAgoReturnPct(), js/
+    // minicharts.js) — zastąpiło dawne daily_squeeze.return_6m_pct razem z całą
+    // usuniętą infrastrukturą dziennych danych, patrz CLAUDE.md. return_1m_pct/
+    // return_3m_pct nadal liczone i pokazywane (tooltip w qmPerfCellHtml) —
+    // tylko jako informacja, nie jako osobny warunek bramki.
+    const return6m = weeksAgoReturnPct(c, QM_RETURN_6M_WEEKS);
+    if (return6m == null) return null;
+    const perfPct = return6m;
     if (!(perfPct >= o.minPerfPct)) return null;
 
     const t = c.ttm_squeeze_chart;
@@ -444,7 +448,9 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
 
     return {
         ticker, universe, sector: c.sector, price: c.price,
-        return_1m_pct: d.return_1m_pct, return_3m_pct: d.return_3m_pct, return_6m_pct: d.return_6m_pct,
+        return_1m_pct: weeksAgoReturnPct(c, QM_RETURN_1M_WEEKS),
+        return_3m_pct: weeksAgoReturnPct(c, QM_RETURN_3M_WEEKS),
+        return_6m_pct: return6m,
         perf_pct: perfPct,
         current_stage: c.weekly_chart && c.weekly_chart.current_stage,
         status: isFired ? "fired" : "consolidating",
@@ -490,39 +496,50 @@ function combinedQullamaggieCandidates(opts = {}) {
 }
 
 // ============================================================
-// CONTINUATION — SCREENER (na wyraźną prośbę użytkownika): spółka JUŻ jest
-// w dynamicznym Etapie 2 na wykresie TYGODNIOWYM, a na wykresie DZIENNYM
-// robi krótką pauzę (TTM Squeeze na D1) — moment "dołączenia do trendu"
-// z celem ~10-20%. Tylko filtr sygnałów: wejście/wyjście użytkownik
-// decyduje sam.
-// Trend (tydzień): current_stage 2A/2B, momentum 12M-1M > 0 (i >= suwak "Min.
-//   momentum", domyślnie 0), klasyczny Mansfield RS 52 tyg. (mansfield_chart.rsm_long) > 0
-//   (silniejsza od swojego indeksu), cena nad dzienną SMA50.
-// Setup (dzień, daily_squeeze z run_query.py::compute_daily_squeeze):
-//   - "squeeze" 🌀 — squeeze trwa od CONTINUATION_MIN_SQUEEZE_DAYS do suwaka
-//     "Maks. squeeze" sesji (krótka konsolidacja w trendzie, nie długa baza),
-//   - "fired" 🔥 — squeeze odpalił w ostatnich "Wybicie w ciągu" sesjach po
-//     konsolidacji od CONTINUATION_MIN_SQUEEZE_DAYS do "Maks. squeeze" sesji
-//     (ten sam limit — chodzi o KRÓTKĄ pauzę), a histogram D1 jest
-//     dodatni (wybicie w GÓRĘ, nie w dół).
+// CONTINUATION — SCREENER, PRZEPROJEKTOWANY NA TYGODNIOWY (na wyraźną prośbę
+// użytkownika, po przeglądzie materiału o strategii "lateral consolidation
+// breakout" na wykresie tygodniowym, który użytkownik wskazał jako bliski
+// temu, co już robimy — patrz CLAUDE.md dla pełnej historii). Wcześniejsza
+// wersja patrzyła na krótką pauzę na D1 (dzienny TTM Squeeze) — CAŁA
+// infrastruktura dziennych danych (daily_squeeze, docs/data/continuation.json,
+// przycisk "Odśwież dane D1", refresh_daily.py) została usunięta: użytkownik
+// uznał, że wymaga za dużo zachodu (ręczne odświeżanie, dane "z weekendu"
+// nieaktualne w tygodniu) i wolał oprzeć wszystko na tygodniowym cyklu, który
+// już i tak jest głównym rytmem tej apki. Spółka jest JUŻ w dynamicznym
+// Etapie 2, a konsolidacja/wybicie liczone są z TEGO SAMEGO tygodniowego TTM
+// Squeeze co zakładki "🧨 TTM Squeeze"/"🎯 Qullamaggie" (nie z Darvasa) —
+// tylko z innymi domyślnymi progami i BEZ wymogu dużego wcześniejszego ruchu
+// (to jest to, co odróżnia Continuation od Qullamaggie: tu liczy się WYŁĄCZNIE
+// to, że spółka jest już w potwierdzonym trendzie, nie że wcześniej zrobiła
+// duży ruch). Tylko filtr sygnałów: wejście/wyjście użytkownik decyduje sam —
+// "poziom do obserwacji"/"sugerowany stop" (breakoutLevelFor(), js/
+// minicharts.js) to punkt odniesienia, nie automatyczna rekomendacja.
+//
+// Trend (tydzień, continuationWeeklyGate — NIEZMIENIONE z poprzedniej wersji):
+//   current_stage 2A/2B, momentum 12M-1M > 0 (i >= suwak "Min. momentum",
+//   domyślnie 0), klasyczny Mansfield RS 52 tyg. (mansfield_chart.rsm_long) > 0
+//   (silniejsza od swojego indeksu).
+// Konsolidacja (tygodniowy TTM Squeeze, ttm_squeeze_chart — TA SAMA logika co
+//   w Qullamaggie/TTM Squeeze, patrz tam, tylko inne domyślne progi):
+//   - "squeeze" 🌀 — squeeze trwa od suwaka "Min. tyg. konsolidacji" do "Maks.
+//     tyg. konsolidacji" tygodni,
+//   - "fired" 🔥 — squeeze odpalił w ostatnich "Wybicie w ciągu" tygodniach po
+//     konsolidacji w tym samym oknie, a histogram jest dodatni (wybicie w
+//     GÓRĘ, nie w dół).
+//   Domyślne okno to 6-16 tyg., NIE 2-8 jak w Qullamaggie — materiał
+//   referencyjny mówi wprost "co najmniej 6 tygodni, dłużej często lepiej",
+//   bez górnego limitu; 16 to praktyczny górny sufit (suwak, dostosowywalny),
+//   nie reguła z materiału.
+// Potwierdzenie tygodniowym MACD (macd_chart) — na wzór materiału
+//   referencyjnego ("linia MACD nad linią sygnału" jako stały wymóg pozycji):
+//   liczone WYŁĄCZNIE dla "fired" (przy trwającej konsolidacji nie ma jeszcze
+//   wybicia do potwierdzenia) — macd.macd > macd.signal w tygodniu wybicia,
+//   dopasowane po DACIE (ten sam wzorzec co breakout_volume_ratio w
+//   Qullamaggie, bo macd_chart i ttm_squeeze_chart mogą mieć różne bufory
+//   rozgrzewki). Informacyjne (`macd_confirmed`) — NIE odrzuca wiersza, tak
+//   jak wolumen w Qullamaggie: to sygnał jakości, nie twardy warunek.
 // ============================================================
-const CONTINUATION_MIN_SQUEEZE_DAYS = 3;
 
-// Dzienne podsumowanie spółki: świeższe z docs/data/continuation.json (dzienne
-// odświeżenie na żądanie — refresh_daily.py, przycisk "Odśwież dane D1"),
-// a gdy go nie ma albo jest starsze — to z sobotniego eksportu (c.daily_squeeze).
-function effectiveDaily(c) {
-    const override = state.dailyOverride && state.dailyOverride.tickers && state.dailyOverride.tickers[c.ticker];
-    const base = c.daily_squeeze;
-    if (override && (!base || (override.date || "") > (base.date || ""))) return override;
-    return base || null;
-}
-
-// Bramka TYGODNIOWA ("tygodniowi zwycięzcy"): Etap 2A/2B, momentum 12M > 0 i
-// >= suwak, Mansfield RS 52 tyg. > 0 — klasyczne okno Weinsteina, na wyraźną
-// prośbę użytkownika (wcześniej było tu RS 26 tyg.). NIE momentum_score: jest
-// zawsze > 0 (1+Z albo 1/(1-Z)), więc nic by nie filtrował. Zwraca null albo { stage, rsLong }.
-// refresh_daily.py stosuje tę samą bramkę bez progu momentum (nadzbiór).
 function continuationWeeklyGate(c, minMomentumPct) {
     const stage = c.weekly_chart && c.weekly_chart.current_stage;
     if (stage !== "2A" && stage !== "2B") return null;
@@ -533,43 +550,12 @@ function continuationWeeklyGate(c, minMomentumPct) {
     return { stage, rsLong: rsLong[rsIdx] };
 }
 
-// Status setupu D1 niezależnie od SMA50: "squeeze" / "fired" / null.
-function continuationDailyStatus(d, maxSqueezeDays, fireLookbackDays) {
-    if (!d) return null;
-    if (d.squeeze_on && d.squeeze_days >= CONTINUATION_MIN_SQUEEZE_DAYS && d.squeeze_days <= maxSqueezeDays) {
-        return "squeeze";
-    }
-    if (!d.squeeze_on && d.days_since_fire != null && d.days_since_fire <= fireLookbackDays
-        && d.fire_consolidation_days != null && d.fire_consolidation_days >= CONTINUATION_MIN_SQUEEZE_DAYS
-        && d.fire_consolidation_days <= maxSqueezeDays && d.histogram > 0) {
-        return "fired";
-    }
-    return null;
-}
-
 function continuationOpts(opts) {
     return {
-        maxSqueezeDays: opts.maxSqueezeDays ?? state.contMaxSqueezeDays,
-        fireLookbackDays: opts.fireLookbackDays ?? state.contFireLookbackDays,
+        minConsolidationWeeks: opts.minConsolidationWeeks ?? state.contMinConsolidationWeeks,
+        maxConsolidationWeeks: opts.maxConsolidationWeeks ?? state.contMaxConsolidationWeeks,
+        fireLookbackWeeks: opts.fireLookbackWeeks ?? state.contFireLookbackWeeks,
         minMomentumPct: opts.minMomentumPct ?? state.contMinMomentumPct,
-    };
-}
-
-function continuationRowBase(ticker, universe, c, gate, d) {
-    return {
-        ticker, universe, sector: c.sector,
-        price: d && d.close != null ? d.close : c.price,
-        momentum_pct: c.momentum_pct,
-        current_stage: gate.stage,
-        rs_long: gate.rsLong,
-        daily_date: d ? d.date : null,
-        histogram: d ? d.histogram : null,
-        histogram_rising: !!(d && d.histogram_prev != null && d.histogram > d.histogram_prev),
-        recent_squeeze: (d && d.recent_squeeze) || [],
-        sma50_pct: d ? d.sma50_pct : null,
-        ema20_pct: d && d.ema20_pct != null ? d.ema20_pct : null,
-        high_20d_pct: d ? d.high_20d_pct : null,
-        return_1m_pct: d ? d.return_1m_pct : null,
     };
 }
 
@@ -577,77 +563,64 @@ function classifyContinuation(ticker, universe, c, opts = {}) {
     const o = continuationOpts(opts);
     const gate = continuationWeeklyGate(c, o.minMomentumPct);
     if (!gate) return null;
-    const d = effectiveDaily(c);
-    if (!d || !(d.sma50_pct > 0)) return null;
-    const status = continuationDailyStatus(d, o.maxSqueezeDays, o.fireLookbackDays);
-    if (!status) return null;
+
+    const t = c.ttm_squeeze_chart;
+    if (!t || !t.dates || t.dates.length === 0) return null;
+    // Ostatni tydzień bywa jeszcze niedomknięty — patrz ten sam caveat w classifyTtmSqueeze/classifyQullamaggie.
+    let nowIdx = t.dates.length - 1;
+    while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
+    if (nowIdx < 0) return null;
+
+    const squeezeOn = t.squeeze_on[nowIdx];
+    const squeezeCount = t.squeeze_count[nowIdx];
+    const weeksSinceFire = t.weeks_since_fire[nowIdx];
+    const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
+    const histNow = t.histogram[nowIdx];
+
+    const isConsolidating = squeezeOn === true
+        && squeezeCount >= o.minConsolidationWeeks && squeezeCount <= o.maxConsolidationWeeks;
+    const isFired = weeksSinceFire != null && weeksSinceFire <= o.fireLookbackWeeks
+        && fireConsolidationWeeks != null
+        && fireConsolidationWeeks >= o.minConsolidationWeeks && fireConsolidationWeeks <= o.maxConsolidationWeeks
+        && histNow != null && histNow > 0;
+    if (!isConsolidating && !isFired) return null;
+
+    const consolidationWeeks = isFired ? fireConsolidationWeeks : squeezeCount;
+
+    // Potwierdzenie tygodniowym MACD w tygodniu wybicia — patrz komentarz nad
+    // blokiem; dopasowane po DACIE, bo macd_chart/ttm_squeeze_chart mogą mieć
+    // różne bufory rozgrzewki (patrz alignSqueezeToDates/alignMacdToDates w
+    // chart-render.js).
+    let macdConfirmed = null;
+    if (isFired) {
+        const breakoutDate = t.dates[nowIdx - weeksSinceFire];
+        const mc = c.macd_chart;
+        const mcIdx = mc && mc.dates ? mc.dates.indexOf(breakoutDate) : -1;
+        if (mcIdx >= 0 && mc.macd && mc.signal && mc.macd[mcIdx] != null && mc.signal[mcIdx] != null) {
+            macdConfirmed = mc.macd[mcIdx] > mc.signal[mcIdx];
+        }
+    }
+
     return {
-        ...continuationRowBase(ticker, universe, c, gate, d),
-        status,
-        squeeze_days: status === "squeeze" ? d.squeeze_days : d.fire_consolidation_days,
-        days_since_fire: status === "fired" ? d.days_since_fire : null,
+        ticker, universe, sector: c.sector, price: c.price,
+        current_stage: gate.stage, rs_long: gate.rsLong, momentum_pct: c.momentum_pct,
+        status: isFired ? "fired" : "squeeze",
+        consolidation_weeks: consolidationWeeks,
+        weeks_since_fire: isFired ? weeksSinceFire : null,
+        macd_confirmed: macdConfirmed,
+        // Poziom oporu/wsparcia "do obserwowania" + sugerowany stop (dolna
+        // granica środkowej tercji pudełka) — ten sam wspólny helper co
+        // Qullamaggie, patrz breakoutLevelFor() w js/minicharts.js.
+        breakout_level: breakoutLevelFor(c),
+        ...miniVisualFields(c),
     };
-}
-
-// Wiersz podtabeli "Tygodniowi zwycięzcy": KAŻDA spółka po bramce tygodniowej,
-// z dziennym statusem (także "brak setupu") i danymi mini-wykresów.
-const WINNERS_WEEKLY_SPARK_WEEKS = 26;
-
-function classifyWeeklyWinner(ticker, universe, c, opts = {}) {
-    const o = continuationOpts(opts);
-    const gate = continuationWeeklyGate(c, o.minMomentumPct);
-    if (!gate) return null;
-    const d = effectiveDaily(c);
-    const setup = continuationDailyStatus(d, o.maxSqueezeDays, o.fireLookbackDays);
-    const signal = setup && d && d.sma50_pct > 0 ? setup : null;
-    const wc = c.weekly_chart || {};
-    return {
-        ...continuationRowBase(ticker, universe, c, gate, d),
-        signal,
-        status_order: signal === "fired" ? 0 : signal === "squeeze" ? 1 : 2,
-        squeeze_on: !!(d && d.squeeze_on),
-        squeeze_days: d ? d.squeeze_days : null,
-        weekly_closes: (wc.close_pct || []).slice(-WINNERS_WEEKLY_SPARK_WEEKS),
-        weekly_ema: (wc.ema20_pct || []).slice(-WINNERS_WEEKLY_SPARK_WEEKS),
-        daily_closes: (d && d.spark && d.spark.closes) || [],
-        daily_squeeze: (d && d.spark && d.spark.squeeze) || [],
-        daily_ema: (d && d.spark && d.spark.ema20) || [],
-    };
-}
-
-function combinedWeeklyWinners(opts = {}) {
-    const rows = [];
-    const seen = new Set();
-    UNIVERSES.forEach(u => {
-        const universeData = state.data[u] || {};
-        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
-            if (seen.has(c.ticker)) return;
-            const r = classifyWeeklyWinner(c.ticker, u, c, opts);
-            if (r) { rows.push(r); seen.add(c.ticker); }
-        });
-    });
-    rows.sort((a, b) => a.status_order - b.status_order || b.momentum_pct - a.momentum_pct);
-    return rows;
-}
-
-// Najświeższa sesja dzienna w danych (override z continuation.json albo
-// sobotni eksport) — do etykiety "Dane D1 z sesji: ...".
-function latestDailyDate() {
-    let best = (state.dailyOverride && state.dailyOverride.ref_date) || null;
-    UNIVERSES.forEach(u => {
-        const universeData = state.data[u] || {};
-        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
-            const d = c.daily_squeeze;
-            if (d && d.date && (!best || d.date > best)) best = d.date;
-        });
-    });
-    return best;
 }
 
 // Wszystkie uniwersa, bez duplikatów (pierwsze wystąpienie w kolejności
 // UNIVERSES wygrywa — jak combinedWybicieCandidates). Kolejność: świeże
-// wybicia z D1 squeeze'a (najnowsze na górze), potem trwające squeeze'y
-// (najmocniejsze momentum 12M na górze).
+// wybicia (najnowsze na górze), potem trwające konsolidacje (najmocniejsze
+// momentum 12M na górze) — ten sam wzorzec co combinedTtmSqueezeCandidates/
+// combinedQullamaggieCandidates.
 function combinedContinuationCandidates(opts = {}) {
     const rows = [];
     const seen = new Set();
@@ -661,7 +634,7 @@ function combinedContinuationCandidates(opts = {}) {
     });
     rows.sort((a, b) => {
         if (a.status !== b.status) return a.status === "fired" ? -1 : 1;
-        if (a.status === "fired" && a.days_since_fire !== b.days_since_fire) return a.days_since_fire - b.days_since_fire;
+        if (a.status === "fired" && a.weeks_since_fire !== b.weeks_since_fire) return a.weeks_since_fire - b.weeks_since_fire;
         return b.momentum_pct - a.momentum_pct;
     });
     return rows;
@@ -826,11 +799,8 @@ function matchesStageFilter(stage) {
 function updateSortHeaderClasses() {
     document.querySelectorAll("table.momentum-table thead th").forEach(th => {
         th.classList.remove("sort-asc", "sort-desc");
-        const isWinners = th.closest("#winnersTable") != null;
-        const sortKey = isWinners ? state.winnersSortKey : state.sortKey;
-        const sortDir = isWinners ? state.winnersSortDir : state.sortDir;
-        if (th.dataset.key === sortKey) {
-            th.classList.add(sortDir === "asc" ? "sort-asc" : "sort-desc");
+        if (th.dataset.key === state.sortKey) {
+            th.classList.add(state.sortDir === "asc" ? "sort-asc" : "sort-desc");
         }
     });
 }
@@ -840,7 +810,6 @@ function showSignalsTable(tab) {
     document.getElementById("wybicieControls").hidden = tab !== "WYBICIE";
     document.getElementById("ttmSqueezeTable").hidden = tab !== "TTM_SQUEEZE";
     document.getElementById("continuationTable").hidden = tab !== "CONTINUATION";
-    document.getElementById("continuationWinnersSection").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationControls").hidden = tab !== "CONTINUATION";
     document.getElementById("qullamaggieTable").hidden = tab !== "QULLAMAGGIE";
     document.getElementById("qullamaggieControls").hidden = tab !== "QULLAMAGGIE";
@@ -849,7 +818,7 @@ function showSignalsTable(tab) {
         : tab === "TTM_SQUEEZE"
             ? "Pełna tabela — TTM Squeeze"
             : tab === "CONTINUATION"
-                ? "Continuation — Etap 2 + krótki squeeze D1"
+                ? "Continuation — Etap 2 + konsolidacja tygodniowa"
                 : "Qullamaggie — duży ruch + konsolidacja + wybicie z wolumenem";
     renderActiveSignalsTable();
 }
@@ -875,16 +844,11 @@ function initSignalsDrawer() {
         th.addEventListener("click", () => {
             const key = th.dataset.key;
             if (!key) return; // kolumny bez sortowania (Etap, TV)
-            // #winnersTable ma wlasny sortKey/sortDir — widoczna jednoczesnie z
-            // glowna tabela Continuation, ktora ma inny ksztalt wierszy.
-            const isWinners = th.closest("#winnersTable") != null;
-            const sortKeyProp = isWinners ? "winnersSortKey" : "sortKey";
-            const sortDirProp = isWinners ? "winnersSortDir" : "sortDir";
-            if (state[sortKeyProp] === key) {
-                state[sortDirProp] = state[sortDirProp] === "asc" ? "desc" : "asc";
+            if (state.sortKey === key) {
+                state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
             } else {
-                state[sortKeyProp] = key;
-                state[sortDirProp] = "asc";
+                state.sortKey = key;
+                state.sortDir = "asc";
             }
             updateSortHeaderClasses();
             renderActiveSignalsTable();
@@ -1221,27 +1185,22 @@ function initQullamaggieControls() {
     bind("qmFireLookbackInput", "qmFireLookbackValue", "qmFireLookbackWeeks", " tyg.");
 }
 
-// Pasek kropek jak na TradingView: czerwona = squeeze w danej sesji, szara =
-// brak squeeze'a (ostatnie DAILY_SQUEEZE_RECENT_DAYS sesji, najnowsza z prawej).
-function squeezeDotsHtml(recent) {
-    const dots = (recent || []).map(v =>
-        `<span class="sq-dot ${v === 1 ? "sq-dot-on" : v === 0 ? "sq-dot-off" : "sq-dot-na"}"></span>`).join("");
-    return `<span class="sq-dots" title="TTM Squeeze D1, ostatnie ${(recent || []).length} sesji (czerwona = squeeze)">${dots}</span>`;
-}
-
+// Status + odznaka potwierdzenia tygodniowym MACD dla "fired" (patrz komentarz
+// nad classifyContinuation) — ten sam wzorzec co wolumen w qmStatusHtml, tylko
+// inne potwierdzenie jakości wybicia.
 function continuationStatusHtml(r) {
-    return r.status === "fired"
-        ? `<span class="squeeze-status squeeze-status-fired">🔥 Odpalił ${r.days_since_fire === 0 ? "dziś" : `${r.days_since_fire} ses. temu`}</span>`
-        : `<span class="squeeze-status squeeze-status-consolidating">🌀 Squeeze</span>`;
-}
-
-function signedPctHtml(v) {
-    if (v == null) return "—";
-    return `<span class="${v >= 0 ? "positive" : "negative"}">${v >= 0 ? "+" : ""}${v.toFixed(1)}%</span>`;
+    if (r.status === "fired") {
+        const macdBadge = r.macd_confirmed === true
+            ? `<span class="cross-age" title="Tygodniowy MACD nad linią sygnału w tygodniu wybicia">· MACD ✓</span>`
+            : r.macd_confirmed === false
+                ? `<span class="cross-age" title="Tygodniowy MACD POD linią sygnału w tygodniu wybicia">· MACD ✗</span>`
+                : "";
+        return `<span class="squeeze-status squeeze-status-fired">🔥 Wybicie (${r.weeks_since_fire} tyg. temu)</span> ${macdBadge}`;
+    }
+    return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
 }
 
 function continuationRowHtml(r, position) {
-    const arrow = r.histogram_rising ? "↑" : "↓";
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
@@ -1251,11 +1210,10 @@ function continuationRowHtml(r, position) {
         <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
         <td class="positive">${r.rs_long.toFixed(1)}</td>
         <td>${continuationStatusHtml(r)}</td>
-        <td>${r.squeeze_days} ses.</td>
-        <td>${squeezeDotsHtml(r.recent_squeeze)}</td>
-        <td class="${r.histogram >= 0 ? "positive" : "negative"}" title="Histogram TTM D1 ${r.histogram_rising ? "rośnie" : "spada"}">${r.histogram.toFixed(2)} ${arrow}</td>
-        <td>${signedPctHtml(r.sma50_pct)}</td>
-        <td title="Odległość od najwyższego High z 20 sesji">${signedPctHtml(r.high_20d_pct)}</td>
+        <td>${r.consolidation_weeks} tyg.</td>
+        <td title="Cena, przy której warto obserwować wybicie; dymek pokazuje też sugerowany stop (dolna granica środkowej tercji konsolidacji)">${qmLevelCellHtml(r)}</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
+        <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
@@ -1270,8 +1228,8 @@ function renderContinuationTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 15,
-        emptyAllMsg: `Brak spółek w Etapie 2 (momentum > 0 i ≥ ${state.contMinMomentumPct}%, RS 52 tyg. > 0, nad SMA50 D1) z krótkim squeeze D1 (≤ ${state.contMaxSqueezeDays} sesji) albo wybiciem z niego w ostatnich ${state.contFireLookbackDays} sesjach.`,
+        colspan: 13,
+        emptyAllMsg: `Brak spółek w Etapie 2 (momentum > 0 i ≥ ${state.contMinMomentumPct}%, RS 52 tyg. > 0) z konsolidacją tygodniową ${state.contMinConsolidationWeeks}-${state.contMaxConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
@@ -1280,7 +1238,6 @@ function renderContinuationTable() {
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
-    renderWinnersTable();
 }
 
 // Suwaki nad tabelą Continuation (#continuationControls) — ten sam wzorzec co
@@ -1289,8 +1246,9 @@ function initContinuationControls() {
     try {
         const saved = JSON.parse(localStorage.getItem(CONTINUATION_SETTINGS_KEY) || "null");
         if (saved) {
-            if (Number.isFinite(saved.maxSqueezeDays)) state.contMaxSqueezeDays = saved.maxSqueezeDays;
-            if (Number.isFinite(saved.fireLookbackDays)) state.contFireLookbackDays = saved.fireLookbackDays;
+            if (Number.isFinite(saved.minConsolidationWeeks)) state.contMinConsolidationWeeks = saved.minConsolidationWeeks;
+            if (Number.isFinite(saved.maxConsolidationWeeks)) state.contMaxConsolidationWeeks = saved.maxConsolidationWeeks;
+            if (Number.isFinite(saved.fireLookbackWeeks)) state.contFireLookbackWeeks = saved.fireLookbackWeeks;
             if (Number.isFinite(saved.minMomentumPct)) state.contMinMomentumPct = saved.minMomentumPct;
         }
     } catch (e) { /* brak localStorage — zostają domyślne */ }
@@ -1306,8 +1264,9 @@ function initContinuationControls() {
             if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
             try {
                 localStorage.setItem(CONTINUATION_SETTINGS_KEY, JSON.stringify({
-                    maxSqueezeDays: state.contMaxSqueezeDays,
-                    fireLookbackDays: state.contFireLookbackDays,
+                    minConsolidationWeeks: state.contMinConsolidationWeeks,
+                    maxConsolidationWeeks: state.contMaxConsolidationWeeks,
+                    fireLookbackWeeks: state.contFireLookbackWeeks,
                     minMomentumPct: state.contMinMomentumPct,
                 }));
             } catch (e) { /* ignoruj */ }
@@ -1315,284 +1274,10 @@ function initContinuationControls() {
             if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
         });
     };
-    bind("contMaxSqueezeInput", "contMaxSqueezeValue", "contMaxSqueezeDays", " ses.");
-    bind("contFireLookbackInput", "contFireLookbackValue", "contFireLookbackDays", " ses.");
+    bind("contMinConsolidationInput", "contMinConsolidationValue", "contMinConsolidationWeeks", " tyg.");
+    bind("contMaxConsolidationInput", "contMaxConsolidationValue", "contMaxConsolidationWeeks", " tyg.");
+    bind("contFireLookbackInput", "contFireLookbackValue", "contFireLookbackWeeks", " tyg.");
     bind("contMinMomentumInput", "contMinMomentumValue", "contMinMomentumPct", "%");
-}
-
-function winnerStatusHtml(r) {
-    if (r.signal === "fired") return `<span class="squeeze-status squeeze-status-fired">🔥 Odpalił</span>`;
-    if (r.signal === "squeeze") return `<span class="squeeze-status squeeze-status-consolidating">🌀 Squeeze ${r.squeeze_days} ses.</span>`;
-    if (r.squeeze_on) return `<span class="cross-age">squeeze ${r.squeeze_days} ses. (poza progiem)</span>`;
-    return `<span class="cross-age">brak setupu</span>`;
-}
-
-function winnerRowHtml(r, position) {
-    return `
-        <td><span class="rank-badge">${position}</span></td>
-        <td class="ticker-cell">${r.ticker}</td>
-        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
-        <td>${formatPrice(r.price, r.universe)}</td>
-        <td class="positive">${r.momentum_pct.toFixed(1)}%</td>
-        <td class="positive">${r.rs_long.toFixed(1)}</td>
-        <td title="Cena tygodniowa (ostatnie ${WINNERS_WEEKLY_SPARK_WEEKS} tyg.) + EMA20 (przerywana)">${weeklySparkSvg(r.weekly_closes, r.weekly_ema)}</td>
-        <td title="Cena dzienna (ostatnie ${r.daily_closes.length} sesji), przerywana = EMA20, czerwone kreski = dni squeeze'a D1">${dailySparkSvg(r.daily_closes, r.daily_squeeze, r.daily_ema)}</td>
-        <td>${winnerStatusHtml(r)}</td>
-        <td>${pullbackHtml(r.ema20_pct)}</td>
-        <td>${signedPctHtml(r.sma50_pct)}</td>
-        <td>${stageCellHtml(r.current_stage)}</td>
-        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
-    `;
-}
-
-// Podtabela pod sygnałami Continuation: wszyscy tygodniowi zwycięzcy (bramka
-// tygodniowa), z mini-wykresami — czytelny przegląd "kto jest w trendzie",
-// niezależnie od tego, czy akurat ma setup na D1.
-function renderWinnersTable() {
-    const allRows = combinedWeeklyWinners();
-    const meta = document.getElementById("winnersMeta");
-    renderScreenerTable({
-        tbody: document.getElementById("winnersTableBody"),
-        metaEl: meta,
-        allRows,
-        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
-        sortKey: state.winnersSortKey, sortDir: state.winnersSortDir,
-        colspan: 13,
-        emptyAllMsg: `Brak spółek w Etapie 2 z momentum > 0 (≥ ${state.contMinMomentumPct}%) i RS 52 tyg. > 0.`,
-        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
-        metaText: (rows) => {
-            const withSignal = rows.filter(r => r.signal).length;
-            const atEma = rows.filter(r => r.ema20_pct != null && r.ema20_pct >= 0 && r.ema20_pct <= PULLBACK_BAND_PCT).length;
-            return `${rows.length} spółek · ${withSignal} z sygnałem D1 · ${atEma} przy EMA20`;
-        },
-        rowKey: r => r.ticker,
-        isSelected: r => r.ticker === state.selectedTicker,
-        rowHtml: (r, i) => winnerRowHtml(r, i + 1),
-        onRowClick: r => selectTicker(r.ticker, r.universe),
-        afterRender: bindTvRowButtons,
-    });
-}
-
-// ============================================================
-// ODŚWIEŻANIE DANYCH D1 NA ŻĄDANIE (przycisk w zakładce Continuation)
-// Strona jest statyczna, więc przycisk uruchamia workflow GitHub Actions
-// (.github/workflows/daily_continuation.yml → refresh_daily.py) przez API
-// GitHuba i śledzi jego kroki. Wymaga tokenu GitHub (fine-grained, tylko to
-// repo: Actions read/write + Contents read), który użytkownik wkleja raz —
-// trzymany WYŁĄCZNIE w localStorage tej przeglądarki, nigdy w repo/na stronie.
-// ============================================================
-const GH_API = "https://api.github.com";
-const DAILY_WORKFLOW_FILE = "daily_continuation.yml";
-const GH_TOKEN_KEY = "momentum_gh_token";
-const DAILY_REFRESH_RUN_KEY = "momentum_daily_refresh_run";
-const DEFAULT_GH_REPO = { owner: "agnar92", repo: "Momentum" };
-const REFRESH_POLL_MS = 4000;
-const REFRESH_TIMEOUT_MS = 20 * 60 * 1000;
-
-// Repo z adresu strony GitHub Pages (https://<owner>.github.io/<repo>/...).
-function githubRepoFromLocation(loc) {
-    const host = (loc && loc.hostname) || "";
-    const m = host.match(/^([^.]+)\.github\.io$/i);
-    const seg = ((loc && loc.pathname) || "").split("/").filter(Boolean)[0];
-    if (m && seg && !seg.includes(".")) return { owner: m[1], repo: seg };
-    return DEFAULT_GH_REPO;
-}
-
-// Uruchomienie, które MY właśnie zleciliśmy: najnowsze z utworzonych nie
-// wcześniej niż minutę przed kliknięciem (margines na różnicę zegarów).
-function pickDispatchedRun(runs, sinceMs) {
-    return (runs || [])
-        .filter(r => Date.parse(r.created_at) >= sinceMs - 60000)
-        .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0] || null;
-}
-
-function refreshStepLabel(name) {
-    if (!name) return "";
-    if (name === "Set up job") return "Start maszyny";
-    if (name === "Complete job") return "Zakończenie";
-    if (name.startsWith("Post ")) return "Sprzątanie";
-    return name;
-}
-
-// Postęp z odpowiedzi /actions/runs/{id}/jobs: ile kroków zakończonych,
-// który trwa, czy całość się skończyła i jak.
-function refreshProgressFromJobs(jobsResponse) {
-    const job = jobsResponse && jobsResponse.jobs && jobsResponse.jobs[0];
-    if (!job) return { phase: "queued", done: 0, total: 0, current: "W kolejce…" };
-    const steps = job.steps || [];
-    const done = steps.filter(st => st.status === "completed").length;
-    const running = steps.find(st => st.status === "in_progress") || steps.find(st => st.status !== "completed");
-    if (job.status === "completed") {
-        return { phase: job.conclusion === "success" ? "success" : "failure", done: steps.length, total: steps.length,
-            current: job.conclusion === "success" ? "Gotowe" : `Błąd (${job.conclusion})`, url: job.html_url };
-    }
-    return { phase: job.status === "queued" ? "queued" : "running", done, total: steps.length,
-        current: running ? refreshStepLabel(running.name) : "Start…", url: job.html_url };
-}
-
-function getGhToken() {
-    try { return localStorage.getItem(GH_TOKEN_KEY) || ""; } catch (e) { return ""; }
-}
-
-function setGhToken(token) {
-    try {
-        if (token) localStorage.setItem(GH_TOKEN_KEY, token);
-        else localStorage.removeItem(GH_TOKEN_KEY);
-    } catch (e) { /* brak localStorage */ }
-}
-
-async function ghRequest(path, token, opts = {}) {
-    const res = await fetch(GH_API + path, {
-        method: opts.method || "GET",
-        headers: {
-            "Accept": opts.accept || "application/vnd.github+json",
-            "Authorization": `Bearer ${token}`,
-            "X-GitHub-Api-Version": "2022-11-28",
-            ...(opts.body ? { "Content-Type": "application/json" } : {}),
-        },
-        body: opts.body ? JSON.stringify(opts.body) : undefined,
-        cache: "no-store",
-    });
-    if (!res.ok) {
-        const err = new Error(`GitHub API ${res.status}`);
-        err.status = res.status;
-        throw err;
-    }
-    return res;
-}
-
-function ghErrorMessage(e) {
-    if (e.status === 401) return "Token nieprawidłowy albo wygasł — wklej nowy (⚙️).";
-    if (e.status === 403) return "Token nie ma uprawnień (Actions: Read and write, Contents: Read).";
-    if (e.status === 404) return "Nie znaleziono repo/workflow — czy token obejmuje to repozytorium?";
-    return `Błąd połączenia z GitHubem (${e.status || e.message}).`;
-}
-
-const sleep = (ms) => new Promise(resolve => window.setTimeout(resolve, ms));
-
-function setRefreshUi({ busy, status, pct, url }) {
-    const btn = document.getElementById("dailyRefreshBtn");
-    const statusEl = document.getElementById("dailyRefreshStatus");
-    const progress = document.getElementById("dailyRefreshProgress");
-    const bar = document.getElementById("dailyRefreshBar");
-    if (btn && busy != null) {
-        btn.disabled = busy;
-        btn.textContent = busy ? "⏳ Odświeżanie…" : "🔄 Odśwież dane D1";
-    }
-    if (statusEl && status != null) {
-        statusEl.innerHTML = url ? `${status} · <a href="${url}" target="_blank" rel="noopener">log</a>` : status;
-    }
-    if (progress) progress.hidden = pct == null;
-    if (bar && pct != null) bar.style.width = `${Math.max(3, Math.min(100, pct))}%`;
-}
-
-function dailyDataLabel() {
-    const d = latestDailyDate();
-    return d ? `Dane D1 z sesji: ${d}` : "Brak danych D1";
-}
-
-function refreshContinuationViews() {
-    renderContinuationPanel();
-    if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
-}
-
-async function loadFreshContinuationJson(token) {
-    const { owner, repo } = githubRepoFromLocation(window.location);
-    const res = await ghRequest(`/repos/${owner}/${repo}/contents/docs/data/continuation.json?ref=main`, token,
-        { accept: "application/vnd.github.raw+json" });
-    state.dailyOverride = await res.json();
-}
-
-async function pollRefreshRun(runId, token) {
-    const { owner, repo } = githubRepoFromLocation(window.location);
-    const deadline = Date.now() + REFRESH_TIMEOUT_MS;
-    while (Date.now() < deadline) {
-        const jobs = await (await ghRequest(`/repos/${owner}/${repo}/actions/runs/${runId}/jobs`, token)).json();
-        const p = refreshProgressFromJobs(jobs);
-        const pct = p.total ? (p.done / p.total) * 100 : 2;
-        const stepInfo = p.total ? `Krok ${Math.min(p.done + 1, p.total)}/${p.total}: ` : "";
-        if (p.phase === "success" || p.phase === "failure") return p;
-        setRefreshUi({ busy: true, status: `${stepInfo}${p.current}`, pct, url: p.url });
-        await sleep(REFRESH_POLL_MS);
-    }
-    return { phase: "failure", current: "Przekroczono czas oczekiwania" };
-}
-
-async function runDailyRefresh(resumeRunId = null) {
-    const token = getGhToken();
-    if (!token) { toggleTokenForm(true); return; }
-    const { owner, repo } = githubRepoFromLocation(window.location);
-    setRefreshUi({ busy: true, status: "Uruchamiam zadanie…", pct: 2 });
-    try {
-        let runId = resumeRunId;
-        if (!runId) {
-            const since = Date.now();
-            await ghRequest(`/repos/${owner}/${repo}/actions/workflows/${DAILY_WORKFLOW_FILE}/dispatches`, token,
-                { method: "POST", body: { ref: "main" } });
-            for (let i = 0; i < 20 && !runId; i++) {
-                await sleep(3000);
-                const list = await (await ghRequest(
-                    `/repos/${owner}/${repo}/actions/workflows/${DAILY_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=5`, token)).json();
-                const run = pickDispatchedRun(list.workflow_runs, since);
-                if (run) runId = run.id;
-            }
-            if (!runId) throw new Error("Nie znalazłem uruchomionego zadania");
-            try { localStorage.setItem(DAILY_REFRESH_RUN_KEY, JSON.stringify({ runId, startedAt: since })); } catch (e) { /* ignoruj */ }
-        }
-        const result = await pollRefreshRun(runId, token);
-        if (result.phase !== "success") {
-            setRefreshUi({ busy: false, status: `❌ ${result.current}`, pct: null, url: result.url });
-            showToast("Odświeżanie danych D1 nie powiodło się", { type: "error" });
-            return;
-        }
-        setRefreshUi({ busy: true, status: "Wczytuję nowe dane…", pct: 100 });
-        await loadFreshContinuationJson(token);
-        refreshContinuationViews();
-        setRefreshUi({ busy: false, status: `✅ ${dailyDataLabel()}`, pct: null });
-        showToast("Dane D1 odświeżone", { type: "success" });
-    } catch (e) {
-        setRefreshUi({ busy: false, status: `❌ ${e.status ? ghErrorMessage(e) : e.message}`, pct: null });
-        if (e.status === 401) setGhToken("");
-    } finally {
-        try { localStorage.removeItem(DAILY_REFRESH_RUN_KEY); } catch (e) { /* ignoruj */ }
-    }
-}
-
-function toggleTokenForm(show) {
-    const form = document.getElementById("dailyRefreshTokenForm");
-    if (!form) return;
-    form.hidden = show == null ? !form.hidden : !show;
-    const input = document.getElementById("dailyRefreshTokenInput");
-    if (input) input.value = "";
-    const clearBtn = document.getElementById("dailyRefreshTokenClear");
-    if (clearBtn) clearBtn.hidden = !getGhToken();
-}
-
-function initDailyRefresh() {
-    const btn = document.getElementById("dailyRefreshBtn");
-    if (!btn) return;
-    setRefreshUi({ busy: false, status: dailyDataLabel(), pct: null });
-    btn.addEventListener("click", () => runDailyRefresh());
-    document.getElementById("dailyRefreshTokenBtn").addEventListener("click", () => toggleTokenForm());
-    document.getElementById("dailyRefreshTokenSave").addEventListener("click", () => {
-        const value = document.getElementById("dailyRefreshTokenInput").value.trim();
-        if (!value) return;
-        setGhToken(value);
-        toggleTokenForm(false);
-        showToast("Token zapisany w tej przeglądarce", { type: "success" });
-    });
-    document.getElementById("dailyRefreshTokenClear").addEventListener("click", () => {
-        setGhToken("");
-        toggleTokenForm(false);
-        showToast("Token usunięty", { type: "info" });
-    });
-    // Przeładowanie strony w trakcie zadania — wznawiamy śledzenie tego samego uruchomienia.
-    try {
-        const saved = JSON.parse(localStorage.getItem(DAILY_REFRESH_RUN_KEY) || "null");
-        if (saved && saved.runId && Date.now() - saved.startedAt < REFRESH_TIMEOUT_MS && getGhToken()) {
-            runDailyRefresh(saved.runId);
-        }
-    } catch (e) { /* ignoruj */ }
 }
 
 // ============================================================
@@ -1608,7 +1293,6 @@ if (typeof document !== "undefined") {
         initWybicieControls();
         initContinuationControls();
         initQullamaggieControls();
-        initDailyRefresh();
         renderWybiciePanel();
         renderTtmSqueezePanel();
         renderContinuationPanel();
@@ -1638,8 +1322,6 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
-        effectiveDaily, classifyWeeklyWinner, combinedWeeklyWinners, latestDailyDate,
-        githubRepoFromLocation, pickDispatchedRun, refreshProgressFromJobs, refreshStepLabel,
         classifyQullamaggie, combinedQullamaggieCandidates,
     };
 }

@@ -469,7 +469,6 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     # index_mom w export_relative_strength, żeby uniknąć osobnego, rozjeżdżającego się
     # okna. ---
     weekly_charts, mansfield_charts, ttm_squeeze_charts, macd_charts = {}, {}, {}, {}
-    daily_squeezes = {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_weighted["Ticker"])
     if universe in FULL_COVERAGE_UNIVERSES:
@@ -484,13 +483,12 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
                                                                      ref_date, index_mom["date_start"])
             macd_charts[ticker] = compute_macd_chart(con, ticker, universe,
                                                        ref_date, index_mom["date_start"])
-            daily_squeezes[ticker] = compute_daily_squeeze(con, ticker, ref_date)
 
     all_constituents = None
     if universe in FULL_COVERAGE_UNIVERSES:
         all_constituents = _build_full_universe_records(df_ranked, selected_tickers,
                                                           weekly_charts, mansfield_charts, ttm_squeeze_charts,
-                                                          macd_charts, daily_squeezes)
+                                                          macd_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked)} spółek "
               f"(nie tylko {len(selected_tickers)} w decylu).")
 
@@ -498,7 +496,7 @@ def process_universe(con, universe, ref_date, args, docs_data_dir):
     export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
                 all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts,
-                macd_charts=macd_charts, daily_squeezes=daily_squeezes)
+                macd_charts=macd_charts)
 
     return df_weighted
 
@@ -598,7 +596,6 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
             df_ranked_full = add_zscore_and_momentum_score(df_metrics_full)
 
     weekly_charts, mansfield_charts, ttm_squeeze_charts, macd_charts = {}, {}, {}, {}
-    daily_squeezes = {}
     index_mom = compute_index_momentum(con, universe, ref_date)
     chart_tickers = set(df_sel["Ticker"])
     if df_ranked_full is not None:
@@ -613,13 +610,12 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
                                                                      ref_date, index_mom["date_start"])
             macd_charts[ticker] = compute_macd_chart(con, ticker, universe,
                                                        ref_date, index_mom["date_start"])
-            daily_squeezes[ticker] = compute_daily_squeeze(con, ticker, ref_date)
 
     all_constituents = None
     if df_ranked_full is not None:
         all_constituents = _build_full_universe_records(df_ranked_full, set(df_sel["Ticker"]),
                                                           weekly_charts, mansfield_charts, ttm_squeeze_charts,
-                                                          macd_charts, daily_squeezes)
+                                                          macd_charts)
         print(f"📈 Wykresy dla całego uniwersum ({universe}): {len(df_ranked_full)} spółek "
               f"(nie tylko {len(df_sel)} w ostatniej zapisanej selekcji).")
 
@@ -630,12 +626,12 @@ def process_universe_charts_only(con, universe, ref_date, docs_data_dir,
     export_json(df_sel, universe, last_ref_date, docs_data_dir, n_missing_fmc,
                 prev_ref_date, added_tickers, dropped_tickers, weekly_charts, mansfield_charts,
                 all_constituents=all_constituents, ttm_squeeze_charts=ttm_squeeze_charts,
-                macd_charts=macd_charts, daily_squeezes=daily_squeezes)
+                macd_charts=macd_charts)
     return df_sel
 
 
 def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, mansfield_charts, ttm_squeeze_charts=None,
-                                  macd_charts=None, daily_squeezes=None):
+                                  macd_charts=None):
     """Rekord dla KAZDEJ kwalifikujacej sie spolki w uniwersum (df_ranked — wynik
     get_universe_metrics + add_zscore_and_momentum_score), nie tylko tych wybranych do
     decyla/portfela — patrz FULL_COVERAGE_UNIVERSES. Zasila "all_constituents" w
@@ -646,7 +642,6 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
     czy dany ticker jest akurat w biezacym decylu (te same tickery co "constituents")."""
     ttm_squeeze_charts = ttm_squeeze_charts or {}
     macd_charts = macd_charts or {}
-    daily_squeezes = daily_squeezes or {}
     records = []
     for _, r in df_ranked.iterrows():
         records.append({
@@ -664,7 +659,6 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
             "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
             "macd_chart": macd_charts.get(r["Ticker"]),
-            "daily_squeeze": daily_squeezes.get(r["Ticker"]),
         })
     return records
 
@@ -672,12 +666,11 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
 def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
                  prev_ref_date=None, added_tickers=None, dropped_tickers=None,
                  weekly_charts=None, mansfield_charts=None, all_constituents=None, ttm_squeeze_charts=None,
-                 macd_charts=None, daily_squeezes=None):
+                 macd_charts=None):
     weekly_charts = weekly_charts or {}
     mansfield_charts = mansfield_charts or {}
     ttm_squeeze_charts = ttm_squeeze_charts or {}
     macd_charts = macd_charts or {}
-    daily_squeezes = daily_squeezes or {}
     records = []
     for _, r in df_weighted.iterrows():
         weekly_chart = weekly_charts.get(r["Ticker"])
@@ -696,7 +689,6 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
             "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),
             "macd_chart": macd_charts.get(r["Ticker"]),
-            "daily_squeeze": daily_squeezes.get(r["Ticker"]),
         })
     # pd.notna guard: przy odswiezeniu --charts-only (process_universe_charts_only)
     # tuz PO migracji kolumny (ALTER TABLE ... ADD COLUMN, patrz
@@ -2071,9 +2063,9 @@ def _rolling_linreg_endpoint(series, window):
 
 def _ttm_squeeze_series(close, high, low, length):
     """Rdzen TTM Squeeze (port LazyBeara, patrz compute_ttm_squeeze_chart) na
-    DOWOLNYM interwale — te same wzory dla swiec tygodniowych
-    (compute_ttm_squeeze_chart) i dziennych (compute_daily_squeeze). `close`/
-    `high`/`low` to posortowane chronologicznie Series o wspolnym indeksie,
+    DOWOLNYM interwale — obecnie uzywany tylko dla swiec tygodniowych
+    (compute_ttm_squeeze_chart), ale parametryzowany interwalem niezaleznie.
+    `close`/`high`/`low` to posortowane chronologicznie Series o wspolnym indeksie,
     `length` to okno BB/KC/regresji (w swiecach). Zwraca dict Series:
     squeeze_on, squeeze_count, fired, since_fire, fire_consolidation, histogram
     (znaczenie pol — patrz docstring compute_ttm_squeeze_chart; "since_fire"/
@@ -2246,127 +2238,6 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
         "fired": fired_out,
         "weeks_since_fire": weeks_since_fire_out,
         "fire_consolidation_weeks": fire_consolidation_weeks_out,
-    }
-
-
-# --- Dzienny TTM Squeeze (screener "Continuation" na dashboardzie) — na wyrazne
-# zyczenie uzytkownika: spolka juz w dynamicznym Etapie 2 (tygodniowo), a na
-# wykresie DZIENNYM krotki squeeze (kilka-kilkanascie sesji konsolidacji) jako
-# moment dolaczenia do trendu, cel 10-20%. Te same wzory co tygodniowy panel
-# (_ttm_squeeze_series), tylko na dziennych swiecach z `prices`.
-DAILY_SQUEEZE_LENGTH = 20             # okno BB/KC/regresji w SESJACH (standard LazyBeara na D1)
-DAILY_SQUEEZE_LOOKBACK_DAYS = 280     # dni KALENDARZOWE pobierane wstecz (~190 sesji): 2*20+2 na
-                                      # rozgrzewke histogramu + SMA50 + DAILY_RETURN_6M_DAYS (126 sesji)
-                                      # + zapas na swieta. Podniesione ze 200 (~135 sesji) kiedy dolozono
-                                      # return_3m_pct/return_6m_pct (screener "Qullamaggie", patrz nizej) —
-                                      # 200 dni starczalo na return_1m ale nie na 126-sesyjny return_6m.
-                                      # Czyta wylacznie juz pobrany, lokalny `prices` (28-miesieczna
-                                      # retencja z fetch_data.py), wiec podniesienie tego okna nie kosztuje
-                                      # dodatkowego fetchu z yfinance.
-DAILY_SQUEEZE_RECENT_DAYS = 20        # ile ostatnich sesji squeeze_on eksportujemy (kropki w tabeli)
-DAILY_SPARK_DAYS = 60                 # ile ostatnich sesji ceny + squeeze_on dla mini-wykresu D1
-DAILY_SMA_DAYS = 50
-DAILY_EMA_DAYS = 21
-DAILY_PULLBACK_EMA_DAYS = 20          # EMA20 D1: linia na mini-wykresie + odleglosc ceny (pullback)
-DAILY_RETURN_1M_DAYS = 21             # ~1 miesiac sesji
-DAILY_RETURN_3M_DAYS = 63             # ~3 miesiace sesji
-DAILY_RETURN_6M_DAYS = 126            # ~6 miesiecy sesji — patrz return_3m_pct/return_6m_pct nizej
-
-
-def compute_daily_squeeze(con, ticker, ref_date):
-    """Zwiezle PODSUMOWANIE (nie caly wykres — JSON musi zostac maly dla ~700
-    spolek) dziennego TTM Squeeze na ostatnia sesje <= ref_date:
-
-    - squeeze_on / squeeze_days — czy squeeze trwa i od ilu kolejnych sesji,
-    - days_since_fire / fire_consolidation_days — ile sesji temu squeeze sie
-      ostatnio "odpalil" i ile sesji trwala konsolidacja przed nim (None, gdy w
-      pobranej historii nie bylo wybicia),
-    - histogram / histogram_prev — momentum oscylatora (dodatni i rosnacy =
-      ruch w gore przyspiesza),
-    - recent_squeeze — squeeze_on z ostatnich DAILY_SQUEEZE_RECENT_DAYS sesji
-      (1/0/None), zeby front mogl narysowac pasek kropek jak na TradingView,
-    - close — ostatnie zamkniecie (swiezsze niz "price" z tygodniowego eksportu,
-      gdy podsumowanie pochodzi z refresh_daily.py),
-    - spark — {"closes", "ema20", "squeeze"} z ostatnich DAILY_SPARK_DAYS sesji:
-      dane mini-wykresu D1 (linia ceny, EMA20, zaznaczone dni squeeze'a) w
-      tabeli "Tygodniowi zwyciezcy" na dashboardzie,
-    - ema20_pct — % ceny nad dzienna EMA20 (maly dodatni = pullback do sredniej
-      w trendzie, klasyczne miejsce dolaczenia),
-    - sma50_pct / ema21_pct — % nad dzienna SMA50/EMA21 (czy cena trzyma trend
-      na D1), return_1m_pct / return_3m_pct / return_6m_pct — zmiana ceny za
-      ~21/63/126 sesji (dynamika na 3 horyzontach — na wyrazne zyczenie
-      uzytkownika, do screenera "Qullamaggie": kwalifikuje sie spolka, u ktorej
-      CHOCIAZ JEDEN z tych trzech zwrotow jest >= progu z suwaka, taka sama
-      logika OR jak w oryginalnym skanie Kristjana Qullamaggie'go),
-      high_20d_pct — % od najwyzszego High z 20 sesji (<= 0; blisko 0 = cena
-      przy lokalnym szczycie, wybicie w toku).
-
-    Zwraca None, gdy brakuje historii albo High/Low (stare wiersze sprzed
-    migracji, patrz _ensure_prices_ohlc_columns) uniemozliwiaja policzenie
-    squeeze'a na ostatnich sesjach — ta sama zasada lagodnej degradacji co reszta
-    modulu."""
-    start = (pd.Timestamp(ref_date) - pd.Timedelta(days=DAILY_SQUEEZE_LOOKBACK_DAYS)).strftime("%Y-%m-%d")
-    df = con.execute("""
-        SELECT Date, Close, High, Low
-        FROM prices
-        WHERE Ticker = ? AND Date >= CAST(? AS DATE) AND Date <= CAST(? AS DATE) AND Close IS NOT NULL
-        ORDER BY Date
-    """, [ticker, start, str(ref_date)[:10]]).df()
-    if len(df) < 2 * DAILY_SQUEEZE_LENGTH + 2:
-        return None
-    df = df.reset_index(drop=True)
-    close = df["Close"].astype(float)
-    high = df["High"].astype(float)
-    low = df["Low"].astype(float)
-    sq = _ttm_squeeze_series(close, high, low, DAILY_SQUEEZE_LENGTH)
-
-    last = len(df) - 1
-    if pd.isna(sq["squeeze_on"].iloc[last]) or pd.isna(sq["histogram"].iloc[last]):
-        return None
-
-    def safe_float(value, digits=2):
-        return round(float(value), digits) if pd.notna(value) else None
-
-    def safe_int(value):
-        return int(value) if pd.notna(value) else None
-
-    def pct_vs(ref):
-        return safe_float((close.iloc[last] / ref - 1) * 100) if pd.notna(ref) and ref else None
-
-    sma50 = close.rolling(DAILY_SMA_DAYS).mean().iloc[last]
-    ema21 = close.ewm(span=DAILY_EMA_DAYS, adjust=False).mean().iloc[last]
-    ema20_series = close.ewm(span=DAILY_PULLBACK_EMA_DAYS, adjust=False).mean()
-    past_close = close.iloc[last - DAILY_RETURN_1M_DAYS] if last >= DAILY_RETURN_1M_DAYS else None
-    past_close_3m = close.iloc[last - DAILY_RETURN_3M_DAYS] if last >= DAILY_RETURN_3M_DAYS else None
-    past_close_6m = close.iloc[last - DAILY_RETURN_6M_DAYS] if last >= DAILY_RETURN_6M_DAYS else None
-    high_20d = high.iloc[-DAILY_SQUEEZE_LENGTH:].max()
-    recent = sq["squeeze_on"].iloc[-DAILY_SQUEEZE_RECENT_DAYS:]
-
-    def flags(series):
-        return [(1 if v else 0) if pd.notna(v) else None for v in series]
-
-    return {
-        "date": pd.Timestamp(df["Date"].iloc[last]).strftime("%Y-%m-%d"),
-        "squeeze_on": bool(sq["squeeze_on"].iloc[last]),
-        "squeeze_days": safe_int(sq["squeeze_count"].iloc[last]),
-        "days_since_fire": safe_int(sq["since_fire"].iloc[last]),
-        "fire_consolidation_days": safe_int(sq["fire_consolidation"].iloc[last]),
-        "histogram": safe_float(sq["histogram"].iloc[last], 4),
-        "histogram_prev": safe_float(sq["histogram"].iloc[last - 1], 4),
-        "close": safe_float(close.iloc[last]),
-        "recent_squeeze": flags(recent),
-        "spark": {
-            "closes": [safe_float(v) for v in close.iloc[-DAILY_SPARK_DAYS:]],
-            "ema20": [safe_float(v) for v in ema20_series.iloc[-DAILY_SPARK_DAYS:]],
-            "squeeze": flags(sq["squeeze_on"].iloc[-DAILY_SPARK_DAYS:]),
-        },
-        "sma50_pct": pct_vs(sma50),
-        "ema21_pct": pct_vs(ema21),
-        "ema20_pct": pct_vs(ema20_series.iloc[last]),
-        "return_1m_pct": pct_vs(past_close),
-        "return_3m_pct": pct_vs(past_close_3m),
-        "return_6m_pct": pct_vs(past_close_6m),
-        "high_20d_pct": pct_vs(high_20d),
     }
 
 

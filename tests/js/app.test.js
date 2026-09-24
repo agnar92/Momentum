@@ -15,7 +15,7 @@ const {
     state, buildSearchIndex, getCmdkIndex,
 } = require(path.join("..", "..", "docs", "js", "app.js"));
 const {
-    sparkPoints, sparkPath, weeklySparkSvg, dailySparkSvg, pullbackHtml,
+    sparkPoints, sparkPath, weeklySparkSvg, pullbackHtml,
     rsBarHtml, ttmMiniSvg, miniVisualFields, stageBreakdown,
     zeroLineSparkSvg, crossIndexInTail, findConstituent, bulletHtml,
     squeezeConsolidationBox, breakoutLevelFor,
@@ -70,11 +70,6 @@ test("spark SVG helpers render a path, squeeze bars and a placeholder without da
     assert.match(weeklySparkSvg([0, 3, 6], [0, 1, 2]), /class="spark-up"/);
     assert.match(weeklySparkSvg([6, 3, 0], [2, 1, 0]), /class="spark-down"/);
     assert.match(weeklySparkSvg([], []), /spark-empty/);
-    const daily = dailySparkSvg([1, 2, 3, 4], [0, 1, 1, 0]);
-    assert.equal((daily.match(/class="spark-sq"/g) || []).length, 2);
-    assert.match(dailySparkSvg([], []), /spark-empty/);
-    assert.match(dailySparkSvg([1, 2, 3], [0, 0, 1], [1, 1.5, 2]), /class="spark-ema"/);
-    assert.doesNotMatch(dailySparkSvg([1, 2, 3], [0, 0, 1]), /spark-ema/);
 });
 
 test("pullbackHtml flags price 0-2% above daily EMA20 as a pullback", () => {
