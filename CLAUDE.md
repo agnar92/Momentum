@@ -1216,11 +1216,19 @@ flex child (no `.topbar-left` wrapper there).
   **2-8 tygodni** (see the version-history paragraph below) after reviewing this whole tab against
   Qullamaggie's own "The Breakout" reference diagram, i.e. a real base, not the short D1 pause "🚀
   Continuation" screens for). `classifyQullamaggie()` in `signals.js`:
-  1. **Performance** — `perfPct = max(return_1m_pct, return_3m_pct, return_6m_pct)` must clear the "Min.
-     wynik (1/3/6M)" slider (default 30%, the same threshold Qullamaggie's own scan uses) — an explicit
-     "OR", not "AND": the user's own correction ("for the performance i think need to be or not and
-     check") was that ONE of the three windows clearing the bar is enough to qualify, matching how the
-     original scan actually filters (any one of the three timeframes showing a 30%+ move is a candidate).
+  1. **Performance** — `perfPct = return_6m_pct` must clear the "Min. wynik (6M)" slider (default 30%, the
+     same threshold Qullamaggie's own scan uses). **This replaced an earlier `max(return_1m_pct,
+     return_3m_pct, return_6m_pct)` OR-across-three-windows version** (itself the user's own correction to
+     an original AND, "for the performance i think need to be or not and check") — simplified again, a
+     later, separate explicit user request made during the Wybicie-vs-Qullamaggie overlap review below: the
+     6-month window in practice already covers a move that only just (within the last 1 or 3 months)
+     pushed the price up 30%+, since the price from 6 months ago is usually close to the price from 1-3
+     months ago unless there was an offsetting move in between — so a separate OR across three windows was
+     an unneeded complication once the user re-examined it. `return_1m_pct`/`return_3m_pct` are still read
+     and shown (the "Wynik 6M" column's tooltip breakdown, `qmPerfCellHtml()`) purely as context, not as a
+     second way into the gate any more — a stock with a big 1M/3M pop but a 6-month return below the
+     threshold no longer qualifies, which is the one behavior change worth testing explicitly (see
+     `tests/js/signals.test.js`).
   2. **Consolidation** — same "walk back to the last week that actually has a computed `squeeze_on`" logic
      as `classifyTtmSqueeze()` (the current week is often still `null`), but `squeeze_count`/
      `fire_consolidation_weeks` must fall INSIDE `[state.qmMinConsolidationWeeks,
@@ -1288,6 +1296,30 @@ flex child (no `.topbar-left` wrapper there).
   dashboard indices rather than a broader pool like the Nasdaq Composite Qullamaggie's own scan actually
   draws from — a deliberate, accepted trade-off against the extra yfinance fetch that would require, not an
   oversight.
+
+  **"Doesn't Qullamaggie overlap with 💥 Wybicie? If so, merge them, favoring Qullamaggie" — a later,
+  separate explicit user question, answered empirically rather than by inspecting the code alone.** Both
+  tabs are momentum/breakout screeners on the same universes, so the question was reasonable, but they
+  gate on genuinely different things: Wybicie requires a fresh MACD zero-cross-up + RS-52-week
+  zero-cross-up + positive TTM histogram (a broad "trend/RS just turned bullish" signal, no prior-move or
+  consolidation-length requirement at all), while Qullamaggie requires a large prior move AND a
+  specific-length TTM squeeze (a narrow "already ran, based, now breaking out" signal). Running both
+  screeners against the actual committed `docs/data/*.json` (a Node script requiring `combinedWybicieCandidates`/
+  `combinedQullamaggieCandidates` from `signals.js` directly, not a synthetic example) found 20 Wybicie
+  candidates vs. 3 Qullamaggie candidates with exactly 1 ticker in common — i.e. genuinely disjoint
+  populations, not two variants of the same scan. Merging and favoring Qullamaggie's stricter criteria
+  would have thrown away 17 of Wybicie's 20 candidates for near-zero gain, so **the two tabs were kept
+  separate, unmerged** — the right call given the data, not a default to inaction. That same check also
+  surfaced a real, separate staleness finding worth recording: at the time of this review, `docs/data/*.json`
+  had `return_1m_pct` on every constituent's `daily_squeeze` but `return_3m_pct`/`return_6m_pct` on NONE of
+  them (0 of 500 SP500 rows) — the committed export simply predates the code that added those two fields
+  (see point 1 above), so `combinedQullamaggieCandidates()`'s old `max(1M, 3M, 6M)` OR was, on the live
+  site at that moment, silently only ever evaluating `return_1m_pct` for every ticker. This is a data
+  freshness gap the next `weekly_full_refresh.yml` run (or an earlier manual `workflow_dispatch`) closes on
+  its own — `run_query.py` itself already computes both fields correctly, nothing in the code needed
+  fixing for this — but it is the direct reason the 6M-only simplification in point 1 above will show ZERO
+  Qullamaggie candidates until that next full refresh actually populates `return_6m_pct` site-wide, not a
+  regression from the simplification itself.
 
   **`breakoutLevelFor()`'s FIRST version read `weekly_chart.pending_base`** (the independent Darvas-box
   mechanism, see `compute_relative_strength_chart`/`_compute_weinstein_stage_series` under Relative strength

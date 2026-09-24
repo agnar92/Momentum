@@ -316,18 +316,37 @@ test("classifyQullamaggie returns null without a daily_squeeze summary", () => {
     assert.equal(classifyQullamaggie("AAA", "SP500", qmConstituent({ daily_squeeze: null }), QM_OPTS), null);
 });
 
-test("classifyQullamaggie returns null when none of 1M/3M/6M clears the performance threshold", () => {
+test("classifyQullamaggie returns null when the 6-month return doesn't clear the performance threshold", () => {
     const c = qmConstituent({}, { return_1m_pct: 5, return_3m_pct: 10, return_6m_pct: 20 });
     assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
 });
 
-test("classifyQullamaggie accepts when only ONE of 1M/3M/6M clears the threshold (OR, not AND)", () => {
+test("classifyQullamaggie returns null without a 6-month return, even when 1M/3M are missing entirely", () => {
+    const c = qmConstituent({}, { return_1m_pct: null, return_3m_pct: null, return_6m_pct: null });
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+});
+
+// Uproszczone na wyraźną prośbę użytkownika: perf_pct = return_6m_pct WYŁĄCZNIE
+// (nie max(1M, 3M, 6M) — patrz komentarz przy classifyQullamaggie w signals.js).
+// Duży ruch widoczny TYLKO w 1M/3M (a nie w 6M) już NIE kwalifikuje — odwrotnie
+// niż w poprzedniej wersji z warunkiem OR.
+test("classifyQullamaggie no longer qualifies on a big 1M/3M move alone when the 6-month return is below the threshold", () => {
     const c = qmConstituent({
         ttm_squeeze_chart: {
             dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
             fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
         },
-    }, { return_1m_pct: -5, return_3m_pct: 2, return_6m_pct: 35 });
+    }, { return_1m_pct: 50, return_3m_pct: 45, return_6m_pct: 20 });
+    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+});
+
+test("classifyQullamaggie qualifies on the 6-month return alone, even when 1M/3M are negative", () => {
+    const c = qmConstituent({
+        ttm_squeeze_chart: {
+            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+        },
+    }, { return_1m_pct: -5, return_3m_pct: -2, return_6m_pct: 35 });
     const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
     assert.ok(r);
     assert.equal(r.perf_pct, 35);

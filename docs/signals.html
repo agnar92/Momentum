@@ -144,8 +144,8 @@
             </div>
         </div>
         <div class="stage-filter-bar wybicie-controls" id="qullamaggieControls" hidden>
-            <label class="wybicie-slider" title="Minimalny wynik: MAKSYMALNY z trzech zwrotów (1, 3, 6 miesięcy) musi być co najmniej tyle — wystarczy, że JEDEN z nich przekroczy próg (tak jak w oryginalnym skanie).">
-                <span class="stage-filter-label">Min. wynik (1/3/6M):</span>
+            <label class="wybicie-slider" title="Minimalny zwrot z ostatnich 6 miesięcy — uproszczone z osobnego OR po 1/3/6M, bo 6-miesięczne okno w praktyce obejmuje też niedawny ruch z 1 lub 3 miesięcy.">
+                <span class="stage-filter-label">Min. wynik (6M):</span>
                 <input type="range" id="qmMinPerfInput" min="10" max="100" step="5">
                 <span class="wybicie-slider-value" id="qmMinPerfValue"></span>
             </label>
@@ -268,7 +268,7 @@
                 </table>
             </div>
 
-            <!-- Qullamaggie: wynik ≥ 30% w 1/3/6M (OR), konsolidacja 2-8 tyg.
+            <!-- Qullamaggie: wynik ≥ 30% w 6M, konsolidacja 2-8 tyg.
                  (TTM Squeeze tygodniowy) trwająca albo świeżo zakończona wybiciem —
                  konsolidacja 1-2 tyg. wymaga dodatkowo wąskiego zakresu ceny (5-20%),
                  wolumen kupujących sprawdzony przy wybiciu — patrz
@@ -282,7 +282,7 @@
                         <th data-key="universe">Uniwersum</th>
                         <th data-key="sector">Sektor</th>
                         <th data-key="price">Cena</th>
-                        <th data-key="perf_pct" title="Największy z trzech zwrotów: 1, 3 i 6 miesięcy">Wynik 1/3/6M</th>
+                        <th data-key="perf_pct" title="Zwrot z ostatnich 6 miesięcy">Wynik 6M</th>
                         <th data-key="status">Status</th>
                         <th data-key="consolidation_weeks">Konsolidacja</th>
                         <th title="Cena, przy której warto obserwować 1-minutowy wykres (zakładka „⚡ 1 min + VWAP” po kliknięciu w wiersz)">Poziom do obserwacji</th>
