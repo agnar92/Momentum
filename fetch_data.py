@@ -238,8 +238,41 @@ def get_unique_tickers(con):
     return [r[0] for r in res]
 
 
+def _last_completed_trading_week_friday(today=None):
+    """Ostatni PIĄTEK, którego dane (Pon-Pt) są już kompletne — w sobotę/niedzielę to
+    piątek TEGO tygodnia (sesje już się odbyły), w poniedziałek-piątek to piątek
+    POPRZEDNIEGO tygodnia (bieżący tydzień wciąż w trakcie, mogą jeszcze powstać nowe
+    sesje). Istnieje wyłącznie po to, żeby żadne pobranie cen (bootstrap/przyrostowe/
+    poziom indeksu, patrz get_full_refresh_range()/update_prices_incremental() poniżej)
+    nigdy nie wciągnęło do `prices`/`index_prices` niepełnego, wciąż trwającego
+    tygodnia — bo run_query.py liczy tygodniowe świece jako "najnowszy dzień w danym
+    tygodniowym kubełku" (DATE_TRUNC('week', Date) + ARGMAX), bez opinii o tym, czy ten
+    tydzień faktycznie się już zakończył. Cotygodniowy cron (weekly_full_refresh.yml)
+    i tak odpala się w sobotę, więc w normalnej produkcji ta funkcja nigdy niczego nie
+    ucina — to zabezpieczenie czysto na wypadek manualnego/deweloperskiego odpalenia w
+    środku tygodnia ("Jeżeli skrypt odpali się wcześniej z różnych powodów
+    developerskich to nie pobieraj nowych danych jeżeli tydzień trwa"). Nie
+    uwzględnia świąt giełdowych — te po prostu nie mają wiersza u yfinance, jak
+    zawsze; tylko granica tygodnia kalendarzowego. Zwraca zawsze pełną DATĘ (bez
+    komponentu czasu — `.normalize()`), żeby dało się to bezpiecznie porównywać z
+    datami odczytanymi z kolumny DATE w DuckDB (te nigdy nie mają czasu), np. w
+    update_prices_incremental() poniżej."""
+    today = pd.Timestamp(today) if today is not None else pd.Timestamp.today()
+    today = today.normalize()
+    weekday = today.weekday()  # Mon=0 .. Sun=6
+    if weekday >= 5:  # sobota/niedziela — ten tydzień już się zakończył
+        return today - pd.Timedelta(days=weekday - 4)
+    return today - pd.Timedelta(days=weekday + 3)  # tydzień wciąż trwa — piątek poprzedniego
+
+
 def get_full_refresh_range(lookback_months):
-    """Zwraca (start_date, end_date) jako `lookback_months` wstecz od DZISIAJ.
+    """Zwraca (start_date, end_date) jako `lookback_months` wstecz od ostatniego
+    ZAKOŃCZONEGO tygodnia (patrz _last_completed_trading_week_friday() powyżej) —
+    NIE od dzisiaj, żeby pobranie odpalone w środku tygodnia (manualnie/dewelopersko)
+    nie wciągnęło niepełnych, wciąż trwających dni. W normalnej, sobotniej produkcji
+    "ostatni zakończony tydzień" i "dzisiaj" praktycznie się pokrywają (yfinance's
+    `end` jest wyłączny, więc sobota jako end i tak daje dane do piątku włącznie) —
+    ta zmiana nic tam nie zmienia, tylko chroni odpalenia poza tym harmonogramem.
     Do 2026-09 end_date był liczony jako ostatni dzień POPRZEDNIEGO miesiąca
     kalendarzowego — poprawne dla starej, miesięcznej architektury pipeline'u
     (pełny refresh odpalany raz na początku miesiąca, więc "koniec poprzedniego
@@ -256,8 +289,7 @@ def get_full_refresh_range(lookback_months):
     następnym, zwykłym przebiegu przyrostowym (który zawsze dogrywa do
     dzisiaj) — update_index_prices() nie ma takiego mechanizmu, stąd
     rozjazd narastał w nieskończoność."""
-    today = pd.Timestamp.today()
-    end_date = today
+    end_date = _last_completed_trading_week_friday() + pd.Timedelta(days=1)
     start_date = end_date - pd.DateOffset(months=lookback_months)
     return start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')
 
@@ -642,11 +674,24 @@ def update_prices_incremental(con, tickers, retention_months):
     tylko dla tickerów, których jeszcze nie ma w prices (np. nowy skład indeksu
     po podmianie CSV), a na końcu przycina historię do ostatnich retention_months
     miesięcy — tak żeby baza nie rosła w nieskończoność, mając zawsze tyle
-    historii, ile potrzebuje momentum_value (M-14) + margines na fallback/staleness."""
+    historii, ile potrzebuje momentum_value (M-14) + margines na fallback/staleness.
+
+    Górna granica pobrania to NIE "dzisiaj" — to ostatni ZAKOŃCZONY tydzień
+    (_last_completed_trading_week_friday()), żeby odpalenie w środku tygodnia
+    (manualnie/dewelopersko) nigdy nie wciągnęło niepełnych, wciąż trwających dni do
+    `prices` (run_query.py liczy tygodniową świecę jako "najnowszy dzień w danym
+    tygodniowym kubełku", bez opinii o tym, czy ten tydzień faktycznie się już
+    zakończył — więc partial-week dane w `prices` skutkowałyby momentum/stage/TTM
+    Squeeze liczonym na niekompletnym tygodniu). Jeśli dane per-tickerowe już sięgają
+    do tego piątku, funkcja NIE robi żadnego pobrania sieciowego — dokładnie zgodnie
+    z "nie pobieraj nowych danych jeżeli tydzień trwa; jedynie przelicz dane, które są
+    potrzebne, lub pobierz brakujące dane dla skończonego tygodnia": run_query.py i
+    tak przeliczy wszystko od nowa z tego, co już jest w bazie."""
     _ensure_prices_ohlc_columns(con)
     existing_tickers = set(con.execute("SELECT DISTINCT Ticker FROM prices").df()["Ticker"]) & set(tickers)
     new_tickers = [t for t in tickers if t not in existing_tickers]
-    end_date = pd.Timestamp.today().strftime('%Y-%m-%d')
+    last_friday = _last_completed_trading_week_friday()
+    end_date = (last_friday + pd.Timedelta(days=1)).strftime('%Y-%m-%d')
 
     if existing_tickers:
         # Watermark PER TICKERZE (najstarszy z ostatnich znanych dni wsrod
@@ -665,13 +710,19 @@ def update_prices_incremental(con, tickers, retention_months):
             )
         """).fetchone()[0]
         con.unregister("_existing_tickers_tmp")
-        catchup_start = (pd.Timestamp(watermark) - pd.Timedelta(days=CATCHUP_OVERLAP_DAYS)).strftime('%Y-%m-%d')
-        print(f"🔄 Doszacowanie cen: {catchup_start} → {end_date} dla {len(existing_tickers)} znanych tickerów...")
-        rows, fetched, failed = _download_price_rows(sorted(existing_tickers), catchup_start, end_date, include_ohlc=True)
-        _upsert_price_rows(con, rows, sorted(fetched), catchup_start)
-        if failed:
-            print(f"⚠️  Brak świeżych cen dla: {sorted(set(failed))} — stare dane pozostają w bazie "
-                  f"(zostaną odfiltrowane przez --max-staleness-days w run_query.py, jeśli się zestarzeją).")
+        if pd.Timestamp(watermark) >= last_friday:
+            print(f"⏭️  Ceny już sięgają do ostatniego zakończonego tygodnia (piątek "
+                  f"{last_friday.strftime('%Y-%m-%d')}) — bieżący tydzień jeszcze trwa, pomijam "
+                  f"pobranie dla {len(existing_tickers)} znanych tickerów.")
+        else:
+            catchup_start = (pd.Timestamp(watermark) - pd.Timedelta(days=CATCHUP_OVERLAP_DAYS)).strftime('%Y-%m-%d')
+            print(f"🔄 Doszacowanie cen: {catchup_start} → {end_date} dla {len(existing_tickers)} znanych tickerów...")
+            rows, fetched, failed = _download_price_rows(sorted(existing_tickers), catchup_start, end_date,
+                                                           include_ohlc=True)
+            _upsert_price_rows(con, rows, sorted(fetched), catchup_start)
+            if failed:
+                print(f"⚠️  Brak świeżych cen dla: {sorted(set(failed))} — stare dane pozostają w bazie "
+                      f"(zostaną odfiltrowane przez --max-staleness-days w run_query.py, jeśli się zestarzeją).")
 
     if new_tickers:
         backfill_start, _ = get_full_refresh_range(retention_months)
