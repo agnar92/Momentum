@@ -206,8 +206,9 @@ function sortEpEntries(entries) {
 }
 
 // Notatki to jedyne wolne pole tekstowe w dzienniku (ticker jest już
-// oczyszczony przez sanitizeTicker) — bez tego cudzysłów wpisany w notatce
-// urywałby atrybut value="..." poniżej i psuł resztę wiersza tabeli.
+// oczyszczony przez sanitizeTicker) — bez tego np. "<" wpisane w notatce
+// (a wcześniej, gdy notatka była atrybutem input value="...", też cudzysłów)
+// urywałoby resztę wiersza tabeli, teraz jako tekst wewnątrz <textarea>.
 function escAttr(s) {
     return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
@@ -240,7 +241,7 @@ function renderEpLogTable() {
             <td class="ep-ticker-cell">${entry.ticker}</td>
             <td><select class="ep-type-select">${epTypeOptionsHtml(entry.type)}</select></td>
             <td><select class="ep-status-select">${epStatusOptionsHtml(entry.status)}</select></td>
-            <td><input type="text" class="ep-notes-input" value="${escAttr(entry.notes)}" placeholder="notatki"></td>
+            <td><textarea class="ep-notes-input" rows="3" placeholder="notatki">${escAttr(entry.notes)}</textarea></td>
             <td><button type="button" class="add-row-btn ep-vwap-btn" title="Otwórz ${entry.ticker} na wykresie 1 min + VWAP">📈 1 min + VWAP</button></td>
             <td><button type="button" class="remove-row-btn" title="Usuń z dziennika">✕</button></td>
         `;
