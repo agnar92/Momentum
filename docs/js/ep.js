@@ -16,19 +16,22 @@ if (typeof require === "function" && typeof window === "undefined") {
 // liczy własne sygnały z cotygodniowo pobieranych danych yfinance (patrz
 // CLAUDE.md) — dobre do wykrywania wielotygodniowych wybić, ale bezużyteczne
 // do EP: gap przedrynkowy trzeba złapać TEGO SAMEGO DNIA, więc ta strona w
-// ogóle nie dotyka pipeline'u/docs/data/*.json. Zamiast tego trzy elementy,
-// wszystkie na żywo, wszystkie z darmowych osadzonych widgetów TradingView:
-//   1. Skaner (embed-widget-screener.js) — kandydaci na gapujące spółki.
-//   2. Top Stories (embed-widget-timeline.js, feedMode:"market") — czy dany
+// ogóle nie dotyka pipeline'u/docs/data/*.json. Cztery elementy:
+//   1. Link do skanera gapów (patrz EP_GAP_SCANNER_URL niżej) — NIE widget,
+//      zwykły <a> do prawdziwej, darmowej strony TradingView.
+//   2. Skaner wybicia na wolumenie (embed-widget-screener.js) — osobne
+//      narzędzie, osobna strategia (użytkownik dodał to jako drugą, odrębną
+//      rzecz obok EP, patrz historia niżej).
+//   3. Top Stories (embed-widget-timeline.js, feedMode:"market") — czy dany
 //      ruch ma za sobą newsa/wyniki, czy to "cisza" (podejrzana zmienność
 //      bez powodu).
-//   3. Dziennik EP (localStorage, ten sam wzorzec co holdings/excluded w
+//   4. Dziennik EP (localStorage, ten sam wzorzec co holdings/excluded w
 //      rebalance.js) — ręcznie dodajesz tickera, klasyfikujesz TYP EP (żeby
 //      z czasem widzieć, które kategorie faktycznie działają) i status.
 // Klik w "📈 1 min + VWAP" w dzienniku otwiera ten sam widget co zakładka
 // "⚡ 1 min + VWAP" na signals.html (TV_1MIN_VWAP_WIDGET, js/shared.js) —
 // tam też NIE ma własnego wykresu (za mało/brak historii minutowej w tym
-// pipeline), tylko ta sama filozofia: screener/dziennik wskazuje kandydata,
+// pipeline), tylko ta sama filozofia: skaner/dziennik wskazuje kandydata,
 // dokładny moment wejścia (Opening Range Breakout + sesyjny VWAP)
 // obserwujesz sam, na żywo.
 //
@@ -40,48 +43,40 @@ if (typeof require === "function" && typeof window === "undefined") {
 // który zauważysz w skanerze/newsach, wpisujesz RĘCZNIE do dziennika — a
 // KAŻDY wiersz dziennika (własny <button>, nie część widgetu TradingView)
 // dostaje działający przycisk otwierający okno 1-min+VWAP dla TEGO tickera.
+//
+// WERSJE — dlaczego gap NIE jest już widgetem TradingView: pierwsza wersja
+// próbowała skonfigurować embed-widget-screener.js na gap przedrynkowy przez
+// defaultScreen/defaultColumn — darmowy config tego pola w ogóle nie ma
+// (sprawdzone w dokumentacji TradingView), więc "top_gainers" był tylko
+// przybliżeniem, nie realnym filtrem. Użytkownik wprost to odrzucił
+// ("to powinno być banalnie proste") i zapytał o Finviz — sprawdzone: Finviz
+// blokuje dane premarket/gap% na koncie darmowym (tylko Elite, 39.50$/mies.).
+// Zamiast tego: TradingView ma WŁASNĄ, gotową, darmową stronę dokładnie do
+// tego (tradingview.com/markets/stocks-usa/market-movers-pre-market-gappers/,
+// bez logowania, realna kolumna "Pre-mkt gap %", posortowane malejąco) —
+// EP_GAP_SCANNER_URL to link do niej, żadnego widgetu/configu do utrzymania.
 // ============================================================
+const EP_GAP_SCANNER_URL = "https://www.tradingview.com/markets/stocks-usa/market-movers-pre-market-gappers/";
 
 // ============================================================
-// SKANER — embed-widget-screener.js, DOKŁADNIE DWA presety, na wyraźną
-// prośbę użytkownika (pierwsza wersja miała cztery — "ja chciałem tylko
-// dwie"): każdy odpowiada jednej, osobnej strategii, nie wariantom tej samej:
-//   1. "EP — gap przedrynkowy": defaultScreen "top_gainers" — najbliższe
-//      darmowemu widgetowi przybliżenie gapu (nie ma udokumentowanego
-//      presetu wprost "premarket", sprawdzone w dokumentacji TradingView —
-//      defaultScreen bierze jedną z ustalonych wartości typu
-//      most_capitalized/top_gainers/unusual_volume/..., żadna nie nazywa się
-//      "premarket"); defaultColumn "performance" pokazuje % zmiany.
-//      showToolbar:true zostawia użytkownikowi WEWNĄTRZ widgetu własny pasek
-//      narzędzi TradingView, gdzie można dodać kolumnę/filtr "Zmiana od
-//      otwarcia %" albo realny "Premarket Change %" i posortować po niej
-//      ręcznie — patrz panel-hint w ep.html.
-//   2. "Wybicie na wolumenie": defaultScreen "unusual_volume" (użytkownik:
-//      "nietypowy wolumen co może pokazać breakout"); defaultColumn
-//      "moving_averages" — udokumentowana wartość defaultColumn, pokazuje w
-//      tabeli SMA/EMA 10/20/50/100/200 + rating każdej — dokładnie to, co
-//      użytkownik chciał widzieć ("cena powyżej EMA20 dziennego, najlepiej
-//      aligned 10>20>50>100>200") bez pisania własnego, osobnego wskaźnika
-//      "EMA stack" — darmowy widget już to liczy i pokazuje.
-// Przełączane przyciskami (ten sam wzorzec przebudowy widgetu od zera co
-// renderTvOverviewPanel w chart-modal.js, bo osadzony <script> nie ma API do
-// podmiany configu w locie) — stąd config bierze cały obiekt presetu
-// ({screen, column}), nie samą nazwę screena, żeby każdy preset mógł mieć
-// swój własny domyślny widok kolumn.
+// SKANER WYBICIA NA WOLUMENIE — embed-widget-screener.js, JEDEN, stały
+// config (bez przełącznika presetów — gap ma teraz własny link wyżej,
+// więc nie ma już między czym przełączać). defaultScreen "unusual_volume"
+// (użytkownik: "nietypowy wolumen co może pokazać breakout"); defaultColumn
+// "moving_averages" — udokumentowana wartość, pokazuje w tabeli SMA/EMA
+// 10/20/50/100/200 + rating każdej — dokładnie to, co użytkownik chciał
+// widzieć ("cena powyżej EMA20 dziennego, najlepiej aligned 10>20>50>100>200")
+// bez pisania własnego, osobnego wskaźnika "EMA stack" — darmowy widget już
+// to liczy i pokazuje.
 // ============================================================
-const EP_SCREENER_PRESETS = [
-    { key: "gap", label: "📈 EP — gap przedrynkowy", screen: "top_gainers", column: "performance" },
-    { key: "breakout", label: "📊 Wybicie na wolumenie (EMA 10>20>50>100>200)", screen: "unusual_volume", column: "moving_averages" },
-];
-
 const EP_SCREENER_WIDGET = {
     src: `${TV_EMBED_BASE}embed-widget-screener.js`,
     heightPx: 640,
-    config: preset => ({
+    config: () => ({
         width: "100%",
         height: "100%",
-        defaultColumn: preset.column,
-        defaultScreen: preset.screen,
+        defaultColumn: "moving_averages",
+        defaultScreen: "unusual_volume",
         showToolbar: true,
         market: "america",
         colorTheme: "dark",
@@ -110,27 +105,11 @@ const EP_NEWS_WIDGET = {
     }),
 };
 
-let activeScreenerPreset = EP_SCREENER_PRESETS[0].key;
-
 function renderEpScreenerWidget() {
     const container = document.getElementById("epScreenerContainer");
     if (!container) return;
-    const preset = EP_SCREENER_PRESETS.find(p => p.key === activeScreenerPreset) || EP_SCREENER_PRESETS[0];
     container.querySelectorAll(".tv-widget-block").forEach(el => el.remove());
-    container.appendChild(buildTvWidgetBlock(EP_SCREENER_WIDGET, preset));
-}
-
-function initEpScreenerPresets() {
-    const wrap = document.getElementById("epScreenerPresets");
-    if (!wrap) return;
-    wrap.querySelectorAll(".chart-mode-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
-            if (btn.dataset.preset === activeScreenerPreset) return;
-            activeScreenerPreset = btn.dataset.preset;
-            wrap.querySelectorAll(".chart-mode-btn").forEach(b => b.classList.toggle("active", b === btn));
-            renderEpScreenerWidget();
-        });
-    });
+    container.appendChild(buildTvWidgetBlock(EP_SCREENER_WIDGET, null));
 }
 
 function renderEpNewsWidget() {
@@ -347,7 +326,6 @@ if (typeof document !== "undefined") {
     (function init() {
         initConnStatus();
         epLog = loadEpLog();
-        initEpScreenerPresets();
         renderEpScreenerWidget();
         renderEpNewsWidget();
         initEpLogForm();
@@ -365,7 +343,7 @@ if (typeof document !== "undefined") {
 // ładowany i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        EP_SCREENER_PRESETS, EP_SCREENER_WIDGET, EP_NEWS_WIDGET,
+        EP_GAP_SCANNER_URL, EP_SCREENER_WIDGET, EP_NEWS_WIDGET,
         EP_TYPES, EP_STATUSES, epTypeLabel, epStatusLabel,
         sanitizeTicker, sortEpEntries, todayIso,
     };

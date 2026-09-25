@@ -9,40 +9,21 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    EP_SCREENER_PRESETS, EP_SCREENER_WIDGET, EP_NEWS_WIDGET,
+    EP_GAP_SCANNER_URL, EP_SCREENER_WIDGET, EP_NEWS_WIDGET,
     EP_TYPES, EP_STATUSES, epTypeLabel, epStatusLabel,
     sanitizeTicker, sortEpEntries, todayIso,
 } = require(path.join("..", "..", "docs", "js", "ep.js"));
 
-test("EP_SCREENER_PRESETS has exactly 2 distinct presets (gap + breakout)", () => {
-    assert.equal(EP_SCREENER_PRESETS.length, 2);
-    const keys = EP_SCREENER_PRESETS.map(p => p.key);
-    assert.deepEqual(keys, ["gap", "breakout"]);
-    EP_SCREENER_PRESETS.forEach(p => {
-        assert.equal(typeof p.label, "string");
-        assert.equal(typeof p.screen, "string");
-        assert.equal(typeof p.column, "string");
-    });
+test("EP_GAP_SCANNER_URL points at TradingView's own free pre-market gappers page", () => {
+    assert.equal(EP_GAP_SCANNER_URL, "https://www.tradingview.com/markets/stocks-usa/market-movers-pre-market-gappers/");
 });
 
-test("EP_SCREENER_WIDGET.config wires the chosen preset's screen+column", () => {
-    const breakout = EP_SCREENER_PRESETS.find(p => p.key === "breakout");
-    const cfg = EP_SCREENER_WIDGET.config(breakout);
+test("EP_SCREENER_WIDGET.config is the unusual-volume/moving-averages breakout scan", () => {
+    const cfg = EP_SCREENER_WIDGET.config();
     assert.equal(cfg.defaultScreen, "unusual_volume");
     assert.equal(cfg.defaultColumn, "moving_averages");
     assert.equal(cfg.market, "america");
     assert.equal(cfg.showToolbar, true);
-});
-
-test("the breakout preset surfaces the moving-averages column view (EMA 10/20/50/100/200 stack)", () => {
-    const breakout = EP_SCREENER_PRESETS.find(p => p.key === "breakout");
-    assert.equal(breakout.column, "moving_averages");
-});
-
-test("the gap preset targets the premarket-gap approximation (top gainers by performance)", () => {
-    const gap = EP_SCREENER_PRESETS.find(p => p.key === "gap");
-    assert.equal(gap.screen, "top_gainers");
-    assert.equal(gap.column, "performance");
 });
 
 test("EP_NEWS_WIDGET.config uses feedMode market (general feed, not one symbol)", () => {
