@@ -14,21 +14,35 @@ const {
     sanitizeTicker, sortEpEntries, todayIso,
 } = require(path.join("..", "..", "docs", "js", "ep.js"));
 
-test("EP_SCREENER_PRESETS has 4 distinct, non-empty presets", () => {
-    assert.equal(EP_SCREENER_PRESETS.length, 4);
+test("EP_SCREENER_PRESETS has exactly 2 distinct presets (gap + breakout)", () => {
+    assert.equal(EP_SCREENER_PRESETS.length, 2);
     const keys = EP_SCREENER_PRESETS.map(p => p.key);
-    assert.equal(new Set(keys).size, keys.length);
+    assert.deepEqual(keys, ["gap", "breakout"]);
     EP_SCREENER_PRESETS.forEach(p => {
-        assert.equal(typeof p.key, "string");
         assert.equal(typeof p.label, "string");
+        assert.equal(typeof p.screen, "string");
+        assert.equal(typeof p.column, "string");
     });
 });
 
-test("EP_SCREENER_WIDGET.config wires the chosen preset into defaultScreen", () => {
-    const cfg = EP_SCREENER_WIDGET.config("unusual_volume");
+test("EP_SCREENER_WIDGET.config wires the chosen preset's screen+column", () => {
+    const breakout = EP_SCREENER_PRESETS.find(p => p.key === "breakout");
+    const cfg = EP_SCREENER_WIDGET.config(breakout);
     assert.equal(cfg.defaultScreen, "unusual_volume");
+    assert.equal(cfg.defaultColumn, "moving_averages");
     assert.equal(cfg.market, "america");
     assert.equal(cfg.showToolbar, true);
+});
+
+test("the breakout preset surfaces the moving-averages column view (EMA 10/20/50/100/200 stack)", () => {
+    const breakout = EP_SCREENER_PRESETS.find(p => p.key === "breakout");
+    assert.equal(breakout.column, "moving_averages");
+});
+
+test("the gap preset targets the premarket-gap approximation (top gainers by performance)", () => {
+    const gap = EP_SCREENER_PRESETS.find(p => p.key === "gap");
+    assert.equal(gap.screen, "top_gainers");
+    assert.equal(gap.column, "performance");
 });
 
 test("EP_NEWS_WIDGET.config uses feedMode market (general feed, not one symbol)", () => {

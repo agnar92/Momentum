@@ -41,20 +41,18 @@
     <div class="panel-card" id="epIntroCard">
         <h3>EP — Episodic Pivot</h3>
         <p class="panel-hint">
-            Reszta strony liczy własne sygnały z danych pobieranych raz w tygodniu (yfinance) — dobre do wielotygodniowych wybić, bezużyteczne do gapów, które trzeba złapać tego samego dnia. Ta strona w ogóle nie dotyka tamtego pipeline'u: wszystko poniżej to widgety TradingView na żywo. Przepływ: (1) skaner niżej pokazuje kandydatów na gap, (2) Top Stories obok mówi, czy za ruchem stoi realny news/wyniki, czy to podejrzana cisza, (3) tickera, który wygląda na prawdziwy EP, wpisujesz ręcznie do dziennika poniżej i klasyfikujesz TYP — z czasem dziennik pokaże, które typy faktycznie działają. Informacyjne narzędzie, nie automatyczna rekomendacja.
+            Reszta strony liczy własne sygnały z danych pobieranych raz w tygodniu (yfinance) — dobre do wielotygodniowych wybić, bezużyteczne do gapów/wybić na wolumenie, które trzeba złapać tego samego dnia. Ta strona w ogóle nie dotyka tamtego pipeline'u: wszystko poniżej to widgety TradingView na żywo. Przepływ: (1) skaner niżej ma dwie zakładki — gap przedrynkowy albo wybicie na wolumenie z EMA — i pokazuje kandydatów, (2) Top Stories obok mówi, czy za ruchem stoi realny news/wyniki, czy to podejrzana cisza, (3) tickera, który wygląda na prawdziwy setup, wpisujesz ręcznie do dziennika poniżej i klasyfikujesz TYP — z czasem dziennik pokaże, które typy faktycznie działają. Informacyjne narzędzie, nie automatyczna rekomendacja.
         </p>
     </div>
 
     <div class="panel-card" id="epScreenerCard">
-        <h3>Skaner gapów</h3>
+        <h3>Skaner</h3>
         <p class="panel-hint">
-            Darmowy widget TradingView nie ma osobnego presetu „gap przedrynkowy" — cztery presety niżej to najbliższe przybliżenie. Żeby zobaczyć realną zmianę przedrynkową, użyj paska narzędzi WEWNĄTRZ widgetu (ikona filtra/kolumn) i dodaj kolumnę „Zmiana od otwarcia %" albo „Premarket Change %", posortuj malejąco.
+            Dwie osobne zakładki, dwie osobne strategie. <strong>„EP — gap przedrynkowy"</strong>: darmowy widget nie ma osobnego presetu „premarket" — to najbliższe przybliżenie (największe wzrosty); żeby zobaczyć realną zmianę przedrynkową, użyj paska narzędzi WEWNĄTRZ widgetu (ikona filtra/kolumn) i dodaj kolumnę „Zmiana od otwarcia %" albo „Premarket Change %", posortuj malejąco. <strong>„Wybicie na wolumenie"</strong>: nietypowy wolumen jako sygnał możliwego breakoutu — kolumny w tabeli to od razu SMA/EMA 10/20/50/100/200 z ratingiem (Buy/Sell/Neutral) każdej, żeby ocenić cenę względem EMA20 dziennego i ułożenie 10&gt;20&gt;50&gt;100&gt;200 bez przełączania się nigdzie indziej.
         </p>
         <div class="chart-mode-toggle" id="epScreenerPresets">
-            <button type="button" class="chart-mode-btn active" data-preset="top_gainers">🔥 Największe wzrosty</button>
-            <button type="button" class="chart-mode-btn" data-preset="unusual_volume">📊 Nietypowy wolumen</button>
-            <button type="button" class="chart-mode-btn" data-preset="earnings_this_week">📅 Wyniki w tym tygodniu</button>
-            <button type="button" class="chart-mode-btn" data-preset="most_volatile">🌪 Najbardziej zmienne</button>
+            <button type="button" class="chart-mode-btn active" data-preset="gap">📈 EP — gap przedrynkowy</button>
+            <button type="button" class="chart-mode-btn" data-preset="breakout">📊 Wybicie na wolumenie (EMA 10&gt;20&gt;50&gt;100&gt;200)</button>
         </div>
         <div class="tv-overview-container" id="epScreenerContainer"></div>
     </div>
