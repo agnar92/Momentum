@@ -296,11 +296,15 @@ test("parseTickerList splits, uppercases and dedupes", () => {
 });
 
 // ------------------------------------------------------------
-// Stop strategii: polowa pudelka Darvasa -> low swiecy z przeciecia MACD
-// W DOL linii sygnalu (przeciecie w gore to tylko potwierdzenie wejscia)
+// Stop strategii: dolna granica srodkowej tercji pudelka Darvasa -> low
+// swiecy z przeciecia MACD W DOL linii sygnalu (przeciecie w gore to tylko
+// potwierdzenie wejscia) — patrz "MY STRATEGY BLUEPRINT" (Gareth Packer/
+// Financial Wisdom): stop idzie w SRODKOWA tercje pudelka, "usually the
+// lower of that portion", nie w jego polowe.
 // ------------------------------------------------------------
 
-// close0 = 100 (cena 120, ostatni close_pct = 20). Pudelko: 10%..0% -> polowa = 105.
+// close0 = 100 (cena 120, ostatni close_pct = 20). Pudelko: 10%..0% ->
+// dolna granica srodkowej tercji = 0 + (10-0)/3 = 3.333% -> cena ~103.333.
 function boxedStock(macd, signal, lowPct) {
     return {
         ticker: "BOX", price: 120,
@@ -318,10 +322,10 @@ function boxedStock(macd, signal, lowPct) {
     };
 }
 
-test("strategyStopFor starts at the midpoint of the LAST Darvas box", () => {
+test("strategyStopFor starts at the lower bound of the middle third of the LAST Darvas box", () => {
     const info = strategyStopFor(boxedStock([3, 3, 3, 3, 3], [2, 2, 2, 2, 2]));
     assert.equal(info.source, "box");
-    assert.ok(Math.abs(info.stop - 105) < 1e-9);
+    assert.ok(Math.abs(info.stop - 100 * (1 + (10 / 3) / 100)) < 1e-6);
 });
 
 test("strategyStopFor raises the stop to the low of a bearish MACD cross after the box", () => {
@@ -336,6 +340,7 @@ test("strategyStopFor raises the stop to the low of a bearish MACD cross after t
 test("strategyStopFor ignores bullish MACD crosses (entry confirmation, not a stop)", () => {
     const info = strategyStopFor(boxedStock([1, 1, 1, 3, 4], [2, 2, 2, 2, 2]));
     assert.equal(info.source, "box");
+    assert.ok(Math.abs(info.stop - 100 * (1 + (10 / 3) / 100)) < 1e-6);
 });
 
 test("strategyStopFor also trails on bearish crosses with MACD below zero", () => {
@@ -345,10 +350,10 @@ test("strategyStopFor also trails on bearish crosses with MACD below zero", () =
 });
 
 test("strategyStopFor ignores crosses inside the box and never lowers the stop", () => {
-    // przeciecie w dol w d2 (koniec pudelka) — ignorowane; w d5 low 104 < 105 — stop zostaje
-    const info = strategyStopFor(boxedStock([3, 1, 3, 3, 1], [2, 2, 2, 2, 2], [-2, 3, 8, 12, 4]));
+    // przeciecie w dol w d2 (koniec pudelka) — ignorowane; w d5 low -5% < 3.333% (baza pudelka) — stop zostaje
+    const info = strategyStopFor(boxedStock([3, 1, 3, 3, 1], [2, 2, 2, 2, 2], [-2, 3, 8, 12, -5]));
     assert.equal(info.source, "box");
-    assert.ok(Math.abs(info.stop - 105) < 1e-9);
+    assert.ok(Math.abs(info.stop - 100 * (1 + (10 / 3) / 100)) < 1e-6);
 });
 
 test("strategyStopFor falls back to the weekly close when low_pct is missing (old data)", () => {

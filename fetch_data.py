@@ -319,10 +319,15 @@ def _download_price_rows(tickers, start_date, end_date, include_ohlc=False):
     (5-kolumnowych, bez High/Low) cenach poziomu indeksu (update_index_prices).
 
     include_ohlc=True dokłada High/Low na końcu każdego wiersza (7-krotka zamiast
-    5-krotki) — używane tylko dla tabeli `prices` (per-spółka), do wyliczenia w
-    run_query.py wolumenu kupujących/sprzedających metodą Close Location Value.
-    `index_prices` tego nie potrzebuje, stąd domyślnie False (żeby nie zaburzać
-    jej dotychczasowego, 5-kolumnowego schematu).
+    5-krotki) — używane dla tabeli `prices` (per-spółka), do wyliczenia w
+    run_query.py wolumenu kupujących/sprzedających metodą Close Location Value,
+    ORAZ (od korekty ATR Siły Relatywnej — patrz RS_ATR_WEEKS w run_query.py)
+    dla sektorowych ETF-ów SPDR w `index_prices` (update_index_prices), bo te
+    grają rolę LICZNIKA w Kroku 2 strategii sektorowej i potrzebują własnego
+    ATR. Domyślnie False dla reszty `index_prices` (prawdziwe indeksy SP500/
+    NASDAQ100/DOWJONES i syntetyczne poziomy WIG20/mWIG40/sWIG80) — te grają
+    tam rolę WYŁĄCZNIE benchmarku/mianownika, który zostaje surowy, więc nie
+    potrzebują High/Low wcale.
 
     Każdy ticker, który po paczkowym pobraniu nadal nie ma żadnego wiersza, jest
     dogrywany jeszcze raz POJEDYNCZO (zapytanie o jeden symbol) zanim ostatecznie
@@ -578,6 +583,7 @@ def update_index_prices(con, lookback_months):
             PRIMARY KEY (Date, Index_Name)
         )
     """)
+    _ensure_index_prices_ohlc_columns(con)
     # Jawna lista kolumn w kazdym "INSERT INTO index_prices" ponizej (zamiast
     # pozycyjnego "SELECT *") jest CELOWA, nie kosmetyczna: krotko zyjaca
     # (i juz zrewertowana) funkcja korekty ATR Sily Relatywnej migrowala ta
@@ -591,6 +597,11 @@ def update_index_prices(con, lookback_months):
     # supplied". Jawne kolumny dzialaja niezaleznie od tego, czy tabela ma
     # 5 czy 7 kolumn (nadmiarowe High/Low zostaja NULL) — bez tego trzeba by
     # recznie migrowac/dropowac kolumny w juz zacommitowanym binarnym pliku.
+    # _ensure_index_prices_ohlc_columns powyzej WSKRZESZA te same kolumny
+    # (idempotentnie, ADD COLUMN IF NOT EXISTS) — od korekty ATR Sily
+    # Relatywnej (run_query.py::RS_ATR_WEEKS) sa one znow faktycznie
+    # WYKORZYSTYWANE (dla sektorowych ETF-ow SPDR, ponizej), nie tylko martwym
+    # naddatkiem schematu jak zaraz po pierwszym revercie.
     start_date, end_date = get_full_refresh_range(lookback_months)
 
     yf_backed = {name: INDEX_LEVEL_SYMBOLS[name] for name in YFINANCE_BACKED_INDEX_UNIVERSES}
@@ -622,7 +633,11 @@ def update_index_prices(con, lookback_months):
     print(f"🔄 Ceny sektorowych ETF-ów SPDR (Siła Relatywna sektorów SP500): "
           f"{start_date} → {end_date} dla {sector_symbols}...")
 
-    sector_rows, sector_fetched, sector_failed = _download_price_rows(sector_symbols, start_date, end_date)
+    # include_ohlc=True: od korekty ATR Sily Relatywnej (run_query.py::RS_ATR_WEEKS)
+    # sektorowy ETF gra role LICZNIKA w Kroku 2 strategii sektorowej i potrzebuje
+    # wlasnego High/Low do policzenia ATR — patrz komentarz nad _download_price_rows.
+    sector_rows, sector_fetched, sector_failed = _download_price_rows(sector_symbols, start_date, end_date,
+                                                                       include_ohlc=True)
     if sector_failed:
         print(f"⚠️  Brak danych sektorowego ETF-u dla: {sorted(set(sector_failed))}")
 
@@ -633,11 +648,11 @@ def update_index_prices(con, lookback_months):
         WHERE Index_Name IN ({sector_names_sql}) AND Date >= DATE '{start_date}'
     """)
     if sector_rows:
-        df_sector = pd.DataFrame(sector_rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume"])
+        df_sector = pd.DataFrame(sector_rows, columns=["Date", "Ticker", "Close", "Adj_Close", "Volume", "High", "Low"])
         df_sector["Index_Name"] = df_sector["Ticker"].map(sector_symbol_to_name)
-        df_sector = df_sector[["Date", "Index_Name", "Close", "Adj_Close", "Volume"]]  # noqa: F841
+        df_sector = df_sector[["Date", "Index_Name", "Close", "Adj_Close", "Volume", "High", "Low"]]  # noqa: F841
         con.execute("""
-            INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume)
+            INSERT INTO index_prices (Date, Index_Name, Close, Adj_Close, Volume, High, Low)
             SELECT * FROM df_sector
         """)
     print(f"✅ Zapisano {len(sector_rows)} wierszy danych sektorowych ETF-ów SPDR ({start_date} → {end_date}).")
@@ -654,6 +669,23 @@ def update_index_prices(con, lookback_months):
         """)
         print(f"✅ Zbudowano syntetyczny poziom indeksu {index_name}: {len(synth)} dni "
               f"(równoważony zwrot składników, baza={WIG_SYNTHETIC_INDEX_BASE}).")
+
+
+def _ensure_index_prices_ohlc_columns(con):
+    """Idempotentna migracja (ADD COLUMN IF NOT EXISTS) dla `index_prices` — te
+    same dwie kolumny, ktore krotko zyjaca, zrewertowana korekta ATR Sily
+    Relatywnej kiedys dodala (patrz duzy komentarz w update_index_prices);
+    zostaly w schemacie po revercie, wiec to wywolanie jest dzis w praktyce
+    no-opem na juz-zacommitowanym momentum_data.duckdb — trzymane jawnie na
+    wypadek swiezego bootstrapu (nowa, pusta baza od CREATE TABLE IF NOT
+    EXISTS wyzej ma tylko 5 kolumn, dopoki ta migracja jej nie dogoni), tak
+    samo jak _ensure_prices_ohlc_columns nizej dla `prices`. Populowane od tej
+    korekty TYLKO dla sektorowych ETF-ow SPDR (patrz nizej w
+    update_index_prices) — realne indeksy/syntetyczne poziomy graja wylacznie
+    role benchmarku i zostaja NULL, co jest nieszkodliwe (_mansfield_rsm_series
+    ich po prostu nie uzywa)."""
+    con.execute("ALTER TABLE index_prices ADD COLUMN IF NOT EXISTS High DOUBLE")
+    con.execute("ALTER TABLE index_prices ADD COLUMN IF NOT EXISTS Low DOUBLE")
 
 
 def _ensure_prices_ohlc_columns(con):
