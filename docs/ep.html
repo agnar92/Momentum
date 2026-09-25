@@ -1,0 +1,120 @@
+
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EP (Episodic Pivot) — Momentum Dashboard</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0e0f13">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Momentum">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
+</head>
+<body>
+
+<div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p>Ładowanie danych…</p>
+</div>
+
+<div class="topbar">
+    <div class="topbar-left">
+        <div class="brand">MOMENTUM<span class="brand-sub"> // EP: gapy przedrynkowe na żywo</span></div>
+    </div>
+    <nav>
+        <a href="index.html">Indeksy</a>
+        <a href="signals.html">Sygnały</a>
+        <a href="rebalance.html">Rebalanser USA</a>
+        <a href="rebalance_pl.html">Rebalanser PL</a>
+        <a href="strategy.html">Strategia</a>
+        <a href="ep.html" class="active">EP</a>
+        <span id="connStatus" class="conn-status" title="Brak połączenia z siecią — pokazywane są ostatnie zapisane dane." hidden>⚠ Offline</span>
+    </nav>
+</div>
+
+<div class="ep-page">
+
+    <div class="panel-card" id="epIntroCard">
+        <h3>EP — Episodic Pivot</h3>
+        <p class="panel-hint">
+            Reszta strony liczy własne sygnały z danych pobieranych raz w tygodniu (yfinance) — dobre do wielotygodniowych wybić, bezużyteczne do gapów, które trzeba złapać tego samego dnia. Ta strona w ogóle nie dotyka tamtego pipeline'u: wszystko poniżej to widgety TradingView na żywo. Przepływ: (1) skaner niżej pokazuje kandydatów na gap, (2) Top Stories obok mówi, czy za ruchem stoi realny news/wyniki, czy to podejrzana cisza, (3) tickera, który wygląda na prawdziwy EP, wpisujesz ręcznie do dziennika poniżej i klasyfikujesz TYP — z czasem dziennik pokaże, które typy faktycznie działają. Informacyjne narzędzie, nie automatyczna rekomendacja.
+        </p>
+    </div>
+
+    <div class="panel-card" id="epScreenerCard">
+        <h3>Skaner gapów</h3>
+        <p class="panel-hint">
+            Darmowy widget TradingView nie ma osobnego presetu „gap przedrynkowy" — cztery presety niżej to najbliższe przybliżenie. Żeby zobaczyć realną zmianę przedrynkową, użyj paska narzędzi WEWNĄTRZ widgetu (ikona filtra/kolumn) i dodaj kolumnę „Zmiana od otwarcia %" albo „Premarket Change %", posortuj malejąco.
+        </p>
+        <div class="chart-mode-toggle" id="epScreenerPresets">
+            <button type="button" class="chart-mode-btn active" data-preset="top_gainers">🔥 Największe wzrosty</button>
+            <button type="button" class="chart-mode-btn" data-preset="unusual_volume">📊 Nietypowy wolumen</button>
+            <button type="button" class="chart-mode-btn" data-preset="earnings_this_week">📅 Wyniki w tym tygodniu</button>
+            <button type="button" class="chart-mode-btn" data-preset="most_volatile">🌪 Najbardziej zmienne</button>
+        </div>
+        <div class="tv-overview-container" id="epScreenerContainer"></div>
+    </div>
+
+    <div class="panel-card" id="epNewsCard">
+        <h3>Newsy rynkowe (Top Stories)</h3>
+        <p class="panel-hint">Ogólny feed newsów rynkowych — sprawdź, czy tickera ze skanera powyżej dotyczy któryś z nagłówków (wyniki, kontrakt, decyzja regulacyjna, upgrade analityka...), zanim dodasz go do dziennika.</p>
+        <div class="tv-overview-container" id="epNewsContainer"></div>
+    </div>
+
+    <div class="panel-card" id="epLogCard">
+        <h3>Dziennik EP</h3>
+        <p class="panel-hint">
+            Zapisuje się tylko w tej przeglądarce (localStorage), tak jak pozycje w rebalanserach. Typ EP klasyfikujesz sam wg tego, co znalazłeś w newsach powyżej — kolumna „Status" to tylko Twoja notatka (obserwuję / wszedłem / pominąłem), niczego nie automatyzuje. „📈 1 min + VWAP" otwiera żywy wykres 1-minutowy z sesyjnym VWAP dla tego tickera — dokładny moment wejścia (Opening Range Breakout) obserwujesz tam sam, na żywo.
+        </p>
+        <div class="import-row">
+            <input type="text" id="epTickerInput" placeholder="np. NVDA" class="exclude-input" maxlength="12">
+            <select id="epTypeInput" class="contribution-input ep-select-inline"></select>
+            <select id="epStatusInput" class="contribution-input ep-select-inline"></select>
+            <input type="text" id="epNotesInput" placeholder="notatki (opcjonalnie)" class="contribution-input">
+            <button type="button" class="add-row-btn" id="epAddBtn">+ Dodaj do dziennika</button>
+        </div>
+        <div class="table-wrap">
+        <table class="momentum-table" id="epLogTable">
+            <thead>
+                <tr>
+                    <th>Data</th>
+                    <th>Ticker</th>
+                    <th>Typ EP</th>
+                    <th>Status</th>
+                    <th>Notatki</th>
+                    <th>Wykres</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody id="epLogBody"></tbody>
+        </table>
+        </div>
+        <div class="empty-state" id="epLogEmpty">Dziennik jest pusty — dodaj pierwszego tickera powyżej.</div>
+    </div>
+
+</div>
+
+<!-- ====================== OKNO "1 min + VWAP" ====================== -->
+<div class="chart-modal-backdrop" id="epChartModal" hidden>
+<div class="charts-area" role="dialog" aria-modal="true" aria-labelledby="epChartTickerLabel">
+    <div class="chart-mode-toggle">
+        <button class="chart-mode-btn" id="epChartOpenTvBtn" title="Otwiera ten ticker na tradingview.com w nowej karcie">📈 Otwórz w TradingView ↗</button>
+        <div class="chart-ticker-label" id="epChartTickerLabel"></div>
+        <button class="chart-modal-close" id="epChartModalClose" type="button" title="Zamknij (Esc)" aria-label="Zamknij">✕</button>
+    </div>
+    <div class="chart-panel">
+        <div class="tv-overview-container" id="epChartContainer"></div>
+    </div>
+</div>
+</div>
+
+<script src="js/pull-to-refresh.js"></script>
+<script src="js/shared.js"></script>
+<script src="js/qol.js"></script>
+<script src="js/ep.js"></script>
+</body>
+</html>
