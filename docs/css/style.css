@@ -1054,26 +1054,51 @@ th.tv-col, th.chart-col { width: 1%; }
 /* Strona EP (Episodic Pivot, docs/ep.html/js/ep.js) — dziennik ręcznie
    dodawanych tickerów, wpisywanych po przejrzeniu skanera/newsów powyżej na
    tej samej stronie (patrz komentarz na górze ep.js). #epLogTable to zwykłe
-   table.momentum-table (patrz wyżej), tylko z edytowalnymi <select>/<input>
+   table.momentum-table (patrz wyżej), tylko z edytowalnymi <select>/<textarea>
    w komórkach zamiast statycznego tekstu — table.holdings-table ma już taką
-   regułę dla swoich input-ów, ale nie dla select-ów, i ukrywa na telefonie
-   3. kolumnę (myślaną dla ceny w innych tabelach), co tutaj wycięłoby "Typ
-   EP" — stąd osobna, węższa reguła zamiast reużycia .holdings-table. */
-#epLogTable select, #epLogTable input[type="text"] {
+   regułę dla swoich input-ów, ale nie dla select-ów/textarea, i ukrywa na
+   telefonie 3. kolumnę (myślaną dla ceny w innych tabelach), co tutaj
+   wycięłoby "Typ EP" — stąd osobna, węższa reguła zamiast reużycia
+   .holdings-table. Rozmiar czcionki/padding większy niż domyślne
+   table.momentum-table — na wyraźną prośbę użytkownika ("duże ten tracker"),
+   dziennik ma być czytelny/wygodny do codziennego wpisywania, nie ciasną
+   tabelką danych jak reszta dashboardu. */
+#epLogTable th, #epLogTable td { padding: 10px 12px; font-size: 13.5px; }
+#epLogTable select, #epLogTable textarea {
     background: var(--panel-alt);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 5px 8px;
+    padding: 6px 9px;
     border-radius: 5px;
-    font-size: 12.5px;
+    font-size: 13px;
+    font-family: inherit;
 }
-#epLogTable input[type="text"] { width: 150px; }
-#epLogTable td.ep-ticker-cell { font-weight: 700; }
+#epLogTable td.ep-ticker-cell { font-weight: 700; font-size: 15px; }
+
+/* Notatki — DUŻE, resizowalne <textarea>, zarówno w formularzu dodawania
+   (pełna szerokość, pod wierszem ticker/typ/status/przycisk, patrz
+   .settings-row w ep.html) jak i w samej tabeli (jedna na wiersz) — na
+   wyraźną prośbę użytkownika: małe pole tekstowe na jedną linię nie
+   wystarczało do realnych notatek (katalizator, poziomy, plan). */
+.ep-notes-textarea, #epLogTable textarea.ep-notes-input {
+    width: 100%;
+    min-height: 90px;
+    resize: vertical;
+    line-height: 1.5;
+}
+#epLogTable textarea.ep-notes-input { min-width: 260px; }
 
 /* Selecty Typ EP/Status w formularzu dodawania (.import-row nad tabelą) —
    .contribution-input jest domyślnie 200px, tu trochę węziej, żeby cały
-   wiersz (ticker + 2 selecty + notatki + przycisk) mieścił się bliżej siebie. */
-.ep-select-inline { width: 170px; }
+   wiersz (ticker + 2 selecty + przycisk) mieścił się bliżej siebie. */
+.ep-select-inline { width: 200px; }
+
+/* Karta Dziennika EP jest teraz GŁÓWNYM narzędziem strony (na wyraźną
+   prośbę użytkownika, "ten tracker był fajny") — większy nagłówek i więcej
+   oddechu niż zwykła .panel-card, żeby wizualnie odróżnić ją od kart
+   informacyjnych (skaner/newsy) powyżej. */
+.panel-card-large { padding: 28px; }
+.panel-card-large > h3 { font-size: 21px; margin-bottom: 10px; }
 
 /* Krok 1 strategii sektorowej (docs/strategy.html): baner "faza wzrostu"
    SP500 wg filtru trendu (SMA200 dzienna LUB SMA40 tygodniowa), patrz
@@ -1581,6 +1606,8 @@ table.holdings-table td, table.rebalance-table td {
     /* --- Rebalans --- */
     .rebalance-page, .strategy-page, .ep-page { padding: 14px 12px; }
     .panel-card { padding: 14px; }
+    .panel-card-large { padding: 16px; }
+    .ep-select-inline { width: 100%; max-width: 220px; }
     .stat-cards { gap: 10px; margin-bottom: 16px; }
     .stat-card { min-width: 0; flex: 1 1 45%; padding: 12px 14px; }
     .stat-card .value { font-size: 18px; }

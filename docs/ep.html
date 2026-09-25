@@ -71,7 +71,7 @@
         <div class="tv-overview-container" id="epNewsContainer"></div>
     </div>
 
-    <div class="panel-card" id="epLogCard">
+    <div class="panel-card panel-card-large" id="epLogCard">
         <h3>Dziennik EP</h3>
         <p class="panel-hint">
             Zapisuje się tylko w tej przeglądarce (localStorage), tak jak pozycje w rebalanserach. Typ EP klasyfikujesz sam wg tego, co znalazłeś w newsach powyżej — kolumna „Status" to tylko Twoja notatka (obserwuję / wszedłem / pominąłem), niczego nie automatyzuje. „📈 1 min + VWAP" otwiera żywy wykres 1-minutowy z sesyjnym VWAP dla tego tickera — dokładny moment wejścia (Opening Range Breakout) obserwujesz tam sam, na żywo.
@@ -80,8 +80,11 @@
             <input type="text" id="epTickerInput" placeholder="np. NVDA" class="exclude-input" maxlength="12">
             <select id="epTypeInput" class="contribution-input ep-select-inline"></select>
             <select id="epStatusInput" class="contribution-input ep-select-inline"></select>
-            <input type="text" id="epNotesInput" placeholder="notatki (opcjonalnie)" class="contribution-input">
             <button type="button" class="add-row-btn" id="epAddBtn">+ Dodaj do dziennika</button>
+        </div>
+        <div class="settings-row">
+            <label for="epNotesInput">Notatki (nowy wpis)</label>
+            <textarea id="epNotesInput" class="ep-notes-textarea" rows="4" placeholder="katalizator, poziomy, plan wejścia/wyjścia, obserwacje..."></textarea>
         </div>
         <div class="table-wrap">
         <table class="momentum-table" id="epLogTable">
