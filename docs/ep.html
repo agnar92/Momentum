@@ -41,27 +41,23 @@
     <div class="panel-card" id="epIntroCard">
         <h3>EP — Episodic Pivot</h3>
         <p class="panel-hint">
-            Reszta strony liczy własne sygnały z danych pobieranych raz w tygodniu (yfinance) — dobre do wielotygodniowych wybić, bezużyteczne do gapów/wybić na wolumenie, które trzeba złapać tego samego dnia. Ta strona w ogóle nie dotyka tamtego pipeline'u: wszystko poniżej to widgety TradingView na żywo. Przepływ: (1) skaner niżej ma dwie zakładki — gap przedrynkowy albo wybicie na wolumenie z EMA — i pokazuje kandydatów, (2) Top Stories obok mówi, czy za ruchem stoi realny news/wyniki, czy to podejrzana cisza, (3) tickera, który wygląda na prawdziwy setup, wpisujesz ręcznie do dziennika poniżej i klasyfikujesz TYP — z czasem dziennik pokaże, które typy faktycznie działają. Informacyjne narzędzie, nie automatyczna rekomendacja.
+            Reszta strony liczy własne sygnały z danych pobieranych raz w tygodniu (yfinance) — bezużyteczne do gapów, które trzeba złapać tego samego dnia. Ta strona w ogóle nie dotyka tamtego pipeline'u. Przepływ: (1) klik w skaner gapów niżej, top listy = Twoi kandydaci &gt;10%, (2) Top Stories obok mówi, czy za ruchem stoi realny news (najlepsze EP to zarobkowe), (3) dobrego kandydata wpisujesz ręcznie do dziennika i klasyfikujesz TYP. Informacyjne narzędzie, nie automatyczna rekomendacja.
         </p>
     </div>
 
+    <div class="panel-card" id="epGapCard">
+        <h3>🎯 Gap przedrynkowy &gt;10%</h3>
+        <p class="panel-hint">
+            Jeden link, zero konfiguracji: darmowa, gotowa strona TradingView z WSZYSTKIMI spółkami US posortowanymi wg realnego gapu przedrynkowego (kolumna „Pre-mkt gap %"), bez logowania. Top listy to Twoi kandydaci &gt;10% — po prostu scrolluj, aż zejdziesz poniżej progu.
+        </p>
+        <a class="add-row-btn ep-gap-link" href="https://www.tradingview.com/markets/stocks-usa/market-movers-pre-market-gappers/" target="_blank" rel="noopener">📈 Otwórz skaner gapów przedrynkowych (TradingView) ↗</a>
+    </div>
+
     <div class="panel-card" id="epScreenerCard">
-        <h3>Skaner gapów &gt;10% — realny skan, jeden klik</h3>
+        <h3>Wybicie na wolumenie (EMA 10&gt;20&gt;50&gt;100&gt;200)</h3>
         <p class="panel-hint">
-            Osadzony widget TradingView niżej NIE potrafi filtrować po realnej zmianie przedrynkowej (darmowy config nie ma takiego pola — patrz przyciski „Otwórz w TradingView" pod spodem jako opcja z logowaniem/płatnym planem). Do faktycznego porannego skanu „wszystkie spółki, gap &gt;10%" użyj jednego z darmowych, gotowych, posortowanych już linków poniżej — zero konfiguracji, zero logowania, top listy to Twoje kandydaci:
+            Osobne narzędzie, osobna strategia: nietypowy wolumen jako sygnał możliwego breakoutu. Kolumny w tabeli to od razu SMA/EMA 10/20/50/100/200 z ratingiem (Buy/Sell/Neutral) każdej, żeby ocenić cenę względem EMA20 dziennego i ułożenie 10&gt;20&gt;50&gt;100&gt;200 bez przełączania się nigdzie indziej.
         </p>
-        <div class="import-row" id="epExternalScanners">
-            <a class="add-row-btn" href="https://www.barchart.com/stocks/pre-market-trading/gap/gap-up" target="_blank" rel="noopener">🎯 Barchart — gap przedrynkowy (posortowane) ↗</a>
-            <a class="add-row-btn" href="https://www.marketbeat.com/market-data/premarket-trading/" target="_blank" rel="noopener">📰 MarketBeat — premarket movers + newsy ↗</a>
-            <a class="add-row-btn" href="https://finance.yahoo.com/calendar/earnings" target="_blank" rel="noopener">📅 Kalendarz wyników (Yahoo) — najlepsze EP to zarobkowe ↗</a>
-        </div>
-        <p class="panel-hint">
-            Poniższy widget zostaje jako dodatkowy, żywy podgląd (i jako właściwe narzędzie do drugiej zakładki — wybicie na wolumenie z EMA, tego akurat linki wyżej nie pokażą). <strong>„EP — gap przedrynkowy"</strong>: najbliższe przybliżenie w widgecie (największe wzrosty) — jeśli masz płatny plan TradingView, w pasku narzędzi WEWNĄTRZ widgetu (ikona filtra) możesz dodać realną kolumnę „Premarket Change %" i zapisać to jako własny, trwały filtr na swoim koncie. <strong>„Wybicie na wolumenie"</strong>: nietypowy wolumen jako sygnał możliwego breakoutu — kolumny w tabeli to od razu SMA/EMA 10/20/50/100/200 z ratingiem (Buy/Sell/Neutral) każdej, żeby ocenić cenę względem EMA20 dziennego i ułożenie 10&gt;20&gt;50&gt;100&gt;200 bez przełączania się nigdzie indziej.
-        </p>
-        <div class="chart-mode-toggle" id="epScreenerPresets">
-            <button type="button" class="chart-mode-btn active" data-preset="gap">📈 EP — gap przedrynkowy</button>
-            <button type="button" class="chart-mode-btn" data-preset="breakout">📊 Wybicie na wolumenie (EMA 10&gt;20&gt;50&gt;100&gt;200)</button>
-        </div>
         <div class="tv-overview-container" id="epScreenerContainer"></div>
     </div>
 

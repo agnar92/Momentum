@@ -1100,6 +1100,18 @@ th.tv-col, th.chart-col { width: 1%; }
 .panel-card-large { padding: 28px; }
 .panel-card-large > h3 { font-size: 21px; margin-bottom: 10px; }
 
+/* Duży, oczywisty przycisk-link do skanera gapów (patrz EP_GAP_SCANNER_URL w
+   ep.js) — na wyraźną prośbę użytkownika po tym, jak pierwsza wersja
+   (osadzony widget udający filtr premarket) okazała się myląca zamiast
+   "banalnie prosta": to zwykły <a>, nie widget, więc nic tu nie może się
+   "nie dać skonfigurować" — jeden klik i gotowe, żadnego configu do
+   pilnowania. */
+.ep-gap-link {
+    display: inline-block;
+    padding: 14px 24px;
+    font-size: 15px;
+}
+
 /* Krok 1 strategii sektorowej (docs/strategy.html): baner "faza wzrostu"
    SP500 wg filtru trendu (SMA200 dzienna LUB SMA40 tygodniowa), patrz
    compute_sp500_trend_filter w run_query.py. */
