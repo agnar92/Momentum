@@ -43,35 +43,45 @@ if (typeof require === "function" && typeof window === "undefined") {
 // ============================================================
 
 // ============================================================
-// SKANER GAPÓW — embed-widget-screener.js. Darmowy widget nie ma
-// udokumentowanego presetu "gap przedrynkowy" (sprawdzone w dokumentacji
-// TradingView — defaultScreen bierze jedną z ustalonych wartości typu
-// most_capitalized/top_gainers/unusual_volume/most_volatile/
-// earnings_this_week, żadna nie nazywa się wprost "premarket"), więc
-// domyślny preset to najbliższe przybliżenie ("🔥 Największe wzrosty"), a
-// pozostałe trzy presety (przełączane przyciskami — ten sam wzorzec
-// przebudowy widgetu od zera co renderTvOverviewPanel w chart-modal.js,
-// bo osadzony <script> nie ma API do podmiany configu w locie) pokrywają
-// resztę tego, co realnie sygnalizuje EP. showToolbar:true zostawia
-// użytkownikowi WEWNĄTRZ widgetu własny pasek narzędzi TradingView, gdzie
-// można dodać kolumnę/filtr "Zmiana od otwarcia %" albo realny "Premarket
-// Change %" i posortować po niej ręcznie — patrz panel-hint w ep.html.
+// SKANER — embed-widget-screener.js, DOKŁADNIE DWA presety, na wyraźną
+// prośbę użytkownika (pierwsza wersja miała cztery — "ja chciałem tylko
+// dwie"): każdy odpowiada jednej, osobnej strategii, nie wariantom tej samej:
+//   1. "EP — gap przedrynkowy": defaultScreen "top_gainers" — najbliższe
+//      darmowemu widgetowi przybliżenie gapu (nie ma udokumentowanego
+//      presetu wprost "premarket", sprawdzone w dokumentacji TradingView —
+//      defaultScreen bierze jedną z ustalonych wartości typu
+//      most_capitalized/top_gainers/unusual_volume/..., żadna nie nazywa się
+//      "premarket"); defaultColumn "performance" pokazuje % zmiany.
+//      showToolbar:true zostawia użytkownikowi WEWNĄTRZ widgetu własny pasek
+//      narzędzi TradingView, gdzie można dodać kolumnę/filtr "Zmiana od
+//      otwarcia %" albo realny "Premarket Change %" i posortować po niej
+//      ręcznie — patrz panel-hint w ep.html.
+//   2. "Wybicie na wolumenie": defaultScreen "unusual_volume" (użytkownik:
+//      "nietypowy wolumen co może pokazać breakout"); defaultColumn
+//      "moving_averages" — udokumentowana wartość defaultColumn, pokazuje w
+//      tabeli SMA/EMA 10/20/50/100/200 + rating każdej — dokładnie to, co
+//      użytkownik chciał widzieć ("cena powyżej EMA20 dziennego, najlepiej
+//      aligned 10>20>50>100>200") bez pisania własnego, osobnego wskaźnika
+//      "EMA stack" — darmowy widget już to liczy i pokazuje.
+// Przełączane przyciskami (ten sam wzorzec przebudowy widgetu od zera co
+// renderTvOverviewPanel w chart-modal.js, bo osadzony <script> nie ma API do
+// podmiany configu w locie) — stąd config bierze cały obiekt presetu
+// ({screen, column}), nie samą nazwę screena, żeby każdy preset mógł mieć
+// swój własny domyślny widok kolumn.
 // ============================================================
 const EP_SCREENER_PRESETS = [
-    { key: "top_gainers", label: "🔥 Największe wzrosty" },
-    { key: "unusual_volume", label: "📊 Nietypowy wolumen" },
-    { key: "earnings_this_week", label: "📅 Wyniki w tym tygodniu" },
-    { key: "most_volatile", label: "🌪 Najbardziej zmienne" },
+    { key: "gap", label: "📈 EP — gap przedrynkowy", screen: "top_gainers", column: "performance" },
+    { key: "breakout", label: "📊 Wybicie na wolumenie (EMA 10>20>50>100>200)", screen: "unusual_volume", column: "moving_averages" },
 ];
 
 const EP_SCREENER_WIDGET = {
     src: `${TV_EMBED_BASE}embed-widget-screener.js`,
     heightPx: 640,
-    config: screen => ({
+    config: preset => ({
         width: "100%",
         height: "100%",
-        defaultColumn: "performance",
-        defaultScreen: screen,
+        defaultColumn: preset.column,
+        defaultScreen: preset.screen,
         showToolbar: true,
         market: "america",
         colorTheme: "dark",
@@ -105,8 +115,9 @@ let activeScreenerPreset = EP_SCREENER_PRESETS[0].key;
 function renderEpScreenerWidget() {
     const container = document.getElementById("epScreenerContainer");
     if (!container) return;
+    const preset = EP_SCREENER_PRESETS.find(p => p.key === activeScreenerPreset) || EP_SCREENER_PRESETS[0];
     container.querySelectorAll(".tv-widget-block").forEach(el => el.remove());
-    container.appendChild(buildTvWidgetBlock(EP_SCREENER_WIDGET, activeScreenerPreset));
+    container.appendChild(buildTvWidgetBlock(EP_SCREENER_WIDGET, preset));
 }
 
 function initEpScreenerPresets() {
