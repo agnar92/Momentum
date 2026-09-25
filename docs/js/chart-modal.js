@@ -60,8 +60,14 @@ if (typeof require === "function" && typeof window === "undefined") {
 // argument po prostu ignoruje). Osadzone <script> nie mają API do podmiany
 // symbolu w locie, więc renderTvOverviewPanel przy każdej zmianie tickera
 // buduje WSZYSTKIE bloki od zera.
+//
+// TV_EMBED_BASE/buildTvWidgetBlock (budowanie pojedynczego bloku widgetu) i
+// TV_1MIN_VWAP_WIDGET (widget "⚡ 1 min + VWAP" niżej) żyją teraz w
+// js/shared.js — dokładnie ten sam mechanizm zaczął być potrzebny DRUGI raz w
+// js/ep.js (sekcja EP — skaner gapów, Top Stories, okno 1-min+VWAP), więc
+// wydzielone stąd, żeby nie kopiować budowania widgetu po raz trzeci (patrz
+// komentarz na górze shared.js).
 // ============================================================
-const TV_EMBED_BASE = "https://s3.tradingview.com/external-embedding/";
 
 const TV_TICKER_TAPE_SYMBOLS = [
     { proName: "AMEX:SPY", title: "S&P 500" },
@@ -164,26 +170,9 @@ const TV_PAGE_WIDGETS_ROW = [
 // TradingView) — użytkownik patrzy na zakres z pierwszych minut sesji i sam
 // decyduje o wejściu/stop-lossie. Ten sam wzorzec budowy bloku
 // (buildTvWidgetBlock) co panel "Dane spółki", tylko jeden widget zamiast
-// całej "wizytówki".
+// całej "wizytówki". Sam widget (TV_1MIN_VWAP_WIDGET) żyje teraz w
+// js/shared.js — patrz komentarz na górze tego pliku.
 // ============================================================
-const TV_ORB_WIDGET = {
-    src: `${TV_EMBED_BASE}embed-widget-advanced-chart.js`,
-    heightPx: 600,
-    autosizeFill: true,
-    config: symbol => ({
-        autosize: true,
-        symbol,
-        interval: "1",
-        timezone: "Etc/UTC",
-        theme: "dark",
-        style: "1",
-        locale: "pl",
-        allow_symbol_change: true,
-        calendar: false,
-        studies: ["VWAP@tv-basicstudies"],
-        support_host: "https://www.tradingview.com",
-    }),
-};
 
 // Pasek nad wykresem z poziomem oporu/wsparcia "do obserwowania"
 // (breakoutLevelFor(), js/minicharts.js) — na wyraźną prośbę użytkownika: samo
@@ -228,38 +217,7 @@ function renderOrbPanel(ticker, universe) {
         return;
     }
     if (empty) empty.hidden = true;
-    container.appendChild(buildTvWidgetBlock(TV_ORB_WIDGET, tvSymbolFor(ticker, universe)));
-}
-
-function buildTvWidgetBlock(spec, tvSymbol) {
-    const block = document.createElement("div");
-    block.className = "tv-widget-block";
-    if (spec.heightPx) block.style.height = `${spec.heightPx}px`;
-
-    const container = document.createElement("div");
-    container.className = "tradingview-widget-container";
-    const widgetDiv = document.createElement("div");
-    widgetDiv.className = "tradingview-widget-container__widget";
-    if (spec.autosizeFill) {
-        // Jak w źródle: kontener na 100%/100%, wewnętrzny div na
-        // calc(100% - 32px) — te 32px rezerwują miejsce na pasek atrybucji
-        // TradingView u dołu widgetu, inaczej autosize go przykrywa.
-        container.style.height = "100%";
-        container.style.width = "100%";
-        widgetDiv.style.height = "calc(100% - 32px)";
-        widgetDiv.style.width = "100%";
-    }
-    container.appendChild(widgetDiv);
-
-    const script = document.createElement("script");
-    script.type = "text/javascript";
-    script.src = spec.src;
-    script.async = true;
-    script.textContent = JSON.stringify(spec.config(tvSymbol));
-    container.appendChild(script);
-
-    block.appendChild(container);
-    return block;
+    container.appendChild(buildTvWidgetBlock(TV_1MIN_VWAP_WIDGET, tvSymbolFor(ticker, universe)));
 }
 
 // Przebudowuje CAŁĄ zawartość panelu TV (nie da się podmienić symbolu w już

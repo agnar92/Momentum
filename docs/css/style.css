@@ -1043,13 +1043,37 @@ th.tv-col, th.chart-col { width: 1%; }
 /* ============================================================
    STRONA REBALANS
    ============================================================ */
-.rebalance-page, .strategy-page {
+.rebalance-page, .strategy-page, .ep-page {
     height: calc(100vh - 48px);
     overflow-y: auto;
     padding: 24px 32px;
     max-width: 980px;
     margin: 0 auto;
 }
+
+/* Strona EP (Episodic Pivot, docs/ep.html/js/ep.js) — dziennik ręcznie
+   dodawanych tickerów, wpisywanych po przejrzeniu skanera/newsów powyżej na
+   tej samej stronie (patrz komentarz na górze ep.js). #epLogTable to zwykłe
+   table.momentum-table (patrz wyżej), tylko z edytowalnymi <select>/<input>
+   w komórkach zamiast statycznego tekstu — table.holdings-table ma już taką
+   regułę dla swoich input-ów, ale nie dla select-ów, i ukrywa na telefonie
+   3. kolumnę (myślaną dla ceny w innych tabelach), co tutaj wycięłoby "Typ
+   EP" — stąd osobna, węższa reguła zamiast reużycia .holdings-table. */
+#epLogTable select, #epLogTable input[type="text"] {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 5px 8px;
+    border-radius: 5px;
+    font-size: 12.5px;
+}
+#epLogTable input[type="text"] { width: 150px; }
+#epLogTable td.ep-ticker-cell { font-weight: 700; }
+
+/* Selecty Typ EP/Status w formularzu dodawania (.import-row nad tabelą) —
+   .contribution-input jest domyślnie 200px, tu trochę węziej, żeby cały
+   wiersz (ticker + 2 selecty + notatki + przycisk) mieścił się bliżej siebie. */
+.ep-select-inline { width: 170px; }
 
 /* Krok 1 strategii sektorowej (docs/strategy.html): baner "faza wzrostu"
    SP500 wg filtru trendu (SMA200 dzienna LUB SMA40 tygodniowa), patrz
@@ -1555,7 +1579,7 @@ table.holdings-table td, table.rebalance-table td {
     .workspace.mobile-chart-view .chart-back-btn { display: block; }
 
     /* --- Rebalans --- */
-    .rebalance-page, .strategy-page { padding: 14px 12px; }
+    .rebalance-page, .strategy-page, .ep-page { padding: 14px 12px; }
     .panel-card { padding: 14px; }
     .stat-cards { gap: 10px; margin-bottom: 16px; }
     .stat-card { min-width: 0; flex: 1 1 45%; padding: 12px 14px; }

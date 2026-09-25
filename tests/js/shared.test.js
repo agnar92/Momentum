@@ -9,6 +9,7 @@ const path = require("node:path");
 const {
     UNIVERSES, UNIVERSE_LABELS, PLN_UNIVERSES, formatPrice, tvSymbolFor, tvUrlFor,
     STAGE_LABELS, STAGE_COLORS, stageCellHtml, compareRows,
+    TV_EMBED_BASE, TV_1MIN_VWAP_WIDGET,
 } = require(path.join("..", "..", "docs", "js", "shared.js"));
 
 test("UNIVERSES lists all six universes the pipeline computes", () => {
@@ -74,4 +75,12 @@ test("compareRows sorts strings case-insensitively", () => {
 test("compareRows treats equal values as a tie (stable order)", () => {
     const rows = [{ rank: 1, id: "a" }, { rank: 1, id: "b" }];
     assert.equal(compareRows(rows[0], rows[1], "rank", "asc"), 0);
+});
+
+test("TV_1MIN_VWAP_WIDGET.config pins interval 1 + VWAP study for the given symbol", () => {
+    const cfg = TV_1MIN_VWAP_WIDGET.config("NVDA");
+    assert.equal(cfg.symbol, "NVDA");
+    assert.equal(cfg.interval, "1");
+    assert.deepEqual(cfg.studies, ["VWAP@tv-basicstudies"]);
+    assert.equal(TV_1MIN_VWAP_WIDGET.src, `${TV_EMBED_BASE}embed-widget-advanced-chart.js`);
 });

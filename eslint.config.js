@@ -89,6 +89,9 @@ const browserGlobals = {
     BASE_BOX_COLORS: "readonly",
     stageCellHtml: "readonly",
     compareRows: "readonly",
+    TV_EMBED_BASE: "readonly",
+    TV_1MIN_VWAP_WIDGET: "readonly",
+    buildTvWidgetBlock: "readonly",
     // Zdefiniowane w docs/js/table-render.js, wspoldzielonym przez zwykly
     // <script> tag z docs/js/app.js i docs/js/rebalance.js — patrz komentarz
     // na gorze table-render.js. Ten sam wzorzec co powyzej dla
