@@ -726,6 +726,25 @@ def insert_daily_series(con, table, id_column, id_value, start_date, end_date, s
     return prices
 
 
+def insert_daily_series_ohlc(con, table, id_column, id_value, start_date, end_date, start_price, step_per_day,
+                              half_range=0.5):
+    """Jak insert_daily_series, ale dolicza tez High/Low (Close +/- half_range) —
+    potrzebne dla serie grajace role LICZNIKA korekty ATR Sily Relatywnej
+    (RS_ATR_WEEKS w run_query.py; patrz insert_weekly_ohlc_close_list dla ten
+    sam idiom na serii tygodniowej z jawna lista zamkniec zamiast liniowego kroku)."""
+    dates = pd.bdate_range(start=start_date, end=end_date)
+    prices, rows = {}, []
+    for i, d in enumerate(dates):
+        price = start_price + i * step_per_day
+        prices[d] = price
+        rows.append((d.strftime("%Y-%m-%d"), id_value, price, price, 1000, price + half_range, price - half_range))
+    con.executemany(
+        f"INSERT INTO {table} (Date, {id_column}, Close, Adj_Close, Volume, High, Low) "
+        f"VALUES (?, ?, ?, ?, ?, ?, ?)", rows,
+    )
+    return prices
+
+
 def nearest_price_on_or_before(prices, target_date):
     candidates = [d for d in prices if d <= target_date]
     return prices[max(candidates)]
@@ -1447,16 +1466,22 @@ class TestComputeMansfieldRsChart:
         # start_date jest teraz PRZEKAZYWANY (to samo okno momentum co
         # compute_relative_strength_chart), nie liczony wewnetrznie z ref_date.
         start_date = ref_date - pd.Timedelta(weeks=26)
-        # Dane siegaja 44 tyg. PRZED start_date -> wiecej niz potrzebny zapas
-        # (RS_MANSFIELD_MEDIUM_WEEKS - 1 = 25 tyg.), zeby oba wygladzenia mialy juz
-        # wartosc na pierwszym WYSWIETLANYM tygodniu (start_date), nie dopiero
-        # pare miesiecy pozniej.
-        fixture_start = start_date - pd.Timedelta(weeks=44)
+        # RS jest teraz skorygowany o ATR20 spolki (RS_ATR_WEEKS) — rs_raw dostaje
+        # wartosc dopiero od tygodnia 20 (rozgrzewka ATR: True Range potrzebuje 1
+        # tygodnia na prev_close + 20-tyg. rolling srednia), wiec wygladzenie W
+        # potrzebuje buforu >= 19+W tygodni PRZED start_date (nie W-1 jak przed
+        # ta korekta): 32 dla short, 45 dla medium. 50 tyg. bufora daje wygodny
+        # zapas dla obu.
+        fixture_start = start_date - pd.Timedelta(weeks=50)
+        n_weeks = 85
         # AAA rosnie proporcjonalnie szybciej niz NASDAQ100 (1/100 vs 0.3/200
-        # tygodniowo) -> RS (cena/indeks) systematycznie przyspiesza.
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 75, 100.0, 1.0)
+        # tygodniowo) -> RS (cena/indeks) systematycznie przyspiesza. High/Low
+        # (+/-0.5 wokol close) daja STALY True Range/ATR — stala redukcja ceny nie
+        # zmienia kierunku trendu.
+        closes = [100.0 + i * 1.0 for i in range(n_weeks)]
+        insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 75, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), n_weeks, 200.0, 0.3)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -1472,14 +1497,17 @@ class TestComputeMansfieldRsChart:
     def test_long_rsm_has_value_from_first_displayed_week_with_enough_history(self):
         # rsm_long (RS_MANSFIELD_LONG_WEEKS=52, dodane na wyrazne zyczenie uzytkownika
         # -- "ad 52 weeks for that panel so it will have 3 lines") potrzebuje wiecej
-        # zapasu PRZED start_date niz short/medium: RS_MANSFIELD_LONG_WEEKS - 1 = 51 tyg.
+        # zapasu PRZED start_date niz short/medium: 19+52=71 tyg. (patrz komentarz w
+        # tescie powyzej dla skad bierze sie +19, czyli rozgrzewka ATR20 korekty RS).
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
         start_date = ref_date - pd.Timedelta(weeks=26)
-        fixture_start = start_date - pd.Timedelta(weeks=70)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 100, 100.0, 1.0)
+        fixture_start = start_date - pd.Timedelta(weeks=75)
+        n_weeks = 110
+        closes = [100.0 + i * 1.0 for i in range(n_weeks)]
+        insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 100, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), n_weeks, 200.0, 0.3)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -1488,18 +1516,20 @@ class TestComputeMansfieldRsChart:
         assert out["rsm_long"][-1] > 0
 
     def test_insufficient_lookback_for_long_leaves_it_none_while_short_and_medium_populate(self):
-        # Ten sam zapas (44 tyg.) co w test_short_and_medium_rsm_have_values_from_first_
-        # displayed_week powyzej: wiecej niz potrzeba dla short/medium (12/25 tyg.), ale
-        # za malo dla long (potrzeba RS_MANSFIELD_LONG_WEEKS - 1 = 51 tyg.) -- ten sam
-        # "None dopoki nie ma dosc historii" wzorzec co rsm_medium w drugim tescie tej
-        # klasy, tylko dla trzeciej, dluzszej linii.
+        # Bufor (55 tyg.) wybrany celowo w przedziale [45, 70]: wiecej niz
+        # potrzeba dla short/medium (32/45 tyg. z ATR20, patrz pierwszy test tej
+        # klasy), ale za malo dla long (potrzeba 71 tyg.) -- ten sam "None dopoki
+        # nie ma dosc historii" wzorzec co rsm_medium w kolejnym tescie tej klasy,
+        # tylko dla trzeciej, dluzszej linii.
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
         start_date = ref_date - pd.Timedelta(weeks=26)
-        fixture_start = start_date - pd.Timedelta(weeks=44)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 75, 100.0, 1.0)
+        fixture_start = start_date - pd.Timedelta(weeks=55)
+        n_weeks = 90
+        closes = [100.0 + i * 1.0 for i in range(n_weeks)]
+        insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 75, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), n_weeks, 200.0, 0.3)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -1512,13 +1542,16 @@ class TestComputeMansfieldRsChart:
         con = make_gem_con()
         ref_date = pd.Timestamp("2026-06-29")
         start_date = ref_date - pd.Timedelta(weeks=26)
-        # 15 tyg. historii PRZED start_date: wystarczy na krotkoterminowe
-        # wygladzenie (potrzeba RS_MANSFIELD_SHORT_WEEKS - 1 = 12 tyg.), za malo na
-        # srednioterminowe (potrzeba RS_MANSFIELD_MEDIUM_WEEKS - 1 = 25 tyg.).
-        fixture_start = start_date - pd.Timedelta(weeks=15)
-        insert_weekly_series(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), 42, 100.0, 1.0)
+        # 40 tyg. historii PRZED start_date, w przedziale [32, 44]: wystarczy na
+        # krotkoterminowe wygladzenie (potrzeba 19+13=32 tyg. z ATR20, patrz
+        # komentarz w pierwszym tescie tej klasy), za malo na srednioterminowe
+        # (potrzeba 19+26=45 tyg.).
+        fixture_start = start_date - pd.Timedelta(weeks=40)
+        n_weeks = 70
+        closes = [100.0 + i * 1.0 for i in range(n_weeks)]
+        insert_weekly_ohlc_close_list(con, "prices", "Ticker", "AAA", fixture_start.strftime("%Y-%m-%d"), closes)
         insert_weekly_series(con, "index_prices", "Index_Name", "NASDAQ100",
-                              fixture_start.strftime("%Y-%m-%d"), 42, 200.0, 0.3)
+                              fixture_start.strftime("%Y-%m-%d"), n_weeks, 200.0, 0.3)
 
         out = compute_mansfield_rs_chart(con, "AAA", "NASDAQ100", ref_date.strftime("%Y-%m-%d"),
                                           start_date.strftime("%Y-%m-%d"))
@@ -2044,15 +2077,30 @@ class TestComputeSp500TrendFilter:
 
 class TestComputeSectorRelativeStrength:
     def _seed(self, con):
+        # index_prices w make_gem_con() ma tylko 5 kolumn (bez High/Low); prawdziwa
+        # produkcyjna `index_prices` MA je od dawna (pozostalosc po wczesniejszej,
+        # zrewertowanej migracji, patrz komentarz w fetch_data.py::update_index_
+        # prices) — _mansfield_rsm_series(..., include_high_low=True) dla sektora
+        # (Krok 2, patrz compute_sector_relative_strength) odpytuje ta kolumne
+        # BEZ WZGLEDU na to, czy dany sektor akurat ma jakiekolwiek wiersze (np.
+        # "no_data" w pierwszym tescie ponizej), wiec kolumna musi istniec w
+        # schemacie niezaleznie od tego, ktory test akurat sprawdzamy.
+        con.execute("ALTER TABLE index_prices ADD COLUMN High DOUBLE")
+        con.execute("ALTER TABLE index_prices ADD COLUMN Low DOUBLE")
         con.executemany("INSERT INTO index_constituents VALUES (?, 'SP500', ?, 100.0)", [
             ("TFAST", "Tech"), ("TMID", "Tech"), ("TSLOW", "Tech"),
             ("UONE", "Utilities"),
         ])
+        # SP500 gra tu WYLACZNIE role benchmarku/mianownika (Krok 2 i "top_rs_
+        # companies") -> zostaje surowy, bez High/Low (patrz komentarz nad
+        # RS_ATR_WEEKS w run_query.py). Spolki graja role LICZNIKA -> potrzebuja
+        # realnego High/Low do policzenia wlasnego ATR20 (insert_daily_series_ohlc,
+        # `prices` ma te kolumny od dawna, niezaleznie od tej zmiany).
         insert_daily_series(con, "index_prices", "Index_Name", "SP500", "2024-06-01", "2026-03-16", 100.0, 0.05)
-        insert_daily_series(con, "prices", "Ticker", "TFAST", "2024-06-01", "2026-03-16", 100.0, 0.40)
-        insert_daily_series(con, "prices", "Ticker", "TMID", "2024-06-01", "2026-03-16", 100.0, 0.20)
-        insert_daily_series(con, "prices", "Ticker", "TSLOW", "2024-06-01", "2026-03-16", 100.0, 0.10)
-        insert_daily_series(con, "prices", "Ticker", "UONE", "2024-06-01", "2026-03-16", 100.0, 0.01)
+        insert_daily_series_ohlc(con, "prices", "Ticker", "TFAST", "2024-06-01", "2026-03-16", 100.0, 0.40)
+        insert_daily_series_ohlc(con, "prices", "Ticker", "TMID", "2024-06-01", "2026-03-16", 100.0, 0.20)
+        insert_daily_series_ohlc(con, "prices", "Ticker", "TSLOW", "2024-06-01", "2026-03-16", 100.0, 0.10)
+        insert_daily_series_ohlc(con, "prices", "Ticker", "UONE", "2024-06-01", "2026-03-16", 100.0, 0.01)
 
     def test_sector_without_etf_data_has_no_rs_and_lands_last(self):
         # Brak wierszy w index_prices dla Index_Name='Tech'/'Utilities' (zaden
@@ -2089,8 +2137,8 @@ class TestComputeSectorRelativeStrength:
         # bez wygladzenia RS wobec wlasnej sredniej).
         con = make_gem_con()
         self._seed(con)
-        insert_daily_series(con, "index_prices", "Index_Name", "Tech", "2024-06-01", "2026-03-16", 100.0, 0.02)
-        insert_daily_series(con, "index_prices", "Index_Name", "Utilities", "2024-06-01", "2026-03-16", 100.0, 0.15)
+        insert_daily_series_ohlc(con, "index_prices", "Index_Name", "Tech", "2024-06-01", "2026-03-16", 100.0, 0.02)
+        insert_daily_series_ohlc(con, "index_prices", "Index_Name", "Utilities", "2024-06-01", "2026-03-16", 100.0, 0.15)
 
         out = compute_sector_relative_strength(con, "2026-03-16", min_trading_days=5, max_staleness_days=10)
         sectors_by_name = {s["sector"]: s for s in out["sectors"]}
@@ -2128,9 +2176,18 @@ class TestComputeSectorRelativeStrength:
 
 class TestMansfieldRsmTail:
     def test_tail_returns_last_n_rsm_values_without_warmup_nans(self):
-        weeks = pd.date_range("2025-01-06", periods=80, freq="7D")
-        num = pd.DataFrame({"week_start": weeks, "close": [100.0 + i for i in range(80)]})
-        den = pd.DataFrame({"week_start": weeks, "close": [100.0] * 80})
+        # 120 tyg. (nie 80): RS jest teraz skorygowany o ATR20 licznika (patrz
+        # RS_ATR_WEEKS w run_query.py) — rs_raw dostaje wartosc dopiero od
+        # tygodnia 20 (rozgrzewka ATR), wiec RSM(52) potrzebuje 20+52-1=71
+        # tygodni PRZED pierwsza wartoscia, a test chce jeszcze 26-tygodniowy
+        # "ogon" takich wartosci (71+26=97, 120 daje wygodny zapas). High/Low
+        # (close +/- 1) daja STALY True Range/ATR — nie zmienia to kierunku
+        # trendu (rosnaca linia minus stala dalej rosnie), tylko przesuwa RS w dol.
+        weeks = pd.date_range("2025-01-06", periods=120, freq="7D")
+        closes = [100.0 + i for i in range(120)]
+        num = pd.DataFrame({"week_start": weeks, "close": closes,
+                             "high": [c + 1 for c in closes], "low": [c - 1 for c in closes]})
+        den = pd.DataFrame({"week_start": weeks, "close": [100.0] * 120})
         tail = run_query._mansfield_rsm_tail(num, den, n=26, weeks=52)
         assert len(tail) == 26
         assert tail[-1] == round(run_query._mansfield_rsm_current_value(num, den, weeks=52), 2)
@@ -2150,7 +2207,11 @@ class TestMansfieldRsmTail:
         # obejmowac WIECEJ niz `weeks` realnych tygodni na zawsze po luce (nigdy
         # sie nie "wyrownuje"). Zamiast tego luka powinna zostac jako NaN.
         weeks = pd.date_range("2025-01-06", periods=115, freq="7D")
-        num = pd.DataFrame({"week_start": weeks, "close": [100.0] * 115})
+        # high/low stale (101/99) -> ATR20 stala -> RS przesuniete o stala, ale
+        # dalej PLASKIE (jak przed korekta) — RSM=0 poza luka pozostaje 0 bez
+        # wzgledu na dokladna wartosc tej stalej (patrz asercja przy gap_idx+52).
+        num = pd.DataFrame({"week_start": weeks, "close": [100.0] * 115,
+                             "high": [101.0] * 115, "low": [99.0] * 115})
         gap_idx = 60
         den_weeks = weeks.delete(gap_idx)  # mianownik NIE ma wiersza dla tego tygodnia
         den = pd.DataFrame({"week_start": den_weeks, "close": [100.0] * len(den_weeks)})
