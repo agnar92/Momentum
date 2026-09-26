@@ -28,7 +28,21 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const WYBICIE_DEFAULT_WINDOW_WEEKS = 6;
 const WYBICIE_DEFAULT_MONITOR_WEEKS = 6;
-const WYBICIE_DEFAULT_MODE = "MACD_RS";
+// Domyślnie: tryb skojarzony (MACD + RS 52 tyg., oba przecinają zero w oknie —
+// dotychczasowe, jedyne zachowanie) — patrz nagłówek klasyfikacji niżej dla
+// pełnego opisu, dlaczego to jest jeden, wyłączny przełącznik, a reszta to
+// niezależne, łączalne checkboxy.
+const WYBICIE_DEFAULT_COMBINED_MODE = true;
+const WYBICIE_FILTER_KEYS = ["macdCrossZero", "macdCrossSignal", "macdAboveZero", "rsAboveZero"];
+const WYBICIE_FILTER_BTN_IDS = {
+    macdCrossZero: "wybicieFilterMacdCrossZeroBtn",
+    macdCrossSignal: "wybicieFilterMacdCrossSignalBtn",
+    macdAboveZero: "wybicieFilterMacdAboveZeroBtn",
+    rsAboveZero: "wybicieFilterRsAboveZeroBtn",
+};
+function defaultWybicieFilters() {
+    return { macdCrossZero: false, macdCrossSignal: false, macdAboveZero: false, rsAboveZero: false };
+}
 const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
 
 // Continuation, przeprojektowany na TYGODNIOWY (patrz nagłówek klasyfikacji
@@ -97,7 +111,8 @@ const state = {
     sortDir: "asc",
     wybicieWindowWeeks: WYBICIE_DEFAULT_WINDOW_WEEKS,
     wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
-    wybicieMode: WYBICIE_DEFAULT_MODE,
+    wybicieCombinedMode: WYBICIE_DEFAULT_COMBINED_MODE,
+    wybicieFilters: defaultWybicieFilters(),
     contMinConsolidationWeeks: CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS,
     contFireLookbackWeeks: CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS,
     contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
@@ -166,20 +181,46 @@ async function loadData() {
 // NIE-null wartością w danej serii (ten sam caveat co w classifyTtmSqueeze —
 // najnowszy tydzień bywa null).
 //
-// TRYB (state.wybicieMode, przełącznik nad tabelą, #wybicieModeMacdRsBtn /
-// #wybicieModeMacdOnlyBtn) — dodany na wyraźną prośbę użytkownika ("dodaj
-// selector bez wybicia RS 52 tygodnie, samo MACD tygodniowe"):
-//   - "MACD_RS" (domyślny, jak opisano wyżej) — wymaga WSZYSTKICH TRZECH
-//     warunków 1-3, włącznie z przecięciem RS 52 tyg. blisko przecięcia MACD
-//     (OKNO WYBICIA ma tu sens i suwak jest widoczny).
-//   - "MACD_ONLY" — pomija warunek 2 (RS 52 tyg.) CAŁKOWICIE: liczy się
-//     wyłącznie przecięcie zera w górę przez tygodniowy MACD (warunek 1) i
-//     dodatni histogram TTM (warunek 3, bez zmian). OKNO WYBICIA nie ma tu
-//     zastosowania (nie ma drugiego przecięcia, z którym porównywać odstęp) —
-//     suwak jest wtedy ukryty, breakoutWeeks = macdCrossWeeks wprost. Linia
-//     RS 52 tyg. jest nadal liczona i pokazywana w tabeli/kafelkach jako
-//     informacja (może być dodatnia bez świeżego przecięcia, ujemna, albo
-//     brakująca), po prostu przestaje być warunkiem WEJŚCIA na listę.
+// TRYB — PRZEPROJEKTOWANY z dwuprzyciskowego "MACD_RS"/"MACD_ONLY" selektora na
+// wyraźną, późniejszą prośbę użytkownika: chciał osobno włączać "MACD przecina
+// linię sygnałową będąc nad zerem" (bycze nastawienie) i "MACD ponad 0" — a
+// resztę warunków (w tym "RS 52 tyg. ponad 0") dało się łączyć swobodnie, np.
+// włączyć wszystkie naraz, żeby zawężać listę. Jedyny warunek, który MUSI
+// zostać jako pojedynczy, WYŁĄCZNY przełącznik (a nie kolejny checkbox do
+// łączenia) jest dokładnie ten, który wcześniej był domyślnym trybem: "MACD
+// przecina zero w górę I RS 52 tyg. też, blisko siebie w czasie" — włączenie
+// go wyłącza wszystkie poniższe checkboxy, i odwrotnie (checkbox włączony ->
+// tryb skojarzony się wyłącza). Stąd dwa niezależne pola stanu:
+//   - state.wybicieCombinedMode (domyślnie true) — TEN JEDEN, wyłączny
+//     warunek: WSZYSTKIE TRZY warunki 1-3 z akapitu wyżej, włącznie z
+//     przecięciem RS 52 tyg. blisko przecięcia MACD (OKNO WYBICIA ma tu sens
+//     i suwak jest widoczny). #wybicieCombinedBtn.
+//   - state.wybicieFilters (state.wybicieCombinedMode === false) — do CZTERECH
+//     niezależnych, łączalnych (logiczne I między włączonymi) checkboxów,
+//     WYBICIE_FILTER_KEYS/WYBICIE_FILTER_BTN_IDS:
+//       - macdCrossZero — tygodniowy MACD przeciął zero w górę (dawny tryb
+//         "Samo MACD tygodniowe", teraz jeden z kilku łączalnych warunków, nie
+//         osobny "tryb").
+//       - macdCrossSignal — MACD przeciął swoją linię sygnałową W GÓRĘ, W
+//         BYCZYM NASTAWIENIU (MACD jest TERAZ nad zerem) — inaczej to zwykłe
+//         odbicie z dołka, nie kontynuacja trendu wzrostowego.
+//       - macdAboveZero — MACD jest TERAZ nad zerem (bez wymogu żadnego
+//         przecięcia — czysty poziom, nie zdarzenie).
+//       - rsAboveZero — RS 52 tyg. (mansfield_chart.rsm_long) jest TERAZ nad
+//         zerem (też czysty poziom, bez wymogu przecięcia).
+//     Warunek 3 (dodatni histogram TTM) jest zawsze wymagany, niezależnie od
+//     trybu/checkboxów — to jest podstawa tego, że coś "właśnie rusza", a nie
+//     osobny przełącznik. OKNO WYBICIA dotyczy wyłącznie trybu skojarzonego —
+//     w checkboxach nie ma dwóch przecięć do porównania odstępem, suwak jest
+//     wtedy ukryty. breakoutWeeks (wiek "wydarzenia") liczy się z NAJŚWIEŻSZEGO
+//     z aktywnych warunków-ZDARZEŃ (macdCrossZero/macdCrossSignal) — czyste
+//     warunki-POZIOMY (macdAboveZero/rsAboveZero) nie mają wieku, więc jeśli
+//     żaden warunek-zdarzenie nie jest aktywny, breakoutWeeks jest null (lista
+//     nie jest wtedy filtrowana wiekiem — MONITOROWANIE PO WYBICIU nie ma
+//     zastosowania) i tabela pokazuje "aktualnie" zamiast liczby tygodni.
+//     Odznaczenie OSTATNIEGO aktywnego checkboxa (przy wyłączonym trybie
+//     skojarzonym) wraca do trybu skojarzonego — inaczej ekran wpadałby w
+//     niejasny stan "brak żadnego warunku MACD/RS" (tylko histogram TTM).
 // ============================================================
 
 // Ile tygodni temu seria przecięła zero w górę (1 = w ostatnim tygodniu), albo
@@ -199,29 +240,55 @@ function weeksSinceZeroCrossUp(arr, lookback = Infinity) {
 // Zwraca null, gdy spółka nie spełnia wszystkich warunków (albo brakuje
 // danych) — celowo wyselekcjonowany screener, nie pełna lista.
 function classifyWybicie(ticker, universe, c, opts = {}) {
-    const mode = opts.mode ?? state.wybicieMode;
+    const combinedMode = opts.combinedMode ?? state.wybicieCombinedMode;
+    const filters = opts.filters ?? state.wybicieFilters;
     const windowWeeks = opts.windowWeeks ?? state.wybicieWindowWeeks;
     const monitorWeeks = opts.monitorWeeks ?? state.wybicieMonitorWeeks;
     const macd = c.macd_chart && c.macd_chart.macd;
+    const signal = c.macd_chart && c.macd_chart.signal;
     const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
     const hist = c.ttm_squeeze_chart && c.ttm_squeeze_chart.histogram;
     if (!macd || !hist) return null;
 
+    const macdIdx = latestNonNullIdx(macd);
+    const macdNow = macdIdx >= 0 ? macd[macdIdx] : null;
     const macdCrossWeeks = weeksSinceZeroCrossUp(macd);
-    if (macdCrossWeeks == null) return null;
 
-    let rsCrossWeeks = null;
-    let breakoutWeeks;
-    if (mode === "MACD_ONLY") {
-        breakoutWeeks = macdCrossWeeks;
-    } else {
-        if (!rsLong) return null;
-        rsCrossWeeks = weeksSinceZeroCrossUp(rsLong);
-        if (rsCrossWeeks == null) return null;
+    const rsIdx = rsLong ? latestNonNullIdx(rsLong) : -1;
+    const rsNow = rsIdx >= 0 ? rsLong[rsIdx] : null;
+    const rsCrossWeeks = rsLong ? weeksSinceZeroCrossUp(rsLong) : null;
+
+    // Przecięcie MACD z linią sygnałową w górę, "w byczym nastawieniu" — liczy
+    // się tylko, gdy MACD jest TERAZ nad zerem, żeby nie łapać zwykłego
+    // odbicia z dołka (patrz nagłówek klasyfikacji wyżej).
+    let macdSignalCrossWeeks = null;
+    if (signal) {
+        const diff = macd.map((v, i) => (v != null && signal[i] != null) ? v - signal[i] : null);
+        const crossWeeks = weeksSinceZeroCrossUp(diff);
+        if (crossWeeks != null && macdNow > 0) macdSignalCrossWeeks = crossWeeks;
+    }
+
+    let breakoutWeeks = null;
+    if (combinedMode) {
+        if (macdCrossWeeks == null) return null;
+        if (!rsLong || rsCrossWeeks == null) return null;
         if (Math.abs(macdCrossWeeks - rsCrossWeeks) > windowWeeks) return null;
         breakoutWeeks = Math.min(macdCrossWeeks, rsCrossWeeks);
+    } else {
+        const eventAges = [];
+        if (filters.macdCrossZero) {
+            if (macdCrossWeeks == null) return null;
+            eventAges.push(macdCrossWeeks);
+        }
+        if (filters.macdCrossSignal) {
+            if (macdSignalCrossWeeks == null) return null;
+            eventAges.push(macdSignalCrossWeeks);
+        }
+        if (filters.macdAboveZero && !(macdNow > 0)) return null;
+        if (filters.rsAboveZero && !(rsNow > 0)) return null;
+        if (eventAges.length) breakoutWeeks = Math.min(...eventAges);
     }
-    if (breakoutWeeks > monitorWeeks) return null;
+    if (breakoutWeeks != null && breakoutWeeks > monitorWeeks) return null;
     const histIdx = latestNonNullIdx(hist);
     if (histIdx < 0 || !(hist[histIdx] > 0)) return null;
 
@@ -229,9 +296,10 @@ function classifyWybicie(ticker, universe, c, opts = {}) {
         ticker, universe, sector: c.sector, price: c.price,
         momentum_pct: c.momentum_pct,
         current_stage: c.weekly_chart && c.weekly_chart.current_stage,
-        macdNow: macd[latestNonNullIdx(macd)],
+        macdNow,
         macdCrossWeeks,
-        rsLongNow: rsLong && latestNonNullIdx(rsLong) >= 0 ? rsLong[latestNonNullIdx(rsLong)] : null,
+        macdSignalCrossWeeks,
+        rsLongNow: rsNow,
         rsCrossWeeks,
         breakoutWeeks,
         histNow: hist[histIdx],
@@ -247,7 +315,9 @@ function classifyWybicie(ticker, universe, c, opts = {}) {
 // nie tylko bieżący top-decyl), bez duplikatów: spółka obecna w dwóch
 // uniwersach naraz (np. SP500 i NASDAQ100) pojawia się raz, z pierwszego
 // uniwersum w kolejności UNIVERSES. Sortowanie: najświeższe wybicie na górze,
-// potem mocniejszy histogram.
+// potem mocniejszy histogram. breakoutWeeks bywa null (patrz classifyWybicie —
+// tylko czyste warunki-poziomy aktywne, brak zdarzenia z wiekiem) — takie
+// wiersze lądują na końcu (Infinity), nie mając wieku do porównania.
 function combinedWybicieCandidates(opts = {}) {
     const rows = [];
     const seen = new Set();
@@ -261,7 +331,7 @@ function combinedWybicieCandidates(opts = {}) {
             rows.push(r);
         });
     });
-    rows.sort((a, b) => (a.breakoutWeeks - b.breakoutWeeks) || (b.histNow - a.histNow));
+    rows.sort((a, b) => ((a.breakoutWeeks ?? Infinity) - (b.breakoutWeeks ?? Infinity)) || (b.histNow - a.histNow));
     return rows;
 }
 
@@ -724,7 +794,8 @@ function renderWybiciePanel() {
         tile.className = "ticker-tile";
         tile.textContent = r.ticker;
         tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
-            + `wybicie ${r.breakoutWeeks} tyg. temu · MACD > 0 od ${r.macdCrossWeeks} tyg. · `
+            + (r.breakoutWeeks != null ? `wybicie ${r.breakoutWeeks} tyg. temu · ` : "")
+            + (r.macdCrossWeeks != null ? `MACD > 0 od ${r.macdCrossWeeks} tyg. · ` : "")
             + (r.rsCrossWeeks != null ? `RS 52 tyg. > 0 od ${r.rsCrossWeeks} tyg. · ` : "")
             + `histogram TTM ${r.histNow.toFixed(2)}`;
         tile.dataset.ticker = r.ticker;
@@ -964,31 +1035,38 @@ function crossWeeksHtml(weeks) {
     return weeks === 1 ? "w ost. tyg." : `${weeks} tyg. temu`;
 }
 
-function wybicieRowHtml(r, position) {
-    // W trybie "MACD_ONLY" (patrz classifyWybicie) RS 52 tyg. nie jest warunkiem
-    // wejścia na listę — rsLongNow/rsCrossWeeks bywają wtedy null (brak danych
-    // albo po prostu brak świeżego przecięcia). Kolumna pozostaje informacyjna:
-    // pokazuje aktualną wartość gdy jest dostępna (kolor wg znaku, nie zawsze
-    // "positive"), bez wieku przecięcia gdy go nie ma.
-    const rsCell = r.rsLongNow != null
-        ? `<span class="cell-spark">${zeroLineSparkSvg(r.mini_rs, r.mini_rs_cross)}<span>${r.rsLongNow.toFixed(2)}`
-            + (r.rsCrossWeeks != null ? ` <span class="cross-age">(${crossWeeksHtml(r.rsCrossWeeks)})</span>` : "")
+// Odkąd RS 52 tyg. (i, poniżej, MACD) może być tylko informacyjny — checkbox
+// "RS 52 tyg. > 0"/"MACD > 0" niekoniecznie jest włączony, ani MACD/RS nie
+// muszą mieć świeżego przecięcia — obie kolumny pokazują aktualną wartość, gdy
+// jest dostępna (kolor wg znaku, nie zawsze "positive"), z wiekiem przecięcia
+// tylko wtedy, gdy jakieś przecięcie faktycznie było.
+function wybicieValueCellHtml(now, crossWeeks, miniValues, miniCrossIdx, label) {
+    const cell = now != null
+        ? `<span class="cell-spark">${zeroLineSparkSvg(miniValues, miniCrossIdx)}<span>${now.toFixed(2)}`
+            + (crossWeeks != null ? ` <span class="cross-age">(${crossWeeksHtml(crossWeeks)})</span>` : "")
             + `</span></span>`
         : `<span class="spark-empty">—</span>`;
-    const rsCellClass = r.rsLongNow == null ? "" : r.rsLongNow >= 0 ? "positive" : "negative";
-    const rsTitle = r.rsCrossWeeks != null
-        ? `RS 52 tyg. (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.rsCrossWeeks)}`
-        : `RS 52 tyg. (${MINI_WEEKS} tyg.) — informacyjnie, nie jest wymagane w trybie „Samo MACD tygodniowe”`;
+    const cellClass = now == null ? "" : now >= 0 ? "positive" : "negative";
+    const title = crossWeeks != null
+        ? `${label} (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(crossWeeks)}`
+        : `${label} (${MINI_WEEKS} tyg.) — informacyjnie, nie jest wymagane przy bieżących warunkach`;
+    return { cell, cellClass, title };
+}
+
+function wybicieRowHtml(r, position) {
+    const macdCell = wybicieValueCellHtml(r.macdNow, r.macdCrossWeeks, r.mini_macd, r.mini_macd_cross, "MACD tygodniowy");
+    const rsCell = wybicieValueCellHtml(r.rsLongNow, r.rsCrossWeeks, r.mini_rs, r.mini_rs_cross, "RS 52 tyg.");
+    const breakoutHtml = r.breakoutWeeks != null ? crossWeeksHtml(r.breakoutWeeks) : "aktualnie";
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
-        <td>${crossWeeksHtml(r.breakoutWeeks)}</td>
+        <td>${breakoutHtml}</td>
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
-        <td class="positive" title="MACD tygodniowy (${MINI_WEEKS} tyg.), złota kropka = przecięcie zera w górę ${crossWeeksHtml(r.macdCrossWeeks)}"><span class="cell-spark">${zeroLineSparkSvg(r.mini_macd, r.mini_macd_cross)}<span>${r.macdNow.toFixed(2)} <span class="cross-age">(${crossWeeksHtml(r.macdCrossWeeks)})</span></span></span></td>
-        <td class="${rsCellClass}" title="${rsTitle}">${rsCell}</td>
+        <td class="${macdCell.cellClass}" title="${macdCell.title}">${macdCell.cell}</td>
+        <td class="${rsCell.cellClass}" title="${rsCell.title}">${rsCell.cell}</td>
         <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.)">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
@@ -1009,14 +1087,35 @@ function flatScreenerMetaText(allRows, rows) {
     return text;
 }
 
+// Opis aktywnych warunków MACD/RS (poza histogramem TTM, zawsze wymaganym) —
+// używany w komunikacie "brak wyników" i w podpowiedziach kontrolek.
+function wybicieActiveConditionsText() {
+    if (state.wybicieCombinedMode) {
+        return `MACD i RS 52 tyg. przecięły zero w odstępie ≤ ${state.wybicieWindowWeeks} tyg.`;
+    }
+    const parts = [];
+    if (state.wybicieFilters.macdCrossZero) parts.push("MACD tygodniowy przeciął zero w górę");
+    if (state.wybicieFilters.macdCrossSignal) parts.push("MACD przeciął linię sygnałową będąc nad zerem");
+    if (state.wybicieFilters.macdAboveZero) parts.push("MACD tygodniowy jest nad zerem");
+    if (state.wybicieFilters.rsAboveZero) parts.push("RS 52 tyg. jest nad zerem");
+    return parts.length ? parts.join(", ") : "brak dodatkowych warunków MACD/RS";
+}
+
+// Czy jakikolwiek aktywny warunek ma "wiek" (zdarzenie-przecięcie), a nie
+// tylko czysty poziom — od tego zależy, czy "Monitoruj po wybiciu" ma
+// zastosowanie (patrz classifyWybicie/breakoutWeeks).
+function wybicieHasAgeBasedFilter() {
+    return state.wybicieCombinedMode || state.wybicieFilters.macdCrossZero || state.wybicieFilters.macdCrossSignal;
+}
+
 // Tabela screenera Wybicie — sortowalna i filtrowalna po etapie, tak jak
 // pozostałe tabele, na płaskiej, wielo-uniwersalnej liście z
 // combinedWybicieCandidates().
 function renderWybicieTable() {
     const allRows = combinedWybicieCandidates();
-    const emptyAllMsg = state.wybicieMode === "MACD_ONLY"
-        ? `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (tygodniowy MACD przeciął zero w górę, histogram TTM dodatni).`
-        : `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (MACD i RS 52 tyg. przecięły zero w odstępie ≤ ${state.wybicieWindowWeeks} tyg., histogram TTM dodatni).`;
+    const emptyAllMsg = wybicieHasAgeBasedFilter()
+        ? `Brak spółek z wybiciem w ostatnich ${state.wybicieMonitorWeeks} tyg. (${wybicieActiveConditionsText()}, histogram TTM dodatni).`
+        : `Brak spółek spełniających wybrane warunki (${wybicieActiveConditionsText()}, histogram TTM dodatni).`;
 
     renderScreenerTable({
         tbody: document.getElementById("wybicieTableBody"),
@@ -1036,54 +1135,105 @@ function renderWybicieTable() {
     });
 }
 
-// Pokazuje/ukrywa suwak "Okno wybicia" — nie ma zastosowania w trybie
-// "MACD_ONLY" (nie ma drugiego przecięcia, z którym porównywać odstęp).
+// Pokazuje/ukrywa suwak "Okno wybicia" (tylko tryb skojarzony ma dwa
+// przecięcia do porównania odstępem) i "Monitoruj po wybiciu" (tylko gdy
+// jakiś aktywny warunek w ogóle ma wiek — patrz wybicieHasAgeBasedFilter), oraz
+// odświeża klasę "active" na przycisku skojarzonym i czterech checkboxach.
 function applyWybicieModeVisibility() {
-    const row = document.getElementById("wybicieWindowRow");
-    if (row) row.hidden = state.wybicieMode === "MACD_ONLY";
-    const macdRsBtn = document.getElementById("wybicieModeMacdRsBtn");
-    const macdOnlyBtn = document.getElementById("wybicieModeMacdOnlyBtn");
-    if (macdRsBtn) macdRsBtn.classList.toggle("active", state.wybicieMode !== "MACD_ONLY");
-    if (macdOnlyBtn) macdOnlyBtn.classList.toggle("active", state.wybicieMode === "MACD_ONLY");
+    const windowRow = document.getElementById("wybicieWindowRow");
+    if (windowRow) windowRow.hidden = !state.wybicieCombinedMode;
+    const monitorRow = document.getElementById("wybicieMonitorRow");
+    if (monitorRow) monitorRow.hidden = !wybicieHasAgeBasedFilter();
+    const combinedBtn = document.getElementById("wybicieCombinedBtn");
+    if (combinedBtn) combinedBtn.classList.toggle("active", state.wybicieCombinedMode);
+    WYBICIE_FILTER_KEYS.forEach(key => {
+        const btn = document.getElementById(WYBICIE_FILTER_BTN_IDS[key]);
+        if (btn) btn.classList.toggle("active", !state.wybicieCombinedMode && state.wybicieFilters[key]);
+    });
 }
 
-// Przełącznik trybu (#wybicieModeMacdRsBtn/#wybicieModeMacdOnlyBtn) i suwaki
-// nad tabelą Wybicie (#wybicieControls): tryb, okno wybicia i czas
-// monitorowania po wybiciu (patrz opis nad classifyWybicie). Wartości
-// zapamiętywane per przeglądarka w localStorage — tylko wygoda, strona działa
-// też bez niego (try/catch — tryb prywatny itp.).
+// Przełącznik skojarzony (#wybicieCombinedBtn) + cztery niezależne checkboxy
+// (WYBICIE_FILTER_BTN_IDS) + suwaki nad tabelą Wybicie (#wybicieControls):
+// patrz opis trybu nad classifyWybicie dla pełnej semantyki (wyłączność
+// skojarzonego warunku, łączalność checkboxów). Wartości zapamiętywane per
+// przeglądarka w localStorage — tylko wygoda, strona działa też bez niego
+// (try/catch — tryb prywatny itp.).
 function initWybicieControls() {
     try {
         const saved = JSON.parse(localStorage.getItem(WYBICIE_SETTINGS_KEY) || "null");
         if (saved) {
             if (Number.isFinite(saved.windowWeeks)) state.wybicieWindowWeeks = saved.windowWeeks;
             if (Number.isFinite(saved.monitorWeeks)) state.wybicieMonitorWeeks = saved.monitorWeeks;
-            if (saved.mode === "MACD_ONLY" || saved.mode === "MACD_RS") state.wybicieMode = saved.mode;
+            if (typeof saved.combinedMode === "boolean") {
+                state.wybicieCombinedMode = saved.combinedMode;
+                if (saved.filters) {
+                    WYBICIE_FILTER_KEYS.forEach(key => {
+                        if (typeof saved.filters[key] === "boolean") state.wybicieFilters[key] = saved.filters[key];
+                    });
+                }
+            } else if (saved.mode === "MACD_ONLY") {
+                // Migracja starego dwuprzyciskowego formatu: "Samo MACD
+                // tygodniowe" znaczyło dokładnie "MACD przecina zero w górę",
+                // bez warunku RS — jeden z dzisiejszych checkboxów.
+                state.wybicieCombinedMode = false;
+                state.wybicieFilters.macdCrossZero = true;
+            } else if (saved.mode === "MACD_RS") {
+                state.wybicieCombinedMode = true;
+            }
         }
     } catch (e) { /* brak localStorage — zostają domyślne */ }
 
-    const saveMode = () => {
+    const saveSettings = () => {
         try {
             localStorage.setItem(WYBICIE_SETTINGS_KEY, JSON.stringify({
                 windowWeeks: state.wybicieWindowWeeks, monitorWeeks: state.wybicieMonitorWeeks,
-                mode: state.wybicieMode,
+                combinedMode: state.wybicieCombinedMode, filters: state.wybicieFilters,
             }));
         } catch (e) { /* ignoruj */ }
     };
 
+    const rerender = () => {
+        applyWybicieModeVisibility();
+        saveSettings();
+        renderWybiciePanel();
+        if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
+    };
+
     applyWybicieModeVisibility();
-    [document.getElementById("wybicieModeMacdRsBtn"), document.getElementById("wybicieModeMacdOnlyBtn")]
-        .forEach(btn => {
-            if (!btn) return;
-            btn.addEventListener("click", () => {
-                if (state.wybicieMode === btn.dataset.mode) return;
-                state.wybicieMode = btn.dataset.mode;
-                applyWybicieModeVisibility();
-                saveMode();
-                renderWybiciePanel();
-                if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
-            });
+
+    const combinedBtn = document.getElementById("wybicieCombinedBtn");
+    if (combinedBtn) {
+        combinedBtn.addEventListener("click", () => {
+            if (state.wybicieCombinedMode) return;
+            state.wybicieCombinedMode = true;
+            WYBICIE_FILTER_KEYS.forEach(key => { state.wybicieFilters[key] = false; });
+            rerender();
         });
+    }
+
+    WYBICIE_FILTER_KEYS.forEach(key => {
+        const btn = document.getElementById(WYBICIE_FILTER_BTN_IDS[key]);
+        if (!btn) return;
+        btn.addEventListener("click", () => {
+            const turningOn = !state.wybicieFilters[key];
+            if (!turningOn && !state.wybicieCombinedMode) {
+                // Odznaczenie OSTATNIEGO aktywnego checkboxa (bez trybu
+                // skojarzonego) wracałoby do "brak żadnego warunku MACD/RS" —
+                // cofamy wtedy do domyślnego trybu skojarzonego zamiast
+                // zostawiać ekran w niejasnym stanie.
+                const othersActive = WYBICIE_FILTER_KEYS.some(k => k !== key && state.wybicieFilters[k]);
+                if (!othersActive) {
+                    state.wybicieCombinedMode = true;
+                    WYBICIE_FILTER_KEYS.forEach(k => { state.wybicieFilters[k] = false; });
+                    rerender();
+                    return;
+                }
+            }
+            state.wybicieFilters[key] = turningOn;
+            if (turningOn) state.wybicieCombinedMode = false;
+            rerender();
+        });
+    });
 
     const bind = (inputId, valueId, stateKey) => {
         const input = document.getElementById(inputId);
@@ -1094,7 +1244,7 @@ function initWybicieControls() {
         input.addEventListener("input", () => {
             state[stateKey] = Number(input.value);
             if (valueEl) valueEl.textContent = `${state[stateKey]} tyg.`;
-            saveMode();
+            saveSettings();
             renderWybiciePanel();
             if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
         });

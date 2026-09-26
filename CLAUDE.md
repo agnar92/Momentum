@@ -1182,30 +1182,65 @@ flex child (no `.topbar-left` wrapper there).
   stage-filterable table shape as TTM Squeeze (`renderWybicieTable()`/`wybicieRowHtml()`), plus a matching
   sidebar tile group (`renderWybiciePanel()`, `#tiles-WYBICIE`).
 
-  **A "Tryb" (mode) selector** — two buttons above the table (`#wybicieModeMacdRsBtn`/
-  `#wybicieModeMacdOnlyBtn`, styled like `.stage-filter-btn`, persisted alongside the two sliders in the
-  same `momentum_dashboard_wybicie` `localStorage` key as `mode`) — was added at the user's explicit
-  request ("do panelu wybicia dodaj selector bez wybicia RS 52 tygodnie, samo MACD tygodniowe"):
-  **"MACD + RS 52 tyg."** (`state.wybicieMode = "MACD_RS"`, the default — unchanged behavior, exactly as
-  described above) vs. **"Samo MACD tygodniowe"** (`"MACD_ONLY"`) — which drops condition 2 (the RS 52-week
-  zero-cross) ENTIRELY: only the MACD zero-cross-up (condition 1) and a positive TTM histogram (condition 3)
-  are required. `classifyWybicie(ticker, universe, c, opts)` takes `opts.mode` (defaulting to
-  `state.wybicieMode`, same pattern as `opts.windowWeeks`/`opts.monitorWeeks`); in `"MACD_ONLY"` mode
-  `breakoutWeeks` is simply `macdCrossWeeks` — there's no second cross to compare it against, so **"Okno
-  wybicia" has no meaning in this mode and its slider (`#wybicieWindowRow`) is hidden** (via
-  `applyWybicieModeVisibility()`) while it's active; "Monitoruj po wybiciu" still applies, gating on
-  `macdCrossWeeks` alone. The RS 52-week line is NOT dropped from the constituent requirement or the table —
-  it's simply no longer a FILTER: `rsLong` is read if present (a missing `mansfield_chart`/`rsm_long` no
-  longer disqualifies a row in this mode, unlike `"MACD_RS"` mode, which still requires it), `rsLongNow`/
-  `mini_rs` are populated whenever available and shown in the "RS 52 tyg." column purely as information (its
-  cell color now reflects the ACTUAL sign, `positive`/`negative`, rather than always `positive` as before,
-  since a row in this mode is not guaranteed to have a recent/any upward RS cross), and `rsCrossWeeks`/
-  `mini_rs_cross` stay `null` when there wasn't one (the column then shows the current value with no
-  "(N tyg. temu)" age suffix, or a plain "—" when RS data itself is entirely missing for a constituent).
-  Switching modes re-renders both the table and the sidebar tile group immediately
-  (`renderWybiciePanel()`/`renderWybicieTable()` from the button's click handler, same as the two sliders'
-  own `input` handlers) and widens the result set considerably (roughly 20→38 constituents in a spot check)
-  since one of the three original AND-conditions is gone.
+  **Version history — from a two-button "Tryb" selector to independent, combinable checkbox filters.** The
+  first version of this had exactly two mutually-exclusive buttons (`#wybicieModeMacdRsBtn`/
+  `#wybicieModeMacdOnlyBtn`, `state.wybicieMode = "MACD_RS" | "MACD_ONLY"`) added at the user's request
+  ("do panelu wybicia dodaj selector bez wybicia RS 52 tygodnie, samo MACD tygodniowe") to optionally drop
+  condition 2 (the RS 52-week zero-cross) entirely. A later, separate explicit request asked to go further:
+  split "MACD crosses its signal line while above zero" (a distinct, new bullish-crossover condition) out
+  from plain "MACD above zero" (a third, separate condition), make ALL of these freely combinable (e.g. all
+  three on at once), and keep only the ORIGINAL "MACD + RS 52 tyg." behavior as a single, mutually-exclusive
+  toggle that turns the others off when enabled ("zachowaj tylko ten jeden ze MACD przecina 0 i rs też, jak
+  go włączę to wyłącza inne, a resztę to daj żebym mógł sprawdzić że rs jest nad 0"). The two-button design
+  was replaced with the CURRENT one described below rather than adding a third mode, since the request was
+  explicitly for independent, ANDable conditions, not one more mutually-exclusive option.
+
+  **Current design**: `state.wybicieCombinedMode` (boolean, default `true`) is the ONE exclusive condition —
+  `#wybicieCombinedBtn` ("MACD + RS 52 tyg. (przecięcia)") — requiring the SAME thing the old default
+  `"MACD_RS"` mode did: both MACD and RS 52 tyg. cross zero upward, within "Okno wybicia" (`#wybicieWindowRow`,
+  only shown/meaningful in this mode) of each other. `state.wybicieFilters` (`WYBICIE_FILTER_KEYS`:
+  `macdCrossZero`/`macdCrossSignal`/`macdAboveZero`/`rsAboveZero`, each its own `.stage-filter-btn` toggle,
+  `WYBICIE_FILTER_BTN_IDS`) are four INDEPENDENT, freely combinable checkboxes evaluated with logical AND
+  when `wybicieCombinedMode` is `false`:
+    - `macdCrossZero` — the old `"MACD_ONLY"` mode's condition: weekly MACD crossed zero upward. Now one of
+      several checkboxes rather than its own "mode".
+    - `macdCrossSignal` — NEW: MACD crossed ABOVE its own signal line, while MACD is CURRENTLY above zero
+      ("w byczym nastawieniu" — a bullish-territory crossover, not an ordinary bounce off a bottom while
+      still negative). Computed from `macd_chart.signal` (already exported by `compute_macd_chart`, see
+      Pipeline architecture above — no backend change needed): `diff = macd - signal`, zero-cross-up of
+      `diff` via the same `weeksSinceZeroCrossUp()`, only kept as a match when `macdNow > 0` at read time.
+    - `macdAboveZero` — NEW: MACD is CURRENTLY above zero. A pure LEVEL check, no crossing/age required —
+      deliberately distinct from `macdCrossZero`/`macdCrossSignal`, per the user's own explicit instruction
+      to separate "MACD above 0" from the crossing-based conditions ("W ogóle rozdziel tą, MACD ponad 0 o to
+      co teraz napisałem").
+    - `rsAboveZero` — NEW: RS 52 tyg. (`mansfield_chart.rsm_long`) is CURRENTLY above zero. Same pure-level
+      shape as `macdAboveZero`.
+  Enabling the combined toggle clears all four filter checkboxes (mutual exclusivity, exactly as the user
+  asked: "jak go włączę to wyłącza inne"); enabling any filter checkbox clears the combined toggle. Unchecking
+  the LAST active filter (with the combined toggle already off) falls back to re-enabling the combined toggle
+  rather than leaving the screener with zero MACD/RS conditions (only the always-required positive TTM
+  histogram left) — an explicit guard against a confusing, easy-to-reach "no filter selected" state, not
+  something the user asked for verbatim but a direct consequence of "keep exactly one thing exclusive, the
+  rest freely combinable."
+
+  `classifyWybicie(ticker, universe, c, opts)` takes `opts.combinedMode`/`opts.filters` (defaulting to
+  `state.wybicieCombinedMode`/`state.wybicieFilters`) in place of the old `opts.mode`. `breakoutWeeks` (the
+  "Wybicie" column / sort key / freshness gate for "Monitoruj po wybiciu") is derived from whichever
+  EVENT-based conditions (`macdCrossZero`/`macdCrossSignal`, or both crosses in combined mode) are actually
+  active, taking the freshest (`Math.min`) of their ages; when only LEVEL-based filters (`macdAboveZero`/
+  `rsAboveZero`) are active, there is no event to date at all, so `breakoutWeeks` is `null` — the table shows
+  "aktualnie" instead of an age, "Monitoruj po wybiciu" has no effect (its row, `#wybicieMonitorRow`, is
+  hidden via `applyWybicieModeVisibility()`), and `combinedWybicieCandidates()`'s sort treats a `null` age as
+  `Infinity` (least fresh, sorted last). MACD/RS values and their mini-sparklines/cross ages are always shown
+  in the table when available, REGARDLESS of which filters are active — `wybicieValueCellHtml()` (shared by
+  both the MACD and RS 52 tyg. columns) reads the current value unconditionally and only appends a
+  "(N tyg. temu)" age suffix when a cross was actually found — the same "show it whenever available, gate on
+  it only when it's actually a selected filter" convention the old `"MACD_ONLY"` mode already established
+  for the RS column alone. `WYBICIE_SETTINGS_KEY`'s stored shape moved from `{windowWeeks, monitorWeeks,
+  mode}` to `{windowWeeks, monitorWeeks, combinedMode, filters}` — `initWybicieControls()` migrates an old
+  saved `mode` value on read (`"MACD_ONLY"` → `combinedMode: false` + `filters.macdCrossZero: true`,
+  `"MACD_RS"` → `combinedMode: true`) so an existing user's saved preference still resolves to the same
+  effective behavior after this change, rather than silently reverting to the new default.
 
   **"🚀 Continuation" screener tab** (`data-universe="CONTINUATION"`, PREPROJEKTOWANY NA TYGODNIOWY —
   a later, separate explicit user request: "rezygnuje z dziennych danych, za duzo zachodu", after the user
