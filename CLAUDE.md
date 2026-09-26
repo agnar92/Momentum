@@ -1362,6 +1362,20 @@ flex child (no `.topbar-left` wrapper there).
   raw MACD/RS-52W numbers into small oscillator charts with a gold dot marking the zero-cross week —
   `crossWeeksHtml` text stays as the tooltip/inline label, the chart is what you glance at.
 
+  **"🎯 Qullamaggie" screener tab — REPLACED by "📐 Breakout" (see the dedicated bullet after this one).**
+  A later, separate explicit user request: the user shared a full PDF ("MY STRATEGY BLUEPRINT", Gareth
+  Packer/Financial Wisdom — a different, more mechanical breakout methodology than Qullamaggie's own
+  discretionary scan) and asked for it to replace this tab outright, step for step, with full
+  visualization of every criterion — not layered on top of Qullamaggie's own gates. `classifyQullamaggie`/
+  `combinedQullamaggieCandidates`/`renderQullamaggieTable`/`renderQullamaggiePanel`/
+  `initQullamaggieControls`/the `QM_*` constants are all GONE from `signals.js` — this whole bullet (and its
+  two version-history paragraphs below) is kept as history for two things that DID carry over unchanged
+  into Breakout: `breakoutLevelFor()`/`squeezeConsolidationBox()` (js/minicharts.js, the "level to watch"
+  helper — see its own version-history paragraph below, still exactly as described) and the general
+  "screener finds candidates, human decides entries/exits, entry timing via the ⚡ 1 min + VWAP chart tab"
+  philosophy. Everything else described below (performance gate, 2-8 week window, tight-range confirmation,
+  buying-volume badge) is Qullamaggie-specific and no longer live code.
+
   **"🎯 Qullamaggie" screener tab** (`data-universe="QULLAMAGGIE"`, explicit user request: replicate
   Kristjan Qullamaggie's breakout-scanning approach — screen for a large prior move, wait through a
   multi-week consolidation, buy the breakout on volume, time the actual entry against an intraday Opening
@@ -1503,8 +1517,9 @@ flex child (no `.topbar-left` wrapper there).
   `classifyQullamaggie()` above). `breakoutLevelFor()` now tries this FIRST and only falls back to
   `weekly_chart.pending_base`/last `bases` entry when there's no active or just-fired squeeze at all (e.g.
   a ticker opened from a general table, not from a squeeze screener) — converted back to a real price via
-  the same `close0 = price / (1 + close_pct[last]/100)` convention `js/strategy.js::strategyStopFor()`
-  already uses. `pending: false` (the Darvas-fallback-to-`bases` case, or a squeeze-derived box for a
+  the same `close0 = price / (1 + close_pct[last]/100)` convention `js/minicharts.js::strategyStopFor()`
+  (moved there from `strategy.js`, see the "📐 Breakout" bullet below) already uses. `pending: false`
+  (the Darvas-fallback-to-`bases` case, or a squeeze-derived box for a
   "fired" row) renders the number at reduced opacity — still shown as a reference point, just
   not a "wait for this" level any more. **Entry timing (the ORB/session-VWAP part of the
   original strategy) is intentionally NOT automatically computed at all** — see the dedicated "⚡ 1 min + VWAP"
@@ -1514,9 +1529,121 @@ flex child (no `.topbar-left` wrapper there).
   now WITH the price level that makes that actually actionable — same "screener finds candidates, human
   decides entries/exits" philosophy as every other tab on this page.
 
+  **"📐 Breakout" screener tab** (`data-universe="BREAKOUT"`) — REPLACED "🎯 Qullamaggie" (see that bullet
+  above) at the user's explicit request: "@blueprint_2025.pdf Ten dokument zawiera pełną strategię Breakout
+  na wykresach tygodniowych. Proszę zaimplementuj ją zamiast Quallamagii zakładki w sygnałach. Nazwijmy ją
+  Breakout. Nie pomijaj żadnego kroku. Proszę o pełną wizualizację." The PDF is "MY STRATEGY BLUEPRINT"
+  (Gareth Packer / Financial Wisdom, financialwisdomtv.com) — a full "Consolidation Breakout" methodology
+  (entry catalyst, exit catalyst, risk management, position sizing) already PARTIALLY implemented once
+  before, as an optional chip inside the "Stage 2 Continuation" funnel (`strategy.js`, see that bullet
+  below and its own comment block) — but only NATR/stop/MACD, and only as one option among several inside
+  a much broader, multi-strategy funnel. `classifyBreakout()`/`combinedBreakoutCandidates()` in `signals.js`
+  instead reproduce EVERY step of the blueprint directly, one after another, on its own screener, with a
+  dedicated column per step so nothing is a hidden pass/fail baked into a single status:
+  1. **Trend** — price must be ABOVE its own 20-week MA ("First, we look to ensure price is above the
+     20-week MA... this ensures we are in an upward trend"). The pipeline exports a 20-week EMA, not SMA
+     (`weekly_chart.ema20_pct` — the same substitution the whole "10:30" chart already made years earlier,
+     see Relative strength above: "chcę usunąć 10,30 SMA i dodać 20 EMA"), reused here rather than adding a
+     new SMA20 computation. TWARDY (hard) gate: a stock below its own EMA20 does not appear on the list AT
+     ALL, whether consolidating or fired.
+  2. **Consolidation** ≥ `BREAKOUT_DEFAULT_MIN_CONSOLIDATION_WEEKS` (6, "at least a minimum 6 weeks... the
+     longer the better", no upper bound — the same "no ceiling" convention "🚀 Continuation" already
+     established for the identical blueprint sentence) — the hand-drawn channel from the material ("candles
+     touching or closing at a near parallel point... forming resistance... forming support") is reproduced
+     with the SAME weekly TTM Squeeze substitute every other tab on this page already uses
+     (`ttm_squeeze_chart`), not a new channel-detection algorithm.
+  3. **NATR (Normalized ATR) < `BLUEPRINT_NATR_MAX`** (8, "I require the metric to be below 8") — DEFAULT
+     REQUIRED here (`state.breakoutRequireNatr`, toggle in `#breakoutControls`), unlike the `strategy.js`
+     funnel where the identical constant is an opt-in chip off by default: on this tab it is one of the
+     blueprint's own explicit, named steps, not an optional extra layered on top of a broader strategy.
+  4. **MACD above its signal line** ("we always want to be in a position with the MACD line above the
+     signal line") — DEFAULT REQUIRED (`state.breakoutRequireMacd`) for the same reason as NATR above.
+  5. **Breakout** — a weekly close above the channel's resistance, i.e. the TTM Squeeze turning off
+     (`fired`), the same event every other tab on this page already calls a breakout.
+  6. **Upper wick ≤ `BREAKOUT_MAX_WICK_PCT`** (50%, "if the upper weekly candle wick is greater than 50%,
+     we do not take the trade... we want to be with momentum not against it") — the ONE criterion that
+     needed an actual backend change: `weekly_chart` already carried `low_pct` (added earlier for
+     `strategyStopFor()`'s low-of-the-week stop-raise) but never `high_pct`, so `compute_relative_strength_
+     chart()` in `run_query.py` now also exports weekly `high_pct` (same close0-relative %, same None-when-
+     no-OHLC fallback as `low_pct`) — `High` was already being fetched and used internally for VWAP/
+     buying-volume, just never surfaced. `wickPct = (high-close)/(high-low)*100` at the fire week (looked up
+     by DATE into `weekly_chart`, the same join pattern `breakout_volume_ratio` already used in the old
+     Qullamaggie tab). TWARDY: rejects the row ENTIRELY, only when actually measured and violated (the same
+     "null never rejects, only a real false does" convention every hard gate on this page already follows).
+  7. **≥ `BREAKOUT_TEN_WEEK_HIGH_WEEKS`-week closing high** (10, "the breakout candle must be at least a
+     10-week high (closing prices)") — the EXACT same logic/threshold "🚀 Continuation" already uses
+     (`CONTINUATION_TEN_WEEK_HIGH_WEEKS`), just under a Breakout-specific constant name (both tabs'
+     thresholds happen to already be 10, no coincidence — same reference material's own number).
+  8. **Breakout-week gain in [`BREAKOUT_MIN_GAIN_PCT`, `BREAKOUT_MAX_GAIN_PCT`]** (5%-20%, "greater than 5%
+     and less than 20% of the previous weeks closing price") — again the exact same logic/thresholds
+     Continuation already established for the identical blueprint sentence.
+  9. **Volume increase ≥ `BREAKOUT_MIN_VOLUME_SPIKE_PCT`** (30% vs. the prior week's TOTAL volume, "I want
+     to see at least a 30% volume increase from the prior week") — computed fresh from `weekly_chart.volume`
+     (a plain week-over-week ratio, NOT the existing CLV-derived `buying_volume_ratio` used elsewhere on this
+     page, which answers a different question: buying vs. selling pressure within a week, not total volume
+     vs. the prior week). INFORMATIONAL by default (`state.breakoutRequireVolumeSpike`, off) — the blueprint
+     itself hedges this one ("some discretion can be applied pending other criteria"), unlike wick/10-week-
+     high/gain, which are stated as flat rules with no such hedge. The old buying-volume badge is also kept,
+     purely informational, for continuity with the rest of the page.
+  10. **Stop / risk** — `strategyStopFor()` (`js/minicharts.js`, see that file's own comment block): the
+      lower boundary of the MIDDLE THIRD of the last Darvas box (`weekly_chart.bases`, split top/bottom
+      thirds ignored — "too early"/"too late" — per the blueprint), raised to that week's low after every
+      bearish MACD/signal cross following the box. "if the structure does not allow for a stop loss of less
+      than 20%, we do not take the trade" (`BLUEPRINT_MAX_STOP_DISTANCE_PCT`) is NOT a silent reject here —
+      the row stays visible with `substatus: "WAIT_RISK"` (a `fired` breakout whose stop is simply too far
+      away right now), because seeing "this did break out, but the blueprint says skip it" is itself useful,
+      the same non-hiding treatment `strategy.js`'s funnel already gives the identical situation.
+  11. **Position size — Fractional Kelly Criterion**, a calculator above the table
+      (`#breakoutControls`/`breakoutKellyFraction()`/`breakoutPositionFor()`), explicitly NOT
+      `strategy.js`'s `positionSize()` (a fixed 1%-risk/10%-max-position rule): the blueprint describes Kelly
+      by name ("I use Fractional (33%) Kelly Criterion... which is currently 16% of Equity"), a genuinely
+      different mechanism — position VALUE is set directly from `equity * fractionalKelly%` (no further
+      capping by the resulting risk, unlike `positionSize()`, which works the other way around, solving FOR
+      share count FROM a risk budget), and risk-on-equity comes out as an OUTPUT to watch, not an input
+      constraint — matching the blueprint's own framing ("a 2.43% risk on equity for one position is
+      considered high"). Default inputs (`BREAKOUT_DEFAULT_EQUITY`/`_WIN_RATE_PCT`/`_REWARD_RISK`/
+      `_KELLY_FRACTION_PCT` = 100000/59/4.04/33) are the blueprint's OWN worked example numbers verbatim,
+      verified to reproduce its own stated ≈16% result exactly (`Kelly = W - (1-W)/R`, fractional =
+      `Kelly * kellyFraction`) — chosen specifically so the calculator agrees with the PDF on first load,
+      before the user swaps in their own real statistics.
+  Every row carries a "Warunki wejścia" cell (`breakoutConditionsHtml()`) showing NATR/MACD always (even
+  while still consolidating — a quality-of-setup signal, not just a fired-week confirmation), plus wick/
+  10-week-high/gain/volume/buying-volume badges once fired — these last four are ALWAYS ✓ when shown (a
+  row that failed one of the hard three was already dropped entirely in `classifyBreakout()`, so a visible
+  badge is confirmation, not an evaluation). `substatus` (`ENTRY`/`WAIT_MACD`/`WAIT_NATR`/`WAIT_RISK`/
+  `WAIT_VOLUME`/`SETUP`) drives both the status cell (`breakoutStatusHtml()`) and `combinedBreakoutCandidates()`'s
+  sort order (ENTRY first, then other fired rows by freshness, then longest-running consolidations).
+  **Fundamentals (ROC/ROE/operating margin, revenue/profit trend — the blueprint's "Quality" factor)
+  are deliberately NOT fetched or gated on automatically.** The blueprint itself frames these as a
+  complementary, qualitative overlay on top of the technical scan ("Often an area traders ignore... adding
+  fundamentals to a weekly chart has huge benefits"), not a mechanical condition baked into the breakout
+  scan proper — and a real fundamentals fetch (yfinance `.info`/financials for hundreds of tickers, weekly,
+  in CI) would be a genuine architecture change with real cost/reliability risk, the same category of risk
+  that already once forced this project to abandon automated WIG20/mWIG40 index-level fetching in favor of
+  a manual entry (`gem_manual_returns.json`, see Global Equity Momentum above). Rather than skip the step
+  silently, `#breakoutGuide` documents it explicitly as a manual checklist pointing at the ALREADY-EXISTING
+  "🏢 Dane spółki (TradingView)" chart-modal tab (Company Profile + Financials widgets, see that bullet
+  below) — connected to existing infrastructure instead of duplicating it with a new, riskier fetch.
+  **Live entry timing is likewise not automated** — same as every other screener on this page, the "⚡ 1 min
+  + VWAP" chart-modal tab (see that bullet below) is where the user watches for the actual moment to buy;
+  the blueprint's own "entry at the open of the following week" is already consistent with this app's
+  weekly refresh cadence, needing no extra mechanism.
+  `levelToWatchCellHtml()` (renamed from the old tab's `qmLevelCellHtml()` — a purely mechanical rename at
+  this same occasion, now shared with "🚀 Continuation" too, no behavior change) still reads
+  `breakoutLevelFor(c)` for the "Poziom do obserwacji" column, unchanged from the old tab.
+  `stopPriceFor()`/`strategyStopFor()`/`macdConfirmation()`/`currentNatr()` and the
+  `BLUEPRINT_MAX_STOP_DISTANCE_PCT`/`BLUEPRINT_NATR_MAX` constants MOVED from `strategy.js` into
+  `js/minicharts.js` at this same occasion (renamed from `STRATEGY_MAX_STOP_DISTANCE_PCT`/`STRATEGY_NATR_MAX`
+  — the `STRATEGY_` prefix stopped being accurate once a second, independent page needed the exact same
+  mechanism) — `strategy.js` still uses all four functions/constants unchanged, now reading them from the
+  shared file (loaded before it on `strategy.html`, same cross-file-global convention as `js/shared.js`/
+  `js/qol.js` elsewhere); `positionSize()`/`STRATEGY_RISK_PER_TRADE_PCT`/`STRATEGY_MAX_POSITION_PCT`
+  deliberately did NOT move — Breakout's own Kelly-based sizing (point 11 above) is a genuinely different
+  mechanism, not a second consumer of `strategy.js`'s fixed-risk-% one.
+
   **Sidebar tiles get a stage color + RS direction dot** (`decorateTile()`, called from
   `renderSidebarTiles()`/`renderWybiciePanel()`/`renderTtmSqueezePanel()`/`renderContinuationPanel()`/
-  `renderQullamaggiePanel()`): a
+  `renderBreakoutPanel()`): a
   bottom inset border in the ticker's Weinstein-stage color (`STAGE_COLORS`) plus a small green/red dot
   (RS 52-week ≥ 0 / < 0) in the corner — a tile now says something without being clicked.
 
@@ -2263,8 +2390,14 @@ bullet for the mechanism (`#chartModal`/`openChartModal`/`closeChartModal`).
   `evaluateHolding()`: EXIT on price < stop / Stage 3-4 / `rsm_medium` < 0, TIGHTEN on recent
   `WARNING_MA_SLOWING` / base > 3 / Stage 1.
   **The stop is the user's own rule, NOT the backend's Weinstein trailing stop** (`strategyStopFor()`, used
-  by both steps 4 and 5): start at the MIDPOINT of the last Darvas box (`weekly_chart.bases[-1]`,
-  `(resistance_pct + support_pct) / 2`), then after every weekly MACD BEARISH cross (MACD crosses BELOW its
+  by both steps 4 and 5, now living in `js/minicharts.js` — moved there once the "📐 Breakout" tab in
+  `signals.js` needed the exact same mechanism, see that bullet under Frontend below): start at the LOWER
+  BOUND OF THE MIDDLE THIRD of the last Darvas box (`weekly_chart.bases[-1]`, `support_pct + (resistance_pct
+  - support_pct) / 3` — per "MY STRATEGY BLUEPRINT", Gareth Packer/Financial Wisdom: "we always split the
+  consolidation box into 3 portions... the middle portion is where we place the stop, usually the lower of
+  that portion"; an EARLIER version of this function used the plain MIDPOINT, `(resistance_pct +
+  support_pct) / 2` — a bug, fixed after re-verifying the source material's exact wording), then after every
+  weekly MACD BEARISH cross (MACD crosses BELOW its
   signal line, `macd_chart`) dated after that box's `end_date`, raise the stop to that week's LOW — only
   ever up. No MACD > 0 requirement (briefly added, then removed at the user's request: Stage 2/TTM Squeeze
   already establish the uptrend, MACD is "tylko dodatkowa polisa"). An earlier version of this used the BULLISH
@@ -2274,7 +2407,7 @@ bullet for the mechanism (`#chartModal`/`openChartModal`/`closeChartModal`).
   `*_pct` fields convert back to prices via `close0 = price / (1 + close_pct[last]/100)`. With no Darvas box
   in the data window it falls back to `stopPriceFor()` (the Weinstein stop from `stop_level_pct`, read at
   the LAST week only — after `EXIT_STOP` it's intentionally null). If MACD never dips below its signal after
-  the box, the stop stays at the box midpoint — that's the rule as specified, not a bug. The old sector-leaders and
+  the box, the stop stays at the box's own middle-third bound — that's the rule as specified, not a bug. The old sector-leaders and
   top-10-RS tables stay at the bottom as "Narzędzia pomocnicze" (USA only).
   **Interactive funnel + adjustable criteria** (a later, explicit user request after the first version's
   plain row of count boxes rendered badly on a phone — "zrób to bardziej interaktywne w sensie rzeczywiście

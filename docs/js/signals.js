@@ -64,40 +64,67 @@ const CONTINUATION_MIN_BREAKOUT_GAIN_PCT = 5;
 const CONTINUATION_MAX_BREAKOUT_GAIN_PCT = 20;
 const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
 
-// Domyślne progi screenera Qullamaggie (patrz klasyfikacja niżej) — 30% na
-// wyraźną prośbę użytkownika (ten sam próg co w oryginalnym skanie), 2-8 tyg.
-// konsolidacji (poprawione z 4-6 po ponownym przeglądzie ze slajdem "The
-// Breakout" — to jest oryginalny zakres bazy Qullamaggiego, nie 4-6), wybicie
-// liczone jeszcze przez 3 tyg. po fakcie.
-const QM_DEFAULT_MIN_PERF_PCT = 30;
-const QM_DEFAULT_MIN_CONSOLIDATION_WEEKS = 2;
-const QM_DEFAULT_MAX_CONSOLIDATION_WEEKS = 8;
-const QM_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
-const QM_SETTINGS_KEY = "momentum_dashboard_qullamaggie";
+// ============================================================
+// BREAKOUT — replika "MY STRATEGY BLUEPRINT" (Gareth Packer / Financial
+// Wisdom — PDF udostępniony przez użytkownika), zastąpiła zakładkę
+// "🎯 Qullamaggie" na wyraźną prośbę użytkownika: "zaimplementuj ją zamiast
+// Quallamagii zakładki w sygnałach... Nie pomijaj żadnego kroku. Proszę o
+// pełną wizualizację." Ten sam materiał już raz zasilił ten kod — lejek
+// "Stage 2 Continuation" (strategy.js) używa TEGO SAMEGO stopu/MACD/NATR
+// (patrz komentarz w js/minicharts.js, gdzie te mechanizmy mieszkają teraz
+// współdzielone) — ale tam to jeden z wielu kroków wieloetapowego lejka
+// (rynek -> sektor -> etap -> RS -> ...), tutaj KAŻDY krok blueprintu jest
+// odtworzony wprost, jeden po drugim, na WŁASNYM ekranie, z pełną
+// wizualizacją każdego warunku w tabeli (nie tylko końcowym statusem
+// ENTRY/WAIT_*) — patrz classifyBreakout niżej dla numerowanej listy kroków.
+//
+// CZEGO TA ZAKŁADKA CELOWO NIE AUTOMATYZUJE:
+//   - FUNDAMENTY (ROC/ROE/marża operacyjna/trend przychodów) — materiał
+//     opisuje je jako DODATKOWY, jakościowy czynnik ("Often an area traders
+//     ignore... nevertheless adding fundamentals has huge benefits"), nie
+//     jako twardy, mechaniczny warunek bramki tego konkretnego skanu
+//     technicznego. Nowy fetch fundamentów (yfinance .info dla setek
+//     tickerów, co tydzień w CI) byłby realną zmianą architektury pipeline'u
+//     (nowy koszt/czas wykonania, nowe ryzyko limitów/błędów API — dokładnie
+//     ten sam rodzaj ryzyka, który już raz zmusił ten projekt do porzucenia
+//     automatycznego fetchu WIG20/mWIG40 z yfinance/stooq.pl na rzecz
+//     ręcznego wpisu, patrz gem_manual_returns.json w run_query.py) — a ten
+//     kod już ma narzędzie do ręcznej weryfikacji jakości: zakładka
+//     "🏢 Dane spółki (TradingView)" w oknie modalnym wykresu
+//     (js/chart-modal.js) już pokazuje Company Profile + Financials dla
+//     każdego tickera. Zamiast duplikować to nowym fetchem, ten krok jest
+//     udokumentowany w #breakoutGuide jako checklist kierujący tam — nie
+//     pominięty, tylko podłączony do już istniejącego narzędzia.
+//   - WEJŚCIE NA ŻYWO (moment złożenia zlecenia w ciągu tygodnia) — materiał:
+//     "the entry would be at the open of the following week" — już spójne z
+//     tygodniowym cyklem tej apki (dane odświeżane raz w tygodniu, w
+//     sobotę): "Poziom do obserwacji" mówi PRZY JAKIEJ CENIE wypatrywać
+//     wybicia, decyzję o złożeniu zlecenia podejmuje użytkownik sam — ta
+//     sama filozofia "screener wytypowuje, człowiek decyduje" co reszta apki.
+// ============================================================
+const BREAKOUT_DEFAULT_MIN_CONSOLIDATION_WEEKS = 6; // blueprint: "at least a minimum 6 weeks... the longer the better" — bez górnego limitu.
+const BREAKOUT_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
+const BREAKOUT_TEN_WEEK_HIGH_WEEKS = 10;   // "the breakout candle must be at least a 10-week high (closing prices)"
+const BREAKOUT_MIN_GAIN_PCT = 5;
+const BREAKOUT_MAX_GAIN_PCT = 20;          // "greater than 5% and less than 20% of the previous weeks closing price"
+const BREAKOUT_MAX_WICK_PCT = 50;          // "if the upper weekly candle wick is greater than 50%, we do not take the trade"
+const BREAKOUT_MIN_VOLUME_SPIKE_PCT = 30;  // "I want to see at least a 30% volume increase from the prior week"
+const BREAKOUT_DEFAULT_REQUIRE_NATR = true;
+const BREAKOUT_DEFAULT_REQUIRE_MACD = true;
+const BREAKOUT_DEFAULT_REQUIRE_VOLUME_SPIKE = false; // blueprint: "some discretion can be applied pending other criteria"
+const BREAKOUT_SETTINGS_KEY = "momentum_dashboard_breakout";
 
-// Dodatkowe potwierdzenie dla BARDZO KRÓTKIEJ konsolidacji (1-2 tyg.) — na
-// wyraźną prośbę użytkownika po przeglądzie ze slajdem "The Breakout": sama
-// długość squeeze'a 4-8 tyg. jest już wystarczającym potwierdzeniem "prawdziwej"
-// bazy, ale 1-2-tygodniowy squeeze to za mało samej długości, żeby odróżnić
-// realną, ciasną konsolidację od przypadkowego, chwilowego uspokojenia
-// zmienności — więc dla niego DODATKOWO wymagamy, żeby cena w tym okresie
-// faktycznie oscylowała w wąskim, ale nie mikroskopijnym przedziale (5-20%
-// między szczytem a dołkiem konsolidacji, patrz squeezeConsolidationBox() w
-// js/minicharts.js — te same, close-owe granice pudełka, które już liczymy
-// dla "poziomu do obserwacji"). Poza tym oknem (3-8 tyg. w domyślnych progach)
-// długość squeeze'a sama w sobie jest już dobrym potwierdzeniem i nie wymaga
-// tego dodatkowego sprawdzenia.
-const QM_TIGHT_RANGE_MAX_WEEKS = 2;
-const QM_TIGHT_RANGE_MIN_PCT = 5;
-const QM_TIGHT_RANGE_MAX_PCT = 20;
-
-// Okna 1/3/6M w TYGODNIACH, do weeksAgoReturnPct() (js/minicharts.js) — patrz
-// komentarz przy classifyQullamaggie: zastąpiło dawne daily_squeeze.return_1m_pct/
-// return_3m_pct/return_6m_pct (usunięte razem z całą infrastrukturą dziennych
-// danych) bez żadnej nowej danej z backendu, licząc z weekly_chart.close_pct.
-const QM_RETURN_1M_WEEKS = 4;
-const QM_RETURN_3M_WEEKS = 13;
-const QM_RETURN_6M_WEEKS = 26;
+// Kalkulator Kelly Criterion (krok "Optimal Position Size" blueprintu) —
+// domyślne wartości to WPROST liczby z przykładu w materiale (59% strike
+// rate, 4.04 reward/risk, 33% Kelly frakcyjny -> ok. 16% pozycji), żeby
+// kalkulator od razu zgadzał się z przykładem z PDF-a; użytkownik podmienia
+// je na własne statystyki. To NIE jest positionSize() z strategy.js (stały
+// 1% ryzyka/10% maks. pozycji) — blueprint opisuje wprost Kelly Criterion,
+// osobny mechanizm tej zakładki.
+const BREAKOUT_DEFAULT_EQUITY = 100000;
+const BREAKOUT_DEFAULT_WIN_RATE_PCT = 59;
+const BREAKOUT_DEFAULT_REWARD_RISK = 4.04;
+const BREAKOUT_DEFAULT_KELLY_FRACTION_PCT = 33;
 
 const state = {
     data: {},
@@ -116,10 +143,15 @@ const state = {
     contMinConsolidationWeeks: CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS,
     contFireLookbackWeeks: CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS,
     contMinMomentumPct: CONTINUATION_DEFAULT_MIN_MOMENTUM_PCT,
-    qmMinPerfPct: QM_DEFAULT_MIN_PERF_PCT,
-    qmMinConsolidationWeeks: QM_DEFAULT_MIN_CONSOLIDATION_WEEKS,
-    qmMaxConsolidationWeeks: QM_DEFAULT_MAX_CONSOLIDATION_WEEKS,
-    qmFireLookbackWeeks: QM_DEFAULT_FIRE_LOOKBACK_WEEKS,
+    breakoutMinConsolidationWeeks: BREAKOUT_DEFAULT_MIN_CONSOLIDATION_WEEKS,
+    breakoutFireLookbackWeeks: BREAKOUT_DEFAULT_FIRE_LOOKBACK_WEEKS,
+    breakoutRequireNatr: BREAKOUT_DEFAULT_REQUIRE_NATR,
+    breakoutRequireMacd: BREAKOUT_DEFAULT_REQUIRE_MACD,
+    breakoutRequireVolumeSpike: BREAKOUT_DEFAULT_REQUIRE_VOLUME_SPIKE,
+    breakoutEquity: BREAKOUT_DEFAULT_EQUITY,
+    breakoutWinRatePct: BREAKOUT_DEFAULT_WIN_RATE_PCT,
+    breakoutRewardRisk: BREAKOUT_DEFAULT_REWARD_RISK,
+    breakoutKellyFractionPct: BREAKOUT_DEFAULT_KELLY_FRACTION_PCT,
     marketTrend: null,
 };
 
@@ -416,96 +448,116 @@ function combinedTtmSqueezeCandidates() {
     return rows;
 }
 
-// ============================================================
-// QULLAMAGGIE — SCREENER (na wyraźną prośbę użytkownika): replika skanu
-// Kristjana Qullamaggie'go — duży wcześniejszy ruch (30%+ w 6 miesięcy — patrz
-// UPROSZCZENIE poniżej: to jeden warunek zamiast osobnego OR po 1/3/6M), po
-// którym spółka wchodzi w kilkutygodniową konsolidację (TTM Squeeze na wykresie
-// TYGODNIOWYM — inaczej niż "Continuation" powyżej, które patrzy na KRÓTKĄ
-// pauzę na D1; tu chodzi o dłuższą, kilkutygodniową bazę, klasyczne "2-8
-// tygodni" ze skanu — patrz slajd "The Breakout"), a wybicie z niej jest
-// potwierdzone wolumenem KUPUJĄCYCH (ten sam próg STAGE_BREAKOUT_VOLUME_RATIO
-// co reszta apki).
-//
-// Sama długość squeeze'a 3-8 tyg. jest już wystarczającym potwierdzeniem
-// "prawdziwej" bazy (a nie przypadkowego, chwilowego uspokojenia zmienności);
-// dla BARDZO KRÓTKIEJ konsolidacji (1-2 tyg., QM_TIGHT_RANGE_MAX_WEEKS)
-// wymagamy DODATKOWO, żeby cena w tym okresie faktycznie oscylowała w
-// odpowiednio wąskim przedziale (5-20% między szczytem a dołkiem konsolidacji,
-// qmTightRangeConfirmed() poniżej) — inaczej 1-2-tygodniowy "squeeze" zbyt
-// łatwo trafiałby na przypadkowy tydzień niskiej zmienności, nie na realną
-// bazę.
-//
-// Wejście na wykresie 1-minutowym (ORB — Opening Range Breakout — z sesyjnym
-// VWAP) NIE jest tu automatyzowane: to wymagałoby danych śróddziennych,
-// których ten pipeline nie pobiera (tylko dzienne świece, tygodniowy
-// cykl odświeżania — patrz CLAUDE.md). Zamiast tego każdy wiersz otwiera,
-// przez zwykły przycisk wykresu (📈, patrz ttmSqueezeRowHtml/qmRowHtml),
-// tę samą wspólną modalkę wykresu co reszta apki — a w niej trzecią zakładkę
-// "⚡ 1 min + VWAP" (patrz js/chart-modal.js) z osadzonym widgetem
-// TradingView Advanced Chart na interwale 1 min + studium VWAP: użytkownik
-// sam monitoruje wybicie z zakresu otwarcia na żywo, apka tylko wskazuje
-// KTÓRE spółki warto obserwować danego dnia.
-//
-// UPROSZCZENIE (na wyraźną prośbę użytkownika, po przeglądzie): perf_pct to
-// TERAZ WYŁĄCZNIE return_6m_pct, nie max(1M, 3M, 6M) — 6-miesięczne okno w
-// praktyce OBEJMUJE też ruch, który dopiero co (w 1 lub 3 miesiące) wypchnął
-// cenę o 30%+ (cena z przed 6 miesięcy jest zwykle zbliżona do ceny z przed
-// 1/3 miesięcy, jeśli w tym czasie nie było odwrotnego ruchu), więc osobny OR
-// po trzech oknach był zbędną komplikacją. return_1m_pct/return_3m_pct wciąż
-// czytane i pokazywane (tooltip w qmPerfCellHtml) jako informacja — wszystkie
-// trzy liczone z weekly_chart (weeksAgoReturnPct(), js/minicharts.js), nie z
-// dziennych danych (cała ta infrastruktura, wraz z daily_squeeze/przyciskiem
-// "Odśwież dane D1", została usunięta — patrz CLAUDE.md).
-function qullamaggieOpts(opts) {
-    return {
-        minPerfPct: opts.minPerfPct ?? state.qmMinPerfPct,
-        minConsolidationWeeks: opts.minConsolidationWeeks ?? state.qmMinConsolidationWeeks,
-        maxConsolidationWeeks: opts.maxConsolidationWeeks ?? state.qmMaxConsolidationWeeks,
-        fireLookbackWeeks: opts.fireLookbackWeeks ?? state.qmFireLookbackWeeks,
+// Kalkulator Kelly Criterion — patrz komentarz nad BREAKOUT_DEFAULT_EQUITY.
+// Zwraca UŁAMEK kapitału (nie %) albo null, gdy stosunek zysk/strata <= 0
+// (dzielenie przez zero/ujemne — nie ma sensu liczyć Kelly'ego).
+function breakoutKellyFraction() {
+    const r = state.breakoutRewardRisk;
+    if (!(r > 0)) return null;
+    const w = state.breakoutWinRatePct / 100;
+    const fullKelly = w - (1 - w) / r;
+    return fullKelly * (state.breakoutKellyFractionPct / 100);
+}
+
+// Wielkość pozycji wg Kelly Criterion (kalkulator nad tabelą) dla danej
+// ceny/stopu — DOKŁADNIE mechanika z przykładu w blueprincie: wartość
+// pozycji = kapitał * Kelly frakcyjny (BEZ dalszego capowania ryzykiem, w
+// odróżnieniu od positionSize() w strategy.js, które odwrotnie: WYLICZA
+// wielkość pozycji Z budżetu ryzyka) — ryzyko/equity% jest tu WYNIKIEM do
+// obserwowania (blueprint: "a 2.43% risk on equity for one position is
+// considered high"), nie odgórnym limitem.
+function breakoutPositionFor(price, stop) {
+    const fracKelly = breakoutKellyFraction();
+    if (fracKelly == null || !(fracKelly > 0)) return null;
+    if (price == null || stop == null || !(price > stop) || !(state.breakoutEquity > 0)) return null;
+    const positionValue = state.breakoutEquity * fracKelly;
+    const shares = Math.floor(positionValue / price);
+    if (shares <= 0) return null;
+    const value = shares * price;
+    const riskPerShare = price - stop;
+    const riskValue = shares * riskPerShare;
+    return { shares, value, riskValue, riskOnEquityPct: (riskValue / state.breakoutEquity) * 100 };
+}
+
+// Klasyfikuje jedną spółkę wg WSZYSTKICH kroków "MY STRATEGY BLUEPRINT"
+// (Gareth Packer/Financial Wisdom), jeden po drugim:
+//   1. TREND — cena TERAZ nad własną 20-tyg. EMA (substytut 20-tyg. MA z
+//      materiału — backend eksportuje EMA20, nie SMA, ten sam substytut, co
+//      cały wykres "10:30" już stosuje, patrz CLAUDE.md). TWARDY warunek:
+//      spółka pod własną EMA20 nie pojawia się na liście WCALE.
+//   2. KONSOLIDACJA (min. `minConsolidationWeeks`, domyślnie 6 tyg., "dłużej
+//      lepiej", BEZ górnego limitu) — kanał z materiału ("candles touching
+//      or closing at a near parallel point") odtworzony tygodniowym TTM
+//      Squeeze (ttm_squeeze_chart), tym samym substytutem, który
+//      Continuation/dawne Qullamaggie już stosowały.
+//   3. NATR < BLUEPRINT_NATR_MAX (js/minicharts.js) — "I require the metric
+//      to be below 8". Domyślnie WYMAGANY (`requireNatr`, w odróżnieniu od
+//      lejka strategy.js, gdzie to opcjonalny chip) — tutaj to jawny krok
+//      blueprintu, nadal wyłączalny suwakiem.
+//   4. MACD nad linią sygnałową — "we always want to be in a position with
+//      the MACD line above the signal line" (macdConfirmation(),
+//      js/minicharts.js). Domyślnie WYMAGANY (`requireMacd`) z tego samego
+//      powodu co NATR.
+//   5. WYBICIE — tygodniowe zamknięcie POWYŻEJ oporu kanału = koniec
+//      squeeze'a (status "fired", ten sam co TTM Squeeze/Continuation).
+//   6. GÓRNY KNOT świecy wybicia <= BREAKOUT_MAX_WICK_PCT (50%) jej zakresu
+//      — "if the upper weekly candle wick is greater than 50%, we do not
+//      take the trade". Wymaga High i Low tygodnia (weekly_chart.high_pct/
+//      low_pct — high_pct dodany do run_query.py specjalnie na potrzeby
+//      tego kroku). TWARDY warunek, tylko gdy realnie policzony (odrzuca
+//      wiersz CAŁKOWICIE, ten sam wzorzec co Continuation).
+//   7. Świeca wybicia = co najmniej BREAKOUT_TEN_WEEK_HIGH_WEEKS-tygodniowy
+//      szczyt zamknięcia — TA SAMA logika/próg co CONTINUATION_TEN_WEEK_
+//      HIGH_WEEKS (ten sam materiał referencyjny).
+//   8. Zysk świecy wybicia w [BREAKOUT_MIN_GAIN_PCT, BREAKOUT_MAX_GAIN_PCT]
+//      (5%-20%) względem poprzedniego zamknięcia — TA SAMA logika/progi co
+//      CONTINUATION_*_BREAKOUT_GAIN_PCT.
+//   9. WOLUMEN: wzrost >= BREAKOUT_MIN_VOLUME_SPIKE_PCT (30%) względem
+//      poprzedniego tygodnia ("I want to see at least a 30% volume
+//      increase... some discretion can be applied") — INFORMACYJNE
+//      domyślnie (materiał mówi wprost o dyskrecji), `requireVolumeSpike`
+//      pozwala uczynić go wymaganym. Osobno pokazujemy też istniejący
+//      wolumen KUPUJĄCYCH (buying_volume_ratio, ten sam próg
+//      STAGE_BREAKOUT_VOLUME_RATIO co reszta apki) — informacyjnie, jak w
+//      dawnym Qullamaggie.
+//   10. STOP/RYZYKO — strategyStopFor() (js/minicharts.js): dolna granica
+//       ŚRODKOWEJ TERCJI ostatniego pudełka Darvasa, podnoszony na LOW
+//       świecy po każdym przecięciu MACD w dół linii sygnałowej — DOKŁADNIE
+//       ten sam mechanizm co krok 4 lejka strategy.js. "if the structure
+//       does not allow for a stop loss of less than 20%, we do not take the
+//       trade" (BLUEPRINT_MAX_STOP_DISTANCE_PCT) — status WAIT_RISK zamiast
+//       ENTRY, gdy przekroczone (wiersz NIE jest chowany — sama informacja
+//       "wybicie jest, ale stop za daleko" ma wartość).
+//   11. WIELKOŚĆ POZYCJI — Kelly Criterion (breakoutPositionFor() powyżej),
+//       NIE stały % ryzyka jak w strategy.js — materiał opisuje wprost Kelly
+//       Criterion.
+// "Poziom do obserwacji" (opór/wsparcie kanału, breakoutLevelFor()) jest
+// czysto informacyjny i może pochodzić z INNEGO okna niż stop powyżej
+// (squeezeConsolidationBox vs. weekly_chart.bases/Darvas) — ta sama
+// niezależność dwóch pomocników już istnieje między dawnym Qullamaggie i
+// lejkiem strategy.js, nie jest nowym problemem wprowadzonym tutaj.
+function classifyBreakout(ticker, universe, c, opts = {}) {
+    const o = {
+        minConsolidationWeeks: opts.minConsolidationWeeks ?? state.breakoutMinConsolidationWeeks,
+        fireLookbackWeeks: opts.fireLookbackWeeks ?? state.breakoutFireLookbackWeeks,
+        requireNatr: opts.requireNatr ?? state.breakoutRequireNatr,
+        requireMacd: opts.requireMacd ?? state.breakoutRequireMacd,
+        requireVolumeSpike: opts.requireVolumeSpike ?? state.breakoutRequireVolumeSpike,
     };
-}
 
-// Potwierdzenie dla bardzo krótkiej (<= QM_TIGHT_RANGE_MAX_WEEKS) konsolidacji
-// — patrz komentarz przy tej konstancie. Zakres liczymy z TEGO SAMEGO,
-// close-owego pudełka co breakoutLevelFor() (squeezeConsolidationBox(), js/
-// minicharts.js), nie z realnego dziennego High/Low — Darvas (i cała reszta
-// tego modułu) świadomie pracuje na zamknięciach, patrz CLAUDE.md.
-function qmTightRangeConfirmed(c) {
-    const box = squeezeConsolidationBox(c);
+    // Krok 1: trend.
     const wc = c.weekly_chart;
-    if (!box || box.resistance_pct == null || box.support_pct == null) return false;
-    if (!wc || !wc.close_pct || !wc.close_pct.length || !(c.price > 0)) return false;
-    const lastPct = wc.close_pct[wc.close_pct.length - 1];
-    if (lastPct == null) return false;
-    const close0 = c.price / (1 + lastPct / 100);
-    const resistance = close0 * (1 + box.resistance_pct / 100);
-    const support = close0 * (1 + box.support_pct / 100);
-    if (!(support > 0)) return false;
-    const rangePct = (resistance - support) / support * 100;
-    return rangePct >= QM_TIGHT_RANGE_MIN_PCT && rangePct <= QM_TIGHT_RANGE_MAX_PCT;
-}
+    if (!wc || !wc.close_pct || !wc.close_pct.length) return null;
+    const priceIdx = latestNonNullIdx(wc.close_pct);
+    if (priceIdx < 0) return null;
+    const closeNowPct = wc.close_pct[priceIdx];
+    const emaNowPct = wc.ema20_pct ? wc.ema20_pct[priceIdx] : null;
+    if (emaNowPct == null || !(closeNowPct > emaNowPct)) return null;
 
-function classifyQullamaggie(ticker, universe, c, opts = {}) {
-    const o = qullamaggieOpts(opts);
-    // Uproszczone na wyraźną prośbę użytkownika: sam zwrot 6-miesięczny jest
-    // wystarczającym warunkiem (zamiast osobnego OR po 1/3/6M) — 6-miesięczne
-    // okno w praktyce OBEJMUJE też ruch, który dopiero co (w ciągu 1 lub 3
-    // miesięcy) wypchnął cenę o 30%+, bo cena z przed 6 miesięcy jest zwykle
-    // zbliżona do ceny z przed 1/3 miesięcy, jeśli w tym czasie nie było
-    // odwrotnego ruchu. Liczone z weekly_chart (weeksAgoReturnPct(), js/
-    // minicharts.js) — zastąpiło dawne daily_squeeze.return_6m_pct razem z całą
-    // usuniętą infrastrukturą dziennych danych, patrz CLAUDE.md. return_1m_pct/
-    // return_3m_pct nadal liczone i pokazywane (tooltip w qmPerfCellHtml) —
-    // tylko jako informacja, nie jako osobny warunek bramki.
-    const return6m = weeksAgoReturnPct(c, QM_RETURN_6M_WEEKS);
-    if (return6m == null) return null;
-    const perfPct = return6m;
-    if (!(perfPct >= o.minPerfPct)) return null;
-
+    // Krok 2: konsolidacja (TTM Squeeze tygodniowy jako substytut kanału).
     const t = c.ttm_squeeze_chart;
     if (!t || !t.dates || t.dates.length === 0) return null;
-    // Ostatni tydzień bywa jeszcze niedomknięty — patrz ten sam caveat w classifyTtmSqueeze.
+    // Ostatni tydzień bywa jeszcze niedomknięty — ten sam caveat co w classifyTtmSqueeze/classifyContinuation.
     let nowIdx = t.dates.length - 1;
     while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
     if (nowIdx < 0) return null;
@@ -516,78 +568,125 @@ function classifyQullamaggie(ticker, universe, c, opts = {}) {
     const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
     const histNow = t.histogram[nowIdx];
 
-    const isConsolidating = squeezeOn === true
-        && squeezeCount >= o.minConsolidationWeeks && squeezeCount <= o.maxConsolidationWeeks;
+    const isConsolidating = squeezeOn === true && squeezeCount >= o.minConsolidationWeeks;
     const isFired = weeksSinceFire != null && weeksSinceFire <= o.fireLookbackWeeks
-        && fireConsolidationWeeks != null
-        && fireConsolidationWeeks >= o.minConsolidationWeeks && fireConsolidationWeeks <= o.maxConsolidationWeeks
+        && fireConsolidationWeeks != null && fireConsolidationWeeks >= o.minConsolidationWeeks
         && histNow != null && histNow > 0;
     if (!isConsolidating && !isFired) return null;
-
     const consolidationWeeks = isFired ? fireConsolidationWeeks : squeezeCount;
-    // Bardzo krótki squeeze (<= QM_TIGHT_RANGE_MAX_WEEKS) potrzebuje dodatkowego
-    // potwierdzenia zakresem ceny — patrz komentarz przy tej konstancie i
-    // qmTightRangeConfirmed() powyżej. Dłuższy squeeze (typowe 3-8 tyg. w
-    // domyślnych progach) jest już wystarczającym potwierdzeniem samą długością.
-    if (consolidationWeeks <= QM_TIGHT_RANGE_MAX_WEEKS && !qmTightRangeConfirmed(c)) return null;
 
-    // Potwierdzenie wolumenem kupujących W TYGODNIU WYBICIA — tylko dla
-    // "fired" (przy trwającej konsolidacji nie ma jeszcze wybicia do
-    // potwierdzenia). ttm_squeeze_chart i weekly_chart mają NIEKONIECZNIE tę
-    // samą długość bufora rozgrzewki (patrz alignSqueezeToDates w
-    // chart-render.js), więc łączymy je po DACIE, nie po indeksie wprost.
+    // Kroki 3-4: jakość konsolidacji/momentum — informacyjne zawsze,
+    // wymagane wg opts.requireNatr/requireMacd.
+    const natrValue = currentNatr(c);
+    const natrOk = natrValue != null && natrValue <= BLUEPRINT_NATR_MAX;
+    const macd = macdConfirmation(c);
+    const macdOk = macd.above === true;
+
+    // Kroki 6-9: kryteria świecy wybicia — TYLKO dla "fired", dopasowane po
+    // DACIE (ttm_squeeze_chart/weekly_chart mogą mieć inny bufor rozgrzewki
+    // — ten sam wzorzec co breakout_volume_ratio w dawnym classifyQullamaggie).
+    let wickPct = null, tenWeekHigh = null, breakoutGainPct = null, volumeIncreasePct = null;
     let breakoutVolumeRatio = null;
     if (isFired) {
         const breakoutDate = t.dates[nowIdx - weeksSinceFire];
-        const wc = c.weekly_chart;
-        const wcIdx = wc && wc.dates ? wc.dates.indexOf(breakoutDate) : -1;
-        if (wcIdx >= 0 && wc.buying_volume_ratio) breakoutVolumeRatio = wc.buying_volume_ratio[wcIdx];
+        const wcIdx = wc.dates ? wc.dates.indexOf(breakoutDate) : -1;
+        if (wcIdx >= 0) {
+            const closeNow = wc.close_pct[wcIdx];
+            const highNow = wc.high_pct ? wc.high_pct[wcIdx] : null;
+            const lowNow = wc.low_pct ? wc.low_pct[wcIdx] : null;
+            if (closeNow != null && highNow != null && lowNow != null && highNow > lowNow) {
+                wickPct = ((highNow - closeNow) / (highNow - lowNow)) * 100;
+            }
+            if (closeNow != null && wcIdx >= BREAKOUT_TEN_WEEK_HIGH_WEEKS) {
+                const windowVals = wc.close_pct
+                    .slice(wcIdx - BREAKOUT_TEN_WEEK_HIGH_WEEKS, wcIdx + 1)
+                    .filter(v => v != null);
+                tenWeekHigh = closeNow >= Math.max(...windowVals);
+            }
+            const prevPct = wcIdx > 0 ? wc.close_pct[wcIdx - 1] : null;
+            if (closeNow != null && prevPct != null) {
+                breakoutGainPct = ((1 + closeNow / 100) / (1 + prevPct / 100) - 1) * 100;
+            }
+            if (wc.volume && wc.volume[wcIdx] != null && wcIdx > 0 && wc.volume[wcIdx - 1] > 0) {
+                volumeIncreasePct = (wc.volume[wcIdx] / wc.volume[wcIdx - 1] - 1) * 100;
+            }
+            if (wc.buying_volume_ratio) breakoutVolumeRatio = wc.buying_volume_ratio[wcIdx];
+        }
+        // Kroki 6/7/8: TWARDE warunki świecy wybicia — odrzucają wiersz
+        // CAŁKOWICIE, tylko gdy realnie policzone (ten sam wzorzec co
+        // Continuation, patrz komentarz nad classifyContinuation).
+        if (wickPct != null && wickPct > BREAKOUT_MAX_WICK_PCT) return null;
+        if (tenWeekHigh === false) return null;
+        if (breakoutGainPct != null
+            && (breakoutGainPct < BREAKOUT_MIN_GAIN_PCT || breakoutGainPct > BREAKOUT_MAX_GAIN_PCT)) {
+            return null;
+        }
     }
+    const volumeSpikeOk = volumeIncreasePct != null && volumeIncreasePct >= BREAKOUT_MIN_VOLUME_SPIKE_PCT;
     const breakoutVolumeConfirmed = breakoutVolumeRatio != null && breakoutVolumeRatio >= STAGE_BREAKOUT_VOLUME_RATIO;
+
+    // Krok 10: stop/ryzyko.
+    const stopInfo = strategyStopFor(c);
+    const stop = stopInfo ? stopInfo.stop : null;
+    const stopDistancePct = stop != null && c.price > 0 ? ((c.price - stop) / c.price) * 100 : null;
+    const riskOk = stopDistancePct == null || stopDistancePct <= BLUEPRINT_MAX_STOP_DISTANCE_PCT;
+
+    let substatus;
+    if (isFired) {
+        if (o.requireMacd && !macdOk) substatus = "WAIT_MACD";
+        else if (o.requireNatr && !natrOk) substatus = "WAIT_NATR";
+        else if (!riskOk) substatus = "WAIT_RISK";
+        else if (o.requireVolumeSpike && !volumeSpikeOk) substatus = "WAIT_VOLUME";
+        else substatus = "ENTRY";
+    } else {
+        substatus = "SETUP";
+    }
 
     return {
         ticker, universe, sector: c.sector, price: c.price,
-        return_1m_pct: weeksAgoReturnPct(c, QM_RETURN_1M_WEEKS),
-        return_3m_pct: weeksAgoReturnPct(c, QM_RETURN_3M_WEEKS),
-        return_6m_pct: return6m,
-        perf_pct: perfPct,
-        current_stage: c.weekly_chart && c.weekly_chart.current_stage,
+        current_stage: wc.current_stage,
         status: isFired ? "fired" : "consolidating",
+        substatus,
         consolidation_weeks: consolidationWeeks,
         weeks_since_fire: isFired ? weeksSinceFire : null,
         histNow,
-        breakout_volume_ratio: breakoutVolumeRatio,
-        breakout_volume_confirmed: breakoutVolumeConfirmed,
-        // Poziom oporu/wsparcia "do obserwowania" (breakoutLevelFor(), js/
-        // minicharts.js) — na wyraźną prośbę użytkownika, żeby nie trzeba było
-        // zgadywać przy jakiej cenie wypatrywać wybicia na 1-minutowym wykresie
-        // (zakładka "⚡ 1 min + VWAP", chart-modal.js). Ten sam pomocnik liczy to
-        // dla obu miejsc, z tych samych pól (weekly_chart.pending_base/bases).
+        natr_value: natrValue, natr_ok: natrOk,
+        macd_above: macd.above, macd_cross_up_date: macd.crossUpDate, macd_ok: macdOk,
+        wick_pct: wickPct,
+        ten_week_high: tenWeekHigh,
+        breakout_gain_pct: breakoutGainPct,
+        volume_increase_pct: volumeIncreasePct, volume_spike_ok: volumeSpikeOk,
+        breakout_volume_ratio: breakoutVolumeRatio, breakout_volume_confirmed: breakoutVolumeConfirmed,
+        stop, stop_source: stopInfo ? stopInfo.source : null, stop_distance_pct: stopDistancePct, risk_ok: riskOk,
+        // Poziom oporu/wsparcia "do obserwowania" — ten sam pomocnik co
+        // dawne Continuation/Qullamaggie (breakoutLevelFor(), js/minicharts.js).
         breakout_level: breakoutLevelFor(c),
+        kelly: breakoutPositionFor(c.price, stop),
         ...miniVisualFields(c),
     };
 }
 
 // Zwraca listę połączoną ze WSZYSTKICH 6 uniwersów, bez duplikatów, posortowaną:
-// świeże wybicia (najnowsze na górze, potwierdzone wolumenem pierwsze przy
-// remisie tygodnia), potem trwające konsolidacje (najdłuższe, czyli
-// najbliższe wybicia, na górze).
-function combinedQullamaggieCandidates(opts = {}) {
+// świeże wybicia gotowe do ENTRY najpierw, potem inne wybicia (WAIT_*, od
+// najświeższego), potem trwające konsolidacje (najdłuższe, czyli najbliższe
+// wybicia, na górze).
+function combinedBreakoutCandidates(opts = {}) {
     const rows = [];
     const seen = new Set();
     UNIVERSES.forEach(u => {
         const universeData = state.data[u] || {};
         (universeData.all_constituents || universeData.constituents || []).forEach(c => {
             if (seen.has(c.ticker)) return;
-            const r = classifyQullamaggie(c.ticker, u, c, opts);
+            const r = classifyBreakout(c.ticker, u, c, opts);
             if (r) { rows.push(r); seen.add(c.ticker); }
         });
     });
     rows.sort((a, b) => {
         if (a.status !== b.status) return a.status === "fired" ? -1 : 1;
         if (a.status === "fired") {
-            if (a.weeks_since_fire !== b.weeks_since_fire) return a.weeks_since_fire - b.weeks_since_fire;
-            return (b.breakout_volume_confirmed ? 1 : 0) - (a.breakout_volume_confirmed ? 1 : 0);
+            if (a.substatus === "ENTRY" && b.substatus !== "ENTRY") return -1;
+            if (b.substatus === "ENTRY" && a.substatus !== "ENTRY") return 1;
+            return a.weeks_since_fire - b.weeks_since_fire;
         }
         return b.consolidation_weeks - a.consolidation_weeks;
     });
@@ -904,13 +1003,13 @@ function renderContinuationPanel() {
     }
 }
 
-// Sidebar: kafelki screenera Qullamaggie (patrz combinedQullamaggieCandidates powyżej).
-function renderQullamaggiePanel() {
-    const container = document.getElementById("tiles-QULLAMAGGIE");
+// Sidebar: kafelki screenera Breakout (patrz combinedBreakoutCandidates powyżej).
+function renderBreakoutPanel() {
+    const container = document.getElementById("tiles-BREAKOUT");
     if (!container) return;
 
-    const rows = combinedQullamaggieCandidates();
-    const meta = document.getElementById("qullamaggieMeta");
+    const rows = combinedBreakoutCandidates();
+    const meta = document.getElementById("breakoutMeta");
     if (meta) meta.textContent = `${rows.length} spółek`;
 
     container.innerHTML = "";
@@ -919,10 +1018,8 @@ function renderQullamaggiePanel() {
         tile.className = "ticker-tile";
         tile.textContent = r.ticker;
         tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · `
-            + `wynik ${r.perf_pct.toFixed(0)}% (6M) · `
             + (r.status === "fired"
-                ? `wybicie ${r.weeks_since_fire} tyg. temu po ${r.consolidation_weeks} tyg. konsolidacji`
-                    + (r.breakout_volume_confirmed ? " · wolumen potwierdzony" : "")
+                ? `${r.substatus === "ENTRY" ? "ENTRY" : "wybicie"} ${r.weeks_since_fire} tyg. temu po ${r.consolidation_weeks} tyg. konsolidacji`
                 : `w konsolidacji od ${r.consolidation_weeks} tyg.`);
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
@@ -941,7 +1038,7 @@ function renderQullamaggiePanel() {
 
 // ============================================================
 // SZUFLADA TABEL: cztery zakładki (Wybicie / TTM Squeeze / Continuation /
-// Qullamaggie), bez pełnej tabeli per-uniwersum (ta zostaje na "Indeksach",
+// Breakout), bez pełnej tabeli per-uniwersum (ta zostaje na "Indeksach",
 // patrz app.js) — stąd prostszy dispatcher niż showDrawerTable/
 // renderActiveDrawerTable w app.js (nie ma tam "if universe is one of
 // SIDEBAR_TAB_UNIVERSES" gałęzi, bo tu każda zakładka to zawsze jeden z tych
@@ -973,16 +1070,16 @@ function showSignalsTable(tab) {
     document.getElementById("continuationControls").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationMarketBanner").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationGuide").hidden = tab !== "CONTINUATION";
-    document.getElementById("qullamaggieTable").hidden = tab !== "QULLAMAGGIE";
-    document.getElementById("qullamaggieControls").hidden = tab !== "QULLAMAGGIE";
-    document.getElementById("qullamaggieGuide").hidden = tab !== "QULLAMAGGIE";
+    document.getElementById("breakoutTable").hidden = tab !== "BREAKOUT";
+    document.getElementById("breakoutControls").hidden = tab !== "BREAKOUT";
+    document.getElementById("breakoutGuide").hidden = tab !== "BREAKOUT";
     document.getElementById("drawerTitle").textContent = tab === "WYBICIE"
         ? "Pełna tabela — Wybicie"
         : tab === "TTM_SQUEEZE"
             ? "Pełna tabela — TTM Squeeze"
             : tab === "CONTINUATION"
                 ? "Continuation — Etap 2 + konsolidacja tygodniowa"
-                : "Qullamaggie — duży ruch + konsolidacja + wybicie z wolumenem";
+                : "Breakout — replika \"MY STRATEGY BLUEPRINT\" (Gareth Packer/Financial Wisdom)";
     renderActiveSignalsTable();
 }
 
@@ -990,7 +1087,7 @@ function renderActiveSignalsTable() {
     if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
     else if (state.drawerUniverse === "TTM_SQUEEZE") renderTtmSqueezeTable();
     else if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
-    else renderQullamaggieTable();
+    else renderBreakoutTable();
 }
 
 function initSignalsDrawer() {
@@ -1303,35 +1400,13 @@ function renderTtmSqueezeTable() {
     });
 }
 
-// Wynik 6M (= perf_pct, patrz classifyQullamaggie) — dymek dodatkowo pokazuje
-// 1M/3M informacyjnie (nie są już częścią warunku bramki, tylko kontekstem —
-// np. czy większość ruchu przyszła niedawno, czy jest rozłożona równomiernie).
-function qmReturnHtml(v) {
-    return v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(0)}%`;
-}
-
-function qmPerfCellHtml(r) {
-    const title = `6M: ${qmReturnHtml(r.perf_pct)} · 1M: ${qmReturnHtml(r.return_1m_pct)} · 3M: ${qmReturnHtml(r.return_3m_pct)}`;
-    return `<span class="positive" title="${title}">+${r.perf_pct.toFixed(0)}%</span>`;
-}
-
-function qmStatusHtml(r) {
-    if (r.status === "fired") {
-        const volBadge = r.breakout_volume_confirmed
-            ? `<span class="cross-age" title="Wolumen kupujących w tygodniu wybicia ≥ ${STAGE_BREAKOUT_VOLUME_RATIO}x średniej">· wolumen ✓</span>`
-            : r.breakout_volume_ratio != null
-                ? `<span class="cross-age" title="Wolumen kupujących w tygodniu wybicia poniżej ${STAGE_BREAKOUT_VOLUME_RATIO}x średniej">· wolumen ✗</span>`
-                : "";
-        return `<span class="squeeze-status squeeze-status-fired">🔥 Wybicie (${r.weeks_since_fire} tyg. temu)</span> ${volBadge}`;
-    }
-    return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
-}
-
 // Poziom "do obserwowania" (breakoutLevelFor(), js/minicharts.js): opór
 // (▲, zielony) + wsparcie (▼, czerwony) gdy znane. `pending: false` (box już
 // skonsumowany przez wcześniejsze wybicie, patrz breakoutLevelFor) obniża
-// opacity — to referencyjny, nie aktualny poziom.
-function qmLevelCellHtml(r) {
+// opacity — to referencyjny, nie aktualny poziom. Wspólne dla Continuation i
+// Breakout (dawniej nazwane qmLevelCellHtml, z Qullamaggie — czysto
+// techniczna funkcja, przemianowana przy tej samej okazji).
+function levelToWatchCellHtml(r) {
     const lvl = r.breakout_level;
     if (!lvl) return `<span class="spark-empty">—</span>`;
     const style = lvl.pending ? "" : ' style="opacity:0.6"';
@@ -1341,17 +1416,87 @@ function qmLevelCellHtml(r) {
         + `<span class="orb-level-value positive">▲ ${formatPrice(lvl.resistance, r.universe)}</span>${support}</span>`;
 }
 
-function qmRowHtml(r, position) {
+const BREAKOUT_SUBSTATUS_LABELS = {
+    WAIT_MACD: `<span class="cross-age" title="Tygodniowy MACD nie jest nad linią sygnałową — blueprint: &quot;we always want to be in a position with the MACD line above the signal line&quot;.">⏳ Czekaj na MACD</span>`,
+    WAIT_NATR: `<span class="cross-age" title="NATR powyżej ${BLUEPRINT_NATR_MAX} — konsolidacja niewystarczająco ciasna wg tego kryterium.">⏳ NATR za wysoki</span>`,
+    WAIT_RISK: `<span class="negative" title="Odległość do stopu przekracza ${BLUEPRINT_MAX_STOP_DISTANCE_PCT}% — blueprint: &quot;if the structure does not allow for a stop loss of less than 20%, we do not take the trade&quot;.">⏳ Stop za daleko</span>`,
+    WAIT_VOLUME: `<span class="cross-age" title="Wolumen wzrósł mniej niż ${BREAKOUT_MIN_VOLUME_SPIKE_PCT}% względem poprzedniego tygodnia.">⏳ Wolumen za słaby</span>`,
+};
+
+function breakoutStatusHtml(r) {
+    if (r.status !== "fired") return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
+    const fired = `<span class="squeeze-status squeeze-status-fired">${r.substatus === "ENTRY" ? "🎯 ENTRY" : "🔥 Wybicie"} (${r.weeks_since_fire} tyg. temu)</span>`;
+    if (r.substatus === "ENTRY") return fired;
+    return `${fired} ${BREAKOUT_SUBSTATUS_LABELS[r.substatus] || ""}`;
+}
+
+// "Warunki wejścia" — badge'e dla każdego jawnego kroku blueprintu (patrz
+// numerowana lista w komentarzu nad classifyBreakout): NATR/MACD zawsze
+// widoczne (dotyczą też trwającej konsolidacji — jakość setupu, nie tylko
+// samej świecy wybicia), knot/10-tyg. szczyt/zysk/wolumen tylko dla "fired"
+// (są policzone WYŁĄCZNIE dla świecy wybicia). Knot/10-tyg. szczyt/zysk są
+// tu ZAWSZE ✓ gdy widoczne — wiersz, który je nie spełnił, został już
+// odrzucony CAŁKOWICIE w classifyBreakout (TWARDE warunki), więc pojawienie
+// się badge'a samo w sobie jest potwierdzeniem, nie oceną.
+function breakoutConditionsHtml(r) {
+    const natrBadge = r.natr_value != null
+        ? `<span class="${r.natr_ok ? "positive" : "negative"}" title="NATR: ${r.natr_value.toFixed(1)} (limit ${BLUEPRINT_NATR_MAX})">NATR ${r.natr_ok ? "✓" : "✗"}</span>`
+        : "";
+    const macdBadge = r.macd_above != null
+        ? `<span class="${r.macd_ok ? "positive" : "negative"}" title="MACD ${r.macd_ok ? "nad" : "pod"} linią sygnałową">MACD ${r.macd_ok ? "✓" : "✗"}</span>`
+        : "";
+    const badges = [natrBadge, macdBadge];
+    if (r.status === "fired") {
+        if (r.wick_pct != null) {
+            badges.push(`<span class="positive" title="Górny knot świecy wybicia: ${r.wick_pct.toFixed(0)}% zakresu (limit ${BREAKOUT_MAX_WICK_PCT}%)">Knot ✓</span>`);
+        }
+        if (r.ten_week_high != null) {
+            badges.push(`<span class="positive" title="Świeca wybicia = ${BREAKOUT_TEN_WEEK_HIGH_WEEKS}-tyg. szczyt zamknięcia">${BREAKOUT_TEN_WEEK_HIGH_WEEKS} tyg. ✓</span>`);
+        }
+        if (r.breakout_gain_pct != null) {
+            badges.push(`<span class="positive" title="Zysk świecy wybicia: +${r.breakout_gain_pct.toFixed(1)}% (wymagane ${BREAKOUT_MIN_GAIN_PCT}-${BREAKOUT_MAX_GAIN_PCT}%)">Zysk ✓</span>`);
+        }
+        if (r.volume_increase_pct != null) {
+            badges.push(`<span class="${r.volume_spike_ok ? "positive" : "cross-age"}" title="Wolumen: ${r.volume_increase_pct >= 0 ? "+" : ""}${r.volume_increase_pct.toFixed(0)}% względem poprz. tygodnia (cel ${BREAKOUT_MIN_VOLUME_SPIKE_PCT}%+, materiał mówi o dyskrecji)">Wolumen ${r.volume_spike_ok ? "✓" : "~"}</span>`);
+        }
+        if (r.breakout_volume_confirmed) {
+            badges.push(`<span class="cross-age" title="Wolumen kupujących w tygodniu wybicia ≥ ${STAGE_BREAKOUT_VOLUME_RATIO}x średniej">Kupujący ✓</span>`);
+        }
+    }
+    return badges.filter(Boolean).join(" ") || "—";
+}
+
+function breakoutStopCellHtml(r) {
+    if (r.stop == null) return `<span class="spark-empty">—</span>`;
+    const pctTxt = r.stop_distance_pct != null ? `${r.stop_distance_pct.toFixed(1)}%` : "—";
+    const cls = r.risk_ok ? "" : "negative";
+    const sourceLabel = r.stop_source === "macd" ? "podniesiony po przecięciu MACD w dół"
+        : r.stop_source === "box" ? "dolna granica środkowej tercji pudełka"
+            : "trailing stop Weinsteina (fallback bez pudełka)";
+    return `<span title="Stop: ${formatPrice(r.stop, r.universe)} (${sourceLabel})">`
+        + `${formatPrice(r.stop, r.universe)} <span class="${cls}">(${pctTxt})</span></span>`;
+}
+
+function breakoutKellyCellHtml(r) {
+    if (!r.kelly) return `<span class="spark-empty">—</span>`;
+    const k = r.kelly;
+    return `<span title="Ryzyko: ${formatPrice(k.riskValue, r.universe)} (${k.riskOnEquityPct.toFixed(2)}% kapitału) — wg kalkulatora Kelly'ego nad tabelą">`
+        + `${k.shares} szt. (${formatPrice(k.value, r.universe)})</span>`;
+}
+
+function breakoutRowHtml(r, position) {
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
-        <td title="Zwrot z ostatnich 6 miesięcy (dymek: także 1M/3M informacyjnie)">${qmPerfCellHtml(r)}</td>
-        <td>${qmStatusHtml(r)}</td>
+        <td>${breakoutStatusHtml(r)}</td>
         <td>${r.consolidation_weeks} tyg.</td>
-        <td title="Cena, przy której warto obserwować 1-minutowy wykres (zakładka „⚡ 1 min + VWAP” po kliknięciu w wiersz)">${qmLevelCellHtml(r)}</td>
+        <td title="Warunki blueprintu: NATR &lt; ${BLUEPRINT_NATR_MAX}, MACD nad sygnałową, górny knot &le; ${BREAKOUT_MAX_WICK_PCT}%, ${BREAKOUT_TEN_WEEK_HIGH_WEEKS}-tyg. szczyt, zysk ${BREAKOUT_MIN_GAIN_PCT}-${BREAKOUT_MAX_GAIN_PCT}%, wolumen +${BREAKOUT_MIN_VOLUME_SPIKE_PCT}%">${breakoutConditionsHtml(r)}</td>
+        <td title="Cena, przy której warto obserwować wybicie (opór/wsparcie kanału konsolidacji)">${levelToWatchCellHtml(r)}</td>
+        <td title="Stop wg blueprintu: środkowa tercja pudełka, podnoszony po każdym przecięciu MACD w dół">${breakoutStopCellHtml(r)}</td>
+        <td title="Wielkość pozycji wg Kelly Criterion (kalkulator nad tabelą)">${breakoutKellyCellHtml(r)}</td>
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
         <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
@@ -1359,55 +1504,93 @@ function qmRowHtml(r, position) {
     `;
 }
 
-// Tabela screenera Qullamaggie — sortowalna i filtrowalna po etapie, tak jak
+// Tabela screenera Breakout — sortowalna i filtrowalna po etapie, tak jak
 // pozostałe tabele, na płaskiej, wielo-uniwersalnej liście z
-// combinedQullamaggieCandidates().
-function renderQullamaggieTable() {
-    const allRows = combinedQullamaggieCandidates();
+// combinedBreakoutCandidates().
+function renderBreakoutTable() {
+    const allRows = combinedBreakoutCandidates();
 
     renderScreenerTable({
-        tbody: document.getElementById("qullamaggieTableBody"),
+        tbody: document.getElementById("breakoutTableBody"),
         metaEl: document.getElementById("drawerMeta"),
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 13,
-        emptyAllMsg: `Brak spółek z ruchem ≥ ${state.qmMinPerfPct}% (6M) i konsolidacją ${state.qmMinConsolidationWeeks}-${state.qmMaxConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem).`,
+        colspan: 15,
+        emptyAllMsg: `Brak spółek nad własną EMA20 z konsolidacją ≥ ${state.breakoutMinConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem spełniającym kryteria świecy z blueprintu).`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
         isSelected: r => r.ticker === state.selectedTicker,
-        rowHtml: (r, i) => qmRowHtml(r, i + 1),
+        rowHtml: (r, i) => breakoutRowHtml(r, i + 1),
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
 }
 
-// Suwaki nad tabelą Qullamaggie (#qullamaggieControls) — ten sam wzorzec co
-// initWybicieControls/initContinuationControls, własny klucz localStorage.
-function initQullamaggieControls() {
+// Tekst podsumowania kalkulatora Kelly Criterion nad tabelą (#breakoutKellySummary).
+function breakoutKellySummaryText() {
+    const r = state.breakoutRewardRisk;
+    if (!(r > 0)) return "Podaj dodatni stosunek zysk/strata (Reward/Risk).";
+    const w = state.breakoutWinRatePct / 100;
+    const fullKellyPct = (w - (1 - w) / r) * 100;
+    const fracKelly = breakoutKellyFraction();
+    if (fracKelly == null || !(fracKelly > 0)) {
+        return `Kelly pełny: ${fullKellyPct.toFixed(1)}% — ujemna wartość oczekiwana przy tych statystykach, kalkulator nie zaleca pozycji.`;
+    }
+    const fracPct = fracKelly * 100;
+    const positionValue = state.breakoutEquity * fracKelly;
+    return `Kelly pełny: ${fullKellyPct.toFixed(1)}% · Kelly frakcyjny (${state.breakoutKellyFractionPct}%): ${fracPct.toFixed(1)}% kapitału ≈ ${Math.round(positionValue).toLocaleString("pl-PL")} na pozycję.`;
+}
+
+function updateBreakoutKellySummary() {
+    const el = document.getElementById("breakoutKellySummary");
+    if (el) el.textContent = breakoutKellySummaryText();
+}
+
+// Suwaki/przełączniki/kalkulator Kelly'ego nad tabelą Breakout
+// (#breakoutControls) — ten sam wzorzec co initWybicieControls/
+// initContinuationControls, własny klucz localStorage.
+function initBreakoutControls() {
     try {
-        const saved = JSON.parse(localStorage.getItem(QM_SETTINGS_KEY) || "null");
+        const saved = JSON.parse(localStorage.getItem(BREAKOUT_SETTINGS_KEY) || "null");
         if (saved) {
-            if (Number.isFinite(saved.minPerfPct)) state.qmMinPerfPct = saved.minPerfPct;
-            if (Number.isFinite(saved.minConsolidationWeeks)) state.qmMinConsolidationWeeks = saved.minConsolidationWeeks;
-            if (Number.isFinite(saved.maxConsolidationWeeks)) state.qmMaxConsolidationWeeks = saved.maxConsolidationWeeks;
-            if (Number.isFinite(saved.fireLookbackWeeks)) state.qmFireLookbackWeeks = saved.fireLookbackWeeks;
+            if (Number.isFinite(saved.minConsolidationWeeks)) state.breakoutMinConsolidationWeeks = saved.minConsolidationWeeks;
+            if (Number.isFinite(saved.fireLookbackWeeks)) state.breakoutFireLookbackWeeks = saved.fireLookbackWeeks;
+            if (typeof saved.requireNatr === "boolean") state.breakoutRequireNatr = saved.requireNatr;
+            if (typeof saved.requireMacd === "boolean") state.breakoutRequireMacd = saved.requireMacd;
+            if (typeof saved.requireVolumeSpike === "boolean") state.breakoutRequireVolumeSpike = saved.requireVolumeSpike;
+            if (Number.isFinite(saved.equity)) state.breakoutEquity = saved.equity;
+            if (Number.isFinite(saved.winRatePct)) state.breakoutWinRatePct = saved.winRatePct;
+            if (Number.isFinite(saved.rewardRisk)) state.breakoutRewardRisk = saved.rewardRisk;
+            if (Number.isFinite(saved.kellyFractionPct)) state.breakoutKellyFractionPct = saved.kellyFractionPct;
         }
     } catch (e) { /* brak localStorage — zostają domyślne */ }
 
     const save = () => {
         try {
-            localStorage.setItem(QM_SETTINGS_KEY, JSON.stringify({
-                minPerfPct: state.qmMinPerfPct,
-                minConsolidationWeeks: state.qmMinConsolidationWeeks,
-                maxConsolidationWeeks: state.qmMaxConsolidationWeeks,
-                fireLookbackWeeks: state.qmFireLookbackWeeks,
+            localStorage.setItem(BREAKOUT_SETTINGS_KEY, JSON.stringify({
+                minConsolidationWeeks: state.breakoutMinConsolidationWeeks,
+                fireLookbackWeeks: state.breakoutFireLookbackWeeks,
+                requireNatr: state.breakoutRequireNatr,
+                requireMacd: state.breakoutRequireMacd,
+                requireVolumeSpike: state.breakoutRequireVolumeSpike,
+                equity: state.breakoutEquity,
+                winRatePct: state.breakoutWinRatePct,
+                rewardRisk: state.breakoutRewardRisk,
+                kellyFractionPct: state.breakoutKellyFractionPct,
             }));
         } catch (e) { /* ignoruj */ }
     };
 
-    const bind = (inputId, valueId, stateKey, unit) => {
+    const rerender = () => {
+        save();
+        renderBreakoutPanel();
+        if (state.drawerUniverse === "BREAKOUT") renderBreakoutTable();
+        updateBreakoutKellySummary();
+    };
+
+    const bindSlider = (inputId, valueId, stateKey, unit) => {
         const input = document.getElementById(inputId);
         const valueEl = document.getElementById(valueId);
         if (!input) return;
@@ -1416,15 +1599,42 @@ function initQullamaggieControls() {
         input.addEventListener("input", () => {
             state[stateKey] = Number(input.value);
             if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
-            save();
-            renderQullamaggiePanel();
-            if (state.drawerUniverse === "QULLAMAGGIE") renderQullamaggieTable();
+            rerender();
         });
     };
-    bind("qmMinPerfInput", "qmMinPerfValue", "qmMinPerfPct", "%");
-    bind("qmMinConsolidationInput", "qmMinConsolidationValue", "qmMinConsolidationWeeks", " tyg.");
-    bind("qmMaxConsolidationInput", "qmMaxConsolidationValue", "qmMaxConsolidationWeeks", " tyg.");
-    bind("qmFireLookbackInput", "qmFireLookbackValue", "qmFireLookbackWeeks", " tyg.");
+    bindSlider("breakoutMinConsolidationInput", "breakoutMinConsolidationValue", "breakoutMinConsolidationWeeks", " tyg.");
+    bindSlider("breakoutFireLookbackInput", "breakoutFireLookbackValue", "breakoutFireLookbackWeeks", " tyg.");
+
+    const bindToggle = (btnId, stateKey) => {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.classList.toggle("active", state[stateKey]);
+        btn.addEventListener("click", () => {
+            state[stateKey] = !state[stateKey];
+            btn.classList.toggle("active", state[stateKey]);
+            rerender();
+        });
+    };
+    bindToggle("breakoutRequireNatrBtn", "breakoutRequireNatr");
+    bindToggle("breakoutRequireMacdBtn", "breakoutRequireMacd");
+    bindToggle("breakoutRequireVolumeBtn", "breakoutRequireVolumeSpike");
+
+    const bindNumber = (inputId, stateKey) => {
+        const input = document.getElementById(inputId);
+        if (!input) return;
+        input.value = state[stateKey];
+        input.addEventListener("input", () => {
+            const v = Number(input.value);
+            if (Number.isFinite(v)) state[stateKey] = v;
+            rerender();
+        });
+    };
+    bindNumber("breakoutEquityInput", "breakoutEquity");
+    bindNumber("breakoutWinRateInput", "breakoutWinRatePct");
+    bindNumber("breakoutRewardRiskInput", "breakoutRewardRisk");
+    bindNumber("breakoutKellyFractionInput", "breakoutKellyFractionPct");
+
+    updateBreakoutKellySummary();
 }
 
 // Status + odznaka potwierdzenia tygodniowym MACD dla "fired" (patrz komentarz
@@ -1456,7 +1666,7 @@ function continuationRowHtml(r, position) {
         <td class="positive">${r.rs_long.toFixed(1)}</td>
         <td>${continuationStatusHtml(r)}</td>
         <td>${r.consolidation_weeks} tyg.</td>
-        <td title="Cena, przy której warto obserwować wybicie; dymek pokazuje też sugerowany stop (dolna granica środkowej tercji konsolidacji)">${qmLevelCellHtml(r)}</td>
+        <td title="Cena, przy której warto obserwować wybicie; dymek pokazuje też sugerowany stop (dolna granica środkowej tercji konsolidacji)">${levelToWatchCellHtml(r)}</td>
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
         <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
@@ -1534,12 +1744,12 @@ if (typeof document !== "undefined") {
         await loadData();
         initWybicieControls();
         initContinuationControls();
-        initQullamaggieControls();
+        initBreakoutControls();
         renderWybiciePanel();
         renderTtmSqueezePanel();
         renderContinuationPanel();
         renderMarketTrendBanner();
-        renderQullamaggiePanel();
+        renderBreakoutPanel();
         initSignalsDrawer();
         initOpenTvButton();
         initResetZoomButton();
@@ -1565,6 +1775,6 @@ if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
-        classifyQullamaggie, combinedQullamaggieCandidates,
+        classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
     };
 }

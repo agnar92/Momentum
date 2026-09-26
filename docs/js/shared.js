@@ -126,7 +126,7 @@ function compareRows(a, b, sortKey, sortDir) {
 // TV_1MIN_VWAP_WIDGET (dawniej TV_ORB_WIDGET, tylko w chart-modal.js) też
 // żyje teraz tutaj z tego samego powodu — identyczny widget (Advanced Chart,
 // interwał "1", studium VWAP@tv-basicstudies) jest teraz potrzebny osobno w
-// zakładce "⚡ 1 min + VWAP" (Qullamaggie/screenery na signals.html) ORAZ w
+// zakładce "⚡ 1 min + VWAP" (Breakout/screenery na signals.html) ORAZ w
 // oknie EP (dziennik EP na ep.html, patrz renderEpChartModal w js/ep.js).
 // ============================================================
 const TV_EMBED_BASE = "https://s3.tradingview.com/external-embedding/";

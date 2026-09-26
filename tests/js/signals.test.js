@@ -11,7 +11,7 @@ const path = require("node:path");
 const {
     weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     classifyContinuation, combinedContinuationCandidates,
-    classifyQullamaggie, combinedQullamaggieCandidates,
+    classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
 } = require(path.join("..", "..", "docs", "js", "signals.js"));
 
 // ---------- weeksSinceZeroCrossUp / classifyWybicie / combinedWybicieCandidates ----------
@@ -376,263 +376,284 @@ test("combinedTtmSqueezeCandidates merges candidates across universes, fired fir
     assert.deepEqual(rows.map(r => r.ticker), ["FIRED_FRESH", "FIRED_OLD", "COIL_LONG", "COIL_SHORT"]);
 });
 
-// ---------- classifyQullamaggie / combinedQullamaggieCandidates (replika skanu Qullamaggie) ----------
+// ---------- classifyBreakout / combinedBreakoutCandidates (replika "MY STRATEGY BLUEPRINT", Gareth Packer/Financial Wisdom) ----------
 
-const QM_OPTS = { minPerfPct: 30, minConsolidationWeeks: 4, maxConsolidationWeeks: 6, fireLookbackWeeks: 3 };
+const BREAKOUT_OPTS = {
+    minConsolidationWeeks: 6, fireLookbackWeeks: 3,
+    requireNatr: true, requireMacd: true, requireVolumeSpike: false,
+};
 
-// Zwroty 1M/3M/6M są teraz czytane z weekly_chart.close_pct (weeksAgoReturnPct(),
-// js/minicharts.js), nie z usuniętego daily_squeeze — patrz komentarz przy
-// classifyQullamaggie w signals.js. qmPastPct() odtwarza dokładnie taki % "N
-// tygodni temu", jaki dałby żądany zwrot względem OSTATNIEJ wartości w
-// tablicy — niezależnie od tego, czym ta ostatnia wartość akurat jest (może
-// być ustawiona przez test na potrzeby squeezeConsolidationBox).
-function qmPastPct(lastPct, returnPct) {
-    return 100 * ((1 + lastPct / 100) / (1 + returnPct / 100) - 1);
-}
-
-const QM_PAD_WEEKS = 30;
-
-function qmPadDates(realDates) {
-    return Array.from({ length: QM_PAD_WEEKS }, (_, i) => `__pad_${i}__`).concat(realDates);
-}
-
-// Tablica close_pct dlugości >= 27 (PAD placeholderów z przodu + `tail` na
-// końcu, dokładnie taki, jaki test faktycznie chce) tak, żeby
-// weeksAgoReturnPct(c, 4/13/26) odtworzył podane zwroty 1/3/6M. `rXm: null`
-// pomija dany zwrot (placeholder 0 w tej pozycji — realny "brak danych"
-// (null) wymaga osobnej, jawnie SKRÓCONEJ tablicy, patrz dedykowany test).
-function qmClosePct({ r1m = 10, r3m = 45, r6m = 60 } = {}, tail = [0]) {
-    const full = new Array(QM_PAD_WEEKS).fill(0).concat(tail);
-    const last = full.length - 1;
-    const lastPct = full[last];
-    if (r1m != null) full[last - 4] = qmPastPct(lastPct, r1m);
-    if (r3m != null) full[last - 13] = qmPastPct(lastPct, r3m);
-    if (r6m != null) full[last - 26] = qmPastPct(lastPct, r6m);
-    return full;
-}
-
-// weekly_chart z realnymi datami (do wyszukiwania buying_volume_ratio po
-// dacie wybicia) plus paddingiem, żeby weeksAgoReturnPct miał czego szukać.
-function qmWeeklyChart(realDates, { buyingVolumeRatio, closeTail, returns } = {}) {
-    return {
-        current_stage: "2A",
-        dates: qmPadDates(realDates),
-        buying_volume_ratio: new Array(QM_PAD_WEEKS).fill(null).concat(buyingVolumeRatio || realDates.map(() => null)),
-        close_pct: qmClosePct(returns || {}, closeTail || realDates.map(() => 0)),
-    };
-}
-
-function qmConstituent(overrides = {}, returns = {}) {
+// Fixture minimalna, "wciąż w konsolidacji" — nie ma jeszcze świecy wybicia,
+// więc knot/10-tyg. szczyt/zysk/wolumen nie mają zastosowania (zostają null).
+// Trend gate zdany domyślnie (close_pct 10 > ema20_pct 5).
+function breakoutConstituent(overrides = {}, squeezeOverrides = {}) {
+    const dates = ["2026-01-01"];
     return {
         sector: "Tech", price: 100,
-        weekly_chart: qmWeeklyChart(["2026-01-01"], { buyingVolumeRatio: [2.0], returns }),
-        ttm_squeeze_chart: { dates: [], histogram: [], squeeze_on: [], squeeze_count: [], fired: [], weeks_since_fire: [], fire_consolidation_weeks: [] },
+        weekly_chart: {
+            current_stage: "2B", dates,
+            close_pct: [10], ema20_pct: [5], low_pct: [9], high_pct: [11],
+            volume: [1000], buying_volume_ratio: [1.0], bases: [], stop_level_pct: null,
+        },
+        ttm_squeeze_chart: {
+            dates, histogram: [0.2], squeeze_on: [true], squeeze_count: [8],
+            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+            natr: [5],
+            ...squeezeOverrides,
+        },
+        macd_chart: { dates, macd: [1], signal: [0.5] },
         ...overrides,
     };
 }
 
-test("classifyQullamaggie returns null without enough weekly price history for a 6-month return", () => {
-    const c = qmConstituent({ weekly_chart: { current_stage: "2A", dates: ["2026-01-01"], close_pct: [0] } });
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
-});
-
-test("classifyQullamaggie returns null when the 6-month return doesn't clear the performance threshold", () => {
-    const c = qmConstituent({}, { r1m: 5, r3m: 10, r6m: 20 });
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
-});
-
-// Uproszczone na wyraźną prośbę użytkownika: perf_pct = return_6m_pct WYŁĄCZNIE
-// (nie max(1M, 3M, 6M) — patrz komentarz przy classifyQullamaggie w signals.js).
-// Duży ruch widoczny TYLKO w 1M/3M (a nie w 6M) już NIE kwalifikuje — odwrotnie
-// niż w poprzedniej wersji z warunkiem OR.
-test("classifyQullamaggie no longer qualifies on a big 1M/3M move alone when the 6-month return is below the threshold", () => {
-    const c = qmConstituent({
-        ttm_squeeze_chart: {
-            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
-            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+test("classifyBreakout returns null when price is not above its own EMA20 (trend gate)", () => {
+    const c = breakoutConstituent({
+        weekly_chart: {
+            current_stage: "2B", dates: ["2026-01-01"],
+            close_pct: [5], ema20_pct: [10], low_pct: [4], high_pct: [6],
+            volume: [1000], buying_volume_ratio: [1.0], bases: [], stop_level_pct: null,
         },
-    }, { r1m: 50, r3m: 45, r6m: 20 });
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+    });
+    assert.equal(classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS), null);
 });
 
-test("classifyQullamaggie qualifies on the 6-month return alone, even when 1M/3M are negative", () => {
-    const c = qmConstituent({
-        ttm_squeeze_chart: {
-            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
-            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
-        },
-    }, { r1m: -5, r3m: -2, r6m: 35 });
-    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
+test("classifyBreakout marks consolidating (SETUP) once the squeeze has run at least the minimum weeks", () => {
+    const r = classifyBreakout("AAA", "SP500", breakoutConstituent(), BREAKOUT_OPTS);
     assert.ok(r);
-    assert.ok(Math.abs(r.perf_pct - 35) < 0.01);
-});
-
-test("classifyQullamaggie marks consolidating when the weekly squeeze is inside the min/max week window", () => {
-    const c = qmConstituent({
-        ttm_squeeze_chart: {
-            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [5],
-            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
-        },
-    });
-    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
     assert.equal(r.status, "consolidating");
-    assert.equal(r.consolidation_weeks, 5);
+    assert.equal(r.substatus, "SETUP");
+    assert.equal(r.consolidation_weeks, 8);
+    assert.equal(r.wick_pct, null, "no breakout candle yet");
 });
 
-test("classifyQullamaggie ignores a squeeze shorter than the minimum consolidation window", () => {
-    const c = qmConstituent({
-        ttm_squeeze_chart: {
-            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [2],
-            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
-        },
-    });
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
+test("classifyBreakout ignores a squeeze shorter than the minimum consolidation window (blueprint: at least 6 weeks)", () => {
+    const c = breakoutConstituent({}, { squeeze_count: [3] });
+    assert.equal(classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS), null);
 });
 
-test("classifyQullamaggie ignores a squeeze longer than the maximum consolidation window", () => {
-    const c = qmConstituent({
-        ttm_squeeze_chart: {
-            dates: ["2026-01-01"], histogram: [0.2], squeeze_on: [true], squeeze_count: [9],
-            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+// Fixture "fired" — 10 tygodni płaskiej konsolidacji na 0%, wybicie na
+// tygodniu 11. Domyślnie zdaje WSZYSTKIE kroki blueprintu (knot 33% <= 50%,
+// 10-tyg. szczyt, zysk 9% w [5,20], wolumen +40% >= 30%, MACD nad sygnałową,
+// NATR 5 <= 8) -> ENTRY.
+function breakoutFiredConstituent({ gainPct = 9, wickExtra = 0.5, macd = 1, signal = 0.5, natr = 5,
+    volumeRatio = 1.4, priorVolume = 1000, bases = [], stopLevelPct = null } = {}) {
+    const dates = continuationFireDates(11);
+    const closePct = new Array(10).fill(0).concat([gainPct]);
+    const emaPct = new Array(11).fill(-10); // zawsze pod cena -> trend gate zawsze zdany
+    const lowPct = closePct.map(v => v - 1);
+    const highPct = closePct.map((v, i) => i === 10 ? v + wickExtra : v + 1);
+    const volume = new Array(9).fill(priorVolume).concat([priorVolume, priorVolume * volumeRatio]);
+    return {
+        sector: "Tech", price: 100,
+        weekly_chart: {
+            current_stage: "2A", dates, close_pct: closePct, ema20_pct: emaPct,
+            low_pct: lowPct, high_pct: highPct, volume,
+            buying_volume_ratio: new Array(11).fill(1.0), bases, stop_level_pct: stopLevelPct,
         },
-    });
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
-});
-
-test("classifyQullamaggie marks fired and confirms buying volume at the breakout week", () => {
-    const realDates = ["2025-12-11", "2025-12-18", "2026-01-01"];
-    const c = qmConstituent({
-        weekly_chart: qmWeeklyChart(realDates, { buyingVolumeRatio: [1.0, 1.8, 1.1] }),
         ttm_squeeze_chart: {
-            dates: realDates,
-            histogram: [0.1, 0.2, 3.5], squeeze_on: [true, false, false], squeeze_count: [5, 0, 0],
-            fired: [false, true, false], weeks_since_fire: [null, 0, 1], fire_consolidation_weeks: [null, 5, 5],
+            dates,
+            histogram: new Array(10).fill(0.1).concat([0.5]),
+            squeeze_on: new Array(10).fill(true).concat([false]),
+            squeeze_count: new Array(10).fill(6).concat([0]),
+            fired: new Array(10).fill(false).concat([true]),
+            weeks_since_fire: new Array(10).fill(null).concat([0]),
+            fire_consolidation_weeks: new Array(10).fill(null).concat([6]),
+            natr: new Array(11).fill(natr),
         },
-    });
-    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
-    assert.equal(r.status, "fired");
-    assert.equal(r.weeks_since_fire, 1);
-    assert.equal(r.consolidation_weeks, 5);
-    // Wybicie nastąpiło w tygodniu 2025-12-18 (buying_volume_ratio 1.8 >= STAGE_BREAKOUT_VOLUME_RATIO 1.5x).
-    assert.equal(r.breakout_volume_ratio, 1.8);
-    assert.equal(r.breakout_volume_confirmed, true);
-});
-
-test("classifyQullamaggie flags an unconfirmed breakout when buying volume is below the ratio threshold", () => {
-    const realDates = ["2025-12-18", "2026-01-01"];
-    const c = qmConstituent({
-        weekly_chart: qmWeeklyChart(realDates, { buyingVolumeRatio: [0.9, 1.1] }),
-        ttm_squeeze_chart: {
-            dates: realDates,
-            histogram: [0.2, 3.5], squeeze_on: [false, false], squeeze_count: [0, 0],
-            fired: [true, false], weeks_since_fire: [0, 1], fire_consolidation_weeks: [5, 5],
-        },
-    });
-    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS);
-    assert.equal(r.status, "fired");
-    assert.equal(r.breakout_volume_ratio, 0.9);
-    assert.equal(r.breakout_volume_confirmed, false);
-});
-
-test("classifyQullamaggie ignores a fire with a bearish (negative) histogram", () => {
-    const c = qmConstituent({
-        ttm_squeeze_chart: {
-            dates: ["2026-01-01"], histogram: [-3.5], squeeze_on: [false], squeeze_count: [0],
-            fired: [false], weeks_since_fire: [1], fire_consolidation_weeks: [5],
-        },
-    });
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS), null);
-});
-
-// ---------- potwierdzenie zakresem ceny dla bardzo krótkiej (1-2 tyg.) konsolidacji ----------
-// (QM_TIGHT_RANGE_MAX_WEEKS/MIN_PCT/MAX_PCT w signals.js) — na wyraźną prośbę
-// użytkownika po przeglądzie ze slajdem "The Breakout": sama długość squeeze'a
-// 1-2 tyg. to za mało potwierdzenia, więc dla niej dodatkowo wymagamy, żeby
-// szczyt/dołek konsolidacji (squeezeConsolidationBox, close-owy — jak reszta
-// modułu) dały zakres 5-20%.
-const QM_OPTS_WIDE = { minPerfPct: 30, minConsolidationWeeks: 2, maxConsolidationWeeks: 8, fireLookbackWeeks: 3 };
-
-function qmShortSqueezeConstituent(closePctWindow) {
-    const dates = ["2025-12-25", "2026-01-01"];
-    return qmConstituent({
-        weekly_chart: qmWeeklyChart(dates, { closeTail: closePctWindow }),
-        ttm_squeeze_chart: {
-            dates, histogram: [0.1, 0.1], squeeze_on: [true, true], squeeze_count: [1, 2],
-            fired: [false, false], weeks_since_fire: [null, null], fire_consolidation_weeks: [null, null],
-        },
-    });
+        macd_chart: { dates, macd: new Array(11).fill(macd), signal: new Array(11).fill(signal) },
+    };
 }
 
-test("classifyQullamaggie accepts a 2-week squeeze when the price range is inside 5-20%", () => {
-    // close0 = 100 / 1.10 ≈ 90.91 -> support ≈ 90.91, resistance = 100 -> range ≈ 10%.
-    const c = qmShortSqueezeConstituent([0, 10]);
-    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE);
+test("classifyBreakout marks a fully-qualifying fire as ENTRY, with every blueprint badge computed", () => {
+    const r = classifyBreakout("AAA", "SP500", breakoutFiredConstituent(), BREAKOUT_OPTS);
     assert.ok(r);
-    assert.equal(r.consolidation_weeks, 2);
+    assert.equal(r.status, "fired");
+    assert.equal(r.substatus, "ENTRY");
+    assert.equal(r.weeks_since_fire, 0);
+    assert.equal(r.consolidation_weeks, 6);
+    assert.ok(Math.abs(r.wick_pct - 33.33) < 0.1, "wick = 0.5 / 1.5 range = 33%");
+    assert.equal(r.ten_week_high, true);
+    assert.ok(Math.abs(r.breakout_gain_pct - 9) < 0.01);
+    assert.ok(Math.abs(r.volume_increase_pct - 40) < 0.01);
+    assert.equal(r.natr_ok, true);
+    assert.equal(r.macd_ok, true);
+    assert.equal(r.risk_ok, true);
 });
 
-test("classifyQullamaggie rejects a 2-week squeeze when the price range is too wide (> 20%)", () => {
-    // close0 = 100 / 1.30 ≈ 76.92 -> range ≈ 30%.
-    const c = qmShortSqueezeConstituent([0, 30]);
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE), null);
+test("classifyBreakout rejects a fire whose upper wick exceeds 50% of the candle range", () => {
+    // knot = 3 / (3+1) = 75% > 50%.
+    const c = breakoutFiredConstituent({ wickExtra: 3 });
+    assert.equal(classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS), null);
 });
 
-test("classifyQullamaggie rejects a 2-week squeeze when the price range is too tight (< 5%)", () => {
-    // close0 = 100 / 1.03 ≈ 97.09 -> range ≈ 3%.
-    const c = qmShortSqueezeConstituent([0, 3]);
-    assert.equal(classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE), null);
-});
-
-test("classifyQullamaggie does not require the price-range check once the squeeze is longer than 2 weeks", () => {
-    const c = qmConstituent({
-        weekly_chart: qmWeeklyChart(["2026-01-01"], { closeTail: [30] }),
-        ttm_squeeze_chart: {
-            dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [3],
-            fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
+test("classifyBreakout rejects a fire whose close is not a 10-week high", () => {
+    const dates = continuationFireDates(11);
+    // 10 tygodni płasko na 20%, potem "wybicie" na 15% — NIE jest nowym szczytem
+    // (odrzucane na tym kroku, przed nawet dotarciem do sprawdzenia zysku).
+    const closePct = new Array(10).fill(20).concat([15]);
+    const c = breakoutConstituent({
+        weekly_chart: {
+            current_stage: "2A", dates, close_pct: closePct,
+            ema20_pct: new Array(11).fill(-10),
+            low_pct: closePct.map(v => v - 1), high_pct: closePct.map(v => v + 1),
+            volume: new Array(11).fill(1000), buying_volume_ratio: new Array(11).fill(1.0),
+            bases: [], stop_level_pct: null,
         },
+    }, {
+        dates,
+        histogram: new Array(10).fill(0.1).concat([0.5]),
+        squeeze_on: new Array(10).fill(true).concat([false]),
+        squeeze_count: new Array(10).fill(6).concat([0]),
+        fired: new Array(10).fill(false).concat([true]),
+        weeks_since_fire: new Array(10).fill(null).concat([0]),
+        fire_consolidation_weeks: new Array(10).fill(null).concat([6]),
+        natr: new Array(11).fill(5),
     });
-    const r = classifyQullamaggie("AAA", "SP500", c, QM_OPTS_WIDE);
-    assert.ok(r);
-    assert.equal(r.consolidation_weeks, 3);
+    c.macd_chart = { dates, macd: new Array(11).fill(1), signal: new Array(11).fill(0.5) };
+    assert.equal(classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS), null);
 });
 
-test("combinedQullamaggieCandidates merges universes, dedupes tickers, sorts fired-fresh first then longest consolidation", () => {
+test("classifyBreakout rejects a breakout-week gain outside 5-20%", () => {
+    assert.equal(classifyBreakout("AAA", "SP500", breakoutFiredConstituent({ gainPct: 2 }), BREAKOUT_OPTS),
+        null, "2% gain is below the 5% floor");
+    assert.equal(classifyBreakout("AAA", "SP500", breakoutFiredConstituent({ gainPct: 30 }), BREAKOUT_OPTS),
+        null, "30% gain is above the 20% ceiling");
+});
+
+test("classifyBreakout ignores a fire with a bearish (negative) histogram", () => {
+    const c = breakoutFiredConstituent();
+    c.ttm_squeeze_chart.histogram = new Array(10).fill(0.1).concat([-0.5]);
+    assert.equal(classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS), null);
+});
+
+test("classifyBreakout flags WAIT_MACD when required and MACD is below its signal, but still enters when not required", () => {
+    const c = breakoutFiredConstituent({ macd: 0.2, signal: 0.5 });
+    const withGate = classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS);
+    assert.equal(withGate.substatus, "WAIT_MACD");
+    const withoutGate = classifyBreakout("AAA", "SP500", c, { ...BREAKOUT_OPTS, requireMacd: false });
+    assert.equal(withoutGate.substatus, "ENTRY");
+});
+
+test("classifyBreakout flags WAIT_NATR when required and NATR is above the blueprint's threshold (8)", () => {
+    const c = breakoutFiredConstituent({ natr: 12 });
+    const withGate = classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS);
+    assert.equal(withGate.substatus, "WAIT_NATR");
+    const withoutGate = classifyBreakout("AAA", "SP500", c, { ...BREAKOUT_OPTS, requireNatr: false });
+    assert.equal(withoutGate.substatus, "ENTRY");
+});
+
+test("classifyBreakout flags WAIT_VOLUME only when requireVolumeSpike is explicitly turned on", () => {
+    const c = breakoutFiredConstituent({ volumeRatio: 1.1 }); // +10%, below the 30% target
+    const informational = classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS);
+    assert.equal(informational.substatus, "ENTRY", "volume spike is informational by default (blueprint: 'some discretion can be applied')");
+    assert.equal(informational.volume_spike_ok, false);
+    const required = classifyBreakout("AAA", "SP500", c, { ...BREAKOUT_OPTS, requireVolumeSpike: true });
+    assert.equal(required.substatus, "WAIT_VOLUME");
+});
+
+test("classifyBreakout flags WAIT_RISK when the stop sits further than the blueprint's 20% ceiling", () => {
+    // Box spanning 100 (resistance) to 50 (support) at close0=100 -> middle-third
+    // stop = 50 + (100-50)/3 ≈ 66.67 -> ~33% below the current price of 100.
+    const c = breakoutFiredConstituent({
+        bases: [{ resistance_pct: 0, support_pct: -50, end_date: continuationFireDates(11)[8] }],
+    });
+    const r = classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS);
+    assert.equal(r.substatus, "WAIT_RISK");
+    assert.equal(r.risk_ok, false);
+    assert.ok(r.stop_distance_pct > 20);
+});
+
+test("classifyBreakout sizes the position via breakoutPositionFor once a stop is known", () => {
+    const saved = { equity: state.breakoutEquity, winRatePct: state.breakoutWinRatePct, rewardRisk: state.breakoutRewardRisk, kellyFractionPct: state.breakoutKellyFractionPct };
+    state.breakoutEquity = 100000;
+    state.breakoutWinRatePct = 59;
+    state.breakoutRewardRisk = 4.04;
+    state.breakoutKellyFractionPct = 33;
+    try {
+        // Tight box (resistance 5% above close0, support 0%) -> stop close to price -> valid, small-risk position.
+        const c = breakoutFiredConstituent({
+            bases: [{ resistance_pct: 5, support_pct: 0, end_date: continuationFireDates(11)[8] }],
+        });
+        const r = classifyBreakout("AAA", "SP500", c, BREAKOUT_OPTS);
+        assert.ok(r.kelly, "a valid stop below price should produce a sized position");
+        assert.ok(r.kelly.shares > 0);
+        assert.ok(Math.abs(r.kelly.riskOnEquityPct - (r.kelly.riskValue / 100000) * 100) < 1e-9);
+    } finally {
+        state.breakoutEquity = saved.equity;
+        state.breakoutWinRatePct = saved.winRatePct;
+        state.breakoutRewardRisk = saved.rewardRisk;
+        state.breakoutKellyFractionPct = saved.kellyFractionPct;
+    }
+});
+
+// ---------- breakoutKellyFraction / breakoutPositionFor (kalkulator Kelly Criterion) ----------
+// Wartości z przykładu w "MY STRATEGY BLUEPRINT": 59% strike rate, 4.04
+// reward/risk, 33% Kelly frakcyjny -> ok. 16% pozycji (dokładnie ten sam
+// przykład, który daje domyślne wartości suwaków w signals.js).
+test("breakoutKellyFraction matches the blueprint's own worked example (~16% fractional Kelly)", () => {
+    const saved = { winRatePct: state.breakoutWinRatePct, rewardRisk: state.breakoutRewardRisk, kellyFractionPct: state.breakoutKellyFractionPct };
+    state.breakoutWinRatePct = 59;
+    state.breakoutRewardRisk = 4.04;
+    state.breakoutKellyFractionPct = 33;
+    try {
+        const frac = breakoutKellyFraction();
+        assert.ok(Math.abs(frac * 100 - 16.12) < 0.1);
+    } finally {
+        state.breakoutWinRatePct = saved.winRatePct;
+        state.breakoutRewardRisk = saved.rewardRisk;
+        state.breakoutKellyFractionPct = saved.kellyFractionPct;
+    }
+});
+
+test("breakoutKellyFraction returns null for a non-positive reward/risk ratio", () => {
+    const saved = state.breakoutRewardRisk;
+    state.breakoutRewardRisk = 0;
+    try {
+        assert.equal(breakoutKellyFraction(), null);
+    } finally {
+        state.breakoutRewardRisk = saved;
+    }
+});
+
+test("breakoutPositionFor sizes shares from equity * fractional Kelly, never from the risk budget", () => {
+    const saved = { equity: state.breakoutEquity, winRatePct: state.breakoutWinRatePct, rewardRisk: state.breakoutRewardRisk, kellyFractionPct: state.breakoutKellyFractionPct };
+    state.breakoutEquity = 100000;
+    state.breakoutWinRatePct = 59;
+    state.breakoutRewardRisk = 4.04;
+    state.breakoutKellyFractionPct = 33;
+    try {
+        const pos = breakoutPositionFor(100, 90);
+        assert.ok(pos);
+        // positionValue = 100000 * 0.1612 ~= 16120 -> shares = floor(16120/100) = 161.
+        assert.equal(pos.shares, 161);
+        assert.ok(Math.abs(pos.riskOnEquityPct - (161 * 10 / 100000) * 100) < 1e-6);
+    } finally {
+        state.breakoutEquity = saved.equity;
+        state.breakoutWinRatePct = saved.winRatePct;
+        state.breakoutRewardRisk = saved.rewardRisk;
+        state.breakoutKellyFractionPct = saved.kellyFractionPct;
+    }
+});
+
+test("breakoutPositionFor returns null without a valid stop below the price", () => {
+    assert.equal(breakoutPositionFor(100, null), null);
+    assert.equal(breakoutPositionFor(100, 100), null);
+    assert.equal(breakoutPositionFor(100, 110), null);
+});
+
+test("combinedBreakoutCandidates merges universes, dedupes tickers, sorts ENTRY first, then WAIT_*, then longest consolidation", () => {
     state.data = emptyStateData();
     state.data.SP500.constituents = [
-        qmConstituent({
-            ticker: "FIRED_OLD",
-            ttm_squeeze_chart: {
-                dates: ["2026-01-01"], histogram: [1], squeeze_on: [false], squeeze_count: [0],
-                fired: [false], weeks_since_fire: [3], fire_consolidation_weeks: [5],
-            },
-        }),
-        qmConstituent({
-            ticker: "COIL_SHORT",
-            ttm_squeeze_chart: {
-                dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [4],
-                fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
-            },
-        }),
+        { ticker: "ENTRY_ROW", ...breakoutFiredConstituent() },
+        { ticker: "COIL_SHORT", ...breakoutConstituent({}, { squeeze_count: [6] }) },
     ];
     state.data.WIG20.constituents = [
-        qmConstituent({
-            ticker: "FIRED_FRESH",
-            ttm_squeeze_chart: {
-                dates: ["2026-01-01"], histogram: [2], squeeze_on: [false], squeeze_count: [0],
-                fired: [false], weeks_since_fire: [0], fire_consolidation_weeks: [6],
-            },
-        }),
-        qmConstituent({
-            ticker: "COIL_LONG",
-            ttm_squeeze_chart: {
-                dates: ["2026-01-01"], histogram: [0.1], squeeze_on: [true], squeeze_count: [6],
-                fired: [false], weeks_since_fire: [null], fire_consolidation_weeks: [null],
-            },
-        }),
+        { ticker: "WAIT_ROW", ...breakoutFiredConstituent({ macd: 0.2, signal: 0.5 }) },
+        { ticker: "COIL_LONG", ...breakoutConstituent({}, { squeeze_count: [12] }) },
     ];
 
-    const rows = combinedQullamaggieCandidates(QM_OPTS);
-    assert.deepEqual(rows.map(r => r.ticker), ["FIRED_FRESH", "FIRED_OLD", "COIL_LONG", "COIL_SHORT"]);
+    const rows = combinedBreakoutCandidates(BREAKOUT_OPTS);
+    assert.deepEqual(rows.map(r => r.ticker), ["ENTRY_ROW", "WAIT_ROW", "COIL_LONG", "COIL_SHORT"]);
 });
 
 // ---------- classifyContinuation / combinedContinuationCandidates (przeprojektowany na tygodniowy) ----------

@@ -276,6 +276,11 @@ html, body {
 .wybicie-slider { display: flex; align-items: center; gap: 6px; margin-right: 12px; }
 .wybicie-slider input[type="range"] { width: 140px; accent-color: var(--green-bright); }
 .wybicie-slider-value { font-size: 11.5px; font-weight: 600; color: var(--text); min-width: 44px; }
+
+/* Kalkulator Kelly Criterion nad tabelą "📐 Breakout" (signals.js) — pełna
+   szerokość paska filtrów (flex-basis:100%), zamiast wciskać się w jeden
+   rząd z przyciskami "Wymagane" po lewej. */
+.breakout-kelly-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-basis: 100%; margin-top: 4px; }
 .cross-age { font-size: 10.5px; color: var(--text-faint); font-weight: 400; }
 
 /* Separator wizualny między warunkiem skojarzonym a checkboxami łączalnymi w

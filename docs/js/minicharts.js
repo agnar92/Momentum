@@ -219,14 +219,14 @@ function findConstituent(dataByUniverse, ticker) {
 // `weekly_chart` mogą mieć inną długość/wyrównanie bufora rozgrzewkowego
 // (patrz alignSqueezeToDates w chart-render.js), więc tygodnie są łączone po
 // DACIE, nie po indeksie wprost — ten sam wzorzec co breakoutVolumeRatio w
-// classifyQullamaggie (signals.js). Zwraca null, gdy nie ma (jeszcze/już)
+// classifyBreakout (signals.js). Zwraca null, gdy nie ma (jeszcze/już)
 // żadnej rozpoznanej konsolidacji.
 function squeezeConsolidationBox(c) {
     const t = c && c.ttm_squeeze_chart;
     const wc = c && c.weekly_chart;
     if (!t || !t.dates || !t.dates.length || !wc || !wc.dates || !wc.close_pct) return null;
 
-    // Ostatni tydzień bywa jeszcze niedomknięty — ten sam caveat co w classifyTtmSqueeze/classifyQullamaggie.
+    // Ostatni tydzień bywa jeszcze niedomknięty — ten sam caveat co w classifyTtmSqueeze/classifyBreakout.
     let nowIdx = t.dates.length - 1;
     while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
     if (nowIdx < 0) return null;
@@ -273,13 +273,13 @@ function squeezeConsolidationBox(c) {
 }
 
 // Poziom oporu/wsparcia "do obserwowania" na wykresie 1-minutowym (zakładka
-// "⚡ 1 min + VWAP" w js/chart-modal.js) i w screenerze Qullamaggie
+// "⚡ 1 min + VWAP" w js/chart-modal.js) i w screenerach Continuation/Breakout
 // (signals.js) — na wyraźną prośbę użytkownika: bez tego nie było wiadomo,
 // jakiego poziomu ceny w ogóle wypatrywać przy wybiciu z konsolidacji.
 // Preferuje `squeezeConsolidationBox()` (powyżej) — bezpośrednio z okna, które
 // screener sam oznaczył jako squeeze; gdy go brak (spółka nie ma akurat ani
 // trwającej, ani świeżo zakończonej konsolidacji — np. otwarta z ogólnej
-// tabeli, nie z zakładki Qullamaggie/TTM Squeeze), spada do
+// tabeli, nie z zakładki Breakout/TTM Squeeze), spada do
 // `weekly_chart.pending_base` (pudełko Darvasa, wciąż otwarte), a na końcu do
 // OSTATNIEGO wpisu w `weekly_chart.bases` (box, który doprowadził do
 // najświeższego wybicia) jako czysto informacyjny punkt odniesienia —
@@ -344,6 +344,132 @@ function weeksAgoReturnPct(c, weeksBack) {
     const pricePast = close0 * (1 + pastPct / 100);
     if (!(pricePast > 0)) return null;
     return (c.price / pricePast - 1) * 100;
+}
+
+// ============================================================
+// "MY STRATEGY BLUEPRINT" (Gareth Packer/Financial Wisdom) — mechanizm stopu/
+// potwierdzenia MACD/NATR, wspólny dla DWÓCH niezależnych konsumentów tej
+// samej strategii: lejka "Stage 2 Continuation" (strategy.js) i dedykowanej
+// zakładki "📐 Breakout" (signals.js). Wcześniej żyło wyłącznie w strategy.js
+// (jedyny wtedy konsument) — przeniesione tutaj, żeby signals.js nie musiał
+// go duplikować (ten sam wzorzec co squeezeConsolidationBox/breakoutLevelFor
+// powyżej). strategy.js dalej go używa (i re-eksportuje pod tymi samymi
+// nazwami dla tests/js/strategy.test.js) — patrz "if (typeof require...)"
+// na górze strategy.js, który współdzieli globale Node tak samo jak w
+// przeglądarce (ładowanie <script> w kolejności minicharts.js -> strategy.js).
+// ============================================================
+
+// Maks. odleglosc do stopu, powyzej ktorej blueprint mowi wprost nie brac
+// pozycji: "if the structure does not allow for a stop loss of less than
+// 20%, we do not take the trade".
+const BLUEPRINT_MAX_STOP_DISTANCE_PCT = 20;
+// Prog NATR (Normalized ATR) z tego samego materialu: "I require the metric
+// to be below 8" — musi byc zgodny z TTM_SQUEEZE_NATR_MAX w run_query.py.
+const BLUEPRINT_NATR_MAX = 8;
+
+// Aktualny trailing stop Weinsteina w walucie spolki. stop_level_pct jest
+// liczony wzgledem tej samej bazy (close0) co close_pct, wiec
+// close0 = cena / (1 + close_pct/100). Bierzemy stop z OSTATNIEGO tygodnia
+// z cena — nie cofamy sie dalej, bo po EXIT_STOP stop jest celowo pusty.
+function stopPriceFor(c) {
+    const w = c && c.weekly_chart;
+    if (!w || c.price == null) return null;
+    const i = latestNonNullIdx(w.close_pct);
+    if (i < 0) return null;
+    const stopPct = w.stop_level_pct && w.stop_level_pct[i];
+    if (stopPct == null) return null;
+    const close0 = c.price / (1 + w.close_pct[i] / 100);
+    return close0 * (1 + stopPct / 100);
+}
+
+// Stop strategii (na wyrazne zyczenie uzytkownika, zastepuje trailing stop
+// Weinsteina z backendu):
+//   1. start: DOLNA GRANICA SRODKOWEJ TERCJI ostatniego pudelka Darvasa
+//      (weekly_chart.bases[-1], support + (resistance - support) / 3) —
+//      pudelko, z ktorego bylo ostatnie wybicie. Zgodnie z "MY STRATEGY
+//      BLUEPRINT": dzielimy pudelko na 3 czesci, gorna i dolna sa ignorowane
+//      (gorna "za wczesnie", dolna "za pozno"), stop idzie w SRODKOWA czesc,
+//      "usually the lower of that portion" — TA SAMA regula, ktora
+//      breakoutLevelFor() powyzej juz stosuje dla "sugerowanego stopu" w
+//      zakladkach Continuation/Breakout.
+//   2. potem, po kazdym przecieciu MACD W DOL linii sygnalu (tygodniowy MACD,
+//      macd_chart) PO koncu tego pudelka (MACD NIE musi byc nad zerem — trend
+//      potwierdzaja juz Etap 2/TTM Squeeze, MACD to tylko dodatkowa polisa), stop idzie na LOW tej tygodniowej swiecy
+//      (weekly_chart.low_pct) — tylko w gore, nigdy w dol.
+// Przeciecie MACD W GORE to NIE jest stop — to potwierdzenie wejscia (patrz
+// macdConfirmation / status WAIT_MACD w evaluateCandidate, strategy.js).
+// Bez pudelka w oknie danych -> fallback na stop Weinsteina (source "weinstein").
+// Bez low_pct (stare dane sprzed dodania pola) -> zamkniecie tygodnia
+// zamiast low, oznaczone lowApprox=true.
+function strategyStopFor(c) {
+    const w = c && c.weekly_chart;
+    if (!w || c.price == null) return null;
+    const iClose = latestNonNullIdx(w.close_pct);
+    if (iClose < 0) return null;
+    const close0 = c.price / (1 + w.close_pct[iClose] / 100);
+    const toPrice = pct => close0 * (1 + pct / 100);
+
+    const bases = (w.bases || []).filter(b => b.resistance_pct != null && b.support_pct != null);
+    if (!bases.length) {
+        const wStop = stopPriceFor(c);
+        return wStop == null ? null : { stop: wStop, source: "weinstein" };
+    }
+    const box = bases[bases.length - 1];
+    const boxMiddleThirdLow = toPrice(box.support_pct + (box.resistance_pct - box.support_pct) / 3);
+    const out = { stop: boxMiddleThirdLow, source: "box", boxMiddleThirdLow, boxEnd: box.end_date, macdDate: null, lowApprox: false };
+
+    const m = c.macd_chart;
+    if (!m || !m.dates || !m.macd || !m.signal) return out;
+    const weekIdx = {};
+    (w.dates || []).forEach((d, i) => { weekIdx[d] = i; });
+    for (let k = 1; k < m.dates.length; k++) {
+        const date = m.dates[k];
+        if (date <= box.end_date) continue;
+        const a0 = m.macd[k - 1], s0 = m.signal[k - 1], a1 = m.macd[k], s1 = m.signal[k];
+        if (a0 == null || s0 == null || a1 == null || s1 == null) continue;
+        if (!(a0 >= s0 && a1 < s1)) continue;
+        const j = weekIdx[date];
+        if (j == null) continue;
+        const hasLow = w.low_pct && w.low_pct[j] != null;
+        const lowPct = hasLow ? w.low_pct[j] : w.close_pct[j];
+        if (lowPct == null) continue;
+        const low = toPrice(lowPct);
+        if (low > out.stop) {
+            out.stop = low;
+            out.source = "macd";
+            out.macdDate = date;
+            out.lowApprox = !hasLow;
+        }
+    }
+    return out;
+}
+
+// Potwierdzenie wejscia MACD: tygodniowy MACD powyzej linii sygnalu (czyli
+// przeciecie w gore juz bylo i sie nie odwrocilo) + data ostatniego
+// przeciecia w gore.
+function macdConfirmation(c) {
+    const m = c && c.macd_chart;
+    if (!m || !m.macd || !m.signal) return { above: null, crossUpDate: null };
+    let i = m.macd.length - 1;
+    while (i >= 0 && (m.macd[i] == null || m.signal[i] == null)) i--;
+    if (i < 0) return { above: null, crossUpDate: null };
+    let crossUpDate = null;
+    for (let k = i; k >= 1; k--) {
+        const a0 = m.macd[k - 1], s0 = m.signal[k - 1];
+        if (a0 == null || s0 == null) break;
+        if (a0 <= s0 && m.macd[k] > m.signal[k]) { crossUpDate = m.dates[k]; break; }
+    }
+    return { above: m.macd[i] > m.signal[i], crossUpDate };
+}
+
+// Ostatnia policzona wartosc NATR (Normalized ATR, ttm_squeeze_chart.natr —
+// patrz compute_ttm_squeeze_chart w run_query.py) — nizej = ciasniejsza,
+// bardziej "podreczna" konsolidacja.
+function currentNatr(c) {
+    const r = c && c.ttm_squeeze_chart && c.ttm_squeeze_chart.natr;
+    if (!r) return null;
+    const i = latestNonNullIdx(r);
+    return i < 0 ? null : r[i];
 }
 
 // "Mam vs cel": pasek obecnej wartości pozycji na tle docelowej (pionowa kreska
@@ -542,5 +668,6 @@ function initMiniChartHoverPreview() {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         latestNonNullIdx, sparkPoints, sparkPath, seriesRange, sparkSqueezeBars, weeklySparkSvg, RS_BAR_CAP, rsBarHtml, ttmMiniSvg, MINI_WEEKS, miniVisualFields, zeroLineSparkSvg, crossIndexInTail, findConstituent, BULLET_TOLERANCE_PCT, bulletHtml, stageBreakdown, PULLBACK_BAND_PCT, pullbackHtml, squeezeConsolidationBox, breakoutLevelFor, weeksAgoReturnPct,
+        BLUEPRINT_MAX_STOP_DISTANCE_PCT, BLUEPRINT_NATR_MAX, stopPriceFor, strategyStopFor, macdConfirmation, currentNatr,
     };
 }

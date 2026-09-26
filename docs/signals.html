@@ -23,7 +23,7 @@
 
 <div class="topbar">
     <div class="topbar-left">
-        <div class="brand">MOMENTUM<span class="brand-sub"> // Sygnały: Wybicie · TTM Squeeze · Continuation · Qullamaggie</span></div>
+        <div class="brand">MOMENTUM<span class="brand-sub"> // Sygnały: Wybicie · TTM Squeeze · Continuation · Breakout</span></div>
     </div>
     <nav>
         <a href="index.html">Indeksy</a>
@@ -64,12 +64,12 @@
             <div class="ticker-grid" id="tiles-CONTINUATION"></div>
         </div>
 
-        <div class="sidebar-group" id="qullamaggieGroup">
-            <div class="sidebar-group-label" title="Replika skanu Kristjana Qullamaggie'go: spółki z wynikiem ≥ 30% w 1, 3 LUB 6 miesięcy, które przeszły (albo właśnie przechodzą) przez kilkutygodniową konsolidację (TTM Squeeze tygodniowy) i wybiły się z niej — wybicie potwierdzone wolumenem kupujących jest oznaczone osobno. Wejście (ORB + sesyjny VWAP na 1-minutowym wykresie) monitorujesz sam — otwórz wykres spółki i przełącz na zakładkę „⚡ 1 min + VWAP”. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">
-                🎯 Qullamaggie
+        <div class="sidebar-group" id="breakoutGroup">
+            <div class="sidebar-group-label" title="Replika „MY STRATEGY BLUEPRINT” (Gareth Packer / Financial Wisdom): spółki nad własną 20-tyg. EMA, w konsolidacji tygodniowej (TTM Squeeze) ≥ 6 tyg., które się z niej wybiły świecą spełniającą wszystkie kryteria blueprintu (knot ≤ 50%, 10-tyg. szczyt, zysk 5-20%, NATR < 8, MACD nad sygnałową) — z wyliczonym stopem (środkowa tercja pudełka, podnoszony na MACD) i wielkością pozycji wg Kelly Criterion. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">
+                📐 Breakout
             </div>
-            <div class="sidebar-group-meta" id="qullamaggieMeta"></div>
-            <div class="ticker-grid" id="tiles-QULLAMAGGIE"></div>
+            <div class="sidebar-group-meta" id="breakoutMeta"></div>
+            <div class="ticker-grid" id="tiles-BREAKOUT"></div>
         </div>
     </div>
 
@@ -83,7 +83,7 @@
                 <button class="drawer-tab active" data-universe="WYBICIE" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia blisko siebie (suwak „Okno wybicia”) i niedawno (suwak „Monitoruj po wybiciu”) — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">💥 Wybicie</button>
                 <button class="drawer-tab" data-universe="TTM_SQUEEZE" title="TTM Squeeze — spółki z Momentum, które przeszły przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte wewnątrz kanału Kellera) i albo wciąż w niej trwają, albo właśnie się z niej wybiły, CAŁE uniwersa (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80), nie tylko dzisiejsza selekcja portfela.">🧨 TTM Squeeze</button>
                 <button class="drawer-tab" data-universe="CONTINUATION" title="Continuation — spółki już w Etapie 2 (tygodniowo) z dodatnim momentum 12M i Mansfield RS 52 tyg. &gt; 0, w konsolidacji na wykresie TYGODNIOWYM (TTM Squeeze): squeeze trwa (🌀) albo właśnie się z niego wybiły (🔥), z tygodniowym MACD jako potwierdzeniem. Do dołączenia do trendu — tylko filtr sygnałów, wejście/wyjście decydujesz sam.">🚀 Continuation</button>
-                <button class="drawer-tab" data-universe="QULLAMAGGIE" title="Qullamaggie — spółki z wynikiem ≥ 30% w 1, 3 lub 6 miesięcy, w kilkutygodniowej konsolidacji (TTM Squeeze tygodniowy) albo świeżo z niej wybite, z wolumenem kupujących sprawdzonym przy wybiciu. Wejście (ORB + sesyjny VWAP) monitorujesz sam na zakładce „⚡ 1 min + VWAP” wykresu spółki.">🎯 Qullamaggie</button>
+                <button class="drawer-tab" data-universe="BREAKOUT" title="Breakout — replika „MY STRATEGY BLUEPRINT” (Gareth Packer / Financial Wisdom): trend + konsolidacja tygodniowa + świeca wybicia (knot/10-tyg. szczyt/zysk 5-20%) + NATR/MACD + stop wg blueprintu + wielkość pozycji wg Kelly Criterion.">📐 Breakout</button>
             </div>
         </div>
         <div class="screener-guide" id="wybicieGuide">
@@ -103,10 +103,11 @@
             <br>Czego szukać: to samo 🌀/🔥 co w TTM Squeeze, plus kolumna „Poziom do obserwacji” (górna/dolna granica konsolidacji) i potwierdzenie tygodniowym MACD.
             <br>Kiedy rozważyć kupno: 🔥 świeże (kolumna „Wybicie w ciągu”) + MACD nad linią sygnału + cena nad „Poziomem do obserwacji”.
         </div>
-        <div class="screener-guide" id="qullamaggieGuide" hidden>
-            <strong>🎯 Qullamaggie</strong> — spółki z dużym wcześniejszym ruchem (≥30% w 6 mies.), które przeszły przez ciasną, kilkutygodniową konsolidację i się z niej wybiły, z wolumenem kupujących sprawdzonym przy wybiciu.
-            <br>Czego szukać: status 🔥 + „· wolumen ✓” (wybicie potwierdzone realnym wolumenem, nie tylko ceną) + kolumna „Poziom do obserwacji”.
-            <br>Kiedy kupić: ten screener tylko WYTYPOWUJE kandydata i poziom do obserwacji — dokładny moment wejścia (Opening Range Breakout + VWAP) obserwujesz sam na żywo, na zakładce „⚡ 1 min + VWAP” po otwarciu wykresu spółki.
+        <div class="screener-guide" id="breakoutGuide" hidden>
+            <strong>📐 Breakout</strong> — pełna, krok po kroku replika <em>„MY STRATEGY BLUEPRINT”</em> (Gareth Packer / Financial Wisdom): trend (cena nad własną 20-tyg. EMA) + konsolidacja tygodniowa ≥ 6 tyg. (TTM Squeeze jako substytut kanału z materiału) + świeca wybicia spełniająca WSZYSTKIE kryteria blueprintu (górny knot ≤ 50% zakresu, ≥10-tyg. szczyt zamknięcia, zysk 5-20%) + jakość konsolidacji/momentum (NATR &lt; 8, MACD nad linią sygnałową — suwaki „Wymagane” obok mogą je uczynić opcjonalnymi) + stop (dolna granica środkowej tercji pudełka, podnoszony po każdym przecięciu MACD w dół) + wielkość pozycji wg Kelly Criterion (kalkulator poniżej).
+            <br>Czego szukać: status 🎯 ENTRY = wszystkie warunki spełnione; 🔥 Wybicie + „⏳ …” = świeca wybicia jest, ale coś jeszcze nie gotowe (dymek wyjaśnia co); 🌀 Konsolidacja = jeszcze czekaj, ale warto obserwować (kolumna „Warunki wejścia” już pokazuje jakość NATR/MACD).
+            <br>Fundamenty (ROC/ROE/marża operacyjna dwucyfrowe, pozytywny trend przychodów/zysku — <em>Quality</em> z materiału) NIE są tu automatycznie sprawdzane (materiał traktuje je jako dodatkowy, jakościowy czynnik, nie mechaniczny warunek): sprawdź je ręcznie na zakładce „🏢 Dane spółki (TradingView)” po otwarciu wykresu spółki (Company Profile + Financials).
+            <br>Kiedy kupić: ten screener tylko WYTYPOWUJE kandydata, poziom do obserwacji, stop i wielkość pozycji — materiał mówi „entry at the open of the following week”, decyzję o złożeniu zlecenia podejmujesz sam.
         </div>
         <div class="stage-filter-bar" id="stageFilterBar">
             <span class="stage-filter-label">Etap Weinsteina:</span>
@@ -158,27 +159,35 @@
                 <span class="wybicie-slider-value" id="contMinMomentumValue"></span>
             </label>
         </div>
-        <div class="stage-filter-bar wybicie-controls" id="qullamaggieControls" hidden>
-            <label class="wybicie-slider" title="Minimalny zwrot z ostatnich 6 miesięcy — uproszczone z osobnego OR po 1/3/6M, bo 6-miesięczne okno w praktyce obejmuje też niedawny ruch z 1 lub 3 miesięcy.">
-                <span class="stage-filter-label">Min. wynik (6M):</span>
-                <input type="range" id="qmMinPerfInput" min="10" max="100" step="5">
-                <span class="wybicie-slider-value" id="qmMinPerfValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Minimalna długość konsolidacji (TTM Squeeze tygodniowy), żeby liczyć się jako baza po dużym ruchu. Konsolidacja 1-2 tyg. wymaga dodatkowo wąskiego zakresu ceny (5-20% szczyt/dołek) — sama długość to za mało potwierdzenia.">
+        <div class="stage-filter-bar wybicie-controls" id="breakoutControls" hidden>
+            <label class="wybicie-slider" title="Minimalna długość konsolidacji (TTM Squeeze tygodniowy) — blueprint: „at least a minimum 6 weeks, the longer the better”, bez górnego limitu.">
                 <span class="stage-filter-label">Min. tyg. konsolidacji:</span>
-                <input type="range" id="qmMinConsolidationInput" min="1" max="12" step="1">
-                <span class="wybicie-slider-value" id="qmMinConsolidationValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Maksymalna długość konsolidacji — dłuższa baza wychodzi poza klasyczne „2-8 tygodni” ze skanu Qullamaggiego.">
-                <span class="stage-filter-label">Maks. tyg. konsolidacji:</span>
-                <input type="range" id="qmMaxConsolidationInput" min="1" max="20" step="1">
-                <span class="wybicie-slider-value" id="qmMaxConsolidationValue"></span>
+                <input type="range" id="breakoutMinConsolidationInput" min="1" max="30" step="1">
+                <span class="wybicie-slider-value" id="breakoutMinConsolidationValue"></span>
             </label>
             <label class="wybicie-slider" title="Przez ile tygodni po wybiciu z konsolidacji spółka zostaje na liście.">
                 <span class="stage-filter-label">Wybicie w ciągu:</span>
-                <input type="range" id="qmFireLookbackInput" min="0" max="12" step="1">
-                <span class="wybicie-slider-value" id="qmFireLookbackValue"></span>
+                <input type="range" id="breakoutFireLookbackInput" min="0" max="12" step="1">
+                <span class="wybicie-slider-value" id="breakoutFireLookbackValue"></span>
             </label>
+            <span class="wybicie-filter-sep" aria-hidden="true">·</span>
+            <span class="stage-filter-label">Wymagane:</span>
+            <button type="button" class="stage-filter-btn" id="breakoutRequireNatrBtn"
+                    title="NATR (Normalized ATR) < 8 jako warunek ENTRY — blueprint: „I require the metric to be below 8”. Wyłączenie zmienia go w informacyjny badge.">NATR &lt; 8</button>
+            <button type="button" class="stage-filter-btn" id="breakoutRequireMacdBtn"
+                    title="MACD tygodniowy nad linią sygnałową jako warunek ENTRY — blueprint: „we always want to be in a position with the MACD line above the signal line”. Wyłączenie zmienia go w informacyjny badge.">MACD nad sygnałową</button>
+            <button type="button" class="stage-filter-btn" id="breakoutRequireVolumeBtn"
+                    title="Wzrost wolumenu ≥ 30% względem poprzedniego tygodnia jako warunek ENTRY — blueprint mówi wprost o dyskrecji („some discretion can be applied”), więc domyślnie to tylko informacyjny badge.">Wolumen +30%</button>
+            <div class="breakout-kelly-row" title="Krok „Optimal Position Size” z blueprintu: Fractional Kelly Criterion. Domyślne wartości = przykład z materiału (59% strike rate, 4.04 reward/risk, 33% Kelly frakcyjny ≈ 16% pozycji).">
+                <span class="stage-filter-label">💰 Kalkulator Kelly Criterion:</span>
+                <div class="bucket-inputs">
+                    <label class="bucket-input"><span>Kapitał</span><input type="number" id="breakoutEquityInput" min="0" step="1000" inputmode="decimal"></label>
+                    <label class="bucket-input"><span>Strike rate</span><input type="number" id="breakoutWinRateInput" min="1" max="99" step="1" inputmode="decimal"><span>%</span></label>
+                    <label class="bucket-input"><span>Reward/Risk</span><input type="number" id="breakoutRewardRiskInput" min="0.1" step="0.01" inputmode="decimal"></label>
+                    <label class="bucket-input"><span>Kelly frakcyjny</span><input type="number" id="breakoutKellyFractionInput" min="1" max="100" step="1" inputmode="decimal"><span>%</span></label>
+                </div>
+                <span class="wybicie-slider-value" id="breakoutKellySummary"></span>
+            </div>
         </div>
         <div class="table-scroll">
             <!-- Wybicie: MACD i RS 52 tyg. świeżo przecięły zero w górę, histogram
@@ -255,13 +264,12 @@
                 <tbody id="continuationTableBody"></tbody>
             </table>
 
-            <!-- Qullamaggie: wynik ≥ 30% w 6M, konsolidacja 2-8 tyg.
-                 (TTM Squeeze tygodniowy) trwająca albo świeżo zakończona wybiciem —
-                 konsolidacja 1-2 tyg. wymaga dodatkowo wąskiego zakresu ceny (5-20%),
-                 wolumen kupujących sprawdzony przy wybiciu — patrz
-                 combinedQullamaggieCandidates w signals.js. Wejście (ORB + sesyjny
-                 VWAP) monitorujesz sam, na zakładce „⚡ 1 min + VWAP” wykresu spółki. -->
-            <table class="momentum-table" id="qullamaggieTable" hidden>
+            <!-- Breakout: replika "MY STRATEGY BLUEPRINT" (Gareth Packer/Financial
+                 Wisdom) — trend (EMA20) + konsolidacja tygodniowa (TTM Squeeze) ≥ 6
+                 tyg. + świeca wybicia spełniająca knot/10-tyg. szczyt/zysk 5-20% +
+                 NATR/MACD + stop wg blueprintu + wielkość pozycji wg Kelly Criterion —
+                 patrz combinedBreakoutCandidates w signals.js. -->
+            <table class="momentum-table" id="breakoutTable" hidden>
                 <thead>
                     <tr>
                         <th>#</th>
@@ -269,17 +277,19 @@
                         <th data-key="universe">Uniwersum</th>
                         <th data-key="sector">Sektor</th>
                         <th data-key="price">Cena</th>
-                        <th data-key="perf_pct" title="Zwrot z ostatnich 6 miesięcy">Wynik 6M</th>
                         <th data-key="status">Status</th>
                         <th data-key="consolidation_weeks">Konsolidacja</th>
-                        <th title="Cena, przy której warto obserwować 1-minutowy wykres (zakładka „⚡ 1 min + VWAP” po kliknięciu w wiersz)">Poziom do obserwacji</th>
+                        <th>Warunki wejścia</th>
+                        <th>Poziom do obserwacji</th>
+                        <th data-key="stop_distance_pct">Stop / ryzyko</th>
+                        <th>Pozycja (Kelly)</th>
                         <th>Cena (26 tyg.)</th>
                         <th>TTM (26 tyg.)</th>
                         <th>Etap</th>
                         <th class="tv-col">TV</th>
                     </tr>
                 </thead>
-                <tbody id="qullamaggieTableBody"></tbody>
+                <tbody id="breakoutTableBody"></tbody>
             </table>
         </div>
     </div>
@@ -307,7 +317,7 @@
         <div class="chart-view-tabs" id="chartViewTabs">
             <button class="chart-view-tab active" id="chartViewTabOwn" data-view="own">📊 Wykres własny</button>
             <button class="chart-view-tab" id="chartViewTabTv" data-view="tv">🏢 Dane spółki (TradingView)</button>
-            <button class="chart-view-tab" id="chartViewTabOrb" data-view="orb" title="Wykres 1-minutowy z sesyjnym VWAP (TradingView) — do ręcznego monitorowania Opening Range Breakout po wybiciu z konsolidacji (np. screener Qullamaggie).">⚡ 1 min + VWAP</button>
+            <button class="chart-view-tab" id="chartViewTabOrb" data-view="orb" title="Wykres 1-minutowy z sesyjnym VWAP (TradingView) — do ręcznego monitorowania Opening Range Breakout po wybiciu z konsolidacji (np. screener Breakout).">⚡ 1 min + VWAP</button>
         </div>
         <div class="chart-panel" id="chartPanelOwn">
             <div class="chart-container rs-chart-container" id="rs_chart">

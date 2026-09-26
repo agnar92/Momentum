@@ -159,7 +159,7 @@ const TV_PAGE_WIDGETS_ROW = [
 // ============================================================
 // ZAKŁADKA "⚡ 1 min + VWAP" — na wyraźną prośbę użytkownika, jako pomoc przy
 // ręcznym monitorowaniu Opening Range Breakout (ORB) po wybiciu z
-// konsolidacji (np. screener Qullamaggie na stronie Sygnały — patrz
+// konsolidacji (np. screener Breakout na stronie Sygnały — patrz
 // CLAUDE.md/signals.js dla pełnego opisu strategii). Świadomie NIE
 // automatyzujemy wykrywania samego ORB: wymagałoby to danych śróddziennych
 // (minutowych), których ten pipeline w ogóle nie pobiera (yfinance daily bars,

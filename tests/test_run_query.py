@@ -1029,6 +1029,9 @@ class TestComputeRelativeStrengthChart:
         # low_pct: tygodniowe MIN(Low) wzgledem tego samego close0 co close_pct
         # (stop strategii na low swiecy z przeciecia MACD, docs/js/strategy.js).
         assert out["low_pct"] == [round((lo / close0 - 1) * 100, 2) for lo in window_lows]
+        # high_pct: tygodniowe MAX(High), ten sam close0 — do sprawdzenia
+        # gornego knota swiecy wybicia w zakladce "📐 Breakout" (signals.js).
+        assert out["high_pct"] == [round((h / close0 - 1) * 100, 2) for h in window_highs]
 
     def test_insufficient_lookback_leaves_first_week_ema20_as_none(self):
         con = make_gem_con()

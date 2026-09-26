@@ -1794,6 +1794,16 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     (faza SEEKING_BOTTOM — opór już znany, wsparcie jeszcze nie), `resistance_pct`
     nigdy nie jest `None` gdy `pending_base` w ogóle istnieje.
 
+    "high_pct" — tygodniowe MAX(High), tym samym close0-relatywnym % co
+    close_pct/low_pct — dodane dla "MY STRATEGY BLUEPRINT" (Gareth Packer/
+    Financial Wisdom, patrz zakładka "📐 Breakout" w signals.js): sprawdzenie
+    "górny knot świecy wybicia nie może przekraczać 50% jej zakresu" wymaga
+    zarówno szczytu, jak i dołka tygodnia — low_pct już istniał (stop
+    strategii), high_pct był liczony WEWNĘTRZNIE (VWAP/buying_volume) ale
+    nigdy nie eksportowany. None dla tych samych starych wierszy sprzed
+    migracji schematu, co low_pct (patrz _ensure_prices_ohlc_columns w
+    fetch_data.py).
+
     "vwap_pct" — Volume-Weighted Average Price ZAKOTWICZONY (anchored) na
     początku WYŚWIETLANEGO okna (start_date), nie na buforze rozgrzewkowym EMA:
     to świadomie inny punkt startowy niż ema20_pct — anchored VWAP z
@@ -1884,7 +1894,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
 
     dates, close_pct, ema20_pct, index_pct, vwap_pct = [], [], [], [], []
     volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
-    stop_level_pct, base_count, low_pct = [], [], []
+    stop_level_pct, base_count, low_pct, high_pct = [], [], [], []
     raw_base_events = []
     for _, r in in_window.iterrows():
         dates.append(r["week_end"].strftime("%Y-%m-%d"))
@@ -1896,6 +1906,9 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         # przesuwany na low swiecy z przeciecia MACD). None dla starych wierszy
         # bez High/Low (patrz _ensure_prices_ohlc_columns w fetch_data.py).
         low_pct.append(pct(r["low"], close0))
+        # Tygodniowe MAX(High) — do sprawdzenia gornego knota swiecy wybicia
+        # (patrz "high_pct" w docstringu powyzej). Ten sam None-fallback co low_pct.
+        high_pct.append(pct(r["high"], close0))
         volume.append(int(r["volume"]) if pd.notna(r["volume"]) else None)
         buying_volume.append(int(round(r["buying_volume"])) if pd.notna(r["buying_volume"]) else None)
         # UWAGA: r pochodzi z in_window.iterrows() — wiersz miesza kolumny float
@@ -1959,6 +1972,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "index_pct": index_pct,
         "vwap_pct": vwap_pct,
         "low_pct": low_pct,
+        "high_pct": high_pct,
         "volume": volume,
         "buying_volume": buying_volume,
         "buying_volume_ratio": buying_volume_ratio,
@@ -2191,10 +2205,14 @@ TTM_SQUEEZE_MIN_CONSOLIDATION_WEEKS = 5
 # app.js) — starsze wybicia to juz rozwiniety ruch, nie swiezy sygnal wejscia.
 TTM_SQUEEZE_FIRE_LOOKBACK_WEEKS = 3
 # Prog NATR (Normalized ATR) z "MY STRATEGY BLUEPRINT" (Gareth Packer/Financial
-# Wisdom) — "I require the metric to be below 8" jako dodatkowy, opcjonalny
-# sygnal jakosci konsolidacji obok TTM Squeeze (patrz "natr" w
-# compute_ttm_squeeze_chart). Musi byc zgodny z STRATEGY_NATR_MAX w
-# docs/js/strategy.js.
+# Wisdom) — "I require the metric to be below 8" jako sygnal jakosci
+# konsolidacji obok TTM Squeeze (patrz "natr" w compute_ttm_squeeze_chart).
+# Uzywany jako OPCJONALNY chip w lejku "Stage 2 Continuation" (strategy.js) i
+# jako domyslnie WYMAGANY warunek w dedykowanej replice tej strategii,
+# zakladce "📐 Breakout" (signals.js) — obie strony czytaja WSPOLNA stala
+# BLUEPRINT_NATR_MAX w docs/js/minicharts.js (przeniesiona tam z strategy.js,
+# zeby drugi konsument nie musial jej duplikowac). Musi byc zgodny z tamta
+# wartoscia.
 TTM_SQUEEZE_NATR_MAX = 8.0
 
 
@@ -2360,12 +2378,14 @@ def compute_ttm_squeeze_chart(con, ticker, universe, ref_date, start_date):
     dokladnie jak reszta pol zaleznych od plytkiej historii w tym module.
 
     "natr" (Normalized ATR = ATR/close*100, patrz stale nad _ttm_squeeze_series)
-    to dodatkowy, OPCJONALNY sygnal jakosci konsolidacji z "MY STRATEGY BLUEPRINT"
+    to dodatkowy sygnal jakosci konsolidacji z "MY STRATEGY BLUEPRINT"
     (Gareth Packer/Financial Wisdom) — "I require the metric to be below 8"
     (TTM_SQUEEZE_NATR_MAX) — obok (nie zamiast) samego squeeze'u Bollinger/
-    Keltner powyzej; frontend (docs/js/strategy.js, STRATEGY_NATR_MAX) go
-    odczytuje jako opcjonalny chip w lejku "Stage 2 Continuation", domyslnie
-    wylaczony.
+    Keltner powyzej; frontend (docs/js/minicharts.js, BLUEPRINT_NATR_MAX) go
+    odczytuje jako opcjonalny chip w lejku "Stage 2 Continuation"
+    (strategy.js, domyslnie wylaczony) i jako domyslnie WYMAGANY warunek w
+    zakladce "📐 Breakout" (signals.js) — dedykowanej replice tej samej
+    strategii.
 
     Zwraca None gdy brakuje danych (np. spolka bez wystarczajacej historii cen)."""
     lookback_weeks = 2 * TTM_SQUEEZE_KC_WEEKS + 2
