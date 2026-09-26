@@ -12,7 +12,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // wzorzec co chart.html: coś, co nie pasuje do istniejącego kształtu
 // screenerów, dostaje własną stronę zamiast zakładki bolted-on do innej).
 //
-// Reszta apki (Wybicie/TTM Squeeze/Continuation/Qullamaggie na signals.js)
+// Reszta apki (Wybicie/TTM Squeeze/Continuation/Breakout na signals.js)
 // liczy własne sygnały z cotygodniowo pobieranych danych yfinance (patrz
 // CLAUDE.md) — dobre do wykrywania wielotygodniowych wybić, ale bezużyteczne
 // do EP: gap przedrynkowy trzeba złapać TEGO SAMEGO DNIA, więc ta strona w

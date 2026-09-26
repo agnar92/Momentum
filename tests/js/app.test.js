@@ -166,7 +166,7 @@ test("bulletHtml colors under/at/over target and shows the % of target", () => {
     assert.match(bulletHtml(0, 0), /spark-empty/);
 });
 
-// ---------- breakoutLevelFor (poziom "do obserwowania" na wykresie 1-min./w tabeli Qullamaggie) ----------
+// ---------- breakoutLevelFor (poziom "do obserwowania" na wykresie 1-min./w tabeli Breakout) ----------
 
 test("breakoutLevelFor converts pending_base close0-relative % to a real price, preferring it over bases", () => {
     const c = {
