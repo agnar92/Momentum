@@ -112,6 +112,11 @@ const BREAKOUT_MIN_VOLUME_SPIKE_PCT = 30;  // "I want to see at least a 30% volu
 const BREAKOUT_DEFAULT_REQUIRE_NATR = true;
 const BREAKOUT_DEFAULT_REQUIRE_MACD = true;
 const BREAKOUT_DEFAULT_REQUIRE_VOLUME_SPIKE = false; // blueprint: "some discretion can be applied pending other criteria"
+// Źródło konsolidacji (krok 2, patrz komentarz nad classifyBreakout) —
+// "darvas" (domyślne, na wyraźną prośbę użytkownika — bliższe literze
+// materiału, "candles touching a near parallel point") albo "squeeze" (TTM
+// Squeeze, ten sam substytut co Continuation/dawne Qullamaggie).
+const BREAKOUT_DEFAULT_CONSOLIDATION_SOURCE = "darvas";
 const BREAKOUT_SETTINGS_KEY = "momentum_dashboard_breakout";
 
 // Kalkulator Kelly Criterion (krok "Optimal Position Size" blueprintu) —
@@ -148,6 +153,7 @@ const state = {
     breakoutRequireNatr: BREAKOUT_DEFAULT_REQUIRE_NATR,
     breakoutRequireMacd: BREAKOUT_DEFAULT_REQUIRE_MACD,
     breakoutRequireVolumeSpike: BREAKOUT_DEFAULT_REQUIRE_VOLUME_SPIKE,
+    breakoutConsolidationSource: BREAKOUT_DEFAULT_CONSOLIDATION_SOURCE,
     breakoutEquity: BREAKOUT_DEFAULT_EQUITY,
     breakoutWinRatePct: BREAKOUT_DEFAULT_WIN_RATE_PCT,
     breakoutRewardRisk: BREAKOUT_DEFAULT_REWARD_RISK,
@@ -479,6 +485,101 @@ function breakoutPositionFor(price, stop) {
     return { shares, value, riskValue, riskOnEquityPct: (riskValue / state.breakoutEquity) * 100 };
 }
 
+// Konsolidacja przez tygodniowy TTM Squeeze (Bollinger Bands wewnątrz kanału
+// Kellera) — substytut kanału z materiału używany przez Continuation/dawne
+// Qullamaggie. Zwraca null, gdy dana spółka ani nie trwa w konsolidacji, ani
+// nie wybiła się z niej w oknie lookbacku.
+function breakoutConsolidationFromSqueeze(c, o) {
+    const t = c.ttm_squeeze_chart;
+    if (!t || !t.dates || t.dates.length === 0) return null;
+    // Ostatni tydzień bywa jeszcze niedomknięty — ten sam caveat co w classifyTtmSqueeze/classifyContinuation.
+    let nowIdx = t.dates.length - 1;
+    while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
+    if (nowIdx < 0) return null;
+
+    const squeezeOn = t.squeeze_on[nowIdx];
+    const squeezeCount = t.squeeze_count[nowIdx];
+    const weeksSinceFire = t.weeks_since_fire[nowIdx];
+    const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
+    const histNow = t.histogram[nowIdx];
+
+    const isConsolidating = squeezeOn === true && squeezeCount >= o.minConsolidationWeeks;
+    const isFired = weeksSinceFire != null && weeksSinceFire <= o.fireLookbackWeeks
+        && fireConsolidationWeeks != null && fireConsolidationWeeks >= o.minConsolidationWeeks
+        && histNow != null && histNow > 0;
+    if (!isConsolidating && !isFired) return null;
+
+    return {
+        isConsolidating, isFired,
+        consolidationWeeks: isFired ? fireConsolidationWeeks : squeezeCount,
+        weeksSinceFire: isFired ? weeksSinceFire : null,
+        fireWeekDate: isFired ? t.dates[nowIdx - weeksSinceFire] : null,
+    };
+}
+
+// Konsolidacja przez pudełko Darvasa (weekly_chart.bases/pending_base,
+// _compute_weinstein_stage_series w run_query.py) — na wyraźną prośbę
+// użytkownika, bliższa literze materiału: "3 candles in a row didn't
+// surpass the highest close price, and next 3 lowest close you have the
+// box" jest DOKŁADNIE mechanizmem Darvasa już istniejącym w tym pipeline
+// (DARVAS_BOX_CONFIRM_WEEKS = 3, potwierdzenie szczytu, potem dołka, tymi
+// samymi 3 tygodniami), zbudowanym pierwotnie dla klasyfikacji Etapów
+// Weinsteina, tutaj użytym jako ALTERNATYWNE źródło konsolidacji (domyślne,
+// patrz `state.breakoutConsolidationSource`).
+//   - "Fired": ostatni zapisany `base_event` (weekly_chart.bases), jeśli
+//     wybicie mieści się w oknie `fireLookbackWeeks`. Wybicie następuje
+//     tydzień PO `base.end_date` (ostatni tydzień pudełka) — stąd
+//     `breakoutIdx = end_date_idx + 1`.
+//   - "Consolidating": spółka TERAZ siedzi w KOMPLETNYM pudełku
+//     (`pending_base.phase === "BOXED"` — oba brzegi już potwierdzone, nie
+//     tylko opór przy wciąż szukanym wsparciu — SEEKING_BOTTOM celowo NIE
+//     liczy się jako "masz już pudełko", zgodnie z opisem użytkownika: box
+//     istnieje dopiero gdy OBA brzegi potwierdzone).
+// W obu przypadkach `consolidationWeeks` liczone od `dv_box_start_idx`
+// (początek śledzenia kandydata na szczyt) do końca pudełka — dłuższe niż
+// samo `squeeze_count` z TTM (obejmuje też fazę szukania szczytu), co jest
+// zgodne z duchem "3 tyg. + 3 tyg. = już masz pudełko" z prośby użytkownika.
+function breakoutConsolidationFromDarvas(c, o) {
+    const wc = c.weekly_chart;
+    if (!wc || !wc.dates || !wc.dates.length) return null;
+    const lastIdx = wc.dates.length - 1;
+
+    const bases = wc.bases || [];
+    if (bases.length) {
+        const lastBase = bases[bases.length - 1];
+        const endIdx = wc.dates.indexOf(lastBase.end_date);
+        const startIdx = wc.dates.indexOf(lastBase.start_date);
+        if (endIdx >= 0) {
+            const breakoutIdx = endIdx + 1;
+            const weeksSinceFire = lastIdx - breakoutIdx;
+            const consolidationWeeks = startIdx >= 0 ? (endIdx - startIdx + 1) : null;
+            if (breakoutIdx <= lastIdx && weeksSinceFire <= o.fireLookbackWeeks
+                && (consolidationWeeks == null || consolidationWeeks >= o.minConsolidationWeeks)) {
+                return {
+                    isConsolidating: false, isFired: true,
+                    consolidationWeeks, weeksSinceFire,
+                    fireWeekDate: wc.dates[breakoutIdx],
+                };
+            }
+        }
+    }
+
+    const pb = wc.pending_base;
+    if (pb && pb.phase === "BOXED" && pb.resistance_pct != null && pb.support_pct != null) {
+        const startIdx = wc.dates.indexOf(pb.start_date);
+        if (startIdx >= 0) {
+            const consolidationWeeks = lastIdx - startIdx + 1;
+            if (consolidationWeeks >= o.minConsolidationWeeks) {
+                return {
+                    isConsolidating: true, isFired: false,
+                    consolidationWeeks, weeksSinceFire: null, fireWeekDate: null,
+                };
+            }
+        }
+    }
+    return null;
+}
+
 // Klasyfikuje jedną spółkę wg WSZYSTKICH kroków "MY STRATEGY BLUEPRINT"
 // (Gareth Packer/Financial Wisdom), jeden po drugim:
 //   1. TREND — cena TERAZ nad własną 20-tyg. EMA (substytut 20-tyg. MA z
@@ -487,9 +588,17 @@ function breakoutPositionFor(price, stop) {
 //      spółka pod własną EMA20 nie pojawia się na liście WCALE.
 //   2. KONSOLIDACJA (min. `minConsolidationWeeks`, domyślnie 6 tyg., "dłużej
 //      lepiej", BEZ górnego limitu) — kanał z materiału ("candles touching
-//      or closing at a near parallel point") odtworzony tygodniowym TTM
-//      Squeeze (ttm_squeeze_chart), tym samym substytutem, który
-//      Continuation/dawne Qullamaggie już stosowały.
+//      or closing at a near parallel point"), z DWOMA wymiennymi źródłami
+//      (`state.breakoutConsolidationSource`, przełącznik nad tabelą):
+//        - "darvas" (DOMYŚLNE) — pudełko Darvasa (breakoutConsolidationFromDarvas()
+//          powyżej), bliższe literze materiału (3+3 tygodnie potwierdzenia
+//          szczytu/dołka, dokładnie jak w opisie użytkownika).
+//        - "squeeze" — tygodniowy TTM Squeeze (breakoutConsolidationFromSqueeze()
+//          powyżej), ten sam substytut, który Continuation/dawne Qullamaggie
+//          już stosowały; oferowany jako alternatywa do porównania, bo oba
+//          mechanizmy śledzą swoją WŁASNĄ, niezależną definicję "pudełka" i
+//          routinowo dają inne kandydatury (ten sam efekt uboczny, który już
+//          raz udokumentowano dla breakoutLevelFor() — patrz jego komentarz).
 //   3. NATR < BLUEPRINT_NATR_MAX (js/minicharts.js) — "I require the metric
 //      to be below 8". Domyślnie WYMAGANY (`requireNatr`, w odróżnieniu od
 //      lejka strategy.js, gdzie to opcjonalny chip) — tutaj to jawny krok
@@ -499,7 +608,7 @@ function breakoutPositionFor(price, stop) {
 //      js/minicharts.js). Domyślnie WYMAGANY (`requireMacd`) z tego samego
 //      powodu co NATR.
 //   5. WYBICIE — tygodniowe zamknięcie POWYŻEJ oporu kanału = koniec
-//      squeeze'a (status "fired", ten sam co TTM Squeeze/Continuation).
+//      squeeze'a albo wybicie z pudełka Darvasa, wg wybranego źródła.
 //   6. GÓRNY KNOT świecy wybicia <= BREAKOUT_MAX_WICK_PCT (50%) jej zakresu
 //      — "if the upper weekly candle wick is greater than 50%, we do not
 //      take the trade". Wymaga High i Low tygodnia (weekly_chart.high_pct/
@@ -521,7 +630,10 @@ function breakoutPositionFor(price, stop) {
 //      STAGE_BREAKOUT_VOLUME_RATIO co reszta apki) — informacyjnie, jak w
 //      dawnym Qullamaggie.
 //   10. STOP/RYZYKO — strategyStopFor() (js/minicharts.js): dolna granica
-//       ŚRODKOWEJ TERCJI ostatniego pudełka Darvasa, podnoszony na LOW
+//       ŚRODKOWEJ TERCJI ostatniego pudełka Darvasa (ZAWSZE z weekly_chart.
+//       bases, NIEZALEŻNIE od wybranego źródła konsolidacji w kroku 2 —
+//       blueprint opisuje stop wprost jako "split the box into 3 portions",
+//       a jedyny box, jaki ten pipeline ma, to Darvas), podnoszony na LOW
 //       świecy po każdym przecięciu MACD w dół linii sygnałowej — DOKŁADNIE
 //       ten sam mechanizm co krok 4 lejka strategy.js. "if the structure
 //       does not allow for a stop loss of less than 20%, we do not take the
@@ -531,8 +643,14 @@ function breakoutPositionFor(price, stop) {
 //   11. WIELKOŚĆ POZYCJI — Kelly Criterion (breakoutPositionFor() powyżej),
 //       NIE stały % ryzyka jak w strategy.js — materiał opisuje wprost Kelly
 //       Criterion.
+// Mansfield RS 52 tyg. (mansfield_chart.rsm_long, kolumna "RS 52 tyg.") jest
+// pokazywany na KAŻDYM wierszu jako INFORMACYJNY sygnał "spółka bije rynek",
+// na wyraźną prośbę użytkownika — NIGDY nie blokuje/odrzuca wiersza (w
+// odróżnieniu od NATR/MACD powyżej), i to NIE jest to samo co "Quality" z
+// blueprintu (fundamenty ROC/ROE/marża) — to czysto techniczny, momentum-owy
+// odpowiednik, tańszy bo już policzony, ale inny wymiar niż fundamenty.
 // "Poziom do obserwacji" (opór/wsparcie kanału, breakoutLevelFor()) jest
-// czysto informacyjny i może pochodzić z INNEGO okna niż stop powyżej
+// czysto informacyjny i może pochodzić z INNEGO okna niż stop w kroku 10
 // (squeezeConsolidationBox vs. weekly_chart.bases/Darvas) — ta sama
 // niezależność dwóch pomocników już istnieje między dawnym Qullamaggie i
 // lejkiem strategy.js, nie jest nowym problemem wprowadzonym tutaj.
@@ -543,6 +661,7 @@ function classifyBreakout(ticker, universe, c, opts = {}) {
         requireNatr: opts.requireNatr ?? state.breakoutRequireNatr,
         requireMacd: opts.requireMacd ?? state.breakoutRequireMacd,
         requireVolumeSpike: opts.requireVolumeSpike ?? state.breakoutRequireVolumeSpike,
+        consolidationSource: opts.consolidationSource ?? state.breakoutConsolidationSource,
     };
 
     // Krok 1: trend.
@@ -554,26 +673,12 @@ function classifyBreakout(ticker, universe, c, opts = {}) {
     const emaNowPct = wc.ema20_pct ? wc.ema20_pct[priceIdx] : null;
     if (emaNowPct == null || !(closeNowPct > emaNowPct)) return null;
 
-    // Krok 2: konsolidacja (TTM Squeeze tygodniowy jako substytut kanału).
-    const t = c.ttm_squeeze_chart;
-    if (!t || !t.dates || t.dates.length === 0) return null;
-    // Ostatni tydzień bywa jeszcze niedomknięty — ten sam caveat co w classifyTtmSqueeze/classifyContinuation.
-    let nowIdx = t.dates.length - 1;
-    while (nowIdx >= 0 && t.squeeze_on[nowIdx] == null) nowIdx--;
-    if (nowIdx < 0) return null;
-
-    const squeezeOn = t.squeeze_on[nowIdx];
-    const squeezeCount = t.squeeze_count[nowIdx];
-    const weeksSinceFire = t.weeks_since_fire[nowIdx];
-    const fireConsolidationWeeks = t.fire_consolidation_weeks[nowIdx];
-    const histNow = t.histogram[nowIdx];
-
-    const isConsolidating = squeezeOn === true && squeezeCount >= o.minConsolidationWeeks;
-    const isFired = weeksSinceFire != null && weeksSinceFire <= o.fireLookbackWeeks
-        && fireConsolidationWeeks != null && fireConsolidationWeeks >= o.minConsolidationWeeks
-        && histNow != null && histNow > 0;
-    if (!isConsolidating && !isFired) return null;
-    const consolidationWeeks = isFired ? fireConsolidationWeeks : squeezeCount;
+    // Krok 2: konsolidacja — wg wybranego źródła (patrz komentarz wyżej).
+    const consol = o.consolidationSource === "squeeze"
+        ? breakoutConsolidationFromSqueeze(c, o)
+        : breakoutConsolidationFromDarvas(c, o);
+    if (!consol) return null;
+    const { isFired, consolidationWeeks, weeksSinceFire, fireWeekDate } = consol;
 
     // Kroki 3-4: jakość konsolidacji/momentum — informacyjne zawsze,
     // wymagane wg opts.requireNatr/requireMacd.
@@ -588,8 +693,7 @@ function classifyBreakout(ticker, universe, c, opts = {}) {
     let wickPct = null, tenWeekHigh = null, breakoutGainPct = null, volumeIncreasePct = null;
     let breakoutVolumeRatio = null;
     if (isFired) {
-        const breakoutDate = t.dates[nowIdx - weeksSinceFire];
-        const wcIdx = wc.dates ? wc.dates.indexOf(breakoutDate) : -1;
+        const wcIdx = wc.dates ? wc.dates.indexOf(fireWeekDate) : -1;
         if (wcIdx >= 0) {
             const closeNow = wc.close_pct[wcIdx];
             const highNow = wc.high_pct ? wc.high_pct[wcIdx] : null;
@@ -647,9 +751,9 @@ function classifyBreakout(ticker, universe, c, opts = {}) {
         current_stage: wc.current_stage,
         status: isFired ? "fired" : "consolidating",
         substatus,
+        consolidation_source: o.consolidationSource,
         consolidation_weeks: consolidationWeeks,
         weeks_since_fire: isFired ? weeksSinceFire : null,
-        histNow,
         natr_value: natrValue, natr_ok: natrOk,
         macd_above: macd.above, macd_cross_up_date: macd.crossUpDate, macd_ok: macdOk,
         wick_pct: wickPct,
@@ -1423,9 +1527,19 @@ const BREAKOUT_SUBSTATUS_LABELS = {
     WAIT_VOLUME: `<span class="cross-age" title="Wolumen wzrósł mniej niż ${BREAKOUT_MIN_VOLUME_SPIKE_PCT}% względem poprzedniego tygodnia.">⏳ Wolumen za słaby</span>`,
 };
 
+// Mała ikonka źródła konsolidacji (patrz classifyBreakout/state.breakoutConsolidationSource)
+// przed statusem — widać od razu, którym mechanizmem dany wiersz się zakwalifikował,
+// bez otwierania dymka.
+function breakoutSourceIcon(r) {
+    return r.consolidation_source === "squeeze"
+        ? `<span title="Konsolidacja wykryta przez TTM Squeeze">🌀</span>`
+        : `<span title="Konsolidacja wykryta przez pudełko Darvasa">📦</span>`;
+}
+
 function breakoutStatusHtml(r) {
-    if (r.status !== "fired") return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
-    const fired = `<span class="squeeze-status squeeze-status-fired">${r.substatus === "ENTRY" ? "🎯 ENTRY" : "🔥 Wybicie"} (${r.weeks_since_fire} tyg. temu)</span>`;
+    const icon = breakoutSourceIcon(r);
+    if (r.status !== "fired") return `${icon} <span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
+    const fired = `${icon} <span class="squeeze-status squeeze-status-fired">${r.substatus === "ENTRY" ? "🎯 ENTRY" : "🔥 Wybicie"} (${r.weeks_since_fire} tyg. temu)</span>`;
     if (r.substatus === "ENTRY") return fired;
     return `${fired} ${BREAKOUT_SUBSTATUS_LABELS[r.substatus] || ""}`;
 }
@@ -1497,6 +1611,7 @@ function breakoutRowHtml(r, position) {
         <td title="Cena, przy której warto obserwować wybicie (opór/wsparcie kanału konsolidacji)">${levelToWatchCellHtml(r)}</td>
         <td title="Stop wg blueprintu: środkowa tercja pudełka, podnoszony po każdym przecięciu MACD w dół">${breakoutStopCellHtml(r)}</td>
         <td title="Wielkość pozycji wg Kelly Criterion (kalkulator nad tabelą)">${breakoutKellyCellHtml(r)}</td>
+        <td title="Mansfield RS 52 tyg. — informacyjnie: czy spółka bije własny indeks (NIE jest to &quot;Quality&quot; z blueprintu, to techniczny odpowiednik)">${rsBarHtml(r.rs_long)}</td>
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20; czerwone kreski = tygodnie squeeze'a">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
         <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.): słupki = momentum, czerwona kropka = squeeze, złota = wybicie">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
@@ -1516,8 +1631,8 @@ function renderBreakoutTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 15,
-        emptyAllMsg: `Brak spółek nad własną EMA20 z konsolidacją ≥ ${state.breakoutMinConsolidationWeeks} tyg. (trwającą albo świeżo zakończoną wybiciem spełniającym kryteria świecy z blueprintu).`,
+        colspan: 16,
+        emptyAllMsg: `Brak spółek nad własną EMA20 z konsolidacją ≥ ${state.breakoutMinConsolidationWeeks} tyg. wg źródła „${state.breakoutConsolidationSource === "squeeze" ? "TTM Squeeze" : "pudełko Darvasa"}” (trwającą albo świeżo zakończoną wybiciem spełniającym kryteria świecy z blueprintu) — spróbuj przełączyć źródło konsolidacji nad tabelą.`,
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
@@ -1560,6 +1675,9 @@ function initBreakoutControls() {
             if (typeof saved.requireNatr === "boolean") state.breakoutRequireNatr = saved.requireNatr;
             if (typeof saved.requireMacd === "boolean") state.breakoutRequireMacd = saved.requireMacd;
             if (typeof saved.requireVolumeSpike === "boolean") state.breakoutRequireVolumeSpike = saved.requireVolumeSpike;
+            if (saved.consolidationSource === "darvas" || saved.consolidationSource === "squeeze") {
+                state.breakoutConsolidationSource = saved.consolidationSource;
+            }
             if (Number.isFinite(saved.equity)) state.breakoutEquity = saved.equity;
             if (Number.isFinite(saved.winRatePct)) state.breakoutWinRatePct = saved.winRatePct;
             if (Number.isFinite(saved.rewardRisk)) state.breakoutRewardRisk = saved.rewardRisk;
@@ -1575,6 +1693,7 @@ function initBreakoutControls() {
                 requireNatr: state.breakoutRequireNatr,
                 requireMacd: state.breakoutRequireMacd,
                 requireVolumeSpike: state.breakoutRequireVolumeSpike,
+                consolidationSource: state.breakoutConsolidationSource,
                 equity: state.breakoutEquity,
                 winRatePct: state.breakoutWinRatePct,
                 rewardRisk: state.breakoutRewardRisk,
@@ -1604,6 +1723,28 @@ function initBreakoutControls() {
     };
     bindSlider("breakoutMinConsolidationInput", "breakoutMinConsolidationValue", "breakoutMinConsolidationWeeks", " tyg.");
     bindSlider("breakoutFireLookbackInput", "breakoutFireLookbackValue", "breakoutFireLookbackWeeks", " tyg.");
+
+    // Przełącznik źródła konsolidacji (Darvas/TTM Squeeze) — dwa wykluczające
+    // się przyciski, ten sam wzorzec co #wybicieCombinedBtn.
+    const applySourceButtons = () => {
+        const darvasBtn = document.getElementById("breakoutSourceDarvasBtn");
+        const squeezeBtn = document.getElementById("breakoutSourceSqueezeBtn");
+        if (darvasBtn) darvasBtn.classList.toggle("active", state.breakoutConsolidationSource === "darvas");
+        if (squeezeBtn) squeezeBtn.classList.toggle("active", state.breakoutConsolidationSource === "squeeze");
+    };
+    applySourceButtons();
+    const bindSource = (btnId, source) => {
+        const btn = document.getElementById(btnId);
+        if (!btn) return;
+        btn.addEventListener("click", () => {
+            if (state.breakoutConsolidationSource === source) return;
+            state.breakoutConsolidationSource = source;
+            applySourceButtons();
+            rerender();
+        });
+    };
+    bindSource("breakoutSourceDarvasBtn", "darvas");
+    bindSource("breakoutSourceSqueezeBtn", "squeeze");
 
     const bindToggle = (btnId, stateKey) => {
         const btn = document.getElementById(btnId);
@@ -1776,5 +1917,6 @@ if (typeof module !== "undefined" && module.exports) {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, state,
         classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
+        breakoutConsolidationFromSqueeze, breakoutConsolidationFromDarvas,
     };
 }

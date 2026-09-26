@@ -12,6 +12,7 @@ const {
     weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     classifyContinuation, combinedContinuationCandidates,
     classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
+    breakoutConsolidationFromDarvas,
 } = require(path.join("..", "..", "docs", "js", "signals.js"));
 
 // ---------- weeksSinceZeroCrossUp / classifyWybicie / combinedWybicieCandidates ----------
@@ -378,9 +379,17 @@ test("combinedTtmSqueezeCandidates merges candidates across universes, fired fir
 
 // ---------- classifyBreakout / combinedBreakoutCandidates (replika "MY STRATEGY BLUEPRINT", Gareth Packer/Financial Wisdom) ----------
 
+// Testy poniżej celowo używają consolidationSource: "squeeze" — fixtures tego
+// bloku (breakoutConstituent/breakoutFiredConstituent) populują tylko
+// ttm_squeeze_chart, nie weekly_chart.bases/pending_base (Darvas), więc pod
+// domyślnym źródłem ("darvas", patrz BREAKOUT_DEFAULT_CONSOLIDATION_SOURCE w
+// signals.js) zwracałyby null. Testy dla źródła Darvas mają własną sekcję
+// niżej (breakoutConsolidationFromDarvas / classifyBreakout z domyślnym
+// źródłem).
 const BREAKOUT_OPTS = {
     minConsolidationWeeks: 6, fireLookbackWeeks: 3,
     requireNatr: true, requireMacd: true, requireVolumeSpike: false,
+    consolidationSource: "squeeze",
 };
 
 // Fixture minimalna, "wciąż w konsolidacji" — nie ma jeszcze świecy wybicia,
@@ -654,6 +663,162 @@ test("combinedBreakoutCandidates merges universes, dedupes tickers, sorts ENTRY 
 
     const rows = combinedBreakoutCandidates(BREAKOUT_OPTS);
     assert.deepEqual(rows.map(r => r.ticker), ["ENTRY_ROW", "WAIT_ROW", "COIL_LONG", "COIL_SHORT"]);
+});
+
+// ---------- breakoutConsolidationFromDarvas (źródło konsolidacji "darvas", domyślne — patrz komentarz nad classifyBreakout) ----------
+// Na wyraźną prośbę użytkownika: "3 candles in a row didn't surpass the
+// highest close price, and next 3 lowest close you have the box" — dokładnie
+// mechanizm Darvasa już istniejący w _compute_weinstein_stage_series
+// (run_query.py), tutaj użyty jako alternatywne (i domyślne) źródło
+// konsolidacji zamiast TTM Squeeze.
+
+const BREAKOUT_DARVAS_BASE_OPTS = { minConsolidationWeeks: 6, fireLookbackWeeks: 3 };
+
+test("state.breakoutConsolidationSource defaults to darvas", () => {
+    assert.equal(state.breakoutConsolidationSource, "darvas");
+});
+
+test("breakoutConsolidationFromDarvas marks consolidating when the stock sits in a COMPLETE (BOXED) box", () => {
+    const dates = continuationFireDates(8);
+    const c = {
+        weekly_chart: {
+            dates,
+            pending_base: { start_date: dates[0], resistance_pct: 10, support_pct: 0, phase: "BOXED" },
+            bases: [],
+        },
+    };
+    const consol = breakoutConsolidationFromDarvas(c, BREAKOUT_DARVAS_BASE_OPTS);
+    assert.ok(consol);
+    assert.equal(consol.isConsolidating, true);
+    assert.equal(consol.isFired, false);
+    assert.equal(consol.consolidationWeeks, 8);
+});
+
+test("breakoutConsolidationFromDarvas does NOT count a box whose bottom isn't confirmed yet (SEEKING_BOTTOM)", () => {
+    const dates = continuationFireDates(8);
+    const c = {
+        weekly_chart: {
+            dates,
+            pending_base: { start_date: dates[0], resistance_pct: 10, support_pct: null, phase: "SEEKING_BOTTOM" },
+            bases: [],
+        },
+    };
+    assert.equal(breakoutConsolidationFromDarvas(c, BREAKOUT_DARVAS_BASE_OPTS), null,
+        "box exists only once BOTH edges are confirmed, per the user's own description");
+});
+
+test("breakoutConsolidationFromDarvas rejects a box shorter than the minimum consolidation window", () => {
+    const dates = continuationFireDates(8);
+    const c = {
+        weekly_chart: {
+            dates,
+            pending_base: { start_date: dates[5], resistance_pct: 10, support_pct: 0, phase: "BOXED" }, // 3 weeks only
+            bases: [],
+        },
+    };
+    assert.equal(breakoutConsolidationFromDarvas(c, BREAKOUT_DARVAS_BASE_OPTS), null);
+});
+
+test("breakoutConsolidationFromDarvas marks fired from the last recorded base breakout, within the lookback window", () => {
+    const dates = continuationFireDates(8);
+    const c = {
+        weekly_chart: {
+            dates,
+            pending_base: null,
+            bases: [{ start_date: dates[0], end_date: dates[6], resistance_pct: 10, support_pct: 0, base_count: 1, kind: "stage2" }],
+        },
+    };
+    const consol = breakoutConsolidationFromDarvas(c, BREAKOUT_DARVAS_BASE_OPTS);
+    assert.ok(consol);
+    assert.equal(consol.isFired, true);
+    assert.equal(consol.weeksSinceFire, 0, "breakout happens the week AFTER the box's own end_date");
+    assert.equal(consol.consolidationWeeks, 7);
+    assert.equal(consol.fireWeekDate, dates[7]);
+});
+
+test("breakoutConsolidationFromDarvas ignores a base breakout older than the fire lookback window", () => {
+    const dates = continuationFireDates(12);
+    const c = {
+        weekly_chart: {
+            dates,
+            pending_base: null,
+            // 7-week box (>= minConsolidationWeeks), but the breakout itself (dates[7]) is 4 weeks
+            // before the last displayed week (dates[11]) — outside fireLookbackWeeks (3).
+            bases: [{ start_date: dates[0], end_date: dates[6], resistance_pct: 10, support_pct: 0, base_count: 1, kind: "stage2" }],
+        },
+    };
+    assert.equal(breakoutConsolidationFromDarvas(c, BREAKOUT_DARVAS_BASE_OPTS), null);
+});
+
+test("breakoutConsolidationFromDarvas falls back to the pending box when the last recorded base is too old/short", () => {
+    const dates = continuationFireDates(12);
+    const c = {
+        weekly_chart: {
+            dates,
+            // Stale base: only 8 weeks in the past.
+            bases: [{ start_date: dates[0], end_date: dates[3], resistance_pct: 5, support_pct: 0, base_count: 1, kind: "stage1" }],
+            pending_base: { start_date: dates[5], resistance_pct: 20, support_pct: 15, phase: "BOXED" },
+        },
+    };
+    const consol = breakoutConsolidationFromDarvas(c, BREAKOUT_DARVAS_BASE_OPTS);
+    assert.ok(consol);
+    assert.equal(consol.isConsolidating, true);
+    assert.equal(consol.consolidationWeeks, 7); // dates[5]..dates[11]
+});
+
+// classifyBreakout end-to-end with the Darvas source — reuses the same
+// candle-criteria code path (wick/10-week-high/gain/volume) as the squeeze
+// tests above, just fed by a `bases` entry instead of ttm_squeeze_chart fields.
+function breakoutDarvasFiredConstituent({ gainPct = 9, wickExtra = 0.5, macd = 1, signal = 0.5, natr = 5,
+    volumeRatio = 1.4, priorVolume = 1000 } = {}) {
+    const dates = continuationFireDates(11);
+    const closePct = new Array(10).fill(0).concat([gainPct]);
+    const emaPct = new Array(11).fill(-10);
+    const lowPct = closePct.map(v => v - 1);
+    const highPct = closePct.map((v, i) => i === 10 ? v + wickExtra : v + 1);
+    const volume = new Array(9).fill(priorVolume).concat([priorVolume, priorVolume * volumeRatio]);
+    return {
+        sector: "Tech", price: 100,
+        weekly_chart: {
+            current_stage: "2A", dates, close_pct: closePct, ema20_pct: emaPct,
+            low_pct: lowPct, high_pct: highPct, volume,
+            buying_volume_ratio: new Array(11).fill(1.0),
+            bases: [{ start_date: dates[0], end_date: dates[9], resistance_pct: 0, support_pct: -10, base_count: 1, kind: "stage2" }],
+            pending_base: null,
+            stop_level_pct: null,
+        },
+        // squeeze_on/etc. all "off" — squeezeConsolidationBox() (js/minicharts.js, called
+        // unconditionally by breakoutLevelFor() for the "Poziom do obserwacji" column,
+        // independent of state.breakoutConsolidationSource) needs these arrays to exist
+        // even when the Darvas source is what's actually driving classification here.
+        ttm_squeeze_chart: {
+            dates, natr: new Array(11).fill(natr),
+            squeeze_on: new Array(11).fill(false), squeeze_count: new Array(11).fill(0),
+            fired: new Array(11).fill(false), weeks_since_fire: new Array(11).fill(null),
+            fire_consolidation_weeks: new Array(11).fill(null), histogram: new Array(11).fill(0.1),
+        },
+        macd_chart: { dates, macd: new Array(11).fill(macd), signal: new Array(11).fill(signal) },
+    };
+}
+
+const BREAKOUT_DARVAS_OPTS = { ...BREAKOUT_DARVAS_BASE_OPTS, requireNatr: true, requireMacd: true, requireVolumeSpike: false, consolidationSource: "darvas" };
+
+test("classifyBreakout with the Darvas source marks a fully-qualifying box breakout as ENTRY", () => {
+    const r = classifyBreakout("AAA", "SP500", breakoutDarvasFiredConstituent(), BREAKOUT_DARVAS_OPTS);
+    assert.ok(r);
+    assert.equal(r.status, "fired");
+    assert.equal(r.substatus, "ENTRY");
+    assert.equal(r.consolidation_source, "darvas");
+    assert.equal(r.consolidation_weeks, 10);
+    assert.equal(r.weeks_since_fire, 0);
+    assert.ok(Math.abs(r.wick_pct - 33.33) < 0.1, "same wick/gain/10-week-high logic as the squeeze path");
+    assert.equal(r.ten_week_high, true);
+    assert.ok(Math.abs(r.breakout_gain_pct - 9) < 0.01);
+});
+
+test("classifyBreakout returns null under the Darvas source for a fixture that only populates ttm_squeeze_chart", () => {
+    assert.equal(classifyBreakout("AAA", "SP500", breakoutFiredConstituent(), BREAKOUT_DARVAS_OPTS), null,
+        "no weekly_chart.bases/pending_base -> nothing for the Darvas source to classify");
 });
 
 // ---------- classifyContinuation / combinedContinuationCandidates (przeprojektowany na tygodniowy) ----------

@@ -1549,17 +1549,50 @@ flex child (no `.topbar-left` wrapper there).
   2. **Consolidation** ≥ `BREAKOUT_DEFAULT_MIN_CONSOLIDATION_WEEKS` (6, "at least a minimum 6 weeks... the
      longer the better", no upper bound — the same "no ceiling" convention "🚀 Continuation" already
      established for the identical blueprint sentence) — the hand-drawn channel from the material ("candles
-     touching or closing at a near parallel point... forming resistance... forming support") is reproduced
-     with the SAME weekly TTM Squeeze substitute every other tab on this page already uses
-     (`ttm_squeeze_chart`), not a new channel-detection algorithm.
+     touching or closing at a near parallel point... forming resistance... forming support") has TWO
+     interchangeable sources (`state.breakoutConsolidationSource`, a toggle pair above the table,
+     `#breakoutSourceDarvasBtn`/`#breakoutSourceSqueezeBtn`), a later, separate explicit user request after
+     they pointed out the blueprint gives no precise N-candle rule for the box edges ("candles touching a
+     near parallel point" is visual/discretionary) and asked how a genuine Darvas box (already built into
+     this pipeline) would compare to the TTM Squeeze substitute already in use:
+       - **"darvas" (DEFAULT)** — `breakoutConsolidationFromDarvas()` in `signals.js`, reading
+         `weekly_chart.bases`/`pending_base` (`_compute_weinstein_stage_series()`'s existing Darvas-box
+         state machine, `DARVAS_BOX_CONFIRM_WEEKS = 3` — see Relative strength above): this is LITERALLY
+         the user's own description of the rule ("3 candles in a row didn't surpass the highest close
+         price, and next 3 lowest close you have the box"), already implemented for Weinstein-stage
+         classification, reused here with zero new backend work. "Fired" = the last recorded `base_event`
+         in `bases`, if its breakout (the week AFTER the box's own `end_date`) falls inside
+         `fireLookbackWeeks`; "consolidating" = the stock is CURRENTLY sitting in a COMPLETE box
+         (`pending_base.phase === "BOXED"` — both edges confirmed). A box whose bottom isn't confirmed yet
+         (`phase === "SEEKING_BOTTOM"`, top known, bottom still being sought) deliberately does NOT count
+         as "you have the box" yet, matching the user's own phrasing precisely (the box only exists once
+         BOTH edges are confirmed). `consolidationWeeks` runs from `dv_box_start_idx` (when the top
+         candidate first started being tracked) to the box's end — longer than the TTM path's
+         `squeeze_count` alone, since it also covers the top-seeking phase, in the same spirit as "3 + 3
+         weeks = you already have the box."
+       - **"squeeze"** — `breakoutConsolidationFromSqueeze()`, the ORIGINAL implementation (weekly TTM
+         Squeeze, `ttm_squeeze_chart`), the same substitute every other tab on this page (Continuation/TTM
+         Squeeze/dawne Qullamaggie) already uses — kept as a selectable alternative, not replaced outright,
+         because the two mechanisms track their OWN, independent notion of "the box" and routinely surface
+         different candidates (verified: 60 Darvas-sourced candidates vs. 79 TTM-Squeeze-sourced on the
+         same committed `docs/data/*.json`, only partial overlap) — the exact same "two independent box
+         definitions, no single ground truth" situation `breakoutLevelFor()`'s own version-history note
+         (below) already documents between Darvas and `squeezeConsolidationBox()`.
+     Both sources return the SAME shape (`{isConsolidating, isFired, consolidationWeeks, weeksSinceFire,
+     fireWeekDate}`) so every downstream step (candle criteria, stop, Kelly sizing) is completely
+     source-agnostic — only `fireWeekDate` (used to look up the breakout week's wick/10-week-high/gain/
+     volume in `weekly_chart` by DATE) differs in origin. A small 📦/🌀 icon before the status cell
+     (`breakoutSourceIcon()`) shows which mechanism classified that particular row, since the two toggle
+     states can disagree on the same ticker.
   3. **NATR (Normalized ATR) < `BLUEPRINT_NATR_MAX`** (8, "I require the metric to be below 8") — DEFAULT
      REQUIRED here (`state.breakoutRequireNatr`, toggle in `#breakoutControls`), unlike the `strategy.js`
      funnel where the identical constant is an opt-in chip off by default: on this tab it is one of the
      blueprint's own explicit, named steps, not an optional extra layered on top of a broader strategy.
   4. **MACD above its signal line** ("we always want to be in a position with the MACD line above the
      signal line") — DEFAULT REQUIRED (`state.breakoutRequireMacd`) for the same reason as NATR above.
-  5. **Breakout** — a weekly close above the channel's resistance, i.e. the TTM Squeeze turning off
-     (`fired`), the same event every other tab on this page already calls a breakout.
+  5. **Breakout** — a weekly close above the channel's resistance: the TTM Squeeze turning off (`fired`,
+     "squeeze" source) or the Darvas box being broken out of (a new `base_event`, "darvas" source, DEFAULT)
+     — see step 2 above.
   6. **Upper wick ≤ `BREAKOUT_MAX_WICK_PCT`** (50%, "if the upper weekly candle wick is greater than 50%,
      we do not take the trade... we want to be with momentum not against it") — the ONE criterion that
      needed an actual backend change: `weekly_chart` already carried `low_pct` (added earlier for
@@ -1606,6 +1639,13 @@ flex child (no `.topbar-left` wrapper there).
       verified to reproduce its own stated ≈16% result exactly (`Kelly = W - (1-W)/R`, fractional =
       `Kelly * kellyFraction`) — chosen specifically so the calculator agrees with the PDF on first load,
       before the user swaps in their own real statistics.
+  A "RS 52 tyg." column (`rsBarHtml(r.rs_long)`, `r.rs_long` already computed for free by the
+  `miniVisualFields(c)` spread every row already carries) shows the stock's Mansfield RS 52-week vs. its
+  own index — a later, separate explicit user request ("Quality stocks are that are beating the market so
+  mansfield RS above 0 is ok criteria for quality stocks"), added as a PURELY INFORMATIONAL signal, never a
+  gate (no `requireRs` toggle exists) — explicitly NOT the blueprint's own "Quality" factor (fundamentals),
+  just a cheap, already-computed, technical/momentum proxy for "is this stock currently beating its own
+  market," shown for context alongside the real Quality checklist in `#breakoutGuide` (see below).
   Every row carries a "Warunki wejścia" cell (`breakoutConditionsHtml()`) showing NATR/MACD always (even
   while still consolidating — a quality-of-setup signal, not just a fired-week confirmation), plus wick/
   10-week-high/gain/volume/buying-volume badges once fired — these last four are ALWAYS ✓ when shown (a
