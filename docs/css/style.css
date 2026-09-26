@@ -278,6 +278,10 @@ html, body {
 .wybicie-slider-value { font-size: 11.5px; font-weight: 600; color: var(--text); min-width: 44px; }
 .cross-age { font-size: 10.5px; color: var(--text-faint); font-weight: 400; }
 
+/* Separator wizualny między warunkiem skojarzonym a checkboxami łączalnymi w
+   panelu Wybicie (#wybicieControls, patrz signals.html/signals.js). */
+.wybicie-filter-sep { color: var(--text-faint); margin: 0 2px; }
+
 /* Kolumna "Status" w tabeli TTM Squeeze (patrz ttmSqueezeStatusHtml/
    classifyTtmSqueeze w app.js) — te same kolory co kropki squeeze na czwartym
    panelu wykresu (patrz dotColors w renderRelativeStrengthChart): złoty =

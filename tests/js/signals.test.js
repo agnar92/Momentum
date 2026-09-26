@@ -49,27 +49,32 @@ function wybicieConstituent(overrides) {
     };
 }
 
-test("classifyWybicie accepts a fresh MACD + RS 52W zero cross with a positive TTM histogram", () => {
+function noFilters() {
+    return { macdCrossZero: false, macdCrossSignal: false, macdAboveZero: false, rsAboveZero: false };
+}
+
+test("classifyWybicie combined mode (default) accepts a fresh MACD + RS 52W zero cross with a positive TTM histogram", () => {
     const r = classifyWybicie("AAA", "SP500", wybicieConstituent({}));
     assert.ok(r);
     assert.equal(r.macdCrossWeeks, 2);
     assert.equal(r.rsCrossWeeks, 2);
+    assert.equal(r.breakoutWeeks, 2);
     assert.equal(r.histNow, 2);
 });
 
-test("classifyWybicie rejects when the two crosses are further apart than the breakout window", () => {
+test("classifyWybicie combined mode rejects when the two crosses are further apart than the breakout window", () => {
     const c = wybicieConstituent({ macd_chart: { macd: [-1, 1, 1, 1, 1, 1] }, mansfield_chart: { rsm_long: [-1, -1, -1, -1, -1, 1] } });
     // MACD 5 tyg. temu, RS 1 tydz. temu -> odstęp 4
-    assert.equal(classifyWybicie("AAA", "SP500", c, { windowWeeks: 3, monitorWeeks: 10 }), null);
-    const r = classifyWybicie("AAA", "SP500", c, { windowWeeks: 4, monitorWeeks: 10 });
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: true, windowWeeks: 3, monitorWeeks: 10 }), null);
+    const r = classifyWybicie("AAA", "SP500", c, { combinedMode: true, windowWeeks: 4, monitorWeeks: 10 });
     assert.equal(r.breakoutWeeks, 1);
 });
 
-test("classifyWybicie drops a breakout older than the monitoring period", () => {
+test("classifyWybicie combined mode drops a breakout older than the monitoring period", () => {
     const c = wybicieConstituent({ macd_chart: { macd: [-1, 1, 1, 1, 1] }, mansfield_chart: { rsm_long: [-1, 1, 1, 1, 1] } });
     // oba przecięcia 4 tyg. temu
-    assert.equal(classifyWybicie("AAA", "SP500", c, { windowWeeks: 0, monitorWeeks: 3 }), null);
-    assert.equal(classifyWybicie("AAA", "SP500", c, { windowWeeks: 0, monitorWeeks: 4 }).breakoutWeeks, 4);
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: true, windowWeeks: 0, monitorWeeks: 3 }), null);
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: true, windowWeeks: 0, monitorWeeks: 4 }).breakoutWeeks, 4);
 });
 
 test("classifyWybicie rejects when the TTM histogram is not positive", () => {
@@ -77,12 +82,12 @@ test("classifyWybicie rejects when the TTM histogram is not positive", () => {
     assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });
 
-test("classifyWybicie rejects when MACD never crossed zero in the data", () => {
+test("classifyWybicie combined mode rejects when MACD never crossed zero in the data", () => {
     const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, 1, 1, 1, 1, 1] } });
     assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });
 
-test("classifyWybicie rejects when RS 52W is still below zero", () => {
+test("classifyWybicie combined mode rejects when RS 52W is still below zero", () => {
     const c = wybicieConstituent({ mansfield_chart: { rsm_long: [-3, -2, -1, -0.5] } });
     assert.equal(classifyWybicie("AAA", "SP500", c), null);
 });
@@ -91,43 +96,118 @@ test("classifyWybicie returns null when chart data is missing", () => {
     assert.equal(classifyWybicie("AAA", "SP500", { price: 1 }), null);
 });
 
-// ---------- tryb "MACD_ONLY" (selector "Samo MACD tygodniowe", bez warunku RS 52 tyg.) ----------
+// ---------- checkboxy niezależne (combinedMode: false) — patrz nagłówek trybu nad classifyWybicie w signals.js ----------
 
-test("classifyWybicie MACD_ONLY mode accepts a fresh MACD cross even when RS 52W never crossed", () => {
+test("classifyWybicie macdCrossZero filter accepts a fresh MACD cross even when RS 52W never crossed", () => {
     const c = wybicieConstituent({ mansfield_chart: { rsm_long: [-3, -2, -1, -0.5] } });
-    assert.equal(classifyWybicie("AAA", "SP500", c), null); // domyślny tryb MACD_RS nadal odrzuca
-    const r = classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY", monitorWeeks: 10 });
+    assert.equal(classifyWybicie("AAA", "SP500", c), null); // domyślny tryb skojarzony nadal odrzuca
+    const r = classifyWybicie("AAA", "SP500", c, {
+        combinedMode: false, filters: { ...noFilters(), macdCrossZero: true }, monitorWeeks: 10,
+    });
     assert.ok(r);
     assert.equal(r.breakoutWeeks, r.macdCrossWeeks);
     assert.equal(r.rsCrossWeeks, null);
     assert.equal(r.rsLongNow, -0.5);
 });
 
-test("classifyWybicie MACD_ONLY mode ignores the breakout window entirely", () => {
-    // MACD skrzyżował 5 tyg. temu, RS wcale — w trybie MACD_RS okno by to odrzuciło niezależnie od RS.
+test("classifyWybicie macdCrossZero filter ignores the breakout window entirely", () => {
+    // MACD skrzyżował 5 tyg. temu, RS wcale — w trybie skojarzonym okno by to odrzuciło niezależnie od RS.
     const c = wybicieConstituent({ macd_chart: { macd: [-1, 1, 1, 1, 1, 1] }, mansfield_chart: { rsm_long: [-1, -1, -1, -1, -1, -1] } });
-    const r = classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY", windowWeeks: 0, monitorWeeks: 10 });
+    const r = classifyWybicie("AAA", "SP500", c, {
+        combinedMode: false, filters: { ...noFilters(), macdCrossZero: true }, windowWeeks: 0, monitorWeeks: 10,
+    });
     assert.ok(r);
     assert.equal(r.breakoutWeeks, 5);
 });
 
-test("classifyWybicie MACD_ONLY mode still requires a positive TTM histogram", () => {
+test("classifyWybicie macdCrossZero filter still requires a positive TTM histogram", () => {
     const c = wybicieConstituent({ ttm_squeeze_chart: { histogram: [1, 1, 1, -0.1] } });
-    assert.equal(classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY" }), null);
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), macdCrossZero: true } }), null);
 });
 
-test("classifyWybicie MACD_ONLY mode still requires a fresh MACD cross", () => {
+test("classifyWybicie macdCrossZero filter still requires a fresh MACD cross", () => {
     const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, 1, 1, 1, 1, 1] } });
-    assert.equal(classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY" }), null);
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), macdCrossZero: true } }), null);
 });
 
-test("classifyWybicie MACD_ONLY mode tolerates missing RS 52W data entirely", () => {
+test("classifyWybicie with only macdCrossZero tolerates missing RS 52W data entirely", () => {
     const c = wybicieConstituent({ mansfield_chart: null });
-    const r = classifyWybicie("AAA", "SP500", c, { mode: "MACD_ONLY", monitorWeeks: 10 });
+    const r = classifyWybicie("AAA", "SP500", c, {
+        combinedMode: false, filters: { ...noFilters(), macdCrossZero: true }, monitorWeeks: 10,
+    });
     assert.ok(r);
     assert.equal(r.rsLongNow, null);
     assert.equal(r.rsCrossWeeks, null);
     assert.deepEqual(r.mini_rs, []);
+});
+
+test("classifyWybicie macdAboveZero filter is a pure level check, no cross/age required", () => {
+    // MACD nad zerem od zawsze w tym oknie (brak przecięcia) — macdCrossWeeks: null.
+    const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, 1] } });
+    const r = classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), macdAboveZero: true } });
+    assert.ok(r);
+    assert.equal(r.macdCrossWeeks, null);
+    assert.equal(r.breakoutWeeks, null);
+});
+
+test("classifyWybicie macdAboveZero filter rejects when MACD is currently negative", () => {
+    const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, -0.1] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), macdAboveZero: true } }), null);
+});
+
+test("classifyWybicie rsAboveZero filter is a pure level check, no cross/age required", () => {
+    const c = wybicieConstituent({ mansfield_chart: { rsm_long: [1, 1, 1, 1] } });
+    const r = classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), rsAboveZero: true } });
+    assert.ok(r);
+    assert.equal(r.rsCrossWeeks, null);
+    assert.equal(r.breakoutWeeks, null);
+});
+
+test("classifyWybicie rsAboveZero filter rejects when RS 52W is currently negative", () => {
+    const c = wybicieConstituent({ mansfield_chart: { rsm_long: [1, 1, 1, -0.1] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), rsAboveZero: true } }), null);
+});
+
+test("classifyWybicie macdCrossSignal filter accepts a bullish MACD/signal cross while MACD is above zero", () => {
+    // MACD ujemne aż do tygodnia 2, potem dodatnie i przecina sygnałową w górę w tygodniu 3.
+    const c = wybicieConstituent({
+        macd_chart: { macd: [-1, -0.5, 0.5, 1], signal: [-0.8, -0.3, 0.6, 0.4] },
+    });
+    const r = classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), macdCrossSignal: true } });
+    assert.ok(r);
+    assert.equal(r.macdSignalCrossWeeks, 1);
+    assert.equal(r.breakoutWeeks, 1);
+});
+
+test("classifyWybicie macdCrossSignal filter rejects a bullish cross that happens below zero", () => {
+    // MACD przecina sygnałową w górę, ale samo MACD jest wciąż ujemne ("zwykłe odbicie z dołka").
+    const c = wybicieConstituent({
+        macd_chart: { macd: [-2, -1.5, -0.5, -0.2], signal: [-1, -1.2, -0.8, -0.6] },
+    });
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), macdCrossSignal: true } }), null);
+});
+
+test("classifyWybicie macdCrossSignal filter rejects when there was no crossover", () => {
+    const c = wybicieConstituent({ macd_chart: { macd: [1, 1, 1, 1], signal: [1.5, 1.5, 1.5, 1.5] } });
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters: { ...noFilters(), macdCrossSignal: true } }), null);
+});
+
+test("classifyWybicie combines several independent filters with AND", () => {
+    const c = wybicieConstituent({
+        macd_chart: { macd: [-1, -0.5, 0.3, 0.8], signal: [-0.9, -0.6, 0.1, 0.2] },
+        mansfield_chart: { rsm_long: [-3, -1, 2, 4] },
+    });
+    const filters = { macdCrossZero: true, macdCrossSignal: false, macdAboveZero: false, rsAboveZero: true };
+    const r = classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters, monitorWeeks: 10 });
+    assert.ok(r);
+    // breakoutWeeks bierze wiek jedynego aktywnego warunku-zdarzenia (macdCrossZero).
+    assert.equal(r.breakoutWeeks, r.macdCrossWeeks);
+});
+
+test("classifyWybicie combined filters reject when any one of them fails", () => {
+    const c = wybicieConstituent({ mansfield_chart: { rsm_long: [-3, -2, -1, -0.5] } }); // RS wciąż ujemne
+    const filters = { macdCrossZero: true, macdCrossSignal: false, macdAboveZero: false, rsAboveZero: true };
+    assert.equal(classifyWybicie("AAA", "SP500", c, { combinedMode: false, filters, monitorWeeks: 10 }), null);
 });
 
 function emptyStateData() {
