@@ -1379,6 +1379,18 @@ RS_PRICE_EMA10_WEEKS = 10       # DRUGA, krotsza EMA na tym samym wykresie — W
 # SAMEGO bufora rozgrzewkowego co EMA20 (RS_PRICE_EMA_BUFFER_WEEKS, 42 tyg. — wiecej
 # niz dosc dla 10-okresowej EMA), zaden dodatkowy zapas nie jest potrzebny.
 
+RS_PRICE_EMA40_WEEKS = 40       # TRZECIA EMA na tym samym wykresie — WYLACZNIE jako
+# DRUGI warunek trend gate'u "🚀 Continuation" (WERSJA 4, patrz CLAUDE.md): uzytkownik
+# uznal automat wykrywania konsolidacji/wybicia (WERSJA 3) za "bez sensu, nie wnosi
+# pozytywnych analiz" i poprosil o prosty filtr trendu zamiast niego — spolka jest "w
+# trendzie wzrostowym" gdy jednoczesnie EMA10 > EMA20, CENA > wlasna 40-tyg. EMA, RS > 0
+# i MACD nad linia sygnalowa; wybicia/wejscia uzytkownik wypatruje juz sam. Uzywa TEGO
+# SAMEGO bufora rozgrzewkowego co EMA20/EMA10 (RS_PRICE_EMA_BUFFER_WEEKS) — bufor ten
+# wplywa tylko na to, jak wczesnie w WYSWIETLANYM oknie EMA40 ma juz zbiezna wartosc, nie
+# na to, czy ma wartosc w OSTATNIM (najnowszym) tygodniu, ktory jedynie gate faktycznie
+# czyta — stock_df siega o wiele dalej wstecz niz start_date (okno momentum + bufor), wiec
+# min_periods=40 jest zawsze spelnione przy ref_date niezaleznie od wielkosci bufora.
+
 # --- Klasyfikacja etapow Weinsteina (Stage Analysis, "Secrets for Profiting in
 # Bull and Bear Markets") na wykresie 10:30 — patrz _compute_weinstein_stage_series.
 # WERSJA 2: pierwsza wersja tej klasyfikacji wyznaczala wybicie WYLACZNIE z
@@ -1823,6 +1835,13 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     "wykres wlasny" (panel 1) dalej rysuje wylacznie ema20_pct, tak jak przed
     tym dodaniem.
 
+    "ema40_pct" — TRZECIA, jeszcze dluzsza 40-tyg. EMA ceny, ten sam
+    close0-relatywny % co ema10_pct/ema20_pct — dodana dla WERSJI 4 trend gate'u
+    "🚀 Continuation" (patrz RS_PRICE_EMA40_WEEKS powyzej i CLAUDE.md): drugi
+    warunek tego gate'u to CENA (close_pct) POWYZEJ wlasnej ema40_pct spolki.
+    Rowniez nieczytana przez "wykres wlasny" (panel 1 dalej rysuje tylko
+    ema20_pct).
+
     "vwap_pct" — Volume-Weighted Average Price ZAKOTWICZONY (anchored) na
     początku WYŚWIETLANEGO okna (start_date), nie na buforze rozgrzewkowym EMA:
     to świadomie inny punkt startowy niż ema20_pct — anchored VWAP z
@@ -1859,6 +1878,10 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     # ema10 — patrz "ema10_pct" w docstringu powyzej (trend gate "🚀 Continuation").
     stock_df["ema10"] = stock_df["close"].ewm(span=RS_PRICE_EMA10_WEEKS, adjust=False,
                                               min_periods=RS_PRICE_EMA10_WEEKS).mean()
+    # ema40 — patrz "ema40_pct" w docstringu powyzej (drugi warunek trend gate'u
+    # "🚀 Continuation" WERSJA 4).
+    stock_df["ema40"] = stock_df["close"].ewm(span=RS_PRICE_EMA40_WEEKS, adjust=False,
+                                              min_periods=RS_PRICE_EMA40_WEEKS).mean()
 
     stage_rows = _compute_weinstein_stage_series(stock_df)
     stock_df["stage"] = [row["stage"] for row in stage_rows]
@@ -1914,7 +1937,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
             return None
         return round((float(value) / base - 1) * 100, 2)
 
-    dates, close_pct, ema20_pct, ema10_pct, index_pct, vwap_pct = [], [], [], [], [], []
+    dates, close_pct, ema20_pct, ema10_pct, ema40_pct, index_pct, vwap_pct = [], [], [], [], [], [], []
     volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
     stop_level_pct, base_count, low_pct, high_pct = [], [], [], []
     raw_base_events = []
@@ -1923,6 +1946,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         close_pct.append(pct(r["close"], close0))
         ema20_pct.append(pct(r["ema20"], close0))
         ema10_pct.append(pct(r["ema10"], close0))
+        ema40_pct.append(pct(r["ema40"], close0))
         index_pct.append(pct(r["index_close"], index0))
         vwap_pct.append(pct(r["vwap"], close0))
         # Tygodniowe MIN(Low) — do stopu strategii (docs/js/strategy.js: stop
@@ -1993,6 +2017,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "close_pct": close_pct,
         "ema20_pct": ema20_pct,
         "ema10_pct": ema10_pct,
+        "ema40_pct": ema40_pct,
         "index_pct": index_pct,
         "vwap_pct": vwap_pct,
         "low_pct": low_pct,

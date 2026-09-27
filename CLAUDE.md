@@ -596,8 +596,11 @@ the outperformer — directly answering "is this stock stronger than its own mar
 stock-price base as `close_pct` so it still reads as a smoothed version of the price line). A SECOND,
 shorter EMA — `ema10_pct` (`RS_PRICE_EMA10_WEEKS = 10`) — was added later, on the exact same buffer/rebase
 convention, but WHOLE PURPOSE-BUILT for one downstream consumer only: `signals.js`'s "🚀 Continuation"
-screener gates on the stock's own EMA10 being above its own EMA20 (see that tab's CLAUDE.md bullet). The
-main chart itself never plots `ema10_pct` — panel 1 still draws only `ema20_pct`, unchanged. **Version
+screener gates on the stock's own EMA10 being above its own EMA20 (see that tab's CLAUDE.md bullet). A
+THIRD, longer EMA — `ema40_pct` (`RS_PRICE_EMA40_WEEKS = 40`) — was added later still, same
+buffer/rebase convention again, for the same single consumer: Continuation's WERSJA 4 trend gate (see that
+tab's CLAUDE.md bullet) additionally requires price above this 40-week EMA. The main chart itself never
+plots `ema10_pct`/`ema40_pct` — panel 1 still draws only `ema20_pct`, unchanged. **Version
 history**: this used to be the classic "10:30" chart (10-week + 30-week SMA, `sma10_pct`/`sma30_pct`,
 `RS_PRICE_SMA_SHORT_WEEKS`/`RS_PRICE_SMA_LONG_WEEKS`) — replaced by a single 20-week EMA at the user's
 explicit request to simplify the main chart ("chcę usunąć 10,30 SMA i dodać 20 EMA i bazować stage 2 na
@@ -1279,7 +1282,7 @@ flex child (no `.topbar-left` wrapper there).
   consolidation weeks (default 6), fire lookback (default 3) — see "WERSJA 3" below for what replaced the
   min-12M-momentum slider that used to sit alongside these two. Sidebar tile group `#tiles-CONTINUATION`.
 
-  **WERSJA 3 (current design) — trend gate replaced by EMA10 > EMA20 (per spółka) + RS > 0; consolidation
+  **WERSJA 3 — trend gate replaced by EMA10 > EMA20 (per spółka) + RS > 0; consolidation
   replaced by a client-side "top-only" box, deliberately WITHOUT a lower boundary — a later, separate,
   explicit user request, given directly rather than as an abstract requirement: "teraz w continuation zmień
   ze jeżeli akcja jest powyżej RS > 0 i ma EMA 10> 20 to szukamy topu boksa czyli 3 dni z rzędu poniżej
@@ -1353,6 +1356,57 @@ flex child (no `.topbar-left` wrapper there).
   column stays in the table purely as an already-available, informational visual (same
   `miniVisualFields()`/`ttmMiniSvg()` every other screener/table already uses), not because Continuation's
   own logic depends on it any more.
+
+  **WERSJA 4 (current design) — the ENTIRE consolidation/breakout automaton (WERSJA 2/3's box, `status`
+  🌀/🔥, "Poziom do obserwacji", MACD/gain confirmation on "fired") was REMOVED, replaced by a pure,
+  four-condition trend filter — a later, direct, explicit user correction after using WERSJA 3 for a
+  while: "Dobra to jest bez sensu i nie wnosi żadnych pozytywnych analiz chodzi mi o continuation. Zmieniamy
+  podejście. Szukamy akcji w tredzie wzrostowym czyli EMA 10 nad ema20 cena nad EMA 40. RS dodatnie. Lina
+  MACD nad sygnałową. Ja będę szukał sam wybić i wejść. Dodatkowy punkt jak akcja jest w sektorze dodatnim
+  pod względem RS." (the box/breakout mechanism is pointless and adds no useful analysis; switch to a plain
+  uptrend filter — EMA10 above EMA20, price above EMA40, RS positive, MACD line above its signal line — the
+  user will look for breakouts/entries themselves; an extra point when the stock's own sector is RS-positive).
+  `continuationTopBoxState()`/`continuationWeeklyGate()`/`continuationOpts()` and every
+  `CONTINUATION_*` slider constant/`localStorage` key (`CONTINUATION_SETTINGS_KEY`,
+  "Min. tyg. konsolidacji"/"Wybicie w ciągu" sliders) are gone — there is nothing left to tune, the four
+  conditions are fixed by definition.
+  - **`continuationTrendGate(c)`** — ALL FOUR of the following, on the latest available week of each own
+    series (twarde AND, same "return null on the first failing/undatable condition" shape every gate in
+    this module already uses):
+    1. Own 10-week EMA above own 20-week EMA (`weekly_chart.ema10_pct`/`ema20_pct`) — unchanged from
+       WERSJA 2/3.
+    2. Price (`weekly_chart.close_pct`) above the stock's own 40-week EMA (`weekly_chart.ema40_pct`) — a
+       BRAND NEW backend field, `RS_PRICE_EMA40_WEEKS = 40` in `run_query.py`'s
+       `compute_relative_strength_chart()`, computed and exported the exact same way as `ema10_pct` (same
+       `RS_PRICE_EMA_BUFFER_WEEKS` warm-up buffer — sufficient because the gate only ever reads the LAST
+       row of `stock_df`, which by construction always has far more than `RS_PRICE_EMA40_WEEKS` weeks of
+       history behind it regardless of buffer size, so no buffer/`--lookback-months` change was needed for
+       correctness here). Like `ema10_pct`, the main "wykres własny" chart still plots only `ema20_pct`.
+    3. Classic Mansfield RS 52 tyg. (`mansfield_chart.rsm_long`) > 0 — unchanged.
+    4. Weekly MACD above its own signal line (`macdConfirmation()`, `js/minicharts.js` — the SAME helper
+       Breakout/the "Stage 2 Continuation" funnel already use for their own MACD checks) — in WERSJA 2/3
+       this was only an informational badge on a "fired" row (`macd_confirmed`); it is now a hard, twarde
+       gate condition like the other three.
+    Etap Weinsteina/momentum 12M are still NOT part of the gate — still shown purely informationally
+    (`current_stage`/`momentum_pct`).
+  - **`sectorRsInfo(sectorName)`** — the "dodatkowy punkt": reads `docs/data/sector_strategy.json`'s
+    `sector_rs.sectors` (fetched into `state.sectorRs` in `loadData()`, the SAME file already powering the
+    market-trend banner above and the "Strategia" page's sector ranking — see
+    `compute_sector_relative_strength()` under Pipeline architecture above) and returns that sector's
+    Mansfield RS vs. SP500 (`rsm_vs_index_pct`) when known — "dodatni pod względem RS" is simply that value
+    being `> 0`. This is PURELY INFORMATIONAL and NEVER rejects a row (unlike the four gate conditions
+    above) — exactly the "extra point," not a fifth requirement, the user asked for. All three ETF-backed
+    CSVs (`CSPX_holdings.csv`/`CNDX_holdings.csv`/`CIND_holdings.csv`) carry a real `Sector` column, so
+    SP500/NASDAQ100/DOWJONES tickers all have a real, matchable sector; WIG20/mWIG40 tickers carry
+    `sector: "Unknown"` (no GICS sector data, see `fetch_data.py` above) and a sector genuinely missing ETF
+    data (`sector_rs` row's `data_source === "no_data"`) both simply show "—" instead of a value.
+  - The table itself dropped every column tied to the old automaton (`Status`/`Konsolidacja`/"Poziom do
+    obserwacji"/the TTM Squeeze mini-chart, which had become purely decorative under WERSJA 3 already, see
+    above) and gained "Cena vs EMA40" (`price_vs_ema40_pct`), "MACD" (`macd_now`, a value + mini
+    zero-line-sparkline via `zeroLineSparkSvg()`, always colored positive since the gate guarantees it), and
+    "Sektor RS" (`sector_rs_pct` — the one column in this table that can legitimately be negative or "—",
+    since it's the only field that isn't gated). `combinedContinuationCandidates()` no longer sorts by a
+    fired/consolidating status (there isn't one) — it sorts by RS 52 tyg. descending, strongest trend first.
 
   **REMOVED along with the move to weekly: the "🏆 Tygodniowi zwycięzcy" sub-table and the whole daily-data
   layer it and Continuation were built on** (`daily_squeeze`, `run_query.py::compute_daily_squeeze()`,

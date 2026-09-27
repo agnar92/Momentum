@@ -57,7 +57,7 @@
         </div>
 
         <div class="sidebar-group" id="continuationGroup">
-            <div class="sidebar-group-label" title="Continuation — spółki z własną 10-tyg. EMA nad 20-tyg. EMA i Mansfield RS 52 tyg. &gt; 0, które konsolidują się pod potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia): opór trzyma (🌀) albo cena go właśnie przełamała (🔥), z tygodniowym MACD jako potwierdzeniem. Bez dolnej granicy pudełka — wyjście z pozycji ma iść przez MACD. Tylko filtr sygnałów, wejście/wyjście decydujesz sam.">
+            <div class="sidebar-group-label" title="Continuation — spółki jednocześnie w trendzie wzrostowym: własna 10-tyg. EMA nad 20-tyg. EMA, cena nad własną 40-tyg. EMA, Mansfield RS 52 tyg. dodatni i tygodniowy MACD nad linią sygnałową. Dodatkowy plus: sektor spółki dodatni pod względem RS. Tylko filtr trendu — wybicia/wejścia wypatrujesz sam.">
                 🚀 Continuation
             </div>
             <div class="sidebar-group-meta" id="continuationMeta"></div>
@@ -82,7 +82,7 @@
             <div class="drawer-tabs">
                 <button class="drawer-tab active" data-universe="WYBICIE" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia blisko siebie (suwak „Okno wybicia”) i niedawno (suwak „Monitoruj po wybiciu”) — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">💥 Wybicie</button>
                 <button class="drawer-tab" data-universe="TTM_SQUEEZE" title="TTM Squeeze — spółki z Momentum, które przeszły przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte wewnątrz kanału Kellera) i albo wciąż w niej trwają, albo właśnie się z niej wybiły, CAŁE uniwersa (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80), nie tylko dzisiejsza selekcja portfela.">🧨 TTM Squeeze</button>
-                <button class="drawer-tab" data-universe="CONTINUATION" title="Continuation — spółki z własną 10-tyg. EMA nad 20-tyg. EMA i Mansfield RS 52 tyg. &gt; 0, w konsolidacji pod potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia): opór trzyma (🌀) albo cena go właśnie przełamała (🔥), z tygodniowym MACD jako potwierdzeniem. Bez dolnej granicy pudełka — wyjście z pozycji ma iść przez MACD. Tylko filtr sygnałów, wejście/wyjście decydujesz sam.">🚀 Continuation</button>
+                <button class="drawer-tab" data-universe="CONTINUATION" title="Continuation — spółki jednocześnie w trendzie wzrostowym: własna 10-tyg. EMA nad 20-tyg. EMA, cena nad własną 40-tyg. EMA, Mansfield RS 52 tyg. dodatni i tygodniowy MACD nad linią sygnałową. Dodatkowy plus: sektor spółki dodatni pod względem RS. Tylko filtr trendu — wybicia/wejścia wypatrujesz sam.">🚀 Continuation</button>
                 <button class="drawer-tab" data-universe="BREAKOUT" title="Breakout — replika „MY STRATEGY BLUEPRINT” (Gareth Packer / Financial Wisdom): trend + konsolidacja tygodniowa + świeca wybicia (knot/10-tyg. szczyt/zysk 5-20%) + NATR/MACD + stop wg blueprintu + wielkość pozycji wg Kelly Criterion.">📐 Breakout</button>
             </div>
         </div>
@@ -99,9 +99,9 @@
             <br>Kiedy rozważyć kupno: dopiero przy/blisko 🔥, z rosnącym histogramem TTM i najlepiej Etapem 2. Samo 🌀 to lista obserwacyjna — jeszcze NIE sygnał kupna.
         </div>
         <div class="screener-guide" id="continuationGuide" hidden>
-            <strong>🚀 Continuation</strong> — spółki z własną 10-tyg. EMA nad 20-tyg. EMA i dodatnim RS (trend), które teraz siedzą pod potwierdzonym oporem konsolidacji (3 tyg. bez nowego szczytu zamknięcia) — pod dołączenie do pozycji, nie pod nowe wejście od zera.
-            <br>Czego szukać: 🌀 „konsolidacja” = opór trzyma, jeszcze czekaj; 🔥 „wybicie” = cena właśnie przełamała opór w górę. Kolumna „Poziom do obserwacji” pokazuje ten opór (BEZ dolnej granicy — wyjście z pozycji ma iść przez tygodniowy MACD, nie przez zejście pod wsparcie).
-            <br>Kiedy rozważyć kupno: 🔥 świeże (kolumna „Wybicie w ciągu”) + MACD nad linią sygnału + cena nad „Poziomem do obserwacji”.
+            <strong>🚀 Continuation</strong> — czysty filtr trendu wzrostowego: spółka trafia na listę tylko gdy JEDNOCZEŚNIE własna 10-tyg. EMA jest nad jej 20-tyg. EMA, cena jest nad jej własną 40-tyg. EMA, Mansfield RS 52 tyg. jest dodatni i tygodniowy MACD jest nad linią sygnałową.
+            <br>Kolumna „Sektor RS” to DODATKOWY, niewymagany plus — czy sektor spółki (wg Mansfield RS vs SP500) też jest dodatni.
+            <br>To NIE jest lista konsolidacji/wybić — wybicia i moment wejścia wypatrujesz i decydujesz sam.
         </div>
         <div class="screener-guide" id="breakoutGuide" hidden>
             <strong>📐 Breakout</strong> — pełna, krok po kroku replika <em>„MY STRATEGY BLUEPRINT”</em> (Gareth Packer / Financial Wisdom): trend (cena nad własną 20-tyg. EMA) + konsolidacja tygodniowa ≥ 6 tyg. (📦 pudełko Darvasa — domyślne, przełącznik obok pozwala porównać z 🌀 TTM Squeeze) + świeca wybicia spełniająca WSZYSTKIE kryteria blueprintu (górny knot ≤ 50% zakresu, ≥10-tyg. szczyt zamknięcia, zysk 5-20%) + jakość konsolidacji/momentum (NATR &lt; 8, MACD nad linią sygnałową — suwaki „Wymagane” obok mogą je uczynić opcjonalnymi) + stop (dolna granica środkowej tercji pudełka, podnoszony po każdym przecięciu MACD w dół) + wielkość pozycji wg Kelly Criterion (kalkulator poniżej).
@@ -143,18 +143,6 @@
             </label>
         </div>
         <div class="trend-banner" id="continuationMarketBanner" hidden></div>
-        <div class="stage-filter-bar wybicie-controls" id="continuationControls" hidden>
-            <label class="wybicie-slider" title="Minimalna długość konsolidacji pod potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia potwierdzają go), żeby liczyć się jako baza w trendzie.">
-                <span class="stage-filter-label">Min. tyg. konsolidacji:</span>
-                <input type="range" id="contMinConsolidationInput" min="1" max="20" step="1">
-                <span class="wybicie-slider-value" id="contMinConsolidationValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Przez ile tygodni po przełamaniu oporu (wybiciu) spółka zostaje na liście.">
-                <span class="stage-filter-label">Wybicie w ciągu:</span>
-                <input type="range" id="contFireLookbackInput" min="0" max="12" step="1">
-                <span class="wybicie-slider-value" id="contFireLookbackValue"></span>
-            </label>
-        </div>
         <div class="stage-filter-bar wybicie-controls" id="breakoutControls" hidden>
             <span class="stage-filter-label">Źródło konsolidacji:</span>
             <button type="button" class="stage-filter-btn" id="breakoutSourceDarvasBtn"
@@ -241,10 +229,10 @@
                 <tbody id="ttmSqueezeTableBody"></tbody>
             </table>
 
-            <!-- Continuation: EMA10 > EMA20 + RS 52 tyg. > 0 (trend) + konsolidacja pod
-                 potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia, trwa albo
-                 właśnie przełamana), z potwierdzeniem tygodniowym MACD —
-                 patrz combinedContinuationCandidates w signals.js. -->
+            <!-- Continuation: EMA10 > EMA20 + cena > EMA40 + RS 52 tyg. > 0 + MACD nad
+                 sygnałową (wszystkie jednocześnie, czysty filtr trendu — WERSJA 4, bez
+                 wykrywania konsolidacji/wybicia) — patrz combinedContinuationCandidates
+                 w signals.js. -->
             <table class="momentum-table" id="continuationTable" hidden>
                 <thead>
                     <tr>
@@ -253,13 +241,12 @@
                         <th data-key="universe">Uniwersum</th>
                         <th data-key="sector">Sektor</th>
                         <th data-key="price">Cena</th>
-                        <th data-key="ema_spread_pct" title="EMA10 nad EMA20 (tygodniowo) — warunek trendu, zamiast dawnego Etapu 2A/2B">EMA10 vs EMA20</th>
-                        <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
-                        <th data-key="status">Status</th>
-                        <th data-key="consolidation_weeks">Konsolidacja</th>
-                        <th>Poziom do obserwacji</th>
+                        <th data-key="ema_spread_pct" title="EMA10 nad EMA20 (tygodniowo) — warunek trendu">EMA10 vs EMA20</th>
+                        <th data-key="price_vs_ema40_pct" title="Cena nad własną 40-tyg. EMA — warunek trendu">Cena vs EMA40</th>
+                        <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks — warunek trendu">RS 52 tyg.</th>
+                        <th data-key="macd_now" title="Tygodniowy MACD nad linią sygnałową — warunek trendu">MACD</th>
+                        <th data-key="sector_rs_pct" title="Mansfield RS sektora spółki (52 tyg.) vs SP500 — DODATKOWY plus, NIE jest wymagany">Sektor RS</th>
                         <th>Cena (26 tyg.)</th>
-                        <th>TTM (26 tyg.)</th>
                         <th>Etap</th>
                         <th class="tv-col">TV</th>
                     </tr>
