@@ -45,32 +45,13 @@ function defaultWybicieFilters() {
 }
 const WYBICIE_SETTINGS_KEY = "momentum_dashboard_wybicie";
 
-// Continuation, przeprojektowany na TYGODNIOWY (patrz nagłówek klasyfikacji
-// niżej) — domyślne minimum konsolidacji 6 tyg., BEZ górnego limitu:
-// materiał referencyjny o strategii "lateral consolidation breakout" mówi
-// wprost "co najmniej 6 tygodni, dłużej często lepiej", więc nie ma sensu
-// odcinać dłuższych, wciąż ważnych baz — usunięty na wyraźną prośbę
-// użytkownika (wcześniej był praktyczny górny sufit 16 tyg., suwakiem
-// dostosowywalny do 30, ale to nigdy nie było regułą z materiału, tylko
-// arbitralnym ograniczeniem).
-const CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS = 6;
-const CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS = 3;
-// TWARDE kryterium świecy wybicia z materiału referencyjnego (patrz
-// classifyContinuation) — nie ma swojego slidera (nie o to prosił
-// użytkownik), tylko fixed constants jak reszta podobnych progów w tym module.
-// Drugie kryterium z tego samego materiału ("10-tyg. szczyt zamknięcia",
-// wciąż żywe w Breakout jako BREAKOUT_TEN_WEEK_HIGH_WEEKS) NIE MA już tu
-// odpowiednika — patrz komentarz nad blokiem "if (isFired)" w
-// classifyContinuation, dlaczego pod nowym automatem (continuationTopBoxState)
-// jest ono matematycznie zawsze prawdziwe.
-const CONTINUATION_MIN_BREAKOUT_GAIN_PCT = 5;
-const CONTINUATION_MAX_BREAKOUT_GAIN_PCT = 20;
-// Ile tygodni z rzędu BEZ nowego szczytu zamknięcia potwierdza opór "topu
-// pudełka" (patrz continuationTopBoxState niżej) — ta sama liczba/duch co
-// backendowe DARVAS_BOX_CONFIRM_WEEKS (run_query.py), ale liczona WYŁĄCZNIE
-// tutaj, po stronie klienta, bez wymogu dna pudełka.
-const CONTINUATION_BOX_CONFIRM_WEEKS = 3;
-const CONTINUATION_SETTINGS_KEY = "momentum_dashboard_continuation";
+// Continuation — WERSJA 4 (patrz nagłówek klasyfikacji niżej): cały mechanizm
+// wykrywania konsolidacji/wybicia (WERSJA 2/3, pudełko/opór/TTM Squeeze) został
+// USUNIĘTY na wyraźną prośbę użytkownika — "to jest bez sensu i nie wnosi
+// żadnych pozytywnych analiz". Zakładka jest teraz CZYSTYM filtrem trendu, bez
+// żadnych progów do suwakowania — stąd brak tu jakichkolwiek stałych/kluczy
+// localStorage (CONTINUATION_SETTINGS_KEY usunięty razem z nimi, nie ma już nic
+// do zapamiętania per-przeglądarka na tej zakładce).
 
 // ============================================================
 // BREAKOUT — replika "MY STRATEGY BLUEPRINT" (Gareth Packer / Financial
@@ -153,8 +134,7 @@ const state = {
     wybicieMonitorWeeks: WYBICIE_DEFAULT_MONITOR_WEEKS,
     wybicieCombinedMode: WYBICIE_DEFAULT_COMBINED_MODE,
     wybicieFilters: defaultWybicieFilters(),
-    contMinConsolidationWeeks: CONTINUATION_DEFAULT_MIN_CONSOLIDATION_WEEKS,
-    contFireLookbackWeeks: CONTINUATION_DEFAULT_FIRE_LOOKBACK_WEEKS,
+    sectorRs: null,
     breakoutMinConsolidationWeeks: BREAKOUT_DEFAULT_MIN_CONSOLIDATION_WEEKS,
     breakoutFireLookbackWeeks: BREAKOUT_DEFAULT_FIRE_LOOKBACK_WEEKS,
     breakoutRequireNatr: BREAKOUT_DEFAULT_REQUIRE_NATR,
@@ -193,13 +173,18 @@ async function loadData() {
     // "lateral consolidation breakout" (patrz CLAUDE.md). Ten sam
     // sector_strategy.json, który już zasila zakładkę Strategia — informacyjny
     // banner, NIE chowa kandydatów (ta sama konwencja co krok 1 w strategy.js).
+    // `sector_rs` (sektory SP500 rankowane Mansfield RS vs SP500, patrz
+    // compute_sector_relative_strength w run_query.py) zasila DODATKOWY,
+    // niewymagany "plus" w tabeli Continuation (WERSJA 4) — sektor spółki jest
+    // "dodatni pod względem RS", gdy jego `rsm_vs_index_pct` > 0.
     try {
         const res = await fetch("data/sector_strategy.json", { cache: "no-store" });
         if (res.ok) {
             const data = await res.json();
             state.marketTrend = data.trend || null;
+            state.sectorRs = (data.sector_rs && data.sector_rs.sectors) || null;
         }
-    } catch (e) { /* brak danych trendu rynku — OK, banner po prostu się nie pokaże */ }
+    } catch (e) { /* brak danych trendu rynku/sektorów — OK, informacja po prostu się nie pokaże */ }
 }
 
 // ============================================================
@@ -724,8 +709,7 @@ function classifyBreakout(ticker, universe, c, opts = {}) {
             if (wc.buying_volume_ratio) breakoutVolumeRatio = wc.buying_volume_ratio[wcIdx];
         }
         // Kroki 6/7/8: TWARDE warunki świecy wybicia — odrzucają wiersz
-        // CAŁKOWICIE, tylko gdy realnie policzone (ten sam wzorzec co
-        // Continuation, patrz komentarz nad classifyContinuation).
+        // CAŁKOWICIE, ale tylko gdy realnie policzone (null nigdy nie odrzuca).
         if (wickPct != null && wickPct > BREAKOUT_MAX_WICK_PCT) return null;
         if (tenWeekHigh === false) return null;
         if (breakoutGainPct != null
@@ -817,251 +801,125 @@ function combinedBreakoutCandidates(opts = {}) {
 // już i tak jest głównym rytmem tej apki. Tylko filtr sygnałów: wejście/
 // wyjście użytkownik decyduje sam.
 //
-// WERSJA 2 trendu/konsolidacji (na kolejną, separatną prośbę użytkownika:
-// "jeżeli akcja jest powyżej RS > 0 i ma EMA 10 > 20 to szukamy topu boksa
-// czyli 3 dni z rzędu poniżej ostatniej ceny zamknięcia to jest nasz top.
-// Wyjścia będą po MACD więc nie potrzebuje dolnego boxa") — ZASTĄPIŁA
-// pierwszą wersję opisaną w CLAUDE.md (Etap 2A/2B + dodatnie momentum jako
-// trend, tygodniowy TTM Squeeze jako konsolidacja):
+// WERSJA 4 (ZASTĄPIŁA WERSJA 2/3 opisane wcześniej w tej historii — patrz
+// CLAUDE.md dla starszych wersji) — na wyraźną, bezpośrednią prośbę
+// użytkownika: cały automat wykrywania konsolidacji/oporu/wybicia (pudełko,
+// status 🌀/🔥, "Poziom do obserwacji", potwierdzenie MACD/zysku tygodnia
+// wybicia) został USUNIĘTY w całości — "to jest bez sensu i nie wnosi żadnych
+// pozytywnych analiz". Zakładka jest teraz CZYSTYM, czterowarunkowym filtrem
+// trendu wzrostowego — użytkownik sam wypatruje wybić/wejść na wytypowanych
+// spółkach, dokładnie tak jak poprosił ("Ja będę szukał sam wybić i wejść").
 //
-// Trend (continuationWeeklyGate) — TERAZ tylko dwa warunki, PER SPÓŁKA:
+// continuationTrendGate(c) — WSZYSTKIE cztery warunki muszą być spełnione
+// jednocześnie (twarde AND), każdy sprawdzany na OSTATNIM dostępnym tygodniu
+// swojej własnej serii (ten sam "najnowszy tydzień bywa jeszcze null" caveat
+// co wszędzie indziej w tym module):
 //   1. WŁASNA 10-tyg. EMA spółki NAD jej 20-tyg. EMA (weekly_chart.ema10_pct/
-//      ema20_pct, ema10_pct dodane do run_query.py specjalnie na tę potrzebę —
-//      patrz CLAUDE.md) — prostszy, ciągły odpowiednik dawnego "Etap 2A/2B",
-//      zamiast dyskretnej klasyfikacji etapów Weinsteina.
-//   2. Klasyczny Mansfield RS 52 tyg. (mansfield_chart.rsm_long) > 0 — spółka
-//      silniejsza od własnego indeksu (BEZ ZMIAN z poprzedniej wersji).
-//   Etap Weinsteina/momentum 12M nie są już częścią gate'u — wciąż pokazywane
-//   informacyjnie w tabeli (current_stage/momentum_pct), po prostu nie filtrują.
+//      ema20_pct) — BEZ ZMIAN z poprzedniej wersji.
+//   2. CENA (weekly_chart.close_pct) NAD własną 40-tyg. EMA spółki
+//      (weekly_chart.ema40_pct, RS_PRICE_EMA40_WEEKS — NOWE pole w
+//      run_query.py, dodane specjalnie na tę potrzebę, patrz CLAUDE.md) —
+//      drugi, dłuższy warunek trendu obok EMA10>EMA20.
+//   3. Klasyczny Mansfield RS 52 tyg. (mansfield_chart.rsm_long) > 0 — spółka
+//      silniejsza od własnego indeksu — BEZ ZMIAN.
+//   4. Tygodniowy MACD NAD linią sygnałową (macd_chart, macdConfirmation() z
+//      js/minicharts.js) — w poprzedniej wersji to było tylko informacyjne
+//      potwierdzenie "fired"; TERAZ to twardy warunek gate'u, jak reszta.
+// Etap Weinsteina/momentum 12M nadal NIE są częścią gate'u — wciąż pokazywane
+// informacyjnie w tabeli (current_stage/momentum_pct).
 //
-// Konsolidacja (continuationTopBoxState) — TERAZ własny, prostszy automat
-//   dwustanowy liczony WYŁĄCZNIE z weekly_chart.close_pct (bez żadnej nowej
-//   danej z backendu), inspirowany pudełkiem Darvasa z
-//   _compute_weinstein_stage_series (run_query.py), ale BEZ jego dolnej
-//   granicy (wsparcia): tylko GÓRNA granica (opór) jest wykrywana, bo
-//   wyjścia z pozycji mają iść przez tygodniowy MACD (patrz macd_confirmed
-//   niżej), nie przez zejście pod dolną granicę pudełka — dokładnie tak, jak
-//   poprosił użytkownik. To NIE jest to samo, co backendowe weekly_chart.
-//   bases/pending_base (te wymagają OBU brzegów potwierdzonych, z inną
-//   logiką resetu — patrz continuationTopBoxState poniżej) i NIE korzysta z
-//   ttm_squeeze_chart wcale — Continuation ma teraz WŁASNĄ, niezależną
-//   definicję "pudełka", inną od TTM Squeeze/Breakout/Qullamaggie:
-//   - SEEKING_TOP — śledzimy najwyższe zamknięcie od ostatniego wybicia;
-//     CONTINUATION_BOX_CONFIRM_WEEKS (3) tygodni z rzędu BEZ nowego szczytu
-//     potwierdza go jako opór -> WATCHING.
-//   - WATCHING (🌀 "konsolidacja") — opór znany, czekamy na wybicie.
-//     Zamknięcie POWYŻEJ oporu = wybicie (🔥 "fired") i NATYCHMIAST zaczynamy
-//     szukać nowego, wyższego oporu od tego samego tygodnia (pudełka piętrzą
-//     się w górę, ten sam duch co backendowy mechanizm).
-//   BEZ górnego limitu długości konsolidacji (BEZ ZMIAN z poprzedniej wersji)
-//   — materiał referencyjny mówi "co najmniej 6 tygodni, dłużej często
-//   lepiej". Domyślne minimum 6 tyg., "wybicie w ciągu" 3 tyg. — te same
-//   suwaki/domyślne co wcześniej, tylko liczone z nowego automatu.
-// Potwierdzenie tygodniowym MACD (macd_chart, macd_confirmed) + dwa TWARDE
-//   kryteria świecy wybicia (10-tyg. szczyt zamknięcia, zysk 5-20%) — BEZ
-//   ZMIAN z poprzedniej wersji, tylko dopasowane teraz PROSTO do indeksu
-//   wybicia w weekly_chart (nasz automat liczy się bezpośrednio na
-//   weekly_chart.close_pct/dates, więc nie trzeba już dopasowywać dat między
-//   dwoma różnymi tablicami jak poprzednio z ttm_squeeze_chart).
-// "Poziom do obserwacji" (breakout_level) jest teraz liczony WŁASNYM oporem
-//   tego automatu (bez wsparcia/stopu z pudełka — patrz wyżej, dlaczego), nie
-//   przez wspólny breakoutLevelFor()/squeezeConsolidationBox() (js/
-//   minicharts.js), które opierają się na TTM Squeeze/Darvas z pełnym
-//   pudełkiem — inna definicja "pudełka" niż ta, którą Continuation teraz ma.
+// DODATKOWY PUNKT (informacyjny, NIGDY nie odrzuca wiersza) — "jak akcja jest
+// w sektorze dodatnim pod względem RS": sectorRsInfo() czyta
+// docs/data/sector_strategy.json's sector_rs.sectors (ten sam plik, który już
+// zasila zakładkę Strategia i baner rynku Continuation powyżej) i zwraca
+// Mansfield RS sektora danej spółki (rsm_vs_index_pct) wobec SP500, gdy
+// znany — sektor "dodatni pod względem RS" to po prostu ta wartość > 0. Tylko
+// spółki z GICS sektorem obecnym w sector_rs.sectors (SP500/NASDAQ100/
+// DOWJONES — patrz CLAUDE.md, wszystkie trzy CSV mają kolumnę Sector) mają tu
+// realną wartość; WIG20/mWIG40 (sector "Unknown") i sektor bez danych ETF
+// (data_source "no_data") pokazują "—".
 // ============================================================
 
-// Automat 2-stanowy (SEEKING_TOP -> WATCHING) wykrywający WYŁĄCZNIE górną
-// granicę (opór) konsolidacji z tygodniowych zamknięć (close_pct) — patrz
-// pełny opis w komentarzu nad tym blokiem. `closePct` może zaczynać się od
-// kilku `null` (bufor rozgrzewkowy EMA w weekly_chart) — pomijane, nie
-// przerywają śledzenia. Zwraca:
-//   - phase: "SEEKING_TOP" (opór jeszcze nie potwierdzony) albo "WATCHING"
-//     (opór znany, cena wciąż pod nim).
-//   - confirmedTopPct/confirmedTopStartIdx: opór (close0-relatywny %) i
-//     indeks tygodnia, w którym padł ten szczyt — TYLKO gdy phase===WATCHING.
-//   - lastBreakout: {idx, boxStartIdx, boxTopPct} — NAJNOWSZE wybicie ponad
-//     potwierdzony opór (jeśli w ogóle wystąpiło w tej serii), niezależnie od
-//     aktualnej fazy (po wybiciu automat od razu zaczyna szukać nowego oporu).
-function continuationTopBoxState(closePct) {
-    let phase = "SEEKING_TOP";
-    let top = null, topAge = 0, topStartIdx = null;
-    let confirmedTopPct = null, confirmedTopStartIdx = null;
-    let lastBreakout = null;
-    for (let i = 0; i < closePct.length; i++) {
-        const close = closePct[i];
-        if (close == null) continue;
-        if (phase === "SEEKING_TOP") {
-            if (top === null || close > top) {
-                top = close; topAge = 0; topStartIdx = i;
-            } else {
-                topAge += 1;
-                if (topAge >= CONTINUATION_BOX_CONFIRM_WEEKS) {
-                    confirmedTopPct = top;
-                    confirmedTopStartIdx = topStartIdx;
-                    phase = "WATCHING";
-                }
-            }
-        } else if (close > confirmedTopPct) {
-            lastBreakout = { idx: i, boxStartIdx: confirmedTopStartIdx, boxTopPct: confirmedTopPct };
-            phase = "SEEKING_TOP";
-            top = close; topAge = 0; topStartIdx = i;
-            confirmedTopPct = null; confirmedTopStartIdx = null;
-        }
-    }
-    return { phase, confirmedTopPct, confirmedTopStartIdx, lastBreakout };
-}
-
-function continuationWeeklyGate(c) {
+function continuationTrendGate(c) {
     const wc = c.weekly_chart;
-    if (!wc || !wc.close_pct || !wc.close_pct.length || !wc.ema10_pct || !wc.ema20_pct) return null;
+    if (!wc || !wc.close_pct || !wc.close_pct.length) return null;
     const idx = latestNonNullIdx(wc.close_pct);
     if (idx < 0) return null;
-    const ema10 = wc.ema10_pct[idx], ema20 = wc.ema20_pct[idx];
+    const closePct = wc.close_pct[idx];
+    const ema10 = wc.ema10_pct && wc.ema10_pct[idx];
+    const ema20 = wc.ema20_pct && wc.ema20_pct[idx];
+    const ema40 = wc.ema40_pct && wc.ema40_pct[idx];
     if (ema10 == null || ema20 == null || !(ema10 > ema20)) return null;
+    if (ema40 == null || closePct == null || !(closePct > ema40)) return null;
     const rsLong = c.mansfield_chart && c.mansfield_chart.rsm_long;
     const rsIdx = latestNonNullIdx(rsLong);
     if (rsIdx < 0 || !(rsLong[rsIdx] > 0)) return null;
-    return { rsLong: rsLong[rsIdx], ema10Pct: ema10, ema20Pct: ema20 };
+    const macd = macdConfirmation(c);
+    if (macd.above !== true) return null;
+    return { rsLong: rsLong[rsIdx], ema10Pct: ema10, ema20Pct: ema20, ema40Pct: ema40, closePct };
 }
 
-function continuationOpts(opts) {
-    return {
-        minConsolidationWeeks: opts.minConsolidationWeeks ?? state.contMinConsolidationWeeks,
-        fireLookbackWeeks: opts.fireLookbackWeeks ?? state.contFireLookbackWeeks,
-    };
+// Ostatnia policzona wartość MACD (macd_chart.macd), z tego samego indeksu co
+// macdConfirmation() (js/minicharts.js) już użył wewnętrznie do sprawdzenia
+// "above" — czysto do wyświetlenia w tabeli, nie do bramkowania.
+function latestMacdValue(c) {
+    const m = c && c.macd_chart;
+    if (!m || !m.macd || !m.signal) return null;
+    let i = m.macd.length - 1;
+    while (i >= 0 && (m.macd[i] == null || m.signal[i] == null)) i--;
+    return i >= 0 ? m.macd[i] : null;
 }
 
-function classifyContinuation(ticker, universe, c, opts = {}) {
-    const o = continuationOpts(opts);
-    const gate = continuationWeeklyGate(c);
+// Mansfield RS sektora spółki (52 tyg.) wobec SP500 — patrz komentarz nad
+// classifyContinuation. null gdy sektor nieznany/bez danych ETF.
+function sectorRsInfo(sectorName) {
+    const sectors = state.sectorRs;
+    if (!sectorName || !sectors) return null;
+    const s = sectors.find(row => row.sector === sectorName);
+    if (!s || s.data_source === "no_data" || s.rsm_vs_index_pct == null) return null;
+    return s.rsm_vs_index_pct;
+}
+
+function classifyContinuation(ticker, universe, c) {
+    const gate = continuationTrendGate(c);
     if (!gate) return null;
-
     const wc = c.weekly_chart;
-    const lastIdx = latestNonNullIdx(wc.close_pct);
-    if (lastIdx < 0) return null;
-    const box = continuationTopBoxState(wc.close_pct);
 
-    let isConsolidating = false, isFired = false;
-    let consolidationWeeks = null, weeksSinceFire = null, resistancePct = null, boxStartIdx = null, fireIdx = null;
-    if (box.phase === "WATCHING") {
-        boxStartIdx = box.confirmedTopStartIdx;
-        consolidationWeeks = lastIdx - boxStartIdx + 1;
-        resistancePct = box.confirmedTopPct;
-        isConsolidating = consolidationWeeks >= o.minConsolidationWeeks;
-    } else if (box.lastBreakout) {
-        fireIdx = box.lastBreakout.idx;
-        boxStartIdx = box.lastBreakout.boxStartIdx;
-        weeksSinceFire = lastIdx - fireIdx;
-        consolidationWeeks = fireIdx - boxStartIdx;
-        resistancePct = box.lastBreakout.boxTopPct;
-        isFired = weeksSinceFire <= o.fireLookbackWeeks && consolidationWeeks >= o.minConsolidationWeeks;
-    }
-    if (!isConsolidating && !isFired) return null;
+    // Rozstępy w % (na tej samej close0-relatywnej skali co close_pct/
+    // ema*_pct — nie trzeba przeliczać na realną cenę, żeby porównać dwie
+    // serie już wyrażone względem tego samego punktu odniesienia).
+    const emaSpreadPct = ((1 + gate.ema10Pct / 100) / (1 + gate.ema20Pct / 100) - 1) * 100;
+    const priceVsEma40Pct = ((1 + gate.closePct / 100) / (1 + gate.ema40Pct / 100) - 1) * 100;
 
-    // Potwierdzenie tygodniowym MACD + dwa TWARDE kryteria świecy wybicia z
-    // materiału referencyjnego (patrz komentarz nad blokiem klasyfikacji) —
-    // liczone TYLKO dla "fired", teraz PROSTO na indeksie fireIdx w
-    // weekly_chart (nasz automat już się liczy na dokładnie tej tablicy, więc
-    // nie trzeba dopasowywać dat między dwoma niezależnymi buforami jak w
-    // poprzedniej wersji z ttm_squeeze_chart) — macd_chart wciąż potrzebuje
-    // dopasowania po DACIE (własny, inny bufor rozgrzewkowy).
-    //
-    // UWAGA: NIE MA już tu sprawdzenia "10-tyg. szczyt zamknięcia"
-    // (CONTINUATION_TEN_WEEK_HIGH_WEEKS z poprzedniej wersji, wciąż żywe w
-    // Breakout jako BREAKOUT_TEN_WEEK_HIGH_WEEKS) — pod NOWYM automatem
-    // (continuationTopBoxState) jest ono MATEMATYCZNIE zawsze prawdziwe, więc
-    // martwym kodem: wybicie z definicji wymaga `close > confirmedTopPct`, a
-    // `confirmedTopPct` to zawsze bieżące maksimum WSZYSTKICH dotychczasowych
-    // zamknięć w tej serii (każde kolejne "pudełko" zaczyna się od ceny
-    // wybicia z poprzedniego, więc jest od niego WYŻSZE) — wybicie jest więc
-    // z definicji nowym szczytem całej dotychczasowej historii, nie tylko
-    // ostatnich 10 tygodni. To NIE dotyczy Breakout: tamten automat (TTM
-    // Squeeze/pudełko Darvasa Z dołkiem) może się "załamać" (breakdown) i
-    // zresetować bez wymogu monotonicznie rosnących szczytów, więc tam ten
-    // sam sprawdzian wciąż ma realną szansę odrzucić wiersz.
-    let macdConfirmed = null;
-    let breakoutGainPct = null;
-    if (isFired) {
-        const breakoutDate = wc.dates[fireIdx];
-        const mc = c.macd_chart;
-        const mcIdx = mc && mc.dates ? mc.dates.indexOf(breakoutDate) : -1;
-        if (mcIdx >= 0 && mc.macd && mc.signal && mc.macd[mcIdx] != null && mc.signal[mcIdx] != null) {
-            macdConfirmed = mc.macd[mcIdx] > mc.signal[mcIdx];
-        }
-
-        const closeNow = wc.close_pct[fireIdx];
-        const prevPct = fireIdx > 0 ? wc.close_pct[fireIdx - 1] : null;
-        if (closeNow != null && prevPct != null) {
-            breakoutGainPct = ((1 + closeNow / 100) / (1 + prevPct / 100) - 1) * 100;
-        }
-        if (breakoutGainPct != null
-            && (breakoutGainPct < CONTINUATION_MIN_BREAKOUT_GAIN_PCT || breakoutGainPct > CONTINUATION_MAX_BREAKOUT_GAIN_PCT)) {
-            return null;
-        }
-    }
-
-    // "Poziom do obserwacji" — WŁASNY opór tego automatu (bez wsparcia/stopu,
-    // patrz komentarz nad blokiem klasyfikacji), przeliczony na realną cenę
-    // tym samym close0 = price / (1 + ostatni close_pct / 100), co
-    // breakoutLevelFor()/strategyStopFor() (js/minicharts.js).
-    let breakoutLevel = null;
-    const lastClosePct = wc.close_pct[lastIdx];
-    if (resistancePct != null && c.price > 0 && lastClosePct != null) {
-        const close0 = c.price / (1 + lastClosePct / 100);
-        breakoutLevel = {
-            resistance: close0 * (1 + resistancePct / 100),
-            support: null,
-            pending: isConsolidating,
-            startDate: wc.dates[boxStartIdx],
-        };
-    }
-
-    // EMA10 vs EMA20 (spread w %, na tej samej realnej cenie co breakout_level
-    // powyżej) — informacyjnie, żeby było widać SAM warunek gate'u w tabeli,
-    // zawsze dodatni skoro wiersz w ogóle istnieje (gate wymaga ema10 > ema20).
-    let emaSpreadPct = null;
-    if (c.price > 0 && lastClosePct != null) {
-        const close0 = c.price / (1 + lastClosePct / 100);
-        const ema10Price = close0 * (1 + gate.ema10Pct / 100);
-        const ema20Price = close0 * (1 + gate.ema20Pct / 100);
-        emaSpreadPct = (ema10Price / ema20Price - 1) * 100;
-    }
-
+    const mc = c.macd_chart;
     return {
         ticker, universe, sector: c.sector, price: c.price,
-        current_stage: wc.current_stage, rs_long: gate.rsLong, momentum_pct: c.momentum_pct,
+        current_stage: wc.current_stage, momentum_pct: c.momentum_pct,
         ema_spread_pct: emaSpreadPct,
-        status: isFired ? "fired" : "consolidating",
-        consolidation_weeks: consolidationWeeks,
-        weeks_since_fire: isFired ? weeksSinceFire : null,
-        macd_confirmed: macdConfirmed,
-        breakout_gain_pct: breakoutGainPct,
-        breakout_level: breakoutLevel,
+        price_vs_ema40_pct: priceVsEma40Pct,
+        macd_now: latestMacdValue(c),
+        sector_rs_pct: sectorRsInfo(c.sector),
         ...miniVisualFields(c),
+        mini_macd: mc && mc.macd ? mc.macd.slice(-MINI_WEEKS) : [],
     };
 }
 
 // Wszystkie uniwersa, bez duplikatów (pierwsze wystąpienie w kolejności
-// UNIVERSES wygrywa — jak combinedWybicieCandidates). Kolejność: świeże
-// wybicia (najnowsze na górze), potem trwające konsolidacje (najdłuższe, czyli
-// najbliższe potencjalnemu wybiciu, na górze) — ten sam wzorzec co
-// combinedBreakoutCandidates.
-function combinedContinuationCandidates(opts = {}) {
+// UNIVERSES wygrywa — jak combinedWybicieCandidates). Posortowane po sile RS
+// 52 tyg. malejąco (najsilniejszy trend na górze) — nie ma już statusu
+// fired/consolidating do sortowania po nim.
+function combinedContinuationCandidates() {
     const rows = [];
     const seen = new Set();
     UNIVERSES.forEach(u => {
         const universeData = state.data[u] || {};
         (universeData.all_constituents || universeData.constituents || []).forEach(c => {
             if (seen.has(c.ticker)) return;
-            const r = classifyContinuation(c.ticker, u, c, opts);
+            const r = classifyContinuation(c.ticker, u, c);
             if (r) { rows.push(r); seen.add(c.ticker); }
         });
     });
-    rows.sort((a, b) => {
-        if (a.status !== b.status) return a.status === "fired" ? -1 : 1;
-        if (a.status === "fired" && a.weeks_since_fire !== b.weeks_since_fire) return a.weeks_since_fire - b.weeks_since_fire;
-        return b.consolidation_weeks - a.consolidation_weeks;
-    });
+    rows.sort((a, b) => (b.rs_long ?? -Infinity) - (a.rs_long ?? -Infinity));
     return rows;
 }
 
@@ -1175,10 +1033,9 @@ function renderContinuationPanel() {
         const tile = document.createElement("div");
         tile.className = "ticker-tile";
         tile.textContent = r.ticker;
+        const sectorRsNote = r.sector_rs_pct != null ? ` · sektor RS ${r.sector_rs_pct > 0 ? "+" : ""}${r.sector_rs_pct.toFixed(1)}` : "";
         tile.title = `${r.ticker} — ${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")} · Etap ${r.current_stage} · `
-            + (r.status === "fired"
-                ? `D1 squeeze odpalił ${r.days_since_fire} sesji temu (po ${r.squeeze_days} sesjach)`
-                : `D1 squeeze od ${r.squeeze_days} sesji`);
+            + `RS 52 tyg. ${r.rs_long.toFixed(1)} · EMA10>EMA20, cena>EMA40, MACD>sygnał${sectorRsNote}`;
         tile.dataset.ticker = r.ticker;
         tile.dataset.universe = r.universe;
         decorateTile(tile, r.current_stage, r.rs_long);
@@ -1258,7 +1115,6 @@ function showSignalsTable(tab) {
     document.getElementById("ttmSqueezeTable").hidden = tab !== "TTM_SQUEEZE";
     document.getElementById("ttmSqueezeGuide").hidden = tab !== "TTM_SQUEEZE";
     document.getElementById("continuationTable").hidden = tab !== "CONTINUATION";
-    document.getElementById("continuationControls").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationMarketBanner").hidden = tab !== "CONTINUATION";
     document.getElementById("continuationGuide").hidden = tab !== "CONTINUATION";
     document.getElementById("breakoutTable").hidden = tab !== "BREAKOUT";
@@ -1751,8 +1607,8 @@ function updateBreakoutKellySummary() {
 }
 
 // Suwaki/przełączniki/kalkulator Kelly'ego nad tabelą Breakout
-// (#breakoutControls) — ten sam wzorzec co initWybicieControls/
-// initContinuationControls, własny klucz localStorage.
+// (#breakoutControls) — ten sam wzorzec co initWybicieControls, własny klucz
+// localStorage.
 function initBreakoutControls() {
     try {
         const saved = JSON.parse(localStorage.getItem(BREAKOUT_SETTINGS_KEY) || "null");
@@ -1865,38 +1721,44 @@ function initBreakoutControls() {
     updateBreakoutKellySummary();
 }
 
-// Status + odznaka potwierdzenia tygodniowym MACD dla "fired" (patrz komentarz
-// nad classifyContinuation) — ten sam wzorzec co wolumen w qmStatusHtml, tylko
-// inne potwierdzenie jakości wybicia.
-function continuationStatusHtml(r) {
-    if (r.status === "fired") {
-        const macdBadge = r.macd_confirmed === true
-            ? `<span class="cross-age" title="Tygodniowy MACD nad linią sygnału w tygodniu wybicia">· MACD ✓</span>`
-            : r.macd_confirmed === false
-                ? `<span class="cross-age" title="Tygodniowy MACD POD linią sygnału w tygodniu wybicia">· MACD ✗</span>`
-                : "";
-        const gainBadge = r.breakout_gain_pct != null
-            ? `<span class="cross-age" title="Zysk tygodnia wybicia względem poprzedniego zamknięcia">· +${r.breakout_gain_pct.toFixed(1)}%</span>`
-            : "";
-        return `<span class="squeeze-status squeeze-status-fired">🔥 Wybicie (${r.weeks_since_fire} tyg. temu)</span> ${macdBadge} ${gainBadge}`;
-    }
-    return `<span class="squeeze-status squeeze-status-consolidating">🌀 Konsolidacja</span>`;
+// Komórka MACD dla tabeli Continuation — zawsze "positive" gdy wiersz w ogóle
+// istnieje (gate wymaga MACD nad linią sygnałową), z minisparklinem tła
+// (r.mini_macd, patrz classifyContinuation).
+function continuationMacdCellHtml(r) {
+    if (r.macd_now == null) return { cell: '<span class="spark-empty">—</span>', cellClass: "" };
+    return {
+        cell: `<span class="cell-spark">${zeroLineSparkSvg(r.mini_macd)}<span>${r.macd_now.toFixed(2)}</span></span>`,
+        cellClass: "positive",
+    };
+}
+
+// Komórka "Sektor RS" — DODATKOWY, niewymagany plus (patrz komentarz nad
+// classifyContinuation): "—" gdy sektor nieznany/bez danych ETF, wartość
+// kolorowana wg znaku w przeciwnym razie (może być ujemna — to jedyna
+// kolumna w tej tabeli, która NIE jest gwarantowana dodatnia, bo nie jest
+// częścią gate'u).
+function continuationSectorRsCellHtml(r) {
+    if (r.sector_rs_pct == null) return { cell: '<span class="spark-empty">—</span>', cellClass: "" };
+    const cls = r.sector_rs_pct > 0 ? "positive" : "negative";
+    const cell = `${r.sector_rs_pct > 0 ? "✓ " : ""}${r.sector_rs_pct.toFixed(1)}`;
+    return { cell, cellClass: cls };
 }
 
 function continuationRowHtml(r, position) {
+    const macdCell = continuationMacdCellHtml(r);
+    const sectorRsCell = continuationSectorRsCellHtml(r);
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
         <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
-        <td class="positive" title="EMA10 nad EMA20 (tygodniowo) — warunek trendu">${r.ema_spread_pct != null ? `+${r.ema_spread_pct.toFixed(1)}%` : "—"}</td>
-        <td class="positive">${r.rs_long.toFixed(1)}</td>
-        <td>${continuationStatusHtml(r)}</td>
-        <td>${r.consolidation_weeks} tyg.</td>
-        <td title="Cena, przy której warto obserwować wybicie — opór potwierdzony 3 tyg. bez nowego szczytu (bez dolnej granicy: wyjścia idą przez MACD, nie przez wsparcie)">${levelToWatchCellHtml(r)}</td>
-        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema, r.mini_sq_flags)}</td>
-        <td title="TTM Squeeze tygodniowy (${MINI_WEEKS} tyg.) — informacyjnie (Continuation nie używa go już do wykrywania konsolidacji)">${ttmMiniSvg(r.mini_hist, r.mini_sq_on, r.mini_fired)}</td>
+        <td class="positive" title="EMA10 nad EMA20 (tygodniowo) — warunek trendu">+${r.ema_spread_pct.toFixed(1)}%</td>
+        <td class="positive" title="Cena nad własną 40-tyg. EMA — warunek trendu">+${r.price_vs_ema40_pct.toFixed(1)}%</td>
+        <td class="positive" title="Mansfield RS 52 tyg. vs własny indeks — warunek trendu">${r.rs_long.toFixed(1)}</td>
+        <td class="${macdCell.cellClass}" title="Tygodniowy MACD nad linią sygnałową — warunek trendu">${macdCell.cell}</td>
+        <td class="${sectorRsCell.cellClass}" title="Mansfield RS sektora spółki (52 tyg.) vs SP500 — DODATKOWY plus, NIE jest wymagany">${sectorRsCell.cell}</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
     `;
@@ -1912,7 +1774,7 @@ function renderContinuationTable() {
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
         colspan: 13,
-        emptyAllMsg: `Brak spółek z EMA10 &gt; EMA20 (tygodniowo) i RS 52 tyg. &gt; 0, z oporem konsolidacji potwierdzonym ≥ ${state.contMinConsolidationWeeks} tyg. (trwającym albo świeżo przełamanym wybiciem).`,
+        emptyAllMsg: "Brak spółek z EMA10 &gt; EMA20, ceną nad 40-tyg. EMA, RS 52 tyg. &gt; 0 i MACD nad linią sygnałową (wszystkie tygodniowo, jednocześnie).",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
         metaText: (rows) => flatScreenerMetaText(allRows, rows),
         rowKey: r => r.ticker,
@@ -1921,43 +1783,6 @@ function renderContinuationTable() {
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
-}
-
-// Suwaki nad tabelą Continuation (#continuationControls) — ten sam wzorzec co
-// initWybicieControls, własny klucz localStorage. Suwak "Min. momentum"
-// USUNIĘTY razem z jego stanem/localStorage — momentum nie jest już częścią
-// trend gate'u (patrz komentarz nad classifyContinuation), więc suwak nie
-// miałby już nic do filtrowania.
-function initContinuationControls() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(CONTINUATION_SETTINGS_KEY) || "null");
-        if (saved) {
-            if (Number.isFinite(saved.minConsolidationWeeks)) state.contMinConsolidationWeeks = saved.minConsolidationWeeks;
-            if (Number.isFinite(saved.fireLookbackWeeks)) state.contFireLookbackWeeks = saved.fireLookbackWeeks;
-        }
-    } catch (e) { /* brak localStorage — zostają domyślne */ }
-
-    const bind = (inputId, valueId, stateKey, unit) => {
-        const input = document.getElementById(inputId);
-        const valueEl = document.getElementById(valueId);
-        if (!input) return;
-        input.value = state[stateKey];
-        if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
-        input.addEventListener("input", () => {
-            state[stateKey] = Number(input.value);
-            if (valueEl) valueEl.textContent = `${state[stateKey]}${unit}`;
-            try {
-                localStorage.setItem(CONTINUATION_SETTINGS_KEY, JSON.stringify({
-                    minConsolidationWeeks: state.contMinConsolidationWeeks,
-                    fireLookbackWeeks: state.contFireLookbackWeeks,
-                }));
-            } catch (e) { /* ignoruj */ }
-            renderContinuationPanel();
-            if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
-        });
-    };
-    bind("contMinConsolidationInput", "contMinConsolidationValue", "contMinConsolidationWeeks", " tyg.");
-    bind("contFireLookbackInput", "contFireLookbackValue", "contFireLookbackWeeks", " tyg.");
 }
 
 // ============================================================
@@ -1971,7 +1796,6 @@ if (typeof document !== "undefined") {
         initConnStatus();
         await loadData();
         initWybicieControls();
-        initContinuationControls();
         initBreakoutControls();
         renderWybiciePanel();
         renderTtmSqueezePanel();
@@ -2002,7 +1826,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
-        classifyContinuation, combinedContinuationCandidates, continuationTopBoxState, continuationWeeklyGate, state,
+        classifyContinuation, combinedContinuationCandidates, continuationTrendGate, sectorRsInfo, state,
         classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
         breakoutConsolidationFromSqueeze, breakoutConsolidationFromDarvas,
     };
