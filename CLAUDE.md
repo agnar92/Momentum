@@ -593,7 +593,11 @@ separate scales: two raw series on different axes make it hard to judge by eye w
 growing faster, while rebasing both to 0% at the window's start means whichever line ends up higher *is*
 the outperformer — directly answering "is this stock stronger than its own market right now" (`close_pct`/
 `ema20_pct`/`index_pct`; the EMA is computed on the raw weekly price first, then rebased by the same
-stock-price base as `close_pct` so it still reads as a smoothed version of the price line). **Version
+stock-price base as `close_pct` so it still reads as a smoothed version of the price line). A SECOND,
+shorter EMA — `ema10_pct` (`RS_PRICE_EMA10_WEEKS = 10`) — was added later, on the exact same buffer/rebase
+convention, but WHOLE PURPOSE-BUILT for one downstream consumer only: `signals.js`'s "🚀 Continuation"
+screener gates on the stock's own EMA10 being above its own EMA20 (see that tab's CLAUDE.md bullet). The
+main chart itself never plots `ema10_pct` — panel 1 still draws only `ema20_pct`, unchanged. **Version
 history**: this used to be the classic "10:30" chart (10-week + 30-week SMA, `sma10_pct`/`sma30_pct`,
 `RS_PRICE_SMA_SHORT_WEEKS`/`RS_PRICE_SMA_LONG_WEEKS`) — replaced by a single 20-week EMA at the user's
 explicit request to simplify the main chart ("chcę usunąć 10,30 SMA i dodać 20 EMA i bazować stage 2 na
@@ -1271,9 +1275,84 @@ flex child (no `.topbar-left` wrapper there).
   - **"Poziom do obserwacji" / sugerowany stop**: `breakout_level: breakoutLevelFor(c)` — the SAME shared
     helper Qullamaggie uses (`js/minicharts.js`), now also returning a `stop` field (see the version-history
     paragraph below).
-  Four sliders (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): min/max
-  consolidation weeks (default 6/16), fire lookback (default 3), min 12M momentum (0% — the user:
-  "powyżej zera jest ok"). Sidebar tile group `#tiles-CONTINUATION`.
+  Sliders (`#continuationControls`, `localStorage` key `momentum_dashboard_continuation`): min
+  consolidation weeks (default 6), fire lookback (default 3) — see "WERSJA 3" below for what replaced the
+  min-12M-momentum slider that used to sit alongside these two. Sidebar tile group `#tiles-CONTINUATION`.
+
+  **WERSJA 3 (current design) — trend gate replaced by EMA10 > EMA20 (per spółka) + RS > 0; consolidation
+  replaced by a client-side "top-only" box, deliberately WITHOUT a lower boundary — a later, separate,
+  explicit user request, given directly rather than as an abstract requirement: "teraz w continuation zmień
+  ze jeżeli akcja jest powyżej RS > 0 i ma EMA 10> 20 to szukamy topu boksa czyli 3 dni z rzędu poniżej
+  ostatniej ceny zamknięcia to jest nasz top. Wyjścia będą bo MACD więc nie potrzebuje dolnego boxa" (if the
+  stock has RS > 0 and its own 10-week EMA above its 20-week EMA, look for the box's TOP — 3 weeks in a row
+  below the last high close confirms it — exits will be handled by MACD, so no lower box boundary is
+  needed). This REPLACES everything the bullets above describe as the "Trend gate"/"Consolidation" steps
+  (the WERSJA 2 design just above, itself already a replacement of the original D1/TTM-Squeeze design — see
+  the version-history paragraphs below for that earlier context, still accurate for its own time):
+  - **Trend gate (`continuationWeeklyGate()`)** is now just two conditions, PER STOCK: (1) the stock's own
+    10-week EMA above its own 20-week EMA (`weekly_chart.ema10_pct`/`ema20_pct` at the latest week —
+    `ema10_pct` is a NEW field, added to `compute_relative_strength_chart()` in `run_query.py` specifically
+    for this gate; `RS_PRICE_EMA10_WEEKS = 10` alongside the existing `RS_PRICE_EMA_WEEKS = 20` — the main
+    chart itself keeps plotting only `ema20_pct`, nothing else reads `ema10_pct`), and (2) classic Mansfield
+    RS 52 tyg. (`mansfield_chart.rsm_long`) > 0, unchanged from WERSJA 2. Etap Weinsteina and 12M momentum
+    are NO LONGER part of the gate — `current_stage`/`momentum_pct` are still carried on the row purely
+    informationally (the "Etap" column stays, unaffected), and the "Min. momentum 12M" slider was removed
+    entirely (nothing left for it to filter). This is the same idea `compute_sp500_trend_filter()`'s own
+    `ema10w`/`ema20w`/`weekly_ema_bullish` (added earlier for the market-wide banner, see the "SECOND review
+    pass" paragraph below) already established — just applied PER STOCK instead of to the SP500 index, and
+    genuinely gating the row this time instead of only informing a banner.
+  - **Consolidation (`continuationTopBoxState()`, `signals.js`)** is a NEW, deliberately simpler two-state
+    automaton (`SEEKING_TOP` → `WATCHING`), computed ENTIRELY client-side from the already-exported
+    `weekly_chart.close_pct` (no further backend change beyond `ema10_pct`) — inspired by, but NOT the same
+    mechanism as, the Darvas box already living in `_compute_weinstein_stage_series()`
+    (`weekly_chart.bases`/`pending_base`, used by "📐 Breakout"'s Darvas source and by `strategyStopFor()`):
+    that one requires BOTH a confirmed top AND a confirmed bottom (`SEEKING_TOP` → `SEEKING_BOTTOM` →
+    `BOXED`) before it calls a box complete, and can reset on a breakDOWN below the bottom, not only on a
+    breakout above the top. Continuation's own automaton only ever tracks the TOP:
+      - `SEEKING_TOP` — track the highest close since the last breakout; `CONTINUATION_BOX_CONFIRM_WEEKS`
+        (3, same number/spirit as the backend's `DARVAS_BOX_CONFIRM_WEEKS`, but a separate client-side
+        constant since this is a genuinely different automaton) weeks in a row without a new high confirms
+        that high as the box's resistance → `WATCHING`.
+      - `WATCHING` — resistance known, waiting for a breakout. A close ABOVE resistance is the breakout
+        (`fired` 🔥); the automaton immediately starts tracking a new, higher candidate top from that same
+        week (boxes stack upward, same spirit as the backend's own mechanism). A close that merely EQUALS
+        resistance does not break out (still `WATCHING`) and does not reset the "weeks without a new high"
+        counter either — consistent with the backend's own `close > top`, never `>=`.
+      There is NO equivalent of `SEEKING_BOTTOM`/support at all — exactly per the user's request, since
+      exits are meant to go through the weekly MACD (`macd_confirmed`, unchanged informational badge from
+      WERSJA 2), not through a price falling below a box's lower edge.
+  - **"10-week closing high" hard gate REMOVED as now-provably-dead code.** WERSJA 2's `ten_week_high`/
+    `CONTINUATION_TEN_WEEK_HIGH_WEEKS` check (point 2 of the "SECOND review pass" below) is gone from
+    Continuation — under the new automaton, EVERY detected breakout is, by construction, the highest close
+    in the stock's entire `close_pct` series up to that week: `continuationTopBoxState()`'s `WATCHING`
+    phase only ever sees prices at or below the current resistance, a breakout requires exceeding it, and
+    each successive box's resistance is itself the PREVIOUS box's breakout price or higher (a new box can
+    only start via a breakout, which by definition exceeds the old resistance) — so by induction, a fire
+    week's close is always >= every close before it, making a fixed 10-week lookback window strictly
+    redundant (always true when computable, never false). This is NOT a general claim about every breakout
+    mechanism in this codebase — "📐 Breakout"'s own `BREAKOUT_TEN_WEEK_HIGH_WEEKS` check stays exactly as
+    is, since ITS consolidation sources (weekly TTM Squeeze, or the full Darvas box WITH a bottom) can both
+    "break down" and reset without that monotonic-resistance guarantee, so the check still has real teeth
+    there.
+  - **"Poziom do obserwacji" (`breakout_level`) is now computed by Continuation's OWN resistance** (from
+    `continuationTopBoxState()`), converted to a real price via the same `close0 = price / (1 +
+    close_pct[last]/100)` convention as `breakoutLevelFor()`/`strategyStopFor()` (`js/minicharts.js`) — NOT
+    by calling `breakoutLevelFor()` itself any more, since that helper's box (TTM-Squeeze-window or the
+    full Darvas box) is a DIFFERENT "box" than the one this screener now tracks (same "two independent box
+    definitions, no single ground truth" situation already documented for `breakoutLevelFor()`'s own
+    version history). The returned `support`/`stop` fields are always `null` — there IS no lower boundary
+    any more, per the user's own explicit reasoning above, so the "sugerowany stop" this column used to show
+    (the box's middle-third bound, inherited from WERSJA 2/the reference video) is gone from Continuation
+    specifically; "📐 Breakout"/`strategy.js`'s own `strategyStopFor()` stop mechanism is completely
+    unaffected (still full Darvas-box-based, still MACD-raised).
+  - A new **"EMA10 vs EMA20" column** (`ema_spread_pct`, replacing the old "Momentum 12M" column, since
+    momentum is no longer a gate condition) shows the actual spread between the stock's own EMA10/EMA20 —
+    always positive when a row appears at all, since the gate requires `ema10 > ema20` — so the gate
+    condition itself is visible in the table, not just enforced invisibly.
+  `ttm_squeeze_chart` is no longer read by `classifyContinuation()` AT ALL — the "TTM (26 tyg.)" mini-chart
+  column stays in the table purely as an already-available, informational visual (same
+  `miniVisualFields()`/`ttmMiniSvg()` every other screener/table already uses), not because Continuation's
+  own logic depends on it any more.
 
   **REMOVED along with the move to weekly: the "🏆 Tygodniowi zwycięzcy" sub-table and the whole daily-data
   layer it and Continuation were built on** (`daily_squeeze`, `run_query.py::compute_daily_squeeze()`,

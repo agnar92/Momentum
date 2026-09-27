@@ -57,7 +57,7 @@
         </div>
 
         <div class="sidebar-group" id="continuationGroup">
-            <div class="sidebar-group-label" title="Continuation — spółki już w Etapie 2 (tygodniowo) z dodatnim momentum 12M i Mansfield RS 52 tyg. &gt; 0, które konsolidują się na wykresie TYGODNIOWYM (TTM Squeeze): squeeze trwa (🌀) albo właśnie się z niego wybiły (🔥), z tygodniowym MACD jako potwierdzeniem. Do dołączenia do trendu — tylko filtr sygnałów, wejście/wyjście decydujesz sam.">
+            <div class="sidebar-group-label" title="Continuation — spółki z własną 10-tyg. EMA nad 20-tyg. EMA i Mansfield RS 52 tyg. &gt; 0, które konsolidują się pod potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia): opór trzyma (🌀) albo cena go właśnie przełamała (🔥), z tygodniowym MACD jako potwierdzeniem. Bez dolnej granicy pudełka — wyjście z pozycji ma iść przez MACD. Tylko filtr sygnałów, wejście/wyjście decydujesz sam.">
                 🚀 Continuation
             </div>
             <div class="sidebar-group-meta" id="continuationMeta"></div>
@@ -82,7 +82,7 @@
             <div class="drawer-tabs">
                 <button class="drawer-tab active" data-universe="WYBICIE" title="Spółki, u których tygodniowy MACD przeciął linię zera w górę, linia RS 52 tyg. (panel TTM Squeeze) też przecięła zero w górę — oba przecięcia blisko siebie (suwak „Okno wybicia”) i niedawno (suwak „Monitoruj po wybiciu”) — a histogram TTM Squeeze jest dodatni. Obejmuje CAŁE uniwersa SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80.">💥 Wybicie</button>
                 <button class="drawer-tab" data-universe="TTM_SQUEEZE" title="TTM Squeeze — spółki z Momentum, które przeszły przez konsolidację dłuższą niż 5 tyg. (Bollinger Bands ściśnięte wewnątrz kanału Kellera) i albo wciąż w niej trwają, albo właśnie się z niej wybiły, CAŁE uniwersa (SP500/NASDAQ100/DOWJONES/WIG20/mWIG40/sWIG80), nie tylko dzisiejsza selekcja portfela.">🧨 TTM Squeeze</button>
-                <button class="drawer-tab" data-universe="CONTINUATION" title="Continuation — spółki już w Etapie 2 (tygodniowo) z dodatnim momentum 12M i Mansfield RS 52 tyg. &gt; 0, w konsolidacji na wykresie TYGODNIOWYM (TTM Squeeze): squeeze trwa (🌀) albo właśnie się z niego wybiły (🔥), z tygodniowym MACD jako potwierdzeniem. Do dołączenia do trendu — tylko filtr sygnałów, wejście/wyjście decydujesz sam.">🚀 Continuation</button>
+                <button class="drawer-tab" data-universe="CONTINUATION" title="Continuation — spółki z własną 10-tyg. EMA nad 20-tyg. EMA i Mansfield RS 52 tyg. &gt; 0, w konsolidacji pod potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia): opór trzyma (🌀) albo cena go właśnie przełamała (🔥), z tygodniowym MACD jako potwierdzeniem. Bez dolnej granicy pudełka — wyjście z pozycji ma iść przez MACD. Tylko filtr sygnałów, wejście/wyjście decydujesz sam.">🚀 Continuation</button>
                 <button class="drawer-tab" data-universe="BREAKOUT" title="Breakout — replika „MY STRATEGY BLUEPRINT” (Gareth Packer / Financial Wisdom): trend + konsolidacja tygodniowa + świeca wybicia (knot/10-tyg. szczyt/zysk 5-20%) + NATR/MACD + stop wg blueprintu + wielkość pozycji wg Kelly Criterion.">📐 Breakout</button>
             </div>
         </div>
@@ -99,8 +99,8 @@
             <br>Kiedy rozważyć kupno: dopiero przy/blisko 🔥, z rosnącym histogramem TTM i najlepiej Etapem 2. Samo 🌀 to lista obserwacyjna — jeszcze NIE sygnał kupna.
         </div>
         <div class="screener-guide" id="continuationGuide" hidden>
-            <strong>🚀 Continuation</strong> — spółki JUŻ w potwierdzonym Etapie 2, z dodatnim momentum i RS, które teraz robią pauzę (konsolidację) w trakcie trwającego trendu — pod dołączenie do pozycji, nie pod nowe wejście od zera.
-            <br>Czego szukać: to samo 🌀/🔥 co w TTM Squeeze, plus kolumna „Poziom do obserwacji” (górna/dolna granica konsolidacji) i potwierdzenie tygodniowym MACD.
+            <strong>🚀 Continuation</strong> — spółki z własną 10-tyg. EMA nad 20-tyg. EMA i dodatnim RS (trend), które teraz siedzą pod potwierdzonym oporem konsolidacji (3 tyg. bez nowego szczytu zamknięcia) — pod dołączenie do pozycji, nie pod nowe wejście od zera.
+            <br>Czego szukać: 🌀 „konsolidacja” = opór trzyma, jeszcze czekaj; 🔥 „wybicie” = cena właśnie przełamała opór w górę. Kolumna „Poziom do obserwacji” pokazuje ten opór (BEZ dolnej granicy — wyjście z pozycji ma iść przez tygodniowy MACD, nie przez zejście pod wsparcie).
             <br>Kiedy rozważyć kupno: 🔥 świeże (kolumna „Wybicie w ciągu”) + MACD nad linią sygnału + cena nad „Poziomem do obserwacji”.
         </div>
         <div class="screener-guide" id="breakoutGuide" hidden>
@@ -144,20 +144,15 @@
         </div>
         <div class="trend-banner" id="continuationMarketBanner" hidden></div>
         <div class="stage-filter-bar wybicie-controls" id="continuationControls" hidden>
-            <label class="wybicie-slider" title="Minimalna długość konsolidacji (TTM Squeeze tygodniowy), żeby liczyć się jako baza w trendzie.">
+            <label class="wybicie-slider" title="Minimalna długość konsolidacji pod potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia potwierdzają go), żeby liczyć się jako baza w trendzie.">
                 <span class="stage-filter-label">Min. tyg. konsolidacji:</span>
                 <input type="range" id="contMinConsolidationInput" min="1" max="20" step="1">
                 <span class="wybicie-slider-value" id="contMinConsolidationValue"></span>
             </label>
-            <label class="wybicie-slider" title="Przez ile tygodni po wybiciu z konsolidacji (histogram dodatni) spółka zostaje na liście.">
+            <label class="wybicie-slider" title="Przez ile tygodni po przełamaniu oporu (wybiciu) spółka zostaje na liście.">
                 <span class="stage-filter-label">Wybicie w ciągu:</span>
                 <input type="range" id="contFireLookbackInput" min="0" max="12" step="1">
                 <span class="wybicie-slider-value" id="contFireLookbackValue"></span>
-            </label>
-            <label class="wybicie-slider" title="Minimalne momentum 12M-1M. Domyślnie 0% — wystarczy dodatnie momentum; podnieś, jeśli chcesz tylko najdynamiczniejsze trendy.">
-                <span class="stage-filter-label">Min. momentum 12M:</span>
-                <input type="range" id="contMinMomentumInput" min="0" max="150" step="5">
-                <span class="wybicie-slider-value" id="contMinMomentumValue"></span>
             </label>
         </div>
         <div class="stage-filter-bar wybicie-controls" id="breakoutControls" hidden>
@@ -246,8 +241,9 @@
                 <tbody id="ttmSqueezeTableBody"></tbody>
             </table>
 
-            <!-- Continuation: Etap 2 (tydzień) + konsolidacja TYGODNIOWA (TTM Squeeze,
-                 trwa albo właśnie odpalił w górę), z potwierdzeniem tygodniowym MACD —
+            <!-- Continuation: EMA10 > EMA20 + RS 52 tyg. > 0 (trend) + konsolidacja pod
+                 potwierdzonym oporem (3 tyg. bez nowego szczytu zamknięcia, trwa albo
+                 właśnie przełamana), z potwierdzeniem tygodniowym MACD —
                  patrz combinedContinuationCandidates w signals.js. -->
             <table class="momentum-table" id="continuationTable" hidden>
                 <thead>
@@ -257,7 +253,7 @@
                         <th data-key="universe">Uniwersum</th>
                         <th data-key="sector">Sektor</th>
                         <th data-key="price">Cena</th>
-                        <th data-key="momentum_pct">Momentum 12M</th>
+                        <th data-key="ema_spread_pct" title="EMA10 nad EMA20 (tygodniowo) — warunek trendu, zamiast dawnego Etapu 2A/2B">EMA10 vs EMA20</th>
                         <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
                         <th data-key="status">Status</th>
                         <th data-key="consolidation_weeks">Konsolidacja</th>

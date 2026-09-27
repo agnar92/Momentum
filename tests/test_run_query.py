@@ -927,6 +927,10 @@ class TestComputeRelativeStrengthChart:
         assert out is not None
         assert out["dates"][0] == "2026-01-05"
         assert out["ema20_pct"][0] is not None
+        # ema10_pct — druga, krotsza EMA, WYLACZNIE dla trend gate "Continuation"
+        # (docs/js/signals.js) — ten sam 42-tyg. bufor rozgrzewkowy wystarcza jej
+        # z naddatkiem (potrzebuje tylko ok. 20 tyg., zeby zbiec).
+        assert out["ema10_pct"][0] is not None
         # Wykres nie niesie juz SMA10/SMA30 (zastapione przez EMA20).
         assert "sma10_pct" not in out and "sma30_pct" not in out
         # Pierwszy wyswietlany tydzien to punkt odniesienia (rebase) -> 0% dla obu.
@@ -1048,6 +1052,8 @@ class TestComputeRelativeStrengthChart:
                                                 start_date.strftime("%Y-%m-%d"))
         assert out is not None
         assert out["ema20_pct"][0] is None
+        # Tylko 5 tyg. bufora < RS_PRICE_EMA10_WEEKS (10) -> ema10_pct rowniez None.
+        assert out["ema10_pct"][0] is None
         assert out["index_pct"][0] == 0.0
 
     def test_no_stock_history_returns_none(self):
