@@ -1369,6 +1369,16 @@ RS_PRICE_EMA_BUFFER_WEEKS = 2 * RS_PRICE_EMA_WEEKS + 2  # zapas przed start_date
 # zgodnej z TradingView — samo RS_PRICE_EMA_WEEKS dawaloby wartosc, ale jeszcze
 # wyraznie zalezna od pierwszego tygodnia bufora.
 
+RS_PRICE_EMA10_WEEKS = 10       # DRUGA, krotsza EMA na tym samym wykresie — WYLACZNIE
+# jako trend gate zakladki "🚀 Continuation" (docs/js/signals.js): spolka jest "w
+# trendzie" gdy jej wlasna 10-tyg. EMA jest NAD 20-tyg. EMA (RS_PRICE_EMA_WEEKS), na
+# wyrazna prosbe uzytkownika — patrz CLAUDE.md. To NIE jest to samo co
+# compute_sp500_trend_filter's ema10w/ema20w (ten sam pomysl, ale liczony na SAMYM
+# INDEKSIE SP500, jako rynkowy banner, nie per-spolka gate) — dwa niezalezne uzycia
+# tej samej idei na dwoch innych poziomach (rynek vs. konkretna spolka). Uzywa TEGO
+# SAMEGO bufora rozgrzewkowego co EMA20 (RS_PRICE_EMA_BUFFER_WEEKS, 42 tyg. — wiecej
+# niz dosc dla 10-okresowej EMA), zaden dodatkowy zapas nie jest potrzebny.
+
 # --- Klasyfikacja etapow Weinsteina (Stage Analysis, "Secrets for Profiting in
 # Bull and Bear Markets") na wykresie 10:30 — patrz _compute_weinstein_stage_series.
 # WERSJA 2: pierwsza wersja tej klasyfikacji wyznaczala wybicie WYLACZNIE z
@@ -1804,6 +1814,15 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     migracji schematu, co low_pct (patrz _ensure_prices_ohlc_columns w
     fetch_data.py).
 
+    "ema10_pct" — DRUGA, krotsza 10-tyg. EMA ceny, tym samym close0-relatywnym %
+    co ema20_pct — dodana WYLACZNIE dla zakladki "🚀 Continuation" (docs/js/
+    signals.js), na wyrazna prosbe uzytkownika: trend gate tej zakladki
+    sprawdza teraz, czy WLASNA 10-tyg. EMA spolki jest NAD jej 20-tyg. EMA
+    (RS_PRICE_EMA10_WEEKS/RS_PRICE_EMA_WEEKS), zamiast dotychczasowego Etapu
+    2A/2B + dodatniego momentum. Nikt inny w tym module tego pola nie czyta —
+    "wykres wlasny" (panel 1) dalej rysuje wylacznie ema20_pct, tak jak przed
+    tym dodaniem.
+
     "vwap_pct" — Volume-Weighted Average Price ZAKOTWICZONY (anchored) na
     początku WYŚWIETLANEGO okna (start_date), nie na buforze rozgrzewkowym EMA:
     to świadomie inny punkt startowy niż ema20_pct — anchored VWAP z
@@ -1837,6 +1856,9 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
     # "None zamiast wartosci z za krotkiej historii" co reszta modulu).
     stock_df["ema20"] = stock_df["close"].ewm(span=RS_PRICE_EMA_WEEKS, adjust=False,
                                               min_periods=RS_PRICE_EMA_WEEKS).mean()
+    # ema10 — patrz "ema10_pct" w docstringu powyzej (trend gate "🚀 Continuation").
+    stock_df["ema10"] = stock_df["close"].ewm(span=RS_PRICE_EMA10_WEEKS, adjust=False,
+                                              min_periods=RS_PRICE_EMA10_WEEKS).mean()
 
     stage_rows = _compute_weinstein_stage_series(stock_df)
     stock_df["stage"] = [row["stage"] for row in stage_rows]
@@ -1892,7 +1914,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
             return None
         return round((float(value) / base - 1) * 100, 2)
 
-    dates, close_pct, ema20_pct, index_pct, vwap_pct = [], [], [], [], []
+    dates, close_pct, ema20_pct, ema10_pct, index_pct, vwap_pct = [], [], [], [], [], []
     volume, buying_volume, buying_volume_ratio, stage, signal = [], [], [], [], []
     stop_level_pct, base_count, low_pct, high_pct = [], [], [], []
     raw_base_events = []
@@ -1900,6 +1922,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         dates.append(r["week_end"].strftime("%Y-%m-%d"))
         close_pct.append(pct(r["close"], close0))
         ema20_pct.append(pct(r["ema20"], close0))
+        ema10_pct.append(pct(r["ema10"], close0))
         index_pct.append(pct(r["index_close"], index0))
         vwap_pct.append(pct(r["vwap"], close0))
         # Tygodniowe MIN(Low) — do stopu strategii (docs/js/strategy.js: stop
@@ -1969,6 +1992,7 @@ def compute_relative_strength_chart(con, ticker, universe, ref_date, start_date)
         "dates": dates,
         "close_pct": close_pct,
         "ema20_pct": ema20_pct,
+        "ema10_pct": ema10_pct,
         "index_pct": index_pct,
         "vwap_pct": vwap_pct,
         "low_pct": low_pct,
