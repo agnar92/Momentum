@@ -171,6 +171,7 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
             dr.Ticker,
             MAX(dr.Date) AS last_price_date,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params)) AS price_now,
+            ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '52 WEEKS') AS price_52w,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS') AS price_m2,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '14 MONTHS') AS price_m14,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '11 MONTHS') AS price_m11,
@@ -200,6 +201,7 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
     momentum AS (
         SELECT
             Ticker, last_price_date, price_now,
+            CASE WHEN price_52w IS NOT NULL AND price_52w > 0 THEN price_now / price_52w - 1 END AS return_52w,
             CASE WHEN price_m14 IS NOT NULL AND price_m2 IS NOT NULL THEN annualized_volatility_12m
                  WHEN price_m11 IS NOT NULL AND price_m2 IS NOT NULL THEN annualized_volatility_9m
                  ELSE NULL END AS annualized_volatility,
@@ -213,7 +215,7 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
                  ELSE trading_days_9m END AS trading_days_used
         FROM price_points
     )
-    SELECT m.Ticker, u.Sector, u.fmc_etf AS fmc, m.price_now, m.momentum_value, m.momentum_window,
+    SELECT m.Ticker, u.Sector, u.fmc_etf AS fmc, m.price_now, m.return_52w, m.momentum_value, m.momentum_window,
            m.annualized_volatility, m.last_price_date
     FROM momentum m
     JOIN uni_tickers u ON m.Ticker = u.Ticker
@@ -649,6 +651,7 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
             "ticker": r["Ticker"],
             "sector": r["Sector"],
             "price": round(float(r["price_now"]), 2),
+            "return_52w_pct": round(float(r["return_52w"]) * 100, 2) if pd.notna(r.get("return_52w")) else None,
             "momentum_pct": round(float(r["momentum_value"]) * 100, 2),
             "momentum_window": r["momentum_window"],
             "volatility_pct": round(float(r["annualized_volatility"]) * 100, 2),
@@ -679,6 +682,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "ticker": r["Ticker"],
             "sector": r["Sector"],
             "price": round(float(r["price_now"]), 2),
+            "return_52w_pct": round(float(r["return_52w"]) * 100, 2) if pd.notna(r.get("return_52w")) else None,
             "momentum_pct": round(float(r["momentum_value"]) * 100, 2),
             "momentum_window": r["momentum_window"],
             "volatility_pct": round(float(r["annualized_volatility"]) * 100, 2),

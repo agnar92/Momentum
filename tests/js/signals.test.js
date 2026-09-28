@@ -9,7 +9,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
+    weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, combinedTopGainersCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates, state,
     classifyContinuation, combinedContinuationCandidates, continuationTrendGate, sectorRsInfo,
     classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
     breakoutConsolidationFromDarvas,
@@ -232,6 +232,22 @@ test("combinedWybicieCandidates merges universes, dedupes tickers, and sorts fre
     const rows = combinedWybicieCandidates();
     assert.deepEqual(rows.map(r => r.ticker), ["FRESH", "OLDER", "DUP"]);
     assert.equal(rows.find(r => r.ticker === "DUP").universe, "SP500");
+});
+
+test("combinedTopGainersCandidates returns the top 30 distinct tickers by 52-week return", () => {
+    state.data = emptyStateData();
+    state.data.SP500.all_constituents = [
+        { ticker: "AAA", return_52w_pct: 12, price: 10 },
+        { ticker: "DUP", return_52w_pct: 50, price: 10 },
+        { ticker: "NO_DATA", price: 10 },
+    ];
+    state.data.NASDAQ100.all_constituents = [
+        { ticker: "DUP", return_52w_pct: 99, price: 10 },
+        { ticker: "BBB", return_52w_pct: 40, price: 10 },
+    ];
+    const rows = combinedTopGainersCandidates();
+    assert.deepEqual(rows.map(r => r.ticker), ["DUP", "BBB", "AAA"]);
+    assert.equal(rows[0].return_52w_pct, 50);
 });
 
 // ---------- classifyTtmSqueeze / combinedTtmSqueezeCandidates (TTM Squeeze screener) ----------

@@ -365,6 +365,29 @@ function combinedWybicieCandidates(opts = {}) {
     return rows;
 }
 
+// Dokładnie 30 liderów zwykłej stopy zwrotu z ostatnich 52 tygodni. To nie
+// jest `momentum_pct`: tamta metryka celowo pomija dwa ostatnie miesiące i
+// służy do strategii momentum. `return_52w_pct` jest liczona w pipeline jako
+// cena bieżąca / najbliższa dostępna cena sprzed 52 tygodni - 1.
+function combinedTopGainersCandidates(limit = 30) {
+    const rows = [];
+    const seen = new Set();
+    UNIVERSES.forEach(u => {
+        const universeData = state.data[u] || {};
+        (universeData.all_constituents || universeData.constituents || []).forEach(c => {
+            if (seen.has(c.ticker) || !Number.isFinite(c.return_52w_pct)) return;
+            seen.add(c.ticker);
+            rows.push({
+                ticker: c.ticker, universe: u, sector: c.sector, price: c.price,
+                return_52w_pct: c.return_52w_pct,
+                current_stage: c.weekly_chart && c.weekly_chart.current_stage,
+                ...miniVisualFields(c),
+            });
+        });
+    });
+    return rows.sort((a, b) => b.return_52w_pct - a.return_52w_pct).slice(0, limit);
+}
+
 // ============================================================
 // TTM SQUEEZE — SCREENER: szuka spółek z Momentum (momentum_score > 0),
 // które przeszły przez WIELOTYGODNIOWĄ konsolidację (Bollinger Bands ściśnięte
@@ -961,6 +984,27 @@ function renderWybiciePanel() {
     }
 }
 
+function renderTopGainersPanel() {
+    const container = document.getElementById("tiles-TOP_GAINERS");
+    if (!container) return;
+    const rows = combinedTopGainersCandidates();
+    const meta = document.getElementById("topGainersMeta");
+    if (meta) meta.textContent = `${rows.length} z 30 spółek`;
+    container.innerHTML = "";
+    rows.forEach(r => {
+        const tile = document.createElement("div");
+        tile.className = "ticker-tile";
+        tile.textContent = r.ticker;
+        tile.title = `${r.ticker} — wynik 52 tyg.: +${r.return_52w_pct.toFixed(2)}%`;
+        tile.dataset.ticker = r.ticker;
+        tile.dataset.universe = r.universe;
+        decorateTile(tile, r.current_stage, null);
+        if (r.ticker === state.selectedTicker) tile.classList.add("selected");
+        tile.addEventListener("click", () => selectTicker(r.ticker, r.universe));
+        container.appendChild(tile);
+    });
+}
+
 // Sidebar: kafelki screenera TTM Squeeze (patrz combinedTtmSqueezeCandidates
 // powyżej) — ten sam wzorzec co renderWybiciePanel, jedna wspólna, już posortowana
 // lista (świeże wybicia przed trwającymi konsolidacjami).
@@ -1112,29 +1156,17 @@ function showSignalsTable(tab) {
     document.getElementById("wybicieTable").hidden = tab !== "WYBICIE";
     document.getElementById("wybicieControls").hidden = tab !== "WYBICIE";
     document.getElementById("wybicieGuide").hidden = tab !== "WYBICIE";
-    document.getElementById("ttmSqueezeTable").hidden = tab !== "TTM_SQUEEZE";
-    document.getElementById("ttmSqueezeGuide").hidden = tab !== "TTM_SQUEEZE";
-    document.getElementById("continuationTable").hidden = tab !== "CONTINUATION";
-    document.getElementById("continuationMarketBanner").hidden = tab !== "CONTINUATION";
-    document.getElementById("continuationGuide").hidden = tab !== "CONTINUATION";
-    document.getElementById("breakoutTable").hidden = tab !== "BREAKOUT";
-    document.getElementById("breakoutControls").hidden = tab !== "BREAKOUT";
-    document.getElementById("breakoutGuide").hidden = tab !== "BREAKOUT";
+    document.getElementById("topGainersTable").hidden = tab !== "TOP_GAINERS";
+    document.getElementById("topGainersGuide").hidden = tab !== "TOP_GAINERS";
     document.getElementById("drawerTitle").textContent = tab === "WYBICIE"
-        ? "Pełna tabela — Wybicie"
-        : tab === "TTM_SQUEEZE"
-            ? "Pełna tabela — TTM Squeeze"
-            : tab === "CONTINUATION"
-                ? "Continuation — Etap 2 + konsolidacja tygodniowa"
-                : "Breakout — replika \"MY STRATEGY BLUEPRINT\" (Gareth Packer/Financial Wisdom)";
+        ? "Sygnały — Wybicie"
+        : "Top gainers — 52 tyg.";
     renderActiveSignalsTable();
 }
 
 function renderActiveSignalsTable() {
     if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
-    else if (state.drawerUniverse === "TTM_SQUEEZE") renderTtmSqueezeTable();
-    else if (state.drawerUniverse === "CONTINUATION") renderContinuationTable();
-    else renderBreakoutTable();
+    else renderTopGainersTable();
 }
 
 function initSignalsDrawer() {
@@ -1274,6 +1306,40 @@ function renderWybicieTable() {
         rowKey: r => r.ticker,
         isSelected: r => r.ticker === state.selectedTicker,
         rowHtml: (r, i) => wybicieRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
+    });
+}
+
+function topGainersRowHtml(r, position) {
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${r.sector || ""}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td class="positive">+${r.return_52w_pct.toFixed(2)}%</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+function renderTopGainersTable() {
+    const allRows = combinedTopGainersCandidates();
+    renderScreenerTable({
+        tbody: document.getElementById("topGainersTableBody"),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 9,
+        emptyAllMsg: "Brak danych o stopie zwrotu z 52 tygodni.",
+        emptyFilteredMsg: "Żadna spółka z top 30 nie pasuje do wybranego etapu.",
+        metaText: rows => `Top ${rows.length} z 30 spółek według wyniku z ostatnich 52 tygodni`,
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => topGainersRowHtml(r, i + 1),
         onRowClick: r => selectTicker(r.ticker, r.universe),
         afterRender: bindTvRowButtons,
     });
@@ -1796,12 +1862,8 @@ if (typeof document !== "undefined") {
         initConnStatus();
         await loadData();
         initWybicieControls();
-        initBreakoutControls();
         renderWybiciePanel();
-        renderTtmSqueezePanel();
-        renderContinuationPanel();
-        renderMarketTrendBanner();
-        renderBreakoutPanel();
+        renderTopGainersPanel();
         initSignalsDrawer();
         initOpenTvButton();
         initResetZoomButton();
@@ -1825,7 +1887,7 @@ if (typeof document !== "undefined") {
 // ładowany i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
+        weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, combinedTopGainersCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, continuationTrendGate, sectorRsInfo, state,
         classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
         breakoutConsolidationFromSqueeze, breakoutConsolidationFromDarvas,

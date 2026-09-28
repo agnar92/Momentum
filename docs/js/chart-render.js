@@ -48,6 +48,37 @@ let rsMansfieldChartInstance = null;
 // Domyślnie false: panel jest schowany, dopóki użytkownik go sam nie otworzy.
 let mansfieldPanelVisible = false;
 
+// Jednowymiarowy filtr Kalmana dla serii ceny. W odróżnieniu od VWAP nie
+// zależy od wolumenu ani od arbitralnego punktu zakotwiczenia: szacuje bieżący
+// poziom trendu wyłącznie z kolejnych obserwacji ceny. Parametry są w jednostkach
+// wykresu (% zmiany) i dają łagodne, lecz wystarczająco szybkie wygładzenie
+// danych tygodniowych.
+function kalman1d(values, processNoise = 0.08, measurementNoise = 4) {
+    let estimate = null;
+    let covariance = 1;
+    return values.map(value => {
+        if (!Number.isFinite(value)) return null;
+        if (estimate == null) {
+            estimate = value;
+            return value;
+        }
+        covariance += processNoise;
+        const gain = covariance / (covariance + measurementNoise);
+        estimate += gain * (value - estimate);
+        covariance *= (1 - gain);
+        return Number(estimate.toFixed(2));
+    });
+}
+
+function kalmanTrendLabel(values, lookback = 4) {
+    const finite = values.filter(Number.isFinite);
+    if (finite.length < 2) return "brak danych";
+    const delta = finite.at(-1) - finite[Math.max(0, finite.length - 1 - lookback)];
+    if (delta > 0.25) return "wzrostowy ↑";
+    if (delta < -0.25) return "spadkowy ↓";
+    return "boczny →";
+}
+
 // Przesuwa widoczny zakres osi X panelu wolumenu tak, zeby dokladnie odpowiadal
 // aktualnemu zoom/pan wykresu 10:30 (patrz onZoomComplete/onPanComplete w
 // renderRelativeStrengthChart) — oba wykresy dziela dokladnie te sama tablice
@@ -299,9 +330,9 @@ function syncChartsCrosshair(charts) {
 // stage analysis (Stan Weinstein / Dr Eric Wish):
 // 1. Wykres główny — cena tygodniowa spółki + EMA 20-tyg. (zastąpiła dawny
 //    "wykres 10:30", SMA 10-tyg./30-tyg. — uproszczenie na prośbę użytkownika;
-//    etapy Weinsteina też liczą się teraz względem EMA20) + VWAP
-//    zakotwiczony na początku okna (fioletowa przerywana linia, patrz
-//    "vwap_pct" w compute_relative_strength_chart), wszystko przeliczone na %
+//    etapy Weinsteina też liczą się teraz względem EMA20) + linia filtra
+//    Kalmana 1D, której kolor segmentów wizualizuje kierunek trendu, wszystko
+//    przeliczone na %
 //    zmiany względem pierwszego wyświetlanego tygodnia OKNA MOMENTUM (patrz
 //    compute_relative_strength_chart). Poziom własnego indeksu NIE jest już
 //    tu rysowany (usunięty na wyraźną prośbę użytkownika — zamiast dwóch
@@ -404,6 +435,8 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
     renderStageBadge(chartData.current_stage);
 
     const pctFmt = (v) => (v == null ? "—" : `${v.toFixed(2)}%`);
+    const kalmanValues = kalman1d(chartData.close_pct || []);
+    const kalmanTrend = kalmanTrendLabel(kalmanValues);
     const volumes = chartData.volume || [];
     // "buying_volume" to CZESC tygodniowego wolumenu przypisana kupujacym metoda
     // Close Location Value (patrz _weekly_close_series w run_query.py — NIE jest to
@@ -448,7 +481,16 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
                     backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, order: 1,
                 },
                 { label: "EMA 20-tyg.", data: chartData.ema20_pct, borderColor: "#e0a72e", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3], order: 1 },
-                { label: "VWAP (od początku okna)", data: chartData.vwap_pct, borderColor: "#c084fc", backgroundColor: "transparent", pointRadius: 0, borderWidth: 1.5, borderDash: [6, 2], order: 1 },
+                {
+                    label: `Kalman 1D · trend ${kalmanTrend}`, data: kalmanValues,
+                    backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, order: 1,
+                    segment: {
+                        borderColor: ctx => {
+                            const change = ctx.p1.parsed.y - ctx.p0.parsed.y;
+                            return change > 0.05 ? "#2ecc71" : change < -0.05 ? "#ef5350" : "#c084fc";
+                        },
+                    },
+                },
             ],
         },
         options: {
@@ -807,6 +849,6 @@ function renderRelativeStrengthChart(symbol, rsEntry) {
 // co rysuje na canvasie, nie jest tu testowalne bez pełnego DOM-a.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rollingMean, alignMansfieldToDates, alignSqueezeToDates, alignMacdToDates, fmtPlDate,
+        rollingMean, kalman1d, kalmanTrendLabel, alignMansfieldToDates, alignSqueezeToDates, alignMacdToDates, fmtPlDate,
     };
 }

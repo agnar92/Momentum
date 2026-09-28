@@ -10,7 +10,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rollingMean, alignMansfieldToDates, alignSqueezeToDates, alignMacdToDates, fmtPlDate,
+    rollingMean, kalman1d, kalmanTrendLabel, alignMansfieldToDates, alignSqueezeToDates, alignMacdToDates, fmtPlDate,
 } = require(path.join("..", "..", "docs", "js", "chart-render.js"));
 
 test("rollingMean averages the trailing window, using a shorter window for the first points", () => {
@@ -29,6 +29,22 @@ test("rollingMean returns null only when every value in the window (so far) is n
     const values = [null, null, 30];
     const out = rollingMean(values, 3);
     assert.deepEqual(out, [null, null, 30]);
+});
+
+test("kalman1d smooths a noisy price series while preserving the first observation", () => {
+    const result = kalman1d([0, 10, 0]);
+    assert.deepEqual(result, [0, 2.13, 1.72]);
+    assert.ok(result[1] > 0 && result[1] < 10);
+});
+
+test("kalman1d keeps gaps and resumes from its latest estimate", () => {
+    assert.deepEqual(kalman1d([0, null, 10]), [0, null, 2.13]);
+});
+
+test("kalmanTrendLabel classifies rising, falling and flat filters", () => {
+    assert.equal(kalmanTrendLabel([0, 1, 2, 3, 4]), "wzrostowy ↑");
+    assert.equal(kalmanTrendLabel([4, 3, 2, 1, 0]), "spadkowy ↓");
+    assert.equal(kalmanTrendLabel([1, 1.1]), "boczny →");
 });
 
 test("alignMansfieldToDates pads with null before the Mansfield window's own start date", () => {
