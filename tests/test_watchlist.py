@@ -158,8 +158,8 @@ class TestCharts:
         df = make_prices(n=300, daily=0.002)
         days = list(df.index[-20:])
         d = watchlist.build_daily(df, days)
-        assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma50", "sma200"))
-        assert d["sma200"][0] is not None  # SMA200 liczona na pelnej historii, nie tylko na oknie
+        assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma10", "sma20"))
+        assert d["sma20"][0] is not None  # SMA liczona na pelnej historii, nie tylko na oknie
 
     def test_build_chart_aligns_to_common_weeks_and_pads_missing(self):
         weekly = watchlist.weekly_ohlcv(make_prices(n=300, daily=0.002))
@@ -247,6 +247,7 @@ class TestBases:
         assert b["peak"] == 100 and b["pivot"] == 100 and b["low"] == 80
         assert b["depth_pct"] == 20.0 and b["weeks"] == 8 and b["type"] in ("cup", "correction")
         assert b["start"] == "2025-01-17" and b["end"] == "2025-03-07"
+        assert b["low_date"] == "2025-02-14" and b["end_close"] is not None
 
     def test_open_base_flat_vcp_with_shrinking_contractions(self):
         # szczyt 100, potem trzy coraz płytsze skurcze (10% -> 6% -> 3%+) i brak wybicia = otwarta baza "flat"
@@ -278,3 +279,33 @@ class TestBases:
         charts = watchlist.build_charts(["AAA"], {"AAA": df}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 52)
         assert "bases" in charts["stocks"]["AAA"]
         assert len(charts["stocks"]["AAA"]["bases"]) <= watchlist.BASE_MAX_SHOWN
+
+
+class TestTrendlines:
+    def _frame(self, highs, lows, closes, volume=1000):
+        idx = pd.bdate_range("2026-01-01", periods=len(highs))
+        return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": volume}, index=idx)
+
+    def test_descending_channel_then_breakout_is_detected(self):
+        # opadajacy korytarz (flaga): szczyty co 8 swiec coraz nizej, na koncu wybicie nad opor
+        n = 60
+        base = [100 - 0.2 * i + (3 if i % 8 == 0 else 0) for i in range(n)]
+        highs = [b + 1 for b in base]
+        lows = [b - 1 for b in base]
+        closes = list(base)
+        for i in range(n - 2, n):           # ostatnie 2 swiece: wybicie
+            closes[i] = highs[i] + 6
+            highs[i] = closes[i] + 1
+        tl = watchlist.detect_trendlines(self._frame(highs, lows, closes), k=2, lookback=60, min_span=8)
+        assert tl is not None and any(ln["kind"] == "res" for ln in tl["lines"])
+        assert tl["state"] == "wybicie"
+        assert tl["breakout"]["confirmed"] is False and tl["breakout"]["vol_ratio"] == 1.0   # ten sam wolumen co zwykle
+
+        vol = np.full(n, 1000.0)
+        vol[n - 2:] = 3000.0                                                                  # skok wolumenu na wybiciu
+        boosted = watchlist.detect_trendlines(self._frame(highs, lows, closes, vol), k=2, lookback=60, min_span=8)
+        assert boosted["breakout"]["confirmed"] is True and boosted["breakout"]["vol_ratio"] == 3.0
+
+    def test_too_short_history_returns_none(self):
+        df = self._frame([1] * 10, [1] * 10, [1] * 10)
+        assert watchlist.detect_trendlines(df, k=2, lookback=60, min_span=8) is None

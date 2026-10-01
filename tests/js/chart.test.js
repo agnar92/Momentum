@@ -20,8 +20,8 @@ function charts(over = {}) {
                 v: [1000, 2000, 1500, 1800, 2500], sma10: [null, null, 11, 12, 13], sma40: [null, null, null, null, 12],
                 eps: [{ d: "2025-10-01", e: 1.0, g: null }, { d: "2026-01-10", e: 1.2, g: 20 }, { d: "2026-07-01", e: 1.6, g: 33 }],
                 eps_next: { d: "2026-10-20", e: 1.8 },
-                bases: [{ start: "2026-01-09", end: "2026-04-03", peak: 15, low: 11, depth_pct: 26.7, weeks: 5, type: "cup", open: false, pivot: 15, contractions: [12.0, 6.5], vcp: true },
-                        { start: "2026-04-03", end: "2026-07-03", peak: 15, low: 13, depth_pct: 13.3, weeks: 4, type: "flat", open: true, pivot: 15, contractions: [], vcp: false }],
+                tl: { lines: [{ kind: "res", x0: "2026-01-09", y0: 15, x1: "2026-07-03", y1: 15, touches: 3 },
+                              { kind: "sup", x0: "2025-12-01", y0: 8, x1: "2026-07-03", y1: 12, touches: 2 }], pattern: "kanał", state: "wybicie" },
             },
         },
         ...over,
@@ -77,7 +77,7 @@ test("chartSvg renders bars, benchmark, RS label, EPS labels and handles empty E
     const svg = chartSvg(buildChartModel(charts(), "AAA", { rs_rating: 94 }));
     assert.match(svg, /^<svg id="chartSvg"/);
     assert.match(svg, /S&amp;P 500/);
-    assert.match(svg, /RS Rating 94/);
+    assert.match(svg, /Rating 94/);
     assert.match(svg, />\+33%</);
     const noEps = charts();
     noEps.stocks.AAA.eps = [];
@@ -111,8 +111,8 @@ test("logTicks uses 1/2/5 steps and falls back to denser steps for narrow ranges
 
 test("chartSvg in log mode labels the scale and keeps rendering bars", () => {
     const m = buildChartModel(charts(), "AAA", null);
-    assert.match(chartSvg(m, { log: true }), /skala logarytmiczna/);
-    assert.doesNotMatch(chartSvg(m, {}), /skala logarytmiczna/);
+    assert.match(chartSvg(m, { log: true }), /skala log\./);
+    assert.doesNotMatch(chartSvg(m, {}), /skala log\./);
 });
 
 test("sliceModel keeps the last n weeks and shifts EPS weeks, dropping those cut off", () => {
@@ -130,8 +130,8 @@ test("chartSvg compact layout uses the narrow viewBox and larger fonts", () => {
     const m = buildChartModel(charts(), "AAA", { rs_rating: 94 });
     const wide = chartSvg(m, {});
     const compact = chartSvg(m, { compact: true });
-    assert.match(wide, /viewBox="0 0 1000 690"/);
-    assert.match(compact, /viewBox="0 0 560 740"/);
+    assert.match(wide, /viewBox="0 0 1000 710"/);
+    assert.match(compact, /viewBox="0 0 560 800"/);
     assert.match(wide, /font-size="11"/);
     assert.match(compact, /font-size="16\.5"/);
 });
@@ -151,33 +151,56 @@ test("rollingMean needs a full finite window", () => {
     assert.deepEqual(rollingMean([1, null, 3, 4], 2), [null, null, null, 3.5]);
 });
 
-test("buildChartModel maps bases to week indexes; sliceModel shifts and drops them", () => {
+test("buildChartModel maps trend lines to indexes; sliceModel shifts and drops them", () => {
     const m = buildChartModel(charts(), "AAA", null);
-    assert.deepEqual(m.bases.map(b => [b.i0, b.i1]), [[1, 3], [3, 4]]);   // koniec w 2026-07-03 = ostatni tydzień
-    const s = sliceModel(m, 2);                                          // zostają tygodnie 3-4
-    assert.deepEqual(s.bases.map(b => [b.i0, b.i1]), [[0, 0], [0, 1]]);
+    assert.deepEqual(m.lines.map(l => [l.kind, l.i0, l.i1]), [["res", 1, 4], ["sup", 0, 4]]);
+    assert.deepEqual(m.trend, { pattern: "kanał", state: "wybicie", breakout: null });
+    const s = sliceModel(m, 2);
+    assert.deepEqual(s.lines.map(l => [l.i0, l.i1]), [[-2, 1], [-3, 1]]);
+    assert.equal(s.smas[0].values.length, 2);
     assert.equal(s.volAvg.length, 2);
-    assert.equal(s.rsNewHigh.length, 2);
 });
 
-test("chartSvg draws base boxes with depth/VCP label and a pivot line for the open base", () => {
+test("chartSvg draws trend lines, breakout marker and a legend strip", () => {
     const svg = chartSvg(buildChartModel(charts(), "AAA", { rs_rating: 90 }));
-    assert.match(svg, /Cup base −26\.7% · 5 tyg\. · VCP/);
-    assert.match(svg, /Flat base −13\.3% · 4 tyg\./);
-    assert.match(svg, /pivot 15\.00 \(/);
+    assert.match(svg, /Opór \(3 dotknięć\)/);
+    assert.match(svg, /Wsparcie \(2 dotknięć\)/);
+    assert.match(svg, /wybicie z linii trendu/);
+    assert.match(svg, /SMA 10 tyg\./);
     assert.match(svg, /średnia 10 tyg\./);
 });
 
-test("dailyCharts: SMA50/200 w miejscu SMA10/40, oś = dni", () => {
+test("dailyCharts: SMA 10/20, oś = dni, wyniki sprzed okna pominięte", () => {
     const { dailyCharts, buildChartModel } = require("../../docs/js/chart.js");
     const charts = {
         weeks: ["2026-01-02"], days: ["2026-01-01", "2026-01-02"], spx_d: [100, 101],
-        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma50: [1, 1.5], sma200: [1, 1.2] }, eps: [], eps_next: null } },
+        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma10: [1, 2], sma20: [1, 1.8] }, eps: [{ d: "2025-06-01", e: 1, g: null }, { d: "2026-01-02", e: 2, g: 5 }], eps_next: null } },
     };
     const d = dailyCharts(charts);
     assert.strictEqual(d.daily, true);
     const m = buildChartModel(d, "X", null);
     assert.strictEqual(m.n, 2);
-    assert.deepStrictEqual(m.sma10, [1, 1.5]);
+    assert.deepStrictEqual(m.smas.map(x => x.label), ["SMA 10", "SMA 20"]);
+    assert.deepStrictEqual(m.eps.map(q => q.week), [1]);
     assert.strictEqual(dailyCharts({ weeks: [] }), null);
+});
+
+test("cup base is drawn as an arc with the depth label; indexes shift with sliceModel", () => {
+    const c = charts();
+    c.stocks.AAA.bases = [{ start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 11, end_close: 14, depth_pct: 26.7, type: "cup", open: false },
+                          { start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 13, depth_pct: 13, type: "flat", open: false }];
+    const m = buildChartModel(c, "AAA", null);
+    assert.deepEqual(m.cups.map(x => [x.i0, x.iLow, x.i1]), [[1, 2, 4]]);   // tylko typ cup
+    const svg = chartSvg(m);
+    assert.match(svg, /−26\.7%<\/text>/);
+    assert.match(svg, /<title>Cup −26\.7%<\/title>/);
+    assert.deepEqual(sliceModel(m, 2).cups.map(x => [x.i0, x.iLow, x.i1]), [[-2, -1, 1]]);
+});
+
+test("legend shows breakout volume confirmation", () => {
+    const c = charts();
+    c.stocks.AAA.tl.breakout = { date: "2026-07-03", vol_ratio: 2.1, confirmed: true };
+    assert.match(chartSvg(buildChartModel(c, "AAA", null)), /wolumen ×2\.1 śr\. ✓ potwierdzone/);
+    c.stocks.AAA.tl.breakout = { date: "2026-07-03", vol_ratio: 0.8, confirmed: false };
+    assert.match(chartSvg(buildChartModel(c, "AAA", null)), /bez potwierdzenia/);
 });

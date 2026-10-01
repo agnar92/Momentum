@@ -40,6 +40,11 @@ SPARK_WEEKS = 26
 CHART_DAYS = 150             # ile sesji pokazuje wykres dzienny (~7 miesięcy)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
+TL_TOLERANCE = 0.015         # tyle (1,5%) cena może "przekłuć" linię trendu, żeby nadal była to ta sama linia
+TL_RECENT_BARS = 3           # ostatnie świece, które mogą już być wybiciem (nie psują linii)
+TL_VOLUME_MULT = 1.5         # wybicie potwierdzone, gdy wolumen >= 1,5x średniej z poprzednich 50 świec
+TL_VOLUME_AVG_BARS = 50
+TL_NEAR_PCT = 3.0            # cena do 3% pod oporem = "przy oporze"
 BASE_MIN_WEEKS = 5           # minimalna długość bazy/korekty (tygodnie od szczytu)
 BASE_MIN_DEPTH_PCT = 6       # płytsze konsolidacje nie są raportowane
 BASE_MAX_DEPTH_PCT = 50      # głębsze to już nie baza, tylko załamanie
@@ -170,6 +175,8 @@ def compute_metrics(df):
     high_52w = float(df["High"].tail(252).max())
     open_base = next((b for b in reversed(detect_bases(weekly_ohlcv(df, asof))) if b["open"]), None)
 
+    tl = detect_trendlines(df, k=3, lookback=70, min_span=8) or {}
+
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
 
@@ -198,6 +205,10 @@ def compute_metrics(df):
         "pivot": open_base["pivot"] if open_base else None,
         "pct_to_pivot": _num((open_base["pivot"] / price - 1) * 100, 1) if open_base else None,
         "vcp": open_base["vcp"] if open_base else None,
+        "tl_state": tl.get("state"),
+        "tl_pattern": tl.get("pattern"),
+        "tl_vol_ratio": (tl.get("breakout") or {}).get("vol_ratio"),
+        "tl_vol_ok": (tl.get("breakout") or {}).get("confirmed"),
         "spark": spark,
     }
 
@@ -268,7 +279,8 @@ def detect_bases(weekly):
         if end <= peak:
             return
         weeks = end - peak + 1
-        low = float(lo[peak + 1:end + 1].min())
+        low_i = peak + 1 + int(np.argmin(lo[peak + 1:end + 1]))
+        low = float(lo[low_i])
         depth = (hi[peak] - low) / hi[peak] * 100
         if weeks < BASE_MIN_WEEKS or not (BASE_MIN_DEPTH_PCT <= depth <= BASE_MAX_DEPTH_PCT):
             return
@@ -284,6 +296,7 @@ def detect_bases(weekly):
         bases.append({
             "start": dates[peak].strftime("%Y-%m-%d"), "end": dates[end].strftime("%Y-%m-%d"),
             "peak": _num(hi[peak]), "low": _num(low), "depth_pct": _num(depth, 1), "weeks": weeks, "type": kind,
+            "low_date": dates[low_i].strftime("%Y-%m-%d"), "end_close": _num(cl[end]),
             "open": is_open, "pivot": _num(hi[peak]), "contractions": drops, "vcp": bool(vcp),
         })
 
@@ -300,6 +313,96 @@ def detect_bases(weekly):
 # WYKRES W STYLU MARKETSMITH (docs/data/charts.json): słupki tygodniowe OHLC + wolumen,
 # SMA10/SMA40 tygodniowe, linia benchmarku (S&P 500) i linia EPS kwartalnego.
 # ============================================================================
+def _pivot_indices(values, k, highs):
+    """Indeksy lokalnych ekstremów: wartość jest największa (highs) / najmniejsza w oknie ±k świec."""
+    out = []
+    for i in range(k, len(values) - k):
+        window = values[i - k:i + k + 1]
+        if (highs and values[i] == window.max()) or (not highs and values[i] == window.min()):
+            out.append(i)
+    return out
+
+
+def _best_line(values, pivots, n, highs, min_span, tol=TL_TOLERANCE):
+    """Najdłuższa prosta przez dwa pivoty, której żadna świeca (poza ostatnimi TL_RECENT_BARS) nie przebija o więcej
+    niż tol. Zwraca (i0, y0, i1, y1, touches) z końcem przedłużonym do ostatniej świecy albo None."""
+    last = n - 1
+    check_to = last - TL_RECENT_BARS
+    best = None
+    for ai, a in enumerate(pivots):
+        for b in pivots[ai + 1:]:
+            if b - a < min_span or values[a] <= 0:
+                continue
+            slope = (values[b] - values[a]) / (b - a)
+            idx = np.arange(a, check_to + 1)
+            line = values[a] + slope * (idx - a)
+            seg = values[a:check_to + 1]
+            bad = (seg > line * (1 + tol)) if highs else (seg < line * (1 - tol))
+            if bad.any() or line.min() <= 0:
+                continue
+            touches = sum(1 for q in pivots if a <= q <= check_to and abs(values[q] - (values[a] + slope * (q - a))) <= tol * values[q])
+            cand = (a, float(values[a]), last, float(values[a] + slope * (last - a)), touches)
+            if best is None or (touches, last - a) > (best[4], last - best[0]):
+                best = cand
+        if best is not None and best[0] == a:
+            break   # najwcześniejszy punkt startowy, który coś daje — dłuższych linii już nie będzie
+    return best
+
+
+def detect_trendlines(ohlc, k, lookback, min_span):
+    """Linie trendu na świecach (daily/weekly): opór przez szczyty, wsparcie przez dołki z ostatnich `lookback` świec.
+    Zwraca {lines, pattern, state, breakout} albo None; breakout = {date, vol_ratio, confirmed} (wolumen świecy wybicia / średnia z 50 poprzednich). state: 'wybicie' (cena nad oporem w ostatnich świecach), 'przy oporze'
+    (<= TL_NEAR_PCT% pod nim) lub None. pattern: opis kształtu (flaga/handle, kanał, trójkąt...) gdy są obie linie."""
+    if len(ohlc) < lookback // 2:
+        return None
+    df = ohlc.tail(lookback)
+    dates = [d.strftime("%Y-%m-%d") for d in pd.DatetimeIndex(df.index)]
+    hi, lo, cl = (df[c].astype(float).values for c in ("High", "Low", "Close"))
+    n = len(df)
+    res = _best_line(hi, _pivot_indices(hi, k, True), n, True, min_span)
+    sup = _best_line(lo, _pivot_indices(lo, k, False), n, False, min_span)
+    lines = []
+    for kind, ln in (("res", res), ("sup", sup)):
+        if ln:
+            lines.append({"kind": kind, "x0": dates[ln[0]], "y0": _num(ln[1]), "x1": dates[ln[2]], "y1": _num(ln[3]), "touches": ln[4]})
+    if not lines:
+        return None
+
+    def slope_pct(ln):  # % na świecę względem poziomu ceny
+        return (ln[3] - ln[1]) / ln[1] / max(1, ln[2] - ln[0]) * 100
+
+    state, pattern, breakout = None, None, None
+    if res:
+        res_now = res[3]
+        recent = range(n - TL_RECENT_BARS, n)
+        broke = any(cl[i] > res[1] + (res[3] - res[1]) * (i - res[0]) / (res[2] - res[0]) for i in recent)
+        if broke:
+            state = "wybicie"
+            first = next(i for i in recent if cl[i] > res[1] + (res[3] - res[1]) * (i - res[0]) / (res[2] - res[0]))
+            full = ohlc["Volume"].astype(float).values
+            pos = len(full) - n + first                      # indeks tej świecy w pełnej serii
+            prev = full[max(0, pos - TL_VOLUME_AVG_BARS):pos]
+            if len(prev) >= 10 and prev.mean() > 0:
+                breakout = {"date": dates[first], "vol_ratio": _num(full[pos] / prev.mean(), 1)}
+                breakout["confirmed"] = bool(breakout["vol_ratio"] >= TL_VOLUME_MULT)
+        elif cl[-1] < res_now and (res_now / cl[-1] - 1) * 100 <= TL_NEAR_PCT:
+            state = "przy oporze"
+    if res and sup:
+        sr, ss = slope_pct(res), slope_pct(sup)
+        flat = 0.05
+        if sr < -flat and ss < -flat and abs(sr - ss) <= abs(sr) * 0.6:
+            pattern = "flaga / handle"
+        elif abs(sr) <= flat and abs(ss) <= flat:
+            pattern = "korytarz poziomy"
+        elif sr > flat and ss > flat and abs(sr - ss) <= abs(sr) * 0.6:
+            pattern = "kanał wzrostowy"
+        elif sr < ss - 0.02:
+            pattern = "trójkąt (zbieżne linie)"
+    elif res and slope_pct(res) < -0.05:
+        pattern = "opadający opór"
+    return {"lines": lines, "pattern": pattern, "state": state, "breakout": breakout}
+
+
 def weekly_ohlcv(df, last_date=None):
     """Dzienne świece -> tygodniowe (piątek). Ostatni, niepełny tydzień dostaje datę ostatniej sesji."""
     df = df.copy()
@@ -328,6 +431,12 @@ def build_chart(weekly, weeks):
     }
 
 
+def _daily_ohlc(df):
+    df = df.copy()
+    df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
+    return df[~df.index.duplicated(keep="last")]
+
+
 def build_daily(df, days):
     """Dzienne świece (ostatnie `days` sesji) + SMA50/SMA200 liczone na pełnej historii, null dla braków."""
     df = df.copy()
@@ -339,8 +448,8 @@ def build_daily(df, days):
     return {
         "o": _series(w["Open"]), "h": _series(w["High"]), "l": _series(w["Low"]), "c": _series(w["Close"]),
         "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
-        "sma50": _series(close.rolling(50).mean().reindex(idx)),
-        "sma200": _series(close.rolling(200).mean().reindex(idx)),
+        "sma10": _series(close.rolling(10).mean().reindex(idx)),
+        "sma20": _series(close.rolling(20).mean().reindex(idx)),
     }
 
 
@@ -447,6 +556,8 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
         chart["day"] = build_daily(df, day_index)
+        chart["tl"] = detect_trendlines(wk, k=2, lookback=40, min_span=4)
+        chart["day"]["tl"] = detect_trendlines(_daily_ohlc(df), k=3, lookback=70, min_span=8)
         payload["stocks"][t] = chart
     return payload
 
