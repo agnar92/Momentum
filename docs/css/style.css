@@ -1,3 +1,8 @@
+/* ============================================================
+   Watchlist (index.html), Episodic Pivot (ep.html) i elementy wspólne (qol.js, pull-to-refresh.js).
+   Układ: na dużym ekranie stała wysokość z przewijaniem tabeli w środku; na małym / niskim (telefon
+   pionowo i poziomo) zwykłe przewijanie strony — patrz @media na końcu.
+   ============================================================ */
 
 :root {
     --bg: #0e0f13;
@@ -26,9 +31,12 @@ html, body {
     overflow: hidden;
 }
 
-/* ============================================================
-   GŁÓWNY LAYOUT: pasek nawigacji + obszar roboczy (sidebar + charts)
-   ============================================================ */
+.positive { color: var(--green-bright); }
+.negative { color: var(--red); }
+.muted { color: var(--text-faint); }
+.small { font-size: 10.5px; }
+
+/* ---------- pasek nawigacji ---------- */
 .topbar {
     height: 48px;
     display: flex;
@@ -38,14 +46,7 @@ html, body {
     background: var(--panel);
     border-bottom: 1px solid var(--border);
 }
-
-.topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    min-width: 0;
-}
-
+.topbar-left { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .topbar .brand {
     font-weight: 700;
     letter-spacing: 0.5px;
@@ -54,106 +55,9 @@ html, body {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    /* min-width:0 pozwala temu elementowi FAKTYCZNIE się skurczyć poniżej
-       jego naturalnej szerokości treści (domyślne min-width:auto we flexie
-       by na to nie pozwoliło) — bez tego, na wąskich telefonach, "MOMENTUM"
-       + długi .brand-sub potrafiły spychać nav (Dashboard/Rebalans) poza
-       widoczny obszar .topbar zamiast obcinać się elipsą (patrz też
-       flex-shrink:0 na .topbar nav niżej — nav ma pierwszeństwo do miejsca,
-       marka ustępuje jako pierwsza). Dotyczy zarówno index.html (.brand
-       zagnieżdżony w .topbar-left, które już miało min-width:0) jak i
-       rebalance.html/chart.html (.brand wprost dzieckiem .topbar, bez
-       pośredniego .topbar-left). */
     min-width: 0;
 }
-
-.cmdk-trigger {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-faint);
-    padding: 6px 10px;
-    border-radius: 6px;
-    font-size: 12px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    white-space: nowrap;
-}
-.cmdk-trigger:hover { color: var(--text); border-color: var(--green); }
-.cmdk-kbd {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 1px 5px;
-    font-size: 10.5px;
-    color: var(--text-faint);
-}
-
-.cmdk-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.55);
-    z-index: 50;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding-top: 12vh;
-}
-
-.cmdk-box {
-    width: min(560px, 92vw);
-    max-height: 70vh;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-.cmdk-input {
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-    font-size: 16px;
-    padding: 16px;
-    outline: none;
-}
-
-.cmdk-results { overflow-y: auto; }
-
-.cmdk-result {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 16px;
-    cursor: pointer;
-}
-
-.cmdk-result.selected { background: var(--panel-alt); }
-
-.cmdk-ticker { font-weight: 700; min-width: 64px; }
-.cmdk-sector { color: var(--text-dim); font-size: 12px; flex: 1; }
-.cmdk-universe { color: var(--text-faint); font-size: 11px; }
-
-.cmdk-empty {
-    padding: 20px 16px;
-    color: var(--text-faint);
-    font-size: 13px;
-    text-align: center;
-}
-
-/* flex-shrink:0 — nav (Dashboard/Rebalans) jest tym, co użytkownik faktycznie
-   chce kliknąć, więc nigdy nie powinien się skurczyć/schować pierwszy; to
-   .brand (patrz min-width:0/text-overflow tam) ustępuje miejsca w razie
-   ciasnoty, nie odwrotnie — patrz komentarz przy .topbar .brand. */
-.topbar nav {
-    flex-shrink: 0;
-}
-
+.topbar nav { flex-shrink: 0; }
 .topbar nav a {
     color: var(--text-dim);
     text-decoration: none;
@@ -164,222 +68,148 @@ html, body {
     border-radius: 6px;
     transition: background 0.15s, color 0.15s;
 }
+.topbar nav a:hover, .topbar nav a.active { color: var(--text); background: var(--panel-alt); }
 
-.topbar nav a:hover,
-.topbar nav a.active {
-    color: var(--text);
-    background: var(--panel-alt);
-}
-
-.workspace {
-    display: flex;
-    height: calc(100vh - 48px);
-    position: relative;
-}
-
-/* ============================================================
-   LEWA KOLUMNA: tickery w kwadratach + przycisk rozwijania
-   ============================================================ */
-.sidebar {
-    width: 96px;
-    min-width: 96px;
-    background: var(--panel);
-    border-right: 2px solid var(--accent-line);
-    display: flex;
-    flex-direction: column;
-    padding: 10px 8px;
-    overflow-y: auto;
-    transition: width 0.25s ease;
-    z-index: 5;
-}
-
-.expand-btn {
-    width: 100%;
-    background: var(--panel-alt);
-    color: var(--green-bright);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 16px;
-    font-weight: 700;
-    padding: 8px 0;
-    margin-bottom: 12px;
-    cursor: pointer;
-    letter-spacing: 2px;
-    transition: background 0.15s, color 0.15s;
-}
-
-.expand-btn:hover {
-    background: var(--green);
-    color: #04170c;
-}
-
-.sidebar-group {
-    margin-bottom: 14px;
-}
-
-.sidebar-group-label {
-    font-size: 10px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--text-faint);
-    margin-bottom: 6px;
-    padding-left: 2px;
-}
-
-.sidebar-group-meta {
-    font-size: 9.5px;
-    color: var(--text-faint);
-    margin-bottom: 6px;
-    padding-left: 2px;
-    line-height: 1.4;
-}
-
-.ticker-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-}
-
-.ticker-tile {
+/* ---------- przyciski i pola ---------- */
+.btn, .add-row-btn, .remove-row-btn {
     background: var(--panel-alt);
     border: 1px solid var(--border);
-    border-radius: 5px;
     color: var(--text-dim);
-    font-size: 10.5px;
-    font-weight: 700;
-    text-align: center;
-    padding: 7px 2px;
+    border-radius: 6px;
     cursor: pointer;
-    user-select: none;
-    transition: background 0.12s, color 0.12s, border-color 0.12s;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    text-decoration: none;
+    font-family: inherit;
 }
+.btn, .add-row-btn { padding: 7px 14px; font-size: 12.5px; font-weight: 600; }
+.add-row-btn { margin-top: 10px; }
+.btn:hover, .add-row-btn:hover { border-color: var(--green); color: var(--text); }
+.remove-row-btn { width: 24px; height: 24px; font-size: 12px; }
+.remove-row-btn:hover { border-color: var(--red); color: var(--red); }
 
-.ticker-tile { position: relative; }
-.tile-rs-dot { position: absolute; top: 3px; right: 3px; width: 5px; height: 5px; border-radius: 50%; }
-.tile-rs-up { background: #2ecc71; }
-.tile-rs-down { background: #ff4d4f; }
-.ticker-tile:hover {
-    border-color: var(--green);
+.contribution-input, .exclude-input, .field input[type="text"], .field input[type="number"], .field select {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
     color: var(--text);
+    padding: 6px 9px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
 }
+.contribution-input { padding: 8px 10px; font-size: 14px; width: 200px; }
+.exclude-input { padding: 8px 10px; width: 140px; }
 
-.ticker-tile.selected {
-    background: var(--green);
-    color: #ffffff;
-    border-color: var(--green-bright);
-}
+.field { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-dim); }
+.field input[type="text"] { width: 140px; }
+.field input[type="number"] { width: 76px; }
+.field input[type="checkbox"] { accent-color: var(--green-bright); }
 
-/* "(N tyg. temu)" przy MACD/RS 52 tyg. w tabeli Wybicie (patrz wybicieRowHtml w app.js). */
-.wybicie-slider { display: flex; align-items: center; gap: 6px; margin-right: 12px; }
-.wybicie-slider input[type="range"] { width: 140px; accent-color: var(--green-bright); }
-.wybicie-slider-value { font-size: 11.5px; font-weight: 600; color: var(--text); min-width: 44px; }
+/* ---------- workspace + tabela ---------- */
+.workspace { display: flex; height: calc(100vh - 48px); position: relative; }
 
-/* Kalkulator Kelly Criterion nad tabelą "📐 Breakout" (signals.js) — pełna
-   szerokość paska filtrów (flex-basis:100%), zamiast wciskać się w jeden
-   rząd z przyciskami "Wymagane" po lewej. */
-.breakout-kelly-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-basis: 100%; margin-top: 4px; }
-.cross-age { font-size: 10.5px; color: var(--text-faint); font-weight: 400; }
-
-/* Separator wizualny między warunkiem skojarzonym a checkboxami łączalnymi w
-   panelu Wybicie (#wybicieControls, patrz signals.html/signals.js). */
-.wybicie-filter-sep { color: var(--text-faint); margin: 0 2px; }
-
-/* Kolumna "Status" w tabeli TTM Squeeze (patrz ttmSqueezeStatusHtml/
-   classifyTtmSqueeze w app.js) — te same kolory co kropki squeeze na czwartym
-   panelu wykresu (patrz dotColors w renderRelativeStrengthChart): złoty =
-   świeże wybicie z konsolidacji, czerwonawy = konsolidacja wciąż trwa. */
-.squeeze-status { font-size: 10.5px; font-weight: 600; }
-.squeeze-status-fired { color: #ffd23f; }
-.squeeze-status-consolidating { color: #e74c3c; }
-.sq-dots { display: inline-flex; gap: 2px; align-items: center; }
-.sq-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
-.sq-dot-on { background: #e74c3c; }
-.sq-dot-off { background: #5c6370; }
-.sq-dot-na { background: transparent; border: 1px solid #5c6370; }
-.spark { display: block; overflow: visible; }
-.spark path { fill: none; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
-.spark .spark-up { stroke: var(--green-bright); }
-.spark .spark-down { stroke: #e74c3c; }
-.spark .spark-ema { stroke: #8b93a1; stroke-width: 1; stroke-dasharray: 3 2; }
-.spark .spark-sq { fill: #e74c3c; }
-.spark-empty { color: var(--text-faint); }
-.cell-spark { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
-.spark .spark-zero { stroke: #6b7280; stroke-width: 1; stroke-dasharray: 2 2; }
-.spark .spark-mark { fill: #ffd23f; }
-.stat-card-buy .value { color: #2ecc71; }
-.stat-card-sell .value { color: #ff6b6b; }
-.bullet { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
-.bullet svg { display: block; }
-.bullet-track { fill: rgba(255, 255, 255, 0.07); }
-.bullet-under { fill: #2ecc71; }
-.bullet-ok { fill: #8a8f9c; }
-.bullet-over { fill: #e0a72e; }
-.bullet-target { fill: #e8eaed; }
-.bullet-label { font-size: 11px; color: var(--text-dim); }
-.rs-bar { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11.5px; }
-.rs-bar svg { display: block; }
-.rs-bar-track { fill: rgba(255, 255, 255, 0.07); }
-.rs-bar-zero { fill: #6b7280; }
-.rs-bar-pos { fill: #2ecc71; }
-.rs-bar-neg { fill: #ff4d4f; }
-.spark .ttm-up { fill: #2ecc71; }
-.spark .ttm-up-fade { fill: #1f7a4d; }
-.spark .ttm-dn { fill: #ff4d4f; }
-.spark .ttm-dn-fade { fill: #7a2020; }
-.spark .ttm-dot-on { fill: #e74c3c; }
-.spark .ttm-dot-fired { fill: #ffd23f; }
-.spark .ttm-dot-off { fill: #5c6370; }
-/* Pasek rozkładu etapów Weinsteina całego uniwersum nad tabelą (renderBreadthBar). */
-.breadth-bar { display: flex; align-items: center; gap: 10px; padding: 6px 16px 8px; flex-shrink: 0; }
-.breadth-bar[hidden] { display: none; }
-.breadth-label { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
-.breadth-track { display: flex; flex: 1; height: 18px; border-radius: 6px; overflow: hidden; gap: 2px; min-width: 160px; }
-.breadth-seg { border: none; padding: 0 4px; color: #0e0f13; font-size: 10.5px; font-weight: 700; cursor: pointer; white-space: nowrap; overflow: hidden; min-width: 3px; }
-.breadth-seg[data-stage="none"] { cursor: default; color: var(--text-faint); }
-.breadth-seg:hover { filter: brightness(1.15); }
-.pullback-badge { color: #ffd23f; font-weight: 600; font-size: 11px; white-space: nowrap; }
-
-/* ============================================================
-   PANEL TABEL (rozwijany, ~80% szerokości ekranu)
-   ============================================================ */
 .table-drawer {
-    position: absolute;
-    top: 0;
-    left: 96px;
-    height: 100%;
-    width: 0;
-    background: var(--panel);
-    border-right: 1px solid var(--border);
-    overflow: hidden;
-    transition: width 0.28s ease;
-    z-index: 4;
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
+    background: var(--panel);
+    overflow: hidden;
 }
 
-.table-drawer.open {
-    width: 80vw;
+.drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
 }
-
-/* Tabela na CAŁY ekran (na prośbę użytkownika) — szuflada nie jest już
-   wysuwana nad wykresem: stoi w układzie obok sidebara i bierze całą resztę
-   szerokości. Wykres otwiera się w okienku (.chart-modal-backdrop niżej). */
-.workspace .table-drawer {
-    position: static;
-    flex: 1;
-    width: auto;
-    min-width: 0;
-    transition: none;
+.drawer-header-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.drawer-header h2 { font-size: 14px; margin: 0; color: var(--text); white-space: nowrap; }
+.drawer-meta { font-size: 11px; color: var(--text-faint); }
+.drawer-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.drawer-tab {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
 }
-.workspace .expand-btn { display: none; }
+.drawer-tab.active { background: var(--green); color: #fff; border-color: var(--green-bright); }
 
-/* Okienko z wykresem nad tabelą: ✕ w rogu, Esc albo klik w tło zamyka
-   (openChartModal/closeChartModal w app.js). Wewnątrz ta sama .charts-area
-   co wcześniej, więc renderRelativeStrengthChart/tryb pełnoekranowy/zakładka
-   TradingView działają bez zmian. */
+.toolbar, .tab-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px 14px;
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+.toolbar-info { font-size: 11px; color: var(--text-faint); flex: 1 1 260px; }
+.tab-controls[hidden], .tab-controls:empty { display: none; }
+
+.screener-guide {
+    padding: 8px 14px;
+    font-size: 12.5px;
+    line-height: 1.55;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel-alt);
+    color: var(--text-dim);
+    flex-shrink: 0;
+}
+.screener-guide[hidden] { display: none; }
+.screener-guide summary { cursor: pointer; color: var(--text); font-weight: 600; }
+.screener-guide[open] summary { margin-bottom: 4px; }
+
+.table-scroll { overflow: auto; flex: 1; padding: 0 16px 16px 16px; }
+
+table.momentum-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.momentum-table thead th {
+    position: sticky;
+    top: 0;
+    background: var(--panel);
+    color: var(--text-dim);
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+}
+table.momentum-table thead th:hover { color: var(--text); }
+table.momentum-table thead th:not([data-key]) { cursor: default; }
+table.momentum-table thead th:not([data-key]):hover { color: var(--text-dim); }
+table.momentum-table thead th.sort-asc::after { content: " ▲"; color: var(--green-bright); }
+table.momentum-table thead th.sort-desc::after { content: " ▼"; color: var(--green-bright); }
+table.momentum-table tbody tr { border-bottom: 1px solid var(--border); }
+table.momentum-table tbody tr[data-ticker] { cursor: pointer; }
+table.momentum-table tbody tr:hover { background: var(--panel-alt); }
+table.momentum-table td { padding: 7px 10px; white-space: nowrap; }
+td.ticker-cell { font-weight: 700; }
+td.fav-cell { cursor: pointer; color: #e0a72e; font-size: 15px; text-align: center; user-select: none; }
+td.earnings-soon { color: #e0a72e; font-weight: 600; }
+th.tv-col { width: 1%; }
+.rank-badge { display: inline-block; min-width: 20px; text-align: center; color: var(--text-faint); }
+.tv-row-btn {
+    background: var(--panel-alt);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 5px;
+    text-decoration: none;
+}
+.tv-row-btn:hover { color: var(--green-bright); border-color: var(--green-bright); }
+.spark { display: block; overflow: visible; }
+.empty-state { color: var(--text-faint); font-size: 13px; padding: 40px; text-align: center; }
+
+/* ---------- okno z wykresem (index.html: .wl-chart-box, ep.html: .charts-area) ---------- */
 .chart-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -391,16 +221,6 @@ html, body {
     padding: 2vh 2vw;
 }
 .chart-modal-backdrop[hidden] { display: none; }
-.chart-modal-backdrop .charts-area {
-    flex: none;
-    width: min(1400px, 96vw);
-    height: 94vh;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
-    padding: 12px;
-}
 .chart-modal-close {
     margin-left: auto;
     flex-shrink: 0;
@@ -416,255 +236,38 @@ html, body {
 }
 .chart-modal-close:hover { border-color: #e74c3c; color: #ff6b6b; }
 
-.drawer-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-}
-
-.drawer-header-title {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-}
-
-.drawer-header h2 {
-    font-size: 14px;
-    margin: 0;
-    color: var(--text);
-    white-space: nowrap;
-}
-
-.drawer-tabs {
-    display: flex;
-    gap: 6px;
-}
-
-.drawer-tab {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.drawer-tab.active {
-    background: var(--green);
-    color: #fff;
-    border-color: var(--green-bright);
-}
-
-/* Filtr etapow Weinsteina nad tabela — widoczny dla kazdej z 5 tabel drawera
-   (per-uniwersum + RSM Stabilne/Wzrostowe, patrz showDrawerTable w app.js).
-   Kolory przyciskow "Etap N" musza byc zgodne z STAGE_COLORS w app.js. */
-.stage-filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-}
-
-/* [hidden] jest tu potrzebne jawnie: `display:flex` powyzej ma ta sama
-   specyficznosc co regula UA `[hidden]{display:none}`, a autorska wygrywa —
-   bez tego pasek nigdy by sie realnie nie chowal (patrz showDrawerTable). */
-.stage-filter-bar[hidden] { display: none; }
-
-.stage-filter-label {
-    font-size: 11px;
-    color: var(--text-faint);
-    margin-right: 2px;
-}
-
-.stage-filter-btn {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 11.5px;
-    font-weight: 600;
-    padding: 5px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.stage-filter-btn:hover { border-color: var(--text-dim); }
-
-.stage-filter-btn.active {
-    background: var(--green);
-    color: #fff;
-    border-color: var(--green-bright);
-}
-
-.stage-filter-btn[data-stage="1"].active { background: #8a8f9c; border-color: #8a8f9c; }
-.stage-filter-btn[data-stage="2"].active { background: var(--green); border-color: var(--green-bright); }
-.stage-filter-btn[data-stage="3"].active,
-.stage-filter-btn[data-stage="4"].active { background: var(--red); border-color: var(--red); }
-
-.drawer-meta {
-    font-size: 11px;
-    color: var(--text-faint);
-}
-
-.table-scroll {
+.wl-chart-box {
+    width: min(1300px, 96vw);
+    max-height: 96vh;
     overflow: auto;
-    flex: 1;
-    padding: 0 16px 16px 16px;
-}
-
-table.momentum-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12.5px;
-}
-
-table.momentum-table thead th {
-    position: sticky;
-    top: 0;
-    background: var(--panel);
-    color: var(--text-dim);
-    text-align: left;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-    white-space: nowrap;
-    user-select: none;
-}
-
-table.momentum-table thead th:hover {
-    color: var(--text);
-}
-
-/* Kolumny bez sortowania (Etap, TV) — patrz guard "if (!key) return" w initDrawer. */
-table.momentum-table thead th:not([data-key]) {
-    cursor: default;
-}
-table.momentum-table thead th:not([data-key]):hover {
-    color: var(--text-dim);
-}
-
-table.momentum-table thead th.sort-asc::after { content: " ▲"; color: var(--green-bright); }
-table.momentum-table thead th.sort-desc::after { content: " ▼"; color: var(--green-bright); }
-
-table.momentum-table tbody tr {
-    border-bottom: 1px solid var(--border);
-    cursor: pointer;
-}
-
-table.momentum-table tbody tr:hover { background: var(--panel-alt); }
-table.momentum-table tbody tr.row-selected { background: rgba(46, 204, 113, 0.12); }
-
-/* #poolTable (ranking puli rebalansera, Krok 2) jest czysto informacyjny —
-   caly wiersz nigdy nie byl/nie jest klikalny, otwarcie wykresu to dedykowany
-   przycisk "📈" (patrz chart-row-btn w poolRowHtml/renderPoolTable,
-   docs/js/rebalance.js) — cursor:pointer odziedziczony z .momentum-table
-   wyzej sugerowalby klikalnosc calego wiersza, ktorej nie ma. */
-#poolTable tbody tr { cursor: default; }
-
-/* #poolTable ma dziś 12 kolumn (doszła kolumna "Grupa" dla core/satelity) i
-   przy typowej szerokości laptopa (~1366px) przelewał się poza .table-wrap,
-   wymuszając poziomy scroll — zgłoszone przez użytkownika ("tabele się nie
-   mieszczą w rebalanserze"). Nieco ciaśniejszy padding/czcionka, SCOPED
-   wyłącznie do tej tabeli (nie dotyka dashboardowych tabel .momentum-table
-   poza rebalanserem, ani innych tabel na tej samej stronie, np. #holdingsTable/
-   #rebalanceTable) — ta sama zmiana obowiązuje na obu rebalanserach (PL i USA
-   dzielą #poolTable id, patrz table-render.js). */
-#poolTable { font-size: 11.5px; }
-#poolTable thead th { padding: 6px 6px; }
-#poolTable td { padding: 5px 6px; }
-
-table.momentum-table td {
-    padding: 7px 10px;
-    white-space: nowrap;
-}
-
-td.ticker-cell { font-weight: 700; }
-td.positive { color: var(--green-bright); }
-td.negative { color: var(--red); }
-
-.rank-badge {
-    display: inline-block;
-    min-width: 20px;
-    text-align: center;
-    color: var(--text-faint);
-}
-
-/* Kolumna "TV" w tabelach dashboardu — przycisk otwierający tradingview.com
-   dla danego wiersza w nowej karcie, bez zaznaczania wiersza (patrz
-   tvRowButtonHtml/bindTvRowButtons w app.js). */
-th.tv-col, th.chart-col { width: 1%; }
-
-.tv-row-btn {
-    background: var(--panel-alt);
+    background: var(--bg);
     border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 10px;
-    font-weight: 700;
-    padding: 3px 8px;
-    border-radius: 5px;
-    cursor: pointer;
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    padding: 12px 14px;
 }
+.wl-chart-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.wl-chart-titles { min-width: 0; flex: 1 1 320px; }
+.wl-chart-title { font-size: 16px; font-weight: 700; }
+.wl-chart-sub, .wl-chart-stats { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
+.wl-chart-stats { margin-top: 6px; }
+.wl-chart-readout { font-size: 12px; color: var(--text-dim); min-height: 18px; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
+.wl-chart-body svg { display: block; width: 100%; height: auto; max-height: calc(96vh - 150px); }
 
-.tv-row-btn:hover {
-    color: var(--green-bright);
-    border-color: var(--green-bright);
-}
-
-/* Kolumna "Etap" w glownej tabeli momentum — kropka + skrot etapu (1/2A/2B/3/4),
-   ten sam kolor co odznaka nad wykresem (patrz stageCellHtml/STAGE_COLORS w app.js). */
-.stage-cell {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    font-size: 11px;
-    font-weight: 700;
-}
-
-.stage-cell .stage-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.weight-bar-bg {
-    background: var(--border);
-    border-radius: 3px;
-    height: 6px;
-    width: 70px;
-    display: inline-block;
-    overflow: hidden;
-    vertical-align: middle;
-    margin-right: 6px;
-}
-
-.weight-bar-fill {
-    background: var(--green);
-    height: 100%;
-}
-
-/* ============================================================
-   OBSZAR WYKRESU (wlasny wykres 10:30 + Mansfield RS, przycisk "Otworz w
-   TradingView" zamiast osadzonego widgetu — patrz updateChartArea w app.js)
-   ============================================================ */
+/* ---------- ep.html ---------- */
 .charts-area {
-    flex: 1;
+    flex: none;
+    width: min(1400px, 96vw);
+    height: 94vh;
     display: flex;
     flex-direction: column;
-    padding: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    padding: 12px;
     overflow: hidden;
 }
-
 .chart-panel {
     flex: 1;
     background: var(--panel);
@@ -674,174 +277,19 @@ th.tv-col, th.chart-col { width: 1%; }
     display: flex;
     flex-direction: column;
 }
-
-/* [hidden] jawnie, z tego samego powodu co .stage-filter-bar[hidden] powyżej
-   (dwie zakładki .chart-panel — własny wykres / TradingView — dzielą to samo
-   ".chart-panel { display: flex }", które inaczej biłoby regułę UA). */
 .chart-panel[hidden] { display: none; }
-
-.chart-panel-header {
-    padding: 6px 12px;
-    font-size: 11px;
-    color: var(--text-faint);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    justify-content: space-between;
-}
-
-.chart-panel-header .symbol {
-    color: var(--green-bright);
-    font-weight: 700;
-}
-
-.chart-container { flex: 1; }
-/* Do pieciu wykresow jeden pod drugim: wykres główny (cena + EMA20 +
-   VWAP, wszystko w % zmiany względem początku okna momentum, duży, u góry,
-   interaktywny — zoom/pan przez chartjs-plugin-zoom) + wolumen tygodniowy
-   (własny panel, osobna widoczna oś) + MACD + TTM Squeeze + (opcjonalny,
-   domyslnie schowany) oscylator Mansfield RS — patrz
-   renderRelativeStrengthChart w js/chart-render.js. Panel jest zawsze
-   widoczny (nie ma juz przelacznika z osadzonym widgetem TradingView) — gdy
-   dany ticker nie ma wlasnego wykresu, JS chowa wszystkie panele i pokazuje
-   #noChartMessage zamiast calego kontenera (patrz updateChartArea). */
-/* overflow-y: auto — na telefonie ".charts-area" (patrz media query nizej) ma
-   SZTYWNA wysokosc (100vh - topbar), wiec badge + panele wykresow + legenda
-   moga sie NIE zmiescic (a NAWET NA DESKTOPIE, po podniesieniu min-height
-   ponizej na wyrazne zyczenie uzytkownika, caly stos zwykle juz przekracza
-   wysokosc widocznego obszaru — to swiadomy kompromis: przewijanie zamiast
-   splaszczonych, malo czytelnych wykresow). Bez tego flexbox scisnalby
-   panele PONIZEJ ich min-height (patrz nizej) zamiast pozwolic przewinac —
-   a Chart.js renderuje sie ZLE (zdegenerowana skala osi Y — np. przy
-   wąskim zakresie danych typu oscylatora Mansfielda, zmierzone empirycznie:
-   canvas <=120px wysokosci -> skala [-100,100] z JEDNYM tickiem zamiast
-   realnego zakresu danych, dopiero >=160px daje poprawna autoskale) w zbyt
-   niskim canvasie, wiec samo scisniecie do zera bez przewijania
-   wygladaloby na "zepsuty" wykres. */
-.rs-chart-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-    overflow-y: auto;
-}
-
-/* min-height wartosci ponizej byly kiedys znacznie nizsze (220/200px) — na
-   wyrazne zyczenie uzytkownika podniesione, zeby wykresy nie wygladaly
-   "splaszczone" nawet kosztem wiecej scrollowania w .rs-chart-container
-   (ktory i tak juz ma overflow-y: auto, patrz komentarz powyzej) — czytelnosc
-   linii/slupkow wazniejsza niz zmieszczenie calego stosu paneli bez
-   przewijania na jednym ekranie. */
-.rs-chart-panel {
-    position: relative;
-    flex: 3;
-    min-height: 460px;
-}
-
-.rs-chart-panel-small {
-    flex: 1;
-    min-height: 300px;
-}
-
-/* Wolumen tygodniowy w oddzielnym panelu pod wykresem 10:30 (wcześniej ukryte
-   słupki na dolnej krawędzi tego samego wykresu) — własna, w pełni widoczna
-   oś, żeby wysokość słupka faktycznie było widać, a nie tylko zgadywać z
-   proporcji dolnego paska. min-height podniesiony razem z resztą paneli
-   powyzej — patrz komentarz przy .rs-chart-container o degenerowaniu sie
-   skali Chart.js ponizej ok. 160px wysokosci canvasu (ten floor teraz jest
-   znacznie ponizej faktycznie ustawionej wysokosci, czysto zabezpieczenie). */
-.rs-chart-panel-volume {
-    position: relative;
-    flex: 1;
-    min-height: 300px;
-}
-
-/* Zakres dat panelu Mansfield RS — nakładka w rogu canvasu (nie zajmuje
-   własnego wiersza w flex-layoucie, żeby nie zepchnąć canvasu poniżej progu
-   degenerowania się skali Chart.js, patrz komentarz przy .rs-chart-container
-   powyżej) — patrz alignMansfieldToDates w app.js: wykres Mansfield dzieli
-   teraz oś X z wykresem 10:30/wolumenu (te same daty, dopełnione null przed
-   startem własnego, krótszego okna Mansfielda), więc pusty odcinek z lewej
-   strony linii RSM już sam pokazuje, od kiedy zaczynają się dane — ten napis
-   tylko to potwierdza słowami. */
-.rs-chart-caption {
-    position: absolute;
-    top: 2px;
-    right: 6px;
-    font-size: 10px;
-    color: var(--text-faint);
-    z-index: 2;
-    pointer-events: none;
-}
-
-/* Odznaka aktualnego etapu Weinsteina (1/2A/2B/3/4) nad wykresem 10:30 — patrz
-   renderStageBadge w app.js. */
-.stage-badge {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    font-weight: 700;
-    padding: 6px 10px;
-    border-radius: 6px;
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    flex-shrink: 0;
-}
-
-.stage-badge:empty {
-    display: none;
-}
-
-.stage-badge .stage-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    flex-shrink: 0;
-}
-
-.stage-badge .stage-desc {
-    color: var(--text-dim);
-    font-weight: 400;
-    font-size: 11px;
-}
-
-/* Legenda baz (prostokąty Etapu 1/2) + wolumenu + interakcji pod wykresem 10:30. */
-.stage-legend {
-    font-size: 10.5px;
-    color: var(--text-faint);
-    flex-shrink: 0;
-    line-height: 1.5;
-}
-
-/* Pasek nad panelem wykresu — "Otwórz w TradingView" (#openTvBtn, patrz
-   initOpenTvButton w app.js), otwierający pełną stronę tradingview.com w nowej
-   karcie zamiast osadzonego widgetu, oraz "Resetuj zoom" (#resetZoomBtn, patrz
-   initResetZoomButton) do cofnięcia interaktywnego zoom/pan wykresu 10:30. */
-.chart-mode-toggle {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 8px;
-    flex-shrink: 0;
-    flex-wrap: wrap;
-}
-
-/* Ticker + uniwersum (+ sektor) aktualnie wybranej spółki — po prawo od
-   przycisków TV / Resetuj zoom, żeby na PWA/mobile było od razu widać, na
-   który wykres się patrzy (patrz updateChartTickerLabel w app.js). */
+.chart-mode-toggle { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-shrink: 0; flex-wrap: wrap; }
 .chart-ticker-label {
     margin-left: auto;
     padding-left: 8px;
     font-size: 13px;
     font-weight: 700;
-    color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     min-width: 0;
     text-align: right;
 }
-
 .chart-mode-btn {
     background: var(--panel-alt);
     border: 1px solid var(--border);
@@ -852,424 +300,12 @@ th.tv-col, th.chart-col { width: 1%; }
     border-radius: 6px;
     cursor: pointer;
 }
+.chart-mode-btn.active { background: var(--green); color: #fff; border-color: var(--green-bright); }
+.tv-overview-container { display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow-y: auto; }
+.tv-widget-block { flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
 
-.chart-mode-btn.active {
-    background: var(--green);
-    color: #fff;
-    border-color: var(--green-bright);
-}
-
-.chart-back-btn {
-    display: none; /* widoczny tylko w widoku wykresu na telefonie */
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 14px;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    margin-bottom: 8px;
-    align-self: flex-start;
-    flex-shrink: 0;
-}
-.chart-back-btn:hover { border-color: var(--green); }
-
-/* Zakładki przełączające obszar wykresu między własnym wykresem stage-analysis
-   (domyślny) a osadzonymi widgetami TradingView (notowanie, profil spółki,
-   dane fundamentalne) — patrz initChartViewTabs/renderTvOverviewPanel w app.js. */
-.chart-view-tabs {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 8px;
-    flex-shrink: 0;
-}
-
-.chart-view-tab {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-
-.chart-view-tab.active {
-    background: var(--panel);
-    color: var(--green-bright);
-    border-color: var(--green);
-}
-
-/* Widgety TradingView jeden pod drugim (ticker tape, notowanie, Advanced
-   Chart, profil spółki, dane fundamentalne) — każdy w osobnym
-   tradingview-widget-container, patrz renderTvOverviewPanel w app.js.
-   overflow-y: auto z tego samego powodu co .rs-chart-container powyżej
-   (widgety mają stałą wysokość, telefon ma sztywną wysokość .charts-area). */
-.tv-overview-container {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 12px;
-    overflow-y: auto;
-}
-
-/* Wysokość każdego bloku to inline style ustawiany z spec.heightPx w
-   buildTvWidgetBlock (app.js) — 1:1 z per-sekcyjnymi CSS regułami źródłowego
-   tutoriala TradingView (np. `#advanced-chart{height:500px}`), tylko
-   przeniesione do JS bo tu nie mamy tych samych id-ów co tamten plik. */
-.tv-widget-block {
-    flex-shrink: 0;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-}
-
-/* Dolny wiersz wzorca (Analiza techniczna + oś czasu newsów) obok siebie —
-   flex zamiast media query, żeby responsywność zależała od realnej
-   szerokości panelu wykresu (zmienia się z rozwinięciem/schowaniem
-   sidebara), a nie tylko od szerokości viewportu. */
-.tv-widget-row {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-}
-
-.tv-widget-row .tv-widget-block {
-    flex: 1 1 340px;
-    min-width: 0;
-}
-
-/* Pasek "poziom do obserwowania" nad wykresem 1-minutowym (zakładka "⚡ 1 min
-   + VWAP", renderOrbLevelInfo w js/chart-modal.js) — osadzony widget
-   TradingView "Advanced Chart" (wersja bez konta) nie ma API do narysowania
-   własnej poziomej linii, więc to jawna liczba tekstowa nad wykresem, nie
-   linia na nim. Umieszczony wewnątrz .tv-overview-container, więc dziedziczy
-   jej padding/gap. */
-.orb-level-info {
-    flex-shrink: 0;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--panel-alt);
-    font-size: 13px;
-}
-.orb-level-label { color: var(--text-dim); margin-right: 6px; }
-.orb-level-value { font-weight: 700; margin-right: 10px; }
-.orb-level-value.positive { color: var(--green-bright); }
-.orb-level-value.negative { color: var(--red); }
-
-/* Pełnoekranowy tryb wykresu 10:30 (#chartFullscreenBtn, patrz
-   initChartFullscreen w app.js) — świadomie CSS-owy nakładany kontener
-   (position: fixed na już istniejącym .rs-chart-container), NIE prawdziwe
-   Element.requestFullscreen(): w PWA uruchomionym z ekranu głównego na iOS
-   ta przeglądarkowa Fullscreen API bywa niedostępna/rzuca błędem (apka i tak
-   już działa bez chrome'u przeglądarki), więc nakładka position:fixed działa
-   spójnie wszędzie. Chart.js ma responsive:true + maintainAspectRatio:false
-   na wszystkich trzech wykresach, więc ResizeObserver na canvasie sam łapie
-   zmianę rozmiaru kontenera — dodatkowe ręczne .resize() w JS to tylko
-   zabezpieczenie przed nierównym timingiem na iOS Safari. */
-.rs-chart-container.chart-fullscreen {
-    position: fixed;
-    inset: 0;
-    z-index: 2000;
-    background: var(--bg);
-    border-radius: 0;
-    padding: 12px;
-}
-
-/* Pasek przełączników "Wolumen"/"MACD"/"TTM Squeeze", widoczny tylko w trybie
-   pełnoekranowym (poza nim panele są zawsze widoczne, jak dotychczas) —
-   pozwala dołożyć je do widoku na żądanie zamiast trzymać je zawsze włączone
-   i zabierać miejsce głównemu wykresowi cenowemu z bazami Darvasa. Mansfield
-   RS NIE jest tu już wymieniony — ma teraz własny, zawsze widoczny przycisk
-   przy swoim panelu (patrz .rs-mansfield-controls niżej), działający tak samo
-   w obu trybach. */
-.chart-fullscreen-extras {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    flex-shrink: 0;
-    margin-bottom: 8px;
-}
-
-/* [hidden] jawnie: `display:flex` powyzej ma ta sama specyficznosc co regula
-   UA `[hidden]{display:none}`, a autorska wygrywa — bez tego pasek nigdy by
-   sie realnie nie chowal poza trybem pelnoekranowym (ten sam gotcha co przy
-   .stage-filter-bar[hidden] powyzej w tym pliku). */
-.chart-fullscreen-extras[hidden] { display: none; }
-
-.chart-fullscreen-extras-label {
-    font-size: 11px;
-    color: var(--text-faint);
-    margin-right: 2px;
-}
-
-.chart-extra-toggle {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 5px 12px;
-    border-radius: 999px;
-    cursor: pointer;
-}
-
-.chart-extra-toggle.active {
-    background: var(--green);
-    color: #fff;
-    border-color: var(--green-bright);
-}
-
-.chart-extra-toggle:disabled {
-    opacity: 0.5;
-    cursor: default;
-}
-
-/* Pasek nad panelem Mansfield RS (patrz applyMansfieldPanelVisibility/
-   initMansfieldControls w chart-render.js) — panel jest teraz OPCJONALNY i na
-   samym dole (przeniesiony na wyraźną prośbę użytkownika), więc przycisk
-   pokazujący/chowający go żyje tuż nad nim zamiast w pasku trybu
-   pełnoekranowego (patrz .chart-fullscreen-extras powyżej) — działa
-   identycznie w widoku normalnym i pełnoekranowym. */
-.rs-mansfield-controls {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-    margin-top: 4px;
-}
-
-/* Zamknięcie pełnego ekranu — #chartFullscreenBtn (poza kontenerem) staje się
-   niedostępny pod nakładką position:fixed, więc jedyne wyjście musi żyć
-   wewnątrz samego .chart-fullscreen-extras. */
-.chart-fullscreen-close {
-    margin-left: auto;
-    color: var(--text);
-}
-
-/* ============================================================
-   STRONA REBALANS
-   ============================================================ */
-.rebalance-page, .strategy-page, .ep-page {
-    height: calc(100vh - 48px);
-    overflow-y: auto;
-    padding: 24px 32px;
-    max-width: 980px;
-    margin: 0 auto;
-}
-
-/* Strona EP (Episodic Pivot, docs/ep.html/js/ep.js) — dziennik ręcznie
-   dodawanych tickerów, wpisywanych po przejrzeniu skanera/newsów powyżej na
-   tej samej stronie (patrz komentarz na górze ep.js). #epLogTable to zwykłe
-   table.momentum-table (patrz wyżej), tylko z edytowalnymi <select>/<textarea>
-   w komórkach zamiast statycznego tekstu — table.holdings-table ma już taką
-   regułę dla swoich input-ów, ale nie dla select-ów/textarea, i ukrywa na
-   telefonie 3. kolumnę (myślaną dla ceny w innych tabelach), co tutaj
-   wycięłoby "Typ EP" — stąd osobna, węższa reguła zamiast reużycia
-   .holdings-table. Rozmiar czcionki/padding większy niż domyślne
-   table.momentum-table — na wyraźną prośbę użytkownika ("duże ten tracker"),
-   dziennik ma być czytelny/wygodny do codziennego wpisywania, nie ciasną
-   tabelką danych jak reszta dashboardu. */
-#epLogTable th, #epLogTable td { padding: 10px 12px; font-size: 13.5px; }
-#epLogTable select, #epLogTable textarea {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 6px 9px;
-    border-radius: 5px;
-    font-size: 13px;
-    font-family: inherit;
-}
-#epLogTable td.ep-ticker-cell { font-weight: 700; font-size: 15px; }
-
-/* Notatki — DUŻE, resizowalne <textarea>, zarówno w formularzu dodawania
-   (pełna szerokość, pod wierszem ticker/typ/status/przycisk, patrz
-   .settings-row w ep.html) jak i w samej tabeli (jedna na wiersz) — na
-   wyraźną prośbę użytkownika: małe pole tekstowe na jedną linię nie
-   wystarczało do realnych notatek (katalizator, poziomy, plan). */
-.ep-notes-textarea, #epLogTable textarea.ep-notes-input {
-    width: 100%;
-    min-height: 90px;
-    resize: vertical;
-    line-height: 1.5;
-}
-#epLogTable textarea.ep-notes-input { min-width: 260px; }
-
-/* Selecty Typ EP/Status w formularzu dodawania (.import-row nad tabelą) —
-   .contribution-input jest domyślnie 200px, tu trochę węziej, żeby cały
-   wiersz (ticker + 2 selecty + przycisk) mieścił się bliżej siebie. */
-.ep-select-inline { width: 200px; }
-
-/* Karta Dziennika EP jest teraz GŁÓWNYM narzędziem strony (na wyraźną
-   prośbę użytkownika, "ten tracker był fajny") — większy nagłówek i więcej
-   oddechu niż zwykła .panel-card, żeby wizualnie odróżnić ją od kart
-   informacyjnych (skaner/newsy) powyżej. */
-.panel-card-large { padding: 28px; }
-.panel-card-large > h3 { font-size: 21px; margin-bottom: 10px; }
-
-/* Duży, oczywisty przycisk-link do skanera gapów (patrz EP_GAP_SCANNER_URL w
-   ep.js) — na wyraźną prośbę użytkownika po tym, jak pierwsza wersja
-   (osadzony widget udający filtr premarket) okazała się myląca zamiast
-   "banalnie prosta": to zwykły <a>, nie widget, więc nic tu nie może się
-   "nie dać skonfigurować" — jeden klik i gotowe, żadnego configu do
-   pilnowania. */
-.ep-gap-link {
-    display: inline-block;
-    padding: 14px 24px;
-    font-size: 15px;
-}
-
-/* Krok 1 strategii sektorowej (docs/strategy.html): baner "faza wzrostu"
-   SP500 wg filtru trendu (SMA200 dzienna LUB SMA40 tygodniowa), patrz
-   compute_sp500_trend_filter w run_query.py. */
-.trend-banner {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-weight: 700;
-    font-size: 13px;
-    margin-bottom: 14px;
-    border: 1px solid var(--border);
-    background: var(--panel-alt);
-    color: var(--text-dim);
-}
-.trend-banner.growth { background: rgba(46, 204, 113, 0.12); color: var(--green-bright); border-color: var(--green-bright); }
-.trend-banner.no-growth { background: rgba(224, 69, 90, 0.12); color: var(--red); border-color: var(--red); }
-
-/* Widoczne, zwykłe (nie tylko hover-title) wyjaśnienie "co pokazuje ta
-   zakładka / czego szukać / kiedy rozważyć kupno" nad każdą tabelą na
-   signals.html — dodane po zgłoszeniu użytkownika, że same zakładki
-   Wybicie/TTM Squeeze/Continuation/Qullamaggie były mało czytelne. */
-.screener-guide {
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 12.5px;
-    line-height: 1.55;
-    margin-bottom: 14px;
-    border: 1px solid var(--border);
-    background: var(--panel-alt);
-    color: var(--text-dim);
-}
-.screener-guide strong { color: var(--text); }
-
-/* Lejek strategii Stage 2 Continuation (docs/strategy.html, js/strategy.js):
-   pasek licznikow kolejnych bramek + znaczniki statusu w tabelach. */
-.funnel-viz {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    margin-bottom: 12px;
-}
-.funnel-row {
-    padding: 8px 10px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-}
-.funnel-row-top { cursor: default; }
-.funnel-row[data-step]:hover { background: var(--panel-alt); }
-.funnel-row.focused { border-color: var(--green-bright); background: rgba(46, 204, 113, 0.06); }
-.funnel-row:focus-visible { outline: 2px solid var(--green-bright); outline-offset: 1px; }
-.funnel-row-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 8px;
-    margin-bottom: 4px;
-}
-.funnel-row-title { font-size: 12.5px; font-weight: 600; color: var(--text); }
-.funnel-row-drop {
-    font-size: 12px;
-    font-weight: 700;
-    color: var(--red);
-    padding: 1px 6px;
-    border-radius: 4px;
-}
-.funnel-row-drop:hover { background: rgba(224, 69, 90, 0.15); }
-.funnel-row-drop.zero { color: var(--text-faint); }
-.funnel-bar-track { display: flex; justify-content: center; }
-.funnel-bar {
-    height: 26px;
-    border-radius: 5px;
-    background: linear-gradient(90deg, rgba(52, 152, 219, 0.55), rgba(52, 152, 219, 0.85));
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 34px;
-    transition: width 0.3s ease;
-}
-.funnel-bar span { font-size: 13px; font-weight: 700; color: #fff; }
-.funnel-bar-all { background: linear-gradient(90deg, rgba(138, 143, 156, 0.45), rgba(138, 143, 156, 0.7)); }
-.funnel-bar-final { background: linear-gradient(90deg, rgba(46, 204, 113, 0.7), var(--green-bright)); }
-.funnel-row-info {
-    font-size: 11px;
-    color: var(--text-faint);
-    text-align: center;
-    margin-top: 4px;
-}
-.funnel-chips {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 5px 10px;
-    margin-top: 6px;
-}
-.funnel-chips:empty { display: none; }
-.funnel-chip-group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.funnel-chip-prefix { font-size: 11px; color: var(--text-faint); margin-right: 2px; }
-.funnel-chip {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 11.5px;
-    font-weight: 600;
-    padding: 4px 9px;
-    border-radius: 999px;
-    cursor: pointer;
-    min-height: 28px;
-}
-.funnel-chip:hover { border-color: var(--text-dim); }
-.funnel-chip.active { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); border-color: var(--green-bright); }
-.funnel-reset { margin-top: 4px; }
-.funnel-status-drop { color: var(--text-faint); font-weight: 500; }
-.funnel-status { font-weight: 600; white-space: nowrap; font-size: 12px; }
-.funnel-status-entry { color: var(--green-bright); }
-.funnel-status-wait { color: #e0a72e; }
-.funnel-status-setup { color: var(--text); }
-.funnel-status-watch { color: var(--text-faint); }
-.funnel-status-exit { color: var(--red); }
-.funnel-note {
-    font-size: 10px;
-    font-weight: 600;
-    color: var(--text-faint);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 0 4px;
-    white-space: nowrap;
-}
-.funnel-note-warn { color: #e0a72e; border-color: #e0a72e; }
-.held-input { width: 100%; max-width: 420px; }
-.helper-heading {
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-faint);
-    margin: 28px 0 12px;
-}
-
-.panel-card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 18px 22px;
-    margin-bottom: 20px;
-}
-
+.ep-page { height: calc(100vh - 48px); overflow-y: auto; padding: 24px 32px; max-width: 980px; margin: 0 auto; }
+.panel-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; }
 .panel-card h3 {
     margin: 0 0 14px 0;
     font-size: 13px;
@@ -1281,372 +317,36 @@ th.tv-col, th.chart-col { width: 1%; }
     gap: 10px;
     flex-wrap: wrap;
 }
-
-.collapse-toggle-btn {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
-    text-transform: none;
-    letter-spacing: 0;
-    cursor: pointer;
-    margin-left: auto;
-}
-.collapse-toggle-btn:hover { border-color: var(--green-bright); color: var(--text); }
-
-.mc-horizon {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 4px 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    text-transform: none;
-    letter-spacing: 0;
-}
-
-.mc-chart-wrap { height: 260px; }
-.mc-chart-wrap canvas { width: 100% !important; height: 100% !important; }
-
-.ref-date-note {
-    text-transform: none;
-    letter-spacing: 0;
-    color: var(--text-faint);
-    font-weight: 400;
-    font-size: 11.5px;
-}
-
-.panel-hint {
-    font-size: 12px;
-    color: var(--text-faint);
-    margin: -6px 0 14px 0;
-}
-
-.settings-hint {
-    font-size: 11.5px;
-    color: var(--text-faint);
-    margin-top: 8px;
-}
-
+.panel-card-large { padding: 28px; }
+.panel-card-large > h3 { font-size: 21px; margin-bottom: 10px; }
+.panel-hint { font-size: 12px; color: var(--text-faint); margin: -6px 0 14px 0; }
 .settings-row { margin-bottom: 14px; }
 .settings-row:last-child { margin-bottom: 0; }
-.settings-row > label {
-    display: block;
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-bottom: 6px;
-}
-
-.contribution-input {
+.settings-row > label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.import-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.ep-gap-link { display: inline-block; padding: 14px 24px; font-size: 15px; }
+.ep-select-inline { width: 200px; }
+#epLogTable th, #epLogTable td { padding: 10px 12px; font-size: 13.5px; }
+#epLogTable select, #epLogTable textarea {
     background: var(--panel-alt);
     border: 1px solid var(--border);
     color: var(--text);
-    padding: 8px 10px;
-    border-radius: 6px;
-    font-size: 14px;
-    width: 200px;
-}
-
-.bucket-inputs { display: flex; gap: 18px; flex-wrap: wrap; }
-.bucket-input {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
-}
-.bucket-input span { font-size: 12px; color: var(--text-dim); }
-.bucket-input input {
-    width: 56px;
-    background: transparent;
-    border: none;
-    color: var(--text);
-    font-size: 14px;
-    text-align: right;
-}
-.bucket-input input:focus { outline: none; }
-
-.stat-cards {
-    display: flex;
-    gap: 16px;
-    margin-bottom: 24px;
-    flex-wrap: wrap;
-}
-
-.stat-card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px 22px;
-    min-width: 160px;
-    flex: 1;
-}
-
-.stat-card .label {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    color: var(--text-faint);
-    margin-bottom: 6px;
-}
-
-.stat-card .value {
-    font-size: 24px;
-    font-weight: 700;
-}
-
-.stat-card .value.positive { color: var(--green-bright); }
-.stat-card .value.negative { color: var(--red); }
-
-.table-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-table.holdings-table, table.rebalance-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12.5px;
-}
-
-table.holdings-table th, table.rebalance-table th {
-    text-align: left;
-    padding: 6px 10px;
-    color: var(--text-faint);
-    font-weight: 600;
-    border-bottom: 1px solid var(--border);
-}
-
-table.holdings-table td, table.rebalance-table td {
-    padding: 6px 10px;
-    border-bottom: 1px solid var(--border);
-}
-
-.holdings-table input[type="text"], .holdings-table input[type="number"] {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 5px 8px;
+    padding: 6px 9px;
     border-radius: 5px;
-    font-size: 12.5px;
-    width: 90px;
-}
-
-.import-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 14px;
-    flex-wrap: wrap;
-}
-
-.import-row input[type="file"] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    opacity: 0;
-}
-
-.file-btn { display: inline-block; margin-top: 0; cursor: pointer; }
-
-.add-row-btn, .remove-row-btn {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    border-radius: 6px;
-    cursor: pointer;
-}
-.add-row-btn { padding: 7px 14px; font-size: 12.5px; font-weight: 600; margin-top: 10px; }
-.add-row-btn:hover { border-color: var(--green); color: var(--text); }
-.add-row-btn.danger:hover { border-color: var(--red); color: var(--red); }
-.remove-row-btn { width: 24px; height: 24px; font-size: 12px; }
-.remove-row-btn:hover { border-color: var(--red); color: var(--red); }
-
-.text-faint { color: var(--text-faint); }
-
-.action-badge {
-    display: inline-block;
-    padding: 3px 9px;
-    border-radius: 5px;
-    font-size: 11.5px;
-    font-weight: 700;
-}
-.action-badge.buy { background: rgba(46, 204, 113, 0.15); color: var(--green-bright); }
-.action-badge.sell { background: rgba(224, 69, 90, 0.15); color: var(--red); }
-.action-badge.hold { background: var(--panel-alt); color: var(--text-faint); }
-.action-badge.skip { background: var(--panel-alt); color: var(--text-faint); font-weight: 400; }
-.action-badge.unknown { background: var(--panel-alt); color: var(--text-dim); }
-.action-badge.excluded { background: var(--panel-alt); color: var(--text-faint); font-style: italic; }
-
-.exclude-input {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 8px 10px;
-    border-radius: 6px;
     font-size: 13px;
-    width: 140px;
+    font-family: inherit;
 }
+#epLogTable td.ep-ticker-cell { font-weight: 700; font-size: 15px; }
+.ep-notes-textarea, #epLogTable textarea.ep-notes-input { width: 100%; min-height: 90px; resize: vertical; line-height: 1.5; }
+#epLogTable textarea.ep-notes-input { min-width: 260px; }
 
-.exclude-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-
-.exclude-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    border-radius: 20px;
-    padding: 5px 6px 5px 12px;
-    font-size: 12.5px;
-    font-weight: 600;
-}
-
-.exclude-chip-remove {
-    background: var(--border);
-    border: none;
-    color: var(--text-dim);
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    font-size: 11px;
-    line-height: 1;
-    cursor: pointer;
-}
-.exclude-chip-remove:hover { background: var(--red); color: #fff; }
-
-.empty-state {
-    color: var(--text-faint);
-    font-size: 13px;
-    padding: 40px;
-    text-align: center;
-}
-
-.import-row label {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 13px;
-    color: var(--text-dim);
-    cursor: pointer;
-}
-
-.donut-wrap {
-    height: 260px;
-    margin-bottom: 18px;
-}
-.donut-wrap canvas { width: 100% !important; height: 100% !important; }
-
-/* Scrollbars */
+/* ---------- qol.js / pull-to-refresh.js ---------- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--panel); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
 
-/* ============================================================
-   MOBILE (telefony, np. iPhone 6.1" ~390px szerokości) —
-   jednokolumnowy układ zamiast desktopowego panelu 3-kolumnowego.
-   Sidebar z kafelkami znika (dubluje pełną tabelę poniżej — tap
-   na wiersz też wybiera ticker), tabela jest zawsze widoczna
-   zamiast rozwijana, żeby nie dublować interakcji na małym ekranie.
-   ============================================================ */
-@media (max-width: 640px) {
-    .brand-sub { display: none; }
-    .topbar { padding: 0 12px; }
-    .topbar-left { gap: 8px; }
-    .topbar nav a { margin-left: 8px; padding: 6px 8px; font-size: 12px; }
-    .cmdk-kbd { display: none; }
-    .cmdk-trigger { padding: 6px 8px; }
-    .cmdk-overlay { padding-top: 4vh; align-items: flex-start; }
-
-    /* --- Dashboard: na telefonie nie ma miejsca na tabelę i wykres naraz,
-       więc to dwa osobne "widoki" — domyślnie lista (pełna wysokość), po
-       dotknięciu spółki przełącza się na pełnoekranowy wykres (patrz
-       .workspace.mobile-chart-view niżej i selectTicker() w app.js). --- */
-    .workspace {
-        flex-direction: column;
-        overflow: hidden;
-    }
-
-    .sidebar { display: none; }
-
-    .table-drawer {
-        position: static;
-        width: 100% !important;
-        height: calc(100vh - 48px);
-        max-height: none;
-        border-right: none;
-        border-bottom: 2px solid var(--accent-line);
-        /* Na Sygnałach (drawer-header + opis screenera + filtr etapów + ewentualne
-           suwaki/banner rynkowy) treść NAD tabelą bywa sama w sobie wyższa niż
-           dostępna wysokość telefonu — przy .table-scroll{flex:1} (patrz niżej)
-           to ściskało obszar tabeli do kilku pikseli zamiast pozwolić przewinąć
-           całość, więc widać było tylko maleńki, "urwany" fragment tabeli.
-           Całą szufladę (nagłówek + filtry + tabela) przewijamy teraz jako
-           jedną całość zamiast dzielić ją na "stały nagłówek" + "tabela ze
-           swoim własnym, wewnętrznym scrollem". */
-        overflow-y: auto;
-        overflow-x: hidden;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    /* h2 znika — aktywna zakładka niżej już mówi, który indeks widać */
-    .drawer-header { flex-direction: column-reverse; align-items: stretch; gap: 6px; padding: 8px 12px; flex-shrink: 0; }
-    .drawer-header-title h2 { display: none; }
-    .drawer-tabs { flex-wrap: wrap; }
-    .drawer-tab { padding: 6px 10px; font-size: 11.5px; }
-
-    /* Pionowy scroll dzieje się teraz na .table-drawer (patrz wyżej) — .table-scroll
-       już nie konkuruje o wysokość (flex:1 by je ściskało do ~0), tylko rośnie do
-       naturalnej wysokości tabeli; poziomy scroll (dla szerokiej tabeli, patrz
-       min-width niżej) zostaje lokalnie na nim. */
-    .table-scroll { padding: 0 8px 8px 8px; flex: none; overflow-x: auto; overflow-y: visible; }
-    table.momentum-table { width: auto; min-width: 640px; }
-
-    .chart-back-btn { display: none; }
-    .chart-modal-backdrop { padding: 0; }
-    .chart-modal-backdrop .charts-area { width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; border: none; padding: 8px; }
-
-    .workspace.mobile-chart-view .table-drawer { display: none; }
-    .workspace.mobile-chart-view .charts-area {
-        display: flex;
-        flex: none;
-        height: calc(100vh - 48px);
-    }
-    .workspace.mobile-chart-view .chart-back-btn { display: block; }
-
-    /* --- Rebalans --- */
-    .rebalance-page, .strategy-page, .ep-page { padding: 14px 12px; }
-    .panel-card { padding: 14px; }
-    .panel-card-large { padding: 16px; }
-    .ep-select-inline { width: 100%; max-width: 220px; }
-    .stat-cards { gap: 10px; margin-bottom: 16px; }
-    .stat-card { min-width: 0; flex: 1 1 45%; padding: 12px 14px; }
-    .stat-card .value { font-size: 18px; }
-    .contribution-input { width: 100%; max-width: 220px; }
-    .bucket-inputs { gap: 8px; }
-
-    /* Cena / Waga docelowa — zbędne obok Wartości, znikają żeby zmieścić resztę bez przewijania */
-    table.holdings-table th:nth-child(3), table.holdings-table td:nth-child(3) { display: none; }
-    table.rebalance-table th:nth-child(3), table.rebalance-table td:nth-child(3) { display: none; }
-    .holdings-table input[type="text"], .holdings-table input[type="number"] { width: 72px; }
-    .mc-chart-wrap { height: 200px; }
-}
-
-/* ============================================================
-   PULL-TO-REFRESH (gest "przeciągnij w dół") — patrz js/pull-to-refresh.js.
-   Świadomie większy i bardziej widoczny niż domyślny wskaźnik przeglądarki,
-   tak jak w nowoczesnych natywnych aplikacjach.
-   ============================================================ */
 .ptr-indicator {
     position: fixed;
     top: 0;
@@ -1666,43 +366,11 @@ table.holdings-table td, table.rebalance-table td {
     z-index: 999;
     pointer-events: none;
 }
+.ptr-spinner { width: 30px; height: 30px; }
+.ptr-spinner circle { stroke: var(--text-faint); stroke-dasharray: 90 40; stroke-linecap: round; transition: stroke 0.15s ease; }
+.ptr-indicator.ptr-ready .ptr-spinner circle, .ptr-indicator.ptr-loading .ptr-spinner circle { stroke: var(--green-bright); }
+.ptr-indicator.ptr-loading .ptr-spinner { animation: spin 0.8s linear infinite; }
 
-.ptr-spinner {
-    width: 30px;
-    height: 30px;
-}
-
-.ptr-spinner circle {
-    stroke: var(--text-faint);
-    stroke-dasharray: 90 40;
-    stroke-linecap: round;
-    transition: stroke 0.15s ease;
-}
-
-.ptr-indicator.ptr-ready .ptr-spinner circle {
-    stroke: var(--green-bright);
-}
-
-.ptr-indicator.ptr-loading .ptr-spinner {
-    animation: ptr-spin 0.8s linear infinite;
-}
-
-.ptr-indicator.ptr-loading .ptr-spinner circle {
-    stroke: var(--green-bright);
-}
-
-@keyframes ptr-spin {
-    to { transform: rotate(360deg); }
-}
-
-/* ============================================================
-   NAKŁADKA ŁADOWANIA (#loadingOverlay) — pokazana domyślnie w HTML na
-   index.html/rebalance.html/chart.html, chowana przez hideLoadingOverlay()
-   (js/qol.js) po zakończeniu pierwszego fetchu danych strony (loadData() w
-   app.js, loadUniverseData() w rebalance.js, init() w chart.js). Bez niej
-   pierwsze odsłonięcie strony pokazywało pusty sidebar/tabelę/wykres aż
-   fetch się skończy, bez żadnego sygnału, że coś się w ogóle dzieje.
-   ============================================================ */
 .loading-overlay {
     position: fixed;
     inset: 0;
@@ -1717,33 +385,17 @@ table.holdings-table td, table.rebalance-table td {
     font-size: 13px;
     transition: opacity 0.3s ease;
 }
-
-.loading-overlay.loading-overlay-hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
+.loading-overlay.loading-overlay-hidden { opacity: 0; pointer-events: none; }
 .loading-spinner {
     width: 36px;
     height: 36px;
     border: 3px solid var(--border);
     border-top-color: var(--green-bright);
     border-radius: 50%;
-    animation: loading-spin 0.8s linear infinite;
+    animation: spin 0.8s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-@keyframes loading-spin {
-    to { transform: rotate(360deg); }
-}
-
-/* ============================================================
-   WSKAŹNIK OFFLINE (#connStatus w .topbar nav) — patrz initConnStatus() w
-   js/qol.js. Ukryty (atrybut `hidden` w HTML), odsłaniany tylko gdy
-   navigator.onLine jest false — apka jest PWA z Service Workerem, który po
-   utracie sieci cicho spada na ostatnią zacache'owaną wersję danych (patrz
-   sw.js), więc bez tego wskaźnika nie było żadnego sygnału, że widoczne dane
-   mogą być nieaktualne.
-   ============================================================ */
 .conn-status {
     margin-left: 14px;
     padding: 4px 9px;
@@ -1756,14 +408,6 @@ table.holdings-table td, table.rebalance-table td {
     white-space: nowrap;
 }
 
-/* ============================================================
-   TOASTY (#toastContainer, dopisywany do <body> przez showToast() w
-   js/qol.js przy pierwszym wywołaniu) — krótkie, nieblokujące potwierdzenie
-   akcji użytkownika (dodanie/usunięcie spółki z portfela, zapis/wyczyszczenie
-   ręcznego zwrotu GEM, import/eksport XTB). Stos w prawym dolnym rogu, nowe
-   toasty dochodzą na dole (column-reverse), żeby najnowszy zawsze był
-   najbliżej miejsca kliknięcia użytkownika na małym ekranie.
-   ============================================================ */
 .toast-container {
     position: fixed;
     right: 16px;
@@ -1775,7 +419,6 @@ table.holdings-table td, table.rebalance-table td {
     pointer-events: none;
     max-width: min(360px, calc(100vw - 32px));
 }
-
 .toast {
     padding: 10px 14px;
     border-radius: 8px;
@@ -1789,182 +432,53 @@ table.holdings-table td, table.rebalance-table td {
     transform: translateY(8px);
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
+.toast.toast-visible { opacity: 1; transform: translateY(0); }
 
-.toast.toast-visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.toast.toast-success { border-left-color: var(--green-bright); }
-.toast.toast-error { border-left-color: var(--red); }
-
-/* Podglad "na hover" mini-wykresu (patrz initMiniChartHoverPreview w
-   minicharts.js) — wieksza wersja tego samego mini-wykresu + krotkie
-   podsumowanie spolki, po ~2s najechania. Nieinteraktywny
-   (pointer-events: none), znika natychmiast przy opuszczeniu elementu. */
-.mini-preview {
-    position: fixed;
-    z-index: 1200;
-    pointer-events: none;
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 14px 16px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
-    width: 340px;
-    opacity: 0;
-    transform: translateY(4px);
-    transition: opacity 0.15s ease, transform 0.15s ease;
-}
-
-.mini-preview.mini-preview-visible {
-    opacity: 1;
-    transform: translateY(0);
-}
-
-.mini-preview-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.mini-preview-ticker {
-    font-weight: 700;
-    font-size: 16px;
-    color: var(--text);
-}
-
-.mini-preview-sub {
-    font-size: 12px;
-    color: var(--text-dim);
-    margin-top: 3px;
-}
-
-.mini-preview-visual { margin-top: 12px; }
-
-.mini-preview-visual-label {
-    font-size: 11px;
-    color: var(--text-faint);
-    margin-bottom: 4px;
-}
-
-.mini-preview-visual svg.spark { width: 100%; height: 84px; display: block; }
-.mini-preview-visual .rs-bar { display: flex; align-items: center; gap: 8px; }
-.mini-preview-visual .rs-bar svg { flex: 1; height: 26px; }
-.mini-preview-visual .rs-bar .positive, .mini-preview-visual .rs-bar .negative { font-size: 13px; }
-
-@media (max-width: 640px) {
-    .loading-overlay p { font-size: 12px; padding: 0 24px; text-align: center; }
-    .conn-status { margin-left: 8px; padding: 3px 7px; font-size: 11px; }
-    .toast-container { right: 10px; bottom: 10px; left: 10px; max-width: none; }
-    /* Bez kursora/hover na dotyku sensownego nie ma tu co pokazywac —
-       chowamy zamiast zostawiac przyklejone okienko po dotknieciu. */
-    .mini-preview { display: none; }
-}
-
-
-/* Lista spółek lejka (strategy.html): ticker przyklejony do lewej krawędzi przy
-   przewijaniu tabeli w bok na telefonie. */
-#watchTable th:first-child, #watchTable td:first-child,
-#entryTable th:first-child, #entryTable td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 1;
-    background: var(--panel);
-}
-
-/* Karta "Zarzadzanie kapitalem" (strategy.html): pasek Core/Satelita z pasmem
-   rebalansu i lista instrukcji. */
-.capital-inputs { margin-bottom: 14px; }
-.capital-inputs .bucket-input input { width: 96px; }
-.capital-stats { margin-bottom: 12px; }
-.capital-bar-track {
-    position: relative;
-    display: flex;
-    height: 28px;
-    border-radius: 6px;
-    overflow: hidden;
-    border: 1px solid var(--border);
-    margin-bottom: 12px;
-}
-.capital-bar-core, .capital-bar-sat {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11.5px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden;
-}
-.capital-bar-core { background: rgba(138, 143, 156, 0.55); }
-.capital-bar-sat { background: rgba(52, 152, 219, 0.75); }
-.capital-bar-band {
-    position: absolute; top: 0; bottom: 0;
-    border-left: 2px dashed var(--green-bright);
-    border-right: 2px dashed var(--green-bright);
-    background: rgba(46, 204, 113, 0.10);
-    pointer-events: none;
-}
-.capital-actions { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
-.capital-action {
-    padding: 8px 12px;
-    border-radius: 6px;
-    background: var(--panel-alt);
-    border-left: 3px solid var(--border);
-    font-size: 13px;
-    line-height: 1.45;
-}
-.capital-action-ok { border-left-color: var(--green-bright); }
-.capital-action-contribute, .capital-action-move { border-left-color: #3498db; }
-.capital-action-sell { border-left-color: #e0a72e; }
-.capital-action-hold { border-left-color: var(--red); }
-.capital-subhead { margin: 16px 0 8px; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-
-
-/* Okienko z wykresem w stylu MarketSmith (index.html, js/chart.js) */
-.wl-chart-box {
-    width: min(1300px, 96vw);
-    max-height: 96vh;
-    overflow: auto;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
-    padding: 12px 14px;
-}
-.wl-chart-head { display: flex; align-items: center; gap: 12px; }
-.wl-chart-titles { min-width: 0; flex: 1; }
-.wl-chart-title { font-size: 16px; font-weight: 700; }
-.wl-chart-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-.wl-chart-readout { font-size: 12px; color: var(--text-dim); min-height: 18px; margin: 8px 0 4px; font-variant-numeric: tabular-nums; }
-.wl-chart-body svg { display: block; width: 100%; height: auto; max-height: calc(96vh - 120px); }
-table.momentum-table tbody tr[data-ticker] { cursor: pointer; }
-@media (max-width: 640px) {
-    .wl-chart-box { width: 100vw; max-height: 100vh; border-radius: 0; padding: 8px; }
-    /* Nagłówek w dwóch rzędach: tytuł na całą szerokość, pod nim przyciski (zamknięcie zostaje w prawym górnym rogu). */
-    .wl-chart-head { flex-wrap: wrap; gap: 8px; position: relative; }
-    .wl-chart-titles { flex: 1 1 100%; padding-right: 44px; }
-    .wl-chart-title { font-size: 15px; }
-    .wl-chart-sub { font-size: 11.5px; line-height: 1.4; }
-    .wl-chart-head .chart-modal-close { position: absolute; top: 0; right: 0; margin: 0; }
-    .wl-chart-head .add-row-btn { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
-    .wl-chart-readout { font-size: 11px; }
-    .wl-chart-body svg { max-height: none; }
-}
-
-/* Małe ekrany i telefon poziomo: strona przewija się normalnie (bez stałej wysokości
-   .workspace), zakładki przewijają się poziomo, a okienko wykresu zajmuje cały ekran. */
+/* ============================================================
+   Małe ekrany (telefon pionowo) i niskie (telefon poziomo): strona przewija się normalnie,
+   zakładki w jednym rzędzie z przewijaniem w bok, okno wykresu na cały ekran.
+   ============================================================ */
 @media (max-width: 900px), (max-height: 560px) {
     html, body { height: auto; min-height: 100%; overflow: auto; }
     .topbar { position: sticky; top: 0; z-index: 20; }
-    .workspace { display: block; height: auto; overflow: visible; }
-    .table-drawer, .table-drawer.open {
-        position: static; width: 100% !important; height: auto; max-height: none;
-        overflow: visible; border-right: none;
-    }
-    .table-scroll { flex: none; overflow-x: auto; overflow-y: visible; padding: 0 8px 8px 8px; }
+    .workspace { display: block; height: auto; }
+    .table-drawer { overflow: visible; }
+    .table-scroll { flex: none; overflow-x: auto; padding: 0 8px 8px 8px; }
+    table.momentum-table { width: auto; min-width: 640px; }
+    .drawer-header { flex-direction: column-reverse; align-items: stretch; gap: 6px; padding: 8px 12px; }
+    .drawer-header-title h2 { display: none; }
     .drawer-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-    .drawer-tab { flex: none; white-space: nowrap; }
+    .drawer-tab { flex: none; white-space: nowrap; padding: 6px 10px; font-size: 11.5px; }
+    .toolbar, .tab-controls { padding: 8px 12px; }
+
     .chart-modal-backdrop { padding: 0; align-items: stretch; }
-    .wl-chart-box {
-        width: 100vw; height: 100vh; height: 100dvh; max-height: none;
-        border-radius: 0; border: none; padding: 8px;
+    .wl-chart-box, .chart-modal-backdrop .charts-area {
+        width: 100vw; height: 100vh; height: 100dvh; max-height: none; border-radius: 0; border: none; padding: 8px;
     }
     .wl-chart-body svg { max-height: none; }
+    .wl-chart-head .chart-modal-close { margin-left: 0; }
+}
+
+@media (max-width: 640px) {
+    .brand-sub { display: none; }
+    .topbar { padding: 0 12px; }
+    .topbar-left { gap: 8px; }
+    .topbar nav a { margin-left: 8px; padding: 6px 8px; font-size: 12px; }
+    .conn-status { margin-left: 8px; padding: 3px 7px; font-size: 11px; }
+    .loading-overlay p { font-size: 12px; padding: 0 24px; text-align: center; }
+    .toast-container { right: 10px; bottom: 10px; left: 10px; max-width: none; }
+
+    .ep-page { padding: 14px 12px; }
+    .panel-card { padding: 14px; }
+    .panel-card-large { padding: 16px; }
+    .ep-select-inline, .contribution-input { width: 100%; max-width: 220px; }
+
+    /* Nagłówek wykresu w dwóch rzędach: tytuł na całą szerokość (z miejscem na ✕), pod nim przyciski. */
+    .wl-chart-head { position: relative; gap: 8px; }
+    .wl-chart-titles { flex: 1 1 100%; padding-right: 44px; }
+    .wl-chart-title { font-size: 15px; }
+    .wl-chart-sub, .wl-chart-stats { font-size: 11.5px; }
+    .wl-chart-head .chart-modal-close { position: absolute; top: 0; right: 0; }
+    .wl-chart-head .btn { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
+    .wl-chart-readout { font-size: 11px; }
 }

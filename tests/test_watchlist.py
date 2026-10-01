@@ -154,6 +154,13 @@ class TestCharts:
         assert w.iloc[0].to_dict() == {"Open": 1, "High": 4, "Low": 1, "Close": 3.5, "Volume": 30}
         assert w.iloc[1]["High"] == 9 and w.iloc[1]["Open"] == 4 and w.iloc[1]["Volume"] == 20
 
+    def test_build_daily_has_sma_on_full_history_and_aligns_days(self):
+        df = make_prices(n=300, daily=0.002)
+        days = list(df.index[-20:])
+        d = watchlist.build_daily(df, days)
+        assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma50", "sma200"))
+        assert d["sma200"][0] is not None  # SMA200 liczona na pelnej historii, nie tylko na oknie
+
     def test_build_chart_aligns_to_common_weeks_and_pads_missing(self):
         weekly = watchlist.weekly_ohlcv(make_prices(n=300, daily=0.002))
         weeks = list(weekly.index[-10:])

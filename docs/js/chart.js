@@ -27,6 +27,7 @@ const CHART_LAYOUT_COMPACT = {
 };
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
+const COMPACT_DAYS = 75;
 const CHART_COLORS = {
     up: "#2ecc71", down: "#e0455a", sma10: "#3fbf6e", sma40: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
     eps: "#e0b341", base: "#9aa3b5", pivot: "#2ecc71", volAvg: "#e8a33d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
@@ -90,6 +91,18 @@ function weekIndexForDate(weeks, date) {
 }
 
 // Model wykresu jednej spółki: wspólne tablice + linia RS (cena / S&P 500) + pozycje wyników na osi tygodni.
+// Widok dzienny: te same tablice, ale oś to ostatnie sesje (charts.days), SMA50/SMA200 w miejsce SMA10/SMA40 tyg.
+// i bez baz (te liczone są na świecach tygodniowych).
+function dailyCharts(charts) {
+    if (!charts || !charts.days) return null;
+    const stocks = {};
+    Object.keys(charts.stocks).forEach(t => {
+        const c = charts.stocks[t], d = c.day;
+        if (d) stocks[t] = { ...d, sma10: d.sma50, sma40: d.sma200, eps: c.eps, eps_next: c.eps_next, bases: [] };
+    });
+    return { weeks: charts.days, spx: charts.spx_d, stocks, daily: true };
+}
+
 function buildChartModel(charts, ticker, stock) {
     const c = charts && charts.stocks && charts.stocks[ticker];
     if (!c) return null;
@@ -104,7 +117,7 @@ function buildChartModel(charts, ticker, stock) {
     }).filter(b => b.i1 >= 0 && b.i1 >= b.i0);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
     return {
-        ticker, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v, sma10: c.sma10, sma40: c.sma40,
+        ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v, sma10: c.sma10, sma40: c.sma40,
         spx, rs, eps, bases, epsNext: c.eps_next || null, lastIdx,
         rsNewHigh: rsNewHighFlags(rs), volAvg: rollingMean(c.v, VOL_AVG_WEEKS),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
@@ -267,7 +280,7 @@ function chartSvg(m, opts = {}) {
         parts.push(`<path d="M${cx - 4},${cy} L${cx + 4},${cy} L${cx},${cy - 8} Z" fill="${CHART_COLORS.textStrong}" opacity="0.7"><title>Wyniki ${q.d}: EPS ${q.e}</title></path>`);
     });
     parts.push(`<text x="${L.left + 4}" y="${L.price.y + 12}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">`
-        + `<tspan fill="${CHART_COLORS.sma10}">— SMA 10 tyg.</tspan>  <tspan fill="${CHART_COLORS.sma40}">— SMA 40 tyg.</tspan>  <tspan fill="${CHART_COLORS.rs}">— RS (spółka / S&amp;P 500)</tspan>${useLog ? "  · skala logarytmiczna" : ""}</text>`);
+        + `<tspan fill="${CHART_COLORS.sma10}">— ${m.daily ? "SMA 50 dni" : "SMA 10 tyg."}</tspan>  <tspan fill="${CHART_COLORS.sma40}">— ${m.daily ? "SMA 200 dni" : "SMA 40 tyg."}</tspan>  <tspan fill="${CHART_COLORS.rs}">— RS (spółka / S&amp;P 500)</tspan>${useLog ? "  · skala logarytmiczna" : ""}</text>`);
 
     // --- 3. wolumen
     const vMax = Math.max(1, ...m.v.filter(Number.isFinite));
@@ -279,7 +292,7 @@ function chartSvg(m, opts = {}) {
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"/>`);
     }
     parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), L.volume.y + L.volume.h - Math.min(1, v / vMax) * L.volume.h] : null), CHART_COLORS.volAvg, 1.3));
-    parts.push(`<text x="${L.left + 4}" y="${L.volume.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Wolumen tygodniowy · średnia 10 tyg.</text>`);
+    parts.push(`<text x="${L.left + 4}" y="${L.volume.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${m.daily ? "Wolumen dzienny · średnia 10 dni" : "Wolumen tygodniowy · średnia 10 tyg."}</text>`);
     parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + 10}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
 
     // --- 4. EPS kwartalny
@@ -305,7 +318,7 @@ function chartSvg(m, opts = {}) {
 
     // --- crosshair (ustawiany w attachChartHover)
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
-    return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres tygodniowy ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
+    return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres ${m.daily ? "dzienny" : "tygodniowy"} ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
 }
 
 // Tekst paska nad wykresem dla wskazanego tygodnia.
@@ -341,14 +354,14 @@ function attachChartHover(container, m, readoutEl, L) {
 
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
-    let m = buildChartModel(charts, ticker, stock);
+    let m = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock);
     if (!m) {
         container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${escapeHtml(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";
         return null;
     }
     const full = m;
-    if (opts.compact) m = sliceModel(m, COMPACT_WEEKS);
+    if (opts.compact) m = sliceModel(m, m.daily ? COMPACT_DAYS : COMPACT_WEEKS);
     container.innerHTML = chartSvg(m, opts);
     readoutEl.textContent = chartReadout(m, m.lastIdx);
     attachChartHover(container, m, readoutEl, opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT);
@@ -357,6 +370,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, dailyCharts, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }

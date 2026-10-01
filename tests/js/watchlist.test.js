@@ -95,3 +95,24 @@ test("formatters", () => {
     assert.equal(sparkSvg([1]), "");
     assert.match(sparkSvg([0, 1, 2]), /<polyline/);
 });
+
+test("baseRows: dystans do pivotu, VCP i sortowanie", () => {
+    const { baseRows } = require("../../docs/js/watchlist.js");
+    const stocks = [
+        { ticker: "A", base_type: "cup", pct_to_pivot: 8, vcp: false },
+        { ticker: "B", base_type: "flat", pct_to_pivot: 2, vcp: true },
+        { ticker: "C", base_type: "deep", pct_to_pivot: 30, vcp: true },
+        { ticker: "D", base_type: null, pct_to_pivot: null },
+    ];
+    assert.deepStrictEqual(baseRows(stocks, { maxDistPct: 10, vcpOnly: false }).map(s => s.ticker), ["B", "A"]);
+    assert.deepStrictEqual(baseRows(stocks, { maxDistPct: 50, vcpOnly: true }).map(s => s.ticker), ["B", "C"]);
+});
+
+test("earningsInDays: parsuje daty Finviz", () => {
+    const { earningsInDays } = require("../../docs/js/watchlist.js");
+    const now = new Date(2026, 9, 1);
+    assert.strictEqual(earningsInDays("Oct 5/a", now), 4);
+    assert.strictEqual(earningsInDays("Jan 10/b", now), 101);
+    assert.strictEqual(earningsInDays("Sep 20/a", now), -11);
+    assert.strictEqual(earningsInDays("-", now), null);
+});

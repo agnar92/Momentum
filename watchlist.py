@@ -37,6 +37,7 @@ EMA_SPAN = 34
 EMA_LAG_STEP = 5             # EMA34 porównujemy co 5 sesji ...
 EMA_LAG_COUNT = 4            # ... 4 razy wstecz (5, 10, 15, 20 sesji temu)
 SPARK_WEEKS = 26
+CHART_DAYS = 150             # ile sesji pokazuje wykres dzienny (~7 miesięcy)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 BASE_MIN_WEEKS = 5           # minimalna długość bazy/korekty (tygodnie od szczytu)
@@ -327,6 +328,22 @@ def build_chart(weekly, weeks):
     }
 
 
+def build_daily(df, days):
+    """Dzienne świece (ostatnie `days` sesji) + SMA50/SMA200 liczone na pełnej historii, null dla braków."""
+    df = df.copy()
+    df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
+    df = df[~df.index.duplicated(keep="last")]
+    idx = pd.DatetimeIndex(days)
+    w = df.reindex(idx)
+    close = df["Close"].astype(float)
+    return {
+        "o": _series(w["Open"]), "h": _series(w["High"]), "l": _series(w["Low"]), "c": _series(w["Close"]),
+        "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
+        "sma50": _series(close.rolling(50).mean().reindex(idx)),
+        "sma200": _series(close.rolling(200).mean().reindex(idx)),
+    }
+
+
 def eps_quarters(rows):
     """rows: [{'date','eps','est'}...] z Yahoo (eps=None dla przyszłych). -> (zrealizowane kwartały z YoY %, następna prognoza).
     YoY = (EPS − EPS rok wcześniej) / |EPS rok wcześniej| · 100; None, gdy brak/zero poprzedniego."""
@@ -414,6 +431,13 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         "spx": _series(ref["Close"].reindex(pd.DatetimeIndex(weeks))) if bench is not None else None,
         "stocks": {},
     }
+    day_ref = bench if bench is not None else next(iter(cleaned.values()))
+    day_index = pd.DatetimeIndex(day_ref.index).tz_localize(None).normalize()
+    day_index = day_index[~day_index.duplicated(keep="last")][-CHART_DAYS:]
+    payload["days"] = [d.strftime("%Y-%m-%d") for d in day_index]
+    payload["spx_d"] = (_series(bench["Close"].astype(float).set_axis(
+        pd.DatetimeIndex(bench.index).tz_localize(None).normalize()).groupby(level=0).last().reindex(day_index))
+        if bench is not None else None)
     for t, df in cleaned.items():
         chart = build_chart(weekly_ohlcv(df, last_date), weeks)
         quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
@@ -422,6 +446,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         chart["bases"] = [b for b in detect_bases(wk) if b["end"] >= first][-BASE_MAX_SHOWN:]
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
+        chart["day"] = build_daily(df, day_index)
         payload["stocks"][t] = chart
     return payload
 

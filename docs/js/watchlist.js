@@ -10,25 +10,36 @@ if (typeof require === "function" && typeof window === "undefined") {
 // ============================================================
 // LISTA OBSERWOWANA (index.html) — czyta docs/data/watchlist.json generowany
 // codziennie przez watchlist.py (Finviz: lista spółek + fundamenty, yfinance:
-// ceny i wskaźniki). Cztery zakładki nad TĄ SAMĄ listą:
+// ceny i wskaźniki). Zakładki nad TĄ SAMĄ listą:
 //   📋 Lista      — wszystkie spółki po filtrze Finviz,
 //   📊 RS Ranking — liderzy RS Rating (percentyl IBD policzony w watchlist.py),
 //   🎯 Qullamaggie — progi obrotu/ADR + top X% wzrostu z okien 1/3/6M (suma bez
 //                    powtórzeń); progi wpisuje użytkownik, liczone tutaj,
 //   📈 Trend EMA34 — OSOBNY filtr (poza RS i Qullamaggie): EMA34 dzienna rośnie co
-//                    5 sesji przez 20 (ema34_rising liczy watchlist.py).
+//                    5 sesji przez 20 (ema34_rising liczy watchlist.py),
+//   🧱 Bazy        — spółki w otwartej bazie/korekcie blisko pivotu (heurystyka watchlist.py::detect_bases),
+//   ⭐ Ulubione    — własne ★ użytkownika (localStorage).
 // To tylko informacja do przeglądania, nie rekomendacja inwestycyjna.
 // ============================================================
 
 const COMPACT_MAX_WIDTH = 640;
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
+const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
+const FAVS_KEY = "momentum_watchlist_favs";
 const SETTINGS_KEY = "momentum_watchlist_settings";
-const DEFAULT_SETTINGS = { tab: "LIST", rsMin: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 } };
+const EARNINGS_SOON_DAYS = 7;
+const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
+const DEFAULT_SETTINGS = {
+    tab: "LIST", rsMin: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
+};
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["rs_rating", "desc"], QM: ["max_ratio", "desc"], EMA34: ["ema34_slope_20d_pct", "desc"],
+    BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"],
 };
-const TAB_TITLES = { LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", EMA34: "Trend EMA34" };
+const TAB_TITLES = {
+    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", EMA34: "Trend EMA34", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
+};
 const FALLBACK_REPO = "agnar92/Momentum";
 
 const state = {
@@ -36,6 +47,8 @@ const state = {
     tab: DEFAULT_SETTINGS.tab,
     rsMin: DEFAULT_SETTINGS.rsMin,
     qm: { ...DEFAULT_SETTINGS.qm },
+    bases: { ...DEFAULT_SETTINGS.bases },
+    favs: new Set(),
     search: "",
     sector: "",
     sortKey: "ticker",
@@ -74,12 +87,33 @@ function qullamaggieRows(stocks, params) {
     picked.forEach(({ stock, windows }) => {
         rows.push({ ...stock, windows, max_ratio: Math.max(...windows.map(w => w.ratio)) });
     });
-    return rows.sort((a, b) => b.max_gain_pct - a.max_gain_pct);
+    return rows.sort((a, b) => b.max_ratio - a.max_ratio);
 }
 
 // Trend EMA34: tylko spółki z ema34_rising === true (wartość liczy watchlist.py::ema34_trend).
 function ema34Rows(stocks) {
     return stocks.filter(s => s.ema34_rising === true);
+}
+
+// Bazy: spółki z otwartą bazą/korektą, którym do pivotu (szczyt bazy) zostało najwyżej maxDistPct%;
+// opcjonalnie tylko z flagą VCP (malejące skurcze). Najbliżej pivotu na górze.
+function baseRows(stocks, params) {
+    const maxDist = Number(params.maxDistPct);
+    const limit = Number.isFinite(maxDist) && maxDist >= 0 ? maxDist : Infinity;
+    return stocks
+        .filter(s => s.base_type && Number.isFinite(s.pct_to_pivot) && s.pct_to_pivot <= limit && (!params.vcpOnly || s.vcp === true))
+        .sort((a, b) => a.pct_to_pivot - b.pct_to_pivot);
+}
+
+// Dni do wyników z tekstu Finviz ("Oct 22/a", "Aug 26/a"); rok wynika z bieżącej daty. null = brak/nieczytelne.
+function earningsInDays(text, now = new Date()) {
+    const m = /^([A-Z][a-z]{2}) (\d{1,2})/.exec(text || "");
+    const month = m ? ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"].indexOf(m[1]) : -1;
+    if (month < 0) return null;
+    const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    let t = Date.UTC(now.getFullYear(), month, Number(m[2]));
+    if (t - today < -30 * 86400000) t = Date.UTC(now.getFullYear() + 1, month, Number(m[2]));
+    return Math.round((t - today) / 86400000);
 }
 
 // Filtry wspólne dla wszystkich zakładek: tekst (ticker/spółka) i sektor.
@@ -145,12 +179,7 @@ function sparkSvg(values) {
     return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${up ? "#2ecc71" : "#e0455a"}" stroke-width="1.5" points="${pts}"/></svg>`;
 }
 
-function identityCells(s, position) {
-    return `<td><span class="rank-badge">${position}</span></td>
-        <td class="ticker-cell">${escapeHtml(s.ticker)}</td>
-        <td title="${escapeHtml(s.industry || "")}">${escapeHtml(s.company || "")}</td>
-        <td>${escapeHtml(s.sector || "")}</td>`;
-}
+const money = v => (Number.isFinite(v) ? "$" + Number(v).toFixed(2) : "—");
 
 function ratingCell(s) {
     if (!Number.isFinite(s.rs_rating)) return `<td class="muted">—</td>`;
@@ -158,39 +187,88 @@ function ratingCell(s) {
     return `<td class="${cls}"><strong>${s.rs_rating}</strong></td>`;
 }
 
-function tailCells(s, withSpark = true) {
-    return `${withSpark ? `<td title="Cena tygodniowa, ostatnie 26 tygodni">${sparkSvg(s.spark)}</td>` : ""}
-        <td>${escapeHtml(s.earnings || "—")}</td>
-        <td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`;
+function earningsCell(s) {
+    const days = earningsInDays(s.earnings);
+    const soon = days !== null && days >= 0 && days <= EARNINGS_SOON_DAYS;
+    return `<td${soon ? ` class="earnings-soon" title="Wyniki za ${days} dni — podwyższone ryzyko luki"` : ""}>${soon ? "⚠ " : ""}${escapeHtml(s.earnings || "—")}</td>`;
 }
 
-const ROW_RENDERERS = {
-    LIST: (s, i) => `${identityCells(s, i)}
-        <td>${fmtMarketCap(s.market_cap)}</td><td>$${Number(s.price).toFixed(2)}</td>
-        ${pctCell(s.pct_above_sma50)}${pctCell(s.pct_above_sma200)}
-        ${pctCell(s.eps_this_y)}${pctCell(s.eps_next_y)}${pctCell(s.eps_past_5y)}${pctCell(s.eps_next_5y)}
-        ${ratingCell(s)}${tailCells(s)}`,
-    RS: (s, i) => `${identityCells(s, i)}
-        <td>$${Number(s.price).toFixed(2)}</td>${ratingCell(s)}
-        ${pctCell(s.ret_3m_pct)}${pctCell(s.ret_6m_pct)}${pctCell(s.ret_12m_pct)}
-        ${pctCell(s.eps_next_y)}${pctCell(s.eps_next_5y)}${tailCells(s)}`,
-    QM: (s, i) => {
+function baseSummary(s) {
+    if (!s.base_type) return "—";
+    return `${BASE_LABELS_PL[s.base_type] || s.base_type} −${s.base_depth_pct}% · ${s.base_weeks} tyg.${s.vcp ? " · VCP" : ""}`;
+}
+
+// Kolumny: [nagłówek, klucz sortowania (null = nie sortuje), funkcja komórki, opcjonalny tytuł nagłówka].
+const COL = {
+    rank: ["#", null, (s, i) => `<td><span class="rank-badge">${i}</span></td>`],
+    fav: ["★", null, s => `<td class="fav-cell" data-fav="${escapeHtml(s.ticker)}" title="Dodaj/usuń z ulubionych">${state.favs.has(s.ticker) ? "★" : "☆"}</td>`],
+    ticker: ["Ticker", "ticker", s => `<td class="ticker-cell">${escapeHtml(s.ticker)}</td>`],
+    company: ["Spółka", "company", s => `<td title="${escapeHtml(s.industry || "")}">${escapeHtml(s.company || "")}</td>`],
+    sector: ["Sektor", "sector", s => `<td>${escapeHtml(s.sector || "")}</td>`],
+    cap: ["Kapitalizacja", "market_cap", s => `<td>${fmtMarketCap(s.market_cap)}</td>`],
+    price: ["Cena", "price", s => `<td>${money(s.price)}</td>`],
+    sma50: ["vs SMA50", "pct_above_sma50", s => pctCell(s.pct_above_sma50)],
+    sma200: ["vs SMA200", "pct_above_sma200", s => pctCell(s.pct_above_sma200)],
+    high52: ["Od szczytu 52 tyg.", "pct_from_high_52w", s => pctCell(s.pct_from_high_52w)],
+    epsThis: ["EPS ten rok", "eps_this_y", s => pctCell(s.eps_this_y)],
+    epsNext: ["EPS przyszły rok", "eps_next_y", s => pctCell(s.eps_next_y)],
+    eps5: ["EPS 5 lat", "eps_past_5y", s => pctCell(s.eps_past_5y)],
+    epsNext5: ["EPS prognoza 5 lat", "eps_next_5y", s => pctCell(s.eps_next_5y)],
+    rs: ["RS Rating", "rs_rating", s => ratingCell(s)],
+    r3: ["3M", "ret_3m_pct", s => pctCell(s.ret_3m_pct)],
+    r6: ["6M", "ret_6m_pct", s => pctCell(s.ret_6m_pct)],
+    r12: ["12M", "ret_12m_pct", s => pctCell(s.ret_12m_pct)],
+    base: ["Baza", "base_depth_pct", s => `<td>${baseSummary(s)}</td>`],
+    dollarVol: ["Obrót dzienny", "dollar_volume_avg", s => `<td>${fmtVolume(s.dollar_volume_avg)}</td>`],
+    adr: ["ADR %", "adr_pct", s => `<td>${s.adr_pct.toFixed(1)}%</td>`],
+    ratio: ["Cena / minimum", "max_ratio", s => {
         const gains = s.windows.map(w => `${w.label}: ×${w.ratio.toFixed(2)}`).join(" · ");
-        return `${identityCells(s, i)}
-        <td>$${Number(s.price).toFixed(2)}</td><td>${fmtVolume(s.dollar_volume_avg)}</td><td>${s.adr_pct.toFixed(1)}%</td>
-        <td class="positive" title="${gains}"><strong>×${s.max_ratio.toFixed(2)}</strong> <span class="muted" style="font-size:10.5px">top ${state.qm.topPct}% w: ${s.windows.map(w => w.label).join(", ")}</span></td>
-        ${ratingCell(s)}${tailCells(s)}`;
-    },
-    EMA34: (s, i) => `${identityCells(s, i)}
-        <td>$${Number(s.price).toFixed(2)}</td><td>${Number.isFinite(s.ema34) ? "$" + s.ema34.toFixed(2) : "—"}</td>
-        ${pctCell(s.ema34_slope_20d_pct)}${pctCell(s.price_vs_ema34_pct)}${ratingCell(s)}${tailCells(s)}`,
+        return `<td class="positive" title="${gains}"><strong>×${s.max_ratio.toFixed(2)}</strong> <span class="muted small">top ${state.qm.topPct}% w: ${s.windows.map(w => w.label).join(", ")}</span></td>`;
+    }, "Cena / najniższy Low z okna (np. ×1.35 = 35% nad minimum)"],
+    ema: ["EMA34", "ema34", s => `<td>${money(s.ema34)}</td>`],
+    slope: ["Nachylenie 20 sesji", "ema34_slope_20d_pct", s => pctCell(s.ema34_slope_20d_pct)],
+    vsEma: ["Cena vs EMA34", "price_vs_ema34_pct", s => pctCell(s.price_vs_ema34_pct)],
+    pivot: ["Pivot", "pivot", s => `<td>${money(s.pivot)}</td>`],
+    toPivot: ["Do pivotu", "pct_to_pivot", s => pctCell(s.pct_to_pivot)],
+    baseType: ["Typ bazy", "base_type", s => `<td>${BASE_LABELS_PL[s.base_type] || "—"}${s.vcp ? ` <span class="positive">VCP</span>` : ""}</td>`],
+    depth: ["Głębokość", "base_depth_pct", s => `<td>${Number.isFinite(s.base_depth_pct) ? "−" + s.base_depth_pct + "%" : "—"}</td>`],
+    baseWeeks: ["Tygodnie", "base_weeks", s => `<td>${s.base_weeks ?? "—"}</td>`],
+    spark: ["Cena (26 tyg.)", null, s => `<td title="Cena tygodniowa, ostatnie 26 tygodni">${sparkSvg(s.spark)}</td>`],
+    earnings: ["Wyniki", "earnings", s => earningsCell(s)],
+    tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
+const LEAD = ["rank", "fav", "ticker", "company", "sector"];
+const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "base", "spark", "earnings", "tv"];
+const TAB_COLUMNS = {
+    LIST: LIST_COLUMNS,
+    FAV: LIST_COLUMNS,
+    RS: [...LEAD, "price", "rs", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
+    QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
+    EMA34: [...LEAD, "price", "ema", "slope", "vsEma", "rs", "spark", "earnings", "tv"],
+    BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "rs", "spark", "earnings", "tv"],
+};
+
+function renderHeaders() {
+    Object.keys(TAB_COLUMNS).forEach(tab => {
+        const head = TAB_COLUMNS[tab].map(id => {
+            const [label, key, , title] = COL[id];
+            return `<th${key ? ` data-key="${key}"` : ""}${title ? ` title="${title}"` : ""}${id === "tv" ? ` class="tv-col"` : ""}>${label}</th>`;
+        }).join("");
+        document.querySelector(`#table-${tab} thead`).innerHTML = `<tr>${head}</tr>`;
+    });
+}
+
+function renderRow(tab, s, i) {
+    return TAB_COLUMNS[tab].map(id => COL[id][2](s, i)).join("");
+}
 
 function rowsForTab(tab) {
     const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector);
     if (tab === "RS") return rsLeaders(stocks, state.rsMin);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
     if (tab === "EMA34") return ema34Rows(stocks);
+    if (tab === "BASES") return baseRows(stocks, state.bases);
+    if (tab === "FAV") return stocks.filter(s => state.favs.has(s.ticker));
     return stocks;
 }
 
@@ -199,6 +277,8 @@ const EMPTY_MESSAGES = {
     RS: "Żadna spółka nie ma RS Rating powyżej wybranego progu.",
     QM: "Żadna spółka nie spełnia progów — obniż obrót lub ADR% albo zwiększ top %.",
     EMA34: "Żadna spółka nie ma rosnącej EMA34 (co 5 sesji przez 20) przy bieżących filtrach.",
+    BASES: "Brak spółek w bazie w zadanej odległości od pivotu — zwiększ dystans albo odznacz „tylko VCP”.",
+    FAV: "Brak ulubionych — kliknij ☆ przy spółce na dowolnej liście.",
 };
 
 function renderTable() {
@@ -209,7 +289,7 @@ function renderTable() {
     const rows = sortRows(rowsForTab(tab), state.sortKey, state.sortDir);
     const cols = table.querySelectorAll("thead th").length;
     tbody.innerHTML = rows.length
-        ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}">${ROW_RENDERERS[tab](s, i + 1)}</tr>`).join("")
+        ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}">${renderRow(tab, s, i + 1)}</tr>`).join("")
         : `<tr><td colspan="${cols}" class="empty-state">${EMPTY_MESSAGES[tab]}</td></tr>`;
     const meta = document.getElementById("drawerMeta");
     const total = state.data.stocks.length;
@@ -228,7 +308,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, qm: state.qm }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, qm: state.qm, bases: state.bases }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -241,7 +321,24 @@ function loadSettings() {
         if (saved.qm) ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
             if (Number.isFinite(saved.qm[k])) state.qm[k] = saved.qm[k];
         });
+        if (saved.bases) {
+            if (Number.isFinite(saved.bases.maxDistPct)) state.bases.maxDistPct = saved.bases.maxDistPct;
+            state.bases.vcpOnly = saved.bases.vcpOnly === true;
+        }
     } catch (e) { /* uszkodzony zapis — zostają domyślne */ }
+}
+
+function loadFavs() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(FAVS_KEY) || "[]");
+        if (Array.isArray(saved)) state.favs = new Set(saved.filter(t => typeof t === "string"));
+    } catch (e) { /* uszkodzony zapis */ }
+}
+
+function toggleFav(ticker) {
+    if (!state.favs.delete(ticker)) state.favs.add(ticker);
+    try { localStorage.setItem(FAVS_KEY, JSON.stringify([...state.favs].sort())); } catch (e) { /* brak localStorage */ }
+    renderTable();
 }
 
 function showTab(tab, resetSort = true) {
@@ -251,6 +348,7 @@ function showTab(tab, resetSort = true) {
     Object.keys(TAB_TITLES).forEach(t => {
         document.getElementById(`table-${t}`).hidden = t !== tab;
         document.getElementById(`guide-${t}`).hidden = t !== tab;
+        document.getElementById(`controls-${t}`).hidden = t !== tab;
     });
     document.getElementById("drawerTitle").textContent = TAB_TITLES[tab];
     saveSettings();
@@ -287,6 +385,11 @@ function initControls() {
     bind("qmMinDollarVolume", v => { state.qm.minDollarVolumeM = v; });
     bind("qmMinAdr", v => { state.qm.minAdrPct = v; });
     bind("qmTopPct", v => { state.qm.topPct = v; });
+    document.getElementById("baseMaxDist").value = state.bases.maxDistPct;
+    bind("baseMaxDist", v => { state.bases.maxDistPct = v; });
+    const vcp = document.getElementById("baseVcpOnly");
+    vcp.checked = state.bases.vcpOnly;
+    vcp.addEventListener("change", () => { state.bases.vcpOnly = vcp.checked; saveSettings(); renderTable(); });
 
     document.getElementById("searchInput").addEventListener("input", e => { state.search = e.target.value; renderTable(); });
     const sectorSelect = document.getElementById("sectorSelect");
@@ -299,8 +402,9 @@ function initControls() {
     sectorSelect.addEventListener("change", () => { state.sector = sectorSelect.value; renderTable(); });
 
     document.querySelectorAll(".drawer-tab").forEach(btn => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
-    document.querySelectorAll("table.momentum-table thead th").forEach(th => th.addEventListener("click", () => {
-        const key = th.dataset.key;
+    document.querySelectorAll("table.momentum-table thead").forEach(thead => thead.addEventListener("click", ev => {
+        const th = ev.target.closest("th");
+        const key = th && th.dataset.key;
         if (!key) return;
         if (state.sortKey === key) state.sortDir = state.sortDir === "asc" ? "desc" : "asc";
         else { state.sortKey = key; state.sortDir = "desc"; }
@@ -310,6 +414,8 @@ function initControls() {
     // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
         if (ev.target.closest("a")) return;
+        const star = ev.target.closest("td[data-fav]");
+        if (star) { toggleFav(star.dataset.fav); return; }
         const tr = ev.target.closest("tr[data-ticker]");
         if (tr) openChart(tr.dataset.ticker);
     }));
@@ -319,6 +425,7 @@ function initControls() {
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
 
 let chartsPromise = null;
+let chartDaily = false;     // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
@@ -339,9 +446,9 @@ async function openChart(ticker) {
         ? [stock.sector, stock.industry, Number.isFinite(stock.rs_rating) ? `RS Rating ${stock.rs_rating}` : null,
             stock.earnings ? `wyniki: ${stock.earnings}` : null].filter(Boolean).join(" · ")
         : "";
+    document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
     document.getElementById("chartTv").href = tvUrlFor(ticker);
     const body = document.getElementById("chartBody");
-    const readout = document.getElementById("chartReadout");
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
     body.innerHTML = `<div class="empty-state">Ładowanie wykresu…</div>`;
     modal.hidden = false;
@@ -349,10 +456,24 @@ async function openChart(ticker) {
     if (modal.hidden) return; // zamknięte w trakcie ładowania
     if (!charts) { body.innerHTML = `<div class="empty-state">Nie udało się wczytać danych wykresów.</div>`; return; }
     currentChart = { charts, ticker, stock };
-    const model = renderStockChart(body, readout, charts, ticker, stock, { log: chartLog, compact: chartCompact });
+    const model = drawChart();
     if (model && model.epsNext) {
         document.getElementById("chartSub").textContent += ` · następny raport ${model.epsNext.d} (prognoza EPS ${model.epsNext.e})`;
     }
+}
+
+// Linia fundamentów pod tytułem okna wykresu.
+function chartStats(s) {
+    const num = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "—");
+    return [`Kapitalizacja ${fmtMarketCap(s.market_cap)}`, `P/E ${num(s.pe)}`, `Fwd P/E ${num(s.forward_pe)}`,
+        `ROE ${fmtPct(s.roe, 1, false)}`, `od szczytu 52 tyg. ${fmtPct(s.pct_from_high_52w)}`,
+        s.base_type ? `baza: ${baseSummary(s)}, pivot ${money(s.pivot)} (${fmtPct(s.pct_to_pivot)})` : null].filter(Boolean).join(" · ");
+}
+
+function drawChart() {
+    if (!currentChart) return null;
+    return renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
+        currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, daily: chartDaily });
 }
 
 function closeChart() {
@@ -364,17 +485,28 @@ function updateLogButton() {
     document.getElementById("chartLogBtn").textContent = chartLog ? "Skala: logarytmiczna" : "Skala: liniowa";
 }
 
+function updateTfButton() {
+    document.getElementById("chartTfBtn").textContent = chartDaily ? "Wykres: dzienny" : "Wykres: tygodniowy";
+}
+
 function initChartModal() {
-    try { chartLog = localStorage.getItem(CHART_LOG_KEY) === "1"; } catch (e) { /* brak localStorage */ }
+    try {
+        chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
+        chartDaily = localStorage.getItem(CHART_DAILY_KEY) === "1";
+    } catch (e) { /* brak localStorage */ }
     updateLogButton();
+    updateTfButton();
+    document.getElementById("chartTfBtn").addEventListener("click", () => {
+        chartDaily = !chartDaily;
+        try { localStorage.setItem(CHART_DAILY_KEY, chartDaily ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        updateTfButton();
+        drawChart();
+    });
     document.getElementById("chartLogBtn").addEventListener("click", () => {
         chartLog = !chartLog;
         try { localStorage.setItem(CHART_LOG_KEY, chartLog ? "1" : "0"); } catch (e) { /* ignoruj */ }
         updateLogButton();
-        if (currentChart) {
-            renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
-                currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact });
-        }
+        drawChart();
     });
     document.getElementById("chartClose").addEventListener("click", closeChart);
     // Obrót telefonu / zmiana rozmiaru okna przełącza układ kompaktowy bez ponownego otwierania wykresu.
@@ -382,8 +514,7 @@ function initChartModal() {
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;
         chartCompact = compact;
-        renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
-            currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact });
+        drawChart();
     });
     document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal") closeChart(); });
     document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeChart(); });
@@ -406,8 +537,10 @@ if (typeof document !== "undefined") {
     (async function init() {
         initConnStatus();
         loadSettings();
+        loadFavs();
         await loadData();
         renderDataInfo();
+        renderHeaders();
         initControls();
         showTab(state.tab);
         hideLoadingOverlay();
@@ -421,7 +554,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ema34Rows, applyCommonFilters, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ema34Rows, baseRows, earningsInDays, applyCommonFilters, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state,
     };
 }

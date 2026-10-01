@@ -167,3 +167,17 @@ test("chartSvg draws base boxes with depth/VCP label and a pivot line for the op
     assert.match(svg, /pivot 15\.00 \(/);
     assert.match(svg, /średnia 10 tyg\./);
 });
+
+test("dailyCharts: SMA50/200 w miejscu SMA10/40, oś = dni", () => {
+    const { dailyCharts, buildChartModel } = require("../../docs/js/chart.js");
+    const charts = {
+        weeks: ["2026-01-02"], days: ["2026-01-01", "2026-01-02"], spx_d: [100, 101],
+        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma50: [1, 1.5], sma200: [1, 1.2] }, eps: [], eps_next: null } },
+    };
+    const d = dailyCharts(charts);
+    assert.strictEqual(d.daily, true);
+    const m = buildChartModel(d, "X", null);
+    assert.strictEqual(m.n, 2);
+    assert.deepStrictEqual(m.sma10, [1, 1.5]);
+    assert.strictEqual(dailyCharts({ weeks: [] }), null);
+});
