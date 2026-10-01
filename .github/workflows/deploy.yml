@@ -1,12 +1,8 @@
 name: Deploy Pages (bez pobierania danych)
 
-# Zwykły deploy strony — publikuje aktualną zawartość docs/ na GitHub Pages,
-# BEZ uruchamiania fetch_data.py/run_query.py. Dane w docs/data/*.json (i
-# momentum_data.duckdb) są już zacommitowane w repo (patrz sekcja Frontend w
-# CLAUDE.md), więc do wypchnięcia samej zmiany w kodzie strony (HTML/CSS/JS)
-# nie trzeba czekać na cotygodniowy pełny fetch z weekly_full_refresh.yml ani
-# odpalać go ręcznie — ten workflow tylko pakuje i wdraża to, co już jest w
-# docs/.
+# Zwykły deploy strony — publikuje aktualną zawartość docs/ na GitHub Pages BEZ pobierania danych.
+# Dane (docs/data/watchlist.json) są zacommitowane w repo i odświeża je daily_watchlist.yml, więc
+# zmianę samego kodu strony (HTML/CSS/JS) wystarczy tylko wdrożyć.
 on:
   push:
     branches: [main]
@@ -17,7 +13,7 @@ permissions:
   pages: write
   id-token: write
 
-# Ta sama grupa co w weekly_full_refresh.yml, żeby wdrożenia Pages się nie
+# Ta sama grupa co w daily_watchlist.yml, żeby wdrożenia Pages się nie
 # nakładały.
 concurrency:
   group: "pages"

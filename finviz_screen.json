@@ -1,5 +1,5 @@
 {
-  "_instructions": "Wstepna filtracja spolek dla zakladek RS Rating i Qullamaggie (patrz finviz.py). 'filters' = kody filtrow darmowego screenera Finviz rozdzielone przecinkami: cap_midover = kapitalizacja >= 2 mld USD, ta_sma200_pa = cena powyzej SMA200, fa_eps5years_pos = dodatni wzrost EPS z ostatnich 5 lat, fa_epsyoy_pos = dodatni wzrost EPS w tym roku (inne: fa_epsqoq_pos = kwartal do kwartalu, ta_sma50_pa = cena nad SMA50). Nieznany kod Finviz po cichu ignoruje, wiec po zmianie sprawdz liczbe spolek. 'max_tickers' = limit listy.",
-  "filters": "cap_midover,ta_sma200_pa,fa_eps5years_pos,fa_epsyoy_pos",
-  "max_tickers": 1500
+  "_instructions": "Wstepna filtracja listy obserwowanej (patrz finviz.py). 'filters' = kody filtrow darmowego screenera Finviz rozdzielone przecinkami: cap_midover = kapitalizacja >= 2 mld USD, ta_sma50_pa / ta_sma200_pa = cena powyzej SMA50 / SMA200, fa_eps5years_pos = dodatni wzrost EPS z ostatnich 5 lat, fa_epsyoy_pos = dodatni wzrost EPS w tym roku, fa_epsyoy1_pos = dodatnia prognoza wzrostu EPS na przyszly rok, fa_estltgrowth_pos = dodatnia prognoza wzrostu EPS na 5 lat (zaostrzenie: zamiast _pos uzyj _o10 = powyzej 10%; inne: fa_epsqoq_pos = kwartal do kwartalu). Nieznany kod Finviz po cichu ignoruje, wiec po zmianie sprawdz liczbe spolek. 'max_tickers' = limit listy.",
+  "filters": "cap_midover,ta_sma50_pa,ta_sma200_pa,fa_eps5years_pos,fa_epsyoy_pos,fa_epsyoy1_pos,fa_estltgrowth_pos",
+  "max_tickers": 600
 }

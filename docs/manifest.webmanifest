@@ -1,6 +1,6 @@
 {
-  "name": "Momentum Dashboard",
-  "short_name": "Momentum",
+  "name": "Watchlist",
+  "short_name": "Watchlist",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
