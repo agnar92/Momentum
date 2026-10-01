@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
+    niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -111,4 +111,25 @@ test("chartSvg in log mode labels the scale and keeps rendering bars", () => {
     const m = buildChartModel(charts(), "AAA", null);
     assert.match(chartSvg(m, { log: true }), /skala logarytmiczna/);
     assert.doesNotMatch(chartSvg(m, {}), /skala logarytmiczna/);
+});
+
+test("sliceModel keeps the last n weeks and shifts EPS weeks, dropping those cut off", () => {
+    const m = buildChartModel(charts(), "AAA", null);          // 5 tygodni, EPS na tygodniach 0, 2, 4
+    const s = sliceModel(m, 3);
+    assert.equal(s.n, 3);
+    assert.deepEqual(s.weeks, WEEKS.slice(2));
+    assert.deepEqual(s.eps.map(q => q.week), [0, 2]);            // dawny tydzień 0 odcięty, 2 -> 0, 4 -> 2
+    assert.equal(s.lastIdx, 2);
+    assert.equal(s.c.length, 3);
+    assert.equal(sliceModel(m, 10), m);                          // krótszy niż okno => bez zmian
+});
+
+test("chartSvg compact layout uses the narrow viewBox and larger fonts", () => {
+    const m = buildChartModel(charts(), "AAA", { rs_rating: 94 });
+    const wide = chartSvg(m, {});
+    const compact = chartSvg(m, { compact: true });
+    assert.match(wide, /viewBox="0 0 1000 690"/);
+    assert.match(compact, /viewBox="0 0 560 740"/);
+    assert.match(wide, /font-size="11"/);
+    assert.match(compact, /font-size="16\.5"/);
 });
