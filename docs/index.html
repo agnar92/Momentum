@@ -54,7 +54,7 @@
         <div class="screener-guide" id="guide-LIST"><strong>📋 Lista</strong> — wszystkie spółki, które przeszły filtr Finviz: kapitalizacja ≥ 2 mld $, cena nad SMA50 i SMA200, dodatni wzrost EPS (ostatnie 5 lat i ten rok) oraz dodatnie prognozy EPS (przyszły rok i 5 lat). Filtry zmieniasz w <code>finviz_screen.json</code>. Kolumny fundamentalne pochodzą z Finviz, ceny i wskaźniki z yfinance (dane z zamknięcia ostatniej sesji USA).</div>
         <div class="screener-guide" id="guide-RS" hidden><strong>📊 RS Ranking</strong> — liderzy siły względnej w stylu IBD: <code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code> (najnowszy kwartał z podwójną wagą), przeliczone na percentyl 1–99 względem spółek z listy. To przybliżenie — IBD nie publikuje formuły ani swojej puli spółek, a tu ranking jest wśród spółek już wyselekcjonowanych przez Finviz.
             <div style="margin-top:8px"><label class="wybicie-slider"><span class="stage-filter-label">Min. RS Rating:</span><input type="number" id="rsMin" min="1" max="99" step="1" style="width:70px"></label></div></div>
-        <div class="screener-guide" id="guide-QM" hidden><strong>🎯 Qullamaggie</strong> — szukanie „gruberów”: najpierw progi płynności (średni obrót dzienny cena × wolumen z ~20 sesji i ADR% — średnia dzienna rozpiętość High/Low), potem dla każdego okna (1, 3 i 6 miesięcy) top X% spółek wg wzrostu ceny od najniższego notowania z okna. Lista to suma tych trzech grup bez powtórzeń.
+        <div class="screener-guide" id="guide-QM" hidden><strong>🎯 Qullamaggie</strong> — szukanie „gruberów”: najpierw progi płynności (średni obrót dzienny cena × wolumen z ~20 sesji i ADR% — średnia dzienna rozpiętość High/Low), potem dla każdego okna (1, 3 i 6 miesięcy) top X% spółek wg relacji ceny do najniższego notowania z okna (cena / minimum). Lista to suma tych trzech grup bez powtórzeń.
             <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px 6px">
                 <label class="wybicie-slider"><span class="stage-filter-label">Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1" style="width:80px"></label>
                 <label class="wybicie-slider"><span class="stage-filter-label">Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5" style="width:70px"></label>
@@ -65,15 +65,29 @@
         <div class="table-scroll">
             <table class="momentum-table" id="table-LIST"><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="market_cap">Kapitalizacja</th><th data-key="price">Cena</th><th data-key="pct_above_sma50">vs SMA50</th><th data-key="pct_above_sma200">vs SMA200</th><th data-key="eps_this_y">EPS ten rok</th><th data-key="eps_next_y">EPS przyszły rok</th><th data-key="eps_past_5y">EPS 5 lat</th><th data-key="eps_next_5y">EPS prognoza 5 lat</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-RS" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="rs_rating">RS Rating</th><th data-key="ret_3m_pct">3M</th><th data-key="ret_6m_pct">6M</th><th data-key="ret_12m_pct">12M</th><th data-key="eps_next_y">EPS przyszły rok</th><th data-key="eps_next_5y">EPS prognoza 5 lat</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
-            <table class="momentum-table" id="table-QM" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="dollar_volume_avg">Obrót dzienny</th><th data-key="adr_pct">ADR %</th><th data-key="max_gain_pct">Wzrost od minimum</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-QM" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="dollar_volume_avg">Obrót dzienny</th><th data-key="adr_pct">ADR %</th><th data-key="max_ratio" title="Cena / najniższy Low z okna (np. ×1.35 = 35% nad minimum)">Cena / minimum</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-EMA34" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="ema34">EMA34</th><th data-key="ema34_slope_20d_pct">Nachylenie 20 sesji</th><th data-key="price_vs_ema34_pct">Cena vs EMA34</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
         </div>
+    </div>
+</div>
+
+<div class="chart-modal-backdrop" id="chartModal" hidden>
+    <div class="wl-chart-box" role="dialog" aria-modal="true" aria-labelledby="chartTitle">
+        <div class="wl-chart-head">
+            <div class="wl-chart-titles"><div class="wl-chart-title" id="chartTitle"></div><div class="wl-chart-sub" id="chartSub"></div></div>
+            <button type="button" class="add-row-btn" id="chartLogBtn" style="margin-top:0" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
+            <a class="add-row-btn" id="chartTv" href="#" target="_blank" rel="noopener" style="margin-top:0">📈 TradingView ↗</a>
+            <button class="chart-modal-close" id="chartClose" type="button" title="Zamknij (Esc)" aria-label="Zamknij wykres">✕</button>
+        </div>
+        <div class="wl-chart-readout" id="chartReadout"></div>
+        <div class="wl-chart-body" id="chartBody"></div>
     </div>
 </div>
 
 <script src="js/pull-to-refresh.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/qol.js"></script>
+<script src="js/chart.js"></script>
 <script src="js/watchlist.js"></script>
 </body>
 </html>

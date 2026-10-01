@@ -7,7 +7,7 @@ Przepływ (odpalany codziennie rano, po sesji USA z poprzedniego dnia — patrz
   2. yfinance: dzienne ceny tych spółek (~15 mies.), z których liczymy:
        - RS Rating w stylu IBD (rs_score = 0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M, potem percentyl 1-99
          względem listy),
-       - dane do filtra w stylu Qullamaggie (ADR %, średni obrót dzienny, wzrost od minimum z 1/3/6 mies.),
+       - dane do filtra w stylu Qullamaggie (ADR %, średni obrót dzienny, relacja ceny do minimum z 1/3/6 mies.),
        - trend EMA34 (EMA34 dzienna rośnie: teraz > 5 > 10 > 15 > 20 sesji temu).
   3. Zapis docs/data/watchlist.json (czytane przez docs/index.html).
 Wszystko to informacja do przeglądania, nie rekomendacja inwestycyjna.
@@ -25,8 +25,10 @@ import finviz
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist.json"
+CHARTS_PATH = ROOT / "docs" / "data" / "charts.json"
+EPS_CACHE_PATH = ROOT / "docs" / "data" / "eps_cache.json"
 
-HISTORY_PERIOD = "15mo"      # 12M do RS Rating + zapas na rozgrzanie EMA/SMA200
+HISTORY_PERIOD = "3y"        # 12M do RS Rating + 104 tyg. wykresu + rozgrzanie SMA40 tygodniowej
 BATCH_SIZE = 50
 MIN_COVERAGE = 0.7           # minimalny odsetek spółek z Finviz, dla których dostaliśmy ceny
 AVG_SESSIONS = 20            # okno ADR% i średniego obrotu (~miesiąc sesji)
@@ -35,6 +37,11 @@ EMA_SPAN = 34
 EMA_LAG_STEP = 5             # EMA34 porównujemy co 5 sesji ...
 EMA_LAG_COUNT = 4            # ... 4 razy wstecz (5, 10, 15, 20 sesji temu)
 SPARK_WEEKS = 26
+CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
+BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
+EPS_CACHE_MAX_AGE_DAYS = 7   # EPS zmienia się raz na kwartał — nie pytamy Yahoo codziennie
+EPS_TIME_BUDGET_S = 600
+EPS_WORKERS = 4
 FINVIZ_KEYS = ("company", "sector", "industry", "country", "market_cap", "pe", "forward_pe", "peg",
                "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "sales_past_5y",
                "roe", "oper_margin", "profit_margin", "earnings")
@@ -142,11 +149,12 @@ def compute_metrics(df):
     adr = (ratio.mean() - 1) * 100 if len(ratio) else None
     dollar_volume = float((tail["Close"] * tail["Volume"]).mean()) if len(tail) else None
 
-    gains = {}
+    # Relacja ceny do najniższego Low z okna (bez odejmowania 1 — to i tak tylko ranking, wystarczy sortować malejąco).
+    low_ratio = {}
     for months in (1, 3, 6):
         window = df[df.index > asof - pd.DateOffset(months=months)]["Low"]
         low = float(window.min()) if len(window) else None
-        gains[months] = (price / low - 1) * 100 if low and low > 0 else None
+        low_ratio[months] = price / low if low and low > 0 else None
 
     sma50 = float(close.tail(50).mean()) if len(close) >= 50 else None
     sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
@@ -164,9 +172,9 @@ def compute_metrics(df):
         "rs_score": _num(rs_score, 4),
         "adr_pct": _num(adr),
         "dollar_volume_avg": _num(dollar_volume, 0),
-        "gain_from_low_1m_pct": _num(gains[1]),
-        "gain_from_low_3m_pct": _num(gains[3]),
-        "gain_from_low_6m_pct": _num(gains[6]),
+        "low_ratio_1m": _num(low_ratio[1], 3),
+        "low_ratio_3m": _num(low_ratio[3], 3),
+        "low_ratio_6m": _num(low_ratio[6], 3),
         "pct_above_sma50": _num((price / sma50 - 1) * 100) if sma50 else None,
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
         "ema34": _num(ema),
@@ -192,6 +200,135 @@ def add_rs_rating(stocks):
     for s, r in zip(scored, ranks):
         s["rs_rating"] = int(round(1 + 98 * (r - 1) / (n - 1)))
     return stocks
+
+
+# ============================================================================
+# WYKRES W STYLU MARKETSMITH (docs/data/charts.json): słupki tygodniowe OHLC + wolumen,
+# SMA10/SMA40 tygodniowe, linia benchmarku (S&P 500) i linia EPS kwartalnego.
+# ============================================================================
+def weekly_ohlcv(df, last_date=None):
+    """Dzienne świece -> tygodniowe (piątek). Ostatni, niepełny tydzień dostaje datę ostatniej sesji."""
+    df = df.copy()
+    df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
+    week = df.resample("W-FRI").agg({"Open": "first", "High": "max", "Low": "min", "Close": "last", "Volume": "sum"})
+    week = week.dropna(subset=["Close"])
+    last = pd.Timestamp(last_date) if last_date is not None else df.index[-1]
+    week.index = pd.DatetimeIndex([min(d, last) for d in week.index])
+    return week[~week.index.duplicated(keep="last")]
+
+
+def _series(values, digits=2):
+    return [_num(v, digits) for v in values]
+
+
+def build_chart(weekly, weeks):
+    """Tablice (wyrównane do wspólnej listy `weeks`, null dla brakujących tygodni) dla jednej spółki."""
+    w = weekly.reindex(pd.DatetimeIndex(weeks))
+    close_all = weekly["Close"]
+    sma10 = close_all.rolling(10).mean().reindex(w.index)
+    sma40 = close_all.rolling(40).mean().reindex(w.index)
+    return {
+        "o": _series(w["Open"]), "h": _series(w["High"]), "l": _series(w["Low"]), "c": _series(w["Close"]),
+        "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],  # wolumen w tysiącach
+        "sma10": _series(sma10), "sma40": _series(sma40),
+    }
+
+
+def eps_quarters(rows):
+    """rows: [{'date','eps','est'}...] z Yahoo (eps=None dla przyszłych). -> (zrealizowane kwartały z YoY %, następna prognoza).
+    YoY = (EPS − EPS rok wcześniej) / |EPS rok wcześniej| · 100; None, gdy brak/zero poprzedniego."""
+    reported = sorted((r for r in rows if r.get("eps") is not None), key=lambda r: r["date"])
+    out = []
+    for r in reported:
+        d = pd.Timestamp(r["date"])
+        prev = next((p for p in reported if 330 <= (d - pd.Timestamp(p["date"])).days <= 400), None)
+        yoy = None
+        if prev and prev["eps"]:
+            yoy = _num((r["eps"] - prev["eps"]) / abs(prev["eps"]) * 100, 0)
+        out.append({"d": r["date"], "e": _num(r["eps"]), "g": yoy})
+    upcoming = sorted((r for r in rows if r.get("eps") is None and r.get("est") is not None), key=lambda r: r["date"])
+    nxt = {"d": upcoming[0]["date"], "e": _num(upcoming[0]["est"])} if upcoming else None
+    return out, nxt
+
+
+def fetch_eps_one(ticker):
+    import yfinance as yf
+    ed = yf.Ticker(ticker).get_earnings_dates(limit=20)
+    if ed is None or ed.empty:
+        return []
+    rows = []
+    for ts, r in ed.iterrows():
+        rep, est = r.get("Reported EPS"), r.get("EPS Estimate")
+        rows.append({"date": pd.Timestamp(ts).strftime("%Y-%m-%d"),
+                     "eps": None if pd.isna(rep) else float(rep), "est": None if pd.isna(est) else float(est)})
+    return rows
+
+
+def update_eps_cache(tickers, cache_path=EPS_CACHE_PATH, now=None, fetch=fetch_eps_one,
+                     max_age_days=EPS_CACHE_MAX_AGE_DAYS, time_budget_s=EPS_TIME_BUDGET_S):
+    """Cache {ticker: {fetched, rows}} w JSON (docs/data/eps_cache.json) — odświeża tylko wpisy starsze niż max_age_days.
+    Błąd pojedynczego tickera albo limit czasu nigdy nie przerywa pipeline'u (brak EPS = wykres bez dolnego panelu)."""
+    from concurrent.futures import ThreadPoolExecutor
+    import time
+    now = pd.Timestamp(now if now is not None else datetime.now(timezone.utc)).tz_localize(None)
+    try:
+        cache = json.loads(Path(cache_path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        cache = {}
+    stale = [t for t in tickers
+             if t not in cache or (now - pd.Timestamp(cache[t].get("fetched", "1970-01-01"))).days >= max_age_days]
+    if stale:
+        print(f"⏳ EPS: pobieram historię dla {len(stale)} spółek (limit {time_budget_s}s)...")
+        started = time.time()
+
+        def work(t):
+            if time.time() - started > time_budget_s:
+                return t, None
+            try:
+                return t, fetch(t)
+            except Exception:
+                return t, None
+        with ThreadPoolExecutor(EPS_WORKERS) as pool:
+            for t, rows in pool.map(work, stale):
+                if rows is not None:
+                    cache[t] = {"fetched": now.strftime("%Y-%m-%d"), "rows": rows}
+    cache = {t: v for t, v in cache.items() if t in set(tickers)}
+    out = Path(cache_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    return cache
+
+
+def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks=CHART_WEEKS):
+    """Struktura docs/data/charts.json: wspólna lista tygodni + S&P 500 + wykres każdej spółki."""
+    bench = drop_incomplete_bar(benchmark_df, now_utc) if benchmark_df is not None and len(benchmark_df) else None
+    last_date = None
+    cleaned = {}
+    for t in tickers:
+        if t in frames:
+            cleaned[t] = drop_incomplete_bar(frames[t], now_utc)
+    if bench is not None:
+        last_date = pd.DatetimeIndex(bench.index).tz_localize(None).normalize()[-1]
+    elif cleaned:
+        last_date = max(pd.DatetimeIndex(df.index).tz_localize(None).normalize()[-1] for df in cleaned.values())
+    if last_date is None:
+        return None
+    ref = weekly_ohlcv(bench, last_date) if bench is not None else weekly_ohlcv(next(iter(cleaned.values())), last_date)
+    weeks = list(ref.index[-n_weeks:])
+    payload = {
+        "benchmark": BENCHMARK if bench is not None else None,
+        "weeks": [d.strftime("%Y-%m-%d") for d in weeks],
+        "spx": _series(ref["Close"].reindex(pd.DatetimeIndex(weeks))) if bench is not None else None,
+        "stocks": {},
+    }
+    for t, df in cleaned.items():
+        chart = build_chart(weekly_ohlcv(df, last_date), weeks)
+        quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
+        first = payload["weeks"][0]
+        chart["eps"] = [q for q in quarters if q["d"] >= first]
+        chart["eps_next"] = nxt
+        payload["stocks"][t] = chart
+    return payload
 
 
 # ============================================================================
@@ -222,9 +359,10 @@ def load_previous(path=OUTPUT_PATH):
     return data if isinstance(data, dict) and data.get("stocks") else None
 
 
-def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None):
+def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None):
     cfg = finviz.load_config()
     max_tickers = max_tickers or cfg["max_tickers"]
+    eps_cache_path = eps_cache_path or Path(output_path).parent / "eps_cache.json"
     previous = load_previous(output_path)
     finviz_rows, finviz_total, finviz_stale = [], None, False
 
@@ -255,6 +393,18 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None):
         return 1
 
     stocks = build_stocks(finviz_rows, frames)
+    try:
+        bench_frames = download_prices([BENCHMARK])
+        benchmark_df = bench_frames.get(BENCHMARK)
+    except Exception as e:
+        print(f"⚠️  Benchmark {BENCHMARK} niedostępny ({e}) — wykresy bez linii S&P 500.")
+        benchmark_df = None
+    try:
+        eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
+    except Exception as e:
+        print(f"⚠️  Krok EPS pominięty ({e}).")
+        eps_cache = {}
+    charts = build_charts([s["ticker"] for s in stocks], frames, benchmark_df, eps_cache)
     payload = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "data_as_of": max((s["as_of"] for s in stocks), default=None),
@@ -266,8 +416,13 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None):
     }
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
+    charts_path = charts_path or out.parent / "charts.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False), encoding="utf-8")
     print(f"💾 Zapisano {out} ({len(stocks)} spółek, dane z sesji {payload['data_as_of']}).")
+    if charts is not None:
+        charts_out = Path(charts_path)
+        charts_out.write_text(json.dumps(charts, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
+        print(f"💾 Zapisano {charts_out} (wykresy tygodniowe {len(charts['stocks'])} spółek, {len(charts['weeks'])} tygodni).")
     return 0
 
 

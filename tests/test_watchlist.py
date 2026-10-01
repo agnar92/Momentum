@@ -79,7 +79,7 @@ class TestIndicators:
         # High/Low = +-2% wokol Close => ADR = (1.02/0.98 - 1)*100
         assert m["adr_pct"] == pytest.approx((1.02 / 0.98 - 1) * 100, abs=0.01)
         assert m["dollar_volume_avg"] == pytest.approx(df["Close"].tail(20).mean() * 1_000_000, rel=0.01)
-        assert m["gain_from_low_6m_pct"] > m["gain_from_low_3m_pct"] > m["gain_from_low_1m_pct"] > 0
+        assert m["low_ratio_6m"] > m["low_ratio_3m"] > m["low_ratio_1m"] > 1
         assert m["pct_above_sma50"] > 0 and m["pct_above_sma200"] > m["pct_above_sma50"]
         assert m["ema34_rising"] is True
         assert len(m["spark"]) == watchlist.SPARK_WEEKS and m["spark"][0] == 0
@@ -123,8 +123,10 @@ class TestPipeline:
         out.write_text(json.dumps({"stocks": [{"ticker": "AAA", "sector": "Tech"}], "finviz_total": 7,
                                    "finviz_filters": "old"}), encoding="utf-8")
         monkeypatch.setattr(finviz, "fetch_watchlist", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("403")))
-        monkeypatch.setattr(watchlist, "download_prices", lambda tickers: {"AAA": make_prices()})
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers: {"AAA": make_prices(), "^GSPC": make_prices(daily=0.0005)})
+        monkeypatch.setattr(watchlist, "update_eps_cache", lambda tickers, path: {})
         assert watchlist.run(out) == 0
+        assert (tmp_path / "charts.json").exists()
         data = json.loads(out.read_text(encoding="utf-8"))
         assert data["finviz_stale"] is True and data["stocks"][0]["sector"] == "Tech" and data["finviz_total"] == 7
 
@@ -140,3 +142,73 @@ class TestPipeline:
         monkeypatch.setattr(watchlist, "download_prices", lambda tickers: {"T0": make_prices()})
         assert watchlist.run(out) == 1
         assert out.read_text(encoding="utf-8") == "OLD"
+
+
+class TestCharts:
+    def test_weekly_ohlcv_aggregates_and_relabels_partial_last_week(self):
+        idx = pd.to_datetime(["2026-09-21", "2026-09-22", "2026-09-25", "2026-09-28", "2026-09-30"])
+        df = pd.DataFrame({"Open": [1, 2, 3, 4, 5], "High": [2, 3, 4, 9, 6], "Low": [1, 1.5, 2, 3, 4],
+                           "Close": [1.5, 2.5, 3.5, 5, 5.5], "Volume": [10, 10, 10, 10, 10]}, index=idx)
+        w = watchlist.weekly_ohlcv(df)
+        assert list(w.index) == [pd.Timestamp("2026-09-25"), pd.Timestamp("2026-09-30")]  # niepelny tydzien -> data ostatniej sesji
+        assert w.iloc[0].to_dict() == {"Open": 1, "High": 4, "Low": 1, "Close": 3.5, "Volume": 30}
+        assert w.iloc[1]["High"] == 9 and w.iloc[1]["Open"] == 4 and w.iloc[1]["Volume"] == 20
+
+    def test_build_chart_aligns_to_common_weeks_and_pads_missing(self):
+        weekly = watchlist.weekly_ohlcv(make_prices(n=300, daily=0.002))
+        weeks = list(weekly.index[-10:])
+        chart = watchlist.build_chart(weekly, weeks + [weeks[-1] + pd.Timedelta(days=7)])
+        assert len(chart["c"]) == 11 and chart["c"][-1] is None and chart["c"][0] is not None
+        assert chart["sma10"][0] is not None and chart["sma40"][0] is not None
+        assert chart["v"][0] == int(round(weekly["Volume"].iloc[-10] / 1000))
+
+    def test_eps_quarters_yoy_and_next_estimate(self):
+        rows = [
+            {"date": "2025-07-30", "eps": 1.0, "est": 0.9}, {"date": "2025-10-30", "eps": 2.0, "est": 1.9},
+            {"date": "2026-07-30", "eps": 1.5, "est": 1.4}, {"date": "2026-10-29", "eps": 1.0, "est": 1.2},
+            {"date": "2027-01-28", "eps": None, "est": 2.5}, {"date": "2027-04-29", "eps": None, "est": 2.9},
+        ]
+        quarters, nxt = watchlist.eps_quarters(rows)
+        assert [q["d"] for q in quarters] == ["2025-07-30", "2025-10-30", "2026-07-30", "2026-10-29"]
+        assert quarters[0]["g"] is None                       # brak kwartalu sprzed roku
+        assert quarters[2]["g"] == 50                         # 1.0 -> 1.5
+        assert quarters[3]["g"] == -50                        # 2.0 -> 1.0
+        assert nxt == {"d": "2027-01-28", "e": 2.5}
+
+    def test_eps_quarters_yoy_with_negative_previous_uses_abs(self):
+        rows = [{"date": "2025-07-30", "eps": -1.0, "est": None}, {"date": "2026-07-30", "eps": 1.0, "est": None}]
+        assert watchlist.eps_quarters(rows)[0][1]["g"] == 200
+
+    def test_update_eps_cache_fetches_only_stale_and_survives_errors(self, tmp_path):
+        path = tmp_path / "eps.json"
+        path.write_text(json.dumps({"FRESH": {"fetched": "2026-09-30", "rows": [1]},
+                                    "OLD": {"fetched": "2026-09-01", "rows": [2]},
+                                    "GONE": {"fetched": "2026-09-30", "rows": [3]}}), encoding="utf-8")
+        calls = []
+
+        def fake_fetch(t):
+            calls.append(t)
+            if t == "BAD":
+                raise RuntimeError("429")
+            return [{"date": "2026-07-30", "eps": 1.0, "est": 1.0}]
+        cache = watchlist.update_eps_cache(["FRESH", "OLD", "NEW", "BAD"], path, now="2026-10-01", fetch=fake_fetch)
+        assert sorted(calls) == ["BAD", "NEW", "OLD"]
+        assert cache["FRESH"]["rows"] == [1] and cache["OLD"]["fetched"] == "2026-10-01"
+        assert "BAD" not in cache and "GONE" not in cache  # blad = brak wpisu; spolki spoza listy sprzatane
+        assert json.loads(path.read_text(encoding="utf-8")) == cache
+
+    def test_build_charts_structure_with_benchmark_and_eps(self):
+        now = pd.Timestamp("2026-10-01 05:00", tz="UTC")
+        frames = {"AAA": make_prices(n=400, daily=0.003)}
+        cache = {"AAA": {"rows": [{"date": "2026-07-30", "eps": 2.0, "est": 1.8}, {"date": "2025-07-30", "eps": 1.0, "est": 1.0},
+                                  {"date": "2026-10-29", "eps": None, "est": 2.2}]}}
+        charts = watchlist.build_charts(["AAA", "NOPRICE"], frames, make_prices(n=400, daily=0.001), cache, now, n_weeks=52)
+        assert charts["benchmark"] == "^GSPC" and len(charts["weeks"]) == 52 and len(charts["spx"]) == 52
+        assert list(charts["stocks"]) == ["AAA"]
+        a = charts["stocks"]["AAA"]
+        assert all(len(a[k]) == 52 for k in ("o", "h", "l", "c", "v", "sma10", "sma40"))
+        assert a["eps"][-1] == {"d": "2026-07-30", "e": 2.0, "g": 100} and a["eps_next"] == {"d": "2026-10-29", "e": 2.2}
+
+    def test_build_charts_without_benchmark_still_works(self):
+        charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=300)}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 30)
+        assert charts["benchmark"] is None and charts["spx"] is None and len(charts["stocks"]["AAA"]["c"]) == 30

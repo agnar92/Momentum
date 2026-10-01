@@ -45,13 +45,22 @@ files (English is fine for new, unrelated code).
      rank for ties). Stocks with < 252 bars get no RS (too young for 12M). **The rating is relative to the
      already-filtered list**, not the whole market.
    - Qullamaggie-style inputs: `adr_pct` (100·(mean(High/Low) − 1), last 20 sessions),
-     `dollar_volume_avg` (mean Close·Volume, last 20 sessions), `gain_from_low_{1,3,6}m_pct` (price /
-     lowest Low of the last 1/3/6 months − 1).
+     `dollar_volume_avg` (mean Close·Volume, last 20 sessions), `low_ratio_{1,3,6}m` (price /
+     lowest Low of the last 1/3/6 months — a plain ratio, NO "− 1": it is only used for ranking, so sorting
+     descending is enough).
    - EMA34 trend: `ema34_rising` is true when daily EMA34 now > 5 > 10 > 15 > 20 sessions ago
      (`ema34_trend`; EMA34 checked every 5 sessions over the last 20), plus `ema34_slope_20d_pct`,
      `price_vs_ema34_pct`, `ema34`.
    - `pct_above_sma50/200` (own computation, informational), `spark` (last 26 weekly closes, % vs. first).
-4. Output **`docs/data/watchlist.json`** (`generated_at`, `data_as_of` = last session date, `finviz_filters`,
+4. **Chart data** (`build_charts`, `docs/data/charts.json`, lazily fetched by the chart modal): a shared list of the
+   last 104 weeks (`weeks`), the S&P 500 (`^GSPC`, `spx`; benchmark download is non-fatal) and, per stock, weekly OHLC
+   + volume (thousands) aligned to those weeks (`weekly_ohlcv`: W-FRI bars, the partial last week is dated with the
+   last session) plus SMA10/SMA40 weekly (computed on the full 3-year history, then sliced) and quarterly EPS
+   (`eps`: report date, EPS, YoY % = vs. the report ~1 year earlier, `None` if no/zero base; `eps_next` = upcoming
+   estimate). EPS comes from Yahoo `get_earnings_dates` (reported/adjusted EPS, ~12 quarters) and is cached in
+   **`docs/data/eps_cache.json`** (`update_eps_cache`, refreshed per ticker only when older than 7 days, 4 worker
+   threads, 600 s budget, errors never abort the run). Price history is downloaded for `3y`.
+5. Output **`docs/data/watchlist.json`** (`generated_at`, `data_as_of` = last session date, `finviz_filters`,
    `finviz_total`, `finviz_stale`, `n_stocks`, `stocks[]`). If Finviz fails or returns suspiciously few rows
    (`MIN_TICKERS`), the previous file's stock list (and its Finviz fields) is reused and `finviz_stale` is
    set; if price coverage is below `MIN_COVERAGE` (70%) nothing is written and the script exits 1.
@@ -80,10 +89,15 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   - **📊 RS Ranking** — `rs_rating ≥` a user-entered minimum (default 80), best first (`rsLeaders`).
   - **🎯 Qullamaggie** — user-entered min daily dollar volume (default 20 mln $), min ADR % (default 4) and
     **top X %** (default 10); stocks failing the liquidity thresholds are dropped, then for EACH of the 1/3/6
-    month windows the top X % by `gain_from_low_*` are taken and the result is the UNIQUE union (each row
+    month windows the top X % by `low_ratio_*` (price / minimum) are taken and the result is the UNIQUE union (each row
     remembers which windows it made; `qullamaggieRows`).
   - **📈 Trend EMA34** — a SEPARATE filter, deliberately independent of RS and Qullamaggie
     (`ema34_rising === true`, sorted by 20-session slope; `ema34Rows`).
+  **Clicking a row opens a MarketSmith-style chart** (`js/chart.js`, pure SVG, no libraries; model/scales are unit
+  tested in `tests/js/chart.test.js`): S&P 500 strip on top; weekly OHLC bars + SMA10 (green) / SMA40 (red) + the RS
+  line (stock / S&P 500, blue, own scale in the lower third, labelled with the RS Rating); weekly volume; quarterly
+  EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover; a header button toggles the PRICE panel between linear and logarithmic scale (`makeLogScale`/`logTicks`, 1/2/5·10ⁿ ticks; choice stored in `localStorage` `momentum_watchlist_chart_log`; the S&P strip, RS line and volume stay linear). The link
+  button inside a row still opens TradingView and does not open the chart.
   Common search box + sector select; table headers sort (empty values always last); settings persist in
   `localStorage` (`momentum_watchlist_settings`). Rows link out to TradingView (`tvUrlFor`) — there is no
   in-app chart any more. Pure logic is covered by `tests/js/watchlist.test.js`.

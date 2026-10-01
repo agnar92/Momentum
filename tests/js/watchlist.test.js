@@ -14,7 +14,7 @@ function stock(ticker, over = {}) {
     return {
         ticker, company: `${ticker} Inc`, sector: "Tech", price: 100, rs_rating: 50, rs_score: 0.5,
         adr_pct: 6, dollar_volume_avg: 50e6,
-        gain_from_low_1m_pct: 5, gain_from_low_3m_pct: 12, gain_from_low_6m_pct: 40,
+        low_ratio_1m: 1.05, low_ratio_3m: 1.12, low_ratio_6m: 1.4,
         ema34_rising: false, ...over,
     };
 }
@@ -27,14 +27,14 @@ test("rsLeaders keeps ratings at or above the threshold, best first", () => {
 
 test("qullamaggieRows: liquidity thresholds, then union of top X% per 1/3/6M window without duplicates", () => {
     const mk = (t, g1, g3, g6, over = {}) => stock(t, {
-        gain_from_low_1m_pct: g1, gain_from_low_3m_pct: g3, gain_from_low_6m_pct: g6, ...over,
+        low_ratio_1m: g1, low_ratio_3m: g3, low_ratio_6m: g6, ...over,
     });
-    const filler = ["E", "F", "G", "H", "I", "J", "K"].map(t => mk(t, 1, 1, 1));
+    const filler = ["E", "F", "G", "H", "I", "J", "K"].map(t => mk(t, 1.01, 1.01, 1.01));
     const stocks = [
-        mk("A", 90, 5, 5), mk("B", 5, 90, 5), mk("C", 5, 5, 90),
-        mk("LOWVOL", 99, 99, 99, { dollar_volume_avg: 1e6 }),
-        mk("LOWADR", 99, 99, 99, { adr_pct: 2 }),
-        mk("MISSING", 99, 99, 99, { adr_pct: null }),
+        mk("A", 1.9, 1.05, 1.05), mk("B", 1.05, 1.9, 1.05), mk("C", 1.05, 1.05, 1.9),
+        mk("LOWVOL", 9.9, 9.9, 9.9, { dollar_volume_avg: 1e6 }),
+        mk("LOWADR", 9.9, 9.9, 9.9, { adr_pct: 2 }),
+        mk("MISSING", 9.9, 9.9, 9.9, { adr_pct: null }),
         ...filler,
     ];
     const params = { minDollarVolumeM: 20, minAdrPct: 5, topPct: 10 };
@@ -42,14 +42,14 @@ test("qullamaggieRows: liquidity thresholds, then union of top X% per 1/3/6M win
     // 10 płynnych spółek, top 10% = 1 na okno => A (1M), B (3M), C (6M)
     assert.deepEqual(rows.map(r => r.ticker).sort(), ["A", "B", "C"]);
     assert.deepEqual(rows.find(r => r.ticker === "A").windows.map(w => w.label), ["1M"]);
-    assert.equal(rows.find(r => r.ticker === "A").max_gain_pct, 90);
+    assert.equal(rows.find(r => r.ticker === "A").max_ratio, 1.9);
 
     // ta sama spółka liderem w kilku oknach => jeden wiersz z kilkoma oknami
-    stocks[0] = mk("A", 90, 95, 5);
+    stocks[0] = mk("A", 1.9, 1.95, 1.05);
     const merged = qullamaggieRows(stocks, params);
     assert.equal(merged.filter(r => r.ticker === "A").length, 1);
     assert.deepEqual(merged.find(r => r.ticker === "A").windows.map(w => w.label), ["1M", "3M"]);
-    assert.equal(merged.find(r => r.ticker === "A").max_gain_pct, 95);
+    assert.equal(merged.find(r => r.ticker === "A").max_ratio, 1.95);
 });
 
 test("qullamaggieRows: empty input and zero topPct give an empty list", () => {

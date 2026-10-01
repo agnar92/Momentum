@@ -30,6 +30,8 @@ const browserGlobals = {
     showToast: "readonly",
     initConnStatus: "readonly",
     hideLoadingOverlay: "readonly",
+    // docs/js/chart.js (ładowany PRZED watchlist.js)
+    renderStockChart: "readonly",
 };
 
 const nodeGlobals = {
