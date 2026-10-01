@@ -154,7 +154,7 @@ test("rollingMean needs a full finite window", () => {
 test("buildChartModel maps trend lines to indexes; sliceModel shifts and drops them", () => {
     const m = buildChartModel(charts(), "AAA", null);
     assert.deepEqual(m.lines.map(l => [l.kind, l.i0, l.i1]), [["res", 1, 4], ["sup", 0, 4]]);
-    assert.deepEqual(m.trend, { pattern: "kanał", state: "wybicie" });
+    assert.deepEqual(m.trend, { pattern: "kanał", state: "wybicie", breakout: null });
     const s = sliceModel(m, 2);
     assert.deepEqual(s.lines.map(l => [l.i0, l.i1]), [[-2, 1], [-3, 1]]);
     assert.equal(s.smas[0].values.length, 2);
@@ -170,17 +170,17 @@ test("chartSvg draws trend lines, breakout marker and a legend strip", () => {
     assert.match(svg, /średnia 10 tyg\./);
 });
 
-test("dailyCharts: SMA 10/20/50/200, oś = dni, wyniki sprzed okna pominięte", () => {
+test("dailyCharts: SMA 10/20, oś = dni, wyniki sprzed okna pominięte", () => {
     const { dailyCharts, buildChartModel } = require("../../docs/js/chart.js");
     const charts = {
         weeks: ["2026-01-02"], days: ["2026-01-01", "2026-01-02"], spx_d: [100, 101],
-        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma10: [1, 2], sma20: [1, 1.8], sma50: [1, 1.5], sma200: [1, 1.2] }, eps: [{ d: "2025-06-01", e: 1, g: null }, { d: "2026-01-02", e: 2, g: 5 }], eps_next: null } },
+        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma10: [1, 2], sma20: [1, 1.8] }, eps: [{ d: "2025-06-01", e: 1, g: null }, { d: "2026-01-02", e: 2, g: 5 }], eps_next: null } },
     };
     const d = dailyCharts(charts);
     assert.strictEqual(d.daily, true);
     const m = buildChartModel(d, "X", null);
     assert.strictEqual(m.n, 2);
-    assert.deepStrictEqual(m.smas.map(x => x.label), ["SMA 10", "SMA 20", "SMA 50", "SMA 200"]);
+    assert.deepStrictEqual(m.smas.map(x => x.label), ["SMA 10", "SMA 20"]);
     assert.deepStrictEqual(m.eps.map(q => q.week), [1]);
     assert.strictEqual(dailyCharts({ weeks: [] }), null);
 });
@@ -195,4 +195,12 @@ test("cup base is drawn as an arc with the depth label; indexes shift with slice
     assert.match(svg, /−26\.7%<\/text>/);
     assert.match(svg, /<title>Cup −26\.7%<\/title>/);
     assert.deepEqual(sliceModel(m, 2).cups.map(x => [x.i0, x.iLow, x.i1]), [[-2, -1, 1]]);
+});
+
+test("legend shows breakout volume confirmation", () => {
+    const c = charts();
+    c.stocks.AAA.tl.breakout = { date: "2026-07-03", vol_ratio: 2.1, confirmed: true };
+    assert.match(chartSvg(buildChartModel(c, "AAA", null)), /wolumen ×2\.1 śr\. ✓ potwierdzone/);
+    c.stocks.AAA.tl.breakout = { date: "2026-07-03", vol_ratio: 0.8, confirmed: false };
+    assert.match(chartSvg(buildChartModel(c, "AAA", null)), /bez potwierdzenia/);
 });

@@ -158,8 +158,8 @@ class TestCharts:
         df = make_prices(n=300, daily=0.002)
         days = list(df.index[-20:])
         d = watchlist.build_daily(df, days)
-        assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma50", "sma200"))
-        assert d["sma200"][0] is not None  # SMA200 liczona na pelnej historii, nie tylko na oknie
+        assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma10", "sma20"))
+        assert d["sma20"][0] is not None  # SMA liczona na pelnej historii, nie tylko na oknie
 
     def test_build_chart_aligns_to_common_weeks_and_pads_missing(self):
         weekly = watchlist.weekly_ohlcv(make_prices(n=300, daily=0.002))
@@ -282,9 +282,9 @@ class TestBases:
 
 
 class TestTrendlines:
-    def _frame(self, highs, lows, closes):
+    def _frame(self, highs, lows, closes, volume=1000):
         idx = pd.bdate_range("2026-01-01", periods=len(highs))
-        return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": 1000}, index=idx)
+        return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": volume}, index=idx)
 
     def test_descending_channel_then_breakout_is_detected(self):
         # opadajacy korytarz (flaga): szczyty co 8 swiec coraz nizej, na koncu wybicie nad opor
@@ -299,6 +299,12 @@ class TestTrendlines:
         tl = watchlist.detect_trendlines(self._frame(highs, lows, closes), k=2, lookback=60, min_span=8)
         assert tl is not None and any(ln["kind"] == "res" for ln in tl["lines"])
         assert tl["state"] == "wybicie"
+        assert tl["breakout"]["confirmed"] is False and tl["breakout"]["vol_ratio"] == 1.0   # ten sam wolumen co zwykle
+
+        vol = np.full(n, 1000.0)
+        vol[n - 2:] = 3000.0                                                                  # skok wolumenu na wybiciu
+        boosted = watchlist.detect_trendlines(self._frame(highs, lows, closes, vol), k=2, lookback=60, min_span=8)
+        assert boosted["breakout"]["confirmed"] is True and boosted["breakout"]["vol_ratio"] == 3.0
 
     def test_too_short_history_returns_none(self):
         df = self._frame([1] * 10, [1] * 10, [1] * 10)

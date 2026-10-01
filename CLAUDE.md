@@ -130,7 +130,10 @@ highs (resistance) / lows (support) that no bar pierces by more than 1.5 % (last
 Run on weekly bars (`tl` in charts.json: 40 weeks) and daily bars (`day.tl`: 70 sessions; also `tl_state`
 = "wybicie"/"przy oporze" and `tl_pattern` = flaga/handle, korytarz poziomy, kanał wzrostowy, trójkąt in watchlist.json).
 Drawn as dashed orange (resistance) / grey (support) lines + ▲ at a breakout; legend strip above the price panel
-(separate band so labels never cover candles). Daily view has SMA 10/20/50/200, weekly SMA 10/40 weeks.
+(separate band so labels never cover candles). Daily view (the default; `momentum_watchlist_chart_daily` = "0" switches to weekly) has only SMA 10/20, weekly SMA 10/40 weeks.
+A breakout carries volume confirmation (`breakout`: date, `vol_ratio` = breakout-bar volume / mean of the previous 50 bars,
+`confirmed` ≥ 1.5×) — shown in the legend, the breakout volume bar is outlined; `tl_vol_ratio`/`tl_vol_ok` in watchlist.json feed the
+"Trendlinia" column.
 
 ## Layout
 

@@ -119,7 +119,7 @@ function buildChartModel(charts, ticker, stock) {
     const rs = c.c.map((close, i) => (spx && Number.isFinite(close) && Number.isFinite(spx[i]) && spx[i] > 0) ? close / spx[i] : null);
     const eps = (c.eps || []).map(q => ({ ...q, week: weekIndexForDate(weeks, q.d) })).filter(q => q.week >= 0);
     const smas = charts.daily
-        ? [["SMA 10", c.sma10], ["SMA 20", c.sma20], ["SMA 50", c.sma50], ["SMA 200", c.sma200]]
+        ? [["SMA 10", c.sma10], ["SMA 20", c.sma20]]
         : [["SMA 10 tyg.", c.sma10], ["SMA 40 tyg.", c.sma40]];
     // Linie trendu (watchlist.py::detect_trendlines): opór/wsparcie jako odcinki (indeks, cena).
     const tl = c.tl || null;
@@ -133,7 +133,7 @@ function buildChartModel(charts, ticker, stock) {
     return {
         ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
         smas: smas.map(([label, values]) => ({ label, values: values || [], color: SMA_COLORS[label] })),
-        spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state } : null,
+        spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null } : null,
         epsNext: c.eps_next || null, lastIdx,
         rsNewHigh: rsNewHighFlags(rs), volAvg: rollingMean(c.v, VOL_AVG_WEEKS),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
@@ -309,7 +309,11 @@ function chartSvg(m, opts = {}) {
     const smaItems = m.smas.map(x => `<tspan fill="${x.color}">— ${x.label}</tspan>`);
     const otherItems = [`<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${m.rsRating != null ? ` · Rating ${m.rsRating}` : ""}</tspan>`];
     if (m.trend && m.trend.pattern) otherItems.push(`<tspan fill="${CHART_COLORS.res}">▸ ${escapeHtml(m.trend.pattern)}</tspan>`);
-    if (m.trend && m.trend.state) otherItems.push(`<tspan fill="${CHART_COLORS.res}" font-weight="700">${m.trend.state === "wybicie" ? "▲ wybicie z linii trendu" : "przy oporze"}</tspan>`);
+    if (m.trend && m.trend.state) {
+        const bo = m.trend.breakout;
+        const vol = bo ? ` · wolumen ×${bo.vol_ratio} śr. ${bo.confirmed ? "✓ potwierdzone" : "— bez potwierdzenia"}` : "";
+        otherItems.push(`<tspan fill="${bo && !bo.confirmed ? CHART_COLORS.text : CHART_COLORS.res}" font-weight="700">${m.trend.state === "wybicie" ? "▲ wybicie z linii trendu" + vol : "przy oporze"}</tspan>`);
+    }
     if (useLog) otherItems.push("skala log.");
     const legendRows = opts.compact ? [smaItems, otherItems] : [[...smaItems, ...otherItems]];
     legendRows.forEach((row, r) => {
@@ -318,12 +322,14 @@ function chartSvg(m, opts = {}) {
 
     // --- 3. wolumen
     const vMax = Math.max(1, ...m.v.filter(Number.isFinite));
+    const boIdx = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.volume.y - 4}" y2="${L.volume.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
     for (let i = 0; i < m.n; i++) {
         if (!Number.isFinite(m.v[i])) continue;
         const col = m.c[i] >= m.o[i] ? CHART_COLORS.up : CHART_COLORS.down;
         const h = (m.v[i] / vMax) * (L.volume.h - fs(11) - 4);
-        parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"/>`);
+        const isBreak = boIdx === i;
+        parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);
     }
     parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), L.volume.y + L.volume.h - Math.min(1, v / vMax) * (L.volume.h - fs(11) - 4)] : null), CHART_COLORS.volAvg, 1.3));
     parts.push(`<text x="${L.left + 4}" y="${L.volume.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${m.daily ? "Wolumen dzienny · średnia 10 dni" : "Wolumen tygodniowy · średnia 10 tyg."}</text>`);

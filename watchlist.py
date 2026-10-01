@@ -42,6 +42,8 @@ CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 TL_TOLERANCE = 0.015         # tyle (1,5%) cena może "przekłuć" linię trendu, żeby nadal była to ta sama linia
 TL_RECENT_BARS = 3           # ostatnie świece, które mogą już być wybiciem (nie psują linii)
+TL_VOLUME_MULT = 1.5         # wybicie potwierdzone, gdy wolumen >= 1,5x średniej z poprzednich 50 świec
+TL_VOLUME_AVG_BARS = 50
 TL_NEAR_PCT = 3.0            # cena do 3% pod oporem = "przy oporze"
 BASE_MIN_WEEKS = 5           # minimalna długość bazy/korekty (tygodnie od szczytu)
 BASE_MIN_DEPTH_PCT = 6       # płytsze konsolidacje nie są raportowane
@@ -205,6 +207,8 @@ def compute_metrics(df):
         "vcp": open_base["vcp"] if open_base else None,
         "tl_state": tl.get("state"),
         "tl_pattern": tl.get("pattern"),
+        "tl_vol_ratio": (tl.get("breakout") or {}).get("vol_ratio"),
+        "tl_vol_ok": (tl.get("breakout") or {}).get("confirmed"),
         "spark": spark,
     }
 
@@ -347,7 +351,7 @@ def _best_line(values, pivots, n, highs, min_span, tol=TL_TOLERANCE):
 
 def detect_trendlines(ohlc, k, lookback, min_span):
     """Linie trendu na świecach (daily/weekly): opór przez szczyty, wsparcie przez dołki z ostatnich `lookback` świec.
-    Zwraca {lines, pattern, state} albo None. state: 'wybicie' (cena nad oporem w ostatnich świecach), 'przy oporze'
+    Zwraca {lines, pattern, state, breakout} albo None; breakout = {date, vol_ratio, confirmed} (wolumen świecy wybicia / średnia z 50 poprzednich). state: 'wybicie' (cena nad oporem w ostatnich świecach), 'przy oporze'
     (<= TL_NEAR_PCT% pod nim) lub None. pattern: opis kształtu (flaga/handle, kanał, trójkąt...) gdy są obie linie."""
     if len(ohlc) < lookback // 2:
         return None
@@ -367,13 +371,20 @@ def detect_trendlines(ohlc, k, lookback, min_span):
     def slope_pct(ln):  # % na świecę względem poziomu ceny
         return (ln[3] - ln[1]) / ln[1] / max(1, ln[2] - ln[0]) * 100
 
-    state, pattern = None, None
+    state, pattern, breakout = None, None, None
     if res:
         res_now = res[3]
         recent = range(n - TL_RECENT_BARS, n)
         broke = any(cl[i] > res[1] + (res[3] - res[1]) * (i - res[0]) / (res[2] - res[0]) for i in recent)
         if broke:
             state = "wybicie"
+            first = next(i for i in recent if cl[i] > res[1] + (res[3] - res[1]) * (i - res[0]) / (res[2] - res[0]))
+            full = ohlc["Volume"].astype(float).values
+            pos = len(full) - n + first                      # indeks tej świecy w pełnej serii
+            prev = full[max(0, pos - TL_VOLUME_AVG_BARS):pos]
+            if len(prev) >= 10 and prev.mean() > 0:
+                breakout = {"date": dates[first], "vol_ratio": _num(full[pos] / prev.mean(), 1)}
+                breakout["confirmed"] = bool(breakout["vol_ratio"] >= TL_VOLUME_MULT)
         elif cl[-1] < res_now and (res_now / cl[-1] - 1) * 100 <= TL_NEAR_PCT:
             state = "przy oporze"
     if res and sup:
@@ -389,7 +400,7 @@ def detect_trendlines(ohlc, k, lookback, min_span):
             pattern = "trójkąt (zbieżne linie)"
     elif res and slope_pct(res) < -0.05:
         pattern = "opadający opór"
-    return {"lines": lines, "pattern": pattern, "state": state}
+    return {"lines": lines, "pattern": pattern, "state": state, "breakout": breakout}
 
 
 def weekly_ohlcv(df, last_date=None):
@@ -439,8 +450,6 @@ def build_daily(df, days):
         "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
         "sma10": _series(close.rolling(10).mean().reindex(idx)),
         "sma20": _series(close.rolling(20).mean().reindex(idx)),
-        "sma50": _series(close.rolling(50).mean().reindex(idx)),
-        "sma200": _series(close.rolling(200).mean().reindex(idx)),
     }
 
 
