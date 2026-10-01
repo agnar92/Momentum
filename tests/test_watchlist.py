@@ -296,7 +296,7 @@ class TestTrendlines:
             closes[i] = highs[i] + 6
             highs[i] = closes[i] + 1
         tl = watchlist.detect_trendlines(self._frame(highs, lows, closes), k=2, lookback=60, min_span=8)
-        assert tl is not None and any(l["kind"] == "res" for l in tl["lines"])
+        assert tl is not None and any(ln["kind"] == "res" for ln in tl["lines"])
         assert tl["state"] == "wybicie"
 
     def test_too_short_history_returns_none(self):
