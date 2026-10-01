@@ -32,7 +32,7 @@ const COMPACT_DAYS = 75;
 const SMA_COLORS = { "SMA 10": "#3fbf6e", "SMA 20": "#f5d547", "SMA 50": "#c77dff", "SMA 200": "#e0455a", "SMA 10 tyg.": "#3fbf6e", "SMA 40 tyg.": "#e0455a" };
 const CHART_COLORS = {
     up: "#2ecc71", down: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
-    eps: "#e0b341", res: "#ff9f43", sup: "#9fb3c8", volAvg: "#e8a33d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
+    eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e8a33d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
 };
 const MONTHS_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 
@@ -100,7 +100,7 @@ function dailyCharts(charts) {
     Object.keys(charts.stocks).forEach(t => {
         const c = charts.stocks[t], d = c.day;
         // wyniki sprzed pierwszej sesji okna wypadłyby na indeks 0 i nałożyły się na siebie — pomijamy je
-        if (d) stocks[t] = { ...d, eps: (c.eps || []).filter(q => q.d >= charts.days[0]), eps_next: c.eps_next };
+        if (d) stocks[t] = { ...d, bases: c.bases, eps: (c.eps || []).filter(q => q.d >= charts.days[0]), eps_next: c.eps_next };
     });
     return { weeks: charts.days, spx: charts.spx_d, stocks, daily: true };
 }
@@ -124,11 +124,16 @@ function buildChartModel(charts, ticker, stock) {
     // Linie trendu (watchlist.py::detect_trendlines): opór/wsparcie jako odcinki (indeks, cena).
     const tl = c.tl || null;
     const lines = tl ? tl.lines.map(l => ({ kind: l.kind, i0: lineIndex(weeks, l.x0), y0: l.y0, i1: lineIndex(weeks, l.x1), y1: l.y1, touches: l.touches })) : [];
+    // Miseczki (cup): lewy szczyt, dołek i prawy brzeg w indeksach świec; część może wypadać przed oknem (ujemne indeksy).
+    const cups = (c.bases || []).filter(b => b.type === "cup" && b.low_date).map(b => ({
+        i0: lineIndex(weeks, b.start), iLow: lineIndex(weeks, b.low_date), i1: lineIndex(weeks, b.end),
+        peak: b.peak, low: b.low, right: b.end_close, depth: b.depth_pct, open: b.open,
+    })).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
     return {
         ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
         smas: smas.map(([label, values]) => ({ label, values: values || [], color: SMA_COLORS[label] })),
-        spx, rs, eps, lines, trend: tl ? { pattern: tl.pattern, state: tl.state } : null,
+        spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state } : null,
         epsNext: c.eps_next || null, lastIdx,
         rsNewHigh: rsNewHighFlags(rs), volAvg: rollingMean(c.v, VOL_AVG_WEEKS),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
@@ -145,6 +150,7 @@ function sliceModel(m, n) {
         smas: m.smas.map(x => ({ ...x, values: cut(x.values) })), spx: m.spx ? cut(m.spx) : null, rs: cut(m.rs),
         eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0),
         lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0),
+        cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off })).filter(c => c.i1 > 0),
         rsNewHigh: cut(m.rsNewHigh), volAvg: cut(m.volAvg),
         lastIdx: m.lastIdx - off,
     };
@@ -247,6 +253,21 @@ function chartSvg(m, opts = {}) {
     (useLog ? logTicks(pMin, pMax) : niceTicks(pMin, pMax, 6)).forEach(t => {
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
         parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
+    });
+    // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
+    parts.push(`<clipPath id="chartPriceClip"><rect x="${L.left}" y="${L.price.y}" width="${L.width - L.left - L.right}" height="${L.price.h}"/></clipPath>`);
+    m.cups.forEach(cup => {
+        const yL = yP(cup.peak), yB = yP(cup.low), yR = yP(Number.isFinite(cup.right) ? cup.right : cup.peak);
+        const pts = [];
+        for (let k = 0; k <= 48; k++) {
+            const i = cup.i0 + (cup.i1 - cup.i0) * k / 48;
+            const t = i <= cup.iLow ? (cup.iLow - i) / Math.max(1e-9, cup.iLow - cup.i0) : (i - cup.iLow) / Math.max(1e-9, cup.i1 - cup.iLow);
+            const edge = i <= cup.iLow ? yL : yR;
+            pts.push(`${(x(i)).toFixed(1)},${(yB - (yB - edge) * t * t).toFixed(1)}`);
+        }
+        parts.push(`<polyline clip-path="url(#chartPriceClip)" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.join(" ")}"><title>Cup −${cup.depth}%</title></polyline>`);
+        const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
+        parts.push(`<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${cup.depth}%</text>`);
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;

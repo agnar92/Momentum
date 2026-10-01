@@ -247,6 +247,7 @@ class TestBases:
         assert b["peak"] == 100 and b["pivot"] == 100 and b["low"] == 80
         assert b["depth_pct"] == 20.0 and b["weeks"] == 8 and b["type"] in ("cup", "correction")
         assert b["start"] == "2025-01-17" and b["end"] == "2025-03-07"
+        assert b["low_date"] == "2025-02-14" and b["end_close"] is not None
 
     def test_open_base_flat_vcp_with_shrinking_contractions(self):
         # szczyt 100, potem trzy coraz płytsze skurcze (10% -> 6% -> 3%+) i brak wybicia = otwarta baza "flat"

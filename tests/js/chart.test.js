@@ -184,3 +184,15 @@ test("dailyCharts: SMA 10/20/50/200, oś = dni, wyniki sprzed okna pominięte", 
     assert.deepStrictEqual(m.eps.map(q => q.week), [1]);
     assert.strictEqual(dailyCharts({ weeks: [] }), null);
 });
+
+test("cup base is drawn as an arc with the depth label; indexes shift with sliceModel", () => {
+    const c = charts();
+    c.stocks.AAA.bases = [{ start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 11, end_close: 14, depth_pct: 26.7, type: "cup", open: false },
+                          { start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 13, depth_pct: 13, type: "flat", open: false }];
+    const m = buildChartModel(c, "AAA", null);
+    assert.deepEqual(m.cups.map(x => [x.i0, x.iLow, x.i1]), [[1, 2, 4]]);   // tylko typ cup
+    const svg = chartSvg(m);
+    assert.match(svg, /−26\.7%<\/text>/);
+    assert.match(svg, /<title>Cup −26\.7%<\/title>/);
+    assert.deepEqual(sliceModel(m, 2).cups.map(x => [x.i0, x.iLow, x.i1]), [[-2, -1, 1]]);
+});

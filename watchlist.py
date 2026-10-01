@@ -275,7 +275,8 @@ def detect_bases(weekly):
         if end <= peak:
             return
         weeks = end - peak + 1
-        low = float(lo[peak + 1:end + 1].min())
+        low_i = peak + 1 + int(np.argmin(lo[peak + 1:end + 1]))
+        low = float(lo[low_i])
         depth = (hi[peak] - low) / hi[peak] * 100
         if weeks < BASE_MIN_WEEKS or not (BASE_MIN_DEPTH_PCT <= depth <= BASE_MAX_DEPTH_PCT):
             return
@@ -291,6 +292,7 @@ def detect_bases(weekly):
         bases.append({
             "start": dates[peak].strftime("%Y-%m-%d"), "end": dates[end].strftime("%Y-%m-%d"),
             "peak": _num(hi[peak]), "low": _num(low), "depth_pct": _num(depth, 1), "weeks": weeks, "type": kind,
+            "low_date": dates[low_i].strftime("%Y-%m-%d"), "end_close": _num(cl[end]),
             "open": is_open, "pivot": _num(hi[peak]), "contractions": drops, "vcp": bool(vcp),
         })
 

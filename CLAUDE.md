@@ -117,8 +117,8 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
 
 ## Bases / VCP (heuristic)
 
-`detect_bases` (watchlist.py, feeds only the 🧱 Bazy tab and the stats line — NOT drawn on the chart any more, the
-boxes were unreadable) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks), classifies them
+`detect_bases` (watchlist.py, feeds only the 🧱 Bazy tab and the stats line — on the chart only `cup` bases are drawn, as a parabola arc left peak → low → right rim with the depth % in the
+center (`cups` in the model, `low_date`/`end_close` from `detect_bases`; the old boxes were unreadable) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks), classifies them
 flat/cup/correction/deep, gives a pivot (peak high) and a VCP flag (≥2 strictly decreasing zig-zag contractions,
 last ≤10 %). Stored as `base_*`, `pivot`, `pct_to_pivot`,
 `vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (no handle/flag detection).
