@@ -278,3 +278,27 @@ class TestBases:
         charts = watchlist.build_charts(["AAA"], {"AAA": df}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 52)
         assert "bases" in charts["stocks"]["AAA"]
         assert len(charts["stocks"]["AAA"]["bases"]) <= watchlist.BASE_MAX_SHOWN
+
+
+class TestTrendlines:
+    def _frame(self, highs, lows, closes):
+        idx = pd.bdate_range("2026-01-01", periods=len(highs))
+        return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": 1000}, index=idx)
+
+    def test_descending_channel_then_breakout_is_detected(self):
+        # opadajacy korytarz (flaga): szczyty co 8 swiec coraz nizej, na koncu wybicie nad opor
+        n = 60
+        base = [100 - 0.2 * i + (3 if i % 8 == 0 else 0) for i in range(n)]
+        highs = [b + 1 for b in base]
+        lows = [b - 1 for b in base]
+        closes = list(base)
+        for i in range(n - 2, n):           # ostatnie 2 swiece: wybicie
+            closes[i] = highs[i] + 6
+            highs[i] = closes[i] + 1
+        tl = watchlist.detect_trendlines(self._frame(highs, lows, closes), k=2, lookback=60, min_span=8)
+        assert tl is not None and any(l["kind"] == "res" for l in tl["lines"])
+        assert tl["state"] == "wybicie"
+
+    def test_too_short_history_returns_none(self):
+        df = self._frame([1] * 10, [1] * 10, [1] * 10)
+        assert watchlist.detect_trendlines(df, k=2, lookback=60, min_span=8) is None

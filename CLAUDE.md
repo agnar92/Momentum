@@ -27,9 +27,9 @@ files (English is fine for new, unrelated code).
 1. **`finviz.py`** — scrapes the free Finviz screener (`finviz.com/screener.ashx`, 20 rows/page, `r=` offset)
    with the filters in **`finviz_screen.json`** (`filters` = comma-separated Finviz filter codes, copy them
    from a Finviz screener URL; `max_tickers` = cap). Default: market cap ≥ $2B (`cap_midover`), price above
-   SMA50 and SMA200 (`ta_sma50_pa`, `ta_sma200_pa`), positive EPS growth past 5 years / this year
-   (`fa_eps5years_pos`, `fa_epsyoy_pos`) and positive EPS forecasts next year / next 5 years
-   (`fa_epsyoy1_pos`, `fa_estltgrowth_pos`) ≈ 130 stocks. It queries three views (Overview `111`,
+   SMA50 and SMA200 (`ta_sma50_pa`, `ta_sma200_pa`), positive EPS growth this year (`fa_epsyoy_pos`) and positive EPS
+   forecast next year (`fa_epsyoy1_pos`) ≈ 290 stocks. The 5-year EPS filter (`fa_eps5years_pos`) was deliberately
+   dropped at the user's request so young leaders / recent IPOs are not cut out. It queries three views (Overview `111`,
    Valuation `121`, Financial `161`) with the same filters and merges rows by ticker, mapping columns by
    header text (`VIEW_COLUMNS`) — sector, industry, market cap, P/E, EPS this Y / next Y / past 5Y / next 5Y,
    ROE, margins, next earnings date. **Finviz silently ignores unknown filter codes** (a typo widens the list
@@ -117,10 +117,20 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
 
 ## Bases / VCP (heuristic)
 
-`detect_bases` (watchlist.py) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks), classifies them
+`detect_bases` (watchlist.py, feeds only the 🧱 Bazy tab and the stats line — NOT drawn on the chart any more, the
+boxes were unreadable) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks), classifies them
 flat/cup/correction/deep, gives a pivot (peak high) and a VCP flag (≥2 strictly decreasing zig-zag contractions,
-last ≤10 %). Stored as `bases` in charts.json (drawn as boxes + pivot line) and as `base_*`, `pivot`, `pct_to_pivot`,
+last ≤10 %). Stored as `base_*`, `pivot`, `pct_to_pivot`,
 `vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (no handle/flag detection).
+
+## Trendlines (heuristic)
+
+`detect_trendlines` (watchlist.py) finds swing highs/lows (±k bars), then the LONGEST straight line through two swing
+highs (resistance) / lows (support) that no bar pierces by more than 1.5 % (last 3 bars may — that is the breakout).
+Run on weekly bars (`tl` in charts.json: 40 weeks) and daily bars (`day.tl`: 70 sessions; also `tl_state`
+= "wybicie"/"przy oporze" and `tl_pattern` = flaga/handle, korytarz poziomy, kanał wzrostowy, trójkąt in watchlist.json).
+Drawn as dashed orange (resistance) / grey (support) lines + ▲ at a breakout; legend strip above the price panel
+(separate band so labels never cover candles). Daily view has SMA 10/20/50/200, weekly SMA 10/40 weeks.
 
 ## Layout
 
