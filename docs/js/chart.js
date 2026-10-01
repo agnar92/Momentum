@@ -39,6 +39,28 @@ function makeYScale(min, max, top, height) {
     return v => top + height - ((v - min) / span) * height;
 }
 
+// Skala logarytmiczna (tylko wartości dodatnie): równe odległości = równe zmiany procentowe.
+function makeLogScale(min, max, top, height) {
+    const lin = makeYScale(Math.log(min), Math.log(max), top, height);
+    return v => lin(Math.log(v));
+}
+
+// Znaczniki osi logarytmicznej: 1/2/5 · 10^n w przedziale; przy małej liczbie — gęściej (1,1.5,2,3,...), a w bardzo wąskim zakresie — liniowe.
+function logTicks(min, max) {
+    if (!(min > 0) || !(max > min)) return [];
+    const pick = mults => {
+        const out = [];
+        for (let p = Math.floor(Math.log10(min)); p <= Math.ceil(Math.log10(max)); p++) {
+            mults.forEach(m => { const v = Number((m * Math.pow(10, p)).toPrecision(12)); if (v >= min && v <= max) out.push(v); });
+        }
+        return out;
+    };
+    const coarse = pick([1, 2, 5]);
+    if (coarse.length >= 4) return coarse;
+    const dense = pick([1, 1.5, 2, 3, 4, 5, 6, 7, 8, 9]);
+    return dense.length >= 3 ? dense : niceTicks(min, max, 5);   // bardzo wąski zakres: zwykłe, liniowe znaczniki
+}
+
 function numericExtent(arrays) {
     let min = Infinity, max = -Infinity;
     arrays.forEach(arr => (arr || []).forEach(v => {
@@ -97,7 +119,7 @@ function fmtCompact(v) {
     return v.toFixed(2);
 }
 
-function chartSvg(m) {
+function chartSvg(m, opts = {}) {
     const L = CHART_LAYOUT;
     const plotW = L.width - L.left - L.right;
     const step = plotW / m.n;
@@ -137,10 +159,12 @@ function chartSvg(m) {
 
     // --- 2. cena: słupki OHLC + SMA + RS
     const pExt = numericExtent([m.h, m.l, m.sma10, m.sma40]) || [0, 1];
+    const useLog = !!opts.log && pExt[0] > 0;
     const pad = (pExt[1] - pExt[0]) * 0.04;
-    const pMin = pExt[0] - pad, pMax = pExt[1] + pad;
-    const yP = makeYScale(pMin, pMax, L.price.y, L.price.h);
-    niceTicks(pMin, pMax, 6).forEach(t => {
+    const pMin = useLog ? pExt[0] / 1.04 : pExt[0] - pad;
+    const pMax = useLog ? pExt[1] * 1.04 : pExt[1] + pad;
+    const yP = useLog ? makeLogScale(pMin, pMax, L.price.y, L.price.h) : makeYScale(pMin, pMax, L.price.y, L.price.h);
+    (useLog ? logTicks(pMin, pMax) : niceTicks(pMin, pMax, 6)).forEach(t => {
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
         parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="10">${fmtAxis(t)}</text>`);
     });
@@ -171,7 +195,7 @@ function chartSvg(m) {
         parts.push(`<path d="M${cx - 4},${cy} L${cx + 4},${cy} L${cx},${cy - 8} Z" fill="${CHART_COLORS.textStrong}" opacity="0.7"><title>Wyniki ${q.d}: EPS ${q.e}</title></path>`);
     });
     parts.push(`<text x="${L.left + 4}" y="${L.price.y + 12}" font-size="11" fill="${CHART_COLORS.text}">`
-        + `<tspan fill="${CHART_COLORS.sma10}">— SMA 10 tyg.</tspan>  <tspan fill="${CHART_COLORS.sma40}">— SMA 40 tyg.</tspan>  <tspan fill="${CHART_COLORS.rs}">— RS (spółka / S&amp;P 500)</tspan></text>`);
+        + `<tspan fill="${CHART_COLORS.sma10}">— SMA 10 tyg.</tspan>  <tspan fill="${CHART_COLORS.sma40}">— SMA 40 tyg.</tspan>  <tspan fill="${CHART_COLORS.rs}">— RS (spółka / S&amp;P 500)</tspan>${useLog ? "  · skala logarytmiczna" : ""}</text>`);
 
     // --- 3. wolumen
     const vMax = Math.max(1, ...m.v.filter(Number.isFinite));
@@ -244,14 +268,14 @@ function attachChartHover(container, m, readoutEl) {
 }
 
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
-function renderStockChart(container, readoutEl, charts, ticker, stock) {
+function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
     const m = buildChartModel(charts, ticker, stock);
     if (!m) {
         container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${chartEsc(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";
         return null;
     }
-    container.innerHTML = chartSvg(m);
+    container.innerHTML = chartSvg(m, opts);
     readoutEl.textContent = chartReadout(m, m.lastIdx);
     attachChartHover(container, m, readoutEl);
     return m;
@@ -259,6 +283,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, numericExtent, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }

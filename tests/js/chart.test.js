@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    niceTicks, makeYScale, numericExtent, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
+    niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -93,4 +93,22 @@ test("chartReadout formats a week and is empty for missing bars", () => {
 test("polyline breaks the line on gaps", () => {
     const out = polyline([[0, 0], [1, 1], null, [3, 3], [4, 4], null, [6, 6]], "#fff");
     assert.equal((out.match(/<polyline/g) || []).length, 2);   // pojedynczy punkt nie tworzy linii
+});
+
+test("makeLogScale gives equal distances for equal ratios", () => {
+    const y = makeLogScale(1, 100, 0, 200);
+    assert.ok(Math.abs(y(1) - 200) < 1e-9 && Math.abs(y(100)) < 1e-9);
+    assert.ok(Math.abs((y(1) - y(10)) - (y(10) - y(100))) < 1e-9);
+});
+
+test("logTicks uses 1/2/5 steps and falls back to denser steps for narrow ranges", () => {
+    assert.deepEqual(logTicks(1, 1000), [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]);
+    assert.ok(logTicks(100, 150).length >= 3);
+    assert.deepEqual(logTicks(0, 10), []);
+});
+
+test("chartSvg in log mode labels the scale and keeps rendering bars", () => {
+    const m = buildChartModel(charts(), "AAA", null);
+    assert.match(chartSvg(m, { log: true }), /skala logarytmiczna/);
+    assert.doesNotMatch(chartSvg(m, {}), /skala logarytmiczna/);
 });

@@ -20,6 +20,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // To tylko informacja do przeglądania, nie rekomendacja inwestycyjna.
 // ============================================================
 
+const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const DEFAULT_SETTINGS = { tab: "LIST", rsMin: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 } };
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
@@ -321,6 +322,8 @@ function initControls() {
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
 
 let chartsPromise = null;
+let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
+let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
 function loadCharts() {
     if (!chartsPromise) {
         chartsPromise = fetch("data/charts.json", { cache: "no-store" })
@@ -346,7 +349,8 @@ async function openChart(ticker) {
     const charts = await loadCharts();
     if (modal.hidden) return; // zamknięte w trakcie ładowania
     if (!charts) { body.innerHTML = `<div class="empty-state">Nie udało się wczytać danych wykresów.</div>`; return; }
-    const model = renderStockChart(body, readout, charts, ticker, stock);
+    currentChart = { charts, ticker, stock };
+    const model = renderStockChart(body, readout, charts, ticker, stock, { log: chartLog });
     if (model && model.epsNext) {
         document.getElementById("chartSub").textContent += ` · następny raport ${model.epsNext.d} (prognoza EPS ${model.epsNext.e})`;
     }
@@ -354,9 +358,25 @@ async function openChart(ticker) {
 
 function closeChart() {
     document.getElementById("chartModal").hidden = true;
+    currentChart = null;
+}
+
+function updateLogButton() {
+    document.getElementById("chartLogBtn").textContent = chartLog ? "Skala: logarytmiczna" : "Skala: liniowa";
 }
 
 function initChartModal() {
+    try { chartLog = localStorage.getItem(CHART_LOG_KEY) === "1"; } catch (e) { /* brak localStorage */ }
+    updateLogButton();
+    document.getElementById("chartLogBtn").addEventListener("click", () => {
+        chartLog = !chartLog;
+        try { localStorage.setItem(CHART_LOG_KEY, chartLog ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        updateLogButton();
+        if (currentChart) {
+            renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
+                currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog });
+        }
+    });
     document.getElementById("chartClose").addEventListener("click", closeChart);
     document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal") closeChart(); });
     document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeChart(); });

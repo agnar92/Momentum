@@ -96,7 +96,7 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   **Clicking a row opens a MarketSmith-style chart** (`js/chart.js`, pure SVG, no libraries; model/scales are unit
   tested in `tests/js/chart.test.js`): S&P 500 strip on top; weekly OHLC bars + SMA10 (green) / SMA40 (red) + the RS
   line (stock / S&P 500, blue, own scale in the lower third, labelled with the RS Rating); weekly volume; quarterly
-  EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover. The link
+  EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover; a header button toggles the PRICE panel between linear and logarithmic scale (`makeLogScale`/`logTicks`, 1/2/5·10ⁿ ticks; choice stored in `localStorage` `momentum_watchlist_chart_log`; the S&P strip, RS line and volume stay linear). The link
   button inside a row still opens TradingView and does not open the chart.
   Common search box + sector select; table headers sort (empty values always last); settings persist in
   `localStorage` (`momentum_watchlist_settings`). Rows link out to TradingView (`tvUrlFor`) — there is no
