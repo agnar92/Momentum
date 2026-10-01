@@ -97,7 +97,9 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   tested in `tests/js/chart.test.js`): S&P 500 strip on top; weekly OHLC bars + SMA10 (green) / SMA40 (red) + the RS
   line (stock / S&P 500, blue, own scale in the lower third, labelled with the RS Rating); weekly volume; quarterly
   EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover; a header button toggles the PRICE panel between linear and logarithmic scale (`makeLogScale`/`logTicks`, 1/2/5·10ⁿ ticks; choice stored in `localStorage` `momentum_watchlist_chart_log`; the S&P strip, RS line and volume stay linear). The link
-  button inside a row still opens TradingView and does not open the chart.
+  button inside a row still opens TradingView and does not open the chart. **Phones (≤ 640 px) get a compact layout**
+  (`opts.compact`: narrower viewBox 560×740, fonts ×1.5, only the last 52 weeks via `sliceModel`, header split into two
+  rows; re-rendered on rotation) so the chart stays readable instead of being a shrunken desktop chart.
   Common search box + sector select; table headers sort (empty values always last); settings persist in
   `localStorage` (`momentum_watchlist_settings`). Rows link out to TradingView (`tvUrlFor`) — there is no
   in-app chart any more. Pure logic is covered by `tests/js/watchlist.test.js`.

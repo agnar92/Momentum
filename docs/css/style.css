@@ -1937,4 +1937,13 @@ table.holdings-table td, table.rebalance-table td {
 table.momentum-table tbody tr[data-ticker] { cursor: pointer; }
 @media (max-width: 640px) {
     .wl-chart-box { width: 100vw; max-height: 100vh; border-radius: 0; padding: 8px; }
+    /* Nagłówek w dwóch rzędach: tytuł na całą szerokość, pod nim przyciski (zamknięcie zostaje w prawym górnym rogu). */
+    .wl-chart-head { flex-wrap: wrap; gap: 8px; position: relative; }
+    .wl-chart-titles { flex: 1 1 100%; padding-right: 44px; }
+    .wl-chart-title { font-size: 15px; }
+    .wl-chart-sub { font-size: 11.5px; line-height: 1.4; }
+    .wl-chart-head .chart-modal-close { position: absolute; top: 0; right: 0; margin: 0; }
+    .wl-chart-head .add-row-btn { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
+    .wl-chart-readout { font-size: 11px; }
+    .wl-chart-body svg { max-height: none; }
 }

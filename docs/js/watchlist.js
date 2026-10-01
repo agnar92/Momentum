@@ -20,6 +20,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // To tylko informacja do przeglądania, nie rekomendacja inwestycyjna.
 // ============================================================
 
+const COMPACT_MAX_WIDTH = 640;
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const DEFAULT_SETTINGS = { tab: "LIST", rsMin: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 } };
@@ -323,6 +324,7 @@ function initControls() {
 
 let chartsPromise = null;
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
+let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
 function loadCharts() {
     if (!chartsPromise) {
@@ -344,13 +346,14 @@ async function openChart(ticker) {
     document.getElementById("chartTv").href = tvUrlFor(ticker);
     const body = document.getElementById("chartBody");
     const readout = document.getElementById("chartReadout");
+    chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
     body.innerHTML = `<div class="empty-state">Ładowanie wykresu…</div>`;
     modal.hidden = false;
     const charts = await loadCharts();
     if (modal.hidden) return; // zamknięte w trakcie ładowania
     if (!charts) { body.innerHTML = `<div class="empty-state">Nie udało się wczytać danych wykresów.</div>`; return; }
     currentChart = { charts, ticker, stock };
-    const model = renderStockChart(body, readout, charts, ticker, stock, { log: chartLog });
+    const model = renderStockChart(body, readout, charts, ticker, stock, { log: chartLog, compact: chartCompact });
     if (model && model.epsNext) {
         document.getElementById("chartSub").textContent += ` · następny raport ${model.epsNext.d} (prognoza EPS ${model.epsNext.e})`;
     }
@@ -374,10 +377,18 @@ function initChartModal() {
         updateLogButton();
         if (currentChart) {
             renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
-                currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog });
+                currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact });
         }
     });
     document.getElementById("chartClose").addEventListener("click", closeChart);
+    // Obrót telefonu / zmiana rozmiaru okna przełącza układ kompaktowy bez ponownego otwierania wykresu.
+    window.addEventListener("resize", () => {
+        const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
+        if (!currentChart || compact === chartCompact) return;
+        chartCompact = compact;
+        renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
+            currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact });
+    });
     document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal") closeChart(); });
     document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeChart(); });
 }

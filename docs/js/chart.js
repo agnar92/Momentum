@@ -14,6 +14,15 @@ const CHART_LAYOUT = {
     bench: { y: 8, h: 70 }, price: { y: 88, h: 340 }, volume: { y: 436, h: 78 }, eps: { y: 526, h: 118 },
     axisY: 668,
 };
+// Układ dla wąskich ekranów (telefon): węższy viewBox + większa czcionka względem niego, żeby po przeskalowaniu
+// do szerokości ekranu napisy były czytelne; do tego krótsze okno (COMPACT_WEEKS tygodni) — patrz sliceModel.
+const CHART_LAYOUT_COMPACT = {
+    width: 560, height: 740, left: 6, right: 46,
+    bench: { y: 6, h: 62 }, price: { y: 76, h: 330 }, volume: { y: 414, h: 76 }, eps: { y: 502, h: 132 },
+    axisY: 658,
+};
+const COMPACT_FONT_SCALE = 1.5;
+const COMPACT_WEEKS = 52;
 const CHART_COLORS = {
     up: "#2ecc71", down: "#e0455a", sma10: "#3fbf6e", sma40: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
     eps: "#e0b341", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
@@ -92,6 +101,19 @@ function buildChartModel(charts, ticker, stock) {
     };
 }
 
+// Ostatnie n tygodni modelu (dla układu kompaktowego); wyniki EPS przesuwają się o odciętą liczbę tygodni.
+function sliceModel(m, n) {
+    if (m.n <= n) return m;
+    const off = m.n - n;
+    const cut = arr => arr.slice(off);
+    return {
+        ...m, weeks: cut(m.weeks), n, o: cut(m.o), h: cut(m.h), l: cut(m.l), c: cut(m.c), v: cut(m.v),
+        sma10: cut(m.sma10), sma40: cut(m.sma40), spx: m.spx ? cut(m.spx) : null, rs: cut(m.rs),
+        eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0),
+        lastIdx: m.lastIdx - off,
+    };
+}
+
 function chartEsc(s) {
     return String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
 }
@@ -120,7 +142,8 @@ function fmtCompact(v) {
 }
 
 function chartSvg(m, opts = {}) {
-    const L = CHART_LAYOUT;
+    const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
+    const fs = n => +(n * (opts.compact ? COMPACT_FONT_SCALE : 1)).toFixed(1);
     const plotW = L.width - L.left - L.right;
     const step = plotW / m.n;
     const x = i => L.left + (i + 0.5) * step;
@@ -137,7 +160,8 @@ function chartSvg(m, opts = {}) {
     labelWeeks.forEach(i => {
         const d = m.weeks[i];
         parts.push(`<line x1="${x(i)}" x2="${x(i)}" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="${CHART_COLORS.grid}" stroke-width="0.7"/>`);
-        parts.push(`<text x="${x(i)}" y="${L.axisY}" fill="${CHART_COLORS.text}" font-size="11" text-anchor="middle">${MONTHS_PL[Number(d.slice(5, 7)) - 1]} '${d.slice(2, 4)}</text>`);
+        if (x(i) < L.left + 22) return;   // etykieta przy samej krawędzi byłaby ucięta
+        parts.push(`<text x="${x(i)}" y="${L.axisY}" fill="${CHART_COLORS.text}" font-size="${fs(11)}" text-anchor="middle">${MONTHS_PL[Number(d.slice(5, 7)) - 1]} '${d.slice(2, 4)}</text>`);
     });
 
     // --- 1. benchmark
@@ -148,12 +172,12 @@ function chartSvg(m, opts = {}) {
         const last = [...m.spx].reverse().find(Number.isFinite);
         const first = m.spx.find(Number.isFinite);
         const chg = ((last / first - 1) * 100);
-        parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 12}" fill="${CHART_COLORS.bench}" font-size="11" font-weight="600">S&amp;P 500 ${fmtCompact(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(0)}% w oknie)</text>`);
+        parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 12}" fill="${CHART_COLORS.bench}" font-size="${fs(11)}" font-weight="600">S&amp;P 500 ${fmtCompact(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(0)}% w oknie)</text>`);
         niceTicks(bExt[0], bExt[1], 2).forEach(t => {
-            parts.push(`<text x="${L.width - L.right + 6}" y="${yB(t) + 4}" fill="${CHART_COLORS.text}" font-size="10">${fmtAxis(t)}</text>`);
+            parts.push(`<text x="${L.width - L.right + 6}" y="${yB(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
         });
     } else {
-        parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 14}" fill="${CHART_COLORS.text}" font-size="11">Brak danych benchmarku (S&amp;P 500)</text>`);
+        parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 14}" fill="${CHART_COLORS.text}" font-size="${fs(11)}">Brak danych benchmarku (S&amp;P 500)</text>`);
     }
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.price.y - 4}" y2="${L.price.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
 
@@ -166,7 +190,7 @@ function chartSvg(m, opts = {}) {
     const yP = useLog ? makeLogScale(pMin, pMax, L.price.y, L.price.h) : makeYScale(pMin, pMax, L.price.y, L.price.h);
     (useLog ? logTicks(pMin, pMax) : niceTicks(pMin, pMax, 6)).forEach(t => {
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
-        parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="10">${fmtAxis(t)}</text>`);
+        parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
@@ -186,7 +210,7 @@ function chartSvg(m, opts = {}) {
         const lastRs = [...m.rs].reverse().findIndex(Number.isFinite);
         if (lastRs >= 0 && m.rsRating != null) {
             const li = m.n - 1 - lastRs;
-            parts.push(`<text x="${x(li) - 4}" y="${yR(m.rs[li]) - 8}" fill="${CHART_COLORS.rs}" font-size="12" font-weight="700" text-anchor="end">RS Rating ${m.rsRating}</text>`);
+            parts.push(`<text x="${x(li) - 4}" y="${yR(m.rs[li]) - 8}" fill="${CHART_COLORS.rs}" font-size="${fs(12)}" font-weight="700" text-anchor="end">RS Rating ${m.rsRating}</text>`);
         }
     }
     // znaczniki dat wyników na dole panelu cen
@@ -194,7 +218,7 @@ function chartSvg(m, opts = {}) {
         const cx = x(q.week), cy = L.price.y + L.price.h - 6;
         parts.push(`<path d="M${cx - 4},${cy} L${cx + 4},${cy} L${cx},${cy - 8} Z" fill="${CHART_COLORS.textStrong}" opacity="0.7"><title>Wyniki ${q.d}: EPS ${q.e}</title></path>`);
     });
-    parts.push(`<text x="${L.left + 4}" y="${L.price.y + 12}" font-size="11" fill="${CHART_COLORS.text}">`
+    parts.push(`<text x="${L.left + 4}" y="${L.price.y + 12}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">`
         + `<tspan fill="${CHART_COLORS.sma10}">— SMA 10 tyg.</tspan>  <tspan fill="${CHART_COLORS.sma40}">— SMA 40 tyg.</tspan>  <tspan fill="${CHART_COLORS.rs}">— RS (spółka / S&amp;P 500)</tspan>${useLog ? "  · skala logarytmiczna" : ""}</text>`);
 
     // --- 3. wolumen
@@ -206,12 +230,12 @@ function chartSvg(m, opts = {}) {
         const h = (m.v[i] / vMax) * L.volume.h;
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"/>`);
     }
-    parts.push(`<text x="${L.left + 4}" y="${L.volume.y + 10}" font-size="11" fill="${CHART_COLORS.text}">Wolumen tygodniowy</text>`);
-    parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + 10}" font-size="10" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)} mln</text>`);
+    parts.push(`<text x="${L.left + 4}" y="${L.volume.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Wolumen tygodniowy</text>`);
+    parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + 10}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
 
     // --- 4. EPS kwartalny
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.eps.y - 4}" y2="${L.eps.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
-    parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="11" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
+    parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
     if (m.eps.length) {
         const vals = m.eps.map(q => q.e);
         const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
@@ -221,13 +245,13 @@ function chartSvg(m, opts = {}) {
         m.eps.forEach(q => {
             const cx = x(q.week), cy = yE(q.e);
             parts.push(`<circle cx="${cx}" cy="${cy}" r="3.5" fill="${CHART_COLORS.eps}"/>`);
-            parts.push(`<text x="${cx}" y="${cy - 8}" font-size="11" fill="${CHART_COLORS.textStrong}" text-anchor="middle">${q.e}</text>`);
+            parts.push(`<text x="${cx}" y="${cy - 8}" font-size="${fs(11)}" fill="${CHART_COLORS.textStrong}" text-anchor="middle">${q.e}</text>`);
             if (Number.isFinite(q.g)) {
-                parts.push(`<text x="${cx}" y="${L.eps.y + L.eps.h - 2}" font-size="11" font-weight="600" text-anchor="middle" fill="${q.g >= 0 ? CHART_COLORS.up : CHART_COLORS.down}">${q.g >= 0 ? "+" : ""}${q.g}%</text>`);
+                parts.push(`<text x="${cx}" y="${L.eps.y + L.eps.h - 2}" font-size="${fs(11)}" font-weight="600" text-anchor="middle" fill="${q.g >= 0 ? CHART_COLORS.up : CHART_COLORS.down}">${q.g >= 0 ? "+" : ""}${q.g}%</text>`);
             }
         });
     } else {
-        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 40}" font-size="11" fill="${CHART_COLORS.text}">Brak danych o EPS kwartalnym dla tej spółki.</text>`);
+        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 40}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Brak danych o EPS kwartalnym dla tej spółki.</text>`);
     }
 
     // --- crosshair (ustawiany w attachChartHover)
@@ -244,11 +268,10 @@ function chartReadout(m, i) {
         + ` · wol. ${Number.isFinite(m.v[i]) ? (m.v[i] / 1000).toFixed(1) + " mln" : "—"}${rs}${spx}`;
 }
 
-function attachChartHover(container, m, readoutEl) {
+function attachChartHover(container, m, readoutEl, L) {
     const svg = container.querySelector("#chartSvg");
     const cross = container.querySelector("#chartCross");
     if (!svg || !cross) return;
-    const L = CHART_LAYOUT;
     const plotW = L.width - L.left - L.right;
     svg.addEventListener("mousemove", ev => {
         const rect = svg.getBoundingClientRect();
@@ -269,20 +292,22 @@ function attachChartHover(container, m, readoutEl) {
 
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
-    const m = buildChartModel(charts, ticker, stock);
+    let m = buildChartModel(charts, ticker, stock);
     if (!m) {
         container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${chartEsc(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";
         return null;
     }
+    const full = m;
+    if (opts.compact) m = sliceModel(m, COMPACT_WEEKS);
     container.innerHTML = chartSvg(m, opts);
     readoutEl.textContent = chartReadout(m, m.lastIdx);
-    attachChartHover(container, m, readoutEl);
-    return m;
+    attachChartHover(container, m, readoutEl, opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT);
+    return full;
 }
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }
