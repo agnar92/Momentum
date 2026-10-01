@@ -2,7 +2,7 @@
  "_instructions": "Generowane automatycznie przez finviz.py (fetch_data.py) wg finviz_screen.json — nie edytuj ręcznie, zmieniaj filtry w finviz_screen.json.",
  "as_of": "2026-10-01",
  "filters": "cap_midover,ta_sma200_pa,fa_eps5years_pos,fa_epsyoy_pos",
- "finviz_total": 401,
+ "finviz_total": 402,
  "tickers": [
   {
    "ticker": "A",
@@ -262,10 +262,6 @@
   },
   {
    "ticker": "CATY",
-   "sector": "Financial"
-  },
-  {
-   "ticker": "CB",
    "sector": "Financial"
   },
   {
@@ -821,6 +817,10 @@
    "sector": "Consumer Defensive"
   },
   {
+   "ticker": "KOF",
+   "sector": "Consumer Defensive"
+  },
+  {
    "ticker": "KSPI",
    "sector": "Technology"
   },
@@ -1045,10 +1045,6 @@
    "sector": "Financial"
   },
   {
-   "ticker": "OKE",
-   "sector": "Energy"
-  },
-  {
    "ticker": "ONB",
    "sector": "Financial"
   },
@@ -1174,6 +1170,10 @@
   },
   {
    "ticker": "RDNT",
+   "sector": "Healthcare"
+  },
+  {
+   "ticker": "REGN",
    "sector": "Healthcare"
   },
   {
@@ -1559,6 +1559,10 @@
   {
    "ticker": "WLY",
    "sector": "Communication Services"
+  },
+  {
+   "ticker": "WPM",
+   "sector": "Basic Materials"
   },
   {
    "ticker": "WRB",
