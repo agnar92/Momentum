@@ -824,6 +824,73 @@ def export_all_prices(con, ref_date, docs_data_dir):
 
 
 # ============================================================================
+# FINVIZ — lekka lista spolek (po wstepnej filtracji Finviz, patrz finviz.py) dla zakladek
+# "RS Rating" i "Qullamaggie" na signals.html. Bez wykresow (weekly_chart itd.) — tylko pola
+# potrzebne screenerom, wiec plik jest maly mimo kilkuset spolek.
+# ============================================================================
+FINVIZ_UNIVERSE = "FINVIZ"
+
+
+def compute_eps_growth(eps_by_date):
+    """eps_by_date: {data_roku_obrotowego: EPS}. Zwraca (liczba kolejnych lat wzrostu EPS
+    konczacych sie na najnowszym roku, lista ostatnich wartosci rosnaco po dacie). Wzrost =
+    EPS rok do roku WYZSZY niz rok wczesniej; None, gdy sa mniej niz 2 punkty danych."""
+    pts = sorted(eps_by_date.items())
+    values = [v for _, v in pts]
+    if len(values) < 2:
+        return None, [round(v, 2) for v in values]
+    years = 0
+    for prev, cur in zip(values[-2::-1], values[:0:-1]):
+        if cur > prev:
+            years += 1
+        else:
+            break
+    return years, [round(v, 2) for v in values]
+
+
+def export_finviz_screen(con, ref_date, docs_data_dir, min_trading_days, max_staleness_days):
+    """Eksportuje docs/data/finviz.json (uniwersum FINVIZ z fetch_data.py)."""
+    out_path = Path(docs_data_dir) / "finviz.json"
+    meta = {}
+    try:
+        meta = json.loads((Path(__file__).resolve().parent / "FINVIZ_holdings.json").read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        pass
+    has_universe = con.execute(
+        f"SELECT COUNT(*) FROM index_constituents WHERE Index_Name = '{FINVIZ_UNIVERSE}'").fetchone()[0]
+    records = []
+    if has_universe:
+        df = get_universe_metrics(con, FINVIZ_UNIVERSE, ref_date, min_trading_days, max_staleness_days)
+        eps = {}
+        has_eps = con.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'eps_history'").fetchone()[0]
+        if has_eps:
+            for t, d, v in con.execute("SELECT Ticker, FiscalDate, EPS FROM eps_history").fetchall():
+                eps.setdefault(t, {})[d] = v
+        for _, r in df.iterrows():
+            years, series = compute_eps_growth(eps.get(r["Ticker"], {}))
+            records.append({
+                "ticker": r["Ticker"],
+                "sector": r["Sector"],
+                "price": round(float(r["price_now"]), 2),
+                "return_52w_pct": round(float(r["return_52w"]) * 100, 2) if pd.notna(r.get("return_52w")) else None,
+                "momentum_pct": round(float(r["momentum_value"]) * 100, 2),
+                **_screener_fields(r),
+                "eps_growth_years": years,
+                "eps_series": series,
+            })
+    payload = {
+        "universe": FINVIZ_UNIVERSE,
+        "ref_date": ref_date,
+        "finviz_as_of": meta.get("as_of"),
+        "finviz_filters": meta.get("filters"),
+        "n_constituents": len(records),
+        "all_constituents": records,
+    }
+    out_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    print(f"💾 Wyeksportowano finviz.json ({len(records)} spółek).")
+
+
+# ============================================================================
 # EQUITY CURVE (historyczny, zrealizowany wynik strategii vs. benchmark)
 # — informacyjne porównanie, NIE prognoza ani porada inwestycyjna.
 # ============================================================================
@@ -3172,6 +3239,8 @@ def main():
         process_universe(con, universe, ref_date, args, docs_data_dir)
 
     export_all_prices(con, ref_date, docs_data_dir)
+    export_finviz_screen(con, ref_date, docs_data_dir, min_trading_days=args.min_trading_days,
+                         max_staleness_days=args.max_staleness_days)
     export_equity_curve(con, docs_data_dir)
     export_global_equity_momentum(con, docs_data_dir)
     export_relative_strength(con, docs_data_dir, min_trading_days=args.min_trading_days,

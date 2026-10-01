@@ -121,7 +121,7 @@ const BREAKOUT_DEFAULT_REWARD_RISK = 4.04;
 const BREAKOUT_DEFAULT_KELLY_FRACTION_PCT = 33;
 
 // Domyślne progi filtra Qullamaggie (edytowalne w UI, patrz initMarketAndQmControls).
-const QM_DEFAULTS = { minDollarVolumeM: 20, minAdrPct: 5, minGainPct: 10 };
+const QM_DEFAULTS = { minDollarVolumeM: 20, minAdrPct: 5, topPct: 10, minEpsYears: 2 };
 
 const state = {
     data: {},
@@ -129,7 +129,7 @@ const state = {
     selectedUniverse: null,
     currentRsEntry: null,
     drawerUniverse: "WYBICIE",
-    market: "USA",
+    market: "FINVIZ",
     qm: { ...QM_DEFAULTS },
     chartView: "own",
     stageFilter: "ALL",
@@ -173,6 +173,15 @@ async function loadData() {
             state.data[u] = { universe: u, ref_date: null, n_constituents: 0, constituents: [] };
         }
     }));
+    // Uniwersum FINVIZ (lista po wstępnej filtracji Finviz, bez wykresów) — NIE jest w UNIVERSES,
+    // bo to nie indeks; czytają je wyłącznie zakładki RS Rating/Qullamaggie.
+    try {
+        const res = await fetch("data/finviz.json", { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        state.data.FINVIZ = await res.json();
+    } catch (e) {
+        state.data.FINVIZ = { universe: "FINVIZ", n_constituents: 0, all_constituents: [] };
+    }
     // Filtr rynku dla Continuation (10-tyg. EMA SP500 nad 20-tyg. EMA) — na
     // wyraźną prośbę użytkownika po przeglądzie materiału o strategii
     // "lateral consolidation breakout" (patrz CLAUDE.md). Ten sam
@@ -397,22 +406,36 @@ function combinedTopGainersCandidates(limit = 30) {
 // RS RATING (IBD) + FILTR QULLAMAGGIE — dwie zakładki na wyraźną prośbę
 // użytkownika. Dane (rs_score, adr_pct, dollar_volume_avg,
 // gain_from_low_{1,3,6}m_pct) liczy run_query.py::get_universe_metrics i
-// eksportuje w KAŻDYM rekordzie all_constituents/constituents.
+// eksportuje w rekordach all_constituents/constituents każdego uniwersum ORAZ
+// w docs/data/finviz.json (uniwersum FINVIZ: spółki USA po wstępnej filtracji
+// Finviz — kapitalizacja, cena nad SMA200, wzrost EPS; patrz finviz.py).
 //
 // RS Rating: rs_score = 0.4*R3M + 0.2*R6M + 0.2*R9M + 0.2*R12M (kumulatywne
 // zwroty ceny; najnowszy kwartał z podwójną wagą — powszechnie znana
 // aproksymacja IBD, sama formuła nie jest publiczna). Rating 1-99 to
-// PERCENTYL rs_score wśród WSZYSTKICH spółek wybranego rynku (USA albo PL —
-// nie mieszamy walut/rynków w jednym rankingu).
+// PERCENTYL rs_score wśród WSZYSTKICH spółek wybranej puli (FINVIZ, USA albo
+// PL — nie mieszamy walut/rynków w jednym rankingu). Dla puli FINVIZ jest to
+// więc rating względem już przefiltrowanej listy (same spółki nad SMA200).
+//
+// Filtr Qullamaggie: obrót dzienny >= próg, ADR% >= próg, (opcjonalnie) EPS
+// rosnący >= N lat; potem dla każdego z okien 1/3/6 miesięcy bierzemy TOP X%
+// spółek wg wzrostu od najniższego notowania z okna, a wynik to UNIKALNA lista
+// (suma trzech top-X%, bez powtórzeń).
 // ============================================================
 const RS_MARKETS = {
+    FINVIZ: ["FINVIZ"],
     USA: ["SP500", "NASDAQ100", "DOWJONES"],
     PL: ["WIG20", "MWIG40", "SWIG80"],
 };
-// Domyślne sortowanie nowych zakładek (reszta zostaje przy bieżącym kluczu).
-const TAB_DEFAULT_SORT = { RS_RATING: ["rs_rating", "desc"], QULLAMAGGIE: ["max_gain_pct", "desc"] };
 const QM_SETTINGS_KEY = "momentum_signals_qm";
 const QM_WINDOWS = [["1M", "gain_from_low_1m_pct"], ["3M", "gain_from_low_3m_pct"], ["6M", "gain_from_low_6m_pct"]];
+// Domyślne sortowanie nowych zakładek (reszta zostaje przy bieżącym kluczu).
+const TAB_DEFAULT_SORT = { RS_RATING: ["rs_rating", "desc"], QULLAMAGGIE: ["max_gain_pct", "desc"] };
+
+// Etykieta uniwersum w tabeli ("FINVIZ" nie ma wpisu w UNIVERSE_LABELS).
+function poolUniverseLabel(u) {
+    return UNIVERSE_LABELS[u] ? UNIVERSE_LABELS[u].replace(" Momentum", "") : "Finviz";
+}
 
 // Rating 1-99 = percentyl rank (remisy: średnia ranga). Zwraca Map ticker -> rating.
 function percentileRatings(rows) {
@@ -434,9 +457,20 @@ function percentileRatings(rows) {
     return out;
 }
 
-// Pula rynku: all_constituents wszystkich uniwersów rynku, bez duplikatów
-// tickerów (pierwszy uniwers wygrywa), z dołączonym rs_rating.
+// Pula: all_constituents wszystkich uniwersów puli, bez duplikatów tickerów
+// (pierwszy uniwers wygrywa), z dołączonym rs_rating. Rekordy FINVIZ nie mają
+// wykresów — jeśli ten sam ticker jest w którymś indeksie (SP500...), bierzemy
+// stamtąd etap Weinsteina i mini-wykres (oraz uniwersum do otwarcia wykresu).
 function marketPoolRows(market) {
+    const chartLookup = new Map();
+    if (market === "FINVIZ") {
+        UNIVERSES.forEach(u => {
+            const d = state.data[u] || {};
+            (d.all_constituents || d.constituents || []).forEach(c => {
+                if (c.weekly_chart && !chartLookup.has(c.ticker)) chartLookup.set(c.ticker, { c, u });
+            });
+        });
+    }
     const rows = [];
     const seen = new Set();
     (RS_MARKETS[market] || []).forEach(u => {
@@ -444,14 +478,18 @@ function marketPoolRows(market) {
         (d.all_constituents || d.constituents || []).forEach(c => {
             if (seen.has(c.ticker)) return;
             seen.add(c.ticker);
+            const chartSrc = chartLookup.get(c.ticker);
+            const visual = chartSrc ? chartSrc.c : c;
             rows.push({
-                ticker: c.ticker, universe: u, sector: c.sector, price: c.price,
+                ticker: c.ticker, universe: chartSrc ? chartSrc.u : u, sector: c.sector, price: c.price,
                 rs_score: Number.isFinite(c.rs_score) ? c.rs_score : null,
                 adr_pct: Number.isFinite(c.adr_pct) ? c.adr_pct : null,
                 dollar_volume_avg: Number.isFinite(c.dollar_volume_avg) ? c.dollar_volume_avg : null,
                 gains: QM_WINDOWS.map(([label, key]) => ({ label, pct: Number.isFinite(c[key]) ? c[key] : null })),
-                current_stage: c.weekly_chart && c.weekly_chart.current_stage,
-                ...miniVisualFields(c),
+                eps_growth_years: Number.isFinite(c.eps_growth_years) ? c.eps_growth_years : null,
+                eps_series: c.eps_series || [],
+                current_stage: visual.weekly_chart && visual.weekly_chart.current_stage,
+                ...miniVisualFields(visual),
             });
         });
     });
@@ -469,19 +507,34 @@ function combinedRsRatingRows(market = state.market) {
         .sort((a, b) => b.rs_rating - a.rs_rating || b.rs_score - a.rs_score);
 }
 
-// Filtr Qullamaggie: obrót >= min (mln), ADR% >= min, wzrost od minimum
-// któregokolwiek z okien 1/3/6M >= min%. Brakujące dane => odrzucone.
+// Filtr Qullamaggie (patrz nagłówek sekcji): obrót >= min (mln), ADR% >= min,
+// EPS rosnący >= minEpsYears lat (brak danych EPS NIE odrzuca — dane są tylko
+// dla puli FINVIZ), potem UNIA top topPct% z każdego okna 1/3/6M wg wzrostu od
+// minimum. Brakujące obrót/ADR => odrzucone.
 function combinedQullamaggieRows(params = state.qm, market = state.market) {
     const minVol = (Number(params.minDollarVolumeM) || 0) * 1e6;
     const minAdr = Number(params.minAdrPct) || 0;
-    const minGain = Number(params.minGainPct) || 0;
+    const topPct = Math.min(100, Math.max(0, Number(params.topPct) || 0));
+    const minEps = Number(params.minEpsYears) || 0;
+    const liquid = marketPoolRows(market).filter(r => {
+        if (r.dollar_volume_avg == null || r.adr_pct == null) return false;
+        if (r.dollar_volume_avg < minVol || r.adr_pct < minAdr) return false;
+        if (minEps > 0 && r.eps_growth_years != null && r.eps_growth_years < minEps) return false;
+        return true;
+    });
+    const picked = new Map(); // ticker -> { row, windows: [label...] }
+    QM_WINDOWS.forEach(([label], wi) => {
+        const ranked = liquid.filter(r => r.gains[wi].pct != null).sort((a, b) => b.gains[wi].pct - a.gains[wi].pct);
+        const take = ranked.length ? Math.max(1, Math.ceil(ranked.length * topPct / 100)) : 0;
+        ranked.slice(0, take).forEach(r => {
+            if (!picked.has(r.ticker)) picked.set(r.ticker, { row: r, windows: [] });
+            picked.get(r.ticker).windows.push(label);
+        });
+    });
     const rows = [];
-    marketPoolRows(market).forEach(r => {
-        if (r.dollar_volume_avg == null || r.adr_pct == null) return;
-        if (r.dollar_volume_avg < minVol || r.adr_pct < minAdr) return;
-        const passing = r.gains.filter(g => g.pct != null && g.pct >= minGain);
-        if (!passing.length) return;
-        rows.push({ ...r, max_gain_pct: Math.max(...passing.map(g => g.pct)) });
+    picked.forEach(({ row, windows }) => {
+        const winGains = row.gains.filter(g => windows.includes(g.label)).map(g => g.pct);
+        rows.push({ ...row, windows, max_gain_pct: Math.max(...winGains) });
     });
     return rows.sort((a, b) => b.max_gain_pct - a.max_gain_pct);
 }
@@ -492,16 +545,24 @@ function fmtVolume(v) {
     return (v / 1e6).toFixed(1) + " mln";
 }
 
+function epsCellHtml(r) {
+    if (r.eps_growth_years == null) return `<td class="muted" title="Brak danych EPS (tylko pula Finviz)">—</td>`;
+    const cls = r.eps_growth_years >= 2 ? "positive" : "";
+    const title = r.eps_series.length ? `EPS roczny (od najstarszego): ${r.eps_series.join(" → ")}` : "";
+    return `<td class="${cls}" title="${title}">↑ ${r.eps_growth_years} ${r.eps_growth_years === 1 ? "rok" : "lat"}</td>`;
+}
+
 function rsRatingRowHtml(r, position) {
     const cls = r.rs_rating >= 80 ? "positive" : (r.rs_rating < 50 ? "negative" : "");
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
-        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${poolUniverseLabel(r.universe)}</td>
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
         <td class="${cls}"><strong>${r.rs_rating}</strong></td>
         <td>${r.rs_score_pct >= 0 ? "+" : ""}${r.rs_score_pct.toFixed(1)}%</td>
+        ${epsCellHtml(r)}
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
@@ -513,13 +574,14 @@ function qmRowHtml(r, position) {
     return `
         <td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${r.ticker}</td>
-        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${poolUniverseLabel(r.universe)}</td>
         <td>${r.sector || ""}</td>
         <td>${formatPrice(r.price, r.universe)}</td>
         <td>${fmtVolume(r.dollar_volume_avg)}</td>
         <td>${r.adr_pct.toFixed(1)}%</td>
-        <td class="positive" title="${gains}"><strong>+${r.max_gain_pct.toFixed(0)}%</strong> <span class="muted" style="font-size:10.5px">${gains}</span></td>
+        <td class="positive" title="${gains}"><strong>+${r.max_gain_pct.toFixed(0)}%</strong> <span class="muted" style="font-size:10.5px">top ${state.qm.topPct}% w: ${r.windows.join(", ")}</span></td>
         <td>${r.rs_rating != null ? r.rs_rating : "—"}</td>
+        ${epsCellHtml(r)}
         <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
         <td>${stageCellHtml(r.current_stage)}</td>
         <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
@@ -534,10 +596,10 @@ function renderRsRatingTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 10,
-        emptyAllMsg: "Brak danych RS Rating — uruchom pipeline (fetch_data.py + run_query.py).",
+        colspan: 11,
+        emptyAllMsg: "Brak danych RS Rating dla tej puli — uruchom pipeline (fetch_data.py + run_query.py).",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
-        metaText: rows => `${rows.length} z ${allRows.length} spółek · rynek ${state.market}`,
+        metaText: rows => `${rows.length} z ${allRows.length} spółek · pula ${state.market}`,
         rowKey: r => r.ticker,
         isSelected: r => r.ticker === state.selectedTicker,
         rowHtml: (r, i) => rsRatingRowHtml(r, i + 1),
@@ -554,10 +616,10 @@ function renderQmTable() {
         allRows,
         matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
         sortKey: state.sortKey, sortDir: state.sortDir,
-        colspan: 12,
-        emptyAllMsg: "Żadna spółka nie spełnia wszystkich progów — obniż obrót, ADR% albo wymagany wzrost.",
+        colspan: 13,
+        emptyAllMsg: "Żadna spółka nie spełnia progów — obniż obrót, ADR% albo wymagane lata wzrostu EPS.",
         emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
-        metaText: rows => `${rows.length} z ${allRows.length} spółek · rynek ${state.market}`,
+        metaText: rows => `${rows.length} z ${allRows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) · pula ${state.market}`,
         rowKey: r => r.ticker,
         isSelected: r => r.ticker === state.selectedTicker,
         rowHtml: (r, i) => qmRowHtml(r, i + 1),
@@ -570,16 +632,16 @@ function initMarketAndQmControls() {
     try {
         const saved = JSON.parse(localStorage.getItem(QM_SETTINGS_KEY) || "null");
         if (saved) {
-            ["minDollarVolumeM", "minAdrPct", "minGainPct"].forEach(k => {
+            ["minDollarVolumeM", "minAdrPct", "topPct", "minEpsYears"].forEach(k => {
                 if (Number.isFinite(saved[k])) state.qm[k] = saved[k];
             });
-            if (saved.market === "USA" || saved.market === "PL") state.market = saved.market;
+            if (RS_MARKETS[saved.market]) state.market = saved.market;
         }
     } catch (e) { /* brak localStorage — domyślne */ }
     const save = () => {
         try { localStorage.setItem(QM_SETTINGS_KEY, JSON.stringify({ ...state.qm, market: state.market })); } catch (e) { /* ignoruj */ }
     };
-    const inputs = { minDollarVolumeM: "qmMinDollarVolume", minAdrPct: "qmMinAdr", minGainPct: "qmMinGain" };
+    const inputs = { minDollarVolumeM: "qmMinDollarVolume", minAdrPct: "qmMinAdr", topPct: "qmTopPct", minEpsYears: "qmMinEpsYears" };
     Object.entries(inputs).forEach(([key, id]) => {
         const el = document.getElementById(id);
         if (!el) return;

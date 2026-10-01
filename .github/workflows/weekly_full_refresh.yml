@@ -94,7 +94,7 @@ jobs:
             git fetch origin main
             git reset --mixed origin/main
 
-            git add momentum_data.duckdb docs/data/
+            git add momentum_data.duckdb docs/data/ FINVIZ_holdings.json
             # [skip ci]: bez tego ten commit odpaliłby workflow ponownie (trigger "push: main"),
             # tworząc pętlę.
             git commit -m "chore: weekly full refresh (prices + index levels + selection/weights + docs/data) [skip ci]"
@@ -116,7 +116,7 @@ jobs:
               sleep $((attempt * 3))
               git fetch origin main
               git reset --mixed origin/main
-              git add momentum_data.duckdb docs/data/
+              git add momentum_data.duckdb docs/data/ FINVIZ_holdings.json
               git commit -m "chore: weekly full refresh (prices + index levels + selection/weights + docs/data) [skip ci]"
             done
           else

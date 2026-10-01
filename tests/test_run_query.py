@@ -2262,3 +2262,22 @@ class TestScreenerFieldsInUniverseMetrics:
         assert r["avg_dollar_volume"] == pytest.approx(200 * 1000, rel=0.05)
         # Rosnaca cena: minimum z dluzszego okna jest nizsze => wiekszy wzrost od minimum.
         assert r["gain_from_low_6m_pct"] > r["gain_from_low_3m_pct"] > r["gain_from_low_1m_pct"] > 0
+
+
+class TestFinvizExport:
+    def test_compute_eps_growth_counts_consecutive_years_ending_at_latest(self):
+        from datetime import date
+        years, series = run_query.compute_eps_growth(
+            {date(2022, 9, 30): 1.0, date(2023, 9, 30): 2.0, date(2024, 9, 30): 3.0, date(2025, 9, 30): 4.0})
+        assert years == 3 and series == [1.0, 2.0, 3.0, 4.0]
+        years, _ = run_query.compute_eps_growth(
+            {date(2022, 1, 1): 5.0, date(2023, 1, 1): 2.0, date(2024, 1, 1): 3.0, date(2025, 1, 1): 4.0})
+        assert years == 2  # spadek w 2023 przerywa serie wstecz
+        years, _ = run_query.compute_eps_growth({date(2025, 1, 1): 4.0})
+        assert years is None  # za malo danych
+
+    def test_export_finviz_screen_without_universe_writes_empty_payload(self, tmp_path):
+        con = make_gem_con()
+        run_query.export_finviz_screen(con, "2026-09-30", str(tmp_path), 150, 10)
+        payload = json.loads((tmp_path / "finviz.json").read_text(encoding="utf-8"))
+        assert payload["universe"] == "FINVIZ" and payload["all_constituents"] == []

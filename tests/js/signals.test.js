@@ -1012,20 +1012,39 @@ test("percentileRatings: 1..99, remisy dostaja srednia range", () => {
     assert.equal(m.has("X"), false);
 });
 
-test("combinedQullamaggieRows: wszystkie progi, wzrost z dowolnego okna", () => {
+test("combinedQullamaggieRows: progi plynnosci, EPS i unikalna suma top X% z okien 1/3/6M", () => {
+    const mk = (t, g1, g3, g6, over = {}) => rsRec(t, { gain_from_low_1m_pct: g1, gain_from_low_3m_pct: g3, gain_from_low_6m_pct: g6, ...over });
+    // 10 plynnych spolek; A wygrywa okno 1M, B okno 3M, C okno 6M, D to lider we WSZYSTKICH oknach nizszy niz A/B/C
+    const base = ["E", "F", "G", "H", "I", "J", "K"].map(t => mk(t, 1, 1, 1));
     rsq.state.data = {
         SP500: { all_constituents: [
-            rsRec("OK"),
-            rsRec("LOWVOL", { dollar_volume_avg: 1e6 }),
-            rsRec("LOWADR", { adr_pct: 2 }),
-            rsRec("NOGAIN", { gain_from_low_1m_pct: 1, gain_from_low_3m_pct: 2, gain_from_low_6m_pct: 3 }),
-            rsRec("MISSING", { adr_pct: null }),
+            mk("A", 90, 5, 5), mk("B", 5, 90, 5), mk("C", 5, 5, 90),
+            mk("LOWVOL", 99, 99, 99, { dollar_volume_avg: 1e6 }),
+            mk("LOWADR", 99, 99, 99, { adr_pct: 2 }),
+            mk("MISSING", 99, 99, 99, { adr_pct: null }),
+            ...base,
         ] },
-        NASDAQ100: { all_constituents: [rsRec("OK")] }, // duplikat pomijany
+        NASDAQ100: { all_constituents: [mk("A", 90, 5, 5)] }, // duplikat pomijany
     };
-    const rows = rsq.combinedQullamaggieRows({ minDollarVolumeM: 20, minAdrPct: 5, minGainPct: 10 }, "USA");
-    assert.deepEqual(rows.map(r => r.ticker), ["OK"]);
-    assert.equal(rows[0].max_gain_pct, 40);
-    // wyzszy prog wzrostu odrzuca
-    assert.equal(rsq.combinedQullamaggieRows({ minDollarVolumeM: 20, minAdrPct: 5, minGainPct: 50 }, "USA").length, 0);
+    const params = { minDollarVolumeM: 20, minAdrPct: 5, topPct: 10, minEpsYears: 0 };
+    const rows = rsq.combinedQullamaggieRows(params, "USA");
+    // 10 plynnych spolek, top 10% = 1 na okno => A (1M), B (3M), C (6M), bez powtorzen
+    assert.deepEqual(rows.map(r => r.ticker).sort(), ["A", "B", "C"]);
+    assert.deepEqual(rows.find(r => r.ticker === "A").windows, ["1M"]);
+    assert.equal(rows.find(r => r.ticker === "A").max_gain_pct, 90);
+    // ta sama spolka najlepsza w kilku oknach => jeden wiersz z kilkoma oknami
+    rsq.state.data.SP500.all_constituents[0] = mk("A", 90, 95, 5);
+    const merged = rsq.combinedQullamaggieRows(params, "USA");
+    assert.equal(merged.filter(r => r.ticker === "A").length, 1);
+    assert.deepEqual(merged.find(r => r.ticker === "A").windows, ["1M", "3M"]);
+});
+
+test("combinedQullamaggieRows: filtr EPS odrzuca tylko gdy dane sa i lat jest za malo", () => {
+    rsq.state.data = { SP500: { all_constituents: [
+        rsRec("EPS3", { eps_growth_years: 3 }),
+        rsRec("EPS1", { eps_growth_years: 1 }),
+        rsRec("NOEPS"),
+    ] } };
+    const p = { minDollarVolumeM: 20, minAdrPct: 5, topPct: 100, minEpsYears: 2 };
+    assert.deepEqual(rsq.combinedQullamaggieRows(p, "USA").map(r => r.ticker).sort(), ["EPS3", "NOEPS"]);
 });

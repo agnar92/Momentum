@@ -680,3 +680,38 @@ class TestUpdateIndexPrices:
         con = duckdb.connect(":memory:")
         result = _compute_synthetic_equal_weight_index(con, "WIG20", "2024-01-01", "2024-01-31")
         assert result.empty
+
+
+class TestFinviz:
+    def test_parse_screener_page_extracts_tickers_sector_and_total(self):
+        import finviz
+        page = """<html><body><div id="screener-total">#1 / 912 Total</div><table>
+        <tr class="styled-row"><td>1</td><td data-boxover-ticker="AAPL">x</td><td>Apple</td><td>Technology</td></tr>
+        <tr class="styled-row"><td>2</td><td data-boxover-ticker="BRK-B">x</td><td>Berkshire</td><td> Financial </td></tr>
+        <tr class="styled-row"><td>3</td><td>brak tickera</td><td>X</td><td>Y</td></tr>
+        </table></body></html>"""
+        rows, total = finviz.parse_screener_page(page)
+        assert total == 912
+        assert rows == [{"ticker": "AAPL", "sector": "Technology"}, {"ticker": "BRK-B", "sector": "Financial"}]
+
+    def test_refresh_holdings_keeps_old_file_when_finviz_fails(self, tmp_path, monkeypatch):
+        import finviz
+        holdings = tmp_path / "FINVIZ_holdings.json"
+        holdings.write_text('{"tickers": ["OLD"]}', encoding="utf-8")
+        monkeypatch.setattr(finviz, "fetch_screener", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("403")))
+        assert finviz.refresh_holdings(tmp_path / "cfg.json", holdings) is False
+        assert "OLD" in holdings.read_text(encoding="utf-8")
+        # zbyt krotka lista = podejrzenie blokady -> tez zostaje stary plik
+        monkeypatch.setattr(finviz, "fetch_screener", lambda *a, **k: ([{"ticker": "X", "sector": "S"}], 1))
+        assert finviz.refresh_holdings(tmp_path / "cfg.json", holdings) is False
+        assert "OLD" in holdings.read_text(encoding="utf-8")
+
+    def test_load_finviz_constituents_skips_gpw_collisions(self, tmp_path, monkeypatch):
+        import fetch_data
+        (tmp_path / "FINVIZ_holdings.json").write_text(
+            '{"tickers": [{"ticker": "AAPL", "sector": "Technology"}, {"ticker": "ICE", "sector": "Financial"}]}',
+            encoding="utf-8")
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(fetch_data, "GPW_TICKERS", {"ICE"})
+        rows = fetch_data._load_finviz_constituents()
+        assert rows == [("AAPL", "FINVIZ", "Technology", 1.0)]
