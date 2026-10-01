@@ -1,16 +1,15 @@
-
 <!DOCTYPE html>
 <html lang="pl">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Indeksy — Momentum</title>
+<title>Watchlist — Momentum</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e0f13">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Momentum">
+<meta name="apple-mobile-web-app-title" content="Watchlist">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/favicon-32.png" type="image/png">
 </head>
@@ -22,211 +21,59 @@
 </div>
 
 <div class="topbar">
-    <div class="topbar-left">
-        <div class="brand">MOMENTUM<span class="brand-sub"> // SP500 · NASDAQ100 · DJIA · WIG20 · mWIG40 · sWIG80</span></div>
-        <button class="cmdk-trigger" id="cmdkTrigger">🔍 Szukaj <span class="cmdk-kbd">Ctrl+K</span></button>
-    </div>
+    <div class="brand">WATCHLIST<span class="brand-sub"> // Finviz + yfinance, odświeżane codziennie</span></div>
     <nav>
-        <a href="index.html" class="active">Indeksy</a>
-        <a href="signals.html">Sygnały</a>
-        <a href="rebalance.html">Rebalanser USA</a>
-        <a href="rebalance_pl.html">Rebalanser PL</a>
+        <a href="index.html" class="active">Watchlist</a>
         <a href="ep.html">EP</a>
         <span id="connStatus" class="conn-status" title="Brak połączenia z siecią — pokazywane są ostatnie zapisane dane." hidden>⚠ Offline</span>
     </nav>
 </div>
 
-<div class="cmdk-overlay" id="cmdkOverlay" style="display:none;">
-    <div class="cmdk-box">
-        <input type="text" id="cmdkInput" class="cmdk-input" placeholder="Szukaj tickera... (np. AAPL)" autocomplete="off">
-        <div class="cmdk-results" id="cmdkResults"></div>
-    </div>
-</div>
-
 <div class="workspace">
-
-    <!-- ====================== LEWA KOLUMNA / SZUFLADA TABEL ====================== -->
-    <div class="sidebar" id="sidebar">
-        <button class="expand-btn" id="toggleDrawerBtn">&gt;&gt;&gt;</button>
-
-        <div class="sidebar-group">
-            <div class="sidebar-group-label" title="Replikacja S&amp;P 500 Momentum Index (jak ETF SPMO): top kwintyl SP500 wg momentum (~100 spółek), wagi fmc × momentum_score z capem 9%.">S&amp;P 500 Momentum (SPMO)</div>
-            <div class="ticker-grid" id="tiles-SP500"></div>
-        </div>
-
-        <div class="sidebar-group">
-            <div class="sidebar-group-label" title="Replikacja Nasdaq 100 Momentum: top kwintyl NASDAQ100 wg momentum, wagi fmc × momentum_score z capem 9%.">Nasdaq 100 Momentum</div>
-            <div class="ticker-grid" id="tiles-NASDAQ100"></div>
-        </div>
-
-        <div class="sidebar-group">
-            <div class="sidebar-group-label">Dow Jones</div>
-            <div class="ticker-grid" id="tiles-DOWJONES"></div>
-        </div>
-
-        <div class="sidebar-group">
-            <div class="sidebar-group-label">WIG20</div>
-            <div class="ticker-grid" id="tiles-WIG20"></div>
-        </div>
-
-        <div class="sidebar-group">
-            <div class="sidebar-group-label">mWIG40</div>
-            <div class="ticker-grid" id="tiles-MWIG40"></div>
-        </div>
-
-        <div class="sidebar-group">
-            <div class="sidebar-group-label">sWIG80</div>
-            <div class="ticker-grid" id="tiles-SWIG80"></div>
-        </div>
-
-    </div>
-
     <div class="table-drawer open" id="tableDrawer">
         <div class="drawer-header">
-            <div class="drawer-header-title">
-                <h2 id="drawerTitle">Pełna tabela — S&amp;P 500 Momentum</h2>
-                <div class="drawer-meta" id="drawerMeta"></div>
-            </div>
+            <div class="drawer-header-title"><h2 id="drawerTitle">Lista Finviz</h2><div class="drawer-meta" id="drawerMeta"></div></div>
             <div class="drawer-tabs">
-                <button class="drawer-tab active" data-universe="SP500" title="Replikacja S&amp;P 500 Momentum Index (ETF SPMO)">S&amp;P 500 (SPMO)</button>
-                <button class="drawer-tab" data-universe="NASDAQ100">Nasdaq 100</button>
-                <button class="drawer-tab" data-universe="DOWJONES">Dow Jones</button>
-                <button class="drawer-tab" data-universe="WIG20">WIG20</button>
-                <button class="drawer-tab" data-universe="MWIG40">mWIG40</button>
-                <button class="drawer-tab" data-universe="SWIG80">sWIG80</button>
+                <button class="drawer-tab active" data-tab="LIST">📋 Lista</button>
+                <button class="drawer-tab" data-tab="RS">📊 RS Ranking</button>
+                <button class="drawer-tab" data-tab="QM">🎯 Qullamaggie</button>
+                <button class="drawer-tab" data-tab="EMA34">📈 Trend EMA34</button>
             </div>
         </div>
-        <div class="stage-filter-bar" id="stageFilterBar">
-            <span class="stage-filter-label">Etap Weinsteina:</span>
-            <button class="stage-filter-btn active" data-stage="ALL">Wszystkie</button>
-            <button class="stage-filter-btn" data-stage="1" title="Baza — cena w ciasnej konsolidacji, brak potwierdzonego trendu.">Etap 1</button>
-            <button class="stage-filter-btn" data-stage="2" title="Etap 2A (świeże wybicie) + 2B (kontynuacja) — spółki w potwierdzonym trendzie wzrostowym, kandydaci do kupna.">Etap 2</button>
-            <button class="stage-filter-btn" data-stage="3" title="Szczyt / dystrybucja — trend się wypłaszcza, rozważ realizację zysków.">Etap 3</button>
-            <button class="stage-filter-btn" data-stage="4" title="Spadek — cena pod opadającą EMA20, unikaj nowych pozycji.">Etap 4</button>
+
+        <div class="stage-filter-bar" id="dataBar">
+            <span class="stage-filter-label" id="dataInfo"></span>
+            <a class="add-row-btn" id="refreshLink" href="#" target="_blank" rel="noopener" style="margin-top:0"
+               title="Dane odświeżają się same codziennie rano. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
         </div>
-        <div class="breadth-bar" id="breadthBar" hidden></div>
+        <div class="stage-filter-bar">
+            <label class="wybicie-slider"><span class="stage-filter-label">Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka" style="width:140px"></label>
+            <label class="wybicie-slider"><span class="stage-filter-label">Sektor:</span><select id="sectorSelect"><option value="">wszystkie</option></select></label>
+        </div>
+
+        <div class="screener-guide" id="guide-LIST"><strong>📋 Lista</strong> — wszystkie spółki, które przeszły filtr Finviz: kapitalizacja ≥ 2 mld $, cena nad SMA50 i SMA200, dodatni wzrost EPS (ostatnie 5 lat i ten rok) oraz dodatnie prognozy EPS (przyszły rok i 5 lat). Filtry zmieniasz w <code>finviz_screen.json</code>. Kolumny fundamentalne pochodzą z Finviz, ceny i wskaźniki z yfinance (dane z zamknięcia ostatniej sesji USA).</div>
+        <div class="screener-guide" id="guide-RS" hidden><strong>📊 RS Ranking</strong> — liderzy siły względnej w stylu IBD: <code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code> (najnowszy kwartał z podwójną wagą), przeliczone na percentyl 1–99 względem spółek z listy. To przybliżenie — IBD nie publikuje formuły ani swojej puli spółek, a tu ranking jest wśród spółek już wyselekcjonowanych przez Finviz.
+            <div style="margin-top:8px"><label class="wybicie-slider"><span class="stage-filter-label">Min. RS Rating:</span><input type="number" id="rsMin" min="1" max="99" step="1" style="width:70px"></label></div></div>
+        <div class="screener-guide" id="guide-QM" hidden><strong>🎯 Qullamaggie</strong> — szukanie „gruberów”: najpierw progi płynności (średni obrót dzienny cena × wolumen z ~20 sesji i ADR% — średnia dzienna rozpiętość High/Low), potem dla każdego okna (1, 3 i 6 miesięcy) top X% spółek wg wzrostu ceny od najniższego notowania z okna. Lista to suma tych trzech grup bez powtórzeń.
+            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px 6px">
+                <label class="wybicie-slider"><span class="stage-filter-label">Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1" style="width:80px"></label>
+                <label class="wybicie-slider"><span class="stage-filter-label">Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5" style="width:70px"></label>
+                <label class="wybicie-slider"><span class="stage-filter-label">Top % wzrostu:</span><input type="number" id="qmTopPct" min="1" max="100" step="1" style="width:70px"></label>
+            </div></div>
+        <div class="screener-guide" id="guide-EMA34" hidden><strong>📈 Trend EMA34</strong> — osobny filtr trendu, niezależny od RS i Qullamaggiego: dzienna EMA34 rośnie, gdy <code>EMA34 teraz &gt; EMA34[5] &gt; EMA34[10] &gt; EMA34[15] &gt; EMA34[20]</code> (sesji wstecz), czyli rośnie co 5 sesji przez ostatnie 20. Sortowanie domyślnie po nachyleniu z 20 sesji.</div>
+
         <div class="table-scroll">
-            <table class="momentum-table" id="momentumTable">
-                <thead>
-                    <tr>
-                        <th data-key="rank">#</th>
-                        <th data-key="ticker">Ticker</th>
-                        <th data-key="sector">Sektor</th>
-                        <th data-key="price">Cena</th>
-                        <th data-key="momentum_pct">Momentum (12M-1M)</th>
-                        <th data-key="momentum_window">Okno</th>
-                        <th data-key="volatility_pct">Zmienność</th>
-                        <th data-key="z_score">Z-score</th>
-                        <th data-key="momentum_score">Momentum Score</th>
-                        <th data-key="weight_pct">Waga</th>
-                        <th>Tydzień (26 tyg.)</th>
-                        <th data-key="rs_long" title="Mansfield RS 52 tyg. vs własny indeks">RS 52 tyg.</th>
-                        <th>TTM (26 tyg.)</th>
-                        <th>Etap</th>
-                        <th class="tv-col">TV</th>
-                    </tr>
-                </thead>
-                <tbody id="momentumTableBody"></tbody>
-            </table>
+            <table class="momentum-table" id="table-LIST"><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="market_cap">Kapitalizacja</th><th data-key="price">Cena</th><th data-key="pct_above_sma50">vs SMA50</th><th data-key="pct_above_sma200">vs SMA200</th><th data-key="eps_this_y">EPS ten rok</th><th data-key="eps_next_y">EPS przyszły rok</th><th data-key="eps_past_5y">EPS 5 lat</th><th data-key="eps_next_5y">EPS prognoza 5 lat</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-RS" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="rs_rating">RS Rating</th><th data-key="ret_3m_pct">3M</th><th data-key="ret_6m_pct">6M</th><th data-key="ret_12m_pct">12M</th><th data-key="eps_next_y">EPS przyszły rok</th><th data-key="eps_next_5y">EPS prognoza 5 lat</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-QM" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="dollar_volume_avg">Obrót dzienny</th><th data-key="adr_pct">ADR %</th><th data-key="max_gain_pct">Wzrost od minimum</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-EMA34" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="ema34">EMA34</th><th data-key="ema34_slope_20d_pct">Nachylenie 20 sesji</th><th data-key="price_vs_ema34_pct">Cena vs EMA34</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
         </div>
     </div>
-
-    <!-- ====================== WYKRES W OKIENKU (pop-up nad tabelą, ✕ / Esc / klik w tło zamyka) ====================== -->
-    <div class="chart-modal-backdrop" id="chartModal" hidden>
-    <div class="charts-area" role="dialog" aria-modal="true" aria-labelledby="chartTickerLabel">
-        <button class="chart-back-btn" id="chartBackBtn">&larr; Lista spółek</button>
-        <div class="chart-mode-toggle" id="chartModeToggle">
-            <button class="chart-mode-btn active" id="openTvBtn"
-                    title="Otwiera ten ticker na tradingview.com w nowej karcie (pełny widget TradingView, z narzędziami do rysowania itd.)">
-                📈 Otwórz w TradingView ↗
-            </button>
-            <button class="chart-mode-btn" id="resetZoomBtn"
-                    title="Kółko myszy / uszczypnięcie = powiększanie, przeciąganie = przesuwanie">
-                ↺ Resetuj zoom
-            </button>
-            <button class="chart-mode-btn" id="chartFullscreenBtn"
-                    title="Pełny ekran — wykres główny na cały ekran, z opcjonalnym wolumenem, MACD i TTM Squeeze">
-                ⤢ Pełny ekran
-            </button>
-            <div class="chart-ticker-label" id="chartTickerLabel"></div>
-            <button class="chart-modal-close" id="chartModalClose" type="button" title="Zamknij wykres (Esc)" aria-label="Zamknij wykres">✕</button>
-        </div>
-        <div class="chart-view-tabs" id="chartViewTabs">
-            <button class="chart-view-tab active" id="chartViewTabOwn" data-view="own">📊 Wykres własny</button>
-            <button class="chart-view-tab" id="chartViewTabTv" data-view="tv">🏢 Dane spółki (TradingView)</button>
-            <button class="chart-view-tab" id="chartViewTabOrb" data-view="orb" title="Wykres 1-minutowy z sesyjnym VWAP (TradingView) — do ręcznego monitorowania Opening Range Breakout po wybiciu z konsolidacji (np. screener Breakout na stronie Sygnały).">⚡ 1 min + VWAP</button>
-        </div>
-        <div class="chart-panel" id="chartPanelOwn">
-            <div class="chart-container rs-chart-container" id="rs_chart">
-                <div class="stage-badge" id="stageBadge"></div>
-                <div class="chart-fullscreen-extras" id="chartFullscreenExtras" hidden>
-                    <span class="chart-fullscreen-extras-label">Dodaj do widoku:</span>
-                    <button class="chart-extra-toggle" id="toggleVolumeBtn" type="button">📊 Wolumen</button>
-                    <button class="chart-extra-toggle" id="toggleMacdBtn" type="button">📉 MACD</button>
-                    <button class="chart-extra-toggle" id="toggleSqueezeBtn" type="button">🧨 TTM Squeeze</button>
-                    <button class="chart-extra-toggle" id="fsResetZoomBtn" type="button">↺ Zoom</button>
-                    <button class="chart-extra-toggle chart-fullscreen-close" id="chartFullscreenCloseBtn" type="button">✕ Zamknij</button>
-                </div>
-                <div class="empty-state" id="noChartMessage" hidden>
-                    Brak własnego wykresu tygodniowego dla tej spółki (za mało historii cen) — użyj przycisku
-                    „Otwórz w TradingView” powyżej.
-                </div>
-                <div class="rs-chart-panel" id="rsChartPanel">
-                    <canvas id="rsChartCanvas"></canvas>
-                </div>
-                <div class="rs-chart-panel rs-chart-panel-volume" id="rsVolumePanel">
-                    <canvas id="rsVolumeCanvas"></canvas>
-                </div>
-                <div class="rs-chart-panel rs-chart-panel-small" id="rsMacdPanel">
-                    <div class="rs-chart-caption" id="rsMacdCaption"></div>
-                    <canvas id="rsMacdCanvas"></canvas>
-                </div>
-                <div class="rs-chart-panel rs-chart-panel-small" id="rsSqueezePanel">
-                    <div class="rs-chart-caption" id="rsSqueezeCaption"></div>
-                    <canvas id="rsSqueezeCanvas"></canvas>
-                </div>
-                <div class="rs-mansfield-controls" id="rsMansfieldControls">
-                    <button class="chart-extra-toggle" id="rsMansfieldToggleBtn" type="button" disabled>📉 Pokaż RSM ▼</button>
-                </div>
-                <div class="rs-chart-panel rs-chart-panel-small" id="rsMansfieldPanel" hidden>
-                    <div class="rs-chart-caption" id="rsMansfieldCaption"></div>
-                    <canvas id="rsMansfieldCanvas"></canvas>
-                </div>
-                <div class="stage-legend" id="stageLegend">
-                    fioletowy prostokąt = baza Etapu 1 (dno), szary = kontynuacja Etapu 2 &nbsp;·&nbsp;
-                    jaśniejszy zielony słupek = wybicie potwierdzone wolumenem kupujących &nbsp;·&nbsp;
-                    czerwona kropka (TTM Squeeze) = konsolidacja, złota = wybicie z niej &nbsp;·&nbsp;
-                    kółko myszy / uszczypnięcie = zoom, przeciąganie = przesuwanie
-                </div>
-            </div>
-        </div>
-        <div class="chart-panel" id="chartPanelTv" hidden>
-            <div class="chart-container tv-overview-container" id="tvOverviewContainer">
-                <div class="empty-state" id="tvOverviewEmpty" hidden>Wybierz spółkę, żeby zobaczyć jej dane na TradingView.</div>
-            </div>
-        </div>
-        <div class="chart-panel" id="chartPanelOrb" hidden>
-            <div class="chart-container tv-overview-container" id="orbContainer">
-                <div class="empty-state" id="orbEmpty" hidden>Wybierz spółkę, żeby zobaczyć wykres 1-minutowy.</div>
-                <div class="orb-level-info" id="orbLevelInfo" hidden></div>
-            </div>
-        </div>
-    </div>
-    </div>
-
 </div>
 
-<script src="js/vendor/chart.umd.min.js"></script>
-<script src="js/vendor/chartjs-plugin-zoom.min.js"></script>
-<script src="js/vendor/chartjs-plugin-annotation.min.js"></script>
 <script src="js/pull-to-refresh.js"></script>
 <script src="js/shared.js"></script>
 <script src="js/qol.js"></script>
-<script src="js/minicharts.js"></script>
-<script src="js/chart-render.js"></script>
-<script src="js/chart-modal.js"></script>
-<script src="js/table-render.js"></script>
-<script src="js/app.js"></script>
+<script src="js/watchlist.js"></script>
 </body>
 </html>
-
