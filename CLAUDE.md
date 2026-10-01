@@ -80,7 +80,6 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   (GitHub re-runs against the original trigger SHA, i.e. old code); trigger a fresh `workflow_dispatch`.
 - **`deploy.yml`** — plain Pages deploy of `docs/` on every push to `main` (no data fetch).
 - **`tests.yml`** — `ruff` + `pytest` (Python) and ESLint + `node --test` (JS) on pushes/PRs.
-- `feature-branch-check.yml` is a leftover temporary workflow for an old branch; safe to delete.
 
 ## Frontend (`docs/`) — plain HTML/CSS/vanilla JS, no build step
 
@@ -110,6 +109,19 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   `CACHE` and keep `SHELL` in sync when files are added/removed). Files are plain `<script>` tags sharing
   globals; for Node tests each file re-attaches the shared globals via the `typeof require` block at its top.
   `css/style.css` still contains a lot of CSS from the removed pages.
+
+## Bases / VCP (heuristic)
+
+`detect_bases` (watchlist.py) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks), classifies them
+flat/cup/correction/deep, gives a pivot (peak high) and a VCP flag (≥2 strictly decreasing zig-zag contractions,
+last ≤10 %). Stored as `bases` in charts.json (drawn as boxes + pivot line) and as `base_*`, `pivot`, `pct_to_pivot`,
+`vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (no handle/flag detection).
+
+## Layout
+
+Desktop: fixed-height workspace with inner scroll. `@media (max-width:900px), (max-height:560px)` (end of
+style.css): normal page scroll, horizontally scrollable tabs, full-screen scrollable chart modal (phone landscape).
+`escapeHtml` lives in `js/shared.js`.
 
 ## Commands
 

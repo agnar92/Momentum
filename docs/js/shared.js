@@ -95,6 +95,10 @@ function buildTvWidgetBlock(spec, configArg) {
 
 // Eksport wyłącznie dla test runnera Node (tests/js/shared.test.js) — nie
 // ładowany i bez efektu w przeglądarce (module tam nie istnieje).
+function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { tvUrlFor, compareRows, TV_EMBED_BASE, TV_1MIN_VWAP_WIDGET, buildTvWidgetBlock };
+    module.exports = { escapeHtml, tvUrlFor, compareRows, TV_EMBED_BASE, TV_1MIN_VWAP_WIDGET, buildTvWidgetBlock };
 }

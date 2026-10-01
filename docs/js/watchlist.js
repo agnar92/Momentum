@@ -145,10 +145,6 @@ function sparkSvg(values) {
     return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${up ? "#2ecc71" : "#e0455a"}" stroke-width="1.5" points="${pts}"/></svg>`;
 }
 
-function escapeHtml(s) {
-    return String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
 function identityCells(s, position) {
     return `<td><span class="rank-badge">${position}</span></td>
         <td class="ticker-cell">${escapeHtml(s.ticker)}</td>

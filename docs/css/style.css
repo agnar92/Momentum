@@ -1947,3 +1947,24 @@ table.momentum-table tbody tr[data-ticker] { cursor: pointer; }
     .wl-chart-readout { font-size: 11px; }
     .wl-chart-body svg { max-height: none; }
 }
+
+/* Małe ekrany i telefon poziomo: strona przewija się normalnie (bez stałej wysokości
+   .workspace), zakładki przewijają się poziomo, a okienko wykresu zajmuje cały ekran. */
+@media (max-width: 900px), (max-height: 560px) {
+    html, body { height: auto; min-height: 100%; overflow: auto; }
+    .topbar { position: sticky; top: 0; z-index: 20; }
+    .workspace { display: block; height: auto; overflow: visible; }
+    .table-drawer, .table-drawer.open {
+        position: static; width: 100% !important; height: auto; max-height: none;
+        overflow: visible; border-right: none;
+    }
+    .table-scroll { flex: none; overflow-x: auto; overflow-y: visible; padding: 0 8px 8px 8px; }
+    .drawer-tabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .drawer-tab { flex: none; white-space: nowrap; }
+    .chart-modal-backdrop { padding: 0; align-items: stretch; }
+    .wl-chart-box {
+        width: 100vw; height: 100vh; height: 100dvh; max-height: none;
+        border-radius: 0; border: none; padding: 8px;
+    }
+    .wl-chart-body svg { max-height: none; }
+}

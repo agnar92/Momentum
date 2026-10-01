@@ -39,12 +39,18 @@ EMA_LAG_COUNT = 4            # ... 4 razy wstecz (5, 10, 15, 20 sesji temu)
 SPARK_WEEKS = 26
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
+BASE_MIN_WEEKS = 5           # minimalna długość bazy/korekty (tygodnie od szczytu)
+BASE_MIN_DEPTH_PCT = 6       # płytsze konsolidacje nie są raportowane
+BASE_MAX_DEPTH_PCT = 50      # głębsze to już nie baza, tylko załamanie
+BASE_FLAT_MAX_DEPTH_PCT = 15
+BASE_CUP_MAX_DEPTH_PCT = 35
+BASE_MAX_SHOWN = 4           # ile ostatnich baz trafia na wykres
+ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "skurcze" (VCP)
 EPS_CACHE_MAX_AGE_DAYS = 7   # EPS zmienia się raz na kwartał — nie pytamy Yahoo codziennie
 EPS_TIME_BUDGET_S = 600
 EPS_WORKERS = 4
-FINVIZ_KEYS = ("company", "sector", "industry", "country", "market_cap", "pe", "forward_pe", "peg",
-               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "sales_past_5y",
-               "roe", "oper_margin", "profit_margin", "earnings")
+FINVIZ_KEYS = ("company", "sector", "industry", "market_cap", "pe", "forward_pe",
+               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings")
 
 
 # ============================================================================
@@ -160,6 +166,9 @@ def compute_metrics(df):
     sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
     rising, slope, ema = ema34_trend(close)
 
+    high_52w = float(df["High"].tail(252).max())
+    open_base = next((b for b in reversed(detect_bases(weekly_ohlcv(df, asof))) if b["open"]), None)
+
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
 
@@ -181,6 +190,13 @@ def compute_metrics(df):
         "ema34_rising": rising,
         "ema34_slope_20d_pct": _num(slope),
         "price_vs_ema34_pct": _num((price / ema - 1) * 100) if ema else None,
+        "pct_from_high_52w": _num((price / high_52w - 1) * 100, 1) if high_52w > 0 else None,
+        "base_type": open_base["type"] if open_base else None,
+        "base_depth_pct": open_base["depth_pct"] if open_base else None,
+        "base_weeks": open_base["weeks"] if open_base else None,
+        "pivot": open_base["pivot"] if open_base else None,
+        "pct_to_pivot": _num((open_base["pivot"] / price - 1) * 100, 1) if open_base else None,
+        "vcp": open_base["vcp"] if open_base else None,
         "spark": spark,
     }
 
@@ -200,6 +216,83 @@ def add_rs_rating(stocks):
     for s, r in zip(scored, ranks):
         s["rs_rating"] = int(round(1 + 98 * (r - 1) / (n - 1)))
     return stocks
+
+
+# ============================================================================
+# BAZY / KOREKTY (głębokość od szczytu, pivot, skurcze VCP) — heurystyka na świecach tygodniowych.
+# NIE jest to rozpoznawanie formacji jak w MarketSmith (cup with handle, flagi...) — mierzy po prostu głębokość
+# i długość każdej korekty od lokalnego szczytu do ponownego wybicia ponad ten szczyt; typ ("flat"/"cup"/"deep")
+# to prosta klasyfikacja po głębokości i odbiciu, orientacyjna.
+# ============================================================================
+def zigzag_contractions(closes, pct=ZIGZAG_PCT):
+    """Kolejne spadki (w %) od lokalnego szczytu do następnego dołka, liczone na zamknięciach; zmiana kierunku
+    dopiero po ruchu o >= pct % (drobny szum jest ignorowany)."""
+    pivots, direction = [], 0     # direction: +1 w górę (szukamy szczytu), -1 w dół (szukamy dołka)
+    hi = lo = (0, closes[0]) if len(closes) else None
+    for i, c in enumerate(closes[1:], 1):
+        if hi is None:
+            break
+        if c > hi[1]:
+            hi = (i, c)
+        if c < lo[1]:
+            lo = (i, c)
+        if direction >= 0 and hi[1] > 0 and (hi[1] - c) / hi[1] * 100 >= pct:      # zakończony szczyt -> zaczyna się spadek
+            pivots.append(("H", hi[1]))
+            direction, lo = -1, (i, c)
+        elif direction == -1 and lo[1] > 0 and (c - lo[1]) / lo[1] * 100 >= pct:   # zakończony dołek -> zaczyna się wzrost
+            pivots.append(("L", lo[1]))
+            direction, hi = 1, (i, c)
+    if pivots and pivots[-1][0] == "H" and direction == -1:
+        pivots.append(("L", lo[1]))   # trwający, jeszcze niepotwierdzony spadek też jest skurczem (aktualny stan bazy)
+    drops = []
+    for k in range(len(pivots) - 1):
+        if pivots[k][0] == "H" and pivots[k + 1][0] == "L":
+            drops.append(round(float((pivots[k][1] - pivots[k + 1][1]) / pivots[k][1] * 100), 1))
+    return drops
+
+
+def detect_bases(weekly):
+    """Korekty od lokalnego szczytu (High) do ponownego wybicia ponad ten szczyt (lub do dziś — wtedy open=True).
+    Zwraca listę {start, end, peak, low, depth_pct, weeks, type, open, pivot, contractions, vcp} (rosnąco po czasie).
+    pivot = szczyt bazy (punkt zakupu w terminologii MarketSmith); vcp = co najmniej 2 kolejne, coraz płytsze skurcze,
+    ostatni <= 10 %."""
+    hi = weekly["High"].astype(float).values
+    lo = weekly["Low"].astype(float).values
+    cl = weekly["Close"].astype(float).values
+    dates = list(weekly.index)
+    n = len(hi)
+    bases = []
+
+    def record(peak, end, is_open):
+        if end <= peak:
+            return
+        weeks = end - peak + 1
+        low = float(lo[peak + 1:end + 1].min())
+        depth = (hi[peak] - low) / hi[peak] * 100
+        if weeks < BASE_MIN_WEEKS or not (BASE_MIN_DEPTH_PCT <= depth <= BASE_MAX_DEPTH_PCT):
+            return
+        if depth <= BASE_FLAT_MAX_DEPTH_PCT:
+            kind = "flat"
+        elif depth <= BASE_CUP_MAX_DEPTH_PCT:
+            recovered = (cl[end] - low) / (hi[peak] - low) if hi[peak] > low else 0
+            kind = "cup" if recovered >= 0.5 else "correction"
+        else:
+            kind = "deep"
+        drops = zigzag_contractions(list(cl[peak:end + 1]))
+        vcp = len(drops) >= 2 and all(drops[k + 1] < drops[k] for k in range(len(drops) - 1)) and drops[-1] <= 10
+        bases.append({
+            "start": dates[peak].strftime("%Y-%m-%d"), "end": dates[end].strftime("%Y-%m-%d"),
+            "peak": _num(hi[peak]), "low": _num(low), "depth_pct": _num(depth, 1), "weeks": weeks, "type": kind,
+            "open": is_open, "pivot": _num(hi[peak]), "contractions": drops, "vcp": bool(vcp),
+        })
+
+    peak = 0
+    for j in range(1, n):
+        if hi[j] > hi[peak]:          # nowy szczyt: poprzednia korekta (jeśli była) właśnie się zakończyła
+            record(peak, j - 1, False)
+            peak = j
+    record(peak, n - 1, True)
+    return bases
 
 
 # ============================================================================
@@ -325,6 +418,8 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         chart = build_chart(weekly_ohlcv(df, last_date), weeks)
         quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
         first = payload["weeks"][0]
+        wk = weekly_ohlcv(df, last_date)
+        chart["bases"] = [b for b in detect_bases(wk) if b["end"] >= first][-BASE_MAX_SHOWN:]
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
         payload["stocks"][t] = chart

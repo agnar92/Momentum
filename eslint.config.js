@@ -22,6 +22,7 @@ const browserGlobals = {
     // require pojawia sie tylko w galezi `typeof require === "function" &&
     // typeof window === "undefined"` na gorze plikow (Node/tests/js/).
     require: "readonly",
+    escapeHtml: "readonly",
     tvUrlFor: "readonly",
     compareRows: "readonly",
     TV_EMBED_BASE: "readonly",
