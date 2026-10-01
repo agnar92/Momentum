@@ -989,3 +989,43 @@ test("combinedContinuationCandidates dedupes tickers and sorts by RS 52 tyg. des
         state.sectorRs = savedSectorRs;
     }
 });
+
+// ---------------------------------------------------------------
+// RS Rating (IBD) + filtr Qullamaggie
+// ---------------------------------------------------------------
+const rsq = require(path.join("..", "..", "docs", "js", "signals.js"));
+
+function rsRec(ticker, over = {}) {
+    return { ticker, sector: "Tech", price: 100, rs_score: 0.5, adr_pct: 6, dollar_volume_avg: 50e6,
+        gain_from_low_1m_pct: 5, gain_from_low_3m_pct: 12, gain_from_low_6m_pct: 40, ...over };
+}
+
+test("percentileRatings: 1..99, remisy dostaja srednia range", () => {
+    const m = rsq.percentileRatings([
+        { ticker: "A", rs_score: 0.1 }, { ticker: "B", rs_score: 0.2 },
+        { ticker: "C", rs_score: 0.3 }, { ticker: "D", rs_score: 0.3 }, { ticker: "X", rs_score: null },
+    ]);
+    assert.equal(m.get("A"), 1);
+    assert.equal(m.get("B"), 34);
+    assert.equal(m.get("C"), 83);
+    assert.equal(m.get("D"), 83);
+    assert.equal(m.has("X"), false);
+});
+
+test("combinedQullamaggieRows: wszystkie progi, wzrost z dowolnego okna", () => {
+    rsq.state.data = {
+        SP500: { all_constituents: [
+            rsRec("OK"),
+            rsRec("LOWVOL", { dollar_volume_avg: 1e6 }),
+            rsRec("LOWADR", { adr_pct: 2 }),
+            rsRec("NOGAIN", { gain_from_low_1m_pct: 1, gain_from_low_3m_pct: 2, gain_from_low_6m_pct: 3 }),
+            rsRec("MISSING", { adr_pct: null }),
+        ] },
+        NASDAQ100: { all_constituents: [rsRec("OK")] }, // duplikat pomijany
+    };
+    const rows = rsq.combinedQullamaggieRows({ minDollarVolumeM: 20, minAdrPct: 5, minGainPct: 10 }, "USA");
+    assert.deepEqual(rows.map(r => r.ticker), ["OK"]);
+    assert.equal(rows[0].max_gain_pct, 40);
+    // wyzszy prog wzrostu odrzuca
+    assert.equal(rsq.combinedQullamaggieRows({ minDollarVolumeM: 20, minAdrPct: 5, minGainPct: 50 }, "USA").length, 0);
+});

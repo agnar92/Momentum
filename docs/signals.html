@@ -30,7 +30,6 @@
         <a href="signals.html" class="active">Sygnały</a>
         <a href="rebalance.html">Rebalanser USA</a>
         <a href="rebalance_pl.html">Rebalanser PL</a>
-        <a href="strategy.html">Strategia</a>
         <a href="ep.html">EP</a>
         <span id="connStatus" class="conn-status" title="Brak połączenia z siecią — pokazywane są ostatnie zapisane dane." hidden>⚠ Offline</span>
     </nav>
@@ -56,10 +55,24 @@
             <div class="drawer-tabs">
                 <button class="drawer-tab active" data-universe="WYBICIE">💥 Wybicie</button>
                 <button class="drawer-tab" data-universe="TOP_GAINERS">🏆 Top gainers · 52 tyg.</button>
+                <button class="drawer-tab" data-universe="RS_RATING">📊 RS Rating (IBD)</button>
+                <button class="drawer-tab" data-universe="QULLAMAGGIE">🎯 Qullamaggie</button>
             </div>
         </div>
         <div class="screener-guide" id="wybicieGuide"><strong>💥 Wybicie</strong> — spółki, dla których tygodniowy MACD i RS 52 tyg. świeżo przecięły zero w górę, a histogram TTM Squeeze jest dodatni. Screener nie jest rekomendacją inwestycyjną.</div>
         <div class="screener-guide" id="topGainersGuide" hidden><strong>🏆 Top gainers · 52 tyg.</strong> — dokładnie 30 spółek z najwyższą stopą zwrotu za ostatnie 52 tygodnie, po połączeniu dostępnych uniwersów i usunięciu duplikatów tickerów. Wynik 52 tyg. jest zwykłą zmianą ceny od najbliższego dostępnego kursu sprzed 52 tygodni do bieżącej ceny.</div>
+        <div class="screener-guide" id="rsRatingGuide" hidden><strong>📊 RS Rating (IBD)</strong> — ocena siły względnej 1–99 jak w Investor's Business Daily: ważony wynik ceny z 4 kwartałów (<code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code>, najnowszy kwartał z podwójną wagą), potem percentyl względem wszystkich spółek wybranego rynku (99 = lepsza niż 99% pozostałych). To przybliżenie — IBD nie publikuje dokładnej formuły ani swojej puli spółek.</div>
+        <div class="screener-guide" id="qmGuide" hidden><strong>🎯 Qullamaggie</strong> — spółki spełniające WSZYSTKIE trzy progi: średni obrót dzienny (cena × wolumen, ~20 sesji) ≥ wpisana wartość, ADR% (średnia dzienna rozpiętość High/Low, ~20 sesji) ≥ wpisana wartość oraz kurs zamknięcia o co najmniej X% powyżej najniższego notowania z <em>któregokolwiek</em> okna: 1, 3 lub 6 miesięcy. Obrót jest w walucie rynku (USD albo PLN).</div>
+        <div class="stage-filter-bar" id="marketBar" hidden>
+            <span class="stage-filter-label">Rynek:</span>
+            <button type="button" class="stage-filter-btn active" data-market="USA">USA (SP500 + NASDAQ100 + DJIA)</button>
+            <button type="button" class="stage-filter-btn" data-market="PL">PL (WIG20 + mWIG40 + sWIG80)</button>
+        </div>
+        <div class="stage-filter-bar" id="qmControls" hidden>
+            <label class="wybicie-slider"><span class="stage-filter-label">Min. obrót dzienny (mln):</span><input type="number" id="qmMinDollarVolume" min="0" step="1" style="width:80px"></label>
+            <label class="wybicie-slider"><span class="stage-filter-label">Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5" style="width:70px"></label>
+            <label class="wybicie-slider"><span class="stage-filter-label">Min. wzrost od minimum (%):</span><input type="number" id="qmMinGain" min="0" step="1" style="width:70px"></label>
+        </div>
         <div class="stage-filter-bar" id="stageFilterBar">
             <span class="stage-filter-label">Etap Weinsteina:</span>
             <button class="stage-filter-btn active" data-stage="ALL">Wszystkie</button>
@@ -80,6 +93,8 @@
         <div class="table-scroll">
             <table class="momentum-table" id="wybicieTable"><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="universe">Uniwersum</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="breakoutWeeks">Wybicie</th><th>Cena (26 tyg.)</th><th data-key="macdCrossWeeks">MACD</th><th data-key="rsCrossWeeks">RS 52 tyg.</th><th data-key="histNow">TTM (26 tyg.)</th><th>Etap</th><th class="tv-col">TV</th></tr></thead><tbody id="wybicieTableBody"></tbody></table>
             <table class="momentum-table" id="topGainersTable" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="universe">Uniwersum</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="return_52w_pct">Wynik 52 tyg.</th><th>Cena (26 tyg.)</th><th>Etap</th><th class="tv-col">TV</th></tr></thead><tbody id="topGainersTableBody"></tbody></table>
+            <table class="momentum-table" id="rsRatingTable" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="universe">Uniwersum</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="rs_rating">RS Rating</th><th data-key="rs_score_pct">Wynik ważony</th><th>Cena (26 tyg.)</th><th>Etap</th><th class="tv-col">TV</th></tr></thead><tbody id="rsRatingTableBody"></tbody></table>
+            <table class="momentum-table" id="qmTable" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="universe">Uniwersum</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="dollar_volume_avg">Obrót dzienny</th><th data-key="adr_pct">ADR %</th><th data-key="max_gain_pct">Wzrost od min. 1/3/6M</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th>Etap</th><th class="tv-col">TV</th></tr></thead><tbody id="qmTableBody"></tbody></table>
         </div>
     </div>
 

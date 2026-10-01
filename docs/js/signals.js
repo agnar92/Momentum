@@ -120,12 +120,17 @@ const BREAKOUT_DEFAULT_WIN_RATE_PCT = 59;
 const BREAKOUT_DEFAULT_REWARD_RISK = 4.04;
 const BREAKOUT_DEFAULT_KELLY_FRACTION_PCT = 33;
 
+// Domyślne progi filtra Qullamaggie (edytowalne w UI, patrz initMarketAndQmControls).
+const QM_DEFAULTS = { minDollarVolumeM: 20, minAdrPct: 5, minGainPct: 10 };
+
 const state = {
     data: {},
     selectedTicker: null,
     selectedUniverse: null,
     currentRsEntry: null,
     drawerUniverse: "WYBICIE",
+    market: "USA",
+    qm: { ...QM_DEFAULTS },
     chartView: "own",
     stageFilter: "ALL",
     sortKey: "rank",
@@ -386,6 +391,217 @@ function combinedTopGainersCandidates(limit = 30) {
         });
     });
     return rows.sort((a, b) => b.return_52w_pct - a.return_52w_pct).slice(0, limit);
+}
+
+// ============================================================
+// RS RATING (IBD) + FILTR QULLAMAGGIE — dwie zakładki na wyraźną prośbę
+// użytkownika. Dane (rs_score, adr_pct, dollar_volume_avg,
+// gain_from_low_{1,3,6}m_pct) liczy run_query.py::get_universe_metrics i
+// eksportuje w KAŻDYM rekordzie all_constituents/constituents.
+//
+// RS Rating: rs_score = 0.4*R3M + 0.2*R6M + 0.2*R9M + 0.2*R12M (kumulatywne
+// zwroty ceny; najnowszy kwartał z podwójną wagą — powszechnie znana
+// aproksymacja IBD, sama formuła nie jest publiczna). Rating 1-99 to
+// PERCENTYL rs_score wśród WSZYSTKICH spółek wybranego rynku (USA albo PL —
+// nie mieszamy walut/rynków w jednym rankingu).
+// ============================================================
+const RS_MARKETS = {
+    USA: ["SP500", "NASDAQ100", "DOWJONES"],
+    PL: ["WIG20", "MWIG40", "SWIG80"],
+};
+// Domyślne sortowanie nowych zakładek (reszta zostaje przy bieżącym kluczu).
+const TAB_DEFAULT_SORT = { RS_RATING: ["rs_rating", "desc"], QULLAMAGGIE: ["max_gain_pct", "desc"] };
+const QM_SETTINGS_KEY = "momentum_signals_qm";
+const QM_WINDOWS = [["1M", "gain_from_low_1m_pct"], ["3M", "gain_from_low_3m_pct"], ["6M", "gain_from_low_6m_pct"]];
+
+// Rating 1-99 = percentyl rank (remisy: średnia ranga). Zwraca Map ticker -> rating.
+function percentileRatings(rows) {
+    const scored = rows.filter(r => Number.isFinite(r.rs_score));
+    const n = scored.length;
+    const out = new Map();
+    if (n === 0) return out;
+    if (n === 1) { out.set(scored[0].ticker, 50); return out; }
+    const sorted = scored.slice().sort((a, b) => a.rs_score - b.rs_score);
+    let i = 0;
+    while (i < n) {
+        let j = i;
+        while (j + 1 < n && sorted[j + 1].rs_score === sorted[i].rs_score) j++;
+        const avgRank = (i + j) / 2; // 0..n-1
+        const rating = Math.round(1 + 98 * avgRank / (n - 1));
+        for (let k = i; k <= j; k++) out.set(sorted[k].ticker, rating);
+        i = j + 1;
+    }
+    return out;
+}
+
+// Pula rynku: all_constituents wszystkich uniwersów rynku, bez duplikatów
+// tickerów (pierwszy uniwers wygrywa), z dołączonym rs_rating.
+function marketPoolRows(market) {
+    const rows = [];
+    const seen = new Set();
+    (RS_MARKETS[market] || []).forEach(u => {
+        const d = state.data[u] || {};
+        (d.all_constituents || d.constituents || []).forEach(c => {
+            if (seen.has(c.ticker)) return;
+            seen.add(c.ticker);
+            rows.push({
+                ticker: c.ticker, universe: u, sector: c.sector, price: c.price,
+                rs_score: Number.isFinite(c.rs_score) ? c.rs_score : null,
+                adr_pct: Number.isFinite(c.adr_pct) ? c.adr_pct : null,
+                dollar_volume_avg: Number.isFinite(c.dollar_volume_avg) ? c.dollar_volume_avg : null,
+                gains: QM_WINDOWS.map(([label, key]) => ({ label, pct: Number.isFinite(c[key]) ? c[key] : null })),
+                current_stage: c.weekly_chart && c.weekly_chart.current_stage,
+                ...miniVisualFields(c),
+            });
+        });
+    });
+    const ratings = percentileRatings(rows);
+    rows.forEach(r => {
+        r.rs_rating = ratings.has(r.ticker) ? ratings.get(r.ticker) : null;
+        r.rs_score_pct = r.rs_score != null ? r.rs_score * 100 : null;
+    });
+    return rows;
+}
+
+function combinedRsRatingRows(market = state.market) {
+    return marketPoolRows(market)
+        .filter(r => r.rs_rating != null)
+        .sort((a, b) => b.rs_rating - a.rs_rating || b.rs_score - a.rs_score);
+}
+
+// Filtr Qullamaggie: obrót >= min (mln), ADR% >= min, wzrost od minimum
+// któregokolwiek z okien 1/3/6M >= min%. Brakujące dane => odrzucone.
+function combinedQullamaggieRows(params = state.qm, market = state.market) {
+    const minVol = (Number(params.minDollarVolumeM) || 0) * 1e6;
+    const minAdr = Number(params.minAdrPct) || 0;
+    const minGain = Number(params.minGainPct) || 0;
+    const rows = [];
+    marketPoolRows(market).forEach(r => {
+        if (r.dollar_volume_avg == null || r.adr_pct == null) return;
+        if (r.dollar_volume_avg < minVol || r.adr_pct < minAdr) return;
+        const passing = r.gains.filter(g => g.pct != null && g.pct >= minGain);
+        if (!passing.length) return;
+        rows.push({ ...r, max_gain_pct: Math.max(...passing.map(g => g.pct)) });
+    });
+    return rows.sort((a, b) => b.max_gain_pct - a.max_gain_pct);
+}
+
+function fmtVolume(v) {
+    if (v == null) return "—";
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + " mld";
+    return (v / 1e6).toFixed(1) + " mln";
+}
+
+function rsRatingRowHtml(r, position) {
+    const cls = r.rs_rating >= 80 ? "positive" : (r.rs_rating < 50 ? "negative" : "");
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${r.sector || ""}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td class="${cls}"><strong>${r.rs_rating}</strong></td>
+        <td>${r.rs_score_pct >= 0 ? "+" : ""}${r.rs_score_pct.toFixed(1)}%</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+function qmRowHtml(r, position) {
+    const gains = r.gains.map(g => g.pct == null ? `${g.label}: —` : `${g.label}: +${g.pct.toFixed(0)}%`).join(" · ");
+    return `
+        <td><span class="rank-badge">${position}</span></td>
+        <td class="ticker-cell">${r.ticker}</td>
+        <td>${UNIVERSE_LABELS[r.universe].replace(" Momentum", "")}</td>
+        <td>${r.sector || ""}</td>
+        <td>${formatPrice(r.price, r.universe)}</td>
+        <td>${fmtVolume(r.dollar_volume_avg)}</td>
+        <td>${r.adr_pct.toFixed(1)}%</td>
+        <td class="positive" title="${gains}"><strong>+${r.max_gain_pct.toFixed(0)}%</strong> <span class="muted" style="font-size:10.5px">${gains}</span></td>
+        <td>${r.rs_rating != null ? r.rs_rating : "—"}</td>
+        <td title="Cena tygodniowa (${MINI_WEEKS} tyg.) + EMA20">${weeklySparkSvg(r.mini_closes, r.mini_ema)}</td>
+        <td>${stageCellHtml(r.current_stage)}</td>
+        <td>${tvRowButtonHtml(r.ticker, r.universe)}</td>
+    `;
+}
+
+function renderRsRatingTable() {
+    const allRows = combinedRsRatingRows();
+    renderScreenerTable({
+        tbody: document.getElementById("rsRatingTableBody"),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 10,
+        emptyAllMsg: "Brak danych RS Rating — uruchom pipeline (fetch_data.py + run_query.py).",
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: rows => `${rows.length} z ${allRows.length} spółek · rynek ${state.market}`,
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => rsRatingRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
+    });
+}
+
+function renderQmTable() {
+    const allRows = combinedQullamaggieRows();
+    renderScreenerTable({
+        tbody: document.getElementById("qmTableBody"),
+        metaEl: document.getElementById("drawerMeta"),
+        allRows,
+        matchesStage: state.stageFilter === "ALL" ? null : (r => matchesStageFilter(r.current_stage)),
+        sortKey: state.sortKey, sortDir: state.sortDir,
+        colspan: 12,
+        emptyAllMsg: "Żadna spółka nie spełnia wszystkich progów — obniż obrót, ADR% albo wymagany wzrost.",
+        emptyFilteredMsg: "Żadna spółka nie pasuje do wybranego etapu.",
+        metaText: rows => `${rows.length} z ${allRows.length} spółek · rynek ${state.market}`,
+        rowKey: r => r.ticker,
+        isSelected: r => r.ticker === state.selectedTicker,
+        rowHtml: (r, i) => qmRowHtml(r, i + 1),
+        onRowClick: r => selectTicker(r.ticker, r.universe),
+        afterRender: bindTvRowButtons,
+    });
+}
+
+function initMarketAndQmControls() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(QM_SETTINGS_KEY) || "null");
+        if (saved) {
+            ["minDollarVolumeM", "minAdrPct", "minGainPct"].forEach(k => {
+                if (Number.isFinite(saved[k])) state.qm[k] = saved[k];
+            });
+            if (saved.market === "USA" || saved.market === "PL") state.market = saved.market;
+        }
+    } catch (e) { /* brak localStorage — domyślne */ }
+    const save = () => {
+        try { localStorage.setItem(QM_SETTINGS_KEY, JSON.stringify({ ...state.qm, market: state.market })); } catch (e) { /* ignoruj */ }
+    };
+    const inputs = { minDollarVolumeM: "qmMinDollarVolume", minAdrPct: "qmMinAdr", minGainPct: "qmMinGain" };
+    Object.entries(inputs).forEach(([key, id]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = state.qm[key];
+        el.addEventListener("input", () => {
+            const v = parseFloat(el.value);
+            state.qm[key] = Number.isFinite(v) && v >= 0 ? v : 0;
+            save();
+            if (state.drawerUniverse === "QULLAMAGGIE") renderQmTable();
+        });
+    });
+    const bar = document.getElementById("marketBar");
+    if (bar) {
+        const sync = () => bar.querySelectorAll("[data-market]").forEach(b => b.classList.toggle("active", b.dataset.market === state.market));
+        sync();
+        bar.querySelectorAll("[data-market]").forEach(btn => btn.addEventListener("click", () => {
+            state.market = btn.dataset.market;
+            sync();
+            save();
+            renderActiveSignalsTable();
+        }));
+    }
 }
 
 // ============================================================
@@ -1158,14 +1374,25 @@ function showSignalsTable(tab) {
     document.getElementById("wybicieGuide").hidden = tab !== "WYBICIE";
     document.getElementById("topGainersTable").hidden = tab !== "TOP_GAINERS";
     document.getElementById("topGainersGuide").hidden = tab !== "TOP_GAINERS";
-    document.getElementById("drawerTitle").textContent = tab === "WYBICIE"
-        ? "Sygnały — Wybicie"
-        : "Top gainers — 52 tyg.";
+    document.getElementById("rsRatingTable").hidden = tab !== "RS_RATING";
+    document.getElementById("rsRatingGuide").hidden = tab !== "RS_RATING";
+    document.getElementById("qmTable").hidden = tab !== "QULLAMAGGIE";
+    document.getElementById("qmGuide").hidden = tab !== "QULLAMAGGIE";
+    document.getElementById("qmControls").hidden = tab !== "QULLAMAGGIE";
+    document.getElementById("marketBar").hidden = tab !== "RS_RATING" && tab !== "QULLAMAGGIE";
+    document.getElementById("drawerTitle").textContent = {
+        WYBICIE: "Sygnały — Wybicie",
+        TOP_GAINERS: "Top gainers — 52 tyg.",
+        RS_RATING: "RS Rating (IBD)",
+        QULLAMAGGIE: "Filtr Qullamaggie",
+    }[tab];
     renderActiveSignalsTable();
 }
 
 function renderActiveSignalsTable() {
     if (state.drawerUniverse === "WYBICIE") renderWybicieTable();
+    else if (state.drawerUniverse === "RS_RATING") renderRsRatingTable();
+    else if (state.drawerUniverse === "QULLAMAGGIE") renderQmTable();
     else renderTopGainersTable();
 }
 
@@ -1175,6 +1402,9 @@ function initSignalsDrawer() {
             document.querySelectorAll(".drawer-tab").forEach(t => t.classList.remove("active"));
             tab.classList.add("active");
             state.drawerUniverse = tab.dataset.universe;
+            const defaultSort = TAB_DEFAULT_SORT[state.drawerUniverse];
+            if (defaultSort) { state.sortKey = defaultSort[0]; state.sortDir = defaultSort[1]; }
+            updateSortHeaderClasses();
             showSignalsTable(state.drawerUniverse);
         });
     });
@@ -1862,6 +2092,7 @@ if (typeof document !== "undefined") {
         initConnStatus();
         await loadData();
         initWybicieControls();
+        initMarketAndQmControls();
         renderWybiciePanel();
         renderTopGainersPanel();
         initSignalsDrawer();
@@ -1887,7 +2118,7 @@ if (typeof document !== "undefined") {
 // ładowany i bez efektu w przeglądarce (module tam nie istnieje).
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, combinedTopGainersCandidates, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
+        weeksSinceZeroCrossUp, classifyWybicie, combinedWybicieCandidates, combinedTopGainersCandidates, percentileRatings, combinedRsRatingRows, combinedQullamaggieRows, classifyTtmSqueeze, combinedTtmSqueezeCandidates,
         classifyContinuation, combinedContinuationCandidates, continuationTrendGate, sectorRsInfo, state,
         classifyBreakout, combinedBreakoutCandidates, breakoutKellyFraction, breakoutPositionFor,
         breakoutConsolidationFromSqueeze, breakoutConsolidationFromDarvas,

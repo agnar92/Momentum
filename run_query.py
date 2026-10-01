@@ -152,6 +152,24 @@ GEM_MANUAL_OVERRIDE_UNIVERSES = {"WIG20", "MWIG40", "SWIG80"}
 
 # 1-2-3-4: METRYKI (SQL) — momentum value, zmienność, eligibility, z-score, score
 # ============================================================================
+SCREENER_AVG_DAYS = 28  # okno (dni kalendarzowe, ~20 sesji) dla ADR% i sredniego obrotu
+
+
+def _screener_fields(r):
+    """Pola RS Rating / filtra Qullamaggie z wiersza get_universe_metrics (None, gdy brak)."""
+    def num(key, digits):
+        v = r.get(key)
+        return round(float(v), digits) if v is not None and pd.notna(v) else None
+    return {
+        "rs_score": num("rs_score", 4),
+        "adr_pct": num("adr_pct", 2),
+        "dollar_volume_avg": num("avg_dollar_volume", 0),
+        "gain_from_low_1m_pct": num("gain_from_low_1m_pct", 2),
+        "gain_from_low_3m_pct": num("gain_from_low_3m_pct", 2),
+        "gain_from_low_6m_pct": num("gain_from_low_6m_pct", 2),
+    }
+
+
 def get_universe_metrics(con, universe, ref_date, min_trading_days, max_staleness_days):
     query = f"""
     WITH params AS (SELECT DATE '{ref_date}' AS ref_date),
@@ -161,7 +179,7 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
         WHERE ic.Index_Name = '{universe}'
     ),
     daily_returns AS (
-        SELECT p.Ticker, p.Date, p.Close,
+        SELECT p.Ticker, p.Date, p.Close, p.High, p.Low, p.Volume,
                (p.Close / LAG(p.Close) OVER (PARTITION BY p.Ticker ORDER BY p.Date) - 1) AS daily_return
         FROM prices p
         JOIN uni_tickers u ON p.Ticker = u.Ticker
@@ -175,6 +193,36 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '2 MONTHS') AS price_m2,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '14 MONTHS') AS price_m14,
             ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '11 MONTHS') AS price_m11,
+            -- RS Rating (IBD): ceny sprzed 3/6/9/12 miesiecy (patrz rs_score nizej).
+            ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '3 MONTHS') AS price_3m,
+            ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '6 MONTHS') AS price_6m,
+            ARGMAX(dr.Close, dr.Date) FILTER (WHERE dr.Date <= (SELECT ref_date FROM params) - INTERVAL '9 MONTHS') AS price_9m,
+            -- Filtr w stylu Qullamaggie: srednia dzienna zmiennosc (ADR%), sredni obrot
+            -- dzienny (cena*wolumen) z ostatnich {SCREENER_AVG_DAYS} dni kalendarzowych
+            -- (~20 sesji) oraz najnizsze notowanie z ostatniego 1/3/6 miesiaca (Low,
+            -- a dla starych wierszy bez High/Low — Close).
+            AVG(dr.High / NULLIF(dr.Low, 0)) FILTER (
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '{SCREENER_AVG_DAYS} DAYS'
+                  AND dr.Date <= (SELECT ref_date FROM params)
+                  AND dr.High IS NOT NULL AND dr.Low IS NOT NULL
+            ) AS avg_high_low_ratio,
+            AVG(dr.Close * dr.Volume) FILTER (
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '{SCREENER_AVG_DAYS} DAYS'
+                  AND dr.Date <= (SELECT ref_date FROM params)
+                  AND dr.Volume IS NOT NULL
+            ) AS avg_dollar_volume,
+            MIN(COALESCE(dr.Low, dr.Close)) FILTER (
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '1 MONTHS'
+                  AND dr.Date <= (SELECT ref_date FROM params)
+            ) AS low_1m,
+            MIN(COALESCE(dr.Low, dr.Close)) FILTER (
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '3 MONTHS'
+                  AND dr.Date <= (SELECT ref_date FROM params)
+            ) AS low_3m,
+            MIN(COALESCE(dr.Low, dr.Close)) FILTER (
+                WHERE dr.Date > (SELECT ref_date FROM params) - INTERVAL '6 MONTHS'
+                  AND dr.Date <= (SELECT ref_date FROM params)
+            ) AS low_6m,
             -- Appendix A pkt 2 (S&P Momentum Indices Methodology): "Standard deviation of daily
             -- price returns for the SAME date period used in Step 1" -> zmienność musi być liczona
             -- z tego samego okna co momentum_value (M-14..M-2, albo M-11..M-2 dla fallbacku 9M),
@@ -202,6 +250,17 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
         SELECT
             Ticker, last_price_date, price_now,
             CASE WHEN price_52w IS NOT NULL AND price_52w > 0 THEN price_now / price_52w - 1 END AS return_52w,
+            -- RS Rating (IBD): 0.4*R3M + 0.2*R6M + 0.2*R9M + 0.2*R12M (kumulatywne zwroty,
+            -- najnowszy kwartal z podwojna waga). Percentyl 1-99 liczy frontend.
+            CASE WHEN price_3m > 0 AND price_6m > 0 AND price_9m > 0 AND price_52w > 0
+                 THEN 0.4 * (price_now / price_3m - 1) + 0.2 * (price_now / price_6m - 1)
+                    + 0.2 * (price_now / price_9m - 1) + 0.2 * (price_now / price_52w - 1)
+            END AS rs_score,
+            100 * (avg_high_low_ratio - 1) AS adr_pct,
+            avg_dollar_volume,
+            CASE WHEN low_1m > 0 THEN 100 * (price_now / low_1m - 1) END AS gain_from_low_1m_pct,
+            CASE WHEN low_3m > 0 THEN 100 * (price_now / low_3m - 1) END AS gain_from_low_3m_pct,
+            CASE WHEN low_6m > 0 THEN 100 * (price_now / low_6m - 1) END AS gain_from_low_6m_pct,
             CASE WHEN price_m14 IS NOT NULL AND price_m2 IS NOT NULL THEN annualized_volatility_12m
                  WHEN price_m11 IS NOT NULL AND price_m2 IS NOT NULL THEN annualized_volatility_9m
                  ELSE NULL END AS annualized_volatility,
@@ -216,7 +275,9 @@ def get_universe_metrics(con, universe, ref_date, min_trading_days, max_stalenes
         FROM price_points
     )
     SELECT m.Ticker, u.Sector, u.fmc_etf AS fmc, m.price_now, m.return_52w, m.momentum_value, m.momentum_window,
-           m.annualized_volatility, m.last_price_date
+           m.annualized_volatility, m.last_price_date,
+           m.rs_score, m.adr_pct, m.avg_dollar_volume,
+           m.gain_from_low_1m_pct, m.gain_from_low_3m_pct, m.gain_from_low_6m_pct
     FROM momentum m
     JOIN uni_tickers u ON m.Ticker = u.Ticker
     WHERE m.momentum_value IS NOT NULL
@@ -657,6 +718,7 @@ def _build_full_universe_records(df_ranked, selected_tickers, weekly_charts, man
             "volatility_pct": round(float(r["annualized_volatility"]) * 100, 2),
             "z_score": round(float(r["z_score"]), 3),
             "momentum_score": round(float(r["momentum_score"]), 3),
+            **_screener_fields(r),
             "in_selection": bool(r["Ticker"] in selected_tickers),
             "weekly_chart": weekly_charts.get(r["Ticker"]),
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
@@ -689,6 +751,7 @@ def export_json(df_weighted, universe, ref_date, docs_data_dir, n_missing_fmc,
             "z_score": round(float(r["z_score"]), 3),
             "momentum_score": round(float(r["momentum_score"]), 3),
             "weight_pct": round(float(r["weight"]) * 100, 3),
+            **_screener_fields(r),
             "weekly_chart": weekly_chart,
             "mansfield_chart": mansfield_charts.get(r["Ticker"]),
             "ttm_squeeze_chart": ttm_squeeze_charts.get(r["Ticker"]),

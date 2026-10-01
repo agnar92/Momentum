@@ -1,7 +1,7 @@
 // Współdzielone mini-wizualizacje tabel (inline SVG, bez Chart.js — dziesiątki
 // na raz): mini-wykresy ceny, słupki RS wokół zera, mini-wskaźnik TTM Squeeze.
 // Zwykły <script> ładowany po js/shared.js na index.html, rebalance.html,
-// rebalance_pl.html i strategy.html — ten sam wzorzec globalnych funkcji co
+// rebalance_pl.html — ten sam wzorzec globalnych funkcji co
 // shared.js/table-render.js (bez modułów/bundlera). Klasy CSS (.spark, .rs-bar,
 // .ttm-*) żyją w css/style.css.
 

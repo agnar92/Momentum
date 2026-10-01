@@ -2238,3 +2238,27 @@ class TestMansfieldRsmTail:
         # Gdy luka calkowicie wypadnie z okna 52-tygodniowego, seria wraca do
         # poprawnej wartosci (RS stale plaskie = 1.0 -> RSM = 0).
         assert rsm.iloc[gap_idx + 52] == pytest.approx(0.0)
+
+
+class TestScreenerFieldsInUniverseMetrics:
+    """RS Rating (IBD) i filtr Qullamaggie: rs_score, adr_pct, dollar_volume_avg, gain_from_low_*."""
+
+    def test_rs_score_adr_volume_and_gain_from_low(self):
+        con = make_gem_con()
+        con.execute("INSERT INTO index_constituents VALUES ('AAA', 'SP500', 'Tech', 1.0)")
+        ref = pd.Timestamp("2026-09-30")
+        rows = []
+        # Dzienne notowania z ostatnich ~15 miesiecy: cena rosnie liniowo 100 -> 200.
+        days = pd.bdate_range(ref - pd.DateOffset(months=15), ref)
+        for i, d in enumerate(days):
+            close = 100.0 + 100.0 * i / (len(days) - 1)
+            rows.append((d.date(), "AAA", close, close, 1000, close * 1.05, close * 0.95))
+        con.executemany("INSERT INTO prices VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+        df = run_query.get_universe_metrics(con, "SP500", "2026-09-30", 150, 10)
+        r = df.iloc[0]
+        assert r["rs_score"] > 0
+        # High/Low = +-5% wokol Close => High/Low = 1.05/0.95
+        assert r["adr_pct"] == pytest.approx(100 * (1.05 / 0.95 - 1))
+        assert r["avg_dollar_volume"] == pytest.approx(200 * 1000, rel=0.05)
+        # Rosnaca cena: minimum z dluzszego okna jest nizsze => wiekszy wzrost od minimum.
+        assert r["gain_from_low_6m_pct"] > r["gain_from_low_3m_pct"] > r["gain_from_low_1m_pct"] > 0

@@ -2,6 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Aktualizacja (październik 2026): usunięta strona Strategia, nowe zakładki RS Rating i Qullamaggie
+
+- **`strategy.html`/`js/strategy.js`/`tests/js/strategy.test.js` zostały USUNIĘTE** (wraz z linkami "Strategia" w nawigacji i wpisami w `sw.js`). Wszystkie opisy "Strategia"/"Stage 2 Continuation funnel"/`strategy.js` niżej w tym pliku są historyczne. Backend `compute_sector_relative_strength`/`export_sector_strategy` (`docs/data/sector_strategy.json`) został celowo zostawiony — `signals.js` nadal czyta ten plik (baner rynku/RS sektora).
+- **Nowe pola w każdym rekordzie `constituents`/`all_constituents`** (liczone w `get_universe_metrics`, eksport przez `_screener_fields`): `rs_score` (= 0.4·R3M + 0.2·R6M + 0.2·R9M + 0.2·R12M, kumulatywne zwroty — aproksymacja IBD, ułamek np. 0.42), `adr_pct` (100·(średnia High/Low − 1), ostatnie `SCREENER_AVG_DAYS`=28 dni kalendarzowych ≈ 20 sesji), `dollar_volume_avg` (średnia Close·Volume, to samo okno, w walucie rynku), `gain_from_low_{1,3,6}m_pct` (cena / najniższe Low z okna − 1; dla starych wierszy bez High/Low — Close).
+- **`signals.html` ma dwie nowe zakładki.** "📊 RS Rating (IBD)": rating 1–99 = percentyl `rs_score` w puli wybranego rynku (`RS_MARKETS`: USA = SP500+NASDAQ100+DJIA, PL = WIG20+mWIG40+sWIG80; `percentileRatings()`/`marketPoolRows()`), liczony w przeglądarce. "🎯 Qullamaggie": trzy pola do wpisania (min. obrót dzienny w mln, min. ADR %, min. wzrost od minimum w %; `localStorage` `momentum_signals_qm`) — spółka musi spełnić WSZYSTKIE trzy, przy czym wzrost liczy się z KTÓREGOKOLWIEK okna 1/3/6M (`combinedQullamaggieRows()`). Dane `docs/data/*.json` muszą być wygenerowane przez `run_query.py` po tej zmianie, żeby pola istniały (CI robi to co tydzień).
+
 ## What this repo is
 
 A momentum-investing tool for SP500, NASDAQ100, DOWJONES, WIG20, and mWIG40: a Python pipeline computes
