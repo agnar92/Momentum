@@ -142,6 +142,41 @@ def _load_json_constituents():
     return rows
 
 
+FINVIZ_INDEX_NAME = "FINVIZ"
+
+
+def _load_finviz_constituents():
+    """Wczytuje uniwersum "FINVIZ" (FINVIZ_holdings.json, generowane przez finviz.py) —
+    spółki USA po wstępnej filtracji Finviz, zasilające zakładki RS Rating/Qullamaggie.
+    Ważone nie są (fmc_etf = 1.0, jak GPW). Ticker kolidujący z tickerem GPW (np. "ICE" to
+    zarówno Intercontinental Exchange, jak i polska spółka z sWIG80) jest POMIJANY: `prices`
+    ma klucz (Date, Ticker) bez rynku, a GPW_TICKERS wymusza sufiks .WA, więc dostałby ceny
+    złej spółki. Musi być wołane PO _load_json_constituents() (ono czyści GPW_TICKERS)."""
+    try:
+        with open("FINVIZ_holdings.json", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError:
+        print("ℹ️  Brak FINVIZ_holdings.json — pomijam uniwersum FINVIZ.")
+        return []
+    except Exception as e:
+        print(f"❌ Błąd podczas odczytu FINVIZ_holdings.json: {e}")
+        return []
+    rows, skipped = [], []
+    for entry in data.get("tickers", []) if isinstance(data, dict) else []:
+        t = str(entry.get("ticker", "")).strip() if isinstance(entry, dict) else str(entry).strip()
+        sec = str(entry.get("sector") or "Unknown").strip() if isinstance(entry, dict) else "Unknown"
+        if not t:
+            continue
+        if t in GPW_TICKERS:
+            skipped.append(t)
+            continue
+        rows.append((t, FINVIZ_INDEX_NAME, sec, 1.0))
+    if skipped:
+        print(f"ℹ️  FINVIZ: pominięto {len(skipped)} tickerów kolidujących z GPW: {', '.join(sorted(skipped))}.")
+    print(f"✅ FINVIZ_holdings.json: wczytano {len(rows)} pozycji jako {FINVIZ_INDEX_NAME}.")
+    return rows
+
+
 def load_index_constituents(con):
     """
     Wczytuje skład indeksów z plików holdings funduszy ETF (CSPX/CNDX/CIND),
@@ -219,6 +254,7 @@ def load_index_constituents(con):
         print(f"✅ {filepath}: wczytano {len(rows) - n_before} pozycji jako {index_name}.")
 
     rows.extend(_load_json_constituents())
+    rows.extend(_load_finviz_constituents())
 
     if rows:
         df_const = pd.DataFrame(rows, columns=["Ticker", "Index_Name", "Sector", "fmc_etf"]).drop_duplicates(
@@ -802,6 +838,52 @@ def _prices_history_is_shallow(con, lookback_months):
     return pd.Timestamp(oldest) > needed_start + pd.Timedelta(days=14)
 
 
+EPS_CACHE_MAX_AGE_DAYS = 30      # EPS zmienia się raz na kwartał/rok — nie ma po co pytać co tydzień
+EPS_FETCH_TIME_BUDGET_S = 900    # twardy limit czasu kroku (spółki bez danych dociągną się następnym razem)
+
+
+def update_eps_history(con, tickers, max_age_days=EPS_CACHE_MAX_AGE_DAYS,
+                       time_budget_s=EPS_FETCH_TIME_BUDGET_S):
+    """Roczny EPS (Diluted EPS, ~4 ostatnie lata) z Yahoo dla `tickers`, cache'owany w
+    eps_history/eps_fetch_log. Odświeża tylko tickery, których wpis jest starszy niż
+    max_age_days (albo nie istnieje); ticker bez danych też dostaje wpis w logu, żeby nie
+    był pytany co tydzień. Błąd pojedynczego tickera/limit czasu nigdy nie przerywa pipeline'u."""
+    con.execute("CREATE TABLE IF NOT EXISTS eps_history (Ticker VARCHAR, FiscalDate DATE, EPS DOUBLE, "
+                "PRIMARY KEY (Ticker, FiscalDate))")
+    con.execute("CREATE TABLE IF NOT EXISTS eps_fetch_log (Ticker VARCHAR PRIMARY KEY, fetched_at TIMESTAMP)")
+    stale = {r[0] for r in con.execute(
+        f"SELECT Ticker FROM eps_fetch_log WHERE fetched_at >= now() - INTERVAL '{int(max_age_days)} DAYS'"
+    ).fetchall()}
+    todo = [t for t in tickers if t not in stale]
+    if not todo:
+        print("ℹ️  EPS: cache aktualny, nic do pobrania.")
+        return
+    print(f"⏳ EPS: pobieram historię dla {len(todo)} spółek (limit czasu {time_budget_s}s)...")
+    started, done, with_data = time.time(), 0, 0
+    for t in todo:
+        if time.time() - started > time_budget_s:
+            print(f"⚠️  EPS: limit czasu — pobrano {done}/{len(todo)}, reszta przy następnym przebiegu.")
+            break
+        series = {}
+        try:
+            stmt = yf.Ticker(_to_yf_symbol(t)).income_stmt
+            for label in ("Diluted EPS", "Basic EPS"):
+                if stmt is not None and label in stmt.index:
+                    row = stmt.loc[label].dropna()
+                    if len(row):
+                        series = {pd.Timestamp(d).date(): float(v) for d, v in row.items()}
+                        break
+        except Exception:
+            series = {}
+        con.execute("DELETE FROM eps_history WHERE Ticker = ?", [t])
+        for d, v in series.items():
+            con.execute("INSERT INTO eps_history VALUES (?, ?, ?)", [t, d, v])
+        con.execute("INSERT OR REPLACE INTO eps_fetch_log VALUES (?, now())", [t])
+        done += 1
+        with_data += 1 if series else 0
+    print(f"✅ EPS: {done} spółek przetworzonych, {with_data} z danymi.")
+
+
 def update_duckdb(lookback_months=28, min_coverage=0.8, indices_only=False):
     # try/finally zamiast pojedynczego con.close() na koncu — wyjatek wewnatrz
     # ktoregokolwiek z ponizszych krokow (np. blad DuckDB przy uszkodzonym
@@ -818,6 +900,13 @@ def update_duckdb(lookback_months=28, min_coverage=0.8, indices_only=False):
             update_index_prices(con, lookback_months)
             return
 
+        # Wstępna lista z Finviz (nigdy nie przerywa pipeline'u — przy błędzie zostaje
+        # poprzedni FINVIZ_holdings.json, patrz finviz.py).
+        try:
+            import finviz
+            finviz.refresh_holdings()
+        except Exception as e:
+            print(f"⚠️  Krok Finviz pominięty: {e}")
         load_index_constituents(con)
         tickers = get_unique_tickers(con)
         if not tickers:
@@ -842,6 +931,14 @@ def update_duckdb(lookback_months=28, min_coverage=0.8, indices_only=False):
                 raise SystemExit(1)
 
         update_index_prices(con, lookback_months)
+
+        finviz_tickers = [r[0] for r in con.execute(
+            f"SELECT Ticker FROM index_constituents WHERE Index_Name = '{FINVIZ_INDEX_NAME}'").fetchall()]
+        if finviz_tickers:
+            try:
+                update_eps_history(con, finviz_tickers)
+            except Exception as e:
+                print(f"⚠️  Krok EPS pominięty: {e}")
     finally:
         con.close()
 

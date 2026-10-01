@@ -1,0 +1,5 @@
+{
+  "_instructions": "Wstepna filtracja spolek dla zakladek RS Rating i Qullamaggie (patrz finviz.py). 'filters' = kody filtrow darmowego screenera Finviz rozdzielone przecinkami: cap_midover = kapitalizacja >= 2 mld USD, ta_sma200_pa = cena powyzej SMA200, fa_eps5years_pos = dodatni wzrost EPS z ostatnich 5 lat, fa_epsyoy_pos = dodatni wzrost EPS w tym roku (inne: fa_epsqoq_pos = kwartal do kwartalu, ta_sma50_pa = cena nad SMA50). Nieznany kod Finviz po cichu ignoruje, wiec po zmianie sprawdz liczbe spolek. 'max_tickers' = limit listy.",
+  "filters": "cap_midover,ta_sma200_pa,fa_eps5years_pos,fa_epsyoy_pos",
+  "max_tickers": 1500
+}

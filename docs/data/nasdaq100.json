@@ -11,13 +11,19 @@
       "ticker": "MU",
       "sector": "Information Technology",
       "price": 1082.28,
-      "return_52w_pct": null,
+      "return_52w_pct": 588.17,
       "momentum_pct": 727.75,
       "momentum_window": "12M",
       "volatility_pct": 77.83,
       "z_score": 2.426,
       "momentum_score": 3.426,
       "weight_pct": 9.0,
+      "rs_score": 2.0546,
+      "adr_pct": 3.81,
+      "dollar_volume_avg": 25087911541.0,
+      "gain_from_low_1m_pct": 19.91,
+      "gain_from_low_3m_pct": 46.67,
+      "gain_from_low_6m_pct": 247.45,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -2065,13 +2071,19 @@
       "ticker": "GOOG",
       "sector": "Communication",
       "price": 341.08,
-      "return_52w_pct": null,
+      "return_52w_pct": 37.99,
       "momentum_pct": 64.41,
       "momentum_window": "12M",
       "volatility_pct": 31.09,
       "z_score": 0.312,
       "momentum_score": 1.312,
       "weight_pct": 9.0,
+      "rs_score": 0.1263,
+      "adr_pct": 2.13,
+      "dollar_volume_avg": 5949103433.0,
+      "gain_from_low_1m_pct": 4.74,
+      "gain_from_low_3m_pct": 8.32,
+      "gain_from_low_6m_pct": 25.61,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -4110,13 +4122,19 @@
       "ticker": "AAPL",
       "sector": "Information Technology",
       "price": 341.07,
-      "return_52w_pct": null,
+      "return_52w_pct": 33.51,
       "momentum_pct": 55.7,
       "momentum_window": "12M",
       "volatility_pct": 24.87,
       "z_score": 0.361,
       "momentum_score": 1.361,
       "weight_pct": 9.0,
+      "rs_score": 0.282,
+      "adr_pct": 2.22,
+      "dollar_volume_avg": 14198703191.0,
+      "gain_from_low_1m_pct": 10.45,
+      "gain_from_low_3m_pct": 24.38,
+      "gain_from_low_6m_pct": 38.92,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -6167,13 +6185,19 @@
       "ticker": "INTC",
       "sector": "Information Technology",
       "price": 123.0,
-      "return_52w_pct": null,
+      "return_52w_pct": 246.48,
       "momentum_pct": 345.99,
       "momentum_window": "12M",
       "volatility_pct": 77.87,
       "z_score": 1.001,
       "momentum_score": 2.001,
       "weight_pct": 9.0,
+      "rs_score": 1.265,
+      "adr_pct": 4.62,
+      "dollar_volume_avg": 11460731190.0,
+      "gain_from_low_1m_pct": 43.64,
+      "gain_from_low_3m_pct": 50.39,
+      "gain_from_low_6m_pct": 202.73,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -8221,13 +8245,19 @@
       "ticker": "GOOGL",
       "sector": "Communication",
       "price": 343.92,
-      "return_52w_pct": null,
+      "return_52w_pct": 39.5,
       "momentum_pct": 65.51,
       "momentum_window": "12M",
       "volatility_pct": 31.48,
       "z_score": 0.315,
       "momentum_score": 1.315,
       "weight_pct": 9.0,
+      "rs_score": 0.1347,
+      "adr_pct": 2.16,
+      "dollar_volume_avg": 9238887886.0,
+      "gain_from_low_1m_pct": 4.94,
+      "gain_from_low_3m_pct": 9.22,
+      "gain_from_low_6m_pct": 26.39,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -10266,13 +10296,19 @@
       "ticker": "AMD",
       "sector": "Information Technology",
       "price": 630.63,
-      "return_52w_pct": null,
+      "return_52w_pct": 295.48,
       "momentum_pct": 213.54,
       "momentum_window": "12M",
       "volatility_pct": 69.58,
       "z_score": 0.602,
       "momentum_score": 1.602,
       "weight_pct": 9.0,
+      "rs_score": 1.4237,
+      "adr_pct": 3.68,
+      "dollar_volume_avg": 11915624197.0,
+      "gain_from_low_1m_pct": 43.16,
+      "gain_from_low_3m_pct": 48.72,
+      "gain_from_low_6m_pct": 226.97,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -12323,13 +12359,19 @@
       "ticker": "SNDK",
       "sector": "Information Technology",
       "price": 1777.8,
-      "return_52w_pct": null,
+      "return_52w_pct": 1730.52,
       "momentum_pct": 3281.73,
       "momentum_window": "12M",
       "volatility_pct": 110.67,
       "z_score": 8.323,
       "momentum_score": 4.0,
       "weight_pct": 8.653,
+      "rs_score": 4.9119,
+      "adr_pct": 5.81,
+      "dollar_volume_avg": 18099883371.0,
+      "gain_from_low_1m_pct": 23.84,
+      "gain_from_low_3m_pct": 78.1,
+      "gain_from_low_6m_pct": 218.27,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -14377,13 +14419,19 @@
       "ticker": "LRCX",
       "sector": "Information Technology",
       "price": 315.21,
-      "return_52w_pct": null,
+      "return_52w_pct": 145.62,
       "momentum_pct": 214.78,
       "momentum_window": "12M",
       "volatility_pct": 59.69,
       "z_score": 0.756,
       "momentum_score": 1.756,
       "weight_pct": 7.317,
+      "rs_score": 0.4306,
+      "adr_pct": 3.86,
+      "dollar_volume_avg": 2753438452.0,
+      "gain_from_low_1m_pct": 18.78,
+      "gain_from_low_3m_pct": 25.83,
+      "gain_from_low_6m_pct": 58.72,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -16417,13 +16465,19 @@
       "ticker": "AMAT",
       "sector": "Information Technology",
       "price": 485.0,
-      "return_52w_pct": null,
+      "return_52w_pct": 137.84,
       "momentum_pct": 188.79,
       "momentum_window": "12M",
       "volatility_pct": 56.84,
       "z_score": 0.675,
       "momentum_score": 1.675,
       "weight_pct": 6.762,
+      "rs_score": 0.4007,
+      "adr_pct": 3.22,
+      "dollar_volume_avg": 2859655663.0,
+      "gain_from_low_1m_pct": 17.86,
+      "gain_from_low_3m_pct": 17.86,
+      "gain_from_low_6m_pct": 51.24,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -18471,13 +18525,19 @@
       "ticker": "WDC",
       "sector": "Information Technology",
       "price": 456.81,
-      "return_52w_pct": null,
+      "return_52w_pct": 327.4,
       "momentum_pct": 655.3,
       "momentum_window": "12M",
       "volatility_pct": 75.69,
       "z_score": 2.225,
       "momentum_score": 3.225,
       "weight_pct": 5.306,
+      "rs_score": 0.9427,
+      "adr_pct": 5.08,
+      "dollar_volume_avg": 2929358683.0,
+      "gain_from_low_1m_pct": 12.21,
+      "gain_from_low_3m_pct": 12.21,
+      "gain_from_low_6m_pct": 83.41,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -20516,13 +20576,19 @@
       "ticker": "KLAC",
       "sector": "Information Technology",
       "price": 187.92,
-      "return_52w_pct": null,
+      "return_52w_pct": 76.57,
       "momentum_pct": 133.37,
       "momentum_window": "12M",
       "volatility_pct": 58.05,
       "z_score": 0.378,
       "momentum_score": 1.378,
       "weight_pct": 3.496,
+      "rs_score": 0.1814,
+      "adr_pct": 3.76,
+      "dollar_volume_avg": 1723018295.0,
+      "gain_from_low_1m_pct": 13.28,
+      "gain_from_low_3m_pct": 13.28,
+      "gain_from_low_6m_pct": 36.73,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -22565,13 +22631,19 @@
       "ticker": "MRVL",
       "sector": "Information Technology",
       "price": 261.94,
-      "return_52w_pct": null,
+      "return_52w_pct": 214.95,
       "momentum_pct": 161.73,
       "momentum_window": "12M",
       "volatility_pct": 76.81,
       "z_score": 0.322,
       "momentum_score": 1.322,
       "weight_pct": 2.945,
+      "rs_score": 1.1403,
+      "adr_pct": 4.51,
+      "dollar_volume_avg": 4320961509.0,
+      "gain_from_low_1m_pct": 30.57,
+      "gain_from_low_3m_pct": 60.8,
+      "gain_from_low_6m_pct": 202.44,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -24619,13 +24691,19 @@
       "ticker": "ASML",
       "sector": "Information Technology",
       "price": 1743.94,
-      "return_52w_pct": null,
+      "return_52w_pct": 83.28,
       "momentum_pct": 147.04,
       "momentum_window": "12M",
       "volatility_pct": 45.2,
       "z_score": 0.655,
       "momentum_score": 1.655,
       "weight_pct": 2.801,
+      "rs_score": 0.323,
+      "adr_pct": 2.36,
+      "dollar_volume_avg": 2191536968.0,
+      "gain_from_low_1m_pct": 10.88,
+      "gain_from_low_3m_pct": 13.94,
+      "gain_from_low_6m_pct": 39.73,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -26673,13 +26751,19 @@
       "ticker": "LITE",
       "sector": "Information Technology",
       "price": 941.65,
-      "return_52w_pct": null,
+      "return_52w_pct": 485.79,
       "momentum_pct": 629.99,
       "momentum_window": "12M",
       "volatility_pct": 91.09,
       "z_score": 1.719,
       "momentum_score": 2.719,
       "weight_pct": 1.981,
+      "rs_score": 1.3266,
+      "adr_pct": 5.98,
+      "dollar_volume_avg": 4074006541.0,
+      "gain_from_low_1m_pct": 14.99,
+      "gain_from_low_3m_pct": 58.3,
+      "gain_from_low_6m_pct": 58.3,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -28713,13 +28797,19 @@
       "ticker": "CSX",
       "sector": "Industrials",
       "price": 46.78,
-      "return_52w_pct": null,
+      "return_52w_pct": 37.55,
       "momentum_pct": 48.85,
       "momentum_window": "12M",
       "volatility_pct": 22.89,
       "z_score": 0.33,
       "momentum_score": 1.33,
       "weight_pct": 1.346,
+      "rs_score": 0.1603,
+      "adr_pct": 2.08,
+      "dollar_volume_avg": 529841342.0,
+      "gain_from_low_1m_pct": 2.16,
+      "gain_from_low_3m_pct": 2.16,
+      "gain_from_low_6m_pct": 19.37,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -30775,13 +30865,19 @@
       "ticker": "MNST",
       "sector": "Consumer Staples",
       "price": 43.11,
-      "return_52w_pct": null,
+      "return_52w_pct": 31.96,
       "momentum_pct": 54.12,
       "momentum_window": "12M",
       "volatility_pct": 26.55,
       "z_score": 0.303,
       "momentum_score": 1.303,
       "weight_pct": 1.316,
+      "rs_score": 0.0821,
+      "adr_pct": 2.02,
+      "dollar_volume_avg": 437268144.0,
+      "gain_from_low_1m_pct": 2.37,
+      "gain_from_low_3m_pct": 2.37,
+      "gain_from_low_6m_pct": 21.68,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -32840,13 +32936,19 @@
       "ticker": "ROST",
       "sector": "Consumer Discretionary",
       "price": 236.12,
-      "return_52w_pct": null,
+      "return_52w_pct": 55.83,
       "momentum_pct": 72.7,
       "momentum_window": "12M",
       "volatility_pct": 25.98,
       "z_score": 0.523,
       "momentum_score": 1.523,
       "weight_pct": 1.254,
+      "rs_score": 0.2292,
+      "adr_pct": 2.01,
+      "dollar_volume_avg": 459964777.0,
+      "gain_from_low_1m_pct": 6.29,
+      "gain_from_low_3m_pct": 14.67,
+      "gain_from_low_6m_pct": 14.67,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -34902,13 +35004,19 @@
       "ticker": "TER",
       "sector": "Information Technology",
       "price": 398.38,
-      "return_52w_pct": null,
+      "return_52w_pct": 194.42,
       "momentum_pct": 288.15,
       "momentum_window": "12M",
       "volatility_pct": 74.82,
       "z_score": 0.829,
       "momentum_score": 1.829,
       "weight_pct": 1.108,
+      "rs_score": 0.5742,
+      "adr_pct": 4.23,
+      "dollar_volume_avg": 907639882.0,
+      "gain_from_low_1m_pct": 22.2,
+      "gain_from_low_3m_pct": 34.22,
+      "gain_from_low_6m_pct": 45.89,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -36972,13 +37080,19 @@
       "ticker": "WBD",
       "sector": "Communication",
       "price": 30.86,
-      "return_52w_pct": null,
+      "return_52w_pct": 58.18,
       "momentum_pct": 91.03,
       "momentum_window": "12M",
       "volatility_pct": 45.87,
       "z_score": 0.287,
       "momentum_score": 1.287,
       "weight_pct": 0.988,
+      "rs_score": 0.2118,
+      "adr_pct": 1.11,
+      "dollar_volume_avg": 1261400663.0,
+      "gain_from_low_1m_pct": 11.25,
+      "gain_from_low_3m_pct": 22.22,
+      "gain_from_low_6m_pct": 22.22,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -39012,13 +39126,19 @@
       "ticker": "NBIS",
       "sector": "Information Technology",
       "price": 237.33,
-      "return_52w_pct": null,
+      "return_52w_pct": 120.36,
       "momentum_pct": 265.52,
       "momentum_window": "12M",
       "volatility_pct": 109.71,
       "z_score": 0.413,
       "momentum_score": 1.413,
       "weight_pct": 0.727,
+      "rs_score": 0.7439,
+      "adr_pct": 6.32,
+      "dollar_volume_avg": 3430680986.0,
+      "gain_from_low_1m_pct": 21.83,
+      "gain_from_low_3m_pct": 62.78,
+      "gain_from_low_6m_pct": 164.72,
       "weekly_chart": {
         "dates": [
           "2025-08-01",
@@ -41074,6 +41194,12 @@
       "volatility_pct": 110.67,
       "z_score": 8.323,
       "momentum_score": 4.0,
+      "rs_score": 4.9119,
+      "adr_pct": 5.81,
+      "dollar_volume_avg": 18099883371.0,
+      "gain_from_low_1m_pct": 23.84,
+      "gain_from_low_3m_pct": 78.1,
+      "gain_from_low_6m_pct": 218.27,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -43128,6 +43254,12 @@
       "volatility_pct": 77.83,
       "z_score": 2.426,
       "momentum_score": 3.426,
+      "rs_score": 2.0546,
+      "adr_pct": 3.81,
+      "dollar_volume_avg": 25087911541.0,
+      "gain_from_low_1m_pct": 19.91,
+      "gain_from_low_3m_pct": 46.67,
+      "gain_from_low_6m_pct": 247.45,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -45182,6 +45314,12 @@
       "volatility_pct": 75.69,
       "z_score": 2.225,
       "momentum_score": 3.225,
+      "rs_score": 0.9427,
+      "adr_pct": 5.08,
+      "dollar_volume_avg": 2929358683.0,
+      "gain_from_low_1m_pct": 12.21,
+      "gain_from_low_3m_pct": 12.21,
+      "gain_from_low_6m_pct": 83.41,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -47227,6 +47365,12 @@
       "volatility_pct": 91.09,
       "z_score": 1.719,
       "momentum_score": 2.719,
+      "rs_score": 1.3266,
+      "adr_pct": 5.98,
+      "dollar_volume_avg": 4074006541.0,
+      "gain_from_low_1m_pct": 14.99,
+      "gain_from_low_3m_pct": 58.3,
+      "gain_from_low_6m_pct": 58.3,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -49267,6 +49411,12 @@
       "volatility_pct": 77.87,
       "z_score": 1.001,
       "momentum_score": 2.001,
+      "rs_score": 1.265,
+      "adr_pct": 4.62,
+      "dollar_volume_avg": 11460731190.0,
+      "gain_from_low_1m_pct": 43.64,
+      "gain_from_low_3m_pct": 50.39,
+      "gain_from_low_6m_pct": 202.73,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -51321,6 +51471,12 @@
       "volatility_pct": 74.82,
       "z_score": 0.829,
       "momentum_score": 1.829,
+      "rs_score": 0.5742,
+      "adr_pct": 4.23,
+      "dollar_volume_avg": 907639882.0,
+      "gain_from_low_1m_pct": 22.2,
+      "gain_from_low_3m_pct": 34.22,
+      "gain_from_low_6m_pct": 45.89,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -53391,6 +53547,12 @@
       "volatility_pct": 59.69,
       "z_score": 0.756,
       "momentum_score": 1.756,
+      "rs_score": 0.4306,
+      "adr_pct": 3.86,
+      "dollar_volume_avg": 2753438452.0,
+      "gain_from_low_1m_pct": 18.78,
+      "gain_from_low_3m_pct": 25.83,
+      "gain_from_low_6m_pct": 58.72,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -55431,6 +55593,12 @@
       "volatility_pct": 56.84,
       "z_score": 0.675,
       "momentum_score": 1.675,
+      "rs_score": 0.4007,
+      "adr_pct": 3.22,
+      "dollar_volume_avg": 2859655663.0,
+      "gain_from_low_1m_pct": 17.86,
+      "gain_from_low_3m_pct": 17.86,
+      "gain_from_low_6m_pct": 51.24,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -57485,6 +57653,12 @@
       "volatility_pct": 45.2,
       "z_score": 0.655,
       "momentum_score": 1.655,
+      "rs_score": 0.323,
+      "adr_pct": 2.36,
+      "dollar_volume_avg": 2191536968.0,
+      "gain_from_low_1m_pct": 10.88,
+      "gain_from_low_3m_pct": 13.94,
+      "gain_from_low_6m_pct": 39.73,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -59539,6 +59713,12 @@
       "volatility_pct": 69.58,
       "z_score": 0.602,
       "momentum_score": 1.602,
+      "rs_score": 1.4237,
+      "adr_pct": 3.68,
+      "dollar_volume_avg": 11915624197.0,
+      "gain_from_low_1m_pct": 43.16,
+      "gain_from_low_3m_pct": 48.72,
+      "gain_from_low_6m_pct": 226.97,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -61596,6 +61776,12 @@
       "volatility_pct": 25.98,
       "z_score": 0.523,
       "momentum_score": 1.523,
+      "rs_score": 0.2292,
+      "adr_pct": 2.01,
+      "dollar_volume_avg": 459964777.0,
+      "gain_from_low_1m_pct": 6.29,
+      "gain_from_low_3m_pct": 14.67,
+      "gain_from_low_6m_pct": 14.67,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -63658,6 +63844,12 @@
       "volatility_pct": 109.71,
       "z_score": 0.413,
       "momentum_score": 1.413,
+      "rs_score": 0.7439,
+      "adr_pct": 6.32,
+      "dollar_volume_avg": 3430680986.0,
+      "gain_from_low_1m_pct": 21.83,
+      "gain_from_low_3m_pct": 62.78,
+      "gain_from_low_6m_pct": 164.72,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -65712,6 +65904,12 @@
       "volatility_pct": 58.05,
       "z_score": 0.378,
       "momentum_score": 1.378,
+      "rs_score": 0.1814,
+      "adr_pct": 3.76,
+      "dollar_volume_avg": 1723018295.0,
+      "gain_from_low_1m_pct": 13.28,
+      "gain_from_low_3m_pct": 13.28,
+      "gain_from_low_6m_pct": 36.73,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -67761,6 +67959,12 @@
       "volatility_pct": 24.87,
       "z_score": 0.361,
       "momentum_score": 1.361,
+      "rs_score": 0.282,
+      "adr_pct": 2.22,
+      "dollar_volume_avg": 14198703191.0,
+      "gain_from_low_1m_pct": 10.45,
+      "gain_from_low_3m_pct": 24.38,
+      "gain_from_low_6m_pct": 38.92,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -69818,6 +70022,12 @@
       "volatility_pct": 22.89,
       "z_score": 0.33,
       "momentum_score": 1.33,
+      "rs_score": 0.1603,
+      "adr_pct": 2.08,
+      "dollar_volume_avg": 529841342.0,
+      "gain_from_low_1m_pct": 2.16,
+      "gain_from_low_3m_pct": 2.16,
+      "gain_from_low_6m_pct": 19.37,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -71880,6 +72090,12 @@
       "volatility_pct": 76.81,
       "z_score": 0.322,
       "momentum_score": 1.322,
+      "rs_score": 1.1403,
+      "adr_pct": 4.51,
+      "dollar_volume_avg": 4320961509.0,
+      "gain_from_low_1m_pct": 30.57,
+      "gain_from_low_3m_pct": 60.8,
+      "gain_from_low_6m_pct": 202.44,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -73934,6 +74150,12 @@
       "volatility_pct": 31.48,
       "z_score": 0.315,
       "momentum_score": 1.315,
+      "rs_score": 0.1347,
+      "adr_pct": 2.16,
+      "dollar_volume_avg": 9238887886.0,
+      "gain_from_low_1m_pct": 4.94,
+      "gain_from_low_3m_pct": 9.22,
+      "gain_from_low_6m_pct": 26.39,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -75979,6 +76201,12 @@
       "volatility_pct": 31.09,
       "z_score": 0.312,
       "momentum_score": 1.312,
+      "rs_score": 0.1263,
+      "adr_pct": 2.13,
+      "dollar_volume_avg": 5949103433.0,
+      "gain_from_low_1m_pct": 4.74,
+      "gain_from_low_3m_pct": 8.32,
+      "gain_from_low_6m_pct": 25.61,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -78024,6 +78252,12 @@
       "volatility_pct": 26.55,
       "z_score": 0.303,
       "momentum_score": 1.303,
+      "rs_score": 0.0821,
+      "adr_pct": 2.02,
+      "dollar_volume_avg": 437268144.0,
+      "gain_from_low_1m_pct": 2.37,
+      "gain_from_low_3m_pct": 2.37,
+      "gain_from_low_6m_pct": 21.68,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -80089,6 +80323,12 @@
       "volatility_pct": 32.74,
       "z_score": 0.298,
       "momentum_score": 1.298,
+      "rs_score": 0.2105,
+      "adr_pct": 2.17,
+      "dollar_volume_avg": 2003255053.0,
+      "gain_from_low_1m_pct": 2.1,
+      "gain_from_low_3m_pct": 2.1,
+      "gain_from_low_6m_pct": 39.82,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -82154,6 +82394,12 @@
       "volatility_pct": 45.87,
       "z_score": 0.287,
       "momentum_score": 1.287,
+      "rs_score": 0.2118,
+      "adr_pct": 1.11,
+      "dollar_volume_avg": 1261400663.0,
+      "gain_from_low_1m_pct": 11.25,
+      "gain_from_low_3m_pct": 22.22,
+      "gain_from_low_6m_pct": 22.22,
       "in_selection": true,
       "weekly_chart": {
         "dates": [
@@ -84194,6 +84440,12 @@
       "volatility_pct": 35.11,
       "z_score": 0.233,
       "momentum_score": 1.233,
+      "rs_score": 0.2228,
+      "adr_pct": 2.54,
+      "dollar_volume_avg": 1246825133.0,
+      "gain_from_low_1m_pct": 13.1,
+      "gain_from_low_3m_pct": 13.1,
+      "gain_from_low_6m_pct": 30.96,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -86243,6 +86495,12 @@
       "volatility_pct": 53.22,
       "z_score": 0.183,
       "momentum_score": 1.183,
+      "rs_score": 0.2198,
+      "adr_pct": 3.65,
+      "dollar_volume_avg": 933006749.0,
+      "gain_from_low_1m_pct": 20.6,
+      "gain_from_low_3m_pct": 20.6,
+      "gain_from_low_6m_pct": 37.29,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -88300,6 +88558,12 @@
       "volatility_pct": 41.7,
       "z_score": 0.123,
       "momentum_score": 1.123,
+      "rs_score": 0.7713,
+      "adr_pct": 4.79,
+      "dollar_volume_avg": 2581836148.0,
+      "gain_from_low_1m_pct": 16.6,
+      "gain_from_low_3m_pct": 29.22,
+      "gain_from_low_6m_pct": 161.14,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -90354,6 +90618,12 @@
       "volatility_pct": 99.17,
       "z_score": 0.116,
       "momentum_score": 1.116,
+      "rs_score": 0.7702,
+      "adr_pct": 6.43,
+      "dollar_volume_avg": 1254048132.0,
+      "gain_from_low_1m_pct": 44.91,
+      "gain_from_low_3m_pct": 49.06,
+      "gain_from_low_6m_pct": 272.48,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -92403,6 +92673,12 @@
       "volatility_pct": 31.16,
       "z_score": 0.098,
       "momentum_score": 1.098,
+      "rs_score": 0.1054,
+      "adr_pct": 2.6,
+      "dollar_volume_avg": 672569182.0,
+      "gain_from_low_1m_pct": 1.72,
+      "gain_from_low_3m_pct": 9.74,
+      "gain_from_low_6m_pct": 9.74,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -94465,6 +94741,12 @@
       "volatility_pct": 26.7,
       "z_score": 0.082,
       "momentum_score": 1.082,
+      "rs_score": 0.0769,
+      "adr_pct": 2.15,
+      "dollar_volume_avg": 555365035.0,
+      "gain_from_low_1m_pct": 9.7,
+      "gain_from_low_3m_pct": 9.7,
+      "gain_from_low_6m_pct": 11.21,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -96527,6 +96809,12 @@
       "volatility_pct": 19.03,
       "z_score": 0.068,
       "momentum_score": 1.068,
+      "rs_score": -0.0478,
+      "adr_pct": 1.49,
+      "dollar_volume_avg": 492446208.0,
+      "gain_from_low_1m_pct": 1.41,
+      "gain_from_low_3m_pct": 1.41,
+      "gain_from_low_6m_pct": 1.41,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -98584,6 +98872,12 @@
       "volatility_pct": 42.09,
       "z_score": 0.063,
       "momentum_score": 1.063,
+      "rs_score": 0.2547,
+      "adr_pct": 2.76,
+      "dollar_volume_avg": 1607657404.0,
+      "gain_from_low_1m_pct": 12.07,
+      "gain_from_low_3m_pct": 12.07,
+      "gain_from_low_6m_pct": 50.35,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -100646,6 +100940,12 @@
       "volatility_pct": 47.76,
       "z_score": 0.055,
       "momentum_score": 1.055,
+      "rs_score": 0.9589,
+      "adr_pct": 5.3,
+      "dollar_volume_avg": 2820875265.0,
+      "gain_from_low_1m_pct": 39.11,
+      "gain_from_low_3m_pct": 49.72,
+      "gain_from_low_6m_pct": 178.75,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -102695,6 +102995,12 @@
       "volatility_pct": 27.37,
       "z_score": 0.031,
       "momentum_score": 1.031,
+      "rs_score": -0.0216,
+      "adr_pct": 2.29,
+      "dollar_volume_avg": 411506223.0,
+      "gain_from_low_1m_pct": 1.03,
+      "gain_from_low_3m_pct": 1.03,
+      "gain_from_low_6m_pct": 4.25,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -104749,6 +105055,12 @@
       "volatility_pct": 64.96,
       "z_score": -0.0,
       "momentum_score": 1.0,
+      "rs_score": 0.6945,
+      "adr_pct": 4.79,
+      "dollar_volume_avg": 863898681.0,
+      "gain_from_low_1m_pct": 31.93,
+      "gain_from_low_3m_pct": 31.93,
+      "gain_from_low_6m_pct": 166.02,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -106798,6 +107110,12 @@
       "volatility_pct": 39.58,
       "z_score": -0.0,
       "momentum_score": 1.0,
+      "rs_score": -0.0342,
+      "adr_pct": 3.13,
+      "dollar_volume_avg": 350221828.0,
+      "gain_from_low_1m_pct": 2.15,
+      "gain_from_low_3m_pct": 2.15,
+      "gain_from_low_6m_pct": 2.15,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -108843,6 +109161,12 @@
       "volatility_pct": 45.56,
       "z_score": -0.0,
       "momentum_score": 1.0,
+      "rs_score": 0.7413,
+      "adr_pct": 4.03,
+      "dollar_volume_avg": 749846037.0,
+      "gain_from_low_1m_pct": 16.03,
+      "gain_from_low_3m_pct": 20.65,
+      "gain_from_low_6m_pct": 128.21,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -110892,6 +111216,12 @@
       "volatility_pct": 27.17,
       "z_score": -0.047,
       "momentum_score": 0.955,
+      "rs_score": 0.2564,
+      "adr_pct": 2.28,
+      "dollar_volume_avg": 1251177580.0,
+      "gain_from_low_1m_pct": 10.72,
+      "gain_from_low_3m_pct": 17.14,
+      "gain_from_low_6m_pct": 29.36,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -112954,6 +113284,12 @@
       "volatility_pct": 73.76,
       "z_score": -0.056,
       "momentum_score": 0.947,
+      "rs_score": 0.753,
+      "adr_pct": 5.01,
+      "dollar_volume_avg": 1518107952.0,
+      "gain_from_low_1m_pct": 37.64,
+      "gain_from_low_3m_pct": 41.45,
+      "gain_from_low_6m_pct": 128.18,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -115011,6 +115347,12 @@
       "volatility_pct": 31.96,
       "z_score": -0.068,
       "momentum_score": 0.936,
+      "rs_score": 0.0752,
+      "adr_pct": 3.02,
+      "dollar_volume_avg": 513555500.0,
+      "gain_from_low_1m_pct": 4.31,
+      "gain_from_low_3m_pct": 10.64,
+      "gain_from_low_6m_pct": 10.64,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -117065,6 +117407,12 @@
       "volatility_pct": 24.43,
       "z_score": -0.07,
       "momentum_score": 0.935,
+      "rs_score": -0.1374,
+      "adr_pct": 1.17,
+      "dollar_volume_avg": 80917840.0,
+      "gain_from_low_1m_pct": 3.56,
+      "gain_from_low_3m_pct": 3.56,
+      "gain_from_low_6m_pct": 3.56,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -119110,6 +119458,12 @@
       "volatility_pct": 47.4,
       "z_score": -0.096,
       "momentum_score": 0.913,
+      "rs_score": 0.0062,
+      "adr_pct": 2.32,
+      "dollar_volume_avg": 10000969818.0,
+      "gain_from_low_1m_pct": 5.06,
+      "gain_from_low_3m_pct": 5.06,
+      "gain_from_low_6m_pct": 21.68,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -121150,6 +121504,12 @@
       "volatility_pct": 19.43,
       "z_score": -0.104,
       "momentum_score": 0.906,
+      "rs_score": -0.1143,
+      "adr_pct": 1.67,
+      "dollar_volume_avg": 452206795.0,
+      "gain_from_low_1m_pct": 1.57,
+      "gain_from_low_3m_pct": 1.57,
+      "gain_from_low_6m_pct": 1.57,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -123204,6 +123564,12 @@
       "volatility_pct": 35.91,
       "z_score": -0.134,
       "momentum_score": 0.882,
+      "rs_score": 0.2031,
+      "adr_pct": 2.18,
+      "dollar_volume_avg": 24859590716.0,
+      "gain_from_low_1m_pct": 7.73,
+      "gain_from_low_3m_pct": 18.58,
+      "gain_from_low_6m_pct": 37.01,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -125266,6 +125632,12 @@
       "volatility_pct": 32.96,
       "z_score": -0.144,
       "momentum_score": 0.874,
+      "rs_score": 0.1992,
+      "adr_pct": 2.37,
+      "dollar_volume_avg": 566576041.0,
+      "gain_from_low_1m_pct": 2.4,
+      "gain_from_low_3m_pct": 26.64,
+      "gain_from_low_6m_pct": 33.22,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -127328,6 +127700,12 @@
       "volatility_pct": 24.62,
       "z_score": -0.144,
       "momentum_score": 0.874,
+      "rs_score": -0.0486,
+      "adr_pct": 1.75,
+      "dollar_volume_avg": 2453730890.0,
+      "gain_from_low_1m_pct": 5.58,
+      "gain_from_low_3m_pct": 5.71,
+      "gain_from_low_6m_pct": 5.71,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -129377,6 +129755,12 @@
       "volatility_pct": 17.99,
       "z_score": -0.155,
       "momentum_score": 0.866,
+      "rs_score": -0.03,
+      "adr_pct": 1.49,
+      "dollar_volume_avg": 940784310.0,
+      "gain_from_low_1m_pct": 3.46,
+      "gain_from_low_3m_pct": 3.46,
+      "gain_from_low_6m_pct": 3.46,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -131439,6 +131823,12 @@
       "volatility_pct": 48.43,
       "z_score": -0.166,
       "momentum_score": 0.858,
+      "rs_score": -0.0181,
+      "adr_pct": 3.03,
+      "dollar_volume_avg": 832456971.0,
+      "gain_from_low_1m_pct": 9.89,
+      "gain_from_low_3m_pct": 9.89,
+      "gain_from_low_6m_pct": 28.91,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -133501,6 +133891,12 @@
       "volatility_pct": 19.18,
       "z_score": -0.168,
       "momentum_score": 0.856,
+      "rs_score": -0.1172,
+      "adr_pct": 1.59,
+      "dollar_volume_avg": 335392735.0,
+      "gain_from_low_1m_pct": 1.54,
+      "gain_from_low_3m_pct": 1.54,
+      "gain_from_low_6m_pct": 1.54,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -135558,6 +135954,12 @@
       "volatility_pct": 27.16,
       "z_score": -0.169,
       "momentum_score": 0.856,
+      "rs_score": 0.2153,
+      "adr_pct": 2.25,
+      "dollar_volume_avg": 893928164.0,
+      "gain_from_low_1m_pct": 5.59,
+      "gain_from_low_3m_pct": 21.53,
+      "gain_from_low_6m_pct": 24.33,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -137628,6 +138030,12 @@
       "volatility_pct": 25.86,
       "z_score": -0.181,
       "momentum_score": 0.847,
+      "rs_score": -0.0575,
+      "adr_pct": 2.01,
+      "dollar_volume_avg": 676251127.0,
+      "gain_from_low_1m_pct": 7.9,
+      "gain_from_low_3m_pct": 7.9,
+      "gain_from_low_6m_pct": 7.9,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -139682,6 +140090,12 @@
       "volatility_pct": 95.04,
       "z_score": -0.183,
       "momentum_score": 0.845,
+      "rs_score": 0.0809,
+      "adr_pct": 4.98,
+      "dollar_volume_avg": 1338898587.0,
+      "gain_from_low_1m_pct": 22.21,
+      "gain_from_low_3m_pct": 27.06,
+      "gain_from_low_6m_pct": 31.74,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -141739,6 +142153,12 @@
       "volatility_pct": 28.63,
       "z_score": -0.195,
       "momentum_score": 0.837,
+      "rs_score": 0.0243,
+      "adr_pct": 2.12,
+      "dollar_volume_avg": 676999767.0,
+      "gain_from_low_1m_pct": 2.26,
+      "gain_from_low_3m_pct": 2.26,
+      "gain_from_low_6m_pct": 10.82,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -143793,6 +144213,12 @@
       "volatility_pct": 47.14,
       "z_score": -0.204,
       "momentum_score": 0.831,
+      "rs_score": 0.061,
+      "adr_pct": 3.08,
+      "dollar_volume_avg": 614707661.0,
+      "gain_from_low_1m_pct": 14.46,
+      "gain_from_low_3m_pct": 14.46,
+      "gain_from_low_6m_pct": 32.68,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -145842,6 +146268,12 @@
       "volatility_pct": 29.01,
       "z_score": -0.225,
       "momentum_score": 0.816,
+      "rs_score": -0.094,
+      "adr_pct": 2.48,
+      "dollar_volume_avg": 355426.0,
+      "gain_from_low_1m_pct": 0.19,
+      "gain_from_low_3m_pct": 0.19,
+      "gain_from_low_6m_pct": 7.39,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -147887,6 +148319,12 @@
       "volatility_pct": 23.37,
       "z_score": -0.227,
       "momentum_score": 0.815,
+      "rs_score": 0.0764,
+      "adr_pct": 1.77,
+      "dollar_volume_avg": 187558318.0,
+      "gain_from_low_1m_pct": 2.76,
+      "gain_from_low_3m_pct": 2.76,
+      "gain_from_low_6m_pct": 14.0,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -149941,6 +150379,12 @@
       "volatility_pct": 51.68,
       "z_score": -0.259,
       "momentum_score": 0.794,
+      "rs_score": 0.174,
+      "adr_pct": 4.82,
+      "dollar_volume_avg": 2716381900.0,
+      "gain_from_low_1m_pct": 26.32,
+      "gain_from_low_3m_pct": 41.35,
+      "gain_from_low_6m_pct": 65.56,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -151995,6 +152439,12 @@
       "volatility_pct": 73.24,
       "z_score": -0.259,
       "momentum_score": 0.794,
+      "rs_score": -0.4007,
+      "adr_pct": 4.79,
+      "dollar_volume_avg": 1529986442.0,
+      "gain_from_low_1m_pct": 3.55,
+      "gain_from_low_3m_pct": 4.45,
+      "gain_from_low_6m_pct": 4.45,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -154049,6 +154499,12 @@
       "volatility_pct": 31.06,
       "z_score": -0.261,
       "momentum_score": 0.793,
+      "rs_score": -0.1363,
+      "adr_pct": 3.33,
+      "dollar_volume_avg": 594177593.0,
+      "gain_from_low_1m_pct": 0.44,
+      "gain_from_low_3m_pct": 0.44,
+      "gain_from_low_6m_pct": 7.36,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -156098,6 +156554,12 @@
       "volatility_pct": 35.01,
       "z_score": -0.276,
       "momentum_score": 0.784,
+      "rs_score": 0.1698,
+      "adr_pct": 2.13,
+      "dollar_volume_avg": 550014384.0,
+      "gain_from_low_1m_pct": 5.03,
+      "gain_from_low_3m_pct": 13.16,
+      "gain_from_low_6m_pct": 27.63,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -158152,6 +158614,12 @@
       "volatility_pct": 31.55,
       "z_score": -0.287,
       "momentum_score": 0.777,
+      "rs_score": 0.1179,
+      "adr_pct": 1.84,
+      "dollar_volume_avg": 8776258695.0,
+      "gain_from_low_1m_pct": 2.2,
+      "gain_from_low_3m_pct": 10.41,
+      "gain_from_low_6m_pct": 25.37,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -160214,6 +160682,12 @@
       "volatility_pct": 19.79,
       "z_score": -0.29,
       "momentum_score": 0.775,
+      "rs_score": -0.0058,
+      "adr_pct": 1.49,
+      "dollar_volume_avg": 2158110126.0,
+      "gain_from_low_1m_pct": 4.49,
+      "gain_from_low_3m_pct": 4.49,
+      "gain_from_low_6m_pct": 4.49,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -162263,6 +162737,12 @@
       "volatility_pct": 30.4,
       "z_score": -0.291,
       "momentum_score": 0.775,
+      "rs_score": 0.1677,
+      "adr_pct": 3.11,
+      "dollar_volume_avg": 875816309.0,
+      "gain_from_low_1m_pct": 5.68,
+      "gain_from_low_3m_pct": 16.03,
+      "gain_from_low_6m_pct": 29.59,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -164317,6 +164797,12 @@
       "volatility_pct": 46.41,
       "z_score": -0.295,
       "momentum_score": 0.772,
+      "rs_score": -0.0881,
+      "adr_pct": 3.17,
+      "dollar_volume_avg": 14662238661.0,
+      "gain_from_low_1m_pct": 8.64,
+      "gain_from_low_3m_pct": 25.13,
+      "gain_from_low_6m_pct": 25.13,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -166366,6 +166852,12 @@
       "volatility_pct": 40.47,
       "z_score": -0.302,
       "momentum_score": 0.768,
+      "rs_score": -0.0224,
+      "adr_pct": 3.48,
+      "dollar_volume_avg": 805912288.0,
+      "gain_from_low_1m_pct": 19.43,
+      "gain_from_low_3m_pct": 19.43,
+      "gain_from_low_6m_pct": 23.82,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -168411,6 +168903,12 @@
       "volatility_pct": 25.46,
       "z_score": -0.307,
       "momentum_score": 0.765,
+      "rs_score": 0.1005,
+      "adr_pct": 1.99,
+      "dollar_volume_avg": 335991842.0,
+      "gain_from_low_1m_pct": 5.83,
+      "gain_from_low_3m_pct": 14.46,
+      "gain_from_low_6m_pct": 17.53,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -170473,6 +170971,12 @@
       "volatility_pct": 42.98,
       "z_score": -0.314,
       "momentum_score": 0.761,
+      "rs_score": -0.1302,
+      "adr_pct": 2.5,
+      "dollar_volume_avg": 269954087.0,
+      "gain_from_low_1m_pct": 3.73,
+      "gain_from_low_3m_pct": 3.73,
+      "gain_from_low_6m_pct": 3.73,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -172527,6 +173031,12 @@
       "volatility_pct": 57.53,
       "z_score": -0.333,
       "momentum_score": 0.75,
+      "rs_score": 0.1208,
+      "adr_pct": 4.65,
+      "dollar_volume_avg": 1469790157.0,
+      "gain_from_low_1m_pct": 14.69,
+      "gain_from_low_3m_pct": 28.09,
+      "gain_from_low_6m_pct": 51.33,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -174589,6 +175099,12 @@
       "volatility_pct": 47.02,
       "z_score": -0.389,
       "momentum_score": 0.72,
+      "rs_score": -0.1309,
+      "adr_pct": 3.53,
+      "dollar_volume_avg": 803444628.0,
+      "gain_from_low_1m_pct": 5.08,
+      "gain_from_low_3m_pct": 15.15,
+      "gain_from_low_6m_pct": 15.15,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -176651,6 +177167,12 @@
       "volatility_pct": 22.77,
       "z_score": -0.39,
       "momentum_score": 0.719,
+      "rs_score": 0.1039,
+      "adr_pct": 1.9,
+      "dollar_volume_avg": 417808567.0,
+      "gain_from_low_1m_pct": 4.62,
+      "gain_from_low_3m_pct": 19.12,
+      "gain_from_low_6m_pct": 24.04,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -178691,6 +179213,12 @@
       "volatility_pct": 29.53,
       "z_score": -0.396,
       "momentum_score": 0.717,
+      "rs_score": 0.1141,
+      "adr_pct": 2.22,
+      "dollar_volume_avg": 322658449.0,
+      "gain_from_low_1m_pct": 4.55,
+      "gain_from_low_3m_pct": 11.48,
+      "gain_from_low_6m_pct": 28.42,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -180761,6 +181289,12 @@
       "volatility_pct": 94.95,
       "z_score": -0.405,
       "momentum_score": 0.712,
+      "rs_score": -0.0775,
+      "adr_pct": 5.3,
+      "dollar_volume_avg": 2565543713.0,
+      "gain_from_low_1m_pct": 11.91,
+      "gain_from_low_3m_pct": 44.66,
+      "gain_from_low_6m_pct": 44.66,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -182815,6 +183349,12 @@
       "volatility_pct": 26.09,
       "z_score": -0.406,
       "momentum_score": 0.711,
+      "rs_score": 0.0006,
+      "adr_pct": 2.45,
+      "dollar_volume_avg": 578053242.0,
+      "gain_from_low_1m_pct": 0.64,
+      "gain_from_low_3m_pct": 0.64,
+      "gain_from_low_6m_pct": 10.06,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -184869,6 +185409,12 @@
       "volatility_pct": 25.04,
       "z_score": -0.411,
       "momentum_score": 0.709,
+      "rs_score": -0.0659,
+      "adr_pct": 1.97,
+      "dollar_volume_avg": 570266485.0,
+      "gain_from_low_1m_pct": 3.97,
+      "gain_from_low_3m_pct": 4.27,
+      "gain_from_low_6m_pct": 4.27,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -186914,6 +187460,12 @@
       "volatility_pct": 39.04,
       "z_score": -0.412,
       "momentum_score": 0.708,
+      "rs_score": 0.2339,
+      "adr_pct": 3.59,
+      "dollar_volume_avg": 15862611710.0,
+      "gain_from_low_1m_pct": 35.17,
+      "gain_from_low_3m_pct": 43.31,
+      "gain_from_low_6m_pct": 44.48,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -188963,6 +189515,12 @@
       "volatility_pct": 51.78,
       "z_score": -0.416,
       "momentum_score": 0.706,
+      "rs_score": 0.3611,
+      "adr_pct": 3.82,
+      "dollar_volume_avg": 4707390451.0,
+      "gain_from_low_1m_pct": 15.27,
+      "gain_from_low_3m_pct": 74.86,
+      "gain_from_low_6m_pct": 78.31,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -191012,6 +191570,12 @@
       "volatility_pct": 38.02,
       "z_score": -0.422,
       "momentum_score": 0.703,
+      "rs_score": -0.2526,
+      "adr_pct": 4.08,
+      "dollar_volume_avg": 394212588.0,
+      "gain_from_low_1m_pct": 14.47,
+      "gain_from_low_3m_pct": 29.4,
+      "gain_from_low_6m_pct": 29.4,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -193057,6 +193621,12 @@
       "volatility_pct": 41.23,
       "z_score": -0.428,
       "momentum_score": 0.7,
+      "rs_score": 0.279,
+      "adr_pct": 2.5,
+      "dollar_volume_avg": 357363756.0,
+      "gain_from_low_1m_pct": 5.26,
+      "gain_from_low_3m_pct": 28.71,
+      "gain_from_low_6m_pct": 52.72,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -195102,6 +195672,12 @@
       "volatility_pct": 58.65,
       "z_score": -0.446,
       "momentum_score": 0.691,
+      "rs_score": -0.1593,
+      "adr_pct": 4.71,
+      "dollar_volume_avg": 527181232.0,
+      "gain_from_low_1m_pct": 0.13,
+      "gain_from_low_3m_pct": 0.13,
+      "gain_from_low_6m_pct": 26.87,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -197156,6 +197732,12 @@
       "volatility_pct": 39.88,
       "z_score": -0.462,
       "momentum_score": 0.684,
+      "rs_score": -0.0358,
+      "adr_pct": 3.03,
+      "dollar_volume_avg": 1133847502.0,
+      "gain_from_low_1m_pct": 2.17,
+      "gain_from_low_3m_pct": 9.53,
+      "gain_from_low_6m_pct": 17.23,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -199201,6 +199783,12 @@
       "volatility_pct": 23.57,
       "z_score": -0.465,
       "momentum_score": 0.683,
+      "rs_score": 0.0144,
+      "adr_pct": 1.86,
+      "dollar_volume_avg": 490878843.0,
+      "gain_from_low_1m_pct": 0.42,
+      "gain_from_low_3m_pct": 4.27,
+      "gain_from_low_6m_pct": 7.99,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -201271,6 +201859,12 @@
       "volatility_pct": 34.27,
       "z_score": -0.469,
       "momentum_score": 0.681,
+      "rs_score": -0.1379,
+      "adr_pct": 3.59,
+      "dollar_volume_avg": 1521624359.0,
+      "gain_from_low_1m_pct": 5.52,
+      "gain_from_low_3m_pct": 5.52,
+      "gain_from_low_6m_pct": 9.2,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -203325,6 +203919,12 @@
       "volatility_pct": 42.76,
       "z_score": -0.48,
       "momentum_score": 0.676,
+      "rs_score": 0.1118,
+      "adr_pct": 3.01,
+      "dollar_volume_avg": 713055176.0,
+      "gain_from_low_1m_pct": 8.34,
+      "gain_from_low_3m_pct": 30.4,
+      "gain_from_low_6m_pct": 36.92,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -205370,6 +205970,12 @@
       "volatility_pct": 33.52,
       "z_score": -0.48,
       "momentum_score": 0.676,
+      "rs_score": -0.0613,
+      "adr_pct": 2.19,
+      "dollar_volume_avg": 237932390.0,
+      "gain_from_low_1m_pct": 5.77,
+      "gain_from_low_3m_pct": 10.68,
+      "gain_from_low_6m_pct": 13.41,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -207415,6 +208021,12 @@
       "volatility_pct": 46.76,
       "z_score": -0.481,
       "momentum_score": 0.675,
+      "rs_score": 0.0041,
+      "adr_pct": 3.57,
+      "dollar_volume_avg": 797841851.0,
+      "gain_from_low_1m_pct": 6.16,
+      "gain_from_low_3m_pct": 16.08,
+      "gain_from_low_6m_pct": 34.93,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -209460,6 +210072,12 @@
       "volatility_pct": 57.04,
       "z_score": -0.482,
       "momentum_score": 0.675,
+      "rs_score": -0.0645,
+      "adr_pct": 3.58,
+      "dollar_volume_avg": 761684284.0,
+      "gain_from_low_1m_pct": 17.43,
+      "gain_from_low_3m_pct": 17.43,
+      "gain_from_low_6m_pct": 17.43,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -211505,6 +212123,12 @@
       "volatility_pct": 26.19,
       "z_score": -0.5,
       "momentum_score": 0.667,
+      "rs_score": 0.1337,
+      "adr_pct": 1.79,
+      "dollar_volume_avg": 614286250.0,
+      "gain_from_low_1m_pct": 0.9,
+      "gain_from_low_3m_pct": 21.14,
+      "gain_from_low_6m_pct": 40.13,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -213550,6 +214174,12 @@
       "volatility_pct": 27.14,
       "z_score": -0.538,
       "momentum_score": 0.65,
+      "rs_score": -0.0285,
+      "adr_pct": 2.41,
+      "dollar_volume_avg": 394673310.0,
+      "gain_from_low_1m_pct": 1.05,
+      "gain_from_low_3m_pct": 4.51,
+      "gain_from_low_6m_pct": 18.63,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -215595,6 +216225,12 @@
       "volatility_pct": 33.6,
       "z_score": -0.551,
       "momentum_score": 0.645,
+      "rs_score": -0.1694,
+      "adr_pct": 1.9,
+      "dollar_volume_avg": 549685961.0,
+      "gain_from_low_1m_pct": 0.41,
+      "gain_from_low_3m_pct": 7.83,
+      "gain_from_low_6m_pct": 7.83,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -217649,6 +218285,12 @@
       "volatility_pct": 35.5,
       "z_score": -0.551,
       "momentum_score": 0.645,
+      "rs_score": -0.098,
+      "adr_pct": 2.97,
+      "dollar_volume_avg": 926037598.0,
+      "gain_from_low_1m_pct": 17.36,
+      "gain_from_low_3m_pct": 23.32,
+      "gain_from_low_6m_pct": 23.32,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -219694,6 +220336,12 @@
       "volatility_pct": 34.26,
       "z_score": -0.551,
       "momentum_score": 0.645,
+      "rs_score": -0.1105,
+      "adr_pct": 3.44,
+      "dollar_volume_avg": 512603422.0,
+      "gain_from_low_1m_pct": 1.49,
+      "gain_from_low_3m_pct": 9.32,
+      "gain_from_low_6m_pct": 12.88,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -221748,6 +222396,12 @@
       "volatility_pct": 28.29,
       "z_score": -0.557,
       "momentum_score": 0.642,
+      "rs_score": -0.1734,
+      "adr_pct": 2.87,
+      "dollar_volume_avg": 910829881.0,
+      "gain_from_low_1m_pct": 2.66,
+      "gain_from_low_3m_pct": 2.66,
+      "gain_from_low_6m_pct": 2.66,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -223788,6 +224442,12 @@
       "volatility_pct": 47.53,
       "z_score": -0.558,
       "momentum_score": 0.642,
+      "rs_score": 0.2926,
+      "adr_pct": 3.69,
+      "dollar_volume_avg": 546000830.0,
+      "gain_from_low_1m_pct": 3.22,
+      "gain_from_low_3m_pct": 64.67,
+      "gain_from_low_6m_pct": 71.67,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -225833,6 +226493,12 @@
       "volatility_pct": 27.71,
       "z_score": -0.559,
       "momentum_score": 0.642,
+      "rs_score": 0.2768,
+      "adr_pct": 2.03,
+      "dollar_volume_avg": 10723162190.0,
+      "gain_from_low_1m_pct": 6.21,
+      "gain_from_low_3m_pct": 45.22,
+      "gain_from_low_6m_pct": 47.81,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -227882,6 +228548,12 @@
       "volatility_pct": 29.92,
       "z_score": -0.574,
       "momentum_score": 0.635,
+      "rs_score": -0.1568,
+      "adr_pct": 2.96,
+      "dollar_volume_avg": 753307426.0,
+      "gain_from_low_1m_pct": 2.34,
+      "gain_from_low_3m_pct": 2.96,
+      "gain_from_low_6m_pct": 2.96,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -229927,6 +230599,12 @@
       "volatility_pct": 74.76,
       "z_score": -0.59,
       "momentum_score": 0.629,
+      "rs_score": 0.274,
+      "adr_pct": 5.63,
+      "dollar_volume_avg": 3531930663.0,
+      "gain_from_low_1m_pct": 31.22,
+      "gain_from_low_3m_pct": 93.88,
+      "gain_from_low_6m_pct": 93.88,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -231972,6 +232650,12 @@
       "volatility_pct": 38.33,
       "z_score": -0.593,
       "momentum_score": 0.628,
+      "rs_score": -0.2599,
+      "adr_pct": 1.64,
+      "dollar_volume_avg": 395923.0,
+      "gain_from_low_1m_pct": 3.06,
+      "gain_from_low_3m_pct": 3.06,
+      "gain_from_low_6m_pct": 3.06,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -234017,6 +234701,12 @@
       "volatility_pct": 37.06,
       "z_score": -0.597,
       "momentum_score": 0.626,
+      "rs_score": -0.0504,
+      "adr_pct": 3.28,
+      "dollar_volume_avg": 1460492517.0,
+      "gain_from_low_1m_pct": 0.22,
+      "gain_from_low_3m_pct": 20.57,
+      "gain_from_low_6m_pct": 23.85,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -236062,6 +236752,12 @@
       "volatility_pct": 34.72,
       "z_score": -0.629,
       "momentum_score": 0.614,
+      "rs_score": -0.1749,
+      "adr_pct": 2.45,
+      "dollar_volume_avg": 2467515830.0,
+      "gain_from_low_1m_pct": 1.48,
+      "gain_from_low_3m_pct": 9.33,
+      "gain_from_low_6m_pct": 9.33,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -238107,6 +238803,12 @@
       "volatility_pct": 45.04,
       "z_score": -0.649,
       "momentum_score": 0.607,
+      "rs_score": -0.0098,
+      "adr_pct": 3.52,
+      "dollar_volume_avg": 158945641.0,
+      "gain_from_low_1m_pct": 5.7,
+      "gain_from_low_3m_pct": 23.61,
+      "gain_from_low_6m_pct": 29.77,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -240152,6 +240854,12 @@
       "volatility_pct": 27.77,
       "z_score": -0.653,
       "momentum_score": 0.605,
+      "rs_score": -0.0592,
+      "adr_pct": 2.23,
+      "dollar_volume_avg": 327103101.0,
+      "gain_from_low_1m_pct": 0.23,
+      "gain_from_low_3m_pct": 8.46,
+      "gain_from_low_6m_pct": 17.19,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -242197,6 +242905,12 @@
       "volatility_pct": 46.65,
       "z_score": -0.677,
       "momentum_score": 0.596,
+      "rs_score": -0.2776,
+      "adr_pct": 3.83,
+      "dollar_volume_avg": 1127418164.0,
+      "gain_from_low_1m_pct": 1.61,
+      "gain_from_low_3m_pct": 6.44,
+      "gain_from_low_6m_pct": 9.08,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
@@ -244242,6 +244956,12 @@
       "volatility_pct": 26.63,
       "z_score": -0.727,
       "momentum_score": 0.579,
+      "rs_score": -0.2018,
+      "adr_pct": 3.15,
+      "dollar_volume_avg": 320491552.0,
+      "gain_from_low_1m_pct": 0.18,
+      "gain_from_low_3m_pct": 2.91,
+      "gain_from_low_6m_pct": 2.91,
       "in_selection": false,
       "weekly_chart": {
         "dates": [
