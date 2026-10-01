@@ -1915,3 +1915,26 @@ table.holdings-table td, table.rebalance-table td {
 .capital-action-sell { border-left-color: #e0a72e; }
 .capital-action-hold { border-left-color: var(--red); }
 .capital-subhead { margin: 16px 0 8px; font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+
+
+/* Okienko z wykresem w stylu MarketSmith (index.html, js/chart.js) */
+.wl-chart-box {
+    width: min(1300px, 96vw);
+    max-height: 96vh;
+    overflow: auto;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    padding: 12px 14px;
+}
+.wl-chart-head { display: flex; align-items: center; gap: 12px; }
+.wl-chart-titles { min-width: 0; flex: 1; }
+.wl-chart-title { font-size: 16px; font-weight: 700; }
+.wl-chart-sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+.wl-chart-readout { font-size: 12px; color: var(--text-dim); min-height: 18px; margin: 8px 0 4px; font-variant-numeric: tabular-nums; }
+.wl-chart-body svg { display: block; width: 100%; height: auto; max-height: calc(96vh - 120px); }
+table.momentum-table tbody tr[data-ticker] { cursor: pointer; }
+@media (max-width: 640px) {
+    .wl-chart-box { width: 100vw; max-height: 100vh; border-radius: 0; padding: 8px; }
+}

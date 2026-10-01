@@ -22,9 +22,9 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const DEFAULT_SETTINGS = { tab: "LIST", rsMin: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 } };
-const QM_WINDOWS = [["1M", "gain_from_low_1m_pct"], ["3M", "gain_from_low_3m_pct"], ["6M", "gain_from_low_6m_pct"]];
+const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
-    LIST: ["ticker", "asc"], RS: ["rs_rating", "desc"], QM: ["max_gain_pct", "desc"], EMA34: ["ema34_slope_20d_pct", "desc"],
+    LIST: ["ticker", "asc"], RS: ["rs_rating", "desc"], QM: ["max_ratio", "desc"], EMA34: ["ema34_slope_20d_pct", "desc"],
 };
 const TAB_TITLES = { LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", EMA34: "Trend EMA34" };
 const FALLBACK_REPO = "agnar92/Momentum";
@@ -50,8 +50,9 @@ function rsLeaders(stocks, minRating) {
 }
 
 // Filtr Qullamaggie: progi obrotu (mln) i ADR% odrzucają spółki (brak danych = odrzucone), potem dla
-// KAŻDEGO okna 1/3/6M bierzemy top topPct% wg wzrostu od najniższego notowania; wynik to UNIKALNA suma
-// trzech grup (wiersz pamięta, w których oknach wszedł do top).
+// KAŻDEGO okna 1/3/6M bierzemy top topPct% wg relacji ceny do najniższego Low z okna (cena / minimum —
+// bez odejmowania 1, to i tak tylko ranking); wynik to UNIKALNA suma trzech grup (wiersz pamięta,
+// w których oknach wszedł do top).
 function qullamaggieRows(stocks, params) {
     const minVol = (Number(params.minDollarVolumeM) || 0) * 1e6;
     const minAdr = Number(params.minAdrPct) || 0;
@@ -64,12 +65,12 @@ function qullamaggieRows(stocks, params) {
         const take = ranked.length && topPct > 0 ? Math.max(1, Math.ceil(ranked.length * topPct / 100)) : 0;
         ranked.slice(0, take).forEach(s => {
             if (!picked.has(s.ticker)) picked.set(s.ticker, { stock: s, windows: [] });
-            picked.get(s.ticker).windows.push({ label, pct: s[key] });
+            picked.get(s.ticker).windows.push({ label, ratio: s[key] });
         });
     });
     const rows = [];
     picked.forEach(({ stock, windows }) => {
-        rows.push({ ...stock, windows, max_gain_pct: Math.max(...windows.map(w => w.pct)) });
+        rows.push({ ...stock, windows, max_ratio: Math.max(...windows.map(w => w.ratio)) });
     });
     return rows.sort((a, b) => b.max_gain_pct - a.max_gain_pct);
 }
@@ -176,10 +177,10 @@ const ROW_RENDERERS = {
         ${pctCell(s.ret_3m_pct)}${pctCell(s.ret_6m_pct)}${pctCell(s.ret_12m_pct)}
         ${pctCell(s.eps_next_y)}${pctCell(s.eps_next_5y)}${tailCells(s)}`,
     QM: (s, i) => {
-        const gains = s.windows.map(w => `${w.label}: +${w.pct.toFixed(0)}%`).join(" · ");
+        const gains = s.windows.map(w => `${w.label}: ×${w.ratio.toFixed(2)}`).join(" · ");
         return `${identityCells(s, i)}
         <td>$${Number(s.price).toFixed(2)}</td><td>${fmtVolume(s.dollar_volume_avg)}</td><td>${s.adr_pct.toFixed(1)}%</td>
-        <td class="positive" title="${gains}"><strong>+${s.max_gain_pct.toFixed(0)}%</strong> <span class="muted" style="font-size:10.5px">top ${state.qm.topPct}% w: ${s.windows.map(w => w.label).join(", ")}</span></td>
+        <td class="positive" title="${gains}"><strong>×${s.max_ratio.toFixed(2)}</strong> <span class="muted" style="font-size:10.5px">top ${state.qm.topPct}% w: ${s.windows.map(w => w.label).join(", ")}</span></td>
         ${ratingCell(s)}${tailCells(s)}`;
     },
     EMA34: (s, i) => `${identityCells(s, i)}
@@ -308,6 +309,57 @@ function initControls() {
         renderTable();
     }));
     document.getElementById("refreshLink").href = githubActionsUrl(window.location);
+    // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
+    document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
+        if (ev.target.closest("a")) return;
+        const tr = ev.target.closest("tr[data-ticker]");
+        if (tr) openChart(tr.dataset.ticker);
+    }));
+    initChartModal();
+}
+
+// ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
+
+let chartsPromise = null;
+function loadCharts() {
+    if (!chartsPromise) {
+        chartsPromise = fetch("data/charts.json", { cache: "no-store" })
+            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+            .catch(e => { console.error("Nie udało się wczytać data/charts.json:", e); chartsPromise = null; return null; });
+    }
+    return chartsPromise;
+}
+
+async function openChart(ticker) {
+    const stock = state.data.stocks.find(s => s.ticker === ticker);
+    const modal = document.getElementById("chartModal");
+    document.getElementById("chartTitle").textContent = `${ticker} — ${stock && stock.company ? stock.company : ""}`;
+    document.getElementById("chartSub").textContent = stock
+        ? [stock.sector, stock.industry, Number.isFinite(stock.rs_rating) ? `RS Rating ${stock.rs_rating}` : null,
+            stock.earnings ? `wyniki: ${stock.earnings}` : null].filter(Boolean).join(" · ")
+        : "";
+    document.getElementById("chartTv").href = tvUrlFor(ticker);
+    const body = document.getElementById("chartBody");
+    const readout = document.getElementById("chartReadout");
+    body.innerHTML = `<div class="empty-state">Ładowanie wykresu…</div>`;
+    modal.hidden = false;
+    const charts = await loadCharts();
+    if (modal.hidden) return; // zamknięte w trakcie ładowania
+    if (!charts) { body.innerHTML = `<div class="empty-state">Nie udało się wczytać danych wykresów.</div>`; return; }
+    const model = renderStockChart(body, readout, charts, ticker, stock);
+    if (model && model.epsNext) {
+        document.getElementById("chartSub").textContent += ` · następny raport ${model.epsNext.d} (prognoza EPS ${model.epsNext.e})`;
+    }
+}
+
+function closeChart() {
+    document.getElementById("chartModal").hidden = true;
+}
+
+function initChartModal() {
+    document.getElementById("chartClose").addEventListener("click", closeChart);
+    document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal") closeChart(); });
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeChart(); });
 }
 
 async function loadData() {
