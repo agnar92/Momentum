@@ -38,35 +38,49 @@
                 <button class="drawer-tab" data-tab="RS">📊 RS Ranking</button>
                 <button class="drawer-tab" data-tab="QM">🎯 Qullamaggie</button>
                 <button class="drawer-tab" data-tab="EMA34">📈 Trend EMA34</button>
+                <button class="drawer-tab" data-tab="BASES">🧱 Bazy</button>
+                <button class="drawer-tab" data-tab="FAV">⭐ Ulubione</button>
             </div>
         </div>
 
-        <div class="stage-filter-bar" id="dataBar">
-            <span class="stage-filter-label" id="dataInfo"></span>
-            <a class="add-row-btn" id="refreshLink" href="#" target="_blank" rel="noopener" style="margin-top:0"
+        <div class="toolbar">
+            <span class="toolbar-info" id="dataInfo"></span>
+            <label class="field"><span>Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka"></label>
+            <label class="field"><span>Sektor:</span><select id="sectorSelect"><option value="">wszystkie</option></select></label>
+            <a class="btn" id="refreshLink" href="#" target="_blank" rel="noopener"
                title="Dane odświeżają się same codziennie rano. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
         </div>
-        <div class="stage-filter-bar">
-            <label class="wybicie-slider"><span class="stage-filter-label">Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka" style="width:140px"></label>
-            <label class="wybicie-slider"><span class="stage-filter-label">Sektor:</span><select id="sectorSelect"><option value="">wszystkie</option></select></label>
-        </div>
 
-        <div class="screener-guide" id="guide-LIST"><strong>📋 Lista</strong> — wszystkie spółki, które przeszły filtr Finviz: kapitalizacja ≥ 2 mld $, cena nad SMA50 i SMA200, dodatni wzrost EPS (ostatnie 5 lat i ten rok) oraz dodatnie prognozy EPS (przyszły rok i 5 lat). Filtry zmieniasz w <code>finviz_screen.json</code>. Kolumny fundamentalne pochodzą z Finviz, ceny i wskaźniki z yfinance (dane z zamknięcia ostatniej sesji USA).</div>
-        <div class="screener-guide" id="guide-RS" hidden><strong>📊 RS Ranking</strong> — liderzy siły względnej w stylu IBD: <code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code> (najnowszy kwartał z podwójną wagą), przeliczone na percentyl 1–99 względem spółek z listy. To przybliżenie — IBD nie publikuje formuły ani swojej puli spółek, a tu ranking jest wśród spółek już wyselekcjonowanych przez Finviz.
-            <div style="margin-top:8px"><label class="wybicie-slider"><span class="stage-filter-label">Min. RS Rating:</span><input type="number" id="rsMin" min="1" max="99" step="1" style="width:70px"></label></div></div>
-        <div class="screener-guide" id="guide-QM" hidden><strong>🎯 Qullamaggie</strong> — szukanie „gruberów”: najpierw progi płynności (średni obrót dzienny cena × wolumen z ~20 sesji i ADR% — średnia dzienna rozpiętość High/Low), potem dla każdego okna (1, 3 i 6 miesięcy) top X% spółek wg relacji ceny do najniższego notowania z okna (cena / minimum). Lista to suma tych trzech grup bez powtórzeń.
-            <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px 6px">
-                <label class="wybicie-slider"><span class="stage-filter-label">Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1" style="width:80px"></label>
-                <label class="wybicie-slider"><span class="stage-filter-label">Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5" style="width:70px"></label>
-                <label class="wybicie-slider"><span class="stage-filter-label">Top % wzrostu:</span><input type="number" id="qmTopPct" min="1" max="100" step="1" style="width:70px"></label>
-            </div></div>
-        <div class="screener-guide" id="guide-EMA34" hidden><strong>📈 Trend EMA34</strong> — osobny filtr trendu, niezależny od RS i Qullamaggiego: dzienna EMA34 rośnie, gdy <code>EMA34 teraz &gt; EMA34[5] &gt; EMA34[10] &gt; EMA34[15] &gt; EMA34[20]</code> (sesji wstecz), czyli rośnie co 5 sesji przez ostatnie 20. Sortowanie domyślnie po nachyleniu z 20 sesji.</div>
+        <div class="tab-controls" id="controls-LIST"></div>
+        <div class="tab-controls" id="controls-RS" hidden>
+            <label class="field"><span>Min. RS Rating:</span><input type="number" id="rsMin" min="1" max="99" step="1"></label>
+        </div>
+        <div class="tab-controls" id="controls-QM" hidden>
+            <label class="field"><span>Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1"></label>
+            <label class="field"><span>Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5"></label>
+            <label class="field"><span>Top % wzrostu:</span><input type="number" id="qmTopPct" min="1" max="100" step="1"></label>
+        </div>
+        <div class="tab-controls" id="controls-EMA34" hidden></div>
+        <div class="tab-controls" id="controls-BASES" hidden>
+            <label class="field"><span>Maks. dystans do pivotu (%):</span><input type="number" id="baseMaxDist" min="0" step="1"></label>
+            <label class="field"><input type="checkbox" id="baseVcpOnly"><span>tylko VCP</span></label>
+        </div>
+        <div class="tab-controls" id="controls-FAV" hidden></div>
+
+        <details class="screener-guide" id="guide-LIST"><summary>📋 Lista — co to jest</summary>Wszystkie spółki, które przeszły filtr Finviz: kapitalizacja ≥ 2 mld $, cena nad SMA50 i SMA200, dodatni wzrost EPS (ostatnie 5 lat i ten rok) oraz dodatnie prognozy EPS (przyszły rok i 5 lat). Filtry zmieniasz w <code>finviz_screen.json</code>. Kolumny fundamentalne pochodzą z Finviz, ceny i wskaźniki z yfinance (zamknięcie ostatniej sesji USA). ⚠ przy dacie wyników = raport w ciągu 7 dni. Kliknij wiersz, żeby zobaczyć wykres; ☆ dodaje do ulubionych.</details>
+        <details class="screener-guide" id="guide-RS" hidden><summary>📊 RS Ranking — jak liczony</summary>Liderzy siły względnej w stylu IBD: <code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code> (najnowszy kwartał z podwójną wagą), przeliczone na percentyl 1–99 względem spółek z listy. To przybliżenie — IBD nie publikuje formuły ani swojej puli spółek, a tu ranking jest wśród spółek już wyselekcjonowanych przez Finviz.</details>
+        <details class="screener-guide" id="guide-QM" hidden><summary>🎯 Qullamaggie — jak liczony</summary>Najpierw progi płynności (średni obrót dzienny cena × wolumen z ~20 sesji i ADR% — średnia dzienna rozpiętość High/Low), potem dla każdego okna (1, 3 i 6 miesięcy) top X% spółek wg relacji ceny do najniższego notowania z okna (cena / minimum). Lista to suma tych trzech grup bez powtórzeń.</details>
+        <details class="screener-guide" id="guide-EMA34" hidden><summary>📈 Trend EMA34 — jak liczony</summary>Osobny filtr trendu, niezależny od RS i Qullamaggiego: dzienna EMA34 rośnie, gdy <code>EMA34 teraz &gt; EMA34[5] &gt; EMA34[10] &gt; EMA34[15] &gt; EMA34[20]</code> (sesji wstecz), czyli rośnie co 5 sesji przez ostatnie 20. Sortowanie domyślnie po nachyleniu z 20 sesji.</details>
+        <details class="screener-guide" id="guide-BASES" hidden><summary>🧱 Bazy — jak liczone (heurystyka)</summary>Korekta od lokalnego tygodniowego szczytu (głębokość 6–50%, min. 5 tygodni), jeszcze nie odrobiona. Typ: flat (≤15%), cup (≤35% i odrobione ≥50%), korekta, głęboka. Pivot = szczyt bazy; „Do pivotu” to wzrost potrzebny do jego przebicia. VCP = co najmniej dwa coraz mniejsze skurcze, ostatni ≤10%. To uproszczenie, nie rozpoznawanie formacji z MarketSmith (np. bez wykrywania rączki).</details>
+        <details class="screener-guide" id="guide-FAV" hidden><summary>⭐ Ulubione</summary>Spółki oznaczone ★ — zapisane tylko w tej przeglądarce (localStorage).</details>
 
         <div class="table-scroll">
-            <table class="momentum-table" id="table-LIST"><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="market_cap">Kapitalizacja</th><th data-key="price">Cena</th><th data-key="pct_above_sma50">vs SMA50</th><th data-key="pct_above_sma200">vs SMA200</th><th data-key="eps_this_y">EPS ten rok</th><th data-key="eps_next_y">EPS przyszły rok</th><th data-key="eps_past_5y">EPS 5 lat</th><th data-key="eps_next_5y">EPS prognoza 5 lat</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
-            <table class="momentum-table" id="table-RS" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="rs_rating">RS Rating</th><th data-key="ret_3m_pct">3M</th><th data-key="ret_6m_pct">6M</th><th data-key="ret_12m_pct">12M</th><th data-key="eps_next_y">EPS przyszły rok</th><th data-key="eps_next_5y">EPS prognoza 5 lat</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
-            <table class="momentum-table" id="table-QM" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="dollar_volume_avg">Obrót dzienny</th><th data-key="adr_pct">ADR %</th><th data-key="max_ratio" title="Cena / najniższy Low z okna (np. ×1.35 = 35% nad minimum)">Cena / minimum</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
-            <table class="momentum-table" id="table-EMA34" hidden><thead><tr><th>#</th><th data-key="ticker">Ticker</th><th data-key="company">Spółka</th><th data-key="sector">Sektor</th><th data-key="price">Cena</th><th data-key="ema34">EMA34</th><th data-key="ema34_slope_20d_pct">Nachylenie 20 sesji</th><th data-key="price_vs_ema34_pct">Cena vs EMA34</th><th data-key="rs_rating">RS Rating</th><th>Cena (26 tyg.)</th><th data-key="earnings">Wyniki</th><th class="tv-col">TV</th></tr></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-LIST"><thead></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-RS" hidden><thead></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-QM" hidden><thead></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-EMA34" hidden><thead></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-BASES" hidden><thead></thead><tbody></tbody></table>
+            <table class="momentum-table" id="table-FAV" hidden><thead></thead><tbody></tbody></table>
         </div>
     </div>
 </div>
@@ -75,10 +89,12 @@
     <div class="wl-chart-box" role="dialog" aria-modal="true" aria-labelledby="chartTitle">
         <div class="wl-chart-head">
             <div class="wl-chart-titles"><div class="wl-chart-title" id="chartTitle"></div><div class="wl-chart-sub" id="chartSub"></div></div>
-            <button type="button" class="add-row-btn" id="chartLogBtn" style="margin-top:0" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
-            <a class="add-row-btn" id="chartTv" href="#" target="_blank" rel="noopener" style="margin-top:0">📈 TradingView ↗</a>
+            <button type="button" class="btn" id="chartTfBtn" title="Przełącz wykres: tygodniowy / dzienny">Wykres: tygodniowy</button>
+            <button type="button" class="btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
+            <a class="btn" id="chartTv" href="#" target="_blank" rel="noopener">📈 TradingView ↗</a>
             <button class="chart-modal-close" id="chartClose" type="button" title="Zamknij (Esc)" aria-label="Zamknij wykres">✕</button>
         </div>
+        <div class="wl-chart-stats" id="chartStats"></div>
         <div class="wl-chart-readout" id="chartReadout"></div>
         <div class="wl-chart-body" id="chartBody"></div>
     </div>

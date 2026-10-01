@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
+    niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -20,6 +20,8 @@ function charts(over = {}) {
                 v: [1000, 2000, 1500, 1800, 2500], sma10: [null, null, 11, 12, 13], sma40: [null, null, null, null, 12],
                 eps: [{ d: "2025-10-01", e: 1.0, g: null }, { d: "2026-01-10", e: 1.2, g: 20 }, { d: "2026-07-01", e: 1.6, g: 33 }],
                 eps_next: { d: "2026-10-20", e: 1.8 },
+                bases: [{ start: "2026-01-09", end: "2026-04-03", peak: 15, low: 11, depth_pct: 26.7, weeks: 5, type: "cup", open: false, pivot: 15, contractions: [12.0, 6.5], vcp: true },
+                        { start: "2026-04-03", end: "2026-07-03", peak: 15, low: 13, depth_pct: 13.3, weeks: 4, type: "flat", open: true, pivot: 15, contractions: [], vcp: false }],
             },
         },
         ...over,
@@ -132,4 +134,50 @@ test("chartSvg compact layout uses the narrow viewBox and larger fonts", () => {
     assert.match(compact, /viewBox="0 0 560 740"/);
     assert.match(wide, /font-size="11"/);
     assert.match(compact, /font-size="16\.5"/);
+});
+
+test("rsNewHighFlags marks only new window highs after the warm-up weeks", () => {
+    const rs = Array.from({ length: 20 }, (_, i) => (i === 14 ? 0.5 : 1 + i * 0.1));   // rośnie, jedno wklęśnięcie w tyg. 14
+    const flags = rsNewHighFlags(rs);
+    assert.equal(flags[5], false);                 // za wcześnie (rozgrzewka)
+    assert.equal(flags[12], true);
+    assert.equal(flags[14], false);                // spadek, nie maksimum
+    assert.equal(flags[19], true);
+    assert.deepEqual(rsNewHighFlags([null, 1]).slice(0, 2), [false, false]);
+});
+
+test("rollingMean needs a full finite window", () => {
+    assert.deepEqual(rollingMean([1, 2, 3, 4], 2), [null, 1.5, 2.5, 3.5]);
+    assert.deepEqual(rollingMean([1, null, 3, 4], 2), [null, null, null, 3.5]);
+});
+
+test("buildChartModel maps bases to week indexes; sliceModel shifts and drops them", () => {
+    const m = buildChartModel(charts(), "AAA", null);
+    assert.deepEqual(m.bases.map(b => [b.i0, b.i1]), [[1, 3], [3, 4]]);   // koniec w 2026-07-03 = ostatni tydzień
+    const s = sliceModel(m, 2);                                          // zostają tygodnie 3-4
+    assert.deepEqual(s.bases.map(b => [b.i0, b.i1]), [[0, 0], [0, 1]]);
+    assert.equal(s.volAvg.length, 2);
+    assert.equal(s.rsNewHigh.length, 2);
+});
+
+test("chartSvg draws base boxes with depth/VCP label and a pivot line for the open base", () => {
+    const svg = chartSvg(buildChartModel(charts(), "AAA", { rs_rating: 90 }));
+    assert.match(svg, /Cup base −26\.7% · 5 tyg\. · VCP/);
+    assert.match(svg, /Flat base −13\.3% · 4 tyg\./);
+    assert.match(svg, /pivot 15\.00 \(/);
+    assert.match(svg, /średnia 10 tyg\./);
+});
+
+test("dailyCharts: SMA50/200 w miejscu SMA10/40, oś = dni", () => {
+    const { dailyCharts, buildChartModel } = require("../../docs/js/chart.js");
+    const charts = {
+        weeks: ["2026-01-02"], days: ["2026-01-01", "2026-01-02"], spx_d: [100, 101],
+        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma50: [1, 1.5], sma200: [1, 1.2] }, eps: [], eps_next: null } },
+    };
+    const d = dailyCharts(charts);
+    assert.strictEqual(d.daily, true);
+    const m = buildChartModel(d, "X", null);
+    assert.strictEqual(m.n, 2);
+    assert.deepStrictEqual(m.sma10, [1, 1.5]);
+    assert.strictEqual(dailyCharts({ weeks: [] }), null);
 });

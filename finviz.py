@@ -33,13 +33,12 @@ HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KH
 
 # widok -> {nagłówek kolumny Finviz: nasz klucz}
 VIEW_COLUMNS = {
-    "111": {"Company": "company", "Sector": "sector", "Industry": "industry", "Country": "country",
-            "Market Cap": "market_cap", "P/E": "pe"},
-    "121": {"Forward P/E": "forward_pe", "PEG": "peg", "EPS This Y": "eps_this_y", "EPS Next Y": "eps_next_y",
-            "EPS Past 5Y": "eps_past_5y", "EPS Next 5Y": "eps_next_5y", "Sales Past 5Y": "sales_past_5y"},
-    "161": {"ROE": "roe", "Oper M": "oper_margin", "Profit M": "profit_margin", "Earnings": "earnings"},
+    "111": {"Company": "company", "Sector": "sector", "Industry": "industry", "Market Cap": "market_cap", "P/E": "pe"},
+    "121": {"Forward P/E": "forward_pe", "EPS This Y": "eps_this_y", "EPS Next Y": "eps_next_y",
+            "EPS Past 5Y": "eps_past_5y", "EPS Next 5Y": "eps_next_5y"},
+    "161": {"ROE": "roe", "Earnings": "earnings"},
 }
-TEXT_KEYS = {"company", "sector", "industry", "country", "earnings"}
+TEXT_KEYS = {"company", "sector", "industry", "earnings"}
 _SUFFIX = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
 
 

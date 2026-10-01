@@ -80,11 +80,11 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   (GitHub re-runs against the original trigger SHA, i.e. old code); trigger a fresh `workflow_dispatch`.
 - **`deploy.yml`** — plain Pages deploy of `docs/` on every push to `main` (no data fetch).
 - **`tests.yml`** — `ruff` + `pytest` (Python) and ESLint + `node --test` (JS) on pushes/PRs.
-- `feature-branch-check.yml` is a leftover temporary workflow for an old branch; safe to delete.
 
 ## Frontend (`docs/`) — plain HTML/CSS/vanilla JS, no build step
 
-- **`index.html` + `js/watchlist.js`** — the only data page. Four tabs over the same `watchlist.json`:
+- **`index.html` + `js/watchlist.js`** — the only data page. Six tabs over the same `watchlist.json` (columns are defined once in `COL`/`TAB_COLUMNS` in watchlist.js and the
+  `<thead>`s are generated from them):
   - **📋 Lista** — every stock that passed Finviz (EPS columns from Finviz, SMA distances/RS from our data).
   - **📊 RS Ranking** — `rs_rating ≥` a user-entered minimum (default 80), best first (`rsLeaders`).
   - **🎯 Qullamaggie** — user-entered min daily dollar volume (default 20 mln $), min ADR % (default 4) and
@@ -93,10 +93,13 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
     remembers which windows it made; `qullamaggieRows`).
   - **📈 Trend EMA34** — a SEPARATE filter, deliberately independent of RS and Qullamaggie
     (`ema34_rising === true`, sorted by 20-session slope; `ema34Rows`).
+  - **🧱 Bazy** — open bases with `pct_to_pivot ≤` a user-entered max (default 10 %), optional "only VCP" (`baseRows`).
+  - **⭐ Ulubione** — stocks starred with ☆/★ in any list (`localStorage` `momentum_watchlist_favs`). A ⚠ before the
+    earnings date means a report within 7 days (`earningsInDays`, parses Finviz "Oct 22/a").
   **Clicking a row opens a MarketSmith-style chart** (`js/chart.js`, pure SVG, no libraries; model/scales are unit
   tested in `tests/js/chart.test.js`): S&P 500 strip on top; weekly OHLC bars + SMA10 (green) / SMA40 (red) + the RS
   line (stock / S&P 500, blue, own scale in the lower third, labelled with the RS Rating); weekly volume; quarterly
-  EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover; a header button toggles the PRICE panel between linear and logarithmic scale (`makeLogScale`/`logTicks`, 1/2/5·10ⁿ ticks; choice stored in `localStorage` `momentum_watchlist_chart_log`; the S&P strip, RS line and volume stay linear). The link
+  EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover; a header button switches weekly/daily (`day` arrays in charts.json: last 150 sessions + SMA50/SMA200, `dailyCharts`; stored in `momentum_watchlist_chart_daily`; no bases in daily view); a stats line shows cap, P/E, Fwd P/E, ROE, distance from 52w high and the open base; a header button toggles the PRICE panel between linear and logarithmic scale (`makeLogScale`/`logTicks`, 1/2/5·10ⁿ ticks; choice stored in `localStorage` `momentum_watchlist_chart_log`; the S&P strip, RS line and volume stay linear). The link
   button inside a row still opens TradingView and does not open the chart. **Phones (≤ 640 px) get a compact layout**
   (`opts.compact`: narrower viewBox 560×740, fonts ×1.5, only the last 52 weeks via `sliceModel`, header split into two
   rows; re-rendered on rotation) so the chart stays readable instead of being a shrunken desktop chart.
@@ -109,7 +112,21 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   badge, loading overlay), **`js/pull-to-refresh.js`**; `sw.js` is a network-first PWA service worker (bump
   `CACHE` and keep `SHELL` in sync when files are added/removed). Files are plain `<script>` tags sharing
   globals; for Node tests each file re-attaches the shared globals via the `typeof require` block at its top.
-  `css/style.css` still contains a lot of CSS from the removed pages.
+  `css/style.css` was rewritten from scratch (only rules for existing pages; one `@media (max-width:900px),
+  (max-height:560px)` block makes the page scroll normally on phones in either orientation).
+
+## Bases / VCP (heuristic)
+
+`detect_bases` (watchlist.py) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks), classifies them
+flat/cup/correction/deep, gives a pivot (peak high) and a VCP flag (≥2 strictly decreasing zig-zag contractions,
+last ≤10 %). Stored as `bases` in charts.json (drawn as boxes + pivot line) and as `base_*`, `pivot`, `pct_to_pivot`,
+`vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (no handle/flag detection).
+
+## Layout
+
+Desktop: fixed-height workspace with inner scroll. `@media (max-width:900px), (max-height:560px)` (end of
+style.css): normal page scroll, horizontally scrollable tabs, full-screen scrollable chart modal (phone landscape).
+`escapeHtml` lives in `js/shared.js`.
 
 ## Commands
 

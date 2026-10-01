@@ -9,6 +9,10 @@
 // Logika modelu/skal jest czysta i testowana (tests/js/chart.test.js), rysowanie to tylko składanie SVG.
 // ============================================================
 
+if (typeof require === "function" && typeof window === "undefined") {
+    Object.assign(globalThis, require("./shared.js"));
+}
+
 const CHART_LAYOUT = {
     width: 1000, height: 690, left: 10, right: 66,
     bench: { y: 8, h: 70 }, price: { y: 88, h: 340 }, volume: { y: 436, h: 78 }, eps: { y: 526, h: 118 },
@@ -23,9 +27,10 @@ const CHART_LAYOUT_COMPACT = {
 };
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
+const COMPACT_DAYS = 75;
 const CHART_COLORS = {
     up: "#2ecc71", down: "#e0455a", sma10: "#3fbf6e", sma40: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
-    eps: "#e0b341", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
+    eps: "#e0b341", base: "#9aa3b5", pivot: "#2ecc71", volAvg: "#e8a33d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
 };
 const MONTHS_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 
@@ -86,6 +91,18 @@ function weekIndexForDate(weeks, date) {
 }
 
 // Model wykresu jednej spółki: wspólne tablice + linia RS (cena / S&P 500) + pozycje wyników na osi tygodni.
+// Widok dzienny: te same tablice, ale oś to ostatnie sesje (charts.days), SMA50/SMA200 w miejsce SMA10/SMA40 tyg.
+// i bez baz (te liczone są na świecach tygodniowych).
+function dailyCharts(charts) {
+    if (!charts || !charts.days) return null;
+    const stocks = {};
+    Object.keys(charts.stocks).forEach(t => {
+        const c = charts.stocks[t], d = c.day;
+        if (d) stocks[t] = { ...d, sma10: d.sma50, sma40: d.sma200, eps: c.eps, eps_next: c.eps_next, bases: [] };
+    });
+    return { weeks: charts.days, spx: charts.spx_d, stocks, daily: true };
+}
+
 function buildChartModel(charts, ticker, stock) {
     const c = charts && charts.stocks && charts.stocks[ticker];
     if (!c) return null;
@@ -93,10 +110,16 @@ function buildChartModel(charts, ticker, stock) {
     const spx = charts.spx || null;
     const rs = c.c.map((close, i) => (spx && Number.isFinite(close) && Number.isFinite(spx[i]) && spx[i] > 0) ? close / spx[i] : null);
     const eps = (c.eps || []).map(q => ({ ...q, week: weekIndexForDate(weeks, q.d) })).filter(q => q.week >= 0);
+    // Bazy/korekty (watchlist.py::detect_bases): indeksy tygodni początku i końca (przycięte do okna wykresu).
+    const bases = (c.bases || []).map(b => {
+        const i1 = weekIndexForDate(weeks, b.end);
+        return { ...b, i0: Math.max(0, weekIndexForDate(weeks, b.start)), i1: i1 >= 0 ? i1 : weeks.length - 1 };
+    }).filter(b => b.i1 >= 0 && b.i1 >= b.i0);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
     return {
-        ticker, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v, sma10: c.sma10, sma40: c.sma40,
-        spx, rs, eps, epsNext: c.eps_next || null, lastIdx,
+        ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v, sma10: c.sma10, sma40: c.sma40,
+        spx, rs, eps, bases, epsNext: c.eps_next || null, lastIdx,
+        rsNewHigh: rsNewHighFlags(rs), volAvg: rollingMean(c.v, VOL_AVG_WEEKS),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
     };
 }
@@ -110,13 +133,35 @@ function sliceModel(m, n) {
         ...m, weeks: cut(m.weeks), n, o: cut(m.o), h: cut(m.h), l: cut(m.l), c: cut(m.c), v: cut(m.v),
         sma10: cut(m.sma10), sma40: cut(m.sma40), spx: m.spx ? cut(m.spx) : null, rs: cut(m.rs),
         eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0),
+        bases: m.bases.map(b => ({ ...b, i0: Math.max(0, b.i0 - off), i1: b.i1 - off })).filter(b => b.i1 >= 0),
+        rsNewHigh: cut(m.rsNewHigh), volAvg: cut(m.volAvg),
         lastIdx: m.lastIdx - off,
     };
 }
 
-function chartEsc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"]/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch]));
+const VOL_AVG_WEEKS = 10;       // średnia wolumenu ~50 sesji (jak linia średniego wolumenu w MarketSmith)
+const RS_HIGH_MIN_WEEKS = 12;   // nowe maksimum linii RS liczymy dopiero po tylu tygodniach historii okna
+
+// Tygodnie, w których linia RS ustanawia nowe maksimum okna (niebieska kropka w MarketSmith: RS przed ceną).
+function rsNewHighFlags(rs) {
+    let max = -Infinity;
+    return rs.map((v, i) => {
+        if (!Number.isFinite(v)) return false;
+        const flag = i >= RS_HIGH_MIN_WEEKS && v >= max;
+        if (v > max) max = v;
+        return flag;
+    });
 }
+
+function rollingMean(values, n) {
+    return values.map((_, i) => {
+        if (i < n - 1) return null;
+        const win = values.slice(i - n + 1, i + 1);
+        return win.every(Number.isFinite) ? win.reduce((a, b) => a + b, 0) / n : null;
+    });
+}
+
+const BASE_LABELS = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 
 function polyline(points, color, width = 1.4, dash = "") {
     // points: [[x, y] | null, ...] — przerwy (null) dzielą linię na kawałki.
@@ -192,6 +237,19 @@ function chartSvg(m, opts = {}) {
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
         parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
     });
+    // bazy/korekty: przerywane pudełka od szczytu do dołka + etykieta (typ, głębokość, długość, VCP); pivot dla otwartej bazy
+    const lastClose = m.c[m.lastIdx];
+    m.bases.forEach(b => {
+        const x0 = x(b.i0) - step / 2, x1 = x(b.i1) + step / 2;
+        const yTop = Math.max(L.price.y, yP(b.peak)), yBot = Math.min(L.price.y + L.price.h, yP(b.low));   // szczyt sprzed okna nie wychodzi poza panel
+        parts.push(`<rect x="${x0}" y="${yTop}" width="${Math.max(2, x1 - x0)}" height="${Math.max(2, yBot - yTop)}" fill="${CHART_COLORS.base}" fill-opacity="0.07" stroke="${CHART_COLORS.base}" stroke-width="1" stroke-dasharray="5 3"><title>${escapeHtml(BASE_LABELS[b.type] || b.type)}: −${b.depth_pct}% od ${b.peak}, ${b.weeks} tyg.${b.contractions.length ? ", skurcze: " + b.contractions.map(c => c + "%").join(" → ") : ""}</title></rect>`);
+        parts.push(`<text x="${x0 + 3}" y="${Math.max(L.price.y + 24, yTop - 4)}" font-size="${fs(10)}" fill="${CHART_COLORS.base}" font-weight="600">${escapeHtml(BASE_LABELS[b.type] || b.type)} −${b.depth_pct}% · ${b.weeks} tyg.${b.vcp ? " · VCP" : ""}</text>`);
+        if (b.open && Number.isFinite(lastClose) && b.pivot >= pMin && b.pivot <= pMax) {
+            const away = (b.pivot / lastClose - 1) * 100;
+            parts.push(`<line x1="${x0}" x2="${L.width - L.right}" y1="${yP(b.pivot)}" y2="${yP(b.pivot)}" stroke="${CHART_COLORS.pivot}" stroke-width="1" stroke-dasharray="2 3"/>`);
+            parts.push(`<text x="${L.width - L.right - 2}" y="${yP(b.pivot) - 4}" font-size="${fs(10)}" fill="${CHART_COLORS.pivot}" text-anchor="end">pivot ${fmtAxis(b.pivot)} (${away >= 0 ? "+" : ""}${away.toFixed(1)}% od ceny)</text>`);
+        }
+    });
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
         const col = m.c[i] >= m.o[i] ? CHART_COLORS.up : CHART_COLORS.down;
@@ -207,6 +265,9 @@ function chartSvg(m, opts = {}) {
     if (rExt) {
         const yR = makeYScale(rExt[0], rExt[1], L.price.y + L.price.h * 0.68, L.price.h * 0.3);
         parts.push(polyline(m.rs.map((v, i) => Number.isFinite(v) ? [x(i), yR(v)] : null), CHART_COLORS.rs, 1.6));
+        m.rsNewHigh.forEach((flag, i) => {
+            if (flag) parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${opts.compact ? 3.2 : 2.6}" fill="${CHART_COLORS.rs}"><title>RS na nowym maksimum okna</title></circle>`);
+        });
         const lastRs = [...m.rs].reverse().findIndex(Number.isFinite);
         if (lastRs >= 0 && m.rsRating != null) {
             const li = m.n - 1 - lastRs;
@@ -219,7 +280,7 @@ function chartSvg(m, opts = {}) {
         parts.push(`<path d="M${cx - 4},${cy} L${cx + 4},${cy} L${cx},${cy - 8} Z" fill="${CHART_COLORS.textStrong}" opacity="0.7"><title>Wyniki ${q.d}: EPS ${q.e}</title></path>`);
     });
     parts.push(`<text x="${L.left + 4}" y="${L.price.y + 12}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">`
-        + `<tspan fill="${CHART_COLORS.sma10}">— SMA 10 tyg.</tspan>  <tspan fill="${CHART_COLORS.sma40}">— SMA 40 tyg.</tspan>  <tspan fill="${CHART_COLORS.rs}">— RS (spółka / S&amp;P 500)</tspan>${useLog ? "  · skala logarytmiczna" : ""}</text>`);
+        + `<tspan fill="${CHART_COLORS.sma10}">— ${m.daily ? "SMA 50 dni" : "SMA 10 tyg."}</tspan>  <tspan fill="${CHART_COLORS.sma40}">— ${m.daily ? "SMA 200 dni" : "SMA 40 tyg."}</tspan>  <tspan fill="${CHART_COLORS.rs}">— RS (spółka / S&amp;P 500)</tspan>${useLog ? "  · skala logarytmiczna" : ""}</text>`);
 
     // --- 3. wolumen
     const vMax = Math.max(1, ...m.v.filter(Number.isFinite));
@@ -230,7 +291,8 @@ function chartSvg(m, opts = {}) {
         const h = (m.v[i] / vMax) * L.volume.h;
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"/>`);
     }
-    parts.push(`<text x="${L.left + 4}" y="${L.volume.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Wolumen tygodniowy</text>`);
+    parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), L.volume.y + L.volume.h - Math.min(1, v / vMax) * L.volume.h] : null), CHART_COLORS.volAvg, 1.3));
+    parts.push(`<text x="${L.left + 4}" y="${L.volume.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${m.daily ? "Wolumen dzienny · średnia 10 dni" : "Wolumen tygodniowy · średnia 10 tyg."}</text>`);
     parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + 10}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
 
     // --- 4. EPS kwartalny
@@ -256,7 +318,7 @@ function chartSvg(m, opts = {}) {
 
     // --- crosshair (ustawiany w attachChartHover)
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
-    return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres tygodniowy ${chartEsc(m.ticker)}">${parts.join("")}</svg>`;
+    return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres ${m.daily ? "dzienny" : "tygodniowy"} ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
 }
 
 // Tekst paska nad wykresem dla wskazanego tygodnia.
@@ -292,14 +354,14 @@ function attachChartHover(container, m, readoutEl, L) {
 
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
-    let m = buildChartModel(charts, ticker, stock);
+    let m = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock);
     if (!m) {
-        container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${chartEsc(ticker)} — odśwież dane (watchlist.py).</div>`;
+        container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${escapeHtml(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";
         return null;
     }
     const full = m;
-    if (opts.compact) m = sliceModel(m, COMPACT_WEEKS);
+    if (opts.compact) m = sliceModel(m, m.daily ? COMPACT_DAYS : COMPACT_WEEKS);
     container.innerHTML = chartSvg(m, opts);
     readoutEl.textContent = chartReadout(m, m.lastIdx);
     attachChartHover(container, m, readoutEl, opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT);
@@ -308,6 +370,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, dailyCharts, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }

@@ -154,6 +154,13 @@ class TestCharts:
         assert w.iloc[0].to_dict() == {"Open": 1, "High": 4, "Low": 1, "Close": 3.5, "Volume": 30}
         assert w.iloc[1]["High"] == 9 and w.iloc[1]["Open"] == 4 and w.iloc[1]["Volume"] == 20
 
+    def test_build_daily_has_sma_on_full_history_and_aligns_days(self):
+        df = make_prices(n=300, daily=0.002)
+        days = list(df.index[-20:])
+        d = watchlist.build_daily(df, days)
+        assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma50", "sma200"))
+        assert d["sma200"][0] is not None  # SMA200 liczona na pelnej historii, nie tylko na oknie
+
     def test_build_chart_aligns_to_common_weeks_and_pads_missing(self):
         weekly = watchlist.weekly_ohlcv(make_prices(n=300, daily=0.002))
         weeks = list(weekly.index[-10:])
@@ -212,3 +219,62 @@ class TestCharts:
     def test_build_charts_without_benchmark_still_works(self):
         charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=300)}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 30)
         assert charts["benchmark"] is None and charts["spx"] is None and len(charts["stocks"]["AAA"]["c"]) == 30
+
+
+def make_weekly(highs, lows=None, closes=None, start="2025-01-03"):
+    idx = pd.date_range(start, periods=len(highs), freq="W-FRI")
+    lows = lows if lows is not None else [h * 0.97 for h in highs]
+    closes = closes if closes is not None else [(h + lo) / 2 for h, lo in zip(highs, lows)]
+    return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": 1000}, index=idx)
+
+
+class TestBases:
+    def test_zigzag_contractions_ignore_noise_and_measure_drops(self):
+        closes = [100, 90, 98, 92, 97, 94, 96]
+        assert watchlist.zigzag_contractions(closes, pct=3.0) == [10.0, 6.1, 3.1]
+        assert watchlist.zigzag_contractions([100, 100.5, 100.2, 100.8], pct=3.0) == []   # sam szum, brak skurczów
+        assert watchlist.zigzag_contractions([]) == []
+
+    def test_closed_base_depth_length_and_breakout(self):
+        # szczyt 100 w tygodniu 2, korekta do ~80 przez 7 tygodni, potem wybicie ponad 100 (zamyka bazę)
+        highs = [90, 95, 100, 96, 92, 88, 85, 86, 90, 95, 102, 104]
+        lows = [h * 0.97 for h in highs]
+        lows[6] = 80
+        bases = watchlist.detect_bases(make_weekly(highs, lows))
+        closed = [b for b in bases if not b["open"]]
+        assert len(closed) == 1
+        b = closed[0]
+        assert b["peak"] == 100 and b["pivot"] == 100 and b["low"] == 80
+        assert b["depth_pct"] == 20.0 and b["weeks"] == 8 and b["type"] in ("cup", "correction")
+        assert b["start"] == "2025-01-17" and b["end"] == "2025-03-07"
+
+    def test_open_base_flat_vcp_with_shrinking_contractions(self):
+        # szczyt 100, potem trzy coraz płytsze skurcze (10% -> 6% -> 3%+) i brak wybicia = otwarta baza "flat"
+        closes = [100, 90, 98, 92, 97, 94.5, 96, 95, 96.5, 95.8]
+        highs = [100] + [c * 1.005 for c in closes[1:]]
+        lows = [c * 0.995 for c in closes]
+        bases = watchlist.detect_bases(make_weekly(highs, lows, closes))
+        assert len(bases) == 1 and bases[0]["open"] is True
+        b = bases[0]
+        assert b["type"] == "flat" and b["vcp"] is True and b["pivot"] == 100
+        assert b["contractions"] == sorted(b["contractions"], reverse=True)
+
+    def test_short_or_shallow_pullbacks_are_not_bases(self):
+        highs = [100, 101, 102, 103, 104, 105, 106, 107]               # ciągły trend, brak korekt
+        assert watchlist.detect_bases(make_weekly(highs)) == []
+        shallow = [100, 99, 99.5, 99.2, 99.4, 99.1, 99.3]               # < 6 % głębokości
+        assert watchlist.detect_bases(make_weekly(shallow, [h * 0.995 for h in shallow])) == []
+
+    def test_metrics_expose_52w_high_distance_and_open_base_summary(self):
+        df = make_prices(n=300, daily=0.003)
+        df.iloc[-30:, df.columns.get_indexer(["Close", "High", "Low", "Open"])] *= 0.8      # korekta ~20 % od szczytu
+        m = watchlist.compute_metrics(df)
+        assert m["pct_from_high_52w"] < -5
+        assert m["base_type"] in ("flat", "cup", "correction", "deep") and m["pivot"] > m["price"]
+        assert m["pct_to_pivot"] > 0 and isinstance(m["vcp"], bool)
+
+    def test_build_charts_includes_recent_bases_only(self):
+        df = make_prices(n=400, daily=0.002)
+        charts = watchlist.build_charts(["AAA"], {"AAA": df}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 52)
+        assert "bases" in charts["stocks"]["AAA"]
+        assert len(charts["stocks"]["AAA"]["bases"]) <= watchlist.BASE_MAX_SHOWN
