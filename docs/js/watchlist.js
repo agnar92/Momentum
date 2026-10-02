@@ -263,9 +263,23 @@ const TAB_COLUMNS = {
     BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "spark", "earnings", "tv"],
 };
 
+// Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
+const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
+const TAB_COLUMNS_COMPACT = {
+    LIST: ["fav", "ticker", "price", "rs", "high52"],
+    FAV: ["fav", "ticker", "price", "rs", "high52"],
+    RS: ["fav", "ticker", "price", "rs", "r3"],
+    QM: ["fav", "ticker", "price", "adr", "ratio"],
+    EMA34: ["fav", "ticker", "price", "slope", "rs"],
+    BASES: ["fav", "ticker", "price", "baseType", "toPivot"],
+    ALERTS: ["ticker", "alValue", "alDist", "alStatus", "alAct"],
+};
+let splitMode = false;
+const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
+
 function renderHeaders() {
     Object.keys(TAB_COLUMNS).forEach(tab => {
-        const head = TAB_COLUMNS[tab].map(id => {
+        const head = columnsFor(tab).map(id => {
             const [label, key, , title] = COL[id];
             return `<th${key ? ` data-key="${key}"` : ""}${title ? ` title="${title}"` : ""}${id === "tv" ? ` class="tv-col"` : ""}>${label}</th>`;
         }).join("");
@@ -274,7 +288,7 @@ function renderHeaders() {
 }
 
 function renderRow(tab, s, i) {
-    return TAB_COLUMNS[tab].map(id => COL[id][2](s, i)).join("");
+    return columnsFor(tab).map(id => COL[id][2](s, i)).join("");
 }
 
 function rowsForTab(tab) {
@@ -319,6 +333,56 @@ function renderTable() {
         ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) z ${total}`
         : `${rows.length} z ${total} spółek`;
     updateSortHeaders(table);
+    markSelectedRow();
+    if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
+        const first = tbody.querySelector("tr[data-ticker]");
+        if (first) openChart(first.dataset.ticker);
+        else showChartPlaceholder();
+    }
+}
+
+// Zaznaczenie wiersza spółki, której wykres jest otwarty (i przewinięcie do niego).
+function markSelectedRow(scroll = false) {
+    const t = chartRequested;
+    document.querySelectorAll("table.momentum-table tbody tr.row-selected").forEach(tr => tr.classList.remove("row-selected"));
+    if (!t) return;
+    const tr = [...document.querySelectorAll(`#table-${state.tab} tbody tr[data-ticker]`)].find(r => r.dataset.ticker === t);
+    if (tr) { tr.classList.add("row-selected"); if (scroll) tr.scrollIntoView({ block: "nearest" }); }
+}
+
+// Strzałki ↑/↓ przechodzą po bieżącej liście (jak spacja/strzałki w TC2000) i ładują wykres kolejnej spółki.
+function stepChart(delta) {
+    const rows = [...document.querySelectorAll(`#table-${state.tab} tbody tr[data-ticker]`)];
+    if (!rows.length) return;
+    const cur = rows.findIndex(r => r.dataset.ticker === chartRequested);
+    const next = rows[Math.max(0, Math.min(rows.length - 1, cur < 0 ? 0 : cur + delta))];
+    if (next && next.dataset.ticker !== chartRequested) openChart(next.dataset.ticker);
+}
+
+function showChartPlaceholder() {
+    const body = document.getElementById("chartBody");
+    if (body) body.innerHTML = `<div class="empty-state">Wybierz spółkę z listy (kliknij wiersz albo użyj strzałek ↑ ↓).</div>`;
+    document.getElementById("chartTitle").textContent = "";
+    document.getElementById("chartSub").textContent = "";
+    document.getElementById("chartStats").textContent = "";
+    document.getElementById("chartPattern").textContent = "";
+}
+
+// Przełączenie układu: widok dzielony (szeroki ekran) <-> wykres w oknie (wąski ekran / telefon).
+function applyLayoutMode() {
+    const want = window.innerWidth >= SPLIT_MIN_WIDTH && window.innerHeight >= SPLIT_MIN_HEIGHT;
+    if (want === splitMode) return;
+    splitMode = want;
+    document.body.classList.toggle("split", want);
+    if (state.data) {
+        renderHeaders();
+        if (!want) {
+            document.getElementById("chartModal").hidden = true;
+            currentChart = null; chartRequested = null; chartToken++;
+            if (chartFull) setChartFull(false);
+        }
+        renderTable();
+    }
 }
 
 // Liczba nowych (przebitych, niezatwierdzonych) alertów na zakładce 🔔.
@@ -489,6 +553,8 @@ let chartWinLen = { d: null, w: null };   // długość okna suwaka zapamiętana
 let chartWindow = null;     // okno suwaka {n, end} (null = domyślne); zerowane przy nowej spółce / zmianie interwału
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
+let chartRequested = null;  // ticker, którego wykres jest otwarty lub właśnie się wczytuje (zaznaczenie wiersza, strzałki)
+let chartToken = 0;         // numeruje żądania wykresu — spóźniona odpowiedź nie nadpisze nowszej spółki
 let chartFull = false;      // okno wykresu na cały ekran (przycisk ⛶ / klawisz F)
 let chartWide = false;      // pełny ekran na szerokim monitorze => układ szeroki (chart.js)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
@@ -513,6 +579,9 @@ async function openChart(ticker) {
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
     document.getElementById("chartTv").href = tvUrlFor(ticker);
     const body = document.getElementById("chartBody");
+    chartRequested = ticker;
+    const token = ++chartToken;
+    markSelectedRow(true);
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
     chartWindow = null;
     Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });   // nowy wykres: poza trybem edycji
@@ -521,7 +590,7 @@ async function openChart(ticker) {
     body.innerHTML = `<div class="empty-state">Ładowanie wykresu…</div>`;
     modal.hidden = false;
     const charts = await loadCharts();
-    if (modal.hidden) return; // zamknięte w trakcie ładowania
+    if (modal.hidden || token !== chartToken) return; // zamknięte w trakcie ładowania albo wybrano już inną spółkę
     if (!charts) { body.innerHTML = `<div class="empty-state">Nie udało się wczytać danych wykresów.</div>`; return; }
     currentChart = { charts, ticker, stock };
     const model = drawChart();
@@ -576,8 +645,10 @@ function closeChart() {
     document.getElementById("chartModal").hidden = true;
     Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });
     annSyncTools();
-    renderTable();   // zakładka Alerty / licznik mogły się zmienić po edycji linii
     currentChart = null;
+    chartRequested = null;
+    chartToken++;
+    renderTable();   // zakładka Alerty / licznik mogły się zmienić po edycji linii
 }
 
 function updateLogButton() {
@@ -616,16 +687,23 @@ function initChartModal() {
     document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && chartFull) setChartFull(false); });
     // Obrót telefonu / zmiana rozmiaru okna przełącza układ kompaktowy bez ponownego otwierania wykresu.
     window.addEventListener("resize", () => {
+        applyLayoutMode();
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;
         chartCompact = compact;
         chartWindow = null;
         drawChart();
     });
-    document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal") closeChart(); });
+    document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal" && !splitMode) closeChart(); });
     document.addEventListener("keydown", ev => {
-        if (ev.key === "Escape") { if (chartFull) setChartFull(false); else closeChart(); return; }
-        const open = !document.getElementById("chartModal").hidden;
+        if (ev.key === "Escape") { if (chartFull) setChartFull(false); else if (!splitMode) closeChart(); return; }
+        const open = !document.getElementById("chartModal").hidden || splitMode;
+        const typingNow = /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
+        if ((ev.key === "ArrowDown" || ev.key === "ArrowUp") && open && !typingNow && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+            ev.preventDefault();
+            stepChart(ev.key === "ArrowDown" ? 1 : -1);
+            return;
+        }
         if ((ev.key === "f" || ev.key === "F") && open && !ev.ctrlKey && !ev.metaKey && !/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) setChartFull(!chartFull);
     });
 }
@@ -651,6 +729,7 @@ if (typeof document !== "undefined") {
         annLoad();
         await loadData();
         renderDataInfo();
+        applyLayoutMode();
         renderHeaders();
         initControls();
         annInitUI(drawChart);
@@ -668,6 +747,6 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         rsLeaders, qullamaggieRows, ema34Rows, baseRows, earningsInDays, applyCommonFilters, githubActionsUrl, sortRows,
-        fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state,
+        fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

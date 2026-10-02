@@ -84,7 +84,7 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
 
 ## Frontend (`docs/`) — plain HTML/CSS/vanilla JS, no build step
 
-- **`index.html` + `js/watchlist.js`** — the only data page. Six tabs over the same `watchlist.json` (columns are defined once in `COL`/`TAB_COLUMNS` in watchlist.js and the
+- **`index.html` + `js/watchlist.js`** — the only data page. **Layout modelled on TC2000 (user's reference): on wide screens (≥ 1000 × 560 px, `applyLayoutMode`, `body.split`) it is a split view — narrow list on the left (430 px, only 5 key columns per tab: `TAB_COLUMNS_COMPACT`) and the chart permanently docked on the right (`#chartModal` lives inside `.workspace`; CSS turns the modal into a pane); the chart always shows the current symbol: the first row auto-opens, clicking a row or pressing ↑/↓ (`stepChart`) flips through the visible list, the open row is highlighted (`.row-selected`, `markSelectedRow`), `chartToken` drops stale async loads. On narrow screens / phones the chart is the old overlay modal and the full column set is used.** Six tabs over the same `watchlist.json` (columns are defined once in `COL`/`TAB_COLUMNS` in watchlist.js and the
   `<thead>`s are generated from them):
   - **📋 Lista** — every stock that passed Finviz (EPS columns from Finviz, SMA distances/RS from our data).
   - **📊 RS Ranking** — `rs_rating ≥` a user-entered minimum (default 80), best first (`rsLeaders`).

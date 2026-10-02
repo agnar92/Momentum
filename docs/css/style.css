@@ -273,6 +273,35 @@ th.tv-col { width: 1%; }
 .chart-modal-backdrop:fullscreen { padding: 0; background: var(--bg); }
 .wl-chart-body svg { display: block; width: 100%; height: auto; max-height: calc(96vh - 270px); }
 
+/* ---------- widok dzielony (szeroki ekran): wąska lista po lewej, wykres po prawej — jak w TC2000 ---------- */
+table.momentum-table tbody tr.row-selected { background: rgba(46, 204, 113, 0.13); box-shadow: inset 3px 0 0 var(--green-bright); }
+.wl-chart-box.full { position: fixed; inset: 0; z-index: 1600; }
+body.split .workspace { display: flex; height: calc(100vh - 48px); }
+body.split .table-drawer { flex: 0 0 430px; width: 430px; min-width: 0; border-right: 1px solid var(--border); }
+body.split .drawer-header { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px; }
+body.split .drawer-header-title h2 { font-size: 13px; }
+body.split .drawer-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; }
+body.split .drawer-tab { flex: none; white-space: nowrap; padding: 5px 9px; font-size: 11.5px; }
+body.split .toolbar, body.split .tab-controls { padding: 6px 10px; gap: 6px 10px; }
+body.split .toolbar-info { flex: 1 1 100%; }
+body.split .field input[type="text"] { width: 110px; }
+body.split .screener-guide { padding: 6px 10px; font-size: 12px; }
+body.split .table-scroll { padding: 0 6px 10px; }
+body.split table.momentum-table { font-size: 12px; }
+body.split table.momentum-table thead th { padding: 6px 7px; }
+body.split table.momentum-table td { padding: 6px 7px; }
+body.split .chart-modal-backdrop {
+    position: static; inset: auto; flex: 1; min-width: 0; padding: 0; background: none; z-index: auto;
+    display: flex; align-items: stretch; justify-content: stretch;
+}
+body.split .chart-modal-backdrop[hidden] { display: flex; }
+body.split .chart-modal-backdrop:fullscreen { background: var(--bg); }
+body.split .wl-chart-box { width: 100%; height: 100%; max-height: none; border: none; border-radius: 0; box-shadow: none; padding: 10px 14px; }
+body.split .wl-chart-box.full { width: 100vw; height: 100vh; height: 100dvh; padding: 10px 14px; }
+body.split #chartClose { display: none; }
+body.split .wl-chart-body svg { max-height: calc(100vh - 48px - 250px); }
+body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235px); max-height: calc(100dvh - 235px); }
+
 /* ---------- ep.html ---------- */
 .charts-area {
     flex: none;
