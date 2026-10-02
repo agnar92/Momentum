@@ -348,3 +348,51 @@ class TestRsLine:
         bench.iloc[:-40] = 200.0                                 # a RS było niskie (0.65) -> dziś RS na maksimum
         rs, rs_hi, px_hi = watchlist.rs_line_flags(price, bench)
         assert watchlist.rs_line_summary(rs, rs_hi, px_hi)["state"] == "przed ceną"
+
+
+class TestEstimates:
+    RAW = {
+        "pt": {"low": 46.0, "mean": 60.0, "median": 61.0, "high": 74.0},
+        "trend": {"0y": {"current": 1.2, "7daysAgo": 1.19, "30daysAgo": 1.0, "60daysAgo": 0.9, "90daysAgo": 0.8},
+                  "+1y": {"current": 1.3, "7daysAgo": 1.3, "30daysAgo": 1.4, "60daysAgo": 1.4, "90daysAgo": 1.5}},
+        "est": {"0y": {"avg": 1.2, "low": 1.1, "high": 1.3, "numberOfAnalysts": 6.0, "growth": 0.5, "yearAgoEps": 0.8},
+                "+1y": {"avg": 1.3, "low": 1.2, "high": 1.5, "numberOfAnalysts": 6.0, "growth": 0.1, "yearAgoEps": 1.2}},
+        "rev": {"0y": {"upLast7days": 4, "upLast30days": 5, "downLast30days": 0, "downLast7Days": 0}, "+1y": {}},
+    }
+
+    def test_entry_seeds_history_from_trend_and_merges_new_points(self):
+        e = watchlist.build_estimate_entry(self.RAW, None, "2026-10-02")
+        h = e["p"]["0y"]["h"]
+        assert [d for d, _ in h] == ["2026-07-04", "2026-08-03", "2026-09-02", "2026-09-25", "2026-10-02"]
+        assert h[0][1] == 0.8 and h[-1][1] == 1.2
+        assert e["p"]["0y"]["n"] == 6.0 and e["p"]["0y"]["u30"] == 5
+        raw2 = {**self.RAW, "trend": {**self.RAW["trend"], "0y": {**self.RAW["trend"]["0y"], "current": 1.25}}}
+        e2 = watchlist.build_estimate_entry(raw2, e, "2026-10-04")
+        h2 = e2["p"]["0y"]["h"]
+        assert h2[-1] == ["2026-10-04", 1.25]
+        assert ["2026-10-02", 1.2] in h2 and len(h2) >= 6          # historia rośnie, stare punkty zostają
+
+    def test_estimate_fields_upside_and_revisions(self):
+        e = watchlist.build_estimate_entry(self.RAW, None, "2026-10-02")
+        f = watchlist.estimate_fields(e, 50.0)
+        assert f["pt_mean"] == 60.0 and f["pt_upside_pct"] == 20.0
+        assert f["eps_rev90_pct"] == 50.0                            # 0.8 -> 1.2
+        assert f["eps1_rev30_pct"] == -7.1                           # 1.4 -> 1.3
+        assert f["rev_up30"] == 5 and f["rev_down30"] == 0 and f["analysts"] == 6.0
+        assert watchlist.estimate_fields(None, 50.0)["pt_upside_pct"] is None
+
+    def test_update_estimates_uses_cache_skips_fresh_and_survives_errors(self, tmp_path):
+        calls = []
+
+        def fake(t):
+            calls.append(t)
+            if t == "BAD":
+                raise RuntimeError("yahoo")
+            return self.RAW
+        path = tmp_path / "estimates.json"
+        out = watchlist.update_estimates(["AAA", "BAD"], path, now="2026-10-02", fetch=fake)
+        assert "AAA" in out and "BAD" not in out
+        calls.clear()
+        watchlist.update_estimates(["AAA", "BAD"], path, now="2026-10-03", fetch=fake)   # AAA świeże (1 dzień), BAD ponawiane
+        assert calls == ["BAD"]
+        assert json.loads(path.read_text())["stocks"]["AAA"]["pt"]["mean"] == 60.0

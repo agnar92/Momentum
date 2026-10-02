@@ -306,3 +306,37 @@ test("fitLayout fills the requested box: panels stack in order and fit the heigh
     const svg = chartSvg(buildChartModel(charts(), "AAA", null), { fit: { w: 620, h: 600 } });
     assert.match(svg, new RegExp(`viewBox="0 0 620 ${L.height}"`));
 });
+
+const EST = {
+    f: "2026-10-02", pt: { low: 46, mean: 60, median: 61, high: 74 },
+    p: {
+        "0y": { avg: 1.2, n: 6, u30: 5, d30: 0, h: [["2026-07-04", 0.8], ["2026-09-02", 1.0], ["2026-10-02", 1.2]] },
+        "+1y": { avg: 1.3, n: 6, h: [["2026-07-04", 1.5], ["2026-10-02", 1.3]] },
+    },
+};
+
+test("estimateChange / estimateSeries / estimateText summarise price targets and EPS revisions", () => {
+    const { estimateChange, estimateSeries, estimateText } = require("../../docs/js/chart.js");
+    assert.equal(Math.round(estimateChange(EST.p["0y"].h, 90)), 50);          // 0.8 -> 1.2
+    assert.equal(Math.round(estimateChange(EST.p["0y"].h, 30)), 20);          // 1.0 -> 1.2
+    assert.equal(estimateChange([["2026-10-02", 1]], 30), null);
+    assert.deepEqual(estimateSeries(EST).map(s => s.key), ["0y", "+1y"]);
+    assert.equal(estimateSeries({ p: { "0y": { h: [["2026-10-02", 1]] } } }).length, 0);   // jeden punkt to jeszcze nie linia
+    const t = estimateText(EST, 50);
+    assert.match(t, /Cena celu: śr\. \$60 \(\+20\.0%\), zakres \$46–\$74/);
+    assert.match(t, /EPS bież\. rok: 1\.2 \(30d \+20\.0%, 90d \+50\.0%, rewizje 30d ↑5 ↓0\), 6 analityków/);
+    assert.match(estimateText(null, 50), /Brak estymat/);
+});
+
+test("chartSvg draws the price-target bracket and the consensus EPS panel only when estimates are given", () => {
+    const m = buildChartModel(charts(), "AAA", null);
+    const off = chartSvg(m, {});
+    assert.ok(!/Konsensus EPS/.test(off) && !/Cena celu analityków/.test(off));
+    const on = chartSvg(m, { estimates: EST });
+    assert.match(on, /Cena celu analityków: śr\. \$60/);
+    assert.match(on, /Konsensus EPS \(zmiana %\)/);
+    assert.match(on, /\+50%/);                                                  // koniec linii bieżącego roku względem początku historii
+    const clipped = chartSvg(m, { estimates: { ...EST, pt: { low: 5, mean: 60, median: 60, high: 900 } } });
+    assert.match(clipped, /↑ \$900/);                                          // skrajny cel przycięty w skali, prawdziwa wartość w etykiecie
+    assert.match(clipped, /↓ \$5/);
+});

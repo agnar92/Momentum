@@ -84,7 +84,7 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
 
 ## Frontend (`docs/`) — plain HTML/CSS/vanilla JS, no build step
 
-- **`index.html` + `js/watchlist.js`** — the only data page. **Layout modelled on TC2000 (user's reference): on wide screens (≥ 1000 × 560 px, `applyLayoutMode`, `body.split`) it is a split view — narrow list on the left (430 px, only 5 key columns per tab: `TAB_COLUMNS_COMPACT`) and the chart permanently docked on the right (`#chartModal` lives inside `.workspace`; CSS turns the modal into a pane); the chart always shows the current symbol: the first row auto-opens, clicking a row or pressing ↑/↓ (`stepChart`) flips through the visible list, the open row is highlighted (`.row-selected`, `markSelectedRow`), `chartToken` drops stale async loads. On narrow screens / phones the chart is the old overlay modal and the full column set is used.** **Chart layouts (split view only, `Układ:` button cycles, `momentum_watchlist_chart_layout`)**: `1` one chart; `dw` daily + weekly of the same stock side by side; `4` the selected stock + the next 3 from the visible list (daily; click a cell header to select that stock, ↑/↓ shifts the set by one). `drawChart` builds `.chart-grid` cells (`chartCells`), each with its own readout, slider and window state (`chartWindows[i]`); only cell 0 is editable (`annOverlay` gets `readonly` for the others) and SVG ids are made unique per cell (`opts.uid`). Grid cells use `fitLayout(w, h)` (viewBox = real cell pixels, panels scaled to the height, two-row legend below 560 px) via `opts.fit` (`cellFit`); resize redraws the grid. Six tabs over the same `watchlist.json` (columns are defined once in `COL`/`TAB_COLUMNS` in watchlist.js and the
+- **`index.html` + `js/watchlist.js`** — the only data page. **Layout modelled on TC2000 (user's reference): on wide screens (≥ 1000 × 560 px, `applyLayoutMode`, `body.split`) it is a split view — narrow list on the left (430 px, only 5 key columns per tab: `TAB_COLUMNS_COMPACT`) and the chart permanently docked on the right (`#chartModal` lives inside `.workspace`; CSS turns the modal into a pane); the chart always shows the current symbol: the first row auto-opens, clicking a row or pressing ↑/↓ (`stepChart`) flips through the visible list, the open row is highlighted (`.row-selected`, `markSelectedRow`), `chartToken` drops stale async loads. On narrow screens / phones the chart is the old overlay modal and the full column set is used.** **Chart layouts (split view only, `Układ:` button cycles, `momentum_watchlist_chart_layout`)**: `1` one chart; `dw` daily + weekly of the same stock side by side; `4` the selected stock + the next 3 from the visible list (daily; click a cell header to select that stock, ↑/↓ shifts the set by one). `drawChart` builds `.chart-grid` cells (`chartCells`), each with its own readout, slider and window state (`chartWindows[i]`); only the focused cell is editable (`annOverlay` gets `readonly` for the others): cell 0 by default, and in the `dw` layout clicking either chart (outside its slider) gives it focus (`chartActiveCell`, green header underline), so lines/cups can be drawn on the weekly chart too — user lines are date-based and show on both and SVG ids are made unique per cell (`opts.uid`). Grid cells use `fitLayout(w, h)` (viewBox = real cell pixels, panels scaled to the height, two-row legend below 560 px) via `opts.fit` (`cellFit`); resize redraws the grid. Six tabs over the same `watchlist.json` (columns are defined once in `COL`/`TAB_COLUMNS` in watchlist.js and the
   `<thead>`s are generated from them):
   - **📋 Lista** — every stock that passed Finviz (EPS columns from Finviz, SMA distances/RS from our data).
   - **📊 RS Ranking** — `rs_rating ≥` a user-entered minimum (default 80), best first (`rsLeaders`).
@@ -167,6 +167,22 @@ on the chart without needing the bar series.
 `triggered` = price above/below the line, `near` = within 2 %); a freshly triggered alert stays "PRZEBITA — nowa" (counted in
 the tab badge) until OK is clicked (`ack`), and resets when the price returns to the other side (`annRefresh`). No push
 notifications — alerts are evaluated when the page loads / data is refreshed / a chart closes.
+
+## Analyst estimates (Yahoo via yfinance) — `Estymaty` button
+
+`update_estimates` (watchlist.py → `docs/data/estimates.json` = `{updated, stocks:{T:{f, pt:{low,mean,median,high}, p:{"0y","+1y":{avg,low,high,n,g,ya,u7,u30,d30,d7,h:[[date,value]...]}}}}}`)
+fetches per ticker (4 Yahoo calls: `get_analyst_price_targets`, `get_eps_trend`, `get_earnings_estimate`, `get_eps_revisions`;
+~1.4 s each, 4 workers, refreshed when older than 2 days, 700 s budget, errors never abort). Yahoo only has the current and
+next fiscal year (FY0 / FY+1) and a SNAPSHOT of the consensus (now, 7/30/60/90 days ago), so `build_estimate_entry` seeds the
+history from those points and every refresh APPENDS new points (`h`, kept 400 days) — the series becomes a real consensus-revision
+line over time, like Zacks' "EPS Consensus". `estimate_fields` adds flat columns to watchlist.json: `pt_mean`, `pt_upside_pct`
+(target vs. price — informational, the user can compute it himself), `eps_rev30_pct`, `eps_rev90_pct`, `eps1_rev30_pct`,
+`rev_up30`, `rev_down30`, `analysts` (table columns "Upside do ceny celu", "Rewizje EPS 30d/90d").
+Chart: header button `Estymaty: wł./wył.` (`momentum_watchlist_chart_est`, lazy `loadEstimates`): price panel gets a bracket
+low–high with a dot on the mean target at the right edge and a dotted mean line (extreme targets are clipped to 0.65–1.6× price for
+the scale only, labels keep the real values with ↑/↓); the EPS panel switches from quarterly EPS to "Konsensus EPS (zmiana %)": FY0
+and FY+1 as % change vs. the first history point (one scale for both); `#chartEstimates` shows a one-line summary (`estimateText`).
+estimates.json is generated by the daily workflow — don't commit locally generated copies (they conflict with the bot's refresh).
 
 ## RS line (chart)
 

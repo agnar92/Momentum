@@ -327,6 +327,44 @@ function cupArcPoints(cup, x, yP, steps = 48) {
     return { pts, yL, yB, yR };
 }
 
+// ---------- estymaty analityków (Yahoo): cena celu + rewizje konsensusu EPS (opts.estimates = wpis z data/estimates.json) ----------
+const EST_COLORS = { fy0: "#fbbf24", fy1: "#a78bfa", pt: "#2dd4bf" };
+const EST_LABELS = { "0y": "bież. rok", "+1y": "nast. rok" };
+
+// Linie konsensusu EPS (historia punktów [data, wartość]) dla bieżącego i następnego roku; tylko serie z >= 2 punktami.
+function estimateSeries(entry) {
+    if (!entry || !entry.p) return [];
+    return ["0y", "+1y"].map(k => ({ key: k, label: EST_LABELS[k], color: k === "0y" ? EST_COLORS.fy0 : EST_COLORS.fy1, p: entry.p[k], h: (entry.p[k] && entry.p[k].h) || [] }))
+        .filter(s => s.h.length >= 2);
+}
+
+// Zmiana % konsensusu względem punktu sprzed `days` dni (najbliższy wcześniejszy punkt historii) albo null.
+function estimateChange(h, days) {
+    if (!h || h.length < 2) return null;
+    const last = h[h.length - 1], target = new Date(dateMs(last[0]) - days * DAY_MS).toISOString().slice(0, 10);
+    const older = h.filter(pt => pt[0] <= target);
+    const base = older.length ? older[older.length - 1][1] : null;
+    return base ? (last[1] - base) / Math.abs(base) * 100 : null;
+}
+
+// Jednolinijkowe podsumowanie: cena celu (średnia, upside, zakres) i rewizje EPS.
+function estimateText(entry, price) {
+    if (!entry) return "Brak estymat analityków dla tej spółki.";
+    const parts = [];
+    const pt = entry.pt;
+    if (pt && pt.mean) {
+        const up = Number.isFinite(price) && price > 0 ? ` (${(pt.mean / price - 1) * 100 >= 0 ? "+" : ""}${((pt.mean / price - 1) * 100).toFixed(1)}%)` : "";
+        parts.push(`Cena celu: śr. $${pt.mean}${up}, zakres $${pt.low}–$${pt.high}`);
+    }
+    estimateSeries(entry).forEach(sr => {
+        const c30 = estimateChange(sr.h, 30), c90 = estimateChange(sr.h, 90);
+        const f = v => (v === null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}%`);
+        const rev = sr.key === "0y" && sr.p.u30 !== undefined && sr.p.u30 !== null ? `, rewizje 30d ↑${sr.p.u30} ↓${sr.p.d30 ?? 0}` : "";
+        parts.push(`EPS ${sr.label}: ${sr.h[sr.h.length - 1][1]} (30d ${f(c30)}, 90d ${f(c90)}${rev})${sr.p.n ? `, ${sr.p.n} analityków` : ""}`);
+    });
+    return parts.join(" · ") || "Brak estymat analityków dla tej spółki.";
+}
+
 function chartSvg(m, opts = {}) {
     const L = pickLayout(opts);
     const fs = n => +(n * (opts.compact ? COMPACT_FONT_SCALE : (L.fontScale || 1))).toFixed(1);
@@ -370,7 +408,13 @@ function chartSvg(m, opts = {}) {
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.price.y - 4}" y2="${L.price.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
 
     // --- 2. cena: słupki OHLC + SMA + RS
-    const pExt = numericExtent([m.h, m.l, ...m.smas.map(x => x.values)]) || [0, 1];
+    const est = opts.estimates || null;
+    // Skrajne ceny celu (np. 2× cena) nie mogą spłaszczyć świec: do skali liczymy je w przedziale [0,65×; 1,6×] ostatniej ceny,
+    // a prawdziwe wartości zostają w etykietach (strzałka ↑/↓ przy przyciętym końcu).
+    const lastClose = m.c[m.lastIdx];
+    const clipT = v => (Number.isFinite(lastClose) ? Math.min(lastClose * 1.6, Math.max(lastClose * 0.65, v)) : v);
+    const ptExt = est && est.pt && est.pt.low && est.pt.high ? [clipT(est.pt.low), clipT(est.pt.high), clipT(est.pt.mean || est.pt.high)] : [];
+    const pExt = numericExtent([m.h, m.l, ...m.smas.map(x => x.values), ptExt]) || [0, 1];
     const useLog = !!opts.log && pExt[0] > 0;
     const pad = (pExt[1] - pExt[0]) * 0.04;
     const pMin = useLog ? pExt[0] / 1.04 : pExt[0] - pad;
@@ -420,6 +464,19 @@ function chartSvg(m, opts = {}) {
     if (m.trend && m.trend.state === "wybicie" && m.lastShown !== false && Number.isFinite(m.h[m.lastIdx])) {
         const bx = x_(m.lastIdx), by = yP(m.h[m.lastIdx]) - 8;
         parts.push(`<path d="M${bx - 6},${by - 10} L${bx + 6},${by - 10} L${bx},${by} Z" fill="${CHART_COLORS.res}"><title>Wybicie z linii trendu</title></path>`);
+    }
+    // cena celu analityków: pionowy zakres low–high z kropką na średniej i kropkowaną linią średniej do prawej krawędzi
+    if (est && est.pt && est.pt.mean && Number.isFinite(m.c[m.lastIdx])) {
+        const xr = L.width - L.right - 12, last = m.c[m.lastIdx];
+        const yMean = yP(clipT(est.pt.mean)), yHi = yP(clipT(est.pt.high)), yLo = yP(clipT(est.pt.low));
+        const up = (est.pt.mean / last - 1) * 100;
+        const col = EST_COLORS.pt;
+        parts.push(`<line x1="${x_(m.lastIdx)}" x2="${xr}" y1="${yMean}" y2="${yMean}" stroke="${col}" stroke-width="1.2" stroke-dasharray="2 4"/>`);
+        parts.push(`<line x1="${xr}" x2="${xr}" y1="${yHi}" y2="${yLo}" stroke="${col}" stroke-width="2.5"/>`);
+        [yHi, yLo].forEach(yy => parts.push(`<line x1="${xr - 5}" x2="${xr + 5}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="2"/>`));
+        parts.push(`<circle cx="${xr}" cy="${yMean}" r="${opts.compact ? 4.5 : 4}" fill="${col}"><title>Cena celu analityków: śr. $${est.pt.mean}, zakres $${est.pt.low}–$${est.pt.high}</title></circle>`);
+        const lab = (yy, t, bold) => `<text x="${xr - 9}" y="${yy + 4}" text-anchor="end" font-size="${fs(10)}" fill="${col}"${bold ? ' font-weight="700"' : ""} stroke="#0e0f13" stroke-width="3" paint-order="stroke">${t}</text>`;
+        parts.push(lab(yHi, (clipT(est.pt.high) < est.pt.high ? "↑ $" : "$") + est.pt.high), lab(yMean, `śr. $${est.pt.mean} (${up >= 0 ? "+" : ""}${up.toFixed(0)}%)`, true), lab(yLo, (clipT(est.pt.low) > est.pt.low ? "↓ $" : "$") + est.pt.low));
     }
     // linia RS w dolnej ~1/3 panelu (własna skala — liczy się kształt/kierunek, nie wartość)
     const rExt = numericExtent([m.rs]);
@@ -472,8 +529,36 @@ function chartSvg(m, opts = {}) {
 
     // --- 4. EPS kwartalny
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.eps.y - 4}" y2="${L.eps.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
-    parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
-    if (m.eps.length) {
+    const estSeries = est ? estimateSeries(est) : [];
+    if (estSeries.length) {
+        // tryb estymat: konsensus EPS (rok bieżący / następny) w czasie jako % zmiany względem pierwszego punktu historii —
+        // dzięki temu rewizje obu lat widać na jednej skali (poziomy EPS bywają różne o rząd wielkości); w legendzie wartości bezwzględne
+        const pctSeries = estSeries.map(sr => ({ ...sr, pct: sr.h.map(([d, v]) => [d, sr.h[0][1] ? (v / sr.h[0][1] - 1) * 100 : 0]) }));
+        const vals = pctSeries.flatMap(sr => sr.pct.map(pt => pt[1]).concat(0));
+        const lo = Math.min(...vals), hi = Math.max(...vals), padE = (hi - lo || 1) * 0.18;
+        const yE = makeYScale(lo - padE, hi + padE, L.eps.y + 22, L.eps.h - 36);
+        const legend = estSeries.map(sr => {
+            const c90 = estimateChange(sr.h, 90);
+            return `<tspan fill="${sr.color}">— EPS ${sr.label}: ${sr.h[sr.h.length - 1][1]}${c90 === null ? "" : ` (${c90 >= 0 ? "+" : ""}${c90.toFixed(0)}% / 90d)`}</tspan>`;
+        }).join("  ");
+        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}" font-weight="600">Konsensus EPS (zmiana %):  ${legend}</text>`);
+        parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yE(0)}" y2="${yE(0)}" stroke="${CHART_COLORS.grid}" stroke-dasharray="3 3"/>`);
+        parts.push(`<text x="${L.width - L.right + 6}" y="${yE(0) + 4}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">0%</text>`);
+        pctSeries.forEach(sr => {
+            const pts = sr.pct.map(([d, v]) => {
+                const i = dateToIndex(m.weeks, d);
+                return i < -0.5 || i > m.n - 0.5 ? null : [x(i), yE(v)];
+            });
+            parts.push(polyline(pts, sr.color, 2.2));
+            const lastPt = [...pts].reverse().find(Boolean);
+            if (lastPt) {
+                const v = sr.pct[sr.pct.length - 1][1];
+                parts.push(`<circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="3.6" fill="${sr.color}"/>`);
+                parts.push(`<text x="${L.width - L.right + 6}" y="${lastPt[1] + 4}" font-size="${fs(10)}" font-weight="700" fill="${sr.color}">${v >= 0 ? "+" : ""}${v.toFixed(0)}%</text>`);
+            }
+        });
+    } else if (m.eps.length) {
+        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
         const vals = m.eps.map(q => q.e);
         const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
         const yE = makeYScale(lo, hi, L.eps.y + 34, L.eps.h - 50);
@@ -488,6 +573,7 @@ function chartSvg(m, opts = {}) {
             }
         });
     } else {
+        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
         parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 40}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Brak danych o EPS kwartalnym dla tej spółki.</text>`);
     }
 
@@ -633,6 +719,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }
