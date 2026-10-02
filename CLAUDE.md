@@ -119,10 +119,18 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
 ## Bases / VCP (heuristic)
 
 `detect_bases` (watchlist.py, feeds only the 🧱 Bazy tab and the stats line — on the chart only `cup` bases are drawn, as a parabola arc left peak → low → right rim with the depth % in the
-center (`cups` in the model, `low_date`/`end_close` from `detect_bases`; the old boxes were unreadable) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks), classifies them
-flat/cup/correction/deep, gives a pivot (peak high) and a VCP flag (≥2 strictly decreasing zig-zag contractions,
+center (`cups` in the model, `low_date`/`end_close` from `detect_bases`; the old boxes were unreadable) finds corrections on weekly highs (depth 6–50 %, ≥5 weeks) and classifies them
+flat/cup/correction/deep. **`cup` only when `classify_cup` (O'Neil criteria) passes** (before, every 15–35 % correction that had recovered ≥ 50 % was a "cup", i.e. nearly every stock had one):
+prior uptrend (peak ≥ +30 % above the low of the previous 52 weeks), depth 12–33 % (up to 50 % when the S&P 500 fell ≥ 15 % meanwhile, `CUP_BEAR_MKT_DD`),
+10–45 weeks from the left peak to the right rim (`CUP_MIN_WEEKS`/`CUP_MAX_WEEKS`), a rounded "U" (low not at the edges, ≥ 38 % of the cup's weeks in the lowest third, a
+parabola fit R² ≥ 0.6, no zig-zag: no counter-move > 40 % of the depth), the right rim recovers ≥ 80 % of the depth and sits ≤ 10 % under the left peak,
+optional handle 1–10 weeks, ≤ 15 % deep and in the upper half of the cup. The right rim = the highest high after the low; **pivot = the rim/handle high**. Extra fields in
+`base.cup`: `rim`, `rim_date`, `cup_weeks`, `handle` {weeks, low, low_date, depth_pct}, `prior_gain_pct`, `fit`, `mkt_dd_pct` (S&P peak-to-trough drawdown between left peak and rim)
+and `mkt_ctx` (≥ 7 % = "formed under market pressure", informational, not a filter). The chart draws the arc up to the rim, the handle as a short path and
+labels "−24 % · S&P −8 %"; the Bazy tab shows "Cup base z rączką … · S&P −X %" (`base_handle`, `base_mkt_dd_pct`). The thresholds were tuned by eye on ~200 stocks (≈ 7 % have a cup in 3 years), not on labelled data.
+Gives a pivot (peak high; rim high for cups) and a VCP flag (≥2 strictly decreasing zig-zag contractions,
 last ≤10 %). Stored as `base_*`, `pivot`, `pct_to_pivot`,
-`vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (no handle/flag detection).
+`vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (heuristic; flags are detected separately, see below).
 
 ## Flags / consolidation (heuristic)
 
