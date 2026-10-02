@@ -28,7 +28,7 @@ const CHART_LAYOUT_COMPACT = {
 };
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
-const DAILY_WINDOW_DAYS = 21;   // domyślne okno wykresu dziennego (~1 miesiąc); cały rok jest dostępny suwakiem
+const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 const SMA_COLORS = { "SMA 10": "#3fbf6e", "SMA 20": "#f5d547", "SMA 50": "#c77dff", "SMA 200": "#e0455a", "SMA 10 tyg.": "#3fbf6e", "SMA 40 tyg.": "#e0455a" };
 const CHART_COLORS = {
