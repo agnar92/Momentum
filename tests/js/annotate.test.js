@@ -3,26 +3,36 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord,
+    bizIndex, lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord,
 } = require(path.join("..", "..", "docs", "js", "annotate.js"));
 const { dateToIndex, indexToDate } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
-const LINE = { id: "a1", kind: "res", x0: "2026-01-01", y0: 100, x1: "2026-01-11", y1: 110, alert: "above" };
+const LINE = { id: "a1", kind: "res", x0: "2026-01-05", y0: 100, x1: "2026-01-12", y1: 110, alert: "above" };   // pn -> pn: 5 dni handlowych
 
-test("lineValueAt interpolates and extrapolates by calendar days", () => {
-    assert.equal(lineValueAt(LINE, "2026-01-01"), 100);
-    assert.equal(lineValueAt(LINE, "2026-01-06"), 105);
-    assert.equal(lineValueAt(LINE, "2026-01-21"), 120);   // ekstrapolacja za prawy koniec
+test("bizIndex counts trading days; weekends sit between Friday and Monday", () => {
+    assert.equal(bizIndex("2026-01-12") - bizIndex("2026-01-05"), 5);
+    assert.equal(bizIndex("2026-01-09") + 1, bizIndex("2026-01-12"));
+    assert.ok(bizIndex("2026-01-10") > bizIndex("2026-01-09") && bizIndex("2026-01-10") < bizIndex("2026-01-12"));
+});
+
+test("lineValueAt is a straight line in trading days (log lines straight in ln price)", () => {
+    assert.equal(lineValueAt(LINE, "2026-01-05"), 100);
+    assert.equal(lineValueAt(LINE, "2026-01-07"), 104);
+    assert.equal(lineValueAt(LINE, "2026-01-09"), 108);
+    assert.equal(lineValueAt(LINE, "2026-01-12"), 110);      // za weekendem: tylko 1 dzień handlowy po piątku
+    assert.equal(lineValueAt(LINE, "2026-01-19"), 120);      // ekstrapolacja za prawy koniec
+    const logLine = { ...LINE, log: true, y1: 121 };
+    assert.ok(Math.abs(lineValueAt(logLine, "2026-01-08") - 100 * Math.pow(1.21, 3 / 5)) < 1e-9);
 });
 
 test("alertState: above/below, near and invalid", () => {
-    assert.deepEqual(Object.keys(alertState(LINE, 101, "2026-01-01")).sort(), ["dist", "near", "triggered", "value"]);
-    assert.equal(alertState(LINE, 111, "2026-01-11").triggered, true);          // cena nad linią 110
-    assert.equal(alertState(LINE, 109, "2026-01-11").triggered, false);
-    assert.equal(alertState(LINE, 109, "2026-01-11").near, true);               // < 2% od linii
-    assert.equal(alertState(LINE, 90, "2026-01-11").near, false);
-    assert.equal(alertState({ ...LINE, alert: "below" }, 99, "2026-01-01").triggered, true);
-    assert.equal(alertState(LINE, NaN, "2026-01-01"), null);
+    assert.deepEqual(Object.keys(alertState(LINE, 101, "2026-01-05")).sort(), ["dist", "near", "triggered", "value"]);
+    assert.equal(alertState(LINE, 111, "2026-01-12").triggered, true);          // cena nad linią 110
+    assert.equal(alertState(LINE, 109, "2026-01-12").triggered, false);
+    assert.equal(alertState(LINE, 109, "2026-01-12").near, true);               // < 2% od linii
+    assert.equal(alertState(LINE, 90, "2026-01-12").near, false);
+    assert.equal(alertState({ ...LINE, alert: "below" }, 99, "2026-01-05").triggered, true);
+    assert.equal(alertState(LINE, NaN, "2026-01-05"), null);
 });
 
 test("dateToIndex / indexToDate round trip, extrapolate and stay inside bars", () => {
@@ -54,9 +64,9 @@ test("autoToDates + annAdoptAuto copy auto lines/cups once and keep a snapshot",
 
 test("alertRows ranks new triggers first; annRefresh counts them and resets ack when no longer triggered", () => {
     const stocks = [
-        { ticker: "AAA", price: 111, as_of: "2026-01-11" },
-        { ticker: "BBB", price: 100, as_of: "2026-01-11" },
-        { ticker: "CCC", price: 50, as_of: "2026-01-11" },
+        { ticker: "AAA", price: 111, as_of: "2026-01-12" },
+        { ticker: "BBB", price: 100, as_of: "2026-01-12" },
+        { ticker: "CCC", price: 50, as_of: "2026-01-12" },
     ];
     const store = {
         AAA: { ...annEmptyRecord(), lines: [{ ...LINE }] },

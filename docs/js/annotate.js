@@ -26,11 +26,22 @@ function annEmptyRecord() {
     return { lines: [], cups: [], hideAutoLines: false, hideAutoCups: false, auto: null, note: "", editedAt: null };
 }
 
-// Wartość linii w danym dniu (interpolacja/ekstrapolacja po kalendarzu między dwoma punktami linii).
+// Numer dnia handlowego (pn-pt = kolejne liczby, weekend leży ułamkowo między piątkiem a poniedziałkiem) — dzięki temu linia
+// prosta na wykresie (oś = świece, bez weekendów) ma tę samą wartość co w alercie liczonym bez dostępu do szeregu świec.
+function bizIndex(date) {
+    const m = Math.floor(Date.parse(date + "T00:00:00Z") / 86400000) - 4;   // dni od poniedziałku 1970-01-05
+    const w = Math.floor(m / 7), r = m - 7 * w;
+    return w * 5 + (r <= 4 ? r : 4 + (r - 4) / 3);
+}
+
+// Wartość linii w danym dniu: prosta przez dwa punkty w osi dni handlowych; linia narysowana na skali logarytmicznej
+// (line.log) jest prosta w logarytmie ceny (tak jak ją widać na wykresie).
 function lineValueAt(line, date) {
-    const t0 = Date.parse(line.x0 + "T00:00:00Z"), t1 = Date.parse(line.x1 + "T00:00:00Z"), t = Date.parse(date + "T00:00:00Z");
+    const t0 = bizIndex(line.x0), t1 = bizIndex(line.x1), t = bizIndex(date);
     if (!(t1 > t0)) return line.y0;
-    return line.y0 + (line.y1 - line.y0) * (t - t0) / (t1 - t0);
+    const f = (t - t0) / (t1 - t0);
+    if (line.log && line.y0 > 0 && line.y1 > 0) return Math.exp(Math.log(line.y0) + (Math.log(line.y1) - Math.log(line.y0)) * f);
+    return line.y0 + (line.y1 - line.y0) * f;
 }
 
 // Stan alertu linii względem ceny z dnia asOf: triggered (cena po "złej" stronie linii), near (do ANN_NEAR_PCT% przed linią).
@@ -183,11 +194,6 @@ function annOverlay(ctx) {
         return { date: m.weeks[idx], price: r2(price) };
     };
 
-    const linePoints = (line, from, to) => {      // punkty [x, y] wzdłuż linii w czasie kalendarzowym (zgodnie z alertem)
-        const out = [];
-        for (let i = Math.max(0, Math.ceil(from)); i <= Math.min(m.n - 1, Math.floor(to)); i++) out.push([geom.x(i), geom.yP(lineValueAt(line, m.weeks[i]))]);
-        return out;
-    };
     const pts2s = pts => pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
 
     const markup = () => {
@@ -199,14 +205,16 @@ function annOverlay(ctx) {
             const i0 = idxOf(line.x0), i1 = idxOf(line.x1);
             const col = ANN_COLORS[line.kind] || ANN_COLORS.free;
             const a = [geom.x(i0), geom.yP(line.y0)], b = [geom.x(i1), geom.yP(line.y1)];
-            const main = [a, ...linePoints(line, i0 + 1e-9, i1 - 1e-9), b];
-            const ext = i1 < m.n - 1 ? [b, ...linePoints(line, i1 + 1e-9, m.n - 1)] : [];
+            // zwykła prosta między dwoma punktami + przerywane przedłużenie tej samej prostej do ostatniej świecy
+            const main = [a, b];
+            const xLast = geom.x(m.n - 1);
+            const ext = i1 < m.n - 1 && b[0] > a[0] ? [b, [xLast, b[1] + (b[1] - a[1]) * (xLast - b[0]) / (b[0] - a[0])]] : [];
             const isSel = sel && sel.type === "line" && sel.id === line.id;
             body += `<polyline fill="none" stroke="${col}" stroke-width="${isSel ? 3 : 2}" points="${pts2s(main)}"><title>${ANN_KIND_LABELS[line.kind] || "linia"}${line.alert ? " · alert " + ANN_DIR_LABELS[line.alert] : ""}</title></polyline>`;
             if (ext.length > 1) body += `<polyline fill="none" stroke="${col}" stroke-width="1.4" stroke-dasharray="2 4" points="${pts2s(ext)}"/>`;
             if (line.alert) body += `<text x="${Math.min(plotRight - 12, Math.max(L.left + 12, b[0] + 4))}" y="${b[1] - 6}" font-size="${geom.fs(13)}" text-anchor="middle">🔔</text>`;
             if (annEdit.on) {
-                body += `<polyline data-line="${line.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" points="${pts2s([a, ...linePoints(line, i0, i1), b])}"/>`;
+                body += `<polyline data-line="${line.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" points="${pts2s([a, b])}"/>`;
                 if (isSel) body += `<circle data-handle="a" data-line="${line.id}" cx="${a[0]}" cy="${a[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`
                     + `<circle data-handle="b" data-line="${line.id}" cx="${b[0]}" cy="${b[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`;
             }
@@ -249,7 +257,7 @@ function annOverlay(ctx) {
         if (annEdit.tool === "line" && P.length === 2) {
             const [p, q] = P[0].date <= P[1].date ? [P[0], P[1]] : [P[1], P[0]];
             if (p.date !== q.date) {
-                const line = { id: annNewId(), kind: annEdit.kind, x0: p.date, y0: p.price, x1: q.date, y1: q.price, alert: annEdit.alert || null };
+                const line = { id: annNewId(), kind: annEdit.kind, x0: p.date, y0: p.price, x1: q.date, y1: q.price, alert: annEdit.alert || null, log: !!geom.useLog };
                 R.lines.push(line);
                 annEdit.selected = { type: "line", id: line.id };
             }
@@ -400,6 +408,6 @@ function annInitUI(onRedraw) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT,
+        bizIndex, lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT,
     };
 }

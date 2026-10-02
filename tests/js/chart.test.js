@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    patternExplain, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
+    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -239,4 +239,12 @@ test("patternExplain describes the flag, volume dry-up and breakout; pole is dra
     assert.equal(patternExplain(buildChartModel(charts(), "AAA", null)), "");   // brak info => brak opisu
     c.stocks.AAA.tl = null;
     assert.equal(patternExplain(buildChartModel(c, "AAA", null)), "");
+});
+
+test("defaultWindowLength prefers the remembered length, else built-in defaults", () => {
+    assert.equal(defaultWindowLength({ daily: true, n: 252 }, {}), 42);
+    assert.equal(defaultWindowLength({ daily: true, n: 252 }, { windowLen: 120 }), 120);
+    assert.equal(defaultWindowLength({ daily: false, n: 104 }, {}), 104);
+    assert.equal(defaultWindowLength({ daily: false, n: 104 }, { compact: true }), 52);
+    assert.equal(defaultWindowLength({ daily: true, n: 252 }, { windowLen: 0 }), 42);   // zły zapis => domyślne
 });
