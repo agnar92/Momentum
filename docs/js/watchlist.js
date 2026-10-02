@@ -561,6 +561,7 @@ let chartEstOn = false;      // estymaty analityków na wykresie (cena celu + re
 let estimatesPromise = null;
 let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
+let chartActiveCell = 0;     // w układzie „dzienny + tygodniowy”: który wykres ma fokus (tylko w nim można rysować linie / poprawiać cupy)
 let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
@@ -602,6 +603,7 @@ async function openChart(ticker) {
     document.getElementById("chartTv").href = tvUrlFor(ticker);
     const body = document.getElementById("chartBody");
     chartRequested = ticker;
+    chartActiveCell = 0;
     const token = ++chartToken;
     markSelectedRow(true);
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
@@ -661,11 +663,12 @@ function drawChart() {
     if (!currentChart) return null;
     const layout = splitMode ? chartLayout : "1";
     const cells = chartCells();
+    const activeIdx = layout === "dw" ? Math.min(chartActiveCell, cells.length - 1) : 0;   // komórka z fokusem = edytowalna
     const body = document.getElementById("chartBody");
     body.innerHTML = `<div class="chart-grid layout-${layout}">${cells.map((c, i) => {
         const st = state.data.stocks.find(x => x.ticker === c.ticker);
         const label = layout === "dw" ? (c.daily ? "dzienny" : "tygodniowy") : (st && st.company ? st.company : "");
-        return `<div class="chart-cell${i === 0 ? " primary" : ""}" data-ticker="${escapeHtml(c.ticker)}"><div class="cell-head"><strong>${escapeHtml(c.ticker)}</strong> <span>${escapeHtml(label)}</span></div>`
+        return `<div class="chart-cell${i === activeIdx ? " primary" : ""}" data-ticker="${escapeHtml(c.ticker)}"><div class="cell-head"><strong>${escapeHtml(c.ticker)}</strong> <span>${escapeHtml(label)}</span></div>`
             + `<div class="wl-chart-readout cell-readout"></div><div class="cell-body"></div></div>`;
     }).join("")}</div>`;
     let primary = null;
@@ -680,13 +683,24 @@ function drawChart() {
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
             hideAutoLines: annHide(c.ticker).lines, hideAutoCups: annHide(c.ticker).cups,
-            overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== 0, uid: "c" + i }),
+            overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
-        if (i === 0) primary = model;
+        if (i === activeIdx) primary = model;
     });
     // klik w nagłówek innego wykresu w siatce 4 spółek zaznacza tę spółkę
-    body.querySelectorAll(".chart-cell:not(.primary) .cell-head").forEach(h => h.addEventListener("click", () => openChart(h.parentElement.dataset.ticker)));
+    if (layout === "4") {
+        body.querySelectorAll(".chart-cell:not(.primary) .cell-head").forEach(h => h.addEventListener("click", () => openChart(h.parentElement.dataset.ticker)));
+    } else if (layout === "dw") {
+        // kliknięcie w dowolny z dwóch wykresów (poza suwakiem) daje mu fokus — wtedy to w nim rysujesz linie i poprawiasz cupy
+        body.querySelectorAll(".chart-cell").forEach((cell, i) => cell.addEventListener("pointerdown", ev => {
+            if (i === chartActiveCell || ev.target.closest(".wl-range")) return;
+            chartActiveCell = i;
+            Object.assign(annEdit, { tool: null, selected: null, pending: [], cursor: null });
+            annSyncTools();
+            drawChart();
+        }, true));
+    }
     document.getElementById("chartPattern").textContent = primary ? patternExplain(primary) : "";
     const estEl = document.getElementById("chartEstimates");
     const pst = state.data.stocks.find(x => x.ticker === currentChart.ticker);
@@ -786,6 +800,7 @@ function initChartModal() {
         chartLayout = { "1": "dw", dw: "4", "4": "1" }[chartLayout];
         try { localStorage.setItem(CHART_LAYOUT_KEY, chartLayout); } catch (e) { /* ignoruj */ }
         chartWindows = [];
+        chartActiveCell = 0;
         updateLayoutButton();
         if (currentChart) drawChart();
     });
