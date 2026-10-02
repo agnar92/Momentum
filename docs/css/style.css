@@ -484,3 +484,13 @@ th.tv-col { width: 1%; }
     .wl-chart-head .btn { flex: 1 1 auto; text-align: center; padding: 8px 10px; }
     .wl-chart-readout { font-size: 11px; }
 }
+
+/* suwak okna czasowego pod wykresem (jak w TC2000) */
+.wl-range { position: relative; height: 44px; margin-top: 8px; background: var(--bg-card, #14171e); border: 1px solid var(--border, #262a35); border-radius: 6px; touch-action: none; cursor: pointer; user-select: none; }
+.wl-range > svg { position: absolute; inset: 4px 0; width: 100%; height: calc(100% - 8px); pointer-events: none; opacity: .8; }
+.wl-range-win { position: absolute; top: 0; bottom: 0; background: rgba(74,163,255,.16); border: 1px solid #4aa3ff; border-radius: 5px; cursor: grab; min-width: 14px; }
+.wl-range-win:active { cursor: grabbing; }
+.wl-range-h { position: absolute; top: 0; bottom: 0; width: 12px; cursor: ew-resize; }
+.wl-range-h::after { content: ""; position: absolute; top: 28%; bottom: 28%; left: 4px; width: 3px; border-radius: 2px; background: #4aa3ff; }
+.wl-range-l { left: -2px; }
+.wl-range-r { right: -2px; }
