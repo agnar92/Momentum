@@ -376,6 +376,7 @@ class TestEstimates:
         e = watchlist.build_estimate_entry(self.RAW, None, "2026-10-02")
         f = watchlist.estimate_fields(e, 50.0)
         assert f["pt_mean"] == 60.0 and f["pt_upside_pct"] == 20.0
+        assert f["pt_low"] == 46.0 and f["pt_high"] == 74.0
         assert f["eps_rev90_pct"] == 50.0                            # 0.8 -> 1.2
         assert f["eps1_rev30_pct"] == -7.1                           # 1.4 -> 1.3
         assert f["rev_up30"] == 5 and f["rev_down30"] == 0 and f["analysts"] == 6.0

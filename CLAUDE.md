@@ -92,8 +92,7 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
     **top X %** (default 10); stocks failing the liquidity thresholds are dropped, then for EACH of the 1/3/6
     month windows the top X % by `low_ratio_*` (price / minimum) are taken and the result is the UNIQUE union (each row
     remembers which windows it made; `qullamaggieRows`).
-  - **📈 Trend EMA34** — a SEPARATE filter, deliberately independent of RS and Qullamaggie
-    (`ema34_rising === true`, sorted by 20-session slope; `ema34Rows`).
+  - **🎯 Ceny celu** (replaced the old 📈 Trend EMA34 tab at the user's request; `ema34_*` fields are still computed by `compute_metrics` but no tab uses them) — analyst price-target ranking (`ptRows`: stocks with `pt_mean` and `pt_upside_pct`), default sort by upside to the MEAN target (descending), filter `Min. analityków` (`state.ptMinAnalysts`, default 3, saved in settings — stocks covered by 1–2 analysts give random extreme upsides), columns average target, upside, **Min** and **Max** target (`pt_low`/`pt_high`), analysts, EPS revisions; compact list shows `ptRange` (min – max). `pt_low`/`pt_high` come from `estimate_fields`; until the next daily refresh an older watchlist.json lacks them, so `fillTargets` fills them from `estimates.json` at page load. Informational only.
   - **🧱 Bazy** — open bases with `pct_to_pivot ≤` a user-entered max (default 10 %), optional "only VCP" (`baseRows`).
   - **Własny score** (manual, every tab): a `Score` column with a number input per stock (column `score`, after the ticker; `setScore`, `localStorage` `momentum_watchlist_scores` = `{ticker: number}`, saved on change/Enter so typing keeps focus), the same field in the chart header (`#chartScore`) and a common filter `Score od / do` in the toolbar (`scoreInRange`, `state.scoreMin/Max`; stocks without a score drop out once a bound is set). The column is sortable. Not synced between devices (only annotations are).
   - **⭐ Ulubione** — stocks starred with ☆/★ in any list (`localStorage` `momentum_watchlist_favs`). A ⚠ before the
@@ -196,7 +195,7 @@ fetches per ticker (4 Yahoo calls: `get_analyst_price_targets`, `get_eps_trend`,
 ~1.4 s each, 4 workers, refreshed when older than 2 days, 700 s budget, errors never abort). Yahoo only has the current and
 next fiscal year (FY0 / FY+1) and a SNAPSHOT of the consensus (now, 7/30/60/90 days ago), so `build_estimate_entry` seeds the
 history from those points and every refresh APPENDS new points (`h`, kept 400 days) — the series becomes a real consensus-revision
-line over time, like Zacks' "EPS Consensus". `estimate_fields` adds flat columns to watchlist.json: `pt_mean`, `pt_upside_pct`
+line over time, like Zacks' "EPS Consensus". `estimate_fields` adds flat columns to watchlist.json: `pt_mean`, `pt_low`, `pt_high`, `pt_upside_pct`
 (target vs. price — informational, the user can compute it himself), `eps_rev30_pct`, `eps_rev90_pct`, `eps1_rev30_pct`,
 `rev_up30`, `rev_down30`, `analysts` (table columns "Upside do ceny celu", "Rewizje EPS 30d/90d").
 Chart: header button `Estymaty: wł./wył.` (`momentum_watchlist_chart_est`, lazy `loadEstimates`): price panel gets a bracket

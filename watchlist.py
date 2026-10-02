@@ -757,7 +757,7 @@ def _rev_pct(hist, days, today):
 
 def estimate_fields(entry, price, today=None):
     """Płaskie pola do tabeli (watchlist.json): cena celu i upside, rewizje konsensusu EPS bieżącego/następnego roku, liczba rewizji."""
-    out = {"pt_mean": None, "pt_upside_pct": None, "eps_rev30_pct": None, "eps_rev90_pct": None, "eps1_rev30_pct": None,
+    out = {"pt_mean": None, "pt_low": None, "pt_high": None, "pt_upside_pct": None, "eps_rev30_pct": None, "eps_rev90_pct": None, "eps1_rev30_pct": None,
            "rev_up30": None, "rev_down30": None, "analysts": None}
     if not entry:
         return out
@@ -766,6 +766,7 @@ def estimate_fields(entry, price, today=None):
     if pt.get("mean") and price:
         out["pt_mean"] = _num(pt["mean"])
         out["pt_upside_pct"] = _num((pt["mean"] / price - 1) * 100, 1)
+        out["pt_low"], out["pt_high"] = _num(pt.get("low")), _num(pt.get("high"))
     fy0, fy1 = entry["p"].get("0y") or {}, entry["p"].get("+1y") or {}
     out["eps_rev30_pct"] = _rev_pct(fy0.get("h"), 30, today)
     out["eps_rev90_pct"] = _rev_pct(fy0.get("h"), 90, today)
