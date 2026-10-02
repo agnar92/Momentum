@@ -16,8 +16,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 //   📊 RS Ranking — liderzy RS Rating (percentyl IBD policzony w watchlist.py),
 //   🎯 Qullamaggie — progi obrotu/ADR + top X% wzrostu z okien 1/3/6M (suma bez
 //                    powtórzeń); progi wpisuje użytkownik, liczone tutaj,
-//   📈 Trend EMA34 — OSOBNY filtr (poza RS i Qullamaggie): EMA34 dzienna rośnie co
-//                    5 sesji przez 20 (ema34_rising liczy watchlist.py),
+//   🎯 Upside — ranking średniej ceny celu analityków (upside do średniej, kolumny Min / Max),
 //   🧱 Bazy        — spółki w otwartej bazie/korekcie blisko pivotu (heurystyka watchlist.py::detect_bases),
 //   ⭐ Ulubione    — własne ★ użytkownika (localStorage).
 // To tylko informacja do przeglądania, nie rekomendacja inwestycyjna.
@@ -38,15 +37,15 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", rsMin: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
+    tab: "LIST", rsMin: 80, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
 };
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
-    LIST: ["ticker", "asc"], RS: ["rs_rating", "desc"], QM: ["max_ratio", "desc"], EMA34: ["ema34_slope_20d_pct", "desc"],
+    LIST: ["ticker", "asc"], RS: ["rs_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["pt_upside_pct", "desc"],
     BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
 };
 const TAB_TITLES = {
-    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", EMA34: "Trend EMA34", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
+    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -54,6 +53,7 @@ const state = {
     data: null,
     tab: DEFAULT_SETTINGS.tab,
     rsMin: DEFAULT_SETTINGS.rsMin,
+    ptMinAnalysts: DEFAULT_SETTINGS.ptMinAnalysts,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
     favs: new Set(),
@@ -101,9 +101,20 @@ function qullamaggieRows(stocks, params) {
     return rows.sort((a, b) => b.max_ratio - a.max_ratio);
 }
 
-// Trend EMA34: tylko spółki z ema34_rising === true (wartość liczy watchlist.py::ema34_trend).
-function ema34Rows(stocks) {
-    return stocks.filter(s => s.ema34_rising === true);
+// Ranking cen celu analityków (Yahoo): spółki ze średnią ceną celu, najwyższy upside do średniej na górze;
+// min/max = najniższa i najwyższa cena celu. Pola pt_* liczy watchlist.py::estimate_fields.
+function ptRows(stocks, minAnalysts = 0) {
+    return stocks.filter(s => Number.isFinite(s.pt_mean) && Number.isFinite(s.pt_upside_pct) && (!minAnalysts || s.analysts >= minAnalysts));
+}
+
+// Brakujące pt_low/pt_high (starszy watchlist.json sprzed tej kolumny) uzupełniamy z data/estimates.json.
+function fillTargets(stocks, estimates) {
+    stocks.forEach(s => {
+        const pt = estimates && estimates[s.ticker] && estimates[s.ticker].pt;
+        if (!pt || s.pt_low !== undefined) return;
+        s.pt_low = Number.isFinite(pt.low) ? pt.low : null;
+        s.pt_high = Number.isFinite(pt.high) ? pt.high : null;
+    });
 }
 
 // Bazy: spółki z otwartą bazą/korektą, którym do pivotu (szczyt bazy) zostało najwyżej maxDistPct%;
@@ -246,16 +257,18 @@ const COL = {
         const gains = s.windows.map(w => `${w.label}: ×${w.ratio.toFixed(2)}`).join(" · ");
         return `<td class="positive" title="${gains}"><strong>×${s.max_ratio.toFixed(2)}</strong> <span class="muted small">top ${state.qm.topPct}% w: ${s.windows.map(w => w.label).join(", ")}</span></td>`;
     }, "Cena / najniższy Low z okna (np. ×1.35 = 35% nad minimum)"],
-    ema: ["EMA34", "ema34", s => `<td>${money(s.ema34)}</td>`],
-    slope: ["Nachylenie 20 sesji", "ema34_slope_20d_pct", s => pctCell(s.ema34_slope_20d_pct)],
-    vsEma: ["Cena vs EMA34", "price_vs_ema34_pct", s => pctCell(s.price_vs_ema34_pct)],
+    ptMean: ["Śr. cel", "pt_mean", s => `<td title="${s.analysts ? s.analysts + " analityków" : ""}"><strong>${money(s.pt_mean)}</strong></td>`, "Średnia cena celu analityków (Yahoo)"],
+    ptLow: ["Min", "pt_low", s => `<td>${money(s.pt_low)}</td>`, "Najniższa cena celu analityków"],
+    ptHigh: ["Max", "pt_high", s => `<td>${money(s.pt_high)}</td>`, "Najwyższa cena celu analityków"],
+    ptRange: ["Min – max", "pt_low", s => `<td>${Number.isFinite(s.pt_low) && Number.isFinite(s.pt_high) ? `${s.pt_low.toFixed(0)} – ${s.pt_high.toFixed(0)}` : "—"}</td>`, "Najniższa – najwyższa cena celu"],
+    analysts: ["Analitycy", "analysts", s => `<td>${Number.isFinite(s.analysts) ? s.analysts : "—"}</td>`, "Liczba analityków w konsensusie EPS"],
     pivot: ["Pivot", "pivot", s => `<td>${money(s.pivot)}</td>`],
     toPivot: ["Do pivotu", "pct_to_pivot", s => pctCell(s.pct_to_pivot)],
     baseType: ["Typ bazy", "base_type", s => `<td>${BASE_LABELS_PL[s.base_type] || "—"}${s.vcp ? ` <span class="positive">VCP</span>` : ""}</td>`],
     depth: ["Głębokość", "base_depth_pct", s => `<td>${Number.isFinite(s.base_depth_pct) ? "−" + s.base_depth_pct + "%" : "—"}</td>`],
     baseWeeks: ["Tygodnie", "base_weeks", s => `<td>${s.base_weeks ?? "—"}</td>`],
     trend: ["Trendlinia", "tl_state", s => `<td${s.tl_state === "wybicie" ? ` class="positive"` : ""}>${s.tl_state ? (s.tl_state === "wybicie" ? `▲ wybicie${Number.isFinite(s.tl_vol_ratio) ? ` ×${s.tl_vol_ratio} wol.${s.tl_vol_ok ? " ✓" : ""}` : ""}` : "przy oporze") : ""}${s.tl_pattern ? ` <span class="muted small">${escapeHtml(s.tl_pattern)}</span>` : (s.tl_state ? "" : "—")}</td>`, "Wybicie / zbliżenie do linii oporu (dzienne, ostatnie ~70 sesji) i wykryty kształt"],
-    upside: ["Upside do ceny celu", "pt_upside_pct", s => `<td class="${Number.isFinite(s.pt_upside_pct) ? (s.pt_upside_pct > 0 ? "positive" : "negative") : ""}" title="${Number.isFinite(s.pt_mean) ? "Średnia cena celu analityków $" + s.pt_mean + (s.analysts ? " (" + s.analysts + " analityków)" : "") : ""}">${fmtPct(s.pt_upside_pct, 0)}</td>`, "Różnica między średnią ceną celu analityków a ceną dziś (Yahoo)"],
+    upside: ["Upside", "pt_upside_pct", s => `<td class="${Number.isFinite(s.pt_upside_pct) ? (s.pt_upside_pct > 0 ? "positive" : "negative") : ""}" title="${Number.isFinite(s.pt_mean) ? "Średnia cena celu analityków $" + s.pt_mean + (s.analysts ? " (" + s.analysts + " analityków)" : "") : ""}">${fmtPct(s.pt_upside_pct, 0)}</td>`, "Różnica między średnią ceną celu analityków a ceną dziś (Yahoo)"],
     rev30: ["Rewizje EPS 30d", "eps_rev30_pct", s => pctCell(s.eps_rev30_pct), "Zmiana konsensusu EPS na bieżący rok obrachunkowy w ostatnich 30 dniach (rewizje w górę = analitycy podnoszą prognozy)"],
     rev90: ["Rewizje EPS 90d", "eps_rev90_pct", s => pctCell(s.eps_rev90_pct), "To samo w ostatnich 90 dniach"],
     rsLine: ["Linia RS", "rs_line_dist_pct", s => `<td${s.rs_line_state === "przed ceną" ? ` class="positive"` : ""} title="Linia RS (cena / S&P 500): odległość od maksimum z 52 tyg.; „przed ceną” = RS na maksimum, a cena jeszcze nie">${s.rs_line_state ? (s.rs_line_state === "przed ceną" ? "● RS przed ceną" : "● RS na szczycie") + " " : ""}${Number.isFinite(s.rs_line_dist_pct) ? `<span class="muted small">${fmtPct(s.rs_line_dist_pct)}</span>` : "—"}</td>`, "Linia RS: stan (RS na maksimum 52 tyg. przed/razem z ceną) i odległość od jej maksimum"],
@@ -280,7 +293,7 @@ const TAB_COLUMNS = {
     FAV: LIST_COLUMNS,
     RS: [...LEAD, "price", "rs", "rsLine", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
     QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
-    EMA34: [...LEAD, "price", "ema", "slope", "vsEma", "rs", "spark", "earnings", "tv"],
+    PT: [...LEAD, "price", "ptMean", "upside", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
     ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
     BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "spark", "earnings", "tv"],
 };
@@ -292,7 +305,7 @@ const TAB_COLUMNS_COMPACT = {
     FAV: ["fav", "ticker", "score", "price", "rs", "high52"],
     RS: ["fav", "ticker", "score", "price", "rs", "r3"],
     QM: ["fav", "ticker", "score", "price", "adr", "ratio"],
-    EMA34: ["fav", "ticker", "score", "price", "slope", "rs"],
+    PT: ["fav", "ticker", "score", "ptMean", "upside", "ptRange"],
     BASES: ["fav", "ticker", "score", "price", "baseType", "toPivot"],
     ALERTS: ["ticker", "alValue", "alDist", "alStatus", "alAct"],
 };
@@ -318,7 +331,7 @@ function rowsForTab(tab) {
     const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     if (tab === "RS") return rsLeaders(stocks, state.rsMin);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
-    if (tab === "EMA34") return ema34Rows(stocks);
+    if (tab === "PT") return ptRows(stocks, state.ptMinAnalysts);
     if (tab === "BASES") return baseRows(stocks, state.bases);
     if (tab === "FAV") return stocks.filter(s => state.favs.has(s.ticker));
     if (tab === "ALERTS") {
@@ -333,7 +346,7 @@ const EMPTY_MESSAGES = {
     LIST: "Brak spółek (lista Finviz jest pusta albo filtr tekstu/sektora nic nie zostawia).",
     RS: "Żadna spółka nie ma RS Rating powyżej wybranego progu.",
     QM: "Żadna spółka nie spełnia progów — obniż obrót lub ADR% albo zwiększ top %.",
-    EMA34: "Żadna spółka nie ma rosnącej EMA34 (co 5 sesji przez 20) przy bieżących filtrach.",
+    PT: "Brak spółek z ceną celu analityków przy bieżących filtrach (dane Yahoo ładują się z codziennego odświeżenia).",
     BASES: "Brak spółek w bazie w zadanej odległości od pivotu — zwiększ dystans albo odznacz „tylko VCP”.",
     ALERTS: "Brak alertów — w oknie wykresu kliknij ✎ Edytuj, narysuj linię (Linia) i ustaw przy niej Alert.",
     FAV: "Brak ulubionych — kliknij ☆ przy spółce na dowolnej liście.",
@@ -426,7 +439,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, qm: state.qm, bases: state.bases }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -436,6 +449,7 @@ function loadSettings() {
         if (!saved) return;
         if (TAB_TITLES[saved.tab]) state.tab = saved.tab;
         if (Number.isFinite(saved.rsMin)) state.rsMin = saved.rsMin;
+        if (Number.isFinite(saved.ptMinAnalysts)) state.ptMinAnalysts = saved.ptMinAnalysts;
         if (saved.qm) ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
             if (Number.isFinite(saved.qm[k])) state.qm[k] = saved.qm[k];
         });
@@ -522,6 +536,8 @@ function initControls() {
     document.getElementById("qmMinDollarVolume").value = state.qm.minDollarVolumeM;
     document.getElementById("qmMinAdr").value = state.qm.minAdrPct;
     document.getElementById("qmTopPct").value = state.qm.topPct;
+    document.getElementById("ptMinAnalysts").value = state.ptMinAnalysts;
+    bind("ptMinAnalysts", v => { state.ptMinAnalysts = v; });
     bind("rsMin", v => { state.rsMin = v; });
     bind("qmMinDollarVolume", v => { state.qm.minDollarVolumeM = v; });
     bind("qmMinAdr", v => { state.qm.minAdrPct = v; });
@@ -1004,6 +1020,7 @@ if (typeof document !== "undefined") {
         syncInit(() => { updateAlertBadge(); renderTable(); if (!document.getElementById("chartModal").hidden) drawChart(); });
         showTab(state.tab);
         hideLoadingOverlay();
+        loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
     })();
 
     if ("serviceWorker" in navigator) {
@@ -1014,7 +1031,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ema34Rows, baseRows, earningsInDays, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ptRows, fillTargets, baseRows, earningsInDays, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

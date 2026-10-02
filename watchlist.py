@@ -8,7 +8,6 @@ Przepływ (odpalany codziennie rano, po sesji USA z poprzedniego dnia — patrz
        - RS Rating w stylu IBD (rs_score = 0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M, potem percentyl 1-99
          względem listy),
        - dane do filtra w stylu Qullamaggie (ADR %, średni obrót dzienny, relacja ceny do minimum z 1/3/6 mies.),
-       - trend EMA34 (EMA34 dzienna rośnie: teraz > 5 > 10 > 15 > 20 sesji temu).
   3. Zapis docs/data/watchlist.json (czytane przez docs/index.html).
 Wszystko to informacja do przeglądania, nie rekomendacja inwestycyjna.
 """
@@ -34,9 +33,6 @@ BATCH_SIZE = 50
 MIN_COVERAGE = 0.7           # minimalny odsetek spółek z Finviz, dla których dostaliśmy ceny
 AVG_SESSIONS = 20            # okno ADR% i średniego obrotu (~miesiąc sesji)
 MIN_BARS_RS = 252            # tyle sesji potrzeba na 12M (IBD) — młodsze spółki bez RS Rating
-EMA_SPAN = 34
-EMA_LAG_STEP = 5             # EMA34 porównujemy co 5 sesji ...
-EMA_LAG_COUNT = 4            # ... 4 razy wstecz (5, 10, 15, 20 sesji temu)
 SPARK_WEEKS = 26
 CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
@@ -152,18 +148,6 @@ def _price_at_or_before(close, ts):
     return float(s.iloc[-1]) if len(s) else None
 
 
-def ema34_trend(close):
-    """-> (rośnie?, nachylenie 20 sesji w %, aktualna EMA34). Rośnie = ema[-1] > ema[-6] > ema[-11] > ema[-16] > ema[-21]
-    (EMA34 dzienna sprawdzana co 5 sesji, 20 sesji wstecz); None, gdy za mało danych na rozgrzanie EMA."""
-    need = EMA_LAG_STEP * EMA_LAG_COUNT + 1
-    if len(close) < EMA_SPAN * 2 or len(close) < need:
-        return None, None, None
-    ema = close.ewm(span=EMA_SPAN, adjust=False).mean()
-    points = [float(ema.iloc[-1 - EMA_LAG_STEP * k]) for k in range(EMA_LAG_COUNT + 1)]  # teraz, -5, -10, -15, -20
-    rising = all(points[k] > points[k + 1] for k in range(EMA_LAG_COUNT))
-    return rising, (points[0] / points[-1] - 1) * 100, points[0]
-
-
 def compute_metrics(df, bench_w=None):
     """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
     bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
@@ -197,7 +181,6 @@ def compute_metrics(df, bench_w=None):
 
     sma50 = float(close.tail(50).mean()) if len(close) >= 50 else None
     sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
-    rising, slope, ema = ema34_trend(close)
 
     high_52w = float(df["High"].tail(252).max())
     open_base = next((b for b in reversed(detect_bases(weekly_ohlcv(df, asof), bench_w)) if b["open"]), None)
@@ -221,10 +204,6 @@ def compute_metrics(df, bench_w=None):
         "low_ratio_6m": _num(low_ratio[6], 3),
         "pct_above_sma50": _num((price / sma50 - 1) * 100) if sma50 else None,
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
-        "ema34": _num(ema),
-        "ema34_rising": rising,
-        "ema34_slope_20d_pct": _num(slope),
-        "price_vs_ema34_pct": _num((price / ema - 1) * 100) if ema else None,
         "pct_from_high_52w": _num((price / high_52w - 1) * 100, 1) if high_52w > 0 else None,
         "base_type": open_base["type"] if open_base else None,
         "base_depth_pct": open_base["depth_pct"] if open_base else None,
@@ -757,7 +736,7 @@ def _rev_pct(hist, days, today):
 
 def estimate_fields(entry, price, today=None):
     """Płaskie pola do tabeli (watchlist.json): cena celu i upside, rewizje konsensusu EPS bieżącego/następnego roku, liczba rewizji."""
-    out = {"pt_mean": None, "pt_upside_pct": None, "eps_rev30_pct": None, "eps_rev90_pct": None, "eps1_rev30_pct": None,
+    out = {"pt_mean": None, "pt_low": None, "pt_high": None, "pt_upside_pct": None, "eps_rev30_pct": None, "eps_rev90_pct": None, "eps1_rev30_pct": None,
            "rev_up30": None, "rev_down30": None, "analysts": None}
     if not entry:
         return out
@@ -766,6 +745,7 @@ def estimate_fields(entry, price, today=None):
     if pt.get("mean") and price:
         out["pt_mean"] = _num(pt["mean"])
         out["pt_upside_pct"] = _num((pt["mean"] / price - 1) * 100, 1)
+        out["pt_low"], out["pt_high"] = _num(pt.get("low")), _num(pt.get("high"))
     fy0, fy1 = entry["p"].get("0y") or {}, entry["p"].get("+1y") or {}
     out["eps_rev30_pct"] = _rev_pct(fy0.get("h"), 30, today)
     out["eps_rev90_pct"] = _rev_pct(fy0.get("h"), 90, today)

@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ema34Rows, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, fillTargets, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -57,10 +57,16 @@ test("qullamaggieRows: empty input and zero topPct give an empty list", () => {
     assert.deepEqual(qullamaggieRows([stock("A")], { minDollarVolumeM: 0, minAdrPct: 0, topPct: 0 }), []);
 });
 
-test("ema34Rows keeps only stocks with a strictly rising EMA34", () => {
-    const out = ema34Rows([stock("A", { ema34_rising: true }), stock("B", { ema34_rising: false }),
-        stock("C", { ema34_rising: null }), stock("D")]);
-    assert.deepEqual(out.map(s => s.ticker), ["A"]);
+test("ptRows keeps stocks with a price target, fillTargets adds min/max from estimates", () => {
+    const rows = ptRows([stock("A", { pt_mean: 120, pt_upside_pct: 20 }), stock("B"), stock("C", { pt_mean: 80, pt_upside_pct: null })]);
+    assert.deepEqual(rows.map(s => s.ticker), ["A"]);
+    const few = [stock("X", { pt_mean: 10, pt_upside_pct: 50, analysts: 2 }), stock("Y", { pt_mean: 10, pt_upside_pct: 5, analysts: 8 })];
+    assert.deepEqual(ptRows(few, 3).map(s => s.ticker), ["Y"]);
+    const stocks = [stock("A", { pt_mean: 120 }), stock("B", { pt_low: 5, pt_high: 9 })];
+    fillTargets(stocks, { A: { pt: { low: 90, high: 150 } }, B: { pt: { low: 1, high: 2 } } });
+    assert.equal(stocks[0].pt_low, 90);
+    assert.equal(stocks[0].pt_high, 150);
+    assert.equal(stocks[1].pt_low, 5);
 });
 
 test("applyCommonFilters matches ticker or company text and sector", () => {

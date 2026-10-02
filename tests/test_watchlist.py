@@ -55,22 +55,6 @@ class TestFinviz:
 
 
 class TestIndicators:
-    def test_ema34_rising_for_steady_uptrend_and_not_for_downtrend(self):
-        up = make_prices(daily=0.003)["Close"]
-        rising, slope, ema = watchlist.ema34_trend(up)
-        assert rising is True and slope > 0 and ema > 0
-        down = make_prices(daily=-0.003)["Close"]
-        assert watchlist.ema34_trend(down)[0] is False
-
-    def test_ema34_requires_every_5_day_step_to_rise(self):
-        close = make_prices(daily=0.003)["Close"].copy()
-        # mocny spadek 8-12 sesji temu: EMA34 w punkcie -10 sesji spada wzgledem -15 => nie "rosnie co 5 dni"
-        close.iloc[-16:-6] = close.iloc[-16:-6] * 0.7
-        assert watchlist.ema34_trend(close)[0] is False
-
-    def test_ema34_none_without_enough_history(self):
-        assert watchlist.ema34_trend(make_prices(n=40)["Close"]) == (None, None, None)
-
     def test_compute_metrics_core_fields(self):
         df = make_prices(n=300, daily=0.002)
         m = watchlist.compute_metrics(df)
@@ -81,7 +65,6 @@ class TestIndicators:
         assert m["dollar_volume_avg"] == pytest.approx(df["Close"].tail(20).mean() * 1_000_000, rel=0.01)
         assert m["low_ratio_6m"] > m["low_ratio_3m"] > m["low_ratio_1m"] > 1
         assert m["pct_above_sma50"] > 0 and m["pct_above_sma200"] > m["pct_above_sma50"]
-        assert m["ema34_rising"] is True
         assert len(m["spark"]) == watchlist.SPARK_WEEKS and m["spark"][0] == 0
 
     def test_compute_metrics_young_stock_has_no_rs_score(self):
@@ -376,6 +359,7 @@ class TestEstimates:
         e = watchlist.build_estimate_entry(self.RAW, None, "2026-10-02")
         f = watchlist.estimate_fields(e, 50.0)
         assert f["pt_mean"] == 60.0 and f["pt_upside_pct"] == 20.0
+        assert f["pt_low"] == 46.0 and f["pt_high"] == 74.0
         assert f["eps_rev90_pct"] == 50.0                            # 0.8 -> 1.2
         assert f["eps1_rev30_pct"] == -7.1                           # 1.4 -> 1.3
         assert f["rev_up30"] == 5 and f["rev_down30"] == 0 and f["analysts"] == 6.0
