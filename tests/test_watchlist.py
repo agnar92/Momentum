@@ -281,34 +281,48 @@ class TestBases:
         assert len(charts["stocks"]["AAA"]["bases"]) <= watchlist.BASE_MAX_SHOWN
 
 
-class TestTrendlines:
-    def _frame(self, highs, lows, closes, volume=1000):
-        idx = pd.bdate_range("2026-01-01", periods=len(highs))
-        return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": volume}, index=idx)
+class TestConsolidation:
+    CFG = dict(k=2, min_len=6, max_len=30, recent=3, pole_lookback=20, pole_min_gain=20.0, max_depth=20.0, box_depth=12.0, box_min_len=10)
 
-    def test_descending_channel_then_breakout_is_detected(self):
-        # opadajacy korytarz (flaga): szczyty co 8 swiec coraz nizej, na koncu wybicie nad opor
-        n = 60
-        base = [100 - 0.2 * i + (3 if i % 8 == 0 else 0) for i in range(n)]
-        highs = [b + 1 for b in base]
-        lows = [b - 1 for b in base]
-        closes = list(base)
-        for i in range(n - 2, n):           # ostatnie 2 swiece: wybicie
-            closes[i] = highs[i] + 6
-            highs[i] = closes[i] + 1
-        tl = watchlist.detect_trendlines(self._frame(highs, lows, closes), k=2, lookback=60, min_span=8)
-        assert tl is not None and any(ln["kind"] == "res" for ln in tl["lines"])
-        assert tl["state"] == "wybicie"
-        assert tl["breakout"]["confirmed"] is False and tl["breakout"]["vol_ratio"] == 1.0   # ten sam wolumen co zwykle
+    def _frame(self, closes, volume):
+        idx = pd.bdate_range("2026-01-01", periods=len(closes))
+        c = np.array(closes, dtype=float)
+        return pd.DataFrame({"Open": c, "High": c * 1.01, "Low": c * 0.99, "Close": c, "Volume": volume}, index=idx)
 
-        vol = np.full(n, 1000.0)
-        vol[n - 2:] = 3000.0                                                                  # skok wolumenu na wybiciu
-        boosted = watchlist.detect_trendlines(self._frame(highs, lows, closes, vol), k=2, lookback=60, min_span=8)
-        assert boosted["breakout"]["confirmed"] is True and boosted["breakout"]["vol_ratio"] == 3.0
+    def _flag_series(self, breakout):
+        # 30 sesji dryfu, maszt 100 -> 130 w 12 sesji, flaga 14 sesji (130 -> ~124 z falowaniem), potem wybicie
+        pre = [100.0] * 30
+        pole = list(np.linspace(100, 130, 12))
+        wave = [130 - 0.45 * i + (1.5 if i % 4 == 0 else -1.5) for i in range(14)]
+        post = [135.0, 138.0, 140.0] if breakout else [124.0, 124.5, 125.0]
+        return pre + pole + wave + post
 
-    def test_too_short_history_returns_none(self):
-        df = self._frame([1] * 10, [1] * 10, [1] * 10)
-        assert watchlist.detect_trendlines(df, k=2, lookback=60, min_span=8) is None
+    def test_flag_with_pole_and_volume_confirmed_breakout(self):
+        closes = self._flag_series(True)
+        vol = np.full(len(closes), 1000.0)
+        vol[30:42] = 2000.0                  # maszt: duzy wolumen
+        vol[42:56] = 800.0                   # flaga: schnie
+        vol[56] = 3000.0                     # wybicie
+        tl = watchlist.detect_consolidation(self._frame(closes, vol), self.CFG)
+        assert tl is not None and tl["pattern"] == "flaga" and tl["state"] == "wybicie"
+        info = tl["info"]
+        assert info["pole_gain"] >= 25 and info["vol_ratio"] < 0.6
+        assert tl["breakout"]["confirmed"] is True
+        assert {ln["kind"] for ln in tl["lines"]} >= {"res"}
+
+    def test_breakout_without_volume_is_not_confirmed(self):
+        closes = self._flag_series(True)
+        tl = watchlist.detect_consolidation(self._frame(closes, 1000.0), self.CFG)
+        assert tl["state"] == "wybicie" and tl["breakout"]["confirmed"] is False
+
+    def test_flag_still_inside_has_no_breakout(self):
+        tl = watchlist.detect_consolidation(self._frame(self._flag_series(False), 1000.0), self.CFG)
+        assert tl is not None and tl["state"] in (None, "przy oporze") and tl["breakout"] is None
+
+    def test_random_flat_noise_or_short_history_returns_none(self):
+        assert watchlist.detect_consolidation(self._frame([100.0] * 8, 1000.0), self.CFG) is None
+        rising = list(np.linspace(100, 200, 80))            # czysty trend bez konsolidacji
+        assert watchlist.detect_consolidation(self._frame(rising, 1000.0), self.CFG) is None
 
 
 class TestRsLine:

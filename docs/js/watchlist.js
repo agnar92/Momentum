@@ -476,9 +476,11 @@ function chartStats(s) {
 
 function drawChart() {
     if (!currentChart) return null;
-    return renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
+    const model = renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
         currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, daily: chartDaily,
             window: chartWindow, onWindow: w => { chartWindow = w; } });
+    document.getElementById("chartPattern").textContent = model ? patternExplain(model) : "";
+    return model;
 }
 
 function closeChart() {

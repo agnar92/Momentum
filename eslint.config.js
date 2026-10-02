@@ -23,6 +23,7 @@ const browserGlobals = {
     // typeof window === "undefined"` na gorze plikow (Node/tests/js/).
     require: "readonly",
     escapeHtml: "readonly",
+    patternExplain: "readonly",
     tvUrlFor: "readonly",
     compareRows: "readonly",
     TV_EMBED_BASE: "readonly",

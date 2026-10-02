@@ -251,8 +251,10 @@ th.tv-col { width: 1%; }
 .wl-chart-title { font-size: 16px; font-weight: 700; }
 .wl-chart-sub, .wl-chart-stats { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 .wl-chart-stats { margin-top: 6px; }
+.wl-chart-pattern { font-size: 12px; line-height: 1.5; color: var(--text); margin-top: 6px; padding-left: 8px; border-left: 3px solid #ff9f43; }
+.wl-chart-pattern:empty { display: none; }
 .wl-chart-readout { font-size: 12px; color: var(--text-dim); min-height: 18px; margin: 6px 0 4px; font-variant-numeric: tabular-nums; }
-.wl-chart-body svg { display: block; width: 100%; height: auto; max-height: calc(96vh - 150px); }
+.wl-chart-body svg { display: block; width: 100%; height: auto; max-height: calc(96vh - 270px); }
 
 /* ---------- ep.html ---------- */
 .charts-area {

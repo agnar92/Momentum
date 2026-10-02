@@ -140,7 +140,8 @@ function buildChartModel(charts, ticker, stock) {
     return {
         ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
         smas: smas.map(([label, values]) => ({ label, values: values || [], color: SMA_COLORS[label] })),
-        spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null } : null,
+        spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
+        pole: tl && tl.info && tl.info.pole_start ? { i0: lineIndex(weeks, tl.info.pole_start), y0: tl.info.pole_low, i1: lineIndex(weeks, tl.info.pole_end), y1: tl.info.pole_high, gain: tl.info.pole_gain } : null,
         epsNext: c.eps_next && c.eps_next.d >= weeks[weeks.length - 1] ? c.eps_next : null,   // przeterminowana prognoza z cache'u to nie "następny" raport
         lastIdx,
         // nowe maksimum RS/ceny względem ostatnich ~52 tygodni liczy watchlist.py na pełnej historii (nie tylko na oknie wykresu)
@@ -164,6 +165,7 @@ function sliceModel(m, n, end = m.n) {
         smas: m.smas.map(x => ({ ...x, values: cut(x.values) })), spx: m.spx ? cut(m.spx) : null, rs: cut(m.rs),
         eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0 && q.week < n),
         lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0 && l.i0 < n),
+        pole: m.pole ? { ...m.pole, i0: m.pole.i0 - off, i1: m.pole.i1 - off } : null,
         cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off })).filter(c => c.i1 > 0 && c.i0 < n),
         rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
         lastIdx: Math.min(m.lastIdx - off, n - 1),
@@ -309,6 +311,13 @@ function chartSvg(m, opts = {}) {
         const y1 = Math.min(Math.max(yP(at(l.i1)), L.price.y), L.price.y + L.price.h);
         parts.push(`<line x1="${x_(i0)}" y1="${y0}" x2="${x_(l.i1)}" y2="${y1}" stroke="${col}" stroke-width="1.6" stroke-dasharray="6 3"><title>${l.kind === "res" ? "Opór" : "Wsparcie"} (${l.touches} dotknięć)</title></line>`);
     });
+    // maszt flagi: pogrubiony odcinek od dołka do szczytu wzrostu poprzedzającego konsolidację + podpis
+    if (m.pole && m.pole.i1 > 0) {
+        const p0 = Math.max(0, m.pole.i0);
+        const py0 = yP(m.pole.y0 + (m.pole.y1 - m.pole.y0) * (p0 - m.pole.i0) / Math.max(1, m.pole.i1 - m.pole.i0));
+        parts.push(`<line x1="${x(p0)}" y1="${py0}" x2="${x(m.pole.i1)}" y2="${yP(m.pole.y1)}" stroke="${CHART_COLORS.res}" stroke-width="3" stroke-opacity="0.35" stroke-linecap="round"><title>Maszt +${m.pole.gain}%</title></line>`);
+        parts.push(`<text x="${x(m.pole.i1) - 6}" y="${yP(m.pole.y1) - 4}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.res}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke">maszt +${m.pole.gain}%</text>`);
+    }
     if (m.trend && m.trend.state === "wybicie" && m.lastIdx === m.n - 1 && Number.isFinite(m.h[m.lastIdx])) {
         const bx = x_(m.lastIdx), by = yP(m.h[m.lastIdx]) - 8;
         parts.push(`<path d="M${bx - 6},${by - 10} L${bx + 6},${by - 10} L${bx},${by} Z" fill="${CHART_COLORS.res}"><title>Wybicie z linii trendu</title></path>`);
@@ -386,6 +395,29 @@ function chartSvg(m, opts = {}) {
     // --- crosshair (ustawiany w attachChartHover)
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres ${m.daily ? "dzienny" : "tygodniowy"} ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
+}
+
+// Opis wykrytego wzorca prostym językiem: z czego wynika (maszt, konsolidacja, wolumen, linie) i jaki jest stan wybicia.
+function patternExplain(m) {
+    const t = m && m.trend, info = t && t.info;
+    if (!info) return "";
+    const unit = m.daily ? "sesji" : "tygodni";
+    const vol = Number.isFinite(info.vol_ratio)
+        ? `, wolumen w konsolidacji ${info.vol_ratio}× wolumenu masztu (${info.vol_ratio <= 0.8 ? "schnie — dobry znak" : "nie schnie wyraźnie"})` : "";
+    const head = info.type === "flaga"
+        ? `Flaga: maszt +${info.pole_gain}% (${info.pole_start} → ${info.pole_end}), potem konsolidacja ${info.length} ${unit}, głębokość −${info.depth}%${vol}.`
+        : `Korytarz poziomy: ciasna konsolidacja ${info.length} ${unit}, głębokość −${info.depth}%.`;
+    const lines = " Linia oporu przez szczyty konsolidacji" + (m.lines.some(l => l.kind === "sup") ? ", linia wsparcia przez dołki." : ".");
+    let tail;
+    if (t.state === "wybicie") {
+        const bo = t.breakout;
+        tail = ` Wybicie: zamknięcie nad linią oporu${bo ? ` ${bo.date}, wolumen ×${bo.vol_ratio} średniej z 50 ${unit} — ${bo.confirmed ? "potwierdzone (≥ 1,5×)" : "bez potwierdzenia wolumenem (< 1,5×), łatwiej o fałszywe wybicie"}` : ""}.`;
+    } else if (t.state === "przy oporze") {
+        tail = " Cena tuż pod oporem — wybicie dopiero po zamknięciu nad linią, najlepiej z wolumenem ≥ 1,5× średniej.";
+    } else {
+        tail = " Brak wybicia: cena jest wewnątrz konsolidacji.";
+    }
+    return head + lines + tail;
 }
 
 // Tekst paska nad wykresem dla wskazanego tygodnia.
@@ -498,6 +530,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, dailyCharts, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, dailyCharts, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }
