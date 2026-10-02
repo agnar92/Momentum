@@ -204,3 +204,10 @@ test("legend shows breakout volume confirmation", () => {
     c.stocks.AAA.tl.breakout = { date: "2026-07-03", vol_ratio: 0.8, confirmed: false };
     assert.match(chartSvg(buildChartModel(c, "AAA", null)), /bez potwierdzenia/);
 });
+
+test("clampWindow i sliceModel(m, n, end) wycinają okno z historii", () => {
+    const { clampWindow } = require("../../docs/js/chart.js");
+    assert.deepEqual(clampWindow(null, 100, 52), { n: 52, end: 100 });
+    assert.deepEqual(clampWindow({ n: 5, end: 500 }, 100, 52), { n: 15, end: 100 });
+    assert.deepEqual(clampWindow({ n: 40, end: 10 }, 100, 52), { n: 40, end: 40 });
+});
