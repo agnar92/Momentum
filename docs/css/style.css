@@ -637,3 +637,9 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 .chart-cell.tv .cell-head a { color: var(--green-bright); margin-left: 6px; }
 .chart-cell .tv-widget-block { flex: 1; min-height: 0; height: 100%; }
 .chart-cell .tv-widget-block iframe { height: 100%; }
+
+/* własny score (ręczny) */
+td.score-cell { text-align: center; }
+.score-input { width: 52px; padding: 2px 4px; background: #0e0f13; color: var(--text); border: 1px solid #2c3140; border-radius: 4px; text-align: center; font: inherit; }
+.score-input:focus { outline: 1px solid var(--green-bright); }
+.chart-score input[type="number"] { width: 60px; }
