@@ -509,6 +509,16 @@ function chartSvg(m, opts = {}) {
     if (rExt) {
         const yR = makeYScale(rExt[0], rExt[1], L.price.y + L.price.h * 0.68, L.price.h * 0.3);
         parts.push(polyline(m.rs.map((v, i) => Number.isFinite(v) ? [x(i), yR(v)] : null), CHART_COLORS.rs, 1.6));
+        // RS Rating (1–99) na końcu linii RS, jak w MarketSmith — tylko na wykresie tygodniowym
+        if (!m.daily && m.rsRating != null) {
+            let li = -1;
+            m.rs.forEach((v, i) => { if (Number.isFinite(v)) li = i; });
+            if (li >= 0) {
+                const ex = x(li), ey = yR(m.rs[li]), room = L.width - L.right - ex > fs(44);
+                parts.push(`<circle cx="${ex}" cy="${ey}" r="3.2" fill="${CHART_COLORS.rs}"/>`);
+                parts.push(`<text x="${room ? ex + 7 : ex - 4}" y="${room ? ey + 4 : ey - 8}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.rs}" text-anchor="${room ? "start" : "end"}" stroke="#0e0f13" stroke-width="3" paint-order="stroke"><title>RS Rating ${m.rsRating} (1–99, percentyl siły względnej wśród spółek z listy)</title>RS ${m.rsRating}</text>`);
+            }
+        }
         m.rsNewHigh.forEach((flag, i) => {
             if (!flag) return;
             const leads = m.pxNewHigh && !m.pxNewHigh[i];   // RS na maksimum, a cena jeszcze nie — najcenniejszy sygnał
