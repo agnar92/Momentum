@@ -479,7 +479,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
     const defN = opts.compact ? (full.daily ? COMPACT_DAYS : COMPACT_WEEKS) : full.n;
     let win = clampWindow(opts.window, full.n, defN);
-    container.innerHTML = '<div id="chartPlot"></div>' + sliderHtml(full);
+    container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
         const m = sliceModel(full, win.n, win.end);

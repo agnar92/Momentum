@@ -484,7 +484,7 @@ th.tv-col { width: 1%; }
 }
 
 /* suwak okna czasowego pod wykresem (jak w TC2000) */
-.wl-range { position: relative; height: 44px; margin-top: 8px; background: var(--bg-card, #14171e); border: 1px solid var(--border, #262a35); border-radius: 6px; touch-action: none; cursor: pointer; user-select: none; }
+.wl-range { position: relative; height: 44px; margin: 4px 0 8px; background: var(--bg-card, #14171e); border: 1px solid var(--border, #262a35); border-radius: 6px; touch-action: none; cursor: pointer; user-select: none; }
 .wl-range > svg { position: absolute; inset: 4px 0; width: 100%; height: calc(100% - 8px); pointer-events: none; opacity: .8; }
 .wl-range-win { position: absolute; top: 0; bottom: 0; background: rgba(74,163,255,.16); border: 1px solid #4aa3ff; border-radius: 5px; cursor: grab; min-width: 14px; }
 .wl-range-win:active { cursor: grabbing; }
@@ -492,3 +492,9 @@ th.tv-col { width: 1%; }
 .wl-range-h::after { content: ""; position: absolute; top: 28%; bottom: 28%; left: 4px; width: 3px; border-radius: 2px; background: #4aa3ff; }
 .wl-range-l { left: -2px; }
 .wl-range-r { right: -2px; }
+@media (max-width: 640px) {
+    /* iOS: gest cofania działa od lewej krawędzi ekranu — suwak z marginesem po bokach, by uchwyty go nie wywoływały */
+    .wl-range { height: 52px; margin-left: max(22px, env(safe-area-inset-left)); margin-right: max(22px, env(safe-area-inset-right)); }
+    .wl-range-h { width: 22px; }
+    .wl-range-h::after { left: 9px; }
+}
