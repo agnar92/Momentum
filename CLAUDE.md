@@ -49,9 +49,6 @@ files (English is fine for new, unrelated code).
      `dollar_volume_avg` (mean Close·Volume, last 20 sessions), `low_ratio_{1,3,6}m` (price /
      lowest Low of the last 1/3/6 months — a plain ratio, NO "− 1": it is only used for ranking, so sorting
      descending is enough).
-   - EMA34 trend: `ema34_rising` is true when daily EMA34 now > 5 > 10 > 15 > 20 sessions ago
-     (`ema34_trend`; EMA34 checked every 5 sessions over the last 20), plus `ema34_slope_20d_pct`,
-     `price_vs_ema34_pct`, `ema34`.
    - `pct_above_sma50/200` (own computation, informational), `spark` (last 26 weekly closes, % vs. first).
 4. **Chart data** (`build_charts`, `docs/data/charts.json`, lazily fetched by the chart modal): a shared list of the
    last 104 weeks (`weeks`), the S&P 500 (`^GSPC`, `spx`; benchmark download is non-fatal) and, per stock, weekly OHLC
@@ -92,7 +89,7 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
     **top X %** (default 10); stocks failing the liquidity thresholds are dropped, then for EACH of the 1/3/6
     month windows the top X % by `low_ratio_*` (price / minimum) are taken and the result is the UNIQUE union (each row
     remembers which windows it made; `qullamaggieRows`).
-  - **🎯 Ceny celu** (replaced the old 📈 Trend EMA34 tab at the user's request; `ema34_*` fields are still computed by `compute_metrics` but no tab uses them) — analyst price-target ranking (`ptRows`: stocks with `pt_mean` and `pt_upside_pct`), default sort by upside to the MEAN target (descending), filter `Min. analityków` (`state.ptMinAnalysts`, default 3, saved in settings — stocks covered by 1–2 analysts give random extreme upsides), columns average target, upside, **Min** and **Max** target (`pt_low`/`pt_high`), analysts, EPS revisions; compact list shows `ptRange` (min – max). `pt_low`/`pt_high` come from `estimate_fields`; until the next daily refresh an older watchlist.json lacks them, so `fillTargets` fills them from `estimates.json` at page load. Informational only.
+  - **🎯 Upside** (tab `PT`; replaced the old 📈 Trend EMA34 tab at the user's request, and the EMA34 computation was removed from the pipeline entirely) — analyst price-target ranking (`ptRows`: stocks with `pt_mean` and `pt_upside_pct`), default sort by upside to the MEAN target (descending), filter `Min. analityków` (`state.ptMinAnalysts`, default 3, saved in settings — stocks covered by 1–2 analysts give random extreme upsides), columns average target, upside, **Min** and **Max** target (`pt_low`/`pt_high`), analysts, EPS revisions; compact list shows `ptRange` (min – max). `pt_low`/`pt_high` come from `estimate_fields`; until the next daily refresh an older watchlist.json lacks them, so `fillTargets` fills them from `estimates.json` at page load. Informational only.
   - **🧱 Bazy** — open bases with `pct_to_pivot ≤` a user-entered max (default 10 %), optional "only VCP" (`baseRows`).
   - **Własny score** (manual, every tab): a `Score` column with a number input per stock (column `score`, after the ticker; `setScore`, `localStorage` `momentum_watchlist_scores` = `{ticker: number}`, saved on change/Enter so typing keeps focus), the same field in the chart header (`#chartScore`) and a common filter `Score od / do` in the toolbar (`scoreInRange`, `state.scoreMin/Max`; stocks without a score drop out once a bound is set). The column is sortable. Not synced between devices (only annotations are).
   - **⭐ Ulubione** — stocks starred with ☆/★ in any list (`localStorage` `momentum_watchlist_favs`). A ⚠ before the

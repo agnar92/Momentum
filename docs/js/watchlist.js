@@ -16,7 +16,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 //   📊 RS Ranking — liderzy RS Rating (percentyl IBD policzony w watchlist.py),
 //   🎯 Qullamaggie — progi obrotu/ADR + top X% wzrostu z okien 1/3/6M (suma bez
 //                    powtórzeń); progi wpisuje użytkownik, liczone tutaj,
-//   🎯 Ceny celu — ranking średniej ceny celu analityków (upside do średniej, kolumny Min / Max),
+//   🎯 Upside — ranking średniej ceny celu analityków (upside do średniej, kolumny Min / Max),
 //   🧱 Bazy        — spółki w otwartej bazie/korekcie blisko pivotu (heurystyka watchlist.py::detect_bases),
 //   ⭐ Ulubione    — własne ★ użytkownika (localStorage).
 // To tylko informacja do przeglądania, nie rekomendacja inwestycyjna.
@@ -45,7 +45,7 @@ const TAB_DEFAULT_SORT = {
     BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
 };
 const TAB_TITLES = {
-    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", PT: "Ranking cen celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
+    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
