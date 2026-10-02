@@ -317,7 +317,31 @@ function annOverlay(ctx) {
         const catcher = editing ? `<rect class="ann-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : "";
         return `<defs><clipPath id="${clipId}"><rect x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}"/></clipPath></defs>${catcher}<g clip-path="url(#${clipId})">${body}</g>`;
     };
-    const render = () => { ov.innerHTML = markup(); };
+    // Lupa: podczas przeciągania punktu (palec zasłania miejsce) w rogu wykresu pojawia się powiększony fragment wokół palca
+    // z krzyżykiem i kropką tam, gdzie punkt faktycznie się przyciągnie (do High/Low świecy).
+    let loupe = null, chartHtml = null;
+    const loupeMarkup = () => {
+        if (!loupe) return "";
+        if (chartHtml === null) { const el = plot.querySelector("svg:not(.chart-overlay)"); chartHtml = el ? el.innerHTML : ""; }
+        const Z = 2.2, R = geom.fs(62), pad = geom.fs(8);
+        const raw = loupe.raw, sn = loupe.snap;
+        const left = L.left + pad + R, right = plotRight - pad - R;
+        const nearLeft = raw.x < left + R + geom.fs(40) && raw.y < L.price.y + 2 * R + geom.fs(40);
+        const cx = nearLeft ? right : left, cy = L.price.y + pad + R;
+        const dx = cx + (sn.x - raw.x) * Z, dy = cy + (sn.y - raw.y) * Z;
+        const id = clipId + "Loupe";
+        return `<defs><clipPath id="${id}"><circle cx="${cx}" cy="${cy}" r="${R}"/></clipPath></defs>`
+            + `<circle cx="${cx}" cy="${cy}" r="${R}" fill="#0e0f13"/>`
+            + `<g clip-path="url(#${id})"><g transform="translate(${cx - raw.x * Z} ${cy - raw.y * Z}) scale(${Z})">${chartHtml}</g>`
+            + `<line x1="${cx - R}" x2="${cx + R}" y1="${cy}" y2="${cy}" stroke="#fff" stroke-opacity="0.35"/><line y1="${cy - R}" y2="${cy + R}" x1="${cx}" x2="${cx}" stroke="#fff" stroke-opacity="0.35"/>`
+            + `<circle cx="${dx}" cy="${dy}" r="${geom.fs(4)}" fill="#ff5a5a" stroke="#fff" stroke-width="1.2"/></g>`
+            + `<circle cx="${cx}" cy="${cy}" r="${R}" fill="none" stroke="#9fb3c8" stroke-width="2" pointer-events="none"/>`;
+    };
+    const showLoupe = (rawPt, snapped) => {
+        const idx = idxOf(snapped.date);
+        loupe = { raw: rawPt, snap: { x: geom.x(idx), y: geom.yP(snapped.price) } };
+    };
+    const render = () => { ov.innerHTML = markup() + loupeMarkup(); };
     if (!ctx.readonly) annCurrent = { render, ticker, full: ctx.full };
     render();
     // Dotyk bez trybu edycji: podwójne stuknięcie w wykres włącza edycję i od razu pokazuje wybór „linia / cup”
@@ -399,10 +423,11 @@ function annOverlay(ctx) {
                 let pt = snap(toSvg(e));
                 const R = rec(), l = R && target.type === "line" ? R.lines.find(x => x.id === target.id) : null;
                 if (l) pt = level(pt, { price: handle === "a" ? l.y1 : l.y0 }, e);
-                dragTo(target, handle, pt); render();
+                dragTo(target, handle, pt); showLoupe(toSvg(e), pt); render();
             };
             const up = () => {
                 ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
+                loupe = null; render();
                 touch(); annSyncTools();
             };
             ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
@@ -455,15 +480,17 @@ function annOverlay(ctx) {
         if (annEdit.tool === "line" || annEdit.tool === "cup") {
             annEdit.pending.push(annEdit.tool === "line" && annEdit.pending.length === 1 ? level(snap(toSvg(ev)), annEdit.pending[0], ev) : snap(toSvg(ev)));
             annEdit.cursor = null;
+            loupe = null;
             finishPending();
         } else {
             // bez narzędzia: przeciągnięcie po pustym wykresie rysuje linię (szybkie rysowanie, np. przy trzymanej spacji);
             // samo kliknięcie tylko odznacza
             const startPt = toSvg(ev), start = snap(startPt);
             ov.setPointerCapture(ev.pointerId);
-            const move = e => { annEdit.pending = [start]; annEdit.cursor = level(snap(toSvg(e)), start, e); render(); };
+            const move = e => { annEdit.pending = [start]; annEdit.cursor = level(snap(toSvg(e)), start, e); showLoupe(toSvg(e), annEdit.cursor); render(); };
             const up = e => {
                 ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
+                loupe = null;
                 const endPt = toSvg(e), end = level(snap(endPt), start, e);
                 annEdit.cursor = null;
                 if (Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y) > 8) { annEdit.pending = [start, end]; annEdit.tool = "line"; finishPending(); }
@@ -479,8 +506,10 @@ function annOverlay(ctx) {
         if (!annEdit.pending.length) return;
         const pt = snap(toSvg(ev));
         annEdit.cursor = annEdit.tool === "line" && annEdit.pending.length === 1 ? level(pt, annEdit.pending[0], ev) : pt;
+        showLoupe(toSvg(ev), annEdit.cursor);
         render();
     });
+    ov.addEventListener("pointerleave", () => { if (loupe) { loupe = null; render(); } });
     // Prawy przycisk (na dotyku: długie przytrzymanie): menu linii/cupa albo — na pustym wykresie — wybór „linia / cup”
     ov.addEventListener("contextmenu", ev => {
         ev.preventDefault();
