@@ -612,6 +612,7 @@ async function openChart(ticker) {
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
     document.getElementById("chartTv").href = tvUrlFor(ticker);
     document.getElementById("chartFv").href = `https://finviz.com/stock?t=${encodeURIComponent(ticker)}&ty=fc&p=d&b=1`;
+    document.getElementById("chartZx").href = `https://www.zacks.com/stock/quote/${encodeURIComponent(ticker)}`;
     const body = document.getElementById("chartBody");
     chartRequested = ticker;
     chartActiveCell = 0;
