@@ -147,7 +147,7 @@ pattern, and only draws lines over the consolidation itself:
   previous 50 bars, `confirmed` ≥ 1.5×}; `info` = pole gain/dates, length, depth, `vol_ratio` (flag volume / pole volume,
   ≤ 0.8 = drying up).
 Stored as `tl` (weekly) / `day.tl` (daily) in charts.json and `tl_state`, `tl_pattern`, `tl_vol_ratio`, `tl_vol_ok` in
-watchlist.json ("Trendlinia" column). Drawn as dashed orange (resistance) / grey (support) lines, the pole as a thick
+watchlist.json ("Trendlinia" column). Drawn as dashed orange (resistance) / grey (support) lines (each with its price at the right end = the level to monitor for a breakout; cups get `pivot <rim price>`), the pole as a thick
 translucent segment labelled "maszt +N%", ▲ at a breakout, outlined breakout volume bar; `patternExplain` (chart.js)
 turns `info` into a plain-Polish explanation shown in `#chartPattern` under the stats line — the point is to teach the
 user to recognise the pattern, so keep the explanation in sync with the criteria above. Daily view is the default
