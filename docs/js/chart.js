@@ -118,7 +118,22 @@ function lineIndex(weeks, date) {
     return i >= 0 ? i : weeks.length - 1;
 }
 
-function buildChartModel(charts, ticker, stock) {
+// Puste miejsce z prawej (przyszłe świece): dni handlowe po ostatniej świecy (dziennie) albo kolejne tygodnie.
+const FUTURE_PAD_DAILY = 21, FUTURE_PAD_WEEKLY = 4;           // ile przyszłych miejsc da się obejrzeć suwakiem (~miesiąc)
+const FUTURE_DEFAULT_DAILY = 6, FUTURE_DEFAULT_WEEKLY = 1;    // ile z nich widać domyślnie
+function futureDates(last, count, daily) {
+    const out = [];
+    let t = dateMs(last);
+    while (out.length < count) {
+        t += DAY_MS * (daily ? 1 : 7);
+        if (daily && [0, 6].includes(new Date(t).getUTCDay())) continue;   // pomijamy weekendy
+        out.push(new Date(t).toISOString().slice(0, 10));
+    }
+    return out;
+}
+
+// opts.pad = true: dokłada puste "przyszłe" miejsca na prawo (wszystkie tablice modelu rosną o `pad`, wartości null).
+function buildChartModel(charts, ticker, stock, opts = {}) {
     const c = charts && charts.stocks && charts.stocks[ticker];
     if (!c) return null;
     const weeks = charts.weeks;
@@ -137,18 +152,25 @@ function buildChartModel(charts, ticker, stock) {
         peak: b.peak, low: b.low, right: b.end_close, depth: b.depth_pct, open: b.open,
     })).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
+    const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
+    const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
+    const pad = opts.pad ? (charts.daily ? FUTURE_PAD_DAILY : FUTURE_PAD_WEEKLY) : 0;
+    const padArr = (arr, fill = null) => (arr ? arr.concat(new Array(pad).fill(fill)) : arr);
+    const allWeeks = pad ? weeks.concat(futureDates(weeks[weeks.length - 1], pad, !!charts.daily)) : weeks;
     return {
-        ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
-        smas: smas.map(([label, values]) => ({ label, values: values || [], color: SMA_COLORS[label] })),
-        spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
+        ticker, daily: !!charts.daily, weeks: allWeeks, n: allWeeks.length, pad,
+        padDefault: pad ? (charts.daily ? FUTURE_DEFAULT_DAILY : FUTURE_DEFAULT_WEEKLY) : 0,
+        o: padArr(c.o), h: padArr(c.h), l: padArr(c.l), c: padArr(c.c), v: padArr(c.v),
+        smas: smas.map(([label, values]) => ({ label, values: padArr(values || []), color: SMA_COLORS[label] })),
+        spx: padArr(spx), rs: padArr(rs), eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
         pole: tl && tl.info && tl.info.pole_start ? { i0: lineIndex(weeks, tl.info.pole_start), y0: tl.info.pole_low, i1: lineIndex(weeks, tl.info.pole_end), y1: tl.info.pole_high, gain: tl.info.pole_gain } : null,
         epsNext: c.eps_next && c.eps_next.d >= weeks[weeks.length - 1] ? c.eps_next : null,   // przeterminowana prognoza z cache'u to nie "następny" raport
         lastIdx,
         // nowe maksimum RS/ceny względem ostatnich ~52 tygodni liczy watchlist.py na pełnej historii (nie tylko na oknie wykresu)
-        rsNewHigh: c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs),
-        pxNewHigh: c.px_hi ? c.px_hi.map(Boolean) : null,
+        rsNewHigh: padArr(rsNewHigh, false),
+        pxNewHigh: c.px_hi ? padArr(c.px_hi.map(Boolean), false) : null,
         rsChangePct: relChange(rs),
-        rsLine: c.rs_line || null, volAvg: rollingMean(c.v, VOL_AVG_WEEKS),
+        rsLine: c.rs_line || null, volAvg: padArr(volAvg),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
     };
 }
@@ -169,6 +191,7 @@ function sliceModel(m, n, end = m.n) {
         cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off })).filter(c => c.i1 > 0 && c.i0 < n),
         rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
         lastIdx: Math.min(m.lastIdx - off, n - 1),
+        lastShown: m.lastIdx - off <= n - 1,   // czy ostatnia prawdziwa świeca mieści się w oknie
     };
 }
 
@@ -177,13 +200,14 @@ function sliceModel(m, n, end = m.n) {
 // albo wbudowana (dziennie 2 miesiące, tygodniowo całość / 52 tyg. na telefonie).
 function defaultWindowLength(full, opts = {}) {
     if (Number.isFinite(opts.windowLen) && opts.windowLen > 0) return opts.windowLen;
-    return full.daily ? DAILY_WINDOW_DAYS : (opts.compact ? COMPACT_WEEKS : full.n);
+    const padDef = full.padDefault || 0;
+    return full.daily ? DAILY_WINDOW_DAYS + padDef : (opts.compact ? COMPACT_WEEKS + padDef : full.n - (full.pad || 0) + padDef);
 }
 
-function clampWindow(w, total, defN) {
+function clampWindow(w, total, defN, defEnd = total) {
     const minN = Math.min(MIN_WINDOW, total);
     const n = Math.max(minN, Math.min(total, Math.round(w && w.n ? w.n : defN)));
-    const end = Math.max(n, Math.min(total, Math.round(w && Number.isFinite(w.end) ? w.end : total)));
+    const end = Math.max(n, Math.min(total, Math.round(w && Number.isFinite(w.end) ? w.end : defEnd)));
     return { n, end };
 }
 
@@ -357,7 +381,7 @@ function chartSvg(m, opts = {}) {
         parts.push(`<line x1="${x(p0)}" y1="${py0}" x2="${x(m.pole.i1)}" y2="${yP(m.pole.y1)}" stroke="${CHART_COLORS.res}" stroke-width="3" stroke-opacity="0.35" stroke-linecap="round"><title>Maszt +${m.pole.gain}%</title></line>`);
         parts.push(`<text x="${x(m.pole.i1) - 6}" y="${yP(m.pole.y1) - 4}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.res}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke">maszt +${m.pole.gain}%</text>`);
     }
-    if (m.trend && m.trend.state === "wybicie" && m.lastIdx === m.n - 1 && Number.isFinite(m.h[m.lastIdx])) {
+    if (m.trend && m.trend.state === "wybicie" && m.lastShown !== false && Number.isFinite(m.h[m.lastIdx])) {
         const bx = x_(m.lastIdx), by = yP(m.h[m.lastIdx]) - 8;
         parts.push(`<path d="M${bx - 6},${by - 10} L${bx + 6},${by - 10} L${bx},${by} Z" fill="${CHART_COLORS.res}"><title>Wybicie z linii trendu</title></path>`);
     }
@@ -542,7 +566,7 @@ function attachRangeSlider(root, total, getWin, setWin) {
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
 // opts.window = {n, end} — okno suwaka (null = domyślne); opts.onWindow(w) — wołane po zmianie okna.
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
-    const full = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock);
+    const full = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock, { pad: true });
     if (!full) {
         container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${escapeHtml(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";
@@ -550,7 +574,8 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     }
     const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
     const defN = defaultWindowLength(full, opts);
-    let win = clampWindow(opts.window, full.n, defN);
+    const defEnd = full.n - (full.pad || 0) + (full.padDefault || 0);   // domyślnie widać tylko odrobinę pustego miejsca z prawej
+    let win = clampWindow(opts.window, full.n, defN, defEnd);
     container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
@@ -563,7 +588,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     };
     draw();
     attachRangeSlider(container, full.n, () => win, w => {
-        win = clampWindow(w, full.n, defN);
+        win = clampWindow(w, full.n, defN, defEnd);
         draw();
         if (opts.onWindow) opts.onWindow(win);
     });
@@ -572,6 +597,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, futureDates, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }
