@@ -267,7 +267,7 @@ function annOverlay(ctx) {
             if (ext.length > 1) body += `<polyline fill="none" stroke="${col}" stroke-width="1.4" stroke-dasharray="2 4" points="${pts2s(ext)}"/>`;
             if (line.alert) body += `<text x="${Math.min(plotRight - 12, Math.max(L.left + 12, b[0] + 4))}" y="${b[1] - 6}" font-size="${geom.fs(13)}" text-anchor="middle">🔔</text>`;
             if (editing) {
-                body += `<polyline data-line="${line.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" points="${pts2s([a, b])}"/>`;
+                body += `<polyline data-line="${line.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" style="cursor:move" points="${pts2s([a, b])}"/>`;
                 if (isSel) body += `<circle data-handle="a" data-line="${line.id}" cx="${a[0]}" cy="${a[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`
                     + `<circle data-handle="b" data-line="${line.id}" cx="${b[0]}" cy="${b[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`;
             }
@@ -281,7 +281,7 @@ function annOverlay(ctx) {
             const cx = Math.min(Math.max(geom.x((cup.i0 + cup.i1) / 2), L.left + 24), plotRight - 24);
             body += `<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${geom.fs(12)}" font-weight="700" fill="${ANN_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${depth}%</text>`;
             if (editing) {
-                body += `<polyline data-cup="${cu.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" points="${pts2s(pts)}"/>`;
+                body += `<polyline data-cup="${cu.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" style="cursor:move" points="${pts2s(pts)}"/>`;
                 if (isSel) {
                     [["L", geom.x(cup.i0), yL], ["B", geom.x(cup.iLow), yB], ["R", geom.x(cup.i1), yR]].forEach(([k, hx, hy]) => {
                         body += `<circle data-handle="${k}" data-cup="${cu.id}" cx="${hx}" cy="${hy}" r="${h}" fill="#0e0f13" stroke="#fff" stroke-width="2.5"/>`;
@@ -380,7 +380,34 @@ function annOverlay(ctx) {
         if (t.dataset && (t.dataset.line || t.dataset.cup) && !annEdit.tool) {
             annEdit.selected = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
             annSyncTools(); render();
-            if (ev.pointerType !== "mouse") annObjectMenu(ev.clientX, ev.clientY);   // dotyk: stuknięcie w linię = menu jak w TradingView
+            // Chwycenie za środek linii/cupa i przeciągnięcie przesuwa całość (o całe świece w poziomie, dowolnie w pionie);
+            // samo stuknięcie (dotyk) otwiera menu jak w TradingView
+            const R = rec(), target = annEdit.selected;
+            const obj = R && (target.type === "line" ? R.lines.find(x => x.id === target.id) : R.cups.find(x => x.id === target.id));
+            if (!obj) return;
+            ev.preventDefault();
+            ov.setPointerCapture(ev.pointerId);
+            const start = toSvg(ev), orig = { ...obj };
+            const dateKeys = target.type === "line" ? [["x0", "y0"], ["x1", "y1"]] : [["start", "peak"], ["low_date", "low"], ["end", "right"]];
+            let moved = false;
+            const move = e => {
+                const p = toSvg(e);
+                if (!moved && Math.hypot(p.x - start.x, p.y - start.y) < 5) return;
+                moved = true;
+                const di = Math.round((p.x - start.x) / geom.step), dy = p.y - start.y;
+                dateKeys.forEach(([dk, pk]) => {
+                    obj[dk] = indexToDate(m.weeks, idxOf(orig[dk]) + di);
+                    obj[pk] = r2(priceOfY(geom.yP(orig[pk]) + dy));
+                });
+                if (target.type === "cup") obj.low = Math.min(obj.low, obj.peak);
+                render();
+            };
+            const up = e => {
+                ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
+                if (moved) { touch(); annSyncTools(); render(); }
+                else if (e.pointerType !== "mouse" && e.type === "pointerup") annObjectMenu(e.clientX, e.clientY);
+            };
+            ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
             return;
         }
         if (!t.classList || !t.classList.contains("ann-catch")) return;
