@@ -56,6 +56,12 @@ const browserGlobals = {
     annEdit: "readonly",
     annStore: "writable",
     annCurrent: "writable",
+    annOnSave: "writable",
+    annWriteLocal: "readonly",
+    mergeStores: "readonly",
+    // docs/js/sync.js (ładowany PRZED watchlist.js)
+    syncInit: "readonly",
+    setInterval: "readonly",
 };
 
 const nodeGlobals = {

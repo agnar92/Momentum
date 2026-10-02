@@ -70,7 +70,22 @@
             <button type="button" class="btn" id="annExport" title="Skopiuj wszystkie własne linie, cupy i notatki jako JSON (kopia zapasowa / do przeglądu z Claude)">Eksportuj adnotacje</button>
             <button type="button" class="btn" id="annImport">Importuj</button>
             <button type="button" class="btn" id="annApply" hidden>Zastosuj import</button>
+            <button type="button" class="btn" id="syncBtn" title="Synchronizacja linii i alertów między komputerem a telefonem (prywatny Gist GitHub)">☁ Synchronizacja: wyłączona</button>
+            <button type="button" class="btn" id="syncNowBtn" hidden>Synchronizuj teraz</button>
             <textarea id="annText" class="ann-text" rows="5" hidden></textarea>
+            <div class="sync-panel" id="syncPanel" hidden>
+                <div id="syncSetup">
+                    <p>Linie, cupy i alerty zapisują się automatycznie w <b>prywatnym Gistcie</b> na Twoim koncie GitHub i są pobierane na każdym urządzeniu z tym samym tokenem. Jeśli wyczyścisz dane przeglądarki, wystarczy wkleić token ponownie — dane wrócą z Gista.</p>
+                    <ol>
+                        <li><a href="https://github.com/settings/tokens/new?scopes=gist&amp;description=Momentum%20sync" target="_blank" rel="noopener">Utwórz token (uprawnienie „gist”) ↗</a> — kliknij „Generate token” i skopiuj go.</li>
+                        <li>Wklej go poniżej (na PC i na telefonie ten sam).</li>
+                    </ol>
+                    <label class="field"><span>Token:</span><input type="password" id="syncToken" autocomplete="off" placeholder="ghp_…"></label>
+                    <button type="button" class="btn" id="syncConnect">Połącz</button>
+                </div>
+                <button type="button" class="btn" id="syncOffBtn" hidden>Wyłącz na tym urządzeniu</button>
+                <div class="ann-hint" id="syncInfo"></div>
+            </div>
         </div>
         <div class="tab-controls" id="controls-FAV" hidden></div>
 
@@ -105,6 +120,7 @@
             <button type="button" class="btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
                 <a class="btn" id="chartTv" href="#" target="_blank" rel="noopener">📈 TradingView ↗</a>
                 <a class="btn" id="chartFv" href="#" target="_blank" rel="noopener">📊 Finviz ↗</a>
+                <a class="btn" id="chartZx" href="#" target="_blank" rel="noopener" title="Zacks Rank, Style Scores, konsensus i rewizje EPS">🎯 Zacks ↗</a>
                 <button class="chart-modal-close" id="chartClose" type="button" title="Zamknij (Esc)" aria-label="Zamknij wykres">✕</button>
             </div>
             <div class="wl-chart-tools" id="chartTools" hidden>
@@ -113,6 +129,7 @@
                 <label class="field"><span>Typ:</span><select id="kindSel"><option value="res">opór</option><option value="sup">wsparcie</option><option value="free">dowolna</option></select></label>
                 <label class="field"><span>Alert:</span><select id="alertSel"><option value="">brak</option><option value="above">nad linią</option><option value="below">pod linią</option></select></label>
                 <label class="field" title="Kropkowane przedłużenie linii za drugi punkt do ostatniej świecy (alert i tak liczy wartość linii dziś)"><input type="checkbox" id="extChk" checked><span>Przedłużenie</span></label>
+                <button type="button" class="btn" id="toolFlat" title="Wyrównaj zaznaczoną linię do poziomu (kąt 0°)">⎯ Poziomo</button>
                 <button type="button" class="btn" id="toolDel">Usuń</button>
                 <button type="button" class="btn" id="toolRestore" title="Wróć do linii i cupów wykrytych automatycznie">Przywróć auto</button>
                 <input type="text" id="annNote" class="ann-note" placeholder="Notatka do wzorca (np. czemu auto się mylił)">
@@ -131,6 +148,7 @@
 <script src="js/qol.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/annotate.js"></script>
+<script src="js/sync.js"></script>
 <script src="js/watchlist.js"></script>
 </body>
 </html>
