@@ -445,6 +445,8 @@ function showTab(tab, resetSort = true) {
     state.tab = tab;
     if (resetSort) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    const activeTab = document.querySelector(".drawer-tab.active");
+    if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     Object.keys(TAB_TITLES).forEach(t => {
         document.getElementById(`table-${t}`).hidden = t !== tab;
         document.getElementById(`guide-${t}`).hidden = t !== tab;
@@ -502,6 +504,14 @@ function initControls() {
     sectorSelect.addEventListener("change", () => { state.sector = sectorSelect.value; renderTable(); });
 
     document.querySelectorAll(".drawer-tab").forEach(btn => btn.addEventListener("click", () => showTab(btn.dataset.tab)));
+    // Pasek zakładek przewija się poziomo także kółkiem myszy (na wąskim ekranie nie mieści wszystkich zakładek)
+    const tabsBar = document.querySelector(".drawer-tabs");
+    if (tabsBar) tabsBar.addEventListener("wheel", e => {
+        if (tabsBar.scrollWidth > tabsBar.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+            tabsBar.scrollLeft += e.deltaY;
+            e.preventDefault();
+        }
+    }, { passive: false });
     document.querySelectorAll("table.momentum-table thead").forEach(thead => thead.addEventListener("click", ev => {
         const th = ev.target.closest("th");
         const key = th && th.dataset.key;
