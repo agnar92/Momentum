@@ -25,6 +25,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const COMPACT_MAX_WIDTH = 640;
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
+const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
@@ -574,6 +575,7 @@ let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze 
 let chartActiveCell = 0;     // w układzie „dzienny + tygodniowy”: który wykres ma fokus (tylko w nim można rysować linie / poprawiać cupy)
 let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
+let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
 let chartRequested = null;  // ticker, którego wykres jest otwarty lub właśnie się wczytuje (zaznaczenie wiersza, strzałki)
 let chartToken = 0;         // numeruje żądania wykresu — spóźniona odpowiedź nie nadpisze nowszej spółki
@@ -690,6 +692,7 @@ function drawChart() {
         const opts = {
             log: chartLog, daily: c.daily, uid: "c" + i,
             compact: layout === "1" ? chartCompact : false, wide: layout === "1" && chartWide,
+            hideLabels: layout === "1" && !splitMode && !chartLegendOn,
             fit: layout === "1" ? (chartFull && !splitMode ? phoneFullFit() : null) : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
@@ -738,6 +741,7 @@ function updateLayoutButton() {
     const btn = document.getElementById("chartLayoutBtn");
     const names = { "1": "Układ: 1 wykres", dw: "Układ: dzienny + tygodniowy", "4": "Układ: 4 spółki" };
     btn.hidden = !splitMode;
+    document.getElementById("chartLegendBtn").hidden = splitMode;
     btn.textContent = names[chartLayout];
     document.getElementById("chartTfBtn").hidden = splitMode && chartLayout !== "1";   // interwał dotyczy tylko układu z jednym wykresem
 }
@@ -769,6 +773,9 @@ function closeChart() {
 }
 
 function updateLogButton() {
+    const legendBtn = document.getElementById("chartLegendBtn");
+    legendBtn.hidden = splitMode;
+    legendBtn.textContent = chartLegendOn ? "Legenda: wł." : "Legenda: wył.";
     document.getElementById("chartLogBtn").textContent = chartLog ? "Skala: logarytmiczna" : "Skala: liniowa";
 }
 
@@ -779,6 +786,7 @@ function updateTfButton() {
 function initChartModal() {
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
+        chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved) ["d", "w"].forEach(k => { if (Number.isFinite(saved[k]) && saved[k] > 0) chartWinLen[k] = saved[k]; });
         chartDaily = localStorage.getItem(CHART_DAILY_KEY) !== "0";   // domyślnie dzienny (wybicia i wolumen)
@@ -791,6 +799,12 @@ function initChartModal() {
         try { localStorage.setItem(CHART_DAILY_KEY, chartDaily ? "1" : "0"); } catch (e) { /* ignoruj */ }
         updateTfButton();
         drawChart();
+    });
+    document.getElementById("chartLegendBtn").addEventListener("click", () => {
+        chartLegendOn = !chartLegendOn;
+        try { localStorage.setItem(CHART_LEGEND_KEY, chartLegendOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        updateLogButton();
+        if (currentChart) drawChart();
     });
     document.getElementById("chartLogBtn").addEventListener("click", () => {
         chartLog = !chartLog;
