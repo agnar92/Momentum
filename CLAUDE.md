@@ -135,6 +135,17 @@ A breakout carries volume confirmation (`breakout`: date, `vol_ratio` = breakout
 `confirmed` ≥ 1.5×) — shown in the legend, the breakout volume bar is outlined; `tl_vol_ratio`/`tl_vol_ok` in watchlist.json feed the
 "Trendlinia" column.
 
+## RS line (chart)
+
+Blue line = stock close / S&P 500 close on the chart's own bars (weekly or daily), drawn in the lower third of the price
+panel with its own min–max scale (only shape/direction matter). Meaning comes from the flags, computed in
+`rs_line_flags` on the FULL history (not the visible window): `rs_hi` = RS above all of the previous 252 sessions
+(52 weeks on the weekly chart), `px_hi` = same for the price. Dot = RS at a 52-week high; **larger white-ringed dot =
+RS at a high while the price is not ("RS przed ceną", the leading signal MarketSmith/IBD stress)**. Legend shows the RS
+Rating, % change of the ratio over the window ("+72% vs S&P") and the current state. `rs_line_state`
+("przed ceną"/"na szczycie" within the last 5 sessions) and `rs_line_dist_pct` (distance from the 52w RS high) feed the
+"Linia RS" column. This is NOT the RS Rating (percentile rank among the list, `rs_rating`).
+
 ## Layout
 
 Desktop: fixed-height workspace with inner scroll. `@media (max-width:900px), (max-height:560px)` (end of

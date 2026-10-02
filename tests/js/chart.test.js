@@ -204,3 +204,14 @@ test("legend shows breakout volume confirmation", () => {
     c.stocks.AAA.tl.breakout = { date: "2026-07-03", vol_ratio: 0.8, confirmed: false };
     assert.match(chartSvg(buildChartModel(c, "AAA", null)), /bez potwierdzenia/);
 });
+
+test("RS dots use precomputed 52-week highs; RS leading price gets a larger ring; legend shows relative change", () => {
+    const c = charts();
+    Object.assign(c.stocks.AAA, { rs_hi: [0, 0, 0, 1, 1], px_hi: [0, 0, 0, 0, 1], rs_line: { state: "przed ceną", dist_pct: -1 } });
+    const m = buildChartModel(c, "AAA", { rs_rating: 90 });
+    assert.deepEqual(m.rsNewHigh, [false, false, false, true, true]);
+    const svg = chartSvg(m);
+    assert.match(svg, /RS przed ceną/);
+    assert.match(svg, /vs S&amp;P w oknie/);
+    assert.match(svg, /RS na maks\. przed ceną/);
+});

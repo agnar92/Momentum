@@ -100,9 +100,15 @@ function dailyCharts(charts) {
     Object.keys(charts.stocks).forEach(t => {
         const c = charts.stocks[t], d = c.day;
         // wyniki sprzed pierwszej sesji okna wypadłyby na indeks 0 i nałożyły się na siebie — pomijamy je
-        if (d) stocks[t] = { ...d, bases: c.bases, eps: (c.eps || []).filter(q => q.d >= charts.days[0]), eps_next: c.eps_next };
+        if (d) stocks[t] = { ...d, bases: c.bases, rs_line: c.rs_line, eps: (c.eps || []).filter(q => q.d >= charts.days[0]), eps_next: c.eps_next };
     });
     return { weeks: charts.days, spx: charts.spx_d, stocks, daily: true };
+}
+
+// Zmiana linii RS od pierwszej do ostatniej dostępnej wartości okna (%): ile spółka pobiła (lub przegrała z) S&P 500.
+function relChange(rs) {
+    const vals = rs.filter(Number.isFinite);
+    return vals.length >= 2 ? (vals[vals.length - 1] / vals[0] - 1) * 100 : null;
 }
 
 // Indeks świecy dla daty linii trendu (może wypaść przed oknem — wtedy wartość ujemna, linia jest obcinana przy rysowaniu).
@@ -134,8 +140,12 @@ function buildChartModel(charts, ticker, stock) {
         ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
         smas: smas.map(([label, values]) => ({ label, values: values || [], color: SMA_COLORS[label] })),
         spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null } : null,
-        epsNext: c.eps_next || null, lastIdx,
-        rsNewHigh: rsNewHighFlags(rs), volAvg: rollingMean(c.v, VOL_AVG_WEEKS),
+        epsNext: c.eps_next && c.eps_next.d >= weeks[weeks.length - 1] ? c.eps_next : null,   // przeterminowana prognoza z cache'u nie jest "następnym" raportem lastIdx,
+        // nowe maksimum RS/ceny względem ostatnich ~52 tygodni liczy watchlist.py na pełnej historii (nie tylko na oknie wykresu)
+        rsNewHigh: c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs),
+        pxNewHigh: c.px_hi ? c.px_hi.map(Boolean) : null,
+        rsChangePct: relChange(rs),
+        rsLine: c.rs_line || null, volAvg: rollingMean(c.v, VOL_AVG_WEEKS),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
     };
 }
@@ -151,7 +161,7 @@ function sliceModel(m, n) {
         eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0),
         lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0),
         cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off })).filter(c => c.i1 > 0),
-        rsNewHigh: cut(m.rsNewHigh), volAvg: cut(m.volAvg),
+        rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
         lastIdx: m.lastIdx - off,
     };
 }
@@ -297,7 +307,9 @@ function chartSvg(m, opts = {}) {
         const yR = makeYScale(rExt[0], rExt[1], L.price.y + L.price.h * 0.68, L.price.h * 0.3);
         parts.push(polyline(m.rs.map((v, i) => Number.isFinite(v) ? [x(i), yR(v)] : null), CHART_COLORS.rs, 1.6));
         m.rsNewHigh.forEach((flag, i) => {
-            if (flag) parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${opts.compact ? 3.2 : 2.6}" fill="${CHART_COLORS.rs}"><title>RS na nowym maksimum okna</title></circle>`);
+            if (!flag) return;
+            const leads = m.pxNewHigh && !m.pxNewHigh[i];   // RS na maksimum, a cena jeszcze nie — najcenniejszy sygnał
+            parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${(opts.compact ? 3.2 : 2.6) + (leads ? 1.6 : 0)}" fill="${CHART_COLORS.rs}"${leads ? ` stroke="#fff" stroke-width="1.2"` : ""}><title>${leads ? "RS na maksimum 52 tyg., cena jeszcze nie (RS przed ceną)" : "RS na maksimum 52 tyg."}</title></circle>`);
         });
     }
     // znaczniki dat wyników na dole panelu cen
@@ -307,7 +319,10 @@ function chartSvg(m, opts = {}) {
     });
     // pasek legendy nad panelem cen (osobny pas — nic nie zasłania świec)
     const smaItems = m.smas.map(x => `<tspan fill="${x.color}">— ${x.label}</tspan>`);
-    const otherItems = [`<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${m.rsRating != null ? ` · Rating ${m.rsRating}` : ""}</tspan>`];
+    const rsPart = [m.rsRating != null ? `Rating ${m.rsRating}` : null,
+        Number.isFinite(m.rsChangePct) ? `${m.rsChangePct >= 0 ? "+" : ""}${m.rsChangePct.toFixed(0)}% vs S&amp;P w oknie` : null,
+        m.rsLine && m.rsLine.state ? `RS ${m.rsLine.state === "przed ceną" ? "na maks. przed ceną" : "na maks. razem z ceną"}` : null].filter(Boolean);
+    const otherItems = [`<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${rsPart.length ? " · " + rsPart.join(" · ") : ""}</tspan>`];
     if (m.trend && m.trend.pattern) otherItems.push(`<tspan fill="${CHART_COLORS.res}">▸ ${escapeHtml(m.trend.pattern)}</tspan>`);
     if (m.trend && m.trend.state) {
         const bo = m.trend.breakout;
