@@ -623,3 +623,10 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
     .wl-chart-box.full.phone-full .wl-chart-head .chart-modal-close { position: static; }
     .wl-chart-box.full.phone-full .wl-chart-titles { padding-right: 0; }
 }
+
+/* Karta notatki linii */
+.ann-lnote { position: fixed; z-index: 2000; width: 270px; padding: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55); }
+.ann-lnote-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+.ann-lnote-close { background: none; border: 0; color: var(--text-dim); font-size: 14px; cursor: pointer; padding: 2px 6px; }
+.ann-lnote textarea { width: 100%; box-sizing: border-box; resize: vertical; background: var(--panel-alt); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; font-family: inherit; }
+@media (pointer: coarse) { .ann-lnote { width: min(300px, calc(100vw - 16px)); } .ann-lnote textarea { font-size: 16px; } }

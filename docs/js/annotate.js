@@ -265,6 +265,13 @@ function annOverlay(ctx) {
             const isSel = sel && sel.type === "line" && sel.id === line.id;
             body += `<polyline fill="none" stroke="${col}" stroke-width="${isSel ? 3 : 2}" points="${pts2s(main)}"><title>${ANN_KIND_LABELS[line.kind] || "linia"}${line.alert ? " · alert " + ANN_DIR_LABELS[line.alert] : ""}</title></polyline>`;
             if (ext.length > 1) body += `<polyline fill="none" stroke="${col}" stroke-width="1.4" stroke-dasharray="2 4" points="${pts2s(ext)}"/>`;
+            const hasNote = !!(line.note && line.note.trim());
+            if (hasNote) {
+                // ikona notatki z lewej strony na początku linii; najechanie na linię lub ikonę (dotyk: stuknięcie ikony) pokazuje treść
+                const ix = Math.max(L.left + 12, a[0] - geom.fs(14)), iy = a[1];
+                if (!editing) body += `<polyline data-nline="${line.id}" fill="none" stroke="transparent" stroke-width="14" pointer-events="stroke" points="${pts2s([a, b])}"/>`;
+                body += `<g data-nline="${line.id}" class="ann-note-icon" style="cursor:pointer" pointer-events="all"><circle cx="${ix}" cy="${iy}" r="${geom.fs(9)}" fill="#0e0f13" stroke="${col}" stroke-width="1.3"/><text x="${ix}" y="${iy + geom.fs(4)}" font-size="${geom.fs(11)}" text-anchor="middle" pointer-events="none">📝</text></g>`;
+            }
             if (line.alert) body += `<text x="${Math.min(plotRight - 12, Math.max(L.left + 12, b[0] + 4))}" y="${b[1] - 6}" font-size="${geom.fs(13)}" text-anchor="middle">🔔</text>`;
             if (editing) {
                 body += `<polyline data-line="${line.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" style="cursor:move" points="${pts2s([a, b])}"/>`;
@@ -317,6 +324,19 @@ function annOverlay(ctx) {
             last = { t: now, x: ev.clientX, y: ev.clientY };
         });
     }
+    // Notatka linii: najechanie myszą na linię/ikonę pokazuje kartę z treścią (edytowalną), ikona działa też stuknięciem
+    const noteId = ev => {
+        const g = ev.target.closest && ev.target.closest("[data-nline],[data-line]");
+        const id = g && (g.dataset.nline || g.dataset.line);
+        const line = id && rec() && rec().lines.find(l => l.id === id);
+        return line && line.note && line.note.trim() ? id : null;
+    };
+    ov.addEventListener("mouseover", ev => { const id = noteId(ev); if (id) annShowNote(ev.clientX, ev.clientY, id, false); });
+    ov.addEventListener("mouseout", () => annScheduleNoteHide());
+    ov.addEventListener("click", ev => {
+        const g = ev.target.closest && ev.target.closest(".ann-note-icon");
+        if (g) { const id = g.dataset.nline; annShowNote(ev.clientX, ev.clientY, id, true); }
+    });
     if (!editing) return;
 
     const touch = () => { const R = rec(); if (R) R.editedAt = new Date().toISOString(); annSave(); };
@@ -463,6 +483,61 @@ function annOverlay(ctx) {
     });
 }
 
+// ---------- karta notatki linii ----------
+
+let annNoteEl = null;
+let annNoteTimer = null;
+
+function annCloseNote() {
+    clearTimeout(annNoteTimer);
+    if (annNoteEl) { annNoteEl.remove(); annNoteEl = null; }
+}
+
+function annScheduleNoteHide() {
+    clearTimeout(annNoteTimer);
+    annNoteTimer = setTimeout(() => {
+        if (annNoteEl && document.activeElement !== annNoteEl.querySelector("textarea")) annCloseNote();   // pisząc, karta zostaje
+    }, 350);
+}
+
+// Karta z notatką wybranej linii (podgląd po najechaniu, edycja w polu; zapis na bieżąco, trafia też do synchronizacji).
+function annShowNote(x, y, lineId, focus) {
+    const R = annCurrent && annStore[annCurrent.ticker];
+    const line = R && R.lines.find(l => l.id === lineId);
+    if (!line) return;
+    clearTimeout(annNoteTimer);
+    if (annNoteEl && annNoteEl.dataset.line === lineId) {
+        if (focus) annNoteEl.querySelector("textarea").focus();
+        return;
+    }
+    annCloseNote();
+    const el = document.createElement("div");
+    el.className = "ann-lnote";
+    el.dataset.line = lineId;
+    el.innerHTML = `<div class="ann-lnote-head"><span>📝 Notatka do linii</span><button type="button" class="ann-lnote-close" aria-label="Zamknij">✕</button></div><textarea rows="4" maxlength="1000" placeholder="Napisz, co ta linia znaczy…"></textarea>`;
+    const ta = el.querySelector("textarea");
+    ta.value = line.note || "";
+    ta.addEventListener("input", () => {
+        line.note = ta.value;
+        R.editedAt = new Date().toISOString();
+        annSave();
+        if (annCurrent) annCurrent.render();   // ikona pojawia się / znika razem z treścią
+    });
+    ta.addEventListener("keydown", ev => { if (ev.key === "Escape") { ev.stopPropagation(); annCloseNote(); } ev.stopPropagation(); });
+    ta.addEventListener("keyup", ev => ev.stopPropagation());
+    el.querySelector(".ann-lnote-close").addEventListener("click", annCloseNote);
+    el.addEventListener("mouseenter", () => clearTimeout(annNoteTimer));
+    el.addEventListener("mouseleave", annScheduleNoteHide);
+    (document.fullscreenElement || document.body).appendChild(el);
+    const r = el.getBoundingClientRect();
+    const left = Math.max(4, Math.min(x + 14, window.innerWidth - r.width - 4));
+    const top = y + 14 + r.height > window.innerHeight ? Math.max(4, y - r.height - 14) : y + 14;
+    el.style.left = left + "px";
+    el.style.top = top + "px";
+    annNoteEl = el;
+    if (focus) ta.focus();
+}
+
 // ---------- menu kontekstowe ----------
 
 let annMenuEl = null;
@@ -499,7 +574,7 @@ function annShowMenu(x, y, items) {
     if (touch) y = y - r.height - 28 >= 4 ? y - r.height - 28 : y + 28;   // nad palcem (żeby go nie zasłaniać), a gdy brak miejsca pod nim
     el.style.left = Math.max(4, Math.min(x - (touch ? r.width / 2 : 0), window.innerWidth - r.width - 4)) + "px";
     el.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
-    annMenuOpenedAt = Date.now();
+    annMenuOpenedAt = touch ? Date.now() : 0;   // ochrona przed „click” po stuknięciu otwierającym menu dotyczy tylko dotyku
     annMenuEl = el;
     annEdit.menuOpen = true;
 }
@@ -525,6 +600,7 @@ function annObjectMenu(x, y) {
     const setAlert = v => () => { line.alert = v; line.ack = false; annChanged(); };
     annShowMenu(x, y, [
         { label: "Wyrównaj poziomo (0°)", run: () => { annFlatten(line); annChanged(); } },
+        { label: line.note && line.note.trim() ? "📝 Edytuj notatkę" : "📝 Dodaj notatkę", run: () => annShowNote(x, y, line.id, true) },
         null,
         { label: "Opór", on: line.kind === "res", run: setKind("res") },
         { label: "Wsparcie", on: line.kind === "sup", run: setKind("sup") },
@@ -622,8 +698,11 @@ function annInitUI(onRedraw) {
         annLeaveSpace();   // jeśli właśnie coś się rysuje albo menu jest otwarte, tryb skończy się po zakończeniu
     });
     window.addEventListener("blur", () => { annEdit.spaceHeld = false; if (annEdit.spaceOn) { annEdit.tool = null; annEdit.pending = []; annCloseMenu(); setEdit(false, false); } });
-    document.addEventListener("pointerdown", ev => { if (annMenuEl && !annMenuEl.contains(ev.target)) annCloseMenu(); }, true);
-    document.addEventListener("keydown", ev => { if (ev.key === "Escape" && annMenuEl) annCloseMenu(); });
+    document.addEventListener("pointerdown", ev => {
+        if (annMenuEl && !annMenuEl.contains(ev.target)) annCloseMenu();
+        if (annNoteEl && !annNoteEl.contains(ev.target) && !(ev.target.closest && ev.target.closest(".ann-note-icon"))) annCloseNote();
+    }, true);
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape") { if (annMenuEl) annCloseMenu(); else if (annNoteEl) annCloseNote(); } });
     window.addEventListener("resize", annCloseMenu);
     if ($("toolFlat")) $("toolFlat").addEventListener("click", () => { const l = annSelectedLine(); if (l) { annFlatten(l); annChanged(); } });
     $("toolLine").addEventListener("click", tool("line"));
