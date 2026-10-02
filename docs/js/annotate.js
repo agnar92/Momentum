@@ -163,10 +163,12 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 
 function annOverlay(ctx) {
     const { plot, m, geom, ticker } = ctx;
+    const editing = annEdit.on && !ctx.readonly;      // w siatce wykresów edytować można tylko pierwszy (zaznaczony) wykres
+    const clipId = "annClip" + (ctx.uid || "");
     const L = geom.L;
     plot.style.position = "relative";
     const ov = document.createElementNS(SVG_NS, "svg");
-    ov.setAttribute("class", "chart-overlay" + (annEdit.on ? " editing" : ""));
+    ov.setAttribute("class", "chart-overlay" + (editing ? " editing" : ""));
     ov.setAttribute("viewBox", `0 0 ${L.width} ${L.height}`);
     ov.setAttribute("preserveAspectRatio", "xMidYMid meet");
     plot.appendChild(ov);
@@ -214,7 +216,7 @@ function annOverlay(ctx) {
             body += `<polyline fill="none" stroke="${col}" stroke-width="${isSel ? 3 : 2}" points="${pts2s(main)}"><title>${ANN_KIND_LABELS[line.kind] || "linia"}${line.alert ? " · alert " + ANN_DIR_LABELS[line.alert] : ""}</title></polyline>`;
             if (ext.length > 1) body += `<polyline fill="none" stroke="${col}" stroke-width="1.4" stroke-dasharray="2 4" points="${pts2s(ext)}"/>`;
             if (line.alert) body += `<text x="${Math.min(plotRight - 12, Math.max(L.left + 12, b[0] + 4))}" y="${b[1] - 6}" font-size="${geom.fs(13)}" text-anchor="middle">🔔</text>`;
-            if (annEdit.on) {
+            if (editing) {
                 body += `<polyline data-line="${line.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" points="${pts2s([a, b])}"/>`;
                 if (isSel) body += `<circle data-handle="a" data-line="${line.id}" cx="${a[0]}" cy="${a[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`
                     + `<circle data-handle="b" data-line="${line.id}" cx="${b[0]}" cy="${b[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`;
@@ -228,7 +230,7 @@ function annOverlay(ctx) {
             body += `<polyline fill="none" stroke="${ANN_COLORS.cup}" stroke-width="${isSel ? 3.2 : 2}" stroke-linecap="round" points="${pts2s(pts)}"><title>Cup −${depth}% (własny)</title></polyline>`;
             const cx = Math.min(Math.max(geom.x((cup.i0 + cup.i1) / 2), L.left + 24), plotRight - 24);
             body += `<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${geom.fs(12)}" font-weight="700" fill="${ANN_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${depth}%</text>`;
-            if (annEdit.on) {
+            if (editing) {
                 body += `<polyline data-cup="${cu.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" points="${pts2s(pts)}"/>`;
                 if (isSel) {
                     [["L", geom.x(cup.i0), yL], ["B", geom.x(cup.iLow), yB], ["R", geom.x(cup.i1), yR]].forEach(([k, hx, hy]) => {
@@ -238,19 +240,19 @@ function annOverlay(ctx) {
             }
         });
         // podgląd: punkty już postawione + gumka do kursora
-        if (annEdit.on && annEdit.pending.length) {
+        if (editing && annEdit.pending.length) {
             const P = annEdit.pending.map(p => [geom.x(idxOf(p.date)), geom.yP(p.price)]);
             const cur = annEdit.cursor ? [geom.x(idxOf(annEdit.cursor.date)), geom.yP(annEdit.cursor.price)] : null;
             body += `<polyline fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3" points="${pts2s(cur ? [...P, cur] : P)}"/>`;
             P.forEach(p => { body += `<circle cx="${p[0]}" cy="${p[1]}" r="${h * 0.7}" fill="#fff"/>`; });
         }
-        const catcher = annEdit.on ? `<rect class="ann-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : "";
-        return `<defs><clipPath id="annClip"><rect x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}"/></clipPath></defs>${catcher}<g clip-path="url(#annClip)">${body}</g>`;
+        const catcher = editing ? `<rect class="ann-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : "";
+        return `<defs><clipPath id="${clipId}"><rect x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}"/></clipPath></defs>${catcher}<g clip-path="url(#${clipId})">${body}</g>`;
     };
     const render = () => { ov.innerHTML = markup(); };
-    annCurrent = { render, ticker, full: ctx.full };
+    if (!ctx.readonly) annCurrent = { render, ticker, full: ctx.full };
     render();
-    if (!annEdit.on) return;
+    if (!editing) return;
 
     const touch = () => { const R = rec(); if (R) R.editedAt = new Date().toISOString(); annSave(); };
     const finishPending = () => {

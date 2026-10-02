@@ -32,6 +32,24 @@ const CHART_LAYOUT_WIDE = {
     bench: { y: 8, h: 70 }, legend: { y: 86, h: 20 }, price: { y: 110, h: 400 }, volume: { y: 518, h: 90 }, eps: { y: 616, h: 124 },
     axisY: 778,
 };
+// Układ "dopasowany": viewBox = faktyczny rozmiar komórki w pikselach (siatka dzienny+tygodniowy / 4 spółki), panele proporcjonalnie
+// do wysokości, więc wykres wypełnia komórkę bez pustych pasów; czcionki są wtedy w prawdziwych pikselach.
+function fitLayout(w, h) {
+    const twoRows = w < 560;
+    const legendH = twoRows ? 36 : 20;
+    const avail = Math.max(120, h - legendH - 56);
+    const bench = Math.max(30, Math.round(avail * 0.10)), volume = Math.max(36, Math.round(avail * 0.14)), eps = Math.max(48, Math.round(avail * 0.17));
+    const price = Math.max(60, avail - bench - volume - eps);
+    const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1 };
+    L.bench = { y: 4, h: bench };
+    L.legend = { y: L.bench.y + bench + 6, h: legendH };
+    L.price = { y: L.legend.y + legendH + 4, h: price };
+    L.volume = { y: L.price.y + price + 8, h: volume };
+    L.eps = { y: L.volume.y + volume + 8, h: eps };
+    L.axisY = L.eps.y + eps + 18;
+    L.height = Math.round(L.axisY + 8);
+    return L;
+}
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
@@ -210,7 +228,7 @@ function sliceModel(m, n, end = m.n) {
 function defaultWindowLength(full, opts = {}) {
     if (Number.isFinite(opts.windowLen) && opts.windowLen > 0) return opts.windowLen;
     const padDef = full.padDefault || 0;
-    return full.daily ? DAILY_WINDOW_DAYS + padDef : (opts.compact ? COMPACT_WEEKS + padDef : full.n - (full.pad || 0) + padDef);
+    return full.daily ? DAILY_WINDOW_DAYS + padDef : ((opts.compact || opts.fit) ? COMPACT_WEEKS + padDef : full.n - (full.pad || 0) + padDef);
 }
 
 function clampWindow(w, total, defN, defEnd = total) {
@@ -266,6 +284,7 @@ function fmtCompact(v) {
 }
 
 function pickLayout(opts = {}) {
+    if (opts.fit) return fitLayout(opts.fit.w, opts.fit.h);
     return opts.compact ? CHART_LAYOUT_COMPACT : (opts.wide ? CHART_LAYOUT_WIDE : CHART_LAYOUT);
 }
 
@@ -310,7 +329,7 @@ function cupArcPoints(cup, x, yP, steps = 48) {
 
 function chartSvg(m, opts = {}) {
     const L = pickLayout(opts);
-    const fs = n => +(n * (opts.compact ? COMPACT_FONT_SCALE : 1)).toFixed(1);
+    const fs = n => +(n * (opts.compact ? COMPACT_FONT_SCALE : (L.fontScale || 1))).toFixed(1);
     const plotW = L.width - L.left - L.right;
     const step = plotW / m.n;
     const x_ = i => L.left + (i + 0.5) * step;
@@ -362,10 +381,10 @@ function chartSvg(m, opts = {}) {
         parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
     });
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
-    parts.push(`<clipPath id="chartPriceClip"><rect x="${L.left}" y="${L.price.y}" width="${L.width - L.left - L.right}" height="${L.price.h}"/></clipPath>`);
+    parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${L.price.y}" width="${L.width - L.left - L.right}" height="${L.price.h}"/></clipPath>`);
     (opts.hideAutoCups ? [] : m.cups).forEach(cup => {
         const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
-        parts.push(`<polyline clip-path="url(#chartPriceClip)" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%</title></polyline>`);
+        parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%</title></polyline>`);
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
         parts.push(`<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${cup.depth}%</text>`);
     });
@@ -431,7 +450,7 @@ function chartSvg(m, opts = {}) {
         otherItems.push(`<tspan fill="${bo && !bo.confirmed ? CHART_COLORS.text : CHART_COLORS.res}" font-weight="700">${m.trend.state === "wybicie" ? "▲ wybicie z linii trendu" + vol : "przy oporze"}</tspan>`);
     }
     if (useLog) otherItems.push("skala log.");
-    const legendRows = opts.compact ? [smaItems, otherItems] : [[...smaItems, ...otherItems]];
+    const legendRows = (opts.compact || L.legendRows === 2) ? [smaItems, otherItems] : [[...smaItems, ...otherItems]];
     legendRows.forEach((row, r) => {
         parts.push(`<text x="${L.left + 4}" y="${L.legend.y + fs(11) + 2 + r * fs(11) * 1.5}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${row.join("  ")}</text>`);
     });
@@ -614,6 +633,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }

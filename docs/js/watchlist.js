@@ -25,6 +25,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const COMPACT_MAX_WIDTH = 640;
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
+const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
 const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
 const FAVS_KEY = "momentum_watchlist_favs";
@@ -374,6 +375,7 @@ function applyLayoutMode() {
     if (want === splitMode) return;
     splitMode = want;
     document.body.classList.toggle("split", want);
+    if (document.getElementById("chartLayoutBtn")) updateLayoutButton();
     if (state.data) {
         renderHeaders();
         if (!want) {
@@ -550,7 +552,8 @@ function initAnnotationIO() {
 
 let chartsPromise = null;
 let chartWinLen = { d: null, w: null };   // długość okna suwaka zapamiętana dla wszystkich spółek (osobno dzienny / tygodniowy)
-let chartWindow = null;     // okno suwaka {n, end} (null = domyślne); zerowane przy nowej spółce / zmianie interwału
+let chartWindows = [];      // okna suwaków {n, end} po jednym na wykres w siatce (puste = domyślne); zerowane przy nowej spółce / zmianie układu
+let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
 let chartRequested = null;  // ticker, którego wykres jest otwarty lub właśnie się wczytuje (zaznaczenie wiersza, strzałki)
@@ -583,7 +586,7 @@ async function openChart(ticker) {
     const token = ++chartToken;
     markSelectedRow(true);
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
-    chartWindow = null;
+    chartWindows = [];
     Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });   // nowy wykres: poza trybem edycji
     annCurrent = null;
     annSyncTools();
@@ -608,22 +611,77 @@ function chartStats(s) {
 }
 
 // Zmiana DŁUGOŚCI okna suwaka jest zapamiętywana (localStorage) dla wszystkich spółek; samo przesuwanie okna nie.
-function rememberWindowLength(n) {
-    const key = chartDaily ? "d" : "w";
+function rememberWindowLength(n, daily) {
+    const key = daily ? "d" : "w";
     if (chartWinLen[key] === n) return;
     chartWinLen[key] = n;
     try { localStorage.setItem(CHART_WINLEN_KEY, JSON.stringify(chartWinLen)); } catch (e) { /* brak localStorage */ }
 }
 
+// Spółki widoczne na liście (kolejność jak w tabeli) — dla siatki 4 wykresów i strzałek.
+function visibleTickers() {
+    return [...document.querySelectorAll(`#table-${state.tab} tbody tr[data-ticker]`)].map(r => r.dataset.ticker);
+}
+
+// Komórki siatki wykresów dla bieżącego układu (pierwsza = zaznaczona spółka, jedyna edytowalna).
+function chartCells() {
+    const cur = currentChart.ticker;
+    const layout = splitMode ? chartLayout : "1";
+    if (layout === "dw") return [{ ticker: cur, daily: true }, { ticker: cur, daily: false }];
+    if (layout === "4") {
+        const list = visibleTickers(), i = list.indexOf(cur);
+        const rest = i >= 0 ? list.slice(i + 1) : list.filter(t => t !== cur);
+        return [cur, ...rest].slice(0, 4).map(t => ({ ticker: t, daily: true }));
+    }
+    return [{ ticker: cur, daily: chartDaily }];
+}
+
 function drawChart() {
     if (!currentChart) return null;
-    const model = renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
-        currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, wide: chartWide, daily: chartDaily,
-            window: chartWindow, windowLen: chartDaily ? chartWinLen.d : chartWinLen.w, onWindow: w => { chartWindow = w; rememberWindowLength(w.n); },
-            hideAutoLines: annHide(currentChart.ticker).lines, hideAutoCups: annHide(currentChart.ticker).cups,
-            overlay: c => annOverlay({ ...c, ticker: currentChart.ticker, stock: currentChart.stock }) });
-    document.getElementById("chartPattern").textContent = model ? patternExplain(model) : "";
-    return model;
+    const layout = splitMode ? chartLayout : "1";
+    const cells = chartCells();
+    const body = document.getElementById("chartBody");
+    body.innerHTML = `<div class="chart-grid layout-${layout}">${cells.map((c, i) => {
+        const st = state.data.stocks.find(x => x.ticker === c.ticker);
+        const label = layout === "dw" ? (c.daily ? "dzienny" : "tygodniowy") : (st && st.company ? st.company : "");
+        return `<div class="chart-cell${i === 0 ? " primary" : ""}" data-ticker="${escapeHtml(c.ticker)}"><div class="cell-head"><strong>${escapeHtml(c.ticker)}</strong> <span>${escapeHtml(label)}</span></div>`
+            + `<div class="wl-chart-readout cell-readout"></div><div class="cell-body"></div></div>`;
+    }).join("")}</div>`;
+    let primary = null;
+    cells.forEach((c, i) => {
+        const cell = body.querySelectorAll(".chart-cell")[i];
+        const st = state.data.stocks.find(x => x.ticker === c.ticker) || null;
+        const opts = {
+            log: chartLog, daily: c.daily, uid: "c" + i,
+            compact: layout === "1" ? chartCompact : false, wide: layout === "1" && chartWide,
+            fit: layout === "1" ? null : cellFit(cell),
+            window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
+            onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
+            hideAutoLines: annHide(c.ticker).lines, hideAutoCups: annHide(c.ticker).cups,
+            overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== 0, uid: "c" + i }),
+        };
+        const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
+        if (i === 0) primary = model;
+    });
+    // klik w nagłówek innego wykresu w siatce 4 spółek zaznacza tę spółkę
+    body.querySelectorAll(".chart-cell:not(.primary) .cell-head").forEach(h => h.addEventListener("click", () => openChart(h.parentElement.dataset.ticker)));
+    document.getElementById("chartPattern").textContent = primary ? patternExplain(primary) : "";
+    return primary;
+}
+
+// Rozmiar (px) miejsca na wykres w komórce siatki: wysokość komórki minus nagłówek, odczyt i suwak.
+function cellFit(cell) {
+    const body = cell.querySelector(".cell-body");
+    const r = body.getBoundingClientRect();
+    return { w: Math.max(260, r.width), h: Math.max(180, r.height - 34) };   // 34 = suwak okna + odstępy
+}
+
+function updateLayoutButton() {
+    const btn = document.getElementById("chartLayoutBtn");
+    const names = { "1": "Układ: 1 wykres", dw: "Układ: dzienny + tygodniowy", "4": "Układ: 4 spółki" };
+    btn.hidden = !splitMode;
+    btn.textContent = names[chartLayout];
+    document.getElementById("chartTfBtn").hidden = splitMode && chartLayout !== "1";   // interwał dotyczy tylko układu z jednym wykresem
 }
 
 // Pełny ekran okna wykresu: klasa CSS (działa wszędzie, także na iPhonie) + prawdziwy pełny ekran przeglądarki, gdy jest dostępny.
@@ -670,7 +728,7 @@ function initChartModal() {
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
         chartDaily = !chartDaily;
-        chartWindow = null;
+        chartWindows = [];
         try { localStorage.setItem(CHART_DAILY_KEY, chartDaily ? "1" : "0"); } catch (e) { /* ignoruj */ }
         updateTfButton();
         drawChart();
@@ -683,15 +741,27 @@ function initChartModal() {
     });
     document.getElementById("chartClose").addEventListener("click", closeChart);
     document.getElementById("chartFullBtn").addEventListener("click", () => setChartFull(!chartFull));
+    try { const saved = localStorage.getItem(CHART_LAYOUT_KEY); if (["1", "dw", "4"].includes(saved)) chartLayout = saved; } catch (e) { /* brak localStorage */ }
+    document.getElementById("chartLayoutBtn").addEventListener("click", () => {
+        chartLayout = { "1": "dw", dw: "4", "4": "1" }[chartLayout];
+        try { localStorage.setItem(CHART_LAYOUT_KEY, chartLayout); } catch (e) { /* ignoruj */ }
+        chartWindows = [];
+        updateLayoutButton();
+        if (currentChart) drawChart();
+    });
+    updateLayoutButton();
     // Wyjście z pełnego ekranu klawiszem Esc (obsługuje przeglądarka) synchronizuje stan przycisku i układ.
     document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && chartFull) setChartFull(false); });
     // Obrót telefonu / zmiana rozmiaru okna przełącza układ kompaktowy bez ponownego otwierania wykresu.
+    let resizeTimer = null;
     window.addEventListener("resize", () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => { if (splitMode && chartLayout !== "1" && currentChart) drawChart(); }, 150);   // siatka: nowy rozmiar komórek
         applyLayoutMode();
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;
         chartCompact = compact;
-        chartWindow = null;
+        chartWindows = [];
         drawChart();
     });
     document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal" && !splitMode) closeChart(); });

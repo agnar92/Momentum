@@ -292,3 +292,17 @@ test("pickLayout: compact wins, wide for full screen, default otherwise; wide la
     assert.notEqual(pickLayout({ compact: true, wide: true }), CHART_LAYOUT_WIDE);
     assert.match(chartSvg(buildChartModel(charts(), "AAA", null), { wide: true }), /viewBox="0 0 1600 800"/);
 });
+
+test("fitLayout fills the requested box: panels stack in order and fit the height; narrow cells get a two-row legend", () => {
+    const { fitLayout } = require("../../docs/js/chart.js");
+    const L = fitLayout(620, 600);
+    assert.equal(L.width, 620);
+    assert.ok(L.height >= 590 && L.height <= 612, String(L.height));
+    assert.ok(L.bench.y < L.legend.y && L.legend.y < L.price.y && L.price.y < L.volume.y && L.volume.y < L.eps.y && L.eps.y < L.axisY);
+    assert.ok(L.price.h > L.volume.h && L.price.h > L.eps.h);
+    assert.equal(fitLayout(500, 600).legendRows, 2);
+    assert.equal(L.legendRows, 1);
+    assert.equal(fitLayout(900, 400).legendRows, 1);
+    const svg = chartSvg(buildChartModel(charts(), "AAA", null), { fit: { w: 620, h: 600 } });
+    assert.match(svg, new RegExp(`viewBox="0 0 620 ${L.height}"`));
+});

@@ -302,6 +302,28 @@ body.split #chartClose { display: none; }
 body.split .wl-chart-body svg { max-height: calc(100vh - 48px - 250px); }
 body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235px); max-height: calc(100dvh - 235px); }
 
+/* ---------- siatka wykresów (widok dzielony: 1 wykres / dzienny + tygodniowy / 4 spółki) ---------- */
+.chart-grid { display: grid; gap: 8px; }
+.chart-grid.layout-1 { display: block; }
+.chart-cell { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.chart-grid.layout-1 .cell-head { display: none; }
+.cell-head { font-size: 12px; color: var(--text-dim); padding: 3px 6px; border-bottom: 2px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-head strong { color: var(--text); font-size: 13px; }
+.chart-cell.primary .cell-head { border-bottom-color: var(--green); }
+.chart-cell:not(.primary) .cell-head { cursor: pointer; }
+.chart-cell:not(.primary) .cell-head:hover { color: var(--text); }
+.chart-grid.layout-dw { grid-template-columns: 1fr 1fr; }
+.chart-grid.layout-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.chart-grid:not(.layout-1) { height: calc(100vh - 48px - 235px); }
+.chart-grid:not(.layout-1) .cell-readout { font-size: 11px; min-height: 16px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chart-grid:not(.layout-1) .cell-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.chart-grid:not(.layout-1) .cell-body > #chartPlot { flex: 1; min-height: 0; }
+.chart-grid:not(.layout-1) .cell-body svg#chartSvg { width: 100%; height: 100%; max-height: none; }
+.chart-grid:not(.layout-1) .wl-range { height: 26px; }
+.chart-grid.layout-4 { height: max(calc(100vh - 48px - 235px), 860px); }   /* komórki min. ~420 px — reszta przewija się w oknie wykresu */
+.wl-chart-box.full .chart-grid.layout-4 { height: max(calc(100vh - 235px), 860px); }
+.wl-chart-box.full .chart-grid:not(.layout-1) { height: calc(100vh - 235px); height: calc(100dvh - 235px); }
+
 /* ---------- ep.html ---------- */
 .charts-area {
     flex: none;
