@@ -99,7 +99,7 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   **Clicking a row opens a MarketSmith-style chart** (`js/chart.js`, pure SVG, no libraries; model/scales are unit
   tested in `tests/js/chart.test.js`): S&P 500 strip on top; weekly OHLC bars + SMA10 (green) / SMA40 (red) + the RS
   line (stock / S&P 500, blue, own scale in the lower third, labelled with the RS Rating); weekly volume; quarterly
-  EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover; a header button switches weekly/daily (`day` arrays in charts.json: last 252 sessions (`CHART_DAYS`, ~1 year) + SMA50/SMA200; the daily view opens on a 21-session (1 month) window, the slider reaches the whole year, `dailyCharts`; stored in `momentum_watchlist_chart_daily`; no bases in daily view); a stats line shows cap, P/E, Fwd P/E, ROE, distance from 52w high and the open base; a header button toggles the PRICE panel between linear and logarithmic scale (`makeLogScale`/`logTicks`, 1/2/5·10ⁿ ticks; choice stored in `localStorage` `momentum_watchlist_chart_log`; the S&P strip, RS line and volume stay linear). A **range slider under the chart** (TC2000-style, `sliderHtml`/`attachRangeSlider`, window `{n, end}` in bars, `sliceModel(m, n, end)`, `clampWindow`, min 15 bars): a mini close-price map of the whole history; drag the frame to move the time window, drag its edges to change its length, click the track to jump; the window resets on a new stock / weekly↔daily switch (`chartWindow` in watchlist.js). The link
+  EPS line with YoY % under each point; small triangles at report weeks; crosshair readout on hover; a header button switches weekly/daily (`day` arrays in charts.json: last 252 sessions (`CHART_DAYS`, ~1 year) + SMA50/SMA200; the daily view opens on a 42-session (2 months) window, the slider reaches the whole year, `dailyCharts`; stored in `momentum_watchlist_chart_daily`; no bases in daily view); a stats line shows cap, P/E, Fwd P/E, ROE, distance from 52w high and the open base; a header button toggles the PRICE panel between linear and logarithmic scale (`makeLogScale`/`logTicks`, 1/2/5·10ⁿ ticks; choice stored in `localStorage` `momentum_watchlist_chart_log`; the S&P strip, RS line and volume stay linear). A **range slider under the chart** (TC2000-style, `sliderHtml`/`attachRangeSlider`, window `{n, end}` in bars, `sliceModel(m, n, end)`, `clampWindow`, min 15 bars): a mini close-price map of the whole history; drag the frame to move the time window, drag its edges to change its length, click the track to jump; the window resets on a new stock / weekly↔daily switch (`chartWindow` in watchlist.js). The link
   button inside a row still opens TradingView and does not open the chart. **Phones (≤ 640 px) get a compact layout**
   (`opts.compact`: narrower viewBox 560×740, fonts ×1.5, only the last 52 weeks via `sliceModel`, header split into two
   rows; re-rendered on rotation) so the chart stays readable instead of being a shrunken desktop chart.
@@ -144,6 +144,26 @@ turns `info` into a plain-Polish explanation shown in `#chartPattern` under the 
 user to recognise the pattern, so keep the explanation in sync with the criteria above. Daily view is the default
 (`momentum_watchlist_chart_daily` = "0" → weekly) with only SMA 10/20 (weekly: SMA 10/40 weeks); the legend lives in
 its own band above the price panel so labels never cover candles.
+
+## Own lines, cup corrections, alerts (`docs/js/annotate.js`)
+
+Browser-only (no backend): annotations live in `localStorage` `momentum_watchlist_annotations`, keyed by ticker, and are
+stored in DATES + prices so they show on both the daily and weekly chart. Chart modal → **✎ Edytuj** opens a toolbar:
+`＋ Linia` (two clicks; x snaps to a bar, y snaps to that bar's High/Low when near), `＋ Cup` (three clicks: left rim, bottom,
+right rim), click a line/cup to select it and drag its round handles (line ends; cup L/B/R), `Typ` (opór/wsparcie/dowolna),
+`Alert` (nad/pod linią), `Usuń`, `Przywróć auto`, a free-text note. The first time edit mode opens for a ticker, the
+auto-detected lines/cups of the current view are COPIED as the user's own (`fromAuto`), the automatic ones are hidden
+(`hideAutoLines`/`hideAutoCups` → `opts.hideAutoLines/Cups` in `chartSvg`) and a snapshot of what the algorithm found is
+saved in `rec.auto` — that snapshot + the user's corrected geometry + the note are the material for reviewing/tuning the
+detectors; the user pastes the export (🔔 Alerty tab → "Eksportuj adnotacje", `annExportJson`) into the chat when asking
+for a review. User geometry is drawn by a separate SVG layer (`annOverlay`, `.chart-overlay` over `#chartPlot`; chart.js
+calls `opts.overlay` after each draw and exposes `geomOut` = layout/scales; `dateToIndex`/`indexToDate`/`cupArcPoints`
+are shared helpers). Line values use calendar-time interpolation (`lineValueAt`) both for drawing and for alerts, so the
+line you see is exactly the line that is evaluated.
+**🔔 Alerty tab**: one row per line with an alert; value of the line at the stock's `as_of` vs the last close (`alertState`:
+`triggered` = price above/below the line, `near` = within 2 %); a freshly triggered alert stays "PRZEBITA — nowa" (counted in
+the tab badge) until OK is clicked (`ack`), and resets when the price returns to the other side (`annRefresh`). No push
+notifications — alerts are evaluated when the page loads / data is refreshed / a chart closes.
 
 ## RS line (chart)
 

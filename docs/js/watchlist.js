@@ -5,6 +5,7 @@
 if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
+    Object.assign(globalThis, require("./annotate.js"));
 }
 
 // ============================================================
@@ -35,10 +36,10 @@ const DEFAULT_SETTINGS = {
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["rs_rating", "desc"], QM: ["max_ratio", "desc"], EMA34: ["ema34_slope_20d_pct", "desc"],
-    BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"],
+    BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
 };
 const TAB_TITLES = {
-    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", EMA34: "Trend EMA34", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
+    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", EMA34: "Trend EMA34", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -235,6 +236,16 @@ const COL = {
     baseWeeks: ["Tygodnie", "base_weeks", s => `<td>${s.base_weeks ?? "—"}</td>`],
     trend: ["Trendlinia", "tl_state", s => `<td${s.tl_state === "wybicie" ? ` class="positive"` : ""}>${s.tl_state ? (s.tl_state === "wybicie" ? `▲ wybicie${Number.isFinite(s.tl_vol_ratio) ? ` ×${s.tl_vol_ratio} wol.${s.tl_vol_ok ? " ✓" : ""}` : ""}` : "przy oporze") : ""}${s.tl_pattern ? ` <span class="muted small">${escapeHtml(s.tl_pattern)}</span>` : (s.tl_state ? "" : "—")}</td>`, "Wybicie / zbliżenie do linii oporu (dzienne, ostatnie ~70 sesji) i wykryty kształt"],
     rsLine: ["Linia RS", "rs_line_dist_pct", s => `<td${s.rs_line_state === "przed ceną" ? ` class="positive"` : ""} title="Linia RS (cena / S&P 500): odległość od maksimum z 52 tyg.; „przed ceną” = RS na maksimum, a cena jeszcze nie">${s.rs_line_state ? (s.rs_line_state === "przed ceną" ? "● RS przed ceną" : "● RS na szczycie") + " " : ""}${Number.isFinite(s.rs_line_dist_pct) ? `<span class="muted small">${fmtPct(s.rs_line_dist_pct)}</span>` : "—"}</td>`, "Linia RS: stan (RS na maksimum 52 tyg. przed/razem z ceną) i odległość od jej maksimum"],
+    alKind: ["Linia", "alert_kind", s => `<td>${ANN_KIND_LABELS[s.alert.kind] || "linia"}${s.alert.note ? "" : ""}</td>`],
+    alDir: ["Alert", "alert_dir", s => `<td>${ANN_DIR_LABELS[s.alert.alert]}</td>`],
+    alValue: ["Linia dziś", "alert_value", s => `<td>${money(s.alert.value)}</td>`],
+    alDist: ["Cena vs linia", "alert_dist", s => pctCell(s.alert.dist)],
+    alStatus: ["Status", "alert_rank", s => {
+        const a = s.alert;
+        const txt = a.triggered ? (a.ack ? "przebita (zatwierdzona)" : "🔔 PRZEBITA — nowa") : (a.near ? "blisko linii" : "czeka");
+        return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
+    }],
+    alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
     spark: ["Cena (26 tyg.)", null, s => `<td title="Cena tygodniowa, ostatnie 26 tygodni">${sparkSvg(s.spark)}</td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
@@ -247,6 +258,7 @@ const TAB_COLUMNS = {
     RS: [...LEAD, "price", "rs", "rsLine", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
     QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
     EMA34: [...LEAD, "price", "ema", "slope", "vsEma", "rs", "spark", "earnings", "tv"],
+    ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
     BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "spark", "earnings", "tv"],
 };
 
@@ -271,6 +283,11 @@ function rowsForTab(tab) {
     if (tab === "EMA34") return ema34Rows(stocks);
     if (tab === "BASES") return baseRows(stocks, state.bases);
     if (tab === "FAV") return stocks.filter(s => state.favs.has(s.ticker));
+    if (tab === "ALERTS") {
+        return alertRows(annStore, stocks).map(r => ({
+            ...r, alert_rank: r.alert.rank, alert_kind: r.alert.kind, alert_dir: r.alert.alert, alert_value: r.alert.value, alert_dist: r.alert.dist,
+        }));
+    }
     return stocks;
 }
 
@@ -280,6 +297,7 @@ const EMPTY_MESSAGES = {
     QM: "Żadna spółka nie spełnia progów — obniż obrót lub ADR% albo zwiększ top %.",
     EMA34: "Żadna spółka nie ma rosnącej EMA34 (co 5 sesji przez 20) przy bieżących filtrach.",
     BASES: "Brak spółek w bazie w zadanej odległości od pivotu — zwiększ dystans albo odznacz „tylko VCP”.",
+    ALERTS: "Brak alertów — w oknie wykresu kliknij ✎ Edytuj, narysuj linię (Linia) i ustaw przy niej Alert.",
     FAV: "Brak ulubionych — kliknij ☆ przy spółce na dowolnej liście.",
 };
 
@@ -293,12 +311,21 @@ function renderTable() {
     tbody.innerHTML = rows.length
         ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}">${renderRow(tab, s, i + 1)}</tr>`).join("")
         : `<tr><td colspan="${cols}" class="empty-state">${EMPTY_MESSAGES[tab]}</td></tr>`;
+    updateAlertBadge();
     const meta = document.getElementById("drawerMeta");
     const total = state.data.stocks.length;
     meta.textContent = tab === "QM"
         ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) z ${total}`
         : `${rows.length} z ${total} spółek`;
     updateSortHeaders(table);
+}
+
+// Liczba nowych (przebitych, niezatwierdzonych) alertów na zakładce 🔔.
+function updateAlertBadge() {
+    if (!state.data) return;
+    const n = annRefresh(annStore, state.data.stocks);
+    const badge = document.getElementById("alertBadge");
+    if (badge) badge.textContent = n ? ` (${n})` : "";
 }
 
 function updateSortHeaders(table) {
@@ -416,12 +443,42 @@ function initControls() {
     // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
         if (ev.target.closest("a")) return;
+        const ack = ev.target.closest("[data-ack]"), del = ev.target.closest("[data-delline]");
+        if (ack || del) {
+            const [ticker, id] = (ack || del).dataset[ack ? "ack" : "delline"].split("|");
+            const line = annStore[ticker] && annStore[ticker].lines.find(l => l.id === id);
+            if (line) { if (ack) line.ack = true; else line.alert = null; annSave(); renderTable(); }
+            return;
+        }
         const star = ev.target.closest("td[data-fav]");
         if (star) { toggleFav(star.dataset.fav); return; }
         const tr = ev.target.closest("tr[data-ticker]");
         if (tr) openChart(tr.dataset.ticker);
     }));
     initChartModal();
+}
+
+// Eksport / import adnotacji (kopiowanie JSON do schowka i wklejanie) — kopia zapasowa, przenoszenie między urządzeniami
+// i materiał do przeglądu z Claude (porównanie linii/cupów algorytmu z poprawkami użytkownika).
+function initAnnotationIO() {
+    const text = document.getElementById("annText"), apply = document.getElementById("annApply");
+    if (!text) return;
+    document.getElementById("annExport").addEventListener("click", async () => {
+        const json = annExportJson(annStore);
+        text.value = json; text.hidden = false; apply.hidden = true;
+        try { await navigator.clipboard.writeText(json); showToast("Adnotacje skopiowane do schowka."); }
+        catch (e) { text.select(); showToast("Zaznacz i skopiuj JSON z pola poniżej."); }
+    });
+    document.getElementById("annImport").addEventListener("click", () => {
+        text.value = ""; text.hidden = false; apply.hidden = false; text.placeholder = "Wklej tu JSON z eksportu i kliknij Zastosuj";
+    });
+    apply.addEventListener("click", () => {
+        try {
+            annStore = mergeImport(annStore, text.value);
+            annSave(); text.hidden = true; apply.hidden = true; renderTable();
+            showToast("Zaimportowano adnotacje.");
+        } catch (e) { showToast("Nie udało się zaimportować: " + e.message); }
+    });
 }
 
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
@@ -454,6 +511,9 @@ async function openChart(ticker) {
     const body = document.getElementById("chartBody");
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
     chartWindow = null;
+    Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });   // nowy wykres: poza trybem edycji
+    annCurrent = null;
+    annSyncTools();
     body.innerHTML = `<div class="empty-state">Ładowanie wykresu…</div>`;
     modal.hidden = false;
     const charts = await loadCharts();
@@ -478,13 +538,18 @@ function drawChart() {
     if (!currentChart) return null;
     const model = renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
         currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, daily: chartDaily,
-            window: chartWindow, onWindow: w => { chartWindow = w; } });
+            window: chartWindow, onWindow: w => { chartWindow = w; },
+            hideAutoLines: annHide(currentChart.ticker).lines, hideAutoCups: annHide(currentChart.ticker).cups,
+            overlay: c => annOverlay({ ...c, ticker: currentChart.ticker, stock: currentChart.stock }) });
     document.getElementById("chartPattern").textContent = model ? patternExplain(model) : "";
     return model;
 }
 
 function closeChart() {
     document.getElementById("chartModal").hidden = true;
+    Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });
+    annSyncTools();
+    renderTable();   // zakładka Alerty / licznik mogły się zmienić po edycji linii
     currentChart = null;
 }
 
@@ -547,10 +612,13 @@ if (typeof document !== "undefined") {
         initConnStatus();
         loadSettings();
         loadFavs();
+        annLoad();
         await loadData();
         renderDataInfo();
         renderHeaders();
         initControls();
+        annInitUI(drawChart);
+        initAnnotationIO();
         showTab(state.tab);
         hideLoadingOverlay();
     })();

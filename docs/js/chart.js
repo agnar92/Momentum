@@ -28,7 +28,7 @@ const CHART_LAYOUT_COMPACT = {
 };
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
-const DAILY_WINDOW_DAYS = 21;   // domyślne okno wykresu dziennego (~1 miesiąc); cały rok jest dostępny suwakiem
+const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 const SMA_COLORS = { "SMA 10": "#3fbf6e", "SMA 20": "#f5d547", "SMA 50": "#c77dff", "SMA 200": "#e0455a", "SMA 10 tyg.": "#3fbf6e", "SMA 40 tyg.": "#e0455a" };
 const CHART_COLORS = {
@@ -225,6 +225,45 @@ function fmtCompact(v) {
     return v.toFixed(2);
 }
 
+// Daty <-> indeks świecy (ułamkowy, interpolacja po kalendarzu; poza zakresem ekstrapolacja średnią odległością świec).
+// Używane przez rysowanie własnych linii/cupów (annotate.js): adnotacje są zapisane w datach, więc działają na dziennym i tygodniowym.
+const DAY_MS = 86400000;
+function dateMs(d) { return Date.parse(d + "T00:00:00Z"); }
+function dateToIndex(dates, date) {
+    const n = dates.length;
+    if (!n) return 0;
+    const t = dateMs(date), t0 = dateMs(dates[0]), t1 = dateMs(dates[n - 1]);
+    const avg = n > 1 ? (t1 - t0) / (n - 1) : DAY_MS;
+    if (t <= t0) return (t - t0) / avg;
+    if (t >= t1) return n - 1 + (t - t1) / avg;
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (dateMs(dates[mid]) <= t) lo = mid; else hi = mid; }
+    const a = dateMs(dates[lo]), b = dateMs(dates[hi]);
+    return lo + (t - a) / Math.max(1, b - a);
+}
+function indexToDate(dates, idx) {
+    const n = dates.length;
+    const t0 = dateMs(dates[0]), t1 = dateMs(dates[n - 1]);
+    const avg = n > 1 ? (t1 - t0) / (n - 1) : DAY_MS;
+    let t;
+    if (idx <= 0) t = t0 + idx * avg;
+    else if (idx >= n - 1) t = t1 + (idx - (n - 1)) * avg;
+    else { const lo = Math.floor(idx); t = dateMs(dates[lo]) + (idx - lo) * (dateMs(dates[lo + 1]) - dateMs(dates[lo])); }
+    return new Date(Math.round(t / DAY_MS) * DAY_MS).toISOString().slice(0, 10);
+}
+
+// Punkty łuku miseczki (parabola: lewy szczyt -> dołek -> prawy brzeg); cup = {i0, iLow, i1, peak, low, right}.
+function cupArcPoints(cup, x, yP, steps = 48) {
+    const yL = yP(cup.peak), yB = yP(cup.low), yR = yP(Number.isFinite(cup.right) ? cup.right : cup.peak);
+    const pts = [];
+    for (let k = 0; k <= steps; k++) {
+        const i = cup.i0 + (cup.i1 - cup.i0) * k / steps;
+        const t = i <= cup.iLow ? (cup.iLow - i) / Math.max(1e-9, cup.iLow - cup.i0) : (i - cup.iLow) / Math.max(1e-9, cup.i1 - cup.iLow);
+        pts.push([x(i), yB - (yB - (i <= cup.iLow ? yL : yR)) * t * t]);
+    }
+    return { pts, yL, yB, yR };
+}
+
 function chartSvg(m, opts = {}) {
     const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
     const fs = n => +(n * (opts.compact ? COMPACT_FONT_SCALE : 1)).toFixed(1);
@@ -280,16 +319,9 @@ function chartSvg(m, opts = {}) {
     });
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
     parts.push(`<clipPath id="chartPriceClip"><rect x="${L.left}" y="${L.price.y}" width="${L.width - L.left - L.right}" height="${L.price.h}"/></clipPath>`);
-    m.cups.forEach(cup => {
-        const yL = yP(cup.peak), yB = yP(cup.low), yR = yP(Number.isFinite(cup.right) ? cup.right : cup.peak);
-        const pts = [];
-        for (let k = 0; k <= 48; k++) {
-            const i = cup.i0 + (cup.i1 - cup.i0) * k / 48;
-            const t = i <= cup.iLow ? (cup.iLow - i) / Math.max(1e-9, cup.iLow - cup.i0) : (i - cup.iLow) / Math.max(1e-9, cup.i1 - cup.iLow);
-            const edge = i <= cup.iLow ? yL : yR;
-            pts.push(`${(x(i)).toFixed(1)},${(yB - (yB - edge) * t * t).toFixed(1)}`);
-        }
-        parts.push(`<polyline clip-path="url(#chartPriceClip)" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.join(" ")}"><title>Cup −${cup.depth}%</title></polyline>`);
+    (opts.hideAutoCups ? [] : m.cups).forEach(cup => {
+        const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
+        parts.push(`<polyline clip-path="url(#chartPriceClip)" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%</title></polyline>`);
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
         parts.push(`<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${cup.depth}%</text>`);
     });
@@ -303,7 +335,7 @@ function chartSvg(m, opts = {}) {
     }
     m.smas.forEach(x => parts.push(polyline(x.values.map((v, i) => Number.isFinite(v) ? [x_(i), yP(v)] : null), x.color, 1.4)));
     // linie trendu: opór (pomarańczowa) i wsparcie (szara), od pierwszego dotknięcia do ostatniej świecy
-    m.lines.forEach(l => {
+    (opts.hideAutoLines ? [] : m.lines).forEach(l => {
         const at = i => l.y0 + (l.y1 - l.y0) * (i - l.i0) / Math.max(1, l.i1 - l.i0);
         const i0 = Math.max(0, l.i0);
         const col = l.kind === "res" ? CHART_COLORS.res : CHART_COLORS.sup;
@@ -394,6 +426,7 @@ function chartSvg(m, opts = {}) {
 
     // --- crosshair (ustawiany w attachChartHover)
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
+    if (opts.geomOut) Object.assign(opts.geomOut, { L, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres ${m.daily ? "dzienny" : "tygodniowy"} ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
 }
 
@@ -515,9 +548,11 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
         const m = sliceModel(full, win.n, win.end);
-        plot.innerHTML = chartSvg(m, opts);
+        const geom = {};
+        plot.innerHTML = chartSvg(m, { ...opts, geomOut: geom });
         readoutEl.textContent = chartReadout(m, m.lastIdx);
         attachChartHover(plot, m, readoutEl, L);
+        if (opts.overlay) opts.overlay({ plot, m, geom, full, L });   // własne linie/cupy (annotate.js) — osobna warstwa nad wykresem
     };
     draw();
     attachRangeSlider(container, full.n, () => win, w => {
@@ -530,6 +565,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, dailyCharts, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }
