@@ -284,3 +284,11 @@ test("SMA colours differ from the candle colours", () => {
     const m = buildChartModel(charts(), "AAA", null);
     m.smas.forEach(x => assert.ok(!["#2ecc71", "#3fbf6e", "#e0455a"].includes(x.color)));
 });
+
+test("pickLayout: compact wins, wide for full screen, default otherwise; wide layout renders", () => {
+    const { pickLayout, CHART_LAYOUT, CHART_LAYOUT_WIDE } = require("../../docs/js/chart.js");
+    assert.equal(pickLayout({}), CHART_LAYOUT);
+    assert.equal(pickLayout({ wide: true }), CHART_LAYOUT_WIDE);
+    assert.notEqual(pickLayout({ compact: true, wide: true }), CHART_LAYOUT_WIDE);
+    assert.match(chartSvg(buildChartModel(charts(), "AAA", null), { wide: true }), /viewBox="0 0 1600 800"/);
+});

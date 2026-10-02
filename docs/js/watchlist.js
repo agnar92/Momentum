@@ -489,6 +489,8 @@ let chartWinLen = { d: null, w: null };   // długość okna suwaka zapamiętana
 let chartWindow = null;     // okno suwaka {n, end} (null = domyślne); zerowane przy nowej spółce / zmianie interwału
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
+let chartFull = false;      // okno wykresu na cały ekran (przycisk ⛶ / klawisz F)
+let chartWide = false;      // pełny ekran na szerokim monitorze => układ szeroki (chart.js)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
 function loadCharts() {
@@ -547,7 +549,7 @@ function rememberWindowLength(n) {
 function drawChart() {
     if (!currentChart) return null;
     const model = renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
-        currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, daily: chartDaily,
+        currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, wide: chartWide, daily: chartDaily,
             window: chartWindow, windowLen: chartDaily ? chartWinLen.d : chartWinLen.w, onWindow: w => { chartWindow = w; rememberWindowLength(w.n); },
             hideAutoLines: annHide(currentChart.ticker).lines, hideAutoCups: annHide(currentChart.ticker).cups,
             overlay: c => annOverlay({ ...c, ticker: currentChart.ticker, stock: currentChart.stock }) });
@@ -555,7 +557,22 @@ function drawChart() {
     return model;
 }
 
+// Pełny ekran okna wykresu: klasa CSS (działa wszędzie, także na iPhonie) + prawdziwy pełny ekran przeglądarki, gdy jest dostępny.
+function setChartFull(on) {
+    chartFull = on;
+    const modal = document.getElementById("chartModal");
+    modal.querySelector(".wl-chart-box").classList.toggle("full", on);
+    document.getElementById("chartFullBtn").textContent = on ? "⤢ Zamknij pełny ekran" : "⛶ Pełny ekran";
+    try {
+        if (on && !document.fullscreenElement && modal.requestFullscreen) modal.requestFullscreen().catch(() => {});
+        else if (!on && document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    } catch (e) { /* brak Fullscreen API */ }
+    chartWide = on && window.innerWidth / window.innerHeight > 1.5 && window.innerWidth > 1100;
+    if (currentChart) drawChart();
+}
+
 function closeChart() {
+    if (chartFull) setChartFull(false);
     document.getElementById("chartModal").hidden = true;
     Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });
     annSyncTools();
@@ -594,6 +611,9 @@ function initChartModal() {
         drawChart();
     });
     document.getElementById("chartClose").addEventListener("click", closeChart);
+    document.getElementById("chartFullBtn").addEventListener("click", () => setChartFull(!chartFull));
+    // Wyjście z pełnego ekranu klawiszem Esc (obsługuje przeglądarka) synchronizuje stan przycisku i układ.
+    document.addEventListener("fullscreenchange", () => { if (!document.fullscreenElement && chartFull) setChartFull(false); });
     // Obrót telefonu / zmiana rozmiaru okna przełącza układ kompaktowy bez ponownego otwierania wykresu.
     window.addEventListener("resize", () => {
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
@@ -603,7 +623,11 @@ function initChartModal() {
         drawChart();
     });
     document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal") closeChart(); });
-    document.addEventListener("keydown", ev => { if (ev.key === "Escape") closeChart(); });
+    document.addEventListener("keydown", ev => {
+        if (ev.key === "Escape") { if (chartFull) setChartFull(false); else closeChart(); return; }
+        const open = !document.getElementById("chartModal").hidden;
+        if ((ev.key === "f" || ev.key === "F") && open && !ev.ctrlKey && !ev.metaKey && !/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName)) setChartFull(!chartFull);
+    });
 }
 
 async function loadData() {

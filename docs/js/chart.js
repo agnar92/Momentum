@@ -26,6 +26,12 @@ const CHART_LAYOUT_COMPACT = {
     bench: { y: 6, h: 70 }, legend: { y: 80, h: 50 }, price: { y: 134, h: 300 }, volume: { y: 442, h: 84 }, eps: { y: 534, h: 132 },
     axisY: 718,
 };
+// Układ szeroki (pełny ekran na monitorze): więcej miejsca na słupki zamiast pustych pasów po bokach.
+const CHART_LAYOUT_WIDE = {
+    width: 1600, height: 800, left: 10, right: 70,
+    bench: { y: 8, h: 70 }, legend: { y: 86, h: 20 }, price: { y: 110, h: 400 }, volume: { y: 518, h: 90 }, eps: { y: 616, h: 124 },
+    axisY: 778,
+};
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
@@ -259,6 +265,10 @@ function fmtCompact(v) {
     return v.toFixed(2);
 }
 
+function pickLayout(opts = {}) {
+    return opts.compact ? CHART_LAYOUT_COMPACT : (opts.wide ? CHART_LAYOUT_WIDE : CHART_LAYOUT);
+}
+
 // Daty <-> indeks świecy (ułamkowy, interpolacja po kalendarzu; poza zakresem ekstrapolacja średnią odległością świec).
 // Używane przez rysowanie własnych linii/cupów (annotate.js): adnotacje są zapisane w datach, więc działają na dziennym i tygodniowym.
 const DAY_MS = 86400000;
@@ -299,7 +309,7 @@ function cupArcPoints(cup, x, yP, steps = 48) {
 }
 
 function chartSvg(m, opts = {}) {
-    const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
+    const L = pickLayout(opts);
     const fs = n => +(n * (opts.compact ? COMPACT_FONT_SCALE : 1)).toFixed(1);
     const plotW = L.width - L.left - L.right;
     const step = plotW / m.n;
@@ -579,7 +589,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         readoutEl.textContent = "";
         return null;
     }
-    const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
+    const L = pickLayout(opts);
     const defN = defaultWindowLength(full, opts);
     const defEnd = full.n - (full.pad || 0) + (full.padDefault || 0);   // domyślnie widać tylko odrobinę pustego miejsca z prawej
     let win = clampWindow(opts.window, full.n, defN, defEnd);
@@ -604,6 +614,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, futureDates, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }
