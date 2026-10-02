@@ -60,7 +60,8 @@ function autoToDates(full) {
     const at = i => full.weeks[Math.max(0, Math.min(full.weeks.length - 1, i))];
     return {
         lines: full.lines.map(l => ({ kind: l.kind, x0: at(l.i0), y0: l.y0, x1: at(l.i1), y1: l.y1 })),
-        cups: full.cups.map(c => ({ start: at(c.i0), low_date: at(c.iLow), end: at(c.i1), peak: c.peak, low: c.low, right: c.right })),
+        // miseczka może zaczynać się przed pierwszą świecą (ujemny indeks) — data wychodzi z ekstrapolacji, nie z przycięcia do okna
+        cups: full.cups.map(c => ({ start: indexToDate(full.weeks, c.i0), low_date: indexToDate(full.weeks, c.iLow), end: indexToDate(full.weeks, c.i1), peak: c.peak, low: c.low, right: c.right })),
     };
 }
 

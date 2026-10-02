@@ -270,3 +270,17 @@ test("buildChartModel with pad adds empty future slots to every array; defaults 
     assert.equal(require("../../docs/js/chart.js").clampWindow(null, 40, 20, 26).end, 26);
     assert.ok(chartSvg(s).includes("<svg"));                           // pusta prawa strona rysuje się bez błędów
 });
+
+test("a cup that started before the first bar is kept with negative indexes (partial arc), not dropped", () => {
+    const c = charts();
+    c.stocks.AAA.bases = [{ start: "2025-11-28", low_date: "2025-12-26", end: "2026-01-16", peak: 15, low: 11, end_close: 14, depth_pct: 26.7, type: "cup", open: false }];
+    const m = buildChartModel(c, "AAA", null);
+    assert.equal(m.cups.length, 1);
+    assert.ok(m.cups[0].i0 < 0 && m.cups[0].iLow < 0 && m.cups[0].i1 === 2);
+    assert.match(chartSvg(m), /<title>Cup −26\.7%<\/title>/);
+});
+
+test("SMA colours differ from the candle colours", () => {
+    const m = buildChartModel(charts(), "AAA", null);
+    m.smas.forEach(x => assert.ok(!["#2ecc71", "#3fbf6e", "#e0455a"].includes(x.color)));
+});

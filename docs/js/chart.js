@@ -30,7 +30,8 @@ const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
-const SMA_COLORS = { "SMA 10": "#3fbf6e", "SMA 20": "#f5d547", "SMA 50": "#c77dff", "SMA 200": "#e0455a", "SMA 10 tyg.": "#3fbf6e", "SMA 40 tyg.": "#e0455a" };
+// Kolory średnich inne niż świece (zielona/czerwona) i linia RS (niebieska), żeby nie zlewały się ze słupkami.
+const SMA_COLORS = { "SMA 10": "#22d3ee", "SMA 20": "#f5d547", "SMA 50": "#c77dff", "SMA 200": "#f472b6", "SMA 10 tyg.": "#22d3ee", "SMA 40 tyg.": "#f472b6" };
 const CHART_COLORS = {
     up: "#2ecc71", down: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
     eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e8a33d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
@@ -147,8 +148,10 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
     const tl = c.tl || null;
     const lines = tl ? tl.lines.map(l => ({ kind: l.kind, i0: lineIndex(weeks, l.x0), y0: l.y0, i1: lineIndex(weeks, l.x1), y1: l.y1, touches: l.touches })) : [];
     // Miseczki (cup): lewy szczyt, dołek i prawy brzeg w indeksach świec; część może wypadać przed oknem (ujemne indeksy).
+    // Daty sprzed pierwszej świecy dają ujemne indeksy (dziennie mamy ~rok historii, miseczka mogła zacząć się wcześniej) —
+    // rysujemy wtedy jej widoczną część zamiast gubić całą miseczkę.
     const cups = (c.bases || []).filter(b => b.type === "cup" && b.low_date).map(b => ({
-        i0: lineIndex(weeks, b.start), iLow: lineIndex(weeks, b.low_date), i1: lineIndex(weeks, b.end),
+        i0: dateToIndex(weeks, b.start), iLow: dateToIndex(weeks, b.low_date), i1: dateToIndex(weeks, b.end),
         peak: b.peak, low: b.low, right: b.end_close, depth: b.depth_pct, open: b.open,
     })).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
@@ -364,7 +367,11 @@ function chartSvg(m, opts = {}) {
             + `<line x1="${x(i) - barHalf}" x2="${x(i)}" y1="${yP(m.o[i])}" y2="${yP(m.o[i])}"/>`
             + `<line x1="${x(i)}" x2="${x(i) + barHalf}" y1="${yP(m.c[i])}" y2="${yP(m.c[i])}"/></g>`);
     }
-    m.smas.forEach(x => parts.push(polyline(x.values.map((v, i) => Number.isFinite(v) ? [x_(i), yP(v)] : null), x.color, 1.4)));
+    m.smas.forEach(x => {
+        const pts = x.values.map((v, i) => Number.isFinite(v) ? [x_(i), yP(v)] : null);
+        parts.push(polyline(pts, "#0e0f13", 3.6).replace("<polyline", `<polyline opacity="0.65"`));   // ciemny obrys: średnia odcina się od świec
+        parts.push(polyline(pts, x.color, 1.7));
+    });
     // linie trendu: opór (pomarańczowa) i wsparcie (szara), od pierwszego dotknięcia do ostatniej świecy
     (opts.hideAutoLines ? [] : m.lines).forEach(l => {
         const at = i => l.y0 + (l.y1 - l.y0) * (i - l.i0) / Math.max(1, l.i1 - l.i0);
