@@ -41,7 +41,6 @@ CHART_DAYS = 150             # ile sesji pokazuje wykres dzienny (~7 miesięcy)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 TL_TOLERANCE = 0.015         # tyle (1,5%) cena może "przekłuć" linię trendu, żeby nadal była to ta sama linia
-TL_RECENT_BARS = 3           # ostatnie świece, które mogą już być wybiciem (nie psują linii)
 RS_HIGH_SESSIONS = 252         # "nowe maksimum RS/ceny" = wyższe niż w poprzednich ~52 tygodniach (jak niebieska kropka w MarketSmith)
 RS_RECENT_BARS = 5           # sygnał z ostatnich 5 sesji
 TL_VOLUME_MULT = 1.5         # wybicie potwierdzone, gdy wolumen >= 1,5x średniej z poprzednich 50 świec
@@ -177,7 +176,7 @@ def compute_metrics(df):
     high_52w = float(df["High"].tail(252).max())
     open_base = next((b for b in reversed(detect_bases(weekly_ohlcv(df, asof))) if b["open"]), None)
 
-    tl = detect_trendlines(df, k=3, lookback=70, min_span=8) or {}
+    tl = detect_consolidation(df, DAILY_FLAG) or {}
 
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
@@ -325,17 +324,19 @@ def _pivot_indices(values, k, highs):
     return out
 
 
-def _best_line(values, pivots, n, highs, min_span, tol=TL_TOLERANCE):
-    """Najdłuższa prosta przez dwa pivoty, której żadna świeca (poza ostatnimi TL_RECENT_BARS) nie przebija o więcej
-    niż tol. Zwraca (i0, y0, i1, y1, touches) z końcem przedłużonym do ostatniej świecy albo None."""
-    last = n - 1
-    check_to = last - TL_RECENT_BARS
+def _best_line(values, pivots, check_to, last, highs, min_span, tol=TL_TOLERANCE, slope_range=None):
+    """Najdłuższa prosta przez dwa pivoty (indeksy w `values`), której żadna świeca do `check_to` nie przebija o więcej
+    niż tol (od góry dla oporu, od dołu dla wsparcia). Kończy się na ostatniej świecy `last`.
+    slope_range = (min, max) dozwolonego nachylenia w % na świecę (względem ceny) — odrzuca np. wsparcie opadające
+    stromo, gdy opór jest płaski. Zwraca (i0, y0, i1, y1, touches) albo None."""
     best = None
     for ai, a in enumerate(pivots):
         for b in pivots[ai + 1:]:
-            if b - a < min_span or values[a] <= 0:
+            if b - a < min_span or b > check_to or values[a] <= 0:
                 continue
             slope = (values[b] - values[a]) / (b - a)
+            if slope_range and not (slope_range[0] <= slope / values[a] * 100 <= slope_range[1]):
+                continue
             idx = np.arange(a, check_to + 1)
             line = values[a] + slope * (idx - a)
             seg = values[a:check_to + 1]
@@ -351,58 +352,86 @@ def _best_line(values, pivots, n, highs, min_span, tol=TL_TOLERANCE):
     return best
 
 
-def detect_trendlines(ohlc, k, lookback, min_span):
-    """Linie trendu na świecach (daily/weekly): opór przez szczyty, wsparcie przez dołki z ostatnich `lookback` świec.
-    Zwraca {lines, pattern, state, breakout} albo None; breakout = {date, vol_ratio, confirmed} (wolumen świecy wybicia / średnia z 50 poprzednich). state: 'wybicie' (cena nad oporem w ostatnich świecach), 'przy oporze'
-    (<= TL_NEAR_PCT% pod nim) lub None. pattern: opis kształtu (flaga/handle, kanał, trójkąt...) gdy są obie linie."""
-    if len(ohlc) < lookback // 2:
-        return None
-    df = ohlc.tail(lookback)
-    dates = [d.strftime("%Y-%m-%d") for d in pd.DatetimeIndex(df.index)]
-    hi, lo, cl = (df[c].astype(float).values for c in ("High", "Low", "Close"))
-    n = len(df)
-    res = _best_line(hi, _pivot_indices(hi, k, True), n, True, min_span)
-    sup = _best_line(lo, _pivot_indices(lo, k, False), n, False, min_span)
-    lines = []
-    for kind, ln in (("res", res), ("sup", sup)):
-        if ln:
-            lines.append({"kind": kind, "x0": dates[ln[0]], "y0": _num(ln[1]), "x1": dates[ln[2]], "y1": _num(ln[3]), "touches": ln[4]})
-    if not lines:
-        return None
+# Parametry wykrywania konsolidacji (świece dzienne / tygodniowe): k = okno pivotu, min/max_len = długość flagi,
+# recent = ile ostatnich świec może już być wybiciem, pole_* = maszt (wzrost przed flagą), max_depth = maks. głębokość flagi,
+# box_* = korytarz bez masztu (płaska, ciasna konsolidacja).
+DAILY_FLAG = dict(k=3, min_len=7, max_len=30, recent=5, pole_lookback=20, pole_min_gain=20.0, max_depth=20.0, box_depth=12.0, box_min_len=12)
+WEEKLY_FLAG = dict(k=2, min_len=3, max_len=20, recent=2, pole_lookback=12, pole_min_gain=30.0, max_depth=25.0, box_depth=15.0, box_min_len=5)
+FLAG_PARALLEL_PCT = 0.3          # wsparcie może odbiegać nachyleniem od oporu o tyle (% na świecę)
+FLAG_MAX_SLOPE_PCT = 0.15        # górna linia flagi może co najwyżej lekko rosnąć (% na świecę)
 
-    def slope_pct(ln):  # % na świecę względem poziomu ceny
-        return (ln[3] - ln[1]) / ln[1] / max(1, ln[2] - ln[0]) * 100
 
-    state, pattern, breakout = None, None, None
-    if res:
-        res_now = res[3]
-        recent = range(n - TL_RECENT_BARS, n)
-        broke = any(cl[i] > res[1] + (res[3] - res[1]) * (i - res[0]) / (res[2] - res[0]) for i in recent)
-        if broke:
-            state = "wybicie"
-            first = next(i for i in recent if cl[i] > res[1] + (res[3] - res[1]) * (i - res[0]) / (res[2] - res[0]))
-            full = ohlc["Volume"].astype(float).values
-            pos = len(full) - n + first                      # indeks tej świecy w pełnej serii
-            prev = full[max(0, pos - TL_VOLUME_AVG_BARS):pos]
-            if len(prev) >= 10 and prev.mean() > 0:
-                breakout = {"date": dates[first], "vol_ratio": _num(full[pos] / prev.mean(), 1)}
-                breakout["confirmed"] = bool(breakout["vol_ratio"] >= TL_VOLUME_MULT)
-        elif cl[-1] < res_now and (res_now / cl[-1] - 1) * 100 <= TL_NEAR_PCT:
-            state = "przy oporze"
-    if res and sup:
-        sr, ss = slope_pct(res), slope_pct(sup)
-        flat = 0.05
-        if sr < -flat and ss < -flat and abs(sr - ss) <= abs(sr) * 0.6:
-            pattern = "flaga / handle"
-        elif abs(sr) <= flat and abs(ss) <= flat:
-            pattern = "korytarz poziomy"
-        elif sr > flat and ss > flat and abs(sr - ss) <= abs(sr) * 0.6:
-            pattern = "kanał wzrostowy"
-        elif sr < ss - 0.02:
-            pattern = "trójkąt (zbieżne linie)"
-    elif res and slope_pct(res) < -0.05:
-        pattern = "opadający opór"
-    return {"lines": lines, "pattern": pattern, "state": state, "breakout": breakout}
+def _line_value(ln, i):
+    return ln[1] + (ln[3] - ln[1]) * (i - ln[0]) / max(1, ln[2] - ln[0])
+
+
+def detect_consolidation(ohlc, cfg):
+    """Flaga (maszt + opadająca/płaska konsolidacja) albo korytarz poziomy z liniami oporu i wsparcia ograniczonymi do
+    samej konsolidacji (nie przez cały wykres) oraz stanem wybicia. Zwraca None, gdy nie ma wzorca.
+    Wynik: {lines, pattern, state, breakout, info}; info = {type, pole_gain, pole_start, pole_end, pole_low, pole_high,
+    length, depth, vol_ratio (średni wolumen flagi / masztu), touches}. breakout = {date, vol_ratio, confirmed}
+    (wolumen pierwszej świecy nad oporem / średnia z 50 poprzednich)."""
+    n = len(ohlc)
+    if n < cfg["min_len"] + cfg["recent"] + 5:
+        return None
+    dates = [d.strftime("%Y-%m-%d") for d in pd.DatetimeIndex(ohlc.index)]
+    hi, lo, cl, vol = (ohlc[c].astype(float).values for c in ("High", "Low", "Close", "Volume"))
+    last, recent = n - 1, cfg["recent"]
+    end = last - recent                        # ostatnia świeca, która musi mieścić się w konsolidacji
+    pivots_hi = _pivot_indices(hi, cfg["k"], True)
+    pivots_lo = _pivot_indices(lo, cfg["k"], False)
+    best = None
+    for s in pivots_hi:
+        length = end - s + 1
+        if length < cfg["min_len"] or length > cfg["max_len"]:
+            continue
+        seg_hi, seg_lo = hi[s:end + 1], lo[s:end + 1]
+        depth = (seg_hi.max() - seg_lo.min()) / seg_hi.max() * 100
+        pole_from = max(0, s - cfg["pole_lookback"])
+        pi = pole_from + int(np.argmin(lo[pole_from:s + 1]))
+        pole_gain = (hi[s] / lo[pi] - 1) * 100 if lo[pi] > 0 else 0
+        is_flag = s - pi >= 3 and pole_gain >= cfg["pole_min_gain"] and depth <= min(cfg["max_depth"], pole_gain * 0.6)
+        is_box = depth <= cfg["box_depth"] and length >= cfg["box_min_len"]
+        if not (is_flag or is_box):
+            continue
+        res = _best_line(hi, [q for q in pivots_hi if s <= q <= end], end, last, True, 2)
+        if res is None:
+            continue
+        slope = (res[3] - res[1]) / res[1] / max(1, res[2] - res[0]) * 100
+        if slope > FLAG_MAX_SLOPE_PCT or (is_flag and slope < -1.5):
+            continue
+        sup = _best_line(lo, [q for q in pivots_lo if s <= q <= end], end, last, False, 2,
+                         slope_range=(slope - FLAG_PARALLEL_PCT, slope + FLAG_PARALLEL_PCT))   # wsparcie ~równoległe do oporu
+        score = (is_flag, res[4] + (sup[4] if sup else 0), length)
+        if best is None or score > best[0]:
+            best = (score, s, pi, pole_gain, depth, length, res, sup, is_flag)
+    if best is None:
+        return None
+    _, s, pi, pole_gain, depth, length, res, sup, is_flag = best
+
+    lines = [{"kind": "res", "x0": dates[res[0]], "y0": _num(res[1]), "x1": dates[last], "y1": _num(res[3]), "touches": res[4]}]
+    if sup:
+        lines.append({"kind": "sup", "x0": dates[sup[0]], "y0": _num(sup[1]), "x1": dates[last], "y1": _num(sup[3]), "touches": sup[4]})
+
+    state, breakout = None, None
+    broke = [i for i in range(last - recent + 1, n) if cl[i] > _line_value(res, i)]
+    if broke:
+        state, first = "wybicie", broke[0]
+        prev = vol[max(0, first - TL_VOLUME_AVG_BARS):first]
+        if len(prev) >= 10 and prev.mean() > 0:
+            ratio = _num(vol[first] / prev.mean(), 1)
+            breakout = {"date": dates[first], "vol_ratio": ratio, "confirmed": bool(ratio >= TL_VOLUME_MULT)}
+    elif cl[-1] < res[3] and (res[3] / cl[-1] - 1) * 100 <= TL_NEAR_PCT:
+        state = "przy oporze"
+
+    pole_vol = vol[pi:s + 1].mean() if s >= pi else 0
+    flag_vol = vol[s + 1:end + 1].mean() if end > s else 0
+    info = {"type": "flaga" if is_flag else "korytarz", "pole_gain": _num(pole_gain, 0) if is_flag else None,
+            "pole_start": dates[pi] if is_flag else None, "pole_end": dates[s],
+            "pole_low": _num(lo[pi]) if is_flag else None, "pole_high": _num(hi[s]),
+            "length": int(length), "depth": _num(depth, 1),
+            "vol_ratio": _num(flag_vol / pole_vol, 1) if is_flag and pole_vol > 0 else None, "touches": res[4]}
+    return {"lines": lines, "pattern": info["type"], "state": state, "breakout": breakout, "info": info}
 
 
 def weekly_ohlcv(df, last_date=None):
@@ -596,8 +625,8 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
             widx = pd.DatetimeIndex(payload["weeks"])
             chart["rs_hi"] = [int(bool(v)) for v in wrs_hi.reindex(widx).fillna(False)]
             chart["px_hi"] = [int(bool(v)) for v in wpx_hi.reindex(widx).fillna(False)]
-        chart["tl"] = detect_trendlines(wk, k=2, lookback=40, min_span=4)
-        chart["day"]["tl"] = detect_trendlines(_daily_ohlc(df), k=3, lookback=70, min_span=8)
+        chart["tl"] = detect_consolidation(wk, WEEKLY_FLAG)
+        chart["day"]["tl"] = detect_consolidation(_daily_ohlc(df), DAILY_FLAG)
         payload["stocks"][t] = chart
     return payload
 

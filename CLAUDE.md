@@ -123,17 +123,27 @@ flat/cup/correction/deep, gives a pivot (peak high) and a VCP flag (≥2 strictl
 last ≤10 %). Stored as `base_*`, `pivot`, `pct_to_pivot`,
 `vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (no handle/flag detection).
 
-## Trendlines (heuristic)
+## Flags / consolidation (heuristic)
 
-`detect_trendlines` (watchlist.py) finds swing highs/lows (±k bars), then the LONGEST straight line through two swing
-highs (resistance) / lows (support) that no bar pierces by more than 1.5 % (last 3 bars may — that is the breakout).
-Run on weekly bars (`tl` in charts.json: 40 weeks) and daily bars (`day.tl`: 70 sessions; also `tl_state`
-= "wybicie"/"przy oporze" and `tl_pattern` = flaga/handle, korytarz poziomy, kanał wzrostowy, trójkąt in watchlist.json).
-Drawn as dashed orange (resistance) / grey (support) lines + ▲ at a breakout; legend strip above the price panel
-(separate band so labels never cover candles). Daily view (the default; `momentum_watchlist_chart_daily` = "0" switches to weekly) has only SMA 10/20, weekly SMA 10/40 weeks.
-A breakout carries volume confirmation (`breakout`: date, `vol_ratio` = breakout-bar volume / mean of the previous 50 bars,
-`confirmed` ≥ 1.5×) — shown in the legend, the breakout volume bar is outlined; `tl_vol_ratio`/`tl_vol_ok` in watchlist.json feed the
-"Trendlinia" column.
+`detect_consolidation(ohlc, cfg)` (watchlist.py; `DAILY_FLAG` for the daily chart and `tl_*` fields, `WEEKLY_FLAG` for the
+weekly chart) replaced the old "longest line through any two swings" logic that drew wrong lines. It only reports a
+pattern, and only draws lines over the consolidation itself:
+- **flaga**: pole (low → swing high within `pole_lookback` = 20 sessions, gain ≥ 20 %, ≥ 3 sessions long), then a
+  consolidation of 7–30 sessions no deeper than 20 % (and ≤ 60 % of the pole gain);
+- **korytarz**: no pole, but a tight (≤ 12 %) range of ≥ 12 sessions;
+- resistance = longest line through swing highs of the consolidation that no bar pierces by > 1.5 % (slope ≤ +0.15 %/bar);
+  support = same through lows but required to be roughly parallel (±0.3 %/bar), omitted when none fits;
+- the last `recent` (5 daily / 2 weekly) bars may already be the breakout: `state` = "wybicie" (a close above the
+  resistance) / "przy oporze" (≤ 3 % below) / None; `breakout` = {date, `vol_ratio` = breakout-bar volume / mean of the
+  previous 50 bars, `confirmed` ≥ 1.5×}; `info` = pole gain/dates, length, depth, `vol_ratio` (flag volume / pole volume,
+  ≤ 0.8 = drying up).
+Stored as `tl` (weekly) / `day.tl` (daily) in charts.json and `tl_state`, `tl_pattern`, `tl_vol_ratio`, `tl_vol_ok` in
+watchlist.json ("Trendlinia" column). Drawn as dashed orange (resistance) / grey (support) lines, the pole as a thick
+translucent segment labelled "maszt +N%", ▲ at a breakout, outlined breakout volume bar; `patternExplain` (chart.js)
+turns `info` into a plain-Polish explanation shown in `#chartPattern` under the stats line — the point is to teach the
+user to recognise the pattern, so keep the explanation in sync with the criteria above. Daily view is the default
+(`momentum_watchlist_chart_daily` = "0" → weekly) with only SMA 10/20 (weekly: SMA 10/40 weeks); the legend lives in
+its own band above the price panel so labels never cover candles.
 
 ## RS line (chart)
 

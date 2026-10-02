@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
+    patternExplain, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -154,7 +154,7 @@ test("rollingMean needs a full finite window", () => {
 test("buildChartModel maps trend lines to indexes; sliceModel shifts and drops them", () => {
     const m = buildChartModel(charts(), "AAA", null);
     assert.deepEqual(m.lines.map(l => [l.kind, l.i0, l.i1]), [["res", 1, 4], ["sup", 0, 4]]);
-    assert.deepEqual(m.trend, { pattern: "kanał", state: "wybicie", breakout: null });
+    assert.deepEqual(m.trend, { pattern: "kanał", state: "wybicie", breakout: null, info: null });
     const s = sliceModel(m, 2);
     assert.deepEqual(s.lines.map(l => [l.i0, l.i1]), [[-2, 1], [-3, 1]]);
     assert.equal(s.smas[0].values.length, 2);
@@ -214,4 +214,22 @@ test("RS dots use precomputed 52-week highs; RS leading price gets a larger ring
     assert.match(svg, /RS przed ceną/);
     assert.match(svg, /vs S&amp;P w oknie/);
     assert.match(svg, /RS na maks\. przed ceną/);
+});
+
+test("patternExplain describes the flag, volume dry-up and breakout; pole is drawn", () => {
+    const c = charts();
+    c.stocks.AAA.tl = {
+        lines: c.stocks.AAA.tl.lines, pattern: "flaga", state: "wybicie",
+        breakout: { date: "2026-07-03", vol_ratio: 2.3, confirmed: true },
+        info: { type: "flaga", pole_gain: 34, pole_start: "2026-01-09", pole_end: "2026-04-03", pole_low: 11, pole_high: 15, length: 14, depth: 8.2, vol_ratio: 0.6, touches: 3 },
+    };
+    const m = buildChartModel(c, "AAA", null);
+    const txt = patternExplain(m);
+    assert.match(txt, /Flaga: maszt \+34%/);
+    assert.match(txt, /schnie — dobry znak/);
+    assert.match(txt, /potwierdzone/);
+    assert.match(chartSvg(m), /maszt \+34%/);
+    assert.equal(patternExplain(buildChartModel(charts(), "AAA", null)), "");   // brak info => brak opisu
+    c.stocks.AAA.tl = null;
+    assert.equal(patternExplain(buildChartModel(c, "AAA", null)), "");
 });
