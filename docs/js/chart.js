@@ -140,7 +140,8 @@ function buildChartModel(charts, ticker, stock) {
         ticker, daily: !!charts.daily, weeks, n: weeks.length, o: c.o, h: c.h, l: c.l, c: c.c, v: c.v,
         smas: smas.map(([label, values]) => ({ label, values: values || [], color: SMA_COLORS[label] })),
         spx, rs, eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null } : null,
-        epsNext: c.eps_next && c.eps_next.d >= weeks[weeks.length - 1] ? c.eps_next : null,   // przeterminowana prognoza z cache'u nie jest "następnym" raportem lastIdx,
+        epsNext: c.eps_next && c.eps_next.d >= weeks[weeks.length - 1] ? c.eps_next : null,   // przeterminowana prognoza z cache'u to nie "następny" raport
+        lastIdx,
         // nowe maksimum RS/ceny względem ostatnich ~52 tygodni liczy watchlist.py na pełnej historii (nie tylko na oknie wykresu)
         rsNewHigh: c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs),
         pxNewHigh: c.px_hi ? c.px_hi.map(Boolean) : null,
