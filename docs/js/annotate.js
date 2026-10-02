@@ -130,7 +130,7 @@ function annExportJson(store, now = new Date()) {
 // ---------- stan, zapis ----------
 
 let annStore = {};
-const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", pending: [], cursor: null };
+const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: true, pending: [], cursor: null };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
 
@@ -208,7 +208,7 @@ function annOverlay(ctx) {
             // zwykła prosta między dwoma punktami + przerywane przedłużenie tej samej prostej do ostatniej świecy
             const main = [a, b];
             const xLast = geom.x(m.n - 1);
-            const ext = i1 < m.n - 1 && b[0] > a[0] ? [b, [xLast, b[1] + (b[1] - a[1]) * (xLast - b[0]) / (b[0] - a[0])]] : [];
+            const ext = line.ext !== false && i1 < m.n - 1 && b[0] > a[0] ? [b, [xLast, b[1] + (b[1] - a[1]) * (xLast - b[0]) / (b[0] - a[0])]] : [];
             const isSel = sel && sel.type === "line" && sel.id === line.id;
             body += `<polyline fill="none" stroke="${col}" stroke-width="${isSel ? 3 : 2}" points="${pts2s(main)}"><title>${ANN_KIND_LABELS[line.kind] || "linia"}${line.alert ? " · alert " + ANN_DIR_LABELS[line.alert] : ""}</title></polyline>`;
             if (ext.length > 1) body += `<polyline fill="none" stroke="${col}" stroke-width="1.4" stroke-dasharray="2 4" points="${pts2s(ext)}"/>`;
@@ -257,7 +257,7 @@ function annOverlay(ctx) {
         if (annEdit.tool === "line" && P.length === 2) {
             const [p, q] = P[0].date <= P[1].date ? [P[0], P[1]] : [P[1], P[0]];
             if (p.date !== q.date) {
-                const line = { id: annNewId(), kind: annEdit.kind, x0: p.date, y0: p.price, x1: q.date, y1: q.price, alert: annEdit.alert || null, log: !!geom.useLog };
+                const line = { id: annNewId(), kind: annEdit.kind, x0: p.date, y0: p.price, x1: q.date, y1: q.price, alert: annEdit.alert || null, log: !!geom.useLog, ext: annEdit.ext };
                 R.lines.push(line);
                 annEdit.selected = { type: "line", id: line.id };
             }
@@ -360,6 +360,7 @@ function annSyncTools() {
     const isLine = obj && annEdit.selected.type === "line";
     $("kindSel").value = isLine ? obj.kind : annEdit.kind;
     $("alertSel").value = isLine ? (obj.alert || "") : annEdit.alert;
+    $("extChk").checked = isLine ? obj.ext !== false : annEdit.ext;
     $("toolDel").disabled = !obj;
     $("annHint").textContent = annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy)."
         : annEdit.tool === "cup" ? "Kliknij trzy punkty: lewy brzeg, dołek, prawy brzeg miseczki."
@@ -412,6 +413,11 @@ function annInitUI(onRedraw) {
         const obj = annSelectedObject();
         const v = $("alertSel").value || null;
         if (obj && annEdit.selected.type === "line") { obj.alert = v; obj.ack = false; annSave(); } else annEdit.alert = v || "";
+        if (annCurrent) annCurrent.render();
+    });
+    $("extChk").addEventListener("change", () => {
+        const obj = annSelectedObject();
+        if (obj && annEdit.selected.type === "line") { obj.ext = $("extChk").checked; annSave(); } else annEdit.ext = $("extChk").checked;
         if (annCurrent) annCurrent.render();
     });
     $("toolDel").addEventListener("click", () => {

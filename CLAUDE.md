@@ -152,7 +152,7 @@ Browser-only (no backend): annotations live in `localStorage` `momentum_watchlis
 stored in DATES + prices so they show on both the daily and weekly chart. Chart modal → **✎ Edytuj** opens a toolbar:
 **Holding SPACE** (chart open, focus not in a text field) turns edit mode on temporarily (`annEdit.spaceOn`; released → back to view mode, toolbar stays hidden so the chart does not jump); with no tool selected, dragging across the empty chart draws a line (drag > 8 px; a plain click only deselects). `＋ Linia` (two clicks; x snaps to a bar, y snaps to that bar's High/Low when near), `＋ Cup` (three clicks: left rim, bottom,
 right rim), click a line/cup to select it and drag its round handles (line ends; cup L/B/R), `Typ` (opór/wsparcie/dowolna),
-`Alert` (nad/pod linią), `Usuń`, `Przywróć auto`, a free-text note. The first time edit mode opens for a ticker, the
+`Alert` (nad/pod linią), `Przedłużenie` (per line `ext`, default on: the dotted straight extension past the 2nd point; the alert value is still extrapolated), `Usuń`, `Przywróć auto`, a free-text note. The first time edit mode opens for a ticker, the
 auto-detected lines/cups of the current view are COPIED as the user's own (`fromAuto`), the automatic ones are hidden
 (`hideAutoLines`/`hideAutoCups` → `opts.hideAutoLines/Cups` in `chartSvg`) and a snapshot of what the algorithm found is
 saved in `rec.auto` — that snapshot + the user's corrected geometry + the note are the material for reviewing/tuning the
