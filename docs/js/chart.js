@@ -28,7 +28,7 @@ const CHART_LAYOUT_COMPACT = {
 };
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
-const COMPACT_DAYS = 75;
+const DAILY_WINDOW_DAYS = 21;   // domyślne okno wykresu dziennego (~1 miesiąc); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 const SMA_COLORS = { "SMA 10": "#3fbf6e", "SMA 20": "#f5d547", "SMA 50": "#c77dff", "SMA 200": "#e0455a", "SMA 10 tyg.": "#3fbf6e", "SMA 40 tyg.": "#e0455a" };
 const CHART_COLORS = {
@@ -509,9 +509,9 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         return null;
     }
     const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
-    const defN = opts.compact ? (full.daily ? COMPACT_DAYS : COMPACT_WEEKS) : full.n;
+    const defN = full.daily ? DAILY_WINDOW_DAYS : (opts.compact ? COMPACT_WEEKS : full.n);
     let win = clampWindow(opts.window, full.n, defN);
-    container.innerHTML = '<div id="chartPlot"></div>' + sliderHtml(full);
+    container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
         const m = sliceModel(full, win.n, win.end);
