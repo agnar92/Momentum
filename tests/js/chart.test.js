@@ -248,3 +248,39 @@ test("defaultWindowLength prefers the remembered length, else built-in defaults"
     assert.equal(defaultWindowLength({ daily: false, n: 104 }, { compact: true }), 52);
     assert.equal(defaultWindowLength({ daily: true, n: 252 }, { windowLen: 0 }), 42);   // zły zapis => domyślne
 });
+
+test("futureDates skips weekends for daily and steps by week otherwise", () => {
+    const { futureDates } = require("../../docs/js/chart.js");
+    assert.deepEqual(futureDates("2026-10-01", 4, true), ["2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07"]);   // czwartek -> pt, pn, wt, śr
+    assert.deepEqual(futureDates("2026-10-01", 2, false), ["2026-10-08", "2026-10-15"]);
+});
+
+test("buildChartModel with pad adds empty future slots to every array; defaults show only a little of them", () => {
+    const m = buildChartModel(charts(), "AAA", null, { pad: true });
+    assert.equal(m.pad, 4);
+    assert.equal(m.n, 5 + 4);
+    [m.o, m.h, m.l, m.c, m.v, m.rs, m.volAvg, m.rsNewHigh, m.spx, ...m.smas.map(x => x.values)].forEach(a => assert.equal(a.length, 9));
+    assert.equal(m.c[8], null);
+    assert.equal(m.lastIdx, 4);                                        // ostatnia prawdziwa świeca
+    assert.equal(m.weeks[5], "2026-07-10");                            // kolejne tygodnie po 2026-07-03
+    assert.equal(defaultWindowLength(m, {}), 5 - 0 + 1);               // tygodniowo: całość prawdziwych świec + 1 puste
+    const s = sliceModel(m, 3, 6);                                     // okno kończy się 1 puste miejsce po ostatniej świecy
+    assert.equal(s.lastShown, true);
+    assert.equal(sliceModel(m, 3, 3).lastShown, false);                // okno kończy się przed ostatnią świecą
+    assert.equal(require("../../docs/js/chart.js").clampWindow(null, 40, 20, 26).end, 26);
+    assert.ok(chartSvg(s).includes("<svg"));                           // pusta prawa strona rysuje się bez błędów
+});
+
+test("a cup that started before the first bar is kept with negative indexes (partial arc), not dropped", () => {
+    const c = charts();
+    c.stocks.AAA.bases = [{ start: "2025-11-28", low_date: "2025-12-26", end: "2026-01-16", peak: 15, low: 11, end_close: 14, depth_pct: 26.7, type: "cup", open: false }];
+    const m = buildChartModel(c, "AAA", null);
+    assert.equal(m.cups.length, 1);
+    assert.ok(m.cups[0].i0 < 0 && m.cups[0].iLow < 0 && m.cups[0].i1 === 2);
+    assert.match(chartSvg(m), /<title>Cup −26\.7%<\/title>/);
+});
+
+test("SMA colours differ from the candle colours", () => {
+    const m = buildChartModel(charts(), "AAA", null);
+    m.smas.forEach(x => assert.ok(!["#2ecc71", "#3fbf6e", "#e0455a"].includes(x.color)));
+});

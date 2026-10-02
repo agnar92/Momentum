@@ -251,6 +251,7 @@ th.tv-col { width: 1%; }
 .wl-chart-title { font-size: 16px; font-weight: 700; }
 .wl-chart-sub, .wl-chart-stats { font-size: 12px; color: var(--text-dim); margin-top: 2px; line-height: 1.4; }
 .wl-chart-stats { margin-top: 6px; }
+.wl-chart-tools[hidden] { display: none; }
 .wl-chart-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
 .wl-chart-tools .btn.active, #chartEditBtn.active { background: var(--green); color: #fff; border-color: var(--green-bright); }
 .wl-chart-tools .btn:disabled { opacity: 0.45; cursor: default; }
