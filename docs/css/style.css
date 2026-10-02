@@ -576,3 +576,11 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 .drawer-header, .drawer-header-title { min-width: 0; max-width: 100%; }
 .drawer-tabs { min-width: 0; max-width: 100%; box-sizing: border-box; }
 .drawer-tabs { scrollbar-width: thin; }
+
+/* Menu kontekstowe linii / cupów (prawy przycisk, dotyk) */
+.ann-menu { position: fixed; z-index: 2000; min-width: 210px; padding: 4px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55); }
+.ann-menu-item { display: block; width: 100%; text-align: left; background: none; border: 0; color: var(--text); font-size: 13px; padding: 8px 12px; border-radius: 5px; cursor: pointer; }
+.ann-menu-item:hover, .ann-menu-item:focus-visible { background: var(--panel-alt); outline: none; }
+.ann-menu-item.danger { color: #ff6b6b; }
+.ann-menu-sep { height: 1px; margin: 4px 2px; background: var(--border); }
+@media (pointer: coarse) { .ann-menu-item { padding: 12px 14px; font-size: 15px; } }

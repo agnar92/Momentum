@@ -92,3 +92,10 @@ test("export/import round trip merges per ticker and rejects garbage", () => {
     assert.throws(() => mergeImport({}, "{\"foo\": 1}"));
     assert.throws(() => mergeImport({}, "not json"));
 });
+
+test("annFlatten: oba końce linii na średniej cenie (kąt 0°)", () => {
+    const { annFlatten } = require(path.join("..", "..", "docs", "js", "annotate.js"));
+    const l = annFlatten({ y0: 100, y1: 104.5 });
+    assert.equal(l.y0, 102.25);
+    assert.equal(l.y1, 102.25);
+});

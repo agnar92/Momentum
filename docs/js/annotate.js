@@ -45,6 +45,13 @@ function lineValueAt(line, date) {
 }
 
 // Stan alertu linii względem ceny z dnia asOf: triggered (cena po "złej" stronie linii), near (do ANN_NEAR_PCT% przed linią).
+// Wyrównanie linii do poziomu (kąt 0°): oba końce na średniej cenie.
+function annFlatten(line) {
+    const y = Math.round((line.y0 + line.y1) / 2 * 100) / 100;
+    line.y0 = y; line.y1 = y;
+    return line;
+}
+
 function alertState(line, price, asOf) {
     const value = lineValueAt(line, asOf);
     if (!Number.isFinite(value) || value <= 0 || !Number.isFinite(price)) return null;
@@ -131,7 +138,7 @@ function annExportJson(store, now = new Date()) {
 // ---------- stan, zapis ----------
 
 let annStore = {};
-const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: true, pending: [], cursor: null };
+const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: true, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
 
@@ -196,6 +203,9 @@ function annOverlay(ctx) {
         else if (Number.isFinite(m.l[idx]) && Math.abs(p.y - geom.yP(m.l[idx])) < near) price = m.l[idx];
         return { date: m.weeks[idx], price: r2(price) };
     };
+
+    // Shift = linia pozioma: druga cena = cena pierwszego punktu (kąt 0°)
+    const level = (pt, ref, ev) => (ev && ev.shiftKey && ref ? { date: pt.date, price: ref.price } : pt);
 
     const pts2s = pts => pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
 
@@ -264,7 +274,7 @@ function annOverlay(ctx) {
                 R.lines.push(line);
                 annEdit.selected = { type: "line", id: line.id };
             }
-            annEdit.pending = []; annEdit.tool = null; touch(); annSyncTools();
+            annEdit.pending = []; annEdit.tool = null; touch(); annSyncTools(); annLeaveSpace();
         } else if (annEdit.tool === "cup" && P.length === 3) {
             const [a, b, c] = P;
             if (a.date < b.date && b.date < c.date) {
@@ -272,7 +282,7 @@ function annOverlay(ctx) {
                 R.cups.push(cup);
                 annEdit.selected = { type: "cup", id: cup.id };
             }
-            annEdit.pending = []; annEdit.tool = null; touch(); annSyncTools();
+            annEdit.pending = []; annEdit.tool = null; touch(); annSyncTools(); annLeaveSpace();
         }
     };
     const dragTo = (target, handle, pt) => {
@@ -292,13 +302,19 @@ function annOverlay(ctx) {
     };
 
     ov.addEventListener("pointerdown", ev => {
+        if (ev.pointerType === "mouse" && ev.button !== 0) return;   // prawy przycisk obsługuje menu kontekstowe
         const t = ev.target;
         const handle = t.dataset && t.dataset.handle;
         if (handle) {
             ev.preventDefault();
             const target = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
             ov.setPointerCapture(ev.pointerId);
-            const move = e => { dragTo(target, handle, snap(toSvg(e))); render(); };
+            const move = e => {
+                let pt = snap(toSvg(e));
+                const R = rec(), l = R && target.type === "line" ? R.lines.find(x => x.id === target.id) : null;
+                if (l) pt = level(pt, { price: handle === "a" ? l.y1 : l.y0 }, e);
+                dragTo(target, handle, pt); render();
+            };
             const up = () => {
                 ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
                 touch(); annSyncTools();
@@ -309,11 +325,22 @@ function annOverlay(ctx) {
         if (t.dataset && (t.dataset.line || t.dataset.cup) && !annEdit.tool) {
             annEdit.selected = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
             annSyncTools(); render();
+            if (ev.pointerType !== "mouse") annObjectMenu(ev.clientX, ev.clientY);   // dotyk: stuknięcie w linię = menu jak w TradingView
             return;
         }
         if (!t.classList || !t.classList.contains("ann-catch")) return;
+        if (!annEdit.tool && ev.pointerType !== "mouse") {   // dotyk: podwójne stuknięcie w pusty wykres = wybór „linia / cup”
+            const lt = annEdit.lastTap, now = Date.now();
+            if (lt && now - lt.t < 400 && Math.hypot(ev.clientX - lt.x, ev.clientY - lt.y) < 30) {
+                annEdit.lastTap = null;
+                ev.preventDefault();
+                annAddMenu(ev.clientX, ev.clientY);
+                return;
+            }
+            annEdit.lastTap = { t: now, x: ev.clientX, y: ev.clientY };
+        }
         if (annEdit.tool === "line" || annEdit.tool === "cup") {
-            annEdit.pending.push(snap(toSvg(ev)));
+            annEdit.pending.push(annEdit.tool === "line" && annEdit.pending.length === 1 ? level(snap(toSvg(ev)), annEdit.pending[0], ev) : snap(toSvg(ev)));
             annEdit.cursor = null;
             finishPending();
         } else {
@@ -321,10 +348,10 @@ function annOverlay(ctx) {
             // samo kliknięcie tylko odznacza
             const startPt = toSvg(ev), start = snap(startPt);
             ov.setPointerCapture(ev.pointerId);
-            const move = e => { annEdit.pending = [start]; annEdit.cursor = snap(toSvg(e)); render(); };
+            const move = e => { annEdit.pending = [start]; annEdit.cursor = level(snap(toSvg(e)), start, e); render(); };
             const up = e => {
                 ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
-                const endPt = toSvg(e), end = snap(endPt);
+                const endPt = toSvg(e), end = level(snap(endPt), start, e);
                 annEdit.cursor = null;
                 if (Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y) > 8) { annEdit.pending = [start, end]; annEdit.tool = "line"; finishPending(); }
                 else { annEdit.pending = []; annEdit.selected = null; annSyncTools(); }
@@ -337,10 +364,106 @@ function annOverlay(ctx) {
     });
     ov.addEventListener("pointermove", ev => {
         if (!annEdit.pending.length) return;
-        annEdit.cursor = snap(toSvg(ev));
+        const pt = snap(toSvg(ev));
+        annEdit.cursor = annEdit.tool === "line" && annEdit.pending.length === 1 ? level(pt, annEdit.pending[0], ev) : pt;
         render();
     });
+    // Prawy przycisk (na dotyku: długie przytrzymanie): menu linii/cupa albo — na pustym wykresie — wybór „linia / cup”
+    ov.addEventListener("contextmenu", ev => {
+        ev.preventDefault();
+        const t = ev.target;
+        if (annEdit.tool) return;
+        if (t.dataset && (t.dataset.line || t.dataset.cup)) {
+            annEdit.selected = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
+            annSyncTools(); render();
+            annObjectMenu(ev.clientX, ev.clientY);
+        } else annAddMenu(ev.clientX, ev.clientY);
+    });
 }
+
+// ---------- menu kontekstowe ----------
+
+let annMenuEl = null;
+
+function annCloseMenu() {
+    if (annMenuEl) { annMenuEl.remove(); annMenuEl = null; }
+    if (!annEdit.menuOpen) return;
+    annEdit.menuOpen = false;
+    annLeaveSpace();
+}
+
+// items: [{ label, on (✓), danger, run }]; null = separator
+function annShowMenu(x, y, items) {
+    annCloseMenu();
+    const el = document.createElement("div");
+    el.className = "ann-menu";
+    el.setAttribute("role", "menu");
+    items.forEach(it => {
+        if (!it) { const hr = document.createElement("div"); hr.className = "ann-menu-sep"; el.appendChild(hr); return; }
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "ann-menu-item" + (it.danger ? " danger" : "");
+        b.textContent = (it.on ? "✓ " : "") + it.label;
+        b.addEventListener("click", () => { const run = it.run; annEdit.menuOpen = false; annCloseMenu(); run(); annLeaveSpace(); });
+        el.appendChild(b);
+    });
+    document.body.appendChild(el);
+    const r = el.getBoundingClientRect();
+    el.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px";
+    el.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
+    annMenuEl = el;
+    annEdit.menuOpen = true;
+}
+
+function annSelectedLine() {
+    const obj = annSelectedObject();
+    return obj && annEdit.selected.type === "line" ? obj : null;
+}
+
+function annChanged() {
+    const R = annCurrent && annStore[annCurrent.ticker];
+    if (R) R.editedAt = new Date().toISOString();
+    annSave(); annSyncTools();
+    if (annCurrent) annCurrent.render();
+}
+
+function annObjectMenu(x, y) {
+    const line = annSelectedLine(), obj = annSelectedObject();
+    if (!obj) return;
+    const del = { label: "Usuń", danger: true, run: () => { const b = document.getElementById("toolDel"); if (b) b.click(); } };
+    if (!line) { annShowMenu(x, y, [del]); return; }
+    const setKind = k => () => { line.kind = k; annChanged(); };
+    const setAlert = v => () => { line.alert = v; line.ack = false; annChanged(); };
+    annShowMenu(x, y, [
+        { label: "Wyrównaj poziomo (0°)", run: () => { annFlatten(line); annChanged(); } },
+        null,
+        { label: "Opór", on: line.kind === "res", run: setKind("res") },
+        { label: "Wsparcie", on: line.kind === "sup", run: setKind("sup") },
+        { label: "Zwykła linia", on: line.kind === "free", run: setKind("free") },
+        null,
+        { label: "🔔 Alert: cena nad linią", on: line.alert === "above", run: setAlert("above") },
+        { label: "🔔 Alert: cena pod linią", on: line.alert === "below", run: setAlert("below") },
+        { label: "Bez alertu", on: !line.alert, run: setAlert(null) },
+        null,
+        { label: "Przedłużenie linii", on: line.ext !== false, run: () => { line.ext = line.ext === false; annChanged(); } },
+        null,
+        del,
+    ]);
+}
+
+function annAddMenu(x, y) {
+    const pick = tool => () => { annEdit.tool = tool; annEdit.pending = []; annEdit.cursor = null; annEdit.selected = null; annSyncTools(); if (annCurrent) annCurrent.render(); };
+    annShowMenu(x, y, [
+        { label: "＋ Linia (2 punkty; Shift = pozioma)", run: pick("line") },
+        { label: "＋ Cup (3 punkty)", run: pick("cup") },
+    ]);
+}
+
+// Tryb edycji włączony spacją kończy się, gdy spacja jest puszczona i nic się już nie rysuje.
+function annLeaveSpace() {
+    if (annEdit.spaceOn && !annEdit.spaceHeld && !annEdit.tool && !annEdit.pending.length && !annEdit.menuOpen && annApi.setEdit) annApi.setEdit(false, false);
+}
+const annApi = { setEdit: null };
 
 // ---------- pasek narzędzi w oknie wykresu ----------
 
@@ -365,9 +488,10 @@ function annSyncTools() {
     $("alertSel").value = isLine ? (obj.alert || "") : annEdit.alert;
     $("extChk").checked = isLine ? obj.ext !== false : annEdit.ext;
     $("toolDel").disabled = !obj;
-    $("annHint").textContent = annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy)."
+    if ($("toolFlat")) $("toolFlat").disabled = !isLine;
+    $("annHint").textContent = annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy); Shift = linia pozioma."
         : annEdit.tool === "cup" ? "Kliknij trzy punkty: lewy brzeg, dołek, prawy brzeg miseczki."
-        : obj ? "Przeciągnij kółka, żeby poprawić; Usuń kasuje zaznaczone." : "Przeciągnij po wykresie, żeby narysować linię, albo wybierz narzędzie / kliknij linię lub cup, żeby ją poprawić.";
+        : obj ? "Przeciągnij kółka, żeby poprawić (Shift = poziomo); prawy przycisk / dotknięcie linii = menu." : "Przeciągnij po wykresie, żeby narysować linię, prawy przycisk (na telefonie podwójne stuknięcie) = wybór linia / cup.";
     const R = annCurrent && annStore[annCurrent.ticker];
     $("annNote").value = R ? R.note || "" : "";
 }
@@ -390,6 +514,7 @@ function annInitUI(onRedraw) {
         annSyncTools();
         annOnRedraw();
     };
+    annApi.setEdit = setEdit;
     $("chartEditBtn").addEventListener("click", () => setEdit(!annEdit.on, false));
     // Przytrzymana SPACJA = tymczasowy tryb edycji (po puszczeniu wraca do podglądu); nie działa w polach tekstowych.
     const chartOpen = () => !$("chartModal").hidden;
@@ -397,14 +522,21 @@ function annInitUI(onRedraw) {
     document.addEventListener("keydown", ev => {
         if (ev.key !== " " || !chartOpen() || typing(ev)) return;
         ev.preventDefault();                                   // bez przewijania strony / klikania zogniskowanego przycisku
+        annEdit.spaceHeld = true;
         if (!ev.repeat && !annEdit.on) setEdit(true, true);
     });
     document.addEventListener("keyup", ev => {
-        if (ev.key !== " " || !annEdit.spaceOn) return;
+        if (ev.key !== " ") return;
+        annEdit.spaceHeld = false;
+        if (!annEdit.spaceOn) return;
         ev.preventDefault();
-        setEdit(false, false);
+        annLeaveSpace();   // jeśli właśnie coś się rysuje albo menu jest otwarte, tryb skończy się po zakończeniu
     });
-    window.addEventListener("blur", () => { if (annEdit.spaceOn) setEdit(false, false); });
+    window.addEventListener("blur", () => { annEdit.spaceHeld = false; if (annEdit.spaceOn) { annEdit.tool = null; annEdit.pending = []; annCloseMenu(); setEdit(false, false); } });
+    document.addEventListener("pointerdown", ev => { if (annMenuEl && !annMenuEl.contains(ev.target)) annCloseMenu(); }, true);
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape" && annMenuEl) annCloseMenu(); });
+    window.addEventListener("resize", annCloseMenu);
+    if ($("toolFlat")) $("toolFlat").addEventListener("click", () => { const l = annSelectedLine(); if (l) { annFlatten(l); annChanged(); } });
     $("toolLine").addEventListener("click", tool("line"));
     $("toolCup").addEventListener("click", tool("cup"));
     $("kindSel").addEventListener("change", () => {
@@ -448,6 +580,6 @@ function annInitUI(onRedraw) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        bizIndex, lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT,
+        bizIndex, lineValueAt, alertState, annFlatten, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT,
     };
 }
