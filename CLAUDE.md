@@ -177,7 +177,7 @@ by just re-entering the token). Cycle `syncNow` = GET gist → `mergeStores` (an
 same id → the newer record (`editedAt`) wins, deletions are tombstones `rec.del = {id: time}` so they don't come back, "Przywróć auto" = `annResetRecord`)
 → PATCH only if the merged result differs from the gist. It never sends less than the gist holds. Triggers: 2 s after every `annSave`
 (`annOnSave` hook), page load, tab becomes visible, back online, every 3 min while visible. Not synced: favourites, settings. Imports
-(`mergeImport`) are stamped `editedAt = now` so they win. Gist is "secret", not encrypted (no password layer yet). When touching annotation
+(`mergeImport`) are stamped `editedAt = now` so they win. Gist is "secret", not encrypted (no password layer yet). Classic tokens expire after 30 days by default, so the panel tells the user to pick `Expiration: No expiration` (fine-grained tokens cannot access gists); on a 401 (`syncState.auth`) the panel opens by itself with the token form so a new token can be pasted — local data and the gist are untouched. When touching annotation
 mutations, any deletion must add a tombstone, otherwise sync resurrects the object.
 
 ## Analyst estimates (Yahoo via yfinance) — `Estymaty` button
