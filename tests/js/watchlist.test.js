@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, fillTargets, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -148,4 +148,25 @@ test("applyCommonFilters filters by the manual score range", () => {
     assert.deepEqual(applyCommonFilters(stocks, "", "", 5, null).map(s => s.ticker), ["A"]);
     assert.deepEqual(applyCommonFilters(stocks, "", "", null, 5).map(s => s.ticker), ["B"]);
     assert.equal(applyCommonFilters(stocks, "", "").length, 3);
+});
+
+test("mergePrefs keeps the newer change per ticker for scores and favourites, and tombstones win when newer", () => {
+    const a = { scores: { A: { v: 5, t: "2026-10-01T10:00:00.000Z" }, B: { v: 7, t: "2026-10-01T10:00:00.000Z" } }, favs: { A: { v: true, t: "2026-10-01T10:00:00.000Z" } } };
+    const b = { scores: { A: { v: 9, t: "2026-10-02T10:00:00.000Z" }, C: { v: 3, t: "2026-10-01T09:00:00.000Z" } },
+        favs: { A: { v: false, t: "2026-10-02T09:00:00.000Z" }, D: { v: true, t: "2026-10-01T08:00:00.000Z" } } };
+    const m = mergePrefs(a, b);
+    assert.equal(m.scores.A.v, 9);
+    assert.equal(m.scores.B.v, 7);
+    assert.equal(m.scores.C.v, 3);
+    assert.equal(m.favs.A.v, false);            // usunięcie z ulubionych (nowsze) wygrywa
+    assert.equal(m.favs.D.v, true);
+    assert.deepEqual(mergePrefs(m, a), m);       // idempotentne, a starsze dane nie cofają zmian
+    assert.deepEqual(mergePrefs(a, null), prefsNormalize(a));
+});
+
+test("prefsNormalize drops malformed entries and sorts tickers deterministically", () => {
+    const n = prefsNormalize({ scores: { Z: { v: 1, t: "x" }, A: { v: "oops", t: "y" }, B: 5 }, favs: { Q: { v: 1, t: "z" } } });
+    assert.deepEqual(Object.keys(n.scores), ["A", "Z"]);
+    assert.equal(n.scores.A.v, null);
+    assert.equal(n.favs.Q.v, false);
 });

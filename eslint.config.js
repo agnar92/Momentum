@@ -61,6 +61,12 @@ const browserGlobals = {
     mergeStores: "readonly",
     // docs/js/sync.js (ładowany PRZED watchlist.js)
     syncInit: "readonly",
+    // docs/js/watchlist.js używane przez sync.js (ładowanego wcześniej)
+    prefsStore: "writable",
+    mergePrefs: "readonly",
+    prefsNormalize: "readonly",
+    prefsApply: "readonly",
+    prefsWriteLocal: "readonly",
     setInterval: "readonly",
 };
 

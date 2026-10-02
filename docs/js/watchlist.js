@@ -460,33 +460,78 @@ function loadSettings() {
     } catch (e) { /* uszkodzony zapis — zostają domyślne */ }
 }
 
-function loadFavs() {
-    try {
-        const saved = JSON.parse(localStorage.getItem(FAVS_KEY) || "[]");
-        if (Array.isArray(saved)) state.favs = new Set(saved.filter(t => typeof t === "string"));
-    } catch (e) { /* uszkodzony zapis */ }
+// ---------- własne ustawienia: ulubione ★ i score (synchronizowane z adnotacjami przez Gist) ----------
+// prefsStore = { scores: {T: {v: liczba|null, t: ISO}}, favs: {T: {v: true|false, t: ISO}} } — każda wartość ma czas zmiany,
+// a usunięcie to wpis z v = null/false (nagrobek), dzięki czemu scalenie z drugim urządzeniem (mergePrefs) wybiera nowszą zmianę.
+let prefsStore = { scores: {}, favs: {} };
+const PREFS_KEY = "momentum_watchlist_prefs";
+const PREFS_EPOCH = "1970-01-01T00:00:00.000Z";   // dane sprzed synchronizacji: przegrywają z każdą świadomą zmianą
+
+function prefsNormalize(p) {
+    const out = { scores: {}, favs: {} };
+    ["scores", "favs"].forEach(kind => {
+        const src = (p && p[kind]) || {};
+        Object.keys(src).sort().forEach(t => {
+            const e = src[t];
+            if (e && typeof e === "object" && typeof e.t === "string") out[kind][t] = { v: kind === "scores" ? (Number.isFinite(e.v) ? e.v : null) : e.v === true, t: e.t };
+        });
+    });
+    return out;
 }
 
-function loadScores() {
+// Scalanie po spółce: wygrywa wpis z późniejszym czasem zmiany (przy remisie — bez zmian, wartość z a).
+function mergePrefs(a, b) {
+    const A = prefsNormalize(a), B = prefsNormalize(b), out = { scores: {}, favs: {} };
+    ["scores", "favs"].forEach(kind => {
+        [...new Set([...Object.keys(A[kind]), ...Object.keys(B[kind])])].sort().forEach(t => {
+            const x = A[kind][t], y = B[kind][t];
+            out[kind][t] = !x ? y : !y ? x : (y.t > x.t ? y : x);
+        });
+    });
+    return out;
+}
+
+// Z prefsStore odtwarza to, czego używa reszta strony (state.favs / state.scores).
+function prefsApply() {
+    state.favs = new Set(Object.keys(prefsStore.favs).filter(t => prefsStore.favs[t].v === true));
+    state.scores = {};
+    Object.keys(prefsStore.scores).forEach(t => { if (Number.isFinite(prefsStore.scores[t].v)) state.scores[t] = prefsStore.scores[t].v; });
+}
+
+function prefsWriteLocal() {
+    try { localStorage.setItem(PREFS_KEY, JSON.stringify(prefsStore)); } catch (e) { /* brak localStorage */ }
+}
+
+function loadPrefs() {
     try {
-        const saved = JSON.parse(localStorage.getItem(SCORES_KEY) || "{}");
-        if (saved && typeof saved === "object") Object.keys(saved).forEach(t => { if (Number.isFinite(saved[t])) state.scores[t] = saved[t]; });
+        const saved = JSON.parse(localStorage.getItem(PREFS_KEY) || "null");
+        if (saved) prefsStore = prefsNormalize(saved);
     } catch (e) { /* uszkodzony zapis */ }
+    // jednorazowa migracja z dawnych kluczy (ulubione i score były tylko lokalne)
+    try {
+        const favs = JSON.parse(localStorage.getItem(FAVS_KEY) || "[]");
+        if (Array.isArray(favs)) favs.filter(t => typeof t === "string").forEach(t => { if (!prefsStore.favs[t]) prefsStore.favs[t] = { v: true, t: PREFS_EPOCH }; });
+        const scores = JSON.parse(localStorage.getItem(SCORES_KEY) || "{}");
+        if (scores && typeof scores === "object") Object.keys(scores).forEach(t => { if (Number.isFinite(scores[t]) && !prefsStore.scores[t]) prefsStore.scores[t] = { v: scores[t], t: PREFS_EPOCH }; });
+    } catch (e) { /* uszkodzony zapis */ }
+    prefsStore = prefsNormalize(prefsStore);
+    prefsWriteLocal();
+    prefsApply();
 }
 
 // Zapis własnego score (pusty = usunięcie); komórki w tabeli i pole w nagłówku wykresu zapisują tędy.
 function setScore(ticker, raw) {
     const v = parseFloat(raw);
-    if (Number.isFinite(v)) state.scores[ticker] = v; else delete state.scores[ticker];
-    try { localStorage.setItem(SCORES_KEY, JSON.stringify(state.scores)); } catch (e) { /* brak localStorage */ }
+    prefsStore.scores[ticker] = { v: Number.isFinite(v) ? v : null, t: new Date().toISOString() };
+    prefsWriteLocal(); prefsApply(); annOnSave();
     const box = document.getElementById("chartScore");
     if (box && (chartRequested === ticker || (currentChart && currentChart.ticker === ticker))) box.value = Number.isFinite(v) ? v : "";
     renderTable();
 }
 
 function toggleFav(ticker) {
-    if (!state.favs.delete(ticker)) state.favs.add(ticker);
-    try { localStorage.setItem(FAVS_KEY, JSON.stringify([...state.favs].sort())); } catch (e) { /* brak localStorage */ }
+    prefsStore.favs[ticker] = { v: !state.favs.has(ticker), t: new Date().toISOString() };
+    prefsWriteLocal(); prefsApply(); annOnSave();
     renderTable();
 }
 
@@ -1007,8 +1052,7 @@ if (typeof document !== "undefined") {
     (async function init() {
         initConnStatus();
         loadSettings();
-        loadFavs();
-        loadScores();
+        loadPrefs();
         annLoad();
         await loadData();
         renderDataInfo();
@@ -1031,7 +1075,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ptRows, fillTargets, baseRows, earningsInDays, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ptRows, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
