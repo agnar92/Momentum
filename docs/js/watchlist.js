@@ -25,6 +25,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const COMPACT_MAX_WIDTH = 640;
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
+const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
 const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
 const FAVS_KEY = "momentum_watchlist_favs";
 const SETTINGS_KEY = "momentum_watchlist_settings";
@@ -484,6 +485,7 @@ function initAnnotationIO() {
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
 
 let chartsPromise = null;
+let chartWinLen = { d: null, w: null };   // długość okna suwaka zapamiętana dla wszystkich spółek (osobno dzienny / tygodniowy)
 let chartWindow = null;     // okno suwaka {n, end} (null = domyślne); zerowane przy nowej spółce / zmianie interwału
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
@@ -534,11 +536,19 @@ function chartStats(s) {
         s.base_type ? `baza: ${baseSummary(s)}, pivot ${money(s.pivot)} (${fmtPct(s.pct_to_pivot)})` : null].filter(Boolean).join(" · ");
 }
 
+// Zmiana DŁUGOŚCI okna suwaka jest zapamiętywana (localStorage) dla wszystkich spółek; samo przesuwanie okna nie.
+function rememberWindowLength(n) {
+    const key = chartDaily ? "d" : "w";
+    if (chartWinLen[key] === n) return;
+    chartWinLen[key] = n;
+    try { localStorage.setItem(CHART_WINLEN_KEY, JSON.stringify(chartWinLen)); } catch (e) { /* brak localStorage */ }
+}
+
 function drawChart() {
     if (!currentChart) return null;
     const model = renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
         currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, daily: chartDaily,
-            window: chartWindow, onWindow: w => { chartWindow = w; },
+            window: chartWindow, windowLen: chartDaily ? chartWinLen.d : chartWinLen.w, onWindow: w => { chartWindow = w; rememberWindowLength(w.n); },
             hideAutoLines: annHide(currentChart.ticker).lines, hideAutoCups: annHide(currentChart.ticker).cups,
             overlay: c => annOverlay({ ...c, ticker: currentChart.ticker, stock: currentChart.stock }) });
     document.getElementById("chartPattern").textContent = model ? patternExplain(model) : "";
@@ -564,6 +574,8 @@ function updateTfButton() {
 function initChartModal() {
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
+        const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
+        if (saved) ["d", "w"].forEach(k => { if (Number.isFinite(saved[k]) && saved[k] > 0) chartWinLen[k] = saved[k]; });
         chartDaily = localStorage.getItem(CHART_DAILY_KEY) !== "0";   // domyślnie dzienny (wybicia i wolumen)
     } catch (e) { /* brak localStorage */ }
     updateLogButton();

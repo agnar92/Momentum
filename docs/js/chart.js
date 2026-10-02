@@ -173,6 +173,13 @@ function sliceModel(m, n, end = m.n) {
 }
 
 // Normalizuje okno suwaka {n, end} do zakresu danych (n ≥ MIN_WINDOW, end ≤ total); null = domyślne okno.
+// Domyślna długość okna suwaka: zapamiętana przez użytkownika (opts.windowLen, osobno dla dziennego i tygodniowego)
+// albo wbudowana (dziennie 2 miesiące, tygodniowo całość / 52 tyg. na telefonie).
+function defaultWindowLength(full, opts = {}) {
+    if (Number.isFinite(opts.windowLen) && opts.windowLen > 0) return opts.windowLen;
+    return full.daily ? DAILY_WINDOW_DAYS : (opts.compact ? COMPACT_WEEKS : full.n);
+}
+
 function clampWindow(w, total, defN) {
     const minN = Math.min(MIN_WINDOW, total);
     const n = Math.max(minN, Math.min(total, Math.round(w && w.n ? w.n : defN)));
@@ -542,7 +549,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         return null;
     }
     const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
-    const defN = full.daily ? DAILY_WINDOW_DAYS : (opts.compact ? COMPACT_WEEKS : full.n);
+    const defN = defaultWindowLength(full, opts);
     let win = clampWindow(opts.window, full.n, defN);
     container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie
     const plot = container.querySelector("#chartPlot");
@@ -565,6 +572,6 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, defaultWindowLength, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }
