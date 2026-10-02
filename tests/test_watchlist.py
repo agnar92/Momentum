@@ -396,3 +396,61 @@ class TestEstimates:
         watchlist.update_estimates(["AAA", "BAD"], path, now="2026-10-03", fetch=fake)   # AAA świeże (1 dzień), BAD ponawiane
         assert calls == ["BAD"]
         assert json.loads(path.read_text())["stocks"]["AAA"]["pt"]["mean"] == 60.0
+
+
+def make_cup(depth=0.25, n_cup=24, handle=(0.97, 0.95, 0.96), prior_start=60.0, prior_weeks=40, shape="u", rim_gap=0.05):
+    """Syntetyczny tygodniowy cup: wzrost przed szczytem 100, miseczka (parabola przez szczyt, dołek, prawy brzeg), rączka."""
+    top = 100.0
+    closes = list(np.linspace(prior_start, top, prior_weeks))
+    low, rim = top * (1 - depth), top * (1 - rim_gap)
+    if shape == "u":
+        coef = np.polyfit([0, 0.5, 1], [top, low, rim], 2)
+        cup = [float(np.polyval(coef, k / n_cup)) for k in range(1, n_cup + 1)]
+    else:   # V: prosty spadek i prosty wzrost
+        half = n_cup // 2
+        cup = list(np.linspace(top, low, half + 1)[1:]) + list(np.linspace(low, rim, n_cup - half + 1)[1:])
+    closes += cup
+    closes += [rim * m for m in handle]
+    highs = [c * 1.01 for c in closes]
+    lows = [c * 0.99 for c in closes]
+    rim_i = prior_weeks + n_cup - 1
+    highs[prior_weeks - 1] = top * 1.01                 # lewy szczyt
+    highs[rim_i] = rim * 1.01                           # prawy brzeg = najwyższy szczyt po dołku
+    return make_weekly(highs, lows, closes)
+
+
+class TestCup:
+    def test_textbook_cup_with_handle(self):
+        bases = watchlist.detect_bases(make_cup())
+        cups = [b for b in bases if b["type"] == "cup"]
+        assert len(cups) == 1
+        b = cups[0]
+        assert b["open"] is True and b["cup"]["handle"] is not None and b["cup"]["handle"]["weeks"] == 3
+        assert 24 <= b["depth_pct"] <= 27 and b["cup"]["prior_gain_pct"] >= 60
+        assert b["pivot"] == b["cup"]["rim"]                               # pivot = górka rączki (prawy brzeg)
+        assert b["cup"]["cup_weeks"] == 24 and b["cup"]["fit"] >= 0.6
+
+    def test_v_shape_is_not_a_cup(self):
+        assert [b for b in watchlist.detect_bases(make_cup(shape="v")) if b["type"] == "cup"] == []
+
+    def test_cup_needs_a_prior_uptrend(self):
+        assert [b for b in watchlist.detect_bases(make_cup(prior_start=95.0)) if b["type"] == "cup"] == []   # +5 % przed szczytem
+
+    def test_depth_limits_and_bear_market_exception(self):
+        assert [b for b in watchlist.detect_bases(make_cup(depth=0.08)) if b["type"] == "cup"] == []         # za płytko
+        deep = make_cup(depth=0.42)
+        assert [b for b in watchlist.detect_bases(deep) if b["type"] == "cup"] == []                          # za głęboko w spokojnym rynku
+        weekly = deep
+        bench = pd.Series(np.where(np.arange(len(weekly)) < 40, 100.0, np.linspace(100.0, 78.0, len(weekly))[:len(weekly)] * 0 + 100 - np.minimum(22.0, (np.arange(len(weekly)) - 40) * 1.5)), index=weekly.index)
+        cups = [b for b in watchlist.detect_bases(weekly, bench) if b["type"] == "cup"]
+        assert len(cups) == 1 and cups[0]["cup"]["mkt_dd_pct"] >= 15 and cups[0]["cup"]["mkt_ctx"] is True   # silna korekta S&P dopuszcza głębszą miseczkę
+
+    def test_market_context_flag_and_drawdown(self):
+        weekly = make_cup()
+        bench = pd.Series(100.0, index=weekly.index)
+        bench.iloc[50:56] = 92.0                                                                              # S&P −8 % w trakcie miseczki
+        c = [b for b in watchlist.detect_bases(weekly, bench) if b["type"] == "cup"][0]["cup"]
+        assert c["mkt_dd_pct"] == 8.0 and c["mkt_ctx"] is True
+        calm = [b for b in watchlist.detect_bases(weekly, pd.Series(100.0, index=weekly.index)) if b["type"] == "cup"][0]["cup"]
+        assert calm["mkt_dd_pct"] == 0.0 and calm["mkt_ctx"] is False
+        assert watchlist.mkt_drawdown(None, "2025-01-01", "2025-06-01") is None

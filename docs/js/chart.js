@@ -174,10 +174,17 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
     // Miseczki (cup): lewy szczyt, dołek i prawy brzeg w indeksach świec; część może wypadać przed oknem (ujemne indeksy).
     // Daty sprzed pierwszej świecy dają ujemne indeksy (dziennie mamy ~rok historii, miseczka mogła zacząć się wcześniej) —
     // rysujemy wtedy jej widoczną część zamiast gubić całą miseczkę.
-    const cups = (c.bases || []).filter(b => b.type === "cup" && b.low_date).map(b => ({
-        i0: dateToIndex(weeks, b.start), iLow: dateToIndex(weeks, b.low_date), i1: dateToIndex(weeks, b.end),
-        peak: b.peak, low: b.low, right: b.end_close, depth: b.depth_pct, open: b.open,
-    })).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
+    // Miseczka kończy się na prawym brzegu (cup.rim_date, cena rim); rączka (jeśli jest) to krótkie cofnięcie po nim do dziś / wybicia.
+    const cups = (c.bases || []).filter(b => b.type === "cup" && b.low_date).map(b => {
+        const cp = b.cup || {};
+        const h = cp.handle;
+        return {
+            i0: dateToIndex(weeks, b.start), iLow: dateToIndex(weeks, b.low_date), i1: dateToIndex(weeks, cp.rim_date || b.end),
+            peak: b.peak, low: b.low, right: cp.rim != null ? cp.rim : b.end_close, depth: b.depth_pct, open: b.open,
+            weeks: cp.cup_weeks, prior: cp.prior_gain_pct, mktDd: cp.mkt_dd_pct, ctx: !!cp.mkt_ctx,
+            handle: h ? { iLow: dateToIndex(weeks, h.low_date), low: h.low, iEnd: dateToIndex(weeks, b.end), end: b.end_close, depth: h.depth_pct } : null,
+        };
+    }).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
@@ -215,7 +222,7 @@ function sliceModel(m, n, end = m.n) {
         eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0 && q.week < n),
         lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0 && l.i0 < n),
         pole: m.pole ? { ...m.pole, i0: m.pole.i0 - off, i1: m.pole.i1 - off } : null,
-        cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off })).filter(c => c.i1 > 0 && c.i0 < n),
+        cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off, handle: c.handle ? { ...c.handle, iLow: c.handle.iLow - off, iEnd: c.handle.iEnd - off } : null })).filter(c => c.i1 > 0 && c.i0 < n),
         rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
         lastIdx: Math.min(m.lastIdx - off, n - 1),
         lastShown: m.lastIdx - off <= n - 1,   // czy ostatnia prawdziwa świeca mieści się w oknie
@@ -442,9 +449,14 @@ function chartSvg(m, opts = {}) {
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${L.price.y}" width="${L.width - L.left - L.right}" height="${L.price.h}"/></clipPath>`);
     (opts.hideAutoCups ? [] : m.cups).forEach(cup => {
         const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
-        parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%</title></polyline>`);
+        parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
+        if (cup.handle) {   // rączka: od prawego brzegu przez dołek rączki do ostatniej świecy bazy
+            const hp = [[x(cup.i1), yP(cup.right)], [x(cup.handle.iLow), yP(cup.handle.low)], [x(cup.handle.iEnd), yP(cup.handle.end)]];
+            parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${hp.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Rączka −${cup.handle.depth}%</title></polyline>`);
+            parts.push(`<text x="${hp[1][0]}" y="${hp[1][1] + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">rączka −${cup.handle.depth}%</text>`);
+        }
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
-        parts.push(`<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${cup.depth}%</text>`);
+        parts.push(`<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${cup.depth}%${cup.ctx ? ` · S&amp;P −${cup.mktDd}%` : ""}</text>`);
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;

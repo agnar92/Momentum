@@ -53,6 +53,25 @@ BASE_MAX_DEPTH_PCT = 50      # głębsze to już nie baza, tylko załamanie
 BASE_FLAT_MAX_DEPTH_PCT = 15
 BASE_CUP_MAX_DEPTH_PCT = 35
 BASE_MAX_SHOWN = 4           # ile ostatnich baz trafia na wykres
+# Cup (z rączką) wg kryteriów O'Neila — baza jest "cup" tylko, gdy spełnia je wszystkie (inaczej "korekta"):
+CUP_MIN_DEPTH_PCT = 12       # głębokość od lewego szczytu do dołka (płytsze to raczej flat)
+CUP_MAX_DEPTH_PCT = 33       # normalnie do ~33 %
+CUP_MAX_DEPTH_BEAR_PCT = 50  # w silnej korekcie rynku (S&P >= CUP_BEAR_MKT_DD) dozwolone głębsze miseczki
+CUP_BEAR_MKT_DD = 15.0
+CUP_MIN_WEEKS = 10           # od lewego szczytu do prawego brzegu (O'Neil: min. 7, tu ostrzej — krótsze to zwykła konsolidacja)
+CUP_MAX_WEEKS = 45
+CUP_MAX_RETRACE = 0.40       # w trakcie spadku/odbicia żaden ruch „pod prąd” nie może odrobić > 40 % głębokości (to W / zygzak)
+CUP_MIN_FIT = 0.60           # dopasowanie paraboli do zamknięć (R²) — miseczka ma być gładką „U”
+CUP_PRIOR_GAIN_PCT = 30      # wcześniejszy trend wzrostowy: szczyt >= 30 % ponad dołkiem z poprzednich 52 tyg.
+CUP_PRIOR_LOOKBACK = 52
+CUP_RIM_RECOVERY = 0.80      # prawy brzeg musi odrobić >= 80 % głębokości miseczki ...
+CUP_RIM_MAX_GAP_PCT = 10.0   # ... i być nie dalej niż 10 % pod lewym szczytem
+CUP_BOTTOM_WEEKS = 3         # tyle tygodni (zamknięć) w dolnej 1/3 głębokości — to ma być "U", nie "V"
+CUP_BOTTOM_FRAC = 0.38       # ... i co najmniej taka część długości miseczki (parabola ~58 %, ostre „V” ~33 %)
+CUP_LOW_POS = (0.2, 0.8)     # dołek nie może leżeć tuż przy lewej ani prawej krawędzi
+CUP_HANDLE_MAX_WEEKS = 10
+CUP_HANDLE_MAX_DEPTH_PCT = 15.0
+CUP_MKT_CONTEXT_DD = 7.0     # S&P spadł >= 7 % w trakcie tworzenia miseczki = „pod presją rynku”
 ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "skurcze" (VCP)
 EPS_CACHE_MAX_AGE_DAYS = 7   # EPS zmienia się raz na kwartał — nie pytamy Yahoo codziennie
 EPS_TIME_BUDGET_S = 600
@@ -145,8 +164,9 @@ def ema34_trend(close):
     return rising, (points[0] / points[-1] - 1) * 100, points[0]
 
 
-def compute_metrics(df):
-    """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat)."""
+def compute_metrics(df, bench_w=None):
+    """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
+    bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
     df = df.copy()
     df.index = pd.DatetimeIndex(df.index).tz_localize(None)
     close = df["Close"].astype(float)
@@ -180,7 +200,7 @@ def compute_metrics(df):
     rising, slope, ema = ema34_trend(close)
 
     high_52w = float(df["High"].tail(252).max())
-    open_base = next((b for b in reversed(detect_bases(weekly_ohlcv(df, asof))) if b["open"]), None)
+    open_base = next((b for b in reversed(detect_bases(weekly_ohlcv(df, asof), bench_w)) if b["open"]), None)
 
     tl = detect_consolidation(df, DAILY_FLAG) or {}
 
@@ -209,6 +229,8 @@ def compute_metrics(df):
         "base_type": open_base["type"] if open_base else None,
         "base_depth_pct": open_base["depth_pct"] if open_base else None,
         "base_weeks": open_base["weeks"] if open_base else None,
+        "base_handle": bool(open_base["cup"]["handle"]) if open_base and open_base.get("cup") else None,
+        "base_mkt_dd_pct": open_base["cup"]["mkt_dd_pct"] if open_base and open_base.get("cup") else None,
         "pivot": open_base["pivot"] if open_base else None,
         "pct_to_pivot": _num((open_base["pivot"] / price - 1) * 100, 1) if open_base else None,
         "vcp": open_base["vcp"] if open_base else None,
@@ -243,6 +265,82 @@ def add_rs_rating(stocks):
 # i długość każdej korekty od lokalnego szczytu do ponownego wybicia ponad ten szczyt; typ ("flat"/"cup"/"deep")
 # to prosta klasyfikacja po głębokości i odbiciu, orientacyjna.
 # ============================================================================
+def mkt_drawdown(bench_w, d0, d1):
+    """Największy spadek (peak-to-trough, %) benchmarku (tygodniowe zamknięcia) w oknie dat d0..d1; None bez danych."""
+    if bench_w is None or not len(bench_w):
+        return None
+    idx = pd.DatetimeIndex(bench_w.index)
+    seg = bench_w[(idx >= pd.Timestamp(d0)) & (idx <= pd.Timestamp(d1))].astype(float).dropna()
+    if len(seg) < 2:
+        return None
+    return float(((seg.cummax() - seg) / seg.cummax()).max() * 100)
+
+
+def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None):
+    """Czy baza (lewy szczyt `peak` .. `end`) jest miseczką z rączką wg O'Neila? Zwraca dict ze szczegółami albo None.
+    Warunki: wcześniejszy trend (+30 % w poprzednich 52 tyg.), głębokość 12–33 % (do 50 % przy mocnej korekcie S&P 500),
+    7–65 tygodni od szczytu do prawego brzegu, kształt „U” (kilka tygodni przy dnie, dołek nie przy krawędzi),
+    prawy brzeg odrabia >= 80 % głębokości (<= 12 % pod szczytem), rączka (opcjonalna) 1–10 tyg., płytsza niż 15 %
+    i w górnej połowie miseczki. Kontekst rynku (spadek S&P w tym czasie) jest informacją, nie warunkiem."""
+    if end - peak < CUP_MIN_WEEKS:
+        return None
+    low_i = peak + 1 + int(np.argmin(lo[peak + 1:end + 1]))
+    if low_i >= end:
+        return None                                               # brak prawej strony
+    low = float(lo[low_i])
+    top = float(hi[peak])
+    depth_abs = top - low
+    depth = depth_abs / top * 100
+    r = low_i + 1 + int(np.argmax(hi[low_i + 1:end + 1]))        # prawy brzeg = najwyższy szczyt po dołku
+    rim = float(hi[r])
+    cup_weeks = r - peak
+    mkt_dd = mkt_drawdown(bench_w, dates[peak], dates[r])
+    max_depth = CUP_MAX_DEPTH_BEAR_PCT if mkt_dd is not None and mkt_dd >= CUP_BEAR_MKT_DD else CUP_MAX_DEPTH_PCT
+    if not (CUP_MIN_DEPTH_PCT <= depth <= max_depth) or not (CUP_MIN_WEEKS <= cup_weeks <= CUP_MAX_WEEKS):
+        return None
+    # wcześniejszy trend wzrostowy (szczyt musi być efektem wzrostu, nie odbiciem po spadku)
+    i0 = max(0, peak - CUP_PRIOR_LOOKBACK)
+    if peak - i0 < 13:
+        return None
+    prior_gain = (top / float(lo[i0:peak].min()) - 1) * 100
+    if prior_gain < CUP_PRIOR_GAIN_PCT:
+        return None
+    # kształt „U”: dołek nie przy krawędzi, kilka tygodni w dolnej 1/3, prawa strona nie jest jednym skokiem
+    pos = (low_i - peak) / cup_weeks
+    bottom = int(np.sum(cl[peak + 1:r + 1] <= low + depth_abs / 3))
+    if not (CUP_LOW_POS[0] <= pos <= CUP_LOW_POS[1]) or bottom < max(CUP_BOTTOM_WEEKS, CUP_BOTTOM_FRAC * cup_weeks) or r - low_i < 2:
+        return None
+    if (rim - low) / depth_abs < CUP_RIM_RECOVERY or (top - rim) / top * 100 > CUP_RIM_MAX_GAP_PCT:
+        return None
+    # gładkość: brak zygzaków (odbicie w trakcie spadku / cofnięcie w trakcie odbudowy większe niż 40 % głębokości) ...
+    left, right = cl[peak:low_i + 1], cl[low_i:r + 1]
+    bounce = float(np.max(left - np.minimum.accumulate(left)))                  # największy rajd w trakcie spadku
+    dip = float(np.max(np.maximum.accumulate(right) - right))                    # największe cofnięcie w trakcie odbudowy
+    if max(bounce, dip) > CUP_MAX_RETRACE * depth_abs:
+        return None
+    # ... i kształt zbliżony do paraboli o ramionach w górę
+    xs = np.arange(peak, r + 1, dtype=float)
+    ys = cl[peak:r + 1]
+    coef = np.polyfit(xs, ys, 2)
+    ss_tot = float(np.sum((ys - ys.mean()) ** 2))
+    fit = 1 - float(np.sum((ys - np.polyval(coef, xs)) ** 2)) / ss_tot if ss_tot > 0 else 0.0
+    if coef[0] <= 0 or fit < CUP_MIN_FIT:
+        return None
+    handle = None
+    if r < end:
+        h_low = float(lo[r + 1:end + 1].min())
+        h_depth = (rim - h_low) / rim * 100
+        hw = end - r
+        if hw > CUP_HANDLE_MAX_WEEKS or h_depth > CUP_HANDLE_MAX_DEPTH_PCT or h_low < low + 0.5 * depth_abs:
+            return None
+        handle = {"weeks": hw, "low": _num(h_low), "depth_pct": _num(h_depth, 1),
+                  "low_date": dates[r + 1 + int(np.argmin(lo[r + 1:end + 1]))].strftime("%Y-%m-%d")}
+    return {"rim": _num(rim), "rim_date": dates[r].strftime("%Y-%m-%d"), "cup_weeks": cup_weeks, "handle": handle,
+            "prior_gain_pct": _num(prior_gain, 0), "fit": _num(fit, 2), "rim_gap_pct": _num((top - rim) / top * 100, 1),
+            "mkt_dd_pct": _num(mkt_dd, 1) if mkt_dd is not None else None,
+            "mkt_ctx": bool(mkt_dd is not None and mkt_dd >= CUP_MKT_CONTEXT_DD)}
+
+
 def zigzag_contractions(closes, pct=ZIGZAG_PCT):
     """Kolejne spadki (w %) od lokalnego szczytu do następnego dołka, liczone na zamknięciach; zmiana kierunku
     dopiero po ruchu o >= pct % (drobny szum jest ignorowany)."""
@@ -270,11 +368,12 @@ def zigzag_contractions(closes, pct=ZIGZAG_PCT):
     return drops
 
 
-def detect_bases(weekly):
+def detect_bases(weekly, bench_w=None):
     """Korekty od lokalnego szczytu (High) do ponownego wybicia ponad ten szczyt (lub do dziś — wtedy open=True).
     Zwraca listę {start, end, peak, low, depth_pct, weeks, type, open, pivot, contractions, vcp} (rosnąco po czasie).
     pivot = szczyt bazy (punkt zakupu w terminologii MarketSmith); vcp = co najmniej 2 kolejne, coraz płytsze skurcze,
-    ostatni <= 10 %."""
+    ostatni <= 10 %. Typ "cup" tylko dla miseczek spełniających kryteria O'Neila (classify_cup); bench_w = tygodniowe
+    zamknięcia S&P 500 (kontekst rynku)."""
     hi = weekly["High"].astype(float).values
     lo = weekly["Low"].astype(float).values
     cl = weekly["Close"].astype(float).values
@@ -291,11 +390,13 @@ def detect_bases(weekly):
         depth = (hi[peak] - low) / hi[peak] * 100
         if weeks < BASE_MIN_WEEKS or not (BASE_MIN_DEPTH_PCT <= depth <= BASE_MAX_DEPTH_PCT):
             return
-        if depth <= BASE_FLAT_MAX_DEPTH_PCT:
+        cup = classify_cup(hi, lo, cl, peak, end, dates, bench_w)
+        if cup:
+            kind = "cup"
+        elif depth <= BASE_FLAT_MAX_DEPTH_PCT:
             kind = "flat"
         elif depth <= BASE_CUP_MAX_DEPTH_PCT:
-            recovered = (cl[end] - low) / (hi[peak] - low) if hi[peak] > low else 0
-            kind = "cup" if recovered >= 0.5 else "correction"
+            kind = "correction"
         else:
             kind = "deep"
         drops = zigzag_contractions(list(cl[peak:end + 1]))
@@ -304,7 +405,8 @@ def detect_bases(weekly):
             "start": dates[peak].strftime("%Y-%m-%d"), "end": dates[end].strftime("%Y-%m-%d"),
             "peak": _num(hi[peak]), "low": _num(low), "depth_pct": _num(depth, 1), "weeks": weeks, "type": kind,
             "low_date": dates[low_i].strftime("%Y-%m-%d"), "end_close": _num(cl[end]),
-            "open": is_open, "pivot": _num(hi[peak]), "contractions": drops, "vcp": bool(vcp),
+            "open": is_open, "pivot": _num(cup["rim"] if cup else hi[peak]), "contractions": drops, "vcp": bool(vcp),
+            **({"cup": cup} if cup else {}),
         })
 
     peak = 0
@@ -728,6 +830,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         "spx": _series(ref["Close"].reindex(pd.DatetimeIndex(weeks))) if bench is not None else None,
         "stocks": {},
     }
+    bench_w = ref["Close"].astype(float) if bench is not None else None
     day_ref = bench if bench is not None else next(iter(cleaned.values()))
     day_index = pd.DatetimeIndex(day_ref.index).tz_localize(None).normalize()
     day_index = day_index[~day_index.duplicated(keep="last")][-CHART_DAYS:]
@@ -743,7 +846,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
         first = payload["weeks"][0]
         wk = weekly_ohlcv(df, last_date)
-        chart["bases"] = [b for b in detect_bases(wk) if b["end"] >= first][-BASE_MAX_SHOWN:]
+        chart["bases"] = [b for b in detect_bases(wk, bench_w) if b["end"] >= first][-BASE_MAX_SHOWN:]
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
         chart["day"] = build_daily(df, day_index)
@@ -768,13 +871,23 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
 # ============================================================================
 # SKŁADANIE I ZAPIS
 # ============================================================================
-def build_stocks(finviz_rows, frames, now_utc=None):
+def weekly_close(df):
+    """Tygodniowe (piątek) zamknięcia z dziennych świec; None, gdy brak danych."""
+    if df is None or not len(df):
+        return None
+    close = df["Close"].astype(float).copy()
+    close.index = pd.DatetimeIndex(close.index).tz_localize(None).normalize()
+    return close.resample("W-FRI").last().dropna()
+
+
+def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
     stocks = []
+    bench_w = weekly_close(drop_incomplete_bar(bench_df, now_utc)) if bench_df is not None and len(bench_df) else None
     for row in finviz_rows:
         df = frames.get(row["ticker"])
         if df is None:
             continue
-        metrics = compute_metrics(drop_incomplete_bar(df, now_utc))
+        metrics = compute_metrics(drop_incomplete_bar(df, now_utc), bench_w)
         if metrics is None:
             continue
         stock = {"ticker": row["ticker"]}
@@ -826,13 +939,13 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
         print(f"❌ Pokrycie cen poniżej {MIN_COVERAGE:.0%} — przerywam bez zapisu (zostaje poprzedni plik).")
         return 1
 
-    stocks = build_stocks(finviz_rows, frames)
     try:
         bench_frames = download_prices([BENCHMARK])
         benchmark_df = bench_frames.get(BENCHMARK)
     except Exception as e:
         print(f"⚠️  Benchmark {BENCHMARK} niedostępny ({e}) — wykresy bez linii S&P 500.")
         benchmark_df = None
+    stocks = build_stocks(finviz_rows, frames, bench_df=benchmark_df)
     try:
         eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
     except Exception as e:
