@@ -455,6 +455,12 @@ function chartSvg(m, opts = {}) {
             parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${hp.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Rączka −${cup.handle.depth}%</title></polyline>`);
             parts.push(`<text x="${hp[1][0]}" y="${hp[1][1] + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">rączka −${cup.handle.depth}%</text>`);
         }
+        // cena monitorowania miseczki = pivot (prawy brzeg)
+        const pivot = Number.isFinite(cup.right) ? cup.right : null;
+        if (pivot) {
+            const px = Math.min(Math.max(x(cup.i1), L.left + 30), L.width - L.right - 4);
+            parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, L.price.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
+        }
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
         parts.push(`<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${cup.depth}%${cup.ctx ? ` · S&amp;P −${cup.mktDd}%` : ""}</text>`);
     });
@@ -479,6 +485,12 @@ function chartSvg(m, opts = {}) {
         const y0 = Math.min(Math.max(yP(at(i0)), L.price.y), L.price.y + L.price.h);
         const y1 = Math.min(Math.max(yP(at(l.i1)), L.price.y), L.price.y + L.price.h);
         parts.push(`<line x1="${x_(i0)}" y1="${y0}" x2="${x_(l.i1)}" y2="${y1}" stroke="${col}" stroke-width="1.6" stroke-dasharray="6 3"><title>${l.kind === "res" ? "Opór" : "Wsparcie"} (${l.touches} dotknięć)</title></line>`);
+        // cena monitorowania: wartość linii na jej końcu (ostatniej świecy) — tu szukamy przebicia
+        const lp = at(l.i1);
+        if (Number.isFinite(lp) && lp > 0 && l.i1 >= 0) {
+            const ly = Math.min(Math.max(y1 + (l.kind === "res" ? -5 : fs(12)), L.price.y + fs(10)), L.price.y + L.price.h - 3);
+            parts.push(`<text x="${Math.min(x_(l.i1), L.width - L.right - 4)}" y="${ly}" font-size="${fs(11)}" font-weight="700" fill="${col}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${lp.toFixed(2)}</text>`);
+        }
     });
     // maszt flagi: pogrubiony odcinek od dołka do szczytu wzrostu poprzedzającego konsolidację + podpis
     if (m.pole && m.pole.i1 > 0) {
