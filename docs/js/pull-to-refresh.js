@@ -21,6 +21,15 @@ function nearestScrollable(el) {
     return document.scrollingElement || document.documentElement;
 }
 
+// Dotknięcia, które nigdy nie mogą uruchomić odświeżania: wykres (rysowanie linii przeciągnięciem w dół, suwak okna), pola
+// formularzy, menu, a także strona przybliżona szczypnięciem (wtedy przeciągnięcie w dół to przesuwanie widoku, nie odświeżanie).
+const PTR_IGNORE_SELECTOR = ".chart-overlay, #chartPlot, .wl-range, .ann-menu, .ann-lnote, input, select, textarea, details";
+
+function ptrBlocked(target, zoomScale) {
+    if (zoomScale > 1.01) return true;
+    return !!(target && target.closest && target.closest(PTR_IGNORE_SELECTOR));
+}
+
 function initPullToRefresh(onRefresh) {
     if (!("ontouchstart" in window)) return; // gest ma sens tylko na dotyku
 
@@ -58,7 +67,9 @@ function initPullToRefresh(onRefresh) {
     }
 
     document.addEventListener("touchstart", (e) => {
-        if (refreshing || e.touches.length !== 1) return;
+        if (e.touches.length !== 1) { pulling = false; startY = null; setPull(0); return; }   // drugi palec = szczypnięcie (zoom), nie odświeżanie
+        if (refreshing) return;
+        if (ptrBlocked(e.target, window.visualViewport ? window.visualViewport.scale : 1)) { target = null; pulling = false; startY = null; return; }
         target = nearestScrollable(e.target);
         if (target.scrollTop > 0) { target = null; return; }
         startY = e.touches[0].clientY;
@@ -66,6 +77,7 @@ function initPullToRefresh(onRefresh) {
     }, { passive: true });
 
     document.addEventListener("touchmove", (e) => {
+        if (e.touches.length !== 1 || (window.visualViewport && window.visualViewport.scale > 1.01)) { pulling = false; startY = null; setPull(0); return; }
         if (!pulling || startY === null || refreshing) return;
         if (target.scrollTop > 0) { pulling = false; return; }
         const delta = e.touches[0].clientY - startY;
@@ -108,5 +120,5 @@ if (typeof document !== "undefined") {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { nearestScrollable };
+    module.exports = { nearestScrollable, ptrBlocked };
 }

@@ -644,3 +644,10 @@ td.score-cell { text-align: center; }
 .score-input { width: 52px; padding: 2px 4px; background: #0e0f13; color: var(--text); border: 1px solid #2c3140; border-radius: 4px; text-align: center; font: inherit; }
 .score-input:focus { outline: 1px solid var(--green-bright); }
 .chart-score input[type="number"] { width: 60px; }
+
+/* iPhone: pole formularza o czcionce < 16 px przybliża stronę po dotknięciu; 16 px wyłącza to automatyczne powiększanie.
+   touch-action: manipulation wyłącza przybliżanie podwójnym stuknięciem (podwójne stuknięcie w wykres otwiera menu), szczypanie działa. */
+@media (hover: none) and (pointer: coarse) {
+    input, select, textarea { font-size: 16px !important; }
+    html, body { touch-action: manipulation; }
+}

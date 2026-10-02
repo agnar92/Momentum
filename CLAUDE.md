@@ -101,7 +101,7 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   button inside a row still opens TradingView and does not open the chart. **Phones (≤ 640 px) get a compact layout**
   (`opts.compact`: narrower viewBox 560×740, fonts ×1.5, only the last 52 weeks via `sliceModel`, header split into two
   rows; re-rendered on rotation) so the chart stays readable instead of being a shrunken desktop chart.
-  Common search box + sector select; table headers sort (empty values always last); settings persist in
+  **iPhone/PWA gestures:** pull-to-refresh (`js/pull-to-refresh.js`) is cancelled when a second finger touches (pinch), when the page is pinch-zoomed (`visualViewport.scale > 1`) and when the touch starts in the chart, range slider, form fields or menus (`ptrBlocked`) — before, a pinch or a downward drag in the chart reloaded the page; on touch devices (`@media (hover:none) and (pointer:coarse)`) inputs are 16 px (smaller makes iOS auto-zoom on focus) and `touch-action: manipulation` removes double-tap zoom (the chart's double tap opens the add menu). Common search box + sector select; table headers sort (empty values always last); settings persist in
   `localStorage` (`momentum_watchlist_settings`). Rows link out to TradingView (`tvUrlFor`) — there is no
   in-app chart any more. Pure logic is covered by `tests/js/watchlist.test.js`.
 - **`ep.html` + `js/ep.js`** — standalone Episodic Pivot helper (TradingView gap-scanner link, volume-breakout
