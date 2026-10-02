@@ -207,6 +207,7 @@ function annHide(ticker) {
 // ---------- warstwa nad wykresem (rysowanie i edycja) ----------
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+const ANN_TOUCH_PX = 30;   // promień (px ekranu), w którym dotyk „łapie” najbliższą linię / cup / uchwyt
 
 function annOverlay(ctx) {
     const { plot, m, geom, ticker } = ctx;
@@ -252,7 +253,7 @@ function annOverlay(ctx) {
     const markup = () => {
         const R = rec();
         const sel = annEdit.selected;
-        const h = geom.fs(7);
+        const h = geom.fs(window.matchMedia && window.matchMedia("(pointer: coarse)").matches ? 11 : 7);
         let body = "";
         (R ? R.lines : []).forEach(line => {
             const i0 = idxOf(line.x0), i1 = idxOf(line.x1);
@@ -411,13 +412,52 @@ function annOverlay(ctx) {
         }
     };
 
+    // Dotyk: palec jest gruby i zasłania cel, więc zamiast trafiać w cienką linię, wybieramy NAJBLIŻSZY element (uchwyt zaznaczonego
+    // obiektu, linię albo cup) w promieniu ~30 px od palca; dopiero gdy nic nie jest blisko, dotyk traktujemy jak puste miejsce.
+    const distSeg = (p, a, b) => {
+        const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+        const f = len2 ? Math.max(0, Math.min(1, ((p.x - a[0]) * dx + (p.y - a[1]) * dy) / len2)) : 0;
+        return Math.hypot(p.x - (a[0] + f * dx), p.y - (a[1] + f * dy));
+    };
+    const pickNear = p => {
+        const rect = ov.getBoundingClientRect();
+        const scale = Math.min(rect.width / L.width, rect.height / L.height) || 1;
+        const thr = ANN_TOUCH_PX / scale;
+        const R = rec();
+        if (!R) return null;
+        let best = null;
+        const consider = (d, hit) => { if (d <= thr && (!best || d < best.d)) best = { d, ...hit }; };
+        const sel = annEdit.selected;
+        // uchwyty zaznaczonego obiektu mają pierwszeństwo (łatwo je złapać, żeby przesuwać końce)
+        if (sel && sel.type === "line") {
+            const l = R.lines.find(x => x.id === sel.id);
+            if (l) [["a", l.x0, l.y0], ["b", l.x1, l.y1]].forEach(([k, d, pr]) => consider(Math.hypot(p.x - geom.x(idxOf(d)), p.y - geom.yP(pr)) - thr * 0.35, { handle: k, target: sel }));
+        } else if (sel && sel.type === "cup") {
+            const c = R.cups.find(x => x.id === sel.id);
+            if (c) [["L", c.start, c.peak], ["B", c.low_date, c.low], ["R", c.end, c.right]].forEach(([k, d, pr]) => consider(Math.hypot(p.x - geom.x(idxOf(d)), p.y - geom.yP(pr)) - thr * 0.35, { handle: k, target: sel }));
+        }
+        R.lines.forEach(l => consider(distSeg(p, [geom.x(idxOf(l.x0)), geom.yP(l.y0)], [geom.x(idxOf(l.x1)), geom.yP(l.y1)]), { obj: { type: "line", id: l.id } }));
+        R.cups.forEach(cu => {
+            const { pts } = cupArcPoints({ i0: idxOf(cu.start), iLow: idxOf(cu.low_date), i1: idxOf(cu.end), peak: cu.peak, low: cu.low, right: cu.right }, geom.x, geom.yP);
+            for (let i = 1; i < pts.length; i++) consider(distSeg(p, pts[i - 1], pts[i]), { obj: { type: "cup", id: cu.id } });
+        });
+        return best;
+    };
+
     ov.addEventListener("pointerdown", ev => {
         if (ev.pointerType === "mouse" && ev.button !== 0) return;   // prawy przycisk obsługuje menu kontekstowe
         const t = ev.target;
-        const handle = t.dataset && t.dataset.handle;
+        const touchPtr = ev.pointerType !== "mouse";
+        let handle = t.dataset && t.dataset.handle;
+        let handleTarget = handle ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
+        let hitObj = t.dataset && (t.dataset.line || t.dataset.cup) ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
+        if (touchPtr && !annEdit.tool && !handle && !hitObj) {
+            const pk = pickNear(toSvg(ev));
+            if (pk) { if (pk.handle) { handle = pk.handle; handleTarget = pk.target; } else hitObj = pk.obj; }
+        }
         if (handle) {
             ev.preventDefault();
-            const target = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
+            const target = handleTarget;
             ov.setPointerCapture(ev.pointerId);
             const move = e => {
                 let pt = snap(toSvg(e));
@@ -433,8 +473,8 @@ function annOverlay(ctx) {
             ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
             return;
         }
-        if (t.dataset && (t.dataset.line || t.dataset.cup) && !annEdit.tool) {
-            annEdit.selected = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
+        if (hitObj && !annEdit.tool) {
+            annEdit.selected = hitObj;
             annSyncTools(); render();
             // Chwycenie za środek linii/cupa i przeciągnięcie przesuwa całość (o całe świece w poziomie, dowolnie w pionie);
             // samo stuknięcie (dotyk) otwiera menu jak w TradingView
@@ -477,11 +517,27 @@ function annOverlay(ctx) {
             }
             annEdit.lastTap = { t: now, x: ev.clientX, y: ev.clientY };
         }
+        if (touchPtr && (annEdit.tool === "line" || annEdit.tool === "cup")) {
+            // dotyk + wybrane narzędzie: punkt stawia się dopiero po puszczeniu palca, a w trakcie widać lupę z miejscem przyciągnięcia
+            ev.preventDefault();
+            ov.setPointerCapture(ev.pointerId);
+            const place = e => { const pt = snap(toSvg(e)); return annEdit.tool === "line" && annEdit.pending.length === 1 ? level(pt, annEdit.pending[0], e) : pt; };
+            const stop = () => { ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", cancel); };
+            const move = e => { const pt = place(e); annEdit.cursor = pt; showLoupe(toSvg(e), pt); render(); };
+            const up = e => { stop(); loupe = null; const pt = place(e); annEdit.cursor = null; annEdit.pending.push(pt); finishPending(); render(); };
+            const cancel = () => { stop(); loupe = null; annEdit.cursor = null; render(); };
+            move(ev);
+            ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", cancel);
+            return;
+        }
         if (annEdit.tool === "line" || annEdit.tool === "cup") {
             annEdit.pending.push(annEdit.tool === "line" && annEdit.pending.length === 1 ? level(snap(toSvg(ev)), annEdit.pending[0], ev) : snap(toSvg(ev)));
             annEdit.cursor = null;
             loupe = null;
             finishPending();
+        } else if (touchPtr) {
+            // dotyk bez narzędzia: puste miejsce tylko odznacza — nowe linie dodaje się z menu (podwójne stuknięcie), żeby nie rysować przypadkiem
+            annEdit.pending = []; annEdit.selected = null; annSyncTools();
         } else {
             // bez narzędzia: przeciągnięcie po pustym wykresie rysuje linię (szybkie rysowanie, np. przy trzymanej spacji);
             // samo kliknięcie tylko odznacza
