@@ -593,6 +593,8 @@ function chartSvg(m, opts = {}) {
 
     // --- crosshair (ustawiany w attachChartHover)
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
+    // data wskazanej świecy na dole osi (pokazywana przy najechaniu myszką)
+    parts.push(`<text id="chartCrossDate" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
     if (opts.geomOut) Object.assign(opts.geomOut, { L, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres ${m.daily ? "dzienny" : "tygodniowy"} ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
 }
@@ -629,12 +631,22 @@ function chartReadout(m, i) {
         + ` · wol. ${Number.isFinite(m.v[i]) ? (m.v[i] / 1000).toFixed(1) + " mln" : "—"}${rs}${spx}`;
 }
 
+// "2026-08-13" -> "czw 13 sie 2026" (dzień tygodnia tylko na wykresie dziennym; tygodniowa świeca to tydzień kończący się tą datą)
+const DAYS_PL = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+function fmtCrossDate(d, daily) {
+    if (!d) return "";
+    const dow = daily ? DAYS_PL[new Date(d + "T00:00:00Z").getUTCDay()] + " " : "tydz. do ";
+    return `${dow}${Number(d.slice(8, 10))} ${MONTHS_PL[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+}
+
 function attachChartHover(container, m, readoutEl, L) {
     const svg = container.querySelector("#chartSvg");
     const cross = container.querySelector("#chartCross");
+    const dateEl = container.querySelector("#chartCrossDate");
     if (!svg || !cross) return;
     const plotW = L.width - L.left - L.right;
-    svg.addEventListener("mousemove", ev => {
+    // nasłuch na kontenerze (a nie na svg): działa też, gdy nad wykresem leży warstwa edycji własnych linii
+    container.addEventListener("mousemove", ev => {
         const rect = svg.getBoundingClientRect();
         const vx = (ev.clientX - rect.left) / rect.width * L.width;
         const i = Math.floor((vx - L.left) / plotW * m.n);
@@ -643,10 +655,16 @@ function attachChartHover(container, m, readoutEl, L) {
         cross.setAttribute("x1", cx);
         cross.setAttribute("x2", cx);
         cross.setAttribute("opacity", "0.45");
+        if (dateEl) {
+            dateEl.textContent = fmtCrossDate(m.weeks[i], m.daily);
+            dateEl.setAttribute("x", Math.max(L.left + 60, Math.min(L.width - L.right - 60, cx)));
+            dateEl.setAttribute("opacity", "1");
+        }
         readoutEl.textContent = chartReadout(m, i);
     });
-    svg.addEventListener("mouseleave", () => {
+    container.addEventListener("mouseleave", () => {
         cross.setAttribute("opacity", "0");
+        if (dateEl) dateEl.setAttribute("opacity", "0");
         readoutEl.textContent = chartReadout(m, m.lastIdx);
     });
 }
