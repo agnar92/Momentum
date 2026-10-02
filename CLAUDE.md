@@ -101,13 +101,13 @@ Run it: `python watchlist.py` (`--skip-finviz` reuses the previous list and only
   button inside a row still opens TradingView and does not open the chart. **Phones (≤ 640 px) get a compact layout**
   (`opts.compact`: narrower viewBox 560×740, fonts ×1.5, only the last 52 weeks via `sliceModel`, header split into two
   rows; re-rendered on rotation) so the chart stays readable instead of being a shrunken desktop chart.
-  **iPhone/PWA gestures:** pull-to-refresh (`js/pull-to-refresh.js`) is cancelled when a second finger touches (pinch), when the page is pinch-zoomed (`visualViewport.scale > 1`) and when the touch starts in the chart, range slider, form fields or menus (`ptrBlocked`) — before, a pinch or a downward drag in the chart reloaded the page; on touch devices (`@media (hover:none) and (pointer:coarse)`) inputs are 16 px (smaller makes iOS auto-zoom on focus) and `touch-action: manipulation` removes double-tap zoom (the chart's double tap opens the add menu). Common search box + sector select; table headers sort (empty values always last); settings persist in
+  **iPhone/PWA gestures:** there is NO pull-to-refresh any more (it was removed at the user's request: a pinch or a downward drag reloaded the page); instead `refreshDataIfStale` re-fetches `watchlist.json` (no-store) when the app comes back to the foreground after more than 10 minutes and swaps the data in place (re-renders the list, drops the charts/estimates cache, reopens the chart, toast "Dane odświeżone.") only when `generated_at` changed; on touch devices (`@media (hover:none) and (pointer:coarse)`) inputs are 16 px (smaller makes iOS auto-zoom on focus) and `touch-action: manipulation` removes double-tap zoom (the chart's double tap opens the add menu). Common search box + sector select; table headers sort (empty values always last); settings persist in
   `localStorage` (`momentum_watchlist_settings`). Rows link out to TradingView (`tvUrlFor`) — there is no
   in-app chart any more. Pure logic is covered by `tests/js/watchlist.test.js`.
 - **`ep.html` + `js/ep.js`** — standalone Episodic Pivot helper (TradingView gap-scanner link, volume-breakout
   screener widget, news widget, localStorage journal). Unrelated to the watchlist data.
 - **`js/shared.js`** (`tvUrlFor`, `compareRows`, TradingView embed helpers), **`js/qol.js`** (toasts, offline
-  badge, loading overlay), **`js/pull-to-refresh.js`**; `sw.js` is a network-first PWA service worker (bump
+  badge, loading overlay); `sw.js` is a network-first PWA service worker (bump
   `CACHE` and keep `SHELL` in sync when files are added/removed). Files are plain `<script>` tags sharing
   globals; for Node tests each file re-attaches the shared globals via the `typeof require` block at its top.
   `css/style.css` was rewritten from scratch (only rules for existing pages; one `@media (max-width:900px),

@@ -3,7 +3,7 @@
 // index.html/rebalance.html/rebalance_pl.html/chart.html — zwykły <script>
 // tag (bez modułów/bundlera, ładowany PRZED
 // js/app.js/js/rebalance.js/js/rebalance_pl.js/js/chart.js na wszystkich
-// czterech stronach, ten sam wzorzec co js/pull-to-refresh.js) obejmujący
+// czterech stronach) obejmujący
 // trzy niezależne rzeczy:
 //
 // 1. `showToast(message, opts)` — krótki, nieblokujący komunikat w rogu

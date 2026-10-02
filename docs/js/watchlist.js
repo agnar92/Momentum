@@ -1035,15 +1035,39 @@ function initChartModal() {
     });
 }
 
+let dataLoadedAt = Date.now();
+const DATA_STALE_MS = 10 * 60 * 1000;   // po powrocie do aplikacji dane starsze niż to są pobierane od nowa
+
 async function loadData() {
     try {
         const res = await fetch("data/watchlist.json", { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         state.data = await res.json();
+        dataLoadedAt = Date.now();
     } catch (e) {
         console.error("Nie udało się wczytać data/watchlist.json:", e);
         state.data = { stocks: [], n_stocks: 0 };
     }
+}
+
+// Odświeżenie danych bez przeładowania strony: PWA wznowiona z tła nie ładuje się od nowa, więc po powrocie do aplikacji
+// (po DATA_STALE_MS) pobieramy watchlist.json ponownie; gdy jest nowsze pobranie, podmieniamy dane i przerysowujemy listę.
+async function refreshDataIfStale() {
+    if (!state.data || Date.now() - dataLoadedAt < DATA_STALE_MS) return;
+    dataLoadedAt = Date.now();
+    try {
+        const res = await fetch("data/watchlist.json", { cache: "no-store" });
+        if (!res.ok) return;
+        const fresh = await res.json();
+        if (!fresh || !fresh.stocks || !fresh.stocks.length || fresh.generated_at === state.data.generated_at) return;
+        state.data = fresh;
+        chartsPromise = null; estimatesPromise = null; estimatesMap = null;   // wykresy i estymaty też mogły się zmienić
+        loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
+        renderDataInfo();
+        renderTable();
+        if (currentChart) openChart(currentChart.ticker);
+        showToast("Dane odświeżone.");
+    } catch (e) { /* offline — zostają dotychczasowe dane */ }
 }
 
 // typeof document check: pozwala wczytać ten plik przez `require()` w testach Node bez uruchamiania
@@ -1066,6 +1090,9 @@ if (typeof document !== "undefined") {
         hideLoadingOverlay();
         loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
     })();
+
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") refreshDataIfStale(); });
+    window.addEventListener("pageshow", e => { if (e.persisted) refreshDataIfStale(); });
 
     if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
