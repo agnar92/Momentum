@@ -690,7 +690,7 @@ function drawChart() {
         const opts = {
             log: chartLog, daily: c.daily, uid: "c" + i,
             compact: layout === "1" ? chartCompact : false, wide: layout === "1" && chartWide,
-            fit: layout === "1" ? null : cellFit(cell),
+            fit: layout === "1" ? (chartFull && !splitMode ? phoneFullFit() : null) : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
@@ -720,6 +720,13 @@ function drawChart() {
     return primary;
 }
 
+// Telefon, pełny ekran: wykres dostaje cały ekran pod skróconym nagłówkiem (układ liczony w pikselach jak w siatce),
+// dzięki temu w poziomie nie jest miniaturą ograniczoną wysokością okna.
+function phoneFullFit() {
+    const head = document.querySelector("#chartModal .wl-chart-head").getBoundingClientRect();
+    return { w: Math.max(260, window.innerWidth - 16), h: Math.max(340, window.innerHeight - head.bottom - 104) };   // min. 340: w poziomie wykres jest minimalnie wyższy niż ekran (przewijasz)   // 104 = odczyt, suwak, odstępy
+}
+
 // Rozmiar (px) miejsca na wykres w komórce siatki: wysokość komórki minus nagłówek, odczyt i suwak.
 function cellFit(cell) {
     const body = cell.querySelector(".cell-body");
@@ -740,6 +747,7 @@ function setChartFull(on) {
     chartFull = on;
     const modal = document.getElementById("chartModal");
     modal.querySelector(".wl-chart-box").classList.toggle("full", on);
+    modal.querySelector(".wl-chart-box").classList.toggle("phone-full", on && !splitMode);   // telefon: skrócony nagłówek, wykres na cały ekran
     document.getElementById("chartFullBtn").textContent = on ? "⤢ Zamknij pełny ekran" : "⛶ Pełny ekran";
     try {
         if (on && !document.fullscreenElement && modal.requestFullscreen) modal.requestFullscreen().catch(() => {});
@@ -823,7 +831,7 @@ function initChartModal() {
     let resizeTimer = null;
     window.addEventListener("resize", () => {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => { if (splitMode && chartLayout !== "1" && currentChart) drawChart(); }, 150);   // siatka: nowy rozmiar komórek
+        resizeTimer = setTimeout(() => { if (((splitMode && chartLayout !== "1") || (chartFull && !splitMode)) && currentChart) drawChart(); }, 150);   // siatka: nowy rozmiar komórek
         applyLayoutMode();
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;

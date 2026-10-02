@@ -13,7 +13,7 @@ const SYNC_API = "https://api.github.com";
 const SYNC_DEBOUNCE_MS = 2000;
 const SYNC_POLL_MS = 3 * 60 * 1000;
 
-const syncState = { token: "", gistId: "", status: "off", detail: "", at: null, busy: false, again: false, timer: null, onChange: () => {} };
+const syncState = { token: "", gistId: "", status: "off", detail: "", at: null, busy: false, again: false, auth: false, timer: null, onChange: () => {} };
 
 function syncLoadConfig() {
     try {
@@ -40,7 +40,8 @@ async function syncApi(path, opts = {}) {
             ...(opts.body ? { "Content-Type": "application/json" } : {}),
         },
     });
-    if (res.status === 401) throw new Error("Token nieprawidłowy lub wygasł.");
+    if (res.status === 401) syncState.auth = true;
+    if (res.status === 401) throw new Error("Token nieprawidłowy lub wygasł — utwórz nowy (Expiration: No expiration) i wklej go ponownie; dane są bezpieczne lokalnie i w Gistcie.");
     if (res.status === 403 || res.status === 429) throw new Error("GitHub odmówił (limit zapytań lub brak uprawnień „gist”).");
     if (res.status === 404 && syncState.gistId) throw new Error("Nie znaleziono Gista — połącz ponownie.");
     if (!res.ok) throw new Error("Błąd GitHub " + res.status);
@@ -83,6 +84,7 @@ async function syncNow() {
     if (!syncState.token) return;
     if (syncState.busy) { syncState.again = true; return; }
     syncState.busy = true;
+    syncState.auth = false;
     syncSetStatus("busy");
     try {
         if (!syncState.gistId) {
@@ -146,7 +148,11 @@ function syncRenderStatus() {
     const info = document.getElementById("syncInfo");
     if (info) info.textContent = syncState.status === "error" ? syncState.detail : "";
     const on = !!syncState.token;
-    ["syncSetup"].forEach(id => { const el = document.getElementById(id); if (el) el.hidden = on; });
+    // po błędzie (np. wygasły token) formularz jest znów widoczny, żeby wkleić nowy token
+    const setup = document.getElementById("syncSetup");
+    if (setup) setup.hidden = on && !syncState.auth;
+    const panel = document.getElementById("syncPanel");
+    if (panel && syncState.auth) panel.hidden = false;
     ["syncNowBtn", "syncOffBtn"].forEach(id => { const el = document.getElementById(id); if (el) el.hidden = !on; });
 }
 

@@ -302,6 +302,21 @@ function annOverlay(ctx) {
     const render = () => { ov.innerHTML = markup(); };
     if (!ctx.readonly) annCurrent = { render, ticker, full: ctx.full };
     render();
+    // Dotyk bez trybu edycji: podwójne stuknięcie w wykres włącza edycję i od razu pokazuje wybór „linia / cup”
+    if (!editing && !ctx.readonly && !plot.dataset.annDbl) {
+        plot.dataset.annDbl = "1";
+        let last = null;
+        plot.addEventListener("pointerdown", ev => {
+            if (ev.pointerType === "mouse" || annEdit.on) return;
+            const now = Date.now();
+            if (last && now - last.t < 400 && Math.hypot(ev.clientX - last.x, ev.clientY - last.y) < 30) {
+                last = null;
+                if (annApi.setEdit) { annApi.setEdit(true, false); annAddMenu(ev.clientX, ev.clientY); }
+                return;
+            }
+            last = { t: now, x: ev.clientX, y: ev.clientY };
+        });
+    }
     if (!editing) return;
 
     const touch = () => { const R = rec(); if (R) R.editedAt = new Date().toISOString(); annSave(); };
@@ -424,6 +439,7 @@ function annOverlay(ctx) {
 // ---------- menu kontekstowe ----------
 
 let annMenuEl = null;
+let annMenuOpenedAt = 0;
 
 function annCloseMenu() {
     if (annMenuEl) { annMenuEl.remove(); annMenuEl = null; }
@@ -444,13 +460,19 @@ function annShowMenu(x, y, items) {
         b.type = "button";
         b.className = "ann-menu-item" + (it.danger ? " danger" : "");
         b.textContent = (it.on ? "✓ " : "") + it.label;
-        b.addEventListener("click", () => { const run = it.run; annEdit.menuOpen = false; annCloseMenu(); run(); annLeaveSpace(); });
+        b.addEventListener("click", () => {
+            if (Date.now() - annMenuOpenedAt < 400) return;   // dotyk: „click” po tym samym stuknięciu, które otworzyło menu, nie może go od razu wybrać
+            const run = it.run; annEdit.menuOpen = false; annCloseMenu(); run(); annLeaveSpace(); });
         el.appendChild(b);
     });
-    document.body.appendChild(el);
+    // w trybie pełnoekranowym przeglądarka pokazuje tylko element pełnoekranowy — menu musi być w jego środku
+    (document.fullscreenElement || document.body).appendChild(el);
     const r = el.getBoundingClientRect();
-    el.style.left = Math.max(4, Math.min(x, window.innerWidth - r.width - 4)) + "px";
+    const touch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    if (touch) y = y - r.height - 28 >= 4 ? y - r.height - 28 : y + 28;   // nad palcem (żeby go nie zasłaniać), a gdy brak miejsca pod nim
+    el.style.left = Math.max(4, Math.min(x - (touch ? r.width / 2 : 0), window.innerWidth - r.width - 4)) + "px";
     el.style.top = Math.max(4, Math.min(y, window.innerHeight - r.height - 4)) + "px";
+    annMenuOpenedAt = Date.now();
     annMenuEl = el;
     annEdit.menuOpen = true;
 }
@@ -494,7 +516,7 @@ function annObjectMenu(x, y) {
 function annAddMenu(x, y) {
     const pick = tool => () => { annEdit.tool = tool; annEdit.pending = []; annEdit.cursor = null; annEdit.selected = null; annSyncTools(); if (annCurrent) annCurrent.render(); };
     annShowMenu(x, y, [
-        { label: "＋ Linia (2 punkty; Shift = pozioma)", run: pick("line") },
+        { label: window.matchMedia && window.matchMedia("(pointer: coarse)").matches ? "＋ Linia (2 punkty)" : "＋ Linia (2 punkty; Shift = pozioma)", run: pick("line") },
         { label: "＋ Cup (3 punkty)", run: pick("cup") },
     ]);
 }

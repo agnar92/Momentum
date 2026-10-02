@@ -591,3 +591,35 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 .sync-panel ol { margin: 0 0 8px; padding-left: 18px; }
 .sync-panel[hidden], .sync-panel [hidden] { display: none; }
 #syncBtn.sync-error { border-color: #ff6b6b; color: #ff6b6b; }
+
+/* Telefon, pełny ekran: tylko ticker + najważniejsze przyciski, reszta miejsca dla wykresu */
+.wl-chart-box.full.phone-full { padding: 6px 8px; }
+.wl-chart-box.full.phone-full .wl-chart-sub,
+.wl-chart-box.full.phone-full .wl-chart-stats,
+.wl-chart-box.full.phone-full #chartPattern,
+.wl-chart-box.full.phone-full #chartEstimates,
+.wl-chart-box.full.phone-full #chartTools,
+.wl-chart-box.full.phone-full #chartLayoutBtn,
+.wl-chart-box.full.phone-full #chartEstBtn,
+.wl-chart-box.full.phone-full #chartLogBtn,
+.wl-chart-box.full.phone-full #chartTv,
+.wl-chart-box.full.phone-full #chartFv,
+.wl-chart-box.full.phone-full #chartZx { display: none; }
+.wl-chart-box.full.phone-full .wl-chart-titles { flex: 1 1 100%; padding-right: 0; min-width: 0; }
+.wl-chart-box.full.phone-full .wl-chart-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.wl-chart-box.full.phone-full .wl-chart-head { flex-wrap: wrap; align-items: center; gap: 6px; }
+@media (orientation: landscape) {   /* telefon w poziomie: tytuł i przyciski w jednym rzędzie */
+    .wl-chart-box.full.phone-full .wl-chart-head { flex-wrap: nowrap; }
+    .wl-chart-box.full.phone-full .wl-chart-titles { flex: 1 1 auto; }
+    .wl-chart-box.full.phone-full .wl-chart-head .chart-modal-close { position: static; }
+    .wl-chart-box.full.phone-full .wl-chart-titles { padding-right: 0; }
+}
+.wl-chart-box.full.phone-full .wl-chart-head .btn { flex: 0 0 auto; padding: 6px 10px; }
+.wl-chart-box.full.phone-full .wl-chart-head { position: relative; }
+.wl-chart-box.full.phone-full .wl-chart-head .chart-modal-close { position: absolute; top: 0; right: 0; }
+.wl-chart-box.full.phone-full .wl-chart-titles { padding-right: 44px; }
+.wl-chart-box.full.phone-full .wl-chart-body svg { max-height: none; }
+@media (orientation: landscape) {
+    .wl-chart-box.full.phone-full .wl-chart-head .chart-modal-close { position: static; }
+    .wl-chart-box.full.phone-full .wl-chart-titles { padding-right: 0; }
+}
