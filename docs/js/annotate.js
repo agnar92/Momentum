@@ -265,6 +265,17 @@ function annOverlay(ctx) {
             const isSel = sel && sel.type === "line" && sel.id === line.id;
             body += `<polyline fill="none" stroke="${col}" stroke-width="${isSel ? 3 : 2}" points="${pts2s(main)}"><title>${ANN_KIND_LABELS[line.kind] || "linia"}${line.alert ? " · alert " + ANN_DIR_LABELS[line.alert] : ""}</title></polyline>`;
             if (ext.length > 1) body += `<polyline fill="none" stroke="${col}" stroke-width="1.4" stroke-dasharray="2 4" points="${pts2s(ext)}"/>`;
+            // cena linii na końcu (dziś, jeśli linia sięga ostatniej świecy) — wiadomo, gdzie na TradingView szukać przebicia
+            let lastReal = m.n - 1;
+            while (lastReal > 0 && !Number.isFinite(m.h[lastReal])) lastReal--;
+            const reachesNow = ext.length > 1 || i1 >= lastReal;
+            const endPrice = reachesNow ? lineValueAt(line, m.weeks[lastReal]) : line.y1;
+            if (Number.isFinite(endPrice) && endPrice > 0) {
+                const ex = ext.length > 1 ? ext[1][0] : b[0];
+                const lx = Math.min(plotRight - 4, Math.max(L.left + 30, ex));
+                const ly = Math.max(L.price.y + geom.fs(12), Math.min(L.price.y + L.price.h - 4, geom.yP(endPrice) - 5));
+                body += `<text x="${lx}" y="${ly}" font-size="${geom.fs(11)}" font-weight="700" fill="${col}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${endPrice.toFixed(2)}</text>`;
+            }
             const hasNote = !!(line.note && line.note.trim());
             if (hasNote) {
                 // ikona notatki z lewej strony na początku linii; najechanie na linię lub ikonę (dotyk: stuknięcie ikony) pokazuje treść
