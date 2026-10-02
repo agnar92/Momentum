@@ -283,9 +283,23 @@ function fmtCompact(v) {
     return v.toFixed(2);
 }
 
+// Układ bez pasa legendy (telefon z wyłączoną legendą): pasek znika, a wolne miejsce dostaje wykres.
+function dropLegend(L) {
+    const dy = L.legend.h + 4;
+    const out = { ...L, legend: { y: L.price.y - dy, h: 0 }, legendRows: 0 };
+    ["price", "volume", "eps"].forEach(k => { out[k] = { ...L[k], y: L[k].y - dy }; });
+    if (L.axisY != null) out.axisY = L.axisY - dy;
+    out.height = L.height - dy;
+    return out;
+}
+
 function pickLayout(opts = {}) {
-    if (opts.fit) return fitLayout(opts.fit.w, opts.fit.h);
-    return opts.compact ? CHART_LAYOUT_COMPACT : (opts.wide ? CHART_LAYOUT_WIDE : CHART_LAYOUT);
+    if (opts.fit) {
+        const L = fitLayout(opts.fit.w, opts.fit.h);
+        return opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4)) : L;
+    }
+    const L = opts.compact ? CHART_LAYOUT_COMPACT : (opts.wide ? CHART_LAYOUT_WIDE : CHART_LAYOUT);
+    return opts.hideLabels ? dropLegend(L) : L;
 }
 
 // Daty <-> indeks świecy (ułamkowy, interpolacja po kalendarzu; poza zakresem ekstrapolacja średnią odległością świec).
@@ -398,7 +412,7 @@ function chartSvg(m, opts = {}) {
         const last = [...m.spx].reverse().find(Number.isFinite);
         const first = m.spx.find(Number.isFinite);
         const chg = ((last / first - 1) * 100);
-        parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 12}" fill="${CHART_COLORS.bench}" font-size="${fs(11)}" font-weight="600">S&amp;P 500 ${fmtCompact(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(0)}% w oknie)</text>`);
+        if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 12}" fill="${CHART_COLORS.bench}" font-size="${fs(11)}" font-weight="600">S&amp;P 500 ${fmtCompact(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(0)}% w oknie)</text>`);
         niceTicks(bExt[0], bExt[1], 2).forEach(t => {
             parts.push(`<text x="${L.width - L.right + 6}" y="${yB(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
         });
@@ -508,7 +522,7 @@ function chartSvg(m, opts = {}) {
     }
     if (useLog) otherItems.push("skala log.");
     const legendRows = (opts.compact || L.legendRows === 2) ? [smaItems, otherItems] : [[...smaItems, ...otherItems]];
-    legendRows.forEach((row, r) => {
+    if (!opts.hideLabels) legendRows.forEach((row, r) => {
         parts.push(`<text x="${L.left + 4}" y="${L.legend.y + fs(11) + 2 + r * fs(11) * 1.5}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${row.join("  ")}</text>`);
     });
 
@@ -524,7 +538,7 @@ function chartSvg(m, opts = {}) {
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);
     }
     parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), L.volume.y + L.volume.h - Math.min(1, v / vMax) * (L.volume.h - fs(11) - 4)] : null), CHART_COLORS.volAvg, 1.3));
-    parts.push(`<text x="${L.left + 4}" y="${L.volume.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${m.daily ? "Wolumen dzienny · średnia 10 dni" : "Wolumen tygodniowy · średnia 10 tyg."}</text>`);
+    if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.volume.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${m.daily ? "Wolumen dzienny · średnia 10 dni" : "Wolumen tygodniowy · średnia 10 tyg."}</text>`);
     parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
 
     // --- 4. EPS kwartalny
@@ -541,7 +555,7 @@ function chartSvg(m, opts = {}) {
             const c90 = estimateChange(sr.h, 90);
             return `<tspan fill="${sr.color}">— EPS ${sr.label}: ${sr.h[sr.h.length - 1][1]}${c90 === null ? "" : ` (${c90 >= 0 ? "+" : ""}${c90.toFixed(0)}% / 90d)`}</tspan>`;
         }).join("  ");
-        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}" font-weight="600">Konsensus EPS (zmiana %):  ${legend}</text>`);
+        if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.eps.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}" font-weight="600">Konsensus EPS (zmiana %):  ${legend}</text>`);
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yE(0)}" y2="${yE(0)}" stroke="${CHART_COLORS.grid}" stroke-dasharray="3 3"/>`);
         parts.push(`<text x="${L.width - L.right + 6}" y="${yE(0) + 4}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">0%</text>`);
         pctSeries.forEach(sr => {
@@ -558,7 +572,7 @@ function chartSvg(m, opts = {}) {
             }
         });
     } else if (m.eps.length) {
-        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
+        if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
         const vals = m.eps.map(q => q.e);
         const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
         const yE = makeYScale(lo, hi, L.eps.y + 34, L.eps.h - 50);
@@ -573,12 +587,14 @@ function chartSvg(m, opts = {}) {
             }
         });
     } else {
-        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
+        if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
         parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 40}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Brak danych o EPS kwartalnym dla tej spółki.</text>`);
     }
 
     // --- crosshair (ustawiany w attachChartHover)
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
+    // data wskazanej świecy na dole osi (pokazywana przy najechaniu myszką)
+    parts.push(`<text id="chartCrossDate" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
     if (opts.geomOut) Object.assign(opts.geomOut, { L, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres ${m.daily ? "dzienny" : "tygodniowy"} ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
 }
@@ -615,12 +631,22 @@ function chartReadout(m, i) {
         + ` · wol. ${Number.isFinite(m.v[i]) ? (m.v[i] / 1000).toFixed(1) + " mln" : "—"}${rs}${spx}`;
 }
 
+// "2026-08-13" -> "czw 13 sie 2026" (dzień tygodnia tylko na wykresie dziennym; tygodniowa świeca to tydzień kończący się tą datą)
+const DAYS_PL = ["ndz", "pon", "wt", "śr", "czw", "pt", "sob"];
+function fmtCrossDate(d, daily) {
+    if (!d) return "";
+    const dow = daily ? DAYS_PL[new Date(d + "T00:00:00Z").getUTCDay()] + " " : "tydz. do ";
+    return `${dow}${Number(d.slice(8, 10))} ${MONTHS_PL[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+}
+
 function attachChartHover(container, m, readoutEl, L) {
     const svg = container.querySelector("#chartSvg");
     const cross = container.querySelector("#chartCross");
+    const dateEl = container.querySelector("#chartCrossDate");
     if (!svg || !cross) return;
     const plotW = L.width - L.left - L.right;
-    svg.addEventListener("mousemove", ev => {
+    // nasłuch na kontenerze (a nie na svg): działa też, gdy nad wykresem leży warstwa edycji własnych linii
+    container.addEventListener("mousemove", ev => {
         const rect = svg.getBoundingClientRect();
         const vx = (ev.clientX - rect.left) / rect.width * L.width;
         const i = Math.floor((vx - L.left) / plotW * m.n);
@@ -629,10 +655,16 @@ function attachChartHover(container, m, readoutEl, L) {
         cross.setAttribute("x1", cx);
         cross.setAttribute("x2", cx);
         cross.setAttribute("opacity", "0.45");
+        if (dateEl) {
+            dateEl.textContent = fmtCrossDate(m.weeks[i], m.daily);
+            dateEl.setAttribute("x", Math.max(L.left + 60, Math.min(L.width - L.right - 60, cx)));
+            dateEl.setAttribute("opacity", "1");
+        }
         readoutEl.textContent = chartReadout(m, i);
     });
-    svg.addEventListener("mouseleave", () => {
+    container.addEventListener("mouseleave", () => {
         cross.setAttribute("opacity", "0");
+        if (dateEl) dateEl.setAttribute("opacity", "0");
         readoutEl.textContent = chartReadout(m, m.lastIdx);
     });
 }
