@@ -130,7 +130,7 @@ function annExportJson(store, now = new Date()) {
 // ---------- stan, zapis ----------
 
 let annStore = {};
-const annEdit = { on: false, tool: null, selected: null, kind: "res", alert: "", pending: [], cursor: null };
+const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", pending: [], cursor: null };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
 
@@ -314,7 +314,21 @@ function annOverlay(ctx) {
             annEdit.cursor = null;
             finishPending();
         } else {
-            annEdit.selected = null; annSyncTools();
+            // bez narzędzia: przeciągnięcie po pustym wykresie rysuje linię (szybkie rysowanie, np. przy trzymanej spacji);
+            // samo kliknięcie tylko odznacza
+            const startPt = toSvg(ev), start = snap(startPt);
+            ov.setPointerCapture(ev.pointerId);
+            const move = e => { annEdit.pending = [start]; annEdit.cursor = snap(toSvg(e)); render(); };
+            const up = e => {
+                ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
+                const endPt = toSvg(e), end = snap(endPt);
+                annEdit.cursor = null;
+                if (Math.hypot(endPt.x - startPt.x, endPt.y - startPt.y) > 8) { annEdit.pending = [start, end]; annEdit.tool = "line"; finishPending(); }
+                else { annEdit.pending = []; annEdit.selected = null; annSyncTools(); }
+                render();
+            };
+            ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
+            return;
         }
         render();
     });
@@ -337,8 +351,9 @@ function annSelectedObject() {
 function annSyncTools() {
     const $ = id => document.getElementById(id);
     if (!$("chartTools")) return;
-    $("chartTools").hidden = !annEdit.on;
+    $("chartTools").hidden = !annEdit.on || annEdit.spaceOn;   // przy trzymanej spacji bez paska (nie przesuwa wykresu)
     $("chartEditBtn").classList.toggle("active", annEdit.on);
+    $("chartEditBtn").title = "Rysuj własne linie trendu z alertem i poprawiaj cupy (albo przytrzymaj spację)";
     $("toolLine").classList.toggle("active", annEdit.tool === "line");
     $("toolCup").classList.toggle("active", annEdit.tool === "cup");
     const obj = annSelectedObject();
@@ -348,7 +363,7 @@ function annSyncTools() {
     $("toolDel").disabled = !obj;
     $("annHint").textContent = annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy)."
         : annEdit.tool === "cup" ? "Kliknij trzy punkty: lewy brzeg, dołek, prawy brzeg miseczki."
-        : obj ? "Przeciągnij kółka, żeby poprawić; Usuń kasuje zaznaczone." : "Wybierz narzędzie albo kliknij linię/cup, żeby ją poprawić.";
+        : obj ? "Przeciągnij kółka, żeby poprawić; Usuń kasuje zaznaczone." : "Przeciągnij po wykresie, żeby narysować linię, albo wybierz narzędzie / kliknij linię lub cup, żeby ją poprawić.";
     const R = annCurrent && annStore[annCurrent.ticker];
     $("annNote").value = R ? R.note || "" : "";
 }
@@ -358,10 +373,11 @@ function annInitUI(onRedraw) {
     const $ = id => document.getElementById(id);
     if (!$("chartEditBtn")) return;
     const tool = name => () => { annEdit.tool = annEdit.tool === name ? null : name; annEdit.pending = []; annEdit.cursor = null; annSyncTools(); if (annCurrent) annCurrent.render(); };
-    $("chartEditBtn").addEventListener("click", () => {
-        annEdit.on = !annEdit.on;
-        annEdit.tool = null; annEdit.pending = []; annEdit.selected = null;
-        if (annEdit.on && annCurrent) {   // pierwsze wejście: przejmij automatyczne linie/cupy jako własne (z migawką algorytmu)
+    const setEdit = (on, bySpace) => {
+        annEdit.on = on;
+        annEdit.spaceOn = on && bySpace;
+        annEdit.tool = null; annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null;
+        if (on && annCurrent) {   // pierwsze wejście: przejmij automatyczne linie/cupy jako własne (z migawką algorytmu)
             const R = annRecord(annCurrent.ticker, true);
             const hadAuto = R.hideAutoLines || R.hideAutoCups;
             annAdoptAuto(R, annCurrent.full);
@@ -369,7 +385,22 @@ function annInitUI(onRedraw) {
         }
         annSyncTools();
         annOnRedraw();
+    };
+    $("chartEditBtn").addEventListener("click", () => setEdit(!annEdit.on, false));
+    // Przytrzymana SPACJA = tymczasowy tryb edycji (po puszczeniu wraca do podglądu); nie działa w polach tekstowych.
+    const chartOpen = () => !$("chartModal").hidden;
+    const typing = ev => /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
+    document.addEventListener("keydown", ev => {
+        if (ev.key !== " " || !chartOpen() || typing(ev)) return;
+        ev.preventDefault();                                   // bez przewijania strony / klikania zogniskowanego przycisku
+        if (!ev.repeat && !annEdit.on) setEdit(true, true);
     });
+    document.addEventListener("keyup", ev => {
+        if (ev.key !== " " || !annEdit.spaceOn) return;
+        ev.preventDefault();
+        setEdit(false, false);
+    });
+    window.addEventListener("blur", () => { if (annEdit.spaceOn) setEdit(false, false); });
     $("toolLine").addEventListener("click", tool("line"));
     $("toolCup").addEventListener("click", tool("cup"));
     $("kindSel").addEventListener("change", () => {

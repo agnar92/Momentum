@@ -26,9 +26,10 @@ files (English is fine for new, unrelated code).
 
 1. **`finviz.py`** — scrapes the free Finviz screener (`finviz.com/screener.ashx`, 20 rows/page, `r=` offset)
    with the filters in **`finviz_screen.json`** (`filters` = comma-separated Finviz filter codes, copy them
-   from a Finviz screener URL; `max_tickers` = cap). Default: market cap ≥ $2B (`cap_midover`), price above
+   from a Finviz screener URL; `max_tickers` = cap). Default (the user's own Finviz screener URL): price above $1 (`sh_price_o1`), price above
    SMA50 and SMA200 (`ta_sma50_pa`, `ta_sma200_pa`), positive EPS growth this year (`fa_epsyoy_pos`) and positive EPS
-   forecast next year (`fa_epsyoy1_pos`) ≈ 290 stocks. The 5-year EPS filter (`fa_eps5years_pos`) was deliberately
+   forecast next year (`fa_epsyoy1_pos`) ≈ 500 stocks (there is deliberately NO market-cap filter any more; `max_tickers`
+   = 600 is the cap — if the Finviz total approaches it, raise it or add e.g. `cap_smallover`). The 5-year EPS filter (`fa_eps5years_pos`) was deliberately
    dropped at the user's request so young leaders / recent IPOs are not cut out. It queries three views (Overview `111`,
    Valuation `121`, Financial `161`) with the same filters and merges rows by ticker, mapping columns by
    header text (`VIEW_COLUMNS`) — sector, industry, market cap, P/E, EPS this Y / next Y / past 5Y / next 5Y,
@@ -149,7 +150,7 @@ its own band above the price panel so labels never cover candles.
 
 Browser-only (no backend): annotations live in `localStorage` `momentum_watchlist_annotations`, keyed by ticker, and are
 stored in DATES + prices so they show on both the daily and weekly chart. Chart modal → **✎ Edytuj** opens a toolbar:
-`＋ Linia` (two clicks; x snaps to a bar, y snaps to that bar's High/Low when near), `＋ Cup` (three clicks: left rim, bottom,
+**Holding SPACE** (chart open, focus not in a text field) turns edit mode on temporarily (`annEdit.spaceOn`; released → back to view mode, toolbar stays hidden so the chart does not jump); with no tool selected, dragging across the empty chart draws a line (drag > 8 px; a plain click only deselects). `＋ Linia` (two clicks; x snaps to a bar, y snaps to that bar's High/Low when near), `＋ Cup` (three clicks: left rim, bottom,
 right rim), click a line/cup to select it and drag its round handles (line ends; cup L/B/R), `Typ` (opór/wsparcie/dowolna),
 `Alert` (nad/pod linią), `Usuń`, `Przywróć auto`, a free-text note. The first time edit mode opens for a ticker, the
 auto-detected lines/cups of the current view are COPIED as the user's own (`fromAuto`), the automatic ones are hidden

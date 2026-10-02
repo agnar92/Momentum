@@ -23,7 +23,7 @@ from lxml import html as lxml_html
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "finviz_screen.json"
 
-DEFAULT_FILTERS = "cap_midover,ta_sma50_pa,ta_sma200_pa,fa_epsyoy_pos,fa_epsyoy1_pos"
+DEFAULT_FILTERS = "sh_price_o1,ta_sma50_pa,ta_sma200_pa,fa_epsyoy_pos,fa_epsyoy1_pos"
 DEFAULT_MAX_TICKERS = 600
 MIN_TICKERS = 15   # poniżej tego uznajemy odpowiedź za błędną (blokada/zmiana układu strony)
 PAGE_SIZE = 20     # darmowy Finviz zwraca 20 wierszy na stronę
