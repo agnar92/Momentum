@@ -51,6 +51,7 @@ function fitLayout(w, h) {
     return L;
 }
 const COMPACT_FONT_SCALE = 1.5;
+const FIT_FONT_SCALE = 1.1;
 const COMPACT_WEEKS = 52;
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
@@ -388,7 +389,8 @@ function estimateText(entry, price) {
 
 function chartSvg(m, opts = {}) {
     const L = pickLayout(opts);
-    const fs = n => +(n * (opts.compact ? COMPACT_FONT_SCALE : (L.fontScale || 1))).toFixed(1);
+    // układ fit ma viewBox w prawdziwych pikselach (pełny ekran telefonu, komórki siatki) — tam czcionki ×1,5 byłyby za duże
+    const fs = n => +(n * (opts.compact ? (opts.fit ? FIT_FONT_SCALE : COMPACT_FONT_SCALE) : (L.fontScale || 1))).toFixed(1);
     const plotW = L.width - L.left - L.right;
     const step = plotW / m.n;
     const x_ = i => L.left + (i + 0.5) * step;
@@ -458,7 +460,7 @@ function chartSvg(m, opts = {}) {
         // cena monitorowania miseczki = pivot (prawy brzeg)
         const pivot = Number.isFinite(cup.right) ? cup.right : null;
         if (pivot) {
-            const px = Math.min(Math.max(x(cup.i1), L.left + 30), L.width - L.right - 4);
+            const px = Math.min(Math.max(x(cup.i1), L.left + fs(80)), L.width - L.right - 4);
             parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, L.price.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
         }
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
