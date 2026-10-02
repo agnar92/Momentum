@@ -168,6 +168,18 @@ on the chart without needing the bar series.
 the tab badge) until OK is clicked (`ack`), and resets when the price returns to the other side (`annRefresh`). No push
 notifications — alerts are evaluated when the page loads / data is refreshed / a chart closes.
 
+## Annotation sync between devices (`docs/js/sync.js`)
+
+Optional, browser-only: the 🔔 Alerty tab has `☁ Synchronizacja`. The user pastes a GitHub token with the `gist` scope (same on
+PC and phone, stored in `localStorage` `momentum_watchlist_sync` together with the gist id); `annStore` is then mirrored to ONE
+secret gist (file `momentum-annotations.json`, found again by file name after the browser data is wiped, so lines come back
+by just re-entering the token). Cycle `syncNow` = GET gist → `mergeStores` (annotate.js: per ticker, lines/cups unioned by id,
+same id → the newer record (`editedAt`) wins, deletions are tombstones `rec.del = {id: time}` so they don't come back, "Przywróć auto" = `annResetRecord`)
+→ PATCH only if the merged result differs from the gist. It never sends less than the gist holds. Triggers: 2 s after every `annSave`
+(`annOnSave` hook), page load, tab becomes visible, back online, every 3 min while visible. Not synced: favourites, settings. Imports
+(`mergeImport`) are stamped `editedAt = now` so they win. Gist is "secret", not encrypted (no password layer yet). When touching annotation
+mutations, any deletion must add a tombstone, otherwise sync resurrects the object.
+
 ## Analyst estimates (Yahoo via yfinance) — `Estymaty` button
 
 `update_estimates` (watchlist.py → `docs/data/estimates.json` = `{updated, stocks:{T:{f, pt:{low,mean,median,high}, p:{"0y","+1y":{avg,low,high,n,g,ya,u7,u30,d30,d7,h:[[date,value]...]}}}}}`)

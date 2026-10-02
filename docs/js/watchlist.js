@@ -870,6 +870,7 @@ if (typeof document !== "undefined") {
         initControls();
         annInitUI(drawChart);
         initAnnotationIO();
+        syncInit(() => { updateAlertBadge(); renderTable(); if (!document.getElementById("chartModal").hidden) drawChart(); });
         showTab(state.tab);
         hideLoadingOverlay();
     })();

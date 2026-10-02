@@ -99,3 +99,23 @@ test("annFlatten: oba końce linii na średniej cenie (kąt 0°)", () => {
     assert.equal(l.y0, 102.25);
     assert.equal(l.y1, 102.25);
 });
+
+test("mergeStores: union of lines by id, newer record wins, deletions are final", () => {
+    const { mergeStores, annResetRecord } = require(path.join("..", "..", "docs", "js", "annotate.js"));
+    const l1 = { id: "a", x0: "2026-01-05", y0: 1, x1: "2026-01-12", y1: 2 }, l2 = { id: "b", x0: "2026-01-05", y0: 3, x1: "2026-01-12", y1: 4 };
+    const pc = { ...annEmptyRecord(), lines: [l1], note: "pc", editedAt: "2026-02-01T10:00:00Z" };
+    const ph = { ...annEmptyRecord(), lines: [l2, { ...l1, y1: 9 }], note: "tel", editedAt: "2026-02-01T11:00:00Z" };
+    const m = mergeStores({ AAA: pc, ZZZ: pc }, { AAA: ph, BBB: ph });
+    assert.deepEqual(Object.keys(m).sort(), ["AAA", "BBB", "ZZZ"]);
+    assert.equal(m.AAA.note, "tel");
+    assert.deepEqual(m.AAA.lines.map(l => l.id).sort(), ["a", "b"]);
+    assert.equal(m.AAA.lines.find(l => l.id === "a").y1, 9);   // ta sama linia: wersja z nowszego rekordu
+    // usunięcie na PC (nagrobek) nie wraca z telefonu
+    const pcDel = { ...pc, lines: [], del: { a: "2026-02-01T12:00:00Z" }, editedAt: "2026-02-01T12:00:00Z" };
+    assert.deepEqual(mergeStores({ AAA: pcDel }, { AAA: ph }).AAA.lines.map(l => l.id), ["b"]);
+    // „Przywróć auto” czyści też linie z drugiego urządzenia
+    const reset = annResetRecord(pc, new Date("2026-02-01T13:00:00Z"));
+    assert.deepEqual(mergeStores({ AAA: reset }, { AAA: { ...pc, lines: [l1] } }).AAA.lines, []);
+    // pusty lokalny zestaw nigdy nie kasuje zdalnego
+    assert.equal(mergeStores({}, { AAA: ph }).AAA.lines.length, 2);
+});

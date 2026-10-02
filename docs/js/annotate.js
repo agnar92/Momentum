@@ -126,9 +126,42 @@ function mergeImport(store, text) {
     Object.keys(data.annotations).forEach(t => {
         const r = data.annotations[t];
         if (!r || typeof r !== "object") return;
-        out[t] = { ...annEmptyRecord(), ...r, lines: Array.isArray(r.lines) ? r.lines : [], cups: Array.isArray(r.cups) ? r.cups : [] };
+        // editedAt = teraz: zaimportowane dane mają wygrać przy późniejszej synchronizacji z innym urządzeniem
+        out[t] = { ...annEmptyRecord(), ...r, lines: Array.isArray(r.lines) ? r.lines : [], cups: Array.isArray(r.cups) ? r.cups : [], editedAt: new Date().toISOString() };
     });
     return out;
+}
+
+// ---------- scalanie między urządzeniami (synchronizacja) ----------
+// Rekord spółki: linie/cupy łączone po id (ta sama linia: wersja z nowszego rekordu), usunięcia pamiętamy jako nagrobki
+// rec.del = { id: czas } — usunięta linia nie wraca z drugiego urządzenia. Pola skalarne (notatka, flagi ukrycia, migawka)
+// bierzemy z nowszego rekordu (editedAt).
+function mergeRecords(a, b) {
+    a = { ...annEmptyRecord(), ...a }; b = { ...annEmptyRecord(), ...b };
+    const base = (b.editedAt || "") > (a.editedAt || "") ? b : a;
+    const other = base === a ? b : a;
+    const del = { ...(other.del || {}), ...(base.del || {}) };
+    const union = key => {
+        const m = new Map();
+        [other[key] || [], base[key] || []].forEach(arr => arr.forEach(it => { if (it && it.id && !del[it.id]) m.set(it.id, it); }));
+        return [...m.values()];
+    };
+    return { ...other, ...base, lines: union("lines"), cups: union("cups"), del, editedAt: base.editedAt || other.editedAt || null };
+}
+
+function mergeStores(a, b) {
+    const out = {};
+    new Set([...Object.keys(a || {}), ...Object.keys(b || {})]).forEach(t => {
+        out[t] = a && a[t] && b && b[t] ? mergeRecords(a[t], b[t]) : { ...annEmptyRecord(), ...((a && a[t]) || (b && b[t])) };
+    });
+    return out;
+}
+
+// „Przywróć auto”: pusty rekord z nagrobkami wszystkich dotychczasowych linii i cupów (żeby nie wróciły z drugiego urządzenia)
+function annResetRecord(rec, now = new Date()) {
+    const del = { ...((rec && rec.del) || {}) };
+    ((rec && rec.lines) || []).concat((rec && rec.cups) || []).forEach(x => { del[x.id] = now.toISOString(); });
+    return { ...annEmptyRecord(), del, editedAt: now.toISOString() };
 }
 
 function annExportJson(store, now = new Date()) {
@@ -150,8 +183,15 @@ function annLoad() {
     return annStore;
 }
 
-function annSave() {
+let annOnSave = () => {};   // wywoływane po każdej zmianie zapisanej przez użytkownika (synchronizacja: js/sync.js)
+
+function annWriteLocal() {
     try { localStorage.setItem(ANN_KEY, JSON.stringify(annStore)); } catch (e) { /* brak localStorage */ }
+}
+
+function annSave() {
+    annWriteLocal();
+    annOnSave();
 }
 
 function annRecord(ticker, create = false) {
@@ -560,12 +600,13 @@ function annInitUI(onRedraw) {
         if (!obj) return;
         const R = annStore[annCurrent.ticker];
         if (annEdit.selected.type === "line") R.lines = R.lines.filter(l => l.id !== obj.id); else R.cups = R.cups.filter(c => c.id !== obj.id);
+        R.del = { ...(R.del || {}), [obj.id]: new Date().toISOString() };   // nagrobek, żeby synchronizacja nie przywróciła linii
         R.editedAt = new Date().toISOString();
         annEdit.selected = null; annSave(); annSyncTools(); annCurrent.render();
     });
     $("toolRestore").addEventListener("click", () => {
         if (!annCurrent || !confirm("Usunąć własne linie i cupy tej spółki i wrócić do wykrytych automatycznie? (Alerty na tych liniach znikną.)")) return;
-        delete annStore[annCurrent.ticker];
+        annStore[annCurrent.ticker] = annResetRecord(annStore[annCurrent.ticker]);
         annEdit.selected = null; annSave(); annSyncTools(); annOnRedraw();
     });
     $("annNote").addEventListener("input", () => {
@@ -580,6 +621,6 @@ function annInitUI(onRedraw) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        bizIndex, lineValueAt, alertState, annFlatten, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT,
+        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT,
     };
 }

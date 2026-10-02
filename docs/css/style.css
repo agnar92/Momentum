@@ -584,3 +584,10 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 .ann-menu-item.danger { color: #ff6b6b; }
 .ann-menu-sep { height: 1px; margin: 4px 2px; background: var(--border); }
 @media (pointer: coarse) { .ann-menu-item { padding: 12px 14px; font-size: 15px; } }
+
+/* Synchronizacja adnotacji (Gist) */
+.sync-panel { flex: 1 1 100%; padding: 8px 10px; background: var(--panel-alt); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-dim); }
+.sync-panel p { margin: 0 0 6px; }
+.sync-panel ol { margin: 0 0 8px; padding-left: 18px; }
+.sync-panel[hidden], .sync-panel [hidden] { display: none; }
+#syncBtn.sync-error { border-color: #ff6b6b; color: #ff6b6b; }
