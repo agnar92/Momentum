@@ -29,6 +29,7 @@ const CHART_LAYOUT_COMPACT = {
 const COMPACT_FONT_SCALE = 1.5;
 const COMPACT_WEEKS = 52;
 const COMPACT_DAYS = 75;
+const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 const SMA_COLORS = { "SMA 10": "#3fbf6e", "SMA 20": "#f5d547", "SMA 50": "#c77dff", "SMA 200": "#e0455a", "SMA 10 tyg.": "#3fbf6e", "SMA 40 tyg.": "#e0455a" };
 const CHART_COLORS = {
     up: "#2ecc71", down: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
@@ -151,20 +152,30 @@ function buildChartModel(charts, ticker, stock) {
     };
 }
 
-// Ostatnie n tygodni modelu (dla układu kompaktowego); wyniki EPS przesuwają się o odciętą liczbę tygodni.
-function sliceModel(m, n) {
-    if (m.n <= n) return m;
-    const off = m.n - n;
-    const cut = arr => arr.slice(off);
+// Okno n słupków kończące się przed indeksem end (domyślnie: ostatnie n); wyniki EPS/linie przesuwają się o odciętą część.
+function sliceModel(m, n, end = m.n) {
+    end = Math.max(1, Math.min(m.n, Math.round(end)));
+    n = Math.max(1, Math.min(end, Math.round(n)));
+    if (n >= m.n) return m;
+    const off = end - n;
+    const cut = arr => arr.slice(off, end);
     return {
         ...m, weeks: cut(m.weeks), n, o: cut(m.o), h: cut(m.h), l: cut(m.l), c: cut(m.c), v: cut(m.v),
         smas: m.smas.map(x => ({ ...x, values: cut(x.values) })), spx: m.spx ? cut(m.spx) : null, rs: cut(m.rs),
-        eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0),
-        lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0),
-        cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off })).filter(c => c.i1 > 0),
+        eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0 && q.week < n),
+        lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0 && l.i0 < n),
+        cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off })).filter(c => c.i1 > 0 && c.i0 < n),
         rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
-        lastIdx: m.lastIdx - off,
+        lastIdx: Math.min(m.lastIdx - off, n - 1),
     };
+}
+
+// Normalizuje okno suwaka {n, end} do zakresu danych (n ≥ MIN_WINDOW, end ≤ total); null = domyślne okno.
+function clampWindow(w, total, defN) {
+    const minN = Math.min(MIN_WINDOW, total);
+    const n = Math.max(minN, Math.min(total, Math.round(w && w.n ? w.n : defN)));
+    const end = Math.max(n, Math.min(total, Math.round(w && Number.isFinite(w.end) ? w.end : total)));
+    return { n, end };
 }
 
 const VOL_AVG_WEEKS = 10;       // średnia wolumenu ~50 sesji (jak linia średniego wolumenu w MarketSmith)
@@ -298,7 +309,7 @@ function chartSvg(m, opts = {}) {
         const y1 = Math.min(Math.max(yP(at(l.i1)), L.price.y), L.price.y + L.price.h);
         parts.push(`<line x1="${x_(i0)}" y1="${y0}" x2="${x_(l.i1)}" y2="${y1}" stroke="${col}" stroke-width="1.6" stroke-dasharray="6 3"><title>${l.kind === "res" ? "Opór" : "Wsparcie"} (${l.touches} dotknięć)</title></line>`);
     });
-    if (m.trend && m.trend.state === "wybicie" && Number.isFinite(m.h[m.lastIdx])) {
+    if (m.trend && m.trend.state === "wybicie" && m.lastIdx === m.n - 1 && Number.isFinite(m.h[m.lastIdx])) {
         const bx = x_(m.lastIdx), by = yP(m.h[m.lastIdx]) - 8;
         parts.push(`<path d="M${bx - 6},${by - 10} L${bx + 6},${by - 10} L${bx},${by} Z" fill="${CHART_COLORS.res}"><title>Wybicie z linii trendu</title></path>`);
     }
@@ -408,24 +419,85 @@ function attachChartHover(container, m, readoutEl, L) {
     });
 }
 
+// Suwak okna czasowego (jak w TC2000): minimapa z całą historią, ramka = widoczne okno.
+// Przeciągnięcie środka przesuwa okno, przeciągnięcie krawędzi zmienia jego długość.
+function sliderHtml(m) {
+    const finite = m.c.filter(Number.isFinite);
+    const lo = Math.min(...finite), hi = Math.max(...finite), span = hi - lo || 1;
+    const pts = m.c.map((v, i) => (Number.isFinite(v) ? `${(i / (m.n - 1 || 1) * 100).toFixed(2)},${(100 - (v - lo) / span * 100).toFixed(1)}` : null)).filter(Boolean).join(" ");
+    return `<div class="wl-range" id="chartRange"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${CHART_COLORS.bench}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`
+        + `<div class="wl-range-win" id="chartRangeWin" title="Przeciągnij, by przesunąć okno; krawędzie zmieniają jego długość"><span class="wl-range-h wl-range-l" data-h="l"></span><span class="wl-range-h wl-range-r" data-h="r"></span></div></div>`;
+}
+
+function attachRangeSlider(root, total, getWin, setWin) {
+    const track = root.querySelector("#chartRange"), win = root.querySelector("#chartRangeWin");
+    if (!track || !win) return;
+    const paint = () => {
+        const w = getWin();
+        win.style.left = `${(w.end - w.n) / total * 100}%`;
+        win.style.width = `${w.n / total * 100}%`;
+    };
+    paint();
+    win.addEventListener("pointerdown", ev => {
+        ev.preventDefault();
+        const mode = ev.target.dataset && ev.target.dataset.h ? ev.target.dataset.h : "m";
+        const w0 = getWin(), x0 = ev.clientX, perPx = total / track.getBoundingClientRect().width;
+        win.setPointerCapture(ev.pointerId);
+        const move = e => {
+            const d = Math.round((e.clientX - x0) * perPx);
+            const start0 = w0.end - w0.n;
+            let start = start0, end = w0.end;
+            if (mode === "m") { start = Math.max(0, Math.min(total - w0.n, start0 + d)); end = start + w0.n; }
+            else if (mode === "l") start = Math.max(0, Math.min(w0.end - MIN_WINDOW, start0 + d));
+            else end = Math.min(total, Math.max(start0 + MIN_WINDOW, w0.end + d));
+            setWin({ n: end - start, end });
+            paint();
+        };
+        const up = () => { win.removeEventListener("pointermove", move); win.removeEventListener("pointerup", up); win.removeEventListener("pointercancel", up); };
+        win.addEventListener("pointermove", move);
+        win.addEventListener("pointerup", up);
+        win.addEventListener("pointercancel", up);
+    });
+    track.addEventListener("pointerdown", ev => {
+        if (ev.target !== track && ev.target.tagName !== "svg" && ev.target.tagName !== "polyline") return;
+        const r = track.getBoundingClientRect(), w = getWin();
+        const end = Math.max(w.n, Math.min(total, Math.round((ev.clientX - r.left) / r.width * total + w.n / 2)));
+        setWin({ n: w.n, end });
+        paint();
+    });
+}
+
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
+// opts.window = {n, end} — okno suwaka (null = domyślne); opts.onWindow(w) — wołane po zmianie okna.
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
-    let m = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock);
-    if (!m) {
+    const full = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock);
+    if (!full) {
         container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${escapeHtml(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";
         return null;
     }
-    const full = m;
-    if (opts.compact) m = sliceModel(m, m.daily ? COMPACT_DAYS : COMPACT_WEEKS);
-    container.innerHTML = chartSvg(m, opts);
-    readoutEl.textContent = chartReadout(m, m.lastIdx);
-    attachChartHover(container, m, readoutEl, opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT);
+    const L = opts.compact ? CHART_LAYOUT_COMPACT : CHART_LAYOUT;
+    const defN = opts.compact ? (full.daily ? COMPACT_DAYS : COMPACT_WEEKS) : full.n;
+    let win = clampWindow(opts.window, full.n, defN);
+    container.innerHTML = '<div id="chartPlot"></div>' + sliderHtml(full);
+    const plot = container.querySelector("#chartPlot");
+    const draw = () => {
+        const m = sliceModel(full, win.n, win.end);
+        plot.innerHTML = chartSvg(m, opts);
+        readoutEl.textContent = chartReadout(m, m.lastIdx);
+        attachChartHover(plot, m, readoutEl, L);
+    };
+    draw();
+    attachRangeSlider(container, full.n, () => win, w => {
+        win = clampWindow(w, full.n, defN);
+        draw();
+        if (opts.onWindow) opts.onWindow(win);
+    });
     return full;
 }
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, dailyCharts, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, clampWindow, dailyCharts, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT,
     };
 }

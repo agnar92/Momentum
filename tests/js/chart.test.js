@@ -205,6 +205,13 @@ test("legend shows breakout volume confirmation", () => {
     assert.match(chartSvg(buildChartModel(c, "AAA", null)), /bez potwierdzenia/);
 });
 
+test("clampWindow i sliceModel(m, n, end) wycinają okno z historii", () => {
+    const { clampWindow } = require("../../docs/js/chart.js");
+    assert.deepEqual(clampWindow(null, 100, 52), { n: 52, end: 100 });
+    assert.deepEqual(clampWindow({ n: 5, end: 500 }, 100, 52), { n: 15, end: 100 });
+    assert.deepEqual(clampWindow({ n: 40, end: 10 }, 100, 52), { n: 40, end: 40 });
+});
+
 test("RS dots use precomputed 52-week highs; RS leading price gets a larger ring; legend shows relative change", () => {
     const c = charts();
     Object.assign(c.stocks.AAA, { rs_hi: [0, 0, 0, 1, 1], px_hi: [0, 0, 0, 0, 1], rs_line: { state: "przed ceną", dist_pct: -1 } });

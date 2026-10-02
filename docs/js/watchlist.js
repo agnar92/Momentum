@@ -427,6 +427,7 @@ function initControls() {
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
 
 let chartsPromise = null;
+let chartWindow = null;     // okno suwaka {n, end} (null = domyślne); zerowane przy nowej spółce / zmianie interwału
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
@@ -452,6 +453,7 @@ async function openChart(ticker) {
     document.getElementById("chartTv").href = tvUrlFor(ticker);
     const body = document.getElementById("chartBody");
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
+    chartWindow = null;
     body.innerHTML = `<div class="empty-state">Ładowanie wykresu…</div>`;
     modal.hidden = false;
     const charts = await loadCharts();
@@ -475,7 +477,8 @@ function chartStats(s) {
 function drawChart() {
     if (!currentChart) return null;
     return renderStockChart(document.getElementById("chartBody"), document.getElementById("chartReadout"),
-        currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, daily: chartDaily });
+        currentChart.charts, currentChart.ticker, currentChart.stock, { log: chartLog, compact: chartCompact, daily: chartDaily,
+            window: chartWindow, onWindow: w => { chartWindow = w; } });
 }
 
 function closeChart() {
@@ -500,6 +503,7 @@ function initChartModal() {
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
         chartDaily = !chartDaily;
+        chartWindow = null;
         try { localStorage.setItem(CHART_DAILY_KEY, chartDaily ? "1" : "0"); } catch (e) { /* ignoruj */ }
         updateTfButton();
         drawChart();
@@ -516,6 +520,7 @@ function initChartModal() {
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;
         chartCompact = compact;
+        chartWindow = null;
         drawChart();
     });
     document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal") closeChart(); });
