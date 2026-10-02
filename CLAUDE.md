@@ -158,8 +158,10 @@ saved in `rec.auto` — that snapshot + the user's corrected geometry + the note
 detectors; the user pastes the export (🔔 Alerty tab → "Eksportuj adnotacje", `annExportJson`) into the chat when asking
 for a review. User geometry is drawn by a separate SVG layer (`annOverlay`, `.chart-overlay` over `#chartPlot`; chart.js
 calls `opts.overlay` after each draw and exposes `geomOut` = layout/scales; `dateToIndex`/`indexToDate`/`cupArcPoints`
-are shared helpers). Line values use calendar-time interpolation (`lineValueAt`) both for drawing and for alerts, so the
-line you see is exactly the line that is evaluated.
+are shared helpers). A user line is drawn as a plain STRAIGHT segment between its two points (pixel-straight in the current scale) with a dotted
+straight extension to the last bar; alerts use `lineValueAt`: straight in trading-day space (`bizIndex`, weekend sits between
+Fri and Mon) and, for lines created on the log scale (`line.log`), straight in ln(price) — so the alert value matches the line
+on the chart without needing the bar series.
 **🔔 Alerty tab**: one row per line with an alert; value of the line at the stock's `as_of` vs the last close (`alertState`:
 `triggered` = price above/below the line, `near` = within 2 %); a freshly triggered alert stays "PRZEBITA — nowa" (counted in
 the tab badge) until OK is clicked (`ack`), and resets when the price returns to the other side (`annRefresh`). No push
