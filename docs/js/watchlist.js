@@ -28,7 +28,8 @@ const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
-const ALERTS_TV_KEY = "momentum_watchlist_alerts_tv";          // "0" = w zakładce Alerty bez wykresu TradingView
+const ALERTS_TV_KEY = "momentum_watchlist_alerts_tv";          // "0" = w zakładkach Alerty i Bazy bez wykresu TradingView
+const TV_TABS = ["ALERTS", "BASES"];                            // zakładki z układem "dzienny + TradingView"
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
 const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
 const FAVS_KEY = "momentum_watchlist_favs";
@@ -458,7 +459,7 @@ function showTab(tab, resetSort = true) {
     document.getElementById("drawerTitle").textContent = TAB_TITLES[tab];
     saveSettings();
     renderTable();
-    // zakładka Alerty ma własny układ (dzienny + TradingView) — przerysuj wykres po zmianie zakładki
+    // zakładki Alerty i Bazy mają własny układ (dzienny + TradingView) — przerysuj wykres po zmianie zakładki
     if (document.getElementById("chartLayoutBtn")) updateLayoutButton();
     if (currentChart && effectiveLayout() !== layoutBefore) { chartWindows = []; chartActiveCell = 0; drawChart(); }
 }
@@ -578,7 +579,7 @@ let estimatesPromise = null;
 let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartActiveCell = 0;     // w układzie „dzienny + tygodniowy”: który wykres ma fokus (tylko w nim można rysować linie / poprawiać cupy)
-let alertsTvOn = true;      // zakładka Alerty (widok dzielony): po prawej wykres TradingView zamiast tygodniowego
+let alertsTvOn = true;      // zakładki Alerty i Bazy (widok dzielony): po prawej wykres TradingView zamiast tygodniowego
 let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
@@ -667,11 +668,11 @@ function visibleTickers() {
 }
 
 // Komórki siatki wykresów dla bieżącego układu (pierwsza = zaznaczona spółka, jedyna edytowalna).
-// Układ wykresów faktycznie używany: w zakładce Alerty (widok dzielony) "dtv" = Twój wykres dzienny z liniami i alertami
+// Układ wykresów faktycznie używany: w zakładkach Alerty i Bazy (widok dzielony) "dtv" = Twój wykres dzienny z liniami i alertami
 // + wykres TradingView (na żywo, z własnymi narzędziami rysowania); w pozostałych zakładkach wybrany przyciskiem.
 function effectiveLayout() {
     if (!splitMode) return "1";
-    return state.tab === "ALERTS" && alertsTvOn ? "dtv" : chartLayout;
+    return TV_TABS.includes(state.tab) && alertsTvOn ? "dtv" : chartLayout;
 }
 
 // Widget TradingView (Advanced Chart): dzienny, z paskiem narzędzi rysowania. Rysunki w widgecie żyją tylko w tej karcie
@@ -709,7 +710,7 @@ function drawChart() {
     const cellHtml = (c, i) => {
         const st = state.data.stocks.find(x => x.ticker === c.ticker);
         const label = c.tv ? `TradingView — na żywo, rysuj własne linie <a href="${tvUrlFor(c.ticker)}" target="_blank" rel="noopener">otwórz ↗</a>`
-            : layout === "dtv" ? "dzienny — Twoje linie i alerty"
+            : layout === "dtv" ? "dzienny — Twoje linie, cupy i alerty"
             : layout === "dw" ? (c.daily ? "dzienny" : "tygodniowy") : escapeHtml(st && st.company ? st.company : "");
         return `<div class="chart-cell${i === activeIdx ? " primary" : ""}${c.tv ? " tv" : ""}" data-ticker="${escapeHtml(c.ticker)}"><div class="cell-head"><strong>${escapeHtml(c.ticker)}</strong> <span>${label}</span></div>`
             + `<div class="wl-chart-readout cell-readout"></div><div class="cell-body"></div></div>`;
@@ -785,8 +786,8 @@ function updateLayoutButton() {
     const names = { "1": "Układ: 1 wykres", dw: "Układ: dzienny + tygodniowy", "4": "Układ: 4 spółki" };
     btn.hidden = !splitMode;
     document.getElementById("chartLegendBtn").hidden = splitMode;
-    // w zakładce Alerty przycisk włącza / wyłącza wykres TradingView obok Twojego dziennego
-    btn.textContent = state.tab === "ALERTS" ? (alertsTvOn ? "Układ: dzienny + TradingView" : "TradingView: wył.") : names[chartLayout];
+    // w zakładkach Alerty i Bazy przycisk włącza / wyłącza wykres TradingView obok Twojego dziennego
+    btn.textContent = TV_TABS.includes(state.tab) ? (alertsTvOn ? "Układ: dzienny + TradingView" : "TradingView: wył.") : names[chartLayout];
     document.getElementById("chartTfBtn").hidden = splitMode && effectiveLayout() !== "1";   // interwał dotyczy tylko układu z jednym wykresem
 }
 
@@ -876,7 +877,7 @@ function initChartModal() {
     try { const saved = localStorage.getItem(CHART_LAYOUT_KEY); if (["1", "dw", "4"].includes(saved)) chartLayout = saved; } catch (e) { /* brak localStorage */ }
     try { alertsTvOn = localStorage.getItem(ALERTS_TV_KEY) !== "0"; } catch (e) { /* brak localStorage */ }
     document.getElementById("chartLayoutBtn").addEventListener("click", () => {
-        if (state.tab === "ALERTS") {
+        if (TV_TABS.includes(state.tab)) {
             alertsTvOn = !alertsTvOn;
             try { localStorage.setItem(ALERTS_TV_KEY, alertsTvOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
         } else {
