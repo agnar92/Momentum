@@ -25,6 +25,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const COMPACT_MAX_WIDTH = 640;
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
+const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
 const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
@@ -237,6 +238,9 @@ const COL = {
     depth: ["Głębokość", "base_depth_pct", s => `<td>${Number.isFinite(s.base_depth_pct) ? "−" + s.base_depth_pct + "%" : "—"}</td>`],
     baseWeeks: ["Tygodnie", "base_weeks", s => `<td>${s.base_weeks ?? "—"}</td>`],
     trend: ["Trendlinia", "tl_state", s => `<td${s.tl_state === "wybicie" ? ` class="positive"` : ""}>${s.tl_state ? (s.tl_state === "wybicie" ? `▲ wybicie${Number.isFinite(s.tl_vol_ratio) ? ` ×${s.tl_vol_ratio} wol.${s.tl_vol_ok ? " ✓" : ""}` : ""}` : "przy oporze") : ""}${s.tl_pattern ? ` <span class="muted small">${escapeHtml(s.tl_pattern)}</span>` : (s.tl_state ? "" : "—")}</td>`, "Wybicie / zbliżenie do linii oporu (dzienne, ostatnie ~70 sesji) i wykryty kształt"],
+    upside: ["Upside do ceny celu", "pt_upside_pct", s => `<td class="${Number.isFinite(s.pt_upside_pct) ? (s.pt_upside_pct > 0 ? "positive" : "negative") : ""}" title="${Number.isFinite(s.pt_mean) ? "Średnia cena celu analityków $" + s.pt_mean + (s.analysts ? " (" + s.analysts + " analityków)" : "") : ""}">${fmtPct(s.pt_upside_pct, 0)}</td>`, "Różnica między średnią ceną celu analityków a ceną dziś (Yahoo)"],
+    rev30: ["Rewizje EPS 30d", "eps_rev30_pct", s => pctCell(s.eps_rev30_pct), "Zmiana konsensusu EPS na bieżący rok obrachunkowy w ostatnich 30 dniach (rewizje w górę = analitycy podnoszą prognozy)"],
+    rev90: ["Rewizje EPS 90d", "eps_rev90_pct", s => pctCell(s.eps_rev90_pct), "To samo w ostatnich 90 dniach"],
     rsLine: ["Linia RS", "rs_line_dist_pct", s => `<td${s.rs_line_state === "przed ceną" ? ` class="positive"` : ""} title="Linia RS (cena / S&P 500): odległość od maksimum z 52 tyg.; „przed ceną” = RS na maksimum, a cena jeszcze nie">${s.rs_line_state ? (s.rs_line_state === "przed ceną" ? "● RS przed ceną" : "● RS na szczycie") + " " : ""}${Number.isFinite(s.rs_line_dist_pct) ? `<span class="muted small">${fmtPct(s.rs_line_dist_pct)}</span>` : "—"}</td>`, "Linia RS: stan (RS na maksimum 52 tyg. przed/razem z ceną) i odległość od jej maksimum"],
     alKind: ["Linia", "alert_kind", s => `<td>${ANN_KIND_LABELS[s.alert.kind] || "linia"}${s.alert.note ? "" : ""}</td>`],
     alDir: ["Alert", "alert_dir", s => `<td>${ANN_DIR_LABELS[s.alert.alert]}</td>`],
@@ -253,11 +257,11 @@ const COL = {
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "company", "sector"];
-const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "rsLine", "base", "trend", "spark", "earnings", "tv"];
+const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "rsLine", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
 const TAB_COLUMNS = {
     LIST: LIST_COLUMNS,
     FAV: LIST_COLUMNS,
-    RS: [...LEAD, "price", "rs", "rsLine", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
+    RS: [...LEAD, "price", "rs", "rsLine", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
     QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
     EMA34: [...LEAD, "price", "ema", "slope", "vsEma", "rs", "spark", "earnings", "tv"],
     ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
@@ -553,6 +557,10 @@ function initAnnotationIO() {
 let chartsPromise = null;
 let chartWinLen = { d: null, w: null };   // długość okna suwaka zapamiętana dla wszystkich spółek (osobno dzienny / tygodniowy)
 let chartWindows = [];      // okna suwaków {n, end} po jednym na wykres w siatce (puste = domyślne); zerowane przy nowej spółce / zmianie układu
+let chartEstOn = false;      // estymaty analityków na wykresie (cena celu + rewizje konsensusu EPS), przycisk „Estymaty”
+let estimatesPromise = null;
+let estimatesMap = null;
+let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
@@ -562,6 +570,17 @@ let chartFull = false;      // okno wykresu na cały ekran (przycisk ⛶ / klawi
 let chartWide = false;      // pełny ekran na szerokim monitorze => układ szeroki (chart.js)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
+// Estymaty analityków (watchlist.py::update_estimates -> data/estimates.json) — ładowane leniwie przy pierwszym włączeniu.
+function loadEstimates() {
+    if (!estimatesPromise) {
+        estimatesPromise = fetch("data/estimates.json", { cache: "no-store" })
+            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
+            .then(d => { estimatesMap = d.stocks || {}; return estimatesMap; })
+            .catch(e => { console.error("Nie udało się wczytać data/estimates.json:", e); estimatesPromise = null; estimatesFailed = true; return null; });
+    }
+    return estimatesPromise;
+}
+
 function loadCharts() {
     if (!chartsPromise) {
         chartsPromise = fetch("data/charts.json", { cache: "no-store" })
@@ -595,6 +614,8 @@ async function openChart(ticker) {
     const charts = await loadCharts();
     if (modal.hidden || token !== chartToken) return; // zamknięte w trakcie ładowania albo wybrano już inną spółkę
     if (!charts) { body.innerHTML = `<div class="empty-state">Nie udało się wczytać danych wykresów.</div>`; return; }
+    if (chartEstOn) await loadEstimates();
+    if (modal.hidden || token !== chartToken) return;
     currentChart = { charts, ticker, stock };
     const model = drawChart();
     if (model && model.epsNext) {
@@ -657,6 +678,7 @@ function drawChart() {
             fit: layout === "1" ? null : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
+            estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
             hideAutoLines: annHide(c.ticker).lines, hideAutoCups: annHide(c.ticker).cups,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== 0, uid: "c" + i }),
         };
@@ -666,6 +688,9 @@ function drawChart() {
     // klik w nagłówek innego wykresu w siatce 4 spółek zaznacza tę spółkę
     body.querySelectorAll(".chart-cell:not(.primary) .cell-head").forEach(h => h.addEventListener("click", () => openChart(h.parentElement.dataset.ticker)));
     document.getElementById("chartPattern").textContent = primary ? patternExplain(primary) : "";
+    const estEl = document.getElementById("chartEstimates");
+    const pst = state.data.stocks.find(x => x.ticker === currentChart.ticker);
+    estEl.textContent = chartEstOn ? (estimatesMap ? estimateText(estimatesMap[currentChart.ticker], pst && pst.price) : (estimatesFailed ? "Estymaty analityków jeszcze niedostępne — pojawią się po najbliższym odświeżeniu danych." : "Ładowanie estymat…")) : "";
     return primary;
 }
 
@@ -741,6 +766,21 @@ function initChartModal() {
     });
     document.getElementById("chartClose").addEventListener("click", closeChart);
     document.getElementById("chartFullBtn").addEventListener("click", () => setChartFull(!chartFull));
+    try { chartEstOn = localStorage.getItem(CHART_EST_KEY) === "1"; } catch (e) { /* brak localStorage */ }
+    const updateEstButton = () => {
+        const b = document.getElementById("chartEstBtn");
+        b.textContent = chartEstOn ? "Estymaty: wł." : "Estymaty: wył.";
+        b.classList.toggle("active", chartEstOn);
+    };
+    updateEstButton();
+    if (chartEstOn) loadEstimates();
+    document.getElementById("chartEstBtn").addEventListener("click", async () => {
+        chartEstOn = !chartEstOn;
+        try { localStorage.setItem(CHART_EST_KEY, chartEstOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        updateEstButton();
+        if (chartEstOn && !estimatesMap) { estimatesFailed = false; if (currentChart) drawChart(); await loadEstimates(); }   // najpierw "Ładowanie…", potem dane
+        if (currentChart) drawChart();
+    });
     try { const saved = localStorage.getItem(CHART_LAYOUT_KEY); if (["1", "dw", "4"].includes(saved)) chartLayout = saved; } catch (e) { /* brak localStorage */ }
     document.getElementById("chartLayoutBtn").addEventListener("click", () => {
         chartLayout = { "1": "dw", dw: "4", "4": "1" }[chartLayout];

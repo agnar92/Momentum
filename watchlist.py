@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parent
 OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist.json"
 CHARTS_PATH = ROOT / "docs" / "data" / "charts.json"
 EPS_CACHE_PATH = ROOT / "docs" / "data" / "eps_cache.json"
+ESTIMATES_PATH = ROOT / "docs" / "data" / "estimates.json"
 
 HISTORY_PERIOD = "3y"        # 12M do RS Rating + 104 tyg. wykresu + rozgrzanie SMA40 tygodniowej
 BATCH_SIZE = 50
@@ -56,6 +57,11 @@ ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "s
 EPS_CACHE_MAX_AGE_DAYS = 7   # EPS zmienia się raz na kwartał — nie pytamy Yahoo codziennie
 EPS_TIME_BUDGET_S = 600
 EPS_WORKERS = 4
+EST_MAX_AGE_DAYS = 2         # estymaty analityków zmieniają się codziennie, ale pobranie to 4 zapytania na spółkę — co 2 dni wystarcza
+EST_TIME_BUDGET_S = 700
+EST_HISTORY_DAYS = 400       # ile dni historii konsensusu EPS trzymamy (dopisujemy przy każdym pobraniu)
+EST_PERIODS = ("0y", "+1y")  # bieżący i następny rok obrachunkowy (Yahoo nie podaje dalszych)
+EST_SEED_DAYS = {"90daysAgo": 90, "60daysAgo": 60, "30daysAgo": 30, "7daysAgo": 7}
 FINVIZ_KEYS = ("company", "sector", "industry", "market_cap", "pe", "forward_pe",
                "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings")
 
@@ -572,6 +578,134 @@ def update_eps_cache(tickers, cache_path=EPS_CACHE_PATH, now=None, fetch=fetch_e
     return cache
 
 
+# ============================================================================
+# ESTYMATY ANALITYKÓW (Yahoo przez yfinance): cena celu, konsensus EPS i jego rewizje — jak linie "EPS Consensus" na Zacks
+# ============================================================================
+def _clean(v, digits=4):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return None if (f != f) else round(f, digits)
+
+
+def fetch_estimates_one(ticker):
+    """Surowe dane Yahoo dla jednej spółki: {pt, trend, est, rev} (każde może być puste)."""
+    import yfinance as yf
+    t = yf.Ticker(ticker)
+
+    def safe(fn):
+        try:
+            return fn()
+        except Exception:
+            return None
+
+    def frame(df):
+        if df is None or getattr(df, "empty", True):
+            return {}
+        return {str(k): {c: _clean(v) for c, v in row.items() if c != "currency"} for k, row in df.to_dict("index").items()}
+
+    pt = safe(t.get_analyst_price_targets)
+    return {
+        "pt": {k: _clean(pt.get(k), 2) for k in ("low", "mean", "median", "high")} if isinstance(pt, dict) else None,
+        "trend": frame(safe(t.get_eps_trend)),
+        "est": frame(safe(t.get_earnings_estimate)),
+        "rev": frame(safe(t.get_eps_revisions)),
+    }
+
+
+def build_estimate_entry(raw, prev, today):
+    """Łączy surowe dane Yahoo z poprzednim wpisem: historia konsensusu EPS rośnie z każdym pobraniem (punkty sprzed 7/30/60/90 dni
+    z `get_eps_trend` zasilają pierwszy przebieg). Wpis: {f: data pobrania, pt: {low, mean, median, high}, p: {okres: {...}}}."""
+    today = pd.Timestamp(today).normalize()
+    entry = {"f": today.strftime("%Y-%m-%d"), "pt": raw.get("pt") or None, "p": {}}
+    for period in EST_PERIODS:
+        tr, es, rv = (raw.get(k, {}).get(period) or {} for k in ("trend", "est", "rev"))
+        if not tr and not es:
+            continue
+        old = ((prev or {}).get("p", {}).get(period) or {}).get("h") or []
+        hist = {d: v for d, v in old}
+        for key, days in EST_SEED_DAYS.items():                      # punkty wsteczne tylko, gdy ich jeszcze nie mamy
+            v = tr.get(key)
+            if v is not None:
+                hist.setdefault((today - pd.Timedelta(days=days)).strftime("%Y-%m-%d"), v)
+        cur = tr.get("current", es.get("avg"))
+        if cur is not None:
+            hist[today.strftime("%Y-%m-%d")] = cur                    # dzisiejsza wartość zawsze nadpisuje
+        cutoff = (today - pd.Timedelta(days=EST_HISTORY_DAYS)).strftime("%Y-%m-%d")
+        entry["p"][period] = {
+            "avg": es.get("avg", cur), "low": es.get("low"), "high": es.get("high"), "n": es.get("numberOfAnalysts"),
+            "g": es.get("growth"), "ya": es.get("yearAgoEps"),
+            "u7": rv.get("upLast7days"), "u30": rv.get("upLast30days"), "d30": rv.get("downLast30days"), "d7": rv.get("downLast7Days"),
+            "h": [[d, hist[d]] for d in sorted(hist) if d >= cutoff],
+        }
+    return entry
+
+
+def _rev_pct(hist, days, today):
+    """Zmiana konsensusu (%) względem punktu sprzed ~`days` dni (najbliższy wcześniejszy punkt historii)."""
+    if not hist:
+        return None
+    last = hist[-1][1]
+    target = (pd.Timestamp(today) - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+    older = [v for d, v in hist if d <= target]
+    base = older[-1] if older else None
+    return _num((last - base) / abs(base) * 100, 1) if base else None
+
+
+def estimate_fields(entry, price, today=None):
+    """Płaskie pola do tabeli (watchlist.json): cena celu i upside, rewizje konsensusu EPS bieżącego/następnego roku, liczba rewizji."""
+    out = {"pt_mean": None, "pt_upside_pct": None, "eps_rev30_pct": None, "eps_rev90_pct": None, "eps1_rev30_pct": None,
+           "rev_up30": None, "rev_down30": None, "analysts": None}
+    if not entry:
+        return out
+    today = today or entry.get("f")
+    pt = entry.get("pt") or {}
+    if pt.get("mean") and price:
+        out["pt_mean"] = _num(pt["mean"])
+        out["pt_upside_pct"] = _num((pt["mean"] / price - 1) * 100, 1)
+    fy0, fy1 = entry["p"].get("0y") or {}, entry["p"].get("+1y") or {}
+    out["eps_rev30_pct"] = _rev_pct(fy0.get("h"), 30, today)
+    out["eps_rev90_pct"] = _rev_pct(fy0.get("h"), 90, today)
+    out["eps1_rev30_pct"] = _rev_pct(fy1.get("h"), 30, today)
+    out["rev_up30"], out["rev_down30"], out["analysts"] = fy0.get("u30"), fy0.get("d30"), fy0.get("n")
+    return out
+
+
+def update_estimates(tickers, path=ESTIMATES_PATH, now=None, fetch=fetch_estimates_one, max_age_days=EST_MAX_AGE_DAYS,
+                     time_budget_s=EST_TIME_BUDGET_S):
+    """docs/data/estimates.json = {updated, stocks: {ticker: wpis}}; odświeża wpisy starsze niż max_age_days (limit czasu i błędy
+    pojedynczych spółek nigdy nie przerywają pipeline'u — brak wpisu = brak estymat na wykresie)."""
+    from concurrent.futures import ThreadPoolExecutor
+    import time
+    now = pd.Timestamp(now if now is not None else datetime.now(timezone.utc)).tz_localize(None)
+    try:
+        stocks = json.loads(Path(path).read_text(encoding="utf-8")).get("stocks", {})
+    except (FileNotFoundError, ValueError):
+        stocks = {}
+    stale = [t for t in tickers if t not in stocks or (now - pd.Timestamp(stocks[t].get("f", "1970-01-01"))).days >= max_age_days]
+    if stale:
+        print(f"⏳ Estymaty analityków: pobieram {len(stale)} spółek (limit {time_budget_s}s)...")
+        started = time.time()
+
+        def work(t):
+            if time.time() - started > time_budget_s:
+                return t, None
+            try:
+                return t, fetch(t)
+            except Exception:
+                return t, None
+        with ThreadPoolExecutor(EPS_WORKERS) as pool:
+            for t, raw in pool.map(work, stale):
+                if raw is not None:
+                    stocks[t] = build_estimate_entry(raw, stocks.get(t), now)
+    stocks = {t: v for t, v in stocks.items() if t in set(tickers)}
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"updated": now.strftime("%Y-%m-%d"), "stocks": stocks}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+    return stocks
+
+
 def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks=CHART_WEEKS):
     """Struktura docs/data/charts.json: wspólna lista tygodni + S&P 500 + wykres każdej spółki."""
     bench = drop_incomplete_bar(benchmark_df, now_utc) if benchmark_df is not None and len(benchmark_df) else None
@@ -704,6 +838,13 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
     except Exception as e:
         print(f"⚠️  Krok EPS pominięty ({e}).")
         eps_cache = {}
+    try:
+        estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
+    except Exception as e:
+        print(f"⚠️  Krok estymat analityków pominięty ({e}).")
+        estimates = {}
+    for st in stocks:
+        st.update(estimate_fields(estimates.get(st["ticker"]), st.get("price")))
     charts = build_charts([s["ticker"] for s in stocks], frames, benchmark_df, eps_cache)
     for st in stocks:
         summary = ((charts or {}).get("stocks", {}).get(st["ticker"]) or {}).get("rs_line") or {}

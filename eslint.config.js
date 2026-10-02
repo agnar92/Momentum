@@ -39,6 +39,7 @@ const browserGlobals = {
     dateToIndex: "readonly",
     indexToDate: "readonly",
     cupArcPoints: "readonly",
+    estimateText: "readonly",
     // docs/js/annotate.js (ładowany PRZED watchlist.js); annStore/annCurrent/annOnRedraw to `let` — przypisywane tylko tam i w watchlist.js
     alertRows: "readonly",
     annRefresh: "readonly",
