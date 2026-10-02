@@ -76,7 +76,7 @@ function autoToDates(full) {
 function annAdoptAuto(rec, full) {
     const auto = autoToDates(full);
     if (!rec.hideAutoLines && auto.lines.length && !rec.lines.length) {
-        rec.lines = auto.lines.map(l => ({ id: annNewId(), ...l, alert: null, fromAuto: true }));
+        rec.lines = auto.lines.map(l => ({ id: annNewId(), ...l, alert: null, ext: false, fromAuto: true }));
         rec.hideAutoLines = true;
     }
     if (!rec.hideAutoCups && auto.cups.length && !rec.cups.length) {
@@ -171,7 +171,7 @@ function annExportJson(store, now = new Date()) {
 // ---------- stan, zapis ----------
 
 let annStore = {};
-const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: true, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null };
+const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
 
