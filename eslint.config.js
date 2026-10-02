@@ -34,6 +34,25 @@ const browserGlobals = {
     hideLoadingOverlay: "readonly",
     // docs/js/chart.js (ładowany PRZED watchlist.js)
     renderStockChart: "readonly",
+    dateToIndex: "readonly",
+    indexToDate: "readonly",
+    cupArcPoints: "readonly",
+    // docs/js/annotate.js (ładowany PRZED watchlist.js); annStore/annCurrent/annOnRedraw to `let` — przypisywane tylko tam i w watchlist.js
+    alertRows: "readonly",
+    annRefresh: "readonly",
+    annSave: "readonly",
+    annLoad: "readonly",
+    annHide: "readonly",
+    annOverlay: "readonly",
+    annExportJson: "readonly",
+    annInitUI: "readonly",
+    annSyncTools: "readonly",
+    mergeImport: "readonly",
+    ANN_KIND_LABELS: "readonly",
+    ANN_DIR_LABELS: "readonly",
+    annEdit: "readonly",
+    annStore: "writable",
+    annCurrent: "writable",
 };
 
 const nodeGlobals = {

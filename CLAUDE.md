@@ -145,6 +145,26 @@ user to recognise the pattern, so keep the explanation in sync with the criteria
 (`momentum_watchlist_chart_daily` = "0" → weekly) with only SMA 10/20 (weekly: SMA 10/40 weeks); the legend lives in
 its own band above the price panel so labels never cover candles.
 
+## Own lines, cup corrections, alerts (`docs/js/annotate.js`)
+
+Browser-only (no backend): annotations live in `localStorage` `momentum_watchlist_annotations`, keyed by ticker, and are
+stored in DATES + prices so they show on both the daily and weekly chart. Chart modal → **✎ Edytuj** opens a toolbar:
+`＋ Linia` (two clicks; x snaps to a bar, y snaps to that bar's High/Low when near), `＋ Cup` (three clicks: left rim, bottom,
+right rim), click a line/cup to select it and drag its round handles (line ends; cup L/B/R), `Typ` (opór/wsparcie/dowolna),
+`Alert` (nad/pod linią), `Usuń`, `Przywróć auto`, a free-text note. The first time edit mode opens for a ticker, the
+auto-detected lines/cups of the current view are COPIED as the user's own (`fromAuto`), the automatic ones are hidden
+(`hideAutoLines`/`hideAutoCups` → `opts.hideAutoLines/Cups` in `chartSvg`) and a snapshot of what the algorithm found is
+saved in `rec.auto` — that snapshot + the user's corrected geometry + the note are the material for reviewing/tuning the
+detectors; the user pastes the export (🔔 Alerty tab → "Eksportuj adnotacje", `annExportJson`) into the chat when asking
+for a review. User geometry is drawn by a separate SVG layer (`annOverlay`, `.chart-overlay` over `#chartPlot`; chart.js
+calls `opts.overlay` after each draw and exposes `geomOut` = layout/scales; `dateToIndex`/`indexToDate`/`cupArcPoints`
+are shared helpers). Line values use calendar-time interpolation (`lineValueAt`) both for drawing and for alerts, so the
+line you see is exactly the line that is evaluated.
+**🔔 Alerty tab**: one row per line with an alert; value of the line at the stock's `as_of` vs the last close (`alertState`:
+`triggered` = price above/below the line, `near` = within 2 %); a freshly triggered alert stays "PRZEBITA — nowa" (counted in
+the tab badge) until OK is clicked (`ack`), and resets when the price returns to the other side (`annRefresh`). No push
+notifications — alerts are evaluated when the page loads / data is refreshed / a chart closes.
+
 ## RS line (chart)
 
 Blue line = stock close / S&P 500 close on the chart's own bars (weekly or daily), drawn in the lower third of the price
