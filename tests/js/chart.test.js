@@ -211,3 +211,14 @@ test("clampWindow i sliceModel(m, n, end) wycinają okno z historii", () => {
     assert.deepEqual(clampWindow({ n: 5, end: 500 }, 100, 52), { n: 15, end: 100 });
     assert.deepEqual(clampWindow({ n: 40, end: 10 }, 100, 52), { n: 40, end: 40 });
 });
+
+test("RS dots use precomputed 52-week highs; RS leading price gets a larger ring; legend shows relative change", () => {
+    const c = charts();
+    Object.assign(c.stocks.AAA, { rs_hi: [0, 0, 0, 1, 1], px_hi: [0, 0, 0, 0, 1], rs_line: { state: "przed ceną", dist_pct: -1 } });
+    const m = buildChartModel(c, "AAA", { rs_rating: 90 });
+    assert.deepEqual(m.rsNewHigh, [false, false, false, true, true]);
+    const svg = chartSvg(m);
+    assert.match(svg, /RS przed ceną/);
+    assert.match(svg, /vs S&amp;P w oknie/);
+    assert.match(svg, /RS na maks\. przed ceną/);
+});

@@ -42,6 +42,8 @@ CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 TL_TOLERANCE = 0.015         # tyle (1,5%) cena może "przekłuć" linię trendu, żeby nadal była to ta sama linia
 TL_RECENT_BARS = 3           # ostatnie świece, które mogą już być wybiciem (nie psują linii)
+RS_HIGH_SESSIONS = 252         # "nowe maksimum RS/ceny" = wyższe niż w poprzednich ~52 tygodniach (jak niebieska kropka w MarketSmith)
+RS_RECENT_BARS = 5           # sygnał z ostatnich 5 sesji
 TL_VOLUME_MULT = 1.5         # wybicie potwierdzone, gdy wolumen >= 1,5x średniej z poprzednich 50 świec
 TL_VOLUME_AVG_BARS = 50
 TL_NEAR_PCT = 3.0            # cena do 3% pod oporem = "przy oporze"
@@ -431,6 +433,29 @@ def build_chart(weekly, weeks):
     }
 
 
+def rs_line_flags(close, bench_close, window=RS_HIGH_SESSIONS):
+    """Linia RS (cena / S&P 500) i flagi: rs_hi = RS wyższe niż w poprzednich `window` świecach (cały dostępny zapis,
+    nie tylko widoczne okno), px_hi = to samo dla ceny. Zwraca (rs, rs_hi, px_hi) jako serie."""
+    c = close.astype(float)
+    b = bench_close.astype(float).reindex(c.index).ffill()
+    rs = (c / b).replace([np.inf, -np.inf], np.nan)
+    need = int(window * 0.8)
+    rs_prev = rs.shift(1).rolling(window, min_periods=need).max()
+    px_prev = c.shift(1).rolling(window, min_periods=need).max()
+    return rs, (rs >= rs_prev) & rs_prev.notna(), (c >= px_prev) & px_prev.notna()
+
+
+def rs_line_summary(rs, rs_hi, px_hi, window=RS_HIGH_SESSIONS, recent=RS_RECENT_BARS):
+    """Stan linii RS na dziś: 'przed ceną' (RS na maksimum 52 tyg., cena jeszcze nie), 'na szczycie' (oba) albo None;
+    do tego odległość RS od jego maksimum (%)."""
+    hi = bool(rs_hi.tail(recent).any())
+    px = bool(px_hi.tail(recent).any())
+    tail = rs.dropna().tail(window)
+    dist = (tail.iloc[-1] / tail.max() - 1) * 100 if len(tail) else None
+    state = ("przed ceną" if not px else "na szczycie") if hi else None
+    return {"state": state, "dist_pct": _num(dist, 1)}
+
+
 def _daily_ohlc(df):
     df = df.copy()
     df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
@@ -547,6 +572,9 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
     payload["spx_d"] = (_series(bench["Close"].astype(float).set_axis(
         pd.DatetimeIndex(bench.index).tz_localize(None).normalize()).groupby(level=0).last().reindex(day_index))
         if bench is not None else None)
+    bench_d = None
+    if bench is not None:
+        bench_d = bench["Close"].astype(float).set_axis(pd.DatetimeIndex(bench.index).tz_localize(None).normalize()).groupby(level=0).last()
     for t, df in cleaned.items():
         chart = build_chart(weekly_ohlcv(df, last_date), weeks)
         quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
@@ -556,6 +584,18 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
         chart["day"] = build_daily(df, day_index)
+        if bench_d is not None:
+            dd = _daily_ohlc(df)
+            rs, rs_hi, px_hi = rs_line_flags(dd["Close"], bench_d)
+            idx = pd.DatetimeIndex(day_index)
+            chart["day"]["rs_hi"] = [int(bool(v)) for v in rs_hi.reindex(idx).fillna(False)]
+            chart["day"]["px_hi"] = [int(bool(v)) for v in px_hi.reindex(idx).fillna(False)]
+            chart["rs_line"] = rs_line_summary(rs, rs_hi, px_hi)
+            wk_c = wk["Close"]
+            wrs, wrs_hi, wpx_hi = rs_line_flags(wk_c, bench_d, window=52)
+            widx = pd.DatetimeIndex(payload["weeks"])
+            chart["rs_hi"] = [int(bool(v)) for v in wrs_hi.reindex(widx).fillna(False)]
+            chart["px_hi"] = [int(bool(v)) for v in wpx_hi.reindex(widx).fillna(False)]
         chart["tl"] = detect_trendlines(wk, k=2, lookback=40, min_span=4)
         chart["day"]["tl"] = detect_trendlines(_daily_ohlc(df), k=3, lookback=70, min_span=8)
         payload["stocks"][t] = chart
@@ -636,6 +676,10 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
         print(f"⚠️  Krok EPS pominięty ({e}).")
         eps_cache = {}
     charts = build_charts([s["ticker"] for s in stocks], frames, benchmark_df, eps_cache)
+    for st in stocks:
+        summary = ((charts or {}).get("stocks", {}).get(st["ticker"]) or {}).get("rs_line") or {}
+        st["rs_line_state"] = summary.get("state")
+        st["rs_line_dist_pct"] = summary.get("dist_pct")
     payload = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "data_as_of": max((s["as_of"] for s in stocks), default=None),

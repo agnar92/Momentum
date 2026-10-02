@@ -309,3 +309,28 @@ class TestTrendlines:
     def test_too_short_history_returns_none(self):
         df = self._frame([1] * 10, [1] * 10, [1] * 10)
         assert watchlist.detect_trendlines(df, k=2, lookback=60, min_span=8) is None
+
+
+class TestRsLine:
+    def test_rs_new_high_uses_full_history_and_flags_rs_before_price(self):
+        idx = pd.bdate_range("2025-01-01", periods=300)
+        bench = pd.Series(100.0, index=idx)                      # rynek stoi w miejscu
+        price = pd.Series(100.0, index=idx)
+        price.iloc[-60:-20] = np.linspace(100, 130, 40)          # silny wzrost -> szczyt ceny i RS
+        price.iloc[-20:] = np.linspace(130, 126, 20)             # lekki odpływ
+        rs, rs_hi, px_hi = watchlist.rs_line_flags(price, bench)
+        assert rs.iloc[-1] == 1.26 and bool(rs_hi.iloc[-21]) and not bool(rs_hi.iloc[10])   # za mało historii na początku
+        summary = watchlist.rs_line_summary(rs, rs_hi, px_hi, recent=30)
+        assert summary["state"] == "na szczycie" or summary["state"] == "przed ceną"
+        assert summary["dist_pct"] < 0
+
+    def test_state_is_przed_cena_when_rs_high_but_price_below_its_high(self):
+        idx = pd.bdate_range("2025-01-01", periods=300)
+        price = pd.Series(100.0, index=idx)
+        price.iloc[-40:] = np.linspace(100, 120, 40)             # cena rośnie do 120 ...
+        bench = pd.Series(100.0, index=idx)
+        bench.iloc[:-5] = 100.0
+        price.iloc[:-40] = 130.0                                 # ... ale rok temu była wyżej (130) -> cena poniżej maksimum 52 tyg.
+        bench.iloc[:-40] = 200.0                                 # a RS było niskie (0.65) -> dziś RS na maksimum
+        rs, rs_hi, px_hi = watchlist.rs_line_flags(price, bench)
+        assert watchlist.rs_line_summary(rs, rs_hi, px_hi)["state"] == "przed ceną"
