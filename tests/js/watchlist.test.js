@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ema34Rows, applyCommonFilters, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ema34Rows, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -124,6 +124,22 @@ test("every tab has full and compact column sets and every column id exists", ()
             assert.ok(cols && cols.length > 0, tab);
             cols.forEach(id => assert.ok(COL[id], `${tab}: ${id}`));
         });
-        assert.ok(TAB_COLUMNS_COMPACT[tab].length <= 5, `${tab} compact list stays narrow`);
+        assert.ok(TAB_COLUMNS_COMPACT[tab].length <= 6, `${tab} compact list stays narrow`);
     });
+});
+
+test("scoreInRange: empty range keeps everything, unscored stocks drop out once a bound is set", () => {
+    assert.equal(scoreInRange(null, null, null), true);
+    assert.equal(scoreInRange(null, 5, null), false);
+    assert.equal(scoreInRange(7, 5, null), true);
+    assert.equal(scoreInRange(4, 5, null), false);
+    assert.equal(scoreInRange(8, null, 7), false);
+    assert.equal(scoreInRange(5, 5, 5), true);
+});
+
+test("applyCommonFilters filters by the manual score range", () => {
+    const stocks = [stock("A", { score: 9 }), stock("B", { score: 4 }), stock("C")];
+    assert.deepEqual(applyCommonFilters(stocks, "", "", 5, null).map(s => s.ticker), ["A"]);
+    assert.deepEqual(applyCommonFilters(stocks, "", "", null, 5).map(s => s.ticker), ["B"]);
+    assert.equal(applyCommonFilters(stocks, "", "").length, 3);
 });

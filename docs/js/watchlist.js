@@ -33,6 +33,7 @@ const TV_TABS = ["ALERTS", "BASES"];                            // zakładki z u
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
 const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
 const FAVS_KEY = "momentum_watchlist_favs";
+const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
@@ -56,6 +57,9 @@ const state = {
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
     favs: new Set(),
+    scores: {},
+    scoreMin: null,
+    scoreMax: null,
     search: "",
     sector: "",
     sortKey: "ticker",
@@ -124,10 +128,19 @@ function earningsInDays(text, now = new Date()) {
 }
 
 // Filtry wspólne dla wszystkich zakładek: tekst (ticker/spółka) i sektor.
-function applyCommonFilters(stocks, search, sector) {
+// Własny score (ręczny): od/do — pusty zakres nie filtruje; spółka bez score odpada, gdy ustawiono dowolną granicę.
+function scoreInRange(score, min, max) {
+    const hasMin = Number.isFinite(min), hasMax = Number.isFinite(max);
+    if (!hasMin && !hasMax) return true;
+    if (!Number.isFinite(score)) return false;
+    return (!hasMin || score >= min) && (!hasMax || score <= max);
+}
+
+function applyCommonFilters(stocks, search, sector, scoreMin, scoreMax) {
     const q = (search || "").trim().toLowerCase();
     return stocks.filter(s => {
         if (sector && s.sector !== sector) return false;
+        if (!scoreInRange(s.score, scoreMin, scoreMax)) return false;
         if (!q) return true;
         return s.ticker.toLowerCase().includes(q) || (s.company || "").toLowerCase().includes(q);
     });
@@ -209,6 +222,7 @@ function baseSummary(s) {
 const COL = {
     rank: ["#", null, (s, i) => `<td><span class="rank-badge">${i}</span></td>`],
     fav: ["★", null, s => `<td class="fav-cell" data-fav="${escapeHtml(s.ticker)}" title="Dodaj/usuń z ulubionych">${state.favs.has(s.ticker) ? "★" : "☆"}</td>`],
+    score: ["Score", "score", s => `<td class="score-cell"><input type="number" step="any" class="score-input" data-score="${escapeHtml(s.ticker)}" value="${Number.isFinite(s.score) ? s.score : ""}" placeholder="–" title="Twój własny score (wpisz ręcznie, po nim można filtrować)"></td>`, "Twój własny score wpisywany ręcznie; filtr „Score od/do” w pasku u góry"],
     ticker: ["Ticker", "ticker", s => `<td class="ticker-cell">${escapeHtml(s.ticker)}</td>`],
     company: ["Spółka", "company", s => `<td title="${escapeHtml(s.industry || "")}">${escapeHtml(s.company || "")}</td>`],
     sector: ["Sektor", "sector", s => `<td>${escapeHtml(s.sector || "")}</td>`],
@@ -259,7 +273,7 @@ const COL = {
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
-const LEAD = ["rank", "fav", "ticker", "company", "sector"];
+const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "rsLine", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
 const TAB_COLUMNS = {
     LIST: LIST_COLUMNS,
@@ -274,12 +288,12 @@ const TAB_COLUMNS = {
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const TAB_COLUMNS_COMPACT = {
-    LIST: ["fav", "ticker", "price", "rs", "high52"],
-    FAV: ["fav", "ticker", "price", "rs", "high52"],
-    RS: ["fav", "ticker", "price", "rs", "r3"],
-    QM: ["fav", "ticker", "price", "adr", "ratio"],
-    EMA34: ["fav", "ticker", "price", "slope", "rs"],
-    BASES: ["fav", "ticker", "price", "baseType", "toPivot"],
+    LIST: ["fav", "ticker", "score", "price", "rs", "high52"],
+    FAV: ["fav", "ticker", "score", "price", "rs", "high52"],
+    RS: ["fav", "ticker", "score", "price", "rs", "r3"],
+    QM: ["fav", "ticker", "score", "price", "adr", "ratio"],
+    EMA34: ["fav", "ticker", "score", "price", "slope", "rs"],
+    BASES: ["fav", "ticker", "score", "price", "baseType", "toPivot"],
     ALERTS: ["ticker", "alValue", "alDist", "alStatus", "alAct"],
 };
 let splitMode = false;
@@ -300,7 +314,8 @@ function renderRow(tab, s, i) {
 }
 
 function rowsForTab(tab) {
-    const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector);
+    state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; });
+    const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     if (tab === "RS") return rsLeaders(stocks, state.rsMin);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
     if (tab === "EMA34") return ema34Rows(stocks);
@@ -438,6 +453,23 @@ function loadFavs() {
     } catch (e) { /* uszkodzony zapis */ }
 }
 
+function loadScores() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(SCORES_KEY) || "{}");
+        if (saved && typeof saved === "object") Object.keys(saved).forEach(t => { if (Number.isFinite(saved[t])) state.scores[t] = saved[t]; });
+    } catch (e) { /* uszkodzony zapis */ }
+}
+
+// Zapis własnego score (pusty = usunięcie); komórki w tabeli i pole w nagłówku wykresu zapisują tędy.
+function setScore(ticker, raw) {
+    const v = parseFloat(raw);
+    if (Number.isFinite(v)) state.scores[ticker] = v; else delete state.scores[ticker];
+    try { localStorage.setItem(SCORES_KEY, JSON.stringify(state.scores)); } catch (e) { /* brak localStorage */ }
+    const box = document.getElementById("chartScore");
+    if (box && (chartRequested === ticker || (currentChart && currentChart.ticker === ticker))) box.value = Number.isFinite(v) ? v : "";
+    renderTable();
+}
+
 function toggleFav(ticker) {
     if (!state.favs.delete(ticker)) state.favs.add(ticker);
     try { localStorage.setItem(FAVS_KEY, JSON.stringify([...state.favs].sort())); } catch (e) { /* brak localStorage */ }
@@ -501,6 +533,23 @@ function initControls() {
     vcp.addEventListener("change", () => { state.bases.vcpOnly = vcp.checked; saveSettings(); renderTable(); });
 
     document.getElementById("searchInput").addEventListener("input", e => { state.search = e.target.value; renderTable(); });
+    [["scoreMin", "scoreMin"], ["scoreMax", "scoreMax"]].forEach(([id, key]) => {
+        document.getElementById(id).addEventListener("input", e => {
+            const v = parseFloat(e.target.value);
+            state[key] = Number.isFinite(v) ? v : null;
+            renderTable();
+        });
+    });
+    // Score w komórce tabeli: zapis po zatwierdzeniu (Enter / opuszczenie pola), żeby przerysowanie nie zabierało fokusu przy pisaniu
+    document.querySelectorAll("table.momentum-table tbody").forEach(tbody => {
+        tbody.addEventListener("change", ev => {
+            const inp = ev.target.closest && ev.target.closest("input[data-score]");
+            if (inp) setScore(inp.dataset.score, inp.value);
+        });
+        tbody.addEventListener("keydown", ev => {
+            if (ev.key === "Enter" && ev.target.matches && ev.target.matches("input[data-score]")) ev.target.blur();
+        });
+    });
     const sectorSelect = document.getElementById("sectorSelect");
     [...new Set(state.data.stocks.map(s => s.sector).filter(Boolean))].sort().forEach(sec => {
         const opt = document.createElement("option");
@@ -530,7 +579,7 @@ function initControls() {
     document.getElementById("refreshLink").href = githubActionsUrl(window.location);
     // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
-        if (ev.target.closest("a")) return;
+        if (ev.target.closest("a") || ev.target.closest("input")) return;
         const ack = ev.target.closest("[data-ack]"), del = ev.target.closest("[data-delline]");
         if (ack || del) {
             const [ticker, id] = (ack || del).dataset[ack ? "ack" : "delline"].split("|");
@@ -619,6 +668,8 @@ async function openChart(ticker) {
             stock.earnings ? `wyniki: ${stock.earnings}` : null].filter(Boolean).join(" · ")
         : "";
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
+    const scoreBox = document.getElementById("chartScore");
+    if (scoreBox) scoreBox.value = Number.isFinite(state.scores[ticker]) ? state.scores[ticker] : "";
     document.getElementById("chartTv").href = tvUrlFor(ticker);
     document.getElementById("chartFv").href = `https://finviz.com/stock?t=${encodeURIComponent(ticker)}&ty=fc&p=d&b=1`;
     document.getElementById("chartZx").href = `https://www.zacks.com/stock/quote/${encodeURIComponent(ticker)}`;
@@ -845,6 +896,11 @@ function initChartModal() {
         updateTfButton();
         drawChart();
     });
+    const chartScore = document.getElementById("chartScore");
+    if (chartScore) {
+        chartScore.addEventListener("change", () => { if (chartRequested) setScore(chartRequested, chartScore.value); });
+        chartScore.addEventListener("keydown", ev => { if (ev.key === "Enter") chartScore.blur(); });
+    }
     document.getElementById("chartLegendBtn").addEventListener("click", () => {
         chartLegendOn = !chartLegendOn;
         try { localStorage.setItem(CHART_LEGEND_KEY, chartLegendOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
@@ -936,6 +992,7 @@ if (typeof document !== "undefined") {
         initConnStatus();
         loadSettings();
         loadFavs();
+        loadScores();
         annLoad();
         await loadData();
         renderDataInfo();
@@ -957,7 +1014,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ema34Rows, baseRows, earningsInDays, applyCommonFilters, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ema34Rows, baseRows, earningsInDays, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

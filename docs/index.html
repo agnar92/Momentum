@@ -47,6 +47,8 @@
         <div class="toolbar">
             <span class="toolbar-info" id="dataInfo"></span>
             <label class="field"><span>Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka"></label>
+            <label class="field" title="Filtr po własnym score wpisanym ręcznie (spółki bez score odpadają, gdy ustawisz granicę)"><span>Score od:</span><input type="number" step="any" id="scoreMin" placeholder="–"></label>
+            <label class="field"><span>do:</span><input type="number" step="any" id="scoreMax" placeholder="–"></label>
             <label class="field"><span>Sektor:</span><select id="sectorSelect"><option value="">wszystkie</option></select></label>
             <a class="btn" id="refreshLink" href="#" target="_blank" rel="noopener"
                title="Dane odświeżają się same codziennie rano. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
@@ -120,6 +122,7 @@
             <button type="button" class="btn" id="chartLegendBtn" title="Pokaż / ukryj legendę i podpisy paneli na wykresie (telefon)">Legenda: wył.</button>
             <button type="button" class="btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
                 <a class="btn" id="chartTv" href="#" target="_blank" rel="noopener">📈 TradingView ↗</a>
+                <label class="field chart-score" title="Twój własny score tej spółki (zapisuje się po zatwierdzeniu)"><span>Score:</span><input type="number" step="any" id="chartScore" placeholder="–"></label>
                 <a class="btn" id="chartFv" href="#" target="_blank" rel="noopener">📊 Finviz ↗</a>
                 <a class="btn" id="chartZx" href="#" target="_blank" rel="noopener" title="Zacks Rank, Style Scores, konsensus i rewizje EPS">🎯 Zacks ↗</a>
                 <button class="chart-modal-close" id="chartClose" type="button" title="Zamknij (Esc)" aria-label="Zamknij wykres">✕</button>
