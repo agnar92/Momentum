@@ -28,6 +28,7 @@ const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
+const ALERTS_TV_KEY = "momentum_watchlist_alerts_tv";          // "0" = w zakładce Alerty bez wykresu TradingView
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
 const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
 const FAVS_KEY = "momentum_watchlist_favs";
@@ -443,6 +444,7 @@ function toggleFav(ticker) {
 }
 
 function showTab(tab, resetSort = true) {
+    const layoutBefore = effectiveLayout();
     state.tab = tab;
     if (resetSort) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
@@ -456,6 +458,9 @@ function showTab(tab, resetSort = true) {
     document.getElementById("drawerTitle").textContent = TAB_TITLES[tab];
     saveSettings();
     renderTable();
+    // zakładka Alerty ma własny układ (dzienny + TradingView) — przerysuj wykres po zmianie zakładki
+    if (document.getElementById("chartLayoutBtn")) updateLayoutButton();
+    if (currentChart && effectiveLayout() !== layoutBefore) { chartWindows = []; chartActiveCell = 0; drawChart(); }
 }
 
 function renderDataInfo() {
@@ -573,6 +578,7 @@ let estimatesPromise = null;
 let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartActiveCell = 0;     // w układzie „dzienny + tygodniowy”: który wykres ma fokus (tylko w nim można rysować linie / poprawiać cupy)
+let alertsTvOn = true;      // zakładka Alerty (widok dzielony): po prawej wykres TradingView zamiast tygodniowego
 let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
@@ -661,9 +667,30 @@ function visibleTickers() {
 }
 
 // Komórki siatki wykresów dla bieżącego układu (pierwsza = zaznaczona spółka, jedyna edytowalna).
+// Układ wykresów faktycznie używany: w zakładce Alerty (widok dzielony) "dtv" = Twój wykres dzienny z liniami i alertami
+// + wykres TradingView (na żywo, z własnymi narzędziami rysowania); w pozostałych zakładkach wybrany przyciskiem.
+function effectiveLayout() {
+    if (!splitMode) return "1";
+    return state.tab === "ALERTS" && alertsTvOn ? "dtv" : chartLayout;
+}
+
+// Widget TradingView (Advanced Chart): dzienny, z paskiem narzędzi rysowania. Rysunki w widgecie żyją tylko w tej karcie
+// (bez konta TradingView nie są zapisywane) — stałe linie i alerty rysuj na wykresie obok.
+const TV_ALERT_WIDGET = {
+    src: `${TV_EMBED_BASE}embed-widget-advanced-chart.js`,
+    autosizeFill: true,
+    config: symbol => ({
+        autosize: true, symbol, interval: "D", timezone: "America/New_York", theme: "dark", style: "1", locale: "pl",
+        allow_symbol_change: true, hide_side_toolbar: false, withdateranges: true, calendar: false, details: false,
+        hide_top_toolbar: false, save_image: true, support_host: "https://www.tradingview.com",
+    }),
+};
+const tvSymbol = ticker => ticker.replace("-", ".");   // BRK-B (Yahoo/Finviz) -> BRK.B (TradingView)
+
 function chartCells() {
     const cur = currentChart.ticker;
-    const layout = splitMode ? chartLayout : "1";
+    const layout = effectiveLayout();
+    if (layout === "dtv") return [{ ticker: cur, daily: true }, { ticker: cur, tv: true }];
     if (layout === "dw") return [{ ticker: cur, daily: true }, { ticker: cur, daily: false }];
     if (layout === "4") {
         const list = visibleTickers(), i = list.indexOf(cur);
@@ -675,18 +702,34 @@ function chartCells() {
 
 function drawChart() {
     if (!currentChart) return null;
-    const layout = splitMode ? chartLayout : "1";
+    const layout = effectiveLayout();
     const cells = chartCells();
     const activeIdx = layout === "dw" ? Math.min(chartActiveCell, cells.length - 1) : 0;   // komórka z fokusem = edytowalna
     const body = document.getElementById("chartBody");
-    body.innerHTML = `<div class="chart-grid layout-${layout}">${cells.map((c, i) => {
+    const cellHtml = (c, i) => {
         const st = state.data.stocks.find(x => x.ticker === c.ticker);
-        const label = layout === "dw" ? (c.daily ? "dzienny" : "tygodniowy") : (st && st.company ? st.company : "");
-        return `<div class="chart-cell${i === activeIdx ? " primary" : ""}" data-ticker="${escapeHtml(c.ticker)}"><div class="cell-head"><strong>${escapeHtml(c.ticker)}</strong> <span>${escapeHtml(label)}</span></div>`
+        const label = c.tv ? `TradingView — na żywo, rysuj własne linie <a href="${tvUrlFor(c.ticker)}" target="_blank" rel="noopener">otwórz ↗</a>`
+            : layout === "dtv" ? "dzienny — Twoje linie i alerty"
+            : layout === "dw" ? (c.daily ? "dzienny" : "tygodniowy") : escapeHtml(st && st.company ? st.company : "");
+        return `<div class="chart-cell${i === activeIdx ? " primary" : ""}${c.tv ? " tv" : ""}" data-ticker="${escapeHtml(c.ticker)}"><div class="cell-head"><strong>${escapeHtml(c.ticker)}</strong> <span>${label}</span></div>`
             + `<div class="wl-chart-readout cell-readout"></div><div class="cell-body"></div></div>`;
-    }).join("")}</div>`;
+    };
+    // Układ z TradingView: widget (iframe) nie może być przebudowywany przy każdym przerysowaniu (np. wejście w tryb edycji
+    // spacją) — gubiłby narysowane linie i przeładowywał się. Przy tej samej spółce odświeżamy tylko lewy wykres.
+    let grid = body.querySelector(".chart-grid.layout-dtv");
+    const keepTv = layout === "dtv" && grid && grid.dataset.ticker === currentChart.ticker && grid.querySelector(".chart-cell.tv .tradingview-widget-container");
+    if (keepTv) {
+        const tpl = document.createElement("template");
+        tpl.innerHTML = cellHtml(cells[0], 0);
+        grid.children[0].replaceWith(tpl.content.firstElementChild);
+    } else {
+        body.innerHTML = `<div class="chart-grid layout-${layout}${layout === "dtv" ? " layout-dw" : ""}" data-ticker="${escapeHtml(currentChart.ticker)}">${cells.map(cellHtml).join("")}</div>`;
+        const tvIdx = cells.findIndex(c => c.tv);
+        if (tvIdx >= 0) body.querySelectorAll(".chart-cell")[tvIdx].querySelector(".cell-body").appendChild(buildTvWidgetBlock(TV_ALERT_WIDGET, tvSymbol(cells[tvIdx].ticker)));
+    }
     let primary = null;
     cells.forEach((c, i) => {
+        if (c.tv) return;
         const cell = body.querySelectorAll(".chart-cell")[i];
         const st = state.data.stocks.find(x => x.ticker === c.ticker) || null;
         const opts = {
@@ -742,8 +785,9 @@ function updateLayoutButton() {
     const names = { "1": "Układ: 1 wykres", dw: "Układ: dzienny + tygodniowy", "4": "Układ: 4 spółki" };
     btn.hidden = !splitMode;
     document.getElementById("chartLegendBtn").hidden = splitMode;
-    btn.textContent = names[chartLayout];
-    document.getElementById("chartTfBtn").hidden = splitMode && chartLayout !== "1";   // interwał dotyczy tylko układu z jednym wykresem
+    // w zakładce Alerty przycisk włącza / wyłącza wykres TradingView obok Twojego dziennego
+    btn.textContent = state.tab === "ALERTS" ? (alertsTvOn ? "Układ: dzienny + TradingView" : "TradingView: wył.") : names[chartLayout];
+    document.getElementById("chartTfBtn").hidden = splitMode && effectiveLayout() !== "1";   // interwał dotyczy tylko układu z jednym wykresem
 }
 
 // Pełny ekran okna wykresu: klasa CSS (działa wszędzie, także na iPhonie) + prawdziwy pełny ekran przeglądarki, gdy jest dostępny.
@@ -830,9 +874,15 @@ function initChartModal() {
         if (currentChart) drawChart();
     });
     try { const saved = localStorage.getItem(CHART_LAYOUT_KEY); if (["1", "dw", "4"].includes(saved)) chartLayout = saved; } catch (e) { /* brak localStorage */ }
+    try { alertsTvOn = localStorage.getItem(ALERTS_TV_KEY) !== "0"; } catch (e) { /* brak localStorage */ }
     document.getElementById("chartLayoutBtn").addEventListener("click", () => {
-        chartLayout = { "1": "dw", dw: "4", "4": "1" }[chartLayout];
-        try { localStorage.setItem(CHART_LAYOUT_KEY, chartLayout); } catch (e) { /* ignoruj */ }
+        if (state.tab === "ALERTS") {
+            alertsTvOn = !alertsTvOn;
+            try { localStorage.setItem(ALERTS_TV_KEY, alertsTvOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        } else {
+            chartLayout = { "1": "dw", dw: "4", "4": "1" }[chartLayout];
+            try { localStorage.setItem(CHART_LAYOUT_KEY, chartLayout); } catch (e) { /* ignoruj */ }
+        }
         chartWindows = [];
         chartActiveCell = 0;
         updateLayoutButton();
@@ -845,7 +895,7 @@ function initChartModal() {
     let resizeTimer = null;
     window.addEventListener("resize", () => {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => { if (((splitMode && chartLayout !== "1") || (chartFull && !splitMode)) && currentChart) drawChart(); }, 150);   // siatka: nowy rozmiar komórek
+        resizeTimer = setTimeout(() => { if (((splitMode && effectiveLayout() !== "1") || (chartFull && !splitMode)) && currentChart) drawChart(); }, 150);   // siatka: nowy rozmiar komórek
         applyLayoutMode();
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;

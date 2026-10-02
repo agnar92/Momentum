@@ -630,3 +630,10 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 .ann-lnote-close { background: none; border: 0; color: var(--text-dim); font-size: 14px; cursor: pointer; padding: 2px 6px; }
 .ann-lnote textarea { width: 100%; box-sizing: border-box; resize: vertical; background: var(--panel-alt); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 8px; font-size: 13px; font-family: inherit; }
 @media (pointer: coarse) { .ann-lnote { width: min(300px, calc(100vw - 16px)); } .ann-lnote textarea { font-size: 16px; } }
+
+/* Zakładka Alerty: po prawej wykres TradingView (widget na całą komórkę) */
+.chart-cell.tv .cell-readout { display: none; }
+.chart-cell.tv .cell-head { cursor: default; }
+.chart-cell.tv .cell-head a { color: var(--green-bright); margin-left: 6px; }
+.chart-cell .tv-widget-block { flex: 1; min-height: 0; height: 100%; }
+.chart-cell .tv-widget-block iframe { height: 100%; }
