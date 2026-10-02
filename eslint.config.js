@@ -17,6 +17,8 @@ const browserGlobals = {
     alert: "readonly",
     location: "readonly",
     getComputedStyle: "readonly",
+    setTimeout: "readonly",
+    clearTimeout: "readonly",
     module: "readonly",
     URL: "readonly",
     // require pojawia sie tylko w galezi `typeof require === "function" &&

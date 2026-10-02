@@ -92,34 +92,34 @@
             <table class="momentum-table" id="table-FAV" hidden><thead></thead><tbody></tbody></table>
         </div>
     </div>
-</div>
 
-<div class="chart-modal-backdrop" id="chartModal" hidden>
-    <div class="wl-chart-box" role="dialog" aria-modal="true" aria-labelledby="chartTitle">
-        <div class="wl-chart-head">
-            <div class="wl-chart-titles"><div class="wl-chart-title" id="chartTitle"></div><div class="wl-chart-sub" id="chartSub"></div></div>
-            <button type="button" class="btn" id="chartEditBtn" title="Rysuj własne linie trendu z alertem i poprawiaj cupy (albo przytrzymaj spację)">✎ Edytuj</button>
+    <div class="chart-modal-backdrop" id="chartModal" hidden>
+        <div class="wl-chart-box" role="dialog" aria-modal="true" aria-labelledby="chartTitle">
+            <div class="wl-chart-head">
+                <div class="wl-chart-titles"><div class="wl-chart-title" id="chartTitle"></div><div class="wl-chart-sub" id="chartSub"></div></div>
+                <button type="button" class="btn" id="chartEditBtn" title="Rysuj własne linie trendu z alertem i poprawiaj cupy (albo przytrzymaj spację)">✎ Edytuj</button>
+                <button type="button" class="btn" id="chartLayoutBtn" title="Układ wykresów: 1 wykres / dzienny + tygodniowy / 4 spółki z listy">Układ: 1 wykres</button>
             <button type="button" class="btn" id="chartFullBtn" title="Powiększ wykres na cały ekran (klawisz F, Esc wychodzi)">⛶ Pełny ekran</button>
-            <button type="button" class="btn" id="chartTfBtn" title="Przełącz wykres: tygodniowy / dzienny">Wykres: tygodniowy</button>
-            <button type="button" class="btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
-            <a class="btn" id="chartTv" href="#" target="_blank" rel="noopener">📈 TradingView ↗</a>
-            <button class="chart-modal-close" id="chartClose" type="button" title="Zamknij (Esc)" aria-label="Zamknij wykres">✕</button>
+                <button type="button" class="btn" id="chartTfBtn" title="Przełącz wykres: tygodniowy / dzienny">Wykres: tygodniowy</button>
+                <button type="button" class="btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
+                <a class="btn" id="chartTv" href="#" target="_blank" rel="noopener">📈 TradingView ↗</a>
+                <button class="chart-modal-close" id="chartClose" type="button" title="Zamknij (Esc)" aria-label="Zamknij wykres">✕</button>
+            </div>
+            <div class="wl-chart-tools" id="chartTools" hidden>
+                <button type="button" class="btn" id="toolLine">＋ Linia</button>
+                <button type="button" class="btn" id="toolCup">＋ Cup</button>
+                <label class="field"><span>Typ:</span><select id="kindSel"><option value="res">opór</option><option value="sup">wsparcie</option><option value="free">dowolna</option></select></label>
+                <label class="field"><span>Alert:</span><select id="alertSel"><option value="">brak</option><option value="above">nad linią</option><option value="below">pod linią</option></select></label>
+                <label class="field" title="Kropkowane przedłużenie linii za drugi punkt do ostatniej świecy (alert i tak liczy wartość linii dziś)"><input type="checkbox" id="extChk" checked><span>Przedłużenie</span></label>
+                <button type="button" class="btn" id="toolDel">Usuń</button>
+                <button type="button" class="btn" id="toolRestore" title="Wróć do linii i cupów wykrytych automatycznie">Przywróć auto</button>
+                <input type="text" id="annNote" class="ann-note" placeholder="Notatka do wzorca (np. czemu auto się mylił)">
+                <span class="ann-hint" id="annHint"></span>
+            </div>
+            <div class="wl-chart-stats" id="chartStats"></div>
+            <div class="wl-chart-pattern" id="chartPattern"></div>
+            <div class="wl-chart-body" id="chartBody"></div>
         </div>
-        <div class="wl-chart-tools" id="chartTools" hidden>
-            <button type="button" class="btn" id="toolLine">＋ Linia</button>
-            <button type="button" class="btn" id="toolCup">＋ Cup</button>
-            <label class="field"><span>Typ:</span><select id="kindSel"><option value="res">opór</option><option value="sup">wsparcie</option><option value="free">dowolna</option></select></label>
-            <label class="field"><span>Alert:</span><select id="alertSel"><option value="">brak</option><option value="above">nad linią</option><option value="below">pod linią</option></select></label>
-            <label class="field" title="Kropkowane przedłużenie linii za drugi punkt do ostatniej świecy (alert i tak liczy wartość linii dziś)"><input type="checkbox" id="extChk" checked><span>Przedłużenie</span></label>
-            <button type="button" class="btn" id="toolDel">Usuń</button>
-            <button type="button" class="btn" id="toolRestore" title="Wróć do linii i cupów wykrytych automatycznie">Przywróć auto</button>
-            <input type="text" id="annNote" class="ann-note" placeholder="Notatka do wzorca (np. czemu auto się mylił)">
-            <span class="ann-hint" id="annHint"></span>
-        </div>
-        <div class="wl-chart-stats" id="chartStats"></div>
-        <div class="wl-chart-pattern" id="chartPattern"></div>
-        <div class="wl-chart-readout" id="chartReadout"></div>
-        <div class="wl-chart-body" id="chartBody"></div>
     </div>
 </div>
 

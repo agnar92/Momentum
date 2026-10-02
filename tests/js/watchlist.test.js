@@ -116,3 +116,14 @@ test("earningsInDays: parsuje daty Finviz", () => {
     assert.strictEqual(earningsInDays("Sep 20/a", now), -11);
     assert.strictEqual(earningsInDays("-", now), null);
 });
+
+test("every tab has full and compact column sets and every column id exists", () => {
+    const { COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
+    Object.keys(TAB_TITLES).forEach(tab => {
+        [TAB_COLUMNS[tab], TAB_COLUMNS_COMPACT[tab]].forEach(cols => {
+            assert.ok(cols && cols.length > 0, tab);
+            cols.forEach(id => assert.ok(COL[id], `${tab}: ${id}`));
+        });
+        assert.ok(TAB_COLUMNS_COMPACT[tab].length <= 5, `${tab} compact list stays narrow`);
+    });
+});
