@@ -38,15 +38,17 @@ function fitLayout(w, h) {
     const twoRows = w < 560;
     const legendH = twoRows ? 36 : 20;
     const avail = Math.max(120, h - legendH - 56);
-    const bench = Math.max(30, Math.round(avail * 0.10)), volume = Math.max(36, Math.round(avail * 0.14)), eps = Math.max(48, Math.round(avail * 0.17));
+    // niski ekran (telefon poziomo): bez paska S&P 500, żeby wykres cen nie zamienił się w kreskę
+    const short = avail < 300;
+    const bench = short ? 0 : Math.max(30, Math.round(avail * 0.10)), volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : 0.14))), eps = short ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
     const price = Math.max(60, avail - bench - volume - eps);
     const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1 };
     L.bench = { y: 4, h: bench };
-    L.legend = { y: L.bench.y + bench + 6, h: legendH };
+    L.legend = { y: L.bench.y + bench + (bench ? 6 : 0), h: legendH };
     L.price = { y: L.legend.y + legendH + 4, h: price };
     L.volume = { y: L.price.y + price + 8, h: volume };
-    L.eps = { y: L.volume.y + volume + 8, h: eps };
-    L.axisY = L.eps.y + eps + 18;
+    L.eps = { y: L.volume.y + volume + (eps ? 8 : 0), h: eps };
+    L.axisY = L.eps.y + eps + (eps ? 18 : 16);
     L.height = Math.round(L.axisY + 8);
     return L;
 }
@@ -356,7 +358,7 @@ function dropLegend(L) {
 // Linia zysków leży na wykresie cen (jak w MarketSmith / MarketSurge), więc dolny panel jest potrzebny tylko na tabelę kwartałów
 // (2 wiersze). Tylko w trybie estymat (opts.estimates) zostaje duży panel z konsensusem EPS; wolne miejsce dostaje wykres cen.
 function compactEpsPanel(L, opts) {
-    if (opts.estimates) return L;
+    if (opts.estimates || L.eps.h < 20) return L;
     const scale = opts.compact ? (opts.fit ? FIT_FONT_SCALE : COMPACT_FONT_SCALE) : (L.fontScale || 1);
     const h = Math.round(scale * 36);
     const delta = L.eps.h - h;
@@ -477,7 +479,9 @@ function chartSvg(m, opts = {}) {
 
     // --- 1. benchmark
     const bExt = m.spx ? numericExtent([m.spx]) : null;
-    if (bExt) {
+    if (L.bench.h < 20) {
+        // bez paska benchmarku (niski ekran)
+    } else if (bExt) {
         const labelH = fs(11) + 8;   // pas na podpis nad linią, żeby jej nie zasłaniał
         const yB = makeYScale(bExt[0], bExt[1], L.bench.y + labelH, L.bench.h - labelH - 4);
         parts.push(polyline(m.spx.map((v, i) => Number.isFinite(v) ? [x(i), yB(v)] : null), CHART_COLORS.bench, 1.3));
@@ -728,9 +732,11 @@ function chartSvg(m, opts = {}) {
     parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
 
     // --- 4. EPS kwartalny
-    parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.eps.y - 4}" y2="${L.eps.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
+    if (L.eps.h >= 20) parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.eps.y - 4}" y2="${L.eps.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
     const estSeries = est ? estimateSeries(est) : [];
-    if (estSeries.length) {
+    if (L.eps.h < 20) {
+        // brak miejsca (niski ekran): bez dolnego panelu — pasek ↑ EPS pod cenami niesie zmianę r/r
+    } else if (estSeries.length) {
         // tryb estymat: konsensus EPS (rok bieżący / następny) w czasie jako % zmiany względem pierwszego punktu historii —
         // dzięki temu rewizje obu lat widać na jednej skali (poziomy EPS bywają różne o rząd wielkości); w legendzie wartości bezwzględne
         const pctSeries = estSeries.map(sr => ({ ...sr, pct: sr.h.map(([d, v]) => [d, sr.h[0][1] ? (v / sr.h[0][1] - 1) * 100 : 0]) }));

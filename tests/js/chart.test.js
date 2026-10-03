@@ -436,3 +436,26 @@ test("window without a report explains the last known one instead of claiming th
     assert.equal(cut.eps.length, 0);
     assert.match(chartSvg(cut), /Brak raportu w oknie · ostatni 2026-01-10/);
 });
+
+test("fitLayout on a short screen drops the S&P strip and the quarterly table so the price panel keeps the height", () => {
+    const { fitLayout, pickLayout } = require("../../docs/js/chart.js");
+    const tall = fitLayout(374, 600);
+    assert.ok(tall.bench.h >= 30 && tall.eps.h >= 36);
+    const short = fitLayout(828, 262);
+    assert.equal(short.bench.h, 0);
+    assert.equal(short.eps.h, 0);
+    assert.ok(short.price.h >= 100, String(short.price.h));
+    assert.ok(short.height <= 262 + 6, String(short.height));                        // układ mieści się w dostępnym miejscu
+    const L = pickLayout({ fit: { w: 828, h: 262 }, compact: true });
+    assert.equal(L.eps.h, 0);                                                         // compactEpsPanel nie rusza zerowego panelu
+    const svg = chartSvg(buildChartModel(charts(), "AAA", { rs_rating: 90 }), { fit: { w: 828, h: 262 }, compact: true, hideLabels: true });
+    assert.ok(!/S&amp;P 500 \d/.test(svg) && !/Brak danych benchmarku/.test(svg));   // brak paska benchmarku
+    assert.match(svg, /viewBox="0 0 828 /);
+});
+
+test("phone fit layout: viewBox equals the fitted pixel box (no scaling of a fixed 560x800 canvas)", () => {
+    const svg = chartSvg(buildChartModel(charts(), "AAA", null), { fit: { w: 374, h: 560 }, compact: true, hideLabels: true });
+    const vb = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
+    assert.equal(Number(vb[1]), 374);
+    assert.ok(Math.abs(Number(vb[2]) - 560) <= 16, vb[2]);
+});

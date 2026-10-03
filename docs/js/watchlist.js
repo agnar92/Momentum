@@ -1415,7 +1415,7 @@ function drawChart() {
             log: chartLog, daily: c.daily, uid: "c" + i,
             compact: layout === "1" ? chartCompact : false, wide: layout === "1" && chartWide,
             hideLabels: layout === "1" && !splitMode && !chartLegendOn,
-            fit: layout === "1" ? (chartFull && !splitMode ? phoneFullFit() : null) : cellFit(cell),
+            fit: layout === "1" ? (splitMode ? null : phoneFit(cell)) : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
@@ -1445,11 +1445,17 @@ function drawChart() {
     return primary;
 }
 
-// Telefon, pełny ekran: wykres dostaje cały ekran pod skróconym nagłówkiem (układ liczony w pikselach jak w siatce),
-// dzięki temu w poziomie nie jest miniaturą ograniczoną wysokością okna.
-function phoneFullFit() {
-    const head = document.querySelector("#chartModal .wl-chart-head").getBoundingClientRect();
-    return { w: Math.max(260, window.innerWidth - 16), h: Math.max(340, window.innerHeight - head.bottom - 104) };   // min. 340: w poziomie wykres jest minimalnie wyższy niż ekran (przewijasz)   // 104 = odczyt, suwak, odstępy
+// Telefon: okno wykresu to kolumna na cały ekran (nagłówek, paski informacji, odczyt, suwak, wykres, pasek nawigacji), a wykres
+// zajmuje CAŁĄ resztę — układ liczymy w pikselach faktycznie dostępnego miejsca (viewBox = rozmiar na ekranie, bez skalowania 560×800
+// do szerokości ekranu), więc nic nie jest miniaturą ani nie ma pustych pasów. Przeliczane po obrocie / zmianie rozmiaru.
+const PHONE_SLIDER_PX = 50;   // suwak okna czasowego + odstępy nad wykresem
+const PHONE_SLIDER_PX_SHORT = 30;   // telefon poziomo (CSS: max-height 520 px): niższy suwak, bez wiersza odczytu
+let lastPhoneFit = null;
+const phoneSliderPx = () => (window.innerHeight <= 520 ? PHONE_SLIDER_PX_SHORT : PHONE_SLIDER_PX);
+function phoneFit(cell) {
+    const r = cell.querySelector(".cell-body").getBoundingClientRect();
+    lastPhoneFit = { w: Math.max(260, Math.round(r.width)), h: Math.max(120, Math.round(r.height - phoneSliderPx())) };
+    return lastPhoneFit;
 }
 
 // Rozmiar (px) miejsca na wykres w komórce siatki: wysokość komórki minus nagłówek, odczyt i suwak.
@@ -1524,7 +1530,9 @@ function initBottomNav() {
 // Telefon: opis spółki, fundamenty i objaśnienie wzorca są pod „⋯” (nad wykresem zostają pastylki ocen, ramka formacji i linia gotowości).
 function chartDetailsHtml() {
     const text = id => (document.getElementById(id) ? document.getElementById(id).textContent.trim() : "");
-    const blocks = [["Spółka", text("chartSub")], ["Fundamenty", text("chartStats")], ["Formacja", text("chartPattern")]].filter(b => b[1]);
+    const blocks = [["Gotowość", text("chartReady")], ["Spółka", text("chartSub")], ["Fundamenty", text("chartStats")], ["Formacja", text("chartPattern")]].filter(b => b[1]);
+    const chips = currentChart ? state.data.stocks.find(x => x.ticker === currentChart.ticker) : null;
+    if (chips) blocks.unshift(["Oceny", ratingChips(chips).map(c => `${c.label ? c.label + " " : ""}${c.value}`).join(" · ")]);
     return blocks.length ? `<div class="sheet-section">${blocks.map(([h, t]) => `<h4>${h}</h4><p class="sheet-result">${escapeHtml(t)}</p>`).join("")}</div>` : "";
 }
 
@@ -1621,7 +1629,14 @@ function initChartModal() {
     let resizeTimer = null;
     window.addEventListener("resize", () => {
         clearTimeout(resizeTimer);
-        resizeTimer = setTimeout(() => { if (((splitMode && effectiveLayout() !== "1") || (chartFull && !splitMode)) && currentChart) drawChart(); }, 150);   // siatka: nowy rozmiar komórek
+        resizeTimer = setTimeout(() => {
+            if (!currentChart) return;
+            if (splitMode) { if (effectiveLayout() !== "1") drawChart(); return; }   // siatka: nowy rozmiar komórek
+            // telefon: przerysuj tylko przy realnej zmianie miejsca na wykres (obrót, klawiatura), nie przy chowaniu paska adresu o kilka px
+            const cell = document.querySelector("#chartBody .chart-cell");
+            const now = cell ? cell.querySelector(".cell-body").getBoundingClientRect() : null;
+            if (!lastPhoneFit || !now || Math.abs(now.width - lastPhoneFit.w) > 6 || Math.abs(now.height - phoneSliderPx() - lastPhoneFit.h) > 24) drawChart();
+        }, 150);
         applyLayoutMode();
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;
