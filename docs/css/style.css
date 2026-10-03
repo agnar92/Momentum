@@ -694,3 +694,15 @@ body:not(.split) tr.open td.card-actions .mini-btn { padding: 8px 14px; font-siz
 /* mini wykres w rozwiniętym kafelku */
 .mini-chart svg { display: block; width: 100%; height: auto; }
 body:not(.split) tr.open td.c-mini { display: block; order: 19; flex: 0 0 100%; padding-top: 8px; border-top: 1px solid var(--border); }
+
+/* zakładka Filtry */
+.filters-panel { padding: 10px 14px 16px; }
+.filters-panel[hidden], .card-sort[hidden] { display: none !important; }
+.filters-intro { color: var(--text-dim); font-size: 12px; margin: 0 0 10px; }
+.filter-counts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.filter-count { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; color: var(--text-dim); }
+.filter-count b { color: var(--green-bright); }
+.filter-group { border: 1px solid var(--border); border-radius: 10px; margin: 0 0 12px; padding: 8px 12px 12px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+.filter-group legend { color: var(--text); font-size: 12.5px; font-weight: 700; padding: 0 6px; }
+.filter-group .field { font-size: 12.5px; }
+.filter-group .field input[type="number"] { width: 84px; }

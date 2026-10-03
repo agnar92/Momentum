@@ -44,6 +44,7 @@ const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["upside_main", "desc"],
     BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
 };
+const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
     LIST: "Lista Finviz", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
@@ -444,9 +445,25 @@ const EMPTY_MESSAGES = {
     FAV: "Brak ulubionych — kliknij ☆ przy spółce na dowolnej liście.",
 };
 
+// Zakładka Filtry: podsumowanie, ile spółek zostaje po filtrach wspólnych (szukaj / sektor / score) i po progach każdej zakładki.
+function renderFiltersSummary() {
+    const el = document.getElementById("filtersSummary");
+    if (!el) return;
+    const base = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
+    const counts = [["Lista", base.length], ["Ratingi", rsLeaders(base, state.rsMin, state.epsMin, state.compMin).length],
+        ["Qullamaggie", qullamaggieRows(base, state.qm).length], ["Upside", ptRows(base, state.ptMinAnalysts).length], ["Bazy", baseRows(base, state.bases).length]];
+    el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
+    document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
+}
+
 function renderTable() {
     if (!state.data) return;
     const tab = state.tab;
+    if (tab === FILTERS_TAB) {
+        state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
+        renderFiltersSummary();
+        return;
+    }
     const table = document.getElementById(`table-${tab}`);
     const tbody = table.querySelector("tbody");
     const rows = sortRows(rowsForTab(tab), state.sortKey, state.sortDir);
@@ -541,7 +558,7 @@ function loadSettings() {
     try {
         const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
         if (!saved) return;
-        if (TAB_TITLES[saved.tab]) state.tab = saved.tab;
+        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB) state.tab = saved.tab;
         if (Number.isFinite(saved.rsMin)) state.rsMin = saved.rsMin;
         if (Number.isFinite(saved.epsMin)) state.epsMin = saved.epsMin;
         if (Number.isFinite(saved.compMin)) state.compMin = saved.compMin;
@@ -634,16 +651,20 @@ function toggleFav(ticker) {
 function showTab(tab, resetSort = true) {
     const layoutBefore = effectiveLayout();
     state.tab = tab;
-    if (resetSort) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
+    if (resetSort && TAB_DEFAULT_SORT[tab]) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
     const activeTab = document.querySelector(".drawer-tab.active");
     if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     Object.keys(TAB_TITLES).forEach(t => {
         document.getElementById(`table-${t}`).hidden = t !== tab;
         document.getElementById(`guide-${t}`).hidden = t !== tab;
-        document.getElementById(`controls-${t}`).hidden = t !== tab;
+        const controls = document.getElementById(`controls-${t}`);
+        if (controls) controls.hidden = t !== tab;
     });
-    document.getElementById("drawerTitle").textContent = TAB_TITLES[tab];
+    const onFilters = tab === FILTERS_TAB;
+    document.getElementById("filtersPanel").hidden = !onFilters;
+    document.getElementById("cardSortBar").hidden = onFilters;
+    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : TAB_TITLES[tab];
     saveSettings();
     renderTable();
     // zakładki Alerty i Bazy mają własny układ (dzienny + TradingView) — przerysuj wykres po zmianie zakładki

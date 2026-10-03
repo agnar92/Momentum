@@ -34,6 +34,7 @@
         <div class="drawer-header">
             <div class="drawer-header-title"><h2 id="drawerTitle">Lista Finviz</h2><div class="drawer-meta" id="drawerMeta"></div></div>
             <div class="drawer-tabs">
+                <button class="drawer-tab" data-tab="FILTERS">🔍 Filtry</button>
                 <button class="drawer-tab active" data-tab="LIST">📋 Lista</button>
                 <button class="drawer-tab" data-tab="RS">📊 Ratingi</button>
                 <button class="drawer-tab" data-tab="QM">🎯 Qullamaggie</button>
@@ -47,31 +48,38 @@
         <div class="toolbar">
             <span class="toolbar-info" id="dataInfo"></span>
             <label class="field"><span>Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka"></label>
-            <label class="field" title="Filtr po własnym score wpisanym ręcznie (spółki bez score odpadają, gdy ustawisz granicę)"><span>Score od:</span><input type="number" step="any" id="scoreMin" placeholder="–"></label>
-            <label class="field"><span>do:</span><input type="number" step="any" id="scoreMax" placeholder="–"></label>
-            <label class="field"><span>Sektor:</span><select id="sectorSelect"><option value="">wszystkie</option></select></label>
             <a class="btn" id="refreshLink" href="#" target="_blank" rel="noopener"
                title="Dane odświeżają się same codziennie rano. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
         </div>
 
         <div class="tab-controls" id="controls-LIST"></div>
-        <div class="tab-controls" id="controls-RS" hidden>
-            <label class="field"><span>Min. RS Rating:</span><input type="number" id="rsMin" min="0" max="99" step="1"></label>
-            <label class="field" title="0 = bez filtra; spółki bez EPS Rating odpadają przy progu > 0"><span>Min. EPS Rating:</span><input type="number" id="epsMin" min="0" max="99" step="1"></label>
-            <label class="field" title="Composite = średnia z RS i EPS Rating; 0 = bez filtra"><span>Min. Composite:</span><input type="number" id="compMin" min="0" max="99" step="1"></label>
+        <div class="filters-panel" id="filtersPanel" hidden>
+            <p class="filters-intro">Konfiguracja wyszukiwania w jednym miejscu. Filtry wspólne działają na wszystkich zakładkach, progi poniżej — na swoich. Zapisują się w tej przeglądarce.</p>
+            <div class="filter-counts" id="filtersSummary"></div>
+            <fieldset class="filter-group"><legend>Wspólne (wszystkie zakładki)</legend>
+                <label class="field" title="Filtr po własnym score wpisanym ręcznie (spółki bez score odpadają, gdy ustawisz granicę)"><span>Score od:</span><input type="number" step="any" id="scoreMin" placeholder="–"></label>
+                <label class="field"><span>do:</span><input type="number" step="any" id="scoreMax" placeholder="–"></label>
+                <label class="field"><span>Sektor:</span><select id="sectorSelect"><option value="">wszystkie</option></select></label>
+            </fieldset>
+            <fieldset class="filter-group"><legend>📊 Ratingi</legend>
+                <label class="field"><span>Min. RS Rating:</span><input type="number" id="rsMin" min="0" max="99" step="1"></label>
+                <label class="field" title="0 = bez filtra; spółki bez EPS Rating odpadają przy progu > 0"><span>Min. EPS Rating:</span><input type="number" id="epsMin" min="0" max="99" step="1"></label>
+                <label class="field" title="Composite = średnia z RS i EPS Rating; 0 = bez filtra"><span>Min. Composite:</span><input type="number" id="compMin" min="0" max="99" step="1"></label>
+            </fieldset>
+            <fieldset class="filter-group"><legend>🎯 Qullamaggie</legend>
+                <label class="field"><span>Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1"></label>
+                <label class="field"><span>Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5"></label>
+                <label class="field"><span>Top % wzrostu:</span><input type="number" id="qmTopPct" min="1" max="100" step="1"></label>
+            </fieldset>
+            <fieldset class="filter-group"><legend>🎯 Upside</legend>
+                <label class="field" title="Spółki z 1–2 analitykami dają przypadkowe, skrajne upside — odetnij je progiem (działa tam, gdzie Yahoo zna liczbę analityków)"><span>Min. analityków:</span><input type="number" id="ptMinAnalysts" min="0" step="1"></label>
+            </fieldset>
+            <fieldset class="filter-group"><legend>🧱 Bazy</legend>
+                <label class="field"><span>Maks. dystans do pivotu (%):</span><input type="number" id="baseMaxDist" min="0" step="1"></label>
+                <label class="field"><input type="checkbox" id="baseVcpOnly"><span>tylko VCP</span></label>
+            </fieldset>
         </div>
-        <div class="tab-controls" id="controls-QM" hidden>
-            <label class="field"><span>Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1"></label>
-            <label class="field"><span>Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5"></label>
-            <label class="field"><span>Top % wzrostu:</span><input type="number" id="qmTopPct" min="1" max="100" step="1"></label>
-        </div>
-        <div class="tab-controls" id="controls-PT" hidden>
-            <label class="field" title="Spółki z 1–2 analitykami dają przypadkowe, skrajne upside — odetnij je progiem"><span>Min. analityków:</span><input type="number" id="ptMinAnalysts" min="0" step="1"></label>
-        </div>
-        <div class="tab-controls" id="controls-BASES" hidden>
-            <label class="field"><span>Maks. dystans do pivotu (%):</span><input type="number" id="baseMaxDist" min="0" step="1"></label>
-            <label class="field"><input type="checkbox" id="baseVcpOnly"><span>tylko VCP</span></label>
-        </div>
+
         <div class="tab-controls" id="controls-ALERTS" hidden>
             <button type="button" class="btn" id="annExport" title="Skopiuj wszystkie własne linie, cupy i notatki jako JSON (kopia zapasowa / do przeglądu z Claude)">Eksportuj adnotacje</button>
             <button type="button" class="btn" id="annImport">Importuj</button>
