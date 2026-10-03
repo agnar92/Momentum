@@ -171,7 +171,7 @@ function annExportJson(store, now = new Date()) {
 // ---------- stan, zapis ----------
 
 let annStore = {};
-const annEdit = { on: false, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null };
+const annEdit = { on: false, mode: null, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
 
@@ -207,6 +207,7 @@ function annHide(ticker) {
 // ---------- warstwa nad wykresem (rysowanie i edycja) ----------
 
 const SVG_NS = "http://www.w3.org/2000/svg";
+const ANN_TOUCH_MODE_PX = 24;   // w trybie Linia / Cup promień jest mniejszy, żeby dało się założyć nowy obiekt tuż obok istniejącego
 const ANN_TOUCH_PX = 30;   // promień (px ekranu), w którym dotyk „łapie” najbliższą linię / cup / uchwyt
 
 function annOverlay(ctx) {
@@ -285,7 +286,7 @@ function annOverlay(ctx) {
                 body += `<g data-nline="${line.id}" class="ann-note-icon" style="cursor:pointer" pointer-events="all"><circle cx="${ix}" cy="${iy}" r="${geom.fs(9)}" fill="#0e0f13" stroke="${col}" stroke-width="1.3"/><text x="${ix}" y="${iy + geom.fs(4)}" font-size="${geom.fs(11)}" text-anchor="middle" pointer-events="none">📝</text></g>`;
             }
             if (line.alert) body += `<text x="${Math.min(plotRight - 12, Math.max(L.left + 12, b[0] + 4))}" y="${b[1] - 6}" font-size="${geom.fs(13)}" text-anchor="middle">🔔</text>`;
-            if (editing) {
+            if (editing && (!annEdit.mode || annEdit.mode === "line")) {
                 body += `<polyline data-line="${line.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" style="cursor:move" points="${pts2s([a, b])}"/>`;
                 if (isSel) body += `<circle data-handle="a" data-line="${line.id}" cx="${a[0]}" cy="${a[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`
                     + `<circle data-handle="b" data-line="${line.id}" cx="${b[0]}" cy="${b[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`;
@@ -299,7 +300,7 @@ function annOverlay(ctx) {
             body += `<polyline fill="none" stroke="${ANN_COLORS.cup}" stroke-width="${isSel ? 3.2 : 2}" stroke-linecap="round" points="${pts2s(pts)}"><title>Cup −${depth}% (własny)</title></polyline>`;
             const cx = Math.min(Math.max(geom.x((cup.i0 + cup.i1) / 2), L.left + 24), plotRight - 24);
             body += `<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${geom.fs(12)}" font-weight="700" fill="${ANN_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${depth}%</text>`;
-            if (editing) {
+            if (editing && (!annEdit.mode || annEdit.mode === "cup")) {
                 body += `<polyline data-cup="${cu.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" style="cursor:move" points="${pts2s(pts)}"/>`;
                 if (isSel) {
                     [["L", geom.x(cup.i0), yL], ["B", geom.x(cup.iLow), yB], ["R", geom.x(cup.i1), yR]].forEach(([k, hx, hy]) => {
@@ -385,7 +386,7 @@ function annOverlay(ctx) {
                 R.lines.push(line);
                 annEdit.selected = { type: "line", id: line.id };
             }
-            annEdit.pending = []; annEdit.tool = null; touch(); annSyncTools(); annLeaveSpace();
+            annEdit.pending = []; annEdit.tool = annEdit.mode; touch(); annSyncTools(); annLeaveSpace();
         } else if (annEdit.tool === "cup" && P.length === 3) {
             const [a, b, c] = P;
             if (a.date < b.date && b.date < c.date) {
@@ -393,7 +394,7 @@ function annOverlay(ctx) {
                 R.cups.push(cup);
                 annEdit.selected = { type: "cup", id: cup.id };
             }
-            annEdit.pending = []; annEdit.tool = null; touch(); annSyncTools(); annLeaveSpace();
+            annEdit.pending = []; annEdit.tool = annEdit.mode; touch(); annSyncTools(); annLeaveSpace();
         }
     };
     const dragTo = (target, handle, pt) => {
@@ -422,22 +423,23 @@ function annOverlay(ctx) {
     const pickNear = p => {
         const rect = ov.getBoundingClientRect();
         const scale = Math.min(rect.width / L.width, rect.height / L.height) || 1;
-        const thr = ANN_TOUCH_PX / scale;
+        const thr = (annEdit.mode ? ANN_TOUCH_MODE_PX : ANN_TOUCH_PX) / scale;
         const R = rec();
         if (!R) return null;
+        const lineOk = !annEdit.mode || annEdit.mode === "line", cupOk = !annEdit.mode || annEdit.mode === "cup";
         let best = null;
         const consider = (d, hit) => { if (d <= thr && (!best || d < best.d)) best = { d, ...hit }; };
         const sel = annEdit.selected;
         // uchwyty zaznaczonego obiektu mają pierwszeństwo (łatwo je złapać, żeby przesuwać końce)
-        if (sel && sel.type === "line") {
+        if (sel && sel.type === "line" && lineOk) {
             const l = R.lines.find(x => x.id === sel.id);
             if (l) [["a", l.x0, l.y0], ["b", l.x1, l.y1]].forEach(([k, d, pr]) => consider(Math.hypot(p.x - geom.x(idxOf(d)), p.y - geom.yP(pr)) - thr * 0.35, { handle: k, target: sel }));
-        } else if (sel && sel.type === "cup") {
+        } else if (sel && sel.type === "cup" && cupOk) {
             const c = R.cups.find(x => x.id === sel.id);
             if (c) [["L", c.start, c.peak], ["B", c.low_date, c.low], ["R", c.end, c.right]].forEach(([k, d, pr]) => consider(Math.hypot(p.x - geom.x(idxOf(d)), p.y - geom.yP(pr)) - thr * 0.35, { handle: k, target: sel }));
         }
-        R.lines.forEach(l => consider(distSeg(p, [geom.x(idxOf(l.x0)), geom.yP(l.y0)], [geom.x(idxOf(l.x1)), geom.yP(l.y1)]), { obj: { type: "line", id: l.id } }));
-        R.cups.forEach(cu => {
+        if (lineOk) R.lines.forEach(l => consider(distSeg(p, [geom.x(idxOf(l.x0)), geom.yP(l.y0)], [geom.x(idxOf(l.x1)), geom.yP(l.y1)]), { obj: { type: "line", id: l.id } }));
+        if (cupOk) R.cups.forEach(cu => {
             const { pts } = cupArcPoints({ i0: idxOf(cu.start), iLow: idxOf(cu.low_date), i1: idxOf(cu.end), peak: cu.peak, low: cu.low, right: cu.right }, geom.x, geom.yP);
             for (let i = 1; i < pts.length; i++) consider(distSeg(p, pts[i - 1], pts[i]), { obj: { type: "cup", id: cu.id } });
         });
@@ -451,7 +453,8 @@ function annOverlay(ctx) {
         let handle = t.dataset && t.dataset.handle;
         let handleTarget = handle ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
         let hitObj = t.dataset && (t.dataset.line || t.dataset.cup) ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
-        if (touchPtr && !annEdit.tool && !handle && !hitObj) {
+        const placing = annEdit.pending.length > 0;   // trwa stawianie punktów nowego obiektu — dotyk nie „łapie” istniejących
+        if (touchPtr && (!annEdit.tool || annEdit.mode) && !placing && !handle && !hitObj) {
             const pk = pickNear(toSvg(ev));
             if (pk) { if (pk.handle) { handle = pk.handle; handleTarget = pk.target; } else hitObj = pk.obj; }
         }
@@ -473,7 +476,7 @@ function annOverlay(ctx) {
             ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
             return;
         }
-        if (hitObj && !annEdit.tool) {
+        if (hitObj && (!annEdit.tool || (annEdit.mode && !placing))) {
             annEdit.selected = hitObj;
             annSyncTools(); render();
             // Chwycenie za środek linii/cupa i przeciągnięcie przesuwa całość (o całe świece w poziomie, dowolnie w pionie);
@@ -570,12 +573,12 @@ function annOverlay(ctx) {
     ov.addEventListener("contextmenu", ev => {
         ev.preventDefault();
         const t = ev.target;
-        if (annEdit.tool) return;
+        if (annEdit.tool && !annEdit.mode) return;
         if (t.dataset && (t.dataset.line || t.dataset.cup)) {
             annEdit.selected = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
             annSyncTools(); render();
             annObjectMenu(ev.clientX, ev.clientY);
-        } else annAddMenu(ev.clientX, ev.clientY);
+        } else if (!annEdit.mode) annAddMenu(ev.clientX, ev.clientY);
     });
 }
 
@@ -739,10 +742,8 @@ function annSyncTools() {
     const $ = id => document.getElementById(id);
     if (!$("chartTools")) return;
     $("chartTools").hidden = !annEdit.on || annEdit.spaceOn;   // przy trzymanej spacji bez paska (nie przesuwa wykresu)
-    $("chartEditBtn").classList.toggle("active", annEdit.on);
-    $("chartEditBtn").title = "Rysuj własne linie trendu z alertem i poprawiaj cupy (albo przytrzymaj spację)";
-    $("toolLine").classList.toggle("active", annEdit.tool === "line");
-    $("toolCup").classList.toggle("active", annEdit.tool === "cup");
+    $("chartLineBtn").classList.toggle("active", annEdit.mode === "line");
+    $("chartCupBtn").classList.toggle("active", annEdit.mode === "cup");
     const obj = annSelectedObject();
     const isLine = obj && annEdit.selected.type === "line";
     $("kindSel").value = isLine ? obj.kind : annEdit.kind;
@@ -750,7 +751,9 @@ function annSyncTools() {
     $("extChk").checked = isLine ? obj.ext !== false : annEdit.ext;
     $("toolDel").disabled = !obj;
     if ($("toolFlat")) $("toolFlat").disabled = !isLine;
-    $("annHint").textContent = annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy); Shift = linia pozioma."
+    $("annHint").textContent = annEdit.mode === "line" ? "Tryb LINIA: dotknij istniejącą linię, żeby ją edytować (kółka na końcach, przeciągnięcie środka przesuwa); dotknij puste miejsce, żeby narysować nową (2 punkty, punkt ustawia się po puszczeniu palca)."
+        : annEdit.mode === "cup" ? "Tryb CUP: dotknij istniejący cup, żeby go poprawić; dotknij puste miejsce, żeby narysować nowy (3 punkty: lewy brzeg, dołek, prawy brzeg)."
+        : annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy); Shift = linia pozioma."
         : annEdit.tool === "cup" ? "Kliknij trzy punkty: lewy brzeg, dołek, prawy brzeg miseczki."
         : obj ? "Przeciągnij kółka, żeby poprawić (Shift = poziomo); prawy przycisk / dotknięcie linii = menu." : "Przeciągnij po wykresie, żeby narysować linię, prawy przycisk (na telefonie podwójne stuknięcie) = wybór linia / cup.";
     const R = annCurrent && annStore[annCurrent.ticker];
@@ -760,11 +763,11 @@ function annSyncTools() {
 function annInitUI(onRedraw) {
     annOnRedraw = onRedraw;
     const $ = id => document.getElementById(id);
-    if (!$("chartEditBtn")) return;
-    const tool = name => () => { annEdit.tool = annEdit.tool === name ? null : name; annEdit.pending = []; annEdit.cursor = null; annSyncTools(); if (annCurrent) annCurrent.render(); };
+    if (!$("chartLineBtn")) return;
     const setEdit = (on, bySpace) => {
         annEdit.on = on;
         annEdit.spaceOn = on && bySpace;
+        annEdit.mode = null;
         annEdit.tool = null; annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null;
         if (on && annCurrent) {   // pierwsze wejście: przejmij automatyczne linie/cupy jako własne (z migawką algorytmu)
             const R = annRecord(annCurrent.ticker, true);
@@ -776,7 +779,18 @@ function annInitUI(onRedraw) {
         annOnRedraw();
     };
     annApi.setEdit = setEdit;
-    $("chartEditBtn").addEventListener("click", () => setEdit(!annEdit.on, false));
+    // Przyciski Linia / Cup: tryb pracy z jednym rodzajem obiektu — dotyk istniejącego edytuje go, dotyk pustego wykresu zakłada nowy.
+    // Ponowne naciśnięcie aktywnego przycisku (albo Esc) kończy edycję.
+    const setMode = mode => {
+        if (annEdit.mode === mode) { setEdit(false, false); return; }
+        if (!annEdit.on || annEdit.spaceOn) setEdit(true, false);
+        annEdit.mode = mode; annEdit.tool = mode;
+        annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null;
+        annSyncTools();
+        if (annCurrent) annCurrent.render();
+    };
+    $("chartLineBtn").addEventListener("click", () => setMode("line"));
+    $("chartCupBtn").addEventListener("click", () => setMode("cup"));
     // Przytrzymana SPACJA = tymczasowy tryb edycji (po puszczeniu wraca do podglądu); nie działa w polach tekstowych.
     const chartOpen = () => !$("chartModal").hidden;
     const typing = ev => /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
@@ -798,11 +812,9 @@ function annInitUI(onRedraw) {
         if (annMenuEl && !annMenuEl.contains(ev.target)) annCloseMenu();
         if (annNoteEl && !annNoteEl.contains(ev.target) && !(ev.target.closest && ev.target.closest(".ann-note-icon"))) annCloseNote();
     }, true);
-    document.addEventListener("keydown", ev => { if (ev.key === "Escape") { if (annMenuEl) annCloseMenu(); else if (annNoteEl) annCloseNote(); } });
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape") { if (annMenuEl) annCloseMenu(); else if (annNoteEl) annCloseNote(); else if (annEdit.mode && annEdit.pending.length) { annEdit.pending = []; annEdit.cursor = null; if (annCurrent) annCurrent.render(); } } });
     window.addEventListener("resize", annCloseMenu);
     if ($("toolFlat")) $("toolFlat").addEventListener("click", () => { const l = annSelectedLine(); if (l) { annFlatten(l); annChanged(); } });
-    $("toolLine").addEventListener("click", tool("line"));
-    $("toolCup").addEventListener("click", tool("cup"));
     $("kindSel").addEventListener("change", () => {
         const obj = annSelectedObject();
         if (obj && annEdit.selected.type === "line") { obj.kind = $("kindSel").value; annSave(); } else annEdit.kind = $("kindSel").value;
