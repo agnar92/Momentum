@@ -35,6 +35,9 @@ AVG_SESSIONS = 20            # okno ADR% i średniego obrotu (~miesiąc sesji)
 MIN_BARS_RS = 252            # tyle sesji potrzeba na 12M (IBD) — młodsze spółki bez RS Rating
 SPARK_WEEKS = 26
 EPS_WEIGHTS = {"q0": 0.35, "q1": 0.25, "y0": 0.15, "y5": 0.25}   # najnowszy kwartał r/r, poprzedni kwartał r/r, EPS bieżącego roku, EPS 5 lat
+EPS_STABILITY_WEIGHT = 0.2   # EPS Rating = 80 % percentyl wzrostu + 20 % percentyl stabilności
+EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/r) z dodatnim wzrostem EPS
+EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
 CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
@@ -260,9 +263,20 @@ def eps_score(q0, q1, eps_this_y, eps_past_5y):
     return _num(sum(w * v for w, v in parts) / total)
 
 
+def eps_stability(growths):
+    """Stabilność wzrostu EPS (0-100 %) = odsetek ostatnich EPS_STABILITY_QUARTERS kwartałów, w których EPS r/r wzrósł (g > 0).
+    Spółka z wyraźnym wzrostem co kwartał dostaje ~100, z zygzakiem (zysk, strata, zysk...) wyraźnie mniej. None przy < EPS_STABILITY_MIN
+    porównaniach r/r."""
+    g = [x for x in growths if x is not None][-EPS_STABILITY_QUARTERS:]
+    if len(g) < EPS_STABILITY_MIN:
+        return None
+    return _num(100 * sum(1 for x in g if x > 0) / len(g), 0)
+
+
 def add_eps_rating(stocks, eps_cache):
-    """EPS Rating 1-99 (percentyl eps_score wśród listy) + pola pomocnicze eps_q0_yoy / eps_q1_yoy (wzrost r/r dwóch ostatnich
-    zrealizowanych kwartałów z cache Yahoo). Skumulowany Composite = średnia ważona RS Rating i EPS Rating (tylko gdy są oba)."""
+    """EPS Rating 1-99 = 80 % percentyl wzrostu (eps_score) + 20 % percentyl stabilności (eps_stability; bez stabilności — sam wzrost)
+    + pola pomocnicze eps_q0_yoy / eps_q1_yoy (wzrost r/r dwóch ostatnich zrealizowanych kwartałów z cache Yahoo).
+    Skumulowany Composite = średnia ważona RS Rating i EPS Rating (tylko gdy są oba)."""
     for s in stocks:
         rows = ((eps_cache or {}).get(s["ticker"]) or {}).get("rows") or []
         quarters = [q["g"] for q in eps_quarters(rows)[0]]
@@ -270,7 +284,17 @@ def add_eps_rating(stocks, eps_cache):
         q1 = quarters[-2] if len(quarters) > 1 else None
         s["eps_q0_yoy"], s["eps_q1_yoy"] = q0, q1
         s["eps_score"] = eps_score(q0, q1, s.get("eps_this_y"), s.get("eps_past_5y"))
-    percentile_rating(stocks, "eps_score", "eps_rating")
+        s["eps_stability"] = eps_stability(quarters)
+    percentile_rating(stocks, "eps_score", "eps_growth_rating")
+    percentile_rating(stocks, "eps_stability", "eps_stability_rating")
+    for s in stocks:
+        g, st = s.get("eps_growth_rating"), s.get("eps_stability_rating")
+        if g is None:
+            s["eps_rating"] = None
+        elif st is None:
+            s["eps_rating"] = g
+        else:
+            s["eps_rating"] = int(round((1 - EPS_STABILITY_WEIGHT) * g + EPS_STABILITY_WEIGHT * st))
     for s in stocks:
         rs, eps = s.get("rs_rating"), s.get("eps_rating")
         s["composite_rating"] = int(round(COMPOSITE_RS_WEIGHT * rs + (1 - COMPOSITE_RS_WEIGHT) * eps)) if rs is not None and eps is not None else None

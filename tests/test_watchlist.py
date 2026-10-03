@@ -82,6 +82,40 @@ class TestIndicators:
         # renormalizacja wag: dwa składniki (0,35 i 0,25) -> (0,35*40 + 0,25*20) / 0,6
         assert watchlist.eps_score(40, 20, None, None) == pytest.approx((0.35 * 40 + 0.25 * 20) / 0.6, abs=0.01)
 
+    def test_eps_stability_share_of_positive_quarters(self):
+        assert watchlist.eps_stability([10, 20, 15, 30]) == 100.0
+        assert watchlist.eps_stability([10, -5, 20, -8]) == 50.0
+        assert watchlist.eps_stability([None, 10, 20]) is None                   # < 4 porównań r/r
+        # tylko ostatnie 8 kwartałów: dawne straty nie liczą się
+        assert watchlist.eps_stability([-5] * 4 + [10] * 8) == 100.0
+
+    def test_eps_rating_blends_growth_and_stability_percentiles(self):
+        def quarters_cache(growths):
+            # kolejne kwartały co ~91 dni; EPS rośnie/spada tak, by r/r dawało zadane wzrosty
+            import datetime as dt
+            base = dt.date(2023, 1, 10)
+            eps = []
+            rows = []
+            for i in range(len(growths) + 4):
+                d = base + dt.timedelta(days=91 * i)
+                if i < 4:
+                    v = 1.0
+                else:
+                    v = eps[i - 4] * (1 + growths[i - 4] / 100)
+                eps.append(v)
+                rows.append({"date": d.strftime("%Y-%m-%d"), "eps": v, "est": None})
+            return {"fetched": "2026-10-01", "rows": rows}
+        steady = [20, 20, 20, 20, 20, 20, 20, 20]
+        erratic = [60, -30, 60, -30, 60, -30, 60, 40]
+        stocks = [{"ticker": "S", "rs_rating": 50, "eps_this_y": 20, "eps_past_5y": 20},
+                  {"ticker": "E", "rs_rating": 50, "eps_this_y": 20, "eps_past_5y": 20}]
+        watchlist.add_eps_rating(stocks, {"S": quarters_cache(steady), "E": quarters_cache(erratic)})
+        s, e = stocks
+        assert s["eps_stability"] == 100.0 and e["eps_stability"] < 100.0
+        # E ma wyższy wzrost ostatniego kwartału, ale S wygrywa stabilnością w 20 % — rating E nie przekracza 80 % wagi wzrostu
+        assert s["eps_stability_rating"] > e["eps_stability_rating"]
+        assert s["eps_rating"] is not None and e["eps_rating"] is not None
+
     def test_add_eps_rating_percentile_and_composite(self):
         def cache(g_new, g_old):
             # kwartały r/r: 4 starsze + 2 nowsze tak, żeby ostatnie dwa miały zadany wzrost
