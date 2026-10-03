@@ -325,20 +325,20 @@ const COL = {
         return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
     }],
     alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
-    spark: ["Cena (26 tyg.)", null, s => `<td title="Cena tygodniowa, ostatnie 26 tygodni">${sparkSvg(s.spark)}</td>`],
+    mini: ["Wykres 52 tyg.", null, s => `<td><div class="mini-chart" data-mini="${escapeHtml(s.ticker)}"></div></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
-const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
+const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "mini", "earnings", "tv"];
 const TAB_COLUMNS = {
     LIST: LIST_COLUMNS,
     FAV: LIST_COLUMNS,
-    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
-    QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
+    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "mini", "earnings", "tv"],
+    QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "mini", "earnings", "tv"],
     PT: [...LEAD, "price", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
     ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
-    BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "spark", "earnings", "tv"],
+    BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "mini", "earnings", "tv"],
 };
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
@@ -354,6 +354,28 @@ const TAB_COLUMNS_COMPACT = {
 };
 let splitMode = false;
 const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
+
+// Mini wykres tygodniowy w rozwiniętym kafelku (telefon): dane z charts.json (ładowane raz, to samo co pełny wykres), rysuje miniChartSvg.
+function miniSource(charts, stock) {
+    const st = charts && charts.stocks && charts.stocks[stock.ticker];
+    if (!st) return null;
+    return { weeks: charts.weeks, spx: charts.spx, o: st.o, h: st.h, l: st.l, c: st.c, sma10: st.sma10, sma40: st.sma40, eps: st.eps,
+        rsRating: stock.rs_rating, epsRating: stock.eps_rating, compositeRating: stock.composite_rating };
+}
+
+function fillMiniCharts() {
+    if (splitMode || !state.data) return;
+    const empty = [...document.querySelectorAll("tr.open .mini-chart[data-mini]")].filter(el => !el.firstChild);
+    if (!empty.length) return;
+    loadCharts().then(charts => {
+        if (!charts) return;
+        empty.forEach(el => {
+            if (el.firstChild) return;
+            const stock = state.data.stocks.find(x => x.ticker === el.dataset.mini);
+            el.innerHTML = stock ? miniChartSvg(miniSource(charts, stock)) : "";
+        });
+    });
+}
 
 const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
 
@@ -440,6 +462,7 @@ function renderTable() {
         : `${rows.length} z ${total} spółek`;
     updateSortHeaders(table);
     updateCardSort(tab);
+    fillMiniCharts();
     markSelectedRow();
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
@@ -741,6 +764,7 @@ function initControls() {
         const t = tr.dataset.ticker;
         if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
         tr.classList.toggle("open", openCards.has(t));
+        fillMiniCharts();
     }));
     initChartModal();
 }

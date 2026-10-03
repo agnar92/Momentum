@@ -681,12 +681,16 @@ body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
 body:not(.split) td.c-alDist::before { content: "vs linia"; }
 body:not(.split) td.c-rank { display: none !important; }
 /* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
-body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-recom):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.card-actions) {
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-recom):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini):not(.card-actions) {
     display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
 }
-body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-recom):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
+body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-recom):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini)::before {
     content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
 }
 body:not(.split) td.card-actions { display: none; }
 body:not(.split) tr.open td.card-actions { display: flex; order: 30; flex: 0 0 100%; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 body:not(.split) tr.open td.card-actions .mini-btn { padding: 8px 14px; font-size: 13px; }
+
+/* mini wykres w rozwiniętym kafelku */
+.mini-chart svg { display: block; width: 100%; height: auto; }
+body:not(.split) tr.open td.c-mini { display: block; order: 19; flex: 0 0 100%; padding-top: 8px; border-top: 1px solid var(--border); }
