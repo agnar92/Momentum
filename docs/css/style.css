@@ -889,3 +889,17 @@ body:not(.split) .wl-chart-head #chartMoreBtn { flex: 0 0 44px; }
     body:not(.split) .chart-nav { padding-top: 0; padding-bottom: calc(0px + env(safe-area-inset-bottom, 0px)); }
     body:not(.split) .chart-nav .nav-btn { min-height: 30px; min-width: 56px; font-size: 15px; }
 }
+
+body:not(.split) .chart-grid.layout-1 #chartPlot { touch-action: none; }   /* gesty na wykresie (zoom / przesuwanie) bez przewijania strony */
+
+/* telefon: suwak okna czasowego to cienka linia z dwiema kulkami (bez mini wykresu cen) — nie ma miejsca na większą wizualizację */
+body:not(.split) .wl-chart-box .wl-range { height: 26px; margin: 2px 22px 2px; background: none; border: 0; border-radius: 0; }
+body:not(.split) .wl-chart-box .wl-range > svg { display: none; }
+body:not(.split) .wl-chart-box .wl-range::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--border); border-radius: 1px; }
+body:not(.split) .wl-chart-box .wl-range-win { top: 50%; bottom: auto; height: 28px; margin-top: -14px; min-width: 0; background: none; border: 0; border-radius: 0; }
+body:not(.split) .wl-chart-box .wl-range-win::before { content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 4px; margin-top: -2px; background: #4aa3ff; border-radius: 2px; }
+body:not(.split) .wl-chart-box .wl-range-h { top: 0; bottom: 0; width: 30px; }
+body:not(.split) .wl-chart-box .wl-range-l { left: -15px; }
+body:not(.split) .wl-chart-box .wl-range-r { right: -15px; }
+body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #4aa3ff; border: 2px solid #0e0f13; box-shadow: 0 0 0 1px #4aa3ff; }
+@media (max-height: 520px) { body:not(.split) .wl-chart-box .wl-range { height: 26px; margin: 1px 22px 2px; } }

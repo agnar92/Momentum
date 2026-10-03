@@ -459,3 +459,42 @@ test("phone fit layout: viewBox equals the fitted pixel box (no scaling of a fix
     assert.equal(Number(vb[1]), 374);
     assert.ok(Math.abs(Number(vb[2]) - 560) <= 16, vb[2]);
 });
+
+test("placeLabels: no overlaps, stays inside bounds, important labels win, low priority ones are dropped when there is no room", () => {
+    const { placeLabels, labelBox } = require("../../docs/js/chart.js");
+    const bounds = { x0: 0, x1: 200, y0: 0, y1: 100 };
+    const mk = (text, x, y, prio, over = {}) => ({ text, x, y, anchor: "middle", size: 10, bold: false, prio, ...over });
+    const out = placeLabels([mk("98.41", 100, 50, 2), mk("pivot 98.41", 100, 50, 9), mk("97.10", 100, 50, 2)], bounds);
+    const shown = out.filter(l => !l.dropped);
+    assert.equal(out[1].x, 100); assert.equal(out[1].y, 50);                  // priorytet 9 zostaje na swoim miejscu
+    for (let i = 0; i < shown.length; i++) for (let j = i + 1; j < shown.length; j++) {
+        const a = labelBox(shown[i], shown[i].x, shown[i].y), b = labelBox(shown[j], shown[j].x, shown[j].y);
+        assert.ok(a.x1 <= b.x0 || b.x1 <= a.x0 || a.y1 <= b.y0 || b.y1 <= a.y0, `${shown[i].text} nachodzi na ${shown[j].text}`);
+    }
+    const edge = placeLabels([mk("98.41 długa etykieta", 195, 3, 5, { anchor: "start" })], bounds)[0];
+    const eb = labelBox(edge, edge.x, edge.y);
+    assert.ok(eb.x1 <= 200 && eb.x0 >= 0 && eb.y0 >= 0, "etykieta wypchnięta w granice wykresu");
+    const crowd = Array.from({ length: 60 }, () => mk("111.11", 100, 50, 1));
+    const res = placeLabels(crowd, { x0: 80, x1: 120, y0: 40, y1: 60 });
+    assert.ok(res.some(l => l.dropped), "gdy brak miejsca, najmniej ważne są pomijane");
+    const must = placeLabels([mk("a", 50, 50, 9), mk("b", 50, 50, 9)], { x0: 40, x1: 60, y0: 45, y1: 55 });
+    assert.ok(must.every(l => !l.dropped), "etykiety o prio >= 8 nigdy nie są pomijane");
+});
+
+test("pinchWindow zooms the time axis around the pinch centre; panWindow drags the window like a finance app", () => {
+    const { pinchWindow, panWindow } = require("../../docs/js/chart.js");
+    const start = { n: 60, end: 200, dist: 100, frac: 0.5 };
+    const closer = pinchWindow(start, 200, 252);                      // palce rozsunięte 2× => okno 2× krótsze (przybliżenie)
+    assert.equal(closer.n, 30);
+    assert.equal(closer.end - closer.n / 2, 200 - 30);                // środek okna bez zmian (frac 0,5): 170
+    const wider = pinchWindow(start, 50, 252);                        // palce zbliżone => oddalenie
+    assert.equal(wider.n, 120);
+    assert.equal(pinchWindow(start, 10, 100).n, 100);                 // nie więcej niż cała historia
+    assert.equal(pinchWindow(start, 100000, 252).n, 15);              // nie mniej niż MIN_WINDOW
+    const left = pinchWindow({ n: 60, end: 200, dist: 100, frac: 0 }, 200, 252);   // środek przy lewym brzegu: lewy brzeg zostaje
+    assert.equal(left.end - left.n, 140);
+    assert.deepEqual(panWindow({ n: 50, end: 200 }, 100, 500, 252), { n: 50, end: 190 });   // w prawo = wstecz w czasie
+    assert.deepEqual(panWindow({ n: 50, end: 200 }, -100, 500, 252), { n: 50, end: 210 });
+    assert.equal(panWindow({ n: 50, end: 60 }, 5000, 500, 252).end, 50);                    // nie za początek danych
+    assert.equal(panWindow({ n: 50, end: 250 }, -5000, 500, 252).end, 252);
+});
