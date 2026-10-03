@@ -353,13 +353,24 @@ function dropLegend(L) {
     return out;
 }
 
+// Linia zysków leży na wykresie cen (jak w MarketSmith / MarketSurge), więc dolny panel jest potrzebny tylko na tabelę kwartałów
+// (2 wiersze). Tylko w trybie estymat (opts.estimates) zostaje duży panel z konsensusem EPS; wolne miejsce dostaje wykres cen.
+function compactEpsPanel(L, opts) {
+    if (opts.estimates) return L;
+    const scale = opts.compact ? (opts.fit ? FIT_FONT_SCALE : COMPACT_FONT_SCALE) : (L.fontScale || 1);
+    const h = Math.round(scale * 36);
+    const delta = L.eps.h - h;
+    if (delta <= 0) return L;
+    return { ...L, price: { ...L.price, h: L.price.h + delta }, volume: { ...L.volume, y: L.volume.y + delta }, eps: { y: L.eps.y + delta, h } };
+}
+
 function pickLayout(opts = {}) {
     if (opts.fit) {
         const L = fitLayout(opts.fit.w, opts.fit.h);
-        return opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4)) : L;
+        return compactEpsPanel(opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4)) : L, opts);
     }
     const L = opts.compact ? CHART_LAYOUT_COMPACT : (opts.wide ? CHART_LAYOUT_WIDE : CHART_LAYOUT);
-    return opts.hideLabels ? dropLegend(L) : L;
+    return compactEpsPanel(opts.hideLabels ? dropLegend(L) : L, opts);
 }
 
 // Daty <-> indeks świecy (ułamkowy, interpolacja po kalendarzu; poza zakresem ekstrapolacja średnią odległością świec).
@@ -630,6 +641,33 @@ function chartSvg(m, opts = {}) {
             parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${(opts.compact ? 3.2 : 2.6) + (leads ? 1.6 : 0)}" fill="${CHART_COLORS.rs}"${leads ? ` stroke="#fff" stroke-width="1.2"` : ""}><title>${leads ? "RS na maksimum 52 tyg., cena jeszcze nie (RS przed ceną)" : "RS na maksimum 52 tyg."}</title></circle>`);
         });
     }
+    // linia zysków (EPS za 4 kwartały, TTM) NA wykresie cen — własna skala po prawej jak linia RS; kółka w tygodniach raportów, przerywany odcinek = prognoza
+    const ttmPts = m.eps.filter(q => Number.isFinite(q.t));
+    if (ttmPts.length >= 2) {
+        const nx = m.epsNext && Number.isFinite(m.epsNext.t) ? m.epsNext : null;
+        const nxIdx = nx ? dateToIndex(m.weeks, nx.d) : null;
+        const tv = ttmPts.map(q => q.t).concat(nx ? [nx.t] : []);
+        const tlo = Math.min(...tv), thi = Math.max(...tv), tpad = (thi - tlo || Math.abs(thi) || 1) * 0.12;
+        const yE = makeYScale(tlo - tpad, thi + tpad, P.y + P.h * 0.1, P.h * 0.8);
+        const pts = ttmPts.map(q => [x(q.week), yE(q.t)]);
+        const ec = CHART_COLORS.eps, r = opts.compact ? 4.4 : 3.6;
+        parts.push(polyline(pts, "#0e0f13", 4.2).replace("<polyline", `<polyline ${clipAttr} opacity="0.6"`));
+        parts.push(polyline(pts, ec, 2.2).replace("<polyline", `<polyline ${clipAttr}`));
+        ttmPts.forEach((q, k) => parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${r}" fill="${ec}" stroke="#0e0f13" stroke-width="1"><title>${q.d}: EPS za 4 kwartały ${q.t} (kwartał ${q.e}${Number.isFinite(q.g) ? `, ${q.g >= 0 ? "+" : ""}${q.g}% r/r` : ""})</title></circle>`));
+        const lp = pts[pts.length - 1];
+        const edge = L.width - L.right;
+        let labelX = Math.min(lp[0], edge - 4), anchor = lp[0] > edge - fs(60) ? "end" : "middle";
+        if (nx) {
+            const nxX = Math.min(x(nxIdx), edge - 6), nxY = yE(nx.t), inside = nxIdx <= m.n - 0.5;
+            parts.push(`<line ${clipAttr} x1="${lp[0]}" y1="${lp[1]}" x2="${nxX}" y2="${nxY}" stroke="${ec}" stroke-width="2.2" stroke-dasharray="4 3"/>`);
+            parts.push(inside
+                ? `<circle cx="${nxX}" cy="${nxY}" r="${r}" fill="#0e0f13" stroke="${ec}" stroke-width="1.8"><title>Prognoza następnego raportu ${nx.d}: EPS ${nx.e}, TTM ${nx.t}</title></circle>`
+                : `<path d="M${nxX - 1},${nxY - 5} L${nxX + 6},${nxY} L${nxX - 1},${nxY + 5} Z" fill="${ec}"><title>Następny raport ${nx.d} (poza oknem): prognoza EPS ${nx.e}, TTM ${nx.t}</title></path>`);
+            parts.push(`<text x="${Math.min(nxX, edge - 4)}" y="${Math.max(P.y + fs(10), nxY - fs(8))}" font-size="${fs(10)}" font-weight="700" fill="${ec}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">prog. ${nx.t}</text>`);
+            labelX = lp[0]; anchor = "middle";
+        }
+        parts.push(`<text x="${labelX}" y="${Math.min(P.y + P.h - 3, lp[1] + fs(15))}" font-size="${fs(11)}" font-weight="700" fill="${ec}" text-anchor="${anchor}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">EPS ${ttmPts[ttmPts.length - 1].t}</text>`);
+    }
     // pasek znaczników wyników pod cenami: strzałka ↑, „EPS” i zmiana r/r (zielona / czerwona) przy tygodniu raportu; przerywana strzałka = następny raport
     if (marksH) {
         const arrow = (cx, fill, stroke, title) => {
@@ -657,6 +695,7 @@ function chartSvg(m, opts = {}) {
         Number.isFinite(m.rsChangePct) ? `${m.rsChangePct >= 0 ? "+" : ""}${m.rsChangePct.toFixed(0)}% vs S&amp;P w oknie` : null,
         m.rsLine && m.rsLine.state ? `RS ${m.rsLine.state === "przed ceną" ? "na maks. przed ceną" : "na maks. razem z ceną"}` : null].filter(Boolean);
     const otherItems = [`<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${rsPart.length ? " · " + rsPart.join(" · ") : ""}</tspan>`];
+    if (ttmPts.length >= 2) otherItems.push(`<tspan fill="${CHART_COLORS.eps}">● EPS (4 kw., TTM)${m.epsNext && Number.isFinite(m.epsNext.t) ? " ┄ prognoza" : ""}</tspan>`);
     if (m.trend && m.trend.pattern) otherItems.push(`<tspan fill="${CHART_COLORS.res}">▸ ${escapeHtml(m.trend.pattern)}</tspan>`);
     if (m.trend && m.trend.state) {
         const bo = m.trend.breakout;
@@ -719,40 +758,14 @@ function chartSvg(m, opts = {}) {
             }
         });
     } else if (m.eps.length) {
-        // Linia zysków jak w MarketSmith / MarketSurge: pomarańczowa linia z kółkami = suma EPS z 4 ostatnich kwartałów (TTM) w tygodniach raportów,
-        // przerywany odcinek = TTM z prognozą następnego kwartału; pod linią tabela kwartałów (EPS i zmiana r/r) wyrównana do osi czasu.
-        const rowH = fs(13), tableH = rowH * 2 + 4, tableY = L.eps.y + L.eps.h - tableH;
-        const ttm = m.eps.filter(q => Number.isFinite(q.t));
-        const isTtm = ttm.length >= 2;
-        const series = (isTtm ? ttm : m.eps).map(q => ({ q, v: isTtm ? q.t : q.e }));
-        const next = isTtm && m.epsNext && Number.isFinite(m.epsNext.t) ? m.epsNext : null;
+        // Dolny panel to tylko tabela kwartałów wyrównana do osi czasu (EPS $ i zmiana r/r); linia zysków jest na wykresie cen.
+        const rowH = fs(13), tableY = L.eps.y + 2;
         const nextIdx = m.epsNext ? dateToIndex(m.weeks, m.epsNext.d) : null;
-        const vals = series.map(sr => sr.v).concat(next ? [next.t] : []);
-        const lo = Math.min(...vals), hi = Math.max(...vals), padE = (hi - lo || Math.abs(hi) || 1) * 0.18;
-        const top = L.eps.y + fs(16), bottom = tableY - fs(10);
-        const yE = makeYScale(lo - padE, hi + padE, top, Math.max(18, bottom - top));
-        if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.eps.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">${isTtm ? "Linia zysków: EPS za 4 kwartały (TTM)" : "EPS kwartalny"}${next ? " · przerywana = z prognozą" : ""}</text>`);
-        if (lo < 0 && hi > 0) parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yE(0)}" y2="${yE(0)}" stroke="${CHART_COLORS.grid}" stroke-dasharray="3 3"/>`);
-        const pts = series.map(sr => [x(sr.q.week), yE(sr.v)]);
-        parts.push(polyline(pts, CHART_COLORS.eps, 2));
-        series.forEach((sr, k) => parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${opts.compact ? 4.4 : 3.6}" fill="${CHART_COLORS.eps}"><title>${sr.q.d}: ${isTtm ? "TTM " + sr.v + " (kwartał " + sr.q.e + ")" : "EPS " + sr.v}</title></circle>`));
-        const lastPt = pts[pts.length - 1];
-        parts.push(`<text x="${lastPt[0]}" y="${lastPt[1] - fs(7)}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.eps}" text-anchor="${lastPt[0] > L.width - L.right - fs(30) ? "end" : "middle"}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${series[series.length - 1].v}</text>`);
-        if (next) {
-            const nx = Math.min(x(nextIdx), L.width - L.right - 6), ny = yE(next.t), inside = nextIdx <= m.n - 0.5;
-            parts.push(`<line x1="${lastPt[0]}" y1="${lastPt[1]}" x2="${nx}" y2="${ny}" stroke="${CHART_COLORS.eps}" stroke-width="2" stroke-dasharray="4 3"/>`);
-            parts.push(inside
-                ? `<circle cx="${nx}" cy="${ny}" r="${opts.compact ? 4.4 : 3.6}" fill="#0e0f13" stroke="${CHART_COLORS.eps}" stroke-width="1.6"><title>Prognoza następnego raportu ${next.d}: EPS ${next.e}, TTM ${next.t}</title></circle>`
-                : `<path d="M${nx},${ny - 4} L${nx + 6},${ny} L${nx},${ny + 4} Z" fill="${CHART_COLORS.eps}"><title>Następny raport ${next.d} (poza widocznym oknem): prognoza EPS ${next.e}, TTM ${next.t}</title></path>`);
-            parts.push(`<text x="${Math.min(nx, L.width - L.right - 4)}" y="${ny + (ny > top + 14 ? -fs(7) : fs(14))}" font-size="${fs(10)}" fill="${CHART_COLORS.eps}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">prog. ${next.t}</text>`);
-        }
-        // tabela kwartałów: EPS ($) i zmiana r/r, kolumny wyrównane do tygodnia raportu
-        parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${tableY - 2}" y2="${tableY - 2}" stroke="${CHART_COLORS.grid}"/>`);
         if (!opts.hideLabels) {
             parts.push(`<text x="${L.width - L.right + 6}" y="${tableY + rowH - 2}" font-size="${fs(9)}" fill="${CHART_COLORS.text}">EPS $</text>`);
-            parts.push(`<text x="${L.width - L.right + 6}" y="${tableY + rowH * 2}" font-size="${fs(9)}" fill="${CHART_COLORS.text}">zm. r/r</text>`);
+            parts.push(`<text x="${L.width - L.right + 6}" y="${tableY + rowH * 2 - 1}" font-size="${fs(9)}" fill="${CHART_COLORS.text}">zm. r/r</text>`);
         }
-        const cell = (cx, row, t, col, bold) => `<text x="${cx}" y="${tableY + rowH * row - (row === 1 ? 2 : 0)}" font-size="${fs(11)}" ${bold ? 'font-weight="700"' : ""} fill="${col}" text-anchor="middle">${t}</text>`;
+        const cell = (cx, row, t, col, bold) => `<text x="${cx}" y="${tableY + rowH * row - (row === 1 ? 2 : 1)}" font-size="${fs(11)}" ${bold ? 'font-weight="700"' : ""} fill="${col}" text-anchor="middle">${t}</text>`;
         m.eps.forEach(q => {
             const cx = x(q.week);
             parts.push(cell(cx, 1, q.e, CHART_COLORS.textStrong, false));
@@ -762,12 +775,11 @@ function chartSvg(m, opts = {}) {
             parts.push(cell(x(nextIdx), 1, `~${m.epsNext.e}`, CHART_COLORS.text, false));
         }
     } else {
-        if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 10}" font-size="${fs(11)}" fill="${CHART_COLORS.eps}" font-weight="600">EPS kwartalny (zmiana r/r)</text>`);
         const ql = m.epsLast, qn = m.epsNext;
         const msg = ql
-            ? `Brak raportu w widocznym oknie. Ostatni (${ql.d}): EPS ${ql.e}${Number.isFinite(ql.g) ? `, ${ql.g >= 0 ? "+" : ""}${ql.g}% r/r` : ""}${Number.isFinite(ql.t) ? `, TTM ${ql.t}` : ""}${qn ? `. Następny ${qn.d}${Number.isFinite(qn.e) ? ` (prognoza ${qn.e})` : ""}` : ""}.`
+            ? `Brak raportu w oknie · ostatni ${ql.d}: EPS ${ql.e}${Number.isFinite(ql.g) ? ` (${ql.g >= 0 ? "+" : ""}${ql.g}% r/r)` : ""}${qn ? ` · następny ${qn.d}` : ""}`
             : "Brak danych o EPS kwartalnym dla tej spółki.";
-        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + 40}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${msg}</text>`);
+        parts.push(`<text x="${L.left + 4}" y="${L.eps.y + fs(14)}" font-size="${fs(opts.compact ? 10 : 11)}" fill="${CHART_COLORS.text}">${msg}</text>`);
     }
 
     // --- crosshair (ustawiany w attachChartHover)

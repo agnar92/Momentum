@@ -287,8 +287,13 @@ test("SMA colours differ from the candle colours", () => {
 
 test("pickLayout: compact wins, wide for full screen, default otherwise; wide layout renders", () => {
     const { pickLayout, CHART_LAYOUT, CHART_LAYOUT_WIDE } = require("../../docs/js/chart.js");
-    assert.equal(pickLayout({}), CHART_LAYOUT);
-    assert.equal(pickLayout({ wide: true }), CHART_LAYOUT_WIDE);
+    assert.equal(pickLayout({ estimates: {} }), CHART_LAYOUT);          // tryb estymat zachowuje duży dolny panel
+    const plain = pickLayout({});
+    assert.equal(plain.height, CHART_LAYOUT.height);                    // ta sama wysokość całości…
+    assert.ok(plain.eps.h < 60 && plain.price.h > CHART_LAYOUT.price.h);   // …ale dolny panel to tylko tabela, a wykres cen jest wyższy
+    assert.equal(plain.axisY, CHART_LAYOUT.axisY);                      // oś czasu nie przesuwa się
+    assert.ok(plain.volume.y + plain.volume.h < plain.eps.y && plain.eps.y + plain.eps.h < plain.axisY);
+    assert.equal(pickLayout({ wide: true, estimates: {} }), CHART_LAYOUT_WIDE);
     assert.notEqual(pickLayout({ compact: true, wide: true }), CHART_LAYOUT_WIDE);
     assert.match(chartSvg(buildChartModel(charts(), "AAA", null), { wide: true }), /viewBox="0 0 1600 800"/);
 });
@@ -399,7 +404,8 @@ test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and 
     c.stocks.AAA.eps_next = { d: "2026-10-20", e: 1.8, t: 5.1 };
     const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 14.9, tl_state: null }, { pad: true });
     const svg = chartSvg(m);
-    assert.match(svg, /Linia zysków: EPS za 4 kwartały \(TTM\)/);
+    assert.match(svg, /EPS \(4 kw\., TTM\) ┄ prognoza/);               // linia zysków jest NA wykresie cen i ma wpis w legendzie
+    assert.match(svg, />EPS 4\.9</);                                   // wartość TTM przy ostatnim kółku
     assert.match(svg, /prog\. 5\.1/);                                  // przerywany odcinek do prognozy
     assert.match(svg, /stroke-dasharray="4 3"/);
     assert.match(svg, />\+33%</);                                      // etykieta r/r (pasek znaczników i tabela)
@@ -408,7 +414,7 @@ test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and 
     assert.match(svg, /stop 7–8 %/);
     const geom = {};
     chartSvg(m, { geomOut: geom });
-    assert.ok(geom.L.marks.h > 0 && geom.L.price.h < 330);            // panel cen oddał miejsce na pasek znaczników
+    assert.ok(geom.L.marks.h > 0 && geom.L.eps.h < 60);               // pasek znaczników pod cenami, dolny panel tylko na tabelę
     const none = chartSvg(buildChartModel(charts(), "AAA", null, { pad: true }));
     assert.ok(!/pivot \d/.test(none));
 });
@@ -428,5 +434,5 @@ test("window without a report explains the last known one instead of claiming th
     const m = buildChartModel(c, "AAA", null);
     const cut = sliceModel(m, 2, 5);                                  // okno bez raportu
     assert.equal(cut.eps.length, 0);
-    assert.match(chartSvg(cut), /Brak raportu w widocznym oknie\. Ostatni \(2026-01-10\)/);
+    assert.match(chartSvg(cut), /Brak raportu w oknie · ostatni 2026-01-10/);
 });
