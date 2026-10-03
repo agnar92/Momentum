@@ -35,8 +35,6 @@ AVG_SESSIONS = 20            # okno ADR% i średniego obrotu (~miesiąc sesji)
 MIN_BARS_RS = 252            # tyle sesji potrzeba na 12M (IBD) — młodsze spółki bez RS Rating
 SPARK_WEEKS = 26
 EPS_WEIGHTS = {"q0": 0.35, "q1": 0.25, "y0": 0.15, "y5": 0.25}   # najnowszy kwartał r/r, poprzedni kwartał r/r, EPS bieżącego roku, EPS 5 lat
-EPS_CLIP_MIN = -50.0         # wzrost EPS poza [-50 %, +200 %] jest obcinany (nie dajemy wygrywać wzrostom z bardzo małej bazy)
-EPS_CLIP_MAX = 200.0
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
 CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
@@ -249,13 +247,13 @@ def add_rs_rating(stocks):
 
 def eps_score(q0, q1, eps_this_y, eps_past_5y):
     """Wynik EPS w stylu IBD (przybliżenie): wzrost EPS r/r z dwóch ostatnich kwartałów + roczny wzrost EPS (bieżący rok
-    i średnia z 5 lat, dane Finviz). Każdy składnik jest obcinany do [EPS_CLIP_MIN, EPS_CLIP_MAX] %, żeby wzrost z bardzo małej
-    bazy nie wygrywał rankingu; brakujące składniki pomijamy (wagi się renormalizują), ale najnowszy kwartał jest wymagany
+    i średnia z 5 lat, dane Finviz). Surowe procenty, bez obcinania (tak jak zwroty w rs_score) — skrajne wartości
+    łagodzi dopiero ranking percentylowy; brakujące składniki pomijamy (wagi się renormalizują), ale najnowszy kwartał jest wymagany
     i potrzebne są min. 2 składniki. -> float albo None."""
     if q0 is None:
         return None
     parts = [(EPS_WEIGHTS["q0"], q0), (EPS_WEIGHTS["q1"], q1), (EPS_WEIGHTS["y0"], eps_this_y), (EPS_WEIGHTS["y5"], eps_past_5y)]
-    parts = [(w, min(max(v, EPS_CLIP_MIN), EPS_CLIP_MAX)) for w, v in parts if v is not None]
+    parts = [(w, v) for w, v in parts if v is not None]
     if len(parts) < 2:
         return None
     total = sum(w for w, _ in parts)

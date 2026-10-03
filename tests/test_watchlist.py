@@ -74,12 +74,11 @@ class TestIndicators:
     def test_compute_metrics_too_short_history(self):
         assert watchlist.compute_metrics(make_prices(n=10)) is None
 
-    def test_eps_score_clips_renormalizes_and_needs_latest_quarter(self):
+    def test_eps_score_renormalizes_and_needs_latest_quarter(self):
         assert watchlist.eps_score(None, 50, 20, 20) is None                     # bez najnowszego kwartału nie ma wyniku
         assert watchlist.eps_score(40, None, None, None) is None                 # za mało składników
-        full = watchlist.eps_score(1000, 1000, 1000, 1000)                       # obcięcie do +200 %
-        assert full == 200.0
-        assert watchlist.eps_score(-500, -500, None, None) == -50.0              # obcięcie od dołu, brakujące pomijane
+        assert watchlist.eps_score(1000, 1000, 1000, 1000) == 1000.0             # surowe procenty, bez obcinania (jak w rs_score)
+        assert watchlist.eps_score(-500, -500, None, None) == -500.0             # brakujące składniki pomijane
         # renormalizacja wag: dwa składniki (0,35 i 0,25) -> (0,35*40 + 0,25*20) / 0,6
         assert watchlist.eps_score(40, 20, None, None) == pytest.approx((0.35 * 40 + 0.25 * 20) / 0.6, abs=0.01)
 
