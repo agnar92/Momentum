@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline,
+    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, miniChartSvg, miniRatingColor,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -339,4 +339,25 @@ test("chartSvg draws the price-target bracket and the consensus EPS panel only w
     const clipped = chartSvg(m, { estimates: { ...EST, pt: { low: 5, mean: 60, median: 60, high: 900 } } });
     assert.match(clipped, /↑ \$900/);                                          // skrajny cel przycięty w skali, prawdziwa wartość w etykiecie
     assert.match(clipped, /↓ \$5/);
+});
+
+test("miniChartSvg draws OHLC bars, the RS line with the rating, EPS dots and rating badges from weekly data", () => {
+    const n = 60;
+    const weeks = Array.from({ length: n }, (_, i) => new Date(Date.UTC(2025, 0, 3 + 7 * i)).toISOString().slice(0, 10));
+    const c = Array.from({ length: n }, (_, i) => 100 + i);
+    const src = {
+        weeks, spx: Array.from({ length: n }, (_, i) => 5000 + 3 * i), c, o: c.map(v => v - 1), h: c.map(v => v + 2), l: c.map(v => v - 2),
+        sma10: c.map(v => v - 3), sma40: c.map(v => v - 8), eps: [{ d: weeks[30], e: 1.5, g: 25 }, { d: weeks[5], e: 0.9, g: -4 }],
+        rsRating: 91, epsRating: 77, compositeRating: 84,
+    };
+    const svg = miniChartSvg(src);
+    assert.ok(svg.startsWith("<svg") && svg.endsWith("</svg>"));
+    assert.ok(svg.includes("RS 91") && svg.includes("EPS 77") && svg.includes("Comp 84"));
+    assert.ok(svg.includes("+25%"), "EPS growth of the in-window quarter is labelled");
+    assert.ok(!svg.includes("-4%"), "a quarter older than the 52-week window is not drawn");
+    assert.equal((svg.match(/<polyline/g) || []).length, 3);                       // SMA40, SMA10, RS
+    assert.equal(miniChartSvg({ ...src, c: [1, 2, 3] }), "");                       // za mało danych
+    assert.equal(miniChartSvg(null), "");
+    assert.equal(miniRatingColor(95), "#34e08a");
+    assert.equal(miniRatingColor(10), "#ff5c73");
 });

@@ -44,6 +44,7 @@ const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["upside_main", "desc"],
     BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
 };
+const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
     LIST: "Lista Finviz", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
@@ -325,20 +326,20 @@ const COL = {
         return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
     }],
     alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
-    spark: ["Cena (26 tyg.)", null, s => `<td title="Cena tygodniowa, ostatnie 26 tygodni">${sparkSvg(s.spark)}</td>`],
+    mini: ["Wykres 52 tyg.", null, s => `<td><div class="mini-chart" data-mini="${escapeHtml(s.ticker)}"></div></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
-const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
+const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "mini", "earnings", "tv"];
 const TAB_COLUMNS = {
     LIST: LIST_COLUMNS,
     FAV: LIST_COLUMNS,
-    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
-    QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
+    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "mini", "earnings", "tv"],
+    QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "mini", "earnings", "tv"],
     PT: [...LEAD, "price", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
     ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
-    BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "spark", "earnings", "tv"],
+    BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "mini", "earnings", "tv"],
 };
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
@@ -354,6 +355,28 @@ const TAB_COLUMNS_COMPACT = {
 };
 let splitMode = false;
 const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
+
+// Mini wykres tygodniowy w rozwiniętym kafelku (telefon): dane z charts.json (ładowane raz, to samo co pełny wykres), rysuje miniChartSvg.
+function miniSource(charts, stock) {
+    const st = charts && charts.stocks && charts.stocks[stock.ticker];
+    if (!st) return null;
+    return { weeks: charts.weeks, spx: charts.spx, o: st.o, h: st.h, l: st.l, c: st.c, sma10: st.sma10, sma40: st.sma40, eps: st.eps,
+        rsRating: stock.rs_rating, epsRating: stock.eps_rating, compositeRating: stock.composite_rating };
+}
+
+function fillMiniCharts() {
+    if (splitMode || !state.data) return;
+    const empty = [...document.querySelectorAll("tr.open .mini-chart[data-mini]")].filter(el => !el.firstChild);
+    if (!empty.length) return;
+    loadCharts().then(charts => {
+        if (!charts) return;
+        empty.forEach(el => {
+            if (el.firstChild) return;
+            const stock = state.data.stocks.find(x => x.ticker === el.dataset.mini);
+            el.innerHTML = stock ? miniChartSvg(miniSource(charts, stock)) : "";
+        });
+    });
+}
 
 const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
 
@@ -422,9 +445,25 @@ const EMPTY_MESSAGES = {
     FAV: "Brak ulubionych — kliknij ☆ przy spółce na dowolnej liście.",
 };
 
+// Zakładka Filtry: podsumowanie, ile spółek zostaje po filtrach wspólnych (szukaj / sektor / score) i po progach każdej zakładki.
+function renderFiltersSummary() {
+    const el = document.getElementById("filtersSummary");
+    if (!el) return;
+    const base = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
+    const counts = [["Lista", base.length], ["Ratingi", rsLeaders(base, state.rsMin, state.epsMin, state.compMin).length],
+        ["Qullamaggie", qullamaggieRows(base, state.qm).length], ["Upside", ptRows(base, state.ptMinAnalysts).length], ["Bazy", baseRows(base, state.bases).length]];
+    el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
+    document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
+}
+
 function renderTable() {
     if (!state.data) return;
     const tab = state.tab;
+    if (tab === FILTERS_TAB) {
+        state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
+        renderFiltersSummary();
+        return;
+    }
     const table = document.getElementById(`table-${tab}`);
     const tbody = table.querySelector("tbody");
     const rows = sortRows(rowsForTab(tab), state.sortKey, state.sortDir);
@@ -440,6 +479,7 @@ function renderTable() {
         : `${rows.length} z ${total} spółek`;
     updateSortHeaders(table);
     updateCardSort(tab);
+    fillMiniCharts();
     markSelectedRow();
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
@@ -518,7 +558,7 @@ function loadSettings() {
     try {
         const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
         if (!saved) return;
-        if (TAB_TITLES[saved.tab]) state.tab = saved.tab;
+        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB) state.tab = saved.tab;
         if (Number.isFinite(saved.rsMin)) state.rsMin = saved.rsMin;
         if (Number.isFinite(saved.epsMin)) state.epsMin = saved.epsMin;
         if (Number.isFinite(saved.compMin)) state.compMin = saved.compMin;
@@ -611,16 +651,20 @@ function toggleFav(ticker) {
 function showTab(tab, resetSort = true) {
     const layoutBefore = effectiveLayout();
     state.tab = tab;
-    if (resetSort) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
+    if (resetSort && TAB_DEFAULT_SORT[tab]) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
     const activeTab = document.querySelector(".drawer-tab.active");
     if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     Object.keys(TAB_TITLES).forEach(t => {
         document.getElementById(`table-${t}`).hidden = t !== tab;
         document.getElementById(`guide-${t}`).hidden = t !== tab;
-        document.getElementById(`controls-${t}`).hidden = t !== tab;
+        const controls = document.getElementById(`controls-${t}`);
+        if (controls) controls.hidden = t !== tab;
     });
-    document.getElementById("drawerTitle").textContent = TAB_TITLES[tab];
+    const onFilters = tab === FILTERS_TAB;
+    document.getElementById("filtersPanel").hidden = !onFilters;
+    document.getElementById("cardSortBar").hidden = onFilters;
+    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : TAB_TITLES[tab];
     saveSettings();
     renderTable();
     // zakładki Alerty i Bazy mają własny układ (dzienny + TradingView) — przerysuj wykres po zmianie zakładki
@@ -741,6 +785,7 @@ function initControls() {
         const t = tr.dataset.ticker;
         if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
         tr.classList.toggle("open", openCards.has(t));
+        fillMiniCharts();
     }));
     initChartModal();
 }
