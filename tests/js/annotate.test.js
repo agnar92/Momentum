@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    bizIndex, lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, annTemplateFlag, annTemplateCup, annUndoSnapshot, annUndoApply,
+    bizIndex, lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, annTemplateFlag, annTemplateCup, annUndoSnapshot, annUndoApply, annSyncPositionLines, annPositionLineValue,
 } = require(path.join("..", "..", "docs", "js", "annotate.js"));
 const { dateToIndex, indexToDate } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
@@ -165,4 +165,24 @@ test("annUndoApply restores objects, tombstones the created ones and clears tomb
     assert.equal(rec.del.n, "2026-02-01T00:00:00.000Z");   // utworzona po migawce => nagrobek
     assert.equal(rec.del.x, undefined);                      // przywrócona => bez nagrobka
     assert.equal(rec.editedAt, "2026-02-01T00:00:00.000Z");
+});
+
+test("annSyncPositionLines creates stop/target lines with alerts, updates them and tombstones them on removal", () => {
+    const store = {};
+    const now = new Date("2026-10-03T00:00:00Z");
+    annSyncPositionLines(store, "AAA", { stop: 95, target: 120 }, "2026-10-02", now);
+    const lines = store.AAA.lines;
+    const stop = lines.find(l => l.pos === "stop"), target = lines.find(l => l.pos === "target");
+    assert.equal(stop.alert, "below");
+    assert.equal(stop.y0, 95);
+    assert.equal(target.alert, "above");
+    assert.equal(target.x1, "2026-10-02");
+    assert.ok(stop.x0 < stop.x1);
+    assert.equal(lineValueAt(stop, "2026-10-05"), 95);                 // pozioma i przedłużona
+    annSyncPositionLines(store, "AAA", { stop: 97, target: null }, "2026-10-02", now);
+    assert.equal(annPositionLineValue(store, "AAA", "stop"), 97);
+    assert.equal(annPositionLineValue(store, "AAA", "target"), null);
+    assert.ok(store.AAA.del[target.id]);                               // nagrobek
+    annSyncPositionLines(store, "AAA", null, "2026-10-02", now);
+    assert.equal(store.AAA.lines.length, 0);
 });

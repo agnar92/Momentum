@@ -14,9 +14,9 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const ANN_KEY = "momentum_watchlist_annotations";
 const ANN_NEAR_PCT = 2;   // "blisko" = do 2% od linii
-const ANN_KIND_LABELS = { res: "opór", sup: "wsparcie", free: "linia" };
+const ANN_KIND_LABELS = { res: "opór", sup: "wsparcie", free: "linia", stop: "stop", target: "cel" };
 const ANN_DIR_LABELS = { above: "nad linią", below: "pod linią" };
-const ANN_COLORS = { res: "#ff9f43", sup: "#9fb3c8", free: "#c77dff", cup: "#ffffff" };
+const ANN_COLORS = { res: "#ff9f43", sup: "#9fb3c8", free: "#c77dff", cup: "#ffffff", stop: "#ff5a6a", target: "#2ecc71" };
 
 // ---------- czysta logika ----------
 
@@ -136,6 +136,32 @@ function annTemplateCup(h, l, dates, tapIdx, last, lookback) {
     if (a < 0 || c < 0 || !(a < b && b < c)) return null;
     if (!(h[a] > l[b] * 1.05)) return null;
     return { start: dates[a], low_date: dates[b], end: dates[c], peak: h[a], low: l[b], right: h[c] };
+}
+
+// ---------- stop i cel pozycji jako zwykłe linie z alertem ----------
+// Stop (alert „pod linią”) i cel (alert „nad linią”) to poziome linie z polem pos = "stop" | "target": widać je na wykresie,
+// przebicie trafia do zakładki Alerty. Zmiana lub usunięcie pozycji aktualizuje/usuwa linie (z nagrobkiem, żeby synchronizacja ich nie przywróciła).
+function annSyncPositionLines(store, ticker, pos, asOf, now = new Date()) {
+    const R = store[ticker] || (store[ticker] = annEmptyRecord());
+    const want = { stop: pos && pos.stop > 0 ? pos.stop : null, target: pos && pos.target > 0 ? pos.target : null };
+    const x0 = new Date(Date.parse(asOf + "T00:00:00Z") - 30 * 86400000).toISOString().slice(0, 10);
+    ["stop", "target"].forEach(which => {
+        const idx = R.lines.findIndex(l => l.pos === which);
+        if (want[which] === null) {
+            if (idx >= 0) { const [gone] = R.lines.splice(idx, 1); R.del = { ...(R.del || {}), [gone.id]: now.toISOString() }; }
+            return;
+        }
+        if (idx >= 0) { R.lines[idx].y0 = want[which]; R.lines[idx].y1 = want[which]; R.lines[idx].ack = false; }
+        else R.lines.push({ id: annNewId(), kind: which, pos: which, x0, y0: want[which], x1: asOf, y1: want[which], alert: which === "stop" ? "below" : "above", ext: true, log: false });
+    });
+    R.editedAt = now.toISOString();
+    return R;
+}
+
+// Aktualna wartość linii stopu / celu (użytkownik mógł ją przeciągnąć na wykresie) albo null.
+function annPositionLineValue(store, ticker, which) {
+    const line = store[ticker] && (store[ticker].lines || []).find(l => l.pos === which);
+    return line ? line.y0 : null;
 }
 
 // ---------- cofnij (historia zmian linii i cupów jednej spółki) ----------
@@ -1059,6 +1085,6 @@ function annInitUI(onRedraw) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT, annTemplateFlag, annTemplateCup, annUndoSnapshot, annUndoApply,
+        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT, annTemplateFlag, annTemplateCup, annUndoSnapshot, annUndoApply, annSyncPositionLines, annPositionLineValue,
     };
 }

@@ -96,10 +96,57 @@ function hideLoadingOverlay() {
     window.setTimeout(() => { el.hidden = true; }, 300);
 }
 
+// Arkusz od dołu (bottom sheet) — znany z aplikacji mobilnych wzorzec dla formularzy i menu: przyciemnione tło, uchwyt,
+// zamykanie tłem / Esc / przeciągnięciem nagłówka w dół. Zwraca element treści; onClose wołane przy każdym zamknięciu.
+let sheetEl = null;
+let sheetOnClose = null;
+
+function closeSheet() {
+    if (!sheetEl) return;
+    sheetEl.remove();
+    sheetEl = null;
+    const cb = sheetOnClose;
+    sheetOnClose = null;
+    if (cb) cb();
+}
+
+function showSheet(title, html, onClose) {
+    closeSheet();
+    const back = document.createElement("div");
+    back.className = "sheet-backdrop";
+    back.innerHTML = `<div class="sheet" role="dialog" aria-modal="true" aria-label="${title.replace(/"/g, "&quot;")}"><div class="sheet-head"><span class="sheet-grip"></span><div class="sheet-title">${title}</div><button type="button" class="sheet-close" aria-label="Zamknij">✕</button></div><div class="sheet-body"></div></div>`;
+    const sheet = back.querySelector(".sheet");
+    back.querySelector(".sheet-body").innerHTML = html;
+    back.addEventListener("pointerdown", ev => { if (ev.target === back) closeSheet(); });
+    back.querySelector(".sheet-close").addEventListener("click", closeSheet);
+    let startY = null;
+    const head = back.querySelector(".sheet-head");
+    head.addEventListener("touchstart", e => { startY = e.touches[0].clientY; }, { passive: true });
+    head.addEventListener("touchmove", e => {
+        if (startY === null) return;
+        const dy = e.touches[0].clientY - startY;
+        if (dy > 0) sheet.style.transform = `translateY(${dy}px)`;
+    }, { passive: true });
+    head.addEventListener("touchend", e => {
+        const dy = startY === null ? 0 : e.changedTouches[0].clientY - startY;
+        startY = null;
+        if (dy > 80) closeSheet(); else sheet.style.transform = "";
+    }, { passive: true });
+    (document.fullscreenElement || document.body).appendChild(back);
+    sheetEl = back;
+    sheetOnClose = onClose || null;
+    window.requestAnimationFrame(() => back.classList.add("sheet-open"));
+    return back.querySelector(".sheet-body");
+}
+
+if (typeof document !== "undefined") {
+    document.addEventListener("keydown", ev => { if (ev.key === "Escape" && sheetEl) { ev.stopPropagation(); closeSheet(); } }, true);
+}
+
 // Eksport wyłącznie dla test runnera Node (tests/js/) — nie ładowany i bez
 // efektu w przeglądarce (module tam nie istnieje). showToast/initConnStatus/
 // hideLoadingOverlay są celowo DOM-sprzężone (tak jak renderRelativeStrengthChart
 // w chart-render.js) i nie są tu jednostkowo testowane — patrz CLAUDE.md.
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { showToast, initConnStatus, hideLoadingOverlay };
+    module.exports = { showToast, initConnStatus, hideLoadingOverlay, showSheet, closeSheet };
 }
