@@ -210,11 +210,6 @@ function githubActionsUrl(loc) {
     return `https://github.com/${slug}/actions/workflows/daily_watchlist.yml`;
 }
 
-// Morningstar adresuje notowania przez giełdę (np. /stocks/xnas/aapl/quote), której nie znamy — link idzie więc przez wyszukiwarkę po tickerze.
-function morningstarUrlFor(ticker) {
-    return `https://www.morningstar.com/search?query=${encodeURIComponent(ticker)}`;
-}
-
 function fmtMarketCap(v) {
     if (!Number.isFinite(v)) return "—";
     if (v >= 1e12) return (v / 1e12).toFixed(2) + " bln";
@@ -357,7 +352,7 @@ const COL = {
     strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy"],
     mini: ["Wykres 52 tyg.", null, s => `<td><div class="mini-chart" data-mini="${escapeHtml(s.ticker)}"></div></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
-    tv: ["MS", null, s => `<td><a class="tv-row-btn" href="${morningstarUrlFor(s.ticker)}" target="_blank" rel="noopener" title="Morningstar: długoterminowa ocena spółki">MS</a></td>`],
+    tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
@@ -933,7 +928,6 @@ async function openChart(ticker) {
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
     const scoreBox = document.getElementById("chartScore");
     if (scoreBox) scoreBox.value = Number.isFinite(state.scores[ticker]) ? state.scores[ticker] : "";
-    document.getElementById("chartMs").href = morningstarUrlFor(ticker);
     document.getElementById("chartFv").href = `https://finviz.com/stock?t=${encodeURIComponent(ticker)}&ty=fc&p=d&b=1`;
     document.getElementById("chartZx").href = `https://www.zacks.com/stock/quote/${encodeURIComponent(ticker)}`;
     const body = document.getElementById("chartBody");
@@ -1306,7 +1300,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
