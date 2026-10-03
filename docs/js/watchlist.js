@@ -665,6 +665,7 @@ function renderTable() {
     fillMiniCharts();
     markMiniSelected();
     markSelectedRow();
+    if (chartRequested) updateChartNav(chartRequested);   // pasek ◀ n / N odświeża się po zmianie zakładki, filtra, sortowania
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
         if (first) openChart(first.dataset.ticker);

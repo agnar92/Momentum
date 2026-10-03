@@ -17,6 +17,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pages: write
   id-token: write
 
@@ -47,6 +48,15 @@ jobs:
 
       - name: Fetch Finviz list + yfinance prices and build watchlist.json
         run: python watchlist.py
+
+      # Opcjonalnie: powiadomienie (Issue + e-mail / push z GitHub Mobile) o nowych przebiciach Twoich linii z alertem.
+      # Wymaga sekretu GIST_TOKEN (ten sam token z uprawnieniem "gist", co w synchronizacji); bez niego krok nic nie robi.
+      - name: Alert notifications (optional)
+        continue-on-error: true
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python alerts_notify.py
 
       - name: Persist docs/data/watchlist.json
         run: |

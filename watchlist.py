@@ -206,7 +206,7 @@ def compute_metrics(df, bench_w=None):
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
 
-    tl_level = next((l["y1"] for l in tl.get("lines", []) if l["kind"] == "res"), None)   # opór flagi/korytarza dziś
+    tl_level = next((ln["y1"] for ln in tl.get("lines", []) if ln["kind"] == "res"), None)   # opór flagi/korytarza dziś
     return {
         "price": _num(price),
         "as_of": asof.strftime("%Y-%m-%d"),
