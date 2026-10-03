@@ -38,7 +38,7 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
+    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false, csMin: 6, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
 // Strategie = zakładki z filtrami; kolejność decyduje o grupowaniu w zakładce Alerty (R, potem Q, U, B, na końcu spółki bez strategii).
 const STRATEGIES = { R: ["R", "Ratingi (RS / EPS / Composite)"], Q: ["Q", "Qullamaggie"], U: ["U", "Upside do ceny celu"], B: ["B", "Bazy blisko pivotu"], W: ["W", "Blisko wybicia"] };
@@ -62,12 +62,12 @@ function tagStrategies(allStocks, filtered, st, alerts = []) {
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["upside_main", "desc"],
-    BASES: ["pct_to_pivot", "asc"], BRK: ["brk_sort", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
+    CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], BRK: ["brk_sort", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
 };
 const BOTTOM_NAV_TABS = ["LIST", "BRK", "POS", "ALERTS"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
-    LIST: "Lista Finviz", BRK: "Blisko wybicia", POS: "Moje pozycje", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
+    LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", BRK: "Blisko wybicia", POS: "Moje pozycje", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -80,6 +80,7 @@ const state = {
     groupMin: DEFAULT_SETTINGS.groupMin,
     leadersOnly: DEFAULT_SETTINGS.leadersOnly,
     instOnly: DEFAULT_SETTINGS.instOnly,
+    csMin: DEFAULT_SETTINGS.csMin,
     ptMinAnalysts: DEFAULT_SETTINGS.ptMinAnalysts,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
@@ -281,6 +282,38 @@ function breakoutRows(stocks) {
     return stocks.filter(s => s.brk).sort((a, b) => a.brk_sort - b.brk_sort);
 }
 
+// Lista kontrolna CANSLIM z danych, które już mamy (heurystyka O'Neila, progi nie testowane historycznie):
+// C = EPS ostatniego kwartału r/r ≥ 25 %, A = wzrost EPS 5 lat ≥ 20 % (bez tego: EPS w tym roku ≥ 25 %), N = do 15 % pod szczytem 52 tyg.,
+// S = Acc/Dis A lub B (popyt > podaż), L = RS Rating ≥ 80, I = instytucje ≥ 20 % i napływ, M = rynek w trendzie wzrostowym (EMA10 > EMA20 tyg.).
+const CANSLIM_KEYS = ["C", "A", "N", "S", "L", "I", "M"];
+const CANSLIM_HELP = {
+    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 25 %", A: "A — roczne zyski: wzrost EPS 5 lat ≥ 20 % (albo EPS w tym roku ≥ 25 %)", N: "N — nowość / szczyt: nie dalej niż 15 % pod szczytem 52 tyg.",
+    S: "S — popyt i podaż: Acc/Dis A lub B", L: "L — lider: RS Rating ≥ 80", I: "I — instytucje: własność ≥ 20 % i napływ w ostatnim kwartale", M: "M — rynek: S&P 500 i Nasdaq w trendzie wzrostowym (EMA10 > EMA20 tyg.)",
+};
+function canslimInfo(s, regime) {
+    const num = Number.isFinite;
+    const tri = (v, test) => (num(v) ? test(v) : null);
+    let a = tri(s.eps_past_5y, v => v >= 20);
+    if (a === null) a = tri(s.eps_this_y, v => v >= 25);
+    const flags = {
+        C: tri(s.eps_q0_yoy, v => v >= 25), A: a, N: tri(s.pct_from_high_52w, v => v >= -15),
+        S: s.accdis ? s.accdis === "A" || s.accdis === "B" : null, L: tri(s.rs_rating, v => v >= 80),
+        I: typeof s.inst_sponsor === "boolean" ? s.inst_sponsor : null, M: regime === "uptrend" ? true : regime === "correction" ? false : null,
+    };
+    const score = CANSLIM_KEYS.filter(k => flags[k] === true).length;
+    const known = CANSLIM_KEYS.filter(k => flags[k] !== null).length;
+    return { flags, score, known };
+}
+function tagCanslim(stocks, regime) {
+    stocks.forEach(s => { const c = canslimInfo(s, regime); s.canslim = c; s.cs = c.known >= 4 ? c.score : null; });
+}
+function canslimRows(stocks, minScore) {
+    return stocks.filter(s => s.cs !== null && s.cs >= minScore).sort((a, b) => b.cs - a.cs || (b.composite_rating ?? -1) - (a.composite_rating ?? -1));
+}
+function canslimLettersHtml(c) {
+    return CANSLIM_KEYS.map(k => `<span class="cs-l ${c.flags[k] === true ? "on" : c.flags[k] === false ? "off" : ""}" title="${escapeHtml(CANSLIM_HELP[k])}">${k}</span>`).join("");
+}
+
 // Pastylki ocen nad wykresem (jak panel ocen w MarketSmith): Composite, RS, EPS, grupa, Acc/Dis, stabilność EPS, instytucje, lider.
 function ratingChips(s) {
     const chips = [];
@@ -293,6 +326,7 @@ function ratingChips(s) {
     add("A/D", s.accdis || null, ratingClass(s.accdis_rating), "Akumulacja / dystrybucja ~13 tyg. (A = silna akumulacja, E = dystrybucja)");
     add("Stab.", has(s.eps_stability) ? s.eps_stability + "%" : null, ratingClass(s.eps_stability_rating), "Odsetek ostatnich kwartałów z dodatnim wzrostem EPS r/r");
     add("Inst.", has(s.inst_own) ? s.inst_own.toFixed(0) + "%" : null, s.inst_sponsor === true ? "rt-80" : "", "Własność instytucji (Finviz); zielona = ≥ 20 % i napływ w ostatnim kwartale");
+    if (s.canslim && s.cs !== null) add("CANSLIM", `${s.cs}/7`, s.cs >= 6 ? "rt-90" : s.cs >= 5 ? "rt-80" : s.cs >= 4 ? "rt-60" : "rt-40", CANSLIM_KEYS.map(k => CANSLIM_HELP[k] + (s.canslim.flags[k] === true ? " ✓" : s.canslim.flags[k] === false ? " ✗" : " ?")).join("\n"));
     if (s.leader === true) add("", "★ Lider", "rt-90", "Lider: RS ≥ 80, silna grupa, blisko szczytu 52 tyg.");
     return chips;
 }
@@ -527,6 +561,8 @@ const COL = {
         return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
     }],
     alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
+    cs: ["CANSLIM", "cs", s => s.cs === null || s.cs === undefined ? `<td class="muted"></td>` : `<td class="cs-cell ${s.cs >= 5 ? "positive" : ""}"><strong>${s.cs}/7</strong> ${canslimLettersHtml(s.canslim)}</td>`,
+        "Lista CANSLIM: ile z 7 kryteriów C A N S L I M spełnia spółka (zielone litery = spełnione, czerwone = nie, szare = brak danych)"],
     brk: ["Wybicie", "brk_sort", s => {
         if (!s.brk) return `<td class="muted"></td>`;
         const cls = s.brk.rank === 0 ? "positive" : "";
@@ -555,12 +591,12 @@ const COL = {
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "thumb", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "thumb", "cs", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "mini", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
 const TAB_COLUMNS = {
-    LIST: ALL_COLUMNS, BRK: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], RS: ALL_COLUMNS, QM: ALL_COLUMNS, PT: ALL_COLUMNS, BASES: ALL_COLUMNS,
+    LIST: ALL_COLUMNS, CS: ALL_COLUMNS, BRK: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], RS: ALL_COLUMNS, QM: ALL_COLUMNS, PT: ALL_COLUMNS, BASES: ALL_COLUMNS,
     ALERTS: [...LEAD, ...ALERT_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id))],
 };
 
@@ -568,7 +604,7 @@ const TAB_COLUMNS = {
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const COMPACT_COLUMNS = ["fav", "ticker", "score", "comp", "brk", "strat"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, BRK: COMPACT_COLUMNS, FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], RS: COMPACT_COLUMNS, QM: COMPACT_COLUMNS, PT: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "cs", "comp", "strat"], BRK: COMPACT_COLUMNS, FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], RS: COMPACT_COLUMNS, QM: COMPACT_COLUMNS, PT: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
@@ -641,6 +677,8 @@ function rowsForTab(tab) {
     const alerts = alertRows(annStore, state.data.stocks);
     tagStrategies(state.data.stocks, stocks, state, alerts);
     tagPositions(state.data.stocks, state.pos);
+    tagCanslim(state.data.stocks, marketRegime());
+    if (tab === "CS") return canslimRows(stocks, state.csMin);
     if (tab === "POS") return positionRows(stocks);
     if (tab === "BRK") return breakoutRows(stocks);
     if (tab === "RS") return rsLeaders(stocks, state.rsMin, state.epsMin, state.compMin, state.groupMin, state.leadersOnly, state.instOnly);
@@ -656,7 +694,9 @@ function rowsForTab(tab) {
     return stocks;
 }
 
+const marketRegime = () => (state.data && state.data.market && state.data.market.regime) || null;
 const EMPTY_MESSAGES = {
+    CS: "Żadna spółka nie spełnia tylu kryteriów CANSLIM — obniż próg w Filtrach (🏆 CANSLIM). Przy korekcie rynku (M) maksimum to 6/7.",
     LIST: "Brak spółek (lista Finviz jest pusta albo filtr tekstu/sektora nic nie zostawia).",
     RS: "Żadna spółka nie ma RS Rating powyżej wybranego progu.",
     QM: "Żadna spółka nie spełnia progów — obniż obrót lub ADR% albo zwiększ top %.",
@@ -674,7 +714,7 @@ function renderFiltersSummary() {
     if (!el) return;
     const base = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     const counts = [["Lista", base.length], ["Ratingi", rsLeaders(base, state.rsMin, state.epsMin, state.compMin, state.groupMin, state.leadersOnly, state.instOnly).length],
-        ["Qullamaggie", qullamaggieRows(base, state.qm).length], ["Upside", ptRows(base, state.ptMinAnalysts).length], ["Bazy", baseRows(base, state.bases).length], ["Wybicia", base.filter(s => s.brk).length]];
+        ["Qullamaggie", qullamaggieRows(base, state.qm).length], ["Upside", ptRows(base, state.ptMinAnalysts).length], ["Bazy", baseRows(base, state.bases).length], ["Wybicia", base.filter(s => s.brk).length], ["CANSLIM", canslimRows(base, state.csMin).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
     document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
 }
@@ -685,6 +725,7 @@ function renderTable() {
     if (tab === FILTERS_TAB) {
         state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
         tagBreakouts(state.data.stocks, alertRows(annStore, state.data.stocks), state.brk.maxDistPct);
+        tagCanslim(state.data.stocks, marketRegime());
         renderFiltersSummary();
         return;
     }
@@ -811,7 +852,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, groupMin: state.groupMin, leadersOnly: state.leadersOnly, instOnly: state.instOnly, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases, brk: state.brk }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, groupMin: state.groupMin, leadersOnly: state.leadersOnly, instOnly: state.instOnly, csMin: state.csMin, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases, brk: state.brk }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -826,6 +867,7 @@ function loadSettings() {
         if (Number.isFinite(saved.groupMin)) state.groupMin = saved.groupMin;
         state.leadersOnly = saved.leadersOnly === true;
         state.instOnly = saved.instOnly === true;
+        if (Number.isFinite(saved.csMin)) state.csMin = saved.csMin;
         if (Number.isFinite(saved.ptMinAnalysts)) state.ptMinAnalysts = saved.ptMinAnalysts;
         if (saved.qm) ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
             if (Number.isFinite(saved.qm[k])) state.qm[k] = saved.qm[k];
@@ -1134,6 +1176,8 @@ function initControls() {
     renderPositionControls();
     document.getElementById("brkMaxDist").value = state.brk.maxDistPct;
     bind("brkMaxDist", v => { state.brk.maxDistPct = v; });
+    document.getElementById("csMin").value = state.csMin;
+    bind("csMin", v => { state.csMin = v; });
     document.getElementById("baseMaxDist").value = state.bases.maxDistPct;
     bind("baseMaxDist", v => { state.bases.maxDistPct = v; });
     const vcp = document.getElementById("baseVcpOnly");
@@ -1519,7 +1563,7 @@ function initBottomNav() {
     if (!nav) return;
     nav.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
     document.getElementById("navMore").addEventListener("click", () => {
-        const items = [["FILTERS", "🔍", "Filtry"], ["RS", "📊", "Ratingi"], ["QM", "🎯", "Qullamaggie"], ["PT", "🎯", "Upside"], ["BASES", "🧱", "Bazy"], ["FAV", "⭐", "Ulubione"]];
+        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["RS", "📊", "Ratingi"], ["QM", "🎯", "Qullamaggie"], ["PT", "🎯", "Upside"], ["BASES", "🧱", "Bazy"], ["FAV", "⭐", "Ulubione"]];
         const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
             <a href="ep.html"><span>⚡</span>Episodic Pivot (EP)</a>
             <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
@@ -1727,7 +1771,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
