@@ -529,3 +529,56 @@ class TestCup:
         calm = [b for b in watchlist.detect_bases(weekly, pd.Series(100.0, index=weekly.index)) if b["type"] == "cup"][0]["cup"]
         assert calm["mkt_dd_pct"] == 0.0 and calm["mkt_ctx"] is False
         assert watchlist.mkt_drawdown(None, "2025-01-01", "2025-06-01") is None
+
+
+class TestMarketAndLeaders:
+    @staticmethod
+    def index_df(closes, vols=None, high_pad=1.01):
+        idx = pd.bdate_range(end="2026-09-30", periods=len(closes))
+        c = pd.Series(closes, index=idx, dtype=float)
+        v = pd.Series(vols if vols is not None else [1_000_000] * len(closes), index=idx, dtype=float)
+        return pd.DataFrame({"Open": c, "High": c * high_pad, "Low": c * 0.99, "Close": c, "Volume": v})
+
+    def test_distribution_days_need_a_drop_on_higher_volume(self):
+        closes = [100.0] * 30
+        vols = [1_000_000] * 30
+        closes[-3], vols[-3] = 99.0, 1_200_000       # -1 % na wyższym wolumenie -> dzień dystrybucji
+        closes[-2], vols[-2] = 98.0, 900_000         # spadek na niższym wolumenie -> nie
+        closes[-1], vols[-1] = 98.0, 950_000         # bez spadku -> nie
+        assert watchlist.distribution_days(self.index_df(closes, vols)) == 1
+        old = [100.0] * 60
+        old[10] = 99.0
+        v = [1_000_000] * 60
+        v[10] = 2_000_000
+        assert watchlist.distribution_days(self.index_df(old, v)) == 0          # starsze niż 25 sesji nie liczą się
+
+    def test_index_state_regimes(self):
+        up = watchlist.index_state(self.index_df([100 + 0.3 * i for i in range(260)]))
+        assert up["regime"] == "uptrend" and up["pct_vs_sma50"] > 0 and up["sma50_rising"] is True
+        down = watchlist.index_state(self.index_df([200 - 0.3 * i for i in range(260)]))
+        assert down["regime"] == "correction"
+        # cena nad SMA200, ale pod SMA50 -> „pod presją”
+        closes = [100 + 0.3 * i for i in range(240)] + [170 - i for i in range(20)]
+        assert watchlist.index_state(self.index_df(closes))["regime"] == "pressure"
+        assert watchlist.index_state(self.index_df([100.0] * 50)) is None
+
+    def test_market_state_takes_the_more_severe_index(self):
+        up = self.index_df([100 + 0.3 * i for i in range(260)])
+        down = self.index_df([200 - 0.3 * i for i in range(260)])
+        assert watchlist.market_state(up, up)["regime"] == "uptrend"
+        assert watchlist.market_state(up, down)["regime"] == "correction"
+        assert watchlist.market_state(up, None)["regime"] == "uptrend" and watchlist.market_state(None, None) is None
+
+    def test_group_strength_and_leaders(self):
+        def st(t, ind, rs, below=-5.0):
+            return {"ticker": t, "industry": ind, "rs_rating": rs, "pct_from_high_52w": below}
+        stocks = [st("A1", "Chips", 95), st("A2", "Chips", 90), st("A3", "Chips", 85), st("B1", "Banks", 30), st("B2", "Banks", 40), st("B3", "Banks", 20),
+                  st("C1", "Tiny", 99), st("C2", "Tiny", 99), st("A4", "Chips", 90, below=-40.0), st("A5", "Chips", 60)]
+        watchlist.add_group_strength(stocks)
+        by = {s["ticker"]: s for s in stocks}
+        assert by["A1"]["industry_rating"] > by["B1"]["industry_rating"]
+        assert by["C1"]["industry_rating"] is None and by["C1"]["leader"] is False        # za mała grupa
+        assert by["A1"]["leader"] is True
+        assert by["A4"]["leader"] is False                                                # za daleko od szczytu
+        assert by["A5"]["leader"] is False                                                # RS < 80
+        assert by["B1"]["leader"] is False                                                # słaba grupa i słaby RS

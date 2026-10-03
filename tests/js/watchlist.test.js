@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -207,4 +207,16 @@ test("Finviz is the primary source of target and upside, Yahoo is the fallback; 
     // próg analityków dotyczy tylko spółek, dla których znamy ich liczbę (Yahoo)
     const rows = [stock("A", { finviz_upside_pct: 20 }), stock("B", { finviz_upside_pct: 40, analysts: 1 }), stock("C", { finviz_upside_pct: 10, analysts: 9 })];
     assert.deepEqual(ptRows(rows, 3).map(s => s.ticker), ["A", "C"]);
+});
+
+test("rsLeaders filters by group strength and leaders-only; marketLines describes both indices", () => {
+    const rows = [stock("A", { rs_rating: 90, industry_rating: 80, leader: true }), stock("B", { rs_rating: 95, industry_rating: 30, leader: false }),
+        stock("C", { rs_rating: 92, industry_rating: null, leader: false })];
+    assert.deepEqual(rsLeaders(rows, 80, 0, 0, 60, false).map(s => s.ticker), ["A"]);
+    assert.deepEqual(rsLeaders(rows, 80, 0, 0, 0, true).map(s => s.ticker), ["A"]);
+    assert.equal(rsLeaders(rows, 80, 0, 0, 0, false).length, 3);
+    const lines = marketLines({ sp500: { pct_vs_sma50: 2.1, pct_vs_sma200: 8.4, sma50_rising: true, dist_days: 3, pct_from_high: -1.2 }, nasdaq: null });
+    assert.equal(lines.length, 1);
+    assert.ok(lines[0].startsWith("S&P 500: +2.1% vs SMA50, +8.4% vs SMA200, SMA50 rośnie, 3 dni dystrybucji"));
+    assert.deepEqual(Object.keys(MARKET_LABELS), ["uptrend", "pressure", "correction"]);
 });

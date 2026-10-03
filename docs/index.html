@@ -45,6 +45,8 @@
             </div>
         </div>
 
+        <details class="market-banner" id="marketBanner" hidden><summary></summary><div class="market-lines"></div></details>
+
         <div class="toolbar">
             <span class="toolbar-info" id="dataInfo"></span>
             <label class="field"><span>Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka"></label>
@@ -65,6 +67,8 @@
                 <label class="field"><span>Min. RS Rating:</span><input type="number" id="rsMin" min="0" max="99" step="1"></label>
                 <label class="field" title="0 = bez filtra; spółki bez EPS Rating odpadają przy progu > 0"><span>Min. EPS Rating:</span><input type="number" id="epsMin" min="0" max="99" step="1"></label>
                 <label class="field" title="Composite = średnia z RS i EPS Rating; 0 = bez filtra"><span>Min. Composite:</span><input type="number" id="compMin" min="0" max="99" step="1"></label>
+                <label class="field" title="Siła grupy branżowej 1–99 (średni RS spółek z branży); 0 = bez filtra"><span>Min. Grupa:</span><input type="number" id="groupMin" min="0" max="99" step="1"></label>
+                <label class="field" title="Lider (L z CANSLIM): RS ≥ 80, grupa ≥ 60, nie dalej niż 25 % pod szczytem 52 tyg."><input type="checkbox" id="leadersOnly"><span>tylko liderzy (★ L)</span></label>
             </fieldset>
             <fieldset class="filter-group"><legend>🎯 Qullamaggie</legend>
                 <label class="field"><span>Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1"></label>

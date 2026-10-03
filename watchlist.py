@@ -42,6 +42,14 @@ COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
 CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
+NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
+DIST_WINDOW = 25             # dni dystrybucji liczymy z ostatnich 25 sesji (jak IBD)
+DIST_DROP_PCT = 0.2          # dzień dystrybucji: indeks spadł o >= 0,2 % przy WYŻSZYM wolumenie niż dzień wcześniej
+DIST_MAX_UPTREND = 4         # do tylu dni dystrybucji rynek nadal uznajemy za potwierdzony uptrend
+GROUP_MIN_MEMBERS = 3        # grupa branżowa liczy się od 3 spółek w liście
+LEADER_MIN_RS = 80           # lider (L z CANSLIM): RS Rating >= 80 ...
+LEADER_MIN_GROUP = 60        # ... w grupie z oceną >= 60 ...
+LEADER_MAX_BELOW_HIGH_PCT = 25.0   # ... i nie dalej niż 25 % pod szczytem 52 tyg.
 TL_TOLERANCE = 0.015         # tyle (1,5%) cena może "przekłuć" linię trendu, żeby nadal była to ta sama linia
 RS_HIGH_SESSIONS = 252         # "nowe maksimum RS/ceny" = wyższe niż w poprzednich ~52 tygodniach (jak niebieska kropka w MarketSmith)
 RS_RECENT_BARS = 5           # sygnał z ostatnich 5 sesji
@@ -243,6 +251,24 @@ def percentile_rating(stocks, score_key, rating_key):
     return stocks
 
 
+def add_group_strength(stocks):
+    """L z CANSLIM: siła grupy branżowej = średni RS Rating spółek z tej samej branży Finviz (min. GROUP_MIN_MEMBERS), przeliczona na
+    percentyl 1-99 wśród branż (`industry_rating`); `leader` = RS >= 80, grupa >= 60 i nie dalej niż 25 % pod szczytem 52 tyg."""
+    members = {}
+    for s in stocks:
+        if s.get("industry") and s.get("rs_rating") is not None:
+            members.setdefault(s["industry"], []).append(s["rs_rating"])
+    groups = [{"industry": k, "score": sum(v) / len(v)} for k, v in members.items() if len(v) >= GROUP_MIN_MEMBERS]
+    percentile_rating(groups, "score", "rating")
+    rating = {g["industry"]: g["rating"] for g in groups}
+    for s in stocks:
+        s["industry_rating"] = rating.get(s.get("industry"))
+        below = s.get("pct_from_high_52w")
+        s["leader"] = bool(s.get("rs_rating") is not None and s["rs_rating"] >= LEADER_MIN_RS and s["industry_rating"] is not None
+                           and s["industry_rating"] >= LEADER_MIN_GROUP and below is not None and below >= -LEADER_MAX_BELOW_HIGH_PCT)
+    return stocks
+
+
 def add_rs_rating(stocks):
     """RS Rating 1-99 = percentyl rs_score wśród spółek listy (remisy: średnia ranga). Spółki bez rs_score -> None."""
     return percentile_rating(stocks, "rs_score", "rs_rating")
@@ -307,6 +333,47 @@ def add_eps_rating(stocks, eps_cache):
 # i długość każdej korekty od lokalnego szczytu do ponownego wybicia ponad ten szczyt; typ ("flat"/"cup"/"deep")
 # to prosta klasyfikacja po głębokości i odbiciu, orientacyjna.
 # ============================================================================
+def distribution_days(df, window=DIST_WINDOW, drop_pct=DIST_DROP_PCT):
+    """Liczba dni dystrybucji w ostatnich `window` sesjach: indeks spadł o >= drop_pct % przy większym wolumenie niż dzień wcześniej."""
+    close, vol = df["Close"].astype(float), df["Volume"].astype(float)
+    chg = close.pct_change() * 100
+    dist = (chg <= -drop_pct) & (vol > vol.shift(1))
+    return int(dist.tail(window).sum())
+
+
+def index_state(df):
+    """Stan indeksu: cena vs SMA50/SMA200, kierunek SMA50, odległość od szczytu 52 tyg., dni dystrybucji. None, gdy za mało danych."""
+    close = df["Close"].astype(float)
+    if len(close) < 200:
+        return None
+    price = float(close.iloc[-1])
+    sma50, sma200 = float(close.tail(50).mean()), float(close.tail(200).mean())
+    sma50_prev = float(close.iloc[-60:-10].mean())
+    high = float(df["High"].astype(float).tail(252).max())
+    dd = distribution_days(df)
+    if price < sma200:
+        regime = "correction"
+    elif price > sma50 and sma50 > sma200 and dd <= DIST_MAX_UPTREND:
+        regime = "uptrend"
+    else:
+        regime = "pressure"
+    return {"close": _num(price), "pct_vs_sma50": _num((price / sma50 - 1) * 100, 1), "pct_vs_sma200": _num((price / sma200 - 1) * 100, 1),
+            "sma50_rising": sma50 > sma50_prev, "pct_from_high": _num((price / high - 1) * 100, 1), "dist_days": dd, "regime": regime,
+            "as_of": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")}
+
+
+def market_state(sp_df, nq_df):
+    """M z CANSLIM: stan S&P 500 i Nasdaq oraz łączny reżim = surowszy z dwóch (uptrend < pressure < correction).
+    Heurystyka: potwierdzony uptrend = cena > SMA50 > SMA200 i <= 4 dni dystrybucji; korekta = cena pod SMA200; reszta = „pod presją”."""
+    states = {"sp500": index_state(sp_df) if sp_df is not None and len(sp_df) else None,
+              "nasdaq": index_state(nq_df) if nq_df is not None and len(nq_df) else None}
+    order = {"uptrend": 0, "pressure": 1, "correction": 2}
+    known = [s for s in states.values() if s]
+    if not known:
+        return None
+    return {**states, "regime": max((s["regime"] for s in known), key=order.get)}
+
+
 def mkt_drawdown(bench_w, d0, d1):
     """Największy spadek (peak-to-trough, %) benchmarku (tygodniowe zamknięcia) w oknie dat d0..d1; None bez danych."""
     if bench_w is None or not len(bench_w):
@@ -946,6 +1013,7 @@ def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
         stock["finviz_upside_pct"] = finviz_upside(stock.get("finviz_target"), stock.get("price"))
         stocks.append(stock)
     add_rs_rating(stocks)
+    add_group_strength(stocks)
     return stocks
 
 
@@ -996,6 +1064,17 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
     except Exception as e:
         print(f"⚠️  Benchmark {BENCHMARK} niedostępny ({e}) — wykresy bez linii S&P 500.")
         benchmark_df = None
+    try:
+        nasdaq_df = download_prices([NASDAQ]).get(NASDAQ)
+    except Exception as e:
+        print(f"⚠️  {NASDAQ} niedostępny ({e}) — ocena rynku tylko z S&P 500.")
+        nasdaq_df = None
+    try:
+        market = market_state(drop_incomplete_bar(benchmark_df, None) if benchmark_df is not None and len(benchmark_df) else None,
+                              drop_incomplete_bar(nasdaq_df, None) if nasdaq_df is not None and len(nasdaq_df) else None)
+    except Exception as e:
+        print(f"⚠️  Ocena rynku pominięta ({e}).")
+        market = None
     stocks = build_stocks(finviz_rows, frames, bench_df=benchmark_df)
     try:
         eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
@@ -1022,6 +1101,7 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
         "finviz_total": finviz_total,
         "finviz_stale": finviz_stale,
         "n_stocks": len(stocks),
+        "market": market,
         "stocks": stocks,
     }
     out = Path(output_path)

@@ -37,7 +37,7 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
+    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
 };
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
@@ -56,6 +56,8 @@ const state = {
     rsMin: DEFAULT_SETTINGS.rsMin,
     epsMin: DEFAULT_SETTINGS.epsMin,
     compMin: DEFAULT_SETTINGS.compMin,
+    groupMin: DEFAULT_SETTINGS.groupMin,
+    leadersOnly: DEFAULT_SETTINGS.leadersOnly,
     ptMinAnalysts: DEFAULT_SETTINGS.ptMinAnalysts,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
@@ -72,11 +74,12 @@ const state = {
 // ---------- czyste funkcje (testowane w tests/js/watchlist.test.js) ----------
 
 // Liderzy RS: rs_rating >= próg, od najwyższego.
-function rsLeaders(stocks, minRating, minEps = 0, minComposite = 0) {
+function rsLeaders(stocks, minRating, minEps = 0, minComposite = 0, minGroup = 0, leadersOnly = false) {
     const atLeast = (v, min) => !(Number(min) > 0) || (Number.isFinite(v) && v >= Number(min));   // próg 0 = bez filtra (brak ratingu przechodzi)
     return stocks
         .filter(s => Number.isFinite(s.rs_rating) && s.rs_rating >= (Number(minRating) || 0)
-            && atLeast(s.eps_rating, minEps) && atLeast(s.composite_rating, minComposite))
+            && atLeast(s.eps_rating, minEps) && atLeast(s.composite_rating, minComposite) && atLeast(s.industry_rating, minGroup)
+            && (!leadersOnly || s.leader === true))
         .sort((a, b) => b.rs_rating - a.rs_rating || b.rs_score - a.rs_score);
 }
 
@@ -284,6 +287,8 @@ const COL = {
     epsr: ["EPS Rating", "eps_rating", s => ratingCell(s, "eps_rating"), "EPS Rating 1–99 (przybliżenie IBD): wzrost EPS r/r z dwóch ostatnich kwartałów + roczny wzrost EPS (bieżący rok i 5 lat), percentyl wśród spółek z listy"],
     comp: ["Composite", "composite_rating", s => ratingCell(s, "composite_rating"), "Średnia z RS Rating i EPS Rating (po 50 %); puste, gdy brakuje któregoś z nich"],
     epsStab: ["Stabilność EPS", "eps_stability", s => `<td${Number.isFinite(s.eps_stability) && s.eps_stability < 60 ? ` class="negative"` : ""}>${Number.isFinite(s.eps_stability) ? s.eps_stability + "%" : "—"}</td>`, "Odsetek ostatnich 8 kwartałów, w których EPS r/r wzrósł (min. 4 porównania); 20 % wagi EPS Rating"],
+    grp: ["Grupa", "industry_rating", s => ratingCell(s, "industry_rating"), "Siła grupy branżowej 1–99: średni RS Rating spółek z tej samej branży (min. 3 w liście), percentyl wśród branż"],
+    leader: ["Lider", "leader", s => `<td${s.leader ? ` class="positive"` : ""} title="Lider (L z CANSLIM): RS ≥ 80, grupa ≥ 60, nie dalej niż 25 % pod szczytem 52 tyg.">${s.leader ? "★ L" : ""}</td>`, "Lider: RS ≥ 80, mocna grupa (≥ 60) i blisko szczytu 52 tyg."],
     epsq: ["EPS kw. r/r", "eps_q0_yoy", s => pctCell(s.eps_q0_yoy), "Wzrost EPS ostatniego zrealizowanego kwartału względem tego samego kwartału rok wcześniej"],
     r3: ["3M", "ret_3m_pct", s => pctCell(s.ret_3m_pct)],
     r6: ["6M", "ret_6m_pct", s => pctCell(s.ret_6m_pct)],
@@ -331,11 +336,11 @@ const COL = {
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
-const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "mini", "earnings", "tv"];
+const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "leader", "grp", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "mini", "earnings", "tv"];
 const TAB_COLUMNS = {
     LIST: LIST_COLUMNS,
     FAV: LIST_COLUMNS,
-    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "mini", "earnings", "tv"],
+    RS: [...LEAD, "price", "comp", "leader", "rs", "epsr", "grp", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "mini", "earnings", "tv"],
     QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "mini", "earnings", "tv"],
     PT: [...LEAD, "price", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
     ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
@@ -425,7 +430,7 @@ function rowsForTab(tab) {
         s.target_main = targetMain(s);
     });
     const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
-    if (tab === "RS") return rsLeaders(stocks, state.rsMin, state.epsMin, state.compMin);
+    if (tab === "RS") return rsLeaders(stocks, state.rsMin, state.epsMin, state.compMin, state.groupMin, state.leadersOnly);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
     if (tab === "PT") return ptRows(stocks, state.ptMinAnalysts);
     if (tab === "BASES") return baseRows(stocks, state.bases);
@@ -453,7 +458,7 @@ function renderFiltersSummary() {
     const el = document.getElementById("filtersSummary");
     if (!el) return;
     const base = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
-    const counts = [["Lista", base.length], ["Ratingi", rsLeaders(base, state.rsMin, state.epsMin, state.compMin).length],
+    const counts = [["Lista", base.length], ["Ratingi", rsLeaders(base, state.rsMin, state.epsMin, state.compMin, state.groupMin, state.leadersOnly).length],
         ["Qullamaggie", qullamaggieRows(base, state.qm).length], ["Upside", ptRows(base, state.ptMinAnalysts).length], ["Bazy", baseRows(base, state.bases).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
     document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
@@ -554,7 +559,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, groupMin: state.groupMin, leadersOnly: state.leadersOnly, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -566,6 +571,8 @@ function loadSettings() {
         if (Number.isFinite(saved.rsMin)) state.rsMin = saved.rsMin;
         if (Number.isFinite(saved.epsMin)) state.epsMin = saved.epsMin;
         if (Number.isFinite(saved.compMin)) state.compMin = saved.compMin;
+        if (Number.isFinite(saved.groupMin)) state.groupMin = saved.groupMin;
+        state.leadersOnly = saved.leadersOnly === true;
         if (Number.isFinite(saved.ptMinAnalysts)) state.ptMinAnalysts = saved.ptMinAnalysts;
         if (saved.qm) ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
             if (Number.isFinite(saved.qm[k])) state.qm[k] = saved.qm[k];
@@ -676,6 +683,30 @@ function showTab(tab, resetSort = true) {
     if (currentChart && effectiveLayout() !== layoutBefore) { chartWindows = []; chartActiveCell = 0; drawChart(); }
 }
 
+// M z CANSLIM: stan rynku (S&P 500 i Nasdaq) policzony w watchlist.py::market_state — pasek nad listą.
+const MARKET_LABELS = { uptrend: ["✅", "Rynek: potwierdzony uptrend", "market-up"], pressure: ["⚠️", "Rynek: uptrend pod presją", "market-warn"], correction: ["🛑", "Rynek: korekta", "market-down"] };
+
+function marketLines(market) {
+    const sign = v => (Number.isFinite(v) ? (v > 0 ? "+" : "") + v + "%" : "—");
+    return [["sp500", "S&P 500"], ["nasdaq", "Nasdaq"]].filter(([k]) => market && market[k]).map(([k, name]) => {
+        const m = market[k];
+        return `${name}: ${sign(m.pct_vs_sma50)} vs SMA50, ${sign(m.pct_vs_sma200)} vs SMA200, SMA50 ${m.sma50_rising ? "rośnie" : "spada"}, ${m.dist_days} dni dystrybucji (25 sesji), ${sign(m.pct_from_high)} od szczytu`;
+    });
+}
+
+function renderMarket() {
+    const el = document.getElementById("marketBanner");
+    if (!el) return;
+    const market = state.data && state.data.market;
+    if (!market || !MARKET_LABELS[market.regime]) { el.hidden = true; return; }
+    const [icon, label, cls] = MARKET_LABELS[market.regime];
+    el.hidden = false;
+    el.className = `market-banner ${cls}`;
+    el.querySelector("summary").textContent = `${icon} ${label}`;
+    el.querySelector(".market-lines").innerHTML = marketLines(market).map(escapeHtml).join("<br>")
+        + "<br><span class=\"muted small\">Heurystyka: uptrend = cena &gt; SMA50 &gt; SMA200 i ≤ 4 dni dystrybucji; korekta = cena pod SMA200; wynik = surowszy z dwóch indeksów.</span>";
+}
+
 function renderDataInfo() {
     const d = state.data;
     const info = document.getElementById("dataInfo");
@@ -708,6 +739,11 @@ function initControls() {
     document.getElementById("compMin").value = state.compMin;
     bind("epsMin", v => { state.epsMin = v; });
     bind("compMin", v => { state.compMin = v; });
+    document.getElementById("groupMin").value = state.groupMin;
+    bind("groupMin", v => { state.groupMin = v; });
+    const leadersChk = document.getElementById("leadersOnly");
+    leadersChk.checked = state.leadersOnly;
+    leadersChk.addEventListener("change", () => { state.leadersOnly = leadersChk.checked; saveSettings(); renderTable(); });
     bind("rsMin", v => { state.rsMin = v; });
     bind("qmMinDollarVolume", v => { state.qm.minDollarVolumeM = v; });
     bind("qmMinAdr", v => { state.qm.minAdrPct = v; });
@@ -1206,6 +1242,7 @@ async function refreshDataIfStale() {
         chartsPromise = null; estimatesPromise = null; estimatesMap = null;   // wykresy i estymaty też mogły się zmienić
         loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
         renderDataInfo();
+        renderMarket();
         renderTable();
         if (currentChart) openChart(currentChart.ticker);
         showToast("Dane odświeżone.");
@@ -1222,6 +1259,7 @@ if (typeof document !== "undefined") {
         annLoad();
         await loadData();
         renderDataInfo();
+        renderMarket();
         applyLayoutMode();
         renderHeaders();
         initControls();
@@ -1244,7 +1282,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
