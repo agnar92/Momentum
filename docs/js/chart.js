@@ -225,6 +225,46 @@ function pivotFromStock(stock, bases) {
     return null;
 }
 
+// Rozmieszczanie etykiet bez nakładania (telefon!): każda etykieta {text, x, y, anchor, size, bold, prio} dostaje pierwsze wolne miejsce spośród
+// kandydatów (przesunięcia w górę / dół / na boki), zawsze w granicach wykresu; etykiety o niższym priorytecie, którym nie starczyło
+// miejsca, są pomijane (prio ≥ 8 zostają zawsze, najwyżej nachodząc). `fixed` = prostokąty już zajęte (np. etykiety nieprzesuwalne).
+// Zwraca etykiety z ostatecznymi x, y w kolejności wejściowej (pominięte mają dropped = true).
+function labelBox(it, x, y) {
+    const w = it.size * (it.bold ? 0.62 : 0.56) * String(it.text).length;
+    const x0 = it.anchor === "end" ? x - w : it.anchor === "middle" ? x - w / 2 : x;
+    return { x0, x1: x0 + w, y0: y - it.size, y1: y + it.size * 0.3 };
+}
+
+function placeLabels(items, bounds, fixed = []) {
+    const hit = (a, b) => a.x0 < b.x1 + 1 && b.x0 < a.x1 + 1 && a.y0 < b.y1 + 1 && b.y0 < a.y1 + 1;
+    const placed = fixed.slice();
+    const result = items.map(it => ({ ...it }));
+    const order = result.map((it, i) => i).sort((a, b) => (result[b].prio - result[a].prio) || (a - b));
+    order.forEach(i => {
+        const it = result[i], s = it.size;
+        const w = labelBox(it, 0, 0).x1 - labelBox(it, 0, 0).x0;
+        const dxs = [0, w * 0.6, -w * 0.6, w * 1.2, -w * 1.2];
+        const dys = [0, -s * 1.15, s * 1.15, -s * 2.3, s * 2.3, -s * 3.45, s * 3.45];
+        const cands = [];
+        dys.forEach(dy => dxs.forEach(dx => cands.push([dx, dy])));
+        cands.sort((a, b) => Math.hypot(a[0] / 2, a[1]) - Math.hypot(b[0] / 2, b[1]));
+        const fit = (dx, dy) => {
+            let x = it.x + dx, y = it.y + dy;
+            let b = labelBox(it, x, y);
+            if (b.x0 < bounds.x0) x += bounds.x0 - b.x0; else if (b.x1 > bounds.x1) x -= b.x1 - bounds.x1;
+            b = labelBox(it, x, y);
+            if (b.y0 < bounds.y0) y += bounds.y0 - b.y0; else if (b.y1 > bounds.y1) y -= b.y1 - bounds.y1;
+            return { x, y, box: labelBox(it, x, y) };
+        };
+        for (const [dx, dy] of cands) {
+            const f = fit(dx, dy);
+            if (!placed.some(p => hit(p, f.box))) { it.x = f.x; it.y = f.y; placed.push(f.box); return; }
+        }
+        if (it.prio >= 8) { const f = fit(0, 0); it.x = f.x; it.y = f.y; placed.push(f.box); } else it.dropped = true;
+    });
+    return result;
+}
+
 // Szczyty i dołki do podpisania ceną (jak „366.28” przy lokalnych szczytach w MarketSmith): lokalny ekstremum w promieniu k świec;
 // ważniejsze (wyższe szczyty, niższe dołki) mają pierwszeństwo, zbyt bliskie sobie odrzucamy.
 function swingLabels(h, l, lastIdx, k, maxHigh = 6, maxLow = 5) {
@@ -499,6 +539,10 @@ function chartSvg(m, opts = {}) {
 
     // --- 2. cena: słupki OHLC + SMA + RS
     // Pasek znaczników wyników (strzałka ↑ EPS + zmiana r/r, jak w MarketSmith/MarketSurge) leży pod wykresem cen: odejmujemy go od wysokości panelu.
+    const labels = [];   // etykiety wykresu cen rozmieszczane bez nakładania (placeLabels) po narysowaniu wszystkiego
+    const fixedLabels = [];   // etykiety rysowane na sztywno (miseczki) — tylko zajmują miejsce
+    const addLabel = (text, xx, yy, o = {}) => labels.push({ text: String(text), x: xx, y: yy, anchor: o.anchor || "middle", size: o.size || fs(10), fill: o.fill || CHART_COLORS.textStrong, bold: !!o.bold, prio: o.prio === undefined ? 1 : o.prio, title: o.title || "" });
+    const reserveLabel = (text, xx, yy, anchor, size, bold) => fixedLabels.push(labelBox({ text: String(text), anchor, size, bold }, xx, yy));
     const hasMarks = m.eps.length > 0 || !!m.epsNext;
     const marksH = hasMarks ? fs(opts.compact ? 28 : 32) : 0;
     const P = { y: L.price.y, h: L.price.h - marksH };
@@ -524,7 +568,7 @@ function chartSvg(m, opts = {}) {
     const yP = useLog ? makeLogScale(pMin, pMax, P.y, P.h) : makeYScale(pMin, pMax, P.y, P.h);
     (useLog ? logTicks(pMin, pMax) : niceTicks(pMin, pMax, 6)).forEach(t => {
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
-        parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
+        if (yP(t) > P.y + fs(9)) parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);   // nie na etykiecie osi S&P tuż nad panelem
     });
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${P.y}" width="${L.width - L.left - L.right}" height="${P.h}"/></clipPath>`);
@@ -535,15 +579,17 @@ function chartSvg(m, opts = {}) {
             const hp = [[x(cup.i1), yP(cup.right)], [x(cup.handle.iLow), yP(cup.handle.low)], [x(cup.handle.iEnd), yP(cup.handle.end)]];
             parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${hp.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Rączka −${cup.handle.depth}%</title></polyline>`);
             parts.push(`<text x="${hp[1][0]}" y="${hp[1][1] + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">rączka −${cup.handle.depth}%</text>`);
+            reserveLabel(`rączka −${cup.handle.depth}%`, hp[1][0], hp[1][1] + fs(13), "middle", fs(10), true);
         }
         // cena monitorowania miseczki = pivot (prawy brzeg)
         const pivot = Number.isFinite(cup.right) ? cup.right : null;
         if (pivot) {
             const px = Math.min(Math.max(x(cup.i1), L.left + fs(80)), L.width - L.right - 4);
             parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, P.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
+            reserveLabel(`pivot ${pivot.toFixed(2)}`, px, Math.max(yP(pivot) - 6, P.y + fs(10)), "end", fs(11), true);
         }
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
-        parts.push(`<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${cup.depth}%${cup.ctx ? ` · S&amp;P −${cup.mktDd}%` : ""}</text>`);
+        addLabel(`−${cup.depth}%${cup.ctx ? ` · S&P −${cup.mktDd}%` : ""}`, cx, yB - (yB - Math.min(yL, yR)) * 0.35, { size: fs(12), fill: CHART_COLORS.cup, bold: true, prio: 6 });
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
@@ -567,23 +613,22 @@ function chartSvg(m, opts = {}) {
         const band = (lo, hi, fill, op) => `<rect ${clipAttr} x="${zx}" y="${Math.min(yP(lo), yP(hi))}" width="${zw}" height="${Math.abs(yP(lo) - yP(hi))}" fill="${fill}" opacity="${op}"/>`;
         parts.push(band(pivotPx, pivotPx * 1.05, "#4aa3ff", 0.15), band(pivotPx * 0.92, pivotPx * 0.93, "#ff6b8a", 0.18));
         parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="#2ecc71" stroke-width="1.4" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}</title></line>`);
-        const lab = (yy, t, col, anchor, xx) => `<text x="${xx}" y="${yy}" font-size="${fs(10)}" font-weight="700" fill="${col}" text-anchor="${anchor}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${t}</text>`;
-        parts.push(lab(Math.max(P.y + fs(10), yPv - 4), `pivot ${pivotPx.toFixed(2)}`, "#2ecc71", "start", Math.max(x(i0), L.left) + 4));
         const clampY = v => Math.max(P.y + fs(10), Math.min(P.y + P.h - 3, v));
-        parts.push(lab(clampY(yP(pivotPx * 1.05) - 3), "strefa zakupu do +5 %", "#7ab8ff", "end", zx - 4));
-        parts.push(lab(clampY(yP(pivotPx * 0.92) + fs(11)), "stop 7–8 %", "#ff8fa8", "end", zx - 4));
+        addLabel(`pivot ${pivotPx.toFixed(2)}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: "#2ecc71", bold: true, prio: 9 });
+        addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#7ab8ff", bold: true, prio: 4 });
+        addLabel(opts.compact ? "stop 7–8 %" : "typowy stop 7–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff8fa8", bold: true, prio: 4 });
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
     if (boI >= 0) {
         parts.push(`<line x1="${x(boI)}" x2="${x(boI)}" y1="${P.y}" y2="${L.volume.y + L.volume.h}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"><title>Dzień wybicia ${m.trend.breakout.date}</title></line>`);
-        parts.push(`<text x="${x(boI) + 4}" y="${P.y + fs(11)}" font-size="${fs(10)}" font-weight="700" fill="#22d3ee" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">wybicie${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio} wol.` : ""}</text>`);
+        addLabel(`wybicie${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio} wol.` : ""}`, x(boI) + 4, P.y + fs(11), { anchor: "start", fill: "#22d3ee", bold: true, prio: 6 });
     }
     // ceny lokalnych szczytów i dołków (jak w MarketSmith) — w oknie, bez ostatnich niepotwierdzonych świec
-    swingLabels(m.h, m.l, m.lastIdx, Math.max(2, Math.min(7, Math.round(m.n / 16)))).forEach(sw => {
+    // na telefonie mniej podpisów (3 szczyty / 2 dołki), na dużym ekranie 6 / 5
+    swingLabels(m.h, m.l, m.lastIdx, Math.max(2, Math.min(7, Math.round(m.n / 16))), opts.compact ? 3 : 6, opts.compact ? 2 : 5).forEach(sw => {
         if (pivotPx !== null && Math.abs(sw.price / pivotPx - 1) < 0.003) return;   // ta cena jest już podpisana jako pivot
-        const yy = sw.type === "H" ? Math.max(P.y + fs(10), yP(sw.price) - 4) : Math.min(P.y + P.h - 2, yP(sw.price) + fs(11));
-        parts.push(`<text x="${x(sw.i)}" y="${yy}" font-size="${fs(10)}" fill="${CHART_COLORS.textStrong}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${sw.price.toFixed(2)}</text>`);
+        addLabel(sw.price.toFixed(2), x(sw.i), sw.type === "H" ? yP(sw.price) - 4 : yP(sw.price) + fs(11), { prio: 2 });
     });
     // linie trendu: opór (pomarańczowa) i wsparcie (szara), od pierwszego dotknięcia do ostatniej świecy
     (opts.hideAutoLines ? [] : m.lines).forEach(l => {
@@ -597,7 +642,7 @@ function chartSvg(m, opts = {}) {
         const lp = at(l.i1);
         if (Number.isFinite(lp) && lp > 0 && l.i1 >= 0) {
             const ly = Math.min(Math.max(y1 + (l.kind === "res" ? -5 : fs(12)), P.y + fs(10)), P.y + P.h - 3);
-            parts.push(`<text x="${Math.min(x_(l.i1), L.width - L.right - 4)}" y="${ly}" font-size="${fs(11)}" font-weight="700" fill="${col}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${lp.toFixed(2)}</text>`);
+            addLabel(lp.toFixed(2), Math.min(x_(l.i1), L.width - L.right - 4), ly, { anchor: "end", size: fs(11), fill: col, bold: true, prio: 7 });
         }
     });
     // maszt flagi: pogrubiony odcinek od dołka do szczytu wzrostu poprzedzającego konsolidację + podpis
@@ -605,7 +650,7 @@ function chartSvg(m, opts = {}) {
         const p0 = Math.max(0, m.pole.i0);
         const py0 = yP(m.pole.y0 + (m.pole.y1 - m.pole.y0) * (p0 - m.pole.i0) / Math.max(1, m.pole.i1 - m.pole.i0));
         parts.push(`<line x1="${x(p0)}" y1="${py0}" x2="${x(m.pole.i1)}" y2="${yP(m.pole.y1)}" stroke="${CHART_COLORS.res}" stroke-width="3" stroke-opacity="0.35" stroke-linecap="round"><title>Maszt +${m.pole.gain}%</title></line>`);
-        parts.push(`<text x="${x(m.pole.i1) - 6}" y="${yP(m.pole.y1) - 4}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.res}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke">maszt +${m.pole.gain}%</text>`);
+        addLabel(`maszt +${m.pole.gain}%`, x(m.pole.i1) - 6, yP(m.pole.y1) - 4, { anchor: "end", size: fs(11), fill: CHART_COLORS.res, bold: true, prio: 5 });
     }
     if (m.trend && m.trend.state === "wybicie" && m.lastShown !== false && Number.isFinite(m.h[m.lastIdx])) {
         const bx = x_(m.lastIdx), by = yP(m.h[m.lastIdx]) - 8;
@@ -636,7 +681,7 @@ function chartSvg(m, opts = {}) {
             if (li >= 0) {
                 const ex = x(li), ey = yR(m.rs[li]), room = L.width - L.right - ex > fs(44);
                 parts.push(`<circle cx="${ex}" cy="${ey}" r="3.2" fill="${CHART_COLORS.rs}"/>`);
-                parts.push(`<text x="${room ? ex + 7 : ex - 4}" y="${room ? ey + 4 : ey - 8}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.rs}" text-anchor="${room ? "start" : "end"}" stroke="#0e0f13" stroke-width="3" paint-order="stroke"><title>RS Rating ${m.rsRating} (1–99, percentyl siły względnej wśród spółek z listy)</title>RS ${m.rsRating}</text>`);
+                addLabel(`RS ${m.rsRating}`, room ? ex + 7 : ex - 4, room ? ey + 4 : ey - 8, { anchor: room ? "start" : "end", size: fs(12), fill: CHART_COLORS.rs, bold: true, prio: 9, title: `RS Rating ${m.rsRating} (1–99, percentyl siły względnej wśród spółek z listy)` });
             }
         }
         m.rsNewHigh.forEach((flag, i) => {
@@ -667,11 +712,16 @@ function chartSvg(m, opts = {}) {
             parts.push(inside
                 ? `<circle cx="${nxX}" cy="${nxY}" r="${r}" fill="#0e0f13" stroke="${ec}" stroke-width="1.8"><title>Prognoza następnego raportu ${nx.d}: EPS ${nx.e}, TTM ${nx.t}</title></circle>`
                 : `<path d="M${nxX - 1},${nxY - 5} L${nxX + 6},${nxY} L${nxX - 1},${nxY + 5} Z" fill="${ec}"><title>Następny raport ${nx.d} (poza oknem): prognoza EPS ${nx.e}, TTM ${nx.t}</title></path>`);
-            parts.push(`<text x="${Math.min(nxX, edge - 4)}" y="${Math.max(P.y + fs(10), nxY - fs(8))}" font-size="${fs(10)}" font-weight="700" fill="${ec}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">prog. ${nx.t}</text>`);
+            addLabel(`prog. ${nx.t}`, Math.min(nxX, edge - 4), Math.max(P.y + fs(10), nxY - fs(8)), { anchor: "end", fill: ec, bold: true, prio: 8 });
             labelX = lp[0]; anchor = "middle";
         }
-        parts.push(`<text x="${labelX}" y="${Math.min(P.y + P.h - 3, lp[1] + fs(15))}" font-size="${fs(11)}" font-weight="700" fill="${ec}" text-anchor="${anchor}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">EPS ${ttmPts[ttmPts.length - 1].t}</text>`);
+        addLabel(`EPS ${ttmPts[ttmPts.length - 1].t}`, labelX, Math.min(P.y + P.h - 3, lp[1] + fs(15)), { anchor, size: fs(11), fill: ec, bold: true, prio: 8 });
     }
+    // rozmieszczenie wszystkich etykiet ceny bez nakładania (telefon!) — dopiero teraz, gdy znamy wszystkie
+    placeLabels(labels, { x0: L.left + 2, x1: L.width - L.right - 2, y0: P.y + 2, y1: P.y + P.h - 2 }, fixedLabels).forEach(lb => {
+        if (lb.dropped) return;
+        parts.push(`<text x="${lb.x.toFixed(1)}" y="${lb.y.toFixed(1)}" font-size="${lb.size}" ${lb.bold ? 'font-weight="700"' : ""} fill="${lb.fill}" text-anchor="${lb.anchor}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${lb.title ? `<title>${escapeHtml(lb.title)}</title>` : ""}${escapeHtml(lb.text)}</text>`);
+    });
     // pasek znaczników wyników pod cenami: strzałka ↑, „EPS” i zmiana r/r (zielona / czerwona) przy tygodniu raportu; przerywana strzałka = następny raport
     if (marksH) {
         const arrow = (cx, fill, stroke, title) => {
@@ -878,7 +928,7 @@ function sliderHtml(m) {
 
 function attachRangeSlider(root, total, getWin, setWin) {
     const track = root.querySelector("#chartRange"), win = root.querySelector("#chartRangeWin");
-    if (!track || !win) return;
+    if (!track || !win) return null;
     const paint = () => {
         const w = getWin();
         win.style.left = `${(w.end - w.n) / total * 100}%`;
@@ -912,6 +962,60 @@ function attachRangeSlider(root, total, getWin, setWin) {
         setWin({ n: w.n, end });
         paint();
     });
+    return paint;
+}
+
+// Nowe okno po szczypnięciu: długość skaluje odwrotnie do rozstawu palców, a świeca pod środkiem szczypnięcia zostaje w tym samym miejscu ekranu.
+// start = { n, end, dist, frac } z początku gestu, dist = obecny rozstaw palców, frac = położenie środka w poziomie wykresu (0..1).
+function pinchWindow(start, dist, total) {
+    const n = Math.max(MIN_WINDOW, Math.min(total, Math.round(start.n * start.dist / Math.max(1, dist))));
+    const anchor = start.end - start.n + start.frac * start.n;
+    return clampWindow({ n, end: Math.round(anchor + (1 - start.frac) * n) }, total, n, total);
+}
+
+// Przesunięcie jednym palcem: przeciągnięcie w prawo cofa okno w czasie (jak w aplikacjach giełdowych).
+function panWindow(start, dx, widthPx, total) {
+    const perPx = start.n / Math.max(1, widthPx);
+    return clampWindow({ n: start.n, end: Math.round(start.end - dx * perPx) }, total, start.n, total);
+}
+
+// Gesty dotykowe na wykresie: szczypnięcie = zoom osi czasu (długość okna), przeciągnięcie jednym palcem = przesuwanie okna. Tylko dotyk;
+// enabled() = false (np. tryb rysowania linii) wyłącza gesty, bo wtedy palec rysuje / poprawia obiekty. Odświeżanie scalane w klatkę animacji.
+function attachChartGestures(plot, total, getWin, setWin, enabled) {
+    const ptrs = new Map();
+    let pinch = null, pan = null, raf = 0, pending = null;
+    const apply = w => { pending = w; if (!raf) raf = window.requestAnimationFrame(() => { raf = 0; setWin(pending); }); };
+    const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+    plot.addEventListener("pointerdown", ev => {
+        if (ev.pointerType !== "touch" || !enabled()) return;
+        ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+        const w = getWin(), r = plot.getBoundingClientRect();
+        if (ptrs.size === 2) {
+            const [a, b] = [...ptrs.values()];
+            pinch = { n: w.n, end: w.end, dist: dist(), frac: Math.min(1, Math.max(0, ((a.x + b.x) / 2 - r.left) / r.width)) };
+            pan = null;
+        } else if (ptrs.size === 1) pan = { x: ev.clientX, n: w.n, end: w.end, moved: false };
+    });
+    plot.addEventListener("pointermove", ev => {
+        const p = ptrs.get(ev.pointerId);
+        if (!p || !enabled()) return;
+        p.x = ev.clientX; p.y = ev.clientY;
+        if (pinch && ptrs.size === 2) { apply(pinchWindow(pinch, dist(), total)); return; }
+        if (pan && ptrs.size === 1) {
+            const dx = ev.clientX - pan.x;
+            if (!pan.moved && Math.abs(dx) < 8) return;
+            pan.moved = true;
+            apply(panWindow(pan, dx, plot.getBoundingClientRect().width, total));
+        }
+    });
+    const end = ev => {
+        if (!ptrs.delete(ev.pointerId)) return;
+        if (ptrs.size < 2) pinch = null;
+        if (ptrs.size === 0) pan = null;
+        else if (ptrs.size === 1) { const w = getWin(), q = [...ptrs.values()][0]; pan = { x: q.x, n: w.n, end: w.end, moved: true }; }   // po puszczeniu jednego palca zoom przechodzi w przesuwanie
+    };
+    plot.addEventListener("pointerup", end);
+    plot.addEventListener("pointercancel", end);
 }
 
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
@@ -938,11 +1042,13 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         if (opts.overlay) opts.overlay({ plot, m, geom, full, L });   // własne linie/cupy (annotate.js) — osobna warstwa nad wykresem
     };
     draw();
-    attachRangeSlider(container, full.n, () => win, w => {
+    const applyWin = w => {
         win = clampWindow(w, full.n, defN, defEnd);
         draw();
         if (opts.onWindow) opts.onWindow(win);
-    });
+    };
+    const paintSlider = attachRangeSlider(container, full.n, () => win, applyWin);
+    if (opts.gestures) attachChartGestures(plot, full.n, () => win, w => { applyWin(w); if (paintSlider) paintSlider(); }, opts.gestures);
     return full;
 }
 
@@ -1015,6 +1121,6 @@ function miniChartSvg(src, n = MINI_WEEKS) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, miniChartSvg, miniRatingColor, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, miniChartSvg, miniRatingColor, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow,
     };
 }

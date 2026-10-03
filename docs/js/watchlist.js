@@ -1418,6 +1418,7 @@ function drawChart() {
             fit: layout === "1" ? (splitMode ? null : phoneFit(cell)) : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
+            gestures: layout === "1" && !splitMode ? (() => !annEdit.on) : null,   // telefon: szczypnięcie = zoom osi czasu, przeciągnięcie = przesuwanie okna (poza trybem rysowania)
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
             hideAutoLines: annHide(c.ticker).lines, hideAutoCups: annHide(c.ticker).cups,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
@@ -1448,10 +1449,9 @@ function drawChart() {
 // Telefon: okno wykresu to kolumna na cały ekran (nagłówek, paski informacji, odczyt, suwak, wykres, pasek nawigacji), a wykres
 // zajmuje CAŁĄ resztę — układ liczymy w pikselach faktycznie dostępnego miejsca (viewBox = rozmiar na ekranie, bez skalowania 560×800
 // do szerokości ekranu), więc nic nie jest miniaturą ani nie ma pustych pasów. Przeliczane po obrocie / zmianie rozmiaru.
-const PHONE_SLIDER_PX = 50;   // suwak okna czasowego + odstępy nad wykresem
-const PHONE_SLIDER_PX_SHORT = 30;   // telefon poziomo (CSS: max-height 520 px): niższy suwak, bez wiersza odczytu
+const PHONE_SLIDER_PX = 30;   // suwak okna czasowego (linia + 2 kulki, 26 px) + odstępy nad wykresem
 let lastPhoneFit = null;
-const phoneSliderPx = () => (window.innerHeight <= 520 ? PHONE_SLIDER_PX_SHORT : PHONE_SLIDER_PX);
+const phoneSliderPx = () => PHONE_SLIDER_PX;
 function phoneFit(cell) {
     const r = cell.querySelector(".cell-body").getBoundingClientRect();
     lastPhoneFit = { w: Math.max(260, Math.round(r.width)), h: Math.max(120, Math.round(r.height - phoneSliderPx())) };
