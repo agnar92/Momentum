@@ -510,3 +510,15 @@ test("shiftPriceRange / scalePriceRange move and stretch the manual price range 
     const tight = scalePriceRange({ lo: 100, hi: 400 }, 0.5, true);
     assert.ok(Math.abs(tight.lo * tight.hi - 100 * 400) < 1e-6 && tight.hi / tight.lo < 4);
 });
+
+test("buildChartModel / chartSvg: sell climax top marks the signal bar on the daily chart", () => {
+    const { buildChartModel, chartSvg, dailyCharts } = require("../../docs/js/chart.js");
+    const days = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
+    const arr = v => days.map(() => v);
+    const charts = { days, spx_d: arr(5000), weeks: [], stocks: { X: { day: { o: arr(10), h: arr(11), l: arr(9), c: arr(10), v: arr(100), sma10: arr(10), sma20: arr(10), sma50: arr(10), sma200: arr(10), climax: { date: "2026-09-28", runup_pct: 40, week_gain_pct: 22, vol_ratio: 3.1, reversal: true, gap: false, late: false, conf: 1 } }, eps: [], bases: [] } } };
+    const m = buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {});
+    assert.equal(m.climax.date, "2026-09-28");
+    assert.match(chartSvg(m, {}), /Sell climax top \(tydzień do 2026-09-28\)/);
+    charts.stocks.X.day.climax = null;
+    assert.doesNotMatch(chartSvg(buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {}), {}), /Sell climax top \(tydzień/);
+});
