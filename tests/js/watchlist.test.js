@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -177,4 +177,10 @@ test("prefsNormalize drops malformed entries and sorts tickers deterministically
     assert.deepEqual(Object.keys(n.scores), ["A", "Z"]);
     assert.equal(n.scores.A.v, null);
     assert.equal(n.favs.Q.v, false);
+});
+
+test("morningstarUrlFor builds a ticker search link and encodes the symbol", () => {
+    assert.equal(morningstarUrlFor("AAPL"), "https://www.morningstar.com/search?query=AAPL");
+    assert.equal(morningstarUrlFor("BRK-B"), "https://www.morningstar.com/search?query=BRK-B");
+    assert.equal(morningstarUrlFor("A B"), "https://www.morningstar.com/search?query=A%20B");
 });

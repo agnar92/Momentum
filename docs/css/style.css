@@ -579,7 +579,7 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 .wl-chart-box.full.phone-full #chartLayoutBtn,
 .wl-chart-box.full.phone-full #chartEstBtn,
 .wl-chart-box.full.phone-full #chartLogBtn,
-.wl-chart-box.full.phone-full #chartTv,
+.wl-chart-box.full.phone-full #chartMs,
 .wl-chart-box.full.phone-full .chart-score,
 .wl-chart-box.full.phone-full #chartFv,
 .wl-chart-box.full.phone-full #chartZx { display: none; }
