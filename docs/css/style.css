@@ -909,3 +909,8 @@ body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left
 .cs-l.on { color: var(--green-bright, #3fb950); opacity: 1; }
 .cs-l.off { color: #f85149; opacity: .85; }
 .cs-cell { white-space: nowrap; }
+
+/* przycisk „A” (skala cen automatyczna) po ręcznym przesunięciu wykresu w pionie */
+.cell-body { position: relative; }
+.chart-auto-btn { position: absolute; right: 4px; bottom: 6px; z-index: 4; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel-alt); color: var(--green-bright); font-weight: 800; font-size: 14px; cursor: pointer; opacity: .92; }
+.chart-auto-btn[hidden] { display: none; }
