@@ -253,7 +253,7 @@ th.tv-col { width: 1%; }
 .wl-chart-stats { margin-top: 6px; }
 .wl-chart-tools[hidden] { display: none; }
 .wl-chart-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; padding: 8px 10px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
-.wl-chart-tools .btn.active, #chartEditBtn.active { background: var(--green); color: #fff; border-color: var(--green-bright); }
+.wl-chart-tools .btn.active, #chartLineBtn.active, #chartCupBtn.active { background: var(--green); color: #fff; border-color: var(--green-bright); }
 .wl-chart-tools .btn:disabled { opacity: 0.45; cursor: default; }
 .ann-note { flex: 1 1 200px; min-width: 140px; background: var(--panel-alt); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 9px; font-size: 12.5px; font-family: inherit; }
 .ann-hint { flex: 1 1 100%; font-size: 11.5px; color: var(--text-dim); }
@@ -681,15 +681,12 @@ body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
 body:not(.split) td.c-alDist::before { content: "vs linia"; }
 body:not(.split) td.c-rank { display: none !important; }
 /* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
-body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-recom):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini):not(.card-actions) {
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-recom):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini) {
     display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
 }
 body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-recom):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini)::before {
     content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
 }
-body:not(.split) td.card-actions { display: none; }
-body:not(.split) tr.open td.card-actions { display: flex; order: 30; flex: 0 0 100%; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
-body:not(.split) tr.open td.card-actions .mini-btn { padding: 8px 14px; font-size: 13px; }
 
 /* mini wykres w rozwiniętym kafelku */
 .mini-chart svg { display: block; width: 100%; height: auto; }
@@ -706,3 +703,6 @@ body:not(.split) tr.open td.c-mini { display: block; order: 19; flex: 0 0 100%; 
 .filter-group legend { color: var(--text); font-size: 12.5px; font-weight: 700; padding: 0 6px; }
 .filter-group .field { font-size: 12.5px; }
 .filter-group .field input[type="number"] { width: 84px; }
+.mini-chart { border: 2px solid transparent; border-radius: 10px; padding: 2px; cursor: pointer; }
+.mini-chart.selected { border-color: var(--green-bright); background: rgba(46, 204, 113, 0.07); }
+.mini-chart.selected::after { content: "Stuknij ponownie, aby otworzyć wykres"; display: block; text-align: center; font-size: 11px; color: var(--green-bright); padding: 2px 0 4px; }

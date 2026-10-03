@@ -378,6 +378,11 @@ function fillMiniCharts() {
     });
 }
 
+let miniSelected = null;   // ticker z zaznaczonym (ramka) mini wykresem; drugie stuknięcie otwiera pełny wykres
+function markMiniSelected() {
+    document.querySelectorAll(".mini-chart").forEach(el => el.classList.toggle("selected", el.dataset.mini === miniSelected));
+}
+
 const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
 
 // Telefon: nagłówków tabeli nie ma (kafelki), więc sortowanie daje lista rozwijana + przycisk kierunku.
@@ -410,9 +415,7 @@ function decorateCell(html, id, label) {
 
 function renderRow(tab, s, i) {
     const cells = columnsFor(tab).map(id => decorateCell(COL[id][2](s, i), id, COL[id][0])).join("");
-    // kafelek (telefon): przyciski w rozwiniętej części
-    const actions = splitMode ? "" : `<td class="card-actions"><button type="button" class="mini-btn" data-chart="${escapeHtml(s.ticker)}">📈 Wykres</button></td>`;
-    return cells + actions;
+    return cells;
 }
 
 function rowsForTab(tab) {
@@ -480,6 +483,7 @@ function renderTable() {
     updateSortHeaders(table);
     updateCardSort(tab);
     fillMiniCharts();
+    markMiniSelected();
     markSelectedRow();
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
@@ -776,13 +780,17 @@ function initControls() {
         }
         const star = ev.target.closest("td[data-fav]");
         if (star) { toggleFav(star.dataset.fav); return; }
-        const chartBtn = ev.target.closest("[data-chart]");
-        if (chartBtn) { openChart(chartBtn.dataset.chart); return; }
         const tr = ev.target.closest("tr[data-ticker]");
         if (!tr) return;
         if (splitMode) { openChart(tr.dataset.ticker); return; }
-        // telefon: stuknięcie rozwija / zwija kafelek w dół (wykres otwiera przycisk „Wykres” w rozwiniętej części)
+        // telefon: stuknięcie rozwija / zwija kafelek w dół; mini wykres: pierwsze stuknięcie zaznacza (ramka), drugie otwiera pełny wykres
         const t = tr.dataset.ticker;
+        if (ev.target.closest(".mini-chart")) {
+            if (miniSelected === t) { miniSelected = null; markMiniSelected(); openChart(t); } else { miniSelected = t; markMiniSelected(); }
+            return;
+        }
+        miniSelected = null;
+        markMiniSelected();
         if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
         tr.classList.toggle("open", openCards.has(t));
         fillMiniCharts();
@@ -875,7 +883,7 @@ async function openChart(ticker) {
     markSelectedRow(true);
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
     chartWindows = [];
-    Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });   // nowy wykres: poza trybem edycji
+    Object.assign(annEdit, { on: false, mode: null, tool: null, selected: null, pending: [], cursor: null });   // nowy wykres: poza trybem edycji
     annCurrent = null;
     annSyncTools();
     body.innerHTML = `<div class="empty-state">Ładowanie wykresu…</div>`;
@@ -1001,7 +1009,7 @@ function drawChart() {
         body.querySelectorAll(".chart-cell").forEach((cell, i) => cell.addEventListener("pointerdown", ev => {
             if (i === chartActiveCell || ev.target.closest(".wl-range")) return;
             chartActiveCell = i;
-            Object.assign(annEdit, { tool: null, selected: null, pending: [], cursor: null });
+            Object.assign(annEdit, { tool: annEdit.mode, selected: null, pending: [], cursor: null });
             annSyncTools();
             drawChart();
         }, true));
@@ -1055,7 +1063,7 @@ function setChartFull(on) {
 function closeChart() {
     if (chartFull) setChartFull(false);
     document.getElementById("chartModal").hidden = true;
-    Object.assign(annEdit, { on: false, tool: null, selected: null, pending: [], cursor: null });
+    Object.assign(annEdit, { on: false, mode: null, tool: null, selected: null, pending: [], cursor: null });
     annSyncTools();
     currentChart = null;
     chartRequested = null;
