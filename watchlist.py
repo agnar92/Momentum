@@ -34,6 +34,10 @@ MIN_COVERAGE = 0.7           # minimalny odsetek spółek z Finviz, dla których
 AVG_SESSIONS = 20            # okno ADR% i średniego obrotu (~miesiąc sesji)
 MIN_BARS_RS = 252            # tyle sesji potrzeba na 12M (IBD) — młodsze spółki bez RS Rating
 SPARK_WEEKS = 26
+EPS_WEIGHTS = {"q0": 0.35, "q1": 0.25, "y0": 0.15, "y5": 0.25}   # najnowszy kwartał r/r, poprzedni kwartał r/r, EPS bieżącego roku, EPS 5 lat
+EPS_CLIP_MIN = -50.0         # wzrost EPS poza [-50 %, +200 %] jest obcinany (nie dajemy wygrywać wzrostom z bardzo małej bazy)
+EPS_CLIP_MAX = 200.0
+COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
 CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
@@ -221,20 +225,57 @@ def compute_metrics(df, bench_w=None):
     }
 
 
-def add_rs_rating(stocks):
-    """RS Rating 1-99 = percentyl rs_score wśród spółek listy (remisy: średnia ranga). Spółki bez rs_score -> None."""
-    scored = [s for s in stocks if s.get("rs_score") is not None]
+def percentile_rating(stocks, score_key, rating_key):
+    """Rating 1-99 = percentyl wyniku score_key wśród spółek listy (remisy: średnia ranga). Spółki bez wyniku -> None."""
+    scored = [s for s in stocks if s.get(score_key) is not None]
     for s in stocks:
-        s["rs_rating"] = None
+        s[rating_key] = None
     n = len(scored)
     if n == 0:
         return stocks
     if n == 1:
-        scored[0]["rs_rating"] = 50
+        scored[0][rating_key] = 50
         return stocks
-    ranks = pd.Series([s["rs_score"] for s in scored]).rank(method="average")
+    ranks = pd.Series([s[score_key] for s in scored]).rank(method="average")
     for s, r in zip(scored, ranks):
-        s["rs_rating"] = int(round(1 + 98 * (r - 1) / (n - 1)))
+        s[rating_key] = int(round(1 + 98 * (r - 1) / (n - 1)))
+    return stocks
+
+
+def add_rs_rating(stocks):
+    """RS Rating 1-99 = percentyl rs_score wśród spółek listy (remisy: średnia ranga). Spółki bez rs_score -> None."""
+    return percentile_rating(stocks, "rs_score", "rs_rating")
+
+
+def eps_score(q0, q1, eps_this_y, eps_past_5y):
+    """Wynik EPS w stylu IBD (przybliżenie): wzrost EPS r/r z dwóch ostatnich kwartałów + roczny wzrost EPS (bieżący rok
+    i średnia z 5 lat, dane Finviz). Każdy składnik jest obcinany do [EPS_CLIP_MIN, EPS_CLIP_MAX] %, żeby wzrost z bardzo małej
+    bazy nie wygrywał rankingu; brakujące składniki pomijamy (wagi się renormalizują), ale najnowszy kwartał jest wymagany
+    i potrzebne są min. 2 składniki. -> float albo None."""
+    if q0 is None:
+        return None
+    parts = [(EPS_WEIGHTS["q0"], q0), (EPS_WEIGHTS["q1"], q1), (EPS_WEIGHTS["y0"], eps_this_y), (EPS_WEIGHTS["y5"], eps_past_5y)]
+    parts = [(w, min(max(v, EPS_CLIP_MIN), EPS_CLIP_MAX)) for w, v in parts if v is not None]
+    if len(parts) < 2:
+        return None
+    total = sum(w for w, _ in parts)
+    return _num(sum(w * v for w, v in parts) / total)
+
+
+def add_eps_rating(stocks, eps_cache):
+    """EPS Rating 1-99 (percentyl eps_score wśród listy) + pola pomocnicze eps_q0_yoy / eps_q1_yoy (wzrost r/r dwóch ostatnich
+    zrealizowanych kwartałów z cache Yahoo). Skumulowany Composite = średnia ważona RS Rating i EPS Rating (tylko gdy są oba)."""
+    for s in stocks:
+        rows = ((eps_cache or {}).get(s["ticker"]) or {}).get("rows") or []
+        quarters = [q["g"] for q in eps_quarters(rows)[0]]
+        q0 = quarters[-1] if quarters else None
+        q1 = quarters[-2] if len(quarters) > 1 else None
+        s["eps_q0_yoy"], s["eps_q1_yoy"] = q0, q1
+        s["eps_score"] = eps_score(q0, q1, s.get("eps_this_y"), s.get("eps_past_5y"))
+    percentile_rating(stocks, "eps_score", "eps_rating")
+    for s in stocks:
+        rs, eps = s.get("rs_rating"), s.get("eps_rating")
+        s["composite_rating"] = int(round(COMPOSITE_RS_WEIGHT * rs + (1 - COMPOSITE_RS_WEIGHT) * eps)) if rs is not None and eps is not None else None
     return stocks
 
 
@@ -931,6 +972,7 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
     except Exception as e:
         print(f"⚠️  Krok EPS pominięty ({e}).")
         eps_cache = {}
+    add_eps_rating(stocks, eps_cache)
     try:
         estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
     except Exception as e:
