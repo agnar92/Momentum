@@ -835,3 +835,57 @@ body:not(.split) .wl-chart-box.is-editing .wl-chart-ratings, body:not(.split) .w
 
 /* telefon: wykres ma być bohaterem — opis spółki, fundamenty i objaśnienie wzorca są w arkuszu „⋯” */
 body:not(.split) .wl-chart-box .wl-chart-sub, body:not(.split) .wl-chart-box #chartStats, body:not(.split) .wl-chart-box #chartPattern { display: none; }
+
+/* ---------- telefon: okno wykresu = kolumna na cały ekran, wykres bierze całą resztę (układ w pikselach, patrz phoneFit) ---------- */
+body:not(.split) .wl-chart-box { display: flex; flex-direction: column; height: 100vh; height: 100dvh; max-height: none; overflow: hidden; padding: 6px 8px 0; }
+body:not(.split) .wl-chart-box > * { flex: 0 0 auto; }
+body:not(.split) .wl-chart-box > .wl-chart-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+body:not(.split) .chart-grid.layout-1 { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+body:not(.split) .chart-grid.layout-1 .chart-cell { flex: 1 1 auto; min-height: 0; }
+body:not(.split) .chart-grid.layout-1 .cell-readout { font-size: 10.5px; min-height: 14px; margin: 2px 0 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body:not(.split) .chart-grid.layout-1 .cell-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+body:not(.split) .chart-grid.layout-1 .cell-body > #chartPlot { flex: 1 1 auto; min-height: 0; }
+body:not(.split) .chart-grid.layout-1 svg#chartSvg { width: 100%; height: 100%; max-height: none; }
+body:not(.split) .wl-chart-box .wl-range { height: 40px; margin-top: 2px; margin-bottom: 4px; }
+body:not(.split) .wl-chart-box .wl-range-h { width: 22px; }
+body:not(.split) .wl-chart-box > .wl-chart-body > .chart-grid.layout-1 > .chart-cell > .cell-body { overflow: hidden; }
+/* paski informacji nad wykresem: po jednym wierszu, przewijane w bok (zamiast zawijać się na 2–3 wiersze) */
+body:not(.split) .wl-chart-title { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body:not(.split) .wl-chart-ratings { flex-wrap: nowrap; overflow-x: auto; margin-top: 4px; padding-bottom: 1px; scrollbar-width: none; }
+body:not(.split) .wl-chart-ratings::-webkit-scrollbar, body:not(.split) .wl-chart-ready::-webkit-scrollbar, body:not(.split) .wl-chart-base::-webkit-scrollbar { display: none; }
+body:not(.split) .rchip { flex: none; padding: 1px 8px; font-size: 12px; }
+body:not(.split) .wl-chart-ready { white-space: nowrap; overflow-x: auto; margin-top: 3px; font-size: 12px; scrollbar-width: none; }
+body:not(.split) .wl-chart-base { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; margin-top: 4px; padding: 2px 8px; font-size: 12px; gap: 3px 12px; scrollbar-width: none; }
+body:not(.split) .wl-chart-base > * { flex: none; }
+body:not(.split) .chart-nav { padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)); gap: 14px; }
+body:not(.split) .chart-nav .nav-btn { min-height: 38px; }
+body:not(.split) .ann-fab { position: absolute; right: 12px; bottom: 60px; margin: 0; }
+/* telefon poziomo / niski ekran: jeden wiersz nagłówka, bez pasków informacji — wykres dostaje prawie cały ekran (szczegóły pod „⋯”) */
+@media (max-height: 520px) {
+    body:not(.split) .wl-chart-box .wl-chart-ratings, body:not(.split) .wl-chart-box .wl-chart-ready, body:not(.split) .wl-chart-box .wl-chart-base, body:not(.split) .wl-chart-box .wl-chart-sub { display: none; }
+    body:not(.split) .wl-chart-head { flex-wrap: nowrap; align-items: center; }
+    body:not(.split) .wl-chart-titles { flex: 1 1 auto; min-width: 0; padding-right: 0; }
+    body:not(.split) .wl-chart-head .chart-modal-close { position: static; }
+    body:not(.split) .wl-chart-head .btn { flex: 0 0 auto; padding: 6px 10px; }
+}
+/* pełny ekran na telefonie: tylko wykres i pasek nawigacji */
+body:not(.split) .wl-chart-box.full.phone-full .wl-chart-ratings, body:not(.split) .wl-chart-box.full.phone-full .wl-chart-ready { display: none; }
+
+/* nagłówek na telefonie: wiersz 1 = tytuł + ✕ (w jednym rzędzie, bez nakładania), wiersz 2 = przyciski */
+body:not(.split) .wl-chart-head { position: static; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+body:not(.split) .wl-chart-head .wl-chart-titles { order: 0; flex: 1 1 calc(100% - 56px); min-width: 0; padding-right: 0; }
+body:not(.split) .wl-chart-head .chart-modal-close { order: 1; position: static; flex: 0 0 44px; width: 44px; height: 36px; margin: 0; }
+body:not(.split) .wl-chart-head .btn { order: 2; }
+body:not(.split) .wl-chart-head .btn:not(#chartMoreBtn) { flex: 1 1 auto; }
+body:not(.split) .wl-chart-head #chartMoreBtn { flex: 0 0 44px; }
+@media (max-height: 520px) {
+    body:not(.split) .wl-chart-head .wl-chart-titles { flex: 1 1 auto; }
+    body:not(.split) .wl-chart-head .chart-modal-close { order: 3; }
+}
+
+@media (max-height: 520px) {
+    body:not(.split) .chart-grid.layout-1 .cell-readout { display: none; }
+    body:not(.split) .wl-chart-box .wl-range { height: 26px; margin: 1px 0 3px; }
+    body:not(.split) .chart-nav { padding-top: 0; padding-bottom: calc(0px + env(safe-area-inset-bottom, 0px)); }
+    body:not(.split) .chart-nav .nav-btn { min-height: 30px; min-width: 56px; font-size: 15px; }
+}
