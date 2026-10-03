@@ -64,6 +64,7 @@ const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["upside_main", "desc"],
     BASES: ["pct_to_pivot", "asc"], BRK: ["brk_sort", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
 };
+const BOTTOM_NAV_TABS = ["LIST", "BRK", "POS", "ALERTS"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
     LIST: "Lista Finviz", BRK: "Blisko wybicia", POS: "Moje pozycje", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
@@ -737,6 +738,7 @@ function applyLayoutMode() {
     splitMode = want;
     document.body.classList.toggle("split", want);
     if (document.getElementById("chartLayoutBtn")) updateLayoutButton();
+    if (document.getElementById("chartTfBtn")) updateTfButton();
     if (state.data) {
         renderHeaders();
         if (!want) {
@@ -754,6 +756,8 @@ function updateAlertBadge() {
     const n = annRefresh(annStore, state.data.stocks);
     const badge = document.getElementById("alertBadge");
     if (badge) badge.textContent = n ? ` (${n})` : "";
+    const navBadge = document.getElementById("alertBadgeNav");
+    if (navBadge) navBadge.textContent = n ? String(n) : "";
 }
 
 function updateSortHeaders(table) {
@@ -992,6 +996,9 @@ function showTab(tab, resetSort = true) {
     state.tab = tab;
     if (resetSort && TAB_DEFAULT_SORT[tab]) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    document.querySelectorAll("#bottomNav [data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    const navMore = document.getElementById("navMore");
+    if (navMore) navMore.classList.toggle("active", !BOTTOM_NAV_TABS.includes(tab));
     const activeTab = document.querySelector(".drawer-tab.active");
     if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     Object.keys(TAB_TITLES).forEach(t => {
@@ -1169,6 +1176,7 @@ function initControls() {
         fillMiniCharts();
     }));
     initChartModal();
+    initBottomNav();
 }
 
 // Eksport / import adnotacji (kopiowanie JSON do schowka i wklejanie) — kopia zapasowa, przenoszenie między urządzeniami
@@ -1454,10 +1462,38 @@ function updateLogButton() {
 }
 
 function updateTfButton() {
-    document.getElementById("chartTfBtn").textContent = chartDaily ? "Wykres: dzienny" : "Wykres: tygodniowy";
+    const label = chartDaily ? "dzienny" : "tygodniowy";
+    document.getElementById("chartTfBtn").textContent = splitMode ? `Wykres: ${label}` : label[0].toUpperCase() + label.slice(1);   // telefon: krótko, żeby główne przyciski mieściły się w jednym rzędzie
+}
+
+// Dolna nawigacja telefonu (kciuk dosięga): 4 główne widoki + „Więcej” (arkusz z resztą zakładek i odświeżaniem danych).
+function initBottomNav() {
+    const nav = document.getElementById("bottomNav");
+    if (!nav) return;
+    nav.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+    document.getElementById("navMore").addEventListener("click", () => {
+        const items = [["FILTERS", "🔍", "Filtry"], ["RS", "📊", "Ratingi"], ["QM", "🎯", "Qullamaggie"], ["PT", "🎯", "Upside"], ["BASES", "🧱", "Bazy"], ["FAV", "⭐", "Ulubione"]];
+        const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
+            <a href="ep.html"><span>⚡</span>Episodic Pivot (EP)</a>
+            <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
+        body.querySelectorAll("button[data-tab]").forEach(b => b.addEventListener("click", () => { closeSheet(); showTab(b.dataset.tab); }));
+    });
+}
+
+// Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
+function openChartMore() {
+    const btns = ["chartFullBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
+        ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
+        <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
+        <a href="${document.getElementById("chartZx").href}" target="_blank" rel="noopener">🎯 Zacks ↗</a></div>
+        <div class="sheet-section"><div class="sheet-grid"><label>Mój score<input type="number" inputmode="decimal" step="any" id="moreScore" value="${chartRequested && Number.isFinite(state.scores[chartRequested]) ? state.scores[chartRequested] : ""}"></label></div></div>`);
+    body.querySelectorAll("button[data-click]").forEach(b => b.addEventListener("click", () => { closeSheet(); document.getElementById(b.dataset.click).click(); }));
+    body.querySelector("#moreScore").addEventListener("change", ev => { if (chartRequested) setScore(chartRequested, ev.target.value); });
 }
 
 function initChartModal() {
+    document.getElementById("chartMoreBtn").addEventListener("click", openChartMore);
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";

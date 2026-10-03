@@ -954,6 +954,8 @@ function annSelectedObject() {
 function annSyncTools() {
     const $ = id => document.getElementById(id);
     if (!$("chartTools")) return;
+    const box = document.querySelector(".wl-chart-box");
+    if (box) box.classList.toggle("is-editing", annEdit.on && !annEdit.spaceOn);   // telefon: w trakcie rysowania chowamy opisy, wykres dostaje miejsce
     $("chartTools").hidden = !annEdit.on || annEdit.spaceOn;   // przy trzymanej spacji bez paska (nie przesuwa wykresu)
     $("chartLineBtn").classList.toggle("active", annEdit.mode === "line");
     $("chartCupBtn").classList.toggle("active", annEdit.mode === "cup");
@@ -969,13 +971,15 @@ function annSyncTools() {
     const fab = $("annUndoFab");
     if (fab) fab.hidden = !(annEdit.on && annUndo.stack.length);
     if ($("toolFlat")) $("toolFlat").disabled = !isLine;
-    $("annHint").textContent = annEdit.mode === "line" ? "Tryb LINIA: dotknij istniejącą linię, żeby ją edytować (kółka na końcach, przeciągnięcie środka przesuwa); dotknij puste miejsce, żeby narysować nową (2 punkty, punkt ustawia się po puszczeniu palca)."
-        : annEdit.mode === "cup" ? "Tryb CUP: dotknij istniejący cup, żeby go poprawić; dotknij puste miejsce, żeby narysować nowy (3 punkty: lewy brzeg, dołek, prawy brzeg)."
-        : annEdit.tool === "flag" ? "🚩 Flaga: stuknij POCZĄTEK konsolidacji (po maszcie) — opór i wsparcie ułożą się same do ostatniej świecy."
-        : annEdit.tool === "cuptap" ? "🏆 Cup: stuknij DOŁEK miseczki — lewy i prawy brzeg dobiorą się sami."
-        : annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy); Shift = linia pozioma."
-        : annEdit.tool === "cup" ? "Kliknij trzy punkty: lewy brzeg, dołek, prawy brzeg miseczki."
-        : obj ? "Przeciągnij kółka, żeby poprawić (Shift = poziomo); prawy przycisk / dotknięcie linii = menu." : "Przeciągnij po wykresie, żeby narysować linię, prawy przycisk (na telefonie podwójne stuknięcie) = wybór linia / cup.";
+    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+    $("annHint").textContent = annEdit.mode === "line" && !annEdit.tool ? "Dotknij linię, by ją poprawić. Puste miejsce rysuje nową."
+        : annEdit.mode === "cup" && !annEdit.tool ? "Dotknij cup, by go poprawić. Puste miejsce rysuje nowy (3 punkty)."
+        : annEdit.tool === "flag" ? "🚩 Stuknij POCZĄTEK konsolidacji (po maszcie) — opór i wsparcie ułożą się same."
+        : annEdit.tool === "cuptap" ? "🏆 Stuknij DOŁEK miseczki — brzegi dobiorą się same."
+        : annEdit.tool === "line" ? (coarse ? "Dotknij dwa punkty (punkt ustawia się po puszczeniu palca; lupa pokazuje przyciąganie)." : "Kliknij dwa punkty (przyciąga do High/Low); Shift = pozioma.")
+        : annEdit.tool === "cup" ? "Trzy punkty: lewy brzeg, dołek, prawy brzeg."
+        : obj ? (coarse ? "Przeciągnij kółka, by poprawić; stuknięcie linii = menu (alert, typ, notatka)." : "Przeciągnij kółka, by poprawić (Shift = poziomo); prawy przycisk = menu.")
+        : (coarse ? "Podwójne stuknięcie wykresu = wybór linia / cup / szablon." : "Przeciągnij po wykresie, by narysować linię; prawy przycisk = menu.");
     const R = annCurrent && annStore[annCurrent.ticker];
     $("annNote").value = R ? R.note || "" : "";
 }
