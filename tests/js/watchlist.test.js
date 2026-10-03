@@ -378,8 +378,8 @@ test("canslimInfo: seven criteria C A N S L I M, score needs >= 4 known, rows so
 
 test("ratingChips / readinessLine warn about a sell climax top", () => {
     const { ratingChips, readinessLine } = require("../../docs/js/watchlist.js");
-    const s = { climax_top: true, climax_date: "2026-10-01", climax_runup_pct: 38, climax_vol_ratio: 3.2, climax_reversal: true, climax_gap: false };
+    const s = { climax_top: true, climax_date: "2026-10-02", climax_runup_pct: 38, climax_week_gain_pct: 21, climax_vol_ratio: 3.2, climax_reversal: true, climax_gap: false, climax_conf: 2 };
     assert.ok(ratingChips(s).some(c => c.value === "⚠ Climax top"));
-    assert.match(readinessLine(s, "uptrend"), /sell climax top \(2026-10-01\) z odwróceniem/);
+    assert.match(readinessLine(s, "uptrend"), /sell climax top \(tydz\. 2026-10-02, potwierdzenia 2\/4\)/);
     assert.ok(!ratingChips({ climax_top: false }).some(c => c.value === "⚠ Climax top"));
 });

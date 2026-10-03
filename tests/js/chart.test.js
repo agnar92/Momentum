@@ -515,10 +515,10 @@ test("buildChartModel / chartSvg: sell climax top marks the signal bar on the da
     const { buildChartModel, chartSvg, dailyCharts } = require("../../docs/js/chart.js");
     const days = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
     const arr = v => days.map(() => v);
-    const charts = { days, spx_d: arr(5000), weeks: [], stocks: { X: { day: { o: arr(10), h: arr(11), l: arr(9), c: arr(10), v: arr(100), sma10: arr(10), sma20: arr(10), sma50: arr(10), sma200: arr(10), climax: { date: "2026-09-28", runup_pct: 40, vol_ratio: 3.1, reversal: true, gap: false } }, eps: [], bases: [] } } };
+    const charts = { days, spx_d: arr(5000), weeks: [], stocks: { X: { day: { o: arr(10), h: arr(11), l: arr(9), c: arr(10), v: arr(100), sma10: arr(10), sma20: arr(10), sma50: arr(10), sma200: arr(10), climax: { date: "2026-09-28", runup_pct: 40, week_gain_pct: 22, vol_ratio: 3.1, reversal: true, gap: false, late: false, conf: 1 } }, eps: [], bases: [] } } };
     const m = buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {});
     assert.equal(m.climax.date, "2026-09-28");
-    assert.match(chartSvg(m, {}), /Sell climax top 2026-09-28/);
+    assert.match(chartSvg(m, {}), /Sell climax top \(tydzień do 2026-09-28\)/);
     charts.stocks.X.day.climax = null;
-    assert.doesNotMatch(chartSvg(buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {}), {}), /Sell climax top/);
+    assert.doesNotMatch(chartSvg(buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {}), {}), /Sell climax top \(tydzień/);
 });
