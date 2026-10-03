@@ -206,6 +206,7 @@ def compute_metrics(df, bench_w=None):
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
 
+    tl_level = next((l["y1"] for l in tl.get("lines", []) if l["kind"] == "res"), None)   # opór flagi/korytarza dziś
     return {
         "price": _num(price),
         "as_of": asof.strftime("%Y-%m-%d"),
@@ -233,6 +234,8 @@ def compute_metrics(df, bench_w=None):
         "tl_pattern": tl.get("pattern"),
         "tl_vol_ratio": (tl.get("breakout") or {}).get("vol_ratio"),
         "tl_vol_ok": (tl.get("breakout") or {}).get("confirmed"),
+        "tl_level": tl_level,
+        "tl_dist_pct": _num((tl_level / price - 1) * 100, 1) if tl_level and price else None,   # > 0: do oporu brakuje tyle %
         "spark": spark,
     }
 

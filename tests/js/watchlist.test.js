@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -229,5 +229,41 @@ test("all tabs share the same columns; alerts add alert columns; tagStrategies o
     assert.deepEqual(a.strat, ["R", "Q"]);
     assert.equal(a.strat_rank, 0);
     assert.deepEqual(b.strat, []);
-    assert.equal(b.strat_rank, 4);
+    assert.equal(b.strat_rank, 5);
+});
+
+test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and sort order", () => {
+    assert.equal(breakoutInfo(stock("A"), null, 5), null);
+    const flag = breakoutInfo(stock("A", { tl_state: "przy oporze", tl_pattern: "flaga", tl_dist_pct: 1.4 }), null, 5);
+    assert.equal(flag.dist, 1.4);
+    assert.equal(flag.rank, 1);
+    const fresh = breakoutInfo(stock("B", { tl_state: "wybicie", tl_pattern: "flaga", tl_vol_ratio: 2.1, tl_vol_ok: true }), null, 5);
+    assert.equal(fresh.rank, 0);
+    assert.equal(fresh.dist, null);
+    assert.ok(fresh.reasons[0].text.includes("×2.1") && fresh.reasons[0].text.includes("✓"));
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: 8 }), null, 5), null);
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: 3.2, vcp: true }), null, 5).dist, 3.2);
+    const al = breakoutInfo(stock("D"), { alert: "above", triggered: false, dist: -1.9 }, 5);
+    assert.ok(Math.abs(al.dist - 1.94) < 0.01);   // cena 1,9 % pod linią => do linii ok. 1,94 %
+    assert.equal(breakoutInfo(stock("D"), { alert: "above", triggered: true, dist: 0.5 }, 5).rank, 0);
+    assert.equal(breakoutInfo(stock("D"), { alert: "below", triggered: false, dist: -1 }, 5), null);
+});
+
+test("tagBreakouts + breakoutRows sort fresh breakouts first, then by distance; readinessLine summarises", () => {
+    const rows = [stock("A", { tl_state: "przy oporze", tl_pattern: "flaga", tl_dist_pct: 2.5 }), stock("B", { tl_state: "wybicie", tl_pattern: "korytarz" }),
+        stock("C", { base_type: "flat", pct_to_pivot: 1 }), stock("D")];
+    tagBreakouts(rows, [], 5);
+    assert.deepEqual(breakoutRows(rows).map(s => s.ticker), ["B", "C", "A"]);
+    assert.equal(rows[3].brk, null);
+    const line = readinessLine({ ...rows[0], rs_line_state: "przed ceną", earnings: "" }, "correction");
+    assert.ok(line.startsWith("Do wybicia: 2.5%") && line.includes("RS przed ceną") && line.includes("rynek w korekcie"));
+    assert.ok(readinessLine(rows[3], "uptrend").startsWith("Brak sygnału wybicia"));
+});
+
+test("swipeDirection needs a long, fast, mostly horizontal move", () => {
+    assert.equal(swipeDirection(-90, 10, 200), "left");
+    assert.equal(swipeDirection(90, -10, 200), "right");
+    assert.equal(swipeDirection(-40, 0, 100), null);      // za krótko
+    assert.equal(swipeDirection(-90, 80, 200), null);     // raczej pionowo (przewijanie)
+    assert.equal(swipeDirection(-90, 5, 1200), null);     // za wolno (przeciąganie)
 });

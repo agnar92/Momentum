@@ -53,6 +53,7 @@ const browserGlobals = {
     annSyncTools: "readonly",
     mergeImport: "readonly",
     ANN_KIND_LABELS: "readonly",
+    ANN_NEAR_PCT: "readonly",
     ANN_DIR_LABELS: "readonly",
     annEdit: "readonly",
     annStore: "writable",
