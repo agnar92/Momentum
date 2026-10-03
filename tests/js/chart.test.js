@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, miniChartSvg, miniRatingColor,
+    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, miniChartSvg, miniRatingColor, pivotFromStock, swingLabels, volumeSpikes, fmtVol, dailyCharts,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -360,4 +360,73 @@ test("miniChartSvg draws OHLC bars, the RS line with the rating, EPS dots and ra
     assert.equal(miniChartSvg(null), "");
     assert.equal(miniRatingColor(95), "#34e08a");
     assert.equal(miniRatingColor(10), "#ff5c73");
+});
+
+test("swingLabels picks the most important local highs and lows and keeps them apart", () => {
+    const h = [10, 11, 12, 11, 10, 11, 14, 11, 10, 11, 12, 13, 12, 11, 10];
+    const l = h.map(v => v - 2);
+    const sw = swingLabels(h, l, h.length - 1, 2);
+    const highs = sw.filter(s => s.type === "H");
+    assert.equal(highs[0].price, 14);                                   // najwyższy szczyt pierwszy
+    assert.ok(highs.every((a, i) => highs.every((b, j) => i === j || Math.abs(a.i - b.i) >= 4)));   // nie bliżej niż 2k
+    assert.ok(sw.some(s => s.type === "L" && s.price === 8));            // dołek 8 przy świecy 4 albo 8
+    assert.deepEqual(swingLabels([5, 5, 5], [4, 4, 4], 2, 1).filter(s => s.type === "H").length, 1);   // remis: tylko pierwsza świeca
+});
+
+test("volumeSpikes needs a clear multiple of the average and spacing; fmtVol uses K and M", () => {
+    const v = [100, 100, 400, 100, 380, 100, 100, 100, 700, 100];
+    const avg = v.map(() => 100);
+    const got = volumeSpikes(v, avg, 3, 1.5, 3).map(s => s.i).sort((a, b) => a - b);
+    assert.deepEqual(got, [2, 8]);                 // 400 i 380 są zbyt blisko — zostaje większy
+    assert.deepEqual(volumeSpikes(v, avg.map(() => 1000), 3), []);
+    assert.equal(fmtVol(14400), "14.4M");
+    assert.equal(fmtVol(820), "820K");
+});
+
+test("pivotFromStock: base pivot from the open base start, else the flag resistance, else null", () => {
+    const bases = [{ open: false, start: "2025-01-03" }, { open: true, start: "2026-03-06" }];
+    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 98.4 }, bases), { price: 98.4, date: "2026-03-06", kind: "baza" });
+    assert.deepEqual(pivotFromStock({ tl_level: 50, tl_state: "przy oporze" }, []), { price: 50, date: null, kind: "flaga" });
+    assert.equal(pivotFromStock({ tl_level: 50 }, []), null);       // poziom bez wykrytego stanu nie jest pivotem
+    assert.equal(pivotFromStock(null, []), null);
+});
+
+test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and volume labels", () => {
+    const c = charts();
+    c.stocks.AAA.eps = [
+        { d: "2025-10-01", e: 1.0, g: 10, t: null }, { d: "2026-01-10", e: 1.2, g: 20, t: 4.0 }, { d: "2026-04-01", e: 1.4, g: 25, t: 4.4 }, { d: "2026-07-01", e: 1.6, g: 33, t: 4.9 },
+    ];
+    c.stocks.AAA.eps_next = { d: "2026-10-20", e: 1.8, t: 5.1 };
+    const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 14.9, tl_state: null }, { pad: true });
+    const svg = chartSvg(m);
+    assert.match(svg, /Linia zysków: EPS za 4 kwartały \(TTM\)/);
+    assert.match(svg, /prog\. 5\.1/);                                  // przerywany odcinek do prognozy
+    assert.match(svg, /stroke-dasharray="4 3"/);
+    assert.match(svg, />\+33%</);                                      // etykieta r/r (pasek znaczników i tabela)
+    assert.match(svg, /pivot 14\.90/);
+    assert.match(svg, /strefa zakupu do \+5 %/);
+    assert.match(svg, /stop 7–8 %/);
+    const geom = {};
+    chartSvg(m, { geomOut: geom });
+    assert.ok(geom.L.marks.h > 0 && geom.L.price.h < 330);            // panel cen oddał miejsce na pasek znaczników
+    const none = chartSvg(buildChartModel(charts(), "AAA", null, { pad: true }));
+    assert.ok(!/pivot \d/.test(none));
+});
+
+test("daily model uses SMA 10/50/200 when the data has them", () => {
+    const charts = {
+        weeks: ["2026-01-02"], days: ["2026-01-01", "2026-01-02"], spx_d: [100, 101],
+        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma10: [1, 2], sma20: [1, 1.8], sma50: [1, 1.5], sma200: [0.9, 1] }, eps: [], eps_next: null } },
+    };
+    const m = buildChartModel(dailyCharts(charts), "X", null);
+    assert.deepStrictEqual(m.smas.map(x => x.label), ["SMA 10", "SMA 50", "SMA 200"]);
+});
+
+test("window without a report explains the last known one instead of claiming there is no data", () => {
+    const c = charts();
+    c.stocks.AAA.eps = [{ d: "2026-01-10", e: 1.2, g: 20, t: null }];
+    const m = buildChartModel(c, "AAA", null);
+    const cut = sliceModel(m, 2, 5);                                  // okno bez raportu
+    assert.equal(cut.eps.length, 0);
+    assert.match(chartSvg(cut), /Brak raportu w widocznym oknie\. Ostatni \(2026-01-10\)/);
 });

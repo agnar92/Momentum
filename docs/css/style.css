@@ -818,3 +818,20 @@ body:not(.split) td.c-thumb svg { width: 88px; height: 26px; display: block; }
 .card-chev:active { background: var(--panel-alt); }
 body:not(.split) tr.open .card-chev { transform: rotate(180deg); color: var(--green-bright); }
 :where(body:not(.split)) tr[data-ticker] { cursor: pointer; }
+
+/* pastylki ocen i ramka formacji nad wykresem (jak panel ocen / ramka „Cup with Handle” w MarketSmith / MarketSurge) */
+.wl-chart-ratings { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.wl-chart-ratings:empty, .wl-chart-base:empty { display: none; }
+.rchip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 6px; font-size: 13px; font-weight: 800; background: var(--panel-alt); color: var(--text); }
+.rchip i { font-style: normal; font-weight: 600; font-size: 10.5px; opacity: .8; letter-spacing: .03em; }
+.rchip.rt-90 { background: #0b6b37; color: #e9fff1; } .rchip.rt-80 { background: #1f9d55; color: #e9fff1; }
+.rchip.rt-60 { background: #86b82f; color: #121a04; } .rchip.rt-40 { background: #d9b400; color: #251d00; }
+.rchip.rt-20 { background: #e3801c; color: #261200; } .rchip.rt-0 { background: #d1344a; color: #fff; }
+.wl-chart-base { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 8px; padding: 6px 10px; border: 1px solid #2ecc71; border-radius: 6px; background: rgba(46,204,113,.07); font-size: 12.5px; }
+.wl-chart-base b { color: var(--green-bright); font-size: 13px; }
+.wl-chart-base span i { font-style: normal; color: var(--text-dim); margin-right: 5px; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-ratings, body:not(.split) .wl-chart-box.is-editing .wl-chart-base { display: none; }
+.wl-chart-box.full.phone-full .wl-chart-base { display: none; }
+
+/* telefon: wykres ma być bohaterem — opis spółki, fundamenty i objaśnienie wzorca są w arkuszu „⋯” */
+body:not(.split) .wl-chart-box .wl-chart-sub, body:not(.split) .wl-chart-box #chartStats, body:not(.split) .wl-chart-box #chartPattern { display: none; }

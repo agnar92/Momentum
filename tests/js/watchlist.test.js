@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -317,4 +317,42 @@ test("prefs keep positions and account with newest-wins merge and validate field
     assert.equal(m.pos.B.v, null);            // wpis bez poprawnego wejścia jest odrzucany
     assert.deepEqual(m.acct.main.v, { capital: 1000, riskPct: 1 });
     assert.deepEqual(prefsNormalize({}).pos, {});
+});
+
+test("ratingChips: coloured chips for composite, RS, EPS, group, Acc/Dis, stability, institutions and leader", () => {
+    const chips = ratingChips({ composite_rating: 91, rs_rating: 85, eps_rating: 55, industry_rating: 30, accdis: "B", accdis_rating: 70, eps_stability: 75, eps_stability_rating: 90, inst_own: 61.2, inst_sponsor: true, leader: true });
+    const by = Object.fromEntries(chips.map(c => [c.label, c]));
+    assert.equal(by.Comp.cls, "rt-90");
+    assert.equal(by.RS.cls, "rt-80");
+    assert.equal(by.EPS.cls, "rt-40");
+    assert.equal(by.Grupa.cls, "rt-20");
+    assert.equal(by["A/D"].value, "B");
+    assert.equal(by["A/D"].cls, "rt-60");
+    assert.equal(by["Stab."].value, "75%");
+    assert.equal(by["Inst."].value, "61%");
+    assert.equal(by["Inst."].cls, "rt-80");
+    assert.ok(chips.some(c => c.value === "★ Lider"));
+    assert.deepEqual(ratingChips({}), []);                                         // brak ocen -> brak pastylek
+});
+
+test("baseBoxData describes the open base like the MarketSurge callout; none without a base", () => {
+    assert.equal(baseBoxData({}), null);
+    const d = baseBoxData({ base_type: "cup", base_handle: true, pivot: 280.9, base_weeks: 11, base_depth_pct: 16, vcp: true, pct_to_pivot: 4.5, base_mkt_dd_pct: 9 });
+    assert.equal(d.title, "Cup base z rączką");
+    const rows = Object.fromEntries(d.rows);
+    assert.equal(rows.Pivot, "$280.90");
+    assert.equal(rows["Długość"], "11 tyg.");
+    assert.equal(rows["Głębokość"], "16%");
+    assert.equal(rows["Rączka"], "tak");
+    assert.equal(rows.VCP, "tak");
+    assert.equal(rows["S&P w bazie"], "−9%");
+    assert.equal(rows["Do pivotu"], "+4.5%");
+    assert.equal(Object.fromEntries(baseBoxData({ base_type: "flat", pivot: 10, pct_to_pivot: -2.1 }).rows)["Nad pivotem"], "2.1%");
+});
+
+test("readinessLine warns when the price is more than 5% above the pivot", () => {
+    const late = readinessLine({ ...stock("L"), base_type: "flat", pct_to_pivot: -7.2, brk: null }, "uptrend");
+    assert.ok(late.includes("7.2% nad pivotem") && late.includes("za późno"));
+    const ok = readinessLine({ ...stock("O"), base_type: "flat", pct_to_pivot: -3, brk: null }, "uptrend");
+    assert.ok(ok.includes("3.0% nad pivotem (strefa zakupu do +5 %)"));
 });

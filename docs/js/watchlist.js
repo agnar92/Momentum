@@ -281,6 +281,44 @@ function breakoutRows(stocks) {
     return stocks.filter(s => s.brk).sort((a, b) => a.brk_sort - b.brk_sort);
 }
 
+// Pastylki ocen nad wykresem (jak panel ocen w MarketSmith): Composite, RS, EPS, grupa, Acc/Dis, stabilność EPS, instytucje, lider.
+function ratingChips(s) {
+    const chips = [];
+    const add = (label, value, cls, title) => { if (value !== null && value !== undefined && value !== "") chips.push({ label, value: String(value), cls: cls || "", title }); };
+    const has = Number.isFinite;
+    add("Comp", has(s.composite_rating) ? s.composite_rating : null, ratingClass(s.composite_rating), "Composite = średnia z RS i EPS Rating");
+    add("RS", has(s.rs_rating) ? s.rs_rating : null, ratingClass(s.rs_rating), "RS Rating: siła cenowa względem listy (1–99)");
+    add("EPS", has(s.eps_rating) ? s.eps_rating : null, ratingClass(s.eps_rating), "EPS Rating: wzrost i stabilność zysków (1–99)");
+    add("Grupa", has(s.industry_rating) ? s.industry_rating : null, ratingClass(s.industry_rating), "Siła grupy branżowej (średni RS spółek z branży)");
+    add("A/D", s.accdis || null, ratingClass(s.accdis_rating), "Akumulacja / dystrybucja ~13 tyg. (A = silna akumulacja, E = dystrybucja)");
+    add("Stab.", has(s.eps_stability) ? s.eps_stability + "%" : null, ratingClass(s.eps_stability_rating), "Odsetek ostatnich kwartałów z dodatnim wzrostem EPS r/r");
+    add("Inst.", has(s.inst_own) ? s.inst_own.toFixed(0) + "%" : null, s.inst_sponsor === true ? "rt-80" : "", "Własność instytucji (Finviz); zielona = ≥ 20 % i napływ w ostatnim kwartale");
+    if (s.leader === true) add("", "★ Lider", "rt-90", "Lider: RS ≥ 80, silna grupa, blisko szczytu 52 tyg.");
+    return chips;
+}
+
+function ratingChipsHtml(s) {
+    return ratingChips(s).map(c => `<span class="rchip ${c.cls}" title="${escapeHtml(c.title || "")}">${c.label ? `<i>${escapeHtml(c.label)}</i>` : ""}${escapeHtml(c.value)}</span>`).join("");
+}
+
+// Ramka formacji jak „Cup with Handle / Flat Base” w MarketSurge: typ, pivot, długość, głębokość, rączka, VCP. "" bez otwartej bazy.
+function baseBoxData(s) {
+    if (!s.base_type) return null;
+    const rows = [["Pivot", Number.isFinite(s.pivot) ? money(s.pivot) : "—"]];
+    if (Number.isFinite(s.base_weeks)) rows.push(["Długość", `${s.base_weeks} tyg.`]);
+    if (Number.isFinite(s.base_depth_pct)) rows.push(["Głębokość", `${s.base_depth_pct}%`]);
+    if (s.base_type === "cup") rows.push(["Rączka", s.base_handle ? "tak" : "brak"]);
+    if (s.vcp) rows.push(["VCP", "tak"]);
+    if (Number.isFinite(s.base_mkt_dd_pct) && s.base_mkt_dd_pct >= 7) rows.push(["S&P w bazie", `−${s.base_mkt_dd_pct}%`]);
+    if (Number.isFinite(s.pct_to_pivot)) rows.push([s.pct_to_pivot >= 0 ? "Do pivotu" : "Nad pivotem", `${s.pct_to_pivot >= 0 ? "+" : ""}${Math.abs(s.pct_to_pivot)}%`.replace("+-", "")]);
+    return { title: `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""}`, rows };
+}
+
+function baseBoxHtml(s) {
+    const d = baseBoxData(s);
+    return d ? `<b>${escapeHtml(d.title)}</b>${d.rows.map(([k, v]) => `<span><i>${escapeHtml(k)}</i>${escapeHtml(v)}</span>`).join("")}` : "";
+}
+
 // Jedna linia „czy to już ten moment?” pod tytułem wykresu: dystans do wybicia, baza, wolumen, RS, rynek, wyniki.
 function readinessLine(s, regime) {
     const out = [];
@@ -292,6 +330,10 @@ function readinessLine(s, regime) {
     if (b) out.push(b.dist !== null ? `Do wybicia: ${b.dist.toFixed(1)}%` : (b.rank === 0 ? "Wybicie świeże" : "Przy poziomie"));
     else out.push("Brak sygnału wybicia");
     if (s.base_type) out.push(`${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}`);
+    if (s.base_type && Number.isFinite(s.pct_to_pivot) && s.pct_to_pivot < 0) {
+        const over = -s.pct_to_pivot;
+        out.push(over > 5 ? `⚠ ${over.toFixed(1)}% nad pivotem — za późno wg reguły +5 %` : `${over.toFixed(1)}% nad pivotem (strefa zakupu do +5 %)`);
+    }
     if (s.tl_pattern) out.push(s.tl_pattern === "flaga" ? "flaga" : "korytarz");
     if (Number.isFinite(s.tl_vol_ratio)) out.push(`wolumen wybicia ×${s.tl_vol_ratio}${s.tl_vol_ok ? " ✓" : " (słaby)"}`);
     if (s.rs_line_state === "przed ceną") out.push("RS przed ceną ●");
@@ -435,6 +477,9 @@ const COL = {
     epsStab: ["Stabilność EPS", "eps_stability", s => `<td${Number.isFinite(s.eps_stability) && s.eps_stability < 60 ? ` class="negative"` : ""}>${Number.isFinite(s.eps_stability) ? s.eps_stability + "%" : "—"}</td>`, "Odsetek ostatnich 8 kwartałów, w których EPS r/r wzrósł (min. 4 porównania); 20 % wagi EPS Rating"],
     grp: ["Grupa", "industry_rating", s => ratingCell(s, "industry_rating"), "Siła grupy branżowej 1–99: średni RS Rating spółek z tej samej branży (min. 3 w liście), percentyl wśród branż"],
     leader: ["Lider", "leader", s => `<td${s.leader ? ` class="positive"` : ""} title="Lider (L z CANSLIM): RS ≥ 80, grupa ≥ 60, nie dalej niż 25 % pod szczytem 52 tyg.">${s.leader ? "★ L" : ""}</td>`, "Lider: RS ≥ 80, mocna grupa (≥ 60) i blisko szczytu 52 tyg."],
+    ad: ["Acc/Dis", "accdis_rating", s => s.accdis
+        ? `<td class="rt ${ratingClass(s.accdis_rating)}" title="Akumulacja / dystrybucja z ~13 tygodni (wolumen ważony pozycją zamknięcia w zakresie dnia), percentyl wśród listy: A = silna akumulacja, E = dystrybucja"><strong>${s.accdis}</strong></td>`
+        : `<td class="muted">—</td>`, "Acc/Dis (A–E): czy instytucje zbierają (A) czy sprzedają (E) — z wolumenu ostatnich ~13 tygodni"],
     inst: ["Instytucje", "inst_own", s => Number.isFinite(s.inst_own)
         ? `<td${s.inst_sponsor ? ` class="positive"` : ""} title="Własność instytucji ${s.inst_own}%, zmiana w ostatnim kwartale ${fmtPct(s.inst_trans)}; I ✓ = własność ≥ 20 % i napływ">${s.inst_own.toFixed(0)}%${Number.isFinite(s.inst_trans) ? ` <span class="small ${s.inst_trans >= 0 ? "positive" : "negative"}">${s.inst_trans > 0 ? "+" : ""}${s.inst_trans.toFixed(1)}</span>` : ""}${s.inst_sponsor ? " ✓" : ""}</td>`
         : `<td class="muted">—</td>`, "I z CANSLIM: własność instytucji (%) i jej zmiana w ostatnim kwartale (Finviz); ✓ = własność ≥ 20 % i napływ"],
@@ -510,7 +555,7 @@ const COL = {
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "thumb", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "thumb", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "mini", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -1246,6 +1291,8 @@ async function openChart(ticker) {
             stock.earnings ? `wyniki: ${stock.earnings}` : null].filter(Boolean).join(" · ")
         : "";
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
+    document.getElementById("chartRatings").innerHTML = stock ? ratingChipsHtml(stock) : "";
+    document.getElementById("chartBase").innerHTML = stock ? baseBoxHtml(stock) : "";
     document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && state.data.market.regime) : "";
     updateChartNav(ticker);
     updatePosButton();
@@ -1474,6 +1521,13 @@ function initBottomNav() {
     });
 }
 
+// Telefon: opis spółki, fundamenty i objaśnienie wzorca są pod „⋯” (nad wykresem zostają pastylki ocen, ramka formacji i linia gotowości).
+function chartDetailsHtml() {
+    const text = id => (document.getElementById(id) ? document.getElementById(id).textContent.trim() : "");
+    const blocks = [["Spółka", text("chartSub")], ["Fundamenty", text("chartStats")], ["Formacja", text("chartPattern")]].filter(b => b[1]);
+    return blocks.length ? `<div class="sheet-section">${blocks.map(([h, t]) => `<h4>${h}</h4><p class="sheet-result">${escapeHtml(t)}</p>`).join("")}</div>` : "";
+}
+
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
     const btns = ["chartFullBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
@@ -1481,6 +1535,7 @@ function openChartMore() {
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
         <a href="${document.getElementById("chartZx").href}" target="_blank" rel="noopener">🎯 Zacks ↗</a></div>
+        ${chartDetailsHtml()}
         <div class="sheet-section"><div class="sheet-grid"><label>Mój score<input type="number" inputmode="decimal" step="any" id="moreScore" value="${chartRequested && Number.isFinite(state.scores[chartRequested]) ? state.scores[chartRequested] : ""}"></label></div></div>`);
     body.querySelectorAll("button[data-click]").forEach(b => b.addEventListener("click", () => { closeSheet(); document.getElementById(b.dataset.click).click(); }));
     body.querySelector("#moreScore").addEventListener("change", ev => { if (chartRequested) setScore(chartRequested, ev.target.value); });
@@ -1657,7 +1712,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
