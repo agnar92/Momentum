@@ -200,7 +200,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         padDefault: pad ? (charts.daily ? FUTURE_DEFAULT_DAILY : FUTURE_DEFAULT_WEEKLY) : 0,
         o: padArr(c.o), h: padArr(c.h), l: padArr(c.l), c: padArr(c.c), v: padArr(c.v),
         smas: smas.map(([label, values]) => ({ label, values: padArr(values || []), color: SMA_COLORS[label] })),
-        spx: padArr(spx), rs: padArr(rs), eps, lines, cups, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
+        spx: padArr(spx), rs: padArr(rs), eps, lines, cups, climax: c.climax || null, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
         pole: tl && tl.info && tl.info.pole_start ? { i0: lineIndex(weeks, tl.info.pole_start), y0: tl.info.pole_low, i1: lineIndex(weeks, tl.info.pole_end), y1: tl.info.pole_high, gain: tl.info.pole_gain } : null,
         epsLast: eps.length ? eps[eps.length - 1] : null,
         epsNext: c.eps_next && c.eps_next.d >= weeks[weeks.length - 1] ? c.eps_next : null,   // przeterminowana prognoza z cache'u to nie "następny" raport
@@ -628,6 +628,14 @@ function chartSvg(m, opts = {}) {
     if (boI >= 0) {
         parts.push(`<line x1="${x(boI)}" x2="${x(boI)}" y1="${P.y}" y2="${L.volume.y + L.volume.h}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"><title>Dzień wybicia ${m.trend.breakout.date}</title></line>`);
         addLabel(`wybicie${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio} wol.` : ""}`, x(boI) + 4, P.y + fs(11), { anchor: "start", fill: "#22d3ee", bold: true, prio: 6 });
+    }
+    // sell climax top (tylko widok dzienny): czerwona strzałka ▼ nad świecą i pionowa kreska przez wolumen
+    const cxI = m.climax ? weekIndexForDate(m.weeks, m.climax.date) : -1;
+    if (cxI >= 0) {
+        const tipY = yP(m.h[cxI]) - fs(6);
+        parts.push(`<line x1="${x(cxI)}" x2="${x(cxI)}" y1="${P.y}" y2="${L.volume.y + L.volume.h}" stroke="#ff4d6d" stroke-width="1" stroke-dasharray="3 3" opacity="0.55"/>`);
+        parts.push(`<polygon points="${x(cxI) - fs(6)},${tipY - fs(10)} ${x(cxI) + fs(6)},${tipY - fs(10)} ${x(cxI)},${tipY}" fill="#ff4d6d"><title>Sell climax top ${m.climax.date}: +${m.climax.runup_pct}% w 15 sesji, wolumen ×${m.climax.vol_ratio}${m.climax.reversal ? ", zamknięcie w dolnej połowie" : ""}${m.climax.gap ? ", luka wyczerpania" : ""}</title></polygon>`);
+        addLabel(`climax ×${m.climax.vol_ratio} wol.`, x(cxI), tipY - fs(14), { anchor: "middle", fill: "#ff4d6d", bold: true, prio: 9 });
     }
     // ceny lokalnych szczytów i dołków (jak w MarketSmith) — w oknie, bez ostatnich niepotwierdzonych świec
     // na telefonie mniej podpisów (3 szczyty / 2 dołki), na dużym ekranie 6 / 5

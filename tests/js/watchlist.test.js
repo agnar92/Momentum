@@ -375,3 +375,11 @@ test("canslimInfo: seven criteria C A N S L I M, score needs >= 4 known, rows so
     assert.deepEqual(canslimRows(stocks, 5).map(s => s.ticker), ["G"]);
     assert.deepEqual(canslimRows(stocks, 0).map(s => s.ticker), ["G", "W"]);
 });
+
+test("ratingChips / readinessLine warn about a sell climax top", () => {
+    const { ratingChips, readinessLine } = require("../../docs/js/watchlist.js");
+    const s = { climax_top: true, climax_date: "2026-10-01", climax_runup_pct: 38, climax_vol_ratio: 3.2, climax_reversal: true, climax_gap: false };
+    assert.ok(ratingChips(s).some(c => c.value === "⚠ Climax top"));
+    assert.match(readinessLine(s, "uptrend"), /sell climax top \(2026-10-01\) z odwróceniem/);
+    assert.ok(!ratingChips({ climax_top: false }).some(c => c.value === "⚠ Climax top"));
+});

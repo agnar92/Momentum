@@ -609,3 +609,27 @@ class TestMarketAndLeaders:
         assert by["A4"]["leader"] is False                                                # za daleko od szczytu
         assert by["A5"]["leader"] is False                                                # RS < 80
         assert by["B1"]["leader"] is False                                                # słaba grupa i słaby RS
+
+
+def _climax_frame(last_bar, n=200):
+    """Spokojny trend + szybki 15-sesyjny wzrost, a na końcu świeca `last_bar` = (open, high, low, close, volume)."""
+    idx = pd.bdate_range("2025-01-01", periods=n)
+    close = np.concatenate([np.linspace(50, 60, n - 16), np.linspace(60, 90, 15), [91.0]])
+    df = pd.DataFrame({"Open": close * 0.998, "High": close * 1.01, "Low": close * 0.99, "Close": close, "Volume": 1_000_000.0}, index=idx)
+    df.iloc[-1] = last_bar
+    return df
+
+
+def test_detect_climax_top_wide_range_record_volume_after_run():
+    df = _climax_frame((93.0, 112.0, 90.0, 94.0, 5_000_000.0))
+    c = watchlist.detect_climax_top(df)
+    assert c is not None and c["date"] == df.index[-1].strftime("%Y-%m-%d")
+    assert c["reversal"] is True and c["gap"] is True and c["vol_ratio"] >= 2 and c["runup_pct"] >= 25
+
+
+def test_detect_climax_top_needs_range_volume_and_extension():
+    assert watchlist.detect_climax_top(_climax_frame((91.0, 92.0, 90.0, 91.5, 5_000_000.0))) is None      # wolumen bez szerokiego zakresu
+    assert watchlist.detect_climax_top(_climax_frame((93.0, 112.0, 90.0, 94.0, 1_100_000.0))) is None     # zakres bez wolumenu
+    calm = _climax_frame((60.0, 70.0, 59.0, 69.0, 5_000_000.0))
+    calm.iloc[-16:-1] = calm.iloc[-17]                                                                     # brak wcześniejszego wzrostu
+    assert watchlist.detect_climax_top(calm) is None

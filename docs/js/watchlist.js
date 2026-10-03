@@ -327,6 +327,7 @@ function ratingChips(s) {
     add("Stab.", has(s.eps_stability) ? s.eps_stability + "%" : null, ratingClass(s.eps_stability_rating), "Odsetek ostatnich kwartałów z dodatnim wzrostem EPS r/r");
     add("Inst.", has(s.inst_own) ? s.inst_own.toFixed(0) + "%" : null, s.inst_sponsor === true ? "rt-80" : "", "Własność instytucji (Finviz); zielona = ≥ 20 % i napływ w ostatnim kwartale");
     if (s.canslim && s.cs !== null) add("CANSLIM", `${s.cs}/7`, s.cs >= 6 ? "rt-90" : s.cs >= 5 ? "rt-80" : s.cs >= 4 ? "rt-60" : "rt-40", CANSLIM_KEYS.map(k => CANSLIM_HELP[k] + (s.canslim.flags[k] === true ? " ✓" : s.canslim.flags[k] === false ? " ✗" : " ?")).join("\n"));
+    if (s.climax_top === true) add("", "⚠ Climax top", "rt-0", `Sell climax top (${s.climax_date}): szybki wzrost +${s.climax_runup_pct}% w 15 sesji, najszerszy zakres i wolumen ×${s.climax_vol_ratio}${s.climax_reversal ? ", zamknięcie w dolnej połowie" : ""}${s.climax_gap ? ", luka wyczerpania" : ""} — możliwe wyczerpanie popytu`);
     if (s.leader === true) add("", "★ Lider", "rt-90", "Lider: RS ≥ 80, silna grupa, blisko szczytu 52 tyg.");
     return chips;
 }
@@ -360,6 +361,7 @@ function readinessLine(s, regime) {
         const p = s.position;
         out.push(`💼 ${fmtPct(p.pl_pct)}${p.r !== null ? ` · ${p.r.toFixed(1)}R` : ""}${p.to_stop_pct !== null ? ` · stop ${p.stop_hit ? "PRZEBITY" : fmtPct(p.to_stop_pct)}` : ""}`);
     }
+    if (s.climax_top === true) out.push(`⚠ sell climax top (${s.climax_date})${s.climax_reversal ? " z odwróceniem" : ""}`);
     const b = s.brk;
     if (b) out.push(b.dist !== null ? `Do wybicia: ${b.dist.toFixed(1)}%` : (b.rank === 0 ? "Wybicie świeże" : "Przy poziomie"));
     else out.push("Brak sygnału wybicia");
@@ -561,6 +563,8 @@ const COL = {
         return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
     }],
     alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
+    cx: ["Climax", "climax_vol_ratio", s => s.climax_top === true ? `<td class="negative" title="Sell climax top ${escapeHtml(s.climax_date || "")}: +${s.climax_runup_pct}% w 15 sesji, wolumen ×${s.climax_vol_ratio}${s.climax_reversal ? ", zamknięcie w dolnej połowie" : ""}${s.climax_gap ? ", luka wyczerpania" : ""}">⚠ ×${s.climax_vol_ratio}${s.climax_reversal ? " ↘" : ""}</td>` : `<td class="muted"></td>`,
+        "Sell climax top (O'Neil): w ostatnich 5 sesjach świeca po szybkim, rozciągniętym wzroście z najszerszym zakresem i wolumenem ≥ 2× średniej — możliwe wyczerpanie popytu (↘ = zamknięcie w dolnej połowie). Heurystyka, sprawdź wykres"],
     cs: ["CANSLIM", "cs", s => s.cs === null || s.cs === undefined ? `<td class="muted"></td>` : `<td class="cs-cell ${s.cs >= 5 ? "positive" : ""}"><strong>${s.cs}/7</strong> ${canslimLettersHtml(s.canslim)}</td>`,
         "Lista CANSLIM: ile z 7 kryteriów C A N S L I M spełnia spółka (zielone litery = spełnione, czerwone = nie, szare = brak danych)"],
     brk: ["Wybicie", "brk_sort", s => {
@@ -591,7 +595,7 @@ const COL = {
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "thumb", "cs", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "thumb", "cs", "cx", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "mini", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
