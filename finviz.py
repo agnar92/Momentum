@@ -7,7 +7,7 @@ kapitalizację, wzrost EPS (ten rok / prognoza na przyszły rok / ostatnie 5 lat
 i datę najbliższych wyników. Ceny i wskaźniki techniczne (RS, ADR, EMA34...) liczy już
 watchlist.py z yfinance.
 
-Zapytania idą po 3 widokach screenera (Overview / Valuation / Financial) z tymi samymi
+Zapytania idą po 4 widokach screenera (Overview / Valuation / Financial / własny z rekomendacją i ceną celu) z tymi samymi
 filtrami, a wiersze są scalane po tickerze. UWAGA: Finviz po cichu IGNORUJE nieznany kod
 filtra (zamiast zwrócić błąd), więc literówka daje szerszą listę — po zmianie filtrów sprawdź
 liczbę wyników.
@@ -37,7 +37,9 @@ VIEW_COLUMNS = {
     "121": {"Forward P/E": "forward_pe", "EPS This Y": "eps_this_y", "EPS Next Y": "eps_next_y",
             "EPS Past 5Y": "eps_past_5y", "EPS Next 5Y": "eps_next_5y"},
     "161": {"ROE": "roe", "Earnings": "earnings"},
+    "152": {"Recom": "recom", "Target Price": "finviz_target"},   # widok własny (Custom): rekomendacja analityków 1-5 i średnia cena celu
 }
+VIEW_PARAMS = {"152": {"c": "0,1,62,69"}}   # kolumny widoku własnego: 0 = No., 1 = Ticker, 62 = Analyst Recom., 69 = Target Price
 TEXT_KEYS = {"company", "sector", "industry", "earnings"}
 _SUFFIX = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
 
@@ -88,7 +90,8 @@ def fetch_view(view, filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7, sess
     out, seen = [], set()
     offset, total = 1, None
     while len(out) < max_tickers:
-        resp = session.get(BASE_URL, params={"v": view, "f": filters, "r": offset}, headers=HEADERS, timeout=30)
+        params = {"v": view, "f": filters, "r": offset, **VIEW_PARAMS.get(view, {})}
+        resp = session.get(BASE_URL, params=params, headers=HEADERS, timeout=30)
         resp.raise_for_status()
         rows, page_total = parse_screener_page(resp.text, view)
         total = page_total if page_total is not None else total
@@ -112,7 +115,7 @@ def fetch_watchlist(filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7):
     session = requests.Session()
     base, total = fetch_view("111", filters, max_tickers, pause_s, session)
     by_ticker = {r["ticker"]: r for r in base}
-    for view in ("121", "161"):
+    for view in ("121", "161", "152"):
         try:
             extra, _ = fetch_view(view, filters, max_tickers, pause_s, session)
         except Exception as e:

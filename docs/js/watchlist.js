@@ -41,7 +41,7 @@ const DEFAULT_SETTINGS = {
 };
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
-    LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["pt_upside_pct", "desc"],
+    LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["upside_main", "desc"],
     BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
 };
 const TAB_TITLES = {
@@ -107,8 +107,26 @@ function qullamaggieRows(stocks, params) {
 
 // Ranking cen celu analityków (Yahoo): spółki ze średnią ceną celu, najwyższy upside do średniej na górze;
 // min/max = najniższa i najwyższa cena celu. Pola pt_* liczy watchlist.py::estimate_fields.
+// Upside i cel: źródłem głównym jest Finviz (stabilniejszy niż Yahoo); gdy starszy watchlist.json go jeszcze nie ma — Yahoo.
+function upsideMain(s) {
+    if (Number.isFinite(s.finviz_upside_pct)) return s.finviz_upside_pct;
+    return Number.isFinite(s.pt_upside_pct) ? s.pt_upside_pct : null;
+}
+
+function targetMain(s) {
+    if (Number.isFinite(s.finviz_target)) return s.finviz_target;
+    return Number.isFinite(s.pt_mean) ? s.pt_mean : null;
+}
+
+// Etykieta rekomendacji analityków Finviz (1 = Strong Buy ... 5 = Strong Sell).
+function recomLabel(r) {
+    if (!Number.isFinite(r)) return "";
+    return r < 1.5 ? "Strong Buy" : r < 2.5 ? "Buy" : r < 3.5 ? "Hold" : r < 4.5 ? "Sell" : "Strong Sell";
+}
+
 function ptRows(stocks, minAnalysts = 0) {
-    return stocks.filter(s => Number.isFinite(s.pt_mean) && Number.isFinite(s.pt_upside_pct) && (!minAnalysts || s.analysts >= minAnalysts));
+    // liczba analityków jest znana tylko z Yahoo; gdy jej brak, próg „Min. analityków” nie odrzuca spółki
+    return stocks.filter(s => Number.isFinite(upsideMain(s)) && (!minAnalysts || !Number.isFinite(s.analysts) || s.analysts >= minAnalysts));
 }
 
 // Brakujące pt_low/pt_high (starszy watchlist.json sprzed tej kolumny) uzupełniamy z data/estimates.json.
@@ -221,11 +239,16 @@ function sparkSvg(values) {
 
 const money = v => (Number.isFinite(v) ? "$" + Number(v).toFixed(2) : "—");
 
+// Kolor oceny (RS / EPS / Composite) wg percentyla 1–99: <20 czerwony, 20–39 pomarańczowy, 40–59 żółty, 60–79 limonkowy, 80–89 zielony, 90+ ciemna zieleń.
+function ratingClass(v) {
+    if (!Number.isFinite(v)) return "";
+    return v >= 90 ? "rt-90" : v >= 80 ? "rt-80" : v >= 60 ? "rt-60" : v >= 40 ? "rt-40" : v >= 20 ? "rt-20" : "rt-0";
+}
+
 function ratingCell(s, key = "rs_rating") {
     const v = s[key];
     if (!Number.isFinite(v)) return `<td class="muted">—</td>`;
-    const cls = v >= 80 ? "positive" : (v < 50 ? "negative" : "");
-    return `<td class="${cls}"><strong>${v}</strong></td>`;
+    return `<td class="rt ${ratingClass(v)}"><strong>${v}</strong></td>`;
 }
 
 function earningsCell(s) {
@@ -271,7 +294,10 @@ const COL = {
         const gains = s.windows.map(w => `${w.label}: ×${w.ratio.toFixed(2)}`).join(" · ");
         return `<td class="positive" title="${gains}"><strong>×${s.max_ratio.toFixed(2)}</strong> <span class="muted small">top ${state.qm.topPct}% w: ${s.windows.map(w => w.label).join(", ")}</span></td>`;
     }, "Cena / najniższy Low z okna (np. ×1.35 = 35% nad minimum)"],
-    ptMean: ["Śr. cel", "pt_mean", s => `<td title="${s.analysts ? s.analysts + " analityków" : ""}"><strong>${money(s.pt_mean)}</strong></td>`, "Średnia cena celu analityków (Yahoo)"],
+    ptMean: ["Cel", "target_main", s => `<td title="${Number.isFinite(s.finviz_target) ? "Finviz" : "Yahoo"}${s.analysts ? ", " + s.analysts + " analityków (Yahoo)" : ""}"><strong>${money(targetMain(s))}</strong></td>`, "Średnia cena celu analityków (Finviz; Yahoo, gdy brak)"],
+    recom: ["Rekomendacja", "recom", s => Number.isFinite(s.recom)
+        ? `<td class="rt ${ratingClass(Math.round((5 - s.recom) / 4 * 99))}" title="Rekomendacja analityków Finviz: 1 = Strong Buy … 5 = Strong Sell"><strong>${s.recom.toFixed(2)}</strong> <span class="small">${recomLabel(s.recom)}</span></td>`
+        : `<td class="muted">—</td>`, "Rekomendacja analityków wg Finviz (1 = Strong Buy, 5 = Strong Sell; mniej = lepiej)"],
     ptLow: ["Min", "pt_low", s => `<td>${money(s.pt_low)}</td>`, "Najniższa cena celu analityków"],
     ptHigh: ["Max", "pt_high", s => `<td>${money(s.pt_high)}</td>`, "Najwyższa cena celu analityków"],
     ptRange: ["Min – max", "pt_low", s => `<td>${Number.isFinite(s.pt_low) && Number.isFinite(s.pt_high) ? `${s.pt_low.toFixed(0)} – ${s.pt_high.toFixed(0)}` : "—"}</td>`, "Najniższa – najwyższa cena celu"],
@@ -282,7 +308,10 @@ const COL = {
     depth: ["Głębokość", "base_depth_pct", s => `<td>${Number.isFinite(s.base_depth_pct) ? "−" + s.base_depth_pct + "%" : "—"}</td>`],
     baseWeeks: ["Tygodnie", "base_weeks", s => `<td>${s.base_weeks ?? "—"}</td>`],
     trend: ["Trendlinia", "tl_state", s => `<td${s.tl_state === "wybicie" ? ` class="positive"` : ""}>${s.tl_state ? (s.tl_state === "wybicie" ? `▲ wybicie${Number.isFinite(s.tl_vol_ratio) ? ` ×${s.tl_vol_ratio} wol.${s.tl_vol_ok ? " ✓" : ""}` : ""}` : "przy oporze") : ""}${s.tl_pattern ? ` <span class="muted small">${escapeHtml(s.tl_pattern)}</span>` : (s.tl_state ? "" : "—")}</td>`, "Wybicie / zbliżenie do linii oporu (dzienne, ostatnie ~70 sesji) i wykryty kształt"],
-    upside: ["Upside", "pt_upside_pct", s => `<td class="${Number.isFinite(s.pt_upside_pct) ? (s.pt_upside_pct > 0 ? "positive" : "negative") : ""}" title="${Number.isFinite(s.pt_mean) ? "Średnia cena celu analityków $" + s.pt_mean + (s.analysts ? " (" + s.analysts + " analityków)" : "") : ""}">${fmtPct(s.pt_upside_pct, 0)}</td>`, "Różnica między średnią ceną celu analityków a ceną dziś (Yahoo)"],
+    upside: ["Upside", "upside_main", s => {
+        const u = upsideMain(s);
+        return `<td class="${Number.isFinite(u) ? (u > 0 ? "positive" : "negative") : ""}" title="Cel ${money(targetMain(s))} (${Number.isFinite(s.finviz_upside_pct) ? "Finviz" : "Yahoo"})">${fmtPct(u, 0)}</td>`;
+    }, "Różnica między średnią ceną celu analityków (Finviz; Yahoo, gdy brak) a ceną dziś"],
     rev30: ["Rewizje EPS 30d", "eps_rev30_pct", s => pctCell(s.eps_rev30_pct), "Zmiana konsensusu EPS na bieżący rok obrachunkowy w ostatnich 30 dniach (rewizje w górę = analitycy podnoszą prognozy)"],
     rev90: ["Rewizje EPS 90d", "eps_rev90_pct", s => pctCell(s.eps_rev90_pct), "To samo w ostatnich 90 dniach"],
     rsLine: ["Linia RS", "rs_line_dist_pct", s => `<td${s.rs_line_state === "przed ceną" ? ` class="positive"` : ""} title="Linia RS (cena / S&P 500): odległość od maksimum z 52 tyg.; „przed ceną” = RS na maksimum, a cena jeszcze nie">${s.rs_line_state ? (s.rs_line_state === "przed ceną" ? "● RS przed ceną" : "● RS na szczycie") + " " : ""}${Number.isFinite(s.rs_line_dist_pct) ? `<span class="muted small">${fmtPct(s.rs_line_dist_pct)}</span>` : "—"}</td>`, "Linia RS: stan (RS na maksimum 52 tyg. przed/razem z ceną) i odległość od jej maksimum"],
@@ -301,13 +330,13 @@ const COL = {
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
-const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
+const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
 const TAB_COLUMNS = {
     LIST: LIST_COLUMNS,
     FAV: LIST_COLUMNS,
-    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
+    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
     QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
-    PT: [...LEAD, "price", "ptMean", "upside", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
+    PT: [...LEAD, "price", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
     ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
     BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "spark", "earnings", "tv"],
 };
@@ -319,12 +348,26 @@ const TAB_COLUMNS_COMPACT = {
     FAV: ["fav", "ticker", "score", "price", "rs", "high52"],
     RS: ["fav", "ticker", "score", "comp", "rs", "epsr"],
     QM: ["fav", "ticker", "score", "price", "adr", "ratio"],
-    PT: ["fav", "ticker", "score", "ptMean", "upside", "ptRange"],
+    PT: ["fav", "ticker", "score", "recom", "upside", "ptRange"],
     BASES: ["fav", "ticker", "score", "price", "baseType", "toPivot"],
     ALERTS: ["ticker", "alValue", "alDist", "alStatus", "alAct"],
 };
 let splitMode = false;
 const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
+
+const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
+
+// Telefon: nagłówków tabeli nie ma (kafelki), więc sortowanie daje lista rozwijana + przycisk kierunku.
+function updateCardSort(tab) {
+    const sel = document.getElementById("cardSortKey"), dir = document.getElementById("cardSortDir");
+    if (!sel || !dir) return;
+    const opts = columnsFor(tab).map(id => COL[id]).filter(c => c[1]);
+    const seen = new Set();
+    const uniq = opts.filter(c => (seen.has(c[1]) ? false : (seen.add(c[1]), true)));
+    sel.innerHTML = uniq.map(c => `<option value="${c[1]}">${escapeHtml(c[0])}</option>`).join("");
+    sel.value = state.sortKey;
+    dir.textContent = state.sortDir === "asc" ? "▲" : "▼";
+}
 
 function renderHeaders() {
     Object.keys(TAB_COLUMNS).forEach(tab => {
@@ -336,12 +379,25 @@ function renderHeaders() {
     });
 }
 
+// Każda komórka dostaje klasę c-<kolumna> i data-label (etykieta) — na telefonie tabela jest kafelkami (CSS: body:not(.split)),
+// a te atrybuty mówią, co pokazać w nagłówku kafelka i jak podpisać pole po rozwinięciu.
+function decorateCell(html, id, label) {
+    return html.replace(/^<td(?:\s+class="([^"]*)")?/, (m, cls) => `<td data-label="${escapeHtml(label)}" class="c-${id}${cls ? " " + cls : ""}"`);
+}
+
 function renderRow(tab, s, i) {
-    return columnsFor(tab).map(id => COL[id][2](s, i)).join("");
+    const cells = columnsFor(tab).map(id => decorateCell(COL[id][2](s, i), id, COL[id][0])).join("");
+    // kafelek (telefon): przyciski w rozwiniętej części
+    const actions = splitMode ? "" : `<td class="card-actions"><button type="button" class="mini-btn" data-chart="${escapeHtml(s.ticker)}">📈 Wykres</button></td>`;
+    return cells + actions;
 }
 
 function rowsForTab(tab) {
-    state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; });
+    state.data.stocks.forEach(s => {
+        s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null;
+        s.upside_main = upsideMain(s);
+        s.target_main = targetMain(s);
+    });
     const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     if (tab === "RS") return rsLeaders(stocks, state.rsMin, state.epsMin, state.compMin);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
@@ -374,7 +430,7 @@ function renderTable() {
     const rows = sortRows(rowsForTab(tab), state.sortKey, state.sortDir);
     const cols = table.querySelectorAll("thead th").length;
     tbody.innerHTML = rows.length
-        ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}">${renderRow(tab, s, i + 1)}</tr>`).join("")
+        ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}"${!splitMode && openCards.has(s.ticker) ? ` class="open"` : ""}>${renderRow(tab, s, i + 1)}</tr>`).join("")
         : `<tr><td colspan="${cols}" class="empty-state">${EMPTY_MESSAGES[tab]}</td></tr>`;
     updateAlertBadge();
     const meta = document.getElementById("drawerMeta");
@@ -383,6 +439,7 @@ function renderTable() {
         ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) z ${total}`
         : `${rows.length} z ${total} spółek`;
     updateSortHeaders(table);
+    updateCardSort(tab);
     markSelectedRow();
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
@@ -649,6 +706,11 @@ function initControls() {
             e.preventDefault();
         }
     }, { passive: false });
+    const cardSortKey = document.getElementById("cardSortKey"), cardSortDir = document.getElementById("cardSortDir");
+    if (cardSortKey && cardSortDir) {
+        cardSortKey.addEventListener("change", () => { state.sortKey = cardSortKey.value; state.sortDir = "desc"; renderTable(); });
+        cardSortDir.addEventListener("click", () => { state.sortDir = state.sortDir === "asc" ? "desc" : "asc"; renderTable(); });
+    }
     document.querySelectorAll("table.momentum-table thead").forEach(thead => thead.addEventListener("click", ev => {
         const th = ev.target.closest("th");
         const key = th && th.dataset.key;
@@ -670,8 +732,15 @@ function initControls() {
         }
         const star = ev.target.closest("td[data-fav]");
         if (star) { toggleFav(star.dataset.fav); return; }
+        const chartBtn = ev.target.closest("[data-chart]");
+        if (chartBtn) { openChart(chartBtn.dataset.chart); return; }
         const tr = ev.target.closest("tr[data-ticker]");
-        if (tr) openChart(tr.dataset.ticker);
+        if (!tr) return;
+        if (splitMode) { openChart(tr.dataset.ticker); return; }
+        // telefon: stuknięcie rozwija / zwija kafelek w dół (wykres otwiera przycisk „Wykres” w rozwiniętej części)
+        const t = tr.dataset.ticker;
+        if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
+        tr.classList.toggle("open", openCards.has(t));
     }));
     initChartModal();
 }
@@ -1122,7 +1191,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ptRows, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
