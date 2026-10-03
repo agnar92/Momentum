@@ -37,6 +37,38 @@ class TestFinviz:
         assert total == 130
         assert rows == [{"ticker": "AAPL", "forward_pe": 24.85, "eps_this_y": 10.93, "eps_next_y": None}]
 
+    def test_parse_custom_view_recom_and_target_price(self):
+        page = """<html><body><div>#1 / 556 Total</div>
+        <table class="screener_table"><thead><tr><th>No.</th><th>Ticker</th><th>Recom</th><th>Target Price</th></tr></thead>
+        <tr class="styled-row"><td>1</td><td data-boxover-ticker="A">A</td><td>1.84</td><td>175.89</td></tr>
+        <tr class="styled-row"><td>2</td><td data-boxover-ticker="B">B</td><td>-</td><td>-</td></tr>
+        </table></body></html>"""
+        rows, total = finviz.parse_screener_page(page, "152")
+        assert total == 556
+        assert rows == [{"ticker": "A", "recom": 1.84, "finviz_target": 175.89}, {"ticker": "B", "recom": None, "finviz_target": None}]
+
+    def test_fetch_view_adds_custom_columns_param_only_for_the_custom_view(self, monkeypatch):
+        seen = []
+
+        class FakeResp:
+            text = "<html></html>"
+
+            def raise_for_status(self):
+                pass
+
+        class FakeSession:
+            def get(self, url, params=None, **kw):
+                seen.append(params)
+                return FakeResp()
+        finviz.fetch_view("152", "f", 5, 0, FakeSession())
+        finviz.fetch_view("121", "f", 5, 0, FakeSession())
+        assert seen[0]["c"] == "0,1,62,69" and "c" not in seen[1]
+
+    def test_finviz_upside(self):
+        assert watchlist.finviz_upside(120, 100) == 20.0
+        assert watchlist.finviz_upside(None, 100) is None
+        assert watchlist.finviz_upside(120, 0) is None
+
     def test_fetch_watchlist_merges_views_by_ticker(self, monkeypatch):
         views = {
             "111": [{"ticker": "AAA", "sector": "Tech"}, {"ticker": "BBB", "sector": "Health"}],

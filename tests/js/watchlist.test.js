@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -195,4 +195,16 @@ test("decorateCell adds the column class and label to the first <td> and keeps e
     assert.equal(decorateCell("<td>1</td>", "price", "Cena"), '<td data-label="Cena" class="c-price">1</td>');
     assert.equal(decorateCell('<td class="positive">1</td>', "rs", "RS"), '<td data-label="RS" class="c-rs positive">1</td>');
     assert.equal(decorateCell('<td title="x">1</td>', "company", "Spółka"), '<td data-label="Spółka" class="c-company" title="x">1</td>');
+});
+
+test("Finviz is the primary source of target and upside, Yahoo is the fallback; recomLabel names the scale", () => {
+    assert.equal(upsideMain({ finviz_upside_pct: 12, pt_upside_pct: 30 }), 12);
+    assert.equal(upsideMain({ finviz_upside_pct: null, pt_upside_pct: 30 }), 30);
+    assert.equal(upsideMain({}), null);
+    assert.equal(targetMain({ finviz_target: 150, pt_mean: 160 }), 150);
+    assert.equal(targetMain({ pt_mean: 160 }), 160);
+    assert.deepEqual([1, 1.84, 2.5, 3.2, 4.6].map(recomLabel), ["Strong Buy", "Buy", "Hold", "Hold", "Strong Sell"]);
+    // próg analityków dotyczy tylko spółek, dla których znamy ich liczbę (Yahoo)
+    const rows = [stock("A", { finviz_upside_pct: 20 }), stock("B", { finviz_upside_pct: 40, analysts: 1 }), stock("C", { finviz_upside_pct: 10, analysts: 9 })];
+    assert.deepEqual(ptRows(rows, 3).map(s => s.ticker), ["A", "C"]);
 });

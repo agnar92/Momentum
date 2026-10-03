@@ -83,7 +83,7 @@ EST_HISTORY_DAYS = 400       # ile dni historii konsensusu EPS trzymamy (dopisuj
 EST_PERIODS = ("0y", "+1y")  # bieżący i następny rok obrachunkowy (Yahoo nie podaje dalszych)
 EST_SEED_DAYS = {"90daysAgo": 90, "60daysAgo": 60, "30daysAgo": 30, "7daysAgo": 7}
 FINVIZ_KEYS = ("company", "sector", "industry", "market_cap", "pe", "forward_pe",
-               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings")
+               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings", "recom", "finviz_target")
 
 
 # ============================================================================
@@ -923,6 +923,13 @@ def weekly_close(df):
     return close.resample("W-FRI").last().dropna()
 
 
+def finviz_upside(target, price):
+    """Upside do średniej ceny celu z Finviz (%): (cel / cena − 1)·100; None bez ceny lub celu."""
+    if not target or not price or target <= 0 or price <= 0:
+        return None
+    return _num((target / price - 1) * 100, 1)
+
+
 def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
     stocks = []
     bench_w = weekly_close(drop_incomplete_bar(bench_df, now_utc)) if bench_df is not None and len(bench_df) else None
@@ -936,6 +943,7 @@ def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
         stock = {"ticker": row["ticker"]}
         stock.update({k: row.get(k) for k in FINVIZ_KEYS})
         stock.update(metrics)
+        stock["finviz_upside_pct"] = finviz_upside(stock.get("finviz_target"), stock.get("price"))
         stocks.append(stock)
     add_rs_rating(stocks)
     return stocks
