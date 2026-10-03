@@ -103,6 +103,12 @@
         <details class="screener-guide" id="guide-ALERTS" hidden><summary>🔔 Alerty — jak to działa</summary>W oknie wykresu kliknij <b>✎ Edytuj</b> (albo <b>przytrzymaj spację</b> — tryb edycji działa, dopóki trzymasz; wtedy przeciągnięcie po wykresie rysuje linię), wybierz <b>Linia</b>, kliknij dwa punkty (przyciąga do High/Low świecy) i ustaw <b>Alert</b>: „nad linią” (wybicie oporu) albo „pod linią” (utrata wsparcia). Tu porównuję dzisiejszą wartość linii z ostatnim zamknięciem; „PRZEBITA — nowa” zostaje, dopóki nie klikniesz OK. Alerty działają w aplikacji (bez powiadomień) i są liczone przy otwarciu strony / po odświeżeniu danych. Dane są tylko w tej przeglądarce — użyj eksportu, żeby je zachować albo pokazać Claude do przeglądu.</details>
         <details class="screener-guide" id="guide-FAV" hidden><summary>⭐ Ulubione</summary>Spółki oznaczone ★ — zapisane tylko w tej przeglądarce (localStorage).</details>
 
+        <div class="card-sort" id="cardSortBar">
+            <label>Sortuj:</label>
+            <select id="cardSortKey" aria-label="Sortuj według"></select>
+            <button type="button" class="btn" id="cardSortDir" title="Kierunek sortowania">▼</button>
+        </div>
+
         <div class="table-scroll">
             <table class="momentum-table" id="table-LIST"><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-RS" hidden><thead></thead><tbody></tbody></table>

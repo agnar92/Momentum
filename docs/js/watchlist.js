@@ -221,11 +221,16 @@ function sparkSvg(values) {
 
 const money = v => (Number.isFinite(v) ? "$" + Number(v).toFixed(2) : "—");
 
+// Kolor oceny (RS / EPS / Composite) wg percentyla 1–99: <20 czerwony, 20–39 pomarańczowy, 40–59 żółty, 60–79 limonkowy, 80–89 zielony, 90+ ciemna zieleń.
+function ratingClass(v) {
+    if (!Number.isFinite(v)) return "";
+    return v >= 90 ? "rt-90" : v >= 80 ? "rt-80" : v >= 60 ? "rt-60" : v >= 40 ? "rt-40" : v >= 20 ? "rt-20" : "rt-0";
+}
+
 function ratingCell(s, key = "rs_rating") {
     const v = s[key];
     if (!Number.isFinite(v)) return `<td class="muted">—</td>`;
-    const cls = v >= 80 ? "positive" : (v < 50 ? "negative" : "");
-    return `<td class="${cls}"><strong>${v}</strong></td>`;
+    return `<td class="rt ${ratingClass(v)}"><strong>${v}</strong></td>`;
 }
 
 function earningsCell(s) {
@@ -326,6 +331,20 @@ const TAB_COLUMNS_COMPACT = {
 let splitMode = false;
 const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
 
+const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
+
+// Telefon: nagłówków tabeli nie ma (kafelki), więc sortowanie daje lista rozwijana + przycisk kierunku.
+function updateCardSort(tab) {
+    const sel = document.getElementById("cardSortKey"), dir = document.getElementById("cardSortDir");
+    if (!sel || !dir) return;
+    const opts = columnsFor(tab).map(id => COL[id]).filter(c => c[1]);
+    const seen = new Set();
+    const uniq = opts.filter(c => (seen.has(c[1]) ? false : (seen.add(c[1]), true)));
+    sel.innerHTML = uniq.map(c => `<option value="${c[1]}">${escapeHtml(c[0])}</option>`).join("");
+    sel.value = state.sortKey;
+    dir.textContent = state.sortDir === "asc" ? "▲" : "▼";
+}
+
 function renderHeaders() {
     Object.keys(TAB_COLUMNS).forEach(tab => {
         const head = columnsFor(tab).map(id => {
@@ -336,8 +355,17 @@ function renderHeaders() {
     });
 }
 
+// Każda komórka dostaje klasę c-<kolumna> i data-label (etykieta) — na telefonie tabela jest kafelkami (CSS: body:not(.split)),
+// a te atrybuty mówią, co pokazać w nagłówku kafelka i jak podpisać pole po rozwinięciu.
+function decorateCell(html, id, label) {
+    return html.replace(/^<td(?:\s+class="([^"]*)")?/, (m, cls) => `<td data-label="${escapeHtml(label)}" class="c-${id}${cls ? " " + cls : ""}"`);
+}
+
 function renderRow(tab, s, i) {
-    return columnsFor(tab).map(id => COL[id][2](s, i)).join("");
+    const cells = columnsFor(tab).map(id => decorateCell(COL[id][2](s, i), id, COL[id][0])).join("");
+    // kafelek (telefon): przyciski w rozwiniętej części
+    const actions = splitMode ? "" : `<td class="card-actions"><button type="button" class="mini-btn" data-chart="${escapeHtml(s.ticker)}">📈 Wykres</button></td>`;
+    return cells + actions;
 }
 
 function rowsForTab(tab) {
@@ -374,7 +402,7 @@ function renderTable() {
     const rows = sortRows(rowsForTab(tab), state.sortKey, state.sortDir);
     const cols = table.querySelectorAll("thead th").length;
     tbody.innerHTML = rows.length
-        ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}">${renderRow(tab, s, i + 1)}</tr>`).join("")
+        ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}"${!splitMode && openCards.has(s.ticker) ? ` class="open"` : ""}>${renderRow(tab, s, i + 1)}</tr>`).join("")
         : `<tr><td colspan="${cols}" class="empty-state">${EMPTY_MESSAGES[tab]}</td></tr>`;
     updateAlertBadge();
     const meta = document.getElementById("drawerMeta");
@@ -383,6 +411,7 @@ function renderTable() {
         ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) z ${total}`
         : `${rows.length} z ${total} spółek`;
     updateSortHeaders(table);
+    updateCardSort(tab);
     markSelectedRow();
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
@@ -649,6 +678,11 @@ function initControls() {
             e.preventDefault();
         }
     }, { passive: false });
+    const cardSortKey = document.getElementById("cardSortKey"), cardSortDir = document.getElementById("cardSortDir");
+    if (cardSortKey && cardSortDir) {
+        cardSortKey.addEventListener("change", () => { state.sortKey = cardSortKey.value; state.sortDir = "desc"; renderTable(); });
+        cardSortDir.addEventListener("click", () => { state.sortDir = state.sortDir === "asc" ? "desc" : "asc"; renderTable(); });
+    }
     document.querySelectorAll("table.momentum-table thead").forEach(thead => thead.addEventListener("click", ev => {
         const th = ev.target.closest("th");
         const key = th && th.dataset.key;
@@ -670,8 +704,15 @@ function initControls() {
         }
         const star = ev.target.closest("td[data-fav]");
         if (star) { toggleFav(star.dataset.fav); return; }
+        const chartBtn = ev.target.closest("[data-chart]");
+        if (chartBtn) { openChart(chartBtn.dataset.chart); return; }
         const tr = ev.target.closest("tr[data-ticker]");
-        if (tr) openChart(tr.dataset.ticker);
+        if (!tr) return;
+        if (splitMode) { openChart(tr.dataset.ticker); return; }
+        // telefon: stuknięcie rozwija / zwija kafelek w dół (wykres otwiera przycisk „Wykres” w rozwiniętej części)
+        const t = tr.dataset.ticker;
+        if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
+        tr.classList.toggle("open", openCards.has(t));
     }));
     initChartModal();
 }
@@ -1122,7 +1163,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ptRows, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, githubActionsUrl, sortRows,
+        rsLeaders, qullamaggieRows, ptRows, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

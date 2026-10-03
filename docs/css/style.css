@@ -628,3 +628,64 @@ td.score-cell { text-align: center; }
     input, select, textarea { font-size: 16px !important; }
     html, body { touch-action: manipulation; }
 }
+
+/* ---------- kolory ocen (RS / EPS / Composite) wg percentyla ---------- */
+td.rt { text-align: center; }
+.rt strong { display: inline-block; min-width: 30px; padding: 1px 7px; border-radius: 6px; text-align: center; }
+.rt-90 strong { background: #0b6b37; color: #e9fff1; }
+.rt-80 strong { background: #1f9d55; color: #e9fff1; }
+.rt-60 strong { background: #86b82f; color: #121a04; }
+.rt-40 strong { background: #d9b400; color: #251d00; }
+.rt-20 strong { background: #e3801c; color: #261200; }
+.rt-0 strong { background: #d1344a; color: #fff; }
+
+/* ---------- telefon / wąski ekran: tabela jako kafelki (bez przewijania w bok), stuknięcie rozwija w dół ---------- */
+.card-sort { display: none; }
+body:not(.split) .card-sort { display: flex; align-items: center; gap: 8px; padding: 6px 12px 0; color: var(--text-dim); font-size: 12px; }
+body:not(.split) .card-sort select { flex: 1; min-width: 0; }
+body:not(.split) .table-scroll { overflow-x: hidden; padding: 0 8px 14px; }
+body:not(.split) table.momentum-table, body:not(.split) table.momentum-table tbody { display: block; width: 100%; min-width: 0; }
+body:not(.split) table.momentum-table thead { display: none; }
+body:not(.split) table.momentum-table[hidden] { display: none; }
+.card-sort select { background: #0e0f13; color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: inherit; }
+body:not(.split) table.momentum-table tbody tr[data-ticker] {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 8px 0; padding: 10px 12px;
+    background: var(--panel-alt); border: 1px solid var(--border); border-radius: 12px; cursor: pointer;
+}
+body:not(.split) table.momentum-table tbody tr.open { border-color: var(--green-bright); }
+:where(body:not(.split) table.momentum-table td) { display: none; }
+body:not(.split) table.momentum-table td { padding: 0; white-space: normal; border: 0; }
+body:not(.split) table.momentum-table td.empty-state { display: block; padding: 30px 10px; }
+/* zawsze widoczne: pierwszy wiersz (gwiazdka, ticker, score), nazwa spółki, chipy z oceną / ceną / statusem */
+body:not(.split) td.c-fav, body:not(.split) td.c-ticker, body:not(.split) td.c-score, body:not(.split) td.c-company,
+body:not(.split) td.c-price, body:not(.split) td.c-comp, body:not(.split) td.c-rs, body:not(.split) td.c-epsr,
+body:not(.split) td.c-upside, body:not(.split) td.c-ptMean, body:not(.split) td.c-toPivot, body:not(.split) td.c-ratio,
+body:not(.split) td.c-alStatus, body:not(.split) td.c-alDist, body:not(.split) td.c-alAct { display: inline-flex; align-items: center; }
+body:not(.split) td.c-fav { order: 1; font-size: 20px; }
+body:not(.split) td.c-ticker { order: 2; flex: 1 1 auto; font-size: 17px; font-weight: 800; }
+body:not(.split) td.c-score { order: 3; }
+body:not(.split) td.c-company { order: 4; flex: 0 0 100%; color: var(--text-dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body:not(.split) td.c-price, body:not(.split) td.c-comp, body:not(.split) td.c-rs, body:not(.split) td.c-epsr,
+body:not(.split) td.c-upside, body:not(.split) td.c-ptMean, body:not(.split) td.c-toPivot, body:not(.split) td.c-ratio,
+body:not(.split) td.c-alStatus, body:not(.split) td.c-alDist, body:not(.split) td.c-alAct { order: 5; font-size: 13px; }
+body:not(.split) td.c-comp::before, body:not(.split) td.c-rs::before, body:not(.split) td.c-epsr::before,
+body:not(.split) td.c-upside::before, body:not(.split) td.c-ptMean::before, body:not(.split) td.c-toPivot::before,
+body:not(.split) td.c-alDist::before { color: var(--text-faint); font-size: 10px; font-weight: 600; margin-right: 4px; }
+body:not(.split) td.c-comp::before { content: "Comp"; }
+body:not(.split) td.c-rs::before { content: "RS"; }
+body:not(.split) td.c-epsr::before { content: "EPS"; }
+body:not(.split) td.c-upside::before { content: "Upside"; }
+body:not(.split) td.c-ptMean::before { content: "Cel"; }
+body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
+body:not(.split) td.c-alDist::before { content: "vs linia"; }
+body:not(.split) td.c-rank { display: none !important; }
+/* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.card-actions) {
+    display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
+}
+body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-upside):not(.c-ptMean):not(.c-toPivot):not(.c-ratio):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
+    content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
+}
+body:not(.split) td.card-actions { display: none; }
+body:not(.split) tr.open td.card-actions { display: flex; order: 30; flex: 0 0 100%; gap: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+body:not(.split) tr.open td.card-actions .mini-btn { padding: 8px 14px; font-size: 13px; }

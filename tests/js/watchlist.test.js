@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -183,4 +183,16 @@ test("morningstarUrlFor builds a ticker search link and encodes the symbol", () 
     assert.equal(morningstarUrlFor("AAPL"), "https://www.morningstar.com/search?query=AAPL");
     assert.equal(morningstarUrlFor("BRK-B"), "https://www.morningstar.com/search?query=BRK-B");
     assert.equal(morningstarUrlFor("A B"), "https://www.morningstar.com/search?query=A%20B");
+});
+
+test("ratingClass maps percentile bands to colour classes", () => {
+    assert.deepEqual([99, 90, 89, 80, 79, 60, 59, 40, 39, 20, 19, 1].map(ratingClass),
+        ["rt-90", "rt-90", "rt-80", "rt-80", "rt-60", "rt-60", "rt-40", "rt-40", "rt-20", "rt-20", "rt-0", "rt-0"]);
+    assert.equal(ratingClass(null), "");
+});
+
+test("decorateCell adds the column class and label to the first <td> and keeps existing class and attributes", () => {
+    assert.equal(decorateCell("<td>1</td>", "price", "Cena"), '<td data-label="Cena" class="c-price">1</td>');
+    assert.equal(decorateCell('<td class="positive">1</td>', "rs", "RS"), '<td data-label="RS" class="c-rs positive">1</td>');
+    assert.equal(decorateCell('<td title="x">1</td>', "company", "Spółka"), '<td data-label="Spółka" class="c-company" title="x">1</td>');
 });
