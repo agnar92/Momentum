@@ -904,6 +904,12 @@ body:not(.split) .wl-chart-box .wl-range-r { right: -15px; }
 body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left: 50%; width: 16px; height: 16px; margin: -8px 0 0 -8px; border-radius: 50%; background: #4aa3ff; border: 2px solid #0e0f13; box-shadow: 0 0 0 1px #4aa3ff; }
 @media (max-height: 520px) { body:not(.split) .wl-chart-box .wl-range { height: 26px; margin: 1px 22px 2px; } }
 
+/* lista CANSLIM: litery C A N S L I M */
+.cs-l { display: inline-block; min-width: 1.05em; text-align: center; font-weight: 800; font-size: .9em; color: var(--muted, #7d8590); opacity: .6; }
+.cs-l.on { color: var(--green-bright, #3fb950); opacity: 1; }
+.cs-l.off { color: #f85149; opacity: .85; }
+.cs-cell { white-space: nowrap; }
+
 /* przycisk „A” (skala cen automatyczna) po ręcznym przesunięciu wykresu w pionie */
 .cell-body { position: relative; }
 .chart-auto-btn { position: absolute; right: 4px; bottom: 6px; z-index: 4; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel-alt); color: var(--green-bright); font-weight: 800; font-size: 14px; cursor: pointer; opacity: .92; }

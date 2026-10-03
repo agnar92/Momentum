@@ -356,3 +356,22 @@ test("readinessLine warns when the price is more than 5% above the pivot", () =>
     const ok = readinessLine({ ...stock("O"), base_type: "flat", pct_to_pivot: -3, brk: null }, "uptrend");
     assert.ok(ok.includes("3.0% nad pivotem (strefa zakupu do +5 %)"));
 });
+
+test("canslimInfo: seven criteria C A N S L I M, score needs >= 4 known, rows sorted by score", () => {
+    const { canslimInfo, tagCanslim, canslimRows } = require("../../docs/js/watchlist.js");
+    const good = { ticker: "G", eps_q0_yoy: 40, eps_past_5y: 30, pct_from_high_52w: -4, accdis: "B", rs_rating: 92, inst_sponsor: true, composite_rating: 90 };
+    const c = canslimInfo(good, "uptrend");
+    assert.equal(c.score, 7);
+    assert.deepEqual(canslimInfo(good, "correction").flags.M, false);
+    assert.equal(canslimInfo(good, "correction").score, 6);
+    const weak = { ticker: "W", eps_q0_yoy: 10, eps_this_y: 30, pct_from_high_52w: -30, accdis: "D", rs_rating: 50, inst_sponsor: false };
+    const w = canslimInfo(weak, "uptrend");
+    assert.deepEqual(w.flags, { C: false, A: true, N: false, S: false, L: false, I: false, M: true });   // A: brak 5 lat → EPS w tym roku
+    assert.equal(w.score, 2);
+    const sparse = { ticker: "S", rs_rating: 90 };
+    const stocks = [good, weak, sparse];
+    tagCanslim(stocks, null);
+    assert.equal(sparse.cs, null);                          // znane tylko L → za mało danych
+    assert.deepEqual(canslimRows(stocks, 5).map(s => s.ticker), ["G"]);
+    assert.deepEqual(canslimRows(stocks, 0).map(s => s.ticker), ["G", "W"]);
+});
