@@ -732,3 +732,8 @@ body:not(.split) td.c-strat { order: 3; }
 .nav-btn:disabled { opacity: .3; pointer-events: none; }
 .wl-chart-box.full.phone-full .chart-nav { padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)); }
 .wl-chart-box.full.phone-full .chart-nav .nav-btn { min-height: 34px; }
+
+/* przycisk Cofnij nad wykresem (telefon: pasek narzędzi bywa ukryty); sticky, bo okno wykresu przewija się samo */
+.ann-fab { position: sticky; bottom: 84px; display: block; width: 48px; height: 48px; margin: -48px 14px 0 auto; border-radius: 50%; border: 1px solid var(--border); background: var(--panel-alt); color: var(--text); font-size: 22px; box-shadow: 0 2px 10px rgba(0,0,0,.5); cursor: pointer; z-index: 6; }
+.ann-fab[hidden] { display: none; }
+.ann-fab:active { transform: scale(.94); }

@@ -89,6 +89,76 @@ function annAdoptAuto(rec, full) {
     return rec;
 }
 
+// ---------- szablony formacji (jedno stuknięcie zamiast rysowania od zera) ----------
+// Tablice h/l/dates to PEŁNY model wykresu (świece dzienne albo tygodniowe), indeksy w nich. Wynik zawsze można poprawić uchwytami.
+
+function annExtreme(arr, from, to, wantMax) {
+    let k = -1;
+    for (let i = Math.max(0, from); i <= to && i < arr.length; i++) {
+        if (!Number.isFinite(arr[i])) continue;
+        if (k < 0 || (wantMax ? arr[i] > arr[k] : arr[i] < arr[k])) k = i;
+    }
+    return k;
+}
+
+// Flaga / korytarz: stuknięcie = początek konsolidacji (start), koniec = ostatnia świeca. Opór przez szczyty obu połówek (gdy maleją),
+// inaczej poziomy na najwyższym High; wsparcie przez dołki obu połówek. Zwraca [{kind,x0,y0,x1,y1}] albo null (za krótko).
+function annTemplateFlag(h, l, dates, start, last) {
+    if (!(last - start >= 4)) return null;
+    const mid = start + Math.floor((last - start) / 2);
+    const r2 = v => Math.round(v * 100) / 100;
+    const through = (arr, a, b) => ({ x0: dates[a], y0: arr[a], x1: dates[last], y1: arr[a] + (arr[b] - arr[a]) * (last - a) / (b - a) });
+    const lines = [];
+    const p1 = annExtreme(h, start, mid, true), p2 = annExtreme(h, mid + 1, last, true);
+    if (p1 >= 0 && p2 >= 0 && h[p2] <= h[p1]) {
+        const ln = through(h, p1, p2);
+        if (ln.y1 > 0) lines.push({ kind: "res", ...ln });
+    }
+    if (!lines.length && p1 >= 0) {
+        const top = annExtreme(h, start, last, true);
+        lines.push({ kind: "res", x0: dates[start], y0: h[top], x1: dates[last], y1: h[top] });
+    }
+    const t1 = annExtreme(l, start, mid, false), t2 = annExtreme(l, mid + 1, last, false);
+    if (t1 >= 0 && t2 >= 0) {
+        const ln = through(l, t1, t2);
+        if (ln.y1 > 0) lines.push({ kind: "sup", ...ln });
+    }
+    return lines.length ? lines.map(x => ({ ...x, y0: r2(x.y0), y1: r2(x.y1) })) : null;
+}
+
+// Cup: stuknięcie = dołek. Lewy brzeg = najwyższy High do `lookback` świec przed dołkiem, prawy = najwyższy High po dołku.
+// Zwraca { start, low_date, end, peak, low, right } albo null (brak sensownej miseczki: za mało świec, płytka, dołek na brzegu).
+function annTemplateCup(h, l, dates, tapIdx, last, lookback) {
+    const b = annExtreme(l, tapIdx - 3, Math.min(last, tapIdx + 3), false);
+    if (b < 0) return null;
+    const a = annExtreme(h, b - lookback, b - 3, true);
+    const c = annExtreme(h, b + 3, last, true);
+    if (a < 0 || c < 0 || !(a < b && b < c)) return null;
+    if (!(h[a] > l[b] * 1.05)) return null;
+    return { start: dates[a], low_date: dates[b], end: dates[c], peak: h[a], low: l[b], right: h[c] };
+}
+
+// ---------- cofnij (historia zmian linii i cupów jednej spółki) ----------
+// Migawka = linie, cupy i flagi ukrycia automatów; notatki nie wchodzą (pisanie nie zapełnia historii).
+function annUndoSnapshot(rec) {
+    const r = rec || {};
+    return JSON.parse(JSON.stringify({ lines: r.lines || [], cups: r.cups || [], hideAutoLines: !!r.hideAutoLines, hideAutoCups: !!r.hideAutoCups }));
+}
+
+// Przywraca migawkę. Obiekty, które przez cofnięcie znikają, dostają nagrobek (inaczej wróciłyby z synchronizacji z drugiego urządzenia),
+// a przywrócone tracą nagrobek.
+function annUndoApply(rec, snap, now = new Date()) {
+    const keep = new Set([...snap.lines, ...snap.cups].map(x => x.id));
+    const del = { ...(rec.del || {}) };
+    [...rec.lines, ...rec.cups].forEach(x => { if (!keep.has(x.id)) del[x.id] = now.toISOString(); });
+    keep.forEach(id => { delete del[id]; });
+    rec.lines = snap.lines; rec.cups = snap.cups;
+    rec.hideAutoLines = snap.hideAutoLines; rec.hideAutoCups = snap.hideAutoCups;
+    rec.del = del;
+    rec.editedAt = now.toISOString();
+    return rec;
+}
+
 // Wiersze zakładki Alerty: po jednym na linię z alertem (spółki spoza bieżącej listy pomijamy — brak ceny).
 function alertRows(store, stocks) {
     const byTicker = new Map(stocks.map(s => [s.ticker, s]));
@@ -189,7 +259,39 @@ function annWriteLocal() {
     try { localStorage.setItem(ANN_KEY, JSON.stringify(annStore)); } catch (e) { /* brak localStorage */ }
 }
 
+const annUndo = { ticker: null, stack: [], base: "" };   // historia aktualnie otwartej spółki; base = stan po ostatniej zmianie
+const ANN_UNDO_MAX = 40;
+const annUndoState = ticker => JSON.stringify(annUndoSnapshot(annStore[ticker]));
+
+// Zmiana linii / cupów od ostatniego zapisu => poprzedni stan trafia na stos (jeden wpis na gest, bo zapis jest po puszczeniu palca).
+function annTrack() {
+    if (!annUndo.ticker) return;
+    const now = annUndoState(annUndo.ticker);
+    if (now === annUndo.base) return;
+    annUndo.stack.push(annUndo.base);
+    if (annUndo.stack.length > ANN_UNDO_MAX) annUndo.stack.shift();
+    annUndo.base = now;
+}
+
+function annUndoFor(ticker) {
+    if (annUndo.ticker === ticker) return;
+    annUndo.ticker = ticker; annUndo.stack = []; annUndo.base = annUndoState(ticker);
+}
+
+function annUndoRun() {
+    const t = annUndo.ticker;
+    if (!t || !annUndo.stack.length) return false;
+    const R = annRecord(t, true);
+    annUndoApply(R, JSON.parse(annUndo.stack.pop()));
+    annUndo.base = annUndoState(t);
+    annEdit.selected = null; annEdit.pending = []; annEdit.cursor = null;
+    annWriteLocal(); annOnSave(); annSyncTools();
+    if (annCurrent) annCurrent.render();
+    return true;
+}
+
 function annSave() {
+    annTrack();
     annWriteLocal();
     annOnSave();
 }
@@ -237,14 +339,49 @@ function annOverlay(ctx) {
         return { x: p.x, y: p.y };
     };
     // Punkt na wykresie: x przyciągany do świecy, y do High/Low tej świecy, gdy kursor jest blisko.
+    // Przyciąganie: spośród High i Low świec w okolicy (±2) wybieramy punkt najbliższy palcu/kursorowi, jeśli jest dość blisko
+    // (palec jest gruby — na dotyku promień większy); inaczej x do najbliższej świecy, a cena swobodna.
     const snap = p => {
         const idx = Math.max(0, Math.min(m.n - 1, Math.round((p.x - L.left) / geom.step - 0.5)));
-        let price = priceOfY(Math.max(L.price.y, Math.min(L.price.y + L.price.h, p.y)));
-        const near = geom.fs(12);
-        if (Number.isFinite(m.h[idx]) && Math.abs(p.y - geom.yP(m.h[idx])) < near) price = m.h[idx];
-        else if (Number.isFinite(m.l[idx]) && Math.abs(p.y - geom.yP(m.l[idx])) < near) price = m.l[idx];
-        return { date: m.weeks[idx], price: r2(price) };
+        const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+        const near = geom.fs(coarse ? 22 : 13);
+        let best = null;
+        for (let j = Math.max(0, idx - 2); j <= Math.min(m.n - 1, idx + 2); j++) {
+            [m.h[j], m.l[j]].forEach(v => {
+                if (!Number.isFinite(v)) return;
+                const d = Math.hypot(p.x - geom.x(j), p.y - geom.yP(v));
+                if (d <= near && (!best || d < best.d)) best = { d, j, v };
+            });
+        }
+        if (best) return { date: m.weeks[best.j], price: r2(best.v) };
+        return { date: m.weeks[idx], price: r2(priceOfY(Math.max(L.price.y, Math.min(L.price.y + L.price.h, p.y)))) };
     };
+
+    // Szablony: jedno stuknięcie. flag = początek konsolidacji, cuptap = dołek miseczki. Wynik jest zwykłymi, edytowalnymi obiektami.
+    const full = ctx.full;
+    const applyTemplate = (tool, pt) => {
+        const R = annRecord(ticker, true);
+        const i = Math.max(0, Math.min(full.lastIdx, Math.round(dateToIndex(full.weeks, pt.date))));
+        const done = (sel, text) => { R.editedAt = new Date().toISOString(); annEdit.selected = sel; annEdit.pending = []; annEdit.cursor = null; annEdit.tool = annEdit.mode; annSave(); annSyncTools(); showToast(text); };
+        if (tool === "flag") {
+            const lines = annTemplateFlag(full.h, full.l, full.weeks, i, full.lastIdx);
+            if (!lines) { showToast("Za mało świec od tego miejsca — stuknij wcześniej (początek konsolidacji)."); return; }
+            let first = null;
+            lines.forEach(ln => {
+                const line = { id: annNewId(), ...ln, alert: ln.kind === "res" ? "above" : null, log: !!geom.useLog, ext: false, tpl: "flag" };
+                R.lines.push(line);
+                if (!first) first = line;
+            });
+            done({ type: "line", id: first.id }, "Flaga: opór (z alertem „nad linią”) i wsparcie — popraw końce kółkami.");
+        } else {
+            const cup = annTemplateCup(full.h, full.l, full.weeks, i, full.lastIdx, full.daily ? 150 : 45);
+            if (!cup) { showToast("Nie widzę miseczki wokół tego dołka — stuknij w najniższy punkt po wyraźnym szczycie."); return; }
+            const c = { id: annNewId(), ...cup, tpl: "cup" };
+            R.cups.push(c);
+            done({ type: "cup", id: c.id }, "Cup: lewy brzeg, dołek i prawy brzeg — popraw uchwytami.");
+        }
+    };
+    const isTemplate = () => annEdit.tool === "flag" || annEdit.tool === "cuptap";
 
     // Shift = linia pozioma: druga cena = cena pierwszego punktu (kąt 0°)
     const level = (pt, ref, ev) => (ev && ev.shiftKey && ref ? { date: pt.date, price: ref.price } : pt);
@@ -344,7 +481,7 @@ function annOverlay(ctx) {
         loupe = { raw: rawPt, snap: { x: geom.x(idx), y: geom.yP(snapped.price) } };
     };
     const render = () => { ov.innerHTML = markup() + loupeMarkup(); };
-    if (!ctx.readonly) annCurrent = { render, ticker, full: ctx.full };
+    if (!ctx.readonly) { annUndoFor(ticker); annCurrent = { render, ticker, full: ctx.full }; }
     render();
     // Dotyk bez trybu edycji: podwójne stuknięcie w wykres włącza edycję i od razu pokazuje wybór „linia / cup”
     if (!editing && !ctx.readonly && !plot.dataset.annDbl) {
@@ -453,7 +590,7 @@ function annOverlay(ctx) {
         let handle = t.dataset && t.dataset.handle;
         let handleTarget = handle ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
         let hitObj = t.dataset && (t.dataset.line || t.dataset.cup) ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
-        const placing = annEdit.pending.length > 0;   // trwa stawianie punktów nowego obiektu — dotyk nie „łapie” istniejących
+        const placing = annEdit.pending.length > 0 || isTemplate();   // trwa stawianie punktów nowego obiektu / szablon — dotyk nie „łapie” istniejących
         if (touchPtr && (!annEdit.tool || annEdit.mode) && !placing && !handle && !hitObj) {
             const pk = pickNear(toSvg(ev));
             if (pk) { if (pk.handle) { handle = pk.handle; handleTarget = pk.target; } else hitObj = pk.obj; }
@@ -520,20 +657,28 @@ function annOverlay(ctx) {
             }
             annEdit.lastTap = { t: now, x: ev.clientX, y: ev.clientY };
         }
-        if (touchPtr && (annEdit.tool === "line" || annEdit.tool === "cup")) {
+        if (touchPtr && (annEdit.tool === "line" || annEdit.tool === "cup" || isTemplate())) {
             // dotyk + wybrane narzędzie: punkt stawia się dopiero po puszczeniu palca, a w trakcie widać lupę z miejscem przyciągnięcia
             ev.preventDefault();
             ov.setPointerCapture(ev.pointerId);
             const place = e => { const pt = snap(toSvg(e)); return annEdit.tool === "line" && annEdit.pending.length === 1 ? level(pt, annEdit.pending[0], e) : pt; };
             const stop = () => { ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", cancel); };
             const move = e => { const pt = place(e); annEdit.cursor = pt; showLoupe(toSvg(e), pt); render(); };
-            const up = e => { stop(); loupe = null; const pt = place(e); annEdit.cursor = null; annEdit.pending.push(pt); finishPending(); render(); };
+            const up = e => {
+                stop(); loupe = null; const pt = place(e); annEdit.cursor = null;
+                if (isTemplate()) applyTemplate(annEdit.tool, pt);
+                else { annEdit.pending.push(pt); finishPending(); }
+                render();
+            };
             const cancel = () => { stop(); loupe = null; annEdit.cursor = null; render(); };
             move(ev);
             ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", cancel);
             return;
         }
-        if (annEdit.tool === "line" || annEdit.tool === "cup") {
+        if (isTemplate()) {
+            applyTemplate(annEdit.tool, snap(toSvg(ev)));
+            loupe = null;
+        } else if (annEdit.tool === "line" || annEdit.tool === "cup") {
             annEdit.pending.push(annEdit.tool === "line" && annEdit.pending.length === 1 ? level(snap(toSvg(ev)), annEdit.pending[0], ev) : snap(toSvg(ev)));
             annEdit.cursor = null;
             loupe = null;
@@ -720,7 +865,49 @@ function annAddMenu(x, y) {
     annShowMenu(x, y, [
         { label: window.matchMedia && window.matchMedia("(pointer: coarse)").matches ? "＋ Linia (2 punkty)" : "＋ Linia (2 punkty; Shift = pozioma)", run: pick("line") },
         { label: "＋ Cup (3 punkty)", run: pick("cup") },
+        null,
+        { label: "🚩 Flaga: stuknij początek konsolidacji", run: pick("flag") },
+        { label: "🏆 Cup: stuknij dołek", run: pick("cuptap") },
+        { label: "⚡ Dodaj wykryte automatycznie", run: () => annAddAuto() },
     ]);
+}
+
+// Dodaje do własnych obiektów to, co wykrył algorytm w bieżącym widoku (bez duplikatów); alert „nad” na oporze flagi.
+function annAddAuto() {
+    if (!annCurrent) return;
+    const R = annRecord(annCurrent.ticker, true);
+    const auto = autoToDates(annCurrent.full);
+    const same = (a, b) => a.x0 === b.x0 && a.x1 === b.x1 && a.kind === b.kind;
+    let added = 0, first = null;
+    auto.lines.forEach(l => {
+        if (R.lines.some(x => same(x, l))) return;
+        const line = { id: annNewId(), ...l, alert: l.kind === "res" ? "above" : null, ext: false, fromAuto: true, tpl: "auto" };
+        R.lines.push(line); added++; first = first || { type: "line", id: line.id };
+    });
+    auto.cups.forEach(c => {
+        if (R.cups.some(x => x.start === c.start && x.end === c.end)) return;
+        const cup = { id: annNewId(), ...c, fromAuto: true, tpl: "auto" };
+        R.cups.push(cup); added++; first = first || { type: "cup", id: cup.id };
+    });
+    if (!added) { showToast("Algorytm nie wykrył w tym widoku nowej flagi / korytarza / cupa (spróbuj widoku dziennego albo narysuj ręcznie)."); return; }
+    R.editedAt = new Date().toISOString();
+    annEdit.selected = first; annEdit.tool = annEdit.mode;
+    annSave(); annSyncTools();
+    if (annCurrent) annCurrent.render();
+    showToast(`Dodano ${added} wykryte obiekty — popraw je uchwytami.`);
+}
+
+// Szablon z paska narzędzi: ustawia narzędzie i tryb zgodny z rodzajem obiektu (żeby nowy obiekt dał się od razu poprawiać).
+function annPickTemplate(tool) {
+    if (!annApi.setEdit) return;
+    if (!annEdit.on || annEdit.spaceOn) annApi.setEdit(true, false);
+    if (tool === "flag" && annEdit.mode === "cup") annEdit.mode = "line";
+    if (tool === "cuptap" && annEdit.mode === "line") annEdit.mode = "cup";
+    if (!annEdit.mode) annEdit.mode = tool === "cuptap" ? "cup" : "line";
+    annEdit.tool = annEdit.tool === tool ? annEdit.mode : tool;   // ponowne naciśnięcie wyłącza szablon
+    annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null;
+    annSyncTools();
+    if (annCurrent) annCurrent.render();
 }
 
 // Tryb edycji włączony spacją kończy się, gdy spacja jest puszczona i nic się już nie rysuje.
@@ -750,9 +937,16 @@ function annSyncTools() {
     $("alertSel").value = isLine ? (obj.alert || "") : annEdit.alert;
     $("extChk").checked = isLine ? obj.ext !== false : annEdit.ext;
     $("toolDel").disabled = !obj;
+    if ($("toolUndo")) $("toolUndo").disabled = !annUndo.stack.length;
+    if ($("toolFlag")) $("toolFlag").classList.toggle("active", annEdit.tool === "flag");
+    if ($("toolCupTap")) $("toolCupTap").classList.toggle("active", annEdit.tool === "cuptap");
+    const fab = $("annUndoFab");
+    if (fab) fab.hidden = !(annEdit.on && annUndo.stack.length);
     if ($("toolFlat")) $("toolFlat").disabled = !isLine;
     $("annHint").textContent = annEdit.mode === "line" ? "Tryb LINIA: dotknij istniejącą linię, żeby ją edytować (kółka na końcach, przeciągnięcie środka przesuwa); dotknij puste miejsce, żeby narysować nową (2 punkty, punkt ustawia się po puszczeniu palca)."
         : annEdit.mode === "cup" ? "Tryb CUP: dotknij istniejący cup, żeby go poprawić; dotknij puste miejsce, żeby narysować nowy (3 punkty: lewy brzeg, dołek, prawy brzeg)."
+        : annEdit.tool === "flag" ? "🚩 Flaga: stuknij POCZĄTEK konsolidacji (po maszcie) — opór i wsparcie ułożą się same do ostatniej świecy."
+        : annEdit.tool === "cuptap" ? "🏆 Cup: stuknij DOŁEK miseczki — lewy i prawy brzeg dobiorą się sami."
         : annEdit.tool === "line" ? "Kliknij dwa punkty na wykresie (przyciąga do High/Low świecy); Shift = linia pozioma."
         : annEdit.tool === "cup" ? "Kliknij trzy punkty: lewy brzeg, dołek, prawy brzeg miseczki."
         : obj ? "Przeciągnij kółka, żeby poprawić (Shift = poziomo); prawy przycisk / dotknięcie linii = menu." : "Przeciągnij po wykresie, żeby narysować linię, prawy przycisk (na telefonie podwójne stuknięcie) = wybór linia / cup.";
@@ -773,7 +967,7 @@ function annInitUI(onRedraw) {
             const R = annRecord(annCurrent.ticker, true);
             const hadAuto = R.hideAutoLines || R.hideAutoCups;
             annAdoptAuto(R, annCurrent.full);
-            if (!hadAuto) annSave();
+            if (!hadAuto) { annSave(); annUndo.stack = []; annUndo.base = annUndoState(annCurrent.ticker); }   // przejęcie automatów nie jest „zmianą do cofnięcia”
         }
         annSyncTools();
         annOnRedraw();
@@ -814,6 +1008,14 @@ function annInitUI(onRedraw) {
     }, true);
     document.addEventListener("keydown", ev => { if (ev.key === "Escape") { if (annMenuEl) annCloseMenu(); else if (annNoteEl) annCloseNote(); else if (annEdit.mode && annEdit.pending.length) { annEdit.pending = []; annEdit.cursor = null; if (annCurrent) annCurrent.render(); } } });
     window.addEventListener("resize", annCloseMenu);
+    if ($("toolUndo")) $("toolUndo").addEventListener("click", annUndoRun);
+    if ($("annUndoFab")) $("annUndoFab").addEventListener("click", annUndoRun);
+    if ($("toolFlag")) $("toolFlag").addEventListener("click", () => annPickTemplate("flag"));
+    if ($("toolCupTap")) $("toolCupTap").addEventListener("click", () => annPickTemplate("cuptap"));
+    if ($("toolAuto")) $("toolAuto").addEventListener("click", () => { if (!annEdit.on) setEdit(true, false); annAddAuto(); });
+    document.addEventListener("keydown", ev => {   // Ctrl/Cmd+Z cofa ostatnią zmianę linii / cupów
+        if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && ev.key.toLowerCase() === "z" && annEdit.on && !typing(ev)) { ev.preventDefault(); annUndoRun(); }
+    });
     if ($("toolFlat")) $("toolFlat").addEventListener("click", () => { const l = annSelectedLine(); if (l) { annFlatten(l); annChanged(); } });
     $("kindSel").addEventListener("change", () => {
         const obj = annSelectedObject();
@@ -857,6 +1059,6 @@ function annInitUI(onRedraw) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT,
+        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT, annTemplateFlag, annTemplateCup, annUndoSnapshot, annUndoApply,
     };
 }

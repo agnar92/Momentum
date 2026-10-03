@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    bizIndex, lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord,
+    bizIndex, lineValueAt, alertState, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, annTemplateFlag, annTemplateCup, annUndoSnapshot, annUndoApply,
 } = require(path.join("..", "..", "docs", "js", "annotate.js"));
 const { dateToIndex, indexToDate } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
@@ -118,4 +118,51 @@ test("mergeStores: union of lines by id, newer record wins, deletions are final"
     assert.deepEqual(mergeStores({ AAA: reset }, { AAA: { ...pc, lines: [l1] } }).AAA.lines, []);
     // pusty lokalny zestaw nigdy nie kasuje zdalnego
     assert.equal(mergeStores({}, { AAA: ph }).AAA.lines.length, 2);
+});
+
+// ---------- szablony i cofanie ----------
+const days = n => Array.from({ length: n }, (_, i) => new Date(Date.UTC(2026, 0, 5 + i)).toISOString().slice(0, 10));
+
+test("annTemplateFlag: falling highs give a resistance through both half-peaks and a support through the lows", () => {
+    // maszt do idx 5 (szczyt 120), potem konsolidacja 6..17: szczyty maleją 120 -> 112, dołki 100 -> 98
+    const n = 18, h = [], l = [];
+    for (let i = 0; i < n; i++) { h.push(i <= 5 ? 100 + i * 4 : 120 - (i - 5) * 0.6); l.push(i <= 5 ? 98 + i * 4 : 100 - (i - 5) * 0.15); }
+    const lines = annTemplateFlag(h, l, days(n), 5, 17);
+    assert.equal(lines.length, 2);
+    const res = lines.find(x => x.kind === "res"), sup = lines.find(x => x.kind === "sup");
+    assert.ok(res.y0 > res.y1 && res.x1 === days(n)[17]);       // opór opada do ostatniej świecy
+    assert.ok(sup.y0 >= sup.y1 && sup.y1 > 90);
+    assert.equal(annTemplateFlag(h, l, days(n), 15, 17), null);   // za krótko
+});
+
+test("annTemplateFlag: rising highs fall back to a horizontal resistance at the top", () => {
+    const h = [100, 101, 102, 103, 104, 105, 106, 107, 108, 109], l = h.map(v => v - 3);
+    const res = annTemplateFlag(h, l, days(10), 0, 9).find(x => x.kind === "res");
+    assert.equal(res.y0, 109);
+    assert.equal(res.y1, 109);
+});
+
+test("annTemplateCup: finds left rim before and right rim after the tapped bottom", () => {
+    const n = 40, h = [], l = [];
+    for (let i = 0; i < n; i++) {
+        const base = i < 10 ? 100 : i < 22 ? 100 - (i - 10) * 2.5 : 70 + (i - 22) * 1.6;   // szczyt 100, dołek ok. 70 (idx 22), odrobienie
+        h.push(base + 1); l.push(base - 1);
+    }
+    const cup = annTemplateCup(h, l, days(n), 23, 39, 150);   // stuknięcie obok dołka
+    assert.ok(cup);
+    assert.ok(cup.start < cup.low_date && cup.low_date < cup.end);
+    assert.ok(cup.peak > 95 && cup.low < 72 && cup.right > 90);
+    assert.equal(annTemplateCup(h, l, days(n), 3, 39, 150), null);                  // dołek na początku: brak lewego brzegu
+    assert.equal(annTemplateCup(h.map(() => 100), l.map(() => 99), days(n), 20, 39, 150), null);   // płasko — nie miseczka
+});
+
+test("annUndoApply restores objects, tombstones the created ones and clears tombstones of restored ones", () => {
+    const rec = { lines: [{ id: "a" }, { id: "n" }], cups: [], hideAutoLines: true, hideAutoCups: false, del: { x: "t0" } };
+    const snap = annUndoSnapshot({ lines: [{ id: "a" }, { id: "x" }], cups: [], hideAutoLines: false });
+    annUndoApply(rec, snap, new Date("2026-02-01T00:00:00Z"));
+    assert.deepEqual(rec.lines.map(l => l.id), ["a", "x"]);
+    assert.equal(rec.hideAutoLines, false);
+    assert.equal(rec.del.n, "2026-02-01T00:00:00.000Z");   // utworzona po migawce => nagrobek
+    assert.equal(rec.del.x, undefined);                      // przywrócona => bez nagrobka
+    assert.equal(rec.editedAt, "2026-02-01T00:00:00.000Z");
 });

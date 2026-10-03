@@ -160,6 +160,10 @@
                 <label class="field"><span>Typ:</span><select id="kindSel"><option value="res">opór</option><option value="sup">wsparcie</option><option value="free">dowolna</option></select></label>
                 <label class="field"><span>Alert:</span><select id="alertSel"><option value="">brak</option><option value="above">nad linią</option><option value="below">pod linią</option></select></label>
                 <label class="field" title="Kropkowane przedłużenie linii za drugi punkt do ostatniej świecy (alert i tak liczy wartość linii dziś)"><input type="checkbox" id="extChk" checked><span>Przedłużenie</span></label>
+                <button type="button" class="btn" id="toolFlag" title="Szablon FLAGI: stuknij początek konsolidacji — opór (z alertem „nad linią”) i wsparcie ułożą się same">🚩 Flaga</button>
+                <button type="button" class="btn" id="toolCupTap" title="Szablon CUPA: stuknij dołek miseczki — brzegi dobiorą się same">🏆 Cup z dołka</button>
+                <button type="button" class="btn" id="toolAuto" title="Dodaj do własnych to, co wykrył algorytm w tym widoku (flaga / korytarz / cup)">⚡ Auto</button>
+                <button type="button" class="btn" id="toolUndo" title="Cofnij ostatnią zmianę linii lub cupa (Ctrl+Z)">↶ Cofnij</button>
                 <button type="button" class="btn" id="toolFlat" title="Wyrównaj zaznaczoną linię do poziomu (kąt 0°)">⎯ Poziomo</button>
                 <button type="button" class="btn" id="toolDel">Usuń</button>
                 <button type="button" class="btn" id="toolRestore" title="Wróć do linii i cupów wykrytych automatycznie">Przywróć auto</button>
@@ -171,6 +175,7 @@
             <div class="wl-chart-estimates" id="chartEstimates"></div>
         <div class="wl-chart-pattern" id="chartPattern"></div>
             <div class="wl-chart-body" id="chartBody"></div>
+            <button type="button" class="ann-fab" id="annUndoFab" hidden aria-label="Cofnij ostatnią zmianę" title="Cofnij ostatnią zmianę">↶</button>
             <div class="chart-nav" id="chartNav">
                 <button type="button" class="btn nav-btn" id="chartPrev" aria-label="Poprzednia spółka z listy" title="Poprzednia spółka (↑)">◀</button>
                 <span class="chart-nav-pos" id="chartNavPos"></span>
