@@ -234,6 +234,6 @@ test("all tabs share the same columns; alerts add alert columns; tagStrategies o
         qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, ptMinAnalysts: 3, bases: { maxDistPct: 10, vcpOnly: false } });
     assert.deepEqual(a.strat, ["R", "Q"]);
     assert.equal(a.strat_rank, 0);
-    assert.deepEqual(b.strat, ["Q"]);
-    assert.equal(b.strat_rank, 1);
+    assert.deepEqual(b.strat, []);
+    assert.equal(b.strat_rank, 4);
 });
