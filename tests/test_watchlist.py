@@ -74,6 +74,65 @@ class TestIndicators:
     def test_compute_metrics_too_short_history(self):
         assert watchlist.compute_metrics(make_prices(n=10)) is None
 
+    def test_eps_score_renormalizes_and_needs_latest_quarter(self):
+        assert watchlist.eps_score(None, 50, 20, 20) is None                     # bez najnowszego kwartału nie ma wyniku
+        assert watchlist.eps_score(40, None, None, None) is None                 # za mało składników
+        assert watchlist.eps_score(1000, 1000, 1000, 1000) == 1000.0             # surowe procenty, bez obcinania (jak w rs_score)
+        assert watchlist.eps_score(-500, -500, None, None) == -500.0             # brakujące składniki pomijane
+        # renormalizacja wag: dwa składniki (0,35 i 0,25) -> (0,35*40 + 0,25*20) / 0,6
+        assert watchlist.eps_score(40, 20, None, None) == pytest.approx((0.35 * 40 + 0.25 * 20) / 0.6, abs=0.01)
+
+    def test_eps_stability_share_of_positive_quarters(self):
+        assert watchlist.eps_stability([10, 20, 15, 30]) == 100.0
+        assert watchlist.eps_stability([10, -5, 20, -8]) == 50.0
+        assert watchlist.eps_stability([None, 10, 20]) is None                   # < 4 porównań r/r
+        # tylko ostatnie 8 kwartałów: dawne straty nie liczą się
+        assert watchlist.eps_stability([-5] * 4 + [10] * 8) == 100.0
+
+    def test_eps_rating_blends_growth_and_stability_percentiles(self):
+        def quarters_cache(growths):
+            # kolejne kwartały co ~91 dni; EPS rośnie/spada tak, by r/r dawało zadane wzrosty
+            import datetime as dt
+            base = dt.date(2023, 1, 10)
+            eps = []
+            rows = []
+            for i in range(len(growths) + 4):
+                d = base + dt.timedelta(days=91 * i)
+                if i < 4:
+                    v = 1.0
+                else:
+                    v = eps[i - 4] * (1 + growths[i - 4] / 100)
+                eps.append(v)
+                rows.append({"date": d.strftime("%Y-%m-%d"), "eps": v, "est": None})
+            return {"fetched": "2026-10-01", "rows": rows}
+        steady = [20, 20, 20, 20, 20, 20, 20, 20]
+        erratic = [60, -30, 60, -30, 60, -30, 60, 40]
+        stocks = [{"ticker": "S", "rs_rating": 50, "eps_this_y": 20, "eps_past_5y": 20},
+                  {"ticker": "E", "rs_rating": 50, "eps_this_y": 20, "eps_past_5y": 20}]
+        watchlist.add_eps_rating(stocks, {"S": quarters_cache(steady), "E": quarters_cache(erratic)})
+        s, e = stocks
+        assert s["eps_stability"] == 100.0 and e["eps_stability"] < 100.0
+        # E ma wyższy wzrost ostatniego kwartału, ale S wygrywa stabilnością w 20 % — rating E nie przekracza 80 % wagi wzrostu
+        assert s["eps_stability_rating"] > e["eps_stability_rating"]
+        assert s["eps_rating"] is not None and e["eps_rating"] is not None
+
+    def test_add_eps_rating_percentile_and_composite(self):
+        def cache(g_new, g_old):
+            # kwartały r/r: 4 starsze + 2 nowsze tak, żeby ostatnie dwa miały zadany wzrost
+            rows = [{"date": "2025-01-10", "eps": 1.0, "est": None}, {"date": "2025-04-10", "eps": 1.0, "est": None},
+                    {"date": "2026-01-10", "eps": 1.0 * (1 + g_old / 100), "est": None}, {"date": "2026-04-10", "eps": 1.0 * (1 + g_new / 100), "est": None}]
+            return {"fetched": "2026-10-01", "rows": rows}
+        stocks = [{"ticker": "A", "rs_rating": 90, "eps_this_y": 30, "eps_past_5y": 25},
+                  {"ticker": "B", "rs_rating": 40, "eps_this_y": 5, "eps_past_5y": 3},
+                  {"ticker": "C", "rs_rating": 70, "eps_this_y": None, "eps_past_5y": None}]
+        watchlist.add_eps_rating(stocks, {"A": cache(80, 60), "B": cache(-10, 0), "C": {"fetched": "2026-10-01", "rows": []}})
+        a, b, c = stocks
+        assert a["eps_q0_yoy"] == 80 and a["eps_q1_yoy"] == 60
+        assert a["eps_rating"] == 99 and b["eps_rating"] == 1                      # percentyl wśród spółek z wynikiem
+        assert c["eps_rating"] is None and c["composite_rating"] is None            # brak EPS -> brak Composite
+        assert a["composite_rating"] == round(0.5 * 90 + 0.5 * 99)
+        assert b["composite_rating"] == round(0.5 * 40 + 0.5 * 1)
+
     def test_add_rs_rating_percentiles_with_ties(self):
         stocks = [{"rs_score": 0.1}, {"rs_score": 0.2}, {"rs_score": 0.3}, {"rs_score": 0.3}, {"rs_score": None}]
         watchlist.add_rs_rating(stocks)

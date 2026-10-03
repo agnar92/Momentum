@@ -13,7 +13,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // codziennie przez watchlist.py (Finviz: lista spółek + fundamenty, yfinance:
 // ceny i wskaźniki). Zakładki nad TĄ SAMĄ listą:
 //   📋 Lista      — wszystkie spółki po filtrze Finviz,
-//   📊 RS Ranking — liderzy RS Rating (percentyl IBD policzony w watchlist.py),
+//   📊 Ratingi    — RS Rating, EPS Rating i Composite (policzone w watchlist.py), filtry min. dla każdego,
 //   🎯 Qullamaggie — progi obrotu/ADR + top X% wzrostu z okien 1/3/6M (suma bez
 //                    powtórzeń); progi wpisuje użytkownik, liczone tutaj,
 //   🎯 Upside — ranking średniej ceny celu analityków (upside do średniej, kolumny Min / Max),
@@ -37,15 +37,15 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", rsMin: 80, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
+    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
 };
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
-    LIST: ["ticker", "asc"], RS: ["rs_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["pt_upside_pct", "desc"],
+    LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["pt_upside_pct", "desc"],
     BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
 };
 const TAB_TITLES = {
-    LIST: "Lista Finviz", RS: "RS Ranking", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
+    LIST: "Lista Finviz", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -53,6 +53,8 @@ const state = {
     data: null,
     tab: DEFAULT_SETTINGS.tab,
     rsMin: DEFAULT_SETTINGS.rsMin,
+    epsMin: DEFAULT_SETTINGS.epsMin,
+    compMin: DEFAULT_SETTINGS.compMin,
     ptMinAnalysts: DEFAULT_SETTINGS.ptMinAnalysts,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
@@ -69,9 +71,11 @@ const state = {
 // ---------- czyste funkcje (testowane w tests/js/watchlist.test.js) ----------
 
 // Liderzy RS: rs_rating >= próg, od najwyższego.
-function rsLeaders(stocks, minRating) {
+function rsLeaders(stocks, minRating, minEps = 0, minComposite = 0) {
+    const atLeast = (v, min) => !(Number(min) > 0) || (Number.isFinite(v) && v >= Number(min));   // próg 0 = bez filtra (brak ratingu przechodzi)
     return stocks
-        .filter(s => Number.isFinite(s.rs_rating) && s.rs_rating >= (Number(minRating) || 0))
+        .filter(s => Number.isFinite(s.rs_rating) && s.rs_rating >= (Number(minRating) || 0)
+            && atLeast(s.eps_rating, minEps) && atLeast(s.composite_rating, minComposite))
         .sort((a, b) => b.rs_rating - a.rs_rating || b.rs_score - a.rs_score);
 }
 
@@ -212,10 +216,11 @@ function sparkSvg(values) {
 
 const money = v => (Number.isFinite(v) ? "$" + Number(v).toFixed(2) : "—");
 
-function ratingCell(s) {
-    if (!Number.isFinite(s.rs_rating)) return `<td class="muted">—</td>`;
-    const cls = s.rs_rating >= 80 ? "positive" : (s.rs_rating < 50 ? "negative" : "");
-    return `<td class="${cls}"><strong>${s.rs_rating}</strong></td>`;
+function ratingCell(s, key = "rs_rating") {
+    const v = s[key];
+    if (!Number.isFinite(v)) return `<td class="muted">—</td>`;
+    const cls = v >= 80 ? "positive" : (v < 50 ? "negative" : "");
+    return `<td class="${cls}"><strong>${v}</strong></td>`;
 }
 
 function earningsCell(s) {
@@ -247,6 +252,10 @@ const COL = {
     eps5: ["EPS 5 lat", "eps_past_5y", s => pctCell(s.eps_past_5y)],
     epsNext5: ["EPS prognoza 5 lat", "eps_next_5y", s => pctCell(s.eps_next_5y)],
     rs: ["RS Rating", "rs_rating", s => ratingCell(s)],
+    epsr: ["EPS Rating", "eps_rating", s => ratingCell(s, "eps_rating"), "EPS Rating 1–99 (przybliżenie IBD): wzrost EPS r/r z dwóch ostatnich kwartałów + roczny wzrost EPS (bieżący rok i 5 lat), percentyl wśród spółek z listy"],
+    comp: ["Composite", "composite_rating", s => ratingCell(s, "composite_rating"), "Średnia z RS Rating i EPS Rating (po 50 %); puste, gdy brakuje któregoś z nich"],
+    epsStab: ["Stabilność EPS", "eps_stability", s => `<td${Number.isFinite(s.eps_stability) && s.eps_stability < 60 ? ` class="negative"` : ""}>${Number.isFinite(s.eps_stability) ? s.eps_stability + "%" : "—"}</td>`, "Odsetek ostatnich 8 kwartałów, w których EPS r/r wzrósł (min. 4 porównania); 20 % wagi EPS Rating"],
+    epsq: ["EPS kw. r/r", "eps_q0_yoy", s => pctCell(s.eps_q0_yoy), "Wzrost EPS ostatniego zrealizowanego kwartału względem tego samego kwartału rok wcześniej"],
     r3: ["3M", "ret_3m_pct", s => pctCell(s.ret_3m_pct)],
     r6: ["6M", "ret_6m_pct", s => pctCell(s.ret_6m_pct)],
     r12: ["12M", "ret_12m_pct", s => pctCell(s.ret_12m_pct)],
@@ -287,11 +296,11 @@ const COL = {
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
-const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "rsLine", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
+const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "rsLine", "upside", "rev30", "rev90", "base", "trend", "spark", "earnings", "tv"];
 const TAB_COLUMNS = {
     LIST: LIST_COLUMNS,
     FAV: LIST_COLUMNS,
-    RS: [...LEAD, "price", "rs", "rsLine", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
+    RS: [...LEAD, "price", "comp", "rs", "epsr", "epsStab", "epsq", "rsLine", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "spark", "earnings", "tv"],
     QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "spark", "earnings", "tv"],
     PT: [...LEAD, "price", "ptMean", "upside", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
     ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
@@ -303,7 +312,7 @@ const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const TAB_COLUMNS_COMPACT = {
     LIST: ["fav", "ticker", "score", "price", "rs", "high52"],
     FAV: ["fav", "ticker", "score", "price", "rs", "high52"],
-    RS: ["fav", "ticker", "score", "price", "rs", "r3"],
+    RS: ["fav", "ticker", "score", "comp", "rs", "epsr"],
     QM: ["fav", "ticker", "score", "price", "adr", "ratio"],
     PT: ["fav", "ticker", "score", "ptMean", "upside", "ptRange"],
     BASES: ["fav", "ticker", "score", "price", "baseType", "toPivot"],
@@ -329,7 +338,7 @@ function renderRow(tab, s, i) {
 function rowsForTab(tab) {
     state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; });
     const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
-    if (tab === "RS") return rsLeaders(stocks, state.rsMin);
+    if (tab === "RS") return rsLeaders(stocks, state.rsMin, state.epsMin, state.compMin);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
     if (tab === "PT") return ptRows(stocks, state.ptMinAnalysts);
     if (tab === "BASES") return baseRows(stocks, state.bases);
@@ -439,7 +448,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -449,6 +458,8 @@ function loadSettings() {
         if (!saved) return;
         if (TAB_TITLES[saved.tab]) state.tab = saved.tab;
         if (Number.isFinite(saved.rsMin)) state.rsMin = saved.rsMin;
+        if (Number.isFinite(saved.epsMin)) state.epsMin = saved.epsMin;
+        if (Number.isFinite(saved.compMin)) state.compMin = saved.compMin;
         if (Number.isFinite(saved.ptMinAnalysts)) state.ptMinAnalysts = saved.ptMinAnalysts;
         if (saved.qm) ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
             if (Number.isFinite(saved.qm[k])) state.qm[k] = saved.qm[k];
@@ -583,6 +594,10 @@ function initControls() {
     document.getElementById("qmTopPct").value = state.qm.topPct;
     document.getElementById("ptMinAnalysts").value = state.ptMinAnalysts;
     bind("ptMinAnalysts", v => { state.ptMinAnalysts = v; });
+    document.getElementById("epsMin").value = state.epsMin;
+    document.getElementById("compMin").value = state.compMin;
+    bind("epsMin", v => { state.epsMin = v; });
+    bind("compMin", v => { state.compMin = v; });
     bind("rsMin", v => { state.rsMin = v; });
     bind("qmMinDollarVolume", v => { state.qm.minDollarVolumeM = v; });
     bind("qmMinAdr", v => { state.qm.minAdrPct = v; });

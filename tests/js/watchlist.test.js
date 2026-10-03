@@ -25,6 +25,14 @@ test("rsLeaders keeps ratings at or above the threshold, best first", () => {
     assert.deepEqual(out.map(s => s.ticker), ["C", "A"]);
 });
 
+test("rsLeaders also filters by EPS Rating and Composite when thresholds are set", () => {
+    const rows = [stock("A", { rs_rating: 90, eps_rating: 85, composite_rating: 88 }), stock("B", { rs_rating: 95, eps_rating: 40, composite_rating: 68 }),
+        stock("C", { rs_rating: 92, eps_rating: null, composite_rating: null })];
+    assert.deepEqual(rsLeaders(rows, 80, 0, 0).map(s => s.ticker), ["B", "C", "A"]);
+    assert.deepEqual(rsLeaders(rows, 80, 70, 0).map(s => s.ticker), ["A"]);
+    assert.deepEqual(rsLeaders(rows, 80, 0, 80).map(s => s.ticker), ["A"]);
+});
+
 test("qullamaggieRows: liquidity thresholds, then union of top X% per 1/3/6M window without duplicates", () => {
     const mk = (t, g1, g3, g6, over = {}) => stock(t, {
         low_ratio_1m: g1, low_ratio_3m: g3, low_ratio_6m: g6, ...over,

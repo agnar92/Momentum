@@ -35,7 +35,7 @@
             <div class="drawer-header-title"><h2 id="drawerTitle">Lista Finviz</h2><div class="drawer-meta" id="drawerMeta"></div></div>
             <div class="drawer-tabs">
                 <button class="drawer-tab active" data-tab="LIST">📋 Lista</button>
-                <button class="drawer-tab" data-tab="RS">📊 RS Ranking</button>
+                <button class="drawer-tab" data-tab="RS">📊 Ratingi</button>
                 <button class="drawer-tab" data-tab="QM">🎯 Qullamaggie</button>
                 <button class="drawer-tab" data-tab="PT">🎯 Upside</button>
                 <button class="drawer-tab" data-tab="BASES">🧱 Bazy</button>
@@ -56,7 +56,9 @@
 
         <div class="tab-controls" id="controls-LIST"></div>
         <div class="tab-controls" id="controls-RS" hidden>
-            <label class="field"><span>Min. RS Rating:</span><input type="number" id="rsMin" min="1" max="99" step="1"></label>
+            <label class="field"><span>Min. RS Rating:</span><input type="number" id="rsMin" min="0" max="99" step="1"></label>
+            <label class="field" title="0 = bez filtra; spółki bez EPS Rating odpadają przy progu > 0"><span>Min. EPS Rating:</span><input type="number" id="epsMin" min="0" max="99" step="1"></label>
+            <label class="field" title="Composite = średnia z RS i EPS Rating; 0 = bez filtra"><span>Min. Composite:</span><input type="number" id="compMin" min="0" max="99" step="1"></label>
         </div>
         <div class="tab-controls" id="controls-QM" hidden>
             <label class="field"><span>Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1"></label>
@@ -94,7 +96,7 @@
         <div class="tab-controls" id="controls-FAV" hidden></div>
 
         <details class="screener-guide" id="guide-LIST"><summary>📋 Lista — co to jest</summary>Wszystkie spółki, które przeszły filtr Finviz: cena powyżej 1 $, cena nad SMA50 i SMA200 (bez filtra kapitalizacji), dodatni wzrost EPS w tym roku i dodatnia prognoza EPS na przyszły rok (bez wymogu 5 lat historii, żeby nie gubić młodych liderów). Filtry zmieniasz w <code>finviz_screen.json</code>. Kolumny fundamentalne pochodzą z Finviz, ceny i wskaźniki z yfinance (zamknięcie ostatniej sesji USA). ⚠ przy dacie wyników = raport w ciągu 7 dni. Kliknij wiersz, żeby zobaczyć wykres; ☆ dodaje do ulubionych.</details>
-        <details class="screener-guide" id="guide-RS" hidden><summary>📊 RS Ranking — jak liczony</summary>Liderzy siły względnej w stylu IBD: <code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code> (najnowszy kwartał z podwójną wagą), przeliczone na percentyl 1–99 względem spółek z listy. To przybliżenie — IBD nie publikuje formuły ani swojej puli spółek, a tu ranking jest wśród spółek już wyselekcjonowanych przez Finviz.</details>
+        <details class="screener-guide" id="guide-RS" hidden><summary>📊 Ratingi RS / EPS / Composite — jak liczone</summary><b>RS Rating</b> (siła cenowa, styl IBD): <code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code> (najnowszy kwartał z podwójną wagą), percentyl 1–99 wśród spółek z listy. <b>EPS Rating</b> (przybliżenie IBD): 80 % to percentyl <i>wzrostu</i> EPS, 20 % percentyl <i>stabilności</i> (odsetek ostatnich 8 kwartałów z dodatnim wzrostem r/r, kolumna „Stabilność EPS”; bez stabilności — sam wzrost). Wzrost EPS: r/r z dwóch ostatnich kwartałów (wagi 35 % i 25 %), wzrost EPS w bieżącym roku (15 %) i średnioroczny z 5 lat (25 %) — surowe procenty, bez obcinania (tak jak zwroty w RS); brakujące składniki są pomijane (wymagany ostatni kwartał i min. 2 składniki), wynik to percentyl 1–99 wśród listy. <b>Composite</b> = średnia z RS Rating i EPS Rating (po 50 %), tylko gdy są oba. To przybliżenia — IBD nie publikuje formuł, nie używamy też oceny stabilności ani grupy branżowej, a rankingi są liczone wśród spółek już wyselekcjonowanych przez Finviz. Progi „Min.” poniżej filtrują listę; kolumny można też sortować.</details>
         <details class="screener-guide" id="guide-QM" hidden><summary>🎯 Qullamaggie — jak liczony</summary>Najpierw progi płynności (średni obrót dzienny cena × wolumen z ~20 sesji i ADR% — średnia dzienna rozpiętość High/Low), potem dla każdego okna (1, 3 i 6 miesięcy) top X% spółek wg relacji ceny do najniższego notowania z okna (cena / minimum). Lista to suma tych trzech grup bez powtórzeń.</details>
         <details class="screener-guide" id="guide-PT" hidden><summary>🎯 Upside — jak liczony</summary>Konsensus analityków z Yahoo: <b>średnia cena celu</b>, <b>Min</b> i <b>Max</b> (najniższa / najwyższa cena celu) oraz <b>upside</b> = średnia cena celu względem dzisiejszej ceny. Pole „Min. analityków” (domyślnie 3) odcina spółki z pojedynczymi analitykami, których skrajne ceny celu zaburzałyby ranking. Domyślnie posortowane po upside do średniej (malejąco); nagłówek „Średnia cena celu” sortuje po samej kwocie. To tylko informacja o opiniach analityków, nie rekomendacja.</details>
         <details class="screener-guide" id="guide-BASES" hidden><summary>🧱 Bazy — jak liczone (heurystyka)</summary>Korekta od lokalnego tygodniowego szczytu (głębokość 6–50%, min. 5 tygodni), jeszcze nie odrobiona. Typ: flat (≤15%), cup (≤35% i odrobione ≥50%), korekta, głęboka. Pivot = szczyt bazy; „Do pivotu” to wzrost potrzebny do jego przebicia. VCP = co najmniej dwa coraz mniejsze skurcze, ostatni ≤10%. To uproszczenie, nie rozpoznawanie formacji z MarketSmith (np. bez wykrywania rączki).</details>
