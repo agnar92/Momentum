@@ -39,13 +39,14 @@ class TestFinviz:
 
     def test_parse_custom_view_recom_and_target_price(self):
         page = """<html><body><div>#1 / 556 Total</div>
-        <table class="screener_table"><thead><tr><th>No.</th><th>Ticker</th><th>Recom</th><th>Target Price</th></tr></thead>
-        <tr class="styled-row"><td>1</td><td data-boxover-ticker="A">A</td><td>1.84</td><td>175.89</td></tr>
-        <tr class="styled-row"><td>2</td><td data-boxover-ticker="B">B</td><td>-</td><td>-</td></tr>
+        <table class="screener_table"><thead><tr><th>No.</th><th>Ticker</th><th>Recom</th><th>Target Price</th><th>Inst Own</th><th>Inst Trans</th></tr></thead>
+        <tr class="styled-row"><td>1</td><td data-boxover-ticker="A">A</td><td>1.84</td><td>175.89</td><td>95.51%</td><td>-1.09%</td></tr>
+        <tr class="styled-row"><td>2</td><td data-boxover-ticker="B">B</td><td>-</td><td>-</td><td>-</td><td>-</td></tr>
         </table></body></html>"""
         rows, total = finviz.parse_screener_page(page, "152")
         assert total == 556
-        assert rows == [{"ticker": "A", "recom": 1.84, "finviz_target": 175.89}, {"ticker": "B", "recom": None, "finviz_target": None}]
+        assert rows == [{"ticker": "A", "recom": 1.84, "finviz_target": 175.89, "inst_own": 95.51, "inst_trans": -1.09},
+                        {"ticker": "B", "recom": None, "finviz_target": None, "inst_own": None, "inst_trans": None}]
 
     def test_fetch_view_adds_custom_columns_param_only_for_the_custom_view(self, monkeypatch):
         seen = []
@@ -62,7 +63,13 @@ class TestFinviz:
                 return FakeResp()
         finviz.fetch_view("152", "f", 5, 0, FakeSession())
         finviz.fetch_view("121", "f", 5, 0, FakeSession())
-        assert seen[0]["c"] == "0,1,62,69" and "c" not in seen[1]
+        assert seen[0]["c"] == "0,1,62,69,28,29" and "c" not in seen[1]
+
+    def test_institutional_flag(self):
+        assert watchlist.institutional_flag(65.0, 1.2) is True
+        assert watchlist.institutional_flag(65.0, -0.5) is False         # odpływ
+        assert watchlist.institutional_flag(10.0, 3.0) is False          # za mała własność
+        assert watchlist.institutional_flag(None, 1.0) is None
 
     def test_finviz_upside(self):
         assert watchlist.finviz_upside(120, 100) == 20.0
@@ -552,14 +559,18 @@ class TestMarketAndLeaders:
         v[10] = 2_000_000
         assert watchlist.distribution_days(self.index_df(old, v)) == 0          # starsze niż 25 sesji nie liczą się
 
-    def test_index_state_regimes(self):
+    def test_index_state_regime_is_weekly_ema10_vs_ema20(self):
         up = watchlist.index_state(self.index_df([100 + 0.3 * i for i in range(260)]))
-        assert up["regime"] == "uptrend" and up["pct_vs_sma50"] > 0 and up["sma50_rising"] is True
+        assert up["regime"] == "uptrend" and up["ema10w"] > up["ema20w"] and up["ema_gap_pct"] > 0
+        assert up["pct_vs_sma50"] > 0 and up["sma50_rising"] is True
         down = watchlist.index_state(self.index_df([200 - 0.3 * i for i in range(260)]))
-        assert down["regime"] == "correction"
-        # cena nad SMA200, ale pod SMA50 -> „pod presją”
-        closes = [100 + 0.3 * i for i in range(240)] + [170 - i for i in range(20)]
-        assert watchlist.index_state(self.index_df(closes))["regime"] == "pressure"
+        assert down["regime"] == "correction" and down["ema10w"] < down["ema20w"]
+        # wzrost, potem spadek: reżim przełącza się, gdy EMA10 tygodniowa schodzi pod EMA20 tygodniową
+        closes = [100 + 0.3 * i for i in range(220)] + [166 - 0.8 * i for i in range(40)]
+        crash = watchlist.index_state(self.index_df(closes))
+        assert crash["regime"] == "correction" and crash["ema_gap_pct"] < 0
+        mild = watchlist.index_state(self.index_df([100 + 0.3 * i for i in range(220)] + [166 - 0.4 * i for i in range(40)]))
+        assert mild["regime"] == "uptrend"
         assert watchlist.index_state(self.index_df([100.0] * 50)) is None
 
     def test_market_state_takes_the_more_severe_index(self):

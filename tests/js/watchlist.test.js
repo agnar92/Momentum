@@ -217,6 +217,9 @@ test("rsLeaders filters by group strength and leaders-only; marketLines describe
     assert.equal(rsLeaders(rows, 80, 0, 0, 0, false).length, 3);
     const lines = marketLines({ sp500: { pct_vs_sma50: 2.1, pct_vs_sma200: 8.4, sma50_rising: true, dist_days: 3, pct_from_high: -1.2 }, nasdaq: null });
     assert.equal(lines.length, 1);
-    assert.ok(lines[0].startsWith("S&P 500: +2.1% vs SMA50, +8.4% vs SMA200, SMA50 rośnie, 3 dni dystrybucji"));
-    assert.deepEqual(Object.keys(MARKET_LABELS), ["uptrend", "pressure", "correction"]);
+    assert.ok(lines[0].startsWith("S&P 500: +2.1% vs SMA50, +8.4% vs SMA200, 3 dni dystrybucji"));
+    assert.deepEqual(Object.keys(MARKET_LABELS), ["uptrend", "correction"]);
+    assert.ok(marketLines({ sp500: { ema_gap_pct: 1.8, pct_vs_sma50: 1, pct_vs_sma200: 2, dist_days: 2, pct_from_high: -1 } })[0].includes("EMA10/EMA20 tyg. +1.8%"));
+    const inst = [stock("I", { rs_rating: 90, inst_sponsor: true }), stock("J", { rs_rating: 91, inst_sponsor: false }), stock("K", { rs_rating: 92 })];
+    assert.deepEqual(rsLeaders(inst, 80, 0, 0, 0, false, true).map(s => s.ticker), ["I"]);
 });

@@ -43,9 +43,12 @@ CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno
 CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
+MARKET_EMA_FAST = 10         # rynek w uptrendzie = EMA10 tygodniowa > EMA20 tygodniowa indeksu
+MARKET_EMA_SLOW = 20
+INST_MIN_OWN = 20.0          # I z CANSLIM: własność instytucji >= 20 % ...
+
 DIST_WINDOW = 25             # dni dystrybucji liczymy z ostatnich 25 sesji (jak IBD)
 DIST_DROP_PCT = 0.2          # dzień dystrybucji: indeks spadł o >= 0,2 % przy WYŻSZYM wolumenie niż dzień wcześniej
-DIST_MAX_UPTREND = 4         # do tylu dni dystrybucji rynek nadal uznajemy za potwierdzony uptrend
 GROUP_MIN_MEMBERS = 3        # grupa branżowa liczy się od 3 spółek w liście
 LEADER_MIN_RS = 80           # lider (L z CANSLIM): RS Rating >= 80 ...
 LEADER_MIN_GROUP = 60        # ... w grupie z oceną >= 60 ...
@@ -91,7 +94,7 @@ EST_HISTORY_DAYS = 400       # ile dni historii konsensusu EPS trzymamy (dopisuj
 EST_PERIODS = ("0y", "+1y")  # bieżący i następny rok obrachunkowy (Yahoo nie podaje dalszych)
 EST_SEED_DAYS = {"90daysAgo": 90, "60daysAgo": 60, "30daysAgo": 30, "7daysAgo": 7}
 FINVIZ_KEYS = ("company", "sector", "industry", "market_cap", "pe", "forward_pe",
-               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings", "recom", "finviz_target")
+               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings", "recom", "finviz_target", "inst_own", "inst_trans")
 
 
 # ============================================================================
@@ -342,32 +345,30 @@ def distribution_days(df, window=DIST_WINDOW, drop_pct=DIST_DROP_PCT):
 
 
 def index_state(df):
-    """Stan indeksu: cena vs SMA50/SMA200, kierunek SMA50, odległość od szczytu 52 tyg., dni dystrybucji. None, gdy za mało danych."""
+    """Stan indeksu. Reżim (M z CANSLIM) = EMA10 tygodniowa > EMA20 tygodniowa (uptrend) albo nie (korekta). Dodatkowo informacyjnie:
+    cena vs SMA50/SMA200, kierunek SMA50, odległość od szczytu 52 tyg., dni dystrybucji. None, gdy za mało danych."""
     close = df["Close"].astype(float)
-    if len(close) < 200:
+    weekly = weekly_close(df)
+    if len(close) < 200 or weekly is None or len(weekly) < MARKET_EMA_SLOW + 5:
         return None
+    ema_fast = float(weekly.ewm(span=MARKET_EMA_FAST, adjust=False).mean().iloc[-1])
+    ema_slow = float(weekly.ewm(span=MARKET_EMA_SLOW, adjust=False).mean().iloc[-1])
     price = float(close.iloc[-1])
     sma50, sma200 = float(close.tail(50).mean()), float(close.tail(200).mean())
     sma50_prev = float(close.iloc[-60:-10].mean())
     high = float(df["High"].astype(float).tail(252).max())
-    dd = distribution_days(df)
-    if price < sma200:
-        regime = "correction"
-    elif price > sma50 and sma50 > sma200 and dd <= DIST_MAX_UPTREND:
-        regime = "uptrend"
-    else:
-        regime = "pressure"
-    return {"close": _num(price), "pct_vs_sma50": _num((price / sma50 - 1) * 100, 1), "pct_vs_sma200": _num((price / sma200 - 1) * 100, 1),
-            "sma50_rising": sma50 > sma50_prev, "pct_from_high": _num((price / high - 1) * 100, 1), "dist_days": dd, "regime": regime,
-            "as_of": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")}
+    return {"close": _num(price), "ema10w": _num(ema_fast), "ema20w": _num(ema_slow), "ema_gap_pct": _num((ema_fast / ema_slow - 1) * 100, 2),
+            "pct_vs_sma50": _num((price / sma50 - 1) * 100, 1), "pct_vs_sma200": _num((price / sma200 - 1) * 100, 1),
+            "sma50_rising": sma50 > sma50_prev, "pct_from_high": _num((price / high - 1) * 100, 1), "dist_days": distribution_days(df),
+            "regime": "uptrend" if ema_fast > ema_slow else "correction", "as_of": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")}
 
 
 def market_state(sp_df, nq_df):
-    """M z CANSLIM: stan S&P 500 i Nasdaq oraz łączny reżim = surowszy z dwóch (uptrend < pressure < correction).
-    Heurystyka: potwierdzony uptrend = cena > SMA50 > SMA200 i <= 4 dni dystrybucji; korekta = cena pod SMA200; reszta = „pod presją”."""
+    """M z CANSLIM: stan S&P 500 i Nasdaq oraz łączny reżim = surowszy z dwóch. Uptrend = EMA10 > EMA20 tygodniowa indeksu (decyzja użytkownika),
+    korekta = EMA10 <= EMA20; dni dystrybucji, SMA50/SMA200 i odległość od szczytu są tylko podglądem."""
     states = {"sp500": index_state(sp_df) if sp_df is not None and len(sp_df) else None,
               "nasdaq": index_state(nq_df) if nq_df is not None and len(nq_df) else None}
-    order = {"uptrend": 0, "pressure": 1, "correction": 2}
+    order = {"uptrend": 0, "correction": 1}
     known = [s for s in states.values() if s]
     if not known:
         return None
@@ -997,6 +998,13 @@ def finviz_upside(target, price):
     return _num((target / price - 1) * 100, 1)
 
 
+def institutional_flag(own, trans):
+    """I z CANSLIM (uproszczenie): własność instytucji >= INST_MIN_OWN % i dodatnia zmiana własności w ostatnim kwartale (napływ). None bez danych."""
+    if own is None or trans is None:
+        return None
+    return bool(own >= INST_MIN_OWN and trans > 0)
+
+
 def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
     stocks = []
     bench_w = weekly_close(drop_incomplete_bar(bench_df, now_utc)) if bench_df is not None and len(bench_df) else None
@@ -1011,6 +1019,7 @@ def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
         stock.update({k: row.get(k) for k in FINVIZ_KEYS})
         stock.update(metrics)
         stock["finviz_upside_pct"] = finviz_upside(stock.get("finviz_target"), stock.get("price"))
+        stock["inst_sponsor"] = institutional_flag(stock.get("inst_own"), stock.get("inst_trans"))
         stocks.append(stock)
     add_rs_rating(stocks)
     add_group_strength(stocks)
