@@ -683,10 +683,10 @@ body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
 body:not(.split) td.c-alDist::before { content: "vs linia"; }
 body:not(.split) td.c-rank { display: none !important; }
 /* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
-body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini) {
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-thumb):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini) {
     display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
 }
-body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini)::before {
+body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-thumb):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini)::before {
     content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
 }
 
@@ -706,8 +706,6 @@ body:not(.split) tr.open td.c-mini { display: block; order: 19; flex: 0 0 100%; 
 .filter-group .field { font-size: 12.5px; }
 .filter-group .field input[type="number"] { width: 84px; }
 .mini-chart { border: 2px solid transparent; border-radius: 10px; padding: 2px; cursor: pointer; }
-.mini-chart.selected { border-color: var(--green-bright); background: rgba(46, 204, 113, 0.07); }
-.mini-chart.selected::after { content: "Stuknij ponownie, aby otworzyć wykres"; display: block; text-align: center; font-size: 11px; color: var(--green-bright); padding: 2px 0 4px; }
 
 /* M z CANSLIM: pasek stanu rynku */
 .market-banner { margin: 0; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
@@ -809,3 +807,14 @@ body:not(.split) .wl-chart-tools .ann-hint { flex: 0 0 100%; font-size: 11.5px; 
 }
 body:not(.split) .wl-chart-head { gap: 6px; }
 body:not(.split) .wl-chart-head .btn { padding: 8px 8px; font-size: 13px; }
+
+/* kafelek: stuknięcie otwiera wykres, rozwijanie szczegółów pod przyciskiem ▾; miniatura trendu w zwiniętym kafelku */
+body:not(.split) td.c-toggle, body:not(.split) td.c-thumb { display: inline-flex; align-items: center; }
+body:not(.split) td.c-toggle { order: 3; }
+body:not(.split) td.c-thumb { order: 4; flex: 0 0 auto; width: 92px; justify-content: flex-end; }
+body:not(.split) td.c-company { flex: 1 1 calc(100% - 104px); min-width: 0; }
+body:not(.split) td.c-thumb svg { width: 88px; height: 26px; display: block; }
+.card-chev { width: 44px; height: 44px; margin: -6px -8px -6px 0; background: none; border: 0; border-radius: 50%; color: var(--text-dim); font-size: 20px; line-height: 1; cursor: pointer; transition: transform .2s; -webkit-tap-highlight-color: transparent; }
+.card-chev:active { background: var(--panel-alt); }
+body:not(.split) tr.open .card-chev { transform: rotate(180deg); color: var(--green-bright); }
+:where(body:not(.split)) tr[data-ticker] { cursor: pointer; }

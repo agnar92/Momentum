@@ -502,13 +502,15 @@ const COL = {
     posValue: ["Wartość", "pos_value", s => `<td>${s.position && s.position.value !== null ? money0(s.position.value) : "—"}</td>`],
     posRisk: ["Ryzyko do stopu", "pos_risk_usd", s => `<td>${s.position && s.position.risk_usd !== null ? money0(s.position.risk_usd) : "—"}</td>`, "Początkowe ryzyko: (wejście − stop) · liczba akcji"],
     strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy, W = blisko wybicia"],
+    thumb: ["Trend 26 tyg.", null, s => `<td class="thumb-cell" title="Cena z ostatnich 26 tygodni (zielony = wyżej niż na początku)">${sparkSvg(s.spark)}</td>`],
+    toggle: ["", null, s => `<td class="card-toggle"><button type="button" class="card-chev" aria-label="Pokaż / ukryj szczegóły" aria-expanded="${openCards.has(s.ticker)}">▾</button></td>`],
     mini: ["Wykres 52 tyg.", null, s => `<td><div class="mini-chart" data-mini="${escapeHtml(s.ticker)}"></div></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "brk", "pos", "strat", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "thumb", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "mini", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -547,11 +549,6 @@ function fillMiniCharts() {
             el.innerHTML = stock ? miniChartSvg(miniSource(charts, stock)) : "";
         });
     });
-}
-
-let miniSelected = null;   // ticker z zaznaczonym (ramka) mini wykresem; drugie stuknięcie otwiera pełny wykres
-function markMiniSelected() {
-    document.querySelectorAll(".mini-chart").forEach(el => el.classList.toggle("selected", el.dataset.mini === miniSelected));
 }
 
 const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
@@ -663,7 +660,6 @@ function renderTable() {
     updateSortHeaders(table);
     updateCardSort(tab);
     fillMiniCharts();
-    markMiniSelected();
     markSelectedRow();
     if (chartRequested) updateChartNav(chartRequested);   // pasek ◀ n / N odświeża się po zmianie zakładki, filtra, sortowania
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
@@ -1164,16 +1160,13 @@ function initControls() {
         const tr = ev.target.closest("tr[data-ticker]");
         if (!tr) return;
         if (splitMode) { openChart(tr.dataset.ticker); return; }
-        // telefon: stuknięcie rozwija / zwija kafelek w dół; mini wykres: pierwsze stuknięcie zaznacza (ramka), drugie otwiera pełny wykres
+        // telefon: stuknięcie kafelka (nagłówek, miniwykres, pola) od razu otwiera wykres; szczegóły rozwija osobny przycisk ▾
         const t = tr.dataset.ticker;
-        if (ev.target.closest(".mini-chart")) {
-            if (miniSelected === t) { miniSelected = null; markMiniSelected(); openChart(t); } else { miniSelected = t; markMiniSelected(); }
-            return;
-        }
-        miniSelected = null;
-        markMiniSelected();
+        const chev = ev.target.closest(".card-chev");
+        if (!chev) { openChart(t); return; }
         if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
         tr.classList.toggle("open", openCards.has(t));
+        chev.setAttribute("aria-expanded", String(openCards.has(t)));
         fillMiniCharts();
     }));
     initChartModal();
