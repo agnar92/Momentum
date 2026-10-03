@@ -105,6 +105,7 @@ class TestIndicators:
         assert m["low_ratio_6m"] > m["low_ratio_3m"] > m["low_ratio_1m"] > 1
         assert m["pct_above_sma50"] > 0 and m["pct_above_sma200"] > m["pct_above_sma50"]
         assert len(m["spark"]) == watchlist.SPARK_WEEKS and m["spark"][0] == 0
+        assert "tl_level" in m and "tl_dist_pct" in m   # poziom oporu flagi/korytarza (None bez formacji)
 
     def test_compute_metrics_young_stock_has_no_rs_score(self):
         m = watchlist.compute_metrics(make_prices(n=120))

@@ -23,6 +23,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // ============================================================
 
 const COMPACT_MAX_WIDTH = 640;
+const SWIPE_MIN_PX = 60, SWIPE_MAX_MS = 700;   // przeciągnięcie po tytule wykresu = następna / poprzednia spółka
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
@@ -37,17 +38,19 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
+    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
 // Strategie = zakładki z filtrami; kolejność decyduje o grupowaniu w zakładce Alerty (R, potem Q, U, B, na końcu spółki bez strategii).
-const STRATEGIES = { R: ["R", "Ratingi (RS / EPS / Composite)"], Q: ["Q", "Qullamaggie"], U: ["U", "Upside do ceny celu"], B: ["B", "Bazy blisko pivotu"] };
-const STRATEGY_ORDER = ["R", "Q", "U", "B"];
-function tagStrategies(allStocks, filtered, st) {
+const STRATEGIES = { R: ["R", "Ratingi (RS / EPS / Composite)"], Q: ["Q", "Qullamaggie"], U: ["U", "Upside do ceny celu"], B: ["B", "Bazy blisko pivotu"], W: ["W", "Blisko wybicia"] };
+const STRATEGY_ORDER = ["R", "Q", "U", "B", "W"];
+function tagStrategies(allStocks, filtered, st, alerts = []) {
+    tagBreakouts(allStocks, alerts, st.brk ? st.brk.maxDistPct : DEFAULT_SETTINGS.brk.maxDistPct);
     const sets = {
         R: new Set(rsLeaders(filtered, st.rsMin, st.epsMin, st.compMin, st.groupMin, st.leadersOnly, st.instOnly).map(s => s.ticker)),
         Q: new Set(qullamaggieRows(filtered, st.qm).map(s => s.ticker)),
         U: new Set(ptRows(filtered, st.ptMinAnalysts).map(s => s.ticker)),
         B: new Set(baseRows(filtered, st.bases).map(s => s.ticker)),
+        W: new Set(filtered.filter(s => s.brk).map(s => s.ticker)),
     };
     allStocks.forEach(s => {
         s.strat = STRATEGY_ORDER.filter(c => sets[c].has(s.ticker));
@@ -59,11 +62,12 @@ function tagStrategies(allStocks, filtered, st) {
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["upside_main", "desc"],
-    BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
+    BASES: ["pct_to_pivot", "asc"], BRK: ["brk_sort", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
 };
+const BOTTOM_NAV_TABS = ["LIST", "BRK", "POS", "ALERTS"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
-    LIST: "Lista Finviz", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
+    LIST: "Lista Finviz", BRK: "Blisko wybicia", POS: "Moje pozycje", RS: "Ratingi RS / EPS / Composite", QM: "Filtr Qullamaggie", PT: "Ranking upside do ceny celu", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -79,8 +83,11 @@ const state = {
     ptMinAnalysts: DEFAULT_SETTINGS.ptMinAnalysts,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
+    brk: { ...DEFAULT_SETTINGS.brk },
     favs: new Set(),
     scores: {},
+    pos: {},
+    acct: { capital: null, riskPct: null },
     scoreMin: null,
     scoreMax: null,
     search: "",
@@ -171,6 +178,131 @@ function baseRows(stocks, params) {
         .sort((a, b) => a.pct_to_pivot - b.pct_to_pivot);
 }
 
+// ---------- pozycje ----------
+// Wielkość pozycji z ryzyka: akcje = floor(kapitał · ryzyko% / (wejście − stop)). null, gdy dane nie mają sensu (stop nad wejściem itd.).
+function positionSize(capital, riskPct, entry, stop) {
+    if (![capital, riskPct, entry, stop].every(Number.isFinite) || capital <= 0 || riskPct <= 0 || entry <= 0 || stop <= 0 || stop >= entry) return null;
+    const perShare = entry - stop;
+    const shares = Math.floor((capital * riskPct / 100) / perShare);
+    return { shares, risk_usd: shares * perShare, value: shares * entry, pct_of_capital: shares * entry / capital * 100 };
+}
+
+// Metryki otwartej pozycji względem bieżącej ceny: zysk (%, $), wielokrotność ryzyka R, odległość do stopu, wartość, ryzyko początkowe, R:R celu.
+function positionMetrics(pos, price) {
+    if (!pos || !Number.isFinite(pos.entry) || pos.entry <= 0 || !Number.isFinite(price)) return null;
+    const perShare = Number.isFinite(pos.stop) && pos.stop < pos.entry ? pos.entry - pos.stop : null;
+    const shares = Number.isFinite(pos.shares) ? pos.shares : null;
+    return {
+        pl_pct: (price / pos.entry - 1) * 100,
+        pl_usd: shares !== null ? (price - pos.entry) * shares : null,
+        r: perShare ? (price - pos.entry) / perShare : null,
+        to_stop_pct: Number.isFinite(pos.stop) ? (pos.stop / price - 1) * 100 : null,
+        value: shares !== null ? shares * price : null,
+        risk_usd: perShare && shares !== null ? perShare * shares : null,
+        rr_target: perShare && Number.isFinite(pos.target) ? (pos.target - pos.entry) / perShare : null,
+        stop_hit: Number.isFinite(pos.stop) && price <= pos.stop,
+    };
+}
+
+// Ustawia na każdej spółce s.position (wpis) i płaskie pola pos_* do sortowania; bez pozycji wszystko null.
+function tagPositions(stocks, positions) {
+    stocks.forEach(s => {
+        const p = positions[s.ticker];
+        const m = p ? positionMetrics(p, s.price) : null;
+        s.position = m ? { ...p, ...m } : null;
+        s.pos_pl_pct = m ? m.pl_pct : null;
+        s.pos_r = m ? m.r : null;
+        s.pos_to_stop_pct = m ? m.to_stop_pct : null;
+        s.pos_value = m ? m.value : null;
+        s.pos_risk_usd = m ? m.risk_usd : null;
+    });
+}
+
+function positionRows(stocks) {
+    return stocks.filter(s => s.position).sort((a, b) => (b.pos_to_stop_pct ?? -Infinity) - (a.pos_to_stop_pct ?? -Infinity));
+}
+
+// Podsumowanie portfela: liczba pozycji, wartość, ryzyko do stopów (suma początkowych ryzyk) i jako % kapitału.
+function positionTotals(rows, capital) {
+    let value = 0, risk = 0, pl = 0;
+    rows.forEach(s => { value += s.pos_value || 0; risk += s.pos_risk_usd || 0; pl += s.position.pl_usd || 0; });
+    return { n: rows.length, value, risk, pl, risk_pct: Number.isFinite(capital) && capital > 0 ? risk / capital * 100 : null };
+}
+
+// Wybicia: spółki tuż PRZED wybiciem (albo świeżo po nim). Powody: flaga / korytarz przy oporze lub świeże wybicie (tl_state),
+// blisko pivotu bazy (pct_to_pivot), własna linia z alertem „nad linią” blisko ceny albo przebita (alerty z annotate.js).
+// dist = ile % brakuje do najbliższego poziomu wybicia (null = już po wybiciu); rank 0 = wybicie / przebity alert, 1 = do 2 %, 2 = dalej.
+function breakoutInfo(s, alert, maxDist) {
+    const reasons = [];
+    const dists = [];
+    let fresh = false;
+    if (s.tl_state === "wybicie") {
+        fresh = true;
+        reasons.push({ code: "tl", text: `wybicie z ${s.tl_pattern || "formacji"}${Number.isFinite(s.tl_vol_ratio) ? ` ×${s.tl_vol_ratio} wol.${s.tl_vol_ok ? " ✓" : ""}` : ""}` });
+    } else if (s.tl_state === "przy oporze") {
+        if (Number.isFinite(s.tl_dist_pct) && s.tl_dist_pct > 0) dists.push(s.tl_dist_pct);
+        reasons.push({ code: "tl", text: `przy oporze ${s.tl_pattern || ""}${Number.isFinite(s.tl_dist_pct) ? ` (${s.tl_dist_pct.toFixed(1)}%)` : ""}`.trim() });
+    }
+    if (s.base_type && Number.isFinite(s.pct_to_pivot) && s.pct_to_pivot <= maxDist && s.pct_to_pivot > -3) {
+        if (s.pct_to_pivot >= 0) dists.push(s.pct_to_pivot);
+        else fresh = true;
+        reasons.push({ code: "pivot", text: `pivot ${s.pct_to_pivot >= 0 ? "+" : ""}${s.pct_to_pivot.toFixed(1)}%${s.vcp ? " VCP" : ""}` });
+    }
+    if (alert && alert.alert === "above") {
+        if (alert.triggered) { fresh = true; reasons.push({ code: "alert", text: "alert: linia przebita" }); }
+        else if (alert.dist < 0 && -alert.dist <= Math.max(ANN_NEAR_PCT, maxDist)) {
+            const need = (1 / (1 + alert.dist / 100) - 1) * 100;   // ile % wzrostu do linii
+            dists.push(need);
+            reasons.push({ code: "alert", text: `moja linia ${need.toFixed(1)}%` });
+        }
+    }
+    if (!reasons.length) return null;
+    const dist = dists.length ? Math.min(...dists) : null;
+    const rank = fresh ? 0 : (dist !== null && dist <= 2 ? 1 : 2);
+    return { reasons, dist, rank, sort: rank * 1000 + (dist !== null ? dist : -(s.tl_vol_ratio || 0)) };   // świeże wybicia: mocniejszy wolumen wyżej
+}
+
+// Ustawia s.brk / s.brk_sort na każdej spółce (alerts = wiersze alertRows; bierzemy najbliższy alert „nad” dla spółki).
+function tagBreakouts(stocks, alerts, maxDist) {
+    const best = new Map();
+    alerts.forEach(r => {
+        const a = r.alert;
+        if (a.alert !== "above" || a.pos) return;   // cel pozycji to nie kandydat na wybicie
+        const cur = best.get(r.ticker);
+        if (!cur || Math.abs(a.dist) < Math.abs(cur.dist)) best.set(r.ticker, a);
+    });
+    stocks.forEach(s => {
+        s.brk = breakoutInfo(s, best.get(s.ticker), maxDist);
+        s.brk_sort = s.brk ? s.brk.sort : null;
+    });
+}
+
+function breakoutRows(stocks) {
+    return stocks.filter(s => s.brk).sort((a, b) => a.brk_sort - b.brk_sort);
+}
+
+// Jedna linia „czy to już ten moment?” pod tytułem wykresu: dystans do wybicia, baza, wolumen, RS, rynek, wyniki.
+function readinessLine(s, regime) {
+    const out = [];
+    if (s.position) {
+        const p = s.position;
+        out.push(`💼 ${fmtPct(p.pl_pct)}${p.r !== null ? ` · ${p.r.toFixed(1)}R` : ""}${p.to_stop_pct !== null ? ` · stop ${p.stop_hit ? "PRZEBITY" : fmtPct(p.to_stop_pct)}` : ""}`);
+    }
+    const b = s.brk;
+    if (b) out.push(b.dist !== null ? `Do wybicia: ${b.dist.toFixed(1)}%` : (b.rank === 0 ? "Wybicie świeże" : "Przy poziomie"));
+    else out.push("Brak sygnału wybicia");
+    if (s.base_type) out.push(`${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}`);
+    if (s.tl_pattern) out.push(s.tl_pattern === "flaga" ? "flaga" : "korytarz");
+    if (Number.isFinite(s.tl_vol_ratio)) out.push(`wolumen wybicia ×${s.tl_vol_ratio}${s.tl_vol_ok ? " ✓" : " (słaby)"}`);
+    if (s.rs_line_state === "przed ceną") out.push("RS przed ceną ●");
+    else if (s.rs_line_state) out.push("RS na szczycie");
+    const days = earningsInDays(s.earnings);
+    if (days !== null && days >= 0 && days <= EARNINGS_SOON_DAYS) out.push(`⚠ wyniki za ${days} dn.`);
+    if (regime === "correction") out.push("⚠ rynek w korekcie");
+    else if (regime === "uptrend") out.push("rynek ✓");
+    return out.join(" · ");
+}
+
 // Dni do wyników z tekstu Finviz ("Oct 22/a", "Aug 26/a"); rok wynika z bieżącej daty. null = brak/nieczytelne.
 function earningsInDays(text, now = new Date()) {
     const m = /^([A-Z][a-z]{2}) (\d{1,2})/.exec(text || "");
@@ -255,6 +387,7 @@ function sparkSvg(values) {
 }
 
 const money = v => (Number.isFinite(v) ? "$" + Number(v).toFixed(2) : "—");
+const money0 = v => (Number.isFinite(v) ? (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("pl-PL") : "—");
 
 // Kolor oceny (RS / EPS / Composite) wg percentyla 1–99: <20 czerwony, 20–39 pomarańczowy, 40–59 żółty, 60–79 limonkowy, 80–89 zielony, 90+ ciemna zieleń.
 function ratingClass(v) {
@@ -349,27 +482,47 @@ const COL = {
         return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
     }],
     alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
-    strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy"],
+    brk: ["Wybicie", "brk_sort", s => {
+        if (!s.brk) return `<td class="muted"></td>`;
+        const cls = s.brk.rank === 0 ? "positive" : "";
+        const head = s.brk.dist !== null ? `<strong>${s.brk.dist.toFixed(1)}%</strong>` : `<strong>▲</strong>`;
+        return `<td class="${cls}" title="${escapeHtml(s.brk.reasons.map(r => r.text).join(" · "))}">${head} <span class="small">${escapeHtml(s.brk.reasons.map(r => r.text).join(" · "))}</span></td>`;
+    }, "Ile % brakuje do wybicia (opór flagi / pivot bazy / moja linia z alertem) i powody; ▲ = świeże wybicie"],
+    pos: ["Pozycja", "pos_pl_pct", s => s.position
+        ? `<td class="${s.position.stop_hit ? "negative" : (s.position.pl_pct >= 0 ? "positive" : "negative")}" title="Moja pozycja: wejście ${money(s.position.entry)}, stop ${money(s.position.stop)}">💼 ${fmtPct(s.position.pl_pct)}${s.position.r !== null ? ` · ${s.position.r.toFixed(1)}R` : ""}</td>`
+        : `<td class="muted"></td>`, "Moja pozycja: zysk od wejścia i wielokrotność ryzyka (R)"],
+    posPl: ["Zysk", "pos_pl_pct", s => s.position
+        ? `<td class="${s.position.pl_pct >= 0 ? "positive" : "negative"}"><strong>${fmtPct(s.position.pl_pct)}</strong>${s.position.pl_usd !== null ? ` <span class="small">${money0(s.position.pl_usd)}</span>` : ""}</td>` : `<td class="muted">—</td>`, "Zysk / strata od ceny wejścia (w % i w $)"],
+    posR: ["R", "pos_r", s => s.position && s.position.r !== null ? `<td class="${s.position.r >= 0 ? "positive" : "negative"}"><strong>${s.position.r.toFixed(2)}R</strong></td>` : `<td class="muted">—</td>`, "Zysk w wielokrotnościach początkowego ryzyka (cena − wejście) / (wejście − stop)"],
+    posToStop: ["Do stopu", "pos_to_stop_pct", s => s.position && s.position.to_stop_pct !== null
+        ? `<td class="${s.position.stop_hit ? "negative" : ""}">${s.position.stop_hit ? "🛑 STOP" : fmtPct(s.position.to_stop_pct)}</td>` : `<td class="muted">—</td>`, "O ile % cena musi spaść do stopu"],
+    posEntry: ["Wejście", "pos_entry", s => `<td>${s.position ? money(s.position.entry) : "—"}</td>`],
+    posStop: ["Stop", "pos_stop", s => `<td>${s.position && s.position.stop !== null && s.position.stop !== undefined ? money(s.position.stop) : "—"}</td>`],
+    posShares: ["Akcje", "pos_shares", s => `<td>${s.position && s.position.shares !== null ? s.position.shares : "—"}</td>`],
+    posValue: ["Wartość", "pos_value", s => `<td>${s.position && s.position.value !== null ? money0(s.position.value) : "—"}</td>`],
+    posRisk: ["Ryzyko do stopu", "pos_risk_usd", s => `<td>${s.position && s.position.risk_usd !== null ? money0(s.position.risk_usd) : "—"}</td>`, "Początkowe ryzyko: (wejście − stop) · liczba akcji"],
+    strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy, W = blisko wybicia"],
     mini: ["Wykres 52 tyg.", null, s => `<td><div class="mini-chart" data-mini="${escapeHtml(s.ticker)}"></div></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "strat", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "brk", "pos", "strat", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "mini", "earnings", "tv"];
+const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
 const TAB_COLUMNS = {
-    LIST: ALL_COLUMNS, FAV: ALL_COLUMNS, RS: ALL_COLUMNS, QM: ALL_COLUMNS, PT: ALL_COLUMNS, BASES: ALL_COLUMNS,
+    LIST: ALL_COLUMNS, BRK: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], RS: ALL_COLUMNS, QM: ALL_COLUMNS, PT: ALL_COLUMNS, BASES: ALL_COLUMNS,
     ALERTS: [...LEAD, ...ALERT_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id))],
 };
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
-const COMPACT_COLUMNS = ["fav", "ticker", "score", "comp", "rs", "strat"];
+const COMPACT_COLUMNS = ["fav", "ticker", "score", "comp", "brk", "strat"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, FAV: COMPACT_COLUMNS, RS: COMPACT_COLUMNS, QM: COMPACT_COLUMNS, PT: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
-    ALERTS: ["ticker", "alDist", "alStatus", "alAct", "strat"],
+    LIST: COMPACT_COLUMNS, BRK: COMPACT_COLUMNS, FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], RS: COMPACT_COLUMNS, QM: COMPACT_COLUMNS, PT: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
+    ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
 const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
@@ -443,7 +596,11 @@ function rowsForTab(tab) {
         s.target_main = targetMain(s);
     });
     const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
-    tagStrategies(state.data.stocks, stocks, state);
+    const alerts = alertRows(annStore, state.data.stocks);
+    tagStrategies(state.data.stocks, stocks, state, alerts);
+    tagPositions(state.data.stocks, state.pos);
+    if (tab === "POS") return positionRows(stocks);
+    if (tab === "BRK") return breakoutRows(stocks);
     if (tab === "RS") return rsLeaders(stocks, state.rsMin, state.epsMin, state.compMin, state.groupMin, state.leadersOnly, state.instOnly);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
     if (tab === "PT") return ptRows(stocks, state.ptMinAnalysts);
@@ -463,6 +620,8 @@ const EMPTY_MESSAGES = {
     QM: "Żadna spółka nie spełnia progów — obniż obrót lub ADR% albo zwiększ top %.",
     PT: "Brak spółek z ceną celu analityków przy bieżących filtrach (dane Yahoo ładują się z codziennego odświeżenia).",
     BASES: "Brak spółek w bazie w zadanej odległości od pivotu — zwiększ dystans albo odznacz „tylko VCP”.",
+    BRK: "Brak spółek blisko wybicia — zwiększ dystans w Filtrach (🚀 Wybicia), albo narysuj własne linie z alertem „nad linią”.",
+    POS: "Brak pozycji — otwórz wykres spółki i kliknij „💼 Pozycja” (wejście, stop, kalkulator wielkości pozycji).",
     ALERTS: "Brak alertów — w oknie wykresu kliknij ✎ Edytuj, narysuj linię (Linia) i ustaw przy niej Alert.",
     FAV: "Brak ulubionych — kliknij ☆ przy spółce na dowolnej liście.",
 };
@@ -473,7 +632,7 @@ function renderFiltersSummary() {
     if (!el) return;
     const base = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     const counts = [["Lista", base.length], ["Ratingi", rsLeaders(base, state.rsMin, state.epsMin, state.compMin, state.groupMin, state.leadersOnly, state.instOnly).length],
-        ["Qullamaggie", qullamaggieRows(base, state.qm).length], ["Upside", ptRows(base, state.ptMinAnalysts).length], ["Bazy", baseRows(base, state.bases).length]];
+        ["Qullamaggie", qullamaggieRows(base, state.qm).length], ["Upside", ptRows(base, state.ptMinAnalysts).length], ["Bazy", baseRows(base, state.bases).length], ["Wybicia", base.filter(s => s.brk).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
     document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
 }
@@ -483,6 +642,7 @@ function renderTable() {
     const tab = state.tab;
     if (tab === FILTERS_TAB) {
         state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
+        tagBreakouts(state.data.stocks, alertRows(annStore, state.data.stocks), state.brk.maxDistPct);
         renderFiltersSummary();
         return;
     }
@@ -498,12 +658,14 @@ function renderTable() {
     const total = state.data.stocks.length;
     meta.textContent = tab === "QM"
         ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) z ${total}`
-        : `${rows.length} z ${total} spółek`;
+        : tab === "POS" ? positionSummary(rows) : `${rows.length} z ${total} spółek`;
+    if (tab === "POS") renderPositionControls(rows);
     updateSortHeaders(table);
     updateCardSort(tab);
     fillMiniCharts();
     markMiniSelected();
     markSelectedRow();
+    if (chartRequested) updateChartNav(chartRequested);   // pasek ◀ n / N odświeża się po zmianie zakładki, filtra, sortowania
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
         if (first) openChart(first.dataset.ticker);
@@ -529,6 +691,38 @@ function stepChart(delta) {
     if (next && next.dataset.ticker !== chartRequested) openChart(next.dataset.ticker);
 }
 
+// Pasek ◀ 3/27 ▶ pod wykresem: pozycja w bieżącej liście i przejście do sąsiedniej spółki (przycisk albo przeciągnięcie po tytule).
+function updateChartNav(ticker) {
+    const list = visibleTickers();
+    const i = list.indexOf(ticker);
+    const pos = document.getElementById("chartNavPos");
+    if (pos) pos.textContent = i >= 0 ? `${i + 1} / ${list.length}` : "";
+    const prev = document.getElementById("chartPrev"), next = document.getElementById("chartNext");
+    if (prev) prev.disabled = i <= 0;
+    if (next) next.disabled = i < 0 || i >= list.length - 1;
+}
+
+// Kierunek przeciągnięcia palcem: "left" / "right" gdy ruch jest głównie poziomy, dość długi i szybki; inaczej null.
+function swipeDirection(dx, dy, ms) {
+    if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.8 || ms > SWIPE_MAX_MS) return null;
+    return dx < 0 ? "left" : "right";
+}
+
+function attachSwipe(el, onLeft, onRight) {
+    let start = null;
+    el.addEventListener("touchstart", e => {
+        const t = e.touches[0];
+        start = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
+    }, { passive: true });
+    el.addEventListener("touchend", e => {
+        if (!start) return;
+        const t = e.changedTouches[0];
+        const dir = swipeDirection(t.clientX - start.x, t.clientY - start.y, Date.now() - start.t);
+        start = null;
+        if (dir === "left") onLeft(); else if (dir === "right") onRight();
+    }, { passive: true });
+}
+
 function showChartPlaceholder() {
     const body = document.getElementById("chartBody");
     if (body) body.innerHTML = `<div class="empty-state">Wybierz spółkę z listy (kliknij wiersz albo użyj strzałek ↑ ↓).</div>`;
@@ -545,6 +739,7 @@ function applyLayoutMode() {
     splitMode = want;
     document.body.classList.toggle("split", want);
     if (document.getElementById("chartLayoutBtn")) updateLayoutButton();
+    if (document.getElementById("chartTfBtn")) updateTfButton();
     if (state.data) {
         renderHeaders();
         if (!want) {
@@ -562,6 +757,8 @@ function updateAlertBadge() {
     const n = annRefresh(annStore, state.data.stocks);
     const badge = document.getElementById("alertBadge");
     if (badge) badge.textContent = n ? ` (${n})` : "";
+    const navBadge = document.getElementById("alertBadgeNav");
+    if (navBadge) navBadge.textContent = n ? String(n) : "";
 }
 
 function updateSortHeaders(table) {
@@ -573,7 +770,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, groupMin: state.groupMin, leadersOnly: state.leadersOnly, instOnly: state.instOnly, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, groupMin: state.groupMin, leadersOnly: state.leadersOnly, instOnly: state.instOnly, ptMinAnalysts: state.ptMinAnalysts, qm: state.qm, bases: state.bases, brk: state.brk }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -596,23 +793,37 @@ function loadSettings() {
             if (Number.isFinite(saved.bases.maxDistPct)) state.bases.maxDistPct = saved.bases.maxDistPct;
             state.bases.vcpOnly = saved.bases.vcpOnly === true;
         }
+        if (saved.brk && Number.isFinite(saved.brk.maxDistPct)) state.brk.maxDistPct = saved.brk.maxDistPct;
     } catch (e) { /* uszkodzony zapis — zostają domyślne */ }
 }
 
 // ---------- własne ustawienia: ulubione ★ i score (synchronizowane z adnotacjami przez Gist) ----------
 // prefsStore = { scores: {T: {v: liczba|null, t: ISO}}, favs: {T: {v: true|false, t: ISO}} } — każda wartość ma czas zmiany,
 // a usunięcie to wpis z v = null/false (nagrobek), dzięki czemu scalenie z drugim urządzeniem (mergePrefs) wybiera nowszą zmianę.
-let prefsStore = { scores: {}, favs: {} };
+let prefsStore = { scores: {}, favs: {}, pos: {}, acct: {} };
 const PREFS_KEY = "momentum_watchlist_prefs";
 const PREFS_EPOCH = "1970-01-01T00:00:00.000Z";   // dane sprzed synchronizacji: przegrywają z każdą świadomą zmianą
 
+const PREFS_KINDS = ["scores", "favs", "pos", "acct"];
+const PREFS_FIELDS = { pos: ["entry", "stop", "shares", "target"], acct: ["capital", "riskPct"] };
+// Wartość wpisu: score = liczba|null, fav = bool, pos (wejście / stop / akcje / cel) i acct (kapitał, ryzyko %) = obiekt liczb albo null.
+function prefsValue(kind, v) {
+    if (kind === "scores") return Number.isFinite(v) ? v : null;
+    if (kind === "favs") return v === true;
+    if (!v || typeof v !== "object") return null;
+    const o = {};
+    PREFS_FIELDS[kind].forEach(k => { o[k] = Number.isFinite(v[k]) && v[k] >= 0 ? v[k] : null; });
+    return o[PREFS_FIELDS[kind][0]] !== null ? o : null;
+}
+
 function prefsNormalize(p) {
-    const out = { scores: {}, favs: {} };
-    ["scores", "favs"].forEach(kind => {
+    const out = {};
+    PREFS_KINDS.forEach(kind => {
+        out[kind] = {};
         const src = (p && p[kind]) || {};
         Object.keys(src).sort().forEach(t => {
             const e = src[t];
-            if (e && typeof e === "object" && typeof e.t === "string") out[kind][t] = { v: kind === "scores" ? (Number.isFinite(e.v) ? e.v : null) : e.v === true, t: e.t };
+            if (e && typeof e === "object" && typeof e.t === "string") out[kind][t] = { v: prefsValue(kind, e.v), t: e.t };
         });
     });
     return out;
@@ -620,8 +831,9 @@ function prefsNormalize(p) {
 
 // Scalanie po spółce: wygrywa wpis z późniejszym czasem zmiany (przy remisie — bez zmian, wartość z a).
 function mergePrefs(a, b) {
-    const A = prefsNormalize(a), B = prefsNormalize(b), out = { scores: {}, favs: {} };
-    ["scores", "favs"].forEach(kind => {
+    const A = prefsNormalize(a), B = prefsNormalize(b), out = {};
+    PREFS_KINDS.forEach(kind => {
+        out[kind] = {};
         [...new Set([...Object.keys(A[kind]), ...Object.keys(B[kind])])].sort().forEach(t => {
             const x = A[kind][t], y = B[kind][t];
             out[kind][t] = !x ? y : !y ? x : (y.t > x.t ? y : x);
@@ -635,6 +847,9 @@ function prefsApply() {
     state.favs = new Set(Object.keys(prefsStore.favs).filter(t => prefsStore.favs[t].v === true));
     state.scores = {};
     Object.keys(prefsStore.scores).forEach(t => { if (Number.isFinite(prefsStore.scores[t].v)) state.scores[t] = prefsStore.scores[t].v; });
+    state.pos = {};
+    Object.keys(prefsStore.pos).forEach(t => { if (prefsStore.pos[t].v) state.pos[t] = prefsStore.pos[t].v; });
+    state.acct = prefsStore.acct.main && prefsStore.acct.main.v ? { ...prefsStore.acct.main.v } : { capital: null, riskPct: null };
 }
 
 function prefsWriteLocal() {
@@ -668,6 +883,109 @@ function setScore(ticker, raw) {
     renderTable();
 }
 
+// ---------- pozycje: arkusz „Pozycja” (wejście, stop, akcje, cel + kalkulator wielkości) ----------
+function positionSummary(rows) {
+    const t = positionTotals(rows, state.acct.capital);
+    if (!t.n) return "brak pozycji";
+    return `${t.n} poz. · wartość ${money0(t.value)} · ryzyko do stopów ${money0(t.risk)}${t.risk_pct !== null ? ` (${t.risk_pct.toFixed(1)}% kapitału)` : ""} · wynik ${money0(t.pl)}`;
+}
+
+function renderPositionControls() {
+    const cap = document.getElementById("acctCapital"), risk = document.getElementById("acctRisk");
+    if (cap && document.activeElement !== cap) cap.value = Number.isFinite(state.acct.capital) ? state.acct.capital : "";
+    if (risk && document.activeElement !== risk) risk.value = Number.isFinite(state.acct.riskPct) ? state.acct.riskPct : "";
+}
+
+function saveAcct(capital, riskPct) {
+    prefsStore.acct.main = { v: Number.isFinite(capital) && capital > 0 ? { capital, riskPct: Number.isFinite(riskPct) && riskPct > 0 ? riskPct : null } : null, t: new Date().toISOString() };
+    prefsWriteLocal(); prefsApply(); annOnSave();
+}
+
+function savePosition(ticker, pos) {
+    const stock = state.data.stocks.find(s => s.ticker === ticker);
+    prefsStore.pos[ticker] = { v: pos, t: new Date().toISOString() };
+    prefsWriteLocal(); prefsApply();
+    if (stock) annSyncPositionLines(annStore, ticker, pos, stock.as_of);
+    annSave();   // także synchronizacja (prefs + linie stopu / celu)
+    renderTable();
+    if (currentChart && currentChart.ticker === ticker) { chartWindows = []; drawChart(); }
+    updatePosButton();
+}
+
+function updatePosButton() {
+    const b = document.getElementById("chartPosBtn");
+    if (b) b.textContent = chartRequested && state.pos[chartRequested] ? "💼 Pozycja ✓" : "💼 Pozycja";
+}
+
+function openPositionSheet(ticker) {
+    const stock = state.data.stocks.find(s => s.ticker === ticker);
+    if (!stock) return;
+    const cur = state.pos[ticker] || {};
+    const stop = Number.isFinite(annPositionLineValue(annStore, ticker, "stop")) ? annPositionLineValue(annStore, ticker, "stop") : cur.stop;
+    const target = Number.isFinite(annPositionLineValue(annStore, ticker, "target")) ? annPositionLineValue(annStore, ticker, "target") : cur.target;
+    const v = x => (Number.isFinite(x) ? x : "");
+    const html = `
+        <div class="sheet-grid">
+            <label>Wejście ($)<input type="number" inputmode="decimal" step="any" id="posEntryIn" value="${v(cur.entry !== undefined ? cur.entry : stock.price)}"></label>
+            <label>Stop ($)<input type="number" inputmode="decimal" step="any" id="posStopIn" value="${v(stop)}"></label>
+            <label>Liczba akcji<input type="number" inputmode="numeric" step="1" id="posSharesIn" value="${v(cur.shares)}"></label>
+            <label>Cel ($)<input type="number" inputmode="decimal" step="any" id="posTargetIn" value="${v(target)}"></label>
+        </div>
+        <div class="sheet-quick">Stop: <button type="button" class="chip-btn" data-stop="5">−5%</button><button type="button" class="chip-btn" data-stop="7">−7%</button><button type="button" class="chip-btn" data-stop="8">−8%</button>
+            · Cel: <button type="button" class="chip-btn" data-rr="2">2R</button><button type="button" class="chip-btn" data-rr="3">3R</button></div>
+        <div class="sheet-section"><h4>Kalkulator wielkości pozycji</h4>
+            <div class="sheet-grid">
+                <label>Kapitał ($)<input type="number" inputmode="decimal" step="any" id="posCapital" value="${v(state.acct.capital)}"></label>
+                <label>Ryzyko na pozycję (%)<input type="number" inputmode="decimal" step="any" id="posRiskPct" value="${v(state.acct.riskPct)}" placeholder="np. 0.5"></label>
+            </div>
+            <p class="sheet-result" id="posCalc"></p>
+        </div>
+        <div class="sheet-actions">
+            ${state.pos[ticker] ? `<button type="button" class="btn danger" id="posDelete">Usuń pozycję</button>` : ""}
+            <button type="button" class="btn primary" id="posSave">Zapisz</button>
+        </div>`;
+    const body = showSheet(`💼 ${ticker} — pozycja`, html);
+    const $ = id => body.querySelector("#" + id);
+    const num = id => { const x = parseFloat($(id).value); return Number.isFinite(x) ? x : null; };
+    const calc = () => {
+        const entry = num("posEntryIn"), stopV = num("posStopIn"), tgt = num("posTargetIn");
+        const size = positionSize(num("posCapital"), num("posRiskPct"), entry, stopV);
+        const parts = [];
+        if (entry && stopV && stopV < entry) {
+            parts.push(`Ryzyko na akcję: ${money(entry - stopV)} (${((entry - stopV) / entry * 100).toFixed(1)}% od wejścia)`);
+            if (tgt && tgt > entry) parts.push(`R:R do celu: ${((tgt - entry) / (entry - stopV)).toFixed(1)} : 1`);
+        } else if (entry && stopV) parts.push("Stop musi być poniżej wejścia.");
+        if (size) parts.push(`Sugerowane: <b>${size.shares} akcji</b> (ryzyko ${money0(size.risk_usd)}, wartość ${money0(size.value)} = ${size.pct_of_capital.toFixed(0)}% kapitału) <button type="button" class="chip-btn" id="posUse">Użyj</button>`);
+        else if (!num("posCapital") || !num("posRiskPct")) parts.push("Wpisz kapitał i ryzyko %, a podpowiem liczbę akcji.");
+        $("posCalc").innerHTML = parts.join("<br>");
+        const use = $("posUse");
+        if (use) use.addEventListener("click", () => { $("posSharesIn").value = size.shares; calc(); });
+    };
+    body.addEventListener("input", calc);
+    body.addEventListener("click", ev => {
+        const t = ev.target.closest("button[data-stop],button[data-rr]");
+        if (!t) return;
+        const entry = num("posEntryIn");
+        if (!entry) return;
+        if (t.dataset.stop) $("posStopIn").value = (entry * (1 - Number(t.dataset.stop) / 100)).toFixed(2);
+        else if (num("posStopIn") && num("posStopIn") < entry) $("posTargetIn").value = (entry + Number(t.dataset.rr) * (entry - num("posStopIn"))).toFixed(2);
+        calc();
+    });
+    $("posSave").addEventListener("click", () => {
+        const entry = num("posEntryIn"), stopV = num("posStopIn"), tgt = num("posTargetIn");
+        if (!entry || entry <= 0) { showToast("Podaj cenę wejścia.", { type: "error" }); return; }
+        if (stopV !== null && stopV >= entry) { showToast("Stop musi być poniżej ceny wejścia.", { type: "error" }); return; }
+        if (tgt !== null && tgt <= entry) { showToast("Cel musi być powyżej ceny wejścia.", { type: "error" }); return; }
+        saveAcct(num("posCapital"), num("posRiskPct"));
+        savePosition(ticker, { entry, stop: stopV, shares: num("posSharesIn"), target: tgt });
+        closeSheet();
+        showToast(`Zapisano pozycję ${ticker}.`);
+    });
+    const del = $("posDelete");
+    if (del) del.addEventListener("click", () => { savePosition(ticker, null); closeSheet(); showToast(`Usunięto pozycję ${ticker}.`); });
+    calc();
+}
+
 function toggleFav(ticker) {
     prefsStore.favs[ticker] = { v: !state.favs.has(ticker), t: new Date().toISOString() };
     prefsWriteLocal(); prefsApply(); annOnSave();
@@ -679,6 +997,9 @@ function showTab(tab, resetSort = true) {
     state.tab = tab;
     if (resetSort && TAB_DEFAULT_SORT[tab]) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    document.querySelectorAll("#bottomNav [data-tab]").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
+    const navMore = document.getElementById("navMore");
+    if (navMore) navMore.classList.toggle("active", !BOTTOM_NAV_TABS.includes(tab));
     const activeTab = document.querySelector(".drawer-tab.active");
     if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
     Object.keys(TAB_TITLES).forEach(t => {
@@ -767,6 +1088,11 @@ function initControls() {
     bind("qmMinDollarVolume", v => { state.qm.minDollarVolumeM = v; });
     bind("qmMinAdr", v => { state.qm.minAdrPct = v; });
     bind("qmTopPct", v => { state.qm.topPct = v; });
+    const acctInputs = () => saveAcct(parseFloat(document.getElementById("acctCapital").value), parseFloat(document.getElementById("acctRisk").value));
+    ["acctCapital", "acctRisk"].forEach(id => document.getElementById(id).addEventListener("change", () => { acctInputs(); renderTable(); }));
+    renderPositionControls();
+    document.getElementById("brkMaxDist").value = state.brk.maxDistPct;
+    bind("brkMaxDist", v => { state.brk.maxDistPct = v; });
     document.getElementById("baseMaxDist").value = state.bases.maxDistPct;
     bind("baseMaxDist", v => { state.bases.maxDistPct = v; });
     const vcp = document.getElementById("baseVcpOnly");
@@ -851,6 +1177,7 @@ function initControls() {
         fillMiniCharts();
     }));
     initChartModal();
+    initBottomNav();
 }
 
 // Eksport / import adnotacji (kopiowanie JSON do schowka i wklejanie) — kopia zapasowa, przenoszenie między urządzeniami
@@ -926,6 +1253,9 @@ async function openChart(ticker) {
             stock.earnings ? `wyniki: ${stock.earnings}` : null].filter(Boolean).join(" · ")
         : "";
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
+    document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && state.data.market.regime) : "";
+    updateChartNav(ticker);
+    updatePosButton();
     const scoreBox = document.getElementById("chartScore");
     if (scoreBox) scoreBox.value = Number.isFinite(state.scores[ticker]) ? state.scores[ticker] : "";
     document.getElementById("chartFv").href = `https://finviz.com/stock?t=${encodeURIComponent(ticker)}&ty=fc&p=d&b=1`;
@@ -1133,10 +1463,38 @@ function updateLogButton() {
 }
 
 function updateTfButton() {
-    document.getElementById("chartTfBtn").textContent = chartDaily ? "Wykres: dzienny" : "Wykres: tygodniowy";
+    const label = chartDaily ? "dzienny" : "tygodniowy";
+    document.getElementById("chartTfBtn").textContent = splitMode ? `Wykres: ${label}` : label[0].toUpperCase() + label.slice(1);   // telefon: krótko, żeby główne przyciski mieściły się w jednym rzędzie
+}
+
+// Dolna nawigacja telefonu (kciuk dosięga): 4 główne widoki + „Więcej” (arkusz z resztą zakładek i odświeżaniem danych).
+function initBottomNav() {
+    const nav = document.getElementById("bottomNav");
+    if (!nav) return;
+    nav.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
+    document.getElementById("navMore").addEventListener("click", () => {
+        const items = [["FILTERS", "🔍", "Filtry"], ["RS", "📊", "Ratingi"], ["QM", "🎯", "Qullamaggie"], ["PT", "🎯", "Upside"], ["BASES", "🧱", "Bazy"], ["FAV", "⭐", "Ulubione"]];
+        const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
+            <a href="ep.html"><span>⚡</span>Episodic Pivot (EP)</a>
+            <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
+        body.querySelectorAll("button[data-tab]").forEach(b => b.addEventListener("click", () => { closeSheet(); showTab(b.dataset.tab); }));
+    });
+}
+
+// Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
+function openChartMore() {
+    const btns = ["chartFullBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
+        ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
+        <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
+        <a href="${document.getElementById("chartZx").href}" target="_blank" rel="noopener">🎯 Zacks ↗</a></div>
+        <div class="sheet-section"><div class="sheet-grid"><label>Mój score<input type="number" inputmode="decimal" step="any" id="moreScore" value="${chartRequested && Number.isFinite(state.scores[chartRequested]) ? state.scores[chartRequested] : ""}"></label></div></div>`);
+    body.querySelectorAll("button[data-click]").forEach(b => b.addEventListener("click", () => { closeSheet(); document.getElementById(b.dataset.click).click(); }));
+    body.querySelector("#moreScore").addEventListener("change", ev => { if (chartRequested) setScore(chartRequested, ev.target.value); });
 }
 
 function initChartModal() {
+    document.getElementById("chartMoreBtn").addEventListener("click", openChartMore);
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
@@ -1153,6 +1511,12 @@ function initChartModal() {
         updateTfButton();
         drawChart();
     });
+    document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });
+    document.getElementById("chartPrev").addEventListener("click", () => stepChart(-1));
+    document.getElementById("chartNext").addEventListener("click", () => stepChart(1));
+    // przeciągnięcie po tytule / pasku nawigacji: w lewo = następna spółka, w prawo = poprzednia (wykres ma własne gesty, więc nie na nim)
+    ["chartNav", "chartReady"].forEach(id => attachSwipe(document.getElementById(id), () => stepChart(1), () => stepChart(-1)));
+    attachSwipe(document.querySelector(".wl-chart-titles"), () => stepChart(1), () => stepChart(-1));
     const chartScore = document.getElementById("chartScore");
     if (chartScore) {
         chartScore.addEventListener("change", () => { if (chartRequested) setScore(chartRequested, chartScore.value); });
@@ -1300,7 +1664,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

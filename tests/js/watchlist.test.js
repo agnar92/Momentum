@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -229,5 +229,92 @@ test("all tabs share the same columns; alerts add alert columns; tagStrategies o
     assert.deepEqual(a.strat, ["R", "Q"]);
     assert.equal(a.strat_rank, 0);
     assert.deepEqual(b.strat, []);
-    assert.equal(b.strat_rank, 4);
+    assert.equal(b.strat_rank, 5);
+});
+
+test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and sort order", () => {
+    assert.equal(breakoutInfo(stock("A"), null, 5), null);
+    const flag = breakoutInfo(stock("A", { tl_state: "przy oporze", tl_pattern: "flaga", tl_dist_pct: 1.4 }), null, 5);
+    assert.equal(flag.dist, 1.4);
+    assert.equal(flag.rank, 1);
+    const fresh = breakoutInfo(stock("B", { tl_state: "wybicie", tl_pattern: "flaga", tl_vol_ratio: 2.1, tl_vol_ok: true }), null, 5);
+    assert.equal(fresh.rank, 0);
+    assert.equal(fresh.dist, null);
+    assert.ok(fresh.reasons[0].text.includes("×2.1") && fresh.reasons[0].text.includes("✓"));
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: 8 }), null, 5), null);
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: 3.2, vcp: true }), null, 5).dist, 3.2);
+    const al = breakoutInfo(stock("D"), { alert: "above", triggered: false, dist: -1.9 }, 5);
+    assert.ok(Math.abs(al.dist - 1.94) < 0.01);   // cena 1,9 % pod linią => do linii ok. 1,94 %
+    assert.equal(breakoutInfo(stock("D"), { alert: "above", triggered: true, dist: 0.5 }, 5).rank, 0);
+    assert.equal(breakoutInfo(stock("D"), { alert: "below", triggered: false, dist: -1 }, 5), null);
+});
+
+test("tagBreakouts + breakoutRows sort fresh breakouts first, then by distance; readinessLine summarises", () => {
+    const rows = [stock("A", { tl_state: "przy oporze", tl_pattern: "flaga", tl_dist_pct: 2.5 }), stock("B", { tl_state: "wybicie", tl_pattern: "korytarz" }),
+        stock("C", { base_type: "flat", pct_to_pivot: 1 }), stock("D")];
+    tagBreakouts(rows, [], 5);
+    assert.deepEqual(breakoutRows(rows).map(s => s.ticker), ["B", "C", "A"]);
+    assert.equal(rows[3].brk, null);
+    const line = readinessLine({ ...rows[0], rs_line_state: "przed ceną", earnings: "" }, "correction");
+    assert.ok(line.startsWith("Do wybicia: 2.5%") && line.includes("RS przed ceną") && line.includes("rynek w korekcie"));
+    assert.ok(readinessLine(rows[3], "uptrend").startsWith("Brak sygnału wybicia"));
+});
+
+test("swipeDirection needs a long, fast, mostly horizontal move", () => {
+    assert.equal(swipeDirection(-90, 10, 200), "left");
+    assert.equal(swipeDirection(90, -10, 200), "right");
+    assert.equal(swipeDirection(-40, 0, 100), null);      // za krótko
+    assert.equal(swipeDirection(-90, 80, 200), null);     // raczej pionowo (przewijanie)
+    assert.equal(swipeDirection(-90, 5, 1200), null);     // za wolno (przeciąganie)
+});
+
+test("positionSize sizes the position from risk; invalid inputs give null", () => {
+    const s = positionSize(50000, 0.5, 100, 95);          // ryzyko 250 $ / 5 $ na akcję = 50 akcji
+    assert.equal(s.shares, 50);
+    assert.equal(s.risk_usd, 250);
+    assert.equal(s.value, 5000);
+    assert.equal(s.pct_of_capital, 10);
+    assert.equal(positionSize(50000, 0.5, 100, 101), null);   // stop nad wejściem
+    assert.equal(positionSize(0, 0.5, 100, 95), null);
+    assert.equal(positionSize(50000, null, 100, 95), null);
+    assert.equal(positionSize(1000, 0.1, 100, 90).shares, 0);   // za małe ryzyko na choćby jedną akcję
+});
+
+test("positionMetrics: P/L, R multiple, distance to stop, target R:R and stop hit", () => {
+    const m = positionMetrics({ entry: 100, stop: 95, shares: 20, target: 115 }, 110);
+    assert.ok(Math.abs(m.pl_pct - 10) < 1e-9);
+    assert.equal(m.pl_usd, 200);
+    assert.equal(m.r, 2);
+    assert.ok(Math.abs(m.to_stop_pct - (95 / 110 - 1) * 100) < 1e-9);
+    assert.equal(m.value, 2200);
+    assert.equal(m.risk_usd, 100);
+    assert.equal(m.rr_target, 3);
+    assert.equal(m.stop_hit, false);
+    assert.equal(positionMetrics({ entry: 100, stop: 95 }, 94).stop_hit, true);
+    const noStop = positionMetrics({ entry: 100 }, 105);
+    assert.equal(noStop.r, null);
+    assert.equal(noStop.to_stop_pct, null);
+    assert.equal(positionMetrics(null, 100), null);
+});
+
+test("tagPositions / positionRows / positionTotals: nearest to stop first and portfolio risk", () => {
+    const a = stock("A", { price: 110 }), b = stock("B", { price: 100 }), c = stock("C");
+    tagPositions([a, b, c], { A: { entry: 100, stop: 95, shares: 20, target: null }, B: { entry: 100, stop: 98, shares: 10, target: null } });
+    assert.equal(c.position, null);
+    assert.deepEqual(positionRows([a, b, c]).map(s => s.ticker), ["B", "A"]);   // B: stop −2 %, A: stop −13,6 %
+    const t = positionTotals(positionRows([a, b, c]), 10000);
+    assert.equal(t.n, 2);
+    assert.equal(t.risk, 120);
+    assert.equal(t.risk_pct, 1.2);
+    assert.equal(t.value, 2200 + 1000);
+});
+
+test("prefs keep positions and account with newest-wins merge and validate fields", () => {
+    const a = { pos: { A: { v: { entry: 10, stop: 9, shares: 5, target: null }, t: "2026-10-01T00:00:00.000Z" } }, acct: { main: { v: { capital: 1000, riskPct: 1 }, t: "2026-10-01T00:00:00.000Z" } } };
+    const b = { pos: { A: { v: null, t: "2026-10-02T00:00:00.000Z" }, B: { v: { entry: "x" }, t: "2026-10-02T00:00:00.000Z" } } };
+    const m = mergePrefs(a, b);
+    assert.equal(m.pos.A.v, null);            // usunięcie (nowsze) wygrywa
+    assert.equal(m.pos.B.v, null);            // wpis bez poprawnego wejścia jest odrzucany
+    assert.deepEqual(m.acct.main.v, { capital: 1000, riskPct: 1 });
+    assert.deepEqual(prefsNormalize({}).pos, {});
 });

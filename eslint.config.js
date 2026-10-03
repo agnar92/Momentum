@@ -32,6 +32,8 @@ const browserGlobals = {
     TV_1MIN_VWAP_WIDGET: "readonly",
     buildTvWidgetBlock: "readonly",
     showToast: "readonly",
+    showSheet: "readonly",
+    closeSheet: "readonly",
     initConnStatus: "readonly",
     hideLoadingOverlay: "readonly",
     // docs/js/chart.js (ładowany PRZED watchlist.js)
@@ -53,6 +55,9 @@ const browserGlobals = {
     annSyncTools: "readonly",
     mergeImport: "readonly",
     ANN_KIND_LABELS: "readonly",
+    ANN_NEAR_PCT: "readonly",
+    annSyncPositionLines: "readonly",
+    annPositionLineValue: "readonly",
     ANN_DIR_LABELS: "readonly",
     annEdit: "readonly",
     annStore: "writable",
