@@ -39,10 +39,27 @@ const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekt
 const DEFAULT_SETTINGS = {
     tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false, ptMinAnalysts: 3, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false },
 };
+// Strategie = zakładki z filtrami; kolejność decyduje o grupowaniu w zakładce Alerty (R, potem Q, U, B, na końcu spółki bez strategii).
+const STRATEGIES = { R: ["R", "Ratingi (RS / EPS / Composite)"], Q: ["Q", "Qullamaggie"], U: ["U", "Upside do ceny celu"], B: ["B", "Bazy blisko pivotu"] };
+const STRATEGY_ORDER = ["R", "Q", "U", "B"];
+function tagStrategies(allStocks, filtered, st) {
+    const sets = {
+        R: new Set(rsLeaders(filtered, st.rsMin, st.epsMin, st.compMin, st.groupMin, st.leadersOnly, st.instOnly).map(s => s.ticker)),
+        Q: new Set(qullamaggieRows(filtered, st.qm).map(s => s.ticker)),
+        U: new Set(ptRows(filtered, st.ptMinAnalysts).map(s => s.ticker)),
+        B: new Set(baseRows(filtered, st.bases).map(s => s.ticker)),
+    };
+    allStocks.forEach(s => {
+        s.strat = STRATEGY_ORDER.filter(c => sets[c].has(s.ticker));
+        s.strat_rank = s.strat.length ? STRATEGY_ORDER.indexOf(s.strat[0]) : STRATEGY_ORDER.length;
+        const ratios = QM_WINDOWS.map(([, key]) => s[key]).filter(Number.isFinite);
+        s.max_ratio = ratios.length ? Math.max(...ratios) : null;
+    });
+}
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], RS: ["composite_rating", "desc"], QM: ["max_ratio", "desc"], PT: ["upside_main", "desc"],
-    BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_rank", "asc"],
+    BASES: ["pct_to_pivot", "asc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
 };
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
@@ -299,8 +316,10 @@ const COL = {
     r12: ["12M", "ret_12m_pct", s => pctCell(s.ret_12m_pct)],
     base: ["Baza", "base_depth_pct", s => `<td>${baseSummary(s)}</td>`],
     dollarVol: ["Obrót dzienny", "dollar_volume_avg", s => `<td>${fmtVolume(s.dollar_volume_avg)}</td>`],
-    adr: ["ADR %", "adr_pct", s => `<td>${s.adr_pct.toFixed(1)}%</td>`],
+    adr: ["ADR %", "adr_pct", s => `<td>${Number.isFinite(s.adr_pct) ? s.adr_pct.toFixed(1) + "%" : "—"}</td>`],
     ratio: ["Cena / minimum", "max_ratio", s => {
+        if (!Number.isFinite(s.max_ratio)) return `<td class="muted">—</td>`;
+        if (!s.windows) return `<td title="Cena / najniższy Low z okien 1/3/6M (największy z nich)">×${s.max_ratio.toFixed(2)}</td>`;
         const gains = s.windows.map(w => `${w.label}: ×${w.ratio.toFixed(2)}`).join(" · ");
         return `<td class="positive" title="${gains}"><strong>×${s.max_ratio.toFixed(2)}</strong> <span class="muted small">top ${state.qm.topPct}% w: ${s.windows.map(w => w.label).join(", ")}</span></td>`;
     }, "Cena / najniższy Low z okna (np. ×1.35 = 35% nad minimum)"],
@@ -335,32 +354,27 @@ const COL = {
         return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
     }],
     alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
+    strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy"],
     mini: ["Wykres 52 tyg.", null, s => `<td><div class="mini-chart" data-mini="${escapeHtml(s.ticker)}"></div></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
-    tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
+    tv: ["MS", null, s => `<td><a class="tv-row-btn" href="${morningstarUrlFor(s.ticker)}" target="_blank" rel="noopener" title="Morningstar: długoterminowa ocena spółki">MS</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
-const LIST_COLUMNS = [...LEAD, "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "rs", "epsr", "comp", "leader", "grp", "inst", "rsLine", "recom", "upside", "rev30", "rev90", "base", "trend", "mini", "earnings", "tv"];
+// Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
+const ALL_COLUMNS = [...LEAD, "strat", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "inst", "rsLine", "r3", "r6", "r12",
+    "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "mini", "earnings", "tv"];
+const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
 const TAB_COLUMNS = {
-    LIST: LIST_COLUMNS,
-    FAV: LIST_COLUMNS,
-    RS: [...LEAD, "price", "comp", "leader", "rs", "epsr", "grp", "inst", "epsStab", "epsq", "rsLine", "recom", "upside", "rev30", "r3", "r6", "r12", "epsNext", "epsNext5", "mini", "earnings", "tv"],
-    QM: [...LEAD, "price", "dollarVol", "adr", "ratio", "rs", "mini", "earnings", "tv"],
-    PT: [...LEAD, "price", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rs", "earnings", "tv"],
-    ALERTS: ["rank", "ticker", "company", "price", "alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"],
-    BASES: [...LEAD, "price", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "high52", "trend", "rs", "mini", "earnings", "tv"],
+    LIST: ALL_COLUMNS, FAV: ALL_COLUMNS, RS: ALL_COLUMNS, QM: ALL_COLUMNS, PT: ALL_COLUMNS, BASES: ALL_COLUMNS,
+    ALERTS: [...LEAD, ...ALERT_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id))],
 };
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
+const COMPACT_COLUMNS = ["fav", "ticker", "score", "comp", "rs", "strat"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: ["fav", "ticker", "score", "price", "rs", "high52"],
-    FAV: ["fav", "ticker", "score", "price", "rs", "high52"],
-    RS: ["fav", "ticker", "score", "comp", "rs", "epsr"],
-    QM: ["fav", "ticker", "score", "price", "adr", "ratio"],
-    PT: ["fav", "ticker", "score", "recom", "upside", "ptRange"],
-    BASES: ["fav", "ticker", "score", "price", "baseType", "toPivot"],
-    ALERTS: ["ticker", "alValue", "alDist", "alStatus", "alAct"],
+    LIST: COMPACT_COLUMNS, FAV: COMPACT_COLUMNS, RS: COMPACT_COLUMNS, QM: COMPACT_COLUMNS, PT: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
+    ALERTS: ["ticker", "alDist", "alStatus", "alAct", "strat"],
 };
 let splitMode = false;
 const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
@@ -434,6 +448,7 @@ function rowsForTab(tab) {
         s.target_main = targetMain(s);
     });
     const stocks = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
+    tagStrategies(state.data.stocks, stocks, state);
     if (tab === "RS") return rsLeaders(stocks, state.rsMin, state.epsMin, state.compMin, state.groupMin, state.leadersOnly, state.instOnly);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
     if (tab === "PT") return ptRows(stocks, state.ptMinAnalysts);
@@ -441,7 +456,7 @@ function rowsForTab(tab) {
     if (tab === "FAV") return stocks.filter(s => state.favs.has(s.ticker));
     if (tab === "ALERTS") {
         return alertRows(annStore, stocks).map(r => ({
-            ...r, alert_rank: r.alert.rank, alert_kind: r.alert.kind, alert_dir: r.alert.alert, alert_value: r.alert.value, alert_dist: r.alert.dist,
+            ...r, alert_rank: r.alert.rank, alert_kind: r.alert.kind, alert_dir: r.alert.alert, alert_value: r.alert.value, alert_dist: r.alert.dist, alert_group: r.strat_rank * 10 + r.alert.rank,
         }));
     }
     return stocks;
@@ -1292,6 +1307,6 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, morningstarUrlFor, ratingClass, decorateCell, githubActionsUrl, sortRows,
-        fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT, TAB_TITLES,
+        fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

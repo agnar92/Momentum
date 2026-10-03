@@ -223,3 +223,17 @@ test("rsLeaders filters by group strength and leaders-only; marketLines describe
     const inst = [stock("I", { rs_rating: 90, inst_sponsor: true }), stock("J", { rs_rating: 91, inst_sponsor: false }), stock("K", { rs_rating: 92 })];
     assert.deepEqual(rsLeaders(inst, 80, 0, 0, 0, false, true).map(s => s.ticker), ["I"]);
 });
+
+test("all tabs share the same columns; alerts add alert columns; tagStrategies orders R, Q, U, B", () => {
+    const { TAB_COLUMNS, tagStrategies } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
+    ["LIST", "FAV", "RS", "QM", "PT", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
+    TAB_COLUMNS.LIST.forEach(id => assert.ok(TAB_COLUMNS.ALERTS.includes(id), id));
+    assert.ok(TAB_COLUMNS.ALERTS.includes("alStatus"));
+    const a = stock("A", { rs_rating: 90 }), b = stock("B", { rs_rating: 10 });
+    tagStrategies([a, b], [a, b], { rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false,
+        qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, ptMinAnalysts: 3, bases: { maxDistPct: 10, vcpOnly: false } });
+    assert.deepEqual(a.strat, ["R", "Q"]);
+    assert.equal(a.strat_rank, 0);
+    assert.deepEqual(b.strat, []);
+    assert.equal(b.strat_rank, 4);
+});
