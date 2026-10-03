@@ -164,6 +164,35 @@ def _price_at_or_before(close, ts):
     return float(s.iloc[-1]) if len(s) else None
 
 
+ACCDIS_SESSIONS = 65   # ~13 tygodni, jak w ocenie Acc/Dis IBD
+
+
+def accdis_score(df, sessions=ACCDIS_SESSIONS):
+    """Akumulacja / dystrybucja z ostatnich ~13 tygodni: średnia ważona wolumenem pozycji zamknięcia w zakresie dnia
+    ((C−L) − (H−C)) / (H−L) — wskaźnik Chaikina (CMF). Zakres −1…+1; > 0 = kupujący zamykają dni blisko maksimum przy dużym wolumenie."""
+    tail = df.tail(sessions)
+    rng = (tail["High"] - tail["Low"]).replace(0, np.nan)
+    mfm = (((tail["Close"] - tail["Low"]) - (tail["High"] - tail["Close"])) / rng).fillna(0.0)
+    vol = tail["Volume"].astype(float)
+    total = float(vol.sum())
+    return float((mfm * vol).sum() / total) if total > 0 and len(tail) >= 20 else None
+
+
+def accdis_letter(rating):
+    """Percentyl Acc/Dis -> litera A-E (A = najsilniejsza akumulacja)."""
+    if rating is None:
+        return None
+    return "A" if rating >= 80 else "B" if rating >= 60 else "C" if rating >= 40 else "D" if rating >= 20 else "E"
+
+
+def add_accdis_rating(stocks):
+    """accdis_rating (percentyl 1-99 wśród listy) i accdis (litera A-E) z accdis_score."""
+    percentile_rating(stocks, "accdis_score", "accdis_rating")
+    for s in stocks:
+        s["accdis"] = accdis_letter(s.get("accdis_rating"))
+    return stocks
+
+
 def compute_metrics(df, bench_w=None):
     """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
     bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
@@ -236,6 +265,7 @@ def compute_metrics(df, bench_w=None):
         "tl_vol_ok": (tl.get("breakout") or {}).get("confirmed"),
         "tl_level": tl_level,
         "tl_dist_pct": _num((tl_level / price - 1) * 100, 1) if tl_level and price else None,   # > 0: do oporu brakuje tyle %
+        "accdis_score": _num(accdis_score(df), 3),
         "spark": spark,
     }
 
@@ -725,6 +755,8 @@ def build_daily(df, days):
         "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
         "sma10": _series(close.rolling(10).mean().reindex(idx)),
         "sma20": _series(close.rolling(20).mean().reindex(idx)),
+        "sma50": _series(close.rolling(50).mean().reindex(idx)),
+        "sma200": _series(close.rolling(200).mean().reindex(idx)),
     }
 
 
@@ -740,8 +772,15 @@ def eps_quarters(rows):
         if prev and prev["eps"]:
             yoy = _num((r["eps"] - prev["eps"]) / abs(prev["eps"]) * 100, 0)
         out.append({"d": r["date"], "e": _num(r["eps"]), "g": yoy})
+    # t = suma EPS z 4 ostatnich kwartałów (TTM) — "linia zysków" jak w MarketSmith/MarketSurge; None, gdy brakuje któregoś z 4 kwartałów
+    for k, q in enumerate(out):
+        window = out[k - 3:k + 1] if k >= 3 else []
+        q["t"] = _num(sum(x["e"] for x in window)) if len(window) == 4 and all(x["e"] is not None for x in window) else None
     upcoming = sorted((r for r in rows if r.get("eps") is None and r.get("est") is not None), key=lambda r: r["date"])
     nxt = {"d": upcoming[0]["date"], "e": _num(upcoming[0]["est"])} if upcoming else None
+    if nxt:
+        last3 = out[-3:]
+        nxt["t"] = _num(nxt["e"] + sum(x["e"] for x in last3)) if len(last3) == 3 and nxt["e"] is not None and all(x["e"] is not None for x in last3) else None
     return out, nxt
 
 
@@ -1025,6 +1064,7 @@ def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
         stock["inst_sponsor"] = institutional_flag(stock.get("inst_own"), stock.get("inst_trans"))
         stocks.append(stock)
     add_rs_rating(stocks)
+    add_accdis_rating(stocks)
     add_group_strength(stocks)
     return stocks
 

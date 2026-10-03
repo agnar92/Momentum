@@ -242,6 +242,7 @@ class TestCharts:
         d = watchlist.build_daily(df, days)
         assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma10", "sma20"))
         assert d["sma20"][0] is not None  # SMA liczona na pelnej historii, nie tylko na oknie
+        assert d["sma50"][0] is not None and d["sma200"][0] is not None and len(d["sma200"]) == 20
 
     def test_build_chart_aligns_to_common_weeks_and_pads_missing(self):
         weekly = watchlist.weekly_ohlcv(make_prices(n=300, daily=0.002))
@@ -262,11 +263,25 @@ class TestCharts:
         assert quarters[0]["g"] is None                       # brak kwartalu sprzed roku
         assert quarters[2]["g"] == 50                         # 1.0 -> 1.5
         assert quarters[3]["g"] == -50                        # 2.0 -> 1.0
-        assert nxt == {"d": "2027-01-28", "e": 2.5}
+        assert quarters[3]["t"] == 5.5 and quarters[2]["t"] is None   # TTM = suma 4 kwartałów; wcześniej brak 4 kwartałów (dwa 2025 + dwa 2026 = 4 wiersze)
+        assert nxt == {"d": "2027-01-28", "e": 2.5, "t": 7.0}     # prognoza 2.5 + trzy ostatnie zrealizowane (2.0 + 1.5 + 1.0)
 
     def test_eps_quarters_yoy_with_negative_previous_uses_abs(self):
         rows = [{"date": "2025-07-30", "eps": -1.0, "est": None}, {"date": "2026-07-30", "eps": 1.0, "est": None}]
         assert watchlist.eps_quarters(rows)[0][1]["g"] == 200
+
+    def test_accdis_score_and_rating_letters(self):
+        up = make_prices(n=120, daily=0.002)
+        down = up.copy()
+        # dni zamykane przy maksimum (akumulacja) vs przy minimum (dystrybucja)
+        up["Close"] = up["High"]
+        down["Close"] = down["Low"]
+        assert watchlist.accdis_score(up) > 0.9 and watchlist.accdis_score(down) < -0.9
+        assert watchlist.accdis_score(up.head(10)) is None                      # za mało sesji
+        stocks = [{"accdis_score": v} for v in (0.9, 0.5, 0.0, -0.5, -0.9)]
+        watchlist.add_accdis_rating(stocks)
+        assert [s["accdis"] for s in stocks] == ["A", "B", "C", "D", "E"]
+        assert watchlist.accdis_letter(None) is None
 
     def test_update_eps_cache_fetches_only_stale_and_survives_errors(self, tmp_path):
         path = tmp_path / "eps.json"
@@ -296,7 +311,7 @@ class TestCharts:
         assert list(charts["stocks"]) == ["AAA"]
         a = charts["stocks"]["AAA"]
         assert all(len(a[k]) == 52 for k in ("o", "h", "l", "c", "v", "sma10", "sma40"))
-        assert a["eps"][-1] == {"d": "2026-07-30", "e": 2.0, "g": 100} and a["eps_next"] == {"d": "2026-10-29", "e": 2.2}
+        assert a["eps"][-1] == {"d": "2026-07-30", "e": 2.0, "g": 100, "t": None} and a["eps_next"] == {"d": "2026-10-29", "e": 2.2, "t": None}   # t: za mało kwartałów na TTM
 
     def test_build_charts_without_benchmark_still_works(self):
         charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=300)}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 30)
