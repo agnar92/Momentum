@@ -26,6 +26,8 @@ const browserGlobals = {
     require: "readonly",
     escapeHtml: "readonly",
     patternExplain: "readonly",
+    fundMiniModel: "readonly",
+    fundMiniHtml: "readonly",
     tvUrlFor: "readonly",
     compareRows: "readonly",
     TV_EMBED_BASE: "readonly",

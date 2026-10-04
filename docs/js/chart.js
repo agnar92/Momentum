@@ -1065,8 +1065,79 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     return full;
 }
 
+// ---------- mini wykres fundamentów na rozwiniętym kafelku (telefon) ----------
+// Trzy linie na wspólnej osi tygodni, każda w swojej skali min–max (jak w MarketSurge): cena, EPS TTM (punkty = raporty,
+// przerywana = prognoza) i RS (spółka / S&P 500). Chodzi o jedno spojrzenie: czy cena, zyski i siła względna rosną razem.
+function fundMiniModel(charts, ticker) {
+    const c = charts && charts.stocks && charts.stocks[ticker];
+    if (!c || !Array.isArray(c.c) || c.c.length < 8) return null;
+    const weeks = charts.weeks, n = c.c.length, spx = charts.spx || null;
+    const price = c.c.map(v => (Number.isFinite(v) ? v : null));
+    const rs = c.c.map((v, i) => (spx && Number.isFinite(v) && Number.isFinite(spx[i]) && spx[i] > 0 ? v / spx[i] : null));
+    const eps = [];
+    (c.eps || []).forEach(q => {
+        if (!Number.isFinite(q.t)) return;
+        const i = weekIndexForDate(weeks, q.d);
+        if (i >= 0) eps.push({ i, v: q.t, d: q.d });
+    });
+    const next = c.eps_next && Number.isFinite(c.eps_next.t) ? c.eps_next.t : null;
+    const first = a => a.find(Number.isFinite), last = a => [...a].reverse().find(Number.isFinite);
+    const chg = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && a > 0 ? (b / a - 1) * 100 : null);
+    return {
+        n, price, rs, eps, next,
+        priceChg: chg(first(price), last(price)), rsChg: chg(first(rs), last(rs)),
+        epsChg: eps.length >= 2 ? chg(eps[0].v, eps[eps.length - 1].v) : null,
+        epsLast: eps.length ? eps[eps.length - 1].v : null,
+    };
+}
+
+function fundMiniSvg(m, opts = {}) {
+    const W = opts.width || 320, H = opts.height || 150, padL = 4, padR = 4, padT = 8, padB = 8;
+    const slots = m.n + (m.next !== null ? 4 : 0);   // puste miejsca na prognozę EPS po prawej
+    const x = i => padL + (W - padL - padR) * i / Math.max(1, slots - 1);
+    const scale = vals => {
+        const f = vals.filter(Number.isFinite);
+        if (!f.length) return () => null;
+        const lo = Math.min(...f), hi = Math.max(...f), span = hi - lo || 1;
+        return v => padT + (H - padT - padB) * (1 - (v - lo) / span);
+    };
+    const yP = scale(m.price), yR = scale(m.rs);
+    const epsVals = m.eps.map(e => e.v).concat(m.next !== null ? [m.next] : []);
+    const yE = scale(epsVals);
+    const parts = [];
+    parts.push(`<polyline fill="none" stroke="#5aa0ff" stroke-width="1.4" opacity=".9" points="${linePoints(m.rs, x, yR)}"/>`);
+    parts.push(`<polyline fill="none" stroke="#e8edf5" stroke-width="1.8" points="${linePoints(m.price, x, yP)}"/>`);
+    if (m.eps.length) {
+        const pts = m.eps.map(e => [x(e.i), yE(e.v)]);
+        parts.push(`<polyline fill="none" stroke="#f0932b" stroke-width="2" points="${pts.map(p => p.map(v => v.toFixed(1)).join(",")).join(" ")}"/>`);
+        pts.forEach(p => parts.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#f0932b"/>`));
+        if (m.next !== null) {
+            const lp = pts[pts.length - 1], nx = x(slots - 1), ny = yE(m.next);
+            parts.push(`<line x1="${lp[0].toFixed(1)}" y1="${lp[1].toFixed(1)}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#f0932b" stroke-width="2" stroke-dasharray="4 3"/>`);
+            parts.push(`<circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="3" fill="none" stroke="#f0932b" stroke-width="1.5"/>`);
+        }
+    }
+    return `<svg class="fund-mini-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Cena, EPS i RS">${parts.join("")}</svg>`;
+}
+
+function linePoints(arr, x, y) {
+    return arr.map((v, i) => (Number.isFinite(v) ? `${x(i).toFixed(1)},${y(v).toFixed(1)}` : null)).filter(Boolean).join(" ");
+}
+
+function fundMiniHtml(m) {
+    if (!m) return `<div class="fund-mini-empty">Brak danych wykresu.</div>`;
+    const sg = v => (Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(0)}%` : "—");
+    const cls = v => (Number.isFinite(v) ? (v >= 0 ? "up" : "down") : "");
+    const legend = [
+        `<span class="fm-px">Cena <b class="${cls(m.priceChg)}">${sg(m.priceChg)}</b></span>`,
+        `<span class="fm-eps">EPS TTM ${m.epsLast !== null ? m.epsLast.toFixed(2) : "—"} <b class="${cls(m.epsChg)}">${sg(m.epsChg)}</b>${m.next !== null ? ` · prog. ${m.next.toFixed(2)}` : ""}</span>`,
+        `<span class="fm-rs">RS vs S&amp;P <b class="${cls(m.rsChg)}">${sg(m.rsChg)}</b></span>`,
+    ].join("");
+    return `${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo; każda linia w swojej skali — liczy się kierunek.</div>`;
+}
+
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml,
     };
 }

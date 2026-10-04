@@ -657,12 +657,13 @@ const COL = {
     posRisk: ["Ryzyko do stopu", "pos_risk_usd", s => `<td>${s.position && s.position.risk_usd !== null ? money0(s.position.risk_usd) : "—"}</td>`, "Początkowe ryzyko: (wejście − stop) · liczba akcji"],
     strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy, W = blisko wybicia"],
     toggle: ["", null, s => `<td class="card-toggle"><button type="button" class="card-chev" aria-label="Pokaż / ukryj szczegóły" aria-expanded="${openCards.has(s.ticker)}">▾</button></td>`],
+    fchart: ["", null, s => `<td class="card-fchart" data-fchart="${escapeHtml(s.ticker)}"></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -793,6 +794,7 @@ function renderTable() {
     updateSortHeaders(table);
     updateCardSort(tab);
     markSelectedRow();
+    fillFundCharts();
     if (chartRequested) updateChartNav(chartRequested);   // pasek ◀ n / N odświeża się po zmianie zakładki, filtra, sortowania
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
@@ -1301,6 +1303,7 @@ function initControls() {
         if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
         tr.classList.toggle("open", openCards.has(t));
         chev.setAttribute("aria-expanded", String(openCards.has(t)));
+        fillFundCharts();
         }));
     document.getElementById("chartRatings").addEventListener("click", ev => {
         const chip = ev.target.closest("[data-action=canslim]");
@@ -1363,6 +1366,16 @@ function loadEstimates() {
             .catch(e => { console.error("Nie udało się wczytać data/estimates.json:", e); estimatesPromise = null; estimatesFailed = true; return null; });
     }
     return estimatesPromise;
+}
+
+// Mini wykres fundamentów (cena / EPS / RS) w rozwiniętych kafelkach — dane z charts.json, ładowane leniwie przy pierwszym rozwinięciu.
+async function fillFundCharts() {
+    if (splitMode || !openCards.size) return;
+    const cells = [...document.querySelectorAll("tr.open td.card-fchart")].filter(td => !td.dataset.done);
+    if (!cells.length) return;
+    const charts = await loadCharts();
+    if (!charts) return;
+    cells.forEach(td => { td.innerHTML = fundMiniHtml(fundMiniModel(charts, td.dataset.fchart)); td.dataset.done = "1"; });
 }
 
 function loadCharts() {

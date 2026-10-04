@@ -489,3 +489,20 @@ test("buildChartModel / chartSvg: sell climax top marks the signal bar on the da
     charts.stocks.X.day.climax = null;
     assert.doesNotMatch(chartSvg(buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {}), {}), /Sell climax top \(tydzień/);
 });
+
+test("fundMiniModel: cena, EPS TTM i RS na osi tygodni", () => {
+    const { fundMiniModel, fundMiniHtml } = require("../../docs/js/chart.js");
+    const weeks = Array.from({ length: 10 }, (_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`);
+    const charts = { weeks, spx: weeks.map(() => 100), stocks: { X: {
+        c: [10, 11, 12, 13, 14, 15, 16, 17, 18, 20],
+        eps: [{ d: "2025-01-03", e: 1, g: 5, t: 4 }, { d: "2025-01-08", e: 1, g: 5, t: 5 }, { d: "2025-01-02", e: 1, g: null, t: null }],
+        eps_next: { d: "2025-02-01", e: 1.2, t: 5.5 },
+    } } };
+    const m = fundMiniModel(charts, "X");
+    assert.equal(m.eps.length, 2);
+    assert.equal(m.priceChg, 100);
+    assert.equal(m.epsChg, 25);
+    assert.equal(m.next, 5.5);
+    assert.equal(fundMiniModel(charts, "NOPE"), null);
+    assert.match(fundMiniHtml(m), /<svg/);
+});
