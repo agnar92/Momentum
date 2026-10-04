@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -18,20 +18,6 @@ function stock(ticker, over = {}) {
         ema34_rising: false, ...over,
     };
 }
-
-test("rsLeaders keeps ratings at or above the threshold, best first", () => {
-    const out = rsLeaders([stock("A", { rs_rating: 90 }), stock("B", { rs_rating: 70 }),
-        stock("C", { rs_rating: 99 }), stock("D", { rs_rating: null })], 80);
-    assert.deepEqual(out.map(s => s.ticker), ["C", "A"]);
-});
-
-test("rsLeaders also filters by EPS Rating and Composite when thresholds are set", () => {
-    const rows = [stock("A", { rs_rating: 90, eps_rating: 85, composite_rating: 88 }), stock("B", { rs_rating: 95, eps_rating: 40, composite_rating: 68 }),
-        stock("C", { rs_rating: 92, eps_rating: null, composite_rating: null })];
-    assert.deepEqual(rsLeaders(rows, 80, 0, 0).map(s => s.ticker), ["B", "C", "A"]);
-    assert.deepEqual(rsLeaders(rows, 80, 70, 0).map(s => s.ticker), ["A"]);
-    assert.deepEqual(rsLeaders(rows, 80, 0, 80).map(s => s.ticker), ["A"]);
-});
 
 test("qullamaggieRows: liquidity thresholds, then union of top X% per 1/3/6M window without duplicates", () => {
     const mk = (t, g1, g3, g6, over = {}) => stock(t, {
@@ -194,33 +180,25 @@ test("Finviz is the primary source of target and upside, Yahoo is the fallback; 
     assert.deepEqual([1, 1.84, 2.5, 3.2, 4.6].map(recomLabel), ["Strong Buy", "Buy", "Hold", "Hold", "Strong Sell"]);
 });
 
-test("rsLeaders filters by group strength and leaders-only; marketLines describes both indices", () => {
-    const rows = [stock("A", { rs_rating: 90, industry_rating: 80, leader: true }), stock("B", { rs_rating: 95, industry_rating: 30, leader: false }),
-        stock("C", { rs_rating: 92, industry_rating: null, leader: false })];
-    assert.deepEqual(rsLeaders(rows, 80, 0, 0, 60, false).map(s => s.ticker), ["A"]);
-    assert.deepEqual(rsLeaders(rows, 80, 0, 0, 0, true).map(s => s.ticker), ["A"]);
-    assert.equal(rsLeaders(rows, 80, 0, 0, 0, false).length, 3);
+test("marketLines describes both indices", () => {
     const lines = marketLines({ sp500: { pct_vs_sma50: 2.1, pct_vs_sma200: 8.4, sma50_rising: true, dist_days: 3, pct_from_high: -1.2 }, nasdaq: null });
     assert.equal(lines.length, 1);
     assert.ok(lines[0].startsWith("S&P 500: +2.1% vs SMA50, +8.4% vs SMA200, 3 dni dystrybucji"));
     assert.deepEqual(Object.keys(MARKET_LABELS), ["uptrend", "correction"]);
     assert.ok(marketLines({ sp500: { ema_gap_pct: 1.8, pct_vs_sma50: 1, pct_vs_sma200: 2, dist_days: 2, pct_from_high: -1 } })[0].includes("EMA10/EMA20 tyg. +1.8%"));
-    const inst = [stock("I", { rs_rating: 90, inst_sponsor: true }), stock("J", { rs_rating: 91, inst_sponsor: false }), stock("K", { rs_rating: 92 })];
-    assert.deepEqual(rsLeaders(inst, 80, 0, 0, 0, false, true).map(s => s.ticker), ["I"]);
 });
 
-test("all tabs share the same columns; alerts add alert columns; tagStrategies orders R, Q, B, W", () => {
+test("all tabs share the same columns; alerts add alert columns; tagStrategies orders Q, B", () => {
     const { TAB_COLUMNS, tagStrategies } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
-    ["LIST", "FAV", "RS", "QM", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
+    ["LIST", "FAV", "QM", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
     TAB_COLUMNS.LIST.forEach(id => assert.ok(TAB_COLUMNS.ALERTS.includes(id), id));
     assert.ok(TAB_COLUMNS.ALERTS.includes("alStatus"));
     const a = stock("A", { rs_rating: 90 }), b = stock("B", { rs_rating: 10 });
-    tagStrategies([a, b], [a, b], { rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false,
+    tagStrategies([a, b], [a, b], {
         qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false } });
-    assert.deepEqual(a.strat, ["R", "Q"]);
-    assert.equal(a.strat_rank, 0);
+    assert.ok(!a.strat.includes("R") && !a.strat.includes("W"));
     assert.deepEqual(b.strat, []);
-    assert.equal(b.strat_rank, 4);
+    assert.equal(b.strat_rank, 2);
 });
 
 test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and sort order", () => {
@@ -240,11 +218,11 @@ test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and 
     assert.equal(breakoutInfo(stock("D"), { alert: "below", triggered: false, dist: -1 }, 5), null);
 });
 
-test("tagBreakouts + breakoutRows sort fresh breakouts first, then by distance; readinessLine summarises", () => {
+test("tagBreakouts sets brk and brk_sort (fresh breakouts first, then by distance); readinessLine summarises", () => {
     const rows = [stock("A", { tl_state: "przy oporze", tl_pattern: "flaga", tl_dist_pct: 2.5 }), stock("B", { tl_state: "wybicie", tl_pattern: "korytarz" }),
         stock("C", { base_type: "flat", pct_to_pivot: 1 }), stock("D")];
     tagBreakouts(rows, [], 5);
-    assert.deepEqual(breakoutRows(rows).map(s => s.ticker), ["B", "C", "A"]);
+    assert.deepEqual(rows.filter(s => s.brk).sort((a, b) => a.brk_sort - b.brk_sort).map(s => s.ticker), ["B", "C", "A"]);
     assert.equal(rows[3].brk, null);
     const line = readinessLine({ ...rows[0], rs_line_state: "przed ceną", earnings: "" }, "correction");
     assert.ok(line.startsWith("Do wybicia: 2.5%") && line.includes("RS przed ceną") && line.includes("rynek w korekcie"));
