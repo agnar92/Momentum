@@ -48,6 +48,14 @@ class TestFinviz:
         assert rows == [{"ticker": "A", "recom": 1.84, "finviz_target": 175.89, "inst_own": 95.51, "inst_trans": -1.09},
                         {"ticker": "B", "recom": None, "finviz_target": None, "inst_own": None, "inst_trans": None}]
 
+    def test_parse_custom_view_canslim_columns(self):
+        page = """<html><body><div>#1 / 5 Total</div>
+        <table class="screener_table"><thead><tr><th>No.</th><th>Ticker</th><th>Sales Q/Q</th><th>Float</th><th>Outstanding</th><th>Insider Own</th><th>Debt/Eq</th></tr></thead>
+        <tr class="styled-row"><td>1</td><td data-boxover-ticker="A">A</td><td>31.2%</td><td>280.98M</td><td>281.97M</td><td>0.34%</td><td>0.54</td></tr>
+        </table></body></html>"""
+        rows, _ = finviz.parse_screener_page(page, "152")
+        assert rows == [{"ticker": "A", "sales_qq": 31.2, "shs_float": 280.98e6, "shs_outstanding": 281.97e6, "insider_own": 0.34, "debt_eq": 0.54}]
+
     def test_fetch_view_adds_custom_columns_param_only_for_the_custom_view(self, monkeypatch):
         seen = []
 
@@ -63,13 +71,16 @@ class TestFinviz:
                 return FakeResp()
         finviz.fetch_view("152", "f", 5, 0, FakeSession())
         finviz.fetch_view("121", "f", 5, 0, FakeSession())
-        assert seen[0]["c"] == "0,1,62,69,28,29" and "c" not in seen[1]
+        assert seen[0]["c"] == finviz.VIEW_PARAMS["152"]["c"] and seen[0]["c"].startswith("0,1,62,69,28,29") and "c" not in seen[1]
 
     def test_institutional_flag(self):
         assert watchlist.institutional_flag(65.0, 1.2) is True
         assert watchlist.institutional_flag(65.0, -0.5) is False         # odpływ
         assert watchlist.institutional_flag(10.0, 3.0) is False          # za mała własność
         assert watchlist.institutional_flag(None, 1.0) is None
+        assert watchlist.institutional_flag(99.4, 0.1) is False          # przesadne obłożenie (> 90 %)
+        assert watchlist.institutional_flag(90.0, 0.1) is True
+        assert watchlist.institutional_flag(121.0, 2.0) is None          # Finviz > 100 % = dane niewiarygodne
 
     def test_finviz_upside(self):
         assert watchlist.finviz_upside(120, 100) == 20.0
