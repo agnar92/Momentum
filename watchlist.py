@@ -289,6 +289,12 @@ def compute_metrics(df, bench_w=None):
     open_base = next((b for b in reversed(all_bases) if b["open"]), None)
 
     tl = detect_consolidation(df, DAILY_FLAG) or {}
+    tlw = detect_consolidation(wk_ohlc, WEEKLY_FLAG) or {}
+    tlw_level = next((ln["y1"] for ln in tlw.get("lines", []) if ln["kind"] == "res"), None)
+    pivot_break = None
+    if open_base and open_base.get("pivot"):
+        found = [b for b in (detect_level_break(df, open_base["pivot"], 5, 50, "D"), detect_level_break(wk_ohlc, open_base["pivot"], 2, 10, "W")) if b]
+        pivot_break = next((b for b in found if b["state"] == "wybicie"), found[0] if found else None)
 
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
@@ -324,6 +330,17 @@ def compute_metrics(df, bench_w=None):
         "tl_vol_ok": (tl.get("breakout") or {}).get("confirmed"),
         "tl_level": tl_level,
         "tl_dist_pct": _num((tl_level / price - 1) * 100, 1) if tl_level and price else None,   # > 0: do oporu brakuje tyle %
+        "tlw_state": tlw.get("state"),
+        "tlw_pattern": tlw.get("pattern"),
+        "tlw_vol_ratio": (tlw.get("breakout") or {}).get("vol_ratio"),
+        "tlw_vol_ok": (tlw.get("breakout") or {}).get("confirmed"),
+        "tlw_level": tlw_level,
+        "tlw_dist_pct": _num((tlw_level / price - 1) * 100, 1) if tlw_level and price else None,
+        "pivot_state": pivot_break["state"] if pivot_break else None,
+        "pivot_vol_ratio": pivot_break["vol_ratio"] if pivot_break else None,
+        "pivot_break_date": pivot_break["date"] if pivot_break else None,
+        "pivot_tf": pivot_break["tf"] if pivot_break else None,
+        "vol_surge_5d": volume_surge(df),
         "accdis_score": _num(accdis_score(df), 3),
         "climax_top": climax is not None,
         "climax_date": climax["date"] if climax else None,
@@ -676,14 +693,48 @@ def _best_line(values, pivots, check_to, last, highs, min_span, tol=TL_TOLERANCE
 # Parametry wykrywania konsolidacji (świece dzienne / tygodniowe): k = okno pivotu, min/max_len = długość flagi,
 # recent = ile ostatnich świec może już być wybiciem, pole_* = maszt (wzrost przed flagą), max_depth = maks. głębokość flagi,
 # box_* = korytarz bez masztu (płaska, ciasna konsolidacja).
-DAILY_FLAG = dict(k=3, min_len=7, max_len=30, recent=5, pole_lookback=20, pole_min_gain=20.0, max_depth=20.0, box_depth=12.0, box_min_len=12)
-WEEKLY_FLAG = dict(k=2, min_len=3, max_len=20, recent=2, pole_lookback=12, pole_min_gain=30.0, max_depth=25.0, box_depth=15.0, box_min_len=5)
+DAILY_FLAG = dict(k=3, min_len=7, max_len=30, recent=5, pole_lookback=20, pole_min_gain=20.0, max_depth=20.0, box_depth=12.0, box_min_len=12, vol_avg=50)
+WEEKLY_FLAG = dict(k=2, min_len=3, max_len=20, recent=2, pole_lookback=12, pole_min_gain=30.0, max_depth=25.0, box_depth=15.0, box_min_len=5, vol_avg=10)   # vol_avg = ile poprzednich świec daje średni wolumen (dzienne 50 sesji, tygodniowe 10 tygodni)
 FLAG_PARALLEL_PCT = 0.3          # wsparcie może odbiegać nachyleniem od oporu o tyle (% na świecę)
 FLAG_MAX_SLOPE_PCT = 0.15        # górna linia flagi może co najwyżej lekko rosnąć (% na świecę)
 
 
 def _line_value(ln, i):
     return ln[1] + (ln[3] - ln[1]) * (i - ln[0]) / max(1, ln[2] - ln[0])
+
+
+def volume_ratio(vol, i, avg_bars):
+    """Wolumen świecy i / średnia z `avg_bars` poprzednich świec (None, gdy za mało historii)."""
+    prev = vol[max(0, i - avg_bars):i]
+    return float(vol[i] / prev.mean()) if len(prev) >= 10 and prev.mean() > 0 else None
+
+
+def detect_level_break(ohlc, level, recent, avg_bars, tf):
+    """Wybicie poziomu (np. pivotu bazy) wg O'Neila: zamknięcie nad `level` w jednej z ostatnich `recent` świec i nadal nad nim,
+    na wolumenie >= 1,5x średniej z `avg_bars` poprzednich świec. Zwraca {state: "wybicie"|"bez wolumenu", date, vol_ratio, tf} albo None
+    (cena pod poziomem, albo zamknięcia nad nim sprzed `recent` świec). Przebicie samego maksimum bez zamknięcia nie liczy się."""
+    n = len(ohlc)
+    if n < 12 or not level or level <= 0:
+        return None
+    cl, vol = ohlc["Close"].astype(float).values, ohlc["Volume"].astype(float).values
+    dates = [d.strftime("%Y-%m-%d") for d in pd.DatetimeIndex(ohlc.index)]
+    broke = [i for i in range(max(0, n - recent), n) if cl[i] > level]
+    if not broke or cl[-1] <= level:
+        return None
+    ratios = [(i, volume_ratio(vol, i, avg_bars)) for i in broke]
+    hit = next(((i, r) for i, r in ratios if r is not None and r >= TL_VOLUME_MULT), None)
+    if hit:
+        return {"state": "wybicie", "date": dates[hit[0]], "vol_ratio": _num(hit[1], 1), "tf": tf}
+    r0 = ratios[0][1]
+    return {"state": "bez wolumenu", "date": dates[broke[0]], "vol_ratio": _num(r0, 1) if r0 is not None else None, "tf": tf}
+
+
+def volume_surge(df, recent=5, avg_bars=TL_VOLUME_AVG_BARS):
+    """Najwyższy z ostatnich `recent` dziennych wolumenów względem średniej z `avg_bars` poprzednich sesji (None bez historii)."""
+    vol = df["Volume"].astype(float).values
+    ratios = [volume_ratio(vol, i, avg_bars) for i in range(max(0, len(vol) - recent), len(vol))]
+    ratios = [r for r in ratios if r is not None]
+    return _num(max(ratios), 1) if ratios else None
 
 
 def detect_consolidation(ohlc, cfg):
@@ -734,14 +785,20 @@ def detect_consolidation(ohlc, cfg):
     if sup:
         lines.append({"kind": "sup", "x0": dates[sup[0]], "y0": _num(sup[1]), "x1": dates[last], "y1": _num(sup[3]), "touches": sup[4]})
 
+    # Wybicie wg O'Neila = ZAMKNIĘCIE (dzienne albo tygodniowe) nad linią oporu na podwyższonym wolumenie (>= 1,5x średniej).
+    # Samo przebicie maksimum w trakcie świecy to nie wybicie; zamknięcie nad linią bez wolumenu to state "bez wolumenu";
+    # a jeśli cena wróciła pod linię, wybicie się nie utrzymało.
     state, breakout = None, None
+    avg_bars = cfg.get("vol_avg", TL_VOLUME_AVG_BARS)
     broke = [i for i in range(last - recent + 1, n) if cl[i] > _line_value(res, i)]
-    if broke:
-        state, first = "wybicie", broke[0]
-        prev = vol[max(0, first - TL_VOLUME_AVG_BARS):first]
-        if len(prev) >= 10 and prev.mean() > 0:
-            ratio = _num(vol[first] / prev.mean(), 1)
-            breakout = {"date": dates[first], "vol_ratio": ratio, "confirmed": bool(ratio >= TL_VOLUME_MULT)}
+    if broke and cl[last] > _line_value(res, last):
+        ratios = [(i, volume_ratio(vol, i, avg_bars)) for i in broke]
+        hit = next(((i, r) for i, r in ratios if r is not None and r >= TL_VOLUME_MULT), None)
+        if hit:
+            state, breakout = "wybicie", {"date": dates[hit[0]], "vol_ratio": _num(hit[1], 1), "confirmed": True}
+        else:
+            r0 = ratios[0][1]
+            state, breakout = "bez wolumenu", {"date": dates[broke[0]], "vol_ratio": _num(r0, 1) if r0 is not None else None, "confirmed": False}
     elif cl[-1] < res[3] and (res[3] / cl[-1] - 1) * 100 <= TL_NEAR_PCT:
         state = "przy oporze"
 
