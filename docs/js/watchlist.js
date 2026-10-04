@@ -38,7 +38,7 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false, csMin: 6, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
+    tab: "LIST", rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false, hideSkip: false, csMin: 6, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
 // Strategie = zakładki z filtrami; kolejność decyduje o grupowaniu w zakładce Alerty (R, potem Q, U, B, na końcu spółki bez strategii).
 const STRATEGIES = { R: ["R", "Ratingi (RS / EPS / Composite)"], Q: ["Q", "Qullamaggie"], B: ["B", "Bazy blisko pivotu"], W: ["W", "Blisko wybicia"] };
@@ -79,6 +79,7 @@ const state = {
     groupMin: DEFAULT_SETTINGS.groupMin,
     leadersOnly: DEFAULT_SETTINGS.leadersOnly,
     instOnly: DEFAULT_SETTINGS.instOnly,
+    hideSkip: DEFAULT_SETTINGS.hideSkip,
     csMin: DEFAULT_SETTINGS.csMin,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
@@ -432,6 +433,193 @@ function baseBoxHtml(s) {
     return d ? `<b>${escapeHtml(d.title)}</b>${d.rows.map(([k, v]) => `<span><i>${escapeHtml(k)}</i>${escapeHtml(v)}</span>`).join("")}` : "";
 }
 
+// ---------- profil techniczny na kartach: histogram kolorowych słupków (zamiast mini wykresu) ----------
+// Każdy słupek = jeden parametr przeliczony na 0-100 (wysokość) i pokolorowany jak oceny RS/EPS (zielony = dobrze, czerwony = źle), więc całość
+// czyta się jednym rzutem oka bez liczb. techBars to czysta funkcja (testy); techProfileSvg rysuje histogram, a stuknięcie w niego otwiera
+// arkusz z objaśnieniem każdego słupka (openTechSheet) — do weryfikacji i nauki.
+const TECH_BASES = ["flat", "cup"];   // pivot do strefy zakupu tylko dla baz kupowalnych (korekta i głęboka korekta to nie bazy)
+const TECH_COLORS = ["#d1344a", "#e3801c", "#d9b400", "#86b82f", "#1f9d55", "#0b8a45"];   // te same przedziały co oceny: < 20, 20, 40, 60, 80, 90
+const techColor = v => TECH_COLORS[v >= 90 ? 5 : v >= 80 ? 4 : v >= 60 ? 3 : v >= 40 ? 2 : v >= 20 ? 1 : 0];
+
+function techLevel(s) {
+    const near = p => Number.isFinite(p) && Number.isFinite(s.price) && Math.abs(p / s.price - 1) * 100 <= 15;
+    if (TECH_BASES.includes(s.base_type) && near(s.pivot)) return { price: s.pivot, kind: "pivot" };
+    if (s.tl_state && near(s.tl_level)) return { price: s.tl_level, kind: "opór" };
+    if (s.tlw_state && near(s.tlw_level)) return { price: s.tlw_level, kind: "opór" };
+    return null;
+}
+
+function techBars(s) {
+    const num = Number.isFinite;
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const price = num(s.price) ? s.price : null;
+    const sma50 = price !== null && num(s.pct_above_sma50) ? price / (1 + s.pct_above_sma50 / 100) : null;
+    const sma200 = price !== null && num(s.pct_above_sma200) ? price / (1 + s.pct_above_sma200 / 100) : null;
+    const bars = [];
+    const add = (key, short, name, score, have, rule) => bars.push({ key, short, name, score: score === null ? null : Math.round(clamp(score, 0, 100)), have, rule });
+    add("rs", "RS", "Siła cenowa (RS Rating)", num(s.rs_rating) ? s.rs_rating : null, num(s.rs_rating) ? `RS Rating ${s.rs_rating}` : "brak RS Rating (za krótka historia)",
+        "Im wyżej, tym spółka silniejsza od reszty listy; liderzy mają 80+.");
+    add("eps", "EPS", "Zyski (EPS Rating)", num(s.eps_rating) ? s.eps_rating : null, num(s.eps_rating) ? `EPS Rating ${s.eps_rating}` : "brak EPS Rating", "Wzrost i stabilność zysków wśród spółek z listy; 80+ = mocne zyski.");
+    add("grp", "GRP", "Siła grupy branżowej", num(s.industry_rating) ? s.industry_rating : null, num(s.industry_rating) ? `grupa ${s.industry_rating}` : "za mało spółek w branży",
+        "Liderzy zwykle siedzą w mocnych branżach (60+).");
+    add("ad", "A/D", "Akumulacja / dystrybucja", num(s.accdis_rating) ? s.accdis_rating : null, s.accdis ? `Acc/Dis ${s.accdis}${num(s.accdis_rating) ? ` (percentyl ${s.accdis_rating})` : ""}` : "brak oceny",
+        "Czy instytucje kupują (A, B), czy sprzedają (D, E) — wg wolumenu z 13 tygodni.");
+    const checks = [sma50 === null ? null : price > sma50, sma50 !== null && sma200 !== null ? sma50 > sma200 : null, sma200 === null ? null : price > sma200];
+    const known = checks.filter(c => c !== null);
+    add("trd", "TRD", "Trend (średnie)", known.length ? known.filter(Boolean).length / known.length * 100 : null,
+        known.length ? `cena > SMA50: ${checks[0] ? "tak" : "nie"}, SMA50 > SMA200: ${checks[1] ? "tak" : "nie"}, cena > SMA200: ${checks[2] ? "tak" : "nie"}` : "brak średnich",
+        "Trzy warunki trendu wzrostowego: cena nad SMA50, SMA50 nad SMA200, cena nad SMA200.");
+    add("szc", "SZC", "Blisko szczytu 52 tyg.", num(s.pct_from_high_52w) ? 100 + s.pct_from_high_52w * 4 : null,
+        num(s.pct_from_high_52w) ? (s.pct_from_high_52w >= 0 ? "na szczycie 52 tyg." : `${Math.abs(s.pct_from_high_52w)}% poniżej szczytu 52 tyg.`) : "brak danych",
+        "Pełny słupek = na szczycie; 0 = 25 % lub więcej pod szczytem. Liderzy kupowani są blisko nowych szczytów.");
+    const level = techLevel(s);
+    const toLevel = level && price !== null ? (price / level.price - 1) * 100 : null;
+    let zone = null;
+    if (toLevel !== null) zone = toLevel >= 0 ? (toLevel <= 5 ? 100 : toLevel <= 8 ? 40 : 15) : toLevel >= -3 ? 85 : toLevel >= -7 ? 60 : 30;
+    add("str", "STR", "Strefa zakupu (pivot / opór)", zone,
+        toLevel === null ? "brak bazy do zakupu ani oporu w pobliżu (≤ 15 %)" : `${level.kind === "pivot" ? "pivot" : "opór"} ${level.price.toFixed(2)}, cena ${toLevel >= 0 ? "+" : ""}${toLevel.toFixed(1)}% względem poziomu`,
+        "Najwyżej w strefie zakupu (0 do +5 % nad poziomem), tuż pod nim wysoko; za daleko nad poziomem (nie goń) lub głęboko pod nim — nisko.");
+    const ext = num(s.pct_above_sma50) ? s.pct_above_sma50 : null;
+    add("roz", "ROZ", "Rozciągnięcie nad SMA50", ext === null ? null : ext < 0 ? 25 : ext <= 10 ? 100 : ext <= 15 ? 65 : ext <= 20 ? 40 : 15,
+        ext === null ? "brak SMA50" : `${ext > 0 ? "+" : ""}${ext}% nad SMA50`, "0-10 % nad SMA50 = zdrowo; 10-20 % rozciągnięta; powyżej 20 % za daleko, łatwo o cofnięcie.");
+    add("wol", "WOL", "Wolumen (ostatnie 5 sesji)", num(s.vol_surge_5d) ? s.vol_surge_5d / 1.5 * 100 : null, num(s.vol_surge_5d) ? `najlepszy dzień ×${s.vol_surge_5d} średniej` : "dostępne po odświeżeniu danych",
+        "Pełny słupek = wolumen co najmniej 1,5× średniej (próg wybicia wg O'Neila); niski = brak zainteresowania kupujących.");
+    add("stb", "STB", "Stabilność zysków", num(s.eps_stability_rating) ? s.eps_stability_rating : null, num(s.eps_stability) ? `${s.eps_stability}% kwartałów ze wzrostem EPS r/r` : "brak danych",
+        "Czy zyski rosną regularnie (kwartał po kwartale), a nie jednorazowo.");
+    const GROUP = { eps: ["ZYSKI", 0], stb: ["ZYSKI", 1], rs: ["TECHNIKA", 0], grp: ["TECHNIKA", 1], ad: ["TECHNIKA", 2], trd: ["TECHNIKA", 3], szc: ["TECHNIKA", 4], str: ["SETUP", 0], roz: ["SETUP", 1], wol: ["SETUP", 2] };
+    const ORDER = ["eps", "stb", "rs", "grp", "ad", "trd", "szc", "str", "roz", "wol"];
+    bars.forEach(b => { b.group = GROUP[b.key][0]; });
+    return ORDER.map(k => bars.find(b => b.key === k));
+}
+
+function techProfileSvg(s) {
+    const bars = techBars(s);
+    const W = 340, base = 46, top = 4, bw = 26, inGap = 4, groupGap = 13;
+    const xs = [];
+    let x = 8;
+    bars.forEach((b, i) => { if (i > 0) x += bars[i - 1].group === b.group ? inGap : groupGap; xs.push(x); x += bw; });
+    const out = [`<line x1="8" x2="${(x).toFixed(1)}" y1="${top + (base - top) * 0.2}" y2="${top + (base - top) * 0.2}" stroke="#3a3f4d" stroke-dasharray="3 3"/>`];   // linia „dobrze” (80)
+    bars.forEach((b, i) => {
+        out.push(`<rect x="${xs[i].toFixed(1)}" y="${top}" width="${bw}" height="${base - top}" rx="4" fill="#1d212b"/>`);
+        if (b.score === null) out.push(`<rect x="${xs[i].toFixed(1)}" y="${base - 5}" width="${bw}" height="5" rx="2.5" fill="#3a3f4d"/>`);
+        else {
+            const h = Math.max(4, (base - top) * b.score / 100);
+            out.push(`<rect x="${xs[i].toFixed(1)}" y="${(base - h).toFixed(1)}" width="${bw}" height="${h.toFixed(1)}" rx="4" fill="${techColor(b.score)}"/>`);
+        }
+        out.push(`<text x="${(xs[i] + bw / 2).toFixed(1)}" y="${base + 13}" font-size="9" font-weight="700" text-anchor="middle" fill="${b.score === null ? "#6b7280" : "#aab1c0"}">${b.short}</text>`);
+    });
+    // podpisy grup pod słupkami: cztery porcje zamiast dziesięciu osobnych słupków
+    [...new Set(bars.map(b => b.group))].forEach(g => {
+        const idx = bars.map((b, i) => (b.group === g ? i : -1)).filter(i => i >= 0);
+        const x0 = xs[idx[0]], x1 = xs[idx[idx.length - 1]] + bw;
+        out.push(`<line x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${base + 19}" y2="${base + 19}" stroke="#3a3f4d" stroke-width="1.5"/>`,
+            `<text x="${((x0 + x1) / 2).toFixed(1)}" y="${base + 31}" font-size="9" font-weight="800" letter-spacing="0.06em" text-anchor="middle" fill="#8a8f9c">${g}</text>`);
+    });
+    return `<svg class="tech-profile" viewBox="0 0 ${W} ${base + 36}" width="100%" role="img" aria-label="Profil techniczny: kolorowe słupki parametrów w trzech grupach">${out.join("")}</svg>`;
+}
+
+// ---------- wyrok w 2 sekundy: cztery światła (fundamenty, technika, setup, rynek) + jedno zdanie ----------
+// Zasady z badań o percepcji (czytanie w mniej niż sekundę, ~4 porcje w pamięci roboczej, kolor + kształt zamiast samego koloru):
+// stałe miejsce, cztery porcje, każdy stan ma kolor ORAZ znak (✓ dobrze, ~ średnio, ✗ źle, ? brak danych). Reguły są takie same jak w CANSLIM
+// i profilu technicznym — arkusz po stuknięciu pokazuje, z czego wynika każde światło.
+const VERDICT_ICONS = { good: "✓", mid: "~", bad: "✗", na: "?" };
+function verdictInfo(s, regime) {
+    const num = Number.isFinite;
+    const c = canslimInfo(s, regime).flags;
+    const bars = Object.fromEntries(techBars(s).map(b => [b.key, b]));
+    const level = techLevel(s);
+    const toLevel = level && num(s.price) ? (s.price / level.price - 1) * 100 : null;
+    const ext = num(s.pct_above_sma50) ? s.pct_above_sma50 : null;
+    const sg = v => `${v > 0 ? "+" : ""}${v}`;
+    const check = (ok, text) => ({ ok, text });
+    const gradeOf = checks => {
+        const known = checks.filter(x => x.ok !== null);
+        if (!known.length) return "na";
+        const f = known.filter(x => x.ok).length / known.length;
+        return f >= 0.99 ? "good" : f >= 0.5 ? "mid" : "bad";
+    };
+    const fundChecks = [
+        check(c.C, num(s.eps_q0_yoy) ? `C: EPS ostatniego kwartału ${sg(s.eps_q0_yoy)}% r/r (reguła ≥ 25 %)` : "C: brak EPS z ostatniego kwartału"),
+        check(c.A, num(s.eps_past_5y) ? `A: wzrost EPS z 5 lat ${sg(s.eps_past_5y)}% rocznie (reguła ≥ 20 %)` : num(s.eps_this_y) ? `A: EPS w tym roku ${sg(s.eps_this_y)}% (reguła ≥ 25 %)` : "A: brak rocznego wzrostu EPS"),
+        check(num(s.eps_rating) ? s.eps_rating >= 70 : null, num(s.eps_rating) ? `EPS Rating ${s.eps_rating} (reguła ≥ 70)` : "brak EPS Rating"),
+    ];
+    const techChecks = [
+        check(bars.trd.score === null ? null : bars.trd.score >= 99, `Trend: ${bars.trd.have}`),
+        check(num(s.rs_rating) ? s.rs_rating >= 70 : null, num(s.rs_rating) ? `RS Rating ${s.rs_rating} (reguła ≥ 70)` : "brak RS Rating"),
+        check(num(s.accdis_rating) ? s.accdis_rating >= 60 : null, s.accdis ? `Acc/Dis ${s.accdis} (reguła A lub B)` : "brak Acc/Dis"),
+        check(num(s.pct_from_high_52w) ? s.pct_from_high_52w >= -15 : null, num(s.pct_from_high_52w) ? `${s.pct_from_high_52w >= 0 ? "na szczycie 52 tyg." : Math.abs(s.pct_from_high_52w) + "% pod szczytem 52 tyg."} (reguła ≤ 15 %)` : "brak szczytu 52 tyg."),
+    ];
+    const breakState = s.tl_state === "wybicie" || s.pivot_state === "wybicie" || s.tlw_state === "wybicie" ? true
+        : s.tl_state === "bez wolumenu" || s.pivot_state === "bez wolumenu" || s.tlw_state === "bez wolumenu" ? false : null;
+    const setupChecks = toLevel === null ? [check(null, "brak bazy do zakupu ani oporu w pobliżu (≤ 15 % od ceny)")] : [
+        check(toLevel >= -5 && toLevel <= 5, `cena ${sg(Math.round(toLevel * 10) / 10)}% względem ${level.kind === "pivot" ? "pivotu" : "oporu"} (strefa od −5 do +5 %)`),
+        check(ext === null ? null : ext <= 15, ext === null ? "brak SMA50" : `${sg(ext)}% nad SMA50 (reguła ≤ 15 %, wyżej = rozciągnięta)`),
+        check(breakState, breakState === null ? "wybicie: jeszcze go nie było" : breakState ? "wybicie: zamknięcie nad poziomem z wolumenem ✓" : "zamknięcie nad poziomem BEZ wolumenu — niepotwierdzone"),
+    ];
+    const grades = { fund: gradeOf(fundChecks), tech: gradeOf(techChecks) };
+    let setup = "na", setupText = toLevel === null ? "brak formacji" : "daleko";
+    if (toLevel !== null) {
+        if (toLevel > 5) { setup = "bad"; setupText = "rozciągnięta"; }
+        else if (toLevel >= 0) { setup = ext !== null && ext > 15 ? "mid" : "good"; setupText = setup === "good" ? "w strefie zakupu" : "rozciągnięta"; }
+        else if (toLevel >= -5) { setup = "mid"; setupText = "blisko"; }
+    }
+    const market = regime === "uptrend" ? "good" : regime === "correction" ? "bad" : "na";
+    const lights = [
+        { key: "fund", label: "Fundamenty", state: grades.fund, text: { good: "mocne", mid: "średnie", bad: "słabe", na: "brak danych" }[grades.fund], checks: fundChecks },
+        { key: "tech", label: "Technika", state: grades.tech, text: { good: "silna", mid: "średnia", bad: "słaba", na: "brak danych" }[grades.tech], checks: techChecks },
+        { key: "setup", label: "Setup", state: setup, text: setupText, checks: setupChecks },
+        { key: "market", label: "Rynek", state: market, text: { good: "wzrostowy", bad: "korekta", na: "brak danych" }[market], checks: [check(market === "na" ? null : market === "good", regime === "uptrend" ? "S&P 500 i Nasdaq: EMA10 > EMA20 tygodniowa" : regime === "correction" ? "S&P 500 lub Nasdaq: EMA10 < EMA20 tygodniowa (korekta)" : "brak danych o rynku")] },
+    ];
+    // jedno zdanie na górze (kolejność reguł = priorytet ostrzeżeń)
+    let head;
+    if (s.climax_top === true) head = { tone: "bad", icon: "⚠", text: "Możliwy szczyt (climax top)", short: "Uwaga", rank: 3 };
+    else if (grades.fund === "bad" || grades.tech === "bad") head = { tone: "bad", icon: "✗", text: "Pomiń", short: "Pomiń", rank: 4 };
+    else if (setup === "bad" || (setup === "mid" && setupText === "rozciągnięta")) head = { tone: "mid", icon: "~", text: "Rozciągnięta — poczekaj", short: "Czekaj", rank: 2 };
+    else if (grades.fund === "good" && grades.tech === "good" && setup === "good") head = market === "bad"
+        ? { tone: "mid", icon: "~", text: "Gotowa, ale rynek w korekcie", short: "Gotowa*", rank: 1 } : { tone: "good", icon: "▲", text: "Gotowa do zakupu", short: "Gotowa", rank: 0 };
+    else if (grades.fund === "good" && grades.tech === "good" && setup === "mid") head = { tone: "mid", icon: "~", text: "Obserwuj — blisko pivotu", short: "Obserwuj", rank: 1 };
+    else if (grades.fund === "good" && grades.tech === "good") head = { tone: "mid", icon: "~", text: "Mocna, brak formacji — obserwuj", short: "Obserwuj", rank: 1 };
+    else head = { tone: "mid", icon: "~", text: "Średnia — sprawdź szczegóły", short: "Średnia", rank: 2 };
+    return { lights, head, rank: head.rank, skip: head.short === "Pomiń" };
+}
+
+function tagVerdict(stocks, regime) {
+    stocks.forEach(s => {
+        s.verdict = verdictInfo(s, regime);
+        s.verdict_sort = s.verdict.rank * 1000 + (999 - (Number.isFinite(s.composite_rating) ? s.composite_rating : 0));
+    });
+}
+
+function verdictCellHtml(s) {
+    const v = s.verdict;
+    if (!v) return `<td class="muted"></td>`;
+    return `<td class="verdict-cell vd-${v.head.tone}" title="Kliknij, aby zobaczyć, z czego wynika wyrok"><div class="vd-head"><b>${v.head.icon}</b> <span class="vd-long">${escapeHtml(v.head.text)}</span><span class="vd-short">${escapeHtml(v.head.short)}</span></div>`
+        + `<div class="vd-lights">${v.lights.map(l => `<span class="vl vl-${l.state}" title="${escapeHtml(l.label + ": " + l.text)}"><i>${VERDICT_ICONS[l.state]}</i>${escapeHtml(l.label)}</span>`).join("")}</div></td>`;
+}
+
+function verdictSheetHtml(s, regime) {
+    const v = verdictInfo(s, regime);
+    const mark = ok => (ok === true ? "✓" : ok === false ? "✗" : "?");
+    return `<div class="vd-sheet-head vd-${v.head.tone}"><b>${v.head.icon}</b> ${escapeHtml(v.head.text)}</div>`
+        + v.lights.map(l => `<section class="vd-sec vl-${l.state}"><header><span class="vl vl-${l.state}"><i>${VERDICT_ICONS[l.state]}</i>${escapeHtml(l.label)}</span><b>${escapeHtml(l.text)}</b></header><ul>${l.checks.map(c => `<li class="ck-${c.ok === true ? "y" : c.ok === false ? "n" : "u"}"><i>${mark(c.ok)}</i> ${escapeHtml(c.text)}</li>`).join("")}</ul></section>`).join("");
+}
+
+function techSheetHtml(s) {
+    const rows = techBars(s).map(b => {
+        const col = b.score === null ? "#3a3f4d" : techColor(b.score);
+        return `<section class="tp-row"><header><span class="tp-key" style="background:${col}">${b.short}</span><b>${escapeHtml(b.name)}</b><span class="tp-score">${b.score === null ? "brak" : b.score + "/100"}</span></header>`
+            + `<div class="tp-bar"><i style="width:${b.score === null ? 0 : b.score}%;background:${col}"></i></div>`
+            + `<p><i>Mamy:</i> ${escapeHtml(b.have)}</p><p class="tp-rule"><i>Jak czytać:</i> ${escapeHtml(b.rule)}</p></section>`;
+    }).join("");
+    return verdictSheetHtml(s, marketRegime()) + `<h4 class="tp-title">Profil techniczny — szczegóły słupków</h4><p class="cs-intro">Każdy słupek to jeden parametr przeliczony na 0-100: <b>zielony = dobrze</b>, żółty = średnio, czerwony = źle. Szara kreska = brak danych.</p>${rows}`
+        + `<p class="cs-note">Przeliczenia na 0-100 to moja skala pomocnicza (heurystyka), nie oceny IBD. Informacja pomocnicza, nie rekomendacja.</p>`;
+}
+
+function openTechSheet(ticker) {
+    const s = state.data && state.data.stocks.find(x => x.ticker === ticker);
+    if (s) showSheet(`${escapeHtml(ticker)} — wyrok i profil techniczny`, techSheetHtml(s));
+}
+
 // Jedna linia „czy to już ten moment?” pod tytułem wykresu: dystans do wybicia, baza, wolumen, RS, rynek, wyniki.
 function readinessLine(s, regime) {
     const out = [];
@@ -656,13 +844,15 @@ const COL = {
     posValue: ["Wartość", "pos_value", s => `<td>${s.position && s.position.value !== null ? money0(s.position.value) : "—"}</td>`],
     posRisk: ["Ryzyko do stopu", "pos_risk_usd", s => `<td>${s.position && s.position.risk_usd !== null ? money0(s.position.risk_usd) : "—"}</td>`, "Początkowe ryzyko: (wejście − stop) · liczba akcji"],
     strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy, W = blisko wybicia"],
+    verdict: ["Wyrok", "verdict_sort", s => verdictCellHtml(s), "Wyrok w 2 sekundy: cztery światła (fundamenty, technika, setup, rynek) i jedno zdanie; kliknij, aby zobaczyć powody"],
+    tech: ["Profil techniczny", null, s => `<td class="tech-cell" title="Kliknij, aby zobaczyć objaśnienie każdego słupka">${techProfileSvg(s)}</td>`, "Histogram kolorowych słupków: RS, EPS, grupa, A/D, trend, szczyt 52 tyg., strefa zakupu, rozciągnięcie, wolumen, stabilność zysków"],
     toggle: ["", null, s => `<td class="card-toggle"><button type="button" class="card-chev" aria-label="Pokaż / ukryj szczegóły" aria-expanded="${openCards.has(s.ticker)}">▾</button></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "verdict", "tech", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -673,7 +863,7 @@ const TAB_COLUMNS = {
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
-const COMPACT_COLUMNS = ["fav", "ticker", "score", "comp", "brk", "strat"];
+const COMPACT_COLUMNS = ["fav", "ticker", "verdict", "score", "brk", "strat"];
 const TAB_COLUMNS_COMPACT = {
     LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "cs", "comp", "strat"], BRK: COMPACT_COLUMNS, FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], RS: COMPACT_COLUMNS, QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
@@ -727,6 +917,11 @@ function rowsForTab(tab) {
     tagStrategies(state.data.stocks, stocks, state, alerts);
     tagPositions(state.data.stocks, state.pos);
     tagCanslim(state.data.stocks, marketRegime());
+    tagVerdict(state.data.stocks, marketRegime());
+    if (state.hideSkip && !["POS", "ALERTS", "FAV"].includes(tab)) {   // opcjonalnie: ukryj spółki z wyrokiem „Pomiń” (Filtry)
+        const keep = new Set(stocks.filter(x => !x.verdict.skip).map(x => x.ticker));
+        stocks.splice(0, stocks.length, ...stocks.filter(x => keep.has(x.ticker)));
+    }
     if (tab === "CS") return canslimRows(stocks, state.csMin);
     if (tab === "POS") return positionRows(stocks);
     if (tab === "BRK") return breakoutRows(stocks);
@@ -898,7 +1093,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, groupMin: state.groupMin, leadersOnly: state.leadersOnly, instOnly: state.instOnly, csMin: state.csMin, qm: state.qm, bases: state.bases, brk: state.brk }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, rsMin: state.rsMin, epsMin: state.epsMin, compMin: state.compMin, groupMin: state.groupMin, leadersOnly: state.leadersOnly, instOnly: state.instOnly, hideSkip: state.hideSkip, csMin: state.csMin, qm: state.qm, bases: state.bases, brk: state.brk }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -913,6 +1108,7 @@ function loadSettings() {
         if (Number.isFinite(saved.groupMin)) state.groupMin = saved.groupMin;
         state.leadersOnly = saved.leadersOnly === true;
         state.instOnly = saved.instOnly === true;
+        state.hideSkip = saved.hideSkip === true;
         if (Number.isFinite(saved.csMin)) state.csMin = saved.csMin;
         if (saved.qm) ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
             if (Number.isFinite(saved.qm[k])) state.qm[k] = saved.qm[k];
@@ -1210,6 +1406,9 @@ function initControls() {
     const instChk = document.getElementById("instOnly");
     instChk.checked = state.instOnly;
     instChk.addEventListener("change", () => { state.instOnly = instChk.checked; saveSettings(); renderTable(); });
+    const skipChk = document.getElementById("hideSkip");
+    skipChk.checked = state.hideSkip;
+    skipChk.addEventListener("change", () => { state.hideSkip = skipChk.checked; saveSettings(); renderTable(); });
     bind("rsMin", v => { state.rsMin = v; });
     bind("qmMinDollarVolume", v => { state.qm.minDollarVolumeM = v; });
     bind("qmMinAdr", v => { state.qm.minAdrPct = v; });
@@ -1280,6 +1479,8 @@ function initControls() {
     // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
         if (ev.target.closest("a") || ev.target.closest("input")) return;
+        const techCell = ev.target.closest("td.tech-cell, td.verdict-cell");
+        if (techCell) { openTechSheet(techCell.closest("tr[data-ticker]").dataset.ticker); return; }
         const csCell = ev.target.closest("td.cs-cell");
         if (csCell) { openCanslimSheet(csCell.closest("tr[data-ticker]").dataset.ticker); return; }
         const ack = ev.target.closest("[data-ack]"), del = ev.target.closest("[data-delline]");
@@ -1305,6 +1506,8 @@ function initControls() {
     document.getElementById("chartRatings").addEventListener("click", ev => {
         const chip = ev.target.closest("[data-action=canslim]");
         if (chip) openCanslimSheet(chip.dataset.ticker);
+        const tchip = ev.target.closest("[data-action=tech]");
+        if (tchip) openTechSheet(tchip.dataset.ticker);
     });
     initChartModal();
     initBottomNav();
@@ -1819,7 +2022,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, verdictInfo, tagVerdict, verdictSheetHtml, techBars, techProfileSvg, techSheetHtml, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

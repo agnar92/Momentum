@@ -416,3 +416,63 @@ test("breakoutInfo follows O'Neil: a close above the line / pivot needs volume; 
     assert.equal(noVol.rank, 2);
     assert.match(noVol.reasons[0].text, /bez wolumenu.*niepotwierdzone/);
 });
+
+test("techBars scores each parameter 0-100 and techProfileSvg draws one coloured bar per parameter; sheet explains them", () => {
+    const { techBars, techProfileSvg, techSheetHtml } = require("../../docs/js/watchlist.js");
+    const s = { ticker: "T", price: 110, pct_above_sma50: 8, pct_above_sma200: 22, pct_from_high_52w: -5, base_type: "flat", pivot: 105, rs_rating: 91, eps_rating: 77, industry_rating: 64,
+        accdis: "B", accdis_rating: 72, eps_stability: 88, eps_stability_rating: 70, vol_surge_5d: 2.2 };
+    const bars = techBars(s);
+    assert.deepEqual(bars.map(b => b.short), ["EPS", "STB", "RS", "GRP", "A/D", "TRD", "SZC", "STR", "ROZ", "WOL"]);
+    const by = Object.fromEntries(bars.map(b => [b.key, b.score]));
+    assert.deepEqual([by.rs, by.eps, by.grp, by.ad, by.stb], [91, 77, 64, 72, 70]);
+    assert.equal(by.trd, 100);                 // cena > SMA50 > SMA200 i cena > SMA200
+    assert.equal(by.szc, 80);                  // 5 % pod szczytem: 100 - 5 * 4
+    assert.equal(by.str, 100);                 // 110 / 105 = +4,76 % nad pivotem: w strefie zakupu (0 do +5 %)
+    assert.equal(techBars({ ...s, price: 120 }).find(b => b.key === "str").score, 15);   // +14 % nad pivotem: nie goń
+    assert.equal(by.roz, 100);
+    assert.equal(by.wol, 100);                 // 2,2× >= 1,5×
+    const svg = techProfileSvg(s);
+    assert.equal((svg.match(/<text /g) || []).length, 13);   // 10 podpisów słupków + 3 podpisy grup
+    assert.ok(svg.includes(">ZYSKI<") && svg.includes(">TECHNIKA<") && svg.includes(">SETUP<"));
+    assert.ok(svg.includes("#0b8a45") && svg.includes("#86b82f"));      // kolory z progów 90+ i 60-79
+    // brakujące dane = szary słupek, korekta / głęboka korekta nie daje pivotu, wybicie z wolumenem poniżej progu = niski słupek
+    const bare = techBars({ price: 50, base_type: "deep", pivot: 80 });
+    assert.equal(bare.find(b => b.key === "str").score, null);
+    assert.equal(bare.find(b => b.key === "rs").score, null);
+    assert.equal(techBars({ price: 50, vol_surge_5d: 0.6 }).find(b => b.key === "wol").score, 40);
+    assert.equal(techBars({ price: 50, pct_above_sma50: 25 }).find(b => b.key === "roz").score, 15);
+    const html = techSheetHtml(s);
+    assert.match(html, /Siła cenowa \(RS Rating\)/);
+    assert.match(html, /Jak czytać:/);
+    assert.equal((html.match(/class="tp-row"/g) || []).length, 10);
+});
+
+test("verdictInfo: four lights (colour + glyph) and one headline; climax / weak fundamentals / extended price override a green setup", () => {
+    const { verdictInfo, tagVerdict, verdictSheetHtml } = require("../../docs/js/watchlist.js");
+    const good = { ticker: "G", price: 110, pct_above_sma50: 8, pct_above_sma200: 22, pct_from_high_52w: -3, base_type: "flat", pivot: 108, rs_rating: 90, eps_rating: 85, industry_rating: 70,
+        accdis: "B", accdis_rating: 72, eps_q0_yoy: 40, eps_past_5y: 30, eps_stability: 90, eps_stability_rating: 80, inst_sponsor: true, vol_surge_5d: 2, composite_rating: 88 };
+    const v = verdictInfo(good, "uptrend");
+    assert.deepEqual(v.lights.map(l => [l.key, l.state]), [["fund", "good"], ["tech", "good"], ["setup", "good"], ["market", "good"]]);
+    assert.equal(v.head.text, "Gotowa do zakupu");
+    assert.equal(v.rank, 0);
+    assert.equal(verdictInfo(good, "correction").head.short, "Gotowa*");                      // dobra spółka, ale rynek w korekcie
+    assert.equal(verdictInfo({ ...good, climax_top: true }, "uptrend").head.short, "Uwaga");   // climax top ma pierwszeństwo
+    const weak = verdictInfo({ ...good, eps_q0_yoy: 5, eps_past_5y: 3, eps_rating: 30 }, "uptrend");
+    assert.equal(weak.lights[0].state, "bad");
+    assert.equal(weak.head.short, "Pomiń");
+    assert.equal(weak.skip, true);
+    const stretched = verdictInfo({ ...good, price: 120 }, "uptrend");                        // 120 / 108 = +11 % nad pivotem: nie goń
+    assert.equal(stretched.lights[2].state, "bad");
+    assert.equal(stretched.head.short, "Czekaj");
+    const noBase = verdictInfo({ ...good, base_type: null, pivot: null }, "uptrend");
+    assert.equal(noBase.lights[2].state, "na");
+    assert.equal(noBase.head.short, "Obserwuj");                                               // mocna, ale bez formacji
+    assert.equal(verdictInfo({ ticker: "N" }, null).lights.every(l => l.state === "na"), true);
+    const list = [good, { ...good, ticker: "W", eps_q0_yoy: 5, eps_past_5y: 3, eps_rating: 30, composite_rating: 50 }];
+    tagVerdict(list, "uptrend");
+    assert.ok(list[0].verdict_sort < list[1].verdict_sort);                                    // gotowe przed „pomiń”
+    const html = verdictSheetHtml(good, "uptrend");
+    assert.match(html, /Gotowa do zakupu/);
+    assert.match(html, /C: EPS ostatniego kwartału \+40% r\/r/);
+    assert.equal((html.match(/class="vd-sec/g) || []).length, 4);
+});
