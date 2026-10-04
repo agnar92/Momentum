@@ -416,3 +416,27 @@ test("breakoutInfo follows O'Neil: a close above the line / pivot needs volume; 
     assert.equal(noVol.rank, 2);
     assert.match(noVol.reasons[0].text, /bez wolumenu.*niepotwierdzone/);
 });
+
+test("techModel derives the SMA levels / 52w range / level distance; techStripSvg draws markers, pills and zones graphically", () => {
+    const { techModel, techStripSvg } = require("../../docs/js/watchlist.js");
+    const s = { price: 110, pct_above_sma50: 10, pct_above_sma200: 22.2, pct_from_high_52w: -5, low_52w: 70, base_type: "flat", pivot: 105, vol_surge_5d: 2.2, rs_line_state: "przed ceną" };
+    const t = techModel(s);
+    assert.ok(Math.abs(t.sma50 - 100) < 1e-9 && Math.abs(t.sma200 - 90) < 0.1);
+    assert.ok(Math.abs(t.hi - 115.789) < 0.01 && t.lo === 70);
+    assert.equal(t.level.kind, "pivot");
+    assert.ok(Math.abs(t.toLevelPct - 4.76) < 0.01);
+    assert.deepEqual(t.trend, { p50: true, s50_200: true, p200: true, rs: 2 });
+    const main = techStripSvg(s, "main");
+    assert.ok(main.startsWith("<svg") && main.includes(">kupuj<") && main.includes("C &gt; 50") === false && main.includes("C > 50"));   // cena w strefie zakupu
+    assert.match(main, /RS ● przed/);
+    const more = techStripSvg(s, "more");
+    assert.match(more, /1,5× wybicie/);
+    assert.match(more, /rozciągnięta/);
+    // brak danych: komunikaty zamiast pustych pasków; korekta / głęboka korekta nie daje pivotu
+    const bare = techStripSvg({ price: 50, base_type: "deep", pivot: 80, pct_above_sma50: -3 }, "main");
+    assert.match(bare, /brak zakresu 52 tyg/);
+    assert.match(bare, /brak bazy do zakupu ani oporu/);
+    assert.equal(techModel({ price: 50, base_type: "deep", pivot: 80 }).level, null);
+    assert.equal(techModel({ price: 50, tl_level: 49, tl_state: "przy oporze" }).level.kind, "opór");
+    assert.match(techStripSvg({ price: 50 }, "more"), /po odświeżeniu danych/);
+});

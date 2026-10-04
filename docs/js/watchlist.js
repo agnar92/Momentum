@@ -432,6 +432,115 @@ function baseBoxHtml(s) {
     return d ? `<b>${escapeHtml(d.title)}</b>${d.rows.map(([k, v]) => `<span><i>${escapeHtml(k)}</i>${escapeHtml(v)}</span>`).join("")}` : "";
 }
 
+// ---------- pasek techniczny na kartach (zamiast mini wykresu): wskaźniki pokazane graficznie, bez szeregu czasowego ----------
+// techModel to czysta funkcja z samymi liczbami (testy), techStripSvg rysuje z niej SVG. part "main" = zakres 52 tyg., trend, cena względem pivotu / oporu;
+// part "more" = rozciągnięcie względem SMA50 i wolumen z ostatnich sesji (w rozwiniętej karcie).
+const TECH_BASES = ["flat", "cup"];   // pivot do strefy zakupu tylko dla baz kupowalnych (korekta i głęboka korekta to nie bazy)
+function techLevel(s) {
+    const near = p => Number.isFinite(p) && Number.isFinite(s.price) && Math.abs(p / s.price - 1) * 100 <= 15;
+    if (TECH_BASES.includes(s.base_type) && near(s.pivot)) return { price: s.pivot, kind: "pivot" };
+    if (s.tl_state && near(s.tl_level)) return { price: s.tl_level, kind: "opór" };
+    if (s.tlw_state && near(s.tlw_level)) return { price: s.tlw_level, kind: "opór" };
+    return null;
+}
+
+function techModel(s) {
+    const num = Number.isFinite;
+    const price = num(s.price) ? s.price : null;
+    const sma50 = price !== null && num(s.pct_above_sma50) ? price / (1 + s.pct_above_sma50 / 100) : null;
+    const sma200 = price !== null && num(s.pct_above_sma200) ? price / (1 + s.pct_above_sma200 / 100) : null;
+    const hi = price !== null && num(s.pct_from_high_52w) ? price / (1 + s.pct_from_high_52w / 100) : null;
+    const lo = num(s.low_52w) ? s.low_52w : null;
+    const level = techLevel(s);
+    return {
+        price, sma50, sma200, hi, lo, level,
+        toLevelPct: level && price !== null ? (price / level.price - 1) * 100 : null,
+        extPct: num(s.pct_above_sma50) ? s.pct_above_sma50 : null,
+        volX: num(s.vol_surge_5d) ? s.vol_surge_5d : null,
+        trend: {
+            p50: sma50 === null ? null : price > sma50, s50_200: sma50 !== null && sma200 !== null ? sma50 > sma200 : null,
+            p200: sma200 === null ? null : price > sma200, rs: s.rs_line_state ? (s.rs_line_state === "przed ceną" ? 2 : 1) : 0,
+        },
+    };
+}
+
+function techStripSvg(s, part = "main") {
+    const t = techModel(s);
+    const X0 = 72, XW = 258, ROW = 24;
+    const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+    const scale = (v, lo, hi) => X0 + clamp((v - lo) / (hi - lo), 0, 1) * XW;
+    const label = (i, text) => `<text x="0" y="${i * ROW + 12}" font-size="10.5" fill="#8a8f9c">${text}</text>`;
+    const track = i => `<rect x="${X0}" y="${i * ROW + 4}" width="${XW}" height="8" rx="4" fill="#262a35"/>`;
+    const dot = (x, i, color) => `<circle cx="${x.toFixed(1)}" cy="${i * ROW + 8}" r="6" fill="#fff" stroke="${color}" stroke-width="2.4"/>`;
+    const none = (i, text) => `${label(i, "")}<text x="${X0}" y="${i * ROW + 12}" font-size="10.5" fill="#6b7280">${text}</text>`;
+    const out = [];
+    let rows = 0;
+    if (part === "main") {
+        // 0) zakres 52 tygodni ze średnimi i pivotem
+        rows = 3;
+        out.push(label(0, "52 tyg."));
+        if (t.lo !== null && t.hi !== null && t.hi > t.lo && t.price !== null) {
+            const px = v => scale(v, t.lo, t.hi);
+            out.push(track(0), `<rect x="${X0}" y="4" width="${(px(t.price) - X0).toFixed(1)}" height="8" rx="4" fill="${t.price >= (t.sma50 ?? 0) ? "#1f7a4d" : "#8a2f3d"}" opacity="0.75"/>`);
+            const ticks = [];
+            if (t.sma200 !== null) ticks.push([px(t.sma200), "#e8eaf0", "200"]);
+            if (t.sma50 !== null) ticks.push([px(t.sma50), "#ff6b6b", "50"]);
+            if (t.level) ticks.push([px(t.level.price), "#2ecc71", t.level.kind === "pivot" ? "P" : "O"]);
+            let lastLabelX = -99;
+            ticks.sort((a, b) => a[0] - b[0]).forEach(([x, col, txt]) => {
+                out.push(`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="1" y2="15" stroke="${col}" stroke-width="2.2"/>`);
+                if (x - lastLabelX >= 16) { out.push(`<text x="${x.toFixed(1)}" y="${22}" font-size="8.5" text-anchor="middle" fill="${col}">${txt}</text>`); lastLabelX = x; }
+            });
+            out.push(dot(px(t.price), 0, t.sma50 !== null && t.price < t.sma50 ? "#e0455a" : "#2ecc71"));
+        } else out.push(none(0, "brak zakresu 52 tyg. — po odświeżeniu danych"));
+        // 1) trend: cztery pastylki
+        const pill = (k, text, ok) => `<rect x="${X0 + k * 65}" y="${ROW + 1}" width="61" height="14" rx="7" fill="${ok === null ? "#2a2f3d" : ok ? "#1f9d55" : "#c93a50"}"/>`
+            + `<text x="${X0 + k * 65 + 30.5}" y="${ROW + 11.5}" font-size="9.5" font-weight="700" text-anchor="middle" fill="${ok === null ? "#7d8590" : "#fff"}">${text}</text>`;
+        out.push(label(1, "Trend"), pill(0, "C > 50", t.trend.p50), pill(1, "50 > 200", t.trend.s50_200), pill(2, "C > 200", t.trend.p200),
+            pill(3, t.trend.rs === 2 ? "RS ● przed" : "RS linia", t.trend.rs === 0 ? null : t.trend.rs === 2 ? true : true));
+        // 2) cena względem pivotu / oporu: strefa zakupu i „nie goń”
+        out.push(label(2, t.level ? (t.level.kind === "pivot" ? "Do pivotu" : "Do oporu") : "Pivot"));
+        if (t.level && t.toLevelPct !== null) {
+            const px = v => scale(v, -10, 10);
+            out.push(`<rect x="${X0}" y="${2 * ROW + 4}" width="${(px(0) - X0).toFixed(1)}" height="8" rx="4" fill="#2a2f3d"/>`,
+                `<rect x="${px(0).toFixed(1)}" y="${2 * ROW + 4}" width="${(px(5) - px(0)).toFixed(1)}" height="8" fill="#1d4f8f"/>`,
+                `<rect x="${px(5).toFixed(1)}" y="${2 * ROW + 4}" width="${(X0 + XW - px(5)).toFixed(1)}" height="8" rx="4" fill="#6b2a35"/>`,
+                `<rect x="${px(-8).toFixed(1)}" y="${2 * ROW + 4}" width="${(px(-7) - px(-8)).toFixed(1)}" height="8" fill="#ff6b8a" opacity="0.55"/>`,
+                `<line x1="${px(0).toFixed(1)}" x2="${px(0).toFixed(1)}" y1="${2 * ROW + 1}" y2="${2 * ROW + 15}" stroke="#2ecc71" stroke-width="2.2"/>`,
+                `<text x="${px(0).toFixed(1)}" y="${2 * ROW + 22}" font-size="8.5" text-anchor="middle" fill="#2ecc71">${t.level.kind === "pivot" ? "pivot" : "opór"}</text>`,
+                `<text x="${((px(0) + px(5)) / 2).toFixed(1)}" y="${2 * ROW + 22}" font-size="8.5" text-anchor="middle" fill="#7ab8ff">kupuj</text>`,
+                `<text x="${((px(5) + X0 + XW) / 2).toFixed(1)}" y="${2 * ROW + 22}" font-size="8.5" text-anchor="middle" fill="#ff8fa8">nie goń</text>`,
+                `<text x="${px(-7.5).toFixed(1)}" y="${2 * ROW + 22}" font-size="8.5" text-anchor="middle" fill="#ff8fa8">stop</text>`,
+                dot(px(t.toLevelPct), 2, t.toLevelPct > 5 ? "#e0455a" : t.toLevelPct >= 0 ? "#4aa3ff" : "#9aa3b2"));
+        } else out.push(`<text x="${X0}" y="${2 * ROW + 12}" font-size="10.5" fill="#6b7280">brak bazy do zakupu ani oporu w pobliżu</text>`);
+    } else {
+        rows = 2;
+        // rozciągnięcie względem SMA50: zielone 0–10 %, żółte 10–20 %, czerwone > 20 %
+        out.push(label(0, "vs SMA50"));
+        if (t.extPct !== null) {
+            const px = v => scale(v, -5, 30);
+            const seg = (a, b, col) => `<rect x="${px(a).toFixed(1)}" y="4" width="${(px(b) - px(a)).toFixed(1)}" height="8" fill="${col}"/>`;
+            out.push(`<rect x="${X0}" y="4" width="${XW}" height="8" rx="4" fill="#262a35"/>`, seg(-5, 0, "#3a3f4d"), seg(0, 10, "#1f7a4d"), seg(10, 20, "#8a7a1f"), seg(20, 30, "#8a2f3d"),
+                `<text x="${px(5).toFixed(1)}" y="22" font-size="8.5" text-anchor="middle" fill="#3ddc84">ok</text>`,
+                `<text x="${px(15).toFixed(1)}" y="22" font-size="8.5" text-anchor="middle" fill="#f5d547">rozciągnięta</text>`,
+                `<text x="${px(25).toFixed(1)}" y="22" font-size="8.5" text-anchor="middle" fill="#ff8fa8">za daleko</text>`,
+                dot(px(t.extPct), 0, t.extPct > 20 ? "#e0455a" : t.extPct > 10 ? "#d9b400" : t.extPct >= 0 ? "#2ecc71" : "#9aa3b2"));
+        } else out.push(none(0, "brak danych"));
+        // wolumen: najlepszy dzień z 5 ostatnich sesji względem średniej; kreska = próg 1,5× (wybicie wg O'Neila)
+        out.push(label(1, "Wolumen 5s"));
+        if (t.volX !== null) {
+            const px = v => scale(v, 0, 3);
+            const col = t.volX >= 1.5 ? "#1f9d55" : t.volX >= 1 ? "#d9b400" : "#6b7280";
+            out.push(`<rect x="${X0}" y="${ROW + 4}" width="${XW}" height="8" rx="4" fill="#262a35"/>`,
+                `<rect x="${X0}" y="${ROW + 4}" width="${(px(t.volX) - X0).toFixed(1)}" height="8" rx="4" fill="${col}"/>`,
+                `<line x1="${px(1.5).toFixed(1)}" x2="${px(1.5).toFixed(1)}" y1="${ROW + 1}" y2="${ROW + 15}" stroke="#2ecc71" stroke-width="2"/>`,
+                `<text x="${px(1.5).toFixed(1)}" y="${ROW + 22}" font-size="8.5" text-anchor="middle" fill="#2ecc71">1,5× wybicie</text>`,
+                `<text x="${px(0).toFixed(1)}" y="${ROW + 22}" font-size="8.5" fill="#8a8f9c">średnia</text>`);
+        } else out.push(`<text x="${X0}" y="${ROW + 12}" font-size="10.5" fill="#6b7280">po odświeżeniu danych</text>`);
+    }
+    return `<svg class="tech-strip" viewBox="0 0 340 ${rows * ROW + (part === "main" ? 4 : 2)}" width="100%" role="img" aria-label="Wskaźniki techniczne">${out.join("")}</svg>`;
+}
+
 // Jedna linia „czy to już ten moment?” pod tytułem wykresu: dystans do wybicia, baza, wolumen, RS, rynek, wyniki.
 function readinessLine(s, regime) {
     const out = [];
@@ -656,13 +765,15 @@ const COL = {
     posValue: ["Wartość", "pos_value", s => `<td>${s.position && s.position.value !== null ? money0(s.position.value) : "—"}</td>`],
     posRisk: ["Ryzyko do stopu", "pos_risk_usd", s => `<td>${s.position && s.position.risk_usd !== null ? money0(s.position.risk_usd) : "—"}</td>`, "Początkowe ryzyko: (wejście − stop) · liczba akcji"],
     strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy, W = blisko wybicia"],
+    tech: ["Technika", null, s => `<td class="tech-cell">${techStripSvg(s, "main")}</td>`, "Zakres 52 tyg. (średnie i pivot), trend i cena względem pivotu / oporu — graficznie"],
+    techMore: ["Technika cd.", null, s => `<td class="tech-cell">${techStripSvg(s, "more")}</td>`, "Rozciągnięcie względem SMA50 i wolumen z ostatnich sesji — graficznie"],
     toggle: ["", null, s => `<td class="card-toggle"><button type="button" class="card-chev" aria-label="Pokaż / ukryj szczegóły" aria-expanded="${openCards.has(s.ticker)}">▾</button></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "tech", "techMore", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -1819,7 +1930,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, techModel, techStripSvg, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

@@ -682,10 +682,10 @@ body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
 body:not(.split) td.c-alDist::before { content: "vs linia"; }
 body:not(.split) td.c-rank { display: none !important; }
 /* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
-body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank) {
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-tech):not(.c-techMore):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank) {
     display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
 }
-body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
+body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-tech):not(.c-techMore):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
     content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
 }
 
@@ -918,3 +918,8 @@ body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left
 
 /* karta na telefonie jest kolumną flex — litery C A N S L I M mają zostać w jednym rzędzie */
 .cs-letters { display: inline-flex; gap: 2px; white-space: nowrap; }
+
+/* pasek techniczny na kartach: zakres 52 tyg., trend, cena vs pivot (zawsze), rozciągnięcie i wolumen (po rozwinięciu) */
+.tech-strip { display: block; width: 100%; height: auto; }
+body:not(.split) td.c-tech { display: block; order: 6; flex: 0 0 100%; margin-top: 2px; }
+body:not(.split) tr.open td.c-techMore { display: block; order: 7; flex: 0 0 100%; }
