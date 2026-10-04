@@ -1088,36 +1088,67 @@ function fundMiniModel(charts, ticker) {
         priceChg: chg(first(price), last(price)), rsChg: chg(first(rs), last(rs)),
         epsChg: eps.length >= 2 ? chg(eps[0].v, eps[eps.length - 1].v) : null,
         epsLast: eps.length ? eps[eps.length - 1].v : null,
+        rsHigh: rsAtHigh(rs),
     };
 }
 
+// indeks ostatniego tygodnia (z 5 ostatnich), w którym RS jest na maksimum całego okna; null gdy RS nie jest przy szczycie
+function rsAtHigh(rs) {
+    const f = rs.filter(Number.isFinite);
+    if (f.length < 8) return null;
+    const max = Math.max(...f);
+    for (let i = rs.length - 1; i >= rs.length - 5; i--) if (rs[i] === max) return i;
+    return null;
+}
+
 function fundMiniSvg(m, opts = {}) {
-    const W = opts.width || 320, H = opts.height || 150, padL = 4, padR = 4, padT = 8, padB = 8;
-    const slots = m.n + (m.next !== null ? 4 : 0);   // puste miejsca na prognozę EPS po prawej
+    // Trzy panele jedno pod drugim na wspólnej osi czasu: cena, RS (spółka / S&P 500 przeskalowane do 100 na starcie,
+    // przerywana = parytet z rynkiem) i EPS TTM jako schodki (zysk trzyma wartość do następnego raportu).
+    const W = opts.width || 320, padL = 6, padR = 6;
+    const panels = [{ y: 4, h: 78 }, { y: 92, h: 62 }, { y: 164, h: 54 }];
+    const H = 224, slots = m.n + (m.next !== null ? 4 : 0);
     const x = i => padL + (W - padL - padR) * i / Math.max(1, slots - 1);
-    const scale = vals => {
-        const f = vals.filter(Number.isFinite);
-        if (!f.length) return () => null;
-        const lo = Math.min(...f), hi = Math.max(...f), span = hi - lo || 1;
-        return v => padT + (H - padT - padB) * (1 - (v - lo) / span);
+    const yOf = (pn, vals, pad = 0.08, include = []) => {
+        const f = vals.filter(Number.isFinite).concat(include);
+        const lo = Math.min(...f), hi = Math.max(...f), span = (hi - lo) || Math.abs(hi) || 1;
+        const a = lo - span * pad, bb = hi + span * pad;
+        return v => pn.y + pn.h * (1 - (v - a) / (bb - a));
     };
-    const yP = scale(m.price), yR = scale(m.rs);
-    const epsVals = m.eps.map(e => e.v).concat(m.next !== null ? [m.next] : []);
-    const yE = scale(epsVals);
     const parts = [];
-    parts.push(`<polyline fill="none" stroke="#5aa0ff" stroke-width="1.4" opacity=".9" points="${linePoints(m.rs, x, yR)}"/>`);
-    parts.push(`<polyline fill="none" stroke="#e8edf5" stroke-width="1.8" points="${linePoints(m.price, x, yP)}"/>`);
+    panels.forEach(pn => parts.push(`<rect x="0.5" y="${pn.y}" width="${W - 1}" height="${pn.h}" fill="none" stroke="#2a3340" stroke-width="1"/>`));
+    // pionowe linie dat raportów — widać, jak cena i RS reagowały na wyniki
+    m.eps.forEach(e => panels.forEach(pn => parts.push(`<line x1="${x(e.i).toFixed(1)}" y1="${pn.y}" x2="${x(e.i).toFixed(1)}" y2="${pn.y + pn.h}" stroke="#f0932b" stroke-opacity=".18" stroke-width="1"/>`)));
+    const tag = (pn, text, color) => parts.push(`<text x="${padL + 4}" y="${pn.y + 11}" font-size="10" fill="${color}" font-weight="700">${text}</text>`);
+    const line = (arr, y, color, w) => parts.push(`<polyline fill="none" stroke="${color}" stroke-width="${w}" stroke-linejoin="round" points="${linePoints(arr, x, y)}"/>`);
+    // 1. cena
+    const yP = yOf(panels[0], m.price);
+    line(m.price, yP, "#e8edf5", 1.8);
+    tag(panels[0], "CENA", "#e8edf5");
+    // 2. RS przeskalowane do 100 na początku
+    const rs0 = m.rs.find(Number.isFinite), rsN = m.rs.map(v => (Number.isFinite(v) && rs0 ? v / rs0 * 100 : null));
+    const yR = yOf(panels[1], rsN, 0.1, [100]);
+    parts.push(`<line x1="${padL}" y1="${yR(100).toFixed(1)}" x2="${W - padR}" y2="${yR(100).toFixed(1)}" stroke="#7d8a9c" stroke-width="1" stroke-dasharray="3 3"/>`);
+    const rsLast = [...rsN].reverse().find(Number.isFinite);
+    line(rsN, yR, Number.isFinite(rsLast) && rsLast >= 100 ? "#4aa3ff" : "#ff7b8d", 1.8);
+    tag(panels[1], "SIŁA WZGL. vs S&amp;P (przerywana = rynek)", "#4aa3ff");
+    if (m.rsHigh) parts.push(`<circle cx="${x(m.rsHigh).toFixed(1)}" cy="${yR(rsN[m.rsHigh]).toFixed(1)}" r="3.2" fill="#4aa3ff" stroke="#fff" stroke-width="1"/>`);
+    // 3. EPS TTM — schodki
     if (m.eps.length) {
-        const pts = m.eps.map(e => [x(e.i), yE(e.v)]);
-        parts.push(`<polyline fill="none" stroke="#f0932b" stroke-width="2" points="${pts.map(p => p.map(v => v.toFixed(1)).join(",")).join(" ")}"/>`);
-        pts.forEach(p => parts.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#f0932b"/>`));
+        const yE = yOf(panels[2], m.eps.map(e => e.v).concat(m.next !== null ? [m.next] : []), 0.15);
+        const pts = [];
+        m.eps.forEach((e, k) => { if (k) pts.push([x(e.i), yE(m.eps[k - 1].v)]); pts.push([x(e.i), yE(e.v)]); });
+        const lp = pts[pts.length - 1];
+        pts.push([x(m.n - 1), lp[1]]);
+        parts.push(`<polyline fill="none" stroke="#f0932b" stroke-width="2" points="${pts.map(q => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ")}"/>`);
+        m.eps.forEach(e => parts.push(`<circle cx="${x(e.i).toFixed(1)}" cy="${yE(e.v).toFixed(1)}" r="2.6" fill="#f0932b"/>`));
         if (m.next !== null) {
-            const lp = pts[pts.length - 1], nx = x(slots - 1), ny = yE(m.next);
-            parts.push(`<line x1="${lp[0].toFixed(1)}" y1="${lp[1].toFixed(1)}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#f0932b" stroke-width="2" stroke-dasharray="4 3"/>`);
-            parts.push(`<circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="3" fill="none" stroke="#f0932b" stroke-width="1.5"/>`);
+            const nx = x(slots - 1), ny = yE(m.next);
+            parts.push(`<line x1="${x(m.n - 1).toFixed(1)}" y1="${lp[1].toFixed(1)}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#f0932b" stroke-width="2" stroke-dasharray="4 3"/>`);
+            parts.push(`<circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="3" fill="#0f141b" stroke="#f0932b" stroke-width="1.5"/>`);
         }
     }
-    return `<svg class="fund-mini-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Cena, EPS i RS">${parts.join("")}</svg>`;
+    tag(panels[2], "EPS TTM (raporty, przerywana = prognoza)", "#f0932b");
+    return `<svg class="fund-mini-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cena, siła względna i EPS">${parts.join("")}</svg>`;
 }
 
 function linePoints(arr, x, y) {
@@ -1133,7 +1164,7 @@ function fundMiniHtml(m) {
         `<span class="fm-eps">EPS TTM ${m.epsLast !== null ? m.epsLast.toFixed(2) : "—"} <b class="${cls(m.epsChg)}">${sg(m.epsChg)}</b>${m.next !== null ? ` · prog. ${m.next.toFixed(2)}` : ""}</span>`,
         `<span class="fm-rs">RS vs S&amp;P <b class="${cls(m.rsChg)}">${sg(m.rsChg)}</b></span>`,
     ].join("");
-    return `${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo; każda linia w swojej skali — liczy się kierunek.</div>`;
+    return `${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo. Pomarańczowe linie pionowe = raporty. Niebieska ponad przerywaną = spółka bije S&amp;P; kropka = RS na szczycie.</div>`;
 }
 
 if (typeof module !== "undefined" && module.exports) {
