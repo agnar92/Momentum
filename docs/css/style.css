@@ -718,13 +718,9 @@ body:not(.split) td.c-strat { order: 3; }
 /* linia gotowości do wybicia i pasek ◀ 3/27 ▶ pod wykresem */
 .wl-chart-ready { font-size: 13px; font-weight: 600; line-height: 1.4; color: var(--green-bright); margin-top: 6px; }
 .wl-chart-ready:empty { display: none; }
-.chart-nav { position: sticky; bottom: 0; z-index: 5; background: var(--panel); display: flex; align-items: center; justify-content: center; gap: 18px; padding: 6px 12px; padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--border); flex: 0 0 auto; }
-.chart-nav-pos { min-width: 70px; text-align: center; font-size: 13px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .nav-btn { min-width: 64px; min-height: 40px; font-size: 18px; line-height: 1; }
 .nav-btn:disabled { opacity: .3; pointer-events: none; }
-.wl-chart-box.full.phone-full .chart-nav { padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)); }
-.wl-chart-box.full.phone-full .chart-nav .nav-btn { min-height: 34px; }
-
+.wl-chart-box.full.phone-full 
 /* przycisk Cofnij nad wykresem (telefon: pasek narzędzi bywa ukryty); sticky, bo okno wykresu przewija się samo */
 .ann-fab { position: sticky; bottom: 84px; display: block; width: 48px; height: 48px; margin: -48px 14px 0 auto; border-radius: 50%; border: 1px solid var(--border); background: var(--panel-alt); color: var(--text); font-size: 22px; box-shadow: 0 2px 10px rgba(0,0,0,.5); cursor: pointer; z-index: 6; }
 .ann-fab[hidden] { display: none; }
@@ -849,9 +845,7 @@ body:not(.split) .rchip { flex: none; padding: 1px 8px; font-size: 12px; }
 body:not(.split) .wl-chart-ready { white-space: nowrap; overflow-x: auto; margin-top: 3px; font-size: 12px; scrollbar-width: none; }
 body:not(.split) .wl-chart-base { flex-wrap: nowrap; overflow-x: auto; white-space: nowrap; margin-top: 4px; padding: 2px 8px; font-size: 12px; gap: 3px 12px; scrollbar-width: none; }
 body:not(.split) .wl-chart-base > * { flex: none; }
-body:not(.split) .chart-nav { padding-top: 2px; padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px)); gap: 14px; }
-body:not(.split) .chart-nav .nav-btn { min-height: 38px; }
-body:not(.split) .ann-fab { position: absolute; right: 12px; bottom: 60px; margin: 0; }
+body:not(.split) body:not(.split) .ann-fab { position: absolute; right: 12px; bottom: 60px; margin: 0; }
 /* telefon poziomo / niski ekran: jeden wiersz nagłówka, bez pasków informacji — wykres dostaje prawie cały ekran (szczegóły pod „⋯”) */
 @media (max-height: 520px) {
     body:not(.split) .wl-chart-box .wl-chart-ratings, body:not(.split) .wl-chart-box .wl-chart-ready, body:not(.split) .wl-chart-box .wl-chart-base, body:not(.split) .wl-chart-box .wl-chart-sub { display: none; }
@@ -878,11 +872,8 @@ body:not(.split) .wl-chart-head #chartMoreBtn { flex: 0 0 44px; }
 @media (max-height: 520px) {
     body:not(.split) .chart-grid.layout-1 .cell-readout { display: none; }
     body:not(.split) .wl-chart-box .wl-range { height: 26px; margin: 1px 0 3px; }
-    body:not(.split) .chart-nav { padding-top: 0; padding-bottom: calc(0px + env(safe-area-inset-bottom, 0px)); }
-    body:not(.split) .chart-nav .nav-btn { min-height: 30px; min-width: 56px; font-size: 15px; }
-}
+    body:not(.split)     }
 
-body:not(.split) .chart-grid.layout-1 #chartPlot { touch-action: none; }   /* gesty na wykresie (zoom / przesuwanie) bez przewijania strony */
 
 /* telefon: suwak okna czasowego to cienka linia z dwiema kulkami (bez mini wykresu cen) — nie ma miejsca na większą wizualizację */
 body:not(.split) .wl-chart-box .wl-range { height: 26px; margin: 2px 22px 2px; background: none; border: 0; border-radius: 0; }
@@ -945,3 +936,6 @@ body:not(.split) tr.open td.card-fchart { display: block !important; order: 30; 
 .fund-mini-data { margin-top: 6px; }
 .fund-mini-data summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--text-dim); padding: 6px 0; min-height: 32px; }
 .fund-mini-data[open] summary { color: var(--green-bright); }
+
+/* suwak okna czasu na dole okna wykresu (pod wykresem); na telefonie zapas na pasek „home” iPhone'a */
+body:not(.split) .wl-chart-box .wl-range { margin-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
