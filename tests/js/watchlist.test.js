@@ -397,3 +397,24 @@ test("canslimExplain: one row per letter with the numbers behind each flag; shee
     s.cs = 7; s.canslim = canslimInfo(s, "uptrend");
     assert.equal(ratingChips(s).find(c => c.label === "CANSLIM").action, "canslim");
 });
+
+test("breakoutInfo follows O'Neil: a close above the line / pivot needs volume; unconfirmed closes are not fresh breakouts", () => {
+    // flaga dzienna i tygodniowa
+    assert.equal(breakoutInfo(stock("A", { tl_state: "bez wolumenu", tl_pattern: "flaga", tl_vol_ratio: 1.1 }), null, 5).rank, 2);
+    assert.match(breakoutInfo(stock("A", { tl_state: "bez wolumenu", tl_pattern: "flaga", tl_vol_ratio: 1.1 }), null, 5).reasons[0].text, /niepotwierdzone/);
+    const weekly = breakoutInfo(stock("B", { tlw_state: "wybicie", tlw_pattern: "flaga", tlw_vol_ratio: 2.4, tlw_vol_ok: true }), null, 5);
+    assert.equal(weekly.rank, 0);
+    assert.match(weekly.reasons[0].text, /\(tyg\.\) ×2\.4 wol\. ✓/);
+    // pivot: wybicie tylko z wolumenem
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: -1, pivot_state: "wybicie", pivot_vol_ratio: 2, pivot_tf: "D" }), null, 5).rank, 0);
+    const weak = breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: -1, pivot_state: "bez wolumenu", pivot_vol_ratio: 1.1 }), null, 5);
+    assert.equal(weak.rank, 2);
+    assert.match(weak.reasons[0].text, /bez wolumenu/);
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: -1, pivot_state: null }), null, 5).rank, 2);   // wybicie starsze niż kilka sesji
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: -1 }), null, 5).rank, 0);                        // stary plik bez pivot_state
+    // moja linia z alertem: zamknięcie nad nią + wolumen z ostatnich sesji
+    assert.equal(breakoutInfo(stock("D", { vol_surge_5d: 2.2 }), { alert: "above", triggered: true, dist: 0.5 }, 5).rank, 0);
+    const noVol = breakoutInfo(stock("D", { vol_surge_5d: 1.1 }), { alert: "above", triggered: true, dist: 0.5 }, 5);
+    assert.equal(noVol.rank, 2);
+    assert.match(noVol.reasons[0].text, /bez wolumenu.*niepotwierdzone/);
+});

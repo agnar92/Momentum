@@ -623,8 +623,8 @@ function chartSvg(m, opts = {}) {
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
     if (boI >= 0) {
-        parts.push(`<line x1="${x(boI)}" x2="${x(boI)}" y1="${P.y}" y2="${L.volume.y + L.volume.h}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"><title>Dzień wybicia ${m.trend.breakout.date}</title></line>`);
-        addLabel(`wybicie${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio} wol.` : ""}`, x(boI) + 4, P.y + fs(11), { anchor: "start", fill: "#22d3ee", bold: true, prio: 6 });
+        parts.push(`<line x1="${x(boI)}" x2="${x(boI)}" y1="${P.y}" y2="${L.volume.y + L.volume.h}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"><title>${m.trend.breakout.confirmed ? "Dzień wybicia" : "Zamknięcie nad linią bez wolumenu (niepotwierdzone)"} ${m.trend.breakout.date}</title></line>`);
+        addLabel(`${m.trend.breakout.confirmed ? "wybicie" : "nad linią, bez wol."}${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio} wol.` : ""}`, x(boI) + 4, P.y + fs(11), { anchor: "start", fill: "#22d3ee", bold: true, prio: 6 });
     }
     // sell climax top (tygodniowy; na dziennym stoi na ostatniej sesji tego tygodnia): czerwona strzałka ▼ nad świecą i pionowa kreska przez wolumen
     const cxI = m.climax ? weekIndexForDate(m.weeks, m.climax.date) : -1;
@@ -764,7 +764,7 @@ function chartSvg(m, opts = {}) {
     if (m.trend && m.trend.state) {
         const bo = m.trend.breakout;
         const vol = bo ? ` · wolumen ×${bo.vol_ratio} śr. ${bo.confirmed ? "✓ potwierdzone" : "— bez potwierdzenia"}` : "";
-        otherItems.push(`<tspan fill="${bo && !bo.confirmed ? CHART_COLORS.text : CHART_COLORS.res}" font-weight="700">${m.trend.state === "wybicie" ? "▲ wybicie z linii trendu" + vol : "przy oporze"}</tspan>`);
+        otherItems.push(`<tspan fill="${bo && !bo.confirmed ? CHART_COLORS.text : CHART_COLORS.res}" font-weight="700">${m.trend.state === "wybicie" ? "▲ wybicie z linii trendu" + vol : m.trend.state === "bez wolumenu" ? "nad linią, ale bez wolumenu" + vol : "przy oporze"}</tspan>`);
     }
     if (useLog) otherItems.push("skala log.");
     const legendRows = (opts.compact || L.legendRows === 2) ? [smaItems, otherItems] : [[...smaItems, ...otherItems]];
@@ -870,7 +870,10 @@ function patternExplain(m) {
     let tail;
     if (t.state === "wybicie") {
         const bo = t.breakout;
-        tail = ` Wybicie: zamknięcie nad linią oporu${bo ? ` ${bo.date}, wolumen ×${bo.vol_ratio} średniej z 50 ${unit} — ${bo.confirmed ? "potwierdzone (≥ 1,5×)" : "bez potwierdzenia wolumenem (< 1,5×), łatwiej o fałszywe wybicie"}` : ""}.`;
+        tail = ` Wybicie: zamknięcie nad linią oporu${bo ? ` ${bo.date}, wolumen ×${bo.vol_ratio} średniej — potwierdzone (≥ 1,5×)` : ""}.`;
+    } else if (t.state === "bez wolumenu") {
+        const bo = t.breakout;
+        tail = ` Zamknięcie nad linią oporu${bo ? ` ${bo.date}` : ""} bez wolumenu${bo && Number.isFinite(bo.vol_ratio) ? ` (×${bo.vol_ratio} średniej)` : ""} — to jeszcze nie wybicie: O'Neil chce zamknięcia nad linią z wolumenem ≥ 1,5× średniej, a samo przebicie maksimum w trakcie świecy nie wystarcza.`;
     } else if (t.state === "przy oporze") {
         tail = " Cena tuż pod oporem — wybicie dopiero po zamknięciu nad linią, najlepiej z wolumenem ≥ 1,5× średniej.";
     } else {

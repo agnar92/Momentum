@@ -410,7 +410,44 @@ class TestConsolidation:
     def test_breakout_without_volume_is_not_confirmed(self):
         closes = self._flag_series(True)
         tl = watchlist.detect_consolidation(self._frame(closes, 1000.0), self.CFG)
-        assert tl["state"] == "wybicie" and tl["breakout"]["confirmed"] is False
+        assert tl["state"] == "bez wolumenu" and tl["breakout"]["confirmed"] is False   # zamknięcie nad linią bez wolumenu to jeszcze nie wybicie
+
+    def test_high_above_line_without_a_close_above_is_not_a_breakout(self):
+        # świece przebijają opór maksimum (High), ale zamknięcia zostają pod linią — wybicia nie ma, nawet na dużym wolumenie
+        closes = self._flag_series(False)
+        df = self._frame(closes, 1000.0)
+        df.iloc[-3:, df.columns.get_loc("High")] = [150.0, 150.0, 150.0]
+        df.iloc[-1, df.columns.get_loc("Volume")] = 5000.0
+        tl = watchlist.detect_consolidation(df, self.CFG)
+        assert tl is not None and tl["state"] != "wybicie" and tl["breakout"] is None
+
+    def test_breakout_that_fell_back_under_the_line_is_not_kept(self):
+        closes = self._flag_series(True)[:-1] + [123.0]       # wybicie 2 sesje temu, ostatnie zamknięcie z powrotem pod linią
+        vol = np.full(len(closes), 1000.0)
+        vol[56] = 3000.0
+        tl = watchlist.detect_consolidation(self._frame(closes, vol), self.CFG)
+        assert tl is None or tl["state"] not in ("wybicie", "bez wolumenu")
+
+    def test_level_break_needs_a_close_above_with_volume(self):
+        closes = [100.0] * 30 + [99.0, 101.5, 102.0]
+        df = self._frame(closes, 1000.0)
+        df.iloc[-2, df.columns.get_loc("Volume")] = 2500.0
+        b = watchlist.detect_level_break(df, 101.0, 5, 50, "D")
+        assert b["state"] == "wybicie" and b["vol_ratio"] >= 2 and b["tf"] == "D"
+        weak = watchlist.detect_level_break(self._frame(closes, 1000.0), 101.0, 5, 50, "D")
+        assert weak["state"] == "bez wolumenu"
+        assert watchlist.detect_level_break(df, 105.0, 5, 50, "D") is None                    # zamknięcia pod poziomem
+        spiky = df.copy()
+        spiky.iloc[-1, spiky.columns.get_loc("High")] = 110.0
+        assert watchlist.detect_level_break(spiky, 105.0, 5, 50, "D") is None                 # samo przebicie High nie jest wybiciem
+        fell = self._frame(closes[:-1] + [100.5], 1000.0)
+        assert watchlist.detect_level_break(fell, 101.0, 5, 50, "D") is None                  # wybicie się nie utrzymało
+
+    def test_volume_surge_takes_the_best_of_the_last_sessions(self):
+        df = self._frame([100.0] * 70, 1000.0)
+        df.iloc[-3, df.columns.get_loc("Volume")] = 4000.0
+        assert watchlist.volume_surge(df) == 4.0
+        assert watchlist.volume_surge(self._frame([100.0] * 5, 1000.0)) is None
 
     def test_flag_still_inside_has_no_breakout(self):
         tl = watchlist.detect_consolidation(self._frame(self._flag_series(False), 1000.0), self.CFG)

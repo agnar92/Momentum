@@ -226,25 +226,58 @@ function positionTotals(rows, capital) {
 // Wybicia: spółki tuż PRZED wybiciem (albo świeżo po nim). Powody: flaga / korytarz przy oporze lub świeże wybicie (tl_state),
 // blisko pivotu bazy (pct_to_pivot), własna linia z alertem „nad linią” blisko ceny albo przebita (alerty z annotate.js).
 // dist = ile % brakuje do najbliższego poziomu wybicia (null = już po wybiciu); rank 0 = wybicie / przebity alert, 1 = do 2 %, 2 = dalej.
+// Wybicie wg O'Neila = ZAMKNIĘCIE (dzienne albo tygodniowe) nad linią / pivotem na podwyższonym wolumenie (≥ 1,5× średniej). Samo przebicie
+// maksimum w trakcie świecy to nie wybicie, a zamknięcie nad poziomem bez wolumenu jest tylko „niepotwierdzone” (nie trafia do rank 0).
+const BRK_VOL_MULT = 1.5;
 function breakoutInfo(s, alert, maxDist) {
     const reasons = [];
     const dists = [];
+    const vols = [];
     let fresh = false;
-    if (s.tl_state === "wybicie") {
-        fresh = true;
-        reasons.push({ code: "tl", text: `wybicie z ${s.tl_pattern || "formacji"}${Number.isFinite(s.tl_vol_ratio) ? ` ×${s.tl_vol_ratio} wol.${s.tl_vol_ok ? " ✓" : ""}` : ""}` });
-    } else if (s.tl_state === "przy oporze") {
-        if (Number.isFinite(s.tl_dist_pct) && s.tl_dist_pct > 0) dists.push(s.tl_dist_pct);
-        reasons.push({ code: "tl", text: `przy oporze ${s.tl_pattern || ""}${Number.isFinite(s.tl_dist_pct) ? ` (${s.tl_dist_pct.toFixed(1)}%)` : ""}`.trim() });
-    }
+    const volTxt = (r, ok) => (Number.isFinite(r) ? ` ×${r} wol.${ok ? " ✓" : ""}` : "");
+    // formacje z linią oporu (flaga / korytarz): osobno na świecach dziennych i tygodniowych
+    [["", "dz."], ["w", "tyg."]].forEach(([p, tf]) => {
+        const state = s[`tl${p}_state`], pattern = s[`tl${p}_pattern`] || "formacji", ratio = s[`tl${p}_vol_ratio`], dist = s[`tl${p}_dist_pct`];
+        if (state === "wybicie") {
+            fresh = true;
+            if (Number.isFinite(ratio)) vols.push(ratio);
+            reasons.push({ code: "tl", text: `wybicie z ${pattern} (${tf})${volTxt(ratio, s[`tl${p}_vol_ok`])}` });
+        } else if (state === "bez wolumenu") {
+            reasons.push({ code: "tl", text: `zamknięcie nad oporem ${pattern} (${tf}) bez wolumenu${volTxt(ratio, false)} — niepotwierdzone` });
+        } else if (state === "przy oporze") {
+            if (Number.isFinite(dist) && dist > 0) dists.push(dist);
+            reasons.push({ code: "tl", text: `przy oporze ${pattern} (${tf})${Number.isFinite(dist) ? ` (${dist.toFixed(1)}%)` : ""}`.trim() });
+        }
+    });
     if (s.base_type && Number.isFinite(s.pct_to_pivot) && s.pct_to_pivot <= maxDist && s.pct_to_pivot > -3) {
-        if (s.pct_to_pivot >= 0) dists.push(s.pct_to_pivot);
-        else fresh = true;
-        reasons.push({ code: "pivot", text: `pivot ${s.pct_to_pivot >= 0 ? "+" : ""}${s.pct_to_pivot.toFixed(1)}%${s.vcp ? " VCP" : ""}` });
+        const tf = s.pivot_tf === "W" ? "tyg." : "dz.";
+        if (s.pct_to_pivot >= 0) {
+            dists.push(s.pct_to_pivot);
+            reasons.push({ code: "pivot", text: `pivot +${s.pct_to_pivot.toFixed(1)}%${s.vcp ? " VCP" : ""}` });
+        } else if (s.pivot_state === "wybicie") {
+            fresh = true;
+            if (Number.isFinite(s.pivot_vol_ratio)) vols.push(s.pivot_vol_ratio);
+            reasons.push({ code: "pivot", text: `wybicie pivotu (${tf})${volTxt(s.pivot_vol_ratio, true)}${s.vcp ? " VCP" : ""}` });
+        } else if (s.pivot_state === "bez wolumenu") {
+            reasons.push({ code: "pivot", text: `zamknięcie nad pivotem (${tf}) bez wolumenu${volTxt(s.pivot_vol_ratio, false)} — niepotwierdzone` });
+        } else if (s.pivot_state === undefined) {
+            fresh = true;   // starszy watchlist.json bez pola pivot_state: dawna reguła (cena nad pivotem)
+            reasons.push({ code: "pivot", text: `pivot ${s.pct_to_pivot.toFixed(1)}%${s.vcp ? " VCP" : ""}` });
+        } else {
+            reasons.push({ code: "pivot", text: `nad pivotem ${(-s.pct_to_pivot).toFixed(1)}% (wybicie starsze niż kilka sesji)` });
+        }
     }
     if (alert && alert.alert === "above") {
-        if (alert.triggered) { fresh = true; reasons.push({ code: "alert", text: "alert: linia przebita" }); }
-        else if (alert.dist < 0 && -alert.dist <= Math.max(ANN_NEAR_PCT, maxDist)) {
+        if (alert.triggered) {
+            const v = s.vol_surge_5d;
+            if (!Number.isFinite(v) || v >= BRK_VOL_MULT) {   // brak danych o wolumenie (starszy plik) = dawna reguła
+                fresh = true;
+                if (Number.isFinite(v)) vols.push(v);
+                reasons.push({ code: "alert", text: `zamknięcie nad moją linią${volTxt(v, true)}` });
+            } else {
+                reasons.push({ code: "alert", text: `zamknięcie nad moją linią bez wolumenu${volTxt(v, false)} — niepotwierdzone` });
+            }
+        } else if (alert.dist < 0 && -alert.dist <= Math.max(ANN_NEAR_PCT, maxDist)) {
             const need = (1 / (1 + alert.dist / 100) - 1) * 100;   // ile % wzrostu do linii
             dists.push(need);
             reasons.push({ code: "alert", text: `moja linia ${need.toFixed(1)}%` });
@@ -253,7 +286,8 @@ function breakoutInfo(s, alert, maxDist) {
     if (!reasons.length) return null;
     const dist = dists.length ? Math.min(...dists) : null;
     const rank = fresh ? 0 : (dist !== null && dist <= 2 ? 1 : 2);
-    return { reasons, dist, rank, sort: rank * 1000 + (dist !== null ? dist : -(s.tl_vol_ratio || 0)) };   // świeże wybicia: mocniejszy wolumen wyżej
+    const bestVol = vols.length ? Math.max(...vols) : (s.tl_vol_ratio || 0);
+    return { reasons, dist, rank, sort: rank * 1000 + (dist !== null ? dist : -bestVol) };   // świeże wybicia: mocniejszy wolumen wyżej
 }
 
 // Ustawia s.brk / s.brk_sort na każdej spółce (alerts = wiersze alertRows; bierzemy najbliższy alert „nad” dla spółki).
@@ -415,7 +449,8 @@ function readinessLine(s, regime) {
         out.push(over > 5 ? `⚠ ${over.toFixed(1)}% nad pivotem — za późno wg reguły +5 %` : `${over.toFixed(1)}% nad pivotem (strefa zakupu do +5 %)`);
     }
     if (s.tl_pattern) out.push(s.tl_pattern === "flaga" ? "flaga" : "korytarz");
-    if (Number.isFinite(s.tl_vol_ratio)) out.push(`wolumen wybicia ×${s.tl_vol_ratio}${s.tl_vol_ok ? " ✓" : " (słaby)"}`);
+    if (s.tl_state === "bez wolumenu") out.push("zamknięcie nad oporem bez wolumenu — to jeszcze nie wybicie");
+    else if (Number.isFinite(s.tl_vol_ratio)) out.push(`wolumen wybicia ×${s.tl_vol_ratio}${s.tl_vol_ok ? " ✓" : " (słaby)"}`);
     if (s.rs_line_state === "przed ceną") out.push("RS przed ceną ●");
     else if (s.rs_line_state) out.push("RS na szczycie");
     const days = earningsInDays(s.earnings);
