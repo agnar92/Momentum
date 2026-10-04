@@ -376,3 +376,24 @@ test("ratingChips / readinessLine warn about a sell climax top", () => {
     assert.match(readinessLine(s, "uptrend"), /sell climax top \(tydz\. 2026-10-02, potwierdzenia 2\/4\)/);
     assert.ok(!ratingChips({ climax_top: false }).some(c => c.value === "⚠ Climax top"));
 });
+
+test("canslimExplain: one row per letter with the numbers behind each flag; sheet html mentions values and rules", () => {
+    const { canslimExplain, canslimSheetHtml, canslimInfo, ratingChips } = require("../../docs/js/watchlist.js");
+    const s = { ticker: "G", eps_q0_yoy: 40, eps_q1_yoy: 28, eps_past_5y: 30, eps_this_y: 35, pct_from_high_52w: -4, accdis: "B", accdis_rating: 72, rs_rating: 92, industry_rating: 70, inst_own: 55, inst_trans: 1.2, inst_sponsor: true, leader: true };
+    const e = canslimExplain(s, "uptrend");
+    assert.deepEqual(e.rows.map(r => r.key), ["C", "A", "N", "S", "L", "I", "M"]);
+    assert.equal(e.score, 7);
+    assert.deepEqual(e.rows.map(r => r.ok), Object.values(canslimInfo(s, "uptrend").flags));   // te same flagi co w tabeli
+    assert.match(e.rows[0].have, /\+40% r\/r.*\+28%/);
+    assert.match(e.rows[2].have, /4% poniżej szczytu/);
+    const weak = canslimExplain({ ticker: "W", eps_q0_yoy: 10, pct_from_high_52w: -30 }, "correction");
+    assert.equal(weak.rows[0].ok, false);
+    assert.equal(weak.rows[3].ok, null);
+    assert.match(weak.rows[3].have, /brak/);
+    assert.equal(weak.rows[6].ok, false);
+    const html = canslimSheetHtml(s, "uptrend");
+    assert.match(html, /Spełnione: <b>7\/7<\/b>/);
+    assert.match(html, /Reguła:/);
+    s.cs = 7; s.canslim = canslimInfo(s, "uptrend");
+    assert.equal(ratingChips(s).find(c => c.label === "CANSLIM").action, "canslim");
+});
