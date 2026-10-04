@@ -45,7 +45,9 @@ BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
 MARKET_EMA_FAST = 10         # rynek w uptrendzie = EMA10 tygodniowa > EMA20 tygodniowa indeksu
 MARKET_EMA_SLOW = 20
-INST_MIN_OWN = 20.0          # I z CANSLIM: własność instytucji >= 20 % ...
+INST_MIN_OWN = 20.0          # I z CANSLIM: własność instytucji >= 20 % (ktoś poważny już jest w spółce), ...
+INST_MAX_OWN = 90.0          # ... ale <= 90 %: spółka przesadnie obłożona instytucjami jest już „wykupiona” (nie ma kto dokupić)
+INST_DATA_MAX = 100.0        # Finviz bywa > 100 % (podwójne liczenie w 13F) — takiej wartości nie traktujemy jak danych
 
 DIST_WINDOW = 25             # dni dystrybucji liczymy z ostatnich 25 sesji (jak IBD)
 DIST_DROP_PCT = 0.2          # dzień dystrybucji: indeks spadł o >= 0,2 % przy WYŻSZYM wolumenie niż dzień wcześniej
@@ -94,7 +96,8 @@ EST_HISTORY_DAYS = 400       # ile dni historii konsensusu EPS trzymamy (dopisuj
 EST_PERIODS = ("0y", "+1y")  # bieżący i następny rok obrachunkowy (Yahoo nie podaje dalszych)
 EST_SEED_DAYS = {"90daysAgo": 90, "60daysAgo": 60, "30daysAgo": 30, "7daysAgo": 7}
 FINVIZ_KEYS = ("company", "sector", "industry", "market_cap", "pe", "forward_pe",
-               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings", "recom", "finviz_target", "inst_own", "inst_trans")
+               "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings", "recom", "finviz_target", "inst_own", "inst_trans",
+               "sales_qq", "sales_past_5y", "shs_float", "shs_outstanding", "insider_own", "debt_eq")
 
 
 # ============================================================================
@@ -1171,10 +1174,12 @@ def finviz_upside(target, price):
 
 
 def institutional_flag(own, trans):
-    """I z CANSLIM (uproszczenie): własność instytucji >= INST_MIN_OWN % i dodatnia zmiana własności w ostatnim kwartale (napływ). None bez danych."""
-    if own is None or trans is None:
+    """I z CANSLIM (uproszczenie; O'Neil patrzy na liczbę i jakość funduszy, Finviz daje tylko % akcji i jego zmianę):
+    True = własność instytucji w przedziale [INST_MIN_OWN, INST_MAX_OWN] % i dodatnia zmiana w ostatnim kwartale (napływ);
+    False = za mało, odpływ albo przesadne obłożenie (> INST_MAX_OWN %); None = brak danych albo własność > 100 % (dane niewiarygodne)."""
+    if own is None or trans is None or own > INST_DATA_MAX:
         return None
-    return bool(own >= INST_MIN_OWN and trans > 0)
+    return bool(INST_MIN_OWN <= own <= INST_MAX_OWN and trans > 0)
 
 
 def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):

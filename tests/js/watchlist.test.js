@@ -404,3 +404,37 @@ test("pivot logic only for buyable bases: a deep correction near its old high is
     assert.match(readinessLine({ base_type: "deep", pct_to_pivot: -3 }, "uptrend"), /nie baza do zakupu/);
     assert.doesNotMatch(readinessLine({ base_type: "deep", pct_to_pivot: -8 }, "uptrend"), /za późno/);
 });
+
+test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, L needs a strong group, M counts distribution days", () => {
+    const { canslimInfo, canslimRows, tagCanslim } = require("../../docs/js/watchlist.js");
+    const base = { eps_q0_yoy: 40, eps_past_5y: 30, eps_this_y: 35, roe: 20, pct_from_high_52w: -3, accdis: "A", rs_rating: 90, industry_rating: 80, inst_own: 60, inst_trans: 1 };
+    assert.equal(canslimInfo(base, "uptrend").score, 7);
+    // I: przesadne obłożenie, dane > 100 %, brak napływu
+    assert.equal(canslimInfo({ ...base, inst_own: 99.4 }, "uptrend").flags.I, false);
+    assert.equal(canslimInfo({ ...base, inst_own: 121 }, "uptrend").flags.I, null);
+    assert.equal(canslimInfo({ ...base, inst_own: 15 }, "uptrend").flags.I, false);
+    assert.equal(canslimInfo({ ...base, inst_trans: -1 }, "uptrend").flags.I, false);
+    // C: zysk bez sprzedaży nie wystarcza, a brak sprzedaży nie karze
+    assert.equal(canslimInfo({ ...base, sales_qq: 8 }, "uptrend").flags.C, false);
+    assert.equal(canslimInfo({ ...base, sales_qq: 30 }, "uptrend").flags.C, true);
+    assert.equal(canslimInfo(base, "uptrend").flags.C, true);
+    // A: słaba średnia 5 lat albo ROE < 17 % = czerwone; młoda spółka (bez 5 lat) oceniana po roku i ROE
+    assert.equal(canslimInfo({ ...base, eps_past_5y: 0.1 }, "uptrend").flags.A, false);
+    assert.equal(canslimInfo({ ...base, roe: 9 }, "uptrend").flags.A, false);
+    assert.equal(canslimInfo({ ...base, eps_past_5y: null }, "uptrend").flags.A, true);
+    assert.equal(canslimInfo({ ...base, eps_past_5y: null, eps_this_y: null, roe: null }, "uptrend").flags.A, null);
+    // N: do 10 %; S: zadłużenie; L: grupa
+    assert.equal(canslimInfo({ ...base, pct_from_high_52w: -12 }, "uptrend").flags.N, false);
+    assert.equal(canslimInfo({ ...base, debt_eq: 2.4 }, "uptrend").flags.S, false);
+    assert.equal(canslimInfo({ ...base, industry_rating: 30 }, "uptrend").flags.L, false);
+    assert.equal(canslimInfo({ ...base, industry_rating: null }, "uptrend").flags.L, true);
+    // M: trend wzrostowy z 5 dniami dystrybucji nie jest zielony
+    assert.equal(canslimInfo(base, { regime: "uptrend", distDays: 3 }).flags.M, true);
+    assert.equal(canslimInfo(base, { regime: "uptrend", distDays: 5 }).flags.M, false);
+    assert.equal(canslimInfo(base, { regime: "correction", distDays: 0 }).flags.M, false);
+    // zakładka: C i A obowiązkowe
+    const good = { ticker: "G", ...base }, noA = { ticker: "X", ...base, eps_past_5y: 0.1 };
+    tagCanslim([good, noA], "uptrend");
+    assert.deepEqual(canslimRows([good, noA], 6).map(s => s.ticker), ["G", "X"]);
+    assert.deepEqual(canslimRows([good, noA], 6, true).map(s => s.ticker), ["G"]);
+});
