@@ -1513,7 +1513,7 @@ function drawChart() {
             fit: layout === "1" ? (splitMode ? null : phoneFit(cell)) : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
-            gestures: layout === "1" && !splitMode ? (() => !annEdit.on) : null,   // telefon: szczypnięcie = zoom osi czasu, przeciągnięcie = przesuwanie okna (poza trybem rysowania)
+            gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
             hideAutoLines: annHide(c.ticker).lines, hideAutoCups: annHide(c.ticker).cups,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),

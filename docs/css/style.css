@@ -882,7 +882,6 @@ body:not(.split) .wl-chart-head #chartMoreBtn { flex: 0 0 44px; }
     body:not(.split) .chart-nav .nav-btn { min-height: 30px; min-width: 56px; font-size: 15px; }
 }
 
-body:not(.split) .chart-grid.layout-1 #chartPlot { touch-action: none; }   /* gesty na wykresie (zoom / przesuwanie) bez przewijania strony */
 
 /* telefon: suwak okna czasowego to cienka linia z dwiema kulkami (bez mini wykresu cen) — nie ma miejsca na większą wizualizację */
 body:not(.split) .wl-chart-box .wl-range { height: 26px; margin: 2px 22px 2px; background: none; border: 0; border-radius: 0; }
