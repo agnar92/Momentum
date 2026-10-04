@@ -1084,40 +1084,140 @@ function fundMiniModel(charts, ticker) {
     const first = a => a.find(Number.isFinite), last = a => [...a].reverse().find(Number.isFinite);
     const chg = (a, b) => (Number.isFinite(a) && Number.isFinite(b) && a > 0 ? (b / a - 1) * 100 : null);
     return {
-        n, price, rs, eps, next,
+        n, price, rs, eps, next, spx: spx ? spx.map(v => (Number.isFinite(v) ? v : null)) : price.map(() => null),
         priceChg: chg(first(price), last(price)), rsChg: chg(first(rs), last(rs)),
         epsChg: eps.length >= 2 ? chg(eps[0].v, eps[eps.length - 1].v) : null,
         epsLast: eps.length ? eps[eps.length - 1].v : null,
+        rsHigh: rsAtHigh(rs),
+        ...fundSignals(c, weeks, price, rs, spx, eps),
     };
 }
 
+// Jeden wykres w stylu Ichimoku: wszystkie serie na JEDNEJ osi (skala logarytmiczna), każda przeskalowana do 100 na początku okna,
+// więc nachylenia są porównywalne. Cena (biała), S&P 500 (szara), RS = cena / S&P (niebieska), EPS TTM (pomarańczowe schodki).
+// „Chmura” między ceną a S&P: zielona, gdy spółka bije rynek, czerwona, gdy jest gorsza. Pionowe kreski = daty raportów.
 function fundMiniSvg(m, opts = {}) {
-    const W = opts.width || 320, H = opts.height || 150, padL = 4, padR = 4, padT = 8, padB = 8;
-    const slots = m.n + (m.next !== null ? 4 : 0);   // puste miejsca na prognozę EPS po prawej
+    const W = opts.width || 330, PH = opts.height || 200, padL = 6, padR = 84, padT = 10, padB = 10;
+    const ROW = 9, ROWS = 4, H = PH + 12 + ROWS * (ROW + 2);
+    const slots = m.n + (m.next !== null ? 4 : 0);
     const x = i => padL + (W - padL - padR) * i / Math.max(1, slots - 1);
-    const scale = vals => {
-        const f = vals.filter(Number.isFinite);
-        if (!f.length) return () => null;
-        const lo = Math.min(...f), hi = Math.max(...f), span = hi - lo || 1;
-        return v => padT + (H - padT - padB) * (1 - (v - lo) / span);
-    };
-    const yP = scale(m.price), yR = scale(m.rs);
-    const epsVals = m.eps.map(e => e.v).concat(m.next !== null ? [m.next] : []);
-    const yE = scale(epsVals);
+    const rebase = arr => { const b = arr.find(v => Number.isFinite(v) && v > 0); return arr.map(v => (b && Number.isFinite(v) && v > 0 ? v / b * 100 : null)); };
+    const price = rebase(m.price), spx = rebase(m.spx), rs = rebase(m.rs);
+    // EPS: baza = pierwszy dodatni TTM (przy ujemnym nie da się policzyć zmiany względnej — wtedy bez linii EPS)
+    const eb = (m.eps.find(e => e.v > 0) || {}).v;
+    const eps = eb ? m.eps.filter(e => e.v > 0).map(e => ({ i: e.i, v: e.v / eb * 100 })) : [];
+    const epsNext = eb && m.next !== null && m.next > 0 ? m.next / eb * 100 : null;
+    const all = [price, spx, rs].flatMap(a => a.filter(Number.isFinite)).concat(eps.map(e => e.v), epsNext !== null ? [epsNext] : [], [100]);
+    const lo = Math.log(Math.min(...all)), hi = Math.log(Math.max(...all)), pad = (hi - lo) * 0.06 || 0.1;
+    const y = v => padT + (PH - padT - padB) * (1 - (Math.log(v) - (lo - pad)) / ((hi + pad) - (lo - pad)));
     const parts = [];
-    parts.push(`<polyline fill="none" stroke="#5aa0ff" stroke-width="1.4" opacity=".9" points="${linePoints(m.rs, x, yR)}"/>`);
-    parts.push(`<polyline fill="none" stroke="#e8edf5" stroke-width="1.8" points="${linePoints(m.price, x, yP)}"/>`);
-    if (m.eps.length) {
-        const pts = m.eps.map(e => [x(e.i), yE(e.v)]);
-        parts.push(`<polyline fill="none" stroke="#f0932b" stroke-width="2" points="${pts.map(p => p.map(v => v.toFixed(1)).join(",")).join(" ")}"/>`);
-        pts.forEach(p => parts.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3" fill="#f0932b"/>`));
-        if (m.next !== null) {
-            const lp = pts[pts.length - 1], nx = x(slots - 1), ny = yE(m.next);
-            parts.push(`<line x1="${lp[0].toFixed(1)}" y1="${lp[1].toFixed(1)}" x2="${nx.toFixed(1)}" y2="${ny.toFixed(1)}" stroke="#f0932b" stroke-width="2" stroke-dasharray="4 3"/>`);
-            parts.push(`<circle cx="${nx.toFixed(1)}" cy="${ny.toFixed(1)}" r="3" fill="none" stroke="#f0932b" stroke-width="1.5"/>`);
+    parts.push(`<rect x="0.5" y="0.5" width="${W - 1}" height="${PH - 1}" fill="none" stroke="#2a3340"/>`);
+    parts.push(`<line x1="${padL}" y1="${y(100).toFixed(1)}" x2="${W - padR}" y2="${y(100).toFixed(1)}" stroke="#4a5666" stroke-width="1" stroke-dasharray="2 4"/>`);
+    m.eps.forEach(e => parts.push(`<line x1="${x(e.i).toFixed(1)}" y1="${padT}" x2="${x(e.i).toFixed(1)}" y2="${PH - padB}" stroke="#f0932b" stroke-opacity=".16"/>`));
+    // chmura cena vs S&P: segment po segmencie, z rozcięciem w miejscu przecięcia
+    const cloud = [];
+    for (let i = 1; i < m.n; i++) {
+        const p0 = price[i - 1], p1 = price[i], s0 = spx[i - 1], s1 = spx[i];
+        if (![p0, p1, s0, s1].every(Number.isFinite)) continue;
+        const d0 = p0 - s0, d1 = p1 - s1, quad = (xa, xb, pa, pb, sa, sb, col) => cloud.push(`<polygon fill="${col}" points="${[[xa, pa], [xb, pb], [xb, sb], [xa, sa]].map(q => q[0].toFixed(1) + "," + y(q[1]).toFixed(1)).join(" ")}"/>`);
+        const G = "rgba(46,204,113,.22)", R = "rgba(255,90,110,.22)";
+        if (d0 * d1 >= 0) quad(x(i - 1), x(i), p0, p1, s0, s1, (d0 + d1) >= 0 ? G : R);
+        else {
+            const t = d0 / (d0 - d1), xc = x(i - 1) + (x(i) - x(i - 1)) * t, yc = p0 + (p1 - p0) * t;
+            quad(x(i - 1), xc, p0, yc, s0, yc, d0 >= 0 ? G : R);
+            quad(xc, x(i), yc, p1, yc, s1, d1 >= 0 ? G : R);
         }
     }
-    return `<svg class="fund-mini-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="Cena, EPS i RS">${parts.join("")}</svg>`;
+    parts.push(cloud.join(""));
+    const line = (arr, color, w, dash = "") => parts.push(`<polyline fill="none" stroke="${color}" stroke-width="${w}" stroke-linejoin="round" ${dash ? `stroke-dasharray="${dash}"` : ""} points="${linePoints(arr, x, y)}"/>`);
+    line(spx, "#8d99ab", 1.1, "3 2");
+    line(rs, "#4aa3ff", 1.6);
+    line(price, "#f4f7fb", 2);
+    const ends = [];
+    if (eps.length) {
+        const pts = [];
+        eps.forEach((e, k) => { if (k) pts.push([x(e.i), y(eps[k - 1].v)]); pts.push([x(e.i), y(e.v)]); });
+        const lp = pts[pts.length - 1];
+        pts.push([x(m.n - 1), lp[1]]);
+        parts.push(`<polyline fill="none" stroke="#f0932b" stroke-width="2" points="${pts.map(q => q[0].toFixed(1) + "," + q[1].toFixed(1)).join(" ")}"/>`);
+        eps.forEach(e => parts.push(`<circle cx="${x(e.i).toFixed(1)}" cy="${y(e.v).toFixed(1)}" r="2.6" fill="#f0932b"/>`));
+        let lastV = eps[eps.length - 1].v, xe = x(m.n - 1);
+        if (epsNext !== null) {
+            xe = x(slots - 1);
+            parts.push(`<line x1="${x(m.n - 1).toFixed(1)}" y1="${lp[1].toFixed(1)}" x2="${xe.toFixed(1)}" y2="${y(epsNext).toFixed(1)}" stroke="#f0932b" stroke-width="2" stroke-dasharray="4 3"/>`);
+            parts.push(`<circle cx="${xe.toFixed(1)}" cy="${y(epsNext).toFixed(1)}" r="3" fill="#0f141b" stroke="#f0932b" stroke-width="1.5"/>`);
+            lastV = epsNext;
+        }
+        ends.push({ v: lastV, text: epsNext !== null ? "EPS prog." : "EPS", col: "#f0932b" });
+    }
+    const lastOf = a => [...a].reverse().find(Number.isFinite);
+    [[price, "Cena", "#f4f7fb"], [rs, "RS", "#4aa3ff"], [spx, "S&P", "#8d99ab"]].forEach(([a, t, col]) => { const v = lastOf(a); if (Number.isFinite(v)) ends.push({ v, text: t, col }); });
+    // podpisy na prawym końcu (zmiana % od początku okna), rozsunięte, żeby się nie nakładały
+    ends.sort((a, b) => y(a.v) - y(b.v));
+    let prev = -Infinity;
+    ends.forEach(e => { e.y = Math.max(y(e.v), prev + 11); prev = e.y; });
+    ends.forEach(e => {
+        const ch = e.v - 100;
+        parts.push(`<text x="${W - padR + 4}" y="${(e.y + 3.5).toFixed(1)}" font-size="10" font-weight="700" fill="${e.col}">${e.text} ${ch >= 0 ? "+" : ""}${ch.toFixed(0)}%</text>`);
+    });
+    if (m.rsHigh) parts.push(`<circle cx="${x(m.rsHigh).toFixed(1)}" cy="${y(rs[m.rsHigh]).toFixed(1)}" r="3.2" fill="#4aa3ff" stroke="#fff" stroke-width="1"/>`);
+    // wstęgi sygnałów: po jednym pasku na tydzień (zielony = dobrze, jasny = bardzo dobrze, czerwony = źle, szary = brak danych)
+    const cw = (W - padL - padR) / Math.max(1, slots - 1);
+    const col = v => (v === 2 ? "#2ee07a" : v === 1 ? "#1f9d55" : v === -1 ? "#d1344a" : "#2a3340");
+    [["TREND", m.sig.trend], ["RS", m.sig.rsUp], ["EPS r/r", m.sig.growth], ["POPYT", m.sig.demand]].forEach(([label, arr], r) => {
+        const yy = PH + 8 + r * (ROW + 2);
+        arr.forEach((v, i) => parts.push(`<rect x="${(x(i) - cw / 2).toFixed(1)}" y="${yy}" width="${(cw + 0.4).toFixed(1)}" height="${ROW}" fill="${col(v)}"/>`));
+        parts.push(`<text x="${W - padR + 4}" y="${yy + ROW - 1}" font-size="8.5" font-weight="700" fill="#8d99ab">${label}</text>`);
+    });
+    return `<svg class="fund-mini-svg fund-${m.verdict.level}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cena, S&amp;P 500, siła względna i EPS na jednym wykresie">${parts.join("")}</svg>`;
+}
+
+// Sygnały tydzień po tygodniu (1 = dobrze, -1 = źle, 0 = brak danych) do wstęg pod wykresem i do werdyktu.
+// Heurystyki, nie rekomendacja: trend = cena nad SMA40 tyg.; RS = RS wyżej niż 10 tygodni temu; EPS = ostatni raport r/r (2 = ≥ 25 %);
+// popyt = w ostatnich 10 tygodniach więcej wolumenu w tygodniach wzrostowych niż spadkowych; rynek = cena bije S&P od początku okna.
+function fundSignals(c, weeks, price, rs, spx, eps) {
+    const n = price.length, sma = c.sma40 || [], vol = c.v || [];
+    const trend = price.map((v, i) => (Number.isFinite(v) && Number.isFinite(sma[i]) ? (v > sma[i] ? 1 : -1) : 0));
+    const rsUp = rs.map((v, i) => (i >= 10 && Number.isFinite(v) && Number.isFinite(rs[i - 10]) ? (v > rs[i - 10] ? 1 : -1) : 0));
+    const growth = new Array(n).fill(0);
+    (c.eps || []).forEach(q => {
+        const i = weekIndexForDate(weeks, q.d);
+        if (i < 0 || !Number.isFinite(q.g)) return;
+        const st = q.g >= 25 ? 2 : (q.g > 0 ? 1 : -1);
+        for (let k = i; k < n; k++) growth[k] = st;
+    });
+    const demand = price.map((_, i) => {
+        if (i < 10) return 0;
+        let up = 0, dn = 0;
+        for (let k = i - 9; k <= i; k++) {
+            if (!Number.isFinite(price[k]) || !Number.isFinite(price[k - 1]) || !Number.isFinite(vol[k])) continue;
+            if (price[k] >= price[k - 1]) up += vol[k]; else dn += vol[k];
+        }
+        return up + dn > 0 ? (up > dn ? 1 : -1) : 0;
+    });
+    const last = (a, f = Number.isFinite) => [...a].reverse().find(f);
+    const p0 = price.find(Number.isFinite), s0 = spx ? spx.find(Number.isFinite) : null;
+    const pl = last(price), sl = spx ? last(spx) : null;
+    const market = p0 && s0 && pl && sl ? (pl / p0 > sl / s0 ? 1 : -1) : 0;
+    const now = [trend[n - 1], rsUp[n - 1], growth[n - 1] > 0 ? 1 : growth[n - 1], demand[n - 1], market];
+    return { sig: { trend, rsUp, growth, demand }, verdict: fundVerdict(now) };
+}
+
+// Werdykt: ile z 5 sygnałów jest teraz zielonych (trend, RS, EPS, popyt, bicie rynku).
+function fundVerdict(now) {
+    const known = now.filter(v => v !== 0).length, good = now.filter(v => v > 0).length;
+    const level = known < 3 ? "unknown" : (good >= 4 ? "good" : (good === 3 ? "mixed" : "bad"));
+    const text = { good: "Rośnie, sygnały zgodne", mixed: "Mieszane sygnały", bad: "Słabo, większość sygnałów czerwona", unknown: "Za mało danych" }[level];
+    return { good, known, level, text, now };
+}
+
+// indeks ostatniego tygodnia (z 5 ostatnich), w którym RS jest na maksimum całego okna; null gdy RS nie jest przy szczycie
+function rsAtHigh(rs) {
+    const f = rs.filter(Number.isFinite);
+    if (f.length < 8) return null;
+    const max = Math.max(...f);
+    for (let i = rs.length - 1; i >= rs.length - 5; i--) if (rs[i] === max) return i;
+    return null;
 }
 
 function linePoints(arr, x, y) {
@@ -1133,11 +1233,12 @@ function fundMiniHtml(m) {
         `<span class="fm-eps">EPS TTM ${m.epsLast !== null ? m.epsLast.toFixed(2) : "—"} <b class="${cls(m.epsChg)}">${sg(m.epsChg)}</b>${m.next !== null ? ` · prog. ${m.next.toFixed(2)}` : ""}</span>`,
         `<span class="fm-rs">RS vs S&amp;P <b class="${cls(m.rsChg)}">${sg(m.rsChg)}</b></span>`,
     ].join("");
-    return `${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo; każda linia w swojej skali — liczy się kierunek.</div>`;
+    const v = m.verdict, ok = ["trend", "RS", "EPS", "popyt", "bije S&amp;P"].map((t, i) => `<i class="${v.now[i] > 0 ? "ok" : v.now[i] < 0 ? "no" : "na"}">${t}</i>`).join("");
+    return `<div class="fund-verdict fund-${v.level}"><b>${v.good}/5</b> ${v.text}<span>${ok}</span></div>${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo. Wszystko = 100 na starcie, skala log. Chmura: zielona = spółka bije S&amp;P 500, czerwona = jest gorsza; pomarańczowe kreski = raporty; kropka = RS na szczycie. Pasy: zielony = dobrze, czerwony = źle (heurystyka, nie rekomendacja).</div>`;
 }
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict,
     };
 }
