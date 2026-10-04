@@ -818,12 +818,37 @@ function markSelectedRow(scroll = false) {
 }
 
 // Strzałki ↑/↓ przechodzą po bieżącej liście (jak spacja/strzałki w TC2000) i ładują wykres kolejnej spółki.
-function stepChart(delta) {
+function neighborTicker(delta) {
     const rows = [...document.querySelectorAll(`#table-${state.tab} tbody tr[data-ticker]`)];
-    if (!rows.length) return;
+    if (!rows.length) return null;
     const cur = rows.findIndex(r => r.dataset.ticker === chartRequested);
     const next = rows[Math.max(0, Math.min(rows.length - 1, cur < 0 ? 0 : cur + delta))];
-    if (next && next.dataset.ticker !== chartRequested) openChart(next.dataset.ticker);
+    return next && next.dataset.ticker !== chartRequested ? next.dataset.ticker : null;
+}
+function stepChart(delta) {
+    const t = neighborTicker(delta);
+    if (t) openChart(t);
+}
+
+// Zmiana spółki przesunięciem palca: animacja karty — stara wyjeżdża w stronę przesunięcia (next = w lewo), nowa wjeżdża z przeciwnej strony.
+// Bez animacji, gdy nie ma sąsiedniej spółki (koniec listy) albo użytkownik prosi o mniej ruchu.
+let slideBusy = false;
+function slideChart(delta) {
+    const t = neighborTicker(delta);
+    if (!t || slideBusy) return;
+    const box = document.querySelector(".wl-chart-box");
+    const dir = delta > 0 ? "next" : "prev";
+    const reduced = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!box || reduced) { openChart(t); return; }
+    slideBusy = true;
+    box.classList.remove("card-in-next", "card-in-prev");
+    box.classList.add(`card-out-${dir}`);
+    setTimeout(() => {
+        box.classList.remove(`card-out-${dir}`);
+        box.classList.add(`card-in-${dir}`);
+        openChart(t);
+        setTimeout(() => { box.classList.remove(`card-in-${dir}`); slideBusy = false; }, 280);
+    }, 140);
 }
 
 // Kierunek przeciągnięcia palcem: "left" / "right" gdy ruch jest głównie poziomy, dość długi i szybki; inaczej null.
@@ -1652,7 +1677,7 @@ function initChartModal() {
     document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });
     // przesunięcie palca w poziomie: w lewo = następna spółka z listy, w prawo = poprzednia (zastąpiło strzałki ◀ ▶);
     // działa na tytule, linii gotowości i na wykresie, ale nie na suwaku (ma własne przeciąganie) ani w trybie rysowania
-    const stepNext = () => stepChart(1), stepPrev = () => stepChart(-1);
+    const stepNext = () => slideChart(1), stepPrev = () => slideChart(-1);
     attachSwipe(document.getElementById("chartReady"), stepNext, stepPrev);
     attachSwipe(document.querySelector(".wl-chart-titles"), stepNext, stepPrev);
     attachSwipe(document.getElementById("chartBody"), stepNext, stepPrev, ev => annEdit.on || ev.target.closest(".wl-range"));

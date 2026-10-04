@@ -937,5 +937,17 @@ body:not(.split) tr.open td.card-fchart { display: block !important; order: 30; 
 .fund-mini-data summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--text-dim); padding: 6px 0; min-height: 32px; }
 .fund-mini-data[open] summary { color: var(--green-bright); }
 
-/* suwak okna czasu na dole okna wykresu (pod wykresem); na telefonie zapas na pasek „home” iPhone'a */
-body:not(.split) .wl-chart-box .wl-range { margin-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+/* przejście między spółkami jak karta: stara karta (tytuł, oceny, wykres) wyjeżdża w stronę przesunięcia, nowa wjeżdża z przeciwnej strony;
+   przyciski w nagłówku zostają. Klasy ustawia slideChart w watchlist.js. */
+.wl-chart-box.card-out-next, .wl-chart-box.card-out-prev, .wl-chart-box.card-in-next, .wl-chart-box.card-in-prev { overflow-x: hidden; }
+.wl-chart-box.card-out-next :is(.wl-chart-titles, #chartRatings, #chartReady, #chartStats, #chartBase, #chartPattern, .wl-chart-body) { animation: cardOutNext .14s ease-in forwards; }
+.wl-chart-box.card-out-prev :is(.wl-chart-titles, #chartRatings, #chartReady, #chartStats, #chartBase, #chartPattern, .wl-chart-body) { animation: cardOutPrev .14s ease-in forwards; }
+.wl-chart-box.card-in-next :is(.wl-chart-titles, #chartRatings, #chartReady, #chartStats, #chartBase, #chartPattern, .wl-chart-body) { animation: cardInNext .26s cubic-bezier(.2,.8,.2,1); }
+.wl-chart-box.card-in-prev :is(.wl-chart-titles, #chartRatings, #chartReady, #chartStats, #chartBase, #chartPattern, .wl-chart-body) { animation: cardInPrev .26s cubic-bezier(.2,.8,.2,1); }
+@keyframes cardOutNext { to { transform: translateX(-45%); opacity: 0; } }
+@keyframes cardOutPrev { to { transform: translateX(45%); opacity: 0; } }
+@keyframes cardInNext { from { transform: translateX(45%); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes cardInPrev { from { transform: translateX(-45%); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+    .wl-chart-box[class*="card-"] :is(.wl-chart-titles, #chartRatings, #chartReady, #chartStats, #chartBase, #chartPattern, .wl-chart-body) { animation: none !important; }
+}

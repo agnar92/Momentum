@@ -1056,7 +1056,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     const defN = defaultWindowLength(full, opts);
     const defEnd = full.n - (full.pad || 0) + (full.padDefault || 0);   // domyślnie widać tylko odrobinę pustego miejsca z prawej
     let win = clampWindow(opts.window, full.n, defN, defEnd);
-    container.innerHTML = '<div id="chartPlot"></div>' + sliderHtml(full);   // suwak POD wykresem, na dole okna (na życzenie użytkownika)
+    container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie (próba z suwakiem na dole nie działała)
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
         const m = sliceModel(full, win.n, win.end);
