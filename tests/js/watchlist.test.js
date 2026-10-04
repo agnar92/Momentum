@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    rsLeaders, qullamaggieRows, ptRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    rsLeaders, qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -65,11 +65,7 @@ test("qullamaggieRows: empty input and zero topPct give an empty list", () => {
     assert.deepEqual(qullamaggieRows([stock("A")], { minDollarVolumeM: 0, minAdrPct: 0, topPct: 0 }), []);
 });
 
-test("ptRows keeps stocks with a price target, fillTargets adds min/max from estimates", () => {
-    const rows = ptRows([stock("A", { pt_mean: 120, pt_upside_pct: 20 }), stock("B"), stock("C", { pt_mean: 80, pt_upside_pct: null })]);
-    assert.deepEqual(rows.map(s => s.ticker), ["A"]);
-    const few = [stock("X", { pt_mean: 10, pt_upside_pct: 50, analysts: 2 }), stock("Y", { pt_mean: 10, pt_upside_pct: 5, analysts: 8 })];
-    assert.deepEqual(ptRows(few, 3).map(s => s.ticker), ["Y"]);
+test("fillTargets adds min/max from estimates", () => {
     const stocks = [stock("A", { pt_mean: 120 }), stock("B", { pt_low: 5, pt_high: 9 })];
     fillTargets(stocks, { A: { pt: { low: 90, high: 150 } }, B: { pt: { low: 1, high: 2 } } });
     assert.equal(stocks[0].pt_low, 90);
@@ -198,9 +194,6 @@ test("Finviz is the primary source of target and upside, Yahoo is the fallback; 
     assert.equal(targetMain({ finviz_target: 150, pt_mean: 160 }), 150);
     assert.equal(targetMain({ pt_mean: 160 }), 160);
     assert.deepEqual([1, 1.84, 2.5, 3.2, 4.6].map(recomLabel), ["Strong Buy", "Buy", "Hold", "Hold", "Strong Sell"]);
-    // próg analityków dotyczy tylko spółek, dla których znamy ich liczbę (Yahoo)
-    const rows = [stock("A", { finviz_upside_pct: 20 }), stock("B", { finviz_upside_pct: 40, analysts: 1 }), stock("C", { finviz_upside_pct: 10, analysts: 9 })];
-    assert.deepEqual(ptRows(rows, 3).map(s => s.ticker), ["A", "C"]);
 });
 
 test("rsLeaders filters by group strength and leaders-only; marketLines describes both indices", () => {
@@ -218,18 +211,18 @@ test("rsLeaders filters by group strength and leaders-only; marketLines describe
     assert.deepEqual(rsLeaders(inst, 80, 0, 0, 0, false, true).map(s => s.ticker), ["I"]);
 });
 
-test("all tabs share the same columns; alerts add alert columns; tagStrategies orders R, Q, U, B", () => {
+test("all tabs share the same columns; alerts add alert columns; tagStrategies orders R, Q, B, W", () => {
     const { TAB_COLUMNS, tagStrategies } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
-    ["LIST", "FAV", "RS", "QM", "PT", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
+    ["LIST", "FAV", "RS", "QM", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
     TAB_COLUMNS.LIST.forEach(id => assert.ok(TAB_COLUMNS.ALERTS.includes(id), id));
     assert.ok(TAB_COLUMNS.ALERTS.includes("alStatus"));
     const a = stock("A", { rs_rating: 90 }), b = stock("B", { rs_rating: 10 });
     tagStrategies([a, b], [a, b], { rsMin: 80, epsMin: 0, compMin: 0, groupMin: 0, leadersOnly: false, instOnly: false,
-        qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, ptMinAnalysts: 3, bases: { maxDistPct: 10, vcpOnly: false } });
+        qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false } });
     assert.deepEqual(a.strat, ["R", "Q"]);
     assert.equal(a.strat_rank, 0);
     assert.deepEqual(b.strat, []);
-    assert.equal(b.strat_rank, 5);
+    assert.equal(b.strat_rank, 4);
 });
 
 test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and sort order", () => {

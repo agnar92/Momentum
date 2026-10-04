@@ -23,8 +23,6 @@
 <div class="topbar">
     <div class="brand">WATCHLIST<span class="brand-sub"> // Finviz + yfinance, odświeżane codziennie</span></div>
     <nav>
-        <a href="index.html" class="active">Watchlist</a>
-        <a href="ep.html">EP</a>
         <span id="connStatus" class="conn-status" title="Brak połączenia z siecią — pokazywane są ostatnie zapisane dane." hidden>⚠ Offline</span>
     </nav>
 </div>
@@ -40,7 +38,6 @@
                 <button class="drawer-tab" data-tab="CS">🏆 CANSLIM</button>
                 <button class="drawer-tab" data-tab="RS">📊 Ratingi</button>
                 <button class="drawer-tab" data-tab="QM">🎯 Qullamaggie</button>
-                <button class="drawer-tab" data-tab="PT">🎯 Upside</button>
                 <button class="drawer-tab" data-tab="BASES">🧱 Bazy</button>
                 <button class="drawer-tab" data-tab="POS">💼 Pozycje</button>
                 <button class="drawer-tab" data-tab="ALERTS">🔔 Alerty<span id="alertBadge"></span></button>
@@ -78,9 +75,6 @@
                 <label class="field"><span>Min. obrót dzienny (mln $):</span><input type="number" id="qmMinDollarVolume" min="0" step="1"></label>
                 <label class="field"><span>Min. ADR %:</span><input type="number" id="qmMinAdr" min="0" step="0.5"></label>
                 <label class="field"><span>Top % wzrostu:</span><input type="number" id="qmTopPct" min="1" max="100" step="1"></label>
-            </fieldset>
-            <fieldset class="filter-group"><legend>🎯 Upside</legend>
-                <label class="field" title="Spółki z 1–2 analitykami dają przypadkowe, skrajne upside — odetnij je progiem (działa tam, gdzie Yahoo zna liczbę analityków)"><span>Min. analityków:</span><input type="number" id="ptMinAnalysts" min="0" step="1"></label>
             </fieldset>
             <fieldset class="filter-group"><legend>🏆 CANSLIM</legend>
                 <label class="field" title="Do zakładki CANSLIM wchodzą spółki spełniające co najmniej tyle z 7 kryteriów C A N S L I M"><span>Min. kryteriów (z 7):</span><input type="number" id="csMin" min="0" max="7" step="1"></label>
@@ -125,7 +119,6 @@
         <details class="screener-guide" id="guide-BRK" hidden><summary>🚀 Wybicia — co tu trafia</summary>Jedna kolejka „czy to już ten moment?”. Spółka wpada tu, gdy ma <b>flagę / korytarz przy oporze</b> albo świeże wybicie z nich, <b>pivot bazy</b> w zadanym dystansie albo <b>własną linię z alertem „nad linią”</b> blisko ceny (lub przebitą). Kolumna „Wybicie” pokazuje, ile % brakuje do najbliższego poziomu, i powody; najbliżej na górze, świeże wybicia przed wszystkimi. Otwórz wykres i przeglądaj kolejne spółki strzałkami ◀ ▶ (na telefonie także przeciągnięciem po tytule). Heurystyka — sprawdź wykres i wolumen sam.</details>
         <details class="screener-guide" id="guide-RS" hidden><summary>📊 Ratingi RS / EPS / Composite — jak liczone</summary><b>RS Rating</b> (siła cenowa, styl IBD): <code>0,4·R3M + 0,2·R6M + 0,2·R9M + 0,2·R12M</code> (najnowszy kwartał z podwójną wagą), percentyl 1–99 wśród spółek z listy. <b>EPS Rating</b> (przybliżenie IBD): 80 % to percentyl <i>wzrostu</i> EPS, 20 % percentyl <i>stabilności</i> (odsetek ostatnich 8 kwartałów z dodatnim wzrostem r/r, kolumna „Stabilność EPS”; bez stabilności — sam wzrost). Wzrost EPS: r/r z dwóch ostatnich kwartałów (wagi 35 % i 25 %), wzrost EPS w bieżącym roku (15 %) i średnioroczny z 5 lat (25 %) — surowe procenty, bez obcinania (tak jak zwroty w RS); brakujące składniki są pomijane (wymagany ostatni kwartał i min. 2 składniki), wynik to percentyl 1–99 wśród listy. <b>Composite</b> = średnia z RS Rating i EPS Rating (po 50 %), tylko gdy są oba. To przybliżenia — IBD nie publikuje formuł, nie używamy też oceny stabilności ani grupy branżowej, a rankingi są liczone wśród spółek już wyselekcjonowanych przez Finviz. Progi „Min.” poniżej filtrują listę; kolumny można też sortować.</details>
         <details class="screener-guide" id="guide-QM" hidden><summary>🎯 Qullamaggie — jak liczony</summary>Najpierw progi płynności (średni obrót dzienny cena × wolumen z ~20 sesji i ADR% — średnia dzienna rozpiętość High/Low), potem dla każdego okna (1, 3 i 6 miesięcy) top X% spółek wg relacji ceny do najniższego notowania z okna (cena / minimum). Lista to suma tych trzech grup bez powtórzeń.</details>
-        <details class="screener-guide" id="guide-PT" hidden><summary>🎯 Upside — jak liczony</summary>Źródłem głównym jest <b>Finviz</b> (stabilniejszy niż Yahoo): <b>Rekomendacja</b> analityków (1 = Strong Buy … 5 = Strong Sell; im mniej, tym lepiej), <b>Cel</b> = średnia cena celu i <b>Upside</b> = cel względem dzisiejszej ceny; domyślnie sortowane po upside malejąco. Dane Finviz pojawiają się po najbliższym codziennym przeliczeniu — do tego czasu (i dla spółek, których Finviz nie ma) używany jest Yahoo. <b>Min</b>, <b>Max</b> i liczba analityków pochodzą z Yahoo; pole „Min. analityków” (domyślnie 3) odcina spółki z pojedynczymi analitykami, ale tylko tam, gdzie Yahoo zna ich liczbę. To tylko informacja o opiniach analityków, nie rekomendacja.</details>
         <details class="screener-guide" id="guide-CS" hidden><summary>🏆 CANSLIM — jak liczone (heurystyka)</summary>Lista kontrolna 7 kryteriów O'Neila z danych, które już mamy: <b>C</b> EPS ostatniego kwartału r/r ≥ 25 %, <b>A</b> wzrost EPS 5 lat ≥ 20 % (bez tego: EPS w tym roku ≥ 25 %), <b>N</b> do 15 % pod szczytem 52 tyg., <b>S</b> Acc/Dis A lub B, <b>L</b> RS Rating ≥ 80, <b>I</b> instytucje ≥ 20 % z napływem, <b>M</b> rynek w trendzie wzrostowym (EMA10 &gt; EMA20 tyg.). Zielona litera = spełnione, czerwona = nie, szara = brak danych; wynik liczy się przy co najmniej 4 znanych kryteriach. Próg ustawisz w Filtrach. Progi to heurystyka, nie historycznie testowana — sprawdź wykres i fundamenty sam.</details>
         <details class="screener-guide" id="guide-BASES" hidden><summary>🧱 Bazy — jak liczone (heurystyka)</summary>Korekta od lokalnego tygodniowego szczytu (głębokość 6–50%, min. 5 tygodni), jeszcze nie odrobiona. Typ: flat (≤15%), cup (≤35% i odrobione ≥50%), korekta, głęboka. Pivot = szczyt bazy; „Do pivotu” to wzrost potrzebny do jego przebicia. VCP = co najmniej dwa coraz mniejsze skurcze, ostatni ≤10%. To uproszczenie, nie rozpoznawanie formacji z MarketSmith (np. bez wykrywania rączki).</details>
         <details class="screener-guide" id="guide-POS" hidden><summary>💼 Pozycje — jak to działa</summary>Otwórz wykres spółki → <b>💼 Pozycja</b>: wpisz wejście, stop, liczbę akcji i cel (albo użyj kalkulatora: kapitał × ryzyko % ÷ (wejście − stop)). Stop i cel pojawiają się na wykresie jako linie z alertem (stop: cena pod linią, cel: nad linią), więc przebicie zobaczysz w zakładce 🔔 Alerty. Tu: zysk w % i $, <b>R</b> = zysk w wielokrotnościach początkowego ryzyka, odległość do stopu i ryzyko całego portfela; najbliżej stopu na górze. Dane synchronizują się przez Gist razem z liniami. Notatnik pomocniczy, nie zlecenia — nic nie jest wysyłane do brokera.</details>
@@ -143,7 +136,6 @@
             <table class="momentum-table" id="table-BRK" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-RS" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-QM" hidden><thead></thead><tbody></tbody></table>
-            <table class="momentum-table" id="table-PT" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-CS" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-BASES" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-POS" hidden><thead></thead><tbody></tbody></table>
