@@ -801,7 +801,6 @@ function renderTable() {
     updateCardSort(tab);
     markSelectedRow();
     fillFundCharts();
-    if (chartRequested) updateChartNav(chartRequested);   // pasek ◀ n / N odświeża się po zmianie zakładki, filtra, sortowania
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
         const first = tbody.querySelector("tr[data-ticker]");
         if (first) openChart(first.dataset.ticker);
@@ -827,28 +826,17 @@ function stepChart(delta) {
     if (next && next.dataset.ticker !== chartRequested) openChart(next.dataset.ticker);
 }
 
-// Pasek ◀ 3/27 ▶ pod wykresem: pozycja w bieżącej liście i przejście do sąsiedniej spółki (przycisk albo przeciągnięcie po tytule).
-function updateChartNav(ticker) {
-    const list = visibleTickers();
-    const i = list.indexOf(ticker);
-    const pos = document.getElementById("chartNavPos");
-    if (pos) pos.textContent = i >= 0 ? `${i + 1} / ${list.length}` : "";
-    const prev = document.getElementById("chartPrev"), next = document.getElementById("chartNext");
-    if (prev) prev.disabled = i <= 0;
-    if (next) next.disabled = i < 0 || i >= list.length - 1;
-}
-
 // Kierunek przeciągnięcia palcem: "left" / "right" gdy ruch jest głównie poziomy, dość długi i szybki; inaczej null.
 function swipeDirection(dx, dy, ms) {
     if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.8 || ms > SWIPE_MAX_MS) return null;
     return dx < 0 ? "left" : "right";
 }
 
-function attachSwipe(el, onLeft, onRight) {
+function attachSwipe(el, onLeft, onRight, ignore = null) {
     let start = null;
     el.addEventListener("touchstart", e => {
         const t = e.touches[0];
-        start = e.touches.length === 1 ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
+        start = e.touches.length === 1 && !(ignore && ignore(e)) ? { x: t.clientX, y: t.clientY, t: Date.now() } : null;
     }, { passive: true });
     el.addEventListener("touchend", e => {
         if (!start) return;
@@ -1389,7 +1377,6 @@ async function openChart(ticker) {
     document.getElementById("chartRatings").innerHTML = stock ? ratingChipsHtml(stock) : "";
     document.getElementById("chartBase").innerHTML = stock ? baseBoxHtml(stock) : "";
     document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && state.data.market.regime) : "";
-    updateChartNav(ticker);
     updatePosButton();
     const scoreBox = document.getElementById("chartScore");
     if (scoreBox) scoreBox.value = Number.isFinite(state.scores[ticker]) ? state.scores[ticker] : "";
@@ -1663,11 +1650,12 @@ function initChartModal() {
         drawChart();
     });
     document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });
-    document.getElementById("chartPrev").addEventListener("click", () => stepChart(-1));
-    document.getElementById("chartNext").addEventListener("click", () => stepChart(1));
-    // przeciągnięcie po tytule / pasku nawigacji: w lewo = następna spółka, w prawo = poprzednia (wykres ma własne gesty, więc nie na nim)
-    ["chartNav", "chartReady"].forEach(id => attachSwipe(document.getElementById(id), () => stepChart(1), () => stepChart(-1)));
-    attachSwipe(document.querySelector(".wl-chart-titles"), () => stepChart(1), () => stepChart(-1));
+    // przesunięcie palca w poziomie: w lewo = następna spółka z listy, w prawo = poprzednia (zastąpiło strzałki ◀ ▶);
+    // działa na tytule, linii gotowości i na wykresie, ale nie na suwaku (ma własne przeciąganie) ani w trybie rysowania
+    const stepNext = () => stepChart(1), stepPrev = () => stepChart(-1);
+    attachSwipe(document.getElementById("chartReady"), stepNext, stepPrev);
+    attachSwipe(document.querySelector(".wl-chart-titles"), stepNext, stepPrev);
+    attachSwipe(document.getElementById("chartBody"), stepNext, stepPrev, ev => annEdit.on || ev.target.closest(".wl-range"));
     const chartScore = document.getElementById("chartScore");
     if (chartScore) {
         chartScore.addEventListener("change", () => { if (chartRequested) setScore(chartRequested, chartScore.value); });
