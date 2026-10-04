@@ -543,7 +543,7 @@ function chartSvg(m, opts = {}) {
     // Pasek znaczników wyników (strzałka ↑ EPS + zmiana r/r, jak w MarketSmith/MarketSurge) leży pod wykresem cen: odejmujemy go od wysokości panelu.
     const labels = [];   // etykiety wykresu cen rozmieszczane bez nakładania (placeLabels) po narysowaniu wszystkiego
     const fixedLabels = [];   // etykiety rysowane na sztywno (miseczki) — tylko zajmują miejsce
-    const addLabel = (text, xx, yy, o = {}) => (manualRange && (yy < P.y - fs(14) || yy > P.y + P.h + fs(14))) ? null : labels.push({ text: String(text), x: xx, y: yy, anchor: o.anchor || "middle", size: o.size || fs(10), fill: o.fill || CHART_COLORS.textStrong, bold: !!o.bold, prio: o.prio === undefined ? 1 : o.prio, title: o.title || "" });
+    const addLabel = (text, xx, yy, o = {}) => labels.push({ text: String(text), x: xx, y: yy, anchor: o.anchor || "middle", size: o.size || fs(10), fill: o.fill || CHART_COLORS.textStrong, bold: !!o.bold, prio: o.prio === undefined ? 1 : o.prio, title: o.title || "" });
     const reserveLabel = (text, xx, yy, anchor, size, bold) => fixedLabels.push(labelBox({ text: String(text), anchor, size, bold }, xx, yy));
     const hasMarks = m.eps.length > 0 || !!m.epsNext;
     const marksH = hasMarks ? fs(opts.compact ? 28 : 32) : 0;
@@ -565,11 +565,8 @@ function chartSvg(m, opts = {}) {
     const pExt = numericExtent([m.h, m.l, ...nearSma, ptExt, ...pivotExtra]) || [0, 1];
     const useLog = !!opts.log && pExt[0] > 0;
     const pad = (pExt[1] - pExt[0]) * 0.04;
-    let pMin = useLog ? pExt[0] / 1.04 : pExt[0] - pad;
-    let pMax = useLog ? pExt[1] * 1.04 : pExt[1] + pad;
-    // ręczny zakres cen (przesuwanie palcem góra–dół / rozciąganie osi, jak w TradingView) zastępuje autoskalę do czasu przycisku „A”
-    const manualRange = !!(opts.priceRange && opts.priceRange.hi > opts.priceRange.lo && (!useLog || opts.priceRange.lo > 0));
-    if (manualRange) { pMin = opts.priceRange.lo; pMax = opts.priceRange.hi; }
+    const pMin = useLog ? pExt[0] / 1.04 : pExt[0] - pad;
+    const pMax = useLog ? pExt[1] * 1.04 : pExt[1] + pad;
     const yP = useLog ? makeLogScale(pMin, pMax, P.y, P.h) : makeYScale(pMin, pMax, P.y, P.h);
     (useLog ? logTicks(pMin, pMax) : niceTicks(pMin, pMax, 6)).forEach(t => {
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
@@ -599,7 +596,7 @@ function chartSvg(m, opts = {}) {
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
         const col = m.c[i] >= m.o[i] ? CHART_COLORS.up : CHART_COLORS.down;
-        parts.push(`<g ${manualRange ? `clip-path="url(#chartPriceClip${opts.uid || ""})" ` : ""}stroke="${col}" stroke-width="${step > 5 ? 1.6 : 1.1}">`
+        parts.push(`<g stroke="${col}" stroke-width="${step > 5 ? 1.6 : 1.1}">`
             + `<line x1="${x(i)}" x2="${x(i)}" y1="${yP(m.h[i])}" y2="${yP(m.l[i])}"/>`
             + `<line x1="${x(i) - barHalf}" x2="${x(i)}" y1="${yP(m.o[i])}" y2="${yP(m.o[i])}"/>`
             + `<line x1="${x(i)}" x2="${x(i) + barHalf}" y1="${yP(m.c[i])}" y2="${yP(m.c[i])}"/></g>`);
@@ -855,7 +852,7 @@ function chartSvg(m, opts = {}) {
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
     // data wskazanej świecy na dole osi (pokazywana przy najechaniu myszką)
     parts.push(`<text id="chartCrossDate" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
-    if (opts.geomOut) Object.assign(opts.geomOut, { L: { ...L, price: P, marks }, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs, manualRange });
+    if (opts.geomOut) Object.assign(opts.geomOut, { L: { ...L, price: P, marks }, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres ${m.daily ? "dzienny" : "tygodniowy"} ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
 }
 
@@ -992,67 +989,40 @@ function panWindow(start, dx, widthPx, total) {
     return clampWindow({ n: start.n, end: Math.round(start.end - dx * perPx) }, total, start.n, total);
 }
 
-// Zakres cen {lo, hi} przesunięty o ułamek swojej wysokości (dyFrac > 0: palec w dół = widać wyższe ceny); w skali log. liczy się w ln(ceny).
-function shiftPriceRange(range, dyFrac, useLog) {
-    const a = useLog ? Math.log(range.lo) : range.lo, b = useLog ? Math.log(range.hi) : range.hi;
-    const d = (b - a) * dyFrac;
-    return useLog ? { lo: Math.exp(a + d), hi: Math.exp(b + d) } : { lo: a + d, hi: b + d };
-}
-
-// Rozciągnięcie zakresu wokół środka (factor > 1: oddalenie, mniej szczegółów; < 1: przybliżenie), z dolną granicą szerokości.
-function scalePriceRange(range, factor, useLog) {
-    const a = useLog ? Math.log(range.lo) : range.lo, b = useLog ? Math.log(range.hi) : range.hi;
-    const mid = (a + b) / 2, half = Math.max((b - a) / 2 * factor, 1e-6 * Math.max(1, Math.abs(mid)));
-    return useLog ? { lo: Math.exp(mid - half), hi: Math.exp(mid + half) } : { lo: mid - half, hi: mid + half };
-}
-
-// Gesty dotykowe na wykresie (jak w TradingView): szczypnięcie = zoom osi czasu, przeciągnięcie jednym palcem = przesuwanie w czasie (poziomo)
-// ORAZ po cenie (pionowo — zakres cen przechodzi w ręczny, wraca przyciskiem „A”), przeciągnięcie po osi cen z prawej = rozciąganie skali cen.
-// enabled() = false (np. tryb rysowania linii) wyłącza gesty. Odświeżanie scalane w klatkę animacji.
-// api = { win(), price() -> {lo, hi, useLog, hPx, axisFrac}, apply(win, range|null) }
-function attachChartGestures(plot, total, api, enabled) {
+// Gesty dotykowe na wykresie: szczypnięcie = zoom osi czasu (długość okna), przeciągnięcie jednym palcem = przesuwanie okna. Tylko dotyk;
+// enabled() = false (np. tryb rysowania linii) wyłącza gesty, bo wtedy palec rysuje / poprawia obiekty. Odświeżanie scalane w klatkę animacji.
+function attachChartGestures(plot, total, getWin, setWin, enabled) {
     const ptrs = new Map();
-    let pinch = null, pan = null, axis = null, raf = 0, pending = null;
-    const schedule = (w, r) => { pending = { w, r }; if (!raf) raf = window.requestAnimationFrame(() => { raf = 0; api.apply(pending.w, pending.r); }); };
+    let pinch = null, pan = null, raf = 0, pending = null;
+    const apply = w => { pending = w; if (!raf) raf = window.requestAnimationFrame(() => { raf = 0; setWin(pending); }); };
     const dist = () => { const [a, b] = [...ptrs.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
     plot.addEventListener("pointerdown", ev => {
         if (ev.pointerType !== "touch" || !enabled()) return;
         ptrs.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-        const w = api.win(), r = plot.getBoundingClientRect(), pr = api.price();
+        const w = getWin(), r = plot.getBoundingClientRect();
         if (ptrs.size === 2) {
             const [a, b] = [...ptrs.values()];
             pinch = { n: w.n, end: w.end, dist: dist(), frac: Math.min(1, Math.max(0, ((a.x + b.x) / 2 - r.left) / r.width)) };
-            pan = null; axis = null;
-        } else if (ptrs.size === 1) {
-            if (pr && (ev.clientX - r.left) / r.width > pr.axisFrac) axis = { y: ev.clientY, range: { lo: pr.lo, hi: pr.hi }, useLog: pr.useLog, win: w };
-            else pan = { x: ev.clientX, y: ev.clientY, n: w.n, end: w.end, range: pr ? { lo: pr.lo, hi: pr.hi } : null, useLog: pr ? pr.useLog : false, hPx: pr ? pr.hPx : 1, moved: false };
-        }
+            pan = null;
+        } else if (ptrs.size === 1) pan = { x: ev.clientX, n: w.n, end: w.end, moved: false };
     });
     plot.addEventListener("pointermove", ev => {
         const p = ptrs.get(ev.pointerId);
         if (!p || !enabled()) return;
         p.x = ev.clientX; p.y = ev.clientY;
-        if (pinch && ptrs.size === 2) { schedule(pinchWindow(pinch, dist(), total), null); return; }
-        if (axis && ptrs.size === 1) {
-            schedule(axis.win, scalePriceRange(axis.range, Math.exp((ev.clientY - axis.y) / 160), axis.useLog));   // w dół = oddalenie, w górę = przybliżenie
-            return;
-        }
+        if (pinch && ptrs.size === 2) { apply(pinchWindow(pinch, dist(), total)); return; }
         if (pan && ptrs.size === 1) {
-            const dx = ev.clientX - pan.x, dy = ev.clientY - pan.y;
-            if (!pan.moved && Math.hypot(dx, dy) < 8) return;
+            const dx = ev.clientX - pan.x;
+            if (!pan.moved && Math.abs(dx) < 8) return;
             pan.moved = true;
-            const w = panWindow(pan, dx, plot.getBoundingClientRect().width, total);
-            schedule(w, pan.range ? shiftPriceRange(pan.range, dy / pan.hPx, pan.useLog) : null);
+            apply(panWindow(pan, dx, plot.getBoundingClientRect().width, total));
         }
     });
     const end = ev => {
         if (!ptrs.delete(ev.pointerId)) return;
         if (ptrs.size < 2) pinch = null;
-        if (ptrs.size === 0) { pan = null; axis = null; }
-        else if (ptrs.size === 1) {   // po puszczeniu jednego palca zoom przechodzi w przesuwanie
-            const w = api.win(), q = [...ptrs.values()][0], pr = api.price();
-            pan = { x: q.x, y: q.y, n: w.n, end: w.end, range: pr ? { lo: pr.lo, hi: pr.hi } : null, useLog: pr ? pr.useLog : false, hPx: pr ? pr.hPx : 1, moved: true };
-        }
+        if (ptrs.size === 0) pan = null;
+        else if (ptrs.size === 1) { const w = getWin(), q = [...ptrs.values()][0]; pan = { x: q.x, n: w.n, end: w.end, moved: true }; }   // po puszczeniu jednego palca zoom przechodzi w przesuwanie
     };
     plot.addEventListener("pointerup", end);
     plot.addEventListener("pointercancel", end);
@@ -1073,41 +1043,22 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     let win = clampWindow(opts.window, full.n, defN, defEnd);
     container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie
     const plot = container.querySelector("#chartPlot");
-    let priceRange = opts.priceRange || null;   // ręczny zakres cen {lo, hi}; null = autoskala
-    let lastGeom = null;
-    const autoBtn = document.createElement("button");
-    autoBtn.type = "button"; autoBtn.className = "chart-auto-btn"; autoBtn.textContent = "A"; autoBtn.title = "Skala cen automatyczna (po ręcznym przesunięciu wykresu w pionie)";
-    autoBtn.addEventListener("click", () => { priceRange = null; if (opts.onPriceRange) opts.onPriceRange(null); draw(); });
-    container.appendChild(autoBtn);
     const draw = () => {
         const m = sliceModel(full, win.n, win.end);
         const geom = {};
-        lastGeom = geom;
-        autoBtn.hidden = !priceRange;
-        plot.innerHTML = chartSvg(m, { ...opts, priceRange, geomOut: geom });
+        plot.innerHTML = chartSvg(m, { ...opts, geomOut: geom });
         readoutEl.textContent = chartReadout(m, m.lastIdx);
         attachChartHover(plot, m, readoutEl, L);
         if (opts.overlay) opts.overlay({ plot, m, geom, full, L });   // własne linie/cupy (annotate.js) — osobna warstwa nad wykresem
     };
     draw();
-    const applyWin = (w, range) => {
+    const applyWin = w => {
         win = clampWindow(w, full.n, defN, defEnd);
-        if (range) { priceRange = range; if (opts.onPriceRange) opts.onPriceRange(range); }
         draw();
         if (opts.onWindow) opts.onWindow(win);
     };
     const paintSlider = attachRangeSlider(container, full.n, () => win, applyWin);
-    if (opts.gestures) {
-        attachChartGestures(plot, full.n, {
-            win: () => win,
-            price: () => {
-                if (!lastGeom || !lastGeom.L) return null;
-                const r = plot.getBoundingClientRect(), k = r.height / (lastGeom.L.height || r.height);
-                return { lo: lastGeom.pMin, hi: lastGeom.pMax, useLog: lastGeom.useLog, hPx: Math.max(40, lastGeom.L.price.h * k), axisFrac: (lastGeom.L.width - lastGeom.L.right) / lastGeom.L.width };
-            },
-            apply: (w, range) => { applyWin(w, range); if (paintSlider) paintSlider(); },
-        }, opts.gestures);
-    }
+    if (opts.gestures) attachChartGestures(plot, full.n, () => win, w => { applyWin(w); if (paintSlider) paintSlider(); }, opts.gestures);
     return full;
 }
 
@@ -1180,6 +1131,6 @@ function miniChartSvg(src, n = MINI_WEEKS) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, miniChartSvg, miniRatingColor, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, shiftPriceRange, scalePriceRange,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, miniChartSvg, miniRatingColor, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow,
     };
 }

@@ -995,7 +995,7 @@ function savePosition(ticker, pos) {
     if (stock) annSyncPositionLines(annStore, ticker, pos, stock.as_of);
     annSave();   // także synchronizacja (prefs + linie stopu / celu)
     renderTable();
-    if (currentChart && currentChart.ticker === ticker) { chartWindows = []; chartPriceRanges = []; drawChart(); }
+    if (currentChart && currentChart.ticker === ticker) { chartWindows = []; drawChart(); }
     updatePosButton();
 }
 
@@ -1103,7 +1103,7 @@ function showTab(tab, resetSort = true) {
     renderTable();
     // zakładki Alerty i Bazy mają własny układ (dzienny + TradingView) — przerysuj wykres po zmianie zakładki
     if (document.getElementById("chartLayoutBtn")) updateLayoutButton();
-    if (currentChart && effectiveLayout() !== layoutBefore) { chartWindows = []; chartPriceRanges = []; chartActiveCell = 0; drawChart(); }
+    if (currentChart && effectiveLayout() !== layoutBefore) { chartWindows = []; chartActiveCell = 0; drawChart(); }
 }
 
 // M z CANSLIM: stan rynku (S&P 500 i Nasdaq) policzony w watchlist.py::market_state — pasek nad listą.
@@ -1293,7 +1293,6 @@ function initAnnotationIO() {
 
 let chartsPromise = null;
 let chartWinLen = { d: null, w: null };   // długość okna suwaka zapamiętana dla wszystkich spółek (osobno dzienny / tygodniowy)
-let chartPriceRanges = [];   // ręczne zakresy cen {lo, hi} po jednym na wykres (puste = autoskala); zerowane razem z oknami
 let chartWindows = [];      // okna suwaków {n, end} po jednym na wykres w siatce (puste = domyślne); zerowane przy nowej spółce / zmianie układu
 let chartEstOn = false;      // estymaty analityków na wykresie (cena celu + rewizje konsensusu EPS), przycisk „Estymaty”
 let estimatesPromise = null;
@@ -1355,7 +1354,7 @@ async function openChart(ticker) {
     const token = ++chartToken;
     markSelectedRow(true);
     chartCompact = window.innerWidth <= COMPACT_MAX_WIDTH;
-    chartWindows = []; chartPriceRanges = [];
+    chartWindows = [];
     Object.assign(annEdit, { on: false, mode: null, tool: null, selected: null, pending: [], cursor: null });   // nowy wykres: poza trybem edycji
     annCurrent = null;
     annSyncTools();
@@ -1466,7 +1465,6 @@ function drawChart() {
             hideLabels: layout === "1" && !splitMode && !chartLegendOn,
             fit: layout === "1" ? (splitMode ? null : phoneFit(cell)) : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
-            priceRange: chartPriceRanges[i] || null, onPriceRange: r => { chartPriceRanges[i] = r; },
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
             gestures: layout === "1" && !splitMode ? (() => !annEdit.on) : null,   // telefon: szczypnięcie = zoom osi czasu, przeciągnięcie = przesuwanie okna (poza trybem rysowania)
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
@@ -1612,7 +1610,7 @@ function initChartModal() {
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
         chartDaily = !chartDaily;
-        chartWindows = []; chartPriceRanges = [];
+        chartWindows = [];
         try { localStorage.setItem(CHART_DAILY_KEY, chartDaily ? "1" : "0"); } catch (e) { /* ignoruj */ }
         updateTfButton();
         drawChart();
@@ -1667,7 +1665,7 @@ function initChartModal() {
             chartLayout = { "1": "dw", dw: "4", "4": "1" }[chartLayout];
             try { localStorage.setItem(CHART_LAYOUT_KEY, chartLayout); } catch (e) { /* ignoruj */ }
         }
-        chartWindows = []; chartPriceRanges = [];
+        chartWindows = [];
         chartActiveCell = 0;
         updateLayoutButton();
         if (currentChart) drawChart();
@@ -1691,7 +1689,7 @@ function initChartModal() {
         const compact = window.innerWidth <= COMPACT_MAX_WIDTH;
         if (!currentChart || compact === chartCompact) return;
         chartCompact = compact;
-        chartWindows = []; chartPriceRanges = [];
+        chartWindows = [];
         drawChart();
     });
     document.getElementById("chartModal").addEventListener("click", ev => { if (ev.target.id === "chartModal" && !splitMode) closeChart(); });

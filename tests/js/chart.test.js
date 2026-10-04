@@ -499,18 +499,6 @@ test("pinchWindow zooms the time axis around the pinch centre; panWindow drags t
     assert.equal(panWindow({ n: 50, end: 250 }, -5000, 500, 252).end, 252);
 });
 
-test("shiftPriceRange / scalePriceRange move and stretch the manual price range (linear and log)", () => {
-    const { shiftPriceRange, scalePriceRange } = require("../../docs/js/chart.js");
-    const up = shiftPriceRange({ lo: 100, hi: 200 }, 0.1, false);          // palec w dół = widać wyższe ceny
-    assert.ok(Math.abs(up.lo - 110) < 1e-9 && Math.abs(up.hi - 210) < 1e-9);
-    const lg = shiftPriceRange({ lo: 100, hi: 400 }, 0.5, true);           // w skali log. przesunięcie liczy się w ln
-    assert.ok(Math.abs(lg.hi / lg.lo - 4) < 1e-9 && lg.lo > 100);
-    const wide = scalePriceRange({ lo: 100, hi: 200 }, 2, false);
-    assert.ok(Math.abs(wide.lo - 50) < 1e-9 && Math.abs(wide.hi - 250) < 1e-9);
-    const tight = scalePriceRange({ lo: 100, hi: 400 }, 0.5, true);
-    assert.ok(Math.abs(tight.lo * tight.hi - 100 * 400) < 1e-6 && tight.hi / tight.lo < 4);
-});
-
 test("buildChartModel / chartSvg: sell climax top marks the signal bar on the daily chart", () => {
     const { buildChartModel, chartSvg, dailyCharts } = require("../../docs/js/chart.js");
     const days = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
