@@ -417,26 +417,31 @@ test("breakoutInfo follows O'Neil: a close above the line / pivot needs volume; 
     assert.match(noVol.reasons[0].text, /bez wolumenu.*niepotwierdzone/);
 });
 
-test("techModel derives the SMA levels / 52w range / level distance; techStripSvg draws markers, pills and zones graphically", () => {
-    const { techModel, techStripSvg } = require("../../docs/js/watchlist.js");
-    const s = { price: 110, pct_above_sma50: 10, pct_above_sma200: 22.2, pct_from_high_52w: -5, low_52w: 70, base_type: "flat", pivot: 105, vol_surge_5d: 2.2, rs_line_state: "przed ceną" };
-    const t = techModel(s);
-    assert.ok(Math.abs(t.sma50 - 100) < 1e-9 && Math.abs(t.sma200 - 90) < 0.1);
-    assert.ok(Math.abs(t.hi - 115.789) < 0.01 && t.lo === 70);
-    assert.equal(t.level.kind, "pivot");
-    assert.ok(Math.abs(t.toLevelPct - 4.76) < 0.01);
-    assert.deepEqual(t.trend, { p50: true, s50_200: true, p200: true, rs: 2 });
-    const main = techStripSvg(s, "main");
-    assert.ok(main.startsWith("<svg") && main.includes(">kupuj<") && main.includes("C &gt; 50") === false && main.includes("C > 50"));   // cena w strefie zakupu
-    assert.match(main, /RS ● przed/);
-    const more = techStripSvg(s, "more");
-    assert.match(more, /1,5× wybicie/);
-    assert.match(more, /rozciągnięta/);
-    // brak danych: komunikaty zamiast pustych pasków; korekta / głęboka korekta nie daje pivotu
-    const bare = techStripSvg({ price: 50, base_type: "deep", pivot: 80, pct_above_sma50: -3 }, "main");
-    assert.match(bare, /brak zakresu 52 tyg/);
-    assert.match(bare, /brak bazy do zakupu ani oporu/);
-    assert.equal(techModel({ price: 50, base_type: "deep", pivot: 80 }).level, null);
-    assert.equal(techModel({ price: 50, tl_level: 49, tl_state: "przy oporze" }).level.kind, "opór");
-    assert.match(techStripSvg({ price: 50 }, "more"), /po odświeżeniu danych/);
+test("techBars scores each parameter 0-100 and techProfileSvg draws one coloured bar per parameter; sheet explains them", () => {
+    const { techBars, techProfileSvg, techSheetHtml } = require("../../docs/js/watchlist.js");
+    const s = { ticker: "T", price: 110, pct_above_sma50: 8, pct_above_sma200: 22, pct_from_high_52w: -5, base_type: "flat", pivot: 105, rs_rating: 91, eps_rating: 77, industry_rating: 64,
+        accdis: "B", accdis_rating: 72, eps_stability: 88, eps_stability_rating: 70, vol_surge_5d: 2.2 };
+    const bars = techBars(s);
+    assert.deepEqual(bars.map(b => b.short), ["RS", "EPS", "GRP", "A/D", "TRD", "SZC", "STR", "ROZ", "WOL", "STB"]);
+    const by = Object.fromEntries(bars.map(b => [b.key, b.score]));
+    assert.deepEqual([by.rs, by.eps, by.grp, by.ad, by.stb], [91, 77, 64, 72, 70]);
+    assert.equal(by.trd, 100);                 // cena > SMA50 > SMA200 i cena > SMA200
+    assert.equal(by.szc, 80);                  // 5 % pod szczytem: 100 - 5 * 4
+    assert.equal(by.str, 100);                 // 110 / 105 = +4,76 % nad pivotem: w strefie zakupu (0 do +5 %)
+    assert.equal(techBars({ ...s, price: 120 }).find(b => b.key === "str").score, 15);   // +14 % nad pivotem: nie goń
+    assert.equal(by.roz, 100);
+    assert.equal(by.wol, 100);                 // 2,2× >= 1,5×
+    const svg = techProfileSvg(s);
+    assert.equal((svg.match(/<text /g) || []).length, 10);
+    assert.ok(svg.includes("#0b8a45") && svg.includes("#86b82f"));      // kolory z progów 90+ i 60-79
+    // brakujące dane = szary słupek, korekta / głęboka korekta nie daje pivotu, wybicie z wolumenem poniżej progu = niski słupek
+    const bare = techBars({ price: 50, base_type: "deep", pivot: 80 });
+    assert.equal(bare.find(b => b.key === "str").score, null);
+    assert.equal(bare.find(b => b.key === "rs").score, null);
+    assert.equal(techBars({ price: 50, vol_surge_5d: 0.6 }).find(b => b.key === "wol").score, 40);
+    assert.equal(techBars({ price: 50, pct_above_sma50: 25 }).find(b => b.key === "roz").score, 15);
+    const html = techSheetHtml(s);
+    assert.match(html, /Siła cenowa \(RS Rating\)/);
+    assert.match(html, /Jak czytać:/);
+    assert.equal((html.match(/class="tp-row"/g) || []).length, 10);
 });

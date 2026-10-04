@@ -674,10 +674,3 @@ def test_detect_climax_top_weekly_requires_biggest_gain_spread_and_volume():
     older = _climax_weekly((70.0, 92.0, 66.0, 80.0, 6_000_000.0))
     older.iloc[20, older.columns.get_loc("Close")] = 80.0                                                    # wcześniej w trendzie był większy tygodniowy skok
     assert watchlist.detect_climax_top(older) is None
-
-
-def test_compute_metrics_has_52_week_low():
-    df = make_prices(n=300, daily=0.002)
-    m = watchlist.compute_metrics(df)
-    assert m["low_52w"] is not None and m["low_52w"] <= m["price"]
-    assert m["low_52w"] == round(float(df["Low"].tail(252).min()), 2)

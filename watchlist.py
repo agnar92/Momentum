@@ -284,7 +284,6 @@ def compute_metrics(df, bench_w=None):
     sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
 
     high_52w = float(df["High"].tail(252).max())
-    low_52w = float(df["Low"].tail(252).min())
     wk_ohlc = weekly_ohlcv(df, asof)
     all_bases = detect_bases(wk_ohlc, bench_w)
     open_base = next((b for b in reversed(all_bases) if b["open"]), None)
@@ -317,7 +316,6 @@ def compute_metrics(df, bench_w=None):
         "pct_above_sma50": _num((price / sma50 - 1) * 100) if sma50 else None,
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
         "pct_from_high_52w": _num((price / high_52w - 1) * 100, 1) if high_52w > 0 else None,
-        "low_52w": _num(low_52w) if low_52w > 0 else None,
         "base_type": open_base["type"] if open_base else None,
         "base_depth_pct": open_base["depth_pct"] if open_base else None,
         "base_weeks": open_base["weeks"] if open_base else None,

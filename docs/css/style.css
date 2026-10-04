@@ -682,10 +682,10 @@ body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
 body:not(.split) td.c-alDist::before { content: "vs linia"; }
 body:not(.split) td.c-rank { display: none !important; }
 /* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
-body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-tech):not(.c-techMore):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank) {
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-tech):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank) {
     display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
 }
-body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-tech):not(.c-techMore):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
+body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-tech):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
     content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
 }
 
@@ -920,6 +920,16 @@ body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left
 .cs-letters { display: inline-flex; gap: 2px; white-space: nowrap; }
 
 /* pasek techniczny na kartach: zakres 52 tyg., trend, cena vs pivot (zawsze), rozciągnięcie i wolumen (po rozwinięciu) */
-.tech-strip { display: block; width: 100%; height: auto; }
+.tech-profile { display: block; width: 100%; height: auto; }
+.tech-cell { cursor: pointer; }
 body:not(.split) td.c-tech { display: block; order: 6; flex: 0 0 100%; margin-top: 2px; }
-body:not(.split) tr.open td.c-techMore { display: block; order: 7; flex: 0 0 100%; }
+
+/* arkusz z objaśnieniem profilu technicznego */
+.tp-row { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: var(--panel-alt); }
+.tp-row header { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.tp-key { display: inline-flex; align-items: center; justify-content: center; min-width: 38px; height: 24px; padding: 0 6px; border-radius: 6px; color: #fff; font-weight: 800; font-size: 12px; }
+.tp-score { margin-left: auto; font-weight: 700; font-size: 12.5px; color: var(--text-dim); }
+.tp-bar { height: 8px; border-radius: 4px; background: #262a35; overflow: hidden; margin-bottom: 6px; }
+.tp-bar i { display: block; height: 100%; border-radius: 4px; }
+.tp-row p { margin: 3px 0; font-size: 13px; line-height: 1.35; } .tp-row p i { color: var(--text-dim); font-style: normal; font-weight: 700; }
+.tp-rule { color: var(--text-dim); }
