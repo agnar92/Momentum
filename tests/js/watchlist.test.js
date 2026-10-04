@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const {
     rsLeaders, qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
-    fmtMarketCap, fmtVolume, fmtPct, sparkSvg,
+    fmtMarketCap, fmtVolume, fmtPct,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
 function stock(ticker, over = {}) {
@@ -102,8 +102,6 @@ test("formatters", () => {
     assert.equal(fmtPct(5.123), "+5.1%");
     assert.equal(fmtPct(-2), "-2.0%");
     assert.equal(fmtPct(undefined), "—");
-    assert.equal(sparkSvg([1]), "");
-    assert.match(sparkSvg([0, 1, 2]), /<polyline/);
 });
 
 test("baseRows: dystans do pivotu, VCP i sortowanie", () => {

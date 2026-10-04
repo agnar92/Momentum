@@ -1065,75 +1065,8 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     return full;
 }
 
-// ---------- mini wykres tygodniowy (kafelki na telefonie) w stylu MarketSmith ----------
-const MINI_WEEKS = 52;
-const MINI_RATING_COLORS = ["#ff5c73", "#ff9a3d", "#f5d547", "#a6e04a", "#3ddc84", "#34e08a"];   // te same przedziały co .rt-0 … .rt-90, ale jaśniejsze (tekst na ciemnym tle)
-
-function miniRatingColor(v) {
-    if (!Number.isFinite(v)) return CHART_COLORS.text;
-    return MINI_RATING_COLORS[v >= 90 ? 5 : v >= 80 ? 4 : v >= 60 ? 3 : v >= 40 ? 2 : v >= 20 ? 1 : 0];
-}
-
-// Mały wykres z tygodniowych danych charts.json: słupki OHLC + SMA10 (zielona) / SMA40 (czerwona), linia RS (spółka / S&P 500, niebieska)
-// z numerem RS Rating na końcu, pod spodem kwartalny EPS (wartość i wzrost r/r) i oceny RS / EPS / Composite w rogu.
-// src = {weeks, spx, o,h,l,c, sma10, sma40, eps:[{d,e,g}], rsRating, epsRating, compositeRating}. -> tekst SVG ("" bez danych).
-function miniChartSvg(src, n = MINI_WEEKS) {
-    const total = src && src.c ? src.c.length : 0;
-    if (total < 10 || !src.weeks || src.weeks.length !== total) return "";
-    const from = Math.max(0, total - n), cnt = total - from;
-    const W = 340, H = 292, left = 4, right = 48, plotW = W - left - right, step = plotW / cnt;
-    const xi = i => left + (i + 0.5) * step;
-    const slice = a => (a || []).slice(from);
-    const o = slice(src.o), h = slice(src.h), l = slice(src.l), c = slice(src.c), s10 = slice(src.sma10), s40 = slice(src.sma40);
-    const ext = numericExtent([h, l, s10, s40]) || [0, 1];
-    const pT = 26, pH = 150, yP = makeYScale(ext[0] - (ext[1] - ext[0]) * 0.04, ext[1] + (ext[1] - ext[0]) * 0.04, pT, pH);
-    const parts = [];
-    const poly = (vals, color, y, w = 1.2) => {
-        const pts = vals.map((v, i) => (Number.isFinite(v) ? `${xi(i).toFixed(1)},${y(v).toFixed(1)}` : null)).filter(Boolean);
-        return pts.length > 1 ? `<polyline fill="none" stroke="${color}" stroke-width="${w}" stroke-linejoin="round" points="${pts.join(" ")}"/>` : "";
-    };
-    parts.push(poly(s40, "#f472b6", yP, 1.1), poly(s10, "#22d3ee", yP, 1.1));
-    for (let i = 0; i < cnt; i++) {
-        if (![o[i], h[i], l[i], c[i]].every(Number.isFinite)) continue;
-        const col = c[i] >= o[i] ? CHART_COLORS.up : CHART_COLORS.down;
-        parts.push(`<g stroke="${col}" stroke-width="1.5"><line x1="${xi(i)}" x2="${xi(i)}" y1="${yP(h[i])}" y2="${yP(l[i])}"/>`
-            + `<line x1="${xi(i) - step * 0.45}" x2="${xi(i)}" y1="${yP(o[i])}" y2="${yP(o[i])}"/><line x1="${xi(i)}" x2="${xi(i) + step * 0.45}" y1="${yP(c[i])}" y2="${yP(c[i])}"/></g>`);
-    }
-    parts.push(`<text x="${W - right + 4}" y="${yP(c[cnt - 1]) + 4}" font-size="12" fill="${CHART_COLORS.textStrong}">${fmtAxis(c[cnt - 1])}</text>`);
-    // linia RS (kształt: cena / S&P 500) w osobnym pasku
-    const spx = slice(src.spx);
-    const rs = c.map((v, i) => (Number.isFinite(v) && Number.isFinite(spx[i]) && spx[i] > 0 ? v / spx[i] : null));
-    const rsExt = numericExtent([rs]);
-    const rT = pT + pH + 10, rH = 46;
-    if (rsExt) {
-        const yR = makeYScale(rsExt[0], rsExt[1] + (rsExt[1] === rsExt[0] ? 1 : 0), rT, rH);
-        parts.push(`<rect x="${left}" y="${rT - 2}" width="${plotW}" height="${rH + 4}" fill="#4aa3ff" opacity="0.06"/>`, poly(rs, CHART_COLORS.rs, yR, 1.5));
-        const last = rs.length - 1 - [...rs].reverse().findIndex(Number.isFinite);
-        if (Number.isFinite(src.rsRating)) {
-            parts.push(`<text x="${W - right + 4}" y="${yR(rs[last]) + 3}" font-size="13" font-weight="700" fill="${miniRatingColor(src.rsRating)}">RS ${src.rsRating}</text>`);
-        }
-    }
-    // EPS kwartalny: kropka w tygodniu publikacji, pod nią EPS i wzrost r/r
-    const eT = rT + rH + 16;
-    const eps = (src.eps || []).filter(q => q && q.d);
-    eps.forEach(q => {
-        const wk = src.weeks.findIndex(w => w >= q.d);
-        if (wk < from || wk < 0) return;
-        const x = xi(wk - from);
-        const g = Number.isFinite(q.g) ? q.g : null;
-        parts.push(`<circle cx="${x}" cy="${eT}" r="4" fill="${CHART_COLORS.eps}"/>`,
-            `<text x="${Math.min(Math.max(x, left + 16), W - right - 14)}" y="${eT + 17}" font-size="12.5" text-anchor="middle" fill="${CHART_COLORS.textStrong}">${q.e}</text>`,
-            g === null ? "" : `<text x="${Math.min(Math.max(x, left + 16), W - right - 14)}" y="${eT + 32}" font-size="12" font-weight="700" text-anchor="middle" fill="${g >= 0 ? CHART_COLORS.up : CHART_COLORS.down}">${g >= 0 ? "+" : ""}${g}%</text>`);
-    });
-    // oceny w rogu
-    const badge = (x, label, v) => `<text x="${x}" y="16" font-size="13" font-weight="700" fill="${miniRatingColor(v)}">${label} ${Number.isFinite(v) ? v : "—"}</text>`;
-    parts.push(badge(left, "RS", src.rsRating), badge(left + 74, "EPS", src.epsRating), badge(left + 154, "Comp", src.compositeRating));
-    parts.push(`<text x="${W - right - 2}" y="16" font-size="10" text-anchor="end" fill="${CHART_COLORS.text}">${cnt} tyg.</text>`);
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Mini wykres tygodniowy">${parts.join("")}</svg>`;
-}
-
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, miniChartSvg, miniRatingColor, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow,
     };
 }
