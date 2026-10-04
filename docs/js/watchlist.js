@@ -389,7 +389,7 @@ function openCanslimSheet(ticker) {
 }
 
 function canslimLettersHtml(c) {
-    return CANSLIM_KEYS.map(k => `<span class="cs-l ${c.flags[k] === true ? "on" : c.flags[k] === false ? "off" : ""}" title="${escapeHtml(CANSLIM_HELP[k])}">${k}</span>`).join("");
+    return `<span class="cs-letters">${CANSLIM_KEYS.map(k => `<span class="cs-l ${c.flags[k] === true ? "on" : c.flags[k] === false ? "off" : ""}" title="${escapeHtml(CANSLIM_HELP[k])}">${k}</span>`).join("")}</span>`;
 }
 
 // Pastylki ocen nad wykresem (jak panel ocen w MarketSmith): Composite, RS, EPS, grupa, Acc/Dis, stabilność EPS, instytucje, lider.
@@ -533,16 +533,6 @@ function sortRows(rows, key, dir) {
 
 // ---------- renderowanie ----------
 
-function sparkSvg(values) {
-    if (!values || values.length < 2) return "";
-    const w = 90, h = 24;
-    const min = Math.min(...values), max = Math.max(...values);
-    const span = max - min || 1;
-    const pts = values.map((v, i) => `${(i / (values.length - 1) * w).toFixed(1)},${(h - 2 - (v - min) / span * (h - 4)).toFixed(1)}`).join(" ");
-    const up = values[values.length - 1] >= values[0];
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${up ? "#2ecc71" : "#e0455a"}" stroke-width="1.5" points="${pts}"/></svg>`;
-}
-
 const money = v => (Number.isFinite(v) ? "$" + Number(v).toFixed(2) : "—");
 const money0 = v => (Number.isFinite(v) ? (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("pl-PL") : "—");
 
@@ -666,16 +656,14 @@ const COL = {
     posValue: ["Wartość", "pos_value", s => `<td>${s.position && s.position.value !== null ? money0(s.position.value) : "—"}</td>`],
     posRisk: ["Ryzyko do stopu", "pos_risk_usd", s => `<td>${s.position && s.position.risk_usd !== null ? money0(s.position.risk_usd) : "—"}</td>`, "Początkowe ryzyko: (wejście − stop) · liczba akcji"],
     strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy, W = blisko wybicia"],
-    thumb: ["Trend 26 tyg.", null, s => `<td class="thumb-cell" title="Cena z ostatnich 26 tygodni (zielony = wyżej niż na początku)">${sparkSvg(s.spark)}</td>`],
     toggle: ["", null, s => `<td class="card-toggle"><button type="button" class="card-chev" aria-label="Pokaż / ukryj szczegóły" aria-expanded="${openCards.has(s.ticker)}">▾</button></td>`],
-    mini: ["Wykres 52 tyg.", null, s => `<td><div class="mini-chart" data-mini="${escapeHtml(s.ticker)}"></div></td>`],
     earnings: ["Wyniki", "earnings", s => earningsCell(s)],
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "thumb", "cs", "cx", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
-    "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "mini", "earnings", "tv"];
+const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "toggle", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+    "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
 const TAB_COLUMNS = {
@@ -692,28 +680,6 @@ const TAB_COLUMNS_COMPACT = {
 };
 let splitMode = false;
 const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
-
-// Mini wykres tygodniowy w rozwiniętym kafelku (telefon): dane z charts.json (ładowane raz, to samo co pełny wykres), rysuje miniChartSvg.
-function miniSource(charts, stock) {
-    const st = charts && charts.stocks && charts.stocks[stock.ticker];
-    if (!st) return null;
-    return { weeks: charts.weeks, spx: charts.spx, o: st.o, h: st.h, l: st.l, c: st.c, sma10: st.sma10, sma40: st.sma40, eps: st.eps,
-        rsRating: stock.rs_rating, epsRating: stock.eps_rating, compositeRating: stock.composite_rating };
-}
-
-function fillMiniCharts() {
-    if (splitMode || !state.data) return;
-    const empty = [...document.querySelectorAll("tr.open .mini-chart[data-mini]")].filter(el => !el.firstChild);
-    if (!empty.length) return;
-    loadCharts().then(charts => {
-        if (!charts) return;
-        empty.forEach(el => {
-            if (el.firstChild) return;
-            const stock = state.data.stocks.find(x => x.ticker === el.dataset.mini);
-            el.innerHTML = stock ? miniChartSvg(miniSource(charts, stock)) : "";
-        });
-    });
-}
 
 const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
 
@@ -826,7 +792,6 @@ function renderTable() {
     if (tab === "POS") renderPositionControls(rows);
     updateSortHeaders(table);
     updateCardSort(tab);
-    fillMiniCharts();
     markSelectedRow();
     if (chartRequested) updateChartNav(chartRequested);   // pasek ◀ n / N odświeża się po zmianie zakładki, filtra, sortowania
     if (splitMode && !currentChart && !chartRequested) {   // jak w TC2000: wykres zawsze pokazuje bieżący symbol z listy
@@ -1336,8 +1301,7 @@ function initControls() {
         if (openCards.has(t)) openCards.delete(t); else openCards.add(t);
         tr.classList.toggle("open", openCards.has(t));
         chev.setAttribute("aria-expanded", String(openCards.has(t)));
-        fillMiniCharts();
-    }));
+        }));
     document.getElementById("chartRatings").addEventListener("click", ev => {
         const chip = ev.target.closest("[data-action=canslim]");
         if (chip) openCanslimSheet(chip.dataset.ticker);
@@ -1856,6 +1820,6 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, rsLeaders, qullamaggieRows, breakoutInfo, tagBreakouts, breakoutRows, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
-        fmtMarketCap, fmtVolume, fmtPct, sparkSvg, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
+        fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
