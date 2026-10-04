@@ -394,3 +394,13 @@ test("breakoutInfo follows O'Neil: a close above the line / pivot needs volume; 
     assert.equal(noVol.rank, 2);
     assert.match(noVol.reasons[0].text, /bez wolumenu.*niepotwierdzone/);
 });
+
+test("pivot logic only for buyable bases: a deep correction near its old high is not a breakout candidate; callout warns", () => {
+    assert.equal(breakoutInfo(stock("S", { base_type: "deep", pct_to_pivot: 2 }), null, 5), null);
+    assert.equal(breakoutInfo(stock("S", { base_type: "correction", pct_to_pivot: -1, pivot_state: "wybicie" }), null, 5), null);
+    assert.ok(breakoutInfo(stock("S", { base_type: "flat", pct_to_pivot: 2 }), null, 5));
+    assert.ok(baseBoxData({ base_type: "deep", pivot: 81.19, pct_to_pivot: 41.8, base_weeks: 18, base_depth_pct: 41.6 }).rows.some(r => r[0] === "Uwaga"));
+    assert.ok(!baseBoxData({ base_type: "cup", pivot: 50, pct_to_pivot: 2, base_weeks: 20, base_depth_pct: 25 }).rows.some(r => r[0] === "Uwaga"));
+    assert.match(readinessLine({ base_type: "deep", pct_to_pivot: -3 }, "uptrend"), /nie baza do zakupu/);
+    assert.doesNotMatch(readinessLine({ base_type: "deep", pct_to_pivot: -8 }, "uptrend"), /za późno/);
+});

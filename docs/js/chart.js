@@ -216,13 +216,20 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
 }
 
 // Pivot do narysowania: pivot otwartej bazy (od jej początku) albo, bez bazy, poziom oporu flagi / korytarza dziś.
+// Poziom, od którego liczymy strefę zakupu i typowy stop (O'Neil): pivot BAZY KUPOWALNEJ (flat / cup — korekta i głęboka korekta to nie bazy),
+// a gdy go nie ma albo leży daleko od ceny — poziom oporu flagi / korytarza (dziennej, potem tygodniowej). Poziom dalej niż PIVOT_NEAR_PCT od ceny
+// jest bez znaczenia dla bieżącej decyzji, więc go nie rysujemy (inaczej etykiety „pivot / strefa zakupu / stop” lądują na brzegu wykresu).
+const PIVOT_BASE_TYPES = ["flat", "cup"];
+const PIVOT_NEAR_PCT = 15;
 function pivotFromStock(stock, bases) {
     if (!stock) return null;
-    if (stock.base_type && Number.isFinite(stock.pivot)) {
+    const near = p => !Number.isFinite(stock.price) || Math.abs(p / stock.price - 1) * 100 <= PIVOT_NEAR_PCT;
+    if (PIVOT_BASE_TYPES.includes(stock.base_type) && Number.isFinite(stock.pivot) && near(stock.pivot)) {
         const open = (bases || []).filter(b => b.open).pop();
         return { price: stock.pivot, date: open ? open.start : null, kind: "baza" };
     }
-    if (Number.isFinite(stock.tl_level) && stock.tl_state) return { price: stock.tl_level, date: null, kind: "flaga" };
+    if (Number.isFinite(stock.tl_level) && stock.tl_state && near(stock.tl_level)) return { price: stock.tl_level, date: null, kind: "flaga" };
+    if (Number.isFinite(stock.tlw_level) && stock.tlw_state && near(stock.tlw_level)) return { price: stock.tlw_level, date: null, kind: "flaga" };
     return null;
 }
 
@@ -608,23 +615,26 @@ function chartSvg(m, opts = {}) {
         parts.push(polyline(pts, x.color, 1.7).replace(/<polyline/g, `<polyline ${clipAttr}`));
     });
     // pivot (zielona linia przerywana) + strefa zakupu (pivot … +5 %, niebieska) + typowy stop 7–8 % pod pivotem (różowa) — jak w MarketSurge
-    if (pivotPx !== null && Number.isFinite(lastC) && m.lastShown !== false) {
+    if (pivotNear && m.lastShown !== false) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
+        const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
         const i0 = m.pivot.date ? Math.max(0, dateToIndex(m.weeks, m.pivot.date)) : Math.max(0, m.lastIdx - 25);
         const zx = x(Math.max(0, m.lastIdx - 14)), zw = Math.max(0, xr - zx);
         const band = (lo, hi, fill, op) => `<rect ${clipAttr} x="${zx}" y="${Math.min(yP(lo), yP(hi))}" width="${zw}" height="${Math.abs(yP(lo) - yP(hi))}" fill="${fill}" opacity="${op}"/>`;
-        parts.push(band(pivotPx, pivotPx * 1.05, "#4aa3ff", 0.15), band(pivotPx * 0.92, pivotPx * 0.93, "#ff6b8a", 0.18));
+        if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#4aa3ff", 0.15), band(pivotPx * 0.92, pivotPx * 0.93, "#ff6b8a", 0.18));
         parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="#2ecc71" stroke-width="1.4" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}</title></line>`);
         const clampY = v => Math.max(P.y + fs(10), Math.min(P.y + P.h - 3, v));
-        addLabel(`pivot ${pivotPx.toFixed(2)}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: "#2ecc71", bold: true, prio: 9 });
-        addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#7ab8ff", bold: true, prio: 4 });
-        addLabel(opts.compact ? "stop 7–8 %" : "typowy stop 7–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff8fa8", bold: true, prio: 4 });
+        addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: "#2ecc71", bold: true, prio: 9 });
+        if (!extended) {
+            addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#7ab8ff", bold: true, prio: 4 });
+            addLabel(opts.compact ? "stop 7–8 %" : "typowy stop 7–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff8fa8", bold: true, prio: 4 });
+        }
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
     if (boI >= 0) {
         parts.push(`<line x1="${x(boI)}" x2="${x(boI)}" y1="${P.y}" y2="${L.volume.y + L.volume.h}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"><title>${m.trend.breakout.confirmed ? "Dzień wybicia" : "Zamknięcie nad linią bez wolumenu (niepotwierdzone)"} ${m.trend.breakout.date}</title></line>`);
-        addLabel(`${m.trend.breakout.confirmed ? "wybicie" : "nad linią, bez wol."}${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio} wol.` : ""}`, x(boI) + 4, P.y + fs(11), { anchor: "start", fill: "#22d3ee", bold: true, prio: 6 });
+        addLabel(`${m.trend.breakout.confirmed ? "wybicie" : "nad linią, bez wolumenu"}${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio}${m.trend.breakout.confirmed ? " wol." : ""}` : ""}`, x(boI) + 4, P.y + fs(11), { anchor: "start", fill: "#22d3ee", bold: true, prio: 6 });
     }
     // sell climax top (tygodniowy; na dziennym stoi na ostatniej sesji tego tygodnia): czerwona strzałka ▼ nad świecą i pionowa kreska przez wolumen
     const cxI = m.climax ? weekIndexForDate(m.weeks, m.climax.date) : -1;
@@ -662,9 +672,11 @@ function chartSvg(m, opts = {}) {
         parts.push(`<line x1="${x(p0)}" y1="${py0}" x2="${x(m.pole.i1)}" y2="${yP(m.pole.y1)}" stroke="${CHART_COLORS.res}" stroke-width="3" stroke-opacity="0.35" stroke-linecap="round"><title>Maszt +${m.pole.gain}%</title></line>`);
         addLabel(`maszt +${m.pole.gain}%`, x(m.pole.i1) - 6, yP(m.pole.y1) - 4, { anchor: "end", size: fs(11), fill: CHART_COLORS.res, bold: true, prio: 5 });
     }
-    if (m.trend && m.trend.state === "wybicie" && m.lastShown !== false && Number.isFinite(m.h[m.lastIdx])) {
-        const bx = x_(m.lastIdx), by = yP(m.h[m.lastIdx]) - 8;
-        parts.push(`<path d="M${bx - 6},${by - 10} L${bx + 6},${by - 10} L${bx},${by} Z" fill="${CHART_COLORS.res}"><title>Wybicie z linii trendu</title></path>`);
+    // ▲ wybicia stoi POD świecą, w której zamknięcie przebiło linię z wolumenem (a nie na ostatniej świecy), i wskazuje w górę
+    const bkIdx = m.trend && m.trend.state === "wybicie" && m.trend.breakout && m.trend.breakout.confirmed !== false ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
+    if (bkIdx >= 0 && Number.isFinite(m.l[bkIdx])) {
+        const bx = x_(bkIdx), by = yP(m.l[bkIdx]) + fs(5);
+        parts.push(`<path d="M${bx},${by} L${bx + fs(6)},${by + fs(10)} L${bx - fs(6)},${by + fs(10)} Z" fill="${CHART_COLORS.res}"><title>Wybicie z linii trendu: zamknięcie nad linią z wolumenem ${m.trend.breakout.date}</title></path>`);
     }
     // cena celu analityków: pionowy zakres low–high z kropką na średniej i kropkowaną linią średniej do prawej krawędzi
     if (est && est.pt && est.pt.mean && Number.isFinite(m.c[m.lastIdx])) {

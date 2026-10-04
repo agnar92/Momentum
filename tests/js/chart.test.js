@@ -375,6 +375,44 @@ test("pivotFromStock: base pivot from the open base start, else the flag resista
     assert.equal(pivotFromStock(null, []), null);
 });
 
+test("pivotFromStock ignores corrections / deep corrections and levels far from the price (STM: pivot 81 vs price 57)", () => {
+    const stm = { base_type: "deep", pivot: 81.19, price: 57.26, tl_level: 54.15, tl_state: "wybicie" };
+    assert.deepEqual(pivotFromStock(stm, []), { price: 54.15, date: null, kind: "flaga" });          // nie 81,19: głęboka korekta to nie baza do zakupu
+    assert.equal(pivotFromStock({ base_type: "correction", pivot: 60, price: 58 }, []), null);
+    assert.equal(pivotFromStock({ base_type: "cup", pivot: 81.19, price: 57.26 }, []), null);       // kupowalna baza, ale 42 % od ceny
+    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 81.19, price: 57.26, tl_level: 56, tl_state: "przy oporze" }, []).price, 56);
+    assert.deepEqual(pivotFromStock({ tlw_level: 20, tlw_state: "przy oporze", price: 19.5 }, []), { price: 20, date: null, kind: "flaga" });
+});
+
+test("chartSvg: breakout triangle points up under the breakout bar; extended price drops the buy/stop zone; unconfirmed close gets no triangle", () => {
+    const n = 30;
+    const days = Array.from({ length: n }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
+    const arr = f => days.map((_, i) => f(i));
+    const mk = (breakout, price, tlState = "wybicie") => ({
+        days, spx_d: arr(() => 5000), weeks: [], stocks: { X: { day: {
+            o: arr(i => 10 + i * 0.01), h: arr(i => 10.5 + i * 0.01), l: arr(i => 9.5 + i * 0.01), c: arr(i => (i === n - 1 ? price : 10 + i * 0.01)), v: arr(() => 100),
+            sma10: arr(() => 10), sma20: arr(() => 10), sma50: arr(() => 10), sma200: arr(() => 10),
+            tl: { lines: [{ kind: "res", x0: days[10], y0: 10.3, x1: days[n - 1], y1: 10.3, touches: 2 }], pattern: "korytarz", state: tlState, breakout, info: { type: "korytarz", length: 14, depth: 5, pole_gain: null, touches: 2 } },
+        }, eps: [], bases: [] } } });
+    const stock = { price: 10.6, tl_level: 10.3, tl_state: "wybicie" };
+    const bo = { date: days[n - 3], vol_ratio: 2, confirmed: true };
+    const m = buildChartModel(dailyCharts(mk(bo, 10.6)), "X", stock, { pad: true });
+    const svg = chartSvg(m, {});
+    const tri = svg.match(/<path d="M([\d.]+),([\d.]+) L([\d.]+),([\d.]+) L([\d.]+),([\d.]+) Z" fill="[^"]+"><title>Wybicie z linii trendu/);
+    assert.ok(tri, "trójkąt wybicia istnieje");
+    assert.ok(parseFloat(tri[4]) > parseFloat(tri[2]) && parseFloat(tri[6]) > parseFloat(tri[2]), "wierzchołek u góry — strzałka w górę");
+    const xs = [...svg.matchAll(/<line x1="([\d.]+)" x2="\1" y1="[\d.]+" y2="[\d.]+" stroke="#22d3ee"/g)];
+    assert.ok(xs.length === 1 && Math.abs(parseFloat(xs[0][1]) - parseFloat(tri[1])) < 0.2, "trójkąt stoi pod świecą dnia wybicia, nie pod ostatnią");
+    assert.match(svg, />opór 10\.30</);                      // 10,6 vs 10,3 = +2,9 % — jeszcze w strefie zakupu: sam poziom, bez dopisku o cenie
+    assert.match(svg, /strefa zakupu do \+5 %/);
+    const far = chartSvg(buildChartModel(dailyCharts(mk(bo, 11.0)), "X", { price: 11.0, tl_level: 10.3, tl_state: "wybicie" }, { pad: true }), {});
+    assert.match(far, /opór 10\.30 · cena \+6\.8%/);
+    assert.doesNotMatch(far, /strefa zakupu|typowy stop/);   // cena poza +5 %: bez strefy zakupu i stopu
+    const weak = chartSvg(buildChartModel(dailyCharts(mk({ ...bo, confirmed: false, vol_ratio: 0.7 }, 10.6, "bez wolumenu")), "X", stock, { pad: true }), {});
+    assert.doesNotMatch(weak, /Wybicie z linii trendu: zamknięcie/);
+    assert.match(weak, /nad linią, bez wolumenu ×0\.7</);
+});
+
 test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and volume labels", () => {
     const c = charts();
     c.stocks.AAA.eps = [
