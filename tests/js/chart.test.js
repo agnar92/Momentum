@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, miniChartSvg, miniRatingColor, pivotFromStock, swingLabels, volumeSpikes, fmtVol, dailyCharts,
+    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, pivotFromStock, swingLabels, volumeSpikes, fmtVol, dailyCharts,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -346,27 +346,6 @@ test("chartSvg draws the price-target bracket and the consensus EPS panel only w
     assert.match(clipped, /↓ \$5/);
 });
 
-test("miniChartSvg draws OHLC bars, the RS line with the rating, EPS dots and rating badges from weekly data", () => {
-    const n = 60;
-    const weeks = Array.from({ length: n }, (_, i) => new Date(Date.UTC(2025, 0, 3 + 7 * i)).toISOString().slice(0, 10));
-    const c = Array.from({ length: n }, (_, i) => 100 + i);
-    const src = {
-        weeks, spx: Array.from({ length: n }, (_, i) => 5000 + 3 * i), c, o: c.map(v => v - 1), h: c.map(v => v + 2), l: c.map(v => v - 2),
-        sma10: c.map(v => v - 3), sma40: c.map(v => v - 8), eps: [{ d: weeks[30], e: 1.5, g: 25 }, { d: weeks[5], e: 0.9, g: -4 }],
-        rsRating: 91, epsRating: 77, compositeRating: 84,
-    };
-    const svg = miniChartSvg(src);
-    assert.ok(svg.startsWith("<svg") && svg.endsWith("</svg>"));
-    assert.ok(svg.includes("RS 91") && svg.includes("EPS 77") && svg.includes("Comp 84"));
-    assert.ok(svg.includes("+25%"), "EPS growth of the in-window quarter is labelled");
-    assert.ok(!svg.includes("-4%"), "a quarter older than the 52-week window is not drawn");
-    assert.equal((svg.match(/<polyline/g) || []).length, 3);                       // SMA40, SMA10, RS
-    assert.equal(miniChartSvg({ ...src, c: [1, 2, 3] }), "");                       // za mało danych
-    assert.equal(miniChartSvg(null), "");
-    assert.equal(miniRatingColor(95), "#34e08a");
-    assert.equal(miniRatingColor(10), "#ff5c73");
-});
-
 test("swingLabels picks the most important local highs and lows and keeps them apart", () => {
     const h = [10, 11, 12, 11, 10, 11, 14, 11, 10, 11, 12, 13, 12, 11, 10];
     const l = h.map(v => v - 2);
@@ -547,4 +526,29 @@ test("buildChartModel / chartSvg: sell climax top marks the signal bar on the da
     assert.match(chartSvg(m, {}), /Sell climax top \(tydzień do 2026-09-28\)/);
     charts.stocks.X.day.climax = null;
     assert.doesNotMatch(chartSvg(buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {}), {}), /Sell climax top \(tydzień/);
+});
+
+test("fundMiniModel: cena, EPS TTM i RS na osi tygodni", () => {
+    const { fundMiniModel, fundMiniHtml } = require("../../docs/js/chart.js");
+    const weeks = Array.from({ length: 10 }, (_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`);
+    const charts = { weeks, spx: weeks.map(() => 100), stocks: { X: {
+        c: [10, 11, 12, 13, 14, 15, 16, 17, 18, 20],
+        eps: [{ d: "2025-01-03", e: 1, g: 5, t: 4 }, { d: "2025-01-08", e: 1, g: 5, t: 5 }, { d: "2025-01-02", e: 1, g: null, t: null }],
+        eps_next: { d: "2025-02-01", e: 1.2, t: 5.5 },
+    } } };
+    const m = fundMiniModel(charts, "X");
+    assert.equal(m.eps.length, 2);
+    assert.equal(m.priceChg, 100);
+    assert.equal(m.epsChg, 25);
+    assert.equal(m.next, 5.5);
+    assert.equal(fundMiniModel(charts, "NOPE"), null);
+    assert.match(fundMiniHtml(m), /<svg/);
+});
+
+test("fundVerdict: poziom zależy od liczby zielonych sygnałów", () => {
+    const { fundVerdict } = require("../../docs/js/chart.js");
+    assert.equal(fundVerdict([1, 1, 1, 1, 1]).level, "good");
+    assert.equal(fundVerdict([1, 1, 1, -1, -1]).level, "mixed");
+    assert.equal(fundVerdict([1, -1, -1, -1, 0]).level, "bad");
+    assert.equal(fundVerdict([1, 0, 0, 0, 0]).level, "unknown");
 });

@@ -206,7 +206,6 @@ th.tv-col { width: 1%; }
     text-decoration: none;
 }
 .tv-row-btn:hover { color: var(--green-bright); border-color: var(--green-bright); }
-.spark { display: block; overflow: visible; }
 .empty-state { color: var(--text-faint); font-size: 13px; padding: 40px; text-align: center; }
 
 /* ---------- okno z wykresem (index.html: .wl-chart-box, ep.html: .charts-area) ---------- */
@@ -683,16 +682,12 @@ body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
 body:not(.split) td.c-alDist::before { content: "vs linia"; }
 body:not(.split) td.c-rank { display: none !important; }
 /* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
-body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-thumb):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini) {
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank) {
     display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
 }
-body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-thumb):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank):not(.c-mini)::before {
+body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
     content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
 }
-
-/* mini wykres w rozwiniętym kafelku */
-.mini-chart svg { display: block; width: 100%; height: auto; }
-body:not(.split) tr.open td.c-mini { display: block; order: 19; flex: 0 0 100%; padding-top: 8px; border-top: 1px solid var(--border); }
 
 /* zakładka Filtry */
 .filters-panel { padding: 10px 14px 16px; }
@@ -705,7 +700,6 @@ body:not(.split) tr.open td.c-mini { display: block; order: 19; flex: 0 0 100%; 
 .filter-group legend { color: var(--text); font-size: 12.5px; font-weight: 700; padding: 0 6px; }
 .filter-group .field { font-size: 12.5px; }
 .filter-group .field input[type="number"] { width: 84px; }
-.mini-chart { border: 2px solid transparent; border-radius: 10px; padding: 2px; cursor: pointer; }
 
 /* M z CANSLIM: pasek stanu rynku */
 .market-banner { margin: 0; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 12.5px; }
@@ -718,7 +712,7 @@ body:not(.split) tr.open td.c-mini { display: block; order: 19; flex: 0 0 100%; 
 .market-banner .market-lines { color: var(--text-dim); }
 
 .strat-chip { display: inline-block; min-width: 18px; padding: 1px 5px; border-radius: 4px; font-size: 11px; font-weight: 700; text-align: center; background: var(--border, #334); color: var(--text, #eee); }
-.strat-R { background: #1f6f43; color: #fff; } .strat-Q { background: #7a4fb0; color: #fff; } .strat-U { background: #1f5f8f; color: #fff; } .strat-B { background: #a8661f; color: #fff; }
+.strat-Q { background: #7a4fb0; color: #fff; } .strat-U { background: #1f5f8f; color: #fff; } .strat-B { background: #a8661f; color: #fff; }
 body:not(.split) td.c-strat { order: 3; }
 
 /* linia gotowości do wybicia i pasek ◀ 3/27 ▶ pod wykresem */
@@ -809,11 +803,9 @@ body:not(.split) .wl-chart-head { gap: 6px; }
 body:not(.split) .wl-chart-head .btn { padding: 8px 8px; font-size: 13px; }
 
 /* kafelek: stuknięcie otwiera wykres, rozwijanie szczegółów pod przyciskiem ▾; miniatura trendu w zwiniętym kafelku */
-body:not(.split) td.c-toggle, body:not(.split) td.c-thumb { display: inline-flex; align-items: center; }
+body:not(.split) td.c-toggle { display: inline-flex; align-items: center; }
 body:not(.split) td.c-toggle { order: 3; }
-body:not(.split) td.c-thumb { order: 4; flex: 0 0 auto; width: 92px; justify-content: flex-end; }
 body:not(.split) td.c-company { flex: 1 1 calc(100% - 104px); min-width: 0; }
-body:not(.split) td.c-thumb svg { width: 88px; height: 26px; display: block; }
 .card-chev { width: 44px; height: 44px; margin: -6px -8px -6px 0; background: none; border: 0; border-radius: 50%; color: var(--text-dim); font-size: 20px; line-height: 1; cursor: pointer; transition: transform .2s; -webkit-tap-highlight-color: transparent; }
 .card-chev:active { background: var(--panel-alt); }
 body:not(.split) tr.open .card-chev { transform: rotate(180deg); color: var(--green-bright); }
@@ -923,3 +915,33 @@ body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left
 .cs-row p { margin: 3px 0; font-size: 13px; line-height: 1.35; } .cs-row p i { color: var(--muted, #9aa3b2); font-style: normal; font-weight: 700; }
 .cs-row .cs-lesson { color: var(--muted, #9aa3b2); }
 .cs-note { margin: 10px 0 0; font-size: 12px; color: var(--muted, #9aa3b2); }
+
+/* karta na telefonie jest kolumną flex — litery C A N S L I M mają zostać w jednym rzędzie */
+.cs-letters { display: inline-flex; gap: 2px; white-space: nowrap; }
+
+/* mini wykres fundamentów (cena / EPS TTM / RS) w rozwiniętym kafelku */
+td.card-fchart { display: none; }
+body:not(.split) tr.open td.card-fchart { display: block !important; order: 30; flex: 0 0 100% !important; border-top: 1px solid var(--border); padding-top: 8px; }
+.fund-mini-svg { display: block; width: 100%; height: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; }
+.fund-mini-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; font-size: 12px; color: var(--text-dim); }
+.fund-mini-legend span::before { content: ""; display: inline-block; width: 14px; height: 3px; margin-right: 5px; vertical-align: middle; border-radius: 2px; }
+.fund-mini-legend .fm-px::before { background: #e8edf5; }
+.fund-mini-legend .fm-eps::before { background: #f0932b; }
+.fund-mini-legend .fm-rs::before { background: #5aa0ff; }
+.fund-mini-legend b.up { color: var(--green-bright); }
+.fund-mini-legend b.down { color: var(--red); }
+.fund-mini-note, .fund-mini-empty { margin-top: 4px; font-size: 10.5px; color: var(--text-faint); }
+.fund-mini-svg.fund-good { border-color: #1f9d55; box-shadow: 0 0 0 1px #1f9d55 inset; }
+.fund-mini-svg.fund-bad { border-color: #d1344a; }
+.fund-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 6px; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: var(--panel-alt); }
+.fund-verdict b { font-size: 15px; }
+.fund-verdict.fund-good { background: rgba(46,204,113,.16); color: #5be08f; }
+.fund-verdict.fund-mixed { background: rgba(227,128,28,.16); color: #ffb067; }
+.fund-verdict.fund-bad { background: rgba(209,52,74,.16); color: #ff7b8d; }
+.fund-verdict span { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.fund-verdict i { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #2a3340; color: #8d99ab; }
+.fund-verdict i.ok { background: #1f9d55; color: #fff; }
+.fund-verdict i.no { background: #d1344a; color: #fff; }
+.fund-mini-data { margin-top: 6px; }
+.fund-mini-data summary { cursor: pointer; font-size: 12px; font-weight: 700; color: var(--text-dim); padding: 6px 0; min-height: 32px; }
+.fund-mini-data[open] summary { color: var(--green-bright); }
