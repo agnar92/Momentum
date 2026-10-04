@@ -1234,7 +1234,7 @@ function fundMiniHtml(m) {
         `<span class="fm-rs">RS vs S&amp;P <b class="${cls(m.rsChg)}">${sg(m.rsChg)}</b></span>`,
     ].join("");
     const v = m.verdict, ok = ["trend", "RS", "EPS", "popyt", "bije S&amp;P"].map((t, i) => `<i class="${v.now[i] > 0 ? "ok" : v.now[i] < 0 ? "no" : "na"}">${t}</i>`).join("");
-    return `<div class="fund-verdict fund-${v.level}"><b>${v.good}/5</b> ${v.text}<span>${ok}</span></div>${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo. Wszystko = 100 na starcie, skala log. Chmura: zielona = spółka bije S&amp;P 500, czerwona = jest gorsza; pomarańczowe kreski = raporty; kropka = RS na szczycie. Pasy: zielony = dobrze, czerwony = źle (heurystyka, nie rekomendacja).</div>`;
+    return `<div class="fund-verdict fund-${v.level}"><b>${v.good}/5</b> ${v.text}<span>${ok}</span></div>${fundMiniSvg(m)}<details class="fund-mini-data"><summary>Dane</summary><div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo. Wszystko = 100 na starcie, skala log. Chmura: zielona = spółka bije S&amp;P 500, czerwona = jest gorsza; pomarańczowe kreski = raporty; kropka = RS na szczycie. Pasy: zielony = dobrze, czerwony = źle (heurystyka, nie rekomendacja).</div></details>`;
 }
 
 if (typeof module !== "undefined" && module.exports) {
