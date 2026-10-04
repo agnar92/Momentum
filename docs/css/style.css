@@ -909,3 +909,17 @@ body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left
 .cs-l.on { color: var(--green-bright, #3fb950); opacity: 1; }
 .cs-l.off { color: #f85149; opacity: .85; }
 .cs-cell { white-space: nowrap; }
+
+/* okno z wyjaśnieniem CANSLIM po kliknięciu etykiety n/7 */
+.cs-cell, .rchip-link { cursor: pointer; }
+.rchip-link { text-decoration: underline dotted; text-underline-offset: 3px; }
+.cs-intro { margin: 6px 0 10px; color: var(--muted, #9aa3b2); font-size: 13px; }
+.cs-row { border: 1px solid var(--border); border-left-width: 4px; border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: var(--panel-alt); }
+.cs-row.ok { border-left-color: var(--green-bright, #3fb950); } .cs-row.no { border-left-color: #f85149; } .cs-row.na { border-left-color: #7d8590; }
+.cs-row header { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.cs-row .cs-key { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 6px; background: var(--panel); font-weight: 800; }
+.cs-row .cs-verdict { margin-left: auto; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.cs-row.ok .cs-verdict { color: var(--green-bright, #3fb950); } .cs-row.no .cs-verdict { color: #f85149; }
+.cs-row p { margin: 3px 0; font-size: 13px; line-height: 1.35; } .cs-row p i { color: var(--muted, #9aa3b2); font-style: normal; font-weight: 700; }
+.cs-row .cs-lesson { color: var(--muted, #9aa3b2); }
+.cs-note { margin: 10px 0 0; font-size: 12px; color: var(--muted, #9aa3b2); }
