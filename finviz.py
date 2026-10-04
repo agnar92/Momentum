@@ -37,9 +37,11 @@ VIEW_COLUMNS = {
     "121": {"Forward P/E": "forward_pe", "EPS This Y": "eps_this_y", "EPS Next Y": "eps_next_y",
             "EPS Past 5Y": "eps_past_5y", "EPS Next 5Y": "eps_next_5y"},
     "161": {"ROE": "roe", "Earnings": "earnings"},
-    "152": {"Recom": "recom", "Target Price": "finviz_target", "Inst Own": "inst_own", "Inst Trans": "inst_trans"},   # widok własny (Custom): rekomendacja 1-5, cena celu, własność instytucji (%) i jej zmiana (%)
+    "152": {"Recom": "recom", "Target Price": "finviz_target", "Inst Own": "inst_own", "Inst Trans": "inst_trans",   # widok własny (Custom): rekomendacja 1-5, cena celu, własność instytucji (%) i jej zmiana (%)
+            "Sales Q/Q": "sales_qq", "Sales Past 5Y": "sales_past_5y", "Float": "shs_float", "Outstanding": "shs_outstanding",   # C: wzrost sprzedaży kwartał do kwartału r/r; S: podaż akcji
+            "Insider Own": "insider_own", "Debt/Eq": "debt_eq"},   # S: udział zarządu i zadłużenie
 }
-VIEW_PARAMS = {"152": {"c": "0,1,62,69,28,29"}}   # kolumny widoku własnego: 0 = No., 1 = Ticker, 62 = Analyst Recom., 69 = Target Price, 28 = Inst Own, 29 = Inst Trans
+VIEW_PARAMS = {"152": {"c": "0,1,62,69,28,29,21,23,24,25,26,38"}}   # kolumny widoku własnego: 0 = No., 1 = Ticker, 62 = Analyst Recom., 69 = Target Price, 28 = Inst Own, 29 = Inst Trans, 21 = Sales Past 5Y, 23 = Sales Q/Q, 24 = Outstanding, 25 = Float, 26 = Insider Own, 38 = Debt/Eq
 TEXT_KEYS = {"company", "sector", "industry", "earnings"}
 _SUFFIX = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
 
