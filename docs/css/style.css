@@ -931,3 +931,14 @@ body:not(.split) tr.open td.card-fchart { display: block !important; order: 30; 
 .fund-mini-legend b.up { color: var(--green-bright); }
 .fund-mini-legend b.down { color: var(--red); }
 .fund-mini-note, .fund-mini-empty { margin-top: 4px; font-size: 10.5px; color: var(--text-faint); }
+.fund-mini-svg.fund-good { border-color: #1f9d55; box-shadow: 0 0 0 1px #1f9d55 inset; }
+.fund-mini-svg.fund-bad { border-color: #d1344a; }
+.fund-verdict { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-bottom: 6px; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 700; background: var(--panel-alt); }
+.fund-verdict b { font-size: 15px; }
+.fund-verdict.fund-good { background: rgba(46,204,113,.16); color: #5be08f; }
+.fund-verdict.fund-mixed { background: rgba(227,128,28,.16); color: #ffb067; }
+.fund-verdict.fund-bad { background: rgba(209,52,74,.16); color: #ff7b8d; }
+.fund-verdict span { display: flex; flex-wrap: wrap; gap: 4px; margin-left: auto; }
+.fund-verdict i { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 4px; background: #2a3340; color: #8d99ab; }
+.fund-verdict i.ok { background: #1f9d55; color: #fff; }
+.fund-verdict i.no { background: #d1344a; color: #fff; }

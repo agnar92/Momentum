@@ -506,3 +506,11 @@ test("fundMiniModel: cena, EPS TTM i RS na osi tygodni", () => {
     assert.equal(fundMiniModel(charts, "NOPE"), null);
     assert.match(fundMiniHtml(m), /<svg/);
 });
+
+test("fundVerdict: poziom zależy od liczby zielonych sygnałów", () => {
+    const { fundVerdict } = require("../../docs/js/chart.js");
+    assert.equal(fundVerdict([1, 1, 1, 1, 1]).level, "good");
+    assert.equal(fundVerdict([1, 1, 1, -1, -1]).level, "mixed");
+    assert.equal(fundVerdict([1, -1, -1, -1, 0]).level, "bad");
+    assert.equal(fundVerdict([1, 0, 0, 0, 0]).level, "unknown");
+});

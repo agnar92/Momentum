@@ -1089,6 +1089,7 @@ function fundMiniModel(charts, ticker) {
         epsChg: eps.length >= 2 ? chg(eps[0].v, eps[eps.length - 1].v) : null,
         epsLast: eps.length ? eps[eps.length - 1].v : null,
         rsHigh: rsAtHigh(rs),
+        ...fundSignals(c, weeks, price, rs, spx, eps),
     };
 }
 
@@ -1096,7 +1097,8 @@ function fundMiniModel(charts, ticker) {
 // więc nachylenia są porównywalne. Cena (biała), S&P 500 (szara), RS = cena / S&P (niebieska), EPS TTM (pomarańczowe schodki).
 // „Chmura” między ceną a S&P: zielona, gdy spółka bije rynek, czerwona, gdy jest gorsza. Pionowe kreski = daty raportów.
 function fundMiniSvg(m, opts = {}) {
-    const W = opts.width || 330, H = opts.height || 230, padL = 6, padR = 66, padT = 10, padB = 10;
+    const W = opts.width || 330, PH = opts.height || 200, padL = 6, padR = 84, padT = 10, padB = 10;
+    const ROW = 9, ROWS = 4, H = PH + 12 + ROWS * (ROW + 2);
     const slots = m.n + (m.next !== null ? 4 : 0);
     const x = i => padL + (W - padL - padR) * i / Math.max(1, slots - 1);
     const rebase = arr => { const b = arr.find(v => Number.isFinite(v) && v > 0); return arr.map(v => (b && Number.isFinite(v) && v > 0 ? v / b * 100 : null)); };
@@ -1107,11 +1109,11 @@ function fundMiniSvg(m, opts = {}) {
     const epsNext = eb && m.next !== null && m.next > 0 ? m.next / eb * 100 : null;
     const all = [price, spx, rs].flatMap(a => a.filter(Number.isFinite)).concat(eps.map(e => e.v), epsNext !== null ? [epsNext] : [], [100]);
     const lo = Math.log(Math.min(...all)), hi = Math.log(Math.max(...all)), pad = (hi - lo) * 0.06 || 0.1;
-    const y = v => padT + (H - padT - padB) * (1 - (Math.log(v) - (lo - pad)) / ((hi + pad) - (lo - pad)));
+    const y = v => padT + (PH - padT - padB) * (1 - (Math.log(v) - (lo - pad)) / ((hi + pad) - (lo - pad)));
     const parts = [];
-    parts.push(`<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="none" stroke="#2a3340"/>`);
+    parts.push(`<rect x="0.5" y="0.5" width="${W - 1}" height="${PH - 1}" fill="none" stroke="#2a3340"/>`);
     parts.push(`<line x1="${padL}" y1="${y(100).toFixed(1)}" x2="${W - padR}" y2="${y(100).toFixed(1)}" stroke="#4a5666" stroke-width="1" stroke-dasharray="2 4"/>`);
-    m.eps.forEach(e => parts.push(`<line x1="${x(e.i).toFixed(1)}" y1="${padT}" x2="${x(e.i).toFixed(1)}" y2="${H - padB}" stroke="#f0932b" stroke-opacity=".16"/>`));
+    m.eps.forEach(e => parts.push(`<line x1="${x(e.i).toFixed(1)}" y1="${padT}" x2="${x(e.i).toFixed(1)}" y2="${PH - padB}" stroke="#f0932b" stroke-opacity=".16"/>`));
     // chmura cena vs S&P: segment po segmencie, z rozcięciem w miejscu przecięcia
     const cloud = [];
     for (let i = 1; i < m.n; i++) {
@@ -1159,7 +1161,54 @@ function fundMiniSvg(m, opts = {}) {
         parts.push(`<text x="${W - padR + 4}" y="${(e.y + 3.5).toFixed(1)}" font-size="10" font-weight="700" fill="${e.col}">${e.text} ${ch >= 0 ? "+" : ""}${ch.toFixed(0)}%</text>`);
     });
     if (m.rsHigh) parts.push(`<circle cx="${x(m.rsHigh).toFixed(1)}" cy="${y(rs[m.rsHigh]).toFixed(1)}" r="3.2" fill="#4aa3ff" stroke="#fff" stroke-width="1"/>`);
-    return `<svg class="fund-mini-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cena, S&amp;P 500, siła względna i EPS na jednym wykresie">${parts.join("")}</svg>`;
+    // wstęgi sygnałów: po jednym pasku na tydzień (zielony = dobrze, jasny = bardzo dobrze, czerwony = źle, szary = brak danych)
+    const cw = (W - padL - padR) / Math.max(1, slots - 1);
+    const col = v => (v === 2 ? "#2ee07a" : v === 1 ? "#1f9d55" : v === -1 ? "#d1344a" : "#2a3340");
+    [["TREND", m.sig.trend], ["RS", m.sig.rsUp], ["EPS r/r", m.sig.growth], ["POPYT", m.sig.demand]].forEach(([label, arr], r) => {
+        const yy = PH + 8 + r * (ROW + 2);
+        arr.forEach((v, i) => parts.push(`<rect x="${(x(i) - cw / 2).toFixed(1)}" y="${yy}" width="${(cw + 0.4).toFixed(1)}" height="${ROW}" fill="${col(v)}"/>`));
+        parts.push(`<text x="${W - padR + 4}" y="${yy + ROW - 1}" font-size="8.5" font-weight="700" fill="#8d99ab">${label}</text>`);
+    });
+    return `<svg class="fund-mini-svg fund-${m.verdict.level}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Cena, S&amp;P 500, siła względna i EPS na jednym wykresie">${parts.join("")}</svg>`;
+}
+
+// Sygnały tydzień po tygodniu (1 = dobrze, -1 = źle, 0 = brak danych) do wstęg pod wykresem i do werdyktu.
+// Heurystyki, nie rekomendacja: trend = cena nad SMA40 tyg.; RS = RS wyżej niż 10 tygodni temu; EPS = ostatni raport r/r (2 = ≥ 25 %);
+// popyt = w ostatnich 10 tygodniach więcej wolumenu w tygodniach wzrostowych niż spadkowych; rynek = cena bije S&P od początku okna.
+function fundSignals(c, weeks, price, rs, spx, eps) {
+    const n = price.length, sma = c.sma40 || [], vol = c.v || [];
+    const trend = price.map((v, i) => (Number.isFinite(v) && Number.isFinite(sma[i]) ? (v > sma[i] ? 1 : -1) : 0));
+    const rsUp = rs.map((v, i) => (i >= 10 && Number.isFinite(v) && Number.isFinite(rs[i - 10]) ? (v > rs[i - 10] ? 1 : -1) : 0));
+    const growth = new Array(n).fill(0);
+    (c.eps || []).forEach(q => {
+        const i = weekIndexForDate(weeks, q.d);
+        if (i < 0 || !Number.isFinite(q.g)) return;
+        const st = q.g >= 25 ? 2 : (q.g > 0 ? 1 : -1);
+        for (let k = i; k < n; k++) growth[k] = st;
+    });
+    const demand = price.map((_, i) => {
+        if (i < 10) return 0;
+        let up = 0, dn = 0;
+        for (let k = i - 9; k <= i; k++) {
+            if (!Number.isFinite(price[k]) || !Number.isFinite(price[k - 1]) || !Number.isFinite(vol[k])) continue;
+            if (price[k] >= price[k - 1]) up += vol[k]; else dn += vol[k];
+        }
+        return up + dn > 0 ? (up > dn ? 1 : -1) : 0;
+    });
+    const last = (a, f = Number.isFinite) => [...a].reverse().find(f);
+    const p0 = price.find(Number.isFinite), s0 = spx ? spx.find(Number.isFinite) : null;
+    const pl = last(price), sl = spx ? last(spx) : null;
+    const market = p0 && s0 && pl && sl ? (pl / p0 > sl / s0 ? 1 : -1) : 0;
+    const now = [trend[n - 1], rsUp[n - 1], growth[n - 1] > 0 ? 1 : growth[n - 1], demand[n - 1], market];
+    return { sig: { trend, rsUp, growth, demand }, verdict: fundVerdict(now) };
+}
+
+// Werdykt: ile z 5 sygnałów jest teraz zielonych (trend, RS, EPS, popyt, bicie rynku).
+function fundVerdict(now) {
+    const known = now.filter(v => v !== 0).length, good = now.filter(v => v > 0).length;
+    const level = known < 3 ? "unknown" : (good >= 4 ? "good" : (good === 3 ? "mixed" : "bad"));
+    const text = { good: "Rośnie, sygnały zgodne", mixed: "Mieszane sygnały", bad: "Słabo, większość sygnałów czerwona", unknown: "Za mało danych" }[level];
+    return { good, known, level, text, now };
 }
 
 // indeks ostatniego tygodnia (z 5 ostatnich), w którym RS jest na maksimum całego okna; null gdy RS nie jest przy szczycie
@@ -1184,11 +1233,12 @@ function fundMiniHtml(m) {
         `<span class="fm-eps">EPS TTM ${m.epsLast !== null ? m.epsLast.toFixed(2) : "—"} <b class="${cls(m.epsChg)}">${sg(m.epsChg)}</b>${m.next !== null ? ` · prog. ${m.next.toFixed(2)}` : ""}</span>`,
         `<span class="fm-rs">RS vs S&amp;P <b class="${cls(m.rsChg)}">${sg(m.rsChg)}</b></span>`,
     ].join("");
-    return `${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo. Wszystko = 100 na starcie, skala log. Chmura: zielona = spółka bije S&amp;P 500, czerwona = jest gorsza; pomarańczowe kreski = raporty; kropka = RS na szczycie.</div>`;
+    const v = m.verdict, ok = ["trend", "RS", "EPS", "popyt", "bije S&amp;P"].map((t, i) => `<i class="${v.now[i] > 0 ? "ok" : v.now[i] < 0 ? "no" : "na"}">${t}</i>`).join("");
+    return `<div class="fund-verdict fund-${v.level}"><b>${v.good}/5</b> ${v.text}<span>${ok}</span></div>${fundMiniSvg(m)}<div class="fund-mini-legend">${legend}</div><div class="fund-mini-note">2 lata, tygodniowo. Wszystko = 100 na starcie, skala log. Chmura: zielona = spółka bije S&amp;P 500, czerwona = jest gorsza; pomarańczowe kreski = raporty; kropka = RS na szczycie. Pasy: zielony = dobrze, czerwony = źle (heurystyka, nie rekomendacja).</div>`;
 }
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict,
     };
 }
