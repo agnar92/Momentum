@@ -165,6 +165,16 @@ def _price_at_or_before(close, ts):
 
 
 ACCDIS_SESSIONS = 65   # ~13 tygodni, jak w ocenie Acc/Dis IBD
+CLIMAX_RECENT_WEEKS = 2      # sell climax top (O'Neil, tygodniówka): sygnał w jednym z ostatnich 2 tygodni
+CLIMAX_RUN_WEEKS = 3         # wzrost >= 25 % w 1-3 tygodnie (od najniższego Low z 3 poprzednich tygodni) ...
+CLIMAX_RUN_PCT = 25.0
+CLIMAX_MIN_WEEK_GAIN_PCT = 8.0   # ... tydzień z NAJWIĘKSZYM zyskiem tygodniowym całego trendu (min. 8 %, żeby nie łapać szumu) ...
+CLIMAX_TREND_WEEKS = 104     # trend = od najniższego Low z ostatnich 2 lat (min. 8 tygodni)
+CLIMAX_TREND_MIN_WEEKS = 8
+CLIMAX_VOL_MULT = 1.5        # ... najszerszy zakres i NAJWYŻSZY wolumen tygodniowy trendu (oraz >= 1,5x średnia z 10 tygodni)
+CLIMAX_VOL_AVG_WEEKS = 10
+CLIMAX_EXT200_PCT = 70.0     # potwierdzenie: cena >= 70 % nad 200-dniową (SMA 40 tyg.)
+CLIMAX_LATE_STAGE = 3        # potwierdzenie: 3. lub dalsza baza w trendzie
 
 
 def accdis_score(df, sessions=ACCDIS_SESSIONS):
@@ -176,6 +186,52 @@ def accdis_score(df, sessions=ACCDIS_SESSIONS):
     vol = tail["Volume"].astype(float)
     total = float(vol.sum())
     return float((mfm * vol).sum() / total) if total > 0 and len(tail) >= 20 else None
+
+
+def detect_climax_top(weekly, bases=None, recent=CLIMAX_RECENT_WEEKS):
+    """Sell climax top wg O'Neila (How to Make Money in Stocks) na świecach TYGODNIOWYCH (kolumny Open/High/Low/Close/Volume).
+    Rdzeń (wszystko naraz, w jednym z ostatnich `recent` tygodni): wzrost >= 25 % w 1-3 tygodnie, NAJWIĘKSZY zysk tygodniowy,
+    NAJSZERSZY zakres i NAJWYŻSZY wolumen tygodniowy od dołka trendu (dołek z ostatnich 2 lat). Potwierdzenia (conf 0-4):
+    luka wyczerpania (otwarcie nad maksimum poprzedniego tygodnia), zamknięcie w dolnej połowie zakresu, cena >= 70 % nad SMA 40 tyg.
+    (~200 dni), późny etap trendu (>= 3 bazy typu flat/cup od dołka, `bases` z detect_bases). Zwraca opis najświeższego tygodnia albo None.
+    Heurystyka (progi poza „25 % w 1-3 tygodnie” i „najszerszy / największy / najwyższy” są moje), nie sygnał sprzedaży."""
+    d = weekly[["Open", "High", "Low", "Close", "Volume"]].astype(float).dropna()
+    n = len(d)
+    if n < 52:
+        return None
+    sma40 = d["Close"].rolling(40).mean()
+    ret = d["Close"].pct_change() * 100
+    spread = (d["High"] - d["Low"]) / d["Close"].shift(1)
+    for i in range(n - 1, n - 1 - recent, -1):
+        lo0 = max(0, i - CLIMAX_TREND_WEEKS)
+        t0 = lo0 + int(np.argmin(d["Low"].iloc[lo0:i].to_numpy()))
+        if i - t0 < CLIMAX_TREND_MIN_WEEKS:
+            continue
+        c, h, lo, o, v = (float(d[k].iloc[i]) for k in ("Close", "High", "Low", "Open", "Volume"))
+        base = float(d["Low"].iloc[i - CLIMAX_RUN_WEEKS:i].min())
+        run = (c / base - 1) * 100 if base > 0 else 0.0
+        wk = float(ret.iloc[i])
+        if run < CLIMAX_RUN_PCT or wk < CLIMAX_MIN_WEEK_GAIN_PCT or wk < float(ret.iloc[t0 + 1:i].max()):
+            continue
+        if float(spread.iloc[i]) < float(spread.iloc[t0 + 1:i].max()):
+            continue
+        avg_v = float(d["Volume"].iloc[i - CLIMAX_VOL_AVG_WEEKS:i].mean())
+        if avg_v <= 0 or v < float(d["Volume"].iloc[t0:i].max()) or v < CLIMAX_VOL_MULT * avg_v:
+            continue
+        s40 = float(sma40.iloc[i]) if pd.notna(sma40.iloc[i]) else 0.0
+        ext200 = (c / s40 - 1) * 100 if s40 > 0 else None
+        t0_date = d.index[t0].strftime("%Y-%m-%d")
+        stage = sum(1 for b in (bases or []) if b.get("type") in ("flat", "cup") and b["start"] >= t0_date) if bases is not None else None
+        gap, reversal = bool(o > float(d["High"].iloc[i - 1])), bool(h > lo and (c - lo) / (h - lo) < 0.5)
+        ext_ok = ext200 is not None and ext200 >= CLIMAX_EXT200_PCT
+        late = stage is not None and stage >= CLIMAX_LATE_STAGE
+        return {
+            "date": d.index[i].strftime("%Y-%m-%d"), "runup_pct": round(run, 1), "week_gain_pct": round(wk, 1),
+            "vol_ratio": round(v / avg_v, 1), "gap": gap, "reversal": reversal,
+            "ext200_pct": round(ext200, 1) if ext200 is not None else None, "stage": stage, "late": late,
+            "conf": int(gap) + int(reversal) + int(ext_ok) + int(late),
+        }
+    return None
 
 
 def accdis_letter(rating):
@@ -228,13 +284,16 @@ def compute_metrics(df, bench_w=None):
     sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
 
     high_52w = float(df["High"].tail(252).max())
-    open_base = next((b for b in reversed(detect_bases(weekly_ohlcv(df, asof), bench_w)) if b["open"]), None)
+    wk_ohlc = weekly_ohlcv(df, asof)
+    all_bases = detect_bases(wk_ohlc, bench_w)
+    open_base = next((b for b in reversed(all_bases) if b["open"]), None)
 
     tl = detect_consolidation(df, DAILY_FLAG) or {}
 
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
 
+    climax = detect_climax_top(wk_ohlc, all_bases)
     tl_level = next((ln["y1"] for ln in tl.get("lines", []) if ln["kind"] == "res"), None)   # opór flagi/korytarza dziś
     return {
         "price": _num(price),
@@ -266,6 +325,17 @@ def compute_metrics(df, bench_w=None):
         "tl_level": tl_level,
         "tl_dist_pct": _num((tl_level / price - 1) * 100, 1) if tl_level and price else None,   # > 0: do oporu brakuje tyle %
         "accdis_score": _num(accdis_score(df), 3),
+        "climax_top": climax is not None,
+        "climax_date": climax["date"] if climax else None,
+        "climax_runup_pct": climax["runup_pct"] if climax else None,
+        "climax_week_gain_pct": climax["week_gain_pct"] if climax else None,
+        "climax_vol_ratio": climax["vol_ratio"] if climax else None,
+        "climax_reversal": climax["reversal"] if climax else None,
+        "climax_gap": climax["gap"] if climax else None,
+        "climax_ext200_pct": climax["ext200_pct"] if climax else None,
+        "climax_stage": climax["stage"] if climax else None,
+        "climax_late": climax["late"] if climax else None,
+        "climax_conf": climax["conf"] if climax else None,
         "spark": spark,
     }
 
@@ -999,7 +1069,9 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
         first = payload["weeks"][0]
         wk = weekly_ohlcv(df, last_date)
-        chart["bases"] = [b for b in detect_bases(wk, bench_w) if b["end"] >= first][-BASE_MAX_SHOWN:]
+        all_bases = detect_bases(wk, bench_w)
+        chart["bases"] = [b for b in all_bases if b["end"] >= first][-BASE_MAX_SHOWN:]
+        chart["climax"] = detect_climax_top(wk, all_bases)
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
         chart["day"] = build_daily(df, day_index)
@@ -1017,6 +1089,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
             chart["px_hi"] = [int(bool(v)) for v in wpx_hi.reindex(widx).fillna(False)]
         chart["tl"] = detect_consolidation(wk, WEEKLY_FLAG)
         chart["day"]["tl"] = detect_consolidation(_daily_ohlc(df), DAILY_FLAG)
+        chart["day"]["climax"] = chart["climax"]   # ten sam tydzień, znacznik na wykresie dziennym ląduje na ostatniej sesji tygodnia
         payload["stocks"][t] = chart
     return payload
 

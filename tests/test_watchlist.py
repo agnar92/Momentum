@@ -609,3 +609,31 @@ class TestMarketAndLeaders:
         assert by["A4"]["leader"] is False                                                # za daleko od szczytu
         assert by["A5"]["leader"] is False                                                # RS < 80
         assert by["B1"]["leader"] is False                                                # słaba grupa i słaby RS
+
+
+def _climax_weekly(last_bar, n=80):
+    """Spokojny tygodniowy trend 50 -> 60, potem tygodnie 62, 64 i ostatnia świeca `last_bar` = (open, high, low, close, volume)."""
+    idx = pd.date_range("2025-01-03", periods=n, freq="W-FRI")
+    close = np.concatenate([np.linspace(50, 60, n - 3), [62.0, 64.0, 70.0]])
+    df = pd.DataFrame({"Open": close * 0.998, "High": close * 1.015, "Low": close * 0.985, "Close": close, "Volume": 1_000_000.0}, index=idx)
+    df.iloc[-1] = last_bar
+    return df
+
+
+def test_detect_climax_top_weekly_core_and_confirmations():
+    df = _climax_weekly((70.0, 92.0, 66.0, 80.0, 6_000_000.0))
+    bases = [{"type": "cup", "start": "2025-06-06"}, {"type": "flat", "start": "2025-09-05"}, {"type": "cup", "start": "2025-11-07"}, {"type": "correction", "start": "2025-12-05"}]
+    c = watchlist.detect_climax_top(df, bases)
+    assert c is not None and c["date"] == df.index[-1].strftime("%Y-%m-%d")
+    assert c["runup_pct"] >= 25 and c["week_gain_pct"] >= 8 and c["vol_ratio"] >= 5
+    assert c["gap"] is True and c["reversal"] is False and c["stage"] == 3 and c["late"] is True
+    assert 30 < c["ext200_pct"] < 70 and c["conf"] == 2    # luka + późny etap; brak rozciągnięcia >= 70 % nad SMA 40 tyg. i zamknięcia w dolnej połowie
+    assert watchlist.detect_climax_top(df)["stage"] is None   # bez listy baz: etap nieznany
+
+
+def test_detect_climax_top_weekly_requires_biggest_gain_spread_and_volume():
+    assert watchlist.detect_climax_top(_climax_weekly((70.0, 92.0, 66.0, 80.0, 1_200_000.0))) is None       # zakres i zysk bez rekordowego wolumenu
+    assert watchlist.detect_climax_top(_climax_weekly((65.0, 68.0, 64.0, 67.0, 6_000_000.0))) is None       # rekordowy wolumen, ale bez wzrostu 25 % / dużego zysku tygodniowego
+    older = _climax_weekly((70.0, 92.0, 66.0, 80.0, 6_000_000.0))
+    older.iloc[20, older.columns.get_loc("Close")] = 80.0                                                    # wcześniej w trendzie był większy tygodniowy skok
+    assert watchlist.detect_climax_top(older) is None
