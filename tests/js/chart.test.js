@@ -73,7 +73,7 @@ test("buildChartModel works without a benchmark (no RS line)", () => {
     assert.equal(m.rsRating, null);
 });
 
-test("chartSvg renders bars, benchmark, RS label, EPS labels and handles empty EPS", () => {
+test("chartSvg renders bars, S&P 500 overlay, RS label, EPS labels and handles empty EPS", () => {
     const svg = chartSvg(buildChartModel(charts(), "AAA", { rs_rating: 94 }));
     assert.match(svg, /^<svg id="chartSvg"/);
     assert.match(svg, /S&amp;P 500/);
@@ -82,7 +82,7 @@ test("chartSvg renders bars, benchmark, RS label, EPS labels and handles empty E
     const noEps = charts();
     noEps.stocks.AAA.eps = [];
     assert.match(chartSvg(buildChartModel(noEps, "AAA", null)), /Brak danych o EPS/);
-    assert.match(chartSvg(buildChartModel(charts({ spx: null }), "AAA", null)), /Brak danych benchmarku/);
+    assert.doesNotMatch(chartSvg(buildChartModel(charts({ spx: null }), "AAA", null)), /S&amp;P 500 \d/);   // bez benchmarku nie ma linii
 });
 
 test("chartReadout formats a week and is empty for missing bars", () => {
@@ -303,7 +303,8 @@ test("fitLayout fills the requested box: panels stack in order and fit the heigh
     const L = fitLayout(620, 600);
     assert.equal(L.width, 620);
     assert.ok(L.height >= 590 && L.height <= 612, String(L.height));
-    assert.ok(L.bench.y < L.legend.y && L.legend.y < L.price.y && L.price.y < L.volume.y && L.volume.y < L.eps.y && L.eps.y < L.axisY);
+    assert.equal(L.bench.h, 0);                                                        // S&P 500 nie ma osobnego paska (nałożony na cenę)
+    assert.ok(L.legend.y < L.price.y && L.price.y < L.volume.y && L.volume.y < L.eps.y && L.eps.y < L.axisY);
     assert.ok(L.price.h > L.volume.h && L.price.h > L.eps.h);
     assert.equal(fitLayout(500, 600).legendRows, 2);
     assert.equal(L.legendRows, 1);
@@ -454,10 +455,10 @@ test("window without a report explains the last known one instead of claiming th
     assert.match(chartSvg(cut), /Brak raportu w oknie · ostatni 2026-01-10/);
 });
 
-test("fitLayout on a short screen drops the S&P strip and the quarterly table so the price panel keeps the height", () => {
+test("fitLayout on a short screen drops the quarterly table so the price panel keeps the height (no S&P strip anywhere)", () => {
     const { fitLayout, pickLayout } = require("../../docs/js/chart.js");
     const tall = fitLayout(374, 600);
-    assert.ok(tall.bench.h >= 30 && tall.eps.h >= 36);
+    assert.ok(tall.bench.h === 0 && tall.eps.h >= 36);
     const short = fitLayout(828, 262);
     assert.equal(short.bench.h, 0);
     assert.equal(short.eps.h, 0);
@@ -466,7 +467,7 @@ test("fitLayout on a short screen drops the S&P strip and the quarterly table so
     const L = pickLayout({ fit: { w: 828, h: 262 }, compact: true });
     assert.equal(L.eps.h, 0);                                                         // compactEpsPanel nie rusza zerowego panelu
     const svg = chartSvg(buildChartModel(charts(), "AAA", { rs_rating: 90 }), { fit: { w: 828, h: 262 }, compact: true, hideLabels: true });
-    assert.ok(!/S&amp;P 500 \d/.test(svg) && !/Brak danych benchmarku/.test(svg));   // brak paska benchmarku
+    assert.ok(!/Brak danych benchmarku/.test(svg));
     assert.match(svg, /viewBox="0 0 828 /);
 });
 
@@ -561,4 +562,13 @@ test("cups are drawn only as educational hints (opts.hints) with letters A-E", (
     const on = chartSvg(m, { hints: true });
     assert.match(on, />A<\/text>/);
     assert.match(on, />C<\/text>/);
+});
+
+test("S&P 500 is a thin line in the top band of the price panel (own scale, no separate frame) like in the book", () => {
+    const m = buildChartModel(charts(), "AAA", null);
+    const svg = chartSvg(m);
+    assert.match(svg, /fill="none" stroke="#9aa3b2" stroke-width="1\.3"/);   // linia S&P w panelu cen
+    assert.match(svg, />S&amp;P 500 104\.00</);                                    // podpis z ostatnią wartością
+    const none = chartSvg(buildChartModel(charts({ spx: null }), "AAA", null));
+    assert.doesNotMatch(none, /S&amp;P 500 \d/);
 });
