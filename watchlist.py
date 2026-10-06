@@ -12,6 +12,7 @@ Przepływ (odpalany codziennie rano, po sesji USA z poprzedniego dnia — patrz
 Wszystko to informacja do przeglądania, nie rekomendacja inwestycyjna.
 """
 import argparse
+import bisect
 import json
 import math
 import sys
@@ -398,9 +399,33 @@ def add_group_strength(stocks):
     return stocks
 
 
-def add_rs_rating(stocks):
-    """RS Rating 1-99 = percentyl rs_score wśród spółek listy (remisy: średnia ranga). Spółki bez rs_score -> None."""
-    return percentile_rating(stocks, "rs_score", "rs_rating")
+def add_rs_rating(stocks, universe_scores=None):
+    """RS Rating 1-99 = percentyl rs_score. Domyślnie wśród spółek listy (remisy: średnia ranga); z `universe_scores` (posortowane rs_score
+    szerokiej listy z profilu Qullamaggiego, rs_universe.json) — względem szerokiego rynku, tą samą skalą 1-99. Spółki bez rs_score -> None."""
+    if not universe_scores:
+        return percentile_rating(stocks, "rs_score", "rs_rating")
+    n = len(universe_scores)
+    for s in stocks:
+        v = s.get("rs_score")
+        if v is None:
+            s["rs_rating"] = None
+            continue
+        less = bisect.bisect_left(universe_scores, v)
+        equal = bisect.bisect_right(universe_scores, v) - less
+        s["rs_rating"] = max(1, min(99, int(round(1 + 98 * (less + 0.5 * equal) / n))))
+    return stocks
+
+
+def load_rs_universe(path):
+    """Wczytuje rs_universe.json zapisany przez profil Qullamaggiego: {as_of, n, scores (posortowane)}; brak/uszkodzony -> None."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    scores = data.get("scores") if isinstance(data, dict) else None
+    if not scores or len(scores) < 100:
+        return None
+    return data
 
 
 def eps_score(q0, q1, eps_this_y, eps_past_5y):
@@ -1185,7 +1210,7 @@ def institutional_flag(own, trans):
     return bool(INST_MIN_OWN <= own <= INST_MAX_OWN and trans > 0)
 
 
-def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
+def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None, rs_universe=None):
     stocks = []
     bench_w = weekly_close(drop_incomplete_bar(bench_df, now_utc)) if bench_df is not None and len(bench_df) else None
     for row in finviz_rows:
@@ -1201,7 +1226,7 @@ def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
         stock["finviz_upside_pct"] = finviz_upside(stock.get("finviz_target"), stock.get("price"))
         stock["inst_sponsor"] = institutional_flag(stock.get("inst_own"), stock.get("inst_trans"))
         stocks.append(stock)
-    add_rs_rating(stocks)
+    add_rs_rating(stocks, rs_universe)
     add_accdis_rating(stocks)
     add_group_strength(stocks)
     return stocks
@@ -1292,7 +1317,21 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
     except Exception as e:
         print(f"⚠️  Ocena rynku pominięta ({e}).")
         market = None
-    stocks = build_stocks(finviz_rows, frames, bench_df=benchmark_df)
+    rs_universe_path = Path(output_path).parent / "rs_universe.json"
+    rs_universe = None if qm else load_rs_universe(rs_universe_path)
+    stocks = build_stocks(finviz_rows, frames, bench_df=benchmark_df, rs_universe=(rs_universe or {}).get("scores"))
+    if qm:
+        # Szeroka lista = przybliżenie rynku (spółki nad SMA50/200): jej rozkład rs_score służy codziennemu profilowi CANSLIM do liczenia RS Rating.
+        scores = sorted(round(float(s["rs_score"]), 4) for s in stocks if s.get("rs_score") is not None)
+        as_of = max((s["as_of"] for s in stocks), default=None)
+        rs_universe_path.write_text(json.dumps({"as_of": as_of, "n": len(scores), "scores": scores}, separators=(",", ":")), encoding="utf-8")
+        rs_basis = {"source": "list", "n": len(scores), "as_of": as_of}
+    elif rs_universe:
+        rs_basis = {"source": "market", "n": rs_universe["n"], "as_of": rs_universe.get("as_of")}
+        print(f"ℹ️  RS Rating względem szerokiego rynku ({rs_universe['n']} spółek z sesji {rs_universe.get('as_of')}).")
+    else:
+        rs_basis = {"source": "list", "n": len(stocks), "as_of": None}
+        print("ℹ️  Brak rs_universe.json — RS Rating względem listy CANSLIM (odpal ręcznie workflow Qullamaggie, żeby liczyć RS na szerokim rynku).")
     qm_selected = []
     if qm:
         # RS Rating, Acc/Dis i grupy policzyły się już na CAŁEJ szerokiej liście (~3,7 tys. spółek — prawie cały rynek nad SMA50/200);
@@ -1331,6 +1370,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         "finviz_stale": finviz_stale,
         "n_stocks": len(stocks),
         "profile": profile,
+        "rs_basis": rs_basis,
         "market": market,
         "stocks": stocks,
     }

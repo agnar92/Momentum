@@ -39,7 +39,7 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", csMin: 5, csCore: true, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
+    tab: "LIST", csMin: 5, csCore: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
 // Dwa osobne pobrania: CANSLIM (codzienne, watchlist.json) i Qullamaggie (ręczne, watchlist_qm.json — szeroka lista z filtrem Finviz
 // tylko na cenę i SMA50/200; płynność, ADR i cena/minimum liczy aplikacja). Każda spółka niesie znaczniki in_cs / in_qm; dla spółki z obu list
@@ -97,6 +97,7 @@ const state = {
     tab: DEFAULT_SETTINGS.tab,
     csMin: DEFAULT_SETTINGS.csMin,
     csCore: DEFAULT_SETTINGS.csCore,
+    csRs: DEFAULT_SETTINGS.csRs,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
     brk: { ...DEFAULT_SETTINGS.brk },
@@ -319,11 +320,11 @@ function tagBreakouts(stocks, alerts, maxDist) {
 // N = do 10 % pod szczytem 52 tyg., S = popyt (Acc/Dis A lub B) i podaż (zadłużenie D/E ≤ 1, gdy znane),
 // L = RS Rating ≥ 80 w silnej grupie (grupa ≥ 60, gdy znana), I = instytucje 20–90 % z napływem, M = trend wzrostowy rynku (EMA10 > EMA20 tyg.) i < 5 dni dystrybucji.
 const CANSLIM_KEYS = ["C", "A", "N", "S", "L", "I", "M"];
-const CANSLIM_HELP = {
-    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 25 % i sprzedaż r/r ≥ 25 %", A: "A — roczne zyski: wzrost EPS 5 lat ≥ 25 %, EPS w tym roku ≥ 25 %, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 10 % pod szczytem 52 tyg.",
+const CANSLIM_HELP = {   // L: tekst z aktualnym progiem RS — patrz canslimHelp
+    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 25 % i sprzedaż r/r ≥ 25 %", A: "A — roczne zyski: EPS w tym roku ≥ 25 %, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 10 % pod szczytem 52 tyg.",
     S: "S — popyt i podaż: Acc/Dis A lub B oraz zadłużenie D/E ≤ 1", L: "L — lider: RS Rating ≥ 80 w silnej grupie branżowej (≥ 60)", I: "I — instytucje: własność 20–90 % i napływ w ostatnim kwartale", M: "M — rynek: S&P 500 i Nasdaq w trendzie wzrostowym (EMA10 > EMA20 tyg.), mniej niż 5 dni dystrybucji",
 };
-const CANSLIM_THRESHOLDS = { epsQ: 25, sales: 25, eps5y: 25, epsYear: 25, roe: 17, nearHigh: -10, debtEq: 1, rs: 80, group: 60, instMin: 20, instMax: 90, instData: 100, distDays: 5 };
+const CANSLIM_THRESHOLDS = { epsQ: 25, sales: 25, epsYear: 25, roe: 17, nearHigh: -10, debtEq: 1, rs: 80, group: 60, instMin: 20, instMax: 90, instData: 100, distDays: 5 };
 // I z CANSLIM tak samo jak watchlist.py::institutional_flag (liczymy też tu, żeby nie czekać na odświeżenie danych): przedział 20–90 % + napływ; > 100 % = dane niewiarygodne.
 function institutionalFlag(s) {
     const T = CANSLIM_THRESHOLDS;
@@ -340,6 +341,18 @@ function canslimMarket() {
     const d = [m.sp500, m.nasdaq].map(x => (x && Number.isFinite(x.dist_days) ? x.dist_days : null)).filter(v => v !== null);
     return { regime: m.regime || null, distDays: d.length ? Math.max(...d) : null };
 }
+// RS Rating: percentyl względem szerokiego rynku (spółki nad SMA50/200 z ręcznego pobrania Qullamaggiego, rs_universe.json) albo, gdy go brak, względem listy CANSLIM.
+function rsBasisText() {
+    const b = state.data && state.data.rs_basis;
+    return b && b.source === "market"
+        ? `percentyl wśród ${b.n} spółek szerokiego rynku (nad SMA50 i SMA200) z sesji ${b.as_of}`
+        : "percentyl wśród spółek samej listy CANSLIM (brak danych szerokiego rynku — odpal ręcznie workflow Qullamaggie, to je zapisuje), więc wynik jest zawyżony";
+}
+// Próg RS (litera L) wpisuje użytkownik w Filtrach; CANSLIM_THRESHOLDS.rs czytają canslimInfo i canslimExplain.
+function setCanslimRs(v) { CANSLIM_THRESHOLDS.rs = Number.isFinite(v) && v >= 0 && v <= 99 ? v : DEFAULT_SETTINGS.csRs; }
+function canslimHelp(k) {
+    return k === "L" ? `L — lider: RS Rating ≥ ${CANSLIM_THRESHOLDS.rs} w silnej grupie branżowej (≥ ${CANSLIM_THRESHOLDS.group})` : CANSLIM_HELP[k];
+}
 function canslimInfo(s, mkt) {
     const T = CANSLIM_THRESHOLDS, num = Number.isFinite;
     const regime = mkt && typeof mkt === "object" ? mkt.regime : mkt;
@@ -347,8 +360,8 @@ function canslimInfo(s, mkt) {
     // C: zysk ostatniego kwartału i (gdy znana) sprzedaż; brak EPS = brak danych
     let C = null;
     if (num(s.eps_q0_yoy)) C = s.eps_q0_yoy >= T.epsQ && (!num(s.sales_qq) || s.sales_qq >= T.sales);
-    // A: każdy znany składnik musi przejść; żaden nieznany = brak danych
-    const aParts = [num(s.eps_past_5y) ? s.eps_past_5y >= T.eps5y : null, num(s.eps_this_y) ? s.eps_this_y >= T.epsYear : null, num(s.roe) ? s.roe >= T.roe : null].filter(v => v !== null);
+    // A: każdy znany składnik musi przejść (EPS bieżącego roku, ROE); żaden nieznany = brak danych. Wzrost EPS z 5 lat to nie kryterium O'Neila (on chce ≥ 25 % w KAŻDYM z 3 ostatnich lat), więc go nie używamy.
+    const aParts = [num(s.eps_this_y) ? s.eps_this_y >= T.epsYear : null, num(s.roe) ? s.roe >= T.roe : null].filter(v => v !== null);
     const A = aParts.length ? aParts.every(Boolean) : null;
     const N = num(s.pct_from_high_52w) ? s.pct_from_high_52w >= T.nearHigh : null;
     // S: popyt (Acc/Dis) i podaż (zadłużenie, gdy znane)
@@ -381,9 +394,9 @@ function canslimExplain(s, mkt) {
     add("C", "Current earnings — bieżące zyski", `EPS z ostatniego kwartału wyższy r/r o co najmniej ${T.epsQ} % i sprzedaż r/r o co najmniej ${T.sales} % (gdy znana)`,
         num(s.eps_q0_yoy) ? `EPS ostatniego kwartału ${pct(s.eps_q0_yoy)} r/r${num(s.eps_q1_yoy) ? `, poprzedniego ${pct(s.eps_q1_yoy)}` : ""}${accel ? ` (${accel})` : ""}; sprzedaż ${num(s.sales_qq) ? `${pct(s.sales_qq)} r/r` : "— brak danych (oceniamy tylko EPS)"}` : "brak danych o EPS z ostatniego kwartału",
         "O'Neil: kwartalny EPS co najmniej 18–20 %, najlepsze spółki 25–50 % i więcej, a sprzedaż rośnie ≥ 25 % albo przyspiesza. Wzrost zysku bez wzrostu sprzedaży to często cięcie kosztów. Liczy się też przyspieszenie z kwartału na kwartał. Nie sprawdzamy przyspieszenia sprzedaży (mamy tylko ostatni kwartał).");
-    add("A", "Annual earnings — roczne zyski", `wzrost EPS z 5 lat ≥ ${T.eps5y} %, EPS w tym roku ≥ ${T.epsYear} % i ROE ≥ ${T.roe} % (każdy znany składnik musi przejść)`,
-        [num(s.eps_past_5y) ? `EPS 5 lat ${pct(s.eps_past_5y)} rocznie` : null, num(s.eps_this_y) ? `EPS w tym roku ${pct(s.eps_this_y)}` : null, num(s.roe) ? `ROE ${s.roe}%` : null].filter(Boolean).join(", ") || "brak danych o rocznych zyskach i ROE",
-        "O'Neil: roczny wzrost EPS ≥ 25 % w każdym z ostatnich 3 lat i ROE ≥ 17 %. Nie mamy EPS rok po roku, więc używamy średniej z 5 lat (średnia może ukryć słaby rok — sprawdź na wykresie tabelę kwartałów) plus bieżącego roku. Młode spółki bez 5 lat historii oceniamy po bieżącym roku i ROE.");
+    add("A", "Annual earnings — roczne zyski", `EPS w tym roku ≥ ${T.epsYear} % i ROE ≥ ${T.roe} % (każdy znany składnik musi przejść)`,
+        [num(s.eps_this_y) ? `EPS w tym roku ${pct(s.eps_this_y)}` : null, num(s.roe) ? `ROE ${s.roe}%` : null].filter(Boolean).join(", ") || "brak danych o rocznych zyskach i ROE",
+        "O'Neil: roczny wzrost EPS ≥ 25 % w każdym z ostatnich 3 lat i ROE ≥ 17 %. Nie mamy EPS rok po roku, więc sprawdzamy tylko bieżący rok i ROE — poprzednie lata oceń sam (tabela kwartałów pod wykresem). Średniej z 5 lat celowo nie używamy: ukrywa słaby rok i wycina młode spółki bez 5 lat historii.");
     add("N", "New — nowe szczyty, produkty, zarząd", `cena nie dalej niż ${Math.abs(T.nearHigh)} % pod szczytem 52 tygodni`,
         num(s.pct_from_high_52w) ? (s.pct_from_high_52w >= 0 ? "cena na szczycie 52 tygodni" : `${Math.abs(s.pct_from_high_52w)}% poniżej szczytu 52 tyg.`) : "brak danych o szczycie 52 tyg.",
         "Nie szukamy „tanich” spółek po spadkach: największe wzrosty zaczynają się blisko nowych szczytów, po zbudowaniu bazy (cup, flat base); kupuje się przy wybiciu z pivotu (kolumna „Wybicie”). Tu mierzymy tylko cenę; „nowość” (produkt, zarząd) oceń sam z newsów.");
@@ -394,7 +407,7 @@ function canslimExplain(s, mkt) {
         "Ceny rosną, gdy popyt przeważa nad podażą — widać to po wolumenie (Acc/Dis to nasze przybliżenie Chaikina z 13 tyg., nie ocena IBD). O'Neil patrzy też na podaż: mało akcji w obrocie (mały float), wykupy akcji własnych, niskie zadłużenie i udział zarządu. Float i insiderów pokazujemy, ale nie wymagamy (liderzy bywają duzi).");
     add("L", "Leader — lider czy maruda", `RS Rating ≥ ${T.rs} i silna grupa branżowa (≥ ${T.group}, gdy znana)`,
         num(s.rs_rating) ? `RS Rating ${s.rs_rating}${num(s.industry_rating) ? `, grupa branżowa ${s.industry_rating}` : ", grupa — brak danych"}${s.leader ? ", oznaczona jako ★ lider" : ""}` : "brak RS Rating (zbyt krótka historia)",
-        "Kupuj liderów branży, nie maruderów — najlepiej lidera w najsilniejszej grupie. RS Rating porównuje 12-miesięczną siłę ceny z resztą rynku (u nas: z listą po filtrach Finviz — już samymi mocnymi spółkami — więc 80 u nas to więcej niż 80 w całym rynku).");
+        `Kupuj liderów branży, nie maruderów — najlepiej lidera w najsilniejszej grupie. RS Rating porównuje 12-miesięczną siłę ceny (z podwójną wagą ostatniego kwartału) z resztą rynku — u nas: ${rsBasisText()}. Próg RS ustawiasz w Filtrach (🏆 CANSLIM).`);
     add("I", "Institutional sponsorship — instytucje", `instytucje posiadają ${T.instMin}–${T.instMax} % akcji i ich udział rośnie`,
         num(s.inst_own) ? `instytucje ${s.inst_own}%${num(s.inst_trans) ? `, zmiana w ostatnim kwartale ${pct(s.inst_trans)}` : ""}${s.inst_own > T.instData ? " — Finviz podaje > 100 %, to dane niewiarygodne (podwójne liczenie)" : s.inst_own > T.instMax ? " — przesadne obłożenie, spółka może być już „wykupiona”" : ""}` : "brak danych o instytucjach",
         "O'Neil szuka kilku solidnych funduszy z dobrymi wynikami i rosnącej ich liczby; brak instytucji to zły znak, ale przesadne obłożenie oznacza, że nie ma kto dokupić. Uwaga: Finviz daje tylko % akcji i jego zmianę, nie liczbę ani jakość funduszy — to słabe przybliżenie, sprawdź je np. w raportach 13F.");
@@ -423,7 +436,7 @@ function openCanslimSheet(ticker) {
 }
 
 function canslimLettersHtml(c) {
-    return `<span class="cs-letters">${CANSLIM_KEYS.map(k => `<span class="cs-l ${c.flags[k] === true ? "on" : c.flags[k] === false ? "off" : ""}" title="${escapeHtml(CANSLIM_HELP[k])}">${k}</span>`).join("")}</span>`;
+    return `<span class="cs-letters">${CANSLIM_KEYS.map(k => `<span class="cs-l ${c.flags[k] === true ? "on" : c.flags[k] === false ? "off" : ""}" title="${escapeHtml(canslimHelp(k))}">${k}</span>`).join("")}</span>`;
 }
 
 // Pastylki ocen nad wykresem (jak panel ocen w MarketSmith): Composite, RS, EPS, grupa, Acc/Dis, stabilność EPS, instytucje, lider.
@@ -953,7 +966,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, qm: state.qm, bases: state.bases, brk: state.brk }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csRs: state.csRs, qm: state.qm, bases: state.bases, brk: state.brk }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -964,6 +977,7 @@ function loadSettings() {
         if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB) state.tab = saved.tab;
         if (Number.isFinite(saved.csMin)) state.csMin = saved.csMin;
         if (typeof saved.csCore === "boolean") state.csCore = saved.csCore;
+        if (Number.isFinite(saved.csRs)) { state.csRs = saved.csRs; setCanslimRs(saved.csRs); }
         if (saved.qm) ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
             if (Number.isFinite(saved.qm[k])) state.qm[k] = saved.qm[k];
         });
@@ -1232,6 +1246,7 @@ function renderDataInfo() {
     const generated = d.generated_at ? d.generated_at.replace("T", " ").replace("Z", " UTC") : "?";
     info.textContent = `Dane z sesji ${d.data_as_of} · pobrano ${generated} · ${d.n_stocks} spółek CANSLIM`
         + (d.finviz_stale ? " · ⚠ lista Finviz z poprzedniego pobrania (Finviz niedostępny)" : "")
+        + (d.rs_basis ? (d.rs_basis.source === "market" ? ` · RS vs rynek (${d.rs_basis.n} spółek, sesja ${d.rs_basis.as_of})` : " · RS vs lista CANSLIM") : "")
         + (d.qm ? ` · Qullamaggie: ${d.qm.n_stocks} spółek z sesji ${d.qm.data_as_of} (odświeżane ręcznie)` : "");
 }
 
@@ -1258,6 +1273,8 @@ function initControls() {
     bind("brkMaxDist", v => { state.brk.maxDistPct = v; });
     document.getElementById("csMin").value = state.csMin;
     bind("csMin", v => { state.csMin = v; });
+    document.getElementById("csRs").value = state.csRs;
+    bind("csRs", v => { state.csRs = Math.min(99, v); setCanslimRs(state.csRs); });
     const csCore = document.getElementById("csCore");
     csCore.checked = state.csCore;
     csCore.addEventListener("change", () => { state.csCore = csCore.checked; saveSettings(); renderTable(); });
@@ -1897,7 +1914,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

@@ -709,3 +709,24 @@ class TestQullamaggieProfile:
         missing = finviz.load_config(tmp_path / "none.json", finviz.DEFAULT_QM_FILTERS, finviz.DEFAULT_QM_MAX_TICKERS)
         assert missing == {"filters": finviz.DEFAULT_QM_FILTERS, "max_tickers": finviz.DEFAULT_QM_MAX_TICKERS}
         assert "fa_" not in finviz.DEFAULT_QM_FILTERS   # Qullamaggie: bez filtrów fundamentalnych
+
+
+class TestRsUniverse:
+    def test_rs_rating_against_wide_universe(self):
+        universe = sorted(i / 100 for i in range(200))   # szeroki rynek: wyniki 0.00 … 1.99
+        stocks = [{"ticker": "LOW", "rs_score": -5.0}, {"ticker": "MID", "rs_score": 1.0}, {"ticker": "TOP", "rs_score": 9.0}, {"ticker": "NA", "rs_score": None}]
+        watchlist.add_rs_rating(stocks, universe)
+        r = {s["ticker"]: s["rs_rating"] for s in stocks}
+        assert r["LOW"] == 1 and r["TOP"] == 99 and r["NA"] is None
+        assert 49 <= r["MID"] <= 51   # medianę rynku nie przesuwa to, że lista ma tylko 3 spółki
+        # bez rozkładu rynku nadal percentyl wśród listy
+        watchlist.add_rs_rating(stocks)
+        assert {s["ticker"]: s["rs_rating"] for s in stocks}["LOW"] == 1
+
+    def test_load_rs_universe(self, tmp_path):
+        p = tmp_path / "rs_universe.json"
+        assert watchlist.load_rs_universe(p) is None
+        p.write_text(json.dumps({"as_of": "2026-10-05", "n": 3, "scores": [0.1, 0.2, 0.3]}), encoding="utf-8")
+        assert watchlist.load_rs_universe(p) is None   # za mały rozkład = nie ufamy
+        p.write_text(json.dumps({"as_of": "2026-10-05", "n": 150, "scores": [i / 100 for i in range(150)]}), encoding="utf-8")
+        assert watchlist.load_rs_universe(p)["n"] == 150
