@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const {
     qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
-    fmtMarketCap, fmtVolume, fmtPct,
+    fmtMarketCap, fmtVolume, fmtPct, mergeProfiles, tabUniverse, chartsForTicker,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
 function stock(ticker, over = {}) {
@@ -437,4 +437,33 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     tagCanslim([good, noA], "uptrend");
     assert.deepEqual(canslimRows([good, noA], 6).map(s => s.ticker), ["G", "X"]);
     assert.deepEqual(canslimRows([good, noA], 6, true).map(s => s.ticker), ["G"]);
+});
+
+test("mergeProfiles: CANSLIM i Qullamaggie to osobne listy; wspólna spółka zachowuje rekord CANSLIM", () => {
+    const cs = { generated_at: "t1", data_as_of: "2026-10-05", n_stocks: 2, market: { regime: "uptrend" }, stocks: [stock("AAA", { eps_q0_yoy: 40 }), stock("BBB")] };
+    const qm = { generated_at: "t2", data_as_of: "2026-10-02", finviz_total: 3675, stocks: [stock("AAA", { eps_q0_yoy: null }), stock("QQQ")] };
+    const m = mergeProfiles(cs, qm);
+    assert.deepEqual(m.stocks.map(s => [s.ticker, s.in_cs, s.in_qm]), [["AAA", true, true], ["BBB", true, false], ["QQQ", false, true]]);
+    assert.equal(m.stocks[0].eps_q0_yoy, 40);
+    assert.equal(m.qm.data_as_of, "2026-10-02");
+    assert.equal(m.n_stocks, 2);
+    assert.equal(m.market.regime, "uptrend");
+    // bez pliku Qullamaggiego (jeszcze nie odpalony ręcznie) zakładka QM jest pusta, reszta działa
+    const only = mergeProfiles(cs, null);
+    assert.equal(only.qm, null);
+    assert.deepEqual(tabUniverse("QM", only.stocks), []);
+    assert.deepEqual(tabUniverse("LIST", m.stocks).map(s => s.ticker), ["AAA", "BBB"]);
+    assert.deepEqual(tabUniverse("CS", m.stocks).map(s => s.ticker), ["AAA", "BBB"]);
+    assert.deepEqual(tabUniverse("QM", m.stocks).map(s => s.ticker), ["AAA", "QQQ"]);
+    assert.equal(tabUniverse("FAV", m.stocks).length, 3);   // ulubione / pozycje / alerty widzą obie listy
+    // rekord bez znaczników (stare dane) należy do obu list
+    assert.equal(tabUniverse("QM", [stock("OLD")]).length, 1);
+});
+
+test("chartsForTicker wybiera plik wykresów, który ma daną spółkę", () => {
+    const charts = { weeks: ["w1"], stocks: { AAA: {} }, qm: { weeks: ["w2"], stocks: { QQQ: {} } } };
+    assert.equal(chartsForTicker(charts, "AAA"), charts);
+    assert.equal(chartsForTicker(charts, "QQQ"), charts.qm);
+    assert.equal(chartsForTicker(charts, "NONE"), charts);
+    assert.equal(chartsForTicker(null, "AAA"), null);
 });

@@ -13,6 +13,7 @@ Wszystko to informacja do przeglądania, nie rekomendacja inwestycyjna.
 """
 import argparse
 import json
+import math
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,8 @@ OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist.json"
 CHARTS_PATH = ROOT / "docs" / "data" / "charts.json"
 EPS_CACHE_PATH = ROOT / "docs" / "data" / "eps_cache.json"
 ESTIMATES_PATH = ROOT / "docs" / "data" / "estimates.json"
+QM_OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist_qm.json"    # profil Qullamaggiego (ręczny): osobna lista i osobne wykresy
+QM_WINDOWS = ("low_ratio_1m", "low_ratio_3m", "low_ratio_6m")
 
 HISTORY_PERIOD = "3y"        # 12M do RS Rating + 104 tyg. wykresu + rozgrzanie SMA40 tygodniowej
 BATCH_SIZE = 50
@@ -1212,8 +1215,35 @@ def load_previous(path=OUTPUT_PATH):
     return data if isinstance(data, dict) and data.get("stocks") else None
 
 
-def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None):
-    cfg = finviz.load_config()
+def qullamaggie_select(stocks, min_dollar_volume_m, min_adr_pct, top_pct):
+    """Ta sama reguła co qullamaggieRows w docs/js/watchlist.js: spółki płynne (średni obrót, ADR %), a z nich
+    unikalna suma top X % wg ceny/minimum w każdym z okien 1/3/6 mies. Zwraca listę spółek (bez duplikatów)."""
+    liquid = [s for s in stocks if _is_num(s.get("dollar_volume_avg")) and _is_num(s.get("adr_pct"))
+              and s["dollar_volume_avg"] >= (min_dollar_volume_m or 0) * 1e6 and s["adr_pct"] >= (min_adr_pct or 0)]
+    picked = {}
+    top_pct = min(100.0, max(0.0, float(top_pct or 0)))
+    for key in QM_WINDOWS:
+        ranked = sorted((s for s in liquid if _is_num(s.get(key))), key=lambda s: s[key], reverse=True)
+        take = max(1, math.ceil(len(ranked) * top_pct / 100)) if ranked and top_pct > 0 else 0
+        for s in ranked[:take]:
+            picked[s["ticker"]] = s
+    return list(picked.values())
+
+
+def _is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+
+
+def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim"):
+    """profile 'canslim' (domyślny, codzienny): filtr CANSLIM z finviz_screen.json, EPS, estymaty, wykresy wszystkich spółek.
+    profile 'qm' (ręczny): szeroki filtr z finviz_screen_qm.json, bez EPS i estymat, lista przycięta do płynnych spółek,
+    wykresy tylko dla spółek z top X % ceny/minimum -> watchlist_qm.json + charts_qm.json."""
+    qm = profile == "qm"
+    output_path = output_path or (QM_OUTPUT_PATH if qm else OUTPUT_PATH)
+    if qm:
+        cfg = finviz.load_config(finviz.QM_CONFIG_PATH, finviz.DEFAULT_QM_FILTERS, finviz.DEFAULT_QM_MAX_TICKERS)
+    else:
+        cfg = finviz.load_config()
     max_tickers = max_tickers or cfg["max_tickers"]
     eps_cache_path = eps_cache_path or Path(output_path).parent / "eps_cache.json"
     previous = load_previous(output_path)
@@ -1221,7 +1251,7 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
 
     if not skip_finviz:
         try:
-            finviz_rows, finviz_total = finviz.fetch_watchlist(cfg["filters"], max_tickers)
+            finviz_rows, finviz_total = finviz.fetch_watchlist(cfg["filters"], max_tickers, **({"views": finviz.QM_VIEWS} if qm else {}))
         except Exception as e:
             print(f"⚠️  Finviz niedostępny ({e}).")
         if len(finviz_rows) < finviz.MIN_TICKERS:
@@ -1263,20 +1293,32 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
         print(f"⚠️  Ocena rynku pominięta ({e}).")
         market = None
     stocks = build_stocks(finviz_rows, frames, bench_df=benchmark_df)
-    try:
-        eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
-    except Exception as e:
-        print(f"⚠️  Krok EPS pominięty ({e}).")
+    qm_selected = []
+    if qm:
+        # RS Rating, Acc/Dis i grupy policzyły się już na CAŁEJ szerokiej liście (~3,7 tys. spółek — prawie cały rynek nad SMA50/200);
+        # teraz zapisujemy tylko płynne spółki, a wykresy budujemy dla top X % ceny/minimum.
+        n_all = len(stocks)
+        stocks = [s for s in stocks if _is_num(s.get("dollar_volume_avg")) and _is_num(s.get("adr_pct"))
+                  and s["dollar_volume_avg"] >= cfg.get("min_dollar_volume_m", 0) * 1e6 and s["adr_pct"] >= cfg.get("min_adr_pct", 0)]
+        qm_selected = qullamaggie_select(stocks, cfg.get("min_dollar_volume_m", 0), cfg.get("min_adr_pct", 0), cfg.get("charts_top_pct", 25))
+        print(f"ℹ️  Qullamaggie: {len(stocks)}/{n_all} płynnych spółek zapisanych, wykresy dla {len(qm_selected)} (top {cfg.get('charts_top_pct', 25)} % ceny/minimum).")
         eps_cache = {}
-    add_eps_rating(stocks, eps_cache)
-    try:
-        estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
-    except Exception as e:
-        print(f"⚠️  Krok estymat analityków pominięty ({e}).")
-        estimates = {}
-    for st in stocks:
-        st.update(estimate_fields(estimates.get(st["ticker"]), st.get("price")))
-    charts = build_charts([s["ticker"] for s in stocks], frames, benchmark_df, eps_cache)
+    else:
+        try:
+            eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
+        except Exception as e:
+            print(f"⚠️  Krok EPS pominięty ({e}).")
+            eps_cache = {}
+        add_eps_rating(stocks, eps_cache)
+        try:
+            estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
+        except Exception as e:
+            print(f"⚠️  Krok estymat analityków pominięty ({e}).")
+            estimates = {}
+        for st in stocks:
+            st.update(estimate_fields(estimates.get(st["ticker"]), st.get("price")))
+    chart_tickers = [s["ticker"] for s in (qm_selected if qm else stocks)]
+    charts = build_charts(chart_tickers, frames, benchmark_df, eps_cache)
     for st in stocks:
         summary = ((charts or {}).get("stocks", {}).get(st["ticker"]) or {}).get("rs_line") or {}
         st["rs_line_state"] = summary.get("state")
@@ -1288,12 +1330,13 @@ def run(output_path=OUTPUT_PATH, skip_finviz=False, max_tickers=None, charts_pat
         "finviz_total": finviz_total,
         "finviz_stale": finviz_stale,
         "n_stocks": len(stocks),
+        "profile": profile,
         "market": market,
         "stocks": stocks,
     }
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    charts_path = charts_path or out.parent / "charts.json"
+    charts_path = charts_path or out.parent / ("charts_qm.json" if qm else "charts.json")
     out.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False), encoding="utf-8")
     print(f"💾 Zapisano {out} ({len(stocks)} spółek, dane z sesji {payload['data_as_of']}).")
     if charts is not None:
@@ -1308,9 +1351,11 @@ def main(argv=None):
     parser.add_argument("--skip-finviz", action="store_true",
                         help="Nie pytaj Finviz — użyj listy spółek z poprzedniego watchlist.json (tylko odśwież ceny).")
     parser.add_argument("--max-tickers", type=int, default=None, help="Limit liczby spółek (domyślnie z finviz_screen.json).")
-    parser.add_argument("--output", type=str, default=str(OUTPUT_PATH))
+    parser.add_argument("--output", type=str, default=None, help="Plik wyjściowy (domyślnie watchlist.json albo watchlist_qm.json dla --profile qm).")
+    parser.add_argument("--profile", choices=("canslim", "qm"), default="canslim",
+                        help="canslim = codzienna lista CANSLIM (domyślnie); qm = szeroka lista Qullamaggiego (uruchamiana ręcznie).")
     args = parser.parse_args(argv)
-    return run(args.output, args.skip_finviz, args.max_tickers)
+    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile)
 
 
 if __name__ == "__main__":
