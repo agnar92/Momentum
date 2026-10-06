@@ -438,13 +438,3 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     assert.deepEqual(canslimRows([good, noA], 6).map(s => s.ticker), ["G", "X"]);
     assert.deepEqual(canslimRows([good, noA], 6, true).map(s => s.ticker), ["G"]);
 });
-
-test("canslimStep: market gate, buy / near / watch / late", () => {
-    const { canslimStep } = require("../../docs/js/watchlist.js");
-    const base = { base_type: "cup", pct_to_pivot: 10, brk: null };
-    assert.equal(canslimStep(base, "correction"), "wait");
-    assert.equal(canslimStep(base, "uptrend"), "watch");
-    assert.equal(canslimStep({ ...base, pct_to_pivot: 3, brk: { rank: 2, dist: 3 } }, "uptrend"), "near");
-    assert.equal(canslimStep({ ...base, pct_to_pivot: -1, brk: { rank: 0, dist: null } }, "uptrend"), "buy");
-    assert.equal(canslimStep({ ...base, pct_to_pivot: -8, brk: { rank: 0, dist: null } }, "uptrend"), "late");
-});

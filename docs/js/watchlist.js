@@ -59,7 +59,7 @@ function tagStrategies(allStocks, filtered, st, alerts = []) {
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], QM: ["max_ratio", "desc"],
-    CS: ["cs_step", "asc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
+    CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
 };
 const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "ALERTS"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
@@ -343,47 +343,6 @@ function tagCanslim(stocks, mkt) {
 function canslimRows(stocks, minScore, coreRequired = false) {
     return stocks.filter(s => s.cs !== null && s.cs >= minScore && (!coreRequired || (s.canslim.flags.C === true && s.canslim.flags.A === true))).sort((a, b) => b.cs - a.cs || (b.composite_rating ?? -1) - (a.composite_rating ?? -1));
 }
-// Plan krok po kroku (zakładka CANSLIM): jedna etykieta „co robić” dla każdej spółki z listy CANSLIM.
-// Kolejność = priorytet: 🟢 KUP (wybicie na wolumenie, nie dalej niż 5 % nad pivotem) → 🟡 BLISKO (do 5 % do wybicia: ustaw alert) →
-// 👀 OBSERWUJ (dobra spółka, baza jeszcze się buduje) → ⛔ ZA PÓŹNO (> 5 % nad pivotem, nie goń) → 🛑 CZEKAJ (rynek w korekcie: nic nie kupuj).
-const PLAN_NEAR_PCT = 5;
-const PLAN_STEPS = {
-    buy: { rank: 0, icon: "🟢", label: "KUP", hint: "Wybicie na wolumenie. Kup, stop 7–8 % pod ceną zakupu." },
-    near: { rank: 1, icon: "🟡", label: "BLISKO", hint: "Prawie wybicie. Ustaw alert na pivot i czekaj na zamknięcie nad nim z wolumenem." },
-    watch: { rank: 2, icon: "👀", label: "OBSERWUJ", hint: "Dobra spółka, ale jeszcze buduje bazę. Zostaw na liście." },
-    late: { rank: 3, icon: "⛔", label: "ZA PÓŹNO", hint: "Cena ponad 5 % nad pivotem. Nie goń — poczekaj na nową bazę." },
-    wait: { rank: 4, icon: "🛑", label: "CZEKAJ", hint: "Rynek w korekcie. Nawet dobra spółka teraz zwykle spada — nie kupuj." },
-};
-function canslimStep(s, regime) {
-    const num = Number.isFinite;
-    if (regime !== "uptrend") return "wait";
-    const buyableBase = BUYABLE_BASES.includes(s.base_type) && num(s.pct_to_pivot);
-    const extended = (buyableBase && s.pct_to_pivot < -PLAN_NEAR_PCT) || ((s.tl_state === "wybicie") && num(s.tl_dist_pct) && s.tl_dist_pct < -PLAN_NEAR_PCT);
-    if (extended) return "late";
-    if (s.brk && s.brk.rank === 0) return "buy";
-    if (s.brk && s.brk.dist !== null && s.brk.dist <= PLAN_NEAR_PCT) return "near";
-    return "watch";
-}
-// Ustawia s.plan (kod kroku) i s.cs_step (klucz sortowania: krok, w środku wyższy wynik CANSLIM wyżej).
-function tagPlan(rows, mkt) {
-    const regime = mkt && typeof mkt === "object" ? mkt.regime : mkt;
-    rows.forEach(s => { s.plan = canslimStep(s, regime); s.cs_step = PLAN_STEPS[s.plan].rank * 10 + (7 - (s.cs ?? 0)); });
-}
-function planPanelHtml(rows, mkt) {
-    const regime = mkt && mkt.regime;
-    const n = k => rows.filter(s => s.plan === k).length;
-    const market = regime === "uptrend" ? `<b class="positive">✅ Rynek rośnie — można kupować.</b>` : regime === "correction" ? `<b class="negative">🛑 Rynek w korekcie — dziś niczego nie kupuj, tylko obserwuj.</b>` : `<b>Brak danych o rynku.</b>`;
-    const step = (num, title, body) => `<li><span class="plan-num">${num}</span><div><b>${title}</b><br>${body}</div></li>`;
-    return `<div class="plan-market">${market}</div><ol class="plan-steps">`
-        + step(1, "Rynek", "Kupujemy tylko, gdy rynek rośnie (✅ powyżej). Jak jest korekta — wszystko poniżej to tylko lista do obserwacji.")
-        + step(2, "Wybierz dobrą spółkę", `Lista poniżej to spółki spełniające CANSLIM (min. ${state.csMin} z 7 i zawsze C + A: rosnące zyski). Im wyższy wynik n/7, tym lepiej. Zanim cokolwiek zrobisz, kliknij spółkę i zobacz wykres.`)
-        + step(3, "Poczekaj na wybicie", `Spółka musi wyjść ponad swój poziom oporu (pivot) <b>na dużym wolumenie</b>. Do tego czasu: ustaw alert i czekaj. Kolumna <b>Krok</b> mówi, gdzie jest każda spółka.`)
-        + step(4, "Kup i ustaw stop", "Kup przy wybiciu (nie więcej niż 5 % nad pivotem). Od razu stop 7–8 % niżej. Rozmiar pozycji policzy przycisk 💼 Pozycja na wykresie.")
-        + `</ol><div class="plan-counts">`
-        + ["buy", "near", "watch", "late", "wait"].map(k => `<span class="plan-chip plan-${k}" title="${escapeHtml(PLAN_STEPS[k].hint)}">${PLAN_STEPS[k].icon} <b>${n(k)}</b> ${PLAN_STEPS[k].label}</span>`).join("")
-        + `</div>`;
-}
-
 // Wyjaśnienie wyniku CANSLIM litera po literze (okno po kliknięciu etykiety n/7): co zmierzyliśmy, jaka jest reguła, czy spełnione i czego uczy O'Neil.
 // Czysta funkcja — pokazuje te same liczby, na których canslimInfo ustala flagi.
 function canslimExplain(s, mkt) {
@@ -686,8 +645,6 @@ const COL = {
     alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
     cx: ["Climax", "climax_conf", s => s.climax_top === true ? `<td class="negative" title="Sell climax top (tygodniówka) ${escapeHtml(s.climax_date || "")}: +${s.climax_runup_pct}% w 3 tyg., tydzień +${s.climax_week_gain_pct}%, wolumen ×${s.climax_vol_ratio}">⚠ ${s.climax_conf ?? 0}/4</td>` : `<td class="muted"></td>`,
         "Sell climax top (O'Neil, świece tygodniowe): w ostatnich 2 tygodniach wzrost ≥ 25 % w 1–3 tyg. z największym zyskiem tygodniowym, najszerszym zakresem i najwyższym wolumenem od dołka trendu. Liczba = potwierdzenia z 4: luka wyczerpania, zamknięcie w dolnej połowie, ≥ 70 % nad 200-dniową, 3.+ baza. Heurystyka — sprawdź wykres"],
-    step: ["Krok", "cs_step", s => s.plan ? `<td class="plan-cell plan-${s.plan}" title="${escapeHtml(PLAN_STEPS[s.plan].hint)}"><strong>${PLAN_STEPS[s.plan].icon} ${PLAN_STEPS[s.plan].label}</strong></td>` : `<td class="muted"></td>`,
-        "Co robić z tą spółką: KUP (wybicie na wolumenie), BLISKO (ustaw alert), OBSERWUJ, ZA PÓŹNO (nie goń), CZEKAJ (rynek w korekcie)"],
     cs: ["CANSLIM", "cs", s => s.cs === null || s.cs === undefined ? `<td class="muted"></td>` : `<td class="cs-cell ${s.cs >= 5 ? "positive" : ""}" title="Kliknij, aby zobaczyć wyjaśnienie każdej litery"><strong>${s.cs}/7</strong> ${canslimLettersHtml(s.canslim)}</td>`,
         "Lista CANSLIM: ile z 7 kryteriów C A N S L I M spełnia spółka (zielone litery = spełnione, czerwone = nie, szare = brak danych)"],
     brk: ["Wybicie", "brk_sort", s => {
@@ -722,7 +679,7 @@ const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "toggle", "fcha
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
 const TAB_COLUMNS = {
-    LIST: ALL_COLUMNS, CS: [...LEAD.slice(0, 3), "step", ...ALL_COLUMNS.filter(id => !LEAD.slice(0, 3).includes(id))], FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], QM: ALL_COLUMNS, BASES: ALL_COLUMNS,
+    LIST: ALL_COLUMNS, CS: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], QM: ALL_COLUMNS, BASES: ALL_COLUMNS,
     ALERTS: [...LEAD, ...ALERT_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id))],
 };
 
@@ -730,7 +687,7 @@ const TAB_COLUMNS = {
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const COMPACT_COLUMNS = ["fav", "ticker", "score", "comp", "brk", "strat"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "step", "cs", "score", "strat"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "cs", "comp", "strat"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
@@ -782,11 +739,7 @@ function rowsForTab(tab) {
     tagStrategies(state.data.stocks, stocks, state, alerts);
     tagPositions(state.data.stocks, state.pos);
     tagCanslim(state.data.stocks, canslimMarket());
-    if (tab === "CS") {
-        const rows = canslimRows(stocks, state.csMin, state.csCore);
-        tagPlan(rows, canslimMarket());
-        return rows;
-    }
+    if (tab === "CS") return canslimRows(stocks, state.csMin, state.csCore);
     if (tab === "POS") return positionRows(stocks);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
     if (tab === "BASES") return baseRows(stocks, state.bases);
@@ -844,7 +797,6 @@ function renderTable() {
         ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) z ${total}`
         : tab === "POS" ? positionSummary(rows) : `${rows.length} z ${total} spółek`;
     if (tab === "POS") renderPositionControls(rows);
-    if (tab === "CS") document.getElementById("planCS").innerHTML = planPanelHtml(rows, canslimMarket());
     updateSortHeaders(table);
     updateCardSort(tab);
     markSelectedRow();
@@ -1197,7 +1149,6 @@ function showTab(tab, resetSort = true) {
     Object.keys(TAB_TITLES).forEach(t => {
         document.getElementById(`table-${t}`).hidden = t !== tab;
         document.getElementById(`guide-${t}`).hidden = t !== tab;
-        if (t === "CS") document.getElementById("planCS").hidden = t !== tab;
         const controls = document.getElementById(`controls-${t}`);
         if (controls) controls.hidden = t !== tab;
     });
@@ -1884,7 +1835,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, canslimStep, tagPlan, PLAN_STEPS, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
