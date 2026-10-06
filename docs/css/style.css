@@ -262,6 +262,7 @@ th.tv-col { width: 1%; }
 .wl-chart-body #chartPlot { position: relative; }
 .chart-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .chart-overlay.editing { pointer-events: all; touch-action: none; cursor: crosshair; }
+.chart-overlay.pen-on { pointer-events: all; touch-action: none; cursor: crosshair; }
 .wl-chart-pattern { font-size: 12px; line-height: 1.5; color: var(--text); margin-top: 6px; padding-left: 8px; border-left: 3px solid #ff9f43; }
 .wl-chart-pattern:empty { display: none; }
 .wl-chart-estimates { font-size: 12px; line-height: 1.5; color: var(--text); margin-top: 6px; padding-left: 8px; border-left: 3px solid #2dd4bf; }

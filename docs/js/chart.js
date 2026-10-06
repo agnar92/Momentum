@@ -59,10 +59,12 @@ const COMPACT_WEEKS = 52;
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 // Kolory średnich inne niż świece (zielona/czerwona) i linia RS (niebieska), żeby nie zlewały się ze słupkami.
-const SMA_COLORS = { "SMA 10": "#22d3ee", "SMA 20": "#f5d547", "SMA 50": "#ff6b6b", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#22d3ee", "SMA 40 tyg.": "#f472b6" };
+// Styl jak na wykresach z książki O'Neila (czarne słupki, czerwone spadkowe, czerwona 10-tygodniowa, biała linia RS), ale na ciemnym tle:
+// czerń z książki -> jasny kolor (słupki wzrostowe, linia RS), czerwień zostaje.
+const SMA_COLORS = { "SMA 10": "#e5484d", "SMA 20": "#9fb3c8", "SMA 50": "#f5d547", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#e5484d", "SMA 40 tyg.": "#f5d547" };
 const CHART_COLORS = {
-    up: "#2ecc71", down: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
-    eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e8a33d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
+    up: "#2ecc71", down: "#e0455a", barUp: "#e8eaed", barDown: "#e5484d", rs: "#f2f4f8", bench: "#9aa3b2",
+    eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e5484d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
 };
 const MONTHS_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 
@@ -581,7 +583,8 @@ function chartSvg(m, opts = {}) {
     });
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${P.y}" width="${L.width - L.left - L.right}" height="${P.h}"/></clipPath>`);
-    (opts.hideAutoCups ? [] : m.cups).forEach(cup => {
+    let hintLegendDone = false;
+    (opts.hints ? m.cups : []).forEach(cup => {   // miseczki tylko jako podpowiedź edukacyjna (przycisk 💡 Nauka)
         const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
         parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
         if (cup.handle) {   // rączka: od prawego brzegu przez dołek rączki do ostatniej świecy bazy
@@ -597,12 +600,30 @@ function chartSvg(m, opts = {}) {
             parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, P.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
             reserveLabel(`pivot ${pivot.toFixed(2)}`, px, Math.max(yP(pivot) - 6, P.y + fs(10)), "end", fs(11), true);
         }
+        // litery z książki O'Neila: A lewy szczyt, B dno, C prawy brzeg, D dołek rączki, E punkt zakupu (pivot, kupno nad nim z wolumenem)
+        const tag = (letter, px, py) => parts.push(`<g pointer-events="none"><circle cx="${px}" cy="${py}" r="${fs(8)}" fill="#0e0f13" stroke="${CHART_COLORS.cup}" stroke-width="1.5"/><text x="${px}" y="${py + fs(3.5)}" font-size="${fs(10)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle">${letter}</text></g>`);
+        tag("A", x(cup.i0), yP(cup.peak) - fs(14));
+        tag("B", x(cup.iLow), yP(cup.low) + fs(14));
+        tag("C", x(cup.i1), yP(cup.right) - fs(14));
+        let xE = x(cup.i1);
+        if (cup.handle) {
+            tag("D", x(cup.handle.iLow) + fs(16), yP(cup.handle.low));
+            xE = Math.min(x(cup.handle.iEnd) + step * 3, L.width - L.right - fs(10));
+        }
+        if (pivot) {
+            parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${CHART_COLORS.cup}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
+            tag("E", xE, yP(pivot) - fs(14));
+        }
+        if (!hintLegendDone) {
+            hintLegendDone = true;
+            parts.push(`<text x="${L.left + 6}" y="${P.y + fs(12)}" font-size="${fs(10)}" fill="${CHART_COLORS.cup}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${opts.compact ? "A–E: szczyt · dno · brzeg · rączka · kup" : "A szczyt · B dno miseczki · C prawy brzeg · D rączka · E punkt zakupu (kup nad pivotem z wolumenem)"}</text>`);
+        }
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
         addLabel(`−${cup.depth}%${cup.ctx ? ` · S&P −${cup.mktDd}%` : ""}`, cx, yB - (yB - Math.min(yL, yR)) * 0.35, { size: fs(12), fill: CHART_COLORS.cup, bold: true, prio: 6 });
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
-        const col = m.c[i] >= m.o[i] ? CHART_COLORS.up : CHART_COLORS.down;
+        const col = m.c[i] >= m.o[i] ? CHART_COLORS.barUp : CHART_COLORS.barDown;
         parts.push(`<g stroke="${col}" stroke-width="${step > 5 ? 1.6 : 1.1}">`
             + `<line x1="${x(i)}" x2="${x(i)}" y1="${yP(m.h[i])}" y2="${yP(m.l[i])}"/>`
             + `<line x1="${x(i) - barHalf}" x2="${x(i)}" y1="${yP(m.o[i])}" y2="${yP(m.o[i])}"/>`
@@ -709,7 +730,7 @@ function chartSvg(m, opts = {}) {
         m.rsNewHigh.forEach((flag, i) => {
             if (!flag) return;
             const leads = m.pxNewHigh && !m.pxNewHigh[i];   // RS na maksimum, a cena jeszcze nie — najcenniejszy sygnał
-            parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${(opts.compact ? 3.2 : 2.6) + (leads ? 1.6 : 0)}" fill="${CHART_COLORS.rs}"${leads ? ` stroke="#fff" stroke-width="1.2"` : ""}><title>${leads ? "RS na maksimum 52 tyg., cena jeszcze nie (RS przed ceną)" : "RS na maksimum 52 tyg."}</title></circle>`);
+            parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${(opts.compact ? 3.2 : 2.6) + (leads ? 1.6 : 0)}" fill="${CHART_COLORS.rs}"${leads ? ` stroke="#e5484d" stroke-width="1.6"` : ""}><title>${leads ? "RS na maksimum 52 tyg., cena jeszcze nie (RS przed ceną)" : "RS na maksimum 52 tyg."}</title></circle>`);
         });
     }
     // linia zysków (EPS za 4 kwartały, TTM) NA wykresie cen — własna skala po prawej jak linia RS; kółka w tygodniach raportów, przerywany odcinek = prognoza
@@ -790,7 +811,7 @@ function chartSvg(m, opts = {}) {
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.volume.y - 4}" y2="${L.volume.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
     for (let i = 0; i < m.n; i++) {
         if (!Number.isFinite(m.v[i])) continue;
-        const col = m.c[i] >= m.o[i] ? CHART_COLORS.up : CHART_COLORS.down;
+        const col = m.c[i] >= m.o[i] ? CHART_COLORS.barUp : CHART_COLORS.barDown;
         const h = (m.v[i] / vMax) * (L.volume.h - fs(11) - 4);
         const isBreak = boIdx === i;
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);

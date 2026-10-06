@@ -26,6 +26,7 @@ const COMPACT_MAX_WIDTH = 640;
 const SWIPE_MIN_PX = 60, SWIPE_MAX_MS = 700;   // przeciągnięcie po tytule wykresu = następna / poprzednia spółka
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
+const CHART_HINTS_KEY = "momentum_watchlist_chart_hints";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
 const ALERTS_TV_KEY = "momentum_watchlist_alerts_tv";          // "0" = w zakładkach Alerty i Bazy bez wykresu TradingView
@@ -1352,6 +1353,7 @@ let chartActiveCell = 0;     // w układzie „dzienny + tygodniowy”: który w
 let alertsTvOn = true;      // zakładki Alerty i Bazy (widok dzielony): po prawej wykres TradingView zamiast tygodniowego
 let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
 let chartDaily = true;      // wykres dzienny zamiast tygodniowego
+let chartHintsOn = false;   // 💡 Nauka: edukacyjne podpowiedzi (wykryty cup z literami A–E)
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
 let chartRequested = null;  // ticker, którego wykres jest otwarty lub właśnie się wczytuje (zaznaczenie wiersza, strzałki)
@@ -1527,7 +1529,7 @@ function drawChart() {
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
-            hideAutoLines: annHide(c.ticker).lines, hideAutoCups: annHide(c.ticker).cups,
+            hideAutoLines: annHide(c.ticker).lines, hints: chartHintsOn,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
@@ -1645,7 +1647,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -1661,6 +1663,7 @@ function initChartModal() {
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
+        chartHintsOn = localStorage.getItem(CHART_HINTS_KEY) === "1";
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved) ["d", "w"].forEach(k => { if (Number.isFinite(saved[k]) && saved[k] > 0) chartWinLen[k] = saved[k]; });
         chartDaily = localStorage.getItem(CHART_DAILY_KEY) !== "0";   // domyślnie dzienny (wybicia i wolumen)
@@ -1680,12 +1683,24 @@ function initChartModal() {
     const stepNext = () => slideChart(1), stepPrev = () => slideChart(-1);
     attachSwipe(document.getElementById("chartReady"), stepNext, stepPrev);
     attachSwipe(document.querySelector(".wl-chart-titles"), stepNext, stepPrev);
-    attachSwipe(document.getElementById("chartBody"), stepNext, stepPrev, ev => annEdit.on || ev.target.closest(".wl-range"));
+    attachSwipe(document.getElementById("chartBody"), stepNext, stepPrev, ev => annEdit.on || annPen.on || ev.target.closest(".wl-range"));
     const chartScore = document.getElementById("chartScore");
     if (chartScore) {
         chartScore.addEventListener("change", () => { if (chartRequested) setScore(chartRequested, chartScore.value); });
         chartScore.addEventListener("keydown", ev => { if (ev.key === "Enter") chartScore.blur(); });
     }
+    const updateHintButton = () => {
+        const b = document.getElementById("chartHintBtn");
+        b.textContent = chartHintsOn ? "💡 Nauka: wł." : "💡 Nauka: wył.";
+        b.classList.toggle("active", chartHintsOn);
+    };
+    updateHintButton();
+    document.getElementById("chartHintBtn").addEventListener("click", () => {
+        chartHintsOn = !chartHintsOn;
+        try { localStorage.setItem(CHART_HINTS_KEY, chartHintsOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        updateHintButton();
+        if (currentChart) drawChart();
+    });
     document.getElementById("chartLegendBtn").addEventListener("click", () => {
         chartLegendOn = !chartLegendOn;
         try { localStorage.setItem(CHART_LEGEND_KEY, chartLegendOn ? "1" : "0"); } catch (e) { /* ignoruj */ }

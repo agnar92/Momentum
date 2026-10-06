@@ -23,7 +23,7 @@ const ANN_COLORS = { res: "#ff9f43", sup: "#9fb3c8", free: "#c77dff", cup: "#fff
 function annNewId() { return Math.random().toString(36).slice(2, 8); }
 
 function annEmptyRecord() {
-    return { lines: [], cups: [], hideAutoLines: false, hideAutoCups: false, auto: null, note: "", editedAt: null };
+    return { lines: [], cups: [], pen: [], hideAutoLines: false, hideAutoCups: false, auto: null, note: "", editedAt: null };
 }
 
 // Numer dnia handlowego (pn-pt = kolejne liczby, weekend leży ułamkowo między piątkiem a poniedziałkiem) — dzięki temu linia
@@ -168,17 +168,18 @@ function annPositionLineValue(store, ticker, which) {
 // Migawka = linie, cupy i flagi ukrycia automatów; notatki nie wchodzą (pisanie nie zapełnia historii).
 function annUndoSnapshot(rec) {
     const r = rec || {};
-    return JSON.parse(JSON.stringify({ lines: r.lines || [], cups: r.cups || [], hideAutoLines: !!r.hideAutoLines, hideAutoCups: !!r.hideAutoCups }));
+    return JSON.parse(JSON.stringify({ lines: r.lines || [], cups: r.cups || [], pen: r.pen || [], hideAutoLines: !!r.hideAutoLines, hideAutoCups: !!r.hideAutoCups }));
 }
 
 // Przywraca migawkę. Obiekty, które przez cofnięcie znikają, dostają nagrobek (inaczej wróciłyby z synchronizacji z drugiego urządzenia),
 // a przywrócone tracą nagrobek.
 function annUndoApply(rec, snap, now = new Date()) {
-    const keep = new Set([...snap.lines, ...snap.cups].map(x => x.id));
+    const snapPen = snap.pen || [];
+    const keep = new Set([...snap.lines, ...snap.cups, ...snapPen].map(x => x.id));
     const del = { ...(rec.del || {}) };
-    [...rec.lines, ...rec.cups].forEach(x => { if (!keep.has(x.id)) del[x.id] = now.toISOString(); });
+    [...rec.lines, ...rec.cups, ...(rec.pen || [])].forEach(x => { if (!keep.has(x.id)) del[x.id] = now.toISOString(); });
     keep.forEach(id => { delete del[id]; });
-    rec.lines = snap.lines; rec.cups = snap.cups;
+    rec.lines = snap.lines; rec.cups = snap.cups; rec.pen = snapPen;
     rec.hideAutoLines = snap.hideAutoLines; rec.hideAutoCups = snap.hideAutoCups;
     rec.del = del;
     rec.editedAt = now.toISOString();
@@ -223,7 +224,7 @@ function mergeImport(store, text) {
         const r = data.annotations[t];
         if (!r || typeof r !== "object") return;
         // editedAt = teraz: zaimportowane dane mają wygrać przy późniejszej synchronizacji z innym urządzeniem
-        out[t] = { ...annEmptyRecord(), ...r, lines: Array.isArray(r.lines) ? r.lines : [], cups: Array.isArray(r.cups) ? r.cups : [], editedAt: new Date().toISOString() };
+        out[t] = { ...annEmptyRecord(), ...r, lines: Array.isArray(r.lines) ? r.lines : [], cups: Array.isArray(r.cups) ? r.cups : [], pen: Array.isArray(r.pen) ? r.pen : [], editedAt: new Date().toISOString() };
     });
     return out;
 }
@@ -242,7 +243,7 @@ function mergeRecords(a, b) {
         [other[key] || [], base[key] || []].forEach(arr => arr.forEach(it => { if (it && it.id && !del[it.id]) m.set(it.id, it); }));
         return [...m.values()];
     };
-    return { ...other, ...base, lines: union("lines"), cups: union("cups"), del, editedAt: base.editedAt || other.editedAt || null };
+    return { ...other, ...base, lines: union("lines"), cups: union("cups"), pen: union("pen"), del, editedAt: base.editedAt || other.editedAt || null };
 }
 
 function mergeStores(a, b) {
@@ -257,7 +258,7 @@ function mergeStores(a, b) {
 function annResetRecord(rec, now = new Date()) {
     const del = { ...((rec && rec.del) || {}) };
     ((rec && rec.lines) || []).concat((rec && rec.cups) || []).forEach(x => { del[x.id] = now.toISOString(); });
-    return { ...annEmptyRecord(), del, editedAt: now.toISOString() };
+    return { ...annEmptyRecord(), pen: (rec && rec.pen) || [], del, editedAt: now.toISOString() };   // odręczne rysunki zostają
 }
 
 function annExportJson(store, now = new Date()) {
@@ -267,6 +268,9 @@ function annExportJson(store, now = new Date()) {
 // ---------- stan, zapis ----------
 
 let annStore = {};
+const ANN_PEN_COLOR = "#ffd54a";
+const ANN_PEN_MAX_PTS = 800;
+const annPen = { on: false };   // tryb odręcznego rysowania (osobny od Linia / Cup): rec.pen = [{ id, pts: [[data, ułamek świecy, cena], ...] }]
 const annEdit = { on: false, mode: null, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
@@ -345,7 +349,8 @@ function annOverlay(ctx) {
     const L = geom.L;
     plot.style.position = "relative";
     const ov = document.createElementNS(SVG_NS, "svg");
-    ov.setAttribute("class", "chart-overlay" + (editing ? " editing" : ""));
+    const penOn = annPen.on && !ctx.readonly && !editing;
+    ov.setAttribute("class", "chart-overlay" + (editing ? " editing" : "") + (penOn ? " pen-on" : ""));
     ov.setAttribute("viewBox", `0 0 ${L.width} ${L.height}`);
     ov.setAttribute("preserveAspectRatio", "xMidYMid meet");
     plot.appendChild(ov);
@@ -414,6 +419,7 @@ function annOverlay(ctx) {
 
     const pts2s = pts => pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
 
+    let penLive = [];   // pociągnięcie w trakcie rysowania
     const markup = () => {
         const R = rec();
         const sel = annEdit.selected;
@@ -455,6 +461,10 @@ function annOverlay(ctx) {
                     + `<circle data-handle="b" data-line="${line.id}" cx="${b[0]}" cy="${b[1]}" r="${h}" fill="#0e0f13" stroke="${col}" stroke-width="2.5"/>`;
             }
         });
+        const penXY = pts => pts.map(q => [geom.x(idxOf(q[0]) + q[1]), geom.yP(q[2])]);
+        const penLine = pts => `<polyline fill="none" stroke="${ANN_PEN_COLOR}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" points="${pts2s(penXY(pts))}"/>`;
+        (R && R.pen ? R.pen : []).forEach(st => { if (st.pts && st.pts.length > 1) body += penLine(st.pts); });
+        if (penLive.length > 1) body += penLine(penLive);
         (R ? R.cups : []).forEach(cu => {
             const cup = { i0: idxOf(cu.start), iLow: idxOf(cu.low_date), i1: idxOf(cu.end), peak: cu.peak, low: cu.low, right: cu.right };
             const { pts, yL, yB, yR } = cupArcPoints(cup, geom.x, geom.yP);
@@ -479,7 +489,7 @@ function annOverlay(ctx) {
             body += `<polyline fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3" points="${pts2s(cur ? [...P, cur] : P)}"/>`;
             P.forEach(p => { body += `<circle cx="${p[0]}" cy="${p[1]}" r="${h * 0.7}" fill="#fff"/>`; });
         }
-        const catcher = editing ? `<rect class="ann-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : "";
+        const catcher = penOn ? `<rect class="pen-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : editing ? `<rect class="ann-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : "";
         return `<defs><clipPath id="${clipId}"><rect x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}"/></clipPath></defs>${catcher}<g clip-path="url(#${clipId})">${body}</g>`;
     };
     // Lupa: podczas przeciągania punktu (palec zasłania miejsce) w rogu wykresu pojawia się powiększony fragment wokół palca
@@ -514,7 +524,7 @@ function annOverlay(ctx) {
         plot.dataset.annDbl = "1";
         let last = null;
         plot.addEventListener("pointerdown", ev => {
-            if (ev.pointerType === "mouse" || annEdit.on) return;
+            if (ev.pointerType === "mouse" || annEdit.on || annPen.on) return;
             const now = Date.now();
             if (last && now - last.t < 400 && Math.hypot(ev.clientX - last.x, ev.clientY - last.y) < 30) {
                 last = null;
@@ -537,6 +547,39 @@ function annOverlay(ctx) {
         const g = ev.target.closest && ev.target.closest(".ann-note-icon");
         if (g) { const id = g.dataset.nline; annShowNote(ev.clientX, ev.clientY, id, true); }
     });
+    if (penOn) {
+        const penPoint = p => {
+            const raw = (p.x - L.left) / geom.step - 0.5;
+            const i = Math.max(0, Math.min(m.n - 1, Math.round(raw)));
+            return [m.weeks[i], Math.max(-0.5, Math.min(0.5, Math.round((raw - i) * 100) / 100)), r2(priceOfY(Math.max(L.price.y, Math.min(L.price.y + L.price.h, p.y))))];
+        };
+        ov.addEventListener("pointerdown", ev => {
+            if (ev.pointerType === "mouse" && ev.button !== 0) return;
+            ev.preventDefault();
+            ov.setPointerCapture(ev.pointerId);
+            let last = toSvg(ev);
+            penLive = [penPoint(last)];
+            const move = e => {
+                const p = toSvg(e);
+                if (Math.hypot(p.x - last.x, p.y - last.y) < 1.5 || penLive.length >= ANN_PEN_MAX_PTS) return;
+                last = p; penLive.push(penPoint(p)); render();
+            };
+            const up = () => {
+                ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
+                const pts = penLive; penLive = [];
+                if (pts.length > 1) {
+                    const R = annRecord(ticker, true);
+                    if (!Array.isArray(R.pen)) R.pen = [];
+                    R.pen.push({ id: annNewId(), pts });
+                    R.editedAt = new Date().toISOString();
+                    annSave(); annSyncTools();
+                }
+                render();
+            };
+            ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
+        });
+        return;
+    }
     if (!editing) return;
 
     const touch = () => { const R = rec(); if (R) R.editedAt = new Date().toISOString(); annSave(); };
@@ -968,8 +1011,10 @@ function annSyncTools() {
     if ($("toolUndo")) $("toolUndo").disabled = !annUndo.stack.length;
     if ($("toolFlag")) $("toolFlag").classList.toggle("active", annEdit.tool === "flag");
     if ($("toolCupTap")) $("toolCupTap").classList.toggle("active", annEdit.tool === "cuptap");
+    if ($("chartPenBtn")) $("chartPenBtn").classList.toggle("active", annPen.on);
+    if ($("chartPenClear")) { const R = annCurrent && annStore[annCurrent.ticker]; $("chartPenClear").hidden = !(annPen.on && R && R.pen && R.pen.length); }
     const fab = $("annUndoFab");
-    if (fab) fab.hidden = !(annEdit.on && annUndo.stack.length);
+    if (fab) fab.hidden = !((annEdit.on || annPen.on) && annUndo.stack.length);
     if ($("toolFlat")) $("toolFlat").disabled = !isLine;
     const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
     $("annHint").textContent = annEdit.mode === "line" && !annEdit.tool ? "Dotknij linię, by ją poprawić. Puste miejsce rysuje nową."
@@ -990,6 +1035,7 @@ function annInitUI(onRedraw) {
     if (!$("chartLineBtn")) return;
     const setEdit = (on, bySpace) => {
         annEdit.on = on;
+        if (on) annPen.on = false;
         annEdit.spaceOn = on && bySpace;
         annEdit.mode = null;
         annEdit.tool = null; annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null;
@@ -1015,6 +1061,25 @@ function annInitUI(onRedraw) {
     };
     $("chartLineBtn").addEventListener("click", () => setMode("line"));
     $("chartCupBtn").addEventListener("click", () => setMode("cup"));
+    // ✏️ Rysuj: dowolne pociągnięcia palcem / myszą; wyłącza tryb Linia / Cup (i odwrotnie)
+    if ($("chartPenBtn")) {
+        $("chartPenBtn").addEventListener("click", () => {
+            const on = !annPen.on;
+            if (on && annEdit.on) { annEdit.on = false; annEdit.spaceOn = false; annEdit.mode = null; annEdit.tool = null; annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null; }
+            annPen.on = on;
+            annSyncTools();
+            annOnRedraw();
+        });
+        $("chartPenClear").addEventListener("click", () => {
+            const R = annCurrent && annStore[annCurrent.ticker];
+            if (!R || !R.pen || !R.pen.length) return;
+            const now = new Date().toISOString();
+            R.del = { ...(R.del || {}) };
+            R.pen.forEach(st => { R.del[st.id] = now; });
+            R.pen = []; R.editedAt = now;
+            annSave(); annSyncTools(); annCurrent.render();
+        });
+    }
     // Przytrzymana SPACJA = tymczasowy tryb edycji (po puszczeniu wraca do podglądu); nie działa w polach tekstowych.
     const chartOpen = () => !$("chartModal").hidden;
     const typing = ev => /INPUT|TEXTAREA|SELECT/.test(ev.target.tagName);
