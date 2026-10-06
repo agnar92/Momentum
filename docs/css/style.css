@@ -952,3 +952,11 @@ body:not(.split) tr.open td.card-fchart { display: block !important; order: 30; 
 @media (prefers-reduced-motion: reduce) {
     .wl-chart-box[class*="card-"] :is(.wl-chart-titles, #chartRatings, #chartReady, #chartStats, #chartBase, #chartPattern, .wl-chart-body) { animation: none !important; }
 }
+
+/* Telefon (pionowo): nagłówek wykresu ma zajmować jak najmniej — przyciski w jednym rzędzie (ikony), bez pastylek ocen i linii OHLC
+   (oceny są w arkuszu „⋯” i na kartach listy), żeby świece dostały jak najwięcej wysokości */
+body:not(.split) .wl-chart-head .btn .lbl { display: none; }
+@media (orientation: portrait) {
+    body:not(.split) #chartRatings { display: none; }
+    body:not(.split) .chart-grid.layout-1 .cell-readout { display: none; }
+}

@@ -41,7 +41,7 @@ function fitLayout(w, h, noTable = false) {
     // niski ekran (telefon poziomo): bez paska S&P 500, żeby wykres cen nie zamienił się w kreskę
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
-    const bench = short ? 0 : Math.max(30, Math.round(avail * 0.10)), volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
+    const bench = short || noTable ? 0 : Math.max(30, Math.round(avail * 0.10)), volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
     const price = Math.max(60, avail - bench - volume - eps);
     const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1 };
     L.bench = { y: 4, h: bench };
@@ -59,12 +59,12 @@ const COMPACT_WEEKS = 52;
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 // Kolory średnich inne niż świece (zielona/czerwona) i linia RS (niebieska), żeby nie zlewały się ze słupkami.
-// Styl jak na wykresach z książki O'Neila (czarne słupki, czerwone spadkowe, czerwona 10-tygodniowa, biała linia RS), ale na ciemnym tle:
-// czerń z książki -> jasny kolor (słupki wzrostowe, linia RS), czerwień zostaje.
-const SMA_COLORS = { "SMA 10": "#e5484d", "SMA 20": "#9fb3c8", "SMA 50": "#f5d547", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#e5484d", "SMA 40 tyg.": "#f5d547" };
+// Styl jak na wykresach z książki O'Neila (czarne słupki, czerwone spadkowe, czerwona 10-tygodniowa, niebieska linia RS (biała zlewała się z jasnymi słupkami)), ale na ciemnym tle:
+// czerń z książki -> jasny kolor (słupki wzrostowe), czerwień zostaje.
+const SMA_COLORS = { "SMA 10": "#e5484d", "SMA 20": "#9fb3c8", "SMA 50": "#f0b429", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#e5484d", "SMA 40 tyg.": "#f0b429" };
 const CHART_COLORS = {
-    up: "#2ecc71", down: "#e0455a", barUp: "#e8eaed", barDown: "#e5484d", rs: "#f2f4f8", bench: "#9aa3b2",
-    eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e5484d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
+    up: "#2ecc71", down: "#e0455a", barUp: "#e8eaed", barDown: "#e5484d", rs: "#6ea8ff", bench: "#9aa3b2",
+    eps: "#c58bff", res: "#ff8a5b", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e5484d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
 };
 const MONTHS_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 
@@ -816,7 +816,7 @@ function chartSvg(m, opts = {}) {
         const isBreak = boIdx === i;
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);
     }
-    volumeSpikes(m.v, m.volAvg, opts.compact ? 3 : 5, 1.5, Math.max(2, Math.round(m.n / 25))).forEach(sp => {
+    volumeSpikes(m.v, m.volAvg, opts.compact ? 2 : 5, 1.5, Math.max(2, Math.round(m.n / (opts.compact ? 8 : 25)))).forEach(sp => {
         const h = (sp.val / vMax) * (L.volume.h - fs(11) - 4);
         parts.push(`<text x="${x(sp.i)}" y="${L.volume.y + L.volume.h - h - 2}" font-size="${fs(9)}" fill="${CHART_COLORS.textStrong}" text-anchor="middle" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">${fmtVol(sp.val)}</text>`);
     });
