@@ -61,10 +61,10 @@ const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 // Kolory średnich inne niż świece (zielona/czerwona) i linia RS (niebieska), żeby nie zlewały się ze słupkami.
 // Styl jak na wykresach z książki O'Neila (czarne słupki, czerwone spadkowe, czerwona 10-tygodniowa, biała linia RS), ale na ciemnym tle:
 // czerń z książki -> jasny kolor (słupki wzrostowe, linia RS), czerwień zostaje.
-const SMA_COLORS = { "SMA 10": "#e5484d", "SMA 20": "#9fb3c8", "SMA 50": "#f5d547", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#e5484d", "SMA 40 tyg.": "#f5d547" };
+const SMA_COLORS = { "SMA 10": "#e5484d", "SMA 20": "#9fb3c8", "SMA 50": "#4fc3f7", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#e5484d", "SMA 40 tyg.": "#4fc3f7" };
 const CHART_COLORS = {
     up: "#2ecc71", down: "#e0455a", barUp: "#e8eaed", barDown: "#e5484d", rs: "#f2f4f8", bench: "#9aa3b2",
-    eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e5484d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
+    eps: "#c58bff", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e5484d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
 };
 const MONTHS_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 
