@@ -16,20 +16,20 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const CHART_LAYOUT = {
     width: 1000, height: 710, left: 10, right: 66,
-    bench: { y: 8, h: 70 }, legend: { y: 86, h: 20 }, price: { y: 110, h: 330 }, volume: { y: 448, h: 80 }, eps: { y: 538, h: 118 },
+    bench: { y: 8, h: 0 }, legend: { y: 8, h: 20 }, price: { y: 32, h: 408 }, volume: { y: 448, h: 80 }, eps: { y: 538, h: 118 },
     axisY: 688,
 };
 // Układ dla wąskich ekranów (telefon): węższy viewBox + większa czcionka względem niego, żeby po przeskalowaniu
 // do szerokości ekranu napisy były czytelne; do tego krótsze okno (COMPACT_WEEKS tygodni) — patrz sliceModel.
 const CHART_LAYOUT_COMPACT = {
     width: 560, height: 800, left: 6, right: 46,
-    bench: { y: 6, h: 70 }, legend: { y: 80, h: 50 }, price: { y: 134, h: 300 }, volume: { y: 442, h: 84 }, eps: { y: 534, h: 132 },
+    bench: { y: 6, h: 0 }, legend: { y: 6, h: 50 }, price: { y: 60, h: 374 }, volume: { y: 442, h: 84 }, eps: { y: 534, h: 132 },
     axisY: 718,
 };
 // Układ szeroki (pełny ekran na monitorze): więcej miejsca na słupki zamiast pustych pasów po bokach.
 const CHART_LAYOUT_WIDE = {
     width: 1600, height: 800, left: 10, right: 70,
-    bench: { y: 8, h: 70 }, legend: { y: 86, h: 20 }, price: { y: 110, h: 400 }, volume: { y: 518, h: 90 }, eps: { y: 616, h: 124 },
+    bench: { y: 8, h: 0 }, legend: { y: 8, h: 20 }, price: { y: 32, h: 478 }, volume: { y: 518, h: 90 }, eps: { y: 616, h: 124 },
     axisY: 778,
 };
 // Układ "dopasowany": viewBox = faktyczny rozmiar komórki w pikselach (siatka dzienny+tygodniowy / 4 spółki), panele proporcjonalnie
@@ -41,7 +41,7 @@ function fitLayout(w, h, noTable = false) {
     // niski ekran (telefon poziomo): bez paska S&P 500, żeby wykres cen nie zamienił się w kreskę
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
-    const bench = short || noTable ? 0 : Math.max(30, Math.round(avail * 0.10)), volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
+    const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
     const price = Math.max(60, avail - bench - volume - eps);
     const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1 };
     L.bench = { y: 4, h: bench };
@@ -528,24 +528,6 @@ function chartSvg(m, opts = {}) {
         parts.push(`<text x="${x(i)}" y="${L.axisY}" fill="${CHART_COLORS.text}" font-size="${fs(11)}" text-anchor="middle">${MONTHS_PL[Number(d.slice(5, 7)) - 1]} '${d.slice(2, 4)}</text>`);
     });
 
-    // --- 1. benchmark
-    const bExt = m.spx ? numericExtent([m.spx]) : null;
-    if (L.bench.h < 20) {
-        // bez paska benchmarku (niski ekran)
-    } else if (bExt) {
-        const labelH = fs(11) + 8;   // pas na podpis nad linią, żeby jej nie zasłaniał
-        const yB = makeYScale(bExt[0], bExt[1], L.bench.y + labelH, L.bench.h - labelH - 4);
-        parts.push(polyline(m.spx.map((v, i) => Number.isFinite(v) ? [x(i), yB(v)] : null), CHART_COLORS.bench, 1.3));
-        const last = [...m.spx].reverse().find(Number.isFinite);
-        const first = m.spx.find(Number.isFinite);
-        const chg = ((last / first - 1) * 100);
-        if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 12}" fill="${CHART_COLORS.bench}" font-size="${fs(11)}" font-weight="600">S&amp;P 500 ${fmtCompact(last)} (${chg >= 0 ? "+" : ""}${chg.toFixed(0)}% w oknie)</text>`);
-        niceTicks(bExt[0], bExt[1], 2).forEach(t => {
-            parts.push(`<text x="${L.width - L.right + 6}" y="${yB(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${fmtAxis(t)}</text>`);
-        });
-    } else {
-        parts.push(`<text x="${L.left + 4}" y="${L.bench.y + 14}" fill="${CHART_COLORS.text}" font-size="${fs(11)}">Brak danych benchmarku (S&amp;P 500)</text>`);
-    }
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.price.y - 4}" y2="${L.price.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
 
     // --- 2. cena: słupki OHLC + SMA + RS
@@ -571,7 +553,12 @@ function chartSvg(m, opts = {}) {
     const lastC = m.c[m.lastIdx];
     const pivotNear = pivotPx !== null && Number.isFinite(lastC) && Math.abs(pivotPx / lastC - 1) <= 0.15;
     const pivotExtra = pivotNear ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : [];
-    const pExt = numericExtent([m.h, m.l, ...nearSma, ptExt, ...pivotExtra]) || [0, 1];
+    // S&P 500 nałożony na wykres cen (jak w książce O'Neila): przeskalowany tak, że zaczyna się w cenie spółki z początku okna —
+    // gdy spółka jest nad linią, bije rynek; do skali bierzemy go tylko, gdy nie ucieka daleko od świec
+    const spxK = m.spx ? m.spx.findIndex((v, i) => Number.isFinite(v) && v > 0 && Number.isFinite(m.c[i])) : -1;
+    const spxOver = spxK >= 0 ? m.spx.map(v => (Number.isFinite(v) ? v / m.spx[spxK] * m.c[spxK] : null)) : null;
+    const nearSpx = spxOver ? [spxOver.map(v => (Number.isFinite(v) && v >= baseExt[0] * 0.88 && v <= baseExt[1] * 1.12 ? v : null))] : [];
+    const pExt = numericExtent([m.h, m.l, ...nearSma, ...nearSpx, ptExt, ...pivotExtra]) || [0, 1];
     const useLog = !!opts.log && pExt[0] > 0;
     const pad = (pExt[1] - pExt[0]) * 0.04;
     const pMin = useLog ? pExt[0] / 1.04 : pExt[0] - pad;
@@ -584,6 +571,14 @@ function chartSvg(m, opts = {}) {
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${P.y}" width="${L.width - L.left - L.right}" height="${P.h}"/></clipPath>`);
     let hintLegendDone = false;
+    if (spxOver) {
+        parts.push(`<g clip-path="url(#chartPriceClip${opts.uid || ""})">${polyline(spxOver.map((v, i) => (Number.isFinite(v) ? [x(i), yP(v)] : null)), CHART_COLORS.bench, 1.6)}</g>`);
+        const lastI = spxOver.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
+        if (lastI >= 0) {
+            const chg = (m.spx[lastI] / m.spx[spxK] - 1) * 100;
+            addLabel(`S&P ${chg >= 0 ? "+" : ""}${chg.toFixed(0)}%`, x(lastI) - 4, Math.min(P.y + P.h - 4, Math.max(P.y + fs(10), yP(spxOver[lastI]) + fs(13))), { anchor: "end", size: fs(9), fill: CHART_COLORS.bench, bold: false, prio: 2, title: "S&P 500 nałożony na wykres (przeskalowany do ceny spółki z początku okna)" });
+        }
+    }
     (opts.hints ? m.cups : []).forEach(cup => {   // miseczki tylko jako podpowiedź edukacyjna (przycisk 💡 Nauka)
         const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
         parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
@@ -791,7 +786,7 @@ function chartSvg(m, opts = {}) {
     const rsPart = [m.rsRating != null ? `Rating ${m.rsRating}` : null,
         Number.isFinite(m.rsChangePct) ? `${m.rsChangePct >= 0 ? "+" : ""}${m.rsChangePct.toFixed(0)}% vs S&amp;P w oknie` : null,
         m.rsLine && m.rsLine.state ? `RS ${m.rsLine.state === "przed ceną" ? "na maks. przed ceną" : "na maks. razem z ceną"}` : null].filter(Boolean);
-    const otherItems = [`<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${rsPart.length ? " · " + rsPart.join(" · ") : ""}</tspan>`];
+    const otherItems = [`<tspan fill="${CHART_COLORS.bench}">— S&amp;P 500 (nałożony)</tspan>`, `<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${rsPart.length ? " · " + rsPart.join(" · ") : ""}</tspan>`];
     if (ttmPts.length >= 2) otherItems.push(`<tspan fill="${CHART_COLORS.eps}">● EPS (4 kw., TTM)${m.epsNext && Number.isFinite(m.epsNext.t) ? " ┄ prognoza" : ""}</tspan>`);
     if (m.trend && m.trend.pattern) otherItems.push(`<tspan fill="${CHART_COLORS.res}">▸ ${escapeHtml(m.trend.pattern)}</tspan>`);
     if (m.trend && m.trend.state) {
