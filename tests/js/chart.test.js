@@ -82,7 +82,7 @@ test("chartSvg renders bars, S&P 500 overlay, RS label, EPS labels and handles e
     const noEps = charts();
     noEps.stocks.AAA.eps = [];
     assert.match(chartSvg(buildChartModel(noEps, "AAA", null)), /Brak danych o EPS/);
-    assert.doesNotMatch(chartSvg(buildChartModel(charts({ spx: null }), "AAA", null)), /S&P \+/);   // bez benchmarku nie ma nakładki
+    assert.doesNotMatch(chartSvg(buildChartModel(charts({ spx: null }), "AAA", null)), /S&amp;P 500 \d/);   // bez benchmarku nie ma linii
 });
 
 test("chartReadout formats a week and is empty for missing bars", () => {
@@ -467,7 +467,7 @@ test("fitLayout on a short screen drops the quarterly table so the price panel k
     const L = pickLayout({ fit: { w: 828, h: 262 }, compact: true });
     assert.equal(L.eps.h, 0);                                                         // compactEpsPanel nie rusza zerowego panelu
     const svg = chartSvg(buildChartModel(charts(), "AAA", { rs_rating: 90 }), { fit: { w: 828, h: 262 }, compact: true, hideLabels: true });
-    assert.ok(!/S&amp;P 500 \d/.test(svg) && !/Brak danych benchmarku/.test(svg));   // brak paska benchmarku
+    assert.ok(!/Brak danych benchmarku/.test(svg));
     assert.match(svg, /viewBox="0 0 828 /);
 });
 
@@ -564,10 +564,11 @@ test("cups are drawn only as educational hints (opts.hints) with letters A-E", (
     assert.match(on, />C<\/text>/);
 });
 
-test("S&P 500 is overlaid on the price panel, rebased to the stock's first close, with a % label", () => {
+test("S&P 500 is a thin line in the top band of the price panel (own scale, no separate frame) like in the book", () => {
     const m = buildChartModel(charts(), "AAA", null);
     const svg = chartSvg(m);
-    assert.match(svg, /fill="none" stroke="#9aa3b2" stroke-width="1\.6"/);   // linia S&P w panelu cen
-    assert.match(svg, />S&amp;P \+4%</);                                      // 100 -> 104 w oknie
-    assert.ok(!/S&amp;P 500 \d/.test(svg));                                   // brak osobnego paska z wartością indeksu
+    assert.match(svg, /fill="none" stroke="#9aa3b2" stroke-width="1\.3"/);   // linia S&P w panelu cen
+    assert.match(svg, />S&amp;P 500 104\.00</);                                    // podpis z ostatnią wartością
+    const none = chartSvg(buildChartModel(charts({ spx: null }), "AAA", null));
+    assert.doesNotMatch(none, /S&amp;P 500 \d/);
 });
