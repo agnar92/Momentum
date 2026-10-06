@@ -59,10 +59,12 @@ const COMPACT_WEEKS = 52;
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 // Kolory średnich inne niż świece (zielona/czerwona) i linia RS (niebieska), żeby nie zlewały się ze słupkami.
-const SMA_COLORS = { "SMA 10": "#22d3ee", "SMA 20": "#f5d547", "SMA 50": "#ff6b6b", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#22d3ee", "SMA 40 tyg.": "#f472b6" };
+// Styl jak na wykresach z książki O'Neila (czarne słupki, czerwone spadkowe, czerwona 10-tygodniowa, biała linia RS), ale na ciemnym tle:
+// czerń z książki -> jasny kolor (słupki wzrostowe, linia RS), czerwień zostaje.
+const SMA_COLORS = { "SMA 10": "#e5484d", "SMA 20": "#9fb3c8", "SMA 50": "#f5d547", "SMA 200": "#e8eaed", "SMA 10 tyg.": "#e5484d", "SMA 40 tyg.": "#f5d547" };
 const CHART_COLORS = {
-    up: "#2ecc71", down: "#e0455a", rs: "#4aa3ff", bench: "#c9ced8",
-    eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e8a33d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
+    up: "#2ecc71", down: "#e0455a", barUp: "#e8eaed", barDown: "#e5484d", rs: "#f2f4f8", bench: "#9aa3b2",
+    eps: "#e0b341", res: "#ff9f43", cup: "#d6dbe6", sup: "#9fb3c8", volAvg: "#e5484d", grid: "#262a35", text: "#8a8f9c", textStrong: "#e8eaed",
 };
 const MONTHS_PL = ["sty", "lut", "mar", "kwi", "maj", "cze", "lip", "sie", "wrz", "paź", "lis", "gru"];
 
@@ -621,7 +623,7 @@ function chartSvg(m, opts = {}) {
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
-        const col = m.c[i] >= m.o[i] ? CHART_COLORS.up : CHART_COLORS.down;
+        const col = m.c[i] >= m.o[i] ? CHART_COLORS.barUp : CHART_COLORS.barDown;
         parts.push(`<g stroke="${col}" stroke-width="${step > 5 ? 1.6 : 1.1}">`
             + `<line x1="${x(i)}" x2="${x(i)}" y1="${yP(m.h[i])}" y2="${yP(m.l[i])}"/>`
             + `<line x1="${x(i) - barHalf}" x2="${x(i)}" y1="${yP(m.o[i])}" y2="${yP(m.o[i])}"/>`
@@ -728,7 +730,7 @@ function chartSvg(m, opts = {}) {
         m.rsNewHigh.forEach((flag, i) => {
             if (!flag) return;
             const leads = m.pxNewHigh && !m.pxNewHigh[i];   // RS na maksimum, a cena jeszcze nie — najcenniejszy sygnał
-            parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${(opts.compact ? 3.2 : 2.6) + (leads ? 1.6 : 0)}" fill="${CHART_COLORS.rs}"${leads ? ` stroke="#fff" stroke-width="1.2"` : ""}><title>${leads ? "RS na maksimum 52 tyg., cena jeszcze nie (RS przed ceną)" : "RS na maksimum 52 tyg."}</title></circle>`);
+            parts.push(`<circle cx="${x(i)}" cy="${yR(m.rs[i])}" r="${(opts.compact ? 3.2 : 2.6) + (leads ? 1.6 : 0)}" fill="${CHART_COLORS.rs}"${leads ? ` stroke="#e5484d" stroke-width="1.6"` : ""}><title>${leads ? "RS na maksimum 52 tyg., cena jeszcze nie (RS przed ceną)" : "RS na maksimum 52 tyg."}</title></circle>`);
         });
     }
     // linia zysków (EPS za 4 kwartały, TTM) NA wykresie cen — własna skala po prawej jak linia RS; kółka w tygodniach raportów, przerywany odcinek = prognoza
@@ -809,7 +811,7 @@ function chartSvg(m, opts = {}) {
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.volume.y - 4}" y2="${L.volume.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
     for (let i = 0; i < m.n; i++) {
         if (!Number.isFinite(m.v[i])) continue;
-        const col = m.c[i] >= m.o[i] ? CHART_COLORS.up : CHART_COLORS.down;
+        const col = m.c[i] >= m.o[i] ? CHART_COLORS.barUp : CHART_COLORS.barDown;
         const h = (m.v[i] / vMax) * (L.volume.h - fs(11) - 4);
         const isBreak = boIdx === i;
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);
