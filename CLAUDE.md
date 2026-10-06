@@ -26,11 +26,7 @@ files (English is fine for new, unrelated code).
 
 1. **`finviz.py`** — scrapes the free Finviz screener (`finviz.com/screener.ashx`, 20 rows/page, `r=` offset)
    with the filters in **`finviz_screen.json`** (`filters` = comma-separated Finviz filter codes, copy them
-   from a Finviz screener URL; `max_tickers` = cap). Default (the user's own Finviz screener URL): price above $1 (`sh_price_o1`), price above
-   SMA50 and SMA200 (`ta_sma50_pa`, `ta_sma200_pa`), positive EPS growth this year (`fa_epsyoy_pos`) and positive EPS
-   forecast next year (`fa_epsyoy1_pos`) ≈ 500 stocks (there is deliberately NO market-cap filter any more; `max_tickers`
-   = 600 is the cap — if the Finviz total approaches it, raise it or add e.g. `cap_smallover`). The 5-year EPS filter (`fa_eps5years_pos`) was deliberately
-   dropped at the user's request so young leaders / recent IPOs are not cut out. It queries four views (Overview `111`,
+   from a Finviz screener URL; `max_tickers` = cap). Default (CANSLIM pre-filter, Oct 2026): `sh_price_o10,ta_sma50_pa,ta_sma200_pa,fa_epsqoq_o25,fa_salesqoq_o25,fa_epsyoy_o25,fa_roe_o15` = C (EPS and sales of the last quarter ≥ +25 % y/y) + A (EPS this year ≥ +25 %, ROE ≥ 15 % — Finviz has no 17 %, the exact ROE ≥ 17 % is checked in the app by `CANSLIM_THRESHOLDS.roe`) + trend (above SMA50/SMA200) + price > $10 ≈ 82 stocks (153 without ROE); `max_tickers` = 300. Deliberately NOT on Finviz: N (`ta_highlow52w_b0to10h`; cup/flat bases sit 10–30 % under the high, the app sorts by distance to the pivot), the 5-year EPS filter (young leaders), next-year EPS forecast (not a CANSLIM criterion). L, S, I, M are computed by the app. Note the RS Rating is a percentile among this already-narrowed list. It queries four views (Overview `111`,
    Valuation `121`, Financial `161` and the Custom view `152` with `c=0,1,62,69` = Analyst Recom. + Target Price, `VIEW_PARAMS`) with the same filters and merges rows by ticker, mapping columns by
    header text (`VIEW_COLUMNS`) — sector, industry, market cap, P/E, EPS this Y / next Y / past 5Y / next 5Y,
    ROE, margins, next earnings date, analyst recommendation `recom` (1 = Strong Buy … 5 = Strong Sell) and the mean target price `finviz_target`. **Finviz silently ignores unknown filter codes** (a typo widens the list
