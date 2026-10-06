@@ -186,3 +186,18 @@ test("annSyncPositionLines creates stop/target lines with alerts, updates them a
     annSyncPositionLines(store, "AAA", null, "2026-10-02", now);
     assert.equal(store.AAA.lines.length, 0);
 });
+
+test("pen strokes: merged by id across devices, deletions are tombstones, undo restores them", () => {
+    const { mergeStores, annUndoSnapshot, annUndoApply } = require("../../docs/js/annotate.js");
+    const stroke = id => ({ id, pts: [["2026-01-02", 0, 10], ["2026-01-09", 0.2, 11]] });
+    const a = { AAA: { lines: [], cups: [], pen: [stroke("p1")], del: {}, editedAt: "2026-01-01T00:00:00Z" } };
+    const b = { AAA: { lines: [], cups: [], pen: [stroke("p2")], del: {}, editedAt: "2026-01-02T00:00:00Z" } };
+    assert.deepEqual(mergeStores(a, b).AAA.pen.map(s => s.id).sort(), ["p1", "p2"]);
+    const gone = { AAA: { ...b.AAA, pen: [], del: { p1: "2026-01-03T00:00:00Z" }, editedAt: "2026-01-03T00:00:00Z" } };
+    assert.deepEqual(mergeStores(a, gone).AAA.pen, []);
+    const rec = { lines: [], cups: [], pen: [stroke("p1")], del: {} };
+    const snap = annUndoSnapshot({ lines: [], cups: [], pen: [] });
+    annUndoApply(rec, snap);
+    assert.deepEqual(rec.pen, []);
+    assert.ok(rec.del.p1);
+});

@@ -62,6 +62,7 @@ const browserGlobals = {
     annPositionLineValue: "readonly",
     ANN_DIR_LABELS: "readonly",
     annEdit: "readonly",
+    annPen: "readonly",
     annStore: "writable",
     annCurrent: "writable",
     annOnSave: "writable",
