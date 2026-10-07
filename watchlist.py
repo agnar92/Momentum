@@ -292,6 +292,9 @@ def compute_metrics(df, bench_w=None):
 
     high_52w = float(df["High"].tail(252).max())
     wk_ohlc = weekly_ohlcv(df, asof)
+    wk_close = wk_ohlc["Close"].astype(float)   # średnie TYGODNIOWE (10 i 40 tyg.) — te same co na wykresie tygodniowym; ocena tygodniowa nie używa dziennej SMA50
+    sma10w = float(wk_close.tail(10).mean()) if len(wk_close) >= 10 else None
+    sma40w = float(wk_close.tail(40).mean()) if len(wk_close) >= 40 else None
     all_bases = detect_bases(wk_ohlc, bench_w)
     open_base = next((b for b in reversed(all_bases) if b["open"]), None)
 
@@ -322,6 +325,8 @@ def compute_metrics(df, bench_w=None):
         "low_ratio_6m": _num(low_ratio[6], 3),
         "pct_above_sma50": _num((price / sma50 - 1) * 100) if sma50 else None,
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
+        "pct_above_sma10w": _num((price / sma10w - 1) * 100) if sma10w else None,
+        "pct_above_sma40w": _num((price / sma40w - 1) * 100) if sma40w else None,
         "pct_from_high_52w": _num((price / high_52w - 1) * 100, 1) if high_52w > 0 else None,
         "base_type": open_base["type"] if open_base else None,
         "base_depth_pct": open_base["depth_pct"] if open_base else None,

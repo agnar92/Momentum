@@ -489,12 +489,12 @@ test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez 
     // pozycja ma pierwszeństwo
     assert.equal(code({ position: { stop_hit: true, pl_pct: -8 } }), "SELL");
     assert.equal(code({ position: { stop_hit: false, pl_pct: 20 }, climax_top: true }), "TRIM");
-    assert.equal(code({ position: { stop_hit: false, pl_pct: 3 }, pct_above_sma50: -2 }), "EXIT");
-    assert.equal(code({ position: { stop_hit: false, pl_pct: -3 }, pct_above_sma50: 4 }), "HOLD");   // nie dokupujemy do straty
-    assert.equal(code({ position: { stop_hit: false, pl_pct: 3.5 }, pct_above_sma50: 10 }), "ADD");
-    assert.equal(code({ position: { stop_hit: false, pl_pct: 3.5 }, pct_above_sma50: 10 }, { regime: "uptrend", distDays: 6 }), "HOLD");   // rynek pod presją
-    assert.equal(code({ position: { stop_hit: false, pl_pct: 12 }, pct_above_sma50: 3 }), "ADD");   // odbicie od SMA50
-    assert.equal(code({ position: { stop_hit: false, pl_pct: 12 }, pct_above_sma50: 15 }), "HOLD");
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 3 }, pct_above_sma10w: -2 }), "EXIT");
+    assert.equal(code({ position: { stop_hit: false, pl_pct: -3 }, pct_above_sma10w: 4 }), "HOLD");   // nie dokupujemy do straty
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 3.5 }, pct_above_sma10w: 10 }), "ADD");
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 3.5 }, pct_above_sma10w: 10 }, { regime: "uptrend", distDays: 6 }), "HOLD");   // rynek pod presją
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 12 }, pct_above_sma10w: 3 }), "ADD");   // odbicie od SMA50
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 12 }, pct_above_sma10w: 15 }), "HOLD");
     // bez pozycji: fundamenty i rynek
     assert.equal(code({ canslim: { flags: { C: false, A: true } } }), "SKIP");
     assert.equal(code({}, { regime: "correction", distDays: 0 }), "NOBUY");
@@ -508,9 +508,9 @@ test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez 
     assert.equal(code({ base_type: "cup", pct_to_pivot: 9 }), "BASE");
     assert.equal(code({ base_type: "deep", pct_to_pivot: 3 }), "WAIT");   // głęboka korekta nie jest bazą do zakupu
     // trend bez bazy
-    assert.equal(code({ pct_above_sma50: 3 }), "PULLBACK");
-    assert.equal(code({ pct_above_sma50: 9 }), "WAIT");
-    assert.equal(code({ pct_above_sma50: 22 }), "LATE");
+    assert.equal(code({ pct_above_sma10w: 3 }), "PULLBACK");
+    assert.equal(code({ pct_above_sma10w: 9 }), "WAIT");
+    assert.equal(code({ pct_above_sma10w: 22 }), "LATE");
     // lista Qullamaggiego nie dostaje wskazówki CANSLIM
     assert.equal(actionInfo({ in_cs: false }, up), null);
 });
@@ -518,7 +518,7 @@ test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez 
 test("actionInfo: osobna ocena na wykresie dziennym (flaga / korytarz) i tygodniowym (baza)", () => {
     const { actionInfo, tagActions } = require("../../docs/js/watchlist.js");
     const up = { regime: "uptrend", distDays: 2 };
-    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma50: 9 };
+    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma50: 9, pct_above_sma10w: 9 };
     const w = (s, m = up) => actionInfo({ ...base, ...s }, m, "W").code, d = (s, m = up) => actionInfo({ ...base, ...s }, m, "D").code;
     // tygodniowy: cena 7 % nad pivotem bazy = ZA PÓŹNO, ale dzienna flaga przy oporze = ALERT
     const late = { base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -7, tl_pattern: "flaga", tl_state: "przy oporze", tl_dist_pct: 1.2 };
@@ -544,4 +544,28 @@ test("actionInfo: osobna ocena na wykresie dziennym (flaga / korytarz) i tygodni
     assert.equal(s.action_d.code, "NEAR");
     assert.equal(s.action.code, "NEAR");
     assert.equal(s.act_rank_d < s.act_rank_w, true);
+});
+
+test("actionInfo: tygodniowy liczy na 10-tygodniowej średniej, dzienny na SMA50; główny sygnał = tygodniowy, a gdy go brak — dzienny", () => {
+    const { actionInfo, tagActions } = require("../../docs/js/watchlist.js");
+    const up = { regime: "uptrend", distDays: 2 };
+    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true };
+    // ta sama cena: przy 10-tygodniowej tygodniowy widzi cofnięcie, dzienny (SMA50 +12 %) nie
+    const s1 = { ...base, pct_above_sma10w: 3, pct_above_sma50: 12 };
+    assert.equal(actionInfo(s1, up, "W").code, "PULLBACK");
+    assert.equal(actionInfo(s1, up, "D").code, "WAIT");
+    // brak pola tygodniowego (stare dane) nie podstawia dziennej SMA50
+    assert.equal(actionInfo({ ...base, pct_above_sma50: 3 }, up, "W").code, "WAIT");
+    // rozciągnięcie: tygodniowy dopiero od 20 % nad 10-tyg., dzienny od 15 % nad SMA50
+    assert.equal(actionInfo({ ...base, pct_above_sma10w: 17, pct_above_sma50: 17 }, up, "W").code, "WAIT");
+    assert.equal(actionInfo({ ...base, pct_above_sma10w: 17, pct_above_sma50: 17 }, up, "D").code, "LATE");
+    // główny sygnał: tygodniowy ma sygnał -> tygodniowy
+    const a = { ...base, base_type: "flat", pct_to_pivot: 3, tl_pattern: "flaga", tl_state: "przy oporze", tl_dist_pct: 1 };
+    tagActions([a], up); assert.equal(a.action_tf, "W");
+    // tygodniowy ZA PÓŹNO, dzienny flaga przy oporze -> główny dzienny
+    const b = { ...base, base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -8, tl_pattern: "flaga", tl_state: "przy oporze", tl_dist_pct: 1 };
+    tagActions([b], up); assert.equal(b.action_w.code, "LATE"); assert.equal(b.action_tf, "D"); assert.equal(b.action.code, "NEAR");
+    // oba bez sygnału -> tygodniowy
+    const c = { ...base, pct_above_sma10w: 9, pct_above_sma50: 9 };
+    tagActions([c], up); assert.equal(c.action_tf, "W");
 });

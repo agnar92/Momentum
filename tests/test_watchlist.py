@@ -730,3 +730,11 @@ class TestRsUniverse:
         assert watchlist.load_rs_universe(p) is None   # za mały rozkład = nie ufamy
         p.write_text(json.dumps({"as_of": "2026-10-05", "n": 150, "scores": [i / 100 for i in range(150)]}), encoding="utf-8")
         assert watchlist.load_rs_universe(p)["n"] == 150
+
+
+class TestWeeklyMovingAverages:
+    def test_weekly_sma_distances_are_computed_from_weekly_closes(self):
+        df = make_prices(n=400, daily=0.002)
+        m = watchlist.compute_metrics(df)
+        assert m["pct_above_sma10w"] is not None and m["pct_above_sma40w"] is not None
+        assert m["pct_above_sma40w"] > m["pct_above_sma10w"] > 0   # trend wzrostowy: cena nad obiema, dalej od wolniejszej
