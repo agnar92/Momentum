@@ -26,7 +26,7 @@ QM_CONFIG_PATH = ROOT / "finviz_screen_qm.json"   # osobny, szeroki filtr dla Qu
 
 DEFAULT_FILTERS = "sh_price_o10,ta_sma50_pa,ta_sma200_pa,fa_epsqoq_o25,fa_salesqoq_o25,fa_epsyoy_o25,fa_roe_o15"
 DEFAULT_MAX_TICKERS = 300
-DEFAULT_QM_FILTERS = "sh_price_o1,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa,ta_volatility_mo2,sh_avgvol_o200"
+DEFAULT_QM_FILTERS = "sh_price_o1,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa,ta_volatility_mo2,sh_avgvol_o200,fa_epsyoy_pos,fa_epsyoy1_pos"
 DEFAULT_QM_MAX_TICKERS = 6000
 QM_VIEWS = ()      # Qullamaggie: tylko widok Overview (sektor, branża, kapitalizacja) — fundamentów nie potrzebuje, a pobranie jest ~4x krótsze
 MIN_TICKERS = 15   # poniżej tego uznajemy odpowiedź za błędną (blokada/zmiana układu strony)

@@ -2,9 +2,9 @@ name: Qullamaggie Watchlist Refresh
 
 # Lista Qullamaggiego jest pobierana OSOBNO i TYLKO RĘCZNIE (Actions -> "Qullamaggie Watchlist Refresh" -> Run workflow;
 # link jest też w zakładce Qullamaggie, gdy brak danych). Codzienny workflow (daily_watchlist.yml) obsługuje wyłącznie CANSLIM.
-# Finviz daje najszerszy filtr z finviz_screen_qm.json (cena > 1 USD, nad SMA20/50/200, zmienność miesięczna > 2 %, wolumen > 200 tys., sam widok Overview),
+# Finviz daje najszerszy filtr z finviz_screen_qm.json (cena > 1 USD, nad SMA20/50/200, zmienność miesięczna > 2 %, wolumen > 200 tys., EPS w tym roku i prognoza na przyszły rok dodatnie, sam widok Overview),
 # yfinance ceny, a płynność / ADR / cena-minimum liczy aplikacja. Wynik: docs/data/watchlist_qm.json + charts_qm.json + rs_universe.json (rozkład RS szerokiego rynku, z którego codzienny CANSLIM liczy RS Rating).
-# Pełne pobranie (~700 spółek po filtrach z finviz_screen_qm.json) trwa kilka minut; opcja prices_only pomija Finviz.
+# Pełne pobranie (~400 spółek po filtrach z finviz_screen_qm.json) trwa kilka minut; opcja prices_only pomija Finviz.
 on:
   workflow_dispatch:
     inputs:
