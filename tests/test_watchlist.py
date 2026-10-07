@@ -708,7 +708,7 @@ class TestQullamaggieProfile:
         assert cfg == {"min_adr_pct": 3, "filters": "x", "max_tickers": 7}
         missing = finviz.load_config(tmp_path / "none.json", finviz.DEFAULT_QM_FILTERS, finviz.DEFAULT_QM_MAX_TICKERS)
         assert missing == {"filters": finviz.DEFAULT_QM_FILTERS, "max_tickers": finviz.DEFAULT_QM_MAX_TICKERS}
-        assert "fa_" not in finviz.DEFAULT_QM_FILTERS   # Qullamaggie: bez filtrów fundamentalnych
+        assert "fa_epsyoy_pos" in finviz.DEFAULT_QM_FILTERS and "fa_roe" not in finviz.DEFAULT_QM_FILTERS   # Qullamaggie: tylko dodatni EPS (ten rok i następny)
 
 
 class TestRsUniverse:
