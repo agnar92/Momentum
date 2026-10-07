@@ -874,3 +874,19 @@ body:not(.split) .wl-chart-head .btn .lbl { display: none; }
     body:not(.split) #chartRatings { display: none; }
     body:not(.split) .chart-grid.layout-1 .cell-readout { display: none; }
 }
+
+/* ---------- telefon, rysowanie: wykres ma dostać prawie cały ekran (user: „strasznie mało miejsca na rysowanie”) ---------- */
+body:not(.split) .wl-chart-box.is-editing { padding: 4px 6px 0; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-head > .btn:not(#chartLineBtn):not(#chartCupBtn):not(#chartPenClear),
+body:not(.split) .wl-chart-box.is-editing .wl-chart-ready,
+body:not(.split) .wl-chart-box.is-editing .wl-chart-readout,
+body:not(.split) .wl-chart-box.is-editing #chartCrossDate { display: none; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-title { font-size: 14px; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-head { gap: 4px; flex-wrap: nowrap; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-head .btn { min-height: 40px; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-tools { padding: 2px 0; gap: 4px; flex-wrap: nowrap; overflow-x: auto; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-tools .btn { flex: 0 0 auto; min-height: 40px; padding: 0 12px; white-space: nowrap; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-tools #toolRestore,
+body:not(.split) .wl-chart-box.is-editing .wl-chart-tools #toolAuto { display: none; }
+body:not(.split) .wl-chart-box.is-editing .wl-chart-tools .ann-hint { position: absolute; left: 8px; right: 8px; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 5; flex: none; padding: 6px 10px; border-radius: 8px; background: rgba(14,15,19,.82); color: var(--text); pointer-events: none; }
+body:not(.split) .wl-chart-box { position: relative; }

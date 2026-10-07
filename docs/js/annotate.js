@@ -271,7 +271,7 @@ let annStore = {};
 const ANN_PEN_COLOR = "#ffd54a";
 const ANN_PEN_MAX_PTS = 800;
 const annPen = { on: false };   // tryb odręcznego rysowania (osobny od Linia / Cup): rec.pen = [{ id, pts: [[data, ułamek świecy, cena], ...] }]
-const annEdit = { on: false, mode: null, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null };
+const annEdit = { on: false, mode: null, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null, pad: null, padTicker: null };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
 
@@ -341,7 +341,9 @@ function annHide(ticker) {
 const SVG_NS = "http://www.w3.org/2000/svg";
 const ANN_TOUCH_MODE_PX = 30;   // w trybie Linia / Cup promień jest nieco mniejszy, żeby dało się założyć nowy obiekt tuż obok istniejącego
 const ANN_TOUCH_PX = 38;   // promień (px ekranu), w którym dotyk „łapie” najbliższą linię / cup / uchwyt
-const ANN_DRAG_DRAW_PX = 14;   // dotyk w trybie Linia: przeciągnięcie palca dalej niż tyle px rysuje linię od razu (zamiast dwóch stuknięć)
+const ANN_PAD_OFFSET_PX = 70;    // touchpad: pierwszy kursor pojawia się tyle px NAD palcem (palec nie zasłania punktu)
+const ANN_PAD_MOVE_PX = 8;       // ruch palca większy niż tyle px przesuwa kursor; krótsze stuknięcie stawia punkt
+const ANN_SNAP_TOUCH_PX = 38;    // magnet na dotyku: High / Low / Close świecy w tym promieniu od kursora przyciąga punkt
 
 function annOverlay(ctx) {
     const { plot, m, geom, ticker } = ctx;
@@ -370,16 +372,16 @@ function annOverlay(ctx) {
         const p = pt.matrixTransform(ov.getScreenCTM().inverse());
         return { x: p.x, y: p.y };
     };
-    // Punkt na wykresie: x przyciągany do świecy, y do High/Low tej świecy, gdy kursor jest blisko.
-    // Przyciąganie: spośród High i Low świec w okolicy (±2) wybieramy punkt najbliższy palcu/kursorowi, jeśli jest dość blisko
-    // (palec jest gruby — na dotyku promień większy); inaczej x do najbliższej świecy, a cena swobodna.
+    // Punkt na wykresie (magnet jak w TradingView): x przyciągany do świecy, a cena do High / Low / Close świec w okolicy (±3),
+    // jeśli któryś jest dość blisko kursora (na dotyku promień większy); inaczej cena swobodna. Promień liczony w pikselach ekranu.
+    const pxScale = () => { const r = ov.getBoundingClientRect(); return Math.min(r.width / L.width, r.height / L.height) || 1; };
     const snap = p => {
         const idx = Math.max(0, Math.min(m.n - 1, Math.round((p.x - L.left) / geom.step - 0.5)));
         const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
-        const near = geom.fs(coarse ? 22 : 13);
+        const near = (coarse ? ANN_SNAP_TOUCH_PX : 14) / pxScale();
         let best = null;
-        for (let j = Math.max(0, idx - 2); j <= Math.min(m.n - 1, idx + 2); j++) {
-            [m.h[j], m.l[j]].forEach(v => {
+        for (let j = Math.max(0, idx - 3); j <= Math.min(m.n - 1, idx + 3); j++) {
+            [m.h[j], m.l[j], m.c[j]].forEach(v => {
                 if (!Number.isFinite(v)) return;
                 const d = Math.hypot(p.x - geom.x(j), p.y - geom.yP(v));
                 if (d <= near && (!best || d < best.d)) best = { d, j, v };
@@ -388,6 +390,8 @@ function annOverlay(ctx) {
         if (best) return { date: m.weeks[best.j], price: r2(best.v) };
         return { date: m.weeks[idx], price: r2(priceOfY(Math.max(L.price.y, Math.min(L.price.y + L.price.h, p.y)))) };
     };
+    if (annEdit.padTicker !== ticker) { annEdit.pad = null; annEdit.padTicker = ticker; }   // kursor touchpada nie przechodzi na inną spółkę
+    const padClamp = q => ({ x: Math.max(L.left, Math.min(plotRight, q.x)), y: Math.max(L.price.y, Math.min(L.price.y + L.price.h, q.y)) });
 
     // Szablony: jedno stuknięcie. flag = początek konsolidacji, cuptap = dołek miseczki. Wynik jest zwykłymi, edytowalnymi obiektami.
     const full = ctx.full;
@@ -500,6 +504,16 @@ function annOverlay(ctx) {
             const cur = annEdit.cursor ? [geom.x(idxOf(annEdit.cursor.date)), geom.yP(annEdit.cursor.price)] : null;
             body += `<polyline fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3" points="${pts2s(cur ? [...P, cur] : P)}"/>`;
             P.forEach(p => { body += `<circle cx="${p[0]}" cy="${p[1]}" r="${h * 0.7}" fill="#fff"/>`; });
+        }
+        // kursor touchpada: krzyżyk w miejscu, w którym PRZYCIĄGNIE się punkt (to samo liczy stuknięcie), z podpisem daty i ceny
+        if (editing && annEdit.pad && (annEdit.tool === "line" || annEdit.tool === "cup" || isTemplate())) {
+            const sn = snap(annEdit.pad), sx = geom.x(idxOf(sn.date)), sy = geom.yP(sn.price), fsz = geom.fs(11);
+            const lbl = `${sn.date.slice(5)}  ${sn.price.toFixed(2)}`;
+            const tx = Math.max(L.left + 4, Math.min(plotRight - 4, sx)), anchor = sx > (L.left + plotRight) / 2 ? "end" : "start";
+            body += `<g pointer-events="none"><line x1="${L.left}" x2="${plotRight}" y1="${sy}" y2="${sy}" stroke="#fff" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="4 3"/>`
+                + `<line x1="${sx}" x2="${sx}" y1="${L.price.y}" y2="${L.price.y + L.price.h}" stroke="#fff" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="4 3"/>`
+                + `<circle cx="${sx}" cy="${sy}" r="${h * 0.9}" fill="none" stroke="#ffd54a" stroke-width="2.2"/><circle cx="${sx}" cy="${sy}" r="2.2" fill="#ffd54a"/>`
+                + `<text x="${tx + (anchor === "end" ? -8 : 8)}" y="${Math.max(L.price.y + fsz + 2, sy - 10)}" font-size="${fsz}" font-weight="700" fill="#ffd54a" text-anchor="${anchor}" stroke="#0e0f13" stroke-width="3" paint-order="stroke">${lbl}</text></g>`;
         }
         const catcher = penOn ? `<rect class="pen-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : editing ? `<rect class="ann-catch" x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}" fill="transparent"/>` : "";
         return `<defs><clipPath id="${clipId}"><rect x="${L.left}" y="${L.price.y}" width="${plotRight - L.left}" height="${L.price.h}"/></clipPath></defs>${catcher}<g clip-path="url(#${clipId})">${body}</g>`;
@@ -684,11 +698,17 @@ function annOverlay(ctx) {
             ev.preventDefault();
             const target = handleTarget;
             ov.setPointerCapture(ev.pointerId);
+            // Względne przeciąganie: uchwyt rusza się o tyle, o ile przesunął się palec (bez „skoku” pod palec), a punkt dociąga magnes do High/Low/Close
+            const R0 = rec(), obj0 = R0 && (target.type === "line" ? R0.lines.find(x => x.id === target.id) : R0.cups.find(x => x.id === target.id));
+            const hd = { a: ["x0", "y0"], b: ["x1", "y1"], L: ["start", "peak"], B: ["low_date", "low"], R: ["end", "right"] }[handle];
+            const grab = toSvg(ev), org = obj0 && hd ? { x: geom.x(idxOf(obj0[hd[0]])), y: geom.yP(obj0[hd[1]]) } : null;
             const move = e => {
-                let pt = snap(toSvg(e));
+                const f = toSvg(e);
+                const raw = touchPtr && org ? { x: org.x + f.x - grab.x, y: org.y + f.y - grab.y } : f;
+                let pt = snap(raw);
                 const R = rec(), l = R && target.type === "line" ? R.lines.find(x => x.id === target.id) : null;
                 if (l) pt = level(pt, { price: handle === "a" ? l.y1 : l.y0 }, e);
-                dragTo(target, handle, pt); showLoupe(toSvg(e), pt); render();
+                dragTo(target, handle, pt); showLoupe(raw, pt); render();
             };
             const up = () => {
                 ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
@@ -743,39 +763,36 @@ function annOverlay(ctx) {
             annEdit.lastTap = { t: now, x: ev.clientX, y: ev.clientY };
         }
         if (touchPtr && (annEdit.tool === "line" || annEdit.tool === "cup" || isTemplate())) {
-            // dotyk + wybrane narzędzie: punkt stawia się dopiero po puszczeniu palca, a w trakcie widać lupę z miejscem przyciągnięcia
+            // TOUCHPAD (jak w TakeProfit / TradingView): kursor-krzyżyk jest osobno od palca. Pierwsze dotknięcie ustawia go ANN_PAD_OFFSET_PX nad palcem,
+            // kolejne przesuwają go względnie (palec nie zasłania punktu); krótkie stuknięcie stawia punkt dokładnie tam, gdzie widać pierścień
+            // (to samo liczy się z magnesu na High / Low / Close), więc nic nie „ucieka” po puszczeniu palca.
             ev.preventDefault();
             ov.setPointerCapture(ev.pointerId);
-            const place = e => { const pt = snap(toSvg(e)); return annEdit.tool === "line" && annEdit.pending.length === 1 ? level(pt, annEdit.pending[0], e) : pt; };
-            // Narzędzie Linia, pierwszy punkt: przeciągnięcie palca rysuje linię jednym ruchem (początek = miejsce dotknięcia, koniec = puszczenie);
-            // samo stuknięcie nadal stawia punkt, a drugie stuknięcie kończy linię.
-            const dragDraw = annEdit.tool === "line" && !isTemplate() && annEdit.pending.length === 0;
-            const startRaw = toSvg(ev), startPt = dragDraw ? snap(startRaw) : null;
-            let dragged = false;
+            const sc = pxScale(), start = toSvg(ev), t0 = Date.now();
+            if (!annEdit.pad) annEdit.pad = padClamp({ x: start.x, y: start.y - ANN_PAD_OFFSET_PX / sc });
+            const origin = { ...annEdit.pad };
+            let moved = false;
+            const preview = () => { annEdit.cursor = annEdit.pending.length ? level(snap(annEdit.pad), annEdit.pending[0], null) : null; };
             const stop = () => { ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", cancel); };
             const move = e => {
-                if (dragDraw) {
-                    const r = toSvg(e);
-                    if (!dragged && Math.hypot(r.x - startRaw.x, r.y - startRaw.y) > ANN_DRAG_DRAW_PX / (ov.getBoundingClientRect().width / L.width || 1)) dragged = true;
-                    if (dragged) { annEdit.pending = [startPt]; annEdit.cursor = level(snap(r), startPt, e); showLoupe(r, annEdit.cursor); render(); return; }
-                }
-                const pt = place(e); annEdit.cursor = pt; showLoupe(toSvg(e), pt); render();
+                const f = toSvg(e), dx = f.x - start.x, dy = f.y - start.y;
+                if (!moved && Math.hypot(dx, dy) * sc < ANN_PAD_MOVE_PX) return;
+                moved = true;
+                annEdit.pad = padClamp({ x: origin.x + dx, y: origin.y + dy });
+                preview(); showLoupe(annEdit.pad, snap(annEdit.pad)); render();
             };
-            const up = e => {
-                stop(); loupe = null; annEdit.cursor = null;
-                if (dragged) {
-                    annEdit.pending = [startPt, level(snap(toSvg(e)), startPt, e)];
-                    finishPending();
-                } else {
-                    const pt = place(e);
+            const up = () => {
+                stop(); loupe = null;
+                if (!moved && Date.now() - t0 < 600) {
+                    const pt = snap(annEdit.pad);
                     if (isTemplate()) applyTemplate(annEdit.tool, pt);
-                    else { annEdit.pending.push(pt); finishPending(); }
+                    else { annEdit.pending.push(pt); annEdit.cursor = null; finishPending(); if (annEdit.pending.length) showToast("Punkt 1 postawiony — przesuń kursor i stuknij drugi."); }
                 }
-                render();
+                preview(); render();
             };
-            const cancel = () => { stop(); loupe = null; annEdit.cursor = null; if (dragged) annEdit.pending = []; render(); };
-            move(ev);
+            const cancel = () => { stop(); loupe = null; render(); };
             ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", cancel);
+            render();
             return;
         }
         if (isTemplate()) {
@@ -1055,8 +1072,8 @@ function annSyncTools() {
         : annEdit.mode === "cup" && !annEdit.tool ? "Dotknij cup, by go poprawić. Puste miejsce rysuje nowy (3 punkty)."
         : annEdit.tool === "flag" ? "🚩 Stuknij POCZĄTEK konsolidacji (po maszcie) — opór i wsparcie ułożą się same."
         : annEdit.tool === "cuptap" ? "🏆 Stuknij DOŁEK miseczki — brzegi dobiorą się same."
-        : annEdit.tool === "line" ? (coarse ? "Dotknij dwa punkty (punkt ustawia się po puszczeniu palca; lupa pokazuje przyciąganie)." : "Kliknij dwa punkty (przyciąga do High/Low); Shift = pozioma.")
-        : annEdit.tool === "cup" ? "Trzy punkty: lewy brzeg, dołek, prawy brzeg."
+        : annEdit.tool === "line" ? (coarse ? "Przeciągnij palcem — krzyżyk przesuwa się osobno (przyciąga do High/Low/Close). STUKNIJ, by postawić punkt." : "Kliknij dwa punkty (przyciąga do High/Low); Shift = pozioma.")
+        : annEdit.tool === "cup" ? (coarse ? "Trzy punkty: lewy brzeg, dołek, prawy brzeg. Przeciągnij, by ustawić krzyżyk; STUKNIJ, by postawić punkt." : "Trzy punkty: lewy brzeg, dołek, prawy brzeg.")
         : obj ? (coarse ? "Przeciągnij kółka, by poprawić; stuknięcie linii = menu (alert, typ, notatka)." : "Przeciągnij kółka, by poprawić (Shift = poziomo); prawy przycisk = menu.")
         : (coarse ? "Podwójne stuknięcie wykresu = wybór linia / cup / szablon." : "Przeciągnij po wykresie, by narysować linię; prawy przycisk = menu.");
     const R = annCurrent && annStore[annCurrent.ticker];
@@ -1072,7 +1089,7 @@ function annInitUI(onRedraw) {
         if (on) annPen.on = false;
         annEdit.spaceOn = on && bySpace;
         annEdit.mode = null;
-        annEdit.tool = null; annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null;
+        annEdit.tool = null; annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null; annEdit.pad = null;
         if (on && annCurrent) {   // pierwsze wejście: przejmij automatyczne linie/cupy jako własne (z migawką algorytmu)
             const R = annRecord(annCurrent.ticker, true);
             const hadAuto = R.hideAutoLines || R.hideAutoCups;
@@ -1089,7 +1106,7 @@ function annInitUI(onRedraw) {
         if (annEdit.mode === mode) { setEdit(false, false); return; }
         if (!annEdit.on || annEdit.spaceOn) setEdit(true, false);
         annEdit.mode = mode; annEdit.tool = mode;
-        annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null;
+        annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null; annEdit.pad = null;
         annSyncTools();
         if (annCurrent) annCurrent.render();
     };

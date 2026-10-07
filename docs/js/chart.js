@@ -559,7 +559,7 @@ function chartSvg(m, opts = {}) {
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
     const spxVals = m.spx ? m.spx.filter(Number.isFinite) : [];
-    const spxBand = spxVals.length >= 2 ? SPX_BAND_FRAC : 0;
+    const spxBand = spxVals.length >= 2 && !opts.noBench ? SPX_BAND_FRAC : 0;   // opts.noBench: telefon w trybie rysowania — cały panel dla ceny
     const pExt = numericExtent([m.h, m.l, ...nearSma, ptExt, ...pivotExtra]) || [0, 1];
     const useLog = !!opts.log && pExt[0] > 0;
     const pad = (pExt[1] - pExt[0]) * 0.04;

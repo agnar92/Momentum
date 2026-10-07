@@ -1681,6 +1681,7 @@ function drawChart() {
             log: chartLog, daily: c.daily, uid: "c" + i,
             compact: layout === "1" ? chartCompact : false, wide: layout === "1" && chartWide,
             hideLabels: layout === "1" && !splitMode && !chartLegendOn,
+            noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: layout === "1" ? (splitMode ? null : phoneFit(cell)) : cellFit(cell),
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
