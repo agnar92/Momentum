@@ -3,7 +3,8 @@ name: Daily Watchlist Refresh
 # Codziennie rano (po zakończonej sesji USA z poprzedniego dnia, żeby na nowe otwarcie mieć świeże
 # dane z dnia poprzedniego): watchlist.py pobiera listę spółek z Finviz (nad SMA50 i SMA200, stabilny
 # wzrost EPS i dodatnie prognozy EPS), ceny z yfinance i liczy RS Rating, dane do filtra Qullamaggiego
-# i trend EMA34 -> docs/data/watchlist.json, który następnie trafia na GitHub Pages.
+# i trend EMA34 -> docs/data/watchlist.json, który następnie trafia na GitHub Pages. W tym samym przebiegu odświeża się też
+# lista Qullamaggiego (docs/data/watchlist_qm.json, osobny filtr Finviz z finviz_screen_qm.json).
 #
 # Ręczne odpalenie: zakładka Actions -> "Daily Watchlist Refresh" -> "Run workflow"
 # (na stronie jest przycisk "Odśwież dane", który prowadzi właśnie tutaj) albo lokalnie:
@@ -46,7 +47,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Fetch Finviz list + yfinance prices and build watchlist.json
+      # Najpierw Qullamaggie (szeroka lista ~300 spółek): zapisuje watchlist_qm.json, charts_qm.json i rs_universe.json — z tego rozkładu
+      # codzienny profil CANSLIM liczy RS Rating. Błąd tego kroku nie zatrzymuje CANSLIM (zostają poprzednie pliki Qullamaggiego).
+      - name: Fetch Qullamaggie list (Finviz pre-screen + yfinance) and build watchlist_qm.json
+        continue-on-error: true
+        run: python watchlist.py --profile qm
+
+      - name: Fetch CANSLIM list (Finviz pre-screen + yfinance) and build watchlist.json
         run: python watchlist.py
 
       # Opcjonalnie: powiadomienie (Issue + e-mail / push z GitHub Mobile) o nowych przebiciach Twoich linii z alertem.

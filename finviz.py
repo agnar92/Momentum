@@ -22,7 +22,7 @@ from lxml import html as lxml_html
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "finviz_screen.json"
-QM_CONFIG_PATH = ROOT / "finviz_screen_qm.json"   # osobny, szeroki filtr dla Qullamaggiego (odpalany ręcznie)
+QM_CONFIG_PATH = ROOT / "finviz_screen_qm.json"   # osobny filtr dla Qullamaggiego (ten sam codzienny workflow)
 
 DEFAULT_FILTERS = "sh_price_o10,ta_sma50_pa,ta_sma200_pa,fa_epsqoq_o25,fa_salesqoq_o25,fa_epsyoy_o25,fa_roe_o15"
 DEFAULT_MAX_TICKERS = 300

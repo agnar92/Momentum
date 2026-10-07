@@ -344,7 +344,7 @@ function rsBasisText() {
     const b = state.data && state.data.rs_basis;
     return b && b.source === "market"
         ? `percentyl wśród ${b.n} spółek szerokiego rynku (nad SMA50 i SMA200) z sesji ${b.as_of}`
-        : "percentyl wśród spółek samej listy CANSLIM (brak danych szerokiego rynku — odpal ręcznie workflow Qullamaggie, to je zapisuje), więc wynik jest zawyżony";
+        : "percentyl wśród spółek samej listy CANSLIM (brak danych szerokiego rynku — zapisuje je krok Qullamaggie codziennego odświeżenia), więc wynik jest zawyżony";
 }
 // Próg RS (litera L) wpisuje użytkownik w Filtrach; CANSLIM_THRESHOLDS.rs czytają canslimInfo i canslimExplain.
 function setCanslimRs(v) { CANSLIM_THRESHOLDS.rs = Number.isFinite(v) && v >= 0 && v <= 99 ? v : DEFAULT_SETTINGS.csRs; }
@@ -884,8 +884,8 @@ const EMPTY_MESSAGES = {
 
 function emptyMessage(tab) {
     if (tab === "QM" && !(state.data && state.data.qm)) {
-        const url = githubActionsUrl(window.location, "qullamaggie_watchlist.yml");
-        return `Brak danych Qullamaggiego — lista jest pobierana osobno i tylko ręcznie: <a href="${url}" target="_blank" rel="noopener">Actions → „Qullamaggie Watchlist Refresh” → Run workflow ↗</a> (potem odśwież stronę).`;
+        const url = githubActionsUrl(window.location);
+        return `Brak danych Qullamaggiego — lista odświeża się razem z codziennym odświeżeniem. Uruchom je teraz: <a href="${url}" target="_blank" rel="noopener">Actions → „Daily Watchlist Refresh” → Run workflow ↗</a> (potem odśwież stronę).`;
     }
     return EMPTY_MESSAGES[tab];
 }
@@ -1329,7 +1329,7 @@ function renderDataInfo() {
     info.textContent = `Dane z sesji ${d.data_as_of} · pobrano ${generated} · ${d.n_stocks} spółek CANSLIM`
         + (d.finviz_stale ? " · ⚠ lista Finviz z poprzedniego pobrania (Finviz niedostępny)" : "")
         + (d.rs_basis ? (d.rs_basis.source === "market" ? ` · RS vs rynek (${d.rs_basis.n} spółek, sesja ${d.rs_basis.as_of})` : " · RS vs lista CANSLIM") : "")
-        + (d.qm ? ` · Qullamaggie: ${d.qm.n_stocks} spółek z sesji ${d.qm.data_as_of} (odświeżane ręcznie)` : "");
+        + (d.qm ? ` · Qullamaggie: ${d.qm.n_stocks} spółek z sesji ${d.qm.data_as_of} (odświeżane codziennie)` : "");
 }
 
 function initControls() {
