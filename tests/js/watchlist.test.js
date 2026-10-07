@@ -514,3 +514,34 @@ test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez 
     // lista Qullamaggiego nie dostaje wskazówki CANSLIM
     assert.equal(actionInfo({ in_cs: false }, up), null);
 });
+
+test("actionInfo: osobna ocena na wykresie dziennym (flaga / korytarz) i tygodniowym (baza)", () => {
+    const { actionInfo, tagActions } = require("../../docs/js/watchlist.js");
+    const up = { regime: "uptrend", distDays: 2 };
+    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma50: 9 };
+    const w = (s, m = up) => actionInfo({ ...base, ...s }, m, "W").code, d = (s, m = up) => actionInfo({ ...base, ...s }, m, "D").code;
+    // tygodniowy: cena 7 % nad pivotem bazy = ZA PÓŹNO, ale dzienna flaga przy oporze = ALERT
+    const late = { base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -7, tl_pattern: "flaga", tl_state: "przy oporze", tl_dist_pct: 1.2 };
+    assert.equal(w(late), "LATE");
+    assert.equal(d(late), "NEAR");
+    // dzienny: wybicie flagi na wolumenie do +5 % = KUP; dalej = ZA PÓŹNO; bez wolumenu = czekaj
+    assert.equal(d({ tl_pattern: "flaga", tl_state: "wybicie", tl_dist_pct: -2 }), "BUY");
+    assert.equal(d({ tl_pattern: "flaga", tl_state: "wybicie", tl_dist_pct: -2 }, { regime: "uptrend", distDays: 6 }), "BUY_HALF");
+    assert.equal(d({ tl_pattern: "korytarz", tl_state: "wybicie", tl_dist_pct: -8 }), "LATE");
+    assert.equal(d({ tl_pattern: "korytarz", tl_state: "bez wolumenu", tl_dist_pct: -1 }), "NEAR");
+    assert.equal(d({ tl_pattern: "flaga", tl_dist_pct: 8 }), "BASE");
+    // tygodniowa flaga (tlw_) liczy się tylko w widoku tygodniowym, dzienna (tl_) tylko w dziennym
+    assert.equal(w({ tl_state: "wybicie", tl_dist_pct: -2 }), "WAIT");
+    assert.equal(d({ tlw_state: "wybicie", tlw_dist_pct: -2 }), "WAIT");
+    assert.equal(w({ tlw_state: "wybicie", tlw_dist_pct: -2 }), "BUY");
+    // pozycja i rynek są wspólne
+    assert.equal(w({ position: { stop_hit: true, pl_pct: -8 } }), d({ position: { stop_hit: true, pl_pct: -8 } }));
+    assert.equal(d({}, { regime: "correction", distDays: 0 }), "NOBUY");
+    // tagActions: obie oceny + ważniejsza do sortowania
+    const s = { ...base, ...late };
+    tagActions([s], up);
+    assert.equal(s.action_w.code, "LATE");
+    assert.equal(s.action_d.code, "NEAR");
+    assert.equal(s.action.code, "NEAR");
+    assert.equal(s.act_rank_d < s.act_rank_w, true);
+});
