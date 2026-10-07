@@ -339,8 +339,9 @@ function annHide(ticker) {
 // ---------- warstwa nad wykresem (rysowanie i edycja) ----------
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-const ANN_TOUCH_MODE_PX = 24;   // w trybie Linia / Cup promień jest mniejszy, żeby dało się założyć nowy obiekt tuż obok istniejącego
-const ANN_TOUCH_PX = 30;   // promień (px ekranu), w którym dotyk „łapie” najbliższą linię / cup / uchwyt
+const ANN_TOUCH_MODE_PX = 30;   // w trybie Linia / Cup promień jest nieco mniejszy, żeby dało się założyć nowy obiekt tuż obok istniejącego
+const ANN_TOUCH_PX = 38;   // promień (px ekranu), w którym dotyk „łapie” najbliższą linię / cup / uchwyt
+const ANN_DRAG_DRAW_PX = 14;   // dotyk w trybie Linia: przeciągnięcie palca dalej niż tyle px rysuje linię od razu (zamiast dwóch stuknięć)
 
 function annOverlay(ctx) {
     const { plot, m, geom, ticker } = ctx;
@@ -446,6 +447,17 @@ function annOverlay(ctx) {
                 const lx = Math.min(plotRight - 4, Math.max(L.left + 30, ex));
                 const ly = Math.max(L.price.y + geom.fs(12), Math.min(L.price.y + L.price.h - 4, geom.yP(endPrice) - 5));
                 body += `<text x="${lx}" y="${ly}" font-size="${geom.fs(11)}" font-weight="700" fill="${col}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${endPrice.toFixed(2)}</text>`;
+            }
+            // stop loss 5 % i 8 % pod linią bazy (O'Neil: sprzedaj przy stracie 7–8 % od zakupu, nie więcej) — tylko dla linii oporu (pivot)
+            if (line.kind === "res" && !line.pos && Number.isFinite(endPrice) && endPrice > 0) {
+                const ex = ext.length > 1 ? ext[1][0] : b[0];
+                const x0 = Math.min(plotRight - 60, Math.max(L.left + 30, ex - geom.fs(70)));
+                [[0.05, "−5%"], [0.08, "−8%"]].forEach(([pct, txt]) => {
+                    const lvl = endPrice * (1 - pct), y = geom.yP(lvl);
+                    if (!(y > L.price.y && y < L.price.y + L.price.h)) return;
+                    body += `<line x1="${x0}" x2="${plotRight - 4}" y1="${y}" y2="${y}" stroke="${ANN_COLORS.stop}" stroke-width="1.3" stroke-dasharray="5 4" pointer-events="none"/>`
+                        + `<text x="${plotRight - 6}" y="${y + geom.fs(12)}" font-size="${geom.fs(10)}" font-weight="700" fill="${ANN_COLORS.stop}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">stop ${txt} ${lvl.toFixed(2)}</text>`;
+                });
             }
             const hasNote = !!(line.note && line.note.trim());
             if (hasNote) {
@@ -644,7 +656,11 @@ function annOverlay(ctx) {
             const c = R.cups.find(x => x.id === sel.id);
             if (c) [["L", c.start, c.peak], ["B", c.low_date, c.low], ["R", c.end, c.right]].forEach(([k, d, pr]) => consider(Math.hypot(p.x - geom.x(idxOf(d)), p.y - geom.yP(pr)) - thr * 0.35, { handle: k, target: sel }));
         }
-        if (lineOk) R.lines.forEach(l => consider(distSeg(p, [geom.x(idxOf(l.x0)), geom.yP(l.y0)], [geom.x(idxOf(l.x1)), geom.yP(l.y1)]), { obj: { type: "line", id: l.id } }));
+        // końce KAŻDEJ linii (nie tylko zaznaczonej) łapie się od razu za uchwyt — przesuwa się wtedy jeden koniec, a nie cała linia
+        if (lineOk) R.lines.forEach(l => {
+            [["a", l.x0, l.y0], ["b", l.x1, l.y1]].forEach(([k, d, pr]) => consider(Math.hypot(p.x - geom.x(idxOf(d)), p.y - geom.yP(pr)) - thr * 0.35, { handle: k, target: { type: "line", id: l.id } }));
+            consider(distSeg(p, [geom.x(idxOf(l.x0)), geom.yP(l.y0)], [geom.x(idxOf(l.x1)), geom.yP(l.y1)]), { obj: { type: "line", id: l.id } });
+        });
         if (cupOk) R.cups.forEach(cu => {
             const { pts } = cupArcPoints({ i0: idxOf(cu.start), iLow: idxOf(cu.low_date), i1: idxOf(cu.end), peak: cu.peak, low: cu.low, right: cu.right }, geom.x, geom.yP);
             for (let i = 1; i < pts.length; i++) consider(distSeg(p, pts[i - 1], pts[i]), { obj: { type: "cup", id: cu.id } });
@@ -731,15 +747,33 @@ function annOverlay(ctx) {
             ev.preventDefault();
             ov.setPointerCapture(ev.pointerId);
             const place = e => { const pt = snap(toSvg(e)); return annEdit.tool === "line" && annEdit.pending.length === 1 ? level(pt, annEdit.pending[0], e) : pt; };
+            // Narzędzie Linia, pierwszy punkt: przeciągnięcie palca rysuje linię jednym ruchem (początek = miejsce dotknięcia, koniec = puszczenie);
+            // samo stuknięcie nadal stawia punkt, a drugie stuknięcie kończy linię.
+            const dragDraw = annEdit.tool === "line" && !isTemplate() && annEdit.pending.length === 0;
+            const startRaw = toSvg(ev), startPt = dragDraw ? snap(startRaw) : null;
+            let dragged = false;
             const stop = () => { ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", cancel); };
-            const move = e => { const pt = place(e); annEdit.cursor = pt; showLoupe(toSvg(e), pt); render(); };
+            const move = e => {
+                if (dragDraw) {
+                    const r = toSvg(e);
+                    if (!dragged && Math.hypot(r.x - startRaw.x, r.y - startRaw.y) > ANN_DRAG_DRAW_PX / (ov.getBoundingClientRect().width / L.width || 1)) dragged = true;
+                    if (dragged) { annEdit.pending = [startPt]; annEdit.cursor = level(snap(r), startPt, e); showLoupe(r, annEdit.cursor); render(); return; }
+                }
+                const pt = place(e); annEdit.cursor = pt; showLoupe(toSvg(e), pt); render();
+            };
             const up = e => {
-                stop(); loupe = null; const pt = place(e); annEdit.cursor = null;
-                if (isTemplate()) applyTemplate(annEdit.tool, pt);
-                else { annEdit.pending.push(pt); finishPending(); }
+                stop(); loupe = null; annEdit.cursor = null;
+                if (dragged) {
+                    annEdit.pending = [startPt, level(snap(toSvg(e)), startPt, e)];
+                    finishPending();
+                } else {
+                    const pt = place(e);
+                    if (isTemplate()) applyTemplate(annEdit.tool, pt);
+                    else { annEdit.pending.push(pt); finishPending(); }
+                }
                 render();
             };
-            const cancel = () => { stop(); loupe = null; annEdit.cursor = null; render(); };
+            const cancel = () => { stop(); loupe = null; annEdit.cursor = null; if (dragged) annEdit.pending = []; render(); };
             move(ev);
             ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", cancel);
             return;
