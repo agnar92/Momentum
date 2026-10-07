@@ -55,10 +55,11 @@ function mergeProfiles(cs, qm) {
 }
 const inCs = s => s.in_cs !== false;
 const inQm = s => s.in_qm !== false;
-// Spółki, które widzi dana zakładka: Lista / CANSLIM / Bazy = lista CANSLIM, Qullamaggie = lista Qullamaggiego, reszta (ulubione, pozycje, alerty) = obie.
+// Spółki, które widzi dana zakładka (dwa skanery: pełna szeroka lista + CANSLIM; user: „lista to pełna lista spółek + canslim”):
+// Lista / Bazy / ulubione / pozycje / alerty = WSZYSTKIE (suma obu skanerów), CANSLIM = tylko skaner CANSLIM (ma fundamenty), Qullamaggie = lista Qullamaggiego.
 function tabUniverse(tab, stocks) {
     if (tab === "QM") return stocks.filter(inQm);
-    if (tab === "LIST" || tab === "CS" || tab === "BASES") return stocks.filter(inCs);
+    if (tab === "CS") return stocks.filter(inCs);
     return stocks;
 }
 
@@ -936,11 +937,11 @@ function renderFiltersSummary() {
     const el = document.getElementById("filtersSummary");
     if (!el) return;
     const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
-    const base = tabUniverse("LIST", common), qmBase = tabUniverse("QM", common);
+    const base = tabUniverse("LIST", common), qmBase = tabUniverse("QM", common), csBase = tabUniverse("CS", common);
     const counts = [["Lista", base.length],
-        ["Qullamaggie", qullamaggieRows(qmBase, state.qm).length], ["Bazy", baseRows(base, state.bases).length], ["CANSLIM", canslimRows(base, state.csMin, state.csCore).length]];
+        ["Qullamaggie", qullamaggieRows(qmBase, state.qm).length], ["Bazy", baseRows(base, state.bases).length], ["CANSLIM", canslimRows(csBase, state.csMin, state.csCore).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
-    document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.filter(inCs).length} spółek CANSLIM po filtrach wspólnych`;
+    document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek (w tym ${state.data.stocks.filter(inCs).length} z listy CANSLIM) po filtrach wspólnych`;
 }
 
 function renderTable() {

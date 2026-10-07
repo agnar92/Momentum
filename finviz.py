@@ -28,7 +28,6 @@ DEFAULT_FILTERS = "sh_price_o10,ta_sma50_pa,ta_sma200_pa,fa_epsqoq_o25,fa_salesq
 DEFAULT_MAX_TICKERS = 300
 DEFAULT_QM_FILTERS = "cap_midover,sh_avgvol_o1000,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa"
 DEFAULT_QM_MAX_TICKERS = 6000
-QM_VIEWS = ()      # Qullamaggie: tylko widok Overview (sektor, branża, kapitalizacja) — fundamentów nie potrzebuje, a pobranie jest ~4x krótsze
 MIN_TICKERS = 15   # poniżej tego uznajemy odpowiedź za błędną (blokada/zmiana układu strony)
 PAGE_SIZE = 20     # darmowy Finviz zwraca 20 wierszy na stronę
 BASE_URL = "https://finviz.com/screener.ashx"
