@@ -453,7 +453,7 @@ test("mergeProfiles: CANSLIM i Qullamaggie to osobne listy; wspólna spółka za
     const only = mergeProfiles(cs, null);
     assert.equal(only.qm, null);
     assert.deepEqual(tabUniverse("QM", only.stocks), []);
-    assert.deepEqual(tabUniverse("LIST", m.stocks).map(s => s.ticker), ["AAA", "BBB"]);
+    assert.deepEqual(tabUniverse("LIST", m.stocks).map(s => s.ticker), ["AAA", "BBB", "QQQ"]);   // Lista = suma obu skanerów
     assert.deepEqual(tabUniverse("CS", m.stocks).map(s => s.ticker), ["AAA", "BBB"]);
     assert.deepEqual(tabUniverse("QM", m.stocks).map(s => s.ticker), ["AAA", "QQQ"]);
     assert.equal(tabUniverse("FAV", m.stocks).length, 3);   // ulubione / pozycje / alerty widzą obie listy
