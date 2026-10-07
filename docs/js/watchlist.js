@@ -428,7 +428,7 @@ function actionInfo(s, mkt, tf = "W") {
     if (tf === "D") {   // ---- wykres dzienny: flaga / korytarz ----
         // najpierw baza dzienna z książki O'Neila (cup, double bottom, flat, ascending, HTF), potem flaga / korytarz
         if (BUYABLE_BASES.includes(s.dbase_type) && num(s.dpct_to_pivot)) {
-            const dp = s.dpct_to_pivot, nm = `${BASE_LABELS_PL[s.dbase_type]}${s.dbase_type === "cup" && s.dbase_saucer ? " (saucer)" : ""} dzienny`;
+            const dp = s.dpct_to_pivot, nm = `${BASE_LABELS_PL[s.dbase_type]}${s.dbase_type === "cup" && s.dbase_saucer ? " (saucer)" : ""}${s.dbase_on_base ? ", baza na bazie" : ""} dzienny`;
             if (s.dpivot_state === "wybicie" && dp < 0) return -dp <= 5 ? buy(-dp, `z bazy: ${nm} (baza kontynuacji trendu)`) : mk("LATE", `${(-dp).toFixed(1)}% nad pivotem (${nm}) — poza strefą +5 %. Nie goń: czekaj na cofnięcie albo kolejną bazę.`);
             if (dp < 0 && dp > -3) return mk("NEAR", `Cena nad pivotem (${nm}), ale bez wolumenu ≥ 1,5× — to jeszcze nie wybicie. Czekaj na dzień z wolumenem.${earn}`);
             if (dp >= 0 && dp <= 5) return mk("NEAR", `${dp.toFixed(1)}% do pivotu (${nm}). Ustaw alert na pivocie i kupuj dopiero przy wybiciu z wolumenem ≥ 1,5×.${earn}`);
