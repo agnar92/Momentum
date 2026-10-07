@@ -800,3 +800,35 @@ class TestOneilPatterns:
         m = watchlist.compute_metrics(make_prices(n=400, daily=0.002))
         for key in ("dbase_type", "dpivot", "dpct_to_pivot", "dpivot_state", "base_type", "pct_to_pivot"):
             assert key in m
+
+
+class TestBaseOnBase:
+    @staticmethod
+    def base(start, end, peak, low, pivot, kind="flat"):
+        return {"start": start, "end": end, "peak": peak, "low": low, "pivot": pivot, "type": kind}
+
+    def test_second_base_right_above_the_first_is_base_on_base(self):
+        bs = [self.base("2026-01-02", "2026-03-06", 100, 88, 100), self.base("2026-03-20", "2026-05-01", 112, 101, 112)]
+        watchlist.mark_base_on_base(bs)
+        assert [b["base_on_base"] for b in bs] == [False, True] and [b["stage"] for b in bs] == [1, 2]
+
+    def test_chain_counts_stages(self):
+        bs = [self.base("2026-01-02", "2026-03-06", 100, 90, 100), self.base("2026-03-20", "2026-05-01", 110, 101, 110),
+              self.base("2026-05-15", "2026-07-01", 120, 111, 120)]
+        watchlist.mark_base_on_base(bs)
+        assert [b["stage"] for b in bs] == [1, 2, 3]
+
+    @pytest.mark.parametrize("second", [
+        ("2026-09-04", "2026-10-01", 112, 101, 112, "flat"),    # za długo po poprzedniej bazie
+        ("2026-03-20", "2026-05-01", 140, 125, 140, "flat"),    # cena uciekła o > 20 % — nowy etap
+        ("2026-03-20", "2026-05-01", 112, 80, 112, "flat"),     # dołek głęboko pod pivotem poprzedniej
+        ("2026-03-20", "2026-05-01", 112, 101, 112, "correction"),  # korekta to nie baza
+    ])
+    def test_not_base_on_base(self, second):
+        bs = [self.base("2026-01-02", "2026-03-06", 100, 88, 100), self.base(*second[:5], kind=second[5])]
+        watchlist.mark_base_on_base(bs)
+        assert bs[1]["base_on_base"] is False and bs[1]["stage"] == 1
+
+    def test_metrics_expose_stage_fields(self):
+        m = watchlist.compute_metrics(make_prices(n=400, daily=0.002))
+        assert "base_on_base" in m and "dbase_stage" in m

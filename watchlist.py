@@ -71,6 +71,9 @@ BASE_MIN_DEPTH_PCT = 6       # płytsze konsolidacje nie są raportowane
 BASE_MAX_DEPTH_PCT = 50      # głębsze to już nie baza, tylko załamanie
 BASE_FLAT_MAX_DEPTH_PCT = 15
 BASE_CUP_MAX_DEPTH_PCT = 35
+BOB_MAX_GAP_WEEKS = 8        # baza na bazie: nowa baza zaczyna się najpóźniej tyle tygodni po końcu poprzedniej (po jej wybiciu)
+BOB_MAX_RUN_PCT = 20         # ... cena nie uciekła od pivotu poprzedniej bazy o więcej niż tyle % (inaczej to nowy etap, nie baza na bazie)
+BOB_MIN_LOW_FRAC = 0.90      # ... a dołek nowej bazy nie spadł głębiej niż 10 % pod pivot poprzedniej
 BASE_MAX_SHOWN = 4           # ile ostatnich baz trafia na wykres
 # Cup (z rączką) wg kryteriów O'Neila — baza jest "cup" tylko, gdy spełnia je wszystkie (inaczej "korekta"):
 CUP_MIN_DEPTH_PCT = 12       # głębokość od lewego szczytu do dołka (płytsze to raczej flat)
@@ -338,6 +341,8 @@ def compute_metrics(df, bench_w=None):
         "base_weeks": open_base["weeks"] if open_base else None,
         "base_handle": bool(open_base["cup"]["handle"]) if open_base and open_base.get("cup") else None,
         "base_saucer": open_base.get("saucer") if open_base else None,
+        "base_stage": open_base.get("stage") if open_base else None,
+        "base_on_base": open_base.get("base_on_base") if open_base else None,
         "base_rise_pct": open_base.get("rise_pct") if open_base else None,
         "base_mkt_dd_pct": open_base["cup"]["mkt_dd_pct"] if open_base and open_base.get("cup") else None,
         "pivot": open_base["pivot"] if open_base else None,
@@ -348,6 +353,8 @@ def compute_metrics(df, bench_w=None):
         "dbase_weeks": d_open["weeks"] if d_open else None,
         "dbase_handle": bool(d_open["cup"]["handle"]) if d_open and d_open.get("cup") else None,
         "dbase_saucer": d_open.get("saucer") if d_open else None,
+        "dbase_stage": d_open.get("stage") if d_open else None,
+        "dbase_on_base": d_open.get("base_on_base") if d_open else None,
         "dbase_rise_pct": d_open.get("rise_pct") if d_open else None,
         "dpivot": d_open["pivot"] if d_open else None,
         "dpct_to_pivot": _num((d_open["pivot"] / price - 1) * 100, 1) if d_open else None,
@@ -859,7 +866,25 @@ def detect_bases(ohlc, bench_w=None, k=1):
         if bases and bases[-1]["open"] and bases[-1]["type"] in ("flat", "correction", "deep"):
             bases.pop()
         bases.append(extra)
+    mark_base_on_base(bases, k)
     return bases
+
+
+def mark_base_on_base(bases, k=1):
+    """Baza na bazie (O'Neil): nowa baza do kupna zaczyna się tuż po poprzedniej kupowalnej bazie, a cena nie odleciała od jej pivotu
+    (<= BOB_MAX_RUN_PCT %) i dołek nowej bazy został nad nim (>= BOB_MIN_LOW_FRAC·pivot). Dopisuje `base_on_base` (bool) i `stage`
+    (który kolejny etap w łańcuchu; 1 = pierwsza baza), modyfikuje listę w miejscu."""
+    prev = None
+    for b in bases:
+        b["base_on_base"], b["stage"] = False, 1
+        if prev is not None and b["type"] in BASE_TYPES_BUYABLE and prev.get("pivot") and b.get("peak") and b.get("low"):
+            gap_weeks = (pd.Timestamp(b["start"]) - pd.Timestamp(prev["end"])).days / 7
+            if (0 <= gap_weeks <= BOB_MAX_GAP_WEEKS
+                    and b["peak"] <= prev["pivot"] * (1 + BOB_MAX_RUN_PCT / 100)
+                    and b["low"] >= prev["pivot"] * BOB_MIN_LOW_FRAC):
+                b["base_on_base"], b["stage"] = True, prev["stage"] + 1
+        if b["type"] in BASE_TYPES_BUYABLE:
+            prev = b
 
 
 # ============================================================================

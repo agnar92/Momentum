@@ -583,3 +583,14 @@ test("actionInfo: dzienne bazy z książki O'Neila (double bottom, ascending, HT
     // dzienne pola nie wpływają na ocenę tygodniową
     assert.equal(actionInfo({ ...base, pct_above_sma10w: 9, dbase_type: "cup", dpct_to_pivot: -2, dpivot_state: "wybicie" }, up, "W").code, "WAIT");
 });
+
+test("baza na bazie: nazwa w kafelku, podsumowaniu i opisie akcji", () => {
+    const { baseBoxData, baseSummary, actionInfo } = require("../../docs/js/watchlist.js");
+    const s = { base_type: "flat", pivot: 112, base_weeks: 7, base_depth_pct: 9, pct_to_pivot: 3, base_on_base: true, base_stage: 2 };
+    assert.match(baseBoxData(s).title, /baza na bazie/);
+    assert.ok(baseBoxData(s).rows.some(r => r[0] === "Etap" && /2\. etap/.test(r[1])));
+    assert.match(baseSummary(s), /baza na bazie/);
+    assert.doesNotMatch(baseSummary({ ...s, base_on_base: false }), /baza na bazie/);
+    const d = actionInfo({ canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, dbase_type: "flat", dbase_on_base: true, dpct_to_pivot: 3 }, { regime: "uptrend", distDays: 1 }, "D");
+    assert.match(d.why, /baza na bazie/);
+});
