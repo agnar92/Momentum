@@ -763,7 +763,7 @@ const COL = {
     cs: ["CANSLIM", "cs", s => s.cs === null || s.cs === undefined ? `<td class="muted"></td>` : `<td class="cs-cell ${s.cs >= 5 ? "positive" : ""}" title="Kliknij, aby zobaczyć wyjaśnienie każdej litery"><strong>${s.cs}/7</strong> ${canslimLettersHtml(s.canslim)}</td>`,
         "Lista CANSLIM: ile z 7 kryteriów C A N S L I M spełnia spółka (zielone litery = spełnione, czerwone = nie, szare = brak danych)"],
     act: ["Co robić", "act_rank", s => s.action
-        ? `<td class="act-cell act-${s.action.tone}" title="${escapeHtml(s.action.why)}"><strong>${s.action.icon} ${s.action.label}</strong></td>` : `<td class="muted"></td>`,
+        ? `<td class="act-cell act-${s.action.tone}" title="${escapeHtml(s.action.why)}"><strong>${s.action.icon} ${s.action.label}</strong><span class="act-why">${escapeHtml(s.action.why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`,
         "Jedna wskazówka na spółkę: kup / dokup / czekaj / sprzedaj — z moich zasad O'Neila (kliknij po uzasadnienie)"],
     brk: ["Wybicie", "brk_sort", s => {
         if (!s.brk) return `<td class="muted"></td>`;
