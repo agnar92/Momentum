@@ -803,6 +803,7 @@ body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left
 .cs-cell { white-space: nowrap; }
 .act-cell { white-space: nowrap; cursor: pointer; font-size: 12px; }
 .act-why { display: none; }
+.act-primary { box-shadow: inset 3px 0 0 var(--green-bright, #2ecc71); }
 .act-good strong { color: #2ecc71; } .act-bad strong { color: #ff6b6b; } .act-watch strong { color: #f0b429; }
 .act-wait strong { color: #9fb3c8; } .act-neutral strong { color: #e8eaed; } .act-muted strong { color: #6b7385; font-weight: 500; }
 .act-sheet h4 { margin: 14px 0 6px; font-size: 13px; } .act-rules { padding-left: 18px; font-size: 13px; line-height: 1.5; } .act-now { font-size: 16px; }

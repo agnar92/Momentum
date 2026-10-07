@@ -583,3 +583,11 @@ test("S&P 500 is a thin line in the top band of the price panel (own scale, no s
     const none = chartSvg(buildChartModel(charts({ spx: null }), "AAA", null));
     assert.doesNotMatch(none, /S&amp;P 500 \d/);
 });
+
+test("pivotFromStock: wykres dzienny bierze dpivot / dbase_type, tygodniowy pivot / base_type", () => {
+    const s = { price: 100, base_type: "flat", pivot: 102, dbase_type: "double_bottom", dpivot: 104 };
+    assert.equal(pivotFromStock(s, [], false).price, 102);
+    assert.equal(pivotFromStock(s, [], true).price, 104);
+    assert.equal(pivotFromStock({ price: 100, dbase_type: "htf", dpivot: 103 }, [], false), null);
+    assert.equal(pivotFromStock({ price: 100, base_type: "ascending", pivot: 103 }, [], false).price, 103);
+});

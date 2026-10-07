@@ -35,7 +35,7 @@ const FAVS_KEY = "momentum_watchlist_favs";
 const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
-const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
+const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
     tab: "LIST", csMin: 5, csCore: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
@@ -235,7 +235,7 @@ function positionTotals(rows, capital) {
 // Wybicie wg O'Neila = ZAMKNIĘCIE (dzienne albo tygodniowe) nad linią / pivotem na podwyższonym wolumenie (≥ 1,5× średniej). Samo przebicie
 // maksimum w trakcie świecy to nie wybicie, a zamknięcie nad poziomem bez wolumenu jest tylko „niepotwierdzone” (nie trafia do rank 0).
 const BRK_VOL_MULT = 1.5;
-const BUYABLE_BASES = ["flat", "cup"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
+const BUYABLE_BASES = ["flat", "cup", "double_bottom", "ascending", "htf"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
 function breakoutInfo(s, alert, maxDist) {
     const reasons = [];
     const dists = [];
@@ -394,19 +394,22 @@ function actionInfo(s, mkt, tf = "W") {
     const distDays = mkt && typeof mkt === "object" ? mkt.distDays : null;
     const pressure = regime === "uptrend" && num(distDays) && distDays >= CANSLIM_THRESHOLDS.distDays;
     const mk = (code, why) => ({ code, tf, icon: ACTION_DEFS[code][0], label: ACTION_DEFS[code][1], tone: ACTION_DEFS[code][2], rank: ACTION_DEFS[code][3], why });
-    const above50 = s.pct_above_sma50;
+    // Każdy wykres liczy się OSOBNO na własnych średnich: dzienny na SMA50, tygodniowy na 10-tygodniowej (tygodniowy nie ma SMA50).
+    const above50 = tf === "D" ? s.pct_above_sma50 : s.pct_above_sma10w;
+    const ma = tf === "D" ? "SMA50" : "10-tygodniowej";
+    const extended = tf === "D" ? 15 : 20;   // O'Neil: > 20–25 % nad 10-tygodniową = rozciągnięta
     const days = earningsInDays(s.earnings);
     const earn = days !== null && days >= 0 && days <= EARNINGS_SOON_DAYS ? ` Uwaga: wyniki za ${days} dn. — nie otwieraj nowej pozycji tuż przed raportem.` : "";
     const p = s.position;
     if (p) {   // ---- mam pozycję (ta sama ocena w obu widokach) ----
         if (p.stop_hit) return mk("SELL", "Cena na stopie lub pod nim. Wyjdź zgodnie z planem — nie przesuwaj stopa w dół.");
         if (s.climax_top === true) return mk("TRIM", "Sell climax top (gwałtowne wybicie na szczycie): O'Neil radzi realizować zysk w siłę, a nie czekać na spadek.");
-        if (num(above50) && above50 < 0) return mk("EXIT", `Cena ${Math.abs(above50).toFixed(1)}% pod SMA50. Zejście pod 50-dniową (zwłaszcza na wolumenie) to sygnał słabości — rozważ wyjście lub zacieśnij stop.`);
+        if (num(above50) && above50 < 0) return mk("EXIT", `Cena ${Math.abs(above50).toFixed(1)}% pod ${ma}. Zejście pod tę średnią (zwłaszcza na wolumenie) to sygnał słabości — rozważ wyjście lub zacieśnij stop.`);
         if (p.pl_pct < 0) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Pilnuj stopa. Nigdy nie dokupuj do straty (nie uśredniaj w dół).`);
         if (regime === "correction" || pressure) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Rynek pod presją — nie dokupuj, pilnuj stopa.`);
         if (p.pl_pct >= 2 && p.pl_pct <= 5) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)} (add-on: 2–5 % nad zakupem). Możesz dokupić do ½ początkowej pozycji, jeśli wolumen to potwierdza; łączne ryzyko trzymaj w limicie.`);
-        if (p.pl_pct > 5 && num(above50) && above50 >= 0 && above50 <= 6) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)}, a cena wróciła do SMA50 (+${above50.toFixed(1)}%). Odbicie od 50-dniowej to klasyczne miejsce na dokupienie — zaczekaj na zamknięcie nad poprzednim dniem.`);
-        return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Trzymaj. Kolejny add: cofnięcie do SMA50 z odbiciem albo wybicie NOWEJ bazy. Nie dokupuj, gdy cena jest rozciągnięta.`);
+        if (p.pl_pct > 5 && num(above50) && above50 >= 0 && above50 <= 6) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)}, a cena wróciła do ${ma} (+${above50.toFixed(1)}%). Odbicie od tej średniej to klasyczne miejsce na dokupienie — zaczekaj na zamknięcie nad poprzednią świecą.`);
+        return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Trzymaj. Kolejny add: cofnięcie do ${ma} z odbiciem albo wybicie NOWEJ bazy / flagi. Nie dokupuj, gdy cena jest rozciągnięta.`);
     }
     if (s.in_cs === false) return null;   // lista Qullamaggiego ma własną logikę
     const f = s.canslim && s.canslim.flags;
@@ -416,21 +419,29 @@ function actionInfo(s, mkt, tf = "W") {
         ? mk("BUY_HALF", `Wybicie ${what} na wolumenie (${over.toFixed(1)}% nad poziomem), ale rynek ma ${distDays} dni dystrybucji — max ½ pozycji.${earn}`)
         : mk("BUY", `Wybicie ${what} na wolumenie, ${over.toFixed(1)}% nad poziomem (strefa zakupu do +5 %). Stop 7–8 % pod punktem wejścia.${earn}`);
     const trend = () => {   // trend bez konsolidacji na tym wykresie
-        if (num(above50) && above50 >= 0 && above50 <= 5 && (!f || f.N !== false)) return mk("PULLBACK", `Cofnięcie do SMA50 (+${above50.toFixed(1)}%). W trendzie bez bazy to miejsce na dołączenie, ale dopiero na odbiciu: wypatruj zamknięcia nad poprzednim dniem z rosnącym wolumenem.${earn}`);
-        if (num(above50) && above50 > 15) return mk("LATE", `Cena ${above50.toFixed(1)}% nad SMA50 — rozciągnięta. Nie goń: czekaj na cofnięcie albo nową bazę.`);
+        if (num(above50) && above50 >= 0 && above50 <= 5 && (!f || f.N !== false)) return mk("PULLBACK", `Cofnięcie do ${ma} (+${above50.toFixed(1)}%). W trendzie bez bazy to miejsce na dołączenie, ale dopiero na odbiciu: wypatruj zamknięcia nad poprzednią świecą z rosnącym wolumenem.${earn}`);
+        if (num(above50) && above50 > extended) return mk("LATE", `Cena ${above50.toFixed(1)}% nad ${ma} — rozciągnięta. Nie goń: czekaj na cofnięcie albo nową ${tf === "D" ? "flagę / korytarz" : "bazę"}.`);
         return mk("WAIT", tf === "D"
-            ? "Brak konsolidacji na wykresie dziennym. Czekaj na flagę / korytarz (≥ 7 sesji, ciasny zakres) przy oporze albo na cofnięcie do SMA50 z odbiciem."
-            : "Trend bez bazy. Nie kupuj w biegu. Czekaj na nową płaską bazę (≥ 5 tygodni, ≤ 15 % głębokości) i jej wybicie, albo na cofnięcie do SMA50 z odbiciem.");
+            ? "Brak flagi / korytarza na wykresie dziennym. Czekaj na małą bazę kontynuacji (≥ 7 sesji, ciasny zakres) przy oporze albo na cofnięcie do SMA50 z odbiciem."
+            : "Brak bazy na wykresie tygodniowym. Nie kupuj w biegu. Czekaj na nową płaską bazę (≥ 5 tygodni, ≤ 15 % głębokości) i jej wybicie, albo na cofnięcie do 10-tygodniowej z odbiciem; w międzyczasie szukaj małej bazy na wykresie dziennym.");
     };
     if (tf === "D") {   // ---- wykres dzienny: flaga / korytarz ----
+        // najpierw baza dzienna z książki O'Neila (cup, double bottom, flat, ascending, HTF), potem flaga / korytarz
+        if (BUYABLE_BASES.includes(s.dbase_type) && num(s.dpct_to_pivot)) {
+            const dp = s.dpct_to_pivot, nm = `${BASE_LABELS_PL[s.dbase_type]}${s.dbase_type === "cup" && s.dbase_saucer ? " (saucer)" : ""}${s.dbase_on_base ? ", baza na bazie" : ""} dzienny`;
+            if (s.dpivot_state === "wybicie" && dp < 0) return -dp <= 5 ? buy(-dp, `z bazy: ${nm} (baza kontynuacji trendu)`) : mk("LATE", `${(-dp).toFixed(1)}% nad pivotem (${nm}) — poza strefą +5 %. Nie goń: czekaj na cofnięcie albo kolejną bazę.`);
+            if (dp < 0 && dp > -3) return mk("NEAR", `Cena nad pivotem (${nm}), ale bez wolumenu ≥ 1,5× — to jeszcze nie wybicie. Czekaj na dzień z wolumenem.${earn}`);
+            if (dp >= 0 && dp <= 5) return mk("NEAR", `${dp.toFixed(1)}% do pivotu (${nm}). Ustaw alert na pivocie i kupuj dopiero przy wybiciu z wolumenem ≥ 1,5×.${earn}`);
+            if (dp > 5 && dp <= 15) return mk("BASE", `${nm} w budowie, ${dp.toFixed(1)}% do pivotu. Czekaj, aż cena zbliży się do pivotu na malejącym wolumenie.`);
+        }
         const dist = num(s.tl_dist_pct) ? s.tl_dist_pct : null;   // > 0 = jeszcze pod oporem, < 0 = nad
         const kind = s.tl_pattern === "flaga" ? "flagi" : "korytarza";
         if (s.tl_state === "wybicie" && dist !== null) {
-            return -dist <= 5 ? buy(-dist, `z ${kind} (dzienny)`) : mk("LATE", `${(-dist).toFixed(1)}% nad oporem ${kind} — poza strefą +5 %. Nie goń: czekaj na cofnięcie albo nową konsolidację.`);
+            return -dist <= 5 ? buy(-dist, `z ${kind} (dzienna baza kontynuacji trendu)`) : mk("LATE", `${(-dist).toFixed(1)}% nad oporem ${kind} — poza strefą +5 %. Nie goń: czekaj na cofnięcie albo kolejną flagę / korytarz.`);
         }
         if (s.tl_state === "bez wolumenu") return mk("NEAR", `Zamknięcie nad oporem ${kind} bez wolumenu ≥ 1,5× — to jeszcze nie wybicie. Czekaj na dzień z wolumenem.${earn}`);
         if (s.tl_state === "przy oporze") return mk("NEAR", `Przy oporze ${kind}${dist !== null ? ` (${dist.toFixed(1)}% do oporu)` : ""}. Ustaw alert; kupuj dopiero przy wybiciu z wolumenem ≥ 1,5×.${earn}`);
-        if (s.tl_pattern && dist !== null && dist > 3 && dist <= 15) return mk("BASE", `${s.tl_pattern === "flaga" ? "Flaga" : "Korytarz"} w budowie, ${dist.toFixed(1)}% do oporu. Czekaj, aż cena zbliży się do oporu na malejącym wolumenie.`);
+        if (s.tl_pattern && dist !== null && dist > 3 && dist <= 15) return mk("BASE", `${s.tl_pattern === "flaga" ? "Flaga" : "Korytarz"} w budowie (baza kontynuacji trendu), ${dist.toFixed(1)}% do oporu. Czekaj, aż cena zbliży się do oporu na malejącym wolumenie.`);
         return trend();
     }
     // ---- wykres tygodniowy: baza flat / cup (pivot), flaga tygodniowa ----
@@ -439,26 +450,31 @@ function actionInfo(s, mkt, tf = "W") {
     const wOver = num(s.tlw_dist_pct) && s.tlw_state === "wybicie" ? -s.tlw_dist_pct : null;
     const over = toPivot !== null && toPivot < 0 ? -toPivot : wOver;
     if ((s.pivot_state === "wybicie" || s.tlw_state === "wybicie") && over !== null && over <= 5) return buy(over, "z bazy tygodniowej");
-    if (over !== null && over > 5) return mk("LATE", `${over.toFixed(1)}% nad poziomem wybicia — poza strefą +5 %. Nie goń: sprawdź wykres DZIENNY (tam często jest już nowa flaga / korytarz) albo poczekaj na cofnięcie.`);
+    if (over !== null && over > 5) return mk("LATE", `${over.toFixed(1)}% nad poziomem wybicia — poza strefą +5 %. Nie goń na tygodniowym: szukaj małej bazy (flaga / korytarz) na wykresie DZIENNYM — jest szybsza i pozwala dołączyć do trendu — albo poczekaj na cofnięcie.`);
     if (toPivot !== null && toPivot < 0) return mk("NEAR", `Cena nad pivotem, ale bez wolumenu ≥ 1,5× — to jeszcze nie wybicie. Czekaj na dzień z wolumenem.${earn}`);
     if (toPivot !== null && toPivot >= 0 && toPivot <= 5) return mk("NEAR", `${toPivot.toFixed(1)}% do pivotu (${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}). Ustaw alert na pivocie i kupuj dopiero przy wybiciu z wolumenem ≥ 1,5×.${earn}`);
     if (s.tlw_state === "przy oporze") return mk("NEAR", `Przy oporze flagi tygodniowej (${num(s.tlw_dist_pct) ? s.tlw_dist_pct.toFixed(1) + "%" : "blisko"}). Ustaw alert; kupuj dopiero przy wybiciu z wolumenem.${earn}`);
     if (toPivot !== null && toPivot > 5 && toPivot <= 15) return mk("BASE", `Baza w budowie, ${toPivot.toFixed(1)}% do pivotu. Czekaj, aż cena zbliży się do pivotu na malejącym wolumenie.`);
     return trend();
 }
+// Zasada: wykres TYGODNIOWY jest lepszy od dziennego. Gdy tygodniowy nie daje sygnału do działania (brak bazy, za późno), szukamy na DZIENNYM
+// (mniejsza, szybsza baza = szansa dołączenia do trwającego trendu, „stage 2 continuation”). `s.action` / `s.action_tf` = wykres, którego wskazówka jest główna.
+const ACTIONABLE = new Set(["SELL", "TRIM", "EXIT", "ADD", "BUY", "BUY_HALF", "NEAR", "PULLBACK", "BASE"]);
 function tagActions(stocks, mkt) {
     stocks.forEach(s => {
         const w = actionInfo(s, mkt, "W"), d = actionInfo(s, mkt, "D");
         s.action_w = w; s.action_d = d;
         s.act_rank_w = w ? w.rank : null; s.act_rank_d = d ? d.rank : null;
-        s.action = w && d ? (d.rank < w.rank ? d : w) : (w || d);   // ważniejsza z dwóch (do sortowania i linii gotowości)
+        const useDaily = d && (!w || (!ACTIONABLE.has(w.code) && ACTIONABLE.has(d.code)));
+        s.action = useDaily ? d : w;
+        s.action_tf = s.action ? (useDaily ? "D" : "W") : null;
         s.act_rank = s.action ? s.action.rank : null;
     });
 }
 function actionSheetHtml(s) {
-    const one = (title, a) => `<p class="act-now"><span class="muted">${title}</span><br><strong>${a ? `${a.icon} ${a.label}` : "—"}</strong></p><p>${escapeHtml(a ? a.why : "Spółka z listy Qullamaggiego — ma własne zasady.")}</p>`;
-    return `<div class="act-sheet">${one("Wykres tygodniowy (baza flat / cup)", s.action_w)}${one("Wykres dzienny (flaga / korytarz)", s.action_d)}`
-        + `<p class="small muted">Gdy tygodniowy mówi „ZA PÓŹNO”, zajrzyj na dzienny — krótsze konsolidacje (flaga, korytarz) pojawiają się tam wcześniej.</p>`
+    const one = (title, a, tf) => `<p class="act-now"><span class="muted">${title}${s.action_tf === tf ? " — GŁÓWNY SYGNAŁ" : ""}</span><br><strong>${a ? `${a.icon} ${a.label}` : "—"}</strong></p><p>${escapeHtml(a ? a.why : "Spółka z listy Qullamaggiego — ma własne zasady.")}</p>`;
+    return `<div class="act-sheet">${one("Wykres tygodniowy (baza flat / cup, 10-tyg. średnia)", s.action_w, "W")}${one("Wykres dzienny (flaga / korytarz, SMA50)", s.action_d, "D")}`
+        + `<p class="small muted">Zasada: tygodniowy jest lepszy. Gdy na tygodniowym nie ma bazy albo jest za późno, szukamy na dziennym — mniejsza, szybsza baza (flaga, korytarz) pozwala dołączyć do trendu, który trwa nawet latami („stage 2 continuation”). Każdy wykres jest oceniany osobno na własnych średnich.</p>`
         + `<h4>Jak dołączać do trendu (O'Neil)</h4><ol class="act-rules">`
         + `<li><b>Pierwszy zakup</b> tylko na wybiciu z bazy (cup, flat, flaga) na wolumenie ≥ 1,5×, do +5 % nad pivotem. Stop 7–8 % pod wejściem.</li>`
         + `<li><b>Add-on</b> (dokupienie) tylko do zysku: gdy cena jest 2–5 % nad zakupem — do ½ początkowej pozycji. Nigdy do straty.</li>`
@@ -566,10 +582,11 @@ function baseBoxData(s) {
     if (Number.isFinite(s.base_depth_pct)) rows.push(["Głębokość", `${s.base_depth_pct}%`]);
     if (s.base_type === "cup") rows.push(["Rączka", s.base_handle ? "tak" : "brak"]);
     if (s.vcp) rows.push(["VCP", "tak"]);
+    if (s.base_on_base) rows.push(["Etap", `baza na bazie (${s.base_stage}. etap)`]);
     if (!BUYABLE_BASES.includes(s.base_type)) rows.push(["Uwaga", "korekta, nie baza do zakupu"]);
     if (Number.isFinite(s.base_mkt_dd_pct) && s.base_mkt_dd_pct >= 7) rows.push(["S&P w bazie", `−${s.base_mkt_dd_pct}%`]);
     if (Number.isFinite(s.pct_to_pivot)) rows.push([s.pct_to_pivot >= 0 ? "Do pivotu" : "Nad pivotem", `${s.pct_to_pivot >= 0 ? "+" : ""}${Math.abs(s.pct_to_pivot)}%`.replace("+-", "")]);
-    return { title: `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""}`, rows };
+    return { title: `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""}${s.base_on_base ? " · baza na bazie" : ""}`, rows };
 }
 
 function baseBoxHtml(s) {
@@ -581,8 +598,9 @@ function baseBoxHtml(s) {
 function readinessLine(s, regime) {
     const out = [];
     const short = a => `${a.icon} ${a.label} — ${a.why.split(/(?<=[.!?])\s/)[0]}`;   // pierwsze zdanie; całość po kliknięciu etykiety
-    if (s.action_d) out.push(`Dzień: ${short(s.action_d)}`);
-    if (s.action_w) out.push(`Tydzień: ${short(s.action_w)}`);
+    const first = s.action_tf === "D" ? ["Dzień (główny)", s.action_d, "Tydzień", s.action_w] : ["Tydzień" + (s.action_tf === "W" ? " (główny)" : ""), s.action_w, "Dzień", s.action_d];
+    if (first[1]) out.push(`${first[0]}: ${short(first[1])}`);
+    if (first[3]) out.push(`${first[2]}: ${short(first[3])}`);
     if (s.position) {
         const p = s.position;
         out.push(`💼 ${fmtPct(p.pl_pct)}${p.r !== null ? ` · ${p.r.toFixed(1)}R` : ""}${p.to_stop_pct !== null ? ` · stop ${p.stop_hit ? "PRZEBITY" : fmtPct(p.to_stop_pct)}` : ""}`);
@@ -591,7 +609,7 @@ function readinessLine(s, regime) {
     const b = s.brk;
     if (b) out.push(b.dist !== null ? `Do wybicia: ${b.dist.toFixed(1)}%` : (b.rank === 0 ? "Wybicie świeże" : "Przy poziomie"));
     else out.push("Brak sygnału wybicia");
-    if (s.base_type) out.push(BUYABLE_BASES.includes(s.base_type) ? `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}` : `${BASE_LABELS_PL[s.base_type] || s.base_type} (nie baza do zakupu)`);
+    if (s.base_type) out.push(BUYABLE_BASES.includes(s.base_type) ? `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}${s.base_on_base ? " (baza na bazie)" : ""}` : `${BASE_LABELS_PL[s.base_type] || s.base_type} (nie baza do zakupu)`);
     if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.pct_to_pivot) && s.pct_to_pivot < 0) {
         const over = -s.pct_to_pivot;
         out.push(over > 5 ? `⚠ ${over.toFixed(1)}% nad pivotem — za późno wg reguły +5 %` : `${over.toFixed(1)}% nad pivotem (strefa zakupu do +5 %)`);
@@ -704,7 +722,7 @@ function earningsCell(s) {
 
 function baseSummary(s) {
     if (!s.base_type) return "—";
-    return `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""} −${s.base_depth_pct}% · ${s.base_weeks} tyg.${s.vcp ? " · VCP" : ""}${s.base_mkt_dd_pct >= 7 ? ` · S&P −${s.base_mkt_dd_pct}%` : ""}`;
+    return `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""} −${s.base_depth_pct}% · ${s.base_weeks} tyg.${s.vcp ? " · VCP" : ""}${s.base_on_base ? " · baza na bazie" : ""}${s.base_mkt_dd_pct >= 7 ? ` · S&P −${s.base_mkt_dd_pct}%` : ""}`;
 }
 
 // Kolumny: [nagłówek, klucz sortowania (null = nie sortuje), funkcja komórki, opcjonalny tytuł nagłówka].
@@ -812,10 +830,10 @@ const COL = {
     tv: ["TV", null, s => `<td><a class="tv-row-btn" href="${tvUrlFor(s.ticker)}" target="_blank" rel="noopener">TV</a></td>`],
 };
 const actCell = (s, key) => s[key]
-    ? `<td class="act-cell act-${s[key].tone}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
+    ? `<td class="act-cell act-${s[key].tone}${s.action_tf === s[key].tf ? " act-primary" : ""}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "actD", "actW", "cs", "cx", "brk", "pos", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "actW", "actD", "cs", "cx", "brk", "pos", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -826,9 +844,9 @@ const TAB_COLUMNS = {
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
-const COMPACT_COLUMNS = ["fav", "ticker", "score", "actD", "actW", "cs"];
+const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "actD", "cs"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actD", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "actD", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
@@ -1981,7 +1999,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
