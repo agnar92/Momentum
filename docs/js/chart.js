@@ -633,20 +633,20 @@ function chartSvg(m, opts = {}) {
         parts.push(polyline(pts, "#0e0f13", 3.6).replace("<polyline", `<polyline ${clipAttr} opacity="0.65"`));   // ciemny obrys: średnia odcina się od świec
         parts.push(polyline(pts, x.color, 1.7).replace(/<polyline/g, `<polyline ${clipAttr}`));
     });
-    // pivot (zielona linia przerywana) + strefa zakupu (pivot … +5 %, niebieska) + typowy stop 7–8 % pod pivotem (różowa) — jak w MarketSurge
+    // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
     if (pivotNear && m.lastShown !== false) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
         const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
         const i0 = m.pivot.date ? Math.max(0, dateToIndex(m.weeks, m.pivot.date)) : Math.max(0, m.lastIdx - 25);
         const zx = x(Math.max(0, m.lastIdx - 14)), zw = Math.max(0, xr - zx);
         const band = (lo, hi, fill, op) => `<rect ${clipAttr} x="${zx}" y="${Math.min(yP(lo), yP(hi))}" width="${zw}" height="${Math.abs(yP(lo) - yP(hi))}" fill="${fill}" opacity="${op}"/>`;
-        if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#4aa3ff", 0.15), band(pivotPx * 0.92, pivotPx * 0.93, "#ff6b8a", 0.18));
+        if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#2ecc71", 0.22), band(pivotPx * 0.92, pivotPx * 0.95, "#ff4d4d", 0.22));
         parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="#2ecc71" stroke-width="1.4" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}</title></line>`);
         const clampY = v => Math.max(P.y + fs(10), Math.min(P.y + P.h - 3, v));
         addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: "#2ecc71", bold: true, prio: 9 });
         if (!extended) {
-            addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#7ab8ff", bold: true, prio: 4 });
-            addLabel(opts.compact ? "stop 7–8 %" : "typowy stop 7–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff8fa8", bold: true, prio: 4 });
+            addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#4ee08a", bold: true, prio: 4 });
+            addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
         }
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen

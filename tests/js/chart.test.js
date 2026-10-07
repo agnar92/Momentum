@@ -419,7 +419,7 @@ test("chartSvg: breakout triangle points up under the breakout bar; extended pri
     assert.match(svg, /strefa zakupu do \+5 %/);
     const far = chartSvg(buildChartModel(dailyCharts(mk(bo, 11.0)), "X", { price: 11.0, tl_level: 10.3, tl_state: "wybicie" }, { pad: true }), {});
     assert.match(far, /opór 10\.30 · cena \+6\.8%/);
-    assert.doesNotMatch(far, /strefa zakupu|typowy stop/);   // cena poza +5 %: bez strefy zakupu i stopu
+    assert.doesNotMatch(far, /strefa zakupu|stop loss 5–8/);   // cena poza +5 %: bez strefy zakupu i stopu
     const weak = chartSvg(buildChartModel(dailyCharts(mk({ ...bo, confirmed: false, vol_ratio: 0.7 }, 10.6, "bez wolumenu")), "X", stock, { pad: true }), {});
     assert.doesNotMatch(weak, /Wybicie z linii trendu: zamknięcie/);
     assert.match(weak, /nad linią, bez wolumenu ×0\.7</);
@@ -440,7 +440,7 @@ test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and 
     assert.match(svg, />\+33%</);                                      // etykieta r/r (pasek znaczników i tabela)
     assert.match(svg, /pivot 14\.90/);
     assert.match(svg, /strefa zakupu do \+5 %/);
-    assert.match(svg, /stop 7–8 %/);
+    assert.match(svg, /stop loss 5–8 %/);
     const geom = {};
     chartSvg(m, { geomOut: geom });
     assert.ok(geom.L.marks.h > 0 && geom.L.eps.h < 60);               // pasek znaczników pod cenami, dolny panel tylko na tabelę
