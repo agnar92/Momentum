@@ -560,10 +560,12 @@ body:not(.split) table.momentum-table tbody tr.open { border-color: var(--green-
 body:not(.split) table.momentum-table td { padding: 0; white-space: normal; border: 0; }
 body:not(.split) table.momentum-table td.empty-state { display: block; padding: 30px 10px; }
 /* zawsze widoczne: pierwszy wiersz (gwiazdka, ticker, score), nazwa spółki, chipy z oceną / ceną / statusem */
-body:not(.split) td.c-fav, body:not(.split) td.c-ticker, body:not(.split) td.c-score, body:not(.split) td.c-company, body:not(.split) td.c-strat,
+body:not(.split) td.c-act, body:not(.split) td.c-fav, body:not(.split) td.c-ticker, body:not(.split) td.c-score, body:not(.split) td.c-company, body:not(.split) td.c-strat,
 body:not(.split) td.c-price, body:not(.split) td.c-comp, body:not(.split) td.c-rs, body:not(.split) td.c-epsr,
 body:not(.split) td.c-brk, body:not(.split) td.c-pos, body:not(.split) td.c-posPl, body:not(.split) td.c-posR, body:not(.split) td.c-posToStop, body:not(.split) td.c-inst, body:not(.split) td.c-leader, body:not(.split) td.c-grp, body:not(.split) td.c-recom, body:not(.split) td.c-upside, 
 body:not(.split) td.c-alStatus, body:not(.split) td.c-alDist, body:not(.split) td.c-alAct { display: inline-flex; align-items: center; }
+body:not(.split) td.c-act { display: block; order: 5; flex: 0 0 100%; padding: 6px 8px; margin: 2px 0; border-radius: 6px; background: rgba(255,255,255,0.04); font-size: 13px; line-height: 1.35; white-space: normal; }
+body:not(.split) td.c-act .act-why { display: block; font-weight: 400; color: var(--text-dim); font-size: 12px; margin-top: 2px; }
 body:not(.split) td.c-fav { order: 1; font-size: 20px; }
 body:not(.split) td.c-ticker { order: 2; flex: 1 1 auto; font-size: 17px; font-weight: 800; }
 body:not(.split) td.c-score { order: 3; }
@@ -587,10 +589,10 @@ body:not(.split) td.c-toPivot::before { content: "Do pivotu"; }
 body:not(.split) td.c-alDist::before { content: "vs linia"; }
 body:not(.split) td.c-rank { display: none !important; }
 /* rozwinięty kafelek: pozostałe pola w dwóch kolumnach z podpisami */
-body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank) {
+body:not(.split) tr.open td:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-act):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank) {
     display: flex; flex-direction: column; gap: 1px; order: 20; flex: 0 0 calc(50% - 4px); padding-top: 6px; border-top: 1px solid var(--border);
 }
-body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
+body:not(.split) tr.open td[data-label]:not(.c-fav):not(.c-ticker):not(.c-score):not(.c-company):not(.c-price):not(.c-comp):not(.c-rs):not(.c-epsr):not(.c-toggle):not(.c-act):not(.c-brk):not(.c-pos):not(.c-posPl):not(.c-posR):not(.c-posToStop):not(.c-inst):not(.c-leader):not(.c-grp):not(.c-recom):not(.c-upside):not(.c-strat):not(.c-alStatus):not(.c-alDist):not(.c-alAct):not(.c-rank)::before {
     content: attr(data-label); color: var(--text-faint); font-size: 10.5px; font-weight: 600;
 }
 
@@ -798,6 +800,7 @@ body:not(.split) .wl-chart-box .wl-range-h::after { top: 50%; bottom: auto; left
 .cs-l.off { color: #f85149; opacity: .85; }
 .cs-cell { white-space: nowrap; }
 .act-cell { white-space: nowrap; cursor: pointer; font-size: 12px; }
+.act-why { display: none; }
 .act-good strong { color: #2ecc71; } .act-bad strong { color: #ff6b6b; } .act-watch strong { color: #f0b429; }
 .act-wait strong { color: #9fb3c8; } .act-neutral strong { color: #e8eaed; } .act-muted strong { color: #6b7385; font-weight: 500; }
 .act-sheet h4 { margin: 14px 0 6px; font-size: 13px; } .act-rules { padding-left: 18px; font-size: 13px; line-height: 1.5; } .act-now { font-size: 16px; }
