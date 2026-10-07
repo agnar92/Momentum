@@ -1,12 +1,12 @@
 // Testy dla czystej logiki w docs/js/shared.js (moduł współdzielony przez
-// index.html/watchlist.js i ep.html/ep.js).
+// index.html/watchlist.js).
 "use strict";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("node:path");
 
-const { tvUrlFor, compareRows, TV_EMBED_BASE, TV_1MIN_VWAP_WIDGET } =
+const { tvUrlFor, compareRows } =
     require(path.join("..", "..", "docs", "js", "shared.js"));
 
 test("tvUrlFor builds a full TradingView chart URL and escapes the symbol", () => {
@@ -20,9 +20,4 @@ test("compareRows sorts strings case-insensitively and numbers numerically", () 
     assert.ok(compareRows({ n: 2 }, { n: 10 }, "n", "asc") < 0);
     assert.ok(compareRows({ n: 2 }, { n: 10 }, "n", "desc") > 0);
     assert.equal(compareRows({ n: 5 }, { n: 5 }, "n", "asc"), 0);
-});
-
-test("TradingView widget constants are well formed", () => {
-    assert.match(TV_EMBED_BASE, /^https:\/\/s3\.tradingview\.com\/external-embedding\/$/);
-    assert.equal(TV_1MIN_VWAP_WIDGET.config("AAPL").symbol, "AAPL");
 });

@@ -1,5 +1,5 @@
 /* ============================================================
-   Watchlist (index.html), Episodic Pivot (ep.html) i elementy wspólne (qol.js).
+   Watchlist (index.html) i elementy wspólne (qol.js).
    Układ: na dużym ekranie stała wysokość z przewijaniem tabeli w środku; na małym / niskim (telefon
    pionowo i poziomo) zwykłe przewijanie strony — patrz @media na końcu.
    ============================================================ */
@@ -208,7 +208,7 @@ th.tv-col { width: 1%; }
 .tv-row-btn:hover { color: var(--green-bright); border-color: var(--green-bright); }
 .empty-state { color: var(--text-faint); font-size: 13px; padding: 40px; text-align: center; }
 
-/* ---------- okno z wykresem (index.html: .wl-chart-box, ep.html: .charts-area) ---------- */
+/* ---------- okno z wykresem (index.html: .wl-chart-box) ---------- */
 .chart-modal-backdrop {
     position: fixed;
     inset: 0;
@@ -327,93 +327,6 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 .wl-chart-box.full .chart-grid.layout-4 { height: max(calc(100vh - 235px), 860px); }
 .wl-chart-box.full .chart-grid:not(.layout-1) { height: calc(100vh - 235px); height: calc(100dvh - 235px); }
 
-/* ---------- ep.html ---------- */
-.charts-area {
-    flex: none;
-    width: min(1400px, 96vw);
-    height: 94vh;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
-    padding: 12px;
-    overflow: hidden;
-}
-.chart-panel {
-    flex: 1;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-.chart-panel[hidden] { display: none; }
-.chart-mode-toggle { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-shrink: 0; flex-wrap: wrap; }
-.chart-ticker-label {
-    margin-left: auto;
-    padding-left: 8px;
-    font-size: 13px;
-    font-weight: 700;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    min-width: 0;
-    text-align: right;
-}
-.chart-mode-btn {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-}
-.chart-mode-btn.active { background: var(--green); color: #fff; border-color: var(--green-bright); }
-.tv-overview-container { display: flex; flex-direction: column; gap: 12px; padding: 12px; overflow-y: auto; }
-.tv-widget-block { flex-shrink: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-
-.ep-page { height: calc(100vh - 48px); overflow-y: auto; padding: 24px 32px; max-width: 980px; margin: 0 auto; }
-.panel-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 18px 22px; margin-bottom: 20px; }
-.panel-card h3 {
-    margin: 0 0 14px 0;
-    font-size: 13px;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-}
-.panel-card-large { padding: 28px; }
-.panel-card-large > h3 { font-size: 21px; margin-bottom: 10px; }
-.panel-hint { font-size: 12px; color: var(--text-faint); margin: -6px 0 14px 0; }
-.settings-row { margin-bottom: 14px; }
-.settings-row:last-child { margin-bottom: 0; }
-.settings-row > label { display: block; font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
-.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.import-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
-.ep-gap-link { display: inline-block; padding: 14px 24px; font-size: 15px; }
-.ep-select-inline { width: 200px; }
-#epLogTable th, #epLogTable td { padding: 10px 12px; font-size: 13.5px; }
-#epLogTable select, #epLogTable textarea {
-    background: var(--panel-alt);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 6px 9px;
-    border-radius: 5px;
-    font-size: 13px;
-    font-family: inherit;
-}
-#epLogTable td.ep-ticker-cell { font-weight: 700; font-size: 15px; }
-.ep-notes-textarea, #epLogTable textarea.ep-notes-input { width: 100%; min-height: 90px; resize: vertical; line-height: 1.5; }
-#epLogTable textarea.ep-notes-input { min-width: 260px; }
-
 /* ---------- qol.js ---------- */
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: var(--panel); }
@@ -518,10 +431,6 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
     .loading-overlay p { font-size: 12px; padding: 0 24px; text-align: center; }
     .toast-container { right: 10px; bottom: 10px; left: 10px; max-width: none; }
 
-    .ep-page { padding: 14px 12px; }
-    .panel-card { padding: 14px; }
-    .panel-card-large { padding: 16px; }
-    .ep-select-inline, .contribution-input { width: 100%; max-width: 220px; }
 
     /* Nagłówek wykresu w dwóch rzędach: tytuł na całą szerokość (z miejscem na ✕), pod nim przyciski. */
     .wl-chart-head { position: relative; gap: 8px; }
@@ -609,11 +518,6 @@ body.split .wl-chart-box.full .wl-chart-body svg { max-height: calc(100vh - 235p
 @media (pointer: coarse) { .ann-lnote { width: min(300px, calc(100vw - 16px)); } .ann-lnote textarea { font-size: 16px; } }
 
 /* Zakładka Alerty: po prawej wykres TradingView (widget na całą komórkę) */
-.chart-cell.tv .cell-readout { display: none; }
-.chart-cell.tv .cell-head { cursor: default; }
-.chart-cell.tv .cell-head a { color: var(--green-bright); margin-left: 6px; }
-.chart-cell .tv-widget-block { flex: 1; min-height: 0; height: 100%; }
-.chart-cell .tv-widget-block iframe { height: 100%; }
 
 /* własny score (ręczny) */
 td.score-cell { text-align: center; }
