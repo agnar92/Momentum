@@ -89,8 +89,11 @@ test("price bars are HLC: no open tick, colour by close vs previous close", () =
     const m = buildChartModel(charts(), "AAA", null);
     const svg = chartSvg(m, {});
     const bars = svg.match(/<g stroke="[^"]+" stroke-width="[\d.]+"><line[^>]*\/><line[^>]*\/><\/g>/g) || [];
-    assert.ok(bars.length > 0, "każdy słupek = pion H–L + jedna kreska zamknięcia");
+    assert.ok(bars.length > 0, "każdy słupek = pion H–L + kreska zamknięcia po obu stronach");
     assert.equal(bars.every(b => (b.match(/<line/g) || []).length === 2), true);
+    // kreska zamknięcia sięga w lewo i w prawo od pionu (x1 < x pionu < x2)
+    const [, v, tick] = bars[0].match(/<line x1="([\d.-]+)" x2="\1"[^>]*\/><line x1="([\d.-]+)" x2="([\d.-]+)"/) ? [0, bars[0].match(/<line x1="([\d.-]+)" x2="\1"/)[1], bars[0].match(/<line x1="([\d.-]+)" x2="([\d.-]+)"[^>]*\/><\/g>/)] : [];
+    assert.ok(Number(tick[1]) < Number(v) && Number(v) < Number(tick[2]));
 });
 
 test("chartReadout formats a week and is empty for missing bars", () => {
