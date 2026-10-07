@@ -298,7 +298,8 @@ class TestCharts:
         path = tmp_path / "eps.json"
         path.write_text(json.dumps({"FRESH": {"fetched": "2026-09-30", "rows": [1]},
                                     "OLD": {"fetched": "2026-09-01", "rows": [2]},
-                                    "GONE": {"fetched": "2026-09-30", "rows": [3]}}), encoding="utf-8")
+                                    "OTHER": {"fetched": "2026-09-30", "rows": [3]},      # ticker drugiego skanera — zostaje
+                                    "GONE": {"fetched": "2026-06-01", "rows": [4]}}), encoding="utf-8")   # nieodświeżany > CACHE_KEEP_DAYS — sprzątany
         calls = []
 
         def fake_fetch(t):
@@ -309,7 +310,8 @@ class TestCharts:
         cache = watchlist.update_eps_cache(["FRESH", "OLD", "NEW", "BAD"], path, now="2026-10-01", fetch=fake_fetch)
         assert sorted(calls) == ["BAD", "NEW", "OLD"]
         assert cache["FRESH"]["rows"] == [1] and cache["OLD"]["fetched"] == "2026-10-01"
-        assert "BAD" not in cache and "GONE" not in cache  # blad = brak wpisu; spolki spoza listy sprzatane
+        assert "BAD" not in cache and "GONE" not in cache  # blad = brak wpisu; wpisy bez odswiezenia > 45 dni sprzatane
+        assert cache["OTHER"]["rows"] == [3]               # wpis spolki z drugiego skanera (wspolny plik) zostaje
         assert json.loads(path.read_text(encoding="utf-8")) == cache
 
     def test_build_charts_structure_with_benchmark_and_eps(self):

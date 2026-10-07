@@ -98,6 +98,7 @@ ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "s
 EPS_CACHE_MAX_AGE_DAYS = 7   # EPS zmienia się raz na kwartał — nie pytamy Yahoo codziennie
 EPS_TIME_BUDGET_S = 600
 EPS_WORKERS = 4
+CACHE_KEEP_DAYS = 45         # eps_cache.json / estimates.json dzielą skaner CANSLIM i szeroki skaner: wpis spoza bieżącej listy znika dopiero po tylu dniach bez odświeżenia
 EST_MAX_AGE_DAYS = 2         # estymaty analityków zmieniają się codziennie, ale pobranie to 4 zapytania na spółkę — co 2 dni wystarcza
 EST_TIME_BUDGET_S = 700
 EST_HISTORY_DAYS = 400       # ile dni historii konsensusu EPS trzymamy (dopisujemy przy każdym pobraniu)
@@ -1191,7 +1192,7 @@ def update_eps_cache(tickers, cache_path=EPS_CACHE_PATH, now=None, fetch=fetch_e
             for t, rows in pool.map(work, stale):
                 if rows is not None:
                     cache[t] = {"fetched": now.strftime("%Y-%m-%d"), "rows": rows}
-    cache = {t: v for t, v in cache.items() if t in set(tickers)}
+    cache = {t: v for t, v in cache.items() if t in set(tickers) or (now - pd.Timestamp(v.get("fetched", "1970-01-01"))).days <= CACHE_KEEP_DAYS}   # cache dzielą oba skanery — nie kasujemy cudzych wpisów
     out = Path(cache_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
@@ -1320,7 +1321,7 @@ def update_estimates(tickers, path=ESTIMATES_PATH, now=None, fetch=fetch_estimat
             for t, raw in pool.map(work, stale):
                 if raw is not None:
                     stocks[t] = build_estimate_entry(raw, stocks.get(t), now)
-    stocks = {t: v for t, v in stocks.items() if t in set(tickers)}
+    stocks = {t: v for t, v in stocks.items() if t in set(tickers) or (now - pd.Timestamp(v.get("f", "1970-01-01"))).days <= CACHE_KEEP_DAYS}
     out = Path(path)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"updated": now.strftime("%Y-%m-%d"), "stocks": stocks}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
@@ -1487,7 +1488,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
 
     if not skip_finviz:
         try:
-            finviz_rows, finviz_total = finviz.fetch_watchlist(cfg["filters"], max_tickers, **({"views": finviz.QM_VIEWS} if qm else {}))
+            finviz_rows, finviz_total = finviz.fetch_watchlist(cfg["filters"], max_tickers)   # oba skanery pobierają wszystkie widoki (fundamenty, wycena, analitycy)
         except Exception as e:
             print(f"⚠️  Finviz niedostępny ({e}).")
         if len(finviz_rows) < finviz.MIN_TICKERS:
@@ -1551,25 +1552,26 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         # RS Rating, Acc/Dis i grupy policzyły się już na całej liście z Finviz (przed odcięciem po obrocie i ADR);
         # teraz zapisujemy tylko płynne spółki, a wykresy budujemy dla top X % ceny/minimum.
         n_all = len(stocks)
-        stocks = [s for s in stocks if _is_num(s.get("dollar_volume_avg")) and _is_num(s.get("adr_pct"))
-                  and s["dollar_volume_avg"] >= cfg.get("min_dollar_volume_m", 0) * 1e6 and s["adr_pct"] >= cfg.get("min_adr_pct", 0)]
-        qm_selected = qullamaggie_select(stocks, cfg.get("min_dollar_volume_m", 0), cfg.get("min_adr_pct", 0), cfg.get("charts_top_pct", 25))
-        print(f"ℹ️  Qullamaggie: {len(stocks)}/{n_all} płynnych spółek zapisanych, wykresy dla {len(qm_selected)} (top {cfg.get('charts_top_pct', 25)} % ceny/minimum).")
+        min_dv, min_adr = cfg.get("min_dollar_volume_m", 0) or 0, cfg.get("min_adr_pct", 0) or 0
+        if min_dv > 0 or min_adr > 0:   # domyślnie 0 / 0: zapisujemy WSZYSTKIE spółki ze skanera, progi ustawia się w aplikacji (Filtry)
+            stocks = [s for s in stocks if _is_num(s.get("dollar_volume_avg")) and _is_num(s.get("adr_pct"))
+                      and s["dollar_volume_avg"] >= min_dv * 1e6 and s["adr_pct"] >= min_adr]
+        top = cfg.get("charts_top_pct", 100)
+        qm_selected = stocks if top >= 100 else qullamaggie_select(stocks, min_dv, min_adr, top)
+        print(f"ℹ️  Szeroki skaner: {len(stocks)}/{n_all} spółek zapisanych, wykresy dla {len(qm_selected)}.")
+    try:
+        eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
+    except Exception as e:
+        print(f"⚠️  Krok EPS pominięty ({e}).")
         eps_cache = {}
-    else:
-        try:
-            eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
-        except Exception as e:
-            print(f"⚠️  Krok EPS pominięty ({e}).")
-            eps_cache = {}
-        add_eps_rating(stocks, eps_cache)
-        try:
-            estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
-        except Exception as e:
-            print(f"⚠️  Krok estymat analityków pominięty ({e}).")
-            estimates = {}
-        for st in stocks:
-            st.update(estimate_fields(estimates.get(st["ticker"]), st.get("price")))
+    add_eps_rating(stocks, eps_cache)
+    try:
+        estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
+    except Exception as e:
+        print(f"⚠️  Krok estymat analityków pominięty ({e}).")
+        estimates = {}
+    for st in stocks:
+        st.update(estimate_fields(estimates.get(st["ticker"]), st.get("price")))
     chart_tickers = [s["ticker"] for s in (qm_selected if qm else stocks)]
     charts = build_charts(chart_tickers, frames, benchmark_df, eps_cache)
     for st in stocks:
