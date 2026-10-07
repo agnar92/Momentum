@@ -137,6 +137,10 @@ Gives a pivot (peak high; rim high for cups) and a VCP flag (≥2 strictly decre
 last ≤10 %). Stored as `base_*`, `pivot`, `pct_to_pivot`,
 `vcp`, `pct_from_high_52w` in watchlist.json. Not MarketSmith pattern recognition (heuristic; flags are detected separately, see below).
 
+## O'Neil base patterns, weekly + daily (heuristic)
+
+User: "wykrywać wszystkie pattern z książki How to Make Money in Stocks … na dziennym i tygodniowym, tygodniowy ważniejszy". `detect_bases(ohlc, bench_w=None, k=1)` runs on BOTH timeframes (`k` = bars per week: 1 weekly, `DAILY_BARS_PER_WEEK` = 5 daily; all week thresholds are multiplied by `k`). Types: `cup` (with/without handle; `saucer` flag = long shallow cup, `SAUCER_*`), `double_bottom` (`classify_double_bottom`: second low undercuts the first by ≤ 8 %, pivot = the MIDDLE peak), `flat` (≤ 15 % deep), `ascending` (`detect_ascending_base`: 3 pullbacks of 8–22 % with higher lows, `ASC_*`), `htf` (`detect_high_tight_flag`: ≥ +100 % in ≤ 8 weeks, then ≤ 25 % flag, `HTF_*`), plus the non-buyable `correction` / `deep`. `BASE_TYPES_BUYABLE` (py) = `BUYABLE_BASES` (watchlist.js) = `PIVOT_BASE_TYPES` (chart.js). NOT implemented: IPO base. Weekly fields stay `base_*`, `pivot`, `pct_to_pivot`, `pivot_state`, `base_saucer`, `base_rise_pct`; daily fields are `dbase_type/depth_pct/weeks/handle/saucer/rise_pct`, `dpivot`, `dpct_to_pivot`, `dvcp`, `dpivot_state`, `dpivot_vol_ratio`, `dpivot_break_date` and `charts.json` `day.bases`. `actionInfo(..., "D")` reads `dbase_*` first, then the flag / box (`tl_*`); `pivotFromStock(stock, bases, daily)` draws the pivot of the chart's own timeframe. The chart draws only the pivot line / buy zone / labels for the new types (cup arcs stay as before). Thresholds are tuned by eye, not backtested.
+
 ## Flags / consolidation (heuristic)
 
 `detect_consolidation(ohlc, cfg)` (watchlist.py; `DAILY_FLAG` for the daily chart and `tl_*` fields, `WEEKLY_FLAG` for the

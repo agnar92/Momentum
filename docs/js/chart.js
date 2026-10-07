@@ -133,7 +133,7 @@ function dailyCharts(charts) {
     Object.keys(charts.stocks).forEach(t => {
         const c = charts.stocks[t], d = c.day;
         // wyniki sprzed pierwszej sesji okna wypadłyby na indeks 0 i nałożyły się na siebie — pomijamy je
-        if (d) stocks[t] = { ...d, bases: c.bases, rs_line: c.rs_line, eps: (c.eps || []).filter(q => q.d >= charts.days[0]), eps_next: c.eps_next };
+        if (d) stocks[t] = { ...d, bases: d.bases || c.bases, rs_line: c.rs_line, eps: (c.eps || []).filter(q => q.d >= charts.days[0]), eps_next: c.eps_next };
     });
     return { weeks: charts.days, spx: charts.spx_d, stocks, daily: true };
 }
@@ -214,7 +214,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         rsChangePct: relChange(rs),
         rsLine: c.rs_line || null, volAvg: padArr(volAvg),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
-        pivot: pivotFromStock(stock, c.bases),
+        pivot: pivotFromStock(stock, c.bases, !!charts.daily),
     };
 }
 
@@ -222,14 +222,16 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
 // Poziom, od którego liczymy strefę zakupu i typowy stop (O'Neil): pivot BAZY KUPOWALNEJ (flat / cup — korekta i głęboka korekta to nie bazy),
 // a gdy go nie ma albo leży daleko od ceny — poziom oporu flagi / korytarza (dziennej, potem tygodniowej). Poziom dalej niż PIVOT_NEAR_PCT od ceny
 // jest bez znaczenia dla bieżącej decyzji, więc go nie rysujemy (inaczej etykiety „pivot / strefa zakupu / stop” lądują na brzegu wykresu).
-const PIVOT_BASE_TYPES = ["flat", "cup"];
+const PIVOT_BASE_TYPES = ["flat", "cup", "double_bottom", "ascending", "htf"];   // wzorce z książki O'Neila, które mają pivot do kupna
 const PIVOT_NEAR_PCT = 15;
-function pivotFromStock(stock, bases) {
+function pivotFromStock(stock, bases, daily = false) {
     if (!stock) return null;
     const near = p => !Number.isFinite(stock.price) || Math.abs(p / stock.price - 1) * 100 <= PIVOT_NEAR_PCT;
-    if (PIVOT_BASE_TYPES.includes(stock.base_type) && Number.isFinite(stock.pivot) && near(stock.pivot)) {
+    // wykres dzienny ma własne bazy (dbase_* / dpivot), tygodniowy — base_* / pivot
+    const type = daily ? stock.dbase_type : stock.base_type, pivot = daily ? stock.dpivot : stock.pivot;
+    if (PIVOT_BASE_TYPES.includes(type) && Number.isFinite(pivot) && near(pivot)) {
         const open = (bases || []).filter(b => b.open).pop();
-        return { price: stock.pivot, date: open ? open.start : null, kind: "baza" };
+        return { price: pivot, date: open ? open.start : null, kind: "baza" };
     }
     if (Number.isFinite(stock.tl_level) && stock.tl_state && near(stock.tl_level)) return { price: stock.tl_level, date: null, kind: "flaga" };
     if (Number.isFinite(stock.tlw_level) && stock.tlw_state && near(stock.tlw_level)) return { price: stock.tlw_level, date: null, kind: "flaga" };

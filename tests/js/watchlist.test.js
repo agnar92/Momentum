@@ -569,3 +569,17 @@ test("actionInfo: tygodniowy liczy na 10-tygodniowej średniej, dzienny na SMA50
     const c = { ...base, pct_above_sma10w: 9, pct_above_sma50: 9 };
     tagActions([c], up); assert.equal(c.action_tf, "W");
 });
+
+test("actionInfo: dzienne bazy z książki O'Neila (double bottom, ascending, HTF) mają pierwszeństwo przed flagą", () => {
+    const { actionInfo } = require("../../docs/js/watchlist.js");
+    const up = { regime: "uptrend", distDays: 2 };
+    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma50: 9 };
+    const d = s => actionInfo({ ...base, ...s }, up, "D").code;
+    assert.equal(d({ dbase_type: "double_bottom", dpct_to_pivot: -2, dpivot_state: "wybicie" }), "BUY");
+    assert.equal(d({ dbase_type: "ascending", dpct_to_pivot: -8, dpivot_state: "wybicie" }), "LATE");
+    assert.equal(d({ dbase_type: "htf", dpct_to_pivot: 3 }), "NEAR");
+    assert.equal(d({ dbase_type: "cup", dbase_saucer: true, dpct_to_pivot: 9 }), "BASE");
+    assert.equal(d({ dbase_type: "correction", dpct_to_pivot: 3 }), "WAIT");   // korekta to nie baza do zakupu
+    // dzienne pola nie wpływają na ocenę tygodniową
+    assert.equal(actionInfo({ ...base, pct_above_sma10w: 9, dbase_type: "cup", dpct_to_pivot: -2, dpivot_state: "wybicie" }, up, "W").code, "WAIT");
+});

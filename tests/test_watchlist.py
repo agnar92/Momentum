@@ -738,3 +738,65 @@ class TestWeeklyMovingAverages:
         m = watchlist.compute_metrics(df)
         assert m["pct_above_sma10w"] is not None and m["pct_above_sma40w"] is not None
         assert m["pct_above_sma40w"] > m["pct_above_sma10w"] > 0   # trend wzrostowy: cena nad obiema, dalej od wolniejszej
+
+
+class TestOneilPatterns:
+    """Wzorce z „How to Make Money in Stocks”: double bottom, flat, ascending base, high tight flag — na wykresie tygodniowym (k=1) i dziennym (k=5)."""
+
+    @staticmethod
+    def frame(weekly_closes, per_week=1, end="2026-09-30"):
+        pts = np.asarray(weekly_closes, dtype=float)
+        if per_week > 1:   # dzienny: każdy tydzień rozbijamy liniowo na per_week świec
+            xs = np.arange(len(pts))
+            pts = np.interp(np.linspace(0, len(pts) - 1, (len(pts) - 1) * per_week + 1), xs, pts)
+        idx = pd.bdate_range(end=end, periods=len(pts)) if per_week > 1 else pd.date_range(end=end, periods=len(pts), freq="W-FRI")
+        return pd.DataFrame({"Open": pts, "High": pts * 1.005, "Low": pts * 0.995, "Close": pts, "Volume": 1_000_000.0}, index=idx)
+
+    DOUBLE_BOTTOM = [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 80, 77, 80, 84, 88, 90]
+    FLAT = [100] + [97, 95, 98, 96, 99, 94, 98, 97, 99]
+    ASC = [100, 96, 88, 96, 104, 98, 92, 100, 108, 102, 96, 104, 111, 112]
+    HTF = [10] * 12 + [12, 14, 16, 18, 20, 22] + [21, 20, 19.5, 19.2]
+
+    def last(self, weekly, k):
+        return watchlist.detect_bases(self.frame(weekly, k), None, k)[-1]
+
+    @pytest.mark.parametrize("k", [1, 5])
+    def test_double_bottom_pivot_is_the_middle_peak(self, k):
+        b = self.last(self.DOUBLE_BOTTOM, k)
+        assert b["type"] == "double_bottom" and b["open"]
+        assert b["pivot"] == pytest.approx(92 * 1.005, rel=0.01)       # pivot = środkowy szczyt, a nie szczyt całej bazy (100)
+        assert b["double_bottom"]["low2"] < b["double_bottom"]["low1"]   # drugie dno podcina pierwsze
+
+    def test_double_bottom_needs_an_undercut(self):
+        no_undercut = [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 82, 83, 85, 87, 89, 90]   # drugie dno NAD pierwszym
+        assert self.last(no_undercut, 1)["type"] != "double_bottom"
+
+    @pytest.mark.parametrize("k", [1, 5])
+    def test_flat_base(self, k):
+        b = self.last(self.FLAT, k)
+        assert b["type"] == "flat" and b["depth_pct"] <= 15
+
+    @pytest.mark.parametrize("k", [1, 5])
+    def test_ascending_base_three_pullbacks_with_higher_lows(self, k):
+        b = self.last(self.ASC, k)
+        assert b["type"] == "ascending" and len(b["contractions"]) == 3
+        assert all(8 <= d <= 22 for d in b["contractions"])
+
+    def test_ascending_base_rejects_falling_lows(self):
+        falling = [100, 96, 90, 96, 104, 98, 88, 100, 108, 102, 84, 104, 111, 112]
+        bases = watchlist.detect_bases(self.frame(falling, 1), None, 1)
+        assert all(b["type"] != "ascending" for b in bases)
+
+    @pytest.mark.parametrize("k", [1, 5])
+    def test_high_tight_flag(self, k):
+        b = self.last(self.HTF, k)
+        assert b["type"] == "htf" and b["rise_pct"] >= 100 and 4 <= b["depth_pct"] <= 25
+
+    def test_htf_needs_a_doubling(self):
+        weak = [10] * 12 + [10.5, 11, 11.5, 12, 12.5, 13] + [12.5, 12, 11.8, 11.6]
+        assert self.last(weak, 1)["type"] != "htf"
+
+    def test_compute_metrics_exposes_daily_pattern_fields(self):
+        m = watchlist.compute_metrics(make_prices(n=400, daily=0.002))
+        for key in ("dbase_type", "dpivot", "dpct_to_pivot", "dpivot_state", "base_type", "pct_to_pivot"):
+            assert key in m

@@ -35,7 +35,7 @@ const FAVS_KEY = "momentum_watchlist_favs";
 const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
-const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", correction: "Korekta", deep: "Głęboka korekta" };
+const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
     tab: "LIST", csMin: 5, csCore: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
@@ -235,7 +235,7 @@ function positionTotals(rows, capital) {
 // Wybicie wg O'Neila = ZAMKNIĘCIE (dzienne albo tygodniowe) nad linią / pivotem na podwyższonym wolumenie (≥ 1,5× średniej). Samo przebicie
 // maksimum w trakcie świecy to nie wybicie, a zamknięcie nad poziomem bez wolumenu jest tylko „niepotwierdzone” (nie trafia do rank 0).
 const BRK_VOL_MULT = 1.5;
-const BUYABLE_BASES = ["flat", "cup"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
+const BUYABLE_BASES = ["flat", "cup", "double_bottom", "ascending", "htf"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
 function breakoutInfo(s, alert, maxDist) {
     const reasons = [];
     const dists = [];
@@ -426,6 +426,14 @@ function actionInfo(s, mkt, tf = "W") {
             : "Brak bazy na wykresie tygodniowym. Nie kupuj w biegu. Czekaj na nową płaską bazę (≥ 5 tygodni, ≤ 15 % głębokości) i jej wybicie, albo na cofnięcie do 10-tygodniowej z odbiciem; w międzyczasie szukaj małej bazy na wykresie dziennym.");
     };
     if (tf === "D") {   // ---- wykres dzienny: flaga / korytarz ----
+        // najpierw baza dzienna z książki O'Neila (cup, double bottom, flat, ascending, HTF), potem flaga / korytarz
+        if (BUYABLE_BASES.includes(s.dbase_type) && num(s.dpct_to_pivot)) {
+            const dp = s.dpct_to_pivot, nm = `${BASE_LABELS_PL[s.dbase_type]}${s.dbase_type === "cup" && s.dbase_saucer ? " (saucer)" : ""} dzienny`;
+            if (s.dpivot_state === "wybicie" && dp < 0) return -dp <= 5 ? buy(-dp, `z bazy: ${nm} (baza kontynuacji trendu)`) : mk("LATE", `${(-dp).toFixed(1)}% nad pivotem (${nm}) — poza strefą +5 %. Nie goń: czekaj na cofnięcie albo kolejną bazę.`);
+            if (dp < 0 && dp > -3) return mk("NEAR", `Cena nad pivotem (${nm}), ale bez wolumenu ≥ 1,5× — to jeszcze nie wybicie. Czekaj na dzień z wolumenem.${earn}`);
+            if (dp >= 0 && dp <= 5) return mk("NEAR", `${dp.toFixed(1)}% do pivotu (${nm}). Ustaw alert na pivocie i kupuj dopiero przy wybiciu z wolumenem ≥ 1,5×.${earn}`);
+            if (dp > 5 && dp <= 15) return mk("BASE", `${nm} w budowie, ${dp.toFixed(1)}% do pivotu. Czekaj, aż cena zbliży się do pivotu na malejącym wolumenie.`);
+        }
         const dist = num(s.tl_dist_pct) ? s.tl_dist_pct : null;   // > 0 = jeszcze pod oporem, < 0 = nad
         const kind = s.tl_pattern === "flaga" ? "flagi" : "korytarza";
         if (s.tl_state === "wybicie" && dist !== null) {
