@@ -85,9 +85,17 @@ test("chartSvg renders bars, S&P 500 overlay, RS label, EPS labels and handles e
     assert.doesNotMatch(chartSvg(buildChartModel(charts({ spx: null }), "AAA", null)), /S&amp;P 500 \d/);   // bez benchmarku nie ma linii
 });
 
+test("price bars are HLC: no open tick, colour by close vs previous close", () => {
+    const m = buildChartModel(charts(), "AAA", null);
+    const svg = chartSvg(m, {});
+    const bars = svg.match(/<g stroke="[^"]+" stroke-width="[\d.]+"><line[^>]*\/><line[^>]*\/><\/g>/g) || [];
+    assert.ok(bars.length > 0, "każdy słupek = pion H–L + jedna kreska zamknięcia");
+    assert.equal(bars.every(b => (b.match(/<line/g) || []).length === 2), true);
+});
+
 test("chartReadout formats a week and is empty for missing bars", () => {
     const m = buildChartModel(charts(), "AAA", null);
-    assert.match(chartReadout(m, 0), /2026-01-02 · O 10\.00 H 11\.00 L 9\.00 C 10\.50/);
+    assert.match(chartReadout(m, 0), /2026-01-02 · H 11\.00 L 9\.00 C 10\.50/);
     assert.equal(chartReadout(m, 2), "");
     assert.equal(chartReadout(m, 99), "");
 });

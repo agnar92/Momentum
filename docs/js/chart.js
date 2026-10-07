@@ -619,11 +619,10 @@ function chartSvg(m, opts = {}) {
         addLabel(`−${cup.depth}%${cup.ctx ? ` · S&P −${cup.mktDd}%` : ""}`, cx, yB - (yB - Math.min(yL, yR)) * 0.35, { size: fs(12), fill: CHART_COLORS.cup, bold: true, prio: 6 });
     });
     for (let i = 0; i < m.n; i++) {
-        if (![m.o[i], m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
-        const col = m.c[i] >= m.o[i] ? CHART_COLORS.barUp : CHART_COLORS.barDown;
+        if (![m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
+        const col = barColor(m, i);
         parts.push(`<g stroke="${col}" stroke-width="${step > 5 ? 1.6 : 1.1}">`
             + `<line x1="${x(i)}" x2="${x(i)}" y1="${yP(m.h[i])}" y2="${yP(m.l[i])}"/>`
-            + `<line x1="${x(i) - barHalf}" x2="${x(i)}" y1="${yP(m.o[i])}" y2="${yP(m.o[i])}"/>`
             + `<line x1="${x(i)}" x2="${x(i) + barHalf}" y1="${yP(m.c[i])}" y2="${yP(m.c[i])}"/></g>`);
     }
     const clipAttr = `clip-path="url(#chartPriceClip${opts.uid || ""})"`;
@@ -808,7 +807,7 @@ function chartSvg(m, opts = {}) {
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.volume.y - 4}" y2="${L.volume.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
     for (let i = 0; i < m.n; i++) {
         if (!Number.isFinite(m.v[i])) continue;
-        const col = m.c[i] >= m.o[i] ? CHART_COLORS.barUp : CHART_COLORS.barDown;
+        const col = barColor(m, i);
         const h = (m.v[i] / vMax) * (L.volume.h - fs(11) - 4);
         const isBreak = boIdx === i;
         parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);
@@ -912,12 +911,18 @@ function patternExplain(m) {
     return head + lines + tail;
 }
 
+// Słupki HLC (bez open): kolor wg zamknięcia względem poprzedniego zamknięcia (pierwszy słupek = wzrostowy).
+function barColor(m, i) {
+    const prev = i > 0 ? m.c[i - 1] : NaN;
+    return !Number.isFinite(prev) || m.c[i] >= prev ? CHART_COLORS.barUp : CHART_COLORS.barDown;
+}
+
 // Tekst paska nad wykresem dla wskazanego tygodnia.
 function chartReadout(m, i) {
     if (i < 0 || i >= m.n || !Number.isFinite(m.c[i])) return "";
     const rs = Number.isFinite(m.rs[i]) ? ` · RS ${m.rs[i].toFixed(3)}` : "";
     const spx = m.spx && Number.isFinite(m.spx[i]) ? ` · S&P ${fmtCompact(m.spx[i])}` : "";
-    return `${m.weeks[i]} · O ${fmtCompact(m.o[i])} H ${fmtCompact(m.h[i])} L ${fmtCompact(m.l[i])} C ${fmtCompact(m.c[i])}`
+    return `${m.weeks[i]} · H ${fmtCompact(m.h[i])} L ${fmtCompact(m.l[i])} C ${fmtCompact(m.c[i])}`
         + ` · wol. ${Number.isFinite(m.v[i]) ? (m.v[i] / 1000).toFixed(1) + " mln" : "—"}${rs}${spx}`;
 }
 
