@@ -22,9 +22,13 @@ from lxml import html as lxml_html
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "finviz_screen.json"
+QM_CONFIG_PATH = ROOT / "finviz_screen_qm.json"   # osobny, szeroki filtr dla Qullamaggiego (odpalany ręcznie)
 
-DEFAULT_FILTERS = "sh_price_o1,ta_sma50_pa,ta_sma200_pa,fa_epsyoy_pos,fa_epsyoy1_pos"
-DEFAULT_MAX_TICKERS = 600
+DEFAULT_FILTERS = "sh_price_o10,ta_sma50_pa,ta_sma200_pa,fa_epsqoq_o25,fa_salesqoq_o25,fa_epsyoy_o25,fa_roe_o15"
+DEFAULT_MAX_TICKERS = 300
+DEFAULT_QM_FILTERS = "sh_price_o1,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa,ta_volatility_mo2,sh_avgvol_o200,fa_epsyoy_pos,fa_epsyoy1_pos"
+DEFAULT_QM_MAX_TICKERS = 6000
+QM_VIEWS = ()      # Qullamaggie: tylko widok Overview (sektor, branża, kapitalizacja) — fundamentów nie potrzebuje, a pobranie jest ~4x krótsze
 MIN_TICKERS = 15   # poniżej tego uznajemy odpowiedź za błędną (blokada/zmiana układu strony)
 PAGE_SIZE = 20     # darmowy Finviz zwraca 20 wierszy na stronę
 BASE_URL = "https://finviz.com/screener.ashx"
@@ -110,14 +114,14 @@ def fetch_view(view, filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7, sess
     return out[:max_tickers], total
 
 
-def fetch_watchlist(filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7):
+def fetch_watchlist(filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7, views=("121", "161", "152")):
     """Lista spółek z Finviz scalona z widoków Overview/Valuation/Financial po tickerze.
     Zwraca (lista słowników, łączna liczba wg Finviz). Widok pomocniczy, który się nie uda,
     nie przerywa całości — spółki zostają bez tych kolumn (None)."""
     session = requests.Session()
     base, total = fetch_view("111", filters, max_tickers, pause_s, session)
     by_ticker = {r["ticker"]: r for r in base}
-    for view in ("121", "161", "152"):
+    for view in views:
         try:
             extra, _ = fetch_view(view, filters, max_tickers, pause_s, session)
         except Exception as e:
@@ -129,12 +133,14 @@ def fetch_watchlist(filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7):
     return list(by_ticker.values()), total
 
 
-def load_config(path=CONFIG_PATH):
+def load_config(path=CONFIG_PATH, filters=DEFAULT_FILTERS, max_tickers=DEFAULT_MAX_TICKERS):
+    """Konfiguracja screenera z JSON-a; brakujące pola = wartości domyślne. Pola liczbowe spoza filtra
+    (np. min_dollar_volume_m, min_adr_pct, charts_top_pct profilu Qullamaggiego) przechodzą bez zmian."""
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         data = {}
-    return {
-        "filters": str(data.get("filters") or DEFAULT_FILTERS).strip(),
-        "max_tickers": int(data.get("max_tickers") or DEFAULT_MAX_TICKERS),
-    }
+    cfg = {k: v for k, v in data.items() if isinstance(v, (int, float)) and not isinstance(v, bool)}
+    cfg["filters"] = str(data.get("filters") or filters).strip()
+    cfg["max_tickers"] = int(data.get("max_tickers") or max_tickers)
+    return cfg

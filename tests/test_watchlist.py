@@ -685,3 +685,48 @@ def test_detect_climax_top_weekly_requires_biggest_gain_spread_and_volume():
     older = _climax_weekly((70.0, 92.0, 66.0, 80.0, 6_000_000.0))
     older.iloc[20, older.columns.get_loc("Close")] = 80.0                                                    # wcześniej w trendzie był większy tygodniowy skok
     assert watchlist.detect_climax_top(older) is None
+
+
+class TestQullamaggieProfile:
+    def stocks(self):
+        def st(t, vol, adr, r1, r3, r6):
+            return {"ticker": t, "dollar_volume_avg": vol, "adr_pct": adr, "low_ratio_1m": r1, "low_ratio_3m": r3, "low_ratio_6m": r6}
+        return [st("A", 50e6, 6, 2.0, 1.5, 1.2), st("B", 50e6, 6, 1.1, 3.0, 1.2), st("C", 50e6, 6, 1.0, 1.0, 2.5),
+                st("D", 50e6, 6, 1.0, 1.0, 1.0), st("ILLIQ", 1e6, 6, 9, 9, 9), st("CALM", 50e6, 1, 9, 9, 9)]
+
+    def test_select_is_union_of_top_per_window(self):
+        picked = {s["ticker"] for s in watchlist.qullamaggie_select(self.stocks(), 20, 4, 25)}
+        assert picked == {"A", "B", "C"}   # 4 płynne spółki, top 25 % = 1 na okno; ILLIQ i CALM odpadają na płynności / ADR
+
+    def test_select_zero_top_pct_is_empty(self):
+        assert watchlist.qullamaggie_select(self.stocks(), 20, 4, 0) == []
+
+    def test_load_config_profiles(self, tmp_path):
+        p = tmp_path / "qm.json"
+        p.write_text(json.dumps({"filters": "x", "max_tickers": 7, "min_adr_pct": 3, "_instructions": "tekst"}), encoding="utf-8")
+        cfg = finviz.load_config(p)
+        assert cfg == {"min_adr_pct": 3, "filters": "x", "max_tickers": 7}
+        missing = finviz.load_config(tmp_path / "none.json", finviz.DEFAULT_QM_FILTERS, finviz.DEFAULT_QM_MAX_TICKERS)
+        assert missing == {"filters": finviz.DEFAULT_QM_FILTERS, "max_tickers": finviz.DEFAULT_QM_MAX_TICKERS}
+        assert "fa_epsyoy_pos" in finviz.DEFAULT_QM_FILTERS and "fa_roe" not in finviz.DEFAULT_QM_FILTERS   # Qullamaggie: tylko dodatni EPS (ten rok i następny)
+
+
+class TestRsUniverse:
+    def test_rs_rating_against_wide_universe(self):
+        universe = sorted(i / 100 for i in range(200))   # szeroki rynek: wyniki 0.00 … 1.99
+        stocks = [{"ticker": "LOW", "rs_score": -5.0}, {"ticker": "MID", "rs_score": 1.0}, {"ticker": "TOP", "rs_score": 9.0}, {"ticker": "NA", "rs_score": None}]
+        watchlist.add_rs_rating(stocks, universe)
+        r = {s["ticker"]: s["rs_rating"] for s in stocks}
+        assert r["LOW"] == 1 and r["TOP"] == 99 and r["NA"] is None
+        assert 49 <= r["MID"] <= 51   # medianę rynku nie przesuwa to, że lista ma tylko 3 spółki
+        # bez rozkładu rynku nadal percentyl wśród listy
+        watchlist.add_rs_rating(stocks)
+        assert {s["ticker"]: s["rs_rating"] for s in stocks}["LOW"] == 1
+
+    def test_load_rs_universe(self, tmp_path):
+        p = tmp_path / "rs_universe.json"
+        assert watchlist.load_rs_universe(p) is None
+        p.write_text(json.dumps({"as_of": "2026-10-05", "n": 3, "scores": [0.1, 0.2, 0.3]}), encoding="utf-8")
+        assert watchlist.load_rs_universe(p) is None   # za mały rozkład = nie ufamy
+        p.write_text(json.dumps({"as_of": "2026-10-05", "n": 150, "scores": [i / 100 for i in range(150)]}), encoding="utf-8")
+        assert watchlist.load_rs_universe(p)["n"] == 150

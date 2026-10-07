@@ -1,0 +1,85 @@
+name: Qullamaggie Watchlist Refresh
+
+# Lista Qullamaggiego jest pobierana OSOBNO i TYLKO RĘCZNIE (Actions -> "Qullamaggie Watchlist Refresh" -> Run workflow;
+# link jest też w zakładce Qullamaggie, gdy brak danych). Codzienny workflow (daily_watchlist.yml) obsługuje wyłącznie CANSLIM.
+# Finviz daje najszerszy filtr z finviz_screen_qm.json (cena > 1 USD, nad SMA20/50/200, zmienność miesięczna > 2 %, wolumen > 200 tys., EPS w tym roku i prognoza na przyszły rok dodatnie, sam widok Overview),
+# yfinance ceny, a płynność / ADR / cena-minimum liczy aplikacja. Wynik: docs/data/watchlist_qm.json + charts_qm.json + rs_universe.json (rozkład RS szerokiego rynku, z którego codzienny CANSLIM liczy RS Rating).
+# Pełne pobranie (~400 spółek po filtrach z finviz_screen_qm.json) trwa kilka minut; opcja prices_only pomija Finviz.
+on:
+  workflow_dispatch:
+    inputs:
+      prices_only:
+        description: 'Tylko ceny: bez Finviz, lista spółek z poprzedniego pobrania (szybciej, mniej zapytań)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Wspólna grupa z codziennym odświeżeniem — wdrożenia Pages nie nakładają się.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Fetch wide Finviz list + yfinance prices and build watchlist_qm.json
+        run: python watchlist.py --profile qm ${{ inputs.prices_only && '--skip-finviz' || '' }}
+
+      - name: Persist docs/data/watchlist_qm.json, charts_qm.json and rs_universe.json
+        run: |
+          if [ -n "$(git status --porcelain docs/data/watchlist_qm.json docs/data/charts_qm.json docs/data/rs_universe.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # Jak w daily_watchlist.yml: zawsze na AKTUALNY szczyt main, a dodajemy tylko własne pliki (codzienny workflow nie rusza tych plików i odwrotnie).
+            for attempt in 1 2 3 4 5; do
+              git fetch origin main
+              git reset --mixed origin/main
+              git add docs/data/watchlist_qm.json docs/data/charts_qm.json docs/data/rs_universe.json
+              git commit -m "chore: Qullamaggie watchlist refresh [skip ci]"
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — próbuję ponownie..."
+              sleep $((attempt * 3))
+            done
+          else
+            echo "Brak zmian — pomijam commit."
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

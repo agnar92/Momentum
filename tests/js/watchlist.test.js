@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const {
     qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
-    fmtMarketCap, fmtVolume, fmtPct,
+    fmtMarketCap, fmtVolume, fmtPct, mergeProfiles, tabUniverse, chartsForTicker,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
 function stock(ticker, over = {}) {
@@ -328,14 +328,14 @@ test("readinessLine warns when the price is more than 5% above the pivot", () =>
 
 test("canslimInfo: seven criteria C A N S L I M, score needs >= 4 known, rows sorted by score", () => {
     const { canslimInfo, tagCanslim, canslimRows } = require("../../docs/js/watchlist.js");
-    const good = { ticker: "G", eps_q0_yoy: 40, eps_past_5y: 30, pct_from_high_52w: -4, accdis: "B", rs_rating: 92, inst_sponsor: true, composite_rating: 90 };
+    const good = { ticker: "G", eps_q0_yoy: 40, eps_this_y: 30, pct_from_high_52w: -4, accdis: "B", rs_rating: 92, inst_sponsor: true, composite_rating: 90 };
     const c = canslimInfo(good, "uptrend");
     assert.equal(c.score, 7);
     assert.deepEqual(canslimInfo(good, "correction").flags.M, false);
     assert.equal(canslimInfo(good, "correction").score, 6);
     const weak = { ticker: "W", eps_q0_yoy: 10, eps_this_y: 30, pct_from_high_52w: -30, accdis: "D", rs_rating: 50, inst_sponsor: false };
     const w = canslimInfo(weak, "uptrend");
-    assert.deepEqual(w.flags, { C: false, A: true, N: false, S: false, L: false, I: false, M: true });   // A: brak 5 lat → EPS w tym roku
+    assert.deepEqual(w.flags, { C: false, A: true, N: false, S: false, L: false, I: false, M: true });   // A: EPS w tym roku
     assert.equal(w.score, 2);
     const sparse = { ticker: "S", rs_rating: 90 };
     const stocks = [good, weak, sparse];
@@ -418,8 +418,9 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     assert.equal(canslimInfo({ ...base, sales_qq: 8 }, "uptrend").flags.C, false);
     assert.equal(canslimInfo({ ...base, sales_qq: 30 }, "uptrend").flags.C, true);
     assert.equal(canslimInfo(base, "uptrend").flags.C, true);
-    // A: słaba średnia 5 lat albo ROE < 17 % = czerwone; młoda spółka (bez 5 lat) oceniana po roku i ROE
-    assert.equal(canslimInfo({ ...base, eps_past_5y: 0.1 }, "uptrend").flags.A, false);
+    // A: EPS w tym roku < 25 % albo ROE < 17 % = czerwone; EPS z 5 lat nie wpływa na A (młode spółki, średnia ukrywa słaby rok)
+    assert.equal(canslimInfo({ ...base, eps_this_y: 10 }, "uptrend").flags.A, false);
+    assert.equal(canslimInfo({ ...base, eps_past_5y: 0.1 }, "uptrend").flags.A, true);
     assert.equal(canslimInfo({ ...base, roe: 9 }, "uptrend").flags.A, false);
     assert.equal(canslimInfo({ ...base, eps_past_5y: null }, "uptrend").flags.A, true);
     assert.equal(canslimInfo({ ...base, eps_past_5y: null, eps_this_y: null, roe: null }, "uptrend").flags.A, null);
@@ -433,8 +434,49 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     assert.equal(canslimInfo(base, { regime: "uptrend", distDays: 5 }).flags.M, false);
     assert.equal(canslimInfo(base, { regime: "correction", distDays: 0 }).flags.M, false);
     // zakładka: C i A obowiązkowe
-    const good = { ticker: "G", ...base }, noA = { ticker: "X", ...base, eps_past_5y: 0.1 };
+    const good = { ticker: "G", ...base }, noA = { ticker: "X", ...base, eps_this_y: 10 };
     tagCanslim([good, noA], "uptrend");
     assert.deepEqual(canslimRows([good, noA], 6).map(s => s.ticker), ["G", "X"]);
     assert.deepEqual(canslimRows([good, noA], 6, true).map(s => s.ticker), ["G"]);
+});
+
+test("mergeProfiles: CANSLIM i Qullamaggie to osobne listy; wspólna spółka zachowuje rekord CANSLIM", () => {
+    const cs = { generated_at: "t1", data_as_of: "2026-10-05", n_stocks: 2, market: { regime: "uptrend" }, stocks: [stock("AAA", { eps_q0_yoy: 40 }), stock("BBB")] };
+    const qm = { generated_at: "t2", data_as_of: "2026-10-02", finviz_total: 3675, stocks: [stock("AAA", { eps_q0_yoy: null }), stock("QQQ")] };
+    const m = mergeProfiles(cs, qm);
+    assert.deepEqual(m.stocks.map(s => [s.ticker, s.in_cs, s.in_qm]), [["AAA", true, true], ["BBB", true, false], ["QQQ", false, true]]);
+    assert.equal(m.stocks[0].eps_q0_yoy, 40);
+    assert.equal(m.qm.data_as_of, "2026-10-02");
+    assert.equal(m.n_stocks, 2);
+    assert.equal(m.market.regime, "uptrend");
+    // bez pliku Qullamaggiego (jeszcze nie odpalony ręcznie) zakładka QM jest pusta, reszta działa
+    const only = mergeProfiles(cs, null);
+    assert.equal(only.qm, null);
+    assert.deepEqual(tabUniverse("QM", only.stocks), []);
+    assert.deepEqual(tabUniverse("LIST", m.stocks).map(s => s.ticker), ["AAA", "BBB"]);
+    assert.deepEqual(tabUniverse("CS", m.stocks).map(s => s.ticker), ["AAA", "BBB"]);
+    assert.deepEqual(tabUniverse("QM", m.stocks).map(s => s.ticker), ["AAA", "QQQ"]);
+    assert.equal(tabUniverse("FAV", m.stocks).length, 3);   // ulubione / pozycje / alerty widzą obie listy
+    // rekord bez znaczników (stare dane) należy do obu list
+    assert.equal(tabUniverse("QM", [stock("OLD")]).length, 1);
+});
+
+test("chartsForTicker wybiera plik wykresów, który ma daną spółkę", () => {
+    const charts = { weeks: ["w1"], stocks: { AAA: {} }, qm: { weeks: ["w2"], stocks: { QQQ: {} } } };
+    assert.equal(chartsForTicker(charts, "AAA"), charts);
+    assert.equal(chartsForTicker(charts, "QQQ"), charts.qm);
+    assert.equal(chartsForTicker(charts, "NONE"), charts);
+    assert.equal(chartsForTicker(null, "AAA"), null);
+});
+
+test("próg RS (litera L) jest ustawiany przez użytkownika", () => {
+    const { canslimInfo, setCanslimRs } = require("../../docs/js/watchlist.js");
+    const s = { rs_rating: 72, industry_rating: 80 };
+    try {
+        assert.equal(canslimInfo(s, "uptrend").flags.L, false);   // domyślnie 80
+        setCanslimRs(70);
+        assert.equal(canslimInfo(s, "uptrend").flags.L, true);
+        setCanslimRs(NaN);   // nonsens wraca do wartości domyślnej
+        assert.equal(canslimInfo(s, "uptrend").flags.L, false);
+    } finally { setCanslimRs(80); }
 });
