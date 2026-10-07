@@ -1318,14 +1318,17 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         print(f"⚠️  Ocena rynku pominięta ({e}).")
         market = None
     rs_universe_path = Path(output_path).parent / "rs_universe.json"
-    rs_universe = None if qm else load_rs_universe(rs_universe_path)
+    # qm --skip-finviz (tylko ceny): lista jest przycięta do płynnych spółek, więc rozkładu RS nie nadpisujemy — używamy zapisanego
+    rs_universe = load_rs_universe(rs_universe_path) if (not qm or skip_finviz) else None
     stocks = build_stocks(finviz_rows, frames, bench_df=benchmark_df, rs_universe=(rs_universe or {}).get("scores"))
-    if qm:
-        # Szeroka lista = przybliżenie rynku (spółki nad SMA50/200): jej rozkład rs_score służy codziennemu profilowi CANSLIM do liczenia RS Rating.
+    if qm and not skip_finviz:
+        # Lista Qullamaggiego (płynne, zmienne spółki nad SMA20/50/200) = rozkład odniesienia RS: jej rozkład rs_score służy codziennemu profilowi CANSLIM do liczenia RS Rating.
         scores = sorted(round(float(s["rs_score"]), 4) for s in stocks if s.get("rs_score") is not None)
         as_of = max((s["as_of"] for s in stocks), default=None)
         rs_universe_path.write_text(json.dumps({"as_of": as_of, "n": len(scores), "scores": scores}, separators=(",", ":")), encoding="utf-8")
         rs_basis = {"source": "list", "n": len(scores), "as_of": as_of}
+    elif qm:
+        rs_basis = {"source": "market", "n": rs_universe["n"], "as_of": rs_universe.get("as_of")} if rs_universe else {"source": "list", "n": len(stocks), "as_of": None}
     elif rs_universe:
         rs_basis = {"source": "market", "n": rs_universe["n"], "as_of": rs_universe.get("as_of")}
         print(f"ℹ️  RS Rating względem szerokiego rynku ({rs_universe['n']} spółek z sesji {rs_universe.get('as_of')}).")
@@ -1334,7 +1337,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         print("ℹ️  Brak rs_universe.json — RS Rating względem listy CANSLIM (odpal ręcznie workflow Qullamaggie, żeby liczyć RS na szerokim rynku).")
     qm_selected = []
     if qm:
-        # RS Rating, Acc/Dis i grupy policzyły się już na CAŁEJ szerokiej liście (~3,7 tys. spółek — prawie cały rynek nad SMA50/200);
+        # RS Rating, Acc/Dis i grupy policzyły się już na całej liście z Finviz (przed odcięciem po obrocie i ADR);
         # teraz zapisujemy tylko płynne spółki, a wykresy budujemy dla top X % ceny/minimum.
         n_all = len(stocks)
         stocks = [s for s in stocks if _is_num(s.get("dollar_volume_avg")) and _is_num(s.get("adr_pct"))
