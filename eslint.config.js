@@ -3,9 +3,8 @@
 "use strict";
 
 // Globale przegladarki oraz globale dzielone miedzy zwyklymi <script> tagami
-// (bez modulow/bundlera): js/shared.js (tvUrlFor, compareRows, widgety
-// TradingView) i js/qol.js (toast/offline/loading) sa ladowane PRZED
-// watchlist.js i ep.js — patrz komentarze na gorze tych plikow.
+// (bez modulow/bundlera): js/shared.js (tvUrlFor, compareRows) i js/qol.js (toast/offline/loading) sa ladowane PRZED
+// watchlist.js — patrz komentarze na gorze tych plikow.
 const browserGlobals = {
     window: "readonly",
     document: "readonly",
@@ -30,9 +29,6 @@ const browserGlobals = {
     fundMiniHtml: "readonly",
     tvUrlFor: "readonly",
     compareRows: "readonly",
-    TV_EMBED_BASE: "readonly",
-    TV_1MIN_VWAP_WIDGET: "readonly",
-    buildTvWidgetBlock: "readonly",
     showToast: "readonly",
     showSheet: "readonly",
     closeSheet: "readonly",
