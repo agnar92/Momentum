@@ -480,3 +480,37 @@ test("próg RS (litera L) jest ustawiany przez użytkownika", () => {
         assert.equal(canslimInfo(s, "uptrend").flags.L, false);
     } finally { setCanslimRs(80); }
 });
+
+test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez bazy", () => {
+    const { actionInfo } = require("../../docs/js/watchlist.js");
+    const up = { regime: "uptrend", distDays: 2 };
+    const ok = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true };
+    const code = (s, m = up) => actionInfo({ ...ok, ...s }, m).code;
+    // pozycja ma pierwszeństwo
+    assert.equal(code({ position: { stop_hit: true, pl_pct: -8 } }), "SELL");
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 20 }, climax_top: true }), "TRIM");
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 3 }, pct_above_sma50: -2 }), "EXIT");
+    assert.equal(code({ position: { stop_hit: false, pl_pct: -3 }, pct_above_sma50: 4 }), "HOLD");   // nie dokupujemy do straty
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 3.5 }, pct_above_sma50: 10 }), "ADD");
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 3.5 }, pct_above_sma50: 10 }, { regime: "uptrend", distDays: 6 }), "HOLD");   // rynek pod presją
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 12 }, pct_above_sma50: 3 }), "ADD");   // odbicie od SMA50
+    assert.equal(code({ position: { stop_hit: false, pl_pct: 12 }, pct_above_sma50: 15 }), "HOLD");
+    // bez pozycji: fundamenty i rynek
+    assert.equal(code({ canslim: { flags: { C: false, A: true } } }), "SKIP");
+    assert.equal(code({}, { regime: "correction", distDays: 0 }), "NOBUY");
+    // wybicie z bazy: strefa zakupu, rynek pod presją, za późno
+    const brk = { base_type: "cup", pivot_state: "wybicie", pct_to_pivot: -2 };
+    assert.equal(code(brk), "BUY");
+    assert.equal(code(brk, { regime: "uptrend", distDays: 5 }), "BUY_HALF");
+    assert.equal(code({ ...brk, pct_to_pivot: -7 }), "LATE");
+    assert.equal(code({ base_type: "flat", pct_to_pivot: -2, pivot_state: "bez wolumenu" }), "NEAR");   // nad pivotem bez wolumenu to nie wybicie
+    assert.equal(code({ base_type: "flat", pct_to_pivot: 3 }), "NEAR");
+    assert.equal(code({ base_type: "cup", pct_to_pivot: 9 }), "BASE");
+    assert.equal(code({ base_type: "deep", pct_to_pivot: 3 }), "WAIT");   // głęboka korekta nie jest bazą do zakupu
+    // trend bez bazy
+    assert.equal(code({ pct_above_sma50: 3 }), "PULLBACK");
+    assert.equal(code({ pct_above_sma50: 9 }), "WAIT");
+    assert.equal(code({ pct_above_sma50: 22 }), "LATE");
+    // lista Qullamaggiego nie dostaje wskazówki CANSLIM
+    assert.equal(actionInfo({ in_cs: false }, up), null);
+});

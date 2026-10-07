@@ -374,6 +374,85 @@ function canslimInfo(s, mkt) {
 function tagCanslim(stocks, mkt) {
     stocks.forEach(s => { const c = canslimInfo(s, mkt); s.canslim = c; s.cs = c.known >= 4 ? c.score : null; });
 }
+
+// ---------- „Co robić” — jedna jasna wskazówka na spółkę (kolumna „Co robić”, pierwsza część linii gotowości) ----------
+// Kolejność: najpierw MOJA POZYCJA (sprzedaj / realizuj / dokup / trzymaj), potem rynek (M), potem sygnał wejścia z bazy lub trendu.
+// Zasady wg O'Neila (heurystyka, nie porada): kupuj WYBICIE z bazy na wolumenie ≥ 1,5× do +5 % nad pivotem; dalej nie goń; dokupuj tylko do zysku
+// (add-on 2–5 % nad zakupem, max ½ pozycji) albo przy odbiciu od SMA50; nigdy do straty; sprzedaj przy stracie 7–8 % lub zejściu pod SMA50 na wolumenie.
+const ACTION_DEFS = {
+    SELL: ["✂", "SPRZEDAJ", "bad", 0], TRIM: ["⚠", "REALIZUJ ZYSK", "bad", 1], EXIT: ["⚠", "ROZWAŻ WYJŚCIE", "bad", 2],
+    ADD: ["➕", "DOKUP", "good", 3], BUY: ["🎯", "KUP", "good", 4], BUY_HALF: ["🎯", "KUP ½", "good", 5],
+    NEAR: ["👀", "ALERT NA PIVOCIE", "watch", 6], PULLBACK: ["👀", "CZEKAJ NA ODBICIE", "watch", 7], BASE: ["⏳", "BAZA W BUDOWIE", "wait", 8],
+    WAIT: ["⏳", "CZEKAJ NA BAZĘ", "wait", 9], LATE: ["🚫", "ZA PÓŹNO", "wait", 10], HOLD: ["✔", "TRZYMAJ", "neutral", 11],
+    NOBUY: ["🛑", "NIE KUPUJ", "bad", 12], SKIP: ["—", "POZA CANSLIM", "muted", 13],
+};
+function actionInfo(s, mkt) {
+    const num = Number.isFinite;
+    const regime = mkt && typeof mkt === "object" ? mkt.regime : mkt;
+    const distDays = mkt && typeof mkt === "object" ? mkt.distDays : null;
+    const pressure = regime === "uptrend" && num(distDays) && distDays >= CANSLIM_THRESHOLDS.distDays;
+    const mk = (code, why) => ({ code, icon: ACTION_DEFS[code][0], label: ACTION_DEFS[code][1], tone: ACTION_DEFS[code][2], rank: ACTION_DEFS[code][3], why });
+    const above50 = s.pct_above_sma50;
+    const days = earningsInDays(s.earnings);
+    const earn = days !== null && days >= 0 && days <= EARNINGS_SOON_DAYS ? ` Uwaga: wyniki za ${days} dn. — nie otwieraj nowej pozycji tuż przed raportem.` : "";
+    const p = s.position;
+    if (p) {   // ---- mam pozycję ----
+        if (p.stop_hit) return mk("SELL", "Cena na stopie lub pod nim. Wyjdź zgodnie z planem — nie przesuwaj stopa w dół.");
+        if (s.climax_top === true) return mk("TRIM", "Sell climax top (gwałtowne wybicie na szczycie): O'Neil radzi realizować zysk w siłę, a nie czekać na spadek.");
+        if (num(above50) && above50 < 0) return mk("EXIT", `Cena ${Math.abs(above50).toFixed(1)}% pod SMA50. Zejście pod 50-dniową (zwłaszcza na wolumenie) to sygnał słabości — rozważ wyjście lub zacieśnij stop.`);
+        if (p.pl_pct < 0) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Pilnuj stopa. Nigdy nie dokupuj do straty (nie uśredniaj w dół).`);
+        if (regime === "correction" || pressure) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Rynek pod presją — nie dokupuj, pilnuj stopa.`);
+        if (p.pl_pct >= 2 && p.pl_pct <= 5) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)} (add-on: 2–5 % nad zakupem). Możesz dokupić do ½ początkowej pozycji, jeśli wolumen to potwierdza; łączne ryzyko trzymaj w limicie.`);
+        if (p.pl_pct > 5 && num(above50) && above50 >= 0 && above50 <= 6) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)}, a cena wróciła do SMA50 (+${above50.toFixed(1)}%). Odbicie od 50-dniowej to klasyczne miejsce na dokupienie — zaczekaj na zamknięcie nad poprzednim dniem.`);
+        return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Trzymaj. Kolejny add: cofnięcie do SMA50 z odbiciem albo wybicie NOWEJ bazy. Nie dokupuj, gdy cena jest rozciągnięta.`);
+    }
+    if (s.in_cs === false) return null;   // lista Qullamaggiego ma własną logikę
+    const f = s.canslim && s.canslim.flags;
+    if (f && (f.C === false || f.A === false)) return mk("SKIP", "Nie spełnia fundamentów CANSLIM (C lub A) — nie jest kandydatem.");
+    if (regime === "correction") return mk("NOBUY", "Rynek w korekcie (EMA10 < EMA20 tygodniowa). 3 na 4 akcje podąża za rynkiem — nie otwieraj nowych pozycji, tylko obserwuj.");
+    const buyable = BUYABLE_BASES.includes(s.base_type);
+    const toPivot = buyable && num(s.pct_to_pivot) ? s.pct_to_pivot : null;   // > 0 = jeszcze pod pivotem, < 0 = nad
+    const brokeOut = s.pivot_state === "wybicie" || s.tl_state === "wybicie";
+    const flagOver = num(s.tl_dist_pct) && s.tl_state === "wybicie" ? -s.tl_dist_pct : null;
+    const over = toPivot !== null && toPivot < 0 ? -toPivot : flagOver;
+    if (brokeOut && over !== null && over <= 5) {
+        return pressure
+            ? mk("BUY_HALF", `Wybicie na wolumenie (${over.toFixed(1)}% nad poziomem), ale rynek ma ${distDays} dni dystrybucji — max ½ pozycji.${earn}`)
+            : mk("BUY", `Wybicie na wolumenie, ${over.toFixed(1)}% nad poziomem (strefa zakupu do +5 %). Stop 7–8 % pod punktem wejścia.${earn}`);
+    }
+    if (over !== null && over > 5) return mk("LATE", `${over.toFixed(1)}% nad poziomem wybicia — poza strefą +5 %. Nie goń: czekaj na cofnięcie do SMA50 albo nową bazę.`);
+    if (toPivot !== null && toPivot < 0) return mk("NEAR", `Cena nad pivotem, ale bez wolumenu ≥ 1,5× — to jeszcze nie wybicie. Czekaj na dzień z wolumenem.${earn}`);
+    if (toPivot !== null && toPivot >= 0 && toPivot <= 5) return mk("NEAR", `${toPivot.toFixed(1)}% do pivotu (${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}). Ustaw alert na pivocie i kupuj dopiero przy wybiciu z wolumenem ≥ 1,5×.${earn}`);
+    if (s.tl_state === "przy oporze") return mk("NEAR", `Przy oporze flagi / korytarza (${num(s.tl_dist_pct) ? s.tl_dist_pct.toFixed(1) + "%" : "blisko"}). Ustaw alert; kupuj dopiero przy wybiciu z wolumenem.${earn}`);
+    if (toPivot !== null && toPivot > 5 && toPivot <= 15) return mk("BASE", `Baza w budowie, ${toPivot.toFixed(1)}% do pivotu. Czekaj, aż cena zbliży się do pivotu na malejącym wolumenie.`);
+    if (num(above50) && above50 >= 0 && above50 <= 5 && (!f || f.N !== false)) return mk("PULLBACK", `Cofnięcie do SMA50 (+${above50.toFixed(1)}%). W trendzie bez bazy to miejsce na dołączenie, ale dopiero na odbiciu: wypatruj zamknięcia nad poprzednim dniem z rosnącym wolumenem.${earn}`);
+    if (num(above50) && above50 > 15) return mk("LATE", `Cena ${above50.toFixed(1)}% nad SMA50 — rozciągnięta. Nie goń: czekaj na cofnięcie albo nową bazę.`);
+    return mk("WAIT", "Trend bez bazy. Nie kupuj w biegu. Czekaj na nową płaską bazę (≥ 5 tygodni, ≤ 15 % głębokości) i jej wybicie, albo na cofnięcie do SMA50 z odbiciem.");
+}
+function tagActions(stocks, mkt) {
+    stocks.forEach(s => {
+        const a = actionInfo(s, mkt);
+        s.action = a;
+        s.act_rank = a ? a.rank : null;
+    });
+}
+function actionSheetHtml(s) {
+    const a = s.action;
+    return `<div class="act-sheet"><p class="act-now"><strong>${a ? `${a.icon} ${a.label}` : "—"}</strong></p><p>${escapeHtml(a ? a.why : "Spółka z listy Qullamaggiego — ma własne zasady.")}</p>`
+        + `<h4>Jak dołączać do trendu (O'Neil)</h4><ol class="act-rules">`
+        + `<li><b>Pierwszy zakup</b> tylko na wybiciu z bazy (cup, flat) na wolumenie ≥ 1,5×, do +5 % nad pivotem. Stop 7–8 % pod wejściem.</li>`
+        + `<li><b>Add-on</b> (dokupienie) tylko do zysku: gdy cena jest 2–5 % nad zakupem — do ½ początkowej pozycji. Nigdy do straty.</li>`
+        + `<li><b>Odbicie od SMA50</b>: lider po wybiciu często cofa się do 50-dniowej. Dołączasz dopiero na odbiciu (nie „łapiesz noża”), ze stopem tuż pod średnią.</li>`
+        + `<li><b>Nowa baza</b>: trend bez bazy to nie sygnał. Czekaj na kolejną płaską bazę i kupuj jej wybicie — to najczystszy add.</li>`
+        + `<li><b>Nie goń</b>: > 5 % nad pivotem albo daleko nad SMA50 = ZA PÓŹNO.</li>`
+        + `<li><b>Rynek (M)</b>: korekta = nie kupuj nowych; ≥ 5 dni dystrybucji = tylko ½ pozycji.</li></ol>`
+        + `<p class="small muted">Heurystyka do nauki, nie porada inwestycyjna.</p></div>`;
+}
+function openActionSheet(ticker) {
+    const s = state.data && state.data.stocks.find(x => x.ticker === ticker);
+    if (!s) return;
+    showSheet(`${escapeHtml(ticker)} — co robić`, actionSheetHtml(s));
+}
 // coreRequired: C i A to fundament CANSLIM (O'Neil) — przy włączonym warunku wynik 6/7 nie może mieć czerwonego ani nieznanego C / A.
 function canslimRows(stocks, minScore, coreRequired = false) {
     return stocks.filter(s => s.cs !== null && s.cs >= minScore && (!coreRequired || (s.canslim.flags.C === true && s.canslim.flags.A === true))).sort((a, b) => b.cs - a.cs || (b.composite_rating ?? -1) - (a.composite_rating ?? -1));
@@ -481,6 +560,7 @@ function baseBoxHtml(s) {
 // Jedna linia „czy to już ten moment?” pod tytułem wykresu: dystans do wybicia, baza, wolumen, RS, rynek, wyniki.
 function readinessLine(s, regime) {
     const out = [];
+    if (s.action) out.push(`${s.action.icon} ${s.action.label} — ${s.action.why.split(/(?<=[.!?])\s/)[0]}`);   // pierwsze zdanie; całość po kliknięciu „Co robić”
     if (s.position) {
         const p = s.position;
         out.push(`💼 ${fmtPct(p.pl_pct)}${p.r !== null ? ` · ${p.r.toFixed(1)}R` : ""}${p.to_stop_pct !== null ? ` · stop ${p.stop_hit ? "PRZEBITY" : fmtPct(p.to_stop_pct)}` : ""}`);
@@ -682,6 +762,9 @@ const COL = {
         "Sell climax top (O'Neil, świece tygodniowe): w ostatnich 2 tygodniach wzrost ≥ 25 % w 1–3 tyg. z największym zyskiem tygodniowym, najszerszym zakresem i najwyższym wolumenem od dołka trendu. Liczba = potwierdzenia z 4: luka wyczerpania, zamknięcie w dolnej połowie, ≥ 70 % nad 200-dniową, 3.+ baza. Heurystyka — sprawdź wykres"],
     cs: ["CANSLIM", "cs", s => s.cs === null || s.cs === undefined ? `<td class="muted"></td>` : `<td class="cs-cell ${s.cs >= 5 ? "positive" : ""}" title="Kliknij, aby zobaczyć wyjaśnienie każdej litery"><strong>${s.cs}/7</strong> ${canslimLettersHtml(s.canslim)}</td>`,
         "Lista CANSLIM: ile z 7 kryteriów C A N S L I M spełnia spółka (zielone litery = spełnione, czerwone = nie, szare = brak danych)"],
+    act: ["Co robić", "act_rank", s => s.action
+        ? `<td class="act-cell act-${s.action.tone}" title="${escapeHtml(s.action.why)}"><strong>${s.action.icon} ${s.action.label}</strong></td>` : `<td class="muted"></td>`,
+        "Jedna wskazówka na spółkę: kup / dokup / czekaj / sprzedaj — z moich zasad O'Neila (kliknij po uzasadnienie)"],
     brk: ["Wybicie", "brk_sort", s => {
         if (!s.brk) return `<td class="muted"></td>`;
         const cls = s.brk.rank === 0 ? "positive" : "";
@@ -709,7 +792,7 @@ const COL = {
 };
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "cs", "cx", "brk", "pos", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "act", "cs", "cx", "brk", "pos", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "epsStab", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -720,9 +803,9 @@ const TAB_COLUMNS = {
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
-const COMPACT_COLUMNS = ["fav", "ticker", "score", "comp", "brk", "strat"];
+const COMPACT_COLUMNS = ["fav", "ticker", "score", "act", "cs", "brk"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "cs", "comp", "strat"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "act", "cs", "brk"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
@@ -775,6 +858,7 @@ function rowsForTab(tab) {
     tagStrategies(state.data.stocks, common, state, alerts);
     tagPositions(state.data.stocks, state.pos);
     tagCanslim(state.data.stocks, canslimMarket());
+    tagActions(state.data.stocks, canslimMarket());
     if (tab === "CS") return canslimRows(stocks, state.csMin, state.csCore);
     if (tab === "POS") return positionRows(stocks);
     if (tab === "QM") return qullamaggieRows(stocks, state.qm);
@@ -1335,6 +1419,8 @@ function initControls() {
     // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
         if (ev.target.closest("a") || ev.target.closest("input")) return;
+        const actCell = ev.target.closest("td.act-cell");
+        if (actCell) { openActionSheet(actCell.closest("tr[data-ticker]").dataset.ticker); return; }
         const csCell = ev.target.closest("td.cs-cell");
         if (csCell) { openCanslimSheet(csCell.closest("tr[data-ticker]").dataset.ticker); return; }
         const ack = ev.target.closest("[data-ack]"), del = ev.target.closest("[data-delline]");
@@ -1872,7 +1958,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
