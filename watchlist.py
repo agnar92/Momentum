@@ -1334,7 +1334,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         print(f"ℹ️  RS Rating względem szerokiego rynku ({rs_universe['n']} spółek z sesji {rs_universe.get('as_of')}).")
     else:
         rs_basis = {"source": "list", "n": len(stocks), "as_of": None}
-        print("ℹ️  Brak rs_universe.json — RS Rating względem listy CANSLIM (odpal ręcznie workflow Qullamaggie, żeby liczyć RS na szerokim rynku).")
+        print("ℹ️  Brak rs_universe.json — RS Rating względem listy CANSLIM (krok --profile qm codziennego workflow zapisuje rozkład RS).")
     qm_selected = []
     if qm:
         # RS Rating, Acc/Dis i grupy policzyły się już na całej liście z Finviz (przed odcięciem po obrocie i ADR);
@@ -1396,7 +1396,7 @@ def main(argv=None):
     parser.add_argument("--max-tickers", type=int, default=None, help="Limit liczby spółek (domyślnie z finviz_screen.json).")
     parser.add_argument("--output", type=str, default=None, help="Plik wyjściowy (domyślnie watchlist.json albo watchlist_qm.json dla --profile qm).")
     parser.add_argument("--profile", choices=("canslim", "qm"), default="canslim",
-                        help="canslim = codzienna lista CANSLIM (domyślnie); qm = szeroka lista Qullamaggiego (uruchamiana ręcznie).")
+                        help="canslim = codzienna lista CANSLIM (domyślnie); qm = lista Qullamaggiego (w codziennym workflow przed CANSLIM).")
     args = parser.parse_args(argv)
     return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile)
 
