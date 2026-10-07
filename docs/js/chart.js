@@ -623,7 +623,7 @@ function chartSvg(m, opts = {}) {
         const col = barColor(m, i);
         parts.push(`<g stroke="${col}" stroke-width="${step > 5 ? 1.6 : 1.1}">`
             + `<line x1="${x(i)}" x2="${x(i)}" y1="${yP(m.h[i])}" y2="${yP(m.l[i])}"/>`
-            + `<line x1="${x(i)}" x2="${x(i) + barHalf}" y1="${yP(m.c[i])}" y2="${yP(m.c[i])}"/></g>`);
+            + `<line x1="${x(i) - barHalf}" x2="${x(i) + barHalf}" y1="${yP(m.c[i])}" y2="${yP(m.c[i])}"/></g>`);   // zamknięcie po obu stronach słupka (styl O'Neila)
     }
     const clipAttr = `clip-path="url(#chartPriceClip${opts.uid || ""})"`;
     m.smas.forEach(x => {
