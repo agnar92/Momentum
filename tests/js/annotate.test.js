@@ -201,3 +201,34 @@ test("pen strokes: merged by id across devices, deletions are tombstones, undo r
     assert.deepEqual(rec.pen, []);
     assert.ok(rec.del.p1);
 });
+
+// ECO (okno 45 sesji): linia poprowadzona „na oko” przez palec ma po dopasowaniu leżeć na High / Low i nie być przebijana
+const ECO = {"d": ["2026-08-04", "2026-08-05", "2026-08-06", "2026-08-07", "2026-08-10", "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14", "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27", "2026-08-28", "2026-08-31", "2026-09-01", "2026-09-02", "2026-09-03", "2026-09-04", "2026-09-08", "2026-09-09", "2026-09-10", "2026-09-11", "2026-09-14", "2026-09-15", "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", "2026-09-29", "2026-09-30", "2026-10-01", "2026-10-02", "2026-10-05", "2026-10-06"], "h": [56.16, 58.35, 58.89, 58.56, 57.57, 56.45, 57.94, 65.87, 60.66, 63.36, 62.26, 64.68, 64.89, 66.25, 65.54, 65.31, 63.33, 66.79, 67.81, 67.44, 68.51, 69.17, 70.86, 71.77, 72.75, 72.3, 73.42, 76.21, 80.46, 83.27, 87.11, 87.31, 86.15, 85.8, 79.14, 79.08, 80.44, 79.71, 80.67, 80.7, 83.7, 85.84, 87.71, 90.64, 88.65], "l": [54.28, 55.48, 57.01, 55.49, 55.28, 54.74, 56.22, 62.93, 59.32, 61.12, 61.0, 62.97, 63.11, 64.18, 63.77, 64.13, 61.9, 63.97, 65.82, 65.8, 66.87, 67.46, 69.31, 69.69, 69.54, 70.38, 71.13, 73.19, 74.38, 79.53, 82.34, 84.78, 84.01, 81.71, 75.56, 75.61, 76.3, 76.38, 78.3, 78.23, 80.5, 80.36, 84.12, 85.81, 86.25]};
+
+test("annFitLine: opór wskazany na zamknięciu 87.28 siada na High 87.71, a nie na Close", () => {
+    const { annFitLine } = require("../../docs/js/annotate.js");
+    const f = annFitLine({ kind: "res", x0: "2026-09-17", y0: 87.31, x1: "2026-10-02", y1: 87.28 }, ECO.h, ECO.l, ECO.d, 3);
+    assert.equal(f.x1, "2026-10-02");
+    assert.equal(f.y1, 87.71);
+    assert.equal(f.y0, 87.31);
+    assert.equal(f.kind, "res");
+    assert.equal(f.pierce, 0);
+});
+
+test("annFitLine: wsparcie przez dołki zostaje na Low i nie jest przebijane; rodzaj ustawia się po wybranych ekstremach", () => {
+    const { annFitLine } = require("../../docs/js/annotate.js");
+    const f = annFitLine({ kind: "res", x0: "2026-09-23", y0: 75.8, x1: "2026-09-29", y1: 78.0 }, ECO.h, ECO.l, ECO.d, 3);
+    assert.equal(f.types, "ll");
+    assert.equal(f.kind, "sup");
+    assert.equal(f.y0, 75.61);
+    assert.equal(f.y1, 78.23);
+    assert.equal(f.pierce, 0);
+});
+
+test("annFitLine: gdy świeca przebija linię, wybiera czystszą parę albo zgłasza liczbę przebić; brak danych daje null", () => {
+    const { annFitLine } = require("../../docs/js/annotate.js");
+    const h = [10, 10.1, 12, 10.2, 10.3, 10.4, 10.2], l = h.map(v => v - 0.5), d = h.map((_, i) => "2026-01-0" + (i + 1));
+    const f = annFitLine({ kind: "res", x0: "2026-01-01", y0: 10, x1: "2026-01-06", y1: 10.4 }, h, l, d, 1);
+    assert.ok(f.pierce > 0 || f.x0 !== "2026-01-01");   // szczyt 12 w środku przebija prostą 10 → 10,4
+    assert.equal(annFitLine({ kind: "res", x0: "2026-01-01", y0: 10, x1: "2026-01-06", y1: 10 }, [], [], [], 1), null);
+});

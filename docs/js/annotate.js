@@ -141,6 +141,51 @@ function annTemplateCup(h, l, dates, tapIdx, last, lookback) {
 // ---------- stop i cel pozycji jako zwykłe linie z alertem ----------
 // Stop (alert „pod linią”) i cel (alert „nad linią”) to poziome linie z polem pos = "stop" | "target": widać je na wykresie,
 // przebicie trafia do zakładki Alerty. Zmiana lub usunięcie pozycji aktualizuje/usuwa linie (z nagrobkiem, żeby synchronizacja ich nie przywróciła).
+// Dopasowanie linii do świec: każdy koniec linii przeskakuje na NAJBLIŻSZY szczyt (High) albo dołek (Low) w oknie ±k świec od miejsca, w które
+// użytkownik wskazał (koszt = odległość w świecach + odległość ceny), a para końców musi być „czysta” — żadna świeca między nimi nie przebija
+// linii o więcej niż tol (opór po High, wsparcie po Low). Gdy najlepsza para przebija, bierzemy najtańszą czystą z kilku kandydatów; gdy takiej
+// nie ma, zostają najbliższe ekstrema, a `pierce` mówi, ile świec przebija. Zwraca {x0,y0,x1,y1,kind,pierce,types} albo null (za mało świec).
+function annFitLine(line, h, l, dates, k = 3, tol = 0.008) {
+    const n = dates.length;
+    if (!n || !h || !l) return null;
+    const at = d => { const i = dates.findIndex(x => x >= d); return i < 0 ? n - 1 : i; };
+    const i0 = at(line.x0), i1 = at(line.x1);
+    const cands = (i, price) => {
+        const out = [];
+        for (let j = Math.max(0, i - k); j <= Math.min(n - 1, i + k); j++) {
+            [["h", h[j]], ["l", l[j]]].forEach(([t, v]) => {
+                if (Number.isFinite(v) && v > 0) out.push({ j, t, v, cost: Math.abs(j - i) / k + Math.abs(v / price - 1) * 100 / 2 });
+            });
+        }
+        return out.sort((a, b) => a.cost - b.cost).slice(0, 8);
+    };
+    let A = cands(i0, line.y0), B = cands(i1, line.y1);
+    if (!A.length || !B.length) return null;
+    // intencja użytkownika = rodzaj najbliższych ekstremów: gdy oba końce celowały w szczyty (albo w dołki), rozważamy tylko ten rodzaj
+    // (linia wsparcia nie zamieni się po cichu w linię oporu tylko dlatego, że ta jest „czystsza”)
+    if (A[0].t === B[0].t) { const T = A[0].t; A = A.filter(c => c.t === T); B = B.filter(c => c.t === T); }
+    const pierces = (a, b) => {
+        if (a.t !== b.t) return 999;   // para szczyt + dołek to nie linia trendu — tylko ostateczność
+        if (b.j <= a.j) return 0;
+        let bad = 0;
+        for (let t = a.j; t <= b.j; t++) {
+            const v = a.v + (b.v - a.v) * (t - a.j) / (b.j - a.j);
+            if (a.t === "h" ? h[t] > v * (1 + tol) : l[t] < v * (1 - tol)) bad++;
+        }
+        return bad;
+    };
+    let best = null;
+    A.forEach(a => B.forEach(b => {
+        if (b.j <= a.j) return;
+        const bad = pierces(a, b), cost = a.cost + b.cost;
+        if (!best || (bad === 0 && best.bad > 0) || (bad === 0) === (best.bad === 0) && (bad === 0 ? cost < best.cost : bad < best.bad || (bad === best.bad && cost < best.cost))) best = { a, b, bad, cost };
+    }));
+    if (!best) return null;
+    const { a, b } = best;
+    const kind = a.t === "h" && b.t === "h" ? "res" : a.t === "l" && b.t === "l" ? "sup" : line.kind;
+    return { x0: dates[a.j], y0: Math.round(a.v * 100) / 100, x1: dates[b.j], y1: Math.round(b.v * 100) / 100, kind, pierce: best.bad, types: a.t + b.t };
+}
+
 function annSyncPositionLines(store, ticker, pos, asOf, now = new Date()) {
     const R = store[ticker] || (store[ticker] = annEmptyRecord());
     const want = { stop: pos && pos.stop > 0 ? pos.stop : null, target: pos && pos.target > 0 ? pos.target : null };
@@ -271,7 +316,7 @@ let annStore = {};
 const ANN_PEN_COLOR = "#ffd54a";
 const ANN_PEN_MAX_PTS = 800;
 const annPen = { on: false };   // tryb odręcznego rysowania (osobny od Linia / Cup): rec.pen = [{ id, pts: [[data, ułamek świecy, cena], ...] }]
-const annEdit = { on: false, mode: null, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null, pad: null, padTicker: null };
+const annEdit = { on: false, mode: null, spaceOn: false, tool: null, selected: null, kind: "res", alert: "", ext: false, pending: [], cursor: null, spaceHeld: false, menuOpen: false, lastTap: null, pad: null, padTicker: null, kindSet: false };
 let annCurrent = null;       // { render, ticker, full } ostatnio narysowanej warstwy
 let annOnRedraw = () => {};  // pełne przerysowanie wykresu (np. po ukryciu automatycznych linii)
 
@@ -372,7 +417,8 @@ function annOverlay(ctx) {
         const p = pt.matrixTransform(ov.getScreenCTM().inverse());
         return { x: p.x, y: p.y };
     };
-    // Punkt na wykresie (magnet jak w TradingView): x przyciągany do świecy, a cena do High / Low / Close świec w okolicy (±3),
+    // Punkt na wykresie (magnet jak w TradingView): x przyciągany do świecy, a cena do High / Low świec w okolicy (±3; Close celowo pominięty —
+    // dla linii trendu ważne są szczyty i dołki, a zamknięcie leżące tuż pod High przejmowało punkt),
     // jeśli któryś jest dość blisko kursora (na dotyku promień większy); inaczej cena swobodna. Promień liczony w pikselach ekranu.
     const pxScale = () => { const r = ov.getBoundingClientRect(); return Math.min(r.width / L.width, r.height / L.height) || 1; };
     const snap = p => {
@@ -381,7 +427,7 @@ function annOverlay(ctx) {
         const near = (coarse ? ANN_SNAP_TOUCH_PX : 14) / pxScale();
         let best = null;
         for (let j = Math.max(0, idx - 3); j <= Math.min(m.n - 1, idx + 3); j++) {
-            [m.h[j], m.l[j], m.c[j]].forEach(v => {
+            [m.h[j], m.l[j]].forEach(v => {
                 if (!Number.isFinite(v)) return;
                 const d = Math.hypot(p.x - geom.x(j), p.y - geom.yP(v));
                 if (d <= near && (!best || d < best.d)) best = { d, j, v };
@@ -615,6 +661,8 @@ function annOverlay(ctx) {
             const [p, q] = P[0].date <= P[1].date ? [P[0], P[1]] : [P[1], P[0]];
             if (p.date !== q.date) {
                 const line = { id: annNewId(), kind: annEdit.kind, x0: p.date, y0: p.price, x1: q.date, y1: q.price, alert: annEdit.alert || null, log: !!geom.useLog, ext: annEdit.ext };
+                const fit = annFitLine(line, full.h, full.l, full.weeks, full.daily ? 3 : 2);   // nowa linia od razu siada na szczytach / dołkach i nie jest przebijana
+                if (fit) { Object.assign(line, { x0: fit.x0, y0: fit.y0, x1: fit.x1, y1: fit.y1, kind: fit.kind === line.kind || annEdit.kindSet ? line.kind : fit.kind }); if (fit.pierce) showToast(`Dopasowano do świec, ale ${fit.pierce} świec przebija linię — sprawdź ustawienie.`); }
                 R.lines.push(line);
                 annEdit.selected = { type: "line", id: line.id };
             }
@@ -963,6 +1011,13 @@ function annObjectMenu(x, y) {
     const setKind = k => () => { line.kind = k; annChanged(); };
     const setAlert = v => () => { line.alert = v; line.ack = false; annChanged(); };
     annShowMenu(x, y, [
+        { label: "📐 Dopasuj do świec (szczyty / dołki)", run: () => {
+            const f = annCurrent && annCurrent.full ? annFitLine(line, annCurrent.full.h, annCurrent.full.l, annCurrent.full.weeks, annCurrent.full.daily ? 3 : 2) : null;
+            if (!f) { showToast("Za mało świec, żeby dopasować linię."); return; }
+            Object.assign(line, { x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1, kind: f.kind });
+            annChanged();
+            showToast(f.pierce ? `Dopasowano, ale ${f.pierce} świec nadal przebija linię.` : "Linia dopasowana: leży na szczytach / dołkach i nie jest przebijana.");
+        } },
         { label: "Wyrównaj poziomo (0°)", run: () => { annFlatten(line); annChanged(); } },
         { label: line.note && line.note.trim() ? "📝 Edytuj notatkę" : "📝 Dodaj notatkę", run: () => annShowNote(x, y, line.id, true) },
         null,
@@ -1165,7 +1220,7 @@ function annInitUI(onRedraw) {
     if ($("toolFlat")) $("toolFlat").addEventListener("click", () => { const l = annSelectedLine(); if (l) { annFlatten(l); annChanged(); } });
     $("kindSel").addEventListener("change", () => {
         const obj = annSelectedObject();
-        if (obj && annEdit.selected.type === "line") { obj.kind = $("kindSel").value; annSave(); } else annEdit.kind = $("kindSel").value;
+        if (obj && annEdit.selected.type === "line") { obj.kind = $("kindSel").value; annSave(); } else { annEdit.kind = $("kindSel").value; annEdit.kindSet = true; }
         if (annCurrent) annCurrent.render();
     });
     $("alertSel").addEventListener("change", () => {
@@ -1205,6 +1260,6 @@ function annInitUI(onRedraw) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT, annTemplateFlag, annTemplateCup, annUndoSnapshot, annUndoApply, annSyncPositionLines, annPositionLineValue,
+        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT, annTemplateFlag, annTemplateCup, annFitLine, annUndoSnapshot, annUndoApply, annSyncPositionLines, annPositionLineValue,
     };
 }
