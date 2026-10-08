@@ -920,3 +920,16 @@ body.split .chart-grid.layout-1 .cell-body > #chartPlot { flex: 1 1 auto; min-he
 body.split .chart-grid.layout-1 svg#chartSvg { width: 100%; height: 100%; max-height: none; }
 body.split .chart-grid.layout-1 .wl-range { height: 34px; margin: 2px 0 6px; }
 body.split table.momentum-table td, body.split table.momentum-table thead th { padding-left: 5px; padding-right: 5px; }
+
+/* ---------- telefon poziomo: pełny ekran bez menu — tylko suwak okna czasowego na górze i wykres (user: "jak przekręcam poziomo zrób full screen bez menu z linią itd, sam suwak na górze") ----------
+   Zostaje mały półprzezroczysty ✕ w lewym górnym rogu (wyjście); przyciski Linia / Cup / Pozycja, oceny, opisy i statystyki wracają po obróceniu telefonu pionowo. */
+@media (orientation: landscape) and (max-height: 520px) and (pointer: coarse) {
+    body:not(.split) .wl-chart-box { padding: 0 env(safe-area-inset-right, 0) 0 env(safe-area-inset-left, 0); }
+    body:not(.split) .wl-chart-box .wl-chart-head { position: absolute; top: 3px; left: calc(env(safe-area-inset-left, 0px) + 3px); z-index: 6; margin: 0; padding: 0; width: auto; background: none; border: 0; }
+    body:not(.split) .wl-chart-box .wl-chart-head > :not(.chart-modal-close) { display: none !important; }
+    body:not(.split) .wl-chart-box .wl-chart-head .chart-modal-close { display: block; width: 30px; height: 30px; flex: 0 0 30px; margin: 0; padding: 0; border-radius: 15px; font-size: 13px; line-height: 28px; opacity: 0.7; background: rgba(14, 15, 19, 0.7); }
+    body:not(.split) .wl-chart-box .wl-chart-ratings, body:not(.split) .wl-chart-box .wl-chart-ready, body:not(.split) .wl-chart-box .wl-chart-base, body:not(.split) .wl-chart-box .wl-chart-sub,
+    body:not(.split) .wl-chart-box .wl-chart-stats, body:not(.split) .wl-chart-box .wl-chart-estimates, body:not(.split) .wl-chart-box .wl-chart-pattern, body:not(.split) .wl-chart-box .wl-chart-tools { display: none !important; }
+    body:not(.split) .wl-chart-box .wl-range-row { margin: 3px 0 2px 38px; }
+    body:not(.split) .wl-chart-box #chartCrossDate { display: none; }
+}
