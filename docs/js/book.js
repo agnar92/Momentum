@@ -20,8 +20,8 @@ const BOOK_BUY_GAP = 5;              // kolejne punkty „Kup” nie częściej 
 const BOOK_REBOUND_WEEKS = 12;       // odbicie po korekcie rynku: do tylu tygodni od dołka S&P 500
 const BOOK_REBOUND_DD_X = 2.5;       // ... spółka spadła w korekcie nie więcej niż tyle × spadek S&P 500
 const BOOK_TIGHT_AFTER_BUY = 10;     // „ciasne zamknięcia” po kupnie: do tylu tygodni od punktu kupna
-const BOOK_RESUME_VOL = 0.75;         // „Dokup” po cofnięciu: wolumen wznowienia ≥ tyle × średnia (w mocnym trendzie średnia jest zawyżona przez skoki)
-const BOOK_ADD_GAP = 4;              // „Dokup” nie częściej niż co tyle tygodni
+const BOOK_RESUME_VOL = 1.0;          // „Dokup” po cofnięciu: wolumen wznowienia ≥ tyle × średnia (w mocnym trendzie średnia jest zawyżona przez skoki)
+const BOOK_ADD_GAP = 10;             // „Dokup” nie częściej niż co tyle tygodni
 const BOOK_DRY_RATIO = 0.6;          // wyschnięcie wolumenu: tydzień z wolumenem ≤ tyle × średnia
 const BOOK_CORRECTION_PCT = 8;       // korekta rynku: spadek S&P 500 od szczytu o co najmniej tyle % (tygodniowe zamknięcia)
 const BOOK_BASE_NAMES = { cup: "cup", double_bottom: "double bottom", flat: "flat base", ascending: "ascending base", htf: "high tight flag" };
@@ -165,7 +165,7 @@ function computeBook(m, splits = []) {
     // „Dokup” w trwającym trendzie wzrostowym (40-tygodniowa rośnie, 10 > 40, cena nad 10-tygodniową), dwa warianty (jak „Add” w książce):
     //  (a) odbicie od 10-tygodniowej: dołek tygodnia przy linii (≤ +4 %), poprzedni tydzień przy niej, ten w górę na rosnącym wolumenie;
     //  (b) wznowienie po krótkim cofnięciu: poprzedni tydzień spadkowy (zamknięcie niżej niż tydzień wcześniej), a ten zamyka się NAD maksimum
-    //      poprzedniego tygodnia na wolumenie ≥ 0,75× średniej — w mocnym trendzie cena prawie nie dotyka 10-tygodniowej, a okazji do dokupu jest wiele
+    //      poprzedniego tygodnia na wolumenie ≥ 1,0× średniej — w mocnym trendzie cena prawie nie dotyka 10-tygodniowej, a okazji do dokupu jest wiele
     let lastAdd = -99;
     for (let i = 12; i < n; i++) {
         const s10 = sma10[i], s40 = sma40[i];
@@ -175,7 +175,7 @@ function computeBook(m, splits = []) {
         const a = rowIdx(avg, i - 1);
         const bounce = l[i] <= s10 * 1.04 && c[i - 1] <= sma10[i - 1] * 1.03 && c[i] >= c[i - 1] && v[i] > v[i - 1];
         const resume = c[i - 1] < c[i - 2] && c[i] > h[i - 1] && Number.isFinite(a) && a > 0 && v[i] >= a * BOOK_RESUME_VOL;
-        if (!(bounce || resume) || i - lastAdd < BOOK_ADD_GAP) continue;
+        if (!(bounce || resume) || i - lastAdd < BOOK_ADD_GAP || book.buys.some(x => i - x.i > 0 && i - x.i < 6)) continue;   // nie tuż po kupnie
         book.adds.push({ i, label: "Dokup" }); lastAdd = i;
     }
     // ciasne zamknięcia: tylko w trendzie wzrostowym (nad 10- i 40-tygodniową) i tam, gdzie mają znaczenie dla kupna — w bazie (albo tuż po niej)
