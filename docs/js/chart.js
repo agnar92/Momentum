@@ -645,8 +645,8 @@ function chartSvg(m, opts = {}) {
             if (hintsOn) tag("D", x(cup.handle.iLow) + fs(16), yP(cup.handle.low));
             xE = Math.min(x(cup.handle.iEnd) + step * 3, L.width - L.right - fs(10));
         } else xE = Math.min(x(cup.i1) + step * 3, L.width - L.right - fs(10));
-        if (pivot) {   // pivot: bez rączki od lewego szczytu miseczki, z rączką od prawego brzegu — do punktu zakupu
-            parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${cup.noHandle ? x(cup.i0) : x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${CHART_COLORS.cup}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
+        if (pivot) {   // pivot: od prawego brzegu miseczki do punktu zakupu (otwarty cup bez rączki: rączka dopiero się formuje)
+            parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${CHART_COLORS.cup}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
             if (hintsOn) tag("E", xE, yP(pivot) - fs(14));
         }
         if (hintsOn && !hintLegendDone) {
