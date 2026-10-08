@@ -223,6 +223,40 @@ class TestPipeline:
         data = json.loads(out.read_text(encoding="utf-8"))
         assert data["finviz_stale"] is True and data["stocks"][0]["sector"] == "Tech" and data["finviz_total"] == 7
 
+    def test_fetch_and_compute_stages_match_the_all_in_one_run(self, tmp_path, monkeypatch):
+        rows = [{"ticker": t, "sector": "Tech"} for t in ("AAA", "BBB", "CCC")]
+        frames = {"AAA": make_prices(daily=0.004), "BBB": make_prices(daily=0.001), "CCC": make_prices(daily=0.002)}
+        frames["AAA"].attrs["splits"] = [["2026-05-01", 2.0]]
+        net = {"on": True}
+
+        def guarded(value):
+            def f(*a, **k):
+                if not net["on"]:
+                    raise AssertionError("sieć w kroku obliczeń")
+                return value(*a, **k) if callable(value) else value
+            return f
+        monkeypatch.setattr(finviz, "fetch_watchlist", guarded((rows, 3)))
+        monkeypatch.setattr(finviz, "MIN_TICKERS", 1)
+        monkeypatch.setattr(watchlist, "download_prices", guarded(lambda tickers, **k: {t: frames.get(t, make_prices(daily=0.0005)) for t in tickers}))
+        monkeypatch.setattr(watchlist, "update_eps_cache", guarded(lambda tickers, path: {}))
+        monkeypatch.setattr(watchlist, "update_estimates", guarded(lambda tickers, path: {}))
+        monkeypatch.setattr(watchlist, "fetch_usdpln", guarded({"usdpln": 3.9, "as_of": "2026-09-30"}))
+        monkeypatch.setattr(watchlist, "MIN_COVERAGE", 0.5)
+        all_out = tmp_path / "all" / "watchlist.json"
+        assert watchlist.run(all_out) == 0
+        split_out, raw_dir = tmp_path / "split" / "watchlist.json", tmp_path / "raw"
+        assert watchlist.run(split_out, stage="compute", raw_dir=raw_dir) == 1          # bez migawki nie ma czego liczyć
+        assert watchlist.run(split_out, stage="fetch", raw_dir=raw_dir) == 0
+        assert not split_out.exists() and (raw_dir / "canslim.pkl.gz").exists()          # pobranie niczego nie liczy ani nie publikuje
+        net["on"] = False                                                              # obliczenia nie mogą dotknąć sieci
+        assert watchlist.run(split_out, stage="compute", raw_dir=raw_dir) == 0
+        a, b = (json.loads(p.read_text(encoding="utf-8")) for p in (all_out, split_out))
+        for d in (a, b):
+            d.pop("generated_at")
+        assert a == b
+        assert (split_out.parent / "charts.json").exists()
+        assert watchlist.load_raw("canslim", raw_dir)["frames"]["AAA"].attrs["splits"] == [["2026-05-01", 2.0]]
+
     def test_run_fails_without_finviz_and_without_previous(self, tmp_path, monkeypatch):
         monkeypatch.setattr(finviz, "fetch_watchlist", lambda *a, **k: ([], 0))
         assert watchlist.run(tmp_path / "w.json") == 1
@@ -835,6 +869,12 @@ class TestOneilPatterns:
         assert b["type"] == "double_bottom" and b["open"]
         assert b["pivot"] == pytest.approx(92 * 1.005, rel=0.01)       # pivot = środkowy szczyt, a nie szczyt całej bazy (100)
         assert b["double_bottom"]["low2"] < b["double_bottom"]["low1"]   # drugie dno podcina pierwsze
+
+    def test_base_is_found_even_when_the_stock_is_far_under_its_old_record(self):
+        crashed = list(np.linspace(300, 60, 30)) + self.FLAT                    # rekord sprzed krachu −80 %: dawny szczyt nie może zasłaniać nowych baz
+        assert self.last(crashed, 1)["type"] == "flat"
+        slow = list(np.linspace(110, 62, 90)) + self.FLAT                       # wolna zniżka −44 % przez 90 tygodni: szczyt starszy niż okno baz
+        assert self.last(slow, 1)["type"] == "flat"
 
     def test_double_bottom_needs_an_undercut(self):
         no_undercut = self.RAMP + [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 82, 83, 85, 87, 89, 90]   # drugie dno NAD pierwszym
