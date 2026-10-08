@@ -188,7 +188,7 @@ function annFitLine(line, h, l, dates, k = 3, tol = 0.008) {
 
 function annSyncPositionLines(store, ticker, pos, asOf, now = new Date()) {
     const R = store[ticker] || (store[ticker] = annEmptyRecord());
-    const want = { stop: pos && pos.stop > 0 ? pos.stop : null, target: pos && pos.target > 0 ? pos.target : null };
+    const want = { stop: pos && pos.stop > 0 ? pos.stop : null, target: null };   // cel (take profit) usunięty na życzenie — użytkownik sam śledzi wyjście; stare linie celu znikają (nagrobek)
     const x0 = new Date(Date.parse(asOf + "T00:00:00Z") - 30 * 86400000).toISOString().slice(0, 10);
     ["stop", "target"].forEach(which => {
         const idx = R.lines.findIndex(l => l.pos === which);

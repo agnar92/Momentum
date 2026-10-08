@@ -237,27 +237,42 @@ test("swipeDirection needs a long, fast, mostly horizontal move", () => {
     assert.equal(swipeDirection(-90, 5, 1200), null);     // za wolno (przeciąganie)
 });
 
-test("positionSize sizes the position from risk; invalid inputs give null", () => {
-    const s = positionSize(50000, 0.5, 100, 95);          // ryzyko 250 $ / 5 $ na akcję = 50 akcji
-    assert.equal(s.shares, 50);
-    assert.equal(s.risk_usd, 250);
-    assert.equal(s.value, 5000);
+test("positionSize: konto w PLN, kurs USD/PLN, mniejsza z liczby akcji z % konta i z ryzyka do stopu", () => {
+    const acct = { capital: 40000, fx: 4, posPct: 10, riskPct: 0.5 };   // 10 000 $ konta; pozycja ≤ 1000 $, strata przy stopie ≤ 50 $
+    const s = positionSize(acct, 100, 95);                               // z pozycji: 10 akcji, z ryzyka: 50 / 5 = 10 akcji
+    assert.equal(s.shares, 10);
+    assert.equal(s.value_usd, 1000);
+    assert.equal(s.value_pln, 4000);
     assert.equal(s.pct_of_capital, 10);
-    assert.equal(positionSize(50000, 0.5, 100, 101), null);   // stop nad wejściem
-    assert.equal(positionSize(0, 0.5, 100, 95), null);
-    assert.equal(positionSize(50000, null, 100, 95), null);
-    assert.equal(positionSize(1000, 0.1, 100, 90).shares, 0);   // za małe ryzyko na choćby jedną akcję
+    assert.equal(s.risk_usd, 50);
+    assert.equal(s.risk_pln, 200);
+    assert.equal(s.risk_pct, 0.5);
+    // ryzyko ogranicza, gdy stop jest daleko: stop 90 → 5 akcji (strata 50 $), choć 10 % konta pozwalałoby na 10
+    const far = positionSize(acct, 100, 90);
+    assert.equal(far.shares, 5);
+    assert.equal(far.limited_by, "risk");
+    assert.ok(far.risk_pct <= 0.5 + 1e-9);
+    // tylko % konta (bez ryzyka): stop opcjonalny
+    const posOnly = positionSize({ capital: 40000, fx: 4, posPct: 10 }, 100, null);
+    assert.equal(posOnly.shares, 10);
+    assert.equal(posOnly.risk_pln, null);
+    // tylko ryzyko wymaga stopu poniżej wejścia
+    assert.equal(positionSize({ capital: 40000, fx: 4, riskPct: 0.5 }, 100, null), null);
+    assert.equal(positionSize({ capital: 40000, fx: 4, riskPct: 0.5 }, 100, 101), null);
+    assert.equal(positionSize({ capital: 40000, fx: null, posPct: 10 }, 100, 95), null);   // bez kursu nie przeliczymy
+    assert.equal(positionSize({ capital: 0, fx: 4, posPct: 10 }, 100, 95), null);
+    assert.equal(positionSize({ capital: 40000, fx: 4 }, 100, 95), null);                    // ani % konta, ani ryzyka
+    assert.equal(positionSize({ capital: 1000, fx: 4, riskPct: 0.1 }, 100, 90).shares, 0);   // za małe ryzyko na choćby jedną akcję
 });
 
-test("positionMetrics: P/L, R multiple, distance to stop, target R:R and stop hit", () => {
-    const m = positionMetrics({ entry: 100, stop: 95, shares: 20, target: 115 }, 110);
+test("positionMetrics: P/L, R multiple, distance to stop and stop hit", () => {
+    const m = positionMetrics({ entry: 100, stop: 95, shares: 20 }, 110);
     assert.ok(Math.abs(m.pl_pct - 10) < 1e-9);
     assert.equal(m.pl_usd, 200);
     assert.equal(m.r, 2);
     assert.ok(Math.abs(m.to_stop_pct - (95 / 110 - 1) * 100) < 1e-9);
     assert.equal(m.value, 2200);
     assert.equal(m.risk_usd, 100);
-    assert.equal(m.rr_target, 3);
     assert.equal(m.stop_hit, false);
     assert.equal(positionMetrics({ entry: 100, stop: 95 }, 94).stop_hit, true);
     const noStop = positionMetrics({ entry: 100 }, 105);
@@ -268,23 +283,27 @@ test("positionMetrics: P/L, R multiple, distance to stop, target R:R and stop hi
 
 test("tagPositions / positionRows / positionTotals: nearest to stop first and portfolio risk", () => {
     const a = stock("A", { price: 110 }), b = stock("B", { price: 100 }), c = stock("C");
-    tagPositions([a, b, c], { A: { entry: 100, stop: 95, shares: 20, target: null }, B: { entry: 100, stop: 98, shares: 10, target: null } });
+    tagPositions([a, b, c], { A: { entry: 100, stop: 95, shares: 20 }, B: { entry: 100, stop: 98, shares: 10 } });
     assert.equal(c.position, null);
     assert.deepEqual(positionRows([a, b, c]).map(s => s.ticker), ["B", "A"]);   // B: stop −2 %, A: stop −13,6 %
-    const t = positionTotals(positionRows([a, b, c]), 10000);
+    const t = positionTotals(positionRows([a, b, c]), 40000, 4);   // konto 40 000 zł = 10 000 $
     assert.equal(t.n, 2);
     assert.equal(t.risk, 120);
     assert.equal(t.risk_pct, 1.2);
+    assert.equal(t.risk_pln, 480);
     assert.equal(t.value, 2200 + 1000);
+    assert.equal(t.value_pln, 12800);
+    assert.equal(t.value_pct, 32);
+    assert.equal(positionTotals(positionRows([a, b, c]), 40000, null).value_pln, null);   // bez kursu nie przeliczamy
 });
 
 test("prefs keep positions and account with newest-wins merge and validate fields", () => {
-    const a = { pos: { A: { v: { entry: 10, stop: 9, shares: 5, target: null }, t: "2026-10-01T00:00:00.000Z" } }, acct: { main: { v: { capital: 1000, riskPct: 1 }, t: "2026-10-01T00:00:00.000Z" } } };
+    const a = { pos: { A: { v: { entry: 10, stop: 9, shares: 5 }, t: "2026-10-01T00:00:00.000Z" } }, acct: { main: { v: { capital: 1000, riskPct: 1, posPct: 10 }, t: "2026-10-01T00:00:00.000Z" } } };
     const b = { pos: { A: { v: null, t: "2026-10-02T00:00:00.000Z" }, B: { v: { entry: "x" }, t: "2026-10-02T00:00:00.000Z" } } };
     const m = mergePrefs(a, b);
     assert.equal(m.pos.A.v, null);            // usunięcie (nowsze) wygrywa
     assert.equal(m.pos.B.v, null);            // wpis bez poprawnego wejścia jest odrzucany
-    assert.deepEqual(m.acct.main.v, { capital: 1000, riskPct: 1 });
+    assert.deepEqual(m.acct.main.v, { capital: 1000, riskPct: 1, posPct: 10, fx: null });
     assert.deepEqual(prefsNormalize({}).pos, {});
 });
 

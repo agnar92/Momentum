@@ -33,7 +33,8 @@ QM_OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist_qm.json"    # profil Qullam
 QM_WINDOWS = ("low_ratio_1m", "low_ratio_3m", "low_ratio_6m")
 
 DAILY_BARS_PER_WEEK = 5      # wzorce na wykresie dziennym: progi w tygodniach × 5 świec
-HISTORY_PERIOD = "5y"        # 12M do RS Rating + 156 tyg. wykresu + rozgrzanie SMA40 tygodniowej + historia baz (opisy z książki)
+HISTORY_PERIOD = "10y"       # wykres tygodniowy ~6 lat (CHART_WEEKS) + rozgrzanie SMA40 + historia baz (opisy z książki); RS Rating liczy tylko ostatnie 12M
+DAILY_KEEP = 1700            # compute_metrics i bazy dzienne używają tylko ostatnich ~6,7 roku sesji (reszta historii tylko rozgrzewa średnie tygodniowe)
 BATCH_SIZE = 50
 MIN_COVERAGE = 0.7           # minimalny odsetek spółek z Finviz, dla których dostaliśmy ceny
 AVG_SESSIONS = 20            # okno ADR% i średniego obrotu (~miesiąc sesji)
@@ -45,7 +46,7 @@ EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/
 EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
 CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
-CHART_WEEKS = 156            # ile tygodni pokazuje wykres w stylu książki O'Neila (~3 lata, jak cała pobrana historia)
+CHART_WEEKS = 312            # ile tygodni mieści wykres w stylu książki O'Neila (6 lat; domyślnie widać 156 = 3 lata, resztę pokazuje suwak)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
 MARKET_EMA_FAST = 10         # rynek w uptrendzie = EMA10 tygodniowa > EMA20 tygodniowa indeksu
@@ -74,7 +75,7 @@ BASE_CUP_MAX_DEPTH_PCT = 35
 BOB_MAX_GAP_WEEKS = 8        # baza na bazie: nowa baza zaczyna się najpóźniej tyle tygodni po końcu poprzedniej (po jej wybiciu)
 BOB_MAX_RUN_PCT = 20         # ... cena nie uciekła od pivotu poprzedniej bazy o więcej niż tyle % (inaczej to nowy etap, nie baza na bazie)
 BOB_MIN_LOW_FRAC = 0.90      # ... a dołek nowej bazy nie spadł głębiej niż 10 % pod pivot poprzedniej
-BASE_MAX_SHOWN = 10          # ile ostatnich baz trafia na wykres (opisy z książki: ramki baz, punkty kupna)
+BASE_MAX_SHOWN = 20          # ile ostatnich baz trafia na wykres (opisy z książki: ramki baz, punkty kupna)
 # Cup (z rączką) wg kryteriów O'Neila — baza jest "cup" tylko, gdy spełnia je wszystkie (inaczej "korekta"):
 CUP_MIN_DEPTH_PCT = 12       # głębokość od lewego szczytu do dołka (płytsze to raczej flat)
 CUP_MAX_DEPTH_PCT = 33       # normalnie do ~33 %
@@ -95,6 +96,7 @@ CUP_HANDLE_MAX_WEEKS = 10
 CUP_HANDLE_MAX_DEPTH_PCT = 15.0
 CUP_MKT_CONTEXT_DD = 7.0     # S&P spadł >= 7 % w trakcie tworzenia miseczki = „pod presją rynku”
 ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "skurcze" (VCP)
+EPS_CACHE_VERSION = 2        # v2 = historia raportów do 40 kwartałów (limit=40); starsze wpisy (20) są pobierane ponownie
 EPS_CACHE_MAX_AGE_DAYS = 7   # EPS zmienia się raz na kwartał — nie pytamy Yahoo codziennie
 EPS_TIME_BUDGET_S = 600
 EPS_WORKERS = 4
@@ -146,6 +148,19 @@ def download_prices(tickers, period=HISTORY_PERIOD, batch_size=BATCH_SIZE):
             continue
         frames.update(_extract_frames(data, batch))
     return frames
+
+
+def fetch_usdpln():
+    """Kurs USD/PLN (ostatnie zamknięcie z Yahoo, ticker PLN=X) do przeliczania kapitału z konta IKE (PLN) na liczbę akcji; None, gdy niedostępny."""
+    try:
+        df = download_prices(["PLN=X"], period="10d").get("PLN=X")
+        if df is None or not len(df):
+            return None
+        rate = float(df["Close"].iloc[-1])
+        return {"usdpln": round(rate, 4), "as_of": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")} if 1.0 < rate < 20.0 else None
+    except Exception as e:
+        print(f"⚠️  Kurs USD/PLN niedostępny ({e}) — przeliczenie kapitału wpisze się ręcznie.")
+        return None
 
 
 def drop_incomplete_bar(df, now_utc=None):
@@ -268,7 +283,7 @@ def add_accdis_rating(stocks):
 def compute_metrics(df, bench_w=None):
     """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
     bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
-    df = df.copy()
+    df = df.tail(DAILY_KEEP).copy()
     df.index = pd.DatetimeIndex(df.index).tz_localize(None)
     close = df["Close"].astype(float)
     if len(close) < 30:
@@ -1157,7 +1172,7 @@ def eps_quarters(rows):
 
 def fetch_eps_one(ticker):
     import yfinance as yf
-    ed = yf.Ticker(ticker).get_earnings_dates(limit=20)
+    ed = yf.Ticker(ticker).get_earnings_dates(limit=40)
     if ed is None or ed.empty:
         return []
     rows = []
@@ -1180,7 +1195,7 @@ def update_eps_cache(tickers, cache_path=EPS_CACHE_PATH, now=None, fetch=fetch_e
     except (FileNotFoundError, ValueError):
         cache = {}
     stale = [t for t in tickers
-             if t not in cache or (now - pd.Timestamp(cache[t].get("fetched", "1970-01-01"))).days >= max_age_days]
+             if t not in cache or cache[t].get("v") != EPS_CACHE_VERSION or (now - pd.Timestamp(cache[t].get("fetched", "1970-01-01"))).days >= max_age_days]
     if stale:
         print(f"⏳ EPS: pobieram historię dla {len(stale)} spółek (limit {time_budget_s}s)...")
         started = time.time()
@@ -1195,7 +1210,7 @@ def update_eps_cache(tickers, cache_path=EPS_CACHE_PATH, now=None, fetch=fetch_e
         with ThreadPoolExecutor(EPS_WORKERS) as pool:
             for t, rows in pool.map(work, stale):
                 if rows is not None:
-                    cache[t] = {"fetched": now.strftime("%Y-%m-%d"), "rows": rows}
+                    cache[t] = {"fetched": now.strftime("%Y-%m-%d"), "rows": rows, "v": EPS_CACHE_VERSION}
     cache = {t: v for t, v in cache.items() if t in set(tickers) or (now - pd.Timestamp(v.get("fetched", "1970-01-01"))).days <= CACHE_KEEP_DAYS}   # cache dzielą oba skanery — nie kasujemy cudzych wpisów
     out = Path(cache_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1366,14 +1381,14 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
     if bench is not None:
         bench_d = bench["Close"].astype(float).set_axis(pd.DatetimeIndex(bench.index).tz_localize(None).normalize()).groupby(level=0).last()
     for t, df in cleaned.items():
-        chart = build_chart(weekly_ohlcv(df, last_date), weeks)
+        chart = build_chart(weekly_ohlcv(df, last_date).tail(n_weeks + 80), weeks)
         quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
         first = payload["weeks"][0]
-        wk = weekly_ohlcv(df, last_date)
+        wk = weekly_ohlcv(df, last_date).tail(n_weeks + 80)   # +80 tygodni rozgrzewki średnich / historii baz
         all_bases = detect_bases(wk, bench_w)
         chart["bases"] = [b for b in all_bases if b["end"] >= first][-BASE_MAX_SHOWN:]
         first_day = payload["days"][0]
-        chart_day_bases = [b for b in detect_bases(_daily_ohlc(df), None, DAILY_BARS_PER_WEEK) if b["end"] >= first_day][-BASE_MAX_SHOWN:]
+        chart_day_bases = [b for b in detect_bases(_daily_ohlc(df).tail(1000), None, DAILY_BARS_PER_WEEK) if b["end"] >= first_day][-BASE_MAX_SHOWN:]
         chart["splits"] = [{"d": d, "r": r} for d, r in (frames[t].attrs.get("splits") or []) if d >= first]
         chart["climax"] = detect_climax_top(wk, all_bases)
         chart["eps"] = [q for q in quarters if q["d"] >= first]
@@ -1393,7 +1408,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
             chart["rs_hi"] = [int(bool(v)) for v in wrs_hi.reindex(widx).fillna(False)]
             chart["px_hi"] = [int(bool(v)) for v in wpx_hi.reindex(widx).fillna(False)]
         chart["tl"] = detect_consolidation(wk, WEEKLY_FLAG)
-        chart["day"]["tl"] = detect_consolidation(_daily_ohlc(df), DAILY_FLAG)
+        chart["day"]["tl"] = detect_consolidation(_daily_ohlc(df).tail(400), DAILY_FLAG)
         chart["day"]["climax"] = chart["climax"]   # ten sam tydzień, znacznik na wykresie dziennym ląduje na ostatniej sesji tygodnia
         payload["stocks"][t] = chart
     return payload
@@ -1593,6 +1608,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         "profile": profile,
         "rs_basis": rs_basis,
         "market": market,
+        "fx": fetch_usdpln() or (previous or {}).get("fx"),
         "stocks": stocks,
     }
     out = Path(output_path)

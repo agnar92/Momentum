@@ -296,9 +296,10 @@ class TestCharts:
 
     def test_update_eps_cache_fetches_only_stale_and_survives_errors(self, tmp_path):
         path = tmp_path / "eps.json"
-        path.write_text(json.dumps({"FRESH": {"fetched": "2026-09-30", "rows": [1]},
+        path.write_text(json.dumps({"FRESH": {"fetched": "2026-09-30", "rows": [1], "v": watchlist.EPS_CACHE_VERSION},
+                                    "OLDV": {"fetched": "2026-09-30", "rows": [9]},   # wpis ze starej wersji cache (20 kwartałów) — pobierany ponownie
                                     "OLD": {"fetched": "2026-09-01", "rows": [2]},
-                                    "OTHER": {"fetched": "2026-09-30", "rows": [3]},      # ticker drugiego skanera — zostaje
+                                    "OTHER": {"fetched": "2026-09-30", "rows": [3], "v": watchlist.EPS_CACHE_VERSION},      # ticker drugiego skanera — zostaje
                                     "GONE": {"fetched": "2026-06-01", "rows": [4]}}), encoding="utf-8")   # nieodświeżany > CACHE_KEEP_DAYS — sprzątany
         calls = []
 
@@ -307,8 +308,8 @@ class TestCharts:
             if t == "BAD":
                 raise RuntimeError("429")
             return [{"date": "2026-07-30", "eps": 1.0, "est": 1.0}]
-        cache = watchlist.update_eps_cache(["FRESH", "OLD", "NEW", "BAD"], path, now="2026-10-01", fetch=fake_fetch)
-        assert sorted(calls) == ["BAD", "NEW", "OLD"]
+        cache = watchlist.update_eps_cache(["FRESH", "OLD", "OLDV", "NEW", "BAD"], path, now="2026-10-01", fetch=fake_fetch)
+        assert sorted(calls) == ["BAD", "NEW", "OLD", "OLDV"]
         assert cache["FRESH"]["rows"] == [1] and cache["OLD"]["fetched"] == "2026-10-01"
         assert "BAD" not in cache and "GONE" not in cache  # blad = brak wpisu; wpisy bez odswiezenia > 45 dni sprzatane
         assert cache["OTHER"]["rows"] == [3]               # wpis spolki z drugiego skanera (wspolny plik) zostaje
@@ -854,3 +855,19 @@ class TestSplits:
         frames = watchlist._extract_frames(data, ["AAA"])
         assert "splits" not in frames["AAA"].attrs
         assert watchlist.build_charts(["AAA"], frames, None, {})["stocks"]["AAA"]["splits"] == []
+
+
+class TestFx:
+    def test_fetch_usdpln_returns_last_close(self, monkeypatch):
+        df = make_prices(n=5, start=3.7, daily=0.0, end="2026-10-02")
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": {"PLN=X": df})
+        fx = watchlist.fetch_usdpln()
+        assert fx == {"usdpln": 3.7, "as_of": "2026-10-02"}
+
+    def test_fetch_usdpln_rejects_nonsense_and_errors(self, monkeypatch):
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": {"PLN=X": make_prices(n=3, start=0.2, daily=0.0)})
+        assert watchlist.fetch_usdpln() is None
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": (_ for _ in ()).throw(RuntimeError("net")))
+        assert watchlist.fetch_usdpln() is None
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": {})
+        assert watchlist.fetch_usdpln() is None

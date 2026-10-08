@@ -103,8 +103,10 @@
         </div>
         <div class="tab-controls" id="controls-FAV" hidden></div>
         <div class="tab-controls" id="controls-POS" hidden>
-            <label class="field" title="Kapitał do liczenia ryzyka portfela i wielkości pozycji (synchronizowany z linią/Gistem)"><span>Kapitał ($):</span><input type="number" inputmode="decimal" step="any" id="acctCapital" placeholder="np. 50000"></label>
-            <label class="field" title="Ile % kapitału ryzykujesz na jednej pozycji (wejście → stop)"><span>Ryzyko / pozycję (%):</span><input type="number" inputmode="decimal" step="any" id="acctRisk" placeholder="np. 0.5"></label>
+            <label class="field" title="Wartość konta (IKE) w PLN — do przeliczenia na liczbę akcji po kursie USD/PLN (synchronizowane z Gistem)"><span>Konto (PLN):</span><input type="number" inputmode="decimal" step="any" id="acctCapital" placeholder="np. 50000"></label>
+            <label class="field" title="Ile % konta ma wynosić jedna pozycja"><span>Pozycja (% konta):</span><input type="number" inputmode="decimal" step="any" id="acctPosPct" placeholder="np. 10"></label>
+            <label class="field" title="Ile % konta tracisz, gdy cena dojdzie do stopu (wejście → stop); liczba akcji jest ograniczona tak, żeby strata się zgadzała"><span>Ryzyko do stopu (% konta):</span><input type="number" inputmode="decimal" step="any" id="acctRisk" placeholder="np. 0.5"></label>
+            <span class="small muted" id="acctFx"></span>
         </div>
 
         <details class="screener-guide" id="guide-LIST"><summary>📋 Lista — co to jest</summary>Pełna lista z DWÓCH skanerów Finviz, pobieranych codziennie: (1) szeroki skaner (kapitalizacja ≥ 2 mld $, średni wolumen > 1 mln, cena nad SMA20/50/200; zapisujemy WSZYSTKIE spółki, progi obrotu i ADR ustawiasz w Filtrach) oraz (2) skaner CANSLIM (cena > 10 $, nad SMA50 i SMA200, EPS i sprzedaż ostatniego kwartału r/r ≥ 25 %, EPS w tym roku ≥ 25 %, ROE ≥ 15 %; filtry w <code>finviz_screen.json</code>). Spółki z obu skanerów mają rekord CANSLIM (z fundamentami); zakładka 🏆 CANSLIM pokazuje tylko skaner CANSLIM. Wykresy, EPS i estymaty analityków są liczone dla wszystkich spółek obu skanerów.</details>
@@ -142,14 +144,14 @@
                 <button type="button" class="btn" id="chartPenBtn" title="Rysowanie odręczne: włącz i rysuj palcem / myszą po wykresie (zapisuje się przy spółce)">✏️<span class="lbl"> Rysuj</span></button>
                 <button type="button" class="btn" id="chartPenClear" title="Usuń wszystkie odręczne rysunki tej spółki" hidden>🗑</button>
                 <button type="button" class="btn" id="chartPosBtn" title="Moja pozycja: wejście, stop, cel, kalkulator wielkości pozycji">💼<span class="lbl"> Pozycja</span></button>
-                <button type="button" class="btn sec-btn" id="chartLayoutBtn" title="Układ wykresów: 1 wykres / dzienny + tygodniowy / 4 spółki z listy">Układ: 1 wykres</button>
+                <button hidden type="button" class="btn sec-btn" id="chartLayoutBtn" title="Układ wykresów: 1 wykres / dzienny + tygodniowy / 4 spółki z listy">Układ: 1 wykres</button>
             <button type="button" class="btn sec-btn" id="chartFullBtn" title="Powiększ wykres na cały ekran (klawisz F, Esc wychodzi)">⛶ Pełny ekran</button>
-                <button type="button" class="btn" id="chartTfBtn" title="Przełącz wykres: tygodniowy / dzienny">Wykres: tygodniowy</button>
+                <button hidden type="button" class="btn" id="chartTfBtn" title="Przełącz wykres: tygodniowy / dzienny">Wykres: tygodniowy</button>
                 <button type="button" class="btn sec-btn" id="chartEstBtn" title="Estymaty analityków: cena celu (zakres i średnia) oraz rewizje konsensusu EPS w czasie">Estymaty: wył.</button>
-            <button type="button" class="btn sec-btn" id="chartBookBtn" title="Wygląd i opisy jak na wykresach z książki O'Neila (tygodniowy): ramki baz, Kup / Dokup, ciasne zamknięcia, strzałki wolumenu, korekty rynku, oś Cena = 20×EPS">📖 Książka: wł.</button>
+            <button hidden type="button" class="btn sec-btn" id="chartBookBtn" title="Wygląd i opisy jak na wykresach z książki O'Neila (tygodniowy): ramki baz, Kup / Dokup, ciasne zamknięcia, strzałki wolumenu, korekty rynku, oś Cena = 20×EPS">📖 Książka: wł.</button>
             <button type="button" class="btn sec-btn" id="chartHintBtn" title="Podpowiedzi edukacyjne: pokazuje wykryty cup z rączką z literami A–E jak w książce O'Neila">💡 Nauka: wył.</button>
             <button type="button" class="btn sec-btn" id="chartLegendBtn" title="Pokaż / ukryj legendę i podpisy paneli na wykresie (telefon)">Legenda: wył.</button>
-            <button type="button" class="btn sec-btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
+            <button hidden type="button" class="btn sec-btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>
                 <label class="field chart-score sec-btn" title="Twój własny score tej spółki (zapisuje się po zatwierdzeniu)"><span>Score:</span><input type="number" step="any" id="chartScore" placeholder="–"></label>
                 <a class="btn sec-btn" id="chartFv" href="#" target="_blank" rel="noopener">📊 Finviz ↗</a>
                 <a class="btn sec-btn" id="chartZx" href="#" target="_blank" rel="noopener" title="Zacks Rank, Style Scores, konsensus i rewizje EPS">🎯 Zacks ↗</a>

@@ -52,7 +52,7 @@ function mergeProfiles(cs, qm) {
         else { const row = { ...s, in_cs: false, in_qm: true }; stocks.push(row); byTicker.set(s.ticker, row); }
     });
     const meta = qm && qm.stocks && qm.stocks.length ? { generated_at: qm.generated_at, data_as_of: qm.data_as_of, n_stocks: qm.stocks.length, finviz_total: qm.finviz_total, finviz_stale: qm.finviz_stale } : null;
-    return { ...(cs || { n_stocks: 0 }), stocks, qm: meta };
+    return { ...(cs || { n_stocks: 0 }), stocks, qm: meta, fx: (cs && cs.fx) || (qm && qm.fx) || null };
 }
 const inCs = s => s.in_cs !== false;
 const inQm = s => s.in_qm !== false;
@@ -104,7 +104,7 @@ const state = {
     favs: new Set(),
     scores: {},
     pos: {},
-    acct: { capital: null, riskPct: null },
+    acct: { capital: null, riskPct: null, posPct: null, fx: null },
     scoreMin: null,
     scoreMax: null,
     search: "",
@@ -181,15 +181,29 @@ function baseRows(stocks, params) {
 }
 
 // ---------- pozycje ----------
-// Wielkość pozycji z ryzyka: akcje = floor(kapitał · ryzyko% / (wejście − stop)). null, gdy dane nie mają sensu (stop nad wejściem itd.).
-function positionSize(capital, riskPct, entry, stop) {
-    if (![capital, riskPct, entry, stop].every(Number.isFinite) || capital <= 0 || riskPct <= 0 || entry <= 0 || stop <= 0 || stop >= entry) return null;
-    const perShare = entry - stop;
-    const shares = Math.floor((capital * riskPct / 100) / perShare);
-    return { shares, risk_usd: shares * perShare, value: shares * entry, pct_of_capital: shares * entry / capital * 100 };
+// Wielkość pozycji dla konta w PLN (IKE): kapitał PLN ÷ kurs USD/PLN = kapitał w USD. Liczba akcji = mniejsza z dwóch: z % konta na pozycję
+// (kapitał · posPct% / wejście) i z ryzyka do stopu (kapitał · riskPct% / (wejście − stop)) — dzięki temu strata przy stopie nigdy nie przekracza
+// zadanego ryzyka, a pozycja nie przekracza zadanego % konta. Wystarczy jedno z dwóch (posPct albo riskPct); null, gdy dane nie mają sensu.
+function positionSize(acct, entry, stop) {
+    const { capital, fx, posPct, riskPct } = acct || {};
+    const okPos = Number.isFinite(posPct) && posPct > 0, okRisk = Number.isFinite(riskPct) && riskPct > 0;
+    if (![capital, fx, entry].every(Number.isFinite) || capital <= 0 || fx <= 0 || entry <= 0 || (!okPos && !okRisk)) return null;
+    const perShare = Number.isFinite(stop) && stop > 0 && stop < entry ? entry - stop : null;
+    if (okRisk && !okPos && perShare === null) return null;
+    const capUsd = capital / fx;
+    const byPos = okPos ? capUsd * posPct / 100 / entry : Infinity;
+    const byRisk = okRisk && perShare !== null ? capUsd * riskPct / 100 / perShare : Infinity;
+    const shares = Math.floor(Math.min(byPos, byRisk));
+    if (!Number.isFinite(shares)) return null;
+    return {
+        shares, limited_by: byRisk < byPos ? "risk" : "pos",
+        value_usd: shares * entry, value_pln: shares * entry * fx, pct_of_capital: shares * entry / capUsd * 100,
+        risk_usd: perShare !== null ? shares * perShare : null, risk_pln: perShare !== null ? shares * perShare * fx : null,
+        risk_pct: perShare !== null ? shares * perShare / capUsd * 100 : null,
+    };
 }
 
-// Metryki otwartej pozycji względem bieżącej ceny: zysk (%, $), wielokrotność ryzyka R, odległość do stopu, wartość, ryzyko początkowe, R:R celu.
+// Metryki otwartej pozycji względem bieżącej ceny: zysk (%, $), wielokrotność ryzyka R, odległość do stopu, wartość, ryzyko początkowe.
 function positionMetrics(pos, price) {
     if (!pos || !Number.isFinite(pos.entry) || pos.entry <= 0 || !Number.isFinite(price)) return null;
     const perShare = Number.isFinite(pos.stop) && pos.stop < pos.entry ? pos.entry - pos.stop : null;
@@ -201,7 +215,6 @@ function positionMetrics(pos, price) {
         to_stop_pct: Number.isFinite(pos.stop) ? (pos.stop / price - 1) * 100 : null,
         value: shares !== null ? shares * price : null,
         risk_usd: perShare && shares !== null ? perShare * shares : null,
-        rr_target: perShare && Number.isFinite(pos.target) ? (pos.target - pos.entry) / perShare : null,
         stop_hit: Number.isFinite(pos.stop) && price <= pos.stop,
     };
 }
@@ -225,10 +238,16 @@ function positionRows(stocks) {
 }
 
 // Podsumowanie portfela: liczba pozycji, wartość, ryzyko do stopów (suma początkowych ryzyk) i jako % kapitału.
-function positionTotals(rows, capital) {
+// Wartości w USD (jak ceny); capital = kapitał konta w PLN, fx = USD/PLN → dodatkowo przeliczenie na PLN i % konta.
+function positionTotals(rows, capital, fx) {
     let value = 0, risk = 0, pl = 0;
     rows.forEach(s => { value += s.pos_value || 0; risk += s.pos_risk_usd || 0; pl += s.position.pl_usd || 0; });
-    return { n: rows.length, value, risk, pl, risk_pct: Number.isFinite(capital) && capital > 0 ? risk / capital * 100 : null };
+    const capUsd = Number.isFinite(capital) && capital > 0 && Number.isFinite(fx) && fx > 0 ? capital / fx : null;
+    return {
+        n: rows.length, value, risk, pl, fx: Number.isFinite(fx) ? fx : null,
+        value_pln: Number.isFinite(fx) ? value * fx : null, risk_pln: Number.isFinite(fx) ? risk * fx : null, pl_pln: Number.isFinite(fx) ? pl * fx : null,
+        risk_pct: capUsd ? risk / capUsd * 100 : null, value_pct: capUsd ? value / capUsd * 100 : null,
+    };
 }
 
 // Wybicia: spółki tuż PRZED wybiciem (albo świeżo po nim). Powody: flaga / korytarz przy oporze lub świeże wybicie (tl_state),
@@ -702,6 +721,7 @@ function sortRows(rows, key, dir) {
 // ---------- renderowanie ----------
 
 const money = v => (Number.isFinite(v) ? "$" + Number(v).toFixed(2) : "—");
+const pln0 = v => (Number.isFinite(v) ? (v < 0 ? "−" : "") + Math.abs(Math.round(v)).toLocaleString("pl-PL") + " zł" : "—");
 const money0 = v => (Number.isFinite(v) ? (v < 0 ? "−$" : "$") + Math.abs(Math.round(v)).toLocaleString("pl-PL") : "—");
 
 // Kolor oceny (RS / EPS / Composite) wg percentyla 1–99: <20 czerwony, 20–39 pomarańczowy, 40–59 żółty, 60–79 limonkowy, 80–89 zielony, 90+ ciemna zieleń.
@@ -1122,7 +1142,7 @@ const PREFS_KEY = "momentum_watchlist_prefs";
 const PREFS_EPOCH = "1970-01-01T00:00:00.000Z";   // dane sprzed synchronizacji: przegrywają z każdą świadomą zmianą
 
 const PREFS_KINDS = ["scores", "favs", "pos", "acct"];
-const PREFS_FIELDS = { pos: ["entry", "stop", "shares", "target"], acct: ["capital", "riskPct"] };
+const PREFS_FIELDS = { pos: ["entry", "stop", "shares"], acct: ["capital", "riskPct", "posPct", "fx"] };   // cel (take profit) usunięty; konto w PLN: kapitał, ryzyko %, % konta na pozycję, ręczny kurs USD/PLN
 // Wartość wpisu: score = liczba|null, fav = bool, pos (wejście / stop / akcje / cel) i acct (kapitał, ryzyko %) = obiekt liczb albo null.
 function prefsValue(kind, v) {
     if (kind === "scores") return Number.isFinite(v) ? v : null;
@@ -1166,7 +1186,7 @@ function prefsApply() {
     Object.keys(prefsStore.scores).forEach(t => { if (Number.isFinite(prefsStore.scores[t].v)) state.scores[t] = prefsStore.scores[t].v; });
     state.pos = {};
     Object.keys(prefsStore.pos).forEach(t => { if (prefsStore.pos[t].v) state.pos[t] = prefsStore.pos[t].v; });
-    state.acct = prefsStore.acct.main && prefsStore.acct.main.v ? { ...prefsStore.acct.main.v } : { capital: null, riskPct: null };
+    state.acct = prefsStore.acct.main && prefsStore.acct.main.v ? { ...prefsStore.acct.main.v } : { capital: null, riskPct: null, posPct: null, fx: null };
 }
 
 function prefsWriteLocal() {
@@ -1202,19 +1222,33 @@ function setScore(ticker, raw) {
 
 // ---------- pozycje: arkusz „Pozycja” (wejście, stop, akcje, cel + kalkulator wielkości) ----------
 function positionSummary(rows) {
-    const t = positionTotals(rows, state.acct.capital);
+    const t = positionTotals(rows, state.acct.capital, usdPln());
     if (!t.n) return "brak pozycji";
-    return `${t.n} poz. · wartość ${money0(t.value)} · ryzyko do stopów ${money0(t.risk)}${t.risk_pct !== null ? ` (${t.risk_pct.toFixed(1)}% kapitału)` : ""} · wynik ${money0(t.pl)}`;
+    if (t.fx === null) return `${t.n} poz. · wartość ${money0(t.value)} · ryzyko do stopów ${money0(t.risk)} · wynik ${money0(t.pl)} (brak kursu USD/PLN)`;
+    return `${t.n} poz. · wartość ${pln0(t.value_pln)}${t.value_pct !== null ? ` (${t.value_pct.toFixed(0)}% konta)` : ""} · ryzyko do stopów ${pln0(t.risk_pln)}${t.risk_pct !== null ? ` (${t.risk_pct.toFixed(1)}% konta)` : ""} · wynik ${pln0(t.pl_pln)}`;
 }
+
+// Kurs USD/PLN: ręczny (ustawiony w koncie) albo ostatnie zamknięcie z Yahoo zapisane przez watchlist.py (data.fx); null, gdy żadnego nie ma.
+function usdPln() {
+    if (Number.isFinite(state.acct.fx) && state.acct.fx > 0) return state.acct.fx;
+    const f = state.data && state.data.fx;
+    return f && Number.isFinite(f.usdpln) && f.usdpln > 0 ? f.usdpln : null;
+}
+const fxText = () => {
+    const f = state.data && state.data.fx, manual = Number.isFinite(state.acct.fx) && state.acct.fx > 0;
+    return manual ? `kurs USD/PLN ${state.acct.fx} (ręczny)` : f && Number.isFinite(f.usdpln) ? `kurs USD/PLN ${f.usdpln} (Yahoo, ${f.as_of})` : "brak kursu USD/PLN — wpisz ręcznie";
+};
 
 function renderPositionControls() {
-    const cap = document.getElementById("acctCapital"), risk = document.getElementById("acctRisk");
-    if (cap && document.activeElement !== cap) cap.value = Number.isFinite(state.acct.capital) ? state.acct.capital : "";
-    if (risk && document.activeElement !== risk) risk.value = Number.isFinite(state.acct.riskPct) ? state.acct.riskPct : "";
+    const set = (id, val) => { const el = document.getElementById(id); if (el && document.activeElement !== el) el.value = Number.isFinite(val) ? val : ""; };
+    set("acctCapital", state.acct.capital); set("acctPosPct", state.acct.posPct); set("acctRisk", state.acct.riskPct);
+    const fx = document.getElementById("acctFx");
+    if (fx) fx.textContent = fxText();
 }
 
-function saveAcct(capital, riskPct) {
-    prefsStore.acct.main = { v: Number.isFinite(capital) && capital > 0 ? { capital, riskPct: Number.isFinite(riskPct) && riskPct > 0 ? riskPct : null } : null, t: new Date().toISOString() };
+function saveAcct(capital, riskPct, posPct, fx = state.acct.fx) {
+    const pos = x => (Number.isFinite(x) && x > 0 ? x : null);
+    prefsStore.acct.main = { v: Number.isFinite(capital) && capital > 0 ? { capital, riskPct: pos(riskPct), posPct: pos(posPct), fx: pos(fx) } : null, t: new Date().toISOString() };
     prefsWriteLocal(); prefsApply(); annOnSave();
 }
 
@@ -1239,22 +1273,22 @@ function openPositionSheet(ticker) {
     if (!stock) return;
     const cur = state.pos[ticker] || {};
     const stop = Number.isFinite(annPositionLineValue(annStore, ticker, "stop")) ? annPositionLineValue(annStore, ticker, "stop") : cur.stop;
-    const target = Number.isFinite(annPositionLineValue(annStore, ticker, "target")) ? annPositionLineValue(annStore, ticker, "target") : cur.target;
     const v = x => (Number.isFinite(x) ? x : "");
     const html = `
         <div class="sheet-grid">
             <label>Wejście ($)<input type="number" inputmode="decimal" step="any" id="posEntryIn" value="${v(cur.entry !== undefined ? cur.entry : stock.price)}"></label>
             <label>Stop ($)<input type="number" inputmode="decimal" step="any" id="posStopIn" value="${v(stop)}"></label>
             <label>Liczba akcji<input type="number" inputmode="numeric" step="1" id="posSharesIn" value="${v(cur.shares)}"></label>
-            <label>Cel ($)<input type="number" inputmode="decimal" step="any" id="posTargetIn" value="${v(target)}"></label>
         </div>
-        <div class="sheet-quick">Stop: <button type="button" class="chip-btn" data-stop="5">−5%</button><button type="button" class="chip-btn" data-stop="7">−7%</button><button type="button" class="chip-btn" data-stop="8">−8%</button>
-            · Cel: <button type="button" class="chip-btn" data-rr="2">2R</button><button type="button" class="chip-btn" data-rr="3">3R</button></div>
-        <div class="sheet-section"><h4>Kalkulator wielkości pozycji</h4>
+        <div class="sheet-quick">Stop: <button type="button" class="chip-btn" data-stop="5">−5%</button><button type="button" class="chip-btn" data-stop="7">−7%</button><button type="button" class="chip-btn" data-stop="8">−8%</button></div>
+        <div class="sheet-section"><h4>Wielkość pozycji — konto w PLN (IKE)</h4>
             <div class="sheet-grid">
-                <label>Kapitał ($)<input type="number" inputmode="decimal" step="any" id="posCapital" value="${v(state.acct.capital)}"></label>
-                <label>Ryzyko na pozycję (%)<input type="number" inputmode="decimal" step="any" id="posRiskPct" value="${v(state.acct.riskPct)}" placeholder="np. 0.5"></label>
+                <label>Konto (PLN)<input type="number" inputmode="decimal" step="any" id="posCapital" value="${v(state.acct.capital)}" placeholder="np. 50000"></label>
+                <label>Pozycja (% konta)<input type="number" inputmode="decimal" step="any" id="posPosPct" value="${v(state.acct.posPct)}" placeholder="np. 10"></label>
+                <label>Ryzyko do stopu (% konta)<input type="number" inputmode="decimal" step="any" id="posRiskPct" value="${v(state.acct.riskPct)}" placeholder="np. 0.5"></label>
+                <label>Kurs USD/PLN<input type="number" inputmode="decimal" step="any" id="posFx" value="${v(state.acct.fx)}" placeholder="${v(usdPln())}"></label>
             </div>
+            <p class="sheet-result small muted" id="posFxInfo">${fxText()} — puste pole = kurs z Yahoo</p>
             <p class="sheet-result" id="posCalc"></p>
         </div>
         <div class="sheet-actions">
@@ -1264,37 +1298,40 @@ function openPositionSheet(ticker) {
     const body = showSheet(`💼 ${ticker} — pozycja`, html);
     const $ = id => body.querySelector("#" + id);
     const num = id => { const x = parseFloat($(id).value); return Number.isFinite(x) ? x : null; };
+    const fxNow = () => num("posFx") || (state.data && state.data.fx && state.data.fx.usdpln) || null;
     const calc = () => {
-        const entry = num("posEntryIn"), stopV = num("posStopIn"), tgt = num("posTargetIn");
-        const size = positionSize(num("posCapital"), num("posRiskPct"), entry, stopV);
+        const entry = num("posEntryIn"), stopV = num("posStopIn");
+        const acct = { capital: num("posCapital"), fx: fxNow(), posPct: num("posPosPct"), riskPct: num("posRiskPct") };
+        const size = positionSize(acct, entry, stopV);
         const parts = [];
-        if (entry && stopV && stopV < entry) {
-            parts.push(`Ryzyko na akcję: ${money(entry - stopV)} (${((entry - stopV) / entry * 100).toFixed(1)}% od wejścia)`);
-            if (tgt && tgt > entry) parts.push(`R:R do celu: ${((tgt - entry) / (entry - stopV)).toFixed(1)} : 1`);
-        } else if (entry && stopV) parts.push("Stop musi być poniżej wejścia.");
-        if (size) parts.push(`Sugerowane: <b>${size.shares} akcji</b> (ryzyko ${money0(size.risk_usd)}, wartość ${money0(size.value)} = ${size.pct_of_capital.toFixed(0)}% kapitału) <button type="button" class="chip-btn" id="posUse">Użyj</button>`);
-        else if (!num("posCapital") || !num("posRiskPct")) parts.push("Wpisz kapitał i ryzyko %, a podpowiem liczbę akcji.");
+        if (entry && stopV && stopV < entry) parts.push(`Ryzyko na akcję: ${money(entry - stopV)} (${((entry - stopV) / entry * 100).toFixed(1)}% od wejścia)`);
+        else if (entry && stopV) parts.push("Stop musi być poniżej wejścia.");
+        if (size) {
+            parts.push(`Sugerowane: <b>${size.shares} akcji</b> = ${pln0(size.value_pln)} (${money0(size.value_usd)}, ${size.pct_of_capital.toFixed(1)}% konta)`
+                + (size.risk_pln !== null ? `<br>Strata przy stopie: <b>${pln0(size.risk_pln)}</b> (${size.risk_pct.toFixed(2)}% konta)` : "")
+                + (acct.posPct && acct.riskPct && size.risk_pln !== null ? ` — liczbę akcji ogranicza ${size.limited_by === "risk" ? "ryzyko do stopu" : "% konta na pozycję"}` : "")
+                + ` <button type="button" class="chip-btn" id="posUse">Użyj</button>`);
+        } else if (!acct.capital || !acct.fx || (!acct.posPct && !acct.riskPct)) parts.push("Wpisz konto (PLN) oraz % konta na pozycję i/lub ryzyko do stopu — podpowiem liczbę akcji.");
+        else if (acct.riskPct && !acct.posPct) parts.push("Do liczenia z ryzyka potrzebny jest stop poniżej wejścia.");
         $("posCalc").innerHTML = parts.join("<br>");
         const use = $("posUse");
         if (use) use.addEventListener("click", () => { $("posSharesIn").value = size.shares; calc(); });
     };
     body.addEventListener("input", calc);
     body.addEventListener("click", ev => {
-        const t = ev.target.closest("button[data-stop],button[data-rr]");
+        const t = ev.target.closest("button[data-stop]");
         if (!t) return;
         const entry = num("posEntryIn");
         if (!entry) return;
-        if (t.dataset.stop) $("posStopIn").value = (entry * (1 - Number(t.dataset.stop) / 100)).toFixed(2);
-        else if (num("posStopIn") && num("posStopIn") < entry) $("posTargetIn").value = (entry + Number(t.dataset.rr) * (entry - num("posStopIn"))).toFixed(2);
+        $("posStopIn").value = (entry * (1 - Number(t.dataset.stop) / 100)).toFixed(2);
         calc();
     });
     $("posSave").addEventListener("click", () => {
-        const entry = num("posEntryIn"), stopV = num("posStopIn"), tgt = num("posTargetIn");
+        const entry = num("posEntryIn"), stopV = num("posStopIn");
         if (!entry || entry <= 0) { showToast("Podaj cenę wejścia.", { type: "error" }); return; }
         if (stopV !== null && stopV >= entry) { showToast("Stop musi być poniżej ceny wejścia.", { type: "error" }); return; }
-        if (tgt !== null && tgt <= entry) { showToast("Cel musi być powyżej ceny wejścia.", { type: "error" }); return; }
-        saveAcct(num("posCapital"), num("posRiskPct"));
-        savePosition(ticker, { entry, stop: stopV, shares: num("posSharesIn"), target: tgt });
+        saveAcct(num("posCapital"), num("posRiskPct"), num("posPosPct"), num("posFx"));
+        savePosition(ticker, { entry, stop: stopV, shares: num("posSharesIn") });
         closeSheet();
         showToast(`Zapisano pozycję ${ticker}.`);
     });
@@ -1391,8 +1428,8 @@ function initControls() {
     bind("qmMinDollarVolume", v => { state.qm.minDollarVolumeM = v; });
     bind("qmMinAdr", v => { state.qm.minAdrPct = v; });
     bind("qmTopPct", v => { state.qm.topPct = v; });
-    const acctInputs = () => saveAcct(parseFloat(document.getElementById("acctCapital").value), parseFloat(document.getElementById("acctRisk").value));
-    ["acctCapital", "acctRisk"].forEach(id => document.getElementById(id).addEventListener("change", () => { acctInputs(); renderTable(); }));
+    const acctInputs = () => saveAcct(parseFloat(document.getElementById("acctCapital").value), parseFloat(document.getElementById("acctRisk").value), parseFloat(document.getElementById("acctPosPct").value));
+    ["acctCapital", "acctPosPct", "acctRisk"].forEach(id => document.getElementById(id).addEventListener("change", () => { acctInputs(); renderTable(); }));
     renderPositionControls();
     document.getElementById("brkMaxDist").value = state.brk.maxDistPct;
     bind("brkMaxDist", v => { state.brk.maxDistPct = v; });
@@ -1648,7 +1685,7 @@ function visibleTickers() {
 // Komórki siatki wykresów dla bieżącego układu (pierwsza = zaznaczona spółka, jedyna edytowalna).
 // Układ wykresów faktycznie używany: w widoku dzielonym wybrany przyciskiem, na telefonie zawsze jeden wykres.
 function effectiveLayout() {
-    return splitMode ? chartLayout : "1";
+    return "1";   // jeden wykres jak w książce (układy dzienny+tygodniowy / 4 spółki wyłączone na życzenie: „tylko te z książką zgodne”)
 }
 
 function chartCells() {
@@ -1807,7 +1844,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartBookBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -1829,6 +1866,8 @@ function initChartModal() {
         chartDaily = localStorage.getItem(CHART_TF_KEY) === "d";   // domyślnie tygodniowy
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
+    // JEDEN rodzaj wykresu: tygodniowy w stylu książki O'Neila, skala logarytmiczna (user: „czemu aż tyle rodzajów wykresów, zrób tylko te z książką zgodne”)
+    chartDaily = false; chartBookOn = true; chartLog = false; chartLayout = "1";
     updateLogButton();
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
