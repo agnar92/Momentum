@@ -30,7 +30,6 @@ const CHART_HINTS_KEY = "momentum_watchlist_chart_hints";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
-const CHART_TF_KEY = "momentum_watchlist_chart_tf";   // "d" / "w"; domyślnie TYGODNIOWY (user: „tygodniówki to będzie mój default dla każdej akcji”)
 const CHART_BOOK_KEY = "momentum_watchlist_chart_book";   // wygląd i opisy jak w książce O'Neila (domyślnie włączone)
 const FAVS_KEY = "momentum_watchlist_favs";
 const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
