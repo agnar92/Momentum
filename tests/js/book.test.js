@@ -280,6 +280,7 @@ test("bookSvg: sygnały to kółka z literą K / D / P pod świecą, ✕ przy st
     assert.match(svg, />P<\/text>/);
     assert.match(svg, /<path[^>]*stroke="#ff4d6d"/);          // ✕ stop
     assert.match(svg, /kup ponownie/);                         // legenda
+    assert.match(svg, /stroke="#2ecc71"[^>]*stroke-dasharray="4 3"/);   // linia pivotu przy K w zielonym kolorze litery
     assert.ok(!/<polygon/.test(svg), "bez strzałek");
     assert.ok(!labels.some(t => /Kup|Dokup|ponownie|stop/.test(t)), "żadnych długich podpisów sygnałów w warstwie podpisów");
     assert.equal(typeof shiftBook, "function");

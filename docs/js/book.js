@@ -227,7 +227,7 @@ function computeBook(m, splits = []) {
     book.addCands.forEach(cd => {
         const prev = book.buys.filter(x => x.i < cd.i).pop();
         if (!prev || cd.i - prev.i > BOOK_ADD_AFTER_BUY || cd.i - prev.i <= BOOK_ADD_MIN_WEEKS || cd.i - lastAdd < BOOK_ADD_GAP || !(l[cd.i] <= cd.pivot * BOOK_BUY_MAX_EXT) || book.buys.some(x => x.i === cd.i)) return;
-        book.adds.push({ i: cd.i, label: "Dokup" }); lastAdd = cd.i;
+        book.adds.push({ i: cd.i, label: "Dokup", pivot: cd.pivot }); lastAdd = cd.i;
     });
     // „Kup ponownie” (O'Neil: po wycięciu na stopie / wytrząśnięciu przełam opór psychologiczny i wróć do silnej spółki, nawet drożej): po stopie −8 % od ceny kupna
     // pierwszy tydzień w górę, w którym cena wraca nad 10-tygodniową (wcześniej była pod nią) na wolumenie ≥ średniej i nad 40-tygodniową, albo przebija dawny pivot
@@ -244,7 +244,7 @@ function computeBook(m, splits = []) {
             if (![c[k], c[k - 1], v[k], sma10[k], sma10[k - 1], sma40[k], a].every(Number.isFinite) || !(a > 0) || !(c[k] >= c[k - 1])) continue;
             const above10 = c[k] > sma10[k] && c[k - 1] <= sma10[k - 1] * 1.02 && v[k] >= a && c[k] > sma40[k];
             const abovePivot = b.pivot > 0 && c[k] > b.pivot && c[k - 1] <= b.pivot && v[k] >= BOOK_BUY_VOL * a && c[k] <= b.pivot * BOOK_BUY_MAX_EXT;
-            if ((above10 || abovePivot) && !book.buys.some(x => x.i === k)) { book.reentries.push({ i: k, stopI, label: "Kup ponownie", why: abovePivot ? "pivot" : "10-tyg." }); break; }
+            if ((above10 || abovePivot) && !book.buys.some(x => x.i === k)) { book.reentries.push({ i: k, stopI, label: "Kup ponownie", why: abovePivot ? "pivot" : "10-tyg.", ...(abovePivot ? { pivot: b.pivot } : {}) }); break; }
         }
     });
     // „Dokup” po odbiciu od 10-tygodniowej (jak „Add: bounces off 10-week moving average line on volume” w książce): trend wzrostowy (40-tygodniowa rośnie, 10 > 40,
@@ -332,14 +332,19 @@ function bookSvg(m, g) {
     // P = kup ponownie (turkusowe), ✕ = stop −8 % (czerwony krzyżyk pod dołkiem). Bez strzałek, linii pivotu i długich podpisów; opis w legendzie na wykresie.
     const r = fs(compact ? 8 : 9), placed = [];
     const signals = [
-        ...bk.buys.map(b => ({ i: b.i, k: "K", late: b.late })),
-        ...bk.adds.map(a => ({ i: a.i, k: "D" })),
-        ...(bk.reentries || []).map(q => ({ i: q.i, k: "P" })),
+        ...bk.buys.map(b => ({ i: b.i, k: "K", late: b.late, pivot: b.pivot })),
+        ...bk.adds.map(a => ({ i: a.i, k: "D", pivot: a.pivot })),
+        ...(bk.reentries || []).map(q => ({ i: q.i, k: "P", pivot: q.pivot })),
     ].sort((a, b2) => a.i - b2.i);
     (bk.reentries || []).forEach(q => {
         if (!(q.stopI >= 0)) return;
         const sx = x(q.stopI), sy = inY(yP(m.l[q.stopI]) + fs(11)), d = fs(4.5);
         out.push(`<path ${clip} d="M${sx - d},${sy - d} L${sx + d},${sy + d} M${sx + d},${sy - d} L${sx - d},${sy + d}" stroke="${BOOK_COLORS.sell}" stroke-width="2" stroke-linecap="round" pointer-events="none"/>`);
+    });
+    signals.forEach(sg => {   // linia pivotu tuż przed wybiciem — w kolorze litery sygnału
+        if (!(sg.pivot > 0)) return;
+        const col = sg.k === "P" ? BOOK_COLORS.reentry : sg.k === "D" ? BOOK_COLORS.add : sg.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, py = yP(sg.pivot);
+        out.push(`<line ${clip} x1="${x(Math.max(0, sg.i - 6))}" x2="${x(sg.i)}" y1="${py}" y2="${py}" stroke="${col}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
     });
     signals.forEach(sg => {
         const cx = x(sg.i);
@@ -354,8 +359,8 @@ function bookSvg(m, g) {
     });
     if (signals.length && g.legendY != null) {
         const lx = x(0) + fs(6);
-        out.push(`<text xml:space="preserve" x="${lx}" y="${g.legendY}" font-size="${fs(compact ? 9.5 : 10.5)}" font-weight="700" fill="${BOOK_COLORS.dim}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">`
-            + `<tspan fill="${BOOK_COLORS.buy}">K</tspan> kup  ·  <tspan fill="${BOOK_COLORS.add}">D</tspan> dokup  ·  <tspan fill="${BOOK_COLORS.reentry}">P</tspan> ${compact ? "ponownie" : "kup ponownie"}  ·  <tspan fill="${BOOK_COLORS.sell}">✕</tspan> stop${compact ? "" : " −8 %"}</text>`);
+        out.push(`<text x="${lx}" y="${g.legendY}" font-size="${fs(compact ? 9.5 : 10.5)}" font-weight="700" fill="${BOOK_COLORS.dim}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">`
+            + `<tspan fill="${BOOK_COLORS.buy}">K</tspan> kup &#160;·&#160; <tspan fill="${BOOK_COLORS.add}">D</tspan> dokup &#160;·&#160; <tspan fill="${BOOK_COLORS.reentry}">P</tspan> ${compact ? "ponownie" : "kup ponownie"} &#160;·&#160; <tspan fill="${BOOK_COLORS.sell}">✕</tspan> stop${compact ? "" : " −8 %"}</text>`);
     }
     // korekty rynku: łuk pod załamaniem linii S&P 500 + podpis
     if (g.yS) bk.corrections.forEach(cr => {
