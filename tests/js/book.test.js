@@ -149,3 +149,16 @@ test("computeBook: odbicie po korekcie rynku — pierwsze zamknięcie nad 10-tyg
     assert.ok(rb[0].i > 50 && rb[0].i <= 62);
     assert.equal(rb[0].pivot, null);
 });
+
+test("computeBook: „Dokup” także w mocnym trendzie bez dotknięcia 10-tygodniowej — wznowienie po krótkim cofnięciu na wolumenie", () => {
+    const n = 70, c = [], h = [], l = [], v = [];
+    for (let i = 0; i < n; i++) {
+        c.push(10 + i * 0.8 - (i % 5 === 3 ? 0.9 : 0));   // stromy trend z jednotygodniowym cofnięciem co 5 tygodni
+        h.push(c[i] + 0.3); l.push(c[i] - 0.3); v.push(1000 + (i % 5 === 4 ? 600 : 0));
+    }
+    const sma10 = rollingMean(c, 10);
+    assert.ok(c.every((x, i) => i < 20 || l[i] > sma10[i] * 1.04));   // cena nigdy nie wraca do 10-tygodniowej
+    const b = computeBook({ n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: sma10 }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases: [] });
+    assert.ok(b.adds.length >= 3);
+    assert.ok(b.adds.every(a => c[a.i - 1] < c[a.i - 2]));   // zawsze po tygodniu spadkowym
+});

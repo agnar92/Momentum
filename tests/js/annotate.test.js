@@ -167,22 +167,24 @@ test("annUndoApply restores objects, tombstones the created ones and clears tomb
     assert.equal(rec.editedAt, "2026-02-01T00:00:00.000Z");
 });
 
-test("annSyncPositionLines creates stop/target lines with alerts, updates them and tombstones them on removal", () => {
+test("annSyncPositionLines keeps only the stop line (no take-profit); old target lines are tombstoned", () => {
     const store = {};
     const now = new Date("2026-10-03T00:00:00Z");
-    annSyncPositionLines(store, "AAA", { stop: 95, target: 120 }, "2026-10-02", now);
+    annSyncPositionLines(store, "AAA", { stop: 95, target: 120 }, "2026-10-02", now);   // cel z dawnych danych jest ignorowany
     const lines = store.AAA.lines;
-    const stop = lines.find(l => l.pos === "stop"), target = lines.find(l => l.pos === "target");
+    const stop = lines.find(l => l.pos === "stop");
+    assert.equal(lines.length, 1);
     assert.equal(stop.alert, "below");
     assert.equal(stop.y0, 95);
-    assert.equal(target.alert, "above");
-    assert.equal(target.x1, "2026-10-02");
     assert.ok(stop.x0 < stop.x1);
     assert.equal(lineValueAt(stop, "2026-10-05"), 95);                 // pozioma i przedłużona
-    annSyncPositionLines(store, "AAA", { stop: 97, target: null }, "2026-10-02", now);
+    // stara linia celu zapisana wcześniej znika z nagrobkiem
+    const old = { id: "tg1", kind: "target", pos: "target", x0: "2026-09-01", y0: 120, x1: "2026-10-02", y1: 120, alert: "above", ext: true };
+    store.AAA.lines.push(old);
+    annSyncPositionLines(store, "AAA", { stop: 97 }, "2026-10-02", now);
     assert.equal(annPositionLineValue(store, "AAA", "stop"), 97);
     assert.equal(annPositionLineValue(store, "AAA", "target"), null);
-    assert.ok(store.AAA.del[target.id]);                               // nagrobek
+    assert.ok(store.AAA.del.tg1);                                      // nagrobek
     annSyncPositionLines(store, "AAA", null, "2026-10-02", now);
     assert.equal(store.AAA.lines.length, 0);
 });

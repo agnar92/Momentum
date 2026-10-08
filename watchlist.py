@@ -148,6 +148,19 @@ def download_prices(tickers, period=HISTORY_PERIOD, batch_size=BATCH_SIZE):
     return frames
 
 
+def fetch_usdpln():
+    """Kurs USD/PLN (ostatnie zamknięcie z Yahoo, ticker PLN=X) do przeliczania kapitału z konta IKE (PLN) na liczbę akcji; None, gdy niedostępny."""
+    try:
+        df = download_prices(["PLN=X"], period="10d").get("PLN=X")
+        if df is None or not len(df):
+            return None
+        rate = float(df["Close"].iloc[-1])
+        return {"usdpln": round(rate, 4), "as_of": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")} if 1.0 < rate < 20.0 else None
+    except Exception as e:
+        print(f"⚠️  Kurs USD/PLN niedostępny ({e}) — przeliczenie kapitału wpisze się ręcznie.")
+        return None
+
+
 def drop_incomplete_bar(df, now_utc=None):
     """Usuwa dzisiejszą (jeszcze trwającą) sesję USA — ręczne odpalenie w trakcie sesji nie może wciągnąć
     niepełnej świecy jako 'dzisiejszego zamknięcia'."""
@@ -1593,6 +1606,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         "profile": profile,
         "rs_basis": rs_basis,
         "market": market,
+        "fx": fetch_usdpln() or (previous or {}).get("fx"),
         "stocks": stocks,
     }
     out = Path(output_path)

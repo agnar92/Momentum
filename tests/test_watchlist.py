@@ -854,3 +854,19 @@ class TestSplits:
         frames = watchlist._extract_frames(data, ["AAA"])
         assert "splits" not in frames["AAA"].attrs
         assert watchlist.build_charts(["AAA"], frames, None, {})["stocks"]["AAA"]["splits"] == []
+
+
+class TestFx:
+    def test_fetch_usdpln_returns_last_close(self, monkeypatch):
+        df = make_prices(n=5, start=3.7, daily=0.0, end="2026-10-02")
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": {"PLN=X": df})
+        fx = watchlist.fetch_usdpln()
+        assert fx == {"usdpln": 3.7, "as_of": "2026-10-02"}
+
+    def test_fetch_usdpln_rejects_nonsense_and_errors(self, monkeypatch):
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": {"PLN=X": make_prices(n=3, start=0.2, daily=0.0)})
+        assert watchlist.fetch_usdpln() is None
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": (_ for _ in ()).throw(RuntimeError("net")))
+        assert watchlist.fetch_usdpln() is None
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": {})
+        assert watchlist.fetch_usdpln() is None
