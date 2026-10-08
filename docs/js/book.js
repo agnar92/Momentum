@@ -16,6 +16,9 @@ const BOOK_BUY_MAX_EXT = 1.05;       // „Kup” tylko do +5 % nad pivotem (wy�
 const BOOK_PRIOR_UP = 1.3;           // wcześniejszy trend wzrostowy przed bazą ≥ +30 % (flat base: +20 %)
 const BOOK_PRIOR_FLAT = 1.2;
 const BOOK_MIN_WEEKS = { cup: 7, double_bottom: 7, flat: 5, ascending: 9, htf: 3 };   // minimalna długość bazy wg książki
+const BOOK_HOLD_GAIN_PCT = 20;       // F: +20 % w ciągu ≤ 3 tygodni od wybicia = trzymaj co najmniej 8 tygodni (reguła 8 tygodni)
+const BOOK_HOLD_FAST_WEEKS = 3;
+const BOOK_HOLD_WEEKS = 8;
 const BOOK_STAGE_RESET_PCT = 20;     // etap bazy zeruje korekta ≥ 20 % od szczytu
 const BOOK_FLAT_MIN_WEEKS = 5;       // wybicie z dowolnej konsolidacji (nie tylko z bazy wykrytej przez detect_bases): min. tyle tygodni (3 — „schodki” w mocnym trendzie), głębokość ≤ BOOK_FLAT_DEPTH_PCT
 const BOOK_FLAT_MAX_WEEKS = 10;
@@ -108,7 +111,7 @@ function computeBook(m, splits = []) {
     const n = m.n, h = m.h, l = m.l, c = m.c, v = m.v, avg = m.volAvg || [];
     const sma10 = (m.smas && m.smas[0] && m.smas[0].values) || [], sma40 = (m.smas && m.smas[1] && m.smas[1].values) || [];
     const bases = m.bases || [];
-    const book = { addCands: [], brackets: [], buys: [], adds: [], tights: [], volUp: [], dry: [], corrections: [], ipo: null, splits: [] };
+    const book = { holds: [], addCands: [], brackets: [], buys: [], adds: [], tights: [], volUp: [], dry: [], corrections: [], ipo: null, splits: [] };
     // ramki baz (nie: korekta / głęboka korekta — to nie bazy do kupna)
     bases.forEach(b => {
         if (!BOOK_BASE_NAMES[b.type]) return;
@@ -203,6 +206,17 @@ function computeBook(m, splits = []) {
         if (stage === 1) { peak = -Infinity; peakI = bp.i; }
         bp.stage = stage; bp.late = stage >= 3; prevI = bp.i;
     });
+    // reguła 8 tygodni (F): po wybiciu cena rośnie o ≥ +20 % w ciągu ≤ 3 tygodni → nie sprzedawaj wcześniej niż po 8 tygodniach od zakupu
+    book.buys.forEach(bp => {
+        const base = bp.pivot > 0 ? bp.pivot : c[bp.i];
+        if (!(base > 0)) return;
+        for (let j = bp.i; j <= Math.min(n - 1, bp.i + BOOK_HOLD_FAST_WEEKS); j++) {
+            if (Number.isFinite(c[j]) && c[j] >= base * (1 + BOOK_HOLD_GAIN_PCT / 100)) {
+                book.holds.push({ i0: bp.i, i1: Math.min(n - 1, bp.i + BOOK_HOLD_WEEKS), iHit: j, weeks: BOOK_HOLD_WEEKS });
+                break;
+            }
+        }
+    });
     // „Dokup” (jak „Add” w książce: Amgen „5 weeks tight”, Healthcare Compare „8-week base and bounce back above 10-week on volume”, US Surgical „base-on-base”):
     // wybicie z małej bazy / ciasnych zamknięć ≥ BOOK_ADD_MIN_WEEKS tygodni, do BOOK_ADD_AFTER_BUY tygodni po wcześniejszym „Kup”, na wolumenie ≥ BOOK_ADD_VOL × średnia,
     // ≥ BOOK_ADD_GAP tygodni od poprzedniego dokupu. Bez wcześniejszego „Kup” kandydat odpada (dokładamy tylko do trwającej pozycji).
@@ -264,7 +278,7 @@ function shiftBook(book, off, n) {
     const pt = arr => arr.map(x => ({ ...x, i: x.i - off })).filter(x => x.i >= 0 && x.i < n);
     const rg = arr => arr.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, ...(x.iLow !== undefined ? { iLow: x.iLow - off } : {}) })).filter(x => x.i1 >= 0 && x.i0 < n);
     return {
-        brackets: rg(book.brackets), buys: pt(book.buys), adds: pt(book.adds), tights: rg(book.tights), volUp: pt(book.volUp), dry: pt(book.dry),
+        holds: book.holds.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, iHit: x.iHit - off })).filter(x => x.i1 >= 0 && x.i0 < n), brackets: rg(book.brackets), buys: pt(book.buys), adds: pt(book.adds), tights: rg(book.tights), volUp: pt(book.volUp), dry: pt(book.dry),
         corrections: rg(book.corrections), ipo: book.ipo && book.ipo.i - off >= 0 && book.ipo.i - off < n ? { i: book.ipo.i - off } : null, splits: pt(book.splits),
     };
 }
@@ -294,6 +308,11 @@ function bookSvg(m, g) {
         if (b.pivot) out.push(`<line ${clip} x1="${x(Math.max(0, b.i - 6))}" x2="${px}" y1="${py}" y2="${py}" stroke="${BOOK_COLORS.text}" stroke-width="1.3" stroke-dasharray="3 2" pointer-events="none"/>`);
         out.push(arrow(px - fs(26), inY(py - fs(26)), px - fs(3), py - fs(3), b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy));
         addLabel(b.label + (b.stage >= 2 ? (compact ? ` ${b.stage}.` : ` · ${b.stage}. etap${b.late ? " ⚠" : ""}`) : ""), px - fs(28), inY(py - fs(30)), { anchor: "end", size: fs(11.5), fill: b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, bold: true, prio: 8, title: b.pivot ? "Zamknięcie nad szczytem konsolidacji / pivotem bazy na podwyższonym wolumenie (kupno do +5 % nad pivotem)" : "Pierwsze zamknięcie nad 10-tygodniową po korekcie rynku — spółka trzymała się lepiej niż indeks" });
+    });
+    bk.holds.forEach(hd => {   // reguła 8 tygodni: poziomy nawias nad wykresem od kupna do +8 tygodni
+        const x0 = x(Math.max(0, hd.i0)), x1 = x(Math.min(m.n - 1, hd.i1)), hit = Math.min(m.n - 1, Math.max(0, hd.iHit)), y = inY(yP(m.h[hit]) - fs(16));
+        out.push(`<g ${clip} pointer-events="none" stroke="${BOOK_COLORS.add}" stroke-width="1.4"><line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}"/><line x1="${x0}" x2="${x0}" y1="${y}" y2="${y + fs(5)}"/><line x1="${x1}" x2="${x1}" y1="${y}" y2="${y + fs(5)}"/></g>`);
+        addLabel(compact ? "8 tyg." : `Trzymaj 8 tyg. (+20 % w ≤ 3 tyg.)`, (x0 + x1) / 2, y - fs(3), { size: fs(10.5), fill: BOOK_COLORS.add, bold: true, prio: 5, title: "Reguła 8 tygodni (O'Neil): akcja zyskała ≥ 20 % w ciągu 1–3 tygodni od wybicia — trzymaj ją co najmniej 8 pełnych tygodni" });
     });
     bk.adds.forEach(a => {
         const px = x(a.i), py = yP(m.h[a.i]);

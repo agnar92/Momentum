@@ -180,6 +180,14 @@ function baseRows(stocks, params) {
 }
 
 // ---------- pozycje ----------
+// F: sztywny stop — maksymalna strata 7–8 % poniżej ceny zakupu (O'Neil, bez wyjątków). Zwraca {loss_pct, ok} albo null.
+const STOP_LOSS_MAX_PCT = 8;
+function stopRuleCheck(entry, stop) {
+    if (!(entry > 0) || !(stop > 0) || stop >= entry) return null;
+    const loss = (entry - stop) / entry * 100;
+    return { loss_pct: loss, ok: loss <= STOP_LOSS_MAX_PCT + 1e-9 };
+}
+
 // Wielkość pozycji dla konta w PLN (IKE): kapitał PLN ÷ kurs USD/PLN = kapitał w USD. Liczba akcji = mniejsza z dwóch: z % konta na pozycję
 // (kapitał · posPct% / wejście) i z ryzyka do stopu (kapitał · riskPct% / (wejście − stop)) — dzięki temu strata przy stopie nigdy nie przekracza
 // zadanego ryzyka, a pozycja nie przekracza zadanego % konta. Wystarczy jedno z dwóch (posPct albo riskPct); null, gdy dane nie mają sensu.
@@ -598,6 +606,8 @@ function ratingChipsHtml(s) {
 }
 
 // Ramka formacji jak „Cup with Handle / Flat Base” w MarketSurge: typ, pivot, długość, głębokość, rączka, VCP. "" bez otwartej bazy.
+const BASE_STATUS_PL = { WATCHLIST: "WATCHLIST — pod pivotem", VALID_BREAKOUT: "WYBICIE potwierdzone", EXTENDED: "ROZCIĄGNIĘTA (> +5 % nad pivotem)", FAULTY_REJECTED: "ODRZUCONA wg reguł" };
+
 function baseBoxData(s) {
     if (!s.base_type) return null;
     const rows = [["Pivot", Number.isFinite(s.pivot) ? money(s.pivot) : "—"]];
@@ -605,6 +615,12 @@ function baseBoxData(s) {
     if (Number.isFinite(s.base_depth_pct)) rows.push(["Głębokość", `${s.base_depth_pct}%`]);
     if (s.base_type === "cup") rows.push(["Rączka", s.base_handle ? "tak" : "brak"]);
     if (s.vcp) rows.push(["VCP", "tak"]);
+    if (Number.isFinite(s.base_prior_uptrend_pct)) rows.push(["Wzrost przed bazą", `+${s.base_prior_uptrend_pct}%${s.base_prior_uptrend_pct >= 30 ? "" : " (< 30%)"}`]);
+    if (s.base_rs_prior_up === true || s.base_rs_prior_up === false) rows.push(["Linia RS przed bazą", s.base_rs_prior_up ? "rosła" : "nie rosła"]);
+    if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.base_buy_zone_max)) rows.push(["Strefa kupna do", `${money(s.base_buy_zone_max)} (pivot +5%)`]);
+    if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.base_stop_8pct)) rows.push(["Stop −8% od pivotu", money(s.base_stop_8pct)]);
+    if (s.base_status) rows.push(["Status", BASE_STATUS_PL[s.base_status] || s.base_status]);
+    if (s.base_rejection) rows.push(["Odrzucona", s.base_rejection]);
     if (s.base_on_base) rows.push(["Etap", `baza na bazie (${s.base_stage}. etap)`]);
     if (!BUYABLE_BASES.includes(s.base_type)) rows.push(["Uwaga", "korekta, nie baza do zakupu"]);
     if (Number.isFinite(s.base_mkt_dd_pct) && s.base_mkt_dd_pct >= 7) rows.push(["S&P w bazie", `−${s.base_mkt_dd_pct}%`]);
@@ -1308,6 +1324,8 @@ function openPositionSheet(ticker) {
         const parts = [];
         if (entry && stopV && stopV < entry) parts.push(`Ryzyko na akcję: ${money(entry - stopV)} (${((entry - stopV) / entry * 100).toFixed(1)}% od wejścia)`);
         else if (entry && stopV) parts.push("Stop musi być poniżej wejścia.");
+        const rule = stopRuleCheck(entry, stopV);
+        if (rule && !rule.ok) parts.push(`⚠ Stop ${rule.loss_pct.toFixed(1)}% pod ceną zakupu — reguła O'Neila: maksymalna strata 7–8 %, bez wyjątków (kliknij −7 % albo −8 %).`);
         if (size) {
             parts.push(`Sugerowane: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${money0(size.value_usd)}, ${size.pct_of_capital.toFixed(1)}% konta)`
                 + (size.risk_pln !== null ? `<br>Strata przy stopie: <b>${pln0(size.risk_pln)}</b> (${size.risk_pct.toFixed(2)}% konta)` : "")
@@ -2057,7 +2075,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

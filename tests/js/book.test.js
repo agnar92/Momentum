@@ -193,3 +193,14 @@ test("computeBook: „Dokup” po odbiciu od 10-tygodniowej tylko po „Kup” z
     const first = b.buys.length ? b.buys[0].i : Infinity;
     assert.ok(b.adds.every(a => a.i > first));   // żaden Dokup przed pierwszym „Kup”
 });
+
+test("computeBook: reguła 8 tygodni — +20 % w ≤ 3 tygodnie od „Kup” daje nawias trzymania (F)", () => {
+    const fast = computeBook(addSeries(2, 1.0, 12));            // po wybiciu cena skacze o +1,5 / tydz. (≈ +3 %) — za wolno
+    assert.equal(fast.holds.length, 0);
+    const m = addSeries(2, 1.0, 12);
+    const k = computeBook(m).buys[0];
+    for (let j = k.i + 1; j <= k.i + 2 && j < m.n; j++) { m.c[j] = k.pivot * 1.25; m.h[j] = m.c[j] + 0.1; m.l[j] = m.c[j] - 0.1; }
+    const withHold = computeBook(m);
+    assert.ok(withHold.holds.length >= 1);
+    assert.equal(withHold.holds[0].i1 - withHold.holds[0].i0 <= 8, true);
+});

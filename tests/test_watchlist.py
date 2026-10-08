@@ -332,11 +332,11 @@ class TestCharts:
         assert charts["benchmark"] is None and charts["spx"] is None and len(charts["stocks"]["AAA"]["c"]) == 30
 
 
-def make_weekly(highs, lows=None, closes=None, start="2025-01-03"):
+def make_weekly(highs, lows=None, closes=None, start="2025-01-03", volume=1000):
     idx = pd.date_range(start, periods=len(highs), freq="W-FRI")
     lows = lows if lows is not None else [h * 0.97 for h in highs]
     closes = closes if closes is not None else [(h + lo) / 2 for h, lo in zip(highs, lows)]
-    return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": 1000}, index=idx)
+    return pd.DataFrame({"Open": closes, "High": highs, "Low": lows, "Close": closes, "Volume": volume}, index=idx)
 
 
 class TestBases:
@@ -547,7 +547,7 @@ class TestEstimates:
         assert json.loads(path.read_text())["stocks"]["AAA"]["pt"]["mean"] == 60.0
 
 
-def make_cup(depth=0.25, n_cup=24, handle=(0.97, 0.95, 0.96), prior_start=60.0, prior_weeks=40, shape="u", rim_gap=0.05):
+def make_cup(depth=0.25, n_cup=24, handle=(0.97, 0.95, 0.96), prior_start=60.0, prior_weeks=40, shape="u", rim_gap=0.05, dry=True):
     """Syntetyczny tygodniowy cup: wzrost przed szczytem 100, miseczka (parabola przez szczyt, dołek, prawy brzeg), rączka."""
     top = 100.0
     closes = list(np.linspace(prior_start, top, prior_weeks))
@@ -565,7 +565,11 @@ def make_cup(depth=0.25, n_cup=24, handle=(0.97, 0.95, 0.96), prior_start=60.0, 
     rim_i = prior_weeks + n_cup - 1
     highs[prior_weeks - 1] = top * 1.01                 # lewy szczyt
     highs[rim_i] = rim * 1.01                           # prawy brzeg = najwyższy szczyt po dołku
-    return make_weekly(highs, lows, closes)
+    vol = [1000.0] * len(closes)
+    if dry:
+        for j in range(len(handle)):
+            vol[prior_weeks + n_cup + j] = 400.0                # wyschnięcie wolumenu w rączce (B)
+    return make_weekly(highs, lows, closes, volume=vol)
 
 
 class TestCup:
@@ -593,6 +597,51 @@ class TestCup:
         bench = pd.Series(np.where(np.arange(len(weekly)) < 40, 100.0, np.linspace(100.0, 78.0, len(weekly))[:len(weekly)] * 0 + 100 - np.minimum(22.0, (np.arange(len(weekly)) - 40) * 1.5)), index=weekly.index)
         cups = [b for b in watchlist.detect_bases(weekly, bench) if b["type"] == "cup"]
         assert len(cups) == 1 and cups[0]["cup"]["mkt_dd_pct"] >= 15 and cups[0]["cup"]["mkt_ctx"] is True   # silna korekta S&P dopuszcza głębszą miseczkę
+
+    def test_cup_length_must_be_7_to_65_weeks(self):
+        assert [b for b in watchlist.detect_bases(make_cup(n_cup=5)) if b["type"] == "cup"] == []             # < 7 tygodni
+        assert [b for b in watchlist.detect_bases(make_cup(n_cup=70, prior_weeks=60)) if b["type"] == "cup"] == []   # > 65 tygodni
+        assert len([b for b in watchlist.detect_bases(make_cup(n_cup=60, prior_weeks=60, handle=(0.995, 0.99, 0.992))) if b["type"] == "cup"]) == 1   # 60 tyg. mieści się (było limitem 45)
+
+    @staticmethod
+    def rejected(**kw):
+        bases = watchlist.detect_bases(make_cup(**kw))
+        assert [b for b in bases if b["type"] == "cup"] == []
+        return [r for b in bases for r in b.get("rejection_reasons", [])]
+
+    def test_handle_flaws_reject_the_cup_and_name_the_reason(self):
+        assert any("wedging" in r for r in self.rejected(handle=(0.95, 0.96, 0.97)))                          # dołki rączki rosną
+        assert any("tyg." in r and "wymagane" in r for r in self.rejected(handle=(0.97, 0.96, 0.95, 0.96, 0.97, 0.96)))   # rączka 6 tygodni (> 4)
+        assert any("głębsza" in r for r in self.rejected(handle=(0.93, 0.86, 0.88)))                          # rączka > 12 %
+        assert any("wolumenu" in r for r in self.rejected(dry=False))                                         # brak wyschnięcia wolumenu
+
+    def test_handle_must_stay_above_the_10_week_average(self):
+        reasons = self.rejected(handle=(0.93, 0.90, 0.88, 0.89))
+        assert any("10-tygodniowej" in r for r in reasons) or any("dolnej połowie" in r for r in reasons) or any("głębsza" in r for r in reasons)
+
+    def test_a_closed_cup_without_a_handle_is_not_a_cup_with_handle(self):
+        weekly = make_cup(handle=())
+        last = weekly.iloc[-1]
+        extra = pd.DataFrame({"Open": [last["Close"]], "High": [110.0], "Low": [last["Close"]], "Close": [108.0], "Volume": [3000.0]}, index=[weekly.index[-1] + pd.Timedelta(days=7)])
+        bases = watchlist.detect_bases(pd.concat([weekly, extra]))
+        assert [b for b in bases if b["type"] == "cup"] == []
+        assert any("brak rączki" in r for b in bases for r in b.get("rejection_reasons", []))
+        assert [b for b in watchlist.detect_bases(make_cup(handle=())) if b["type"] == "cup"]                  # otwarta (jeszcze się tworzy) — WATCHLIST
+
+    def test_status_buy_zone_and_stop_for_an_open_cup(self):
+        b = [x for x in watchlist.detect_bases(make_cup()) if x["type"] == "cup"][0]
+        assert b["status"] == "WATCHLIST" and b["rejection_reasons"] == []
+        assert b["buy_zone_max"] == pytest.approx(b["pivot"] * 1.05, abs=0.02) and b["stop_loss_8pct"] == pytest.approx(b["pivot"] * 0.92, abs=0.02)
+        assert b["prior_uptrend_pct"] >= 30
+
+    def test_breakout_volume_is_checked_on_closed_bases(self):
+        weekly = make_cup()
+        def with_breakout(vol):
+            nxt = pd.DataFrame({"Open": [97.0], "High": [104.0], "Low": [96.0], "Close": [103.0], "Volume": [vol]}, index=[weekly.index[-1] + pd.Timedelta(days=7)])
+            return [x for x in watchlist.detect_bases(pd.concat([weekly, nxt])) if x["type"] == "cup"][0]
+        strong, weak = with_breakout(3000.0), with_breakout(1000.0)
+        assert strong["status"] == "VALID_BREAKOUT" and strong["breakout_vol_ratio"] >= 1.4
+        assert weak["status"] == "FAULTY_REJECTED" and any("wolumenie" in r for r in weak["rejection_reasons"])
 
     def test_market_context_flag_and_drawdown(self):
         weekly = make_cup()
@@ -755,10 +804,18 @@ class TestOneilPatterns:
         idx = pd.bdate_range(end=end, periods=len(pts)) if per_week > 1 else pd.date_range(end=end, periods=len(pts), freq="W-FRI")
         return pd.DataFrame({"Open": pts, "High": pts * 1.005, "Low": pts * 0.995, "Close": pts, "Volume": 1_000_000.0}, index=idx)
 
-    DOUBLE_BOTTOM = [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 80, 77, 80, 84, 88, 90]
-    FLAT = [100] + [97, 95, 98, 96, 99, 94, 98, 97, 99]
-    ASC = [100, 96, 88, 96, 104, 98, 92, 100, 108, 102, 96, 104, 111, 112]
+    RAMP = list(np.linspace(60, 99, 14))                      # A: wcześniejszy wzrost >= +30 % (14 tygodni przed bazą)
+    DOUBLE_BOTTOM = RAMP + [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 80, 77, 80, 84, 88, 90]
+    FLAT = list(np.linspace(70, 99, 14)) + [100] + [97, 95, 98, 96, 99, 94, 98, 97, 99]
+    ASC = RAMP + [100, 96, 88, 96, 104, 98, 92, 100, 108, 102, 96, 104, 111, 112]
     HTF = [10] * 12 + [12, 14, 16, 18, 20, 22] + [21, 20, 19.5, 19.2]
+
+    def frame_dry(self, weekly, k, after_peak=4e5):
+        """Jak frame(), ale wolumen po szczycie (flaga) spada — zanik wolumenu wymagany w HTF."""
+        df = self.frame(weekly, k)
+        ip = int(np.argmax(df["High"].values))
+        df.iloc[ip + 1:, df.columns.get_loc("Volume")] = after_peak
+        return df
 
     def last(self, weekly, k):
         return watchlist.detect_bases(self.frame(weekly, k), None, k)[-1]
@@ -771,13 +828,25 @@ class TestOneilPatterns:
         assert b["double_bottom"]["low2"] < b["double_bottom"]["low1"]   # drugie dno podcina pierwsze
 
     def test_double_bottom_needs_an_undercut(self):
-        no_undercut = [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 82, 83, 85, 87, 89, 90]   # drugie dno NAD pierwszym
-        assert self.last(no_undercut, 1)["type"] != "double_bottom"
+        no_undercut = self.RAMP + [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 82, 83, 85, 87, 89, 90]   # drugie dno NAD pierwszym
+        b = self.last(no_undercut, 1)
+        assert b["type"] != "double_bottom"
+        assert any("podcięcia" in r for r in b.get("rejection_reasons", []))          # wadliwe „W” jest nazwane, nie tylko pominięte
+
+    def test_double_bottom_needs_a_prior_uptrend_and_depth_15_to_33(self):
+        assert self.last([100] * 14 + self.DOUBLE_BOTTOM[14:], 1)["type"] != "double_bottom"                   # brak wzrostu przed bazą
+        shallow = self.RAMP + [100, 97, 94, 92, 90, 89, 92, 94, 96, 94, 92, 90, 88.5, 90, 92, 94, 96]          # ~11 % głębokości
+        assert self.last(shallow, 1)["type"] != "double_bottom"
 
     @pytest.mark.parametrize("k", [1, 5])
     def test_flat_base(self, k):
         b = self.last(self.FLAT, k)
         assert b["type"] == "flat" and b["depth_pct"] <= 15
+
+    def test_flat_base_needs_a_prior_gain_of_20_percent(self):
+        weak = list(np.linspace(92, 99, 14)) + [100] + [97, 95, 98, 96, 99, 94, 98, 97, 99]
+        b = self.last(weak, 1)
+        assert b["type"] == "correction" and any("flat base" in r for r in b["rejection_reasons"])
 
     @pytest.mark.parametrize("k", [1, 5])
     def test_ascending_base_three_pullbacks_with_higher_lows(self, k):
@@ -792,8 +861,11 @@ class TestOneilPatterns:
 
     @pytest.mark.parametrize("k", [1, 5])
     def test_high_tight_flag(self, k):
-        b = self.last(self.HTF, k)
-        assert b["type"] == "htf" and b["rise_pct"] >= 100 and 4 <= b["depth_pct"] <= 25
+        b = watchlist.detect_bases(self.frame_dry(self.HTF, k), None, k)[-1]
+        assert b["type"] == "htf" and b["rise_pct"] >= 100 and 10 <= b["depth_pct"] <= 25
+
+    def test_htf_needs_volume_dry_up_in_the_flag(self):
+        assert self.last(self.HTF, 1)["type"] != "htf"                       # stały wolumen = brak zaniku
 
     def test_htf_needs_a_doubling(self):
         weak = [10] * 12 + [10.5, 11, 11.5, 12, 12.5, 13] + [12.5, 12, 11.8, 11.6]
