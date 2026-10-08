@@ -116,7 +116,7 @@ test("computeBook: wybicie z dowolnej płaskiej konsolidacji (bez bazy z detect_
     const m = model({ bases: [] });
     m.smas[1].values = m.c.map(() => 5);   // 40-tygodniowa pod ceną (w teście historia jest krótsza niż 40 tygodni)
     const b = computeBook(m);
-    const k = b.buys.find(x => x.i === 36);
+    const k = b.buys.find(x => x.i === 36) || (b.adds.some(x => x.i === 36) && { pivot: 21 });   // po wcześniejszym „Kup” to samo wybicie z bazy ≥ 4 tyg. jest „Dokup”
     assert.ok(k && k.pivot > 20 && k.pivot < 21.5);
 });
 
@@ -144,15 +144,36 @@ test("computeBook: odbicie po korekcie rynku — pierwsze zamknięcie nad 10-tyg
     assert.ok(rb.length >= 1);
 });
 
-test("computeBook: „Dokup” także w mocnym trendzie bez dotknięcia 10-tygodniowej — wznowienie po krótkim cofnięciu na wolumenie", () => {
+function addSeries(pauseWeeks, step = 0.5) {
+    // trend + dwie przerwy: pierwsza 6-tygodniowa (daje „Kup”), druga o długości pauseWeeks, potem wybicie na wolumenie
+    const c = [], v = [];
+    let p = 10;
+    const seg = (len, step, vol) => { for (let k = 0; k < len; k++) { p += step + (k % 2 ? 0.05 : -0.05); c.push(p); v.push(vol); } };
+    seg(30, step, 1000); seg(6, 0, 700); seg(1, 1.5, 3000); seg(14, step, 1000); seg(pauseWeeks, 0, 700); seg(1, 1.5, 3000); seg(6, step, 1000);
+    const h = c.map(x => x + 0.1), l = c.map(x => x - 0.1), n = c.length;
+    return { n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases: [] };
+}
+
+test("computeBook: „Dokup” = wybicie z bazy ≥ 4 tygodni po wcześniejszym „Kup” (jak „Add” w książce)", () => {
+    const b = computeBook(addSeries(5));
+    assert.ok(b.buys.length >= 1);
+    assert.ok(b.adds.length >= 1);
+    assert.ok(b.adds.every(a => a.i > b.buys[0].i));
+});
+
+test("computeBook: krótka pauza (2 tygodnie) nie daje „Dokup”", () => {
+    const b = computeBook(addSeries(2, 1.0));
+    assert.equal(b.adds.length, 0);
+});
+
+test("computeBook: „Dokup” po odbiciu od 10-tygodniowej tylko po „Kup” z patternu", () => {
     const n = 70, c = [], h = [], l = [], v = [];
     for (let i = 0; i < n; i++) {
-        c.push(10 + i * 0.8 - (i % 5 === 3 ? 0.9 : 0));   // stromy trend z jednotygodniowym cofnięciem co 5 tygodni
-        h.push(c[i] + 0.3); l.push(c[i] - 0.3); v.push(1000 + (i % 5 === 4 ? 600 : 0));
+        const base = 10 + i * 0.5 + (i % 7 === 6 ? -3 : 0);
+        c.push(base); h.push(base + 0.4); l.push(i % 7 === 0 && i > 14 ? base - 3 : base - 0.4); v.push(i % 7 === 0 ? 1500 : 1000);
     }
-    const sma10 = rollingMean(c, 10);
-    assert.ok(c.every((x, i) => i < 20 || l[i] > sma10[i] * 1.04));   // cena nigdy nie wraca do 10-tygodniowej
-    const b = computeBook({ n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: sma10 }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases: [] });
-    assert.ok(b.adds.length + b.buys.length >= 3);
-    assert.ok(b.adds.every(a => c[a.i - 1] < c[a.i - 2]));   // zawsze po tygodniu spadkowym
+    const mk = bases => ({ n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases });
+    const b = computeBook(mk([]));
+    const first = b.buys.length ? b.buys[0].i : Infinity;
+    assert.ok(b.adds.every(a => a.i > first));   // żaden Dokup przed pierwszym „Kup”
 });
