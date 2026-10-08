@@ -114,7 +114,7 @@ function computeBook(m, splits = []) {
     const n = m.n, h = m.h, l = m.l, c = m.c, v = m.v, avg = m.volAvg || [];
     const sma10 = (m.smas && m.smas[0] && m.smas[0].values) || [], sma40 = (m.smas && m.smas[1] && m.smas[1].values) || [];
     const bases = m.bases || [];
-    const book = { holds: [], addCands: [], brackets: [], buys: [], adds: [], reentries: [], tights: [], volUp: [], dry: [], corrections: [], ipo: null, splits: [] };
+    const book = { holds: [], addCands: [], brackets: [], buys: [], adds: [], reentries: [], pivots: [], tights: [], volUp: [], dry: [], corrections: [], ipo: null, splits: [] };
     // ramki baz (nie: korekta / głęboka korekta — to nie bazy do kupna)
     bases.forEach(b => {
         if (!BOOK_BASE_NAMES[b.type]) return;
@@ -265,6 +265,13 @@ function computeBook(m, splits = []) {
         if (l[i] <= s10 * 1.04 && c[i] >= c[i - 1] && v[i] >= a10) book.adds.push({ i, label: "Dokup" });
     }
     book.adds.sort((a, b) => a.i - b.i);
+    // pivoty baz, które jeszcze nie dały sygnału (czekają na wybicie na wolumenie): biała przerywana linia; po sygnale rysuje ją kolor sygnału
+    bases.forEach(b => {
+        if (!BOOK_BASE_NAMES[b.type] || !(b.pivot > 0)) return;
+        if ([...book.buys, ...book.adds, ...book.reentries].some(sg => sg.pivot > 0 && Math.abs(sg.pivot / b.pivot - 1) < 0.01 && sg.i >= Math.floor(b.i0))) return;
+        const end = b.open ? n - 1 : Math.min(n - 1, Math.round(b.i1) + 1);
+        book.pivots.push({ i0: Math.max(0, Math.round(b.i0), end - 8), i1: end, level: b.pivot });
+    });
     // ciasne zamknięcia: tylko w trendzie wzrostowym (nad 10- i 40-tygodniową) i tam, gdzie mają znaczenie dla kupna — w bazie (albo tuż po niej)
     // lub do BOOK_TIGHT_AFTER_BUY tygodni po kupnie (jak w książce: „4 tight closes” przy punkcie kupna / po nim)
     tightCloseRuns(c).forEach(r => {
@@ -304,7 +311,7 @@ function shiftBook(book, off, n) {
     const pt = arr => arr.map(x => ({ ...x, i: x.i - off })).filter(x => x.i >= 0 && x.i < n);
     const rg = arr => arr.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, ...(x.iLow !== undefined ? { iLow: x.iLow - off } : {}) })).filter(x => x.i1 >= 0 && x.i0 < n);
     return {
-        holds: book.holds.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, iHit: x.iHit - off })).filter(x => x.i1 >= 0 && x.i0 < n), brackets: rg(book.brackets), buys: pt(book.buys), adds: pt(book.adds), reentries: book.reentries.map(x => ({ ...x, i: x.i - off, stopI: x.stopI - off })).filter(x => x.i >= 0 && x.i < n), tights: rg(book.tights), volUp: pt(book.volUp), dry: pt(book.dry),
+        holds: book.holds.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, iHit: x.iHit - off })).filter(x => x.i1 >= 0 && x.i0 < n), brackets: rg(book.brackets), pivots: rg(book.pivots), buys: pt(book.buys), adds: pt(book.adds), reentries: book.reentries.map(x => ({ ...x, i: x.i - off, stopI: x.stopI - off })).filter(x => x.i >= 0 && x.i < n), tights: rg(book.tights), volUp: pt(book.volUp), dry: pt(book.dry),
         corrections: rg(book.corrections), ipo: book.ipo && book.ipo.i - off >= 0 && book.ipo.i - off < n ? { i: book.ipo.i - off } : null, splits: pt(book.splits),
     };
 }
@@ -328,32 +335,27 @@ function bookSvg(m, g) {
         out.push(`<g ${clip} pointer-events="none" stroke="${BOOK_COLORS.buy}" stroke-width="1.3" opacity="0.8"><line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}"/><line x1="${x0}" x2="${x0}" y1="${y}" y2="${y + fs(5)}"/><line x1="${x1}" x2="${x1}" y1="${y}" y2="${y + fs(5)}"/></g>`);
         addLabel("trzymaj 8 tyg.", (x0 + x1) / 2, y - fs(3), { size: fs(10), fill: BOOK_COLORS.buy, prio: 3 });
     });
-    // SYGNAŁY = tylko kolorowe linie (bez liter i strzałek), jeden kolor na rodzaj: pionowa linia przez cały panel ceny w tygodniu sygnału
-    // + krótka przerywana linia pivotu tuż przed wybiciem (gdy jest pivot). Kup = zielona (szara = późny etap ≥ 3), dokup = niebieskozielona (cyjan),
-    // kup ponownie = różowa, stop −8 % = czerwona przerywana. Znaczenie kolorów: legenda na wykresie.
-    const top = P.y + 2, bottom = P.y + P.h - 2;
+    // PIVOTY = krótkie przerywane linie (bez liter i kółek): BIAŁA = pivot bazy czeka na wybicie, po sygnale linia dostaje kolor sygnału:
+    // zielona = kup (szara = późny etap ≥ 3), cyjan = dokup, różowa = kup ponownie. Linia kończy się w tygodniu sygnału, więc od razu widać, kiedy świeca ją przebiła.
+    // Sygnały bez pivotu (odbicie od 10-tygodniowej) dostają krótką linię w kolorze sygnału na poziomie zamknięcia tygodnia.
+    const dash = (x0, x1, y, col) => out.push(`<line ${clip} x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>`);
+    (bk.pivots || []).forEach(pv => dash(x(pv.i0), x(pv.i1), yP(pv.level), BOOK_COLORS.text));
     const signals = [
         ...bk.buys.map(b => ({ i: b.i, col: b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, pivot: b.pivot })),
         ...bk.adds.map(a => ({ i: a.i, col: BOOK_COLORS.add, pivot: a.pivot })),
         ...(bk.reentries || []).map(q => ({ i: q.i, col: BOOK_COLORS.reentry, pivot: q.pivot })),
     ];
-    (bk.reentries || []).forEach(q => {
-        if (q.stopI >= 0) out.push(`<line ${clip} x1="${x(q.stopI)}" x2="${x(q.stopI)}" y1="${top}" y2="${bottom}" stroke="${BOOK_COLORS.sell}" stroke-width="1.6" stroke-dasharray="5 4" opacity="0.8" pointer-events="none"/>`);
-    });
     signals.forEach(sg => {
-        out.push(`<line ${clip} x1="${x(sg.i)}" x2="${x(sg.i)}" y1="${top}" y2="${bottom}" stroke="${sg.col}" stroke-width="2" opacity="0.6" pointer-events="none"/>`);
-        if (sg.pivot > 0) {
-            const py = yP(sg.pivot);
-            out.push(`<line ${clip} x1="${x(Math.max(0, sg.i - 6))}" x2="${x(sg.i)}" y1="${py}" y2="${py}" stroke="${sg.col}" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>`);
-        }
+        if (sg.pivot > 0) dash(x(Math.max(0, sg.i - 6)), x(sg.i), yP(sg.pivot), sg.col);
+        else dash(x(Math.max(0, sg.i - 2)), x(sg.i + 1), yP(m.c[sg.i]), sg.col);
     });
-    if (signals.length && g.legendY != null) {
-        const items = [[BOOK_COLORS.buy, "kup", ""], [BOOK_COLORS.add, "dokup", ""], [BOOK_COLORS.reentry, compact ? "ponownie" : "kup ponownie", ""], [BOOK_COLORS.sell, compact ? "stop" : "stop −8 %", "5 4"]];
+    if ((signals.length || (bk.pivots || []).length) && g.legendY != null) {
+        const items = [[BOOK_COLORS.text, compact ? "czeka" : "pivot czeka"], [BOOK_COLORS.buy, "kup"], [BOOK_COLORS.add, "dokup"], [BOOK_COLORS.reentry, compact ? "ponownie" : "kup ponownie"]];
         const size = fs(compact ? 8.5 : 10.5), cw = size * 0.58, seg = fs(compact ? 11 : 16), gap = fs(compact ? 7 : 12);
         let lx = x(0) + fs(6);
-        items.forEach(([col, text, dash]) => {
+        items.forEach(([col, text]) => {
             const ly = g.legendY - size * 0.32;
-            out.push(`<line x1="${lx}" x2="${lx + seg}" y1="${ly}" y2="${ly}" stroke="${col}" stroke-width="2.4"${dash ? ` stroke-dasharray="${dash}"` : ""} pointer-events="none"/>`);
+            out.push(`<line x1="${lx}" x2="${lx + seg}" y1="${ly}" y2="${ly}" stroke="${col}" stroke-width="2.4" stroke-dasharray="4 3" pointer-events="none"/>`);
             out.push(`<text x="${lx + seg + fs(4)}" y="${g.legendY}" font-size="${size}" font-weight="700" fill="${BOOK_COLORS.text}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${text}</text>`);
             lx += seg + fs(4) + text.length * cw + gap;
         });

@@ -381,19 +381,20 @@ test("volumeSpikes needs a clear multiple of the average and spacing; fmtVol use
 
 test("pivotFromStock: base pivot from the open base start, else the flag resistance, else null", () => {
     const bases = [{ open: false, start: "2025-01-03" }, { open: true, start: "2026-03-06" }];
-    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 98.4 }, bases), { price: 98.4, date: "2026-03-06", kind: "baza" });
-    assert.deepEqual(pivotFromStock({ tl_level: 50, tl_state: "przy oporze" }, []), { price: 50, date: null, kind: "flaga" });
+    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 98.4 }, bases), { price: 98.4, date: "2026-03-06", kind: "baza", active: false });
+    assert.equal(pivotFromStock({ base_type: "cup", pivot: 98.4, pivot_state: "wybicie" }, bases).active, true);   // pivot aktywny (wybicie na wolumenie) = zielona linia, nieaktywny = biała
+    assert.deepEqual(pivotFromStock({ tl_level: 50, tl_state: "przy oporze" }, []), { price: 50, date: null, kind: "flaga", active: false });
     assert.equal(pivotFromStock({ tl_level: 50 }, []), null);       // poziom bez wykrytego stanu nie jest pivotem
     assert.equal(pivotFromStock(null, []), null);
 });
 
 test("pivotFromStock ignores corrections / deep corrections and levels far from the price (STM: pivot 81 vs price 57)", () => {
     const stm = { base_type: "deep", pivot: 81.19, price: 57.26, tl_level: 54.15, tl_state: "wybicie" };
-    assert.deepEqual(pivotFromStock(stm, []), { price: 54.15, date: null, kind: "flaga" });          // nie 81,19: głęboka korekta to nie baza do zakupu
+    assert.deepEqual(pivotFromStock(stm, []), { price: 54.15, date: null, kind: "flaga", active: true });          // nie 81,19: głęboka korekta to nie baza do zakupu
     assert.equal(pivotFromStock({ base_type: "correction", pivot: 60, price: 58 }, []), null);
     assert.equal(pivotFromStock({ base_type: "cup", pivot: 81.19, price: 57.26 }, []), null);       // kupowalna baza, ale 42 % od ceny
     assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 81.19, price: 57.26, tl_level: 56, tl_state: "przy oporze" }, []).price, 56);
-    assert.deepEqual(pivotFromStock({ tlw_level: 20, tlw_state: "przy oporze", price: 19.5 }, []), { price: 20, date: null, kind: "flaga" });
+    assert.deepEqual(pivotFromStock({ tlw_level: 20, tlw_state: "przy oporze", price: 19.5 }, []), { price: 20, date: null, kind: "flaga", active: false });
 });
 
 test("chartSvg: breakout triangle points up under the breakout bar; extended price drops the buy/stop zone; unconfirmed close gets no triangle", () => {
