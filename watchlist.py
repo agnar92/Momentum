@@ -664,7 +664,22 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
     top = float(hi[peak])
     depth_abs = top - low
     depth = depth_abs / top * 100
-    r = low_i + 1 + int(np.argmax(hi[low_i + 1:end + 1]))        # prawy brzeg = najwyższy szczyt po dołku
+    # prawy brzeg = szczyt PRZED rączką: pierwszy kolejny rekord wysokości po dołku, który już odrobił >= 80 % głębokości, leży <= 10 % pod lewym szczytem
+    # i po którym następuje krótka (1–4 tyg.) przerwa / cofnięcie, zanim cena go przebije. Wcześniej brzegiem był zawsze NAJWYŻSZY szczyt po dołku
+    # (często ten z dnia wybicia nad lewy szczyt), więc rączka znikała, a prawdziwy cup z rączką wychodził jako „cup bez rączki”.
+    rec_idx = [j for j in range(low_i + 1, end + 1) if hi[j] >= np.max(hi[low_i + 1:j + 1])]            # kolejne rekordy wysokości po dołku (strict > w praktyce)
+    r, h_end = None, end
+    for a, j in enumerate(rec_idx):
+        nxt = rec_idx[a + 1] if a + 1 < len(rec_idx) else end + 1
+        gap_w = nxt - 1 - j                                                                              # tygodnie (świece) cofnięcia po szczycie j przed kolejnym rekordem
+        if (hi[j] - low) / depth_abs < CUP_RIM_RECOVERY or (top - hi[j]) / top * 100 > CUP_RIM_MAX_GAP_PCT or j - low_i < 2 * k:
+            continue
+        if (CUP_HANDLE_MIN_WEEKS if k == 1 else k + 1) <= gap_w <= CUP_HANDLE_MAX_WEEKS * k and nxt <= end:             # przerwa jak rączka i potem przebicie szczytu j
+            r, h_end = j, nxt - 1
+            break
+    if r is None:
+        r = low_i + 1 + int(np.argmax(hi[low_i + 1:end + 1]))    # brak rączki w tym kształcie: brzeg = najwyższy szczyt po dołku (cup bez rączki / wada rączki)
+        h_end = end
     rim = float(hi[r])
     cup_weeks = r - start
     span = r - peak
@@ -699,12 +714,12 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         return None
     handle = None
     faults = []                                                    # wady rączki (B) — baza przestaje być „cup with handle” do kupna
-    hw = end - r
-    if r < end:
-        h_lows = lo[r + 1:end + 1]
+    hw = h_end - r
+    if r < h_end:
+        h_lows = lo[r + 1:h_end + 1]
         h_low = float(h_lows.min())
         h_depth = (rim - h_low) / rim * 100
-        hmin, hmax = (CUP_HANDLE_MIN_WEEKS if k == 1 else 5 * k + 1), CUP_HANDLE_MAX_WEEKS * k
+        hmin, hmax = (CUP_HANDLE_MIN_WEEKS if k == 1 else k + 1), CUP_HANDLE_MAX_WEEKS * k   # dziennie: rączka > 5 sesji (k + 1 świec), do 4 tygodni
         if not (hmin <= hw <= hmax):
             faults.append(f"rączka trwa {hw if k == 1 else round(hw / k, 1)} tyg. (wymagane 1–{CUP_HANDLE_MAX_WEEKS})")
         h_max = CUP_HANDLE_MAX_DEPTH_BEAR_PCT if mkt_dd is not None and mkt_dd >= CUP_BEAR_MKT_DD else CUP_HANDLE_MAX_DEPTH_PCT
@@ -713,7 +728,7 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         if h_low < low + 0.5 * depth_abs:
             faults.append("rączka w dolnej połowie miseczki")
         ma_n = CUP_HANDLE_MA_WEEKS * k
-        below_ma = [j for j in range(r + 1, end + 1) if j + 1 >= ma_n and cl[j] < float(cl[j + 1 - ma_n:j + 1].mean())]
+        below_ma = [j for j in range(r + 1, h_end + 1) if j + 1 >= ma_n and cl[j] < float(cl[j + 1 - ma_n:j + 1].mean())]
         if below_ma:
             faults.append("rączka poniżej 10-tygodniowej średniej")
         if hw >= 2 and float(np.polyfit(np.arange(hw, dtype=float), h_lows.astype(float), 1)[0]) > 0:
@@ -723,7 +738,8 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         if v_avg is not None and vol is not None and np.isfinite(vol[h_low_i]) and vol[h_low_i] >= v_avg:
             faults.append("brak wyschnięcia wolumenu w rączce")
         handle = {"weeks": hw if k == 1 else round(hw / k, 1), "low": _num(h_low), "depth_pct": _num(h_depth, 1),
-                  "low_date": dates[h_low_i].strftime("%Y-%m-%d")}
+                  "low_date": dates[h_low_i].strftime("%Y-%m-%d"),
+                  "end_date": dates[h_end].strftime("%Y-%m-%d"), "end_close": _num(cl[h_end])}
     # bez rączki to „cup without handle” (też z książki): ten sam kształt i czas, wybicie wprost z prawego brzegu — pivot = lewy szczyt, wyższy odsetek porażek
     return {"rim": _num(rim), "rim_date": dates[r].strftime("%Y-%m-%d"), "cup_weeks": cup_weeks if k == 1 else round(cup_weeks / k, 1), "handle": handle,
             "prior_gain_pct": _num(prior_gain, 0), "fit": _num(fit, 2), "rim_gap_pct": _num((top - rim) / top * 100, 1),

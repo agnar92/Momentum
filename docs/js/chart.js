@@ -191,7 +191,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
             i0: dateToIndex(weeks, b.start), iLow: dateToIndex(weeks, b.low_date), i1: dateToIndex(weeks, cp.rim_date || b.end),
             peak: b.peak, low: b.low, right: cp.rim != null ? cp.rim : b.end_close, pivotPx: b.pivot, noHandle: !!cp.no_handle, depth: b.depth_pct, open: b.open,
             weeks: cp.cup_weeks, prior: cp.prior_gain_pct, mktDd: cp.mkt_dd_pct, ctx: !!cp.mkt_ctx,
-            handle: h ? { iLow: dateToIndex(weeks, h.low_date), low: h.low, iEnd: dateToIndex(weeks, b.end), end: b.end_close, depth: h.depth_pct } : null,
+            handle: h ? { iLow: dateToIndex(weeks, h.low_date), low: h.low, iEnd: dateToIndex(weeks, h.end_date || b.end), end: h.end_close != null ? h.end_close : b.end_close, depth: h.depth_pct } : null,
         };
     }).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);

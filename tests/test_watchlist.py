@@ -617,6 +617,19 @@ class TestCup:
         assert b["pivot"] == b["cup"]["rim"]                               # pivot = górka rączki (prawy brzeg)
         assert b["cup"]["cup_weeks"] == 23 and b["cup"]["fit"] >= 0.6   # 24 tygodnie od szczytu, liczone od pierwszego spadku
 
+    def test_handle_is_found_before_the_breakout_above_the_left_peak(self):
+        # miseczka, rączka 3 tygodnie, potem wybicie NAD lewy szczyt i dalszy wzrost: baza kończy się dopiero po przekroczeniu lewego szczytu,
+        # ale prawy brzeg = szczyt przed rączką (nie najwyższy szczyt po dołku), a rączka kończy się tuż przed wybiciem
+        df = make_cup()
+        idx = pd.date_range(df.index[-1] + pd.Timedelta(days=7), periods=3, freq="W-FRI")
+        extra = pd.DataFrame({"Open": [100.0, 104.0, 108.0], "High": [102.5, 107.0, 111.0], "Low": [96.0, 101.0, 105.0], "Close": [102.0, 106.0, 110.0], "Volume": [2500.0, 1800.0, 1500.0]}, index=idx)
+        cups = [b for b in watchlist.detect_bases(pd.concat([df, extra])) if b["type"] == "cup"]
+        assert len(cups) == 1
+        c = cups[0]["cup"]
+        assert c["handle"] is not None and c["handle"]["weeks"] == 3 and not c["no_handle"]
+        assert c["rim"] == pytest.approx(95 * 1.01, abs=0.05) and cups[0]["pivot"] == c["rim"]
+        assert c["handle"]["end_date"] == df.index[-1].strftime("%Y-%m-%d")                # rączka kończy się w ostatnim tygodniu przed wybiciem
+
     def test_v_shape_is_not_a_cup(self):
         assert [b for b in watchlist.detect_bases(make_cup(shape="v")) if b["type"] == "cup"] == []
 
