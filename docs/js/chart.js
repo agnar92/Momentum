@@ -225,7 +225,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
             n: model.n, h: model.h, l: model.l, c: model.c, v: model.v, volAvg: model.volAvg, smas: model.smas, spx: model.spx,
             bases: (c.bases || []).map(b => ({
                 type: b.type, i0: dateToIndex(weeks, b.start), i1: dateToIndex(weeks, b.end), pivot: b.pivot, weeks: b.weeks, low: b.low,
-                handle: !!(b.cup && b.cup.handle), saucer: !!b.saucer, onBase: !!b.base_on_base,
+                handle: !!(b.cup && b.cup.handle), saucer: !!b.saucer, onBase: !!b.base_on_base, open: !!b.open,
             })),
         }, (c.splits || []).map(sp => ({ i: weekIndexForDate(weeks, sp.d), r: sp.r })).filter(sp => sp.i >= 0));
     } else model.book = null;
@@ -245,10 +245,10 @@ function pivotFromStock(stock, bases, daily = false) {
     const type = daily ? stock.dbase_type : stock.base_type, pivot = daily ? stock.dpivot : stock.pivot;
     if (PIVOT_BASE_TYPES.includes(type) && Number.isFinite(pivot) && near(pivot)) {
         const open = (bases || []).filter(b => b.open).pop();
-        return { price: pivot, date: open ? open.start : null, kind: "baza" };
+        return { price: pivot, date: open ? open.start : null, kind: "baza", active: (daily ? stock.dpivot_state : stock.pivot_state) === "wybicie" };
     }
-    if (Number.isFinite(stock.tl_level) && stock.tl_state && near(stock.tl_level)) return { price: stock.tl_level, date: null, kind: "flaga" };
-    if (Number.isFinite(stock.tlw_level) && stock.tlw_state && near(stock.tlw_level)) return { price: stock.tlw_level, date: null, kind: "flaga" };
+    if (Number.isFinite(stock.tl_level) && stock.tl_state && near(stock.tl_level)) return { price: stock.tl_level, date: null, kind: "flaga", active: stock.tl_state === "wybicie" };
+    if (Number.isFinite(stock.tlw_level) && stock.tlw_state && near(stock.tlw_level)) return { price: stock.tlw_level, date: null, kind: "flaga", active: stock.tlw_state === "wybicie" };
     return null;
 }
 
@@ -687,14 +687,15 @@ function chartSvg(m, opts = {}) {
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
     if (pivotNear && m.lastShown !== false) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
+        const pivotCol = m.pivot.active ? "#2ecc71" : "#e8eaed";   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
         const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
         const i0 = m.pivot.date ? Math.max(0, dateToIndex(m.weeks, m.pivot.date)) : Math.max(0, m.lastIdx - 25);
         const zx = x(Math.max(0, m.lastIdx - 14)), zw = Math.max(0, xr - zx);
         const band = (lo, hi, fill, op) => `<rect ${clipAttr} x="${zx}" y="${Math.min(yP(lo), yP(hi))}" width="${zw}" height="${Math.abs(yP(lo) - yP(hi))}" fill="${fill}" opacity="${op}"/>`;
         if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#2ecc71", 0.22), band(pivotPx * 0.92, pivotPx * 0.95, "#ff4d4d", 0.22));
-        parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="#2ecc71" stroke-width="1.4" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}</title></line>`);
+        parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="${pivotCol}" stroke-width="1.6" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}${m.pivot.active ? " — aktywny (wybicie)" : " — czeka na wybicie"}</title></line>`);
         const clampY = v => Math.max(P.y + fs(10), Math.min(P.y + P.h - 3, v));
-        addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: "#2ecc71", bold: true, prio: 9 });
+        addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: pivotCol, bold: true, prio: 9 });
         if (!extended) {
             addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#4ee08a", bold: true, prio: 4 });
             addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
@@ -724,7 +725,7 @@ function chartSvg(m, opts = {}) {
     (opts.hideAutoLines ? [] : m.lines).forEach(l => {
         const at = i => l.y0 + (l.y1 - l.y0) * (i - l.i0) / Math.max(1, l.i1 - l.i0);
         const i0 = Math.max(0, l.i0);
-        const col = l.kind === "res" ? CHART_COLORS.res : CHART_COLORS.sup;
+        const col = l.kind === "res" ? (m.trend && m.trend.state === "wybicie" ? "#2ecc71" : "#e8eaed") : CHART_COLORS.sup;   // opór flagi: biały, gdy czeka; zielony po wybiciu
         const y0 = Math.min(Math.max(yP(at(i0)), P.y), P.y + P.h);
         const y1 = Math.min(Math.max(yP(at(l.i1)), P.y), P.y + P.h);
         parts.push(`<line x1="${x_(i0)}" y1="${y0}" x2="${x_(l.i1)}" y2="${y1}" stroke="${col}" stroke-width="1.6" stroke-dasharray="6 3"><title>${l.kind === "res" ? "Opór" : "Wsparcie"} (${l.touches} dotknięć)</title></line>`);

@@ -268,20 +268,27 @@ test("computeBook: „Kup ponownie” toleruje zamknięcie tygodnia przed powrot
     assert.ok(computeBook(m).reentries.length >= 1);
 });
 
-test("bookSvg: sygnały to kółka z literą K / D / P pod świecą, ✕ przy stopie i jedna legenda — bez strzałek i długich podpisów", () => {
-    const { bookSvg, shiftBook } = require("../../docs/js/book.js");
+test("bookSvg: pivoty to krótkie przerywane linie — białe, gdy czekają, w kolorze sygnału po aktywacji (kup zielona, kup ponownie różowa); legenda; bez liter i kółek", () => {
+    const { bookSvg } = require("../../docs/js/book.js");
     const m = stopOutSeries(true);
-    const book = computeBook(m);
-    m.book = book;
+    m.book = computeBook(m);
+    m.book.pivots = [{ i0: 3, i1: 11, level: 25 }];                 // baza, która jeszcze nie dała sygnału
     const labels = [];
     const g = { x: i => 10 + i * 8, yP: v => 500 - v * 3, P: { y: 0, h: 480 }, fs: v => v, addLabel: t => labels.push(t), clip: "", compact: false, legendY: 20 };
     const svg = bookSvg(m, g);
-    assert.match(svg, />K<\/text>/);
-    assert.match(svg, />P<\/text>/);
-    assert.match(svg, /<path[^>]*stroke="#ff4d6d"/);          // ✕ stop
-    assert.match(svg, /kup ponownie/);                         // legenda
-    assert.match(svg, /stroke="#2ecc71"[^>]*stroke-dasharray="4 3"/);   // linia pivotu przy K w zielonym kolorze litery
-    assert.ok(!/<polygon/.test(svg), "bez strzałek");
-    assert.ok(!labels.some(t => /Kup|Dokup|ponownie|stop/.test(t)), "żadnych długich podpisów sygnałów w warstwie podpisów");
-    assert.equal(typeof shiftBook, "function");
+    assert.match(svg, /stroke="#e8eaed" stroke-width="2" stroke-dasharray="4 3"/);      // biała = czeka
+    assert.match(svg, /stroke="#2ecc71" stroke-width="2" stroke-dasharray="4 3"/);      // zielona = kup
+    assert.match(svg, /stroke="#f472b6" stroke-width="2" stroke-dasharray="4 3"/);      // różowa = kup ponownie
+    for (const t of ["pivot czeka", "kup", "dokup", "kup ponownie"]) assert.ok(svg.includes(`>${t}</text>`), `legenda: ${t}`);
+    assert.ok(!/<circle|<polygon/.test(svg) && !/>[KDP]<\/text>/.test(svg), "bez kółek, strzałek i liter");
+    assert.ok(!labels.some(t => /Kup|Dokup|ponownie|stop/.test(t)), "żadnych podpisów sygnałów w warstwie podpisów");
+});
+
+test("computeBook: pivot bazy bez sygnału trafia na listę oczekujących (białe linie), a z sygnałem — nie", () => {
+    const m = stopOutSeries(true);
+    m.bases = [{ type: "flat", i0: 20, i1: 30, pivot: 999, weeks: 10, low: 5, open: false }];
+    assert.equal(computeBook(m).pivots.length, 1);
+    const kup = computeBook(stopOutSeries(true)).buys[0];
+    m.bases = [{ type: "flat", i0: kup.i - 8, i1: kup.i - 1, pivot: kup.pivot || 1, weeks: 8, low: 5, open: false }];
+    assert.ok(kup);
 });
