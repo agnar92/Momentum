@@ -8,7 +8,7 @@
 // bookSvg tylko składa SVG. Plik ładowany przed chart.js.
 // ============================================================
 
-const BOOK_COLORS = { text: "#e8eaed", dim: "#aab0bd", buy: "#2ecc71", add: "#7be0a1", sell: "#ff4d6d", mkt: "#9aa3b2", vol: "#e8eaed", split: "#f0b429", ipo: "#e8eaed" };
+const BOOK_COLORS = { text: "#e8eaed", dim: "#aab0bd", buy: "#2ecc71", add: "#7be0a1", sell: "#ff4d6d", mkt: "#9aa3b2", vol: "#e8eaed", split: "#f0b429", ipo: "#e8eaed", reentry: "#38d9c0" };
 const BOOK_TIGHT_PCT = 1.5;          // „ciasne zamknięcia”: zamknięcia kolejnych tygodni mieszczą się w tylu % (max/min)
 const BOOK_TIGHT_MIN_WEEKS = 3;
 const BOOK_BUY_VOL = 1.4;            // wybicie z bazy na wolumenie ≥ tyle × średnia z poprzednich tygodni (książka: +40–50 % ponad średnią)
@@ -227,21 +227,8 @@ function computeBook(m, splits = []) {
     book.addCands.forEach(cd => {
         const prev = book.buys.filter(x => x.i < cd.i).pop();
         if (!prev || cd.i - prev.i > BOOK_ADD_AFTER_BUY || cd.i - prev.i <= BOOK_ADD_MIN_WEEKS || cd.i - lastAdd < BOOK_ADD_GAP || !(l[cd.i] <= cd.pivot * BOOK_BUY_MAX_EXT) || book.buys.some(x => x.i === cd.i)) return;
-        book.adds.push({ i: cd.i, label: "Dokup" }); lastAdd = cd.i;
+        book.adds.push({ i: cd.i, label: "Dokup", pivot: cd.pivot }); lastAdd = cd.i;
     });
-    // „Dokup” po odbiciu od 10-tygodniowej (jak „Add: bounces off 10-week moving average line on volume” w książce): trend wzrostowy (40-tygodniowa rośnie, 10 > 40,
-    // cena nad obiema), dołek tygodnia przy linii (≤ +4 %), poprzedni tydzień przy niej, ten w górę na rosnącym wolumenie — TYLKO do BOOK_ADD_AFTER_BUY tygodni po
-    // sygnale „Kup” z patternu (baza / flaga / konsolidacja; „Kup po korekcie” nie liczy się)
-    const patBuys = book.buys.filter(x => x.label === "Kup");
-    for (let i = 12; i < n; i++) {
-        const s10 = sma10[i], s40 = sma40[i];
-        if (![s10, s40, sma10[i - 1], sma10[i - 3], sma40[i - 4], h[i], l[i], c[i], c[i - 1], v[i], v[i - 1]].every(Number.isFinite)) continue;
-        if (!(s40 > sma40[i - 4]) || book.buys.some(x => x.i === i) || book.adds.some(x => Math.abs(x.i - i) < BOOK_ADD_GAP)) continue;
-        if (!(c[i] > s10 && c[i] > s40 && s10 > sma10[i - 3] && s10 > s40)) continue;
-        if (!patBuys.some(x => i - x.i > 0 && i - x.i <= BOOK_ADD_AFTER_BUY)) continue;
-        if (l[i] <= s10 * 1.04 && c[i - 1] <= sma10[i - 1] * 1.03 && c[i] >= c[i - 1] && v[i] > v[i - 1]) book.adds.push({ i, label: "Dokup" });
-    }
-    book.adds.sort((a, b) => a.i - b.i);
     // „Kup ponownie” (O'Neil: po wycięciu na stopie / wytrząśnięciu przełam opór psychologiczny i wróć do silnej spółki, nawet drożej): po stopie −8 % od ceny kupna
     // pierwszy tydzień w górę, w którym cena wraca nad 10-tygodniową (wcześniej była pod nią) na wolumenie ≥ średniej i nad 40-tygodniową, albo przebija dawny pivot
     // na wolumenie ≥ 1,4× (do +5 % nad pivotem); najpóźniej BOOK_REENTRY_WEEKS po stopie i przed następnym „Kup”.
@@ -255,11 +242,29 @@ function computeBook(m, splits = []) {
         for (let k = stopI + 1; k <= Math.min(n - 1, nextBuy - 1, stopI + BOOK_REENTRY_WEEKS); k++) {
             const a = rowIdx(avg, k - 1);
             if (![c[k], c[k - 1], v[k], sma10[k], sma10[k - 1], sma40[k], a].every(Number.isFinite) || !(a > 0) || !(c[k] >= c[k - 1])) continue;
-            const above10 = c[k] > sma10[k] && c[k - 1] <= sma10[k - 1] && v[k] >= a && c[k] > sma40[k];
+            const above10 = c[k] > sma10[k] && c[k - 1] <= sma10[k - 1] * 1.02 && v[k] >= a && c[k] > sma40[k];
             const abovePivot = b.pivot > 0 && c[k] > b.pivot && c[k - 1] <= b.pivot && v[k] >= BOOK_BUY_VOL * a && c[k] <= b.pivot * BOOK_BUY_MAX_EXT;
-            if ((above10 || abovePivot) && !book.buys.some(x => x.i === k)) { book.reentries.push({ i: k, stopI, label: "Kup ponownie", why: abovePivot ? "pivot" : "10-tyg." }); break; }
+            if ((above10 || abovePivot) && !book.buys.some(x => x.i === k)) { book.reentries.push({ i: k, stopI, label: "Kup ponownie", why: abovePivot ? "pivot" : "10-tyg.", ...(abovePivot ? { pivot: b.pivot } : {}) }); break; }
         }
     });
+    // „Dokup” po odbiciu od 10-tygodniowej (jak „Add: bounces off 10-week moving average line on volume” w książce): trend wzrostowy (40-tygodniowa rośnie, 10 > 40,
+    // cena nad obiema), dołek tygodnia przy linii (≤ +4 %), poprzedni tydzień przy niej, ten w górę na rosnącym wolumenie — TYLKO do BOOK_ADD_AFTER_BUY tygodni po
+    // sygnale „Kup” z patternu (baza / flaga / konsolidacja; „Kup po korekcie” nie liczy się)
+    // Pozycja trwa od „Kup” z patternu albo od „Kup ponownie” do pierwszego zamknięcia pod 40-tygodniową (koniec trendu) — nie tylko BOOK_ADD_AFTER_BUY tygodni:
+    // lider (DELL) potrafi rosnąć ponad rok, a kolejne cofnięcia do 10-tygodniowej to miejsca dla spóźnionych.
+    const anchors = [...book.buys.filter(x => x.label === "Kup"), ...book.reentries].map(x => x.i).sort((a, b) => a - b);
+    const trendAlive = (a, i) => { for (let j = a + 1; j <= i; j++) if (Number.isFinite(sma40[j]) && Number.isFinite(c[j]) && c[j] < sma40[j]) return false; return true; };
+    for (let i = 12; i < n; i++) {
+        const s10 = sma10[i], s40 = sma40[i], a10 = rowIdx(avg, i - 1);
+        if (![s10, s40, sma10[i - 3], sma40[i - 4], h[i], l[i], c[i], c[i - 1], v[i], a10].every(Number.isFinite)) continue;
+        if (!(s40 > sma40[i - 4]) || book.buys.some(x => x.i === i) || book.adds.some(x => Math.abs(x.i - i) < BOOK_ADD_GAP)) continue;
+        if (!(c[i] > s10 && c[i] > s40 && s10 > sma10[i - 3] && s10 > s40)) continue;
+        const anchor = anchors.filter(a => a < i).pop();
+        if (anchor === undefined || !(i - anchor <= BOOK_ADD_AFTER_BUY || trendAlive(anchor, i))) continue;
+        // tydzień cofnął się do 10-tygodniowej (dołek ≤ +4 % nad nią), zamknął w górę i na wolumenie co najmniej średnim
+        if (l[i] <= s10 * 1.04 && c[i] >= c[i - 1] && v[i] >= a10) book.adds.push({ i, label: "Dokup" });
+    }
+    book.adds.sort((a, b) => a.i - b.i);
     // ciasne zamknięcia: tylko w trendzie wzrostowym (nad 10- i 40-tygodniową) i tam, gdzie mają znaczenie dla kupna — w bazie (albo tuż po niej)
     // lub do BOOK_TIGHT_AFTER_BUY tygodni po kupnie (jak w książce: „4 tight closes” przy punkcie kupna / po nim)
     tightCloseRuns(c).forEach(r => {
@@ -311,59 +316,51 @@ function bookSvg(m, g) {
     const { x, yP, P, fs, addLabel, clip, compact } = g;
     const out = [];
     const inY = y => Math.max(P.y + fs(8), Math.min(P.y + P.h - fs(4), y));
-    const arrow = (x0, y0, x1, y1, col, w = 1.6) => {
-        const a = Math.atan2(y1 - y0, x1 - x0), s = fs(5.5);
-        const p1 = [x1 - s * Math.cos(a - 0.45), y1 - s * Math.sin(a - 0.45)], p2 = [x1 - s * Math.cos(a + 0.45), y1 - s * Math.sin(a + 0.45)];
-        return `<g pointer-events="none"><line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="${col}" stroke-width="${w}"/>`
-            + `<polygon points="${x1.toFixed(1)},${y1.toFixed(1)} ${p1[0].toFixed(1)},${p1[1].toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}" fill="${col}"/></g>`;
-    };
-    // ramki baz: pozioma kreska pod najniższym punktem z krótkimi zakończeniami + podpis „N-tyg. nazwa”
+    // ramki baz: cienka kreska pod najniższym punktem + krótki podpis „typ N t.” (tylko gdy jest miejsce — szerokość ramki)
     bk.brackets.forEach(b => {
-        const x0 = x(Math.max(0, b.i0)), x1 = x(Math.min(m.n - 1, b.i1)), y = inY(yP(b.low) + fs(9));
-        out.push(`<g ${clip} pointer-events="none" stroke="${BOOK_COLORS.text}" stroke-width="1.2" opacity="0.85"><line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}"/><line x1="${x0}" x2="${x0}" y1="${y - fs(3)}" y2="${y + fs(3)}"/><line x1="${x1}" x2="${x1}" y1="${y - fs(3)}" y2="${y + fs(3)}"/></g>`);
-        addLabel(compact ? b.short : b.label, (x0 + x1) / 2, Math.min(P.y + P.h - 3, y + fs(13)), { size: fs(10.5), fill: BOOK_COLORS.text, prio: 6, title: `Baza wg O'Neila: ${b.label}` });
+        const x0 = x(Math.max(0, b.i0)), x1 = x(Math.min(m.n - 1, b.i1)), y = inY(yP(b.low) + fs(7));
+        out.push(`<g ${clip} pointer-events="none" stroke="${BOOK_COLORS.dim}" stroke-width="1" opacity="0.6"><line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}"/><line x1="${x0}" x2="${x0}" y1="${y - fs(3)}" y2="${y + fs(3)}"/><line x1="${x1}" x2="${x1}" y1="${y - fs(3)}" y2="${y + fs(3)}"/></g>`);
+        if (x1 - x0 >= fs(compact ? 46 : 60)) addLabel(compact ? b.short : b.label, (x0 + x1) / 2, Math.min(P.y + P.h - 3, y + fs(12)), { size: fs(10), fill: BOOK_COLORS.dim, prio: 2 });
     });
-    // punkt kupna: przerywana linia pivotu tuż przed wybiciem + strzałka „Kup” z lewej góry
-    bk.buys.forEach(b => {
-        const px = x(b.i), py = yP(b.pivot || m.c[b.i]);
-        if (b.pivot) out.push(`<line ${clip} x1="${x(Math.max(0, b.i - 6))}" x2="${px}" y1="${py}" y2="${py}" stroke="${BOOK_COLORS.text}" stroke-width="1.3" stroke-dasharray="3 2" pointer-events="none"/>`);
-        out.push(arrow(px - fs(26), inY(py - fs(26)), px - fs(3), py - fs(3), b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy));
-        addLabel(b.label + (b.stage >= 2 ? (compact ? ` ${b.stage}.` : ` · ${b.stage}. etap${b.late ? " ⚠" : ""}`) : ""), px - fs(28), inY(py - fs(30)), { anchor: "end", size: fs(11.5), fill: b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, bold: true, prio: 8, title: b.pivot ? "Zamknięcie nad szczytem konsolidacji / pivotem bazy na podwyższonym wolumenie (kupno do +5 % nad pivotem)" : "Pierwsze zamknięcie nad 10-tygodniową po korekcie rynku — spółka trzymała się lepiej niż indeks" });
-    });
-    bk.holds.forEach(hd => {   // reguła 8 tygodni: poziomy nawias nad wykresem od kupna do +8 tygodni
+    // reguła 8 tygodni: cienki zielony nawias nad wykresem od kupna do +8 tygodni
+    bk.holds.forEach(hd => {
         const x0 = x(Math.max(0, hd.i0)), x1 = x(Math.min(m.n - 1, hd.i1)), hit = Math.min(m.n - 1, Math.max(0, hd.iHit)), y = inY(yP(m.h[hit]) - fs(16));
-        out.push(`<g ${clip} pointer-events="none" stroke="${BOOK_COLORS.add}" stroke-width="1.4"><line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}"/><line x1="${x0}" x2="${x0}" y1="${y}" y2="${y + fs(5)}"/><line x1="${x1}" x2="${x1}" y1="${y}" y2="${y + fs(5)}"/></g>`);
-        addLabel(compact ? "8 tyg." : `Trzymaj 8 tyg. (+20 % w ≤ 3 tyg.)`, (x0 + x1) / 2, y - fs(3), { size: fs(10.5), fill: BOOK_COLORS.add, bold: true, prio: 5, title: "Reguła 8 tygodni (O'Neil): akcja zyskała ≥ 20 % w ciągu 1–3 tygodni od wybicia — trzymaj ją co najmniej 8 pełnych tygodni" });
+        out.push(`<g ${clip} pointer-events="none" stroke="${BOOK_COLORS.add}" stroke-width="1.3" opacity="0.8"><line x1="${x0}" x2="${x1}" y1="${y}" y2="${y}"/><line x1="${x0}" x2="${x0}" y1="${y}" y2="${y + fs(5)}"/><line x1="${x1}" x2="${x1}" y1="${y}" y2="${y + fs(5)}"/></g>`);
+        addLabel("trzymaj 8 tyg.", (x0 + x1) / 2, y - fs(3), { size: fs(10), fill: BOOK_COLORS.add, prio: 3 });
     });
-    bk.adds.forEach(a => {
-        const px = x(a.i), py = yP(m.h[a.i]);
-        out.push(arrow(px - fs(20), inY(py - fs(24)), px - fs(2), inY(py - fs(4)), BOOK_COLORS.add, 1.3));
-        addLabel("Dokup", px - fs(22), inY(py - fs(27)), { anchor: "end", size: fs(10.5), fill: BOOK_COLORS.add, bold: true, prio: 5, title: "Odbicie od 10-tygodniowej średniej na wolumenie w trwającym trendzie — miejsce na dokupienie (tylko do zysku)" });
+    // SYGNAŁY: jeden prosty język — kółko z literą pod świecą tygodnia sygnału: K = kup (zielone, pełne; szare = późny etap ≥ 3), D = dokup (zielona obwódka),
+    // P = kup ponownie (turkusowe), ✕ = stop −8 % (czerwony krzyżyk pod dołkiem). Bez strzałek, linii pivotu i długich podpisów; opis w legendzie na wykresie.
+    const r = fs(compact ? 8 : 9), placed = [];
+    const signals = [
+        ...bk.buys.map(b => ({ i: b.i, k: "K", late: b.late, pivot: b.pivot })),
+        ...bk.adds.map(a => ({ i: a.i, k: "D", pivot: a.pivot })),
+        ...(bk.reentries || []).map(q => ({ i: q.i, k: "P", pivot: q.pivot })),
+    ].sort((a, b2) => a.i - b2.i);
+    (bk.reentries || []).forEach(q => {
+        if (!(q.stopI >= 0)) return;
+        const sx = x(q.stopI), sy = inY(yP(m.l[q.stopI]) + fs(11)), d = fs(4.5);
+        out.push(`<path ${clip} d="M${sx - d},${sy - d} L${sx + d},${sy + d} M${sx + d},${sy - d} L${sx - d},${sy + d}" stroke="${BOOK_COLORS.sell}" stroke-width="2" stroke-linecap="round" pointer-events="none"/>`);
     });
-    (bk.reentries || []).forEach(r => {
-        const px = x(r.i), py = yP(m.h[r.i]);
-        if (r.stopI >= 0) addLabel("stop −8 %", x(r.stopI), inY(yP(m.l[r.stopI]) + fs(14)), { size: fs(10), fill: BOOK_COLORS.dim, prio: 4, title: "Cena spadła o 8 % poniżej ceny kupna — wyjście wg reguły stop-loss" });
-        out.push(arrow(px - fs(20), inY(py - fs(24)), px - fs(2), inY(py - fs(4)), BOOK_COLORS.buy, 1.3));
-        addLabel("Kup ponownie", px - fs(22), inY(py - fs(27)), { anchor: "end", size: fs(10.5), fill: BOOK_COLORS.buy, bold: true, prio: 6, title: r.why === "pivot" ? "Po wycięciu na stopie cena przebiła dawny pivot na wolumenie — wróć do silnej spółki, nawet drożej (O'Neil)" : "Po wycięciu na stopie cena wróciła ponad 10-tygodniową na wolumenie — wróć do silnej spółki, nawet drożej (O'Neil)" });
+    signals.forEach(sg => {   // linia pivotu tuż przed wybiciem — w kolorze litery sygnału
+        if (!(sg.pivot > 0)) return;
+        const col = sg.k === "P" ? BOOK_COLORS.reentry : sg.k === "D" ? BOOK_COLORS.add : sg.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, py = yP(sg.pivot);
+        out.push(`<line ${clip} x1="${x(Math.max(0, sg.i - 6))}" x2="${x(sg.i)}" y1="${py}" y2="${py}" stroke="${col}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
     });
-    bk.tights.forEach(t => {
-        const cx = (x(t.i0) + x(t.i1)) / 2, cy = (yP(t.lo) + yP(t.hi)) / 2;
-        const rx = (x(t.i1) - x(t.i0)) / 2 + fs(7), ry = Math.abs(yP(t.lo) - yP(t.hi)) / 2 + fs(5);
-        out.push(`<ellipse ${clip} cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="${BOOK_COLORS.text}" stroke-width="1.2" opacity="0.85" pointer-events="none"><title>${t.label}: zamknięcia w ${BOOK_TIGHT_PCT} % — kupujący trzymają akcje</title></ellipse>`);
-        if (!compact) addLabel(t.label, cx, Math.min(P.y + P.h - 3, cy + ry + fs(12)), { size: fs(10), fill: BOOK_COLORS.dim, prio: 4 });
+    signals.forEach(sg => {
+        const cx = x(sg.i);
+        let cy = yP(m.l[sg.i]) + fs(19);
+        for (let tries = 0; tries < 4 && placed.some(q => Math.hypot(q.x - cx, q.y - cy) < 2 * r + 1); tries++) cy += 2 * r + 2;
+        cy = Math.min(cy, P.y + P.h - r - 2);
+        placed.push({ x: cx, y: cy });
+        const col = sg.k === "P" ? BOOK_COLORS.reentry : sg.late ? BOOK_COLORS.dim : BOOK_COLORS.buy;
+        const filled = sg.k !== "D";
+        out.push(`<g ${clip} pointer-events="none"><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="${r}" fill="${filled ? col : "#0e0f13"}" stroke="${col}" stroke-width="1.8"/>`
+            + `<text x="${cx.toFixed(1)}" y="${(cy + fs(3.8)).toFixed(1)}" font-size="${fs(11)}" font-weight="800" fill="${filled ? "#0e0f13" : col}" text-anchor="middle">${sg.k}</text></g>`);
     });
-    // strzałki wolumenu nad słupkami
-    if (g.volTop) {
-        let lastLabel = -99;
-        [...bk.volUp.map(x2 => ({ ...x2, col: BOOK_COLORS.vol })), ...bk.dry.map(x2 => ({ ...x2, col: BOOK_COLORS.dim }))].sort((a, b) => a.i - b.i).forEach(vv => {
-            const top = g.volTop(vv.i);
-            if (!Number.isFinite(top)) return;
-            const px = x(vv.i), y1 = top - fs(3), y0 = y1 - fs(15);
-            out.push(arrow(px, y0, px, y1, vv.col, 1.3));
-            const showLabel = vv.i - lastLabel >= 7 && px > x(0) + fs(215);   // nie nad podpisem panelu wolumenu (lewy górny róg)   // podpis tylko przy pierwszej strzałce z grupy (inaczej napisy się nakładają)
-            if (showLabel) lastLabel = vv.i;
-            if (!compact && showLabel) out.push(`<text x="${px}" y="${y0 - 3}" font-size="${fs(9.5)}" font-weight="700" fill="${vv.col}" text-anchor="middle" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">${vv.label}</text>`);
-        });
+    if (signals.length && g.legendY != null) {
+        const lx = x(0) + fs(6);
+        out.push(`<text x="${lx}" y="${g.legendY}" font-size="${fs(compact ? 9.5 : 10.5)}" font-weight="700" fill="${BOOK_COLORS.dim}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">`
+            + `<tspan fill="${BOOK_COLORS.buy}">K</tspan> kup &#160;·&#160; <tspan fill="${BOOK_COLORS.add}">D</tspan> dokup &#160;·&#160; <tspan fill="${BOOK_COLORS.reentry}">P</tspan> ${compact ? "ponownie" : "kup ponownie"} &#160;·&#160; <tspan fill="${BOOK_COLORS.sell}">✕</tspan> stop${compact ? "" : " −8 %"}</text>`);
     }
     // korekty rynku: łuk pod załamaniem linii S&P 500 + podpis
     if (g.yS) bk.corrections.forEach(cr => {

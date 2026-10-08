@@ -674,6 +674,7 @@ function chartSvg(m, opts = {}) {
     if (bookOn) {
         parts.push(bookSvg(m, {
             x, yP, yS, P, L, fs, addLabel, clip: clipAttr, compact: !!opts.compact, step,
+            legendY: (opts.bookTitle && !opts.compact) ? P.y + 6 + fs(36) + fs(14) : P.y + fs(12),
             volTop: i => (Number.isFinite(m.v[i]) ? L.volume.y + L.volume.h - (m.v[i] / vMax) * (L.volume.h - fs(11) - 4) : NaN),
         }));
         if (opts.bookTitle && !opts.compact) {
@@ -824,11 +825,24 @@ function chartSvg(m, opts = {}) {
             return `<path d="M${cx - a * 0.6},${y0 + a} L${cx + a * 0.6},${y0 + a} L${cx},${y0} Z" fill="${fill}" stroke="${stroke}" stroke-width="1"${stroke !== "none" ? ` stroke-dasharray="2 1.5"` : ""}><title>${title}</title></path>`;
         };
         const txt = (cx, yy, t, col, bold) => `<text x="${cx}" y="${yy}" font-size="${fs(9)}" ${bold ? 'font-weight="700"' : ""} fill="${col}" text-anchor="middle" pointer-events="none">${t}</text>`;
+        // gęste okno (kilka lat na telefonie): podpisy „EPS x” i „+y %” pokazujemy tylko tam, gdzie się mieszczą obok poprzedniego (strzałka ↑ zostaje przy każdym raporcie)
+        let edgeEps = -Infinity, edgePct = -Infinity;
+        const cw = fs(9) * 0.6;
         m.eps.forEach(q => {
             const cx = x(q.week), g = Number.isFinite(q.g);
             parts.push(arrow(cx, CHART_COLORS.textStrong, "none", `Wyniki ${q.d}: EPS ${q.e}${g ? ` (${q.g >= 0 ? "+" : ""}${q.g}% r/r)` : ""}`));
-            parts.push(txt(cx, marks.y + fs(8) + fs(9) + 4, (opts.compact || bookOn) ? `EPS ${q.e}` : "EPS", (opts.compact || bookOn) ? CHART_COLORS.textStrong : CHART_COLORS.text, !!(opts.compact || bookOn)));
-            if (g) parts.push(txt(cx, marks.y + fs(8) + fs(9) * 2 + 5, `${q.g >= 0 ? "+" : ""}${q.g}%`, q.g >= 0 ? CHART_COLORS.up : CHART_COLORS.down, true));
+            const t1 = (opts.compact || bookOn) ? `EPS ${q.e}` : "EPS", w1 = t1.length * cw;
+            if (cx - w1 / 2 >= edgeEps + 4) {
+                parts.push(txt(cx, marks.y + fs(8) + fs(9) + 4, t1, (opts.compact || bookOn) ? CHART_COLORS.textStrong : CHART_COLORS.text, !!(opts.compact || bookOn)));
+                edgeEps = cx + w1 / 2;
+            }
+            if (g) {
+                const t2 = `${q.g >= 0 ? "+" : ""}${q.g}%`, w2 = t2.length * cw;
+                if (cx - w2 / 2 >= edgePct + 4) {
+                    parts.push(txt(cx, marks.y + fs(8) + fs(9) * 2 + 5, t2, q.g >= 0 ? CHART_COLORS.up : CHART_COLORS.down, true));
+                    edgePct = cx + w2 / 2;
+                }
+            }
         });
         const ni = m.epsNext ? dateToIndex(m.weeks, m.epsNext.d) : -1;
         if (m.epsNext && ni >= 0 && ni <= m.n - 0.5) {
