@@ -290,7 +290,7 @@ function bookSvg(m, g) {
             if (!Number.isFinite(top)) return;
             const px = x(vv.i), y1 = top - fs(3), y0 = y1 - fs(15);
             out.push(arrow(px, y0, px, y1, vv.col, 1.3));
-            const showLabel = vv.i - lastLabel >= 7;   // podpis tylko przy pierwszej strzałce z grupy (inaczej napisy się nakładają)
+            const showLabel = vv.i - lastLabel >= 7 && px > x(0) + fs(215);   // nie nad podpisem panelu wolumenu (lewy górny róg)   // podpis tylko przy pierwszej strzałce z grupy (inaczej napisy się nakładają)
             if (showLabel) lastLabel = vv.i;
             if (!compact && showLabel) out.push(`<text x="${px}" y="${y0 - 3}" font-size="${fs(9.5)}" font-weight="700" fill="${vv.col}" text-anchor="middle" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">${vv.label}</text>`);
         });
