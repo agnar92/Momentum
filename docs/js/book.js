@@ -31,6 +31,9 @@ const BOOK_ADD_MIN_WEEKS = 4;        // „Dokup” = wybicie z bazy / ciasnych 
 const BOOK_ADD_AFTER_BUY = 40;       // „Dokup” tylko do tylu tygodni od wcześniejszego „Kup” (dokładamy do trwającego trendu)
 const BOOK_ADD_TIGHT_PCT = 4;        // ... a zamknięcia bazy dokupu mieszczą się w ≤ tylu % (+ 0,5 % za każdy tydzień ponad minimum): to prawdziwa pauza, nie sam trend
 const BOOK_ADD_VOL = 1.0;            // wolumen wybicia z bazy dokupu ≥ tyle × średnia
+const BOOK_STOP_PCT = 8;             // „wycięcie na stopie”: dołek tygodnia ≥ tyle % pod ceną kupna (reguła 7–8 % z książki)
+const BOOK_REENTRY_AFTER_BUY = 26;   // stop liczy się do tylu tygodni od „Kup”
+const BOOK_REENTRY_WEEKS = 20;       // „Kup ponownie” najpóźniej tyle tygodni po wycięciu
 const BOOK_ADD_GAP = 6;              // „Dokup” nie częściej niż co tyle tygodni
 const BOOK_DRY_RATIO = 0.6;          // wyschnięcie wolumenu: tydzień z wolumenem ≤ tyle × średnia
 const BOOK_CORRECTION_PCT = 8;       // korekta rynku: spadek S&P 500 od szczytu o co najmniej tyle % (tygodniowe zamknięcia)
@@ -111,7 +114,7 @@ function computeBook(m, splits = []) {
     const n = m.n, h = m.h, l = m.l, c = m.c, v = m.v, avg = m.volAvg || [];
     const sma10 = (m.smas && m.smas[0] && m.smas[0].values) || [], sma40 = (m.smas && m.smas[1] && m.smas[1].values) || [];
     const bases = m.bases || [];
-    const book = { holds: [], addCands: [], brackets: [], buys: [], adds: [], tights: [], volUp: [], dry: [], corrections: [], ipo: null, splits: [] };
+    const book = { holds: [], addCands: [], brackets: [], buys: [], adds: [], reentries: [], tights: [], volUp: [], dry: [], corrections: [], ipo: null, splits: [] };
     // ramki baz (nie: korekta / głęboka korekta — to nie bazy do kupna)
     bases.forEach(b => {
         if (!BOOK_BASE_NAMES[b.type]) return;
@@ -239,6 +242,24 @@ function computeBook(m, splits = []) {
         if (l[i] <= s10 * 1.04 && c[i - 1] <= sma10[i - 1] * 1.03 && c[i] >= c[i - 1] && v[i] > v[i - 1]) book.adds.push({ i, label: "Dokup" });
     }
     book.adds.sort((a, b) => a.i - b.i);
+    // „Kup ponownie” (O'Neil: po wycięciu na stopie / wytrząśnięciu przełam opór psychologiczny i wróć do silnej spółki, nawet drożej): po stopie −8 % od ceny kupna
+    // pierwszy tydzień w górę, w którym cena wraca nad 10-tygodniową (wcześniej była pod nią) na wolumenie ≥ średniej i nad 40-tygodniową, albo przebija dawny pivot
+    // na wolumenie ≥ 1,4× (do +5 % nad pivotem); najpóźniej BOOK_REENTRY_WEEKS po stopie i przed następnym „Kup”.
+    book.buys.forEach((b, bi) => {
+        const ref = b.pivot > 0 ? Math.min(c[b.i], b.pivot * BOOK_BUY_MAX_EXT) : c[b.i];
+        if (!(ref > 0)) return;
+        const nextBuy = bi + 1 < book.buys.length ? book.buys[bi + 1].i : n;
+        let stopI = -1;
+        for (let j = b.i + 1; j <= Math.min(n - 1, b.i + BOOK_REENTRY_AFTER_BUY); j++) if (Number.isFinite(l[j]) && l[j] <= ref * (1 - BOOK_STOP_PCT / 100)) { stopI = j; break; }
+        if (stopI < 0) return;
+        for (let k = stopI + 1; k <= Math.min(n - 1, nextBuy - 1, stopI + BOOK_REENTRY_WEEKS); k++) {
+            const a = rowIdx(avg, k - 1);
+            if (![c[k], c[k - 1], v[k], sma10[k], sma10[k - 1], sma40[k], a].every(Number.isFinite) || !(a > 0) || !(c[k] >= c[k - 1])) continue;
+            const above10 = c[k] > sma10[k] && c[k - 1] <= sma10[k - 1] && v[k] >= a && c[k] > sma40[k];
+            const abovePivot = b.pivot > 0 && c[k] > b.pivot && c[k - 1] <= b.pivot && v[k] >= BOOK_BUY_VOL * a && c[k] <= b.pivot * BOOK_BUY_MAX_EXT;
+            if ((above10 || abovePivot) && !book.buys.some(x => x.i === k)) { book.reentries.push({ i: k, stopI, label: "Kup ponownie", why: abovePivot ? "pivot" : "10-tyg." }); break; }
+        }
+    });
     // ciasne zamknięcia: tylko w trendzie wzrostowym (nad 10- i 40-tygodniową) i tam, gdzie mają znaczenie dla kupna — w bazie (albo tuż po niej)
     // lub do BOOK_TIGHT_AFTER_BUY tygodni po kupnie (jak w książce: „4 tight closes” przy punkcie kupna / po nim)
     tightCloseRuns(c).forEach(r => {
@@ -278,7 +299,7 @@ function shiftBook(book, off, n) {
     const pt = arr => arr.map(x => ({ ...x, i: x.i - off })).filter(x => x.i >= 0 && x.i < n);
     const rg = arr => arr.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, ...(x.iLow !== undefined ? { iLow: x.iLow - off } : {}) })).filter(x => x.i1 >= 0 && x.i0 < n);
     return {
-        holds: book.holds.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, iHit: x.iHit - off })).filter(x => x.i1 >= 0 && x.i0 < n), brackets: rg(book.brackets), buys: pt(book.buys), adds: pt(book.adds), tights: rg(book.tights), volUp: pt(book.volUp), dry: pt(book.dry),
+        holds: book.holds.map(x => ({ ...x, i0: x.i0 - off, i1: x.i1 - off, iHit: x.iHit - off })).filter(x => x.i1 >= 0 && x.i0 < n), brackets: rg(book.brackets), buys: pt(book.buys), adds: pt(book.adds), reentries: book.reentries.map(x => ({ ...x, i: x.i - off, stopI: x.stopI - off })).filter(x => x.i >= 0 && x.i < n), tights: rg(book.tights), volUp: pt(book.volUp), dry: pt(book.dry),
         corrections: rg(book.corrections), ipo: book.ipo && book.ipo.i - off >= 0 && book.ipo.i - off < n ? { i: book.ipo.i - off } : null, splits: pt(book.splits),
     };
 }
@@ -318,6 +339,12 @@ function bookSvg(m, g) {
         const px = x(a.i), py = yP(m.h[a.i]);
         out.push(arrow(px - fs(20), inY(py - fs(24)), px - fs(2), inY(py - fs(4)), BOOK_COLORS.add, 1.3));
         addLabel("Dokup", px - fs(22), inY(py - fs(27)), { anchor: "end", size: fs(10.5), fill: BOOK_COLORS.add, bold: true, prio: 5, title: "Odbicie od 10-tygodniowej średniej na wolumenie w trwającym trendzie — miejsce na dokupienie (tylko do zysku)" });
+    });
+    (bk.reentries || []).forEach(r => {
+        const px = x(r.i), py = yP(m.h[r.i]);
+        if (r.stopI >= 0) addLabel("stop −8 %", x(r.stopI), inY(yP(m.l[r.stopI]) + fs(14)), { size: fs(10), fill: BOOK_COLORS.dim, prio: 4, title: "Cena spadła o 8 % poniżej ceny kupna — wyjście wg reguły stop-loss" });
+        out.push(arrow(px - fs(20), inY(py - fs(24)), px - fs(2), inY(py - fs(4)), BOOK_COLORS.buy, 1.3));
+        addLabel("Kup ponownie", px - fs(22), inY(py - fs(27)), { anchor: "end", size: fs(10.5), fill: BOOK_COLORS.buy, bold: true, prio: 6, title: r.why === "pivot" ? "Po wycięciu na stopie cena przebiła dawny pivot na wolumenie — wróć do silnej spółki, nawet drożej (O'Neil)" : "Po wycięciu na stopie cena wróciła ponad 10-tygodniową na wolumenie — wróć do silnej spółki, nawet drożej (O'Neil)" });
     });
     bk.tights.forEach(t => {
         const cx = (x(t.i0) + x(t.i1)) / 2, cy = (yP(t.lo) + yP(t.hi)) / 2;

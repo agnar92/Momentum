@@ -204,3 +204,23 @@ test("computeBook: reguła 8 tygodni — +20 % w ≤ 3 tygodnie od „Kup” daj
     assert.ok(withHold.holds.length >= 1);
     assert.equal(withHold.holds[0].i1 - withHold.holds[0].i0 <= 8, true);
 });
+
+function stopOutSeries(rebound = true) {
+    // trend + płaska baza + „Kup” na wolumenie, potem spadek ≈ −18 % (stop −8 %), 2 tygodnie pod 10-tygodniową i szybki powrót nad nią na wolumenie
+    const c = [], v = [];
+    let p = 10;
+    const seg = (len, st, vol) => { for (let k = 0; k < len; k++) { p += st + (k % 2 ? 0.05 : -0.05); c.push(p); v.push(vol); } };
+    seg(40, 0.5, 1000); seg(6, 0, 700); seg(1, 1.5, 3000); seg(2, 0.5, 1000); seg(3, -2.0, 1000); seg(2, 0, 700);
+    if (rebound) seg(1, 5, 1300); else seg(1, -0.5, 700);
+    seg(3, 0.3, 1000);
+    const h = c.map(x => x + 0.1), l = c.map(x => x - 0.1), n = c.length;
+    return { n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases: [] };
+}
+
+test("computeBook: „Kup ponownie” — po wycięciu na stopie −8 % powrót nad 10-tygodniową na wolumenie", () => {
+    const b = computeBook(stopOutSeries(true));
+    assert.ok(b.buys.length >= 1);
+    assert.equal(b.reentries.length, 1);
+    assert.ok(b.reentries[0].i > b.reentries[0].stopI && b.reentries[0].stopI > b.buys[0].i);
+    assert.equal(computeBook(stopOutSeries(false)).reentries.length, 0);   // bez powrotu nad średnią brak sygnału
+});

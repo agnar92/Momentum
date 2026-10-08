@@ -189,7 +189,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         const h = cp.handle;
         return {
             i0: dateToIndex(weeks, b.start), iLow: dateToIndex(weeks, b.low_date), i1: dateToIndex(weeks, cp.rim_date || b.end),
-            peak: b.peak, low: b.low, right: cp.rim != null ? cp.rim : b.end_close, depth: b.depth_pct, open: b.open,
+            peak: b.peak, low: b.low, right: cp.rim != null ? cp.rim : b.end_close, pivotPx: b.pivot, noHandle: !!cp.no_handle, depth: b.depth_pct, open: b.open,
             weeks: cp.cup_weeks, prior: cp.prior_gain_pct, mktDd: cp.mkt_dd_pct, ctx: !!cp.mkt_ctx,
             handle: h ? { iLow: dateToIndex(weeks, h.low_date), low: h.low, iEnd: dateToIndex(weeks, b.end), end: b.end_close, depth: h.depth_pct } : null,
         };
@@ -616,7 +616,7 @@ function chartSvg(m, opts = {}) {
         const lastI = m.spx.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
         addLabel(`S&P 500 ${fmtCompact(m.spx[lastI])}`, x(lastI) - 4, Math.max(P.y + fs(10), yS(m.spx[lastI]) - 6), { anchor: "end", size: fs(10), fill: CHART_COLORS.bench, bold: true, prio: 5, title: "S&P 500 (własna skala, jak na wykresach z książki O'Neila)" });
     }
-    (opts.hints ? m.cups : []).forEach(cup => {   // miseczki tylko jako podpowiedź edukacyjna (przycisk 💡 Nauka)
+    ((opts.hints || bookOn) ? m.cups : []).forEach(cup => {   // miseczki: w widoku książkowym zawsze (łuk, rączka, pivot), litery A–E i legenda tylko w trybie 💡 Nauka
         const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
         parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
         if (cup.handle) {   // rączka: od prawego brzegu przez dołek rączki do ostatniej świecy bazy
@@ -626,7 +626,7 @@ function chartSvg(m, opts = {}) {
             reserveLabel(`rączka −${cup.handle.depth}%`, hp[1][0], hp[1][1] + fs(13), "middle", fs(10), true);
         }
         // cena monitorowania miseczki = pivot (prawy brzeg)
-        const pivot = Number.isFinite(cup.right) ? cup.right : null;
+        const pivot = Number.isFinite(cup.pivotPx) ? cup.pivotPx : (Number.isFinite(cup.right) ? cup.right : null);
         if (pivot) {
             const px = Math.min(Math.max(x(cup.i1), L.left + fs(80)), L.width - L.right - 4);
             parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, P.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
@@ -634,19 +634,22 @@ function chartSvg(m, opts = {}) {
         }
         // litery z książki O'Neila: A lewy szczyt, B dno, C prawy brzeg, D dołek rączki, E punkt zakupu (pivot, kupno nad nim z wolumenem)
         const tag = (letter, px, py) => parts.push(`<g pointer-events="none"><circle cx="${px}" cy="${py}" r="${fs(8)}" fill="#0e0f13" stroke="${CHART_COLORS.cup}" stroke-width="1.5"/><text x="${px}" y="${py + fs(3.5)}" font-size="${fs(10)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle">${letter}</text></g>`);
-        tag("A", x(cup.i0), yP(cup.peak) - fs(14));
-        tag("B", x(cup.iLow), yP(cup.low) + fs(14));
-        tag("C", x(cup.i1), yP(cup.right) - fs(14));
+        const hintsOn = !!opts.hints;
+        if (hintsOn) {
+            tag("A", x(cup.i0), yP(cup.peak) - fs(14));
+            tag("B", x(cup.iLow), yP(cup.low) + fs(14));
+            tag("C", x(cup.i1), yP(cup.right) - fs(14));
+        }
         let xE = x(cup.i1);
         if (cup.handle) {
-            tag("D", x(cup.handle.iLow) + fs(16), yP(cup.handle.low));
+            if (hintsOn) tag("D", x(cup.handle.iLow) + fs(16), yP(cup.handle.low));
             xE = Math.min(x(cup.handle.iEnd) + step * 3, L.width - L.right - fs(10));
+        } else xE = Math.min(x(cup.i1) + step * 3, L.width - L.right - fs(10));
+        if (pivot) {   // pivot: bez rączki od lewego szczytu miseczki, z rączką od prawego brzegu — do punktu zakupu
+            parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${cup.noHandle ? x(cup.i0) : x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${CHART_COLORS.cup}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
+            if (hintsOn) tag("E", xE, yP(pivot) - fs(14));
         }
-        if (pivot) {
-            parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${CHART_COLORS.cup}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
-            tag("E", xE, yP(pivot) - fs(14));
-        }
-        if (!hintLegendDone) {
+        if (hintsOn && !hintLegendDone) {
             hintLegendDone = true;
             parts.push(`<text x="${L.left + 6}" y="${P.y + fs(12)}" font-size="${fs(10)}" fill="${CHART_COLORS.cup}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${opts.compact ? "A–E: szczyt · dno · brzeg · rączka · kup" : "A szczyt · B dno miseczki · C prawy brzeg · D rączka · E punkt zakupu (kup nad pivotem z wolumenem)"}</text>`);
         }
