@@ -15,7 +15,7 @@ const BOOK_BUY_VOL = 1.4;            // wybicie z bazy na wolumenie ≥ tyle × 
 const BOOK_BUY_MAX_EXT = 1.05;       // „Kup” tylko do +5 % nad pivotem (wyżej = za późno, bez znacznika)
 const BOOK_PRIOR_UP = 1.3;           // wcześniejszy trend wzrostowy przed bazą ≥ +30 % (flat base: +20 %)
 const BOOK_PRIOR_FLAT = 1.2;
-const BOOK_MIN_WEEKS = { cup: 7, double_bottom: 7, flat: 5, ascending: 9, htf: 3 };   // minimalna długość bazy wg książki
+const BOOK_MIN_WEEKS = { cup: 7, double_bottom: 7, flat: 5, ascending: 9, htf: 3, square_box: 4, ipo: 3 };   // minimalna długość bazy wg książki
 const BOOK_HOLD_GAIN_PCT = 20;       // F: +20 % w ciągu ≤ 3 tygodni od wybicia = trzymaj co najmniej 8 tygodni (reguła 8 tygodni)
 const BOOK_HOLD_FAST_WEEKS = 3;
 const BOOK_HOLD_WEEKS = 8;
@@ -34,7 +34,7 @@ const BOOK_ADD_VOL = 1.0;            // wolumen wybicia z bazy dokupu ≥ tyle �
 const BOOK_ADD_GAP = 6;              // „Dokup” nie częściej niż co tyle tygodni
 const BOOK_DRY_RATIO = 0.6;          // wyschnięcie wolumenu: tydzień z wolumenem ≤ tyle × średnia
 const BOOK_CORRECTION_PCT = 8;       // korekta rynku: spadek S&P 500 od szczytu o co najmniej tyle % (tygodniowe zamknięcia)
-const BOOK_BASE_NAMES = { cup: "cup", double_bottom: "double bottom", flat: "flat base", ascending: "ascending base", htf: "high tight flag" };
+const BOOK_BASE_NAMES = { cup: "cup", double_bottom: "double bottom", flat: "flat base", ascending: "ascending base", htf: "high tight flag", square_box: "square box", ipo: "IPO base" };
 
 // Wartość osi ceny jak w książce: 2 cyfry znaczące (100, 80, 34, 4.5, 0.35).
 function bookAxisFmt(v) {

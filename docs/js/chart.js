@@ -236,7 +236,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
 // Poziom, od którego liczymy strefę zakupu i typowy stop (O'Neil): pivot BAZY KUPOWALNEJ (flat / cup — korekta i głęboka korekta to nie bazy),
 // a gdy go nie ma albo leży daleko od ceny — poziom oporu flagi / korytarza (dziennej, potem tygodniowej). Poziom dalej niż PIVOT_NEAR_PCT od ceny
 // jest bez znaczenia dla bieżącej decyzji, więc go nie rysujemy (inaczej etykiety „pivot / strefa zakupu / stop” lądują na brzegu wykresu).
-const PIVOT_BASE_TYPES = ["flat", "cup", "double_bottom", "ascending", "htf"];   // wzorce z książki O'Neila, które mają pivot do kupna
+const PIVOT_BASE_TYPES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // wzorce z książki O'Neila, które mają pivot do kupna
 const PIVOT_NEAR_PCT = 15;
 function pivotFromStock(stock, bases, daily = false) {
     if (!stock) return null;

@@ -356,7 +356,7 @@ class TestBases:
         assert len(closed) == 1
         b = closed[0]
         assert b["peak"] == 100 and b["pivot"] == 100 and b["low"] == 80
-        assert b["depth_pct"] == 20.0 and b["weeks"] == 8 and b["type"] in ("cup", "correction")
+        assert b["depth_pct"] == 20.0 and b["weeks"] == 7 and b["type"] in ("cup", "correction")   # czas bazy od pierwszego tygodnia ze spadkiem zamknięcia (peak + 1)
         assert b["start"] == "2025-01-17" and b["end"] == "2025-03-07"
         assert b["low_date"] == "2025-02-14" and b["end_close"] is not None
 
@@ -581,7 +581,7 @@ class TestCup:
         assert b["open"] is True and b["cup"]["handle"] is not None and b["cup"]["handle"]["weeks"] == 3
         assert 24 <= b["depth_pct"] <= 27 and b["cup"]["prior_gain_pct"] >= 60
         assert b["pivot"] == b["cup"]["rim"]                               # pivot = górka rączki (prawy brzeg)
-        assert b["cup"]["cup_weeks"] == 24 and b["cup"]["fit"] >= 0.6
+        assert b["cup"]["cup_weeks"] == 23 and b["cup"]["fit"] >= 0.6   # 24 tygodnie od szczytu, liczone od pierwszego spadku
 
     def test_v_shape_is_not_a_cup(self):
         assert [b for b in watchlist.detect_bases(make_cup(shape="v")) if b["type"] == "cup"] == []
@@ -619,14 +619,23 @@ class TestCup:
         reasons = self.rejected(handle=(0.93, 0.90, 0.88, 0.89))
         assert any("10-tygodniowej" in r for r in reasons) or any("dolnej połowie" in r for r in reasons) or any("głębsza" in r for r in reasons)
 
-    def test_a_closed_cup_without_a_handle_is_not_a_cup_with_handle(self):
+    def test_cup_without_handle_is_a_valid_cup_with_the_left_peak_as_pivot(self):
         weekly = make_cup(handle=())
         last = weekly.iloc[-1]
         extra = pd.DataFrame({"Open": [last["Close"]], "High": [110.0], "Low": [last["Close"]], "Close": [108.0], "Volume": [3000.0]}, index=[weekly.index[-1] + pd.Timedelta(days=7)])
-        bases = watchlist.detect_bases(pd.concat([weekly, extra]))
-        assert [b for b in bases if b["type"] == "cup"] == []
-        assert any("brak rączki" in r for b in bases for r in b.get("rejection_reasons", []))
-        assert [b for b in watchlist.detect_bases(make_cup(handle=())) if b["type"] == "cup"]                  # otwarta (jeszcze się tworzy) — WATCHLIST
+        cups = [b for b in watchlist.detect_bases(pd.concat([weekly, extra])) if b["type"] == "cup"]
+        assert len(cups) == 1 and cups[0]["cup"]["handle"] is None and cups[0]["cup"]["no_handle"] is True
+        assert cups[0]["pivot"] == pytest.approx(cups[0]["peak"], abs=0.01)             # pivot = lewy szczyt, nie prawy brzeg
+        assert any("bez rączki" in n for n in cups[0]["notes"])
+
+    def test_handle_depth_up_to_30_percent_only_at_a_bear_market_bottom(self):
+        weekly = make_cup(depth=0.45, handle=(0.95, 0.88, 0.9))                                              # miseczka 45 % i rączka ~13 %
+        bench = pd.Series(100.0, index=weekly.index)
+        bench.iloc[45:60] = np.linspace(100, 80, 15)                                                         # S&P −20 % w trakcie miseczki
+        cups = [b for b in watchlist.detect_bases(weekly, bench) if b["type"] == "cup"]
+        assert len(cups) == 1 and cups[0]["cup"]["handle"]["depth_pct"] > watchlist.CUP_HANDLE_MAX_DEPTH_PCT   # przy dnie bessy rączka do 30 %
+        calm = watchlist.detect_bases(weekly, pd.Series(100.0, index=weekly.index))
+        assert [b for b in calm if b["type"] == "cup"] == []                                                 # w spokojnym rynku ani miseczka 45 %, ani rączka > 12 %
 
     def test_status_buy_zone_and_stop_for_an_open_cup(self):
         b = [x for x in watchlist.detect_bases(make_cup()) if x["type"] == "cup"][0]
@@ -842,6 +851,24 @@ class TestOneilPatterns:
     def test_flat_base(self, k):
         b = self.last(self.FLAT, k)
         assert b["type"] == "flat" and b["depth_pct"] <= 15
+
+    def test_square_box_is_4_to_7_weeks_and_10_to_15_percent_deep(self):
+        box = self.RAMP + [100, 94, 91, 92, 90, 93]
+        b = self.last(box, 1)
+        assert b["type"] == "square_box" and 10 <= b["depth_pct"] <= 15 and 4 <= b["weeks"] <= 7 and b["open"]
+        assert b["status"] == "WATCHLIST" and b["buy_zone_max"] == pytest.approx(b["pivot"] * 1.05, abs=0.02)
+
+    def test_ipo_base_uses_the_high_since_the_debut_as_pivot(self):
+        ipo = [20, 24, 28, 30, 29, 28, 27, 28, 27.5, 28.2, 27.8]
+        b = watchlist.detect_bases(self.frame(ipo, 1), None, 1, ipo=True)[-1]
+        assert b["type"] == "ipo" and b["pivot"] == pytest.approx(30 * 1.005, rel=0.01) and b["open"]
+        assert all(x["type"] != "ipo" for x in watchlist.detect_bases(self.frame(ipo, 1), None, 1))         # bez flagi IPO (stara spółka) brak bazy IPO
+
+    def test_double_bottom_with_a_handle_on_the_right_uses_the_handle_high(self):
+        with_handle = self.RAMP + [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 80, 77, 80, 84, 88, 93, 91, 90.5]
+        b = self.last(with_handle, 1)
+        assert b["type"] == "double_bottom" and b["double_bottom"]["handle"] is True
+        assert b["pivot"] == pytest.approx(93 * 1.005, rel=0.01)                                            # uszko po prawej (punkt E), nie środkowy szczyt
 
     def test_flat_base_needs_a_prior_gain_of_20_percent(self):
         weak = list(np.linspace(92, 99, 14)) + [100] + [97, 95, 98, 96, 99, 94, 98, 97, 99]

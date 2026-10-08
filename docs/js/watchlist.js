@@ -35,7 +35,7 @@ const FAVS_KEY = "momentum_watchlist_favs";
 const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
-const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", correction: "Korekta", deep: "Głęboka korekta" };
+const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", square_box: "Square box", ipo: "Baza po debiucie (IPO)", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
     tab: "LIST", csMin: 5, csCore: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
@@ -266,7 +266,7 @@ function positionTotals(rows, capital, fx) {
 // Wybicie wg O'Neila = ZAMKNIĘCIE (dzienne albo tygodniowe) nad linią / pivotem na podwyższonym wolumenie (≥ 1,5× średniej). Samo przebicie
 // maksimum w trakcie świecy to nie wybicie, a zamknięcie nad poziomem bez wolumenu jest tylko „niepotwierdzone” (nie trafia do rank 0).
 const BRK_VOL_MULT = 1.5;
-const BUYABLE_BASES = ["flat", "cup", "double_bottom", "ascending", "htf"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
+const BUYABLE_BASES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
 function breakoutInfo(s, alert, maxDist) {
     const reasons = [];
     const dists = [];
@@ -625,7 +625,7 @@ function baseBoxData(s) {
     if (!BUYABLE_BASES.includes(s.base_type)) rows.push(["Uwaga", "korekta, nie baza do zakupu"]);
     if (Number.isFinite(s.base_mkt_dd_pct) && s.base_mkt_dd_pct >= 7) rows.push(["S&P w bazie", `−${s.base_mkt_dd_pct}%`]);
     if (Number.isFinite(s.pct_to_pivot)) rows.push([s.pct_to_pivot >= 0 ? "Do pivotu" : "Nad pivotem", `${s.pct_to_pivot >= 0 ? "+" : ""}${Math.abs(s.pct_to_pivot)}%`.replace("+-", "")]);
-    return { title: `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""}${s.base_on_base ? " · baza na bazie" : ""}`, rows };
+    return { title: `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : s.base_type === "cup" ? " bez rączki" : ""}${s.base_on_base ? " · baza na bazie" : ""}`, rows };
 }
 
 function baseBoxHtml(s) {
@@ -762,7 +762,7 @@ function earningsCell(s) {
 
 function baseSummary(s) {
     if (!s.base_type) return "—";
-    return `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""} −${s.base_depth_pct}% · ${s.base_weeks} tyg.${s.vcp ? " · VCP" : ""}${s.base_on_base ? " · baza na bazie" : ""}${s.base_mkt_dd_pct >= 7 ? ` · S&P −${s.base_mkt_dd_pct}%` : ""}`;
+    return `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : s.base_type === "cup" ? " bez rączki" : ""} −${s.base_depth_pct}% · ${s.base_weeks} tyg.${s.vcp ? " · VCP" : ""}${s.base_on_base ? " · baza na bazie" : ""}${s.base_mkt_dd_pct >= 7 ? ` · S&P −${s.base_mkt_dd_pct}%` : ""}`;
 }
 
 // Kolumny: [nagłówek, klucz sortowania (null = nie sortuje), funkcja komórki, opcjonalny tytuł nagłówka].

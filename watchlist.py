@@ -330,7 +330,7 @@ def compute_metrics(df, bench_w=None):
     wk_close = wk_ohlc["Close"].astype(float)   # średnie TYGODNIOWE (10 i 40 tyg.) — te same co na wykresie tygodniowym; ocena tygodniowa nie używa dziennej SMA50
     sma10w = float(wk_close.tail(10).mean()) if len(wk_close) >= 10 else None
     sma40w = float(wk_close.tail(40).mean()) if len(wk_close) >= 40 else None
-    all_bases = detect_bases(wk_ohlc, bench_w)
+    all_bases = detect_bases(wk_ohlc, bench_w, ipo=len(wk_ohlc) <= IPO_MAX_WEEKS)
     open_base = next((b for b in reversed(all_bases) if b["open"]), None)
     # TEN SAM zestaw wzorców (cup, saucer, double bottom, flat, ascending, high tight flag) liczymy też na wykresie DZIENNYM (progi w tygodniach × 5 świec)
     d_bases = detect_bases(df[["Open", "High", "Low", "Close", "Volume"]], None, DAILY_BARS_PER_WEEK)
@@ -607,6 +607,14 @@ def mkt_drawdown(bench_w, d0, d1):
     return float(((seg.cummax() - seg) / seg.cummax()).max() * 100)
 
 
+def first_down_idx(cl, peak, end):
+    """Liczenie czasu bazy: zaczyna się od pierwszego tygodnia po szczycie, w którym cena zamyka się ze spadkiem (O'Neil). Brak spadku = peak + 1."""
+    for i in range(peak + 1, end + 1):
+        if cl[i] < cl[i - 1]:
+            return i
+    return min(peak + 1, end)
+
+
 def prior_gain_pct(hi, lo, peak, k=1, lookback=CUP_PRIOR_LOOKBACK):
     """Wzrost przed bazą (A): szczyt bazy / najniższy Low z poprzednich 52 tygodni, w %. None = za mało historii (< 13 tygodni przed szczytem)."""
     i0 = max(0, peak - lookback * k)
@@ -646,7 +654,8 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
     prawy brzeg odrabia >= 80 % głębokości (<= 12 % pod szczytem), rączka (opcjonalna) 1–10 tyg., płytsza niż 15 %
     i w górnej połowie miseczki. Kontekst rynku (spadek S&P w tym czasie) jest informacją, nie warunkiem."""
     # k = świec na tydzień (1 = wykres tygodniowy, 5 = dzienny): wszystkie progi w tygodniach skalujemy do liczby świec
-    if end - peak < CUP_MIN_WEEKS * k:
+    start = first_down_idx(cl, peak, end)                          # czas bazy liczymy od pierwszego tygodnia ze spadkiem
+    if end - start < CUP_MIN_WEEKS * k:
         return None
     low_i = peak + 1 + int(np.argmin(lo[peak + 1:end + 1]))
     if low_i >= end:
@@ -657,7 +666,8 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
     depth = depth_abs / top * 100
     r = low_i + 1 + int(np.argmax(hi[low_i + 1:end + 1]))        # prawy brzeg = najwyższy szczyt po dołku
     rim = float(hi[r])
-    cup_weeks = r - peak
+    cup_weeks = r - start
+    span = r - peak
     mkt_dd = mkt_drawdown(bench_w, dates[peak], dates[r]) if bench_w is not None else None
     max_depth = CUP_MAX_DEPTH_BEAR_PCT if mkt_dd is not None and mkt_dd >= CUP_BEAR_MKT_DD else CUP_MAX_DEPTH_PCT
     if not (CUP_MIN_DEPTH_PCT <= depth <= max_depth) or not (CUP_MIN_WEEKS * k <= cup_weeks <= CUP_MAX_WEEKS * k):
@@ -667,9 +677,9 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
     if prior_gain is None or prior_gain < BASE_PRIOR_GAIN_PCT:
         return None
     # kształt „U”: dołek nie przy krawędzi, kilka tygodni w dolnej 1/3, prawa strona nie jest jednym skokiem
-    pos = (low_i - peak) / cup_weeks
+    pos = (low_i - peak) / span
     bottom = int(np.sum(cl[peak + 1:r + 1] <= low + depth_abs / 3))
-    if not (CUP_LOW_POS[0] <= pos <= CUP_LOW_POS[1]) or bottom < max(CUP_BOTTOM_WEEKS * k, CUP_BOTTOM_FRAC * cup_weeks) or r - low_i < 2 * k:
+    if not (CUP_LOW_POS[0] <= pos <= CUP_LOW_POS[1]) or bottom < max(CUP_BOTTOM_WEEKS * k, CUP_BOTTOM_FRAC * span) or r - low_i < 2 * k:
         return None
     if (rim - low) / depth_abs < CUP_RIM_RECOVERY or (top - rim) / top * 100 > CUP_RIM_MAX_GAP_PCT:
         return None
@@ -697,8 +707,9 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         hmin, hmax = (CUP_HANDLE_MIN_WEEKS if k == 1 else 5 * k + 1), CUP_HANDLE_MAX_WEEKS * k
         if not (hmin <= hw <= hmax):
             faults.append(f"rączka trwa {hw if k == 1 else round(hw / k, 1)} tyg. (wymagane 1–{CUP_HANDLE_MAX_WEEKS})")
-        if h_depth > CUP_HANDLE_MAX_DEPTH_PCT:
-            faults.append(f"rączka głębsza niż {CUP_HANDLE_MAX_DEPTH_PCT:.0f} % ({h_depth:.1f} %)")
+        h_max = CUP_HANDLE_MAX_DEPTH_BEAR_PCT if mkt_dd is not None and mkt_dd >= CUP_BEAR_MKT_DD else CUP_HANDLE_MAX_DEPTH_PCT
+        if h_depth > h_max:
+            faults.append(f"rączka głębsza niż {h_max:.0f} % ({h_depth:.1f} %)")
         if h_low < low + 0.5 * depth_abs:
             faults.append("rączka w dolnej połowie miseczki")
         ma_n = CUP_HANDLE_MA_WEEKS * k
@@ -713,13 +724,12 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
             faults.append("brak wyschnięcia wolumenu w rączce")
         handle = {"weeks": hw if k == 1 else round(hw / k, 1), "low": _num(h_low), "depth_pct": _num(h_depth, 1),
                   "low_date": dates[h_low_i].strftime("%Y-%m-%d")}
-    elif not is_open:
-        faults.append("brak rączki (baza zakończona wybiciem bez rączki)")
+    # bez rączki to „cup without handle” (też z książki): ten sam kształt i czas, wybicie wprost z prawego brzegu — pivot = lewy szczyt, wyższy odsetek porażek
     return {"rim": _num(rim), "rim_date": dates[r].strftime("%Y-%m-%d"), "cup_weeks": cup_weeks if k == 1 else round(cup_weeks / k, 1), "handle": handle,
             "prior_gain_pct": _num(prior_gain, 0), "fit": _num(fit, 2), "rim_gap_pct": _num((top - rim) / top * 100, 1),
             "mkt_dd_pct": _num(mkt_dd, 1) if mkt_dd is not None else None,
             "mkt_ctx": bool(mkt_dd is not None and mkt_dd >= CUP_MKT_CONTEXT_DD),
-            "faults": faults, "handle_upper_half": bool(handle is None or handle["low"] >= low + 0.5 * depth_abs),
+            "no_handle": handle is None, "faults": faults, "handle_upper_half": bool(handle is None or handle["low"] >= low + 0.5 * depth_abs),
             "rs_prior_up": _rs_prior_up(cl, lo, peak, k, bench_w, dates)}
 
 
@@ -758,14 +768,19 @@ DB_MIN_LEG_WEEKS = 2         # każde dno ma kilka tygodni „oddechu” od śro
 SAUCER_MIN_WEEKS = 20        # saucer = płytka (12–20 %), długa (od ~20 tygodni) miseczka
 SAUCER_MAX_DEPTH_PCT = 20
 ASC_WEEKS = (9, 18)          # ascending base: 3 kolejne korekty 10–20 % z rosnącymi dołkami w ciągu 9–16 tygodni (z lekkim zapasem)
-ASC_DEPTH_PCT = (8.0, 22.0)
+ASC_DEPTH_PCT = (10.0, 20.0)   # trzy cofnięcia po 10–20 %
 ASC_SWING_PCT = 8.0
 HTF_MIN_GAIN = 2.0           # high tight flag: +100 % (x2) w 4–8 tygodni, potem korekta 10–25 % przez 3–5 tygodni
 HTF_RISE_WEEKS = (4, 8)      # +100 % w 4–8 tygodni
 HTF_FLAG_WEEKS = (3, 5)      # flaga 3–5 tygodni
 HTF_FLAG_DEPTH_PCT = (10.0, 25.0)
+BOX_WEEKS = (4, 7)           # square box (kwadratowa baza): 4–7 tygodni konsolidacji po ruchu z wcześniejszej bazy, głębokość 10–15 %
+BOX_DEPTH_PCT = (10.0, 15.0)
+IPO_MAX_WEEKS = 52           # baza po debiucie (IPO base): spółka notowana nie dłużej niż ~rok; min. 3 tygodnie od szczytu po debiucie
+IPO_MIN_WEEKS = 3
+CUP_HANDLE_MAX_DEPTH_BEAR_PCT = 30.0   # rączka przy dnie bessy: wyjątkowo 20–30 %
 HTF_DRYUP = 0.6              # średni wolumen we fladze <= 0,6x średniego wolumenu rajdu (drastyczny zanik)
-BASE_TYPES_BUYABLE = ("cup", "double_bottom", "flat", "ascending", "htf")
+BASE_TYPES_BUYABLE = ("cup", "double_bottom", "flat", "square_box", "ascending", "htf", "ipo")
 
 
 def _zigzag(values, pct):
@@ -806,7 +821,7 @@ def _zigzag(values, pct):
 def classify_double_bottom(hi, lo, cl, peak, end, dates, k=1):
     """Double bottom (W) wg O'Neila: drugie dno PODCINA pierwsze (wytrząśnięcie), pivot = szczyt środkowy (nie szczyt całej bazy).
     Głębokość i długość jak miseczka. Zwraca dict albo None."""
-    if not (DB_MIN_WEEKS * k <= end - peak + 1 <= DB_MAX_WEEKS * k):
+    if not (DB_MIN_WEEKS * k <= end - first_down_idx(cl, peak, end) + 1 <= DB_MAX_WEEKS * k):
         return None
     pg = prior_gain_pct(hi, lo, peak, k)
     if pg is None or pg < BASE_PRIOR_GAIN_PCT:
@@ -832,14 +847,17 @@ def classify_double_bottom(hi, lo, cl, peak, end, dates, k=1):
         return None
     if end - ib < 2 * k or float(cl[end]) < second + 0.4 * (mid - second):
         return None                                              # po drugim dnie musi być widoczne odbicie ku środkowemu szczytowi
-    return {"pivot": _num(mid), "mid_date": dates[im].strftime("%Y-%m-%d"), "low1": _num(first), "low2": _num(second),
+    r2 = ib + int(np.argmax(hi[ib:end + 1]))                     # ewentualne uszko po prawej (punkt E): szczyt po drugim dnie z cofnięciem po nim
+    handle_e = bool(r2 > ib and r2 < end and float(hi[r2]) >= mid)
+    pivot = float(hi[r2]) if handle_e else mid
+    return {"pivot": _num(pivot), "mid_date": dates[im].strftime("%Y-%m-%d"), "low1": _num(first), "low2": _num(second), "handle": handle_e,
             "undercut_pct": _num((first - second) / first * 100, 1)}
 
 
 def faulty_double_bottom(hi, lo, cl, peak, end, k=1):
     """Wadliwe „W”: wszystko jak w double bottom (długość 7–65 tyg., głębokość 15–33 %, wzrost przed bazą >= +30 %, widoczny środkowy szczyt),
     ale drugie dno leży NAD pierwszym (bez podcięcia / wytrząśnięcia). Zwraca True / False."""
-    if not (DB_MIN_WEEKS * k <= end - peak + 1 <= DB_MAX_WEEKS * k):
+    if not (DB_MIN_WEEKS * k <= end - first_down_idx(cl, peak, end) + 1 <= DB_MAX_WEEKS * k):
         return False
     pg = prior_gain_pct(hi, lo, peak, k)
     if pg is None or pg < BASE_PRIOR_GAIN_PCT:
@@ -928,7 +946,26 @@ def detect_high_tight_flag(hi, lo, cl, dates, k=1, vol=None):
             "contractions": [], "vcp": False}
 
 
-def detect_bases(ohlc, bench_w=None, k=1):
+def detect_ipo_base(hi, lo, cl, dates, k=1):
+    """Baza po debiucie (IPO base): w pierwszych tygodniach / miesiącach notowań spółka tworzy bazę pod absolutnym maksimum od debiutu (pivot = to maksimum);
+    min. IPO_MIN_WEEKS tygodni od szczytu, korekta nie głębsza niż miseczka (35 %). Wywołujemy tylko dla spółek notowanych <= IPO_MAX_WEEKS tygodni."""
+    n = len(cl)
+    if k != 1 or n < IPO_MIN_WEEKS + 2 or n > IPO_MAX_WEEKS:
+        return None
+    ip = int(np.argmax(hi))
+    length = n - 1 - ip
+    if length < IPO_MIN_WEEKS:
+        return None
+    low = float(lo[ip + 1:].min())
+    depth = (float(hi[ip]) - low) / float(hi[ip]) * 100
+    if not (BASE_MIN_DEPTH_PCT <= depth <= BASE_CUP_MAX_DEPTH_PCT):
+        return None
+    return {"start": dates[ip].strftime("%Y-%m-%d"), "end": dates[n - 1].strftime("%Y-%m-%d"), "peak": _num(hi[ip]), "low": _num(low), "depth_pct": _num(depth, 1),
+            "weeks": length, "type": "ipo", "open": True, "pivot": _num(hi[ip]), "contractions": [], "vcp": False,
+            "low_date": dates[ip + 1 + int(np.argmin(lo[ip + 1:]))].strftime("%Y-%m-%d"), "end_close": _num(cl[-1]), "ipo_weeks": n}
+
+
+def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
     """Korekty od lokalnego szczytu (High) do ponownego wybicia ponad ten szczyt (lub do dziś — wtedy open=True).
     k = świec na tydzień (1 = wykres tygodniowy, 5 = dzienny): progi w tygodniach są skalowane. Dla k > 1 `bench_w` jest ignorowany.
     Zwraca listę {start, end, peak, low, depth_pct, weeks, type, open, pivot, contractions, vcp} (rosnąco po czasie).
@@ -949,11 +986,11 @@ def detect_bases(ohlc, bench_w=None, k=1):
     def record(peak, end, is_open):
         if end <= peak:
             return
-        weeks = end - peak + 1
+        weeks = end - first_down_idx(cl, peak, end) + 1              # czas bazy od pierwszego tygodnia ze spadkiem zamknięcia
         low_i = peak + 1 + int(np.argmin(lo[peak + 1:end + 1]))
         low = float(lo[low_i])
         depth = (hi[peak] - low) / hi[peak] * 100
-        if weeks < BASE_MIN_WEEKS * k or not (BASE_MIN_DEPTH_PCT <= depth <= BASE_MAX_DEPTH_PCT):
+        if weeks < BOX_WEEKS[0] * k or not (BASE_MIN_DEPTH_PCT <= depth <= BASE_MAX_DEPTH_PCT):
             return
         cup = classify_cup(hi, lo, cl, peak, end, dates, bench_w if k == 1 else None, k, vol, is_open)
         faults = []
@@ -972,15 +1009,19 @@ def detect_bases(ohlc, bench_w=None, k=1):
             if pg is not None and pg < FLAT_PRIOR_GAIN_PCT:           # D: flat base po wzroście >= +20 %
                 kind = "correction"
                 faults.append(f"flat base bez wcześniejszego wzrostu ≥ {FLAT_PRIOR_GAIN_PCT} % ({pg:.0f} %)")
+            elif BOX_DEPTH_PCT[0] <= depth <= BOX_DEPTH_PCT[1] and BOX_WEEKS[0] * k <= weeks <= BOX_WEEKS[1] * k:
+                kind = "square_box"                                      # kwadratowa baza: 4–7 tygodni, głębokość 10–15 %, po wzroście z wcześniejszej bazy
             else:
                 kind = "flat"
         elif depth <= BASE_CUP_MAX_DEPTH_PCT:
             kind = "correction"
         else:
             kind = "deep"
+        if weeks < BASE_MIN_WEEKS * k and kind != "square_box":
+            return
         drops = zigzag_contractions(list(cl[peak:end + 1]), zz_pct)
         vcp = len(drops) >= 2 and all(drops[j + 1] < drops[j] for j in range(len(drops) - 1)) and drops[-1] <= 10
-        pivot = cup["rim"] if cup else (dbl["pivot"] if dbl else hi[peak])
+        pivot = (cup["rim"] if cup["handle"] else hi[peak]) if cup else (dbl["pivot"] if dbl else hi[peak])   # cup bez rączki: pivot = lewy szczyt
         bases.append({
             "start": dates[peak].strftime("%Y-%m-%d"), "end": dates[end].strftime("%Y-%m-%d"),
             "peak": _num(hi[peak]), "low": _num(low), "depth_pct": _num(depth, 1), "weeks": weeks if k == 1 else round(weeks / k, 1), "type": kind,
@@ -990,6 +1031,7 @@ def detect_bases(ohlc, bench_w=None, k=1):
             **({"double_bottom": dbl} if dbl else {}),
             "prior_uptrend_pct": _num(pg, 0) if pg is not None else None,
             **({"rejection_reasons": faults} if faults else {}),
+            **({"notes": ["cup bez rączki — wyższy odsetek porażek niż z rączką (brak końcowego wytrząśnięcia)"]} if cup and cup["no_handle"] else {}),
         })
 
     peak = 0
@@ -999,9 +1041,9 @@ def detect_bases(ohlc, bench_w=None, k=1):
             peak = j
     record(peak, n - 1, True)
     # formujące się teraz: high tight flag (ma pierwszeństwo — rzadki i najsilniejszy) albo ascending base; zastępują otwartą „korektę/flat”
-    extra = detect_high_tight_flag(hi, lo, cl, dates, k, vol) or detect_ascending_base(hi, lo, cl, dates, k)
+    extra = detect_high_tight_flag(hi, lo, cl, dates, k, vol) or detect_ascending_base(hi, lo, cl, dates, k) or (detect_ipo_base(hi, lo, cl, dates, k) if ipo else None)
     if extra:
-        if bases and bases[-1]["open"] and bases[-1]["type"] in ("flat", "correction", "deep"):
+        if bases and bases[-1]["open"] and bases[-1]["type"] in ("flat", "square_box", "correction", "deep"):
             bases.pop()
         bases.append(extra)
     mark_base_on_base(bases, k)
@@ -1545,7 +1587,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         quarters, nxt = eps_quarters((eps_cache.get(t) or {}).get("rows", []))
         first = payload["weeks"][0]
         wk = weekly_ohlcv(df, last_date).tail(n_weeks + 80)   # +80 tygodni rozgrzewki średnich / historii baz
-        all_bases = detect_bases(wk, bench_w)
+        all_bases = detect_bases(wk, bench_w, ipo=len(wk) <= IPO_MAX_WEEKS)
         chart["bases"] = [b for b in all_bases if b["end"] >= first][-BASE_MAX_SHOWN:]
         first_day = payload["days"][0]
         chart_day_bases = [b for b in detect_bases(_daily_ohlc(df).tail(1000), None, DAILY_BARS_PER_WEEK) if b["end"] >= first_day][-BASE_MAX_SHOWN:]
