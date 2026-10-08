@@ -268,20 +268,18 @@ test("computeBook: „Kup ponownie” toleruje zamknięcie tygodnia przed powrot
     assert.ok(computeBook(m).reentries.length >= 1);
 });
 
-test("bookSvg: sygnały to kółka z literą K / D / P pod świecą, ✕ przy stopie i jedna legenda — bez strzałek i długich podpisów", () => {
-    const { bookSvg, shiftBook } = require("../../docs/js/book.js");
+test("bookSvg: sygnały to same kolorowe linie (kup zielona, kup ponownie różowa, stop czerwona przerywana) + legenda; bez liter, kółek i strzałek", () => {
+    const { bookSvg } = require("../../docs/js/book.js");
     const m = stopOutSeries(true);
-    const book = computeBook(m);
-    m.book = book;
+    m.book = computeBook(m);
     const labels = [];
     const g = { x: i => 10 + i * 8, yP: v => 500 - v * 3, P: { y: 0, h: 480 }, fs: v => v, addLabel: t => labels.push(t), clip: "", compact: false, legendY: 20 };
     const svg = bookSvg(m, g);
-    assert.match(svg, />K<\/text>/);
-    assert.match(svg, />P<\/text>/);
-    assert.match(svg, /<path[^>]*stroke="#ff4d6d"/);          // ✕ stop
-    assert.match(svg, /kup ponownie/);                         // legenda
-    assert.match(svg, /stroke="#2ecc71"[^>]*stroke-dasharray="4 3"/);   // linia pivotu przy K w zielonym kolorze litery
-    assert.ok(!/<polygon/.test(svg), "bez strzałek");
-    assert.ok(!labels.some(t => /Kup|Dokup|ponownie|stop/.test(t)), "żadnych długich podpisów sygnałów w warstwie podpisów");
-    assert.equal(typeof shiftBook, "function");
+    assert.match(svg, /<line[^>]*stroke="#2ecc71"[^>]*stroke-width="2" opacity="0.6"/);          // pionowa linia kupna
+    assert.match(svg, /<line[^>]*stroke="#f472b6"[^>]*stroke-width="2" opacity="0.6"/);          // kup ponownie
+    assert.match(svg, /<line[^>]*stroke="#ff4d6d"[^>]*stroke-dasharray="5 4" opacity="0.8"/);    // stop
+    assert.match(svg, /stroke="#2ecc71" stroke-width="2" stroke-dasharray="4 3"/);                // pivot w kolorze kupna
+    for (const t of ["kup", "dokup", "kup ponownie", "stop −8 %"]) assert.ok(svg.includes(`>${t}</text>`), `legenda: ${t}`);
+    assert.ok(!/<circle|<polygon/.test(svg), "bez kółek i strzałek");
+    assert.ok(!labels.some(t => /Kup|Dokup|ponownie|stop/.test(t)), "żadnych podpisów sygnałów w warstwie podpisów");
 });
