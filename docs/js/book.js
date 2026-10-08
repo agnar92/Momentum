@@ -229,19 +229,6 @@ function computeBook(m, splits = []) {
         if (!prev || cd.i - prev.i > BOOK_ADD_AFTER_BUY || cd.i - prev.i <= BOOK_ADD_MIN_WEEKS || cd.i - lastAdd < BOOK_ADD_GAP || !(l[cd.i] <= cd.pivot * BOOK_BUY_MAX_EXT) || book.buys.some(x => x.i === cd.i)) return;
         book.adds.push({ i: cd.i, label: "Dokup" }); lastAdd = cd.i;
     });
-    // „Dokup” po odbiciu od 10-tygodniowej (jak „Add: bounces off 10-week moving average line on volume” w książce): trend wzrostowy (40-tygodniowa rośnie, 10 > 40,
-    // cena nad obiema), dołek tygodnia przy linii (≤ +4 %), poprzedni tydzień przy niej, ten w górę na rosnącym wolumenie — TYLKO do BOOK_ADD_AFTER_BUY tygodni po
-    // sygnale „Kup” z patternu (baza / flaga / konsolidacja; „Kup po korekcie” nie liczy się)
-    const patBuys = book.buys.filter(x => x.label === "Kup");
-    for (let i = 12; i < n; i++) {
-        const s10 = sma10[i], s40 = sma40[i];
-        if (![s10, s40, sma10[i - 1], sma10[i - 3], sma40[i - 4], h[i], l[i], c[i], c[i - 1], v[i], v[i - 1]].every(Number.isFinite)) continue;
-        if (!(s40 > sma40[i - 4]) || book.buys.some(x => x.i === i) || book.adds.some(x => Math.abs(x.i - i) < BOOK_ADD_GAP)) continue;
-        if (!(c[i] > s10 && c[i] > s40 && s10 > sma10[i - 3] && s10 > s40)) continue;
-        if (!patBuys.some(x => i - x.i > 0 && i - x.i <= BOOK_ADD_AFTER_BUY)) continue;
-        if (l[i] <= s10 * 1.04 && c[i - 1] <= sma10[i - 1] * 1.03 && c[i] >= c[i - 1] && v[i] > v[i - 1]) book.adds.push({ i, label: "Dokup" });
-    }
-    book.adds.sort((a, b) => a.i - b.i);
     // „Kup ponownie” (O'Neil: po wycięciu na stopie / wytrząśnięciu przełam opór psychologiczny i wróć do silnej spółki, nawet drożej): po stopie −8 % od ceny kupna
     // pierwszy tydzień w górę, w którym cena wraca nad 10-tygodniową (wcześniej była pod nią) na wolumenie ≥ średniej i nad 40-tygodniową, albo przebija dawny pivot
     // na wolumenie ≥ 1,4× (do +5 % nad pivotem); najpóźniej BOOK_REENTRY_WEEKS po stopie i przed następnym „Kup”.
@@ -255,11 +242,29 @@ function computeBook(m, splits = []) {
         for (let k = stopI + 1; k <= Math.min(n - 1, nextBuy - 1, stopI + BOOK_REENTRY_WEEKS); k++) {
             const a = rowIdx(avg, k - 1);
             if (![c[k], c[k - 1], v[k], sma10[k], sma10[k - 1], sma40[k], a].every(Number.isFinite) || !(a > 0) || !(c[k] >= c[k - 1])) continue;
-            const above10 = c[k] > sma10[k] && c[k - 1] <= sma10[k - 1] && v[k] >= a && c[k] > sma40[k];
+            const above10 = c[k] > sma10[k] && c[k - 1] <= sma10[k - 1] * 1.02 && v[k] >= a && c[k] > sma40[k];
             const abovePivot = b.pivot > 0 && c[k] > b.pivot && c[k - 1] <= b.pivot && v[k] >= BOOK_BUY_VOL * a && c[k] <= b.pivot * BOOK_BUY_MAX_EXT;
             if ((above10 || abovePivot) && !book.buys.some(x => x.i === k)) { book.reentries.push({ i: k, stopI, label: "Kup ponownie", why: abovePivot ? "pivot" : "10-tyg." }); break; }
         }
     });
+    // „Dokup” po odbiciu od 10-tygodniowej (jak „Add: bounces off 10-week moving average line on volume” w książce): trend wzrostowy (40-tygodniowa rośnie, 10 > 40,
+    // cena nad obiema), dołek tygodnia przy linii (≤ +4 %), poprzedni tydzień przy niej, ten w górę na rosnącym wolumenie — TYLKO do BOOK_ADD_AFTER_BUY tygodni po
+    // sygnale „Kup” z patternu (baza / flaga / konsolidacja; „Kup po korekcie” nie liczy się)
+    // Pozycja trwa od „Kup” z patternu albo od „Kup ponownie” do pierwszego zamknięcia pod 40-tygodniową (koniec trendu) — nie tylko BOOK_ADD_AFTER_BUY tygodni:
+    // lider (DELL) potrafi rosnąć ponad rok, a kolejne cofnięcia do 10-tygodniowej to miejsca dla spóźnionych.
+    const anchors = [...book.buys.filter(x => x.label === "Kup"), ...book.reentries].map(x => x.i).sort((a, b) => a - b);
+    const trendAlive = (a, i) => { for (let j = a + 1; j <= i; j++) if (Number.isFinite(sma40[j]) && Number.isFinite(c[j]) && c[j] < sma40[j]) return false; return true; };
+    for (let i = 12; i < n; i++) {
+        const s10 = sma10[i], s40 = sma40[i], a10 = rowIdx(avg, i - 1);
+        if (![s10, s40, sma10[i - 3], sma40[i - 4], h[i], l[i], c[i], c[i - 1], v[i], a10].every(Number.isFinite)) continue;
+        if (!(s40 > sma40[i - 4]) || book.buys.some(x => x.i === i) || book.adds.some(x => Math.abs(x.i - i) < BOOK_ADD_GAP)) continue;
+        if (!(c[i] > s10 && c[i] > s40 && s10 > sma10[i - 3] && s10 > s40)) continue;
+        const anchor = anchors.filter(a => a < i).pop();
+        if (anchor === undefined || !(i - anchor <= BOOK_ADD_AFTER_BUY || trendAlive(anchor, i))) continue;
+        // tydzień cofnął się do 10-tygodniowej (dołek ≤ +4 % nad nią), zamknął w górę i na wolumenie co najmniej średnim
+        if (l[i] <= s10 * 1.04 && c[i] >= c[i - 1] && v[i] >= a10) book.adds.push({ i, label: "Dokup" });
+    }
+    book.adds.sort((a, b) => a.i - b.i);
     // ciasne zamknięcia: tylko w trendzie wzrostowym (nad 10- i 40-tygodniową) i tam, gdzie mają znaczenie dla kupna — w bazie (albo tuż po niej)
     // lub do BOOK_TIGHT_AFTER_BUY tygodni po kupnie (jak w książce: „4 tight closes” przy punkcie kupna / po nim)
     tightCloseRuns(c).forEach(r => {

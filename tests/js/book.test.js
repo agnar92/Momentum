@@ -224,3 +224,46 @@ test("computeBook: „Kup ponownie” — po wycięciu na stopie −8 % powrót 
     assert.ok(b.reentries[0].i > b.reentries[0].stopI && b.reentries[0].stopI > b.buys[0].i);
     assert.equal(computeBook(stopOutSeries(false)).reentries.length, 0);   // bez powrotu nad średnią brak sygnału
 });
+
+function longTrendSeries(weeksAfter = 70) {
+    // trend + płaska baza + „Kup”, potem długi wzrost z cofnięciami do 10-tygodniowej co 9 tygodni (odbicie na zwiększonym wolumenie)
+    const c = [], v = [];
+    let p = 10;
+    const seg = (len, st, vol) => { for (let k = 0; k < len; k++) { p += st + (k % 2 ? 0.05 : -0.05); c.push(p); v.push(vol); } };
+    seg(40, 0.5, 1000); seg(6, 0, 700); seg(1, 1.5, 3000);
+    for (let r = 0; r < Math.ceil(weeksAfter / 9); r++) { seg(5, 1.2, 1000); seg(2, -2.6, 900); seg(1, 3.2, 2000); seg(1, 0.6, 1000); }
+    const h = c.map(x => x + 0.1), l = c.map(x => x - 0.1), n = c.length;
+    return { n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases: [] };
+}
+
+test("computeBook: „Dokup” po odbiciu od 10-tygodniowej trwa tak długo, jak trend (zamknięcia nad 40-tygodniową), a nie tylko 40 tygodni od „Kup”", () => {
+    const b = computeBook(longTrendSeries(90));
+    const kup = b.buys.find(x => x.label === "Kup");
+    assert.ok(kup);
+    assert.ok(b.adds.some(a => a.i - kup.i > 40), "dokup później niż 40 tygodni po Kup, gdy trend trwa");
+});
+
+test("computeBook: po zamknięciu pod 40-tygodniową trend się kończy i dokupy po 40 tygodniach od „Kup” znikają", () => {
+    const m = longTrendSeries(90);
+    const kup = computeBook(m).buys.find(x => x.label === "Kup");
+    const cut = kup.i + 45;
+    for (let i = cut; i < cut + 3; i++) { m.c[i] = m.c[kup.i] * 0.5; m.l[i] = m.c[i] - 0.1; m.h[i] = m.c[i] + 0.1; }
+    m.smas = [{ values: rollingMean(m.c, 10) }, { values: rollingMean(m.c, 40) }];
+    const b = computeBook(m);
+    const restarted = [...b.buys, ...b.reentries].filter(x => x.i > cut + 2).map(x => x.i);   // nowy „Kup” / „Kup ponownie” po przerwaniu trendu zaczyna pozycję od nowa
+    const late = b.adds.filter(a => a.i - kup.i > 40 && a.i > cut + 2 && !restarted.some(r => r < a.i));
+    assert.equal(late.length, 0);
+});
+
+test("computeBook: „Kup ponownie” toleruje zamknięcie tygodnia przed powrotem minimalnie nad 10-tygodniową (≤ +2 %)", () => {
+    const m = stopOutSeries(true);
+    const kup = computeBook(m).buys[0];
+    // tydzień przed powrotem: zamknięcie tuż nad średnią (+1 %) — dawniej odrzucało sygnał
+    const s10 = rollingMean(m.c, 10);
+    const base = computeBook(m).reentries[0];
+    assert.ok(kup && base);
+    const prev = base.i - 1;
+    m.c[prev] = s10[prev] * 1.01; m.h[prev] = m.c[prev] + 0.1; m.l[prev] = m.c[prev] - 0.1;
+    m.smas = [{ values: rollingMean(m.c, 10) }, { values: rollingMean(m.c, 40) }];
+    assert.ok(computeBook(m).reentries.length >= 1);
+});
