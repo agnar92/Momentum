@@ -1037,11 +1037,11 @@ function sliderHtml(m) {
         + `<div class="wl-range-win" id="chartRangeWin" title="Przeciągnij, by przesunąć okno; krawędzie zmieniają jego długość"><span class="wl-range-h wl-range-l" data-h="l"></span><span class="wl-range-h wl-range-r" data-h="r"></span></div></div><div class="wl-zoom-strip" id="chartZoom" title="Przeciągnij w lewo / w prawo, by płynnie przybliżyć / oddalić (na komputerze także kółko myszy nad wykresem, na telefonie szczypnięcie suwaka)"><span class="wl-zoom-l">◀</span><b id="chartZoomLbl"></b><span class="wl-zoom-r">▶</span></div></div>`;
 }
 
-function attachRangeSlider(root, total, getWin, setWin) {
+function attachRangeSlider(root, total, getWin, setWin, daily = false) {
     const track = root.querySelector("#chartRange"), win = root.querySelector("#chartRangeWin");
     if (!track || !win) return null;
     const strip = root.querySelector("#chartZoom"), lbl = root.querySelector("#chartZoomLbl");
-    const label = () => { if (lbl) { const w = getWin(); lbl.textContent = w.n >= 104 ? `${(w.n / 52).toFixed(1).replace(".", ",")} l.` : `${w.n} tyg.`; } };
+    const label = () => { if (lbl) { const w = getWin(); lbl.textContent = daily ? `${w.n} sesji` : (w.n >= 104 ? `${(w.n / 52).toFixed(1).replace(".", ",")} l.` : `${w.n} tyg.`); } };
     const paint = () => {
         label();
         const w = getWin();
@@ -1189,7 +1189,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         draw();
         if (opts.onWindow) opts.onWindow(win);
     };
-    const paintSlider = attachRangeSlider(container, full.n, () => win, w => { applyWin(w); });
+    const paintSlider = attachRangeSlider(container, full.n, () => win, w => { applyWin(w); }, !!full.daily);
     plot.addEventListener("wheel", ev => {   // komputer: kółko myszy nad wykresem = płynny zoom wokół kursora
         if (ev.ctrlKey || !ev.deltaY) return;
         ev.preventDefault();

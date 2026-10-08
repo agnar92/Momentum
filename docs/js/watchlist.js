@@ -30,7 +30,6 @@ const CHART_HINTS_KEY = "momentum_watchlist_chart_hints";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
-const CHART_TF_KEY = "momentum_watchlist_chart_tf";   // "d" / "w"; domyślnie TYGODNIOWY (user: „tygodniówki to będzie mój default dla każdej akcji”)
 const CHART_BOOK_KEY = "momentum_watchlist_chart_book";   // wygląd i opisy jak w książce O'Neila (domyślnie włączone)
 const FAVS_KEY = "momentum_watchlist_favs";
 const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
@@ -184,6 +183,9 @@ function baseRows(stocks, params) {
 // Wielkość pozycji dla konta w PLN (IKE): kapitał PLN ÷ kurs USD/PLN = kapitał w USD. Liczba akcji = mniejsza z dwóch: z % konta na pozycję
 // (kapitał · posPct% / wejście) i z ryzyka do stopu (kapitał · riskPct% / (wejście − stop)) — dzięki temu strata przy stopie nigdy nie przekracza
 // zadanego ryzyka, a pozycja nie przekracza zadanego % konta. Wystarczy jedno z dwóch (posPct albo riskPct); null, gdy dane nie mają sensu.
+// Liczba akcji bez zbędnych zer: 12, 3,5, 0,27 (pozycje mogą być ułamkowe)
+function fmtShares(n) { return Number.isFinite(n) ? String(Math.round(n * 100) / 100).replace(".", ",") : "—"; }
+
 function positionSize(acct, entry, stop) {
     const { capital, fx, posPct, riskPct } = acct || {};
     const okPos = Number.isFinite(posPct) && posPct > 0, okRisk = Number.isFinite(riskPct) && riskPct > 0;
@@ -193,7 +195,7 @@ function positionSize(acct, entry, stop) {
     const capUsd = capital / fx;
     const byPos = okPos ? capUsd * posPct / 100 / entry : Infinity;
     const byRisk = okRisk && perShare !== null ? capUsd * riskPct / 100 / perShare : Infinity;
-    const shares = Math.floor(Math.min(byPos, byRisk));
+    const shares = Math.floor(Math.min(byPos, byRisk) * 100 + 1e-6) / 100;   // akcje ułamkowe (IKE / broker z ułamkami): zaokrąglenie w dół do 0,01
     if (!Number.isFinite(shares)) return null;
     return {
         shares, limited_by: byRisk < byPos ? "risk" : "pos",
@@ -842,7 +844,7 @@ const COL = {
         ? `<td class="${s.position.stop_hit ? "negative" : ""}">${s.position.stop_hit ? "🛑 STOP" : fmtPct(s.position.to_stop_pct)}</td>` : `<td class="muted">—</td>`, "O ile % cena musi spaść do stopu"],
     posEntry: ["Wejście", "pos_entry", s => `<td>${s.position ? money(s.position.entry) : "—"}</td>`],
     posStop: ["Stop", "pos_stop", s => `<td>${s.position && s.position.stop !== null && s.position.stop !== undefined ? money(s.position.stop) : "—"}</td>`],
-    posShares: ["Akcje", "pos_shares", s => `<td>${s.position && s.position.shares !== null ? s.position.shares : "—"}</td>`],
+    posShares: ["Akcje", "pos_shares", s => `<td>${s.position && s.position.shares !== null ? fmtShares(s.position.shares) : "—"}</td>`],
     posValue: ["Wartość", "pos_value", s => `<td>${s.position && s.position.value !== null ? money0(s.position.value) : "—"}</td>`],
     posRisk: ["Ryzyko do stopu", "pos_risk_usd", s => `<td>${s.position && s.position.risk_usd !== null ? money0(s.position.risk_usd) : "—"}</td>`, "Początkowe ryzyko: (wejście − stop) · liczba akcji"],
     strat: ["Strategie", "strat_rank", s => `<td>${(s.strat || []).map(c => `<span class="strat-chip strat-${c}" title="${STRATEGIES[c][1]}">${STRATEGIES[c][0]}</span>`).join(" ") || `<span class="muted">—</span>`}</td>`, "Z których strategii (zakładek) spółka przechodzi filtry: R = Ratingi, Q = Qullamaggie, U = Upside, B = Bazy, W = blisko wybicia"],
@@ -1278,7 +1280,7 @@ function openPositionSheet(ticker) {
         <div class="sheet-grid">
             <label>Wejście ($)<input type="number" inputmode="decimal" step="any" id="posEntryIn" value="${v(cur.entry !== undefined ? cur.entry : stock.price)}"></label>
             <label>Stop ($)<input type="number" inputmode="decimal" step="any" id="posStopIn" value="${v(stop)}"></label>
-            <label>Liczba akcji<input type="number" inputmode="numeric" step="1" id="posSharesIn" value="${v(cur.shares)}"></label>
+            <label>Liczba akcji<input type="number" inputmode="decimal" step="any" id="posSharesIn" value="${v(cur.shares)}"></label>
         </div>
         <div class="sheet-quick">Stop: <button type="button" class="chip-btn" data-stop="5">−5%</button><button type="button" class="chip-btn" data-stop="7">−7%</button><button type="button" class="chip-btn" data-stop="8">−8%</button></div>
         <div class="sheet-section"><h4>Wielkość pozycji — konto w PLN (IKE)</h4>
@@ -1307,7 +1309,7 @@ function openPositionSheet(ticker) {
         if (entry && stopV && stopV < entry) parts.push(`Ryzyko na akcję: ${money(entry - stopV)} (${((entry - stopV) / entry * 100).toFixed(1)}% od wejścia)`);
         else if (entry && stopV) parts.push("Stop musi być poniżej wejścia.");
         if (size) {
-            parts.push(`Sugerowane: <b>${size.shares} akcji</b> = ${pln0(size.value_pln)} (${money0(size.value_usd)}, ${size.pct_of_capital.toFixed(1)}% konta)`
+            parts.push(`Sugerowane: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${money0(size.value_usd)}, ${size.pct_of_capital.toFixed(1)}% konta)`
                 + (size.risk_pln !== null ? `<br>Strata przy stopie: <b>${pln0(size.risk_pln)}</b> (${size.risk_pct.toFixed(2)}% konta)` : "")
                 + (acct.posPct && acct.riskPct && size.risk_pln !== null ? ` — liczbę akcji ogranicza ${size.limited_by === "risk" ? "ryzyko do stopu" : "% konta na pozycję"}` : "")
                 + ` <button type="button" class="chip-btn" id="posUse">Użyj</button>`);
@@ -1864,17 +1866,15 @@ function initChartModal() {
         chartHintsOn = localStorage.getItem(CHART_HINTS_KEY) === "1";
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved) ["d", "w"].forEach(k => { if (Number.isFinite(saved[k]) && saved[k] > 0) chartWinLen[k] = saved[k]; });
-        chartDaily = localStorage.getItem(CHART_TF_KEY) === "d";   // domyślnie tygodniowy
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
-    // JEDEN rodzaj wykresu: tygodniowy w stylu książki O'Neila, skala logarytmiczna (user: „czemu aż tyle rodzajów wykresów, zrób tylko te z książką zgodne”)
+    // Tygodniowy wykres w stylu książki O'Neila jest GŁÓWNY (zawsze na starcie); dzienny dostępny przyciskiem, gdy na tygodniowym nie ma patternu (user: „tygodniowe nadrzędne, ale chcę sprawdzić dzienny”)
     chartDaily = false; chartBookOn = true; chartLog = false; chartLayout = "1";
     updateLogButton();
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
         chartDaily = !chartDaily;
         chartWindows = [];
-        try { localStorage.setItem(CHART_TF_KEY, chartDaily ? "d" : "w"); } catch (e) { /* ignoruj */ }
         updateTfButton();
         drawChart();
     });
@@ -2057,7 +2057,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
