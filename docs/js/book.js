@@ -11,10 +11,16 @@
 const BOOK_COLORS = { text: "#e8eaed", dim: "#aab0bd", buy: "#2ecc71", add: "#7be0a1", sell: "#ff4d6d", mkt: "#9aa3b2", vol: "#e8eaed", split: "#f0b429", ipo: "#e8eaed" };
 const BOOK_TIGHT_PCT = 1.5;          // „ciasne zamknięcia”: zamknięcia kolejnych tygodni mieszczą się w tylu % (max/min)
 const BOOK_TIGHT_MIN_WEEKS = 3;
-const BOOK_BUY_VOL = 1.3;            // wybicie z bazy na wolumenie ≥ tyle × średnia z poprzednich tygodni
+const BOOK_BUY_VOL = 1.15;           // wybicie z bazy na wolumenie ≥ tyle × średnia z poprzednich tygodni
+const BOOK_FLAT_MIN_WEEKS = 4;       // wybicie z dowolnej konsolidacji (nie tylko z bazy wykrytej przez detect_bases): min. tyle tygodni, głębokość ≤ BOOK_FLAT_DEPTH_PCT
+const BOOK_FLAT_MAX_WEEKS = 10;
+const BOOK_FLAT_DEPTH_PCT = 12;
+const BOOK_FLAT_VOL = 1.2;
+const BOOK_BUY_GAP = 8;              // kolejne punkty „Kup” nie częściej niż co tyle tygodni
+const BOOK_REBOUND_WEEKS = 12;       // odbicie po korekcie rynku: do tylu tygodni od dołka S&P 500
+const BOOK_REBOUND_DD_X = 2.5;       // ... spółka spadła w korekcie nie więcej niż tyle × spadek S&P 500
 const BOOK_TIGHT_AFTER_BUY = 10;     // „ciasne zamknięcia” po kupnie: do tylu tygodni od punktu kupna
 const BOOK_ADD_GAP = 6;              // „Dokup” nie częściej niż co tyle tygodni
-const BOOK_ADD_MAX_AFTER_BUY = 40;   // „Dokup” tylko do tylu tygodni po kupnie (dokupuje się do trwającej pozycji)
 const BOOK_DRY_RATIO = 0.6;          // wyschnięcie wolumenu: tydzień z wolumenem ≤ tyle × średnia
 const BOOK_CORRECTION_PCT = 8;       // korekta rynku: spadek S&P 500 od szczytu o co najmniej tyle % (tygodniowe zamknięcia)
 const BOOK_BASE_NAMES = { cup: "cup", double_bottom: "double bottom", flat: "flat base", ascending: "ascending base", htf: "high tight flag" };
@@ -118,14 +124,47 @@ function computeBook(m, splits = []) {
             }
         }
     });
+    // wybicie z DOWOLNEJ konsolidacji (jak „7-week base”, „5 weeks tight closes” w książce): płaski zakres ≥ 4 tygodni (≤ 12 %), zamknięcie nad jego
+    // szczytem po zamknięciu pod nim, na wolumenie ≥ BOOK_FLAT_VOL × średnia, w trendzie wzrostowym (nad 10- i 40-tygodniową)
+    const nearBuy = (j, gap) => book.buys.some(x => Math.abs(x.i - j) < gap);
+    for (let j = 12; j < n; j++) {
+        const a = rowIdx(avg, j - 1), s10 = sma10[j], s40 = sma40[j];
+        if (![c[j], c[j - 1], v[j], a, s10, s40].every(Number.isFinite) || a <= 0) continue;
+        if (!(c[j] > s40 && s10 > s40 && v[j] / a >= BOOK_FLAT_VOL) || nearBuy(j, BOOK_BUY_GAP)) continue;
+        for (let len = BOOK_FLAT_MAX_WEEKS; len >= BOOK_FLAT_MIN_WEEKS; len--) {
+            let hi = -Infinity, lo = Infinity;
+            for (let k = j - len; k < j; k++) { hi = Math.max(hi, h[k]); lo = Math.min(lo, l[k]); }
+            if (!Number.isFinite(hi) || !Number.isFinite(lo) || hi <= 0) continue;
+            if ((hi - lo) / hi * 100 <= BOOK_FLAT_DEPTH_PCT && c[j] > hi && c[j - 1] <= hi) { book.buys.push({ i: j, pivot: hi, label: "Kup" }); break; }
+        }
+    }
+    // odbicie po korekcie rynku (jak „base-on-base formed during general market correction” / „general market turns up”): w ciągu BOOK_REBOUND_WEEKS od dołka
+    // S&P 500 pierwsze zamknięcie spółki z powrotem nad 10-tygodniową (nad 40-tygodniową) na wolumenie ≥ średniej; spółka w korekcie nie spadła mocniej niż 2,5× indeks
+    book.corrections = marketCorrections(m.spx);
+    book.corrections.forEach(cr => {
+        const dd = (() => {
+            let top = -Infinity, low = Infinity;
+            for (let i = Math.max(0, cr.i0 - 1); i <= Math.min(n - 1, cr.i0 + 1); i++) if (Number.isFinite(h[i])) top = Math.max(top, h[i]);
+            for (let i = Math.max(0, cr.iLow - 2); i <= Math.min(n - 1, cr.iLow + 2); i++) if (Number.isFinite(l[i])) low = Math.min(low, l[i]);
+            return top > 0 && Number.isFinite(low) ? (1 - low / top) * 100 : null;
+        })();
+        if (dd === null || dd > cr.drop * BOOK_REBOUND_DD_X) return;
+        for (let j = cr.iLow + 1; j <= Math.min(n - 1, cr.iLow + BOOK_REBOUND_WEEKS); j++) {
+            const a = rowIdx(avg, j - 1), s10 = sma10[j], s40 = sma40[j];
+            if (![c[j], c[j - 1], v[j], a, s10, s40, sma10[j - 1]].every(Number.isFinite) || a <= 0) continue;
+            if (c[j] > s10 && c[j - 1] <= sma10[j - 1] && c[j] > s40 && v[j] >= a) {
+                if (!nearBuy(j, 4)) book.buys.push({ i: j, pivot: null, label: "Kup po korekcie" });
+                break;
+            }
+        }
+    });
     book.buys.sort((a, b) => a.i - b.i);
-    // „Dokup”: pierwsze odbicie od 10-tygodniowej średniej na wolumenie w trwającym trendzie (po kupnie)
+    // „Dokup”: pierwsze odbicie od 10-tygodniowej średniej na wolumenie w trwającym trendzie wzrostowym (nie wymaga wcześniejszego „Kup” w oknie)
     let lastAdd = -99;
     for (let i = 12; i < n; i++) {
         const s10 = sma10[i], s40 = sma40[i];
-        if (![s10, s40, sma10[i - 1], sma10[i - 3], h[i], l[i], c[i], c[i - 1], v[i], v[i - 1]].every(Number.isFinite)) continue;
-        const buy = [...book.buys].reverse().find(x => x.i <= i - 2);
-        if (!buy || i - buy.i > BOOK_ADD_MAX_AFTER_BUY) continue;
+        if (![s10, s40, sma10[i - 1], sma10[i - 3], sma40[i - 4], h[i], l[i], c[i], c[i - 1], v[i], v[i - 1]].every(Number.isFinite)) continue;
+        if (!(s40 > sma40[i - 4]) || book.buys.some(x => x.i === i)) continue;   // 40-tygodniowa rośnie; w tygodniu kupna nie dokupujemy
         if (!(c[i] > s10 && l[i] <= s10 * 1.02 && c[i] > s40 && s10 > sma10[i - 3] && s10 > s40)) continue;   // odbicie od linii w trendzie wzrostowym
         if (!(c[i - 1] <= sma10[i - 1] * 1.03 && c[i] >= c[i - 1] && v[i] > v[i - 1])) continue;               // poprzedni tydzień przy linii, ten w górę z większym wolumenem
         if (i - lastAdd < BOOK_ADD_GAP) continue;
@@ -158,7 +197,6 @@ function computeBook(m, splits = []) {
         }
         if (best) book.dry.push({ i: best.i, label: "Wyschnięcie" });
     });
-    book.corrections = marketCorrections(m.spx);
     const first = c.findIndex(Number.isFinite);
     if (first >= 2 && first < n - 8) book.ipo = { i: first };   // spółka weszła na giełdę w oknie wykresu (pierwsze tygodnie bez notowań)
     book.splits = (splits || []).filter(s => Number.isFinite(s.i) && splitLabel(s.r)).map(s => ({ i: s.i, label: splitLabel(s.r), up: s.r > 1 }));
@@ -197,10 +235,10 @@ function bookSvg(m, g) {
     });
     // punkt kupna: przerywana linia pivotu tuż przed wybiciem + strzałka „Kup” z lewej góry
     bk.buys.forEach(b => {
-        const px = x(b.i), py = yP(b.pivot);
-        out.push(`<line ${clip} x1="${x(Math.max(0, b.i - 6))}" x2="${px}" y1="${py}" y2="${py}" stroke="${BOOK_COLORS.text}" stroke-width="1.3" stroke-dasharray="3 2" pointer-events="none"/>`);
+        const px = x(b.i), py = yP(b.pivot || m.c[b.i]);
+        if (b.pivot) out.push(`<line ${clip} x1="${x(Math.max(0, b.i - 6))}" x2="${px}" y1="${py}" y2="${py}" stroke="${BOOK_COLORS.text}" stroke-width="1.3" stroke-dasharray="3 2" pointer-events="none"/>`);
         out.push(arrow(px - fs(26), inY(py - fs(26)), px - fs(3), py - fs(3), BOOK_COLORS.buy));
-        addLabel("Kup", px - fs(28), inY(py - fs(30)), { anchor: "end", size: fs(11.5), fill: BOOK_COLORS.buy, bold: true, prio: 8, title: "Pierwsze zamknięcie nad pivotem bazy na podwyższonym wolumenie (kupno do +5 % nad pivotem)" });
+        addLabel(b.label, px - fs(28), inY(py - fs(30)), { anchor: "end", size: fs(11.5), fill: BOOK_COLORS.buy, bold: true, prio: 8, title: b.pivot ? "Zamknięcie nad szczytem konsolidacji / pivotem bazy na podwyższonym wolumenie (kupno do +5 % nad pivotem)" : "Pierwsze zamknięcie nad 10-tygodniową po korekcie rynku — spółka trzymała się lepiej niż indeks" });
     });
     bk.adds.forEach(a => {
         const px = x(a.i), py = yP(m.h[a.i]);

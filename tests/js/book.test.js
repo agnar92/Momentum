@@ -115,3 +115,37 @@ test("computeBook: ciasne zamknięcia tylko w bazie / po kupnie, nie gdziekolwie
     for (let i = 25; i < 29; i++) { m.c[i] = 20; m.h[i] = 20.4; m.l[i] = 19.6; }
     assert.ok(computeBook(m).tights.some(t => t.i0 >= 24 && t.i1 <= 29));
 });
+
+test("computeBook: wybicie z dowolnej płaskiej konsolidacji (bez bazy z detect_bases) jest punktem „Kup”", () => {
+    const m = model({ bases: [] });
+    m.smas[1].values = m.c.map(() => 5);   // 40-tygodniowa pod ceną (w teście historia jest krótsza niż 40 tygodni)
+    const b = computeBook(m);
+    assert.deepEqual(b.buys.map(x => x.i), [36]);
+    assert.ok(b.buys[0].pivot > 20 && b.buys[0].pivot < 21.5);
+});
+
+test("computeBook: „Dokup” nie wymaga wcześniejszego „Kup” w oknie — wystarczy trend i odbicie od 10-tygodniowej na wolumenie", () => {
+    const n = 70, c = [], h = [], l = [], v = [];
+    for (let i = 0; i < n; i++) {
+        const base = 10 + i * 0.5 + (i % 7 === 6 ? -3 : 0);   // trend z cofnięciami co 7 tygodni
+        c.push(base); h.push(base + 0.4); l.push(i % 7 === 0 && i > 14 ? base - 3 : base - 0.4); v.push(i % 7 === 0 ? 1500 : 1000);
+    }
+    const b = computeBook({ n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases: [] });
+    assert.ok(b.adds.length >= 1);
+    assert.ok(b.adds.every(a => a.i >= 40));
+});
+
+test("computeBook: odbicie po korekcie rynku — pierwsze zamknięcie nad 10-tygodniową daje „Kup po korekcie”", () => {
+    const n = 80, c = [], spx = [];
+    for (let i = 0; i < n; i++) {
+        c.push(i <= 40 ? 10 + i * 0.5 : i <= 50 ? 30 - (i - 40) * 0.4 : 26 + (i - 50) * 0.8);
+        spx.push(i <= 40 ? 100 + i * 0.5 : i <= 50 ? 120 - (i - 40) * 2 : 100 + (i - 50) * 0.9);
+    }
+    const h = c.map(x => x + 0.4), l = c.map(x => x - 0.4), v = c.map(() => 2500);
+    const b = computeBook({ n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx, bases: [] });
+    const rb = b.buys.filter(x => x.label === "Kup po korekcie");
+    assert.equal(b.corrections.length >= 1, true);
+    assert.equal(rb.length, 1);
+    assert.ok(rb[0].i > 50 && rb[0].i <= 62);
+    assert.equal(rb[0].pivot, null);
+});

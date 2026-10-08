@@ -890,3 +890,6 @@ body:not(.split) .wl-chart-box.is-editing .wl-chart-tools #toolRestore,
 body:not(.split) .wl-chart-box.is-editing .wl-chart-tools #toolAuto { display: none; }
 body:not(.split) .wl-chart-box.is-editing .wl-chart-tools .ann-hint { position: absolute; left: 8px; right: 8px; bottom: calc(6px + env(safe-area-inset-bottom, 0px)); z-index: 5; flex: none; padding: 6px 10px; border-radius: 8px; background: rgba(14,15,19,.82); color: var(--text); pointer-events: none; }
 body:not(.split) .wl-chart-box { position: relative; }
+
+/* jeden rodzaj wykresu (tygodniowy jak w książce) — przełączniki widoku ukryte na stałe */
+#chartLayoutBtn, #chartTfBtn, #chartBookBtn, #chartLogBtn { display: none !important; }

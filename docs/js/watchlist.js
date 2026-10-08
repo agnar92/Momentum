@@ -1648,7 +1648,7 @@ function visibleTickers() {
 // Komórki siatki wykresów dla bieżącego układu (pierwsza = zaznaczona spółka, jedyna edytowalna).
 // Układ wykresów faktycznie używany: w widoku dzielonym wybrany przyciskiem, na telefonie zawsze jeden wykres.
 function effectiveLayout() {
-    return splitMode ? chartLayout : "1";
+    return "1";   // jeden wykres jak w książce (układy dzienny+tygodniowy / 4 spółki wyłączone na życzenie: „tylko te z książką zgodne”)
 }
 
 function chartCells() {
@@ -1807,7 +1807,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartBookBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -1829,6 +1829,8 @@ function initChartModal() {
         chartDaily = localStorage.getItem(CHART_TF_KEY) === "d";   // domyślnie tygodniowy
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
+    // JEDEN rodzaj wykresu: tygodniowy w stylu książki O'Neila, skala logarytmiczna (user: „czemu aż tyle rodzajów wykresów, zrób tylko te z książką zgodne”)
+    chartDaily = false; chartBookOn = true; chartLog = false; chartLayout = "1";
     updateLogButton();
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
