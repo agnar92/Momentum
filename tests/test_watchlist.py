@@ -836,6 +836,12 @@ class TestOneilPatterns:
         assert b["pivot"] == pytest.approx(92 * 1.005, rel=0.01)       # pivot = środkowy szczyt, a nie szczyt całej bazy (100)
         assert b["double_bottom"]["low2"] < b["double_bottom"]["low1"]   # drugie dno podcina pierwsze
 
+    def test_base_is_found_even_when_the_stock_is_far_under_its_old_record(self):
+        crashed = list(np.linspace(300, 60, 30)) + self.FLAT                    # rekord sprzed krachu −80 %: dawny szczyt nie może zasłaniać nowych baz
+        assert self.last(crashed, 1)["type"] == "flat"
+        slow = list(np.linspace(110, 62, 90)) + self.FLAT                       # wolna zniżka −44 % przez 90 tygodni: szczyt starszy niż okno baz
+        assert self.last(slow, 1)["type"] == "flat"
+
     def test_double_bottom_needs_an_undercut(self):
         no_undercut = self.RAMP + [100, 96, 90, 85, 82, 80, 84, 88, 92, 88, 84, 82, 83, 85, 87, 89, 90]   # drugie dno NAD pierwszym
         b = self.last(no_undercut, 1)

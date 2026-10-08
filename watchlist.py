@@ -776,6 +776,7 @@ HTF_FLAG_WEEKS = (3, 5)      # flaga 3–5 tygodni
 HTF_FLAG_DEPTH_PCT = (10.0, 25.0)
 BOX_WEEKS = (4, 7)           # square box (kwadratowa baza): 4–7 tygodni konsolidacji po ruchu z wcześniejszej bazy, głębokość 10–15 %
 BOX_DEPTH_PCT = (10.0, 15.0)
+BASE_PEAK_WINDOW_WEEKS = 75     # szczyt odniesienia bazy nie może być starszy niż CUP_MAX_WEEKS + 10 tygodni (inaczej liczymy od najwyższego High z tego okna)
 IPO_MAX_WEEKS = 52           # baza po debiucie (IPO base): spółka notowana nie dłużej niż ~rok; min. 3 tygodnie od szczytu po debiucie
 IPO_MIN_WEEKS = 3
 CUP_HANDLE_MAX_DEPTH_BEAR_PCT = 30.0   # rączka przy dnie bessy: wyjątkowo 20–30 %
@@ -1035,10 +1036,17 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
         })
 
     peak = 0
+    window = BASE_PEAK_WINDOW_WEEKS * k
     for j in range(1, n):
         if hi[j] > hi[peak]:          # nowy szczyt: poprzednia korekta (jeśli była) właśnie się zakończyła
             record(peak, j - 1, False)
             peak = j
+        elif lo[j] <= hi[peak] * (1 - BASE_MAX_DEPTH_PCT / 100):   # krach głębszy niż każda baza: dawny szczyt przestaje być punktem odniesienia — liczymy od dołka krachu
+            low_i = peak + 1 + int(np.argmin(lo[peak + 1:j + 1]))
+            peak = low_i + int(np.argmax(hi[low_i:j + 1]))
+        elif j - peak > window:       # szczyt starszy niż najdłuższa baza: spółka jest wciąż pod dawnym rekordem (np. sprzed lat) —
+            from_i = j - window       # szczytem odniesienia staje się najwyższy High z ostatniego okna, inaczej cała historia to jedna „głęboka korekta” i nie ma żadnej bazy
+            peak = from_i + int(np.argmax(hi[from_i:j + 1]))
     record(peak, n - 1, True)
     # formujące się teraz: high tight flag (ma pierwszeństwo — rzadki i najsilniejszy) albo ascending base; zastępują otwartą „korektę/flat”
     extra = detect_high_tight_flag(hi, lo, cl, dates, k, vol) or detect_ascending_base(hi, lo, cl, dates, k) or (detect_ipo_base(hi, lo, cl, dates, k) if ipo else None)
