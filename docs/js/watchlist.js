@@ -30,7 +30,8 @@ const CHART_HINTS_KEY = "momentum_watchlist_chart_hints";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_LAYOUT_KEY = "momentum_watchlist_chart_layout";   // "1" | "dw" | "4"
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {d, w}
-const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";
+const CHART_TF_KEY = "momentum_watchlist_chart_tf";   // "d" / "w"; domyślnie TYGODNIOWY (user: „tygodniówki to będzie mój default dla każdej akcji”)
+const CHART_BOOK_KEY = "momentum_watchlist_chart_book";   // wygląd i opisy jak w książce O'Neila (domyślnie włączone)
 const FAVS_KEY = "momentum_watchlist_favs";
 const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
 const SETTINGS_KEY = "momentum_watchlist_settings";
@@ -1528,7 +1529,8 @@ let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartActiveCell = 0;     // w układzie „dzienny + tygodniowy”: który wykres ma fokus (tylko w nim można rysować linie / poprawiać cupy)
 let chartLayout = "1";      // układ wykresów w widoku dzielonym: "1" wykres, "dw" dzienny + tygodniowy, "4" cztery spółki
-let chartDaily = true;      // wykres dzienny zamiast tygodniowego
+let chartDaily = false;     // wykres dzienny zamiast tygodniowego (domyślnie tygodniowy)
+let chartBookOn = true;     // 📖 Książka: opisy i oś jak na wykresach z książki O'Neila (tylko tygodniowy)
 let chartHintsOn = false;   // 💡 Nauka: edukacyjne podpowiedzi (wykryty cup z literami A–E)
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
@@ -1689,6 +1691,7 @@ function drawChart() {
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
             hideAutoLines: annHide(c.ticker).lines, hints: chartHintsOn,
+            book: chartBookOn && !c.daily, bookTitle: layout === "4" ? "" : `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), chartsForTicker(currentChart.charts, c.ticker), c.ticker, st, opts);
@@ -1804,7 +1807,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartBookBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn", "chartLogBtn"].map(id => document.getElementById(id)).filter(Boolean);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -1823,14 +1826,15 @@ function initChartModal() {
         chartHintsOn = localStorage.getItem(CHART_HINTS_KEY) === "1";
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved) ["d", "w"].forEach(k => { if (Number.isFinite(saved[k]) && saved[k] > 0) chartWinLen[k] = saved[k]; });
-        chartDaily = localStorage.getItem(CHART_DAILY_KEY) !== "0";   // domyślnie dzienny (wybicia i wolumen)
+        chartDaily = localStorage.getItem(CHART_TF_KEY) === "d";   // domyślnie tygodniowy
+        chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
     updateLogButton();
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
         chartDaily = !chartDaily;
         chartWindows = [];
-        try { localStorage.setItem(CHART_DAILY_KEY, chartDaily ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        try { localStorage.setItem(CHART_TF_KEY, chartDaily ? "d" : "w"); } catch (e) { /* ignoruj */ }
         updateTfButton();
         drawChart();
     });
@@ -1852,6 +1856,18 @@ function initChartModal() {
         b.classList.toggle("active", chartHintsOn);
     };
     updateHintButton();
+    const updateBookButton = () => {
+        const b = document.getElementById("chartBookBtn");
+        b.textContent = chartBookOn ? "📖 Książka: wł." : "📖 Książka: wył.";
+        b.classList.toggle("active", chartBookOn);
+    };
+    updateBookButton();
+    document.getElementById("chartBookBtn").addEventListener("click", () => {
+        chartBookOn = !chartBookOn;
+        try { localStorage.setItem(CHART_BOOK_KEY, chartBookOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        updateBookButton();
+        if (currentChart) drawChart();
+    });
     document.getElementById("chartHintBtn").addEventListener("click", () => {
         chartHintsOn = !chartHintsOn;
         try { localStorage.setItem(CHART_HINTS_KEY, chartHintsOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
