@@ -42,9 +42,9 @@ function fitLayout(w, h, noTable = false) {
     // niski ekran (telefon poziomo): bez paska S&P 500, żeby wykres cen nie zamienił się w kreskę
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
-    const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
+    const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
     const price = Math.max(60, avail - bench - volume - eps);
-    const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1 };
+    const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
     L.bench = { y: 4, h: bench };
     L.legend = { y: L.bench.y + bench + (bench ? 6 : 0), h: legendH };
     L.price = { y: L.legend.y + legendH + 4, h: price };
@@ -207,6 +207,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         smas: smas.map(([label, values]) => ({ label, values: padArr(values || []), color: SMA_COLORS[label] })),
         spx: padArr(spx), rs: padArr(rs), eps, lines, cups, climax: c.climax || null, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
         pole: tl && tl.info && tl.info.pole_start ? { i0: lineIndex(weeks, tl.info.pole_start), y0: tl.info.pole_low, i1: lineIndex(weeks, tl.info.pole_end), y1: tl.info.pole_high, gain: tl.info.pole_gain } : null,
+        epsLine: eps,   // wszystkie raporty (także poza oknem) — linia EPS musi się ciągnąć przez okno nawet wtedy, gdy żaden raport nie wpada w jego środek
         epsLast: eps.length ? eps[eps.length - 1] : null,
         epsNext: c.eps_next && c.eps_next.d >= weeks[weeks.length - 1] ? c.eps_next : null,   // przeterminowana prognoza z cache'u to nie "następny" raport
         lastIdx,
@@ -341,6 +342,7 @@ function sliceModel(m, n, end = m.n) {
         ...m, weeks: cut(m.weeks), n, o: cut(m.o), h: cut(m.h), l: cut(m.l), c: cut(m.c), v: cut(m.v),
         smas: m.smas.map(x => ({ ...x, values: cut(x.values) })), spx: m.spx ? cut(m.spx) : null, rs: cut(m.rs),
         eps: m.eps.map(q => ({ ...q, week: q.week - off })).filter(q => q.week >= 0 && q.week < n),
+        epsLine: (m.epsLine || m.eps).map(q => ({ ...q, week: q.week - off })),
         lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0 && l.i0 < n),
         pole: m.pole ? { ...m.pole, i0: m.pole.i0 - off, i1: m.pole.i1 - off } : null,
         cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off, handle: c.handle ? { ...c.handle, iLow: c.handle.iLow - off, iEnd: c.handle.iEnd - off } : null })).filter(c => c.i1 > 0 && c.i0 < n),
@@ -357,7 +359,7 @@ function sliceModel(m, n, end = m.n) {
 function defaultWindowLength(full, opts = {}) {
     if (Number.isFinite(opts.windowLen) && opts.windowLen > 0) return opts.windowLen;
     const padDef = full.padDefault || 0;
-    return full.daily ? DAILY_WINDOW_DAYS + padDef : ((opts.compact || opts.fit) ? COMPACT_WEEKS + padDef : Math.min(WEEKLY_WINDOW_WEEKS, full.n - (full.pad || 0)) + padDef);   // tygodniowy: 3 lata (jak na stronach książki), starsze 3 lata pokazuje suwak
+    return full.daily ? DAILY_WINDOW_DAYS + padDef : (opts.compact ? COMPACT_WEEKS + padDef : Math.min(WEEKLY_WINDOW_WEEKS, full.n - (full.pad || 0)) + padDef);   // tygodniowy: 3 lata (jak na stronach książki), starsze 3 lata pokazuje suwak
 }
 
 function clampWindow(w, total, defN, defEnd = total) {
@@ -435,7 +437,7 @@ function compactEpsPanel(L, opts) {
 
 function pickLayout(opts = {}) {
     if (opts.fit) {
-        const noTable = !!opts.compact && !opts.estimates;
+        const noTable = (!!opts.compact || !!opts.book) && !opts.estimates;   // książkowy widok: pasek ↑ EPS niesie wartość i zmianę r/r (osobna tabela duplikowała te liczby)
         const L = fitLayout(opts.fit.w, opts.fit.h, noTable);
         return compactEpsPanel(opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4, noTable)) : L, opts);
     }
@@ -582,10 +584,10 @@ function chartSvg(m, opts = {}) {
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
     const spxVals = m.spx ? m.spx.filter(Number.isFinite) : [];
     const spxBand = spxVals.length >= 2 && !opts.noBench ? SPX_BAND_FRAC : 0;   // opts.noBench: telefon w trybie rysowania — cały panel dla ceny
-    const ttmPts = m.eps.filter(q => Number.isFinite(q.t));
+    const ttmAll = (m.epsLine || m.eps).filter(q => Number.isFinite(q.t));
     // „Cena = 20×EPS” (jak w książce): linia zysków leży na TEJ SAMEJ skali co cena w punktach 20 × EPS za 4 kwartały; do zakresu liczymy ją tylko
     // do 1,3× poza zakresem świec (dalej linia jest ucięta — wtedy P/E jest dużo wyższe / niższe niż 20)
-    const e20 = bookOn ? ttmPts.map(q => q.t * 20).concat(m.epsNext && Number.isFinite(m.epsNext.t) ? [m.epsNext.t * 20] : []).filter(v => v > 0).map(v => Math.min(baseExt[1] * 1.3, Math.max(baseExt[0] / 1.3, v))) : [];
+    const e20 = bookOn ? ttmAll.map(q => q.t * 20).concat(m.epsNext && Number.isFinite(m.epsNext.t) ? [m.epsNext.t * 20] : []).filter(v => v > 0).map(v => Math.min(baseExt[1] * 1.3, Math.max(baseExt[0] / 1.3, v))) : [];
     const pExt = numericExtent([m.h, m.l, ...nearSma, ptExt, ...pivotExtra, e20]) || [0, 1];
     const useLog = (!!opts.log || bookOn) && pExt[0] > 0;
     const pad = (pExt[1] - pExt[0]) * 0.04;
@@ -777,30 +779,35 @@ function chartSvg(m, opts = {}) {
         });
     }
     // linia zysków (EPS za 4 kwartały, TTM) NA wykresie cen — własna skala po prawej jak linia RS; kółka w tygodniach raportów, przerywany odcinek = prognoza
-    if (ttmPts.length >= 2) {
+    if (ttmAll.length >= 2) {
         const nx = m.epsNext && Number.isFinite(m.epsNext.t) ? m.epsNext : null;
         const nxIdx = nx ? dateToIndex(m.weeks, nx.d) : null;
-        const tv = ttmPts.map(q => q.t).concat(nx ? [nx.t] : []);
+        const tv = ttmAll.map(q => q.t).concat(nx ? [nx.t] : []);
         const tlo = Math.min(...tv), thi = Math.max(...tv), tpad = (thi - tlo || Math.abs(thi) || 1) * 0.12;
         const yE = bookOn ? (t => (t > 0 ? yP(20 * t) : NaN)) : makeYScale(tlo - tpad, thi + tpad, P.y + P.h * 0.1, P.h * 0.8);
-        const pts = ttmPts.map(q => (Number.isFinite(yE(q.t)) ? [x(q.week), yE(q.t)] : null));
+        const pts = ttmAll.map(q => (Number.isFinite(yE(q.t)) ? [x(q.week), yE(q.t)] : null));   // także raporty poza oknem: segmenty ucina clipAttr, linia nie znika po zmianie okna
+        const inWin = q => q.week >= 0 && q.week < m.n;
         const ec = CHART_COLORS.eps, r = opts.compact ? 4.4 : 3.6;
         parts.push(polyline(pts, "#0e0f13", 4.2).replace("<polyline", `<polyline ${clipAttr} opacity="0.6"`));
         parts.push(polyline(pts, ec, 2.2).replace("<polyline", `<polyline ${clipAttr}`));
-        ttmPts.forEach((q, k) => pts[k] && pts[k][1] >= P.y && pts[k][1] <= P.y + P.h && parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${r}" fill="${ec}" stroke="#0e0f13" stroke-width="1"><title>${q.d}: EPS za 4 kwartały ${q.t} (kwartał ${q.e}${Number.isFinite(q.g) ? `, ${q.g >= 0 ? "+" : ""}${q.g}% r/r` : ""})</title></circle>`));
-        const lp = [...pts].reverse().find(Boolean) || [x(ttmPts[ttmPts.length - 1].week), P.y + P.h];
+        ttmAll.forEach((q, k) => inWin(q) && pts[k] && pts[k][1] >= P.y && pts[k][1] <= P.y + P.h && parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${r}" fill="${ec}" stroke="#0e0f13" stroke-width="1"><title>${q.d}: EPS za 4 kwartały ${q.t} (kwartał ${q.e}${Number.isFinite(q.g) ? `, ${q.g >= 0 ? "+" : ""}${q.g}% r/r` : ""})</title></circle>`));
+        const lastAll = ttmAll[ttmAll.length - 1], lpAll = pts[pts.length - 1];
+        const lastIn = lastAll && inWin(lastAll) && lpAll;
+        const lp = lpAll || [x(lastAll.week), P.y + P.h];
         const edge = L.width - L.right;
         let labelX = Math.min(lp[0], edge - 4), anchor = lp[0] > edge - fs(60) ? "end" : "middle";
-        if (nx) {
+        if (nx && lastAll.week < m.n) {   // prognoza tylko gdy okno sięga ostatniego raportu (w starszym oknie przerywana linia przecinałaby wykres bez sensu)
             const nxX = Math.min(x(nxIdx), edge - 6), nxY = yE(nx.t), inside = nxIdx <= m.n - 0.5;
-            parts.push(`<line ${clipAttr} x1="${lp[0]}" y1="${lp[1]}" x2="${nxX}" y2="${nxY}" stroke="${ec}" stroke-width="2.2" stroke-dasharray="4 3"/>`);
-            parts.push(inside
-                ? `<circle cx="${nxX}" cy="${nxY}" r="${r}" fill="#0e0f13" stroke="${ec}" stroke-width="1.8"><title>Prognoza następnego raportu ${nx.d}: EPS ${nx.e}, TTM ${nx.t}</title></circle>`
-                : `<path d="M${nxX - 1},${nxY - 5} L${nxX + 6},${nxY} L${nxX - 1},${nxY + 5} Z" fill="${ec}"><title>Następny raport ${nx.d} (poza oknem): prognoza EPS ${nx.e}, TTM ${nx.t}</title></path>`);
-            addLabel(`prog. ${nx.t}`, Math.min(nxX, edge - 4), Math.max(P.y + fs(10), nxY - fs(8)), { anchor: "end", fill: ec, bold: true, prio: 8 });
+            if (lpAll && Number.isFinite(nxY)) parts.push(`<line ${clipAttr} x1="${lp[0]}" y1="${lp[1]}" x2="${nxX}" y2="${nxY}" stroke="${ec}" stroke-width="2.2" stroke-dasharray="4 3"/>`);
+            if (Number.isFinite(nxY)) {
+                parts.push(inside
+                    ? `<circle cx="${nxX}" cy="${nxY}" r="${r}" fill="#0e0f13" stroke="${ec}" stroke-width="1.8"><title>Prognoza następnego raportu ${nx.d}: EPS ${nx.e}, TTM ${nx.t}</title></circle>`
+                    : `<path d="M${nxX - 1},${nxY - 5} L${nxX + 6},${nxY} L${nxX - 1},${nxY + 5} Z" fill="${ec}"><title>Następny raport ${nx.d} (poza oknem): prognoza EPS ${nx.e}, TTM ${nx.t}</title></path>`);
+                addLabel(`prog. ${nx.t}`, Math.min(nxX, edge - 4), Math.min(P.y + P.h - 4, Math.max(P.y + fs(10), nxY - fs(8))), { anchor: "end", fill: ec, bold: true, prio: 8 });
+            }
             labelX = lp[0]; anchor = "middle";
         }
-        addLabel(`EPS ${ttmPts[ttmPts.length - 1].t}`, labelX, Math.min(P.y + P.h - 3, lp[1] + fs(15)), { anchor, size: fs(11), fill: ec, bold: true, prio: 8 });
+        if (lastIn) addLabel(`EPS ${lastAll.t}`, labelX, Math.min(P.y + P.h - 3, lp[1] + fs(15)), { anchor, size: fs(11), fill: ec, bold: true, prio: 8 });
     }
     // rozmieszczenie wszystkich etykiet ceny bez nakładania (telefon!) — dopiero teraz, gdy znamy wszystkie
     placeLabels(labels, { x0: L.left + 2, x1: L.width - L.right - 2, y0: P.y + 2, y1: P.y + P.h - 2 }, fixedLabels).forEach(lb => {
@@ -817,7 +824,7 @@ function chartSvg(m, opts = {}) {
         m.eps.forEach(q => {
             const cx = x(q.week), g = Number.isFinite(q.g);
             parts.push(arrow(cx, CHART_COLORS.textStrong, "none", `Wyniki ${q.d}: EPS ${q.e}${g ? ` (${q.g >= 0 ? "+" : ""}${q.g}% r/r)` : ""}`));
-            parts.push(txt(cx, marks.y + fs(8) + fs(9) + 4, opts.compact ? `EPS ${q.e}` : "EPS", opts.compact ? CHART_COLORS.textStrong : CHART_COLORS.text, !!opts.compact));
+            parts.push(txt(cx, marks.y + fs(8) + fs(9) + 4, (opts.compact || bookOn) ? `EPS ${q.e}` : "EPS", (opts.compact || bookOn) ? CHART_COLORS.textStrong : CHART_COLORS.text, !!(opts.compact || bookOn)));
             if (g) parts.push(txt(cx, marks.y + fs(8) + fs(9) * 2 + 5, `${q.g >= 0 ? "+" : ""}${q.g}%`, q.g >= 0 ? CHART_COLORS.up : CHART_COLORS.down, true));
         });
         const ni = m.epsNext ? dateToIndex(m.weeks, m.epsNext.d) : -1;
@@ -834,7 +841,7 @@ function chartSvg(m, opts = {}) {
         Number.isFinite(m.rsChangePct) ? `${m.rsChangePct >= 0 ? "+" : ""}${m.rsChangePct.toFixed(0)}% vs S&amp;P w oknie` : null,
         m.rsLine && m.rsLine.state ? `RS ${m.rsLine.state === "przed ceną" ? "na maks. przed ceną" : "na maks. razem z ceną"}` : null].filter(Boolean);
     const otherItems = [`<tspan fill="${CHART_COLORS.bench}">— S&amp;P 500 (u góry)</tspan>`, `<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${rsPart.length ? " · " + rsPart.join(" · ") : ""}</tspan>`];
-    if (ttmPts.length >= 2) otherItems.push(`<tspan fill="${CHART_COLORS.eps}">● ${bookOn ? "20×EPS (4 kw., TTM)" : "EPS (4 kw., TTM)"}${m.epsNext && Number.isFinite(m.epsNext.t) ? " ┄ prognoza" : ""}</tspan>`);
+    if (ttmAll.length >= 2) otherItems.push(`<tspan fill="${CHART_COLORS.eps}">● ${bookOn ? "20×EPS (4 kw., TTM)" : "EPS (4 kw., TTM)"}${m.epsNext && Number.isFinite(m.epsNext.t) ? " ┄ prognoza" : ""}</tspan>`);
     if (m.trend && m.trend.pattern) otherItems.push(`<tspan fill="${CHART_COLORS.res}">▸ ${escapeHtml(m.trend.pattern)}</tspan>`);
     if (m.trend && m.trend.state) {
         const bo = m.trend.breakout;
@@ -859,6 +866,7 @@ function chartSvg(m, opts = {}) {
     }
     volumeSpikes(m.v, m.volAvg, opts.compact ? 2 : 5, 1.5, Math.max(2, Math.round(m.n / (opts.compact ? 8 : 25)))).forEach(sp => {
         const h = (sp.val / vMax) * (L.volume.h - fs(11) - 4);
+        if (!opts.hideLabels && x(sp.i) < L.left + fs(235) && L.volume.h - h - 2 < fs(16)) return;   // nie na podpisie panelu wolumenu
         parts.push(`<text x="${x(sp.i)}" y="${L.volume.y + L.volume.h - h - 2}" font-size="${fs(9)}" fill="${CHART_COLORS.textStrong}" text-anchor="middle" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">${fmtVol(sp.val)}</text>`);
     });
     parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), L.volume.y + L.volume.h - Math.min(1, v / vMax) * (L.volume.h - fs(11) - 4)] : null), CHART_COLORS.volAvg, 1.3));

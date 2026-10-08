@@ -1722,7 +1722,7 @@ function drawChart() {
             compact: layout === "1" ? chartCompact : false, wide: layout === "1" && chartWide,
             hideLabels: layout === "1" && !splitMode && !chartLegendOn,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
-            fit: layout === "1" ? (splitMode ? null : phoneFit(cell)) : cellFit(cell),
+            fit: layout === "1" ? phoneFit(cell) : cellFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
             window: chartWindows[i], windowLen: c.daily ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
@@ -1757,9 +1757,10 @@ function drawChart() {
 // Telefon: okno wykresu to kolumna na cały ekran (nagłówek, paski informacji, odczyt, suwak, wykres, pasek nawigacji), a wykres
 // zajmuje CAŁĄ resztę — układ liczymy w pikselach faktycznie dostępnego miejsca (viewBox = rozmiar na ekranie, bez skalowania 560×800
 // do szerokości ekranu), więc nic nie jest miniaturą ani nie ma pustych pasów. Przeliczane po obrocie / zmianie rozmiaru.
+const SPLIT_SLIDER_PX = 46;   // komputer: rząd suwaka (44 px minimapa + odstępy)
 const PHONE_SLIDER_PX = 30;   // suwak okna czasowego (linia + 2 kulki, 26 px) + odstępy nad wykresem
 let lastPhoneFit = null;
-const phoneSliderPx = () => PHONE_SLIDER_PX;
+const phoneSliderPx = () => (splitMode ? SPLIT_SLIDER_PX : PHONE_SLIDER_PX);
 function phoneFit(cell) {
     const r = cell.querySelector(".cell-body").getBoundingClientRect();
     lastPhoneFit = { w: Math.max(260, Math.round(r.width)), h: Math.max(120, Math.round(r.height - phoneSliderPx())) };
@@ -1960,7 +1961,7 @@ function initChartModal() {
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
             if (!currentChart) return;
-            if (splitMode) { if (effectiveLayout() !== "1") drawChart(); return; }   // siatka: nowy rozmiar komórek
+            if (splitMode && effectiveLayout() !== "1") { drawChart(); return; }   // siatka: nowy rozmiar komórek
             // telefon: przerysuj tylko przy realnej zmianie miejsca na wykres (obrót, klawiatura), nie przy chowaniu paska adresu o kilka px
             const cell = document.querySelector("#chartBody .chart-cell");
             const now = cell ? cell.querySelector(".cell-body").getBoundingClientRect() : null;

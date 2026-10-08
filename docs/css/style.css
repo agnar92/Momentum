@@ -280,7 +280,7 @@ th.tv-col { width: 1%; }
 table.momentum-table tbody tr.row-selected { background: rgba(46, 204, 113, 0.13); box-shadow: inset 3px 0 0 var(--green-bright); }
 .wl-chart-box.full { position: fixed; inset: 0; z-index: 1600; }
 body.split .workspace { display: flex; height: calc(100vh - 48px); }
-body.split .table-drawer { flex: 0 0 430px; width: 430px; min-width: 0; border-right: 1px solid var(--border); }
+body.split .table-drawer { flex: 0 0 clamp(548px, 31vw, 680px); width: clamp(548px, 31vw, 680px); min-width: 0; border-right: 1px solid var(--border); }
 body.split .drawer-header { flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 10px; }
 body.split .drawer-header-title h2 { font-size: 13px; }
 body.split .drawer-tabs { flex-wrap: wrap; overflow-x: visible; }
@@ -907,3 +907,16 @@ body:not(.split) .wl-chart-box .wl-range-win { min-width: 30px; }
 body:not(.split) .wl-chart-box .wl-range-win::before { height: 8px; margin-top: -4px; border-radius: 4px; }
 .chart-grid:not(.layout-1) .wl-zoom-strip { display: none; }
 @media (max-height: 520px) { .wl-zoom-strip { height: 26px; min-width: 72px; } }
+
+/* ---------- komputer (widok dzielony): jeden wykres wypełnia cały panel obok listy (układ w pikselach, patrz phoneFit / SPLIT_SLIDER_PX) ---------- */
+body.split .wl-chart-box { display: flex; flex-direction: column; overflow: hidden; }
+body.split .wl-chart-box > * { flex: 0 0 auto; }
+body.split .wl-chart-box > .wl-chart-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+body.split .chart-grid.layout-1 { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+body.split .chart-grid.layout-1 .chart-cell { flex: 1 1 auto; min-height: 0; }
+body.split .chart-grid.layout-1 .cell-readout { font-size: 11px; min-height: 15px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.split .chart-grid.layout-1 .cell-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+body.split .chart-grid.layout-1 .cell-body > #chartPlot { flex: 1 1 auto; min-height: 0; }
+body.split .chart-grid.layout-1 svg#chartSvg { width: 100%; height: 100%; max-height: none; }
+body.split .chart-grid.layout-1 .wl-range { height: 34px; margin: 2px 0 6px; }
+body.split table.momentum-table td, body.split table.momentum-table thead th { padding-left: 5px; padding-right: 5px; }

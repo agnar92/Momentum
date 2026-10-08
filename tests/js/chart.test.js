@@ -602,3 +602,18 @@ test("zoomWindow: płynny zoom zachowuje punkt kotwiczenia i granice", () => {
     const edge = zoomWindow({ n: 100, end: 312 }, 0.5, 1, 312);   // kotwica na prawym brzegu: koniec zostaje
     assert.equal(edge.end, 312);
 });
+
+test("sliceModel: linia EPS zachowuje raporty spoza okna (nie znika po zmianie suwaka)", () => {
+    const { sliceModel } = require("../../docs/js/chart.js");
+    const eps = [{ week: 5, t: 1 }, { week: 40, t: 2 }, { week: 90, t: 3 }];
+    const m = { n: 100, weeks: Array.from({ length: 100 }, (_, i) => String(i)), o: [], h: [], l: [], c: [], v: [], smas: [], spx: null, rs: [], eps, lines: [], cups: [], rsNewHigh: [], pxNewHigh: null, volAvg: [], book: null, lastIdx: 99, pole: null };
+    const arr = new Array(100).fill(1);
+    Object.assign(m, { o: arr, h: arr, l: arr, c: arr, v: arr, rs: arr, rsNewHigh: arr, volAvg: arr });
+    const s = sliceModel(m, 20, 60);   // okno [40, 60): w środku tylko raport z tygodnia 40
+    assert.equal(s.eps.length, 1);
+    assert.equal(s.epsLine.length, 3);   // ale linia zna wszystkie raporty (z przesuniętymi tygodniami)
+    assert.deepEqual(s.epsLine.map(q => q.week), [-35, 0, 50]);
+    const s2 = sliceModel(m, 20, 30);   // okno [10, 30): żaden raport w środku, linia nadal ma 3 punkty
+    assert.equal(s2.eps.length, 0);
+    assert.equal(s2.epsLine.length, 3);
+});
