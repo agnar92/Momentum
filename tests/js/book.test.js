@@ -144,27 +144,43 @@ test("computeBook: odbicie po korekcie rynku — pierwsze zamknięcie nad 10-tyg
     assert.ok(rb.length >= 1);
 });
 
-function addSeries(pauseWeeks, step = 0.5) {
-    // trend + dwie przerwy: pierwsza 6-tygodniowa (daje „Kup”), druga o długości pauseWeeks, potem wybicie na wolumenie
+function addSeries(pauseWeeks, step = 0.5, lead = 1, kupVol = 3000) {
+    // trend + 6-tygodniowa płaska baza (daje „Kup”), potem `lead` tygodni wzrostu i pauza pauseWeeks tygodni, potem wybicie na wolumenie
     const c = [], v = [];
     let p = 10;
-    const seg = (len, step, vol) => { for (let k = 0; k < len; k++) { p += step + (k % 2 ? 0.05 : -0.05); c.push(p); v.push(vol); } };
-    seg(30, step, 1000); seg(6, 0, 700); seg(1, 1.5, 3000); seg(14, step, 1000); seg(pauseWeeks, 0, 700); seg(1, 1.5, 3000); seg(6, step, 1000);
+    const seg = (len, st, vol) => { for (let k = 0; k < len; k++) { p += st + (k % 2 ? 0.05 : -0.05); c.push(p); v.push(vol); } };
+    seg(40, step, 1000); seg(6, 0, 700); seg(1, 1.5, kupVol); seg(lead, step, 1000); seg(pauseWeeks, 0, 700); seg(1, 1.5, 3000); seg(6, step, 1000);
     const h = c.map(x => x + 0.1), l = c.map(x => x - 0.1), n = c.length;
     return { n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases: [] };
 }
 
-test("computeBook: „Dokup” = wybicie z bazy ≥ 4 tygodni po wcześniejszym „Kup” (jak „Add” w książce)", () => {
-    const b = computeBook(addSeries(5));
+test("computeBook: „Kup” z płaskiej bazy ≥ 5 tygodni na wolumenie ≥ 1,4× (kryteria z książki) i numer etapu", () => {
+    const b = computeBook(addSeries(2, 1.0, 12));
+    assert.ok(b.buys.length >= 1);
+    assert.equal(b.buys[0].stage, 1);
+    assert.equal(b.buys[0].src, "flat");
+    assert.ok(b.brackets.some(x => /flat base/.test(x.label)));
+});
+
+test("computeBook: wybicie na słabym wolumenie (< 1,4× średniej) nie jest „Kup”", () => {
+    const b = computeBook(addSeries(2, 1.0, 12, 1000));
+    assert.equal(b.buys.filter(x => x.i < 52).length, 0);
+});
+
+test("computeBook: „Dokup” = wybicie z bazy 4 tygodnie po wcześniejszym „Kup” (jak „Add” w książce)", () => {
+    const b = computeBook(addSeries(4, 0.5, 1));
     assert.ok(b.buys.length >= 1);
     assert.ok(b.adds.length >= 1);
     assert.ok(b.adds.every(a => a.i > b.buys[0].i));
 });
 
-test("computeBook: krótka pauza (2 tygodnie) nie daje „Dokup”", () => {
-    const b = computeBook(addSeries(2, 1.0));
-    assert.equal(b.adds.length, 0);
+test("computeBook: „Dokup” tylko po wcześniejszym „Kup” — bez niego (słaby wolumen pierwszego wybicia) nic nie dokładamy", () => {
+    const b = computeBook(addSeries(4, 0.5, 1, 1000));
+    assert.equal(b.buys.filter(x => x.i < 52).length, 0);
+    assert.equal(b.adds.filter(a => a.i < b.buys[0].i + 5).length, 0);   // nie tydzień po „Kup”: mała baza musi powstać już po kupnie
 });
+
+
 
 test("computeBook: „Dokup” po odbiciu od 10-tygodniowej tylko po „Kup” z patternu", () => {
     const n = 70, c = [], h = [], l = [], v = [];
@@ -176,4 +192,15 @@ test("computeBook: „Dokup” po odbiciu od 10-tygodniowej tylko po „Kup” z
     const b = computeBook(mk([]));
     const first = b.buys.length ? b.buys[0].i : Infinity;
     assert.ok(b.adds.every(a => a.i > first));   // żaden Dokup przed pierwszym „Kup”
+});
+
+test("computeBook: reguła 8 tygodni — +20 % w ≤ 3 tygodnie od „Kup” daje nawias trzymania (F)", () => {
+    const fast = computeBook(addSeries(2, 1.0, 12));            // po wybiciu cena skacze o +1,5 / tydz. (≈ +3 %) — za wolno
+    assert.equal(fast.holds.length, 0);
+    const m = addSeries(2, 1.0, 12);
+    const k = computeBook(m).buys[0];
+    for (let j = k.i + 1; j <= k.i + 2 && j < m.n; j++) { m.c[j] = k.pivot * 1.25; m.h[j] = m.c[j] + 0.1; m.l[j] = m.c[j] - 0.1; }
+    const withHold = computeBook(m);
+    assert.ok(withHold.holds.length >= 1);
+    assert.equal(withHold.holds[0].i1 - withHold.holds[0].i0 <= 8, true);
 });

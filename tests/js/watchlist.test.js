@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, mergeProfiles, tabUniverse, chartsForTicker,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -621,4 +621,24 @@ test("positionSize: akcje ułamkowe (w dół do 0,01) i ich formatowanie", () =>
     assert.equal(fmtShares(0.62), "0,62");
     assert.equal(fmtShares(12), "12");
     assert.equal(fmtShares(3.5), "3,5");
+});
+
+test("stopRuleCheck: stop do 8 % pod ceną zakupu jest OK, głębszy łamie regułę O'Neila (F)", () => {
+    assert.equal(stopRuleCheck(100, 92).ok, true);
+    assert.equal(stopRuleCheck(100, 93).ok, true);
+    assert.equal(stopRuleCheck(100, 91).ok, false);
+    assert.ok(Math.abs(stopRuleCheck(100, 91).loss_pct - 9) < 1e-9);
+    assert.equal(stopRuleCheck(100, 105), null);
+    assert.equal(stopRuleCheck(null, 90), null);
+});
+
+test("baseBoxData: pokazuje wzrost przed bazą, strefę kupna, stop −8 %, status i powody odrzucenia", () => {
+    const d = baseBoxData({ base_type: "correction", base_prior_uptrend_pct: 45, base_buy_zone_max: 105, base_stop_8pct: 92, base_status: "FAULTY_REJECTED", base_rejection: "cup z wadą rączki; rączka rośnie wzdłuż dołków (wedging handle)", pivot: 100 });
+    const rows = Object.fromEntries(d.rows);
+    assert.equal(rows["Wzrost przed bazą"], "+45%");
+    assert.match(rows["Odrzucona"], /wedging/);
+    assert.match(rows["Status"], /ODRZUCONA/);
+    const ok = Object.fromEntries(baseBoxData({ base_type: "cup", base_buy_zone_max: 105, base_stop_8pct: 92, base_status: "WATCHLIST", pivot: 100 }).rows);
+    assert.match(ok["Strefa kupna do"], /105/);
+    assert.match(ok["Stop −8% od pivotu"], /92/);
 });

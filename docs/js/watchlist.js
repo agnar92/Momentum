@@ -35,7 +35,7 @@ const FAVS_KEY = "momentum_watchlist_favs";
 const SCORES_KEY = "momentum_watchlist_scores";            // własny score spółek wpisywany ręcznie {ticker: liczba}
 const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
-const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", correction: "Korekta", deep: "Głęboka korekta" };
+const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", square_box: "Square box", ipo: "Baza po debiucie (IPO)", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
     tab: "LIST", csMin: 5, csCore: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
@@ -180,6 +180,14 @@ function baseRows(stocks, params) {
 }
 
 // ---------- pozycje ----------
+// F: sztywny stop — maksymalna strata 7–8 % poniżej ceny zakupu (O'Neil, bez wyjątków). Zwraca {loss_pct, ok} albo null.
+const STOP_LOSS_MAX_PCT = 8;
+function stopRuleCheck(entry, stop) {
+    if (!(entry > 0) || !(stop > 0) || stop >= entry) return null;
+    const loss = (entry - stop) / entry * 100;
+    return { loss_pct: loss, ok: loss <= STOP_LOSS_MAX_PCT + 1e-9 };
+}
+
 // Wielkość pozycji dla konta w PLN (IKE): kapitał PLN ÷ kurs USD/PLN = kapitał w USD. Liczba akcji = mniejsza z dwóch: z % konta na pozycję
 // (kapitał · posPct% / wejście) i z ryzyka do stopu (kapitał · riskPct% / (wejście − stop)) — dzięki temu strata przy stopie nigdy nie przekracza
 // zadanego ryzyka, a pozycja nie przekracza zadanego % konta. Wystarczy jedno z dwóch (posPct albo riskPct); null, gdy dane nie mają sensu.
@@ -258,7 +266,7 @@ function positionTotals(rows, capital, fx) {
 // Wybicie wg O'Neila = ZAMKNIĘCIE (dzienne albo tygodniowe) nad linią / pivotem na podwyższonym wolumenie (≥ 1,5× średniej). Samo przebicie
 // maksimum w trakcie świecy to nie wybicie, a zamknięcie nad poziomem bez wolumenu jest tylko „niepotwierdzone” (nie trafia do rank 0).
 const BRK_VOL_MULT = 1.5;
-const BUYABLE_BASES = ["flat", "cup", "double_bottom", "ascending", "htf"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
+const BUYABLE_BASES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
 function breakoutInfo(s, alert, maxDist) {
     const reasons = [];
     const dists = [];
@@ -430,7 +438,8 @@ function actionInfo(s, mkt, tf = "W") {
         if (num(above50) && above50 < 0) return mk("EXIT", `Cena ${Math.abs(above50).toFixed(1)}% pod ${ma}. Zejście pod tę średnią (zwłaszcza na wolumenie) to sygnał słabości — rozważ wyjście lub zacieśnij stop.`);
         if (p.pl_pct < 0) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Pilnuj stopa. Nigdy nie dokupuj do straty (nie uśredniaj w dół).`);
         if (regime === "correction" || pressure) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Rynek pod presją — nie dokupuj, pilnuj stopa.`);
-        if (p.pl_pct >= 2 && p.pl_pct <= 5) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)} (add-on: 2–5 % nad zakupem). Możesz dokupić do ½ początkowej pozycji, jeśli wolumen to potwierdza; łączne ryzyko trzymaj w limicie.`);
+        if (num(s.pct_to_pivot) && s.pct_to_pivot < -5) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Cena ponad 5 % nad pivotem — nie dokupuj (reguła +5 %), pilnuj stopa.`);
+        if (p.pl_pct >= 2 && p.pl_pct <= 5) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)} (pierwszy add-on: 2–3 % nad zakupem, najwyżej 5 %). Dokup do ½ początkowej pozycji, jeśli wolumen to potwierdza; każdy kolejny add mniejszy od poprzedniego; łączne ryzyko w limicie.`);
         if (p.pl_pct > 5 && num(above50) && above50 >= 0 && above50 <= 6) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)}, a cena wróciła do ${ma} (+${above50.toFixed(1)}%). Odbicie od tej średniej to klasyczne miejsce na dokupienie — zaczekaj na zamknięcie nad poprzednią świecą.`);
         return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Trzymaj. Kolejny add: cofnięcie do ${ma} z odbiciem albo wybicie NOWEJ bazy / flagi. Nie dokupuj, gdy cena jest rozciągnięta.`);
     }
@@ -598,6 +607,8 @@ function ratingChipsHtml(s) {
 }
 
 // Ramka formacji jak „Cup with Handle / Flat Base” w MarketSurge: typ, pivot, długość, głębokość, rączka, VCP. "" bez otwartej bazy.
+const BASE_STATUS_PL = { WATCHLIST: "WATCHLIST — pod pivotem", VALID_BREAKOUT: "WYBICIE potwierdzone", EXTENDED: "ROZCIĄGNIĘTA (> +5 % nad pivotem)", FAULTY_REJECTED: "ODRZUCONA wg reguł" };
+
 function baseBoxData(s) {
     if (!s.base_type) return null;
     const rows = [["Pivot", Number.isFinite(s.pivot) ? money(s.pivot) : "—"]];
@@ -605,11 +616,17 @@ function baseBoxData(s) {
     if (Number.isFinite(s.base_depth_pct)) rows.push(["Głębokość", `${s.base_depth_pct}%`]);
     if (s.base_type === "cup") rows.push(["Rączka", s.base_handle ? "tak" : "brak"]);
     if (s.vcp) rows.push(["VCP", "tak"]);
+    if (Number.isFinite(s.base_prior_uptrend_pct)) rows.push(["Wzrost przed bazą", `+${s.base_prior_uptrend_pct}%${s.base_prior_uptrend_pct >= 30 ? "" : " (< 30%)"}`]);
+    if (s.base_rs_prior_up === true || s.base_rs_prior_up === false) rows.push(["Linia RS przed bazą", s.base_rs_prior_up ? "rosła" : "nie rosła"]);
+    if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.base_buy_zone_max)) rows.push(["Strefa kupna do", `${money(s.base_buy_zone_max)} (pivot +5%)`]);
+    if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.base_stop_8pct)) rows.push(["Stop −8% od pivotu", money(s.base_stop_8pct)]);
+    if (s.base_status) rows.push(["Status", BASE_STATUS_PL[s.base_status] || s.base_status]);
+    if (s.base_rejection) rows.push(["Odrzucona", s.base_rejection]);
     if (s.base_on_base) rows.push(["Etap", `baza na bazie (${s.base_stage}. etap)`]);
     if (!BUYABLE_BASES.includes(s.base_type)) rows.push(["Uwaga", "korekta, nie baza do zakupu"]);
     if (Number.isFinite(s.base_mkt_dd_pct) && s.base_mkt_dd_pct >= 7) rows.push(["S&P w bazie", `−${s.base_mkt_dd_pct}%`]);
     if (Number.isFinite(s.pct_to_pivot)) rows.push([s.pct_to_pivot >= 0 ? "Do pivotu" : "Nad pivotem", `${s.pct_to_pivot >= 0 ? "+" : ""}${Math.abs(s.pct_to_pivot)}%`.replace("+-", "")]);
-    return { title: `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""}${s.base_on_base ? " · baza na bazie" : ""}`, rows };
+    return { title: `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : s.base_type === "cup" ? " bez rączki" : ""}${s.base_on_base ? " · baza na bazie" : ""}`, rows };
 }
 
 function baseBoxHtml(s) {
@@ -746,7 +763,7 @@ function earningsCell(s) {
 
 function baseSummary(s) {
     if (!s.base_type) return "—";
-    return `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : ""} −${s.base_depth_pct}% · ${s.base_weeks} tyg.${s.vcp ? " · VCP" : ""}${s.base_on_base ? " · baza na bazie" : ""}${s.base_mkt_dd_pct >= 7 ? ` · S&P −${s.base_mkt_dd_pct}%` : ""}`;
+    return `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.base_type === "cup" && s.base_handle ? " z rączką" : s.base_type === "cup" ? " bez rączki" : ""} −${s.base_depth_pct}% · ${s.base_weeks} tyg.${s.vcp ? " · VCP" : ""}${s.base_on_base ? " · baza na bazie" : ""}${s.base_mkt_dd_pct >= 7 ? ` · S&P −${s.base_mkt_dd_pct}%` : ""}`;
 }
 
 // Kolumny: [nagłówek, klucz sortowania (null = nie sortuje), funkcja komórki, opcjonalny tytuł nagłówka].
@@ -1308,6 +1325,8 @@ function openPositionSheet(ticker) {
         const parts = [];
         if (entry && stopV && stopV < entry) parts.push(`Ryzyko na akcję: ${money(entry - stopV)} (${((entry - stopV) / entry * 100).toFixed(1)}% od wejścia)`);
         else if (entry && stopV) parts.push("Stop musi być poniżej wejścia.");
+        const rule = stopRuleCheck(entry, stopV);
+        if (rule && !rule.ok) parts.push(`⚠ Stop ${rule.loss_pct.toFixed(1)}% pod ceną zakupu — reguła O'Neila: maksymalna strata 7–8 %, bez wyjątków (kliknij −7 % albo −8 %).`);
         if (size) {
             parts.push(`Sugerowane: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${money0(size.value_usd)}, ${size.pct_of_capital.toFixed(1)}% konta)`
                 + (size.risk_pln !== null ? `<br>Strata przy stopie: <b>${pln0(size.risk_pln)}</b> (${size.risk_pct.toFixed(2)}% konta)` : "")
@@ -2057,7 +2076,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
