@@ -438,7 +438,8 @@ function actionInfo(s, mkt, tf = "W") {
         if (num(above50) && above50 < 0) return mk("EXIT", `Cena ${Math.abs(above50).toFixed(1)}% pod ${ma}. Zejście pod tę średnią (zwłaszcza na wolumenie) to sygnał słabości — rozważ wyjście lub zacieśnij stop.`);
         if (p.pl_pct < 0) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Pilnuj stopa. Nigdy nie dokupuj do straty (nie uśredniaj w dół).`);
         if (regime === "correction" || pressure) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Rynek pod presją — nie dokupuj, pilnuj stopa.`);
-        if (p.pl_pct >= 2 && p.pl_pct <= 5) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)} (add-on: 2–5 % nad zakupem). Możesz dokupić do ½ początkowej pozycji, jeśli wolumen to potwierdza; łączne ryzyko trzymaj w limicie.`);
+        if (num(s.pct_to_pivot) && s.pct_to_pivot < -5) return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Cena ponad 5 % nad pivotem — nie dokupuj (reguła +5 %), pilnuj stopa.`);
+        if (p.pl_pct >= 2 && p.pl_pct <= 5) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)} (pierwszy add-on: 2–3 % nad zakupem, najwyżej 5 %). Dokup do ½ początkowej pozycji, jeśli wolumen to potwierdza; każdy kolejny add mniejszy od poprzedniego; łączne ryzyko w limicie.`);
         if (p.pl_pct > 5 && num(above50) && above50 >= 0 && above50 <= 6) return mk("ADD", `Zysk ${fmtPct(p.pl_pct)}, a cena wróciła do ${ma} (+${above50.toFixed(1)}%). Odbicie od tej średniej to klasyczne miejsce na dokupienie — zaczekaj na zamknięcie nad poprzednią świecą.`);
         return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Trzymaj. Kolejny add: cofnięcie do ${ma} z odbiciem albo wybicie NOWEJ bazy / flagi. Nie dokupuj, gdy cena jest rozciągnięta.`);
     }

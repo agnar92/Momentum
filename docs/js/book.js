@@ -223,7 +223,7 @@ function computeBook(m, splits = []) {
     let lastAdd = -99;
     book.addCands.forEach(cd => {
         const prev = book.buys.filter(x => x.i < cd.i).pop();
-        if (!prev || cd.i - prev.i > BOOK_ADD_AFTER_BUY || cd.i - prev.i <= BOOK_ADD_MIN_WEEKS || cd.i - lastAdd < BOOK_ADD_GAP || book.buys.some(x => x.i === cd.i)) return;
+        if (!prev || cd.i - prev.i > BOOK_ADD_AFTER_BUY || cd.i - prev.i <= BOOK_ADD_MIN_WEEKS || cd.i - lastAdd < BOOK_ADD_GAP || !(l[cd.i] <= cd.pivot * BOOK_BUY_MAX_EXT) || book.buys.some(x => x.i === cd.i)) return;
         book.adds.push({ i: cd.i, label: "Dokup" }); lastAdd = cd.i;
     });
     // „Dokup” po odbiciu od 10-tygodniowej (jak „Add: bounces off 10-week moving average line on volume” w książce): trend wzrostowy (40-tygodniowa rośnie, 10 > 40,
