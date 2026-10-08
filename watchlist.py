@@ -1701,10 +1701,51 @@ def _is_num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
-def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim"):
+RAW_DIR = ROOT / "raw"       # migawka pobranych danych (Finviz, ceny, kurs) — krok „pobierz” zapisuje, krok „policz” czyta; poza gitem (workflow trzyma ją w gałęzi raw-data)
+RAW_VERSION = 1
+
+
+def raw_path(profile, raw_dir=None):
+    return Path(raw_dir or RAW_DIR) / f"{profile}.pkl.gz"
+
+
+def save_raw(raw, profile, raw_dir=None):
+    """Zapisuje migawkę pobranych danych (słownik z DataFrame'ami; pickle zachowuje też df.attrs[\"splits\"])."""
+    import gzip
+    import pickle
+    path = raw_path(profile, raw_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with gzip.open(path, "wb", compresslevel=6) as f:
+        pickle.dump({"version": RAW_VERSION, **raw}, f, protocol=pickle.HIGHEST_PROTOCOL)
+    return path
+
+
+def load_raw(profile, raw_dir=None):
+    """Wczytuje migawkę; None, gdy jej nie ma albo ma inną wersję. Plik pochodzi z własnego repozytorium (workflow zapisuje go sam)."""
+    import gzip
+    import pickle
+    path = raw_path(profile, raw_dir)
+    try:
+        with gzip.open(path, "rb") as f:
+            raw = pickle.load(f)
+    except (FileNotFoundError, EOFError, OSError, pickle.UnpicklingError):
+        return None
+    return raw if isinstance(raw, dict) and raw.get("version") == RAW_VERSION else None
+
+
+def _read_json(path, default):
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (FileNotFoundError, ValueError):
+        return default
+
+
+def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim", stage="all", raw_dir=None):
     """profile 'canslim' (domyślny, codzienny): filtr CANSLIM z finviz_screen.json, EPS, estymaty, wykresy wszystkich spółek.
     profile 'qm' (ręczny): szeroki filtr z finviz_screen_qm.json, bez EPS i estymat, lista przycięta do płynnych spółek,
-    wykresy tylko dla spółek z top X % ceny/minimum -> watchlist_qm.json + charts_qm.json."""
+    wykresy tylko dla spółek z top X % ceny/minimum -> watchlist_qm.json + charts_qm.json.
+    stage: "all" (pobierz i policz — jak dotąd), "fetch" (tylko pobranie: Finviz, ceny, kurs, EPS, estymaty -> migawka w raw_dir),
+    "compute" (tylko obliczenia z zapisanej migawki, bez sieci)."""
     qm = profile == "qm"
     output_path = output_path or (QM_OUTPUT_PATH if qm else OUTPUT_PATH)
     if qm:
@@ -1715,8 +1756,18 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
     eps_cache_path = eps_cache_path or Path(output_path).parent / "eps_cache.json"
     previous = load_previous(output_path)
     finviz_rows, finviz_total, finviz_stale = [], None, False
+    frames, benchmark_df, nasdaq_df, fx, now_utc = None, None, None, None, None
+    if stage == "compute":
+        raw = load_raw(profile, raw_dir)
+        if raw is None:
+            print(f"❌ Brak migawki danych ({raw_path(profile, raw_dir)}) — najpierw krok pobierania (--fetch-only).")
+            return 1
+        finviz_rows, finviz_total, finviz_stale = raw["finviz_rows"], raw.get("finviz_total"), raw.get("finviz_stale", False)
+        frames, benchmark_df, nasdaq_df, fx = raw["frames"], raw.get("benchmark"), raw.get("nasdaq"), raw.get("fx")
+        now_utc = pd.Timestamp(raw["fetched_at"])        # „teraz” z chwili pobrania: wynik nie zależy od godziny liczenia
+        print(f"ℹ️  Liczę z migawki z {raw['fetched_at']} ({len(frames)} spółek) — bez pobierania.")
 
-    if not skip_finviz:
+    if stage != "compute" and not skip_finviz:
         try:
             finviz_rows, finviz_total = finviz.fetch_watchlist(cfg["filters"], max_tickers)   # oba skanery pobierają wszystkie widoki (fundamenty, wycena, analitycy)
         except Exception as e:
@@ -1724,45 +1775,65 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         if len(finviz_rows) < finviz.MIN_TICKERS:
             print(f"⚠️  Finviz zwrócił {len(finviz_rows)} spółek (<{finviz.MIN_TICKERS}) — wygląda na blokadę/zmianę strony.")
             finviz_rows = []
-    if not finviz_rows:
+    if stage != "compute" and not finviz_rows:
         if previous is None:
             print("❌ Brak listy z Finviz i brak poprzedniego watchlist.json — nie ma co liczyć.")
             return 1
         print("ℹ️  Używam listy spółek (i danych Finviz) z poprzedniego watchlist.json.")
         finviz_rows = [{k: v for k, v in s.items() if k == "ticker" or k in FINVIZ_KEYS} for s in previous["stocks"]]
         finviz_total, finviz_stale = previous.get("finviz_total"), True
-    else:
+    elif stage != "compute":
         print(f"✅ Finviz: {len(finviz_rows)} spółek (filtry: {cfg['filters']}).")
 
     tickers = [r["ticker"] for r in finviz_rows]
-    frames = download_prices(tickers)
+    if stage != "compute":
+        frames = download_prices(tickers)
     coverage = len(frames) / len(tickers) if tickers else 0
     print(f"ℹ️  Ceny dla {len(frames)}/{len(tickers)} spółek ({coverage:.0%}).")
     if coverage < MIN_COVERAGE:
         print(f"❌ Pokrycie cen poniżej {MIN_COVERAGE:.0%} — przerywam bez zapisu (zostaje poprzedni plik).")
         return 1
 
+    if stage != "compute":
+        try:
+            bench_frames = download_prices([BENCHMARK])
+            benchmark_df = bench_frames.get(BENCHMARK)
+        except Exception as e:
+            print(f"⚠️  Benchmark {BENCHMARK} niedostępny ({e}) — wykresy bez linii S&P 500.")
+            benchmark_df = None
+        try:
+            nasdaq_df = download_prices([NASDAQ]).get(NASDAQ)
+        except Exception as e:
+            print(f"⚠️  {NASDAQ} niedostępny ({e}) — ocena rynku tylko z S&P 500.")
+            nasdaq_df = None
+    if stage == "fetch":
+        # tylko pobranie: kurs, EPS i estymaty (sieć) oraz migawka cen / listy z Finviz do późniejszego liczenia
+        fx = fetch_usdpln() or (previous or {}).get("fx")
+        have = [t for t in tickers if t in frames]
+        try:
+            update_eps_cache(have, eps_cache_path)
+        except Exception as e:
+            print(f"⚠️  Krok EPS pominięty ({e}).")
+        try:
+            update_estimates(have, Path(output_path).parent / "estimates.json")
+        except Exception as e:
+            print(f"⚠️  Krok estymat analityków pominięty ({e}).")
+        path = save_raw({"profile": profile, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
+                         "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
+                         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, profile, raw_dir)
+        print(f"💾 Zapisano migawkę {path} ({len(frames)} spółek, {path.stat().st_size / 1e6:.1f} MB). Obliczenia: python watchlist.py --compute-only"
+              + (" --profile qm" if qm else ""))
+        return 0
     try:
-        bench_frames = download_prices([BENCHMARK])
-        benchmark_df = bench_frames.get(BENCHMARK)
-    except Exception as e:
-        print(f"⚠️  Benchmark {BENCHMARK} niedostępny ({e}) — wykresy bez linii S&P 500.")
-        benchmark_df = None
-    try:
-        nasdaq_df = download_prices([NASDAQ]).get(NASDAQ)
-    except Exception as e:
-        print(f"⚠️  {NASDAQ} niedostępny ({e}) — ocena rynku tylko z S&P 500.")
-        nasdaq_df = None
-    try:
-        market = market_state(drop_incomplete_bar(benchmark_df, None) if benchmark_df is not None and len(benchmark_df) else None,
-                              drop_incomplete_bar(nasdaq_df, None) if nasdaq_df is not None and len(nasdaq_df) else None)
+        market = market_state(drop_incomplete_bar(benchmark_df, now_utc) if benchmark_df is not None and len(benchmark_df) else None,
+                              drop_incomplete_bar(nasdaq_df, now_utc) if nasdaq_df is not None and len(nasdaq_df) else None)
     except Exception as e:
         print(f"⚠️  Ocena rynku pominięta ({e}).")
         market = None
     rs_universe_path = Path(output_path).parent / "rs_universe.json"
     # qm --skip-finviz (tylko ceny): lista jest przycięta do płynnych spółek, więc rozkładu RS nie nadpisujemy — używamy zapisanego
-    rs_universe = load_rs_universe(rs_universe_path) if (not qm or skip_finviz) else None
-    stocks = build_stocks(finviz_rows, frames, bench_df=benchmark_df, rs_universe=(rs_universe or {}).get("scores"))
+    rs_universe = load_rs_universe(rs_universe_path) if (not qm or skip_finviz) else None   # compute: lista z migawki jest pełna jak po pobraniu z Finviz
+    stocks = build_stocks(finviz_rows, frames, now_utc, bench_df=benchmark_df, rs_universe=(rs_universe or {}).get("scores"))
     if qm and not skip_finviz:
         # Lista Qullamaggiego (płynne, zmienne spółki nad SMA20/50/200) = rozkład odniesienia RS: jej rozkład rs_score służy codziennemu profilowi CANSLIM do liczenia RS Rating.
         scores = sorted(round(float(s["rs_score"]), 4) for s in stocks if s.get("rs_score") is not None)
@@ -1789,21 +1860,26 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         top = cfg.get("charts_top_pct", 100)
         qm_selected = stocks if top >= 100 else qullamaggie_select(stocks, min_dv, min_adr, top)
         print(f"ℹ️  Szeroki skaner: {len(stocks)}/{n_all} spółek zapisanych, wykresy dla {len(qm_selected)}.")
-    try:
-        eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
-    except Exception as e:
-        print(f"⚠️  Krok EPS pominięty ({e}).")
-        eps_cache = {}
+    if stage == "compute":   # EPS i estymaty odświeża krok pobierania; tu tylko czytamy zapisane pliki
+        eps_cache = _read_json(eps_cache_path, {})
+        estimates = _read_json(Path(output_path).parent / "estimates.json", {}).get("stocks", {})
+    else:
+        try:
+            eps_cache = update_eps_cache([s["ticker"] for s in stocks], eps_cache_path)
+        except Exception as e:
+            print(f"⚠️  Krok EPS pominięty ({e}).")
+            eps_cache = {}
     add_eps_rating(stocks, eps_cache)
-    try:
-        estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
-    except Exception as e:
-        print(f"⚠️  Krok estymat analityków pominięty ({e}).")
-        estimates = {}
+    if stage != "compute":
+        try:
+            estimates = update_estimates([s["ticker"] for s in stocks], Path(output_path).parent / "estimates.json")
+        except Exception as e:
+            print(f"⚠️  Krok estymat analityków pominięty ({e}).")
+            estimates = {}
     for st in stocks:
         st.update(estimate_fields(estimates.get(st["ticker"]), st.get("price")))
     chart_tickers = [s["ticker"] for s in (qm_selected if qm else stocks)]
-    charts = build_charts(chart_tickers, frames, benchmark_df, eps_cache)
+    charts = build_charts(chart_tickers, frames, benchmark_df, eps_cache, now_utc)
     for st in stocks:
         summary = ((charts or {}).get("stocks", {}).get(st["ticker"]) or {}).get("rs_line") or {}
         st["rs_line_state"] = summary.get("state")
@@ -1818,7 +1894,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         "profile": profile,
         "rs_basis": rs_basis,
         "market": market,
-        "fx": fetch_usdpln() or (previous or {}).get("fx"),
+        "fx": (fx if stage == "compute" else fetch_usdpln()) or (previous or {}).get("fx"),
         "stocks": stocks,
     }
     out = Path(output_path)
@@ -1839,10 +1915,17 @@ def main(argv=None):
                         help="Nie pytaj Finviz — użyj listy spółek z poprzedniego watchlist.json (tylko odśwież ceny).")
     parser.add_argument("--max-tickers", type=int, default=None, help="Limit liczby spółek (domyślnie z finviz_screen.json).")
     parser.add_argument("--output", type=str, default=None, help="Plik wyjściowy (domyślnie watchlist.json albo watchlist_qm.json dla --profile qm).")
+    stage_group = parser.add_mutually_exclusive_group()
+    stage_group.add_argument("--fetch-only", action="store_true",
+                             help="Tylko pobranie danych (Finviz, ceny, kurs, EPS, estymaty) -> migawka w --raw-dir; bez obliczeń i zapisu docs/data/*.json.")
+    stage_group.add_argument("--compute-only", action="store_true",
+                             help="Tylko obliczenia z zapisanej migawki (bez sieci) -> watchlist.json / charts.json.")
+    parser.add_argument("--raw-dir", type=str, default=None, help="Katalog migawki danych (domyślnie raw/ w repozytorium, poza gitem).")
     parser.add_argument("--profile", choices=("canslim", "qm"), default="canslim",
                         help="canslim = codzienna lista CANSLIM (domyślnie); qm = lista Qullamaggiego (w codziennym workflow przed CANSLIM).")
     args = parser.parse_args(argv)
-    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile)
+    stage = "fetch" if args.fetch_only else "compute" if args.compute_only else "all"
+    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile, stage=stage, raw_dir=args.raw_dir)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,97 @@
+name: Recompute Watchlist
+
+# Same OBLICZENIA, bez pobierania danych: liczy watchlist.json / watchlist_qm.json / charts*.json z ostatniej migawki
+# (gałąź raw-data, zapisywana przez "Daily Watchlist Refresh"), z bieżącym kodem w main. Użyteczne po zmianie reguł w watchlist.py
+# (wykrywanie baz, rankingi, wykresy) — bez Finviz, yfinance i czekania na EPS / estymaty.
+#
+# Ręczne odpalenie: zakładka Actions -> "Recompute Watchlist" -> "Run workflow". Lokalnie:
+#   python watchlist.py --fetch-only            # raz: pobranie do raw/
+#   python watchlist.py --compute-only          # dowolnie wiele razy
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  recompute:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Checkout raw snapshot (branch raw-data)
+        uses: actions/checkout@v4
+        with:
+          ref: raw-data
+          path: raw
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compute Qullamaggie list from snapshot
+        continue-on-error: true
+        run: python watchlist.py --profile qm --compute-only
+
+      - name: Compute CANSLIM list from snapshot
+        run: python watchlist.py --compute-only
+
+      - name: Persist docs/data/
+        run: |
+          if [ -n "$(git status --porcelain docs/data/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # Zawsze najpierw na AKTUALNY szczyt main ("reset --mixed", nie --soft), żeby commit
+            # niósł tylko świeże dane na poprawnej bazie — nawet gdy job wystartował ze starego
+            # checkoutu (np. ręczne "Re-run jobs" używa ORYGINALNEGO SHA, nie bieżącego main).
+            git fetch origin main
+            git reset --mixed origin/main
+            git add docs/data/
+            # [skip ci]: bez tego commit odpaliłby kolejne workflowy (push: main).
+            git commit -m "chore: recompute watchlist [skip ci]"
+            for attempt in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — pobieram najnowszy main i próbuję ponownie..."
+              sleep $((attempt * 3))
+              git fetch origin main
+              git reset --mixed origin/main
+              git add docs/data/
+              git commit -m "chore: recompute watchlist [skip ci]"
+            done
+          else
+            echo "Brak zmian w docs/data/ — pomijam commit."
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
