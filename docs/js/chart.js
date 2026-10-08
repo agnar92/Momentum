@@ -57,6 +57,7 @@ function fitLayout(w, h, noTable = false) {
 const COMPACT_FONT_SCALE = 1.5;
 const FIT_FONT_SCALE = 1.1;
 const COMPACT_WEEKS = 52;
+const WEEKLY_WINDOW_WEEKS = 156;   // domyślne okno wykresu tygodniowego (3 lata); dane sięgają 6 lat (CHART_WEEKS w watchlist.py)
 const SPX_BAND_FRAC = 0.2;   // górna część panelu cen zarezerwowana na linię S&P 500
 const DAILY_WINDOW_DAYS = 42;   // domyślne okno wykresu dziennego (~2 miesiące); cały rok jest dostępny suwakiem
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
@@ -356,7 +357,7 @@ function sliceModel(m, n, end = m.n) {
 function defaultWindowLength(full, opts = {}) {
     if (Number.isFinite(opts.windowLen) && opts.windowLen > 0) return opts.windowLen;
     const padDef = full.padDefault || 0;
-    return full.daily ? DAILY_WINDOW_DAYS + padDef : ((opts.compact || opts.fit) ? COMPACT_WEEKS + padDef : full.n - (full.pad || 0) + padDef);
+    return full.daily ? DAILY_WINDOW_DAYS + padDef : ((opts.compact || opts.fit) ? COMPACT_WEEKS + padDef : Math.min(WEEKLY_WINDOW_WEEKS, full.n - (full.pad || 0)) + padDef);   // tygodniowy: 3 lata (jak na stronach książki), starsze 3 lata pokazuje suwak
 }
 
 function clampWindow(w, total, defN, defEnd = total) {
@@ -593,7 +594,7 @@ function chartSvg(m, opts = {}) {
     const room = spxBand / (1 - spxBand);   // górny pas na S&P: ceny zajmują dolne (1 − spxBand) panelu
     const pMax = useLog ? pMax0 * Math.pow(pMax0 / pMin, room) : pMax0 + (pMax0 - pMin) * room;
     const yP = useLog ? makeLogScale(pMin, pMax, P.y, P.h) : makeYScale(pMin, pMax, P.y, P.h);
-    (useLog ? (bookOn ? bookLogTicks(pMin, pMax, Math.max(6, Math.round(P.h / fs(27)))) : logTicks(pMin, pMax)) : niceTicks(pMin, pMax, 6)).forEach(t => {
+    (useLog ? (bookOn ? bookLogTicks(pMin, Math.min(pMax, pMax0 * 1.02), Math.max(6, Math.round(P.h / fs(27)))) : logTicks(pMin, pMax)) : niceTicks(pMin, pMax, 6)).forEach(t => {   // w trybie książki bez podpisów w pasie S&P nad ceną
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
         if (yP(t) > P.y + fs(9)) {   // nie na etykiecie osi S&P tuż nad panelem
             parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${bookOn ? bookAxisFmt(t) : fmtAxis(t)}</text>`);

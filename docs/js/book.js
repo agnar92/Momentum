@@ -12,11 +12,11 @@ const BOOK_COLORS = { text: "#e8eaed", dim: "#aab0bd", buy: "#2ecc71", add: "#7b
 const BOOK_TIGHT_PCT = 1.5;          // „ciasne zamknięcia”: zamknięcia kolejnych tygodni mieszczą się w tylu % (max/min)
 const BOOK_TIGHT_MIN_WEEKS = 3;
 const BOOK_BUY_VOL = 1.15;           // wybicie z bazy na wolumenie ≥ tyle × średnia z poprzednich tygodni
-const BOOK_FLAT_MIN_WEEKS = 4;       // wybicie z dowolnej konsolidacji (nie tylko z bazy wykrytej przez detect_bases): min. tyle tygodni, głębokość ≤ BOOK_FLAT_DEPTH_PCT
+const BOOK_FLAT_MIN_WEEKS = 3;       // wybicie z dowolnej konsolidacji (nie tylko z bazy wykrytej przez detect_bases): min. tyle tygodni (3 — „schodki” w mocnym trendzie), głębokość ≤ BOOK_FLAT_DEPTH_PCT
 const BOOK_FLAT_MAX_WEEKS = 10;
-const BOOK_FLAT_DEPTH_PCT = 12;
-const BOOK_FLAT_VOL = 1.2;
-const BOOK_BUY_GAP = 8;              // kolejne punkty „Kup” nie częściej niż co tyle tygodni
+const BOOK_FLAT_DEPTH_PCT = 16;
+const BOOK_FLAT_VOL = 0.5;
+const BOOK_BUY_GAP = 5;              // kolejne punkty „Kup” nie częściej niż co tyle tygodni
 const BOOK_REBOUND_WEEKS = 12;       // odbicie po korekcie rynku: do tylu tygodni od dołka S&P 500
 const BOOK_REBOUND_DD_X = 2.5;       // ... spółka spadła w korekcie nie więcej niż tyle × spadek S&P 500
 const BOOK_TIGHT_AFTER_BUY = 10;     // „ciasne zamknięcia” po kupnie: do tylu tygodni od punktu kupna
@@ -133,10 +133,12 @@ function computeBook(m, splits = []) {
         if (![c[j], c[j - 1], v[j], a, s10, s40].every(Number.isFinite) || a <= 0) continue;
         if (!(c[j] > s40 && s10 > s40 && v[j] / a >= BOOK_FLAT_VOL) || nearBuy(j, BOOK_BUY_GAP)) continue;
         for (let len = BOOK_FLAT_MAX_WEEKS; len >= BOOK_FLAT_MIN_WEEKS; len--) {
-            let hi = -Infinity, lo = Infinity;
-            for (let k = j - len; k < j; k++) { hi = Math.max(hi, h[k]); lo = Math.min(lo, l[k]); }
-            if (!Number.isFinite(hi) || !Number.isFinite(lo) || hi <= 0) continue;
-            if ((hi - lo) / hi * 100 <= BOOK_FLAT_DEPTH_PCT && c[j] > hi && c[j - 1] <= hi) { book.buys.push({ i: j, pivot: hi, label: "Kup" }); break; }
+            // pivot = najwyższy szczyt konsolidacji; „ciasność” liczymy po ZAMKNIĘCIACH (tygodniowe świece zmiennych spółek mają zakres 10–20 %, więc
+            // zakres High–Low zabijałby „schodki” w mocnym trendzie — jak w MU / SNDK)
+            let hi = -Infinity, cHi = -Infinity, cLo = Infinity;
+            for (let k = j - len; k < j; k++) { hi = Math.max(hi, h[k]); cHi = Math.max(cHi, c[k]); cLo = Math.min(cLo, c[k]); }
+            if (!Number.isFinite(hi) || !Number.isFinite(cLo) || hi <= 0) continue;
+            if ((cHi - cLo) / cHi * 100 <= BOOK_FLAT_DEPTH_PCT && c[j] > hi && c[j - 1] <= hi) { book.buys.push({ i: j, pivot: hi, label: "Kup" }); break; }
         }
     }
     // odbicie po korekcie rynku (jak „base-on-base formed during general market correction” / „general market turns up”): w ciągu BOOK_REBOUND_WEEKS od dołka
