@@ -145,6 +145,31 @@ function annTemplateCup(h, l, dates, tapIdx, last, lookback) {
 // użytkownik wskazał (koszt = odległość w świecach + odległość ceny), a para końców musi być „czysta” — żadna świeca między nimi nie przebija
 // linii o więcej niż tol (opór po High, wsparcie po Low). Gdy najlepsza para przebija, bierzemy najtańszą czystą z kilku kandydatów; gdy takiej
 // nie ma, zostają najbliższe ekstrema, a `pierce` mówi, ile świec przebija. Zwraca {x0,y0,x1,y1,kind,pierce,types} albo null (za mało świec).
+// Dopasowanie cupa do świec (jak annFitLine dla linii): lewy brzeg → najwyższy High w ±k świec od wskazanej daty, dołek → najniższy Low,
+// prawy brzeg → najwyższy High PO dołku. Bez tego kliknięcia „obok” dają łuk, który nie dotyka szczytu / dołka / prawego brzegu.
+// `only` = "L" | "B" | "R" dopasowuje tylko jeden uchwyt (po jego przeciągnięciu). Zwraca poprawiony cup albo null.
+function annFitCup(cup, h, l, dates, k = 3, only = null) {
+    const n = dates.length;
+    if (!n || !h || !l) return null;
+    const at = d => { const i = dates.findIndex(x => x >= d); return i < 0 ? n - 1 : i; };
+    let iL = at(cup.start), iB = at(cup.low_date), iR = at(cup.end);
+    const best = (i, lo, hi, arr, sign) => {
+        let bj = null;
+        for (let j = Math.max(lo, i - k); j <= Math.min(hi, i + k); j++) {
+            if (!Number.isFinite(arr[j]) || arr[j] <= 0) continue;
+            if (bj === null || sign * arr[j] > sign * arr[bj] || (arr[j] === arr[bj] && Math.abs(j - i) < Math.abs(bj - i))) bj = j;
+        }
+        return bj;
+    };
+    const out = { ...cup };
+    if (!only || only === "B") { const j = best(iB, 0, n - 1, l, -1); if (j !== null) { iB = j; out.low_date = dates[j]; out.low = Math.round(l[j] * 100) / 100; } }
+    if (!only || only === "L") { const j = best(iL, 0, iB - 1, h, 1); if (j !== null) { iL = j; out.start = dates[j]; out.peak = Math.round(h[j] * 100) / 100; } }
+    if (!only || only === "R") { const j = best(iR, iB + 1, n - 1, h, 1); if (j !== null) { iR = j; out.end = dates[j]; out.right = Math.round(h[j] * 100) / 100; } }
+    if (!(out.start < out.low_date && out.low_date < out.end)) return null;
+    out.low = Math.min(out.low, out.peak);
+    return out;
+}
+
 function annFitLine(line, h, l, dates, k = 3, tol = 0.008) {
     const n = dates.length;
     if (!n || !h || !l) return null;
@@ -671,6 +696,7 @@ function annOverlay(ctx) {
             const [a, b, c] = P;
             if (a.date < b.date && b.date < c.date) {
                 const cup = { id: annNewId(), start: a.date, low_date: b.date, end: c.date, peak: a.price, low: Math.min(b.price, a.price), right: c.price };
+                Object.assign(cup, annFitCup(cup, full.h, full.l, full.weeks, full.daily ? 5 : 3) || {});   // łuk dotyka prawdziwego szczytu, dołka i prawego brzegu
                 R.cups.push(cup);
                 annEdit.selected = { type: "cup", id: cup.id };
             }
@@ -760,7 +786,13 @@ function annOverlay(ctx) {
             };
             const up = () => {
                 ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up);
-                loupe = null; render();
+                loupe = null;
+                if (target.type === "cup") {   // uchwyt cupa po puszczeniu siada na najbliższym szczycie / dołku
+                    const Rc = rec(), c = Rc && Rc.cups.find(x => x.id === target.id);
+                    const f = c ? annFitCup(c, full.h, full.l, full.weeks, full.daily ? 5 : 3, handle) : null;
+                    if (f) Object.assign(c, f);
+                }
+                render();
                 touch(); annSyncTools();
             };
             ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
@@ -1007,7 +1039,15 @@ function annObjectMenu(x, y) {
     const line = annSelectedLine(), obj = annSelectedObject();
     if (!obj) return;
     const del = { label: "Usuń", danger: true, run: () => { const b = document.getElementById("toolDel"); if (b) b.click(); } };
-    if (!line) { annShowMenu(x, y, [del]); return; }
+    if (!line) {
+        const fitCup = { label: "📐 Dopasuj do świec (szczyt / dołek / brzeg)", run: () => {
+            const R = annCurrent && annStore[annCurrent.ticker], cup = R && annEdit.selected && annEdit.selected.type === "cup" ? R.cups.find(c => c.id === annEdit.selected.id) : null;
+            const f = cup && annCurrent.full ? annFitCup(cup, annCurrent.full.h, annCurrent.full.l, annCurrent.full.weeks, annCurrent.full.daily ? 5 : 3) : null;
+            if (!f) { showToast("Nie udało się dopasować cupa do świec."); return; }
+            Object.assign(cup, f); annChanged(); showToast("Cup dopasowany do szczytu, dołka i prawego brzegu.");
+        } };
+        annShowMenu(x, y, [fitCup, del]); return;
+    }
     const setKind = k => () => { line.kind = k; annChanged(); };
     const setAlert = v => () => { line.alert = v; line.ack = false; annChanged(); };
     annShowMenu(x, y, [
@@ -1260,6 +1300,6 @@ function annInitUI(onRedraw) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        bizIndex, lineValueAt, alertState, annFlatten, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT, annTemplateFlag, annTemplateCup, annFitLine, annUndoSnapshot, annUndoApply, annSyncPositionLines, annPositionLineValue,
+        bizIndex, lineValueAt, alertState, annFlatten, annFitCup, mergeRecords, mergeStores, annResetRecord, autoToDates, annAdoptAuto, alertRows, annRefresh, mergeImport, annExportJson, annEmptyRecord, ANN_NEAR_PCT, annTemplateFlag, annTemplateCup, annFitLine, annUndoSnapshot, annUndoApply, annSyncPositionLines, annPositionLineValue,
     };
 }

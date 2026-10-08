@@ -234,3 +234,18 @@ test("annFitLine: gdy świeca przebija linię, wybiera czystszą parę albo zgł
     assert.ok(f.pierce > 0 || f.x0 !== "2026-01-01");   // szczyt 12 w środku przebija prostą 10 → 10,4
     assert.equal(annFitLine({ kind: "res", x0: "2026-01-01", y0: 10, x1: "2026-01-06", y1: 10 }, [], [], [], 1), null);
 });
+
+test("annFitCup: łuk siada na prawdziwym szczycie, dołku i prawym brzegu mimo kliknięć obok", () => {
+    const { annFitCup } = require("../../docs/js/annotate.js");
+    const dates = Array.from({ length: 20 }, (_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`);
+    const h = [5, 6, 11.6, 10, 9, 7, 5, 4, 3, 2.5, 2.4, 3, 4, 6, 8, 10, 11, 10.5, 10, 9];
+    const l = h.map(v => v * 0.9);
+    l[9] = 1.92;
+    // kliknięcia: lewy brzeg o tydzień za późno i za nisko, dołek 2 świece za późno, prawy brzeg nad świecami
+    const cup = { start: dates[3], peak: 9.5, low_date: dates[11], low: 2.6, end: dates[14], right: 12.5 };
+    const f = annFitCup(cup, h, l, dates, 3);
+    assert.equal(f.start, dates[2]); assert.equal(f.peak, 11.6);
+    assert.equal(f.low_date, dates[9]); assert.equal(f.low, 1.92);
+    assert.equal(f.end, dates[16]); assert.equal(f.right, 11);
+    assert.equal(annFitCup(cup, h, l, dates, 3, "B").start, dates[3]);   // tylko dołek
+});
