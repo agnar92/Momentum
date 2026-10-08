@@ -165,3 +165,15 @@ test("computeBook: krótka pauza (2 tygodnie) nie daje „Dokup”", () => {
     const b = computeBook(addSeries(2, 1.0));
     assert.equal(b.adds.length, 0);
 });
+
+test("computeBook: „Dokup” po odbiciu od 10-tygodniowej tylko po „Kup” z patternu", () => {
+    const n = 70, c = [], h = [], l = [], v = [];
+    for (let i = 0; i < n; i++) {
+        const base = 10 + i * 0.5 + (i % 7 === 6 ? -3 : 0);
+        c.push(base); h.push(base + 0.4); l.push(i % 7 === 0 && i > 14 ? base - 3 : base - 0.4); v.push(i % 7 === 0 ? 1500 : 1000);
+    }
+    const mk = bases => ({ n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100), bases });
+    const b = computeBook(mk([]));
+    const first = b.buys.length ? b.buys[0].i : Infinity;
+    assert.ok(b.adds.every(a => a.i > first));   // żaden Dokup przed pierwszym „Kup”
+});
