@@ -897,12 +897,13 @@ body:not(.split) .wl-chart-box { position: relative; }
 /* Suwak okna: przyciski zoomu − / + obok; na telefonie krawędzie suwaka nie zmieniają długości (tylko przesuwanie środka). */
 .wl-range-row { display: flex; align-items: center; gap: 6px; }
 .wl-range-row > .wl-range { flex: 1; min-width: 0; }
-.wl-zoom { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border, #262a35); background: var(--bg-card, #14171e); color: #4aa3ff; font-size: 20px; line-height: 1; padding: 0; cursor: pointer; touch-action: manipulation; }
-.wl-zoom:active { background: rgba(74,163,255,.2); }
+.wl-zoom-strip { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 84px; height: 34px; padding: 0 8px; border: 1px solid var(--border, #262a35); border-radius: 17px; background: var(--bg-card, #14171e); color: #4aa3ff; font-size: 12px; cursor: ew-resize; touch-action: none; user-select: none; }
+.wl-zoom-strip b { color: var(--text, #e6e6e6); font-weight: 600; white-space: nowrap; }
+.wl-zoom-strip:active { background: rgba(74,163,255,.18); }
 body:not(.split) .wl-chart-box .wl-range-row .wl-range { margin-left: 0; margin-right: 0; }
 body:not(.split) .wl-chart-box .wl-range-h { pointer-events: none; }
 body:not(.split) .wl-chart-box .wl-range-h::after { display: none; }
 body:not(.split) .wl-chart-box .wl-range-win { min-width: 30px; }
 body:not(.split) .wl-chart-box .wl-range-win::before { height: 8px; margin-top: -4px; border-radius: 4px; }
-.chart-grid:not(.layout-1) .wl-zoom { display: none; }
-@media (max-height: 520px) { .wl-zoom { width: 28px; height: 26px; font-size: 16px; } }
+.chart-grid:not(.layout-1) .wl-zoom-strip { display: none; }
+@media (max-height: 520px) { .wl-zoom-strip { height: 26px; min-width: 72px; } }

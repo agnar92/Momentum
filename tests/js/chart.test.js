@@ -591,3 +591,14 @@ test("pivotFromStock: wykres dzienny bierze dpivot / dbase_type, tygodniowy pivo
     assert.equal(pivotFromStock({ price: 100, dbase_type: "htf", dpivot: 103 }, [], false), null);
     assert.equal(pivotFromStock({ price: 100, base_type: "ascending", pivot: 103 }, [], false).price, 103);
 });
+
+test("zoomWindow: płynny zoom zachowuje punkt kotwiczenia i granice", () => {
+    const { zoomWindow } = require("../../docs/js/chart.js");
+    const z = zoomWindow({ n: 100, end: 200 }, 0.5, 0.5, 312);
+    assert.equal(z.n, 50);
+    assert.equal(z.end - z.n / 2, 150);                       // środek okna bez zmian
+    assert.equal(zoomWindow({ n: 100, end: 200 }, 100, 0.5, 312).n, 312);   // nie więcej niż całość
+    assert.equal(zoomWindow({ n: 100, end: 200 }, 0.001, 0.5, 312).n, 15);   // nie mniej niż MIN_WINDOW
+    const edge = zoomWindow({ n: 100, end: 312 }, 0.5, 1, 312);   // kotwica na prawym brzegu: koniec zostaje
+    assert.equal(edge.end, 312);
+});

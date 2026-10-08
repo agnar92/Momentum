@@ -1009,34 +1009,66 @@ function attachChartHover(container, m, readoutEl, L) {
     });
 }
 
+const ZOOM_PX_PER_E = 110;   // przeciągnięcie paska zoom o tyle px zmienia długość okna e-krotnie (płynnie, bez skoków)
+
+// Płynna zmiana długości okna: factor > 1 = więcej słupków (oddalenie), < 1 = przybliżenie; frac = punkt okna (0..1), który zostaje w miejscu.
+function zoomWindow(w, factor, frac, total) {
+    const n = Math.max(Math.min(MIN_WINDOW, total), Math.min(total, Math.round(w.n * factor)));
+    const anchor = w.end - w.n + frac * w.n;
+    const start = Math.max(0, Math.min(total - n, Math.round(anchor - frac * n)));
+    return { n, end: start + n };
+}
+
 // Suwak okna czasowego (jak w TC2000): minimapa z całą historią, ramka = widoczne okno.
 // Przeciągnięcie środka przesuwa okno, przeciągnięcie krawędzi zmienia jego długość.
 function sliderHtml(m) {
     const finite = m.c.filter(Number.isFinite);
     const lo = Math.min(...finite), hi = Math.max(...finite), span = hi - lo || 1;
     const pts = m.c.map((v, i) => (Number.isFinite(v) ? `${(i / (m.n - 1 || 1) * 100).toFixed(2)},${(100 - (v - lo) / span * 100).toFixed(1)}` : null)).filter(Boolean).join(" ");
-    return `<div class="wl-range-row"><button type="button" class="wl-zoom" data-z="out" aria-label="Oddal (dłuższe okno)">−</button><div class="wl-range" id="chartRange"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${CHART_COLORS.bench}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`
-        + `<div class="wl-range-win" id="chartRangeWin" title="Przeciągnij, by przesunąć okno; krawędzie zmieniają jego długość"><span class="wl-range-h wl-range-l" data-h="l"></span><span class="wl-range-h wl-range-r" data-h="r"></span></div></div><button type="button" class="wl-zoom" data-z="in" aria-label="Przybliż (krótsze okno)">+</button></div>`;
+    return `<div class="wl-range-row"><div class="wl-range" id="chartRange"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${CHART_COLORS.bench}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`
+        + `<div class="wl-range-win" id="chartRangeWin" title="Przeciągnij, by przesunąć okno; krawędzie zmieniają jego długość"><span class="wl-range-h wl-range-l" data-h="l"></span><span class="wl-range-h wl-range-r" data-h="r"></span></div></div><div class="wl-zoom-strip" id="chartZoom" title="Przeciągnij w lewo / w prawo, by płynnie przybliżyć / oddalić (na komputerze także kółko myszy nad wykresem, na telefonie szczypnięcie suwaka)"><span class="wl-zoom-l">◀</span><b id="chartZoomLbl"></b><span class="wl-zoom-r">▶</span></div></div>`;
 }
 
 function attachRangeSlider(root, total, getWin, setWin) {
     const track = root.querySelector("#chartRange"), win = root.querySelector("#chartRangeWin");
     if (!track || !win) return null;
+    const strip = root.querySelector("#chartZoom"), lbl = root.querySelector("#chartZoomLbl");
+    const label = () => { if (lbl) { const w = getWin(); lbl.textContent = w.n >= 104 ? `${(w.n / 52).toFixed(1).replace(".", ",")} l.` : `${w.n} tyg.`; } };
     const paint = () => {
+        label();
         const w = getWin();
         win.style.left = `${(w.end - w.n) / total * 100}%`;
         win.style.width = `${w.n / total * 100}%`;
     };
     paint();
-    // Zoom przyciskami − / + (×1,5 względem środka okna): na telefonie krawędzie suwaka nie zmieniają długości, żeby nie robić tego przypadkiem.
-    root.querySelectorAll(".wl-zoom").forEach(b => b.addEventListener("click", () => {
-        const w = getWin(), out = b.dataset.z === "out";
-        const n = Math.max(MIN_WINDOW, Math.min(total, Math.round(out ? w.n * 1.5 : w.n / 1.5)));
-        const mid = w.end - w.n / 2;
-        const end = Math.max(n, Math.min(total, Math.round(mid + n / 2)));
-        setWin({ n, end });
-        paint();
-    }));
+    // Płynny zoom (bez z góry ustalonych przedziałów): przeciąganie po pasku „zoom” (w prawo = przybliża, w lewo = oddala — jak oś czasu w TradingView / TC2000),
+    // szczypnięcie dwoma palcami po suwaku, kółko myszy nad suwakiem. Środek okna zostaje w miejscu.
+    const zoomTo = (n0, end0, factor, frac = 0.5) => { const w = zoomWindow({ n: n0, end: end0 }, factor, frac, total); setWin(w); paint(); };
+    if (strip) {
+        strip.addEventListener("pointerdown", ev => {
+            ev.preventDefault();
+            const w0 = getWin(), x0 = ev.clientX;
+            strip.setPointerCapture(ev.pointerId);
+            const move = e => zoomTo(w0.n, w0.end, Math.exp(-(e.clientX - x0) / ZOOM_PX_PER_E));
+            const up = () => { strip.removeEventListener("pointermove", move); strip.removeEventListener("pointerup", up); strip.removeEventListener("pointercancel", up); };
+            strip.addEventListener("pointermove", move); strip.addEventListener("pointerup", up); strip.addEventListener("pointercancel", up);
+        });
+    }
+    const ptrs = new Map();
+    let pinch0 = null;
+    track.addEventListener("pointerdown", ev => {
+        if (ev.pointerType === "mouse") return;
+        ptrs.set(ev.pointerId, ev.clientX);
+        if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; const w = getWin(); pinch0 = { d: Math.max(20, Math.abs(a - b)), n: w.n, end: w.end }; }
+    });
+    track.addEventListener("pointermove", ev => {
+        if (!ptrs.has(ev.pointerId)) return;
+        ptrs.set(ev.pointerId, ev.clientX);
+        if (pinch0 && ptrs.size === 2) { const [a, b] = [...ptrs.values()]; zoomTo(pinch0.n, pinch0.end, pinch0.d / Math.max(20, Math.abs(a - b))); }
+    });
+    const endPtr = ev => { ptrs.delete(ev.pointerId); if (ptrs.size < 2) pinch0 = null; };
+    track.addEventListener("pointerup", endPtr); track.addEventListener("pointercancel", endPtr);
+    track.addEventListener("wheel", ev => { ev.preventDefault(); const w = getWin(); zoomTo(w.n, w.end, Math.exp(ev.deltaY * 0.0015)); }, { passive: false });
     win.addEventListener("pointerdown", ev => {
         ev.preventDefault();
         const mode = ev.target.dataset && ev.target.dataset.h ? ev.target.dataset.h : "m";
@@ -1149,7 +1181,14 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         draw();
         if (opts.onWindow) opts.onWindow(win);
     };
-    const paintSlider = attachRangeSlider(container, full.n, () => win, applyWin);
+    const paintSlider = attachRangeSlider(container, full.n, () => win, w => { applyWin(w); });
+    plot.addEventListener("wheel", ev => {   // komputer: kółko myszy nad wykresem = płynny zoom wokół kursora
+        if (ev.ctrlKey || !ev.deltaY) return;
+        ev.preventDefault();
+        const r = plot.getBoundingClientRect();
+        applyWin(zoomWindow(win, Math.exp(ev.deltaY * 0.0015), Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width)), full.n));
+        if (paintSlider) paintSlider();
+    }, { passive: false });
     if (opts.gestures) attachChartGestures(plot, full.n, () => win, w => { applyWin(w); if (paintSlider) paintSlider(); }, opts.gestures);
     return full;
 }
@@ -1328,6 +1367,6 @@ function fundMiniHtml(m) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict,
+        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict,
     };
 }
