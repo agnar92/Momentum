@@ -267,3 +267,20 @@ test("computeBook: „Kup ponownie” toleruje zamknięcie tygodnia przed powrot
     m.smas = [{ values: rollingMean(m.c, 10) }, { values: rollingMean(m.c, 40) }];
     assert.ok(computeBook(m).reentries.length >= 1);
 });
+
+test("bookSvg: sygnały to kółka z literą K / D / P pod świecą, ✕ przy stopie i jedna legenda — bez strzałek i długich podpisów", () => {
+    const { bookSvg, shiftBook } = require("../../docs/js/book.js");
+    const m = stopOutSeries(true);
+    const book = computeBook(m);
+    m.book = book;
+    const labels = [];
+    const g = { x: i => 10 + i * 8, yP: v => 500 - v * 3, P: { y: 0, h: 480 }, fs: v => v, addLabel: t => labels.push(t), clip: "", compact: false, legendY: 20 };
+    const svg = bookSvg(m, g);
+    assert.match(svg, />K<\/text>/);
+    assert.match(svg, />P<\/text>/);
+    assert.match(svg, /<path[^>]*stroke="#ff4d6d"/);          // ✕ stop
+    assert.match(svg, /kup ponownie/);                         // legenda
+    assert.ok(!/<polygon/.test(svg), "bez strzałek");
+    assert.ok(!labels.some(t => /Kup|Dokup|ponownie|stop/.test(t)), "żadnych długich podpisów sygnałów w warstwie podpisów");
+    assert.equal(typeof shiftBook, "function");
+});
