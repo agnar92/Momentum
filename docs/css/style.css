@@ -893,3 +893,16 @@ body:not(.split) .wl-chart-box { position: relative; }
 
 /* jeden rodzaj wykresu (tygodniowy jak w książce) — przełączniki widoku ukryte na stałe */
 #chartLayoutBtn, #chartTfBtn, #chartBookBtn, #chartLogBtn { display: none !important; }
+
+/* Suwak okna: przyciski zoomu − / + obok; na telefonie krawędzie suwaka nie zmieniają długości (tylko przesuwanie środka). */
+.wl-range-row { display: flex; align-items: center; gap: 6px; }
+.wl-range-row > .wl-range { flex: 1; min-width: 0; }
+.wl-zoom { flex: 0 0 auto; width: 34px; height: 34px; border-radius: 8px; border: 1px solid var(--border, #262a35); background: var(--bg-card, #14171e); color: #4aa3ff; font-size: 20px; line-height: 1; padding: 0; cursor: pointer; touch-action: manipulation; }
+.wl-zoom:active { background: rgba(74,163,255,.2); }
+body:not(.split) .wl-chart-box .wl-range-row .wl-range { margin-left: 0; margin-right: 0; }
+body:not(.split) .wl-chart-box .wl-range-h { pointer-events: none; }
+body:not(.split) .wl-chart-box .wl-range-h::after { display: none; }
+body:not(.split) .wl-chart-box .wl-range-win { min-width: 30px; }
+body:not(.split) .wl-chart-box .wl-range-win::before { height: 8px; margin-top: -4px; border-radius: 4px; }
+.chart-grid:not(.layout-1) .wl-zoom { display: none; }
+@media (max-height: 520px) { .wl-zoom { width: 28px; height: 26px; font-size: 16px; } }

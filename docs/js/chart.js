@@ -1015,8 +1015,8 @@ function sliderHtml(m) {
     const finite = m.c.filter(Number.isFinite);
     const lo = Math.min(...finite), hi = Math.max(...finite), span = hi - lo || 1;
     const pts = m.c.map((v, i) => (Number.isFinite(v) ? `${(i / (m.n - 1 || 1) * 100).toFixed(2)},${(100 - (v - lo) / span * 100).toFixed(1)}` : null)).filter(Boolean).join(" ");
-    return `<div class="wl-range" id="chartRange"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${CHART_COLORS.bench}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`
-        + `<div class="wl-range-win" id="chartRangeWin" title="Przeciągnij, by przesunąć okno; krawędzie zmieniają jego długość"><span class="wl-range-h wl-range-l" data-h="l"></span><span class="wl-range-h wl-range-r" data-h="r"></span></div></div>`;
+    return `<div class="wl-range-row"><button type="button" class="wl-zoom" data-z="out" aria-label="Oddal (dłuższe okno)">−</button><div class="wl-range" id="chartRange"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${CHART_COLORS.bench}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`
+        + `<div class="wl-range-win" id="chartRangeWin" title="Przeciągnij, by przesunąć okno; krawędzie zmieniają jego długość"><span class="wl-range-h wl-range-l" data-h="l"></span><span class="wl-range-h wl-range-r" data-h="r"></span></div></div><button type="button" class="wl-zoom" data-z="in" aria-label="Przybliż (krótsze okno)">+</button></div>`;
 }
 
 function attachRangeSlider(root, total, getWin, setWin) {
@@ -1028,6 +1028,15 @@ function attachRangeSlider(root, total, getWin, setWin) {
         win.style.width = `${w.n / total * 100}%`;
     };
     paint();
+    // Zoom przyciskami − / + (×1,5 względem środka okna): na telefonie krawędzie suwaka nie zmieniają długości, żeby nie robić tego przypadkiem.
+    root.querySelectorAll(".wl-zoom").forEach(b => b.addEventListener("click", () => {
+        const w = getWin(), out = b.dataset.z === "out";
+        const n = Math.max(MIN_WINDOW, Math.min(total, Math.round(out ? w.n * 1.5 : w.n / 1.5)));
+        const mid = w.end - w.n / 2;
+        const end = Math.max(n, Math.min(total, Math.round(mid + n / 2)));
+        setWin({ n, end });
+        paint();
+    }));
     win.addEventListener("pointerdown", ev => {
         ev.preventDefault();
         const mode = ev.target.dataset && ev.target.dataset.h ? ev.target.dataset.h : "m";
