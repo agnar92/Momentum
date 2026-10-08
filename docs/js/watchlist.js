@@ -1867,17 +1867,15 @@ function initChartModal() {
         chartHintsOn = localStorage.getItem(CHART_HINTS_KEY) === "1";
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved) ["d", "w"].forEach(k => { if (Number.isFinite(saved[k]) && saved[k] > 0) chartWinLen[k] = saved[k]; });
-        chartDaily = localStorage.getItem(CHART_TF_KEY) === "d";   // domyślnie tygodniowy
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
-    // JEDEN rodzaj wykresu: tygodniowy w stylu książki O'Neila, skala logarytmiczna (user: „czemu aż tyle rodzajów wykresów, zrób tylko te z książką zgodne”)
+    // Tygodniowy wykres w stylu książki O'Neila jest GŁÓWNY (zawsze na starcie); dzienny dostępny przyciskiem, gdy na tygodniowym nie ma patternu (user: „tygodniowe nadrzędne, ale chcę sprawdzić dzienny”)
     chartDaily = false; chartBookOn = true; chartLog = false; chartLayout = "1";
     updateLogButton();
     updateTfButton();
     document.getElementById("chartTfBtn").addEventListener("click", () => {
         chartDaily = !chartDaily;
         chartWindows = [];
-        try { localStorage.setItem(CHART_TF_KEY, chartDaily ? "d" : "w"); } catch (e) { /* ignoruj */ }
         updateTfButton();
         drawChart();
     });

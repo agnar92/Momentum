@@ -892,7 +892,7 @@ body:not(.split) .wl-chart-box.is-editing .wl-chart-tools .ann-hint { position: 
 body:not(.split) .wl-chart-box { position: relative; }
 
 /* jeden rodzaj wykresu (tygodniowy jak w książce) — przełączniki widoku ukryte na stałe */
-#chartLayoutBtn, #chartTfBtn, #chartBookBtn, #chartLogBtn { display: none !important; }
+#chartLayoutBtn, #chartBookBtn, #chartLogBtn { display: none !important; }   /* przełącznik tygodniowy / dzienny (#chartTfBtn) zostaje */
 
 /* Suwak okna: przyciski zoomu − / + obok; na telefonie krawędzie suwaka nie zmieniają długości (tylko przesuwanie środka). */
 .wl-range-row { display: flex; align-items: center; gap: 6px; }
