@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct, mergeProfiles, tabUniverse, chartsForTicker,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -262,7 +262,7 @@ test("positionSize: konto w PLN, kurs USD/PLN, mniejsza z liczby akcji z % konta
     assert.equal(positionSize({ capital: 40000, fx: null, posPct: 10 }, 100, 95), null);   // bez kursu nie przeliczymy
     assert.equal(positionSize({ capital: 0, fx: 4, posPct: 10 }, 100, 95), null);
     assert.equal(positionSize({ capital: 40000, fx: 4 }, 100, 95), null);                    // ani % konta, ani ryzyka
-    assert.equal(positionSize({ capital: 1000, fx: 4, riskPct: 0.1 }, 100, 90).shares, 0);   // za małe ryzyko na choćby jedną akcję
+    assert.equal(positionSize({ capital: 1000, fx: 4, riskPct: 0.1 }, 100, 90).shares, 0.02);   // małe ryzyko = ułamek akcji (nie 0)
 });
 
 test("positionMetrics: P/L, R multiple, distance to stop and stop hit", () => {
@@ -612,4 +612,13 @@ test("baza na bazie: nazwa w kafelku, podsumowaniu i opisie akcji", () => {
     assert.doesNotMatch(baseSummary({ ...s, base_on_base: false }), /baza na bazie/);
     const d = actionInfo({ canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, dbase_type: "flat", dbase_on_base: true, dpct_to_pivot: 3 }, { regime: "uptrend", distDays: 1 }, "D");
     assert.match(d.why, /baza na bazie/);
+});
+
+test("positionSize: akcje ułamkowe (w dół do 0,01) i ich formatowanie", () => {
+    const s = positionSize({ capital: 1000, fx: 4, posPct: 100 }, 400, null);   // 250 $ konta → 0,625 akcji po 400 $
+    assert.equal(s.shares, 0.62);
+    assert.ok(s.value_usd <= 250);
+    assert.equal(fmtShares(0.62), "0,62");
+    assert.equal(fmtShares(12), "12");
+    assert.equal(fmtShares(3.5), "3,5");
 });
