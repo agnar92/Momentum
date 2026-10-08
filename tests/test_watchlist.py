@@ -834,3 +834,23 @@ class TestBaseOnBase:
     def test_metrics_expose_stage_fields(self):
         m = watchlist.compute_metrics(make_prices(n=400, daily=0.002))
         assert "base_on_base" in m and "dbase_stage" in m
+
+
+class TestSplits:
+    def test_extract_frames_keeps_splits_in_attrs_and_build_charts_exports_them(self):
+        df = make_prices(n=400)
+        raw = df.copy()
+        raw["Dividends"] = 0.0
+        raw["Stock Splits"] = 0.0
+        raw.iloc[300, raw.columns.get_loc("Stock Splits")] = 2.0
+        data = pd.concat({"AAA": raw}, axis=1)
+        frames = watchlist._extract_frames(data, ["AAA"])
+        assert frames["AAA"].attrs["splits"] == [[raw.index[300].strftime("%Y-%m-%d"), 2.0]]
+        charts = watchlist.build_charts(["AAA"], frames, None, {})
+        assert charts["stocks"]["AAA"]["splits"] == [{"d": raw.index[300].strftime("%Y-%m-%d"), "r": 2.0}]
+
+    def test_no_splits_column_is_fine(self):
+        data = pd.concat({"AAA": make_prices(n=60)}, axis=1)
+        frames = watchlist._extract_frames(data, ["AAA"])
+        assert "splits" not in frames["AAA"].attrs
+        assert watchlist.build_charts(["AAA"], frames, None, {})["stocks"]["AAA"]["splits"] == []

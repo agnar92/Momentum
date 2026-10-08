@@ -34,6 +34,12 @@ const browserGlobals = {
     closeSheet: "readonly",
     initConnStatus: "readonly",
     hideLoadingOverlay: "readonly",
+    // docs/js/book.js (ładowany PRZED chart.js)
+    bookLogTicks: "readonly",
+    bookAxisFmt: "readonly",
+    bookSvg: "readonly",
+    computeBook: "readonly",
+    shiftBook: "readonly",
     // docs/js/chart.js (ładowany PRZED watchlist.js)
     renderStockChart: "readonly",
     dateToIndex: "readonly",

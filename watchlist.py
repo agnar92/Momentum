@@ -33,7 +33,7 @@ QM_OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist_qm.json"    # profil Qullam
 QM_WINDOWS = ("low_ratio_1m", "low_ratio_3m", "low_ratio_6m")
 
 DAILY_BARS_PER_WEEK = 5      # wzorce na wykresie dziennym: progi w tygodniach × 5 świec
-HISTORY_PERIOD = "3y"        # 12M do RS Rating + 104 tyg. wykresu + rozgrzanie SMA40 tygodniowej
+HISTORY_PERIOD = "5y"        # 12M do RS Rating + 156 tyg. wykresu + rozgrzanie SMA40 tygodniowej + historia baz (opisy z książki)
 BATCH_SIZE = 50
 MIN_COVERAGE = 0.7           # minimalny odsetek spółek z Finviz, dla których dostaliśmy ceny
 AVG_SESSIONS = 20            # okno ADR% i średniego obrotu (~miesiąc sesji)
@@ -45,7 +45,7 @@ EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/
 EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
 CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
-CHART_WEEKS = 104            # ile tygodni pokazuje wykres w stylu MarketSmith (~2 lata)
+CHART_WEEKS = 156            # ile tygodni pokazuje wykres w stylu książki O'Neila (~3 lata, jak cała pobrana historia)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
 MARKET_EMA_FAST = 10         # rynek w uptrendzie = EMA10 tygodniowa > EMA20 tygodniowa indeksu
@@ -74,7 +74,7 @@ BASE_CUP_MAX_DEPTH_PCT = 35
 BOB_MAX_GAP_WEEKS = 8        # baza na bazie: nowa baza zaczyna się najpóźniej tyle tygodni po końcu poprzedniej (po jej wybiciu)
 BOB_MAX_RUN_PCT = 20         # ... cena nie uciekła od pivotu poprzedniej bazy o więcej niż tyle % (inaczej to nowy etap, nie baza na bazie)
 BOB_MIN_LOW_FRAC = 0.90      # ... a dołek nowej bazy nie spadł głębiej niż 10 % pod pivot poprzedniej
-BASE_MAX_SHOWN = 4           # ile ostatnich baz trafia na wykres
+BASE_MAX_SHOWN = 10          # ile ostatnich baz trafia na wykres (opisy z książki: ramki baz, punkty kupna)
 # Cup (z rączką) wg kryteriów O'Neila — baza jest "cup" tylko, gdy spełnia je wszystkie (inaczej "korekta"):
 CUP_MIN_DEPTH_PCT = 12       # głębokość od lewego szczytu do dołka (płytsze to raczej flat)
 CUP_MAX_DEPTH_PCT = 33       # normalnie do ~33 %
@@ -120,10 +120,14 @@ def _extract_frames(data, tickers):
     for t in tickers:
         try:
             df = data[t] if isinstance(data.columns, pd.MultiIndex) else data
+            raw = df
             df = df[["Open", "High", "Low", "Close", "Volume"]].dropna(subset=["Close"])
         except KeyError:
             continue
         if len(df):
+            if "Stock Splits" in raw.columns:   # splity (do kółek „2/1” na wykresie) — ceny są już skorygowane (auto_adjust)
+                sp = raw["Stock Splits"].dropna()
+                df.attrs["splits"] = [[pd.Timestamp(d).strftime("%Y-%m-%d"), float(r)] for d, r in sp[sp > 0].items()]
             frames[t] = df
     return frames
 
@@ -136,7 +140,7 @@ def download_prices(tickers, period=HISTORY_PERIOD, batch_size=BATCH_SIZE):
         print(f"  Ceny — paczka {i // batch_size + 1}/{-(-len(tickers) // batch_size)} ({len(batch)} spółek)...")
         try:
             data = yf.download(batch, period=period, interval="1d", auto_adjust=True, group_by="ticker",
-                               threads=True, progress=False)
+                               threads=True, progress=False, actions=True)
         except Exception as e:
             print(f"⚠️  Paczka nieudana ({e}).")
             continue
@@ -1370,6 +1374,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         chart["bases"] = [b for b in all_bases if b["end"] >= first][-BASE_MAX_SHOWN:]
         first_day = payload["days"][0]
         chart_day_bases = [b for b in detect_bases(_daily_ohlc(df), None, DAILY_BARS_PER_WEEK) if b["end"] >= first_day][-BASE_MAX_SHOWN:]
+        chart["splits"] = [{"d": d, "r": r} for d, r in (frames[t].attrs.get("splits") or []) if d >= first]
         chart["climax"] = detect_climax_top(wk, all_bases)
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
