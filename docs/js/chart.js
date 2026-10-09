@@ -768,8 +768,8 @@ function chartSvg(m, opts = {}) {
     }
     // ceny lokalnych szczytów i dołków (jak w MarketSmith) — w oknie, bez ostatnich niepotwierdzonych świec
     // na telefonie mniej podpisów (3 szczyty / 2 dołki), na dużym ekranie 6 / 5
-    swingLabels(m.h, m.l, m.lastIdx, Math.max(2, Math.min(7, Math.round(m.n / 16))), opts.compact ? 3 : 6, opts.compact ? 2 : 5).forEach(sw => {
-        if (pivotPx !== null && Math.abs(sw.price / pivotPx - 1) < 0.003) return;   // ta cena jest już podpisana jako pivot
+    swingLabels(m.h, m.l, m.lastIdx, Math.max(2, Math.min(7, Math.round(m.n / 16))), opts.compact ? 2 : 6, opts.compact ? 1 : 5).forEach(sw => {
+        if (pivotPx !== null && Math.abs(sw.price / pivotPx - 1) < (opts.compact ? 0.015 : 0.003)) return;   // ta cena jest już podpisana jako pivot
         addLabel(sw.price.toFixed(2), x(sw.i), sw.type === "H" ? yP(sw.price) - 4 : yP(sw.price) + fs(11), { prio: 2 });
     });
     // linie trendu: opór (pomarańczowa) i wsparcie (szara), od pierwszego dotknięcia do ostatniej świecy
@@ -782,7 +782,7 @@ function chartSvg(m, opts = {}) {
         parts.push(`<line x1="${x_(i0)}" y1="${y0}" x2="${x_(l.i1)}" y2="${y1}" stroke="${col}" stroke-width="1.6" stroke-dasharray="6 3"><title>${l.kind === "res" ? "Opór" : "Wsparcie"} (${l.touches} dotknięć)</title></line>`);
         // cena monitorowania: wartość linii na jej końcu (ostatniej świecy) — tu szukamy przebicia
         const lp = at(l.i1);
-        if (Number.isFinite(lp) && lp > 0 && l.i1 >= 0) {
+        if (Number.isFinite(lp) && lp > 0 && l.i1 >= 0 && !(pivotPx !== null && Math.abs(lp / pivotPx - 1) < 0.005)) {   // cena równa pivotowi jest już podpisana („opór / pivot …”)
             const ly = Math.min(Math.max(y1 + (l.kind === "res" ? -5 : fs(12)), P.y + fs(10)), P.y + P.h - 3);
             addLabel(lp.toFixed(2), Math.min(x_(l.i1), L.width - L.right - 4), ly, { anchor: "end", size: fs(11), fill: col, bold: true, prio: 7 });
         }
@@ -859,7 +859,7 @@ function chartSvg(m, opts = {}) {
                 parts.push(inside
                     ? `<circle cx="${nxX}" cy="${nxY}" r="${r}" fill="#0e0f13" stroke="${ec}" stroke-width="1.8"><title>Prognoza następnego raportu ${nx.d}: EPS ${nx.e}, TTM ${nx.t}</title></circle>`
                     : `<path d="M${nxX - 1},${nxY - 5} L${nxX + 6},${nxY} L${nxX - 1},${nxY + 5} Z" fill="${ec}"><title>Następny raport ${nx.d} (poza oknem): prognoza EPS ${nx.e}, TTM ${nx.t}</title></path>`);
-                addLabel(`prog. ${nx.t}`, Math.min(nxX, edge - 4), Math.min(P.y + P.h - 4, Math.max(P.y + fs(10), nxY - fs(8))), { anchor: "end", fill: ec, bold: true, prio: 8 });
+                if (!opts.compact) addLabel(`prog. ${nx.t}`, Math.min(nxX, edge - 4), Math.min(P.y + P.h - 4, Math.max(P.y + fs(10), nxY - fs(8))), { anchor: "end", fill: ec, bold: true, prio: 8 });
             }
             labelX = lp[0]; anchor = "middle";
         }
