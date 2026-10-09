@@ -194,21 +194,6 @@ test("chartSvg draws trend lines, breakout marker and a legend strip", () => {
     assert.match(svg, /średnia 10 tyg\./);
 });
 
-test("dailyCharts: SMA 10/20, oś = dni, wyniki sprzed okna pominięte", () => {
-    const { dailyCharts, buildChartModel } = require("../../docs/js/chart.js");
-    const charts = {
-        weeks: ["2026-01-02"], days: ["2026-01-01", "2026-01-02"], spx_d: [100, 101],
-        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma10: [1, 2], sma20: [1, 1.8] }, eps: [{ d: "2025-06-01", e: 1, g: null }, { d: "2026-01-02", e: 2, g: 5 }], eps_next: null } },
-    };
-    const d = dailyCharts(charts);
-    assert.strictEqual(d.daily, true);
-    const m = buildChartModel(d, "X", null);
-    assert.strictEqual(m.n, 2);
-    assert.deepStrictEqual(m.smas.map(x => x.label), ["SMA 10", "SMA 20"]);
-    assert.deepStrictEqual(m.eps.map(q => q.week), [1]);
-    assert.strictEqual(dailyCharts({ weeks: [] }), null);
-});
-
 test("cup base is drawn as an arc with the depth label; indexes shift with sliceModel", () => {
     const c = charts();
     c.stocks.AAA.bases = [{ start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 11, end_close: 14, depth_pct: 26.7, type: "cup", open: false },
@@ -266,17 +251,16 @@ test("patternExplain describes the flag, volume dry-up and breakout; pole is dra
 });
 
 test("defaultWindowLength prefers the remembered length, else built-in defaults", () => {
-    assert.equal(defaultWindowLength({ daily: true, n: 252 }, {}), 42);
-    assert.equal(defaultWindowLength({ daily: true, n: 252 }, { windowLen: 120 }), 120);
-    assert.equal(defaultWindowLength({ daily: false, n: 104 }, {}), 104);
-    assert.equal(defaultWindowLength({ daily: false, n: 104 }, { compact: true }), 52);
-    assert.equal(defaultWindowLength({ daily: true, n: 252 }, { windowLen: 0 }), 42);   // zły zapis => domyślne
+    assert.equal(defaultWindowLength({ n: 312 }, {}), 156);                       // 3 lata z 6 dostępnych
+    assert.equal(defaultWindowLength({ n: 312 }, { windowLen: 120 }), 120);
+    assert.equal(defaultWindowLength({ n: 104 }, {}), 104);
+    assert.equal(defaultWindowLength({ n: 104 }, { compact: true }), 52);
+    assert.equal(defaultWindowLength({ n: 312 }, { windowLen: 0 }), 156);         // zły zapis => domyślne
 });
 
-test("futureDates skips weekends for daily and steps by week otherwise", () => {
+test("futureDates steps by week", () => {
     const { futureDates } = require("../../docs/js/chart.js");
-    assert.deepEqual(futureDates("2026-10-01", 4, true), ["2026-10-02", "2026-10-05", "2026-10-06", "2026-10-07"]);   // czwartek -> pt, pn, wt, śr
-    assert.deepEqual(futureDates("2026-10-01", 2, false), ["2026-10-08", "2026-10-15"]);
+    assert.deepEqual(futureDates("2026-10-01", 2), ["2026-10-08", "2026-10-15"]);
 });
 
 test("buildChartModel with pad adds empty future slots to every array; defaults show only a little of them", () => {
@@ -397,48 +381,49 @@ test("pivotFromStock: base pivot from the open base start, else the flag resista
     assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 98.4 }, bases), { price: 98.4, date: "2026-03-06", kind: "baza", active: false, risky: true });
     assert.equal(pivotFromStock({ base_type: "cup", base_handle: true, pivot: 98.4 }, bases).risky, false);   // cup z rączką = bez ostrzeżenia, bez rączki = ryzykowny setup
     assert.equal(pivotFromStock({ base_type: "cup", pivot: 98.4, pivot_state: "wybicie" }, bases).active, true);   // pivot aktywny (wybicie na wolumenie) = zielona linia, nieaktywny = biała
-    assert.deepEqual(pivotFromStock({ tl_level: 50, tl_state: "przy oporze" }, []), { price: 50, date: null, kind: "flaga", active: false });
-    assert.equal(pivotFromStock({ tl_level: 50 }, []), null);       // poziom bez wykrytego stanu nie jest pivotem
+    assert.deepEqual(pivotFromStock({ tlw_level: 50, tlw_state: "przy oporze" }, []), { price: 50, date: null, kind: "flaga", active: false });
+    assert.equal(pivotFromStock({ tlw_level: 50 }, []), null);       // poziom bez wykrytego stanu nie jest pivotem
     assert.equal(pivotFromStock(null, []), null);
 });
 
 test("pivotFromStock ignores corrections / deep corrections and levels far from the price (STM: pivot 81 vs price 57)", () => {
-    const stm = { base_type: "deep", pivot: 81.19, price: 57.26, tl_level: 54.15, tl_state: "wybicie" };
+    const stm = { base_type: "deep", pivot: 81.19, price: 57.26, tlw_level: 54.15, tlw_state: "wybicie" };
     assert.deepEqual(pivotFromStock(stm, []), { price: 54.15, date: null, kind: "flaga", active: true });          // nie 81,19: głęboka korekta to nie baza do zakupu
     assert.equal(pivotFromStock({ base_type: "correction", pivot: 60, price: 58 }, []), null);
     assert.equal(pivotFromStock({ base_type: "cup", pivot: 81.19, price: 57.26 }, []), null);       // kupowalna baza, ale 42 % od ceny
-    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 81.19, price: 57.26, tl_level: 56, tl_state: "przy oporze" }, []).price, 56);
+    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 81.19, price: 57.26, tlw_level: 56, tlw_state: "przy oporze" }, []).price, 56);
     assert.deepEqual(pivotFromStock({ tlw_level: 20, tlw_state: "przy oporze", price: 19.5 }, []), { price: 20, date: null, kind: "flaga", active: false });
 });
 
 test("chartSvg: breakout triangle points up under the breakout bar; extended price drops the buy/stop zone; unconfirmed close gets no triangle", () => {
     const n = 30;
-    const days = Array.from({ length: n }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
-    const arr = f => days.map((_, i) => f(i));
+    const weeks = Array.from({ length: n }, (_, i) => new Date(Date.UTC(2026, 0, 2) + i * 7 * 86400000).toISOString().slice(0, 10));
+    const arr = f => weeks.map((_, i) => f(i));
     const mk = (breakout, price, tlState = "wybicie") => ({
-        days, spx_d: arr(() => 5000), weeks: [], stocks: { X: { day: {
+        weeks, spx: arr(() => 5000), stocks: { X: {
             o: arr(i => 10 + i * 0.01), h: arr(i => 10.5 + i * 0.01), l: arr(i => 9.5 + i * 0.01), c: arr(i => (i === n - 1 ? price : 10 + i * 0.01)), v: arr(() => 100),
-            sma10: arr(() => 10), sma20: arr(() => 10), sma50: arr(() => 10), sma200: arr(() => 10),
-            tl: { lines: [{ kind: "res", x0: days[10], y0: 10.3, x1: days[n - 1], y1: 10.3, touches: 2 }], pattern: "korytarz", state: tlState, breakout, info: { type: "korytarz", length: 14, depth: 5, pole_gain: null, touches: 2 } },
-        }, eps: [], bases: [] } } });
-    const stock = { price: 10.6, tl_level: 10.3, tl_state: "wybicie" };
-    const bo = { date: days[n - 3], vol_ratio: 2, confirmed: true };
-    const m = buildChartModel(dailyCharts(mk(bo, 10.6)), "X", stock, { pad: true });
+            sma10: arr(() => 10), sma40: arr(() => 10),
+            tl: { lines: [{ kind: "res", x0: weeks[10], y0: 10.3, x1: weeks[n - 1], y1: 10.3, touches: 2 }], pattern: "korytarz", state: tlState, breakout, info: { type: "korytarz", length: 14, depth: 5, pole_gain: null, touches: 2 } },
+            eps: [], bases: [] } } });
+    const stock = { price: 10.6, tlw_level: 10.3, tlw_state: "wybicie" };
+    const bo = { date: weeks[n - 3], vol_ratio: 2, confirmed: true };
+    const m = buildChartModel(mk(bo, 10.6), "X", stock, { pad: true });
     const svg = chartSvg(m, {});
     const tri = svg.match(/<path d="M([\d.]+),([\d.]+) L([\d.]+),([\d.]+) L([\d.]+),([\d.]+) Z" fill="[^"]+"><title>Wybicie z linii trendu/);
     assert.ok(tri, "trójkąt wybicia istnieje");
     assert.ok(parseFloat(tri[4]) > parseFloat(tri[2]) && parseFloat(tri[6]) > parseFloat(tri[2]), "wierzchołek u góry — strzałka w górę");
     const xs = [...svg.matchAll(/<line x1="([\d.]+)" x2="\1" y1="[\d.]+" y2="[\d.]+" stroke="#22d3ee"/g)];
-    assert.ok(xs.length === 1 && Math.abs(parseFloat(xs[0][1]) - parseFloat(tri[1])) < 0.2, "trójkąt stoi pod świecą dnia wybicia, nie pod ostatnią");
+    assert.ok(xs.length === 1 && Math.abs(parseFloat(xs[0][1]) - parseFloat(tri[1])) < 0.2, "trójkąt stoi pod świecą tygodnia wybicia, nie pod ostatnią");
     assert.match(svg, />opór 10\.30</);                      // 10,6 vs 10,3 = +2,9 % — jeszcze w strefie zakupu: sam poziom, bez dopisku o cenie
     assert.match(svg, /strefa zakupu do \+5 %/);
-    const far = chartSvg(buildChartModel(dailyCharts(mk(bo, 11.0)), "X", { price: 11.0, tl_level: 10.3, tl_state: "wybicie" }, { pad: true }), {});
+    const far = chartSvg(buildChartModel(mk(bo, 11.0), "X", { price: 11.0, tlw_level: 10.3, tlw_state: "wybicie" }, { pad: true }), {});
     assert.match(far, /opór 10\.30 · cena \+6\.8%/);
     assert.doesNotMatch(far, /strefa zakupu|stop loss 5–8/);   // cena poza +5 %: bez strefy zakupu i stopu
-    const weak = chartSvg(buildChartModel(dailyCharts(mk({ ...bo, confirmed: false, vol_ratio: 0.7 }, 10.6, "bez wolumenu")), "X", stock, { pad: true }), {});
+    const weak = chartSvg(buildChartModel(mk({ ...bo, confirmed: false, vol_ratio: 0.7 }, 10.6, "bez wolumenu"), "X", stock, { pad: true }), {});
     assert.doesNotMatch(weak, /Wybicie z linii trendu: zamknięcie/);
     assert.match(weak, /nad linią, bez wolumenu ×0\.7</);
 });
+
 
 test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and volume labels", () => {
     const c = charts();
@@ -461,15 +446,6 @@ test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and 
     assert.ok(geom.L.marks.h > 0 && geom.L.eps.h < 60);               // pasek znaczników pod cenami, dolny panel tylko na tabelę
     const none = chartSvg(buildChartModel(charts(), "AAA", null, { pad: true }));
     assert.ok(!/pivot \d/.test(none));
-});
-
-test("daily model uses SMA 10/50/200 when the data has them", () => {
-    const charts = {
-        weeks: ["2026-01-02"], days: ["2026-01-01", "2026-01-02"], spx_d: [100, 101],
-        stocks: { X: { c: [1], day: { o: [1, 2], h: [1, 2], l: [1, 2], c: [1, 2], v: [1, 1], sma10: [1, 2], sma20: [1, 1.8], sma50: [1, 1.5], sma200: [0.9, 1] }, eps: [], eps_next: null } },
-    };
-    const m = buildChartModel(dailyCharts(charts), "X", null);
-    assert.deepStrictEqual(m.smas.map(x => x.label), ["SMA 10", "SMA 50", "SMA 200"]);
 });
 
 test("window without a report explains the last known one instead of claiming there is no data", () => {
@@ -543,17 +519,24 @@ test("pinchWindow zooms the time axis around the pinch centre; panWindow drags t
     assert.equal(panWindow({ n: 50, end: 250 }, -5000, 500, 252).end, 252);
 });
 
-test("buildChartModel / chartSvg: sell climax top marks the signal bar on the daily chart", () => {
-    const { buildChartModel, chartSvg, dailyCharts } = require("../../docs/js/chart.js");
-    const days = Array.from({ length: 30 }, (_, i) => `2026-09-${String(i + 1).padStart(2, "0")}`);
-    const arr = v => days.map(() => v);
-    const charts = { days, spx_d: arr(5000), weeks: [], stocks: { X: { day: { o: arr(10), h: arr(11), l: arr(9), c: arr(10), v: arr(100), sma10: arr(10), sma20: arr(10), sma50: arr(10), sma200: arr(10), climax: { date: "2026-09-28", runup_pct: 40, week_gain_pct: 22, vol_ratio: 3.1, reversal: true, gap: false, late: false, conf: 1 } }, eps: [], bases: [] } } };
-    const m = buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {});
-    assert.equal(m.climax.date, "2026-09-28");
-    assert.match(chartSvg(m, {}), /Sell climax top \(tydzień do 2026-09-28\)/);
-    charts.stocks.X.day.climax = null;
-    assert.doesNotMatch(chartSvg(buildChartModel(dailyCharts(charts), "X", { ticker: "X" }, {}), {}), /Sell climax top \(tydzień/);
+test("buildChartModel / chartSvg: sell climax top and distribution mark the signal weeks", () => {
+    const { buildChartModel, chartSvg } = require("../../docs/js/chart.js");
+    const weeks = Array.from({ length: 30 }, (_, i) => new Date(Date.UTC(2026, 0, 2) + i * 7 * 86400000).toISOString().slice(0, 10));
+    const arr = v => weeks.map(() => v);
+    const charts = { weeks, spx: arr(5000), stocks: { X: { o: arr(10), h: arr(11), l: arr(9), c: arr(10), v: arr(100), sma10: arr(10), sma40: arr(10), eps: [], bases: [],
+        climax: { date: weeks[27], runup_pct: 40, week_gain_pct: 22, vol_ratio: 3.1, reversal: true, gap: false, late: false, conf: 1 },
+        distribution: { date: weeks[20], vol_ratio: 2.4, change_pct: 0.4, close_pos: 0.3 } } } };
+    const m = buildChartModel(charts, "X", { ticker: "X" }, {});
+    assert.equal(m.climax.date, weeks[27]);
+    const svg = chartSvg(m, {});
+    assert.match(svg, new RegExp(`Sell climax top \\(tydzień do ${weeks[27]}\\)`));
+    assert.match(svg, new RegExp(`Dystrybucja bez wzrostu ceny \\(tydzień do ${weeks[20]}\\)`));
+    const clean = chartSvg(buildChartModel(charts, "X", { ticker: "X" }, { patterns: false }), {});
+    assert.doesNotMatch(clean, /Sell climax top \(tydzień|Dystrybucja bez wzrostu/);
+    charts.stocks.X.climax = null;
+    assert.doesNotMatch(chartSvg(buildChartModel(charts, "X", { ticker: "X" }, {}), {}), /Sell climax top \(tydzień/);
 });
+
 
 test("fundMiniModel: cena, EPS TTM i RS na osi tygodni", () => {
     const { fundMiniModel, fundMiniHtml } = require("../../docs/js/chart.js");
@@ -599,13 +582,13 @@ test("S&P 500 is a thin line in the top band of the price panel (own scale, no s
     assert.doesNotMatch(none, /S&amp;P 500 \d/);
 });
 
-test("pivotFromStock: wykres dzienny bierze dpivot / dbase_type, tygodniowy pivot / base_type", () => {
+test("pivotFromStock: wykres tygodniowy bierze pivot / base_type (pola dzienne dbase_* są ignorowane)", () => {
     const s = { price: 100, base_type: "flat", pivot: 102, dbase_type: "double_bottom", dpivot: 104 };
-    assert.equal(pivotFromStock(s, [], false).price, 102);
-    assert.equal(pivotFromStock(s, [], true).price, 104);
-    assert.equal(pivotFromStock({ price: 100, dbase_type: "htf", dpivot: 103 }, [], false), null);
-    assert.equal(pivotFromStock({ price: 100, base_type: "ascending", pivot: 103 }, [], false).price, 103);
+    assert.equal(pivotFromStock(s, []).price, 102);
+    assert.equal(pivotFromStock({ price: 100, dbase_type: "htf", dpivot: 103 }, []), null);
+    assert.equal(pivotFromStock({ price: 100, base_type: "ascending", pivot: 103 }, []).price, 103);
 });
+
 
 test("zoomWindow: płynny zoom zachowuje punkt kotwiczenia i granice", () => {
     const { zoomWindow } = require("../../docs/js/chart.js");

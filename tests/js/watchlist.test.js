@@ -203,10 +203,10 @@ test("all tabs share the same columns; alerts add alert columns; tagStrategies o
 
 test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and sort order", () => {
     assert.equal(breakoutInfo(stock("A"), null, 5), null);
-    const flag = breakoutInfo(stock("A", { tl_state: "przy oporze", tl_pattern: "flaga", tl_dist_pct: 1.4 }), null, 5);
+    const flag = breakoutInfo(stock("A", { tlw_state: "przy oporze", tlw_pattern: "flaga", tlw_dist_pct: 1.4 }), null, 5);
     assert.equal(flag.dist, 1.4);
     assert.equal(flag.rank, 1);
-    const fresh = breakoutInfo(stock("B", { tl_state: "wybicie", tl_pattern: "flaga", tl_vol_ratio: 2.1, tl_vol_ok: true }), null, 5);
+    const fresh = breakoutInfo(stock("B", { tlw_state: "wybicie", tlw_pattern: "flaga", tlw_vol_ratio: 2.1, tlw_vol_ok: true }), null, 5);
     assert.equal(fresh.rank, 0);
     assert.equal(fresh.dist, null);
     assert.ok(fresh.reasons[0].text.includes("×2.1") && fresh.reasons[0].text.includes("✓"));
@@ -219,7 +219,7 @@ test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and 
 });
 
 test("tagBreakouts sets brk and brk_sort (fresh breakouts first, then by distance); readinessLine summarises", () => {
-    const rows = [stock("A", { tl_state: "przy oporze", tl_pattern: "flaga", tl_dist_pct: 2.5 }), stock("B", { tl_state: "wybicie", tl_pattern: "korytarz" }),
+    const rows = [stock("A", { tlw_state: "przy oporze", tlw_pattern: "flaga", tlw_dist_pct: 2.5 }), stock("B", { tlw_state: "wybicie", tlw_pattern: "korytarz" }),
         stock("C", { base_type: "flat", pct_to_pivot: 1 }), stock("D")];
     tagBreakouts(rows, [], 5);
     assert.deepEqual(rows.filter(s => s.brk).sort((a, b) => a.brk_sort - b.brk_sort).map(s => s.ticker), ["B", "C", "A"]);
@@ -396,14 +396,14 @@ test("canslimExplain: one row per letter with the numbers behind each flag; shee
 });
 
 test("breakoutInfo follows O'Neil: a close above the line / pivot needs volume; unconfirmed closes are not fresh breakouts", () => {
-    // flaga dzienna i tygodniowa
-    assert.equal(breakoutInfo(stock("A", { tl_state: "bez wolumenu", tl_pattern: "flaga", tl_vol_ratio: 1.1 }), null, 5).rank, 2);
-    assert.match(breakoutInfo(stock("A", { tl_state: "bez wolumenu", tl_pattern: "flaga", tl_vol_ratio: 1.1 }), null, 5).reasons[0].text, /niepotwierdzone/);
+    // flaga tygodniowa
+    assert.equal(breakoutInfo(stock("A", { tlw_state: "bez wolumenu", tlw_pattern: "flaga", tlw_vol_ratio: 1.1 }), null, 5).rank, 2);
+    assert.match(breakoutInfo(stock("A", { tlw_state: "bez wolumenu", tlw_pattern: "flaga", tlw_vol_ratio: 1.1 }), null, 5).reasons[0].text, /niepotwierdzone/);
     const weekly = breakoutInfo(stock("B", { tlw_state: "wybicie", tlw_pattern: "flaga", tlw_vol_ratio: 2.4, tlw_vol_ok: true }), null, 5);
     assert.equal(weekly.rank, 0);
     assert.match(weekly.reasons[0].text, /\(tyg\.\) ×2\.4 wol\. ✓/);
     // pivot: wybicie tylko z wolumenem
-    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: -1, pivot_state: "wybicie", pivot_vol_ratio: 2, pivot_tf: "D" }), null, 5).rank, 0);
+    assert.equal(breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: -1, pivot_state: "wybicie", pivot_vol_ratio: 2, pivot_tf: "W" }), null, 5).rank, 0);
     const weak = breakoutInfo(stock("C", { base_type: "cup", pct_to_pivot: -1, pivot_state: "bez wolumenu", pivot_vol_ratio: 1.1 }), null, 5);
     assert.equal(weak.rank, 2);
     assert.match(weak.reasons[0].text, /bez wolumenu/);
@@ -532,88 +532,58 @@ test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez 
     assert.equal(code({ pct_above_sma10w: 3 }), "PULLBACK");
     assert.equal(code({ pct_above_sma10w: 9 }), "WAIT");
     assert.equal(code({ pct_above_sma10w: 22 }), "LATE");
-    // lista Qullamaggiego nie dostaje wskazówki CANSLIM
-    assert.equal(actionInfo({ in_cs: false }, up), null);
+    // spółka tylko z listy Qullamaggiego: ocena po wzorcu tygodniowym, bez bramki fundamentów CANSLIM (C / A false nie daje SKIP)
+    const qm = { in_cs: false, canslim: { flags: { C: false, A: false } } };
+    assert.equal(actionInfo({ ...qm, ...brk }, up).code, "BUY");
+    assert.equal(actionInfo({ ...qm, base_type: "flat", pct_to_pivot: 3 }, up).code, "NEAR");
+    assert.equal(actionInfo({ ...qm }, { regime: "correction", distDays: 0 }).code, "NOBUY");
 });
 
-test("actionInfo: osobna ocena na wykresie dziennym (flaga / korytarz) i tygodniowym (baza)", () => {
+test("actionInfo: ocena na wykresie tygodniowym (baza, flaga tygodniowa, 10-tygodniowa), dystrybucja i tagActions", () => {
     const { actionInfo, tagActions } = require("../../docs/js/watchlist.js");
     const up = { regime: "uptrend", distDays: 2 };
-    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma50: 9, pct_above_sma10w: 9 };
-    const w = (s, m = up) => actionInfo({ ...base, ...s }, m, "W").code, d = (s, m = up) => actionInfo({ ...base, ...s }, m, "D").code;
-    // tygodniowy: cena 7 % nad pivotem bazy = ZA PÓŹNO, ale dzienna flaga przy oporze = ALERT
-    const late = { base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -7, tl_pattern: "flaga", tl_state: "przy oporze", tl_dist_pct: 1.2 };
-    assert.equal(w(late), "LATE");
-    assert.equal(d(late), "NEAR");
-    // dzienny: wybicie flagi na wolumenie do +5 % = KUP; dalej = ZA PÓŹNO; bez wolumenu = czekaj
-    assert.equal(d({ tl_pattern: "flaga", tl_state: "wybicie", tl_dist_pct: -2 }), "BUY");
-    assert.equal(d({ tl_pattern: "flaga", tl_state: "wybicie", tl_dist_pct: -2 }, { regime: "uptrend", distDays: 6 }), "BUY_HALF");
-    assert.equal(d({ tl_pattern: "korytarz", tl_state: "wybicie", tl_dist_pct: -8 }), "LATE");
-    assert.equal(d({ tl_pattern: "korytarz", tl_state: "bez wolumenu", tl_dist_pct: -1 }), "NEAR");
-    assert.equal(d({ tl_pattern: "flaga", tl_dist_pct: 8 }), "BASE");
-    // tygodniowa flaga (tlw_) liczy się tylko w widoku tygodniowym, dzienna (tl_) tylko w dziennym
-    assert.equal(w({ tl_state: "wybicie", tl_dist_pct: -2 }), "WAIT");
-    assert.equal(d({ tlw_state: "wybicie", tlw_dist_pct: -2 }), "WAIT");
+    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma10w: 9 };
+    const w = (s, m = up) => actionInfo({ ...base, ...s }, m).code;
+    // cena 7 % nad pivotem bazy = ZA PÓŹNO; tuż nad pivotem na wolumenie = KUP; ½ przy dniach dystrybucji rynku
+    assert.equal(w({ base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -7 }), "LATE");
+    assert.equal(w({ base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -2 }), "BUY");
+    assert.equal(w({ base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -2 }, { regime: "uptrend", distDays: 6 }), "BUY_HALF");
+    assert.equal(w({ base_type: "flat", pct_to_pivot: 3 }), "NEAR");
+    assert.equal(w({ base_type: "cup", pct_to_pivot: 9 }), "BASE");
+    // flaga tygodniowa (tlw_); pola dzienne (tl_, dbase_*) są ignorowane
     assert.equal(w({ tlw_state: "wybicie", tlw_dist_pct: -2 }), "BUY");
-    // pozycja i rynek są wspólne
-    assert.equal(w({ position: { stop_hit: true, pl_pct: -8 } }), d({ position: { stop_hit: true, pl_pct: -8 } }));
-    assert.equal(d({}, { regime: "correction", distDays: 0 }), "NOBUY");
-    // tagActions: obie oceny + ważniejsza do sortowania
-    const s = { ...base, ...late };
+    assert.equal(w({ tlw_state: "przy oporze", tlw_dist_pct: 1.5 }), "NEAR");
+    assert.equal(w({ tl_state: "wybicie", tl_dist_pct: -2, dbase_type: "cup", dpct_to_pivot: -2, dpivot_state: "wybicie" }), "WAIT");
+    // średnia: tygodniowy liczy na 10-tygodniowej (brak pola nie podstawia SMA50); rozciągnięcie od 20 %
+    assert.equal(actionInfo({ ...base, pct_above_sma10w: 3, pct_above_sma50: 12 }, up).code, "PULLBACK");
+    assert.equal(actionInfo({ ...base, pct_above_sma10w: undefined, pct_above_sma50: 3 }, up).code, "WAIT");
+    assert.equal(actionInfo({ ...base, pct_above_sma10w: 17 }, up).code, "WAIT");
+    assert.equal(actionInfo({ ...base, pct_above_sma10w: 23 }, up).code, "LATE");
+    // pozycja i rynek
+    assert.equal(w({ position: { stop_hit: true, pl_pct: -8 } }), "SELL");
+    assert.equal(w({}, { regime: "correction", distDays: 0 }), "NOBUY");
+    // dystrybucja: bez pozycji = nie kupuj (DIST), z pozycją = realizuj zysk (TRIM)
+    const dist = { dist_top: true, dist_date: "2026-10-02", dist_vol_ratio: 2.4 };
+    assert.equal(w({ ...dist, base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -2 }), "DIST");
+    assert.equal(w({ ...dist, position: { pl_pct: 12, stop_hit: false } }), "TRIM");
+    assert.match(actionInfo({ ...base, ...dist }, up).why, /Dystrybucja bez wzrostu ceny/);
+    // tagActions: jedna ocena tygodniowa = główna
+    const s = { ...base, base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -7 };
     tagActions([s], up);
     assert.equal(s.action_w.code, "LATE");
-    assert.equal(s.action_d.code, "NEAR");
-    assert.equal(s.action.code, "NEAR");
-    assert.equal(s.act_rank_d < s.act_rank_w, true);
-});
-
-test("actionInfo: tygodniowy liczy na 10-tygodniowej średniej, dzienny na SMA50; główny sygnał = tygodniowy, a gdy go brak — dzienny", () => {
-    const { actionInfo, tagActions } = require("../../docs/js/watchlist.js");
-    const up = { regime: "uptrend", distDays: 2 };
-    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true };
-    // ta sama cena: przy 10-tygodniowej tygodniowy widzi cofnięcie, dzienny (SMA50 +12 %) nie
-    const s1 = { ...base, pct_above_sma10w: 3, pct_above_sma50: 12 };
-    assert.equal(actionInfo(s1, up, "W").code, "PULLBACK");
-    assert.equal(actionInfo(s1, up, "D").code, "WAIT");
-    // brak pola tygodniowego (stare dane) nie podstawia dziennej SMA50
-    assert.equal(actionInfo({ ...base, pct_above_sma50: 3 }, up, "W").code, "WAIT");
-    // rozciągnięcie: tygodniowy dopiero od 20 % nad 10-tyg., dzienny od 15 % nad SMA50
-    assert.equal(actionInfo({ ...base, pct_above_sma10w: 17, pct_above_sma50: 17 }, up, "W").code, "WAIT");
-    assert.equal(actionInfo({ ...base, pct_above_sma10w: 17, pct_above_sma50: 17 }, up, "D").code, "LATE");
-    // główny sygnał: tygodniowy ma sygnał -> tygodniowy
-    const a = { ...base, base_type: "flat", pct_to_pivot: 3, tl_pattern: "flaga", tl_state: "przy oporze", tl_dist_pct: 1 };
-    tagActions([a], up); assert.equal(a.action_tf, "W");
-    // tygodniowy ZA PÓŹNO, dzienny flaga przy oporze -> główny dzienny
-    const b = { ...base, base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -8, tl_pattern: "flaga", tl_state: "przy oporze", tl_dist_pct: 1 };
-    tagActions([b], up); assert.equal(b.action_w.code, "LATE"); assert.equal(b.action_tf, "D"); assert.equal(b.action.code, "NEAR");
-    // oba bez sygnału -> tygodniowy
-    const c = { ...base, pct_above_sma10w: 9, pct_above_sma50: 9 };
-    tagActions([c], up); assert.equal(c.action_tf, "W");
-});
-
-test("actionInfo: dzienne bazy z książki O'Neila (double bottom, ascending, HTF) mają pierwszeństwo przed flagą", () => {
-    const { actionInfo } = require("../../docs/js/watchlist.js");
-    const up = { regime: "uptrend", distDays: 2 };
-    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma50: 9 };
-    const d = s => actionInfo({ ...base, ...s }, up, "D").code;
-    assert.equal(d({ dbase_type: "double_bottom", dpct_to_pivot: -2, dpivot_state: "wybicie" }), "BUY");
-    assert.equal(d({ dbase_type: "ascending", dpct_to_pivot: -8, dpivot_state: "wybicie" }), "LATE");
-    assert.equal(d({ dbase_type: "htf", dpct_to_pivot: 3 }), "NEAR");
-    assert.equal(d({ dbase_type: "cup", dbase_saucer: true, dpct_to_pivot: 9 }), "BASE");
-    assert.equal(d({ dbase_type: "correction", dpct_to_pivot: 3 }), "WAIT");   // korekta to nie baza do zakupu
-    // dzienne pola nie wpływają na ocenę tygodniową
-    assert.equal(actionInfo({ ...base, pct_above_sma10w: 9, dbase_type: "cup", dpct_to_pivot: -2, dpivot_state: "wybicie" }, up, "W").code, "WAIT");
+    assert.equal(s.action.code, "LATE");
+    assert.equal(s.action_tf, "W");
+    assert.equal(s.action_d, undefined);
+    assert.equal(s.act_rank, s.act_rank_w);
 });
 
 test("baza na bazie: nazwa w kafelku, podsumowaniu i opisie akcji", () => {
-    const { baseBoxData, baseSummary, actionInfo } = require("../../docs/js/watchlist.js");
+    const { baseBoxData, baseSummary } = require("../../docs/js/watchlist.js");
     const s = { base_type: "flat", pivot: 112, base_weeks: 7, base_depth_pct: 9, pct_to_pivot: 3, base_on_base: true, base_stage: 2 };
     assert.match(baseBoxData(s).title, /baza na bazie/);
     assert.ok(baseBoxData(s).rows.some(r => r[0] === "Etap" && /2\. etap/.test(r[1])));
     assert.match(baseSummary(s), /baza na bazie/);
     assert.doesNotMatch(baseSummary({ ...s, base_on_base: false }), /baza na bazie/);
-    const d = actionInfo({ canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, dbase_type: "flat", dbase_on_base: true, dpct_to_pivot: 3 }, { regime: "uptrend", distDays: 1 }, "D");
-    assert.match(d.why, /baza na bazie/);
 });
 
 test("positionSize: akcje ułamkowe (w dół do 0,01) i ich formatowanie", () => {
@@ -643,4 +613,35 @@ test("baseBoxData: pokazuje wzrost przed bazą, strefę kupna, stop −8 %, stat
     const ok = Object.fromEntries(baseBoxData({ base_type: "cup", base_buy_zone_max: 105, base_stop_8pct: 92, base_status: "WATCHLIST", pivot: 100 }).rows);
     assert.match(ok["Strefa kupna do"], /105/);
     assert.match(ok["Stop −8% od pivotu"], /92/);
+});
+
+test("CANSLIM A: wzrost EPS ≥ 25 % w każdym znanym z 3 ostatnich lat; akceleracja i skup akcji to chipy i sortowanie, nie wymóg", () => {
+    const { canslimInfo, canslimRows, ratingChips, canslimExplain } = require("../../docs/js/watchlist.js");
+    const mkt = { regime: "uptrend", distDays: 1 };
+    const good = { eps_this_y: 40, roe: 22, eps_yr0: 40, eps_yr1: 30, eps_yr2: 28 };
+    assert.equal(canslimInfo(good, mkt).flags.A, true);
+    assert.equal(canslimInfo({ ...good, eps_yr1: 12 }, mkt).flags.A, false);             // słaby rok w środku = A nie przechodzi
+    assert.equal(canslimInfo({ ...good, eps_yr1: null, eps_yr2: null }, mkt).flags.A, true);   // młoda spółka: nieznane lata pomijamy
+    assert.equal(canslimInfo({ eps_yr0: null }, mkt).flags.A, null);
+    // akceleracja: C nie zależy od niej, ale chip i sortowanie tak
+    const base = { eps_q0_yoy: 40, sales_qq: 30 };
+    assert.equal(canslimInfo({ ...base, eps_accel: false }, mkt).flags.C, true);
+    const rows = [{ ticker: "A", cs: 6, composite_rating: 90, eps_accel: false, canslim: { flags: { C: true, A: true } } }, { ticker: "B", cs: 6, composite_rating: 70, eps_accel: true, canslim: { flags: { C: true, A: true } } }];
+    assert.deepEqual(canslimRows(rows, 5, true).map(r => r.ticker), ["B", "A"]);   // ta sama liczba liter: przyspieszający wyżej niż wyższy Composite
+    const labels = ratingChips({ eps_accel: true, eps_q0_yoy: 50, eps_q1_yoy: 25, shares_chg_pct: -6.2, dist_top: true, dist_date: "2026-10-02", dist_vol_ratio: 2.1 }).map(c => c.value);
+    assert.ok(labels.includes("↗ Akceleracja") && labels.includes("Skup -6.2%") && labels.includes("⚠ Dystrybucja"));
+    assert.ok(!ratingChips({ shares_chg_pct: -2 }).some(c => /Skup/.test(c.value)));   // skup < 5 % to jeszcze nie sygnał
+    const e = canslimExplain({ ...good, shares_chg_pct: -7, eps_accel: true, eps_q0_yoy: 50, eps_q1_yoy: 25 }, mkt);
+    assert.match(e.rows.find(r => r.key === "S").have, /skup akcji ✓/);
+    assert.match(e.rows.find(r => r.key === "A").have, /\+40% \/ \+30% \/ \+28%/);
+});
+
+test("hasWeeklyPattern i filtr Qullamaggiego „tylko z wzorcem tygodniowym”", () => {
+    const { qullamaggieRows, hasWeeklyPattern } = require("../../docs/js/watchlist.js");
+    const mk = (t, extra) => ({ ticker: t, dollar_volume_avg: 5e7, adr_pct: 6, low_ratio_1m: 1.5, low_ratio_3m: 1.5, low_ratio_6m: 1.5, ...extra });
+    const rows = [mk("A", { base_type: "flat" }), mk("B", { tlw_pattern: "flaga" }), mk("C", { base_type: "correction" }), mk("D")];
+    assert.deepEqual(rows.map(hasWeeklyPattern), [true, true, false, false]);
+    const p = { minDollarVolumeM: 20, minAdrPct: 4, topPct: 100 };
+    assert.deepEqual(qullamaggieRows(rows, p).map(r => r.ticker).sort(), ["A", "B", "C", "D"]);
+    assert.deepEqual(qullamaggieRows(rows, { ...p, patternOnly: true }).map(r => r.ticker).sort(), ["A", "B"]);
 });

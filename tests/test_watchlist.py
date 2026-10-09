@@ -116,7 +116,9 @@ class TestIndicators:
         assert m["low_ratio_6m"] > m["low_ratio_3m"] > m["low_ratio_1m"] > 1
         assert m["pct_above_sma50"] > 0 and m["pct_above_sma200"] > m["pct_above_sma50"]
         assert len(m["spark"]) == watchlist.SPARK_WEEKS and m["spark"][0] == 0
-        assert "tl_level" in m and "tl_dist_pct" in m   # poziom oporu flagi/korytarza (None bez formacji)
+        assert "tlw_level" in m and "tlw_dist_pct" in m   # poziom oporu tygodniowej flagi/korytarza (None bez formacji)
+        assert not any(k.startswith(("dbase_", "dpivot", "tl_")) for k in m)   # wzorce dzienne usunięte — tylko tygodniowe
+        assert "dist_top" in m
 
     def test_compute_metrics_young_stock_has_no_rs_score(self):
         m = watchlist.compute_metrics(make_prices(n=120))
@@ -302,14 +304,6 @@ class TestCharts:
         assert list(w.index) == [pd.Timestamp("2026-09-25"), pd.Timestamp("2026-09-30")]  # niepelny tydzien -> data ostatniej sesji
         assert w.iloc[0].to_dict() == {"Open": 1, "High": 4, "Low": 1, "Close": 3.5, "Volume": 30}
         assert w.iloc[1]["High"] == 9 and w.iloc[1]["Open"] == 4 and w.iloc[1]["Volume"] == 20
-
-    def test_build_daily_has_sma_on_full_history_and_aligns_days(self):
-        df = make_prices(n=300, daily=0.002)
-        days = list(df.index[-20:])
-        d = watchlist.build_daily(df, days)
-        assert len(d["c"]) == 20 and all(len(d[k]) == 20 for k in ("o", "h", "l", "v", "sma10", "sma20"))
-        assert d["sma20"][0] is not None  # SMA liczona na pelnej historii, nie tylko na oknie
-        assert d["sma50"][0] is not None and d["sma200"][0] is not None and len(d["sma200"]) == 20
 
     def test_build_chart_aligns_to_common_weeks_and_pads_missing(self):
         weekly = watchlist.weekly_ohlcv(make_prices(n=300, daily=0.002))
@@ -977,10 +971,11 @@ class TestOneilPatterns:
         weak = [10] * 12 + [10.5, 11, 11.5, 12, 12.5, 13] + [12.5, 12, 11.8, 11.6]
         assert self.last(weak, 1)["type"] != "htf"
 
-    def test_compute_metrics_exposes_daily_pattern_fields(self):
+    def test_compute_metrics_exposes_weekly_pattern_fields_only(self):
         m = watchlist.compute_metrics(make_prices(n=400, daily=0.002))
-        for key in ("dbase_type", "dpivot", "dpct_to_pivot", "dpivot_state", "base_type", "pct_to_pivot"):
+        for key in ("base_type", "pct_to_pivot", "pivot_state", "tlw_state"):
             assert key in m
+        assert "dpivot" not in m and "dbase_type" not in m
 
 
 class TestBaseOnBase:
@@ -1012,7 +1007,7 @@ class TestBaseOnBase:
 
     def test_metrics_expose_stage_fields(self):
         m = watchlist.compute_metrics(make_prices(n=400, daily=0.002))
-        assert "base_on_base" in m and "dbase_stage" in m
+        assert "base_on_base" in m and "base_stage" in m
 
 
 class TestSplits:
@@ -1049,3 +1044,75 @@ class TestFx:
         assert watchlist.fetch_usdpln() is None
         monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period="10d": {})
         assert watchlist.fetch_usdpln() is None
+
+
+class TestWeeklyDistributionAndEps:
+    @staticmethod
+    def weekly(closes, vols, highs=None, lows=None):
+        idx = pd.date_range("2024-01-05", periods=len(closes), freq="W-FRI")
+        c = pd.Series(closes, index=idx, dtype=float)
+        return pd.DataFrame({"Open": c.shift(1).fillna(c.iloc[0]), "High": highs if highs is not None else c * 1.01,
+                             "Low": lows if lows is not None else c * 0.99, "Close": c, "Volume": vols}, index=idx)
+
+    def rally(self, last_close, last_vol, last_low=None, last_high=None):
+        closes = [10 + 0.25 * i for i in range(60)]          # stały rajd, +150 %
+        vols = [100.0] * 60
+        closes.append(last_close)
+        vols.append(last_vol)
+        w = self.weekly(closes, vols)
+        if last_low is not None:
+            w.iloc[-1, w.columns.get_loc("Low")] = last_low
+        if last_high is not None:
+            w.iloc[-1, w.columns.get_loc("High")] = last_high
+        return w
+
+    def test_distribution_needs_record_volume_with_flat_close(self):
+        flat = self.rally(25.0, 400)                          # zamknięcie 25,0 vs 24,75 (+1,0 %), wolumen 4x
+        d = watchlist.detect_distribution_week(flat)
+        assert d and d["vol_ratio"] == pytest.approx(4.0) and d["change_pct"] <= watchlist.DISTR_FLAT_PCT
+        assert watchlist.detect_distribution_week(self.rally(25.0, 120)) is None        # wolumen za mały (1,2x)
+        assert watchlist.detect_distribution_week(self.rally(27.0, 400, last_low=24.9, last_high=27.1)) is None   # mocny tydzień w górę przy górze zakresu = popyt
+
+    def test_distribution_lower_half_close_counts_even_after_a_rise(self):
+        w = self.rally(25.6, 400, last_low=24.5, last_high=27.0)   # +3,4 %, ale zamknięcie w dolnej połowie zakresu
+        assert watchlist.detect_distribution_week(w)["close_pos"] < 0.5
+
+    def test_distribution_ignores_big_up_weeks_even_with_a_weak_close(self):
+        w = self.rally(27.0, 400, last_low=24.7, last_high=30.0)   # +9 % w tygodniu, zamknięcie w dolnej połowie = wybicie / climax, nie dystrybucja
+        assert watchlist.detect_distribution_week(w) is None
+
+    def test_distribution_ignores_stock_far_below_its_high(self):
+        closes = [10 + 0.25 * i for i in range(60)] + [14.0]     # 14 vs szczyt ~24,75 (>15 % pod)
+        w = self.weekly(closes, [100.0] * 60 + [400.0])
+        assert watchlist.detect_distribution_week(w) is None
+
+    def test_eps_annual_growth_uses_ttm_of_each_of_last_3_years(self):
+        q = [{"t": None}] * 3 + [{"t": float(t)} for t in (4, 4, 4, 4, 5, 5, 5, 6, 7.5, 7.5, 8, 9, 10, 10, 11, 12)][:]
+        assert watchlist.eps_annual_growth(q) == [33.3, 50.0, 50.0]   # TTM 12 vs 9, 9 vs 6, 6 vs 4
+        assert watchlist.eps_annual_growth([{"t": 5.0}] * 4) == [None, None, None]                   # za mało historii
+        assert watchlist.eps_annual_growth([{"t": -1.0}] * 4 + [{"t": 2.0}] * 4)[0] is None         # ujemna baza = brak procentu
+
+    def test_add_eps_rating_sets_acceleration_annual_growth_and_shares(self):
+        rows = []
+        eps = [1.0, 1.0, 1.0, 1.0, 1.3, 1.3, 1.4, 1.5, 1.8, 1.9, 2.1, 2.4]
+        for i, e in enumerate(eps):
+            rows.append({"date": (pd.Timestamp("2023-03-01") + pd.DateOffset(months=3 * i)).strftime("%Y-%m-%d"), "eps": e, "est": None})
+        stocks = [{"ticker": "AAA", "eps_this_y": 30.0, "eps_past_5y": 20.0}]
+        watchlist.add_eps_rating(stocks, {"AAA": {"rows": rows, "shares_chg_pct": -6.2}})
+        s = stocks[0]
+        assert s["eps_accel"] is True and s["eps_q0_yoy"] > s["eps_q1_yoy"]
+        assert s["eps_yr0"] is not None and s["eps_yr1"] is not None and s["eps_yr2"] is None
+        assert s["shares_chg_pct"] == -6.2
+
+    def test_shares_change_pct_compares_with_a_year_ago(self):
+        idx = pd.to_datetime(["2025-01-10", "2025-10-01", "2026-01-12", "2026-10-01"])
+        assert watchlist.shares_change_pct(pd.Series([100.0, 98.0, 95.0, 92.0], index=idx)) == pytest.approx(-6.1, abs=0.1)
+        assert watchlist.shares_change_pct(pd.Series([100.0, 98.0], index=pd.to_datetime(["2026-09-01", "2026-10-01"]))) is None   # historia za krótka
+        assert watchlist.shares_change_pct(None) is None
+
+    def test_update_eps_cache_keeps_extra_fields_from_dict_fetch(self, tmp_path):
+        out = watchlist.update_eps_cache(["AAA"], cache_path=tmp_path / "e.json", now="2026-10-10",
+                                         fetch=lambda t: {"rows": [{"date": "2026-08-01", "eps": 1.0, "est": None}], "shares_chg_pct": -7.0})
+        assert out["AAA"]["shares_chg_pct"] == -7.0 and out["AAA"]["rows"][0]["eps"] == 1.0
+        out2 = watchlist.update_eps_cache(["BBB"], cache_path=tmp_path / "e2.json", now="2026-10-10", fetch=lambda t: [])
+        assert out2["BBB"]["rows"] == []

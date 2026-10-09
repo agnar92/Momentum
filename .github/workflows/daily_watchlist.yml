@@ -1,7 +1,7 @@
-name: Daily Watchlist Refresh
+name: Weekly Watchlist Refresh
 
-# Codziennie rano (po zakończonej sesji USA z poprzedniego dnia, żeby na nowe otwarcie mieć świeże
-# dane z dnia poprzedniego): watchlist.py pobiera listę spółek z Finviz (nad SMA50 i SMA200, stabilny
+# Raz w tygodniu, w sobotę rano (po piątkowej sesji USA — aplikacja ma tylko wykresy TYGODNIOWE, więc codzienne pobieranie jest zbędne;
+# plik zostaje pod starą nazwą daily_watchlist.yml, bo na niego wskazuje link „Odśwież dane” na stronie): watchlist.py pobiera listę spółek z Finviz (nad SMA50 i SMA200, stabilny
 # wzrost EPS i dodatnie prognozy EPS), ceny z yfinance i liczy RS Rating, dane do filtra Qullamaggiego
 # i trend EMA34 -> docs/data/watchlist.json, który następnie trafia na GitHub Pages. W tym samym przebiegu odświeża się też
 # lista Qullamaggiego (docs/data/watchlist_qm.json, osobny filtr Finviz z finviz_screen_qm.json).
@@ -9,14 +9,14 @@ name: Daily Watchlist Refresh
 # Pobieranie i obliczenia w jednym przebiegu (jak dawniej) + zapis migawki pobranych danych (gałąź raw-data). Same obliczenia, bez pobierania, robi
 # deploy strony (deploy.yml) po każdym pushu do main oraz ręczny workflow "Recompute Watchlist" (watchlist.py --compute-only).
 #
-# Ręczne odpalenie: zakładka Actions -> "Daily Watchlist Refresh" -> "Run workflow"
+# Ręczne odpalenie: zakładka Actions -> "Weekly Watchlist Refresh" -> "Run workflow"
 # (na stronie jest przycisk "Odśwież dane", który prowadzi właśnie tutaj) albo lokalnie:
 #   python watchlist.py
 on:
   schedule:
-    # 05:30 UTC (07:30 latem / 06:30 zimą w Polsce), wtorek-sobota = po sesjach pon-pt USA.
-    # GitHub Actions liczy cron w UTC, bez przejścia na czas letni.
-    - cron: '30 5 * * 2-6'
+    # Sobota 03:17 UTC (05:17 latem / 04:17 zimą w Polsce) = po piątkowej sesji; do rana dane są gotowe. GitHub Actions liczy cron w UTC, bez przejścia na czas letni,
+    # a przy dużym ruchu opóźnia starty nawet o kilkadziesiąt minut — stąd zapas.
+    - cron: '17 3 * * 6'
   workflow_dispatch:
 
 permissions:

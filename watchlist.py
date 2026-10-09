@@ -1,6 +1,6 @@
 """Codzienna lista obserwowana: Finviz (lista spółek + fundamenty) -> yfinance (ceny) -> docs/data/watchlist.json.
 
-Przepływ (odpalany codziennie rano, po sesji USA z poprzedniego dnia — patrz
+Przepływ (odpalany raz w tygodniu, w sobotę rano, po piątkowej sesji USA — patrz
 .github/workflows/daily_watchlist.yml; ręcznie: `python watchlist.py` albo "Run workflow" na GitHubie):
   1. finviz.py: spółki nad SMA50 i SMA200 z dodatnim, stabilnym wzrostem EPS i prognozami EPS
      + sektor/branża/kapitalizacja/wzrost EPS/data wyników (wszystko, co da się wziąć z Finviz).
@@ -32,7 +32,6 @@ ESTIMATES_PATH = ROOT / "docs" / "data" / "estimates.json"
 QM_OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist_qm.json"    # profil Qullamaggiego (ręczny): osobna lista i osobne wykresy
 QM_WINDOWS = ("low_ratio_1m", "low_ratio_3m", "low_ratio_6m")
 
-DAILY_BARS_PER_WEEK = 5      # wzorce na wykresie dziennym: progi w tygodniach × 5 świec
 HISTORY_PERIOD = "10y"       # wykres tygodniowy ~6 lat (CHART_WEEKS) + rozgrzanie SMA40 + historia baz (opisy z książki); RS Rating liczy tylko ostatnie 12M
 DAILY_KEEP = 1700            # compute_metrics i bazy dzienne używają tylko ostatnich ~6,7 roku sesji (reszta historii tylko rozgrzewa średnie tygodniowe)
 BATCH_SIZE = 50
@@ -45,7 +44,6 @@ EPS_STABILITY_WEIGHT = 0.2   # EPS Rating = 80 % percentyl wzrostu + 20 % percen
 EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/r) z dodatnim wzrostem EPS
 EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
-CHART_DAYS = 252             # ile sesji ma wykres dzienny (~rok; domyślne okno suwaka to 1 miesiąc)
 CHART_WEEKS = 312            # ile tygodni mieści wykres w stylu książki O'Neila (6 lat; domyślnie widać 156 = 3 lata, resztę pokazuje suwak)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
@@ -107,8 +105,10 @@ HOLD_FAST_WEEKS = 3
 HOLD_WEEKS = 8               # ... = trzymaj minimum 8 tygodni
 CUP_MKT_CONTEXT_DD = 7.0     # S&P spadł >= 7 % w trakcie tworzenia miseczki = „pod presją rynku”
 ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "skurcze" (VCP)
-EPS_CACHE_VERSION = 2        # v2 = historia raportów do 40 kwartałów (limit=40); starsze wpisy (20) są pobierane ponownie
-EPS_CACHE_MAX_AGE_DAYS = 7   # EPS zmienia się raz na kwartał — nie pytamy Yahoo codziennie
+EPS_CACHE_VERSION = 3        # v3 = dodatkowo zmiana liczby akcji r/r (skup akcji); v2 = historia raportów do 40 kwartałów (limit=40); starsze wpisy są pobierane ponownie
+EPS_CACHE_MAX_AGE_DAYS = 6   # EPS zmienia się raz na kwartał; odświeżenie jest tygodniowe (sobota), więc wpis starszy niż 6 dni jest zawsze pobierany ponownie
+EPS_ACCEL_PP = 5.0           # akceleracja C: wzrost EPS r/r z ostatniego kwartału wyższy od poprzedniego o >= tyle punktów procentowych
+BUYBACK_PCT = -5.0           # skup akcji (S): liczba akcji spadła r/r o >= 5 % (blueprint: 5-10 % to silny sygnał zmniejszania podaży)
 EPS_TIME_BUDGET_S = 600
 EPS_WORKERS = 4
 CACHE_KEEP_DAYS = 45         # eps_cache.json / estimates.json dzielą skaner CANSLIM i szeroki skaner: wpis spoza bieżącej listy znika dopiero po tylu dniach bez odświeżenia
@@ -216,6 +216,14 @@ CLIMAX_TREND_MIN_WEEKS = 8
 CLIMAX_VOL_MULT = 1.5        # ... najszerszy zakres i NAJWYŻSZY wolumen tygodniowy trendu (oraz >= 1,5x średnia z 10 tygodni)
 CLIMAX_VOL_AVG_WEEKS = 10
 CLIMAX_EXT200_PCT = 70.0     # potwierdzenie: cena >= 70 % nad 200-dniową (SMA 40 tyg.)
+DISTR_RECENT_WEEKS = 2       # dystrybucja bez wzrostu ceny (O'Neil, tygodniówka): sygnał w jednym z ostatnich 2 tygodni
+DISTR_TREND_WEEKS = 104      # trend = od najniższego Low z ostatnich 2 lat (min. 8 tygodni), jak przy climax top
+DISTR_TREND_MIN_WEEKS = 8
+DISTR_MIN_RALLY_PCT = 30.0   # cena min. +30 % nad dołkiem trendu (to ma być szczyt rajdu, nie zwykła baza)
+DISTR_VOL_MULT = 1.5         # NAJWYŻSZY wolumen tygodniowy od dołka trendu i >= 1,5x średnia z 10 poprzednich tygodni
+DISTR_FLAT_PCT = 1.5         # ... a cena zamyka się niemal bez zmian (<= +1,5 % do poprzedniego zamknięcia) albo w dolnej połowie zakresu tygodnia
+DISTR_MAX_UP_PCT = 5.0       # (tydzień zamknięty w górę o więcej niż 5 % to wybicie / climax, nie „mielenie” — nawet przy słabym zamknięciu)
+DISTR_NEAR_HIGH_PCT = 15.0   # i nadal blisko szczytu (<= 15 % pod maksimum z 52 tygodni)
 CLIMAX_LATE_STAGE = 3        # potwierdzenie: 3. lub dalsza baza w trendzie
 
 
@@ -276,6 +284,39 @@ def detect_climax_top(weekly, bases=None, recent=CLIMAX_RECENT_WEEKS):
     return None
 
 
+def detect_distribution_week(weekly, recent=DISTR_RECENT_WEEKS):
+    """Dystrybucja bez wzrostu ceny („mielenie”, O'Neil) na świecach TYGODNIOWYCH: w jednym z ostatnich `recent` tygodni NAJWYŻSZY wolumen
+    tygodniowy od dołka trendu (i >= 1,5x średnia z 10 tygodni), a cena zamyka się niemal bez zmian (<= +1,5 % do poprzedniego zamknięcia)
+    albo w dolnej połowie zakresu tygodnia — przy cenie >= +30 % nad dołkiem trendu i <= 15 % pod rocznym maksimum. Podaż tłumi popyt
+    (instytucje sprzedają w siłę). Zwraca opis najświeższego takiego tygodnia albo None. Heurystyka, progi moje — ostrzeżenie, nie sygnał sprzedaży."""
+    d = weekly[["Open", "High", "Low", "Close", "Volume"]].astype(float).dropna()
+    n = len(d)
+    if n < 52:
+        return None
+    for i in range(n - 1, n - 1 - recent, -1):
+        lo0 = max(0, i - DISTR_TREND_WEEKS)
+        t0 = lo0 + int(np.argmin(d["Low"].iloc[lo0:i].to_numpy()))
+        if i - t0 < DISTR_TREND_MIN_WEEKS:
+            continue
+        c, h, lo, v = (float(d[k].iloc[i]) for k in ("Close", "High", "Low", "Volume"))
+        prev_c = float(d["Close"].iloc[i - 1])
+        trend_low = float(d["Low"].iloc[t0])
+        if trend_low <= 0 or prev_c <= 0 or (c / trend_low - 1) * 100 < DISTR_MIN_RALLY_PCT:
+            continue
+        avg_v = float(d["Volume"].iloc[max(0, i - 10):i].mean())
+        if avg_v <= 0 or v < float(d["Volume"].iloc[t0:i].max()) or v < DISTR_VOL_MULT * avg_v:
+            continue
+        chg = (c / prev_c - 1) * 100
+        pos = (c - lo) / (h - lo) if h > lo else 0.5
+        if chg > DISTR_MAX_UP_PCT or (chg > DISTR_FLAT_PCT and pos >= 0.5):
+            continue   # tydzień zamknięty wyraźnie w górę i w górnej połowie to popyt (albo climax), nie dystrybucja
+        hi52 = float(d["High"].iloc[max(0, i - 52):i + 1].max())
+        if hi52 <= 0 or c < hi52 * (1 - DISTR_NEAR_HIGH_PCT / 100):
+            continue
+        return {"date": d.index[i].strftime("%Y-%m-%d"), "vol_ratio": round(v / avg_v, 1), "change_pct": round(chg, 1), "close_pos": round(pos, 2)}
+    return None
+
+
 def accdis_letter(rating):
     """Percentyl Acc/Dis -> litera A-E (A = najsilniejsza akumulacja)."""
     if rating is None:
@@ -332,24 +373,17 @@ def compute_metrics(df, bench_w=None):
     sma40w = float(wk_close.tail(40).mean()) if len(wk_close) >= 40 else None
     all_bases = detect_bases(wk_ohlc, bench_w, ipo=len(wk_ohlc) <= IPO_MAX_WEEKS)
     open_base = next((b for b in reversed(all_bases) if b["open"]), None)
-    # TEN SAM zestaw wzorców (cup, saucer, double bottom, flat, ascending, high tight flag) liczymy też na wykresie DZIENNYM (progi w tygodniach × 5 świec)
-    d_bases = detect_bases(df[["Open", "High", "Low", "Close", "Volume"]], None, DAILY_BARS_PER_WEEK)
-    d_open = next((b for b in reversed(d_bases) if b["open"]), None)
-    d_break = detect_level_break(df, d_open["pivot"], 5, 50, "D") if d_open and d_open.get("pivot") else None
-
-    tl = detect_consolidation(df, DAILY_FLAG) or {}
     tlw = detect_consolidation(wk_ohlc, WEEKLY_FLAG) or {}
     tlw_level = next((ln["y1"] for ln in tlw.get("lines", []) if ln["kind"] == "res"), None)
     pivot_break = None
     if open_base and open_base.get("pivot"):
-        found = [b for b in (detect_level_break(df, open_base["pivot"], 5, 50, "D"), detect_level_break(wk_ohlc, open_base["pivot"], 2, 10, "W")) if b]
-        pivot_break = next((b for b in found if b["state"] == "wybicie"), found[0] if found else None)
+        pivot_break = detect_level_break(wk_ohlc, open_base["pivot"], 2, 10, "W")
 
     weekly = close.resample("W-FRI").last().dropna().tail(SPARK_WEEKS)
     spark = [round((v / weekly.iloc[0] - 1) * 100, 1) for v in weekly] if len(weekly) >= 5 else []
 
     climax = detect_climax_top(wk_ohlc, all_bases)
-    tl_level = next((ln["y1"] for ln in tl.get("lines", []) if ln["kind"] == "res"), None)   # opór flagi/korytarza dziś
+    distr = detect_distribution_week(wk_ohlc)
     return {
         "price": _num(price),
         "as_of": asof.strftime("%Y-%m-%d"),
@@ -385,28 +419,6 @@ def compute_metrics(df, bench_w=None):
         "pivot": open_base["pivot"] if open_base else None,
         "pct_to_pivot": _num((open_base["pivot"] / price - 1) * 100, 1) if open_base else None,
         "vcp": open_base["vcp"] if open_base else None,
-        "dbase_type": d_open["type"] if d_open else None,
-        "dbase_depth_pct": d_open["depth_pct"] if d_open else None,
-        "dbase_weeks": d_open["weeks"] if d_open else None,
-        "dbase_handle": bool(d_open["cup"]["handle"]) if d_open and d_open.get("cup") else None,
-        "dbase_saucer": d_open.get("saucer") if d_open else None,
-        "dbase_stage": d_open.get("stage") if d_open else None,
-        "dbase_on_base": d_open.get("base_on_base") if d_open else None,
-        "dbase_status": d_open.get("status") if d_open else None,
-        "dbase_rejection": "; ".join(d_open.get("rejection_reasons") or []) or None if d_open else None,
-        "dbase_rise_pct": d_open.get("rise_pct") if d_open else None,
-        "dpivot": d_open["pivot"] if d_open else None,
-        "dpct_to_pivot": _num((d_open["pivot"] / price - 1) * 100, 1) if d_open else None,
-        "dvcp": d_open["vcp"] if d_open else None,
-        "dpivot_state": d_break["state"] if d_break else None,
-        "dpivot_vol_ratio": d_break["vol_ratio"] if d_break else None,
-        "dpivot_break_date": d_break["date"] if d_break else None,
-        "tl_state": tl.get("state"),
-        "tl_pattern": tl.get("pattern"),
-        "tl_vol_ratio": (tl.get("breakout") or {}).get("vol_ratio"),
-        "tl_vol_ok": (tl.get("breakout") or {}).get("confirmed"),
-        "tl_level": tl_level,
-        "tl_dist_pct": _num((tl_level / price - 1) * 100, 1) if tl_level and price else None,   # > 0: do oporu brakuje tyle %
         "tlw_state": tlw.get("state"),
         "tlw_pattern": tlw.get("pattern"),
         "tlw_vol_ratio": (tlw.get("breakout") or {}).get("vol_ratio"),
@@ -430,6 +442,10 @@ def compute_metrics(df, bench_w=None):
         "climax_stage": climax["stage"] if climax else None,
         "climax_late": climax["late"] if climax else None,
         "climax_conf": climax["conf"] if climax else None,
+        "dist_top": distr is not None,   # dystrybucja bez wzrostu ceny (tygodniówka)
+        "dist_date": distr["date"] if distr else None,
+        "dist_vol_ratio": distr["vol_ratio"] if distr else None,
+        "dist_change_pct": distr["change_pct"] if distr else None,
         "spark": spark,
     }
 
@@ -513,6 +529,19 @@ def eps_score(q0, q1, eps_this_y, eps_past_5y):
     return _num(sum(w * v for w, v in parts) / total)
 
 
+def eps_annual_growth(quarters, years=3):
+    """A z CANSLIM (O'Neil: wzrost EPS >= 25 % w KAŻDYM z ostatnich 3 lat): wzrost sumy EPS z 4 kwartałów (TTM) względem sumy z 4 kwartałów
+    wcześniej — dla ostatnich `years` okien: [najświeższy, rok wcześniej, 2 lata wcześniej]. Brak 4 kwartałów w oknie albo nieujemnej
+    bazy (<= 0) = None (przy ujemnej bazie wzrost % nie ma sensu). `quarters` = lista z eps_quarters (z polem t = TTM)."""
+    out = []
+    for j in range(years):
+        i = len(quarters) - 1 - 4 * j
+        now = quarters[i]["t"] if 0 <= i < len(quarters) else None
+        prev = quarters[i - 4]["t"] if i - 4 >= 0 else None
+        out.append(_num((now - prev) / prev * 100, 1) if now is not None and prev is not None and prev > 0 else None)
+    return out
+
+
 def eps_stability(growths):
     """Stabilność wzrostu EPS (0-100 %) = odsetek ostatnich EPS_STABILITY_QUARTERS kwartałów, w których EPS r/r wzrósł (g > 0).
     Spółka z wyraźnym wzrostem co kwartał dostaje ~100, z zygzakiem (zysk, strata, zysk...) wyraźnie mniej. None przy < EPS_STABILITY_MIN
@@ -533,6 +562,11 @@ def add_eps_rating(stocks, eps_cache):
         q0 = quarters[-1] if quarters else None
         q1 = quarters[-2] if len(quarters) > 1 else None
         s["eps_q0_yoy"], s["eps_q1_yoy"] = q0, q1
+        # akceleracja (C): tempo wzrostu zysków rośnie z kwartału na kwartał (np. +25 % -> +50 %); None, gdy brakuje któregoś kwartału
+        s["eps_accel"] = (q0 - q1 >= EPS_ACCEL_PP) if q0 is not None and q1 is not None else None
+        s["eps_yr0"], s["eps_yr1"], s["eps_yr2"] = eps_annual_growth(eps_quarters(rows)[0])   # roczny wzrost EPS (TTM) w 3 ostatnich latach — kryterium A
+        shares = ((eps_cache or {}).get(s["ticker"]) or {}).get("shares_chg_pct")
+        s["shares_chg_pct"] = shares if _is_num(shares) else None   # zmiana liczby akcji r/r (ujemna = skup akcji)
         s["eps_score"] = eps_score(q0, q1, s.get("eps_this_y"), s.get("eps_past_5y"))
         s["eps_stability"] = eps_stability(quarters)
     percentile_rating(stocks, "eps_score", "eps_growth_rating")
@@ -1178,7 +1212,6 @@ def _best_line(values, pivots, check_to, last, highs, min_span, tol=TL_TOLERANCE
 # Parametry wykrywania konsolidacji (świece dzienne / tygodniowe): k = okno pivotu, min/max_len = długość flagi,
 # recent = ile ostatnich świec może już być wybiciem, pole_* = maszt (wzrost przed flagą), max_depth = maks. głębokość flagi,
 # box_* = korytarz bez masztu (płaska, ciasna konsolidacja).
-DAILY_FLAG = dict(k=3, min_len=7, max_len=30, recent=5, pole_lookback=20, pole_min_gain=20.0, max_depth=20.0, box_depth=12.0, box_min_len=12, vol_avg=50)
 WEEKLY_FLAG = dict(k=2, min_len=3, max_len=20, recent=2, pole_lookback=12, pole_min_gain=30.0, max_depth=25.0, box_depth=15.0, box_min_len=5, vol_avg=10)   # vol_avg = ile poprzednich świec daje średni wolumen (dzienne 50 sesji, tygodniowe 10 tygodni)
 FLAG_PARALLEL_PCT = 0.3          # wsparcie może odbiegać nachyleniem od oporu o tyle (% na świecę)
 FLAG_MAX_SLOPE_PCT = 0.15        # górna linia flagi może co najwyżej lekko rosnąć (% na świecę)
@@ -1348,30 +1381,6 @@ def rs_line_summary(rs, rs_hi, px_hi, window=RS_HIGH_SESSIONS, recent=RS_RECENT_
     return {"state": state, "dist_pct": _num(dist, 1)}
 
 
-def _daily_ohlc(df):
-    df = df.copy()
-    df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
-    return df[~df.index.duplicated(keep="last")]
-
-
-def build_daily(df, days):
-    """Dzienne świece (ostatnie `days` sesji) + SMA50/SMA200 liczone na pełnej historii, null dla braków."""
-    df = df.copy()
-    df.index = pd.DatetimeIndex(df.index).tz_localize(None).normalize()
-    df = df[~df.index.duplicated(keep="last")]
-    idx = pd.DatetimeIndex(days)
-    w = df.reindex(idx)
-    close = df["Close"].astype(float)
-    return {
-        "o": _series(w["Open"]), "h": _series(w["High"]), "l": _series(w["Low"]), "c": _series(w["Close"]),
-        "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
-        "sma10": _series(close.rolling(10).mean().reindex(idx)),
-        "sma20": _series(close.rolling(20).mean().reindex(idx)),
-        "sma50": _series(close.rolling(50).mean().reindex(idx)),
-        "sma200": _series(close.rolling(200).mean().reindex(idx)),
-    }
-
-
 def eps_quarters(rows):
     """rows: [{'date','eps','est'}...] z Yahoo (eps=None dla przyszłych). -> (zrealizowane kwartały z YoY %, następna prognoza).
     YoY = (EPS − EPS rok wcześniej) / |EPS rok wcześniej| · 100; None, gdy brak/zero poprzedniego."""
@@ -1396,9 +1405,40 @@ def eps_quarters(rows):
     return out, nxt
 
 
+def shares_change_pct(shares):
+    """Zmiana liczby akcji (%) między najnowszym odczytem a odczytem sprzed ok. roku; ujemna = skup akcji (buyback). shares = Series
+    (indeks = daty) z yfinance get_shares_full. None, gdy historia jest krótsza niż ~10 miesięcy albo brak danych."""
+    if shares is None or len(shares) < 2:
+        return None
+    ser = shares.dropna().astype(float)
+    ser = ser[ser > 0]
+    if len(ser) < 2:
+        return None
+    ser.index = pd.DatetimeIndex(ser.index).tz_localize(None)
+    ser = ser.sort_index()
+    last_d = ser.index[-1]
+    old = ser[ser.index <= last_d - pd.Timedelta(days=300)]
+    if not len(old):
+        return None
+    target = last_d - pd.Timedelta(days=365)
+    base = float(old.iloc[int(np.argmin(np.abs((old.index - target).days)))])   # odczyt najbliższy sprzed roku
+    return _num((float(ser.iloc[-1]) / base - 1) * 100, 1)
+
+
 def fetch_eps_one(ticker):
+    """-> {"rows": historia raportów EPS, "shares_chg_pct": zmiana liczby akcji r/r albo None} (jedno pobranie na spółkę)."""
     import yfinance as yf
-    ed = yf.Ticker(ticker).get_earnings_dates(limit=40)
+    t = yf.Ticker(ticker)
+    rows = _fetch_eps_rows(t)
+    try:
+        shares = shares_change_pct(t.get_shares_full(start=(datetime.now(timezone.utc) - pd.Timedelta(days=430)).strftime("%Y-%m-%d")))
+    except Exception:
+        shares = None
+    return {"rows": rows, "shares_chg_pct": shares}
+
+
+def _fetch_eps_rows(t):
+    ed = t.get_earnings_dates(limit=40)
     if ed is None or ed.empty:
         return []
     rows = []
@@ -1434,9 +1474,10 @@ def update_eps_cache(tickers, cache_path=EPS_CACHE_PATH, now=None, fetch=fetch_e
             except Exception:
                 return t, None
         with ThreadPoolExecutor(EPS_WORKERS) as pool:
-            for t, rows in pool.map(work, stale):
-                if rows is not None:
-                    cache[t] = {"fetched": now.strftime("%Y-%m-%d"), "rows": rows, "v": EPS_CACHE_VERSION}
+            for t, res in pool.map(work, stale):
+                if res is not None:
+                    rows, extra = (res.get("rows", []), {k: v for k, v in res.items() if k != "rows"}) if isinstance(res, dict) else (res, {})
+                    cache[t] = {"fetched": now.strftime("%Y-%m-%d"), "rows": rows, "v": EPS_CACHE_VERSION, **extra}
     cache = {t: v for t, v in cache.items() if t in set(tickers) or (now - pd.Timestamp(v.get("fetched", "1970-01-01"))).days <= CACHE_KEEP_DAYS}   # cache dzielą oba skanery — nie kasujemy cudzych wpisów
     out = Path(cache_path)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -1596,13 +1637,6 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         "stocks": {},
     }
     bench_w = ref["Close"].astype(float) if bench is not None else None
-    day_ref = bench if bench is not None else next(iter(cleaned.values()))
-    day_index = pd.DatetimeIndex(day_ref.index).tz_localize(None).normalize()
-    day_index = day_index[~day_index.duplicated(keep="last")][-CHART_DAYS:]
-    payload["days"] = [d.strftime("%Y-%m-%d") for d in day_index]
-    payload["spx_d"] = (_series(bench["Close"].astype(float).set_axis(
-        pd.DatetimeIndex(bench.index).tz_localize(None).normalize()).groupby(level=0).last().reindex(day_index))
-        if bench is not None else None)
     bench_d = None
     if bench is not None:
         bench_d = bench["Close"].astype(float).set_axis(pd.DatetimeIndex(bench.index).tz_localize(None).normalize()).groupby(level=0).last()
@@ -1613,29 +1647,23 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         wk = weekly_ohlcv(df, last_date).tail(n_weeks + 80)   # +80 tygodni rozgrzewki średnich / historii baz
         all_bases = detect_bases(wk, bench_w, ipo=len(wk) <= IPO_MAX_WEEKS)
         chart["bases"] = [b for b in all_bases if b["end"] >= first][-BASE_MAX_SHOWN:]
-        first_day = payload["days"][0]
-        chart_day_bases = [b for b in detect_bases(_daily_ohlc(df).tail(1000), None, DAILY_BARS_PER_WEEK) if b["end"] >= first_day][-BASE_MAX_SHOWN:]
         chart["splits"] = [{"d": d, "r": r} for d, r in (frames[t].attrs.get("splits") or []) if d >= first]
         chart["climax"] = detect_climax_top(wk, all_bases)
         chart["eps"] = [q for q in quarters if q["d"] >= first]
         chart["eps_next"] = nxt
-        chart["day"] = build_daily(df, day_index)
-        chart["day"]["bases"] = chart_day_bases
         if bench_d is not None:
-            dd = _daily_ohlc(df)
+            dd = df.copy()
+            dd.index = pd.DatetimeIndex(dd.index).tz_localize(None).normalize()
+            dd = dd[~dd.index.duplicated(keep="last")]
             rs, rs_hi, px_hi = rs_line_flags(dd["Close"], bench_d)
-            idx = pd.DatetimeIndex(day_index)
-            chart["day"]["rs_hi"] = [int(bool(v)) for v in rs_hi.reindex(idx).fillna(False)]
-            chart["day"]["px_hi"] = [int(bool(v)) for v in px_hi.reindex(idx).fillna(False)]
-            chart["rs_line"] = rs_line_summary(rs, rs_hi, px_hi)
+            chart["rs_line"] = rs_line_summary(rs, rs_hi, px_hi)   # stan linii RS liczymy na dziennych zamknięciach (ostatnie 5 sesji), na wykresie rysujemy tygodniową
             wk_c = wk["Close"]
             wrs, wrs_hi, wpx_hi = rs_line_flags(wk_c, bench_d, window=52)
             widx = pd.DatetimeIndex(payload["weeks"])
             chart["rs_hi"] = [int(bool(v)) for v in wrs_hi.reindex(widx).fillna(False)]
             chart["px_hi"] = [int(bool(v)) for v in wpx_hi.reindex(widx).fillna(False)]
         chart["tl"] = detect_consolidation(wk, WEEKLY_FLAG)
-        chart["day"]["tl"] = detect_consolidation(_daily_ohlc(df).tail(400), DAILY_FLAG)
-        chart["day"]["climax"] = chart["climax"]   # ten sam tydzień, znacznik na wykresie dziennym ląduje na ostatniej sesji tygodnia
+        chart["distribution"] = detect_distribution_week(wk)
         payload["stocks"][t] = chart
     return payload
 
