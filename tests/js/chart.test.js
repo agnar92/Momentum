@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    patternExplain, defaultWindowLength, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, pivotFromStock, swingLabels, volumeSpikes, fmtVol, dailyCharts,
+    patternExplain, defaultWindowLength, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, pivotFromStock, swingLabels, volumeSpikes, fmtVol,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -673,9 +673,15 @@ test("posMiniSvg: miniatura z ceną, liniami wejścia / stopu / nowego stopu, MA
     const l = c.map(v => v - 1);
     const weeks = c.map((_, i) => new Date(Date.UTC(2024, 0, 5) + i * 7 * 86400000).toISOString().slice(0, 10));
     const st = macdWeeklyState({ weeks, c, l });
-    const svg = posMiniSvg({ c, l }, weeks, { entry: 120, stop: 110 }, { newStop: st.crossLow }, st, { ticker: "X" });
+    const svg = posMiniSvg({ c, l }, weeks, { entry: 120, stop: 110 }, { code: "RAISE", newStop: st.crossLow }, st, { ticker: "X" });
     assert.match(svg, /^<svg class="pos-mini-svg"/);
     assert.ok(svg.includes("MACD") && svg.includes("sygnał") && svg.includes("wej.") && svg.includes("stop") && svg.includes("nowy"));
     assert.match(svg, /<polygon/);                                      // ▼ przecięcia w dół
     assert.equal(posMiniSvg({ c }, weeks, null, null, null), "");
+    // „stop już wyżej” (KEEP) nie rysuje proponowanego stopu, a etykiety poziomów leżą ≥ 9 px od siebie
+    const keep = posMiniSvg({ c, l }, weeks, { entry: 120, stop: 119.5 }, { code: "KEEP", newStop: 100 }, st, { ticker: "X" });
+    assert.ok(!keep.includes("nowy"));
+    const ys = [...keep.matchAll(/<text x="[\d.]+" y="([\d.]+)" font-size="8" fill="#(?:8a8f9c|ff5d5d)"/g)].map(m => +m[1]).sort((a, b) => a - b);
+    assert.equal(ys.length, 2);
+    assert.ok(ys[1] - ys[0] >= 9 - 1e-6);
 });

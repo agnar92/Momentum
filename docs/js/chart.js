@@ -1320,7 +1320,7 @@ function fundMiniSvg(m, opts = {}) {
             parts.push(`<circle cx="${xe.toFixed(1)}" cy="${y(epsNext).toFixed(1)}" r="3" fill="#0f141b" stroke="#f0932b" stroke-width="1.5"/>`);
             lastV = epsNext;
         }
-        ends.push({ v: lastV, text: epsNext !== null ? "EPS prog." : "EPS", col: "#f0932b" });
+        ends.push({ v: lastV, text: "EPS", col: "#f0932b" });
     }
     const lastOf = a => [...a].reverse().find(Number.isFinite);
     [[price, "Cena", "#f4f7fb"], [rs, "RS", "#4aa3ff"], [spx, "S&P", "#8d99ab"]].forEach(([a, t, col]) => { const v = lastOf(a); if (Number.isFinite(v)) ends.push({ v, text: t, col }); });
@@ -1459,7 +1459,8 @@ function posMiniSvg(c, weeks, pos, advice, st, opts = {}) {
     const idx = Array.from({ length: cnt }, (_, k) => first + k);
     const closes = idx.map(i => c.c[i]).filter(Number.isFinite);
     if (closes.length < 5) return "";
-    const levels = [pos && pos.entry, pos && pos.stop, advice && advice.newStop].filter(v => Number.isFinite(v) && v > 0);
+    const newStop = advice && (advice.code === "RAISE" || advice.code === "HIT") ? advice.newStop : null;
+    const levels = [pos && pos.entry, pos && pos.stop, newStop].filter(v => Number.isFinite(v) && v > 0);
     const lo0 = Math.min(...closes, ...levels), hi0 = Math.max(...closes, ...levels), padv = (hi0 - lo0) * 0.06 || 1;
     const lo = lo0 - padv, hi = hi0 + padv;
     const yp = v => 2 + (priceH - 4) * (1 - (v - lo) / (hi - lo));
@@ -1467,7 +1468,11 @@ function posMiniSvg(c, weeks, pos, advice, st, opts = {}) {
         const pts = idx.map(i => (Number.isFinite(arr[i]) ? `${xs(i).toFixed(1)},${yp(arr[i]).toFixed(1)}` : null)).filter(Boolean);
         return pts.length > 1 ? `<polyline fill="none" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ""} points="${pts.join(" ")}"/>` : "";
     };
-    const hline = (v, col, dash, label) => (Number.isFinite(v) ? `<line x1="${padL}" x2="${W - padR}" y1="${yp(v).toFixed(1)}" y2="${yp(v).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="${dash}"/><text x="${W - padR + 2}" y="${(yp(v) + 3).toFixed(1)}" font-size="8" fill="${col}">${label}</text>` : "");
+    // etykiety poziomów rozsuwamy co najmniej o 9 px, żeby „wej.” / „stop” / „nowy” nie nakładały się
+    const lvls = [[pos && pos.entry, "#8a8f9c", "2 3", "wej."], [pos && pos.stop, "#ff5d5d", "4 2", "stop"], [newStop, "#f59e0b", "5 2", "nowy"]]
+        .filter(l => Number.isFinite(l[0])).map(l => ({ v: l[0], col: l[1], dash: l[2], label: l[3], ty: yp(l[0]) + 3 })).sort((a, b) => a.ty - b.ty);
+    lvls.forEach((l, k) => { if (k && l.ty - lvls[k - 1].ty < 9) l.ty = lvls[k - 1].ty + 9; });
+    const hlines = lvls.map(l => `<line x1="${padL}" x2="${W - padR}" y1="${yp(l.v).toFixed(1)}" y2="${yp(l.v).toFixed(1)}" stroke="${l.col}" stroke-width="1" stroke-dasharray="${l.dash}"/><text x="${W - padR + 2}" y="${l.ty.toFixed(1)}" font-size="8" fill="${l.col}">${l.label}</text>`).join("");
     const sma10 = (() => { const o = []; for (let i = 0; i <= last; i++) { const w = c.c.slice(Math.max(0, i - 9), i + 1); o.push(w.length === 10 && w.every(Number.isFinite) ? w.reduce((a, b) => a + b, 0) / 10 : null); } return o; })();
     const m = Math.max(1e-9, ...idx.map(i => Math.max(Math.abs(st.macd[i] || 0), Math.abs(st.signal[i] || 0), Math.abs(st.hist[i] || 0))));
     const ym = v => mTop + mH / 2 - (v / m) * (mH / 2 - 1);
@@ -1478,7 +1483,7 @@ function posMiniSvg(c, weeks, pos, advice, st, opts = {}) {
     const mark = cd !== null && Number.isFinite(c.c[cd]) ? `<polygon points="${xs(cd) - 3},${yp(c.c[cd]) - 9} ${xs(cd) + 3},${yp(c.c[cd]) - 9} ${xs(cd)},${yp(c.c[cd]) - 3}" fill="#ff9f43"/>` : "";
     return `<svg class="pos-mini-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Miniatura tygodniowa z MACD ${escapeHtml(opts.ticker || "")}">`
         + `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="none" stroke="#2c3040"/>`
-        + hline(pos && pos.entry, "#8a8f9c", "2 3", "wej.") + hline(pos && pos.stop, "#ff5d5d", "4 2", "stop") + hline(advice && advice.newStop, "#f59e0b", "5 2", "nowy")
+        + hlines
         + line(sma10, "#e5484d", 1) + line(c.c, "#e8eaed", 1.4) + mark
         + `<line x1="${padL}" x2="${W - padR}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#3a3f4d" stroke-width="0.6"/>`
         + bars + mline(st.macd, "#6ea8ff") + mline(st.signal, "#ff9f43")
