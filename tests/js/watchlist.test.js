@@ -645,3 +645,41 @@ test("hasWeeklyPattern i filtr Qullamaggiego „tylko z wzorcem tygodniowym”",
     assert.deepEqual(qullamaggieRows(rows, p).map(r => r.ticker).sort(), ["A", "B", "C", "D"]);
     assert.deepEqual(qullamaggieRows(rows, { ...p, patternOnly: true }).map(r => r.ticker).sort(), ["A", "B"]);
 });
+
+
+test("stopAdvice: MACD nad sygnałem = stop bez zmian; po przecięciu w dół i zamknięciu pod sygnałem = podnieś stop pod dołek świecy", () => {
+    const { stopAdvice } = require("../../docs/js/watchlist.js");
+    const above = { state: "above", histDelta: 0.2, histDelta2: 0.1 };
+    assert.equal(stopAdvice({ stop: 90 }, above, 120).code, "KEEP");
+    assert.equal(stopAdvice({ stop: 90 }, above, 120).tone, "good");
+    assert.equal(stopAdvice({ stop: 90 }, { ...above, histDelta: -0.1, histDelta2: -0.2 }, 120).tone, "watch");   // histogram maleje 2 tygodnie
+    const below = { state: "below", crossDown: 50, crossDownDate: "2026-09-25", crossLow: 112.345, weeksSinceDown: 1 };
+    const raise = stopAdvice({ stop: 100 }, below, 120);
+    assert.equal(raise.code, "RAISE");
+    assert.equal(raise.newStop, 112.35);
+    assert.match(raise.text, /podnieś stop tuż pod dołek/);
+    assert.equal(stopAdvice({ stop: 115 }, below, 120).code, "KEEP");               // stop jest już wyżej niż dołek świecy sygnału
+    assert.equal(stopAdvice({ stop: 100 }, below, 111).code, "HIT");                // cena pod dołkiem świecy sygnału
+    assert.equal(stopAdvice({ stop: 100 }, { state: "below", crossDown: null }, 120).code, "WARN");
+    assert.equal(stopAdvice({ stop: 100 }, null, 120).code, "NA");
+    assert.match(stopAdvice({}, below, 120).text, /tyg\. temu|ostatnia zamknięta/);
+});
+
+test("pudełko bazy: stop z dołu środkowej 1/3, podział na 3, jakość świecy wybicia i knot > 50 % blokuje KUP", () => {
+    const { baseBoxData, actionInfo } = require("../../docs/js/watchlist.js");
+    const box = { base_type: "flat", pivot: 100, box_low: 85, box_t1: 90, box_t2: 95, box_stop: 90, box_stop_pct: 10, pct_to_pivot: -2, pivot_state: "wybicie",
+        box_brk_wick_pct: 20, box_brk_vol_wow_pct: 45, box_brk_hi10: true, in_cs: true, canslim: { flags: { C: true, A: true } }, pct_above_sma10w: 9 };
+    const rows = Object.fromEntries(baseBoxData(box).rows);
+    assert.match(rows["Stop z bazy (dół środka)"], /\$90.*−10% od pivotu/);
+    assert.match(rows["Podział na 3"], /dolna.*za późno.*środek.*stop.*górna.*za wcześnie/);
+    assert.match(rows["Świeca wybicia"], /knot 20%.*\+45% vs poprzedni tydzień.*10-tyg\. maksimum ✓/);
+    const up = { regime: "uptrend", distDays: 1 };
+    const buy = actionInfo(box, up);
+    assert.equal(buy.code, "BUY");
+    assert.match(buy.why, /Stop z bazy .*90.*−10% od pivotu/);                      // stop ze struktury zamiast stałych 7–8 %
+    const wick = actionInfo({ ...box, box_brk_wick_pct: 64 }, up);
+    assert.equal(wick.code, "NEAR");
+    assert.match(wick.why, /górny knot.*64%.*> 50 %/);
+    assert.equal(actionInfo({ ...box, base_type: "cup", box_stop: null }, up).code, "BUY");   // cup (i flaga) nie dostają podziału na 3 ani filtra knota
+    assert.match(actionInfo({ ...box, base_type: "cup", box_stop: null, box_brk_wick_pct: 64 }, up).why, /Stop 7–8 %/);
+});

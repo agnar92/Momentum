@@ -332,6 +332,20 @@ def add_accdis_rating(stocks):
     return stocks
 
 
+def fresh_breakout_base(bases, index, max_age_weeks=2):
+    """Baza kupowalna, która zakończyła się wybiciem w ostatnich `max_age_weeks` tygodniach (świeca wybicia = tydzień po końcu bazy). Dla płaskiej bazy /
+    kwadratowego pudełka / cupa bez rączki pivot = szczyt bazy, więc wybicie kończy bazę i nie ma już „otwartej” — bez tego świeże wybicie z pudełka
+    nie miałoby pivotu, odległości ani stanu wybicia. None, gdy takiej bazy nie ma."""
+    last = next((b for b in reversed(bases) if not b["open"]), None)
+    if not last or last["type"] not in BASE_TYPES_BUYABLE or not last.get("pivot") or len(index) < 3:
+        return None
+    try:
+        end_i = index.get_loc(pd.Timestamp(last["end"]))
+    except KeyError:
+        return None
+    return last if end_i >= len(index) - 1 - max_age_weeks else None
+
+
 def compute_metrics(df, bench_w=None):
     """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
     bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
@@ -372,7 +386,7 @@ def compute_metrics(df, bench_w=None):
     sma10w = float(wk_close.tail(10).mean()) if len(wk_close) >= 10 else None
     sma40w = float(wk_close.tail(40).mean()) if len(wk_close) >= 40 else None
     all_bases = detect_bases(wk_ohlc, bench_w, ipo=len(wk_ohlc) <= IPO_MAX_WEEKS)
-    open_base = next((b for b in reversed(all_bases) if b["open"]), None)
+    open_base = next((b for b in reversed(all_bases) if b["open"]), None) or fresh_breakout_base(all_bases, wk_ohlc.index)
     tlw = detect_consolidation(wk_ohlc, WEEKLY_FLAG) or {}
     tlw_level = next((ln["y1"] for ln in tlw.get("lines", []) if ln["kind"] == "res"), None)
     pivot_break = None
@@ -411,6 +425,14 @@ def compute_metrics(df, bench_w=None):
         "base_status": open_base.get("status") if open_base else None,
         "base_rejection": "; ".join(open_base.get("rejection_reasons") or []) or None if open_base else None,
         "base_buy_zone_max": open_base.get("buy_zone_max") if open_base else None,
+        "box_low": open_base.get("low") if open_base and open_base.get("box_stop") is not None else None,   # pudełko bazy płaskiej / kwadratowej: dół, podział na 3 części, stop ze środka
+        "box_t1": open_base["box_thirds"][0] if open_base and open_base.get("box_thirds") else None,
+        "box_t2": open_base["box_thirds"][1] if open_base and open_base.get("box_thirds") else None,
+        "box_stop": open_base.get("box_stop") if open_base else None,
+        "box_stop_pct": open_base.get("box_stop_pct") if open_base else None,
+        "box_brk_wick_pct": open_base.get("breakout_wick_pct") if open_base else None,
+        "box_brk_vol_wow_pct": open_base.get("breakout_vol_wow_pct") if open_base else None,
+        "box_brk_hi10": open_base.get("breakout_hi10") if open_base else None,
         "base_stop_8pct": open_base.get("stop_loss_8pct") if open_base else None,
         "base_prior_uptrend_pct": open_base.get("prior_uptrend_pct") if open_base else None,
         "base_rs_prior_up": (open_base.get("cup") or {}).get("rs_prior_up") if open_base else None,
@@ -831,6 +853,12 @@ IPO_MAX_WEEKS = 52           # baza po debiucie (IPO base): spółka notowana ni
 IPO_MIN_WEEKS = 3
 CUP_HANDLE_MAX_DEPTH_BEAR_PCT = 30.0   # rączka przy dnie bessy: wyjątkowo 20–30 %
 HTF_DRYUP = 0.6              # średni wolumen we fladze <= 0,6x średniego wolumenu rajdu (drastyczny zanik)
+BOX_BASE_TYPES = ("flat", "square_box")   # bazy-pudełka: dzielimy je na 3 części (cup z rączką i flaga to inna bajka — bez tego podziału)
+BOX_STOP_WARN_PCT = 10.0     # stop z pudełka głębszy niż 10 % pod pivotem = szeroki (blueprint: średnio ~10 %, powyżej ~20 % nie kupuje się wcale)
+BOX_STOP_MAX_PCT = 20.0
+BRK_WICK_MAX_PCT = 50.0      # górny knot świecy wybicia > 50 % jej zakresu = presja sprzedaży, nie bierzemy tego wybicia
+BRK_VOL_WOW_MIN_PCT = 30.0   # wolumen świecy wybicia min. +30 % względem poprzedniego tygodnia (informacyjnie; reguła O'Neila +40 % względem średniej zostaje)
+BRK_HIGH_WEEKS = 10          # zamknięcie wybicia = najwyższe zamknięcie od 10 tygodni
 BASE_TYPES_BUYABLE = ("cup", "double_bottom", "flat", "square_box", "ascending", "htf", "ipo")
 
 
@@ -1028,6 +1056,7 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
     hi = weekly["High"].astype(float).values
     lo = weekly["Low"].astype(float).values
     cl = weekly["Close"].astype(float).values
+    op = weekly["Open"].astype(float).values if "Open" in weekly.columns else None
     vol = weekly["Volume"].astype(float).values if "Volume" in weekly.columns else None
     dates = list(weekly.index)
     n = len(hi)
@@ -1105,11 +1134,11 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
             bases.pop()
         bases.append(extra)
     mark_base_on_base(bases, k)
-    annotate_base_status(bases, hi, lo, cl, vol, dates, k)
+    annotate_base_status(bases, hi, lo, cl, vol, dates, k, op)
     return bases
 
 
-def annotate_base_status(bases, hi, lo, cl, vol, dates, k=1):
+def annotate_base_status(bases, hi, lo, cl, vol, dates, k=1, op=None):
     """Status bazy jak w specyfikacji z książki: WATCHLIST (jeszcze pod pivotem) / VALID_BREAKOUT (wybicie na wolumenie >= +40 %, do +5 % nad pivotem) /
     EXTENDED (> +5 % nad pivotem — nie gonić) / FAULTY_REJECTED (wada bazy, 3.–4. etap, wybicie na słabym wolumenie). Dopisuje `status`,
     `rejection_reasons`, `buy_zone_max` (pivot +5 %) i `stop_loss_8pct` (pivot −8 %). Tylko bazy do kupna (BASE_TYPES_BUYABLE) i bazy odrzucone z powodów w `rejection_reasons`."""
@@ -1124,6 +1153,13 @@ def annotate_base_status(bases, hi, lo, cl, vol, dates, k=1):
         if buyable and pivot:
             b["buy_zone_max"] = _num(pivot * (1 + BUY_ZONE_MAX_PCT / 100))
             b["stop_loss_8pct"] = _num(pivot * (1 - STOP_LOSS_PCT / 100))
+        if b["type"] in BOX_BASE_TYPES and pivot and b.get("low") and b["low"] < pivot:
+            # pudełko bazy (od dołka do szczytu) dzielimy na 3 równe części: górna = za wcześnie, dolna = za późno (większa presja sprzedaży i luka w dół),
+            # stop stawiamy w środkowej, najczęściej na jej dolnej krawędzi
+            third = (pivot - b["low"]) / 3
+            b["box_thirds"] = [_num(b["low"] + third), _num(b["low"] + 2 * third)]
+            b["box_stop"] = b["box_thirds"][0]
+            b["box_stop_pct"] = _num((pivot - b["box_stop"]) / pivot * 100, 1)
         if buyable and b.get("stage", 1) >= 3:
             reasons.append(f"baza {b['stage']}. etapu (późna — wysoki odsetek porażek)")
         j = idx.get(b["end"], n - 1) + (0 if b["open"] else 1)       # świeca wybicia: tuż po końcu zamkniętej bazy; dla otwartej — ostatnia
@@ -1148,6 +1184,12 @@ def annotate_base_status(bases, hi, lo, cl, vol, dates, k=1):
         b["rejection_reasons"] = reasons
         if broke and vr is not None:
             b["breakout_vol_ratio"] = _num(vr, 2)
+        if broke and b["type"] in BOX_BASE_TYPES and op is not None and j >= 1:
+            # jakość świecy wybicia z pudełka (blueprint): górny knot, wolumen vs poprzedni tydzień, zamknięcie na 10-tygodniowym maksimum
+            rng = float(hi[j] - lo[j])
+            b["breakout_wick_pct"] = _num((float(hi[j]) - max(float(op[j]), float(cl[j]))) / rng * 100, 0) if rng > 0 else None
+            b["breakout_vol_wow_pct"] = _num((float(vol[j]) / float(vol[j - 1]) - 1) * 100, 0) if vol is not None and vol[j - 1] and np.isfinite(vol[j - 1]) and np.isfinite(vol[j]) else None
+            b["breakout_hi10"] = bool(j >= 1 and float(cl[j]) >= float(np.max(cl[max(0, j - BRK_HIGH_WEEKS):j])))
 
 
 def mark_base_on_base(bases, k=1):

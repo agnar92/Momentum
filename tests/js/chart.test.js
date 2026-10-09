@@ -630,3 +630,52 @@ test("chartSvg: linia zysków podzielona na odcinki (ujemny EPS) — KAŻDY odci
     assert.ok((polys.match(/<polyline/g) || []).length >= 2);
     assert.equal(polys.replace(/<polyline/g, "<polyline CLIP").match(/<polyline CLIP/g).length, (polys.match(/<polyline/g) || []).length);
 });
+
+
+test("macdSeries: EMA jak w TradingView (SMA jako ziarno), na prostej rampie MACD → (26−12)/2 · nachylenie", () => {
+    const { emaSeries, macdSeries } = require("../../docs/js/chart.js");
+    const ramp = Array.from({ length: 300 }, (_, i) => 100 + i);
+    const e = emaSeries([1, 2, 3, 4, 5], 3);
+    assert.deepEqual(e.slice(0, 2), [null, null]);
+    assert.equal(e[2], 2);                                     // ziarno = SMA z pierwszych 3
+    assert.equal(e[3], 4 * 0.5 + 2 * 0.5);                     // alpha = 2 / (3 + 1)
+    const { macd, signal, hist } = macdSeries(ramp);
+    assert.equal(macd[24], null);                              // MACD zaczyna się po 26 zamknięciach
+    assert.ok(Math.abs(macd[299] - 7) < 0.05, `MACD ${macd[299]}`);   // opóźnienie EMA(n) = (n−1)/2 tygodnia → 12,5 − 5,5 = 7
+    assert.ok(Math.abs(signal[299] - 7) < 0.05 && Math.abs(hist[299]) < 0.05);
+});
+
+test("macdWeeklyState: przecięcie w dół (hist < 0 po hist ≥ 0), data i dołek świecy sygnału; stan nad sygnałem bez przecięcia", () => {
+    const { macdWeeklyState } = require("../../docs/js/chart.js");
+    const n = 120, up = 80;
+    const c = Array.from({ length: n }, (_, i) => (i < up ? 100 * Math.pow(1.01, i) : 100 * Math.pow(1.01, up) * Math.pow(0.98, i - up)));   // wzrost wykładniczy (hist > 0), potem spadek 2 % tygodniowo
+    const l = c.map(v => v - 1);
+    const weeks = c.map((_, i) => new Date(Date.UTC(2024, 0, 5) + i * 7 * 86400000).toISOString().slice(0, 10));
+    const st = macdWeeklyState({ weeks, c, l });
+    assert.equal(st.state, "below");
+    assert.ok(st.crossDown > up && st.crossDown < up + 12, `crossDown ${st.crossDown}`);
+    assert.ok(st.hist[st.crossDown] < 0 && st.hist[st.crossDown - 1] >= 0);
+    assert.equal(st.crossLow, l[st.crossDown]);
+    assert.equal(st.crossDownDate, weeks[st.crossDown]);
+    assert.equal(st.weeksSinceDown, st.last - st.crossDown);
+    const rising = macdWeeklyState({ weeks: weeks.slice(0, up), c: c.slice(0, up), l: l.slice(0, up) });
+    assert.equal(rising.state, "above");
+    assert.equal(rising.crossDown, null);
+    assert.equal(macdWeeklyState({ weeks: ["2024-01-05"], c: [1], l: [1] }), null);          // za krótka historia
+    const padded = macdWeeklyState({ weeks: [...weeks, "2027-01-01"], c: [...c, null], l: [...l, null] });   // puste przyszłe miejsca są pomijane
+    assert.equal(padded.last, n - 1);
+});
+
+test("posMiniSvg: miniatura z ceną, liniami wejścia / stopu / nowego stopu, MACD i znacznikiem przecięcia", () => {
+    const { macdWeeklyState, posMiniSvg } = require("../../docs/js/chart.js");
+    const n = 120;
+    const c = Array.from({ length: n }, (_, i) => (i < 80 ? 100 * Math.pow(1.01, i) : 100 * Math.pow(1.01, 80) * Math.pow(0.98, i - 80)));
+    const l = c.map(v => v - 1);
+    const weeks = c.map((_, i) => new Date(Date.UTC(2024, 0, 5) + i * 7 * 86400000).toISOString().slice(0, 10));
+    const st = macdWeeklyState({ weeks, c, l });
+    const svg = posMiniSvg({ c, l }, weeks, { entry: 120, stop: 110 }, { newStop: st.crossLow }, st, { ticker: "X" });
+    assert.match(svg, /^<svg class="pos-mini-svg"/);
+    assert.ok(svg.includes("MACD") && svg.includes("sygnał") && svg.includes("wej.") && svg.includes("stop") && svg.includes("nowy"));
+    assert.match(svg, /<polygon/);                                      // ▼ przecięcia w dół
+    assert.equal(posMiniSvg({ c }, weeks, null, null, null), "");
+});

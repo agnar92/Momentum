@@ -251,6 +251,26 @@ function tagPositions(stocks, positions) {
     });
 }
 
+// Czy przestawić stop? Reguła z blueprintu: MACD tygodniowy (12, 26, 9) przecina linię sygnału W DÓŁ i tydzień zamyka się pod nią → nowy stop tuż pod dołkiem
+// (knotem) tej świecy, bo jest „ostatnią linią obrony” (jeśli ją zjedzą kolejne tygodnie, wychodzimy). Dopóki MACD jest nad sygnałem, stopa nie ruszamy.
+// pos = { stop, ... }, st = macdWeeklyState(...) (chart.js), price = ostatnia cena. -> { code, tone, label, short, text, newStop }
+function stopAdvice(pos, st, price) {
+    const mk = (code, tone, label, text, newStop = null, short = label) => ({ code, tone, label, short, text, newStop });
+    if (!st) return mk("NA", "muted", "brak MACD", "Za krótka historia, żeby policzyć MACD tygodniowy.");
+    if (st.state === "above") {
+        const closing = Number.isFinite(st.histDelta) && st.histDelta < 0 && Number.isFinite(st.histDelta2) && st.histDelta2 < 0;
+        return closing
+            ? mk("KEEP", "watch", "stop bez zmian, MACD słabnie", "MACD jest jeszcze nad sygnałem, ale histogram maleje od 2 tygodni — zbliża się przecięcie. Stopa nie ruszaj; przygotuj się, że po przecięciu w dół i zamknięciu tygodnia pod sygnałem podniesiesz go pod dołek tej świecy.", null, "MACD słabnie")
+            : mk("KEEP", "good", "stop bez zmian", "MACD tygodniowy jest nad linią sygnału — momentum trwa. Nie podnoś stopa.", null, "MACD nad sygnałem");
+    }
+    if (st.crossDown === null || !Number.isFinite(st.crossLow)) return mk("WARN", "watch", "MACD pod sygnałem", "MACD jest pod linią sygnału, ale przecięcie w dół jest sprzed zakresu danych — sprawdź wykres i ustaw stop pod dołkiem świecy, w której nastąpiło.", null, "MACD pod sygnałem");
+    const ago = st.weeksSinceDown, when = `tydzień do ${st.crossDownDate}${ago ? ` (${ago} tyg. temu)` : " (ostatnia zamknięta świeca)"}`;
+    const newStop = Math.round(st.crossLow * 100) / 100;
+    if (Number.isFinite(price) && price <= newStop) return mk("HIT", "bad", "pod dołkiem świecy sygnału", `MACD zszedł pod sygnał w ${when}, a cena ${money(price)} jest już pod dołkiem tej świecy (${money(newStop)}) — stop z reguły MACD wybity: wyjście.`, newStop, "stop z MACD wybity");
+    if (pos && Number.isFinite(pos.stop) && pos.stop >= newStop) return mk("KEEP", "good", "stop już wyżej", `MACD zszedł pod sygnał w ${when}; dołek tej świecy to ${money(newStop)}, a Twój stop ${money(pos.stop)} jest wyżej — nic nie zmieniaj.`, newStop, "stop już wyżej niż dołek sygnału");
+    return mk("RAISE", "watch", `podnieś stop do ${money(newStop)}`, `MACD zszedł pod linię sygnału w ${when}. Reguła: podnieś stop tuż pod dołek tej świecy — ${money(newStop)}${pos && Number.isFinite(pos.stop) ? ` (obecny ${money(pos.stop)})` : ""}. Jeśli kolejne tygodnie zjedzą ten dołek, wychodzisz.`, newStop, `podnieś stop do ${money(newStop)}`);
+}
+
 function positionRows(stocks) {
     return stocks.filter(s => s.position).sort((a, b) => (b.pos_to_stop_pct ?? -Infinity) - (a.pos_to_stop_pct ?? -Infinity));
 }
@@ -274,6 +294,7 @@ function positionTotals(rows, capital, fx) {
 // Wybicie wg O'Neila = ZAMKNIĘCIE tygodnia nad linią / pivotem na podwyższonym wolumenie (≥ 1,5× średniej). Samo przebicie
 // maksimum w trakcie świecy to nie wybicie, a zamknięcie nad poziomem bez wolumenu jest tylko „niepotwierdzone” (nie trafia do rank 0).
 const BRK_VOL_MULT = 1.5;
+const BOX_BASES = ["flat", "square_box"];   // pudełka: podział na 3 części, stop ze środka, ocena świecy wybicia (cup z rączką i flaga — bez tego)
 const BUYABLE_BASES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // pivot do wybicia i strefa zakupu mają sens tylko dla baz kupowalnych (nie „korekta” / „głęboka korekta”)
 function breakoutInfo(s, alert, maxDist) {
     const reasons = [];
@@ -458,9 +479,11 @@ function actionInfo(s, mkt) {
     if (s.in_cs !== false && f && (f.C === false || f.A === false)) return mk("SKIP", "Nie spełnia fundamentów CANSLIM (C lub A) — nie jest kandydatem.");
     if (s.dist_top === true) return mk("DIST", `Dystrybucja bez wzrostu ceny (tydzień do ${s.dist_date}): rekordowy tygodniowy wolumen ×${s.dist_vol_ratio} od dołka trendu, a cena prawie bez zmian albo zamknięta w dolnej połowie zakresu. Instytucje sprzedają w siłę — nie kupuj, poczekaj na nową bazę.`);
     if (regime === "correction") return mk("NOBUY", "Rynek w korekcie (EMA10 < EMA20 tygodniowa). 3 na 4 akcje podąża za rynkiem — nie otwieraj nowych pozycji, tylko obserwuj.");
+    const boxStop = BOX_BASES.includes(s.base_type) && num(s.box_stop) ? s.box_stop : null;   // pudełko: stop ze środka bazy zamiast stałych 7–8 %
+    const stopTxt = boxStop !== null ? `Stop z bazy ${money(boxStop)} (−${s.box_stop_pct}% od pivotu, dół środkowej 1/3 pudełka).` : "Stop 7–8 % pod punktem wejścia.";
     const buy = (over, what) => pressure
-        ? mk("BUY_HALF", `Wybicie ${what} na wolumenie (${over.toFixed(1)}% nad poziomem), ale rynek ma ${distDays} dni dystrybucji — max ½ pozycji.${earn}`)
-        : mk("BUY", `Wybicie ${what} na wolumenie, ${over.toFixed(1)}% nad poziomem (strefa zakupu do +5 %). Stop 7–8 % pod punktem wejścia.${earn}`);
+        ? mk("BUY_HALF", `Wybicie ${what} na wolumenie (${over.toFixed(1)}% nad poziomem), ale rynek ma ${distDays} dni dystrybucji — max ½ pozycji. ${stopTxt}${earn}`)
+        : mk("BUY", `Wybicie ${what} na wolumenie, ${over.toFixed(1)}% nad poziomem (strefa zakupu do +5 %). ${stopTxt}${earn}`);
     const trend = () => {   // trend bez konsolidacji na tym wykresie
         if (num(above50) && above50 >= 0 && above50 <= 5 && (!f || f.N !== false)) return mk("PULLBACK", `Cofnięcie do ${ma} (+${above50.toFixed(1)}%). W trendzie bez bazy to miejsce na dołączenie, ale dopiero na odbiciu: wypatruj zamknięcia nad poprzednią świecą z rosnącym wolumenem.${earn}`);
         if (num(above50) && above50 > extended) return mk("LATE", `Cena ${above50.toFixed(1)}% nad ${ma} — rozciągnięta. Nie goń: czekaj na cofnięcie albo nową bazę.`);
@@ -471,7 +494,11 @@ function actionInfo(s, mkt) {
     const toPivot = buyable && num(s.pct_to_pivot) ? s.pct_to_pivot : null;   // > 0 = jeszcze pod pivotem, < 0 = nad
     const wOver = num(s.tlw_dist_pct) && s.tlw_state === "wybicie" ? -s.tlw_dist_pct : null;
     const over = toPivot !== null && toPivot < 0 ? -toPivot : wOver;
-    if ((s.pivot_state === "wybicie" || s.tlw_state === "wybicie") && over !== null && over <= 5) return buy(over, "z bazy tygodniowej");
+    if ((s.pivot_state === "wybicie" || s.tlw_state === "wybicie") && over !== null && over <= 5) {
+        // blueprint: górny knot świecy wybicia > 50 % jej zakresu = presja sprzedaży — tego wybicia nie bierzemy
+        if (BOX_BASES.includes(s.base_type) && num(s.box_brk_wick_pct) && s.box_brk_wick_pct > 50) return mk("NEAR", `Wybicie z bazy, ale górny knot świecy to ${s.box_brk_wick_pct}% jej zakresu (> 50 %) — presja sprzedaży. Nie bierz tego wybicia; poczekaj na mocniejsze zamknięcie (pełny korpus, krótki knot).${earn}`);
+        return buy(over, "z bazy tygodniowej");
+    }
     if (over !== null && over > 5) return mk("LATE", `${over.toFixed(1)}% nad poziomem wybicia — poza strefą +5 %. Nie goń: poczekaj na cofnięcie do 10-tygodniowej albo na nową bazę.`);
     if (toPivot !== null && toPivot < 0) return mk("NEAR", `Cena nad pivotem, ale bez wolumenu ≥ 1,5× — to jeszcze nie wybicie. Czekaj na tydzień z wolumenem.${earn}`);
     if (toPivot !== null && toPivot >= 0 && toPivot <= 5) return mk("NEAR", `${toPivot.toFixed(1)}% do pivotu (${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}). Ustaw alert na pivocie i kupuj dopiero przy wybiciu z wolumenem ≥ 1,5×.${earn}`);
@@ -611,6 +638,14 @@ function baseBoxData(s) {
     if (s.base_rs_prior_up === true || s.base_rs_prior_up === false) rows.push(["Linia RS przed bazą", s.base_rs_prior_up ? "rosła" : "nie rosła"]);
     if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.base_buy_zone_max)) rows.push(["Strefa kupna do", `${money(s.base_buy_zone_max)} (pivot +5%)`]);
     if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.base_stop_8pct)) rows.push(["Stop −8% od pivotu", money(s.base_stop_8pct)]);
+    if (BOX_BASES.includes(s.base_type) && Number.isFinite(s.box_stop)) {
+        rows.push(["Stop z bazy (dół środka)", `${money(s.box_stop)} (−${s.box_stop_pct}% od pivotu)`]);
+        if (Number.isFinite(s.box_t1) && Number.isFinite(s.box_t2)) rows.push(["Podział na 3", `dolna ${money(s.box_low)}–${money(s.box_t1)} (za późno) · środek ${money(s.box_t1)}–${money(s.box_t2)} (stop) · górna ${money(s.box_t2)}–${money(s.pivot)} (za wcześnie)`]);
+    }
+    if (BOX_BASES.includes(s.base_type) && Number.isFinite(s.box_brk_wick_pct)) {
+        const w = s.box_brk_wick_pct, v = s.box_brk_vol_wow_pct;
+        rows.push(["Świeca wybicia", `górny knot ${w}% zakresu${w > 50 ? " ⚠ > 50 % — presja sprzedaży" : ""}; wolumen ${Number.isFinite(v) ? `${v > 0 ? "+" : ""}${v}% vs poprzedni tydzień${v < 30 ? " (< +30 %)" : ""}` : "—"}; ${s.box_brk_hi10 ? "zamknięcie = 10-tyg. maksimum ✓" : "poniżej 10-tyg. maksimum"}`]);
+    }
     if (s.base_status) rows.push(["Status", BASE_STATUS_PL[s.base_status] || s.base_status]);
     if (s.base_rejection) rows.push(["Odrzucona", s.base_rejection]);
     if (s.base_on_base) rows.push(["Etap", `baza na bazie (${s.base_stage}. etap)`]);
@@ -634,6 +669,7 @@ function readinessLine(s, regime, patterns = true) {
         const p = s.position;
         out.push(`💼 ${fmtPct(p.pl_pct)}${p.r !== null ? ` · ${p.r.toFixed(1)}R` : ""}${p.to_stop_pct !== null ? ` · stop ${p.stop_hit ? "PRZEBITY" : fmtPct(p.to_stop_pct)}` : ""}`);
     }
+    if (s.position && s.macd_advice && s.macd_advice.code !== "NA") out.push(`MACD: ${s.macd_advice.short}`);
     if (patterns && s.climax_top === true) out.push(`⚠ sell climax top (tydz. ${s.climax_date}, potwierdzenia ${s.climax_conf ?? 0}/4)`);
     if (patterns && s.dist_top === true && !(s.action_w && ["DIST", "TRIM"].includes(s.action_w.code))) out.push(`⚠ dystrybucja bez wzrostu ceny (tydz. ${s.dist_date}, wolumen ×${s.dist_vol_ratio})`);
     const b = patterns ? s.brk : null;
@@ -857,6 +893,8 @@ const COL = {
     posR: ["R", "pos_r", s => s.position && s.position.r !== null ? `<td class="${s.position.r >= 0 ? "positive" : "negative"}"><strong>${s.position.r.toFixed(2)}R</strong></td>` : `<td class="muted">—</td>`, "Zysk w wielokrotnościach początkowego ryzyka (cena − wejście) / (wejście − stop)"],
     posToStop: ["Do stopu", "pos_to_stop_pct", s => s.position && s.position.to_stop_pct !== null
         ? `<td class="${s.position.stop_hit ? "negative" : ""}">${s.position.stop_hit ? "🛑 STOP" : fmtPct(s.position.to_stop_pct)}</td>` : `<td class="muted">—</td>`, "O ile % cena musi spaść do stopu"],
+    posMacd: ["MACD / stop", null, s => `<td class="pos-macd" data-pos-macd="${escapeHtml(s.ticker)}"><span class="muted small">…</span></td>`, "Czy przestawić stop: MACD tygodniowy pod sygnałem + zamknięcie tygodnia = stop pod dołek tej świecy"],
+    posMini: ["Wykres + MACD", null, s => `<td class="pos-mini" data-pos-mini="${escapeHtml(s.ticker)}"></td>`, "Miniatura tygodniowa: cena, wejście, stop, proponowany stop; pod spodem MACD (histogram, MACD, sygnał); ▼ = przecięcie w dół"],
     posEntry: ["Wejście", "pos_entry", s => `<td>${s.position ? money(s.position.entry) : "—"}</td>`],
     posStop: ["Stop", "pos_stop", s => `<td>${s.position && s.position.stop !== null && s.position.stop !== undefined ? money(s.position.stop) : "—"}</td>`],
     posShares: ["Akcje", "pos_shares", s => `<td>${s.position && s.position.shares !== null ? fmtShares(s.position.shares) : "—"}</td>`],
@@ -874,7 +912,7 @@ const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
 const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "brk", "pos", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
-const POS_COLUMNS = ["posPl", "posR", "posToStop", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
+const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
 const TAB_COLUMNS = {
     LIST: ALL_COLUMNS, CS: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], QM: ALL_COLUMNS, BASES: ALL_COLUMNS,
@@ -885,7 +923,7 @@ const TAB_COLUMNS = {
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "cs"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posR", "posToStop", "strat"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
@@ -1001,6 +1039,7 @@ function renderTable() {
     tbody.innerHTML = rows.length
         ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}"${!splitMode && openCards.has(s.ticker) ? ` class="open"` : ""}>${renderRow(tab, s, i + 1)}</tr>`).join("")
         : `<tr><td colspan="${cols}" class="empty-state">${emptyMessage(tab)}</td></tr>`;
+    if (tab === "POS") fillPosMinis();
     updateAlertBadge();
     const meta = document.getElementById("drawerMeta");
     const total = tabUniverse(tab, state.data.stocks).length;
@@ -1303,7 +1342,7 @@ function openPositionSheet(ticker) {
             <label>Stop ($)<input type="number" inputmode="decimal" step="any" id="posStopIn" value="${v(stop)}"></label>
             <label>Liczba akcji<input type="number" inputmode="decimal" step="any" id="posSharesIn" value="${v(cur.shares)}"></label>
         </div>
-        <div class="sheet-quick">Stop: <button type="button" class="chip-btn" data-stop="5">−5%</button><button type="button" class="chip-btn" data-stop="7">−7%</button><button type="button" class="chip-btn" data-stop="8">−8%</button></div>
+        <div class="sheet-quick">Stop: <button type="button" class="chip-btn" data-stop="5">−5%</button><button type="button" class="chip-btn" data-stop="7">−7%</button><button type="button" class="chip-btn" data-stop="8">−8%</button>${Number.isFinite(stock.box_stop) ? `<button type="button" class="chip-btn" data-stop-price="${stock.box_stop}" title="Dół środkowej 1/3 pudełka bazy (${stock.box_low}–${stock.pivot})">z bazy ${money(stock.box_stop)}</button>` : ""}</div>
         <div class="sheet-section"><h4>Wielkość pozycji — konto w PLN (IKE)</h4>
             <div class="sheet-grid">
                 <label>Konto (PLN)<input type="number" inputmode="decimal" step="any" id="posCapital" value="${v(state.acct.capital)}" placeholder="np. 50000"></label>
@@ -1344,6 +1383,8 @@ function openPositionSheet(ticker) {
     };
     body.addEventListener("input", calc);
     body.addEventListener("click", ev => {
+        const tb = ev.target.closest("button[data-stop-price]");
+        if (tb) { $("posStopIn").value = Number(tb.dataset.stopPrice).toFixed(2); calc(); return; }
         const t = ev.target.closest("button[data-stop]");
         if (!t) return;
         const entry = num("posEntryIn");
@@ -1644,6 +1685,28 @@ function loadEstimates() {
     return estimatesPromise;
 }
 
+// Panel pozycji: miniatury tygodniowe z MACD i podpowiedź „czy przestawić stop” — dane z charts.json, ładowane leniwie po narysowaniu tabeli.
+async function fillPosMinis() {
+    const cells = [...document.querySelectorAll("#table-POS td[data-pos-mini]")];
+    if (!cells.length) return;
+    const charts = await loadCharts();
+    if (!charts) return;
+    cells.forEach(td => {
+        const t = td.dataset.posMini, s = state.data.stocks.find(x => x.ticker === t);
+        const src = chartsForTicker(charts, t), c = src && src.stocks && src.stocks[t];
+        const st = c ? macdWeeklyState({ weeks: src.weeks, c: c.c, l: c.l }) : null;
+        const adv = s && s.position ? stopAdvice(s.position, st, s.price) : null;
+        if (s) s.macd_advice = adv;
+        td.innerHTML = st ? posMiniSvg(c, src.weeks, s && s.position, adv, st, { ticker: t }) : `<span class="muted small">brak danych wykresu</span>`;
+        const mc = document.querySelector(`#table-POS td[data-pos-macd="${CSS.escape(t)}"]`);
+        if (mc) {
+            mc.className = `pos-macd adv-${adv ? adv.tone : "muted"}`;
+            mc.title = adv ? adv.text : "";
+            mc.innerHTML = adv ? `<strong>${adv.code === "RAISE" ? "⬆" : adv.code === "HIT" ? "✂" : adv.code === "NA" ? "—" : "✔"} ${escapeHtml(adv.label)}</strong><span class="act-why">${escapeHtml(adv.text.split(/(?<=[.!?])\s/)[0])}</span>` : "";
+        }
+    });
+}
+
 // Mini wykres fundamentów (cena / EPS / RS) w rozwiniętych kafelkach — dane z charts.json, ładowane leniwie przy pierwszym rozwinięciu.
 async function fillFundCharts() {
     if (splitMode || !openCards.size) return;
@@ -1770,6 +1833,11 @@ function drawChart() {
         if (i === activeIdx) primary = model;
     });
     document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
+    const posStock = state.data.stocks.find(x => x.ticker === currentChart.ticker);
+    if (primary && posStock && posStock.position) {   // moja pozycja: podpowiedź „czy przestawić stop” z MACD tygodniowego trafia do linii gotowości
+        posStock.macd_advice = stopAdvice(posStock.position, macdWeeklyState({ weeks: primary.weeks, c: primary.c, l: primary.l }), posStock.price);
+        document.getElementById("chartReady").textContent = readinessLine(posStock, state.data.market && state.data.market.regime, state.patterns);
+    }
     const estEl = document.getElementById("chartEstimates");
     const pst = state.data.stocks.find(x => x.ticker === currentChart.ticker);
     estEl.textContent = chartEstOn ? (estimatesMap ? estimateText(estimatesMap[currentChart.ticker], pst && pst.price) : (estimatesFailed ? "Estymaty analityków jeszcze niedostępne — pojawią się po najbliższym odświeżeniu danych." : "Ładowanie estymat…")) : "";
@@ -2043,7 +2111,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        hasWeeklyPattern, qmParams,
+        hasWeeklyPattern, qmParams, stopAdvice,
         ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };

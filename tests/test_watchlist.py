@@ -1116,3 +1116,50 @@ class TestWeeklyDistributionAndEps:
         assert out["AAA"]["shares_chg_pct"] == -7.0 and out["AAA"]["rows"][0]["eps"] == 1.0
         out2 = watchlist.update_eps_cache(["BBB"], cache_path=tmp_path / "e2.json", now="2026-10-10", fetch=lambda t: [])
         assert out2["BBB"]["rows"] == []
+
+
+class TestBoxBaseThirdsAndBreakout:
+    """Bazy-pudełka (flat, square_box): podział na 3 części, stop z dołu środkowej części i jakość świecy wybicia (blueprint); fresh_breakout_base."""
+
+    FLAT = TestOneilPatterns.FLAT
+
+    def frame_breakout(self, close=102.0, high=110.0, low=100.0, open_=100.5, vol=1_500_000.0):
+        df = TestOneilPatterns.frame(self.FLAT + [100.0])
+        last = df.index[-1]
+        df.loc[last, ["Open", "High", "Low", "Close", "Volume"]] = [open_, high, low, close, vol]
+        return df
+
+    def test_open_flat_base_gets_thirds_and_a_stop_at_the_bottom_of_the_middle_third(self):
+        b = watchlist.detect_bases(TestOneilPatterns.frame(self.FLAT), None, 1)[-1]
+        assert b["type"] == "flat" and b["open"]
+        third = (b["pivot"] - b["low"]) / 3
+        assert b["box_thirds"] == [pytest.approx(b["low"] + third, abs=0.02), pytest.approx(b["low"] + 2 * third, abs=0.02)]
+        assert b["box_stop"] == b["box_thirds"][0]
+        assert b["box_stop_pct"] == pytest.approx((b["pivot"] - b["box_stop"]) / b["pivot"] * 100, abs=0.1)
+        assert 0 < b["box_stop_pct"] < watchlist.BOX_STOP_WARN_PCT * 2
+
+    def test_cup_and_double_bottom_have_no_thirds(self):
+        for series in (TestOneilPatterns.DOUBLE_BOTTOM,):
+            assert "box_stop" not in watchlist.detect_bases(TestOneilPatterns.frame(series), None, 1)[-1]
+
+    def test_breakout_candle_quality_wick_volume_and_ten_week_high(self):
+        bases = watchlist.detect_bases(self.frame_breakout(), None, 1)
+        b = next(x for x in reversed(bases) if x["type"] == "flat" and not x["open"])
+        assert b["breakout_wick_pct"] == 80          # (110 − max(open, close = 102)) / (110 − 100)
+        assert b["breakout_vol_wow_pct"] == 50       # 1,5 mln vs 1,0 mln
+        assert b["breakout_hi10"] is True
+        strong = watchlist.detect_bases(self.frame_breakout(close=109.5, high=110.0, open_=100.5, vol=1_400_000.0), None, 1)
+        assert next(x for x in reversed(strong) if not x["open"])["breakout_wick_pct"] <= 10
+
+    def test_fresh_breakout_base_replaces_the_missing_open_base(self):
+        df = self.frame_breakout()
+        wk = df
+        bases = watchlist.detect_bases(wk, None, 1)
+        assert not any(x["open"] and x["type"] in watchlist.BASE_TYPES_BUYABLE for x in bases)
+        fresh = watchlist.fresh_breakout_base(bases, wk.index)
+        assert fresh and fresh["type"] == "flat" and fresh["pivot"] < 102
+        m = watchlist.compute_metrics(TestOneilPatterns.frame([*self.FLAT, 103.0], per_week=5))
+        assert m is not None   # dzienny wiersz wejściowy; ścieżka tygodniowa nie może się wywrócić
+        # stara baza (wybicie > 2 tygodnie temu) nie jest „świeża”
+        old = TestOneilPatterns.frame(self.FLAT + [103, 104, 105, 106, 107])
+        assert watchlist.fresh_breakout_base(watchlist.detect_bases(old, None, 1), old.index) is None

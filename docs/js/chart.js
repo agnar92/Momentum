@@ -181,6 +181,11 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         };
     }).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
+    // pudełko ostatniej bazy płaskiej / kwadratowej (otwartej albo świeżo po wybiciu): góra = pivot, dół, podział na 3 części, stop z dolnej krawędzi środkowej
+    const boxBase = [...(c.bases || [])].reverse().find(b => BOX_BASE_TYPES.includes(b.type) && Number.isFinite(b.box_stop) && Array.isArray(b.box_thirds)
+        && (b.open || dateToIndex(weeks, b.end) >= lastIdx - 2));
+    const box = boxBase ? { i0: dateToIndex(weeks, boxBase.start), i1: boxBase.open ? lastIdx : dateToIndex(weeks, boxBase.end), top: boxBase.pivot, low: boxBase.low,
+        t1: boxBase.box_thirds[0], t2: boxBase.box_thirds[1], stop: boxBase.box_stop, stopPct: boxBase.box_stop_pct } : null;
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
     const pad = opts.pad ? FUTURE_PAD_WEEKLY : 0;
@@ -191,7 +196,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         padDefault: pad ? FUTURE_DEFAULT_WEEKLY : 0,
         o: padArr(c.o), h: padArr(c.h), l: padArr(c.l), c: padArr(c.c), v: padArr(c.v),
         smas: smas.map(([label, values]) => ({ label, values: padArr(values || []), color: SMA_COLORS[label] })),
-        spx: padArr(spx), rs: padArr(rs), eps, lines, cups, climax: c.climax || null, distribution: c.distribution || null, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
+        spx: padArr(spx), rs: padArr(rs), eps, lines, cups, box, climax: c.climax || null, distribution: c.distribution || null, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
         pole: tl && tl.info && tl.info.pole_start ? { i0: lineIndex(weeks, tl.info.pole_start), y0: tl.info.pole_low, i1: lineIndex(weeks, tl.info.pole_end), y1: tl.info.pole_high, gain: tl.info.pole_gain } : null,
         epsLine: eps,   // wszystkie raporty (także poza oknem) — linia EPS musi się ciągnąć przez okno nawet wtedy, gdy żaden raport nie wpada w jego środek
         epsLast: eps.length ? eps[eps.length - 1] : null,
@@ -222,6 +227,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
 // Poziom, od którego liczymy strefę zakupu i typowy stop (O'Neil): pivot BAZY KUPOWALNEJ (flat / cup — korekta i głęboka korekta to nie bazy),
 // a gdy go nie ma albo leży daleko od ceny — poziom oporu flagi / korytarza (dziennej, potem tygodniowej). Poziom dalej niż PIVOT_NEAR_PCT od ceny
 // jest bez znaczenia dla bieżącej decyzji, więc go nie rysujemy (inaczej etykiety „pivot / strefa zakupu / stop” lądują na brzegu wykresu).
+const BOX_BASE_TYPES = ["flat", "square_box"];   // pudełka: podział na 3 części i stop ze środka (cup z rączką i flaga to inna bajka)
 const PIVOT_BASE_TYPES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // wzorce z książki O'Neila, które mają pivot do kupna
 const PIVOT_NEAR_PCT = 15;
 function pivotFromStock(stock, bases) {
@@ -329,6 +335,7 @@ function sliceModel(m, n, end = m.n) {
         epsLine: (m.epsLine || m.eps).map(q => ({ ...q, week: q.week - off })),
         lines: m.lines.map(l => ({ ...l, i0: l.i0 - off, i1: l.i1 - off })).filter(l => l.i1 > 0 && l.i0 < n),
         pole: m.pole ? { ...m.pole, i0: m.pole.i0 - off, i1: m.pole.i1 - off } : null,
+        box: m.box ? { ...m.box, i0: m.box.i0 - off, i1: m.box.i1 - off } : null,
         cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off, handle: c.handle ? { ...c.handle, iLow: c.handle.iLow - off, iEnd: c.handle.iEnd - off } : null })).filter(c => c.i1 > 0 && c.i0 < n),
         rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
         book: shiftBook(m.book, off, n),
@@ -689,14 +696,23 @@ function chartSvg(m, opts = {}) {
         const i0 = m.pivot.date ? Math.max(0, dateToIndex(m.weeks, m.pivot.date)) : Math.max(0, m.lastIdx - 25);
         const zx = x(Math.max(0, m.lastIdx - 14)), zw = Math.max(0, xr - zx);
         const band = (lo, hi, fill, op) => `<rect ${clipAttr} x="${zx}" y="${Math.min(yP(lo), yP(hi))}" width="${zw}" height="${Math.abs(yP(lo) - yP(hi))}" fill="${fill}" opacity="${op}"/>`;
-        if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#2ecc71", 0.22), band(pivotPx * 0.92, pivotPx * 0.95, "#ff4d4d", 0.22));
+        if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#2ecc71", 0.22), ...(m.box ? [] : [band(pivotPx * 0.92, pivotPx * 0.95, "#ff4d4d", 0.22)]));   // pudełko ma własny stop ze środka, więc bez ogólnej strefy 5–8 %
         parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="${pivotCol}" stroke-width="1.6" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}${m.pivot.active ? " — aktywny (wybicie)" : " — czeka na wybicie"}</title></line>`);
         const clampY = v => Math.max(P.y + fs(10), Math.min(P.y + P.h - 3, v));
         addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${m.pivot.risky ? " · bez rączki ⚠ ryzyko" : ""}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: pivotCol, bold: true, prio: 9 });
         if (!extended) {
             addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#4ee08a", bold: true, prio: 4 });
-            addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
+            if (!m.box) addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
         }
+    }
+    // pudełko bazy płaskiej / kwadratowej: obrys od początku bazy, linie podziału na 3 części (górna = za wcześnie, dolna = za późno) i stop z dołu środkowej części
+    if (m.box && m.box.i1 >= 0 && m.box.i0 < m.n) {
+        const b = m.box, bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
+        const yTop = yP(b.top), yLow = yP(b.low), yStop = yP(b.stop);
+        parts.push(`<g ${clipAttr} pointer-events="none"><rect x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${yLow - yTop}" fill="none" stroke="#8a8f9c" stroke-width="1" opacity="0.75"><title>Pudełko bazy (${b.low}–${b.top}): górna 1/3 = za wcześnie, dolna 1/3 = za późno, stop w środkowej</title></rect>`
+            + [b.t1, b.t2].map(v => `<line x1="${bx0}" x2="${bx1}" y1="${yP(v)}" y2="${yP(v)}" stroke="#8a8f9c" stroke-width="1" stroke-dasharray="2 4" opacity="0.8"/>`).join("")
+            + `<line x1="${bx0}" x2="${Math.min(L.width - L.right, bx1 + fs(40))}" y1="${yStop}" y2="${yStop}" stroke="#ff5d5d" stroke-width="1.8"><title>Stop z bazy: ${b.stop} (−${b.stopPct}% od pivotu)</title></line></g>`);
+        addLabel(`${opts.compact ? "stop" : "stop z bazy"} ${Number(b.stop).toFixed(2)} (−${b.stopPct}%)`, Math.min(bx1 + fs(40), L.width - L.right) - 3, Math.min(P.y + P.h - 3, yStop + fs(12)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 8 });
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
@@ -1380,6 +1396,95 @@ function linePoints(arr, x, y) {
     return arr.map((v, i) => (Number.isFinite(v) ? `${x(i).toFixed(1)},${y(v).toFixed(1)}` : null)).filter(Boolean).join(" ");
 }
 
+// ---------- MACD tygodniowy (12, 26, 9) do zarządzania pozycją ----------
+// Blueprint: stop podnosimy, gdy MACD przetnie linię sygnału w dół I tydzień zamknie się pod nią — nowy stop tuż pod dołkiem (knotem) tej świecy.
+// EMA liczona jak w TradingView (ta.ema): pierwsza wartość = SMA z pierwszych n zamknięć, dalej alpha = 2 / (n + 1).
+function emaSeries(values, n) {
+    const out = new Array(values.length).fill(null);
+    const k = 2 / (n + 1);
+    let prev = null;
+    const seed = [];
+    for (let i = 0; i < values.length; i++) {
+        const v = values[i];
+        if (!Number.isFinite(v)) continue;
+        if (prev === null) {
+            seed.push(v);
+            if (seed.length === n) { prev = seed.reduce((a, b) => a + b, 0) / n; out[i] = prev; }
+        } else {
+            prev = v * k + prev * (1 - k);
+            out[i] = prev;
+        }
+    }
+    return out;
+}
+
+function macdSeries(closes, fast = 12, slow = 26, sig = 9) {
+    const f = emaSeries(closes, fast), sl = emaSeries(closes, slow);
+    const macd = closes.map((_, i) => (f[i] !== null && sl[i] !== null ? f[i] - sl[i] : null));
+    const signal = emaSeries(macd, sig);
+    const hist = macd.map((v, i) => (v !== null && signal[i] !== null ? v - signal[i] : null));
+    return { macd, signal, hist };
+}
+
+// Stan MACD na ostatniej prawdziwej świecy: nad / pod sygnałem, ostatnie przecięcie w dół (indeks, data, dołek tej świecy) i w górę.
+// m = { weeks, c, l } — tablice tygodniowe (puste przyszłe miejsca = null są pomijane).
+function macdWeeklyState(m) {
+    if (!m || !Array.isArray(m.c)) return null;
+    const { macd, signal, hist } = macdSeries(m.c);
+    let last = -1;
+    hist.forEach((v, i) => { if (v !== null && Number.isFinite(m.c[i])) last = i; });
+    if (last < 1 || hist[last - 1] === null) return null;
+    let crossDown = null, crossUp = null;
+    for (let i = last; i >= 1 && hist[i - 1] !== null; i--) {
+        if (crossDown === null && hist[i] < 0 && hist[i - 1] >= 0) crossDown = i;
+        if (crossUp === null && hist[i] >= 0 && hist[i - 1] < 0) crossUp = i;
+        if (crossDown !== null && crossUp !== null) break;
+    }
+    return {
+        macd, signal, hist, last, state: hist[last] >= 0 ? "above" : "below",
+        crossDown, crossDownDate: crossDown !== null ? m.weeks[crossDown] : null, crossLow: crossDown !== null && m.l ? m.l[crossDown] : null,
+        crossUp, weeksSinceDown: crossDown !== null ? last - crossDown : null,
+        histDelta: hist[last] - hist[last - 1], histDelta2: last >= 2 && hist[last - 2] !== null ? hist[last - 1] - hist[last - 2] : null,
+    };
+}
+
+// Miniatura pozycji: cena (zamknięcia + SMA 10 tyg.) z liniami wejścia / stopu / proponowanego stopu u góry i MACD tygodniowy (histogram, MACD, sygnał) u dołu;
+// ▼ = tydzień, w którym MACD zszedł pod sygnał. c = rekord spółki z charts.json, pos = {entry, stop}, advice z stopAdvice (watchlist.js).
+function posMiniSvg(c, weeks, pos, advice, st, opts = {}) {
+    if (!c || !Array.isArray(c.c) || !st) return "";
+    const W = opts.w || 230, H = opts.h || 104, N = opts.weeks || 52, padL = 4, padR = 34;
+    const priceH = Math.round(H * 0.6), gap = 6, mTop = priceH + gap, mH = H - mTop - 2;
+    const last = st.last, first = Math.max(0, last - N + 1), cnt = last - first + 1;
+    const xs = i => padL + (W - padL - padR) * (i - first) / Math.max(1, cnt - 1);
+    const idx = Array.from({ length: cnt }, (_, k) => first + k);
+    const closes = idx.map(i => c.c[i]).filter(Number.isFinite);
+    if (closes.length < 5) return "";
+    const levels = [pos && pos.entry, pos && pos.stop, advice && advice.newStop].filter(v => Number.isFinite(v) && v > 0);
+    const lo0 = Math.min(...closes, ...levels), hi0 = Math.max(...closes, ...levels), padv = (hi0 - lo0) * 0.06 || 1;
+    const lo = lo0 - padv, hi = hi0 + padv;
+    const yp = v => 2 + (priceH - 4) * (1 - (v - lo) / (hi - lo));
+    const line = (arr, col, w, dash) => {
+        const pts = idx.map(i => (Number.isFinite(arr[i]) ? `${xs(i).toFixed(1)},${yp(arr[i]).toFixed(1)}` : null)).filter(Boolean);
+        return pts.length > 1 ? `<polyline fill="none" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ""} points="${pts.join(" ")}"/>` : "";
+    };
+    const hline = (v, col, dash, label) => (Number.isFinite(v) ? `<line x1="${padL}" x2="${W - padR}" y1="${yp(v).toFixed(1)}" y2="${yp(v).toFixed(1)}" stroke="${col}" stroke-width="1" stroke-dasharray="${dash}"/><text x="${W - padR + 2}" y="${(yp(v) + 3).toFixed(1)}" font-size="8" fill="${col}">${label}</text>` : "");
+    const sma10 = (() => { const o = []; for (let i = 0; i <= last; i++) { const w = c.c.slice(Math.max(0, i - 9), i + 1); o.push(w.length === 10 && w.every(Number.isFinite) ? w.reduce((a, b) => a + b, 0) / 10 : null); } return o; })();
+    const m = Math.max(1e-9, ...idx.map(i => Math.max(Math.abs(st.macd[i] || 0), Math.abs(st.signal[i] || 0), Math.abs(st.hist[i] || 0))));
+    const ym = v => mTop + mH / 2 - (v / m) * (mH / 2 - 1);
+    const bw = Math.max(1, (W - padL - padR) / cnt * 0.7);
+    const bars = idx.map(i => (st.hist[i] === null ? "" : `<rect x="${(xs(i) - bw / 2).toFixed(1)}" y="${Math.min(ym(0), ym(st.hist[i])).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(0.6, Math.abs(ym(st.hist[i]) - ym(0))).toFixed(1)}" fill="${st.hist[i] >= 0 ? "#2ecc71" : "#ff4d4d"}" opacity="0.55"/>`)).join("");
+    const mline = (arr, col) => { const pts = idx.map(i => (arr[i] === null ? null : `${xs(i).toFixed(1)},${ym(arr[i]).toFixed(1)}`)).filter(Boolean); return pts.length > 1 ? `<polyline fill="none" stroke="${col}" stroke-width="1.2" points="${pts.join(" ")}"/>` : ""; };
+    const cd = st.crossDown !== null && st.crossDown >= first ? st.crossDown : null;
+    const mark = cd !== null && Number.isFinite(c.c[cd]) ? `<polygon points="${xs(cd) - 3},${yp(c.c[cd]) - 9} ${xs(cd) + 3},${yp(c.c[cd]) - 9} ${xs(cd)},${yp(c.c[cd]) - 3}" fill="#ff9f43"/>` : "";
+    return `<svg class="pos-mini-svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="Miniatura tygodniowa z MACD ${escapeHtml(opts.ticker || "")}">`
+        + `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" fill="none" stroke="#2c3040"/>`
+        + hline(pos && pos.entry, "#8a8f9c", "2 3", "wej.") + hline(pos && pos.stop, "#ff5d5d", "4 2", "stop") + hline(advice && advice.newStop, "#f59e0b", "5 2", "nowy")
+        + line(sma10, "#e5484d", 1) + line(c.c, "#e8eaed", 1.4) + mark
+        + `<line x1="${padL}" x2="${W - padR}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#3a3f4d" stroke-width="0.6"/>`
+        + bars + mline(st.macd, "#6ea8ff") + mline(st.signal, "#ff9f43")
+        + `<text x="${W - padR + 2}" y="${mTop + 8}" font-size="8" fill="#6ea8ff">MACD</text><text x="${W - padR + 2}" y="${mTop + 17}" font-size="8" fill="#ff9f43">sygnał</text></svg>`;
+}
+
 function fundMiniHtml(m) {
     if (!m) return `<div class="fund-mini-empty">Brak danych wykresu.</div>`;
     const sg = v => (Number.isFinite(v) ? `${v >= 0 ? "+" : ""}${v.toFixed(0)}%` : "—");
@@ -1395,6 +1500,6 @@ function fundMiniHtml(m) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict,
+        niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict, emaSeries, macdSeries, macdWeeklyState, posMiniSvg,
     };
 }
