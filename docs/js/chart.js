@@ -688,7 +688,7 @@ function chartSvg(m, opts = {}) {
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
     if (pivotNear && m.lastShown !== false) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
-        const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : "#e8eaed";   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
+        const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : (lastC > pivotPx ? "#ff8a5b" : "#e8eaed");   // pomarańczowa = cena już nad pivotem, ale bez potwierdzonego wybicia na wolumenie   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
         const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
         const i0 = m.pivot.date ? Math.max(0, dateToIndex(m.weeks, m.pivot.date)) : Math.max(0, m.lastIdx - 25);
         const zx = x(Math.max(0, m.lastIdx - 14)), zw = Math.max(0, xr - zx);

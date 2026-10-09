@@ -317,3 +317,24 @@ test("computeBook / bookSvg: Kup z cupa bez rączki jest oznaczony jako ryzykown
     assert.ok(risky.b.brackets.some(x => /bez rączki/.test(x.label)));
     assert.ok(normal.b.brackets.some(x => /cup-with-handle/.test(x.label)));
 });
+
+test("computeBook / bookSvg: pivot bazy przebity zamknięciem, ale bez sygnału „Kup” (luka powyżej strefy +5 %), nie zostaje biały — kończy się w tygodniu przebicia w kolorze „przebity”", () => {
+    const { bookSvg } = require("../../docs/js/book.js");
+    const n = 40, c = [], h = [], l = [], v = [];
+    for (let i = 0; i < n; i++) {
+        const p = i < 26 ? 10 + i * 0.4 : i < 34 ? 20.4 + (i % 2) * 0.2 : 32 + (i - 34) * 0.5;   // trend, płaska baza tuż pod pivotem 21, potem luka w górę o ~50 %
+        c.push(p); h.push(p + 0.2); l.push(i === 34 ? 30 : p - 0.2); v.push(i === 34 ? 5000 : 1000);
+    }
+    const m = { n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100),
+        bases: [{ type: "flat", i0: 26, i1: 33, pivot: 21, weeks: 8, low: 20, open: false }] };
+    const b = computeBook(m);
+    assert.equal(b.buys.filter(x => x.src === "base").length, 0, "luka powyżej +5 % = za późno, bez Kup");
+    assert.equal(b.pivots.length, 1);
+    assert.equal(b.pivots[0].broken, true);
+    assert.equal(b.pivots[0].i1, 34);
+    m.book = b;
+    const g = { x: i => 10 + i * 8, yP: v2 => 500 - v2 * 3, P: { y: 0, h: 480 }, fs: v2 => v2, addLabel: () => {}, clip: "", compact: false, legendY: 20 };
+    const svg = bookSvg(m, g);
+    assert.match(svg, /stroke="#ff8a5b" stroke-width="2" stroke-dasharray="4 3"/);
+    assert.ok(svg.includes(">przebity bez sygnału kup</text>"));
+});
