@@ -84,7 +84,7 @@ function annAdoptAuto(rec, full) {
         rec.hideAutoCups = true;
     }
     if (!rec.auto) {
-        rec.auto = { tf: full.daily ? "d" : "w", lines: auto.lines, cups: auto.cups, pattern: full.trend ? full.trend.pattern : null, state: full.trend ? full.trend.state : null };
+        rec.auto = { tf: "w", lines: auto.lines, cups: auto.cups, pattern: full.trend ? full.trend.pattern : null, state: full.trend ? full.trend.state : null };
     }
     return rec;
 }
@@ -481,7 +481,7 @@ function annOverlay(ctx) {
             });
             done({ type: "line", id: first.id }, "Flaga: opór (z alertem „nad linią”) i wsparcie — popraw końce kółkami.");
         } else {
-            const cup = annTemplateCup(full.h, full.l, full.weeks, i, full.lastIdx, full.daily ? 150 : 45);
+            const cup = annTemplateCup(full.h, full.l, full.weeks, i, full.lastIdx, 45);
             if (!cup) { showToast("Nie widzę miseczki wokół tego dołka — stuknij w najniższy punkt po wyraźnym szczycie."); return; }
             const c = { id: annNewId(), ...cup, tpl: "cup" };
             R.cups.push(c);
@@ -523,15 +523,15 @@ function annOverlay(ctx) {
                 const ly = Math.max(L.price.y + geom.fs(12), Math.min(L.price.y + L.price.h - 4, geom.yP(endPrice) - 5));
                 body += `<text x="${lx}" y="${ly}" font-size="${geom.fs(11)}" font-weight="700" fill="${col}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${endPrice.toFixed(2)}</text>`;
             }
-            // stop loss 5 % i 8 % pod linią bazy (O'Neil: sprzedaj przy stracie 7–8 % od zakupu, nie więcej) — tylko dla linii oporu (pivot)
+            // poziomy od mojej linii oporu (wejścia): strefa zakupu do +5 % nad linią (O'Neil: nie goń ceny wyżej) i stop −8 % pod nią — tylko dla linii oporu, nie dla pozycji
             if (line.kind === "res" && !line.pos && Number.isFinite(endPrice) && endPrice > 0) {
                 const ex = ext.length > 1 ? ext[1][0] : b[0];
                 const x0 = Math.min(plotRight - 60, Math.max(L.left + 30, ex - geom.fs(70)));
-                [[0.05, "−5%"], [0.08, "−8%"]].forEach(([pct, txt]) => {
-                    const lvl = endPrice * (1 - pct), y = geom.yP(lvl);
+                [[1.05, "kup do +5%", "#2ecc71"], [0.92, "stop −8%", ANN_COLORS.stop]].forEach(([mult, txt, c]) => {
+                    const lvl = endPrice * mult, y = geom.yP(lvl);
                     if (!(y > L.price.y && y < L.price.y + L.price.h)) return;
-                    body += `<line x1="${x0}" x2="${plotRight - 4}" y1="${y}" y2="${y}" stroke="${ANN_COLORS.stop}" stroke-width="1.3" stroke-dasharray="5 4" pointer-events="none"/>`
-                        + `<text x="${plotRight - 6}" y="${y + geom.fs(12)}" font-size="${geom.fs(10)}" font-weight="700" fill="${ANN_COLORS.stop}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">stop ${txt} ${lvl.toFixed(2)}</text>`;
+                    body += `<line x1="${x0}" x2="${plotRight - 4}" y1="${y}" y2="${y}" stroke="${c}" stroke-width="1.3" stroke-dasharray="5 4" pointer-events="none"/>`
+                        + `<text x="${plotRight - 6}" y="${mult > 1 ? y - 4 : y + geom.fs(12)}" font-size="${geom.fs(10)}" font-weight="700" fill="${c}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${txt} ${lvl.toFixed(2)}</text>`;
                 });
             }
             const hasNote = !!(line.note && line.note.trim());
@@ -686,7 +686,7 @@ function annOverlay(ctx) {
             const [p, q] = P[0].date <= P[1].date ? [P[0], P[1]] : [P[1], P[0]];
             if (p.date !== q.date) {
                 const line = { id: annNewId(), kind: annEdit.kind, x0: p.date, y0: p.price, x1: q.date, y1: q.price, alert: annEdit.alert || null, log: !!geom.useLog, ext: annEdit.ext };
-                const fit = annFitLine(line, full.h, full.l, full.weeks, full.daily ? 3 : 2);   // nowa linia od razu siada na szczytach / dołkach i nie jest przebijana
+                const fit = annFitLine(line, full.h, full.l, full.weeks, 2);   // nowa linia od razu siada na szczytach / dołkach i nie jest przebijana
                 if (fit) { Object.assign(line, { x0: fit.x0, y0: fit.y0, x1: fit.x1, y1: fit.y1, kind: fit.kind === line.kind || annEdit.kindSet ? line.kind : fit.kind }); if (fit.pierce) showToast(`Dopasowano do świec, ale ${fit.pierce} świec przebija linię — sprawdź ustawienie.`); }
                 R.lines.push(line);
                 annEdit.selected = { type: "line", id: line.id };
@@ -696,7 +696,7 @@ function annOverlay(ctx) {
             const [a, b, c] = P;
             if (a.date < b.date && b.date < c.date) {
                 const cup = { id: annNewId(), start: a.date, low_date: b.date, end: c.date, peak: a.price, low: Math.min(b.price, a.price), right: c.price };
-                Object.assign(cup, annFitCup(cup, full.h, full.l, full.weeks, full.daily ? 5 : 3) || {});   // łuk dotyka prawdziwego szczytu, dołka i prawego brzegu
+                Object.assign(cup, annFitCup(cup, full.h, full.l, full.weeks, 3) || {});   // łuk dotyka prawdziwego szczytu, dołka i prawego brzegu
                 R.cups.push(cup);
                 annEdit.selected = { type: "cup", id: cup.id };
             }
@@ -789,7 +789,7 @@ function annOverlay(ctx) {
                 loupe = null;
                 if (target.type === "cup") {   // uchwyt cupa po puszczeniu siada na najbliższym szczycie / dołku
                     const Rc = rec(), c = Rc && Rc.cups.find(x => x.id === target.id);
-                    const f = c ? annFitCup(c, full.h, full.l, full.weeks, full.daily ? 5 : 3, handle) : null;
+                    const f = c ? annFitCup(c, full.h, full.l, full.weeks, 3, handle) : null;
                     if (f) Object.assign(c, f);
                 }
                 render();
@@ -1042,7 +1042,7 @@ function annObjectMenu(x, y) {
     if (!line) {
         const fitCup = { label: "📐 Dopasuj do świec (szczyt / dołek / brzeg)", run: () => {
             const R = annCurrent && annStore[annCurrent.ticker], cup = R && annEdit.selected && annEdit.selected.type === "cup" ? R.cups.find(c => c.id === annEdit.selected.id) : null;
-            const f = cup && annCurrent.full ? annFitCup(cup, annCurrent.full.h, annCurrent.full.l, annCurrent.full.weeks, annCurrent.full.daily ? 5 : 3) : null;
+            const f = cup && annCurrent.full ? annFitCup(cup, annCurrent.full.h, annCurrent.full.l, annCurrent.full.weeks, 3) : null;
             if (!f) { showToast("Nie udało się dopasować cupa do świec."); return; }
             Object.assign(cup, f); annChanged(); showToast("Cup dopasowany do szczytu, dołka i prawego brzegu.");
         } };
@@ -1052,7 +1052,7 @@ function annObjectMenu(x, y) {
     const setAlert = v => () => { line.alert = v; line.ack = false; annChanged(); };
     annShowMenu(x, y, [
         { label: "📐 Dopasuj do świec (szczyty / dołki)", run: () => {
-            const f = annCurrent && annCurrent.full ? annFitLine(line, annCurrent.full.h, annCurrent.full.l, annCurrent.full.weeks, annCurrent.full.daily ? 3 : 2) : null;
+            const f = annCurrent && annCurrent.full ? annFitLine(line, annCurrent.full.h, annCurrent.full.l, annCurrent.full.weeks, 2) : null;
             if (!f) { showToast("Za mało świec, żeby dopasować linię."); return; }
             Object.assign(line, { x0: f.x0, y0: f.y0, x1: f.x1, y1: f.y1, kind: f.kind });
             annChanged();

@@ -1,7 +1,7 @@
 name: Recompute Watchlist
 
 # Same OBLICZENIA, bez pobierania danych: liczy watchlist.json / watchlist_qm.json / charts*.json z ostatniej migawki
-# (gałąź raw-data, zapisywana przez "Daily Watchlist Refresh"), z bieżącym kodem w main. Użyteczne po zmianie reguł w watchlist.py
+# (gałąź raw-data, zapisywana przez "Weekly Watchlist Refresh"), z bieżącym kodem w main. Użyteczne po zmianie reguł w watchlist.py
 # (wykrywanie baz, rankingi, wykresy) — bez Finviz, yfinance i czekania na EPS / estymaty.
 #
 # Ręczne odpalenie: zakładka Actions -> "Recompute Watchlist" -> "Run workflow". Lokalnie:

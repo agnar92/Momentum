@@ -2,7 +2,7 @@ name: Deploy Pages (z obliczeniami, bez pobierania danych)
 
 # Publikuje docs/ na GitHub Pages po każdym pushu do main. PRZED publikacją liczy dane od nowa z ostatniej migawki pobranych danych (gałąź raw-data,
 # zapisywana przez daily_watchlist.yml): python watchlist.py --compute-only — bez Finviz i yfinance. Dzięki temu zmiana reguł w watchlist.py
-# (bazy, flagi, rankingi, wykresy) od razu widać na stronie. Brak migawki (pierwsze uruchomienie przed „Daily Watchlist Refresh”) = tylko deploy, jak dawniej.
+# (bazy, flagi, rankingi, wykresy) od razu widać na stronie. Brak migawki (pierwsze uruchomienie przed „Weekly Watchlist Refresh”) = tylko deploy, jak dawniej.
 # Wynik liczenia jest commitowany do main z [skip ci] (nie odpala kolejnego deployu).
 on:
   push:
