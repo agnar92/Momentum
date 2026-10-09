@@ -431,6 +431,7 @@ function annOverlay(ctx) {
     const rec = () => annStore[ticker] || null;
     const plotRight = L.width - L.right;
     const idxOf = d => dateToIndex(m.weeks, d);
+    const lowPx = i => (Number.isFinite(m.l[Math.round(i)]) ? geom.yP(m.l[Math.round(i)]) : NaN);   // łuk własnej miseczki idzie pod dołkami świec, jak w IBD
     const priceOfY = y => {
         const f = (L.price.y + L.price.h - y) / L.price.h;
         return geom.useLog ? Math.exp(Math.log(geom.pMin) + f * (Math.log(geom.pMax) - Math.log(geom.pMin))) : geom.pMin + f * (geom.pMax - geom.pMin);
@@ -554,12 +555,12 @@ function annOverlay(ctx) {
         if (penLive.length > 1) body += penLine(penLive);
         (R ? R.cups : []).forEach(cu => {
             const cup = { i0: idxOf(cu.start), iLow: idxOf(cu.low_date), i1: idxOf(cu.end), peak: cu.peak, low: cu.low, right: cu.right };
-            const { pts, yL, yB, yR } = cupArcPoints(cup, geom.x, geom.yP);
+            const { pts, yL, yB, yR } = cupArcPoints(cup, geom.x, geom.yP, 48, lowPx);
             const depth = cu.peak > 0 ? ((cu.peak - cu.low) / cu.peak * 100).toFixed(1) : "?";
             const isSel = sel && sel.type === "cup" && sel.id === cu.id;
             body += `<polyline fill="none" stroke="${ANN_COLORS.cup}" stroke-width="${isSel ? 3.2 : 2}" stroke-linecap="round" points="${pts2s(pts)}"><title>Cup −${depth}% (własny)</title></polyline>`;
-            const cx = Math.min(Math.max(geom.x((cup.i0 + cup.i1) / 2), L.left + 24), plotRight - 24);
-            body += `<text x="${cx}" y="${yB - (yB - Math.min(yL, yR)) * 0.35}" font-size="${geom.fs(12)}" font-weight="700" fill="${ANN_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${depth}%</text>`;
+            const cx = Math.min(Math.max(geom.x(cup.iLow), L.left + 24), plotRight - 24);
+            body += `<text x="${cx}" y="${yB + geom.fs(14)}" font-size="${geom.fs(12)}" font-weight="700" fill="${ANN_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">−${depth}%</text>`;
             if (editing && (!annEdit.mode || annEdit.mode === "cup")) {
                 body += `<polyline data-cup="${cu.id}" fill="none" stroke="transparent" stroke-width="16" pointer-events="stroke" style="cursor:move" points="${pts2s(pts)}"/>`;
                 if (isSel) {
@@ -750,7 +751,7 @@ function annOverlay(ctx) {
             consider(distSeg(p, [geom.x(idxOf(l.x0)), geom.yP(l.y0)], [geom.x(idxOf(l.x1)), geom.yP(l.y1)]), { obj: { type: "line", id: l.id } });
         });
         if (cupOk) R.cups.forEach(cu => {
-            const { pts } = cupArcPoints({ i0: idxOf(cu.start), iLow: idxOf(cu.low_date), i1: idxOf(cu.end), peak: cu.peak, low: cu.low, right: cu.right }, geom.x, geom.yP);
+            const { pts } = cupArcPoints({ i0: idxOf(cu.start), iLow: idxOf(cu.low_date), i1: idxOf(cu.end), peak: cu.peak, low: cu.low, right: cu.right }, geom.x, geom.yP, 48, lowPx);
             for (let i = 1; i < pts.length; i++) consider(distSeg(p, pts[i - 1], pts[i]), { obj: { type: "cup", id: cu.id } });
         });
         return best;
