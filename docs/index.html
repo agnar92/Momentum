@@ -71,10 +71,13 @@
                 <label class="field" title="L z CANSLIM: minimalny RS Rating (1–99). RS liczy się względem szerokiego rynku, gdy pobrano listę Qullamaggiego (inaczej względem listy CANSLIM). O'Neil: 80 i więcej."><span>Min. RS Rating (L):</span><input type="number" id="csRs" min="0" max="99" step="1"></label>
                 <label class="field" title="O'Neil: C (bieżące zyski) i A (roczne zyski) to fundament — spółka z czerwonym lub nieznanym C albo A nie wchodzi do zakładki, nawet z wysokim wynikiem"><input type="checkbox" id="csCore"><span>C i A obowiązkowe</span></label>
             </fieldset>
-            <fieldset class="filter-group"><legend>🚀 Kolumna „Wybicie”</legend>
+            <fieldset class="filter-group"><legend>🧩 Analiza wzorców</legend>
+                <label class="field" title="Wyłączona: wykres jest czysty (świece, SMA, EPS, wolumen), bez baz, cupów, pivotów, flag i sygnałów Kup / Dokup; znikają też zakładka Bazy i kolumny z formacjami. Własne linie, alerty i pozycje działają bez zmian."><input type="checkbox" id="patternsOn"><span>Wykrywaj wzorce (bazy, cupy, flagi, Kup / Dokup)</span></label>
+            </fieldset>
+            <fieldset class="filter-group pattern-only"><legend>🚀 Kolumna „Wybicie”</legend>
                 <label class="field" title="Kolumna „Wybicie” pokazuje spółkę (do sortowania np. w CANSLIM), gdy do jej poziomu wybicia (opór flagi, pivot bazy, moja linia z alertem „nad”) brakuje najwyżej tyle %"><span>Maks. dystans do wybicia (%):</span><input type="number" id="brkMaxDist" min="0" step="0.5"></label>
             </fieldset>
-            <fieldset class="filter-group"><legend>🧱 Bazy</legend>
+            <fieldset class="filter-group pattern-only"><legend>🧱 Bazy</legend>
                 <label class="field"><span>Maks. dystans do pivotu (%):</span><input type="number" id="baseMaxDist" min="0" step="1"></label>
                 <label class="field"><input type="checkbox" id="baseVcpOnly"><span>tylko VCP</span></label>
             </fieldset>
@@ -149,6 +152,7 @@
                 <button hidden type="button" class="btn" id="chartTfBtn" title="Przełącz wykres: tygodniowy / dzienny">Wykres: tygodniowy</button>
                 <button type="button" class="btn sec-btn" id="chartEstBtn" title="Estymaty analityków: cena celu (zakres i średnia) oraz rewizje konsensusu EPS w czasie">Estymaty: wył.</button>
             <button hidden type="button" class="btn sec-btn" id="chartBookBtn" title="Wygląd i opisy jak na wykresach z książki O'Neila (tygodniowy): ramki baz, Kup / Dokup, ciasne zamknięcia, strzałki wolumenu, korekty rynku, oś Cena = 20×EPS">📖 Książka: wł.</button>
+            <button type="button" class="btn sec-btn" id="chartPatBtn" title="Włącz / wyłącz analizę wzorców: wyłączona = czysty wykres z SMA, EPS i wolumenem">🧩 Wzorce: wł.</button>
             <button type="button" class="btn sec-btn" id="chartHintBtn" title="Podpowiedzi edukacyjne: pokazuje wykryty cup z rączką z literami A–E jak w książce O'Neila">💡 Nauka: wył.</button>
             <button type="button" class="btn sec-btn" id="chartLegendBtn" title="Pokaż / ukryj legendę i podpisy paneli na wykresie (telefon)">Legenda: wył.</button>
             <button hidden type="button" class="btn sec-btn" id="chartLogBtn" title="Przełącz skalę ceny: liniowa / logarytmiczna">Skala: liniowa</button>

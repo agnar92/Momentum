@@ -168,8 +168,10 @@ function futureDates(last, count, daily) {
 
 // opts.pad = true: dokłada puste "przyszłe" miejsca na prawo (wszystkie tablice modelu rosną o `pad`, wartości null).
 function buildChartModel(charts, ticker, stock, opts = {}) {
-    const c = charts && charts.stocks && charts.stocks[ticker];
-    if (!c) return null;
+    const c0 = charts && charts.stocks && charts.stocks[ticker];
+    if (!c0) return null;
+    // opts.patterns === false: czysty wykres (świece, SMA, EPS, wolumen, S&P / RS) — bez baz, cupów, pivotów, flag, Kup / Dokup i climaxu (user: „sam będę wykrywał pattern”)
+    const c = opts.patterns === false ? { ...c0, tl: null, bases: [], climax: null } : c0;
     const weeks = charts.weeks;
     const spx = charts.spx || null;
     const rs = c.c.map((close, i) => (spx && Number.isFinite(close) && Number.isFinite(spx[i]) && spx[i] > 0) ? close / spx[i] : null);
@@ -217,10 +219,10 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         rsChangePct: relChange(rs),
         rsLine: c.rs_line || null, volAvg: padArr(volAvg),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
-        pivot: pivotFromStock(stock, c.bases, !!charts.daily),
+        pivot: opts.patterns === false ? null : pivotFromStock(stock, c.bases, !!charts.daily),
     };
     // opisy jak w książce (tylko wykres tygodniowy): liczone na pełnym modelu, sliceModel przesuwa je razem z oknem
-    if (!charts.daily) {
+    if (!charts.daily && opts.patterns !== false) {
         model.book = computeBook({
             n: model.n, h: model.h, l: model.l, c: model.c, v: model.v, volAvg: model.volAvg, smas: model.smas, spx: model.spx,
             bases: (c.bases || []).map(b => ({
@@ -1195,7 +1197,7 @@ function attachChartGestures(plot, total, getWin, setWin, enabled) {
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
 // opts.window = {n, end} — okno suwaka (null = domyślne); opts.onWindow(w) — wołane po zmianie okna.
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
-    const full = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock, { pad: true });
+    const full = buildChartModel(opts.daily ? (dailyCharts(charts) || charts) : charts, ticker, stock, { pad: true, patterns: opts.patterns });
     if (!full) {
         container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${escapeHtml(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";

@@ -100,6 +100,7 @@ const state = {
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
     brk: { ...DEFAULT_SETTINGS.brk },
+    patterns: true,   // false = bez analizy wzorców: brak zakładki Bazy, kolumn bazowych i rysunków formacji na wykresie (user: „sam będę wykrywał pattern”)
     favs: new Set(),
     scores: {},
     pos: {},
@@ -635,27 +636,29 @@ function baseBoxHtml(s) {
 }
 
 // Jedna linia „czy to już ten moment?” pod tytułem wykresu: dystans do wybicia, baza, wolumen, RS, rynek, wyniki.
-function readinessLine(s, regime) {
+function readinessLine(s, regime, patterns = true) {
     const out = [];
     const short = a => `${a.icon} ${a.label} — ${a.why.split(/(?<=[.!?])\s/)[0]}`;   // pierwsze zdanie; całość po kliknięciu etykiety
-    const first = s.action_tf === "D" ? ["Dzień (główny)", s.action_d, "Tydzień", s.action_w] : ["Tydzień" + (s.action_tf === "W" ? " (główny)" : ""), s.action_w, "Dzień", s.action_d];
+    const first = !patterns ? [null, null, null, null] : s.action_tf === "D" ? ["Dzień (główny)", s.action_d, "Tydzień", s.action_w] : ["Tydzień" + (s.action_tf === "W" ? " (główny)" : ""), s.action_w, "Dzień", s.action_d];
     if (first[1]) out.push(`${first[0]}: ${short(first[1])}`);
     if (first[3]) out.push(`${first[2]}: ${short(first[3])}`);
     if (s.position) {
         const p = s.position;
         out.push(`💼 ${fmtPct(p.pl_pct)}${p.r !== null ? ` · ${p.r.toFixed(1)}R` : ""}${p.to_stop_pct !== null ? ` · stop ${p.stop_hit ? "PRZEBITY" : fmtPct(p.to_stop_pct)}` : ""}`);
     }
-    if (s.climax_top === true) out.push(`⚠ sell climax top (tydz. ${s.climax_date}, potwierdzenia ${s.climax_conf ?? 0}/4)`);
-    const b = s.brk;
-    if (b) out.push(b.dist !== null ? `Do wybicia: ${b.dist.toFixed(1)}%` : (b.rank === 0 ? "Wybicie świeże" : "Przy poziomie"));
+    if (patterns && s.climax_top === true) out.push(`⚠ sell climax top (tydz. ${s.climax_date}, potwierdzenia ${s.climax_conf ?? 0}/4)`);
+    const b = patterns ? s.brk : null;
+    if (!patterns) { /* bez analizy wzorców: bez baz, flag i wybicia */ }
+    else if (b) out.push(b.dist !== null ? `Do wybicia: ${b.dist.toFixed(1)}%` : (b.rank === 0 ? "Wybicie świeże" : "Przy poziomie"));
     else out.push("Brak sygnału wybicia");
-    if (s.base_type) out.push(BUYABLE_BASES.includes(s.base_type) ? `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}${s.base_on_base ? " (baza na bazie)" : ""}` : `${BASE_LABELS_PL[s.base_type] || s.base_type} (nie baza do zakupu)`);
-    if (BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.pct_to_pivot) && s.pct_to_pivot < 0) {
+    if (patterns && s.base_type) out.push(BUYABLE_BASES.includes(s.base_type) ? `${BASE_LABELS_PL[s.base_type] || s.base_type}${s.vcp ? " + VCP" : ""}${s.base_on_base ? " (baza na bazie)" : ""}` : `${BASE_LABELS_PL[s.base_type] || s.base_type} (nie baza do zakupu)`);
+    if (patterns && BUYABLE_BASES.includes(s.base_type) && Number.isFinite(s.pct_to_pivot) && s.pct_to_pivot < 0) {
         const over = -s.pct_to_pivot;
         out.push(over > 5 ? `⚠ ${over.toFixed(1)}% nad pivotem — za późno wg reguły +5 %` : `${over.toFixed(1)}% nad pivotem (strefa zakupu do +5 %)`);
     }
-    if (s.tl_pattern) out.push(s.tl_pattern === "flaga" ? "flaga" : "korytarz");
-    if (s.tl_state === "bez wolumenu") out.push("zamknięcie nad oporem bez wolumenu — to jeszcze nie wybicie");
+    if (patterns && s.tl_pattern) out.push(s.tl_pattern === "flaga" ? "flaga" : "korytarz");
+    if (!patterns) { /* pominięte */ }
+    else if (s.tl_state === "bez wolumenu") out.push("zamknięcie nad oporem bez wolumenu — to jeszcze nie wybicie");
     else if (Number.isFinite(s.tl_vol_ratio)) out.push(`wolumen wybicia ×${s.tl_vol_ratio}${s.tl_vol_ok ? " ✓" : " (słaby)"}`);
     if (s.rs_line_state === "przed ceną") out.push("RS przed ceną ●");
     else if (s.rs_line_state) out.push("RS na szczycie");
@@ -891,7 +894,9 @@ const TAB_COLUMNS_COMPACT = {
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
-const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]);
+// Kolumny, które istnieją tylko dzięki analizie wzorców (bazy, pivot, flagi, wybicie, „Co robić”, climax) — znikają po jej wyłączeniu.
+const PATTERN_COLUMNS = new Set(["actW", "actD", "cx", "brk", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend"]);
+const columnsFor = tab => (splitMode ? TAB_COLUMNS_COMPACT[tab] : TAB_COLUMNS[tab]).filter(id => state.patterns || !PATTERN_COLUMNS.has(id));
 
 const openCards = new Set();   // rozwinięte kafelki (telefon), przeżywają przerysowanie listy
 
@@ -979,7 +984,7 @@ function renderFiltersSummary() {
     const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     const base = tabUniverse("LIST", common), qmBase = tabUniverse("QM", common), csBase = tabUniverse("CS", common);
     const counts = [["Lista", base.length],
-        ["Qullamaggie", qullamaggieRows(qmBase, state.qm).length], ["Bazy", baseRows(base, state.bases).length], ["CANSLIM", canslimRows(csBase, state.csMin, state.csCore).length]];
+        ["Qullamaggie", qullamaggieRows(qmBase, state.qm).length], ...(state.patterns ? [["Bazy", baseRows(base, state.bases).length]] : []), ["CANSLIM", canslimRows(csBase, state.csMin, state.csCore).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
     document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek (w tym ${state.data.stocks.filter(inCs).length} z listy CANSLIM) po filtrach wspólnych`;
 }
@@ -1130,7 +1135,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csRs: state.csRs, qm: state.qm, bases: state.bases, brk: state.brk }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csRs: state.csRs, qm: state.qm, bases: state.bases, brk: state.brk, patterns: state.patterns }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -1150,6 +1155,8 @@ function loadSettings() {
             state.bases.vcpOnly = saved.bases.vcpOnly === true;
         }
         if (saved.brk && Number.isFinite(saved.brk.maxDistPct)) state.brk.maxDistPct = saved.brk.maxDistPct;
+        if (saved.patterns === false) state.patterns = false;
+        if (!state.patterns && state.tab === "BASES") state.tab = "CS";
     } catch (e) { /* uszkodzony zapis — zostają domyślne */ }
 }
 
@@ -1433,7 +1440,42 @@ function renderDataInfo() {
         + (d.qm ? ` · Qullamaggie: ${d.qm.n_stocks} spółek z sesji ${d.qm.data_as_of} (odświeżane codziennie)` : "");
 }
 
+// Przełącznik analizy wzorców (Filtry → 🧩 i przycisk nad wykresem): wyłączony = czysty wykres (świece, SMA, EPS, wolumen) i brak zakładki Bazy.
+function applyPatternsUi() {
+    const on = state.patterns;
+    document.body.classList.toggle("no-patterns", !on);
+    const tab = document.querySelector('.drawer-tab[data-tab="BASES"]');
+    if (tab) tab.hidden = !on;
+    const cb = document.getElementById("patternsOn");
+    if (cb) cb.checked = on;
+    const b = document.getElementById("chartPatBtn");
+    if (b) { b.textContent = on ? "🧩 Wzorce: wł." : "🧩 Wzorce: wył."; b.classList.toggle("active", on); }
+    const hint = document.getElementById("chartHintBtn");
+    if (hint) hint.hidden = !on;
+}
+
+function setPatterns(on) {
+    state.patterns = !!on;
+    applyPatternsUi();
+    saveSettings();
+    renderHeaders();
+    if (!state.patterns && state.tab === "BASES") { showTab("CS"); }
+    else renderTable();
+    if (currentChart) {
+        const st = state.data.stocks.find(x => x.ticker === currentChart.ticker);
+        document.getElementById("chartBase").innerHTML = st && state.patterns ? baseBoxHtml(st) : "";
+        document.getElementById("chartReady").textContent = st ? readinessLine(st, state.data.market && state.data.market.regime, state.patterns) : "";
+        chartWindows = [];
+        drawChart();
+    }
+}
+
 function initControls() {
+    const patCb = document.getElementById("patternsOn");
+    if (patCb) patCb.addEventListener("change", () => setPatterns(patCb.checked));
+    const patBtn = document.getElementById("chartPatBtn");
+    if (patBtn) patBtn.addEventListener("click", () => setPatterns(!state.patterns));
+    applyPatternsUi();
     const bind = (id, apply) => {
         const el = document.getElementById(id);
         el.addEventListener("input", () => {
@@ -1651,8 +1693,8 @@ async function openChart(ticker) {
         : "";
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
     document.getElementById("chartRatings").innerHTML = stock ? ratingChipsHtml(stock) : "";
-    document.getElementById("chartBase").innerHTML = stock ? baseBoxHtml(stock) : "";
-    document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && state.data.market.regime) : "";
+    document.getElementById("chartBase").innerHTML = stock && state.patterns ? baseBoxHtml(stock) : "";
+    document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && state.data.market.regime, state.patterns) : "";
     updatePosButton();
     const scoreBox = document.getElementById("chartScore");
     if (scoreBox) scoreBox.value = Number.isFinite(state.scores[ticker]) ? state.scores[ticker] : "";
@@ -1687,7 +1729,7 @@ function chartStats(s) {
     const num = (v, d = 1) => (Number.isFinite(v) ? v.toFixed(d) : "—");
     return [`Kapitalizacja ${fmtMarketCap(s.market_cap)}`, `P/E ${num(s.pe)}`, `Fwd P/E ${num(s.forward_pe)}`,
         `ROE ${fmtPct(s.roe, 1, false)}`, `od szczytu 52 tyg. ${fmtPct(s.pct_from_high_52w)}`,
-        s.base_type ? `baza: ${baseSummary(s)}, pivot ${money(s.pivot)} (${fmtPct(s.pct_to_pivot)})` : null].filter(Boolean).join(" · ");
+        state.patterns && s.base_type ? `baza: ${baseSummary(s)}, pivot ${money(s.pivot)} (${fmtPct(s.pct_to_pivot)})` : null].filter(Boolean).join(" · ");
 }
 
 // Zmiana DŁUGOŚCI okna suwaka jest zapamiętywana (localStorage) dla wszystkich spółek; samo przesuwanie okna nie.
@@ -1748,7 +1790,7 @@ function drawChart() {
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n, c.daily); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
-            hideAutoLines: annHide(c.ticker).lines, hints: chartHintsOn,
+            hideAutoLines: annHide(c.ticker).lines, hints: chartHintsOn && state.patterns, patterns: state.patterns,
             book: chartBookOn && !c.daily, bookTitle: layout === "4" ? "" : `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
@@ -1768,7 +1810,7 @@ function drawChart() {
             drawChart();
         }, true));
     }
-    document.getElementById("chartPattern").textContent = primary ? patternExplain(primary) : "";
+    document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
     const estEl = document.getElementById("chartEstimates");
     const pst = state.data.stocks.find(x => x.ticker === currentChart.ticker);
     estEl.textContent = chartEstOn ? (estimatesMap ? estimateText(estimatesMap[currentChart.ticker], pst && pst.price) : (estimatesFailed ? "Estymaty analityków jeszcze niedostępne — pojawią się po najbliższym odświeżeniu danych." : "Ładowanie estymat…")) : "";
@@ -1848,7 +1890,7 @@ function initBottomNav() {
     if (!nav) return;
     nav.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
     document.getElementById("navMore").addEventListener("click", () => {
-        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["QM", "🎯", "Qullamaggie"], ["BASES", "🧱", "Bazy"], ["FAV", "⭐", "Ulubione"]];
+        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["QM", "🎯", "Qullamaggie"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]];
         const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
             <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
         body.querySelectorAll("button[data-tab]").forEach(b => b.addEventListener("click", () => { closeSheet(); showTab(b.dataset.tab); }));
@@ -1866,7 +1908,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartPatBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>

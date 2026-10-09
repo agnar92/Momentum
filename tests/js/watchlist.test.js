@@ -227,6 +227,8 @@ test("tagBreakouts sets brk and brk_sort (fresh breakouts first, then by distanc
     const line = readinessLine({ ...rows[0], rs_line_state: "przed ceną", earnings: "" }, "correction");
     assert.ok(line.startsWith("Do wybicia: 2.5%") && line.includes("RS przed ceną") && line.includes("rynek w korekcie"));
     assert.ok(readinessLine(rows[3], "uptrend").startsWith("Brak sygnału wybicia"));
+    const clean = readinessLine({ ...rows[0], rs_line_state: "przed ceną", earnings: "", base_type: "flat", pct_to_pivot: -2 }, "uptrend", false);
+    assert.equal(clean, "RS przed ceną ● · rynek ✓");   // bez analizy wzorców: żadnej bazy, flagi ani wybicia
 });
 
 test("swipeDirection needs a long, fast, mostly horizontal move", () => {

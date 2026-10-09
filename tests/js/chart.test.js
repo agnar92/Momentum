@@ -67,6 +67,19 @@ test("buildChartModel: RS line = price / benchmark, EPS quarters mapped to weeks
     assert.equal(buildChartModel(charts(), "ZZZ", null), null);
 });
 
+test("buildChartModel with patterns: false drops bases, flags, pivot, climax and the book annotations but keeps SMA / EPS / volume", () => {
+    const ch = charts();
+    ch.stocks.AAA.bases = [{ type: "flat", start: "2026-01-02", end: "2026-01-30", pivot: 11, weeks: 5, low: 9, open: true }];
+    ch.stocks.AAA.tl = { pattern: "flaga", state: "wybicie", lines: [], info: null };
+    ch.stocks.AAA.climax = { date: "2026-01-30" };
+    const on = buildChartModel(ch, "AAA", { price: 11, base_type: "flat", pivot: 11 });
+    const off = buildChartModel(ch, "AAA", { price: 11, base_type: "flat", pivot: 11 }, { patterns: false });
+    assert.ok(on.trend && on.climax && on.book);
+    assert.equal(off.trend, null); assert.equal(off.climax, null); assert.equal(off.book, null); assert.equal(off.pivot, null);
+    assert.deepEqual(off.cups, []); assert.deepEqual(off.lines, []);
+    assert.equal(off.eps.length, on.eps.length); assert.equal(off.v.length, on.v.length);
+});
+
 test("buildChartModel works without a benchmark (no RS line)", () => {
     const m = buildChartModel(charts({ spx: null }), "AAA", null);
     assert.ok(m.rs.every(v => v === null));

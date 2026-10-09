@@ -933,3 +933,9 @@ body.split table.momentum-table td, body.split table.momentum-table thead th { p
     body:not(.split) .wl-chart-box .wl-range-row { margin: 3px 0 2px 38px; }
     body:not(.split) .wl-chart-box #chartCrossDate { display: none; }
 }
+
+/* Analiza wzorców wyłączona (Filtry → 🧩): bez zakładki Bazy, ramek formacji i ustawień z nimi związanych */
+body.no-patterns .pattern-only,
+body.no-patterns #chartBase,
+body.no-patterns #chartPattern,
+body.no-patterns .drawer-tab[data-tab="BASES"] { display: none !important; }
