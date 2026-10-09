@@ -563,7 +563,7 @@ body:not(.split) td.c-actW, body:not(.split) td.c-fav, body:not(.split) td.c-tic
 body:not(.split) td.c-price, body:not(.split) td.c-comp, body:not(.split) td.c-rs, body:not(.split) td.c-epsr,
 body:not(.split) td.c-brk, body:not(.split) td.c-pos, body:not(.split) td.c-posPl, body:not(.split) td.c-posR, body:not(.split) td.c-posToStop, body:not(.split) td.c-posMacd, body:not(.split) td.c-posMini, body:not(.split) td.c-inst, body:not(.split) td.c-leader, body:not(.split) td.c-grp, body:not(.split) td.c-recom, body:not(.split) td.c-upside, 
 body:not(.split) td.c-alStatus, body:not(.split) td.c-alDist, body:not(.split) td.c-alAct { display: inline-flex; align-items: center; }
-body:not(.split) td.c-actW { display: block; order: 5; flex: 0 0 100%; padding: 6px 8px; margin: 2px 0; border-radius: 6px; background: rgba(255,255,255,0.04); font-size: 13px; line-height: 1.35; white-space: normal; }
+body:not(.split) td.c-actW { display: block; order: 5; flex: 0 0 100%; padding: 6px 8px 6px 14px; margin: 2px 0; border-radius: 6px; background: rgba(255,255,255,0.04); font-size: 13px; line-height: 1.35; white-space: normal; }
 body:not(.split) td.c-actW .act-why { display: block; font-weight: 400; color: var(--text-dim); font-size: 12px; margin-top: 2px; }
 body:not(.split) td.c-actW::before { content: "Tydzień: "; font-weight: 400; color: var(--text-faint); }
 body:not(.split) td.c-fav { order: 1; font-size: 20px; }
@@ -942,6 +942,8 @@ body.no-patterns .drawer-tab[data-tab="BASES"] { display: none !important; }
 /* Panel pozycji: miniatury tygodniowe z MACD i podpowiedź „czy przestawić stop” */
 td.pos-mini { padding: 4px 6px; min-width: 190px; }
 td.pos-mini svg { display: block; width: 186px; max-width: 100%; height: auto; }
+body:not(.split) td.pos-mini { min-width: 0; width: 100%; }
+body:not(.split) td.pos-mini svg { width: 100%; }
 td.pos-macd { white-space: normal; }
 td.pos-macd strong { display: block; white-space: normal; }
 td.pos-macd.adv-good strong { color: #4ee08a; }

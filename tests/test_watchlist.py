@@ -1136,7 +1136,7 @@ class TestBoxBaseThirdsAndBreakout:
         assert b["box_thirds"] == [pytest.approx(b["low"] + third, abs=0.02), pytest.approx(b["low"] + 2 * third, abs=0.02)]
         assert b["box_stop"] == b["box_thirds"][0]
         assert b["box_stop_pct"] == pytest.approx((b["pivot"] - b["box_stop"]) / b["pivot"] * 100, abs=0.1)
-        assert 0 < b["box_stop_pct"] < watchlist.BOX_STOP_WARN_PCT * 2
+        assert 0 < b["box_stop_pct"] < 20
 
     def test_cup_and_double_bottom_have_no_thirds(self):
         for series in (TestOneilPatterns.DOUBLE_BOTTOM,):

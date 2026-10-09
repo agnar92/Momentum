@@ -26,7 +26,6 @@ import finviz
 
 ROOT = Path(__file__).resolve().parent
 OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist.json"
-CHARTS_PATH = ROOT / "docs" / "data" / "charts.json"
 EPS_CACHE_PATH = ROOT / "docs" / "data" / "eps_cache.json"
 ESTIMATES_PATH = ROOT / "docs" / "data" / "estimates.json"
 QM_OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist_qm.json"    # profil Qullamaggiego (ręczny): osobna lista i osobne wykresy
@@ -83,7 +82,6 @@ CUP_MIN_WEEKS = 7            # od lewego szczytu do prawego brzegu: 7–65 tygod
 CUP_MAX_WEEKS = 65
 CUP_MAX_RETRACE = 0.40       # w trakcie spadku/odbicia żaden ruch „pod prąd” nie może odrobić > 40 % głębokości (to W / zygzak)
 CUP_MIN_FIT = 0.60           # dopasowanie paraboli do zamknięć (R²) — miseczka ma być gładką „U”
-CUP_PRIOR_GAIN_PCT = 30      # wcześniejszy trend wzrostowy: szczyt >= 30 % ponad dołkiem z poprzednich 52 tyg.
 CUP_PRIOR_LOOKBACK = 52
 CUP_RIM_RECOVERY = 0.80      # prawy brzeg musi odrobić >= 80 % głębokości miseczki ...
 CUP_RIM_MAX_GAP_PCT = 10.0   # ... i być nie dalej niż 10 % pod lewym szczytem
@@ -100,15 +98,11 @@ BUY_ZONE_MAX_PCT = 5.0       # strefa zakupu: pivot ... pivot + 5 %
 STOP_LOSS_PCT = 8.0          # sztywny stop: do 7–8 % poniżej ceny zakupu
 BASE_PRIOR_GAIN_PCT = 30     # A: wcześniejszy trend wzrostowy >= +30 % przed każdą bazą (cup, double bottom, ascending)
 FLAT_PRIOR_GAIN_PCT = 20     # D: flat base po wzroście >= +20 %
-HOLD_GAIN_PCT = 20.0         # F: +20 % w <= 3 tygodnie od wybicia ...
-HOLD_FAST_WEEKS = 3
-HOLD_WEEKS = 8               # ... = trzymaj minimum 8 tygodni
 CUP_MKT_CONTEXT_DD = 7.0     # S&P spadł >= 7 % w trakcie tworzenia miseczki = „pod presją rynku”
 ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "skurcze" (VCP)
 EPS_CACHE_VERSION = 3        # v3 = dodatkowo zmiana liczby akcji r/r (skup akcji); v2 = historia raportów do 40 kwartałów (limit=40); starsze wpisy są pobierane ponownie
 EPS_CACHE_MAX_AGE_DAYS = 6   # EPS zmienia się raz na kwartał; odświeżenie jest tygodniowe (sobota), więc wpis starszy niż 6 dni jest zawsze pobierany ponownie
 EPS_ACCEL_PP = 5.0           # akceleracja C: wzrost EPS r/r z ostatniego kwartału wyższy od poprzedniego o >= tyle punktów procentowych
-BUYBACK_PCT = -5.0           # skup akcji (S): liczba akcji spadła r/r o >= 5 % (blueprint: 5-10 % to silny sygnał zmniejszania podaży)
 EPS_TIME_BUDGET_S = 600
 EPS_WORKERS = 4
 CACHE_KEEP_DAYS = 45         # eps_cache.json / estimates.json dzielą skaner CANSLIM i szeroki skaner: wpis spoza bieżącej listy znika dopiero po tylu dniach bez odświeżenia
@@ -854,10 +848,6 @@ IPO_MIN_WEEKS = 3
 CUP_HANDLE_MAX_DEPTH_BEAR_PCT = 30.0   # rączka przy dnie bessy: wyjątkowo 20–30 %
 HTF_DRYUP = 0.6              # średni wolumen we fladze <= 0,6x średniego wolumenu rajdu (drastyczny zanik)
 BOX_BASE_TYPES = ("flat", "square_box")   # bazy-pudełka: dzielimy je na 3 części (cup z rączką i flaga to inna bajka — bez tego podziału)
-BOX_STOP_WARN_PCT = 10.0     # stop z pudełka głębszy niż 10 % pod pivotem = szeroki (blueprint: średnio ~10 %, powyżej ~20 % nie kupuje się wcale)
-BOX_STOP_MAX_PCT = 20.0
-BRK_WICK_MAX_PCT = 50.0      # górny knot świecy wybicia > 50 % jej zakresu = presja sprzedaży, nie bierzemy tego wybicia
-BRK_VOL_WOW_MIN_PCT = 30.0   # wolumen świecy wybicia min. +30 % względem poprzedniego tygodnia (informacyjnie; reguła O'Neila +40 % względem średniej zostaje)
 BRK_HIGH_WEEKS = 10          # zamknięcie wybicia = najwyższe zamknięcie od 10 tygodni
 BASE_TYPES_BUYABLE = ("cup", "double_bottom", "flat", "square_box", "ascending", "htf", "ipo")
 
