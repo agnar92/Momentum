@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    patternExplain, defaultWindowLength, niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, pivotFromStock, swingLabels, volumeSpikes, fmtVol, dailyCharts,
+    patternExplain, defaultWindowLength, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, pivotFromStock, swingLabels, volumeSpikes, fmtVol, dailyCharts,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -618,4 +618,19 @@ test("sliceModel: linia EPS zachowuje raporty spoza okna (nie znika po zmianie s
     const s2 = sliceModel(m, 20, 30);   // okno [10, 30): żaden raport w środku, linia nadal ma 3 punkty
     assert.equal(s2.eps.length, 0);
     assert.equal(s2.epsLine.length, 3);
+});
+
+test("epsMultiple: 20× jak w książce, a gdy linia zysków przy 20× wypada poza cenami okna (EPS > 10 przy cenie 100, albo EPS bardzo niski) — najbliższy równy mnożnik", () => {
+    assert.equal(epsMultiple([4, 4.5, 5], 60, 140), 20);                // 20× EPS 4,5 = 90 mieści się w cenach 60–140
+    assert.equal(epsMultiple([10, 11, 12], 60, 140), 10);               // 20× EPS 11 = 220 (poza) → 10× = 110
+    assert.equal(epsMultiple([18, 18.4], 200, 600), 20);                // DELL: 20× = 368 mieści się
+    assert.equal(epsMultiple([0.14, 0.19, 0.22, 0.35, 0.9], 12, 128), 160); // MXL: mediana EPS 0,22 → 20× = 4,4 poniżej cen okna → 160× (35 w środku zakresu)
+    assert.equal(epsMultiple([], 10, 20), 20);
+    assert.equal(epsMultiple([-1, 0], 10, 20), 20);
+});
+
+test("chartSvg: linia zysków podzielona na odcinki (ujemny EPS) — KAŻDY odcinek ma przycięcie do panelu cen, nie wychodzi pod wykres", () => {
+    const polys = polyline([[0, 0], [10, 10], null, [20, 20], [30, 30]], "#c58bff", 2.2);
+    assert.ok((polys.match(/<polyline/g) || []).length >= 2);
+    assert.equal(polys.replace(/<polyline/g, "<polyline CLIP").match(/<polyline CLIP/g).length, (polys.match(/<polyline/g) || []).length);
 });
