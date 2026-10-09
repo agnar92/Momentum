@@ -391,6 +391,18 @@ function rollingMean(values, n) {
     });
 }
 
+// Mnożnik linii zysków na wykresie książkowym: 20× (P/E 20, jak w książce); gdy przy 20× typowa (mediana z ostatnich 8 raportów) wartość wypada poza zakresem cen okna
+// (EPS > 10 przy cenie 100, albo bardzo niski EPS), bierzemy najbliższy „równy” mnożnik, żeby linia była widoczna zamiast uciętej poza wykresem.
+const EPS_MULTIPLES = [1, 2, 5, 10, 20, 40, 80, 160, 320];
+function epsMultiple(ttmValues, lo, hi) {
+    const v = (ttmValues || []).filter(t => Number.isFinite(t) && t > 0).slice(-8).sort((a, b) => a - b);
+    if (!v.length || !(lo > 0) || !(hi > lo)) return 20;
+    const med = v[Math.floor(v.length / 2)];
+    if (med * 20 >= lo / 1.3 && med * 20 <= hi * 1.3) return 20;
+    const mid = Math.sqrt(lo * hi);
+    return EPS_MULTIPLES.reduce((best, k) => (Math.abs(Math.log(med * k / mid)) < Math.abs(Math.log(med * best / mid)) ? k : best), 20);
+}
+
 function polyline(points, color, width = 1.4, dash = "") {
     // points: [[x, y] | null, ...] — przerwy (null) dzielą linię na kawałki.
     const segs = [];
@@ -587,7 +599,8 @@ function chartSvg(m, opts = {}) {
     const ttmAll = (m.epsLine || m.eps).filter(q => Number.isFinite(q.t));
     // „Cena = 20×EPS” (jak w książce): linia zysków leży na TEJ SAMEJ skali co cena w punktach 20 × EPS za 4 kwartały; do zakresu liczymy ją tylko
     // do 1,3× poza zakresem świec (dalej linia jest ucięta — wtedy P/E jest dużo wyższe / niższe niż 20)
-    const e20 = bookOn ? ttmAll.map(q => q.t * 20).concat(m.epsNext && Number.isFinite(m.epsNext.t) ? [m.epsNext.t * 20] : []).filter(v => v > 0).map(v => Math.min(baseExt[1] * 1.3, Math.max(baseExt[0] / 1.3, v))) : [];
+    const epsMult = bookOn ? epsMultiple(ttmAll.map(q => q.t), baseExt[0], baseExt[1]) : 20;
+    const e20 = bookOn ? ttmAll.map(q => q.t * epsMult).concat(m.epsNext && Number.isFinite(m.epsNext.t) ? [m.epsNext.t * epsMult] : []).filter(v => v > 0).map(v => Math.min(baseExt[1] * 1.3, Math.max(baseExt[0] / 1.3, v))) : [];
     const pExt = numericExtent([m.h, m.l, ...nearSma, ptExt, ...pivotExtra, e20]) || [0, 1];
     const useLog = (!!opts.log || bookOn) && pExt[0] > 0;
     const pad = (pExt[1] - pExt[0]) * 0.04;
@@ -600,10 +613,10 @@ function chartSvg(m, opts = {}) {
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
         if (yP(t) > P.y + fs(9)) {   // nie na etykiecie osi S&P tuż nad panelem
             parts.push(`<text x="${L.width - L.right + 6}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}">${bookOn ? bookAxisFmt(t) : fmtAxis(t)}</text>`);
-            if (bookOn && !opts.compact) parts.push(`<text x="${L.left - 5}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}" text-anchor="end">${bookAxisFmt(t / 20)}</text>`);   // lewa oś = cena / 20 (skala EPS)
+            if (bookOn && !opts.compact) parts.push(`<text x="${L.left - 5}" y="${yP(t) + 4}" fill="${CHART_COLORS.text}" font-size="${fs(10)}" text-anchor="end">${bookAxisFmt(t / epsMult)}</text>`);   // lewa oś = cena / mnożnik (skala EPS)
         }
     });
-    if (bookOn && !opts.compact) parts.push(`<g pointer-events="none"><rect x="2" y="${P.y}" width="${L.left - 6}" height="${fs(26)}" fill="none" stroke="#3a3f4d"/><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(11)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.text}" text-anchor="middle">Cena =</text><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(22)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.textStrong}" font-weight="700" text-anchor="middle">20×EPS</text></g>`);
+    if (bookOn && !opts.compact) parts.push(`<g pointer-events="none"><rect x="2" y="${P.y}" width="${L.left - 6}" height="${fs(26)}" fill="none" stroke="#3a3f4d"/><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(11)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.text}" text-anchor="middle">Cena =</text><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(22)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.textStrong}" font-weight="700" text-anchor="middle">${epsMult}×EPS</text></g>`);
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${P.y}" width="${L.width - L.left - L.right}" height="${P.h}"/></clipPath>`);
     let hintLegendDone = false;
@@ -667,7 +680,7 @@ function chartSvg(m, opts = {}) {
     const clipAttr = `clip-path="url(#chartPriceClip${opts.uid || ""})"`;
     m.smas.forEach(x => {
         const pts = x.values.map((v, i) => Number.isFinite(v) ? [x_(i), yP(v)] : null);
-        parts.push(polyline(pts, "#0e0f13", 3.6).replace("<polyline", `<polyline ${clipAttr} opacity="0.65"`));   // ciemny obrys: średnia odcina się od świec
+        parts.push(polyline(pts, "#0e0f13", 3.6).replace(/<polyline/g, `<polyline ${clipAttr} opacity="0.65"`));   // ciemny obrys: średnia odcina się od świec
         parts.push(polyline(pts, x.color, 1.7).replace(/<polyline/g, `<polyline ${clipAttr}`));
     });
     // opisy z książki (ramki baz, Kup / Dokup, ciasne zamknięcia, strzałki wolumenu, korekty rynku, IPO, splity)
@@ -790,12 +803,12 @@ function chartSvg(m, opts = {}) {
         const nxIdx = nx ? dateToIndex(m.weeks, nx.d) : null;
         const tv = ttmAll.map(q => q.t).concat(nx ? [nx.t] : []);
         const tlo = Math.min(...tv), thi = Math.max(...tv), tpad = (thi - tlo || Math.abs(thi) || 1) * 0.12;
-        const yE = bookOn ? (t => (t > 0 ? yP(20 * t) : NaN)) : makeYScale(tlo - tpad, thi + tpad, P.y + P.h * 0.1, P.h * 0.8);
+        const yE = bookOn ? (t => (t > 0 ? yP(epsMult * t) : NaN)) : makeYScale(tlo - tpad, thi + tpad, P.y + P.h * 0.1, P.h * 0.8);
         const pts = ttmAll.map(q => (Number.isFinite(yE(q.t)) ? [x(q.week), yE(q.t)] : null));   // także raporty poza oknem: segmenty ucina clipAttr, linia nie znika po zmianie okna
         const inWin = q => q.week >= 0 && q.week < m.n;
         const ec = CHART_COLORS.eps, r = opts.compact ? 4.4 : 3.6;
-        parts.push(polyline(pts, "#0e0f13", 4.2).replace("<polyline", `<polyline ${clipAttr} opacity="0.6"`));
-        parts.push(polyline(pts, ec, 2.2).replace("<polyline", `<polyline ${clipAttr}`));
+        parts.push(polyline(pts, "#0e0f13", 4.2).replace(/<polyline/g, `<polyline ${clipAttr} opacity="0.6"`));   // /g: linia EPS bywa podzielona na odcinki (raporty z ujemnym EPS) — każdy musi być obcięty do panelu cen
+        parts.push(polyline(pts, ec, 2.2).replace(/<polyline/g, `<polyline ${clipAttr}`));
         ttmAll.forEach((q, k) => inWin(q) && pts[k] && pts[k][1] >= P.y && pts[k][1] <= P.y + P.h && parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${r}" fill="${ec}" stroke="#0e0f13" stroke-width="1"><title>${q.d}: EPS za 4 kwartały ${q.t} (kwartał ${q.e}${Number.isFinite(q.g) ? `, ${q.g >= 0 ? "+" : ""}${q.g}% r/r` : ""})</title></circle>`));
         const lastAll = ttmAll[ttmAll.length - 1], lpAll = pts[pts.length - 1];
         const lastIn = lastAll && inWin(lastAll) && lpAll;
@@ -860,7 +873,7 @@ function chartSvg(m, opts = {}) {
         Number.isFinite(m.rsChangePct) ? `${m.rsChangePct >= 0 ? "+" : ""}${m.rsChangePct.toFixed(0)}% vs S&amp;P w oknie` : null,
         m.rsLine && m.rsLine.state ? `RS ${m.rsLine.state === "przed ceną" ? "na maks. przed ceną" : "na maks. razem z ceną"}` : null].filter(Boolean);
     const otherItems = [`<tspan fill="${CHART_COLORS.bench}">— S&amp;P 500 (u góry)</tspan>`, `<tspan fill="${CHART_COLORS.rs}">— RS spółka/S&amp;P${rsPart.length ? " · " + rsPart.join(" · ") : ""}</tspan>`];
-    if (ttmAll.length >= 2) otherItems.push(`<tspan fill="${CHART_COLORS.eps}">● ${bookOn ? "20×EPS (4 kw., TTM)" : "EPS (4 kw., TTM)"}${m.epsNext && Number.isFinite(m.epsNext.t) ? " ┄ prognoza" : ""}</tspan>`);
+    if (ttmAll.length >= 2) otherItems.push(`<tspan fill="${CHART_COLORS.eps}">● ${bookOn ? `${epsMult}×EPS (4 kw., TTM)` : "EPS (4 kw., TTM)"}${m.epsNext && Number.isFinite(m.epsNext.t) ? " ┄ prognoza" : ""}</tspan>`);
     if (m.trend && m.trend.pattern) otherItems.push(`<tspan fill="${CHART_COLORS.res}">▸ ${escapeHtml(m.trend.pattern)}</tspan>`);
     if (m.trend && m.trend.state) {
         const bo = m.trend.breakout;
@@ -1394,6 +1407,6 @@ function fundMiniHtml(m) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict,
+        niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dailyCharts, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict,
     };
 }
