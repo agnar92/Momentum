@@ -664,7 +664,22 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
     top = float(hi[peak])
     depth_abs = top - low
     depth = depth_abs / top * 100
-    r = low_i + 1 + int(np.argmax(hi[low_i + 1:end + 1]))        # prawy brzeg = najwyższy szczyt po dołku
+    # prawy brzeg = szczyt PRZED rączką: pierwszy kolejny rekord wysokości po dołku, który już odrobił >= 80 % głębokości, leży <= 10 % pod lewym szczytem
+    # i po którym następuje krótka (1–4 tyg.) przerwa / cofnięcie, zanim cena go przebije. Wcześniej brzegiem był zawsze NAJWYŻSZY szczyt po dołku
+    # (często ten z dnia wybicia nad lewy szczyt), więc rączka znikała, a prawdziwy cup z rączką wychodził jako „cup bez rączki”.
+    rec_idx = [j for j in range(low_i + 1, end + 1) if hi[j] >= np.max(hi[low_i + 1:j + 1])]            # kolejne rekordy wysokości po dołku (strict > w praktyce)
+    r, h_end = None, end
+    for a, j in enumerate(rec_idx):
+        nxt = rec_idx[a + 1] if a + 1 < len(rec_idx) else end + 1
+        gap_w = nxt - 1 - j                                                                              # tygodnie (świece) cofnięcia po szczycie j przed kolejnym rekordem
+        if (hi[j] - low) / depth_abs < CUP_RIM_RECOVERY or (top - hi[j]) / top * 100 > CUP_RIM_MAX_GAP_PCT or j - low_i < 2 * k:
+            continue
+        if (CUP_HANDLE_MIN_WEEKS if k == 1 else k + 1) <= gap_w <= CUP_HANDLE_MAX_WEEKS * k and nxt <= end:             # przerwa jak rączka i potem przebicie szczytu j
+            r, h_end = j, nxt - 1
+            break
+    if r is None:
+        r = low_i + 1 + int(np.argmax(hi[low_i + 1:end + 1]))    # brak rączki w tym kształcie: brzeg = najwyższy szczyt po dołku (cup bez rączki / wada rączki)
+        h_end = end
     rim = float(hi[r])
     cup_weeks = r - start
     span = r - peak
@@ -699,12 +714,12 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         return None
     handle = None
     faults = []                                                    # wady rączki (B) — baza przestaje być „cup with handle” do kupna
-    hw = end - r
-    if r < end:
-        h_lows = lo[r + 1:end + 1]
+    hw = h_end - r
+    if r < h_end:
+        h_lows = lo[r + 1:h_end + 1]
         h_low = float(h_lows.min())
         h_depth = (rim - h_low) / rim * 100
-        hmin, hmax = (CUP_HANDLE_MIN_WEEKS if k == 1 else 5 * k + 1), CUP_HANDLE_MAX_WEEKS * k
+        hmin, hmax = (CUP_HANDLE_MIN_WEEKS if k == 1 else k + 1), CUP_HANDLE_MAX_WEEKS * k   # dziennie: rączka > 5 sesji (k + 1 świec), do 4 tygodni
         if not (hmin <= hw <= hmax):
             faults.append(f"rączka trwa {hw if k == 1 else round(hw / k, 1)} tyg. (wymagane 1–{CUP_HANDLE_MAX_WEEKS})")
         h_max = CUP_HANDLE_MAX_DEPTH_BEAR_PCT if mkt_dd is not None and mkt_dd >= CUP_BEAR_MKT_DD else CUP_HANDLE_MAX_DEPTH_PCT
@@ -713,7 +728,7 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         if h_low < low + 0.5 * depth_abs:
             faults.append("rączka w dolnej połowie miseczki")
         ma_n = CUP_HANDLE_MA_WEEKS * k
-        below_ma = [j for j in range(r + 1, end + 1) if j + 1 >= ma_n and cl[j] < float(cl[j + 1 - ma_n:j + 1].mean())]
+        below_ma = [j for j in range(r + 1, h_end + 1) if j + 1 >= ma_n and cl[j] < float(cl[j + 1 - ma_n:j + 1].mean())]
         if below_ma:
             faults.append("rączka poniżej 10-tygodniowej średniej")
         if hw >= 2 and float(np.polyfit(np.arange(hw, dtype=float), h_lows.astype(float), 1)[0]) > 0:
@@ -723,8 +738,9 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         if v_avg is not None and vol is not None and np.isfinite(vol[h_low_i]) and vol[h_low_i] >= v_avg:
             faults.append("brak wyschnięcia wolumenu w rączce")
         handle = {"weeks": hw if k == 1 else round(hw / k, 1), "low": _num(h_low), "depth_pct": _num(h_depth, 1),
-                  "low_date": dates[h_low_i].strftime("%Y-%m-%d")}
-    # bez rączki to „cup without handle” (też z książki): ten sam kształt i czas, wybicie wprost z prawego brzegu — pivot = lewy szczyt, wyższy odsetek porażek
+                  "low_date": dates[h_low_i].strftime("%Y-%m-%d"),
+                  "end_date": dates[h_end].strftime("%Y-%m-%d"), "end_close": _num(cl[h_end])}
+    # cup bez rączki jest wciąż bazą (pivot = lewy szczyt), ale RYZYKOWNĄ: O'Neil — z rączką szansa powodzenia jest większa (końcowe wytrząśnięcie słabych rąk); `risky` zaznaczamy na wykresie
     return {"rim": _num(rim), "rim_date": dates[r].strftime("%Y-%m-%d"), "cup_weeks": cup_weeks if k == 1 else round(cup_weeks / k, 1), "handle": handle,
             "prior_gain_pct": _num(prior_gain, 0), "fit": _num(fit, 2), "rim_gap_pct": _num((top - rim) / top * 100, 1),
             "mkt_dd_pct": _num(mkt_dd, 1) if mkt_dd is not None else None,
@@ -1022,7 +1038,7 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
             return
         drops = zigzag_contractions(list(cl[peak:end + 1]), zz_pct)
         vcp = len(drops) >= 2 and all(drops[j + 1] < drops[j] for j in range(len(drops) - 1)) and drops[-1] <= 10
-        pivot = (cup["rim"] if cup["handle"] else hi[peak]) if cup else (dbl["pivot"] if dbl else hi[peak])   # cup bez rączki: pivot = lewy szczyt
+        pivot = (cup["rim"] if cup["handle"] else hi[peak]) if cup else (dbl["pivot"] if dbl else hi[peak])   # cup z rączką: górka rączki; bez rączki (ryzykowny): lewy szczyt
         bases.append({
             "start": dates[peak].strftime("%Y-%m-%d"), "end": dates[end].strftime("%Y-%m-%d"),
             "peak": _num(hi[peak]), "low": _num(low), "depth_pct": _num(depth, 1), "weeks": weeks if k == 1 else round(weeks / k, 1), "type": kind,
@@ -1032,7 +1048,7 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
             **({"double_bottom": dbl} if dbl else {}),
             "prior_uptrend_pct": _num(pg, 0) if pg is not None else None,
             **({"rejection_reasons": faults} if faults else {}),
-            **({"notes": ["cup bez rączki — wyższy odsetek porażek niż z rączką (brak końcowego wytrząśnięcia)"]} if cup and cup["no_handle"] else {}),
+            **({"risky": True, "notes": ["ryzykowny setup: cup bez rączki — mniejsza szansa powodzenia niż z rączką (brak końcowego wytrząśnięcia); bezpieczniej poczekać na rączkę"]} if cup and cup["no_handle"] else {}),
         })
 
     peak = 0
@@ -1740,12 +1756,12 @@ def _read_json(path, default):
         return default
 
 
-def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim", stage="all", raw_dir=None):
+def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim", stage="all", raw_dir=None, save_snapshot=False):
     """profile 'canslim' (domyślny, codzienny): filtr CANSLIM z finviz_screen.json, EPS, estymaty, wykresy wszystkich spółek.
     profile 'qm' (ręczny): szeroki filtr z finviz_screen_qm.json, bez EPS i estymat, lista przycięta do płynnych spółek,
     wykresy tylko dla spółek z top X % ceny/minimum -> watchlist_qm.json + charts_qm.json.
     stage: "all" (pobierz i policz — jak dotąd), "fetch" (tylko pobranie: Finviz, ceny, kurs, EPS, estymaty -> migawka w raw_dir),
-    "compute" (tylko obliczenia z zapisanej migawki, bez sieci)."""
+    "compute" (tylko obliczenia z zapisanej migawki, bez sieci). save_snapshot (stage "all"): oprócz liczenia zapisuje też migawkę pobranych danych."""
     qm = profile == "qm"
     output_path = output_path or (QM_OUTPUT_PATH if qm else OUTPUT_PATH)
     if qm:
@@ -1806,6 +1822,12 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         except Exception as e:
             print(f"⚠️  {NASDAQ} niedostępny ({e}) — ocena rynku tylko z S&P 500.")
             nasdaq_df = None
+    if stage == "all" and save_snapshot:   # liczymy jak dotąd, a przy okazji zapisujemy migawkę pobranych danych (deploy strony liczy z niej przy każdej zmianie kodu)
+        fx = fetch_usdpln() or (previous or {}).get("fx")
+        path = save_raw({"profile": profile, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
+                         "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
+                         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, profile, raw_dir)
+        print(f"💾 Zapisano migawkę {path} ({path.stat().st_size / 1e6:.1f} MB).")
     if stage == "fetch":
         # tylko pobranie: kurs, EPS i estymaty (sieć) oraz migawka cen / listy z Finviz do późniejszego liczenia
         fx = fetch_usdpln() or (previous or {}).get("fx")
@@ -1894,7 +1916,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         "profile": profile,
         "rs_basis": rs_basis,
         "market": market,
-        "fx": (fx if stage == "compute" else fetch_usdpln()) or (previous or {}).get("fx"),
+        "fx": (fx if (stage == "compute" or fx is not None) else fetch_usdpln()) or (previous or {}).get("fx"),
         "stocks": stocks,
     }
     out = Path(output_path)
@@ -1920,12 +1942,13 @@ def main(argv=None):
                              help="Tylko pobranie danych (Finviz, ceny, kurs, EPS, estymaty) -> migawka w --raw-dir; bez obliczeń i zapisu docs/data/*.json.")
     stage_group.add_argument("--compute-only", action="store_true",
                              help="Tylko obliczenia z zapisanej migawki (bez sieci) -> watchlist.json / charts.json.")
+    parser.add_argument("--save-raw", action="store_true", help="Przy pełnym przebiegu (bez --fetch-only / --compute-only) zapisz też migawkę pobranych danych do --raw-dir.")
     parser.add_argument("--raw-dir", type=str, default=None, help="Katalog migawki danych (domyślnie raw/ w repozytorium, poza gitem).")
     parser.add_argument("--profile", choices=("canslim", "qm"), default="canslim",
                         help="canslim = codzienna lista CANSLIM (domyślnie); qm = lista Qullamaggiego (w codziennym workflow przed CANSLIM).")
     args = parser.parse_args(argv)
     stage = "fetch" if args.fetch_only else "compute" if args.compute_only else "all"
-    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile, stage=stage, raw_dir=args.raw_dir)
+    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile, stage=stage, raw_dir=args.raw_dir, save_snapshot=args.save_raw)
 
 
 if __name__ == "__main__":

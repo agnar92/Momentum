@@ -292,3 +292,28 @@ test("computeBook: pivot bazy bez sygnału trafia na listę oczekujących (biał
     m.bases = [{ type: "flat", i0: kup.i - 8, i1: kup.i - 1, pivot: kup.pivot || 1, weeks: 8, low: 5, open: false }];
     assert.ok(kup);
 });
+
+test("computeBook / bookSvg: Kup z cupa bez rączki jest oznaczony jako ryzykowny (bursztynowa linia + legenda), z rączką zwykły zielony", () => {
+    const { bookSvg } = require("../../docs/js/book.js");
+    const run = risky => {
+        const m = addSeries(2, 1.0, 12);
+        const probe = computeBook(m).buys[0];
+        assert.ok(probe);
+        m.bases = [{ type: "cup", i0: probe.i - 24, i1: probe.i - 1, iLow: probe.i - 12, pivot: m.h[probe.i - 1], weeks: 23, low: 5, handle: !risky, risky, open: false }];
+        const b = computeBook(m);
+        m.book = b;
+        const g = { x: i => 10 + i * 8, yP: v => 500 - v * 3, P: { y: 0, h: 480 }, fs: v => v, addLabel: () => {}, clip: "", compact: false, legendY: 20 };
+        return { b, svg: bookSvg(m, g) };
+    };
+    const normal = run(false), risky = run(true);
+    const baseBuy = r => r.b.buys.find(x => x.src === "base");
+    assert.ok(baseBuy(risky) && baseBuy(normal), "Kup z bazy powinien powstać w obu wariantach");
+    if (baseBuy(risky)) {
+        assert.equal(baseBuy(risky).risky, true);
+        assert.match(risky.svg, /stroke="#f59e0b" stroke-width="2" stroke-dasharray="4 3"/);
+        assert.ok(risky.svg.includes(">ryzykowny (bez rączki)</text>"));
+    }
+    if (baseBuy(normal)) assert.ok(!normal.svg.includes("ryzykowny"));
+    assert.ok(risky.b.brackets.some(x => /bez rączki/.test(x.label)));
+    assert.ok(normal.b.brackets.some(x => /cup-with-handle/.test(x.label)));
+});

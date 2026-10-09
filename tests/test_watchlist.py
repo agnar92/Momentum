@@ -257,6 +257,28 @@ class TestPipeline:
         assert (split_out.parent / "charts.json").exists()
         assert watchlist.load_raw("canslim", raw_dir)["frames"]["AAA"].attrs["splits"] == [["2026-05-01", 2.0]]
 
+    def test_all_in_one_run_can_also_save_the_snapshot_for_later_computing(self, tmp_path, monkeypatch):
+        rows = [{"ticker": t} for t in ("AAA", "BBB")]
+        frames = {"AAA": make_prices(daily=0.004), "BBB": make_prices(daily=0.001)}
+        monkeypatch.setattr(finviz, "fetch_watchlist", lambda *a, **k: (rows, 2))
+        monkeypatch.setattr(finviz, "MIN_TICKERS", 1)
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, **k: {t: frames.get(t, make_prices(daily=0.0005)) for t in tickers})
+        monkeypatch.setattr(watchlist, "update_eps_cache", lambda tickers, path: {})
+        monkeypatch.setattr(watchlist, "update_estimates", lambda tickers, path: {})
+        monkeypatch.setattr(watchlist, "fetch_usdpln", lambda: {"usdpln": 3.9, "as_of": "2026-09-30"})
+        monkeypatch.setattr(watchlist, "MIN_COVERAGE", 0.5)
+        raw_dir = tmp_path / "raw"
+        out = tmp_path / "a" / "watchlist.json"
+        assert watchlist.run(out, raw_dir=raw_dir, save_snapshot=True) == 0
+        assert (raw_dir / "canslim.pkl.gz").exists()
+        again = tmp_path / "b" / "watchlist.json"
+        monkeypatch.setattr(watchlist, "download_prices", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sieć")))
+        assert watchlist.run(again, stage="compute", raw_dir=raw_dir) == 0
+        a, b = (json.loads(p.read_text(encoding="utf-8")) for p in (out, again))
+        for d in (a, b):
+            d.pop("generated_at")
+        assert a == b
+
     def test_run_fails_without_finviz_and_without_previous(self, tmp_path, monkeypatch):
         monkeypatch.setattr(finviz, "fetch_watchlist", lambda *a, **k: ([], 0))
         assert watchlist.run(tmp_path / "w.json") == 1
@@ -617,6 +639,19 @@ class TestCup:
         assert b["pivot"] == b["cup"]["rim"]                               # pivot = górka rączki (prawy brzeg)
         assert b["cup"]["cup_weeks"] == 23 and b["cup"]["fit"] >= 0.6   # 24 tygodnie od szczytu, liczone od pierwszego spadku
 
+    def test_handle_is_found_before_the_breakout_above_the_left_peak(self):
+        # miseczka, rączka 3 tygodnie, potem wybicie NAD lewy szczyt i dalszy wzrost: baza kończy się dopiero po przekroczeniu lewego szczytu,
+        # ale prawy brzeg = szczyt przed rączką (nie najwyższy szczyt po dołku), a rączka kończy się tuż przed wybiciem
+        df = make_cup()
+        idx = pd.date_range(df.index[-1] + pd.Timedelta(days=7), periods=3, freq="W-FRI")
+        extra = pd.DataFrame({"Open": [100.0, 104.0, 108.0], "High": [102.5, 107.0, 111.0], "Low": [96.0, 101.0, 105.0], "Close": [102.0, 106.0, 110.0], "Volume": [2500.0, 1800.0, 1500.0]}, index=idx)
+        cups = [b for b in watchlist.detect_bases(pd.concat([df, extra])) if b["type"] == "cup"]
+        assert len(cups) == 1
+        c = cups[0]["cup"]
+        assert c["handle"] is not None and c["handle"]["weeks"] == 3 and not c["no_handle"]
+        assert c["rim"] == pytest.approx(95 * 1.01, abs=0.05) and cups[0]["pivot"] == c["rim"]
+        assert c["handle"]["end_date"] == df.index[-1].strftime("%Y-%m-%d")                # rączka kończy się w ostatnim tygodniu przed wybiciem
+
     def test_v_shape_is_not_a_cup(self):
         assert [b for b in watchlist.detect_bases(make_cup(shape="v")) if b["type"] == "cup"] == []
 
@@ -653,14 +688,18 @@ class TestCup:
         reasons = self.rejected(handle=(0.93, 0.90, 0.88, 0.89))
         assert any("10-tygodniowej" in r for r in reasons) or any("dolnej połowie" in r for r in reasons) or any("głębsza" in r for r in reasons)
 
-    def test_cup_without_handle_is_a_valid_cup_with_the_left_peak_as_pivot(self):
+    def test_cup_without_a_handle_is_a_risky_setup_not_a_rejected_one(self):
+        # O'Neil: z rączką szansa powodzenia jest większa. Cup bez rączki zostaje bazą (pivot = lewy szczyt), ale ma `risky` i notatkę o ryzyku
         weekly = make_cup(handle=())
         last = weekly.iloc[-1]
         extra = pd.DataFrame({"Open": [last["Close"]], "High": [110.0], "Low": [last["Close"]], "Close": [108.0], "Volume": [3000.0]}, index=[weekly.index[-1] + pd.Timedelta(days=7)])
-        cups = [b for b in watchlist.detect_bases(pd.concat([weekly, extra])) if b["type"] == "cup"]
-        assert len(cups) == 1 and cups[0]["cup"]["handle"] is None and cups[0]["cup"]["no_handle"] is True
-        assert cups[0]["pivot"] == pytest.approx(cups[0]["peak"], abs=0.01)             # pivot = lewy szczyt, nie prawy brzeg
-        assert any("bez rączki" in n for n in cups[0]["notes"])
+        for frame in (pd.concat([weekly, extra]), weekly):                       # zamknięty (cena nad lewym szczytem) i formujący się
+            cups = [b for b in watchlist.detect_bases(frame) if b["type"] == "cup"]
+            assert len(cups) == 1 and cups[0]["cup"]["no_handle"] is True and cups[0]["risky"] is True
+            assert cups[0]["pivot"] == pytest.approx(cups[0]["peak"], abs=0.01)  # pivot = lewy szczyt
+            assert any("ryzykowny" in n for n in cups[0]["notes"])
+        with_handle = [b for b in watchlist.detect_bases(make_cup()) if b["type"] == "cup"][0]
+        assert "risky" not in with_handle and with_handle["pivot"] == with_handle["cup"]["rim"]
 
     def test_handle_depth_up_to_30_percent_only_at_a_bear_market_bottom(self):
         weekly = make_cup(depth=0.45, handle=(0.95, 0.88, 0.9))                                              # miseczka 45 % i rączka ~13 %

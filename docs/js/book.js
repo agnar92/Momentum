@@ -8,7 +8,7 @@
 // bookSvg tylko składa SVG. Plik ładowany przed chart.js.
 // ============================================================
 
-const BOOK_COLORS = { text: "#e8eaed", dim: "#aab0bd", buy: "#2ecc71", add: "#22d3ee", sell: "#ff4d6d", mkt: "#9aa3b2", vol: "#e8eaed", split: "#f0b429", ipo: "#e8eaed", reentry: "#f472b6" };
+const BOOK_COLORS = { text: "#e8eaed", dim: "#aab0bd", buy: "#2ecc71", add: "#22d3ee", sell: "#ff4d6d", mkt: "#9aa3b2", vol: "#e8eaed", split: "#f0b429", ipo: "#e8eaed", reentry: "#f472b6", risky: "#f59e0b" };
 const BOOK_TIGHT_PCT = 1.5;          // „ciasne zamknięcia”: zamknięcia kolejnych tygodni mieszczą się w tylu % (max/min)
 const BOOK_TIGHT_MIN_WEEKS = 3;
 const BOOK_BUY_VOL = 1.4;            // wybicie z bazy na wolumenie ≥ tyle × średnia z poprzednich tygodni (książka: +40–50 % ponad średnią)
@@ -118,10 +118,10 @@ function computeBook(m, splits = []) {
     // ramki baz (nie: korekta / głęboka korekta — to nie bazy do kupna)
     bases.forEach(b => {
         if (!BOOK_BASE_NAMES[b.type]) return;
-        const name = b.type === "cup" ? (b.handle ? "cup-with-handle" : b.saucer ? "saucer" : "cup") : BOOK_BASE_NAMES[b.type];
+        const name = b.type === "cup" ? (b.handle ? "cup-with-handle" : b.risky ? "cup bez rączki ⚠" : b.saucer ? "saucer" : "cup") : BOOK_BASE_NAMES[b.type];
         const weeks = Math.round(b.weeks || (b.i1 - b.i0));
         const label = b.type === "ascending" ? "ascending base (3 cofnięcia)" : b.type === "htf" ? "high tight flag" : `${weeks}-tyg. ${name}`;
-        book.brackets.push({ i0: b.i0, i1: b.i1, low: b.low, label: label + (b.onBase ? " · base-on-base" : ""), short: b.type === "cup" ? `${weeks} tyg. ${b.handle ? "cup+rączka" : "cup"}` : `${weeks} tyg. ${name}`, type: b.type });
+        book.brackets.push({ i0: b.i0, i1: b.i1, low: b.low, label: label + (b.onBase ? " · base-on-base" : ""), short: b.type === "cup" ? `${weeks} tyg. ${b.handle ? "cup+rączka" : b.risky ? "cup ⚠" : "cup"}` : `${weeks} tyg. ${name}`, type: b.type });
     });
     // Kryteria z książki (How to Make Money in Stocks): wcześniejszy trend wzrostowy ≥ +30 % (flat base ≥ +20 %), min. długość bazy (cup / double bottom 7 tyg.,
     // flat 5, ascending 9), wybicie na wolumenie ≥ +40 % ponad średnią, zakup do +5 % nad pivotem — w tygodniu wybicia cena musiała zahaczyć o strefę pivot … +5 % (Low ≤ pivot × 1,05); wybicie z luką powyżej strefy = „za późno”, bez znacznika.
@@ -144,7 +144,7 @@ function computeBook(m, splits = []) {
             if (c[j - 1] < b.pivot && c[j] >= b.pivot) {
                 const a = rowIdx(avg, j - 1);
                 if (Number.isFinite(v[j]) && Number.isFinite(a) && a > 0 && v[j] / a >= BOOK_BUY_VOL && l[j] <= b.pivot * BOOK_BUY_MAX_EXT) {
-                    if (!book.buys.some(x => x.i === j)) book.buys.push({ i: j, pivot: b.pivot, label: "Kup", src: "base" });
+                    if (!book.buys.some(x => x.i === j)) book.buys.push({ i: j, pivot: b.pivot, label: "Kup", src: "base", ...(b.risky ? { risky: true } : {}) });
                 }
                 break;
             }
@@ -341,7 +341,7 @@ function bookSvg(m, g) {
     const dash = (x0, x1, y, col) => out.push(`<line ${clip} x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>`);
     (bk.pivots || []).forEach(pv => dash(x(pv.i0), x(pv.i1), yP(pv.level), BOOK_COLORS.text));
     const signals = [
-        ...bk.buys.map(b => ({ i: b.i, col: b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, pivot: b.pivot })),
+        ...bk.buys.map(b => ({ i: b.i, col: b.risky ? BOOK_COLORS.risky : b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, pivot: b.pivot, risky: !!b.risky })),
         ...bk.adds.map(a => ({ i: a.i, col: BOOK_COLORS.add, pivot: a.pivot })),
         ...(bk.reentries || []).map(q => ({ i: q.i, col: BOOK_COLORS.reentry, pivot: q.pivot })),
     ];
@@ -351,6 +351,7 @@ function bookSvg(m, g) {
     });
     if ((signals.length || (bk.pivots || []).length) && g.legendY != null) {
         const items = [[BOOK_COLORS.text, compact ? "czeka" : "pivot czeka"], [BOOK_COLORS.buy, "kup"], [BOOK_COLORS.add, "dokup"], [BOOK_COLORS.reentry, compact ? "ponownie" : "kup ponownie"]];
+        if (signals.some(sg => sg.risky)) items.push([BOOK_COLORS.risky, compact ? "ryzyko" : "ryzykowny (bez rączki)"]);
         const size = fs(compact ? 8.5 : 10.5), cw = size * 0.58, seg = fs(compact ? 11 : 16), gap = fs(compact ? 7 : 12);
         let lx = x(0) + fs(6);
         items.forEach(([col, text]) => {

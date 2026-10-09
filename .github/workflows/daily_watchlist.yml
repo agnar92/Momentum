@@ -6,8 +6,8 @@ name: Daily Watchlist Refresh
 # i trend EMA34 -> docs/data/watchlist.json, który następnie trafia na GitHub Pages. W tym samym przebiegu odświeża się też
 # lista Qullamaggiego (docs/data/watchlist_qm.json, osobny filtr Finviz z finviz_screen_qm.json).
 #
-# Pobieranie danych i obliczenia to dwa osobne kroki (watchlist.py --fetch-only / --compute-only). Same obliczenia, bez pobierania:
-# workflow "Recompute Watchlist" (recompute_watchlist.yml) — liczy z ostatniej migawki z gałęzi raw-data.
+# Pobieranie i obliczenia w jednym przebiegu (jak dawniej) + zapis migawki pobranych danych (gałąź raw-data). Same obliczenia, bez pobierania, robi
+# deploy strony (deploy.yml) po każdym pushu do main oraz ręczny workflow "Recompute Watchlist" (watchlist.py --compute-only).
 #
 # Ręczne odpalenie: zakładka Actions -> "Daily Watchlist Refresh" -> "Run workflow"
 # (na stronie jest przycisk "Odśwież dane", który prowadzi właśnie tutaj) albo lokalnie:
@@ -58,16 +58,17 @@ jobs:
           ref: raw-data
           path: raw
 
-      # POBIERANIE (sieć: Finviz, yfinance, EPS, estymaty, kurs USD/PLN) — osobno od obliczeń. Qullamaggie (szeroka lista ~300 spółek) pierwszy;
-      # błąd tego kroku nie zatrzymuje CANSLIM (zostaje poprzednia migawka Qullamaggiego).
-      - name: Fetch Qullamaggie data (Finviz + yfinance) -> raw snapshot
+      # Jak dawniej: pobieranie i obliczenia w jednym przebiegu. Najpierw Qullamaggie (szeroka lista ~300 spółek): zapisuje watchlist_qm.json, charts_qm.json
+      # i rs_universe.json — z tego rozkładu profil CANSLIM liczy RS Rating. Błąd tego kroku nie zatrzymuje CANSLIM (zostają poprzednie pliki Qullamaggiego).
+      # --save-raw: przy okazji zapisuje migawkę pobranych danych (raw/), z której deploy strony liczy wszystko od nowa po każdej zmianie kodu.
+      - name: Fetch Qullamaggie list (Finviz pre-screen + yfinance) and build watchlist_qm.json
         continue-on-error: true
-        run: python watchlist.py --profile qm --fetch-only
+        run: python watchlist.py --profile qm --save-raw
 
-      - name: Fetch CANSLIM data (Finviz + yfinance) -> raw snapshot
-        run: python watchlist.py --fetch-only
+      - name: Fetch CANSLIM list (Finviz pre-screen + yfinance) and build watchlist.json
+        run: python watchlist.py --save-raw
 
-      # Migawka trafia do osobnej gałęzi raw-data (jeden commit, wymieniany za każdym razem), skąd bierze ją workflow „Recompute Watchlist”.
+      # Migawka trafia do osobnej gałęzi raw-data (jeden commit, wymieniany za każdym razem), skąd bierze ją deploy strony i workflow „Recompute Watchlist”.
       - name: Publish raw snapshot (branch raw-data)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -85,15 +86,6 @@ jobs:
           git add .
           git commit -q -m "raw snapshot $(date -u +%F)"
           git push -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" raw-data
-
-      # OBLICZENIA (bez sieci, z migawki). Qullamaggie najpierw: zapisuje watchlist_qm.json, charts_qm.json i rs_universe.json — z tego rozkładu
-      # profil CANSLIM liczy RS Rating.
-      - name: Compute Qullamaggie list -> watchlist_qm.json
-        continue-on-error: true
-        run: python watchlist.py --profile qm --compute-only
-
-      - name: Compute CANSLIM list -> watchlist.json
-        run: python watchlist.py --compute-only
 
       # Opcjonalnie: powiadomienie (Issue + e-mail / push z GitHub Mobile) o nowych przebiciach Twoich linii z alertem.
       # Wymaga sekretu GIST_TOKEN (ten sam token z uprawnieniem "gist", co w synchronizacji); bez niego krok nic nie robi.
