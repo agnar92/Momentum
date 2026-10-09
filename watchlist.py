@@ -740,9 +740,7 @@ def classify_cup(hi, lo, cl, peak, end, dates, bench_w=None, k=1, vol=None, is_o
         handle = {"weeks": hw if k == 1 else round(hw / k, 1), "low": _num(h_low), "depth_pct": _num(h_depth, 1),
                   "low_date": dates[h_low_i].strftime("%Y-%m-%d"),
                   "end_date": dates[h_end].strftime("%Y-%m-%d"), "end_close": _num(cl[h_end])}
-    # O'Neil: poprawny jest TYLKO cup z rączką. Baza zamknięta (cena przebiła już lewy szczyt) bez rączki = wada „brak rączki”; otwarta bez rączki jeszcze się formuje (czekamy na rączkę)
-    if handle is None and not is_open:
-        faults.append("brak rączki — wg O'Neila cup bez rączki nie jest bazą do zakupu")
+    # cup bez rączki jest wciąż bazą (pivot = lewy szczyt), ale RYZYKOWNĄ: O'Neil — z rączką szansa powodzenia jest większa (końcowe wytrząśnięcie słabych rąk); `risky` zaznaczamy na wykresie
     return {"rim": _num(rim), "rim_date": dates[r].strftime("%Y-%m-%d"), "cup_weeks": cup_weeks if k == 1 else round(cup_weeks / k, 1), "handle": handle,
             "prior_gain_pct": _num(prior_gain, 0), "fit": _num(fit, 2), "rim_gap_pct": _num((top - rim) / top * 100, 1),
             "mkt_dd_pct": _num(mkt_dd, 1) if mkt_dd is not None else None,
@@ -1040,7 +1038,7 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
             return
         drops = zigzag_contractions(list(cl[peak:end + 1]), zz_pct)
         vcp = len(drops) >= 2 and all(drops[j + 1] < drops[j] for j in range(len(drops) - 1)) and drops[-1] <= 10
-        pivot = cup["rim"] if cup else (dbl["pivot"] if dbl else hi[peak])   # cup: pivot = prawy brzeg / górka rączki (otwarty cup bez rączki: prawy brzeg — rączka dopiero się formuje)
+        pivot = (cup["rim"] if cup["handle"] else hi[peak]) if cup else (dbl["pivot"] if dbl else hi[peak])   # cup z rączką: górka rączki; bez rączki (ryzykowny): lewy szczyt
         bases.append({
             "start": dates[peak].strftime("%Y-%m-%d"), "end": dates[end].strftime("%Y-%m-%d"),
             "peak": _num(hi[peak]), "low": _num(low), "depth_pct": _num(depth, 1), "weeks": weeks if k == 1 else round(weeks / k, 1), "type": kind,
@@ -1050,7 +1048,7 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
             **({"double_bottom": dbl} if dbl else {}),
             "prior_uptrend_pct": _num(pg, 0) if pg is not None else None,
             **({"rejection_reasons": faults} if faults else {}),
-            **({"notes": ["cup formuje się bez rączki — O'Neil kupuje dopiero po rączce (1–4 tyg. cofnięcia), czekaj"]} if cup and cup["no_handle"] else {}),
+            **({"risky": True, "notes": ["ryzykowny setup: cup bez rączki — mniejsza szansa powodzenia niż z rączką (brak końcowego wytrząśnięcia); bezpieczniej poczekać na rączkę"]} if cup and cup["no_handle"] else {}),
         })
 
     peak = 0

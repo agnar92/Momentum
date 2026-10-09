@@ -614,7 +614,7 @@ function baseBoxData(s) {
     const rows = [["Pivot", Number.isFinite(s.pivot) ? money(s.pivot) : "—"]];
     if (Number.isFinite(s.base_weeks)) rows.push(["Długość", `${s.base_weeks} tyg.`]);
     if (Number.isFinite(s.base_depth_pct)) rows.push(["Głębokość", `${s.base_depth_pct}%`]);
-    if (s.base_type === "cup") rows.push(["Rączka", s.base_handle ? "tak" : "brak"]);
+    if (s.base_type === "cup") rows.push(["Rączka", s.base_handle ? "tak" : "brak — ryzykowny setup (z rączką szansa większa)"]);
     if (s.vcp) rows.push(["VCP", "tak"]);
     if (Number.isFinite(s.base_prior_uptrend_pct)) rows.push(["Wzrost przed bazą", `+${s.base_prior_uptrend_pct}%${s.base_prior_uptrend_pct >= 30 ? "" : " (< 30%)"}`]);
     if (s.base_rs_prior_up === true || s.base_rs_prior_up === false) rows.push(["Linia RS przed bazą", s.base_rs_prior_up ? "rosła" : "nie rosła"]);

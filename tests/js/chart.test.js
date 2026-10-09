@@ -381,7 +381,8 @@ test("volumeSpikes needs a clear multiple of the average and spacing; fmtVol use
 
 test("pivotFromStock: base pivot from the open base start, else the flag resistance, else null", () => {
     const bases = [{ open: false, start: "2025-01-03" }, { open: true, start: "2026-03-06" }];
-    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 98.4 }, bases), { price: 98.4, date: "2026-03-06", kind: "baza", active: false });
+    assert.deepEqual(pivotFromStock({ base_type: "cup", pivot: 98.4 }, bases), { price: 98.4, date: "2026-03-06", kind: "baza", active: false, risky: true });
+    assert.equal(pivotFromStock({ base_type: "cup", base_handle: true, pivot: 98.4 }, bases).risky, false);   // cup z rączką = bez ostrzeżenia, bez rączki = ryzykowny setup
     assert.equal(pivotFromStock({ base_type: "cup", pivot: 98.4, pivot_state: "wybicie" }, bases).active, true);   // pivot aktywny (wybicie na wolumenie) = zielona linia, nieaktywny = biała
     assert.deepEqual(pivotFromStock({ tl_level: 50, tl_state: "przy oporze" }, []), { price: 50, date: null, kind: "flaga", active: false });
     assert.equal(pivotFromStock({ tl_level: 50 }, []), null);       // poziom bez wykrytego stanu nie jest pivotem

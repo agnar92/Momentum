@@ -666,18 +666,18 @@ class TestCup:
         reasons = self.rejected(handle=(0.93, 0.90, 0.88, 0.89))
         assert any("10-tygodniowej" in r for r in reasons) or any("dolnej połowie" in r for r in reasons) or any("głębsza" in r for r in reasons)
 
-    def test_only_a_cup_with_a_handle_is_a_buyable_cup(self):
-        # O'Neil: bez rączki cup nie jest bazą do zakupu. Zamknięta baza (cena już nad lewym szczytem) bez rączki = odrzucona z powodem,
-        # otwarta jeszcze się formuje (pivot = prawy brzeg, notatka „czekaj na rączkę”)
+    def test_cup_without_a_handle_is_a_risky_setup_not_a_rejected_one(self):
+        # O'Neil: z rączką szansa powodzenia jest większa. Cup bez rączki zostaje bazą (pivot = lewy szczyt), ale ma `risky` i notatkę o ryzyku
         weekly = make_cup(handle=())
         last = weekly.iloc[-1]
         extra = pd.DataFrame({"Open": [last["Close"]], "High": [110.0], "Low": [last["Close"]], "Close": [108.0], "Volume": [3000.0]}, index=[weekly.index[-1] + pd.Timedelta(days=7)])
-        closed = watchlist.detect_bases(pd.concat([weekly, extra]))
-        assert [b for b in closed if b["type"] == "cup"] == []
-        assert any("brak rączki" in " ".join(b.get("rejection_reasons") or []) for b in closed)
-        forming = [b for b in watchlist.detect_bases(weekly) if b["type"] == "cup"]
-        assert len(forming) == 1 and forming[0]["open"] and forming[0]["cup"]["no_handle"] is True
-        assert forming[0]["pivot"] == forming[0]["cup"]["rim"] and any("rączki" in n for n in forming[0]["notes"])
+        for frame in (pd.concat([weekly, extra]), weekly):                       # zamknięty (cena nad lewym szczytem) i formujący się
+            cups = [b for b in watchlist.detect_bases(frame) if b["type"] == "cup"]
+            assert len(cups) == 1 and cups[0]["cup"]["no_handle"] is True and cups[0]["risky"] is True
+            assert cups[0]["pivot"] == pytest.approx(cups[0]["peak"], abs=0.01)  # pivot = lewy szczyt
+            assert any("ryzykowny" in n for n in cups[0]["notes"])
+        with_handle = [b for b in watchlist.detect_bases(make_cup()) if b["type"] == "cup"][0]
+        assert "risky" not in with_handle and with_handle["pivot"] == with_handle["cup"]["rim"]
 
     def test_handle_depth_up_to_30_percent_only_at_a_bear_market_bottom(self):
         weekly = make_cup(depth=0.45, handle=(0.95, 0.88, 0.9))                                              # miseczka 45 % i rączka ~13 %

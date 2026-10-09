@@ -225,7 +225,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
             n: model.n, h: model.h, l: model.l, c: model.c, v: model.v, volAvg: model.volAvg, smas: model.smas, spx: model.spx,
             bases: (c.bases || []).map(b => ({
                 type: b.type, i0: dateToIndex(weeks, b.start), i1: dateToIndex(weeks, b.end), pivot: b.pivot, weeks: b.weeks, low: b.low,
-                handle: !!(b.cup && b.cup.handle), saucer: !!b.saucer, onBase: !!b.base_on_base, open: !!b.open,
+                handle: !!(b.cup && b.cup.handle), risky: !!b.risky, saucer: !!b.saucer, onBase: !!b.base_on_base, open: !!b.open,
             })),
         }, (c.splits || []).map(sp => ({ i: weekIndexForDate(weeks, sp.d), r: sp.r })).filter(sp => sp.i >= 0));
     } else model.book = null;
@@ -245,7 +245,7 @@ function pivotFromStock(stock, bases, daily = false) {
     const type = daily ? stock.dbase_type : stock.base_type, pivot = daily ? stock.dpivot : stock.pivot;
     if (PIVOT_BASE_TYPES.includes(type) && Number.isFinite(pivot) && near(pivot)) {
         const open = (bases || []).filter(b => b.open).pop();
-        return { price: pivot, date: open ? open.start : null, kind: "baza", active: (daily ? stock.dpivot_state : stock.pivot_state) === "wybicie" };
+        return { price: pivot, date: open ? open.start : null, kind: "baza", active: (daily ? stock.dpivot_state : stock.pivot_state) === "wybicie", risky: type === "cup" && !(daily ? stock.dbase_handle : stock.base_handle) };
     }
     if (Number.isFinite(stock.tl_level) && stock.tl_state && near(stock.tl_level)) return { price: stock.tl_level, date: null, kind: "flaga", active: stock.tl_state === "wybicie" };
     if (Number.isFinite(stock.tlw_level) && stock.tlw_state && near(stock.tlw_level)) return { price: stock.tlw_level, date: null, kind: "flaga", active: stock.tlw_state === "wybicie" };
@@ -616,24 +616,25 @@ function chartSvg(m, opts = {}) {
         const lastI = m.spx.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
         addLabel(`S&P 500 ${fmtCompact(m.spx[lastI])}`, x(lastI) - 4, Math.max(P.y + fs(10), yS(m.spx[lastI]) - 6), { anchor: "end", size: fs(10), fill: CHART_COLORS.bench, bold: true, prio: 5, title: "S&P 500 (własna skala, jak na wykresach z książki O'Neila)" });
     }
-    ((opts.hints || bookOn) ? m.cups : []).forEach(cup => {   // miseczki: w widoku książkowym zawsze (łuk, rączka, pivot), litery A–E i legenda tylko w trybie 💡 Nauka
+    ((opts.hints || bookOn) ? m.cups : []).forEach(cup => {
+        const cupCol = cup.noHandle ? "#f59e0b" : CHART_COLORS.cup;   // bez rączki = ryzykowny setup: bursztynowy   // miseczki: w widoku książkowym zawsze (łuk, rączka, pivot), litery A–E i legenda tylko w trybie 💡 Nauka
         const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
-        parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
+        parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${cupCol}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
         if (cup.handle) {   // rączka: od prawego brzegu przez dołek rączki do ostatniej świecy bazy
             const hp = [[x(cup.i1), yP(cup.right)], [x(cup.handle.iLow), yP(cup.handle.low)], [x(cup.handle.iEnd), yP(cup.handle.end)]];
-            parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${CHART_COLORS.cup}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${hp.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Rączka −${cup.handle.depth}%</title></polyline>`);
-            parts.push(`<text x="${hp[1][0]}" y="${hp[1][1] + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">rączka −${cup.handle.depth}%</text>`);
+            parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${cupCol}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${hp.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Rączka −${cup.handle.depth}%</title></polyline>`);
+            parts.push(`<text x="${hp[1][0]}" y="${hp[1][1] + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="${cupCol}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">rączka −${cup.handle.depth}%</text>`);
             reserveLabel(`rączka −${cup.handle.depth}%`, hp[1][0], hp[1][1] + fs(13), "middle", fs(10), true);
         }
         // cena monitorowania miseczki = pivot (prawy brzeg)
         const pivot = Number.isFinite(cup.pivotPx) ? cup.pivotPx : (Number.isFinite(cup.right) ? cup.right : null);
         if (pivot) {
             const px = Math.min(Math.max(x(cup.i1), L.left + fs(80)), L.width - L.right - 4);
-            parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, P.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
+            parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, P.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${cupCol}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
             reserveLabel(`pivot ${pivot.toFixed(2)}`, px, Math.max(yP(pivot) - 6, P.y + fs(10)), "end", fs(11), true);
         }
         // litery z książki O'Neila: A lewy szczyt, B dno, C prawy brzeg, D dołek rączki, E punkt zakupu (pivot, kupno nad nim z wolumenem)
-        const tag = (letter, px, py) => parts.push(`<g pointer-events="none"><circle cx="${px}" cy="${py}" r="${fs(8)}" fill="#0e0f13" stroke="${CHART_COLORS.cup}" stroke-width="1.5"/><text x="${px}" y="${py + fs(3.5)}" font-size="${fs(10)}" font-weight="700" fill="${CHART_COLORS.cup}" text-anchor="middle">${letter}</text></g>`);
+        const tag = (letter, px, py) => parts.push(`<g pointer-events="none"><circle cx="${px}" cy="${py}" r="${fs(8)}" fill="#0e0f13" stroke="${cupCol}" stroke-width="1.5"/><text x="${px}" y="${py + fs(3.5)}" font-size="${fs(10)}" font-weight="700" fill="${cupCol}" text-anchor="middle">${letter}</text></g>`);
         const hintsOn = !!opts.hints;
         if (hintsOn) {
             tag("A", x(cup.i0), yP(cup.peak) - fs(14));
@@ -646,15 +647,15 @@ function chartSvg(m, opts = {}) {
             xE = Math.min(x(cup.handle.iEnd) + step * 3, L.width - L.right - fs(10));
         } else xE = Math.min(x(cup.i1) + step * 3, L.width - L.right - fs(10));
         if (pivot) {   // pivot: od prawego brzegu miseczki do punktu zakupu (otwarty cup bez rączki: rączka dopiero się formuje)
-            parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${CHART_COLORS.cup}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
+            parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${cup.noHandle ? x(cup.i0) : x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${cupCol}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
             if (hintsOn) tag("E", xE, yP(pivot) - fs(14));
         }
         if (hintsOn && !hintLegendDone) {
             hintLegendDone = true;
-            parts.push(`<text x="${L.left + 6}" y="${P.y + fs(12)}" font-size="${fs(10)}" fill="${CHART_COLORS.cup}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${opts.compact ? "A–E: szczyt · dno · brzeg · rączka · kup" : "A szczyt · B dno miseczki · C prawy brzeg · D rączka · E punkt zakupu (kup nad pivotem z wolumenem)"}</text>`);
+            parts.push(`<text x="${L.left + 6}" y="${P.y + fs(12)}" font-size="${fs(10)}" fill="${cupCol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${opts.compact ? "A–E: szczyt · dno · brzeg · rączka · kup" : "A szczyt · B dno miseczki · C prawy brzeg · D rączka · E punkt zakupu (kup nad pivotem z wolumenem)"}</text>`);
         }
         const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
-        addLabel(`−${cup.depth}%${cup.ctx ? ` · S&P −${cup.mktDd}%` : ""}`, cx, yB - (yB - Math.min(yL, yR)) * 0.35, { size: fs(12), fill: CHART_COLORS.cup, bold: true, prio: 6 });
+        addLabel(`−${cup.depth}%${cup.ctx ? ` · S&P −${cup.mktDd}%` : ""}${cup.noHandle ? " · bez rączki ⚠" : ""}`, cx, yB - (yB - Math.min(yL, yR)) * 0.35, { size: fs(12), fill: cupCol, bold: true, prio: 6 });
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
@@ -687,7 +688,7 @@ function chartSvg(m, opts = {}) {
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
     if (pivotNear && m.lastShown !== false) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
-        const pivotCol = m.pivot.active ? "#2ecc71" : "#e8eaed";   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
+        const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : "#e8eaed";   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
         const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
         const i0 = m.pivot.date ? Math.max(0, dateToIndex(m.weeks, m.pivot.date)) : Math.max(0, m.lastIdx - 25);
         const zx = x(Math.max(0, m.lastIdx - 14)), zw = Math.max(0, xr - zx);
@@ -695,7 +696,7 @@ function chartSvg(m, opts = {}) {
         if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#2ecc71", 0.22), band(pivotPx * 0.92, pivotPx * 0.95, "#ff4d4d", 0.22));
         parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="${pivotCol}" stroke-width="1.6" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}${m.pivot.active ? " — aktywny (wybicie)" : " — czeka na wybicie"}</title></line>`);
         const clampY = v => Math.max(P.y + fs(10), Math.min(P.y + P.h - 3, v));
-        addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: pivotCol, bold: true, prio: 9 });
+        addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${m.pivot.risky ? " · bez rączki ⚠ ryzyko" : ""}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: pivotCol, bold: true, prio: 9 });
         if (!extended) {
             addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#4ee08a", bold: true, prio: 4 });
             addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
