@@ -361,7 +361,9 @@ function bookSvg(m, g) {
         if (signals.some(sg => sg.risky)) items.push([BOOK_COLORS.risky, compact ? "ryzyko" : "ryzykowny (bez rączki)"]);
         const size = fs(compact ? 8.5 : 10.5), cw = size * 0.58, seg = fs(compact ? 11 : 16), gap = fs(compact ? 7 : 12);
         let lx = x(0) + fs(6);
+        const lxMax = g.L ? g.L.width - g.L.right - (compact ? fs(105) : fs(150)) : Infinity;   // legenda nie wchodzi pod podpis „S&P 500 …” z prawej strony
         items.forEach(([col, text]) => {
+            if (lx + seg + fs(4) + text.length * cw > lxMax) return;
             const ly = g.legendY - size * 0.32;
             out.push(`<line x1="${lx}" x2="${lx + seg}" y1="${ly}" y2="${ly}" stroke="${col}" stroke-width="2.4" stroke-dasharray="4 3" pointer-events="none"/>`);
             out.push(`<text x="${lx + seg + fs(4)}" y="${g.legendY}" font-size="${size}" font-weight="700" fill="${BOOK_COLORS.text}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${text}</text>`);
@@ -369,7 +371,7 @@ function bookSvg(m, g) {
         });
     }
     // korekty rynku: łuk pod załamaniem linii S&P 500 + podpis
-    if (g.yS) bk.corrections.forEach(cr => {
+    if (g.yS && !compact) bk.corrections.forEach(cr => {   // na telefonie bez łuków „Korekta” — pasek S&P jest tam za mały
         const a = Math.max(0, cr.i0), b = Math.min(m.n - 1, cr.i1);
         if (b - a < 2) return;
         const xa = x(a), xb = x(b), yb = g.yS(m.spx[Math.max(0, Math.min(m.n - 1, cr.iLow))]) + fs(8);

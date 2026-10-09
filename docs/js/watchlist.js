@@ -449,7 +449,7 @@ const ACTION_DEFS = {
     DIST: ["📉", "DYSTRYBUCJA", "bad", 12], NOBUY: ["🛑", "NIE KUPUJ", "bad", 13], SKIP: ["—", "POZA CANSLIM", "muted", 14],
 };
 // Ocena na wykresie TYGODNIOWYM (baza flat / cup / double bottom…, flaga tygodniowa, 10-tygodniowa średnia) — jedyny wykres w aplikacji. Pozycja, fundamenty i rynek liczą się tak samo.
-function actionInfo(s, mkt) {
+function actionInfo(s, mkt, requireCore = true) {
     const tf = "W";
     const num = Number.isFinite;
     const regime = mkt && typeof mkt === "object" ? mkt.regime : mkt;
@@ -476,7 +476,8 @@ function actionInfo(s, mkt) {
     }
     const f = s.canslim && s.canslim.flags;
     // spółka tylko z listy Qullamaggiego nie przechodzi filtra fundamentów CANSLIM — oceniamy ją po wzorcu tygodniowym, bez bramki C / A
-    if (s.in_cs !== false && f && (f.C === false || f.A === false)) return mk("SKIP", "Nie spełnia fundamentów CANSLIM (C lub A) — nie jest kandydatem.");
+    // bramka C / A działa tylko przy włączonym „C i A obowiązkowe” (Filtry → 🏆 CANSLIM); bez niej oceniamy wzorzec jak u spółek z Qullamaggiego
+    if (requireCore && s.in_cs !== false && f && (f.C === false || f.A === false)) return mk("SKIP", "Nie spełnia fundamentów CANSLIM (C lub A) — nie jest kandydatem.");
     if (s.dist_top === true) return mk("DIST", `Dystrybucja bez wzrostu ceny (tydzień do ${s.dist_date}): rekordowy tygodniowy wolumen ×${s.dist_vol_ratio} od dołka trendu, a cena prawie bez zmian albo zamknięta w dolnej połowie zakresu. Instytucje sprzedają w siłę — nie kupuj, poczekaj na nową bazę.`);
     if (regime === "correction") return mk("NOBUY", "Rynek w korekcie (EMA10 < EMA20 tygodniowa). 3 na 4 akcje podąża za rynkiem — nie otwieraj nowych pozycji, tylko obserwuj.");
     const boxStop = BOX_BASES.includes(s.base_type) && num(s.box_stop) ? s.box_stop : null;   // pudełko: stop ze środka bazy zamiast stałych 7–8 %
@@ -506,9 +507,9 @@ function actionInfo(s, mkt) {
     if (toPivot !== null && toPivot > 5 && toPivot <= 15) return mk("BASE", `Baza w budowie, ${toPivot.toFixed(1)}% do pivotu. Czekaj, aż cena zbliży się do pivotu na malejącym wolumenie.`);
     return trend();
 }
-function tagActions(stocks, mkt) {
+function tagActions(stocks, mkt, requireCore = true) {
     stocks.forEach(s => {
-        const w = actionInfo(s, mkt);
+        const w = actionInfo(s, mkt, requireCore);
         s.action_w = w;
         s.act_rank_w = w ? w.rank : null;
         s.action = w;
@@ -978,7 +979,7 @@ function rowsForTab(tab) {
     tagStrategies(state.data.stocks, common, state, alerts);
     tagPositions(state.data.stocks, state.pos);
     tagCanslim(state.data.stocks, canslimMarket());
-    tagActions(state.data.stocks, canslimMarket());
+    tagActions(state.data.stocks, canslimMarket(), state.csCore);
     if (tab === "CS") return canslimRows(stocks, state.csMin, state.csCore);
     if (tab === "POS") return positionRows(stocks);
     if (tab === "QM") return qullamaggieRows(stocks, qmParams(state.qm, state.patterns));

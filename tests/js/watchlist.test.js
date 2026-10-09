@@ -502,6 +502,15 @@ test("próg RS (litera L) jest ustawiany przez użytkownika", () => {
     } finally { setCanslimRs(80); }
 });
 
+test("actionInfo: bramka C / A działa tylko przy „C i A obowiązkowe”", () => {
+    const { actionInfo } = require("../../docs/js/watchlist.js");
+    const s = { canslim: { flags: { C: false, A: true } }, in_cs: true };
+    const up = { regime: "uptrend", distDays: 1 };
+    assert.equal(actionInfo(s, up).code, "SKIP");
+    assert.equal(actionInfo(s, up, true).code, "SKIP");
+    assert.notEqual(actionInfo(s, up, false).code, "SKIP");
+});
+
 test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez bazy", () => {
     const { actionInfo } = require("../../docs/js/watchlist.js");
     const up = { regime: "uptrend", distDays: 2 };
