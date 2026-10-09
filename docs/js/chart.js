@@ -475,13 +475,36 @@ function indexToDate(dates, idx) {
 }
 
 // Punkty łuku miseczki (parabola: lewy szczyt -> dołek -> prawy brzeg); cup = {i0, iLow, i1, peak, low, right}.
-function cupArcPoints(cup, x, yP, steps = 48) {
-    const yL = yP(cup.peak), yB = yP(cup.low), yR = yP(Number.isFinite(cup.right) ? cup.right : cup.peak);
+// Z lowPx(i) (piksel dołka świecy i) łuk jest rysowany POD dołkami świec, jak w IBD / MarketSmith: dno = najniższy dołek, a każda strona
+// to najbardziej wygięta parabola, która nie przecina żadnej świecy (styka się z dołkami od dołu); nie wychodzi ponad szczyty na końcach.
+function cupArcPoints(cup, x, yP, steps = 48, lowPx = null) {
+    const yL = yP(cup.peak), yB0 = yP(cup.low), yR = yP(Number.isFinite(cup.right) ? cup.right : cup.peak);
+    const under = typeof lowPx === "function";
+    const yB = under ? yB0 + 2 : yB0;
+    const kSide = (from, to, yEnd) => {   // k: y(i) = yB − k·d², d = odległość od dna w świecach
+        const dEnd = Math.abs(to - from);
+        let k = dEnd > 0 ? (yB - yEnd) / (dEnd * dEnd) : 0;   // na końcu najwyżej szczyt
+        if (under) {
+            const lo = Math.min(from, to), hi = Math.max(from, to);
+            for (let i = Math.ceil(lo); i <= Math.floor(hi); i++) {
+                const d = Math.abs(i - cup.iLow), ly = lowPx(i);
+                if (d < 0.5 || !Number.isFinite(ly)) continue;
+                k = Math.min(k, (yB - ly) / (d * d));
+            }
+        }
+        return Math.max(k, 0);
+    };
+    const kL = kSide(cup.iLow, cup.i0, yL), kR = kSide(cup.iLow, cup.i1, yR);
     const pts = [];
     for (let k = 0; k <= steps; k++) {
         const i = cup.i0 + (cup.i1 - cup.i0) * k / steps;
-        const t = i <= cup.iLow ? (cup.iLow - i) / Math.max(1e-9, cup.iLow - cup.i0) : (i - cup.iLow) / Math.max(1e-9, cup.i1 - cup.iLow);
-        pts.push([x(i), yB - (yB - (i <= cup.iLow ? yL : yR)) * t * t]);
+        if (!under) {
+            const t = i <= cup.iLow ? (cup.iLow - i) / Math.max(1e-9, cup.iLow - cup.i0) : (i - cup.iLow) / Math.max(1e-9, cup.i1 - cup.iLow);
+            pts.push([x(i), yB - (yB - (i <= cup.iLow ? yL : yR)) * t * t]);
+        } else {
+            const d = i - cup.iLow;
+            pts.push([x(i), yB - (d <= 0 ? kL : kR) * d * d]);
+        }
     }
     return { pts, yL, yB, yR };
 }
@@ -621,13 +644,18 @@ function chartSvg(m, opts = {}) {
     }
     ((opts.hints || bookOn) ? m.cups : []).forEach(cup => {
         const cupCol = cup.noHandle ? "#f59e0b" : CHART_COLORS.cup;   // bez rączki = ryzykowny setup: bursztynowy   // miseczki: w widoku książkowym zawsze (łuk, rączka, pivot), litery A–E i legenda tylko w trybie 💡 Nauka
-        const { pts, yL, yB, yR } = cupArcPoints(cup, x, yP);
+        const lowPx = i => (Number.isFinite(m.l[Math.round(i)]) ? yP(m.l[Math.round(i)]) : NaN);
+        const { pts, yB } = cupArcPoints(cup, x, yP, 48, lowPx);
         parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${cupCol}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
-        if (cup.handle) {   // rączka: od prawego brzegu przez dołek rączki do ostatniej świecy bazy
-            const hp = [[x(cup.i1), yP(cup.right)], [x(cup.handle.iLow), yP(cup.handle.low)], [x(cup.handle.iEnd), yP(cup.handle.end)]];
-            parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${cupCol}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${hp.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Rączka −${cup.handle.depth}%</title></polyline>`);
-            parts.push(`<text x="${hp[1][0]}" y="${hp[1][1] + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="${cupCol}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">rączka −${cup.handle.depth}%</text>`);
-            reserveLabel(`rączka −${cup.handle.depth}%`, hp[1][0], hp[1][1] + fs(13), "middle", fs(10), true);
+        if (cup.handle) {   // rączka: mały łuk POD dołkami świec rączki (od prawego brzegu do ostatniej świecy bazy)
+            const ch = cup.handle, okArc = ch.iLow > cup.i1 && ch.iEnd > ch.iLow;
+            const hp = okArc
+                ? cupArcPoints({ i0: cup.i1, iLow: ch.iLow, i1: ch.iEnd, peak: cup.right, low: ch.low, right: ch.end }, x, yP, 16, lowPx).pts
+                : [[x(cup.i1), yP(cup.right)], [x(ch.iLow), yP(ch.low)], [x(ch.iEnd), yP(ch.end)]];
+            parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${cupCol}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${hp.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Rączka −${ch.depth}%</title></polyline>`);
+            const hy = Math.max(...hp.map(p => p[1])) + fs(13), hx = x(ch.iLow);
+            parts.push(`<text x="${hx}" y="${hy}" font-size="${fs(10)}" font-weight="700" fill="${cupCol}" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke">rączka −${ch.depth}%</text>`);
+            reserveLabel(`rączka −${ch.depth}%`, hx, hy, "middle", fs(10), true);
         }
         // cena monitorowania miseczki = pivot (prawy brzeg)
         const pivot = Number.isFinite(cup.pivotPx) ? cup.pivotPx : (Number.isFinite(cup.right) ? cup.right : null);
@@ -657,8 +685,11 @@ function chartSvg(m, opts = {}) {
             hintLegendDone = true;
             parts.push(`<text x="${L.left + 6}" y="${P.y + fs(12)}" font-size="${fs(10)}" fill="${cupCol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${opts.compact ? "A–E: szczyt · dno · brzeg · rączka · kup" : "A szczyt · B dno miseczki · C prawy brzeg · D rączka · E punkt zakupu (kup nad pivotem z wolumenem)"}</text>`);
         }
-        const cx = Math.min(Math.max(x((cup.i0 + cup.i1) / 2), L.left + 24), L.width - L.right - 24);
-        addLabel(`−${cup.depth}%${cup.ctx ? ` · S&P −${cup.mktDd}%` : ""}${cup.noHandle ? " · bez rączki ⚠" : ""}`, cx, yB - (yB - Math.min(yL, yR)) * 0.35, { size: fs(12), fill: cupCol, bold: true, prio: 6 });
+        // głębokość korekty (%) na dnie łuku miseczki — krótko, żeby się nie nakładała na świece (kontekst S&P i „bez rączki” są w dymku i w opisie bazy)
+        const bx = Math.min(Math.max(x(cup.iLow), L.left + fs(24)), L.width - L.right - fs(24)), by = Math.min(yB + fs(14), P.y + P.h - fs(4));
+        const dTxt = `−${cup.depth}%`;
+        parts.push(`<text x="${bx.toFixed(1)}" y="${by.toFixed(1)}" font-size="${fs(13)}" font-weight="800" fill="${cupCol}" text-anchor="middle" stroke="#0e0f13" stroke-width="3.5" paint-order="stroke" pointer-events="none"><title>Korekta miseczki ${dTxt}${cup.ctx ? ` · S&amp;P −${cup.mktDd}%` : ""}${cup.noHandle ? " · bez rączki (ryzykowny setup)" : ""}</title>${dTxt}</text>`);
+        reserveLabel(dTxt, bx, by, "middle", fs(13), true);
     });
     for (let i = 0; i < m.n; i++) {
         if (![m.h[i], m.l[i], m.c[i]].every(Number.isFinite)) continue;
