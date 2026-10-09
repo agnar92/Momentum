@@ -257,6 +257,28 @@ class TestPipeline:
         assert (split_out.parent / "charts.json").exists()
         assert watchlist.load_raw("canslim", raw_dir)["frames"]["AAA"].attrs["splits"] == [["2026-05-01", 2.0]]
 
+    def test_all_in_one_run_can_also_save_the_snapshot_for_later_computing(self, tmp_path, monkeypatch):
+        rows = [{"ticker": t} for t in ("AAA", "BBB")]
+        frames = {"AAA": make_prices(daily=0.004), "BBB": make_prices(daily=0.001)}
+        monkeypatch.setattr(finviz, "fetch_watchlist", lambda *a, **k: (rows, 2))
+        monkeypatch.setattr(finviz, "MIN_TICKERS", 1)
+        monkeypatch.setattr(watchlist, "download_prices", lambda tickers, **k: {t: frames.get(t, make_prices(daily=0.0005)) for t in tickers})
+        monkeypatch.setattr(watchlist, "update_eps_cache", lambda tickers, path: {})
+        monkeypatch.setattr(watchlist, "update_estimates", lambda tickers, path: {})
+        monkeypatch.setattr(watchlist, "fetch_usdpln", lambda: {"usdpln": 3.9, "as_of": "2026-09-30"})
+        monkeypatch.setattr(watchlist, "MIN_COVERAGE", 0.5)
+        raw_dir = tmp_path / "raw"
+        out = tmp_path / "a" / "watchlist.json"
+        assert watchlist.run(out, raw_dir=raw_dir, save_snapshot=True) == 0
+        assert (raw_dir / "canslim.pkl.gz").exists()
+        again = tmp_path / "b" / "watchlist.json"
+        monkeypatch.setattr(watchlist, "download_prices", lambda *a, **k: (_ for _ in ()).throw(AssertionError("sieć")))
+        assert watchlist.run(again, stage="compute", raw_dir=raw_dir) == 0
+        a, b = (json.loads(p.read_text(encoding="utf-8")) for p in (out, again))
+        for d in (a, b):
+            d.pop("generated_at")
+        assert a == b
+
     def test_run_fails_without_finviz_and_without_previous(self, tmp_path, monkeypatch):
         monkeypatch.setattr(finviz, "fetch_watchlist", lambda *a, **k: ([], 0))
         assert watchlist.run(tmp_path / "w.json") == 1

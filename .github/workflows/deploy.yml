@@ -1,15 +1,16 @@
-name: Deploy Pages (bez pobierania danych)
+name: Deploy Pages (z obliczeniami, bez pobierania danych)
 
-# Zwykły deploy strony — publikuje aktualną zawartość docs/ na GitHub Pages BEZ pobierania danych.
-# Dane (docs/data/watchlist.json) są zacommitowane w repo i odświeża je daily_watchlist.yml, więc
-# zmianę samego kodu strony (HTML/CSS/JS) wystarczy tylko wdrożyć.
+# Publikuje docs/ na GitHub Pages po każdym pushu do main. PRZED publikacją liczy dane od nowa z ostatniej migawki pobranych danych (gałąź raw-data,
+# zapisywana przez daily_watchlist.yml): python watchlist.py --compute-only — bez Finviz i yfinance. Dzięki temu zmiana reguł w watchlist.py
+# (bazy, flagi, rankingi, wykresy) od razu widać na stronie. Brak migawki (pierwsze uruchomienie przed „Daily Watchlist Refresh”) = tylko deploy, jak dawniej.
+# Wynik liczenia jest commitowany do main z [skip ci] (nie odpala kolejnego deployu).
 on:
   push:
     branches: [main]
   workflow_dispatch: # Umożliwia manualne kliknięcie "Run workflow" z poziomu GitHuba
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -28,6 +29,70 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Checkout raw snapshot (branch raw-data)
+        id: raw
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: raw-data
+          path: raw
+
+      - name: Setup Python
+        if: steps.raw.outcome == 'success'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        if: steps.raw.outcome == 'success'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # Najpierw Qullamaggie (zapisuje rs_universe.json, z którego liczy się RS Rating w CANSLIM). Błąd obliczeń nie blokuje deployu — zostają zacommitowane dane.
+      - name: Compute Qullamaggie list from snapshot
+        if: steps.raw.outcome == 'success'
+        continue-on-error: true
+        run: python watchlist.py --profile qm --compute-only
+
+      - name: Compute CANSLIM list from snapshot
+        if: steps.raw.outcome == 'success'
+        continue-on-error: true
+        run: python watchlist.py --compute-only
+
+      - name: Persist recomputed docs/data/
+        if: steps.raw.outcome == 'success'
+        run: |
+          if [ -n "$(git status --porcelain docs/data/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # Zawsze najpierw na AKTUALNY szczyt main ("reset --mixed", nie --soft), żeby commit
+            # niósł tylko świeże dane na poprawnej bazie — nawet gdy job wystartował ze starego
+            # checkoutu (np. ręczne "Re-run jobs" używa ORYGINALNEGO SHA, nie bieżącego main).
+            git fetch origin main
+            git reset --mixed origin/main
+            git add docs/data/
+            # [skip ci]: bez tego commit odpaliłby kolejne workflowy (push: main).
+            git commit -m "chore: recompute watchlist [skip ci]"
+            for attempt in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — pobieram najnowszy main i próbuję ponownie..."
+              sleep $((attempt * 3))
+              git fetch origin main
+              git reset --mixed origin/main
+              git add docs/data/
+              git commit -m "chore: recompute watchlist [skip ci]"
+            done
+          else
+            echo "Brak zmian w docs/data/ — pomijam commit."
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

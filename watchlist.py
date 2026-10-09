@@ -1756,12 +1756,12 @@ def _read_json(path, default):
         return default
 
 
-def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim", stage="all", raw_dir=None):
+def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim", stage="all", raw_dir=None, save_snapshot=False):
     """profile 'canslim' (domyślny, codzienny): filtr CANSLIM z finviz_screen.json, EPS, estymaty, wykresy wszystkich spółek.
     profile 'qm' (ręczny): szeroki filtr z finviz_screen_qm.json, bez EPS i estymat, lista przycięta do płynnych spółek,
     wykresy tylko dla spółek z top X % ceny/minimum -> watchlist_qm.json + charts_qm.json.
     stage: "all" (pobierz i policz — jak dotąd), "fetch" (tylko pobranie: Finviz, ceny, kurs, EPS, estymaty -> migawka w raw_dir),
-    "compute" (tylko obliczenia z zapisanej migawki, bez sieci)."""
+    "compute" (tylko obliczenia z zapisanej migawki, bez sieci). save_snapshot (stage "all"): oprócz liczenia zapisuje też migawkę pobranych danych."""
     qm = profile == "qm"
     output_path = output_path or (QM_OUTPUT_PATH if qm else OUTPUT_PATH)
     if qm:
@@ -1822,6 +1822,12 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         except Exception as e:
             print(f"⚠️  {NASDAQ} niedostępny ({e}) — ocena rynku tylko z S&P 500.")
             nasdaq_df = None
+    if stage == "all" and save_snapshot:   # liczymy jak dotąd, a przy okazji zapisujemy migawkę pobranych danych (deploy strony liczy z niej przy każdej zmianie kodu)
+        fx = fetch_usdpln() or (previous or {}).get("fx")
+        path = save_raw({"profile": profile, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
+                         "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
+                         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, profile, raw_dir)
+        print(f"💾 Zapisano migawkę {path} ({path.stat().st_size / 1e6:.1f} MB).")
     if stage == "fetch":
         # tylko pobranie: kurs, EPS i estymaty (sieć) oraz migawka cen / listy z Finviz do późniejszego liczenia
         fx = fetch_usdpln() or (previous or {}).get("fx")
@@ -1910,7 +1916,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         "profile": profile,
         "rs_basis": rs_basis,
         "market": market,
-        "fx": (fx if stage == "compute" else fetch_usdpln()) or (previous or {}).get("fx"),
+        "fx": (fx if (stage == "compute" or fx is not None) else fetch_usdpln()) or (previous or {}).get("fx"),
         "stocks": stocks,
     }
     out = Path(output_path)
@@ -1936,12 +1942,13 @@ def main(argv=None):
                              help="Tylko pobranie danych (Finviz, ceny, kurs, EPS, estymaty) -> migawka w --raw-dir; bez obliczeń i zapisu docs/data/*.json.")
     stage_group.add_argument("--compute-only", action="store_true",
                              help="Tylko obliczenia z zapisanej migawki (bez sieci) -> watchlist.json / charts.json.")
+    parser.add_argument("--save-raw", action="store_true", help="Przy pełnym przebiegu (bez --fetch-only / --compute-only) zapisz też migawkę pobranych danych do --raw-dir.")
     parser.add_argument("--raw-dir", type=str, default=None, help="Katalog migawki danych (domyślnie raw/ w repozytorium, poza gitem).")
     parser.add_argument("--profile", choices=("canslim", "qm"), default="canslim",
                         help="canslim = codzienna lista CANSLIM (domyślnie); qm = lista Qullamaggiego (w codziennym workflow przed CANSLIM).")
     args = parser.parse_args(argv)
     stage = "fetch" if args.fetch_only else "compute" if args.compute_only else "all"
-    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile, stage=stage, raw_dir=args.raw_dir)
+    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile, stage=stage, raw_dir=args.raw_dir, save_snapshot=args.save_raw)
 
 
 if __name__ == "__main__":
