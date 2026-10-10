@@ -154,6 +154,8 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
 // Cup & handle na samych zamknięciach (dla Dar-Card): z miseczki wykrytej przez watchlist.py (`full.cups`: i0 lewy szczyt, i1 prawy brzeg, handle {iEnd}) wyznacza kluczowe poziomy
 // z zamknięć tygodniowych: lewy szczyt, dołek miski, prawy brzeg, rączkę jako mały box (góra = najwyższe, dół = najniższe zamknięcie rączki) i pivot (góra rączki; bez rączki — lewy szczyt).
 const CUP_STOP_PCT = 8, CUP_BUY_MAX_PCT = 5;
+// Kolory boxów wzorców na Dar-Card (strefy zagrożenia mają jeden wspólny kolor — białe kreskowanie)
+const PATTERN_COLORS = { "flat base": "#3b9cff", "flaga": "#ff9f43", "korytarz": "#ffd166", "high tight flag": "#b57cff", "cup & handle": "#2ee6c5" };
 function darvasCupGeometry(c, cup) {
     const n = c.length;
     if (!cup || !(cup.i1 > cup.i0)) return null;
@@ -279,10 +281,10 @@ function darvasSvg(full, win, opts = {}) {
     darvasPatternBoxes(full).forEach(fb => {
         if (!(fb.i1 >= start && fb.i0 < endExcl && fb.top > fb.low)) return;
         const fx0 = x(Math.max(start, fb.i0)) - bw / 2, fx1 = x(Math.min(endExcl - 1, fb.i1)) + bw / 2, fyT = y(fb.top), fyB = y(fb.low), fyS = y(fb.top * (1 - CUP_STOP_PCT / 100));
-        const fpx1 = W - L.right, fcol = full.c[lastReal] > fb.top ? "#4ee08a" : "#ffffff";
-        out.push(`<rect x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyB - fyT).toFixed(1)}" fill="none" stroke="#2fb4ff" stroke-width="${fs(2.2)}" stroke-dasharray="6 3" pointer-events="none"><title>${fb.name}: dół ${fb.low}, pivot ${fb.top}</title></rect>`);
-        if (fyS - fyB > 1) out.push(`<rect x="${fx0.toFixed(1)}" y="${fyB.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${(fyS - fyB).toFixed(1)}" fill="url(#darvasHatch)" fill-opacity="0.6" pointer-events="none"/>`);
-        out.push(`<text x="${fx1.toFixed(1)}" y="${(fyT - 6).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="end" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${fb.name} ${fb.i1 - fb.i0 + 1} tyg.</text>`);
+        const pcol = PATTERN_COLORS[fb.name] || "#3b9cff", fpx1 = W - L.right, fcol = full.c[lastReal] > fb.top ? "#4ee08a" : "#ffffff";
+        out.push(`<rect x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyB - fyT).toFixed(1)}" fill="${pcol}" fill-opacity="0.78" stroke="${pcol}" stroke-width="${fs(1.6)}" pointer-events="none"><title>${fb.name}: dół ${fb.low}, pivot ${fb.top}</title></rect>`);
+        if (fyS - fyB > 1) out.push(`<rect x="${fx0.toFixed(1)}" y="${fyB.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${(fyS - fyB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
+        out.push(`<text x="${fx1.toFixed(1)}" y="${(fyT - 6).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="${pcol}" text-anchor="end" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${fb.name} ${fb.i1 - fb.i0 + 1} tyg.</text>`);
         out.push(`<line x1="${fx0.toFixed(1)}" x2="${fpx1}" y1="${fyT.toFixed(1)}" y2="${fyT.toFixed(1)}" stroke="${fcol}" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" pointer-events="none"/>`);
         out.push(`<rect x="${W - L.right}" y="${(fyT - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${fcol}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyT + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${fb.top.toFixed(2)}</text>`);
         out.push(`<rect x="${W - L.right}" y="${(fyS - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyS + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(fb.top * (1 - CUP_STOP_PCT / 100)).toFixed(2)}</text>`);
@@ -315,12 +317,12 @@ function darvasSvg(full, win, opts = {}) {
         const txt = (tx, ty, t, col = "#ffffff", sz = 12) => `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" font-size="${fs(sz)}" font-weight="700" fill="${col}" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${t}</text>`;
         const hatchBase = (cx, half) => `<rect x="${(cx - half).toFixed(1)}" y="${y(g.bottom).toFixed(1)}" width="${(2 * half).toFixed(1)}" height="${Math.max(2, y(g.bottom * (1 - DARVAS_STOP_PCT / 100)) - y(g.bottom)).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`;
         if (style === "pivotbox") {   // BOX PIVOTU: cienka miska dla kontekstu + box od rączki do prawej krawędzi: góra = pivot, dół = wygaśnięcie rączki / stop −8 %
-            out.push(`<polyline points="${cupPoly}" fill="none" stroke="#9adbff" stroke-width="${fs(1.6)}" stroke-dasharray="2 4" stroke-linecap="round" pointer-events="none">${title}</polyline>`);
+            out.push(`<polyline points="${cupPoly}" fill="none" stroke="#2ee6c5" stroke-width="${fs(1.6)}" stroke-dasharray="2 4" stroke-linecap="round" pointer-events="none">${title}</polyline>`);
             const bx0 = x(g.handle ? g.handle.i0 : g.i1) - bw / 2, bx1 = W - L.right, byT = y(g.pivot), byB = y(g.boxBottom), byS = y(g.stop);
-            out.push(`<rect x="${bx0.toFixed(1)}" y="${byT.toFixed(1)}" width="${Math.max(0, bx1 - bx0).toFixed(1)}" height="${Math.max(2, byB - byT).toFixed(1)}" fill="#ffffff" fill-opacity="0.2" stroke="#ffffff" stroke-width="1.4" stroke-dasharray="${g.handle ? "0" : "4 3"}" pointer-events="none"><title>Box pivotu ${g.boxBottom}–${g.pivot}</title></rect>`);
+            out.push(`<rect x="${bx0.toFixed(1)}" y="${byT.toFixed(1)}" width="${Math.max(0, bx1 - bx0).toFixed(1)}" height="${Math.max(2, byB - byT).toFixed(1)}" fill="${PATTERN_COLORS["cup & handle"]}" fill-opacity="0.78" stroke="${PATTERN_COLORS["cup & handle"]}" stroke-width="1.4" pointer-events="none"><title>Box pivotu ${g.boxBottom}–${g.pivot}</title></rect>`);
             if (byS - byB > 1) out.push(`<rect x="${bx0.toFixed(1)}" y="${byB.toFixed(1)}" width="${Math.max(0, bx1 - bx0).toFixed(1)}" height="${(byS - byB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
             out.push(`<rect x="${W - L.right}" y="${(byS - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(byS + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${g.stop.toFixed(2)}</text>`);
-            out.push(txt(x(g.ib), y(g.bottom) + fs(15), label, "#7fd0ff"));
+            out.push(txt(x(g.ib), y(g.bottom) + fs(15), label, PATTERN_COLORS["cup & handle"]));
         } else if (style === "mug") {   // KUBEK: biała czasza z uchem (ucho = rączka) i kreskowaną podstawką pod dnem
             out.push(`<polygon points="${closeP}" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
             if (!g.handle) {
