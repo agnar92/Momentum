@@ -44,14 +44,12 @@ test("darvasSvg: pudełka, punkty kupna i stopu; mało danych = komunikat", () =
     assert.match(darvasSvg({ c: [1], weeks: ["2026-01-01"], n: 1 }, { n: 1, end: 1 }), /Za mało danych/);
 });
 
-test("darvasBoxInfo / darvasBoxSheetHtml: wejście = góra, anulowanie = dół, stop loss −8 % od wejścia", () => {
+test("darvasBoxInfo / darvasBoxSheetHtml: wejście = góra, anulowanie = dół, strefa ryzyka 5 % pod dołem", () => {
     const i = darvasBoxInfo(100, 90);
-    assert.deepEqual([i.entry, i.cancel, i.stop, i.stopPct, i.depthPct, i.stopAboveCancel], [100, 90, 92, 8, 10, true]);
-    assert.equal(darvasBoxInfo(100, 85).stopAboveCancel, true);   // stop 92 nad dołem 85: box głębszy niż stop
-    assert.equal(darvasBoxInfo(100, 95).stopAboveCancel, false);  // dół 95 nad stopem 92
+    assert.deepEqual([i.entry, i.cancel, i.stop, i.stopPct, i.depthPct], [100, 90, 85.5, 14.5, 10]);
     const html = darvasBoxSheetHtml(i, "open", false);
     assert.match(html, /Cena wejścia[\s\S]*100\.00/);
     assert.match(html, /Początek strefy ryzyka[\s\S]*90\.00/);
-    assert.match(html, /Exit[\s\S]*92\.00/);
+    assert.match(html, /Exit[\s\S]*85\.50/);
     assert.match(html, /niepotwierdzony/);
 });
