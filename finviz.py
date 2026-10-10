@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "finviz_screen.json"
 QM_CONFIG_PATH = ROOT / "finviz_screen_qm.json"   # osobny filtr dla Qullamaggiego (ten sam codzienny workflow)
 
-DEFAULT_FILTERS = "sh_price_o10,ta_sma50_pa,ta_sma200_pa,fa_epsqoq_o25,fa_salesqoq_o25,fa_epsyoy_o25,fa_roe_o15"
+DEFAULT_FILTERS = "cap_smallover,sh_avgvol_o300,sh_price_o10,fa_epsqoq_o25,fa_salesqoq_o25,fa_epsyoy_o25,fa_roe_o15"
 DEFAULT_MAX_TICKERS = 300
 DEFAULT_QM_FILTERS = "cap_midover,sh_avgvol_o1000,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa"
 DEFAULT_QM_MAX_TICKERS = 6000
