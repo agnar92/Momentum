@@ -1024,3 +1024,4 @@ body.box-add .wl-chart-body svg#chartSvg { touch-action: none; cursor: crosshair
 .box-pick-title { font-size: 11px; color: #8a8f9c; padding: 2px 6px 4px; }
 .box-pick button { text-align: left; min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid #2c3140; background: #232733; color: #e8eaed; font-size: 13px; }
 .box-pick button:active { background: #2f3646; border-color: #ffd54a; }
+.box-mkpos { margin: 6px 0 4px 8px; min-height: 40px; }

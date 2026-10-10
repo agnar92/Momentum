@@ -358,3 +358,5 @@ To look at the page locally: `cd docs && python3 -m http.server`, then open `htt
 
 **Closing-price dot line on the Dar-Card (user: "wykres liniowy punktowy cen zamknięcia — czy to pierwsza świeca przebiła, czy już daleko jesteśmy ponad")**: `darvasSvg` draws the weekly closes as a blue polyline with a dot per week (dark halo, `pointer-events:none`, tooltip date · close) over the boxes; the last dot is the larger current-price dot.
 (Update: the line is drawn only OUTSIDE the boxes — an SVG mask `#darvasLineMask` cuts out every `box-hit` rect; user: "żeby nie było linii wewnątrz darcard, tylko poza".)
+
+**Auto position from a box (user: "w boxy daj możliwość automatycznego utworzenia pozycji z boxa")**: the expandable `💰 Pozycja z tego boxa` (📦 Boxy rows and the candle focus bar) has a button `💼 Utwórz pozycję z tego boxa` (`.box-mkpos`, `createPositionFromBox`): entry = box top, stop = bottom −5 % (danger zone's lower edge), shares from `positionSize` when the account is set (else `null`); saved via `savePosition` (so it appears in 💼 Pozycje with the stop line); an existing position asks for confirmation first (button then reads `Zastąp pozycję…`).
