@@ -1001,3 +1001,11 @@ body.box-add #chartSvg { touch-action: none; cursor: crosshair; }
 .chart-grid .cell-body.scroll-y .wl-range-row { position: sticky; top: 0; z-index: 3; background: var(--bg, #0e0f13); }
 .box-focus-bar { padding: 4px 8px; font-size: 12px; }
 .box-focus-bar button { min-height: 28px; padding: 2px 8px; }
+
+/* Dar-Card: pasek akcji zaznaczonego boxa (stuknięcie zaznacza, przyciski przybliżają / przypinają) */
+.chart-grid .cell-body { position: relative; }
+.box-select-bar { position: absolute; left: 6px; right: 6px; bottom: 6px; z-index: 5; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 10px; background: rgba(20, 24, 33, 0.96); border: 1px solid #3a4152; box-shadow: 0 4px 14px rgba(0,0,0,.5); font-size: 13px; }
+.box-select-bar[hidden] { display: none; }
+.box-select-bar span { flex: 1; font-weight: 700; color: #e6e8ee; }
+.box-select-bar button { min-height: 38px; padding: 4px 12px; border-radius: 8px; border: 1px solid #4ee08a; background: transparent; color: #4ee08a; font-weight: 700; }
+.box-select-bar button[data-act="close"] { border-color: #5b6272; color: #9aa0ae; min-width: 38px; padding: 4px 8px; }

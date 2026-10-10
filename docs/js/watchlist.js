@@ -1414,6 +1414,21 @@ function initBoxesPanel() {
     });
 }
 
+// Akcje paska zaznaczonego boxa na Dar-Card (stuknięcie zaznacza; przycisk przybliża albo przypina): `d` = wartość data-box `top|bottom|outcome|conf|i0|i1`.
+function focusBoxFromData(d) {
+    const [top, bottom, , , i0, i1] = String(d).split("|");
+    if (!currentChart || !Number.isFinite(+i0) || i0 === undefined || i1 === undefined) return;
+    boxFocus = { ticker: currentChart.ticker, top: +top, bottom: +bottom, i0: +i0, i1: +i1 };
+    const end = +i1 + 1 + 6;   // clampWindow ucina do końca danych
+    chartWindows[0] = { n: Math.max(15, end - (+i0) + 14), end };
+    drawChart();
+}
+
+function pinBoxFromData(d) {
+    const [top, bottom, , , i0] = String(d).split("|");
+    if (currentChart) togglePinnedBox(currentChart.ticker, +top, +bottom, +i0);
+}
+
 function savePinnedBox(ticker, box) {
     prefsStore.box[ticker] = { v: box ? { top: box.top, bottom: box.bottom, start: box.start } : null, t: new Date().toISOString() };
     prefsWriteLocal(); prefsApply(); annOnSave();
