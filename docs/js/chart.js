@@ -228,6 +228,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
 // a gdy go nie ma albo leży daleko od ceny — poziom oporu flagi / korytarza (dziennej, potem tygodniowej). Poziom dalej niż PIVOT_NEAR_PCT od ceny
 // jest bez znaczenia dla bieżącej decyzji, więc go nie rysujemy (inaczej etykiety „pivot / strefa zakupu / stop” lądują na brzegu wykresu).
 const BOX_BASE_TYPES = ["flat", "square_box"];   // pudełka Darvasa (cup z rączką i flaga to inna bajka)
+const BOX_RISK_ZONE_PCT = 5;                      // strefa ryzyka pod dołem boxa (fokus po kliknięciu): 5 %, jej dół = exit
 const BOX_STOP_PCT = 8;                           // stop pod pudełkiem: −8 % od góry (pivotu)
 const PIVOT_BASE_TYPES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // wzorce z książki O'Neila, które mają pivot do kupna
 const PIVOT_NEAR_PCT = 15;
@@ -606,7 +607,7 @@ function chartSvg(m, opts = {}) {
     const pivotPx = m.pivot && Number.isFinite(m.pivot.price) ? m.pivot.price : null;
     const lastC = m.c[m.lastIdx];
     const pivotNear = pivotPx !== null && Number.isFinite(lastC) && Math.abs(pivotPx / lastC - 1) <= 0.15;
-    const focusExtra = opts.focusBox ? [[opts.focusBox.top], [opts.focusBox.bottom], [opts.focusBox.top * (1 - BOX_STOP_PCT / 100)]] : [];
+    const focusExtra = opts.focusBox ? [[opts.focusBox.top], [opts.focusBox.bottom], [opts.focusBox.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]] : [];
     const pivotExtra = [...(pivotNear ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : []), ...focusExtra];
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
@@ -733,15 +734,23 @@ function chartSvg(m, opts = {}) {
         const topCol = m.pivot && m.pivot.active ? "#2ecc71" : (lastCl > b.top ? "#ff8a5b" : "#e8eaed");
         parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1|${b.i0 + (m.off || 0)}|${b.i1 + (m.off || 0)}" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.1" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
     }
-    // fokus na boxie (kliknięcie): poziomy wejścia / anulowania / stopu przez całe okno, żeby co tydzień widać było, czy cena przebiła
+    // fokus na boxie (kliknięcie): kupno = góra boxa, dół boxa = początek szarej strefy ryzyka (potencjalny exit), dół strefy (−8 % od góry) = exit
     if (opts.focusBox) {
-        const fb = opts.focusBox, stopPx = fb.top * (1 - BOX_STOP_PCT / 100);
-        [[fb.top, "#4ee08a", "wejście (kup nad)", ""], [fb.bottom, "#ff8a5b", "anulowanie (dół boxa)", "4 3"], [stopPx, "#ff7a7a", `stop −${BOX_STOP_PCT} %`, "2 3"]].forEach(([v, col, txt, dash]) => {
+        const fb = opts.focusBox, stopPx = fb.bottom * (1 - BOX_RISK_ZONE_PCT / 100);
+        const inPlot = yy => yy > P.y - 1 && yy < P.y + P.h + 1;
+        const hline = (v, col, txt, dash) => {
             const yy = yP(v);
-            if (!(yy > P.y - 1 && yy < P.y + P.h + 1)) return;
+            if (!inPlot(yy)) return;
             parts.push(`<g ${clipAttr}><line x1="${L.left}" x2="${L.width - L.right}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="1.3"${dash ? ` stroke-dasharray="${dash}"` : ""} opacity="0.9"/></g>`);
             addLabel(`${txt} ${v.toFixed(2)}`, L.left + 4, yy - 3, { anchor: "start", fill: col, bold: true, prio: 9 });
-        });
+        };
+        {   // szara strefa ryzyka: od dołu boxa do stopu
+            const yA = yP(fb.bottom), yB = yP(stopPx);
+            parts.push(`<g ${clipAttr}><rect x="${L.left}" y="${yA}" width="${L.width - L.right - L.left}" height="${Math.max(0, yB - yA)}" fill="#8a8f9c" fill-opacity="0.22" pointer-events="none"/></g>`);
+        }
+        hline(fb.top, "#4ee08a", "kupno (góra boxa)", "");
+        hline(fb.bottom, "#c9ced8", "strefa ryzyka od", "4 3");
+        hline(stopPx, "#ff7a7a", `exit pod strefą (−${BOX_RISK_ZONE_PCT} %)`, "2 3");
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;

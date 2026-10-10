@@ -1808,10 +1808,10 @@ function drawChart() {
         if (i === activeIdx) primary = model;
     });
     if (focus) {   // pasek nad wykresem: poziomy boxa + powrót do pełnego widoku
-        const stop = focus.top * (1 - DARVAS_STOP_PCT / 100);
+        const stop = focus.bottom * (1 - DARVAS_STOP_PCT / 100);
         const bar = document.createElement("div");
         bar.className = "box-focus-bar";
-        bar.innerHTML = `<span>📦 Box: kup nad <b>${focus.top.toFixed(2)}</b> · anulowanie pod <b>${focus.bottom.toFixed(2)}</b> · stop <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
         body.insertBefore(bar, body.firstChild);
         bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
     }

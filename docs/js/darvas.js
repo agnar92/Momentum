@@ -44,13 +44,13 @@ function darvasBoxes(c, confirm = DARVAS_CONFIRM) {
     return boxes;
 }
 
-const DARVAS_STOP_PCT = 8;   // stop loss: −8 % od ceny wejścia (góry boxa)
+const DARVAS_STOP_PCT = 5;   // szeroko strefy ryzyka: 5 % poniżej dołu boxa; dół strefy = exit
 
 // Ceny boxa: wejście = góra (kup po zamknięciu tygodnia nad nią), anulowanie = dolna krawędź (zamknięcie pod nią kończy box), stop loss = −stopPct % od wejścia.
-function darvasBoxInfo(top, bottom, stopPct = DARVAS_STOP_PCT) {
+function darvasBoxInfo(top, bottom, zonePct = DARVAS_STOP_PCT) {
     const r2 = v => Math.round(v * 100) / 100;
-    const stop = r2(top * (1 - stopPct / 100));
-    return { entry: r2(top), cancel: r2(bottom), stop, stopPct, depthPct: r2((top - bottom) / top * 100), stopAboveCancel: stop > bottom };
+    const stop = r2(bottom * (1 - zonePct / 100)), stopPct = r2((1 - stop / top) * 100);
+    return { entry: r2(top), cancel: r2(bottom), stop, stopPct, zonePct, depthPct: r2((top - bottom) / top * 100), stopAboveCancel: stop > bottom };
 }
 
 // Treść arkusza po kliknięciu boxa (HTML); state: "up" | "down" | "open" | undefined (box z wykresu świecowego)
@@ -58,8 +58,8 @@ function darvasBoxSheetHtml(info, state, confirmed) {
     const st = state === "up" ? "wybity w górę (był sygnał kupna)" : state === "down" ? "złamany w dół (anulowany)" : state === "open" ? "otwarty — czeka na wybicie" : "otwarty (baza flat)";
     return `<div class="darvas-sheet"><p class="muted small">Box ${info.cancel.toFixed(2)}–${info.entry.toFixed(2)} · głębokość ${info.depthPct}% · ${st}${confirmed === false ? " · dół jeszcze niepotwierdzony" : ""}</p>`
         + `<table class="sheet-table" style="width:100%;text-align:left"><tr><th>💚 Cena wejścia</th><td><b>${info.entry.toFixed(2)}</b><br><span class="muted small">kup, gdy tydzień zamknie się NAD górą boxa</span></td></tr>`
-        + `<tr><th>⛔ Anulowanie boxa</th><td><b>${info.cancel.toFixed(2)}</b><br><span class="muted small">dolna krawędź — zamknięcie tygodnia pod nią kończy box</span></td></tr>`
-        + `<tr><th>🛑 Stop loss</th><td><b>${info.stop.toFixed(2)}</b><br><span class="muted small">−${info.stopPct}% od ceny wejścia${info.stopAboveCancel ? " — stop jest wyżej niż dół boxa, więc zadziała, zanim box zostanie anulowany" : " — dół boxa jest wyżej niż stop, więc box anuluje się, zanim dojdzie do stopu"}</span></td></tr></table>`
+        + `<tr><th>⚠️ Początek strefy ryzyka</th><td><b>${info.cancel.toFixed(2)}</b><br><span class="muted small">dolna krawędź boxa; od niej w dół jest szara strefa ryzyka (potencjalny exit)</span></td></tr>`
+        + `<tr><th>🛑 Exit (dół strefy ryzyka)</th><td><b>${info.stop.toFixed(2)}</b><br><span class="muted small">dół szarej strefy ryzyka = ${info.zonePct}% pod dołem boxa (${info.stopPct}% pod ceną wejścia); wyjście poniżej tej ceny = exit</span></td></tr></table>`
         + `<p class="muted small">Reguły Darvasa na tygodniowych zamknięciach; heurystyka, nie rekomendacja.</p></div>`;
 }
 
