@@ -723,18 +723,13 @@ function chartSvg(m, opts = {}) {
             if (!m.box) addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
         }
     }
-    // pudełko Darvasa bazy płaskiej / kwadratowej: prostokąt od początku bazy (góra = poziom wybicia, kolor jak pivot: biały czeka, zielony po wybiciu, pomarańczowy przebity bez potwierdzenia),
-    // pod nim czerwona linia stopu −8 % od góry. Zastępuje przerywaną linię pivotu i strefy zakupu / stopu.
+    // pudełko Darvasa bazy płaskiej / kwadratowej: sam prostokąt od początku bazy do dziś (obrys: biały czeka, zielony po wybiciu, pomarańczowy przebity bez potwierdzenia) — bez linii i podpisów.
+    // Kliknięcie / dotknięcie (data-box → watchlist.js) pokazuje cenę wejścia (góra), anulowania (dolna krawędź) i stop loss (−8 % od góry). Zastępuje linię pivotu i strefy zakupu / stopu.
     if (m.box && m.box.i1 >= 0 && m.box.i0 < m.n) {
         const b = m.box, bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
-        const yTop = yP(b.top), yLow = yP(b.low), yStop = yP(b.stop), lastCl = m.c[m.lastIdx];
+        const yTop = yP(b.top), yLow = yP(b.low), lastCl = m.c[m.lastIdx];
         const topCol = m.pivot && m.pivot.active ? "#2ecc71" : (lastCl > b.top ? "#ff8a5b" : "#e8eaed");
-        const xr = Math.min(L.width - L.right, bx1 + fs(36));
-        parts.push(`<g ${clipAttr} pointer-events="none"><rect x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.08" stroke="#8a8f9c" stroke-width="1" stroke-opacity="0.7"><title>Pudełko (${b.low}–${b.top})</title></rect>`
-            + `<line x1="${bx0}" x2="${xr}" y1="${yTop}" y2="${yTop}" stroke="${topCol}" stroke-width="2"><title>Góra pudełka = poziom wybicia ${b.top}</title></line>`
-            + `<line x1="${bx0}" x2="${xr}" y1="${yStop}" y2="${yStop}" stroke="#ff5d5d" stroke-width="1.6" stroke-dasharray="5 3"><title>Stop −${BOX_STOP_PCT}% od góry pudełka: ${b.stop}</title></line></g>`);
-        addLabel(Number(b.top).toFixed(2), xr - 3, yTop - 4, { anchor: "end", fill: topCol, bold: true, prio: 9 });
-        addLabel(`stop −${BOX_STOP_PCT}% ${Number(b.stop).toFixed(2)}`, xr - 3, Math.min(P.y + P.h - 3, yStop + fs(12)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 8 });
+        parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.1" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;

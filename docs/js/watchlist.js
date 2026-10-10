@@ -1950,6 +1950,13 @@ function initChartModal() {
         updateDarvasButton();
         if (currentChart) drawChart();
     });
+    document.getElementById("chartModal").addEventListener("click", ev => {   // kliknięcie boxa (Darvas / baza flat) → ceny wejścia, anulowania, stop loss
+        const el = ev.target.closest && ev.target.closest("[data-box]");
+        if (!el || typeof darvasBoxInfo !== "function") return;
+        const [top, bottom, outcome, conf] = el.dataset.box.split("|");
+        const t = currentChart ? currentChart.ticker : "";
+        showSheet(`${escapeHtml(t)} — box`, darvasBoxSheetHtml(darvasBoxInfo(+top, +bottom), outcome, conf === "1"));
+    });
     document.getElementById("chartLegendBtn").addEventListener("click", () => {
         chartLegendOn = !chartLegendOn;
         try { localStorage.setItem(CHART_LEGEND_KEY, chartLegendOn ? "1" : "0"); } catch (e) { /* ignoruj */ }

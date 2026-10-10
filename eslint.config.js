@@ -46,6 +46,8 @@ const browserGlobals = {
     // docs/js/darvas.js (ładowany po chart.js, PRZED watchlist.js)
     darvasBoxes: "readonly",
     darvasSvg: "readonly",
+    darvasBoxInfo: "readonly",
+    darvasBoxSheetHtml: "readonly",
     // docs/js/chart.js (ładowany PRZED watchlist.js)
     niceTicks: "readonly",
     renderStockChart: "readonly",

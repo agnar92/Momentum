@@ -676,14 +676,14 @@ test("posMiniSvg: miniatura z ceną, liniami wejścia / stopu / nowego stopu, MA
     assert.ok(ys[1] - ys[0] >= 9 - 1e-6);
 });
 
-test("chartSvg: baza flat to pudełko Darvasa (obrys + góra + stop −8 %), bez przerywanej linii pivotu i stref", () => {
+test("chartSvg: baza flat to samo pudełko Darvasa (klikalne), bez linii pivotu, stopu i stref", () => {
     const c = charts();
     c.stocks.AAA.bases = [{ start: "2026-01-09", end: "2026-07-03", peak: 15, low: 12, pivot: 15, depth_pct: 20, type: "flat", open: true }];
     const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 15, tl_state: null }, { pad: true });
     assert.ok(m.box && m.box.top === 15 && m.box.low === 12 && m.box.stop === 13.8);
     const svg = chartSvg(m);
-    assert.match(svg, /stop −8% 13\.80/);
-    assert.match(svg, /Pudełko \(12–15\)/);
+    assert.match(svg, /data-box="15\|12\|open\|1"/);                  // box do kliknięcia (ceny w arkuszu), bez linii stopu i podpisów
+    assert.doesNotMatch(svg, /stop −8%/);
     assert.doesNotMatch(svg, /strefa zakupu do/);
     assert.doesNotMatch(svg, /pivot 15\.00/);
 });
