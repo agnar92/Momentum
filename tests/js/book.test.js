@@ -326,7 +326,7 @@ test("computeBook / bookSvg: pivot bazy przebity zamknięciem, ale bez sygnału 
         c.push(p); h.push(p + 0.2); l.push(i === 34 ? 30 : p - 0.2); v.push(i === 34 ? 5000 : 1000);
     }
     const m = { n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100),
-        bases: [{ type: "flat", i0: 26, i1: 33, pivot: 21, weeks: 8, low: 20, open: false }] };
+        bases: [{ type: "double_bottom", i0: 26, i1: 33, pivot: 21, weeks: 8, low: 20, open: false }] };
     const b = computeBook(m);
     assert.equal(b.buys.filter(x => x.src === "base").length, 0, "luka powyżej +5 % = za późno, bez Kup");
     assert.equal(b.pivots.length, 1);
@@ -337,4 +337,15 @@ test("computeBook / bookSvg: pivot bazy przebity zamknięciem, ale bez sygnału 
     const svg = bookSvg(m, g);
     assert.match(svg, /stroke="#ff8a5b" stroke-width="2" stroke-dasharray="4 3"/);
     assert.ok(svg.includes(">przebity bez sygnału kup</text>"));
+});
+
+test("bookSvg: pudełka (flat / square_box) nie dostają białej kreski pivotu — rysuje je chart.js jako box Darvasa", () => {
+    const { bookSvg } = require("../../docs/js/book.js");
+    const n = 40, c = Array.from({ length: n }, (_, i) => 10 + i * 0.1), h = c.map(v => v + 0.2), l = c.map(v => v - 0.2), v = c.map(() => 1000);
+    const m = { n, h, l, c, v, weeks: c.map((_, i) => String(i)), volAvg: rollingMean(v, 10), smas: [{ values: rollingMean(c, 10) }, { values: rollingMean(c, 40) }], spx: c.map(() => 100),
+        bases: [{ type: "flat", i0: 30, i1: 39, pivot: 30, weeks: 8, low: 10, open: true }] };
+    m.book = computeBook(m);
+    assert.ok(m.book.pivots.every(p => p.box));
+    const g = { x: i => 10 + i * 8, yP: v2 => 500 - v2 * 3, P: { y: 0, h: 480 }, fs: v2 => v2, addLabel: () => {}, clip: "", compact: false, legendY: 20 };
+    assert.doesNotMatch(bookSvg(m, g), /stroke-dasharray="4 3"/);
 });

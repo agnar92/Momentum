@@ -200,7 +200,7 @@ test("cup base is drawn as an arc with the depth label; indexes shift with slice
                           { start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 13, depth_pct: 13, type: "flat", open: false }];
     const m = buildChartModel(c, "AAA", null);
     assert.deepEqual(m.cups.map(x => [x.i0, x.iLow, x.i1]), [[1, 2, 4]]);   // tylko typ cup
-    const svg = chartSvg(m, { hints: true });
+    const svg = chartSvg(m, { book: true });
     assert.match(svg, /−26\.7%<\/text>/);
     assert.match(svg, /<title>Cup −26\.7%<\/title>/);
     assert.deepEqual(sliceModel(m, 2).cups.map(x => [x.i0, x.iLow, x.i1]), [[-2, -1, 1]]);
@@ -285,7 +285,7 @@ test("a cup that started before the first bar is kept with negative indexes (par
     const m = buildChartModel(c, "AAA", null);
     assert.equal(m.cups.length, 1);
     assert.ok(m.cups[0].i0 < 0 && m.cups[0].iLow < 0 && m.cups[0].i1 === 2);
-    assert.match(chartSvg(m, { hints: true }), /<title>Cup −26\.7%<\/title>/);
+    assert.match(chartSvg(m, { book: true }), /<title>Cup −26\.7%<\/title>/);
 });
 
 test("SMA colours differ from the candle colours", () => {
@@ -434,8 +434,8 @@ test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and 
     const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 14.9, tl_state: null }, { pad: true });
     const svg = chartSvg(m);
     assert.match(svg, /EPS \(4 kw\., TTM\) ┄ prognoza/);               // linia zysków jest NA wykresie cen i ma wpis w legendzie
-    assert.match(svg, />EPS 4\.9</);                                   // wartość TTM przy ostatnim kółku
-    assert.match(svg, /prog\. 5\.1/);                                  // przerywany odcinek do prognozy
+    assert.doesNotMatch(svg, />EPS 4\.9</);                            // bez podpisu przy fioletowej linii: wartości EPS są w pasku pod wykresem
+    assert.doesNotMatch(svg, /prog\. 5\.1/);                           // przerywany odcinek do prognozy zostaje, ale bez podpisu
     assert.match(svg, /stroke-dasharray="4 3"/);
     assert.match(svg, />\+33%</);                                      // etykieta r/r (pasek znaczników i tabela)
     assert.match(svg, /pivot 14\.90/);
@@ -563,16 +563,6 @@ test("fundVerdict: poziom zależy od liczby zielonych sygnałów", () => {
     assert.equal(fundVerdict([1, 0, 0, 0, 0]).level, "unknown");
 });
 
-test("cups are drawn only as educational hints (opts.hints) with letters A-E", () => {
-    const c = charts();
-    c.stocks.AAA.bases = [{ start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 11, end_close: 14, depth_pct: 26.7, type: "cup", open: false }];
-    const m = buildChartModel(c, "AAA", null);
-    assert.doesNotMatch(chartSvg(m), /Cup −/);
-    const on = chartSvg(m, { hints: true });
-    assert.match(on, />A<\/text>/);
-    assert.match(on, />C<\/text>/);
-});
-
 test("S&P 500 is a thin line in the top band of the price panel (own scale, no separate frame) like in the book", () => {
     const m = buildChartModel(charts(), "AAA", null);
     const svg = chartSvg(m);
@@ -684,4 +674,16 @@ test("posMiniSvg: miniatura z ceną, liniami wejścia / stopu / nowego stopu, MA
     const ys = [...keep.matchAll(/<text x="[\d.]+" y="([\d.]+)" font-size="8" fill="#(?:8a8f9c|ff5d5d)"/g)].map(m => +m[1]).sort((a, b) => a - b);
     assert.equal(ys.length, 2);
     assert.ok(ys[1] - ys[0] >= 9 - 1e-6);
+});
+
+test("chartSvg: baza flat to pudełko Darvasa (obrys + góra + stop −8 %), bez przerywanej linii pivotu i stref", () => {
+    const c = charts();
+    c.stocks.AAA.bases = [{ start: "2026-01-09", end: "2026-07-03", peak: 15, low: 12, pivot: 15, depth_pct: 20, type: "flat", open: true }];
+    const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 15, tl_state: null }, { pad: true });
+    assert.ok(m.box && m.box.top === 15 && m.box.low === 12 && m.box.stop === 13.8);
+    const svg = chartSvg(m);
+    assert.match(svg, /stop −8% 13\.80/);
+    assert.match(svg, /Pudełko \(12–15\)/);
+    assert.doesNotMatch(svg, /strefa zakupu do/);
+    assert.doesNotMatch(svg, /pivot 15\.00/);
 });

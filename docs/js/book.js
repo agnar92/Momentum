@@ -38,6 +38,7 @@ const BOOK_BROKEN_WEEKS = 8;         // pivot bazy uznajemy za przebity, jeśli 
 const BOOK_ADD_GAP = 6;              // „Dokup” nie częściej niż co tyle tygodni
 const BOOK_DRY_RATIO = 0.6;          // wyschnięcie wolumenu: tydzień z wolumenem ≤ tyle × średnia
 const BOOK_CORRECTION_PCT = 8;       // korekta rynku: spadek S&P 500 od szczytu o co najmniej tyle % (tygodniowe zamknięcia)
+const BOOK_BOX_TYPES = ["flat", "square_box"];   // pudełka Darvasa rysuje chart.js (obrys + stop −8 %), więc ich pivot nie dostaje osobnej białej kreski
 const BOOK_BASE_NAMES = { cup: "cup", double_bottom: "double bottom", flat: "flat base", ascending: "ascending base", htf: "high tight flag", square_box: "square box", ipo: "IPO base" };
 
 // Wartość osi ceny jak w książce: 2 cyfry znaczące (100, 80, 34, 4.5, 0.35).
@@ -274,9 +275,9 @@ function computeBook(m, splits = []) {
         // i dostaje kolor „przebity” — nie zostaje biała, jakby cena jeszcze czekała pod nią
         let broken = -1;
         for (let j = Math.max(0, Math.round(b.i0)); j <= Math.min(n - 1, Math.round(b.i1) + BOOK_BROKEN_WEEKS); j++) if (j > Math.round(b.i0) && Number.isFinite(c[j]) && c[j] > b.pivot) { broken = j; break; }
-        if (broken >= 0) { book.pivots.push({ i0: Math.max(0, Math.round(b.i0), broken - 8), i1: broken, level: b.pivot, broken: true, gap: Number.isFinite(l[broken]) && l[broken] > b.pivot * BOOK_BUY_MAX_EXT }); return; }
+        if (broken >= 0) { book.pivots.push({ i0: Math.max(0, Math.round(b.i0), broken - 8), i1: broken, level: b.pivot, box: BOOK_BOX_TYPES.includes(b.type), broken: true, gap: Number.isFinite(l[broken]) && l[broken] > b.pivot * BOOK_BUY_MAX_EXT }); return; }
         const end = b.open ? n - 1 : Math.min(n - 1, Math.round(b.i1) + 1);
-        book.pivots.push({ i0: Math.max(0, Math.round(b.i0), end - 8), i1: end, level: b.pivot });
+        book.pivots.push({ i0: Math.max(0, Math.round(b.i0), end - 8), i1: end, level: b.pivot, box: BOOK_BOX_TYPES.includes(b.type) });
     });
     // ciasne zamknięcia: tylko w trendzie wzrostowym (nad 10- i 40-tygodniową) i tam, gdzie mają znaczenie dla kupna — w bazie (albo tuż po niej)
     // lub do BOOK_TIGHT_AFTER_BUY tygodni po kupnie (jak w książce: „4 tight closes” przy punkcie kupna / po nim)
@@ -345,7 +346,8 @@ function bookSvg(m, g) {
     // zielona = kup (szara = późny etap ≥ 3), cyjan = dokup, różowa = kup ponownie. Linia kończy się w tygodniu sygnału, więc od razu widać, kiedy świeca ją przebiła.
     // Sygnały bez pivotu (odbicie od 10-tygodniowej) dostają krótką linię w kolorze sygnału na poziomie zamknięcia tygodnia.
     const dash = (x0, x1, y, col) => out.push(`<line ${clip} x1="${x0}" x2="${x1}" y1="${y}" y2="${y}" stroke="${col}" stroke-width="2" stroke-dasharray="4 3" pointer-events="none"/>`);
-    (bk.pivots || []).forEach(pv => dash(x(pv.i0), x(pv.i1), yP(pv.level), pv.broken ? BOOK_COLORS.missed : BOOK_COLORS.text));
+    const pivots = (bk.pivots || []).filter(pv => !pv.box);
+    pivots.forEach(pv => dash(x(pv.i0), x(pv.i1), yP(pv.level), pv.broken ? BOOK_COLORS.missed : BOOK_COLORS.text));
     const signals = [
         ...bk.buys.map(b => ({ i: b.i, col: b.risky ? BOOK_COLORS.risky : b.late ? BOOK_COLORS.dim : BOOK_COLORS.buy, pivot: b.pivot, risky: !!b.risky })),
         ...bk.adds.map(a => ({ i: a.i, col: BOOK_COLORS.add, pivot: a.pivot })),
@@ -355,9 +357,9 @@ function bookSvg(m, g) {
         if (sg.pivot > 0) dash(x(Math.max(0, sg.i - 6)), x(sg.i), yP(sg.pivot), sg.col);
         else dash(x(Math.max(0, sg.i - 2)), x(sg.i + 1), yP(m.c[sg.i]), sg.col);
     });
-    if ((signals.length || (bk.pivots || []).length) && g.legendY != null) {
+    if ((signals.length || pivots.length) && g.legendY != null) {
         const items = [[BOOK_COLORS.text, compact ? "czeka" : "pivot czeka"], [BOOK_COLORS.buy, "kup"], [BOOK_COLORS.add, "dokup"], [BOOK_COLORS.reentry, compact ? "ponownie" : "kup ponownie"]];
-        if ((bk.pivots || []).some(pv => pv.broken)) items.push([BOOK_COLORS.missed, compact ? "przebity" : "przebity bez sygnału kup"]);
+        if (pivots.some(pv => pv.broken)) items.push([BOOK_COLORS.missed, compact ? "przebity" : "przebity bez sygnału kup"]);
         if (signals.some(sg => sg.risky)) items.push([BOOK_COLORS.risky, compact ? "ryzyko" : "ryzykowny (bez rączki)"]);
         const size = fs(compact ? 8.5 : 10.5), cw = size * 0.58, seg = fs(compact ? 11 : 16), gap = fs(compact ? 7 : 12);
         let lx = x(0) + fs(6);

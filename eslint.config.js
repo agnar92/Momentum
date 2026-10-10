@@ -43,7 +43,11 @@ const browserGlobals = {
     bookSvg: "readonly",
     computeBook: "readonly",
     shiftBook: "readonly",
+    // docs/js/darvas.js (ładowany po chart.js, PRZED watchlist.js)
+    darvasBoxes: "readonly",
+    darvasSvg: "readonly",
     // docs/js/chart.js (ładowany PRZED watchlist.js)
+    niceTicks: "readonly",
     renderStockChart: "readonly",
     dateToIndex: "readonly",
     indexToDate: "readonly",

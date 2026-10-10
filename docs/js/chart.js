@@ -181,11 +181,11 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         };
     }).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
-    // pudełko ostatniej bazy płaskiej / kwadratowej (otwartej albo świeżo po wybiciu): góra = pivot, dół, podział na 3 części, stop z dolnej krawędzi środkowej
-    const boxBase = [...(c.bases || [])].reverse().find(b => BOX_BASE_TYPES.includes(b.type) && Number.isFinite(b.box_stop) && Array.isArray(b.box_thirds)
+    // pudełko Darvasa ostatniej bazy płaskiej / kwadratowej (otwartej albo świeżo po wybiciu): góra = pivot, dół = dołek bazy, stop −8 % od góry
+    const boxBase = [...(c.bases || [])].reverse().find(b => BOX_BASE_TYPES.includes(b.type) && b.pivot > 0 && Number.isFinite(b.low) && b.low < b.pivot
         && (b.open || dateToIndex(weeks, b.end) >= lastIdx - 2));
     const box = boxBase ? { i0: dateToIndex(weeks, boxBase.start), i1: boxBase.open ? lastIdx : dateToIndex(weeks, boxBase.end), top: boxBase.pivot, low: boxBase.low,
-        t1: boxBase.box_thirds[0], t2: boxBase.box_thirds[1], stop: boxBase.box_stop, stopPct: boxBase.box_stop_pct } : null;
+        stop: Math.round(boxBase.pivot * (1 - BOX_STOP_PCT / 100) * 100) / 100 } : null;
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
     const pad = opts.pad ? FUTURE_PAD_WEEKLY : 0;
@@ -227,7 +227,8 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
 // Poziom, od którego liczymy strefę zakupu i typowy stop (O'Neil): pivot BAZY KUPOWALNEJ (flat / cup — korekta i głęboka korekta to nie bazy),
 // a gdy go nie ma albo leży daleko od ceny — poziom oporu flagi / korytarza (dziennej, potem tygodniowej). Poziom dalej niż PIVOT_NEAR_PCT od ceny
 // jest bez znaczenia dla bieżącej decyzji, więc go nie rysujemy (inaczej etykiety „pivot / strefa zakupu / stop” lądują na brzegu wykresu).
-const BOX_BASE_TYPES = ["flat", "square_box"];   // pudełka: podział na 3 części i stop ze środka (cup z rączką i flaga to inna bajka)
+const BOX_BASE_TYPES = ["flat", "square_box"];   // pudełka Darvasa (cup z rączką i flaga to inna bajka)
+const BOX_STOP_PCT = 8;                           // stop pod pudełkiem: −8 % od góry (pivotu)
 const PIVOT_BASE_TYPES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // wzorce z książki O'Neila, które mają pivot do kupna
 const PIVOT_NEAR_PCT = 15;
 function pivotFromStock(stock, bases) {
@@ -632,7 +633,6 @@ function chartSvg(m, opts = {}) {
     if (bookOn && !opts.compact) parts.push(`<g pointer-events="none"><rect x="2" y="${P.y}" width="${L.left - 6}" height="${fs(26)}" fill="none" stroke="#3a3f4d"/><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(11)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.text}" text-anchor="middle">Cena =</text><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(22)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.textStrong}" font-weight="700" text-anchor="middle">${epsMult}×EPS</text></g>`);
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${P.y}" width="${L.width - L.left - L.right}" height="${P.h}"/></clipPath>`);
-    let hintLegendDone = false;
     let yS = null;
     if (spxBand) {
         const top = P.y + 4, bottom = P.y + P.h * spxBand - 10;
@@ -642,8 +642,8 @@ function chartSvg(m, opts = {}) {
         const lastI = m.spx.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
         addLabel(`S&P 500 ${fmtCompact(m.spx[lastI])}`, x(lastI) - 4, Math.max(P.y + fs(10), yS(m.spx[lastI]) - 6), { anchor: "end", size: fs(10), fill: CHART_COLORS.bench, bold: true, prio: 5, title: "S&P 500 (własna skala, jak na wykresach z książki O'Neila)" });
     }
-    ((opts.hints || bookOn) ? m.cups : []).forEach(cup => {
-        const cupCol = cup.noHandle ? "#f59e0b" : CHART_COLORS.cup;   // bez rączki = ryzykowny setup: bursztynowy   // miseczki: w widoku książkowym zawsze (łuk, rączka, pivot), litery A–E i legenda tylko w trybie 💡 Nauka
+    (bookOn ? m.cups : []).forEach(cup => {
+        const cupCol = cup.noHandle ? "#f59e0b" : CHART_COLORS.cup;   // bez rączki = ryzykowny setup: bursztynowy // miseczki rysujemy w widoku książkowym (łuk, rączka, pivot)
         const lowPx = i => (Number.isFinite(m.l[Math.round(i)]) ? yP(m.l[Math.round(i)]) : NaN);
         const { pts, yB } = cupArcPoints(cup, x, yP, 48, lowPx);
         parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${cupCol}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
@@ -664,26 +664,12 @@ function chartSvg(m, opts = {}) {
             parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, P.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${cupCol}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
             reserveLabel(`pivot ${pivot.toFixed(2)}`, px, Math.max(yP(pivot) - 6, P.y + fs(10)), "end", fs(11), true);
         }
-        // litery z książki O'Neila: A lewy szczyt, B dno, C prawy brzeg, D dołek rączki, E punkt zakupu (pivot, kupno nad nim z wolumenem)
-        const tag = (letter, px, py) => parts.push(`<g pointer-events="none"><circle cx="${px}" cy="${py}" r="${fs(8)}" fill="#0e0f13" stroke="${cupCol}" stroke-width="1.5"/><text x="${px}" y="${py + fs(3.5)}" font-size="${fs(10)}" font-weight="700" fill="${cupCol}" text-anchor="middle">${letter}</text></g>`);
-        const hintsOn = !!opts.hints;
-        if (hintsOn) {
-            tag("A", x(cup.i0), yP(cup.peak) - fs(14));
-            tag("B", x(cup.iLow), yP(cup.low) + fs(14));
-            tag("C", x(cup.i1), yP(cup.right) - fs(14));
-        }
         let xE = x(cup.i1);
         if (cup.handle) {
-            if (hintsOn) tag("D", x(cup.handle.iLow) + fs(16), yP(cup.handle.low));
             xE = Math.min(x(cup.handle.iEnd) + step * 3, L.width - L.right - fs(10));
         } else xE = Math.min(x(cup.i1) + step * 3, L.width - L.right - fs(10));
         if (pivot) {   // pivot: od prawego brzegu miseczki do punktu zakupu (otwarty cup bez rączki: rączka dopiero się formuje)
             parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${cup.noHandle ? x(cup.i0) : x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${cupCol}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
-            if (hintsOn) tag("E", xE, yP(pivot) - fs(14));
-        }
-        if (hintsOn && !hintLegendDone) {
-            hintLegendDone = true;
-            parts.push(`<text x="${L.left + 6}" y="${P.y + fs(12)}" font-size="${fs(10)}" fill="${cupCol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${opts.compact ? "A–E: szczyt · dno · brzeg · rączka · kup" : "A szczyt · B dno miseczki · C prawy brzeg · D rączka · E punkt zakupu (kup nad pivotem z wolumenem)"}</text>`);
         }
         // głębokość korekty (%) na dnie łuku miseczki — krótko, żeby się nie nakładała na świece (kontekst S&P i „bez rączki” są w dymku i w opisie bazy)
         const bx = Math.min(Math.max(x(cup.iLow), L.left + fs(24)), L.width - L.right - fs(24)), by = Math.min(yB + fs(14), P.y + P.h - fs(4));
@@ -720,7 +706,8 @@ function chartSvg(m, opts = {}) {
         }
     }
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
-    if (pivotNear && m.lastShown !== false) {
+    const boxHasPivot = !!(m.box && pivotNear && Math.abs(pivotPx / m.box.top - 1) < 0.005);   // poziom wybicia pokazuje góra pudełka — bez osobnej linii pivotu i stref
+    if (pivotNear && m.lastShown !== false && !boxHasPivot) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
         const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : (lastC > pivotPx ? "#ff8a5b" : "#e8eaed");   // pomarańczowa = cena już nad pivotem, ale bez potwierdzonego wybicia na wolumenie   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
         const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
@@ -736,14 +723,18 @@ function chartSvg(m, opts = {}) {
             if (!m.box) addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
         }
     }
-    // pudełko bazy płaskiej / kwadratowej: obrys od początku bazy, linie podziału na 3 części (górna = za wcześnie, dolna = za późno) i stop z dołu środkowej części
+    // pudełko Darvasa bazy płaskiej / kwadratowej: prostokąt od początku bazy (góra = poziom wybicia, kolor jak pivot: biały czeka, zielony po wybiciu, pomarańczowy przebity bez potwierdzenia),
+    // pod nim czerwona linia stopu −8 % od góry. Zastępuje przerywaną linię pivotu i strefy zakupu / stopu.
     if (m.box && m.box.i1 >= 0 && m.box.i0 < m.n) {
         const b = m.box, bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
-        const yTop = yP(b.top), yLow = yP(b.low), yStop = yP(b.stop);
-        parts.push(`<g ${clipAttr} pointer-events="none"><rect x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${yLow - yTop}" fill="none" stroke="#8a8f9c" stroke-width="1" opacity="0.75"><title>Pudełko bazy (${b.low}–${b.top}): górna 1/3 = za wcześnie, dolna 1/3 = za późno, stop w środkowej</title></rect>`
-            + [b.t1, b.t2].map(v => `<line x1="${bx0}" x2="${bx1}" y1="${yP(v)}" y2="${yP(v)}" stroke="#8a8f9c" stroke-width="1" stroke-dasharray="2 4" opacity="0.8"/>`).join("")
-            + `<line x1="${bx0}" x2="${Math.min(L.width - L.right, bx1 + fs(40))}" y1="${yStop}" y2="${yStop}" stroke="#ff5d5d" stroke-width="1.8"><title>Stop z bazy: ${b.stop} (−${b.stopPct}% od pivotu)</title></line></g>`);
-        addLabel(`${opts.compact ? "stop" : "stop z bazy"} ${Number(b.stop).toFixed(2)} (−${b.stopPct}%)`, Math.min(bx1 + fs(40), L.width - L.right) - 3, Math.min(P.y + P.h - 3, yStop + fs(12)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 8 });
+        const yTop = yP(b.top), yLow = yP(b.low), yStop = yP(b.stop), lastCl = m.c[m.lastIdx];
+        const topCol = m.pivot && m.pivot.active ? "#2ecc71" : (lastCl > b.top ? "#ff8a5b" : "#e8eaed");
+        const xr = Math.min(L.width - L.right, bx1 + fs(36));
+        parts.push(`<g ${clipAttr} pointer-events="none"><rect x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.08" stroke="#8a8f9c" stroke-width="1" stroke-opacity="0.7"><title>Pudełko (${b.low}–${b.top})</title></rect>`
+            + `<line x1="${bx0}" x2="${xr}" y1="${yTop}" y2="${yTop}" stroke="${topCol}" stroke-width="2"><title>Góra pudełka = poziom wybicia ${b.top}</title></line>`
+            + `<line x1="${bx0}" x2="${xr}" y1="${yStop}" y2="${yStop}" stroke="#ff5d5d" stroke-width="1.6" stroke-dasharray="5 3"><title>Stop −${BOX_STOP_PCT}% od góry pudełka: ${b.stop}</title></line></g>`);
+        addLabel(Number(b.top).toFixed(2), xr - 3, yTop - 4, { anchor: "end", fill: topCol, bold: true, prio: 9 });
+        addLabel(`stop −${BOX_STOP_PCT}% ${Number(b.stop).toFixed(2)}`, xr - 3, Math.min(P.y + P.h - 3, yStop + fs(12)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 8 });
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
@@ -848,10 +839,8 @@ function chartSvg(m, opts = {}) {
         parts.push(polyline(pts, ec, 2.2).replace(/<polyline/g, `<polyline ${clipAttr}`));
         ttmAll.forEach((q, k) => inWin(q) && pts[k] && pts[k][1] >= P.y && pts[k][1] <= P.y + P.h && parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${r}" fill="${ec}" stroke="#0e0f13" stroke-width="1"><title>${q.d}: EPS za 4 kwartały ${q.t} (kwartał ${q.e}${Number.isFinite(q.g) ? `, ${q.g >= 0 ? "+" : ""}${q.g}% r/r` : ""})</title></circle>`));
         const lastAll = ttmAll[ttmAll.length - 1], lpAll = pts[pts.length - 1];
-        const lastIn = lastAll && inWin(lastAll) && lpAll;
         const lp = lpAll || [x(lastAll.week), P.y + P.h];
         const edge = L.width - L.right;
-        let labelX = Math.min(lp[0], edge - 4), anchor = lp[0] > edge - fs(60) ? "end" : "middle";
         if (nx && lastAll.week < m.n) {   // prognoza tylko gdy okno sięga ostatniego raportu (w starszym oknie przerywana linia przecinałaby wykres bez sensu)
             const nxX = Math.min(x(nxIdx), edge - 6), nxY = yE(nx.t), inside = nxIdx <= m.n - 0.5;
             if (lpAll && Number.isFinite(nxY)) parts.push(`<line ${clipAttr} x1="${lp[0]}" y1="${lp[1]}" x2="${nxX}" y2="${nxY}" stroke="${ec}" stroke-width="2.2" stroke-dasharray="4 3"/>`);
@@ -859,11 +848,8 @@ function chartSvg(m, opts = {}) {
                 parts.push(inside
                     ? `<circle cx="${nxX}" cy="${nxY}" r="${r}" fill="#0e0f13" stroke="${ec}" stroke-width="1.8"><title>Prognoza następnego raportu ${nx.d}: EPS ${nx.e}, TTM ${nx.t}</title></circle>`
                     : `<path d="M${nxX - 1},${nxY - 5} L${nxX + 6},${nxY} L${nxX - 1},${nxY + 5} Z" fill="${ec}"><title>Następny raport ${nx.d} (poza oknem): prognoza EPS ${nx.e}, TTM ${nx.t}</title></path>`);
-                if (!opts.compact) addLabel(`prog. ${nx.t}`, Math.min(nxX, edge - 4), Math.min(P.y + P.h - 4, Math.max(P.y + fs(10), nxY - fs(8))), { anchor: "end", fill: ec, bold: true, prio: 8 });
             }
-            labelX = lp[0]; anchor = "middle";
         }
-        if (lastIn) addLabel(`EPS ${lastAll.t}`, labelX, Math.min(P.y + P.h - 3, lp[1] + fs(15)), { anchor, size: fs(11), fill: ec, bold: true, prio: 8 });
     }
     // rozmieszczenie wszystkich etykiet ceny bez nakładania (telefon!) — dopiero teraz, gdy znamy wszystkie
     placeLabels(labels, { x0: L.left + 2, x1: L.width - L.right - 2, y0: P.y + 2, y1: P.y + P.h - 2 }, fixedLabels).forEach(lb => {
@@ -1243,6 +1229,11 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie (próba z suwakiem na dole nie działała)
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
+        if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
+            plot.innerHTML = darvasSvg(full, win, opts);
+            readoutEl.textContent = "Widok Darvasa (ceny zamknięcia tygodniowe): kup nad górą pudełka, stop pod jego dołem.";
+            return;
+        }
         const m = sliceModel(full, win.n, win.end);
         const geom = {};
         plot.innerHTML = chartSvg(m, { ...opts, geomOut: geom });
