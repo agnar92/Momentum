@@ -53,3 +53,16 @@ test("darvasBoxInfo / darvasBoxSheetHtml: wejście = góra, anulowanie = dół, 
     assert.match(html, /Exit[\s\S]*85\.50/);
     assert.match(html, /niepotwierdzony/);
 });
+
+test("darvasStatus: KUP po wybiciu, TRZYMAJ w najwyższym boxie, SPRZEDAJ po wyższym boxie pod dnem, CZEKAJ w pierwszym", () => {
+    const { darvasStatus } = require("../../docs/js/darvas.js");
+    const box1 = [100, 104, 108, 110, 108, 106, 104, 105, 107, 106];   // góra 110, dół 104
+    assert.equal(darvasStatus(box1).state, "WAIT");
+    assert.equal(darvasStatus([...box1, 112]).state, "BUY");
+    const box2 = [...box1, 112, 116, 120, 118, 116, 114, 115, 117, 116];   // wyższy box 114–120 po wybiciu
+    const hold = darvasStatus(box2);
+    assert.equal(hold.state, "HOLD");
+    assert.equal(hold.stop, Math.round(114 * 0.95 * 100) / 100);
+    assert.equal(darvasStatus([...box2, 110]).state, "SELL");
+    assert.equal(darvasStatus([100, 101]).state, "NONE");
+});

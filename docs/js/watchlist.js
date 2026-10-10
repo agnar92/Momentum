@@ -1816,6 +1816,10 @@ function drawChart() {
         bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
     }
     document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
+    if (primary && state.patterns && typeof darvasStatus === "function") {   // stan wg zasad DAR-CARD (KUP / TRZYMAJ / SPRZEDAJ) dopisany do opisu formacji
+        const ds = darvasStatus(primary.c);
+        if (ds.state !== "NONE") { const el = document.getElementById("chartPattern"); el.textContent = `${el.textContent ? el.textContent + " · " : ""}📦 Darvas: ${ds.text}`; }
+    }
     const posStock = state.data.stocks.find(x => x.ticker === currentChart.ticker);
     if (primary && posStock && posStock.position) {   // moja pozycja: podpowiedź „czy przestawić stop” z MACD tygodniowego trafia do linii gotowości
         posStock.macd_advice = stopAdvice(posStock.position, macdWeeklyState({ weeks: primary.weeks, c: primary.c, l: primary.l }), posStock.price);

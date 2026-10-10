@@ -63,6 +63,37 @@ function darvasBoxSheetHtml(info, state, confirmed) {
         + `<p class="muted small">Reguły Darvasa na tygodniowych zamknięciach; heurystyka, nie rekomendacja.</p></div>`;
 }
 
+const DARVAS_START_STOP_PCT = 10;   // stop początkowy przy pierwszym wybiciu: ok. 10 % pod wejściem
+
+// Stan akcji wg zasad DAR-CARD na ostatnim tygodniowym zamknięciu c: KUP (wybicie nad górę najwyższego boxa w tym tygodniu), TRZYMAJ (jest w najwyższym
+// boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia), SPRZEDAJ (po wyższym boxie cena spadła pod jego dno = wejście w strefę
+// zagrożenia), CZEKAJ (pierwszy box, jeszcze bez wybicia), POZA (box złamany bez wcześniejszego wybicia / brak boxa — brak powodu do trzymania).
+function darvasStatus(c, zonePct = DARVAS_STOP_PCT) {
+    const boxes = darvasBoxes(c);
+    let lastReal = -1;
+    c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
+    if (!boxes.length || lastReal < 0) return { state: "NONE", text: "brak boxa Darvasa (za mało danych)" };
+    const last = boxes[boxes.length - 1], prev = boxes.length > 1 ? boxes[boxes.length - 2] : null;
+    const r2 = v => Math.round(v * 100) / 100;
+    const hadUp = !!(prev && prev.outcome === "up");
+    const zoneFrom = r2(last.bottom), stop = r2(last.bottom * (1 - zonePct / 100));
+    const base = { top: r2(last.top), bottom: zoneFrom, zoneFrom, stop };
+    if (last.outcome === "up" && last.i1 === lastReal) {
+        return { ...base, state: "BUY", stop: r2(last.top * (1 - DARVAS_START_STOP_PCT / 100)), text: `KUP — zamknięcie nad górą boxa ${r2(last.top)}; stop początkowy ok. ${DARVAS_START_STOP_PCT} % pod wejściem (${r2(last.top * (1 - DARVAS_START_STOP_PCT / 100))}), potem pod dnem kolejnych boxów` };
+    }
+    if (last.outcome === "down") {
+        return hadUp
+            ? { ...base, state: "SELL", text: `SPRZEDAJ — po wyższym boxie cena spadła pod jego dno ${zoneFrom} (strefa zagrożenia do ${stop})` }
+            : { ...base, state: "OUT", text: `POZA — box złamany w dół (dno ${zoneFrom}) bez wcześniejszego wybicia; brak powodu, by trzymać` };
+    }
+    if (last.outcome === "up") {   // wybicie było wcześniej, nowy box jeszcze się nie uformował
+        return { ...base, state: "HOLD", text: `TRZYMAJ — wybicie nad ${r2(last.top)} jest za nami, czekamy na nowy, wyższy box; stop pod dnem ostatniego boxa ${stop}` };
+    }
+    return hadUp
+        ? { ...base, state: "HOLD", text: `TRZYMAJ — cena w najwyższym boxie ${zoneFrom}–${r2(last.top)}, wahania w nim ignorujemy; stop pod strefą zagrożenia ${stop}` }
+        : { ...base, state: "WAIT", text: `CZEKAJ — pierwszy box ${zoneFrom}–${r2(last.top)}; kup po zamknięciu tygodnia nad ${r2(last.top)}` };
+}
+
 // Widok Dar-Card dla okna wykresu: full = pełny model z chart.js (c, weeks, n, pad), win = {n, end}; opts: fit {w, h}
 function darvasSvg(full, win, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
@@ -117,5 +148,5 @@ function darvasSvg(full, win, opts = {}) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, DARVAS_CONFIRM, DARVAS_STOP_PCT };
+    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, DARVAS_CONFIRM, DARVAS_STOP_PCT };
 }
