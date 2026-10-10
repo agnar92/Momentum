@@ -1957,6 +1957,16 @@ function drawChart() {
             + `<div class="wl-chart-readout cell-readout"></div><div class="cell-body"></div></div>`;
     };
     body.innerHTML = `<div class="chart-grid layout-1" data-ticker="${escapeHtml(currentChart.ticker)}">${cells.map(cellHtml).join("")}</div>`;
+    if (focus) {   // pasek nad wykresem (wstawiany PRZED rysowaniem, żeby pomiar miejsca na wykres był prawdziwy — inaczej viewBox jest wyższy niż pole i wykres wraca z pustymi pasami po bokach)
+        const stop = focus.bottom * (1 - DARVAS_STOP_PCT / 100);
+        const bar = document.createElement("div");
+        bar.className = "box-focus-bar";
+        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
+        bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
+        body.insertBefore(bar, body.firstChild);
+        bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
+    }
     let primary = null;
     cells.forEach((c, i) => {
         const cell = body.querySelectorAll(".chart-cell")[i];
@@ -1982,16 +1992,6 @@ function drawChart() {
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
         if (i === activeIdx) primary = model;
     });
-    if (focus) {   // pasek nad wykresem: poziomy boxa + powrót do pełnego widoku
-        const stop = focus.bottom * (1 - DARVAS_STOP_PCT / 100);
-        const bar = document.createElement("div");
-        bar.className = "box-focus-bar";
-        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
-        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
-        bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
-        body.insertBefore(bar, body.firstChild);
-        bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
-    }
     document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
     if (primary && state.patterns && typeof darvasStatus === "function") {   // stan wg zasad DAR-CARD (KUP / TRZYMAJ / SPRZEDAJ) dopisany do opisu formacji
         const ds = darvasStatus(primary.c, undefined, undefined, undefined, primary.v);

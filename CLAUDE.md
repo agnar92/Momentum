@@ -347,3 +347,5 @@ To look at the page locally: `cd docs && python3 -m http.server`, then open `htt
 `docs/data/watchlist.json` is committed, so the page works from a fresh checkout.
 
 **No side margins (user: "usuń marginesy z lewej i prawej, pamiętaj o tym")**: the chart box has no horizontal padding (CSS at the end of style.css; header rows keep 8 px), `fitLayout` `left: 0`. Keep it that way for new chart UI.
+
+**Chart letterbox fix (user, iPhone screenshot: empty strips left and right)**: in the box focus view `.box-focus-bar` is inserted BEFORE the charts are rendered (`drawChart`), otherwise `phoneFit` measured a taller cell than remained, the viewBox was taller than the box and the SVG shrank (preserveAspectRatio meet) and was centred with side gaps.
