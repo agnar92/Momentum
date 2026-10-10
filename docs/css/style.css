@@ -1009,3 +1009,7 @@ body.box-add #chartSvg { touch-action: none; cursor: crosshair; }
 .box-select-bar span { flex: 1; font-weight: 700; color: #e6e8ee; }
 .box-select-bar button { min-height: 38px; padding: 4px 12px; border-radius: 8px; border: 1px solid #4ee08a; background: transparent; color: #4ee08a; font-weight: 700; }
 .box-select-bar button[data-act="close"] { border-color: #5b6272; color: #9aa0ae; min-width: 38px; padding: 4px 8px; }
+
+/* Dar-Card bez menu w nagłówku (tylko tytuł i ✕); przyciski wracają w widoku świecowym (po zaznaczeniu boxa) */
+.wl-chart-box:not(.focus-view) .wl-chart-head > :is(.btn, label, a, button):not(.chart-modal-close) { display: none !important; }
+body.box-add .wl-chart-body svg#chartSvg { touch-action: none; cursor: crosshair; }

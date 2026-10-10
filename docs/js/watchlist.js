@@ -2143,22 +2143,24 @@ function initChartModal() {
         const btn = document.getElementById("chartBoxAddBtn");
         const body = document.getElementById("chartBody");
         let drag = null;
-        const weekAt = (svg, clientX) => {
-            const g = (svg.dataset.geom || "").split(",").map(Number);
-            if (g.length < 10 || g.some(v => !Number.isFinite(v))) return null;
-            const [W, H, left, right, , , start, slots] = g;
+        const weekAt = (svg, clientX) => {   // widok świecowy: pozycja w poziomie → indeks tygodnia w pełnej serii
+            const g = (svg.dataset.cgeom || "").split(",").map(Number);
+            if (g.length < 5 || g.some(v => !Number.isFinite(v))) return null;
+            const [W, left, right, n, off] = g;
             const r = svg.getBoundingClientRect();
-            const sc = Math.min(r.width / W, r.height / H), ox = (r.width - W * sc) / 2;
-            const x = (clientX - r.left - ox) / sc;
-            return Math.round(start + (x - left) / (W - left - right) * slots - 0.5);
+            const vx = (clientX - r.left) / r.width * W;
+            const i = Math.floor((vx - left) / (W - left - right) * n);
+            return Math.max(0, Math.min(n - 1, i)) + off;
         };
         const sync = () => {
-            btn.hidden = !(chartDarvasOn && !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker));
+            const inFocus = !!(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
+            btn.hidden = !inFocus;   // własny box rysuje się tylko na wykresie świecowym
+            document.querySelector(".wl-chart-box").classList.toggle("focus-view", inFocus);
             const est = document.getElementById("chartEstBtn");   // estymaty analityków: tylko na wykresie słupkowym (po dotknięciu boxa), nie na Dar-Card
             if (est) est.hidden = !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
             btn.classList.toggle("active", boxAddOn);
             document.body.classList.toggle("box-add", boxAddOn);
-            btn.textContent = boxAddOn ? "＋ Box: przeciągnij po tygodniach" : "＋ Box";
+            btn.textContent = boxAddOn ? "＋ Box: przeciągnij po świecach" : "＋ Box";
         };
         window.syncBoxAddButton = sync;
         btn.addEventListener("click", () => { boxAddOn = !boxAddOn; sync(); if (boxAddOn) showToast("Przeciągnij palcem poziomo przez tygodnie konsolidacji — powstanie własny, przypięty box.", { type: "info" }); });
