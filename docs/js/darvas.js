@@ -15,7 +15,7 @@ const DARVAS_MIN_HEIGHT_PCT = 1.5;   // pudełko niższe niż 1,5 % ceny to szum
 
 // Pudełko z niepotwierdzonym dołkiem (cena wybiła górę szybciej niż po `confirm` tygodniach) ma confirmed=false i jest rysowane przerywaną ramką.
 // Pudełka z zamknięć c (tablica, końcowe null = puste miejsce na osi): [{i0, i1, top, bottom, confirmed, outcome: "up" | "down" | "open"}], rosnąco po czasie.
-function darvasBoxes(c, confirm = DARVAS_CONFIRM) {
+function darvasBoxes(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
     let n = c.length;
     while (n > 0 && !Number.isFinite(c[n - 1])) n--;
     const boxes = [];
@@ -35,7 +35,7 @@ function darvasBoxes(c, confirm = DARVAS_CONFIRM) {
             if (c[j] > top) { outcome = "up"; end = j; break; }   // przebicie góry: pudełko z niepotwierdzonym dołkiem (confirmed false) też jest schodkiem — w silnym trendzie to jedyne przerwy
             if (confirmed && c[j] < bottom) { outcome = "down"; end = j; break; }
             if (!confirmed && c[j] < bottom) { bottom = c[j]; bi = j; }
-            if (!confirmed && bi >= 0 && j - bi >= confirm) confirmed = true;
+            if (!confirmed && bi >= 0 && j - bi >= bottomConfirm) confirmed = true;
         }
         if (end < 0) end = n - 1;
         if (Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT) boxes.push({ i0: t, i1: end, top, bottom, confirmed, outcome });
@@ -68,8 +68,8 @@ const DARVAS_START_STOP_PCT = 10;   // stop początkowy przy pierwszym wybiciu: 
 // Stan akcji wg zasad DAR-CARD na ostatnim tygodniowym zamknięciu c: KUP (wybicie nad górę najwyższego boxa w tym tygodniu), TRZYMAJ (jest w najwyższym
 // boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia), SPRZEDAJ (po wyższym boxie cena spadła pod jego dno = wejście w strefę
 // zagrożenia), CZEKAJ (pierwszy box, jeszcze bez wybicia), POZA (box złamany bez wcześniejszego wybicia / brak boxa — brak powodu do trzymania).
-function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM) {
-    const boxes = darvasBoxes(c, confirm);
+function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
+    const boxes = darvasBoxes(c, confirm, bottomConfirm);
     let lastReal = -1;
     c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
     if (!boxes.length || lastReal < 0) return { state: "NONE", text: "brak boxa Darvasa (za mało danych)" };
