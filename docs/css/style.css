@@ -984,3 +984,12 @@ body.split #table-POS td.pos-macd .act-why { display: none; }   /* pełne uzasad
 @media (max-width: 700px) { .box-row { grid-template-columns: 56px 66px 1fr 40px; } .box-new { grid-column: 3; } .box-tx { grid-column: 1 / 4; } .box-px { display: none; } }
 @keyframes pinflash { 0%, 100% { stroke-opacity: 1; fill-opacity: 0.08; } 50% { stroke-opacity: 0.25; fill-opacity: 0.4; } }
 .pin-flash { animation: pinflash 0.6s ease-in-out 4; }
+
+body.box-add #chartSvg { touch-action: none; cursor: crosshair; }
+
+/* Dar-Card jest jedynym widokiem: górny panel wykresu uproszczony do tytułu i kilku przycisków */
+#chartRatings, #chartReady, #chartStats, #chartPattern, #chartBase, #chartTools, #chartSub { display: none !important; }
+.box-pos { margin: 0 0 6px 10px; font-size: 13px; color: var(--muted, #9aa0ae); }
+.box-pos > summary { cursor: pointer; padding: 4px 0; }
+.box-pos-line { padding: 2px 0 2px 8px; color: var(--text, #e6e8ee); }
+.box-focus-bar .box-pos { display: block; width: 100%; }

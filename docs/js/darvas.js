@@ -230,7 +230,7 @@ function darvasFlatStatus(c, box, name = "flat base") {
 function darvasSvg(full, win, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
     const fs = v => Math.round(v * (compact ? 1.25 : 1) * 10) / 10;
-    const L = { left: 8, right: compact ? 46 : 60, top: 14, bottom: 26 };
+    const L = { left: 2, right: compact ? 42 : 52, top: 14, bottom: 24 };   // wąskie marginesy: wykres wypełnia szerokość, podpisy osi są drobniejsze
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const lastReal = full.c.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
     const start = Math.max(0, Math.min(win.end - win.n, lastReal)), endExcl = Math.max(start + 2, win.end);
@@ -254,7 +254,7 @@ function darvasSvg(full, win, opts = {}) {
     for (let v = Math.ceil(lo / step) * step; v < hi; v += step) out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#1d212b" stroke-width="1"/>`);
     ticks.forEach(t => {
         out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="#2c3140" stroke-width="1.2"/>`);
-        out.push(`<text x="${W - L.right + 6}" y="${(y(t) + 4).toFixed(1)}" font-size="${fs(11)}" fill="#8a8f9c">${t}</text>`);
+        out.push(`<text x="${W - L.right + 4}" y="${(y(t) + 3.5).toFixed(1)}" font-size="${fs(9.5)}" fill="#8a8f9c">${t}</text>`);
     });
     // osie czasu: etykiety kwartałów
     let lastKey = "";
@@ -265,7 +265,7 @@ function darvasSvg(full, win, opts = {}) {
         if (key === lastKey) continue;
         lastKey = key;
         const mon = +d.slice(5, 7);
-        if ([1, 4, 7, 10].includes(mon)) out.push(`<text x="${x(i).toFixed(1)}" y="${H - 8}" font-size="${fs(11)}" fill="#8a8f9c" text-anchor="middle">${["", "sty", "", "", "kwi", "", "", "lip", "", "", "paź"][mon]} ${d.slice(2, 4)}</text>`);
+        if ([1, 4, 7, 10].includes(mon)) out.push(`<text x="${x(i).toFixed(1)}" y="${H - 7}" font-size="${fs(9.5)}" fill="#8a8f9c" text-anchor="middle">${["", "sty", "", "", "kwi", "", "", "lip", "", "", "paź"][mon]} ${d.slice(2, 4)}</text>`);
     }
     const bw = Math.max(2, pw / slots * 0.5);
     boxes.forEach(b => {
@@ -284,13 +284,16 @@ function darvasSvg(full, win, opts = {}) {
         const pcol = PATTERN_COLORS[fb.name] || "#3b9cff", fpx1 = W - L.right, fcol = full.c[lastReal] > fb.top ? "#4ee08a" : "#ffffff";
         out.push(`<rect x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyB - fyT).toFixed(1)}" fill="${pcol}" fill-opacity="0.78" stroke="${pcol}" stroke-width="${fs(1.6)}" pointer-events="none"><title>${fb.name}: dół ${fb.low}, pivot ${fb.top}</title></rect>`);
         if (fyS - fyB > 1) out.push(`<rect x="${fx0.toFixed(1)}" y="${fyB.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${(fyS - fyB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
+        out.push(`<rect class="box-hit" data-box="${fb.top}|${fb.low}|wzorzec|1|${fb.i0}|${fb.i1}" style="cursor:pointer" x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyS - fyT).toFixed(1)}" fill="transparent"><title>${fb.name} ${fb.low}–${fb.top} — kliknij: przybliż, przytrzymaj: przypnij</title></rect>`);
         out.push(`<text x="${fx1.toFixed(1)}" y="${(fyT - 6).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="${pcol}" text-anchor="end" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${fb.name} ${fb.i1 - fb.i0 + 1} tyg.</text>`);
         out.push(`<line x1="${fx0.toFixed(1)}" x2="${fpx1}" y1="${fyT.toFixed(1)}" y2="${fyT.toFixed(1)}" stroke="${fcol}" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" pointer-events="none"/>`);
         out.push(`<rect x="${W - L.right}" y="${(fyT - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${fcol}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyT + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${fb.top.toFixed(2)}</text>`);
         out.push(`<rect x="${W - L.right}" y="${(fyS - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyS + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(fb.low * (1 - PATTERN_ZONE_PCT / 100)).toFixed(2)}</text>`);
     });
     // cup & handle na zamknięciach: miska jako gładka krzywa przez lewy szczyt – dołek – prawy brzeg, rączka jako mały box, pivot = góra rączki (bez rączki: lewy szczyt)
-    (full.cups || []).forEach(cp => {
+    // własne cupy użytkownika (narysowane ręcznie) traktujemy jak wykryte: ten sam box pivotu (bez rączki — pivot = lewy szczyt)
+    const userCups = (opts.userCups || []).map(u => ({ i0: dateToIndex(full.weeks, u.start), i1: dateToIndex(full.weeks, u.end), noHandle: true, user: true })).filter(u => u.i0 >= 0 && u.i1 > u.i0);
+    (full.cups || []).concat(userCups).forEach(cp => {
         const g = darvasCupGeometry(full.c, cp);
         if (!g || g.i1 < start || g.i0 >= endExcl) return;
         const pts = [];
@@ -323,6 +326,7 @@ function darvasSvg(full, win, opts = {}) {
             if (byS - byB > 1) out.push(`<rect x="${bx0.toFixed(1)}" y="${byB.toFixed(1)}" width="${Math.max(0, bx1 - bx0).toFixed(1)}" height="${(byS - byB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
             out.push(`<rect x="${W - L.right}" y="${(byS - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(byS + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${g.stop.toFixed(2)}</text>`);
             out.push(txt(x(g.ib), y(g.bottom) + fs(15), label, PATTERN_COLORS["cup & handle"]));
+            out.push(`<rect class="box-hit" data-box="${g.pivot}|${g.boxBottom}|wzorzec|1|${g.handle ? g.handle.i0 : g.i1}|${lastReal}" style="cursor:pointer" x="${bx0.toFixed(1)}" y="${byT.toFixed(1)}" width="${Math.max(0, bx1 - bx0).toFixed(1)}" height="${Math.max(2, byS - byT).toFixed(1)}" fill="transparent"><title>Cup & handle: pivot ${g.pivot}, dół ${g.boxBottom} — kliknij: przybliż, przytrzymaj: przypnij</title></rect>`);
         } else if (style === "mug") {   // KUBEK: biała czasza z uchem (ucho = rączka) i kreskowaną podstawką pod dnem
             out.push(`<polygon points="${closeP}" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
             if (!g.handle) {
@@ -397,9 +401,49 @@ function darvasSvg(full, win, opts = {}) {
     }
     const lastC = full.c[lastReal];
     if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
-    return `<svg id="chartSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
+    // celownik (ustawiany w attachDarvasHover): pionowa linia tygodnia, pozioma linia zamknięcia z ceną na osi i data pod osią
+    out.push(`<line id="dCrossV" x1="0" x2="0" y1="${L.top}" y2="${H - L.bottom}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
+    out.push(`<line id="dCrossH" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="4 3" opacity="0" pointer-events="none"/>`);
+    out.push(`<g id="dCrossTag" opacity="0" pointer-events="none"><rect x="${W - L.right}" y="0" width="${L.right - 1}" height="${fs(14)}" rx="2" fill="#6ea8ff"/><text x="${W - L.right + 3}" y="0" font-size="${fs(9.5)}" font-weight="700" fill="#0e0f13"></text></g>`);
+    out.push(`<text id="dCrossDate" x="0" y="${H - 7}" font-size="${fs(10)}" font-weight="700" fill="#ffffff" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke" opacity="0" pointer-events="none"></text>`);
+    return `<svg id="chartSvg" data-geom="${[W, H, L.left, L.right, L.top, L.bottom, start, slots, lo, hi].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
+}
+
+// Najechanie / dotyk na Dar-Card: pionowa linia na wybranym tygodniu + pozioma linia na jego zamknięciu (cena na osi), data pod osią i opis w readout.
+function attachDarvasHover(container, full, readoutEl) {
+    const svg = container.querySelector("svg#chartSvg");
+    if (!svg || !svg.dataset.geom) return;
+    const g = svg.dataset.geom.split(",").map(Number);
+    if (g.length < 10 || g.some(v => !Number.isFinite(v))) return;
+    const [W, H, left, right, top, bottom, start, slots, lo, hi] = g;
+    const pw = W - left - right, ph = H - top - bottom;
+    const lastReal = full.c.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
+    const v = svg.querySelector("#dCrossV"), h = svg.querySelector("#dCrossH"), tag = svg.querySelector("#dCrossTag"), dt = svg.querySelector("#dCrossDate");
+    let base = null;   // opis stanu zapamiętujemy przy pierwszym ruchu (readout jest ustawiany już po podpięciu)
+    const hide = () => { [v, h, tag, dt].forEach(e => e.setAttribute("opacity", "0")); if (readoutEl && base !== null) readoutEl.textContent = base; };
+    const move = ev => {
+        if (base === null && readoutEl) base = readoutEl.textContent;
+        const r = svg.getBoundingClientRect();
+        const sc = Math.min(r.width / W, r.height / H), ox = (r.width - W * sc) / 2;
+        const x = (ev.clientX - r.left - ox) / sc;
+        let i = Math.round(start + (x - left) / pw * slots - 0.5);
+        i = Math.max(start, Math.min(Math.min(lastReal, start + slots - 1), i));
+        const c = full.c[i];
+        if (!Number.isFinite(c)) { hide(); return; }
+        const xi = left + pw * (i - start + 0.5) / slots, yi = top + ph * (1 - (c - lo) / (hi - lo));
+        v.setAttribute("x1", xi.toFixed(1)); v.setAttribute("x2", xi.toFixed(1)); v.setAttribute("opacity", "0.6");
+        h.setAttribute("y1", yi.toFixed(1)); h.setAttribute("y2", yi.toFixed(1)); h.setAttribute("opacity", "0.7");
+        const rect = tag.querySelector("rect"), txt = tag.querySelector("text"), th = +rect.getAttribute("height");
+        rect.setAttribute("y", (yi - th / 2).toFixed(1)); txt.setAttribute("y", (yi + th / 3).toFixed(1)); txt.textContent = c.toFixed(2); tag.setAttribute("opacity", "1");
+        const d = full.weeks && full.weeks[i] ? full.weeks[i] : "";
+        dt.setAttribute("x", Math.max(40, Math.min(W - 40, xi)).toFixed(1)); dt.textContent = d ? "tydz. do " + d : ""; dt.setAttribute("opacity", "1");
+        if (readoutEl) readoutEl.textContent = `${d} · zamknięcie ${c.toFixed(2)}`;
+    };
+    svg.addEventListener("pointermove", move);
+    svg.addEventListener("pointerdown", move);
+    svg.addEventListener("pointerleave", hide);
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_STOP_PCT };
 }

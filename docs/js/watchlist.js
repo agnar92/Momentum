@@ -59,13 +59,13 @@ function tagStrategies(allStocks, filtered, st, alerts = []) {
 const QM_WINDOWS = [["1M", "low_ratio_1m"], ["3M", "low_ratio_3m"], ["6M", "low_ratio_6m"]];
 const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], QM: ["max_ratio", "desc"],
-    CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
+    CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"],
 };
-const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "ALERTS"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
+const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "BOXES"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const BOXES_TAB = "BOXES";   // podstrona „Boxy” (bez własnej tabeli) — przegląd boxów Darvasa: monitorowane, nowe, wybicia, trzymaj, sprzedaj; patrz #boxesPanel
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
-    LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", QM: "Filtr Qullamaggie", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
+    LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", QM: "Filtr Qullamaggie", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -836,16 +836,6 @@ const COL = {
     rev30: ["Rewizje EPS 30d", "eps_rev30_pct", s => pctCell(s.eps_rev30_pct), "Zmiana konsensusu EPS na bieżący rok obrachunkowy w ostatnich 30 dniach (rewizje w górę = analitycy podnoszą prognozy)"],
     rev90: ["Rewizje EPS 90d", "eps_rev90_pct", s => pctCell(s.eps_rev90_pct), "To samo w ostatnich 90 dniach"],
     rsLine: ["Linia RS", "rs_line_dist_pct", s => `<td${s.rs_line_state === "przed ceną" ? ` class="positive"` : ""} title="Linia RS (cena / S&P 500): odległość od maksimum z 52 tyg.; „przed ceną” = RS na maksimum, a cena jeszcze nie">${s.rs_line_state ? (s.rs_line_state === "przed ceną" ? "● RS przed ceną" : "● RS na szczycie") + " " : ""}${Number.isFinite(s.rs_line_dist_pct) ? `<span class="muted small">${fmtPct(s.rs_line_dist_pct)}</span>` : "—"}</td>`, "Linia RS: stan (RS na maksimum 52 tyg. przed/razem z ceną) i odległość od jej maksimum"],
-    alKind: ["Linia", "alert_kind", s => `<td>${ANN_KIND_LABELS[s.alert.kind] || "linia"}${s.alert.note ? "" : ""}</td>`],
-    alDir: ["Alert", "alert_dir", s => `<td>${ANN_DIR_LABELS[s.alert.alert]}</td>`],
-    alValue: ["Linia dziś", "alert_value", s => `<td>${money(s.alert.value)}</td>`],
-    alDist: ["Cena vs linia", "alert_dist", s => pctCell(s.alert.dist)],
-    alStatus: ["Status", "alert_rank", s => {
-        const a = s.alert;
-        const txt = a.triggered ? (a.ack ? "przebita (zatwierdzona)" : "🔔 PRZEBITA — nowa") : (a.near ? "blisko linii" : "czeka");
-        return `<td class="${a.triggered && !a.ack ? "positive" : ""}"><strong>${txt}</strong></td>`;
-    }],
-    alAct: ["", null, s => `<td>${s.alert.triggered && !s.alert.ack ? `<button class="mini-btn" data-ack="${s.alert.ticker}|${s.alert.id}">OK</button> ` : ""}<button class="mini-btn" data-delline="${s.alert.ticker}|${s.alert.id}" title="Usuń alert (zostaje sama linia)">🗑</button></td>`],
     dist: ["Dystrybucja", "dist_vol_ratio", s => s.dist_top === true ? `<td class="negative" title="Dystrybucja bez wzrostu ceny (tydzień do ${escapeHtml(s.dist_date || "")}): najwyższy tygodniowy wolumen od dołka trendu ×${s.dist_vol_ratio}, zamknięcie ${fmtPct(s.dist_change_pct)}">⚠ ×${s.dist_vol_ratio}</td>` : `<td class="muted"></td>`,
         "Dystrybucja bez wzrostu ceny („mielenie”, O'Neil, świece tygodniowe): w ostatnich 2 tygodniach najwyższy wolumen tygodniowy od dołka trendu (≥ 1,5× średniej), a cena zamyka się prawie bez zmian albo w dolnej połowie zakresu, blisko szczytu rajdu. Podaż tłumi popyt. Heurystyka — sprawdź wykres"],
     eps3y: ["EPS 3 lata", "eps_yr0", s => [s.eps_yr0, s.eps_yr1, s.eps_yr2].some(Number.isFinite)
@@ -895,10 +885,8 @@ const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
-const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
 const TAB_COLUMNS = {
     LIST: ALL_COLUMNS, CS: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], QM: ALL_COLUMNS, BASES: ALL_COLUMNS,
-    ALERTS: [...LEAD, ...ALERT_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id))],
 };
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
@@ -906,7 +894,6 @@ const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "cs", "pbox"];
 const TAB_COLUMNS_COMPACT = {
     LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
-    ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
 };
 let splitMode = false;
 // Kolumny, które istnieją tylko dzięki analizie wzorców (bazy, pivot, flagi, wybicie, „Co robić”, climax) — znikają po jej wyłączeniu.
@@ -956,8 +943,7 @@ function rowsForTab(tab) {
     });
     const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     const stocks = common;
-    const alerts = alertRows(annStore, state.data.stocks);
-    tagStrategies(state.data.stocks, common, state, alerts);
+    tagStrategies(state.data.stocks, common, state, []);
     tagPositions(state.data.stocks, state.pos);
     tagPinnedBoxes(state.data.stocks, state.boxes);
     tagCanslim(state.data.stocks, canslimMarket());
@@ -967,11 +953,6 @@ function rowsForTab(tab) {
     if (tab === "QM") return qullamaggieRows(stocks, qmParams(state.qm, state.patterns));
     if (tab === "BASES") return baseRows(stocks, state.bases);
     if (tab === "FAV") return stocks.filter(s => state.favs.has(s.ticker));
-    if (tab === "ALERTS") {
-        return alertRows(annStore, stocks).map(r => ({
-            ...r, alert_rank: r.alert.rank, alert_kind: r.alert.kind, alert_dir: r.alert.alert, alert_value: r.alert.value, alert_dist: r.alert.dist, alert_group: r.strat_rank * 10 + r.alert.rank,
-        }));
-    }
     return stocks;
 }
 
@@ -981,7 +962,6 @@ const EMPTY_MESSAGES = {
     QM: "Żadna spółka nie spełnia progów — obniż obrót lub ADR% albo zwiększ top %.",
     BASES: "Brak spółek w bazie w zadanej odległości od pivotu — zwiększ dystans albo odznacz „tylko VCP”.",
     POS: "Brak pozycji — otwórz wykres spółki i kliknij „💼 Pozycja” (wejście, stop, kalkulator wielkości pozycji).",
-    ALERTS: "Brak alertów — w oknie wykresu kliknij ✎ Edytuj, narysuj linię (Linia) i ustaw przy niej Alert.",
     FAV: "Brak ulubionych — kliknij ☆ przy spółce na dowolnej liście.",
 };
 
@@ -1007,7 +987,7 @@ function renderTable() {
     if (tab === BOXES_TAB) { renderBoxesPanel(); return; }
     if (tab === FILTERS_TAB) {
         state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
-        tagBreakouts(state.data.stocks, alertRows(annStore, state.data.stocks), state.brk.maxDistPct);
+        tagBreakouts(state.data.stocks, [], state.brk.maxDistPct);
         tagCanslim(state.data.stocks, canslimMarket());
         renderFiltersSummary();
         return;
@@ -1130,14 +1110,7 @@ function applyLayoutMode() {
 }
 
 // Liczba nowych (przebitych, niezatwierdzonych) alertów na zakładce 🔔.
-function updateAlertBadge() {
-    if (!state.data) return;
-    const n = annRefresh(annStore, state.data.stocks);
-    const badge = document.getElementById("alertBadge");
-    if (badge) badge.textContent = n ? ` (${n})` : "";
-    const navBadge = document.getElementById("alertBadgeNav");
-    if (navBadge) navBadge.textContent = n ? String(n) : "";
-}
+function updateAlertBadge() { /* alerty na liniach usunięte — zostaje pusta funkcja dla wywołań z sync */ }
 
 function updateSortHeaders(table) {
     table.querySelectorAll("thead th").forEach(th => {
@@ -1323,12 +1296,24 @@ let boxesOverviewData = null, boxesNewKeys = null, boxesCharts = null;
 
 function boxesLoadJson(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v === null ? fallback : v; } catch (e) { return fallback; } }
 
+// Rozwijana informacja o pozycji liczonej z boxa (Dar-Card): wejście = góra boxa (zamknięcie tygodnia nad nią), stop = dół strefy zagrożenia (5 % pod dołem boxa).
+function boxPositionHtml(top, bottom) {
+    const stop = Math.round(bottom * (1 - (typeof DARVAS_STOP_PCT !== "undefined" ? DARVAS_STOP_PCT : 5) / 100) * 100) / 100;
+    const perShare = top > stop ? (top / stop - 1) * 100 : null;
+    const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
+    const lines = [`Wejście: zamknięcie tygodnia nad <b>${top.toFixed(2)}</b>`, `Stop: zamknięcie pod <b>${stop.toFixed(2)}</b> (dół strefy zagrożenia)${perShare !== null ? `, ryzyko ${perShare.toFixed(1)} % na akcję` : ""}`];
+    if (size) lines.push(`Pozycja: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${size.pct_of_capital.toFixed(1)} % konta), strata przy stopie ${pln0(size.risk_pln)} (${size.risk_pct !== null ? size.risk_pct.toFixed(2) : "—"} % konta)${size.limited_by === "risk" ? " — ograniczone ryzykiem" : " — ograniczone % konta"}`);
+    else lines.push("Pozycja: ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby liczyć liczbę akcji.");
+    return lines.map(l => `<div class="box-pos-line">${l}</div>`).join("");
+}
+
 function boxRowHtml(r, sec, isNew) {
     const [lab, cls] = BOX_STATE_LABELS[r.state] || [r.state, ""];
     const pinned = state.boxes[r.ticker] && Math.abs(state.boxes[r.ticker].top - r.box.top) < 0.005 && Math.abs(state.boxes[r.ticker].bottom - r.box.bottom) < 0.005;
     const btn = sec === "pinned" ? `<button type="button" class="box-act" data-act="unpin" title="Odepnij box">✕</button>`
         : `<button type="button" class="box-act${pinned ? " on" : ""}" data-act="${pinned ? "unpin" : "pin"}" title="${pinned ? "Odepnij" : "Przypnij do monitorowania"}">📌</button>`;
-    return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`;
+    return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`
+        + `<details class="box-pos"><summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(r.box.top, r.box.bottom)}</details>`;
 }
 
 async function renderBoxesPanel() {
@@ -1813,6 +1798,7 @@ let chartFull = false;      // okno wykresu na cały ekran (przycisk ⛶ / klawi
 let chartWide = false;      // pełny ekran na szerokim monitorze => układ szeroki (chart.js)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
 let pinFlashUntil = 0;       // krótkie mignięcie przypiętego boxa na wykresie (zamiast wibracji, której iOS nie obsługuje)
+let boxAddOn = false;   // tryb „＋ Box” na widoku Dar-Card: przeciągnij poziomo przez tygodnie konsolidacji → własny, przypięty box
 let boxLongPressed = false;   // po przytrzymaniu boxa następujące kliknięcie nie otwiera fokusu
 let boxFocus = null;        // { ticker, top, bottom, i0, i1 } — po kliknięciu boxa: przybliżenie na jego fragment (świece + wolumen) do tygodniowego monitoringu
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
@@ -1940,6 +1926,7 @@ function posStockPin() { return currentChart ? state.data.stocks.find(x => x.tic
 
 function drawChart() {
     if (!currentChart) return null;
+    if (typeof window.syncBoxAddButton === "function") window.syncBoxAddButton();
     const cells = chartCells();
     const activeIdx = 0;   // komórka z fokusem = edytowalna
     const focus = boxFocus && boxFocus.ticker === currentChart.ticker ? boxFocus : null;
@@ -1973,6 +1960,7 @@ function drawChart() {
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
             hideAutoLines: annHide(c.ticker).lines, patterns: state.patterns,
+            userCups: annStore[c.ticker] && annStore[c.ticker].cups ? annStore[c.ticker].cups.filter(u => u.start && u.end) : [],
             book: chartBookOn, bookTitle: `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
@@ -1984,6 +1972,7 @@ function drawChart() {
         const bar = document.createElement("div");
         bar.className = "box-focus-bar";
         bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
         bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
         body.insertBefore(bar, body.firstChild);
         bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
@@ -2079,7 +2068,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartPatBtn", "chartDarvasBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartPatBtn", "chartDarvasBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(b => b && !b.hidden);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -2095,7 +2084,7 @@ function initChartModal() {
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
-        chartDarvasOn = localStorage.getItem(CHART_DARVAS_KEY) === "1";
+        chartDarvasOn = true;   // Dar-Card jest jedynym widokiem (świece tylko po kliknięciu boxa)
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved && Number.isFinite(saved.w) && saved.w > 0) chartWinLen.w = saved.w;
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
@@ -2109,7 +2098,7 @@ function initChartModal() {
     const stepNext = () => slideChart(1), stepPrev = () => slideChart(-1);
     attachSwipe(document.getElementById("chartReady"), stepNext, stepPrev);
     attachSwipe(document.querySelector(".wl-chart-titles"), stepNext, stepPrev);
-    attachSwipe(document.getElementById("chartBody"), stepNext, stepPrev, ev => annEdit.on || annPen.on || ev.target.closest(".wl-range"));
+    attachSwipe(document.getElementById("chartBody"), stepNext, stepPrev, ev => annEdit.on || annPen.on || boxAddOn || ev.target.closest(".wl-range"));
     const chartScore = document.getElementById("chartScore");
     if (chartScore) {
         chartScore.addEventListener("change", () => { if (chartRequested) setScore(chartRequested, chartScore.value); });
@@ -2133,6 +2122,57 @@ function initChartModal() {
         b.classList.toggle("active", chartDarvasOn);
     };
     updateDarvasButton();
+    // „＋ Box”: własny box na Dar-Card (skrypt nie wyłapuje wąskich konsolidacji) — przeciągnij poziomo po tygodniach, box = najwyższe / najniższe zamknięcie z tego przedziału, zapisuje się jako przypięty
+    (() => {
+        const btn = document.getElementById("chartBoxAddBtn");
+        const body = document.getElementById("chartBody");
+        let drag = null;
+        const weekAt = (svg, clientX) => {
+            const g = (svg.dataset.geom || "").split(",").map(Number);
+            if (g.length < 10 || g.some(v => !Number.isFinite(v))) return null;
+            const [W, H, left, right, , , start, slots] = g;
+            const r = svg.getBoundingClientRect();
+            const sc = Math.min(r.width / W, r.height / H), ox = (r.width - W * sc) / 2;
+            const x = (clientX - r.left - ox) / sc;
+            return Math.round(start + (x - left) / (W - left - right) * slots - 0.5);
+        };
+        const sync = () => {
+            btn.hidden = !(chartDarvasOn && !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker));
+            const est = document.getElementById("chartEstBtn");   // estymaty analityków: tylko na wykresie słupkowym (po dotknięciu boxa), nie na Dar-Card
+            if (est) est.hidden = !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
+            btn.classList.toggle("active", boxAddOn);
+            document.body.classList.toggle("box-add", boxAddOn);
+            btn.textContent = boxAddOn ? "＋ Box: przeciągnij po tygodniach" : "＋ Box";
+        };
+        window.syncBoxAddButton = sync;
+        btn.addEventListener("click", () => { boxAddOn = !boxAddOn; sync(); if (boxAddOn) showToast("Przeciągnij palcem poziomo przez tygodnie konsolidacji — powstanie własny, przypięty box.", { type: "info" }); });
+        body.addEventListener("pointerdown", ev => {
+            if (!boxAddOn) return;
+            const svg = ev.target.closest && ev.target.closest("svg#chartSvg");
+            if (!svg) return;
+            const i = weekAt(svg, ev.clientX);
+            if (i === null) return;
+            drag = { svg, i0: i };
+            ev.preventDefault();
+        });
+        const finish = ev => {
+            if (!drag) return;
+            const d = drag; drag = null;
+            const i1 = weekAt(d.svg, ev.clientX);
+            if (i1 === null || !currentChart) return;
+            const st = currentChart.charts.stocks && currentChart.charts.stocks[currentChart.ticker];
+            const lo = Math.max(0, Math.min(d.i0, i1)), hi = Math.min((st && st.c ? st.c.length : 0) - 1, Math.max(d.i0, i1));
+            const cl = st && st.c ? st.c.slice(lo, hi + 1).filter(Number.isFinite) : [];
+            if (hi - lo < 1 || cl.length < 2 || !(Math.max(...cl) > Math.min(...cl))) { showToast("Zaznacz co najmniej 2 tygodnie konsolidacji.", { type: "info" }); return; }
+            boxAddOn = false; sync();
+            pinFlashUntil = Date.now() + 2500;
+            savePinnedBox(currentChart.ticker, { top: Math.max(...cl), bottom: Math.min(...cl), start: currentChart.charts.weeks[lo] });
+            showToast("📌 Własny box zapisany i monitorowany.", { type: "success" });
+        };
+        body.addEventListener("pointerup", finish);
+        body.addEventListener("pointercancel", () => { drag = null; });
+        sync();
+    })();
     document.getElementById("chartDarvasBtn").addEventListener("click", () => {
         chartDarvasOn = !chartDarvasOn;
         try { localStorage.setItem(CHART_DARVAS_KEY, chartDarvasOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
