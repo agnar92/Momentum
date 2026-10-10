@@ -124,7 +124,7 @@ function darvasSvg(full, win, opts = {}) {
     const lo = lo0 - pad, hi = hi0 + pad;
     const y = v => L.top + ph * (1 - (v - lo) / (hi - lo));
     const out = [];
-    out.push(`<defs><pattern id="darvasHatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" fill="#3a3f4d"/><line x1="0" y1="0" x2="0" y2="4" stroke="#8a8f9c" stroke-width="1.4"/></pattern></defs>`);
+    out.push(`<defs><pattern id="darvasHatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#ffffff" fill-opacity="0.22"/><line x1="0" y1="0" x2="0" y2="5" stroke="#ffffff" stroke-opacity="0.8" stroke-width="2"/></pattern></defs>`);
     // „papier w linie” jak na Dar-Card: poziome linie co tyle, ile wynosi ~1/80 zakresu; grubsze na okrągłych poziomach
     const ticks = niceTicks(lo, hi, compact ? 6 : 8);
     const step = (hi - lo) / 80;
