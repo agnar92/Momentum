@@ -396,8 +396,9 @@ function institutionalFlag(s) {
 function canslimMarket() {
     const m = state.data && state.data.market;
     if (!m) return null;
-    const d = [m.sp500, m.nasdaq].map(x => (x && Number.isFinite(x.dist_days) ? x.dist_days : null)).filter(v => v !== null);
-    return { regime: m.regime || null, distDays: d.length ? Math.max(...d) : null };
+    // M efektywne z watchlist.py: po korekcie potwierdzony Follow-Through Day też otwiera rynek (dni dystrybucji liczone wtedy od FTD); starsze pliki — reżim techniczny
+    const d = [m.sp500, m.nasdaq].map(x => (x ? (Number.isFinite(x.m_dist_days) ? x.m_dist_days : Number.isFinite(x.dist_days) ? x.dist_days : null) : null)).filter(v => v !== null);
+    return { regime: m.m_regime || m.regime || null, distDays: d.length ? Math.max(...d) : null, ftd: [m.sp500, m.nasdaq].some(x => x && x.m_via_ftd) };
 }
 // RS Rating: percentyl względem szerokiego rynku (spółki nad SMA50/200 z ręcznego pobrania Qullamaggiego, rs_universe.json) albo, gdy go brak, względem listy CANSLIM.
 function rsBasisText() {
@@ -572,8 +573,8 @@ function canslimExplain(s, mkt) {
     add("I", "Institutional sponsorship — instytucje", `instytucje posiadają ${T.instMin}–${T.instMax} % akcji i ich udział rośnie`,
         num(s.inst_own) ? `instytucje ${s.inst_own}%${num(s.inst_trans) ? `, zmiana w ostatnim kwartale ${pct(s.inst_trans)}` : ""}${s.inst_own > T.instData ? " — Finviz podaje > 100 %, to dane niewiarygodne (podwójne liczenie)" : s.inst_own > T.instMax ? " — przesadne obłożenie, spółka może być już „wykupiona”" : ""}` : "brak danych o instytucjach",
         "O'Neil szuka kilku solidnych funduszy z dobrymi wynikami i rosnącej ich liczby; brak instytucji to zły znak, ale przesadne obłożenie oznacza, że nie ma kto dokupić. Uwaga: Finviz daje tylko % akcji i jego zmianę, nie liczbę ani jakość funduszy — to słabe przybliżenie, sprawdź je np. w raportach 13F.");
-    add("M", "Market direction — kierunek rynku", `S&P 500 i Nasdaq w trendzie wzrostowym (EMA10 > EMA20 tygodniowa) i mniej niż ${T.distDays} dni dystrybucji`,
-        regime === "uptrend" ? `rynek w trendzie wzrostowym${num(distDays) ? `, dni dystrybucji (max z indeksów): ${distDays}` : ""}` : regime === "correction" ? "rynek w korekcie" : "brak danych o rynku",
+    add("M", "Market direction — kierunek rynku", `S&P 500 i Nasdaq w trendzie wzrostowym (EMA10 > EMA20 tygodniowa) albo po korekcie z potwierdzonym Follow-Through Day, i mniej niż ${T.distDays} dni dystrybucji`,
+        regime === "uptrend" ? `rynek w trendzie wzrostowym${mkt && mkt.ftd ? " (przez potwierdzony Follow-Through Day)" : ""}${num(distDays) ? `, dni dystrybucji (max z indeksów${mkt && mkt.ftd ? ", liczone od FTD" : ""}): ${distDays}` : ""}` : regime === "correction" ? "rynek w korekcie (brak potwierdzonego Follow-Through Day)" : "brak danych o rynku",
         "Ok. 3 na 4 akcje podąża za rynkiem. Nawet najlepsza spółka ma małe szanse w korekcie — dlatego przy korekcie wynik nie przekroczy 6/7. O'Neil uznaje 4–5 dni dystrybucji w kilka tygodni za sygnał szczytu rynku (u nas okno 25 sesji), nawet gdy trend jest jeszcze wzrostowy.");
     return { score: c.score, known: c.known, rows };
 }
@@ -1439,12 +1440,19 @@ function showTab(tab, resetSort = true) {
 // M z CANSLIM: stan rynku (S&P 500 i Nasdaq) policzony w watchlist.py::market_state — pasek nad listą.
 const MARKET_LABELS = { uptrend: ["✅", "Rynek: uptrend (EMA10 > EMA20 tyg.)", "market-up"], correction: ["🛑", "Rynek: korekta (EMA10 < EMA20 tyg.)", "market-down"] };
 
+// Follow-Through Day: krótki opis stanu po korekcie indeksu (tylko gdy była korekta ≥ 7 %)
+function ftdText(f) {
+    if (!f || f.state === "none" || !f.state) return "";
+    if (f.state === "ftd") return ` · FTD ${f.date}: +${f.gain_pct}% na wolumenie ×${f.vol_ratio}, ${f.day}. dzień próby odbicia, ${f.dist_days} dni dystrybucji od FTD`;
+    if (f.state === "attempt") return ` · próba odbicia po korekcie −${f.drawdown_pct}% (dno ${f.low_date}): ${f.day}. dzień, FTD dopiero od 4. dnia`;
+    return ` · korekta −${f.drawdown_pct}% (dno ${f.low_date}), bez próby odbicia`;
+}
 function marketLines(market) {
     const sign = v => (Number.isFinite(v) ? (v > 0 ? "+" : "") + v + "%" : "—");
     return [["sp500", "S&P 500"], ["nasdaq", "Nasdaq"]].filter(([k]) => market && market[k]).map(([k, name]) => {
         const m = market[k];
         const ema = Number.isFinite(m.ema_gap_pct) ? `EMA10/EMA20 tyg. ${sign(m.ema_gap_pct)}, ` : "";
-        return `${name}: ${ema}${sign(m.pct_vs_sma50)} vs SMA50, ${sign(m.pct_vs_sma200)} vs SMA200, ${m.dist_days} dni dystrybucji (25 sesji), ${sign(m.pct_from_high)} od szczytu`;
+        return `${name}: ${ema}${sign(m.pct_vs_sma50)} vs SMA50, ${sign(m.pct_vs_sma200)} vs SMA200, ${m.dist_days} dni dystrybucji (25 sesji), ${sign(m.pct_from_high)} od szczytu${ftdText(m.ftd)}`;
     });
 }
 
@@ -1453,7 +1461,8 @@ function renderMarket() {
     if (!el) return;
     const market = state.data && state.data.market;
     if (!market || !MARKET_LABELS[market.regime]) { el.hidden = true; return; }
-    const [icon, label, cls] = MARKET_LABELS[market.regime];
+    const viaFtd = market.regime === "correction" && market.m_regime === "uptrend";
+    const [icon, label, cls] = viaFtd ? ["🟡", "Rynek: korekta, ale potwierdzony Follow-Through Day (M ✓)", "market-up"] : MARKET_LABELS[market.regime];
     el.hidden = false;
     el.className = `market-banner ${cls}`;
     el.querySelector("summary").textContent = `${icon} ${label}`;
@@ -1499,7 +1508,7 @@ function setPatterns(on) {
     if (currentChart) {
         const st = state.data.stocks.find(x => x.ticker === currentChart.ticker);
         document.getElementById("chartBase").innerHTML = st && state.patterns ? baseBoxHtml(st) : "";
-        document.getElementById("chartReady").textContent = st ? readinessLine(st, state.data.market && state.data.market.regime, state.patterns) : "";
+        document.getElementById("chartReady").textContent = st ? readinessLine(st, state.data.market && (state.data.market.m_regime || state.data.market.regime), state.patterns) : "";
         chartWindows = [];
         drawChart();
     }
@@ -1751,7 +1760,7 @@ async function openChart(ticker) {
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
     document.getElementById("chartRatings").innerHTML = stock ? ratingChipsHtml(stock) : "";
     document.getElementById("chartBase").innerHTML = stock && state.patterns ? baseBoxHtml(stock) : "";
-    document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && state.data.market.regime, state.patterns) : "";
+    document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && (state.data.market.m_regime || state.data.market.regime), state.patterns) : "";
     updatePosButton();
     const scoreBox = document.getElementById("chartScore");
     if (scoreBox) scoreBox.value = Number.isFinite(state.scores[ticker]) ? state.scores[ticker] : "";
@@ -1837,7 +1846,7 @@ function drawChart() {
     const posStock = state.data.stocks.find(x => x.ticker === currentChart.ticker);
     if (primary && posStock && posStock.position) {   // moja pozycja: podpowiedź „czy przestawić stop” z MACD tygodniowego trafia do linii gotowości
         posStock.macd_advice = stopAdvice(posStock.position, macdWeeklyState({ weeks: primary.weeks, c: primary.c, l: primary.l }), posStock.price);
-        document.getElementById("chartReady").textContent = readinessLine(posStock, state.data.market && state.data.market.regime, state.patterns);
+        document.getElementById("chartReady").textContent = readinessLine(posStock, state.data.market && (state.data.market.m_regime || state.data.market.regime), state.patterns);
     }
     const estEl = document.getElementById("chartEstimates");
     const pst = state.data.stocks.find(x => x.ticker === currentChart.ticker);
@@ -2113,7 +2122,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         hasWeeklyPattern, qmParams, stopAdvice,
-        ratingChips, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, mergeProfiles, tabUniverse, chartsForTicker, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

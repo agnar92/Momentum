@@ -53,6 +53,11 @@ INST_MAX_OWN = 90.0          # ... ale <= 90 %: spółka przesadnie obłożona i
 INST_DATA_MAX = 100.0        # Finviz bywa > 100 % (podwójne liczenie w 13F) — takiej wartości nie traktujemy jak danych
 
 DIST_WINDOW = 25             # dni dystrybucji liczymy z ostatnich 25 sesji (jak IBD)
+FTD_LOOKBACK = 120           # Follow-Through Day: szukamy ostatniej korekty w 120 sesjach (~6 miesięcy)
+FTD_MIN_DRAWDOWN_PCT = 7.0   # spadek od szczytu do dołka o co najmniej tyle %, żeby mówić o korekcie wymagającej FTD
+FTD_MIN_DAY = 4              # FTD najwcześniej w 4. dniu próby odbicia (dzień 1 = pierwsze zamknięcie w górę po dołku)
+FTD_MAX_DIST = 5             # po FTD rynek zostaje otwarty, dopóki jest mniej niż 5 dni dystrybucji (liczonych od FTD)
+FTD_MIN_GAIN_PCT = 1.25      # wzrost indeksu w FTD o co najmniej 1,25 % (IBD) na wolumenie wyższym niż dzień wcześniej
 DIST_DROP_PCT = 0.2          # dzień dystrybucji: indeks spadł o >= 0,2 % przy WYŻSZYM wolumenie niż dzień wcześniej
 GROUP_MIN_MEMBERS = 3        # grupa branżowa liczy się od 3 spółek w liście
 LEADER_MIN_RS = 80           # lider (L z CANSLIM): RS Rating >= 80 ...
@@ -615,6 +620,38 @@ def distribution_days(df, window=DIST_WINDOW, drop_pct=DIST_DROP_PCT):
     return int(dist.tail(window).sum())
 
 
+def follow_through_day(df, lookback=FTD_LOOKBACK):
+    """Follow-Through Day (O'Neil / IBD): po korekcie (spadek >= FTD_MIN_DRAWDOWN_PCT od szczytu) próba odbicia zaczyna się pierwszym zamknięciem w górę po
+    najniższym dołku (dzień 1). FTD = dzień >= 4 próby, w którym indeks zyskuje >= FTD_MIN_GAIN_PCT na wolumenie wyższym niż dzień wcześniej. Próba przepada,
+    gdy indeks wybije dołek w dół — bierzemy więc zawsze NAJNIŻSZY dołek po szczycie, a FTD tylko po nim.
+    Zwraca {state, ...}: "none" (brak korekty), "correction" (dołek jest świeży, brak próby), "attempt" (próba w toku, `day`), "ftd" (potwierdzony:
+    `date`, `gain_pct`, `vol_ratio`, `day`, `low_date`, `drawdown_pct`, `dist_days` = dni dystrybucji PO FTD)."""
+    d = df.tail(lookback)
+    if len(d) < 30:
+        return {"state": "none"}
+    hi, lo, cl, vol = (d[c].astype(float).values for c in ("High", "Low", "Close", "Volume"))
+    last = len(d) - 1
+    peak = int(np.argmax(hi))
+    if peak >= last - 1:
+        return {"state": "none"}
+    low_i = peak + 1 + int(np.argmin(lo[peak + 1:]))
+    drawdown = (hi[peak] - lo[low_i]) / hi[peak] * 100
+    if drawdown < FTD_MIN_DRAWDOWN_PCT:
+        return {"state": "none"}
+    base = {"low_date": pd.Timestamp(d.index[low_i]).strftime("%Y-%m-%d"), "drawdown_pct": _num(drawdown, 1)}
+    day1 = next((j for j in range(low_i + 1, last + 1) if cl[j] > cl[j - 1]), None)
+    if day1 is None:
+        return {"state": "correction", **base}
+    for k in range(day1 + FTD_MIN_DAY - 1, last + 1):
+        gain = (cl[k] / cl[k - 1] - 1) * 100
+        if gain >= FTD_MIN_GAIN_PCT and vol[k] > vol[k - 1]:
+            chg = pd.Series(cl).pct_change().values * 100
+            dist = int(sum(1 for j in range(k + 1, last + 1) if chg[j] <= -DIST_DROP_PCT and vol[j] > vol[j - 1]))
+            return {"state": "ftd", "date": pd.Timestamp(d.index[k]).strftime("%Y-%m-%d"), "gain_pct": _num(gain, 2),
+                    "vol_ratio": _num(vol[k] / vol[k - 1], 2), "day": k - day1 + 1, "dist_days": dist, **base}
+    return {"state": "attempt", "day": last - day1 + 1, **base}
+
+
 def index_state(df):
     """Stan indeksu. Reżim (M z CANSLIM) = EMA10 tygodniowa > EMA20 tygodniowa (uptrend) albo nie (korekta). Dodatkowo informacyjnie:
     cena vs SMA50/SMA200, kierunek SMA50, odległość od szczytu 52 tyg., dni dystrybucji. None, gdy za mało danych."""
@@ -628,10 +665,17 @@ def index_state(df):
     sma50, sma200 = float(close.tail(50).mean()), float(close.tail(200).mean())
     sma50_prev = float(close.iloc[-60:-10].mean())
     high = float(df["High"].astype(float).tail(252).max())
+    regime = "uptrend" if ema_fast > ema_slow else "correction"
+    ftd = follow_through_day(df)
+    dist = distribution_days(df)
+    # M efektywne: tygodniowa EMA reaguje z opóźnieniem, więc po korekcie potwierdzony Follow-Through Day (z mniej niż 5 dniami dystrybucji PO nim) też otwiera rynek
+    via_ftd = regime == "correction" and ftd["state"] == "ftd" and ftd["dist_days"] < FTD_MAX_DIST
+    m_regime = "uptrend" if regime == "uptrend" or via_ftd else "correction"
+    m_dist = ftd["dist_days"] if via_ftd else dist
     return {"close": _num(price), "ema10w": _num(ema_fast), "ema20w": _num(ema_slow), "ema_gap_pct": _num((ema_fast / ema_slow - 1) * 100, 2),
             "pct_vs_sma50": _num((price / sma50 - 1) * 100, 1), "pct_vs_sma200": _num((price / sma200 - 1) * 100, 1),
-            "sma50_rising": sma50 > sma50_prev, "pct_from_high": _num((price / high - 1) * 100, 1), "dist_days": distribution_days(df),
-            "regime": "uptrend" if ema_fast > ema_slow else "correction", "as_of": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")}
+            "sma50_rising": sma50 > sma50_prev, "pct_from_high": _num((price / high - 1) * 100, 1), "dist_days": dist,
+            "regime": regime, "ftd": ftd, "m_regime": m_regime, "m_dist_days": m_dist, "m_via_ftd": via_ftd, "as_of": pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")}
 
 
 def market_state(sp_df, nq_df):
@@ -643,7 +687,8 @@ def market_state(sp_df, nq_df):
     known = [s for s in states.values() if s]
     if not known:
         return None
-    return {**states, "regime": max((s["regime"] for s in known), key=order.get)}
+    return {**states, "regime": max((s["regime"] for s in known), key=order.get),
+            "m_regime": max((s["m_regime"] for s in known), key=order.get)}
 
 
 def mkt_drawdown(bench_w, d0, d1):
