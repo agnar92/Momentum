@@ -44,6 +44,25 @@ function darvasBoxes(c, confirm = DARVAS_CONFIRM) {
     return boxes;
 }
 
+const DARVAS_STOP_PCT = 8;   // stop loss: −8 % od ceny wejścia (góry boxa)
+
+// Ceny boxa: wejście = góra (kup po zamknięciu tygodnia nad nią), anulowanie = dolna krawędź (zamknięcie pod nią kończy box), stop loss = −stopPct % od wejścia.
+function darvasBoxInfo(top, bottom, stopPct = DARVAS_STOP_PCT) {
+    const r2 = v => Math.round(v * 100) / 100;
+    const stop = r2(top * (1 - stopPct / 100));
+    return { entry: r2(top), cancel: r2(bottom), stop, stopPct, depthPct: r2((top - bottom) / top * 100), stopAboveCancel: stop > bottom };
+}
+
+// Treść arkusza po kliknięciu boxa (HTML); state: "up" | "down" | "open" | undefined (box z wykresu świecowego)
+function darvasBoxSheetHtml(info, state, confirmed) {
+    const st = state === "up" ? "wybity w górę (był sygnał kupna)" : state === "down" ? "złamany w dół (anulowany)" : state === "open" ? "otwarty — czeka na wybicie" : "otwarty (baza flat)";
+    return `<div class="darvas-sheet"><p class="muted small">Box ${info.cancel.toFixed(2)}–${info.entry.toFixed(2)} · głębokość ${info.depthPct}% · ${st}${confirmed === false ? " · dół jeszcze niepotwierdzony" : ""}</p>`
+        + `<table class="sheet-table" style="width:100%;text-align:left"><tr><th>💚 Cena wejścia</th><td><b>${info.entry.toFixed(2)}</b><br><span class="muted small">kup, gdy tydzień zamknie się NAD górą boxa</span></td></tr>`
+        + `<tr><th>⛔ Anulowanie boxa</th><td><b>${info.cancel.toFixed(2)}</b><br><span class="muted small">dolna krawędź — zamknięcie tygodnia pod nią kończy box</span></td></tr>`
+        + `<tr><th>🛑 Stop loss</th><td><b>${info.stop.toFixed(2)}</b><br><span class="muted small">−${info.stopPct}% od ceny wejścia${info.stopAboveCancel ? " — stop jest wyżej niż dół boxa, więc zadziała, zanim box zostanie anulowany" : " — dół boxa jest wyżej niż stop, więc box anuluje się, zanim dojdzie do stopu"}</span></td></tr></table>`
+        + `<p class="muted small">Reguły Darvasa na tygodniowych zamknięciach; heurystyka, nie rekomendacja.</p></div>`;
+}
+
 // Widok Dar-Card dla okna wykresu: full = pełny model z chart.js (c, weeks, n, pad), win = {n, end}; opts: fit {w, h}
 function darvasSvg(full, win, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
@@ -82,29 +101,21 @@ function darvasSvg(full, win, opts = {}) {
         const mon = +d.slice(5, 7);
         if ([1, 4, 7, 10].includes(mon)) out.push(`<text x="${x(i).toFixed(1)}" y="${H - 8}" font-size="${fs(11)}" fill="#8a8f9c" text-anchor="middle">${["", "sty", "", "", "kwi", "", "", "lip", "", "", "paź"][mon]} ${d.slice(2, 4)}</text>`);
     }
-    // cienka linia zamknięć pod pudełkami (kontekst), potem pudełka
-    const pts = [];
-    for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) pts.push(`${x(i).toFixed(1)},${y(full.c[i]).toFixed(1)}`);
-    out.push(`<polyline fill="none" stroke="#5b6376" stroke-width="1.2" points="${pts.join(" ")}"/>`);
     const bw = Math.max(2, pw / slots * 0.5);
     boxes.forEach(b => {
         const x0 = x(Math.max(start, b.i0)) - bw / 2, x1 = x(Math.min(endExcl - 1, Math.max(b.i1, b.i0 + 1))) + bw / 2;
         const yT = y(b.top), yB = y(b.bottom), hatchH = Math.max(3, (yB - yT) * 0.07);
         const col = b.outcome === "up" ? "#e8eaed" : b.outcome === "down" ? "#ff8a8a" : "#f4f6fa";
-        out.push(`<rect x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="0.92" stroke="#ffffff" stroke-width="1.4"${b.confirmed ? "" : ' stroke-dasharray="3 2"'}><title>Pudełko ${b.bottom.toFixed(2)}–${b.top.toFixed(2)}${b.outcome === "up" ? " — wybite w górę" : b.outcome === "down" ? " — złamane w dół" : " — otwarte"}</title></rect>`);
-        out.push(`<rect x="${x0.toFixed(1)}" y="${(yB - hatchH).toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${hatchH.toFixed(1)}" fill="url(#darvasHatch)"/>`);
-        // punkt kupna: kropka w prawym górnym rogu + poziomy wąs w lewo do osi z podpisem
-        const buyCol = b.outcome === "up" ? "#2ecc71" : "#e8eaed";
-        out.push(`<circle cx="${x1.toFixed(1)}" cy="${yT.toFixed(1)}" r="${fs(3.2)}" fill="${buyCol}" stroke="#0e0f13" stroke-width="1"/>`);
-        out.push(`<line x1="${L.left}" x2="${x1.toFixed(1)}" y1="${yT.toFixed(1)}" y2="${yT.toFixed(1)}" stroke="${buyCol}" stroke-width="1" stroke-dasharray="2 3" opacity="0.7"/>`);
-        if (b.i1 >= endExcl - 2 || b.outcome === "open") {
-            out.push(`<text x="${(x0 + 3).toFixed(1)}" y="${(yT - 5).toFixed(1)}" font-size="${fs(11)}" font-weight="700" fill="${buyCol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke">kup nad ${b.top.toFixed(2)}</text>`);
-            out.push(`<text x="${(x0 + 3).toFixed(1)}" y="${(yB + fs(13)).toFixed(1)}" font-size="${fs(10.5)}" font-weight="700" fill="#ff7a7a" stroke="#0e0f13" stroke-width="3" paint-order="stroke">stop pod ${b.bottom.toFixed(2)}</text>`);
-        }
+        const state = b.outcome === "up" ? "wybite w górę" : b.outcome === "down" ? "złamane w dół" : "otwarte";
+        // sam box, bez linii i podpisów: kliknięcie / dotknięcie pokazuje ceny wejścia, anulowania i stop lossa (data-box → arkusz w watchlist.js)
+        out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|${b.confirmed ? 1 : 0}|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="0.92" stroke="#ffffff" stroke-width="1.4"${b.confirmed ? "" : ' stroke-dasharray="3 2"'}><title>Box ${b.bottom.toFixed(2)}–${b.top.toFixed(2)} (${state}) — kliknij po ceny</title></rect>`);
+        out.push(`<rect x="${x0.toFixed(1)}" y="${(yB - hatchH).toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${hatchH.toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
     });
+    const lastC = full.c[lastReal];
+    if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
     return `<svg id="chartSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { darvasBoxes, darvasSvg, DARVAS_CONFIRM };
+    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, DARVAS_CONFIRM, DARVAS_STOP_PCT };
 }
