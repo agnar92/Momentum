@@ -43,13 +43,15 @@ function fitLayout(w, h, noTable = false) {
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
     const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
-    const price = Math.max(60, avail - bench - volume - eps);
+    const macd = short ? 0 : Math.max(44, Math.round(avail * 0.17));   // osobny panel MACD (12, 26, 9) pod wolumenem
+    const price = Math.max(60, avail - bench - volume - eps - macd);
     const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
     L.bench = { y: 4, h: bench };
     L.legend = { y: L.bench.y + bench + (bench ? 6 : 0), h: legendH };
     L.price = { y: L.legend.y + legendH + 4, h: price };
     L.volume = { y: L.price.y + price + 8, h: volume };
-    L.eps = { y: L.volume.y + volume + (eps ? 8 : 0), h: eps };
+    L.macd = { y: L.volume.y + volume + (macd ? 8 : 0), h: macd };
+    L.eps = { y: L.macd.y + macd + (eps ? 8 : 0), h: eps };
     L.axisY = L.eps.y + eps + (eps ? 18 : 16);
     L.height = Math.round(L.axisY + 8);
     return L;
@@ -221,6 +223,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         pxNewHigh: c.px_hi ? padArr(c.px_hi.map(Boolean), false) : null,
         rsChangePct: relChange(rs),
         rsLine: c.rs_line || null, volAvg: padArr(volAvg),
+        macd: (() => { const ms = macdSeries(c.c); return { macd: padArr(ms.macd), signal: padArr(ms.signal), hist: padArr(ms.hist) }; })(),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
         pivot: opts.patterns === false ? null : pivotFromStock(stock, c.bases),
     };
@@ -354,6 +357,7 @@ function sliceModel(m, n, end = m.n) {
         box: m.box ? { ...m.box, i0: m.box.i0 - off, i1: m.box.i1 - off } : null,
         cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off, handle: c.handle ? { ...c.handle, iLow: c.handle.iLow - off, iEnd: c.handle.iEnd - off } : null })).filter(c => c.i1 > 0 && c.i0 < n),
         rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
+        macd: m.macd ? { macd: cut(m.macd.macd), signal: cut(m.macd.signal), hist: cut(m.macd.hist) } : null,
         book: shiftBook(m.book, off, n),
         off: (m.off || 0) + off,
         lastIdx: Math.min(m.lastIdx - off, n - 1),
@@ -437,7 +441,7 @@ function fmtCompact(v) {
 function dropLegend(L) {
     const dy = L.legend.h + 4;
     const out = { ...L, legend: { y: L.price.y - dy, h: 0 }, legendRows: 0 };
-    ["price", "volume", "eps"].forEach(k => { out[k] = { ...L[k], y: L[k].y - dy }; });
+    ["price", "volume", "macd", "eps"].forEach(k => { if (L[k]) out[k] = { ...L[k], y: L[k].y - dy }; });
     if (L.axisY != null) out.axisY = L.axisY - dy;
     out.height = L.height - dy;
     return out;
@@ -451,7 +455,7 @@ function compactEpsPanel(L, opts) {
     const h = Math.round(scale * 36);
     const delta = L.eps.h - h;
     if (delta <= 0) return L;
-    return { ...L, price: { ...L.price, h: L.price.h + delta }, volume: { ...L.volume, y: L.volume.y + delta }, eps: { y: L.eps.y + delta, h } };
+    return { ...L, price: { ...L.price, h: L.price.h + delta }, volume: { ...L.volume, y: L.volume.y + delta }, ...(L.macd ? { macd: { ...L.macd, y: L.macd.y + delta } } : {}), eps: { y: L.eps.y + delta, h } };
 }
 
 function pickLayout(opts = {}) {
@@ -973,6 +977,30 @@ function chartSvg(m, opts = {}) {
     parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), L.volume.y + L.volume.h - Math.min(1, v / vMax) * (L.volume.h - fs(11) - 4)] : null), CHART_COLORS.volAvg, 1.3));
     if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.volume.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Wolumen tygodniowy · średnia 10 tyg.</text>`);
     parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
+
+    // --- 3b. MACD (12, 26, 9) tygodniowy: histogram + linia MACD + sygnał, liczone na pełnej historii (nie na oknie), ▼ przy przecięciu sygnału w dół
+    if (L.macd && L.macd.h >= 30 && m.macd) {
+        const P = L.macd, vals = [];
+        for (let i = 0; i < m.n; i++) { [m.macd.macd[i], m.macd.signal[i], m.macd.hist[i]].forEach(v => { if (Number.isFinite(v)) vals.push(v); }); }
+        if (vals.length) {
+            const ext = Math.max(Math.abs(Math.min(...vals)), Math.abs(Math.max(...vals))) * 1.1 || 1;
+            const top = P.y + fs(12), bot = P.y + P.h - 2, yM = v => bot - (v + ext) / (2 * ext) * (bot - top), y0 = yM(0);
+            parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${P.y - 4}" y2="${P.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
+            parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}" stroke="${CHART_COLORS.grid}" stroke-dasharray="3 3"/>`);
+            for (let i = 0; i < m.n; i++) {
+                const hv = m.macd.hist[i];
+                if (!Number.isFinite(hv)) continue;
+                const yy = yM(hv);
+                parts.push(`<rect x="${(x(i) - barHalf).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${(barHalf * 2).toFixed(1)}" height="${Math.max(0.5, Math.abs(yy - y0)).toFixed(1)}" fill="${hv >= 0 ? CHART_COLORS.up : CHART_COLORS.down}" opacity="0.55"/>`);
+                const prev = m.macd.hist[i - 1];
+                if (Number.isFinite(prev) && prev >= 0 && hv < 0) parts.push(`<path d="M${(x(i) - fs(3.5)).toFixed(1)},${(top - fs(2)).toFixed(1)} h${fs(7)} l${-fs(3.5)},${fs(5)} z" fill="#ff6b6b"/>`);
+            }
+            parts.push(polyline(m.macd.macd.map((v, i) => (Number.isFinite(v) ? [x(i), yM(v)] : null)), CHART_COLORS.rs, 1.4));
+            parts.push(polyline(m.macd.signal.map((v, i) => (Number.isFinite(v) ? [x(i), yM(v)] : null)), "#ff9f43", 1.4));
+            if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${P.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">MACD (12, 26, 9) tygodniowy</text>`);
+            parts.push(`<text x="${L.width - L.right + 6}" y="${(y0 + fs(3)).toFixed(1)}" font-size="${fs(9)}" fill="${CHART_COLORS.text}">0</text>`);
+        }
+    }
 
     // --- 4. EPS kwartalny
     if (L.eps.h >= 20) parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.eps.y - 4}" y2="${L.eps.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
