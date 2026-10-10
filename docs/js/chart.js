@@ -1316,6 +1316,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     const draw = () => {
         if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
             plot.innerHTML = darvasSvg(full, win, opts);
+            if (typeof attachDarvasHover === "function") attachDarvasHover(plot, full, readoutEl);
             readoutEl.textContent = typeof darvasStatus === "function" ? "Darvas: " + darvasStatus(full.c, undefined, undefined, undefined, full.v).text + (typeof darvasCupStatus === "function" && darvasCupStatus(full.c, full.cups).text ? " · " + darvasCupStatus(full.c, full.cups).text : "") + (typeof darvasPatternBoxes === "function" ? darvasPatternBoxes(full).map(p => " · " + darvasFlatStatus(full.c, p, p.name).text).join("") : "") : "Widok Darvasa (ceny zamknięcia tygodniowe): kup nad górą pudełka, stop pod jego dołem.";
             return;
         }
