@@ -432,7 +432,7 @@ class TestBases:
         df.iloc[-30:, df.columns.get_indexer(["Close", "High", "Low", "Open"])] *= 0.8      # korekta ~20 % od szczytu
         m = watchlist.compute_metrics(df)
         assert m["pct_from_high_52w"] < -5
-        assert m["base_type"] in ("flat", "cup", "correction", "deep") and m["pivot"] > m["price"]
+        assert m["base_type"] in ("flat", "square_box", "cup", "correction", "deep") and m["pivot"] > m["price"]
         assert m["pct_to_pivot"] > 0 and isinstance(m["vcp"], bool)
 
     def test_build_charts_includes_recent_bases_only(self):
@@ -1163,3 +1163,41 @@ class TestBoxBaseThirdsAndBreakout:
         # stara baza (wybicie > 2 tygodnie temu) nie jest „świeża”
         old = TestOneilPatterns.frame(self.FLAT + [103, 104, 105, 106, 107])
         assert watchlist.fresh_breakout_base(watchlist.detect_bases(old, None, 1), old.index) is None
+
+
+class TestCorridorBase:
+    def _frame(self, highs_creep=True):
+        # 40 tygodni wzrostu 50 -> 150, potem 6 tygodni korytarza 130–150 (górna krawędź lekko rośnie), na końcu tydzień wybicia
+        n_up, closes, hi, lo = 34, [], [], []
+        for i in range(n_up):
+            c = 50 + i * 3.0
+            closes.append(c)
+            hi.append(c * 1.01)
+            lo.append(c * 0.98)
+        box = [(148, 135), (150, 133), (149, 132), (151, 134), (150, 131), (152, 138)] if highs_creep else [(150, 135)] * 6
+        for top, bot in box:
+            hi.append(top)
+            lo.append(bot)
+            closes.append((top + bot) / 2 + 3)
+        hi.append(158)                                                  # tydzień wybicia nad szczytem korytarza (152)
+        lo.append(150)
+        closes.append(157)
+        idx = pd.date_range("2025-01-03", periods=len(closes), freq="W-FRI")
+        return pd.DataFrame({"Open": closes, "High": hi, "Low": lo, "Close": closes, "Volume": [1e6] * len(closes)}, index=idx)
+
+    def test_detects_corridor_with_creeping_highs(self):
+        df = self._frame()
+        bases = watchlist.detect_bases(df)
+        cor = [b for b in bases if b.get("corridor")]
+        assert len(cor) == 1
+        b = cor[0]
+        assert b["type"] in ("flat", "square_box") and b["weeks"] >= 6
+        assert 5 <= b["depth_pct"] <= 20 and b["pivot"] == 152.0
+        assert watchlist.fresh_breakout_base(bases, df.index) is b
+
+    def test_too_deep_or_no_prior_run_is_not_a_corridor(self):
+        df = self._frame()
+        df.loc[df.index[-5], "Low"] = 90.0                              # dołek 40 % pod szczytem: to już nie korytarz
+        assert not any(b.get("corridor") for b in watchlist.detect_bases(df))
+        flat = pd.DataFrame({"Open": 100.0, "High": 105.0, "Low": 95.0, "Close": 100.0, "Volume": 1e6}, index=pd.date_range("2025-01-03", periods=60, freq="W-FRI"))
+        assert not any(b.get("corridor") for b in watchlist.detect_bases(flat))   # bez wcześniejszego wzrostu

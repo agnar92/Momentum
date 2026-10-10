@@ -847,6 +847,10 @@ IPO_MAX_WEEKS = 52           # baza po debiucie (IPO base): spółka notowana ni
 IPO_MIN_WEEKS = 3
 CUP_HANDLE_MAX_DEPTH_BEAR_PCT = 30.0   # rączka przy dnie bessy: wyjątkowo 20–30 %
 HTF_DRYUP = 0.6              # średni wolumen we fladze <= 0,6x średniego wolumenu rajdu (drastyczny zanik)
+CORRIDOR_DEPTH_PCT = (5.0, 20.0)   # korytarz: zmiana ceny w oknie 5–20 % = baza / flaga (znane kryterium konsolidacji; flat wg O'Neila ma do 15 %, korytarz toleruje do 20 %)
+CORRIDOR_WEEKS = (5, 12)       # długość korytarza w tygodniach
+CORRIDOR_MIN_POS = 0.4         # zamknięcie w górnych 60 % korytarza (nie przy dnie)
+CORRIDOR_CLOSE_RANGE_PCT = 10.0   # same ZAMKNIĘCIA tygodni mieszczą się w 10 % (ciasna konsolidacja zamknięć odróżnia bazę od zwykłej huśtawki cen)
 BOX_BASE_TYPES = ("flat", "square_box")   # bazy-pudełka: dzielimy je na 3 części (cup z rączką i flaga to inna bajka — bez tego podziału)
 BRK_HIGH_WEEKS = 10          # zamknięcie wybicia = najwyższe zamknięcie od 10 tygodni
 BASE_TYPES_BUYABLE = ("cup", "double_bottom", "flat", "square_box", "ascending", "htf", "ipo")
@@ -1117,6 +1121,12 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
             from_i = j - window       # szczytem odniesienia staje się najwyższy High z ostatniego okna, inaczej cała historia to jedna „głęboka korekta” i nie ma żadnej bazy
             peak = from_i + int(np.argmax(hi[from_i:j + 1]))
     record(peak, n - 1, True)
+    # korytarz 5–20 % (stage 2 continuation), gdy żadna kupowalna baza nie obejmuje tego okresu; nakładające się „korekty” są zastępowane
+    cor = detect_corridor_base(hi, lo, cl, vol, dates, k)
+    if cor:
+        overlap = [b for b in bases if b["end"] >= cor["start"] and b["start"] <= cor["end"]]
+        if not any(b["type"] in BASE_TYPES_BUYABLE or b.get("rejection_reasons") for b in overlap):   # baza odrzucona z powodem (np. cup z wadą rączki) zostaje — nie nadpisujemy jej korytarzem
+            bases = [b for b in bases if b not in overlap] + [cor]
     # formujące się teraz: high tight flag (ma pierwszeństwo — rzadki i najsilniejszy) albo ascending base; zastępują otwartą „korektę/flat”
     extra = detect_high_tight_flag(hi, lo, cl, dates, k, vol) or detect_ascending_base(hi, lo, cl, dates, k) or (detect_ipo_base(hi, lo, cl, dates, k) if ipo else None)
     if extra:
@@ -1126,6 +1136,56 @@ def detect_bases(ohlc, bench_w=None, k=1, ipo=False):
     mark_base_on_base(bases, k)
     annotate_base_status(bases, hi, lo, cl, vol, dates, k, op)
     return bases
+
+
+def detect_corridor_base(hi, lo, cl, vol, dates, k=1):
+    """Korytarz konsolidacji (stage 2 continuation): ostatnie 5–12 tygodni mieszczą się w przedziale 5–20 % (od najwyższego High do najniższego Low)
+    po wcześniejszym wzroście >= +20 %. Wykrywa to, co algorytm szczyt-do-szczytu (`detect_bases`) gubi, gdy górna krawędź pudełka lekko rośnie
+    (kolejne szczyty +1 %) i baza rozpada się na krótkie kawałki. Okno szukane od NAJDŁUŻSZEGO. Jeśli ostatnia świeca zamknęła się nad szczytem
+    korytarza, to ona jest wybiciem i do bazy nie należy (baza kończy się tydzień wcześniej — `fresh_breakout_base` znajdzie pivot).
+    Zwraca słownik bazy (jak w `detect_bases`, typ flat / square_box, `corridor`=True) albo None."""
+    n = len(hi)
+    if k != 1 or n < 30:
+        return None
+    lo_w, hi_w = CORRIDOR_WEEKS
+    for e in (n - 2, n - 1):
+        if e < hi_w:
+            continue
+        for length in range(hi_w, lo_w - 1, -1):
+            s_i = e - length + 1
+            if s_i < 1:
+                continue
+            top = float(hi[s_i:e + 1].max())
+            bottom = float(lo[s_i:e + 1].min())
+            depth = (top - bottom) / top * 100
+            if not (CORRIDOR_DEPTH_PCT[0] <= depth <= CORRIDOR_DEPTH_PCT[1]):
+                continue
+            broke = float(cl[n - 1]) > top
+            if e == n - 2 and not broke:
+                continue                      # wersja „bez ostatniej świecy” tylko, gdy ta świeca właśnie wybiła
+            if e == n - 1 and broke:
+                continue
+            if (float(cl[e]) - bottom) / max(top - bottom, 1e-9) < CORRIDOR_MIN_POS:
+                continue
+            cmax, cmin = float(cl[s_i:e + 1].max()), float(cl[s_i:e + 1].min())
+            if (cmax - cmin) / cmax * 100 > CORRIDOR_CLOSE_RANGE_PCT:
+                continue
+            pk = s_i + int(np.argmax(hi[s_i:e + 1]))
+            pg = prior_gain_pct(hi, lo, pk, k)
+            if pg is None or pg < FLAT_PRIOR_GAIN_PCT:
+                continue
+            low_i = s_i + int(np.argmin(lo[s_i:e + 1]))
+            kind = "square_box" if BOX_DEPTH_PCT[0] <= depth <= BOX_DEPTH_PCT[1] and BOX_WEEKS[0] <= length <= BOX_WEEKS[1] else "flat"
+            drops = zigzag_contractions(list(cl[s_i:e + 1]), ZIGZAG_PCT)
+            return {
+                "start": dates[s_i].strftime("%Y-%m-%d"), "end": dates[e].strftime("%Y-%m-%d"),
+                "peak": _num(top), "low": _num(bottom), "depth_pct": _num(depth, 1), "weeks": length, "type": kind,
+                "low_date": dates[low_i].strftime("%Y-%m-%d"), "end_close": _num(cl[e]),
+                "open": e == n - 1, "pivot": _num(top), "contractions": drops,
+                "vcp": bool(len(drops) >= 2 and all(drops[j + 1] < drops[j] for j in range(len(drops) - 1)) and drops[-1] <= 10),
+                "prior_uptrend_pct": _num(pg, 0), "corridor": True,
+            }
+    return None
 
 
 def annotate_base_status(bases, hi, lo, cl, vol, dates, k=1, op=None):
@@ -1143,7 +1203,7 @@ def annotate_base_status(bases, hi, lo, cl, vol, dates, k=1, op=None):
         if buyable and pivot:
             b["buy_zone_max"] = _num(pivot * (1 + BUY_ZONE_MAX_PCT / 100))
             b["stop_loss_8pct"] = _num(pivot * (1 - STOP_LOSS_PCT / 100))
-        if b["type"] in BOX_BASE_TYPES and pivot and b.get("low") and b["low"] < pivot:
+        if b["type"] in BOX_BASE_TYPES and pivot and b.get("low") and b["low"] < pivot and (b.get("depth_pct") or 0) <= BASE_FLAT_MAX_DEPTH_PCT:   # korytarz głębszy niż 15 % ma stop ze środka > 10 % — zostaje ogólna reguła −8 %
             # pudełko bazy (od dołka do szczytu) dzielimy na 3 równe części: górna = za wcześnie, dolna = za późno (większa presja sprzedaży i luka w dół),
             # stop stawiamy w środkowej, najczęściej na jej dolnej krawędzi
             third = (pivot - b["low"]) / 3
