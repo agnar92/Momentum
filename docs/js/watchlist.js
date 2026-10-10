@@ -1953,8 +1953,8 @@ function drawChart() {
             focusBox: focus,
             pinBox: pin,
             pinFlash: Date.now() < pinFlashUntil,
-            noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
-            fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
+            noBench: !!focus || (!splitMode && annEdit.on && !annEdit.spaceOn),   // widok boxa: bez pasa S&P 500 u góry — więcej miejsca na świece
+            fit: focus ? { ...phoneFit(cell), scroll: true } : phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
             window: chartWindows[i], windowLen: chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
@@ -1964,6 +1964,7 @@ function drawChart() {
             book: chartBookOn, bookTitle: `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
+        cell.querySelector(".cell-body").classList.toggle("scroll-y", !!focus);   // widok boxa: cena na cały ekran, wolumen i MACD pod nią (przewijanie)
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
         if (i === activeIdx) primary = model;
     });
