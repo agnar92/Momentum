@@ -1229,6 +1229,11 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie (próba z suwakiem na dole nie działała)
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
+        if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
+            plot.innerHTML = darvasSvg(full, win, opts);
+            readoutEl.textContent = "Widok Darvasa (ceny zamknięcia tygodniowe): kup nad górą pudełka, stop pod jego dołem.";
+            return;
+        }
         const m = sliceModel(full, win.n, win.end);
         const geom = {};
         plot.innerHTML = chartSvg(m, { ...opts, geomOut: geom });

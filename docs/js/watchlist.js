@@ -26,6 +26,7 @@ const COMPACT_MAX_WIDTH = 640;
 const SWIPE_MIN_PX = 60, SWIPE_MAX_MS = 700;   // przeciągnięcie po tytule wykresu = następna / poprzednia spółka
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
+const CHART_DARVAS_KEY = "momentum_watchlist_chart_darvas";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {w}
 const CHART_BOOK_KEY = "momentum_watchlist_chart_book";   // wygląd i opisy jak w książce O'Neila (domyślnie włączone)
@@ -1641,6 +1642,7 @@ let estimatesPromise = null;
 let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartBookOn = true;     // 📖 Książka: opisy i oś jak na wykresach z książki O'Neila (tylko tygodniowy)
+let chartDarvasOn = false;  // 📦 widok Darvasa (Dar-Card): pudełka na cenach zamknięcia zamiast świec
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
 let chartRequested = null;  // ticker, którego wykres jest otwarty lub właśnie się wczytuje (zaznaczenie wiersza, strzałki)
@@ -1788,7 +1790,7 @@ function drawChart() {
         const opts = {
             log: chartLog, uid: "c" + i,
             compact: chartCompact, wide: chartWide,
-            hideLabels: !splitMode && !chartLegendOn,
+            hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
             window: chartWindows[i], windowLen: chartWinLen.w,
@@ -1888,7 +1890,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartPatBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartPatBtn", "chartDarvasBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -1904,6 +1906,7 @@ function initChartModal() {
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
+        chartDarvasOn = localStorage.getItem(CHART_DARVAS_KEY) === "1";
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved && Number.isFinite(saved.w) && saved.w > 0) chartWinLen.w = saved.w;
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
@@ -1933,6 +1936,18 @@ function initChartModal() {
         chartBookOn = !chartBookOn;
         try { localStorage.setItem(CHART_BOOK_KEY, chartBookOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
         updateBookButton();
+        if (currentChart) drawChart();
+    });
+    const updateDarvasButton = () => {
+        const b = document.getElementById("chartDarvasBtn");
+        b.textContent = chartDarvasOn ? "📦 Darvas: wł." : "📦 Darvas: wył.";
+        b.classList.toggle("active", chartDarvasOn);
+    };
+    updateDarvasButton();
+    document.getElementById("chartDarvasBtn").addEventListener("click", () => {
+        chartDarvasOn = !chartDarvasOn;
+        try { localStorage.setItem(CHART_DARVAS_KEY, chartDarvasOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        updateDarvasButton();
         if (currentChart) drawChart();
     });
     document.getElementById("chartLegendBtn").addEventListener("click", () => {
