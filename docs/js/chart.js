@@ -184,8 +184,14 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
     // pudełko Darvasa ostatniej bazy płaskiej / kwadratowej (otwartej albo świeżo po wybiciu): góra = pivot, dół = dołek bazy, stop −8 % od góry
     const boxBase = [...(c.bases || [])].reverse().find(b => BOX_BASE_TYPES.includes(b.type) && b.pivot > 0 && Number.isFinite(b.low) && b.low < b.pivot
         && (b.open || dateToIndex(weeks, b.end) >= lastIdx - 2));
-    const box = boxBase ? { i0: dateToIndex(weeks, boxBase.start), i1: boxBase.open ? lastIdx : dateToIndex(weeks, boxBase.end), top: boxBase.pivot, low: boxBase.low,
-        stop: Math.round(boxBase.pivot * (1 - BOX_STOP_PCT / 100) * 100) / 100 } : null;
+    // box rysujemy na CENACH ZAMKNIĘCIA (jak Darvas): góra = najwyższe, dół = najniższe zamknięcie w rozpiętości bazy (nie High / Low świec)
+    let box = null;
+    if (boxBase) {
+        const bi0 = dateToIndex(weeks, boxBase.start), bi1 = boxBase.open ? lastIdx : dateToIndex(weeks, boxBase.end);
+        const closes = c.c.slice(Math.max(0, bi0), bi1 + 1).filter(Number.isFinite);
+        const cTop = closes.length ? Math.max(...closes) : boxBase.pivot, cLow = closes.length ? Math.min(...closes) : boxBase.low;
+        if (cLow < cTop) box = { i0: bi0, i1: bi1, top: cTop, low: cLow, stop: Math.round(cTop * (1 - BOX_STOP_PCT / 100) * 100) / 100 };
+    }
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
     const pad = opts.pad ? FUTURE_PAD_WEEKLY : 0;
@@ -709,7 +715,7 @@ function chartSvg(m, opts = {}) {
         }
     }
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
-    const boxHasPivot = !!(m.box && pivotNear && Math.abs(pivotPx / m.box.top - 1) < 0.005);   // poziom wybicia pokazuje góra pudełka — bez osobnej linii pivotu i stref
+    const boxHasPivot = !!(m.box && pivotNear && pivotPx / m.box.top >= 0.995 && pivotPx / m.box.top <= 1.12);   // pivot (High bazy) leży tuż nad górą boxa z zamknięć   // poziom wybicia pokazuje góra pudełka — bez osobnej linii pivotu i stref
     if (pivotNear && m.lastShown !== false && !boxHasPivot) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
         const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : (lastC > pivotPx ? "#ff8a5b" : "#e8eaed");   // pomarańczowa = cena już nad pivotem, ale bez potwierdzonego wybicia na wolumenie   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
