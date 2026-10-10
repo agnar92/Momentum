@@ -715,7 +715,7 @@ function chartSvg(m, opts = {}) {
         }
     }
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
-    const boxHasPivot = !!(m.box && pivotNear && Math.abs(pivotPx / m.box.top - 1) < 0.005);   // poziom wybicia pokazuje góra pudełka — bez osobnej linii pivotu i stref
+    const boxHasPivot = !!(m.box && pivotNear && pivotPx / m.box.top >= 0.995 && pivotPx / m.box.top <= 1.12);   // pivot (High bazy) leży tuż nad górą boxa z zamknięć   // poziom wybicia pokazuje góra pudełka — bez osobnej linii pivotu i stref
     if (pivotNear && m.lastShown !== false && !boxHasPivot) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
         const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : (lastC > pivotPx ? "#ff8a5b" : "#e8eaed");   // pomarańczowa = cena już nad pivotem, ale bez potwierdzonego wybicia na wolumenie   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
