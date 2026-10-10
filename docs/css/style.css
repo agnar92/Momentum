@@ -875,7 +875,7 @@ body:not(.split) .wl-chart-head .btn .lbl { display: none; }
 
 /* ---------- telefon, rysowanie: wykres ma dostać prawie cały ekran (user: „strasznie mało miejsca na rysowanie”) ---------- */
 body:not(.split) .wl-chart-box.is-editing { padding: 4px 6px 0; }
-body:not(.split) .wl-chart-box.is-editing .wl-chart-head > .btn:not(#chartLineBtn):not(#chartCupBtn):not(#chartPenClear),
+body:not(.split) .wl-chart-box.is-editing .wl-chart-head > .btn:not(#chartLineBtn):not(#chartCupBtn):not(#chartPenClear):not(#chartBoxAddBtn),
 body:not(.split) .wl-chart-box.is-editing .wl-chart-ready,
 body:not(.split) .wl-chart-box.is-editing .wl-chart-readout,
 body:not(.split) .wl-chart-box.is-editing #chartCrossDate { display: none; }

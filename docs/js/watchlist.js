@@ -2141,53 +2141,21 @@ function initChartModal() {
     (() => {
         const btn = document.getElementById("chartBoxAddBtn");
         const body = document.getElementById("chartBody");
-        let drag = null;
-        const weekAt = (svg, clientX) => {   // widok świecowy: pozycja w poziomie → indeks tygodnia w pełnej serii
-            const g = (svg.dataset.cgeom || "").split(",").map(Number);
-            if (g.length < 5 || g.some(v => !Number.isFinite(v))) return null;
-            const [W, left, right, n, off] = g;
-            const r = svg.getBoundingClientRect();
-            const vx = (clientX - r.left) / r.width * W;
-            const i = Math.floor((vx - left) / (W - left - right) * n);
-            return Math.max(0, Math.min(n - 1, i)) + off;
-        };
         const sync = () => {
             const inFocus = !!(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
             btn.hidden = !inFocus;   // własny box rysuje się tylko na wykresie świecowym
             document.querySelector(".wl-chart-box").classList.toggle("focus-view", inFocus);
             const est = document.getElementById("chartEstBtn");   // estymaty analityków: tylko na wykresie słupkowym (po dotknięciu boxa), nie na Dar-Card
             if (est) est.hidden = !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
-            btn.classList.toggle("active", boxAddOn);
-            document.body.classList.toggle("box-add", boxAddOn);
-            btn.textContent = boxAddOn ? "＋ Box: przeciągnij po świecach" : "＋ Box";
         };
         window.syncBoxAddButton = sync;
-        btn.addEventListener("click", () => { boxAddOn = !boxAddOn; sync(); if (boxAddOn) showToast("Przeciągnij palcem poziomo przez tygodnie konsolidacji — powstanie własny, przypięty box.", { type: "info" }); });
-        body.addEventListener("pointerdown", ev => {
-            if (!boxAddOn) return;
-            const svg = ev.target.closest && ev.target.closest("svg#chartSvg");
-            if (!svg) return;
-            const i = weekAt(svg, ev.clientX);
-            if (i === null) return;
-            drag = { svg, i0: i };
-            ev.preventDefault();
-        });
-        const finish = ev => {
-            if (!drag) return;
-            const d = drag; drag = null;
-            const i1 = weekAt(d.svg, ev.clientX);
-            if (i1 === null || !currentChart) return;
-            const st = currentChart.charts.stocks && currentChart.charts.stocks[currentChart.ticker];
-            const lo = Math.max(0, Math.min(d.i0, i1)), hi = Math.min((st && st.c ? st.c.length : 0) - 1, Math.max(d.i0, i1));
-            const cl = st && st.c ? st.c.slice(lo, hi + 1).filter(Number.isFinite) : [];
-            if (hi - lo < 1 || cl.length < 2 || !(Math.max(...cl) > Math.min(...cl))) { showToast("Zaznacz co najmniej 2 tygodnie konsolidacji.", { type: "info" }); return; }
-            boxAddOn = false; sync();
+        btn.addEventListener("click", () => { if (annApi.toggleBox) annApi.toggleBox(); });
+        annApi.onBox = (ticker, box) => {   // własny box (kursor jak przy Linii / Cup): najwyższe / najniższe zamknięcie z przedziału, zapisany jako przypięty
+            if (!currentChart || currentChart.ticker !== ticker) return;
             pinFlashUntil = Date.now() + 2500;
-            savePinnedBox(currentChart.ticker, { top: Math.max(...cl), bottom: Math.min(...cl), start: currentChart.charts.weeks[lo] });
+            savePinnedBox(ticker, box);
             showToast("📌 Własny box zapisany i monitorowany.", { type: "success" });
         };
-        body.addEventListener("pointerup", finish);
-        body.addEventListener("pointercancel", () => { drag = null; });
         sync();
     })();
     document.getElementById("chartDarvasBtn").addEventListener("click", () => {

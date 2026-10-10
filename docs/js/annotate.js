@@ -490,6 +490,7 @@ function annOverlay(ctx) {
         }
     };
     const isTemplate = () => annEdit.tool === "flag" || annEdit.tool === "cuptap";
+    const padTool = () => annEdit.tool === "line" || annEdit.tool === "cup" || annEdit.tool === "box" || isTemplate();   // narzędzia stawiane kursorem (touchpad)
 
     // Shift = linia pozioma: druga cena = cena pierwszego punktu (kąt 0°)
     const level = (pt, ref, ev) => (ev && ev.shiftKey && ref ? { date: pt.date, price: ref.price } : pt);
@@ -574,11 +575,14 @@ function annOverlay(ctx) {
         if (editing && annEdit.pending.length) {
             const P = annEdit.pending.map(p => [geom.x(idxOf(p.date)), geom.yP(p.price)]);
             const cur = annEdit.cursor ? [geom.x(idxOf(annEdit.cursor.date)), geom.yP(annEdit.cursor.price)] : null;
-            body += `<polyline fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3" points="${pts2s(cur ? [...P, cur] : P)}"/>`;
+            if (annEdit.tool === "box") {   // własny box: podgląd przedziału tygodni (pasek od pierwszego punktu do kursora)
+                const xa = P[0][0], xb = cur ? cur[0] : xa;
+                body += `<rect pointer-events="none" x="${Math.min(xa, xb)}" y="${L.price.y}" width="${Math.abs(xb - xa)}" height="${L.price.h}" fill="#fff" fill-opacity="0.12" stroke="#fff" stroke-opacity="0.7" stroke-dasharray="4 3"/>`;
+            } else body += `<polyline fill="none" stroke="#fff" stroke-width="1.5" stroke-dasharray="4 3" points="${pts2s(cur ? [...P, cur] : P)}"/>`;
             P.forEach(p => { body += `<circle cx="${p[0]}" cy="${p[1]}" r="${h * 0.7}" fill="#fff"/>`; });
         }
         // kursor touchpada: krzyżyk w miejscu, w którym PRZYCIĄGNIE się punkt (to samo liczy stuknięcie), z podpisem daty i ceny
-        if (editing && annEdit.pad && (annEdit.tool === "line" || annEdit.tool === "cup" || isTemplate())) {
+        if (editing && annEdit.pad && padTool()) {
             const sn = snap(annEdit.pad), sx = geom.x(idxOf(sn.date)), sy = geom.yP(sn.price), fsz = geom.fs(11);
             const lbl = `${sn.date.slice(5)}  ${sn.price.toFixed(2)}`;
             const tx = Math.max(L.left + 4, Math.min(plotRight - 4, sx)), anchor = sx > (L.left + plotRight) / 2 ? "end" : "start";
@@ -617,21 +621,6 @@ function annOverlay(ctx) {
     const render = () => { ov.innerHTML = markup() + loupeMarkup(); };
     if (!ctx.readonly) { annUndoFor(ticker); annCurrent = { render, ticker, full: ctx.full }; }
     render();
-    // Dotyk bez trybu edycji: podwójne stuknięcie w wykres włącza edycję i od razu pokazuje wybór „linia / cup”
-    if (!editing && !ctx.readonly && !plot.dataset.annDbl) {
-        plot.dataset.annDbl = "1";
-        let last = null;
-        plot.addEventListener("pointerdown", ev => {
-            if (ev.pointerType === "mouse" || annEdit.on || annPen.on) return;
-            const now = Date.now();
-            if (last && now - last.t < 400 && Math.hypot(ev.clientX - last.x, ev.clientY - last.y) < 30) {
-                last = null;
-                if (annApi.setEdit) { annApi.setEdit(true, false); annAddMenu(ev.clientX, ev.clientY); }
-                return;
-            }
-            last = { t: now, x: ev.clientX, y: ev.clientY };
-        });
-    }
     // Notatka linii: najechanie myszą na linię/ikonę pokazuje kartę z treścią (edytowalną), ikona działa też stuknięciem
     const noteId = ev => {
         const g = ev.target.closest && ev.target.closest("[data-nline],[data-line]");
@@ -693,6 +682,15 @@ function annOverlay(ctx) {
                 annEdit.selected = { type: "line", id: line.id };
             }
             annEdit.pending = []; annEdit.tool = annEdit.mode; touch(); annSyncTools(); annLeaveSpace();
+        } else if (annEdit.tool === "box" && P.length === 2) {
+            const fi = d => dateToIndex(full.weeks, d);   // indeks w PEŁNEJ serii (idxOf liczy w oknie)
+            const i0 = Math.min(fi(P[0].date), fi(P[1].date)), i1 = Math.max(fi(P[0].date), fi(P[1].date));
+            const cl = (full.c || []).slice(i0, i1 + 1).filter(Number.isFinite);
+            annEdit.pending = [];
+            if (i1 - i0 < 1 || cl.length < 2 || !(Math.max(...cl) > Math.min(...cl))) { showToast("Zaznacz co najmniej 2 tygodnie konsolidacji.", { type: "info" }); annSyncTools(); return; }
+            annEdit.tool = annEdit.mode; annSyncTools();
+            if (annApi.onBox) annApi.onBox(ticker, { top: Math.max(...cl), bottom: Math.min(...cl), start: full.weeks[i0] });
+            if (annApi.setEdit) annApi.setEdit(false, false);   // własny box gotowy — koniec trybu rysowania
         } else if (annEdit.tool === "cup" && P.length === 3) {
             const [a, b, c] = P;
             if (a.date < b.date && b.date < c.date) {
@@ -764,7 +762,7 @@ function annOverlay(ctx) {
         let handle = t.dataset && t.dataset.handle;
         let handleTarget = handle ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
         let hitObj = t.dataset && (t.dataset.line || t.dataset.cup) ? (t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup }) : null;
-        const placing = annEdit.pending.length > 0 || isTemplate();   // trwa stawianie punktów nowego obiektu / szablon — dotyk nie „łapie” istniejących
+        const placing = annEdit.pending.length > 0 || isTemplate() || annEdit.tool === "box";   // trwa stawianie punktów nowego obiektu / szablon — dotyk nie „łapie” istniejących
         if (touchPtr && (!annEdit.tool || annEdit.mode) && !placing && !handle && !hitObj) {
             const pk = pickNear(toSvg(ev));
             if (pk) { if (pk.handle) { handle = pk.handle; handleTarget = pk.target; } else hitObj = pk.obj; }
@@ -833,17 +831,7 @@ function annOverlay(ctx) {
             return;
         }
         if (!t.classList || !t.classList.contains("ann-catch")) return;
-        if (!annEdit.tool && ev.pointerType !== "mouse") {   // dotyk: podwójne stuknięcie w pusty wykres = wybór „linia / cup”
-            const lt = annEdit.lastTap, now = Date.now();
-            if (lt && now - lt.t < 400 && Math.hypot(ev.clientX - lt.x, ev.clientY - lt.y) < 30) {
-                annEdit.lastTap = null;
-                ev.preventDefault();
-                annAddMenu(ev.clientX, ev.clientY);
-                return;
-            }
-            annEdit.lastTap = { t: now, x: ev.clientX, y: ev.clientY };
-        }
-        if (touchPtr && (annEdit.tool === "line" || annEdit.tool === "cup" || isTemplate())) {
+        if (touchPtr && padTool()) {
             // TOUCHPAD (jak w TakeProfit / TradingView): kursor-krzyżyk jest osobno od palca. Pierwsze dotknięcie ustawia go ANN_PAD_OFFSET_PX nad palcem,
             // kolejne przesuwają go względnie (palec nie zasłania punktu); krótkie stuknięcie stawia punkt dokładnie tam, gdzie widać pierścień
             // (to samo liczy się z magnesu na High / Low / Close), więc nic nie „ucieka” po puszczeniu palca.
@@ -879,7 +867,7 @@ function annOverlay(ctx) {
         if (isTemplate()) {
             applyTemplate(annEdit.tool, snap(toSvg(ev)));
             loupe = null;
-        } else if (annEdit.tool === "line" || annEdit.tool === "cup") {
+        } else if (annEdit.tool === "line" || annEdit.tool === "cup" || annEdit.tool === "box") {
             annEdit.pending.push(annEdit.tool === "line" && annEdit.pending.length === 1 ? level(snap(toSvg(ev)), annEdit.pending[0], ev) : snap(toSvg(ev)));
             annEdit.cursor = null;
             loupe = null;
@@ -924,7 +912,7 @@ function annOverlay(ctx) {
             annEdit.selected = t.dataset.line ? { type: "line", id: t.dataset.line } : { type: "cup", id: t.dataset.cup };
             annSyncTools(); render();
             annObjectMenu(ev.clientX, ev.clientY);
-        } else if (!annEdit.mode) annAddMenu(ev.clientX, ev.clientY);
+        }
     });
 }
 
@@ -1076,18 +1064,6 @@ function annObjectMenu(x, y) {
     ]);
 }
 
-function annAddMenu(x, y) {
-    const pick = tool => () => { annEdit.tool = tool; annEdit.pending = []; annEdit.cursor = null; annEdit.selected = null; annSyncTools(); if (annCurrent) annCurrent.render(); };
-    annShowMenu(x, y, [
-        { label: window.matchMedia && window.matchMedia("(pointer: coarse)").matches ? "＋ Linia (2 punkty)" : "＋ Linia (2 punkty; Shift = pozioma)", run: pick("line") },
-        { label: "＋ Cup (3 punkty)", run: pick("cup") },
-        null,
-        { label: "🚩 Flaga: stuknij początek konsolidacji", run: pick("flag") },
-        { label: "🏆 Cup: stuknij dołek", run: pick("cuptap") },
-        { label: "⚡ Dodaj wykryte automatycznie", run: () => annAddAuto() },
-    ]);
-}
-
 // Dodaje do własnych obiektów to, co wykrył algorytm w bieżącym widoku (bez duplikatów); alert „nad” na oporze flagi.
 function annAddAuto() {
     if (!annCurrent) return;
@@ -1130,7 +1106,7 @@ function annPickTemplate(tool) {
 function annLeaveSpace() {
     if (annEdit.spaceOn && !annEdit.spaceHeld && !annEdit.tool && !annEdit.pending.length && !annEdit.menuOpen && annApi.setEdit) annApi.setEdit(false, false);
 }
-const annApi = { setEdit: null };
+const annApi = { setEdit: null, onBox: null, toggleBox: null };
 
 // ---------- pasek narzędzi w oknie wykresu ----------
 
@@ -1159,6 +1135,7 @@ function annSyncTools() {
     if ($("toolFlag")) $("toolFlag").classList.toggle("active", annEdit.tool === "flag");
     if ($("toolCupTap")) $("toolCupTap").classList.toggle("active", annEdit.tool === "cuptap");
     if ($("chartPenBtn")) $("chartPenBtn").classList.toggle("active", annPen.on);
+    if ($("chartBoxAddBtn")) { $("chartBoxAddBtn").classList.toggle("active", annEdit.mode === "box"); $("chartBoxAddBtn").textContent = annEdit.mode === "box" ? "✕ Box" : "＋ Box"; }
     if ($("chartPenClear")) { const R = annCurrent && annStore[annCurrent.ticker]; $("chartPenClear").hidden = !(annPen.on && R && R.pen && R.pen.length); }
     const fab = $("annUndoFab");
     if (fab) fab.hidden = !((annEdit.on || annPen.on) && annUndo.stack.length);
@@ -1205,6 +1182,16 @@ function annInitUI(onRedraw) {
         annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null; annEdit.pad = null;
         annSyncTools();
         if (annCurrent) annCurrent.render();
+    };
+    // ＋ Box: własny box kursorem (touchpad jak przy Linii / Cup) — dwa stuknięcia = początek i koniec konsolidacji; bez przejmowania automatycznych linii
+    annApi.toggleBox = () => {
+        if (annEdit.mode === "box") { setEdit(false, false); return; }
+        annEdit.on = true; annPen.on = false; annEdit.spaceOn = false;
+        annEdit.mode = "box"; annEdit.tool = "box";
+        annEdit.pending = []; annEdit.selected = null; annEdit.cursor = null; annEdit.pad = null;
+        annSyncTools();
+        annOnRedraw();   // pełne przerysowanie: warstwa rysowania powstaje dopiero przy trybie edycji
+        showToast("Przeciągnij, by ustawić krzyżyk na początku konsolidacji, STUKNIJ; potem koniec i STUKNIJ drugi raz.", { type: "info" });
     };
     $("chartLineBtn").addEventListener("click", () => setMode("line"));
     $("chartCupBtn").addEventListener("click", () => setMode("cup"));
