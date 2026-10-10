@@ -822,7 +822,7 @@ class TestFinvizConfig:
         assert finviz.load_config(p) == {"extra": 3, "filters": "x", "max_tickers": 7}
         missing = finviz.load_config(tmp_path / "none.json")
         assert missing == {"filters": finviz.DEFAULT_FILTERS, "max_tickers": finviz.DEFAULT_MAX_TICKERS}
-        assert "cap_smallover" in finviz.DEFAULT_FILTERS and "ta_sma" not in finviz.DEFAULT_FILTERS   # bez filtra trendu: trend ocenia aplikacja / użytkownik
+        assert "cap_smallover" in finviz.DEFAULT_FILTERS and "ta_sma200_pa" in finviz.DEFAULT_FILTERS   # bez filtra trendu: trend ocenia aplikacja / użytkownik
 
     def test_rs_rating_is_percentile_within_the_list(self):
         stocks = [{"ticker": "LOW", "rs_score": -5.0}, {"ticker": "MID", "rs_score": 1.0}, {"ticker": "TOP", "rs_score": 9.0}, {"ticker": "NA", "rs_score": None}]
