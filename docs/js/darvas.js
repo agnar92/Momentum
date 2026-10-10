@@ -120,7 +120,7 @@ function darvasSvg(full, win, opts = {}) {
     const shown = [];
     for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) shown.push(full.c[i]);
     if (shown.length < 2) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na pudełka Darvasa.</text></svg>`;
-    const lo0 = Math.min(...shown, ...boxes.map(b => b.bottom)), hi0 = Math.max(...shown, ...boxes.map(b => b.top)), pad = (hi0 - lo0) * 0.06 || 1;
+    const lo0 = Math.min(...shown, ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100))), hi0 = Math.max(...shown, ...boxes.map(b => b.top)), pad = (hi0 - lo0) * 0.06 || 1;
     const lo = lo0 - pad, hi = hi0 + pad;
     const y = v => L.top + ph * (1 - (v - lo) / (hi - lo));
     const out = [];
@@ -147,12 +147,12 @@ function darvasSvg(full, win, opts = {}) {
     const bw = Math.max(2, pw / slots * 0.5);
     boxes.forEach(b => {
         const x0 = x(Math.max(start, b.i0)) - bw / 2, x1 = x(Math.min(endExcl - 1, Math.max(b.i1, b.i0 + 1))) + bw / 2;
-        const yT = y(b.top), yB = y(b.bottom), hatchH = Math.max(3, (yB - yT) * 0.07);
+        const yT = y(b.top), yB = y(b.bottom), yZ = y(b.bottom * (1 - DARVAS_STOP_PCT / 100));   // dół boxa = najniższe zamknięcie; zacieniona strefa zagrożenia leży 5 % POD nim (jak na Dar-Card)
         const col = b.outcome === "up" ? "#e8eaed" : b.outcome === "down" ? "#ff8a8a" : "#f4f6fa";
         const state = b.outcome === "up" ? "wybite w górę" : b.outcome === "down" ? "złamane w dół" : "otwarte";
         // sam box, bez linii i podpisów: kliknięcie / dotknięcie pokazuje ceny wejścia, anulowania i stop lossa (data-box → arkusz w watchlist.js)
         out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|${b.confirmed ? 1 : 0}|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="0.92" stroke="#ffffff" stroke-width="1.4"${b.confirmed ? "" : ' stroke-dasharray="3 2"'}><title>Box ${b.bottom.toFixed(2)}–${b.top.toFixed(2)} (${state}) — kliknij po ceny</title></rect>`);
-        out.push(`<rect x="${x0.toFixed(1)}" y="${(yB - hatchH).toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${hatchH.toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
+        out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${Math.max(2, yZ - yB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
     });
     const lastC = full.c[lastReal];
     if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
