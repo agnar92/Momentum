@@ -181,11 +181,11 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         };
     }).filter(b => b.i1 > b.i0 && b.iLow > b.i0 && b.iLow <= b.i1);
     const lastIdx = c.c.reduce((acc, v, i) => (Number.isFinite(v) ? i : acc), -1);
-    // pudełko ostatniej bazy płaskiej / kwadratowej (otwartej albo świeżo po wybiciu): góra = pivot, dół, podział na 3 części, stop z dolnej krawędzi środkowej
-    const boxBase = [...(c.bases || [])].reverse().find(b => BOX_BASE_TYPES.includes(b.type) && Number.isFinite(b.box_stop) && Array.isArray(b.box_thirds)
+    // pudełko Darvasa ostatniej bazy płaskiej / kwadratowej (otwartej albo świeżo po wybiciu): góra = pivot, dół = dołek bazy, stop −8 % od góry
+    const boxBase = [...(c.bases || [])].reverse().find(b => BOX_BASE_TYPES.includes(b.type) && b.pivot > 0 && Number.isFinite(b.low) && b.low < b.pivot
         && (b.open || dateToIndex(weeks, b.end) >= lastIdx - 2));
     const box = boxBase ? { i0: dateToIndex(weeks, boxBase.start), i1: boxBase.open ? lastIdx : dateToIndex(weeks, boxBase.end), top: boxBase.pivot, low: boxBase.low,
-        t1: boxBase.box_thirds[0], t2: boxBase.box_thirds[1], stop: boxBase.box_stop, stopPct: boxBase.box_stop_pct } : null;
+        stop: Math.round(boxBase.pivot * (1 - BOX_STOP_PCT / 100) * 100) / 100 } : null;
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
     const pad = opts.pad ? FUTURE_PAD_WEEKLY : 0;
@@ -227,7 +227,8 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
 // Poziom, od którego liczymy strefę zakupu i typowy stop (O'Neil): pivot BAZY KUPOWALNEJ (flat / cup — korekta i głęboka korekta to nie bazy),
 // a gdy go nie ma albo leży daleko od ceny — poziom oporu flagi / korytarza (dziennej, potem tygodniowej). Poziom dalej niż PIVOT_NEAR_PCT od ceny
 // jest bez znaczenia dla bieżącej decyzji, więc go nie rysujemy (inaczej etykiety „pivot / strefa zakupu / stop” lądują na brzegu wykresu).
-const BOX_BASE_TYPES = ["flat", "square_box"];   // pudełka: podział na 3 części i stop ze środka (cup z rączką i flaga to inna bajka)
+const BOX_BASE_TYPES = ["flat", "square_box"];   // pudełka Darvasa (cup z rączką i flaga to inna bajka)
+const BOX_STOP_PCT = 8;                           // stop pod pudełkiem: −8 % od góry (pivotu)
 const PIVOT_BASE_TYPES = ["flat", "cup", "double_bottom", "square_box", "ascending", "htf", "ipo"];   // wzorce z książki O'Neila, które mają pivot do kupna
 const PIVOT_NEAR_PCT = 15;
 function pivotFromStock(stock, bases) {
@@ -705,7 +706,8 @@ function chartSvg(m, opts = {}) {
         }
     }
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
-    if (pivotNear && m.lastShown !== false) {
+    const boxHasPivot = !!(m.box && pivotNear && Math.abs(pivotPx / m.box.top - 1) < 0.005);   // poziom wybicia pokazuje góra pudełka — bez osobnej linii pivotu i stref
+    if (pivotNear && m.lastShown !== false && !boxHasPivot) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
         const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : (lastC > pivotPx ? "#ff8a5b" : "#e8eaed");   // pomarańczowa = cena już nad pivotem, ale bez potwierdzonego wybicia na wolumenie   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
         const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
@@ -721,14 +723,18 @@ function chartSvg(m, opts = {}) {
             if (!m.box) addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
         }
     }
-    // pudełko bazy płaskiej / kwadratowej: obrys od początku bazy, linie podziału na 3 części (górna = za wcześnie, dolna = za późno) i stop z dołu środkowej części
+    // pudełko Darvasa bazy płaskiej / kwadratowej: prostokąt od początku bazy (góra = poziom wybicia, kolor jak pivot: biały czeka, zielony po wybiciu, pomarańczowy przebity bez potwierdzenia),
+    // pod nim czerwona linia stopu −8 % od góry. Zastępuje przerywaną linię pivotu i strefy zakupu / stopu.
     if (m.box && m.box.i1 >= 0 && m.box.i0 < m.n) {
         const b = m.box, bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
-        const yTop = yP(b.top), yLow = yP(b.low), yStop = yP(b.stop);
-        parts.push(`<g ${clipAttr} pointer-events="none"><rect x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${yLow - yTop}" fill="none" stroke="#8a8f9c" stroke-width="1" opacity="0.75"><title>Pudełko bazy (${b.low}–${b.top}): górna 1/3 = za wcześnie, dolna 1/3 = za późno, stop w środkowej</title></rect>`
-            + [b.t1, b.t2].map(v => `<line x1="${bx0}" x2="${bx1}" y1="${yP(v)}" y2="${yP(v)}" stroke="#8a8f9c" stroke-width="1" stroke-dasharray="2 4" opacity="0.8"/>`).join("")
-            + `<line x1="${bx0}" x2="${Math.min(L.width - L.right, bx1 + fs(40))}" y1="${yStop}" y2="${yStop}" stroke="#ff5d5d" stroke-width="1.8"><title>Stop z bazy: ${b.stop} (−${b.stopPct}% od pivotu)</title></line></g>`);
-        addLabel(`${opts.compact ? "stop" : "stop z bazy"} ${Number(b.stop).toFixed(2)} (−${b.stopPct}%)`, Math.min(bx1 + fs(40), L.width - L.right) - 3, Math.min(P.y + P.h - 3, yStop + fs(12)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 8 });
+        const yTop = yP(b.top), yLow = yP(b.low), yStop = yP(b.stop), lastCl = m.c[m.lastIdx];
+        const topCol = m.pivot && m.pivot.active ? "#2ecc71" : (lastCl > b.top ? "#ff8a5b" : "#e8eaed");
+        const xr = Math.min(L.width - L.right, bx1 + fs(36));
+        parts.push(`<g ${clipAttr} pointer-events="none"><rect x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.08" stroke="#8a8f9c" stroke-width="1" stroke-opacity="0.7"><title>Pudełko (${b.low}–${b.top})</title></rect>`
+            + `<line x1="${bx0}" x2="${xr}" y1="${yTop}" y2="${yTop}" stroke="${topCol}" stroke-width="2"><title>Góra pudełka = poziom wybicia ${b.top}</title></line>`
+            + `<line x1="${bx0}" x2="${xr}" y1="${yStop}" y2="${yStop}" stroke="#ff5d5d" stroke-width="1.6" stroke-dasharray="5 3"><title>Stop −${BOX_STOP_PCT}% od góry pudełka: ${b.stop}</title></line></g>`);
+        addLabel(Number(b.top).toFixed(2), xr - 3, yTop - 4, { anchor: "end", fill: topCol, bold: true, prio: 9 });
+        addLabel(`stop −${BOX_STOP_PCT}% ${Number(b.stop).toFixed(2)}`, xr - 3, Math.min(P.y + P.h - 3, yStop + fs(12)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 8 });
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
@@ -833,10 +839,8 @@ function chartSvg(m, opts = {}) {
         parts.push(polyline(pts, ec, 2.2).replace(/<polyline/g, `<polyline ${clipAttr}`));
         ttmAll.forEach((q, k) => inWin(q) && pts[k] && pts[k][1] >= P.y && pts[k][1] <= P.y + P.h && parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${r}" fill="${ec}" stroke="#0e0f13" stroke-width="1"><title>${q.d}: EPS za 4 kwartały ${q.t} (kwartał ${q.e}${Number.isFinite(q.g) ? `, ${q.g >= 0 ? "+" : ""}${q.g}% r/r` : ""})</title></circle>`));
         const lastAll = ttmAll[ttmAll.length - 1], lpAll = pts[pts.length - 1];
-        const lastIn = lastAll && inWin(lastAll) && lpAll;
         const lp = lpAll || [x(lastAll.week), P.y + P.h];
         const edge = L.width - L.right;
-        let labelX = Math.min(lp[0], edge - 4), anchor = lp[0] > edge - fs(60) ? "end" : "middle";
         if (nx && lastAll.week < m.n) {   // prognoza tylko gdy okno sięga ostatniego raportu (w starszym oknie przerywana linia przecinałaby wykres bez sensu)
             const nxX = Math.min(x(nxIdx), edge - 6), nxY = yE(nx.t), inside = nxIdx <= m.n - 0.5;
             if (lpAll && Number.isFinite(nxY)) parts.push(`<line ${clipAttr} x1="${lp[0]}" y1="${lp[1]}" x2="${nxX}" y2="${nxY}" stroke="${ec}" stroke-width="2.2" stroke-dasharray="4 3"/>`);
@@ -844,11 +848,8 @@ function chartSvg(m, opts = {}) {
                 parts.push(inside
                     ? `<circle cx="${nxX}" cy="${nxY}" r="${r}" fill="#0e0f13" stroke="${ec}" stroke-width="1.8"><title>Prognoza następnego raportu ${nx.d}: EPS ${nx.e}, TTM ${nx.t}</title></circle>`
                     : `<path d="M${nxX - 1},${nxY - 5} L${nxX + 6},${nxY} L${nxX - 1},${nxY + 5} Z" fill="${ec}"><title>Następny raport ${nx.d} (poza oknem): prognoza EPS ${nx.e}, TTM ${nx.t}</title></path>`);
-                if (!opts.compact) addLabel(`prog. ${nx.t}`, Math.min(nxX, edge - 4), Math.min(P.y + P.h - 4, Math.max(P.y + fs(10), nxY - fs(8))), { anchor: "end", fill: ec, bold: true, prio: 8 });
             }
-            labelX = lp[0]; anchor = "middle";
         }
-        if (lastIn) addLabel(`EPS ${lastAll.t}`, labelX, Math.min(P.y + P.h - 3, lp[1] + fs(15)), { anchor, size: fs(11), fill: ec, bold: true, prio: 8 });
     }
     // rozmieszczenie wszystkich etykiet ceny bez nakładania (telefon!) — dopiero teraz, gdy znamy wszystkie
     placeLabels(labels, { x0: L.left + 2, x1: L.width - L.right - 2, y0: P.y + 2, y1: P.y + P.h - 2 }, fixedLabels).forEach(lb => {

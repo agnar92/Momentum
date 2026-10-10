@@ -434,8 +434,8 @@ test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and 
     const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 14.9, tl_state: null }, { pad: true });
     const svg = chartSvg(m);
     assert.match(svg, /EPS \(4 kw\., TTM\) ┄ prognoza/);               // linia zysków jest NA wykresie cen i ma wpis w legendzie
-    assert.match(svg, />EPS 4\.9</);                                   // wartość TTM przy ostatnim kółku
-    assert.match(svg, /prog\. 5\.1/);                                  // przerywany odcinek do prognozy
+    assert.doesNotMatch(svg, />EPS 4\.9</);                            // bez podpisu przy fioletowej linii: wartości EPS są w pasku pod wykresem
+    assert.doesNotMatch(svg, /prog\. 5\.1/);                           // przerywany odcinek do prognozy zostaje, ale bez podpisu
     assert.match(svg, /stroke-dasharray="4 3"/);
     assert.match(svg, />\+33%</);                                      // etykieta r/r (pasek znaczników i tabela)
     assert.match(svg, /pivot 14\.90/);
@@ -674,4 +674,16 @@ test("posMiniSvg: miniatura z ceną, liniami wejścia / stopu / nowego stopu, MA
     const ys = [...keep.matchAll(/<text x="[\d.]+" y="([\d.]+)" font-size="8" fill="#(?:8a8f9c|ff5d5d)"/g)].map(m => +m[1]).sort((a, b) => a - b);
     assert.equal(ys.length, 2);
     assert.ok(ys[1] - ys[0] >= 9 - 1e-6);
+});
+
+test("chartSvg: baza flat to pudełko Darvasa (obrys + góra + stop −8 %), bez przerywanej linii pivotu i stref", () => {
+    const c = charts();
+    c.stocks.AAA.bases = [{ start: "2026-01-09", end: "2026-07-03", peak: 15, low: 12, pivot: 15, depth_pct: 20, type: "flat", open: true }];
+    const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 15, tl_state: null }, { pad: true });
+    assert.ok(m.box && m.box.top === 15 && m.box.low === 12 && m.box.stop === 13.8);
+    const svg = chartSvg(m);
+    assert.match(svg, /stop −8% 13\.80/);
+    assert.match(svg, /Pudełko \(12–15\)/);
+    assert.doesNotMatch(svg, /strefa zakupu do/);
+    assert.doesNotMatch(svg, /pivot 15\.00/);
 });
