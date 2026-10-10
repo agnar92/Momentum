@@ -45,7 +45,7 @@ function fitLayout(w, h, noTable = false, scroll = false) {
     const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
     const macd = short ? 0 : Math.max(44, Math.round(avail * 0.15));   // osobny panel MACD (12, 26, 9) NA GÓRZE, tuż pod suwakiem i legendą — cena, wolumen i EPS zachowują proporcje
     const price = Math.max(60, avail - bench - volume - eps - macd);
-    const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
+    const L = { width: Math.round(w), left: 0, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
     L.bench = { y: 4, h: bench };
     L.legend = { y: L.bench.y + bench + (bench ? 6 : 0), h: legendH };
     L.macd = { y: L.legend.y + legendH + 4, h: macd };

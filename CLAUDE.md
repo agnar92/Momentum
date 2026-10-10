@@ -345,3 +345,5 @@ npm ci && npm test && npm run lint                         # JS tests (node --te
 
 To look at the page locally: `cd docs && python3 -m http.server`, then open `http://localhost:8000`.
 `docs/data/watchlist.json` is committed, so the page works from a fresh checkout.
+
+**No side margins (user: "usuń marginesy z lewej i prawej, pamiętaj o tym")**: the chart box has no horizontal padding (CSS at the end of style.css; header rows keep 8 px), `fitLayout` `left: 0`. Keep it that way for new chart UI.
