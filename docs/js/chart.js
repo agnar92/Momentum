@@ -613,7 +613,7 @@ function chartSvg(m, opts = {}) {
     const pivotPx = m.pivot && Number.isFinite(m.pivot.price) ? m.pivot.price : null;
     const lastC = m.c[m.lastIdx];
     const pivotNear = pivotPx !== null && Number.isFinite(lastC) && Math.abs(pivotPx / lastC - 1) <= 0.15;
-    const focusExtra = opts.focusBox ? [[opts.focusBox.top], [opts.focusBox.bottom], [opts.focusBox.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]] : [];
+    const focusExtra = [opts.pinBox, opts.focusBox].filter(Boolean).flatMap(b => [[b.top], [b.bottom], [b.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]]);
     const pivotExtra = [...(pivotNear ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : []), ...focusExtra];
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
@@ -641,6 +641,7 @@ function chartSvg(m, opts = {}) {
     });
     if (bookOn && !opts.compact) parts.push(`<g pointer-events="none"><rect x="2" y="${P.y}" width="${L.left - 6}" height="${fs(26)}" fill="none" stroke="#3a3f4d"/><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(11)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.text}" text-anchor="middle">Cena =</text><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(22)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.textStrong}" font-weight="700" text-anchor="middle">${epsMult}×EPS</text></g>`);
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
+    parts.push(`<pattern id="chartZoneHatch${opts.uid || ""}" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="6" height="6" fill="#ffffff" fill-opacity="0.22"/><line x1="0" y1="0" x2="0" y2="6" stroke="#ffffff" stroke-opacity="0.75" stroke-width="2"/></pattern>`);
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${P.y}" width="${L.width - L.left - L.right}" height="${P.h}"/></clipPath>`);
     let yS = null;
     if (spxBand) {
@@ -738,15 +739,15 @@ function chartSvg(m, opts = {}) {
         const b = m.box, bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
         const yTop = yP(b.top), yLow = yP(b.low), lastCl = m.c[m.lastIdx];
         const topCol = m.pivot && m.pivot.active ? "#2ecc71" : (lastCl > b.top ? "#ff8a5b" : "#e8eaed");
-        parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1|${b.i0 + (m.off || 0)}|${b.i1 + (m.off || 0)}" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#ffffff" fill-opacity="0.12" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
+        parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1|${b.i0 + (m.off || 0)}|${b.i1 + (m.off || 0)}" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#ffffff" fill-opacity="0.2" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
     }
     if (m.box && m.box.i1 >= 0 && m.box.i0 < m.n) {   // szara strefa zagrożenia pod boxem (5 % pod dołem boxa)
         const b = m.box, yA = yP(b.low), yB = yP(b.low * (1 - BOX_RISK_ZONE_PCT / 100)), bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
-        parts.push(`<g ${clipAttr}><rect x="${bx0}" y="${yA}" width="${bx1 - bx0}" height="${Math.max(0, yB - yA)}" fill="#8a8f9c" fill-opacity="0.28" pointer-events="none"/></g>`);
+        parts.push(`<g ${clipAttr}><rect x="${bx0}" y="${yA}" width="${bx1 - bx0}" height="${Math.max(0, yB - yA)}" fill="url(#chartZoneHatch${opts.uid || ""})" pointer-events="none"/></g>`);
     }
     // fokus na boxie (kliknięcie): kupno = góra boxa, dół boxa = początek szarej strefy ryzyka (potencjalny exit), dół strefy (−8 % od góry) = exit
-    if (opts.focusBox) {
-        const fb = opts.focusBox, off = m.off || 0, zone = 1 - BOX_RISK_ZONE_PCT / 100;
+    for (const fb of [opts.pinBox, opts.focusBox].filter(Boolean)) {   // przypięty (monitorowany) box i box z fokusu — oba z tłem i znacznikami na osi
+        const off = m.off || 0, zone = 1 - BOX_RISK_ZONE_PCT / 100;
         const inPlot = yy => yy > P.y - 1 && yy < P.y + P.h + 1;
         const xr = L.width - L.right;
         // zamiast linii: półprzezroczyste tło dokładnie tam, gdzie box został narysowany — biała część (box) i szara strefa zagrożenia pod nim
@@ -755,8 +756,8 @@ function chartSvg(m, opts = {}) {
             if (xb <= xa) return;
             parts.push(`<g ${clipAttr}><rect x="${xa}" y="${ya}" width="${xb - xa}" height="${Math.max(0, yb - ya)}" fill="${fill}" fill-opacity="${op}" pointer-events="none"/></g>`);
         };
-        const boxBg = (top, bottom, xa, xb) => { rect(top, bottom, xa, xb, "#ffffff", 0.2); rect(bottom, bottom * zone, xa, xb, "#8a8f9c", 0.45); };
-        (m.focusPrev || []).forEach(pb => {
+        const boxBg = (top, bottom, xa, xb) => { rect(top, bottom, xa, xb, "#ffffff", 0.22); rect(bottom, bottom * zone, xa, xb, `url(#chartZoneHatch${opts.uid || ""})`, 1); };
+        (fb === opts.focusBox ? (m.focusPrev || []) : []).forEach(pb => {
             const step = (L.width - L.left - L.right) / m.n;
             boxBg(pb.top, pb.bottom, Math.max(L.left, x(pb.i0) - step / 2), Math.min(xr, x(pb.i1) + step / 2));
         });
@@ -764,7 +765,7 @@ function chartSvg(m, opts = {}) {
         const step0 = (L.width - L.left - L.right) / m.n;
         const xa = Math.max(L.left, x(fb.i0 - off) - step0 / 2), xe = Math.min(xr, x((fb.i1 || fb.i0) - off) + step0 / 2);
         boxBg(fb.top, fb.bottom, xa, xe);
-        rect(fb.top, fb.bottom, xe, xr, "#ffffff", 0.05); rect(fb.bottom, fb.bottom * zone, xe, xr, "#8a8f9c", 0.12);
+        rect(fb.top, fb.bottom, xe, xr, "#ffffff", 0.08); rect(fb.bottom, fb.bottom * zone, xe, xr, `url(#chartZoneHatch${opts.uid || ""})`, 0.5);
         [[fb.top, "#2e9e5b", "", 1.3], [fb.bottom, "#6b7280", "4 3", 1.3], [fb.bottom * zone, "#c0504d", "2 3", 1.3]].forEach(([v, col, dash, w], k) => {
             const yy = yP(v);
             if (!inPlot(yy)) return;

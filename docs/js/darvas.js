@@ -106,6 +106,16 @@ function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bo
         : { ...base, state: "WAIT", text: `CZEKAJ — pierwszy box ${zoneFrom}–${r2(last.top)}; kup po zamknięciu tygodnia nad ${r2(last.top)}` };
 }
 
+// Status przypiętego (monitorowanego) boxa względem bieżącej ceny: nad górą = wybicie, w boxie, w szarej strefie zagrożenia (5 % pod dołem), pod strefą = exit.
+function darvasPinStatus(box, price, zonePct = DARVAS_STOP_PCT) {
+    if (!box || !Number.isFinite(price) || !(box.top > box.bottom)) return { state: "NONE", text: "" };
+    const r2 = v => Math.round(v * 100) / 100, zone = r2(box.bottom * (1 - zonePct / 100));
+    if (price > box.top) return { state: "ABOVE", rank: 1, text: `wybił nad ${r2(box.top)} (+${((price / box.top - 1) * 100).toFixed(1)} %)` };
+    if (price >= box.bottom) return { state: "INSIDE", rank: 2, text: `w boxie ${r2(box.bottom)}–${r2(box.top)}, do wybicia ${((box.top / price - 1) * 100).toFixed(1)} %` };
+    if (price >= zone) return { state: "ZONE", rank: 0, text: `W STREFIE ZAGROŻENIA ${zone}–${r2(box.bottom)} — potencjalny exit` };
+    return { state: "EXIT", rank: 0, text: `EXIT — cena ${r2(price)} poniżej strefy zagrożenia (${zone})` };
+}
+
 // Widok Dar-Card dla okna wykresu: full = pełny model z chart.js (c, weeks, n, pad), win = {n, end}; opts: fit {w, h}
 function darvasSvg(full, win, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
@@ -124,7 +134,7 @@ function darvasSvg(full, win, opts = {}) {
     const lo = lo0 - pad, hi = hi0 + pad;
     const y = v => L.top + ph * (1 - (v - lo) / (hi - lo));
     const out = [];
-    out.push(`<defs><pattern id="darvasHatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" fill="#3a3f4d"/><line x1="0" y1="0" x2="0" y2="4" stroke="#8a8f9c" stroke-width="1.4"/></pattern></defs>`);
+    out.push(`<defs><pattern id="darvasHatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#ffffff" fill-opacity="0.22"/><line x1="0" y1="0" x2="0" y2="5" stroke="#ffffff" stroke-opacity="0.8" stroke-width="2"/></pattern></defs>`);
     // „papier w linie” jak na Dar-Card: poziome linie co tyle, ile wynosi ~1/80 zakresu; grubsze na okrągłych poziomach
     const ticks = niceTicks(lo, hi, compact ? 6 : 8);
     const step = (hi - lo) / 80;
@@ -160,5 +170,5 @@ function darvasSvg(full, win, opts = {}) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, DARVAS_CONFIRM, DARVAS_STOP_PCT };
+    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, DARVAS_CONFIRM, DARVAS_STOP_PCT };
 }
