@@ -153,6 +153,7 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
 
 // Cup & handle na samych zamknięciach (dla Dar-Card): z miseczki wykrytej przez watchlist.py (`full.cups`: i0 lewy szczyt, i1 prawy brzeg, handle {iEnd}) wyznacza kluczowe poziomy
 // z zamknięć tygodniowych: lewy szczyt, dołek miski, prawy brzeg, rączkę jako mały box (góra = najwyższe, dół = najniższe zamknięcie rączki) i pivot (góra rączki; bez rączki — lewy szczyt).
+const CUP_STOP_PCT = 8, CUP_BUY_MAX_PCT = 5;
 function darvasCupGeometry(c, cup) {
     const n = c.length;
     if (!cup || !(cup.i1 > cup.i0)) return null;
@@ -172,7 +173,10 @@ function darvasCupGeometry(c, cup) {
         }
     }
     const r2 = v => Math.round(v * 100) / 100;
-    return { i0, ib, i1, left: r2(left), bottom: r2(bottom), rim: r2(rim), handle: handle ? { ...handle, top: r2(handle.top), bottom: r2(handle.bottom) } : null, pivot: r2(handle ? handle.top : left), depthPct: r2((left - bottom) / left * 100), noHandle: !handle };
+    // reguły CANSLIM: kupno na pivocie (do +5 %), twardy stop −8 % od pivotu; box = pivot … dół (rączka wygasa, gdy zamknięcie spadnie pod jej dołek — jeśli rączka jest głębsza niż 8 %, dołem jest stop −8 %)
+    const pv = handle ? handle.top : left, stopPx = pv * (1 - CUP_STOP_PCT / 100);
+    const boxBottom = handle ? Math.max(handle.bottom, stopPx) : stopPx;
+    return { stop: r2(stopPx), boxBottom: r2(boxBottom), buyMax: r2(pv * (1 + CUP_BUY_MAX_PCT / 100)), i0, ib, i1, left: r2(left), bottom: r2(bottom), rim: r2(rim), handle: handle ? { ...handle, top: r2(handle.top), bottom: r2(handle.bottom) } : null, pivot: r2(handle ? handle.top : left), depthPct: r2((left - bottom) / left * 100), noHandle: !handle };
 }
 
 // Opis stanu ostatniej miski względem ostatniego zamknięcia (do paska pod Dar-Card): czeka / wybicie.
@@ -183,8 +187,11 @@ function darvasCupStatus(c, cups) {
     if (lastReal < 0 || !geoms.length) return { state: "NONE", text: "" };
     const g = geoms[geoms.length - 1], price = c[lastReal];
     const kind = g.noHandle ? "cup bez rączki ⚠" : "cup & handle";
-    if (price > g.pivot) return { state: "ABOVE", text: `${kind}: zamknięcie ${price} nad pivotem ${g.pivot} (+${((price / g.pivot - 1) * 100).toFixed(1)} %), miska −${g.depthPct} %` };
-    return { state: "WAIT", text: `${kind}: pivot ${g.pivot}, do wybicia ${((g.pivot / price - 1) * 100).toFixed(1)} %, miska −${g.depthPct} %` };
+    const lv = `kup ${g.pivot}–${g.buyMax}, wyjście: zamknięcie pod ${g.boxBottom}, stop −8 % ${g.stop}`;
+    if (price < g.boxBottom) return { state: "FAILED", text: `${kind}: zamknięcie ${price} pod dołem boxa ${g.boxBottom} — wzorzec wygasł (${lv})` };
+    if (price > g.buyMax) return { state: "LATE", text: `${kind}: ${price} więcej niż 5 % nad pivotem ${g.pivot} — nie goń (${lv})` };
+    if (price > g.pivot) return { state: "ABOVE", text: `${kind}: zamknięcie ${price} nad pivotem ${g.pivot} (+${((price / g.pivot - 1) * 100).toFixed(1)} %) — strefa kupna (${lv})` };
+    return { state: "WAIT", text: `${kind}: pivot ${g.pivot}, do wybicia ${((g.pivot / price - 1) * 100).toFixed(1)} %, miska −${g.depthPct} % (${lv})` };
 }
 
 // Widok Dar-Card dla okna wykresu: full = pełny model z chart.js (c, weeks, n, pad), win = {n, end}; opts: fit {w, h}
@@ -247,6 +254,7 @@ function darvasSvg(full, win, opts = {}) {
             const v = t <= g.ib ? g.bottom + (g.left - g.bottom) * Math.pow((g.ib - t) / (g.ib - g.i0), 2) : g.bottom + (g.rim - g.bottom) * Math.pow((t - g.ib) / (g.i1 - g.ib), 2);
             pts.push([x(t), y(v)]);
         }
+        const cupPoly = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
         // rączka = dalszy ciąg tej samej krzywej (mała zatoka za prawym brzegiem), nie osobny box
         if (g.handle && g.handle.i1 > g.i1) {
             for (let t = g.i1 + 0.25; t <= g.handle.i1 + 1e-9; t += 0.25) {
@@ -255,7 +263,7 @@ function darvasSvg(full, win, opts = {}) {
             }
         }
         const poly = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
-        const style = opts.cupStyle || "arc";
+        const style = opts.cupStyle || "pivotbox";
         const label = `${g.noHandle ? "cup ⚠" : "cup"} −${g.depthPct}%`;
         const title = `<title>${g.noHandle ? "Cup bez rączki (ryzykowny)" : "Cup & handle"}: miska −${g.depthPct} %, pivot ${g.pivot}</title>`;
         const lblY = y(g.bottom) + fs(15);
@@ -264,7 +272,14 @@ function darvasSvg(full, win, opts = {}) {
         const lastClose = full.c[lastReal];
         const txt = (tx, ty, t, col = "#ffffff", sz = 12) => `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" font-size="${fs(sz)}" font-weight="700" fill="${col}" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${t}</text>`;
         const hatchBase = (cx, half) => `<rect x="${(cx - half).toFixed(1)}" y="${y(g.bottom).toFixed(1)}" width="${(2 * half).toFixed(1)}" height="${Math.max(2, y(g.bottom * (1 - DARVAS_STOP_PCT / 100)) - y(g.bottom)).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`;
-        if (style === "mug") {   // KUBEK: biała czasza z uchem (ucho = rączka) i kreskowaną podstawką pod dnem
+        if (style === "pivotbox") {   // BOX PIVOTU: cienka miska dla kontekstu + box od rączki do prawej krawędzi: góra = pivot, dół = wygaśnięcie rączki / stop −8 %
+            out.push(`<polyline points="${cupPoly}" fill="none" stroke="#9adbff" stroke-width="${fs(1.6)}" stroke-dasharray="2 4" stroke-linecap="round" pointer-events="none">${title}</polyline>`);
+            const bx0 = x(g.handle ? g.handle.i0 : g.i1) - bw / 2, bx1 = W - L.right, byT = y(g.pivot), byB = y(g.boxBottom), byS = y(g.stop);
+            out.push(`<rect x="${bx0.toFixed(1)}" y="${byT.toFixed(1)}" width="${Math.max(0, bx1 - bx0).toFixed(1)}" height="${Math.max(2, byB - byT).toFixed(1)}" fill="#ffffff" fill-opacity="0.2" stroke="#ffffff" stroke-width="1.4" stroke-dasharray="${g.handle ? "0" : "4 3"}" pointer-events="none"><title>Box pivotu ${g.boxBottom}–${g.pivot}</title></rect>`);
+            if (byS - byB > 1) out.push(`<rect x="${bx0.toFixed(1)}" y="${byB.toFixed(1)}" width="${Math.max(0, bx1 - bx0).toFixed(1)}" height="${(byS - byB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
+            out.push(`<rect x="${W - L.right}" y="${(byS - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(byS + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${g.stop.toFixed(2)}</text>`);
+            out.push(txt(x(g.ib), y(g.bottom) + fs(15), label, "#7fd0ff"));
+        } else if (style === "mug") {   // KUBEK: biała czasza z uchem (ucho = rączka) i kreskowaną podstawką pod dnem
             out.push(`<polygon points="${closeP}" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
             if (!g.handle) {
             const ex0 = x(g.i1), ex1 = (g.handle ? x(g.handle.i1) : x(g.i1) + bw * 3) + bw / 2, ey0 = g.handle ? y(g.handle.top) : y(g.rim), ey1 = g.handle ? y(g.handle.bottom) : y(g.rim) + (y(g.bottom) - y(g.rim)) * 0.28;
@@ -316,7 +331,7 @@ function darvasSvg(full, win, opts = {}) {
             out.push(`<text x="${x(g.ib).toFixed(1)}" y="${lblY.toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label}</text>`);
         }
         const px1 = W - L.right;
-        if (g.handle) {
+        if (g.handle && style !== "pivotbox") {
             out.push(txt((x(g.handle.i0) + x(g.handle.i1)) / 2, y(g.handle.top) - fs(8), "rączka", "#ffffff", 10));
         }
         const pyy = y(g.pivot), lastCl = full.c[lastReal], pcol = lastCl > g.pivot ? "#4ee08a" : "#ffffff";
