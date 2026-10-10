@@ -1297,15 +1297,35 @@ let boxesOverviewData = null, boxesNewKeys = null, boxesCharts = null;
 function boxesLoadJson(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v === null ? fallback : v; } catch (e) { return fallback; } }
 
 // Rozwijana informacja o pozycji liczonej z boxa (Dar-Card): wejście = góra boxa (zamknięcie tygodnia nad nią), stop = dół strefy zagrożenia (5 % pod dołem boxa).
-function boxPositionHtml(top, bottom) {
+function boxPositionHtml(top, bottom, ticker) {
     const stop = Math.round(bottom * (1 - (typeof DARVAS_STOP_PCT !== "undefined" ? DARVAS_STOP_PCT : 5) / 100) * 100) / 100;
     const perShare = top > stop ? (top / stop - 1) * 100 : null;
     const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
     const lines = [`Wejście: zamknięcie tygodnia nad <b>${top.toFixed(2)}</b>`, `Stop: zamknięcie pod <b>${stop.toFixed(2)}</b> (dół strefy zagrożenia)${perShare !== null ? `, ryzyko ${perShare.toFixed(1)} % na akcję` : ""}`];
     if (size) lines.push(`Pozycja: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${size.pct_of_capital.toFixed(1)} % konta), strata przy stopie ${pln0(size.risk_pln)} (${size.risk_pct !== null ? size.risk_pct.toFixed(2) : "—"} % konta)${size.limited_by === "risk" ? " — ograniczone ryzykiem" : " — ograniczone % konta"}`);
     else lines.push("Pozycja: ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby liczyć liczbę akcji.");
-    return lines.map(l => `<div class="box-pos-line">${l}</div>`).join("");
+    const has = ticker && state.pos[ticker];
+    const mk = ticker ? `<button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(ticker)}|${top}|${bottom}">${has ? "💼 Zastąp pozycję tym boxem" : "💼 Utwórz pozycję z tego boxa"}</button>` : "";
+    return lines.map(l => `<div class="box-pos-line">${l}</div>`).join("") + mk;
 }
+
+// Automatyczna pozycja z boxa: wejście = góra boxa, stop = dół strefy zagrożenia (dół boxa −5 %), liczba akcji z kalkulatora konta (gdy konto ustawione).
+function createPositionFromBox(ticker, top, bottom) {
+    if (!state.data || !(top > bottom)) return;
+    const stop = Math.round(bottom * (1 - (typeof DARVAS_STOP_PCT !== "undefined" ? DARVAS_STOP_PCT : 5) / 100) * 100) / 100;
+    if (state.pos[ticker] && !window.confirm(`${ticker} ma już pozycję (wejście ${state.pos[ticker].entry}, stop ${state.pos[ticker].stop}). Zastąpić ją pozycją z boxa?`)) return;
+    const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
+    savePosition(ticker, { entry: top, stop, shares: size ? size.shares : null });
+    showToast(`💼 Pozycja ${ticker}: wejście ${top.toFixed(2)}, stop ${stop.toFixed(2)}${size ? `, ${fmtShares(size.shares)} akcji` : " (ustaw konto, by policzyć akcje)"}.`, { type: "success" });
+}
+if (typeof document !== "undefined") document.addEventListener("click", ev => {
+    const b = ev.target.closest && ev.target.closest(".box-mkpos");
+    if (!b) return;
+    ev.stopPropagation();
+    const [tk, top, bottom] = b.dataset.mkpos.split("|");
+    createPositionFromBox(tk, +top, +bottom);
+    if (state.tab === BOXES_TAB) renderBoxesPanel();
+}, true);
 
 function boxRowHtml(r, sec, isNew) {
     const [lab, cls] = BOX_STATE_LABELS[r.state] || [r.state, ""];
@@ -1313,7 +1333,7 @@ function boxRowHtml(r, sec, isNew) {
     const btn = sec === "pinned" ? `<button type="button" class="box-act" data-act="unpin" title="Odepnij box">✕</button>`
         : `<button type="button" class="box-act${pinned ? " on" : ""}" data-act="${pinned ? "unpin" : "pin"}" title="${pinned ? "Odepnij" : "Przypnij do monitorowania"}">📌</button>`;
     return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`
-        + `<details class="box-pos"><summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(r.box.top, r.box.bottom)}</details>`;
+        + `<details class="box-pos"><summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(r.box.top, r.box.bottom, r.ticker)}</details>`;
 }
 
 async function renderBoxesPanel() {
@@ -1399,6 +1419,7 @@ function initBoxesPanel() {
         try { localStorage.setItem(BOXES_OPEN_KEY, JSON.stringify(open)); } catch (e) { /* brak localStorage */ }
     }, true);
     panel.addEventListener("click", ev => {
+        if (ev.target.closest && ev.target.closest(".box-pos")) return;   // rozwijana pozycja z boxa nie otwiera wykresu
         const row = ev.target.closest && ev.target.closest(".box-row");
         if (!row || !boxesOverviewData) return;
         const r = boxesOverviewData[row.dataset.sec] && boxesOverviewData[row.dataset.sec][+row.dataset.i];
@@ -1962,7 +1983,7 @@ function drawChart() {
         const bar = document.createElement("div");
         bar.className = "box-focus-bar";
         bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
-        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
+        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom, focus.ticker)}`; bar.appendChild(d); }
         if (state.boxes[focus.ticker] && !(Math.abs(state.boxes[focus.ticker].top - focus.top) < 0.005 && Math.abs(state.boxes[focus.ticker].bottom - focus.bottom) < 0.005)) {   // jest przypięty (np. własny) box inny niż ten w fokusie — da się go usunąć
             const pb = state.boxes[focus.ticker], del = document.createElement("button");
             del.type = "button"; del.className = "btn"; del.textContent = `🗑 Usuń przypięty box ${pb.bottom.toFixed(2)}–${pb.top.toFixed(2)}`;
