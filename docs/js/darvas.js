@@ -71,7 +71,7 @@ const DARVAS_START_STOP_PCT = 10;   // stop początkowy przy pierwszym wybiciu: 
 // Stan akcji wg zasad DAR-CARD na ostatnim tygodniowym zamknięciu c: KUP (wybicie nad górę najwyższego boxa w tym tygodniu), TRZYMAJ (jest w najwyższym
 // boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia), SPRZEDAJ (po wyższym boxie cena spadła pod jego dno = wejście w strefę
 // zagrożenia), CZEKAJ (pierwszy box, jeszcze bez wybicia), POZA (box złamany bez wcześniejszego wybicia / brak boxa — brak powodu do trzymania).
-function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bottomConfirm = confirm, vol = null) {
+function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bottomConfirm = confirm, vol = null, maxExtPct = DARVAS_MAX_EXT_PCT) {
     const boxes = darvasBoxes(c, confirm, bottomConfirm);
     let lastReal = -1;
     c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
@@ -84,7 +84,7 @@ function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bo
     if (last.outcome === "up" && last.i1 === lastReal) {
         // kontrola poprawnego wybicia (blueprint): cena najwyżej 5 % nad górą boxa, wolumen ≥ 1,4× średniej z 10 tygodni (gdy znamy wolumen)
         const over = c[lastReal] / last.top - 1;
-        if (over > DARVAS_MAX_EXT_PCT / 100) return { ...base, state: "LATE", text: `ZA PÓŹNO — zamknięcie ${(over * 100).toFixed(1)} % nad górą boxa ${r2(last.top)} (limit ${DARVAS_MAX_EXT_PCT} %), nie goń` };
+        if (over > maxExtPct / 100) return { ...base, state: "LATE", text: `ZA PÓŹNO — zamknięcie ${(over * 100).toFixed(1)} % nad górą boxa ${r2(last.top)} (limit ${maxExtPct} %), nie goń` };
         let vr = null;
         if (vol && Number.isFinite(vol[lastReal])) {
             const prevV = vol.slice(Math.max(0, lastReal - DARVAS_VOL_WEEKS), lastReal).filter(Number.isFinite);
