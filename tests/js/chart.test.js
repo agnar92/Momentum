@@ -200,7 +200,7 @@ test("cup base is drawn as an arc with the depth label; indexes shift with slice
                           { start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 13, depth_pct: 13, type: "flat", open: false }];
     const m = buildChartModel(c, "AAA", null);
     assert.deepEqual(m.cups.map(x => [x.i0, x.iLow, x.i1]), [[1, 2, 4]]);   // tylko typ cup
-    const svg = chartSvg(m, { hints: true });
+    const svg = chartSvg(m, { book: true });
     assert.match(svg, /−26\.7%<\/text>/);
     assert.match(svg, /<title>Cup −26\.7%<\/title>/);
     assert.deepEqual(sliceModel(m, 2).cups.map(x => [x.i0, x.iLow, x.i1]), [[-2, -1, 1]]);
@@ -285,7 +285,7 @@ test("a cup that started before the first bar is kept with negative indexes (par
     const m = buildChartModel(c, "AAA", null);
     assert.equal(m.cups.length, 1);
     assert.ok(m.cups[0].i0 < 0 && m.cups[0].iLow < 0 && m.cups[0].i1 === 2);
-    assert.match(chartSvg(m, { hints: true }), /<title>Cup −26\.7%<\/title>/);
+    assert.match(chartSvg(m, { book: true }), /<title>Cup −26\.7%<\/title>/);
 });
 
 test("SMA colours differ from the candle colours", () => {
@@ -561,16 +561,6 @@ test("fundVerdict: poziom zależy od liczby zielonych sygnałów", () => {
     assert.equal(fundVerdict([1, 1, 1, -1, -1]).level, "mixed");
     assert.equal(fundVerdict([1, -1, -1, -1, 0]).level, "bad");
     assert.equal(fundVerdict([1, 0, 0, 0, 0]).level, "unknown");
-});
-
-test("cups are drawn only as educational hints (opts.hints) with letters A-E", () => {
-    const c = charts();
-    c.stocks.AAA.bases = [{ start: "2026-01-09", low_date: "2026-01-16", end: "2026-07-03", peak: 15, low: 11, end_close: 14, depth_pct: 26.7, type: "cup", open: false }];
-    const m = buildChartModel(c, "AAA", null);
-    assert.doesNotMatch(chartSvg(m), /Cup −/);
-    const on = chartSvg(m, { hints: true });
-    assert.match(on, />A<\/text>/);
-    assert.match(on, />C<\/text>/);
 });
 
 test("S&P 500 is a thin line in the top band of the price panel (own scale, no separate frame) like in the book", () => {

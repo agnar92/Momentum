@@ -26,7 +26,6 @@ const COMPACT_MAX_WIDTH = 640;
 const SWIPE_MIN_PX = 60, SWIPE_MAX_MS = 700;   // przeciągnięcie po tytule wykresu = następna / poprzednia spółka
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
-const CHART_HINTS_KEY = "momentum_watchlist_chart_hints";
 const CHART_EST_KEY = "momentum_watchlist_chart_est";   // "1" = estymaty analityków włączone
 const CHART_WINLEN_KEY = "momentum_watchlist_chart_winlen";   // zapamiętana długość okna suwaka {w}
 const CHART_BOOK_KEY = "momentum_watchlist_chart_book";   // wygląd i opisy jak w książce O'Neila (domyślnie włączone)
@@ -1463,8 +1462,6 @@ function applyPatternsUi() {
     if (cb) cb.checked = on;
     const b = document.getElementById("chartPatBtn");
     if (b) { b.textContent = on ? "🧩 Wzorce: wł." : "🧩 Wzorce: wył."; b.classList.toggle("active", on); }
-    const hint = document.getElementById("chartHintBtn");
-    if (hint) hint.hidden = !on;
 }
 
 function setPatterns(on) {
@@ -1644,7 +1641,6 @@ let estimatesPromise = null;
 let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartBookOn = true;     // 📖 Książka: opisy i oś jak na wykresach z książki O'Neila (tylko tygodniowy)
-let chartHintsOn = false;   // 💡 Nauka: edukacyjne podpowiedzi (wykryty cup z literami A–E)
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
 let chartRequested = null;  // ticker, którego wykres jest otwarty lub właśnie się wczytuje (zaznaczenie wiersza, strzałki)
@@ -1799,7 +1795,7 @@ function drawChart() {
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
-            hideAutoLines: annHide(c.ticker).lines, hints: chartHintsOn && state.patterns, patterns: state.patterns,
+            hideAutoLines: annHide(c.ticker).lines, patterns: state.patterns,
             book: chartBookOn, bookTitle: `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
@@ -1892,7 +1888,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartPatBtn", "chartHintBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartPatBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -1908,7 +1904,6 @@ function initChartModal() {
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
-        chartHintsOn = localStorage.getItem(CHART_HINTS_KEY) === "1";
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved && Number.isFinite(saved.w) && saved.w > 0) chartWinLen.w = saved.w;
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
@@ -1928,12 +1923,6 @@ function initChartModal() {
         chartScore.addEventListener("change", () => { if (chartRequested) setScore(chartRequested, chartScore.value); });
         chartScore.addEventListener("keydown", ev => { if (ev.key === "Enter") chartScore.blur(); });
     }
-    const updateHintButton = () => {
-        const b = document.getElementById("chartHintBtn");
-        b.textContent = chartHintsOn ? "💡 Nauka: wł." : "💡 Nauka: wył.";
-        b.classList.toggle("active", chartHintsOn);
-    };
-    updateHintButton();
     const updateBookButton = () => {
         const b = document.getElementById("chartBookBtn");
         b.textContent = chartBookOn ? "📖 Książka: wł." : "📖 Książka: wył.";
@@ -1944,12 +1933,6 @@ function initChartModal() {
         chartBookOn = !chartBookOn;
         try { localStorage.setItem(CHART_BOOK_KEY, chartBookOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
         updateBookButton();
-        if (currentChart) drawChart();
-    });
-    document.getElementById("chartHintBtn").addEventListener("click", () => {
-        chartHintsOn = !chartHintsOn;
-        try { localStorage.setItem(CHART_HINTS_KEY, chartHintsOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
-        updateHintButton();
         if (currentChart) drawChart();
     });
     document.getElementById("chartLegendBtn").addEventListener("click", () => {

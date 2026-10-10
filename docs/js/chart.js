@@ -632,7 +632,6 @@ function chartSvg(m, opts = {}) {
     if (bookOn && !opts.compact) parts.push(`<g pointer-events="none"><rect x="2" y="${P.y}" width="${L.left - 6}" height="${fs(26)}" fill="none" stroke="#3a3f4d"/><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(11)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.text}" text-anchor="middle">Cena =</text><text x="${(L.left - 4) / 2 + 1}" y="${P.y + fs(22)}" font-size="${fs(9.5)}" fill="${CHART_COLORS.textStrong}" font-weight="700" text-anchor="middle">${epsMult}×EPS</text></g>`);
     // miseczki (cup) jako łuk od lewego szczytu przez dołek do prawego brzegu, z głębokością w środku
     parts.push(`<clipPath id="chartPriceClip${opts.uid || ""}"><rect x="${L.left}" y="${P.y}" width="${L.width - L.left - L.right}" height="${P.h}"/></clipPath>`);
-    let hintLegendDone = false;
     let yS = null;
     if (spxBand) {
         const top = P.y + 4, bottom = P.y + P.h * spxBand - 10;
@@ -642,8 +641,8 @@ function chartSvg(m, opts = {}) {
         const lastI = m.spx.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
         addLabel(`S&P 500 ${fmtCompact(m.spx[lastI])}`, x(lastI) - 4, Math.max(P.y + fs(10), yS(m.spx[lastI]) - 6), { anchor: "end", size: fs(10), fill: CHART_COLORS.bench, bold: true, prio: 5, title: "S&P 500 (własna skala, jak na wykresach z książki O'Neila)" });
     }
-    ((opts.hints || bookOn) ? m.cups : []).forEach(cup => {
-        const cupCol = cup.noHandle ? "#f59e0b" : CHART_COLORS.cup;   // bez rączki = ryzykowny setup: bursztynowy   // miseczki: w widoku książkowym zawsze (łuk, rączka, pivot), litery A–E i legenda tylko w trybie 💡 Nauka
+    (bookOn ? m.cups : []).forEach(cup => {
+        const cupCol = cup.noHandle ? "#f59e0b" : CHART_COLORS.cup;   // bez rączki = ryzykowny setup: bursztynowy // miseczki rysujemy w widoku książkowym (łuk, rączka, pivot)
         const lowPx = i => (Number.isFinite(m.l[Math.round(i)]) ? yP(m.l[Math.round(i)]) : NaN);
         const { pts, yB } = cupArcPoints(cup, x, yP, 48, lowPx);
         parts.push(`<polyline clip-path="url(#chartPriceClip${opts.uid || ''})" fill="none" stroke="${cupCol}" stroke-width="2" stroke-linecap="round" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"><title>Cup −${cup.depth}%${cup.weeks ? ` · ${cup.weeks} tyg.` : ""}${cup.prior != null ? ` · trend przed: +${cup.prior}%` : ""}${cup.mktDd != null ? ` · S&amp;P w tym czasie −${cup.mktDd}%` : ""}</title></polyline>`);
@@ -664,26 +663,12 @@ function chartSvg(m, opts = {}) {
             parts.push(`<text x="${px}" y="${Math.max(yP(pivot) - 6, P.y + fs(10))}" font-size="${fs(11)}" font-weight="700" fill="${cupCol}" text-anchor="end" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">pivot ${pivot.toFixed(2)}</text>`);
             reserveLabel(`pivot ${pivot.toFixed(2)}`, px, Math.max(yP(pivot) - 6, P.y + fs(10)), "end", fs(11), true);
         }
-        // litery z książki O'Neila: A lewy szczyt, B dno, C prawy brzeg, D dołek rączki, E punkt zakupu (pivot, kupno nad nim z wolumenem)
-        const tag = (letter, px, py) => parts.push(`<g pointer-events="none"><circle cx="${px}" cy="${py}" r="${fs(8)}" fill="#0e0f13" stroke="${cupCol}" stroke-width="1.5"/><text x="${px}" y="${py + fs(3.5)}" font-size="${fs(10)}" font-weight="700" fill="${cupCol}" text-anchor="middle">${letter}</text></g>`);
-        const hintsOn = !!opts.hints;
-        if (hintsOn) {
-            tag("A", x(cup.i0), yP(cup.peak) - fs(14));
-            tag("B", x(cup.iLow), yP(cup.low) + fs(14));
-            tag("C", x(cup.i1), yP(cup.right) - fs(14));
-        }
         let xE = x(cup.i1);
         if (cup.handle) {
-            if (hintsOn) tag("D", x(cup.handle.iLow) + fs(16), yP(cup.handle.low));
             xE = Math.min(x(cup.handle.iEnd) + step * 3, L.width - L.right - fs(10));
         } else xE = Math.min(x(cup.i1) + step * 3, L.width - L.right - fs(10));
         if (pivot) {   // pivot: od prawego brzegu miseczki do punktu zakupu (otwarty cup bez rączki: rączka dopiero się formuje)
             parts.push(`<line clip-path="url(#chartPriceClip${opts.uid || ''})" x1="${cup.noHandle ? x(cup.i0) : x(cup.i1)}" x2="${xE}" y1="${yP(pivot)}" y2="${yP(pivot)}" stroke="${cupCol}" stroke-width="1.4" stroke-dasharray="4 3" pointer-events="none"/>`);
-            if (hintsOn) tag("E", xE, yP(pivot) - fs(14));
-        }
-        if (hintsOn && !hintLegendDone) {
-            hintLegendDone = true;
-            parts.push(`<text x="${L.left + 6}" y="${P.y + fs(12)}" font-size="${fs(10)}" fill="${cupCol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${opts.compact ? "A–E: szczyt · dno · brzeg · rączka · kup" : "A szczyt · B dno miseczki · C prawy brzeg · D rączka · E punkt zakupu (kup nad pivotem z wolumenem)"}</text>`);
         }
         // głębokość korekty (%) na dnie łuku miseczki — krótko, żeby się nie nakładała na świece (kontekst S&P i „bez rączki” są w dymku i w opisie bazy)
         const bx = Math.min(Math.max(x(cup.iLow), L.left + fs(24)), L.width - L.right - fs(24)), by = Math.min(yB + fs(14), P.y + P.h - fs(4));
