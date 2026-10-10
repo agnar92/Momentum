@@ -1817,7 +1817,7 @@ function drawChart() {
     }
     document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
     if (primary && state.patterns && typeof darvasStatus === "function") {   // stan wg zasad DAR-CARD (KUP / TRZYMAJ / SPRZEDAJ) dopisany do opisu formacji
-        const ds = darvasStatus(primary.c);
+        const ds = darvasStatus(primary.c, undefined, undefined, undefined, primary.v);
         if (ds.state !== "NONE") { const el = document.getElementById("chartPattern"); el.textContent = `${el.textContent ? el.textContent + " · " : ""}📦 Darvas: ${ds.text}`; }
     }
     const posStock = state.data.stocks.find(x => x.ticker === currentChart.ticker);
