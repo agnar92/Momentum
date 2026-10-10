@@ -35,16 +35,17 @@ const CHART_LAYOUT_WIDE = {
 };
 // Układ "dopasowany": viewBox = faktyczny rozmiar komórki w pikselach (siatka dzienny+tygodniowy / 4 spółki), panele proporcjonalnie
 // do wysokości, więc wykres wypełnia komórkę bez pustych pasów; czcionki są wtedy w prawdziwych pikselach.
-function fitLayout(w, h, noTable = false) {
+function fitLayout(w, h, noTable = false, scroll = false) {
     const twoRows = w < 560;
     const legendH = twoRows ? 36 : 20;
     const avail = Math.max(120, h - legendH - 56);
     // niski ekran (telefon poziomo): bez paska S&P 500, żeby wykres cen nie zamienił się w kreskę
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
-    const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
-    const macd = short ? 0 : Math.max(44, Math.round(avail * 0.17));   // osobny panel MACD (12, 26, 9) pod wolumenem
-    const price = Math.max(60, avail - bench - volume - eps - macd);
+    const bench = 0, volume = scroll ? 120 : Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = (dropTable || scroll) ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
+    let macd = short ? 0 : Math.max(44, Math.round(avail * 0.17));   // osobny panel MACD (12, 26, 9) pod wolumenem
+    let price = Math.max(60, avail - bench - volume - eps - macd);
+    if (scroll) { macd = 120; price = Math.max(220, avail - 90); }   // widok przewijany: cena zajmuje cały widoczny ekran, wolumen i MACD leżą pod nią (przewiń w dół)
     const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
     L.bench = { y: 4, h: bench };
     L.legend = { y: L.bench.y + bench + (bench ? 6 : 0), h: legendH };
@@ -461,8 +462,8 @@ function compactEpsPanel(L, opts) {
 function pickLayout(opts = {}) {
     if (opts.fit) {
         const noTable = (!!opts.compact || !!opts.book) && !opts.estimates;   // książkowy widok: pasek ↑ EPS niesie wartość i zmianę r/r (osobna tabela duplikowała te liczby)
-        const L = fitLayout(opts.fit.w, opts.fit.h, noTable);
-        return compactEpsPanel(opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4, noTable)) : L, opts);
+        const sc = !!opts.fit.scroll, L = fitLayout(opts.fit.w, opts.fit.h, noTable, sc);
+        return compactEpsPanel(opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4, noTable, sc)) : L, opts);
     }
     const L = opts.compact ? CHART_LAYOUT_COMPACT : (opts.wide ? CHART_LAYOUT_WIDE : CHART_LAYOUT);
     return compactEpsPanel(opts.hideLabels ? dropLegend(L) : L, opts);

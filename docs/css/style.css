@@ -993,3 +993,11 @@ body.box-add #chartSvg { touch-action: none; cursor: crosshair; }
 .box-pos > summary { cursor: pointer; padding: 4px 0; }
 .box-pos-line { padding: 2px 0 2px 8px; color: var(--text, #e6e8ee); }
 .box-focus-bar .box-pos { display: block; width: 100%; }
+
+/* Widok słupkowy po dotknięciu boxa: cena zajmuje cały ekran, wolumen i MACD leżą pod nią — przewiń w dół */
+.chart-grid .cell-body.scroll-y { overflow-y: auto !important; overflow-x: hidden; -webkit-overflow-scrolling: touch; display: block !important; }
+.chart-grid .cell-body.scroll-y > #chartPlot { flex: none !important; }
+.chart-grid .cell-body.scroll-y svg#chartSvg { height: auto !important; max-height: none !important; }
+.chart-grid .cell-body.scroll-y .wl-range-row { position: sticky; top: 0; z-index: 3; background: var(--bg, #0e0f13); }
+.box-focus-bar { padding: 4px 8px; font-size: 12px; }
+.box-focus-bar button { min-height: 28px; padding: 2px 8px; }
