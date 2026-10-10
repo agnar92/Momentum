@@ -192,6 +192,14 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         const cTop = closes.length ? Math.max(...closes) : boxBase.pivot, cLow = closes.length ? Math.min(...closes) : boxBase.low;
         if (cLow < cTop) box = { i0: bi0, i1: bi1, top: cTop, low: cLow, stop: Math.round(cTop * (1 - BOX_STOP_PCT / 100) * 100) / 100 };
     }
+    // high tight flag (+100 % w ≤ 8 tyg., potem flaga): pudełko na zamknięciach od początku flagi do dziś / wybicia, jak flat base
+    let htf = null;
+    const htfBase = [...(c.bases || [])].reverse().find(b => b.type === "htf" && (b.open || dateToIndex(weeks, b.end) >= lastIdx - 2));
+    if (htfBase) {
+        const hi0 = dateToIndex(weeks, htfBase.start), hi1 = htfBase.open ? lastIdx : dateToIndex(weeks, htfBase.end);
+        const hc = c.c.slice(Math.max(0, hi0), hi1 + 1).filter(Number.isFinite);
+        if (hc.length >= 2 && Math.max(...hc) > Math.min(...hc)) htf = { i0: hi0, i1: hi1, top: Math.max(...hc), low: Math.min(...hc) };
+    }
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
     const pad = opts.pad ? FUTURE_PAD_WEEKLY : 0;
@@ -202,7 +210,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         padDefault: pad ? FUTURE_DEFAULT_WEEKLY : 0,
         o: padArr(c.o), h: padArr(c.h), l: padArr(c.l), c: padArr(c.c), v: padArr(c.v),
         smas: smas.map(([label, values]) => ({ label, values: padArr(values || []), color: SMA_COLORS[label] })),
-        spx: padArr(spx), rs: padArr(rs), eps, lines, cups, box, climax: c.climax || null, distribution: c.distribution || null, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
+        spx: padArr(spx), rs: padArr(rs), eps, lines, cups, box, htf, climax: c.climax || null, distribution: c.distribution || null, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
         pole: tl && tl.info && tl.info.pole_start ? { i0: lineIndex(weeks, tl.info.pole_start), y0: tl.info.pole_low, i1: lineIndex(weeks, tl.info.pole_end), y1: tl.info.pole_high, gain: tl.info.pole_gain } : null,
         epsLine: eps,   // wszystkie raporty (także poza oknem) — linia EPS musi się ciągnąć przez okno nawet wtedy, gdy żaden raport nie wpada w jego środek
         epsLast: eps.length ? eps[eps.length - 1] : null,
@@ -1280,7 +1288,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     const draw = () => {
         if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
             plot.innerHTML = darvasSvg(full, win, opts);
-            readoutEl.textContent = typeof darvasStatus === "function" ? "Darvas: " + darvasStatus(full.c, undefined, undefined, undefined, full.v).text + (typeof darvasCupStatus === "function" && darvasCupStatus(full.c, full.cups).text ? " · " + darvasCupStatus(full.c, full.cups).text : "") : "Widok Darvasa (ceny zamknięcia tygodniowe): kup nad górą pudełka, stop pod jego dołem.";
+            readoutEl.textContent = typeof darvasStatus === "function" ? "Darvas: " + darvasStatus(full.c, undefined, undefined, undefined, full.v).text + (typeof darvasCupStatus === "function" && darvasCupStatus(full.c, full.cups).text ? " · " + darvasCupStatus(full.c, full.cups).text : "") + (typeof darvasPatternBoxes === "function" ? darvasPatternBoxes(full).map(p => " · " + darvasFlatStatus(full.c, p, p.name).text).join("") : "") : "Widok Darvasa (ceny zamknięcia tygodniowe): kup nad górą pudełka, stop pod jego dołem.";
             return;
         }
         const m = sliceModel(full, win.n, win.end);
