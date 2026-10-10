@@ -952,3 +952,7 @@ td.pos-macd.adv-bad strong { color: #ff5d5d; }
 body:not(.split) td.c-posMacd, body:not(.split) td.c-posMini { display: block; order: 6; flex: 0 0 100%; padding: 4px 8px; }
 body.split #table-POS td.pos-macd { min-width: 120px; max-width: 170px; font-size: 12px; }
 body.split #table-POS td.pos-macd .act-why { display: none; }   /* pełne uzasadnienie w dymku (title) i w linii gotowości nad wykresem */
+
+/* pasek fokusu na boxie (kliknięcie boxa → przybliżenie na jego fragment) */
+.box-focus-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; padding: 6px 10px; font-size: 12px; background: rgba(78, 224, 138, 0.1); border-bottom: 1px solid rgba(78, 224, 138, 0.35); }
+.box-focus-bar button { min-height: 32px; padding: 4px 10px; border-radius: 6px; border: 1px solid #4ee08a; background: transparent; color: #4ee08a; font-weight: 600; }

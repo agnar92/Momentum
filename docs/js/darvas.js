@@ -108,7 +108,7 @@ function darvasSvg(full, win, opts = {}) {
         const col = b.outcome === "up" ? "#e8eaed" : b.outcome === "down" ? "#ff8a8a" : "#f4f6fa";
         const state = b.outcome === "up" ? "wybite w górę" : b.outcome === "down" ? "złamane w dół" : "otwarte";
         // sam box, bez linii i podpisów: kliknięcie / dotknięcie pokazuje ceny wejścia, anulowania i stop lossa (data-box → arkusz w watchlist.js)
-        out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|${b.confirmed ? 1 : 0}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="0.92" stroke="#ffffff" stroke-width="1.4"${b.confirmed ? "" : ' stroke-dasharray="3 2"'}><title>Box ${b.bottom.toFixed(2)}–${b.top.toFixed(2)} (${state}) — kliknij po ceny</title></rect>`);
+        out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|${b.confirmed ? 1 : 0}|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="0.92" stroke="#ffffff" stroke-width="1.4"${b.confirmed ? "" : ' stroke-dasharray="3 2"'}><title>Box ${b.bottom.toFixed(2)}–${b.top.toFixed(2)} (${state}) — kliknij po ceny</title></rect>`);
         out.push(`<rect x="${x0.toFixed(1)}" y="${(yB - hatchH).toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${hatchH.toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
     });
     const lastC = full.c[lastReal];

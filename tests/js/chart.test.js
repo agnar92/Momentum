@@ -682,7 +682,7 @@ test("chartSvg: baza flat to samo pudełko Darvasa (klikalne), bez linii pivotu,
     const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 15, tl_state: null }, { pad: true });
     assert.ok(m.box && m.box.top === 15 && m.box.low === 12 && m.box.stop === 13.8);
     const svg = chartSvg(m);
-    assert.match(svg, /data-box="15\|12\|open\|1"/);                  // box do kliknięcia (ceny w arkuszu), bez linii stopu i podpisów
+    assert.match(svg, /data-box="15\|12\|open\|1\|1\|4"/);                  // box do kliknięcia (ceny w arkuszu), bez linii stopu i podpisów
     assert.doesNotMatch(svg, /stop −8%/);
     assert.doesNotMatch(svg, /strefa zakupu do/);
     assert.doesNotMatch(svg, /pivot 15\.00/);

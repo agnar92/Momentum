@@ -340,6 +340,7 @@ function sliceModel(m, n, end = m.n) {
         cups: m.cups.map(c => ({ ...c, i0: c.i0 - off, iLow: c.iLow - off, i1: c.i1 - off, handle: c.handle ? { ...c.handle, iLow: c.handle.iLow - off, iEnd: c.handle.iEnd - off } : null })).filter(c => c.i1 > 0 && c.i0 < n),
         rsNewHigh: cut(m.rsNewHigh), pxNewHigh: m.pxNewHigh ? cut(m.pxNewHigh) : null, volAvg: cut(m.volAvg),
         book: shiftBook(m.book, off, n),
+        off: (m.off || 0) + off,
         lastIdx: Math.min(m.lastIdx - off, n - 1),
         lastShown: m.lastIdx - off <= n - 1,   // czy ostatnia prawdziwa świeca mieści się w oknie
     };
@@ -605,7 +606,8 @@ function chartSvg(m, opts = {}) {
     const pivotPx = m.pivot && Number.isFinite(m.pivot.price) ? m.pivot.price : null;
     const lastC = m.c[m.lastIdx];
     const pivotNear = pivotPx !== null && Number.isFinite(lastC) && Math.abs(pivotPx / lastC - 1) <= 0.15;
-    const pivotExtra = pivotNear ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : [];
+    const focusExtra = opts.focusBox ? [[opts.focusBox.top], [opts.focusBox.bottom], [opts.focusBox.top * (1 - BOX_STOP_PCT / 100)]] : [];
+    const pivotExtra = [...(pivotNear ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : []), ...focusExtra];
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
     const spxVals = m.spx ? m.spx.filter(Number.isFinite) : [];
@@ -729,7 +731,17 @@ function chartSvg(m, opts = {}) {
         const b = m.box, bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
         const yTop = yP(b.top), yLow = yP(b.low), lastCl = m.c[m.lastIdx];
         const topCol = m.pivot && m.pivot.active ? "#2ecc71" : (lastCl > b.top ? "#ff8a5b" : "#e8eaed");
-        parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.1" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
+        parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1|${b.i0 + (m.off || 0)}|${b.i1 + (m.off || 0)}" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.1" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
+    }
+    // fokus na boxie (kliknięcie): poziomy wejścia / anulowania / stopu przez całe okno, żeby co tydzień widać było, czy cena przebiła
+    if (opts.focusBox) {
+        const fb = opts.focusBox, stopPx = fb.top * (1 - BOX_STOP_PCT / 100);
+        [[fb.top, "#4ee08a", "wejście (kup nad)", ""], [fb.bottom, "#ff8a5b", "anulowanie (dół boxa)", "4 3"], [stopPx, "#ff7a7a", `stop −${BOX_STOP_PCT} %`, "2 3"]].forEach(([v, col, txt, dash]) => {
+            const yy = yP(v);
+            if (!(yy > P.y - 1 && yy < P.y + P.h + 1)) return;
+            parts.push(`<g ${clipAttr}><line x1="${L.left}" x2="${L.width - L.right}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="1.3"${dash ? ` stroke-dasharray="${dash}"` : ""} opacity="0.9"/></g>`);
+            addLabel(`${txt} ${v.toFixed(2)}`, L.left + 4, yy - 3, { anchor: "start", fill: col, bold: true, prio: 9 });
+        });
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;

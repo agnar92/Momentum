@@ -1650,6 +1650,7 @@ let chartToken = 0;         // numeruje żądania wykresu — spóźniona odpowi
 let chartFull = false;      // okno wykresu na cały ekran (przycisk ⛶ / klawisz F)
 let chartWide = false;      // pełny ekran na szerokim monitorze => układ szeroki (chart.js)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
+let boxFocus = null;        // { ticker, top, bottom, i0, i1 } — po kliknięciu boxa: przybliżenie na jego fragment (świece + wolumen) do tygodniowego monitoringu
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
 // Estymaty analityków (watchlist.py::update_estimates -> data/estimates.json) — ładowane leniwie przy pierwszym włączeniu.
 function loadEstimates() {
@@ -1775,6 +1776,7 @@ function drawChart() {
     if (!currentChart) return null;
     const cells = chartCells();
     const activeIdx = 0;   // komórka z fokusem = edytowalna
+    const focus = boxFocus && boxFocus.ticker === currentChart.ticker ? boxFocus : null;
     const body = document.getElementById("chartBody");
     const cellHtml = (c, i) => {
         const st = state.data.stocks.find(x => x.ticker === c.ticker);
@@ -1790,7 +1792,8 @@ function drawChart() {
         const opts = {
             log: chartLog, uid: "c" + i,
             compact: chartCompact, wide: chartWide,
-            hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn,
+            hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus,
+            focusBox: focus,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
             window: chartWindows[i], windowLen: chartWinLen.w,
@@ -1804,6 +1807,14 @@ function drawChart() {
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
         if (i === activeIdx) primary = model;
     });
+    if (focus) {   // pasek nad wykresem: poziomy boxa + powrót do pełnego widoku
+        const stop = focus.top * (1 - DARVAS_STOP_PCT / 100);
+        const bar = document.createElement("div");
+        bar.className = "box-focus-bar";
+        bar.innerHTML = `<span>📦 Box: kup nad <b>${focus.top.toFixed(2)}</b> · anulowanie pod <b>${focus.bottom.toFixed(2)}</b> · stop <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        body.insertBefore(bar, body.firstChild);
+        bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
+    }
     document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
     const posStock = state.data.stocks.find(x => x.ticker === currentChart.ticker);
     if (primary && posStock && posStock.position) {   // moja pozycja: podpowiedź „czy przestawić stop” z MACD tygodniowego trafia do linii gotowości
@@ -1953,8 +1964,15 @@ function initChartModal() {
     document.getElementById("chartModal").addEventListener("click", ev => {   // kliknięcie boxa (Darvas / baza flat) → ceny wejścia, anulowania, stop loss
         const el = ev.target.closest && ev.target.closest("[data-box]");
         if (!el || typeof darvasBoxInfo !== "function") return;
-        const [top, bottom, outcome, conf] = el.dataset.box.split("|");
+        const [top, bottom, outcome, conf, i0, i1] = el.dataset.box.split("|");
         const t = currentChart ? currentChart.ticker : "";
+        if (currentChart && Number.isFinite(+i0) && i0 !== undefined && i1 !== undefined) {   // przybliż na box: świece + wolumen od początku boxa do dziś (+ miejsce na kolejne tygodnie)
+            boxFocus = { ticker: t, top: +top, bottom: +bottom, i0: +i0, i1: +i1 };
+            const end = +i1 + 1 + 6;   // clampWindow ucina do końca danych
+            chartWindows[0] = { n: Math.max(15, end - (+i0) + 4), end };
+            drawChart();
+            return;
+        }
         showSheet(`${escapeHtml(t)} — box`, darvasBoxSheetHtml(darvasBoxInfo(+top, +bottom), outcome, conf === "1"));
     });
     document.getElementById("chartLegendBtn").addEventListener("click", () => {
