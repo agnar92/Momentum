@@ -252,7 +252,45 @@ function darvasSvg(full, win, opts = {}) {
         const label = `${g.noHandle ? "cup ⚠" : "cup"} −${g.depthPct}%`;
         const title = `<title>${g.noHandle ? "Cup bez rączki (ryzykowny)" : "Cup & handle"}: miska −${g.depthPct} %, pivot ${g.pivot}</title>`;
         const lblY = y(g.bottom) + fs(15);
-        if (style === "bowl") {   // miska jak box Dar-Card: biała półprzezroczysta czasza z białą obwódką
+        const closeP = `${poly} ${x(g.i0).toFixed(1)},${y(g.left).toFixed(1)}`;
+        const topY = y(Math.max(g.left, g.rim)), bowlId = `cupClip${Math.round(g.i0)}`;
+        const lastClose = full.c[lastReal];
+        const txt = (tx, ty, t, col = "#ffffff", sz = 12) => `<text x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" font-size="${fs(sz)}" font-weight="700" fill="${col}" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${t}</text>`;
+        const hatchBase = (cx, half) => `<rect x="${(cx - half).toFixed(1)}" y="${y(g.bottom).toFixed(1)}" width="${(2 * half).toFixed(1)}" height="${Math.max(2, y(g.bottom * (1 - DARVAS_STOP_PCT / 100)) - y(g.bottom)).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`;
+        if (style === "mug") {   // KUBEK: biała czasza z uchem (ucho = rączka) i kreskowaną podstawką pod dnem
+            out.push(`<polygon points="${closeP}" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
+            const ex0 = x(g.i1), ex1 = (g.handle ? x(g.handle.i1) : x(g.i1) + bw * 3) + bw / 2, ey0 = g.handle ? y(g.handle.top) : y(g.rim), ey1 = g.handle ? y(g.handle.bottom) : y(g.rim) + (y(g.bottom) - y(g.rim)) * 0.28;
+            out.push(`<path d="M${ex0.toFixed(1)},${ey0.toFixed(1)} H${(ex1 - 6).toFixed(1)} Q${ex1.toFixed(1)},${ey0.toFixed(1)} ${ex1.toFixed(1)},${(ey0 + 6).toFixed(1)} V${(ey1 - 6).toFixed(1)} Q${ex1.toFixed(1)},${ey1.toFixed(1)} ${(ex1 - 6).toFixed(1)},${ey1.toFixed(1)} H${ex0.toFixed(1)}" fill="none" stroke="#ffffff" stroke-width="${fs(3.2)}" stroke-linecap="round" pointer-events="none"/>`);
+            out.push(hatchBase(x(g.ib), Math.max(bw, (x(g.i1) - x(g.i0)) * 0.22)));
+            out.push(txt(x(g.ib), y(g.bottom) + fs(26), label));
+        } else if (style === "cutout") {   // NEGATYW: biała płyta od szczytu do dna, z wyciętym kształtem miski (miska = pusty „kielich”)
+            const rx0 = x(g.i0), rx1 = x(g.i1), ry0 = topY - fs(4), ry1 = y(g.bottom) + fs(3);
+            out.push(`<path d="M${rx0.toFixed(1)},${ry0.toFixed(1)} H${rx1.toFixed(1)} V${ry1.toFixed(1)} H${rx0.toFixed(1)} Z M${closeP.split(" ").map((p2, i) => (i ? "L" : "") + p2).join(" ")} Z" fill="#ffffff" fill-opacity="0.24" fill-rule="evenodd" stroke="#ffffff" stroke-width="${fs(1.4)}" pointer-events="none">${title}</path>`);
+            out.push(txt(x(g.ib), y(g.bottom) + fs(15), label));
+        } else if (style === "pipe") {   // PRZEWÓD: gruba biała rura przez lewy szczyt – dołek – brzeg z kołowymi węzłami i podpisami
+            out.push(`<polyline points="${poly}" fill="none" stroke="#0e0f13" stroke-opacity="0.9" stroke-width="${fs(9)}" stroke-linecap="round" pointer-events="none"/>`);
+            out.push(`<polyline points="${poly}" fill="none" stroke="#ffffff" stroke-opacity="0.9" stroke-width="${fs(5)}" stroke-linecap="round" pointer-events="none">${title}</polyline>`);
+            [[g.i0, g.left, "szczyt"], [g.ib, g.bottom, "dołek"], [g.i1, g.rim, "brzeg"]].forEach(([ii, vv, nm]) => {
+                out.push(`<circle cx="${x(ii).toFixed(1)}" cy="${y(vv).toFixed(1)}" r="${fs(6)}" fill="#0e0f13" stroke="#ffffff" stroke-width="${fs(2.4)}" pointer-events="none"/>`);
+                out.push(txt(x(ii), y(vv) + (nm === "dołek" ? fs(20) : -fs(11)), nm, "#d6e6f5", 10));
+            });
+            out.push(txt(x(g.ib), y(g.bottom) + fs(34), label));
+        } else if (style === "glass") {   // SZKLANKA: czasza napełniona „wodą” do poziomu ostatniego zamknięcia — widać, ile miski odrobiono i ile brakuje do brzegu
+            const wy = Math.min(Math.max(y(lastClose), topY), y(g.bottom));
+            out.push(`<clipPath id="${bowlId}"><polygon points="${closeP}"/></clipPath>`);
+            out.push(`<g clip-path="url(#${bowlId})"><rect x="${(x(g.i0) - 2).toFixed(1)}" y="${wy.toFixed(1)}" width="${(x(g.i1) - x(g.i0) + 4).toFixed(1)}" height="${(y(g.bottom) - wy + 4).toFixed(1)}" fill="#2fb4ff" fill-opacity="0.45"/><line x1="${x(g.i0).toFixed(1)}" x2="${x(g.i1).toFixed(1)}" y1="${wy.toFixed(1)}" y2="${wy.toFixed(1)}" stroke="#bfe8ff" stroke-width="${fs(1.6)}"/></g>`);
+            out.push(`<polygon points="${closeP}" fill="none" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
+            const fill = Math.round(Math.min(1, Math.max(0, (lastClose - g.bottom) / ((g.pivot - g.bottom) || 1))) * 100);
+            out.push(txt(x(g.ib), y(g.bottom) + fs(15), `${label} · napełnienie ${fill}%`));
+        } else if (style === "hatch") {   // TEKSTURA: czasza wypełniona tym samym kreskowaniem co strefa zagrożenia, bez obrysu
+            out.push(`<polygon points="${closeP}" fill="url(#darvasHatch)" fill-opacity="0.8" pointer-events="none">${title}</polygon>`);
+            out.push(txt(x(g.ib), y(g.bottom) + fs(15), label));
+        } else if (style === "glow") {   // POŚWIATA: miękki gradient od brzegu (pivot) w dół, bez obrysu — im głębiej, tym jaśniej
+            const gid = `cupGlow${Math.round(g.i0)}`;
+            out.push(`<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity="0.03"/><stop offset="1" stop-color="#ffffff" stop-opacity="0.55"/></linearGradient></defs>`);
+            out.push(`<polygon points="${closeP}" fill="url(#${gid})" pointer-events="none">${title}</polygon>`);
+            out.push(txt(x(g.ib), y(g.bottom) + fs(15), label));
+        } else if (style === "bowl") {   // miska jak box Dar-Card: biała półprzezroczysta czasza z białą obwódką
             out.push(`<polygon points="${poly} ${x(g.i0).toFixed(1)},${y(g.left).toFixed(1)}" fill="#ffffff" fill-opacity="0.2" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
             out.push(`<text x="${x(g.ib).toFixed(1)}" y="${(y(g.bottom) - fs(6)).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#ffffff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label}</text>`);
         } else if (style === "bracket") {   // bez krzywej: nawias nad miską z opisem (szczyt → dołek → brzeg), box rączki jak zwykły box
@@ -269,7 +307,7 @@ function darvasSvg(full, win, opts = {}) {
             out.push(`<text x="${x(g.ib).toFixed(1)}" y="${lblY.toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label}</text>`);
         }
         const px1 = W - L.right;
-        if (g.handle) {
+        if (g.handle && style !== "mug") {
             const hx0 = x(g.handle.i0) - bw / 2, hx1 = x(g.handle.i1) + bw / 2, hyT = y(g.handle.top), hyB = y(g.handle.bottom), hyZ = y(g.handle.bottom * (1 - DARVAS_STOP_PCT / 100));
             out.push(`<rect x="${hx0.toFixed(1)}" y="${hyT.toFixed(1)}" width="${(hx1 - hx0).toFixed(1)}" height="${Math.max(2, hyB - hyT).toFixed(1)}" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-width="1.4" pointer-events="none"><title>Rączka ${g.handle.bottom}–${g.handle.top}</title></rect>`);
             out.push(`<rect x="${hx0.toFixed(1)}" y="${hyB.toFixed(1)}" width="${(hx1 - hx0).toFixed(1)}" height="${Math.max(2, hyZ - hyB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
