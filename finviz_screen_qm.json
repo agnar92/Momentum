@@ -1,8 +1,0 @@
-{
-  "_instructions": "Szeroki skaner (python watchlist.py --profile qm, krok codziennego workflow Daily Watchlist Refresh, przed CANSLIM). Finviz robi tylko pre-screen: kapitalizacja >= 2 mld USD (cap_midover), sredni wolumen > 1 mln akcji (sh_avgvol_o1000) i cena nad SMA20, SMA50 i SMA200 (ok. 300 spolek; screener wskazany przez uzytkownika). Pobierane sa wszystkie widoki Finviz, historia EPS i estymaty analitykow (jak w CANSLIM), a wykresy buduje sie dla WSZYSTKICH spolek. min_dollar_volume_m / min_adr_pct = opcjonalne odciecie zapisu (0 = zapisz wszystko; progi Qullamaggiego ustawia sie w aplikacji, Filtry); charts_top_pct = 100 -> wykresy dla wszystkich (ponizej 100: tylko top X % ceny/minimum). Nieznany kod Finviz jest po cichu ignorowany.",
-  "filters": "cap_midover,sh_avgvol_o1000,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa",
-  "max_tickers": 6000,
-  "min_dollar_volume_m": 0,
-  "min_adr_pct": 0,
-  "charts_top_pct": 100
-}
