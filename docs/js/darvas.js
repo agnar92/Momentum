@@ -68,8 +68,8 @@ const DARVAS_START_STOP_PCT = 10;   // stop początkowy przy pierwszym wybiciu: 
 // Stan akcji wg zasad DAR-CARD na ostatnim tygodniowym zamknięciu c: KUP (wybicie nad górę najwyższego boxa w tym tygodniu), TRZYMAJ (jest w najwyższym
 // boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia), SPRZEDAJ (po wyższym boxie cena spadła pod jego dno = wejście w strefę
 // zagrożenia), CZEKAJ (pierwszy box, jeszcze bez wybicia), POZA (box złamany bez wcześniejszego wybicia / brak boxa — brak powodu do trzymania).
-function darvasStatus(c, zonePct = DARVAS_STOP_PCT) {
-    const boxes = darvasBoxes(c);
+function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM) {
+    const boxes = darvasBoxes(c, confirm);
     let lastReal = -1;
     c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
     if (!boxes.length || lastReal < 0) return { state: "NONE", text: "brak boxa Darvasa (za mało danych)" };
