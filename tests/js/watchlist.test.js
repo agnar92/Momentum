@@ -674,3 +674,9 @@ test("Follow-Through Day: opis w banerze rynku i M z FTD", () => {
     const c = canslimInfo({}, { regime: "uptrend", distDays: 1, ftd: true });
     assert.equal(c.flags.M, true);
 });
+
+test("prefsNormalize: przypięty box zachowuje górę / dół / datę, nieprawidłowy staje się null", () => {
+    const p = prefsNormalize({ box: { A: { v: { top: 20, bottom: 18, start: "2026-05-01", x: 1 }, t: "2026-01-01T00:00:00Z" }, B: { v: { top: 10, bottom: 12, start: "2026-05-01" }, t: "2026-01-01T00:00:00Z" } } });
+    assert.deepEqual(p.box.A.v, { top: 20, bottom: 18, start: "2026-05-01" });
+    assert.equal(p.box.B.v, null);
+});

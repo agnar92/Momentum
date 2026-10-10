@@ -81,6 +81,7 @@ const state = {
     favs: new Set(),
     scores: {},
     pos: {},
+    boxes: {},   // przypięte boxy do monitorowania {T: {top, bottom, start}}
     acct: { capital: null, riskPct: null, posPct: null, fx: null },
     scoreMin: null,
     scoreMax: null,
@@ -865,6 +866,9 @@ const COL = {
     pos: ["Pozycja", "pos_pl_pct", s => s.position
         ? `<td class="${s.position.stop_hit ? "negative" : (s.position.pl_pct >= 0 ? "positive" : "negative")}" title="Moja pozycja: wejście ${money(s.position.entry)}, stop ${money(s.position.stop)}">💼 ${fmtPct(s.position.pl_pct)}${s.position.r !== null ? ` · ${s.position.r.toFixed(1)}R` : ""}</td>`
         : `<td class="muted"></td>`, "Moja pozycja: zysk od wejścia i wielokrotność ryzyka (R)"],
+    pbox: ["Box 📌", "pbox_rank", s => s.pbox
+        ? `<td class="${s.pbox.state === "ABOVE" ? "positive" : s.pbox.state === "INSIDE" ? "" : "negative"}" title="Przypięty box ${s.pbox.bottom}–${s.pbox.top}: ${escapeHtml(s.pbox.text)}">📌 ${s.pbox.state === "ABOVE" ? "wybił" : s.pbox.state === "INSIDE" ? "w boxie" : s.pbox.state === "ZONE" ? "strefa!" : "EXIT"}</td>`
+        : `<td class="muted"></td>`, "Przypięty (przytrzymaj box) box do monitorowania: wybił / w boxie / w strefie zagrożenia / exit"],
     posPl: ["Zysk", "pos_pl_pct", s => s.position
         ? `<td class="${s.position.pl_pct >= 0 ? "positive" : "negative"}"><strong>${fmtPct(s.position.pl_pct)}</strong>${s.position.pl_usd !== null ? ` · <span class="small">${money0(s.position.pl_usd)}</span>` : ""}</td>` : `<td class="muted">—</td>`, "Zysk / strata od ceny wejścia (w % i w $)"],
     posR: ["R", "pos_r", s => s.position && s.position.r !== null ? `<td class="${s.position.r >= 0 ? "positive" : "negative"}"><strong>${s.position.r.toFixed(2)}R</strong></td>` : `<td class="muted">—</td>`, "Zysk w wielokrotnościach początkowego ryzyka (cena − wejście) / (wejście − stop)"],
@@ -887,7 +891,7 @@ const actCell = (s, key) => s[key]
     ? `<td class="act-cell act-${s[key].tone}${s.action_tf === s[key].tf ? " act-primary" : ""}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "brk", "pos", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "ratio", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const ALERT_COLUMNS = ["alKind", "alDir", "alValue", "alDist", "alStatus", "alAct"];
@@ -898,7 +902,7 @@ const TAB_COLUMNS = {
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
-const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "cs"];
+const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "cs", "pbox"];
 const TAB_COLUMNS_COMPACT = {
     LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], QM: COMPACT_COLUMNS, BASES: COMPACT_COLUMNS,
     ALERTS: ["ticker", "alDist", "alStatus", "alAct", "brk", "strat"],
@@ -954,6 +958,7 @@ function rowsForTab(tab) {
     const alerts = alertRows(annStore, state.data.stocks);
     tagStrategies(state.data.stocks, common, state, alerts);
     tagPositions(state.data.stocks, state.pos);
+    tagPinnedBoxes(state.data.stocks, state.boxes);
     tagCanslim(state.data.stocks, canslimMarket());
     tagActions(state.data.stocks, canslimMarket(), state.csCore);
     if (tab === "CS") return canslimRows(stocks, state.csMin, state.csCore);
@@ -1172,16 +1177,17 @@ function loadSettings() {
 // ---------- własne ustawienia: ulubione ★ i score (synchronizowane z adnotacjami przez Gist) ----------
 // prefsStore = { scores: {T: {v: liczba|null, t: ISO}}, favs: {T: {v: true|false, t: ISO}} } — każda wartość ma czas zmiany,
 // a usunięcie to wpis z v = null/false (nagrobek), dzięki czemu scalenie z drugim urządzeniem (mergePrefs) wybiera nowszą zmianę.
-let prefsStore = { scores: {}, favs: {}, pos: {}, acct: {} };
+let prefsStore = { scores: {}, favs: {}, pos: {}, acct: {}, box: {} };
 const PREFS_KEY = "momentum_watchlist_prefs";
 const PREFS_EPOCH = "1970-01-01T00:00:00.000Z";   // dane sprzed synchronizacji: przegrywają z każdą świadomą zmianą
 
-const PREFS_KINDS = ["scores", "favs", "pos", "acct"];
+const PREFS_KINDS = ["scores", "favs", "pos", "acct", "box"];
 const PREFS_FIELDS = { pos: ["entry", "stop", "shares"], acct: ["capital", "riskPct", "posPct", "fx"] };   // cel (take profit) usunięty; konto w PLN: kapitał, ryzyko %, % konta na pozycję, ręczny kurs USD/PLN
 // Wartość wpisu: score = liczba|null, fav = bool, pos (wejście / stop / akcje / cel) i acct (kapitał, ryzyko %) = obiekt liczb albo null.
 function prefsValue(kind, v) {
     if (kind === "scores") return Number.isFinite(v) ? v : null;
     if (kind === "favs") return v === true;
+    if (kind === "box") return v && typeof v === "object" && Number.isFinite(v.top) && Number.isFinite(v.bottom) && v.top > v.bottom && v.bottom > 0 && typeof v.start === "string" ? { top: v.top, bottom: v.bottom, start: v.start } : null;   // przypięty box: góra / dół (zamknięcia) + data początku
     if (!v || typeof v !== "object") return null;
     const o = {};
     PREFS_FIELDS[kind].forEach(k => { o[k] = Number.isFinite(v[k]) && v[k] >= 0 ? v[k] : null; });
@@ -1221,6 +1227,8 @@ function prefsApply() {
     Object.keys(prefsStore.scores).forEach(t => { if (Number.isFinite(prefsStore.scores[t].v)) state.scores[t] = prefsStore.scores[t].v; });
     state.pos = {};
     Object.keys(prefsStore.pos).forEach(t => { if (prefsStore.pos[t].v) state.pos[t] = prefsStore.pos[t].v; });
+    state.boxes = {};
+    Object.keys(prefsStore.box).forEach(t => { if (prefsStore.box[t].v) state.boxes[t] = prefsStore.box[t].v; });
     state.acct = prefsStore.acct.main && prefsStore.acct.main.v ? { ...prefsStore.acct.main.v } : { capital: null, riskPct: null, posPct: null, fx: null };
 }
 
@@ -1285,6 +1293,33 @@ function saveAcct(capital, riskPct, posPct, fx = state.acct.fx) {
     const pos = x => (Number.isFinite(x) && x > 0 ? x : null);
     prefsStore.acct.main = { v: Number.isFinite(capital) && capital > 0 ? { capital, riskPct: pos(riskPct), posPct: pos(posPct), fx: pos(fx) } : null, t: new Date().toISOString() };
     prefsWriteLocal(); prefsApply(); annOnSave();
+}
+
+// Przypina box (góra / dół z zamknięć, data początku) do monitorowania albo odpina, gdy to ten sam box.
+function togglePinnedBox(ticker, top, bottom, i0) {
+    const weeks = currentChart && currentChart.charts.weeks || [];
+    const start = weeks[Math.max(0, Math.min(weeks.length - 1, +i0))];
+    if (!start || !(top > bottom)) return;
+    const cur = state.boxes[ticker];
+    if (cur && Math.abs(cur.top - top) < 0.005 && Math.abs(cur.bottom - bottom) < 0.005) { savePinnedBox(ticker, null); showToast("📌 Box odpięty.", { type: "info" }); }
+    else { savePinnedBox(ticker, { top, bottom, start }); showToast("📌 Box przypięty do monitorowania — zostaje na wykresie także po wyjściu ze strefy.", { type: "success" }); }
+}
+
+function savePinnedBox(ticker, box) {
+    prefsStore.box[ticker] = { v: box ? { top: box.top, bottom: box.bottom, start: box.start } : null, t: new Date().toISOString() };
+    prefsWriteLocal(); prefsApply(); annOnSave();
+    tagPinnedBoxes(state.data.stocks, state.boxes);
+    renderTable();
+    if (currentChart && currentChart.ticker === ticker) drawChart();
+}
+
+function tagPinnedBoxes(stocks, boxes) {
+    stocks.forEach(s => {
+        const b = boxes[s.ticker];
+        const st = b && typeof darvasPinStatus === "function" ? darvasPinStatus(b, s.price) : null;
+        s.pbox = st && st.state !== "NONE" ? { ...b, ...st } : null;
+        s.pbox_rank = s.pbox ? s.pbox.rank : null;
+    });
 }
 
 function savePosition(ticker, pos) {
@@ -1650,6 +1685,7 @@ let chartToken = 0;         // numeruje żądania wykresu — spóźniona odpowi
 let chartFull = false;      // okno wykresu na cały ekran (przycisk ⛶ / klawisz F)
 let chartWide = false;      // pełny ekran na szerokim monitorze => układ szeroki (chart.js)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
+let boxLongPressed = false;   // po przytrzymaniu boxa następujące kliknięcie nie otwiera fokusu
 let boxFocus = null;        // { ticker, top, bottom, i0, i1 } — po kliknięciu boxa: przybliżenie na jego fragment (świece + wolumen) do tygodniowego monitoringu
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
 // Estymaty analityków (watchlist.py::update_estimates -> data/estimates.json) — ładowane leniwie przy pierwszym włączeniu.
@@ -1772,11 +1808,17 @@ function chartCells() {
     return [{ ticker: currentChart.ticker }];
 }
 
+function posStockPin() { return currentChart ? state.data.stocks.find(x => x.ticker === currentChart.ticker) : null; }
+
 function drawChart() {
     if (!currentChart) return null;
     const cells = chartCells();
     const activeIdx = 0;   // komórka z fokusem = edytowalna
     const focus = boxFocus && boxFocus.ticker === currentChart.ticker ? boxFocus : null;
+    const pinned = state.boxes[currentChart.ticker] || null;   // przypięty box: rysowany zawsze (też po wyjściu z boxa i strefy), do monitorowania
+    const pinIdx = pinned ? dateToIndex(currentChart.charts.weeks || [], pinned.start) : -1;
+    const pin = pinned && pinIdx >= 0 && !(focus && Math.abs(focus.top - pinned.top) < 0.005 && Math.abs(focus.bottom - pinned.bottom) < 0.005)
+        ? { top: pinned.top, bottom: pinned.bottom, i0: pinIdx, i1: 1e5 } : null;
     const body = document.getElementById("chartBody");
     const cellHtml = (c, i) => {
         const st = state.data.stocks.find(x => x.ticker === c.ticker);
@@ -1794,6 +1836,7 @@ function drawChart() {
             compact: chartCompact, wide: chartWide,
             hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus,
             focusBox: focus,
+            pinBox: pin,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
             window: chartWindows[i], windowLen: chartWinLen.w,
@@ -1811,7 +1854,8 @@ function drawChart() {
         const stop = focus.bottom * (1 - DARVAS_STOP_PCT / 100);
         const bar = document.createElement("div");
         bar.className = "box-focus-bar";
-        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
         body.insertBefore(bar, body.firstChild);
         bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
     }
@@ -1820,6 +1864,7 @@ function drawChart() {
         const ds = darvasStatus(primary.c, undefined, undefined, undefined, primary.v);
         if (ds.state !== "NONE") { const el = document.getElementById("chartPattern"); el.textContent = `${el.textContent ? el.textContent + " · " : ""}📦 Darvas: ${ds.text}`; }
     }
+    if (pinned && posStockPin()) { const el = document.getElementById("chartPattern"); const ps = posStockPin().pbox; if (ps) el.textContent = `${el.textContent ? el.textContent + " · " : ""}📌 Box: ${ps.text}`; }
     const posStock = state.data.stocks.find(x => x.ticker === currentChart.ticker);
     if (primary && posStock && posStock.position) {   // moja pozycja: podpowiedź „czy przestawić stop” z MACD tygodniowego trafia do linii gotowości
         posStock.macd_advice = stopAdvice(posStock.position, macdWeeklyState({ weeks: primary.weeks, c: primary.c, l: primary.l }), posStock.price);
@@ -1965,9 +2010,32 @@ function initChartModal() {
         updateDarvasButton();
         if (currentChart) drawChart();
     });
+    // przytrzymanie boxa (≈ 0,55 s) przypina go do monitorowania (po kliknięciu fokus, po przytrzymaniu pin); ponowne przytrzymanie tego samego boxa odpina
+    (() => {
+        const modal = document.getElementById("chartModal");
+        let timer = null, sx = 0, sy = 0;
+        const cancel = () => { if (timer) { clearTimeout(timer); timer = null; } };
+        modal.addEventListener("pointerdown", ev => {
+            const el = ev.target.closest && ev.target.closest("[data-box]");
+            if (!el || !currentChart) return;
+            sx = ev.clientX; sy = ev.clientY;
+            cancel();
+            timer = setTimeout(() => {
+                timer = null;
+                const [top, bottom, , , i0] = el.dataset.box.split("|");
+                boxLongPressed = true;
+                if (navigator.vibrate) { try { navigator.vibrate(25); } catch (e) { /* brak wibracji */ } }
+                togglePinnedBox(currentChart.ticker, +top, +bottom, +i0);
+            }, 550);
+        });
+        modal.addEventListener("pointermove", ev => { if (timer && Math.hypot(ev.clientX - sx, ev.clientY - sy) > 8) cancel(); });
+        ["pointerup", "pointercancel", "pointerleave"].forEach(n => modal.addEventListener(n, cancel));
+        modal.addEventListener("contextmenu", ev => { if (ev.target.closest && ev.target.closest("[data-box]")) ev.preventDefault(); });
+    })();
     document.getElementById("chartModal").addEventListener("click", ev => {   // kliknięcie boxa (Darvas / baza flat) → ceny wejścia, anulowania, stop loss
         const el = ev.target.closest && ev.target.closest("[data-box]");
         if (!el || typeof darvasBoxInfo !== "function") return;
+        if (boxLongPressed) { boxLongPressed = false; return; }   // to było przytrzymanie (przypięcie), nie kliknięcie
         const [top, bottom, outcome, conf, i0, i1] = el.dataset.box.split("|");
         const t = currentChart ? currentChart.ticker : "";
         if (currentChart && Number.isFinite(+i0) && i0 !== undefined && i1 !== undefined) {   // przybliż na box: świece + wolumen od początku boxa do dziś (+ miejsce na kolejne tygodnie)

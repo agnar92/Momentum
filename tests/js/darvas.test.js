@@ -78,3 +78,13 @@ test("darvasStatus: kontrola wybicia — wolumen ≥ 1,4× i najwyżej 10 % nad 
     assert.equal(darvasStatus([...box1, 125], 5, 3, 3, vol).state, "NOVOL");   // brak wolumenu ma pierwszeństwo przed oddaleniem
     assert.equal(darvasStatus([...box1, 112]).state, "BUY");   // bez danych o wolumenie filtr wolumenu pomijamy
 });
+
+test("darvasPinStatus: nad górą / w boxie / w strefie zagrożenia (5 % pod dołem) / exit pod strefą", () => {
+    const { darvasPinStatus } = require("../../docs/js/darvas.js");
+    const box = { top: 100, bottom: 90 };
+    assert.equal(darvasPinStatus(box, 104).state, "ABOVE");
+    assert.equal(darvasPinStatus(box, 95).state, "INSIDE");
+    assert.equal(darvasPinStatus(box, 88).state, "ZONE");      // strefa 85,5–90
+    assert.equal(darvasPinStatus(box, 85).state, "EXIT");
+    assert.equal(darvasPinStatus(null, 100).state, "NONE");
+});

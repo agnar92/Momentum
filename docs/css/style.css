@@ -956,3 +956,6 @@ body.split #table-POS td.pos-macd .act-why { display: none; }   /* pełne uzasad
 /* pasek fokusu na boxie (kliknięcie boxa → przybliżenie na jego fragment) */
 .box-focus-bar { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; justify-content: space-between; padding: 6px 10px; font-size: 12px; background: rgba(78, 224, 138, 0.1); border-bottom: 1px solid rgba(78, 224, 138, 0.35); }
 .box-focus-bar button { min-height: 32px; padding: 4px 10px; border-radius: 6px; border: 1px solid #4ee08a; background: transparent; color: #4ee08a; font-weight: 600; }
+
+/* przytrzymanie boxa nie zaznacza tekstu ani nie otwiera menu systemowego */
+.box-hit { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

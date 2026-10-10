@@ -613,7 +613,7 @@ function chartSvg(m, opts = {}) {
     const pivotPx = m.pivot && Number.isFinite(m.pivot.price) ? m.pivot.price : null;
     const lastC = m.c[m.lastIdx];
     const pivotNear = pivotPx !== null && Number.isFinite(lastC) && Math.abs(pivotPx / lastC - 1) <= 0.15;
-    const focusExtra = opts.focusBox ? [[opts.focusBox.top], [opts.focusBox.bottom], [opts.focusBox.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]] : [];
+    const focusExtra = [opts.pinBox, opts.focusBox].filter(Boolean).flatMap(b => [[b.top], [b.bottom], [b.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]]);
     const pivotExtra = [...(pivotNear ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : []), ...focusExtra];
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
@@ -746,8 +746,8 @@ function chartSvg(m, opts = {}) {
         parts.push(`<g ${clipAttr}><rect x="${bx0}" y="${yA}" width="${bx1 - bx0}" height="${Math.max(0, yB - yA)}" fill="url(#chartZoneHatch${opts.uid || ""})" pointer-events="none"/></g>`);
     }
     // fokus na boxie (kliknięcie): kupno = góra boxa, dół boxa = początek szarej strefy ryzyka (potencjalny exit), dół strefy (−8 % od góry) = exit
-    if (opts.focusBox) {
-        const fb = opts.focusBox, off = m.off || 0, zone = 1 - BOX_RISK_ZONE_PCT / 100;
+    for (const fb of [opts.pinBox, opts.focusBox].filter(Boolean)) {   // przypięty (monitorowany) box i box z fokusu — oba z tłem i znacznikami na osi
+        const off = m.off || 0, zone = 1 - BOX_RISK_ZONE_PCT / 100;
         const inPlot = yy => yy > P.y - 1 && yy < P.y + P.h + 1;
         const xr = L.width - L.right;
         // zamiast linii: półprzezroczyste tło dokładnie tam, gdzie box został narysowany — biała część (box) i szara strefa zagrożenia pod nim
@@ -757,7 +757,7 @@ function chartSvg(m, opts = {}) {
             parts.push(`<g ${clipAttr}><rect x="${xa}" y="${ya}" width="${xb - xa}" height="${Math.max(0, yb - ya)}" fill="${fill}" fill-opacity="${op}" pointer-events="none"/></g>`);
         };
         const boxBg = (top, bottom, xa, xb) => { rect(top, bottom, xa, xb, "#ffffff", 0.22); rect(bottom, bottom * zone, xa, xb, `url(#chartZoneHatch${opts.uid || ""})`, 1); };
-        (m.focusPrev || []).forEach(pb => {
+        (fb === opts.focusBox ? (m.focusPrev || []) : []).forEach(pb => {
             const step = (L.width - L.left - L.right) / m.n;
             boxBg(pb.top, pb.bottom, Math.max(L.left, x(pb.i0) - step / 2), Math.min(xr, x(pb.i1) + step / 2));
         });
