@@ -1,6 +1,6 @@
 name: Recompute Watchlist
 
-# Same OBLICZENIA, bez pobierania danych: liczy watchlist.json / watchlist_qm.json / charts*.json z ostatniej migawki
+# Same OBLICZENIA, bez pobierania danych: liczy watchlist.json / charts.json z ostatniej migawki
 # (gałąź raw-data, zapisywana przez "Weekly Watchlist Refresh"), z bieżącym kodem w main. Użyteczne po zmianie reguł w watchlist.py
 # (wykrywanie baz, rankingi, wykresy) — bez Finviz, yfinance i czekania na EPS / estymaty.
 #
@@ -45,11 +45,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Compute Qullamaggie list from snapshot
-        continue-on-error: true
-        run: python watchlist.py --profile qm --compute-only
-
-      - name: Compute CANSLIM list from snapshot
+      - name: Compute watchlist from snapshot
         run: python watchlist.py --compute-only
 
       - name: Persist docs/data/

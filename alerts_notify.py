@@ -19,7 +19,6 @@ import urllib.request
 from datetime import datetime, timezone
 
 WATCHLIST_PATH = os.path.join("docs", "data", "watchlist.json")
-WATCHLIST_QM_PATH = os.path.join("docs", "data", "watchlist_qm.json")   # lista Qullamaggiego (ręczna) — spółki spoza listy CANSLIM
 GIST_FILE = "momentum-annotations.json"
 ISSUE_TITLE = "🔔 Alerty Watchlist"
 STATE_RE = re.compile(r"<!-- alert-state: ([^>]*) -->")
@@ -153,12 +152,6 @@ def main():
         return 0
     with open(WATCHLIST_PATH, encoding="utf-8") as f:
         stocks = json.load(f).get("stocks", [])
-    try:
-        with open(WATCHLIST_QM_PATH, encoding="utf-8") as f:
-            known = {s["ticker"] for s in stocks}
-            stocks += [s for s in json.load(f).get("stocks", []) if s["ticker"] not in known]
-    except (OSError, ValueError):
-        pass
     annotations = read_annotations(gist_token)
     if annotations is None:
         print("⚠️  Nie znaleziono Gista z adnotacjami (plik " + GIST_FILE + ") — włącz synchronizację w aplikacji.")

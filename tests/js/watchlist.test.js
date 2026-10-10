@@ -7,7 +7,7 @@ const path = require("node:path");
 
 const {
     qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
-    fmtMarketCap, fmtVolume, fmtPct, mergeProfiles, tabUniverse, chartsForTicker,
+    fmtMarketCap, fmtVolume, fmtPct,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
 function stock(ticker, over = {}) {
@@ -461,35 +461,6 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     assert.deepEqual(canslimRows([good, noA], 6, true).map(s => s.ticker), ["G"]);
 });
 
-test("mergeProfiles: CANSLIM i Qullamaggie to osobne listy; wspólna spółka zachowuje rekord CANSLIM", () => {
-    const cs = { generated_at: "t1", data_as_of: "2026-10-05", n_stocks: 2, market: { regime: "uptrend" }, stocks: [stock("AAA", { eps_q0_yoy: 40 }), stock("BBB")] };
-    const qm = { generated_at: "t2", data_as_of: "2026-10-02", finviz_total: 3675, stocks: [stock("AAA", { eps_q0_yoy: null }), stock("QQQ")] };
-    const m = mergeProfiles(cs, qm);
-    assert.deepEqual(m.stocks.map(s => [s.ticker, s.in_cs, s.in_qm]), [["AAA", true, true], ["BBB", true, false], ["QQQ", false, true]]);
-    assert.equal(m.stocks[0].eps_q0_yoy, 40);
-    assert.equal(m.qm.data_as_of, "2026-10-02");
-    assert.equal(m.n_stocks, 2);
-    assert.equal(m.market.regime, "uptrend");
-    // bez pliku Qullamaggiego (jeszcze nie odpalony ręcznie) zakładka QM jest pusta, reszta działa
-    const only = mergeProfiles(cs, null);
-    assert.equal(only.qm, null);
-    assert.deepEqual(tabUniverse("QM", only.stocks), []);
-    assert.deepEqual(tabUniverse("LIST", m.stocks).map(s => s.ticker), ["AAA", "BBB", "QQQ"]);   // Lista = suma obu skanerów
-    assert.deepEqual(tabUniverse("CS", m.stocks).map(s => s.ticker), ["AAA", "BBB"]);
-    assert.deepEqual(tabUniverse("QM", m.stocks).map(s => s.ticker), ["AAA", "QQQ"]);
-    assert.equal(tabUniverse("FAV", m.stocks).length, 3);   // ulubione / pozycje / alerty widzą obie listy
-    // rekord bez znaczników (stare dane) należy do obu list
-    assert.equal(tabUniverse("QM", [stock("OLD")]).length, 1);
-});
-
-test("chartsForTicker wybiera plik wykresów, który ma daną spółkę", () => {
-    const charts = { weeks: ["w1"], stocks: { AAA: {} }, qm: { weeks: ["w2"], stocks: { QQQ: {} } } };
-    assert.equal(chartsForTicker(charts, "AAA"), charts);
-    assert.equal(chartsForTicker(charts, "QQQ"), charts.qm);
-    assert.equal(chartsForTicker(charts, "NONE"), charts);
-    assert.equal(chartsForTicker(null, "AAA"), null);
-});
-
 test("próg RS (litera L) jest ustawiany przez użytkownika", () => {
     const { canslimInfo, setCanslimRs } = require("../../docs/js/watchlist.js");
     const s = { rs_rating: 72, industry_rating: 80 };
@@ -504,7 +475,7 @@ test("próg RS (litera L) jest ustawiany przez użytkownika", () => {
 
 test("actionInfo: bramka C / A działa tylko przy „C i A obowiązkowe”", () => {
     const { actionInfo } = require("../../docs/js/watchlist.js");
-    const s = { canslim: { flags: { C: false, A: true } }, in_cs: true };
+    const s = { canslim: { flags: { C: false, A: true } } };
     const up = { regime: "uptrend", distDays: 1 };
     assert.equal(actionInfo(s, up).code, "SKIP");
     assert.equal(actionInfo(s, up, true).code, "SKIP");
@@ -514,7 +485,7 @@ test("actionInfo: bramka C / A działa tylko przy „C i A obowiązkowe”", () 
 test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez bazy", () => {
     const { actionInfo } = require("../../docs/js/watchlist.js");
     const up = { regime: "uptrend", distDays: 2 };
-    const ok = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true };
+    const ok = { canslim: { flags: { C: true, A: true, N: true } } };
     const code = (s, m = up) => actionInfo({ ...ok, ...s }, m).code;
     // pozycja ma pierwszeństwo
     assert.equal(code({ position: { stop_hit: true, pl_pct: -8 } }), "SELL");
@@ -541,17 +512,17 @@ test("actionInfo: jedna wskazówka — pozycja, rynek, wybicie, baza, trend bez 
     assert.equal(code({ pct_above_sma10w: 3 }), "PULLBACK");
     assert.equal(code({ pct_above_sma10w: 9 }), "WAIT");
     assert.equal(code({ pct_above_sma10w: 22 }), "LATE");
-    // spółka tylko z listy Qullamaggiego: ocena po wzorcu tygodniowym, bez bramki fundamentów CANSLIM (C / A false nie daje SKIP)
-    const qm = { in_cs: false, canslim: { flags: { C: false, A: false } } };
-    assert.equal(actionInfo({ ...qm, ...brk }, up).code, "BUY");
-    assert.equal(actionInfo({ ...qm, base_type: "flat", pct_to_pivot: 3 }, up).code, "NEAR");
-    assert.equal(actionInfo({ ...qm }, { regime: "correction", distDays: 0 }).code, "NOBUY");
+    // bez bramki C / A (odznaczone „C i A obowiązkowe”): ocena po wzorcu tygodniowym
+    const noCore = { canslim: { flags: { C: false, A: false } } };
+    assert.equal(actionInfo({ ...noCore, ...brk }, up, false).code, "BUY");
+    assert.equal(actionInfo({ ...noCore, base_type: "flat", pct_to_pivot: 3 }, up, false).code, "NEAR");
+    assert.equal(actionInfo({ ...noCore }, { regime: "correction", distDays: 0 }, false).code, "NOBUY");
 });
 
 test("actionInfo: ocena na wykresie tygodniowym (baza, flaga tygodniowa, 10-tygodniowa), dystrybucja i tagActions", () => {
     const { actionInfo, tagActions } = require("../../docs/js/watchlist.js");
     const up = { regime: "uptrend", distDays: 2 };
-    const base = { canslim: { flags: { C: true, A: true, N: true } }, in_cs: true, pct_above_sma10w: 9 };
+    const base = { canslim: { flags: { C: true, A: true, N: true } }, pct_above_sma10w: 9 };
     const w = (s, m = up) => actionInfo({ ...base, ...s }, m).code;
     // cena 7 % nad pivotem bazy = ZA PÓŹNO; tuż nad pivotem na wolumenie = KUP; ½ przy dniach dystrybucji rynku
     assert.equal(w({ base_type: "flat", pivot_state: "wybicie", pct_to_pivot: -7 }), "LATE");
@@ -677,7 +648,7 @@ test("stopAdvice: MACD nad sygnałem = stop bez zmian; po przecięciu w dół i 
 test("pudełko bazy: stop z dołu środkowej 1/3, podział na 3, jakość świecy wybicia i knot > 50 % blokuje KUP", () => {
     const { baseBoxData, actionInfo } = require("../../docs/js/watchlist.js");
     const box = { base_type: "flat", pivot: 100, box_low: 85, box_t1: 90, box_t2: 95, box_stop: 90, box_stop_pct: 10, pct_to_pivot: -2, pivot_state: "wybicie",
-        box_brk_wick_pct: 20, box_brk_vol_wow_pct: 45, box_brk_hi10: true, in_cs: true, canslim: { flags: { C: true, A: true } }, pct_above_sma10w: 9 };
+        box_brk_wick_pct: 20, box_brk_vol_wow_pct: 45, box_brk_hi10: true, canslim: { flags: { C: true, A: true } }, pct_above_sma10w: 9 };
     const rows = Object.fromEntries(baseBoxData(box).rows);
     assert.match(rows["Stop z bazy (dół środka)"], /\$90.*−10% od pivotu/);
     assert.match(rows["Podział na 3"], /dolna.*za późno.*środek.*stop.*górna.*za wcześnie/);

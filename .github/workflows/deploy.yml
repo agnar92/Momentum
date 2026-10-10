@@ -50,13 +50,8 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # Najpierw Qullamaggie (zapisuje rs_universe.json, z którego liczy się RS Rating w CANSLIM). Błąd obliczeń nie blokuje deployu — zostają zacommitowane dane.
-      - name: Compute Qullamaggie list from snapshot
-        if: steps.raw.outcome == 'success'
-        continue-on-error: true
-        run: python watchlist.py --profile qm --compute-only
-
-      - name: Compute CANSLIM list from snapshot
+      # Błąd obliczeń nie blokuje deployu — zostają zacommitowane dane.
+      - name: Compute watchlist from snapshot
         if: steps.raw.outcome == 'success'
         continue-on-error: true
         run: python watchlist.py --compute-only

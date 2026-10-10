@@ -22,12 +22,9 @@ from lxml import html as lxml_html
 
 ROOT = Path(__file__).resolve().parent
 CONFIG_PATH = ROOT / "finviz_screen.json"
-QM_CONFIG_PATH = ROOT / "finviz_screen_qm.json"   # osobny filtr dla Qullamaggiego (ten sam codzienny workflow)
 
 DEFAULT_FILTERS = "cap_smallover,sh_avgvol_o300,sh_price_o10,fa_epsqoq_o25,fa_salesqoq_o25,fa_epsyoy_o25,fa_roe_o15"
 DEFAULT_MAX_TICKERS = 300
-DEFAULT_QM_FILTERS = "cap_midover,sh_avgvol_o1000,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa"
-DEFAULT_QM_MAX_TICKERS = 6000
 MIN_TICKERS = 15   # poniżej tego uznajemy odpowiedź za błędną (blokada/zmiana układu strony)
 PAGE_SIZE = 20     # darmowy Finviz zwraca 20 wierszy na stronę
 BASE_URL = "https://finviz.com/screener.ashx"
@@ -134,7 +131,7 @@ def fetch_watchlist(filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7, views
 
 def load_config(path=CONFIG_PATH, filters=DEFAULT_FILTERS, max_tickers=DEFAULT_MAX_TICKERS):
     """Konfiguracja screenera z JSON-a; brakujące pola = wartości domyślne. Pola liczbowe spoza filtra
-    (np. min_dollar_volume_m, min_adr_pct, charts_top_pct profilu Qullamaggiego) przechodzą bez zmian."""
+    przechodzą bez zmian."""
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):

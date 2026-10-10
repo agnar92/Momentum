@@ -12,7 +12,6 @@ Przepływ (odpalany raz w tygodniu, w sobotę rano, po piątkowej sesji USA — 
 Wszystko to informacja do przeglądania, nie rekomendacja inwestycyjna.
 """
 import argparse
-import bisect
 import json
 import math
 import sys
@@ -28,7 +27,6 @@ ROOT = Path(__file__).resolve().parent
 OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist.json"
 EPS_CACHE_PATH = ROOT / "docs" / "data" / "eps_cache.json"
 ESTIMATES_PATH = ROOT / "docs" / "data" / "estimates.json"
-QM_OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist_qm.json"    # profil Qullamaggiego (ręczny): osobna lista i osobne wykresy
 QM_WINDOWS = ("low_ratio_1m", "low_ratio_3m", "low_ratio_6m")
 
 HISTORY_PERIOD = "10y"       # wykres tygodniowy ~6 lat (CHART_WEEKS) + rozgrzanie SMA40 + historia baz (opisy z książki); RS Rating liczy tylko ostatnie 12M
@@ -506,33 +504,9 @@ def add_group_strength(stocks):
     return stocks
 
 
-def add_rs_rating(stocks, universe_scores=None):
-    """RS Rating 1-99 = percentyl rs_score. Domyślnie wśród spółek listy (remisy: średnia ranga); z `universe_scores` (posortowane rs_score
-    szerokiej listy z profilu Qullamaggiego, rs_universe.json) — względem szerokiego rynku, tą samą skalą 1-99. Spółki bez rs_score -> None."""
-    if not universe_scores:
-        return percentile_rating(stocks, "rs_score", "rs_rating")
-    n = len(universe_scores)
-    for s in stocks:
-        v = s.get("rs_score")
-        if v is None:
-            s["rs_rating"] = None
-            continue
-        less = bisect.bisect_left(universe_scores, v)
-        equal = bisect.bisect_right(universe_scores, v) - less
-        s["rs_rating"] = max(1, min(99, int(round(1 + 98 * (less + 0.5 * equal) / n))))
-    return stocks
-
-
-def load_rs_universe(path):
-    """Wczytuje rs_universe.json zapisany przez profil Qullamaggiego: {as_of, n, scores (posortowane)}; brak/uszkodzony -> None."""
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    scores = data.get("scores") if isinstance(data, dict) else None
-    if not scores or len(scores) < 100:
-        return None
-    return data
+def add_rs_rating(stocks):
+    """RS Rating 1-99 = percentyl rs_score wśród spółek listy (remisy: średnia ranga). Spółki bez rs_score -> None."""
+    return percentile_rating(stocks, "rs_score", "rs_rating")
 
 
 def eps_score(q0, q1, eps_this_y, eps_past_5y):
@@ -1833,7 +1807,7 @@ def institutional_flag(own, trans):
     return bool(INST_MIN_OWN <= own <= INST_MAX_OWN and trans > 0)
 
 
-def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None, rs_universe=None):
+def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
     stocks = []
     bench_w = weekly_close(drop_incomplete_bar(bench_df, now_utc)) if bench_df is not None and len(bench_df) else None
     for row in finviz_rows:
@@ -1849,7 +1823,7 @@ def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None, rs_universe=N
         stock["finviz_upside_pct"] = finviz_upside(stock.get("finviz_target"), stock.get("price"))
         stock["inst_sponsor"] = institutional_flag(stock.get("inst_own"), stock.get("inst_trans"))
         stocks.append(stock)
-    add_rs_rating(stocks, rs_universe)
+    add_rs_rating(stocks)
     add_accdis_rating(stocks)
     add_group_strength(stocks)
     return stocks
@@ -1863,27 +1837,13 @@ def load_previous(path=OUTPUT_PATH):
     return data if isinstance(data, dict) and data.get("stocks") else None
 
 
-def qullamaggie_select(stocks, min_dollar_volume_m, min_adr_pct, top_pct):
-    """Ta sama reguła co qullamaggieRows w docs/js/watchlist.js: spółki płynne (średni obrót, ADR %), a z nich
-    unikalna suma top X % wg ceny/minimum w każdym z okien 1/3/6 mies. Zwraca listę spółek (bez duplikatów)."""
-    liquid = [s for s in stocks if _is_num(s.get("dollar_volume_avg")) and _is_num(s.get("adr_pct"))
-              and s["dollar_volume_avg"] >= (min_dollar_volume_m or 0) * 1e6 and s["adr_pct"] >= (min_adr_pct or 0)]
-    picked = {}
-    top_pct = min(100.0, max(0.0, float(top_pct or 0)))
-    for key in QM_WINDOWS:
-        ranked = sorted((s for s in liquid if _is_num(s.get(key))), key=lambda s: s[key], reverse=True)
-        take = max(1, math.ceil(len(ranked) * top_pct / 100)) if ranked and top_pct > 0 else 0
-        for s in ranked[:take]:
-            picked[s["ticker"]] = s
-    return list(picked.values())
-
-
 def _is_num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
 RAW_DIR = ROOT / "raw"       # migawka pobranych danych (Finviz, ceny, kurs) — krok „pobierz” zapisuje, krok „policz” czyta; poza gitem (workflow trzyma ją w gałęzi raw-data)
 RAW_VERSION = 1
+RAW_PROFILE = "canslim"      # nazwa migawki raw/canslim.pkl.gz (jedna lista)
 
 
 def raw_path(profile, raw_dir=None):
@@ -1921,27 +1881,22 @@ def _read_json(path, default):
         return default
 
 
-def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, profile="canslim", stage="all", raw_dir=None, save_snapshot=False):
-    """profile 'canslim' (domyślny, codzienny): filtr CANSLIM z finviz_screen.json, EPS, estymaty, wykresy wszystkich spółek.
-    profile 'qm' (ręczny): szeroki filtr z finviz_screen_qm.json, bez EPS i estymat, lista przycięta do płynnych spółek,
-    wykresy tylko dla spółek z top X % ceny/minimum -> watchlist_qm.json + charts_qm.json.
+def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None, eps_cache_path=None, stage="all", raw_dir=None, save_snapshot=False):
+    """Jedna lista: filtr CANSLIM z finviz_screen.json, ceny, EPS, estymaty, wykresy wszystkich spółek -> watchlist.json + charts.json.
+    Zakładka Qullamaggie w aplikacji tylko inaczej filtruje i sortuje te same spółki (płynność, ADR, cena / minimum).
     stage: "all" (pobierz i policz — jak dotąd), "fetch" (tylko pobranie: Finviz, ceny, kurs, EPS, estymaty -> migawka w raw_dir),
     "compute" (tylko obliczenia z zapisanej migawki, bez sieci). save_snapshot (stage "all"): oprócz liczenia zapisuje też migawkę pobranych danych."""
-    qm = profile == "qm"
-    output_path = output_path or (QM_OUTPUT_PATH if qm else OUTPUT_PATH)
-    if qm:
-        cfg = finviz.load_config(finviz.QM_CONFIG_PATH, finviz.DEFAULT_QM_FILTERS, finviz.DEFAULT_QM_MAX_TICKERS)
-    else:
-        cfg = finviz.load_config()
+    output_path = output_path or OUTPUT_PATH
+    cfg = finviz.load_config()
     max_tickers = max_tickers or cfg["max_tickers"]
     eps_cache_path = eps_cache_path or Path(output_path).parent / "eps_cache.json"
     previous = load_previous(output_path)
     finviz_rows, finviz_total, finviz_stale = [], None, False
     frames, benchmark_df, nasdaq_df, fx, now_utc = None, None, None, None, None
     if stage == "compute":
-        raw = load_raw(profile, raw_dir)
+        raw = load_raw(RAW_PROFILE, raw_dir)
         if raw is None:
-            print(f"❌ Brak migawki danych ({raw_path(profile, raw_dir)}) — najpierw krok pobierania (--fetch-only).")
+            print(f"❌ Brak migawki danych ({raw_path(RAW_PROFILE, raw_dir)}) — najpierw krok pobierania (--fetch-only).")
             return 1
         finviz_rows, finviz_total, finviz_stale = raw["finviz_rows"], raw.get("finviz_total"), raw.get("finviz_stale", False)
         frames, benchmark_df, nasdaq_df, fx = raw["frames"], raw.get("benchmark"), raw.get("nasdaq"), raw.get("fx")
@@ -1989,9 +1944,9 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
             nasdaq_df = None
     if stage == "all" and save_snapshot:   # liczymy jak dotąd, a przy okazji zapisujemy migawkę pobranych danych (deploy strony liczy z niej przy każdej zmianie kodu)
         fx = fetch_usdpln() or (previous or {}).get("fx")
-        path = save_raw({"profile": profile, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
+        path = save_raw({"profile": RAW_PROFILE, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
                          "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
-                         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, profile, raw_dir)
+                         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, RAW_PROFILE, raw_dir)
         print(f"💾 Zapisano migawkę {path} ({path.stat().st_size / 1e6:.1f} MB).")
     if stage == "fetch":
         # tylko pobranie: kurs, EPS i estymaty (sieć) oraz migawka cen / listy z Finviz do późniejszego liczenia
@@ -2005,11 +1960,10 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
             update_estimates(have, Path(output_path).parent / "estimates.json")
         except Exception as e:
             print(f"⚠️  Krok estymat analityków pominięty ({e}).")
-        path = save_raw({"profile": profile, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
+        path = save_raw({"profile": RAW_PROFILE, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
                          "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
-                         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, profile, raw_dir)
-        print(f"💾 Zapisano migawkę {path} ({len(frames)} spółek, {path.stat().st_size / 1e6:.1f} MB). Obliczenia: python watchlist.py --compute-only"
-              + (" --profile qm" if qm else ""))
+                         "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, RAW_PROFILE, raw_dir)
+        print(f"💾 Zapisano migawkę {path} ({len(frames)} spółek, {path.stat().st_size / 1e6:.1f} MB). Obliczenia: python watchlist.py --compute-only")
         return 0
     try:
         market = market_state(drop_incomplete_bar(benchmark_df, now_utc) if benchmark_df is not None and len(benchmark_df) else None,
@@ -2017,36 +1971,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
     except Exception as e:
         print(f"⚠️  Ocena rynku pominięta ({e}).")
         market = None
-    rs_universe_path = Path(output_path).parent / "rs_universe.json"
-    # qm --skip-finviz (tylko ceny): lista jest przycięta do płynnych spółek, więc rozkładu RS nie nadpisujemy — używamy zapisanego
-    rs_universe = load_rs_universe(rs_universe_path) if (not qm or skip_finviz) else None   # compute: lista z migawki jest pełna jak po pobraniu z Finviz
-    stocks = build_stocks(finviz_rows, frames, now_utc, bench_df=benchmark_df, rs_universe=(rs_universe or {}).get("scores"))
-    if qm and not skip_finviz:
-        # Lista Qullamaggiego (płynne, zmienne spółki nad SMA20/50/200) = rozkład odniesienia RS: jej rozkład rs_score służy codziennemu profilowi CANSLIM do liczenia RS Rating.
-        scores = sorted(round(float(s["rs_score"]), 4) for s in stocks if s.get("rs_score") is not None)
-        as_of = max((s["as_of"] for s in stocks), default=None)
-        rs_universe_path.write_text(json.dumps({"as_of": as_of, "n": len(scores), "scores": scores}, separators=(",", ":")), encoding="utf-8")
-        rs_basis = {"source": "list", "n": len(scores), "as_of": as_of}
-    elif qm:
-        rs_basis = {"source": "market", "n": rs_universe["n"], "as_of": rs_universe.get("as_of")} if rs_universe else {"source": "list", "n": len(stocks), "as_of": None}
-    elif rs_universe:
-        rs_basis = {"source": "market", "n": rs_universe["n"], "as_of": rs_universe.get("as_of")}
-        print(f"ℹ️  RS Rating względem szerokiego rynku ({rs_universe['n']} spółek z sesji {rs_universe.get('as_of')}).")
-    else:
-        rs_basis = {"source": "list", "n": len(stocks), "as_of": None}
-        print("ℹ️  Brak rs_universe.json — RS Rating względem listy CANSLIM (krok --profile qm codziennego workflow zapisuje rozkład RS).")
-    qm_selected = []
-    if qm:
-        # RS Rating, Acc/Dis i grupy policzyły się już na całej liście z Finviz (przed odcięciem po obrocie i ADR);
-        # teraz zapisujemy tylko płynne spółki, a wykresy budujemy dla top X % ceny/minimum.
-        n_all = len(stocks)
-        min_dv, min_adr = cfg.get("min_dollar_volume_m", 0) or 0, cfg.get("min_adr_pct", 0) or 0
-        if min_dv > 0 or min_adr > 0:   # domyślnie 0 / 0: zapisujemy WSZYSTKIE spółki ze skanera, progi ustawia się w aplikacji (Filtry)
-            stocks = [s for s in stocks if _is_num(s.get("dollar_volume_avg")) and _is_num(s.get("adr_pct"))
-                      and s["dollar_volume_avg"] >= min_dv * 1e6 and s["adr_pct"] >= min_adr]
-        top = cfg.get("charts_top_pct", 100)
-        qm_selected = stocks if top >= 100 else qullamaggie_select(stocks, min_dv, min_adr, top)
-        print(f"ℹ️  Szeroki skaner: {len(stocks)}/{n_all} spółek zapisanych, wykresy dla {len(qm_selected)}.")
+    stocks = build_stocks(finviz_rows, frames, now_utc, bench_df=benchmark_df)
     if stage == "compute":   # EPS i estymaty odświeża krok pobierania; tu tylko czytamy zapisane pliki
         eps_cache = _read_json(eps_cache_path, {})
         estimates = _read_json(Path(output_path).parent / "estimates.json", {}).get("stocks", {})
@@ -2065,7 +1990,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
             estimates = {}
     for st in stocks:
         st.update(estimate_fields(estimates.get(st["ticker"]), st.get("price")))
-    chart_tickers = [s["ticker"] for s in (qm_selected if qm else stocks)]
+    chart_tickers = [s["ticker"] for s in stocks]
     charts = build_charts(chart_tickers, frames, benchmark_df, eps_cache, now_utc)
     for st in stocks:
         summary = ((charts or {}).get("stocks", {}).get(st["ticker"]) or {}).get("rs_line") or {}
@@ -2078,15 +2003,13 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         "finviz_total": finviz_total,
         "finviz_stale": finviz_stale,
         "n_stocks": len(stocks),
-        "profile": profile,
-        "rs_basis": rs_basis,
         "market": market,
         "fx": (fx if (stage == "compute" or fx is not None) else fetch_usdpln()) or (previous or {}).get("fx"),
         "stocks": stocks,
     }
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
-    charts_path = charts_path or out.parent / ("charts_qm.json" if qm else "charts.json")
+    charts_path = charts_path or out.parent / "charts.json"
     out.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False), encoding="utf-8")
     print(f"💾 Zapisano {out} ({len(stocks)} spółek, dane z sesji {payload['data_as_of']}).")
     if charts is not None:
@@ -2101,7 +2024,7 @@ def main(argv=None):
     parser.add_argument("--skip-finviz", action="store_true",
                         help="Nie pytaj Finviz — użyj listy spółek z poprzedniego watchlist.json (tylko odśwież ceny).")
     parser.add_argument("--max-tickers", type=int, default=None, help="Limit liczby spółek (domyślnie z finviz_screen.json).")
-    parser.add_argument("--output", type=str, default=None, help="Plik wyjściowy (domyślnie watchlist.json albo watchlist_qm.json dla --profile qm).")
+    parser.add_argument("--output", type=str, default=None, help="Plik wyjściowy (domyślnie docs/data/watchlist.json).")
     stage_group = parser.add_mutually_exclusive_group()
     stage_group.add_argument("--fetch-only", action="store_true",
                              help="Tylko pobranie danych (Finviz, ceny, kurs, EPS, estymaty) -> migawka w --raw-dir; bez obliczeń i zapisu docs/data/*.json.")
@@ -2109,11 +2032,9 @@ def main(argv=None):
                              help="Tylko obliczenia z zapisanej migawki (bez sieci) -> watchlist.json / charts.json.")
     parser.add_argument("--save-raw", action="store_true", help="Przy pełnym przebiegu (bez --fetch-only / --compute-only) zapisz też migawkę pobranych danych do --raw-dir.")
     parser.add_argument("--raw-dir", type=str, default=None, help="Katalog migawki danych (domyślnie raw/ w repozytorium, poza gitem).")
-    parser.add_argument("--profile", choices=("canslim", "qm"), default="canslim",
-                        help="canslim = codzienna lista CANSLIM (domyślnie); qm = lista Qullamaggiego (w codziennym workflow przed CANSLIM).")
     args = parser.parse_args(argv)
     stage = "fetch" if args.fetch_only else "compute" if args.compute_only else "all"
-    return run(args.output, args.skip_finviz, args.max_tickers, profile=args.profile, stage=stage, raw_dir=args.raw_dir, save_snapshot=args.save_raw)
+    return run(args.output, args.skip_finviz, args.max_tickers, stage=stage, raw_dir=args.raw_dir, save_snapshot=args.save_raw)
 
 
 if __name__ == "__main__":

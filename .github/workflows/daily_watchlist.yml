@@ -1,10 +1,9 @@
 name: Weekly Watchlist Refresh
 
 # Raz w tygodniu, w sobotę rano (po piątkowej sesji USA — aplikacja ma tylko wykresy TYGODNIOWE, więc codzienne pobieranie jest zbędne;
-# plik zostaje pod starą nazwą daily_watchlist.yml, bo na niego wskazuje link „Odśwież dane” na stronie): watchlist.py pobiera listę spółek z Finviz (nad SMA50 i SMA200, stabilny
-# wzrost EPS i dodatnie prognozy EPS), ceny z yfinance i liczy RS Rating, dane do filtra Qullamaggiego
-# i trend EMA34 -> docs/data/watchlist.json, który następnie trafia na GitHub Pages. W tym samym przebiegu odświeża się też
-# lista Qullamaggiego (docs/data/watchlist_qm.json, osobny filtr Finviz z finviz_screen_qm.json).
+# plik zostaje pod starą nazwą daily_watchlist.yml, bo na niego wskazuje link „Odśwież dane” na stronie): watchlist.py pobiera JEDNĄ listę spółek z Finviz (filtr CANSLIM z finviz_screen.json: wzrost EPS i sprzedaży,
+# ROE, kapitalizacja od 300 mln, płynność), ceny z yfinance i liczy RS Rating, bazy, dane do zakładki Qullamaggie
+# (obrót, ADR %, cena / minimum) -> docs/data/watchlist.json + charts.json, które następnie trafiają na GitHub Pages.
 #
 # Pobieranie i obliczenia w jednym przebiegu (jak dawniej) + zapis migawki pobranych danych (gałąź raw-data). Same obliczenia, bez pobierania, robi
 # deploy strony (deploy.yml) po każdym pushu do main oraz ręczny workflow "Recompute Watchlist" (watchlist.py --compute-only).
@@ -58,13 +57,7 @@ jobs:
           ref: raw-data
           path: raw
 
-      # Jak dawniej: pobieranie i obliczenia w jednym przebiegu. Najpierw Qullamaggie (szeroka lista ~300 spółek): zapisuje watchlist_qm.json, charts_qm.json
-      # i rs_universe.json — z tego rozkładu profil CANSLIM liczy RS Rating. Błąd tego kroku nie zatrzymuje CANSLIM (zostają poprzednie pliki Qullamaggiego).
-      # --save-raw: przy okazji zapisuje migawkę pobranych danych (raw/), z której deploy strony liczy wszystko od nowa po każdej zmianie kodu.
-      - name: Fetch Qullamaggie list (Finviz pre-screen + yfinance) and build watchlist_qm.json
-        continue-on-error: true
-        run: python watchlist.py --profile qm --save-raw
-
+      # Pobieranie i obliczenia w jednym przebiegu. --save-raw: przy okazji zapisuje migawkę pobranych danych (raw/), z której deploy strony liczy wszystko od nowa po każdej zmianie kodu.
       - name: Fetch CANSLIM list (Finviz pre-screen + yfinance) and build watchlist.json
         run: python watchlist.py --save-raw
 
