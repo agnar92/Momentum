@@ -47,6 +47,7 @@ const browserGlobals = {
     darvasBoxes: "readonly",
     darvasSvg: "readonly",
     darvasBoxInfo: "readonly",
+    darvasStatus: "readonly",
     DARVAS_STOP_PCT: "readonly",
     darvasBoxSheetHtml: "readonly",
     // docs/js/chart.js (ładowany PRZED watchlist.js)

@@ -732,35 +732,34 @@ function chartSvg(m, opts = {}) {
         const b = m.box, bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
         const yTop = yP(b.top), yLow = yP(b.low), lastCl = m.c[m.lastIdx];
         const topCol = m.pivot && m.pivot.active ? "#2ecc71" : (lastCl > b.top ? "#ff8a5b" : "#e8eaed");
-        parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1|${b.i0 + (m.off || 0)}|${b.i1 + (m.off || 0)}" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#8a8f9c" fill-opacity="0.1" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
+        parts.push(`<g ${clipAttr}><rect class="box-hit" data-box="${b.top}|${b.low}|open|1|${b.i0 + (m.off || 0)}|${b.i1 + (m.off || 0)}" style="cursor:pointer" x="${bx0}" y="${yTop}" width="${bx1 - bx0}" height="${Math.max(0, yLow - yTop)}" fill="#ffffff" fill-opacity="0.12" stroke="${topCol}" stroke-width="1.8"><title>Box ${b.low}–${b.top} — kliknij po ceny wejścia, anulowania i stop loss</title></rect></g>`);
+    }
+    if (m.box && m.box.i1 >= 0 && m.box.i0 < m.n) {   // szara strefa zagrożenia pod boxem (5 % pod dołem boxa)
+        const b = m.box, yA = yP(b.low), yB = yP(b.low * (1 - BOX_RISK_ZONE_PCT / 100)), bx0 = x(Math.max(0, b.i0)), bx1 = x(Math.min(m.n - 1, Math.max(b.i1, b.i0 + 1)));
+        parts.push(`<g ${clipAttr}><rect x="${bx0}" y="${yA}" width="${bx1 - bx0}" height="${Math.max(0, yB - yA)}" fill="#8a8f9c" fill-opacity="0.28" pointer-events="none"/></g>`);
     }
     // fokus na boxie (kliknięcie): kupno = góra boxa, dół boxa = początek szarej strefy ryzyka (potencjalny exit), dół strefy (−8 % od góry) = exit
     if (opts.focusBox) {
         const fb = opts.focusBox, off = m.off || 0, zone = 1 - BOX_RISK_ZONE_PCT / 100;
         const inPlot = yy => yy > P.y - 1 && yy < P.y + P.h + 1;
         const xr = L.width - L.right;
-        const seg = (v, xa, xb, col, dash, op, w) => {
-            const yy = yP(v);
-            if (!inPlot(yy) || xb <= xa) return;
-            parts.push(`<g ${clipAttr}><line x1="${xa}" x2="${xb}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ""} opacity="${op}" pointer-events="none"/></g>`);
+        // zamiast linii: półprzezroczyste tło dokładnie tam, gdzie box został narysowany — biała część (box) i szara strefa zagrożenia pod nim
+        const rect = (v1, v2, xa, xb, fill, op) => {
+            const ya = Math.min(yP(v1), yP(v2)), yb = Math.max(yP(v1), yP(v2));
+            if (xb <= xa) return;
+            parts.push(`<g ${clipAttr}><rect x="${xa}" y="${ya}" width="${xb - xa}" height="${Math.max(0, yb - ya)}" fill="${fill}" fill-opacity="${op}" pointer-events="none"/></g>`);
         };
-        const zoneRect = (bottom, xa, xb, op) => {
-            const yA = yP(bottom), yB = yP(bottom * zone);
-            parts.push(`<g ${clipAttr}><rect x="${xa}" y="${yA}" width="${Math.max(0, xb - xa)}" height="${Math.max(0, yB - yA)}" fill="#8a8f9c" fill-opacity="${op}" pointer-events="none"/></g>`);
-        };
-        // wcześniejsze boxy: poziomy tylko na odcinku, na którym obowiązywały (bez znaczników na osi)
+        const boxBg = (top, bottom, xa, xb) => { rect(top, bottom, xa, xb, "#ffffff", 0.2); rect(bottom, bottom * zone, xa, xb, "#8a8f9c", 0.45); };
         (m.focusPrev || []).forEach(pb => {
-            const xa = Math.max(L.left, x(pb.i0)), xb = Math.min(xr, x(pb.i1));
-            zoneRect(pb.bottom, xa, xb, 0.12);
-            seg(pb.top, xa, xb, "#4ee08a", "", 0.6, 1);
-            seg(pb.bottom, xa, xb, "#c9ced8", "4 3", 0.6, 1);
-            seg(pb.bottom * zone, xa, xb, "#ff7a7a", "2 3", 0.6, 1);
+            const step = (L.width - L.left - L.right) / m.n;
+            boxBg(pb.top, pb.bottom, Math.max(L.left, x(pb.i0) - step / 2), Math.min(xr, x(pb.i1) + step / 2));
         });
-        // ostatni (kliknięty) box: poziomy od jego początku do prawej krawędzi + znaczniki z cenami na osi ceny
-        const xa = Math.max(L.left, x(fb.i0 - off));
-        zoneRect(fb.bottom, xa, xr, 0.22);
+        // kliknięty box: tło na jego rozpiętości + lekkie przedłużenie w prawo (do monitorowania, czy cena wyszła poza box / strefę)
+        const step0 = (L.width - L.left - L.right) / m.n;
+        const xa = Math.max(L.left, x(fb.i0 - off) - step0 / 2), xe = Math.min(xr, x((fb.i1 || fb.i0) - off) + step0 / 2);
+        boxBg(fb.top, fb.bottom, xa, xe);
+        rect(fb.top, fb.bottom, xe, xr, "#ffffff", 0.05); rect(fb.bottom, fb.bottom * zone, xe, xr, "#8a8f9c", 0.12);
         [[fb.top, "#2e9e5b", "", 1.3], [fb.bottom, "#6b7280", "4 3", 1.3], [fb.bottom * zone, "#c0504d", "2 3", 1.3]].forEach(([v, col, dash, w], k) => {
-            seg(v, xa, xr, ["#4ee08a", "#c9ced8", "#ff7a7a"][k], dash, 0.9, w);
             const yy = yP(v);
             if (!inPlot(yy)) return;
             const bw = Math.min(L.right - 2, fs(52)), bh = fs(15);
@@ -1274,7 +1273,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     const draw = () => {
         if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
             plot.innerHTML = darvasSvg(full, win, opts);
-            readoutEl.textContent = "Widok Darvasa (ceny zamknięcia tygodniowe): kup nad górą pudełka, stop pod jego dołem.";
+            readoutEl.textContent = typeof darvasStatus === "function" ? "Darvas: " + darvasStatus(full.c).text : "Widok Darvasa (ceny zamknięcia tygodniowe): kup nad górą pudełka, stop pod jego dołem.";
             return;
         }
         const m = sliceModel(full, win.n, win.end);
