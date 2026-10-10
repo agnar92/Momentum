@@ -1953,7 +1953,7 @@ function drawChart() {
             focusBox: focus,
             pinBox: pin,
             pinFlash: Date.now() < pinFlashUntil,
-            noBench: !!focus || (!splitMode && annEdit.on && !annEdit.spaceOn),   // widok boxa: bez pasa S&P 500 u góry — więcej miejsca na świece
+            noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: focus ? { ...phoneFit(cell), scroll: true } : phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
             window: chartWindows[i], windowLen: chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n); },

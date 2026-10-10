@@ -230,7 +230,7 @@ function darvasFlatStatus(c, box, name = "flat base") {
 function darvasSvg(full, win, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
     const fs = v => Math.round(v * (compact ? 1.25 : 1) * 10) / 10;
-    const L = { left: 2, right: compact ? 42 : 52, top: 14, bottom: 24 };   // wąskie marginesy: wykres wypełnia szerokość, podpisy osi są drobniejsze
+    const L = { left: 2, right: compact ? 48 : 56, top: 14, bottom: 24 };   // wąskie marginesy: wykres wypełnia szerokość, podpisy osi są drobniejsze
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const lastReal = full.c.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
     const start = Math.max(0, Math.min(win.end - win.n, lastReal)), endExcl = Math.max(start + 2, win.end);
@@ -401,47 +401,55 @@ function darvasSvg(full, win, opts = {}) {
     }
     const lastC = full.c[lastReal];
     if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
-    // celownik (ustawiany w attachDarvasHover): pionowa linia tygodnia, pozioma linia zamknięcia z ceną na osi i data pod osią
-    out.push(`<line id="dCrossV" x1="0" x2="0" y1="${L.top}" y2="${H - L.bottom}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
-    out.push(`<line id="dCrossH" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="0.8" stroke-dasharray="4 3" opacity="0" pointer-events="none"/>`);
-    out.push(`<g id="dCrossTag" opacity="0" pointer-events="none"><rect x="${W - L.right}" y="0" width="${L.right - 1}" height="${fs(14)}" rx="2" fill="#6ea8ff"/><text x="${W - L.right + 3}" y="0" font-size="${fs(9.5)}" font-weight="700" fill="#0e0f13"></text></g>`);
-    out.push(`<text id="dCrossDate" x="0" y="${H - 7}" font-size="${fs(10)}" font-weight="700" fill="#ffffff" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke" opacity="0" pointer-events="none"></text>`);
+    // podświetlenie poziomów (ustawiane w attachDarvasHover): 3 linie podziałki (góra boxa, dół, dół strefy zagrożenia) z ceną na osi — widoczne tylko przy najechaniu / przytrzymaniu boxa
+    for (let k = 0; k < 3; k++) {
+        out.push(`<line id="dHl${k}" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="1.6" opacity="0" pointer-events="none"/>`);
+        out.push(`<g id="dHt${k}" opacity="0" pointer-events="none"><rect x="${W - L.right}" y="0" width="${L.right - 1}" height="${fs(14)}" rx="2" fill="#ffffff"/><text x="${W - L.right + 3}" y="0" font-size="${fs(9.5)}" font-weight="700" fill="#0e0f13"></text></g>`);
+    }
     return `<svg id="chartSvg" data-geom="${[W, H, L.left, L.right, L.top, L.bottom, start, slots, lo, hi].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
 }
 
-// Najechanie / dotyk na Dar-Card: pionowa linia na wybranym tygodniu + pozioma linia na jego zamknięciu (cena na osi), data pod osią i opis w readout.
+// Najechanie / przytrzymanie boxa na Dar-Card: podświetla istniejące poziome linie podziałki najbliżej góry boxa, jego dołu i dołu strefy zagrożenia (z ceną na osi).
+// Poza zaznaczonym boxem nic nie jest rysowane — wykres zostaje czysty.
 function attachDarvasHover(container, full, readoutEl) {
     const svg = container.querySelector("svg#chartSvg");
     if (!svg || !svg.dataset.geom) return;
     const g = svg.dataset.geom.split(",").map(Number);
     if (g.length < 10 || g.some(v => !Number.isFinite(v))) return;
-    const [W, H, left, right, top, bottom, start, slots, lo, hi] = g;
-    const pw = W - left - right, ph = H - top - bottom;
-    const lastReal = full.c.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
-    const v = svg.querySelector("#dCrossV"), h = svg.querySelector("#dCrossH"), tag = svg.querySelector("#dCrossTag"), dt = svg.querySelector("#dCrossDate");
-    let base = null;   // opis stanu zapamiętujemy przy pierwszym ruchu (readout jest ustawiany już po podpięciu)
-    const hide = () => { [v, h, tag, dt].forEach(e => e.setAttribute("opacity", "0")); if (readoutEl && base !== null) readoutEl.textContent = base; };
-    const move = ev => {
-        if (base === null && readoutEl) base = readoutEl.textContent;
-        const r = svg.getBoundingClientRect();
-        const sc = Math.min(r.width / W, r.height / H), ox = (r.width - W * sc) / 2;
-        const x = (ev.clientX - r.left - ox) / sc;
-        let i = Math.round(start + (x - left) / pw * slots - 0.5);
-        i = Math.max(start, Math.min(Math.min(lastReal, start + slots - 1), i));
-        const c = full.c[i];
-        if (!Number.isFinite(c)) { hide(); return; }
-        const xi = left + pw * (i - start + 0.5) / slots, yi = top + ph * (1 - (c - lo) / (hi - lo));
-        v.setAttribute("x1", xi.toFixed(1)); v.setAttribute("x2", xi.toFixed(1)); v.setAttribute("opacity", "0.6");
-        h.setAttribute("y1", yi.toFixed(1)); h.setAttribute("y2", yi.toFixed(1)); h.setAttribute("opacity", "0.7");
-        const rect = tag.querySelector("rect"), txt = tag.querySelector("text"), th = +rect.getAttribute("height");
-        rect.setAttribute("y", (yi - th / 2).toFixed(1)); txt.setAttribute("y", (yi + th / 3).toFixed(1)); txt.textContent = c.toFixed(2); tag.setAttribute("opacity", "1");
-        const d = full.weeks && full.weeks[i] ? full.weeks[i] : "";
-        dt.setAttribute("x", Math.max(40, Math.min(W - 40, xi)).toFixed(1)); dt.textContent = d ? "tydz. do " + d : ""; dt.setAttribute("opacity", "1");
-        if (readoutEl) readoutEl.textContent = `${d} · zamknięcie ${c.toFixed(2)}`;
+    const [, H, , , top, bottom, , , lo, hi] = g;
+    const ph = H - top - bottom, step = (hi - lo) / 80;
+    const yOf = v => top + ph * (1 - (v - lo) / (hi - lo));
+    const lines = [0, 1, 2].map(k => svg.querySelector("#dHl" + k)), tags = [0, 1, 2].map(k => svg.querySelector("#dHt" + k));
+    const cols = ["#4ee08a", "#ffffff", "#ff6b6b"];
+    let base = null, cur = null;
+    const hide = () => {
+        cur = null;
+        lines.concat(tags).forEach(e => e.setAttribute("opacity", "0"));
+        if (readoutEl && base !== null) readoutEl.textContent = base;
     };
-    svg.addEventListener("pointermove", move);
-    svg.addEventListener("pointerdown", move);
+    const show = el => {
+        const [t, bt] = el.dataset.box.split("|").map(Number);
+        if (!(t > bt) || cur === el) return;
+        cur = el;
+        if (base === null && readoutEl) base = readoutEl.textContent;
+        const lv = [t, bt, bt * (1 - DARVAS_STOP_PCT / 100)];
+        lv.forEach((v, k) => {
+            const ys = yOf(step > 0 ? Math.round(v / step) * step : v);   // najbliższa linia podziałki
+            lines[k].setAttribute("y1", ys.toFixed(1)); lines[k].setAttribute("y2", ys.toFixed(1)); lines[k].setAttribute("stroke", cols[k]); lines[k].setAttribute("opacity", "0.95");
+            const rect = tags[k].querySelector("rect"), txt = tags[k].querySelector("text"), th = +rect.getAttribute("height");
+            rect.setAttribute("y", (ys - th / 2).toFixed(1)); rect.setAttribute("fill", cols[k]);
+            txt.setAttribute("y", (ys + th / 3).toFixed(1)); txt.textContent = v.toFixed(2); tags[k].setAttribute("opacity", "1");
+        });
+        if (readoutEl) readoutEl.textContent = `box ${bt.toFixed(2)}–${t.toFixed(2)} · strefa zagrożenia do ${lv[2].toFixed(2)}`;
+    };
+    const onMove = ev => {
+        const el = ev.target.closest && ev.target.closest("[data-box]");
+        if (el && svg.contains(el)) show(el); else if (cur) hide();
+    };
+    svg.addEventListener("pointermove", onMove);
+    svg.addEventListener("pointerdown", onMove);
     svg.addEventListener("pointerleave", hide);
+    svg.addEventListener("pointerup", () => { if (cur) setTimeout(hide, 900); });
 }
 
 if (typeof module !== "undefined" && module.exports) {
