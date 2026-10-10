@@ -1002,6 +1002,17 @@ function chartSvg(m, opts = {}) {
     }
 
     // --- crosshair (ustawiany w attachChartHover)
+    // aktualna cena jak w TradingView: kropkowana linia przez panel ceny + znacznik z ceną na osi
+    if (m.lastShown !== false && Number.isFinite(lastC)) {
+        const yy = yP(lastC), prevC = m.c[m.lastIdx - 1];
+        if (yy > P.y && yy < P.y + P.h) {
+            const col = Number.isFinite(prevC) && lastC < prevC ? "#ef5350" : "#26a69a";
+            const bw = Math.min(L.right - 2, fs(52)), bh = fs(15);
+            parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="1" stroke-dasharray="2 3" opacity="0.9" pointer-events="none"/>`);
+            parts.push(`<rect x="${L.width - L.right}" y="${yy - bh / 2}" width="${bw}" height="${bh}" rx="2" fill="${col}" pointer-events="none"/>`);
+            parts.push(`<text x="${L.width - L.right + 4}" y="${yy + fs(4)}" font-size="${fs(10)}" font-weight="700" fill="#ffffff" pointer-events="none">${lastC >= 1000 ? lastC.toFixed(0) : lastC.toFixed(2)}</text>`);
+        }
+    }
     parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
     // data wskazanej świecy na dole osi (pokazywana przy najechaniu myszką)
     parts.push(`<text id="chartCrossDate" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
