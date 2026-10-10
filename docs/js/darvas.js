@@ -400,14 +400,24 @@ function darvasSvg(full, win, opts = {}) {
             out.push(`<rect x="${W - L.right}" y="${(yy - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${col}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(yy + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(+v).toFixed(2)}</text>`);
         });
     }
-    // wykres liniowy punktowy cen zamknięcia tygodni (na wierzchu boxów): widać, czy wybicie to pierwsza świeca nad boxem, czy cena jest już daleko ponad
+    // wykres liniowy punktowy cen zamknięcia tygodni — rysowany tylko POZA boxami (maska wycina prostokąty boxów), więc widać, czy wybicie to pierwsze zamknięcie
+    // nad boxem, czy cena jest już daleko ponad; wewnątrz boxów linii nie ma
     {
         const pts = [];
         for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) pts.push([x(i), y(full.c[i]), i]);
         if (pts.length > 1) {
-            out.push(`<polyline points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}" fill="none" stroke="#0e0f13" stroke-width="${fs(3.4)}" stroke-linejoin="round" stroke-linecap="round" opacity="0.55" pointer-events="none"/>`);
-            out.push(`<polyline points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}" fill="none" stroke="#6ea8ff" stroke-width="${fs(1.6)}" stroke-linejoin="round" stroke-linecap="round" pointer-events="none"/>`);
-            pts.forEach(p => out.push(`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${fs(2.6)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="0.8" pointer-events="none"><title>${full.weeks && full.weeks[p[2]] ? full.weeks[p[2]] + " · " : ""}zamknięcie ${full.c[p[2]]}</title></circle>`));
+            const holes = out.filter(s => s.includes('class="box-hit"')).map(s => {
+                const g = k => { const m = s.match(new RegExp(`\\s${k}="([-\\d.]+)"`)); return m ? m[1] : null; };
+                const hx = g("x"), hy = g("y"), hw = g("width"), hh = g("height");
+                return hx !== null && hw !== null ? `<rect x="${hx}" y="${hy}" width="${hw}" height="${hh}" fill="#000"/>` : "";
+            }).join("");
+            out.push(`<mask id="darvasLineMask" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${holes}</mask>`);
+            const line = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+            out.push(`<g mask="url(#darvasLineMask)" pointer-events="none">`
+                + `<polyline points="${line}" fill="none" stroke="#0e0f13" stroke-width="${fs(3.4)}" stroke-linejoin="round" stroke-linecap="round" opacity="0.55"/>`
+                + `<polyline points="${line}" fill="none" stroke="#6ea8ff" stroke-width="${fs(1.6)}" stroke-linejoin="round" stroke-linecap="round"/>`
+                + pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${fs(2.6)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="0.8"><title>${full.weeks && full.weeks[p[2]] ? full.weeks[p[2]] + " · " : ""}zamknięcie ${full.c[p[2]]}</title></circle>`).join("")
+                + `</g>`);
         }
     }
     const lastC = full.c[lastReal];
