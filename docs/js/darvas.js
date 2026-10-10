@@ -63,12 +63,15 @@ function darvasBoxSheetHtml(info, state, confirmed) {
         + `<p class="muted small">Reguły Darvasa na tygodniowych zamknięciach; heurystyka, nie rekomendacja.</p></div>`;
 }
 
+const DARVAS_MAX_EXT_PCT = 5;      // KUP tylko do 5 % nad górą boxa (strefa kupna jak w blueprincie)
+const DARVAS_BREAKOUT_VOL = 1.4;   // wolumen wybicia ≥ 1,4× średniej
+const DARVAS_VOL_WEEKS = 10;
 const DARVAS_START_STOP_PCT = 10;   // stop początkowy przy pierwszym wybiciu: ok. 10 % pod wejściem
 
 // Stan akcji wg zasad DAR-CARD na ostatnim tygodniowym zamknięciu c: KUP (wybicie nad górę najwyższego boxa w tym tygodniu), TRZYMAJ (jest w najwyższym
 // boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia), SPRZEDAJ (po wyższym boxie cena spadła pod jego dno = wejście w strefę
 // zagrożenia), CZEKAJ (pierwszy box, jeszcze bez wybicia), POZA (box złamany bez wcześniejszego wybicia / brak boxa — brak powodu do trzymania).
-function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
+function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bottomConfirm = confirm, vol = null) {
     const boxes = darvasBoxes(c, confirm, bottomConfirm);
     let lastReal = -1;
     c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
@@ -79,7 +82,16 @@ function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bo
     const zoneFrom = r2(last.bottom), stop = r2(last.bottom * (1 - zonePct / 100));
     const base = { top: r2(last.top), bottom: zoneFrom, zoneFrom, stop };
     if (last.outcome === "up" && last.i1 === lastReal) {
-        return { ...base, state: "BUY", stop: r2(last.top * (1 - DARVAS_START_STOP_PCT / 100)), text: `KUP — zamknięcie nad górą boxa ${r2(last.top)}; stop początkowy ok. ${DARVAS_START_STOP_PCT} % pod wejściem (${r2(last.top * (1 - DARVAS_START_STOP_PCT / 100))}), potem pod dnem kolejnych boxów` };
+        // kontrola poprawnego wybicia (blueprint): cena najwyżej 5 % nad górą boxa, wolumen ≥ 1,4× średniej z 10 tygodni (gdy znamy wolumen)
+        const over = c[lastReal] / last.top - 1;
+        if (over > DARVAS_MAX_EXT_PCT / 100) return { ...base, state: "LATE", text: `ZA PÓŹNO — zamknięcie ${(over * 100).toFixed(1)} % nad górą boxa ${r2(last.top)} (limit ${DARVAS_MAX_EXT_PCT} %), nie goń` };
+        let vr = null;
+        if (vol && Number.isFinite(vol[lastReal])) {
+            const prevV = vol.slice(Math.max(0, lastReal - DARVAS_VOL_WEEKS), lastReal).filter(Number.isFinite);
+            if (prevV.length >= 4) vr = vol[lastReal] / (prevV.reduce((a, b) => a + b, 0) / prevV.length);
+        }
+        if (vr !== null && vr < DARVAS_BREAKOUT_VOL) return { ...base, state: "NOVOL", vol_ratio: Math.round(vr * 100) / 100, text: `BEZ WOLUMENU — zamknięcie nad górą boxa ${r2(last.top)}, ale wolumen tylko ${vr.toFixed(2)}× średniej (wymagane ${DARVAS_BREAKOUT_VOL}×); niepotwierdzone` };
+        return { ...base, state: "BUY", stop: r2(last.top * (1 - DARVAS_START_STOP_PCT / 100)), vol_ratio: vr === null ? null : Math.round(vr * 100) / 100, text: `KUP — zamknięcie nad górą boxa ${r2(last.top)}${vr === null ? "" : ` na wolumenie ${vr.toFixed(2)}×`}; stop początkowy ok. ${DARVAS_START_STOP_PCT} % pod wejściem (${r2(last.top * (1 - DARVAS_START_STOP_PCT / 100))}), potem pod dnem kolejnych boxów` };
     }
     if (last.outcome === "down") {
         return hadUp

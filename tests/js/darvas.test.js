@@ -66,3 +66,13 @@ test("darvasStatus: KUP po wybiciu, TRZYMAJ w najwyższym boxie, SPRZEDAJ po wy�
     assert.equal(darvasStatus([...box2, 110]).state, "SELL");
     assert.equal(darvasStatus([100, 101]).state, "NONE");
 });
+
+test("darvasStatus: kontrola wybicia — wolumen ≥ 1,4× i najwyżej 5 % nad górą", () => {
+    const { darvasStatus } = require("../../docs/js/darvas.js");
+    const box1 = [100, 104, 108, 110, 108, 106, 104, 105, 107, 106];
+    const vol = [...box1.map(() => 100), 100];
+    assert.equal(darvasStatus([...box1, 112], 5, 3, 3, vol).state, "NOVOL");   // wolumen 1,0× < 1,4×
+    assert.equal(darvasStatus([...box1, 112], 5, 3, 3, [...box1.map(() => 100), 160]).state, "BUY");
+    assert.equal(darvasStatus([...box1, 118], 5, 3, 3, [...box1.map(() => 100), 160]).state, "LATE");   // 7,3 % nad górą
+    assert.equal(darvasStatus([...box1, 112]).state, "BUY");   // bez danych o wolumenie filtr wolumenu pomijamy
+});
