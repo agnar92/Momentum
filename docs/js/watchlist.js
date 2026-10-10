@@ -1969,7 +1969,7 @@ function initChartModal() {
         if (currentChart && Number.isFinite(+i0) && i0 !== undefined && i1 !== undefined) {   // przybliż na box: świece + wolumen od początku boxa do dziś (+ miejsce na kolejne tygodnie)
             boxFocus = { ticker: t, top: +top, bottom: +bottom, i0: +i0, i1: +i1 };
             const end = +i1 + 1 + 6;   // clampWindow ucina do końca danych
-            chartWindows[0] = { n: Math.max(15, end - (+i0) + 4), end };
+            chartWindows[0] = { n: Math.max(15, end - (+i0) + 14), end };
             drawChart();
             return;
         }

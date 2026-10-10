@@ -736,21 +736,37 @@ function chartSvg(m, opts = {}) {
     }
     // fokus na boxie (kliknięcie): kupno = góra boxa, dół boxa = początek szarej strefy ryzyka (potencjalny exit), dół strefy (−8 % od góry) = exit
     if (opts.focusBox) {
-        const fb = opts.focusBox, stopPx = fb.bottom * (1 - BOX_RISK_ZONE_PCT / 100);
+        const fb = opts.focusBox, off = m.off || 0, zone = 1 - BOX_RISK_ZONE_PCT / 100;
         const inPlot = yy => yy > P.y - 1 && yy < P.y + P.h + 1;
-        const hline = (v, col, txt, dash) => {
+        const xr = L.width - L.right;
+        const seg = (v, xa, xb, col, dash, op, w) => {
+            const yy = yP(v);
+            if (!inPlot(yy) || xb <= xa) return;
+            parts.push(`<g ${clipAttr}><line x1="${xa}" x2="${xb}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ""} opacity="${op}" pointer-events="none"/></g>`);
+        };
+        const zoneRect = (bottom, xa, xb, op) => {
+            const yA = yP(bottom), yB = yP(bottom * zone);
+            parts.push(`<g ${clipAttr}><rect x="${xa}" y="${yA}" width="${Math.max(0, xb - xa)}" height="${Math.max(0, yB - yA)}" fill="#8a8f9c" fill-opacity="${op}" pointer-events="none"/></g>`);
+        };
+        // wcześniejsze boxy: poziomy tylko na odcinku, na którym obowiązywały (bez znaczników na osi)
+        (m.focusPrev || []).forEach(pb => {
+            const xa = Math.max(L.left, x(pb.i0)), xb = Math.min(xr, x(pb.i1));
+            zoneRect(pb.bottom, xa, xb, 0.12);
+            seg(pb.top, xa, xb, "#4ee08a", "", 0.6, 1);
+            seg(pb.bottom, xa, xb, "#c9ced8", "4 3", 0.6, 1);
+            seg(pb.bottom * zone, xa, xb, "#ff7a7a", "2 3", 0.6, 1);
+        });
+        // ostatni (kliknięty) box: poziomy od jego początku do prawej krawędzi + znaczniki z cenami na osi ceny
+        const xa = Math.max(L.left, x(fb.i0 - off));
+        zoneRect(fb.bottom, xa, xr, 0.22);
+        [[fb.top, "#2e9e5b", "", 1.3], [fb.bottom, "#6b7280", "4 3", 1.3], [fb.bottom * zone, "#c0504d", "2 3", 1.3]].forEach(([v, col, dash, w], k) => {
+            seg(v, xa, xr, ["#4ee08a", "#c9ced8", "#ff7a7a"][k], dash, 0.9, w);
             const yy = yP(v);
             if (!inPlot(yy)) return;
-            parts.push(`<g ${clipAttr}><line x1="${L.left}" x2="${L.width - L.right}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="1.3"${dash ? ` stroke-dasharray="${dash}"` : ""} opacity="0.9"/></g>`);
-            addLabel(`${txt} ${v.toFixed(2)}`, L.left + 4, yy - 3, { anchor: "start", fill: col, bold: true, prio: 9 });
-        };
-        {   // szara strefa ryzyka: od dołu boxa do stopu
-            const yA = yP(fb.bottom), yB = yP(stopPx);
-            parts.push(`<g ${clipAttr}><rect x="${L.left}" y="${yA}" width="${L.width - L.right - L.left}" height="${Math.max(0, yB - yA)}" fill="#8a8f9c" fill-opacity="0.22" pointer-events="none"/></g>`);
-        }
-        hline(fb.top, "#4ee08a", "kupno (góra boxa)", "");
-        hline(fb.bottom, "#c9ced8", "strefa ryzyka od", "4 3");
-        hline(stopPx, "#ff7a7a", `exit pod strefą (−${BOX_RISK_ZONE_PCT} %)`, "2 3");
+            const bw = Math.min(L.right - 2, fs(52)), bh = fs(15);
+            parts.push(`<rect x="${xr}" y="${yy - bh / 2}" width="${bw}" height="${bh}" rx="2" fill="${col}" pointer-events="none"><title>${["kupno (góra boxa)", "początek strefy ryzyka (dół boxa)", `exit pod strefą (−${BOX_RISK_ZONE_PCT} %)`][k]}</title></rect>`);
+            parts.push(`<text x="${xr + 4}" y="${yy + fs(4)}" font-size="${fs(10)}" font-weight="700" fill="#ffffff" pointer-events="none">${v >= 1000 ? v.toFixed(0) : v.toFixed(2)}</text>`);
+        });
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
@@ -1262,6 +1278,10 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
             return;
         }
         const m = sliceModel(full, win.n, win.end);
+        if (opts.focusBox && typeof darvasBoxes === "function") {   // wcześniejsze boxy Darvasa (kończące się przed klikniętym) do pokazania w oknie
+            const off = m.off || 0;
+            m.focusPrev = darvasBoxes(full.c).filter(b => b.i1 < opts.focusBox.i0 && b.i1 - off >= 0 && b.i0 - off < m.n).map(b => ({ ...b, i0: b.i0 - off, i1: b.i1 - off }));
+        }
         const geom = {};
         plot.innerHTML = chartSvg(m, { ...opts, geomOut: geom });
         readoutEl.textContent = chartReadout(m, m.lastIdx);
