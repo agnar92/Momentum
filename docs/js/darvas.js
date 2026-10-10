@@ -409,7 +409,8 @@ function darvasSvg(full, win, opts = {}) {
     return `<svg id="chartSvg" data-geom="${[W, H, L.left, L.right, L.top, L.bottom, start, slots, lo, hi].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
 }
 
-// Najechanie / przytrzymanie boxa na Dar-Card: podświetla istniejące poziome linie podziałki najbliżej góry boxa, jego dołu i dołu strefy zagrożenia (z ceną na osi).
+// Zaznaczanie boxa na Dar-Card (stuknięcie / kliknięcie, bez przytrzymania): podświetla istniejące poziome linie podziałki najbliżej góry boxa, jego dołu i dołu strefy zagrożenia
+// (z ceną na osi) i pokazuje pasek akcji „🔍 Przybliż / 📌 Przypnij / ✕”. Stuknięcie w puste miejsce odznacza. Na komputerze podświetlenie działa też przy samym najechaniu.
 // Poza zaznaczonym boxem nic nie jest rysowane — wykres zostaje czysty.
 function attachDarvasHover(container, full, readoutEl) {
     const svg = container.querySelector("svg#chartSvg");
@@ -421,16 +422,19 @@ function attachDarvasHover(container, full, readoutEl) {
     const yOf = v => top + ph * (1 - (v - lo) / (hi - lo));
     const lines = [0, 1, 2].map(k => svg.querySelector("#dHl" + k)), tags = [0, 1, 2].map(k => svg.querySelector("#dHt" + k));
     const cols = ["#4ee08a", "#ffffff", "#ff6b6b"];
-    let base = null, cur = null;
-    const hide = () => {
-        cur = null;
+    let base = null, shown = null, selected = null;
+    const bar = document.createElement("div");
+    bar.className = "box-select-bar"; bar.hidden = true;
+    container.appendChild(bar);
+    const clear = () => {
+        shown = null;
         lines.concat(tags).forEach(e => e.setAttribute("opacity", "0"));
         if (readoutEl && base !== null) readoutEl.textContent = base;
     };
     const show = el => {
         const [t, bt] = el.dataset.box.split("|").map(Number);
-        if (!(t > bt) || cur === el) return;
-        cur = el;
+        if (!(t > bt) || shown === el) return;
+        shown = el;
         if (base === null && readoutEl) base = readoutEl.textContent;
         const lv = [t, bt, bt * (1 - DARVAS_STOP_PCT / 100)];
         lv.forEach((v, k) => {
@@ -442,14 +446,36 @@ function attachDarvasHover(container, full, readoutEl) {
         });
         if (readoutEl) readoutEl.textContent = `box ${bt.toFixed(2)}–${t.toFixed(2)} · strefa zagrożenia do ${lv[2].toFixed(2)}`;
     };
-    const onMove = ev => {
-        const el = ev.target.closest && ev.target.closest("[data-box]");
-        if (el && svg.contains(el)) show(el); else if (cur) hide();
+    const deselect = () => { selected = null; bar.hidden = true; clear(); };
+    const select = el => {
+        selected = el; show(el);
+        const [t, bt] = el.dataset.box.split("|").map(Number);
+        bar.innerHTML = `<span>📦 ${bt.toFixed(2)} – ${t.toFixed(2)}</span><button type="button" data-act="zoom">🔍 Przybliż</button><button type="button" data-act="pin">📌 Przypnij</button><button type="button" data-act="close" aria-label="Odznacz">✕</button>`;
+        bar.hidden = false;
     };
-    svg.addEventListener("pointermove", onMove);
-    svg.addEventListener("pointerdown", onMove);
-    svg.addEventListener("pointerleave", hide);
-    svg.addEventListener("pointerup", () => { if (cur) setTimeout(hide, 900); });
+    bar.addEventListener("click", ev => {
+        const b = ev.target.closest("button");
+        if (!b || !selected) return;
+        ev.stopPropagation();
+        const d = selected.dataset.box;
+        if (b.dataset.act === "zoom" && typeof focusBoxFromData === "function") focusBoxFromData(d);
+        else if (b.dataset.act === "pin" && typeof pinBoxFromData === "function") pinBoxFromData(d);
+        else deselect();
+    });
+    const addMode = () => typeof boxAddOn !== "undefined" && boxAddOn;   // tryb „＋ Box”: przeciąganie ma pierwszeństwo
+    // zwykłe stuknięcie / kliknięcie nie przybliża i nie przypina (robi to pasek akcji) — przechwytujemy je przed delegowanymi obsługami w watchlist.js
+    ["pointerdown", "click"].forEach(n => svg.addEventListener(n, ev => {
+        if (addMode()) return;
+        const el = ev.target.closest && ev.target.closest("[data-box]");
+        if (n === "click") { if (el && svg.contains(el)) select(el); else deselect(); }
+        ev.stopPropagation();
+    }, true));
+    svg.addEventListener("pointermove", ev => {
+        if (selected || addMode() || ev.pointerType !== "mouse") return;
+        const el = ev.target.closest && ev.target.closest("[data-box]");
+        if (el && svg.contains(el)) show(el); else if (shown) clear();
+    });
+    svg.addEventListener("pointerleave", () => { if (!selected && shown) clear(); });
 }
 
 if (typeof module !== "undefined" && module.exports) {

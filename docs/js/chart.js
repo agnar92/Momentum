@@ -1328,6 +1328,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         }
         const geom = {};
         plot.innerHTML = chartSvg(m, { ...opts, geomOut: geom });
+        { const sv = plot.querySelector("#chartSvg"), GL = geom.L || L; if (sv) sv.dataset.cgeom = [GL.width, GL.left, GL.right, m.n, m.off || 0].join(","); }   // geometria do rysowania własnego boxa (pointer → tydzień)
         readoutEl.textContent = chartReadout(m, m.lastIdx);
         attachChartHover(plot, m, readoutEl, geom.L || L);
         if (opts.overlay) opts.overlay({ plot, m, geom, full, L });   // własne linie/cupy (annotate.js) — osobna warstwa nad wykresem
