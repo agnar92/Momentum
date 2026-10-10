@@ -197,7 +197,9 @@ function darvasSvg(full, win, opts = {}) {
     const start = Math.max(0, Math.min(win.end - win.n, lastReal)), endExcl = Math.max(start + 2, win.end);
     const slots = endExcl - start;
     const x = i => L.left + pw * (i - start + 0.5) / slots;
-    const boxes = darvasBoxes(full.c).filter(b => b.i1 >= start && b.i0 < endExcl);
+    const cupGeoms = (full.cups || []).map(cp => darvasCupGeometry(full.c, cp)).filter(Boolean);
+    // opts.cupHideBoxes: boxy leżące wewnątrz miski nie są rysowane (miska je zastępuje — mniej bałaganu)
+    const boxes = darvasBoxes(full.c).filter(b => b.i1 >= start && b.i0 < endExcl && !(opts.cupHideBoxes && cupGeoms.some(g => b.i0 >= g.i0 && b.i1 <= g.i1 + 1)));
     const shown = [];
     for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) shown.push(full.c[i]);
     if (shown.length < 2) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na pudełka Darvasa.</text></svg>`;
@@ -246,10 +248,26 @@ function darvasSvg(full, win, opts = {}) {
             pts.push([x(t), y(v)]);
         }
         const poly = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
-        out.push(`<polygon points="${poly} ${x(g.i0).toFixed(1)},${y(g.left).toFixed(1)}" fill="#2fb4ff" fill-opacity="0.14" pointer-events="none"/>`);
-        out.push(`<polyline points="${poly}" fill="none" stroke="#0e0f13" stroke-opacity="0.85" stroke-width="${fs(6)}" stroke-linecap="round" pointer-events="none"/>`);
-        out.push(`<polyline points="${poly}" fill="none" stroke="#2fb4ff" stroke-width="${fs(3.2)}" stroke-linecap="round" pointer-events="none"><title>${g.noHandle ? "Cup bez rączki (ryzykowny)" : "Cup & handle"}: miska −${g.depthPct} %, pivot ${g.pivot}</title></polyline>`);
-        out.push(`<text x="${x(g.ib).toFixed(1)}" y="${(y(g.bottom) + fs(15)).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${g.noHandle ? "cup ⚠" : "cup"} −${g.depthPct}%</text>`);
+        const style = opts.cupStyle || "arc";
+        const label = `${g.noHandle ? "cup ⚠" : "cup"} −${g.depthPct}%`;
+        const title = `<title>${g.noHandle ? "Cup bez rączki (ryzykowny)" : "Cup & handle"}: miska −${g.depthPct} %, pivot ${g.pivot}</title>`;
+        const lblY = y(g.bottom) + fs(15);
+        if (style === "bowl") {   // miska jak box Dar-Card: biała półprzezroczysta czasza z białą obwódką
+            out.push(`<polygon points="${poly} ${x(g.i0).toFixed(1)},${y(g.left).toFixed(1)}" fill="#ffffff" fill-opacity="0.2" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
+            out.push(`<text x="${x(g.ib).toFixed(1)}" y="${(y(g.bottom) - fs(6)).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#ffffff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label}</text>`);
+        } else if (style === "bracket") {   // bez krzywej: nawias nad miską z opisem (szczyt → dołek → brzeg), box rączki jak zwykły box
+            const byy = y(Math.max(g.left, g.rim)) - fs(14), bx0 = x(g.i0), bx1 = x(g.i1);
+            out.push(`<path d="M${bx0.toFixed(1)},${(byy + fs(7)).toFixed(1)} V${byy.toFixed(1)} H${bx1.toFixed(1)} V${(byy + fs(7)).toFixed(1)}" fill="none" stroke="#2fb4ff" stroke-width="${fs(2)}" pointer-events="none">${title}</path>`);
+            out.push(`<circle cx="${x(g.ib).toFixed(1)}" cy="${y(g.bottom).toFixed(1)}" r="${fs(4)}" fill="#2fb4ff" stroke="#0e0f13" stroke-width="1.5" pointer-events="none"/>`);
+            out.push(`<text x="${((bx0 + bx1) / 2).toFixed(1)}" y="${(byy - 5).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label} · ${g.i1 - g.i0} tyg.</text>`);
+        } else if (style === "thin") {   // minimalnie: cienka kropkowana krzywa bez wypełnienia i bez opisu miski
+            out.push(`<polyline points="${poly}" fill="none" stroke="#9adbff" stroke-width="${fs(1.6)}" stroke-dasharray="2 4" stroke-linecap="round" pointer-events="none">${title}</polyline>`);
+        } else {   // "arc": gruba niebieska krzywa z ciemnym obrysem i lekkim wypełnieniem
+            out.push(`<polygon points="${poly} ${x(g.i0).toFixed(1)},${y(g.left).toFixed(1)}" fill="#2fb4ff" fill-opacity="0.14" pointer-events="none"/>`);
+            out.push(`<polyline points="${poly}" fill="none" stroke="#0e0f13" stroke-opacity="0.85" stroke-width="${fs(6)}" stroke-linecap="round" pointer-events="none"/>`);
+            out.push(`<polyline points="${poly}" fill="none" stroke="#2fb4ff" stroke-width="${fs(3.2)}" stroke-linecap="round" pointer-events="none">${title}</polyline>`);
+            out.push(`<text x="${x(g.ib).toFixed(1)}" y="${lblY.toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label}</text>`);
+        }
         const px1 = W - L.right;
         if (g.handle) {
             const hx0 = x(g.handle.i0) - bw / 2, hx1 = x(g.handle.i1) + bw / 2, hyT = y(g.handle.top), hyB = y(g.handle.bottom), hyZ = y(g.handle.bottom * (1 - DARVAS_STOP_PCT / 100));
