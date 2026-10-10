@@ -51,7 +51,7 @@ test("darvasBoxInfo / darvasBoxSheetHtml: wejście = góra, anulowanie = dół, 
     assert.equal(darvasBoxInfo(100, 95).stopAboveCancel, false);  // dół 95 nad stopem 92
     const html = darvasBoxSheetHtml(i, "open", false);
     assert.match(html, /Cena wejścia[\s\S]*100\.00/);
-    assert.match(html, /Anulowanie boxa[\s\S]*90\.00/);
-    assert.match(html, /Stop loss[\s\S]*92\.00/);
+    assert.match(html, /Początek strefy ryzyka[\s\S]*90\.00/);
+    assert.match(html, /Exit[\s\S]*92\.00/);
     assert.match(html, /niepotwierdzony/);
 });
