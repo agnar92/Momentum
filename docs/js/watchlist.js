@@ -1296,12 +1296,24 @@ let boxesOverviewData = null, boxesNewKeys = null, boxesCharts = null;
 
 function boxesLoadJson(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v === null ? fallback : v; } catch (e) { return fallback; } }
 
+// Rozwijana informacja o pozycji liczonej z boxa (Dar-Card): wejście = góra boxa (zamknięcie tygodnia nad nią), stop = dół strefy zagrożenia (5 % pod dołem boxa).
+function boxPositionHtml(top, bottom) {
+    const stop = Math.round(bottom * (1 - (typeof DARVAS_STOP_PCT !== "undefined" ? DARVAS_STOP_PCT : 5) / 100) * 100) / 100;
+    const perShare = top > stop ? (top / stop - 1) * 100 : null;
+    const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
+    const lines = [`Wejście: zamknięcie tygodnia nad <b>${top.toFixed(2)}</b>`, `Stop: zamknięcie pod <b>${stop.toFixed(2)}</b> (dół strefy zagrożenia)${perShare !== null ? `, ryzyko ${perShare.toFixed(1)} % na akcję` : ""}`];
+    if (size) lines.push(`Pozycja: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${size.pct_of_capital.toFixed(1)} % konta), strata przy stopie ${pln0(size.risk_pln)} (${size.risk_pct !== null ? size.risk_pct.toFixed(2) : "—"} % konta)${size.limited_by === "risk" ? " — ograniczone ryzykiem" : " — ograniczone % konta"}`);
+    else lines.push("Pozycja: ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby liczyć liczbę akcji.");
+    return lines.map(l => `<div class="box-pos-line">${l}</div>`).join("");
+}
+
 function boxRowHtml(r, sec, isNew) {
     const [lab, cls] = BOX_STATE_LABELS[r.state] || [r.state, ""];
     const pinned = state.boxes[r.ticker] && Math.abs(state.boxes[r.ticker].top - r.box.top) < 0.005 && Math.abs(state.boxes[r.ticker].bottom - r.box.bottom) < 0.005;
     const btn = sec === "pinned" ? `<button type="button" class="box-act" data-act="unpin" title="Odepnij box">✕</button>`
         : `<button type="button" class="box-act${pinned ? " on" : ""}" data-act="${pinned ? "unpin" : "pin"}" title="${pinned ? "Odepnij" : "Przypnij do monitorowania"}">📌</button>`;
-    return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`;
+    return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`
+        + `<details class="box-pos"><summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(r.box.top, r.box.bottom)}</details>`;
 }
 
 async function renderBoxesPanel() {
@@ -1960,6 +1972,7 @@ function drawChart() {
         const bar = document.createElement("div");
         bar.className = "box-focus-bar";
         bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
         bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
         body.insertBefore(bar, body.firstChild);
         bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
@@ -2071,7 +2084,7 @@ function initChartModal() {
     try {
         chartLog = localStorage.getItem(CHART_LOG_KEY) === "1";
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
-        chartDarvasOn = localStorage.getItem(CHART_DARVAS_KEY) === "1";
+        chartDarvasOn = true;   // Dar-Card jest jedynym widokiem (świece tylko po kliknięciu boxa)
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved && Number.isFinite(saved.w) && saved.w > 0) chartWinLen.w = saved.w;
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
