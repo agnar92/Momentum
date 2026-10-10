@@ -188,11 +188,10 @@ test("marketLines describes both indices", () => {
     assert.ok(marketLines({ sp500: { ema_gap_pct: 1.8, pct_vs_sma50: 1, pct_vs_sma200: 2, dist_days: 2, pct_from_high: -1 } })[0].includes("EMA10/EMA20 tyg. +1.8%"));
 });
 
-test("all tabs share the same columns; alerts add alert columns; tagStrategies orders Q, B", () => {
+test("all tabs share the same columns; tagStrategies orders Q, B", () => {
     const { TAB_COLUMNS, tagStrategies } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
     ["LIST", "FAV", "QM", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
-    TAB_COLUMNS.LIST.forEach(id => assert.ok(TAB_COLUMNS.ALERTS.includes(id), id));
-    assert.ok(TAB_COLUMNS.ALERTS.includes("alStatus"));
+    assert.equal(TAB_COLUMNS.ALERTS, undefined);   // zakładka Alerty usunięta
     const a = stock("A", { rs_rating: 90 }), b = stock("B", { rs_rating: 10 });
     tagStrategies([a, b], [a, b], {
         qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false } });

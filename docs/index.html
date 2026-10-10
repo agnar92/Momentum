@@ -39,7 +39,6 @@
                 <button class="drawer-tab" data-tab="BASES">🧱 Bazy</button>
                 <button class="drawer-tab" data-tab="BOXES">📦 Boxy<span id="boxesBadge"></span></button>
                 <button class="drawer-tab" data-tab="POS">💼 Pozycje</button>
-                <button class="drawer-tab" data-tab="ALERTS">🔔 Alerty<span id="alertBadge"></span></button>
                 <button class="drawer-tab" data-tab="FAV">⭐ Ulubione</button>
             </div>
         </div>
@@ -79,14 +78,7 @@
             <fieldset class="filter-group pattern-only"><legend>🚀 Kolumna „Wybicie”</legend>
                 <label class="field" title="Kolumna „Wybicie” pokazuje spółkę (do sortowania np. w CANSLIM), gdy do jej poziomu wybicia (opór flagi, pivot bazy, moja linia z alertem „nad”) brakuje najwyżej tyle %"><span>Maks. dystans do wybicia (%):</span><input type="number" id="brkMaxDist" min="0" step="0.5"></label>
             </fieldset>
-            <fieldset class="filter-group pattern-only"><legend>🧱 Bazy</legend>
-                <label class="field"><span>Maks. dystans do pivotu (%):</span><input type="number" id="baseMaxDist" min="0" step="1"></label>
-                <label class="field"><input type="checkbox" id="baseVcpOnly"><span>tylko VCP</span></label>
-            </fieldset>
-        </div>
-        <div class="boxes-panel" id="boxesPanel" hidden></div>
-
-        <div class="tab-controls" id="controls-ALERTS" hidden>
+            <fieldset class="filter-group"><legend>☁ Synchronizacja i kopia zapasowa</legend>
             <button type="button" class="btn" id="annExport" title="Skopiuj wszystkie własne linie, cupy i notatki jako JSON (kopia zapasowa / do przeglądu z Claude)">Eksportuj adnotacje</button>
             <button type="button" class="btn" id="annImport">Importuj</button>
             <button type="button" class="btn" id="annApply" hidden>Zastosuj import</button>
@@ -106,7 +98,13 @@
                 <button type="button" class="btn" id="syncOffBtn" hidden>Wyłącz na tym urządzeniu</button>
                 <div class="ann-hint" id="syncInfo"></div>
             </div>
+            </fieldset>
+            <fieldset class="filter-group pattern-only"><legend>🧱 Bazy</legend>
+                <label class="field"><span>Maks. dystans do pivotu (%):</span><input type="number" id="baseMaxDist" min="0" step="1"></label>
+                <label class="field"><input type="checkbox" id="baseVcpOnly"><span>tylko VCP</span></label>
+            </fieldset>
         </div>
+        <div class="boxes-panel" id="boxesPanel" hidden></div>
         <div class="tab-controls" id="controls-FAV" hidden></div>
         <div class="tab-controls" id="controls-POS" hidden>
             <label class="field" title="Wartość konta (IKE) w PLN — do przeliczenia na liczbę akcji po kursie USD/PLN (synchronizowane z Gistem)"><span>Konto (PLN):</span><input type="number" inputmode="decimal" step="any" id="acctCapital" placeholder="np. 50000"></label>
@@ -121,7 +119,6 @@
         <details class="screener-guide" id="guide-CS" hidden><summary>🏆 CANSLIM — jak liczone (heurystyka)</summary>Lista kontrolna 7 kryteriów O'Neila („How to Make Money in Stocks”) z danych Finviz / Yahoo: <b>C</b> EPS ostatniego kwartału r/r ≥ 25 % i sprzedaż r/r ≥ 25 %, <b>A</b> EPS w tym roku ≥ 25 % i ROE ≥ 17 % (wzrostu EPS z 5 lat nie używamy — O'Neil chce ≥ 25 % w każdym z 3 ostatnich lat, a średnia z 5 lat to ukrywa), <b>N</b> do 10 % pod szczytem 52 tyg., <b>S</b> Acc/Dis A lub B i zadłużenie D/E ≤ 1, <b>L</b> RS Rating ≥ progu z Filtrów (domyślnie 80; liczony względem szerokiego rynku, gdy pobrano listę Qullamaggiego) w grupie branżowej ≥ 60, <b>I</b> instytucje 20–90 % z napływem (powyżej 90 % = przesadne obłożenie, powyżej 100 % = dane niewiarygodne), <b>M</b> rynek w trendzie wzrostowym (EMA10 &gt; EMA20 tyg.) i mniej niż 5 dni dystrybucji. Zielona litera = spełnione, czerwona = nie, szara = brak danych; składnik, którego nie znamy, nie obniża oceny litery. Wynik liczy się przy co najmniej 4 znanych kryteriach; w Filtrach ustawisz minimum i warunek „C i A obowiązkowe” (fundament CANSLIM). Progi to heurystyka, nie historycznie testowana — sprawdź wykres i fundamenty sam.</details>
         <details class="screener-guide" id="guide-BASES" hidden><summary>🧱 Bazy — jak liczone (heurystyka)</summary>Korekta od lokalnego tygodniowego szczytu (głębokość 6–50%, min. 5 tygodni), jeszcze nie odrobiona. Typ: flat (≤15%), cup (≤35% i odrobione ≥50%), korekta, głęboka. Pivot = szczyt bazy; „Do pivotu” to wzrost potrzebny do jego przebicia. VCP = co najmniej dwa coraz mniejsze skurcze, ostatni ≤10%. To uproszczenie, nie rozpoznawanie formacji z MarketSmith (np. bez wykrywania rączki).</details>
         <details class="screener-guide" id="guide-POS" hidden><summary>💼 Pozycje — jak to działa</summary>Otwórz wykres spółki → <b>💼 Pozycja</b>: wpisz wejście, stop, liczbę akcji i cel (albo użyj kalkulatora: kapitał × ryzyko % ÷ (wejście − stop)). Stop i cel pojawiają się na wykresie jako linie z alertem (stop: cena pod linią, cel: nad linią), więc przebicie zobaczysz w zakładce 🔔 Alerty. Tu: zysk w % i $, <b>R</b> = zysk w wielokrotnościach początkowego ryzyka, odległość do stopu i ryzyko całego portfela; najbliżej stopu na górze. Dane synchronizują się przez Gist razem z liniami. Notatnik pomocniczy, nie zlecenia — nic nie jest wysyłane do brokera.</details>
-        <details class="screener-guide" id="guide-ALERTS" hidden><summary>🔔 Alerty — jak to działa</summary>W oknie wykresu kliknij <b>✎ Edytuj</b> (albo <b>przytrzymaj spację</b> — tryb edycji działa, dopóki trzymasz; wtedy przeciągnięcie po wykresie rysuje linię), wybierz <b>Linia</b>, kliknij dwa punkty (przyciąga do High/Low świecy) i ustaw <b>Alert</b>: „nad linią” (wybicie oporu) albo „pod linią” (utrata wsparcia). Tu porównuję dzisiejszą wartość linii z ostatnim zamknięciem; „PRZEBITA — nowa” zostaje, dopóki nie klikniesz OK. Strona sama nie wysyła powiadomień — alerty są liczone przy otwarciu / po odświeżeniu danych. Powiadomienie e-mail / push (GitHub Issue) włączysz, dodając w repozytorium sekret <code>GIST_TOKEN</code> (ten sam token z uprawnieniem „gist” co w synchronizacji): codzienny workflow zgłosi nowe przebicia. Stop i cel z zakładki 💼 Pozycje też są tu liniami z alertem. Dane są tylko w tej przeglądarce — użyj eksportu, żeby je zachować albo pokazać Claude do przeglądu.</details>
         <details class="screener-guide" id="guide-FAV" hidden><summary>⭐ Ulubione</summary>Spółki oznaczone ★ — zapisane tylko w tej przeglądarce (localStorage).</details>
 
         <div class="card-sort" id="cardSortBar">
@@ -136,7 +133,6 @@
             <table class="momentum-table" id="table-CS" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-BASES" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-POS" hidden><thead></thead><tbody></tbody></table>
-            <table class="momentum-table" id="table-ALERTS" hidden><thead></thead><tbody></tbody></table>
             <table class="momentum-table" id="table-FAV" hidden><thead></thead><tbody></tbody></table>
         </div>
     </div>
@@ -145,8 +141,9 @@
         <div class="wl-chart-box" role="dialog" aria-modal="true" aria-labelledby="chartTitle">
             <div class="wl-chart-head">
                 <div class="wl-chart-titles"><div class="wl-chart-title" id="chartTitle"></div><div class="wl-chart-sub" id="chartSub"></div></div>
-                <button type="button" class="btn" id="chartLineBtn" title="Tryb LINIA: dotknij istniejącą linię, żeby ją edytować, albo puste miejsce, żeby narysować nową (przytrzymanie spacji też włącza edycję)">Linia</button>
+                <button hidden type="button" class="btn" id="chartLineBtn" title="Tryb LINIA: dotknij istniejącą linię, żeby ją edytować, albo puste miejsce, żeby narysować nową (przytrzymanie spacji też włącza edycję)">Linia</button>
                 <button type="button" class="btn" id="chartCupBtn" title="Tryb CUP: dotknij istniejący cup, żeby go poprawić, albo puste miejsce, żeby narysować nowy">Cup</button>
+                <button hidden type="button" class="btn" id="chartBoxAddBtn" title="Własny box: zaznacz palcem / myszą prostokąt na widoku Dar-Card (góra i dół z zamknięć) — zapisze się jako przypięty, monitorowany box. Dla wąskich konsolidacji, których skrypt nie wykrył.">＋ Box</button>
                 <button type="button" class="btn" id="chartPenBtn" title="Rysowanie odręczne: włącz i rysuj palcem / myszą po wykresie (zapisuje się przy spółce)">✏️<span class="lbl"> Rysuj</span></button>
                 <button type="button" class="btn" id="chartPenClear" title="Usuń wszystkie odręczne rysunki tej spółki" hidden>🗑</button>
                 <button type="button" class="btn" id="chartPosBtn" title="Moja pozycja: wejście, stop, cel, kalkulator wielkości pozycji">💼<span class="lbl"> Pozycja</span></button>
@@ -193,7 +190,7 @@
     <button type="button" data-tab="LIST"><span class="bn-icon">📋</span><span class="bn-label">Lista</span></button>
     <button type="button" data-tab="CS"><span class="bn-icon">🏆</span><span class="bn-label">CANSLIM</span></button>
     <button type="button" data-tab="POS"><span class="bn-icon">💼</span><span class="bn-label">Pozycje</span></button>
-    <button type="button" data-tab="ALERTS"><span class="bn-icon">🔔</span><span class="bn-label">Alerty<b id="alertBadgeNav"></b></span></button>
+    <button type="button" data-tab="BOXES"><span class="bn-icon">📦</span><span class="bn-label">Boxy</span></button>
     <button type="button" id="navMore"><span class="bn-icon">☰</span><span class="bn-label">Więcej</span></button>
 </nav>
 
