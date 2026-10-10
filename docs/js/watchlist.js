@@ -1957,6 +1957,16 @@ function drawChart() {
             + `<div class="wl-chart-readout cell-readout"></div><div class="cell-body"></div></div>`;
     };
     body.innerHTML = `<div class="chart-grid layout-1" data-ticker="${escapeHtml(currentChart.ticker)}">${cells.map(cellHtml).join("")}</div>`;
+    if (focus) {   // pasek nad wykresem (wstawiany PRZED rysowaniem, żeby pomiar miejsca na wykres był prawdziwy — inaczej viewBox jest wyższy niż pole i wykres wraca z pustymi pasami po bokach)
+        const stop = focus.bottom * (1 - DARVAS_STOP_PCT / 100);
+        const bar = document.createElement("div");
+        bar.className = "box-focus-bar";
+        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
+        bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
+        body.insertBefore(bar, body.firstChild);
+        bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
+    }
     let primary = null;
     cells.forEach((c, i) => {
         const cell = body.querySelectorAll(".chart-cell")[i];
@@ -1982,16 +1992,6 @@ function drawChart() {
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
         if (i === activeIdx) primary = model;
     });
-    if (focus) {   // pasek nad wykresem: poziomy boxa + powrót do pełnego widoku
-        const stop = focus.bottom * (1 - DARVAS_STOP_PCT / 100);
-        const bar = document.createElement("div");
-        bar.className = "box-focus-bar";
-        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
-        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
-        bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
-        body.insertBefore(bar, body.firstChild);
-        bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
-    }
     document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
     if (primary && state.patterns && typeof darvasStatus === "function") {   // stan wg zasad DAR-CARD (KUP / TRZYMAJ / SPRZEDAJ) dopisany do opisu formacji
         const ds = darvasStatus(primary.c, undefined, undefined, undefined, primary.v);
@@ -2141,53 +2141,21 @@ function initChartModal() {
     (() => {
         const btn = document.getElementById("chartBoxAddBtn");
         const body = document.getElementById("chartBody");
-        let drag = null;
-        const weekAt = (svg, clientX) => {   // widok świecowy: pozycja w poziomie → indeks tygodnia w pełnej serii
-            const g = (svg.dataset.cgeom || "").split(",").map(Number);
-            if (g.length < 5 || g.some(v => !Number.isFinite(v))) return null;
-            const [W, left, right, n, off] = g;
-            const r = svg.getBoundingClientRect();
-            const vx = (clientX - r.left) / r.width * W;
-            const i = Math.floor((vx - left) / (W - left - right) * n);
-            return Math.max(0, Math.min(n - 1, i)) + off;
-        };
         const sync = () => {
             const inFocus = !!(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
             btn.hidden = !inFocus;   // własny box rysuje się tylko na wykresie świecowym
             document.querySelector(".wl-chart-box").classList.toggle("focus-view", inFocus);
             const est = document.getElementById("chartEstBtn");   // estymaty analityków: tylko na wykresie słupkowym (po dotknięciu boxa), nie na Dar-Card
             if (est) est.hidden = !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
-            btn.classList.toggle("active", boxAddOn);
-            document.body.classList.toggle("box-add", boxAddOn);
-            btn.textContent = boxAddOn ? "＋ Box: przeciągnij po świecach" : "＋ Box";
         };
         window.syncBoxAddButton = sync;
-        btn.addEventListener("click", () => { boxAddOn = !boxAddOn; sync(); if (boxAddOn) showToast("Przeciągnij palcem poziomo przez tygodnie konsolidacji — powstanie własny, przypięty box.", { type: "info" }); });
-        body.addEventListener("pointerdown", ev => {
-            if (!boxAddOn) return;
-            const svg = ev.target.closest && ev.target.closest("svg#chartSvg");
-            if (!svg) return;
-            const i = weekAt(svg, ev.clientX);
-            if (i === null) return;
-            drag = { svg, i0: i };
-            ev.preventDefault();
-        });
-        const finish = ev => {
-            if (!drag) return;
-            const d = drag; drag = null;
-            const i1 = weekAt(d.svg, ev.clientX);
-            if (i1 === null || !currentChart) return;
-            const st = currentChart.charts.stocks && currentChart.charts.stocks[currentChart.ticker];
-            const lo = Math.max(0, Math.min(d.i0, i1)), hi = Math.min((st && st.c ? st.c.length : 0) - 1, Math.max(d.i0, i1));
-            const cl = st && st.c ? st.c.slice(lo, hi + 1).filter(Number.isFinite) : [];
-            if (hi - lo < 1 || cl.length < 2 || !(Math.max(...cl) > Math.min(...cl))) { showToast("Zaznacz co najmniej 2 tygodnie konsolidacji.", { type: "info" }); return; }
-            boxAddOn = false; sync();
+        btn.addEventListener("click", () => { if (annApi.toggleBox) annApi.toggleBox(); });
+        annApi.onBox = (ticker, box) => {   // własny box (kursor jak przy Linii / Cup): najwyższe / najniższe zamknięcie z przedziału, zapisany jako przypięty
+            if (!currentChart || currentChart.ticker !== ticker) return;
             pinFlashUntil = Date.now() + 2500;
-            savePinnedBox(currentChart.ticker, { top: Math.max(...cl), bottom: Math.min(...cl), start: currentChart.charts.weeks[lo] });
+            savePinnedBox(ticker, box);
             showToast("📌 Własny box zapisany i monitorowany.", { type: "success" });
         };
-        body.addEventListener("pointerup", finish);
-        body.addEventListener("pointercancel", () => { drag = null; });
         sync();
     })();
     document.getElementById("chartDarvasBtn").addEventListener("click", () => {
