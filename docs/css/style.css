@@ -1018,3 +1018,9 @@ body.box-add .wl-chart-body svg#chartSvg { touch-action: none; cursor: crosshair
 .wl-chart-box, body.split .wl-chart-box, body.split .wl-chart-box.full, .wl-chart-box.full.phone-full { padding-left: 0 !important; padding-right: 0 !important; }
 .wl-chart-box > :not(.wl-chart-body) { padding-left: 8px; padding-right: 8px; }
 .wl-chart-box .wl-chart-body, .wl-chart-box .chart-cell, .wl-chart-box .cell-body { padding-left: 0; padding-right: 0; margin-left: 0; margin-right: 0; }
+
+/* pop-out wyboru boxa, gdy kilka leży jeden na drugim (Dar-Card) */
+.box-pick { position: absolute; z-index: 30; min-width: 190px; max-width: 92%; background: #1a1d26; border: 1px solid #3a4152; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.6); padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.box-pick-title { font-size: 11px; color: #8a8f9c; padding: 2px 6px 4px; }
+.box-pick button { text-align: left; min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid #2c3140; background: #232733; color: #e8eaed; font-size: 13px; }
+.box-pick button:active { background: #2f3646; border-color: #ffd54a; }

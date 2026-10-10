@@ -447,8 +447,19 @@ function attachDarvasHover(container, full, readoutEl) {
         });
         if (readoutEl) readoutEl.textContent = `box ${bt.toFixed(2)}–${t.toFixed(2)} · strefa zagrożenia do ${lv[2].toFixed(2)}`;
     };
-    const deselect = () => { selected = null; bar.hidden = true; clear(); };
+    const mark = el => {
+        svg.querySelectorAll("[data-sel]").forEach(e => {
+            ["stroke", "stroke-width", "stroke-dasharray"].forEach((a, i) => { const v = e.dataset["o" + i]; if (v === undefined || v === "") e.removeAttribute(a); else e.setAttribute(a, v); });
+            delete e.dataset.sel;
+        });
+        if (!el) return;
+        ["stroke", "stroke-width", "stroke-dasharray"].forEach((a, i) => { el.dataset["o" + i] = el.getAttribute(a) || ""; });
+        el.dataset.sel = "1";
+        el.setAttribute("stroke", "#ffd54a"); el.setAttribute("stroke-width", "2.6"); el.setAttribute("stroke-dasharray", "6 3");
+    };
+    const deselect = () => { mark(null); selected = null; bar.hidden = true; clear(); };
     const select = el => {
+        mark(el);   // wybrany box dostaje złotą obwódkę
         selected = el; show(el);
         const [t, bt] = el.dataset.box.split("|").map(Number);
         const isPinned = el.dataset.box.split("|")[2] === "przypięty";
@@ -464,12 +475,46 @@ function attachDarvasHover(container, full, readoutEl) {
         else if (b.dataset.act === "pin" && typeof pinBoxFromData === "function") pinBoxFromData(d);
         else deselect();
     });
+    let pick = null;
+    const closePick = () => { if (pick) { pick.remove(); pick = null; } };
+    const boxName = el => {
+        const f = el.dataset.box.split("|");
+        const ti = el.querySelector("title");
+        const nm = f[2] === "przypięty" ? "📌 Przypięty box" : f[2] === "wzorzec" ? ((ti && ti.textContent.split(/[\n·]/)[0].trim()) || "Wzorzec") : "Box Darvasa";
+        return `${nm} · ${(+f[1]).toFixed(2)}–${(+f[0]).toFixed(2)}`;
+    };
+    const pickBox = (hits, ev) => {   // pop-out menu przy palcu: lista nakładających się boxów, wybór zaznacza (podświetla) dany box
+        pick = document.createElement("div");
+        pick.className = "box-pick";
+        pick.innerHTML = `<div class="box-pick-title">Które pudełko podświetlić?</div>` + hits.map((h, i) => `<button type="button" data-i="${i}">${escapeHtml(boxName(h))}</button>`).join("");
+        const cr = container.getBoundingClientRect();
+        container.appendChild(pick);
+        const w = pick.offsetWidth, hgt = pick.offsetHeight;
+        pick.style.left = Math.max(4, Math.min(cr.width - w - 4, ev.clientX - cr.left - w / 2)) + "px";
+        pick.style.top = Math.max(4, Math.min(cr.height - hgt - 70, ev.clientY - cr.top - hgt - 12)) + "px";
+        pick.addEventListener("click", e => {
+            const b = e.target.closest("button");
+            e.stopPropagation();
+            if (b) { const el2 = hits[+b.dataset.i]; closePick(); select(el2); }
+        });
+    };
     const addMode = () => typeof boxAddOn !== "undefined" && boxAddOn;   // tryb „＋ Box”: przeciąganie ma pierwszeństwo
     // zwykłe stuknięcie / kliknięcie nie przybliża i nie przypina (robi to pasek akcji) — przechwytujemy je przed delegowanymi obsługami w watchlist.js
     ["pointerdown", "click"].forEach(n => svg.addEventListener(n, ev => {
         if (addMode()) return;
         const el = ev.target.closest && ev.target.closest("[data-box]");
-        if (n === "click") { if (el && svg.contains(el)) select(el); else deselect(); }
+        if (n === "click") {
+            closePick();
+            // boxy leżą jeden na drugim: wszystkie pod palcem → gdy jest ich kilka, wyskakuje menu wyboru, który podświetlić
+            const hits = [];
+            (document.elementsFromPoint ? document.elementsFromPoint(ev.clientX, ev.clientY) : [el]).forEach(e => {
+                const b = e && e.closest && e.closest("[data-box]");
+                if (b && svg.contains(b) && !hits.some(h => h.dataset.box === b.dataset.box)) hits.push(b);
+            });
+            if (hits.length > 1) pickBox(hits, ev);
+            else if (el && svg.contains(el)) select(el);
+            else deselect();
+        }
         ev.stopPropagation();
     }, true));
     svg.addEventListener("pointermove", ev => {
