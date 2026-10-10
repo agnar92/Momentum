@@ -692,3 +692,14 @@ test("pudełko bazy: stop z dołu środkowej 1/3, podział na 3, jakość świec
     assert.equal(actionInfo({ ...box, base_type: "cup", box_stop: null }, up).code, "BUY");   // cup (i flaga) nie dostają podziału na 3 ani filtra knota
     assert.match(actionInfo({ ...box, base_type: "cup", box_stop: null, box_brk_wick_pct: 64 }, up).why, /Stop 7–8 %/);
 });
+
+test("Follow-Through Day: opis w banerze rynku i M z FTD", () => {
+    const { ftdText, canslimInfo, marketLines } = require("../../docs/js/watchlist.js");
+    assert.equal(ftdText({ state: "none" }), "");
+    assert.match(ftdText({ state: "ftd", date: "2026-06-18", gain_pct: 1.91, vol_ratio: 1.6, day: 6, dist_days: 3 }), /FTD 2026-06-18: \+1\.91% na wolumenie ×1\.6, 6\. dzień/);
+    assert.match(ftdText({ state: "attempt", day: 3, drawdown_pct: 9.8, low_date: "2026-03-30" }), /3\. dzień, FTD dopiero od 4\. dnia/);
+    assert.match(marketLines({ sp500: { dist_days: 2, pct_vs_sma50: 1, pct_vs_sma200: 2, pct_from_high: -3, ftd: { state: "attempt", day: 2, drawdown_pct: 8, low_date: "2026-03-30" } } })[0], /próba odbicia/);
+    // M: regime „uptrend” (efektywny, także przez FTD) + mniej niż 5 dni dystrybucji = ✓; opis wspomina FTD
+    const c = canslimInfo({}, { regime: "uptrend", distDays: 1, ftd: true });
+    assert.equal(c.flags.M, true);
+});

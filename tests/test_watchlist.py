@@ -1201,3 +1201,51 @@ class TestCorridorBase:
         assert not any(b.get("corridor") for b in watchlist.detect_bases(df))
         flat = pd.DataFrame({"Open": 100.0, "High": 105.0, "Low": 95.0, "Close": 100.0, "Volume": 1e6}, index=pd.date_range("2025-01-03", periods=60, freq="W-FRI"))
         assert not any(b.get("corridor") for b in watchlist.detect_bases(flat))   # bez wcześniejszego wzrostu
+
+
+class TestFollowThroughDay:
+    def _index(self, moves):
+        """moves = lista (zmiana % zamknięcia, mnożnik wolumenu względem dnia wcześniej); 120 sesji wzrostu na starcie."""
+        closes, vols = [], []
+        c, v = 100.0, 1e9
+        for _ in range(60):
+            c *= 1.002
+            closes.append(c)
+            vols.append(v)
+        for chg, vm in moves:
+            c *= 1 + chg / 100
+            v *= vm
+            closes.append(c)
+            vols.append(v)
+        idx = pd.bdate_range("2026-01-01", periods=len(closes))
+        cl = np.array(closes)
+        return pd.DataFrame({"Open": cl, "High": cl * 1.003, "Low": cl * 0.997, "Close": cl, "Volume": vols}, index=idx)
+
+    DECLINE = [(-1.5, 1.1)] * 6      # ~ −9 % od szczytu
+
+    def test_ftd_on_day_4_with_gain_and_higher_volume(self):
+        df = self._index(self.DECLINE + [(0.4, 0.9), (0.5, 0.9), (0.3, 0.9), (1.6, 1.3), (0.2, 0.9)])
+        f = watchlist.follow_through_day(df)
+        assert f["state"] == "ftd" and f["day"] == 4 and f["gain_pct"] >= 1.25 and f["dist_days"] == 0
+
+    def test_big_gain_before_day_4_is_not_ftd_and_attempt_continues(self):
+        df = self._index(self.DECLINE + [(0.4, 0.9), (1.8, 1.3), (0.3, 0.9)])
+        f = watchlist.follow_through_day(df)
+        assert f["state"] == "attempt" and f["day"] == 3
+
+    def test_gain_without_higher_volume_does_not_count(self):
+        df = self._index(self.DECLINE + [(0.4, 0.9), (0.5, 0.9), (0.3, 0.9), (1.6, 0.8)])
+        assert watchlist.follow_through_day(df)["state"] == "attempt"
+
+    def test_undercutting_the_low_cancels_the_attempt(self):
+        df = self._index(self.DECLINE + [(0.4, 0.9), (0.5, 0.9), (0.3, 0.9), (-3.0, 1.2), (0.5, 0.9), (0.3, 0.9)])
+        # nowy dołek po „próbie” — liczy się dopiero odbicie od niego (jeszcze za wcześnie na FTD)
+        assert watchlist.follow_through_day(df)["state"] in ("attempt", "correction")
+
+    def test_no_correction_means_no_ftd_needed(self):
+        assert watchlist.follow_through_day(self._index([(0.2, 1.0)] * 40))["state"] == "none"
+
+    def test_distribution_after_ftd_closes_the_market_again(self):
+        moves = self.DECLINE + [(0.4, 0.9), (0.5, 0.9), (0.3, 0.9), (1.6, 1.3)] + [(-0.5, 1.2), (0.1, 0.9)] * 5
+        f = watchlist.follow_through_day(self._index(moves))
+        assert f["state"] == "ftd" and f["dist_days"] >= watchlist.FTD_MAX_DIST
