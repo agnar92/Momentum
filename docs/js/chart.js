@@ -184,8 +184,14 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
     // pudełko Darvasa ostatniej bazy płaskiej / kwadratowej (otwartej albo świeżo po wybiciu): góra = pivot, dół = dołek bazy, stop −8 % od góry
     const boxBase = [...(c.bases || [])].reverse().find(b => BOX_BASE_TYPES.includes(b.type) && b.pivot > 0 && Number.isFinite(b.low) && b.low < b.pivot
         && (b.open || dateToIndex(weeks, b.end) >= lastIdx - 2));
-    const box = boxBase ? { i0: dateToIndex(weeks, boxBase.start), i1: boxBase.open ? lastIdx : dateToIndex(weeks, boxBase.end), top: boxBase.pivot, low: boxBase.low,
-        stop: Math.round(boxBase.pivot * (1 - BOX_STOP_PCT / 100) * 100) / 100 } : null;
+    // box rysujemy na CENACH ZAMKNIĘCIA (jak Darvas): góra = najwyższe, dół = najniższe zamknięcie w rozpiętości bazy (nie High / Low świec)
+    let box = null;
+    if (boxBase) {
+        const bi0 = dateToIndex(weeks, boxBase.start), bi1 = boxBase.open ? lastIdx : dateToIndex(weeks, boxBase.end);
+        const closes = c.c.slice(Math.max(0, bi0), bi1 + 1).filter(Number.isFinite);
+        const cTop = closes.length ? Math.max(...closes) : boxBase.pivot, cLow = closes.length ? Math.min(...closes) : boxBase.low;
+        if (cLow < cTop) box = { i0: bi0, i1: bi1, top: cTop, low: cLow, stop: Math.round(cTop * (1 - BOX_STOP_PCT / 100) * 100) / 100 };
+    }
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
     const pad = opts.pad ? FUTURE_PAD_WEEKLY : 0;
