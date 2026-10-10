@@ -50,6 +50,8 @@ const browserGlobals = {
     darvasStatus: "readonly",
     darvasPinStatus: "readonly",
     darvasOverview: "readonly",
+    darvasCupGeometry: "readonly",
+    darvasCupStatus: "readonly",
     DARVAS_NEW_WEEKS: "readonly",
     DARVAS_STOP_PCT: "readonly",
     darvasBoxSheetHtml: "readonly",

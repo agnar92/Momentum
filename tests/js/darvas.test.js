@@ -106,3 +106,18 @@ test("darvasOverview: sekcje monitorowane / nowe / KUP / czekaj, klucz i data po
     assert.ok(ov.fresh.length >= 1 && /^AAA\|110\|104\|/.test(ov.fresh.find(r => r.ticker === "AAA").key));
     assert.equal(ov.wait[0].box.start, weeks[3]);
 });
+
+test("darvasCupGeometry / darvasCupStatus: miska i rączka z zamknięć, pivot = góra rączki", () => {
+    const { darvasCupGeometry, darvasCupStatus } = require("../../docs/js/darvas.js");
+    //            0    1   2   3   4   5   6   7   8   9   10  11  12
+    const c = [100, 96, 90, 84, 80, 82, 88, 94, 99, 97, 96, 98, 99];
+    const cup = { i0: 0, iLow: 4, i1: 8, noHandle: false, handle: { iLow: 10, iEnd: 11 } };
+    const g = darvasCupGeometry(c, cup);
+    assert.deepEqual([g.i0, g.ib, g.i1, g.left, g.bottom, g.rim], [0, 4, 8, 100, 80, 99]);
+    assert.deepEqual([g.handle.top, g.handle.bottom, g.pivot, g.depthPct], [99, 96, 99, 20]);
+    assert.equal(darvasCupStatus(c, [cup]).state, "WAIT");   // ostatnie zamknięcie 99 = pivot, jeszcze nie nad nim
+    assert.equal(darvasCupStatus([...c, 103], [cup]).state, "ABOVE");
+    const noH = darvasCupGeometry(c, { i0: 0, iLow: 4, i1: 8, noHandle: true, handle: null });
+    assert.ok(noH.noHandle && noH.pivot === 100 && noH.handle === null);
+    assert.equal(darvasCupGeometry(c, { i0: 4, iLow: 4, i1: 8 }), null);   // dołek na krawędzi = nie miska
+});
