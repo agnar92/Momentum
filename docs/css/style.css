@@ -959,3 +959,28 @@ body.split #table-POS td.pos-macd .act-why { display: none; }   /* pełne uzasad
 
 /* przytrzymanie boxa nie zaznacza tekstu ani nie otwiera menu systemowego */
 .box-hit { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* podstrona „Boxy” (przegląd boxów Darvasa, sekcje do zwijania) */
+.boxes-panel { padding: 8px 10px 80px; overflow-y: auto; }
+.box-sec { border: 1px solid #262a35; border-radius: 8px; margin: 8px 0; background: rgba(255, 255, 255, 0.02); }
+.box-sec > summary { cursor: pointer; padding: 10px 12px; font-weight: 700; list-style: none; user-select: none; }
+.box-sec > summary::-webkit-details-marker { display: none; }
+.box-sec > summary::before { content: "▸"; display: inline-block; margin-right: 6px; transition: transform .15s; }
+.box-sec[open] > summary::before { transform: rotate(90deg); }
+.box-count { display: inline-block; min-width: 22px; padding: 1px 7px; margin-left: 6px; border-radius: 10px; background: #262a35; font-size: 12px; text-align: center; }
+.box-desc { margin: 0 12px 6px; }
+.box-empty { margin: 0 12px 10px; }
+.box-row { display: grid; grid-template-columns: 64px 74px auto 1fr auto 40px; gap: 8px; align-items: center; padding: 8px 12px; border-top: 1px solid #1d212b; cursor: pointer; font-size: 13px; }
+.box-row:hover { background: rgba(255, 255, 255, 0.05); }
+.box-tk { font-weight: 700; }
+.box-st { font-weight: 700; font-size: 12px; }
+.box-new { background: #ffd166; color: #0e0f13; font-weight: 800; font-size: 10px; padding: 1px 6px; border-radius: 8px; }
+.box-tx { color: #b9bfcc; min-width: 0; }
+.box-px { color: #8a8f9c; white-space: nowrap; }
+.box-act { min-height: 34px; min-width: 34px; border-radius: 6px; border: 1px solid #3a3f4d; background: transparent; color: inherit; cursor: pointer; }
+.box-act.on { border-color: #ffd166; background: rgba(255, 209, 102, 0.18); }
+.tab-badge { color: #ffd166; font-weight: 700; }
+.tab-badge.alarm { color: #ff6b6b; }
+@media (max-width: 700px) { .box-row { grid-template-columns: 56px 66px 1fr 40px; } .box-new { grid-column: 3; } .box-tx { grid-column: 1 / 4; } .box-px { display: none; } }
+@keyframes pinflash { 0%, 100% { stroke-opacity: 1; fill-opacity: 0.08; } 50% { stroke-opacity: 0.25; fill-opacity: 0.4; } }
+.pin-flash { animation: pinflash 0.6s ease-in-out 4; }

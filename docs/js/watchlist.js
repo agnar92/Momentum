@@ -62,6 +62,7 @@ const TAB_DEFAULT_SORT = {
     CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"], ALERTS: ["alert_group", "asc"],
 };
 const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "ALERTS"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
+const BOXES_TAB = "BOXES";   // podstrona „Boxy” (bez własnej tabeli) — przegląd boxów Darvasa: monitorowane, nowe, wybicia, trzymaj, sprzedaj; patrz #boxesPanel
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
     LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", QM: "Filtr Qullamaggie", BASES: "Bazy blisko pivotu", FAV: "Ulubione", ALERTS: "Alerty na liniach",
@@ -1003,6 +1004,7 @@ function renderFiltersSummary() {
 function renderTable() {
     if (!state.data) return;
     const tab = state.tab;
+    if (tab === BOXES_TAB) { renderBoxesPanel(); return; }
     if (tab === FILTERS_TAB) {
         state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
         tagBreakouts(state.data.stocks, alertRows(annStore, state.data.stocks), state.brk.maxDistPct);
@@ -1154,7 +1156,7 @@ function loadSettings() {
     try {
         const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
         if (!saved) return;
-        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB) state.tab = saved.tab;
+        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB || saved.tab === BOXES_TAB) state.tab = saved.tab;
         if (Number.isFinite(saved.csMin)) state.csMin = saved.csMin;
         if (typeof saved.csCore === "boolean") state.csCore = saved.csCore;
         if (Number.isFinite(saved.csRs)) { state.csRs = saved.csRs; setCanslimRs(saved.csRs); }
@@ -1302,7 +1304,129 @@ function togglePinnedBox(ticker, top, bottom, i0) {
     if (!start || !(top > bottom)) return;
     const cur = state.boxes[ticker];
     if (cur && Math.abs(cur.top - top) < 0.005 && Math.abs(cur.bottom - bottom) < 0.005) { savePinnedBox(ticker, null); showToast("📌 Box odpięty.", { type: "info" }); }
-    else { savePinnedBox(ticker, { top, bottom, start }); showToast("📌 Box przypięty do monitorowania — zostaje na wykresie także po wyjściu ze strefy.", { type: "success" }); }
+    else { pinFlashUntil = Date.now() + 2500; savePinnedBox(ticker, { top, bottom, start }); showToast("📌 Box przypięty do monitorowania — zostaje na wykresie także po wyjściu ze strefy.", { type: "success" }); }
+}
+
+// ---------- podstrona 📦 Boxy: przegląd boxów Darvasa wszystkich spółek (sekcje do zwijania) ----------
+const BOXES_SEEN_KEY = "momentum_watchlist_boxes_seen", BOXES_OPEN_KEY = "momentum_watchlist_boxes_open";
+const BOX_SECTIONS = [   // [klucz, tytuł, domyślnie otwarta, opis]
+    ["pinned", "📌 Monitorowane", true, "Przypięte boxy (przytrzymaj box lub 📌 w pasku nad wykresem) — najpierw te w strefie zagrożenia i po exicie."],
+    ["fresh", "🆕 Nowe boxy", true, `Boxy, których góra została potwierdzona w ostatnich ${typeof DARVAS_NEW_WEEKS !== "undefined" ? DARVAS_NEW_WEEKS : 4} tygodniach. „NOWE” = jeszcze ich nie widziałeś na tej podstronie.`],
+    ["buy", "🚀 Wybicia potwierdzone", true, "Zamknięcie tygodnia nad górą boxa na wolumenie ≥ 1,4× średniej i do 10 % nad górą — stan KUP."],
+    ["check", "🔎 Wybicia do sprawdzenia", false, "Zamknięcie nad górą boxa, ale bez wolumenu albo za daleko nad nią."],
+    ["hold", "🔒 Trzymaj", false, "W najwyższym boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia."],
+    ["sell", "⚠️ Sprzedaj / poza boxem", false, "Po wyższym boxie cena weszła w strefę zagrożenia (SPRZEDAJ) albo box złamany bez wybicia (POZA)."],
+    ["wait", "⏳ Czekaj na wybicie", false, "Pierwszy box, jeszcze bez zamknięcia nad górą."],
+];
+const BOX_STATE_LABELS = { ABOVE: ["wybił", "positive"], INSIDE: ["w boxie", ""], ZONE: ["STREFA", "negative"], EXIT: ["EXIT", "negative"], BUY: ["KUP", "positive"], NOVOL: ["bez wol.", ""], LATE: ["za późno", ""], HOLD: ["TRZYMAJ", "positive"], SELL: ["SPRZEDAJ", "negative"], OUT: ["POZA", "negative"], WAIT: ["czekaj", ""] };
+let boxesOverviewData = null, boxesNewKeys = null, boxesCharts = null;
+
+function boxesLoadJson(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v === null ? fallback : v; } catch (e) { return fallback; } }
+
+function boxRowHtml(r, sec, isNew) {
+    const [lab, cls] = BOX_STATE_LABELS[r.state] || [r.state, ""];
+    const pinned = state.boxes[r.ticker] && Math.abs(state.boxes[r.ticker].top - r.box.top) < 0.005 && Math.abs(state.boxes[r.ticker].bottom - r.box.bottom) < 0.005;
+    const btn = sec === "pinned" ? `<button type="button" class="box-act" data-act="unpin" title="Odepnij box">✕</button>`
+        : `<button type="button" class="box-act${pinned ? " on" : ""}" data-act="${pinned ? "unpin" : "pin"}" title="${pinned ? "Odepnij" : "Przypnij do monitorowania"}">📌</button>`;
+    return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`;
+}
+
+async function renderBoxesPanel() {
+    const panel = document.getElementById("boxesPanel");
+    if (!panel || !state.data) return;
+    if (!boxesOverviewData) panel.innerHTML = '<p class="muted small" style="padding:10px">Ładuję boxy…</p>';
+    const charts = await loadCharts();
+    if (!charts) { panel.innerHTML = '<p class="muted small" style="padding:10px">Brak danych wykresów (charts.json).</p>'; return; }
+    boxesCharts = charts;
+    const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v } : null; }).filter(Boolean);
+    const ov = darvasOverview(items, charts.weeks, state.boxes);
+    Object.keys(ov).forEach(k => ov[k].forEach((r, i) => { r.idx = i; }));
+    boxesOverviewData = ov;
+    if (boxesNewKeys === null) {   // „nowe od ostatniej wizyty”: porównanie z zapamiętanym zestawem, który odświeżamy dopiero po pokazaniu podstrony
+        const seen = new Set(boxesLoadJson(BOXES_SEEN_KEY, []));
+        boxesNewKeys = new Set(seen.size ? ov.fresh.filter(r => !seen.has(r.key)).map(r => r.key) : []);
+    }
+    if (state.tab === BOXES_TAB) {
+        const seen = new Set(boxesLoadJson(BOXES_SEEN_KEY, []));
+        ov.fresh.forEach(r => seen.add(r.key));
+        try { localStorage.setItem(BOXES_SEEN_KEY, JSON.stringify([...seen].slice(-600))); } catch (e) { /* brak localStorage */ }
+    }
+    const open = boxesLoadJson(BOXES_OPEN_KEY, {});
+    panel.innerHTML = `<p class="filters-intro">Boxy Darvasa na tygodniowych zamknięciach dla wszystkich spółek z listy. Kliknij wiersz, żeby zobaczyć box na wykresie, 📌 przypina go do monitorowania.</p>`
+        + BOX_SECTIONS.map(([key, title, def, desc]) => {
+            const rows = ov[key];
+            const isOpen = key in open ? open[key] : def;
+            return `<details class="box-sec" data-sec="${key}"${isOpen ? " open" : ""}><summary>${title} <span class="box-count">${rows.length}</span></summary><p class="small muted box-desc">${escapeHtml(desc)}</p>`
+                + (rows.length ? rows.map(r => boxRowHtml(r, key, key === "fresh" && boxesNewKeys.has(r.key))).join("") : '<p class="small muted box-empty">Brak.</p>') + "</details>";
+        }).join("");
+    updateBoxesBadge();
+    document.getElementById("drawerMeta").textContent = `${ov.pinned.length} monitorowanych · ${ov.fresh.length} nowych · ${ov.buy.length} wybić potwierdzonych`;
+}
+
+function updateBoxesBadge() {
+    const el = document.getElementById("boxesBadge");
+    if (!el || !boxesOverviewData) return;
+    const alarm = boxesOverviewData.pinned.filter(r => r.state === "ZONE" || r.state === "EXIT").length;
+    const fresh = boxesNewKeys ? boxesOverviewData.fresh.filter(r => boxesNewKeys.has(r.key)).length : 0;
+    const n = alarm + fresh;
+    el.textContent = n ? ` ${n}` : "";
+    el.className = alarm ? "tab-badge alarm" : "tab-badge";
+}
+
+// po wczytaniu danych: w tle policz boxy, żeby znaczek przy zakładce pokazywał monitorowane w strefie i nowe boxy
+async function refreshBoxesBadge() {
+    if (!state.data) return;
+    try { await renderBoxesPanelQuiet(); } catch (e) { /* bez wykresów brak znaczka */ }
+}
+async function renderBoxesPanelQuiet() {
+    const charts = await loadCharts();
+    if (!charts) return;
+    const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v } : null; }).filter(Boolean);
+    boxesOverviewData = darvasOverview(items, charts.weeks, state.boxes);
+    boxesOverviewData && Object.keys(boxesOverviewData).forEach(k => boxesOverviewData[k].forEach((r, i) => { r.idx = i; }));
+    if (boxesNewKeys === null) {
+        const seen = new Set(boxesLoadJson(BOXES_SEEN_KEY, []));
+        boxesNewKeys = new Set(seen.size ? boxesOverviewData.fresh.filter(r => !seen.has(r.key)).map(r => r.key) : []);
+    }
+    updateBoxesBadge();
+}
+
+// Klik w wiersz: otwiera wykres tej spółki przybliżony na box (jak kliknięcie boxa); 📌 / ✕ przypina i odpina.
+async function openBoxRow(ticker, box) {
+    const charts = boxesCharts || await loadCharts();
+    const weeks = (charts && charts.weeks) || [];
+    const i0 = box.i0 >= 0 ? box.i0 : Math.max(0, dateToIndex(weeks, box.start));
+    boxFocus = { ticker, top: box.top, bottom: box.bottom, i0, i1: box.i1 >= 0 ? box.i1 : weeks.length - 1 };
+    await openChart(ticker);
+    const end = weeks.length + 6;
+    chartWindows[0] = { n: Math.max(15, end - i0 + 14), end };
+    if (currentChart && currentChart.ticker === ticker) drawChart();
+}
+
+function initBoxesPanel() {
+    const panel = document.getElementById("boxesPanel");
+    if (!panel) return;
+    panel.addEventListener("toggle", ev => {
+        const d = ev.target;
+        if (!d.classList || !d.classList.contains("box-sec")) return;
+        const open = boxesLoadJson(BOXES_OPEN_KEY, {});
+        open[d.dataset.sec] = d.open;
+        try { localStorage.setItem(BOXES_OPEN_KEY, JSON.stringify(open)); } catch (e) { /* brak localStorage */ }
+    }, true);
+    panel.addEventListener("click", ev => {
+        const row = ev.target.closest && ev.target.closest(".box-row");
+        if (!row || !boxesOverviewData) return;
+        const r = boxesOverviewData[row.dataset.sec] && boxesOverviewData[row.dataset.sec][+row.dataset.i];
+        if (!r) return;
+        const act = ev.target.closest && ev.target.closest(".box-act");
+        if (act) {
+            ev.stopPropagation();
+            if (act.dataset.act === "unpin") { savePinnedBox(r.ticker, null); showToast("📌 Box odpięty.", { type: "info" }); }
+            else { pinFlashUntil = Date.now() + 2500; savePinnedBox(r.ticker, { top: r.box.top, bottom: r.box.bottom, start: r.box.start }); showToast("📌 Box przypięty do monitorowania.", { type: "success" }); }
+            return;
+        }
+        openBoxRow(r.ticker, r.box);
+    });
 }
 
 function savePinnedBox(ticker, box) {
@@ -1310,6 +1434,7 @@ function savePinnedBox(ticker, box) {
     prefsWriteLocal(); prefsApply(); annOnSave();
     tagPinnedBoxes(state.data.stocks, state.boxes);
     renderTable();
+    refreshBoxesBadge();
     if (currentChart && currentChart.ticker === ticker) drawChart();
 }
 
@@ -1436,9 +1561,11 @@ function showTab(tab, resetSort = true) {
         if (controls) controls.hidden = t !== tab;
     });
     const onFilters = tab === FILTERS_TAB;
+    const onBoxes = tab === BOXES_TAB;
     document.getElementById("filtersPanel").hidden = !onFilters;
-    document.getElementById("cardSortBar").hidden = onFilters;
-    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : TAB_TITLES[tab];
+    document.getElementById("boxesPanel").hidden = !onBoxes;
+    document.getElementById("cardSortBar").hidden = onFilters || onBoxes;
+    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : onBoxes ? "Boxy Darvasa" : TAB_TITLES[tab];
     saveSettings();
     renderTable();
 }
@@ -1685,6 +1812,7 @@ let chartToken = 0;         // numeruje żądania wykresu — spóźniona odpowi
 let chartFull = false;      // okno wykresu na cały ekran (przycisk ⛶ / klawisz F)
 let chartWide = false;      // pełny ekran na szerokim monitorze => układ szeroki (chart.js)
 let chartCompact = false;   // układ dla wąskiego ekranu (telefon) — patrz chart.js
+let pinFlashUntil = 0;       // krótkie mignięcie przypiętego boxa na wykresie (zamiast wibracji, której iOS nie obsługuje)
 let boxLongPressed = false;   // po przytrzymaniu boxa następujące kliknięcie nie otwiera fokusu
 let boxFocus = null;        // { ticker, top, bottom, i0, i1 } — po kliknięciu boxa: przybliżenie na jego fragment (świece + wolumen) do tygodniowego monitoringu
 let currentChart = null;    // { charts, ticker, stock } — do ponownego narysowania po przełączeniu skali
@@ -1837,6 +1965,7 @@ function drawChart() {
             hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus,
             focusBox: focus,
             pinBox: pin,
+            pinFlash: Date.now() < pinFlashUntil,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
             window: chartWindows[i], windowLen: chartWinLen.w,
@@ -1932,7 +2061,7 @@ function initBottomNav() {
     if (!nav) return;
     nav.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
     document.getElementById("navMore").addEventListener("click", () => {
-        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["QM", "🎯", "Qullamaggie"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]];
+        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["BOXES", "📦", "Boxy"], ["QM", "🎯", "Qullamaggie"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]];
         const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
             <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
         body.querySelectorAll("button[data-tab]").forEach(b => b.addEventListener("click", () => { closeSheet(); showTab(b.dataset.tab); }));
@@ -2162,8 +2291,10 @@ if (typeof document !== "undefined") {
         annInitUI(drawChart);
         initAnnotationIO();
         syncInit(() => { updateAlertBadge(); renderTable(); if (!document.getElementById("chartModal").hidden) drawChart(); });
+        initBoxesPanel();
         showTab(state.tab);
         hideLoadingOverlay();
+        refreshBoxesBadge();
         loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
     })();
 

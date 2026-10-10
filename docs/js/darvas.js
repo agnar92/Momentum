@@ -116,6 +116,41 @@ function darvasPinStatus(box, price, zonePct = DARVAS_STOP_PCT) {
     return { state: "EXIT", rank: 0, text: `EXIT — cena ${r2(price)} poniżej strefy zagrożenia (${zone})` };
 }
 
+const DARVAS_NEW_WEEKS = 4;   // box jest „nowy”, gdy jego góra została potwierdzona w ostatnich tylu tygodniach
+
+// Przegląd boxów Darvasa dla wszystkich spółek (podstrona „Boxy”): items = [{ticker, price, c (tyg. zamknięcia), v (wolumen)}], weeks = daty tygodni, pinned = {T: {top, bottom, start}}.
+// Zwraca sekcje: pinned (monitorowane), fresh (nowe boxy), buy (wybicie potwierdzone wolumenem), check (wybicie bez wolumenu / za późno), hold, sell, wait — każdy wiersz {ticker, price, state, text, box:{top,bottom,start,i0,i1}, key}.
+function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) {
+    const out = { pinned: [], fresh: [], buy: [], check: [], hold: [], sell: [], wait: [] };
+    const r2 = v => Math.round(v * 100) / 100;
+    (items || []).forEach(it => {
+        const c = it.c || [];
+        let lastReal = -1;
+        c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
+        if (lastReal < 0) return;
+        const boxes = darvasBoxes(c);
+        const mk = b => ({ top: r2(b.top), bottom: r2(b.bottom), start: (weeks && weeks[b.i0]) || "", i0: b.i0, i1: b.i1 });
+        const pin = pinned[it.ticker];
+        if (pin) {
+            const st = darvasPinStatus(pin, it.price);
+            if (st.state !== "NONE") out.pinned.push({ ticker: it.ticker, price: it.price, state: st.state, rank: st.rank, text: st.text, box: { ...pin, i0: -1, i1: -1 }, key: `${it.ticker}|${pin.top}|${pin.bottom}|${pin.start}` });
+        }
+        const ds = darvasStatus(c, undefined, undefined, undefined, it.v);
+        const last = boxes[boxes.length - 1];
+        if (ds.state !== "NONE" && last) {
+            const row = { ticker: it.ticker, price: it.price, state: ds.state, text: ds.text, box: mk(last), key: `${it.ticker}|${r2(last.top)}|${r2(last.bottom)}|${(weeks && weeks[last.i0]) || ""}` };
+            const section = { BUY: "buy", NOVOL: "check", LATE: "check", HOLD: "hold", SELL: "sell", OUT: "sell", WAIT: "wait" }[ds.state];
+            if (section) out[section].push(row);
+        }
+        // nowe boxy: góra potwierdzona (i0 + potwierdzenie) w ostatnich `newWeeks` tygodniach
+        const fresh = boxes.filter(b => { const born = b.i0 + DARVAS_CONFIRM; return born <= lastReal && born >= lastReal - (newWeeks - 1); }).pop();
+        if (fresh) out.fresh.push({ ticker: it.ticker, price: it.price, state: fresh.outcome === "up" ? "ABOVE" : fresh.outcome === "down" ? "EXIT" : "INSIDE", text: `box ${r2(fresh.bottom)}–${r2(fresh.top)} od ${(weeks && weeks[fresh.i0]) || "?"}${fresh.outcome === "up" ? " — już wybity w górę" : fresh.outcome === "down" ? " — złamany w dół" : ""}`, box: mk(fresh), key: `${it.ticker}|${r2(fresh.top)}|${r2(fresh.bottom)}|${(weeks && weeks[fresh.i0]) || ""}` });
+    });
+    out.pinned.sort((a, b) => a.rank - b.rank || a.ticker.localeCompare(b.ticker));
+    ["fresh", "buy", "check", "hold", "sell", "wait"].forEach(k => out[k].sort((a, b) => a.ticker.localeCompare(b.ticker)));
+    return out;
+}
+
 // Widok Dar-Card dla okna wykresu: full = pełny model z chart.js (c, weeks, n, pad), win = {n, end}; opts: fit {w, h}
 function darvasSvg(full, win, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
@@ -130,7 +165,8 @@ function darvasSvg(full, win, opts = {}) {
     const shown = [];
     for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) shown.push(full.c[i]);
     if (shown.length < 2) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na pudełka Darvasa.</text></svg>`;
-    const lo0 = Math.min(...shown, ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100))), hi0 = Math.max(...shown, ...boxes.map(b => b.top)), pad = (hi0 - lo0) * 0.06 || 1;
+    const pin = opts.pinBox && opts.pinBox.top > opts.pinBox.bottom ? opts.pinBox : null;   // przypięty (monitorowany) box: złota obwódka do prawej krawędzi, także po wyjściu ze strefy
+    const lo0 = Math.min(...shown, ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100)), ...(pin ? [pin.bottom * (1 - DARVAS_STOP_PCT / 100)] : [])), hi0 = Math.max(...shown, ...boxes.map(b => b.top), ...(pin ? [pin.top] : [])), pad = (hi0 - lo0) * 0.06 || 1;
     const lo = lo0 - pad, hi = hi0 + pad;
     const y = v => L.top + ph * (1 - (v - lo) / (hi - lo));
     const out = [];
@@ -164,11 +200,24 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|${b.confirmed ? 1 : 0}|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="0.92" stroke="#ffffff" stroke-width="1.4"${b.confirmed ? "" : ' stroke-dasharray="3 2"'}><title>Box ${b.bottom.toFixed(2)}–${b.top.toFixed(2)} (${state}) — kliknij po ceny</title></rect>`);
         out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${Math.max(2, yZ - yB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
     });
+    if (pin) {
+        const px0 = x(Math.max(start, Math.min(endExcl - 1, pin.i0))) - bw / 2, px1 = W - L.right;
+        const pyT = y(pin.top), pyB = y(pin.bottom), pyZ = y(pin.bottom * (1 - DARVAS_STOP_PCT / 100));
+        const ps = darvasPinStatus({ top: pin.top, bottom: pin.bottom }, full.c[lastReal]);
+        const pcol = ps.state === "ABOVE" ? "#4ee08a" : ps.state === "INSIDE" ? "#ffd166" : "#ff6b6b";
+        out.push(`<rect x="${px0.toFixed(1)}" y="${pyB.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${Math.max(2, pyZ - pyB).toFixed(1)}" fill="url(#darvasHatch)" fill-opacity="0.7" pointer-events="none"/>`);
+        out.push(`<rect class="${opts.pinFlash ? "pin-flash" : ""}" x="${px0.toFixed(1)}" y="${pyT.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${(pyB - pyT).toFixed(1)}" fill="${pcol}" fill-opacity="0.08" stroke="${pcol}" stroke-width="2.4" stroke-dasharray="7 4" pointer-events="none"><title>📌 Monitorowany box ${pin.bottom}–${pin.top}: ${ps.text}</title></rect>`);
+        out.push(`<text x="${(px0 + 4).toFixed(1)}" y="${Math.max(L.top + fs(11), pyT - 5).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="${pcol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">📌 ${escapeHtml(ps.state === "ABOVE" ? "wybił" : ps.state === "INSIDE" ? "w boxie" : ps.state === "ZONE" ? "STREFA ZAGROŻENIA" : "EXIT")}</text>`);
+        [[pin.top, pcol], [pin.bottom, pcol], [pin.bottom * (1 - DARVAS_STOP_PCT / 100), "#ff6b6b"]].forEach(([v, col]) => {
+            const yy = y(v);
+            out.push(`<rect x="${W - L.right}" y="${(yy - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${col}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(yy + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(+v).toFixed(2)}</text>`);
+        });
+    }
     const lastC = full.c[lastReal];
     if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
     return `<svg id="chartSvg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, DARVAS_CONFIRM, DARVAS_STOP_PCT };
+    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, darvasOverview, DARVAS_CONFIRM, DARVAS_STOP_PCT };
 }

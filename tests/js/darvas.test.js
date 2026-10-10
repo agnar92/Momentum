@@ -88,3 +88,21 @@ test("darvasPinStatus: nad górą / w boxie / w strefie zagrożenia (5 % pod do�
     assert.equal(darvasPinStatus(box, 85).state, "EXIT");
     assert.equal(darvasPinStatus(null, 100).state, "NONE");
 });
+
+test("darvasOverview: sekcje monitorowane / nowe / KUP / czekaj, klucz i data początku boxa", () => {
+    const { darvasOverview } = require("../../docs/js/darvas.js");
+    const weeks = Array.from({ length: 12 }, (_, i) => `2026-0${1 + Math.floor(i / 4)}-${String(1 + (i % 4) * 7).padStart(2, "0")}`);
+    const box1 = [100, 104, 108, 110, 108, 106, 104, 105, 107, 106];
+    const vol = box1.map(() => 100);
+    const waiting = { ticker: "AAA", price: 106, c: box1, v: vol };
+    const breakout = { ticker: "BBB", price: 112, c: [...box1, 112], v: [...vol, 160] };
+    const ov = darvasOverview([waiting, breakout], weeks, { AAA: { top: 110, bottom: 104, start: weeks[3] } });
+    assert.equal(ov.wait.length, 1);
+    assert.equal(ov.wait[0].ticker, "AAA");
+    assert.equal(ov.buy.length, 1);
+    assert.equal(ov.buy[0].ticker, "BBB");
+    assert.equal(ov.pinned.length, 1);
+    assert.equal(ov.pinned[0].state, "INSIDE");
+    assert.ok(ov.fresh.length >= 1 && /^AAA\|110\|104\|/.test(ov.fresh.find(r => r.ticker === "AAA").key));
+    assert.equal(ov.wait[0].box.start, weeks[3]);
+});
