@@ -42,17 +42,16 @@ function fitLayout(w, h, noTable = false, scroll = false) {
     // niski ekran (telefon poziomo): bez paska S&P 500, żeby wykres cen nie zamienił się w kreskę
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
-    const bench = 0, volume = scroll ? 120 : Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = (dropTable || scroll) ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
-    let macd = short ? 0 : Math.max(44, Math.round(avail * 0.17));   // osobny panel MACD (12, 26, 9) pod wolumenem
-    let price = Math.max(60, avail - bench - volume - eps - macd);
-    if (scroll) { macd = 120; price = Math.max(220, avail - 90); }   // widok przewijany: cena zajmuje cały widoczny ekran, wolumen i MACD leżą pod nią (przewiń w dół)
+    const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
+    const macd = short ? 0 : Math.max(44, Math.round(avail * 0.15));   // osobny panel MACD (12, 26, 9) NA GÓRZE, tuż pod suwakiem i legendą — cena, wolumen i EPS zachowują proporcje
+    const price = Math.max(60, avail - bench - volume - eps - macd);
     const L = { width: Math.round(w), left: 6, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
     L.bench = { y: 4, h: bench };
     L.legend = { y: L.bench.y + bench + (bench ? 6 : 0), h: legendH };
-    L.price = { y: L.legend.y + legendH + 4, h: price };
+    L.macd = { y: L.legend.y + legendH + 4, h: macd };
+    L.price = { y: L.macd.y + macd + (macd ? 8 : 0), h: price };
     L.volume = { y: L.price.y + price + 8, h: volume };
-    L.macd = { y: L.volume.y + volume + (macd ? 8 : 0), h: macd };
-    L.eps = { y: L.macd.y + macd + (eps ? 8 : 0), h: eps };
+    L.eps = { y: L.volume.y + volume + (eps ? 8 : 0), h: eps };
     L.axisY = L.eps.y + eps + (eps ? 18 : 16);
     L.height = Math.round(L.axisY + 8);
     return L;
@@ -456,7 +455,7 @@ function compactEpsPanel(L, opts) {
     const h = Math.round(scale * 36);
     const delta = L.eps.h - h;
     if (delta <= 0) return L;
-    return { ...L, price: { ...L.price, h: L.price.h + delta }, volume: { ...L.volume, y: L.volume.y + delta }, ...(L.macd ? { macd: { ...L.macd, y: L.macd.y + delta } } : {}), eps: { y: L.eps.y + delta, h } };
+    return { ...L, price: { ...L.price, h: L.price.h + delta }, volume: { ...L.volume, y: L.volume.y + delta }, eps: { y: L.eps.y + delta, h } };
 }
 
 function pickLayout(opts = {}) {
