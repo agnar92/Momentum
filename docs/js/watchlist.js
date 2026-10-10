@@ -2068,7 +2068,7 @@ function chartDetailsHtml() {
 
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
-    const btns = ["chartFullBtn", "chartPatBtn", "chartDarvasBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(Boolean);
+    const btns = ["chartFullBtn", "chartPatBtn", "chartDarvasBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(b => b && !b.hidden);
     const body = showSheet("Opcje wykresu", `<div class="sheet-menu">
         ${btns.map(b => `<button type="button" data-click="${b.id}">${escapeHtml(b.textContent)}</button>`).join("")}
         <a href="${document.getElementById("chartFv").href}" target="_blank" rel="noopener">📊 Finviz ↗</a>
@@ -2138,6 +2138,8 @@ function initChartModal() {
         };
         const sync = () => {
             btn.hidden = !(chartDarvasOn && !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker));
+            const est = document.getElementById("chartEstBtn");   // estymaty analityków: tylko na wykresie słupkowym (po dotknięciu boxa), nie na Dar-Card
+            if (est) est.hidden = !(boxFocus && currentChart && boxFocus.ticker === currentChart.ticker);
             btn.classList.toggle("active", boxAddOn);
             document.body.classList.toggle("box-add", boxAddOn);
             btn.textContent = boxAddOn ? "＋ Box: przeciągnij po tygodniach" : "＋ Box";

@@ -988,7 +988,7 @@ body.split #table-POS td.pos-macd .act-why { display: none; }   /* pełne uzasad
 body.box-add #chartSvg { touch-action: none; cursor: crosshair; }
 
 /* Dar-Card jest jedynym widokiem: górny panel wykresu uproszczony do tytułu i kilku przycisków */
-#chartRatings, #chartReady, #chartStats, #chartEstimates, #chartPattern, #chartBase, #chartTools, #chartSub { display: none !important; }
+#chartRatings, #chartReady, #chartStats, #chartPattern, #chartBase, #chartTools, #chartSub { display: none !important; }
 .box-pos { margin: 0 0 6px 10px; font-size: 13px; color: var(--muted, #9aa0ae); }
 .box-pos > summary { cursor: pointer; padding: 4px 0; }
 .box-pos-line { padding: 2px 0 2px 8px; color: var(--text, #e6e8ee); }
