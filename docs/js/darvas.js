@@ -194,17 +194,34 @@ function darvasCupStatus(c, cups) {
     return { state: "WAIT", text: `${kind}: pivot ${g.pivot}, do wybicia ${((g.pivot / price - 1) * 100).toFixed(1)} %, miska −${g.depthPct} % (${lv})` };
 }
 
+// Pudełka wzorców na zamknięciach dla Dar-Card: flat base (`full.box`), flaga / korytarz (linia oporu `full.lines` + maszt `full.pole`), high tight flag (`full.htf`).
+// Góra = pivot (flaga: dzisiejszy poziom oporu), dół = najniższe zamknięcie. Flaga nakładająca się na flat base jest pomijana (to ten sam box).
+function darvasPatternBoxes(full) {
+    const out = [];
+    const lastReal = full.c.reduce((a, v, i) => (Number.isFinite(v) ? i : a), -1);
+    if (full.box && full.box.top > full.box.low) out.push({ name: "flat base", i0: full.box.i0, i1: full.box.i1, top: full.box.top, low: full.box.low });
+    if (full.htf) out.push({ name: "high tight flag", i0: full.htf.i0, i1: full.htf.i1, top: full.htf.top, low: full.htf.low });
+    const res = (full.lines || []).filter(l => l.kind === "res").pop();
+    if (res && full.trend && lastReal >= 0 && Number.isFinite(res.y1)) {
+        const i0 = Math.max(0, full.pole ? full.pole.i1 : res.i0);
+        const cl = full.c.slice(i0, lastReal + 1).filter(Number.isFinite);
+        const overlaps = out.some(p => i0 <= p.i1 && lastReal >= p.i0);
+        if (!overlaps && cl.length >= 3 && res.y1 > Math.min(...cl)) out.push({ name: full.trend.pattern === "flaga" ? "flaga" : "korytarz", i0, i1: lastReal, top: Math.round(res.y1 * 100) / 100, low: Math.min(...cl) });
+    }
+    return out;
+}
+
 // Flat base (płaska baza / kwadratowy box wykryty przez watchlist.py, `full.box` na zamknięciach): to samo co Dar-Card — góra = pivot, dół = dołek bazy, stop −8 % od pivotu, strefa kupna do +5 %.
-function darvasFlatStatus(c, box) {
+function darvasFlatStatus(c, box, name = "flat base") {
     let lastReal = -1;
     c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
     if (!box || lastReal < 0) return { state: "NONE", text: "" };
     const price = c[lastReal], top = box.top, low = box.low, stop = Math.round(top * (1 - CUP_STOP_PCT / 100) * 100) / 100, buyMax = Math.round(top * (1 + CUP_BUY_MAX_PCT / 100) * 100) / 100;
     const lv = `kup ${top}–${buyMax}, wyjście: zamknięcie pod ${low}, stop −8 % ${stop}`;
-    if (price < low) return { state: "FAILED", text: `flat base: zamknięcie ${price} pod dołem ${low} — baza wygasła (${lv})` };
-    if (price > buyMax) return { state: "LATE", text: `flat base: ${price} więcej niż 5 % nad pivotem ${top} — nie goń (${lv})` };
-    if (price > top) return { state: "ABOVE", text: `flat base: zamknięcie ${price} nad pivotem ${top} — strefa kupna (${lv})` };
-    return { state: "WAIT", text: `flat base: pivot ${top}, do wybicia ${((top / price - 1) * 100).toFixed(1)} % (${lv})` };
+    if (price < low) return { state: "FAILED", text: `${name}: zamknięcie ${price} pod dołem ${low} — baza wygasła (${lv})` };
+    if (price > buyMax) return { state: "LATE", text: `${name}: ${price} więcej niż 5 % nad pivotem ${top} — nie goń (${lv})` };
+    if (price > top) return { state: "ABOVE", text: `${name}: zamknięcie ${price} nad pivotem ${top} — strefa kupna (${lv})` };
+    return { state: "WAIT", text: `${name}: pivot ${top}, do wybicia ${((top / price - 1) * 100).toFixed(1)} % (${lv})` };
 }
 
 // Widok Dar-Card dla okna wykresu: full = pełny model z chart.js (c, weeks, n, pad), win = {n, end}; opts: fit {w, h}
@@ -224,7 +241,7 @@ function darvasSvg(full, win, opts = {}) {
     for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) shown.push(full.c[i]);
     if (shown.length < 2) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na pudełka Darvasa.</text></svg>`;
     const pin = opts.pinBox && opts.pinBox.top > opts.pinBox.bottom ? opts.pinBox : null;   // przypięty (monitorowany) box: złota obwódka do prawej krawędzi, także po wyjściu ze strefy
-    const lo0 = Math.min(...shown, ...(full.box ? [full.box.top * (1 - CUP_STOP_PCT / 100)] : []), ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100)), ...(pin ? [pin.bottom * (1 - DARVAS_STOP_PCT / 100)] : [])), hi0 = Math.max(...shown, ...boxes.map(b => b.top), ...(full.box ? [full.box.top] : []), ...(pin ? [pin.top] : [])), pad = (hi0 - lo0) * 0.06 || 1;
+    const lo0 = Math.min(...shown, ...darvasPatternBoxes(full).map(p => p.top * (1 - CUP_STOP_PCT / 100)), ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100)), ...(pin ? [pin.bottom * (1 - DARVAS_STOP_PCT / 100)] : [])), hi0 = Math.max(...shown, ...boxes.map(b => b.top), ...darvasPatternBoxes(full).map(p => p.top), ...(pin ? [pin.top] : [])), pad = (hi0 - lo0) * 0.06 || 1;
     const lo = lo0 - pad, hi = hi0 + pad;
     const y = v => L.top + ph * (1 - (v - lo) / (hi - lo));
     const out = [];
@@ -259,17 +276,17 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${Math.max(2, yZ - yB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
     });
     // flat base: wyróżniona ramka bazy (niebieska, kreskowana) + pivot do prawej krawędzi, strefa kupna +5 % i stop −8 % jak przy cup & handle
-    const fb = full.box;
-    if (fb && fb.i1 >= start && fb.i0 < endExcl && fb.top > fb.low) {
+    darvasPatternBoxes(full).forEach(fb => {
+        if (!(fb.i1 >= start && fb.i0 < endExcl && fb.top > fb.low)) return;
         const fx0 = x(Math.max(start, fb.i0)) - bw / 2, fx1 = x(Math.min(endExcl - 1, fb.i1)) + bw / 2, fyT = y(fb.top), fyB = y(fb.low), fyS = y(fb.top * (1 - CUP_STOP_PCT / 100));
         const fpx1 = W - L.right, fcol = full.c[lastReal] > fb.top ? "#4ee08a" : "#ffffff";
-        out.push(`<rect x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyB - fyT).toFixed(1)}" fill="none" stroke="#2fb4ff" stroke-width="${fs(2.2)}" stroke-dasharray="6 3" pointer-events="none"><title>Flat base: dół ${fb.low}, pivot ${fb.top}</title></rect>`);
+        out.push(`<rect x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyB - fyT).toFixed(1)}" fill="none" stroke="#2fb4ff" stroke-width="${fs(2.2)}" stroke-dasharray="6 3" pointer-events="none"><title>${fb.name}: dół ${fb.low}, pivot ${fb.top}</title></rect>`);
         if (fyS - fyB > 1) out.push(`<rect x="${fx0.toFixed(1)}" y="${fyB.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${(fyS - fyB).toFixed(1)}" fill="url(#darvasHatch)" fill-opacity="0.6" pointer-events="none"/>`);
-        out.push(`<text x="${fx1.toFixed(1)}" y="${(fyT - 6).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="end" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">flat base ${fb.i1 - fb.i0 + 1} tyg.</text>`);
+        out.push(`<text x="${fx1.toFixed(1)}" y="${(fyT - 6).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="end" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${fb.name} ${fb.i1 - fb.i0 + 1} tyg.</text>`);
         out.push(`<line x1="${fx0.toFixed(1)}" x2="${fpx1}" y1="${fyT.toFixed(1)}" y2="${fyT.toFixed(1)}" stroke="${fcol}" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" pointer-events="none"/>`);
         out.push(`<rect x="${W - L.right}" y="${(fyT - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${fcol}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyT + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${fb.top.toFixed(2)}</text>`);
         out.push(`<rect x="${W - L.right}" y="${(fyS - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyS + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(fb.top * (1 - CUP_STOP_PCT / 100)).toFixed(2)}</text>`);
-    }
+    });
     // cup & handle na zamknięciach: miska jako gładka krzywa przez lewy szczyt – dołek – prawy brzeg, rączka jako mały box, pivot = góra rączki (bez rączki: lewy szczyt)
     (full.cups || []).forEach(cp => {
         const g = darvasCupGeometry(full.c, cp);
@@ -382,5 +399,5 @@ function darvasSvg(full, win, opts = {}) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, DARVAS_CONFIRM, DARVAS_STOP_PCT };
+    module.exports = { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_STOP_PCT };
 }
