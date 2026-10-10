@@ -247,6 +247,13 @@ function darvasSvg(full, win, opts = {}) {
             const v = t <= g.ib ? g.bottom + (g.left - g.bottom) * Math.pow((g.ib - t) / (g.ib - g.i0), 2) : g.bottom + (g.rim - g.bottom) * Math.pow((t - g.ib) / (g.i1 - g.ib), 2);
             pts.push([x(t), y(v)]);
         }
+        // rączka = dalszy ciąg tej samej krzywej (mała zatoka za prawym brzegiem), nie osobny box
+        if (g.handle && g.handle.i1 > g.i1) {
+            for (let t = g.i1 + 0.25; t <= g.handle.i1 + 1e-9; t += 0.25) {
+                const u = (t - g.i1) / (g.handle.i1 - g.i1);
+                pts.push([x(t), y(g.rim - (g.rim - g.handle.bottom) * Math.sin(Math.PI * u))]);
+            }
+        }
         const poly = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
         const style = opts.cupStyle || "arc";
         const label = `${g.noHandle ? "cup ⚠" : "cup"} −${g.depthPct}%`;
@@ -259,8 +266,10 @@ function darvasSvg(full, win, opts = {}) {
         const hatchBase = (cx, half) => `<rect x="${(cx - half).toFixed(1)}" y="${y(g.bottom).toFixed(1)}" width="${(2 * half).toFixed(1)}" height="${Math.max(2, y(g.bottom * (1 - DARVAS_STOP_PCT / 100)) - y(g.bottom)).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`;
         if (style === "mug") {   // KUBEK: biała czasza z uchem (ucho = rączka) i kreskowaną podstawką pod dnem
             out.push(`<polygon points="${closeP}" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-width="${fs(2)}" stroke-linejoin="round" pointer-events="none">${title}</polygon>`);
+            if (!g.handle) {
             const ex0 = x(g.i1), ex1 = (g.handle ? x(g.handle.i1) : x(g.i1) + bw * 3) + bw / 2, ey0 = g.handle ? y(g.handle.top) : y(g.rim), ey1 = g.handle ? y(g.handle.bottom) : y(g.rim) + (y(g.bottom) - y(g.rim)) * 0.28;
             out.push(`<path d="M${ex0.toFixed(1)},${ey0.toFixed(1)} H${(ex1 - 6).toFixed(1)} Q${ex1.toFixed(1)},${ey0.toFixed(1)} ${ex1.toFixed(1)},${(ey0 + 6).toFixed(1)} V${(ey1 - 6).toFixed(1)} Q${ex1.toFixed(1)},${ey1.toFixed(1)} ${(ex1 - 6).toFixed(1)},${ey1.toFixed(1)} H${ex0.toFixed(1)}" fill="none" stroke="#ffffff" stroke-width="${fs(3.2)}" stroke-linecap="round" pointer-events="none"/>`);
+            }
             out.push(hatchBase(x(g.ib), Math.max(bw, (x(g.i1) - x(g.i0)) * 0.22)));
             out.push(txt(x(g.ib), y(g.bottom) + fs(26), label));
         } else if (style === "cutout") {   // NEGATYW: biała płyta od szczytu do dna, z wyciętym kształtem miski (miska = pusty „kielich”)
@@ -307,11 +316,8 @@ function darvasSvg(full, win, opts = {}) {
             out.push(`<text x="${x(g.ib).toFixed(1)}" y="${lblY.toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label}</text>`);
         }
         const px1 = W - L.right;
-        if (g.handle && style !== "mug") {
-            const hx0 = x(g.handle.i0) - bw / 2, hx1 = x(g.handle.i1) + bw / 2, hyT = y(g.handle.top), hyB = y(g.handle.bottom), hyZ = y(g.handle.bottom * (1 - DARVAS_STOP_PCT / 100));
-            out.push(`<rect x="${hx0.toFixed(1)}" y="${hyT.toFixed(1)}" width="${(hx1 - hx0).toFixed(1)}" height="${Math.max(2, hyB - hyT).toFixed(1)}" fill="#ffffff" fill-opacity="0.22" stroke="#ffffff" stroke-width="1.4" pointer-events="none"><title>Rączka ${g.handle.bottom}–${g.handle.top}</title></rect>`);
-            out.push(`<rect x="${hx0.toFixed(1)}" y="${hyB.toFixed(1)}" width="${(hx1 - hx0).toFixed(1)}" height="${Math.max(2, hyZ - hyB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
-            out.push(`<text x="${((hx0 + hx1) / 2).toFixed(1)}" y="${(hyT - 5).toFixed(1)}" font-size="${fs(11)}" font-weight="700" fill="#ffffff" text-anchor="middle" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">rączka</text>`);
+        if (g.handle) {
+            out.push(txt((x(g.handle.i0) + x(g.handle.i1)) / 2, y(g.handle.top) - fs(8), "rączka", "#ffffff", 10));
         }
         const pyy = y(g.pivot), lastCl = full.c[lastReal], pcol = lastCl > g.pivot ? "#4ee08a" : "#ffffff";
         out.push(`<line x1="${x(g.handle ? g.handle.i0 : g.i0).toFixed(1)}" x2="${px1}" y1="${pyy.toFixed(1)}" y2="${pyy.toFixed(1)}" stroke="${pcol}" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" pointer-events="none"/>`);
