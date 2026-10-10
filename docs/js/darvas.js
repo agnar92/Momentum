@@ -393,6 +393,7 @@ function darvasSvg(full, win, opts = {}) {
         const pcol = ps.state === "ABOVE" ? "#4ee08a" : ps.state === "INSIDE" ? "#ffd166" : "#ff6b6b";
         out.push(`<rect x="${px0.toFixed(1)}" y="${pyB.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${Math.max(2, pyZ - pyB).toFixed(1)}" fill="url(#darvasHatch)" fill-opacity="0.7" pointer-events="none"/>`);
         out.push(`<rect class="${opts.pinFlash ? "pin-flash" : ""}" x="${px0.toFixed(1)}" y="${pyT.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${(pyB - pyT).toFixed(1)}" fill="${pcol}" fill-opacity="0.08" stroke="${pcol}" stroke-width="2.4" stroke-dasharray="7 4" pointer-events="none"><title>📌 Monitorowany box ${pin.bottom}–${pin.top}: ${ps.text}</title></rect>`);
+        out.push(`<rect class="box-hit" data-box="${pin.top}|${pin.bottom}|przypięty|1|${pin.i0}|${lastReal}" style="cursor:pointer" x="${px0.toFixed(1)}" y="${pyT.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${Math.max(2, pyZ - pyT).toFixed(1)}" fill="transparent"><title>📌 Dotknij, by wybrać (przybliż / odepnij)</title></rect>`);   // przypięty box też da się wybrać: pasek akcji ma wtedy „Odepnij”
         out.push(`<text x="${(px0 + 4).toFixed(1)}" y="${Math.max(L.top + fs(11), pyT - 5).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="${pcol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">📌 ${escapeHtml(ps.state === "ABOVE" ? "wybił" : ps.state === "INSIDE" ? "w boxie" : ps.state === "ZONE" ? "STREFA ZAGROŻENIA" : "EXIT")}</text>`);
         [[pin.top, pcol], [pin.bottom, pcol], [pin.bottom * (1 - DARVAS_STOP_PCT / 100), "#ff6b6b"]].forEach(([v, col]) => {
             const yy = y(v);
@@ -450,7 +451,8 @@ function attachDarvasHover(container, full, readoutEl) {
     const select = el => {
         selected = el; show(el);
         const [t, bt] = el.dataset.box.split("|").map(Number);
-        bar.innerHTML = `<span>📦 ${bt.toFixed(2)} – ${t.toFixed(2)}</span><button type="button" data-act="zoom">🔍 Przybliż</button><button type="button" data-act="pin">📌 Przypnij</button><button type="button" data-act="close" aria-label="Odznacz">✕</button>`;
+        const isPinned = el.dataset.box.split("|")[2] === "przypięty";
+        bar.innerHTML = `<span>📦 ${bt.toFixed(2)} – ${t.toFixed(2)}</span><button type="button" data-act="zoom">🔍 Przybliż</button><button type="button" data-act="pin">${isPinned ? "🗑 Odepnij" : "📌 Przypnij"}</button><button type="button" data-act="close" aria-label="Odznacz">✕</button>`;
         bar.hidden = false;
     };
     bar.addEventListener("click", ev => {

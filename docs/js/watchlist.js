@@ -1963,6 +1963,12 @@ function drawChart() {
         bar.className = "box-focus-bar";
         bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
         { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom)}`; bar.appendChild(d); }
+        if (state.boxes[focus.ticker] && !(Math.abs(state.boxes[focus.ticker].top - focus.top) < 0.005 && Math.abs(state.boxes[focus.ticker].bottom - focus.bottom) < 0.005)) {   // jest przypięty (np. własny) box inny niż ten w fokusie — da się go usunąć
+            const pb = state.boxes[focus.ticker], del = document.createElement("button");
+            del.type = "button"; del.className = "btn"; del.textContent = `🗑 Usuń przypięty box ${pb.bottom.toFixed(2)}–${pb.top.toFixed(2)}`;
+            del.addEventListener("click", () => { savePinnedBox(focus.ticker, null); showToast("📌 Przypięty box usunięty.", { type: "info" }); });
+            bar.appendChild(del);
+        }
         bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
         body.insertBefore(bar, body.firstChild);
         bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
