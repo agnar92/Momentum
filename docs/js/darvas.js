@@ -287,6 +287,8 @@ function darvasSvg(full, win, opts = {}) {
         takenLabels.push({ x0, x1: x0 + w, y0: yy - h, y1: yy });
         return yy;
     };
+    // podpis WEWNĄTRZ boxa, gdy się mieści (tam jest wolne miejsce); inaczej wraca do podpisu nad boxem (placeLabelY)
+    const fitsInside = (text, size, boxW, boxH) => String(text).length * size * 0.62 + 8 <= boxW && size * 1.3 + 4 <= boxH;
     // flat base: wyróżniona ramka bazy (niebieska, kreskowana) + pivot do prawej krawędzi, strefa kupna +5 % i stop −8 % jak przy cup & handle
     darvasPatternBoxes(full).forEach(fb => {
         if (!(fb.i1 >= start && fb.i0 < endExcl && fb.top > fb.low)) return;
@@ -295,8 +297,12 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<rect x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyB - fyT).toFixed(1)}" fill="${pcol}" fill-opacity="0.78" stroke="${pcol}" stroke-width="${fs(1.6)}" pointer-events="none"><title>${fb.name}: dół ${fb.low}, pivot ${fb.top}</title></rect>`);
         if (fyS - fyB > 1) out.push(`<rect x="${fx0.toFixed(1)}" y="${fyB.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${(fyS - fyB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
         out.push(`<rect class="box-hit" data-box="${fb.top}|${fb.low}|wzorzec|1|${fb.i0}|${fb.i1}" style="cursor:pointer" x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyS - fyT).toFixed(1)}" fill="transparent"><title>${fb.name} ${fb.low}–${fb.top} — kliknij: przybliż, przytrzymaj: przypnij</title></rect>`);
-        const fbText = `${fb.name} ${fb.i1 - fb.i0 + 1} tyg.`;
-        out.push(`<text x="${fx1.toFixed(1)}" y="${placeLabelY(fx1, fyT - 6, fbText, fs(12), "end").toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="${pcol}" text-anchor="end" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${fb.name} ${fb.i1 - fb.i0 + 1} tyg.</text>`);
+        const fbText = `${fb.name} ${fb.i1 - fb.i0 + 1} tyg.`, fbShort = `${fb.i1 - fb.i0 + 1} tyg.`;
+        const fbInside = [fbText, fbShort].find(t => fitsInside(t, fs(12), fx1 - fx0, fyB - fyT));
+        if (fbInside) {   // wewnątrz boxa: ciemny napis w lewym górnym rogu
+            takenLabels.push({ x0: fx0 + 4, x1: fx0 + 4 + fbInside.length * fs(12) * 0.62, y0: fyT + 2, y1: fyT + fs(12) * 1.3 + 2 });
+            out.push(`<text x="${(fx0 + 5).toFixed(1)}" y="${(fyT + fs(12) + 3).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#0b0d10" pointer-events="none">${fbInside}</text>`);
+        }   // nie mieści się w środku: bez podpisu (nazwa i długość są w dymku i w pasku odczytu po zaznaczeniu boxa) — mniej nakładających się napisów
         out.push(`<line x1="${fx0.toFixed(1)}" x2="${fpx1}" y1="${fyT.toFixed(1)}" y2="${fyT.toFixed(1)}" stroke="${fcol}" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" pointer-events="none"/>`);
         out.push(`<rect x="${W - L.right}" y="${(fyT - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${fcol}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyT + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${fb.top.toFixed(2)}</text>`);
         out.push(`<rect x="${W - L.right}" y="${(fyS - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(fyS + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(fb.low * (1 - PATTERN_ZONE_PCT / 100)).toFixed(2)}</text>`);
@@ -405,9 +411,18 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<rect x="${px0.toFixed(1)}" y="${pyB.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${Math.max(2, pyZ - pyB).toFixed(1)}" fill="url(#darvasHatch)" fill-opacity="0.7" pointer-events="none"/>`);
         out.push(`<rect class="${opts.pinFlash ? "pin-flash" : ""}" x="${px0.toFixed(1)}" y="${pyT.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${(pyB - pyT).toFixed(1)}" fill="${pcol}" fill-opacity="0.08" stroke="${pcol}" stroke-width="2.4" stroke-dasharray="7 4" pointer-events="none"><title>📌 Monitorowany box ${pin.bottom}–${pin.top}: ${ps.text}</title></rect>`);
         out.push(`<rect class="box-hit" data-box="${pin.top}|${pin.bottom}|przypięty|1|${pin.i0}|${lastReal}" style="cursor:pointer" x="${px0.toFixed(1)}" y="${pyT.toFixed(1)}" width="${Math.max(0, px1 - px0).toFixed(1)}" height="${Math.max(2, pyZ - pyT).toFixed(1)}" fill="transparent"><title>📌 Dotknij, by wybrać (przybliż / odepnij)</title></rect>`);   // przypięty box też da się wybrać: pasek akcji ma wtedy „Odepnij”
-        const pinText = `📌 ${ps.state === "ABOVE" ? "wybił" : ps.state === "INSIDE" ? "w boxie" : ps.state}`;
-        const pinX = Math.max(L.left + 2, Math.min(px0 + 4, W - L.right - pinText.length * fs(12) * 0.62 - 2));   // podpis nie wychodzi na oś cen
-        out.push(`<text x="${pinX.toFixed(1)}" y="${placeLabelY(pinX, Math.max(L.top + fs(11), pyT - 5), pinText, fs(12), "start").toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="${pcol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">📌 ${escapeHtml(ps.state === "ABOVE" ? "wybił" : ps.state === "INSIDE" ? "w boxie" : ps.state === "ZONE" ? "STREFA ZAGROŻENIA" : "EXIT")}</text>`);
+        const pinWord = ps.state === "ABOVE" ? "wybił" : ps.state === "INSIDE" ? "w boxie" : ps.state === "ZONE" ? "STREFA ZAGROŻENIA" : "EXIT";
+        const pinText = `📌 ${pinWord}`, pinSz = fs(12), pinW = pinText.length * pinSz * 0.62;
+        const inY = pyB - 5, inX = px0 + 5;
+        const inOk = fitsInside(pinText, pinSz, px1 - px0, pyB - pyT) && !takenLabels.some(r => inX < r.x1 && inX + pinW > r.x0 && inY - pinSz * 1.15 < r.y1 && inY > r.y0);
+        const pinAttr = `font-size="${pinSz}" font-weight="700" fill="${pcol}" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none"`;
+        if (inOk) {   // wewnątrz przypiętego boxa, przy dolnej krawędzi (u góry zwykle jest podpis wzorca)
+            takenLabels.push({ x0: inX, x1: inX + pinW, y0: inY - pinSz * 1.15, y1: inY });
+            out.push(`<text x="${inX.toFixed(1)}" y="${inY.toFixed(1)}" ${pinAttr}>${escapeHtml(pinText)}</text>`);
+        } else if (ps.state === "ZONE" || ps.state === "EXIT") {   // ostrzeżenia zostają zawsze, nad boxem; zwykły status koloruje obrys (zielony / złoty)
+            const pinX = Math.max(L.left + 2, Math.min(px0 + 4, W - L.right - pinW - 2));   // podpis nie wychodzi na oś cen
+            out.push(`<text x="${pinX.toFixed(1)}" y="${placeLabelY(pinX, Math.max(L.top + fs(11), pyT - 5), pinText, pinSz, "start").toFixed(1)}" ${pinAttr}>${escapeHtml(pinText)}</text>`);
+        }
         [[pin.top, pcol], [pin.bottom, pcol], [pin.bottom * (1 - DARVAS_STOP_PCT / 100), "#ff6b6b"]].forEach(([v, col]) => {
             const yy = y(v);
             out.push(`<rect x="${W - L.right}" y="${(yy - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${col}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(yy + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(+v).toFixed(2)}</text>`);
