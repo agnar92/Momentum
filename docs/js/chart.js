@@ -42,8 +42,8 @@ function fitLayout(w, h, noTable = false, scroll = false) {
     // niski ekran (telefon poziomo): bez paska S&P 500, żeby wykres cen nie zamienił się w kreskę
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
-    const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.18 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
-    const macd = short ? 0 : Math.max(44, Math.round(avail * 0.15));   // osobny panel MACD (12, 26, 9) NA GÓRZE, tuż pod suwakiem i legendą — cena, wolumen i EPS zachowują proporcje
+    const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.14 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
+    const macd = short ? 0 : Math.max(44, Math.round(avail * 0.11));   // osobny panel MACD (12, 26, 9) NA GÓRZE, tuż pod suwakiem i legendą — cena, wolumen i EPS zachowują proporcje
     const price = Math.max(60, avail - bench - volume - eps - macd);
     const L = { width: Math.round(w), left: 0, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
     L.bench = { y: 4, h: bench };
@@ -60,7 +60,7 @@ const COMPACT_FONT_SCALE = 1.5;
 const FIT_FONT_SCALE = 1.1;
 const COMPACT_WEEKS = 52;
 const WEEKLY_WINDOW_WEEKS = 156;   // domyślne okno wykresu tygodniowego (3 lata); dane sięgają 6 lat (CHART_WEEKS w watchlist.py)
-const SPX_BAND_FRAC = 0.2;   // górna część panelu cen zarezerwowana na linię S&P 500
+const SPX_BAND_FRAC = 0.12;   // górna część panelu cen zarezerwowana na linię S&P 500
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
 // Kolory średnich inne niż świece (zielona/czerwona) i linia RS (niebieska), żeby nie zlewały się ze słupkami.
 // Styl jak na wykresach z książki O'Neila (czarne słupki, czerwone spadkowe, czerwona 10-tygodniowa, niebieska linia RS (biała zlewała się z jasnymi słupkami)), ale na ciemnym tle:

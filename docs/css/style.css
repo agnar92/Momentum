@@ -915,7 +915,7 @@ body:not(.split) .wl-chart-box .wl-range-win::before { height: 8px; margin-top: 
 /* ---------- komputer (widok dzielony): jeden wykres wypełnia cały panel obok listy (układ w pikselach, patrz phoneFit / SPLIT_SLIDER_PX) ---------- */
 body.split .wl-chart-box { display: flex; flex-direction: column; overflow-x: hidden; overflow-y: auto; }   /* przewijanie pionowe: wykres ma minimalną wysokość, reszta jest pod nagłówkiem */
 body.split .wl-chart-box > * { flex: 0 0 auto; }
-body.split .wl-chart-box > .wl-chart-body { flex: 1 0 auto; min-height: max(760px, calc(100vh - 230px)); display: flex; flex-direction: column; }
+body.split .wl-chart-box > .wl-chart-body { flex: 1 0 auto; min-height: max(960px, calc(100vh - 230px)); display: flex; flex-direction: column; }
 body.split .chart-grid.layout-1 { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
 body.split .chart-grid.layout-1 .chart-cell { flex: 1 1 auto; min-height: 0; }
 body.split .chart-grid.layout-1 .cell-readout { font-size: 11px; min-height: 15px; margin: 2px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
