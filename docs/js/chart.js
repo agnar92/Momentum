@@ -1428,7 +1428,7 @@ function attachStackHover(root, m, readoutEl, L) {
 
 // Buduje HTML paneli dla jednego okna czasu. Zwraca { html, L } (geom z panelu cen — dla warstwy rysowania własnego boxa).
 function stackPanelsHtml(m, opts, geom) {
-    const order = stackOrder(), full = stackFull && order.includes(stackFull) ? stackFull : null;
+    const order = stackOrder().filter(k => !(m.daily && k === "macd")), full = stackFull && order.includes(stackFull) ? stackFull : null;
     const fitW = opts.fit && opts.fit.w ? opts.fit.w : 900;
     const W = full ? Math.max(260, Math.round(typeof document !== "undefined" ? document.documentElement.clientWidth : fitW)) : fitW;
     const vh = typeof window !== "undefined" ? window.innerHeight : 800;
