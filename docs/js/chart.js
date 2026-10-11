@@ -35,7 +35,7 @@ const CHART_LAYOUT_WIDE = {
 };
 // Układ "dopasowany": viewBox = faktyczny rozmiar komórki w pikselach (siatka dzienny+tygodniowy / 4 spółki), panele proporcjonalnie
 // do wysokości, więc wykres wypełnia komórkę bez pustych pasów; czcionki są wtedy w prawdziwych pikselach.
-function fitLayout(w, h, noTable = false, scroll = false) {
+function fitLayout(w, h, noTable = false, scroll = false, noMacd = false) {
     const twoRows = w < 560;
     const legendH = twoRows ? 36 : 20;
     const avail = Math.max(120, h - legendH - 56);
@@ -43,7 +43,7 @@ function fitLayout(w, h, noTable = false, scroll = false) {
     const short = avail < 300;
     const dropTable = short || noTable;   // telefon: pasek ↑ EPS pod cenami niesie wartość i zmianę r/r, osobna tabela tylko zabierałaby miejsce pod wolumenem
     const bench = 0, volume = Math.max(short ? 28 : 36, Math.round(avail * (short ? 0.18 : noTable ? 0.14 : 0.14))), eps = dropTable ? 0 : Math.max(48, Math.round(avail * 0.17));   // niski ekran: bez tabeli kwartałów (zostaje pasek ↑ EPS z % r/r)
-    const macd = short ? 0 : Math.max(44, Math.round(avail * 0.11));   // osobny panel MACD (12, 26, 9) NA GÓRZE, tuż pod suwakiem i legendą — cena, wolumen i EPS zachowują proporcje
+    const macd = short || noMacd ? 0 : Math.max(44, Math.round(avail * 0.11));   // osobny panel MACD (12, 26, 9) NA GÓRZE, tuż pod suwakiem i legendą — cena, wolumen i EPS zachowują proporcje
     const price = Math.max(60, avail - bench - volume - eps - macd);
     const L = { width: Math.round(w), left: 0, right: 52, legendRows: twoRows ? 2 : 1, fontScale: +Math.min(1.3, Math.max(1, w / 1100)).toFixed(2) };
     L.bench = { y: 4, h: bench };
@@ -462,8 +462,8 @@ function pickLayout(opts = {}) {
     if (opts.stackLayout) return opts.stackLayout;   // osobne wykresy jeden pod drugim (stackLayout): układ policzony z góry
     if (opts.fit) {
         const noTable = (!!opts.compact || !!opts.book) && !opts.estimates;   // książkowy widok: pasek ↑ EPS niesie wartość i zmianę r/r (osobna tabela duplikowała te liczby)
-        const sc = !!opts.fit.scroll, L = fitLayout(opts.fit.w, opts.fit.h, noTable, sc);
-        return compactEpsPanel(opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4, noTable, sc)) : L, opts);
+        const sc = !!opts.fit.scroll, L = fitLayout(opts.fit.w, opts.fit.h, noTable, sc, !!opts.noMacd);
+        return compactEpsPanel(opts.hideLabels ? dropLegend(fitLayout(opts.fit.w, opts.fit.h + L.legend.h + 4, noTable, sc, !!opts.noMacd)) : L, opts);
     }
     const L = opts.compact ? CHART_LAYOUT_COMPACT : (opts.wide ? CHART_LAYOUT_WIDE : CHART_LAYOUT);
     return compactEpsPanel(opts.hideLabels ? dropLegend(L) : L, opts);
@@ -584,7 +584,7 @@ function chartSvg(m, opts = {}) {
     const parts = [];
 
     // --- siatka czasu + etykiety kwartałów
-    const axisParts = opts.stackLayout ? [] : parts;   // oś czasu osobno: każdy panel dostaje własną kopię pod spodem
+    const axisParts = opts.stackLayout && !(opts.crop && opts.crop.keepAxis) ? [] : parts;   // oś czasu osobno: każdy panel dostaje własną kopię pod spodem
     const labelWeeks = [];
     m.weeks.forEach((d, i) => {
         const month = Number(d.slice(5, 7)) - 1;
@@ -1003,7 +1003,7 @@ function chartSvg(m, opts = {}) {
             }
             parts.push(polyline(m.macd.macd.map((v, i) => (Number.isFinite(v) ? [x(i), yM(v)] : null)), CHART_COLORS.rs, 1.4));
             parts.push(polyline(m.macd.signal.map((v, i) => (Number.isFinite(v) ? [x(i), yM(v)] : null)), "#ff9f43", 1.4));
-            if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${P.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">MACD (12, 26, 9) tygodniowy</text>`);
+            if (!opts.hideLabels && !opts.stackLayout) parts.push(`<text x="${L.left + 4}" y="${P.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">MACD (12, 26, 9) tygodniowy</text>`);
             parts.push(`<text x="${L.width - L.right + 6}" y="${(y0 + fs(3)).toFixed(1)}" font-size="${fs(9)}" fill="${CHART_COLORS.text}">0</text>`);
         }
     }
@@ -1096,10 +1096,10 @@ function chartSvg(m, opts = {}) {
     parts.push(`<line id="chartCross" data-cross="1" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
     // data wskazanej świecy na dole osi (pokazywana przy najechaniu myszką)
     axisParts.push(`<text id="chartCrossDate" data-crossdate="1" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
-    const crop = opts.crop || null, cropBand = crop && !crop.noAxis ? Math.round(fs(26)) : 0;   // noAxis: oś czasu tylko pod ostatnim panelem (jak w TradingView)
+    const crop = opts.crop || null, cropBand = crop && !crop.noAxis && !crop.keepAxis ? Math.round(fs(26)) : 0;   // noAxis: oś czasu tylko pod ostatnim panelem (jak w TradingView)
     if (opts.geomOut) Object.assign(opts.geomOut, { L: { ...L, height: crop ? crop.h + cropBand : L.height, price: P, marks }, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
     if (crop) {   // jeden panel z układu "stack": wycinek viewBox + własna oś czasu pod spodem
-        const ax = axisParts.length && !crop.noAxis ? `<g transform="translate(0 ${(crop.y0 + crop.h + cropBand - 10 - L.axisY).toFixed(1)})">${axisParts.join("")}</g>` : "";
+        const ax = axisParts.length && !crop.noAxis && !crop.keepAxis ? `<g transform="translate(0 ${(crop.y0 + crop.h + cropBand - 10 - L.axisY).toFixed(1)})">${axisParts.join("")}</g>` : "";
         return `<svg id="${opts.svgId || "chartSvg"}" viewBox="0 ${crop.y0} ${L.width} ${crop.h + cropBand}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(crop.title || "Wykres")} ${escapeHtml(m.ticker)}">${parts.join("")}${ax}</svg>`;
     }
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres tygodniowy ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
@@ -1330,7 +1330,7 @@ function attachChartGestures(plot, total, getWin, setWin, enabled) {
 // ---------- osobne wykresy jeden pod drugim (jak w TradingView): Cena, Wolumen, MACD, RS, EPS ----------
 // Każdy panel to osobna sekcja z własnym nagłówkiem (▲ ▼ = zmiana kolejności, ⛶ = pełny ekran). Rysowanie: jedno wspólne
 // chartSvg z układem "stackLayout" i wycinkiem viewBox na panel (opts.crop), więc skale i okno czasu są wszędzie te same.
-const STACK_PANELS = [["price", "Cena · wolumen · EPS"], ["macd", "MACD (12, 26, 9) tygodniowy"], ["rs", "Siła względna (cena / S&P 500)"]];
+const STACK_PANELS = [["price", ""], ["macd", "MACD (12, 26, 9) tygodniowy"]];   // wykres słupkowy (z S&P 500, RS, EPS i wolumenem, jak dawniej) + osobny MACD
 const STACK_ORDER_KEY = "momentum_watchlist_chart_panels";
 let stackFull = null;   // klucz panelu na pełnym ekranie (albo null)
 
@@ -1351,27 +1351,17 @@ function moveInOrder(order, key, dir) {
     return out;
 }
 
-// Układ wszystkich paneli w jednym płótnie (geometria; kolejność na ekranie wynika z HTML, nie z tych współrzędnych).
-function stackLayout(w, hs) {
-    const L = { width: Math.round(w), left: 0, right: 52, legendRows: 1, fontScale: 1 };
-    L.bench = { y: 0, h: 0 };
-    L.legend = { y: 0, h: 0 };
-    let y = 6;
-    ["price", "macd", "rs"].forEach(k => {
-        const h = Math.max(0, Math.round(hs[k] || 0));
-        L[k] = { y, h };
-        y += h + 64;   // odstęp > pasek osi kopiowany pod każdym panelem (crop), żeby sąsiednie panele nie wchodziły w kadr
-    });
-    L.volume = { y: 0, h: 0 };   // wolumen i znaczniki EPS są częścią panelu cen (jak w TradingView)
-    L.eps = { y, h: 0 };
-    L.axisY = y + 12;
-    L.height = y + 24;
-    return L;
+// Układ: pełny wykres słupkowy (S&P 500, RS, wolumen, EPS — jak dawniej, bez MACD) + pod nim płótno na MACD (osobny panel).
+// Kolejność na ekranie wynika z HTML, nie z tych współrzędnych; każdy panel to wycinek viewBox tego samego rysunku.
+function stackLayout(base, macdH) {
+    const y = base.height + 64;   // odstęp > pasek osi kopiowany pod MACD, żeby panele nie wchodziły sobie w kadr
+    return { ...base, macd: { y, h: Math.max(0, Math.round(macdH)) }, axisY: y + Math.round(macdH) + 12, height: y + Math.round(macdH) + 24, priceHeight: base.height };
 }
 
-function stackHeights(fit, estimates) {
-    const h = fit && fit.h ? fit.h : 700;
-    return { price: Math.max(320, Math.round(h * 0.78)), macd: 150, rs: 140 };
+// Wysokość wykresu słupkowego: wyższy niż pole (komputer: nie spłaszczony), na telefonie poziomo też ma sensowną wysokość — reszta się przewija.
+function stackHeights(fit) {
+    const w = fit && fit.w ? fit.w : 900, h = fit && fit.h ? fit.h : 700;
+    return { price: Math.max(520, h, Math.round(w * 0.85)), macd: 160 };
 }
 
 function attachStackHover(root, m, readoutEl, L) {
@@ -1398,25 +1388,26 @@ function attachStackHover(root, m, readoutEl, L) {
     root.addEventListener("mouseleave", () => { setAll(0, null); readoutEl.textContent = chartReadout(m, m.lastIdx); });
 }
 
-// Buduje HTML wszystkich paneli dla jednego okna czasu. Zwraca { html, geom } (geom z panelu cen — dla warstwy rysowania własnego boxa).
+// Buduje HTML paneli dla jednego okna czasu. Zwraca { html, L } (geom z panelu cen — dla warstwy rysowania własnego boxa).
 function stackPanelsHtml(m, opts, geom) {
     const order = stackOrder(), full = stackFull && order.includes(stackFull) ? stackFull : null;
     const fitW = opts.fit && opts.fit.w ? opts.fit.w : 900;
     const W = full ? Math.max(260, Math.round(typeof document !== "undefined" ? document.documentElement.clientWidth : fitW)) : fitW;
-    const hs = full
-        ? Object.fromEntries(["price", "macd", "rs"].map(k => [k, k === full ? Math.max(160, (typeof window !== "undefined" ? window.innerHeight : 800) - 96) : 40]))
-        : stackHeights(opts.fit, !!opts.estimates);
-    const L = stackLayout(W, hs);
-    const base = { ...opts, simple: true, volOverlay: true, book: false, hideLabels: true, stackLayout: L, compact: opts.compact, fit: opts.fit || { w: W, h: 700 }, noBench: true };
+    const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+    const hs = full ? { price: full === "price" ? Math.max(260, vh - 70) : 200, macd: full === "macd" ? Math.max(160, vh - 110) : 100 } : stackHeights({ w: W, h: opts.fit && opts.fit.h });
+    const priceOpts = { ...opts, noMacd: true, fit: { w: W, h: hs.price } };
+    const L = stackLayout(pickLayout(priceOpts), hs.macd);
+    const base = { ...priceOpts, stackLayout: L };
     const html = order.filter(k => !full || k === full).map((k, idx, arr) => {
         const title = STACK_PANELS.find(p => p[0] === k)[1];
-        const o = { ...base, crop: { y0: k === "price" ? 0 : L[k].y - 6, h: L[k].h + (k === "price" ? L.price.y : 6), title, noAxis: idx < arr.length - 1 }, svgId: k === "price" ? "chartSvg" : "chartSvg_" + k };
-        if (k === "price") o.geomOut = geom;
+        const o = { ...base, svgId: k === "price" ? "chartSvg" : "chartSvg_" + k,
+            crop: k === "price" ? { y0: 0, h: L.priceHeight, keepAxis: true, title: "Wykres słupkowy" } : { y0: L.macd.y - 6, h: L.macd.h + 6, title, noAxis: idx < arr.length - 1 } };
+        if (k === "price" || full) o.geomOut = geom;
         const svg = chartSvg(m, o);
         const btns = full
             ? `<button type="button" data-stack="full" title="Zamknij pełny ekran">✕</button>`
             : `<button type="button" data-stack="up" title="Przesuń wyżej"${idx === 0 ? " disabled" : ""}>▲</button><button type="button" data-stack="down" title="Przesuń niżej"${idx === arr.length - 1 ? " disabled" : ""}>▼</button><button type="button" data-stack="full" title="Pełny ekran">⛶</button>`;
-        return `<section class="stack-panel${full ? " stack-full" : ""}" data-panel="${k}"><div class="stack-body">${svg}<span class="stack-title">${escapeHtml(title)}</span><span class="stack-btns">${btns}</span></div></section>`;
+        return `<section class="stack-panel${full ? " stack-full" : ""}" data-panel="${k}"><div class="stack-body">${svg}${title ? `<span class="stack-title">${escapeHtml(title)}</span>` : ""}<span class="stack-btns">${btns}</span></div></section>`;
     }).join("");
     return { html: `<div class="stack-root">${html}</div>`, L };
 }
@@ -1454,7 +1445,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
             const priceBody = plot.querySelector('.stack-panel[data-panel="price"] .stack-body');
             { const sv = plot.querySelector("#chartSvg"), GL = geom.L || L; if (sv) sv.dataset.cgeom = [GL.width, GL.left, GL.right, m.n, m.off || 0].join(","); }
             readoutEl.textContent = chartReadout(m, m.lastIdx);
-            attachStackHover(plot, m, readoutEl, st.L);
+            attachStackHover(plot, m, readoutEl, geom.L || st.L);
             plot.querySelectorAll(".stack-panel").forEach(sec => sec.addEventListener("click", ev => {   // dotyk: pokaż przyciski tylko tego panelu (telefon nie ma hover)
                 if (ev.target.closest("[data-stack]")) return;
                 const on = !sec.classList.contains("stack-active");
