@@ -1137,8 +1137,8 @@ function initSplitResizer() {
         document.body.classList.add("resizing");
         const move = e => {
             applyListWidth(widthFromEvent(e));
-            cancelAnimationFrame(raf);
-            raf = requestAnimationFrame(redraw);   // żywe przeskalowanie wykresu podczas przeciągania
+            window.cancelAnimationFrame(raf);
+            raf = window.requestAnimationFrame(redraw);   // żywe przeskalowanie wykresu podczas przeciągania
         };
         const up = e => {
             bar.removeEventListener("pointermove", move);
