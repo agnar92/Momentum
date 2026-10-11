@@ -459,6 +459,7 @@ function compactEpsPanel(L, opts) {
 }
 
 function pickLayout(opts = {}) {
+    if (opts.stackLayout) return opts.stackLayout;   // osobne wykresy jeden pod drugim (stackLayout): układ policzony z góry
     if (opts.fit) {
         const noTable = (!!opts.compact || !!opts.book) && !opts.estimates;   // książkowy widok: pasek ↑ EPS niesie wartość i zmianę r/r (osobna tabela duplikowała te liczby)
         const sc = !!opts.fit.scroll, L = fitLayout(opts.fit.w, opts.fit.h, noTable, sc);
@@ -571,6 +572,7 @@ function estimateText(entry, price) {
 function chartSvg(m, opts = {}) {
     let L = pickLayout(opts);
     const bookOn = !!opts.book;   // wygląd i opisy jak w książce O'Neila (tygodniowy)
+    const simple = !!opts.simple;   // prosty wykres cen: świece + średnie + pivot / box + ostatnia cena (reszta w osobnych panelach)
     // układ fit ma viewBox w prawdziwych pikselach (pełny ekran telefonu, komórki siatki) — tam czcionki ×1,5 byłyby za duże
     const fs = n => +(n * (opts.compact ? (opts.fit ? FIT_FONT_SCALE : COMPACT_FONT_SCALE) : (L.fontScale || 1))).toFixed(1);
     if (bookOn && !opts.compact) L = { ...L, left: L.left + Math.round(fs(42)) };   // miejsce na lewą oś „Cena = 20×EPS”
@@ -582,6 +584,7 @@ function chartSvg(m, opts = {}) {
     const parts = [];
 
     // --- siatka czasu + etykiety kwartałów
+    const axisParts = opts.stackLayout ? [] : parts;   // oś czasu osobno: każdy panel dostaje własną kopię pod spodem
     const labelWeeks = [];
     m.weeks.forEach((d, i) => {
         const month = Number(d.slice(5, 7)) - 1;
@@ -593,12 +596,12 @@ function chartSvg(m, opts = {}) {
         parts.push(`<line x1="${x(i)}" x2="${x(i)}" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="${CHART_COLORS.grid}" stroke-width="0.7"/>`);
         if (bookOn) {   // oś czasu jak w książce: ramki kwartałów z nazwą miesiąca i rokiem
             const e0 = L.left + i * step, e1 = k + 1 < labelWeeks.length ? L.left + labelWeeks[k + 1] * step : L.width - L.right;
-            parts.push(`<rect x="${e0}" y="${L.axisY - fs(12)}" width="${Math.max(0, e1 - e0)}" height="${fs(16)}" fill="none" stroke="#3a3f4d" stroke-width="1"/>`);
-            if (e1 - e0 > fs(46)) parts.push(`<text x="${(e0 + e1) / 2}" y="${L.axisY}" fill="${CHART_COLORS.text}" font-size="${fs(10.5)}" text-anchor="middle">${MONTHS_PL[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}</text>`);
+            axisParts.push(`<rect x="${e0}" y="${L.axisY - fs(12)}" width="${Math.max(0, e1 - e0)}" height="${fs(16)}" fill="none" stroke="#3a3f4d" stroke-width="1"/>`);
+            if (e1 - e0 > fs(46)) axisParts.push(`<text x="${(e0 + e1) / 2}" y="${L.axisY}" fill="${CHART_COLORS.text}" font-size="${fs(10.5)}" text-anchor="middle">${MONTHS_PL[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}</text>`);
             return;
         }
         if (x(i) < L.left + 22) return;   // etykieta przy samej krawędzi byłaby ucięta
-        parts.push(`<text x="${x(i)}" y="${L.axisY}" fill="${CHART_COLORS.text}" font-size="${fs(11)}" text-anchor="middle">${MONTHS_PL[Number(d.slice(5, 7)) - 1]} '${d.slice(2, 4)}</text>`);
+        axisParts.push(`<text x="${x(i)}" y="${L.axisY}" fill="${CHART_COLORS.text}" font-size="${fs(11)}" text-anchor="middle">${MONTHS_PL[Number(d.slice(5, 7)) - 1]} '${d.slice(2, 4)}</text>`);
     });
 
     parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.price.y - 4}" y2="${L.price.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
@@ -610,7 +613,7 @@ function chartSvg(m, opts = {}) {
     const addLabel = (text, xx, yy, o = {}) => labels.push({ text: String(text), x: xx, y: yy, anchor: o.anchor || "middle", size: o.size || fs(10), fill: o.fill || CHART_COLORS.textStrong, bold: !!o.bold, prio: o.prio === undefined ? 1 : o.prio, title: o.title || "" });
     const reserveLabel = (text, xx, yy, anchor, size, bold) => fixedLabels.push(labelBox({ text: String(text), anchor, size, bold }, xx, yy));
     const hasMarks = m.eps.length > 0 || !!m.epsNext;
-    const marksH = hasMarks ? fs(opts.compact ? 28 : 32) : 0;
+    const marksH = hasMarks && !simple ? fs(opts.compact ? 28 : 32) : 0;
     const P = { y: L.price.y, h: L.price.h - marksH };
     const marks = { y: P.y + P.h, h: marksH };
     const est = opts.estimates || null;
@@ -630,7 +633,7 @@ function chartSvg(m, opts = {}) {
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
     const spxVals = m.spx ? m.spx.filter(Number.isFinite) : [];
-    const spxBand = spxVals.length >= 2 && !opts.noBench ? SPX_BAND_FRAC : 0;   // opts.noBench: telefon w trybie rysowania — cały panel dla ceny
+    const spxBand = spxVals.length >= 2 && !opts.noBench && !simple ? SPX_BAND_FRAC : 0;   // opts.noBench: telefon w trybie rysowania — cały panel dla ceny
     const ttmAll = (m.epsLine || m.eps).filter(q => Number.isFinite(q.t));
     // „Cena = 20×EPS” (jak w książce): linia zysków leży na TEJ SAMEJ skali co cena w punktach 20 × EPS za 4 kwartały; do zakresu liczymy ją tylko
     // do 1,3× poza zakresem świec (dalej linia jest ucięta — wtedy P/E jest dużo wyższe / niższe niż 20)
@@ -736,11 +739,11 @@ function chartSvg(m, opts = {}) {
         const i0 = m.pivot.date ? Math.max(0, dateToIndex(m.weeks, m.pivot.date)) : Math.max(0, m.lastIdx - 25);
         const zx = x(Math.max(0, m.lastIdx - 14)), zw = Math.max(0, xr - zx);
         const band = (lo, hi, fill, op) => `<rect ${clipAttr} x="${zx}" y="${Math.min(yP(lo), yP(hi))}" width="${zw}" height="${Math.abs(yP(lo) - yP(hi))}" fill="${fill}" opacity="${op}"/>`;
-        if (!extended) parts.push(band(pivotPx, pivotPx * 1.05, "#2ecc71", 0.22), ...(m.box ? [] : [band(pivotPx * 0.92, pivotPx * 0.95, "#ff4d4d", 0.22)]));   // pudełko ma własny stop ze środka, więc bez ogólnej strefy 5–8 %
+        if (!extended && !simple) parts.push(band(pivotPx, pivotPx * 1.05, "#2ecc71", 0.22), ...(m.box ? [] : [band(pivotPx * 0.92, pivotPx * 0.95, "#ff4d4d", 0.22)]));   // pudełko ma własny stop ze środka, więc bez ogólnej strefy 5–8 %
         parts.push(`<line ${clipAttr} x1="${x(i0)}" x2="${xr}" y1="${yPv}" y2="${yPv}" stroke="${pivotCol}" stroke-width="1.6" stroke-dasharray="5 3"><title>Pivot (${m.pivot.kind}) ${pivotPx.toFixed(2)}${m.pivot.active ? " — aktywny (wybicie)" : " — czeka na wybicie"}</title></line>`);
         const clampY = v => Math.max(P.y + fs(10), Math.min(P.y + P.h - 3, v));
         addLabel(`${m.pivot.kind === "flaga" ? "opór" : "pivot"} ${pivotPx.toFixed(2)}${m.pivot.risky ? " · bez rączki ⚠ ryzyko" : ""}${extended ? ` · cena +${((lastC / pivotPx - 1) * 100).toFixed(1)}%` : ""}`, Math.max(x(i0), L.left) + 4, Math.max(P.y + fs(10), yPv - 4), { anchor: "start", fill: pivotCol, bold: true, prio: 9 });
-        if (!extended) {
+        if (!extended && !simple) {
             addLabel(opts.compact ? "kup do +5 %" : "strefa zakupu do +5 %", zx - 4, clampY(yP(pivotPx * 1.05) - 3), { anchor: "end", fill: "#4ee08a", bold: true, prio: 4 });
             if (!m.box) addLabel(opts.compact ? "stop 5–8 %" : "stop loss 5–8 %", zx - 4, clampY(yP(pivotPx * 0.92) + fs(11)), { anchor: "end", fill: "#ff7a7a", bold: true, prio: 4 });
         }
@@ -788,7 +791,7 @@ function chartSvg(m, opts = {}) {
     }
     // dzień wybicia: pionowa cyjanowa linia przez cenę i wolumen
     const boI = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
-    if (boI >= 0) {
+    if (boI >= 0 && !simple) {
         parts.push(`<line x1="${x(boI)}" x2="${x(boI)}" y1="${P.y}" y2="${L.volume.y + L.volume.h}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3 3" opacity="0.65"><title>${m.trend.breakout.confirmed ? "Dzień wybicia" : "Zamknięcie nad linią bez wolumenu (niepotwierdzone)"} ${m.trend.breakout.date}</title></line>`);
         addLabel(`${m.trend.breakout.confirmed ? "wybicie" : "nad linią, bez wolumenu"}${Number.isFinite(m.trend.breakout.vol_ratio) ? ` ×${m.trend.breakout.vol_ratio}${m.trend.breakout.confirmed ? " wol." : ""}` : ""}`, x(boI) + 4, P.y + fs(11), { anchor: "start", fill: "#22d3ee", bold: true, prio: 6 });
     }
@@ -809,12 +812,12 @@ function chartSvg(m, opts = {}) {
     }
     // ceny lokalnych szczytów i dołków (jak w MarketSmith) — w oknie, bez ostatnich niepotwierdzonych świec
     // na telefonie mniej podpisów (3 szczyty / 2 dołki), na dużym ekranie 6 / 5
-    swingLabels(m.h, m.l, m.lastIdx, Math.max(2, Math.min(7, Math.round(m.n / 16))), opts.compact ? 2 : 6, opts.compact ? 1 : 5).forEach(sw => {
+    (simple ? [] : swingLabels(m.h, m.l, m.lastIdx, Math.max(2, Math.min(7, Math.round(m.n / 16))), opts.compact ? 2 : 6, opts.compact ? 1 : 5)).forEach(sw => {
         if (pivotPx !== null && Math.abs(sw.price / pivotPx - 1) < (opts.compact ? 0.015 : 0.003)) return;   // ta cena jest już podpisana jako pivot
         addLabel(sw.price.toFixed(2), x(sw.i), sw.type === "H" ? yP(sw.price) - 4 : yP(sw.price) + fs(11), { prio: 2 });
     });
     // linie trendu: opór (pomarańczowa) i wsparcie (szara), od pierwszego dotknięcia do ostatniej świecy
-    (opts.hideAutoLines ? [] : m.lines).forEach(l => {
+    (opts.hideAutoLines || simple ? [] : m.lines).forEach(l => {
         const at = i => l.y0 + (l.y1 - l.y0) * (i - l.i0) / Math.max(1, l.i1 - l.i0);
         const i0 = Math.max(0, l.i0);
         const col = l.kind === "res" ? (m.trend && m.trend.state === "wybicie" ? "#2ecc71" : "#e8eaed") : CHART_COLORS.sup;   // opór flagi: biały, gdy czeka; zielony po wybiciu
@@ -829,7 +832,7 @@ function chartSvg(m, opts = {}) {
         }
     });
     // maszt flagi: pogrubiony odcinek od dołka do szczytu wzrostu poprzedzającego konsolidację + podpis
-    if (m.pole && m.pole.i1 > 0) {
+    if (m.pole && m.pole.i1 > 0 && !simple) {
         const p0 = Math.max(0, m.pole.i0);
         const py0 = yP(m.pole.y0 + (m.pole.y1 - m.pole.y0) * (p0 - m.pole.i0) / Math.max(1, m.pole.i1 - m.pole.i0));
         parts.push(`<line x1="${x(p0)}" y1="${py0}" x2="${x(m.pole.i1)}" y2="${yP(m.pole.y1)}" stroke="${CHART_COLORS.res}" stroke-width="3" stroke-opacity="0.35" stroke-linecap="round"><title>Maszt +${m.pole.gain}%</title></line>`);
@@ -837,7 +840,7 @@ function chartSvg(m, opts = {}) {
     }
     // ▲ wybicia stoi POD świecą, w której zamknięcie przebiło linię z wolumenem (a nie na ostatniej świecy), i wskazuje w górę
     const bkIdx = m.trend && m.trend.state === "wybicie" && m.trend.breakout && m.trend.breakout.confirmed !== false ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
-    if (bkIdx >= 0 && Number.isFinite(m.l[bkIdx])) {
+    if (bkIdx >= 0 && Number.isFinite(m.l[bkIdx]) && !simple) {
         const bx = x_(bkIdx), by = yP(m.l[bkIdx]) + fs(5);
         parts.push(`<path d="M${bx},${by} L${bx + fs(6)},${by + fs(10)} L${bx - fs(6)},${by + fs(10)} Z" fill="${CHART_COLORS.res}"><title>Wybicie z linii trendu: zamknięcie nad linią z wolumenem ${m.trend.breakout.date}</title></path>`);
     }
@@ -856,7 +859,7 @@ function chartSvg(m, opts = {}) {
     }
     // linia RS w dolnej ~1/3 panelu (własna skala — liczy się kształt/kierunek, nie wartość)
     const rExt = numericExtent([m.rs]);
-    if (rExt) {
+    if (rExt && !simple) {
         const yR = makeYScale(rExt[0], rExt[1], P.y + P.h * 0.68, P.h * 0.3);
         parts.push(polyline(m.rs.map((v, i) => Number.isFinite(v) ? [x(i), yR(v)] : null), CHART_COLORS.rs, 1.6));
         // RS Rating (1–99) na końcu linii RS, jak w MarketSmith — tylko na wykresie tygodniowym
@@ -876,7 +879,7 @@ function chartSvg(m, opts = {}) {
         });
     }
     // linia zysków (EPS za 4 kwartały, TTM) NA wykresie cen — własna skala po prawej jak linia RS; kółka w tygodniach raportów, przerywany odcinek = prognoza
-    if (ttmAll.length >= 2) {
+    if (ttmAll.length >= 2 && !simple) {
         const nx = m.epsNext && Number.isFinite(m.epsNext.t) ? m.epsNext : null;
         const nxIdx = nx ? dateToIndex(m.weeks, nx.d) : null;
         const tv = ttmAll.map(q => q.t).concat(nx ? [nx.t] : []);
@@ -1002,6 +1005,22 @@ function chartSvg(m, opts = {}) {
         }
     }
 
+    // --- 3c. RS (cena / S&P 500) jako osobny panel w układzie "stack": sama linia, rating na końcu, kropki = RS na maksimum 52 tyg. (duża z obwódką = przed ceną)
+    if (opts.stackLayout && L.rs && L.rs.h >= 30) {
+        const R = L.rs, rExt2 = numericExtent([m.rs]);
+        parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${R.y - 4}" y2="${R.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
+        if (rExt2) {
+            const yR2 = makeYScale(rExt2[0], rExt2[1], R.y + fs(8), R.h - fs(14));
+            parts.push(polyline(m.rs.map((v, i) => (Number.isFinite(v) ? [x(i), yR2(v)] : null)), CHART_COLORS.rs, 1.8));
+            m.rsNewHigh.forEach((flag, i) => {
+                if (!flag || !Number.isFinite(m.rs[i])) return;
+                const leads = m.pxNewHigh && !m.pxNewHigh[i];
+                parts.push(`<circle cx="${x(i)}" cy="${yR2(m.rs[i])}" r="${2.6 + (leads ? 1.6 : 0)}" fill="${CHART_COLORS.rs}"${leads ? ` stroke="#e5484d" stroke-width="1.6"` : ""}><title>${leads ? "RS na maksimum 52 tyg., cena jeszcze nie (RS przed ceną)" : "RS na maksimum 52 tyg."}</title></circle>`);
+            });
+            if (m.rsRating != null) parts.push(`<text x="${L.width - L.right + 6}" y="${R.y + fs(12)}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.rs}">RS ${m.rsRating}</text>`);
+        }
+    }
+
     // --- 4. EPS kwartalny
     if (L.eps.h >= 20) parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.eps.y - 4}" y2="${L.eps.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
     const estSeries = est ? estimateSeries(est) : [];
@@ -1071,10 +1090,15 @@ function chartSvg(m, opts = {}) {
             parts.push(`<text x="${L.width - L.right + 4}" y="${yy + fs(4)}" font-size="${fs(10)}" font-weight="700" fill="#ffffff" pointer-events="none">${lastC >= 1000 ? lastC.toFixed(0) : lastC.toFixed(2)}</text>`);
         }
     }
-    parts.push(`<line id="chartCross" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
+    parts.push(`<line id="chartCross" data-cross="1" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
     // data wskazanej świecy na dole osi (pokazywana przy najechaniu myszką)
-    parts.push(`<text id="chartCrossDate" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
-    if (opts.geomOut) Object.assign(opts.geomOut, { L: { ...L, price: P, marks }, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
+    axisParts.push(`<text id="chartCrossDate" data-crossdate="1" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
+    const crop = opts.crop || null, cropBand = crop ? Math.round(fs(26)) : 0;
+    if (opts.geomOut) Object.assign(opts.geomOut, { L: { ...L, height: crop ? crop.h + cropBand : L.height, price: P, marks }, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
+    if (crop) {   // jeden panel z układu "stack": wycinek viewBox + własna oś czasu pod spodem
+        const ax = axisParts.length ? `<g transform="translate(0 ${(crop.y0 + crop.h + cropBand - 10 - L.axisY).toFixed(1)})">${axisParts.join("")}</g>` : "";
+        return `<svg id="${opts.svgId || "chartSvg"}" viewBox="0 ${crop.y0} ${L.width} ${crop.h + cropBand}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(crop.title || "Wykres")} ${escapeHtml(m.ticker)}">${parts.join("")}${ax}</svg>`;
+    }
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres tygodniowy ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
 }
 
@@ -1300,6 +1324,98 @@ function attachChartGestures(plot, total, getWin, setWin, enabled) {
 
 // Rysuje wykres w kontenerze; zwraca model (albo null, gdy brak danych dla tickera).
 // opts.window = {n, end} — okno suwaka (null = domyślne); opts.onWindow(w) — wołane po zmianie okna.
+// ---------- osobne wykresy jeden pod drugim (jak w TradingView): Cena, Wolumen, MACD, RS, EPS ----------
+// Każdy panel to osobna sekcja z własnym nagłówkiem (▲ ▼ = zmiana kolejności, ⛶ = pełny ekran). Rysowanie: jedno wspólne
+// chartSvg z układem "stackLayout" i wycinkiem viewBox na panel (opts.crop), więc skale i okno czasu są wszędzie te same.
+const STACK_PANELS = [["price", "Cena"], ["volume", "Wolumen"], ["macd", "MACD (12, 26, 9) tygodniowy"], ["rs", "Siła względna (cena / S&P 500)"], ["eps", "Zyski (EPS)"]];
+const STACK_ORDER_KEY = "momentum_watchlist_chart_panels";
+let stackFull = null;   // klucz panelu na pełnym ekranie (albo null)
+
+function stackOrder() {
+    const keys = STACK_PANELS.map(p => p[0]);
+    let saved = [];
+    try { saved = JSON.parse(localStorage.getItem(STACK_ORDER_KEY) || "[]"); } catch (e) { saved = []; }
+    const out = (Array.isArray(saved) ? saved : []).filter(k => keys.includes(k));
+    keys.forEach(k => { if (!out.includes(k)) out.push(k); });
+    return out;
+}
+function saveStackOrder(order) { try { localStorage.setItem(STACK_ORDER_KEY, JSON.stringify(order)); } catch (e) { /* brak localStorage */ } }
+function moveInOrder(order, key, dir) {
+    const i = order.indexOf(key), j = i + dir;
+    if (i < 0 || j < 0 || j >= order.length) return order.slice();
+    const out = order.slice();
+    [out[i], out[j]] = [out[j], out[i]];
+    return out;
+}
+
+// Układ wszystkich paneli w jednym płótnie (geometria; kolejność na ekranie wynika z HTML, nie z tych współrzędnych).
+function stackLayout(w, hs) {
+    const L = { width: Math.round(w), left: 0, right: 52, legendRows: 1, fontScale: 1 };
+    L.bench = { y: 0, h: 0 };
+    L.legend = { y: 0, h: 0 };
+    let y = 6;
+    ["price", "volume", "macd", "rs", "eps"].forEach(k => {
+        const h = Math.max(0, Math.round(hs[k] || 0));
+        L[k] = { y, h };
+        y += h + 64;   // odstęp > pasek osi kopiowany pod każdym panelem (crop), żeby sąsiednie panele nie wchodziły w kadr
+    });
+    L.axisY = y + 12;
+    L.height = y + 24;
+    return L;
+}
+
+function stackHeights(fit, estimates) {
+    const h = fit && fit.h ? fit.h : 700;
+    return { price: Math.max(300, Math.round(h * 0.7)), volume: 150, macd: 150, rs: 140, eps: estimates ? 190 : 78 };
+}
+
+function attachStackHover(root, m, readoutEl, L) {
+    const plotW = L.width - L.left - L.right;
+    const setAll = (cx, i) => {
+        root.querySelectorAll("[data-cross]").forEach(el => { el.setAttribute("x1", cx); el.setAttribute("x2", cx); el.setAttribute("opacity", i === null ? "0" : "0.5"); });
+        root.querySelectorAll("[data-crossdate]").forEach(el => {
+            if (i === null) { el.setAttribute("opacity", "0"); return; }
+            el.textContent = fmtCrossDate(m.weeks[i]);
+            el.setAttribute("x", Math.max(L.left + 60, Math.min(L.width - L.right - 60, cx)));
+            el.setAttribute("opacity", "1");
+        });
+    };
+    root.addEventListener("mousemove", ev => {
+        const svg = ev.target.closest ? ev.target.closest("svg") : null;
+        if (!svg || svg.classList.contains("chart-overlay") && false) return;
+        const rect = svg.getBoundingClientRect();
+        const vx = (ev.clientX - rect.left) / rect.width * L.width;
+        const i = Math.floor((vx - L.left) / plotW * m.n);
+        if (i < 0 || i >= m.n) return;
+        setAll(L.left + (i + 0.5) * (plotW / m.n), i);
+        readoutEl.textContent = chartReadout(m, i);
+    });
+    root.addEventListener("mouseleave", () => { setAll(0, null); readoutEl.textContent = chartReadout(m, m.lastIdx); });
+}
+
+// Buduje HTML wszystkich paneli dla jednego okna czasu. Zwraca { html, geom } (geom z panelu cen — dla warstwy rysowania własnego boxa).
+function stackPanelsHtml(m, opts, geom) {
+    const order = stackOrder(), full = stackFull && order.includes(stackFull) ? stackFull : null;
+    const fitW = opts.fit && opts.fit.w ? opts.fit.w : 900;
+    const W = full ? Math.max(260, Math.round(typeof document !== "undefined" ? document.documentElement.clientWidth : fitW)) : fitW;
+    const hs = full
+        ? Object.fromEntries(["price", "volume", "macd", "rs", "eps"].map(k => [k, k === full ? Math.max(160, (typeof window !== "undefined" ? window.innerHeight : 800) - 96) : 40]))
+        : stackHeights(opts.fit, !!opts.estimates);
+    const L = stackLayout(W, hs);
+    const base = { ...opts, simple: true, book: false, hideLabels: true, stackLayout: L, compact: opts.compact, fit: opts.fit || { w: W, h: 700 }, noBench: true };
+    const html = order.filter(k => !full || k === full).map((k, idx, arr) => {
+        const title = STACK_PANELS.find(p => p[0] === k)[1];
+        const o = { ...base, crop: { y0: k === "price" ? 0 : L[k].y - 6, h: L[k].h + (k === "price" ? L.price.y : 6), title }, svgId: k === "price" ? "chartSvg" : "chartSvg_" + k };
+        if (k === "price") o.geomOut = geom;
+        const svg = chartSvg(m, o);
+        const btns = full
+            ? `<button type="button" data-stack="full" title="Zamknij pełny ekran">✕</button>`
+            : `<button type="button" data-stack="up" title="Wyżej"${idx === 0 ? " disabled" : ""}>▲</button><button type="button" data-stack="down" title="Niżej"${idx === arr.length - 1 ? " disabled" : ""}>▼</button><button type="button" data-stack="full" title="Pełny ekran tego wykresu">⛶</button>`;
+        return `<section class="stack-panel${full ? " stack-full" : ""}" data-panel="${k}"><div class="stack-head"><b>${escapeHtml(title)}</b><span class="stack-btns">${btns}</span></div><div class="stack-body">${svg}</div></section>`;
+    }).join("");
+    return { html: `<div class="stack-root">${html}</div>`, L };
+}
+
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
     const full = buildChartModel(charts, ticker, stock, { pad: true, patterns: opts.patterns });
     if (!full) {
@@ -1311,7 +1427,8 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     const defN = defaultWindowLength(full, opts);
     const defEnd = full.n - (full.pad || 0) + (full.padDefault || 0);   // domyślnie widać tylko odrobinę pustego miejsca z prawej
     let win = clampWindow(opts.window, full.n, defN, defEnd);
-    container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie (próba z suwakiem na dole nie działała)
+    container.innerHTML = sliderHtml(full) + '<div id="chartPlot"></div>';
+    container.classList.toggle("scroll-y", !!opts.stack);   // układ z osobnymi panelami przewija się w pionie (suwak okna zostaje na górze)   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie (próba z suwakiem na dole nie działała)
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
         if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
@@ -1326,6 +1443,24 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
             m.focusPrev = darvasBoxes(full.c).filter(b => b.i1 < opts.focusBox.i0 && b.i1 - off >= 0 && b.i0 - off < m.n).map(b => ({ ...b, i0: b.i0 - off, i1: b.i1 - off }));
         }
         const geom = {};
+        if (opts.stack) {   // osobne wykresy: Cena, Wolumen, MACD, RS, EPS jeden pod drugim (kolejność i pełny ekran jak w TradingView)
+            const st = stackPanelsHtml(m, opts, geom);
+            plot.innerHTML = st.html;
+            const priceBody = plot.querySelector('.stack-panel[data-panel="price"] .stack-body');
+            { const sv = plot.querySelector("#chartSvg"), GL = geom.L || L; if (sv) sv.dataset.cgeom = [GL.width, GL.left, GL.right, m.n, m.off || 0].join(","); }
+            readoutEl.textContent = chartReadout(m, m.lastIdx);
+            attachStackHover(plot, m, readoutEl, st.L);
+            plot.querySelectorAll("[data-stack]").forEach(b => b.addEventListener("click", ev => {
+                const key = b.closest(".stack-panel").dataset.panel, act = b.dataset.stack;
+                if (act === "full") stackFull = stackFull === key ? null : key;
+                else saveStackOrder(moveInOrder(stackOrder(), key, act === "up" ? -1 : 1));
+                ev.stopPropagation();
+                draw();
+                if (act === "full") { const el = plot.querySelector(".stack-panel"); if (el && el.scrollIntoView) el.scrollIntoView({ block: "start" }); }
+            }));
+            if (opts.overlay && priceBody) opts.overlay({ plot: priceBody, m, geom, full, L: geom.L || L });
+            return;
+        }
         plot.innerHTML = chartSvg(m, { ...opts, geomOut: geom });
         { const sv = plot.querySelector("#chartSvg"), GL = geom.L || L; if (sv) sv.dataset.cgeom = [GL.width, GL.left, GL.right, m.n, m.off || 0].join(","); }   // geometria do rysowania własnego boxa (pointer → tydzień)
         readoutEl.textContent = chartReadout(m, m.lastIdx);
@@ -1618,6 +1753,6 @@ function fundMiniHtml(m) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict, emaSeries, macdSeries, macdWeeklyState, posMiniSvg,
+        stackOrder, moveInOrder, stackLayout, stackHeights, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict, emaSeries, macdSeries, macdWeeklyState, posMiniSvg,
     };
 }

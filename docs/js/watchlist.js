@@ -2054,7 +2054,7 @@ function drawChart() {
         const cell = body.querySelectorAll(".chart-cell")[i];
         const st = state.data.stocks.find(x => x.ticker === c.ticker) || null;
         const opts = {
-            log: chartLog, uid: "c" + i,
+            log: true, stack: true, uid: "c" + i,   // osobne wykresy (Cena / Wolumen / MACD / RS / EPS) jeden pod drugim, cena w skali logarytmicznej
             compact: chartCompact, wide: chartWide,
             hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus,
             focusBox: focus,
@@ -2068,7 +2068,7 @@ function drawChart() {
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
             hideAutoLines: annHide(c.ticker).lines, patterns: state.patterns,
             userCups: annStore[c.ticker] && annStore[c.ticker].cups ? annStore[c.ticker].cups.filter(u => u.start && u.end) : [],
-            book: chartBookOn, bookTitle: `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
+            book: false, bookTitle: `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
         const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
