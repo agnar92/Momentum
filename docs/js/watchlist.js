@@ -24,6 +24,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const COMPACT_MAX_WIDTH = 640;
 const SWIPE_MIN_PX = 60, SWIPE_MAX_MS = 700;   // przeciągnięcie po tytule wykresu = następna / poprzednia spółka
+const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";   // 1 = dzienny odpowiednik Dar-Card i wykresu słupkowego (przełącznik tylko w Filtry / Więcej)
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
 const CHART_DARVAS_KEY = "momentum_watchlist_chart_darvas";
@@ -1327,7 +1328,7 @@ function saveAcct(capital, riskPct, posPct, fx = state.acct.fx) {
 
 // Przypina box (góra / dół z zamknięć, data początku) do monitorowania albo odpina, gdy to ten sam box.
 function togglePinnedBox(ticker, top, bottom, i0) {
-    const weeks = currentChart && currentChart.charts.weeks || [];
+    const weeks = activeCharts() ? activeCharts().weeks || [] : [];
     const start = weeks[Math.max(0, Math.min(weeks.length - 1, +i0))];
     if (!start || !(top > bottom)) return;
     const cur = state.boxes[ticker];
@@ -1873,7 +1874,8 @@ function initAnnotationIO() {
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
 
 let chartsPromise = null;
-let chartWinLen = { w: null };   // długość okna suwaka (tygodnie) zapamiętana dla wszystkich spółek
+let chartDailyOn = false;   // dzienny widok wykresów (przełącznik w Filtry → Wykresy dzienne i w menu „Więcej”, nie na samym wykresie)
+let chartWinLen = { w: null, d: null };   // długość okna suwaka (tygodnie) zapamiętana dla wszystkich spółek
 let chartWindows = [];      // okna suwaków {n, end} po jednym na wykres w siatce (puste = domyślne); zerowane przy nowej spółce / zmianie układu
 let chartEstOn = false;      // estymaty analityków na wykresie (cena celu + rewizje konsensusu EPS), przycisk „Estymaty”
 let estimatesPromise = null;
@@ -2003,14 +2005,31 @@ function chartStats(s) {
 
 // Zmiana DŁUGOŚCI okna suwaka jest zapamiętywana (localStorage) dla wszystkich spółek; samo przesuwanie okna nie.
 function rememberWindowLength(n) {
-    if (chartWinLen.w === n) return;
-    chartWinLen.w = n;
+    const k = chartDailyOn ? "d" : "w";
+    if (chartWinLen[k] === n) return;
+    chartWinLen[k] = n;
     try { localStorage.setItem(CHART_WINLEN_KEY, JSON.stringify(chartWinLen)); } catch (e) { /* brak localStorage */ }
 }
 
 // Jeden wykres tygodniowy (jak w książce O'Neila); jedna komórka = jedyna edytowalna.
 function chartCells() {
     return [{ ticker: currentChart.ticker }];
+}
+
+// Dane wykresu w aktualnym widoku: tygodniowe (charts.json) albo dzienny odpowiednik (charts.daily), gdy włączony i dostępny.
+function activeCharts() {
+    if (!currentChart) return null;
+    return (chartDailyOn && typeof dailyChartsView === "function" && dailyChartsView(currentChart.charts)) || currentChart.charts;
+}
+
+function setChartDaily(on) {
+    chartDailyOn = !!on;
+    try { localStorage.setItem(CHART_DAILY_KEY, chartDailyOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+    const cb = document.getElementById("chartDailyOn");
+    if (cb) cb.checked = chartDailyOn;
+    boxFocus = null; chartWindows = [];   // indeksy boxa i okno dotyczą jednej osi czasu
+    if (currentChart) drawChart();
+    if (chartDailyOn && currentChart && !currentChart.charts.daily) showToast("Dane dzienne pojawią się po najbliższym odświeżeniu danych — na razie wykres tygodniowy.", { type: "info" });
 }
 
 function posStockPin() { return currentChart ? state.data.stocks.find(x => x.ticker === currentChart.ticker) : null; }
@@ -2022,7 +2041,7 @@ function drawChart() {
     const activeIdx = 0;   // komórka z fokusem = edytowalna
     const focus = boxFocus && boxFocus.ticker === currentChart.ticker ? boxFocus : null;
     const pinned = state.boxes[currentChart.ticker] || null;   // przypięty box: rysowany zawsze (też po wyjściu z boxa i strefy), do monitorowania
-    const pinIdx = pinned ? dateToIndex(currentChart.charts.weeks || [], pinned.start) : -1;
+    const pinIdx = pinned ? dateToIndex(activeCharts().weeks || [], pinned.start) : -1;
     const pin = pinned && pinIdx >= 0 && !(focus && Math.abs(focus.top - pinned.top) < 0.005 && Math.abs(focus.bottom - pinned.bottom) < 0.005)
         ? { top: pinned.top, bottom: pinned.bottom, i0: pinIdx, i1: 1e5 } : null;
     const body = document.getElementById("chartBody");
@@ -2062,7 +2081,7 @@ function drawChart() {
             pinFlash: Date.now() < pinFlashUntil,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
-            window: chartWindows[i], windowLen: chartWinLen.w,
+            window: chartWindows[i], windowLen: chartDailyOn ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
@@ -2071,7 +2090,7 @@ function drawChart() {
             book: chartBookOn, bookTitle: `${c.ticker}${st && st.company ? " — " + st.company : ""}`,
             overlay: oc => annOverlay({ ...oc, ticker: c.ticker, stock: st, readonly: i !== activeIdx, uid: "c" + i }),
         };
-        const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), currentChart.charts, c.ticker, st, opts);
+        const model = renderStockChart(cell.querySelector(".cell-body"), cell.querySelector(".cell-readout"), activeCharts(), c.ticker, st, opts);
         if (i === activeIdx) primary = model;
     });
     document.getElementById("chartPattern").textContent = primary && state.patterns ? patternExplain(primary) : "";
@@ -2149,7 +2168,9 @@ function initBottomNav() {
     document.getElementById("navMore").addEventListener("click", () => {
         const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["BOXES", "📦", "Boxy"], ["QM", "🎯", "Qullamaggie"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]];
         const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
+            <button type="button" id="navDaily"><span>📅</span>Wykresy: ${chartDailyOn ? "dzienne ✓ (przełącz na tygodniowe)" : "tygodniowe (przełącz na dzienne)"}</button>
             <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
+        body.querySelector("#navDaily").addEventListener("click", () => { closeSheet(); setChartDaily(!chartDailyOn); });
         body.querySelectorAll("button[data-tab]").forEach(b => b.addEventListener("click", () => { closeSheet(); showTab(b.dataset.tab); }));
     });
 }
@@ -2184,11 +2205,14 @@ function initChartModal() {
         chartDarvasOn = true;   // Dar-Card jest jedynym widokiem (świece tylko po kliknięciu boxa)
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved && Number.isFinite(saved.w) && saved.w > 0) chartWinLen.w = saved.w;
+        if (saved && Number.isFinite(saved.d) && saved.d > 0) chartWinLen.d = saved.d;
+        chartDailyOn = localStorage.getItem(CHART_DAILY_KEY) === "1";
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
     // Jedyny wykres to tygodniowy w stylu książki O'Neila (user: „usuń wszystko z wykresami dziennymi”).
     chartBookOn = true; chartLog = false;
     updateLogButton();
+    { const cb = document.getElementById("chartDailyOn"); if (cb) { cb.checked = chartDailyOn; cb.addEventListener("change", () => setChartDaily(cb.checked)); } }
     document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });
     // przesunięcie palca w poziomie: w lewo = następna spółka z listy, w prawo = poprzednia (zastąpiło strzałki ◀ ▶);
     // działa na tytule, linii gotowości i na wykresie, ale nie na suwaku (ma własne przeciąganie) ani w trybie rysowania
