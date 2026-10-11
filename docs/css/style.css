@@ -1031,3 +1031,73 @@ body.box-add .wl-chart-body svg#chartSvg { touch-action: none; cursor: crosshair
 .box-pick button { text-align: left; min-height: 40px; padding: 6px 10px; border-radius: 8px; border: 1px solid #2c3140; background: #232733; color: #e8eaed; font-size: 13px; }
 .box-pick button:active { background: #2f3646; border-color: #ffd54a; }
 .box-mkpos { margin: 6px 0 4px 8px; min-height: 40px; }
+
+/* ============================================================
+   Styl „retro / TC2000” wzorowany na Momentum Desktop (Tkinter): ciemne tło #0b0d10, czcionka Consolas,
+   płaskie kontrolki bez zaokrągleń, gęsta lista z naprzemiennymi wierszami i granatowym zaznaczeniem.
+   Tylko wygląd — żadnych zmian w układzie ani funkcjach. Ten blok MUSI być ostatni w pliku.
+   ============================================================ */
+:root {
+    --bg: #0b0d10;
+    --panel: #12161b;
+    --panel-alt: #1b2027;
+    --border: #262e38;
+    --green: #2f9e5f;
+    --green-bright: #3ddc84;
+    --red: #ff5c5c;
+    --text: #c9d1d9;
+    --text-dim: #8b95a3;
+    --text-faint: #6b7684;
+    --sel: #1f3a5f;
+    --row-odd: #10141a;
+    --font: Consolas, "Cascadia Mono", "SF Mono", Menlo, "DejaVu Sans Mono", "Liberation Mono", monospace;
+}
+body, button, input, select, textarea { font-family: var(--font); }
+button, input, select, textarea { letter-spacing: 0; }
+
+/* płaskie kontrolki */
+.btn, .add-row-btn, .remove-row-btn, .chip-btn, .drawer-tab, button, input, select, textarea,
+.sheet, .sheet-grid input, .box-pick, .box-pick button, .box-select-bar button, .card-sort select {
+    border-radius: 2px;
+}
+.sheet { border-radius: 0; box-shadow: 0 -8px 24px rgba(0,0,0,.7); }
+.sheet-grip { border-radius: 0; }
+.btn, .add-row-btn, .remove-row-btn { background: #222a33; border-color: #333d49; color: var(--text); font-weight: 400; transition: none; }
+.btn:hover, .add-row-btn:hover { background: #2b3540; border-color: #4a5766; color: #fff; }
+input, select, textarea { background: #0f1318; border-color: #333d49; color: #fff; }
+input:focus, select:focus, textarea:focus { outline: 1px solid var(--sel); border-color: #4a78b5; }
+
+/* pasek górny i zakładki */
+.topbar { height: 40px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.topbar .brand { color: var(--green-bright); font-weight: 700; letter-spacing: 0; text-transform: uppercase; font-size: 13px; }
+.topbar nav a { border-radius: 0; transition: none; }
+.drawer-header { background: var(--panel); border-bottom: 1px solid var(--border); }
+.drawer-tabs { gap: 2px; }
+.drawer-tab { background: #1b2027; border: 1px solid #262e38; color: var(--text-dim); font-weight: 400; transition: none; }
+.drawer-tab:hover { background: #27303a; color: #fff; }
+.drawer-tab.active { background: var(--sel); border-color: #4a78b5; color: #fff; font-weight: 700; }
+.drawer-header h2 { text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
+
+/* lista: gęsta, naprzemienne wiersze, granatowe zaznaczenie */
+table.momentum-table { font-size: 12px; }
+table.momentum-table thead th { background: #1b2027; color: var(--text); font-weight: 700; border-bottom: 1px solid #333d49; }
+table.momentum-table thead th:hover { background: #27303a; color: #fff; }
+table.momentum-table tbody tr { border-bottom: 0; }
+table.momentum-table tbody tr:nth-child(odd) { background: var(--row-odd); }
+table.momentum-table tbody tr:hover { background: #18202a; }
+table.momentum-table td { padding: 5px 8px; }
+table.momentum-table tbody tr.row-selected { background: var(--sel); box-shadow: none; color: #fff; }
+td.ticker-cell { color: #fff; }
+
+/* chipy / znaczniki / okna pomocnicze */
+.strat-chip, .cs-cell, .chip, [class^="rt-"], [class*=" rt-"] { border-radius: 2px; }
+.box-pick, .box-sec, details { border-radius: 2px; }
+.box-pick { background: var(--panel); border-color: #333d49; box-shadow: 0 4px 16px rgba(0,0,0,.7); }
+.box-pick button { background: #222a33; border-color: #333d49; color: var(--text); }
+.box-select-bar button { border-radius: 2px; }
+.positive { color: var(--green-bright); }
+.negative { color: var(--red); }
+
+/* paski przewijania w stylu klasycznym */
+* { scrollbar-width: thin; scrollbar-color: #333d49 var(--bg); }
+@media (prefers-reduced-motion: no-preference) { .btn, .drawer-tab, table.momentum-table tbody tr { transition: none; } }
