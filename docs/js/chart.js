@@ -613,7 +613,7 @@ function chartSvg(m, opts = {}) {
     const addLabel = (text, xx, yy, o = {}) => labels.push({ text: String(text), x: xx, y: yy, anchor: o.anchor || "middle", size: o.size || fs(10), fill: o.fill || CHART_COLORS.textStrong, bold: !!o.bold, prio: o.prio === undefined ? 1 : o.prio, title: o.title || "" });
     const reserveLabel = (text, xx, yy, anchor, size, bold) => fixedLabels.push(labelBox({ text: String(text), anchor, size, bold }, xx, yy));
     const hasMarks = m.eps.length > 0 || !!m.epsNext;
-    const marksH = hasMarks && !simple ? fs(opts.compact ? 28 : 32) : 0;
+    const marksH = hasMarks ? fs(simple ? 38 : opts.compact ? 28 : 32) : 0;
     const P = { y: L.price.y, h: L.price.h - marksH };
     const marks = { y: P.y + P.h, h: marksH };
     const est = opts.estimates || null;
@@ -646,7 +646,10 @@ function chartSvg(m, opts = {}) {
     const pMax0 = useLog ? pExt[1] * 1.04 : pExt[1] + pad;
     const room = spxBand / (1 - spxBand);   // górny pas na S&P: ceny zajmują dolne (1 − spxBand) panelu
     const pMax = useLog ? pMax0 * Math.pow(pMax0 / pMin, room) : pMax0 + (pMax0 - pMin) * room;
-    const yP = useLog ? makeLogScale(pMin, pMax, P.y, P.h) : makeYScale(pMin, pMax, P.y, P.h);
+    const volFrac = opts.volOverlay ? 0.17 : 0;   // TradingView: wolumen jako półprzezroczyste słupki na dole panelu cen
+    const VOL = opts.volOverlay ? { y: P.y + P.h * (1 - volFrac), h: P.h * volFrac } : L.volume;
+    const Pv = { y: P.y, h: P.h * (1 - volFrac) - (opts.volOverlay ? 6 : 0) };
+    const yP = useLog ? makeLogScale(pMin, pMax, Pv.y, Pv.h) : makeYScale(pMin, pMax, Pv.y, Pv.h);
     (useLog ? (bookOn ? bookLogTicks(pMin, Math.min(pMax, pMax0 * 1.02), Math.max(6, Math.round(P.h / fs(27)))) : logTicks(pMin, pMax)) : niceTicks(pMin, pMax, 6)).forEach(t => {   // w trybie książki bez podpisów w pasie S&P nad ceną
         parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${yP(t)}" y2="${yP(t)}" stroke="${CHART_COLORS.grid}" stroke-width="0.5"/>`);
         if (yP(t) > P.y + fs(9)) {   // nie na etykiecie osi S&P tuż nad panelem
@@ -922,9 +925,9 @@ function chartSvg(m, opts = {}) {
         m.eps.forEach(q => {
             const cx = x(q.week), g = Number.isFinite(q.g);
             parts.push(arrow(cx, CHART_COLORS.textStrong, "none", `Wyniki ${q.d}: EPS ${q.e}${g ? ` (${q.g >= 0 ? "+" : ""}${q.g}% r/r)` : ""}`));
-            const t1 = (opts.compact || bookOn) ? `EPS ${q.e}` : "EPS", w1 = t1.length * cw;
+            const t1 = (opts.compact || bookOn || simple) ? `EPS ${q.e}` : "EPS", w1 = t1.length * cw;
             if (cx - w1 / 2 >= edgeEps + 4) {
-                parts.push(txt(cx, marks.y + fs(8) + fs(9) + 4, t1, (opts.compact || bookOn) ? CHART_COLORS.textStrong : CHART_COLORS.text, !!(opts.compact || bookOn)));
+                parts.push(txt(cx, marks.y + fs(8) + fs(9) + 4, t1, (opts.compact || bookOn || simple) ? CHART_COLORS.textStrong : CHART_COLORS.text, !!(opts.compact || bookOn)));
                 edgeEps = cx + w1 / 2;
             }
             if (g) {
@@ -964,22 +967,22 @@ function chartSvg(m, opts = {}) {
 
     // --- 3. wolumen
     const boIdx = m.trend && m.trend.breakout ? weekIndexForDate(m.weeks, m.trend.breakout.date) : -1;
-    parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${L.volume.y - 4}" y2="${L.volume.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
+    if (!opts.volOverlay) parts.push(`<line x1="${L.left}" x2="${L.width - L.right}" y1="${VOL.y - 4}" y2="${VOL.y - 4}" stroke="${CHART_COLORS.grid}"/>`);
     for (let i = 0; i < m.n; i++) {
         if (!Number.isFinite(m.v[i])) continue;
         const col = barColor(m, i);
-        const h = (m.v[i] / vMax) * (L.volume.h - fs(11) - 4);
+        const h = (m.v[i] / vMax) * (VOL.h - fs(11) - 4);
         const isBreak = boIdx === i;
-        parts.push(`<rect x="${x(i) - barHalf}" y="${L.volume.y + L.volume.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="0.75"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);
+        parts.push(`<rect x="${x(i) - barHalf}" y="${VOL.y + VOL.h - h}" width="${barHalf * 2}" height="${h}" fill="${col}" opacity="${opts.volOverlay ? 0.4 : 0.75}"${isBreak ? ` stroke="${CHART_COLORS.res}" stroke-width="1.6"` : ""}/>`);
     }
-    volumeSpikes(m.v, m.volAvg, opts.compact ? 2 : 5, 1.5, Math.max(2, Math.round(m.n / (opts.compact ? 8 : 25)))).forEach(sp => {
-        const h = (sp.val / vMax) * (L.volume.h - fs(11) - 4);
-        if (!opts.hideLabels && x(sp.i) < L.left + fs(235) && L.volume.h - h - 2 < fs(16)) return;   // nie na podpisie panelu wolumenu
-        parts.push(`<text x="${x(sp.i)}" y="${L.volume.y + L.volume.h - h - 2}" font-size="${fs(9)}" fill="${CHART_COLORS.textStrong}" text-anchor="middle" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">${fmtVol(sp.val)}</text>`);
+    if (!opts.volOverlay) volumeSpikes(m.v, m.volAvg, opts.compact ? 2 : 5, 1.5, Math.max(2, Math.round(m.n / (opts.compact ? 8 : 25)))).forEach(sp => {
+        const h = (sp.val / vMax) * (VOL.h - fs(11) - 4);
+        if (!opts.hideLabels && x(sp.i) < L.left + fs(235) && VOL.h - h - 2 < fs(16)) return;   // nie na podpisie panelu wolumenu
+        parts.push(`<text x="${x(sp.i)}" y="${VOL.y + VOL.h - h - 2}" font-size="${fs(9)}" fill="${CHART_COLORS.textStrong}" text-anchor="middle" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">${fmtVol(sp.val)}</text>`);
     });
-    parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), L.volume.y + L.volume.h - Math.min(1, v / vMax) * (L.volume.h - fs(11) - 4)] : null), CHART_COLORS.volAvg, 1.3));
-    if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${L.volume.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Wolumen tygodniowy · średnia 10 tyg.</text>`);
-    parts.push(`<text x="${L.width - L.right + 6}" y="${L.volume.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
+    parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), VOL.y + VOL.h - Math.min(1, v / vMax) * (VOL.h - fs(11) - 4)] : null), CHART_COLORS.volAvg, 1.3));
+    if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${VOL.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Wolumen tygodniowy · średnia 10 tyg.</text>`);
+    if (!opts.volOverlay) parts.push(`<text x="${L.width - L.right + 6}" y="${VOL.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
 
     // --- 3b. MACD (12, 26, 9) tygodniowy: histogram + linia MACD + sygnał, liczone na pełnej historii (nie na oknie), ▼ przy przecięciu sygnału w dół
     if (L.macd && L.macd.h >= 30 && m.macd) {
@@ -1327,7 +1330,7 @@ function attachChartGestures(plot, total, getWin, setWin, enabled) {
 // ---------- osobne wykresy jeden pod drugim (jak w TradingView): Cena, Wolumen, MACD, RS, EPS ----------
 // Każdy panel to osobna sekcja z własnym nagłówkiem (▲ ▼ = zmiana kolejności, ⛶ = pełny ekran). Rysowanie: jedno wspólne
 // chartSvg z układem "stackLayout" i wycinkiem viewBox na panel (opts.crop), więc skale i okno czasu są wszędzie te same.
-const STACK_PANELS = [["price", "Cena"], ["volume", "Wolumen"], ["macd", "MACD (12, 26, 9) tygodniowy"], ["rs", "Siła względna (cena / S&P 500)"], ["eps", "Zyski (EPS)"]];
+const STACK_PANELS = [["price", "Cena · wolumen · EPS"], ["macd", "MACD (12, 26, 9) tygodniowy"], ["rs", "Siła względna (cena / S&P 500)"]];
 const STACK_ORDER_KEY = "momentum_watchlist_chart_panels";
 let stackFull = null;   // klucz panelu na pełnym ekranie (albo null)
 
@@ -1354,11 +1357,13 @@ function stackLayout(w, hs) {
     L.bench = { y: 0, h: 0 };
     L.legend = { y: 0, h: 0 };
     let y = 6;
-    ["price", "volume", "macd", "rs", "eps"].forEach(k => {
+    ["price", "macd", "rs"].forEach(k => {
         const h = Math.max(0, Math.round(hs[k] || 0));
         L[k] = { y, h };
         y += h + 64;   // odstęp > pasek osi kopiowany pod każdym panelem (crop), żeby sąsiednie panele nie wchodziły w kadr
     });
+    L.volume = { y: 0, h: 0 };   // wolumen i znaczniki EPS są częścią panelu cen (jak w TradingView)
+    L.eps = { y, h: 0 };
     L.axisY = y + 12;
     L.height = y + 24;
     return L;
@@ -1366,7 +1371,7 @@ function stackLayout(w, hs) {
 
 function stackHeights(fit, estimates) {
     const h = fit && fit.h ? fit.h : 700;
-    return { price: Math.max(300, Math.round(h * 0.7)), volume: 150, macd: 150, rs: 140, eps: estimates ? 190 : 78 };
+    return { price: Math.max(320, Math.round(h * 0.78)), macd: 150, rs: 140 };
 }
 
 function attachStackHover(root, m, readoutEl, L) {
@@ -1399,10 +1404,10 @@ function stackPanelsHtml(m, opts, geom) {
     const fitW = opts.fit && opts.fit.w ? opts.fit.w : 900;
     const W = full ? Math.max(260, Math.round(typeof document !== "undefined" ? document.documentElement.clientWidth : fitW)) : fitW;
     const hs = full
-        ? Object.fromEntries(["price", "volume", "macd", "rs", "eps"].map(k => [k, k === full ? Math.max(160, (typeof window !== "undefined" ? window.innerHeight : 800) - 96) : 40]))
+        ? Object.fromEntries(["price", "macd", "rs"].map(k => [k, k === full ? Math.max(160, (typeof window !== "undefined" ? window.innerHeight : 800) - 96) : 40]))
         : stackHeights(opts.fit, !!opts.estimates);
     const L = stackLayout(W, hs);
-    const base = { ...opts, simple: true, book: false, hideLabels: true, stackLayout: L, compact: opts.compact, fit: opts.fit || { w: W, h: 700 }, noBench: true };
+    const base = { ...opts, simple: true, volOverlay: true, book: false, hideLabels: true, stackLayout: L, compact: opts.compact, fit: opts.fit || { w: W, h: 700 }, noBench: true };
     const html = order.filter(k => !full || k === full).map((k, idx, arr) => {
         const title = STACK_PANELS.find(p => p[0] === k)[1];
         const o = { ...base, crop: { y0: k === "price" ? 0 : L[k].y - 6, h: L[k].h + (k === "price" ? L.price.y : 6), title, noAxis: idx < arr.length - 1 }, svgId: k === "price" ? "chartSvg" : "chartSvg_" + k };
