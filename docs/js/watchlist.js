@@ -2054,7 +2054,7 @@ function drawChart() {
         const cell = body.querySelectorAll(".chart-cell")[i];
         const st = state.data.stocks.find(x => x.ticker === c.ticker) || null;
         const opts = {
-            log: chartLog, uid: "c" + i,
+            log: chartLog, stack: true, uid: "c" + i,   // osobne wykresy (Cena / Wolumen / MACD / RS / EPS) jeden pod drugim, cena w skali logarytmicznej
             compact: chartCompact, wide: chartWide,
             hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus,
             focusBox: focus,

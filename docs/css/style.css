@@ -1079,15 +1079,15 @@ input:focus, select:focus, textarea:focus { outline: 1px solid var(--sel); borde
 .drawer-header h2 { text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
 
 /* lista: gęsta, naprzemienne wiersze, granatowe zaznaczenie */
-table.momentum-table { font-size: 12px; }
-table.momentum-table thead th { background: #1b2027; color: var(--text); font-weight: 700; border-bottom: 1px solid #333d49; }
-table.momentum-table thead th:hover { background: #27303a; color: #fff; }
-table.momentum-table tbody tr { border-bottom: 0; }
-table.momentum-table tbody tr:nth-child(odd) { background: var(--row-odd); }
-table.momentum-table tbody tr:hover { background: #18202a; }
-table.momentum-table td { padding: 5px 8px; }
-table.momentum-table tbody tr.row-selected { background: var(--sel); box-shadow: none; color: #fff; }
-td.ticker-cell { color: #fff; }
+body.split table.momentum-table { font-size: 12px; }
+body.split table.momentum-table thead th { background: #1b2027; color: var(--text); font-weight: 700; border-bottom: 1px solid #333d49; }
+body.split table.momentum-table thead th:hover { background: #27303a; color: #fff; }
+body.split table.momentum-table tbody tr { border-bottom: 0; }
+body.split table.momentum-table tbody tr:nth-child(odd) { background: var(--row-odd); }
+body.split table.momentum-table tbody tr:hover { background: #18202a; }
+body.split table.momentum-table td { padding: 5px 8px; }
+body.split table.momentum-table tbody tr.row-selected { background: var(--sel); box-shadow: none; color: #fff; }
+body.split td.ticker-cell { color: #fff; }
 
 /* chipy / znaczniki / okna pomocnicze */
 .strat-chip, .cs-cell, .chip, [class^="rt-"], [class*=" rt-"] { border-radius: 2px; }
@@ -1116,18 +1116,42 @@ body { font-size: 14px; }
 .drawer-tabs { gap: 4px; }
 
 /* lista: ~28 px wiersze, bez poziomych linii, liczby po prawej, nagłówek wyśrodkowany i pogrubiony */
-.table-scroll { padding: 0 0 8px; }
-table.momentum-table { font-size: 14px; }
-table.momentum-table thead th { padding: 8px 10px; font-size: 13px; background: #1b2027; border: 0; text-transform: none; letter-spacing: 0; white-space: nowrap; }
-table.momentum-table td { padding: 4px 10px; height: 28px; line-height: 20px; color: var(--text); }
-table.momentum-table tbody tr:nth-child(odd) { background: var(--row-odd); }
-table.momentum-table tbody tr:nth-child(even) { background: var(--bg); }
-table.momentum-table tbody tr.row-selected { background: var(--sel); }
-table.momentum-table td.ticker-cell { font-weight: 400; color: #fff; }
-table.momentum-table td:is(.c-price, .c-cap, .c-sma50, .c-sma200, .c-high52, .c-epsThis, .c-epsNext, .c-eps5, .c-epsNext5, .c-rs, .c-epsr, .c-comp, .c-grp, .c-toPivot, .c-pivot),
-table.momentum-table th:is([data-key="price"], [data-key="market_cap"], [data-key="pct_above_sma50"], [data-key="pct_above_sma200"], [data-key="pct_from_high_52w"], [data-key="eps_this_y"], [data-key="eps_next_y"], [data-key="eps_past_5y"], [data-key="eps_next_5y"], [data-key="rs_rating"], [data-key="eps_rating"], [data-key="composite_rating"], [data-key="industry_rating"], [data-key="pct_to_pivot"], [data-key="pivot"]) { text-align: right; }
+body.split .table-scroll { padding: 0 0 8px; }
+body.split table.momentum-table { font-size: 14px; }
+body.split table.momentum-table thead th { padding: 8px 10px; font-size: 13px; background: #1b2027; border: 0; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+body.split table.momentum-table td { padding: 4px 10px; height: 28px; line-height: 20px; color: var(--text); }
+body.split table.momentum-table tbody tr:nth-child(odd) { background: var(--row-odd); }
+body.split table.momentum-table tbody tr:nth-child(even) { background: var(--bg); }
+body.split table.momentum-table tbody tr.row-selected { background: var(--sel); }
+body.split table.momentum-table td.ticker-cell { font-weight: 400; color: #fff; }
+body.split table.momentum-table td:is(.c-price, .c-cap, .c-sma50, .c-sma200, .c-high52, .c-epsThis, .c-epsNext, .c-eps5, .c-epsNext5, .c-rs, .c-epsr, .c-comp, .c-grp, .c-toPivot, .c-pivot),
+body.split table.momentum-table th:is([data-key="price"], [data-key="market_cap"], [data-key="pct_above_sma50"], [data-key="pct_above_sma200"], [data-key="pct_from_high_52w"], [data-key="eps_this_y"], [data-key="eps_next_y"], [data-key="eps_past_5y"], [data-key="eps_next_5y"], [data-key="rs_rating"], [data-key="eps_rating"], [data-key="composite_rating"], [data-key="industry_rating"], [data-key="pct_to_pivot"], [data-key="pivot"]) { text-align: right; }
 
 /* wykres: papier jak w aplikacji desktopowej */
 .wl-chart-box { background: var(--bg); }
 .wl-chart-head { background: var(--panel); border-bottom: 1px solid var(--border); }
 .chart-modal-title, .wl-chart-head h3 { font-weight: 700; color: #fff; }
+
+/* --- Osobne wykresy jeden pod drugim (jak w TradingView): bez pasków nagłówków — mały tytuł w rogu, przyciski dopiero po najechaniu / dotknięciu --- */
+.stack-root { display: flex; flex-direction: column; gap: 0; padding-bottom: 24px; }
+.stack-panel { background: var(--bg); border-top: 1px solid var(--border); }
+.stack-panel:first-child { border-top: 0; }
+.stack-body { position: relative; }
+.stack-body svg { display: block; width: 100%; height: auto; }
+.stack-title { position: absolute; top: 4px; left: 8px; font-size: 11px; color: var(--text-dim); pointer-events: none; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg); }
+.stack-btns { position: absolute; top: 3px; right: 58px; display: inline-flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.stack-panel:hover .stack-btns, .stack-panel.stack-active .stack-btns, .stack-panel.stack-full .stack-btns { opacity: 1; }
+.stack-btns button { width: 24px; height: 24px; padding: 0; line-height: 1; font-size: 11px; background: rgba(18, 22, 27, .85); border: 1px solid #333d49; color: var(--text); border-radius: 2px; cursor: pointer; }
+.stack-btns button:hover { border-color: #9aa4b0; color: #fff; }
+.stack-btns button:disabled { opacity: .3; cursor: default; }
+.stack-panel.stack-full { position: fixed; inset: 0; z-index: 3000; background: var(--bg); padding-top: env(safe-area-inset-top, 0px); border: 0; }
+.stack-panel.stack-full .stack-body { height: 100%; overflow: auto; }
+@media (pointer: coarse) { .stack-btns button { width: 34px; height: 34px; font-size: 13px; } }
+
+/* pasek warstw wykresu słupkowego (jak wskaźniki w TradingView): małe przełączniki, domyślnie wszystko dodatkowe wyłączone */
+.layer-bar { display: flex; gap: 4px; padding: 4px 6px; overflow-x: auto; scrollbar-width: none; background: var(--bg); }
+.layer-bar::-webkit-scrollbar { display: none; }
+.layer-chip { flex: 0 0 auto; padding: 3px 10px; font: inherit; font-size: 11px; line-height: 1.4; color: var(--text-dim); background: transparent; border: 1px solid #333d49; border-radius: 12px; cursor: pointer; white-space: nowrap; }
+.layer-chip:hover { color: #fff; border-color: #6b7684; }
+.layer-chip.on { color: #0b0d10; background: #c9d1d9; border-color: #c9d1d9; font-weight: 700; }
+@media (pointer: coarse) { .layer-chip { padding: 6px 12px; font-size: 12px; } }
