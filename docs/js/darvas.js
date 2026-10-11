@@ -244,14 +244,16 @@ function darvasSvg(full, win, opts = {}) {
     if (shown.length < 2) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na pudełka Darvasa.</text></svg>`;
     const pin = opts.pinBox && opts.pinBox.top > opts.pinBox.bottom ? opts.pinBox : null;   // przypięty (monitorowany) box: złota obwódka do prawej krawędzi, także po wyjściu ze strefy
     const lo0 = Math.min(...shown, ...darvasPatternBoxes(full).map(p => p.low * (1 - PATTERN_ZONE_PCT / 100)), ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100)), ...(pin ? [pin.bottom * (1 - DARVAS_STOP_PCT / 100)] : [])), hi0 = Math.max(...shown, ...boxes.map(b => b.top), ...darvasPatternBoxes(full).map(p => p.top), ...(pin ? [pin.top] : [])), pad = (hi0 - lo0) * 0.06 || 1;
-    const lo = lo0 - pad, hi = hi0 + pad;
-    const y = v => L.top + ph * (1 - (v - lo) / (hi - lo));
+    // skala LOGARYTMICZNA (równe % to równa wysokość): przy dużym zakresie cen stare boxy nie są sprasowane, a strefa zagrożenia 5 % ma stałą wysokość
+    const logSpan = Math.log(hi0 / lo0) || 0.1;
+    const lo = lo0 > 0 ? lo0 * Math.exp(-0.06 * logSpan) : lo0 - pad, hi = lo0 > 0 ? hi0 * Math.exp(0.06 * logSpan) : hi0 + pad;
+    const y = v => L.top + ph * (1 - Math.log(v / lo) / Math.log(hi / lo));
     const out = [];
     out.push(`<defs><pattern id="darvasHatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#ffffff" fill-opacity="0.22"/><line x1="0" y1="0" x2="0" y2="5" stroke="#ffffff" stroke-opacity="0.8" stroke-width="2"/></pattern></defs>`);
     // „papier w linie” jak na Dar-Card: poziome linie co tyle, ile wynosi ~1/80 zakresu; grubsze na okrągłych poziomach
-    const ticks = niceTicks(lo, hi, compact ? 6 : 8);
-    const step = (hi - lo) / 80;
-    for (let v = Math.ceil(lo / step) * step; v < hi; v += step) out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#1d212b" stroke-width="1"/>`);
+    const ticks = logTicks(lo, hi).length >= 3 ? logTicks(lo, hi) : niceTicks(lo, hi, compact ? 6 : 8);
+    const qStep = Math.exp(Math.log(hi / lo) / 80);   // ~1/80 zakresu w skali log.
+    for (let v = lo * qStep; v < hi; v *= qStep) out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#1d212b" stroke-width="1"/>`);
     ticks.forEach(t => {
         out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="#2c3140" stroke-width="1.2"/>`);
         out.push(`<text x="${W - L.right + 4}" y="${(y(t) + 3.5).toFixed(1)}" font-size="${fs(9.5)}" fill="#8a8f9c">${t}</text>`);
@@ -470,8 +472,8 @@ function attachDarvasHover(container, full, readoutEl) {
     const g = svg.dataset.geom.split(",").map(Number);
     if (g.length < 10 || g.some(v => !Number.isFinite(v))) return;
     const [, H, , , top, bottom, , , lo, hi] = g;
-    const ph = H - top - bottom, step = (hi - lo) / 80;
-    const yOf = v => top + ph * (1 - (v - lo) / (hi - lo));
+    const ph = H - top - bottom, qStep = Math.exp(Math.log(hi / lo) / 80);
+    const yOf = v => top + ph * (1 - Math.log(v / lo) / Math.log(hi / lo));
     const lines = [0, 1, 2].map(k => svg.querySelector("#dHl" + k)), tags = [0, 1, 2].map(k => svg.querySelector("#dHt" + k));
     const cols = ["#4ee08a", "#ffffff", "#ff6b6b"];
     let base = null, shown = null, selected = null;
@@ -490,7 +492,7 @@ function attachDarvasHover(container, full, readoutEl) {
         if (base === null && readoutEl) base = readoutEl.textContent;
         const lv = [t, bt, bt * (1 - DARVAS_STOP_PCT / 100)];
         lv.forEach((v, k) => {
-            const ys = yOf(step > 0 ? Math.round(v / step) * step : v);   // najbliższa linia podziałki
+            const ys = yOf(qStep > 1 ? lo * Math.pow(qStep, Math.round(Math.log(v / lo) / Math.log(qStep))) : v);   // najbliższa linia podziałki
             lines[k].setAttribute("y1", ys.toFixed(1)); lines[k].setAttribute("y2", ys.toFixed(1)); lines[k].setAttribute("stroke", cols[k]); lines[k].setAttribute("opacity", "0.95");
             const rect = tags[k].querySelector("rect"), txt = tags[k].querySelector("text"), th = +rect.getAttribute("height");
             rect.setAttribute("y", (ys - th / 2).toFixed(1)); rect.setAttribute("fill", cols[k]);
