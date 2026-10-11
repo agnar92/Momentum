@@ -630,7 +630,7 @@ function chartSvg(m, opts = {}) {
     const lastC = m.c[m.lastIdx];
     const pivotNear = pivotPx !== null && Number.isFinite(lastC) && Math.abs(pivotPx / lastC - 1) <= 0.15;
     const focusExtra = [opts.pinBox, opts.focusBox].filter(Boolean).flatMap(b => [[b.top], [b.bottom], [b.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]]);
-    const pivotExtra = [...(pivotNear ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : []), ...focusExtra];
+    const pivotExtra = [...(pivotNear && layer("pivot") ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : []), ...focusExtra];
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
     const spxVals = m.spx ? m.spx.filter(Number.isFinite) : [];
@@ -736,7 +736,7 @@ function chartSvg(m, opts = {}) {
     }
     // pivot (zielona linia przerywana) + zielona strefa zakupu (pivot … +5 %) + czerwona strefa stopa (5–8 % pod pivotem, O'Neil: tnij straty przy 7–8 %)
     const boxHasPivot = !!(m.box && pivotNear && pivotPx / m.box.top >= 0.995 && pivotPx / m.box.top <= 1.12);   // pivot (High bazy) leży tuż nad górą boxa z zamknięć   // poziom wybicia pokazuje góra pudełka — bez osobnej linii pivotu i stref
-    if (pivotNear && m.lastShown !== false && !boxHasPivot) {
+    if (pivotNear && m.lastShown !== false && !boxHasPivot && layer("pivot")) {
         const xr = L.width - L.right, yPv = yP(pivotPx);
         const pivotCol = m.pivot.active ? (m.pivot.risky ? "#f59e0b" : "#2ecc71") : (lastC > pivotPx ? "#ff8a5b" : "#e8eaed");   // pomarańczowa = cena już nad pivotem, ale bez potwierdzonego wybicia na wolumenie   // biała = pivot czeka na wybicie, zielona = aktywny (zamknięcie nad nim na wolumenie)
         const extended = lastC > pivotPx * 1.05;   // cena już poza strefą zakupu (+5 %): nie gonimy — bez strefy zakupu i stopu
@@ -1334,7 +1334,7 @@ function attachChartGestures(plot, total, getWin, setWin, enabled) {
 const STACK_PANELS = [["price", ""], ["macd", "MACD (12, 26, 9) tygodniowy"]];   // wykres słupkowy (z S&P 500, RS, EPS i wolumenem, jak dawniej) + osobny MACD
 const STACK_ORDER_KEY = "momentum_watchlist_chart_panels";
 // Warstwy wykresu słupkowego (jak wskaźniki w TradingView): domyślnie czysty wykres — świece, średnie, pivot / box, wolumen; resztę włącza się chipami.
-const STACK_LAYERS = [["sp", "S&P 500"], ["rs", "RS"], ["eps", "EPS"], ["zones", "Strefy kup / stop"], ["patterns", "Formacje"], ["book", "Kup / Dokup"], ["swings", "Szczyty i dołki"]];
+const STACK_LAYERS = [["pivot", "Pivot"], ["sp", "S&P 500"], ["rs", "RS"], ["eps", "EPS"], ["zones", "Strefy kup / stop"], ["patterns", "Formacje"], ["book", "Kup / Dokup"], ["swings", "Szczyty i dołki"]];
 const STACK_LAYERS_KEY = "momentum_watchlist_chart_layers";
 function stackLayers() {
     let saved = {};
