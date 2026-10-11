@@ -2195,7 +2195,20 @@ function initChartModal() {
     const stepNext = () => slideChart(1), stepPrev = () => slideChart(-1);
     attachSwipe(document.getElementById("chartReady"), stepNext, stepPrev);
     attachSwipe(document.querySelector(".wl-chart-titles"), stepNext, stepPrev);
-    attachSwipe(document.getElementById("chartBody"), stepNext, stepPrev, ev => annEdit.on || annPen.on || boxAddOn || ev.target.closest(".wl-range"));
+    // wykres: jak w czytnikach — stuknięcie w prawy brzeg = następna spółka, w lewy = poprzednia (tylko dotyk); przesuwanie palcem po wykresie
+    // (przełączniki warstw, suwak) nie zmienia już spółki
+    document.getElementById("chartBody").addEventListener("click", ev => {
+        if (!window.matchMedia || !window.matchMedia("(pointer: coarse)").matches) return;
+        if (annEdit.on || annPen.on || boxAddOn || ev.target.closest("button, a, input, select, summary, details, .wl-range, .layer-bar, .box-focus-bar, .box-select-bar, .box-pick, .chart-overlay.editing")) return;
+        const r = document.getElementById("chartBody").getBoundingClientRect(), f = (ev.clientX - r.left) / r.width;
+        if (f >= 0.86) { ev.stopPropagation(); slideChart(1); } else if (f <= 0.14) { ev.stopPropagation(); slideChart(-1); }
+    }, true);   // faza przechwytywania: działa też na Dar-Card, której własna obsługa kliknięć w svg zatrzymuje zdarzenie
+    try {
+        if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches && !localStorage.getItem("momentum_watchlist_edge_hint")) {
+            localStorage.setItem("momentum_watchlist_edge_hint", "1");
+            showToast("Stuknij prawy brzeg wykresu (ok. 14 % szerokości) = następna spółka, lewy = poprzednia.", { type: "info" });
+        }
+    } catch (e) { /* brak localStorage */ }
     const chartScore = document.getElementById("chartScore");
     if (chartScore) {
         chartScore.addEventListener("change", () => { if (chartRequested) setScore(chartRequested, chartScore.value); });
