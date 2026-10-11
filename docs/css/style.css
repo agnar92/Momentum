@@ -1147,3 +1147,11 @@ body.split table.momentum-table th:is([data-key="price"], [data-key="market_cap"
 .stack-panel.stack-full { position: fixed; inset: 0; z-index: 3000; background: var(--bg); padding-top: env(safe-area-inset-top, 0px); border: 0; }
 .stack-panel.stack-full .stack-body { height: 100%; overflow: auto; }
 @media (pointer: coarse) { .stack-btns button { width: 34px; height: 34px; font-size: 13px; } }
+
+/* pasek warstw wykresu słupkowego (jak wskaźniki w TradingView): małe przełączniki, domyślnie wszystko dodatkowe wyłączone */
+.layer-bar { display: flex; gap: 4px; padding: 4px 6px; overflow-x: auto; scrollbar-width: none; background: var(--bg); }
+.layer-bar::-webkit-scrollbar { display: none; }
+.layer-chip { flex: 0 0 auto; padding: 3px 10px; font: inherit; font-size: 11px; line-height: 1.4; color: var(--text-dim); background: transparent; border: 1px solid #333d49; border-radius: 12px; cursor: pointer; white-space: nowrap; }
+.layer-chip:hover { color: #fff; border-color: #6b7684; }
+.layer-chip.on { color: #0b0d10; background: #c9d1d9; border-color: #c9d1d9; font-weight: 700; }
+@media (pointer: coarse) { .layer-chip { padding: 6px 12px; font-size: 12px; } }
