@@ -1093,10 +1093,10 @@ function chartSvg(m, opts = {}) {
     parts.push(`<line id="chartCross" data-cross="1" x1="0" x2="0" y1="${L.bench.y}" y2="${L.eps.y + L.eps.h}" stroke="#ffffff" stroke-width="0.8" opacity="0" pointer-events="none"/>`);
     // data wskazanej świecy na dole osi (pokazywana przy najechaniu myszką)
     axisParts.push(`<text id="chartCrossDate" data-crossdate="1" x="0" y="${L.axisY}" font-size="${fs(12)}" font-weight="700" fill="${CHART_COLORS.textStrong}" stroke="#0e0f13" stroke-width="5" paint-order="stroke" text-anchor="middle" opacity="0" pointer-events="none"></text>`);
-    const crop = opts.crop || null, cropBand = crop ? Math.round(fs(26)) : 0;
+    const crop = opts.crop || null, cropBand = crop && !crop.noAxis ? Math.round(fs(26)) : 0;   // noAxis: oś czasu tylko pod ostatnim panelem (jak w TradingView)
     if (opts.geomOut) Object.assign(opts.geomOut, { L: { ...L, height: crop ? crop.h + cropBand : L.height, price: P, marks }, step, n: m.n, x: x_, yP, pMin, pMax, useLog, fs });
     if (crop) {   // jeden panel z układu "stack": wycinek viewBox + własna oś czasu pod spodem
-        const ax = axisParts.length ? `<g transform="translate(0 ${(crop.y0 + crop.h + cropBand - 10 - L.axisY).toFixed(1)})">${axisParts.join("")}</g>` : "";
+        const ax = axisParts.length && !crop.noAxis ? `<g transform="translate(0 ${(crop.y0 + crop.h + cropBand - 10 - L.axisY).toFixed(1)})">${axisParts.join("")}</g>` : "";
         return `<svg id="${opts.svgId || "chartSvg"}" viewBox="0 ${crop.y0} ${L.width} ${crop.h + cropBand}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${escapeHtml(crop.title || "Wykres")} ${escapeHtml(m.ticker)}">${parts.join("")}${ax}</svg>`;
     }
     return `<svg id="chartSvg" viewBox="0 0 ${L.width} ${L.height}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Wykres tygodniowy ${escapeHtml(m.ticker)}">${parts.join("")}</svg>`;
@@ -1405,13 +1405,13 @@ function stackPanelsHtml(m, opts, geom) {
     const base = { ...opts, simple: true, book: false, hideLabels: true, stackLayout: L, compact: opts.compact, fit: opts.fit || { w: W, h: 700 }, noBench: true };
     const html = order.filter(k => !full || k === full).map((k, idx, arr) => {
         const title = STACK_PANELS.find(p => p[0] === k)[1];
-        const o = { ...base, crop: { y0: k === "price" ? 0 : L[k].y - 6, h: L[k].h + (k === "price" ? L.price.y : 6), title }, svgId: k === "price" ? "chartSvg" : "chartSvg_" + k };
+        const o = { ...base, crop: { y0: k === "price" ? 0 : L[k].y - 6, h: L[k].h + (k === "price" ? L.price.y : 6), title, noAxis: idx < arr.length - 1 }, svgId: k === "price" ? "chartSvg" : "chartSvg_" + k };
         if (k === "price") o.geomOut = geom;
         const svg = chartSvg(m, o);
         const btns = full
             ? `<button type="button" data-stack="full" title="Zamknij pełny ekran">✕</button>`
-            : `<button type="button" data-stack="up" title="Wyżej"${idx === 0 ? " disabled" : ""}>▲</button><button type="button" data-stack="down" title="Niżej"${idx === arr.length - 1 ? " disabled" : ""}>▼</button><button type="button" data-stack="full" title="Pełny ekran tego wykresu">⛶</button>`;
-        return `<section class="stack-panel${full ? " stack-full" : ""}" data-panel="${k}"><div class="stack-head"><b>${escapeHtml(title)}</b><span class="stack-btns">${btns}</span></div><div class="stack-body">${svg}</div></section>`;
+            : `<button type="button" data-stack="up" title="Przesuń wyżej"${idx === 0 ? " disabled" : ""}>▲</button><button type="button" data-stack="down" title="Przesuń niżej"${idx === arr.length - 1 ? " disabled" : ""}>▼</button><button type="button" data-stack="full" title="Pełny ekran">⛶</button>`;
+        return `<section class="stack-panel${full ? " stack-full" : ""}" data-panel="${k}"><div class="stack-body">${svg}<span class="stack-title">${escapeHtml(title)}</span><span class="stack-btns">${btns}</span></div></section>`;
     }).join("");
     return { html: `<div class="stack-root">${html}</div>`, L };
 }
@@ -1450,6 +1450,12 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
             { const sv = plot.querySelector("#chartSvg"), GL = geom.L || L; if (sv) sv.dataset.cgeom = [GL.width, GL.left, GL.right, m.n, m.off || 0].join(","); }
             readoutEl.textContent = chartReadout(m, m.lastIdx);
             attachStackHover(plot, m, readoutEl, st.L);
+            plot.querySelectorAll(".stack-panel").forEach(sec => sec.addEventListener("click", ev => {   // dotyk: pokaż przyciski tylko tego panelu (telefon nie ma hover)
+                if (ev.target.closest("[data-stack]")) return;
+                const on = !sec.classList.contains("stack-active");
+                plot.querySelectorAll(".stack-active").forEach(e => e.classList.remove("stack-active"));
+                if (on) sec.classList.add("stack-active");
+            }));
             plot.querySelectorAll("[data-stack]").forEach(b => b.addEventListener("click", ev => {
                 const key = b.closest(".stack-panel").dataset.panel, act = b.dataset.stack;
                 if (act === "full") stackFull = stackFull === key ? null : key;
