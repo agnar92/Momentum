@@ -1109,6 +1109,61 @@ function applyLayoutMode() {
     }
 }
 
+// Przeciągany pionowy separator między listą a wykresem (widok dzielony): szerokość listy w px zapisana w localStorage,
+// wykres sam się przeskalowuje (viewBox = rzeczywisty rozmiar, `drawChart` po każdym ruchu).
+const LIST_W_KEY = "momentum_watchlist_list_width";
+const LIST_W_MIN = 320, LIST_W_MIN_CHART = 480;
+function clampListWidth(px) {
+    const max = Math.max(LIST_W_MIN, window.innerWidth - LIST_W_MIN_CHART);
+    return Math.round(Math.min(max, Math.max(LIST_W_MIN, px)));
+}
+function applyListWidth(px) {
+    const root = document.documentElement;
+    if (px == null) root.style.removeProperty("--list-w");
+    else root.style.setProperty("--list-w", clampListWidth(px) + "px");
+}
+function initSplitResizer() {
+    const bar = document.getElementById("splitResizer");
+    if (!bar) return;
+    try { const saved = parseFloat(localStorage.getItem(LIST_W_KEY)); if (saved > 0) applyListWidth(saved); } catch (e) { /* brak localStorage */ }
+    let raf = 0;
+    const redraw = () => { if (currentChart) drawChart(); };
+    const widthFromEvent = ev => ev.clientX - document.querySelector(".workspace").getBoundingClientRect().left;
+    bar.addEventListener("pointerdown", ev => {
+        if (!splitMode) return;
+        ev.preventDefault();
+        bar.setPointerCapture(ev.pointerId);
+        bar.classList.add("dragging");
+        document.body.classList.add("resizing");
+        const move = e => {
+            applyListWidth(widthFromEvent(e));
+            cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(redraw);   // żywe przeskalowanie wykresu podczas przeciągania
+        };
+        const up = e => {
+            bar.removeEventListener("pointermove", move);
+            bar.removeEventListener("pointerup", up);
+            bar.removeEventListener("pointercancel", up);
+            bar.classList.remove("dragging");
+            document.body.classList.remove("resizing");
+            try { localStorage.setItem(LIST_W_KEY, String(clampListWidth(widthFromEvent(e)))); } catch (err) { /* brak localStorage */ }
+            redraw();
+        };
+        bar.addEventListener("pointermove", move);
+        bar.addEventListener("pointerup", up);
+        bar.addEventListener("pointercancel", up);
+    });
+    bar.addEventListener("dblclick", () => {
+        applyListWidth(null);
+        try { localStorage.removeItem(LIST_W_KEY); } catch (e) { /* brak localStorage */ }
+        redraw();
+    });
+    window.addEventListener("resize", () => {   // po zwężeniu okna lista nie może zjeść wykresu
+        const cur = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--list-w"));
+        if (cur > 0) applyListWidth(cur);
+    });
+}
+
 // Liczba nowych (przebitych, niezatwierdzonych) alertów na zakładce 🔔.
 function updateAlertBadge() { /* alerty na liniach usunięte — zostaje pusta funkcja dla wywołań z sync */ }
 
@@ -2344,6 +2399,7 @@ if (typeof document !== "undefined") {
         initAnnotationIO();
         syncInit(() => { updateAlertBadge(); renderTable(); if (!document.getElementById("chartModal").hidden) drawChart(); });
         initBoxesPanel();
+        initSplitResizer();
         showTab(state.tab);
         hideLoadingOverlay();
         refreshBoxesBadge();
