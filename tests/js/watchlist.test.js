@@ -348,12 +348,12 @@ test("readinessLine warns when the price is more than 5% above the pivot", () =>
 
 test("canslimInfo: seven criteria C A N S L I M, score needs >= 4 known, rows sorted by score", () => {
     const { canslimInfo, tagCanslim, canslimRows } = require("../../docs/js/watchlist.js");
-    const good = { ticker: "G", eps_q0_yoy: 40, eps_this_y: 30, pct_from_high_52w: -4, accdis: "B", rs_rating: 92, inst_sponsor: true, composite_rating: 90 };
+    const good = { ticker: "G", eps_q0_yoy: 40, eps_yr0: 30, pct_from_high_52w: -4, accdis: "B", rs_rating: 92, inst_sponsor: true, composite_rating: 90 };
     const c = canslimInfo(good, "uptrend");
     assert.equal(c.score, 7);
     assert.deepEqual(canslimInfo(good, "correction").flags.M, false);
     assert.equal(canslimInfo(good, "correction").score, 6);
-    const weak = { ticker: "W", eps_q0_yoy: 10, eps_this_y: 30, pct_from_high_52w: -30, accdis: "D", rs_rating: 50, inst_sponsor: false };
+    const weak = { ticker: "W", eps_q0_yoy: 10, eps_yr0: 30, pct_from_high_52w: -30, accdis: "D", rs_rating: 50, inst_sponsor: false };
     const w = canslimInfo(weak, "uptrend");
     assert.deepEqual(w.flags, { C: false, A: true, N: false, S: false, L: false, I: false, M: true });   // A: EPS w tym roku
     assert.equal(w.score, 2);
@@ -375,7 +375,7 @@ test("ratingChips / readinessLine warn about a sell climax top", () => {
 
 test("canslimExplain: one row per letter with the numbers behind each flag; sheet html mentions values and rules", () => {
     const { canslimExplain, canslimSheetHtml, canslimInfo, ratingChips } = require("../../docs/js/watchlist.js");
-    const s = { ticker: "G", eps_q0_yoy: 40, eps_q1_yoy: 28, eps_past_5y: 30, eps_this_y: 35, pct_from_high_52w: -4, accdis: "B", accdis_rating: 72, rs_rating: 92, industry_rating: 70, inst_own: 55, inst_trans: 1.2, inst_sponsor: true, leader: true };
+    const s = { ticker: "G", eps_q0_yoy: 40, eps_q1_yoy: 28, eps_past_5y: 30, eps_yr0: 35, pct_from_high_52w: -4, accdis: "B", accdis_rating: 72, rs_rating: 92, industry_rating: 70, inst_own: 55, inst_trans: 1.2, inst_sponsor: true, leader: true };
     const e = canslimExplain(s, "uptrend");
     assert.deepEqual(e.rows.map(r => r.key), ["C", "A", "N", "S", "L", "I", "M"]);
     assert.equal(e.score, 7);
@@ -427,7 +427,7 @@ test("pivot logic only for buyable bases: a deep correction near its old high is
 
 test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, L needs a strong group, M counts distribution days", () => {
     const { canslimInfo, canslimRows, tagCanslim } = require("../../docs/js/watchlist.js");
-    const base = { eps_q0_yoy: 40, eps_past_5y: 30, eps_this_y: 35, roe: 20, pct_from_high_52w: -3, accdis: "A", rs_rating: 90, industry_rating: 80, inst_own: 60, inst_trans: 1 };
+    const base = { eps_q0_yoy: 40, eps_past_5y: 30, eps_yr0: 35, roe: 20, pct_from_high_52w: -3, accdis: "A", rs_rating: 90, industry_rating: 80, inst_own: 60, inst_trans: 1 };
     assert.equal(canslimInfo(base, "uptrend").score, 7);
     // I: przesadne obłożenie, dane > 100 %, brak napływu
     assert.equal(canslimInfo({ ...base, inst_own: 99.4 }, "uptrend").flags.I, false);
@@ -439,11 +439,11 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     assert.equal(canslimInfo({ ...base, sales_qq: 30 }, "uptrend").flags.C, true);
     assert.equal(canslimInfo(base, "uptrend").flags.C, true);
     // A: EPS w tym roku < 25 % albo ROE < 17 % = czerwone; EPS z 5 lat nie wpływa na A (młode spółki, średnia ukrywa słaby rok)
-    assert.equal(canslimInfo({ ...base, eps_this_y: 10 }, "uptrend").flags.A, false);
+    assert.equal(canslimInfo({ ...base, eps_yr0: 10 }, "uptrend").flags.A, false);
     assert.equal(canslimInfo({ ...base, eps_past_5y: 0.1 }, "uptrend").flags.A, true);
     assert.equal(canslimInfo({ ...base, roe: 9 }, "uptrend").flags.A, false);
     assert.equal(canslimInfo({ ...base, eps_past_5y: null }, "uptrend").flags.A, true);
-    assert.equal(canslimInfo({ ...base, eps_past_5y: null, eps_this_y: null, roe: null }, "uptrend").flags.A, null);
+    assert.equal(canslimInfo({ ...base, eps_past_5y: null, eps_yr0: null, roe: null }, "uptrend").flags.A, null);
     // N: do 15 % pod szczytem; S: zadłużenie; L: grupa
     assert.equal(canslimInfo({ ...base, pct_from_high_52w: -12 }, "uptrend").flags.N, true);
     assert.equal(canslimInfo({ ...base, pct_from_high_52w: -17 }, "uptrend").flags.N, false);
@@ -455,7 +455,7 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     assert.equal(canslimInfo(base, { regime: "uptrend", distDays: 5 }).flags.M, false);
     assert.equal(canslimInfo(base, { regime: "correction", distDays: 0 }).flags.M, false);
     // zakładka: C i A obowiązkowe
-    const good = { ticker: "G", ...base }, noA = { ticker: "X", ...base, eps_this_y: 10 };
+    const good = { ticker: "G", ...base }, noA = { ticker: "X", ...base, eps_yr0: 10 };
     tagCanslim([good, noA], "uptrend");
     assert.deepEqual(canslimRows([good, noA], 6).map(s => s.ticker), ["G", "X"]);
     assert.deepEqual(canslimRows([good, noA], 6, true).map(s => s.ticker), ["G"]);
@@ -598,7 +598,7 @@ test("baseBoxData: pokazuje wzrost przed bazą, strefę kupna, stop −8 %, stat
 test("CANSLIM A: wzrost EPS ≥ 25 % w każdym znanym z 3 ostatnich lat; akceleracja i skup akcji to chipy i sortowanie, nie wymóg", () => {
     const { canslimInfo, canslimRows, ratingChips, canslimExplain } = require("../../docs/js/watchlist.js");
     const mkt = { regime: "uptrend", distDays: 1 };
-    const good = { eps_this_y: 40, roe: 22, eps_yr0: 40, eps_yr1: 30, eps_yr2: 28 };
+    const good = { roe: 22, eps_yr0: 40, eps_yr1: 30, eps_yr2: 28 };
     assert.equal(canslimInfo(good, mkt).flags.A, true);
     assert.equal(canslimInfo({ ...good, eps_yr1: 12 }, mkt).flags.A, false);             // słaby rok w środku = A nie przechodzi
     assert.equal(canslimInfo({ ...good, eps_yr1: null, eps_yr2: null }, mkt).flags.A, true);   // młoda spółka: nieznane lata pomijamy

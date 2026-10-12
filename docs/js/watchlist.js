@@ -361,7 +361,7 @@ function tagBreakouts(stocks, alerts, maxDist) {
 // L = RS Rating ≥ 80 w silnej grupie (grupa ≥ 60, gdy znana), I = instytucje 20–90 % z napływem, M = trend wzrostowy rynku (EMA10 > EMA20 tyg.) i < 5 dni dystrybucji.
 const CANSLIM_KEYS = ["C", "A", "N", "S", "L", "I", "M"];
 const CANSLIM_HELP = {   // L: tekst z aktualnym progiem RS — patrz canslimHelp
-    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 20 %, sprzedaż r/r ≥ 25 %, tempo wzrostu EPS rośnie w ostatnich 2–3 kwartałach", A: "A — roczne zyski: EPS w tym roku ≥ 25 %, wzrost EPS ≥ 25 % w każdym z 3 ostatnich lat, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 15 % pod szczytem 52 tyg.",
+    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 20 %, sprzedaż r/r ≥ 25 %, tempo wzrostu EPS rośnie w ostatnich 2–3 kwartałach", A: "A — roczne zyski: wzrost EPS TTM ≥ 25 %, wzrost EPS ≥ 25 % w każdym z 3 ostatnich lat obrotowych, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 15 % pod szczytem 52 tyg.",
     S: "S — popyt i podaż: Acc/Dis A lub B oraz zadłużenie D/E ≤ 1", L: "L — lider: RS Rating ≥ 80 w silnej grupie branżowej (≥ 60)", I: "I — instytucje: własność 20–90 % i napływ w ostatnim kwartale", M: "M — rynek: S&P 500 i Nasdaq w trendzie wzrostowym (EMA10 > EMA20 tyg.), mniej niż 5 dni dystrybucji",
 };
 const CANSLIM_THRESHOLDS = { epsQ: 20, epsQStrong: 25, accel: true, sales: 25, epsYear: 25, roe: 17, nearHigh: -15, debtEq: 1, rs: 80, group: 60, instMin: 20, instMax: 90, instData: 100, distDays: 5 };
@@ -405,9 +405,9 @@ function canslimInfo(s, mkt) {
     // tempa wzrostu EPS w ostatnich 2–3 kwartałach (gdy znane i włączone — Filtry → 🏆); brak EPS = brak danych
     let C = null;
     if (num(s.eps_q0_yoy)) C = s.eps_q0_yoy >= T.epsQ && (!num(s.sales_qq) || s.sales_qq >= T.sales) && !(T.accel && s.eps_accel === false);
-    // A wg książki: każdy znany składnik musi przejść: EPS bieżącego roku, ROE ≥ 17 % i wzrost EPS roku obrotowego w KAŻDYM z 3 ostatnich lat (eps_fy0..2 z Yahoo, O'Neil: ≥ 25 % co roku);
+    // A wg książki (tylko zysk ZREALIZOWANY, bez prognoz): każdy znany składnik musi przejść: wzrost EPS TTM (suma 4 ostatnich kwartałów vs 4 wcześniejsze, eps_yr0), ROE ≥ 17 % i wzrost EPS roku obrotowego w KAŻDYM z 3 ostatnich lat (eps_fy0..2 z Yahoo, O'Neil: ≥ 25 % co roku);
     // nieznany rok (młoda spółka, ujemna baza) jest pomijany; żaden znany = brak danych. Wzrost EPS z 5 lat to nie kryterium O'Neila, więc go nie używamy.
-    const aParts = [num(s.eps_this_y) ? s.eps_this_y >= T.epsYear : null, num(s.roe) ? s.roe >= T.roe : null,
+    const aParts = [num(s.eps_yr0) ? s.eps_yr0 >= T.epsYear : null, num(s.roe) ? s.roe >= T.roe : null,
         ...annualEpsGrowth(s).values.map(v => (num(v) ? v >= T.epsYear : null))].filter(v => v !== null);
     const A = aParts.length ? aParts.every(Boolean) : null;
     const N = num(s.pct_from_high_52w) ? s.pct_from_high_52w >= T.nearHigh : null;
@@ -540,8 +540,8 @@ function canslimExplain(s, mkt) {
     add("C", "Current earnings — bieżące zyski", `EPS z ostatniego kwartału wyższy r/r o co najmniej ${T.epsQ} % (najlepiej ${T.epsQStrong} % i więcej), sprzedaż r/r o co najmniej ${T.sales} % (gdy znana)${T.accel ? " i przyspieszenie EPS w ostatnich 2–3 kwartałach (gdy znane)" : ""}`,
         num(s.eps_q0_yoy) ? `EPS ostatniego kwartału ${pct(s.eps_q0_yoy)} r/r${num(s.eps_q1_yoy) ? `, poprzedniego ${pct(s.eps_q1_yoy)}` : ""}${num(s.eps_q2_yoy) ? `, jeszcze wcześniejszego ${pct(s.eps_q2_yoy)}` : ""}${accel ? ` (${accel})` : ""}; sprzedaż ${num(s.sales_qq) ? `${pct(s.sales_qq)} r/r` : "— brak danych (oceniamy tylko EPS)"}` : "brak danych o EPS z ostatniego kwartału",
         "O'Neil: kwartalny EPS co najmniej 18–20 %, najlepsze spółki 25–50 % i więcej; do tego przyspieszenie tempa wzrostu w ostatnich 2–3 kwartałach oraz sprzedaż ≥ 25 % albo przyspieszająca w 3 ostatnich kwartałach. Wzrost zysku bez wzrostu sprzedaży to często cięcie kosztów. Przyspieszenie EPS wymagamy (można wyłączyć w Filtry → 🏆); przyspieszenia SPRZEDAŻY nie sprawdzamy — Yahoo daje za mało kwartałów, mamy tylko ostatni kwartał z Finviza.");
-    add("A", "Annual earnings — roczne zyski", `EPS w tym roku ≥ ${T.epsYear} %, wzrost EPS ≥ ${T.epsYear} % w każdym z 3 ostatnich lat i ROE ≥ ${T.roe} % (każdy znany składnik musi przejść)`,
-        [num(s.eps_this_y) ? `EPS w tym roku ${pct(s.eps_this_y)}` : null,
+    add("A", "Annual earnings — roczne zyski", `wzrost EPS TTM ≥ ${T.epsYear} %, wzrost EPS ≥ ${T.epsYear} % w każdym z 3 ostatnich lat obrotowych i ROE ≥ ${T.roe} % (każdy znany składnik musi przejść; tylko zysk zrealizowany)`,
+        [num(s.eps_yr0) ? `EPS TTM (ost. 4 kwartały vs 4 wcześniejsze) ${pct(s.eps_yr0)}` : null,
             annualEpsGrowth(s).values.some(num) ? `EPS rok do roku (${annualEpsGrowth(s).basis === "fy" ? "lata obrotowe" : "suma 4 kwartałów"}: najnowszy rok, rok wcześniej, 2 lata wcześniej): ${annualEpsGrowth(s).values.map(v => (num(v) ? pct(v) : "—")).join(" / ")}` : null,
             num(s.roe) ? `ROE ${s.roe}%` : null,
             num(s.pretax_margin) ? `marża przed opodatkowaniem ${s.pretax_margin}%${num(s.pretax_margin_chg) ? ` (${pct(s.pretax_margin_chg)} p.p. r/r)` : ""}` : null].filter(Boolean).join("; ") || "brak danych o rocznych zyskach i ROE",
