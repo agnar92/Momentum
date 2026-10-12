@@ -808,7 +808,7 @@ function chartSvg(m, opts = {}) {
             const step = (L.width - L.left - L.right) / m.n;
             const pxa = Math.max(L.left, x(pb.i0) - step / 2), pxb = Math.min(xr, x(pb.i1) + step / 2);
             boxBg(pb.top, pb.bottom, pxa, pxb);
-            edge(pb.bottom, pxa, pxb, pb.confirmed === false ? "#ff9f43" : null, "5 3", 2);   // niepotwierdzony dół: przerywana pomarańczowa linia (jak na Dar-Card)
+            edge(pb.bottom, pxa, pxb, pb.confirmed === false ? "#ff3b3b" : null, "5 3", 2);   // niepotwierdzony dół: przerywana czerwona linia (jak na Dar-Card)
         });
         // kliknięty box: tło na jego rozpiętości + lekkie przedłużenie w prawo (do monitorowania, czy cena wyszła poza box / strefę)
         const step0 = (L.width - L.left - L.right) / m.n;
@@ -817,7 +817,7 @@ function chartSvg(m, opts = {}) {
         if (fb === opts.focusBox) {   // przybliżony box: gruba złota obwódka (odróżnia go od wcześniejszych boxów) + przerywany pomarańczowy dół, gdy niepotwierdzony
             const ya = Math.min(yP(fb.top), yP(fb.bottom)), yb = Math.max(yP(fb.top), yP(fb.bottom));
             if (xe > xa) parts.push(`<g ${clipAttr}><rect x="${xa}" y="${ya}" width="${xe - xa}" height="${Math.max(0, yb - ya)}" fill="none" stroke="#ffd54a" stroke-width="2.6" pointer-events="none"/></g>`);
-            edge(fb.bottom, xa, xe, m.focusSelf && m.focusSelf.confirmed === false ? "#ff9f43" : null, "5 3", 2.6);
+            edge(fb.bottom, xa, xe, m.focusSelf && m.focusSelf.confirmed === false ? "#ff3b3b" : null, "5 3", 2.6);
         }
         rect(fb.top, fb.bottom, xe, xr, "#ffffff", 0.08); rect(fb.bottom, fb.bottom * zone, xe, xr, `url(#chartZoneHatch${opts.uid || ""})`, 0.5);
         [[fb.top, "#2e9e5b", "", 1.3], [fb.bottom, "#6b7280", "4 3", 1.3], [fb.bottom * zone, "#c0504d", "2 3", 1.3]].forEach(([v, col, dash, w], k) => {
