@@ -50,7 +50,7 @@ const DARVAS_STOP_PCT = 5;   // szeroko strefy ryzyka: 5 % poniżej dołu boxa; 
 function darvasBoxInfo(top, bottom, zonePct = DARVAS_STOP_PCT) {
     const r2 = v => Math.round(v * 100) / 100;
     const stop = r2(bottom * (1 - zonePct / 100)), stopPct = r2((1 - stop / top) * 100);
-    return { entry: r2(top), cancel: r2(bottom), stop, stopPct, zonePct, depthPct: r2((top - bottom) / top * 100), stopAboveCancel: stop > bottom };
+    return { entry: r2(top), cancel: r2(bottom), stop, stopPct, zonePct, depthPct: r2((top - bottom) / top * 100), stopAboveCancel: stop > bottom, initStop: darvasInitialStop(top, bottom, top) };
 }
 
 // Treść arkusza po kliknięciu boxa (HTML); state: "up" | "down" | "open" | undefined (box z wykresu świecowego)
@@ -58,6 +58,7 @@ function darvasBoxSheetHtml(info, state, confirmed) {
     const st = state === "up" ? "wybity w górę (był sygnał kupna)" : state === "down" ? "złamany w dół (anulowany)" : state === "open" ? "otwarty — czeka na wybicie" : "otwarty (baza flat)";
     return `<div class="darvas-sheet"><p class="muted small">Box ${info.cancel.toFixed(2)}–${info.entry.toFixed(2)} · głębokość ${info.depthPct}% · ${st}${confirmed === false ? " · dół jeszcze niepotwierdzony" : ""}</p>`
         + `<table class="sheet-table" style="width:100%;text-align:left"><tr><th>💚 Cena wejścia</th><td><b>${info.entry.toFixed(2)}</b><br><span class="muted small">kup, gdy tydzień zamknie się NAD górą boxa</span></td></tr>`
+        + `<tr><th>🛑 Stop początkowy</th><td><b>${info.initStop.toFixed(2)}</b><br><span class="muted small">połowa boxa, nie głębiej niż ${DARVAS_START_STOP_PCT}% od wejścia; po wyższym boxie stop idzie pod jego dół −${info.zonePct}%</span></td></tr>`
         + `<tr><th>⚠️ Początek strefy ryzyka</th><td><b>${info.cancel.toFixed(2)}</b><br><span class="muted small">dolna krawędź boxa; od niej w dół jest szara strefa ryzyka (potencjalny exit)</span></td></tr>`
         + `<tr><th>🛑 Exit (dół strefy ryzyka)</th><td><b>${info.stop.toFixed(2)}</b><br><span class="muted small">dół szarej strefy ryzyka = ${info.zonePct}% pod dołem boxa (${info.stopPct}% pod ceną wejścia); wyjście poniżej tej ceny = exit</span></td></tr></table>`
         + `<p class="muted small">Reguły Darvasa na tygodniowych zamknięciach; heurystyka, nie rekomendacja.</p></div>`;
@@ -66,7 +67,14 @@ function darvasBoxSheetHtml(info, state, confirmed) {
 const DARVAS_MAX_EXT_PCT = 10;     // KUP tylko do 10 % nad górą boxa (na zamknięciach tygodniowych 5 % jest za ciasne — backtest); główne potwierdzenie to wolumen
 const DARVAS_BREAKOUT_VOL = 1.4;   // wolumen wybicia ≥ 1,4× średniej
 const DARVAS_VOL_WEEKS = 10;
-const DARVAS_START_STOP_PCT = 10;   // stop początkowy przy pierwszym wybiciu: ok. 10 % pod wejściem
+const DARVAS_START_STOP_PCT = 10;   // stop początkowy: nie głębiej niż 10 % pod wejściem
+
+// Stop początkowy po wybiciu: POŁOWA boxa ((góra + dół) / 2), ale nie głębiej niż capPct % pod wejściem (wybór użytkownika po backteście na zamknięciach
+// tygodniowych: stop w połowie boxa z limitem 8–10 % wypada tak samo jak inne głębsze stopy; nie jest najlepszy statystycznie, ale zgodny z jego zasadą).
+function darvasInitialStop(top, bottom, entry = top, capPct = DARVAS_START_STOP_PCT) {
+    const mid = (top + bottom) / 2, floor = entry * (1 - capPct / 100);
+    return Math.round(Math.max(mid, floor) * 100) / 100;
+}
 
 // Stan akcji wg zasad DAR-CARD na ostatnim tygodniowym zamknięciu c: KUP (wybicie nad górę najwyższego boxa w tym tygodniu), TRZYMAJ (jest w najwyższym
 // boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia), SPRZEDAJ (po wyższym boxie cena spadła pod jego dno = wejście w strefę
@@ -91,7 +99,8 @@ function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bo
         }
         if (vr !== null && vr < DARVAS_BREAKOUT_VOL) return { ...base, state: "NOVOL", vol_ratio: Math.round(vr * 100) / 100, text: `BEZ WOLUMENU — zamknięcie nad górą boxa ${r2(last.top)}, ale wolumen tylko ${vr.toFixed(2)}× średniej (wymagane ${DARVAS_BREAKOUT_VOL}×); niepotwierdzone` };
         if (over > maxExtPct / 100) return { ...base, state: "LATE", text: `ZA PÓŹNO — zamknięcie ${(over * 100).toFixed(1)} % nad górą boxa ${r2(last.top)} (limit ${maxExtPct} %), nie goń` };
-        return { ...base, state: "BUY", stop: r2(last.top * (1 - DARVAS_START_STOP_PCT / 100)), vol_ratio: vr === null ? null : Math.round(vr * 100) / 100, text: `KUP — zamknięcie nad górą boxa ${r2(last.top)}${vr === null ? "" : ` na wolumenie ${vr.toFixed(2)}×`}; stop początkowy ok. ${DARVAS_START_STOP_PCT} % pod wejściem (${r2(last.top * (1 - DARVAS_START_STOP_PCT / 100))}), potem pod dnem kolejnych boxów` };
+        const initStop = darvasInitialStop(last.top, last.bottom, c[lastReal]);
+        return { ...base, state: "BUY", stop: initStop, vol_ratio: vr === null ? null : Math.round(vr * 100) / 100, text: `KUP — zamknięcie nad górą boxa ${r2(last.top)}${vr === null ? "" : ` na wolumenie ${vr.toFixed(2)}×`}; stop początkowy w połowie boxa, nie głębiej niż ${DARVAS_START_STOP_PCT} % (${initStop}), potem pod dnem kolejnych boxów` };
     }
     if (last.outcome === "down") {
         return hadUp
@@ -580,5 +589,5 @@ function attachDarvasHover(container, full, readoutEl) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarvasHover, darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasInitialStop, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
 }

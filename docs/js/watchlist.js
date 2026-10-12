@@ -1353,11 +1353,14 @@ let boxesOverviewData = null, boxesNewKeys = null, boxesCharts = null;
 function boxesLoadJson(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v === null ? fallback : v; } catch (e) { return fallback; } }
 
 // Rozwijana informacja o pozycji liczonej z boxa (Dar-Card): wejście = góra boxa (zamknięcie tygodnia nad nią), stop = dół strefy zagrożenia (5 % pod dołem boxa).
+function boxStopFor(top, bottom) {   // stop początkowy: połowa boxa, nie głębiej niż 10 % pod wejściem (wejście = góra boxa)
+    return typeof darvasInitialStop === "function" ? darvasInitialStop(top, bottom, top) : Math.round(Math.max((top + bottom) / 2, top * 0.9) * 100) / 100;
+}
 function boxPositionHtml(top, bottom, ticker) {
-    const stop = Math.round(bottom * (1 - (typeof DARVAS_STOP_PCT !== "undefined" ? DARVAS_STOP_PCT : 5) / 100) * 100) / 100;
+    const stop = boxStopFor(top, bottom);
     const perShare = top > stop ? (top / stop - 1) * 100 : null;
     const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
-    const lines = [`Wejście: zamknięcie tygodnia nad <b>${top.toFixed(2)}</b>`, `Stop: zamknięcie pod <b>${stop.toFixed(2)}</b> (dół strefy zagrożenia)${perShare !== null ? `, ryzyko ${perShare.toFixed(1)} % na akcję` : ""}`];
+    const lines = [`Wejście: zamknięcie tygodnia nad <b>${top.toFixed(2)}</b>`, `Stop: pod <b>${stop.toFixed(2)}</b> (połowa boxa, nie głębiej niż 10 % od wejścia)${perShare !== null ? `, ryzyko ${perShare.toFixed(1)} % na akcję` : ""}`];
     if (size) lines.push(`Pozycja: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${size.pct_of_capital.toFixed(1)} % konta), strata przy stopie ${pln0(size.risk_pln)} (${size.risk_pct !== null ? size.risk_pct.toFixed(2) : "—"} % konta)${size.limited_by === "risk" ? " — ograniczone ryzykiem" : " — ograniczone % konta"}`);
     else lines.push("Pozycja: ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby liczyć liczbę akcji.");
     const has = ticker && state.pos[ticker];
@@ -1365,10 +1368,10 @@ function boxPositionHtml(top, bottom, ticker) {
     return lines.map(l => `<div class="box-pos-line">${l}</div>`).join("") + mk;
 }
 
-// Automatyczna pozycja z boxa: wejście = góra boxa, stop = dół strefy zagrożenia (dół boxa −5 %), liczba akcji z kalkulatora konta (gdy konto ustawione).
+// Automatyczna pozycja z boxa: wejście = góra boxa, stop = połowa boxa, nie głębiej niż 10 % od wejścia, liczba akcji z kalkulatora konta (gdy konto ustawione).
 function createPositionFromBox(ticker, top, bottom) {
     if (!state.data || !(top > bottom)) return;
-    const stop = Math.round(bottom * (1 - (typeof DARVAS_STOP_PCT !== "undefined" ? DARVAS_STOP_PCT : 5) / 100) * 100) / 100;
+    const stop = boxStopFor(top, bottom);
     if (state.pos[ticker] && !window.confirm(`${ticker} ma już pozycję (wejście ${state.pos[ticker].entry}, stop ${state.pos[ticker].stop}). Zastąpić ją pozycją z boxa?`)) return;
     const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
     savePosition(ticker, { entry: top, stop, shares: size ? size.shares : null });
