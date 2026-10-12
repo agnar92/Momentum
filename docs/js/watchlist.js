@@ -357,14 +357,14 @@ function tagBreakouts(stocks, alerts, maxDist) {
 // Lista kontrolna CANSLIM z danych, które mamy (O'Neil, „How to Make Money in Stocks”; progi to heurystyka, nie historycznie testowana):
 // C = EPS ostatniego kwartału r/r ≥ 25 % ORAZ sprzedaż Q/Q r/r ≥ 25 % (gdy znana),
 // A = wzrost EPS 5 lat ≥ 25 %, EPS w tym roku ≥ 25 % i ROE ≥ 17 % (każdy ZNANY składnik musi przejść),
-// N = do 10 % pod szczytem 52 tyg., S = popyt (Acc/Dis A lub B) i podaż (zadłużenie D/E ≤ 1, gdy znane),
+// N = do 15 % pod szczytem 52 tyg., S = popyt (Acc/Dis A lub B) i podaż (zadłużenie D/E ≤ 1, gdy znane),
 // L = RS Rating ≥ 80 w silnej grupie (grupa ≥ 60, gdy znana), I = instytucje 20–90 % z napływem, M = trend wzrostowy rynku (EMA10 > EMA20 tyg.) i < 5 dni dystrybucji.
 const CANSLIM_KEYS = ["C", "A", "N", "S", "L", "I", "M"];
 const CANSLIM_HELP = {   // L: tekst z aktualnym progiem RS — patrz canslimHelp
-    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 20 %, sprzedaż r/r ≥ 25 %, tempo wzrostu EPS rośnie w ostatnich 2–3 kwartałach", A: "A — roczne zyski: EPS w tym roku ≥ 25 %, wzrost EPS ≥ 25 % w każdym z 3 ostatnich lat, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 10 % pod szczytem 52 tyg.",
+    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 20 %, sprzedaż r/r ≥ 25 %, tempo wzrostu EPS rośnie w ostatnich 2–3 kwartałach", A: "A — roczne zyski: EPS w tym roku ≥ 25 %, wzrost EPS ≥ 25 % w każdym z 3 ostatnich lat, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 15 % pod szczytem 52 tyg.",
     S: "S — popyt i podaż: Acc/Dis A lub B oraz zadłużenie D/E ≤ 1", L: "L — lider: RS Rating ≥ 80 w silnej grupie branżowej (≥ 60)", I: "I — instytucje: własność 20–90 % i napływ w ostatnim kwartale", M: "M — rynek: S&P 500 i Nasdaq w trendzie wzrostowym (EMA10 > EMA20 tyg.), mniej niż 5 dni dystrybucji",
 };
-const CANSLIM_THRESHOLDS = { epsQ: 20, epsQStrong: 25, accel: true, sales: 25, epsYear: 25, roe: 17, nearHigh: -10, debtEq: 1, rs: 80, group: 60, instMin: 20, instMax: 90, instData: 100, distDays: 5 };
+const CANSLIM_THRESHOLDS = { epsQ: 20, epsQStrong: 25, accel: true, sales: 25, epsYear: 25, roe: 17, nearHigh: -15, debtEq: 1, rs: 80, group: 60, instMin: 20, instMax: 90, instData: 100, distDays: 5 };
 // I z CANSLIM tak samo jak watchlist.py::institutional_flag (liczymy też tu, żeby nie czekać na odświeżenie danych): przedział 20–90 % + napływ; > 100 % = dane niewiarygodne.
 function institutionalFlag(s) {
     const T = CANSLIM_THRESHOLDS;

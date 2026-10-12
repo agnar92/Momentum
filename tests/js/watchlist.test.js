@@ -444,8 +444,9 @@ test("CANSLIM fidelity: I has an upper bound, C needs sales, A needs EPS + ROE, 
     assert.equal(canslimInfo({ ...base, roe: 9 }, "uptrend").flags.A, false);
     assert.equal(canslimInfo({ ...base, eps_past_5y: null }, "uptrend").flags.A, true);
     assert.equal(canslimInfo({ ...base, eps_past_5y: null, eps_this_y: null, roe: null }, "uptrend").flags.A, null);
-    // N: do 10 %; S: zadłużenie; L: grupa
-    assert.equal(canslimInfo({ ...base, pct_from_high_52w: -12 }, "uptrend").flags.N, false);
+    // N: do 15 % pod szczytem; S: zadłużenie; L: grupa
+    assert.equal(canslimInfo({ ...base, pct_from_high_52w: -12 }, "uptrend").flags.N, true);
+    assert.equal(canslimInfo({ ...base, pct_from_high_52w: -17 }, "uptrend").flags.N, false);
     assert.equal(canslimInfo({ ...base, debt_eq: 2.4 }, "uptrend").flags.S, false);
     assert.equal(canslimInfo({ ...base, industry_rating: 30 }, "uptrend").flags.L, false);
     assert.equal(canslimInfo({ ...base, industry_rating: null }, "uptrend").flags.L, true);
