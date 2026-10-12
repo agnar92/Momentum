@@ -798,15 +798,27 @@ function chartSvg(m, opts = {}) {
             if (xb <= xa) return;
             parts.push(`<g ${clipAttr}><rect x="${xa}" y="${ya}" width="${xb - xa}" height="${Math.max(0, yb - ya)}" fill="${fill}" fill-opacity="${op}" pointer-events="none"/></g>`);
         };
+        const edge = (v, xa, xb, col, dash, w) => {   // pozioma krawędź boxa (np. przerywany niepotwierdzony dół)
+            const yy = yP(v);
+            if (!col || xb <= xa || !inPlot(yy)) return;
+            parts.push(`<g ${clipAttr}><line x1="${xa}" x2="${xb}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${w}" stroke-dasharray="${dash}" pointer-events="none"/></g>`);
+        };
         const boxBg = (top, bottom, xa, xb) => { rect(top, bottom, xa, xb, "#ffffff", 0.22); rect(bottom, bottom * zone, xa, xb, `url(#chartZoneHatch${opts.uid || ""})`, 1); };
         (fb === opts.focusBox ? (m.focusPrev || []) : []).forEach(pb => {
             const step = (L.width - L.left - L.right) / m.n;
-            boxBg(pb.top, pb.bottom, Math.max(L.left, x(pb.i0) - step / 2), Math.min(xr, x(pb.i1) + step / 2));
+            const pxa = Math.max(L.left, x(pb.i0) - step / 2), pxb = Math.min(xr, x(pb.i1) + step / 2);
+            boxBg(pb.top, pb.bottom, pxa, pxb);
+            edge(pb.bottom, pxa, pxb, pb.confirmed === false ? "#ff9f43" : null, "5 3", 2);   // niepotwierdzony dół: przerywana pomarańczowa linia (jak na Dar-Card)
         });
         // kliknięty box: tło na jego rozpiętości + lekkie przedłużenie w prawo (do monitorowania, czy cena wyszła poza box / strefę)
         const step0 = (L.width - L.left - L.right) / m.n;
         const xa = Math.max(L.left, x(fb.i0 - off) - step0 / 2), xe = Math.min(xr, x((fb.i1 || fb.i0) - off) + step0 / 2);
         boxBg(fb.top, fb.bottom, xa, xe);
+        if (fb === opts.focusBox) {   // przybliżony box: gruba złota obwódka (odróżnia go od wcześniejszych boxów) + przerywany pomarańczowy dół, gdy niepotwierdzony
+            const ya = Math.min(yP(fb.top), yP(fb.bottom)), yb = Math.max(yP(fb.top), yP(fb.bottom));
+            if (xe > xa) parts.push(`<g ${clipAttr}><rect x="${xa}" y="${ya}" width="${xe - xa}" height="${Math.max(0, yb - ya)}" fill="none" stroke="#ffd54a" stroke-width="2.6" pointer-events="none"/></g>`);
+            edge(fb.bottom, xa, xe, m.focusSelf && m.focusSelf.confirmed === false ? "#ff9f43" : null, "5 3", 2.6);
+        }
         rect(fb.top, fb.bottom, xe, xr, "#ffffff", 0.08); rect(fb.bottom, fb.bottom * zone, xe, xr, `url(#chartZoneHatch${opts.uid || ""})`, 0.5);
         [[fb.top, "#2e9e5b", "", 1.3], [fb.bottom, "#6b7280", "4 3", 1.3], [fb.bottom * zone, "#c0504d", "2 3", 1.3]].forEach(([v, col, dash, w], k) => {
             const yy = yP(v);
@@ -1476,6 +1488,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         const m = sliceModel(full, win.n, win.end);
         if (opts.focusBox && typeof darvasBoxes === "function") {   // wcześniejsze boxy Darvasa (kończące się przed klikniętym) do pokazania w oknie
             const off = m.off || 0;
+            m.focusSelf = darvasBoxes(full.c).find(b => b.i0 === opts.focusBox.i0) || null;
             m.focusPrev = darvasBoxes(full.c).filter(b => b.i1 < opts.focusBox.i0 && b.i1 - off >= 0 && b.i0 - off < m.n).map(b => ({ ...b, i0: b.i0 - off, i1: b.i1 - off }));
         }
         const geom = {};
