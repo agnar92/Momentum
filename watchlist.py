@@ -104,9 +104,9 @@ BASE_PRIOR_GAIN_PCT = 30     # A: wcześniejszy trend wzrostowy >= +30 % przed k
 FLAT_PRIOR_GAIN_PCT = 20     # D: flat base po wzroście >= +20 %
 CUP_MKT_CONTEXT_DD = 7.0     # S&P spadł >= 7 % w trakcie tworzenia miseczki = „pod presją rynku”
 ZIGZAG_PCT = 3.0             # minimalne odbicie, od którego liczymy kolejne "skurcze" (VCP)
-EPS_CACHE_VERSION = 3        # v3 = dodatkowo zmiana liczby akcji r/r (skup akcji); v2 = historia raportów do 40 kwartałów (limit=40); starsze wpisy są pobierane ponownie
+EPS_CACHE_VERSION = 4        # v4 = dodatkowo roczne EPS / sprzedaż / zysk przed opodatkowaniem z Yahoo (kryterium A wg książki); v3 = dodatkowo zmiana liczby akcji r/r (skup akcji); v2 = historia raportów do 40 kwartałów (limit=40); starsze wpisy są pobierane ponownie
 EPS_CACHE_MAX_AGE_DAYS = 6   # EPS zmienia się raz na kwartał; odświeżenie jest tygodniowe (sobota), więc wpis starszy niż 6 dni jest zawsze pobierany ponownie
-EPS_ACCEL_PP = 5.0           # akceleracja C: wzrost EPS r/r z ostatniego kwartału wyższy od poprzedniego o >= tyle punktów procentowych
+EPS_ACCEL_PP = 0.0           # akceleracja C (O'Neil: tempo wzrostu rośnie w ostatnich 2–3 kwartałach): każdy kolejny kwartał r/r wyższy od poprzedniego o więcej niż tyle p.p.
 EPS_TIME_BUDGET_S = 600
 EPS_WORKERS = 4
 CACHE_KEEP_DAYS = 45         # eps_cache.json / estimates.json dzielą skaner CANSLIM i szeroki skaner: wpis spoza bieżącej listy znika dopiero po tylu dniach bez odświeżenia
@@ -538,6 +538,29 @@ def eps_annual_growth(quarters, years=3):
     return out
 
 
+def eps_fiscal_growth(annual, years=3):
+    """A wg książki O'Neila: roczny wzrost EPS roku obrotowego (Yahoo income_stmt, ~4 ostatnie lata) w `years` ostatnich latach:
+    [najświeższy, rok wcześniej, 2 lata wcześniej]. Ujemna / zerowa baza albo brak roku = None. `annual` = [{d, eps, rev, pretax}] rosnąco po dacie."""
+    rows = sorted((r for r in (annual or []) if _is_num(r.get("eps"))), key=lambda r: r["d"])
+    out = []
+    for j in range(years):
+        i = len(rows) - 1 - j
+        now = rows[i]["eps"] if i >= 0 else None
+        prev = rows[i - 1]["eps"] if i - 1 >= 0 else None
+        out.append(_num((now - prev) / prev * 100, 1) if now is not None and prev is not None and prev > 0 else None)
+    return out
+
+
+def pretax_margin(annual):
+    """Marża przed opodatkowaniem (zysk przed podatkiem / przychody, %) ostatniego roku obrotowego i jej zmiana r/r w p.p. (informacyjnie —
+    O'Neil chce rosnących marż, ale nie podaje progu). -> (marża, zmiana) albo (None, None)."""
+    rows = sorted((r for r in (annual or []) if _is_num(r.get("pretax")) and _is_num(r.get("rev")) and r["rev"] > 0), key=lambda r: r["d"])
+    if not rows:
+        return None, None
+    m = [100 * r["pretax"] / r["rev"] for r in rows]
+    return _num(m[-1], 1), (_num(m[-1] - m[-2], 1) if len(m) > 1 else None)
+
+
 def eps_stability(growths):
     """Stabilność wzrostu EPS (0-100 %) = odsetek ostatnich EPS_STABILITY_QUARTERS kwartałów, w których EPS r/r wzrósł (g > 0).
     Spółka z wyraźnym wzrostem co kwartał dostaje ~100, z zygzakiem (zysk, strata, zysk...) wyraźnie mniej. None przy < EPS_STABILITY_MIN
@@ -557,9 +580,13 @@ def add_eps_rating(stocks, eps_cache):
         quarters = [q["g"] for q in eps_quarters(rows)[0]]
         q0 = quarters[-1] if quarters else None
         q1 = quarters[-2] if len(quarters) > 1 else None
-        s["eps_q0_yoy"], s["eps_q1_yoy"] = q0, q1
-        # akceleracja (C): tempo wzrostu zysków rośnie z kwartału na kwartał (np. +25 % -> +50 %); None, gdy brakuje któregoś kwartału
-        s["eps_accel"] = (q0 - q1 >= EPS_ACCEL_PP) if q0 is not None and q1 is not None else None
+        q2 = quarters[-3] if len(quarters) > 2 else None
+        s["eps_q0_yoy"], s["eps_q1_yoy"], s["eps_q2_yoy"] = q0, q1, q2
+        # akceleracja (C wg książki): tempo wzrostu zysków rośnie w ostatnich 2–3 kwartałach (np. +20 % -> +30 % -> +45 %); trzeci kwartał, gdy znany
+        s["eps_accel"] = ((q0 - q1 > EPS_ACCEL_PP) and (q2 is None or q1 - q2 > EPS_ACCEL_PP)) if q0 is not None and q1 is not None else None
+        annual = ((eps_cache or {}).get(s["ticker"]) or {}).get("annual") or []
+        s["eps_fy0"], s["eps_fy1"], s["eps_fy2"] = eps_fiscal_growth(annual)   # roczny wzrost EPS roku obrotowego w 3 ostatnich latach — kryterium A
+        s["pretax_margin"], s["pretax_margin_chg"] = pretax_margin(annual)
         s["eps_yr0"], s["eps_yr1"], s["eps_yr2"] = eps_annual_growth(eps_quarters(rows)[0])   # roczny wzrost EPS (TTM) w 3 ostatnich latach — kryterium A
         shares = ((eps_cache or {}).get(s["ticker"]) or {}).get("shares_chg_pct")
         s["shares_chg_pct"] = shares if _is_num(shares) else None   # zmiana liczby akcji r/r (ujemna = skup akcji)
@@ -1538,7 +1565,7 @@ def shares_change_pct(shares):
 
 
 def fetch_eps_one(ticker):
-    """-> {"rows": historia raportów EPS, "shares_chg_pct": zmiana liczby akcji r/r albo None} (jedno pobranie na spółkę)."""
+    """-> {"rows": historia raportów EPS, "shares_chg_pct": zmiana liczby akcji r/r albo None, "annual": roczne EPS / przychody / zysk przed podatkiem}."""
     import yfinance as yf
     t = yf.Ticker(ticker)
     rows = _fetch_eps_rows(t)
@@ -1546,7 +1573,31 @@ def fetch_eps_one(ticker):
         shares = shares_change_pct(t.get_shares_full(start=(datetime.now(timezone.utc) - pd.Timedelta(days=430)).strftime("%Y-%m-%d")))
     except Exception:
         shares = None
-    return {"rows": rows, "shares_chg_pct": shares}
+    try:
+        annual = _fetch_annual(t)
+    except Exception:
+        annual = []
+    return {"rows": rows, "shares_chg_pct": shares, "annual": annual}
+
+
+def _fetch_annual(t):
+    """Roczne dane z Yahoo (income_stmt: ~4 ostatnie lata obrotowe): rozwodniony EPS, przychody, zysk przed opodatkowaniem."""
+    inc = t.income_stmt
+    if inc is None or inc.empty:
+        return []
+
+    def val(row, col):
+        for name in (row if isinstance(row, (list, tuple)) else [row]):
+            if name in inc.index:
+                v = inc.loc[name, col]
+                if not pd.isna(v):
+                    return float(v)
+        return None
+    out = []
+    for col in inc.columns:
+        out.append({"d": pd.Timestamp(col).strftime("%Y-%m-%d"), "eps": val(["Diluted EPS", "Basic EPS"], col),
+                    "rev": val(["Total Revenue", "Operating Revenue"], col), "pretax": val("Pretax Income", col)})
+    return sorted(out, key=lambda r: r["d"])
 
 
 def _fetch_eps_rows(t):

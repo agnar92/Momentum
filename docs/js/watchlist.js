@@ -37,7 +37,7 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", square_box: "Square box", ipo: "Baza po debiucie (IPO)", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", csMin: 5, csCore: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10, patternOnly: false }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
+    tab: "LIST", csMin: 5, csCore: true, csAccel: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10, patternOnly: false }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
 // Jedna lista (watchlist.json = skaner CANSLIM z Finviz); zakładki CANSLIM, Qullamaggie, Bazy… to tylko różne filtry i sortowania tych samych spółek.
 
@@ -75,6 +75,7 @@ const state = {
     tab: DEFAULT_SETTINGS.tab,
     csMin: DEFAULT_SETTINGS.csMin,
     csCore: DEFAULT_SETTINGS.csCore,
+    csAccel: DEFAULT_SETTINGS.csAccel,
     csRs: DEFAULT_SETTINGS.csRs,
     qm: { ...DEFAULT_SETTINGS.qm },
     bases: { ...DEFAULT_SETTINGS.bases },
@@ -360,10 +361,10 @@ function tagBreakouts(stocks, alerts, maxDist) {
 // L = RS Rating ≥ 80 w silnej grupie (grupa ≥ 60, gdy znana), I = instytucje 20–90 % z napływem, M = trend wzrostowy rynku (EMA10 > EMA20 tyg.) i < 5 dni dystrybucji.
 const CANSLIM_KEYS = ["C", "A", "N", "S", "L", "I", "M"];
 const CANSLIM_HELP = {   // L: tekst z aktualnym progiem RS — patrz canslimHelp
-    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 25 % i sprzedaż r/r ≥ 25 %", A: "A — roczne zyski: EPS w tym roku ≥ 25 %, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 10 % pod szczytem 52 tyg.",
+    C: "C — bieżące zyski: EPS ostatniego kwartału r/r ≥ 20 %, sprzedaż r/r ≥ 25 %, tempo wzrostu EPS rośnie w ostatnich 2–3 kwartałach", A: "A — roczne zyski: EPS w tym roku ≥ 25 %, wzrost EPS ≥ 25 % w każdym z 3 ostatnich lat, ROE ≥ 17 %", N: "N — nowość / szczyt: nie dalej niż 10 % pod szczytem 52 tyg.",
     S: "S — popyt i podaż: Acc/Dis A lub B oraz zadłużenie D/E ≤ 1", L: "L — lider: RS Rating ≥ 80 w silnej grupie branżowej (≥ 60)", I: "I — instytucje: własność 20–90 % i napływ w ostatnim kwartale", M: "M — rynek: S&P 500 i Nasdaq w trendzie wzrostowym (EMA10 > EMA20 tyg.), mniej niż 5 dni dystrybucji",
 };
-const CANSLIM_THRESHOLDS = { epsQ: 25, sales: 25, epsYear: 25, roe: 17, nearHigh: -10, debtEq: 1, rs: 80, group: 60, instMin: 20, instMax: 90, instData: 100, distDays: 5 };
+const CANSLIM_THRESHOLDS = { epsQ: 20, epsQStrong: 25, accel: true, sales: 25, epsYear: 25, roe: 17, nearHigh: -10, debtEq: 1, rs: 80, group: 60, instMin: 20, instMax: 90, instData: 100, distDays: 5 };
 // I z CANSLIM tak samo jak watchlist.py::institutional_flag (liczymy też tu, żeby nie czekać na odświeżenie danych): przedział 20–90 % + napływ; > 100 % = dane niewiarygodne.
 function institutionalFlag(s) {
     const T = CANSLIM_THRESHOLDS;
@@ -386,21 +387,28 @@ function rsBasisText() {
     return "percentyl wśród spółek listy (skaner CANSLIM z Finviz), więc to „top X % tej listy”, a nie całego rynku";
 }
 // Próg RS (litera L) wpisuje użytkownik w Filtrach; CANSLIM_THRESHOLDS.rs czytają canslimInfo i canslimExplain.
+function setCanslimAccel(on) { CANSLIM_THRESHOLDS.accel = !!on; }
 function setCanslimRs(v) { CANSLIM_THRESHOLDS.rs = Number.isFinite(v) && v >= 0 && v <= 99 ? v : DEFAULT_SETTINGS.csRs; }
 function canslimHelp(k) {
     return k === "L" ? `L — lider: RS Rating ≥ ${CANSLIM_THRESHOLDS.rs} w silnej grupie branżowej (≥ ${CANSLIM_THRESHOLDS.group})` : CANSLIM_HELP[k];
+}
+// Roczny wzrost EPS dla A: lata obrotowe z Yahoo (eps_fy0..2), a gdy ich brak — suma 4 kwartałów (eps_yr0..2); [najświeższy, rok wcześniej, 2 lata wcześniej].
+function annualEpsGrowth(s) {
+    const fy = [s.eps_fy0, s.eps_fy1, s.eps_fy2], yr = [s.eps_yr0, s.eps_yr1, s.eps_yr2];
+    return fy.some(Number.isFinite) ? { values: fy, basis: "fy" } : { values: yr, basis: "ttm" };
 }
 function canslimInfo(s, mkt) {
     const T = CANSLIM_THRESHOLDS, num = Number.isFinite;
     const regime = mkt && typeof mkt === "object" ? mkt.regime : mkt;
     const distDays = mkt && typeof mkt === "object" ? mkt.distDays : null;
-    // C: zysk ostatniego kwartału i (gdy znana) sprzedaż; brak EPS = brak danych
+    // C wg książki O'Neila: EPS ostatniego kwartału r/r ≥ 20 % (minimum z „18–20 %”, najlepiej 25 % i więcej), sprzedaż r/r ≥ 25 % (gdy znana) i przyspieszenie
+    // tempa wzrostu EPS w ostatnich 2–3 kwartałach (gdy znane i włączone — Filtry → 🏆); brak EPS = brak danych
     let C = null;
-    if (num(s.eps_q0_yoy)) C = s.eps_q0_yoy >= T.epsQ && (!num(s.sales_qq) || s.sales_qq >= T.sales);
-    // A: każdy znany składnik musi przejść: EPS bieżącego roku, ROE i wzrost EPS (suma 4 kwartałów) w KAŻDYM z 3 ostatnich lat (eps_yr0..2, O'Neil: ≥ 25 % co roku);
+    if (num(s.eps_q0_yoy)) C = s.eps_q0_yoy >= T.epsQ && (!num(s.sales_qq) || s.sales_qq >= T.sales) && !(T.accel && s.eps_accel === false);
+    // A wg książki: każdy znany składnik musi przejść: EPS bieżącego roku, ROE ≥ 17 % i wzrost EPS roku obrotowego w KAŻDYM z 3 ostatnich lat (eps_fy0..2 z Yahoo, O'Neil: ≥ 25 % co roku);
     // nieznany rok (młoda spółka, ujemna baza) jest pomijany; żaden znany = brak danych. Wzrost EPS z 5 lat to nie kryterium O'Neila, więc go nie używamy.
     const aParts = [num(s.eps_this_y) ? s.eps_this_y >= T.epsYear : null, num(s.roe) ? s.roe >= T.roe : null,
-        ...[s.eps_yr0, s.eps_yr1, s.eps_yr2].map(v => (num(v) ? v >= T.epsYear : null))].filter(v => v !== null);
+        ...annualEpsGrowth(s).values.map(v => (num(v) ? v >= T.epsYear : null))].filter(v => v !== null);
     const A = aParts.length ? aParts.every(Boolean) : null;
     const N = num(s.pct_from_high_52w) ? s.pct_from_high_52w >= T.nearHigh : null;
     // S: popyt (Acc/Dis) i podaż (zadłużenie, gdy znane)
@@ -529,14 +537,15 @@ function canslimExplain(s, mkt) {
     const rows = [];
     const add = (key, name, rule, have, lesson) => rows.push({ key, name, ok: c.flags[key], rule, have, lesson });
     const accel = s.eps_accel === true ? "zysk przyspiesza" : s.eps_accel === false ? "bez przyspieszenia" : null;
-    add("C", "Current earnings — bieżące zyski", `EPS z ostatniego kwartału wyższy r/r o co najmniej ${T.epsQ} % i sprzedaż r/r o co najmniej ${T.sales} % (gdy znana)`,
-        num(s.eps_q0_yoy) ? `EPS ostatniego kwartału ${pct(s.eps_q0_yoy)} r/r${num(s.eps_q1_yoy) ? `, poprzedniego ${pct(s.eps_q1_yoy)}` : ""}${accel ? ` (${accel})` : ""}; sprzedaż ${num(s.sales_qq) ? `${pct(s.sales_qq)} r/r` : "— brak danych (oceniamy tylko EPS)"}` : "brak danych o EPS z ostatniego kwartału",
-        "O'Neil: kwartalny EPS co najmniej 18–20 %, najlepsze spółki 25–50 % i więcej, a sprzedaż rośnie ≥ 25 % albo przyspiesza. Wzrost zysku bez wzrostu sprzedaży to często cięcie kosztów. Liczy się też przyspieszenie z kwartału na kwartał — pokazujemy je (≥ 5 p.p. więcej niż w poprzednim kwartale, chip „↗ Akceleracja” i wyższe miejsce w sortowaniu), ale nie wymagamy go. Przyspieszenia sprzedaży nie sprawdzamy (mamy tylko ostatni kwartał).");
+    add("C", "Current earnings — bieżące zyski", `EPS z ostatniego kwartału wyższy r/r o co najmniej ${T.epsQ} % (najlepiej ${T.epsQStrong} % i więcej), sprzedaż r/r o co najmniej ${T.sales} % (gdy znana)${T.accel ? " i przyspieszenie EPS w ostatnich 2–3 kwartałach (gdy znane)" : ""}`,
+        num(s.eps_q0_yoy) ? `EPS ostatniego kwartału ${pct(s.eps_q0_yoy)} r/r${num(s.eps_q1_yoy) ? `, poprzedniego ${pct(s.eps_q1_yoy)}` : ""}${num(s.eps_q2_yoy) ? `, jeszcze wcześniejszego ${pct(s.eps_q2_yoy)}` : ""}${accel ? ` (${accel})` : ""}; sprzedaż ${num(s.sales_qq) ? `${pct(s.sales_qq)} r/r` : "— brak danych (oceniamy tylko EPS)"}` : "brak danych o EPS z ostatniego kwartału",
+        "O'Neil: kwartalny EPS co najmniej 18–20 %, najlepsze spółki 25–50 % i więcej; do tego przyspieszenie tempa wzrostu w ostatnich 2–3 kwartałach oraz sprzedaż ≥ 25 % albo przyspieszająca w 3 ostatnich kwartałach. Wzrost zysku bez wzrostu sprzedaży to często cięcie kosztów. Przyspieszenie EPS wymagamy (można wyłączyć w Filtry → 🏆); przyspieszenia SPRZEDAŻY nie sprawdzamy — Yahoo daje za mało kwartałów, mamy tylko ostatni kwartał z Finviza.");
     add("A", "Annual earnings — roczne zyski", `EPS w tym roku ≥ ${T.epsYear} %, wzrost EPS ≥ ${T.epsYear} % w każdym z 3 ostatnich lat i ROE ≥ ${T.roe} % (każdy znany składnik musi przejść)`,
         [num(s.eps_this_y) ? `EPS w tym roku ${pct(s.eps_this_y)}` : null,
-            [s.eps_yr0, s.eps_yr1, s.eps_yr2].some(num) ? `EPS rok do roku (ost. 4 kwartały, rok wcześniej, 2 lata wcześniej): ${[s.eps_yr0, s.eps_yr1, s.eps_yr2].map(v => (num(v) ? pct(v) : "—")).join(" / ")}` : null,
-            num(s.roe) ? `ROE ${s.roe}%` : null].filter(Boolean).join("; ") || "brak danych o rocznych zyskach i ROE",
-        "O'Neil: roczny wzrost EPS ≥ 25 % w każdym z ostatnich 3 lat i ROE ≥ 17 %. Lata liczymy z sumy EPS z 4 kwartałów (Yahoo, ~10 lat raportów) — to przybliżenie roku obrotowego; rok bez danych albo z ujemną bazą pomijamy (młode spółki). Średniej z 5 lat celowo nie używamy: ukrywa słaby rok i wycina młode spółki.");
+            annualEpsGrowth(s).values.some(num) ? `EPS rok do roku (${annualEpsGrowth(s).basis === "fy" ? "lata obrotowe" : "suma 4 kwartałów"}: najnowszy rok, rok wcześniej, 2 lata wcześniej): ${annualEpsGrowth(s).values.map(v => (num(v) ? pct(v) : "—")).join(" / ")}` : null,
+            num(s.roe) ? `ROE ${s.roe}%` : null,
+            num(s.pretax_margin) ? `marża przed opodatkowaniem ${s.pretax_margin}%${num(s.pretax_margin_chg) ? ` (${pct(s.pretax_margin_chg)} p.p. r/r)` : ""}` : null].filter(Boolean).join("; ") || "brak danych o rocznych zyskach i ROE",
+        "O'Neil: roczny wzrost EPS co najmniej 25 % (najlepiej 25–50 % i więcej) w KAŻDYM z 3 ostatnich lat, bez załamań, oraz ROE co najmniej 17 % (najlepsze 25–50 %). Lata to lata obrotowe z Yahoo (income_stmt, ok. 4 lata); gdy ich brak, używamy sumy EPS z 4 kwartałów. Rok bez danych albo z ujemną bazą pomijamy (młode spółki). Marża przed opodatkowaniem to informacja (O'Neil chce marż rosnących, nie podaje progu) — nie jest warunkiem. Średniej z 5 lat celowo nie używamy.");
     add("N", "New — nowe szczyty, produkty, zarząd", `cena nie dalej niż ${Math.abs(T.nearHigh)} % pod szczytem 52 tygodni`,
         num(s.pct_from_high_52w) ? (s.pct_from_high_52w >= 0 ? "cena na szczycie 52 tygodni" : `${Math.abs(s.pct_from_high_52w)}% poniżej szczytu 52 tyg.`) : "brak danych o szczycie 52 tyg.",
         "Nie szukamy „tanich” spółek po spadkach: największe wzrosty zaczynają się blisko nowych szczytów, po zbudowaniu bazy (cup, flat base); kupuje się przy wybiciu z pivotu (kolumna „Wybicie”). Tu mierzymy tylko cenę; „nowość” (produkt, zarząd) oceń sam z newsów.");
@@ -839,8 +848,8 @@ const COL = {
     rsLine: ["Linia RS", "rs_line_dist_pct", s => `<td${s.rs_line_state === "przed ceną" ? ` class="positive"` : ""} title="Linia RS (cena / S&P 500): odległość od maksimum z 52 tyg.; „przed ceną” = RS na maksimum, a cena jeszcze nie">${s.rs_line_state ? (s.rs_line_state === "przed ceną" ? "● RS przed ceną" : "● RS na szczycie") + " " : ""}${Number.isFinite(s.rs_line_dist_pct) ? `<span class="muted small">${fmtPct(s.rs_line_dist_pct)}</span>` : "—"}</td>`, "Linia RS: stan (RS na maksimum 52 tyg. przed/razem z ceną) i odległość od jej maksimum"],
     dist: ["Dystrybucja", "dist_vol_ratio", s => s.dist_top === true ? `<td class="negative" title="Dystrybucja bez wzrostu ceny (tydzień do ${escapeHtml(s.dist_date || "")}): najwyższy tygodniowy wolumen od dołka trendu ×${s.dist_vol_ratio}, zamknięcie ${fmtPct(s.dist_change_pct)}">⚠ ×${s.dist_vol_ratio}</td>` : `<td class="muted"></td>`,
         "Dystrybucja bez wzrostu ceny („mielenie”, O'Neil, świece tygodniowe): w ostatnich 2 tygodniach najwyższy wolumen tygodniowy od dołka trendu (≥ 1,5× średniej), a cena zamyka się prawie bez zmian albo w dolnej połowie zakresu, blisko szczytu rajdu. Podaż tłumi popyt. Heurystyka — sprawdź wykres"],
-    eps3y: ["EPS 3 lata", "eps_yr0", s => [s.eps_yr0, s.eps_yr1, s.eps_yr2].some(Number.isFinite)
-        ? `<td title="Wzrost sumy EPS z 4 kwartałów: ostatnie 4 kw. vs rok wcześniej / rok wcześniej vs 2 lata / 2 vs 3 lata wcześniej (kryterium A: ≥ 25 % co roku)">${[s.eps_yr0, s.eps_yr1, s.eps_yr2].map(v => (Number.isFinite(v) ? `<span class="${v >= 25 ? "positive" : "negative"}">${v > 0 ? "+" : ""}${v.toFixed(0)}</span>` : "—")).join(" / ")}</td>` : `<td class="muted">—</td>`,
+    eps3y: ["EPS 3 lata", "eps_fy0", s => annualEpsGrowth(s).values.some(Number.isFinite)
+        ? `<td title="Roczny wzrost EPS (lata obrotowe z Yahoo; bez nich suma 4 kwartałów): najnowszy rok / rok wcześniej / 2 lata wcześniej (kryterium A: ≥ 25 % co roku)">${annualEpsGrowth(s).values.map(v => (Number.isFinite(v) ? `<span class="${v >= 25 ? "positive" : "negative"}">${v > 0 ? "+" : ""}${v.toFixed(0)}</span>` : "—")).join(" / ")}</td>` : `<td class="muted">—</td>`,
         "Roczny wzrost EPS (suma 4 kwartałów) w 3 ostatnich latach, od najświeższego; O'Neil: ≥ 25 % w każdym roku"],
     buyback: ["Skup akcji", "shares_chg_pct", s => Number.isFinite(s.shares_chg_pct) ? `<td${s.shares_chg_pct <= -5 ? ` class="positive"` : ""} title="Zmiana liczby akcji w rok (Yahoo); ujemna = skup akcji własnych, ≤ −5 % to silny sygnał zmniejszania podaży">${s.shares_chg_pct > 0 ? "+" : ""}${s.shares_chg_pct.toFixed(1)}%${s.shares_chg_pct <= -5 ? " ✓" : ""}</td>` : `<td class="muted">—</td>`,
         "S z CANSLIM: zmiana liczby akcji r/r; ujemna = skup akcji (≤ −5 % = silny sygnał)"],
@@ -1177,7 +1186,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csRs: state.csRs, qm: state.qm, bases: state.bases, brk: state.brk, patterns: state.patterns }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, qm: state.qm, bases: state.bases, brk: state.brk, patterns: state.patterns }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -1188,6 +1197,7 @@ function loadSettings() {
         if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB || saved.tab === BOXES_TAB) state.tab = saved.tab;
         if (Number.isFinite(saved.csMin)) state.csMin = saved.csMin;
         if (typeof saved.csCore === "boolean") state.csCore = saved.csCore;
+        if (typeof saved.csAccel === "boolean") { state.csAccel = saved.csAccel; setCanslimAccel(saved.csAccel); }
         if (Number.isFinite(saved.csRs)) { state.csRs = saved.csRs; setCanslimRs(saved.csRs); }
         if (saved.qm) {
             ["minDollarVolumeM", "minAdrPct", "topPct"].forEach(k => {
@@ -1759,6 +1769,10 @@ function initControls() {
     const csCore = document.getElementById("csCore");
     csCore.checked = state.csCore;
     csCore.addEventListener("change", () => { state.csCore = csCore.checked; saveSettings(); renderTable(); });
+    const csAccel = document.getElementById("csAccel");
+    csAccel.checked = state.csAccel;
+    setCanslimAccel(state.csAccel);
+    csAccel.addEventListener("change", () => { state.csAccel = csAccel.checked; setCanslimAccel(state.csAccel); saveSettings(); renderTable(); });
     document.getElementById("baseMaxDist").value = state.bases.maxDistPct;
     bind("baseMaxDist", v => { state.bases.maxDistPct = v; });
     const vcp = document.getElementById("baseVcpOnly");
@@ -2458,7 +2472,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         hasWeeklyPattern, qmParams, stopAdvice,
-        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, qullamaggieRows, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

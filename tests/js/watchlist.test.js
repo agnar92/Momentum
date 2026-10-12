@@ -604,7 +604,18 @@ test("CANSLIM A: wzrost EPS ≥ 25 % w każdym znanym z 3 ostatnich lat; akceler
     assert.equal(canslimInfo({ eps_yr0: null }, mkt).flags.A, null);
     // akceleracja: C nie zależy od niej, ale chip i sortowanie tak
     const base = { eps_q0_yoy: 40, sales_qq: 30 };
-    assert.equal(canslimInfo({ ...base, eps_accel: false }, mkt).flags.C, true);
+    assert.equal(canslimInfo({ ...base, eps_accel: false }, mkt).flags.C, false);   // C wg książki wymaga przyspieszenia EPS (gdy znane)
+    assert.equal(canslimInfo({ ...base, eps_accel: null }, mkt).flags.C, true);      // nieznane przyspieszenie nie blokuje
+    assert.equal(canslimInfo({ eps_q0_yoy: 22, sales_qq: 30, eps_accel: true }, mkt).flags.C, true);    // minimum z książki: 20 %
+    assert.equal(canslimInfo({ eps_q0_yoy: 19, sales_qq: 30, eps_accel: true }, mkt).flags.C, false);
+    assert.equal(canslimInfo({ eps_q0_yoy: 40, sales_qq: 20, eps_accel: true }, mkt).flags.C, false);   // sprzedaż < 25 %
+    const { setCanslimAccel } = require("../../docs/js/watchlist.js");
+    setCanslimAccel(false);
+    assert.equal(canslimInfo({ ...base, eps_accel: false }, mkt).flags.C, true);   // przełącznik w Filtrach
+    setCanslimAccel(true);
+    // A: lata obrotowe (eps_fy*) mają pierwszeństwo przed sumą 4 kwartałów (eps_yr*)
+    assert.equal(canslimInfo({ ...good, eps_fy0: 40, eps_fy1: 12, eps_fy2: 30 }, mkt).flags.A, false);
+    assert.equal(canslimInfo({ ...good, eps_fy0: 40, eps_fy1: 30, eps_fy2: 28, eps_yr1: 5 }, mkt).flags.A, true);
     const rows = [{ ticker: "A", cs: 6, composite_rating: 90, eps_accel: false, canslim: { flags: { C: true, A: true } } }, { ticker: "B", cs: 6, composite_rating: 70, eps_accel: true, canslim: { flags: { C: true, A: true } } }];
     assert.deepEqual(canslimRows(rows, 5, true).map(r => r.ticker), ["B", "A"]);   // ta sama liczba liter: przyspieszający wyżej niż wyższy Composite
     const labels = ratingChips({ eps_accel: true, eps_q0_yoy: 50, eps_q1_yoy: 25, shares_chg_pct: -6.2, dist_top: true, dist_date: "2026-10-02", dist_vol_ratio: 2.1 }).map(c => c.value);

@@ -1084,6 +1084,27 @@ class TestWeeklyDistributionAndEps:
         assert s["eps_yr0"] is not None and s["eps_yr1"] is not None and s["eps_yr2"] is None
         assert s["shares_chg_pct"] == -6.2
 
+    def test_eps_fiscal_growth_and_pretax_margin_from_annual_rows(self):
+        annual = [{"d": "2023-12-31", "eps": 1.0, "rev": 100.0, "pretax": 10.0}, {"d": "2024-12-31", "eps": 1.5, "rev": 150.0, "pretax": 18.0},
+                  {"d": "2025-12-31", "eps": 2.4, "rev": 240.0, "pretax": 36.0}, {"d": "2022-12-31", "eps": 0.8, "rev": 90.0, "pretax": 6.0}]
+        assert watchlist.eps_fiscal_growth(annual) == [60.0, 50.0, 25.0]   # 2.4 vs 1.5, 1.5 vs 1.0, 1.0 vs 0.8
+        assert watchlist.eps_fiscal_growth([{"d": "2024-12-31", "eps": -1.0}, {"d": "2025-12-31", "eps": 2.0}]) == [None, None, None]   # ujemna baza
+        assert watchlist.eps_fiscal_growth([]) == [None, None, None]
+        assert watchlist.pretax_margin(annual) == (15.0, 3.0)   # 36/240 = 15 %, rok wcześniej 12 %
+        assert watchlist.pretax_margin([]) == (None, None)
+
+    def test_add_eps_rating_sets_fiscal_growth_and_three_quarter_acceleration(self):
+        rows = []
+        eps = [1.0, 1.0, 1.0, 1.0, 1.3, 1.3, 1.4, 1.5, 1.8, 1.9, 2.1, 2.4]
+        for i, e in enumerate(eps):
+            rows.append({"date": (pd.Timestamp("2023-03-01") + pd.DateOffset(months=3 * i)).strftime("%Y-%m-%d"), "eps": e, "est": None})
+        annual = [{"d": "2023-12-31", "eps": 3.0}, {"d": "2024-12-31", "eps": 4.5}, {"d": "2025-12-31", "eps": 7.2}]
+        stocks = [{"ticker": "AAA", "eps_this_y": 30.0, "eps_past_5y": 20.0}]
+        watchlist.add_eps_rating(stocks, {"AAA": {"rows": rows, "annual": annual}})
+        s = stocks[0]
+        assert s["eps_q2_yoy"] is not None and s["eps_q0_yoy"] > s["eps_q1_yoy"] > s["eps_q2_yoy"] and s["eps_accel"] is True
+        assert (s["eps_fy0"], s["eps_fy1"], s["eps_fy2"]) == (60.0, 50.0, None)
+
     def test_shares_change_pct_compares_with_a_year_ago(self):
         idx = pd.to_datetime(["2025-01-10", "2025-10-01", "2026-01-12", "2026-10-01"])
         assert watchlist.shares_change_pct(pd.Series([100.0, 98.0, 95.0, 92.0], index=idx)) == pytest.approx(-6.1, abs=0.1)
