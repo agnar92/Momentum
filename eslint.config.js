@@ -58,6 +58,7 @@ const browserGlobals = {
     pinBoxFromData: "readonly",
     boxAddOn: "readonly",
     darvasPatternBoxes: "readonly",
+    darvasInitialStop: "readonly",
     DARVAS_NEW_WEEKS: "readonly",
     DARVAS_STOP_PCT: "readonly",
     darvasBoxSheetHtml: "readonly",
