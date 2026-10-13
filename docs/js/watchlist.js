@@ -2207,7 +2207,8 @@ function chartDetailsHtml() {
 function chartInfoHtml() {
     const text = id => (document.getElementById(id) ? document.getElementById(id).textContent.trim() : "");
     const stock = currentChart ? state.data.stocks.find(x => x.ticker === currentChart.ticker) : null;
-    let html = chartDetailsHtml();
+    let html = stock && typeof heatmapHtml === "function" ? `<div class="sheet-section">${heatmapHtml(stock, canslimMarket())}</div>` : "";
+    html += chartDetailsHtml();
     const base = text("chartBase");
     if (base) html += `<div class="sheet-section"><h4>Baza / wzorzec</h4><p class="sheet-result">${escapeHtml(base)}</p></div>`;
     if (stock) {
