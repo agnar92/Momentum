@@ -49,7 +49,7 @@ class TestSelect:
         c = qm_scan.normalize({"top_pct": "250", "min_adr": "3,5", "windows": ["1m", "zzz"], "chart_top_pct": 1})
         assert c["top_pct"] == 100.0 and c["min_adr"] == 3.5 and c["windows"] == ["1m"] and c["chart_top_pct"] >= c["top_pct"]
         d = qm_scan.normalize(None)
-        assert d["min_dollar_mln"] == 60.0 and d["min_adr"] == 3.0 and d["keep_dollar_mln"] < d["min_dollar_mln"] and d["keep_adr"] < d["min_adr"]
+        assert d["min_dollar_mln"] == 60.0 and d["min_adr"] == 3.0 and d["keep_dollar_mln"] <= d["min_dollar_mln"] and d["keep_adr"] < d["min_adr"]
 
 
 class TestStageOne:
@@ -60,16 +60,11 @@ class TestStageOne:
         cands = {c["ticker"] for c in qm_scan.candidates(uni, {"top_pct": 10})}
         assert "U399" in cands and "U0" not in cands
         assert "ILLIQ" not in cands and "FLAT" not in cands
-        assert 60 <= len(cands) <= 400
+        assert 30 <= len(cands) <= 400
 
     def test_pool_pairs_skip_incomplete_rows(self):
         pairs = qm_scan.pool_pairs([universe_row("A"), {"ticker": "B", "price": 10.0}])
         assert pairs == [[50_000_000, 5.0]]
-
-    def test_suggest_filters_prefilter(self):
-        f = qm_scan.suggest_filters({"keep_dollar_mln": 20, "keep_adr": 3}).split(",")
-        assert {"cap_smallover", "ind_stocksonly", "sh_price_o10"} <= set(f)
-        assert any(x.startswith("sh_avgvol_o") for x in f) and "ta_volatility_mo2" in f
 
 
 class TestRun:
@@ -85,7 +80,7 @@ class TestRun:
         frames = {u["ticker"]: self._prices(400, 0.001 + i * 0.00005, 2_000_000) for i, u in enumerate(uni)}
         monkeypatch.setattr(watchlist, "download_prices", lambda tickers, period=None, **k: {t: frames[t] for t in tickers if t in frames} if tickers != [watchlist.BENCHMARK] else {watchlist.BENCHMARK: self._prices(400, 0.0005, 1e9)})
         out = tmp_path / "data"
-        assert qm_scan.run({"min_dollar_mln": 20, "min_adr": 3, "top_pct": 10}, out, log=lambda *a: None) == 0
+        assert qm_scan.run({"min_dollar_mln": 20, "min_adr": 3, "keep_dollar_mln": 20, "top_pct": 10}, out, two_stage=False, log=lambda *a: None) == 0
         wl = json.loads((out / "watchlist_qm.json").read_text(encoding="utf-8"))
         ch = json.loads((out / "charts_qm.json").read_text(encoding="utf-8"))
         assert wl["n_stocks"] == len(wl["stocks"]) > 0 and wl["qm_universe"] == 150
@@ -96,8 +91,8 @@ class TestRun:
         assert len(with_chart) < len(wl["stocks"])             # wykresy tylko dla czołówki
         assert all(s["qm_max_ratio"] is not None and s["qm_windows"] for s in wl["stocks"] if s["has_chart"])
 
-    def test_default_run_downloads_prices_for_the_whole_universe(self, tmp_path, monkeypatch):
-        uni = [universe_row(f"T{i}", price=20.0, avgvol=2_000_000, vol_m=4.5) for i in range(150)]
+    def test_default_run_is_two_stage_and_downloads_only_candidates(self, tmp_path, monkeypatch):
+        uni = [universe_row(f"T{i}", price=20.0, avgvol=4_000_000, vol_m=4.5, p1m=float(i), p3m=float(i), p6m=float(i), d50=float(i), w52=float(i)) for i in range(600)]
         seen = {}
 
         def fake_fetch(filters, max_tickers=5000, log=print):
@@ -108,14 +103,18 @@ class TestRun:
 
         def fake_dl(tickers, period=None, **k):
             asked.append(list(tickers))
-            return {t: self._prices(400, 0.001, 2_000_000) for t in tickers}
+            return {t: self._prices(400, 0.001, 4_000_000) for t in tickers}
         monkeypatch.setattr(watchlist, "download_prices", fake_dl)
-        assert qm_scan.run(None, tmp_path, log=lambda *a: None) == 0
+        logs = []
+        assert qm_scan.run(None, tmp_path, log=logs.append) == 0
         assert seen["filters"] == qm_scan.DEFAULT_FILTERS == "sh_avgvol_o100,sh_price_o5,ta_sma200_pa,ta_sma50_sa200"
-        assert len(asked[0]) == 150                      # bez zawężania do kandydatów
+        wl = json.loads((tmp_path / "watchlist_qm.json").read_text(encoding="utf-8"))
+        assert 0 < len(asked[0]) < 300 and wl["qm_two_stage"] is True and len(wl["qm_pool"]) == 600   # ceny tylko kandydatów, pula z całego zbioru
+        assert wl["qm_universe"] == 600
+        assert any("Kontrola zapasu" in str(m) for m in logs)
 
-    def test_two_stage_run_downloads_only_candidates_and_keeps_the_pool(self, tmp_path, monkeypatch):
-        uni = [universe_row(f"T{i}", price=20.0, avgvol=2_000_000, vol_m=4.5, p1m=float(i), p3m=float(i), p6m=float(i), d50=float(i), w52=float(i)) for i in range(400)]
+    def test_full_run_downloads_prices_for_the_whole_universe(self, tmp_path, monkeypatch):
+        uni = [universe_row(f"T{i}", price=20.0, avgvol=2_000_000, vol_m=4.5) for i in range(150)]
         monkeypatch.setattr(qm_scan, "fetch_universe", lambda filters, max_tickers=5000, log=print: (uni, len(uni)))
         asked = []
 
@@ -123,9 +122,15 @@ class TestRun:
             asked.append(list(tickers))
             return {t: self._prices(400, 0.001, 2_000_000) for t in tickers}
         monkeypatch.setattr(watchlist, "download_prices", fake_dl)
-        assert qm_scan.run({"min_dollar_mln": 20, "min_adr": 3}, tmp_path, two_stage=True, log=lambda *a: None) == 0
+        assert qm_scan.run({"min_dollar_mln": 20, "keep_dollar_mln": 20}, tmp_path, two_stage=False, log=lambda *a: None) == 0
         wl = json.loads((tmp_path / "watchlist_qm.json").read_text(encoding="utf-8"))
-        assert len(asked[0]) < 400 and wl["qm_two_stage"] is True and len(wl["qm_pool"]) == 400
+        assert len(asked[0]) == 150 and wl["qm_pool"] == [] and wl["qm_two_stage"] is False   # bez zawężania do kandydatów
+
+    def test_proxy_depth_reports_how_deep_the_candidate_list_had_to_go(self):
+        uni = [universe_row(f"U{i}", p1m=float(i), p3m=float(i), p6m=float(i), d50=float(i), w52=float(i)) for i in range(300)]
+        depth, n = qm_scan.proxy_depth(uni, {"top_pct": 10}, ["U299", "U290"])
+        assert depth == 10 and n >= 30                     # U290 jest 10. od góry we wszystkich rankingach
+        assert qm_scan.proxy_depth(uni, {"top_pct": 10}, [])[0] == 0
 
     def test_run_aborts_on_suspiciously_small_universe(self, tmp_path, monkeypatch):
         monkeypatch.setattr(qm_scan, "fetch_universe", lambda filters, max_tickers=5000, log=print: ([universe_row("A")], 1))

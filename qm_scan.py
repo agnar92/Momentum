@@ -6,9 +6,10 @@ docs/data/charts_qm.json (wykresy tygodniowe + dzienne dla czołówki rankingów
 Reguła (ta sama co w qullamaggieRows w watchlist.js): z płynnych spółek (obrót dzienny cena × wolumen ≥ próg, ADR ≥ próg) bierzemy górne X % rankingu
 cena / min Low OSOBNO dla okien 1M (22 sesje), 3M (66) i 6M (132); wynik to suma (unikalne spółki), sortowana po największej z tych relacji.
 
-Etap 1 (tylko Finviz, ok. 2 tys. spółek): zbiór ze skanera użytkownika (DEFAULT_FILTERS) jednym widokiem, sektor po sektorze, bo darmowy screener oddaje
-maks. 1000 wierszy. Etap 2 (yfinance): ceny CAŁEGO zbioru -> dokładny obrót, ADR i cena / min Low, wykresy. Opcja --two-stage (jak w desktopie) pobiera ceny
-tylko kandydatów z czołówki pięciu rankingów przybliżających cena / min Low i liczy wielkość puli płynnych z samego Finviz — szybciej, ale to przybliżenie.
+Etap 1 (tylko Finviz, ok. 2 tys. spółek): zbiór ze skanera użytkownika (DEFAULT_FILTERS) jednym widokiem (cena, średni wolumen, zmienność miesiąca, zwroty 1M / 3M / 6M,
+odległość od minimum 50 dni i 52 tygodni), sektor po sektorze, bo darmowy screener oddaje maks. 1000 wierszy. Z niego wybieramy kandydatów (czołówka pięciu
+rankingów przybliżających cena / min Low wśród spółek płynnych wg Finviz, ~13 % zbioru) i liczymy wielkość puli płynnych (potrzebna do „górnych X %”).
+Etap 2 (yfinance): ceny tylko kandydatów -> dokładny obrót, ADR i cena / min Low, wykresy. Opcja --full pobiera ceny całego zbioru (wolniej, bez przybliżenia).
 """
 import argparse
 import json
@@ -30,20 +31,21 @@ MIN_UNIVERSE = 100          # poniżej tego uznajemy odpowiedź Finviz za błęd
 
 WINDOWS = {"1m": ("low_ratio_1m", "1M"), "3m": ("low_ratio_3m", "3M"), "6m": ("low_ratio_6m", "6M")}
 # Domyślny zbiór = skaner użytkownika z Finviz (v=111, ft=3): średni wolumen > 100 tys., cena > 5 $, cena nad SMA200 i SMA50 nad SMA200 (≈ 2 tys. spółek,
-# 13 X 2026: 2020). Ceny pobieramy dla CAŁEGO zbioru (bez zawężania do kandydatów) — obrót, ADR i cena / min Low liczone są wtedy dokładnie.
+# 13 X 2026: 2020). Ceny pobieramy tylko dla kandydatów z etapu 1 (dwuetapowo jak w desktopie), pełny zbiór to opcja (--full).
 DEFAULT_FILTERS = "sh_avgvol_o100,sh_price_o5,ta_sma200_pa,ta_sma50_sa200"
-# progi listy: obrót 60 mln $, ADR 3 % (2–3 %), górne 10 % z każdego okna; próg pobierania jest niższy, żeby w aplikacji dało się obniżyć obrót / ADR
-# bez nowego pobierania (niżej — uruchom workflow z niższym progiem pobierania)
-DEFAULTS = {"min_dollar_mln": 60.0, "min_adr": 3.0, "top_pct": 10.0, "windows": ["1m", "3m", "6m"], "keep_dollar_mln": 30.0, "keep_adr": 2.0,
+# progi listy: obrót 60 mln $, ADR 3 % (2–3 %), górne 10 % z każdego okna; próg pobierania ADR jest niższy (2 %), żeby w aplikacji dało się go obniżyć bez
+# nowego pobierania (obrotu poniżej progu pobierania — uruchom workflow z niższym progiem; niższy próg = więcej kandydatów = dłuższe pobieranie)
+DEFAULTS = {"min_dollar_mln": 60.0, "min_adr": 3.0, "top_pct": 10.0, "windows": ["1m", "3m", "6m"], "keep_dollar_mln": 60.0, "keep_adr": 2.0,
             "chart_top_pct": 15.0}
 
-AVGVOL_LEVELS = (100, 200, 300, 500, 1000)   # progi średniego wolumenu (tys.), które ma Finviz
-MAX_SAFE_PRICE = 150.0                        # do tej ceny filtr wolumenu Finviz niczego nie obcina: cena × wolumen ≥ próg pobierania
-# Pomiar na sektorze Technology (380 spółek): Finviz „Volatility M” ≈ ADR, obrót cena × „Avg Volume” ≈ obrót z 20 sesji — zapas tylko przy wyborze kandydatów.
-PROXY_ADR_OFFSET = 0.5
-PROXY_DOLLAR_SLACK = 0.7
-CAND_FACTOR = 2.0           # z każdego rankingu bierzemy 2× więcej, niż wynika z górnych X % (ranking z Finviz tylko przybliża cena / min Low)
-CAND_MIN = 60
+# Pomiar na 2019 spółkach ze skanera użytkownika (13 X 2026, porównanie z dokładnym biegiem na cenach z yfinance): Finviz „Volatility M” ≈ ADR (różnica mediana 0,
+# od −1,1 do +0,5), obrót cena × „Avg Volume” ≈ obrót z 20 sesji (mediana 1,00×, ale od 0,2× do 2,7× — Finviz liczy średni wolumen z 3 miesięcy, więc świeży skok
+# wolumenu umyka), a wielkość puli płynnych z samego Finviz różni się od dokładnej o 1–2 spółki (321 vs 322, 555 vs 554, 741 vs 743).
+# Zapas dobrany tak, żeby domyślny wybór (60 mln $, ADR 3 %, górne 10 %) był w kandydatach w całości (61/61), a kandydatów było ~13 % zbioru (267 z 2019).
+PROXY_ADR_OFFSET = 1.0
+PROXY_DOLLAR_SLACK = 0.4
+CAND_FACTOR = 1.25          # z każdego rankingu bierzemy 1,25× tyle, ile wynika z górnych X % (ranking z Finviz tylko przybliża cena / min Low)
+CAND_MIN = 30
 CAND_MIN_PCT = 10.0         # liczone dla co najmniej tylu % (żeby podniesienie „górnych %” w aplikacji miało z czego brać)
 # rankingi przybliżające cena / min Low: zwrot 1M; zwrot 3M i odległość od minimum 50 dni; zwrot 6M i odległość od minimum 52 tygodni
 PROXY_KEYS = ("p1m", "p3m", "d50low", "p6m", "w52low")
@@ -115,34 +117,36 @@ def select(rows, cfg, top_pct=None, pool=None):
     return picked
 
 
-def suggest_filters(cfg):
-    """Wstępny filtr Finviz dla progów pobierania: tnie tylko to, co na pewno nie przejdzie obrotu / ADR (nie ogranicza wyniku)."""
-    c = normalize(cfg)
-    need_k = c["keep_dollar_mln"] * 1e6 / MAX_SAFE_PRICE / 1000   # wymagany wolumen (tys. akcji) dla spółki po MAX_SAFE_PRICE
-    level = max([lv for lv in AVGVOL_LEVELS if lv <= need_k] or [AVGVOL_LEVELS[0]])
-    codes = ["cap_smallover", "ind_stocksonly", f"sh_avgvol_o{level}", "sh_price_o10"]
-    vol = int(math.floor(c["keep_adr"] - 1))
-    if vol >= 2:
-        codes.append(f"ta_volatility_mo{min(vol, 5)}")
-    return ",".join(codes)
-
-
 def _proxy_liquid(u, dollar_mln, adr):
     price, vol, vm = _num(u.get("price")), _num(u.get("avgvol")), _num(u.get("vol_m"))
     return None not in (price, vol, vm) and price * vol >= dollar_mln * 1e6 * PROXY_DOLLAR_SLACK and vm >= adr - PROXY_ADR_OFFSET
 
 
-def candidates(universe, cfg):
-    """Etap 1: z całego zbioru Finviz wybiera kandydatów do pobrania cen — płynne (w przybliżeniu) spółki z czołówki któregokolwiek z pięciu rankingów."""
+def _proxy_rankings(universe, cfg):
+    """-> (płynne wg Finviz, ile bierzemy z rankingu, {klucz rankingu: lista posortowana malejąco})."""
     c = normalize(cfg)
     pool = [u for u in universe if _proxy_liquid(u, c["keep_dollar_mln"], c["keep_adr"])]
     pct = max(c["top_pct"], CAND_MIN_PCT)
     n = max(CAND_MIN, math.ceil(len(pool) * pct / 100 * CAND_FACTOR))
-    chosen = set()
-    for key in PROXY_KEYS:
-        ranked = sorted((u for u in pool if _num(u.get(key)) is not None), key=lambda u: u[key], reverse=True)
-        chosen.update(u["ticker"] for u in ranked[:n])
+    ranked = {key: sorted((u for u in pool if _num(u.get(key)) is not None), key=lambda u: u[key], reverse=True) for key in PROXY_KEYS}
+    return pool, n, ranked
+
+
+def candidates(universe, cfg):
+    """Etap 1: z całego zbioru Finviz wybiera kandydatów do pobrania cen — płynne (w przybliżeniu) spółki z czołówki któregokolwiek z pięciu rankingów."""
+    pool, n, ranked = _proxy_rankings(universe, cfg)
+    chosen = {u["ticker"] for key in PROXY_KEYS for u in ranked[key][:n]}
     return [u for u in pool if u["ticker"] in chosen]
+
+
+def proxy_depth(universe, cfg, tickers):
+    """Kontrola zapasu: (najgłębsza pozycja wybranej spółki w najlepszym z rankingów Finviz, ile bierzemy z rankingu).
+    Gdy pierwsza liczba zbliża się do drugiej, kandydatów mogło zabraknąć (spółki tuż pod granicą nie zostały pobrane)."""
+    _, n, ranked = _proxy_rankings(universe, cfg)
+    pos = {key: {u["ticker"]: i + 1 for i, u in enumerate(rows)} for key, rows in ranked.items()}
+    depths = [min((pos[k][t] for k in PROXY_KEYS if t in pos[k]), default=None) for t in tickers]
+    depths = [d for d in depths if d is not None]
+    return (max(depths) if depths else 0), n
 
 
 # ---------- Finviz: cały zbiór (etap 1) ----------
@@ -232,12 +236,12 @@ def annotate(row, windows):
     row["qm_max_ratio"] = max(ratios) if ratios else None
 
 
-def run(cfg=None, data_dir=None, filters=None, two_stage=False, log=print):
+def run(cfg=None, data_dir=None, filters=None, two_stage=True, log=print):
     """-> 0 / 1. Zapisuje watchlist_qm.json i charts_qm.json w data_dir.
-    two_stage=False (domyślnie): ceny dla całego zbioru z Finviz. two_stage=True: etap 1 wybiera kandydatów (czołówka rankingów zwrotów), ceny tylko ich."""
+    two_stage=True (domyślnie): etap 1 wybiera kandydatów (czołówka rankingów zwrotów z Finviz), ceny tylko ich. two_stage=False: ceny dla całego zbioru."""
     cfg = normalize(cfg)
     data_dir = Path(data_dir or DATA_DIR)
-    filters = filters or (suggest_filters(cfg) if two_stage else DEFAULT_FILTERS)
+    filters = filters or DEFAULT_FILTERS
     log(f"Etap 1 (tylko Finviz): filtr {filters}")
     try:
         universe, total = fetch_universe(filters, log=log)
@@ -250,7 +254,7 @@ def run(cfg=None, data_dir=None, filters=None, two_stage=False, log=print):
     if two_stage:
         cands = candidates(universe, cfg)
         pool = pool_pairs(universe)
-        log(f"Etap 1: {len(universe)} spółek w zbiorze → {len(cands)} kandydatów do pobrania cen (czołówka zwrotów 1M / 3M / 6M wśród płynnych).")
+        log(f"Etap 1: {len(universe)} spółek w zbiorze → {len(cands)} kandydatów do pobrania cen ({len(cands) / len(universe):.0%}; czołówka zwrotów 1M / 3M / 6M wśród płynnych).")
     else:
         cands, pool = universe, None   # wszystkie spółki mają ceny, więc „górne X %” liczymy wprost od liczby płynnych (bez przybliżonej puli z Finviz)
         log(f"Etap 1: {len(universe)} spółek w zbiorze — ceny pobieram dla wszystkich.")
@@ -276,6 +280,12 @@ def run(cfg=None, data_dir=None, filters=None, two_stage=False, log=print):
     if not kept:
         log("❌ Żadna spółka nie przeszła progów pobierania — nie zapisuję.")
         return 1
+    if two_stage:
+        picked_now = select(kept, cfg, pool=pool)
+        depth, n = proxy_depth(universe, cfg, list(picked_now))
+        log(f"Kontrola zapasu kandydatów: najgłębszy wybrany był {depth}. w rankingu Finviz (z {n} branych z każdego).")
+        if depth > 0.8 * n:
+            log("⚠️  Wybrane spółki sięgają końca listy kandydatów — część mogła zostać pominięta; uruchom workflow bez dwuetapowego trybu (two_stage = false).")
     # wykresy tylko dla czołówki (progi listy, górne chart_top_pct % — trochę szerzej niż górne X % listy), żeby plik został mały (ok. 20 kB na spółkę);
     # reszta ma dane liczbowe bez wykresu
     chart_pick = select(kept, cfg, cfg["chart_top_pct"], pool)
@@ -315,16 +325,16 @@ def main(argv=None):
     p.add_argument("--min-dollar", type=float, default=None, help="Próg obrotu dziennego w mln $ dla listy (domyślnie 60).")
     p.add_argument("--min-adr", type=float, default=None, help="Próg ADR %% dla listy (domyślnie 3).")
     p.add_argument("--top-pct", type=float, default=None, help="Górne X %% z każdego okna 1M / 3M / 6M (domyślnie 10).")
-    p.add_argument("--keep-dollar", type=float, default=None, help="Próg pobierania: obrót w mln $ (domyślnie 30) — poniżej spółka nie jest zapisywana.")
+    p.add_argument("--keep-dollar", type=float, default=None, help="Próg pobierania: obrót w mln $ (domyślnie 60) — poniżej spółka nie jest zapisywana.")
     p.add_argument("--keep-adr", type=float, default=None, help="Próg pobierania: ADR %% (domyślnie 2).")
     p.add_argument("--chart-top-pct", type=float, default=None, help="Wykresy tylko dla górnych X %% z każdego okna (domyślnie 15).")
     p.add_argument("--filters", type=str, default=None, help="Filtr Finviz (kody po przecinku); domyślnie skaner użytkownika: " + DEFAULT_FILTERS + ".")
-    p.add_argument("--two-stage", action="store_true", help="Szybki wariant dwuetapowy: ceny tylko kandydatów z czołówki rankingów Finviz (przybliżenie, mniej pobierania).")
+    p.add_argument("--full", action="store_true", help="Ceny dla CAŁEGO zbioru z Finviz zamiast samych kandydatów z czołówki rankingów (dokładniej, ale ~8× więcej pobierania).")
     p.add_argument("--data-dir", type=str, default=None, help="Katalog wyjściowy (domyślnie docs/data).")
     a = p.parse_args(argv)
     cfg = {k: v for k, v in {"min_dollar_mln": a.min_dollar, "min_adr": a.min_adr, "top_pct": a.top_pct, "keep_dollar_mln": a.keep_dollar,
                              "keep_adr": a.keep_adr, "chart_top_pct": a.chart_top_pct}.items() if v is not None}
-    return run(cfg, a.data_dir, a.filters, a.two_stage)
+    return run(cfg, a.data_dir, a.filters, not a.full)
 
 
 if __name__ == "__main__":
