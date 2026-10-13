@@ -1155,3 +1155,14 @@ body.split table.momentum-table th:is([data-key="price"], [data-key="market_cap"
 .layer-chip:hover { color: #fff; border-color: #6b7684; }
 .layer-chip.on { color: #0b0d10; background: #c9d1d9; border-color: #c9d1d9; font-weight: 700; }
 @media (pointer: coarse) { .layer-chip { padding: 6px 12px; font-size: 12px; } }
+
+/* Przycisk „ⓘ Opis”: mały, okrągły, z kolorową plakietką CANSLIM (nie rozciąga się na cały rząd nagłówka) */
+body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-width: 44px; min-height: 40px; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #1b2230; border: 1.5px solid #5b6a85; color: #cfe3ff; }
+#chartInfoBtn .info-ic { font-size: 20px; line-height: 1; }
+#chartInfoBtn .info-badge { font-size: 12px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: #3a4152; color: #fff; letter-spacing: .02em; }
+#chartInfoBtn.info-good { border-color: #2ecc71; color: #8df0b4; }
+#chartInfoBtn.info-good .info-badge { background: #1f9d57; }
+#chartInfoBtn.info-mid { border-color: #f0b429; color: #ffd978; }
+#chartInfoBtn.info-mid .info-badge { background: #b9851a; color: #1a1300; }
+#chartInfoBtn.info-bad { border-color: #e5484d; color: #ff9a9d; }
+#chartInfoBtn.info-bad .info-badge { background: #c23a3f; }

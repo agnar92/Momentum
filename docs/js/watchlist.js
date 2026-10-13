@@ -1726,6 +1726,7 @@ function setPatterns(on) {
     else renderTable();
     if (currentChart) {
         const st = state.data.stocks.find(x => x.ticker === currentChart.ticker);
+        updateInfoButton(st);
         document.getElementById("chartBase").innerHTML = st && state.patterns ? baseBoxHtml(st) : "";
         document.getElementById("chartReady").textContent = st ? readinessLine(st, state.data.market && (state.data.market.m_regime || state.data.market.regime), state.patterns) : "";
         chartWindows = [];
@@ -1982,6 +1983,7 @@ async function openChart(ticker) {
         : "";
     document.getElementById("chartStats").textContent = stock ? chartStats(stock) : "";
     document.getElementById("chartRatings").innerHTML = stock ? ratingChipsHtml(stock) : "";
+    updateInfoButton(stock);
     document.getElementById("chartBase").innerHTML = stock && state.patterns ? baseBoxHtml(stock) : "";
     document.getElementById("chartReady").textContent = stock ? readinessLine(stock, state.data.market && (state.data.market.m_regime || state.data.market.regime), state.patterns) : "";
     updatePosButton();
@@ -2215,6 +2217,16 @@ function chartInfoHtml() {
             + ex.rows.map(r => `<p class="sheet-result"><b>${mark(r.ok)} ${escapeHtml(r.key)}</b> — ${escapeHtml(r.have || "brak danych")}<br><span class="muted small">${escapeHtml(r.rule || "")}</span></p>`).join("") + `</div>`;
     }
     return html || `<p class="muted">Brak danych o spółce.</p>`;
+}
+// Mały przycisk „ⓘ” z kolorową plakietką CANSLIM (zielona ≥ 5/7, żółta 4/7, czerwona poniżej, szara bez danych) — zamiast szerokiego przycisku z tekstem.
+function updateInfoButton(stock) {
+    const b = document.getElementById("chartInfoBtn");
+    if (!b) return;
+    const cs = stock && Number.isFinite(stock.cs) ? stock.cs : null;
+    const tone = cs === null ? "none" : cs >= 5 ? "good" : cs === 4 ? "mid" : "bad";
+    b.className = `btn info-btn info-${tone}`;
+    b.innerHTML = `<span class="info-ic">ⓘ</span>${cs === null ? "" : `<span class="info-badge">${cs}/7</span>`}`;
+    b.title = cs === null ? "Opis spółki: oceny, fundamenty, formacja, baza" : `Opis spółki — CANSLIM ${cs}/7 (oceny, fundamenty, formacja, baza, litery C A N S L I M)`;
 }
 function openChartInfo() {
     if (!currentChart) return;
