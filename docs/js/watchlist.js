@@ -2201,6 +2201,27 @@ function chartDetailsHtml() {
     return blocks.length ? `<div class="sheet-section">${blocks.map(([h, t]) => `<h4>${h}</h4><p class="sheet-result">${escapeHtml(t)}</p>`).join("")}</div>` : "";
 }
 
+// Przycisk „ⓘ Opis” (też na Dar-Card): wszystkie dane spółki w jednym arkuszu — oceny, gotowość, fundamenty, formacja / baza, litery CANSLIM z liczbami — bez wracania do listy.
+function chartInfoHtml() {
+    const text = id => (document.getElementById(id) ? document.getElementById(id).textContent.trim() : "");
+    const stock = currentChart ? state.data.stocks.find(x => x.ticker === currentChart.ticker) : null;
+    let html = chartDetailsHtml();
+    const base = text("chartBase");
+    if (base) html += `<div class="sheet-section"><h4>Baza / wzorzec</h4><p class="sheet-result">${escapeHtml(base)}</p></div>`;
+    if (stock) {
+        const ex = canslimExplain(stock, canslimMarket());
+        const mark = ok => (ok === true ? "✓" : ok === false ? "✗" : "?");
+        html += `<div class="sheet-section"><h4>CANSLIM ${Number.isFinite(stock.cs) ? stock.cs + "/7" : "(za mało danych)"}</h4>`
+            + ex.rows.map(r => `<p class="sheet-result"><b>${mark(r.ok)} ${escapeHtml(r.key)}</b> — ${escapeHtml(r.have || "brak danych")}<br><span class="muted small">${escapeHtml(r.rule || "")}</span></p>`).join("") + `</div>`;
+    }
+    return html || `<p class="muted">Brak danych o spółce.</p>`;
+}
+function openChartInfo() {
+    if (!currentChart) return;
+    const st = state.data.stocks.find(x => x.ticker === currentChart.ticker);
+    showSheet(`${escapeHtml(currentChart.ticker)} — opis${st && st.company ? " · " + escapeHtml(st.company) : ""}`, chartInfoHtml());
+}
+
 // Telefon: drugorzędne przyciski nagłówka wykresu (skala, estymaty, legenda, pełny ekran, linki, score) są pod „⋯” — arkuszem od dołu.
 function openChartMore() {
     const btns = ["chartFullBtn", "chartPatBtn", "chartDarvasBtn", "chartEstBtn", "chartLegendBtn"].map(id => document.getElementById(id)).filter(b => b && !b.hidden);
@@ -2230,6 +2251,7 @@ function initChartModal() {
     chartBookOn = true; chartLog = false;
     updateLogButton();
     { const cb = document.getElementById("chartDailyOn"); if (cb) { cb.checked = chartDailyOn; cb.addEventListener("change", () => setChartDaily(cb.checked)); } }
+    document.getElementById("chartInfoBtn").addEventListener("click", openChartInfo);
     document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });
     // przesunięcie palca w poziomie: w lewo = następna spółka z listy, w prawo = poprzednia (zastąpiło strzałki ◀ ▶);
     // działa na tytule, linii gotowości i na wykresie, ale nie na suwaku (ma własne przeciąganie) ani w trybie rysowania
