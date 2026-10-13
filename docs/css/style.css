@@ -1155,3 +1155,32 @@ body.split table.momentum-table th:is([data-key="price"], [data-key="market_cap"
 .layer-chip:hover { color: #fff; border-color: #6b7684; }
 .layer-chip.on { color: #0b0d10; background: #c9d1d9; border-color: #c9d1d9; font-weight: 700; }
 @media (pointer: coarse) { .layer-chip { padding: 6px 12px; font-size: 12px; } }
+
+/* Przycisk „ⓘ Opis”: mały, okrągły, z kolorową plakietką CANSLIM (nie rozciąga się na cały rząd nagłówka) */
+body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-width: 44px; min-height: 40px; padding: 4px 10px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; background: #1b2230; border: 1.5px solid #5b6a85; color: #cfe3ff; }
+#chartInfoBtn .info-ic { font-size: 20px; line-height: 1; }
+#chartInfoBtn .info-badge { font-size: 12px; font-weight: 800; padding: 2px 7px; border-radius: 999px; background: #3a4152; color: #fff; letter-spacing: .02em; }
+#chartInfoBtn.info-good { border-color: #2ecc71; color: #8df0b4; }
+#chartInfoBtn.info-good .info-badge { background: #1f9d57; }
+#chartInfoBtn.info-mid { border-color: #f0b429; color: #ffd978; }
+#chartInfoBtn.info-mid .info-badge { background: #b9851a; color: #1a1300; }
+#chartInfoBtn.info-bad { border-color: #e5484d; color: #ff9a9d; }
+#chartInfoBtn.info-bad .info-badge { background: #c23a3f; }
+
+/* Mapa cieplna spółki (Opis): podkategorie jak sektory na Finviz Map */
+.hm-wrap { margin: 0 -4px 6px; }
+.hm-total { font-size: 13px; margin: 0 4px 6px; }
+.hm { position: relative; width: 100%; background: #0d1015; border-radius: 6px; overflow: hidden; }
+.hm-g { position: absolute; border: 1px solid #0d1015; box-sizing: border-box; overflow: hidden; background: #181c24; }
+.hm-h { position: absolute; left: 0; right: 0; top: 0; display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 0 4px; font-size: 10px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; color: #dfe4ee; background: #1d222c; overflow: hidden; white-space: nowrap; }
+.hm-h i { font-style: normal; font-weight: 700; }
+.hm-b { position: absolute; left: 0; right: 0; bottom: 0; }
+.hm-t { position: absolute; box-sizing: border-box; border: 1px solid #0d1015; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; overflow: hidden; line-height: 1.1; }
+.hm-t .hm-l { font-size: 9.5px; opacity: .9; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hm-t b { font-size: 12px; }
+.hm-big b { font-size: 18px; }
+.hm-big .hm-l { font-size: 11px; }
+.hm-sm b { font-size: 9px; font-weight: 600; }
+.hm-leg { display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--muted, #8b94a3); margin: 6px 4px 0; }
+.hm-leg i { width: 22px; height: 9px; display: inline-block; }
+.hm-leg span { margin-left: 6px; }
