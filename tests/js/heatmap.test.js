@@ -14,10 +14,10 @@ test("squarify: powierzchnie proporcjonalne do wag i wypełniają prostokąt", (
 
 test("heatMetrics: dobra spółka zielona, brak danych szary", () => {
     const g = heatMetrics({ eps_q0_yoy: 80, sales_qq: 40, rs_rating: 95, accdis: "A", climax_top: false }, { regime: "uptrend", distDays: 2 });
-    const c = g.find(x => x.title.startsWith("Zyski kw"));
+    const c = g.find(x => x.title === "Wzrost zysków");
     assert.ok(c.score > 0.5);
-    assert.strictEqual(c.items.find(i => i.label === "Sprzedaż kw.").score, 1);
-    assert.strictEqual(g.find(x => x.title.startsWith("Rynek")).score, 0.88 > 0 ? g.find(x => x.title.startsWith("Rynek")).score : 0);
+    assert.strictEqual(g.find(x => x.title === "Wzrost sprzedaży").items.find(i => i.label === "Sprzedaż kw. r/r").score, 1);
+    assert.ok(g.find(x => x.title === "Rynek").score > 0.5);
     const none = heatMetrics({}, null);
     assert.ok(none.every(x => x.score === null));
     assert.strictEqual(heatColor(null), "#3a3f49");
@@ -25,7 +25,7 @@ test("heatMetrics: dobra spółka zielona, brak danych szary", () => {
 
 test("heatmapHtml: zawiera podkategorie i kafelki", () => {
     const h = heatmapHtml({ eps_q0_yoy: 30, rs_rating: 70 }, { regime: "correction", distDays: 6 });
-    assert.match(h, /Zyski kwartalne/);
+    assert.match(h, /Wzrost zysków/);
     assert.match(h, /hm-t/);
     assert.match(h, /Ogólnie/);
 });
