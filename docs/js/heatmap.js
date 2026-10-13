@@ -1,5 +1,5 @@
 // ============================================================
-// MAPA CIEPLNA SPÓŁKI (styl Finviz Map): spółka = „indeks”, podkategorie wg TYPU parametru (wzrost, rentowność, wycena, analitycy, własność, momentum, trend, płynność, ostrzeżenia, rynek) = „sektory”,
+// MAPA CIEPLNA SPÓŁKI (styl Finviz Map): spółka = „indeks”, podkategorie wg TYPU parametru (wzrost, rentowność, analitycy, własność, momentum, trend, płynność, ostrzeżenia, rynek) = „sektory”,
 // pojedyncze wskaźniki = kafelki. Wielkość kafelka = waga wskaźnika (litery CANSLIM ważą więcej), kolor = „ciepło” (czerwony zły … zielony dobry, szary brak danych).
 // Progi to heurystyki (O'Neil / CANSLIM), nie porada. Czyste funkcje (heatMetrics, squarify, heatmapHtml) są testowane w tests/js/heatmap.test.js.
 // ============================================================
@@ -21,7 +21,6 @@ const heatYn = k => s => (s[k] == null ? null : s[k] ? "tak" : "nie");
 const heatAnnual = s => ([s.eps_fy0, s.eps_fy1, s.eps_fy2].some(Number.isFinite) ? [s.eps_fy0, s.eps_fy1, s.eps_fy2] : [s.eps_yr0, s.eps_yr1, s.eps_yr2]);
 
 const heatUsd = v => (v == null ? "–" : v >= 1e9 ? "$" + (v / 1e9).toFixed(1) + "B" : "$" + Math.round(v / 1e6) + "M");
-const heatLow = (good, ok, bad) => v => (v == null ? null : v <= 0 ? -0.6 : v <= good ? 1 : v <= ok ? 0.3 : v <= bad ? -0.3 : -1);   // im mniej tym lepiej (wycena)
 
 // Podkategorie wg TYPU parametru (nie wg liter CANSLIM): [etykieta, pobranie wartości (pole lub funkcja), format, ocena −1…+1, waga]
 const HEAT_GROUPS = [
@@ -36,9 +35,6 @@ const HEAT_GROUPS = [
     ["Rentowność i kondycja", [
         ["ROE", "roe", heatPct, heatTh(0, 17, 17), 3], ["Marża przed opod.", "pretax_margin", heatPct, heatTh(0, 10, 20), 2],
         ["Zmiana marży", "pretax_margin_chg", heatPct, v => (v == null ? null : v > 0 ? 1 : -0.7), 1], ["Dług / kapitał", "debt_eq", heatNum(2), v => (v == null ? null : v <= 0.5 ? 1 : v <= 1 ? 0.3 : -0.8), 2]]],
-    ["Wycena", [
-        ["P/E", "pe", heatNum(1), heatLow(25, 45, 80), 2], ["Forward P/E", "forward_pe", heatNum(1), heatLow(20, 35, 60), 2],
-        ["Wzrost EPS za rok", "eps_next_y", heatPct, heatTh(0, 15, 25), 1.5]]],
     ["Analitycy", [
         ["Rekomendacja", "recom", heatNum(1), v => (v == null ? null : v <= 1.8 ? 1 : v <= 2.4 ? 0.5 : v <= 3 ? -0.2 : -1), 2], ["Upside do celu", "pt_upside_pct", heatPct, heatRange(-10, 40), 2.5],
         ["Rewizje EPS 30d", "eps_rev30_pct", heatPct, v => (v == null ? null : v > 0 ? 1 : v < 0 ? -0.8 : 0), 2], ["Rewizje EPS 90d", "eps_rev90_pct", heatPct, v => (v == null ? null : v > 0 ? 1 : v < 0 ? -0.8 : 0), 1.5],
