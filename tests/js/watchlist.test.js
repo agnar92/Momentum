@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    qullamaggieRows, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    qullamaggieRows, qmPoolSize, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -44,6 +44,18 @@ test("qullamaggieRows: liquidity thresholds, then union of top X% per 1/3/6M win
     assert.equal(merged.filter(r => r.ticker === "A").length, 1);
     assert.deepEqual(merged.find(r => r.ticker === "A").windows.map(w => w.label), ["1M", "3M"]);
     assert.equal(merged.find(r => r.ticker === "A").max_ratio, 1.95);
+});
+
+test("qullamaggieRows: with the Finviz pool, top X% is counted from the size of the whole liquid set, not from the candidates", () => {
+    const stocks = Array.from({ length: 20 }, (_, i) => stock(`S${i}`, { low_ratio_1m: 1 + i / 100, low_ratio_3m: 1, low_ratio_6m: 1 }));
+    const params = { minDollarVolumeM: 20, minAdrPct: 5, topPct: 10 };
+    // bez puli: 10 % z 20 kandydatów = 2 na okno; z pulą 200 płynnych: 10 % = 20 => wszyscy kandydaci
+    assert.equal(qullamaggieRows(stocks, params).filter(r => r.windows.some(w => w.label === "1M")).length, 2);
+    const pool = [...Array(200).fill([100e6, 6]), ...Array(50).fill([1e6, 1])];
+    assert.equal(qullamaggieRows(stocks, params, pool).filter(r => r.windows.some(w => w.label === "1M")).length, 20);
+    assert.equal(qmPoolSize(pool, 20e6, 5), 200);
+    assert.equal(qmPoolSize(pool, 200e6, 5), 0);
+    assert.equal(qmPoolSize(null, 20e6, 5), 0);
 });
 
 test("qullamaggieRows: empty input and zero topPct give an empty list", () => {

@@ -1,0 +1,107 @@
+name: QM Prices
+
+# Ręczny skan Qullamaggie na SAMYCH CENACH (bez fundamentów, EPS i estymat) — odpowiednik skanu z aplikacji MomentumDesktop.
+# Etap 1: cały zbiór z Finviz (ok. 2 tys. spółek, sektor po sektorze) -> kandydaci; etap 2: ceny z yfinance tylko kandydatów.
+# Potem: obrót dzienny, ADR i cena / min Low z okien 1M / 3M / 6M; zakładka Qullamaggie w aplikacji wybiera górne X % z KAŻDEGO okna osobno
+# (suma bez duplikatów, sortowanie po największej relacji cena / min Low). Wynik: docs/data/watchlist_qm.json + charts_qm.json (wykresy tygodniowe
+# i dzienne czołówki) — NIE rusza watchlist.json / charts.json (lista CANSLIM) ani migawki raw-data.
+#
+# Ręczne odpalenie: zakładka Actions -> "QM Prices" -> "Run workflow" (progi można zmienić w polach), albo lokalnie:
+#   python qm_scan.py
+on:
+  workflow_dispatch:
+    inputs:
+      min_dollar:
+        description: 'Obrót dzienny od (mln $) — próg listy'
+        default: '20'
+      min_adr:
+        description: 'ADR od (%) — próg listy'
+        default: '4'
+      top_pct:
+        description: 'Górne X % z każdego okna 1M / 3M / 6M'
+        default: '10'
+      keep_dollar:
+        description: 'Próg pobierania: obrót od (mln $) — poniżej spółka nie jest zapisywana'
+        default: '20'
+      keep_adr:
+        description: 'Próg pobierania: ADR od (%)'
+        default: '3'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Wspólna grupa z innymi workflowami: bez nakładających się wdrożeń Pages.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  qm:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: QM scan (Finviz universe + yfinance prices of candidates)
+        run: >
+          python qm_scan.py
+          --min-dollar "${{ inputs.min_dollar }}" --min-adr "${{ inputs.min_adr }}" --top-pct "${{ inputs.top_pct }}"
+          --keep-dollar "${{ inputs.keep_dollar }}" --keep-adr "${{ inputs.keep_adr }}"
+
+      - name: Persist docs/data/*_qm.json
+        run: |
+          if [ -n "$(git status --porcelain docs/data/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # Najpierw na AKTUALNY szczyt main ("reset --mixed"), żeby commit niósł tylko świeże dane na poprawnej bazie.
+            git fetch origin main
+            git reset --mixed origin/main
+            git add docs/data/watchlist_qm.json docs/data/charts_qm.json
+            # [skip ci]: bez tego commit odpaliłby kolejne workflowy (push: main).
+            git commit -m "chore: QM prices scan [skip ci]"
+            for attempt in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — pobieram najnowszy main i próbuję ponownie..."
+              sleep $((attempt * 3))
+              git fetch origin main
+              git reset --mixed origin/main
+              git add docs/data/watchlist_qm.json docs/data/charts_qm.json
+              git commit -m "chore: QM prices scan [skip ci]"
+            done
+          else
+            echo "Brak zmian w docs/data/ — pomijam commit."
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
