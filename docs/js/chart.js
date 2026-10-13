@@ -247,6 +247,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         rsLine: c.rs_line || null, volAvg: padArr(volAvg),
         macd: (() => { const ms = macdSeries(c.c); return { macd: padArr(ms.macd), signal: padArr(ms.signal), hist: padArr(ms.hist) }; })(),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
+        epsRating: stock && Number.isFinite(stock.eps_rating) ? stock.eps_rating : null,   // EPS Rating (1–99) wypisany przy fioletowej linii EPS, jak RS Rating przy linii RS
         pivot: opts.patterns === false ? null : pivotFromStock(stock, c.bases),
     };
     // opisy jak w książce (tylko wykres tygodniowy): liczone na pełnym modelu, sliceModel przesuwa je razem z oknem
@@ -932,6 +933,9 @@ function chartSvg(m, opts = {}) {
         ttmAll.forEach((q, k) => inWin(q) && pts[k] && pts[k][1] >= P.y && pts[k][1] <= P.y + P.h && parts.push(`<circle cx="${pts[k][0]}" cy="${pts[k][1]}" r="${r}" fill="${ec}" stroke="#0e0f13" stroke-width="1"><title>${q.d}: EPS za 4 kwartały ${q.t} (kwartał ${q.e}${Number.isFinite(q.g) ? `, ${q.g >= 0 ? "+" : ""}${q.g}% r/r` : ""})</title></circle>`));
         const lastAll = ttmAll[ttmAll.length - 1], lpAll = pts[pts.length - 1];
         const lp = lpAll || [x(lastAll.week), P.y + P.h];
+        if (m.epsRating != null && lpAll && lastAll.week >= 0 && lastAll.week < m.n) {   // EPS Rating przy ostatnim kółku linii EPS (nad nim, żeby nie wchodzić na przerywany odcinek prognozy)
+            addLabel(`EPS ${m.epsRating}`, lpAll[0], lpAll[1] - r - 5, { anchor: lpAll[0] > L.width - L.right - fs(40) ? "end" : "middle", size: fs(12), fill: CHART_COLORS.eps, bold: true, prio: 9, title: `EPS Rating ${m.epsRating} (1–99, percentyl wzrostu zysków wśród spółek z listy)` });
+        }
         const edge = L.width - L.right;
         if (nx && lastAll.week < m.n) {   // prognoza tylko gdy okno sięga ostatniego raportu (w starszym oknie przerywana linia przecinałaby wykres bez sensu)
             const nxX = Math.min(x(nxIdx), edge - 6), nxY = yE(nx.t), inside = nxIdx <= m.n - 0.5;

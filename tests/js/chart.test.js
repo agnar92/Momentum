@@ -431,8 +431,10 @@ test("chartSvg: EPS marks strip, TTM line with dashed forecast, pivot zones and 
         { d: "2025-10-01", e: 1.0, g: 10, t: null }, { d: "2026-01-10", e: 1.2, g: 20, t: 4.0 }, { d: "2026-04-01", e: 1.4, g: 25, t: 4.4 }, { d: "2026-07-01", e: 1.6, g: 33, t: 4.9 },
     ];
     c.stocks.AAA.eps_next = { d: "2026-10-20", e: 1.8, t: 5.1 };
-    const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 14.9, tl_state: null }, { pad: true });
+    const m = buildChartModel(c, "AAA", { base_type: "flat", pivot: 14.9, tl_state: null, eps_rating: 91 }, { pad: true });
     const svg = chartSvg(m);
+    assert.equal(m.epsRating, 91);
+    assert.match(svg, />EPS 91</);                                     // EPS Rating przy linii EPS (jak „RS 94” przy linii RS)
     assert.match(svg, /EPS \(4 kw\., TTM\) ┄ prognoza/);               // linia zysków jest NA wykresie cen i ma wpis w legendzie
     assert.doesNotMatch(svg, />EPS 4\.9</);                            // bez podpisu przy fioletowej linii: wartości EPS są w pasku pod wykresem
     assert.doesNotMatch(svg, /prog\. 5\.1/);                           // przerywany odcinek do prognozy zostaje, ale bez podpisu
