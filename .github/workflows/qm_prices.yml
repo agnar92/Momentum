@@ -1,7 +1,8 @@
 name: QM Prices
 
 # Ręczny skan Qullamaggie na SAMYCH CENACH (bez fundamentów, EPS i estymat) — odpowiednik skanu z aplikacji MomentumDesktop.
-# Etap 1: cały zbiór z Finviz (ok. 2 tys. spółek, sektor po sektorze) -> kandydaci; etap 2: ceny z yfinance tylko kandydatów.
+# Etap 1: zbiór ze skanera Finviz (domyślnie skaner użytkownika: avg vol > 100 tys., cena > 5 $, cena nad SMA200, SMA50 nad SMA200 — ok. 2 tys. spółek,
+# sektor po sektorze); etap 2: ceny z yfinance dla CAŁEGO zbioru (opcjonalnie tylko kandydaci — pole two_stage).
 # Potem: obrót dzienny, ADR i cena / min Low z okien 1M / 3M / 6M; zakładka Qullamaggie w aplikacji wybiera górne X % z KAŻDEGO okna osobno
 # (suma bez duplikatów, sortowanie po największej relacji cena / min Low). Wynik: docs/data/watchlist_qm.json + charts_qm.json (wykresy tygodniowe
 # i dzienne czołówki) — NIE rusza watchlist.json / charts.json (lista CANSLIM) ani migawki raw-data.
@@ -11,21 +12,28 @@ name: QM Prices
 on:
   workflow_dispatch:
     inputs:
+      filters:
+        description: 'Filtr Finviz (kody po przecinku, jak w adresie ?f=) — zbiór do pobrania cen'
+        default: 'sh_avgvol_o100,sh_price_o5,ta_sma200_pa,ta_sma50_sa200'
       min_dollar:
         description: 'Obrót dzienny od (mln $) — próg listy'
-        default: '20'
+        default: '60'
       min_adr:
-        description: 'ADR od (%) — próg listy'
-        default: '4'
+        description: 'ADR od (%) — próg listy (2–3)'
+        default: '3'
       top_pct:
         description: 'Górne X % z każdego okna 1M / 3M / 6M'
         default: '10'
       keep_dollar:
         description: 'Próg pobierania: obrót od (mln $) — poniżej spółka nie jest zapisywana'
-        default: '20'
+        default: '30'
       keep_adr:
         description: 'Próg pobierania: ADR od (%)'
-        default: '3'
+        default: '2'
+      two_stage:
+        description: 'Szybki wariant dwuetapowy (ceny tylko kandydatów z czołówki rankingów Finviz — przybliżenie)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -60,9 +68,10 @@ jobs:
 
       - name: QM scan (Finviz universe + yfinance prices of candidates)
         run: >
-          python qm_scan.py
+          python qm_scan.py --filters "${{ inputs.filters }}"
           --min-dollar "${{ inputs.min_dollar }}" --min-adr "${{ inputs.min_adr }}" --top-pct "${{ inputs.top_pct }}"
           --keep-dollar "${{ inputs.keep_dollar }}" --keep-adr "${{ inputs.keep_adr }}"
+          ${{ inputs.two_stage && '--two-stage' || '' }}
 
       - name: Persist docs/data/*_qm.json
         run: |

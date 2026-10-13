@@ -6,10 +6,9 @@ docs/data/charts_qm.json (wykresy tygodniowe + dzienne dla czołówki rankingów
 Reguła (ta sama co w qullamaggieRows w watchlist.js): z płynnych spółek (obrót dzienny cena × wolumen ≥ próg, ADR ≥ próg) bierzemy górne X % rankingu
 cena / min Low OSOBNO dla okien 1M (22 sesje), 3M (66) i 6M (132); wynik to suma (unikalne spółki), sortowana po największej z tych relacji.
 
-Etap 1 (tylko Finviz, ok. 2 tys. spółek): cały zbiór jednym widokiem (cena, średni wolumen, zmienność miesiąca, zwroty 1M / 3M / 6M, odległość od minimum
-50 dni i 52 tygodni), sektor po sektorze, bo darmowy screener oddaje maks. 1000 wierszy. Z niego wybieramy kandydatów (czołówka pięciu rankingów
-przybliżających cena / min Low wśród płynnych) i liczymy wielkość całej puli płynnych (potrzebna do „górnych X %”).
-Etap 2 (yfinance): ceny tylko kandydatów -> dokładny obrót, ADR i cena / min Low, wykresy.
+Etap 1 (tylko Finviz, ok. 2 tys. spółek): zbiór ze skanera użytkownika (DEFAULT_FILTERS) jednym widokiem, sektor po sektorze, bo darmowy screener oddaje
+maks. 1000 wierszy. Etap 2 (yfinance): ceny CAŁEGO zbioru -> dokładny obrót, ADR i cena / min Low, wykresy. Opcja --two-stage (jak w desktopie) pobiera ceny
+tylko kandydatów z czołówki pięciu rankingów przybliżających cena / min Low i liczy wielkość puli płynnych z samego Finviz — szybciej, ale to przybliżenie.
 """
 import argparse
 import json
@@ -30,9 +29,12 @@ SECTORS = ("technology", "healthcare", "financial", "industrials", "consumercycl
 MIN_UNIVERSE = 100          # poniżej tego uznajemy odpowiedź Finviz za błędną (blokada / zmiana układu strony)
 
 WINDOWS = {"1m": ("low_ratio_1m", "1M"), "3m": ("low_ratio_3m", "3M"), "6m": ("low_ratio_6m", "6M")}
-# progi listy = domyślne progi zakładki Qullamaggie w aplikacji (obrót 20 mln $, ADR 4 %, górne 10 %); próg pobierania jest odrobinę niższy,
-# żeby w aplikacji dało się lekko obniżyć obrót / ADR bez nowego pobierania (niżej — uruchom workflow z niższym progiem pobierania)
-DEFAULTS = {"min_dollar_mln": 20.0, "min_adr": 4.0, "top_pct": 10.0, "windows": ["1m", "3m", "6m"], "keep_dollar_mln": 20.0, "keep_adr": 3.0,
+# Domyślny zbiór = skaner użytkownika z Finviz (v=111, ft=3): średni wolumen > 100 tys., cena > 5 $, cena nad SMA200 i SMA50 nad SMA200 (≈ 2 tys. spółek,
+# 13 X 2026: 2020). Ceny pobieramy dla CAŁEGO zbioru (bez zawężania do kandydatów) — obrót, ADR i cena / min Low liczone są wtedy dokładnie.
+DEFAULT_FILTERS = "sh_avgvol_o100,sh_price_o5,ta_sma200_pa,ta_sma50_sa200"
+# progi listy: obrót 60 mln $, ADR 3 % (2–3 %), górne 10 % z każdego okna; próg pobierania jest niższy, żeby w aplikacji dało się obniżyć obrót / ADR
+# bez nowego pobierania (niżej — uruchom workflow z niższym progiem pobierania)
+DEFAULTS = {"min_dollar_mln": 60.0, "min_adr": 3.0, "top_pct": 10.0, "windows": ["1m", "3m", "6m"], "keep_dollar_mln": 30.0, "keep_adr": 2.0,
             "chart_top_pct": 15.0}
 
 AVGVOL_LEVELS = (100, 200, 300, 500, 1000)   # progi średniego wolumenu (tys.), które ma Finviz
@@ -230,11 +232,12 @@ def annotate(row, windows):
     row["qm_max_ratio"] = max(ratios) if ratios else None
 
 
-def run(cfg=None, data_dir=None, filters=None, log=print):
-    """-> 0 / 1. Zapisuje watchlist_qm.json i charts_qm.json w data_dir."""
+def run(cfg=None, data_dir=None, filters=None, two_stage=False, log=print):
+    """-> 0 / 1. Zapisuje watchlist_qm.json i charts_qm.json w data_dir.
+    two_stage=False (domyślnie): ceny dla całego zbioru z Finviz. two_stage=True: etap 1 wybiera kandydatów (czołówka rankingów zwrotów), ceny tylko ich."""
     cfg = normalize(cfg)
     data_dir = Path(data_dir or DATA_DIR)
-    filters = filters or suggest_filters(cfg)
+    filters = filters or (suggest_filters(cfg) if two_stage else DEFAULT_FILTERS)
     log(f"Etap 1 (tylko Finviz): filtr {filters}")
     try:
         universe, total = fetch_universe(filters, log=log)
@@ -244,9 +247,13 @@ def run(cfg=None, data_dir=None, filters=None, log=print):
     if len(universe) < MIN_UNIVERSE:
         log(f"❌ Finviz zwrócił tylko {len(universe)} spółek (<{MIN_UNIVERSE}) — wygląda na blokadę / zmianę strony; zostają poprzednie pliki.")
         return 1
-    cands = candidates(universe, cfg)
-    pool = pool_pairs(universe)
-    log(f"Etap 1: {len(universe)} spółek w zbiorze → {len(cands)} kandydatów do pobrania cen (czołówka zwrotów 1M / 3M / 6M wśród płynnych).")
+    if two_stage:
+        cands = candidates(universe, cfg)
+        pool = pool_pairs(universe)
+        log(f"Etap 1: {len(universe)} spółek w zbiorze → {len(cands)} kandydatów do pobrania cen (czołówka zwrotów 1M / 3M / 6M wśród płynnych).")
+    else:
+        cands, pool = universe, None   # wszystkie spółki mają ceny, więc „górne X %” liczymy wprost od liczby płynnych (bez przybliżonej puli z Finviz)
+        log(f"Etap 1: {len(universe)} spółek w zbiorze — ceny pobieram dla wszystkich.")
     tickers = [c["ticker"] for c in cands]
     log(f"Etap 2 (yfinance): ceny {len(tickers)} kandydatów + benchmark…")
     frames = sanitize_frames(watchlist.download_prices(tickers, period=QM_PERIOD), log)
@@ -287,7 +294,8 @@ def run(cfg=None, data_dir=None, filters=None, log=print):
         "qm_filters": filters,
         "qm_cfg": cfg,
         "qm_universe": len(universe),
-        "qm_pool": pool,
+        "qm_pool": pool or [],
+        "qm_two_stage": bool(two_stage),
         "n_stocks": len(kept),
         "stocks": kept,
     }
@@ -304,18 +312,19 @@ def run(cfg=None, data_dir=None, filters=None, log=print):
 
 def main(argv=None):
     p = argparse.ArgumentParser(description="Skan Qullamaggie na samych cenach -> docs/data/watchlist_qm.json + charts_qm.json")
-    p.add_argument("--min-dollar", type=float, default=None, help="Próg obrotu dziennego w mln $ dla listy (domyślnie 20).")
-    p.add_argument("--min-adr", type=float, default=None, help="Próg ADR %% dla listy (domyślnie 4).")
+    p.add_argument("--min-dollar", type=float, default=None, help="Próg obrotu dziennego w mln $ dla listy (domyślnie 60).")
+    p.add_argument("--min-adr", type=float, default=None, help="Próg ADR %% dla listy (domyślnie 3).")
     p.add_argument("--top-pct", type=float, default=None, help="Górne X %% z każdego okna 1M / 3M / 6M (domyślnie 10).")
-    p.add_argument("--keep-dollar", type=float, default=None, help="Próg pobierania: obrót w mln $ (domyślnie 20) — poniżej spółka nie jest zapisywana.")
-    p.add_argument("--keep-adr", type=float, default=None, help="Próg pobierania: ADR %% (domyślnie 3).")
+    p.add_argument("--keep-dollar", type=float, default=None, help="Próg pobierania: obrót w mln $ (domyślnie 30) — poniżej spółka nie jest zapisywana.")
+    p.add_argument("--keep-adr", type=float, default=None, help="Próg pobierania: ADR %% (domyślnie 2).")
     p.add_argument("--chart-top-pct", type=float, default=None, help="Wykresy tylko dla górnych X %% z każdego okna (domyślnie 15).")
-    p.add_argument("--filters", type=str, default=None, help="Własny filtr Finviz (kody po przecinku) zamiast dobranego z progów pobierania.")
+    p.add_argument("--filters", type=str, default=None, help="Filtr Finviz (kody po przecinku); domyślnie skaner użytkownika: " + DEFAULT_FILTERS + ".")
+    p.add_argument("--two-stage", action="store_true", help="Szybki wariant dwuetapowy: ceny tylko kandydatów z czołówki rankingów Finviz (przybliżenie, mniej pobierania).")
     p.add_argument("--data-dir", type=str, default=None, help="Katalog wyjściowy (domyślnie docs/data).")
     a = p.parse_args(argv)
     cfg = {k: v for k, v in {"min_dollar_mln": a.min_dollar, "min_adr": a.min_adr, "top_pct": a.top_pct, "keep_dollar_mln": a.keep_dollar,
                              "keep_adr": a.keep_adr, "chart_top_pct": a.chart_top_pct}.items() if v is not None}
-    return run(cfg, a.data_dir, a.filters)
+    return run(cfg, a.data_dir, a.filters, a.two_stage)
 
 
 if __name__ == "__main__":

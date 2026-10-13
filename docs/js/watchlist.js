@@ -37,7 +37,7 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", square_box: "Square box", ipo: "Baza po debiucie (IPO)", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", csMin: 5, csCore: true, csAccel: true, csRs: 80, qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10, patternOnly: false }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
+    tab: "LIST", csMin: 5, csCore: true, csAccel: true, csRs: 80, qm: { minDollarVolumeM: 60, minAdrPct: 3, topPct: 10, patternOnly: false }, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
 // Jedna lista (watchlist.json = skaner CANSLIM z Finviz); zakładki CANSLIM, Qullamaggie, Bazy… to tylko różne filtry i sortowania tych samych spółek.
 
@@ -112,6 +112,12 @@ function qmParams(qm, patterns) {
 // a nie od zapisanych kandydatów (to już sama czołówka rankingu, więc procent liczony od nich byłby zawyżony).
 function qmPoolSize(pool, minVol, minAdr) {
     return Array.isArray(pool) ? pool.filter(p => Array.isArray(p) && p[0] >= minVol && p[1] >= minAdr).length : 0;
+}
+// Ile spółek skanu QM jest płynnych przy bieżących progach (ze skanem dwuetapowym — z puli całego zbioru Finviz, bo kandydaci to tylko czołówka).
+function qmLiquidCount() {
+    const minVol = state.qm.minDollarVolumeM * 1e6, minAdr = state.qm.minAdrPct;
+    const fromPool = qmPoolSize(qmData.qm_pool, minVol, minAdr);
+    return fromPool || qmData.stocks.filter(s => Number.isFinite(s.dollar_volume_avg) && Number.isFinite(s.adr_pct) && s.dollar_volume_avg >= minVol && s.adr_pct >= minAdr).length;
 }
 function qullamaggieRows(stocks, params, pool = null) {
     const minVol = (Number(params.minDollarVolumeM) || 0) * 1e6;
@@ -1042,7 +1048,7 @@ function renderTable() {
     const meta = document.getElementById("drawerMeta");
     const total = state.data.stocks.length;
     meta.textContent = tab === "QM"
-        ? (qmData ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1M / 3M / 6M; płynnych w całym zbiorze Finviz ${qmPoolSize(qmData.qm_pool, state.qm.minDollarVolumeM * 1e6, state.qm.minAdrPct) || "?"} z ${qmData.qm_universe || "?"}) · skan cen z sesji ${qmData.data_as_of || "?"}`
+        ? (qmData ? `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1M / 3M / 6M; płynnych ${qmLiquidCount()} ze zbioru ${qmData.qm_universe || "?"} z Finviz) · skan cen z sesji ${qmData.data_as_of || "?"}`
             : `${rows.length} unikalnych spółek (top ${state.qm.topPct}% z okien 1/3/6M) z ${total}`)
         : tab === "POS" ? positionSummary(rows) : `${rows.length} z ${total} spółek`;
     if (tab === "POS") renderPositionControls(rows);

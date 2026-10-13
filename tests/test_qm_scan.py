@@ -48,7 +48,8 @@ class TestSelect:
     def test_normalize_clamps_and_defaults(self):
         c = qm_scan.normalize({"top_pct": "250", "min_adr": "3,5", "windows": ["1m", "zzz"], "chart_top_pct": 1})
         assert c["top_pct"] == 100.0 and c["min_adr"] == 3.5 and c["windows"] == ["1m"] and c["chart_top_pct"] >= c["top_pct"]
-        assert qm_scan.normalize(None)["min_dollar_mln"] == 20.0
+        d = qm_scan.normalize(None)
+        assert d["min_dollar_mln"] == 60.0 and d["min_adr"] == 3.0 and d["keep_dollar_mln"] < d["min_dollar_mln"] and d["keep_adr"] < d["min_adr"]
 
 
 class TestStageOne:
@@ -87,12 +88,44 @@ class TestRun:
         assert qm_scan.run({"min_dollar_mln": 20, "min_adr": 3, "top_pct": 10}, out, log=lambda *a: None) == 0
         wl = json.loads((out / "watchlist_qm.json").read_text(encoding="utf-8"))
         ch = json.loads((out / "charts_qm.json").read_text(encoding="utf-8"))
-        assert wl["n_stocks"] == len(wl["stocks"]) > 0 and wl["qm_universe"] == 150 and len(wl["qm_pool"]) == 150
+        assert wl["n_stocks"] == len(wl["stocks"]) > 0 and wl["qm_universe"] == 150
+        assert wl["qm_pool"] == [] and wl["qm_two_stage"] is False       # ceny dla całego zbioru: górne X % liczone wprost od płynnych
         assert all("low_ratio_3m" in s and "dollar_volume_avg" in s for s in wl["stocks"])
         with_chart = [s["ticker"] for s in wl["stocks"] if s["has_chart"]]
         assert with_chart and set(with_chart) == set(ch["stocks"])
         assert len(with_chart) < len(wl["stocks"])             # wykresy tylko dla czołówki
         assert all(s["qm_max_ratio"] is not None and s["qm_windows"] for s in wl["stocks"] if s["has_chart"])
+
+    def test_default_run_downloads_prices_for_the_whole_universe(self, tmp_path, monkeypatch):
+        uni = [universe_row(f"T{i}", price=20.0, avgvol=2_000_000, vol_m=4.5) for i in range(150)]
+        seen = {}
+
+        def fake_fetch(filters, max_tickers=5000, log=print):
+            seen["filters"] = filters
+            return uni, len(uni)
+        monkeypatch.setattr(qm_scan, "fetch_universe", fake_fetch)
+        asked = []
+
+        def fake_dl(tickers, period=None, **k):
+            asked.append(list(tickers))
+            return {t: self._prices(400, 0.001, 2_000_000) for t in tickers}
+        monkeypatch.setattr(watchlist, "download_prices", fake_dl)
+        assert qm_scan.run(None, tmp_path, log=lambda *a: None) == 0
+        assert seen["filters"] == qm_scan.DEFAULT_FILTERS == "sh_avgvol_o100,sh_price_o5,ta_sma200_pa,ta_sma50_sa200"
+        assert len(asked[0]) == 150                      # bez zawężania do kandydatów
+
+    def test_two_stage_run_downloads_only_candidates_and_keeps_the_pool(self, tmp_path, monkeypatch):
+        uni = [universe_row(f"T{i}", price=20.0, avgvol=2_000_000, vol_m=4.5, p1m=float(i), p3m=float(i), p6m=float(i), d50=float(i), w52=float(i)) for i in range(400)]
+        monkeypatch.setattr(qm_scan, "fetch_universe", lambda filters, max_tickers=5000, log=print: (uni, len(uni)))
+        asked = []
+
+        def fake_dl(tickers, period=None, **k):
+            asked.append(list(tickers))
+            return {t: self._prices(400, 0.001, 2_000_000) for t in tickers}
+        monkeypatch.setattr(watchlist, "download_prices", fake_dl)
+        assert qm_scan.run({"min_dollar_mln": 20, "min_adr": 3}, tmp_path, two_stage=True, log=lambda *a: None) == 0
+        wl = json.loads((tmp_path / "watchlist_qm.json").read_text(encoding="utf-8"))
+        assert len(asked[0]) < 400 and wl["qm_two_stage"] is True and len(wl["qm_pool"]) == 400
 
     def test_run_aborts_on_suspiciously_small_universe(self, tmp_path, monkeypatch):
         monkeypatch.setattr(qm_scan, "fetch_universe", lambda filters, max_tickers=5000, log=print: ([universe_row("A")], 1))
