@@ -43,10 +43,6 @@ const HEAT_GROUPS = [
         ["Od szczytu", "pct_from_high_52w", heatPct, heatTh(-30, -15, -15), 3], ["vs SMA50", "pct_above_sma50", heatPct, v => (v == null ? null : v < 0 ? -1 : v > 25 ? -0.2 : 1), 1.5],
         ["vs SMA200", "pct_above_sma200", heatPct, v => (v == null ? null : v < 0 ? -1 : v > 60 ? -0.1 : 0.8), 1.5], ["vs 10 tyg.", "pct_above_sma10w", heatPct, v => (v == null ? null : v < 0 ? -1 : v > 20 ? -0.3 : 1), 1.5],
         ["Zwrot 3m", "ret_3m_pct", heatPct, heatRange(-20, 40), 1.5], ["Zwrot 12m", "ret_12m_pct", heatPct, heatRange(-20, 100), 1.5]]],
-    ["Formacja", [
-        ["Typ bazy", "base_type", heatTx, v => (v == null ? null : 0.3), 1.5], ["Do pivotu", "pct_to_pivot", heatPct, v => (v == null ? null : v <= -5 ? 0.2 : v <= 2 ? 1 : v <= 8 ? 0.4 : -0.4), 2.5],
-        ["Status", "base_status", heatTx, v => (v == null ? null : ({ VALID_BREAKOUT: 1, WATCHLIST: 0.4, EXTENDED: -0.3, FAULTY_REJECTED: -1 })[v] ?? 0), 2],
-        ["Wybicie", s => s.pivot_state || s.tlw_state || null, heatTx, v => (v == null ? null : v === "wybicie" ? 1 : -0.2), 2], ["VCP", heatYn("vcp"), heatTx, v => (v == null ? null : v === "tak" ? 1 : 0), 1]]],
     ["Ryzyko", [
         ["Climax top", s => (s.climax_top == null ? null : s.climax_top ? "TAK" : "nie"), heatTx, v => (v == null ? null : v === "TAK" ? -1 : 0.8), 2],
         ["Dystrybucja", s => (s.dist_top == null ? null : s.dist_top ? "TAK" : "nie"), heatTx, v => (v == null ? null : v === "TAK" ? -1 : 0.8), 2],
