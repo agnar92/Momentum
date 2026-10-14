@@ -1603,6 +1603,7 @@ function toggleFav(ticker) {
 }
 
 function showTab(tab, resetSort = true) {
+    const wasDaily = dailyNow();
     state.tab = tab;
     if (resetSort && TAB_DEFAULT_SORT[tab]) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
@@ -1630,6 +1631,10 @@ function showTab(tab, resetSort = true) {
     document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : onBoxes ? "Boxy Darvasa" : TAB_TITLES[tab];
     saveSettings();
     renderTable();
+    if (dailyNow() !== wasDaily && currentChart) {   // wejście / wyjście z Movers zmienia oś czasu otwartego wykresu (zawsze dzienny)
+        boxFocus = null; chartWindows = [];
+        drawChart();
+    }
 }
 
 // M z CANSLIM: stan rynku (S&P 500 i Nasdaq) policzony w watchlist.py::market_state — pasek nad listą.
@@ -2015,7 +2020,7 @@ function chartStats(s) {
 
 // Zmiana DŁUGOŚCI okna suwaka jest zapamiętywana (localStorage) dla wszystkich spółek; samo przesuwanie okna nie.
 function rememberWindowLength(n) {
-    const k = chartDailyOn ? "d" : "w";
+    const k = dailyNow() ? "d" : "w";
     if (chartWinLen[k] === n) return;
     chartWinLen[k] = n;
     try { localStorage.setItem(CHART_WINLEN_KEY, JSON.stringify(chartWinLen)); } catch (e) { /* brak localStorage */ }
@@ -2027,9 +2032,13 @@ function chartCells() {
 }
 
 // Dane wykresu w aktualnym widoku: tygodniowe (charts.json) albo dzienny odpowiednik (charts.daily), gdy włączony i dostępny.
+// W zakładce Movers wykres jest ZAWSZE dzienny (user: „movers zawsze dzienny wykres”), niezależnie od przełącznika w Filtrach.
+function dailyNow() {
+    return chartDailyOn || state.tab === "MOVERS";
+}
 function activeCharts() {
     if (!currentChart) return null;
-    return (chartDailyOn && typeof dailyChartsView === "function" && dailyChartsView(currentChart.charts)) || currentChart.charts;
+    return (dailyNow() && typeof dailyChartsView === "function" && dailyChartsView(currentChart.charts)) || currentChart.charts;
 }
 
 function setChartDaily(on) {
@@ -2039,7 +2048,7 @@ function setChartDaily(on) {
     if (cb) cb.checked = chartDailyOn;
     boxFocus = null; chartWindows = [];   // indeksy boxa i okno dotyczą jednej osi czasu
     if (currentChart) drawChart();
-    if (chartDailyOn && currentChart && !currentChart.charts.daily) showToast("Dane dzienne pojawią się po najbliższym odświeżeniu danych — na razie wykres tygodniowy.", { type: "info" });
+    if (dailyNow() && currentChart && !currentChart.charts.daily) showToast("Dane dzienne pojawią się po najbliższym odświeżeniu danych — na razie wykres tygodniowy.", { type: "info" });
 }
 
 function posStockPin() { return currentChart ? findStock(currentChart.ticker) : null; }
@@ -2091,7 +2100,7 @@ function drawChart() {
             pinFlash: Date.now() < pinFlashUntil,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
-            window: chartWindows[i], windowLen: chartDailyOn ? chartWinLen.d : chartWinLen.w,
+            window: chartWindows[i], windowLen: dailyNow() ? chartWinLen.d : chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
@@ -2499,7 +2508,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        stopAdvice,
+        stopAdvice, dailyNow,
         ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };

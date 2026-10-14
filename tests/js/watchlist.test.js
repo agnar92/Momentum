@@ -657,3 +657,13 @@ test("prefsNormalize: przypięty box zachowuje górę / dół / datę, nieprawid
     assert.deepEqual(p.box.A.v, { top: 20, bottom: 18, start: "2026-05-01" });
     assert.equal(p.box.B.v, null);
 });
+
+test("dailyNow: w zakładce Movers wykres jest zawsze dzienny, w innych zależy od przełącznika", () => {
+    const { dailyNow, state } = require("../../docs/js/watchlist.js");
+    const old = state.tab;
+    state.tab = "MOVERS";
+    assert.equal(dailyNow(), true);
+    state.tab = "CS";
+    assert.equal(dailyNow(), false);   // przełącznik Filtry → Wykresy dzienne domyślnie wyłączony
+    state.tab = old;
+});
