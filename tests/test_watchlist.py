@@ -113,7 +113,6 @@ class TestIndicators:
         # High/Low = +-2% wokol Close => ADR = (1.02/0.98 - 1)*100
         assert m["adr_pct"] == pytest.approx((1.02 / 0.98 - 1) * 100, abs=0.01)
         assert m["dollar_volume_avg"] == pytest.approx(df["Close"].tail(20).mean() * 1_000_000, rel=0.01)
-        assert m["low_ratio_6m"] > m["low_ratio_3m"] > m["low_ratio_1m"] > 1
         assert m["pct_above_sma50"] > 0 and m["pct_above_sma200"] > m["pct_above_sma50"]
         assert len(m["spark"]) == watchlist.SPARK_WEEKS and m["spark"][0] == 0
         assert "tlw_level" in m and "tlw_dist_pct" in m   # poziom oporu tygodniowej flagi/korytarza (None bez formacji)

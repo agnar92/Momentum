@@ -27,7 +27,6 @@ ROOT = Path(__file__).resolve().parent
 OUTPUT_PATH = ROOT / "docs" / "data" / "watchlist.json"
 EPS_CACHE_PATH = ROOT / "docs" / "data" / "eps_cache.json"
 ESTIMATES_PATH = ROOT / "docs" / "data" / "estimates.json"
-QM_WINDOWS = ("low_ratio_1m", "low_ratio_3m", "low_ratio_6m")
 
 HISTORY_PERIOD = "10y"       # wykres tygodniowy ~6 lat (CHART_WEEKS) + rozgrzanie SMA40 + historia baz (opisy z książki); RS Rating liczy tylko ostatnie 12M
 DAILY_KEEP = 1700            # compute_metrics i bazy dzienne używają tylko ostatnich ~6,7 roku sesji (reszta historii tylko rozgrzewa średnie tygodniowe)
@@ -368,13 +367,6 @@ def compute_metrics(df, bench_w=None):
     adr = (ratio.mean() - 1) * 100 if len(ratio) else None
     dollar_volume = float((tail["Close"] * tail["Volume"]).mean()) if len(tail) else None
 
-    # Relacja ceny do najniższego Low z okna (bez odejmowania 1 — to i tak tylko ranking, wystarczy sortować malejąco).
-    low_ratio = {}
-    for months in (1, 3, 6):
-        window = df[df.index > asof - pd.DateOffset(months=months)]["Low"]
-        low = float(window.min()) if len(window) else None
-        low_ratio[months] = price / low if low and low > 0 else None
-
     sma50 = float(close.tail(50).mean()) if len(close) >= 50 else None
     sma200 = float(close.tail(200).mean()) if len(close) >= 200 else None
 
@@ -405,9 +397,6 @@ def compute_metrics(df, bench_w=None):
         "rs_score": _num(rs_score, 4),
         "adr_pct": _num(adr),
         "dollar_volume_avg": _num(dollar_volume, 0),
-        "low_ratio_1m": _num(low_ratio[1], 3),
-        "low_ratio_3m": _num(low_ratio[3], 3),
-        "low_ratio_6m": _num(low_ratio[6], 3),
         "pct_above_sma50": _num((price / sma50 - 1) * 100) if sma50 else None,
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
         "pct_above_sma10w": _num((price / sma10w - 1) * 100) if sma10w else None,
