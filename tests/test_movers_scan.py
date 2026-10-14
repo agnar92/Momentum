@@ -61,3 +61,19 @@ def test_empty_finviz_keeps_previous_files(tmp_path, monkeypatch):
     monkeypatch.setattr(movers_scan, "fetch_movers", lambda f, log=print: ([], 0))
     assert movers_scan.run(tmp_path, "f", log=lambda *_: None) == 1
     assert (tmp_path / "watchlist_movers.json").read_text() == "{}"
+
+
+def test_build_filters_defaults_and_validation():
+    assert movers_scan.build_filters() == "cap_midover,sh_curvol_o1000,ta_sma20_pc,ta_sma200_pa,ta_sma50_pc"
+    assert movers_scan.build_filters("cap_largeover", "500", "ta_change_u3") == "cap_largeover,sh_curvol_o500,ta_change_u3,ta_sma20_pc,ta_sma200_pa,ta_sma50_pc"
+    assert "sh_avgvol" not in movers_scan.DEFAULT_FILTERS   # wolumen z dnia, nie średni
+    for bad in (("cap_zzz", 1000, ""), ("cap_midover", 123, ""), ("cap_midover", 1000, "ta_change_zzz")):
+        try:
+            movers_scan.build_filters(*bad)
+        except ValueError:
+            continue
+        raise AssertionError(bad)
+
+
+def test_main_rejects_bad_parameters(capsys):
+    assert movers_scan.main(["--min-volume", "7"]) == 2
