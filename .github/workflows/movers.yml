@@ -1,36 +1,29 @@
 name: Movers
 
-# Ręczny skan „Movers” na SAMYCH CENACH: lista ze skanera Finviz + 3 lata cen z yfinance tylko tych spółek (Dar-Card, średnie, wykresy tygodniowe i dzienne).
-# Bez fundamentów. Parametry zmienne ustawiasz w polach poniżej: kapitalizacja, WOLUMEN Z DNIA (nie średni) i zmiana dnia. Warunki SMA są stałe:
-# cena przecięła SMA20 i SMA50, cena nad SMA200 (movers_scan.py: SMA_FILTERS).
-# Wynik: docs/data/watchlist_movers.json + charts_movers.json — NIE rusza watchlist.json / charts.json (lista CANSLIM, odświeżana raz w tygodniu).
+# Ręczny skan „Movers” na SAMYCH CENACH z ZAPAMIĘTANYMI LISTAMI. Lista = nazwa + filtr Finviz (pole `filters`); listy są zapisane w docs/data/movers_lists.json
+# (workflow je pamięta między uruchomieniami). Każde uruchomienie skanuje WSZYSTKIE listy, pobiera 3 lata cen yfinance dla sumy spółek (Dar-Card, średnie,
+# wykresy dzienne i tygodniowe), bez fundamentów. W aplikacji listy są podkategoriami zakładki Movers.
+#   action = add     -> dodaj listę (name + filters) albo zmień filtr listy o tej nazwie
+#   action = remove  -> usuń listę o podanej nazwie (name)
+#   action = refresh -> odśwież wszystkie listy (name i filters są pomijane)
+# Filtr: kody Finviz po przecinku (cap_midover,sh_curvol_o1000,…), zapis `cap:midover sh_curvol:o1000 ta_sma20:pc` albo cały link ze skanera Finviz.
+# Wynik: docs/data/movers_lists.json + watchlist_movers.json + charts_movers.json — NIE rusza watchlist.json / charts.json (lista CANSLIM, odświeżana raz w tygodniu).
 #
 # Ręczne odpalenie: zakładka Actions -> "Movers" -> "Run workflow" (albo przycisk „Odśwież dane” w zakładce Movers), lub lokalnie:
-#   python movers_scan.py --cap cap_midover --min-volume 1000
+#   python movers_scan.py --action add --name "Wolumen" --filters "cap:midover sh_curvol:o1000 ta_change:u5 ta_sma20:pc ta_sma200:pa ta_sma50:pc"
 on:
   workflow_dispatch:
     inputs:
-      cap:
-        description: 'Kapitalizacja od'
+      action:
+        description: 'Akcja: add = dodaj / zmień listę, remove = usuń listę, refresh = odśwież wszystkie'
         type: choice
-        default: cap_midover
-        options:
-          - cap_microover
-          - cap_smallover
-          - cap_midover
-          - cap_largeover
-      min_volume:
-        description: 'Minimalny wolumen Z DNIA (tys. akcji; 1000 = 1 mln)'
-        type: choice
-        default: '1000'
-        options: ['50', '100', '200', '300', '400', '500', '750', '1000', '2000', '3000', '4000', '5000', '10000']
-      change:
-        description: 'Zmiana dnia (Finviz: ta_change_u = wzrost, u3 = ponad +3 % itd.; brak = bez filtra)'
-        type: choice
+        default: refresh
+        options: [refresh, add, remove]
+      name:
+        description: 'Nazwa listy (dla add i remove)'
         default: ''
-        options: ['', ta_change_u, ta_change_u1, ta_change_u2, ta_change_u3, ta_change_u4, ta_change_u5, ta_change_u6, ta_change_u7, ta_change_u8, ta_change_u9, ta_change_u10]
       filters:
-        description: 'Zaawansowane: pełny filtr Finviz (kody po przecinku) zamiast pól powyżej; puste = użyj pól'
+        description: 'Filtr Finviz dla add: kody (cap_midover,sh_curvol_o1000,…), zapis cap:midover sh_curvol:o1000 … albo cały link ze skanera'
         default: ''
 
 permissions:
@@ -64,13 +57,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Movers scan (Finviz list + yfinance prices)
+      - name: Movers scan (saved lists + Finviz + yfinance prices)
         env:
-          CAP: ${{ inputs.cap }}
-          MIN_VOLUME: ${{ inputs.min_volume }}
-          CHANGE: ${{ inputs.change }}
+          ACTION: ${{ inputs.action }}
+          LIST_NAME: ${{ inputs.name }}
           FILTERS: ${{ inputs.filters }}
-        run: python movers_scan.py --cap "$CAP" --min-volume "$MIN_VOLUME" --change "$CHANGE" ${FILTERS:+--filters "$FILTERS"}
+        run: python movers_scan.py --action "$ACTION" --name "$LIST_NAME" --filters "$FILTERS"
 
       - name: Persist docs/data/*_movers.json
         run: |
@@ -80,7 +72,7 @@ jobs:
             # Najpierw na AKTUALNY szczyt main ("reset --mixed"), żeby commit niósł tylko świeże dane na poprawnej bazie.
             git fetch origin main
             git reset --mixed origin/main
-            git add docs/data/watchlist_movers.json docs/data/charts_movers.json
+            git add docs/data/movers_lists.json docs/data/watchlist_movers.json docs/data/charts_movers.json
             # [skip ci]: bez tego commit odpaliłby kolejne workflowy (push: main).
             git commit -m "chore: Movers scan [skip ci]"
             for attempt in 1 2 3 4 5; do
@@ -95,7 +87,7 @@ jobs:
               sleep $((attempt * 3))
               git fetch origin main
               git reset --mixed origin/main
-              git add docs/data/watchlist_movers.json docs/data/charts_movers.json
+              git add docs/data/movers_lists.json docs/data/watchlist_movers.json docs/data/charts_movers.json
               git commit -m "chore: Movers scan [skip ci]"
             done
           else

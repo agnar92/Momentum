@@ -915,7 +915,33 @@ function moversTabRows() {
     tagPositions(moversData.stocks, state.pos);
     tagPinnedBoxes(moversData.stocks, state.boxes);
     tagActions(moversData.stocks, canslimMarket(), state.csCore);
-    return applyCommonFilters(moversData.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
+    const inList = moversList && moversData.lists ? moversData.stocks.filter(s => (s.lists || []).includes(moversList)) : moversData.stocks;
+    return applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax);
+}
+
+// Podkategorie Movers = zapamiętane listy (nazwa + filtr Finviz z workflow „Movers”); starszy plik bez `lists` = jedna lista bez przycisków.
+const MOVERS_LIST_KEY = "momentum_watchlist_movers_list";
+let moversList = "";   // "" = wszystkie listy
+try { moversList = localStorage.getItem(MOVERS_LIST_KEY) || ""; } catch (e) { /* brak localStorage */ }
+function moversListCounts(data = moversData) {
+    const lists = (data && data.lists) || [];
+    return lists.map(l => ({ name: l.name, filters: l.filters, n: data.stocks.filter(s => (s.lists || []).includes(l.name)).length }));
+}
+function renderMoversLists() {
+    const el = document.getElementById("moversLists");
+    if (!el) return;
+    const counts = moversData ? moversListCounts() : [];
+    el.hidden = state.tab !== "MOVERS" || counts.length === 0;
+    if (el.hidden) return;
+    if (moversList && !counts.some(c => c.name === moversList)) moversList = "";   // lista usunięta w workflow
+    const btn = (name, label, n, title) => `<button type="button" class="ml-btn${moversList === name ? " active" : ""}" data-list="${escapeHtml(name)}" title="${escapeHtml(title)}">${escapeHtml(label)}<small>${n}</small></button>`;
+    el.innerHTML = btn("", "Wszystkie", moversData.n_stocks, "Wszystkie zapamiętane listy razem (spółki bez duplikatów)")
+        + counts.map(c => btn(c.name, c.name, c.n, "Filtr Finviz: " + c.filters)).join("");
+}
+function setMoversList(name) {
+    moversList = name || "";
+    try { localStorage.setItem(MOVERS_LIST_KEY, moversList); } catch (e) { /* brak localStorage */ }
+    renderTable();
 }
 
 function rowsForTab(tab) {
@@ -983,11 +1009,12 @@ function renderTable() {
         ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}"${!splitMode && openCards.has(s.ticker) ? ` class="open"` : ""}>${renderRow(tab, s, i + 1)}</tr>`).join("")
         : `<tr><td colspan="${cols}" class="empty-state">${emptyMessage(tab)}</td></tr>`;
     if (tab === "POS") fillPosMinis();
+    renderMoversLists();
     updateAlertBadge();
     const meta = document.getElementById("drawerMeta");
     const total = state.data.stocks.length;
     meta.textContent = tab === "MOVERS"
-        ? (moversData ? `${rows.length} spółek ze skanu (Finviz: ${moversData.n_stocks}) · ceny z sesji ${moversData.data_as_of || "?"}, skan ${String(moversData.generated_at || "?").replace("T", " ").replace("Z", " UTC")}` : "Brak skanu Movers")
+        ? (moversData ? `${rows.length} spółek${moversList ? ` z listy „${moversList}”` : ""} (razem w skanie: ${moversData.n_stocks}) · ceny z sesji ${moversData.data_as_of || "?"}, skan ${String(moversData.generated_at || "?").replace("T", " ").replace("Z", " UTC")}` : "Brak skanu Movers")
         : tab === "POS" ? positionSummary(rows) : `${rows.length} z ${total} spółek`;
     if (tab === "POS") renderPositionControls(rows);
     updateSortHeaders(table);
@@ -1800,6 +1827,11 @@ function initControls() {
     document.getElementById("refreshLink").href = githubActionsUrl(window.location);
     const moversLink = document.getElementById("moversRefreshLink");
     if (moversLink) moversLink.href = githubActionsUrl(window.location, "movers.yml");
+    const moversLists = document.getElementById("moversLists");
+    if (moversLists) moversLists.addEventListener("click", ev => {
+        const b = ev.target.closest("[data-list]");
+        if (b) setMoversList(b.dataset.list);
+    });
     // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
         if (ev.target.closest("a") || ev.target.closest("input")) return;
@@ -2508,7 +2540,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        stopAdvice, dailyNow,
+        stopAdvice, dailyNow, moversListCounts,
         ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
