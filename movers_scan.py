@@ -1,12 +1,16 @@
-"""Movers — ręczny skan spółek, które dziś rosną, na SAMYCH CENACH (bez fundamentów, EPS i estymat).
+"""Movers — ręczny skan spółek na SAMYCH CENACH (bez fundamentów, EPS i estymat), z zapamiętanymi listami.
 
-Workflow `Movers` (movers.yml) uruchamia ten skrypt na żądanie. Lista spółek pochodzi z jednego skanera Finviz (`build_filters`: kapitalizacja, WOLUMEN Z DNIA i opcjonalnie zmiana dnia — parametry workflow — oraz stałe SMA: cena przecięła SMA20 i SMA50, cena nad SMA200). Dla każdej spółki z listy pobieramy z yfinance 3 lata cen dziennych
-(MOVERS_PERIOD) — z nich liczymy średnie, Dar-Card i wykresy tygodniowe oraz dzienne. Wynik: docs/data/watchlist_movers.json (lista z dzisiejszą zmianą,
-wolumenem i metrykami cenowymi) i docs/data/charts_movers.json (wykresy tygodniowe + dzienne) — zakładka Movers w aplikacji czyta te pliki.
+Workflow `Movers` (movers.yml) uruchamia ten skrypt na żądanie. **Lista** = nazwa + filtr Finviz (pole tekstowe `filters`: kody `cap_midover,sh_curvol_o1000,…`,
+zapis `cap:midover sh_curvol:o1000 …` albo cały link ze skanera Finviz). Listy są zapamiętane w docs/data/movers_lists.json; workflow ma akcje `add` (dodaj / zmień listę),
+`remove` (usuń listę) i `refresh` (odśwież wszystkie). Każde uruchomienie skanuje WSZYSTKIE zapamiętane listy, pobiera z yfinance 3 lata cen dziennych dla sumy spółek
+(bez duplikatów) i liczy średnie, Dar-Card oraz wykresy tygodniowe i dzienne. Wynik: docs/data/watchlist_movers.json (spółki z dzisiejszą zmianą, wolumenem, polem `lists`
+= do których list należą) i docs/data/charts_movers.json — zakładka Movers w aplikacji czyta te pliki i pokazuje listy jako podkategorie.
 Nie rusza watchlist.json / charts.json (lista CANSLIM, pobierana raz w tygodniu) ani migawki raw-data.
 """
 import argparse
 import json
+import re
+from urllib.parse import parse_qs, unquote, urlparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,32 +21,76 @@ import watchlist
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "docs" / "data"
 MOVERS_PERIOD = "3y"        # 3 lata dziennych cen: SMA 10 / 40 tygodni, SMA 10 / 50 sesji, Dar-Card, wykres słupkowy (tygodniowy i dzienny)
-# Skaner użytkownika (Finviz, v=111): stałe warunki techniczne — cena przecięła SMA20 i SMA50, cena nad SMA200 (nie są parametrami workflow).
-SMA_FILTERS = "ta_sma20_pc,ta_sma200_pa,ta_sma50_pc"
-# Parametry zmienne (workflow „Movers”): kapitalizacja (kod Finviz cap_*over), WOLUMEN Z DNIA w tys. akcji (sh_curvol_o<N>, nie średni!) i zmiana dnia (ta_change_*; "" = bez filtra).
-DEFAULT_CAP = "cap_midover"
-DEFAULT_VOLUME_K = 1000
-DEFAULT_CHANGE = ""
-CAP_CODES = ("cap_microover", "cap_smallover", "cap_midover", "cap_largeover")
-VOLUME_K_CODES = (50, 100, 200, 300, 400, 500, 750, 1000, 2000, 3000, 4000, 5000, 10000)   # kody sh_curvol_o<N> istniejące na Finviz
-CHANGE_CODES = ("", "ta_change_u", "ta_change_u1", "ta_change_u2", "ta_change_u3", "ta_change_u4", "ta_change_u5", "ta_change_u6", "ta_change_u7", "ta_change_u8", "ta_change_u9", "ta_change_u10")
+# Domyślna lista (skaner użytkownika z Finviz, v=111), gdy nie ma jeszcze pliku z listami.
+DEFAULT_LIST_NAME = "Movers"
+DEFAULT_FILTERS = "cap_midover,sh_curvol_o1000,ta_sma20_pc,ta_sma200_pa,ta_sma50_pc"
+LISTS_FILE = "movers_lists.json"
+ACTIONS = ("add", "remove", "refresh")
+_FILTER_TOKEN = re.compile(r"^[a-z0-9]+_[a-z0-9._-]+$")
 
 
-def build_filters(cap=DEFAULT_CAP, volume_k=DEFAULT_VOLUME_K, change=DEFAULT_CHANGE):
-    """Kod filtra Finviz ze zmiennych parametrów + stałych SMA. Nieznany kod = ValueError (Finviz po cichu ignoruje literówki i poszerza listę)."""
-    cap = (cap or DEFAULT_CAP).strip()
-    change = (change or "").strip()
-    volume_k = int(volume_k) if str(volume_k or "").strip() else DEFAULT_VOLUME_K
-    if cap not in CAP_CODES:
-        raise ValueError(f"Nieznana kapitalizacja {cap!r}; dozwolone: {', '.join(CAP_CODES)}")
-    if volume_k not in VOLUME_K_CODES:
-        raise ValueError(f"Nieznany próg wolumenu {volume_k} tys.; dozwolone: {', '.join(map(str, VOLUME_K_CODES))}")
-    if change not in CHANGE_CODES:
-        raise ValueError(f"Nieznany filtr zmiany {change!r}; dozwolone: {', '.join(c or '(brak)' for c in CHANGE_CODES)}")
-    return ",".join(x for x in (cap, f"sh_curvol_o{volume_k}", change, SMA_FILTERS) if x)
+def parse_filters(text):
+    """Pole „filters” -> kod Finviz po przecinku. Przyjmuje: link ze skanera Finviz (bierze parametr f=), kody `cap_midover,sh_curvol_o1000`
+    albo zapis `cap:midover sh_curvol:o1000` (spacje / przecinki / nowe linie). Kształt kodu jest sprawdzany (Finviz po cichu ignoruje literówki
+    i poszerza listę, więc nieznany kod to błąd tylko, gdy ma zły format — jego istnienie sprawdź liczbą spółek)."""
+    raw = (text or "").strip()
+    if not raw:
+        raise ValueError("Puste pole filters.")
+    if "finviz.com" in raw or "f=" in raw:
+        q = parse_qs(urlparse(raw if "://" in raw else "https://" + raw).query)
+        raw = (q.get("f") or [""])[0] or raw
+    tokens = [t for t in re.split(r"[,\s]+", unquote(raw).strip().lower()) if t]
+    out = []
+    for t in tokens:
+        t = t.replace(":", "_", 1)
+        if not _FILTER_TOKEN.match(t):
+            raise ValueError(f"Nieprawidłowy filtr {t!r} (oczekiwane np. cap:midover albo cap_midover).")
+        if t not in out:
+            out.append(t)
+    if not out:
+        raise ValueError("Puste pole filters.")
+    return ",".join(out)
 
 
-DEFAULT_FILTERS = build_filters()
+def load_lists(path):
+    """Zapamiętane listy [{name, filters}]; bez pliku — jedna lista domyślna."""
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        lists = [{"name": str(x["name"]), "filters": str(x["filters"])} for x in data.get("lists", []) if x.get("name") and x.get("filters")]
+        return lists
+    except FileNotFoundError:
+        return [{"name": DEFAULT_LIST_NAME, "filters": DEFAULT_FILTERS}]
+    except (ValueError, KeyError, TypeError):
+        raise ValueError(f"Uszkodzony plik {path} — popraw go lub usuń.")
+
+
+def apply_action(lists, action, name="", filters=""):
+    """Zwraca (nowe listy, komunikat). add: dodaje listę albo podmienia filtr o tej samej nazwie; remove: usuwa; refresh: bez zmian."""
+    action = (action or "refresh").strip()
+    name = (name or "").strip()
+    if action not in ACTIONS:
+        raise ValueError(f"Nieznana akcja {action!r}; dozwolone: {', '.join(ACTIONS)}")
+    lists = [dict(x) for x in lists]
+    if action == "add":
+        if not name:
+            raise ValueError("Akcja add wymaga nazwy listy (pole name).")
+        parsed = parse_filters(filters)
+        for x in lists:
+            if x["name"].lower() == name.lower():
+                x["filters"] = parsed
+                return lists, f"Zmieniono filtr listy „{x['name']}”."
+        lists.append({"name": name, "filters": parsed})
+        return lists, f"Dodano listę „{name}”."
+    if action == "remove":
+        if not name:
+            raise ValueError("Akcja remove wymaga nazwy listy (pole name).")
+        keep = [x for x in lists if x["name"].lower() != name.lower()]
+        if len(keep) == len(lists):
+            raise ValueError(f"Nie ma listy „{name}”; są: {', '.join(x['name'] for x in lists) or '(brak)'}.")
+        return keep, f"Usunięto listę „{name}”."
+    return lists, "Odświeżenie wszystkich list."
+
+
 FREE_LIMIT = 1000           # darmowy screener Finviz nie oddaje wierszy powyżej 1000 (r=1001 -> 403)
 # Widok własny Finviz (c=…): kolumny skanera dnia. Nagłówki tak, jak zwraca je strona.
 VIEW_COLUMNS = {"Company": "company", "Sector": "sector", "Industry": "industry", "Market Cap": "market_cap", "Price": "price_fv",
@@ -115,21 +163,49 @@ def _safe_metrics(log=print):
         watchlist.compute_metrics = orig
 
 
-def run(data_dir=None, filters=None, log=print):
-    """-> 0 / 1. Zapisuje watchlist_movers.json i charts_movers.json w data_dir (przy błędzie zostają poprzednie pliki)."""
+def _write_json(path, obj):
+    Path(path).write_text(json.dumps(obj, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
+
+
+def run(data_dir=None, action="refresh", name="", filters="", log=print):
+    """-> 0 / 1 / 2. Akcja na zapamiętanych listach, potem skan WSZYSTKICH list: zapisuje movers_lists.json, watchlist_movers.json i charts_movers.json
+    w data_dir (przy błędzie zostają poprzednie pliki)."""
     data_dir = Path(data_dir or DATA_DIR)
-    filters = filters or DEFAULT_FILTERS
-    log(f"Skaner Finviz: {filters}")
     try:
-        rows, total = fetch_movers(filters, log)
-    except Exception as e:
-        log(f"❌ Finviz niedostępny ({e}) — zostają poprzednie pliki.")
+        lists, msg = apply_action(load_lists(data_dir / LISTS_FILE), action, name, filters)
+    except ValueError as e:
+        log(f"❌ {e}")
+        return 2
+    log(msg)
+    now_utc = datetime.now(timezone.utc)
+    now_ts = watchlist.pd.Timestamp(now_utc)
+    rows_by_ticker, members, info = {}, {}, []
+    for lst in lists:
+        log(f"Lista „{lst['name']}”: {lst['filters']}")
+        try:
+            rows, total = fetch_movers(lst["filters"], log)
+        except Exception as e:
+            log(f"❌ Finviz niedostępny ({e}) — zostają poprzednie pliki.")
+            return 1
+        if not rows:
+            log(f"⚠️  Lista „{lst['name']}” jest teraz pusta (żadna spółka nie spełnia filtra) — sprawdź kody, jeśli to nieoczekiwane.")
+        for r in rows:
+            rows_by_ticker.setdefault(r["ticker"], r)
+            members.setdefault(r["ticker"], []).append(lst["name"])
+        info.append({"name": lst["name"], "filters": lst["filters"], "n": len(rows), "finviz_total": total})
+    data_dir.mkdir(parents=True, exist_ok=True)
+    meta = {"generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "lists": info}
+    tickers = list(rows_by_ticker)
+    if not tickers and lists:
+        log("❌ Żadna lista nie zwróciła spółek (brak ruchów spełniających filtry, blokada Finviz albo zmiana układu strony) — zostają poprzednie pliki.")
         return 1
-    if not rows:
-        log("❌ Finviz nie zwrócił żadnej spółki (brak ruchów spełniających filtr albo zmiana układu strony) — zostają poprzednie pliki.")
-        return 1
-    log(f"Finviz: {len(rows)} spółek. Pobieram {MOVERS_PERIOD} cen z yfinance…")
-    tickers = [r["ticker"] for r in rows]
+    if not tickers:
+        log("Nie ma już żadnej listy — zapisuję pusty wynik.")
+        _write_json(data_dir / LISTS_FILE, {"lists": lists})
+        _write_json(data_dir / "watchlist_movers.json", {**meta, "data_as_of": None, "n_stocks": 0, "stocks": []})
+        _write_json(data_dir / "charts_movers.json", {"stocks": {}})
+        return 0
+    log(f"Spółek razem: {len(tickers)}. Pobieram {MOVERS_PERIOD} cen z yfinance…")
     frames = sanitize_frames(watchlist.download_prices(tickers, period=MOVERS_PERIOD), log)
     coverage = len(frames) / len(tickers)
     log(f"Ceny dla {len(frames)}/{len(tickers)} spółek ({coverage:.0%}).")
@@ -141,57 +217,41 @@ def run(data_dir=None, filters=None, log=print):
     except Exception as e:
         log(f"⚠️  Benchmark {watchlist.BENCHMARK} niedostępny ({e}) — wykresy bez linii S&P 500.")
         benchmark_df = None
-    now_utc = datetime.now(timezone.utc)
-    now_ts = watchlist.pd.Timestamp(now_utc)
     with _safe_metrics(log):
-        stocks = watchlist.build_stocks(rows, frames, now_ts, bench_df=benchmark_df)
+        stocks = watchlist.build_stocks(list(rows_by_ticker.values()), frames, now_ts, bench_df=benchmark_df)
     if not stocks:
         log("❌ Żadna spółka nie przeszła obliczeń — nie zapisuję.")
         return 1
-    by_ticker = {r["ticker"]: r for r in rows}
     for s in stocks:
-        row = by_ticker.get(s["ticker"], {})
+        row = rows_by_ticker.get(s["ticker"], {})
         s.update({k: row.get(k) for k in EXTRA_KEYS})
         s.update({k: None for k in RELATIVE_KEYS})
+        s["lists"] = members.get(s["ticker"], [])
     stocks.sort(key=lambda s: s.get("change_pct") if isinstance(s.get("change_pct"), (int, float)) else float("-inf"), reverse=True)
     charts = watchlist.build_charts([s["ticker"] for s in stocks], frames, benchmark_df, {}, now_ts)
     for s in stocks:
         summary = ((charts or {}).get("stocks", {}).get(s["ticker"]) or {}).get("rs_line") or {}
         s["rs_line_state"] = summary.get("state")
         s["rs_line_dist_pct"] = summary.get("dist_pct")
-    payload = {
-        "generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        "data_as_of": max((s["as_of"] for s in stocks), default=None),
-        "movers_filters": filters,
-        "finviz_total": total,
-        "n_stocks": len(stocks),
-        "stocks": stocks,
-    }
-    data_dir.mkdir(parents=True, exist_ok=True)
-    out = data_dir / "watchlist_movers.json"
-    out.write_text(json.dumps(payload, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
-    log(f"💾 Zapisano {out} ({len(stocks)} spółek, dane z sesji {payload['data_as_of']}).")
+    payload = {**meta, "data_as_of": max((s["as_of"] for s in stocks), default=None), "n_stocks": len(stocks), "stocks": stocks}
+    _write_json(data_dir / LISTS_FILE, {"lists": lists})
+    _write_json(data_dir / "watchlist_movers.json", payload)
+    log(f"💾 Zapisano listy ({len(lists)}) i {len(stocks)} spółek, dane z sesji {payload['data_as_of']}.")
     if charts is not None:
         cout = data_dir / "charts_movers.json"
-        cout.write_text(json.dumps(charts, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
+        _write_json(cout, charts)
         log(f"💾 Zapisano {cout} (wykresy tygodniowe i dzienne {len(charts['stocks'])} spółek, {cout.stat().st_size / 1e6:.1f} MB).")
     return 0
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="Movers: lista ze skanera Finviz + 3 lata cen -> docs/data/watchlist_movers.json + charts_movers.json")
-    p.add_argument("--cap", default=DEFAULT_CAP, help="Kapitalizacja od: " + ", ".join(CAP_CODES) + f" (domyślnie {DEFAULT_CAP}).")
-    p.add_argument("--min-volume", default=DEFAULT_VOLUME_K, help="Minimalny WOLUMEN Z DNIA w tys. akcji (domyślnie 1000 = 1 mln).")
-    p.add_argument("--change", default=DEFAULT_CHANGE, help="Filtr zmiany dnia (kod Finviz ta_change_u / u1…u10; puste = bez filtra).")
-    p.add_argument("--filters", type=str, default=None, help="Pełny filtr Finviz (kody po przecinku) zamiast powyższych parametrów.")
+    p = argparse.ArgumentParser(description="Movers: zapamiętane listy (nazwa + filtr Finviz) + 3 lata cen -> docs/data/watchlist_movers.json + charts_movers.json")
+    p.add_argument("--action", default="refresh", choices=ACTIONS, help="add = dodaj / zmień listę (--name, --filters), remove = usuń listę (--name), refresh = odśwież wszystkie.")
+    p.add_argument("--name", default="", help="Nazwa listy.")
+    p.add_argument("--filters", default="", help="Filtr Finviz: kody po przecinku, zapis cap:midover sh_curvol:o1000 … albo cały link ze skanera.")
     p.add_argument("--data-dir", type=str, default=None, help="Katalog wyjściowy (domyślnie docs/data).")
     a = p.parse_args(argv)
-    try:
-        filters = a.filters or build_filters(a.cap, a.min_volume, a.change)
-    except ValueError as e:
-        print(f"❌ {e}")
-        return 2
-    return run(a.data_dir, filters)
+    return run(a.data_dir, a.action, a.name, a.filters)
 
 
 if __name__ == "__main__":

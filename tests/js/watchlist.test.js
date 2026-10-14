@@ -667,3 +667,12 @@ test("dailyNow: w zakładce Movers wykres jest zawsze dzienny, w innych zależy 
     assert.equal(dailyNow(), false);   // przełącznik Filtry → Wykresy dzienne domyślnie wyłączony
     state.tab = old;
 });
+
+test("Movers: podkategorie = zapamiętane listy (liczność każdej listy, starszy plik bez list)", () => {
+    const { moversListCounts } = require("../../docs/js/watchlist.js");
+    const data = { lists: [{ name: "A", filters: "cap_midover" }, { name: "B", filters: "cap_largeover" }],
+        stocks: [{ ticker: "X", lists: ["A", "B"] }, { ticker: "Y", lists: ["A"] }, { ticker: "Z" }] };
+    assert.deepEqual(moversListCounts(data).map(c => [c.name, c.n]), [["A", 2], ["B", 1]]);
+    assert.deepEqual(moversListCounts({ stocks: data.stocks }), []);
+    assert.deepEqual(moversListCounts(null), []);
+});
