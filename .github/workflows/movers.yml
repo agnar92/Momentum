@@ -1,17 +1,37 @@
 name: Movers
 
-# Ręczny skan „Movers” na SAMYCH CENACH: lista ze skanera Finviz (kapitalizacja od 2 mld $, średni wolumen > 1 mln, zmiana dnia > 3 %,
-# cena nad SMA20 / SMA50 / SMA200) + 3 lata cen z yfinance tylko tych spółek (Dar-Card, średnie, wykresy tygodniowe i dzienne). Bez fundamentów.
+# Ręczny skan „Movers” na SAMYCH CENACH: lista ze skanera Finviz + 3 lata cen z yfinance tylko tych spółek (Dar-Card, średnie, wykresy tygodniowe i dzienne).
+# Bez fundamentów. Parametry zmienne ustawiasz w polach poniżej: kapitalizacja, WOLUMEN Z DNIA (nie średni) i zmiana dnia. Warunki SMA są stałe:
+# cena przecięła SMA20 i SMA50, cena nad SMA200 (movers_scan.py: SMA_FILTERS).
 # Wynik: docs/data/watchlist_movers.json + charts_movers.json — NIE rusza watchlist.json / charts.json (lista CANSLIM, odświeżana raz w tygodniu).
 #
-# Ręczne odpalenie: zakładka Actions -> "Movers" -> "Run workflow", albo lokalnie:
-#   python movers_scan.py
+# Ręczne odpalenie: zakładka Actions -> "Movers" -> "Run workflow" (albo przycisk „Odśwież dane” w zakładce Movers), lub lokalnie:
+#   python movers_scan.py --cap cap_midover --min-volume 1000
 on:
   workflow_dispatch:
     inputs:
+      cap:
+        description: 'Kapitalizacja od'
+        type: choice
+        default: cap_midover
+        options:
+          - cap_microover
+          - cap_smallover
+          - cap_midover
+          - cap_largeover
+      min_volume:
+        description: 'Minimalny wolumen Z DNIA (tys. akcji; 1000 = 1 mln)'
+        type: choice
+        default: '1000'
+        options: ['50', '100', '200', '300', '400', '500', '750', '1000', '2000', '3000', '4000', '5000', '10000']
+      change:
+        description: 'Zmiana dnia (Finviz: ta_change_u = wzrost, u3 = ponad +3 % itd.; brak = bez filtra)'
+        type: choice
+        default: ''
+        options: ['', ta_change_u, ta_change_u1, ta_change_u2, ta_change_u3, ta_change_u4, ta_change_u5, ta_change_u6, ta_change_u7, ta_change_u8, ta_change_u9, ta_change_u10]
       filters:
-        description: 'Filtr Finviz (kody po przecinku, jak w adresie ?f=)'
-        default: 'cap_midover,sh_avgvol_o1000,ta_change_u3,ta_sma20_pa,ta_sma200_pa,ta_sma50_pa'
+        description: 'Zaawansowane: pełny filtr Finviz (kody po przecinku) zamiast pól powyżej; puste = użyj pól'
+        default: ''
 
 permissions:
   contents: write
@@ -45,7 +65,12 @@ jobs:
           pip install -r requirements.txt
 
       - name: Movers scan (Finviz list + yfinance prices)
-        run: python movers_scan.py --filters "${{ inputs.filters }}"
+        env:
+          CAP: ${{ inputs.cap }}
+          MIN_VOLUME: ${{ inputs.min_volume }}
+          CHANGE: ${{ inputs.change }}
+          FILTERS: ${{ inputs.filters }}
+        run: python movers_scan.py --cap "$CAP" --min-volume "$MIN_VOLUME" --change "$CHANGE" ${FILTERS:+--filters "$FILTERS"}
 
       - name: Persist docs/data/*_movers.json
         run: |

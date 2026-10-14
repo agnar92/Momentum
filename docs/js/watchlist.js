@@ -14,7 +14,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // ceny i wskaźniki). Zakładki nad TĄ SAMĄ listą:
 //   📋 Lista      — wszystkie spółki po filtrze Finviz,
 //   (RS Rating, EPS Rating i Composite zostały kolumnami; zakładki Ratingi i Wybicia usunięto — sortuj w CANSLIM)
-//   🚀 Movers      — spółki rosnące dziś (skaner Finviz, ręczny workflow „Movers”, same ceny: Dar-Card + średnie),
+//   🚀 Movers      — spółki ze skanera Finviz (ręczny workflow „Movers”, same ceny: Dar-Card + średnie),
 //   🎯 Upside — ranking średniej ceny celu analityków (upside do średniej, kolumny Min / Max),
 //   🧱 Bazy        — spółki w otwartej bazie/korekcie blisko pivotu (heurystyka watchlist.py::detect_bases),
 //   ⭐ Ulubione    — własne ★ użytkownika (localStorage).
@@ -61,7 +61,7 @@ const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "BOXES"];   // zakładki z dolnej 
 const BOXES_TAB = "BOXES";   // podstrona „Boxy” (bez własnej tabeli) — przegląd boxów Darvasa: monitorowane, nowe, wybicia, trzymaj, sprzedaj; patrz #boxesPanel
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
-    LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", MOVERS: "Movers — rosnące dziś", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
+    LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", MOVERS: "Movers — skan Finviz", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -987,7 +987,7 @@ function renderTable() {
     const meta = document.getElementById("drawerMeta");
     const total = state.data.stocks.length;
     meta.textContent = tab === "MOVERS"
-        ? (moversData ? `${rows.length} spółek rosnących dziś (skan Finviz: ${moversData.n_stocks}) · ceny z sesji ${moversData.data_as_of || "?"}, skan ${String(moversData.generated_at || "?").replace("T", " ").replace("Z", " UTC")}` : "Brak skanu Movers")
+        ? (moversData ? `${rows.length} spółek ze skanu (Finviz: ${moversData.n_stocks}) · ceny z sesji ${moversData.data_as_of || "?"}, skan ${String(moversData.generated_at || "?").replace("T", " ").replace("Z", " UTC")}` : "Brak skanu Movers")
         : tab === "POS" ? positionSummary(rows) : `${rows.length} z ${total} spółek`;
     if (tab === "POS") renderPositionControls(rows);
     updateSortHeaders(table);
@@ -1611,6 +1611,11 @@ function showTab(tab, resetSort = true) {
     if (navMore) navMore.classList.toggle("active", !BOTTOM_NAV_TABS.includes(tab));
     const activeTab = document.querySelector(".drawer-tab.active");
     if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const refresh = document.getElementById("refreshLink");   // w zakładce Movers „Odśwież dane” otwiera workflow Movers (z polami: kapitalizacja, wolumen, zmiana), w pozostałych tygodniowe odświeżenie CANSLIM
+    if (refresh) {
+        refresh.href = githubActionsUrl(window.location, tab === "MOVERS" ? "movers.yml" : "daily_watchlist.yml");
+        refresh.title = tab === "MOVERS" ? "Skan Movers jest ręczny. Ten przycisk otwiera GitHub Actions — kliknij „Run workflow” i ustaw kapitalizację, wolumen z dnia i zmianę, żeby pobrać świeżą listę." : refresh.dataset.weeklyTitle;
+    }
     Object.keys(TAB_TITLES).forEach(t => {
         document.getElementById(`table-${t}`).hidden = t !== tab;
         document.getElementById(`guide-${t}`).hidden = t !== tab;
