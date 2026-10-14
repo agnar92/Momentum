@@ -1,0 +1,90 @@
+name: Movers
+
+# Ręczny skan „Movers” na SAMYCH CENACH: lista ze skanera Finviz (kapitalizacja od 2 mld $, średni wolumen > 1 mln, zmiana dnia > 3 %,
+# cena nad SMA20 / SMA50 / SMA200) + 3 lata cen z yfinance tylko tych spółek (Dar-Card, średnie, wykresy tygodniowe i dzienne). Bez fundamentów.
+# Wynik: docs/data/watchlist_movers.json + charts_movers.json — NIE rusza watchlist.json / charts.json (lista CANSLIM, odświeżana raz w tygodniu).
+#
+# Ręczne odpalenie: zakładka Actions -> "Movers" -> "Run workflow", albo lokalnie:
+#   python movers_scan.py
+on:
+  workflow_dispatch:
+    inputs:
+      filters:
+        description: 'Filtr Finviz (kody po przecinku, jak w adresie ?f=)'
+        default: 'cap_midover,sh_avgvol_o1000,ta_change_u3,ta_sma20_pa,ta_sma200_pa,ta_sma50_pa'
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Wspólna grupa z innymi workflowami: bez nakładających się wdrożeń Pages.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  movers:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Movers scan (Finviz list + yfinance prices)
+        run: python movers_scan.py --filters "${{ inputs.filters }}"
+
+      - name: Persist docs/data/*_movers.json
+        run: |
+          if [ -n "$(git status --porcelain docs/data/)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            # Najpierw na AKTUALNY szczyt main ("reset --mixed"), żeby commit niósł tylko świeże dane na poprawnej bazie.
+            git fetch origin main
+            git reset --mixed origin/main
+            git add docs/data/watchlist_movers.json docs/data/charts_movers.json
+            # [skip ci]: bez tego commit odpaliłby kolejne workflowy (push: main).
+            git commit -m "chore: Movers scan [skip ci]"
+            for attempt in 1 2 3 4 5; do
+              if git push; then
+                break
+              fi
+              if [ "$attempt" -eq 5 ]; then
+                echo "❌ Push nie powiódł się po 5 próbach."
+                exit 1
+              fi
+              echo "⚠️  Push odrzucony (próba $attempt) — pobieram najnowszy main i próbuję ponownie..."
+              sleep $((attempt * 3))
+              git fetch origin main
+              git reset --mixed origin/main
+              git add docs/data/watchlist_movers.json docs/data/charts_movers.json
+              git commit -m "chore: Movers scan [skip ci]"
+            done
+          else
+            echo "Brak zmian w docs/data/ — pomijam commit."
+          fi
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

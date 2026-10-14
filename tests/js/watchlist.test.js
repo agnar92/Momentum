@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    qullamaggieRows, qmPoolSize, upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -14,54 +14,9 @@ function stock(ticker, over = {}) {
     return {
         ticker, company: `${ticker} Inc`, sector: "Tech", price: 100, rs_rating: 50, rs_score: 0.5,
         adr_pct: 6, dollar_volume_avg: 50e6,
-        low_ratio_1m: 1.05, low_ratio_3m: 1.12, low_ratio_6m: 1.4,
         ema34_rising: false, ...over,
     };
 }
-
-test("qullamaggieRows: liquidity thresholds, then union of top X% per 1/3/6M window without duplicates", () => {
-    const mk = (t, g1, g3, g6, over = {}) => stock(t, {
-        low_ratio_1m: g1, low_ratio_3m: g3, low_ratio_6m: g6, ...over,
-    });
-    const filler = ["E", "F", "G", "H", "I", "J", "K"].map(t => mk(t, 1.01, 1.01, 1.01));
-    const stocks = [
-        mk("A", 1.9, 1.05, 1.05), mk("B", 1.05, 1.9, 1.05), mk("C", 1.05, 1.05, 1.9),
-        mk("LOWVOL", 9.9, 9.9, 9.9, { dollar_volume_avg: 1e6 }),
-        mk("LOWADR", 9.9, 9.9, 9.9, { adr_pct: 2 }),
-        mk("MISSING", 9.9, 9.9, 9.9, { adr_pct: null }),
-        ...filler,
-    ];
-    const params = { minDollarVolumeM: 20, minAdrPct: 5, topPct: 10 };
-    const rows = qullamaggieRows(stocks, params);
-    // 10 płynnych spółek, top 10% = 1 na okno => A (1M), B (3M), C (6M)
-    assert.deepEqual(rows.map(r => r.ticker).sort(), ["A", "B", "C"]);
-    assert.deepEqual(rows.find(r => r.ticker === "A").windows.map(w => w.label), ["1M"]);
-    assert.equal(rows.find(r => r.ticker === "A").max_ratio, 1.9);
-
-    // ta sama spółka liderem w kilku oknach => jeden wiersz z kilkoma oknami
-    stocks[0] = mk("A", 1.9, 1.95, 1.05);
-    const merged = qullamaggieRows(stocks, params);
-    assert.equal(merged.filter(r => r.ticker === "A").length, 1);
-    assert.deepEqual(merged.find(r => r.ticker === "A").windows.map(w => w.label), ["1M", "3M"]);
-    assert.equal(merged.find(r => r.ticker === "A").max_ratio, 1.95);
-});
-
-test("qullamaggieRows: with the Finviz pool, top X% is counted from the size of the whole liquid set, not from the candidates", () => {
-    const stocks = Array.from({ length: 20 }, (_, i) => stock(`S${i}`, { low_ratio_1m: 1 + i / 100, low_ratio_3m: 1, low_ratio_6m: 1 }));
-    const params = { minDollarVolumeM: 20, minAdrPct: 5, topPct: 10 };
-    // bez puli: 10 % z 20 kandydatów = 2 na okno; z pulą 200 płynnych: 10 % = 20 => wszyscy kandydaci
-    assert.equal(qullamaggieRows(stocks, params).filter(r => r.windows.some(w => w.label === "1M")).length, 2);
-    const pool = [...Array(200).fill([100e6, 6]), ...Array(50).fill([1e6, 1])];
-    assert.equal(qullamaggieRows(stocks, params, pool).filter(r => r.windows.some(w => w.label === "1M")).length, 20);
-    assert.equal(qmPoolSize(pool, 20e6, 5), 200);
-    assert.equal(qmPoolSize(pool, 200e6, 5), 0);
-    assert.equal(qmPoolSize(null, 20e6, 5), 0);
-});
-
-test("qullamaggieRows: empty input and zero topPct give an empty list", () => {
-    assert.deepEqual(qullamaggieRows([], { minDollarVolumeM: 0, minAdrPct: 0, topPct: 10 }), []);
-    assert.deepEqual(qullamaggieRows([stock("A")], { minDollarVolumeM: 0, minAdrPct: 0, topPct: 0 }), []);
-});
 
 test("fillTargets adds min/max from estimates", () => {
     const stocks = [stock("A", { pt_mean: 120 }), stock("B", { pt_low: 5, pt_high: 9 })];
@@ -200,16 +155,16 @@ test("marketLines describes both indices", () => {
     assert.ok(marketLines({ sp500: { ema_gap_pct: 1.8, pct_vs_sma50: 1, pct_vs_sma200: 2, dist_days: 2, pct_from_high: -1 } })[0].includes("EMA10/EMA20 tyg. +1.8%"));
 });
 
-test("all tabs share the same columns; tagStrategies orders Q, B", () => {
+test("all tabs share the same columns; tagStrategies tags B", () => {
     const { TAB_COLUMNS, tagStrategies } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
-    ["LIST", "FAV", "QM", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
+    ["LIST", "FAV", "MOVERS", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
     assert.equal(TAB_COLUMNS.ALERTS, undefined);   // zakładka Alerty usunięta
     const a = stock("A", { rs_rating: 90 }), b = stock("B", { rs_rating: 10 });
     tagStrategies([a, b], [a, b], {
-        qm: { minDollarVolumeM: 20, minAdrPct: 4, topPct: 10 }, bases: { maxDistPct: 10, vcpOnly: false } });
+        bases: { maxDistPct: 10, vcpOnly: false } });
     assert.ok(!a.strat.includes("R") && !a.strat.includes("W"));
     assert.deepEqual(b.strat, []);
-    assert.equal(b.strat_rank, 2);
+    assert.equal(b.strat_rank, 1);
 });
 
 test("breakoutInfo: flag at resistance, pivot distance, my alert line; rank and sort order", () => {
@@ -639,16 +594,15 @@ test("CANSLIM A: wzrost EPS ≥ 25 % w każdym znanym z 3 ostatnich lat; akceler
     assert.match(e.rows.find(r => r.key === "A").have, /\+40% \/ \+30% \/ \+28%/);
 });
 
-test("hasWeeklyPattern i filtr Qullamaggiego „tylko z wzorcem tygodniowym”", () => {
-    const { qullamaggieRows, hasWeeklyPattern } = require("../../docs/js/watchlist.js");
-    const mk = (t, extra) => ({ ticker: t, dollar_volume_avg: 5e7, adr_pct: 6, low_ratio_1m: 1.5, low_ratio_3m: 1.5, low_ratio_6m: 1.5, ...extra });
-    const rows = [mk("A", { base_type: "flat" }), mk("B", { tlw_pattern: "flaga" }), mk("C", { base_type: "correction" }), mk("D")];
-    assert.deepEqual(rows.map(hasWeeklyPattern), [true, true, false, false]);
-    const p = { minDollarVolumeM: 20, minAdrPct: 4, topPct: 100 };
-    assert.deepEqual(qullamaggieRows(rows, p).map(r => r.ticker).sort(), ["A", "B", "C", "D"]);
-    assert.deepEqual(qullamaggieRows(rows, { ...p, patternOnly: true }).map(r => r.ticker).sort(), ["A", "B"]);
+test("Movers: kolumny zmiany dziś i wolumenu względnego, zakładka ma kolumny jak inne", () => {
+    const { COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT } = require("../../docs/js/watchlist.js");
+    assert.deepEqual(TAB_COLUMNS.MOVERS, TAB_COLUMNS.LIST);
+    assert.ok(TAB_COLUMNS_COMPACT.MOVERS.includes("chg") && TAB_COLUMNS_COMPACT.MOVERS.includes("relvol"));
+    assert.match(COL.chg[2]({ change_pct: 4.26 }), /positive.*\+4\.3%/);
+    assert.match(COL.chg[2]({ change_pct: -1 }), /negative/);
+    assert.match(COL.chg[2]({}), /muted/);
+    assert.match(COL.relvol[2]({ rel_volume: 2.34, volume: 3e6, avg_volume: 1.3e6 }), /×2\.3/);
 });
-
 
 test("stopAdvice: MACD nad sygnałem = stop bez zmian; po przecięciu w dół i zamknięciu pod sygnałem = podnieś stop pod dołek świecy", () => {
     const { stopAdvice } = require("../../docs/js/watchlist.js");
