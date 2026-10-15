@@ -1185,9 +1185,9 @@ body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-
 .hm-leg i { width: 22px; height: 9px; display: inline-block; }
 .hm-leg span { margin-left: 6px; }
 
-/* Movers: zapamiętane listy jako podkategorie (przyciski nad tabelą) */
-.movers-lists { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
-.movers-lists[hidden] { display: none; }
-.movers-lists .ml-btn { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
-.movers-lists .ml-btn.active { background: var(--accent, #2ee6c5); border-color: var(--accent, #2ee6c5); color: #05140f; font-weight: 600; }
-.movers-lists .ml-btn small { opacity: .75; margin-left: 4px; }
+/* Watchlisty: zapamiętane listy jako podkategorie (przyciski nad tabelą) */
+.watch-lists { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px 8px; }
+.watch-lists[hidden] { display: none; }
+.watch-lists .ml-btn { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+.watch-lists .ml-btn.active { background: var(--accent, #2ee6c5); border-color: var(--accent, #2ee6c5); color: #05140f; font-weight: 600; }
+.watch-lists .ml-btn small { opacity: .75; margin-left: 4px; }

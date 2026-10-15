@@ -157,7 +157,7 @@ test("marketLines describes both indices", () => {
 
 test("all tabs share the same columns; tagStrategies tags B", () => {
     const { TAB_COLUMNS, tagStrategies } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
-    ["LIST", "FAV", "MOVERS", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
+    ["LIST", "FAV", "WATCH", "BASES"].forEach(t => assert.deepEqual(TAB_COLUMNS[t], TAB_COLUMNS.LIST, t));
     assert.equal(TAB_COLUMNS.ALERTS, undefined);   // zakładka Alerty usunięta
     const a = stock("A", { rs_rating: 90 }), b = stock("B", { rs_rating: 10 });
     tagStrategies([a, b], [a, b], {
@@ -594,14 +594,11 @@ test("CANSLIM A: wzrost EPS ≥ 25 % w każdym znanym z 3 ostatnich lat; akceler
     assert.match(e.rows.find(r => r.key === "A").have, /\+40% \/ \+30% \/ \+28%/);
 });
 
-test("Movers: kolumny zmiany dziś i wolumenu względnego, zakładka ma kolumny jak inne", () => {
-    const { COL, TAB_COLUMNS, TAB_COLUMNS_COMPACT } = require("../../docs/js/watchlist.js");
-    assert.deepEqual(TAB_COLUMNS.MOVERS, TAB_COLUMNS.LIST);
-    assert.ok(TAB_COLUMNS_COMPACT.MOVERS.includes("chg") && TAB_COLUMNS_COMPACT.MOVERS.includes("relvol"));
-    assert.match(COL.chg[2]({ change_pct: 4.26 }), /positive.*\+4\.3%/);
-    assert.match(COL.chg[2]({ change_pct: -1 }), /negative/);
-    assert.match(COL.chg[2]({}), /muted/);
-    assert.match(COL.relvol[2]({ rel_volume: 2.34, volume: 3e6, avg_volume: 1.3e6 }), /×2\.3/);
+test("Watchlisty: zakładka ma kolumny jak inne, w wąskiej liście ratingi do sortowania, domyślnie po Composite", () => {
+    const { TAB_COLUMNS, TAB_COLUMNS_COMPACT } = require("../../docs/js/watchlist.js");
+    assert.deepEqual(TAB_COLUMNS.WATCH, TAB_COLUMNS.LIST);
+    assert.ok(["comp", "rs", "epsr"].every(c => TAB_COLUMNS_COMPACT.WATCH.includes(c)));
+    assert.ok(!TAB_COLUMNS.WATCH.includes("chg") && !TAB_COLUMNS.WATCH.includes("relvol"));   // zmiana dnia / wolumen względny były tylko w starych Movers
 });
 
 test("stopAdvice: MACD nad sygnałem = stop bez zmian; po przecięciu w dół i zamknięciu pod sygnałem = podnieś stop pod dołek świecy", () => {
@@ -658,21 +655,11 @@ test("prefsNormalize: przypięty box zachowuje górę / dół / datę, nieprawid
     assert.equal(p.box.B.v, null);
 });
 
-test("dailyNow: w zakładce Movers wykres jest zawsze dzienny, w innych zależy od przełącznika", () => {
-    const { dailyNow, state } = require("../../docs/js/watchlist.js");
-    const old = state.tab;
-    state.tab = "MOVERS";
-    assert.equal(dailyNow(), true);
-    state.tab = "CS";
-    assert.equal(dailyNow(), false);   // przełącznik Filtry → Wykresy dzienne domyślnie wyłączony
-    state.tab = old;
-});
-
-test("Movers: podkategorie = zapamiętane listy (liczność każdej listy, starszy plik bez list)", () => {
-    const { moversListCounts } = require("../../docs/js/watchlist.js");
+test("Watchlisty: podkategorie = zapamiętane listy (liczność każdej listy, starszy plik bez list)", () => {
+    const { watchListCounts } = require("../../docs/js/watchlist.js");
     const data = { lists: [{ name: "A", filters: "cap_midover" }, { name: "B", filters: "cap_largeover" }],
         stocks: [{ ticker: "X", lists: ["A", "B"] }, { ticker: "Y", lists: ["A"] }, { ticker: "Z" }] };
-    assert.deepEqual(moversListCounts(data).map(c => [c.name, c.n]), [["A", 2], ["B", 1]]);
-    assert.deepEqual(moversListCounts({ stocks: data.stocks }), []);
-    assert.deepEqual(moversListCounts(null), []);
+    assert.deepEqual(watchListCounts(data).map(c => [c.name, c.n]), [["A", 2], ["B", 1]]);
+    assert.deepEqual(watchListCounts({ stocks: data.stocks }), []);
+    assert.deepEqual(watchListCounts(null), []);
 });

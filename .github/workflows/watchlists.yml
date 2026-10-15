@@ -1,16 +1,16 @@
-name: Movers
+name: Watchlisty
 
-# Ręczny skan „Movers” na SAMYCH CENACH z ZAPAMIĘTANYMI LISTAMI. Lista = nazwa + filtr Finviz (pole `filters`); listy są zapisane w docs/data/movers_lists.json
-# (workflow je pamięta między uruchomieniami). Każde uruchomienie skanuje WSZYSTKIE listy, pobiera 3 lata cen yfinance dla sumy spółek (Dar-Card, średnie,
-# wykresy dzienne i tygodniowe), bez fundamentów. W aplikacji listy są podkategoriami zakładki Movers.
+# Ręczne WATCHLISTY z pełną analizą TYGODNIOWĄ (RS Rating, EPS Rating, Composite, Dar-Card, wykres słupkowy). Lista = nazwa + filtr Finviz (pole `filters`);
+# listy są zapisane w docs/data/watchlists_def.json (workflow je pamięta między uruchomieniami). Każde uruchomienie skanuje WSZYSTKIE listy, pobiera ceny i EPS sumy
+# spółek (bez duplikatów) i liczy oceny — percentyle wśród spółek ze wszystkich list razem. W aplikacji listy są podkategoriami zakładki Watchlisty. Wykresów dziennych nie ma.
 #   action = add     -> dodaj listę (name + filters) albo zmień filtr listy o tej nazwie
 #   action = remove  -> usuń listę o podanej nazwie (name)
 #   action = refresh -> odśwież wszystkie listy (name i filters są pomijane)
-# Filtr: kody Finviz po przecinku (cap_midover,sh_curvol_o1000,…), zapis `cap:midover sh_curvol:o1000 ta_sma20:pc` albo cały link ze skanera Finviz.
-# Wynik: docs/data/movers_lists.json + watchlist_movers.json + charts_movers.json — NIE rusza watchlist.json / charts.json (lista CANSLIM, odświeżana raz w tygodniu).
+# Filtr: kody Finviz po przecinku (cap_midover,sh_avgvol_o1000,…), zapis `cap:midover sh_avgvol:o1000 ta_sma20:pa` albo cały link ze skanera Finviz.
+# Wynik: docs/data/watchlists_def.json + watchlists.json + charts_watchlists.json + eps_cache_watchlists.json — NIE rusza watchlist.json / charts.json (lista CANSLIM, odświeżana raz w tygodniu).
 #
-# Ręczne odpalenie: zakładka Actions -> "Movers" -> "Run workflow" (albo przycisk „Odśwież dane” w zakładce Movers), lub lokalnie:
-#   python movers_scan.py --action add --name "Wolumen" --filters "cap:midover sh_curvol:o1000 ta_change:u5 ta_sma20:pc ta_sma200:pa ta_sma50:pc"
+# Ręczne odpalenie: zakładka Actions -> "Watchlisty" -> "Run workflow" (albo przycisk „Odśwież dane” w zakładce Watchlisty), lub lokalnie:
+#   python watchlists_scan.py --action add --name "Wolumen" --filters "cap:midover sh_avgvol:o1000 ta_change:u5 ta_sma20:pa ta_sma200:pa"
 on:
   workflow_dispatch:
     inputs:
@@ -37,12 +37,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  movers:
+  watchlists:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -57,14 +57,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Movers scan (saved lists + Finviz + yfinance prices)
+      - name: Watchlisty scan (saved lists + Finviz + yfinance prices + EPS)
         env:
           ACTION: ${{ inputs.action }}
           LIST_NAME: ${{ inputs.name }}
           FILTERS: ${{ inputs.filters }}
-        run: python movers_scan.py --action "$ACTION" --name "$LIST_NAME" --filters "$FILTERS"
+        run: python watchlists_scan.py --action "$ACTION" --name "$LIST_NAME" --filters "$FILTERS"
 
-      - name: Persist docs/data/*_movers.json
+      - name: Persist docs/data/watchlists*.json
         run: |
           if [ -n "$(git status --porcelain docs/data/)" ]; then
             git config user.name "github-actions[bot]"
@@ -72,9 +72,9 @@ jobs:
             # Najpierw na AKTUALNY szczyt main ("reset --mixed"), żeby commit niósł tylko świeże dane na poprawnej bazie.
             git fetch origin main
             git reset --mixed origin/main
-            git add docs/data/movers_lists.json docs/data/watchlist_movers.json docs/data/charts_movers.json
+            git add docs/data/watchlists_def.json docs/data/watchlists.json docs/data/charts_watchlists.json docs/data/eps_cache_watchlists.json
             # [skip ci]: bez tego commit odpaliłby kolejne workflowy (push: main).
-            git commit -m "chore: Movers scan [skip ci]"
+            git commit -m "chore: Watchlisty scan [skip ci]"
             for attempt in 1 2 3 4 5; do
               if git push; then
                 break
@@ -87,8 +87,8 @@ jobs:
               sleep $((attempt * 3))
               git fetch origin main
               git reset --mixed origin/main
-              git add docs/data/movers_lists.json docs/data/watchlist_movers.json docs/data/charts_movers.json
-              git commit -m "chore: Movers scan [skip ci]"
+              git add docs/data/watchlists_def.json docs/data/watchlists.json docs/data/charts_watchlists.json docs/data/eps_cache_watchlists.json
+              git commit -m "chore: Watchlisty scan [skip ci]"
             done
           else
             echo "Brak zmian w docs/data/ — pomijam commit."
