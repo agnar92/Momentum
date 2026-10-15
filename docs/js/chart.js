@@ -59,7 +59,6 @@ function fitLayout(w, h, noTable = false, scroll = false, noMacd = false) {
 const COMPACT_FONT_SCALE = 1.5;
 const FIT_FONT_SCALE = 1.1;
 const COMPACT_WEEKS = 52;
-const DAILY_WINDOW_SESSIONS = 126;   // domyślne okno dziennego odpowiednika (~6 miesięcy; dane sięgają ~14 miesięcy)
 const WEEKLY_WINDOW_WEEKS = 156;   // domyślne okno wykresu tygodniowego (3 lata); dane sięgają 6 lat (CHART_WEEKS w watchlist.py)
 const SPX_BAND_FRAC = 0.12;   // górna część panelu cen zarezerwowana na linię S&P 500
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
@@ -145,34 +144,14 @@ function lineIndex(weeks, date) {
 // Puste miejsce z prawej (przyszłe świece): kolejne tygodnie po ostatniej świecy.
 const FUTURE_PAD_WEEKLY = 4;       // ile przyszłych tygodni da się obejrzeć suwakiem (~miesiąc)
 const FUTURE_DEFAULT_WEEKLY = 1;   // ile z nich widać domyślnie
-const FUTURE_PAD_DAILY = 10;       // dzienny odpowiednik: ile przyszłych sesji (2 tygodnie)
-const FUTURE_DEFAULT_DAILY = 2;
-function futureDates(last, count, daily = false) {
+function futureDates(last, count) {
     const out = [];
     let t = dateMs(last);
     while (out.length < count) {
-        t += DAY_MS * (daily ? 1 : 7);
-        if (daily) { const wd = new Date(t).getUTCDay(); if (wd === 0 || wd === 6) continue; }   // dzienne: bez weekendów
+        t += DAY_MS * 7;
         out.push(new Date(t).toISOString().slice(0, 10));
     }
     return out;
-}
-
-// Dzienny odpowiednik danych wykresu (charts.daily z watchlist.py) w kształcie tygodniowych charts.json: „tygodnie” to sesje,
-// więc Dar-Card i wykres słupkowy rysują się tym samym kodem. Wzorce (bazy, flagi, climax) są tygodniowe i tu ich nie ma.
-// SMA 10 / 50 liczy Python na pełnej historii; EPS, prognoza i splity są wspólne z widokiem tygodniowym.
-function dailyChartsView(charts) {
-    const d = charts && charts.daily;
-    if (!d || !d.dates || !d.dates.length) return null;
-    if (charts._dailyView) return charts._dailyView;
-    const stocks = {};
-    Object.keys(d.stocks || {}).forEach(t => {
-        const w = (charts.stocks && charts.stocks[t]) || {};
-        stocks[t] = { ...d.stocks[t], eps: w.eps || [], eps_next: w.eps_next || null, splits: w.splits || [], bases: [], tl: null, climax: null, distribution: null, rs_line: w.rs_line || null };
-    });
-    const view = { benchmark: charts.benchmark, weeks: d.dates, spx: d.spx || null, stocks, isDaily: true };
-    try { Object.defineProperty(charts, "_dailyView", { value: view, enumerable: false }); } catch (e) { /* zamrożony obiekt */ }
-    return view;
 }
 
 // opts.pad = true: dokłada puste "przyszłe" miejsca na prawo (wszystkie tablice modelu rosną o `pad`, wartości null).
@@ -185,8 +164,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
     const spx = charts.spx || null;
     const rs = c.c.map((close, i) => (spx && Number.isFinite(close) && Number.isFinite(spx[i]) && spx[i] > 0) ? close / spx[i] : null);
     const eps = (c.eps || []).map(q => ({ ...q, week: weekIndexForDate(weeks, q.d) })).filter(q => q.week >= 0);
-    const daily = !!opts.daily;
-    const smas = daily ? [["SMA 10", c.sma10], ["SMA 50", c.sma50]] : [["SMA 10 tyg.", c.sma10], ["SMA 40 tyg.", c.sma40]];
+    const smas = [["SMA 10 tyg.", c.sma10], ["SMA 40 tyg.", c.sma40]];
     // Linie trendu (watchlist.py::detect_trendlines): opór/wsparcie jako odcinki (indeks, cena).
     const tl = c.tl || null;
     const lines = tl ? tl.lines.map(l => ({ kind: l.kind, i0: lineIndex(weeks, l.x0), y0: l.y0, i1: lineIndex(weeks, l.x1), y1: l.y1, touches: l.touches })) : [];
@@ -226,12 +204,12 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
     }
     const rsNewHigh = c.rs_hi ? c.rs_hi.map(Boolean) : rsNewHighFlags(rs);
     const volAvg = rollingMean(c.v, VOL_AVG_WEEKS);
-    const pad = opts.pad ? (daily ? FUTURE_PAD_DAILY : FUTURE_PAD_WEEKLY) : 0;
+    const pad = opts.pad ? FUTURE_PAD_WEEKLY : 0;
     const padArr = (arr, fill = null) => (arr ? arr.concat(new Array(pad).fill(fill)) : arr);
-    const allWeeks = pad ? weeks.concat(futureDates(weeks[weeks.length - 1], pad, daily)) : weeks;
+    const allWeeks = pad ? weeks.concat(futureDates(weeks[weeks.length - 1], pad)) : weeks;
     const model = {
         ticker, weeks: allWeeks, n: allWeeks.length, pad,
-        padDefault: pad ? (daily ? FUTURE_DEFAULT_DAILY : FUTURE_DEFAULT_WEEKLY) : 0, daily,
+        padDefault: pad ? FUTURE_DEFAULT_WEEKLY : 0,
         o: padArr(c.o), h: padArr(c.h), l: padArr(c.l), c: padArr(c.c), v: padArr(c.v),
         smas: smas.map(([label, values]) => ({ label, values: padArr(values || []), color: SMA_COLORS[label] })),
         spx: padArr(spx), rs: padArr(rs), eps, lines, cups, box, htf, climax: c.climax || null, distribution: c.distribution || null, trend: tl ? { pattern: tl.pattern, state: tl.state, breakout: tl.breakout || null, info: tl.info || null } : null,
@@ -393,7 +371,6 @@ function sliceModel(m, n, end = m.n) {
 function defaultWindowLength(full, opts = {}) {
     if (Number.isFinite(opts.windowLen) && opts.windowLen > 0) return opts.windowLen;
     const padDef = full.padDefault || 0;
-    if (full.daily) return Math.min(opts.compact ? 90 : DAILY_WINDOW_SESSIONS, full.n - (full.pad || 0)) + padDef;
     return opts.compact ? COMPACT_WEEKS + padDef : Math.min(WEEKLY_WINDOW_WEEKS, full.n - (full.pad || 0)) + padDef;   // tygodniowy: 3 lata (jak na stronach książki), starsze 3 lata pokazuje suwak
 }
 
@@ -1021,7 +998,7 @@ function chartSvg(m, opts = {}) {
         parts.push(`<text x="${x(sp.i)}" y="${VOL.y + VOL.h - h - 2}" font-size="${fs(9)}" fill="${CHART_COLORS.textStrong}" text-anchor="middle" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">${fmtVol(sp.val)}</text>`);
     });
     parts.push(polyline(m.volAvg.map((v, i) => Number.isFinite(v) ? [x(i), VOL.y + VOL.h - Math.min(1, v / vMax) * (VOL.h - fs(11) - 4)] : null), CHART_COLORS.volAvg, 1.3));
-    if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${VOL.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">${m.daily ? "Wolumen dzienny · średnia 10 sesji" : "Wolumen tygodniowy · średnia 10 tyg."}</text>`);
+    if (!opts.hideLabels) parts.push(`<text x="${L.left + 4}" y="${VOL.y + fs(11)}" font-size="${fs(11)}" fill="${CHART_COLORS.text}">Wolumen tygodniowy · średnia 10 tyg.</text>`);
     if (!opts.volOverlay) parts.push(`<text x="${L.width - L.right + 6}" y="${VOL.y + fs(10)}" font-size="${fs(10)}" fill="${CHART_COLORS.text}">${(vMax / 1000).toFixed(1)}${opts.compact ? "M" : " mln"}</text>`);
 
     // --- 3b. MACD (12, 26, 9) tygodniowy: histogram + linia MACD + sygnał, liczone na pełnej historii (nie na oknie), ▼ przy przecięciu sygnału w dół
@@ -1187,9 +1164,9 @@ function chartReadout(m, i) {
 }
 
 // "2026-08-13" -> "tydz. do 13 sie 2026" (tygodniowa świeca to tydzień kończący się tą datą)
-function fmtCrossDate(d, daily = false) {
+function fmtCrossDate(d) {
     if (!d) return "";
-    return `${daily ? "" : "tydz. do "} ${Number(d.slice(8, 10))} ${MONTHS_PL[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
+    return `tydz. do ${Number(d.slice(8, 10))} ${MONTHS_PL[Number(d.slice(5, 7)) - 1]} ${d.slice(0, 4)}`;
 }
 
 function attachChartHover(container, m, readoutEl, L) {
@@ -1209,7 +1186,7 @@ function attachChartHover(container, m, readoutEl, L) {
         cross.setAttribute("x2", cx);
         cross.setAttribute("opacity", "0.45");
         if (dateEl) {
-            dateEl.textContent = fmtCrossDate(m.weeks[i], m.daily);
+            dateEl.textContent = fmtCrossDate(m.weeks[i]);
             dateEl.setAttribute("x", Math.max(L.left + 60, Math.min(L.width - L.right - 60, cx)));
             dateEl.setAttribute("opacity", "1");
         }
@@ -1238,7 +1215,7 @@ function sliderHtml(m) {
     const finite = m.c.filter(Number.isFinite);
     const lo = Math.min(...finite), hi = Math.max(...finite), span = hi - lo || 1;
     const pts = m.c.map((v, i) => (Number.isFinite(v) ? `${(i / (m.n - 1 || 1) * 100).toFixed(2)},${(100 - (v - lo) / span * 100).toFixed(1)}` : null)).filter(Boolean).join(" ");
-    return `<div class="wl-range-row"${m.daily ? ' data-daily="1"' : ""}><div class="wl-range" id="chartRange"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${CHART_COLORS.bench}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`
+    return `<div class="wl-range-row"><div class="wl-range" id="chartRange"><svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${CHART_COLORS.bench}" stroke-width="1.2" vector-effect="non-scaling-stroke"/></svg>`
         + `<div class="wl-range-win" id="chartRangeWin" title="Przeciągnij, by przesunąć okno; krawędzie zmieniają jego długość"><span class="wl-range-h wl-range-l" data-h="l"></span><span class="wl-range-h wl-range-r" data-h="r"></span></div></div><div class="wl-zoom-strip" id="chartZoom" title="Przeciągnij w lewo / w prawo, by płynnie przybliżyć / oddalić (na komputerze także kółko myszy nad wykresem, na telefonie szczypnięcie suwaka)"><span class="wl-zoom-l">◀</span><b id="chartZoomLbl"></b><span class="wl-zoom-r">▶</span></div></div>`;
 }
 
@@ -1246,7 +1223,7 @@ function attachRangeSlider(root, total, getWin, setWin) {
     const track = root.querySelector("#chartRange"), win = root.querySelector("#chartRangeWin");
     if (!track || !win) return null;
     const strip = root.querySelector("#chartZoom"), lbl = root.querySelector("#chartZoomLbl");
-    const label = () => { if (lbl) { const w = getWin(); const dly = !!root.querySelector("[data-daily]"); lbl.textContent = dly ? (w.n >= 252 ? `${(w.n / 252).toFixed(1).replace(".", ",")} l.` : `${w.n} ses.`) : (w.n >= 104 ? `${(w.n / 52).toFixed(1).replace(".", ",")} l.` : `${w.n} tyg.`); } };
+    const label = () => { if (lbl) { const w = getWin(); lbl.textContent = w.n >= 104 ? `${(w.n / 52).toFixed(1).replace(".", ",")} l.` : `${w.n} tyg.`; } };
     const paint = () => {
         label();
         const w = getWin();
@@ -1424,7 +1401,7 @@ function attachStackHover(root, m, readoutEl, L) {
         root.querySelectorAll("[data-cross]").forEach(el => { el.setAttribute("x1", cx); el.setAttribute("x2", cx); el.setAttribute("opacity", i === null ? "0" : "0.5"); });
         root.querySelectorAll("[data-crossdate]").forEach(el => {
             if (i === null) { el.setAttribute("opacity", "0"); return; }
-            el.textContent = fmtCrossDate(m.weeks[i], m.daily);
+            el.textContent = fmtCrossDate(m.weeks[i]);
             el.setAttribute("x", Math.max(L.left + 60, Math.min(L.width - L.right - 60, cx)));
             el.setAttribute("opacity", "1");
         });
@@ -1444,7 +1421,7 @@ function attachStackHover(root, m, readoutEl, L) {
 
 // Buduje HTML paneli dla jednego okna czasu. Zwraca { html, L } (geom z panelu cen — dla warstwy rysowania własnego boxa).
 function stackPanelsHtml(m, opts, geom) {
-    const order = stackOrder().filter(k => !(m.daily && k === "macd")), full = stackFull && order.includes(stackFull) ? stackFull : null;
+    const order = stackOrder(), full = stackFull && order.includes(stackFull) ? stackFull : null;
     const fitW = opts.fit && opts.fit.w ? opts.fit.w : 900;
     const W = full ? Math.max(260, Math.round(typeof document !== "undefined" ? document.documentElement.clientWidth : fitW)) : fitW;
     const vh = typeof window !== "undefined" ? window.innerHeight : 800;
@@ -1469,7 +1446,7 @@ function stackPanelsHtml(m, opts, geom) {
 }
 
 function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}) {
-    const full = buildChartModel(charts, ticker, stock, { pad: true, patterns: opts.daily ? false : opts.patterns, daily: !!charts.isDaily });
+    const full = buildChartModel(charts, ticker, stock, { pad: true, patterns: opts.patterns });
     if (!full) {
         container.innerHTML = `<div class="empty-state">Brak danych wykresu dla ${escapeHtml(ticker)} — odśwież dane (watchlist.py).</div>`;
         readoutEl.textContent = "";
@@ -1813,6 +1790,6 @@ function fundMiniHtml(m) {
 
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        stackOrder, moveInOrder, stackLayers, stackLayout, stackHeights, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dateToIndex, indexToDate, dailyChartsView, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict, emaSeries, macdSeries, macdWeeklyState, posMiniSvg,
+        stackOrder, moveInOrder, stackLayers, stackLayout, stackHeights, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, estimateSeries, estimateChange, estimateText, sliceModel, clampWindow, zoomWindow, defaultWindowLength, futureDates, pickLayout, fitLayout, CHART_LAYOUT_WIDE, dateToIndex, indexToDate, cupArcPoints, patternExplain, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, CHART_LAYOUT, pivotFromStock, swingLabels, volumeSpikes, fmtVol, placeLabels, labelBox, pinchWindow, panWindow, fundMiniModel, fundMiniSvg, fundMiniHtml, fundVerdict, emaSeries, macdSeries, macdWeeklyState, posMiniSvg,
     };
 }

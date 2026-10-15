@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    patternExplain, defaultWindowLength, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, dailyChartsView, futureDates, chartSvg, chartReadout, polyline, pivotFromStock, swingLabels, volumeSpikes, fmtVol,
+    patternExplain, defaultWindowLength, niceTicks, epsMultiple, makeYScale, makeLogScale, logTicks, numericExtent, sliceModel, rsNewHighFlags, rollingMean, weekIndexForDate, buildChartModel, chartSvg, chartReadout, polyline, pivotFromStock, swingLabels, volumeSpikes, fmtVol,
 } = require(path.join("..", "..", "docs", "js", "chart.js"));
 
 const WEEKS = ["2026-01-02", "2026-01-09", "2026-01-16", "2026-04-03", "2026-07-03"];
@@ -690,21 +690,3 @@ test("chartSvg: baza flat to samo pudełko Darvasa (klikalne), bez linii pivotu,
     assert.doesNotMatch(svg, /pivot 15\.00/);
 });
 
-test("dailyChartsView: sesje jako oś czasu, SMA 10 / 50, bez wzorców tygodniowych, bez weekendów w przyszłych slotach", () => {
-    const dates = ["2026-10-07", "2026-10-08", "2026-10-09"];
-    const charts = {
-        benchmark: "^GSPC", weeks: ["2026-10-09"], spx: [1],
-        daily: { dates, spx: [10, 11, 12], stocks: { AAA: { o: [1, 2, 3], h: [2, 3, 4], l: [1, 1, 2], c: [2, 3, 4], v: [5, 6, 7], sma10: [null, null, 3], sma50: [null, null, null] } } },
-        stocks: { AAA: { c: [4], bases: [{ type: "flat" }], eps: [{ d: "2026-10-08", e: 1 }], eps_next: null } },
-    };
-    const view = dailyChartsView(charts);
-    assert.deepEqual(view.weeks, dates);
-    assert.equal(view.stocks.AAA.bases.length, 0);
-    assert.equal(dailyChartsView(charts), view);   // zapamiętany
-    assert.equal(dailyChartsView({ weeks: [], stocks: {} }), null);
-    const m = buildChartModel(view, "AAA", null, { pad: true, patterns: false, daily: true });
-    assert.equal(m.smas[0].label, "SMA 10");
-    assert.equal(m.eps[0].week, 1);
-    assert.equal(m.n, 3 + 10);
-    assert.deepEqual(futureDates("2026-10-09", 2, true), ["2026-10-12", "2026-10-13"]);   // piątek → poniedziałek
-});

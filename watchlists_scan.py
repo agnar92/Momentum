@@ -1,30 +1,34 @@
-"""Movers — ręczny skan spółek na SAMYCH CENACH (bez fundamentów, EPS i estymat), z zapamiętanymi listami.
+"""Watchlisty — ręczne listy spółek (nazwa + filtr Finviz) z pełną analizą TYGODNIOWĄ: RS Rating, EPS Rating i Composite do sortowania.
 
-Workflow `Movers` (movers.yml) uruchamia ten skrypt na żądanie. **Lista** = nazwa + filtr Finviz (pole tekstowe `filters`: kody `cap_midover,sh_curvol_o1000,…`,
-zapis `cap:midover sh_curvol:o1000 …` albo cały link ze skanera Finviz). Listy są zapamiętane w docs/data/movers_lists.json; workflow ma akcje `add` (dodaj / zmień listę),
-`remove` (usuń listę) i `refresh` (odśwież wszystkie). Każde uruchomienie skanuje WSZYSTKIE zapamiętane listy, pobiera z yfinance 3 lata cen dziennych dla sumy spółek
-(bez duplikatów) i liczy średnie, Dar-Card oraz wykresy tygodniowe i dzienne. Wynik: docs/data/watchlist_movers.json (spółki z dzisiejszą zmianą, wolumenem, polem `lists`
-= do których list należą) i docs/data/charts_movers.json — zakładka Movers w aplikacji czyta te pliki i pokazuje listy jako podkategorie.
-Nie rusza watchlist.json / charts.json (lista CANSLIM, pobierana raz w tygodniu) ani migawki raw-data.
+Workflow `Watchlisty` (watchlists.yml) uruchamia ten skrypt na żądanie. **Lista** = nazwa + filtr Finviz (pole tekstowe `filters`: kody `cap_midover,sh_curvol_o1000,…`,
+zapis `cap:midover sh_curvol:o1000 …` albo cały link ze skanera Finviz). Listy są zapamiętane w docs/data/watchlists_def.json; workflow ma akcje `add` (dodaj / zmień listę),
+`remove` (usuń listę) i `refresh` (odśwież wszystkie). Każde uruchomienie skanuje WSZYSTKIE zapamiętane listy (fundamenty z Finviz jak w głównej liście), pobiera z yfinance ceny
+sumy spółek (bez duplikatów), kwartalne EPS (osobna pamięć docs/data/eps_cache_watchlists.json) i liczy to samo co `watchlist.py`: RS Rating, EPS Rating, Composite, Acc/Dis,
+bazy, flagi, wykresy tygodniowe (Dar-Card i słupkowy). Oceny to percentyle wśród WSZYSTKICH spółek ze wszystkich list razem (nie rynku). Wykresów dziennych nie ma.
+Wynik: docs/data/watchlists.json (spółki z polem `lists` = do których list należą) i docs/data/charts_watchlists.json — zakładka Watchlisty w aplikacji czyta te pliki.
+Nie rusza watchlist.json / charts.json / eps_cache.json (lista CANSLIM, pobierana raz w tygodniu) ani migawki raw-data.
 """
 import argparse
 import json
 import re
-from urllib.parse import parse_qs, unquote, urlparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
 
 import finviz
 import watchlist
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "docs" / "data"
-MOVERS_PERIOD = "3y"        # 3 lata dziennych cen: SMA 10 / 40 tygodni, SMA 10 / 50 sesji, Dar-Card, wykres słupkowy (tygodniowy i dzienny)
-# Domyślna lista (skaner użytkownika z Finviz, v=111), gdy nie ma jeszcze pliku z listami.
-DEFAULT_LIST_NAME = "Movers"
-DEFAULT_FILTERS = "cap_midover,sh_curvol_o1000,ta_sma20_pc,ta_sma200_pa,ta_sma50_pc"
-LISTS_FILE = "movers_lists.json"
+MAX_PER_LIST = 300          # tyle spółek bierzemy z jednej listy (każda to 4 widoki Finviz po 20 wierszy + EPS z Yahoo); większy skaner (np. idx_sp500) jest ucinany
+# Domyślna lista (zwykły skaner trendu z Finviz), gdy nie ma jeszcze pliku z listami.
+DEFAULT_LIST_NAME = "Watchlista"
+DEFAULT_FILTERS = "cap_midover,sh_avgvol_o1000,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa"
+LISTS_FILE = "watchlists_def.json"
+DATA_FILE = "watchlists.json"
+CHARTS_FILE = "charts_watchlists.json"
+EPS_FILE = "eps_cache_watchlists.json"
 ACTIONS = ("add", "remove", "refresh")
 _FILTER_TOKEN = re.compile(r"^[a-z0-9]+_[a-z0-9._-]+$")
 
@@ -91,36 +95,11 @@ def apply_action(lists, action, name="", filters=""):
     return lists, "Odświeżenie wszystkich list."
 
 
-FREE_LIMIT = 1000           # darmowy screener Finviz nie oddaje wierszy powyżej 1000 (r=1001 -> 403)
-# Widok własny Finviz (c=…): kolumny skanera dnia. Nagłówki tak, jak zwraca je strona.
-VIEW_COLUMNS = {"Company": "company", "Sector": "sector", "Industry": "industry", "Market Cap": "market_cap", "Price": "price_fv",
-                "Change %": "change_pct", "Volume": "volume", "Avg Volume": "avg_volume", "Rel Volume": "rel_volume"}
-VIEW_IDS = "0,1,2,3,4,6,65,66,67,63,64"   # No., Ticker, Company, Sector, Industry, Market Cap, Price, Change %, Volume, Avg Volume, Rel Volume
-EXTRA_KEYS = ("price_fv", "change_pct", "volume", "avg_volume", "rel_volume")
-# Oceny względne (percentyl wśród spółek na liście) nie mają sensu na liście ruchów dnia — zerujemy je, żeby nie wprowadzały w błąd.
-RELATIVE_KEYS = ("rs_rating", "accdis_rating", "accdis", "industry_rating", "leader")
-
-
-@contextmanager
-def _movers_view():
-    """Na czas pobierania widok własny „152” zwraca kolumny skanera dnia (zmiana, wolumen, wolumen względny…) zamiast kolumn fundamentów."""
-    saved = (finviz.VIEW_COLUMNS.get("152"), finviz.VIEW_PARAMS.get("152"), set(finviz.TEXT_KEYS))
-    finviz.VIEW_COLUMNS["152"], finviz.VIEW_PARAMS["152"] = dict(VIEW_COLUMNS), {"c": VIEW_IDS}
-    finviz.TEXT_KEYS.update({"company", "sector", "industry"})
-    try:
-        yield
-    finally:
-        finviz.VIEW_COLUMNS["152"], finviz.VIEW_PARAMS["152"] = saved[0], saved[1]
-        finviz.TEXT_KEYS.clear()
-        finviz.TEXT_KEYS.update(saved[2])
-
-
-def fetch_movers(filters, log=print):
-    """Lista ze skanera Finviz (widok własny z kolumnami dnia). -> (wiersze, razem według Finviz)."""
-    with _movers_view():
-        rows, total = finviz.fetch_view("152", filters, FREE_LIMIT)
-    if total and total > FREE_LIMIT:
-        log(f"⚠️  Finviz ma {total} wyników, a darmowy screener oddaje tylko {FREE_LIMIT} — zawęź filtry.")
+def fetch_list(filters, max_tickers=MAX_PER_LIST, log=print):
+    """Lista ze skanera Finviz z fundamentami (widoki Overview / Valuation / Financial / własny) -> (wiersze, razem według Finviz)."""
+    rows, total = finviz.fetch_watchlist(filters, max_tickers)
+    if total and total > max_tickers:
+        log(f"⚠️  Finviz ma {total} wyników, bierzemy pierwsze {max_tickers} — zawęź filtry.")
     return rows, total
 
 
@@ -168,7 +147,7 @@ def _write_json(path, obj):
 
 
 def run(data_dir=None, action="refresh", name="", filters="", log=print):
-    """-> 0 / 1 / 2. Akcja na zapamiętanych listach, potem skan WSZYSTKICH list: zapisuje movers_lists.json, watchlist_movers.json i charts_movers.json
+    """-> 0 / 1 / 2. Akcja na zapamiętanych listach, potem skan WSZYSTKICH list: zapisuje watchlists_def.json, watchlists.json i charts_watchlists.json
     w data_dir (przy błędzie zostają poprzednie pliki)."""
     data_dir = Path(data_dir or DATA_DIR)
     try:
@@ -183,7 +162,7 @@ def run(data_dir=None, action="refresh", name="", filters="", log=print):
     for lst in lists:
         log(f"Lista „{lst['name']}”: {lst['filters']}")
         try:
-            rows, total = fetch_movers(lst["filters"], log)
+            rows, total = fetch_list(lst["filters"], log=log)
         except Exception as e:
             log(f"❌ Finviz niedostępny ({e}) — zostają poprzednie pliki.")
             return 1
@@ -197,55 +176,58 @@ def run(data_dir=None, action="refresh", name="", filters="", log=print):
     meta = {"generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "lists": info}
     tickers = list(rows_by_ticker)
     if not tickers and lists:
-        log("❌ Żadna lista nie zwróciła spółek (brak ruchów spełniających filtry, blokada Finviz albo zmiana układu strony) — zostają poprzednie pliki.")
+        log("❌ Żadna lista nie zwróciła spółek (brak spółek spełniających filtry, blokada Finviz albo zmiana układu strony) — zostają poprzednie pliki.")
         return 1
     if not tickers:
         log("Nie ma już żadnej listy — zapisuję pusty wynik.")
         _write_json(data_dir / LISTS_FILE, {"lists": lists})
-        _write_json(data_dir / "watchlist_movers.json", {**meta, "data_as_of": None, "n_stocks": 0, "stocks": []})
-        _write_json(data_dir / "charts_movers.json", {"stocks": {}})
+        _write_json(data_dir / DATA_FILE, {**meta, "data_as_of": None, "n_stocks": 0, "stocks": []})
+        _write_json(data_dir / CHARTS_FILE, {"stocks": {}})
         return 0
-    log(f"Spółek razem: {len(tickers)}. Pobieram {MOVERS_PERIOD} cen z yfinance…")
-    frames = sanitize_frames(watchlist.download_prices(tickers, period=MOVERS_PERIOD), log)
+    log(f"Spółek razem: {len(tickers)}. Pobieram ceny z yfinance…")
+    frames = sanitize_frames(watchlist.download_prices(tickers), log)
     coverage = len(frames) / len(tickers)
     log(f"Ceny dla {len(frames)}/{len(tickers)} spółek ({coverage:.0%}).")
     if coverage < watchlist.MIN_COVERAGE:
         log(f"❌ Pokrycie cen poniżej {watchlist.MIN_COVERAGE:.0%} — przerywam bez zapisu (zostają poprzednie pliki).")
         return 1
     try:
-        benchmark_df = watchlist.download_prices([watchlist.BENCHMARK], period=MOVERS_PERIOD).get(watchlist.BENCHMARK)
+        benchmark_df = watchlist.download_prices([watchlist.BENCHMARK]).get(watchlist.BENCHMARK)
     except Exception as e:
-        log(f"⚠️  Benchmark {watchlist.BENCHMARK} niedostępny ({e}) — wykresy bez linii S&P 500.")
+        log(f"⚠️  Benchmark {watchlist.BENCHMARK} niedostępny ({e}) — bez linii RS i S&P 500.")
         benchmark_df = None
     with _safe_metrics(log):
         stocks = watchlist.build_stocks(list(rows_by_ticker.values()), frames, now_ts, bench_df=benchmark_df)
     if not stocks:
         log("❌ Żadna spółka nie przeszła obliczeń — nie zapisuję.")
         return 1
+    try:
+        eps_cache = watchlist.update_eps_cache([s["ticker"] for s in stocks], data_dir / EPS_FILE)
+    except Exception as e:
+        log(f"⚠️  Krok EPS pominięty ({e}) — bez EPS Rating i Composite.")
+        eps_cache = {}
+    watchlist.add_eps_rating(stocks, eps_cache)    # EPS Rating i Composite (RS + EPS) — percentyle wśród spółek ze wszystkich list
     for s in stocks:
-        row = rows_by_ticker.get(s["ticker"], {})
-        s.update({k: row.get(k) for k in EXTRA_KEYS})
-        s.update({k: None for k in RELATIVE_KEYS})
         s["lists"] = members.get(s["ticker"], [])
-    stocks.sort(key=lambda s: s.get("change_pct") if isinstance(s.get("change_pct"), (int, float)) else float("-inf"), reverse=True)
-    charts = watchlist.build_charts([s["ticker"] for s in stocks], frames, benchmark_df, {}, now_ts)
+    stocks.sort(key=lambda s: (s.get("composite_rating") is None, -(s.get("composite_rating") or 0), s["ticker"]))
+    charts = watchlist.build_charts([s["ticker"] for s in stocks], frames, benchmark_df, eps_cache, now_ts)
     for s in stocks:
         summary = ((charts or {}).get("stocks", {}).get(s["ticker"]) or {}).get("rs_line") or {}
         s["rs_line_state"] = summary.get("state")
         s["rs_line_dist_pct"] = summary.get("dist_pct")
     payload = {**meta, "data_as_of": max((s["as_of"] for s in stocks), default=None), "n_stocks": len(stocks), "stocks": stocks}
     _write_json(data_dir / LISTS_FILE, {"lists": lists})
-    _write_json(data_dir / "watchlist_movers.json", payload)
+    _write_json(data_dir / DATA_FILE, payload)
     log(f"💾 Zapisano listy ({len(lists)}) i {len(stocks)} spółek, dane z sesji {payload['data_as_of']}.")
     if charts is not None:
-        cout = data_dir / "charts_movers.json"
+        cout = data_dir / CHARTS_FILE
         _write_json(cout, charts)
-        log(f"💾 Zapisano {cout} (wykresy tygodniowe i dzienne {len(charts['stocks'])} spółek, {cout.stat().st_size / 1e6:.1f} MB).")
+        log(f"💾 Zapisano {cout} (wykresy tygodniowe {len(charts['stocks'])} spółek, {cout.stat().st_size / 1e6:.1f} MB).")
     return 0
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="Movers: zapamiętane listy (nazwa + filtr Finviz) + 3 lata cen -> docs/data/watchlist_movers.json + charts_movers.json")
+    p = argparse.ArgumentParser(description="Watchlisty: zapamiętane listy (nazwa + filtr Finviz), RS / EPS / Composite, wykresy tygodniowe -> docs/data/watchlists.json + charts_watchlists.json")
     p.add_argument("--action", default="refresh", choices=ACTIONS, help="add = dodaj / zmień listę (--name, --filters), remove = usuń listę (--name), refresh = odśwież wszystkie.")
     p.add_argument("--name", default="", help="Nazwa listy.")
     p.add_argument("--filters", default="", help="Filtr Finviz: kody po przecinku, zapis cap:midover sh_curvol:o1000 … albo cały link ze skanera.")

@@ -14,7 +14,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 // ceny i wskaźniki). Zakładki nad TĄ SAMĄ listą:
 //   📋 Lista      — wszystkie spółki po filtrze Finviz,
 //   (RS Rating, EPS Rating i Composite zostały kolumnami; zakładki Ratingi i Wybicia usunięto — sortuj w CANSLIM)
-//   🚀 Movers      — spółki ze skanera Finviz (ręczny workflow „Movers”, same ceny: Dar-Card + średnie),
+//   📑 Watchlisty  — ręczne listy (nazwa + filtr Finviz, workflow „Watchlisty”) z RS / EPS / Composite i wykresami tygodniowymi,
 //   🎯 Upside — ranking średniej ceny celu analityków (upside do średniej, kolumny Min / Max),
 //   🧱 Bazy        — spółki w otwartej bazie/korekcie blisko pivotu (heurystyka watchlist.py::detect_bases),
 //   ⭐ Ulubione    — własne ★ użytkownika (localStorage).
@@ -23,7 +23,6 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const COMPACT_MAX_WIDTH = 640;
 const SWIPE_MIN_PX = 60, SWIPE_MAX_MS = 700;   // przeciągnięcie po tytule wykresu = następna / poprzednia spółka
-const CHART_DAILY_KEY = "momentum_watchlist_chart_daily";   // 1 = dzienny odpowiednik Dar-Card i wykresu słupkowego (przełącznik tylko w Filtry / Więcej)
 const CHART_LOG_KEY = "momentum_watchlist_chart_log";
 const CHART_LEGEND_KEY = "momentum_watchlist_chart_legend";
 const CHART_DARVAS_KEY = "momentum_watchlist_chart_darvas";
@@ -54,14 +53,14 @@ function tagStrategies(allStocks, filtered, st, alerts = []) {
     });
 }
 const TAB_DEFAULT_SORT = {
-    LIST: ["ticker", "asc"], MOVERS: ["change_pct", "desc"],
+    LIST: ["ticker", "asc"], WATCH: ["composite_rating", "desc"],
     CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"],
 };
 const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "BOXES"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const BOXES_TAB = "BOXES";   // podstrona „Boxy” (bez własnej tabeli) — przegląd boxów Darvasa: monitorowane, nowe, wybicia, trzymaj, sprzedaj; patrz #boxesPanel
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
-    LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", MOVERS: "Movers — skan Finviz", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
+    LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", WATCH: "Watchlisty (ręczne listy z Finviz)", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
 };
 const FALLBACK_REPO = "agnar92/Momentum";
 
@@ -422,8 +421,7 @@ function actionInfo(s, mkt, requireCore = true) {
         return mk("HOLD", `Pozycja ${fmtPct(p.pl_pct)}. Trzymaj. Kolejny add: cofnięcie do ${ma} z odbiciem albo wybicie NOWEJ bazy / flagi. Nie dokupuj, gdy cena jest rozciągnięta.`);
     }
     const f = s.canslim && s.canslim.flags;
-    // spółka tylko ze skanu Movers (bez fundamentów) nie przechodzi filtra fundamentów CANSLIM — oceniamy ją po wzorcu tygodniowym, bez bramki C / A
-    // bramka C / A działa tylko przy włączonym „C i A obowiązkowe” (Filtry → 🏆 CANSLIM); bez niej oceniamy wzorzec jak u spółek z Movers
+    // bramka C / A działa tylko przy włączonym „C i A obowiązkowe” (Filtry → 🏆 CANSLIM); bez niej oceniamy wzorzec niezależnie od fundamentów
     if (requireCore && f && (f.C === false || f.A === false)) return mk("SKIP", "Nie spełnia fundamentów CANSLIM (C lub A) — nie jest kandydatem.");
     if (s.dist_top === true) return mk("DIST", `Dystrybucja bez wzrostu ceny (tydzień do ${s.dist_date}): rekordowy tygodniowy wolumen ×${s.dist_vol_ratio} od dołka trendu, a cena prawie bez zmian albo zamknięta w dolnej połowie zakresu. Instytucje sprzedają w siłę — nie kupuj, poczekaj na nową bazę.`);
     if (regime === "correction") return mk("NOBUY", "Rynek w korekcie (EMA10 < EMA20 tygodniowa). 3 na 4 akcje podąża za rynkiem — nie otwieraj nowych pozycji, tylko obserwuj.");
@@ -779,8 +777,6 @@ const COL = {
     base: ["Baza", "base_depth_pct", s => `<td>${baseSummary(s)}</td>`],
     dollarVol: ["Obrót dzienny", "dollar_volume_avg", s => `<td>${fmtVolume(s.dollar_volume_avg)}</td>`],
     adr: ["ADR %", "adr_pct", s => `<td>${Number.isFinite(s.adr_pct) ? s.adr_pct.toFixed(1) + "%" : "—"}</td>`],
-    chg: ["Zmiana dziś", "change_pct", s => Number.isFinite(s.change_pct) ? `<td class="${s.change_pct >= 0 ? "positive" : "negative"}"><strong>${s.change_pct >= 0 ? "+" : ""}${s.change_pct.toFixed(1)}%</strong></td>` : `<td class="muted">—</td>`, "Zmiana ceny dziś według Finviz (w chwili ostatniego skanu)"],
-    relvol: ["Wol. wzgl.", "rel_volume", s => Number.isFinite(s.rel_volume) ? `<td title="Wolumen dziś ${fmtVolume(s.volume)} wobec średniego ${fmtVolume(s.avg_volume)}">×${s.rel_volume.toFixed(1)}</td>` : `<td class="muted">—</td>`, "Wolumen względny: dzisiejszy wolumen / średni (Finviz)"],
     ptMean: ["Cel", "target_main", s => `<td title="${Number.isFinite(s.finviz_target) ? "Finviz" : "Yahoo"}${s.analysts ? ", " + s.analysts + " analityków (Yahoo)" : ""}"><strong>${money(targetMain(s))}</strong></td>`, "Średnia cena celu analityków (Finviz; Yahoo, gdy brak)"],
     recom: ["Rekomendacja", "recom", s => Number.isFinite(s.recom)
         ? `<td class="rt ${ratingClass(Math.round((5 - s.recom) / 4 * 99))}" title="Rekomendacja analityków Finviz: 1 = Strong Buy … 5 = Strong Sell"><strong>${s.recom.toFixed(2)}</strong> <span class="small">${recomLabel(s.recom)}</span></td>`
@@ -849,17 +845,17 @@ const actCell = (s, key) => s[key]
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
 const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
-    "dollarVol", "adr", "chg", "relvol", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
+    "dollarVol", "adr", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const TAB_COLUMNS = {
-    LIST: ALL_COLUMNS, CS: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], MOVERS: ALL_COLUMNS, BASES: ALL_COLUMNS,
+    LIST: ALL_COLUMNS, CS: ALL_COLUMNS, FAV: ALL_COLUMNS, POS: [...LEAD, ...POS_COLUMNS, ...ALL_COLUMNS.filter(id => !LEAD.includes(id) && id !== "pos")], WATCH: ALL_COLUMNS, BASES: ALL_COLUMNS,
 };
 
 // Widok dzielony (jak w TC2000: wąska lista po lewej, wykres po prawej) — w wąskiej liście tylko kluczowe kolumny.
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "cs", "pbox"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], MOVERS: ["fav", "ticker", "chg", "relvol", "actW", "pbox"], BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], WATCH: ["fav", "ticker", "comp", "rs", "epsr", "cs"], BASES: COMPACT_COLUMNS,
 };
 let splitMode = false;
 // Kolumny, które istnieją tylko dzięki analizie wzorców (bazy, pivot, flagi, wybicie, „Co robić”, climax) — znikają po jej wyłączeniu.
@@ -901,46 +897,47 @@ function renderRow(tab, s, i) {
     return cells;
 }
 
-// Zakładka Movers: spółki z watchlist_movers.json (ręczny workflow „Movers”: skaner Finviz + 3 lata cen) — same ceny, bez fundamentów, więc bez CANSLIM n/7.
-function moversTabRows() {
-    if (!moversData) return [];
-    moversData.stocks.forEach(s => {
+// Zakładka Watchlisty: spółki z watchlists.json (ręczny workflow „Watchlisty”: listy = nazwa + filtr Finviz) z TYMI SAMYMI obliczeniami co główna lista —
+// RS Rating, EPS Rating, Composite (percentyle wśród spółek ze wszystkich list), CANSLIM, „Co robić”, bazy — i wykresami tygodniowymi, żeby można było sortować po wynikach.
+function watchTabRows() {
+    if (!watchData) return [];
+    watchData.stocks.forEach(s => {
         s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null;
         s.upside_main = upsideMain(s);
         s.target_main = targetMain(s);
-        s.canslim = null; s.cs = null;   // bez fundamentów nie pokazujemy częściowego CANSLIM (n/7 z samych liter cenowych wprowadzałoby w błąd)
-        s.strat = []; s.strat_rank = STRATEGY_ORDER.length;
     });
-    tagBreakouts(moversData.stocks, [], state.brk.maxDistPct);
-    tagPositions(moversData.stocks, state.pos);
-    tagPinnedBoxes(moversData.stocks, state.boxes);
-    tagActions(moversData.stocks, canslimMarket(), state.csCore);
-    const inList = moversList && moversData.lists ? moversData.stocks.filter(s => (s.lists || []).includes(moversList)) : moversData.stocks;
-    return applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax);
+    const inList = watchList && watchData.lists ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
+    const common = applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax);
+    tagStrategies(watchData.stocks, common, state, []);
+    tagPositions(watchData.stocks, state.pos);
+    tagPinnedBoxes(watchData.stocks, state.boxes);
+    tagCanslim(watchData.stocks, canslimMarket());
+    tagActions(watchData.stocks, canslimMarket(), state.csCore);
+    return common;
 }
 
-// Podkategorie Movers = zapamiętane listy (nazwa + filtr Finviz z workflow „Movers”); starszy plik bez `lists` = jedna lista bez przycisków.
-const MOVERS_LIST_KEY = "momentum_watchlist_movers_list";
-let moversList = "";   // "" = wszystkie listy
-try { moversList = localStorage.getItem(MOVERS_LIST_KEY) || ""; } catch (e) { /* brak localStorage */ }
-function moversListCounts(data = moversData) {
+// Podkategorie Watchlist = zapamiętane listy (nazwa + filtr Finviz z workflow „Watchlisty”); starszy plik bez `lists` = jedna lista bez przycisków.
+const WATCH_LIST_KEY = "momentum_watchlist_watch_list";
+let watchList = "";   // "" = wszystkie listy
+try { watchList = localStorage.getItem(WATCH_LIST_KEY) || ""; } catch (e) { /* brak localStorage */ }
+function watchListCounts(data = watchData) {
     const lists = (data && data.lists) || [];
     return lists.map(l => ({ name: l.name, filters: l.filters, n: data.stocks.filter(s => (s.lists || []).includes(l.name)).length }));
 }
-function renderMoversLists() {
-    const el = document.getElementById("moversLists");
+function renderWatchLists() {
+    const el = document.getElementById("watchLists");
     if (!el) return;
-    const counts = moversData ? moversListCounts() : [];
-    el.hidden = state.tab !== "MOVERS" || counts.length === 0;
+    const counts = watchData ? watchListCounts() : [];
+    el.hidden = state.tab !== "WATCH" || counts.length === 0;
     if (el.hidden) return;
-    if (moversList && !counts.some(c => c.name === moversList)) moversList = "";   // lista usunięta w workflow
-    const btn = (name, label, n, title) => `<button type="button" class="ml-btn${moversList === name ? " active" : ""}" data-list="${escapeHtml(name)}" title="${escapeHtml(title)}">${escapeHtml(label)}<small>${n}</small></button>`;
-    el.innerHTML = btn("", "Wszystkie", moversData.n_stocks, "Wszystkie zapamiętane listy razem (spółki bez duplikatów)")
+    if (watchList && !counts.some(c => c.name === watchList)) watchList = "";   // lista usunięta w workflow
+    const btn = (name, label, n, title) => `<button type="button" class="ml-btn${watchList === name ? " active" : ""}" data-list="${escapeHtml(name)}" title="${escapeHtml(title)}">${escapeHtml(label)}<small>${n}</small></button>`;
+    el.innerHTML = btn("", "Wszystkie", watchData.n_stocks, "Wszystkie zapamiętane listy razem (spółki bez duplikatów)")
         + counts.map(c => btn(c.name, c.name, c.n, "Filtr Finviz: " + c.filters)).join("");
 }
-function setMoversList(name) {
-    moversList = name || "";
-    try { localStorage.setItem(MOVERS_LIST_KEY, moversList); } catch (e) { /* brak localStorage */ }
+function setWatchList(name) {
+    watchList = name || "";
+    try { localStorage.setItem(WATCH_LIST_KEY, watchList); } catch (e) { /* brak localStorage */ }
     renderTable();
 }
 
@@ -959,7 +956,7 @@ function rowsForTab(tab) {
     tagActions(state.data.stocks, canslimMarket(), state.csCore);
     if (tab === "CS") return canslimRows(stocks, state.csMin, state.csCore);
     if (tab === "POS") return positionRows(stocks);
-    if (tab === "MOVERS") return moversTabRows();
+    if (tab === "WATCH") return watchTabRows();
     if (tab === "BASES") return baseRows(stocks, state.bases);
     if (tab === "FAV") return stocks.filter(s => state.favs.has(s.ticker));
     return stocks;
@@ -974,7 +971,7 @@ const EMPTY_MESSAGES = {
 };
 
 function emptyMessage(tab) {
-    if (tab === "MOVERS") return moversData ? "Żadna spółka nie przechodzi filtra tekstu / sektora / score." : "Brak skanu Movers — uruchom workflow „Movers” (przycisk w opisie zakładki).";
+    if (tab === "WATCH") return watchData ? "Żadna spółka nie przechodzi filtra tekstu / sektora / score." : "Brak watchlist — uruchom workflow „Watchlisty” (przycisk w opisie zakładki) i dodaj listę z filtrem Finviz.";
     return EMPTY_MESSAGES[tab];
 }
 
@@ -985,7 +982,7 @@ function renderFiltersSummary() {
     const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
     const base = common;
     const counts = [["Lista", base.length],
-        ["Movers", moversData ? applyCommonFilters(moversData.stocks, state.search, state.sector, state.scoreMin, state.scoreMax).length : 0], ...(state.patterns ? [["Bazy", baseRows(base, state.bases).length]] : []), ["CANSLIM", canslimRows(base, state.csMin, state.csCore).length]];
+        ["Watchlisty", watchData ? applyCommonFilters(watchData.stocks, state.search, state.sector, state.scoreMin, state.scoreMax).length : 0], ...(state.patterns ? [["Bazy", baseRows(base, state.bases).length]] : []), ["CANSLIM", canslimRows(base, state.csMin, state.csCore).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
     document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
 }
@@ -1009,12 +1006,12 @@ function renderTable() {
         ? rows.map((s, i) => `<tr data-ticker="${escapeHtml(s.ticker)}"${!splitMode && openCards.has(s.ticker) ? ` class="open"` : ""}>${renderRow(tab, s, i + 1)}</tr>`).join("")
         : `<tr><td colspan="${cols}" class="empty-state">${emptyMessage(tab)}</td></tr>`;
     if (tab === "POS") fillPosMinis();
-    renderMoversLists();
+    renderWatchLists();
     updateAlertBadge();
     const meta = document.getElementById("drawerMeta");
     const total = state.data.stocks.length;
-    meta.textContent = tab === "MOVERS"
-        ? (moversData ? `${rows.length} spółek${moversList ? ` z listy „${moversList}”` : ""} (razem w skanie: ${moversData.n_stocks}) · ceny z sesji ${moversData.data_as_of || "?"}, skan ${String(moversData.generated_at || "?").replace("T", " ").replace("Z", " UTC")}` : "Brak skanu Movers")
+    meta.textContent = tab === "WATCH"
+        ? (watchData ? `${rows.length} spółek${watchList ? ` z listy „${watchList}”` : ""} (razem na listach: ${watchData.n_stocks}) · ceny z sesji ${watchData.data_as_of || "?"}, skan ${String(watchData.generated_at || "?").replace("T", " ").replace("Z", " UTC")}` : "Brak watchlist")
         : tab === "POS" ? positionSummary(rows) : `${rows.length} z ${total} spółek`;
     if (tab === "POS") renderPositionControls(rows);
     updateSortHeaders(table);
@@ -1630,7 +1627,6 @@ function toggleFav(ticker) {
 }
 
 function showTab(tab, resetSort = true) {
-    const wasDaily = dailyNow();
     state.tab = tab;
     if (resetSort && TAB_DEFAULT_SORT[tab]) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
     document.querySelectorAll(".drawer-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
@@ -1639,10 +1635,10 @@ function showTab(tab, resetSort = true) {
     if (navMore) navMore.classList.toggle("active", !BOTTOM_NAV_TABS.includes(tab));
     const activeTab = document.querySelector(".drawer-tab.active");
     if (activeTab && activeTab.scrollIntoView) activeTab.scrollIntoView({ block: "nearest", inline: "nearest" });
-    const refresh = document.getElementById("refreshLink");   // w zakładce Movers „Odśwież dane” otwiera workflow Movers (z polami: kapitalizacja, wolumen, zmiana), w pozostałych tygodniowe odświeżenie CANSLIM
+    const refresh = document.getElementById("refreshLink");   // w zakładce Watchlisty „Odśwież dane” otwiera workflow Watchlisty (akcje add / remove / refresh), w pozostałych tygodniowe odświeżenie CANSLIM
     if (refresh) {
-        refresh.href = githubActionsUrl(window.location, tab === "MOVERS" ? "movers.yml" : "daily_watchlist.yml");
-        refresh.title = tab === "MOVERS" ? "Skan Movers jest ręczny. Ten przycisk otwiera GitHub Actions — kliknij „Run workflow” i ustaw kapitalizację, wolumen z dnia i zmianę, żeby pobrać świeżą listę." : refresh.dataset.weeklyTitle;
+        refresh.href = githubActionsUrl(window.location, tab === "WATCH" ? "watchlists.yml" : "daily_watchlist.yml");
+        refresh.title = tab === "WATCH" ? "Watchlisty są ręczne. Ten przycisk otwiera GitHub Actions — kliknij „Run workflow”: add (dodaj / zmień listę: name + filters), remove (usuń listę) albo refresh (odśwież wszystkie)." : refresh.dataset.weeklyTitle;
     }
     Object.keys(TAB_TITLES).forEach(t => {
         document.getElementById(`table-${t}`).hidden = t !== tab;
@@ -1658,10 +1654,6 @@ function showTab(tab, resetSort = true) {
     document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : onBoxes ? "Boxy Darvasa" : TAB_TITLES[tab];
     saveSettings();
     renderTable();
-    if (dailyNow() !== wasDaily && currentChart) {   // wejście / wyjście z Movers zmienia oś czasu otwartego wykresu (zawsze dzienny)
-        boxFocus = null; chartWindows = [];
-        drawChart();
-    }
 }
 
 // M z CANSLIM: stan rynku (S&P 500 i Nasdaq) policzony w watchlist.py::market_state — pasek nad listą.
@@ -1825,12 +1817,12 @@ function initControls() {
         renderTable();
     }));
     document.getElementById("refreshLink").href = githubActionsUrl(window.location);
-    const moversLink = document.getElementById("moversRefreshLink");
-    if (moversLink) moversLink.href = githubActionsUrl(window.location, "movers.yml");
-    const moversLists = document.getElementById("moversLists");
-    if (moversLists) moversLists.addEventListener("click", ev => {
+    const watchLink = document.getElementById("watchRefreshLink");
+    if (watchLink) watchLink.href = githubActionsUrl(window.location, "watchlists.yml");
+    const watchLists = document.getElementById("watchLists");
+    if (watchLists) watchLists.addEventListener("click", ev => {
         const b = ev.target.closest("[data-list]");
-        if (b) setMoversList(b.dataset.list);
+        if (b) setWatchList(b.dataset.list);
     });
     // Klik w wiersz otwiera wykres w stylu MarketSmith (klik w link "TV" otwiera TradingView i nie otwiera wykresu).
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => tbody.addEventListener("click", ev => {
@@ -1894,8 +1886,7 @@ function initAnnotationIO() {
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
 
 let chartsPromise = null;
-let chartDailyOn = false;   // dzienny widok wykresów (przełącznik w Filtry → Wykresy dzienne i w menu „Więcej”, nie na samym wykresie)
-let chartWinLen = { w: null, d: null };   // długość okna suwaka (tygodnie) zapamiętana dla wszystkich spółek
+let chartWinLen = { w: null };   // długość okna suwaka (tygodnie) zapamiętana dla wszystkich spółek
 let chartWindows = [];      // okna suwaków {n, end} po jednym na wykres w siatce (puste = domyślne); zerowane przy nowej spółce / zmianie układu
 let chartEstOn = false;      // estymaty analityków na wykresie (cena celu + rewizje konsensusu EPS), przycisk „Estymaty”
 let estimatesPromise = null;
@@ -1964,29 +1955,37 @@ function fetchJson(url, quiet = false) {
         .catch(e => { if (!quiet) console.error(`Nie udało się wczytać ${url}:`, e); return null; });
 }
 
-// Skan Movers (workflow „Movers”): watchlist_movers.json (spółki z metrykami cenowymi i dzisiejszą zmianą) i charts_movers.json (wykresy tygodniowe + dzienne).
-let moversData = null;
-let moversChartsPromise = null;
+// Watchlisty (workflow „Watchlisty”): watchlists.json (spółki z ratingami, polem `lists` i fundamentami z Finviz) i charts_watchlists.json (wykresy tygodniowe z EPS).
+let watchData = null;
+let watchChartsPromise = null;
+// W zakładce Watchlisty pierwszeństwo mają dane watchlist (ich oceny RS / EPS / Composite są względem list), w pozostałych dane głównej listy CANSLIM.
 function findStock(ticker) {
-    return (state.data && state.data.stocks.find(x => x.ticker === ticker)) || (moversData && moversData.stocks.find(x => x.ticker === ticker)) || undefined;
+    const main = state.data && state.data.stocks.find(x => x.ticker === ticker);
+    const watch = watchData && watchData.stocks.find(x => x.ticker === ticker);
+    return (state.tab === "WATCH" ? watch || main : main || watch) || undefined;
 }
-async function loadMoversData() {
-    const d = await fetchJson("data/watchlist_movers.json", true);
-    moversData = d && Array.isArray(d.stocks) && d.stocks.length ? d : null;
-    return moversData;
+async function loadWatchData() {
+    const d = await fetchJson("data/watchlists.json", true);
+    watchData = d && Array.isArray(d.stocks) && d.stocks.length ? d : null;
+    return watchData;
 }
-function loadMoversCharts() {
-    if (!moversChartsPromise) {
-        moversChartsPromise = fetchJson("data/charts_movers.json", true).then(c => { if (!c) { moversChartsPromise = null; return null; } return c; });
+function loadWatchCharts() {
+    if (!watchChartsPromise) {
+        watchChartsPromise = fetchJson("data/charts_watchlists.json", true).then(c => { if (!c) { watchChartsPromise = null; return null; } return c; });
     }
-    return moversChartsPromise;
+    return watchChartsPromise;
 }
-// Wykresy dla jednej spółki: lista CANSLIM (charts.json, z EPS) ma pierwszeństwo, a spółka tylko ze skanu Movers bierze charts_movers.json.
+// Wykresy dla jednej spółki: w zakładce Watchlisty najpierw charts_watchlists.json, w pozostałych charts.json (z EPS); drugi plik jest rezerwą.
 async function loadChartsFor(ticker) {
-    const main = await loadCharts();
-    if (main && main.stocks && main.stocks[ticker]) return main;
-    const mv = await loadMoversCharts();
-    return mv && mv.stocks && mv.stocks[ticker] ? mv : main;
+    const has = c => c && c.stocks && c.stocks[ticker];
+    const order = state.tab === "WATCH" ? [loadWatchCharts, loadCharts] : [loadCharts, loadWatchCharts];
+    let last = null;
+    for (const load of order) {
+        const c = await load();
+        if (has(c)) return c;
+        last = last || c;
+    }
+    return last;
 }
 
 // Wykresy tygodniowe wszystkich spółek listy (charts.json).
@@ -2052,9 +2051,8 @@ function chartStats(s) {
 
 // Zmiana DŁUGOŚCI okna suwaka jest zapamiętywana (localStorage) dla wszystkich spółek; samo przesuwanie okna nie.
 function rememberWindowLength(n) {
-    const k = dailyNow() ? "d" : "w";
-    if (chartWinLen[k] === n) return;
-    chartWinLen[k] = n;
+    if (chartWinLen.w === n) return;
+    chartWinLen.w = n;
     try { localStorage.setItem(CHART_WINLEN_KEY, JSON.stringify(chartWinLen)); } catch (e) { /* brak localStorage */ }
 }
 
@@ -2063,24 +2061,9 @@ function chartCells() {
     return [{ ticker: currentChart.ticker }];
 }
 
-// Dane wykresu w aktualnym widoku: tygodniowe (charts.json) albo dzienny odpowiednik (charts.daily), gdy włączony i dostępny.
-// W zakładce Movers wykres jest ZAWSZE dzienny (user: „movers zawsze dzienny wykres”), niezależnie od przełącznika w Filtrach.
-function dailyNow() {
-    return chartDailyOn || state.tab === "MOVERS";
-}
+// Dane wykresu aktualnej spółki (tygodniowe; wykresów dziennych nie ma).
 function activeCharts() {
-    if (!currentChart) return null;
-    return (dailyNow() && typeof dailyChartsView === "function" && dailyChartsView(currentChart.charts)) || currentChart.charts;
-}
-
-function setChartDaily(on) {
-    chartDailyOn = !!on;
-    try { localStorage.setItem(CHART_DAILY_KEY, chartDailyOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
-    const cb = document.getElementById("chartDailyOn");
-    if (cb) cb.checked = chartDailyOn;
-    boxFocus = null; chartWindows = [];   // indeksy boxa i okno dotyczą jednej osi czasu
-    if (currentChart) drawChart();
-    if (dailyNow() && currentChart && !currentChart.charts.daily) showToast("Dane dzienne pojawią się po najbliższym odświeżeniu danych — na razie wykres tygodniowy.", { type: "info" });
+    return currentChart ? currentChart.charts : null;
 }
 
 function posStockPin() { return currentChart ? findStock(currentChart.ticker) : null; }
@@ -2132,7 +2115,7 @@ function drawChart() {
             pinFlash: Date.now() < pinFlashUntil,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
-            window: chartWindows[i], windowLen: dailyNow() ? chartWinLen.d : chartWinLen.w,
+            window: chartWindows[i], windowLen: chartWinLen.w,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
@@ -2217,11 +2200,9 @@ function initBottomNav() {
     if (!nav) return;
     nav.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
     document.getElementById("navMore").addEventListener("click", () => {
-        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["BOXES", "📦", "Boxy"], ["MOVERS", "🚀", "Movers"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]];
+        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["BOXES", "📦", "Boxy"], ["WATCH", "📑", "Watchlisty"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]];
         const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
-            <button type="button" id="navDaily"><span>📅</span>Wykresy: ${chartDailyOn ? "dzienne ✓ (przełącz na tygodniowe)" : "tygodniowe (przełącz na dzienne)"}</button>
             <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
-        body.querySelector("#navDaily").addEventListener("click", () => { closeSheet(); setChartDaily(!chartDailyOn); });
         body.querySelectorAll("button[data-tab]").forEach(b => b.addEventListener("click", () => { closeSheet(); showTab(b.dataset.tab); }));
     });
 }
@@ -2288,14 +2269,11 @@ function initChartModal() {
         chartDarvasOn = true;   // Dar-Card jest jedynym widokiem (świece tylko po kliknięciu boxa)
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
         if (saved && Number.isFinite(saved.w) && saved.w > 0) chartWinLen.w = saved.w;
-        if (saved && Number.isFinite(saved.d) && saved.d > 0) chartWinLen.d = saved.d;
-        chartDailyOn = localStorage.getItem(CHART_DAILY_KEY) === "1";
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
     // Jedyny wykres to tygodniowy w stylu książki O'Neila (user: „usuń wszystko z wykresami dziennymi”).
     chartBookOn = true; chartLog = false;
     updateLogButton();
-    { const cb = document.getElementById("chartDailyOn"); if (cb) { cb.checked = chartDailyOn; cb.addEventListener("change", () => setChartDaily(cb.checked)); } }
     document.getElementById("chartInfoBtn").addEventListener("click", openChartInfo);
     document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });
     // przesunięcie palca w poziomie: w lewo = następna spółka z listy, w prawo = poprzednia (zastąpiło strzałki ◀ ▶);
@@ -2492,8 +2470,8 @@ async function refreshDataIfStale() {
         const cs = await fetchJson("data/watchlist.json");
         if (!cs || !cs.stocks || !cs.stocks.length || cs.generated_at === state.data.generated_at) return;
         state.data = cs;
-        chartsPromise = null; moversChartsPromise = null; estimatesPromise = null; estimatesMap = null;   // wykresy i estymaty też mogły się zmienić
-        loadMoversData().then(() => { if (state.tab === "MOVERS") renderTable(); });
+        chartsPromise = null; watchChartsPromise = null; estimatesPromise = null; estimatesMap = null;   // wykresy i estymaty też mogły się zmienić
+        loadWatchData().then(() => { if (state.tab === "WATCH") renderTable(); });
         loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
         renderDataInfo();
         renderMarket();
@@ -2512,7 +2490,7 @@ if (typeof document !== "undefined") {
         loadPrefs();
         annLoad();
         await loadData();
-        await loadMoversData();
+        await loadWatchData();
         renderDataInfo();
         renderMarket();
         applyLayoutMode();
@@ -2540,7 +2518,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        stopAdvice, dailyNow, moversListCounts,
+        stopAdvice, watchListCounts,
         ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };

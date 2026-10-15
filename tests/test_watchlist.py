@@ -376,14 +376,10 @@ class TestCharts:
         assert all(len(a[k]) == 52 for k in ("o", "h", "l", "c", "v", "sma10", "sma40"))
         assert a["eps"][-1] == {"d": "2026-07-30", "e": 2.0, "g": 100, "t": None} and a["eps_next"] == {"d": "2026-10-29", "e": 2.2, "t": None}   # t: za mało kwartałów na TTM
 
-    def test_build_charts_has_daily_block(self):
+    def test_build_charts_has_no_daily_block(self):
         now = pd.Timestamp("2026-10-01 05:00", tz="UTC")
         charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=400, daily=0.003)}, make_prices(n=400, daily=0.001), {}, now, n_weeks=52)
-        d = charts["daily"]
-        assert len(d["dates"]) == watchlist.CHART_DAYS and len(d["spx"]) == watchlist.CHART_DAYS
-        a = d["stocks"]["AAA"]
-        assert all(len(a[k]) == watchlist.CHART_DAYS for k in ("o", "h", "l", "c", "v", "sma10", "sma50"))
-        assert a["sma50"][-1] is not None and a["sma10"][-1] is not None
+        assert "daily" not in charts and len(charts["weeks"]) == 52   # tylko wykresy tygodniowe
 
     def test_build_charts_without_benchmark_still_works(self):
         charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=300)}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 30)
