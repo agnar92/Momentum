@@ -21,7 +21,7 @@ import watchlist
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / "docs" / "data"
-MAX_PER_LIST = 300          # tyle spółek bierzemy z jednej listy (każda to 4 widoki Finviz po 20 wierszy + EPS z Yahoo); większy skaner (np. idx_sp500) jest ucinany
+MAX_PER_LIST = 1000         # tyle spółek bierzemy z jednej listy = limit darmowego screenera Finviz (r=1001 daje 403); każda lista to 4 widoki po 20 wierszy (~3 min na 1000) + EPS z Yahoo (~6 min)
 # Domyślna lista (zwykły skaner trendu z Finviz), gdy nie ma jeszcze pliku z listami.
 DEFAULT_LIST_NAME = "Watchlista"
 DEFAULT_FILTERS = "cap_midover,sh_avgvol_o1000,ta_sma20_pa,ta_sma50_pa,ta_sma200_pa"
