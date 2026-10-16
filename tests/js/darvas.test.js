@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml } = require("../../docs/js/darvas.js");
+const { darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml } = require("../../docs/js/darvas.js");
 
 // schodek: 100 → box 100–110 (dół 104 potwierdzony), wybicie 112 → box 112–120 …
 const SERIES = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118, 121];
@@ -13,17 +13,20 @@ test("darvasBoxes: góra i dół potwierdzone przez 3 tygodnie, zamknięcie nad 
     assert.equal(first.bottom, 104);
     assert.equal(first.outcome, "up");
     assert.equal(SERIES[first.i1], 112);
+    assert.equal(first.end, boxes[1].i0);                                        // wybity box obowiązuje, aż powstanie nowy wyżej
     assert.ok(boxes[1].top > first.top && boxes[1].bottom > first.bottom);     // schodek w górę
 });
 
-test("darvasBoxes: złamanie dołka zamyka pudełko jako „down”; szybkie przebicie góry daje pudełko z niepotwierdzonym dołkiem", () => {
+test("darvasBoxes: złamanie dołka zamyka pudełko jako „down”; tylko potwierdzone boxy, sam top = linia", () => {
     const down = darvasBoxes([100, 103, 108, 105, 104, 103, 104, 105, 106, 101, 99, 98, 97, 98, 97]);
     assert.equal(down[0].outcome, "down");
     assert.ok(down[0].i1 > down[0].i0);
     assert.deepEqual(darvasBoxes([100, 110, 109, 111, 112, 113, 114, 116, 118, 120, 122]), []);   // czysty trend bez konsolidacji
-    const quick = darvasBoxes([100, 110, 108, 107, 106, 111, 113]);
-    assert.equal(quick.length, 1);
-    assert.deepEqual([quick[0].top, quick[0].bottom, quick[0].confirmed, quick[0].outcome], [110, 106, false, "up"]);
+    const quick = [100, 110, 108, 107, 106, 111, 113];   // góra 110 potwierdzona, dół jeszcze nie — przebicie: tylko linia topu
+    assert.deepEqual(darvasBoxes(quick), []);
+    assert.deepEqual(darvasTopLines(quick), [{ i0: 1, i1: 5, top: 110, open: false }]);
+    assert.deepEqual(darvasTopLines([100, 110, 108, 107, 106]), [{ i0: 1, i1: 4, top: 110, open: true }]);   // top czeka na wybicie
+    assert.deepEqual(darvasLineInfo(110), { entry: 110, stop: 101.2, stopPct: 8 });
     assert.deepEqual(darvasBoxes([1, 2]), []);
 });
 
@@ -40,7 +43,11 @@ test("darvasSvg: pudełka, punkty kupna i stopu; mało danych = komunikat", () =
     assert.match(svg, /<rect [^>]*stroke="#ffffff"/);
     assert.match(svg, /data-box="110\|104\|up\|1\|3\|10"/);                  // klikalny box z cenami
     assert.doesNotMatch(svg, /kup nad|stop pod|stroke-dasharray="2 3"/);   // bez linii i podpisów
-    assert.match(svg, /Box 104\.00–110\.00 \(wybite w górę\)/);
+    assert.match(svg, /Box 104–110 · wybite w górę/);
+    const withLine = { c: [100, 110, 108, 107, 106, 111, 113], weeks: ["a", "b", "c", "d", "e", "f", "g"], n: 7 };
+    const lineSvg = darvasSvg(withLine, { n: 7, end: 7 });
+    assert.match(lineSvg, /data-box="110\|101\.2\|linia\|0\|1\|5"/);   // klikalna niebieska linia samego topu (stop 8 %)
+    assert.match(lineSvg, /stroke="#3b9cff" stroke-width="2" stroke-dasharray="6 4"/);
     assert.match(darvasSvg({ c: [1], weeks: ["2026-01-01"], n: 1 }, { n: 1, end: 1 }), /Za mało danych/);
 });
 
@@ -94,7 +101,7 @@ test("darvasOverview: sekcje monitorowane / nowe / KUP / czekaj, klucz i data po
     const weeks = Array.from({ length: 12 }, (_, i) => `2026-0${1 + Math.floor(i / 4)}-${String(1 + (i % 4) * 7).padStart(2, "0")}`);
     const box1 = [100, 104, 108, 110, 108, 106, 104, 105, 107, 106];
     const vol = box1.map(() => 100);
-    const waiting = { ticker: "AAA", price: 107, c: box1.slice(0, 9), v: vol.slice(0, 9) };   // szczyt 110 (tydz. 3) potwierdzony po 2 kolejnych tygodniach → „nowy” przez 4 tygodnie
+    const waiting = { ticker: "AAA", price: 106, c: box1, v: vol };   // góra 110 (tydz. 3) i dół 104 potwierdzone → „nowy” box przez 4 tygodnie
     const breakout = { ticker: "BBB", price: 112, c: [...box1, 112], v: [...vol, 160] };
     const ov = darvasOverview([waiting, breakout], weeks, { AAA: { top: 110, bottom: 104, start: weeks[3] } });
     assert.equal(ov.wait.length, 1);
@@ -136,4 +143,89 @@ test("darvasInitialStop: dokładnie 10 % pod wejściem; BOX FAILUJE przy wejści
     const falling = [...rising, ...Array.from({ length: 12 }, (_, i) => rising[59] - (i + 1) * 15)];
     assert.equal(darvasMacdBelow(falling), true);
     assert.equal(darvasMacdBelow([1, 2, 3]), null);
+});
+
+// --- port reguł z Momentum Desktop (boxy potwierdzone, linie niepotwierdzonych topów, śledzenie wybitego boxa) ---
+const DS = [10, 11, 12, 13, 12.5, 12.0, 11.8, 12.2, 12.4, 12.1, 12.3];   // góra 13 (idx 3), dół 11,8 (idx 6) potwierdzony po 3 tygodniach
+const MRVL = [66.14, 65.35, 58.92, 60.22, 68.93, 71.44, 75.81, 65.83, 74.06, 73.45, 70.59, 73.0, 73.65, 79.47, 81.22, 84.36, 93.35, 87.41, 92.07, 92.25,
+    112.97, 120.19, 111.36, 113.08, 117.61, 113.83, 124.22, 123.49, 112.38, 110.15, 106.05, 103.36, 91.43, 70.54, 68.45, 70.09, 61.77];
+
+test("Desktop: góra i dół potrzebują 3 kolejnych tygodni, spadający nóż nie tworzy boxów", () => {
+    const bx = darvasBoxes(DS);
+    assert.deepEqual(bx.map(b => [b.i0, b.top, b.bottom, b.outcome]), [[3, 13, 11.8, "open"]]);
+    assert.deepEqual(darvasTopLines(DS), []);
+    assert.deepEqual(darvasTopLines([10, 11, 12, 13, 12.5, 12.0]), []);   // za wcześnie: tylko 2 tygodnie po topie
+    assert.deepEqual(darvasBoxes([10, 11, 12, 13, 12, 11, 10, 9, 8, 7, 6]), []);
+});
+
+test("Desktop: sam top = linia, wybicie samego topu daje KUP ze stopem 8 %", () => {
+    const { darvasStatus } = require("../../docs/js/darvas.js");
+    const c = [10, 11, 12, 13, 12.5, 12.0, 11.8];
+    assert.deepEqual(darvasBoxes(c), []);
+    const st = darvasStatus(c);
+    assert.ok(st.state === "WAIT" && st.stop === 11.96);
+    const broken = darvasStatus([...c, 13.5]);
+    assert.ok(broken.state === "BUY" && broken.stop === 11.96);
+});
+
+test("Desktop: próba przebicia — box obowiązuje do wejścia ceny w jego strefę zagrożenia (wtedy anulowany + SPRZEDAJ)", () => {
+    const { darvasStatus } = require("../../docs/js/darvas.js");
+    const up = [...DS, 13.5];
+    assert.ok(darvasBoxes(up)[0].outcome === "up" && darvasStatus(up).state === "BUY");
+    const back = darvasStatus([...up, 12.8, 12.0]);   // powrót do boxa: nadal obowiązuje
+    assert.ok(back.state === "HOLD" && /w boxie/.test(back.text));
+    const cancelled = [...up, 12.8, 12.0, 11.5];     // zejście pod dno 11,8 = strefa zagrożenia
+    const bx = darvasBoxes(cancelled);
+    assert.ok(bx[0].cancelled && bx[0].end === up.length + 2);
+    assert.equal(darvasStatus(cancelled).state, "SELL");
+    assert.match(darvasStatus(cancelled).text, /BOX FAILUJE/);
+});
+
+test("Desktop: podwójne wybicie kupuje ponownie, nowy box wyżej przejmuje obowiązywanie", () => {
+    const { darvasStatus } = require("../../docs/js/darvas.js");
+    const c = [10, 11, 12, 13, 12.5, 12.0, 11.8, 12.2, 12.4, 12.1, 11.9, 13.5, 12.8, 13.6];
+    assert.equal(darvasStatus(c.slice(0, 12)).state, "BUY");
+    assert.equal(darvasStatus(c.slice(0, 13)).state, "HOLD");
+    assert.equal(darvasStatus(c).state, "BUY");
+    const [old, nw] = darvasBoxes([...DS, 13.5, 14, 14.5, 14.2, 14.0, 14.1, 14.3, 14.2]);
+    assert.ok(old.outcome === "up" && old.end === nw.i0 && nw.i0 === 13 && !old.cancelled);
+    assert.deepEqual([nw.top, nw.bottom], [14.5, 14.0]);
+});
+
+test("Desktop: box złamany bez wybicia = odwrócony, SPRZEDAJ od razu; powrót nad dno = CZEKAJ", () => {
+    const { darvasStatus } = require("../../docs/js/darvas.js");
+    const c = [...DS, 11.5];
+    const bx = darvasBoxes(c);
+    assert.ok(bx[0].outcome === "down" && bx[0].i1 === DS.length);
+    assert.equal(darvasStatus(c).state, "SELL");
+    assert.equal(darvasStatus([...DS, 11.5, 12.9]).state, "WAIT");
+});
+
+test("Desktop (MRVL): wybity box anulowany w strefie zagrożenia, brak wielkiego boxa przez całą korektę", () => {
+    const { darvasStatus } = require("../../docs/js/darvas.js");
+    const bx = darvasBoxes(MRVL);
+    const r = bx.find(b => b.top === 120.19);
+    assert.ok(r.outcome === "up" && r.cancelled && r.end === MRVL.indexOf(110.15));
+    assert.ok(!bx.some(b => b.top === 124.22));
+    assert.ok(Math.max(...bx.map(b => (b.top - b.bottom) / b.top)) < 0.2);
+    assert.equal(darvasStatus(MRVL.slice(0, 28)).state, "HOLD");
+    assert.equal(darvasStatus(MRVL).state, "SELL");
+});
+
+test("Desktop: przypięty sam top ma stop 8 % i nie ma strefy zagrożenia", () => {
+    const { darvasPinStatus } = require("../../docs/js/darvas.js");
+    const pin = { top: 13, bottom: 11.96, line: true };
+    assert.equal(darvasPinStatus(pin, 13.5).state, "ABOVE");
+    assert.equal(darvasPinStatus(pin, 12.5).state, "INSIDE");
+    assert.equal(darvasPinStatus(pin, 12.0).state, "INSIDE");
+    const ex = darvasPinStatus(pin, 11.9);
+    assert.ok(ex.state === "EXIT" && /11\.96/.test(ex.text));
+});
+
+test("Desktop: Boxy — spółka z samym topem trafia do sekcji z linią jako boxem", () => {
+    const { darvasOverview } = require("../../docs/js/darvas.js");
+    const weeks = Array.from({ length: 8 }, (_, i) => `w${i}`);
+    const ov = darvasOverview([{ ticker: "LIN", price: 111, c: [100, 110, 108, 107, 106, 111, 113], v: [] }], weeks, {});
+    const row = [...ov.buy, ...ov.check, ...ov.hold, ...ov.wait].find(r => r.ticker === "LIN");
+    assert.ok(row && row.box.line === true && row.box.bottom === 101.2);
 });

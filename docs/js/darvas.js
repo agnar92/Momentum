@@ -10,39 +10,82 @@ if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./chart.js"));
 }
 
-const DARVAS_CONFIRM = 3;            // tygodnie potwierdzenia góry i dołu pudełka (reguła Darvasa: 3 okresy; tu 3 tygodnie WLICZAJĄC tydzień samego szczytu / dołka = szczyt + 2 kolejne)
+const DARVAS_CONFIRM = 3;            // góra / dół = zamknięcie, którego nie przebija (nie jest niższe od) kolejne 3 tygodnie (jak w Momentum Desktop; tydzień samego szczytu NIE wlicza się do tych 3)
 const DARVAS_MIN_HEIGHT_PCT = 1.5;   // pudełko niższe niż 1,5 % ceny to szum
 
-// Pudełko z niepotwierdzonym dołkiem (cena wybiła górę szybciej niż po `confirm` tygodniach) ma confirmed=false i jest rysowane przerywaną ramką.
-// Pudełka z zamknięć c (tablica, końcowe null = puste miejsce na osi): [{i0, i1, top, bottom, confirmed, outcome: "up" | "down" | "open"}], rosnąco po czasie.
-function darvasBoxes(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
+// Skan zamknięć c (port z Momentum Desktop, desktop/darvas.py::_scan): zwraca { boxes, lines }.
+// BOX = GÓRA (zamknięcie będące lokalnym szczytem — wyższe od `confirm` poprzednich zamknięć — którego nie przebiły `confirm` KOLEJNYCH zamknięć) + DÓŁ (najniższe
+// zamknięcie po górze, niezłamane przez `confirm` kolejnych zamknięć). Rysujemy tylko POTWIERDZONE boxy; góra bez potwierdzonego dołu to tylko LINIA (`lines`: przerywana
+// od topu do wybicia, stop 8 % pod topem). Zamknięcie nad górą = próba przebicia (outcome "up"): box NADAL obowiązuje (`end` = dokąd; także po powrocie ceny do boxa), aż powstanie nowy box
+// wyżej; zejście pod jego dno (strefa zagrożenia) ANULUJE go (`cancelled`) i szukamy od nowa. Box nie wybity, którego dół przebito = outcome "down" (odwrócony box).
+// Pola: i0 (tydzień góry), i1 (tydzień wybicia / złamania albo ostatni), end (dokąd obowiązuje), top, bottom, confirmed (zawsze true), outcome, cancelled?.
+function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
     let n = c.length;
     while (n > 0 && !Number.isFinite(c[n - 1])) n--;
-    const topAfter = Math.max(1, confirm - 1), botAfter = Math.max(1, bottomConfirm - 1);   // tydzień szczytu / dołka liczy się jako pierwszy z `confirm` (user: „nie wliczasz do 3 tygodnia zerowego”)
-    const boxes = [];
-    let i = 0;
+    const bxs = [], lines = [];
+    let i = 0, ref = null;   // ref = indeks wybitego boxa, który nadal obowiązuje (do utworzenia nowego boxa wyżej)
     while (i < n) {
-        // góra: zamknięcie będące najwyższym od początku szukania i nieprzebite przez `confirm` kolejnych zamknięć
+        const refTop = ref !== null ? bxs[ref].top : null, refBot = ref !== null ? bxs[ref].bottom : null;
         let top = null, t = -1, runMax = -Infinity;
         for (let k = i; k < n; k++) {
-            if (!Number.isFinite(c[k]) || c[k] < runMax) continue;
+            if (!Number.isFinite(c[k]) || c[k] < runMax || (refTop !== null && c[k] <= refTop)) continue;
+            let local = true;   // lokalny szczyt: cena rosła do niego (spadek nie tworzy „boxów” z kolejnych zamknięć)
+            for (let m = Math.max(0, k - confirm); m < k; m++) if (Number.isFinite(c[m]) && !(c[k] > c[m])) { local = false; break; }
+            if (!local) continue;
             runMax = c[k];
-            if (k + topAfter < n && c.slice(k + 1, k + topAfter + 1).every(v => v <= c[k])) { t = k; top = c[k]; break; }
+            if (k + confirm < n) {
+                let ok = true;   // luka w danych (null) nie potwierdza szczytu
+                for (let m = k + 1; m <= k + confirm; m++) if (!(Number.isFinite(c[m]) && c[m] <= c[k])) { ok = false; break; }
+                if (ok) { t = k; top = c[k]; break; }
+            }
+        }
+        if (ref !== null) {   // cena zeszła w strefę zagrożenia wybitego boxa, zanim powstał nowy box nad nim: box anulowany, szukamy od nowa
+            const lim = t >= 0 ? t : n - 1;
+            let hit = -1;
+            for (let k = i; k <= lim; k++) if (Number.isFinite(c[k]) && c[k] < refBot) { hit = k; break; }
+            if (hit >= 0) { bxs[ref].end = hit; bxs[ref].cancelled = true; ref = null; i = hit; continue; }
         }
         if (t < 0) break;
-        // dół: najniższe zamknięcie po górze; potwierdzony, gdy przez `confirm` tygodni go nie złamano
-        let bottom = Infinity, bi = -1, confirmed = false, end = -1, outcome = "open", j = t + 1;
-        for (; j < n; j++) {
-            if (c[j] > top) { outcome = "up"; end = j; break; }   // przebicie góry: pudełko z niepotwierdzonym dołkiem (confirmed false) też jest schodkiem — w silnym trendzie to jedyne przerwy
-            if (confirmed && c[j] < bottom) { outcome = "down"; end = j; break; }
-            if (!confirmed && c[j] < bottom) { bottom = c[j]; bi = j; }
-            if (!confirmed && bi >= 0 && j - bi >= botAfter) confirmed = true;
+        let bottom = Infinity, bi = -1, confirmed = false, end = -1, outcome = "open", cancel = null;
+        for (let j = t + 1; j < n; j++) {
+            const v = c[j], ok = Number.isFinite(v);   // tydzień bez notowania nie zmienia boxa, ale upływ czasu liczy się do potwierdzenia dołu
+            if (ok && v > top) { outcome = "up"; end = j; break; }
+            if (ok && ref !== null && !confirmed && v < refBot) { cancel = j; break; }
+            if (confirmed && ok && v < bottom) { outcome = "down"; end = j; break; }
+            if (!confirmed && ok && v < bottom) { bottom = v; bi = j; }
+            if (!confirmed && bi >= 0 && j - bi >= bottomConfirm) confirmed = true;
         }
+        if (cancel !== null) { bxs[ref].end = cancel; bxs[ref].cancelled = true; ref = null; i = cancel; continue; }
         if (end < 0) end = n - 1;
-        if (Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT) boxes.push({ i0: t, i1: end, top, bottom, confirmed, outcome });
-        i = outcome === "open" ? n : end;
+        const good = confirmed && Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT;
+        if (!confirmed) lines.push({ i0: t, i1: end, top, open: outcome === "open" });
+        else if (good) {
+            if (ref !== null) bxs[ref].end = t;   // nowy box (nad starym) przejmuje obowiązywanie
+            bxs.push({ i0: t, i1: end, end, top, bottom, confirmed: true, outcome });
+            ref = outcome === "up" ? bxs.length - 1 : null;
+        }
+        if (outcome === "open") break;
+        i = end;
     }
-    return boxes;
+    if (ref !== null && !bxs[ref].cancelled) bxs[ref].end = n - 1;
+    return { boxes: bxs, lines };
+}
+
+// Potwierdzone boxy (rosnąco po czasie) — patrz darvasScan. `confirmed` zostaje w polach dla zgodności (zawsze true).
+function darvasBoxes(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
+    return darvasScan(c, confirm, bottomConfirm).boxes;
+}
+
+// Same topy bez potwierdzonego dołu: [{i0, i1, top, open}] — przerywana linia od topu do wybicia (open = jeszcze nie przebity).
+function darvasTopLines(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
+    return darvasScan(c, confirm, bottomConfirm).lines;
+}
+
+const DARVAS_LINE_STOP_PCT = 8;   // sam top (bez potwierdzonego dołu): stop 8 % pod topem
+// Sam top: wejście = zamknięcie nad topem, stop = 8 % pod topem.
+function darvasLineInfo(top, stopPct = DARVAS_LINE_STOP_PCT) {
+    const r2 = v => Math.round(v * 100) / 100;
+    return { entry: r2(top), stop: r2(top * (1 - stopPct / 100)), stopPct };
 }
 
 const DARVAS_STOP_PCT = 5;   // szeroko strefy ryzyka: 5 % poniżej dołu boxa; dół strefy = exit
@@ -97,45 +140,63 @@ function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bo
 }
 
 function darvasStatusCore(c, zonePct, confirm, bottomConfirm, vol, maxExtPct) {
-    const boxes = darvasBoxes(c, confirm, bottomConfirm);
-    let lastReal = -1;
-    c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
-    if (!boxes.length || lastReal < 0) return { state: "NONE", text: "brak boxa Darvasa (za mało danych)" };
-    const last = boxes[boxes.length - 1], prev = boxes.length > 1 ? boxes[boxes.length - 2] : null;
+    const { boxes: bx, lines: ln } = darvasScan(c, confirm, bottomConfirm);
+    let lr = -1;
+    c.forEach((v, i) => { if (Number.isFinite(v)) lr = i; });
+    if (lr < 0 || (!bx.length && !ln.length)) return { state: "NONE", text: "brak boxa Darvasa (za mało danych)" };
     const r2 = v => Math.round(v * 100) / 100;
-    const hadUp = !!(prev && prev.outcome === "up");
-    const zoneFrom = r2(last.bottom), stop = r2(last.bottom * (1 - zonePct / 100));
-    const base = { top: r2(last.top), bottom: zoneFrom, zoneFrom, stop };
-    if (last.outcome === "up" && last.i1 === lastReal) {
-        // kontrola poprawnego wybicia: GŁÓWNE potwierdzenie to wolumen ≥ 1,4× średniej z 10 tygodni (gdy go znamy), dodatkowo cena najwyżej 10 % nad górą boxa
-        const over = c[lastReal] / last.top - 1;
+    const px = c[lr], prevPx = lr > 0 && Number.isFinite(c[lr - 1]) ? c[lr - 1] : null;
+    // wybicie nad `top` w ostatnim tygodniu: GŁÓWNE potwierdzenie to wolumen ≥ 1,4× średniej z 10 tygodni (gdy go znamy), dodatkowo cena najwyżej 10 % nad topem
+    const buy = (top, base, stop, stopTxt, what) => {
+        const over = px / top - 1;
         let vr = null;
-        if (vol && Number.isFinite(vol[lastReal])) {
-            const prevV = vol.slice(Math.max(0, lastReal - DARVAS_VOL_WEEKS), lastReal).filter(Number.isFinite);
-            if (prevV.length >= 4) vr = vol[lastReal] / (prevV.reduce((a, b) => a + b, 0) / prevV.length);
+        if (vol && Number.isFinite(vol[lr])) {
+            const prevV = vol.slice(Math.max(0, lr - DARVAS_VOL_WEEKS), lr).filter(Number.isFinite);
+            if (prevV.length >= 4) vr = vol[lr] / (prevV.reduce((a, b) => a + b, 0) / prevV.length);
         }
-        if (vr !== null && vr < DARVAS_BREAKOUT_VOL) return { ...base, state: "NOVOL", vol_ratio: Math.round(vr * 100) / 100, text: `BEZ WOLUMENU — zamknięcie nad górą boxa ${r2(last.top)}, ale wolumen tylko ${vr.toFixed(2)}× średniej (wymagane ${DARVAS_BREAKOUT_VOL}×); niepotwierdzone` };
-        if (over > maxExtPct / 100) return { ...base, state: "LATE", text: `ZA PÓŹNO — zamknięcie ${(over * 100).toFixed(1)} % nad górą boxa ${r2(last.top)} (limit ${maxExtPct} %), nie goń` };
-        const initStop = darvasInitialStop(last.top, last.bottom, c[lastReal]);
-        return { ...base, state: "BUY", stop: initStop, vol_ratio: vr === null ? null : Math.round(vr * 100) / 100, text: `KUP — zamknięcie nad górą boxa ${r2(last.top)}${vr === null ? "" : ` na wolumenie ${vr.toFixed(2)}×`}; stop początkowy ${DARVAS_START_STOP_PCT} % pod wejściem (${initStop}), potem pod dnem kolejnych boxów; wyjście: MACD tygodniowy pod sygnałem lub wejście w strefę zagrożenia` };
+        if (vr !== null && vr < DARVAS_BREAKOUT_VOL) return { ...base, state: "NOVOL", vol_ratio: Math.round(vr * 100) / 100, text: `BEZ WOLUMENU — zamknięcie nad ${what} ${r2(top)}, ale wolumen tylko ${vr.toFixed(2)}× średniej (wymagane ${DARVAS_BREAKOUT_VOL}×); niepotwierdzone` };
+        if (over > maxExtPct / 100) return { ...base, state: "LATE", text: `ZA PÓŹNO — zamknięcie ${(over * 100).toFixed(1)} % nad ${what} ${r2(top)} (limit ${maxExtPct} %), nie goń` };
+        return { ...base, state: "BUY", stop, vol_ratio: vr === null ? null : Math.round(vr * 100) / 100, text: `KUP — zamknięcie nad ${what} ${r2(top)}${vr === null ? "" : ` na wolumenie ${vr.toFixed(2)}×`}; ${stopTxt}` };
+    };
+    const last = bx.length ? bx[bx.length - 1] : null;
+    const lineTxt = li => `sam top bez potwierdzonego dołu, stop ${DARVAS_LINE_STOP_PCT} % pod topem (${li.stop})`;
+    if (!last) {   // jest tylko top, bez potwierdzonego dołu
+        const tl = ln[ln.length - 1], li = darvasLineInfo(tl.top), base = { top: li.entry, stop: li.stop };
+        if (!tl.open && tl.i1 === lr) return buy(tl.top, base, li.stop, lineTxt(li), "topem");
+        if (tl.open) return { ...base, state: "WAIT", text: `CZEKAJ — jest tylko top ${li.entry} (dół jeszcze niepotwierdzony); kup po zamknięciu tygodnia nad nim, stop ${DARVAS_LINE_STOP_PCT} % (${li.stop})` };
+        return { ...base, state: "HOLD", text: `TRZYMAJ — top ${li.entry} przebity, czekamy na potwierdzony box; stop ${DARVAS_LINE_STOP_PCT} % pod topem (${li.stop})` };
     }
-    if (last.outcome === "down") {
-        return hadUp
-            ? { ...base, state: "SELL", text: `SPRZEDAJ — BOX FAILUJE: cena weszła w strefę zagrożenia (pod dno ${zoneFrom}, strefa do ${stop})` }
-            : { ...base, state: "OUT", text: `POZA — box złamany w dół (dno ${zoneFrom}) bez wcześniejszego wybicia; brak powodu, by trzymać` };
+    const { top, bottom } = last, zoneFrom = r2(bottom), stop = r2(bottom * (1 - zonePct / 100));
+    const base = { top: r2(top), bottom: zoneFrom, zoneFrom, stop };
+    const tracked = last.outcome === "up" && !last.cancelled && last.end >= lr;   // wybity box nadal obowiązuje
+    const nl = ln.length ? ln[ln.length - 1] : null;
+    if (nl && nl.i0 > last.i0 && !nl.open && nl.i1 === lr && !last.cancelled) {   // wybity top nowego, jeszcze niepotwierdzonego boxa
+        const li = darvasLineInfo(nl.top);
+        return buy(nl.top, { ...base, top: li.entry }, li.stop, lineTxt(li), "topem");
     }
-    if (last.outcome === "up") {   // wybicie było wcześniej, nowy box jeszcze się nie uformował
-        return { ...base, state: "HOLD", text: `TRZYMAJ — wybicie nad ${r2(last.top)} jest za nami, czekamy na nowy, wyższy box; stop pod dnem ostatniego boxa ${stop}` };
+    if (last.outcome === "up" && (last.i1 === lr || (tracked && px > top && prevPx !== null && prevPx <= top))) {   // próba przebicia: pierwsza albo kolejna
+        const initStop = darvasInitialStop(top, bottom, px);
+        return buy(top, base, initStop, `stop początkowy ${DARVAS_START_STOP_PCT} % pod wejściem (${initStop}), potem pod dnem kolejnych boxów; wyjście: MACD tygodniowy pod sygnałem lub wejście w strefę zagrożenia`, "górą boxa");
     }
-    return hadUp
-        ? { ...base, state: "HOLD", text: `TRZYMAJ — cena w najwyższym boxie ${zoneFrom}–${r2(last.top)}, wahania w nim ignorujemy; stop pod strefą zagrożenia ${stop}` }
-        : { ...base, state: "WAIT", text: `CZEKAJ — pierwszy box ${zoneFrom}–${r2(last.top)}; kup po zamknięciu tygodnia nad ${r2(last.top)}` };
+    if (last.outcome === "down" || last.cancelled || (last.outcome === "up" && !tracked)) {
+        if (px < bottom) return { ...base, state: "SELL", text: `SPRZEDAJ — BOX FAILUJE: cena weszła w strefę zagrożenia (box ${zoneFrom}–${r2(top)} anulowany, strefa ${stop}–${zoneFrom}); szukamy nowego boxa` };
+        return { ...base, state: "WAIT", text: `CZEKAJ — box ${zoneFrom}–${r2(top)} anulowany, czekamy na nowy` };
+    }
+    if (tracked) return { ...base, state: "HOLD", text: `TRZYMAJ — cena ${px > top ? "nad górą boxa" : "w boxie"} ${zoneFrom}–${r2(top)}; box obowiązuje do utworzenia nowego wyżej, anuluje go zejście pod dno ${zoneFrom} (strefa zagrożenia ${stop}–${zoneFrom})` };
+    const hadUp = bx.length > 1 && bx[bx.length - 2].outcome === "up";
+    if (hadUp) return { ...base, state: "HOLD", text: `TRZYMAJ — cena w nowym boxie ${zoneFrom}–${r2(top)}; stop pod strefą zagrożenia ${stop}` };
+    return { ...base, state: "WAIT", text: `CZEKAJ — box ${zoneFrom}–${r2(top)}; kup po zamknięciu tygodnia nad ${r2(top)}` };
 }
 
 // Status przypiętego (monitorowanego) boxa względem bieżącej ceny: nad górą = wybicie, w boxie, w szarej strefie zagrożenia (5 % pod dołem), pod strefą = exit.
 function darvasPinStatus(box, price, zonePct = DARVAS_STOP_PCT) {
     if (!box || !Number.isFinite(price) || !(box.top > box.bottom)) return { state: "NONE", text: "" };
     const r2 = v => Math.round(v * 100) / 100, zone = r2(box.bottom * (1 - zonePct / 100));
+    if (box.line) {   // przypięty sam top: bottom = stop 8 % pod topem, bez strefy zagrożenia
+        if (price > box.top) return { state: "ABOVE", rank: 1, text: `top ${r2(box.top)} przebity (+${((price / box.top - 1) * 100).toFixed(1)} %), stop ${r2(box.bottom)}` };
+        if (price >= box.bottom) return { state: "INSIDE", rank: 2, text: `pod topem ${r2(box.top)}, do wybicia ${((box.top / price - 1) * 100).toFixed(1)} %, stop ${r2(box.bottom)}` };
+        return { state: "EXIT", rank: 0, text: `EXIT — cena ${r2(price)} poniżej stopu ${r2(box.bottom)} (${DARVAS_LINE_STOP_PCT} % pod topem ${r2(box.top)})` };
+    }
     if (price > box.top) return { state: "ABOVE", rank: 1, text: `wybił nad ${r2(box.top)} (+${((price / box.top - 1) * 100).toFixed(1)} %)` };
     if (price >= box.bottom) return { state: "INSIDE", rank: 2, text: `w boxie ${r2(box.bottom)}–${r2(box.top)}, do wybicia ${((box.top / price - 1) * 100).toFixed(1)} %` };
     if (price >= zone) return { state: "ZONE", rank: 0, text: `W STREFIE ZAGROŻENIA ${zone}–${r2(box.bottom)} — potencjalny exit` };
@@ -154,15 +215,17 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
         let lastReal = -1;
         c.forEach((v, i) => { if (Number.isFinite(v)) lastReal = i; });
         if (lastReal < 0) return;
-        const boxes = darvasBoxes(c);
-        const mk = b => ({ top: r2(b.top), bottom: r2(b.bottom), start: (weeks && weeks[b.i0]) || "", i0: b.i0, i1: b.i1 });
+        const { boxes, lines } = darvasScan(c);
+        const mk = b => ({ top: r2(b.top), bottom: r2(b.bottom), start: (weeks && weeks[b.i0]) || "", i0: b.i0, i1: b.i1, ...(b.line ? { line: true } : {}) });
         const pin = pinned[it.ticker];
         if (pin) {
             const st = darvasPinStatus(pin, it.price);
             if (st.state !== "NONE") out.pinned.push({ ticker: it.ticker, price: it.price, state: st.state, rank: st.rank, text: st.text, box: { ...pin, i0: -1, i1: -1 }, key: `${it.ticker}|${pin.top}|${pin.bottom}|${pin.start}` });
         }
         const ds = darvasStatus(c, undefined, undefined, undefined, it.v);
-        const last = boxes[boxes.length - 1];
+        const lastBox = boxes[boxes.length - 1], lastLine = lines[lines.length - 1];
+        // sam top (dół niepotwierdzony) jest „boxem” wiersza, gdy powstał po ostatnim potwierdzonym boxie (albo box w ogóle nie istnieje); bottom = stop 8 % pod topem
+        const last = lastLine && (!lastBox || lastLine.i0 > lastBox.i0) ? { top: lastLine.top, bottom: darvasLineInfo(lastLine.top).stop, i0: lastLine.i0, i1: lastLine.i1, line: true } : lastBox;
         if (ds.state !== "NONE" && last) {
             const row = { ticker: it.ticker, price: it.price, state: ds.state, text: ds.text, box: mk(last), key: `${it.ticker}|${r2(last.top)}|${r2(last.bottom)}|${(weeks && weeks[last.i0]) || ""}` };
             if (ds.macdExit && ds.state === "HOLD") { row.state = "MACD"; }
@@ -170,7 +233,7 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
             if (section) out[section].push(row);
         }
         // nowe boxy: góra potwierdzona (i0 + potwierdzenie) w ostatnich `newWeeks` tygodniach
-        const fresh = boxes.filter(b => { const born = b.i0 + DARVAS_CONFIRM - 1; return born <= lastReal && born >= lastReal - (newWeeks - 1); }).pop();
+        const fresh = boxes.filter(b => { const born = b.i0 + DARVAS_CONFIRM; return born <= lastReal && born >= lastReal - (newWeeks - 1); }).pop();
         if (fresh) out.fresh.push({ ticker: it.ticker, price: it.price, state: fresh.outcome === "up" ? "ABOVE" : fresh.outcome === "down" ? "EXIT" : "INSIDE", text: `box ${r2(fresh.bottom)}–${r2(fresh.top)} od ${(weeks && weeks[fresh.i0]) || "?"}${fresh.outcome === "up" ? " — już wybity w górę" : fresh.outcome === "down" ? " — złamany w dół" : ""}`, box: mk(fresh), key: `${it.ticker}|${r2(fresh.top)}|${r2(fresh.bottom)}|${(weeks && weeks[fresh.i0]) || ""}` });
     });
     out.pinned.sort((a, b) => a.rank - b.rank || a.ticker.localeCompare(b.ticker));
@@ -265,12 +328,14 @@ function darvasSvg(full, win, opts = {}) {
     const x = i => L.left + pw * (i - start + 0.5) / slots;
     const cupGeoms = (full.cups || []).map(cp => darvasCupGeometry(full.c, cp)).filter(Boolean);
     // opts.cupHideBoxes: boxy leżące wewnątrz miski nie są rysowane (miska je zastępuje — mniej bałaganu)
-    const boxes = darvasBoxes(full.c).filter(b => b.i1 >= start && b.i0 < endExcl && !(opts.cupHideBoxes && cupGeoms.some(g => b.i0 >= g.i0 && b.i1 <= g.i1 + 1)));
+    const scan = darvasScan(full.c);
+    const boxes = scan.boxes.filter(b => (b.end ?? b.i1) >= start && b.i0 < endExcl && !(opts.cupHideBoxes && cupGeoms.some(g => b.i0 >= g.i0 && b.i1 <= g.i1 + 1)));
+    const topLines = scan.lines.filter(l => l.i1 >= start && l.i0 < endExcl);   // same topy bez potwierdzonego dołu: niebieska przerywana linia (stop 8 %)
     const shown = [];
     for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) shown.push(full.c[i]);
     if (shown.length < 2) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na pudełka Darvasa.</text></svg>`;
     const pin = opts.pinBox && opts.pinBox.top > opts.pinBox.bottom ? opts.pinBox : null;   // przypięty (monitorowany) box: złota obwódka do prawej krawędzi, także po wyjściu ze strefy
-    const lo0 = Math.min(...shown, ...darvasPatternBoxes(full).map(p => p.low * (1 - PATTERN_ZONE_PCT / 100)), ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100)), ...(pin ? [pin.bottom * (1 - DARVAS_STOP_PCT / 100)] : [])), hi0 = Math.max(...shown, ...boxes.map(b => b.top), ...darvasPatternBoxes(full).map(p => p.top), ...(pin ? [pin.top] : [])), pad = (hi0 - lo0) * 0.06 || 1;
+    const lo0 = Math.min(...shown, ...darvasPatternBoxes(full).map(p => p.low * (1 - PATTERN_ZONE_PCT / 100)), ...boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100)), ...topLines.map(l => l.top * (1 - DARVAS_LINE_STOP_PCT / 100)), ...(pin ? [pin.line ? pin.bottom : pin.bottom * (1 - DARVAS_STOP_PCT / 100)] : [])), hi0 = Math.max(...shown, ...boxes.map(b => b.outcome === "down" ? b.top * (1 + DARVAS_STOP_PCT / 100) : b.top), ...topLines.map(l => l.top), ...darvasPatternBoxes(full).map(p => p.top), ...(pin ? [pin.top] : [])), pad = (hi0 - lo0) * 0.06 || 1;
     // skala LOGARYTMICZNA (równe % to równa wysokość): przy dużym zakresie cen stare boxy nie są sprasowane, a strefa zagrożenia 5 % ma stałą wysokość
     const logSpan = Math.log(hi0 / lo0) || 0.1;
     const lo = lo0 > 0 ? lo0 * Math.exp(-0.06 * logSpan) : lo0 - pad, hi = lo0 > 0 ? hi0 * Math.exp(0.06 * logSpan) : hi0 + pad;
@@ -298,14 +363,22 @@ function darvasSvg(full, win, opts = {}) {
     }
     const bw = Math.max(2, pw / slots * 0.5);
     boxes.forEach(b => {
-        const x0 = x(Math.max(start, b.i0)) - bw / 2, x1 = x(Math.min(endExcl - 1, Math.max(b.i1, b.i0 + 1))) + bw / 2;
-        const yT = y(b.top), yB = y(b.bottom), yZ = y(b.bottom * (1 - DARVAS_STOP_PCT / 100));   // dół boxa = najniższe zamknięcie; zacieniona strefa zagrożenia leży 5 % POD nim (jak na Dar-Card)
-        const col = b.outcome === "up" ? "#e8eaed" : b.outcome === "down" ? "#ff8a8a" : "#f4f6fa";
-        const state = b.outcome === "up" ? "wybite w górę" : b.outcome === "down" ? "złamane w dół" : "otwarte";
+        const bEnd = b.outcome === "open" ? lastReal : (b.end ?? b.i1);   // wybity box obowiązuje do `end` (nowy box wyżej albo zejście pod dno), nie tylko do tygodnia wybicia
+        const x0 = x(Math.max(start, b.i0)) - bw / 2, x1 = x(Math.min(endExcl - 1, Math.max(bEnd, b.i0 + 1))) + bw / 2;
+        const bad = b.outcome === "down";   // odwrócony box (dół przebity bez wybicia): strefa zagrożenia leży 5 % NAD górą
+        const yT = y(b.top), yB = y(b.bottom), yZ = bad ? y(b.top * (1 + DARVAS_STOP_PCT / 100)) : y(b.bottom * (1 - DARVAS_STOP_PCT / 100));   // dół boxa = najniższe zamknięcie; zacieniona strefa zagrożenia leży 5 % POD nim (jak na Dar-Card)
+        const col = b.cancelled ? "#9aa0ab" : b.outcome === "up" ? "#e8eaed" : bad ? "#ff8a8a" : "#f4f6fa";
+        const state = b.cancelled ? "anulowany (cena zeszła pod dno)" : b.outcome === "up" ? "wybite w górę — obowiązuje do nowego boxa wyżej" : bad ? "złamane w dół (odwrócony box)" : "otwarte";
         // sam box, bez linii i podpisów: kliknięcie / dotknięcie pokazuje ceny wejścia, anulowania i stop lossa (data-box → arkusz w watchlist.js)
-        out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|${b.confirmed ? 1 : 0}|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="0.92" stroke="#ffffff" stroke-width="1.4"><title>Box ${b.bottom.toFixed(2)}–${b.top.toFixed(2)} (${state})${b.confirmed ? "" : " — dół niepotwierdzony (przerywana czerwona linia)"} — kliknij po ceny</title></rect>`);
-        if (!b.confirmed) out.push(`<line x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${yB.toFixed(1)}" y2="${yB.toFixed(1)}" stroke="#ff3b3b" stroke-width="2.6" stroke-dasharray="5 3" pointer-events="none"/>`);   // tylko dół jest przerywany: ramka zostaje ciągła, więc widać, które boxy mają niepotwierdzony dołek
-        out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${Math.max(2, yZ - yB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
+        out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|1|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="${col}" fill-opacity="${b.cancelled ? 0.5 : 0.92}" stroke="#ffffff" stroke-width="1.4"><title>Box ${b.bottom}–${b.top} · ${state} — kliknij: ceny i stop</title></rect>`);
+        const zy0 = bad ? yZ : yB, zh = bad ? yT - yZ : yZ - yB;
+        out.push(`<rect x="${x0.toFixed(1)}" y="${zy0.toFixed(1)}" width="${(x1 - x0).toFixed(1)}" height="${Math.max(2, zh).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
+    });
+    // sam top (potwierdzony przez 3 tygodnie, ale dół jeszcze nie): niebieska przerywana linia od topu do wybicia (open = do prawej krawędzi); klik = wejście i stop 8 %
+    topLines.forEach(l => {
+        const x0 = x(Math.max(start, l.i0)) - bw / 2, x1 = l.open ? W - L.right : x(Math.min(endExcl - 1, l.i1)) + bw / 2, yy = y(l.top), li = darvasLineInfo(l.top);
+        out.push(`<line x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="#3b9cff" stroke-width="2" stroke-dasharray="6 4" pointer-events="none"/>`);
+        out.push(`<rect class="box-hit line-hit" data-box="${l.top}|${li.stop}|linia|0|${l.i0}|${l.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${(yy - 6).toFixed(1)}" width="${Math.max(2, x1 - x0).toFixed(1)}" height="12" fill="transparent"><title>Top ${li.entry} bez potwierdzonego dołu${l.open ? "" : " — przebity"} · stop ${DARVAS_LINE_STOP_PCT} % = ${li.stop} — kliknij</title></rect>`);
     });
     // podpisy boxów nie mogą się nakładać (flat base + przypięty box leżą często w tym samym miejscu): kolejny podpis ucieka w górę o wysokość wiersza
     const takenLabels = [];
@@ -434,7 +507,18 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<line x1="${x(g.handle ? g.handle.i0 : g.i0).toFixed(1)}" x2="${px1}" y1="${pyy.toFixed(1)}" y2="${pyy.toFixed(1)}" stroke="${pcol}" stroke-width="1.4" stroke-dasharray="6 4" opacity="0.85" pointer-events="none"/>`);
         out.push(`<rect x="${W - L.right}" y="${(pyy - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${pcol}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(pyy + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${g.pivot.toFixed(2)}</text>`);
     });
-    if (pin) {
+    if (pin && pin.line) {   // przypięty sam top: przerywana linia topu (kolor statusu) + czerwony stop 8 %, bez strefy zagrożenia
+        const lx0 = x(Math.max(start, Math.min(endExcl - 1, pin.i0))) - bw / 2, lx1 = W - L.right, lyT = y(pin.top), lyS = y(pin.bottom);
+        const ls = darvasPinStatus({ top: pin.top, bottom: pin.bottom, line: true }, full.c[lastReal]);
+        const lcol = ls.state === "ABOVE" ? "#4ee08a" : ls.state === "INSIDE" ? "#3b9cff" : "#ff6b6b";
+        out.push(`<line class="${opts.pinFlash ? "pin-flash" : ""}" x1="${lx0.toFixed(1)}" x2="${lx1}" y1="${lyT.toFixed(1)}" y2="${lyT.toFixed(1)}" stroke="${lcol}" stroke-width="2.4" stroke-dasharray="7 4" pointer-events="none"><title>📌 Monitorowany top ${pin.top}: ${ls.text}</title></line>`);
+        out.push(`<line x1="${lx0.toFixed(1)}" x2="${lx1}" y1="${lyS.toFixed(1)}" y2="${lyS.toFixed(1)}" stroke="#ff6b6b" stroke-width="1.2" stroke-dasharray="3 3" pointer-events="none"/>`);
+        out.push(`<rect class="box-hit line-hit" data-box="${pin.top}|${pin.bottom}|przypięta-linia|1|${pin.i0}|${lastReal}" style="cursor:pointer" x="${lx0.toFixed(1)}" y="${(lyT - 6).toFixed(1)}" width="${Math.max(2, lx1 - lx0).toFixed(1)}" height="${Math.max(12, lyS - lyT + 12).toFixed(1)}" fill="transparent"><title>📌 Dotknij, by wybrać (przybliż / odepnij)</title></rect>`);
+        [[pin.top, lcol], [pin.bottom, "#ff6b6b"]].forEach(([v, col]) => {
+            const yy = y(v);
+            out.push(`<rect x="${W - L.right}" y="${(yy - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="${col}" pointer-events="none"/><text x="${W - L.right + 3}" y="${(yy + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${(+v).toFixed(2)}</text>`);
+        });
+    } else if (pin) {
         const px0 = x(Math.max(start, Math.min(endExcl - 1, pin.i0))) - bw / 2, px1 = W - L.right;
         const pyT = y(pin.top), pyB = y(pin.bottom), pyZ = y(pin.bottom * (1 - DARVAS_STOP_PCT / 100));
         const ps = darvasPinStatus({ top: pin.top, bottom: pin.bottom }, full.c[lastReal]);
@@ -467,7 +551,7 @@ function darvasSvg(full, win, opts = {}) {
         const pts = [];
         for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) pts.push([x(i), y(full.c[i]), i]);
         if (pts.length > 1) {
-            const holes = out.filter(s => s.includes('class="box-hit"')).map(s => {
+            const holes = out.filter(s => s.includes('class="box-hit"') && !s.includes('line-hit')).map(s => {
                 const g = k => { const m = s.match(new RegExp(`\\s${k}="([-\\d.]+)"`)); return m ? m[1] : null; };
                 const hx = g("x"), hy = g("y"), hw = g("width"), hh = g("height");
                 return hx !== null && hw !== null ? `<rect x="${hx}" y="${hy}" width="${hw}" height="${hh}" fill="#000"/>` : "";
@@ -513,20 +597,23 @@ function attachDarvasHover(container, full, readoutEl) {
         lines.concat(tags).forEach(e => e.setAttribute("opacity", "0"));
         if (readoutEl && base !== null) readoutEl.textContent = base;
     };
+    const isLineBox = el => ["linia", "przypięta-linia"].includes(el.dataset.box.split("|")[2]);
     const show = el => {
         const [t, bt] = el.dataset.box.split("|").map(Number);
         if (!(t > bt) || shown === el) return;
         shown = el;
         if (base === null && readoutEl) base = readoutEl.textContent;
-        const lv = [t, bt, bt * (1 - DARVAS_STOP_PCT / 100)];
+        const isLine = isLineBox(el);
+        const lv = isLine ? [t, bt] : [t, bt, bt * (1 - DARVAS_STOP_PCT / 100)];   // sam top: wejście i stop 8 %, bez strefy zagrożenia
+        if (isLine) { lines[2].setAttribute("opacity", "0"); tags[2].setAttribute("opacity", "0"); lines[1].setAttribute("stroke", "#ff6b6b"); }
         lv.forEach((v, k) => {
             const ys = yOf(qStep > 1 ? lo * Math.pow(qStep, Math.round(Math.log(v / lo) / Math.log(qStep))) : v);   // najbliższa linia podziałki
-            lines[k].setAttribute("y1", ys.toFixed(1)); lines[k].setAttribute("y2", ys.toFixed(1)); lines[k].setAttribute("stroke", cols[k]); lines[k].setAttribute("opacity", "0.95");
+            lines[k].setAttribute("y1", ys.toFixed(1)); lines[k].setAttribute("y2", ys.toFixed(1)); lines[k].setAttribute("stroke", isLine ? ["#3b9cff", "#ff6b6b"][k] : cols[k]); lines[k].setAttribute("opacity", "0.95");
             const rect = tags[k].querySelector("rect"), txt = tags[k].querySelector("text"), th = +rect.getAttribute("height");
-            rect.setAttribute("y", (ys - th / 2).toFixed(1)); rect.setAttribute("fill", cols[k]);
+            rect.setAttribute("y", (ys - th / 2).toFixed(1)); rect.setAttribute("fill", isLine ? ["#3b9cff", "#ff6b6b"][k] : cols[k]);
             txt.setAttribute("y", (ys + th / 3).toFixed(1)); txt.textContent = v.toFixed(2); tags[k].setAttribute("opacity", "1");
         });
-        if (readoutEl) readoutEl.textContent = `box ${bt.toFixed(2)}–${t.toFixed(2)} · strefa zagrożenia do ${lv[2].toFixed(2)}`;
+        if (readoutEl) readoutEl.textContent = isLine ? `top ${t.toFixed(2)} (dół niepotwierdzony) · stop ${DARVAS_LINE_STOP_PCT} % = ${bt.toFixed(2)}` : `box ${bt.toFixed(2)}–${t.toFixed(2)} · strefa zagrożenia do ${lv[2].toFixed(2)}`;
     };
     const mark = el => {
         svg.querySelectorAll("[data-sel]").forEach(e => {
@@ -543,8 +630,8 @@ function attachDarvasHover(container, full, readoutEl) {
         mark(el);   // wybrany box dostaje złotą obwódkę
         selected = el; show(el);
         const [t, bt] = el.dataset.box.split("|").map(Number);
-        const isPinned = el.dataset.box.split("|")[2] === "przypięty";
-        bar.innerHTML = `<span>📦 ${bt.toFixed(2)} – ${t.toFixed(2)}</span><button type="button" data-act="zoom">🔍 Przybliż</button><button type="button" data-act="pin">${isPinned ? "🗑 Odepnij" : "📌 Przypnij"}</button><button type="button" data-act="close" aria-label="Odznacz">✕</button>`;
+        const isPinned = el.dataset.box.split("|")[2].startsWith("przypięt");
+        bar.innerHTML = `<span>${isLineBox(el) ? `📏 top ${t.toFixed(2)} · stop ${bt.toFixed(2)}` : `📦 ${bt.toFixed(2)} – ${t.toFixed(2)}`}</span><button type="button" data-act="zoom">🔍 Przybliż</button><button type="button" data-act="pin">${isPinned ? "🗑 Odepnij" : "📌 Przypnij"}</button><button type="button" data-act="close" aria-label="Odznacz">✕</button>`;
         bar.hidden = false;
     };
     bar.addEventListener("click", ev => {
@@ -561,8 +648,8 @@ function attachDarvasHover(container, full, readoutEl) {
     const boxName = el => {
         const f = el.dataset.box.split("|");
         const ti = el.querySelector("title");
-        const nm = f[2] === "przypięty" ? "📌 Przypięty box" : f[2] === "wzorzec" ? ((ti && ti.textContent.split(/[\n·]/)[0].trim()) || "Wzorzec") : "Box Darvasa";
-        return `${nm} · ${(+f[1]).toFixed(2)}–${(+f[0]).toFixed(2)}`;
+        const nm = f[2] === "przypięta-linia" ? "📌 Przypięty top" : f[2] === "linia" ? "Top bez potwierdzonego dołu" : f[2] === "przypięty" ? "📌 Przypięty box" : f[2] === "wzorzec" ? ((ti && ti.textContent.split(/[\n·]/)[0].trim()) || "Wzorzec") : "Box Darvasa";
+        return f[2].endsWith("linia") ? `${nm} · ${(+f[0]).toFixed(2)} (stop ${(+f[1]).toFixed(2)})` : `${nm} · ${(+f[1]).toFixed(2)}–${(+f[0]).toFixed(2)}`;
     };
     const pickBox = (hits, ev) => {   // pop-out menu przy palcu: lista nakładających się boxów, wybór zaznacza (podświetla) dany box
         pick = document.createElement("div");
@@ -607,5 +694,5 @@ function attachDarvasHover(container, full, readoutEl) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarvasHover, darvasBoxes, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
 }
