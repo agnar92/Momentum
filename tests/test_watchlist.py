@@ -1245,3 +1245,13 @@ class TestFollowThroughDay:
         moves = self.DECLINE + [(0.4, 0.9), (0.5, 0.9), (0.3, 0.9), (1.6, 1.3)] + [(-0.5, 1.2), (0.1, 0.9)] * 5
         f = watchlist.follow_through_day(self._index(moves))
         assert f["state"] == "ftd" and f["dist_days"] >= watchlist.FTD_MAX_DIST
+
+
+def test_weekly_macd_above_signal():
+    rising = pd.Series([100 + i * 2.0 for i in range(60)])
+    # po długim wzroście z przyspieszeniem MACD jest nad sygnałem, po ostrym spadku pod
+    accel = pd.Series([100 + (i ** 1.6) for i in range(60)])
+    assert watchlist.weekly_macd_above_signal(accel) is True
+    falling = pd.concat([accel, pd.Series([accel.iloc[-1] - i * 15 for i in range(1, 12)])], ignore_index=True)
+    assert watchlist.weekly_macd_above_signal(falling) is False
+    assert watchlist.weekly_macd_above_signal(rising.head(20)) is None   # za krótka historia
