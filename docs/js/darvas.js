@@ -12,6 +12,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const DARVAS_CONFIRM = 3;            // góra / dół = zamknięcie, którego nie przebija (nie jest niższe od) kolejne 3 tygodnie (jak w Momentum Desktop; tydzień samego szczytu NIE wlicza się do tych 3)
 const DARVAS_MIN_HEIGHT_PCT = 1.5;   // pudełko niższe niż 1,5 % ceny to szum
+const DARVAS_MIN_WEEKS = 6;   // potwierdzony box musi mieć co najmniej tyle tygodni (świec); krótsza formacja zostaje samą linią topu
 
 // Skan zamknięć c (port z Momentum Desktop, desktop/darvas.py::_scan): zwraca { boxes, lines }.
 // BOX = GÓRA (zamknięcie będące lokalnym szczytem — wyższe od `confirm` poprzednich zamknięć — którego nie przebiły `confirm` KOLEJNYCH zamknięć) + DÓŁ (najniższe
@@ -57,8 +58,10 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
         }
         if (cancel !== null) { bxs[ref].end = cancel; bxs[ref].cancelled = true; ref = null; i = cancel; continue; }
         if (end < 0) end = n - 1;
-        const good = confirmed && Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT;
-        if (!confirmed) lines.push({ i0: t, i1: end, top, open: outcome === "open" });
+        // box potwierdzony musi obejmować co najmniej DARVAS_MIN_WEEKS tygodni (świec od szczytu do ostatniego tygodnia w boxie; tydzień wybicia już do niego nie należy)
+        const weeksIn = outcome === "open" ? n - t : end - t;
+        const good = confirmed && Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT && weeksIn >= DARVAS_MIN_WEEKS;
+        if (!confirmed || (Number.isFinite(bottom) && weeksIn < DARVAS_MIN_WEEKS)) lines.push({ i0: t, i1: end, top, open: outcome === "open" });
         else if (good) {
             if (ref !== null) bxs[ref].end = t;   // nowy box (nad starym) przejmuje obowiązywanie
             bxs.push({ i0: t, i1: end, end, top, bottom, confirmed: true, outcome });
@@ -597,21 +600,15 @@ function darvasSvg(full, win, opts = {}) {
         });
     }
     // wykres liniowy punktowy cen zamknięcia tygodni — rysowany tylko POZA boxami (maska wycina prostokąty boxów), więc widać, czy wybicie to pierwsze zamknięcie
-    // nad boxem, czy cena jest już daleko ponad; wewnątrz boxów linii nie ma
+    // nad boxem, czy cena jest już daleko ponad; linia biegnie też nad boxami (kolorowe boxy są czytelne)
     {
         const pts = [];
         for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) pts.push([x(i), y(full.c[i]), i]);
         if (pts.length > 1) {
-            const holes = out.filter(s => s.includes('class="box-hit"') && !s.includes('line-hit')).map(s => {
-                const g = k => { const m = s.match(new RegExp(`\\s${k}="([-\\d.]+)"`)); return m ? m[1] : null; };
-                const hx = g("x"), hy = g("y"), hw = g("width"), hh = g("height");
-                return hx !== null && hw !== null ? `<rect x="${hx}" y="${hy}" width="${hw}" height="${hh}" fill="#000"/>` : "";
-            }).join("");
-            out.push(`<mask id="darvasLineMask" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${holes}</mask>`);
             const line = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
             const UP = "#4ee08a", DOWN = "#ff6b6b", FLAT = "#9aa0ab";
             const dir = k => k === 0 ? FLAT : full.c[pts[k][2]] >= full.c[pts[k - 1][2]] ? UP : DOWN;   // kolor odcinka i kropki: zielony = zamknięcie wyżej niż poprzednie, czerwony = niżej
-            out.push(`<g mask="url(#darvasLineMask)" pointer-events="none">`
+            out.push(`<g pointer-events="none">`
                 + `<polyline points="${line}" fill="none" stroke="#0e0f13" stroke-width="${fs(3.4)}" stroke-linejoin="round" stroke-linecap="round" opacity="0.55"/>`
                 + pts.slice(1).map((p, k) => `<line x1="${pts[k][0].toFixed(1)}" y1="${pts[k][1].toFixed(1)}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="${dir(k + 1)}" stroke-width="${fs(1.8)}" stroke-linecap="round"/>`).join("")
                 + pts.map((p, k) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${fs(2.6)}" fill="${dir(k)}" stroke="#0e0f13" stroke-width="0.8"><title>${full.weeks && full.weeks[p[2]] ? full.weeks[p[2]] + " · " : ""}zamknięcie ${full.c[p[2]]}</title></circle>`).join("")
@@ -825,5 +822,5 @@ function attachDarvasHover(container, full, readoutEl) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, darvasSma, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, darvasSma, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT, DARVAS_MIN_WEEKS };
 }
