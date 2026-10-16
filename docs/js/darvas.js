@@ -12,6 +12,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const DARVAS_CONFIRM = 3;            // góra / dół = zamknięcie, którego nie przebija (nie jest niższe od) kolejne 3 tygodnie (jak w Momentum Desktop; tydzień samego szczytu NIE wlicza się do tych 3)
 const DARVAS_MIN_HEIGHT_PCT = 1.5;   // pudełko niższe niż 1,5 % ceny to szum
+const DARVAS_MIN_WEEKS = 6;   // potwierdzony box musi mieć co najmniej tyle tygodni (świec); krótsza formacja zostaje samą linią topu
 
 // Skan zamknięć c (port z Momentum Desktop, desktop/darvas.py::_scan): zwraca { boxes, lines }.
 // BOX = GÓRA (zamknięcie będące lokalnym szczytem — wyższe od `confirm` poprzednich zamknięć — którego nie przebiły `confirm` KOLEJNYCH zamknięć) + DÓŁ (najniższe
@@ -57,8 +58,10 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
         }
         if (cancel !== null) { bxs[ref].end = cancel; bxs[ref].cancelled = true; ref = null; i = cancel; continue; }
         if (end < 0) end = n - 1;
-        const good = confirmed && Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT;
-        if (!confirmed) lines.push({ i0: t, i1: end, top, open: outcome === "open" });
+        // box potwierdzony musi obejmować co najmniej DARVAS_MIN_WEEKS tygodni (świec od szczytu do ostatniego tygodnia w boxie; tydzień wybicia już do niego nie należy)
+        const weeksIn = outcome === "open" ? n - t : end - t;
+        const good = confirmed && Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT && weeksIn >= DARVAS_MIN_WEEKS;
+        if (!confirmed || (Number.isFinite(bottom) && weeksIn < DARVAS_MIN_WEEKS)) lines.push({ i0: t, i1: end, top, open: outcome === "open" });
         else if (good) {
             if (ref !== null) bxs[ref].end = t;   // nowy box (nad starym) przejmuje obowiązywanie
             bxs.push({ i0: t, i1: end, end, top, bottom, confirmed: true, outcome });
@@ -819,5 +822,5 @@ function attachDarvasHover(container, full, readoutEl) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, darvasSma, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, darvasSma, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT, DARVAS_MIN_WEEKS };
 }

@@ -208,8 +208,9 @@ test("Desktop: box złamany bez wybicia = odwrócony, SPRZEDAJ od razu; powrót 
 test("Desktop (MRVL): wybity box anulowany w strefie zagrożenia, brak wielkiego boxa przez całą korektę", () => {
     const { darvasStatus } = require("../../docs/js/darvas.js");
     const bx = darvasBoxes(MRVL);
-    const r = bx.find(b => b.top === 120.19);
-    assert.ok(r.outcome === "up" && r.cancelled && r.end === MRVL.indexOf(110.15));
+    const r = bx.find(b => b.top === 75.81);   // box 120.19 ma 5 tygodni (< 6), więc jest samą linią topu
+    assert.ok(r.outcome === "up" && r.cancelled);
+    assert.ok(darvasTopLines(MRVL).some(l => l.top === 120.19));
     assert.ok(!bx.some(b => b.top === 124.22));
     assert.ok(Math.max(...bx.map(b => (b.top - b.bottom) / b.top)) < 0.2);
     assert.equal(darvasStatus(MRVL.slice(0, 28)).state, "HOLD");
@@ -272,4 +273,14 @@ test("natrSeries: zgodna z NATR boxa na stałym zakresie i pusta przed pełnym o
 test("darvasSma: średnia krocząca, null przed pełnym oknem i przy luce", () => {
     assert.deepEqual(darvasSma([1, 2, 3, 4], 2), [null, 1.5, 2.5, 3.5]);
     assert.deepEqual(darvasSma([1, null, 3, 4], 2), [null, null, null, 3.5]);
+});
+
+test("minimum 6 tygodni: krótszy box zostaje samą linią topu, 6-tygodniowy jest potwierdzony", () => {
+    const { DARVAS_MIN_WEEKS } = require("../../docs/js/darvas.js");
+    assert.equal(DARVAS_MIN_WEEKS, 6);
+    const base = [90, 95, 100, 98, 97, 96, 97, 98];
+    const mk = k => [...base.slice(0, 3), ...Array(k).fill(0).map((_, i) => 97 - (i % 2)), 103];
+    assert.equal(darvasBoxes(mk(3)).length, 0);   // top + 3 tygodnie + wybicie: za krótko
+    assert.ok(darvasTopLines(mk(3)).length > 0);
+    assert.equal(darvasBoxes(mk(7)).length, 1);   // top + 7 tygodni: box
 });
