@@ -378,6 +378,11 @@ function darvasSvg(full, win, opts = {}) {
     topLines.forEach(l => {
         const x0 = x(Math.max(start, l.i0)) - bw / 2, x1 = l.open ? W - L.right : x(Math.min(endExcl - 1, l.i1)) + bw / 2, yy = y(l.top), li = darvasLineInfo(l.top);
         out.push(`<line x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="#3b9cff" stroke-width="2" stroke-dasharray="6 4" pointer-events="none"/>`);
+        const ys = y(li.stop);   // stop loss 8 % pod linią topu: czerwona przerywana linia na całej długości linii + cena (przy otwartej linii także na osi)
+        out.push(`<line x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${ys.toFixed(1)}" y2="${ys.toFixed(1)}" stroke="#ff6b6b" stroke-width="1.6" stroke-dasharray="4 3" pointer-events="none"><title>Stop loss ${DARVAS_LINE_STOP_PCT} % pod topem ${li.entry} = ${li.stop}</title></line>`);
+        const stopTxt = `stop ${DARVAS_LINE_STOP_PCT} % · ${li.stop}`, stopW = stopTxt.length * fs(10) * 0.62;
+        out.push(`<text x="${Math.max(L.left + 2, Math.min(x0 + 4, W - L.right - stopW - 4)).toFixed(1)}" y="${(ys + fs(11)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#ff8a8a" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${stopTxt}</text>`);   // podpis nie wchodzi na oś cen
+        if (l.open) out.push(`<rect x="${W - L.right}" y="${(ys - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(ys + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${li.stop.toFixed(2)}</text>`);
         out.push(`<rect class="box-hit line-hit" data-box="${l.top}|${li.stop}|linia|0|${l.i0}|${l.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${(yy - 6).toFixed(1)}" width="${Math.max(2, x1 - x0).toFixed(1)}" height="12" fill="transparent"><title>Top ${li.entry} bez potwierdzonego dołu${l.open ? "" : " — przebity"} · stop ${DARVAS_LINE_STOP_PCT} % = ${li.stop} — kliknij</title></rect>`);
     });
     // podpisy boxów nie mogą się nakładać (flat base + przypięty box leżą często w tym samym miejscu): kolejny podpis ucieka w górę o wysokość wiersza
@@ -558,15 +563,17 @@ function darvasSvg(full, win, opts = {}) {
             }).join("");
             out.push(`<mask id="darvasLineMask" maskUnits="userSpaceOnUse" x="0" y="0" width="${W}" height="${H}"><rect x="0" y="0" width="${W}" height="${H}" fill="#fff"/>${holes}</mask>`);
             const line = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
+            const UP = "#4ee08a", DOWN = "#ff6b6b", FLAT = "#9aa0ab";
+            const dir = k => k === 0 ? FLAT : full.c[pts[k][2]] >= full.c[pts[k - 1][2]] ? UP : DOWN;   // kolor odcinka i kropki: zielony = zamknięcie wyżej niż poprzednie, czerwony = niżej
             out.push(`<g mask="url(#darvasLineMask)" pointer-events="none">`
                 + `<polyline points="${line}" fill="none" stroke="#0e0f13" stroke-width="${fs(3.4)}" stroke-linejoin="round" stroke-linecap="round" opacity="0.55"/>`
-                + `<polyline points="${line}" fill="none" stroke="#6ea8ff" stroke-width="${fs(1.6)}" stroke-linejoin="round" stroke-linecap="round"/>`
-                + pts.map(p => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${fs(2.6)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="0.8"><title>${full.weeks && full.weeks[p[2]] ? full.weeks[p[2]] + " · " : ""}zamknięcie ${full.c[p[2]]}</title></circle>`).join("")
+                + pts.slice(1).map((p, k) => `<line x1="${pts[k][0].toFixed(1)}" y1="${pts[k][1].toFixed(1)}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="${dir(k + 1)}" stroke-width="${fs(1.8)}" stroke-linecap="round"/>`).join("")
+                + pts.map((p, k) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${fs(2.6)}" fill="${dir(k)}" stroke="#0e0f13" stroke-width="0.8"><title>${full.weeks && full.weeks[p[2]] ? full.weeks[p[2]] + " · " : ""}zamknięcie ${full.c[p[2]]}</title></circle>`).join("")
                 + `</g>`);
         }
     }
-    const lastC = full.c[lastReal];
-    if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="#6ea8ff" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
+    const lastC = full.c[lastReal], lastPrev = (() => { for (let i = lastReal - 1; i >= 0; i--) if (Number.isFinite(full.c[i])) return full.c[i]; return null; })();
+    if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="${lastPrev === null ? "#9aa0ab" : lastC >= lastPrev ? "#4ee08a" : "#ff6b6b"}" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
     // podświetlenie poziomów (ustawiane w attachDarvasHover): 3 linie podziałki (góra boxa, dół, dół strefy zagrożenia) z ceną na osi — widoczne tylko przy najechaniu / przytrzymaniu boxa
     for (let k = 0; k < 3; k++) {
         out.push(`<line id="dHl${k}" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="1.6" opacity="0" pointer-events="none"/>`);
