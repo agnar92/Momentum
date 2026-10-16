@@ -1221,7 +1221,7 @@ const PREFS_FIELDS = { pos: ["entry", "stop", "shares"], acct: ["capital", "risk
 function prefsValue(kind, v) {
     if (kind === "scores") return Number.isFinite(v) ? v : null;
     if (kind === "favs") return v === true;
-    if (kind === "box") return v && typeof v === "object" && Number.isFinite(v.top) && Number.isFinite(v.bottom) && v.top > v.bottom && v.bottom > 0 && typeof v.start === "string" ? { top: v.top, bottom: v.bottom, start: v.start } : null;   // przypięty box: góra / dół (zamknięcia) + data początku
+    if (kind === "box") return v && typeof v === "object" && Number.isFinite(v.top) && Number.isFinite(v.bottom) && v.top > v.bottom && v.bottom > 0 && typeof v.start === "string" ? { top: v.top, bottom: v.bottom, start: v.start, ...(v.line === true ? { line: true } : {}) } : null;   // przypięty box: góra / dół (zamknięcia) + data początku
     if (!v || typeof v !== "object") return null;
     const o = {};
     PREFS_FIELDS[kind].forEach(k => { o[k] = Number.isFinite(v[k]) && v[k] >= 0 ? v[k] : null; });
@@ -1330,13 +1330,13 @@ function saveAcct(capital, riskPct, posPct, fx = state.acct.fx) {
 }
 
 // Przypina box (góra / dół z zamknięć, data początku) do monitorowania albo odpina, gdy to ten sam box.
-function togglePinnedBox(ticker, top, bottom, i0) {
+function togglePinnedBox(ticker, top, bottom, i0, line = false) {
     const weeks = activeCharts() ? activeCharts().weeks || [] : [];
     const start = weeks[Math.max(0, Math.min(weeks.length - 1, +i0))];
     if (!start || !(top > bottom)) return;
     const cur = state.boxes[ticker];
     if (cur && Math.abs(cur.top - top) < 0.005 && Math.abs(cur.bottom - bottom) < 0.005) { savePinnedBox(ticker, null); showToast("📌 Box odpięty.", { type: "info" }); }
-    else { pinFlashUntil = Date.now() + 2500; savePinnedBox(ticker, { top, bottom, start }); showToast("📌 Box przypięty do monitorowania — zostaje na wykresie także po wyjściu ze strefy.", { type: "success" }); }
+    else { pinFlashUntil = Date.now() + 2500; savePinnedBox(ticker, { top, bottom, start, ...(line ? { line: true } : {}) }); showToast(line ? "📌 Top przypięty do monitorowania (stop 8 % pod topem)." : "📌 Box przypięty do monitorowania — zostaje na wykresie także po wyjściu ze strefy.", { type: "success" }); }
 }
 
 // ---------- podstrona 📦 Boxy: przegląd boxów Darvasa wszystkich spółek (sekcje do zwijania) ----------
@@ -1359,22 +1359,22 @@ function boxesLoadJson(key, fallback) { try { const v = JSON.parse(localStorage.
 function boxStopFor(top, bottom) {   // stop początkowy: 10 % pod wejściem (wejście = góra boxa)
     return typeof darvasInitialStop === "function" ? darvasInitialStop(top, bottom, top) : Math.round(Math.max((top + bottom) / 2, top * 0.9) * 100) / 100;
 }
-function boxPositionHtml(top, bottom, ticker) {
-    const stop = boxStopFor(top, bottom);
+function boxPositionHtml(top, bottom, ticker, line = false) {
+    const stop = line ? bottom : boxStopFor(top, bottom);   // sam top (dół niepotwierdzony): `bottom` = stop 8 % pod topem
     const perShare = top > stop ? (top / stop - 1) * 100 : null;
     const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
-    const lines = [`Wejście: zamknięcie tygodnia nad <b>${top.toFixed(2)}</b>`, `Stop: pod <b>${stop.toFixed(2)}</b> (połowa boxa, nie głębiej niż 10 % od wejścia)${perShare !== null ? `, ryzyko ${perShare.toFixed(1)} % na akcję` : ""}`];
+    const lines = [`Wejście: zamknięcie tygodnia nad <b>${top.toFixed(2)}</b>`, `Stop: pod <b>${stop.toFixed(2)}</b> (${line ? "8 % pod topem" : "10 % pod wejściem"})${perShare !== null ? `, ryzyko ${perShare.toFixed(1)} % na akcję` : ""}`];
     if (size) lines.push(`Pozycja: <b>${fmtShares(size.shares)} akcji</b> = ${pln0(size.value_pln)} (${size.pct_of_capital.toFixed(1)} % konta), strata przy stopie ${pln0(size.risk_pln)} (${size.risk_pct !== null ? size.risk_pct.toFixed(2) : "—"} % konta)${size.limited_by === "risk" ? " — ograniczone ryzykiem" : " — ograniczone % konta"}`);
     else lines.push("Pozycja: ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby liczyć liczbę akcji.");
     const has = ticker && state.pos[ticker];
-    const mk = ticker ? `<button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(ticker)}|${top}|${bottom}">${has ? "💼 Zastąp pozycję tym boxem" : "💼 Utwórz pozycję z tego boxa"}</button>` : "";
+    const mk = ticker ? `<button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(ticker)}|${top}|${bottom}|${line ? 1 : 0}">${has ? "💼 Zastąp pozycję tym boxem" : "💼 Utwórz pozycję z tego boxa"}</button>` : "";
     return lines.map(l => `<div class="box-pos-line">${l}</div>`).join("") + mk;
 }
 
 // Automatyczna pozycja z boxa: wejście = góra boxa, stop = połowa boxa, nie głębiej niż 10 % od wejścia, liczba akcji z kalkulatora konta (gdy konto ustawione).
-function createPositionFromBox(ticker, top, bottom) {
+function createPositionFromBox(ticker, top, bottom, line = false) {
     if (!state.data || !(top > bottom)) return;
-    const stop = boxStopFor(top, bottom);
+    const stop = line ? bottom : boxStopFor(top, bottom);
     if (state.pos[ticker] && !window.confirm(`${ticker} ma już pozycję (wejście ${state.pos[ticker].entry}, stop ${state.pos[ticker].stop}). Zastąpić ją pozycją z boxa?`)) return;
     const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
     savePosition(ticker, { entry: top, stop, shares: size ? size.shares : null });
@@ -1384,8 +1384,8 @@ if (typeof document !== "undefined") document.addEventListener("click", ev => {
     const b = ev.target.closest && ev.target.closest(".box-mkpos");
     if (!b) return;
     ev.stopPropagation();
-    const [tk, top, bottom] = b.dataset.mkpos.split("|");
-    createPositionFromBox(tk, +top, +bottom);
+    const [tk, top, bottom, ln] = b.dataset.mkpos.split("|");
+    createPositionFromBox(tk, +top, +bottom, ln === "1");
     if (state.tab === BOXES_TAB) renderBoxesPanel();
 }, true);
 
@@ -1395,7 +1395,7 @@ function boxRowHtml(r, sec, isNew) {
     const btn = sec === "pinned" ? `<button type="button" class="box-act" data-act="unpin" title="Odepnij box">✕</button>`
         : `<button type="button" class="box-act${pinned ? " on" : ""}" data-act="${pinned ? "unpin" : "pin"}" title="${pinned ? "Odepnij" : "Przypnij do monitorowania"}">📌</button>`;
     return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`
-        + `<details class="box-pos"><summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(r.box.top, r.box.bottom, r.ticker)}</details>`;
+        + `<details class="box-pos"><summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(r.box.top, r.box.bottom, r.ticker, !!r.box.line)}</details>`;
 }
 
 async function renderBoxesPanel() {
@@ -1463,7 +1463,7 @@ async function openBoxRow(ticker, box) {
     const charts = boxesCharts || await loadCharts();
     const weeks = (charts && charts.weeks) || [];
     const i0 = box.i0 >= 0 ? box.i0 : Math.max(0, dateToIndex(weeks, box.start));
-    boxFocus = { ticker, top: box.top, bottom: box.bottom, i0, i1: box.i1 >= 0 ? box.i1 : weeks.length - 1 };
+    boxFocus = { ticker, top: box.top, bottom: box.bottom, i0, i1: box.i1 >= 0 ? box.i1 : weeks.length - 1, line: !!box.line };
     await openChart(ticker);
     const end = weeks.length + 6;
     chartWindows[0] = { n: Math.max(15, end - i0 + 14), end };
@@ -1490,7 +1490,7 @@ function initBoxesPanel() {
         if (act) {
             ev.stopPropagation();
             if (act.dataset.act === "unpin") { savePinnedBox(r.ticker, null); showToast("📌 Box odpięty.", { type: "info" }); }
-            else { pinFlashUntil = Date.now() + 2500; savePinnedBox(r.ticker, { top: r.box.top, bottom: r.box.bottom, start: r.box.start }); showToast("📌 Box przypięty do monitorowania.", { type: "success" }); }
+            else { pinFlashUntil = Date.now() + 2500; savePinnedBox(r.ticker, { top: r.box.top, bottom: r.box.bottom, start: r.box.start, ...(r.box.line ? { line: true } : {}) }); showToast("📌 Box przypięty do monitorowania.", { type: "success" }); }
             return;
         }
         openBoxRow(r.ticker, r.box);
@@ -1499,21 +1499,21 @@ function initBoxesPanel() {
 
 // Akcje paska zaznaczonego boxa na Dar-Card (stuknięcie zaznacza; przycisk przybliża albo przypina): `d` = wartość data-box `top|bottom|outcome|conf|i0|i1`.
 function focusBoxFromData(d) {
-    const [top, bottom, , , i0, i1] = String(d).split("|");
+    const [top, bottom, kind, , i0, i1] = String(d).split("|");
     if (!currentChart || !Number.isFinite(+i0) || i0 === undefined || i1 === undefined) return;
-    boxFocus = { ticker: currentChart.ticker, top: +top, bottom: +bottom, i0: +i0, i1: +i1 };
+    boxFocus = { ticker: currentChart.ticker, top: +top, bottom: +bottom, i0: +i0, i1: +i1, line: kind === "linia" || kind === "przypięta-linia" };
     const end = +i1 + 1 + 6;   // clampWindow ucina do końca danych
     chartWindows[0] = { n: Math.max(15, end - (+i0) + 14), end };
     drawChart();
 }
 
 function pinBoxFromData(d) {
-    const [top, bottom, , , i0] = String(d).split("|");
-    if (currentChart) togglePinnedBox(currentChart.ticker, +top, +bottom, +i0);
+    const [top, bottom, kind, , i0] = String(d).split("|");
+    if (currentChart) togglePinnedBox(currentChart.ticker, +top, +bottom, +i0, kind === "linia" || kind === "przypięta-linia");
 }
 
 function savePinnedBox(ticker, box) {
-    prefsStore.box[ticker] = { v: box ? { top: box.top, bottom: box.bottom, start: box.start } : null, t: new Date().toISOString() };
+    prefsStore.box[ticker] = { v: box ? { top: box.top, bottom: box.bottom, start: box.start, ...(box.line ? { line: true } : {}) } : null, t: new Date().toISOString() };
     prefsWriteLocal(); prefsApply(); annOnSave();
     tagPinnedBoxes(state.data.stocks, state.boxes);
     renderTable();
@@ -2079,7 +2079,7 @@ function drawChart() {
     const pinned = state.boxes[currentChart.ticker] || null;   // przypięty box: rysowany zawsze (też po wyjściu z boxa i strefy), do monitorowania
     const pinIdx = pinned ? dateToIndex(activeCharts().weeks || [], pinned.start) : -1;
     const pin = pinned && pinIdx >= 0 && !(focus && Math.abs(focus.top - pinned.top) < 0.005 && Math.abs(focus.bottom - pinned.bottom) < 0.005)
-        ? { top: pinned.top, bottom: pinned.bottom, i0: pinIdx, i1: 1e5 } : null;
+        ? { top: pinned.top, bottom: pinned.bottom, i0: pinIdx, i1: 1e5, ...(pinned.line ? { line: true } : {}) } : null;
     const body = document.getElementById("chartBody");
     const cellHtml = (c, i) => {
         const st = findStock(c.ticker);
@@ -2089,18 +2089,18 @@ function drawChart() {
     };
     body.innerHTML = `<div class="chart-grid layout-1" data-ticker="${escapeHtml(currentChart.ticker)}">${cells.map(cellHtml).join("")}</div>`;
     if (focus) {   // pasek nad wykresem (wstawiany PRZED rysowaniem, żeby pomiar miejsca na wykres był prawdziwy — inaczej viewBox jest wyższy niż pole i wykres wraca z pustymi pasami po bokach)
-        const stop = focus.bottom * (1 - DARVAS_STOP_PCT / 100);
+        const stop = focus.line ? focus.bottom : focus.bottom * (1 - DARVAS_STOP_PCT / 100);
         const bar = document.createElement("div");
         bar.className = "box-focus-bar";
-        bar.innerHTML = `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
-        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom, focus.ticker)}`; bar.appendChild(d); }
+        bar.innerHTML = focus.line ? `<span>📏 Top <b>${focus.top.toFixed(2)}</b> (dół niepotwierdzony) · kupno nad topem · stop <b>${focus.bottom.toFixed(2)}</b> (${DARVAS_LINE_STOP_PCT} % pod topem)</span> <button type="button" id="boxFocusPin">${pinned && pinned.line && Math.abs(pinned.top - focus.top) < 0.005 ? "🗑 Odepnij top" : "📌 Przypnij top"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>` : `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom, focus.ticker, !!focus.line)}`; bar.appendChild(d); }
         if (state.boxes[focus.ticker] && !(Math.abs(state.boxes[focus.ticker].top - focus.top) < 0.005 && Math.abs(state.boxes[focus.ticker].bottom - focus.bottom) < 0.005)) {   // jest przypięty (np. własny) box inny niż ten w fokusie — da się go usunąć
             const pb = state.boxes[focus.ticker], del = document.createElement("button");
             del.type = "button"; del.className = "btn"; del.textContent = `🗑 Usuń przypięty box ${pb.bottom.toFixed(2)}–${pb.top.toFixed(2)}`;
             del.addEventListener("click", () => { savePinnedBox(focus.ticker, null); showToast("📌 Przypięty box usunięty.", { type: "info" }); });
             bar.appendChild(del);
         }
-        bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0));
+        bar.querySelector("#boxFocusPin").addEventListener("click", () => togglePinnedBox(focus.ticker, focus.top, focus.bottom, focus.i0, !!focus.line));
         body.insertBefore(bar, body.firstChild);
         bar.querySelector("#boxFocusBack").addEventListener("click", () => { boxFocus = null; chartWindows = []; drawChart(); });
     }
@@ -2376,7 +2376,7 @@ function initChartModal() {
         const [top, bottom, outcome, conf, i0, i1] = el.dataset.box.split("|");
         const t = currentChart ? currentChart.ticker : "";
         if (currentChart && Number.isFinite(+i0) && i0 !== undefined && i1 !== undefined) {   // przybliż na box: świece + wolumen od początku boxa do dziś (+ miejsce na kolejne tygodnie)
-            boxFocus = { ticker: t, top: +top, bottom: +bottom, i0: +i0, i1: +i1 };
+            boxFocus = { ticker: t, top: +top, bottom: +bottom, i0: +i0, i1: +i1, line: outcome === "linia" || outcome === "przypięta-linia" };
             const end = +i1 + 1 + 6;   // clampWindow ucina do końca danych
             chartWindows[0] = { n: Math.max(15, end - (+i0) + 14), end };
             drawChart();

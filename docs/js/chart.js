@@ -630,7 +630,7 @@ function chartSvg(m, opts = {}) {
     const pivotPx = m.pivot && Number.isFinite(m.pivot.price) ? m.pivot.price : null;
     const lastC = m.c[m.lastIdx];
     const pivotNear = pivotPx !== null && Number.isFinite(lastC) && Math.abs(pivotPx / lastC - 1) <= 0.15;
-    const focusExtra = [opts.pinBox, opts.focusBox].filter(Boolean).flatMap(b => [[b.top], [b.bottom], [b.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]]);
+    const focusExtra = [opts.pinBox, opts.focusBox].filter(Boolean).flatMap(b => b.line ? [[b.top], [b.bottom]] : [[b.top], [b.bottom], [b.bottom * (1 - BOX_RISK_ZONE_PCT / 100)]]);
     const pivotExtra = [...(pivotNear && layer("pivot") ? [[pivotPx], lastC >= pivotPx * 0.97 ? [pivotPx * 1.05] : []] : []), ...focusExtra];
     // S&P 500 jak w książce O'Neila („How to Make Money in Stocks”): cienka linia w górnym pasie TEGO SAMEGO panelu, nad słupkami,
     // z własną skalą (bez osobnej ramki) — cena dostaje miejsce pod nim (nadwyżka u góry skali)
@@ -770,6 +770,18 @@ function chartSvg(m, opts = {}) {
         const off = m.off || 0, zone = 1 - BOX_RISK_ZONE_PCT / 100;
         const inPlot = yy => yy > P.y - 1 && yy < P.y + P.h + 1;
         const xr = L.width - L.right;
+        if (fb.line) {   // sam top (dół niepotwierdzony / przypięty top): niebieska przerywana linia topu i czerwony stop 8 % od początku do prawej krawędzi, ceny na osi
+            const stepL = (L.width - L.left - L.right) / m.n, xs = Math.max(L.left, x(fb.i0 - off) - stepL / 2);
+            [[fb.top, "#3b9cff", "6 4", 2, "kupno nad topem"], [fb.bottom, "#ff6b6b", "3 3", 1.3, "stop 8 % pod topem"]].forEach(([v, col, dash, w, ttl]) => {
+                const yy = yP(v);
+                if (!inPlot(yy)) return;
+                parts.push(`<g ${clipAttr}><line x1="${xs}" x2="${xr}" y1="${yy}" y2="${yy}" stroke="${col}" stroke-width="${w}" stroke-dasharray="${dash}" pointer-events="none"/></g>`);
+                const bwl = Math.min(L.right - 2, fs(52)), bhl = fs(15);
+                parts.push(`<rect x="${xr}" y="${yy - bhl / 2}" width="${bwl}" height="${bhl}" rx="2" fill="${col}" pointer-events="none"><title>${ttl}</title></rect>`);
+                parts.push(`<text x="${xr + 4}" y="${yy + fs(4)}" font-size="${fs(10)}" font-weight="700" fill="#ffffff" pointer-events="none">${v >= 1000 ? v.toFixed(0) : v.toFixed(2)}</text>`);
+            });
+            continue;
+        }
         // zamiast linii: półprzezroczyste tło dokładnie tam, gdzie box został narysowany — biała część (box) i szara strefa zagrożenia pod nim
         const rect = (v1, v2, xa, xb, fill, op) => {
             const ya = Math.min(yP(v1), yP(v2)), yb = Math.max(yP(v1), yP(v2));

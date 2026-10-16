@@ -29,6 +29,7 @@ const browserGlobals = {
     fundMiniHtml: "readonly",
     macdWeeklyState: "readonly",
     macdSeries: "readonly",
+    DARVAS_LINE_STOP_PCT: "readonly",
     posMiniSvg: "readonly",
     CSS: "readonly",
     tvUrlFor: "readonly",
