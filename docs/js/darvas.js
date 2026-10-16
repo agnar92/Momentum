@@ -10,7 +10,7 @@ if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./chart.js"));
 }
 
-const DARVAS_CONFIRM = 3;            // tygodnie potwierdzenia góry i dołu pudełka (reguła Darvasa: 3 sesje; tu 3 tygodnie)
+const DARVAS_CONFIRM = 3;            // tygodnie potwierdzenia góry i dołu pudełka (reguła Darvasa: 3 okresy; tu 3 tygodnie WLICZAJĄC tydzień samego szczytu / dołka = szczyt + 2 kolejne)
 const DARVAS_MIN_HEIGHT_PCT = 1.5;   // pudełko niższe niż 1,5 % ceny to szum
 
 // Pudełko z niepotwierdzonym dołkiem (cena wybiła górę szybciej niż po `confirm` tygodniach) ma confirmed=false i jest rysowane przerywaną ramką.
@@ -18,6 +18,7 @@ const DARVAS_MIN_HEIGHT_PCT = 1.5;   // pudełko niższe niż 1,5 % ceny to szum
 function darvasBoxes(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
     let n = c.length;
     while (n > 0 && !Number.isFinite(c[n - 1])) n--;
+    const topAfter = Math.max(1, confirm - 1), botAfter = Math.max(1, bottomConfirm - 1);   // tydzień szczytu / dołka liczy się jako pierwszy z `confirm` (user: „nie wliczasz do 3 tygodnia zerowego”)
     const boxes = [];
     let i = 0;
     while (i < n) {
@@ -26,7 +27,7 @@ function darvasBoxes(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
         for (let k = i; k < n; k++) {
             if (!Number.isFinite(c[k]) || c[k] < runMax) continue;
             runMax = c[k];
-            if (k + confirm < n && c.slice(k + 1, k + confirm + 1).every(v => v <= c[k])) { t = k; top = c[k]; break; }
+            if (k + topAfter < n && c.slice(k + 1, k + topAfter + 1).every(v => v <= c[k])) { t = k; top = c[k]; break; }
         }
         if (t < 0) break;
         // dół: najniższe zamknięcie po górze; potwierdzony, gdy przez `confirm` tygodni go nie złamano
@@ -35,7 +36,7 @@ function darvasBoxes(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
             if (c[j] > top) { outcome = "up"; end = j; break; }   // przebicie góry: pudełko z niepotwierdzonym dołkiem (confirmed false) też jest schodkiem — w silnym trendzie to jedyne przerwy
             if (confirmed && c[j] < bottom) { outcome = "down"; end = j; break; }
             if (!confirmed && c[j] < bottom) { bottom = c[j]; bi = j; }
-            if (!confirmed && bi >= 0 && j - bi >= bottomConfirm) confirmed = true;
+            if (!confirmed && bi >= 0 && j - bi >= botAfter) confirmed = true;
         }
         if (end < 0) end = n - 1;
         if (Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT) boxes.push({ i0: t, i1: end, top, bottom, confirmed, outcome });
@@ -169,7 +170,7 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
             if (section) out[section].push(row);
         }
         // nowe boxy: góra potwierdzona (i0 + potwierdzenie) w ostatnich `newWeeks` tygodniach
-        const fresh = boxes.filter(b => { const born = b.i0 + DARVAS_CONFIRM; return born <= lastReal && born >= lastReal - (newWeeks - 1); }).pop();
+        const fresh = boxes.filter(b => { const born = b.i0 + DARVAS_CONFIRM - 1; return born <= lastReal && born >= lastReal - (newWeeks - 1); }).pop();
         if (fresh) out.fresh.push({ ticker: it.ticker, price: it.price, state: fresh.outcome === "up" ? "ABOVE" : fresh.outcome === "down" ? "EXIT" : "INSIDE", text: `box ${r2(fresh.bottom)}–${r2(fresh.top)} od ${(weeks && weeks[fresh.i0]) || "?"}${fresh.outcome === "up" ? " — już wybity w górę" : fresh.outcome === "down" ? " — złamany w dół" : ""}`, box: mk(fresh), key: `${it.ticker}|${r2(fresh.top)}|${r2(fresh.bottom)}|${(weeks && weeks[fresh.i0]) || ""}` });
     });
     out.pinned.sort((a, b) => a.rank - b.rank || a.ticker.localeCompare(b.ticker));
