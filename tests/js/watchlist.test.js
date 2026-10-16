@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, natrOk, filterBoxesByNatr, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -662,4 +662,22 @@ test("Watchlisty: podkategorie = zapamiętane listy (liczność każdej listy, s
     assert.deepEqual(watchListCounts(data).map(c => [c.name, c.n]), [["A", 2], ["B", 1]]);
     assert.deepEqual(watchListCounts({ stocks: data.stocks }), []);
     assert.deepEqual(watchListCounts(null), []);
+});
+
+test("natrOk / applyCommonFilters: maks. NATR — bez wartości odpada tylko przy ustawionym progu", () => {
+    assert.equal(natrOk(null, null), true);
+    assert.equal(natrOk(5.4, 8), true);
+    assert.equal(natrOk(9, 8), false);
+    assert.equal(natrOk(null, 8), false);
+    const stocks = [{ ticker: "AAA", natr_w: 5 }, { ticker: "BBB", natr_w: 12 }, { ticker: "CCC" }];
+    assert.deepEqual(applyCommonFilters(stocks, "", "", null, null, 8).map(s => s.ticker), ["AAA"]);
+    assert.equal(applyCommonFilters(stocks, "", "", null, null, null).length, 3);
+});
+
+test("filterBoxesByNatr: przypięte zostają, reszta sekcji dostaje filtr", () => {
+    const ov = { pinned: [{ ticker: "P" }], buy: [{ ticker: "A", natr: 4 }, { ticker: "B", natr: 14 }, { ticker: "C", natr: null }], fresh: [] };
+    const out = filterBoxesByNatr(ov, 8);
+    assert.deepEqual(out.pinned.map(r => r.ticker), ["P"]);
+    assert.deepEqual(out.buy.map(r => r.ticker), ["A"]);
+    assert.equal(filterBoxesByNatr(ov, null), ov);
 });

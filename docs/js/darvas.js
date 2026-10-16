@@ -203,9 +203,32 @@ function darvasPinStatus(box, price, zonePct = DARVAS_STOP_PCT) {
     return { state: "EXIT", rank: 0, text: `EXIT — cena ${r2(price)} poniżej strefy zagrożenia (${zone})` };
 }
 
+// NATR boxa (Blueprint: konsolidacja ma mieć NATR < 8, im niższy tym ciaśniejsza i czystsza): średni True Range tygodni boxa (i0…i1) jako % ich średniego zamknięcia.
+// True Range = max(High − Low, |High − poprzednie Close|, |Low − poprzednie Close|); luki z poprzedniego tygodnia się liczą. null, gdy box ma < 3 tygodnie z danymi.
+const NATR_GOOD = 8;   // próg z Blueprintu
+function boxNatr(h, l, c, i0, i1) {
+    const tr = [], cl = [];
+    for (let i = Math.max(1, i0); i <= Math.min(i1, c.length - 1); i++) {
+        if (!Number.isFinite(h[i]) || !Number.isFinite(l[i]) || !Number.isFinite(c[i]) || !Number.isFinite(c[i - 1])) continue;
+        tr.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
+        cl.push(c[i]);
+    }
+    if (tr.length < 3) return null;
+    const avgC = cl.reduce((a, b) => a + b, 0) / cl.length;
+    return avgC > 0 ? Math.round(tr.reduce((a, b) => a + b, 0) / tr.length / avgC * 1000) / 10 : null;
+}
+// Ocena jakości boxa po NATR (skala skanera z Blueprintu: ~5 % = pełna ocena, 20 % = najgorsza; wymagane < 8).
+function natrGrade(v) {
+    if (!Number.isFinite(v)) return { key: "na", label: "—", cls: "muted" };
+    if (v < 5) return { key: "tight", label: "ciasny", cls: "positive" };
+    if (v < NATR_GOOD) return { key: "ok", label: "dobry", cls: "positive" };
+    if (v < 12) return { key: "loose", label: "luźny", cls: "warn" };
+    return { key: "wide", label: "za szeroki", cls: "negative" };
+}
+
 const DARVAS_NEW_WEEKS = 4;   // box jest „nowy”, gdy jego góra została potwierdzona w ostatnich tylu tygodniach
 
-// Przegląd boxów Darvasa dla wszystkich spółek (podstrona „Boxy”): items = [{ticker, price, c (tyg. zamknięcia), v (wolumen)}], weeks = daty tygodni, pinned = {T: {top, bottom, start}}.
+// Przegląd boxów Darvasa dla wszystkich spółek (podstrona „Boxy”): items = [{ticker, price, c (tyg. zamknięcia), v (wolumen), h / l (opcjonalnie, dla NATR boxa)}], weeks = daty tygodni, pinned = {T: {top, bottom, start}}.
 // Zwraca sekcje: pinned (monitorowane), fresh (nowe boxy), buy (wybicie potwierdzone wolumenem), check (wybicie bez wolumenu / za późno), hold, sell, wait — każdy wiersz {ticker, price, state, text, box:{top,bottom,start,i0,i1}, key}.
 function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) {
     const out = { pinned: [], fresh: [], buy: [], check: [], hold: [], sell: [], wait: [] };
@@ -217,6 +240,7 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
         if (lastReal < 0) return;
         const { boxes, lines } = darvasScan(c);
         const mk = b => ({ top: r2(b.top), bottom: r2(b.bottom), start: (weeks && weeks[b.i0]) || "", i0: b.i0, i1: b.i1, ...(b.line ? { line: true } : {}) });
+        const natrOf = b => (it.h && it.l ? boxNatr(it.h, it.l, c, b.i0, Math.min(b.i1, lastReal)) : null);
         const pin = pinned[it.ticker];
         if (pin) {
             const st = darvasPinStatus(pin, it.price);
@@ -227,14 +251,14 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
         // sam top (dół niepotwierdzony) jest „boxem” wiersza, gdy powstał po ostatnim potwierdzonym boxie (albo box w ogóle nie istnieje); bottom = stop 8 % pod topem
         const last = lastLine && (!lastBox || lastLine.i0 > lastBox.i0) ? { top: lastLine.top, bottom: darvasLineInfo(lastLine.top).stop, i0: lastLine.i0, i1: lastLine.i1, line: true } : lastBox;
         if (ds.state !== "NONE" && last) {
-            const row = { ticker: it.ticker, price: it.price, state: ds.state, text: ds.text, box: mk(last), key: `${it.ticker}|${r2(last.top)}|${r2(last.bottom)}|${(weeks && weeks[last.i0]) || ""}` };
+            const row = { ticker: it.ticker, price: it.price, state: ds.state, text: ds.text, natr: natrOf(last), box: mk(last), key: `${it.ticker}|${r2(last.top)}|${r2(last.bottom)}|${(weeks && weeks[last.i0]) || ""}` };
             if (ds.macdExit && ds.state === "HOLD") { row.state = "MACD"; }
             const section = ds.macdExit && ds.state === "HOLD" ? "sell" : { BUY: "buy", NOVOL: "check", LATE: "check", HOLD: "hold", SELL: "sell", OUT: "sell", WAIT: "wait" }[ds.state];
             if (section) out[section].push(row);
         }
         // nowe boxy: góra potwierdzona (i0 + potwierdzenie) w ostatnich `newWeeks` tygodniach
         const fresh = boxes.filter(b => { const born = b.i0 + DARVAS_CONFIRM; return born <= lastReal && born >= lastReal - (newWeeks - 1); }).pop();
-        if (fresh) out.fresh.push({ ticker: it.ticker, price: it.price, state: fresh.outcome === "up" ? "ABOVE" : fresh.outcome === "down" ? "EXIT" : "INSIDE", text: `box ${r2(fresh.bottom)}–${r2(fresh.top)} od ${(weeks && weeks[fresh.i0]) || "?"}${fresh.outcome === "up" ? " — już wybity w górę" : fresh.outcome === "down" ? " — złamany w dół" : ""}`, box: mk(fresh), key: `${it.ticker}|${r2(fresh.top)}|${r2(fresh.bottom)}|${(weeks && weeks[fresh.i0]) || ""}` });
+        if (fresh) out.fresh.push({ ticker: it.ticker, price: it.price, natr: natrOf(fresh), state: fresh.outcome === "up" ? "ABOVE" : fresh.outcome === "down" ? "EXIT" : "INSIDE", text: `box ${r2(fresh.bottom)}–${r2(fresh.top)} od ${(weeks && weeks[fresh.i0]) || "?"}${fresh.outcome === "up" ? " — już wybity w górę" : fresh.outcome === "down" ? " — złamany w dół" : ""}`, box: mk(fresh), key: `${it.ticker}|${r2(fresh.top)}|${r2(fresh.bottom)}|${(weeks && weeks[fresh.i0]) || ""}` });
     });
     out.pinned.sort((a, b) => a.rank - b.rank || a.ticker.localeCompare(b.ticker));
     ["fresh", "buy", "check", "hold", "sell", "wait"].forEach(k => out[k].sort((a, b) => a.ticker.localeCompare(b.ticker)));
@@ -737,5 +761,5 @@ function attachDarvasHover(container, full, readoutEl) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
 }

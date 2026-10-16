@@ -81,6 +81,8 @@ const state = {
     acct: { capital: null, riskPct: null, posPct: null, fx: null },
     scoreMin: null,
     scoreMax: null,
+    natrMax: null,      // filtr listy: maks. tygodniowy NATR spółki (%)
+    boxNatrMax: null,   // filtr zakładki Boxy: maks. NATR samego boxa (%)
     search: "",
     sector: "",
     sortKey: "ticker",
@@ -661,11 +663,18 @@ function scoreInRange(score, min, max) {
     return (!hasMin || score >= min) && (!hasMax || score <= max);
 }
 
-function applyCommonFilters(stocks, search, sector, scoreMin, scoreMax) {
+// NATR (Blueprint: konsolidacja < 8): maks. tygodniowy NATR spółki; bez wartości (za krótka historia) odpada, gdy ustawiono granicę.
+function natrOk(natr, max) {
+    if (!Number.isFinite(max)) return true;
+    return Number.isFinite(natr) && natr <= max;
+}
+
+function applyCommonFilters(stocks, search, sector, scoreMin, scoreMax, natrMax) {
     const q = (search || "").trim().toLowerCase();
     return stocks.filter(s => {
         if (sector && s.sector !== sector) return false;
         if (!scoreInRange(s.score, scoreMin, scoreMax)) return false;
+        if (!natrOk(s.natr_w, natrMax)) return false;
         if (!q) return true;
         return s.ticker.toLowerCase().includes(q) || (s.company || "").toLowerCase().includes(q);
     });
@@ -800,6 +809,10 @@ const COL = {
     rsLine: ["Linia RS", "rs_line_dist_pct", s => `<td${s.rs_line_state === "przed ceną" ? ` class="positive"` : ""} title="Linia RS (cena / S&P 500): odległość od maksimum z 52 tyg.; „przed ceną” = RS na maksimum, a cena jeszcze nie">${s.rs_line_state ? (s.rs_line_state === "przed ceną" ? "● RS przed ceną" : "● RS na szczycie") + " " : ""}${Number.isFinite(s.rs_line_dist_pct) ? `<span class="muted small">${fmtPct(s.rs_line_dist_pct)}</span>` : "—"}</td>`, "Linia RS: stan (RS na maksimum 52 tyg. przed/razem z ceną) i odległość od jej maksimum"],
     macd: ["MACD tyg.", "macd_w_above", s => s.macd_w_above === true ? `<td class="positive" title="Tygodniowe MACD (12, 26, 9) leży nad linią sygnałową">Tak</td>` : s.macd_w_above === false ? `<td class="negative" title="Tygodniowe MACD (12, 26, 9) leży pod linią sygnałową">Nie</td>` : `<td class="muted"></td>`,
         "Czy tygodniowe MACD (12, 26, 9) jest nad linią sygnałową — zwykła informacja Tak / Nie, nie wpływa na żadną ocenę"],
+    natr: ["NATR", "natr_w", s => {
+        const g = natrGrade(s.natr_w), d = Number.isFinite(s.natr_d) ? `, dzienny (ATR z Finviza): ${s.natr_d.toFixed(1)} %` : "";
+        return Number.isFinite(s.natr_w) ? `<td class="${g.cls === "warn" ? "" : g.cls}" title="NATR tygodniowy = ATR(14) / cena: ${s.natr_w.toFixed(1)} % (${g.label})${d}. Blueprint: konsolidacja ma mieć NATR < 8.">${s.natr_w.toFixed(1)}%</td>` : `<td class="muted" title="Za krótka historia tygodniowa"></td>`;
+    }, "NATR tygodniowy (ATR 14 tyg. w % ceny): im niższy, tym ciaśniejsze i spokojniejsze notowania. Blueprint: konsolidacja < 8 %."],
     dist: ["Dystrybucja", "dist_vol_ratio", s => s.dist_top === true ? `<td class="negative" title="Dystrybucja bez wzrostu ceny (tydzień do ${escapeHtml(s.dist_date || "")}): najwyższy tygodniowy wolumen od dołka trendu ×${s.dist_vol_ratio}, zamknięcie ${fmtPct(s.dist_change_pct)}">⚠ ×${s.dist_vol_ratio}</td>` : `<td class="muted"></td>`,
         "Dystrybucja bez wzrostu ceny („mielenie”, O'Neil, świece tygodniowe): w ostatnich 2 tygodniach najwyższy wolumen tygodniowy od dołka trendu (≥ 1,5× średniej), a cena zamyka się prawie bez zmian albo w dolnej połowie zakresu, blisko szczytu rajdu. Podaż tłumi popyt. Heurystyka — sprawdź wykres"],
     eps3y: ["EPS 3 lata", "eps_fy0", s => annualEpsGrowth(s).values.some(Number.isFinite)
@@ -846,7 +859,7 @@ const actCell = (s, key) => s[key]
     ? `<td class="act-cell act-${s[key].tone}${s.action_tf === s[key].tf ? " act-primary" : ""}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const TAB_COLUMNS = {
@@ -909,7 +922,7 @@ function watchTabRows() {
         s.target_main = targetMain(s);
     });
     const inList = watchList && watchData.lists ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
-    const common = applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax);
+    const common = applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax);
     tagStrategies(watchData.stocks, common, state, []);
     tagPositions(watchData.stocks, state.pos);
     tagPinnedBoxes(watchData.stocks, state.boxes);
@@ -949,7 +962,7 @@ function rowsForTab(tab) {
         s.upside_main = upsideMain(s);
         s.target_main = targetMain(s);
     });
-    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
+    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax);
     const stocks = common;
     tagStrategies(state.data.stocks, common, state, []);
     tagPositions(state.data.stocks, state.pos);
@@ -981,10 +994,10 @@ function emptyMessage(tab) {
 function renderFiltersSummary() {
     const el = document.getElementById("filtersSummary");
     if (!el) return;
-    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax);
+    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax);
     const base = common;
     const counts = [["Lista", base.length],
-        ["Watchlisty", watchData ? applyCommonFilters(watchData.stocks, state.search, state.sector, state.scoreMin, state.scoreMax).length : 0], ...(state.patterns ? [["Bazy", baseRows(base, state.bases).length]] : []), ["CANSLIM", canslimRows(base, state.csMin, state.csCore).length]];
+        ["Watchlisty", watchData ? applyCommonFilters(watchData.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax).length : 0], ...(state.patterns ? [["Bazy", baseRows(base, state.bases).length]] : []), ["CANSLIM", canslimRows(base, state.csMin, state.csCore).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
     document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
 }
@@ -1185,7 +1198,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, boxNatrMax: state.boxNatrMax }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -1204,6 +1217,8 @@ function loadSettings() {
         }
         if (saved.brk && Number.isFinite(saved.brk.maxDistPct)) state.brk.maxDistPct = saved.brk.maxDistPct;
         if (saved.patterns === false) state.patterns = false;
+        if (Number.isFinite(saved.natrMax)) state.natrMax = saved.natrMax;
+        if (Number.isFinite(saved.boxNatrMax)) state.boxNatrMax = saved.boxNatrMax;
         if (!state.patterns && state.tab === "BASES") state.tab = "CS";
     } catch (e) { /* uszkodzony zapis — zostają domyślne */ }
 }
@@ -1389,12 +1404,25 @@ if (typeof document !== "undefined") document.addEventListener("click", ev => {
     if (state.tab === BOXES_TAB) renderBoxesPanel();
 }, true);
 
+// Jakość boxa po NATR: sekcje (poza przypiętymi, które zawsze zostają) tracą boxy o NATR powyżej progu; bez policzonego NATR odpadają, gdy próg jest ustawiony.
+function filterBoxesByNatr(ov, max) {
+    if (!Number.isFinite(max)) return ov;
+    const out = { ...ov };
+    Object.keys(out).forEach(k => { if (k !== "pinned") out[k] = out[k].filter(r => natrOk(r.natr, max)); });
+    return out;
+}
+function natrChipHtml(natr) {
+    if (!Number.isFinite(natr)) return "";
+    const g = natrGrade(natr);
+    return ` <span class="box-natr ${g.cls}" title="NATR boxa = średni True Range jego tygodni / cena. Blueprint: konsolidacja < 8 %.">NATR ${natr.toFixed(1)} % · ${g.label}</span>`;
+}
+
 function boxRowHtml(r, sec, isNew) {
     const [lab, cls] = BOX_STATE_LABELS[r.state] || [r.state, ""];
     const pinned = state.boxes[r.ticker] && Math.abs(state.boxes[r.ticker].top - r.box.top) < 0.005 && Math.abs(state.boxes[r.ticker].bottom - r.box.bottom) < 0.005;
     const btn = sec === "pinned" ? `<button type="button" class="box-act" data-act="unpin" title="Odepnij box">✕</button>`
         : `<button type="button" class="box-act${pinned ? " on" : ""}" data-act="${pinned ? "unpin" : "pin"}" title="${pinned ? "Odepnij" : "Przypnij do monitorowania"}">📌</button>`;
-    return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`
+    return `<div class="box-row" data-ticker="${escapeHtml(r.ticker)}" data-sec="${sec}" data-i="${r.idx}"><span class="box-tk">${escapeHtml(r.ticker)}</span><span class="box-st ${cls}">${escapeHtml(lab)}</span>${isNew ? '<span class="box-new">NOWE</span>' : ""}<span class="box-tx">${escapeHtml(r.text)}${natrChipHtml(r.natr)}</span><span class="box-px">${Number.isFinite(r.price) ? "$" + r.price : ""}</span>${btn}</div>`
         + `<details class="box-pos"><summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(r.box.top, r.box.bottom, r.ticker, !!r.box.line)}</details>`;
 }
 
@@ -1405,8 +1433,8 @@ async function renderBoxesPanel() {
     const charts = await loadCharts();
     if (!charts) { panel.innerHTML = '<p class="muted small" style="padding:10px">Brak danych wykresów (charts.json).</p>'; return; }
     boxesCharts = charts;
-    const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v } : null; }).filter(Boolean);
-    const ov = darvasOverview(items, charts.weeks, state.boxes);
+    const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v, h: c.h, l: c.l } : null; }).filter(Boolean);
+    const ov = filterBoxesByNatr(darvasOverview(items, charts.weeks, state.boxes), state.boxNatrMax);
     Object.keys(ov).forEach(k => ov[k].forEach((r, i) => { r.idx = i; }));
     boxesOverviewData = ov;
     if (boxesNewKeys === null) {   // „nowe od ostatniej wizyty”: porównanie z zapamiętanym zestawem, który odświeżamy dopiero po pokazaniu podstrony
@@ -1448,8 +1476,8 @@ async function refreshBoxesBadge() {
 async function renderBoxesPanelQuiet() {
     const charts = await loadCharts();
     if (!charts) return;
-    const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v } : null; }).filter(Boolean);
-    boxesOverviewData = darvasOverview(items, charts.weeks, state.boxes);
+    const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v, h: c.h, l: c.l } : null; }).filter(Boolean);
+    boxesOverviewData = filterBoxesByNatr(darvasOverview(items, charts.weeks, state.boxes), state.boxNatrMax);
     boxesOverviewData && Object.keys(boxesOverviewData).forEach(k => boxesOverviewData[k].forEach((r, i) => { r.idx = i; }));
     if (boxesNewKeys === null) {
         const seen = new Set(boxesLoadJson(BOXES_SEEN_KEY, []));
@@ -1777,6 +1805,18 @@ function initControls() {
             renderTable();
         });
     });
+    [["natrMax", "natrMax"], ["boxNatrMax", "boxNatrMax"]].forEach(([id, key]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.value = Number.isFinite(state[key]) ? state[key] : "";
+        el.addEventListener("input", e => {
+            const v = parseFloat(e.target.value);
+            state[key] = Number.isFinite(v) && v > 0 ? v : null;
+            saveSettings();
+            if (key === "boxNatrMax") { boxesOverviewData = null; if (state.tab === BOXES_TAB) renderBoxesPanel(); else refreshBoxesBadge(); }
+            else renderTable();
+        });
+    });
     // Score w komórce tabeli: zapis po zatwierdzeniu (Enter / opuszczenie pola), żeby przerysowanie nie zabierało fokusu przy pisaniu
     document.querySelectorAll("table.momentum-table tbody").forEach(tbody => {
         tbody.addEventListener("change", ev => {
@@ -2090,9 +2130,11 @@ function drawChart() {
     body.innerHTML = `<div class="chart-grid layout-1" data-ticker="${escapeHtml(currentChart.ticker)}">${cells.map(cellHtml).join("")}</div>`;
     if (focus) {   // pasek nad wykresem (wstawiany PRZED rysowaniem, żeby pomiar miejsca na wykres był prawdziwy — inaczej viewBox jest wyższy niż pole i wykres wraca z pustymi pasami po bokach)
         const stop = focus.line ? focus.bottom : focus.bottom * (1 - DARVAS_STOP_PCT / 100);
+        const fc = activeCharts().stocks && activeCharts().stocks[focus.ticker];
+        const focusNatr = fc && !focus.line ? boxNatr(fc.h || [], fc.l || [], fc.c || [], focus.i0, focus.i1) : null;
         const bar = document.createElement("div");
         bar.className = "box-focus-bar";
-        bar.innerHTML = focus.line ? `<span>📏 Top <b>${focus.top.toFixed(2)}</b> (dół niepotwierdzony) · kupno nad topem · stop <b>${focus.bottom.toFixed(2)}</b> (${DARVAS_LINE_STOP_PCT} % pod topem)</span> <button type="button" id="boxFocusPin">${pinned && pinned.line && Math.abs(pinned.top - focus.top) < 0.005 ? "🗑 Odepnij top" : "📌 Przypnij top"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>` : `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b></span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
+        bar.innerHTML = focus.line ? `<span>📏 Top <b>${focus.top.toFixed(2)}</b> (dół niepotwierdzony) · kupno nad topem · stop <b>${focus.bottom.toFixed(2)}</b> (${DARVAS_LINE_STOP_PCT} % pod topem)</span> <button type="button" id="boxFocusPin">${pinned && pinned.line && Math.abs(pinned.top - focus.top) < 0.005 ? "🗑 Odepnij top" : "📌 Przypnij top"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>` : `<span>📦 Kupno nad <b>${focus.top.toFixed(2)}</b> · szara strefa ryzyka <b>${focus.bottom.toFixed(2)}</b> → <b>${stop.toFixed(2)}</b> · exit pod <b>${stop.toFixed(2)}</b>${natrChipHtml(focusNatr)}</span> <button type="button" id="boxFocusPin">${pinned && Math.abs(pinned.top - focus.top) < 0.005 && Math.abs(pinned.bottom - focus.bottom) < 0.005 ? "📌 odepnij" : "📌 przypnij"}</button> <button type="button" id="boxFocusBack">← pełny wykres</button>`;
         { const d = document.createElement("details"); d.className = "box-pos"; d.innerHTML = `<summary>💰 Pozycja z tego boxa</summary>${boxPositionHtml(focus.top, focus.bottom, focus.ticker, !!focus.line)}`; bar.appendChild(d); }
         if (state.boxes[focus.ticker] && !(Math.abs(state.boxes[focus.ticker].top - focus.top) < 0.005 && Math.abs(state.boxes[focus.ticker].bottom - focus.bottom) < 0.005)) {   // jest przypięty (np. własny) box inny niż ten w fokusie — da się go usunąć
             const pb = state.boxes[focus.ticker], del = document.createElement("button");
@@ -2521,7 +2563,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         stopAdvice, watchListCounts,
-        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, natrOk, filterBoxesByNatr, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

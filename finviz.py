@@ -40,6 +40,7 @@ VIEW_COLUMNS = {
     "152": {"Recom": "recom", "Target Price": "finviz_target", "Inst Own": "inst_own", "Inst Trans": "inst_trans",   # widok własny (Custom): rekomendacja 1-5, cena celu, własność instytucji (%) i jej zmiana (%)
             "Sales Q/Q": "sales_qq", "Sales Past 5Y": "sales_past_5y", "Float": "shs_float", "Outstanding": "shs_outstanding",   # C: wzrost sprzedaży kwartał do kwartału r/r; S: podaż akcji
             "Insider Own": "insider_own", "Debt/Eq": "debt_eq"},   # S: udział zarządu i zadłużenie
+    "171": {"ATR": "atr_fv"},   # widok Technical: ATR (14 sesji, w dolarach) — z niego liczymy dzienny NATR = ATR / cena
 }
 VIEW_PARAMS = {"152": {"c": "0,1,62,69,28,29,21,23,24,25,26,38"}}   # kolumny widoku własnego: 0 = No., 1 = Ticker, 62 = Analyst Recom., 69 = Target Price, 28 = Inst Own, 29 = Inst Trans, 21 = Sales Past 5Y, 23 = Sales Q/Q, 24 = Outstanding, 25 = Float, 26 = Insider Own, 38 = Debt/Eq
 TEXT_KEYS = {"company", "sector", "industry", "earnings"}
@@ -110,7 +111,7 @@ def fetch_view(view, filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7, sess
     return out[:max_tickers], total
 
 
-def fetch_watchlist(filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7, views=("121", "161", "152")):
+def fetch_watchlist(filters, max_tickers=DEFAULT_MAX_TICKERS, pause_s=0.7, views=("121", "161", "152", "171")):
     """Lista spółek z Finviz scalona z widoków Overview/Valuation/Financial po tickerze.
     Zwraca (lista słowników, łączna liczba wg Finviz). Widok pomocniczy, który się nie uda,
     nie przerywa całości — spółki zostają bez tych kolumn (None)."""

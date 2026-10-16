@@ -1255,3 +1255,25 @@ def test_weekly_macd_above_signal():
     falling = pd.concat([accel, pd.Series([accel.iloc[-1] - i * 15 for i in range(1, 12)])], ignore_index=True)
     assert watchlist.weekly_macd_above_signal(falling) is False
     assert watchlist.weekly_macd_above_signal(rising.head(20)) is None   # za krótka historia
+
+
+def test_weekly_natr():
+    # stały zakres 4 przy cenie 100 i brak luk: TR = 4 w każdym tygodniu → NATR = 4 %
+    n = 30
+    closes = [100.0] * n
+    wk = pd.DataFrame({"Open": closes, "High": [102.0] * n, "Low": [98.0] * n, "Close": closes, "Volume": [1000] * n})
+    assert watchlist.weekly_natr(wk) == 4.0
+    # luka: tydzień otwiera się 10 wyżej, TR liczy się od poprzedniego zamknięcia → NATR rośnie
+    gap = wk.copy()
+    gap.loc[gap.index[-1], ["High", "Low", "Close"]] = [112.0, 108.0, 110.0]
+    assert watchlist.weekly_natr(gap) > 4.0
+    assert watchlist.weekly_natr(wk.head(10)) is None   # za krótka historia (< 15 tygodni)
+
+
+def test_build_stocks_natr_daily_from_finviz_atr():
+    df = make_prices(n=300)
+    rows = [{"ticker": "AAA", "atr_fv": 2.0}, {"ticker": "BBB"}]
+    stocks = watchlist.build_stocks(rows, {"AAA": df, "BBB": df})
+    by = {s["ticker"]: s for s in stocks}
+    assert by["AAA"]["natr_d"] == round(2.0 / by["AAA"]["price"] * 100, 2)
+    assert by["BBB"]["natr_d"] is None and by["AAA"]["natr_w"] is not None
