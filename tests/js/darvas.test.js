@@ -122,13 +122,18 @@ test("darvasCupGeometry / darvasCupStatus: miska i rączka z zamknięć, pivot =
     assert.equal(darvasCupGeometry(c, { i0: 4, iLow: 4, i1: 8 }), null);   // dołek na krawędzi = nie miska
 });
 
-test("darvasInitialStop: połowa boxa, ale nie głębiej niż 10 % pod wejściem", () => {
-    const { darvasInitialStop, darvasStatus } = require("../../docs/js/darvas.js");
-    assert.equal(darvasInitialStop(110, 100, 110), 105);    // połowa boxa (5 % pod wejściem) mieści się w limicie
-    assert.equal(darvasInitialStop(120, 80, 120), 108);     // połowa = 100 byłaby 16,7 % pod wejściem → limit 10 %
-    assert.equal(darvasInitialStop(110, 100, 112), 105);
-    const box1 = [100, 104, 108, 110, 108, 106, 104, 105, 107, 106];   // góra 110, dół 104
+test("darvasInitialStop: dokładnie 10 % pod wejściem; BOX FAILUJE przy wejściu w strefę; wyjście MACD", () => {
+    const { darvasInitialStop, darvasStatus, darvasMacdBelow } = require("../../docs/js/darvas.js");
+    assert.equal(darvasInitialStop(110, 100, 110), 99);
+    assert.equal(darvasInitialStop(120, 80, 120), 108);
+    assert.equal(darvasInitialStop(110, 100, 112), 100.8);
+    const box1 = [100, 104, 108, 110, 108, 106, 104, 105, 107, 106];
     const st = darvasStatus([...box1, 112]);
     assert.equal(st.state, "BUY");
-    assert.equal(st.stop, 107);   // (110 + 104) / 2
+    assert.equal(st.stop, 100.8);
+    const rising = Array.from({ length: 60 }, (_, i) => 100 + i ** 1.6);
+    assert.equal(darvasMacdBelow(rising), false);
+    const falling = [...rising, ...Array.from({ length: 12 }, (_, i) => rising[59] - (i + 1) * 15)];
+    assert.equal(darvasMacdBelow(falling), true);
+    assert.equal(darvasMacdBelow([1, 2, 3]), null);
 });

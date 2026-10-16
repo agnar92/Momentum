@@ -1356,7 +1356,7 @@ let boxesOverviewData = null, boxesNewKeys = null, boxesCharts = null;
 function boxesLoadJson(key, fallback) { try { const v = JSON.parse(localStorage.getItem(key)); return v === null ? fallback : v; } catch (e) { return fallback; } }
 
 // Rozwijana informacja o pozycji liczonej z boxa (Dar-Card): wejście = góra boxa (zamknięcie tygodnia nad nią), stop = dół strefy zagrożenia (5 % pod dołem boxa).
-function boxStopFor(top, bottom) {   // stop początkowy: połowa boxa, nie głębiej niż 10 % pod wejściem (wejście = góra boxa)
+function boxStopFor(top, bottom) {   // stop początkowy: 10 % pod wejściem (wejście = góra boxa)
     return typeof darvasInitialStop === "function" ? darvasInitialStop(top, bottom, top) : Math.round(Math.max((top + bottom) / 2, top * 0.9) * 100) / 100;
 }
 function boxPositionHtml(top, bottom, ticker) {
