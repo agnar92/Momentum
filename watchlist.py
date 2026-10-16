@@ -389,6 +389,23 @@ def weekly_natr(wk_ohlc, n=NATR_WEEKS):
     return _num(atr / c[-1] * 100, 2) if c[-1] > 0 else None
 
 
+def blueprint_weekly_fields(wk_ohlc):
+    """Kryteria wejścia z Blueprintu na ostatniej TYGODNIOWEJ świecy (tylko informacja): zmiana zamknięcia r/r tygodniowa (świeca wybicia 5–20 %), zamknięcie najwyższe z 10 tygodni,
+    cena nad 20-tygodniową średnią, wolumen vs poprzedni tydzień (≥ +30 %)."""
+    c = wk_ohlc["Close"].astype(float)
+    v = wk_ohlc["Volume"].astype(float)
+    out = {"wk_chg_pct": None, "wk_hi10_close": None, "pct_above_sma20w": None, "wk_vol_wow_pct": None}
+    if len(c) >= 2 and c.iloc[-2] > 0:
+        out["wk_chg_pct"] = _num((c.iloc[-1] / c.iloc[-2] - 1) * 100, 1)
+    if len(c) >= 10:
+        out["wk_hi10_close"] = bool(c.iloc[-1] >= c.tail(10).max())
+    if len(c) >= 20 and c.tail(20).mean() > 0:
+        out["pct_above_sma20w"] = _num((c.iloc[-1] / c.tail(20).mean() - 1) * 100, 1)
+    if len(v) >= 2 and v.iloc[-2] > 0:
+        out["wk_vol_wow_pct"] = _num((v.iloc[-1] / v.iloc[-2] - 1) * 100, 0)
+    return out
+
+
 def compute_metrics(df, bench_w=None):
     """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
     bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
@@ -447,6 +464,7 @@ def compute_metrics(df, bench_w=None):
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
         "macd_w_above": weekly_macd_above_signal(wk_close),
         "natr_w": weekly_natr(wk_ohlc),
+        **blueprint_weekly_fields(wk_ohlc),
         "pct_above_sma10w": _num((price / sma10w - 1) * 100) if sma10w else None,
         "pct_above_sma40w": _num((price / sma40w - 1) * 100) if sma40w else None,
         "pct_from_high_52w": _num((price / high_52w - 1) * 100, 1) if high_52w > 0 else None,

@@ -6,7 +6,7 @@ const assert = require("node:assert/strict");
 const path = require("node:path");
 
 const {
-    upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, natrOk, filterBoxesByNatr, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+    upsideMain, targetMain, recomLabel, fillTargets, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, ratingChips, baseBoxData, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, breakoutInfo, tagBreakouts, readinessLine, swipeDirection, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
     fmtMarketCap, fmtVolume, fmtPct,
 } = require(path.join("..", "..", "docs", "js", "watchlist.js"));
 
@@ -680,4 +680,13 @@ test("filterBoxesByNatr: przypięte zostają, reszta sekcji dostaje filtr", () =
     assert.deepEqual(out.pinned.map(r => r.ticker), ["P"]);
     assert.deepEqual(out.buy.map(r => r.ticker), ["A"]);
     assert.equal(filterBoxesByNatr(ov, null), ov);
+});
+
+test("blueprintInfo: lista kontrolna wejścia z Blueprintu, brak danych = null i nie liczy się", () => {
+    const all = blueprintInfo({ pct_above_sma20w: 4, macd_w_above: true, wk_hi10_close: true, wk_chg_pct: 7, wk_vol_wow_pct: 45, natr_w: 5 });
+    assert.equal(all.score, 6);
+    const some = blueprintInfo({ pct_above_sma20w: -2, macd_w_above: true, wk_chg_pct: 25, natr_w: 9 });
+    assert.equal(some.score, 1);
+    assert.equal(some.known, 4);
+    assert.equal(blueprintInfo({}).known, 0);
 });

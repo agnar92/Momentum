@@ -1277,3 +1277,13 @@ def test_build_stocks_natr_daily_from_finviz_atr():
     by = {s["ticker"]: s for s in stocks}
     assert by["AAA"]["natr_d"] == round(2.0 / by["AAA"]["price"] * 100, 2)
     assert by["BBB"]["natr_d"] is None and by["AAA"]["natr_w"] is not None
+
+
+def test_blueprint_weekly_fields():
+    closes = [100.0] * 20 + [108.0]
+    wk = pd.DataFrame({"Open": closes, "High": closes, "Low": closes, "Close": closes, "Volume": [1000] * 20 + [1500]})
+    f = watchlist.blueprint_weekly_fields(wk)
+    assert f["wk_chg_pct"] == 8.0 and f["wk_hi10_close"] is True
+    assert f["wk_vol_wow_pct"] == 50.0 and f["pct_above_sma20w"] > 0
+    short = watchlist.blueprint_weekly_fields(wk.head(5))
+    assert short["wk_hi10_close"] is None and short["pct_above_sma20w"] is None

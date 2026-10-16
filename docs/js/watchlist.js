@@ -454,7 +454,26 @@ function actionInfo(s, mkt, requireCore = true) {
     if (toPivot !== null && toPivot > 5 && toPivot <= 15) return mk("BASE", `Baza w budowie, ${toPivot.toFixed(1)}% do pivotu. Czekaj, aż cena zbliży się do pivotu na malejącym wolumenie.`);
     return trend();
 }
+// Lista kontrolna wejścia z „My Strategy Blueprint” (tylko informacja, jak kolumna MACD): każda pozycja true / false / null (brak danych); score = liczba spełnionych.
+const BLUEPRINT_CHECKS = [
+    ["Cena nad 20-tyg. średnią", s => (Number.isFinite(s.pct_above_sma20w) ? s.pct_above_sma20w > 0 : null)],
+    ["Tygodniowe MACD nad sygnałem", s => (typeof s.macd_w_above === "boolean" ? s.macd_w_above : null)],
+    ["Zamknięcie = najwyższe z 10 tygodni", s => (typeof s.wk_hi10_close === "boolean" ? s.wk_hi10_close : null)],
+    ["Świeca tygodnia +5…+20 % (wybicie)", s => (Number.isFinite(s.wk_chg_pct) ? s.wk_chg_pct >= 5 && s.wk_chg_pct <= 20 : null)],
+    ["Wolumen ≥ +30 % vs poprzedni tydzień", s => (Number.isFinite(s.wk_vol_wow_pct) ? s.wk_vol_wow_pct >= 30 : null)],
+    ["NATR tygodniowy < 8", s => (Number.isFinite(s.natr_w) ? s.natr_w < 8 : null)],
+];
+function blueprintInfo(s) {
+    const checks = BLUEPRINT_CHECKS.map(([label, fn]) => ({ label, ok: fn(s) }));
+    const known = checks.filter(c => c.ok !== null).length;
+    return { checks, score: checks.filter(c => c.ok === true).length, known, total: checks.length };
+}
+function tagBlueprint(stocks) {
+    stocks.forEach(s => { const b = blueprintInfo(s); s.bp = b; s.bp_score = b.known ? b.score : null; });
+}
+
 function tagActions(stocks, mkt, requireCore = true) {
+    tagBlueprint(stocks);
     stocks.forEach(s => {
         const w = actionInfo(s, mkt, requireCore);
         s.action_w = w;
@@ -813,6 +832,13 @@ const COL = {
         const g = natrGrade(s.natr_w), d = Number.isFinite(s.natr_d) ? `, dzienny (ATR z Finviza): ${s.natr_d.toFixed(1)} %` : "";
         return Number.isFinite(s.natr_w) ? `<td class="${g.cls === "warn" ? "" : g.cls}" title="NATR tygodniowy = ATR(14) / cena: ${s.natr_w.toFixed(1)} % (${g.label})${d}. Blueprint: konsolidacja ma mieć NATR < 8.">${s.natr_w.toFixed(1)}%</td>` : `<td class="muted" title="Za krótka historia tygodniowa"></td>`;
     }, "NATR tygodniowy (ATR 14 tyg. w % ceny): im niższy, tym ciaśniejsze i spokojniejsze notowania. Blueprint: konsolidacja < 8 %."],
+    bp: ["Blueprint", "bp_score", s => {
+        const b = s.bp || blueprintInfo(s);
+        if (!b.known) return `<td class="muted"></td>`;
+        const tip = b.checks.map(c => `${c.ok === true ? "✓" : c.ok === false ? "✗" : "?"} ${c.label}`).join("\n");
+        const cls = b.score >= 5 ? "positive" : b.score <= 2 ? "negative" : "";
+        return `<td class="${cls}" title="${escapeHtml(tip)}">${b.score}/${b.total}</td>`;
+    }, "Kryteria wejścia z Blueprintu (informacja): cena nad 20-tyg. średnią, MACD nad sygnałem, zamknięcie = 10-tyg. maksimum, świeca +5…+20 %, wolumen +30 % w/w, NATR < 8. Najedź, by zobaczyć które."],
     dist: ["Dystrybucja", "dist_vol_ratio", s => s.dist_top === true ? `<td class="negative" title="Dystrybucja bez wzrostu ceny (tydzień do ${escapeHtml(s.dist_date || "")}): najwyższy tygodniowy wolumen od dołka trendu ×${s.dist_vol_ratio}, zamknięcie ${fmtPct(s.dist_change_pct)}">⚠ ×${s.dist_vol_ratio}</td>` : `<td class="muted"></td>`,
         "Dystrybucja bez wzrostu ceny („mielenie”, O'Neil, świece tygodniowe): w ostatnich 2 tygodniach najwyższy wolumen tygodniowy od dołka trendu (≥ 1,5× średniej), a cena zamyka się prawie bez zmian albo w dolnej połowie zakresu, blisko szczytu rajdu. Podaż tłumi popyt. Heurystyka — sprawdź wykres"],
     eps3y: ["EPS 3 lata", "eps_fy0", s => annualEpsGrowth(s).values.some(Number.isFinite)
@@ -859,7 +885,7 @@ const actCell = (s, key) => s[key]
     ? `<td class="act-cell act-${s[key].tone}${s.action_tf === s[key].tf ? " act-primary" : ""}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "bp", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const TAB_COLUMNS = {
@@ -2563,7 +2589,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         stopAdvice, watchListCounts,
-        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, natrOk, filterBoxesByNatr, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }
