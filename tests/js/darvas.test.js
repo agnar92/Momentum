@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, boxNatr, natrGrade, natrSeries, darvasOverview } = require("../../docs/js/darvas.js");
+const { darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, boxNatr, natrGrade, natrSeries, darvasSma, darvasOverview } = require("../../docs/js/darvas.js");
 
 // schodek: 100 → box 100–110 (dół 104 potwierdzony), wybicie 112 → box 112–120 …
 const SERIES = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118, 121];
@@ -267,4 +267,9 @@ test("natrSeries: zgodna z NATR boxa na stałym zakresie i pusta przed pełnym o
     assert.equal(ns[10], null);
     assert.equal(ns[n - 1], 4);
     assert.equal(natrSeries([], [], []).length, 0);
+});
+
+test("darvasSma: średnia krocząca, null przed pełnym oknem i przy luce", () => {
+    assert.deepEqual(darvasSma([1, 2, 3, 4], 2), [null, 1.5, 2.5, 3.5]);
+    assert.deepEqual(darvasSma([1, null, 3, 4], 2), [null, null, null, 3.5]);
 });

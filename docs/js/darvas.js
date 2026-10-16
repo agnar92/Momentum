@@ -217,6 +217,15 @@ function boxNatr(h, l, c, i0, i1) {
     const avgC = cl.reduce((a, b) => a + b, 0) / cl.length;
     return avgC > 0 ? Math.round(tr.reduce((a, b) => a + b, 0) / tr.length / avgC * 1000) / 10 : null;
 }
+// Prosta średnia krocząca z zamknięć (null przed pełnym oknem i przy luce w danych).
+function darvasSma(c, n) {
+    return c.map((_, i) => {
+        if (i < n - 1) return null;
+        let sum = 0;
+        for (let j = i - n + 1; j <= i; j++) { if (!Number.isFinite(c[j])) return null; sum += c[j]; }
+        return sum / n;
+    });
+}
 // Seria NATR (%) dla wykresu: ATR(n) z True Range (RMA z ziarnem SMA jak ta.atr) / zamknięcie; null przed pierwszym pełnym oknem i w lukach danych.
 function natrSeries(h, l, c, n = 14) {
     const out = new Array(c.length).fill(null), tr = [];
@@ -609,6 +618,19 @@ function darvasSvg(full, win, opts = {}) {
                 + `</g>`);
         }
     }
+    // SMA 20 tygodni z zamknięć (liczona na całej historii, więc okno / suwak nie zmienia wartości); poza skalą ceny jest przycięta, nie wpływa na zakres osi
+    {
+        const sm = darvasSma(full.c, 20), pts = [];
+        for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (sm[i] !== null) pts.push(`${x(i).toFixed(1)},${y(sm[i]).toFixed(1)}`);
+        if (pts.length > 1) {
+            const lastI = (() => { for (let i = Math.min(endExcl, lastReal + 1) - 1; i >= start; i--) if (sm[i] !== null) return i; return -1; })();
+            out.push(`<clipPath id="darvasSmaClip"><rect x="${L.left}" y="${L.top}" width="${W - L.left - L.right}" height="${ph}"/></clipPath>`
+                + `<g clip-path="url(#darvasSmaClip)" pointer-events="none"><polyline points="${pts.join(" ")}" fill="none" stroke="#0e0f13" stroke-width="${fs(3.2)}" opacity="0.5" stroke-linejoin="round"/>`
+                + `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0b429" stroke-width="${fs(1.5)}" stroke-linejoin="round"><title>SMA 20 tygodni</title></polyline>`
+                + `</g>`
+                + (lastI >= 0 && Number.isFinite(sm[lastI]) && y(sm[lastI]) > L.top + 10 && y(sm[lastI]) < L.top + ph ? `<text x="${(x(lastI) - 6).toFixed(1)}" y="${(y(sm[lastI]) + 14).toFixed(1)}" text-anchor="end" font-size="${fs(9)}" font-weight="700" fill="#f0b429" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">SMA 20</text>` : ""));
+        }
+    }
     const lastC = full.c[lastReal], lastPrev = (() => { for (let i = lastReal - 1; i >= 0; i--) if (Number.isFinite(full.c[i])) return full.c[i]; return null; })();
     if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="${lastPrev === null ? "#9aa0ab" : lastC >= lastPrev ? "#4ee08a" : "#ff6b6b"}" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
     // podświetlenie poziomów (ustawiane w attachDarvasHover): 3 linie podziałki (góra boxa, dół, dół strefy zagrożenia) z ceną na osi — widoczne tylko przy najechaniu / przytrzymaniu boxa
@@ -803,5 +825,5 @@ function attachDarvasHover(container, full, readoutEl) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, darvasSma, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
 }
