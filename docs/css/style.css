@@ -1191,3 +1191,5 @@ body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-
 .watch-lists .ml-btn { background: var(--panel-alt); border: 1px solid var(--border); border-radius: 999px; padding: 4px 12px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
 .watch-lists .ml-btn.active { background: var(--accent, #2ee6c5); border-color: var(--accent, #2ee6c5); color: #05140f; font-weight: 600; }
 .watch-lists .ml-btn small { opacity: .75; margin-left: 4px; }
+.box-natr { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 8px; background: #262a35; font-size: 11px; white-space: nowrap; }
+.box-natr.warn { color: #ffd166; }

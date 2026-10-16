@@ -61,6 +61,8 @@ const browserGlobals = {
     boxAddOn: "readonly",
     darvasPatternBoxes: "readonly",
     darvasInitialStop: "readonly",
+    boxNatr: "readonly",
+    natrGrade: "readonly",
     heatmapHtml: "readonly",
     heatMetrics: "readonly",
     squarify: "readonly",

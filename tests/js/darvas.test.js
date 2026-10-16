@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml } = require("../../docs/js/darvas.js");
+const { darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, boxNatr, natrGrade, natrSeries, darvasOverview } = require("../../docs/js/darvas.js");
 
 // schodek: 100 → box 100–110 (dół 104 potwierdzony), wybicie 112 → box 112–120 …
 const SERIES = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118, 121];
@@ -232,4 +232,39 @@ test("Desktop: Boxy — spółka z samym topem trafia do sekcji z linią jako bo
     const ov = darvasOverview([{ ticker: "LIN", price: 111, c: [100, 110, 108, 107, 106, 111, 113], v: [] }], weeks, {});
     const row = [...ov.buy, ...ov.check, ...ov.hold, ...ov.wait].find(r => r.ticker === "LIN");
     assert.ok(row && row.box.line === true && row.box.bottom === 101.2);
+});
+
+test("boxNatr: średni True Range tygodni boxa w % średniego zamknięcia, luka się liczy", () => {
+    const n = 8, c = Array(n).fill(100), h = Array(n).fill(102), l = Array(n).fill(98);
+    assert.equal(boxNatr(h, l, c, 0, n - 1), 4);   // TR = 4 przy cenie 100
+    const hg = h.slice(), lg = l.slice(), cg = c.slice();
+    hg[5] = 112; lg[5] = 108; cg[5] = 110;   // luka +10 od poprzedniego zamknięcia: TR = 12
+    assert.ok(boxNatr(hg, lg, cg, 0, n - 1) > 4);
+    assert.equal(boxNatr(h, l, c, 0, 2), null);   // mniej niż 3 tygodnie danych
+    assert.equal(boxNatr(h, l, c, 0, n + 5), 4);   // i1 poza danymi jest przycinane
+});
+
+test("natrGrade: skala z Blueprintu (< 5 ciasny, < 8 dobry, < 12 luźny, dalej za szeroki)", () => {
+    assert.equal(natrGrade(3).key, "tight");
+    assert.equal(natrGrade(7.9).key, "ok");
+    assert.equal(natrGrade(10).key, "loose");
+    assert.equal(natrGrade(20).key, "wide");
+    assert.equal(natrGrade(null).key, "na");
+});
+
+test("darvasOverview: wiersz niesie NATR boxa, gdy są h i l", () => {
+    const c = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118, 121];
+    const h = c.map(v => v + 2), l = c.map(v => v - 2);
+    const weeks = c.map((_, i) => `2026-01-${String(i + 1).padStart(2, "0")}`);
+    const ov = darvasOverview([{ ticker: "AAA", price: 121, c, v: c.map(() => 1000), h, l }], weeks);
+    const rows = Object.values(ov).flat().filter(r => r.ticker === "AAA");
+    assert.ok(rows.length > 0 && rows.some(r => Number.isFinite(r.natr) && r.natr > 0));
+});
+
+test("natrSeries: zgodna z NATR boxa na stałym zakresie i pusta przed pełnym oknem", () => {
+    const n = 30, c = Array(n).fill(100), h = Array(n).fill(102), l = Array(n).fill(98);
+    const ns = natrSeries(h, l, c);
+    assert.equal(ns[10], null);
+    assert.equal(ns[n - 1], 4);
+    assert.equal(natrSeries([], [], []).length, 0);
 });

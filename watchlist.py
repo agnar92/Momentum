@@ -115,7 +115,7 @@ EST_PERIODS = ("0y", "+1y")  # bieżący i następny rok obrachunkowy (Yahoo nie
 EST_SEED_DAYS = {"90daysAgo": 90, "60daysAgo": 60, "30daysAgo": 30, "7daysAgo": 7}
 FINVIZ_KEYS = ("company", "sector", "industry", "market_cap", "pe", "forward_pe",
                "eps_this_y", "eps_next_y", "eps_past_5y", "eps_next_5y", "roe", "earnings", "recom", "finviz_target", "inst_own", "inst_trans",
-               "sales_qq", "sales_past_5y", "shs_float", "shs_outstanding", "insider_own", "debt_eq")
+               "sales_qq", "sales_past_5y", "shs_float", "shs_outstanding", "insider_own", "debt_eq", "atr_fv")
 
 
 # ============================================================================
@@ -373,6 +373,39 @@ def weekly_macd_above_signal(weekly_close, fast=12, slow=26, sig=9):
     return bool(macd[-1] > signal[-1])
 
 
+NATR_WEEKS = 14   # okres ATR (jak w TradingView / Finviz)
+
+
+def weekly_natr(wk_ohlc, n=NATR_WEEKS):
+    """NATR = 100 · ATR(n) / zamknięcie na TYGODNIOWYCH świecach (ATR wygładzany jak ta.atr w TradingView: RMA z ziarnem SMA). Blueprint: konsolidacja ma mieć NATR < 8.
+    None przy historii krótszej niż n + 1 tygodni."""
+    hi, lo, c = (wk_ohlc[k].astype(float).tolist() for k in ("High", "Low", "Close"))
+    if len(c) < n + 1:
+        return None
+    tr = [max(hi[i] - lo[i], abs(hi[i] - c[i - 1]), abs(lo[i] - c[i - 1])) for i in range(1, len(c))]
+    atr = sum(tr[:n]) / n
+    for v in tr[n:]:
+        atr = (atr * (n - 1) + v) / n
+    return _num(atr / c[-1] * 100, 2) if c[-1] > 0 else None
+
+
+def blueprint_weekly_fields(wk_ohlc):
+    """Kryteria wejścia z Blueprintu na ostatniej TYGODNIOWEJ świecy (tylko informacja): zmiana zamknięcia r/r tygodniowa (świeca wybicia 5–20 %), zamknięcie najwyższe z 10 tygodni,
+    cena nad 20-tygodniową średnią, wolumen vs poprzedni tydzień (≥ +30 %)."""
+    c = wk_ohlc["Close"].astype(float)
+    v = wk_ohlc["Volume"].astype(float)
+    out = {"wk_chg_pct": None, "wk_hi10_close": None, "pct_above_sma20w": None, "wk_vol_wow_pct": None}
+    if len(c) >= 2 and c.iloc[-2] > 0:
+        out["wk_chg_pct"] = _num((c.iloc[-1] / c.iloc[-2] - 1) * 100, 1)
+    if len(c) >= 10:
+        out["wk_hi10_close"] = bool(c.iloc[-1] >= c.tail(10).max())
+    if len(c) >= 20 and c.tail(20).mean() > 0:
+        out["pct_above_sma20w"] = _num((c.iloc[-1] / c.tail(20).mean() - 1) * 100, 1)
+    if len(v) >= 2 and v.iloc[-2] > 0:
+        out["wk_vol_wow_pct"] = _num((v.iloc[-1] / v.iloc[-2] - 1) * 100, 0)
+    return out
+
+
 def compute_metrics(df, bench_w=None):
     """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
     bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
@@ -430,6 +463,8 @@ def compute_metrics(df, bench_w=None):
         "pct_above_sma50": _num((price / sma50 - 1) * 100) if sma50 else None,
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
         "macd_w_above": weekly_macd_above_signal(wk_close),
+        "natr_w": weekly_natr(wk_ohlc),
+        **blueprint_weekly_fields(wk_ohlc),
         "pct_above_sma10w": _num((price / sma10w - 1) * 100) if sma10w else None,
         "pct_above_sma40w": _num((price / sma40w - 1) * 100) if sma40w else None,
         "pct_from_high_52w": _num((price / high_52w - 1) * 100, 1) if high_52w > 0 else None,
@@ -1894,6 +1929,8 @@ def build_stocks(finviz_rows, frames, now_utc=None, bench_df=None):
         stock.update(metrics)
         stock["finviz_upside_pct"] = finviz_upside(stock.get("finviz_target"), stock.get("price"))
         stock["inst_sponsor"] = institutional_flag(stock.get("inst_own"), stock.get("inst_trans"))
+        atr_fv, px = stock.get("atr_fv"), stock.get("price")
+        stock["natr_d"] = _num(atr_fv / px * 100, 2) if atr_fv and px else None   # dzienny NATR z ATR Finviza i naszej ostatniej ceny
         stocks.append(stock)
     add_rs_rating(stocks)
     add_accdis_rating(stocks)

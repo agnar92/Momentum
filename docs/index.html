@@ -60,6 +60,10 @@
                 <label class="field" title="Filtr po własnym score wpisanym ręcznie (spółki bez score odpadają, gdy ustawisz granicę)"><span>Score od:</span><input type="number" step="any" id="scoreMin" placeholder="–"></label>
                 <label class="field"><span>do:</span><input type="number" step="any" id="scoreMax" placeholder="–"></label>
                 <label class="field"><span>Sektor:</span><select id="sectorSelect"><option value="">wszystkie</option></select></label>
+                <label class="field" title="NATR = ATR(14 tygodni) / cena w %. Blueprint: konsolidacja ma mieć NATR poniżej 8 — im niższy, tym spokojniejsza, ciaśniejsza spółka. Puste = bez filtra; spółki bez policzonego NATR (krótka historia) odpadają, gdy ustawisz próg."><span>Maks. NATR tyg. (%):</span><input type="number" id="natrMax" min="0" step="0.5" placeholder="np. 8"></label>
+            </fieldset>
+            <fieldset class="filter-group"><legend>📦 Boxy</legend>
+                <label class="field" title="Jakość samego boxa Darvasa wg NATR: średni True Range tygodni boxa / cena. Blueprint: < 8 (poniżej 5 = ciasny). Puste = bez filtra. Przypięte (monitorowane) boxy zawsze zostają."><span>Maks. NATR boxa (%):</span><input type="number" id="boxNatrMax" min="0" step="0.5" placeholder="np. 8"></label>
             </fieldset>
             <fieldset class="filter-group"><legend>🏆 CANSLIM</legend>
                 <label class="field" title="Do zakładki CANSLIM wchodzą spółki spełniające co najmniej tyle z 7 kryteriów C A N S L I M"><span>Min. kryteriów (z 7):</span><input type="number" id="csMin" min="0" max="7" step="1"></label>
