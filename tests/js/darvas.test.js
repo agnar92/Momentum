@@ -48,8 +48,8 @@ test("darvasSvg: pudełka, punkty kupna i stopu; mało danych = komunikat", () =
     const lineSvg = darvasSvg(withLine, { n: 7, end: 7 });
     assert.match(lineSvg, /data-box="110\|101\.2\|linia\|0\|1\|5"/);   // klikalna niebieska linia samego topu (stop 8 %)
     assert.match(lineSvg, /stroke="#3b9cff" stroke-width="2" stroke-dasharray="6 4"/);
-    assert.match(lineSvg, /stroke="#ff6b6b" stroke-width="1.6" stroke-dasharray="4 3"/);   // stop 8 % pod linią topu widoczny od razu
-    assert.match(lineSvg, /stop 8 % · 101\.2/);
+    assert.doesNotMatch(lineSvg, /stroke="#ff6b6b" stroke-width="1.6" stroke-dasharray="4 3"/);   // stop 8 % NIE jest rysowany na stałe (tylko po zaznaczeniu / przypięciu)
+    assert.doesNotMatch(lineSvg, /stop 8 % · 101\.2/);
     assert.match(lineSvg, /stroke="#4ee08a" stroke-width="[\d.]+" stroke-linecap="round"/);   // linia cen: zielony odcinek przy wzroście
     assert.match(lineSvg, /stroke="#ff6b6b" stroke-width="[\d.]+" stroke-linecap="round"/);   // czerwony przy spadku
     assert.match(darvasSvg({ c: [1], weeks: ["2026-01-01"], n: 1 }, { n: 1, end: 1 }), /Za mało danych/);

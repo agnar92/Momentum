@@ -427,11 +427,7 @@ function darvasSvg(full, win, opts = {}) {
     topLines.forEach(l => {
         const x0 = x(Math.max(start, l.i0)) - bw / 2, x1 = l.open ? W - L.right : x(Math.min(endExcl - 1, l.i1)) + bw / 2, yy = y(l.top), li = darvasLineInfo(l.top);
         out.push(`<line x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${yy.toFixed(1)}" y2="${yy.toFixed(1)}" stroke="#3b9cff" stroke-width="2" stroke-dasharray="6 4" pointer-events="none"/>`);
-        const ys = y(li.stop);   // stop loss 8 % pod linią topu: czerwona przerywana linia na całej długości linii + cena (przy otwartej linii także na osi)
-        out.push(`<line x1="${x0.toFixed(1)}" x2="${x1.toFixed(1)}" y1="${ys.toFixed(1)}" y2="${ys.toFixed(1)}" stroke="#ff6b6b" stroke-width="1.6" stroke-dasharray="4 3" pointer-events="none"><title>Stop loss ${DARVAS_LINE_STOP_PCT} % pod topem ${li.entry} = ${li.stop}</title></line>`);
-        const stopTxt = `stop ${DARVAS_LINE_STOP_PCT} % · ${li.stop}`, stopW = stopTxt.length * fs(10) * 0.62;
-        out.push(`<text x="${Math.max(L.left + 2, Math.min(x0 + 4, W - L.right - stopW - 4)).toFixed(1)}" y="${(ys + fs(11)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#ff8a8a" stroke="#0e0f13" stroke-width="3" paint-order="stroke" pointer-events="none">${stopTxt}</text>`);   // podpis nie wchodzi na oś cen
-        if (l.open) out.push(`<rect x="${W - L.right}" y="${(ys - fs(7.5)).toFixed(1)}" width="${L.right - 2}" height="${fs(15)}" rx="2" fill="#ff6b6b" pointer-events="none"/><text x="${W - L.right + 3}" y="${(ys + fs(4)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#0e0f13" pointer-events="none">${li.stop.toFixed(2)}</text>`);
+        // stop 8 % pod linią NIE jest rysowany na stałe: pokazuje się po stuknięciu w linię (podświetlenie poziomów w attachDarvasHover) albo gdy linia jest przypięta
         out.push(`<rect class="box-hit line-hit" data-box="${l.top}|${li.stop}|linia|0|${l.i0}|${l.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${(yy - 6).toFixed(1)}" width="${Math.max(2, x1 - x0).toFixed(1)}" height="12" fill="transparent"><title>Top ${li.entry} bez potwierdzonego dołu${l.open ? "" : " — przebity"} · stop ${DARVAS_LINE_STOP_PCT} % = ${li.stop} — kliknij</title></rect>`);
     });
     // podpisy boxów nie mogą się nakładać (flat base + przypięty box leżą często w tym samym miejscu): kolejny podpis ucieka w górę o wysokość wiersza
