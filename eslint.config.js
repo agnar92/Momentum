@@ -28,6 +28,7 @@ const browserGlobals = {
     fundMiniModel: "readonly",
     fundMiniHtml: "readonly",
     macdWeeklyState: "readonly",
+    macdSeries: "readonly",
     posMiniSvg: "readonly",
     CSS: "readonly",
     tvUrlFor: "readonly",

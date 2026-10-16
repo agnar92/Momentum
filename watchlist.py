@@ -342,6 +342,37 @@ def fresh_breakout_base(bases, index, max_age_weeks=2):
     return last if end_i >= len(index) - 1 - max_age_weeks else None
 
 
+def _ema_tv(values, n):
+    """EMA jak w TradingView (ta.ema): ziarno = SMA z pierwszych n wartości, potem alpha = 2/(n+1). None przed ziarnem."""
+    out = [None] * len(values)
+    k = 2 / (n + 1)
+    prev = None
+    seed = []
+    for i, v in enumerate(values):
+        if v is None or v != v:
+            continue
+        if prev is None:
+            seed.append(v)
+            if len(seed) == n:
+                prev = sum(seed) / n
+                out[i] = prev
+        else:
+            prev = v * k + prev * (1 - k)
+            out[i] = prev
+    return out
+
+
+def weekly_macd_above_signal(weekly_close, fast=12, slow=26, sig=9):
+    """MACD (12, 26, 9) na tygodniowych zamknięciach: True = MACD nad linią sygnału na ostatniej świecy, False = pod, None = za krótka historia."""
+    c = [float(v) for v in weekly_close]
+    f, sl = _ema_tv(c, fast), _ema_tv(c, slow)
+    macd = [a - b if a is not None and b is not None else None for a, b in zip(f, sl)]
+    signal = _ema_tv(macd, sig)
+    if not c or macd[-1] is None or signal[-1] is None:
+        return None
+    return bool(macd[-1] > signal[-1])
+
+
 def compute_metrics(df, bench_w=None):
     """Wskaźniki z dziennych świec jednej spółki (kolumny Open/High/Low/Close/Volume, rosnący indeks dat).
     bench_w = tygodniowe zamknięcia S&P 500 (kontekst rynku dla miseczek), opcjonalnie."""
@@ -398,6 +429,7 @@ def compute_metrics(df, bench_w=None):
         "dollar_volume_avg": _num(dollar_volume, 0),
         "pct_above_sma50": _num((price / sma50 - 1) * 100) if sma50 else None,
         "pct_above_sma200": _num((price / sma200 - 1) * 100) if sma200 else None,
+        "macd_w_above": weekly_macd_above_signal(wk_close),
         "pct_above_sma10w": _num((price / sma10w - 1) * 100) if sma10w else None,
         "pct_above_sma40w": _num((price / sma40w - 1) * 100) if sma40w else None,
         "pct_from_high_52w": _num((price / high_52w - 1) * 100, 1) if high_52w > 0 else None,
