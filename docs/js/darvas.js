@@ -579,6 +579,31 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<line id="dHl${k}" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="1.6" opacity="0" pointer-events="none"/>`);
         out.push(`<g id="dHt${k}" opacity="0" pointer-events="none"><rect x="${W - L.right}" y="0" width="${L.right - 1}" height="${fs(14)}" rx="2" fill="#ffffff"/><text x="${W - L.right + 3}" y="0" font-size="${fs(9.5)}" font-weight="700" fill="#0e0f13"></text></g>`);
     }
+    // panel MACD (12, 26, 9) tygodniowy: ukryty, pokazuje się POD wykresem po zaznaczeniu boxa (attachDarvasHover) — żeby było widać, gdzie leżą linie MACD i sygnału względem boxa;
+    // zakres tygodni zaznaczonego boxa jest podświetlony (dMacdSpan). Oś czasu ta sama co wykres, panel zasłania tylko dół obszaru wykresu na czas zaznaczenia.
+    if (typeof macdSeries === "function") {
+        const ms = macdSeries(full.c), pH = Math.max(70, Math.min(130, ph * 0.24)), pY1 = H - L.bottom - 58, pY0 = pY1 - pH, pW = W - L.left - L.right;
+        const idx = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (ms.macd[i] !== null) idx.push(i);
+        if (idx.length > 2) {
+            const vals = idx.flatMap(i => [ms.macd[i], ms.signal[i] ?? 0, ms.hist[i] ?? 0]);
+            const amp = Math.max(...vals.map(Math.abs)) * 1.1 || 1, ym = v => pY0 + 6 + (pH - 12) * (1 - (v + amp) / (2 * amp));
+            const g = [`<g id="dMacd" opacity="0" pointer-events="none">`, `<rect x="${L.left}" y="${pY0.toFixed(1)}" width="${pW}" height="${pH.toFixed(1)}" fill="#0f141a" fill-opacity="0.95" stroke="#2c3140"/>`,
+                `<rect id="dMacdSpan" x="0" y="${pY0.toFixed(1)}" width="0" height="${pH.toFixed(1)}" fill="#ffd54a" fill-opacity="0.16"/>`,
+                `<line x1="${L.left}" x2="${W - L.right}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#4a5262" stroke-dasharray="3 3"/>`];
+            const bwm = Math.max(1, pw / slots * 0.6);
+            idx.forEach(i => { const h = ms.hist[i]; if (h === null) return; const yy = ym(h), y0 = ym(0); g.push(`<rect x="${(x(i) - bwm / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bwm.toFixed(1)}" height="${Math.max(0.5, Math.abs(yy - y0)).toFixed(1)}" fill="${h >= 0 ? "#2e9e5b" : "#c0504d"}" fill-opacity="0.8"/>`); });
+            const poly = arr => idx.filter(i => arr[i] !== null).map(i => `${x(i).toFixed(1)},${ym(arr[i]).toFixed(1)}`).join(" ");
+            g.push(`<polyline points="${poly(ms.macd)}" fill="none" stroke="#6ea8ff" stroke-width="${fs(1.8)}" stroke-linejoin="round"/>`, `<polyline points="${poly(ms.signal)}" fill="none" stroke="#ff9f43" stroke-width="${fs(1.6)}" stroke-linejoin="round"/>`);
+            idx.forEach(i => {   // przecięcia: ▼ czerwony (MACD w dół pod sygnał = wyjście), ▲ zielony
+                const a = ms.hist[i - 1], b = ms.hist[i];
+                if (a === null || a === undefined || b === null) return;
+                if (a >= 0 && b < 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) + 3).toFixed(1)} l-4,-7 h8 z" fill="#ff6b6b" transform="rotate(180 ${x(i).toFixed(1)} ${(ym(ms.macd[i]) - 0.5).toFixed(1)})"/>`);
+                else if (a < 0 && b >= 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) - 3).toFixed(1)} l-4,7 h8 z" fill="#4ee08a"/>`);
+            });
+            g.push(`<text x="${L.left + 6}" y="${(pY0 + fs(11)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#cfd5e0" stroke="#0f141a" stroke-width="3" paint-order="stroke">MACD (12, 26, 9) tyg. · <tspan fill="#6ea8ff">MACD</tspan> · <tspan fill="#ff9f43">sygnał</tspan> · ▼ MACD pod sygnałem = wyjście</text>`, `</g>`);
+            out.push(g.join(""));
+        }
+    }
     return `<svg id="chartSvg" data-geom="${[W, H, L.left, L.right, L.top, L.bottom, start, slots, lo, hi].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
 }
 
@@ -632,10 +657,21 @@ function attachDarvasHover(container, full, readoutEl) {
         el.dataset.sel = "1";
         el.setAttribute("stroke", "#ffd54a"); el.setAttribute("stroke-width", "2.6"); el.setAttribute("stroke-dasharray", "6 3");
     };
-    const deselect = () => { mark(null); selected = null; bar.hidden = true; clear(); };
+    const macdG = svg.querySelector("#dMacd"), macdSpan = svg.querySelector("#dMacdSpan");
+    const macdShow = el => {   // panel MACD pod wykresem + podświetlony zakres tygodni zaznaczonego boxa
+        if (!macdG) return;
+        if (!el) { macdG.setAttribute("opacity", "0"); return; }
+        const f = el.dataset.box.split("|"), i0 = +f[4], i1 = +f[5], [W0, , gl, gr, , , st, sl] = g, pw0 = W0 - gl - gr;
+        if (macdSpan && Number.isFinite(i0) && Number.isFinite(i1)) {
+            const xa = gl + pw0 * (Math.max(st, i0) - st) / sl, xb = gl + pw0 * (Math.min(st + sl - 1, Math.max(i1, i0 + 1)) - st + 1) / sl;
+            macdSpan.setAttribute("x", xa.toFixed(1)); macdSpan.setAttribute("width", Math.max(2, xb - xa).toFixed(1));
+        }
+        macdG.setAttribute("opacity", "1");
+    };
+    const deselect = () => { mark(null); selected = null; bar.hidden = true; clear(); macdShow(null); };
     const select = el => {
         mark(el);   // wybrany box dostaje złotą obwódkę
-        selected = el; show(el);
+        selected = el; show(el); macdShow(el);
         const [t, bt] = el.dataset.box.split("|").map(Number);
         const isPinned = el.dataset.box.split("|")[2].startsWith("przypięt");
         bar.innerHTML = `<span>${isLineBox(el) ? `📏 top ${t.toFixed(2)} · stop ${bt.toFixed(2)}` : `📦 ${bt.toFixed(2)} – ${t.toFixed(2)}`}</span><button type="button" data-act="zoom">🔍 Przybliż</button><button type="button" data-act="pin">${isPinned ? "🗑 Odepnij" : "📌 Przypnij"}</button><button type="button" data-act="close" aria-label="Odznacz">✕</button>`;
