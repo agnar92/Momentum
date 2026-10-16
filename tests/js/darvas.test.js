@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, boxNatr, natrGrade, darvasOverview } = require("../../docs/js/darvas.js");
+const { darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, boxNatr, natrGrade, natrSeries, darvasOverview } = require("../../docs/js/darvas.js");
 
 // schodek: 100 → box 100–110 (dół 104 potwierdzony), wybicie 112 → box 112–120 …
 const SERIES = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118, 121];
@@ -259,4 +259,12 @@ test("darvasOverview: wiersz niesie NATR boxa, gdy są h i l", () => {
     const ov = darvasOverview([{ ticker: "AAA", price: 121, c, v: c.map(() => 1000), h, l }], weeks);
     const rows = Object.values(ov).flat().filter(r => r.ticker === "AAA");
     assert.ok(rows.length > 0 && rows.some(r => Number.isFinite(r.natr) && r.natr > 0));
+});
+
+test("natrSeries: zgodna z NATR boxa na stałym zakresie i pusta przed pełnym oknem", () => {
+    const n = 30, c = Array(n).fill(100), h = Array(n).fill(102), l = Array(n).fill(98);
+    const ns = natrSeries(h, l, c);
+    assert.equal(ns[10], null);
+    assert.equal(ns[n - 1], 4);
+    assert.equal(natrSeries([], [], []).length, 0);
 });

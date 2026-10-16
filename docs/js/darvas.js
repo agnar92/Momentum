@@ -217,6 +217,19 @@ function boxNatr(h, l, c, i0, i1) {
     const avgC = cl.reduce((a, b) => a + b, 0) / cl.length;
     return avgC > 0 ? Math.round(tr.reduce((a, b) => a + b, 0) / tr.length / avgC * 1000) / 10 : null;
 }
+// Seria NATR (%) dla wykresu: ATR(n) z True Range (RMA z ziarnem SMA jak ta.atr) / zamknięcie; null przed pierwszym pełnym oknem i w lukach danych.
+function natrSeries(h, l, c, n = 14) {
+    const out = new Array(c.length).fill(null), tr = [];
+    let atr = null;
+    for (let i = 1; i < c.length; i++) {
+        if (![h[i], l[i], c[i], c[i - 1]].every(Number.isFinite)) continue;
+        const t = Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1]));
+        if (atr === null) { tr.push(t); if (tr.length === n) atr = tr.reduce((a, b) => a + b, 0) / n; }
+        else atr = (atr * (n - 1) + t) / n;
+        if (atr !== null && c[i] > 0) out[i] = atr / c[i] * 100;
+    }
+    return out;
+}
 // Ocena jakości boxa po NATR (skala skanera z Blueprintu: ~5 % = pełna ocena, 20 % = najgorsza; wymagane < 8).
 function natrGrade(v) {
     if (!Number.isFinite(v)) return { key: "na", label: "—", cls: "muted" };
@@ -603,17 +616,21 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<line id="dHl${k}" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="1.6" opacity="0" pointer-events="none"/>`);
         out.push(`<g id="dHt${k}" opacity="0" pointer-events="none"><rect x="${W - L.right}" y="0" width="${L.right - 1}" height="${fs(14)}" rx="2" fill="#ffffff"/><text x="${W - L.right + 3}" y="0" font-size="${fs(9.5)}" font-weight="700" fill="#0e0f13"></text></g>`);
     }
-    // panel MACD (12, 26, 9) tygodniowy: ukryty, pokazuje się POD wykresem po zaznaczeniu boxa (attachDarvasHover) — żeby było widać, gdzie leżą linie MACD i sygnału względem boxa;
-    // zakres tygodni zaznaczonego boxa jest podświetlony (dMacdSpan). Oś czasu ta sama co wykres, panel zasłania tylko dół obszaru wykresu na czas zaznaczenia.
+    // panel pod wykresem, ukryty, pokazuje się po zaznaczeniu boxa (attachDarvasHover): trzy pasma — MACD (12, 26, 9) tygodniowy, wolumen tygodnia i NATR (14 tyg.) — żeby było widać,
+    // gdzie leżą linie MACD i sygnału, czy wybicie miało wolumen i czy box jest ciasny (NATR < 8) względem boxa. Zakres tygodni zaznaczonego boxa jest podświetlony (dMacdSpan).
+    // Oś czasu ta sama co wykres, panel zasłania tylko dół obszaru wykresu na czas zaznaczenia.
     if (typeof macdSeries === "function") {
-        const ms = macdSeries(full.c), pH = Math.max(70, Math.min(130, ph * 0.24)), pY1 = H - L.bottom - 58, pY0 = pY1 - pH, pW = W - L.left - L.right;
+        const ms = macdSeries(full.c), pH = Math.max(150, Math.min(250, ph * 0.44)), pY1 = H - L.bottom - 58, pY0 = pY1 - pH, pW = W - L.left - L.right;
+        const mH = pH * 0.5, vH = pH * 0.25, nH = pH * 0.25, vY0 = pY0 + mH, nY0 = vY0 + vH;
         const idx = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (ms.macd[i] !== null) idx.push(i);
         if (idx.length > 2) {
             const vals = idx.flatMap(i => [ms.macd[i], ms.signal[i] ?? 0, ms.hist[i] ?? 0]);
-            const amp = Math.max(...vals.map(Math.abs)) * 1.1 || 1, ym = v => pY0 + 6 + (pH - 12) * (1 - (v + amp) / (2 * amp));
+            const amp = Math.max(...vals.map(Math.abs)) * 1.1 || 1, ym = v => pY0 + 6 + (mH - 12) * (1 - (v + amp) / (2 * amp));
+            const lab = (yy, txt) => `<text x="${L.left + 6}" y="${(yy + fs(11)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#cfd5e0" stroke="#0f141a" stroke-width="3" paint-order="stroke">${txt}</text>`;
             const g = [`<g id="dMacd" opacity="0" pointer-events="none">`, `<rect x="${L.left}" y="${pY0.toFixed(1)}" width="${pW}" height="${pH.toFixed(1)}" fill="#0f141a" fill-opacity="0.95" stroke="#2c3140"/>`,
                 `<rect id="dMacdSpan" x="0" y="${pY0.toFixed(1)}" width="0" height="${pH.toFixed(1)}" fill="#ffd54a" fill-opacity="0.16"/>`,
-                `<line x1="${L.left}" x2="${W - L.right}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#4a5262" stroke-dasharray="3 3"/>`];
+                `<line x1="${L.left}" x2="${W - L.right}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#4a5262" stroke-dasharray="3 3"/>`,
+                `<line x1="${L.left}" x2="${W - L.right}" y1="${vY0.toFixed(1)}" y2="${vY0.toFixed(1)}" stroke="#2c3140"/>`, `<line x1="${L.left}" x2="${W - L.right}" y1="${nY0.toFixed(1)}" y2="${nY0.toFixed(1)}" stroke="#2c3140"/>`];
             const bwm = Math.max(1, pw / slots * 0.6);
             idx.forEach(i => { const h = ms.hist[i]; if (h === null) return; const yy = ym(h), y0 = ym(0); g.push(`<rect x="${(x(i) - bwm / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bwm.toFixed(1)}" height="${Math.max(0.5, Math.abs(yy - y0)).toFixed(1)}" fill="${h >= 0 ? "#2e9e5b" : "#c0504d"}" fill-opacity="0.8"/>`); });
             const poly = arr => idx.filter(i => arr[i] !== null).map(i => `${x(i).toFixed(1)},${ym(arr[i]).toFixed(1)}`).join(" ");
@@ -624,7 +641,32 @@ function darvasSvg(full, win, opts = {}) {
                 if (a >= 0 && b < 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) + 3).toFixed(1)} l-4,-7 h8 z" fill="#ff6b6b" transform="rotate(180 ${x(i).toFixed(1)} ${(ym(ms.macd[i]) - 0.5).toFixed(1)})"/>`);
                 else if (a < 0 && b >= 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) - 3).toFixed(1)} l-4,7 h8 z" fill="#4ee08a"/>`);
             });
-            g.push(`<text x="${L.left + 6}" y="${(pY0 + fs(11)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#cfd5e0" stroke="#0f141a" stroke-width="3" paint-order="stroke">MACD (12, 26, 9) tyg. · <tspan fill="#6ea8ff">MACD</tspan> · <tspan fill="#ff9f43">sygnał</tspan> · ▼ MACD pod sygnałem = wyjście</text>`, `</g>`);
+            g.push(lab(pY0, `MACD (12, 26, 9) tyg. · <tspan fill="#6ea8ff">MACD</tspan> · <tspan fill="#ff9f43">sygnał</tspan> · ▼ MACD pod sygnałem = wyjście`));
+            // wolumen tygodnia: słupki zielone / czerwone wg kierunku zamknięcia, przerywana średnia z 10 poprzednich tygodni, złota obwódka = wolumen ≥ 1,4× średniej (reguła wybicia)
+            const vv = full.v || [], cc = full.c || [];
+            const wk = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(vv[i])) wk.push(i);
+            if (wk.length > 2) {
+                const vmax = Math.max(...wk.map(i => vv[i])) * 1.08 || 1, yv = v => vY0 + vH - 3 - (vH - 18) * (v / vmax);
+                const avgAt = i => { const prev = []; for (let j = i - 10; j < i; j++) if (Number.isFinite(vv[j])) prev.push(vv[j]); return prev.length >= 5 ? prev.reduce((a, b2) => a + b2, 0) / prev.length : null; };
+                wk.forEach(i => {
+                    const up = !(Number.isFinite(cc[i - 1]) && cc[i] < cc[i - 1]), av = avgAt(i), big = av !== null && vv[i] >= DARVAS_BREAKOUT_VOL * av, yy = yv(vv[i]);
+                    g.push(`<rect x="${(x(i) - bwm / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${bwm.toFixed(1)}" height="${Math.max(0.5, vY0 + vH - 3 - yy).toFixed(1)}" fill="${up ? "#2e9e5b" : "#c0504d"}" fill-opacity="0.85"${big ? ` stroke="#ffd54a" stroke-width="1.4"` : ""}/>`);
+                });
+                const avgPts = wk.map(i => [i, avgAt(i)]).filter(p2 => p2[1] !== null).map(p2 => `${x(p2[0]).toFixed(1)},${yv(p2[1]).toFixed(1)}`).join(" ");
+                if (avgPts) g.push(`<polyline points="${avgPts}" fill="none" stroke="#cfd5e0" stroke-width="${fs(1.2)}" stroke-dasharray="4 3"/>`);
+                g.push(lab(vY0, `Wolumen tyg. · przerywana = średnia 10 tyg. · złota obwódka ≥ ${DARVAS_BREAKOUT_VOL}× średniej`));
+            }
+            // NATR (14 tyg.): linia, zielona strefa poniżej 8 (Blueprint), przerywany próg 8
+            const nt = natrSeries(full.h || [], full.l || [], full.c || []);
+            const ni = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (nt[i] !== null) ni.push(i);
+            if (ni.length > 2) {
+                const nmax = Math.max(12, ...ni.map(i => nt[i])) * 1.1, yn = v => nY0 + nH - 3 - (nH - 18) * (v / nmax);
+                g.push(`<rect x="${L.left}" y="${yn(NATR_GOOD).toFixed(1)}" width="${pW}" height="${(nY0 + nH - 3 - yn(NATR_GOOD)).toFixed(1)}" fill="#2e9e5b" fill-opacity="0.12"/>`,
+                    `<line x1="${L.left}" x2="${W - L.right}" y1="${yn(NATR_GOOD).toFixed(1)}" y2="${yn(NATR_GOOD).toFixed(1)}" stroke="#4ee08a" stroke-dasharray="4 3" stroke-opacity="0.7"/>`,
+                    `<polyline points="${ni.map(i => `${x(i).toFixed(1)},${yn(nt[i]).toFixed(1)}`).join(" ")}" fill="none" stroke="#b57cff" stroke-width="${fs(1.8)}" stroke-linejoin="round"/>`);
+                g.push(lab(nY0, `NATR (14 tyg.) · zielone pole = poniżej ${NATR_GOOD} (ciasna konsolidacja) · teraz ${nt[ni[ni.length - 1]].toFixed(1)} %`));
+            }
+            g.push(`</g>`);
             out.push(g.join(""));
         }
     }
@@ -761,5 +803,5 @@ function attachDarvasHover(container, full, readoutEl) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
+    module.exports = { attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT };
 }
