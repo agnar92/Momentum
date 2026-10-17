@@ -910,7 +910,7 @@ function darCardSvg(full, opts = {}) {
     const a = darCardAnalyze(full.c, full.v);
     if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Brak boxów do narysowania na karcie Darvasa.</text></svg>`;
     const range = darCardPastRange(full.weeks, full.c);
-    const tableH = fs(16) * (range.length + 1) + 8;
+    const tableH = fs(14) * (range.length + 1) + fs(16);
     const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: tableH + fs(36) };
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const lastReal = full.c.reduce((q, v, i) => (Number.isFinite(v) ? i : q), -1), px = full.c[lastReal];
@@ -928,16 +928,16 @@ function darCardSvg(full, opts = {}) {
         out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="#8b8670" stroke-width="1"/>`);
         out.push(`<text x="${L.left - 4}" y="${(y(t) + 3.5).toFixed(1)}" font-size="${fs(9.5)}" fill="#3a3730" text-anchor="end">${t}</text>`);
     });
-    out.push(`<text x="${L.left + 6}" y="${fs(16)}" font-size="${fs(14)}" font-weight="800" fill="#2b2a24" letter-spacing="2">DAR·CARD</text><text x="${W - L.right - 4}" y="${fs(16)}" font-size="${fs(10)}" fill="#5a574a" text-anchor="end">${Math.min(12, Math.round((lastReal + 1) / 21))} mies.</text>`);
+    out.push(`<text x="${L.left + 6}" y="${fs(16)}" font-size="${fs(14)}" font-weight="800" fill="#2b2a24" letter-spacing="2">DAR·CARD</text>`);
     const n = a.boxes.length, slot = pw / Math.max(n, 3), bw = slot * 0.72;
-    const mon = i => { const d = full.weeks && full.weeks[i]; return d ? `${d.slice(5, 7)}/${d.slice(2, 4)}` : ""; };
+    const MONTHS_PL = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
+    const asOf = full.weeks && full.weeks[lastReal] ? `${MONTHS_PL[+full.weeks[lastReal].slice(5, 7) - 1] || ""} ${full.weeks[lastReal].slice(0, 4)}` : "";   // jak w książce: pod nazwą spółki miesiąc i rok
     a.boxes.forEach((b, k) => {
         const x0 = L.left + slot * k + (slot - bw) / 2, yT = y(b.top), yB = y(b.bottom), yZ = y(b.bottom * (1 - DARVAS_STOP_PCT / 100));
         const topmost = b.i0 === a.topmost.i0;
         const pinned = opts.pinBox && !opts.pinBox.line && Math.abs(opts.pinBox.top - b.top) < 0.005 && Math.abs(opts.pinBox.bottom - b.bottom) < 0.005;   // przypięty (monitorowany) box: złota obwódka i 📌
         out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|1|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="#ffffff" stroke="${pinned ? "#d4a017" : b.inChain || topmost ? "#111" : "#8b8670"}" stroke-width="${pinned ? 3.2 : topmost ? 2.2 : 1.4}"${b.inChain || topmost ? "" : ' fill-opacity="0.6"'}><title>Box ${b.bottom}–${b.top} — stuknij: zaznacz, przypnij, panel MACD</title></rect>`);
         if (pinned) out.push(`<text x="${(x0 + bw - 2).toFixed(1)}" y="${(yT + fs(12)).toFixed(1)}" font-size="${fs(11)}" text-anchor="end">📌</text>`);
-        out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(H - tableH - fs(30)).toFixed(1)}" font-size="${fs(8.5)}" fill="#5a574a" text-anchor="middle">${mon(b.i0)}</text>`);
         out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(2, Math.min(yZ - yB, 9)).toFixed(1)}" fill="url(#dcHatch)" stroke="#333" stroke-width="0.8"/>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yT + fs(11)).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.top * 100) / 100}</text>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yZ + fs(10)).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.bottom * 100) / 100}</text>`);
@@ -958,11 +958,15 @@ function darCardSvg(full, opts = {}) {
     const ty = H - tableH - 4;   // dół karty: spółka i „Past Price Range” (grupa #dcTable chowa się na czas panelu)
     out.push(`<g id="dcTable">`);
     out.push(`<text x="${L.left + 6}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(opts.bookTitle || "")}</text>`);
-    out.push(`<text x="${L.left + 6}" y="${ty + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">Past Price Range</text><text x="${L.left + 110 * (compact ? 1.25 : 1)}" y="${ty + fs(13)}" font-size="${fs(10)}" fill="#2b2a24">High</text><text x="${L.left + 160 * (compact ? 1.25 : 1)}" y="${ty + fs(13)}" font-size="${fs(10)}" fill="#2b2a24">Low</text>`);
+    out.push(`<text x="${L.left + 6}" y="${ty + fs(10)}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${asOf}</text>`);
+    const k = compact ? 1.25 : 1, tx = W - L.right - 6 - 170 * k, cH = tx + 70 * k, cL = tx + 125 * k;   // tabelka po prawej jak w książce
+    out.push(`<text x="${tx}" y="${ty - 4}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">Past Price Range</text>`);
     range.forEach((r, i) => {
-        const yy = ty + fs(13) + fs(14) * (i + 1);
-        out.push(`<text x="${L.left + 6}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.year}</text><text x="${L.left + 110 * (compact ? 1.25 : 1)}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.hi}</text><text x="${L.left + 160 * (compact ? 1.25 : 1)}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.lo}</text>`);
+        const yy = ty + fs(14) * i + fs(10);
+        out.push(`<text x="${tx}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.year}</text><text x="${cH}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.hi}</text><text x="${cL}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.lo}</text>`);
     });
+    const hy = ty + fs(14) * range.length + fs(10);
+    out.push(`<text x="${cH}" y="${hy}" font-size="${fs(10)}" fill="#2b2a24">High</text><text x="${cL}" y="${hy}" font-size="${fs(10)}" fill="#2b2a24">Low</text>`);
     out.push(`</g>`);
     return `<svg id="chartSvg" data-ccgeom="${[W, H, L.left, L.right].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${out.join("")}</svg>`;
 }
