@@ -12,6 +12,10 @@ name: Watchlisty
 # Ręczne odpalenie: zakładka Actions -> "Watchlisty" -> "Run workflow" (albo przycisk „Odśwież dane” w zakładce Watchlisty), lub lokalnie:
 #   python watchlists_scan.py --action add --name "Wolumen" --filters "cap:midover sh_avgvol:o1000 ta_change:u5 ta_sma20:pa ta_sma200:pa"
 on:
+  # Codziennie po sesji w Nowym Jorku (pon–pt 21:50 UTC, po „Daily Watchlist Refresh” o 21:30 — wspólna kolejka „pages”): refresh wszystkich list,
+  # żeby stan karty Darvasa (Do kupna / Kup dziś / Gotowe) i powiadomienia liczyły się z dzisiejszego zamknięcia. Z harmonogramu akcja = refresh.
+  schedule:
+    - cron: '50 21 * * 1-5'
   workflow_dispatch:
     inputs:
       action:
@@ -28,6 +32,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
   pages: write
   id-token: write
 
@@ -65,7 +70,7 @@ jobs:
 
       - name: Watchlisty scan (saved lists + Finviz + yfinance prices + EPS)
         env:
-          ACTION: ${{ inputs.action }}
+          ACTION: ${{ inputs.action || 'refresh' }}   # z harmonogramu inputs są puste
           LIST_NAME: ${{ inputs.name }}
           FILTERS: ${{ inputs.filters }}
         run: python watchlists_scan.py --action "$ACTION" --name "$LIST_NAME" --filters "$FILTERS"
@@ -99,6 +104,14 @@ jobs:
           else
             echo "Brak zmian w docs/data/ — pomijam commit."
           fi
+
+      # Powiadomienia o nowych sygnałach karty Darvasa (Issue „📦 Darvas — sygnały” → e-mail / push GitHub Mobile); GIST_TOKEN opcjonalny (sygnały SPRZEDAJ dla Twoich pozycji).
+      - name: Darvas notifications
+        continue-on-error: true
+        env:
+          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python darvas_notify.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

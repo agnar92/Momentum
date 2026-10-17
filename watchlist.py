@@ -1925,6 +1925,146 @@ def build_daily_block(cleaned, bench, n_days=CHART_DAYS):
 
 
 # ============================================================================
+# DARVAS (KARTA Z KSIĄŻKI) — port 1:1 z docs/js/darvas.js (darvasScan + darCardAnalyze), test zgodności: tests/fixtures/darvas_parity.json
+# Liczone tutaj, żeby aplikacja nie musiała pobierać wykresów, by pokazać listę „Do kupna” (pola dv_* w watchlist*.json).
+# ============================================================================
+DARVAS_CONFIRM = 3          # top / dół = zamknięcie, którego nie przebiły 3 KOLEJNE sesje PO nim
+DARVAS_ZONE_PCT = 5         # strefa zagrożenia: 5 % pod dołem boxa
+DARVAS_START_STOP_PCT = 10  # stop przy pierwszym wybiciu: 10 % pod wejściem
+DARCARD_SESSIONS = 126      # karta = boxy z ostatniego pół roku
+
+
+def _js_round(x, nd=2):
+    """Math.round(x·10^nd) / 10^nd jak w JS (połówki w górę), żeby wyniki były identyczne z frontendem."""
+    f = 10 ** nd
+    return math.floor(x * f + 0.5) / f
+
+
+def darvas_scan(c, confirm=DARVAS_CONFIRM, bottom_confirm=None):
+    """Boxy Darvasa na zamknięciach (lista float / None) — kopia darvasScan (minWeeks = 0, bez minimalnej wysokości).
+    -> lista słowników {i0, i1, end, top, bottom, outcome: open|up|down, cancelled}."""
+    bottom_confirm = confirm if bottom_confirm is None else bottom_confirm
+    ok = lambda v: v is not None and math.isfinite(v)   # noqa: E731
+    n = len(c)
+    while n > 0 and not ok(c[n - 1]):
+        n -= 1
+    bxs = []
+    i, ref = 0, None
+    while i < n:
+        ref_top = bxs[ref]["top"] if ref is not None else None
+        ref_bot = bxs[ref]["bottom"] if ref is not None else None
+        top, t, run_max = None, -1, -math.inf
+        for k in range(i, n):
+            if not ok(c[k]) or c[k] < run_max or (ref_top is not None and c[k] <= ref_top):
+                continue
+            run_max = c[k]
+            if k + confirm < n and all(ok(c[m]) and c[m] <= c[k] for m in range(k + 1, k + confirm + 1)):
+                t, top = k, c[k]
+                break
+        if ref is not None:
+            lim = t if t >= 0 else n - 1
+            hit = next((k for k in range(i, lim + 1) if ok(c[k]) and c[k] < ref_bot), -1)
+            if hit >= 0:
+                bxs[ref]["end"], bxs[ref]["cancelled"], ref, i = hit, True, None, hit
+                continue
+        if t < 0:
+            break
+        bottom, bi, confirmed, end, outcome, cancel = math.inf, -1, False, -1, "open", None
+        for j in range(t + 1, n):
+            v = c[j]
+            good = ok(v)
+            if good and v > top:
+                outcome, end = "up", j
+                break
+            if good and ref is not None and not confirmed and v < ref_bot:
+                cancel = j
+                break
+            if confirmed and good and v < bottom:
+                outcome, end = "down", j
+                break
+            if not confirmed and good and v < bottom:
+                bottom, bi = v, j
+            if not confirmed and bi >= 0 and j - bi >= bottom_confirm:
+                confirmed = True
+        if cancel is not None:
+            bxs[ref]["end"], bxs[ref]["cancelled"], ref, i = cancel, True, None, cancel
+            continue
+        if end < 0:
+            end = n - 1
+        if confirmed and math.isfinite(bottom) and top > bottom:
+            if ref is not None:
+                bxs[ref]["end"] = t
+            bxs.append({"i0": t, "i1": end, "end": end, "top": top, "bottom": bottom, "outcome": outcome, "cancelled": False})
+            ref = len(bxs) - 1 if outcome == "up" else None
+        if outcome == "open":
+            break
+        i = end
+    if ref is not None and not bxs[ref]["cancelled"]:
+        bxs[ref]["end"] = n - 1
+    return bxs
+
+
+def darvas_card_state(c):
+    """Stan karty Darvasa na ostatnim zamknięciu — kopia darCardAnalyze (bez ostrzeżeń, które nie zmieniają stanu).
+    -> {state: BUY|READY|WAIT|HOLD|SELL|OUT|NONE, n (kolejne rosnące boxy), top, bottom, zone, stop, dist (% do punktu kupna)}."""
+    ok = lambda v: v is not None and math.isfinite(v)   # noqa: E731
+    boxes = darvas_scan(c)
+    lr = max((i for i, v in enumerate(c) if ok(v)), default=-1)
+    if lr < 0 or not boxes:
+        return {"state": "NONE", "n": 0, "top": None, "bottom": None, "zone": None, "stop": None, "dist": None}
+    chain = [boxes[-1]]
+    for prev in reversed(boxes[:-1]):
+        if prev["top"] < chain[0]["top"] and not prev["cancelled"] and prev["outcome"] == "up":
+            chain.insert(0, prev)
+        else:
+            break
+    frm = lr - DARCARD_SESSIONS + 1
+    shown = [b for b in boxes if b["end"] >= frm]
+    topmost = chain[-1]
+    px = c[lr]
+    prev_px = c[lr - 1] if lr > 0 and ok(c[lr - 1]) else None
+    top, bottom = topmost["top"], topmost["bottom"]
+    zone_low = bottom * (1 - DARVAS_ZONE_PCT / 100)
+    max_top = max([b["top"] for b in shown if b is not topmost], default=-math.inf)
+    step_down = top < max_top and px <= max_top
+    two_up = len(chain) >= 2 and not step_down
+    start_stop = lambda e: _js_round(e * (1 - DARVAS_START_STOP_PCT / 100))   # noqa: E731
+    stop = None
+    if step_down or (topmost["outcome"] == "down" and px >= bottom):   # karta spadająca albo powrót ceny do złamanego boxa (nie wskrzesza go; pod dołem zostaje SELL)
+        state = "OUT"
+    elif px > top:
+        if prev_px is not None and prev_px <= top:
+            state, stop = "BUY", start_stop(px)
+        else:
+            state, stop = "HOLD", _js_round(zone_low)
+    elif px >= bottom:
+        if topmost["outcome"] == "up":
+            state, stop = "HOLD", _js_round(zone_low)
+        elif two_up:
+            state, stop = "READY", start_stop(top)
+        else:
+            state, stop = "WAIT", start_stop(top)
+    elif two_up or topmost["outcome"] == "up":
+        state = "SELL"
+    else:
+        state = "OUT"
+    live = not step_down and not topmost["cancelled"] and topmost["outcome"] != "down"
+    buy_line = _js_round(top)
+    return {"state": state, "n": len(chain) if live else 0, "top": buy_line, "bottom": _js_round(bottom), "zone": _js_round(zone_low),
+            "stop": stop, "dist": _js_round((buy_line / px - 1) * 100, 1) if px else None}
+
+
+def add_darvas_state(stocks, charts):
+    """Pola dv_* (stan karty Darvasa z dziennych zamknięć bloku `daily` wykresów) na każdej spółce; brak danych dziennych = pola None."""
+    daily = ((charts or {}).get("daily") or {}).get("stocks") or {}
+    for st in stocks:
+        d = daily.get(st["ticker"])
+        r = darvas_card_state(d["c"]) if d and d.get("c") else None
+        for k in ("state", "n", "top", "bottom", "zone", "stop", "dist"):
+            st["dv_" + k] = r[k] if r else None
+
+
+# ============================================================================
 # SKŁADANIE I ZAPIS
 # ============================================================================
 def weekly_close(df):
@@ -2143,6 +2283,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         summary = ((charts or {}).get("stocks", {}).get(st["ticker"]) or {}).get("rs_line") or {}
         st["rs_line_state"] = summary.get("state")
         st["rs_line_dist_pct"] = summary.get("dist_pct")
+    add_darvas_state(stocks, charts)
     payload = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "data_as_of": max((s["as_of"] for s in stocks), default=None),

@@ -714,3 +714,21 @@ test("Watchlisty — wyszukiwanie wg Dar-Card: Do kupna = KUP dziś + GOTOWE (�
     assert.equal(darvasPickRows(rows, "all").length, 6);
     assert.deepEqual([...rows].sort((a, b) => darvasRank(a) - darvasRank(b)).map(s => s.ticker), ["B", "D", "A", "E", "C", "F"]);
 });
+
+test("Darvas z pól Pythona: stan bez wykresów, zlecenia kupna stop + stop loss 10 % i liczba akcji z konta", () => {
+    const { darvasOrders, ordersText, darvasStateText, tagRisingFromFields, darvasPickRows } = require("../../docs/js/watchlist.js");
+    const rows = [
+        { ticker: "RDY", dv_state: "READY", dv_n: 2, dv_top: 50, dv_bottom: 45, dv_zone: 42.75, dv_stop: 45, dv_dist: 3.1, price: 48.5 },
+        { ticker: "BUY", dv_state: "BUY", dv_n: 3, dv_top: 20, dv_bottom: 18, dv_zone: 17.1, dv_stop: 18.9, dv_dist: -5, price: 21 },
+        { ticker: "ONE", dv_state: "BUY", dv_n: 1, dv_top: 10, dv_bottom: 9, dv_stop: 9.9, dv_dist: -2, price: 10.2 },
+        { ticker: "OLD" },   // starszy plik bez pól
+    ];
+    tagRisingFromFields(rows);
+    assert.equal(rows[0].rise_state, "READY");
+    assert.match(darvasStateText(rows[0]), /GOTOWY DO KUPNA.*50\.00.*stop 10 %: 45\.00/);
+    assert.deepEqual(darvasPickRows(rows, "go").map(s => s.ticker), ["RDY", "BUY"]);   // pierwszy box (ONE) się nie kwalifikuje
+    const o = darvasOrders(rows, { capital: 40000, fx: 4, posPct: 10, riskPct: 1 });
+    assert.deepEqual(o.map(x => [x.ticker, x.kind, x.entry, x.stop]), [["BUY", "buy", 21, 18.9], ["RDY", "ready", 50, 45]]);
+    assert.equal(o[1].size.shares, 20);   // 10 000 $ · 10 % / 50 $ = 20 akcji; ryzyko 1 % = 100 $ / 5 $ = 20 akcji
+    assert.equal(ordersText(o).split("\n")[1], "RDY: kup stop 50.00, stop loss 45.00, 20 akcji");
+});
