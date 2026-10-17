@@ -730,5 +730,5 @@ test("Darvas z pól Pythona: stan bez wykresów, zlecenia kupna stop + stop loss
     const o = darvasOrders(rows, { capital: 40000, fx: 4, posPct: 10, riskPct: 1 });
     assert.deepEqual(o.map(x => [x.ticker, x.kind, x.entry, x.stop]), [["BUY", "buy", 21, 18.9], ["RDY", "ready", 50, 45]]);
     assert.equal(o[1].size.shares, 20);   // 10 000 $ · 10 % / 50 $ = 20 akcji; ryzyko 1 % = 100 $ / 5 $ = 20 akcji
-    assert.equal(ordersText(o).split("\n")[1], "RDY: kup stop 50.00, stop loss 45.00, 20 akcji");
+    assert.equal(ordersText(o).split("\n")[1], "RDY: kup, gdy cena > 50.00 (buy stop); stop loss: sprzedaj, gdy < 45.00, 20 akcji");
 });

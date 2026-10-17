@@ -215,6 +215,18 @@ function stopAdvice(pos, st, price) {
     return mk("RAISE", "watch", `podnieś stop do ${money(newStop)}`, `MACD zszedł pod linię sygnału w ${when}. Reguła: podnieś stop tuż pod dołek tej świecy — ${money(newStop)}${pos && Number.isFinite(pos.stop) ? ` (obecny ${money(pos.stop)})` : ""}. Jeśli kolejne tygodnie zjedzą ten dołek, wychodzisz.`, newStop, `podnieś stop do ${money(newStop)}`);
 }
 
+// Pozycje mogą dotyczyć spółek spoza listy CANSLIM (np. utworzone z 📋 Zleceń w Watchlistach): bierzemy je z
+// watchlists.json, a gdy spółki nie ma w żadnym pliku — wiersz zastępczy z samym tickerem i ceną wejścia.
+// Filtry score / NATR / sektor / „≥ 2 rosnące” nie chowają pozycji (tylko wyszukiwarka).
+function positionStocks(main) {
+    const out = main.slice();
+    const seen = new Set((state.data ? state.data.stocks : main).map(s => s.ticker));
+    const extra = [];
+    if (typeof watchData !== "undefined" && watchData) watchData.stocks.forEach(s => { if (state.pos[s.ticker] && !seen.has(s.ticker)) { seen.add(s.ticker); extra.push(s); } });
+    Object.keys(state.pos || {}).forEach(t => { if (!seen.has(t)) { seen.add(t); extra.push({ ticker: t, price: state.pos[t].entry, company: "(spoza list — brak bieżącej ceny)" }); } });
+    tagPositions(extra, state.pos);
+    return out.concat(extra.filter(s => applyCommonFilters([s], state.search, "", null, null, null, false).length));
+}
 function positionRows(stocks) {
     return stocks.filter(s => s.position).sort((a, b) => (b.pos_to_stop_pct ?? -Infinity) - (a.pos_to_stop_pct ?? -Infinity));
 }
@@ -1005,20 +1017,23 @@ function darvasOrders(stocks, acct = null) {
 }
 const DARVAS_ORDER_STOP_PCT = 10;
 function ordersText(orders) {
-    return orders.map(o => `${o.ticker}: ${o.kind === "buy" ? "KUP (wybicie dziś)" : "kup stop"} ${o.entry.toFixed(2)}, stop loss ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
+    return orders.map(o => `${o.ticker}: ${o.kind === "buy" ? "kup na otwarciu ~" : "kup, gdy cena > "}${o.entry.toFixed(2)} (buy stop); stop loss: sprzedaj, gdy < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
 }
 function openOrdersSheet() {
     if (!watchData) return;
     const inList = watchList ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
     const orders = darvasOrders(inList, { ...state.acct, fx: usdPln() });
     const rows = orders.map(o => `<tr><td><b>${escapeHtml(o.ticker)}</b>${o.kind === "buy" ? " 🟢" : ""}<small>${o.n}× box ↑</small></td>`
-        + `<td>${o.kind === "buy" ? "otwarcie ~" : "stop "}<b>${o.entry.toFixed(2)}</b><small>SL ${o.stop.toFixed(2)}${o.kind === "ready" && Number.isFinite(o.dist) ? ` · +${o.dist.toFixed(1)} %` : ""}</small></td>`
+        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? "na otwarciu (wybicie dziś)" : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy &lt; ${o.stop.toFixed(2)} (−10 %)</small></td>`
         + `<td>${o.size ? `<b>${fmtShares(o.size.shares)}</b><small>${pln0(o.size.value_pln)}</small><small>ryz. ${o.size.risk_pln !== null ? pln0(o.size.risk_pln) : "—"}</small>` : "—"}</td>`
         + `<td><button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(o.ticker)}|${o.entry}|${o.bottom ?? o.stop}|0" title="Zapisz jako pozycję (wejście, stop 10 %)">💼</button></td></tr>`).join("");
     const acctOk = orders.some(o => o.size);
     showSheet(`📋 Zlecenia wg Darvasa${watchList ? " — " + escapeHtml(watchList) : ""}`, orders.length
-        ? `<p class="muted">Jak w książce (s. 11, 141): zlecenie <b>kupna stop</b> tuż nad górą najwyższego boxa i od razu <b>stop loss 10 %</b> pod wejściem. „🟢” = wybicie było dziś (wejście na otwarciu, stop od ceny wejścia). Nasze wybicie liczy się po zamknięciu sesji nad górą.</p>
-           <table class="orders-table"><thead><tr><th>Spółka</th><th>Kupno / stop loss</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+        ? `<p class="muted">Dla każdej spółki składasz u brokera <b>dwa zlecenia</b> (Darvas, s. 11, 141):<br>
+           1) <b>„kup, gdy &gt; X”</b> — zlecenie kupna <i>stop</i> (buy stop): kupujesz dopiero, gdy cena WZROŚNIE do X (góra boxa). Jeśli nie wzrośnie, nic się nie dzieje.<br>
+           2) <b>„sprzedaj, gdy &lt; Y”</b> — <i>stop loss</i>: po kupnie broker sam sprzeda, gdy cena SPADNIE do Y (10 % pod wejściem), żeby ograniczyć stratę.<br>
+           „🟢” = wybicie było już dziś: kupujesz na otwarciu, bez czekania. 💼 = zapisz jako pozycję (pojawi się w zakładce 💼 Pozycje).</p>
+           <table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${rows}</tbody></table>
            ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
            <button type="button" class="btn" id="ordersCopy">📋 Kopiuj zlecenia</button>`
         : `<p>Dziś brak spółek „Gotowe” ani „Kup dziś” na tej liście.</p>`);
@@ -1151,7 +1166,7 @@ function rowsForTab(tab) {
     tagCanslim(state.data.stocks, canslimMarket());
     tagActions(state.data.stocks, canslimMarket(), state.csCore);
     if (tab === "CS") return canslimRows(stocks, state.csMin, state.csCore);
-    if (tab === "POS") return positionRows(stocks);
+    if (tab === "POS") return positionRows(positionStocks(applyCommonFilters(state.data.stocks, state.search, "", null, null, null, false)));
     if (tab === "WATCH") return watchTabRows();
     if (tab === "BASES") return baseRows(stocks, state.bases);
     if (tab === "FAV") return stocks.filter(s => state.favs.has(s.ticker));
@@ -1583,7 +1598,7 @@ function createPositionFromBox(ticker, top, bottom, line = false) {
     if (state.pos[ticker] && !window.confirm(`${ticker} ma już pozycję (wejście ${state.pos[ticker].entry}, stop ${state.pos[ticker].stop}). Zastąpić ją pozycją z boxa?`)) return;
     const size = positionSize({ ...state.acct, fx: usdPln() }, top, stop);
     savePosition(ticker, { entry: top, stop, shares: size ? size.shares : null });
-    showToast(`💼 Pozycja ${ticker}: wejście ${top.toFixed(2)}, stop ${stop.toFixed(2)}${size ? `, ${fmtShares(size.shares)} akcji` : " (ustaw konto, by policzyć akcje)"}.`, { type: "success" });
+    showToast(`💼 Pozycja ${ticker}: wejście ${top.toFixed(2)}, stop ${stop.toFixed(2)}${size ? `, ${fmtShares(size.shares)} akcji` : " (ustaw konto, by policzyć akcje)"} — zobaczysz ją w zakładce 💼 Pozycje.`, { type: "success" });
 }
 if (typeof document !== "undefined") document.addEventListener("click", ev => {
     const b = ev.target.closest && ev.target.closest(".box-mkpos");
@@ -2159,10 +2174,13 @@ async function fillPosMinis() {
     const cells = [...document.querySelectorAll("#table-POS td[data-pos-mini]")];
     if (!cells.length) return;
     const charts = await loadCharts();
-    if (!charts) return;
+    // pozycje spoza listy CANSLIM (np. z 📋 Zleceń w Watchlistach) mają wykres w charts_watchlists.json
+    const needWatch = cells.some(td => !(charts && charts.stocks && charts.stocks[td.dataset.posMini]));
+    const wcharts = needWatch && watchData ? await loadWatchCharts() : null;
+    if (!charts && !wcharts) return;
     cells.forEach(td => {
         const t = td.dataset.posMini, s = findStock(t);
-        const src = charts, c = src && src.stocks && src.stocks[t];
+        const src = charts && charts.stocks && charts.stocks[t] ? charts : wcharts, c = src && src.stocks && src.stocks[t];
         const st = c ? macdWeeklyState({ weeks: src.weeks, c: c.c, l: c.l }) : null;
         const adv = s && s.position ? stopAdvice(s.position, st, s.price) : null;
         if (s) s.macd_advice = adv;
