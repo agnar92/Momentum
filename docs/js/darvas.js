@@ -837,7 +837,7 @@ function attachDarvasHover(container, full, readoutEl) {
 // po utworzeniu NOWEGO, wyższego boxa cena pod jego dołem (w zacieniowanej strefie) = SPRZEDAJ; akcji spoza najwyższego boxa nie kupuj ani nie trzymaj.
 // Punkt kupna „po dwóch kolejnych rosnących boxach” (s. 140). Dodatki spoza książki (wolumen, +10 %, MACD) są tylko OSTRZEŻENIAMI. Brak: wersja dla shortów.
 // ============================================================
-const DARCARD_WEEKS = 252;   // karta pokazuje boxy z ostatnich 12 miesięcy (252 sesji dziennych); przy krótszej historii (IPO) tyle, ile spółka istnieje
+const DARCARD_WEEKS = 22;   // karta pokazuje boxy z ostatnich 12 miesięcy (252 sesji dziennych); przy krótszej historii (IPO) tyle, ile spółka istnieje
 
 // Analiza karty: { boxes: łańcuch rosnących boxów (od najstarszego), topmost, rising (≥ 2 kolejne wyższe), status: {state, text, warnings[], top, bottom, zoneLow, stop, buyLine} }
 // states: BUY (pierwsze zamknięcie nad górą), HOLD, READY (w pierwszym boxie, gotowy do kupna), SELL, OUT (poza najwyższym boxem), NONE
@@ -896,7 +896,8 @@ function darvasRisingInfo(c, vol = null) {
 function lastFinite(c) { for (let i = c.length - 1; i >= 0; i--) if (Number.isFinite(c[i])) return c[i]; return NaN; }
 
 // „Past Price Range” z dołu karty: max / min zamknięć w kolejnych latach kalendarzowych (do 4 ostatnich).
-function darCardPastRange(weeks, c) {
+function darCardPastRange(weeks, c, yr = null) {
+    if (Array.isArray(yr) && yr.length) return yr.slice(-3).map(r => ({ year: String(r[0]), hi: r[1], lo: r[2] }));   // High / Low z Pythona (pełna historia) — dane tylko informacyjne
     const by = {};
     c.forEach((v, i) => { const d = weeks && weeks[i]; if (!d || !Number.isFinite(v)) return; const y = d.slice(0, 4), e = by[y] || (by[y] = { hi: v, lo: v }); e.hi = Math.max(e.hi, v); e.lo = Math.min(e.lo, v); });
     return Object.keys(by).sort().slice(-3).map(y => ({ year: y, hi: Math.round(by[y].hi * 100) / 100, lo: Math.round(by[y].lo * 100) / 100 }));
@@ -909,7 +910,7 @@ function darCardSvg(full, opts = {}) {
     const fs = v => Math.round(v * (compact ? 1.25 : 1) * 10) / 10;
     const a = darCardAnalyze(full.c, full.v);
     if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Brak boxów do narysowania na karcie Darvasa.</text></svg>`;
-    const range = darCardPastRange(full.weeks, full.c);
+    const range = darCardPastRange(full.weeks, full.c, full.yr);
     const tableH = fs(14) * (range.length + 1) + fs(16);
     const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: tableH + fs(36) };
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;

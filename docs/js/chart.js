@@ -59,7 +59,7 @@ function fitLayout(w, h, noTable = false, scroll = false, noMacd = false) {
 const COMPACT_FONT_SCALE = 1.5;
 const FIT_FONT_SCALE = 1.1;
 const COMPACT_WEEKS = 52;
-const DAILY_WINDOW_SESSIONS = 252;   // domyślne okno wykresu dziennego = cała historia (12 miesięcy)
+const DAILY_WINDOW_SESSIONS = 22;   // domyślne okno wykresu dziennego = ostatni miesiąc (starsze sesje to rozgrzewka dla MACD / SMA / boxów)
 const WEEKLY_WINDOW_WEEKS = 156;   // domyślne okno wykresu tygodniowego (3 lata); dane sięgają 6 lat (CHART_WEEKS w watchlist.py)
 const SPX_BAND_FRAC = 0.12;   // górna część panelu cen zarezerwowana na linię S&P 500
 const MIN_WINDOW = 15;      // najmniejsze okno suwaka (słupków)
@@ -247,6 +247,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         rsLine: c.rs_line || null, volAvg: padArr(volAvg),
         macd: (() => { const ms = macdSeries(c.c); return { macd: padArr(ms.macd), signal: padArr(ms.signal), hist: padArr(ms.hist) }; })(),
         rsRating: stock && Number.isFinite(stock.rs_rating) ? stock.rs_rating : null,
+        yr: c0.yr || null,   // High / Low z zamknięć dla ostatnich lat (liczone w Pythonie; tabelka „Past Price Range” na karcie)
         epsRating: stock && Number.isFinite(stock.eps_rating) ? stock.eps_rating : null,   // EPS Rating (1–99) wypisany przy fioletowej linii EPS, jak RS Rating przy linii RS
         pivot: opts.patterns === false ? null : pivotFromStock(stock, c.bases),
     };

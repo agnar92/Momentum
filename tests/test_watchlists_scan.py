@@ -163,6 +163,6 @@ def test_add_keeps_daily_block_of_other_lists(tmp_path, monkeypatch):
     assert ws.run(tmp_path, "add", "Małe", "cap_small", log=QUIET) == 0
     d = json.loads((tmp_path / ws.CHARTS_FILE).read_text())["daily"]
     assert {"AAA", "BBB"} <= set(d["stocks"]) and len(d["dates"]) == watchlist.CHART_DAYS
-    assert all(len(v) == len(d["dates"]) for v in d["stocks"]["AAA"].values())
+    assert all(len(v) == len(d["dates"]) for k, v in d["stocks"]["AAA"].items() if k != "yr")
     assert ws.run(tmp_path, "remove", "Duże", log=QUIET) == 0
     assert "AAA" not in json.loads((tmp_path / ws.CHARTS_FILE).read_text())["daily"]["stocks"]
