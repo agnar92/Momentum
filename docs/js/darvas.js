@@ -838,7 +838,7 @@ function attachDarvasHover(container, full, readoutEl) {
 // po utworzeniu NOWEGO, wyższego boxa cena pod jego dołem (w zacieniowanej strefie) = SPRZEDAJ; akcji spoza najwyższego boxa nie kupuj ani nie trzymaj.
 // Punkt kupna „po dwóch kolejnych rosnących boxach” (s. 140). Dodatki spoza książki (wolumen, +10 %, MACD) są tylko OSTRZEŻENIAMI. Brak: wersja dla shortów.
 // ============================================================
-const DARCARD_WEEKS = 22;   // karta pokazuje boxy z ostatniego miesiąca (22 sesje dzienne); przy krótszej historii (IPO) tyle, ile spółka istnieje
+const DARCARD_WEEKS = 126;   // karta pokazuje boxy z ostatniego pół roku (126 sesji dziennych); przy krótszej historii (IPO) tyle, ile spółka istnieje
 
 // Analiza karty: { boxes: WSZYSTKIE boxy z okna karty (jak w książce, także złamane i spadające — s. 30, 135, 141), topmost, rising (≥ 2 kolejne wyższe), status: {state, text, warnings[], top, bottom, zoneLow, stop, buyLine} }
 // states: BUY (pierwsze zamknięcie nad górą najwyższego boxa), HOLD, READY (≥ 2 kolejne rosnące boxy, cena w najwyższym — „Ready for buying”, s. 139–140),
@@ -953,7 +953,7 @@ function darCardSvg(full, opts = {}) {
     const n = a.boxes.length, slot = pw / Math.max(n, 3), bw = slot * 0.72;
     const dmy = d => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
     const dEnd = full.weeks && full.weeks[lastReal], dBeg = full.weeks && full.weeks[Math.max(0, lastReal - DARCARD_WEEKS + 1)];
-    const asOf = dEnd && dBeg ? `${dmy(dBeg)} – ${dmy(dEnd)}.${dEnd.slice(0, 4)}` : "";   // okno karty: miesiąc (22 sesje) wstecz od ostatniej sesji, przy każdym pobraniu danych
+    const asOf = dEnd && dBeg ? `${dmy(dBeg)} – ${dmy(dEnd)}.${dEnd.slice(0, 4)}` : "";   // okno karty: pół roku (126 sesji) wstecz od ostatniej sesji, przy każdym pobraniu danych
     a.boxes.forEach((b, k) => {
         const x0 = L.left + slot * k + (slot - bw) / 2, yT = y(b.top), yB = y(b.bottom), yZ = y(b.bottom * (1 - DARVAS_STOP_PCT / 100));
         const topmost = b.i0 === a.topmost.i0;

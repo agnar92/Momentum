@@ -40,7 +40,7 @@ EPS_STABILITY_WEIGHT = 0.2   # EPS Rating = 80 % percentyl wzrostu + 20 % percen
 EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/r) z dodatnim wzrostem EPS
 EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
-CHART_DAYS = 80              # ile sesji dziennych wysyłamy do wykresu Darvasa: ostatni miesiąc (22 sesje) to widok, reszta to rozgrzewka dla MACD 12/26/9, SMA 20, NATR i boxów
+CHART_DAYS = 170             # ile sesji dziennych wysyłamy do wykresu Darvasa: pół roku (126 sesji) to karta, reszta to rozgrzewka dla MACD 12/26/9, SMA 20, NATR i boxów
 CHART_WEEKS = 312            # ile tygodni mieści wykres w stylu książki O'Neila (6 lat; domyślnie widać 156 = 3 lata, resztę pokazuje suwak)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
