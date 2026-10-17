@@ -931,8 +931,9 @@ function darCardSvg(full, opts = {}) {
     });
     out.push(`<text x="${L.left + 6}" y="${fs(16)}" font-size="${fs(14)}" font-weight="800" fill="#2b2a24" letter-spacing="2">DAR·CARD</text>`);
     const n = a.boxes.length, slot = pw / Math.max(n, 3), bw = slot * 0.72;
-    const MONTHS_PL = ["styczeń", "luty", "marzec", "kwiecień", "maj", "czerwiec", "lipiec", "sierpień", "wrzesień", "październik", "listopad", "grudzień"];
-    const asOf = full.weeks && full.weeks[lastReal] ? `${MONTHS_PL[+full.weeks[lastReal].slice(5, 7) - 1] || ""} ${full.weeks[lastReal].slice(0, 4)}` : "";   // jak w książce: pod nazwą spółki miesiąc i rok
+    const dmy = d => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
+    const dEnd = full.weeks && full.weeks[lastReal], dBeg = full.weeks && full.weeks[Math.max(0, lastReal - DARCARD_WEEKS + 1)];
+    const asOf = dEnd && dBeg ? `${dmy(dBeg)} – ${dmy(dEnd)}.${dEnd.slice(0, 4)}` : "";   // okno karty: miesiąc (22 sesje) wstecz od ostatniej sesji, przy każdym pobraniu danych
     a.boxes.forEach((b, k) => {
         const x0 = L.left + slot * k + (slot - bw) / 2, yT = y(b.top), yB = y(b.bottom), yZ = y(b.bottom * (1 - DARVAS_STOP_PCT / 100));
         const topmost = b.i0 === a.topmost.i0;
@@ -958,8 +959,9 @@ function darCardSvg(full, opts = {}) {
     }
     const ty = H - tableH - 4;   // dół karty: spółka i „Past Price Range” (grupa #dcTable chowa się na czas panelu)
     out.push(`<g id="dcTable">`);
-    out.push(`<text x="${L.left + 6}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(opts.bookTitle || "")}</text>`);
-    out.push(`<text x="${L.left + 6}" y="${ty + fs(10)}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${asOf}</text>`);
+    const k0 = compact ? 1.25 : 1, txMin = W - L.right - 6 - 170 * k0, maxCh = Math.max(6, Math.floor((txMin - L.left - 14) / (fs(11) * 0.62))), ttl = String(opts.bookTitle || ""), ttlShort = ttl.length > maxCh ? ttl.slice(0, maxCh - 1) + "…" : ttl;   // nazwa nie wchodzi pod tabelkę
+    out.push(`<text x="${L.left + 6}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(ttlShort)}</text>`);
+    out.push(`<text x="${L.left + 6}" y="${ty + fs(10)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">${asOf}</text>`);
     const k = compact ? 1.25 : 1, tx = W - L.right - 6 - 170 * k, cH = tx + 70 * k, cL = tx + 125 * k;   // tabelka po prawej jak w książce
     out.push(`<text x="${tx}" y="${ty - 4}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">Past Price Range</text>`);
     range.forEach((r, i) => {
