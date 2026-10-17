@@ -325,3 +325,14 @@ test("darCardAnalyze: BUY podaje stop 10 % i poziom strefy zagrożenia (zlecenie
     const a = darCardAnalyze(base.concat([14]));
     if (a.status.state === "BUY") assert.ok(/zlecenie stop/.test(a.status.text) && a.status.stop > 0);
 });
+
+test("darvasRisingInfo: schodkowa akcja wzrostowa = ≥ 2 kolejne coraz wyższe pudełka; płaska / spadkowa = nie", () => {
+    const { darvasRisingInfo } = require("../../docs/js/darvas.js");
+    const stair = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118, 121, 124, 128, 125, 123, 121, 122, 124, 126, 130];
+    const up = darvasRisingInfo(stair);
+    assert.ok(up.n >= 2 && up.rising, JSON.stringify(up));
+    const flat = darvasRisingInfo(Array.from({ length: 30 }, (_, i) => 100 + (i % 2)));
+    assert.equal(flat.rising, false);
+    const down = darvasRisingInfo(Array.from({ length: 30 }, (_, i) => 200 - i * 3));
+    assert.equal(down.rising, false);
+});
