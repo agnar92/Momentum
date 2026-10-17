@@ -821,7 +821,7 @@ function attachDarvasHover(container, full, readoutEl) {
 // po utworzeniu NOWEGO, wyższego boxa cena pod jego dołem (w zacieniowanej strefie) = SPRZEDAJ; akcji spoza najwyższego boxa nie kupuj ani nie trzymaj.
 // Punkt kupna „po dwóch kolejnych rosnących boxach” (s. 140). Dodatki spoza książki (wolumen, +10 %, MACD) są tylko OSTRZEŻENIAMI. Brak: wersja dla shortów.
 // ============================================================
-const DARCARD_MAX_BOXES = 6;   // tyle ostatnich boxów mieści się na karcie
+const DARCARD_WEEKS = 156;   // karta pokazuje boxy z ostatnich 3 lat (156 tygodni); przy krótszej historii (IPO) tyle, ile spółka istnieje
 
 // Analiza karty: { boxes: łańcuch rosnących boxów (od najstarszego), topmost, rising (≥ 2 kolejne wyższe), status: {state, text, warnings[], top, bottom, zoneLow, stop, buyLine} }
 // states: BUY (pierwsze zamknięcie nad górą), HOLD, READY (w pierwszym boxie, gotowy do kupna), SELL, OUT (poza najwyższym boxem), NONE
@@ -835,7 +835,8 @@ function darCardAnalyze(c, vol = null) {
         const prev = all[k], cur = chain[0];
         if (prev.top < cur.top && !prev.cancelled && prev.outcome === "up") chain.unshift(prev); else break;
     }
-    const boxes = chain.slice(-DARCARD_MAX_BOXES), topmost = chain[chain.length - 1], rising = chain.length >= 2;
+    const from = lr - DARCARD_WEEKS + 1;   // okno 3 lat (min. rok to i tak mieści się w oknie); IPO: from < 0 = cała historia
+    const boxes = all.filter(b => (b.end ?? b.i1) >= from).map(b => ({ ...b, inChain: chain.includes(b) })), topmost = chain[chain.length - 1], rising = chain.length >= 2;
     const r2 = v => Math.round(v * 100) / 100;
     const px = c[lr], prevPx = lr > 0 && Number.isFinite(c[lr - 1]) ? c[lr - 1] : null;
     const top = topmost.top, bottom = topmost.bottom, zoneLow = bottom * (1 - DARVAS_STOP_PCT / 100);
@@ -882,7 +883,7 @@ function darCardSvg(full, opts = {}) {
     if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na kartę Darvasa.</text></svg>`;
     const range = darCardPastRange(full.weeks, full.c);
     const tableH = fs(16) * (range.length + 1) + 8;
-    const L = { left: compact ? 40 : 48, right: 8, top: fs(24), bottom: tableH + fs(22) };
+    const L = { left: compact ? 40 : 48, right: 8, top: fs(24), bottom: tableH + fs(36) };
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const lastReal = full.c.reduce((q, v, i) => (Number.isFinite(v) ? i : q), -1), px = full.c[lastReal];
     const st = a.status;
@@ -898,12 +899,14 @@ function darCardSvg(full, opts = {}) {
         out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="#8b8670" stroke-width="1"/>`);
         out.push(`<text x="${L.left - 4}" y="${(y(t) + 3.5).toFixed(1)}" font-size="${fs(9.5)}" fill="#3a3730" text-anchor="end">${t}</text>`);
     });
-    out.push(`<text x="${L.left + 6}" y="${fs(16)}" font-size="${fs(14)}" font-weight="800" fill="#2b2a24" letter-spacing="2">DAR·CARD</text>`);
+    out.push(`<text x="${L.left + 6}" y="${fs(16)}" font-size="${fs(14)}" font-weight="800" fill="#2b2a24" letter-spacing="2">DAR·CARD</text><text x="${W - L.right - 4}" y="${fs(16)}" font-size="${fs(10)}" fill="#5a574a" text-anchor="end">${Math.min(3, Math.round((lastReal + 1) / 52 * 10) / 10)} l.</text>`);
     const n = a.boxes.length, slot = pw / Math.max(n, 3), bw = slot * 0.72;
+    const mon = i => { const d = full.weeks && full.weeks[i]; return d ? `${d.slice(5, 7)}/${d.slice(2, 4)}` : ""; };
     a.boxes.forEach((b, k) => {
         const x0 = L.left + slot * k + (slot - bw) / 2, yT = y(b.top), yB = y(b.bottom), yZ = y(b.bottom * (1 - DARVAS_STOP_PCT / 100));
-        const topmost = b === a.topmost;
-        out.push(`<rect x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="#ffffff" stroke="#111" stroke-width="${topmost ? 2.2 : 1.4}"/>`);
+        const topmost = b.i0 === a.topmost.i0;
+        out.push(`<rect x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="#ffffff" stroke="${b.inChain || topmost ? "#111" : "#8b8670"}" stroke-width="${topmost ? 2.2 : 1.4}"${b.inChain || topmost ? "" : ' fill-opacity="0.6"'}/>`);
+        out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(H - tableH - fs(30)).toFixed(1)}" font-size="${fs(8.5)}" fill="#5a574a" text-anchor="middle">${mon(b.i0)}</text>`);
         out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yZ - yB).toFixed(1)}" fill="url(#dcHatch)" stroke="#111" stroke-width="1"/>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yT - 3).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.top * 100) / 100}</text>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yZ + fs(10)).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.bottom * 100) / 100}</text>`);
