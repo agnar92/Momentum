@@ -380,7 +380,7 @@ function darvasPanelGroup(full, o) {
             const vals = idx.flatMap(i => [ms.macd[i], ms.signal[i] ?? 0, ms.hist[i] ?? 0]);
             const amp = Math.max(...vals.map(Math.abs)) * 1.1 || 1, ym = v => pY0 + 6 + (mH - 12) * (1 - (v + amp) / (2 * amp));
             const lab = (yy, txt) => `<text x="${left + 6}" y="${(yy + fs(11)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#cfd5e0" stroke="#0f141a" stroke-width="3" paint-order="stroke">${txt}</text>`;
-            const g = [`<g id="dMacd" opacity="${o.opacity ?? 0}" pointer-events="none">`, `<rect x="${left}" y="${pY0.toFixed(1)}" width="${pW}" height="${pH.toFixed(1)}" fill="#0f141a" fill-opacity="0.95" stroke="#2c3140"/>`,
+            const g = [`<g id="dMacd" opacity="${o.opacity ?? 0}" pointer-events="none">`, `<rect x="${left}" y="${pY0.toFixed(1)}" width="${pW}" height="${pH.toFixed(1)}" fill="#0f141a" fill-opacity="1" stroke="#2c3140"/>`,
                 `<rect id="dMacdSpan" x="${(o.spanX ?? 0).toFixed(1)}" y="${pY0.toFixed(1)}" width="${(o.spanW ?? 0).toFixed(1)}" height="${pH.toFixed(1)}" fill="#ffd54a" fill-opacity="0.16"/>`,
                 `<line x1="${left}" x2="${W - right}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#4a5262" stroke-dasharray="3 3"/>`,
                 `<line x1="${left}" x2="${W - right}" y1="${vY0.toFixed(1)}" y2="${vY0.toFixed(1)}" stroke="#2c3140"/>`, `<line x1="${left}" x2="${W - right}" y1="${nY0.toFixed(1)}" y2="${nY0.toFixed(1)}" stroke="#2c3140"/>`];
@@ -394,7 +394,7 @@ function darvasPanelGroup(full, o) {
                 if (a >= 0 && b < 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) + 3).toFixed(1)} l-4,-7 h8 z" fill="#ff6b6b" transform="rotate(180 ${x(i).toFixed(1)} ${(ym(ms.macd[i]) - 0.5).toFixed(1)})"/>`);
                 else if (a < 0 && b >= 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) - 3).toFixed(1)} l-4,7 h8 z" fill="#4ee08a"/>`);
             });
-            g.push(lab(pY0, `MACD (12, 26, 9) tyg. · <tspan fill="#6ea8ff">MACD</tspan> · <tspan fill="#ff9f43">sygnał</tspan> · ▼ MACD pod sygnałem = wyjście`));
+            g.push(lab(pY0, `MACD 12·26·9 · <tspan fill="#6ea8ff">MACD</tspan> · <tspan fill="#ff9f43">sygnał</tspan> · ▼ wyjście`));
             // wolumen tygodnia: słupki zielone / czerwone wg kierunku zamknięcia, przerywana średnia z 10 poprzednich tygodni, złota obwódka = wolumen ≥ 1,4× średniej (reguła wybicia)
             const vv = full.v || [], cc = full.c || [];
             const wk = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(vv[i])) wk.push(i);
@@ -407,7 +407,7 @@ function darvasPanelGroup(full, o) {
                 });
                 const avgPts = wk.map(i => [i, avgAt(i)]).filter(p2 => p2[1] !== null).map(p2 => `${x(p2[0]).toFixed(1)},${yv(p2[1]).toFixed(1)}`).join(" ");
                 if (avgPts) g.push(`<polyline points="${avgPts}" fill="none" stroke="#cfd5e0" stroke-width="${fs(1.2)}" stroke-dasharray="4 3"/>`);
-                g.push(lab(vY0, `Wolumen tyg. · przerywana = średnia 10 tyg. · złota obwódka ≥ ${DARVAS_BREAKOUT_VOL}× średniej`));
+                g.push(lab(vY0, `Wolumen · śr. 10 tyg. · złota ≥ ${DARVAS_BREAKOUT_VOL}×`));
             }
             // NATR (14 tyg.): linia, zielona strefa poniżej 8 (Blueprint), przerywany próg 8
             const nt = natrSeries(full.h || [], full.l || [], full.c || []);
@@ -417,7 +417,7 @@ function darvasPanelGroup(full, o) {
                 g.push(`<rect x="${left}" y="${yn(NATR_GOOD).toFixed(1)}" width="${pW}" height="${(nY0 + nH - 3 - yn(NATR_GOOD)).toFixed(1)}" fill="#2e9e5b" fill-opacity="0.12"/>`,
                     `<line x1="${left}" x2="${W - right}" y1="${yn(NATR_GOOD).toFixed(1)}" y2="${yn(NATR_GOOD).toFixed(1)}" stroke="#4ee08a" stroke-dasharray="4 3" stroke-opacity="0.7"/>`,
                     `<polyline points="${ni.map(i => `${x(i).toFixed(1)},${yn(nt[i]).toFixed(1)}`).join(" ")}" fill="none" stroke="#b57cff" stroke-width="${fs(1.8)}" stroke-linejoin="round"/>`);
-                g.push(lab(nY0, `NATR (14 tyg.) · zielone pole = poniżej ${NATR_GOOD} (ciasna konsolidacja) · teraz ${nt[ni[ni.length - 1]].toFixed(1)} %`));
+                g.push(lab(nY0, `NATR 14 tyg. · zielone < ${NATR_GOOD} · teraz ${nt[ni[ni.length - 1]].toFixed(1)} %`));
             }
             g.push(`</g>`);
             return g.join("");
@@ -906,6 +906,7 @@ function darCardSvg(full, opts = {}) {
     const span = Math.log(hi0 / lo0) || 0.1, lo = lo0 * Math.exp(-0.08 * span), hi = hi0 * Math.exp(0.08 * span);
     const y = v => L.top + ph * (1 - Math.log(v / lo) / Math.log(hi / lo));
     const out = [`<defs><pattern id="dcHatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" fill="#111"/><line x1="0" y1="0" x2="0" y2="4" stroke="#000" stroke-width="2.2"/></pattern></defs>`];
+    out.push(`<style>text,line,circle,polyline,path{pointer-events:none}</style>`);   // etykiety i linie nie przechwytują dotyku — stuknięcie w cenę na górze boxa trafia w box
     out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#e9e4d2"/>`);   // kartka papieru
     const qStep = Math.exp(Math.log(hi / lo) / 70);
     for (let v = lo * qStep; v < hi; v *= qStep) out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="#b9b49f" stroke-width="0.7"/>`);
@@ -931,17 +932,20 @@ function darCardSvg(full, opts = {}) {
             const yb = y(b.top * 1.007), colr = st.state === "BUY" ? "#0a8f3c" : st.state === "SELL" ? "#c0262d" : "#1b5fbf";
             out.push(`<line x1="${(x0 - 6).toFixed(1)}" x2="${(x0 + bw + 6).toFixed(1)}" y1="${yb.toFixed(1)}" y2="${yb.toFixed(1)}" stroke="${colr}" stroke-width="2"/>`);
             const lbl = st.state === "BUY" ? "Kup — wybicie" : st.state === "SELL" ? "Sprzedaj" : st.state === "READY" || a.rising ? "Gotowy do kupna" : "Kup nad górą";
-            out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yb - fs(14)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="${colr}" text-anchor="middle">${lbl}</text>`);
+            const lcx = x0 + bw / 2, edge = lcx + 56 > W, lx = edge ? W - 4 : lcx;   // etykieta nie wychodzi poza kartę
+            out.push(`<text x="${lx.toFixed(1)}" y="${(yb - fs(14)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="${colr}" text-anchor="${edge ? "end" : "middle"}">${lbl}</text>`);
             out.push(`<circle cx="${(x0 + bw / 2).toFixed(1)}" cy="${y(px).toFixed(1)}" r="${fs(4.5)}" fill="#d4a017" stroke="#111" stroke-width="1.2"><title>Zamknięcie ${Math.round(px * 100) / 100}</title></circle>`);
         }
     });
-    const ty = H - tableH - 4;   // dół karty: spółka i „Past Price Range”
+    const ty = H - tableH - 4;   // dół karty: spółka i „Past Price Range” (grupa #dcTable chowa się na czas panelu)
+    out.push(`<g id="dcTable">`);
     out.push(`<text x="${L.left + 6}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(opts.bookTitle || "")}</text>`);
     out.push(`<text x="${L.left + 6}" y="${ty + fs(13)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">Past Price Range</text><text x="${L.left + 110 * (compact ? 1.25 : 1)}" y="${ty + fs(13)}" font-size="${fs(10)}" fill="#2b2a24">High</text><text x="${L.left + 160 * (compact ? 1.25 : 1)}" y="${ty + fs(13)}" font-size="${fs(10)}" fill="#2b2a24">Low</text>`);
     range.forEach((r, i) => {
         const yy = ty + fs(13) + fs(14) * (i + 1);
         out.push(`<text x="${L.left + 6}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.year}</text><text x="${L.left + 110 * (compact ? 1.25 : 1)}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.hi}</text><text x="${L.left + 160 * (compact ? 1.25 : 1)}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.lo}</text>`);
     });
+    out.push(`</g>`);
     return `<svg id="chartSvg" data-ccgeom="${[W, H, L.left, L.right].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${out.join("")}</svg>`;
 }
 
@@ -961,6 +965,7 @@ function attachDarCard(container, full, readoutEl) {
     const deselect = () => {
         if (selected) { selected.setAttribute("stroke", selected.dataset.o0); selected.setAttribute("stroke-width", selected.dataset.o1); }
         selected = null; bar.hidden = true; clearPanel();
+        const tb = svg.querySelector("#dcTable"); if (tb) tb.removeAttribute("display");
         if (readoutEl && base !== null) readoutEl.textContent = base;
     };
     const select = el => {
@@ -970,9 +975,10 @@ function attachDarCard(container, full, readoutEl) {
         el.setAttribute("stroke", "#ffd54a"); el.setAttribute("stroke-width", "3.4");
         const [t, bt, , , i0s, i1s] = el.dataset.box.split("|"), i0 = +i0s, i1 = +i1s;
         const start = Math.max(0, i0 - 8), endExcl = Math.min(lastReal + 1, Math.max(i1, i0 + 6) + 9), slots = Math.max(2, endExcl - start), pw = W - left - right;
-        const x = i => left + pw * (i - start + 0.5) / slots, pH = Math.max(150, Math.min(250, H * 0.42)), pY0 = H - pH - 6;
+        const x = i => left + pw * (i - start + 0.5) / slots, pH = Math.max(120, Math.min(210, H * 0.34)), pY0 = H - pH - 66;   // nad paskiem akcji (≈ 56 px)
         const xa = left + pw * (i0 - start) / slots, xb = left + pw * (Math.min(i1, endExcl - 1) - start + 1) / slots;
         clearPanel();
+        const tb = svg.querySelector("#dcTable"); if (tb) tb.setAttribute("display", "none");
         const g = darvasPanelGroup(full, { W, left, right, pY0, pH, start, endExcl, lastReal, fs, x, bw: Math.max(1, pw / slots * 0.6), opacity: 1, spanX: xa, spanW: Math.max(2, xb - xa) });
         if (g) svg.insertAdjacentHTML("beforeend", g);
         bar.innerHTML = `<span>📦 ${(+bt).toFixed(2)} – ${(+t).toFixed(2)}</span><button type="button" data-act="pin">📌 Przypnij / odepnij</button><button type="button" data-act="close">✕</button>`;
