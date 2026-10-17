@@ -379,7 +379,7 @@ function darvasSvg(full, win, opts = {}) {
     const cupGeoms = (full.cups || []).map(cp => darvasCupGeometry(full.c, cp)).filter(Boolean);
     // opts.cupHideBoxes: boxy leżące wewnątrz miski nie są rysowane (miska je zastępuje — mniej bałaganu)
     const scan = darvasScan(full.c);
-    const boxes = scan.boxes.filter(b => (b.end ?? b.i1) >= start && b.i0 < endExcl && !(opts.cupHideBoxes && cupGeoms.some(g => b.i0 >= g.i0 && b.i1 <= g.i1 + 1)));
+    const boxes = scan.boxes.filter(b => b.outcome !== "down" && !b.cancelled && (b.end ?? b.i1) >= start && b.i0 < endExcl && !(opts.cupHideBoxes && cupGeoms.some(g => b.i0 >= g.i0 && b.i1 <= g.i1 + 1)));
     const topLines = scan.lines.filter(l => l.i1 >= start && l.i0 < endExcl);   // same topy bez potwierdzonego dołu: niebieska przerywana linia (stop 8 %)
     const shown = [];
     for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) shown.push(full.c[i]);
@@ -840,7 +840,7 @@ function darCardAnalyze(c, vol = null) {
         if (prev.top < cur.top && !prev.cancelled && prev.outcome === "up") chain.unshift(prev); else break;
     }
     const from = lr - DARCARD_WEEKS + 1;   // okno 3 lat (min. rok to i tak mieści się w oknie); IPO: from < 0 = cała historia
-    const boxes = all.filter(b => (b.end ?? b.i1) >= from).map(b => ({ ...b, inChain: chain.includes(b) })), topmost = chain[chain.length - 1], rising = chain.length >= 2;
+    const boxes = all.filter(b => b.outcome !== "down" && !b.cancelled && (b.end ?? b.i1) >= from).map(b => ({ ...b, inChain: chain.includes(b) })), topmost = chain[chain.length - 1], rising = chain.length >= 2;
     const r2 = v => Math.round(v * 100) / 100;
     const px = c[lr], prevPx = lr > 0 && Number.isFinite(c[lr - 1]) ? c[lr - 1] : null;
     const top = topmost.top, bottom = topmost.bottom, zoneLow = bottom * (1 - DARVAS_STOP_PCT / 100);
@@ -884,7 +884,7 @@ function darCardSvg(full, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
     const fs = v => Math.round(v * (compact ? 1.25 : 1) * 10) / 10;
     const a = darCardAnalyze(full.c, full.v);
-    if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na kartę Darvasa.</text></svg>`;
+    if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Brak boxów do narysowania na karcie Darvasa.</text></svg>`;
     const range = darCardPastRange(full.weeks, full.c);
     const tableH = fs(16) * (range.length + 1) + 8;
     const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: tableH + fs(36) };
