@@ -934,9 +934,14 @@ function darCardSvg(full, opts = {}) {
             const lbl = st.state === "BUY" ? "Kup — wybicie" : st.state === "SELL" ? "Sprzedaj" : st.state === "READY" || a.rising ? "Gotowy do kupna" : "Kup nad górą";
             const lcx = x0 + bw / 2, edge = lcx + 56 > W, lx = edge ? W - 4 : lcx;   // etykieta nie wychodzi poza kartę
             out.push(`<text x="${lx.toFixed(1)}" y="${(yb - fs(14)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="${colr}" text-anchor="${edge ? "end" : "middle"}">${lbl}</text>`);
-            out.push(`<circle cx="${(x0 + bw / 2).toFixed(1)}" cy="${y(px).toFixed(1)}" r="${fs(4.5)}" fill="#d4a017" stroke="#111" stroke-width="1.2"><title>Zamknięcie ${Math.round(px * 100) / 100}</title></circle>`);
         }
     });
+    {   // żółta kropka = bieżące zamknięcie: zawsze, w kolumnie ostatniego narysowanego boxa (także gdy cena jest poza boxem albo najwyższy box nie jest rysowany)
+        const dcx = L.left + slot * (n - 1) + slot / 2, dcy = y(px);
+        out.push(`<circle cx="${dcx.toFixed(1)}" cy="${dcy.toFixed(1)}" r="${fs(5.5)}" fill="#ffd54a" stroke="#111" stroke-width="1.6"><title>Zamknięcie ${Math.round(px * 100) / 100}</title></circle>`);
+        const left = dcx > W * 0.6;
+        out.push(`<text x="${(left ? dcx - fs(9) : dcx + fs(9)).toFixed(1)}" y="${(dcy + fs(3.5)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24" text-anchor="${left ? "end" : "start"}">${Math.round(px * 100) / 100}</text>`);
+    }
     const ty = H - tableH - 4;   // dół karty: spółka i „Past Price Range” (grupa #dcTable chowa się na czas panelu)
     out.push(`<g id="dcTable">`);
     out.push(`<text x="${L.left + 6}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(opts.bookTitle || "")}</text>`);
