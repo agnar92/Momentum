@@ -661,12 +661,13 @@ function darvasSvg(full, win, opts = {}) {
         for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(full.c[i])) pts.push([x(i), y(full.c[i]), i]);
         if (pts.length > 1) {
             const line = pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ");
-            const UP = "#4ee08a", DOWN = "#ff6b6b", FLAT = "#9aa0ab";
-            const dir = k => k === 0 ? FLAT : full.c[pts[k][2]] >= full.c[pts[k - 1][2]] ? UP : DOWN;   // kolor odcinka i kropki: zielony = zamknięcie wyżej niż poprzednie, czerwony = niżej
+            const GREEN = "#4ee08a";   // jedna zielona linia zamknięć; kropka tylko na zamknięciu tygodnia (ostatnia sesja tygodnia) i na ostatnim zamknięciu
+            const wk = d => { if (!d) return null; const t = Date.parse(d + "T00:00:00Z"); return Number.isFinite(t) ? Math.floor((t / 86400000 + 3) / 7) : null; };   // numer tygodnia (pon–nd)
+            const weekEnd = k => k === pts.length - 1 || wk(full.weeks && full.weeks[pts[k][2]]) !== wk(full.weeks && full.weeks[pts[k + 1][2]]) || wk(full.weeks && full.weeks[pts[k][2]]) === null;
             out.push(`<g pointer-events="none">`
                 + `<polyline points="${line}" fill="none" stroke="#0e0f13" stroke-width="${fs(3.4)}" stroke-linejoin="round" stroke-linecap="round" opacity="0.55"/>`
-                + pts.slice(1).map((p, k) => `<line x1="${pts[k][0].toFixed(1)}" y1="${pts[k][1].toFixed(1)}" x2="${p[0].toFixed(1)}" y2="${p[1].toFixed(1)}" stroke="${dir(k + 1)}" stroke-width="${fs(1.8)}" stroke-linecap="round"/>`).join("")
-                + pts.map((p, k) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${fs(2.6)}" fill="${dir(k)}" stroke="#0e0f13" stroke-width="0.8"><title>${full.weeks && full.weeks[p[2]] ? full.weeks[p[2]] + " · " : ""}zamknięcie ${full.c[p[2]]}</title></circle>`).join("")
+                + `<polyline points="${line}" fill="none" stroke="${GREEN}" stroke-width="${fs(1.6)}" stroke-linejoin="round" stroke-linecap="round"/>`
+                + pts.map((p, k) => weekEnd(k) ? `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${fs(2.6)}" fill="${GREEN}" stroke="#0e0f13" stroke-width="0.8"><title>${full.weeks && full.weeks[p[2]] ? full.weeks[p[2]] + " · " : ""}zamknięcie ${full.c[p[2]]}</title></circle>` : "").join("")
                 + `</g>`);
         }
     }
@@ -684,7 +685,7 @@ function darvasSvg(full, win, opts = {}) {
         }
     }
     const lastC = full.c[lastReal], lastPrev = (() => { for (let i = lastReal - 1; i >= 0; i--) if (Number.isFinite(full.c[i])) return full.c[i]; return null; })();
-    if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="${lastPrev === null ? "#9aa0ab" : lastC >= lastPrev ? "#4ee08a" : "#ff6b6b"}" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
+    if (lastReal >= start && lastReal < endExcl) out.push(`<circle cx="${x(lastReal).toFixed(1)}" cy="${y(lastC).toFixed(1)}" r="${fs(3.5)}" fill="#4ee08a" stroke="#0e0f13" stroke-width="1" pointer-events="none"><title>Ostatnie zamknięcie ${lastC}</title></circle>`);
     // podświetlenie poziomów (ustawiane w attachDarvasHover): 3 linie podziałki (góra boxa, dół, dół strefy zagrożenia) z ceną na osi — widoczne tylko przy najechaniu / przytrzymaniu boxa
     for (let k = 0; k < 3; k++) {
         out.push(`<line id="dHl${k}" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="1.6" opacity="0" pointer-events="none"/>`);
