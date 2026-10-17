@@ -1,1 +1,1 @@
-{"lists":[]}
+{"lists":[{"name":"Movers","filters":"cap_midover,sh_curvol_o1000,ta_sma20_pc,ta_sma200_pa,ta_sma50_pc"},{"name":"GAP","filters":"cap_microover,sh_price_o1,ta_gap_u10"},{"name":"ATH","filters":"sh_price_o1,ta_alltime_nh"}]}
