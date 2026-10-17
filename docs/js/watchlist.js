@@ -53,7 +53,7 @@ function tagStrategies(allStocks, filtered, st, alerts = []) {
     });
 }
 const TAB_DEFAULT_SORT = {
-    LIST: ["ticker", "asc"], WATCH: ["composite_rating", "desc"],
+    LIST: ["ticker", "asc"], WATCH: ["darvas_rank", "asc"],
     CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"],
 };
 const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "BOXES"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
@@ -834,6 +834,12 @@ const COL = {
         const g = natrGrade(s.natr_w), d = Number.isFinite(s.natr_d) ? `, dzienny (ATR z Finviza): ${s.natr_d.toFixed(1)} %` : "";
         return Number.isFinite(s.natr_w) ? `<td class="${g.cls === "warn" ? "" : g.cls}" title="NATR tygodniowy = ATR(14) / cena: ${s.natr_w.toFixed(1)} % (${g.label})${d}. Blueprint: konsolidacja ma mieć NATR < 8.">${s.natr_w.toFixed(1)}%</td>` : `<td class="muted" title="Za krótka historia tygodniowa"></td>`;
     }, "NATR tygodniowy (ATR 14 tyg. w % ceny): im niższy, tym ciaśniejsze i spokojniejsze notowania. Blueprint: konsolidacja < 8 %."],
+    darvas: ["Darvas", "darvas_rank", s => {
+        const d = DARVAS_STATE_LABELS[s.rise_state];
+        if (!d) return `<td class="muted" title="${escapeHtml(s.rise_text || "brak boxów Darvasa")}"></td>`;
+        const dist = s.rise_state === "READY" && Number.isFinite(s.rise_dist) ? ` · ${s.rise_dist.toFixed(1).replace(".", ",")} %` : "";
+        return `<td class="${d[1]}" title="${escapeHtml(s.rise_text || "")}">${d[0]}${dist}</td>`;
+    }],
     rise2: ["Boxy ↑", "rise_n", s => Number.isFinite(s.rise_n) && s.rise_n >= 1
         ? `<td class="${s.rise_n >= 2 ? "positive" : ""}" title="${escapeHtml(s.rise_n >= 2 ? `Akcja wzrostowa wg Dar-Card: ${s.rise_n} kolejne, coraz wyższe pudełka. ` : "Jedno pudełko — jeszcze bez dwóch rosnących. ")}${escapeHtml(s.rise_text || "")}">${s.rise_n >= 2 ? "↑↑ " : ""}${s.rise_n}</td>` : `<td class="muted"></td>`,
         "Ile kolejnych, coraz wyższych pudełek Darvasa (dzienne zamknięcia, 12 mies.) układa spółka. ≥ 2 = akcja wzrostowa wg Dar-Card (kupno po dwóch rosnących pudełkach). Filtr: Filtry → Boxy"],
@@ -890,7 +896,7 @@ const actCell = (s, key) => s[key]
     ? `<td class="act-cell act-${s[key].tone}${s.action_tf === s[key].tf ? " act-primary" : ""}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "bp", "rise2", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "bp", "darvas", "rise2", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const TAB_COLUMNS = {
@@ -901,7 +907,7 @@ const TAB_COLUMNS = {
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "cs", "pbox"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], WATCH: ["fav", "ticker", "comp", "rs", "epsr", "rise2"], BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], WATCH: ["fav", "ticker", "darvas", "rise2", "comp"], BASES: COMPACT_COLUMNS,
 };
 let splitMode = false;
 // Kolumny, które istnieją tylko dzięki analizie wzorców (bazy, pivot, flagi, wybicie, „Co robić”, climax) — znikają po jej wyłączeniu.
@@ -953,7 +959,37 @@ function tagRising(stocks, charts) {
         const c = charts && charts.stocks && charts.stocks[s.ticker];
         const r = c && Array.isArray(c.c) ? darvasRisingInfo(c.c, c.v) : null;
         s.rise_n = r ? r.n : null; s.rise_state = r ? r.state : null; s.rise_text = r ? r.text : ""; s.rise_dist = r ? r.distPct : null;
+        s.darvas_rank = darvasRank(s);
     });
+}
+
+// Wyszukiwanie wg Dar-Card (książka, s. 11 i 139–142) — JEDYNY filtr Watchlist w tym trybie (bez score / NATR / sektora):
+// „Kup dziś” = pierwsze zamknięcie nad górą najwyższego boxa po dwóch kolejnych rosnących boxach (s. 140);
+// „Gotowe do kupna” = dwa kolejne rosnące boxy, cena w najwyższym, jeszcze nie wybita (s. 139 „Ready for buying”);
+// „Trzymaj” = akcja w swoim najwyższym boxie albo nad nim po wybiciu, w rosnącej karcie (reguła A).
+const DARVAS_STATE_LABELS = { BUY: ["🟢 KUP", "positive"], READY: ["🔵 GOTOWE", ""], HOLD: ["TRZYMAJ", ""], WAIT: ["1. box", "muted"], SELL: ["🔴 SPRZEDAJ", "negative"], OUT: ["poza boxem", "muted"] };
+const DARVAS_PICKS = [
+    ["go", "Do kupna", "Kup dziś + Gotowe do kupna: co najmniej dwa kolejne rosnące boxy (książka, s. 139–140)"],
+    ["buy", "🟢 Kup dziś", "Dzisiejsze zamknięcie nad górą najwyższego boxa po dwóch kolejnych rosnących boxach; stop 10 % od razu"],
+    ["ready", "🔵 Gotowe", "Dwa kolejne rosnące boxy, cena w najwyższym — kup po zamknięciu nad jego górą"],
+    ["hold", "Trzymaj", "Rosnąca karta, cena w najwyższym boxie albo nad nim — wahania ignoruj (reguła A)"],
+    ["all", "Wszystkie", "Bez filtra Darvasa — działają zwykłe filtry (score, NATR, sektor)"],
+];
+function darvasPick(s) {
+    if (!(s.rise_n >= 2)) return null;
+    return { BUY: "buy", READY: "ready", HOLD: "hold" }[s.rise_state] || null;
+}
+function darvasPickRows(stocks, pick) {
+    if (pick === "all") return stocks;
+    return stocks.filter(s => { const p = darvasPick(s); return pick === "go" ? p === "buy" || p === "ready" : p === pick; });
+}
+// Kolejność: KUP, potem GOTOWE od najbliższego punktu kupna, TRZYMAJ, pierwszy box, reszta.
+function darvasRank(s) {
+    const p = darvasPick(s);
+    if (p === "buy") return 0;
+    if (p === "ready") return 1 + Math.min(Math.max(s.rise_dist ?? 99, 0), 99) / 100;
+    if (p === "hold") return 2;
+    return { WAIT: 3, BUY: 3, READY: 3, HOLD: 4, SELL: 5, OUT: 6 }[s.rise_state] ?? 7;
 }
 async function ensureRising(which) {
     if (risingState[which] || typeof darvasRisingInfo !== "function") return;
@@ -979,7 +1015,9 @@ function watchTabRows() {
         s.target_main = targetMain(s);
     });
     const inList = watchList && watchData.lists ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
-    const common = applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax, state.risingOnly);
+    const common = watchDarvas === "all"
+        ? applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax, state.risingOnly)
+        : darvasPickRows(applyCommonFilters(inList, state.search), watchDarvas);   // tryb Darvasa: tylko lista + wyszukiwarka + Dar-Card
     tagStrategies(watchData.stocks, common, state, []);
     tagPositions(watchData.stocks, state.pos);
     tagPinnedBoxes(watchData.stocks, state.boxes);
@@ -992,6 +1030,14 @@ function watchTabRows() {
 const WATCH_LIST_KEY = "momentum_watchlist_watch_list";
 let watchList = "";   // "" = wszystkie listy
 try { watchList = localStorage.getItem(WATCH_LIST_KEY) || ""; } catch (e) { /* brak localStorage */ }
+const WATCH_DARVAS_KEY = "momentum_watchlist_watch_darvas";
+let watchDarvas = "go";   // tryb wyszukiwania Darvasa w Watchlistach (DARVAS_PICKS); "all" = zwykłe filtry
+try { const v = localStorage.getItem(WATCH_DARVAS_KEY); if (DARVAS_PICKS.some(p => p[0] === v)) watchDarvas = v; } catch (e) { /* brak localStorage */ }
+function setWatchDarvas(pick) {
+    watchDarvas = pick;
+    try { localStorage.setItem(WATCH_DARVAS_KEY, pick); } catch (e) { /* brak localStorage */ }
+    renderTable();
+}
 function watchListCounts(data = watchData) {
     const lists = (data && data.lists) || [];
     return lists.map(l => ({ name: l.name, filters: l.filters, n: data.stocks.filter(s => (s.lists || []).includes(l.name)).length }));
@@ -1004,8 +1050,12 @@ function renderWatchLists() {
     if (el.hidden) return;
     if (watchList && !counts.some(c => c.name === watchList)) watchList = "";   // lista usunięta w workflow
     const btn = (name, label, n, title) => `<button type="button" class="ml-btn${watchList === name ? " active" : ""}" data-list="${escapeHtml(name)}" title="${escapeHtml(title)}">${escapeHtml(label)}<small>${n}</small></button>`;
-    el.innerHTML = btn("", "Wszystkie", watchData.n_stocks, "Wszystkie zapamiętane listy razem (spółki bez duplikatów)")
-        + counts.map(c => btn(c.name, c.name, c.n, "Filtr Finviz: " + c.filters)).join("");
+    const inList = watchList ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
+    const loaded = inList.some(s => s.rise_state !== undefined);
+    const dbtn = ([k, label, title]) => `<button type="button" class="ml-btn dv-btn${watchDarvas === k ? " active" : ""}" data-darvas="${k}" title="${escapeHtml(title)}">${escapeHtml(label)}${k === "all" ? "" : `<small>${loaded ? darvasPickRows(inList, k).length : "…"}</small>`}</button>`;
+    el.innerHTML = `<div class="wl-row">${btn("", "Wszystkie", watchData.n_stocks, "Wszystkie zapamiętane listy razem (spółki bez duplikatów)")
+        + counts.map(c => btn(c.name, c.name, c.n, "Filtr Finviz: " + c.filters)).join("")}</div>`
+        + `<div class="wl-row"><span class="dv-lbl">📦 Darvas:</span>${DARVAS_PICKS.map(dbtn).join("")}</div>`;
 }
 function setWatchList(name) {
     watchList = name || "";
@@ -1923,6 +1973,8 @@ function initControls() {
     if (watchLink) watchLink.href = githubActionsUrl(window.location, "watchlists.yml");
     const watchLists = document.getElementById("watchLists");
     if (watchLists) watchLists.addEventListener("click", ev => {
+        const d = ev.target.closest("[data-darvas]");
+        if (d) { setWatchDarvas(d.dataset.darvas); return; }
         const b = ev.target.closest("[data-list]");
         if (b) setWatchList(b.dataset.list);
     });
@@ -2639,6 +2691,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
+        darvasPick, darvasPickRows, darvasRank,
         stopAdvice, watchListCounts,
         ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, tagRising, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,

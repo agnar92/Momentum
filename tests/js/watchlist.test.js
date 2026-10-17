@@ -594,10 +594,10 @@ test("CANSLIM A: wzrost EPS ≥ 25 % w każdym znanym z 3 ostatnich lat; akceler
     assert.match(e.rows.find(r => r.key === "A").have, /\+40% \/ \+30% \/ \+28%/);
 });
 
-test("Watchlisty: zakładka ma kolumny jak inne, w wąskiej liście ratingi do sortowania, domyślnie po Composite", () => {
+test("Watchlisty: zakładka ma kolumny jak inne, w wąskiej liście stan Darvasa, boxy i Composite", () => {
     const { TAB_COLUMNS, TAB_COLUMNS_COMPACT } = require("../../docs/js/watchlist.js");
     assert.deepEqual(TAB_COLUMNS.WATCH, TAB_COLUMNS.LIST);
-    assert.ok(["comp", "rs", "epsr"].every(c => TAB_COLUMNS_COMPACT.WATCH.includes(c)));
+    assert.ok(["darvas", "rise2", "comp"].every(c => TAB_COLUMNS_COMPACT.WATCH.includes(c)));
     assert.ok(!TAB_COLUMNS.WATCH.includes("chg") && !TAB_COLUMNS.WATCH.includes("relvol"));   // zmiana dnia / wolumen względny były tylko w starych Movers
 });
 
@@ -695,4 +695,22 @@ test("applyCommonFilters: filtr ≥ 2 rosnących pudełek Dar-Card (risingOnly)"
     const stocks = [{ ticker: "A", rise_n: 3 }, { ticker: "B", rise_n: 1 }, { ticker: "C", rise_n: null }, { ticker: "D" }];
     assert.deepEqual(applyCommonFilters(stocks, "", "", null, null, null, true).map(s => s.ticker), ["A"]);
     assert.equal(applyCommonFilters(stocks, "", "", null, null, null, false).length, 4);
+});
+
+test("Watchlisty — wyszukiwanie wg Dar-Card: Do kupna = KUP dziś + GOTOWE (≥ 2 rosnące boxy), kolejność KUP → GOTOWE od najbliższego", () => {
+    const { darvasPick, darvasPickRows, darvasRank } = require("../../docs/js/watchlist.js");
+    const rows = [
+        { ticker: "A", rise_n: 2, rise_state: "READY", rise_dist: 4 },
+        { ticker: "B", rise_n: 3, rise_state: "BUY" },
+        { ticker: "C", rise_n: 1, rise_state: "BUY" },          // pierwszy box: nie kwalifikuje się
+        { ticker: "D", rise_n: 2, rise_state: "READY", rise_dist: 1 },
+        { ticker: "E", rise_n: 2, rise_state: "HOLD" },
+        { ticker: "F", rise_n: 0, rise_state: "OUT" },
+    ];
+    assert.equal(darvasPick(rows[2]), null);
+    assert.deepEqual(darvasPickRows(rows, "go").map(s => s.ticker), ["A", "B", "D"]);
+    assert.deepEqual(darvasPickRows(rows, "buy").map(s => s.ticker), ["B"]);
+    assert.deepEqual(darvasPickRows(rows, "hold").map(s => s.ticker), ["E"]);
+    assert.equal(darvasPickRows(rows, "all").length, 6);
+    assert.deepEqual([...rows].sort((a, b) => darvasRank(a) - darvasRank(b)).map(s => s.ticker), ["B", "D", "A", "E", "C", "F"]);
 });
