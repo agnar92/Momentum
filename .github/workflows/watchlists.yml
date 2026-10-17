@@ -1,10 +1,10 @@
 name: Watchlisty
 
 # Ręczne WATCHLISTY z pełną analizą TYGODNIOWĄ (RS Rating, EPS Rating, Composite, Dar-Card, wykres słupkowy). Lista = nazwa + filtr Finviz (pole `filters`);
-# listy są zapisane w docs/data/watchlists_def.json (workflow je pamięta między uruchomieniami). Każde uruchomienie skanuje WSZYSTKIE listy, pobiera ceny i EPS sumy
+# listy są zapisane w docs/data/watchlists_def.json (workflow je pamięta między uruchomieniami). Każda akcja robi tylko swoje: add skanuje tylko dodaną / zmienioną listę, remove tylko usuwa listę (bez sieci), refresh skanuje WSZYSTKIE listy; skan pobiera ceny i EPS sumy
 # spółek (bez duplikatów) i liczy oceny — percentyle wśród spółek ze wszystkich list razem. W aplikacji listy są podkategoriami zakładki Watchlisty. Wykresów dziennych nie ma.
 #   action = add     -> dodaj listę (name + filters) albo zmień filtr listy o tej nazwie
-#   action = remove  -> usuń listę o podanej nazwie (name)
+#   action = remove  -> usuń listę o podanej nazwie (name), bez odświeżania pozostałych
 #   action = refresh -> odśwież wszystkie listy (name i filters są pomijane)
 # Filtr: kody Finviz po przecinku (cap_midover,sh_avgvol_o1000,…), zapis `cap:midover sh_avgvol:o1000 ta_sma20:pa` albo cały link ze skanera Finviz.
 # Wynik: docs/data/watchlists_def.json + watchlists.json + charts_watchlists.json + eps_cache_watchlists.json — NIE rusza watchlist.json / charts.json (lista CANSLIM, odświeżana raz w tygodniu).
@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: 'Akcja: add = dodaj / zmień listę, remove = usuń listę, refresh = odśwież wszystkie'
+        description: 'Akcja: add = dodaj / zmień listę (skan tylko jej), remove = usuń listę (bez odświeżania), refresh = odśwież wszystkie'
         type: choice
         default: refresh
         options: [refresh, add, remove]

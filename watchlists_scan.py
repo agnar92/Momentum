@@ -146,51 +146,44 @@ def _write_json(path, obj):
     Path(path).write_text(json.dumps(obj, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
 
 
-def run(data_dir=None, action="refresh", name="", filters="", log=print):
-    """-> 0 / 1 / 2. Akcja na zapamiętanych listach, potem skan WSZYSTKICH list: zapisuje watchlists_def.json, watchlists.json i charts_watchlists.json
-    w data_dir (przy błędzie zostają poprzednie pliki)."""
-    data_dir = Path(data_dir or DATA_DIR)
+def _read_json(path):
     try:
-        lists, msg = apply_action(load_lists(data_dir / LISTS_FILE), action, name, filters)
-    except ValueError as e:
-        log(f"❌ {e}")
-        return 2
-    log(msg)
-    now_utc = datetime.now(timezone.utc)
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _scan(sel, data_dir, now_utc, log):
+    """Pełny potok dla list `sel` (Finviz -> ceny -> metryki -> EPS -> oceny -> wykresy tygodniowe). -> (kod 0/1, stocks, charts, info, members);
+    oceny (percentyle) wśród spółek TYCH list."""
     now_ts = watchlist.pd.Timestamp(now_utc)
     rows_by_ticker, members, info = {}, {}, []
-    for lst in lists:
+    for lst in sel:
         log(f"Lista „{lst['name']}”: {lst['filters']}")
         try:
             rows, total = fetch_list(lst["filters"], log=log)
         except Exception as e:
             log(f"❌ Finviz niedostępny ({e}) — zostają poprzednie pliki.")
-            return 1
+            return 1, [], None, [], {}
         if not rows:
             log(f"⚠️  Lista „{lst['name']}” jest teraz pusta (żadna spółka nie spełnia filtra) — sprawdź kody, jeśli to nieoczekiwane.")
         for r in rows:
             rows_by_ticker.setdefault(r["ticker"], r)
             members.setdefault(r["ticker"], []).append(lst["name"])
         info.append({"name": lst["name"], "filters": lst["filters"], "n": len(rows), "finviz_total": total})
-    data_dir.mkdir(parents=True, exist_ok=True)
-    meta = {"generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "lists": info}
     tickers = list(rows_by_ticker)
-    if not tickers and lists:
-        log("❌ Żadna lista nie zwróciła spółek (brak spółek spełniających filtry, blokada Finviz albo zmiana układu strony) — zostają poprzednie pliki.")
-        return 1
     if not tickers:
-        log("Nie ma już żadnej listy — zapisuję pusty wynik.")
-        _write_json(data_dir / LISTS_FILE, {"lists": lists})
-        _write_json(data_dir / DATA_FILE, {**meta, "data_as_of": None, "n_stocks": 0, "stocks": []})
-        _write_json(data_dir / CHARTS_FILE, {"stocks": {}})
-        return 0
-    log(f"Spółek razem: {len(tickers)}. Pobieram ceny z yfinance…")
+        if sel:
+            log("❌ Żadna lista nie zwróciła spółek (brak spółek spełniających filtry, blokada Finviz albo zmiana układu strony) — zostają poprzednie pliki.")
+            return 1, [], None, info, members
+        return 0, [], None, info, members
+    log(f"Spółek: {len(tickers)}. Pobieram ceny z yfinance…")
     frames = sanitize_frames(watchlist.download_prices(tickers), log)
     coverage = len(frames) / len(tickers)
     log(f"Ceny dla {len(frames)}/{len(tickers)} spółek ({coverage:.0%}).")
     if coverage < watchlist.MIN_COVERAGE:
         log(f"❌ Pokrycie cen poniżej {watchlist.MIN_COVERAGE:.0%} — przerywam bez zapisu (zostają poprzednie pliki).")
-        return 1
+        return 1, [], None, info, members
     try:
         benchmark_df = watchlist.download_prices([watchlist.BENCHMARK]).get(watchlist.BENCHMARK)
     except Exception as e:
@@ -200,21 +193,50 @@ def run(data_dir=None, action="refresh", name="", filters="", log=print):
         stocks = watchlist.build_stocks(list(rows_by_ticker.values()), frames, now_ts, bench_df=benchmark_df)
     if not stocks:
         log("❌ Żadna spółka nie przeszła obliczeń — nie zapisuję.")
-        return 1
+        return 1, [], None, info, members
     try:
         eps_cache = watchlist.update_eps_cache([s["ticker"] for s in stocks], data_dir / EPS_FILE)
     except Exception as e:
         log(f"⚠️  Krok EPS pominięty ({e}) — bez EPS Rating i Composite.")
         eps_cache = {}
-    watchlist.add_eps_rating(stocks, eps_cache)    # EPS Rating i Composite (RS + EPS) — percentyle wśród spółek ze wszystkich list
-    for s in stocks:
-        s["lists"] = members.get(s["ticker"], [])
-    stocks.sort(key=lambda s: (s.get("composite_rating") is None, -(s.get("composite_rating") or 0), s["ticker"]))
+    watchlist.add_eps_rating(stocks, eps_cache)    # EPS Rating i Composite (RS + EPS)
     charts = watchlist.build_charts([s["ticker"] for s in stocks], frames, benchmark_df, eps_cache, now_ts)
     for s in stocks:
         summary = ((charts or {}).get("stocks", {}).get(s["ticker"]) or {}).get("rs_line") or {}
         s["rs_line_state"] = summary.get("state")
         s["rs_line_dist_pct"] = summary.get("dist_pct")
+    return 0, stocks, charts, info, members
+
+
+def _sort_stocks(stocks):
+    stocks.sort(key=lambda s: (s.get("composite_rating") is None, -(s.get("composite_rating") or 0), s["ticker"]))
+
+
+def _rerate(stocks):
+    """Przelicza percentyle (RS, Acc/Dis, siła grupy, EPS, Composite) z zapisanych wyników po zmianie składu spółek — bez pobierania danych."""
+    watchlist.add_rs_rating(stocks)
+    watchlist.add_accdis_rating(stocks)
+    watchlist.add_group_strength(stocks)
+    watchlist.finalize_eps_rating(stocks)
+    _sort_stocks(stocks)
+
+
+def _realign(chart, old_weeks, new_weeks):
+    """Tablice tygodniowe starego wykresu (po jednej wartości na tydzień) przenosi na nową oś tygodni po datach (brak = None)."""
+    if old_weeks == new_weeks:
+        return chart
+    pos = {d: i for i, d in enumerate(old_weeks)}
+    out = {}
+    for k, v in chart.items():
+        if isinstance(v, list) and len(v) == len(old_weeks):
+            v = [v[pos[d]] if d in pos else None for d in new_weeks]
+        out[k] = v
+    return out
+
+
+def _finish(data_dir, lists, info, stocks, charts, now_utc, log, charts_replace=True):
+    meta = {"generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "lists": info}
+    data_dir.mkdir(parents=True, exist_ok=True)
     payload = {**meta, "data_as_of": max((s["as_of"] for s in stocks), default=None), "n_stocks": len(stocks), "stocks": stocks}
     _write_json(data_dir / LISTS_FILE, {"lists": lists})
     _write_json(data_dir / DATA_FILE, payload)
@@ -226,9 +248,99 @@ def run(data_dir=None, action="refresh", name="", filters="", log=print):
     return 0
 
 
+def run(data_dir=None, action="refresh", name="", filters="", log=print):
+    """-> 0 / 1 / 2; zapisuje watchlists_def.json, watchlists.json i charts_watchlists.json w data_dir (przy błędzie zostają poprzednie pliki).
+    Każda akcja robi tylko swoje:
+      remove  — usuwa listę i jej wyłącznych członków z zapisanych plików, BEZ sieci i bez odświeżania pozostałych list;
+      add     — skanuje tylko dodaną / zmienioną listę (i listy, których jeszcze nigdy nie skanowano), resztę bierze z poprzednich plików;
+      refresh — skanuje WSZYSTKIE listy od nowa."""
+    data_dir = Path(data_dir or DATA_DIR)
+    old_lists = load_lists(data_dir / LISTS_FILE)
+    try:
+        lists, msg = apply_action(old_lists, action, name, filters)
+    except ValueError as e:
+        log(f"❌ {e}")
+        return 2
+    log(msg)
+    now_utc = datetime.now(timezone.utc)
+    action = (action or "refresh").strip()
+    old_data = _read_json(data_dir / DATA_FILE) or {}
+    old_charts = _read_json(data_dir / CHARTS_FILE) or {}
+    scanned = {x["name"].lower() for x in old_data.get("lists", [])}
+    if action == "remove" and old_data.get("stocks") is not None:
+        gone = name.strip().lower()
+        stocks = []
+        for s in old_data["stocks"]:
+            mem = [m for m in s.get("lists", []) if m.lower() != gone]
+            if mem:
+                stocks.append({**s, "lists": mem})
+        counts = {}
+        for s in stocks:
+            for m in s["lists"]:
+                counts[m] = counts.get(m, 0) + 1
+        info = [{**x, "n": counts.get(x["name"], 0)} for x in old_data.get("lists", []) if x["name"].lower() != gone]
+        keep = {s["ticker"] for s in stocks}
+        charts = {**old_charts, "stocks": {t: c for t, c in (old_charts.get("stocks") or {}).items() if t in keep}} if old_charts else None
+        if stocks:
+            _rerate(stocks)
+        log("Bez odświeżania pozostałych list — tylko usunięcie.")
+        return _finish(data_dir, lists, info, stocks, charts, now_utc, log)
+    if action == "add" and old_data.get("stocks") is not None:
+        target = name.strip().lower()
+        sel = [x for x in lists if x["name"].lower() == target or x["name"].lower() not in scanned]
+        code, new_stocks, new_charts, new_info, members = _scan(sel, data_dir, now_utc, log)
+        if code:
+            return code
+        redo = {x["name"].lower() for x in sel}
+        fresh = {s["ticker"] for s in new_stocks}
+        stocks, by_old = list(new_stocks), {}
+        for s in old_data["stocks"]:
+            mem = [m for m in s.get("lists", []) if m.lower() not in redo]
+            if s["ticker"] in fresh:
+                by_old[s["ticker"]] = mem   # przynależność do list, których nie skanowaliśmy
+            elif mem:
+                stocks.append({**s, "lists": mem})
+        order = {x["name"]: i for i, x in enumerate(lists)}
+        for s in new_stocks:
+            s["lists"] = sorted(set(members.get(s["ticker"], [])) | set(by_old.get(s["ticker"], [])), key=lambda m: order.get(m, 99))
+        for s in stocks:
+            s["lists"] = sorted(s["lists"], key=lambda m: order.get(m, 99))
+        counts = {}
+        for s in stocks:
+            for m in s["lists"]:
+                counts[m] = counts.get(m, 0) + 1
+        by_name = {x["name"].lower(): x for x in old_data.get("lists", [])}
+        by_name.update({x["name"].lower(): x for x in new_info})
+        info = [{**by_name[x["name"].lower()], "name": x["name"], "filters": x["filters"], "n": counts.get(x["name"], 0)} for x in lists if x["name"].lower() in by_name]
+        _rerate(stocks)
+        charts = new_charts
+        if old_charts.get("stocks") and new_charts is not None:
+            charts = {**new_charts, "stocks": dict(new_charts["stocks"])}
+            have = {s["ticker"] for s in stocks}
+            for t, c in old_charts["stocks"].items():
+                if t in have and t not in charts["stocks"]:
+                    charts["stocks"][t] = _realign(c, old_charts.get("weeks", []), new_charts["weeks"])
+        log("Przeskanowano tylko: " + ", ".join(x["name"] for x in sel) + " — pozostałe listy bez odświeżania.")
+        return _finish(data_dir, lists, info, stocks, charts, now_utc, log)
+    code, stocks, charts, info, members = _scan(lists, data_dir, now_utc, log)   # refresh (albo add / remove bez poprzednich plików) = wszystkie listy
+    if code:
+        return code
+    if not stocks:
+        log("Nie ma już żadnej listy — zapisuję pusty wynik.")
+        _write_json(data_dir / LISTS_FILE, {"lists": lists})
+        data_dir.mkdir(parents=True, exist_ok=True)
+        _write_json(data_dir / DATA_FILE, {"generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "lists": info, "data_as_of": None, "n_stocks": 0, "stocks": []})
+        _write_json(data_dir / CHARTS_FILE, {"stocks": {}})
+        return 0
+    for s in stocks:
+        s["lists"] = members.get(s["ticker"], [])
+    _sort_stocks(stocks)
+    return _finish(data_dir, lists, info, stocks, charts, now_utc, log)
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Watchlisty: zapamiętane listy (nazwa + filtr Finviz), RS / EPS / Composite, wykresy tygodniowe -> docs/data/watchlists.json + charts_watchlists.json")
-    p.add_argument("--action", default="refresh", choices=ACTIONS, help="add = dodaj / zmień listę (--name, --filters), remove = usuń listę (--name), refresh = odśwież wszystkie.")
+    p.add_argument("--action", default="refresh", choices=ACTIONS, help="add = dodaj / zmień listę i przeskanuj tylko ją (--name, --filters), remove = usuń listę bez odświeżania pozostałych (--name), refresh = odśwież wszystkie.")
     p.add_argument("--name", default="", help="Nazwa listy.")
     p.add_argument("--filters", default="", help="Filtr Finviz: kody po przecinku, zapis cap:midover sh_curvol:o1000 … albo cały link ze skanera.")
     p.add_argument("--data-dir", type=str, default=None, help="Katalog wyjściowy (domyślnie docs/data).")

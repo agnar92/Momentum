@@ -115,3 +115,43 @@ def test_removing_the_last_list_writes_an_empty_result(tmp_path):
 
 def test_main_rejects_bad_parameters():
     assert ws.main(["--action", "add", "--name", "X"]) == 2
+
+
+def test_remove_does_not_touch_network_or_other_lists(tmp_path, monkeypatch):
+    fake_network(monkeypatch, lambda f: [fv_row("AAA"), fv_row("BBB")] if "big" in f else [fv_row("BBB"), fv_row("CCC")])
+    assert ws.run(tmp_path, "add", "Duże", "cap_big", log=QUIET) == 0
+    assert ws.run(tmp_path, "add", "Małe", "cap_small", log=QUIET) == 0
+
+    def boom(*a, **k):
+        raise AssertionError("remove nie może łączyć się z siecią")
+    monkeypatch.setattr(ws, "fetch_list", boom)
+    monkeypatch.setattr(watchlist, "download_prices", boom)
+    monkeypatch.setattr(watchlist, "update_eps_cache", boom)
+    assert ws.run(tmp_path, "remove", "Duże", log=QUIET) == 0
+    data = json.loads((tmp_path / ws.DATA_FILE).read_text())
+    by = {s["ticker"]: s["lists"] for s in data["stocks"]}
+    assert "AAA" not in by and by["BBB"] == [ws.DEFAULT_LIST_NAME, "Małe"] and by["CCC"] == [ws.DEFAULT_LIST_NAME, "Małe"] or "CCC" in by
+    assert [x["name"] for x in data["lists"]] == [ws.DEFAULT_LIST_NAME, "Małe"]
+    charts = json.loads((tmp_path / ws.CHARTS_FILE).read_text())
+    assert "AAA" not in charts["stocks"] and "BBB" in charts["stocks"]
+
+
+def test_add_scans_only_the_new_list(tmp_path, monkeypatch):
+    seen = []
+
+    def per_filter(f):
+        seen.append(f)
+        return {"cap_big": [fv_row("AAA")], "cap_small": [fv_row("CCC")]}.get(f, [fv_row("BBB")])
+    fake_network(monkeypatch, per_filter)
+    assert ws.run(tmp_path, "add", "Duże", "cap_big", log=QUIET) == 0
+    seen.clear()
+    assert ws.run(tmp_path, "add", "Małe", "cap_small", log=QUIET) == 0
+    assert seen == ["cap_small"]   # Duże i domyślna lista nie są pobierane od nowa
+    data = json.loads((tmp_path / ws.DATA_FILE).read_text())
+    assert {s["ticker"] for s in data["stocks"]} == {"AAA", "BBB", "CCC"}
+    assert {x["name"]: x["n"] for x in data["lists"]} == {ws.DEFAULT_LIST_NAME: 1, "Duże": 1, "Małe": 1}
+    charts = json.loads((tmp_path / ws.CHARTS_FILE).read_text())
+    assert set(charts["stocks"]) == {"AAA", "BBB", "CCC"}
+    seen.clear()
+    assert ws.run(tmp_path, "refresh", log=QUIET) == 0
+    assert sorted(seen) == sorted(["cap_big", "cap_small", ws.DEFAULT_FILTERS])   # refresh = wszystkie
