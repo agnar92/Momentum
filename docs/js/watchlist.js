@@ -953,7 +953,10 @@ function renderRow(tab, s, i) {
 // RS Rating, EPS Rating, Composite (percentyle wśród spółek ze wszystkich list), CANSLIM, „Co robić”, bazy — i wykresami tygodniowymi, żeby można było sortować po wynikach.
 // Akcje wzrostowe wg Dar-Card: s.rise_n = liczba kolejnych, coraz wyższych pudełek (darvasRisingInfo na dziennych zamknięciach). Wykresy ładują się leniwie,
 // więc znaczniki liczymy raz po załadowaniu (osobno dla głównej listy i dla Watchlist) i odświeżamy tabelę.
-const risingState = { main: false, watch: false };
+// risingState[which] = obiekt danych (state.data / watchData), który już otagowano; inny obiekt (np. po refreshDataIfStale, który podmienia dane
+// po powrocie aplikacji z tła) = liczymy od nowa. risingPending blokuje równoległe ładowanie tego samego zestawu.
+const risingState = { main: null, watch: null };
+const risingPending = { main: null, watch: null };
 function tagRising(stocks, charts) {
     stocks.forEach(s => {
         const c = charts && charts.stocks && charts.stocks[s.ticker];
@@ -992,18 +995,19 @@ function darvasRank(s) {
     return { WAIT: 3, BUY: 3, READY: 3, HOLD: 4, SELL: 5, OUT: 6 }[s.rise_state] ?? 7;
 }
 async function ensureRising(which) {
-    if (risingState[which] || typeof darvasRisingInfo !== "function") return;
-    risingState[which] = true;
+    if (typeof darvasRisingInfo !== "function") return;
+    const target = which === "watch" ? watchData : state.data;
+    if (!target || risingState[which] === target || risingPending[which] === target) return;
+    risingPending[which] = target;
     try {
-        if (which === "watch") {
-            const charts = dailyCharts(await loadWatchCharts());
-            if (charts && watchData) tagRising(watchData.stocks, charts);
-        } else if (state.data) {
-            const charts = dailyCharts(await loadCharts());
-            if (charts) tagRising(state.data.stocks, charts);
+        const charts = dailyCharts(await (which === "watch" ? loadWatchCharts() : loadCharts()));
+        if (charts && target === (which === "watch" ? watchData : state.data)) {
+            tagRising(target.stocks, charts);
+            risingState[which] = target;
+            renderTable();
         }
-        renderTable();
-    } catch (e) { risingState[which] = false; }
+    } catch (e) { /* brak wykresów — spróbujemy przy następnym renderowaniu */ }
+    if (risingPending[which] === target) risingPending[which] = null;
 }
 
 function watchTabRows() {
