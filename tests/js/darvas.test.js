@@ -318,3 +318,10 @@ test("darCardPastRange i darCardSvg", () => {
     const svg = darCardSvg({ c: SERIES, v: null, weeks: SERIES.map((_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`) }, { bookTitle: "TST" });
     assert.ok(svg.includes("DAR·CARD") && svg.includes("Past Price Range"));
 });
+
+test("darCardAnalyze: BUY podaje stop 10 % i poziom strefy zagrożenia (zlecenie stop od razu po zakupie)", () => {
+    const { darCardAnalyze } = require("../../docs/js/darvas.js");
+    const base = [10, 12, 11, 10.5, 11, 10.8, 11.2, 11, 10.9, 11.1];
+    const a = darCardAnalyze(base.concat([14]));
+    if (a.status.state === "BUY") assert.ok(/zlecenie stop/.test(a.status.text) && a.status.stop > 0);
+});

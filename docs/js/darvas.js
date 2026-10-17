@@ -862,7 +862,7 @@ function darCardAnalyze(c, vol = null) {
         const entry = prevPx !== null && prevPx <= top ? px : top;
         if (prevPx !== null && prevPx <= top) {
             state = "BUY"; stop = darvasInitialStop(top, bottom, px);
-            text = `KUP — zamknięcie nad górą najwyższego boxa ${r2(top)}${rising ? " (po dwóch kolejnych wyższych boxach)" : ""}; stop ${DARVAS_START_STOP_PCT} % przy pierwszym wybiciu: ${stop}`;
+            text = `KUP — zamknięcie nad górą najwyższego boxa ${r2(top)}${rising ? " (po dwóch kolejnych wyższych boxach)" : ""}; stop ${DARVAS_START_STOP_PCT} % przy pierwszym wybiciu: ${stop}; od razu złóż zlecenie stop (dalej trzymaj nad strefą zagrożenia ${r2(zoneLow)})`;
             if (vol && Number.isFinite(vol[lr])) {
                 const pv = vol.slice(Math.max(0, lr - DARVAS_VOL_WEEKS), lr).filter(Number.isFinite);
                 if (pv.length >= 4) { const vr = vol[lr] / (pv.reduce((a, b) => a + b, 0) / pv.length); if (vr < DARVAS_BREAKOUT_VOL) warnings.push(`wolumen wybicia tylko ${vr.toFixed(2)}× średniej (zwykle ≥ ${DARVAS_BREAKOUT_VOL}×)`); }
