@@ -2365,7 +2365,7 @@ function initChartModal() {
     // (przełączniki warstw, suwak) nie zmienia już spółki
     document.getElementById("chartBody").addEventListener("click", ev => {
         if (!window.matchMedia || !window.matchMedia("(pointer: coarse)").matches) return;
-        if (annEdit.on || annPen.on || boxAddOn || ev.target.closest("button, a, input, select, summary, details, .wl-range, .layer-bar, .box-focus-bar, .box-select-bar, .box-pick, .chart-overlay.editing")) return;
+        if (annEdit.on || annPen.on || boxAddOn || ev.target.closest("button, a, input, select, summary, details, [data-box], .wl-range, .layer-bar, .box-focus-bar, .box-select-bar, .box-pick, .chart-overlay.editing")) return;
         const r = document.getElementById("chartBody").getBoundingClientRect(), f = (ev.clientX - r.left) / r.width;
         if (f >= 0.86) { ev.stopPropagation(); slideChart(1); } else if (f <= 0.14) { ev.stopPropagation(); slideChart(-1); }
     }, true);   // faza przechwytywania: działa też na Dar-Card, której własna obsługa kliknięć w svg zatrzymuje zdarzenie
