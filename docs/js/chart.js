@@ -252,6 +252,7 @@ function buildChartModel(charts, ticker, stock, opts = {}) {
         pivot: opts.patterns === false ? null : pivotFromStock(stock, c.bases),
     };
     // opisy jak w książce (tylko wykres tygodniowy): liczone na pełnym modelu, sliceModel przesuwa je razem z oknem
+    model.splits = (c.splits || []).filter(sp => sp && sp.d && Number.isFinite(sp.r));   // surowe splity {d, r} (notka na karcie Darvasa)
     if (opts.patterns !== false) {
         model.book = computeBook({
             n: model.n, h: model.h, l: model.l, c: model.c, v: model.v, volAvg: model.volAvg, smas: model.smas, spx: model.spx,

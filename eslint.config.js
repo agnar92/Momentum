@@ -45,6 +45,7 @@ const browserGlobals = {
     bookSvg: "readonly",
     computeBook: "readonly",
     shiftBook: "readonly",
+    splitLabel: "readonly",
     // docs/js/darvas.js (ładowany po chart.js, PRZED watchlist.js)
     darvasBoxes: "readonly",
     darvasSvg: "readonly",
