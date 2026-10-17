@@ -690,3 +690,16 @@ test("chartSvg: baza flat to samo pudełko Darvasa (klikalne), bez linii pivotu,
     assert.doesNotMatch(svg, /pivot 15\.00/);
 });
 
+
+test("dailyChartsView mapuje blok daily na kształt tygodniowy (Darvas na dziennych zamknięciach)", () => {
+    const { dailyChartsView } = require("../../docs/js/chart.js");
+    const charts = { benchmark: "^GSPC", weeks: ["2026-10-02"], stocks: { AAA: { eps: [{ d: "2026-08-01", e: 1 }], eps_next: null, splits: [], bases: [{ x: 1 }], c: [1] } },
+        daily: { dates: ["2026-10-01", "2026-10-02"], spx: [10, 11], stocks: { AAA: { o: [1, 2], h: [2, 3], l: [1, 1], c: [2, 3], v: [5, 6], sma10: [null, 2], sma50: [null, null] } } } };
+    const v = dailyChartsView(charts);
+    assert.deepEqual(v.weeks, ["2026-10-01", "2026-10-02"]);
+    assert.equal(v.isDaily, true);
+    assert.deepEqual(v.stocks.AAA.c, [2, 3]);
+    assert.deepEqual(v.stocks.AAA.bases, []);          // wzorce tygodniowe nie dotyczą widoku dziennego
+    assert.equal(v.stocks.AAA.eps.length, 1);           // EPS wspólny z widokiem tygodniowym
+    assert.equal(dailyChartsView({ weeks: [], stocks: {} }), null);   // brak bloku daily = widok tygodniowy
+});

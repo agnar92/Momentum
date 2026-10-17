@@ -90,7 +90,7 @@ function darvasLineInfo(top, stopPct = DARVAS_LINE_STOP_PCT) {
 
 const DARVAS_STOP_PCT = 5;   // szeroko strefy ryzyka: 5 % poniżej dołu boxa; dół strefy = exit
 
-// Ceny boxa: wejście = góra (kup po zamknięciu tygodnia nad nią), anulowanie = dolna krawędź (zamknięcie pod nią kończy box), stop loss = −stopPct % od wejścia.
+// Ceny boxa: wejście = góra (kup po zamknięciu sesji nad nią), anulowanie = dolna krawędź (zamknięcie pod nią kończy box), stop loss = −stopPct % od wejścia.
 function darvasBoxInfo(top, bottom, zonePct = DARVAS_STOP_PCT) {
     const r2 = v => Math.round(v * 100) / 100;
     const stop = r2(bottom * (1 - zonePct / 100)), stopPct = r2((1 - stop / top) * 100);
@@ -105,7 +105,7 @@ function darvasBoxSheetHtml(info, state, confirmed) {
         + `<tr><th>🛑 Stop początkowy</th><td><b>${info.initStop.toFixed(2)}</b><br><span class="muted small">${DARVAS_START_STOP_PCT}% pod wejściem; po wyższym boxie stop idzie pod jego dół −${info.zonePct}%</span></td></tr>`
         + `<tr><th>⚠️ Początek strefy ryzyka</th><td><b>${info.cancel.toFixed(2)}</b><br><span class="muted small">dolna krawędź boxa; od niej w dół jest szara strefa ryzyka (potencjalny exit)</span></td></tr>`
         + `<tr><th>🛑 Exit (dół strefy ryzyka)</th><td><b>${info.stop.toFixed(2)}</b><br><span class="muted small">dół szarej strefy ryzyka = ${info.zonePct}% pod dołem boxa (${info.stopPct}% pod ceną wejścia); wyjście poniżej tej ceny = exit</span></td></tr></table>`
-        + `<p class="muted small">Reguły Darvasa na tygodniowych zamknięciach; heurystyka, nie rekomendacja.</p></div>`;
+        + `<p class="muted small">Reguły Darvasa na dziennych zamknięciach; heurystyka, nie rekomendacja.</p></div>`;
 }
 
 const DARVAS_MAX_EXT_PCT = 10;     // KUP tylko do 10 % nad górą boxa (na zamknięciach tygodniowych 5 % jest za ciasne — backtest); główne potwierdzenie to wolumen
@@ -114,12 +114,12 @@ const DARVAS_VOL_WEEKS = 10;
 const DARVAS_START_STOP_PCT = 10;   // stop początkowy: nie głębiej niż 10 % pod wejściem
 
 // Stop początkowy po wybiciu = DOKŁADNIE capPct % (domyślnie 10 %) pod wejściem — reguła z teorii pudełek Darvasa (user: „dodaj ten 10 % stop jak mamy wejście początkowe”).
-// Parametry top / bottom zostają dla zgodności wywołań (stop nie zależy już od wysokości boxa). Wyjście: MACD tygodniowy pod sygnałem albo wejście w strefę zagrożenia (box failuje).
+// Parametry top / bottom zostają dla zgodności wywołań (stop nie zależy już od wysokości boxa). Wyjście: MACD dzienny pod sygnałem albo wejście w strefę zagrożenia (box failuje).
 function darvasInitialStop(top, bottom, entry = top, capPct = DARVAS_START_STOP_PCT) {
     return Math.round(entry * (1 - capPct / 100) * 100) / 100;
 }
 
-// Wyjście z MACD: tygodniowy MACD (12, 26, 9) pod linią sygnału na ostatniej prawdziwej świecy. null = za krótka historia / brak funkcji z chart.js.
+// Wyjście z MACD: dzienny MACD (12, 26, 9) pod linią sygnału na ostatniej prawdziwej świecy. null = za krótka historia / brak funkcji z chart.js.
 function darvasMacdBelow(c) {
     if (typeof macdSeries !== "function") return null;
     const { hist } = macdSeries(c);
@@ -139,7 +139,7 @@ function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bo
     }
     const st = darvasStatusCore(c, zonePct, confirm, bottomConfirm, vol, maxExtPct);
     if ((st.state === "HOLD" || st.state === "BUY") && darvasMacdBelow(c) === true) {
-        return { ...st, macdExit: true, text: `${st.text} · ⚠ WYJŚCIE: tygodniowy MACD jest pod linią sygnału` };
+        return { ...st, macdExit: true, text: `${st.text} · ⚠ WYJŚCIE: dzienny MACD jest pod linią sygnału` };
     }
     return st;
 }
@@ -168,7 +168,7 @@ function darvasStatusCore(c, zonePct, confirm, bottomConfirm, vol, maxExtPct) {
     if (!last) {   // jest tylko top, bez potwierdzonego dołu
         const tl = ln[ln.length - 1], li = darvasLineInfo(tl.top), base = { top: li.entry, stop: li.stop };
         if (!tl.open && tl.i1 === lr) return buy(tl.top, base, li.stop, lineTxt(li), "topem");
-        if (tl.open) return { ...base, state: "WAIT", text: `CZEKAJ — jest tylko top ${li.entry} (dół jeszcze niepotwierdzony); kup po zamknięciu tygodnia nad nim, stop ${DARVAS_LINE_STOP_PCT} % (${li.stop})` };
+        if (tl.open) return { ...base, state: "WAIT", text: `CZEKAJ — jest tylko top ${li.entry} (dół jeszcze niepotwierdzony); kup po zamknięciu sesji nad nim, stop ${DARVAS_LINE_STOP_PCT} % (${li.stop})` };
         return { ...base, state: "HOLD", text: `TRZYMAJ — top ${li.entry} przebity, czekamy na potwierdzony box; stop ${DARVAS_LINE_STOP_PCT} % pod topem (${li.stop})` };
     }
     const { top, bottom } = last, zoneFrom = r2(bottom), stop = r2(bottom * (1 - zonePct / 100));
@@ -181,7 +181,7 @@ function darvasStatusCore(c, zonePct, confirm, bottomConfirm, vol, maxExtPct) {
     }
     if (last.outcome === "up" && (last.i1 === lr || (tracked && px > top && prevPx !== null && prevPx <= top))) {   // próba przebicia: pierwsza albo kolejna
         const initStop = darvasInitialStop(top, bottom, px);
-        return buy(top, base, initStop, `stop początkowy ${DARVAS_START_STOP_PCT} % pod wejściem (${initStop}), potem pod dnem kolejnych boxów; wyjście: MACD tygodniowy pod sygnałem lub wejście w strefę zagrożenia`, "górą boxa");
+        return buy(top, base, initStop, `stop początkowy ${DARVAS_START_STOP_PCT} % pod wejściem (${initStop}), potem pod dnem kolejnych boxów; wyjście: MACD dzienny pod sygnałem lub wejście w strefę zagrożenia`, "górą boxa");
     }
     if (last.outcome === "down" || last.cancelled || (last.outcome === "up" && !tracked)) {
         if (px < bottom) return { ...base, state: "SELL", text: `SPRZEDAJ — BOX FAILUJE: cena weszła w strefę zagrożenia (box ${zoneFrom}–${r2(top)} anulowany, strefa ${stop}–${zoneFrom}); szukamy nowego boxa` };
@@ -190,7 +190,7 @@ function darvasStatusCore(c, zonePct, confirm, bottomConfirm, vol, maxExtPct) {
     if (tracked) return { ...base, state: "HOLD", text: `TRZYMAJ — cena ${px > top ? "nad górą boxa" : "w boxie"} ${zoneFrom}–${r2(top)}; box obowiązuje do utworzenia nowego wyżej, anuluje go zejście pod dno ${zoneFrom} (strefa zagrożenia ${stop}–${zoneFrom})` };
     const hadUp = bx.length > 1 && bx[bx.length - 2].outcome === "up";
     if (hadUp) return { ...base, state: "HOLD", text: `TRZYMAJ — cena w nowym boxie ${zoneFrom}–${r2(top)}; stop pod strefą zagrożenia ${stop}` };
-    return { ...base, state: "WAIT", text: `CZEKAJ — box ${zoneFrom}–${r2(top)}; kup po zamknięciu tygodnia nad ${r2(top)}` };
+    return { ...base, state: "WAIT", text: `CZEKAJ — box ${zoneFrom}–${r2(top)}; kup po zamknięciu sesji nad ${r2(top)}` };
 }
 
 // Status przypiętego (monitorowanego) boxa względem bieżącej ceny: nad górą = wybicie, w boxie, w szarej strefie zagrożenia (5 % pod dołem), pod strefą = exit.
@@ -253,7 +253,7 @@ function natrGrade(v) {
     return { key: "wide", label: "za szeroki", cls: "negative" };
 }
 
-const DARVAS_NEW_WEEKS = 4;   // box jest „nowy”, gdy jego góra została potwierdzona w ostatnich tylu tygodniach
+const DARVAS_NEW_WEEKS = 10;   // box jest „nowy”, gdy jego góra została potwierdzona w ostatnich tylu tygodniach
 
 // Przegląd boxów Darvasa dla wszystkich spółek (podstrona „Boxy”): items = [{ticker, price, c (tyg. zamknięcia), v (wolumen), h / l (opcjonalnie, dla NATR boxa)}], weeks = daty tygodni, pinned = {T: {top, bottom, start}}.
 // Zwraca sekcje: pinned (monitorowane), fresh (nowe boxy), buy (wybicie potwierdzone wolumenem), check (wybicie bez wolumenu / za późno), hold, sell, wait — każdy wiersz {ticker, price, state, text, box:{top,bottom,start,i0,i1}, key}.
@@ -367,7 +367,7 @@ function darvasFlatStatus(c, box, name = "flat base") {
 }
 
 // Widok Dar-Card dla okna wykresu: full = pełny model z chart.js (c, weeks, n, pad), win = {n, end}; opts: fit {w, h}
-// Panel pod boxem: trzy pasma — MACD (12, 26, 9) tygodniowy, wolumen tygodnia i NATR (14 tyg.). Używany przez Dar-Card (ukryty, pokazuje się po zaznaczeniu) i kartę z książki.
+// Panel pod boxem: trzy pasma — MACD (12, 26, 9) dzienny, wolumen tygodnia i NATR (14 tyg.). Używany przez Dar-Card (ukryty, pokazuje się po zaznaczeniu) i kartę z książki.
 // o: { W, left, right, pY0, pH, start, endExcl, lastReal, fs, x(i), bw, opacity?, spanX?, spanW? } → fragment SVG (grupa #dMacd) albo "".
 function darvasPanelGroup(full, o) {
     const { W, left, right, pY0, pH, start, endExcl, lastReal, fs, x } = o;
@@ -407,7 +407,7 @@ function darvasPanelGroup(full, o) {
                 });
                 const avgPts = wk.map(i => [i, avgAt(i)]).filter(p2 => p2[1] !== null).map(p2 => `${x(p2[0]).toFixed(1)},${yv(p2[1]).toFixed(1)}`).join(" ");
                 if (avgPts) g.push(`<polyline points="${avgPts}" fill="none" stroke="#cfd5e0" stroke-width="${fs(1.2)}" stroke-dasharray="4 3"/>`);
-                g.push(lab(vY0, `Wolumen · śr. 10 tyg. · złota ≥ ${DARVAS_BREAKOUT_VOL}×`));
+                g.push(lab(vY0, `Wolumen · śr. 10 ses. · złota ≥ ${DARVAS_BREAKOUT_VOL}×`));
             }
             // NATR (14 tyg.): linia, zielona strefa poniżej 8 (Blueprint), przerywany próg 8
             const nt = natrSeries(full.h || [], full.l || [], full.c || []);
@@ -417,7 +417,7 @@ function darvasPanelGroup(full, o) {
                 g.push(`<rect x="${left}" y="${yn(NATR_GOOD).toFixed(1)}" width="${pW}" height="${(nY0 + nH - 3 - yn(NATR_GOOD)).toFixed(1)}" fill="#2e9e5b" fill-opacity="0.12"/>`,
                     `<line x1="${left}" x2="${W - right}" y1="${yn(NATR_GOOD).toFixed(1)}" y2="${yn(NATR_GOOD).toFixed(1)}" stroke="#4ee08a" stroke-dasharray="4 3" stroke-opacity="0.7"/>`,
                     `<polyline points="${ni.map(i => `${x(i).toFixed(1)},${yn(nt[i]).toFixed(1)}`).join(" ")}" fill="none" stroke="#b57cff" stroke-width="${fs(1.8)}" stroke-linejoin="round"/>`);
-                g.push(lab(nY0, `NATR 14 tyg. · zielone < ${NATR_GOOD} · teraz ${nt[ni[ni.length - 1]].toFixed(1)} %`));
+                g.push(lab(nY0, `NATR 14 · zielone < ${NATR_GOOD} · teraz ${nt[ni[ni.length - 1]].toFixed(1)} %`));
             }
             g.push(`</g>`);
             return g.join("");
@@ -509,7 +509,7 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<rect x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyB - fyT).toFixed(1)}" fill="${pcol}" fill-opacity="0.78" stroke="${pcol}" stroke-width="${fs(1.6)}" pointer-events="none"><title>${fb.name}: dół ${fb.low}, pivot ${fb.top}</title></rect>`);
         if (fyS - fyB > 1) out.push(`<rect x="${fx0.toFixed(1)}" y="${fyB.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${(fyS - fyB).toFixed(1)}" fill="url(#darvasHatch)" pointer-events="none"/>`);
         out.push(`<rect class="box-hit" data-box="${fb.top}|${fb.low}|wzorzec|1|${fb.i0}|${fb.i1}" style="cursor:pointer" x="${fx0.toFixed(1)}" y="${fyT.toFixed(1)}" width="${Math.max(0, fx1 - fx0).toFixed(1)}" height="${Math.max(2, fyS - fyT).toFixed(1)}" fill="transparent"><title>${fb.name} ${fb.low}–${fb.top} — kliknij: przybliż, przytrzymaj: przypnij</title></rect>`);
-        const fbText = `${fb.name} ${fb.i1 - fb.i0 + 1} tyg.`, fbShort = `${fb.i1 - fb.i0 + 1} tyg.`;
+        const fbText = `${fb.name} ${fb.i1 - fb.i0 + 1} ses.`, fbShort = `${fb.i1 - fb.i0 + 1} ses.`;
         const fbInside = [fbText, fbShort].find(t => fitsInside(t, fs(12), fx1 - fx0, fyB - fyT));
         if (fbInside) {   // wewnątrz boxa: ciemny napis w lewym górnym rogu
             const fcx = (fx0 + fx1) / 2, fcy = (fyT + fyB) / 2 + fs(12) * 0.35, fw = fbInside.length * fs(12) * 0.62;
@@ -599,7 +599,7 @@ function darvasSvg(full, win, opts = {}) {
             const byy = y(Math.max(g.left, g.rim)) - fs(14), bx0 = x(g.i0), bx1 = x(g.i1);
             out.push(`<path d="M${bx0.toFixed(1)},${(byy + fs(7)).toFixed(1)} V${byy.toFixed(1)} H${bx1.toFixed(1)} V${(byy + fs(7)).toFixed(1)}" fill="none" stroke="#2fb4ff" stroke-width="${fs(2)}" pointer-events="none">${title}</path>`);
             out.push(`<circle cx="${x(g.ib).toFixed(1)}" cy="${y(g.bottom).toFixed(1)}" r="${fs(4)}" fill="#2fb4ff" stroke="#0e0f13" stroke-width="1.5" pointer-events="none"/>`);
-            out.push(`<text x="${((bx0 + bx1) / 2).toFixed(1)}" y="${(byy - 5).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label} · ${g.i1 - g.i0} tyg.</text>`);
+            out.push(`<text x="${((bx0 + bx1) / 2).toFixed(1)}" y="${(byy - 5).toFixed(1)}" font-size="${fs(12)}" font-weight="700" fill="#7fd0ff" text-anchor="middle" stroke="#0e0f13" stroke-width="4" paint-order="stroke" pointer-events="none">${label} · ${g.i1 - g.i0} ses.</text>`);
         } else if (style === "thin") {   // minimalnie: cienka kropkowana krzywa bez wypełnienia i bez opisu miski
             out.push(`<polyline points="${poly}" fill="none" stroke="#9adbff" stroke-width="${fs(1.6)}" stroke-dasharray="2 4" stroke-linecap="round" pointer-events="none">${title}</polyline>`);
         } else {   // "arc": gruba niebieska krzywa z ciemnym obrysem i lekkim wypełnieniem
@@ -670,7 +670,7 @@ function darvasSvg(full, win, opts = {}) {
                 + `</g>`);
         }
     }
-    // SMA 20 tygodni z zamknięć (liczona na całej historii, więc okno / suwak nie zmienia wartości); poza skalą ceny jest przycięta, nie wpływa na zakres osi
+    // SMA 20 sesji z zamknięć (liczona na całej historii, więc okno / suwak nie zmienia wartości); poza skalą ceny jest przycięta, nie wpływa na zakres osi
     {
         const sm = darvasSma(full.c, 20), pts = [];
         for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (sm[i] !== null) pts.push(`${x(i).toFixed(1)},${y(sm[i]).toFixed(1)}`);
@@ -678,7 +678,7 @@ function darvasSvg(full, win, opts = {}) {
             const lastI = (() => { for (let i = Math.min(endExcl, lastReal + 1) - 1; i >= start; i--) if (sm[i] !== null) return i; return -1; })();
             out.push(`<clipPath id="darvasSmaClip"><rect x="${L.left}" y="${L.top}" width="${W - L.left - L.right}" height="${ph}"/></clipPath>`
                 + `<g clip-path="url(#darvasSmaClip)" pointer-events="none"><polyline points="${pts.join(" ")}" fill="none" stroke="#0e0f13" stroke-width="${fs(3.2)}" opacity="0.5" stroke-linejoin="round"/>`
-                + `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0b429" stroke-width="${fs(1.5)}" stroke-linejoin="round"><title>SMA 20 tygodni</title></polyline>`
+                + `<polyline points="${pts.join(" ")}" fill="none" stroke="#f0b429" stroke-width="${fs(1.5)}" stroke-linejoin="round"><title>SMA 20 sesji</title></polyline>`
                 + `</g>`
                 + (lastI >= 0 && Number.isFinite(sm[lastI]) && y(sm[lastI]) > L.top + 10 && y(sm[lastI]) < L.top + ph ? `<text x="${(x(lastI) - 6).toFixed(1)}" y="${(y(sm[lastI]) + 14).toFixed(1)}" text-anchor="end" font-size="${fs(9)}" font-weight="700" fill="#f0b429" stroke="#0e0f13" stroke-width="2.5" paint-order="stroke" pointer-events="none">SMA 20</text>` : ""));
         }
@@ -690,7 +690,7 @@ function darvasSvg(full, win, opts = {}) {
         out.push(`<line id="dHl${k}" x1="${L.left}" x2="${W - L.right}" y1="0" y2="0" stroke="#ffffff" stroke-width="1.6" opacity="0" pointer-events="none"/>`);
         out.push(`<g id="dHt${k}" opacity="0" pointer-events="none"><rect x="${W - L.right}" y="0" width="${L.right - 1}" height="${fs(14)}" rx="2" fill="#ffffff"/><text x="${W - L.right + 3}" y="0" font-size="${fs(9.5)}" font-weight="700" fill="#0e0f13"></text></g>`);
     }
-    // panel pod wykresem, ukryty, pokazuje się po zaznaczeniu boxa (attachDarvasHover): trzy pasma — MACD (12, 26, 9) tygodniowy, wolumen tygodnia i NATR (14 tyg.) — żeby było widać,
+    // panel pod wykresem, ukryty, pokazuje się po zaznaczeniu boxa (attachDarvasHover): trzy pasma — MACD (12, 26, 9) dzienny, wolumen tygodnia i NATR (14 tyg.) — żeby było widać,
     // gdzie leżą linie MACD i sygnału, czy wybicie miało wolumen i czy box jest ciasny (NATR < 8) względem boxa. Zakres tygodni zaznaczonego boxa jest podświetlony (dMacdSpan).
     // Oś czasu ta sama co wykres, panel zasłania tylko dół obszaru wykresu na czas zaznaczenia.
     if (typeof macdSeries === "function") {
@@ -836,7 +836,7 @@ function attachDarvasHover(container, full, readoutEl) {
 // po utworzeniu NOWEGO, wyższego boxa cena pod jego dołem (w zacieniowanej strefie) = SPRZEDAJ; akcji spoza najwyższego boxa nie kupuj ani nie trzymaj.
 // Punkt kupna „po dwóch kolejnych rosnących boxach” (s. 140). Dodatki spoza książki (wolumen, +10 %, MACD) są tylko OSTRZEŻENIAMI. Brak: wersja dla shortów.
 // ============================================================
-const DARCARD_WEEKS = 156;   // karta pokazuje boxy z ostatnich 3 lat (156 tygodni); przy krótszej historii (IPO) tyle, ile spółka istnieje
+const DARCARD_WEEKS = 252;   // karta pokazuje boxy z ostatnich 12 miesięcy (252 sesji dziennych); przy krótszej historii (IPO) tyle, ile spółka istnieje
 
 // Analiza karty: { boxes: łańcuch rosnących boxów (od najstarszego), topmost, rising (≥ 2 kolejne wyższe), status: {state, text, warnings[], top, bottom, zoneLow, stop, buyLine} }
 // states: BUY (pierwsze zamknięcie nad górą), HOLD, READY (w pierwszym boxie, gotowy do kupna), SELL, OUT (poza najwyższym boxem), NONE
@@ -878,7 +878,7 @@ function darCardAnalyze(c, vol = null) {
     } else {
         state = "OUT"; text = `POZA BOXEM — cena ${r2(px)} pod dołem ${r2(bottom)}; nie ma powodu, by trzymać ani kupować akcję spoza najwyższego boxa`;
     }
-    if ((state === "HOLD" || state === "BUY") && typeof darvasMacdBelow === "function" && darvasMacdBelow(c) === true) warnings.push("tygodniowy MACD pod linią sygnału");
+    if ((state === "HOLD" || state === "BUY") && typeof darvasMacdBelow === "function" && darvasMacdBelow(c) === true) warnings.push("dzienny MACD pod linią sygnału");
     return { boxes, topmost, rising, status: { ...base, state, text, stop, warnings } };
 }
 
@@ -915,7 +915,7 @@ function darCardSvg(full, opts = {}) {
         out.push(`<line x1="${L.left}" x2="${W - L.right}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}" stroke="#8b8670" stroke-width="1"/>`);
         out.push(`<text x="${L.left - 4}" y="${(y(t) + 3.5).toFixed(1)}" font-size="${fs(9.5)}" fill="#3a3730" text-anchor="end">${t}</text>`);
     });
-    out.push(`<text x="${L.left + 6}" y="${fs(16)}" font-size="${fs(14)}" font-weight="800" fill="#2b2a24" letter-spacing="2">DAR·CARD</text><text x="${W - L.right - 4}" y="${fs(16)}" font-size="${fs(10)}" fill="#5a574a" text-anchor="end">${Math.min(3, Math.round((lastReal + 1) / 52 * 10) / 10)} l.</text>`);
+    out.push(`<text x="${L.left + 6}" y="${fs(16)}" font-size="${fs(14)}" font-weight="800" fill="#2b2a24" letter-spacing="2">DAR·CARD</text><text x="${W - L.right - 4}" y="${fs(16)}" font-size="${fs(10)}" fill="#5a574a" text-anchor="end">${Math.min(12, Math.round((lastReal + 1) / 21))} mies.</text>`);
     const n = a.boxes.length, slot = pw / Math.max(n, 3), bw = slot * 0.72;
     const mon = i => { const d = full.weeks && full.weeks[i]; return d ? `${d.slice(5, 7)}/${d.slice(2, 4)}` : ""; };
     a.boxes.forEach((b, k) => {
@@ -954,7 +954,7 @@ function darCardSvg(full, opts = {}) {
     return `<svg id="chartSvg" data-ccgeom="${[W, H, L.left, L.right].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${out.join("")}</svg>`;
 }
 
-// Zaznaczanie boxów na karcie: stuknięcie w box = złota obwódka + panel MACD / wolumen / NATR z tygodni tego boxa + pasek akcji „📌 Przypnij / Odepnij”
+// Zaznaczanie boxów na karcie: stuknięcie w box = złota obwódka + panel MACD / wolumen / NATR z sesji tego boxa + pasek akcji „📌 Przypnij / Odepnij”
 // (przypięcie działa jak na Dar-Card: box trafia do monitorowania, 📦 Boxy i na widok czasowy).
 function attachDarCard(container, full, readoutEl) {
     const svg = container.querySelector("svg#chartSvg");
@@ -979,7 +979,7 @@ function attachDarCard(container, full, readoutEl) {
         selected = el; el.dataset.o0 = el.getAttribute("stroke"); el.dataset.o1 = el.getAttribute("stroke-width");
         el.setAttribute("stroke", "#ffd54a"); el.setAttribute("stroke-width", "3.4");
         const [t, bt, , , i0s, i1s] = el.dataset.box.split("|"), i0 = +i0s, i1 = +i1s;
-        const start = Math.max(0, i0 - 8), endExcl = Math.min(lastReal + 1, Math.max(i1, i0 + 6) + 9), slots = Math.max(2, endExcl - start), pw = W - left - right;
+        const start = Math.max(0, i0 - 20), endExcl = Math.min(lastReal + 1, Math.max(i1, i0 + 6) + 20), slots = Math.max(2, endExcl - start), pw = W - left - right;
         const x = i => left + pw * (i - start + 0.5) / slots, pH = Math.max(120, Math.min(210, H * 0.34)), pY0 = H - pH - 66;   // nad paskiem akcji (≈ 56 px)
         const xa = left + pw * (i0 - start) / slots, xb = left + pw * (Math.min(i1, endExcl - 1) - start + 1) / slots;
         clearPanel();
@@ -988,7 +988,7 @@ function attachDarCard(container, full, readoutEl) {
         if (g) svg.insertAdjacentHTML("beforeend", g);
         bar.innerHTML = `<span>📦 ${(+bt).toFixed(2)} – ${(+t).toFixed(2)}</span><button type="button" data-act="pin">📌 Przypnij / odepnij</button><button type="button" data-act="close">✕</button>`;
         bar.hidden = false;
-        if (readoutEl) readoutEl.textContent = `box ${(+bt).toFixed(2)}–${(+t).toFixed(2)} · strefa zagrożenia do ${(bt * (1 - DARVAS_STOP_PCT / 100)).toFixed(2)} · panel: MACD, wolumen, NATR z tygodni boxa`;
+        if (readoutEl) readoutEl.textContent = `box ${(+bt).toFixed(2)}–${(+t).toFixed(2)} · strefa zagrożenia do ${(bt * (1 - DARVAS_STOP_PCT / 100)).toFixed(2)} · panel: MACD, wolumen, NATR z sesji boxa`;
     };
     bar.addEventListener("click", ev => {
         const b = ev.target.closest("button");

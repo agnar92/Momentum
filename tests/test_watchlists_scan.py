@@ -76,7 +76,7 @@ def test_full_run_computes_ratings_and_weekly_charts_only(tmp_path, monkeypatch)
     assert s["lists"] == [ws.DEFAULT_LIST_NAME] and "rs_rating" in s and "eps_rating" in s and "composite_rating" in s
     assert all(isinstance(x["rs_rating"], int) for x in data["stocks"])          # RS Rating = percentyl wśród spółek z list
     charts = json.loads((tmp_path / ws.CHARTS_FILE).read_text())
-    assert set(charts["stocks"]) == {"AAA", "BBB", "CCC"} and "daily" not in charts and len(charts["weeks"]) > 100
+    assert set(charts["stocks"]) == {"AAA", "BBB", "CCC"} and len(charts["weeks"]) > 100 and len(charts["daily"]["dates"]) == watchlist.CHART_DAYS
     assert (tmp_path / ws.LISTS_FILE).exists()
 
 
@@ -155,3 +155,14 @@ def test_add_scans_only_the_new_list(tmp_path, monkeypatch):
     seen.clear()
     assert ws.run(tmp_path, "refresh", log=QUIET) == 0
     assert sorted(seen) == sorted(["cap_big", "cap_small", ws.DEFAULT_FILTERS])   # refresh = wszystkie
+
+
+def test_add_keeps_daily_block_of_other_lists(tmp_path, monkeypatch):
+    fake_network(monkeypatch, lambda f: [fv_row("AAA")] if "big" in f else [fv_row("BBB")])
+    assert ws.run(tmp_path, "add", "Duże", "cap_big", log=QUIET) == 0
+    assert ws.run(tmp_path, "add", "Małe", "cap_small", log=QUIET) == 0
+    d = json.loads((tmp_path / ws.CHARTS_FILE).read_text())["daily"]
+    assert {"AAA", "BBB"} <= set(d["stocks"]) and len(d["dates"]) == watchlist.CHART_DAYS
+    assert all(len(v) == len(d["dates"]) for v in d["stocks"]["AAA"].values())
+    assert ws.run(tmp_path, "remove", "Duże", log=QUIET) == 0
+    assert "AAA" not in json.loads((tmp_path / ws.CHARTS_FILE).read_text())["daily"]["stocks"]
