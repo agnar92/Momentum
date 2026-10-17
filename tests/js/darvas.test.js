@@ -78,16 +78,18 @@ test("darvasStatus: KUP po wybiciu, TRZYMAJ w najwyższym boxie, SPRZEDAJ po wy�
     assert.equal(darvasStatus([100, 101]).state, "NONE");
 });
 
-test("darvasStatus: kontrola wybicia — wolumen ≥ 1,4× i najwyżej 10 % nad górą", () => {
+test("darvasStatus: wg książki wybicie = KUP; wolumen i oddalenie to tylko ostrzeżenia", () => {
     const { darvasStatus } = require("../../docs/js/darvas.js");
     const box1 = [100, 104, 108, 110, 108, 106, 104, 105, 107, 106];
     const vol = [...box1.map(() => 100), 100];
-    assert.equal(darvasStatus([...box1, 112], 5, 3, 3, vol).state, "NOVOL");   // wolumen 1,0× < 1,4×
+    const weak = darvasStatus([...box1, 112], 5, 3, 3, vol);
+    assert.equal(weak.state, "BUY");
+    assert.match(weak.text, /wolumen/);
     assert.equal(darvasStatus([...box1, 112], 5, 3, 3, [...box1.map(() => 100), 160]).state, "BUY");
-    assert.equal(darvasStatus([...box1, 118], 5, 3, 3, [...box1.map(() => 100), 160]).state, "BUY");   // 7,3 % nad górą mieści się w limicie 10 %
-    assert.equal(darvasStatus([...box1, 125], 5, 3, 3, [...box1.map(() => 100), 160]).state, "LATE");   // 13,6 % nad górą
-    assert.equal(darvasStatus([...box1, 125], 5, 3, 3, vol).state, "NOVOL");   // brak wolumenu ma pierwszeństwo przed oddaleniem
-    assert.equal(darvasStatus([...box1, 112]).state, "BUY");   // bez danych o wolumenie filtr wolumenu pomijamy
+    const far = darvasStatus([...box1, 125], 5, 3, 3, [...box1.map(() => 100), 160]);
+    assert.equal(far.state, "BUY");
+    assert.match(far.text, /nie goń/);
+    assert.equal(darvasStatus([...box1, 112]).state, "BUY");
 });
 
 test("darvasPinStatus: nad górą / w boxie / w strefie zagrożenia (5 % pod dołem) / exit pod strefą", () => {
@@ -154,12 +156,12 @@ const DS = [10, 11, 12, 13, 12.5, 12.0, 11.8, 12.2, 12.4, 12.1, 12.3];   // gór
 const MRVL = [66.14, 65.35, 58.92, 60.22, 68.93, 71.44, 75.81, 65.83, 74.06, 73.45, 70.59, 73.0, 73.65, 79.47, 81.22, 84.36, 93.35, 87.41, 92.07, 92.25,
     112.97, 120.19, 111.36, 113.08, 117.61, 113.83, 124.22, 123.49, 112.38, 110.15, 106.05, 103.36, 91.43, 70.54, 68.45, 70.09, 61.77];
 
-test("Oficjalny Darvas: góra i dół potrzebują 3 tygodni wliczając tydzień zerowy, spadający nóż nie tworzy boxów", () => {
+test("Karta Darvasa: góra i dół potrzebują 3 KOLEJNYCH okresów po szczycie / dołku, spadający nóż nie tworzy boxów", () => {
     const bx = darvasBoxes(DS);
     assert.deepEqual(bx.map(b => [b.i0, b.top, b.bottom, b.outcome]), [[3, 13, 11.8, "open"]]);
     assert.deepEqual(darvasTopLines(DS), []);
-    assert.deepEqual(darvasTopLines([10, 11, 12, 13, 12.5]), []);   // za wcześnie: tydzień zerowy + 1 tydzień = 2 tygodnie
-    assert.equal(darvasTopLines([10, 11, 12, 13, 12.5, 12.0]).length, 1);   // tydzień zerowy + 2 kolejne = 3 tygodnie: top potwierdzony (linia, dołu jeszcze nie ma)
+    assert.deepEqual(darvasTopLines([10, 11, 12, 13, 12.5, 12.0]), []);   // za wcześnie: dopiero 2 okresy po szczycie
+    assert.equal(darvasTopLines([10, 11, 12, 13, 12.5, 12.0, 11.8]).length, 1);   // 3 kolejne okresy po szczycie: top potwierdzony (linia, dołu jeszcze nie ma)
     assert.deepEqual(darvasBoxes([10, 11, 12, 13, 12, 11, 10, 9, 8, 7, 6]), []);
 });
 
@@ -178,12 +180,12 @@ test("Desktop: próba przebicia — box obowiązuje do wejścia ceny w jego stre
     const up = [...DS, 13.5];
     assert.ok(darvasBoxes(up)[0].outcome === "up" && darvasStatus(up).state === "BUY");
     const back = darvasStatus([...up, 12.8, 12.0]);   // powrót do boxa: nadal obowiązuje
-    assert.ok(back.state === "HOLD" && /w boxie/.test(back.text));
+    assert.ok(back.state === "HOLD" && /w najwyższym boxie/.test(back.text));
     const cancelled = [...up, 12.8, 12.0, 11.5];     // zejście pod dno 11,8 = strefa zagrożenia
     const bx = darvasBoxes(cancelled);
     assert.ok(bx[0].cancelled && bx[0].end === up.length + 2);
     assert.equal(darvasStatus(cancelled).state, "SELL");
-    assert.match(darvasStatus(cancelled).text, /BOX FAILUJE/);
+    assert.match(darvasStatus(cancelled).text, /strefie zagrożenia/);
 });
 
 test("Desktop: podwójne wybicie kupuje ponownie, nowy box wyżej przejmuje obowiązywanie", () => {
@@ -202,16 +204,15 @@ test("Desktop: box złamany bez wybicia = odwrócony, SPRZEDAJ od razu; powrót 
     const c = [...DS, 11.5];
     const bx = darvasBoxes(c);
     assert.ok(bx[0].outcome === "down" && bx[0].i1 === DS.length);
-    assert.equal(darvasStatus(c).state, "SELL");
+    assert.equal(darvasStatus(c).state, "OUT");   // wg książki: akcji spoza najwyższego boxa nie kupuj ani nie trzymaj
     assert.equal(darvasStatus([...DS, 11.5, 12.9]).state, "WAIT");
 });
 
 test("Desktop (MRVL): wybity box anulowany w strefie zagrożenia, brak wielkiego boxa przez całą korektę", () => {
     const { darvasStatus } = require("../../docs/js/darvas.js");
     const bx = darvasBoxes(MRVL);
-    const r = bx.find(b => b.top === 75.81);   // box 120.19 ma 5 tygodni (< 6), więc jest samą linią topu
+    const r = bx.find(b => b.top === 120.19);   // wg książki box nie ma minimalnej długości
     assert.ok(r.outcome === "up" && r.cancelled);
-    assert.ok(darvasTopLines(MRVL).some(l => l.top === 120.19));
     assert.ok(!bx.some(b => b.top === 124.22));
     assert.ok(Math.max(...bx.map(b => (b.top - b.bottom) / b.top)) < 0.2);
     assert.equal(darvasStatus(MRVL.slice(0, 28)).state, "HOLD");
@@ -276,14 +277,12 @@ test("darvasSma: średnia krocząca, null przed pełnym oknem i przy luce", () =
     assert.deepEqual(darvasSma([1, null, 3, 4], 2), [null, null, null, 3.5]);
 });
 
-test("minimum 6 tygodni: krótszy box zostaje samą linią topu, 6-tygodniowy jest potwierdzony", () => {
+test("wg książki box nie ma minimalnej długości: top + 3 okresy + dół wystarczy", () => {
     const { DARVAS_MIN_WEEKS } = require("../../docs/js/darvas.js");
-    assert.equal(DARVAS_MIN_WEEKS, 6);
+    assert.equal(DARVAS_MIN_WEEKS, 0);
     const base = [90, 95, 100, 98, 97, 96, 97, 98];
     const mk = k => [...base.slice(0, 3), ...Array(k).fill(0).map((_, i) => 97 - (i % 2)), 103];
-    assert.equal(darvasBoxes(mk(3)).length, 0);   // top + 3 tygodnie + wybicie: za krótko
-    assert.ok(darvasTopLines(mk(3)).length > 0);
-    assert.equal(darvasBoxes(mk(7)).length, 1);   // top + 7 tygodni: box
+    assert.equal(darvasBoxes(mk(7)).length, 1);
 });
 
 // --- Karta z książki (darCard*) ---
@@ -301,8 +300,7 @@ test("darCardAnalyze: w najwyższym boxie po wybiciu = TRZYMAJ, nowy wyższy box
     assert.ok(["HOLD", "BUY"].includes(hold.status.state));
     const up = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116];
     const a = darCardAnalyze([...up, 100]);
-    assert.ok(a.rising || a.status.state === "OUT");
-    if (a.rising) assert.equal(a.status.state, "SELL");
+    assert.ok(["SELL", "OUT"].includes(a.status.state));
 });
 
 test("darCardAnalyze: ostrzeżenia z dodatków (wolumen) nie zmieniają stanu KUP", () => {
