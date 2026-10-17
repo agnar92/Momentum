@@ -154,11 +154,12 @@ const DS = [10, 11, 12, 13, 12.5, 12.0, 11.8, 12.2, 12.4, 12.1, 12.3];   // gór
 const MRVL = [66.14, 65.35, 58.92, 60.22, 68.93, 71.44, 75.81, 65.83, 74.06, 73.45, 70.59, 73.0, 73.65, 79.47, 81.22, 84.36, 93.35, 87.41, 92.07, 92.25,
     112.97, 120.19, 111.36, 113.08, 117.61, 113.83, 124.22, 123.49, 112.38, 110.15, 106.05, 103.36, 91.43, 70.54, 68.45, 70.09, 61.77];
 
-test("Desktop: góra i dół potrzebują 3 kolejnych tygodni, spadający nóż nie tworzy boxów", () => {
+test("Oficjalny Darvas: góra i dół potrzebują 3 tygodni wliczając tydzień zerowy, spadający nóż nie tworzy boxów", () => {
     const bx = darvasBoxes(DS);
     assert.deepEqual(bx.map(b => [b.i0, b.top, b.bottom, b.outcome]), [[3, 13, 11.8, "open"]]);
     assert.deepEqual(darvasTopLines(DS), []);
-    assert.deepEqual(darvasTopLines([10, 11, 12, 13, 12.5, 12.0]), []);   // za wcześnie: tylko 2 tygodnie po topie
+    assert.deepEqual(darvasTopLines([10, 11, 12, 13, 12.5]), []);   // za wcześnie: tydzień zerowy + 1 tydzień = 2 tygodnie
+    assert.equal(darvasTopLines([10, 11, 12, 13, 12.5, 12.0]).length, 1);   // tydzień zerowy + 2 kolejne = 3 tygodnie: top potwierdzony (linia, dołu jeszcze nie ma)
     assert.deepEqual(darvasBoxes([10, 11, 12, 13, 12, 11, 10, 9, 8, 7, 6]), []);
 });
 
@@ -283,4 +284,39 @@ test("minimum 6 tygodni: krótszy box zostaje samą linią topu, 6-tygodniowy je
     assert.equal(darvasBoxes(mk(3)).length, 0);   // top + 3 tygodnie + wybicie: za krótko
     assert.ok(darvasTopLines(mk(3)).length > 0);
     assert.equal(darvasBoxes(mk(7)).length, 1);   // top + 7 tygodni: box
+});
+
+// --- Karta z książki (darCard*) ---
+const { darCardAnalyze, darCardPastRange, darCardSvg } = require("../../docs/js/darvas.js");
+
+test("darCardAnalyze: cena nad górą najwyższego boxa po raz pierwszy = KUP ze stopem 10 %", () => {
+    const c = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112];
+    const a = darCardAnalyze(c);
+    assert.equal(a.status.state, "BUY");
+    assert.equal(a.status.stop, Math.round(112 * 0.9 * 100) / 100);
+});
+
+test("darCardAnalyze: w najwyższym boxie po wybiciu = TRZYMAJ, nowy wyższy box i spadek pod jego dół = SPRZEDAJ", () => {
+    const hold = darCardAnalyze(SERIES.slice(0, 21));
+    assert.ok(["HOLD", "BUY"].includes(hold.status.state));
+    const up = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116];
+    const a = darCardAnalyze([...up, 100]);
+    assert.ok(a.rising || a.status.state === "OUT");
+    if (a.rising) assert.equal(a.status.state, "SELL");
+});
+
+test("darCardAnalyze: ostrzeżenia z dodatków (wolumen) nie zmieniają stanu KUP", () => {
+    const c = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112];
+    const v = c.map(() => 100); v[10] = 90;
+    const a = darCardAnalyze(c, v);
+    assert.equal(a.status.state, "BUY");
+    assert.ok(a.status.warnings.some(w => w.includes("wolumen")));
+});
+
+test("darCardPastRange i darCardSvg", () => {
+    const weeks = ["2024-01-05", "2024-06-07", "2025-01-03", "2025-06-06"];
+    const r = darCardPastRange(weeks, [10, 12, 9, 15]);
+    assert.deepEqual(r, [{ year: "2024", hi: 12, lo: 10 }, { year: "2025", hi: 15, lo: 9 }]);
+    const svg = darCardSvg({ c: SERIES, v: null, weeks: SERIES.map((_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`) }, { bookTitle: "TST" });
+    assert.ok(svg.includes("DAR·CARD") && svg.includes("Past Price Range"));
 });
