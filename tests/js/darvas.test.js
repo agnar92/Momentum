@@ -154,11 +154,12 @@ const DS = [10, 11, 12, 13, 12.5, 12.0, 11.8, 12.2, 12.4, 12.1, 12.3];   // gór
 const MRVL = [66.14, 65.35, 58.92, 60.22, 68.93, 71.44, 75.81, 65.83, 74.06, 73.45, 70.59, 73.0, 73.65, 79.47, 81.22, 84.36, 93.35, 87.41, 92.07, 92.25,
     112.97, 120.19, 111.36, 113.08, 117.61, 113.83, 124.22, 123.49, 112.38, 110.15, 106.05, 103.36, 91.43, 70.54, 68.45, 70.09, 61.77];
 
-test("Desktop: góra i dół potrzebują 3 kolejnych tygodni, spadający nóż nie tworzy boxów", () => {
+test("Oficjalny Darvas: góra i dół potrzebują 3 tygodni wliczając tydzień zerowy, spadający nóż nie tworzy boxów", () => {
     const bx = darvasBoxes(DS);
     assert.deepEqual(bx.map(b => [b.i0, b.top, b.bottom, b.outcome]), [[3, 13, 11.8, "open"]]);
     assert.deepEqual(darvasTopLines(DS), []);
-    assert.deepEqual(darvasTopLines([10, 11, 12, 13, 12.5, 12.0]), []);   // za wcześnie: tylko 2 tygodnie po topie
+    assert.deepEqual(darvasTopLines([10, 11, 12, 13, 12.5]), []);   // za wcześnie: tydzień zerowy + 1 tydzień = 2 tygodnie
+    assert.equal(darvasTopLines([10, 11, 12, 13, 12.5, 12.0]).length, 1);   // tydzień zerowy + 2 kolejne = 3 tygodnie: top potwierdzony (linia, dołu jeszcze nie ma)
     assert.deepEqual(darvasBoxes([10, 11, 12, 13, 12, 11, 10, 9, 8, 7, 6]), []);
 });
 

@@ -34,9 +34,9 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
             for (let m = Math.max(0, k - confirm); m < k; m++) if (Number.isFinite(c[m]) && !(c[k] > c[m])) { local = false; break; }
             if (!local) continue;
             runMax = c[k];
-            if (k + confirm < n) {
+            if (k + confirm - 1 < n) {   // szczyt = tydzień zerowy + (confirm − 1) kolejnych tygodni, które go nie przebiły (razem `confirm` tygodni)
                 let ok = true;   // luka w danych (null) nie potwierdza szczytu
-                for (let m = k + 1; m <= k + confirm; m++) if (!(Number.isFinite(c[m]) && c[m] <= c[k])) { ok = false; break; }
+                for (let m = k + 1; m <= k + confirm - 1; m++) if (!(Number.isFinite(c[m]) && c[m] <= c[k])) { ok = false; break; }
                 if (ok) { t = k; top = c[k]; break; }
             }
         }
@@ -54,7 +54,7 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
             if (ok && ref !== null && !confirmed && v < refBot) { cancel = j; break; }
             if (confirmed && ok && v < bottom) { outcome = "down"; end = j; break; }
             if (!confirmed && ok && v < bottom) { bottom = v; bi = j; }
-            if (!confirmed && bi >= 0 && j - bi >= bottomConfirm) confirmed = true;
+            if (!confirmed && bi >= 0 && j - bi >= bottomConfirm - 1) confirmed = true;   // dół: tydzień dołka + (bottomConfirm − 1) kolejnych bez nowego minimum
         }
         if (cancel !== null) { bxs[ref].end = cancel; bxs[ref].cancelled = true; ref = null; i = cancel; continue; }
         if (end < 0) end = n - 1;
