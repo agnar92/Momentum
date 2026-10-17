@@ -61,8 +61,69 @@ def parse_number(text):
         return None
 
 
+# Nowy układ Finviz (2026): wiersze siedzą w JSON-ie strony (`data-ssr-props`), a nie w tabeli HTML. Klucz JSON -> nasz klucz (kapitalizacja i float są w milionach).
+JSON_COLUMNS = {"company": "company", "sector": "sector", "industry": "industry", "marketCap": "market_cap", "PE": "pe", "forwardPE": "forward_pe",
+                "epsYoY": "eps_this_y", "epsYoY1": "eps_next_y", "eps5Years": "eps_past_5y", "estLTGrowth": "eps_next_5y", "roe": "roe",
+                "earningsDate": "earnings", "recom": "recom", "targetPrice": "finviz_target", "instOwn": "inst_own", "instTrans": "inst_trans",
+                "salesQoQ": "sales_qq", "sales5Years": "sales_past_5y", "sharesFloat": "shs_float", "sharesOutstanding2": "shs_outstanding",
+                "insiderOwn": "insider_own", "debtEq": "debt_eq", "averageTrueRange": "atr_fv"}
+JSON_MILLIONS = {"market_cap", "shs_float", "shs_outstanding"}
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+
+
+def earnings_text(iso):
+    """'2026-08-26T16:30:00' -> 'Aug 26/a' (po sesji; przed sesją '/b') — format dawnej kolumny Earnings, który czyta frontend."""
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}))?", iso or "")
+    if not m:
+        return None
+    suffix = "" if m.group(4) is None else ("/a" if int(m.group(4)) >= 12 else "/b")
+    return f"{_MONTHS[int(m.group(2)) - 1]} {int(m.group(3))}{suffix}"
+
+
+def parse_screener_json(page_html):
+    """Nowy układ: -> (wiersze, łącznie) z JSON-a strony; ([], None), gdy go nie ma."""
+    m = re.search(r'<script type="application/json" data-ssr-props="[^"]*">(.*?)</script>', page_html, re.S)
+    if not m:
+        return [], None
+    try:
+        data = json.loads(m.group(1)).get("data") or {}
+    except ValueError:
+        return [], None
+    rows = []
+    for r in data.get("rows") or []:
+        text, nums = r.get("text") or {}, r.get("numbers") or {}
+        ticker = (text.get("ticker") or "").strip()
+        if not ticker:
+            continue
+        row = {"ticker": ticker}
+        for src, val in {**text, **nums}.items():
+            key = JSON_COLUMNS.get(src)
+            if key is None:
+                continue
+            if key == "earnings":
+                val = earnings_text(val)
+            elif key in TEXT_KEYS:
+                val = val or None
+            elif isinstance(val, (int, float)) and not isinstance(val, bool):
+                val = val * 1e6 if key in JSON_MILLIONS else val
+            else:
+                val = None
+            row[key] = val
+        rows.append(row)
+    total = data.get("totalCount")
+    return rows, int(total) if isinstance(total, (int, float)) else None
+
+
 def parse_screener_page(page_html, view="111"):
     """-> (lista słowników {ticker, ...pola widoku}, łączna liczba wyników wg strony lub None)."""
+    rows, total = _parse_html_table(page_html, view)
+    if rows:
+        return rows, total
+    jrows, jtotal = parse_screener_json(page_html)
+    return jrows, (jtotal if jtotal is not None else total)
+
+
+def _parse_html_table(page_html, view="111"):
     total_match = re.search(r"#\d+\s*/\s*(\d+)\s*Total", page_html)
     total = int(total_match.group(1)) if total_match else None
     tree = lxml_html.fromstring(page_html)
