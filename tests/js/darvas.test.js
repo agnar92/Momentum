@@ -40,10 +40,8 @@ test("darvasBoxes: puste miejsce na osi (null) i otwarte pudełko na końcu", ()
 test("darvasSvg: pudełka, punkty kupna i stopu; mało danych = komunikat", () => {
     const full = { c: SERIES, weeks: SERIES.map((_, i) => `2026-${String(1 + Math.floor(i / 4)).padStart(2, "0")}-0${1 + (i % 4)}`), n: SERIES.length, ticker: "AAA" };
     const svg = darvasSvg(full, { n: SERIES.length, end: SERIES.length });
-    assert.match(svg, /<rect [^>]*stroke="#ffffff"/);
-    assert.match(svg, /data-box="110\|104\|up\|1\|3\|10"/);                  // klikalny box z cenami
+    assert.doesNotMatch(svg, /data-box="110\|104\|up/);   // boxów Darvasa na widoku czasowym nie rysujemy (są na karcie)
     assert.doesNotMatch(svg, /kup nad|stop pod|stroke-dasharray="2 3"/);   // bez linii i podpisów
-    assert.match(svg, /Box 104–110 · wybite w górę/);
     const withLine = { c: [100, 110, 108, 107, 106, 111, 113], weeks: ["a", "b", "c", "d", "e", "f", "g"], n: 7 };
     const lineSvg = darvasSvg(withLine, { n: 7, end: 7 });
     assert.match(lineSvg, /data-box="110\|101\.2\|linia\|0\|1\|5"/);   // klikalna niebieska linia samego topu (stop 8 %)

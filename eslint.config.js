@@ -49,6 +49,7 @@ const browserGlobals = {
     darvasBoxes: "readonly",
     darvasSvg: "readonly",
     darCardSvg: "readonly",
+    attachDarCard: "readonly",
     darCardReadout: "readonly",
     darvasBoxInfo: "readonly",
     darvasStatus: "readonly",
