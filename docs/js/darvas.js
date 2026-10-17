@@ -30,9 +30,6 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm) {
         let top = null, t = -1, runMax = -Infinity;
         for (let k = i; k < n; k++) {
             if (!Number.isFinite(c[k]) || c[k] < runMax || (refTop !== null && c[k] <= refTop)) continue;
-            let local = true;   // lokalny szczyt: cena rosła do niego (spadek nie tworzy „boxów” z kolejnych zamknięć)
-            for (let m = Math.max(0, k - confirm); m < k; m++) if (Number.isFinite(c[m]) && !(c[k] > c[m])) { local = false; break; }
-            if (!local) continue;
             runMax = c[k];
             if (k + confirm - 1 < n) {   // szczyt = tydzień zerowy + (confirm − 1) kolejnych tygodni, które go nie przebiły (razem `confirm` tygodni)
                 let ok = true;   // luka w danych (null) nie potwierdza szczytu
