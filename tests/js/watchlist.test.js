@@ -690,3 +690,9 @@ test("blueprintInfo: lista kontrolna wejścia z Blueprintu, brak danych = null i
     assert.equal(some.known, 4);
     assert.equal(blueprintInfo({}).known, 0);
 });
+
+test("applyCommonFilters: filtr ≥ 2 rosnących pudełek Dar-Card (risingOnly)", () => {
+    const stocks = [{ ticker: "A", rise_n: 3 }, { ticker: "B", rise_n: 1 }, { ticker: "C", rise_n: null }, { ticker: "D" }];
+    assert.deepEqual(applyCommonFilters(stocks, "", "", null, null, null, true).map(s => s.ticker), ["A"]);
+    assert.equal(applyCommonFilters(stocks, "", "", null, null, null, false).length, 4);
+});

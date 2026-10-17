@@ -862,7 +862,7 @@ function darCardAnalyze(c, vol = null) {
         const entry = prevPx !== null && prevPx <= top ? px : top;
         if (prevPx !== null && prevPx <= top) {
             state = "BUY"; stop = darvasInitialStop(top, bottom, px);
-            text = `KUP — zamknięcie nad górą najwyższego boxa ${r2(top)}${rising ? " (po dwóch kolejnych wyższych boxach)" : ""}; stop ${DARVAS_START_STOP_PCT} % przy pierwszym wybiciu: ${stop}`;
+            text = `KUP — zamknięcie nad górą najwyższego boxa ${r2(top)}${rising ? " (po dwóch kolejnych wyższych boxach)" : ""}; stop ${DARVAS_START_STOP_PCT} % przy pierwszym wybiciu: ${stop}; od razu złóż zlecenie stop (dalej trzymaj nad strefą zagrożenia ${r2(zoneLow)})`;
             if (vol && Number.isFinite(vol[lr])) {
                 const pv = vol.slice(Math.max(0, lr - DARVAS_VOL_WEEKS), lr).filter(Number.isFinite);
                 if (pv.length >= 4) { const vr = vol[lr] / (pv.reduce((a, b) => a + b, 0) / pv.length); if (vr < DARVAS_BREAKOUT_VOL) warnings.push(`wolumen wybicia tylko ${vr.toFixed(2)}× średniej (zwykle ≥ ${DARVAS_BREAKOUT_VOL}×)`); }
@@ -879,8 +879,19 @@ function darCardAnalyze(c, vol = null) {
         state = "OUT"; text = `POZA BOXEM — cena ${r2(px)} pod dołem ${r2(bottom)}; nie ma powodu, by trzymać ani kupować akcję spoza najwyższego boxa`;
     }
     if ((state === "HOLD" || state === "BUY") && typeof darvasMacdBelow === "function" && darvasMacdBelow(c) === true) warnings.push("dzienny MACD pod linią sygnału");
-    return { boxes, topmost, rising, status: { ...base, state, text, stop, warnings } };
+    return { boxes, topmost, rising, chainLen: chain.length, status: { ...base, state, text, stop, warnings } };
 }
+
+// Wykrywanie „akcji wzrostowej” wg Dar-Card: ile KOLEJNYCH, coraz wyższych pudełek (każde wybite w górę, żadne anulowane) układa się do dziś.
+// rising = co najmniej 2 (s. 139–142: kupno po dwóch kolejnych pudełkach w górę). Używane przez kolumnę „Boxy ↑” i filtr w Watchlistach.
+function darvasRisingInfo(c, vol = null) {
+    const a = darCardAnalyze(c, vol);
+    const n = a.boxes.length ? a.chainLen : 0;
+    const st = a.status || {};
+    const distPct = Number.isFinite(st.buyLine) && Number.isFinite(c[c.length - 1]) && st.buyLine > 0 ? Math.round((st.buyLine / lastFinite(c) - 1) * 1000) / 10 : null;
+    return { n, rising: n >= 2, state: st.state || "NONE", buyLine: st.buyLine ?? null, distPct, text: st.text || "" };
+}
+function lastFinite(c) { for (let i = c.length - 1; i >= 0; i--) if (Number.isFinite(c[i])) return c[i]; return NaN; }
 
 // „Past Price Range” z dołu karty: max / min zamknięć w kolejnych latach kalendarzowych (do 4 ostatnich).
 function darCardPastRange(weeks, c) {
@@ -1011,5 +1022,5 @@ function darCardReadout(full) {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-    module.exports = { attachDarCard, darvasPanelGroup, darCardAnalyze, darCardPastRange, darCardSvg, darCardReadout, attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, darvasSma, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT, DARVAS_MIN_WEEKS };
+    module.exports = { darvasRisingInfo, attachDarCard, darvasPanelGroup, darCardAnalyze, darCardPastRange, darCardSvg, darCardReadout, attachDarvasHover, darvasBoxes, darvasScan, darvasTopLines, darvasLineInfo, darvasSvg, darvasBoxInfo, darvasBoxSheetHtml, darvasStatus, darvasMacdBelow, darvasInitialStop, darvasPinStatus, darvasOverview, boxNatr, natrSeries, darvasSma, natrGrade, NATR_GOOD, darvasCupGeometry, darvasCupStatus, darvasFlatStatus, darvasPatternBoxes, DARVAS_CONFIRM, DARVAS_LINE_STOP_PCT, DARVAS_STOP_PCT, DARVAS_START_STOP_PCT, DARVAS_MIN_WEEKS };
 }

@@ -82,6 +82,7 @@ const state = {
     scoreMin: null,
     scoreMax: null,
     natrMax: null,      // filtr listy: maks. tygodniowy NATR spółki (%)
+    risingOnly: false,  // filtr listy: tylko akcje z ≥ 2 kolejnymi, rosnącymi pudełkami Dar-Card (s.rise_n z dziennych wykresów)
     boxNatrMax: null,   // filtr zakładki Boxy: maks. NATR samego boxa (%)
     search: "",
     sector: "",
@@ -688,12 +689,13 @@ function natrOk(natr, max) {
     return Number.isFinite(natr) && natr <= max;
 }
 
-function applyCommonFilters(stocks, search, sector, scoreMin, scoreMax, natrMax) {
+function applyCommonFilters(stocks, search, sector, scoreMin, scoreMax, natrMax, risingOnly = false) {
     const q = (search || "").trim().toLowerCase();
     return stocks.filter(s => {
         if (sector && s.sector !== sector) return false;
         if (!scoreInRange(s.score, scoreMin, scoreMax)) return false;
         if (!natrOk(s.natr_w, natrMax)) return false;
+        if (risingOnly && !(s.rise_n >= 2)) return false;   // bez policzonych pudełek (wykresy jeszcze się ładują) odpada
         if (!q) return true;
         return s.ticker.toLowerCase().includes(q) || (s.company || "").toLowerCase().includes(q);
     });
@@ -832,6 +834,9 @@ const COL = {
         const g = natrGrade(s.natr_w), d = Number.isFinite(s.natr_d) ? `, dzienny (ATR z Finviza): ${s.natr_d.toFixed(1)} %` : "";
         return Number.isFinite(s.natr_w) ? `<td class="${g.cls === "warn" ? "" : g.cls}" title="NATR tygodniowy = ATR(14) / cena: ${s.natr_w.toFixed(1)} % (${g.label})${d}. Blueprint: konsolidacja ma mieć NATR < 8.">${s.natr_w.toFixed(1)}%</td>` : `<td class="muted" title="Za krótka historia tygodniowa"></td>`;
     }, "NATR tygodniowy (ATR 14 tyg. w % ceny): im niższy, tym ciaśniejsze i spokojniejsze notowania. Blueprint: konsolidacja < 8 %."],
+    rise2: ["Boxy ↑", "rise_n", s => Number.isFinite(s.rise_n) && s.rise_n >= 1
+        ? `<td class="${s.rise_n >= 2 ? "positive" : ""}" title="${escapeHtml(s.rise_n >= 2 ? `Akcja wzrostowa wg Dar-Card: ${s.rise_n} kolejne, coraz wyższe pudełka. ` : "Jedno pudełko — jeszcze bez dwóch rosnących. ")}${escapeHtml(s.rise_text || "")}">${s.rise_n >= 2 ? "↑↑ " : ""}${s.rise_n}</td>` : `<td class="muted"></td>`,
+        "Ile kolejnych, coraz wyższych pudełek Darvasa (dzienne zamknięcia, 12 mies.) układa spółka. ≥ 2 = akcja wzrostowa wg Dar-Card (kupno po dwóch rosnących pudełkach). Filtr: Filtry → Boxy"],
     bp: ["Blueprint", "bp_score", s => {
         const b = s.bp || blueprintInfo(s);
         if (!b.known) return `<td class="muted"></td>`;
@@ -885,7 +890,7 @@ const actCell = (s, key) => s[key]
     ? `<td class="act-cell act-${s[key].tone}${s.action_tf === s[key].tf ? " act-primary" : ""}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "bp", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "bp", "rise2", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const TAB_COLUMNS = {
@@ -896,7 +901,7 @@ const TAB_COLUMNS = {
 const SPLIT_MIN_WIDTH = 1000, SPLIT_MIN_HEIGHT = 560;
 const COMPACT_COLUMNS = ["fav", "ticker", "score", "actW", "cs", "pbox"];
 const TAB_COLUMNS_COMPACT = {
-    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], WATCH: ["fav", "ticker", "comp", "rs", "epsr", "cs"], BASES: COMPACT_COLUMNS,
+    LIST: COMPACT_COLUMNS, CS: ["fav", "ticker", "score", "actW", "cs"], FAV: COMPACT_COLUMNS, POS: ["fav", "ticker", "posPl", "posMacd", "posMini"], WATCH: ["fav", "ticker", "comp", "rs", "epsr", "rise2"], BASES: COMPACT_COLUMNS,
 };
 let splitMode = false;
 // Kolumny, które istnieją tylko dzięki analizie wzorców (bazy, pivot, flagi, wybicie, „Co robić”, climax) — znikają po jej wyłączeniu.
@@ -940,7 +945,33 @@ function renderRow(tab, s, i) {
 
 // Zakładka Watchlisty: spółki z watchlists.json (ręczny workflow „Watchlisty”: listy = nazwa + filtr Finviz) z TYMI SAMYMI obliczeniami co główna lista —
 // RS Rating, EPS Rating, Composite (percentyle wśród spółek ze wszystkich list), CANSLIM, „Co robić”, bazy — i wykresami tygodniowymi, żeby można było sortować po wynikach.
+// Akcje wzrostowe wg Dar-Card: s.rise_n = liczba kolejnych, coraz wyższych pudełek (darvasRisingInfo na dziennych zamknięciach). Wykresy ładują się leniwie,
+// więc znaczniki liczymy raz po załadowaniu (osobno dla głównej listy i dla Watchlist) i odświeżamy tabelę.
+const risingState = { main: false, watch: false };
+function tagRising(stocks, charts) {
+    stocks.forEach(s => {
+        const c = charts && charts.stocks && charts.stocks[s.ticker];
+        const r = c && Array.isArray(c.c) ? darvasRisingInfo(c.c, c.v) : null;
+        s.rise_n = r ? r.n : null; s.rise_state = r ? r.state : null; s.rise_text = r ? r.text : ""; s.rise_dist = r ? r.distPct : null;
+    });
+}
+async function ensureRising(which) {
+    if (risingState[which] || typeof darvasRisingInfo !== "function") return;
+    risingState[which] = true;
+    try {
+        if (which === "watch") {
+            const charts = dailyCharts(await loadWatchCharts());
+            if (charts && watchData) tagRising(watchData.stocks, charts);
+        } else if (state.data) {
+            const charts = dailyCharts(await loadCharts());
+            if (charts) tagRising(state.data.stocks, charts);
+        }
+        renderTable();
+    } catch (e) { risingState[which] = false; }
+}
+
 function watchTabRows() {
+    ensureRising("watch");
     if (!watchData) return [];
     watchData.stocks.forEach(s => {
         s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null;
@@ -948,7 +979,7 @@ function watchTabRows() {
         s.target_main = targetMain(s);
     });
     const inList = watchList && watchData.lists ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
-    const common = applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax);
+    const common = applyCommonFilters(inList, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax, state.risingOnly);
     tagStrategies(watchData.stocks, common, state, []);
     tagPositions(watchData.stocks, state.pos);
     tagPinnedBoxes(watchData.stocks, state.boxes);
@@ -983,12 +1014,13 @@ function setWatchList(name) {
 }
 
 function rowsForTab(tab) {
+    ensureRising("main");
     state.data.stocks.forEach(s => {
         s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null;
         s.upside_main = upsideMain(s);
         s.target_main = targetMain(s);
     });
-    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax);
+    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax, state.risingOnly);
     const stocks = common;
     tagStrategies(state.data.stocks, common, state, []);
     tagPositions(state.data.stocks, state.pos);
@@ -1020,10 +1052,10 @@ function emptyMessage(tab) {
 function renderFiltersSummary() {
     const el = document.getElementById("filtersSummary");
     if (!el) return;
-    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax);
+    const common = applyCommonFilters(state.data.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax, state.risingOnly);
     const base = common;
     const counts = [["Lista", base.length],
-        ["Watchlisty", watchData ? applyCommonFilters(watchData.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax).length : 0], ...(state.patterns ? [["Bazy", baseRows(base, state.bases).length]] : []), ["CANSLIM", canslimRows(base, state.csMin, state.csCore).length]];
+        ["Watchlisty", watchData ? applyCommonFilters(watchData.stocks, state.search, state.sector, state.scoreMin, state.scoreMax, state.natrMax, state.risingOnly).length : 0], ...(state.patterns ? [["Bazy", baseRows(base, state.bases).length]] : []), ["CANSLIM", canslimRows(base, state.csMin, state.csCore).length]];
     el.innerHTML = counts.map(([name, n]) => `<span class="filter-count"><b>${n}</b> ${name}</span>`).join("");
     document.getElementById("drawerMeta").textContent = `${base.length} z ${state.data.stocks.length} spółek po filtrach wspólnych`;
 }
@@ -1224,7 +1256,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, boxNatrMax: state.boxNatrMax }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, boxNatrMax: state.boxNatrMax, risingOnly: state.risingOnly }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -1245,6 +1277,7 @@ function loadSettings() {
         if (saved.patterns === false) state.patterns = false;
         if (Number.isFinite(saved.natrMax)) state.natrMax = saved.natrMax;
         if (Number.isFinite(saved.boxNatrMax)) state.boxNatrMax = saved.boxNatrMax;
+        if (saved.risingOnly === true) state.risingOnly = true;
         if (!state.patterns && state.tab === "BASES") state.tab = "CS";
     } catch (e) { /* uszkodzony zapis — zostają domyślne */ }
 }
@@ -1831,6 +1864,7 @@ function initControls() {
             renderTable();
         });
     });
+    { const cb = document.getElementById("risingOnly"); if (cb) { cb.checked = !!state.risingOnly; cb.addEventListener("change", () => { state.risingOnly = cb.checked; saveSettings(); renderTable(); }); } }
     [["natrMax", "natrMax"], ["boxNatrMax", "boxNatrMax"]].forEach(([id, key]) => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -2606,7 +2640,7 @@ if (typeof document !== "undefined") {
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
         stopAdvice, watchListCounts,
-        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
+        ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, tagRising, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,
     };
 }

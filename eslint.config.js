@@ -78,6 +78,7 @@ const browserGlobals = {
     renderStockChart: "readonly",
     dateToIndex: "readonly",
     dailyChartsView: "readonly",
+    darvasRisingInfo: "readonly",
     indexToDate: "readonly",
     cupArcPoints: "readonly",
     miniChartSvg: "readonly",
