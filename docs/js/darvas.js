@@ -911,7 +911,7 @@ function darCardSvg(full, opts = {}) {
     const a = darCardAnalyze(full.c, full.v);
     if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Brak boxów do narysowania na karcie Darvasa.</text></svg>`;
     const range = darCardPastRange(full.weeks, full.c, full.yr);
-    const tableH = fs(14) * (range.length + 1) + fs(16);
+    const tableH = fs(14) * (range.length + 4) + fs(10);   // nazwa, zakres dat i tabelka jedno pod drugim (nic nie leży obok siebie, więc nic się nie nakłada)
     const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: tableH + fs(36) };
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const lastReal = full.c.reduce((q, v, i) => (Number.isFinite(v) ? i : q), -1), px = full.c[lastReal];
@@ -959,17 +959,16 @@ function darCardSvg(full, opts = {}) {
     }
     const ty = H - tableH - 4;   // dół karty: spółka i „Past Price Range” (grupa #dcTable chowa się na czas panelu)
     out.push(`<g id="dcTable">`);
-    const k0 = compact ? 1.25 : 1, txMin = W - L.right - 6 - 170 * k0, maxCh = Math.max(6, Math.floor((txMin - L.left - 14) / (fs(11) * 0.62))), ttl = String(opts.bookTitle || ""), ttlShort = ttl.length > maxCh ? ttl.slice(0, maxCh - 1) + "…" : ttl;   // nazwa nie wchodzi pod tabelkę
-    out.push(`<text x="${L.left + 6}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(ttlShort)}</text>`);
-    out.push(`<text x="${L.left + 6}" y="${ty + fs(10)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">${asOf}</text>`);
-    const k = compact ? 1.25 : 1, tx = W - L.right - 6 - 170 * k, cH = tx + 70 * k, cL = tx + 125 * k;   // tabelka po prawej jak w książce
-    out.push(`<text x="${tx}" y="${ty - 4}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">Past Price Range</text>`);
+    const k = compact ? 1.25 : 1, tx = L.left + 6, cH = tx + 70 * k, cL = tx + 125 * k;
+    const maxCh = Math.max(6, Math.floor((W - L.right - tx) / (fs(11) * 0.62))), ttl = String(opts.bookTitle || ""), ttlShort = ttl.length > maxCh ? ttl.slice(0, maxCh - 1) + "…" : ttl;
+    out.push(`<text x="${tx}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(ttlShort)}</text>`);
+    out.push(`<text x="${tx}" y="${ty + fs(10)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">${asOf}</text>`);
+    const ry = ty + fs(10) + fs(16);
+    out.push(`<text x="${tx}" y="${ry}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24">Past Price Range</text><text x="${cH}" y="${ry + fs(14)}" font-size="${fs(10)}" fill="#2b2a24">High</text><text x="${cL}" y="${ry + fs(14)}" font-size="${fs(10)}" fill="#2b2a24">Low</text>`);
     range.forEach((r, i) => {
-        const yy = ty + fs(14) * i + fs(10);
+        const yy = ry + fs(14) * (i + 2);
         out.push(`<text x="${tx}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.year}</text><text x="${cH}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.hi}</text><text x="${cL}" y="${yy}" font-size="${fs(10)}" fill="#2b2a24">${r.lo}</text>`);
     });
-    const hy = ty + fs(14) * range.length + fs(10);
-    out.push(`<text x="${cH}" y="${hy}" font-size="${fs(10)}" fill="#2b2a24">High</text><text x="${cL}" y="${hy}" font-size="${fs(10)}" fill="#2b2a24">Low</text>`);
     out.push(`</g>`);
     return `<svg id="chartSvg" data-ccgeom="${[W, H, L.left, L.right].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${out.join("")}</svg>`;
 }
