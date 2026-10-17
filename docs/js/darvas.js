@@ -11,8 +11,8 @@ if (typeof require === "function" && typeof window === "undefined") {
 }
 
 const DARVAS_CONFIRM = 3;            // góra / dół = zamknięcie, którego nie przebija (nie jest niższe od) kolejne 3 tygodnie (jak w Momentum Desktop; tydzień samego szczytu NIE wlicza się do tych 3)
-const DARVAS_MIN_HEIGHT_PCT = 1.5;   // pudełko niższe niż 1,5 % ceny to szum
-const DARVAS_MIN_WEEKS = 6;   // potwierdzony box musi mieć co najmniej tyle tygodni (świec); krótsza formacja zostaje samą linią topu
+const DARVAS_MIN_HEIGHT_PCT = 0;   // wg książki (karta Darvasa) box nie ma minimalnej wysokości
+const DARVAS_MIN_WEEKS = 0;   // wg książki box nie ma minimalnej długości (tylko 3 okresy na górę i dół); parametr zostaje w darvasScan
 
 // Skan zamknięć c (port z Momentum Desktop, desktop/darvas.py::_scan): zwraca { boxes, lines }.
 // BOX = GÓRA (zamknięcie będące lokalnym szczytem — wyższe od `confirm` poprzednich zamknięć — którego nie przebiły `confirm` KOLEJNYCH zamknięć) + DÓŁ (najniższe
@@ -57,7 +57,7 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm, minWee
         if (end < 0) end = n - 1;
         // box potwierdzony musi obejmować co najmniej DARVAS_MIN_WEEKS tygodni (świec od szczytu do ostatniego tygodnia w boxie; tydzień wybicia już do niego nie należy)
         const weeksIn = outcome === "open" ? n - t : end - t;
-        const good = confirmed && Number.isFinite(bottom) && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT && weeksIn >= minWeeks;
+        const good = confirmed && Number.isFinite(bottom) && top > bottom && (top - bottom) / top * 100 >= DARVAS_MIN_HEIGHT_PCT && weeksIn >= minWeeks;
         if (!confirmed || (Number.isFinite(bottom) && weeksIn < minWeeks)) lines.push({ i0: t, i1: end, top, open: outcome === "open" });
         else if (good) {
             if (ref !== null) bxs[ref].end = t;   // nowy box (nad starym) przejmuje obowiązywanie
@@ -132,6 +132,11 @@ function darvasMacdBelow(c) {
 // boxie po wcześniejszym wybiciu — wahania w boxie ignorujemy, stop pod strefą zagrożenia), SPRZEDAJ (po wyższym boxie cena spadła pod jego dno = wejście w strefę
 // zagrożenia), CZEKAJ (pierwszy box, jeszcze bez wybicia), POZA (box złamany bez wcześniejszego wybicia / brak boxa — brak powodu do trzymania).
 function darvasStatus(c, zonePct = DARVAS_STOP_PCT, confirm = DARVAS_CONFIRM, bottomConfirm = confirm, vol = null, maxExtPct = DARVAS_MAX_EXT_PCT) {
+    // Gdy są boxy, status = reguły z książki Darvasa (karta, s. 11): KUP / TRZYMAJ / SPRZEDAJ / POZA; wolumen, +10 % i MACD to tylko ostrzeżenia w tekście.
+    if (darvasScan(c, confirm, bottomConfirm).boxes.length) {
+        const a = darCardAnalyze(c, vol), st = a.status;
+        return { ...st, state: st.state === "READY" ? "WAIT" : st.state, zoneFrom: st.bottom, text: st.text + (st.warnings.length ? " · ⚠ " + st.warnings.join("; ") : "") };
+    }
     const st = darvasStatusCore(c, zonePct, confirm, bottomConfirm, vol, maxExtPct);
     if ((st.state === "HOLD" || st.state === "BUY") && darvasMacdBelow(c) === true) {
         return { ...st, macdExit: true, text: `${st.text} · ⚠ WYJŚCIE: tygodniowy MACD jest pod linią sygnału` };
@@ -274,8 +279,7 @@ function darvasOverview(items, weeks, pinned = {}, newWeeks = DARVAS_NEW_WEEKS) 
         const last = lastLine && (!lastBox || lastLine.i0 > lastBox.i0) ? { top: lastLine.top, bottom: darvasLineInfo(lastLine.top).stop, i0: lastLine.i0, i1: lastLine.i1, line: true } : lastBox;
         if (ds.state !== "NONE" && last) {
             const row = { ticker: it.ticker, price: it.price, state: ds.state, text: ds.text, natr: natrOf(last), box: mk(last), key: `${it.ticker}|${r2(last.top)}|${r2(last.bottom)}|${(weeks && weeks[last.i0]) || ""}` };
-            if (ds.macdExit && ds.state === "HOLD") { row.state = "MACD"; }
-            const section = ds.macdExit && ds.state === "HOLD" ? "sell" : { BUY: "buy", NOVOL: "check", LATE: "check", HOLD: "hold", SELL: "sell", OUT: "sell", WAIT: "wait" }[ds.state];
+            const section = { BUY: "buy", NOVOL: "check", LATE: "check", HOLD: "hold", SELL: "sell", OUT: "sell", WAIT: "wait" }[ds.state];
             if (section) out[section].push(row);
         }
         // nowe boxy: góra potwierdzona (i0 + potwierdzenie) w ostatnich `newWeeks` tygodniach
@@ -826,7 +830,7 @@ const DARCARD_WEEKS = 156;   // karta pokazuje boxy z ostatnich 3 lat (156 tygod
 // Analiza karty: { boxes: łańcuch rosnących boxów (od najstarszego), topmost, rising (≥ 2 kolejne wyższe), status: {state, text, warnings[], top, bottom, zoneLow, stop, buyLine} }
 // states: BUY (pierwsze zamknięcie nad górą), HOLD, READY (w pierwszym boxie, gotowy do kupna), SELL, OUT (poza najwyższym boxem), NONE
 function darCardAnalyze(c, vol = null) {
-    const all = darvasScan(c, DARVAS_CONFIRM, DARVAS_CONFIRM, 0).boxes;
+    const all = darvasScan(c).boxes;   // TE SAME boxy co na Dar-Card (user: karta to tylko inna reprezentacja wyników)
     let lr = -1;
     c.forEach((v, i) => { if (Number.isFinite(v)) lr = i; });
     if (lr < 0 || !all.length) return { boxes: [], topmost: null, rising: false, status: { state: "NONE", text: "brak boxa Darvasa (za mało danych)", warnings: [] } };
@@ -858,8 +862,8 @@ function darCardAnalyze(c, vol = null) {
     } else if (px >= bottom) {
         if (rising || topmost.outcome === "up") { state = "HOLD"; text = `TRZYMAJ — cena w najwyższym boxie ${r2(bottom)}–${r2(top)}; ignoruj wahania, stop pod strefą zagrożenia ${r2(zoneLow)}`; stop = r2(zoneLow); }
         else { state = "READY"; text = `GOTOWY DO KUPNA — cena w pierwszym boxie ${r2(bottom)}–${r2(top)}; kup po zamknięciu nad ${r2(top)}, stop ${DARVAS_START_STOP_PCT} % (${r2(top * (1 - DARVAS_START_STOP_PCT / 100))})`; stop = r2(top * (1 - DARVAS_START_STOP_PCT / 100)); }
-    } else if (rising) {
-        state = "SELL"; text = `SPRZEDAJ — po nowym, wyższym boxie cena spadła pod jego dół ${r2(bottom)}${px >= zoneLow ? " (w zacieniowanej strefie zagrożenia)" : " (pod strefą zagrożenia)"}`;
+    } else if (rising || topmost.outcome === "up") {
+        state = "SELL"; text = `SPRZEDAJ — ${rising ? "po nowym, wyższym boxie " : "po wybiciu "}cena spadła pod dół boxa ${r2(bottom)}${px >= zoneLow ? " (w zacieniowanej strefie zagrożenia)" : " (pod strefą zagrożenia)"}`;
     } else {
         state = "OUT"; text = `POZA BOXEM — cena ${r2(px)} pod dołem ${r2(bottom)}; nie ma powodu, by trzymać ani kupować akcję spoza najwyższego boxa`;
     }
@@ -883,7 +887,7 @@ function darCardSvg(full, opts = {}) {
     if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Za mało danych na kartę Darvasa.</text></svg>`;
     const range = darCardPastRange(full.weeks, full.c);
     const tableH = fs(16) * (range.length + 1) + 8;
-    const L = { left: compact ? 40 : 48, right: 8, top: fs(24), bottom: tableH + fs(36) };
+    const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: tableH + fs(36) };
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const lastReal = full.c.reduce((q, v, i) => (Number.isFinite(v) ? i : q), -1), px = full.c[lastReal];
     const st = a.status;
@@ -908,7 +912,7 @@ function darCardSvg(full, opts = {}) {
         out.push(`<rect x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="#ffffff" stroke="${b.inChain || topmost ? "#111" : "#8b8670"}" stroke-width="${topmost ? 2.2 : 1.4}"${b.inChain || topmost ? "" : ' fill-opacity="0.6"'}/>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(H - tableH - fs(30)).toFixed(1)}" font-size="${fs(8.5)}" fill="#5a574a" text-anchor="middle">${mon(b.i0)}</text>`);
         out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yZ - yB).toFixed(1)}" fill="url(#dcHatch)" stroke="#111" stroke-width="1"/>`);
-        out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yT - 3).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.top * 100) / 100}</text>`);
+        out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yT + fs(11)).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.top * 100) / 100}</text>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yZ + fs(10)).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.bottom * 100) / 100}</text>`);
         if (topmost) {   // punkt kupna: cienka linia tuż nad górą najwyższego boxa + opis; kropka = bieżące zamknięcie
             const yb = y(b.top * 1.007), colr = st.state === "BUY" ? "#0a8f3c" : st.state === "SELL" ? "#c0262d" : "#1b5fbf";
