@@ -647,6 +647,11 @@ def add_eps_rating(stocks, eps_cache):
         s["shares_chg_pct"] = shares if _is_num(shares) else None   # zmiana liczby akcji r/r (ujemna = skup akcji)
         s["eps_score"] = eps_score(q0, q1, s.get("eps_this_y"), s.get("eps_past_5y"))
         s["eps_stability"] = eps_stability(quarters)
+    return finalize_eps_rating(stocks)
+
+
+def finalize_eps_rating(stocks):
+    """Percentyle eps_score / eps_stability -> eps_rating i Composite (z gotowych pól; używa też Watchlisty po dodaniu listy, bez ponownego pobierania)."""
     percentile_rating(stocks, "eps_score", "eps_growth_rating")
     percentile_rating(stocks, "eps_stability", "eps_stability_rating")
     for s in stocks:
