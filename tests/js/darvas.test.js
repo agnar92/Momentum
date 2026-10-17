@@ -313,8 +313,8 @@ test("darCardPastRange i darCardSvg", () => {
     const weeks = ["2024-01-05", "2024-06-07", "2025-01-03", "2025-06-06"];
     const r = darCardPastRange(weeks, [10, 12, 9, 15]);
     assert.deepEqual(r, [{ year: "2024", hi: 12, lo: 10 }, { year: "2025", hi: 15, lo: 9 }]);
-    // „Past Price Range” = ostatnie 4 lata kalendarzowe (jak w oryginale)
-    assert.deepEqual(darCardPastRange(["2022-05-01", "2023-05-01", "2024-05-01", "2025-05-01"], [1, 2, 3, 4]).map(x => x.year), ["2022", "2023", "2024", "2025"]);
+    // „Past Price Range” = 3 lata kalendarzowe (bieżący + 2 poprzednie), High / Low z zamknięć
+    assert.deepEqual(darCardPastRange(["2022-05-01", "2023-05-01", "2024-05-01", "2025-05-01"], [1, 2, 3, 4]).map(x => x.year), ["2023", "2024", "2025"]);
     const svg = darCardSvg({ c: SERIES, v: null, weeks: SERIES.map((_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`) }, { bookTitle: "TST" });
     assert.ok(svg.includes("DAR·CARD") && svg.includes("Past Price Range"));
 });

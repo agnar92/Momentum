@@ -899,7 +899,7 @@ function lastFinite(c) { for (let i = c.length - 1; i >= 0; i--) if (Number.isFi
 function darCardPastRange(weeks, c) {
     const by = {};
     c.forEach((v, i) => { const d = weeks && weeks[i]; if (!d || !Number.isFinite(v)) return; const y = d.slice(0, 4), e = by[y] || (by[y] = { hi: v, lo: v }); e.hi = Math.max(e.hi, v); e.lo = Math.min(e.lo, v); });
-    return Object.keys(by).sort().slice(-4).map(y => ({ year: y, hi: Math.round(by[y].hi * 100) / 100, lo: Math.round(by[y].lo * 100) / 100 }));
+    return Object.keys(by).sort().slice(-3).map(y => ({ year: y, hi: Math.round(by[y].hi * 100) / 100, lo: Math.round(by[y].lo * 100) / 100 }));
 }
 
 // Karta jak w książce: papier w linie, oś cen po lewej, boxy OBOK SIEBIE od najstarszego (nie w skali czasu), biały box + ciemny pas strefy zagrożenia pod dołem,

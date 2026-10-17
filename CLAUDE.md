@@ -445,3 +445,5 @@ To look at the page locally: `cd docs && python3 -m http.server`, then open `htt
 **„Past Price Range” z powrotem jak w oryginale (Oct 2026, user: „cofnijmy do oryginału”)**: OVERRIDES „max 2 lata”: `darCardPastRange` znów zwraca ostatnie 4 lata kalendarzowe.
 
 **Karta: miesiąc i rok pod nazwą spółki, bez etykiet przy boxach (Oct 2026, user pokazał 5 stron książki: „w przykładach jest tylko miesiąc na dar card — pod nazwą spółki jest miesiąc i rok”)**: usunięto małe podpisy miesiąca pod każdym boxem i „n mies.” w rogu; pod nazwą spółki stoi „październik 2026” (miesiąc i rok ostatniej sesji, `asOf`), a „Past Price Range” jest po prawej jak w książce (wiersze rok / High / Low, nagłówki High / Low pod spodem).
+
+**„Past Price Range” = 3 lata (Oct 2026, user: „tabelka z cenami z 3 lat, bieżący rok aktualizowany na bieżąco, High / Low z cen zamknięcia”)**: OVERRIDES „4 lata”: `darCardPastRange` zwraca bieżący rok kalendarzowy + 2 poprzednie (max 3 wiersze); bieżący rok liczy się z zamknięć do ostatniej sesji, więc przy każdym odświeżeniu danych High / Low się aktualizuje. Karta jest opisana miesiącem ostatniej sesji.
