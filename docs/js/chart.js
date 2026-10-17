@@ -1472,6 +1472,11 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     container.classList.toggle("scroll-y", !!opts.stack);   // układ z osobnymi panelami przewija się w pionie (suwak okna zostaje na górze)   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie (próba z suwakiem na dole nie działała)
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
+        if (opts.darvas && opts.card && typeof darCardSvg === "function") {   // widok „karta z książki” Darvasa: boxy obok siebie, reguły z książki
+            plot.innerHTML = darCardSvg(full, opts);
+            readoutEl.textContent = darCardReadout(full);
+            return;
+        }
         if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
             plot.innerHTML = darvasSvg(full, win, opts);
             if (typeof attachDarvasHover === "function") attachDarvasHover(plot, full, readoutEl);

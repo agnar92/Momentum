@@ -1961,6 +1961,7 @@ let estimatesPromise = null;
 let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartBookOn = true;     // 📖 Książka: opisy i oś jak na wykresach z książki O'Neila (tylko tygodniowy)
+let chartCardOn = false;   // 🃏 karta Darvasa z książki (drugi widok obok czasowego Dar-Card)
 let chartDarvasOn = false;  // 📦 widok Darvasa (Dar-Card): pudełka na cenach zamknięcia zamiast świec
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
 let chartLog = false;       // skala logarytmiczna ceny (zapamiętywana w przeglądarce)
@@ -2179,7 +2180,7 @@ function drawChart() {
         const opts = {
             log: chartLog, stack: true, uid: "c" + i,   // osobne wykresy (Cena / Wolumen / MACD / RS / EPS) jeden pod drugim, cena w skali logarytmicznej
             compact: chartCompact, wide: chartWide,
-            hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus,
+            hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus, card: chartCardOn,
             focusBox: focus,
             pinBox: pin,
             pinFlash: Date.now() < pinFlashUntil,
@@ -2345,6 +2346,15 @@ function initChartModal() {
     chartBookOn = true; chartLog = false;
     updateLogButton();
     document.getElementById("chartInfoBtn").addEventListener("click", openChartInfo);
+    try { chartCardOn = localStorage.getItem("momentum_watchlist_chart_card") === "1"; } catch (e) { /* ignoruj */ }
+    const cardBtn = document.getElementById("chartCardBtn");
+    cardBtn.classList.toggle("active", chartCardOn);
+    cardBtn.addEventListener("click", () => {
+        chartCardOn = !chartCardOn;
+        try { localStorage.setItem("momentum_watchlist_chart_card", chartCardOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+        cardBtn.classList.toggle("active", chartCardOn);
+        boxFocus = null; drawChart();
+    });
     document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });
     // przesunięcie palca w poziomie: w lewo = następna spółka z listy, w prawo = poprzednia (zastąpiło strzałki ◀ ▶);
     // działa na tytule, linii gotowości i na wykresie, ale nie na suwaku (ma własne przeciąganie) ani w trybie rysowania

@@ -285,3 +285,38 @@ test("minimum 6 tygodni: krótszy box zostaje samą linią topu, 6-tygodniowy je
     assert.ok(darvasTopLines(mk(3)).length > 0);
     assert.equal(darvasBoxes(mk(7)).length, 1);   // top + 7 tygodni: box
 });
+
+// --- Karta z książki (darCard*) ---
+const { darCardAnalyze, darCardPastRange, darCardSvg } = require("../../docs/js/darvas.js");
+
+test("darCardAnalyze: cena nad górą najwyższego boxa po raz pierwszy = KUP ze stopem 10 %", () => {
+    const c = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112];
+    const a = darCardAnalyze(c);
+    assert.equal(a.status.state, "BUY");
+    assert.equal(a.status.stop, Math.round(112 * 0.9 * 100) / 100);
+});
+
+test("darCardAnalyze: w najwyższym boxie po wybiciu = TRZYMAJ, nowy wyższy box i spadek pod jego dół = SPRZEDAJ", () => {
+    const hold = darCardAnalyze(SERIES.slice(0, 21));
+    assert.ok(["HOLD", "BUY"].includes(hold.status.state));
+    const up = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116];
+    const a = darCardAnalyze([...up, 100]);
+    assert.ok(a.rising || a.status.state === "OUT");
+    if (a.rising) assert.equal(a.status.state, "SELL");
+});
+
+test("darCardAnalyze: ostrzeżenia z dodatków (wolumen) nie zmieniają stanu KUP", () => {
+    const c = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112];
+    const v = c.map(() => 100); v[10] = 90;
+    const a = darCardAnalyze(c, v);
+    assert.equal(a.status.state, "BUY");
+    assert.ok(a.status.warnings.some(w => w.includes("wolumen")));
+});
+
+test("darCardPastRange i darCardSvg", () => {
+    const weeks = ["2024-01-05", "2024-06-07", "2025-01-03", "2025-06-06"];
+    const r = darCardPastRange(weeks, [10, 12, 9, 15]);
+    assert.deepEqual(r, [{ year: "2024", hi: 12, lo: 10 }, { year: "2025", hi: 15, lo: 9 }]);
+    const svg = darCardSvg({ c: SERIES, v: null, weeks: SERIES.map((_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`) }, { bookTitle: "TST" });
+    assert.ok(svg.includes("DAR·CARD") && svg.includes("Past Price Range"));
+});
