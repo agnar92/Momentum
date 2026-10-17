@@ -852,7 +852,7 @@ function darCardAnalyze(c, vol = null) {
         if (prev.top < cur.top && !prev.cancelled && prev.outcome === "up") chain.unshift(prev); else break;
     }
     const from = lr - DARCARD_WEEKS + 1;   // okno 3 lat (min. rok to i tak mieści się w oknie); IPO: from < 0 = cała historia
-    const boxes = all.filter(b => b.outcome !== "down" && !b.cancelled && (b.end ?? b.i1) >= from).map(b => ({ ...b, inChain: chain.includes(b) })), topmost = chain[chain.length - 1], rising = chain.length >= 2;
+    const boxes = all.filter(b => b.outcome !== "down" && !b.cancelled && (b.end ?? b.i1) >= from).map(b => ({ ...b, inChain: chain.includes(b) })), topmost = chain[chain.length - 1], rising = chain.length >= 2, prior = chain.length - 1, broken = chain.filter(b => b.outcome === "up").length;   // prior = wcześniejsze, wybite boxy pod najwyższym; broken = wszystkie wybite w łańcuchu
     const r2 = v => Math.round(v * 100) / 100;
     const px = c[lr], prevPx = lr > 0 && Number.isFinite(c[lr - 1]) ? c[lr - 1] : null;
     const top = topmost.top, bottom = topmost.bottom, zoneLow = bottom * (1 - DARVAS_STOP_PCT / 100);
@@ -863,7 +863,8 @@ function darCardAnalyze(c, vol = null) {
         const entry = prevPx !== null && prevPx <= top ? px : top;
         if (prevPx !== null && prevPx <= top) {
             state = "BUY"; stop = darvasInitialStop(top, bottom, px);
-            text = `KUP — zamknięcie nad górą najwyższego boxa ${r2(top)}${rising ? " (po dwóch kolejnych wyższych boxach)" : ""}; stop ${DARVAS_START_STOP_PCT} % przy pierwszym wybiciu: ${stop}; od razu złóż zlecenie stop (dalej trzymaj nad strefą zagrożenia ${r2(zoneLow)})`;
+            text = `KUP — zamknięcie nad górą najwyższego boxa ${r2(top)}${prior >= 2 ? " (po dwóch wcześniejszych, wybitych wyższych boxach)" : ""}; stop ${DARVAS_START_STOP_PCT} % przy pierwszym wybiciu: ${stop}; od razu złóż zlecenie stop (dalej trzymaj nad strefą zagrożenia ${r2(zoneLow)})`;
+            if (prior < 2) warnings.push(`wcześnie: wcześniej wybitych boxów ${prior}, książka kupuje po dwóch (trzeci box nad nimi)`);
             if (vol && Number.isFinite(vol[lr])) {
                 const pv = vol.slice(Math.max(0, lr - DARVAS_VOL_WEEKS), lr).filter(Number.isFinite);
                 if (pv.length >= 4) { const vr = vol[lr] / (pv.reduce((a, b) => a + b, 0) / pv.length); if (vr < DARVAS_BREAKOUT_VOL) warnings.push(`wolumen wybicia tylko ${vr.toFixed(2)}× średniej (zwykle ≥ ${DARVAS_BREAKOUT_VOL}×)`); }
@@ -872,7 +873,7 @@ function darCardAnalyze(c, vol = null) {
         if ((px / top - 1) * 100 > DARVAS_MAX_EXT_PCT) warnings.push(`cena ${((px / top - 1) * 100).toFixed(1)} % nad górą — nie goń`);
         void entry;
     } else if (px >= bottom) {
-        if (rising || topmost.outcome === "up") { state = "HOLD"; text = `TRZYMAJ — cena w najwyższym boxie ${r2(bottom)}–${r2(top)}; ignoruj wahania, stop pod strefą zagrożenia ${r2(zoneLow)}`; stop = r2(zoneLow); }
+        if (rising || topmost.outcome === "up") { state = "HOLD"; text = `TRZYMAJ — cena w najwyższym boxie ${r2(bottom)}–${r2(top)}; ignoruj wahania, stop pod strefą zagrożenia ${r2(zoneLow)}${topmost.outcome !== "up" && prior >= 2 ? `; box powstał nad dwoma wybitymi — kup po zamknięciu nad ${r2(top)}` : ""}`; stop = r2(zoneLow); }
         else { state = "READY"; text = `GOTOWY DO KUPNA — cena w pierwszym boxie ${r2(bottom)}–${r2(top)}; kup po zamknięciu nad ${r2(top)}, stop ${DARVAS_START_STOP_PCT} % (${r2(top * (1 - DARVAS_START_STOP_PCT / 100))})`; stop = r2(top * (1 - DARVAS_START_STOP_PCT / 100)); }
     } else if (rising || topmost.outcome === "up") {
         state = "SELL"; text = `SPRZEDAJ — ${rising ? "po nowym, wyższym boxie " : "po wybiciu "}cena spadła pod dół boxa ${r2(bottom)}${px >= zoneLow ? " (w zacieniowanej strefie zagrożenia)" : " (pod strefą zagrożenia)"}`;
@@ -880,14 +881,14 @@ function darCardAnalyze(c, vol = null) {
         state = "OUT"; text = `POZA BOXEM — cena ${r2(px)} pod dołem ${r2(bottom)}; nie ma powodu, by trzymać ani kupować akcję spoza najwyższego boxa`;
     }
     if ((state === "HOLD" || state === "BUY") && typeof darvasMacdBelow === "function" && darvasMacdBelow(c) === true) warnings.push("dzienny MACD pod linią sygnału");
-    return { boxes, topmost, rising, chainLen: chain.length, status: { ...base, state, text, stop, warnings } };
+    return { boxes, topmost, rising: broken >= 2, broken, prior, chainLen: chain.length, status: { ...base, state, text, stop, warnings } };
 }
 
 // Wykrywanie „akcji wzrostowej” wg Dar-Card: ile KOLEJNYCH, coraz wyższych pudełek (każde wybite w górę, żadne anulowane) układa się do dziś.
 // rising = co najmniej 2 (s. 139–142: kupno po dwóch kolejnych pudełkach w górę). Używane przez kolumnę „Boxy ↑” i filtr w Watchlistach.
 function darvasRisingInfo(c, vol = null) {
     const a = darCardAnalyze(c, vol);
-    const n = a.boxes.length ? a.chainLen : 0;
+    const n = a.boxes.length ? a.broken : 0;   // liczba wybitych, kolejno wyższych boxów (rising = ≥ 2; kupno przy wybiciu KOLEJNEGO, wyższego boxa)
     const st = a.status || {};
     const distPct = Number.isFinite(st.buyLine) && Number.isFinite(c[c.length - 1]) && st.buyLine > 0 ? Math.round((st.buyLine / lastFinite(c) - 1) * 1000) / 10 : null;
     return { n, rising: n >= 2, state: st.state || "NONE", buyLine: st.buyLine ?? null, distPct, text: st.text || "" };
