@@ -1475,6 +1475,7 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
         if (opts.darvas && opts.card && typeof darCardSvg === "function") {   // widok „karta z książki” Darvasa: boxy obok siebie, reguły z książki
             plot.innerHTML = darCardSvg(full, opts);
             readoutEl.textContent = darCardReadout(full);
+            if (typeof attachDarCard === "function") attachDarCard(plot, full, readoutEl);
             return;
         }
         if (opts.darvas && typeof darvasSvg === "function") {   // alternatywny widok Dar-Card: pudełka Darvasa na zamknięciach (bez świec, linii, nakładek)
