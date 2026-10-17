@@ -1205,5 +1205,6 @@ body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-
 .orders-table th, .orders-table td { padding: 5px 4px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
 .orders-table th:first-child, .orders-table td:first-child { text-align: left; }
 .orders-table small { display: block; color: var(--text-dim); font-size: 11px; white-space: normal; }
+.orders-table small.dn { color: var(--down, #ff6b6b); }
 .orders-table td:last-child { width: 1%; padding-right: 0; }
 .orders-table td:last-child .btn { padding: 4px 8px; }
