@@ -732,3 +732,17 @@ test("Darvas z pól Pythona: stan bez wykresów, zlecenia kupna stop + stop loss
     assert.equal(o[1].size.shares, 20);   // 10 000 $ · 10 % / 50 $ = 20 akcji; ryzyko 1 % = 100 $ / 5 $ = 20 akcji
     assert.equal(ordersText(o).split("\n")[1], "RDY: kup, gdy cena > 50.00 (buy stop); stop loss: sprzedaj, gdy < 45.00, 20 akcji");
 });
+
+test("weeklyPlan: zlecenia tylko przy MACD tyg. nad sygnałem, bez spółek z pozycją; decyzje dla pozycji", () => {
+    const { weeklyPlan, positionDecision, planStocks } = require("../../docs/js/watchlist.js");
+    const mk = (t, extra) => ({ ticker: t, price: 50, rise_n: 2, rise_state: "READY", dv_top: 52, dv_dist: 4, dv_n: 2, dv_bottom: 48, macd_w_above: true, ...extra });
+    const stocks = planStocks([mk("A"), mk("B", { macd_w_above: false }), mk("C")], [mk("A", { price: 1 }), mk("D", { macd_w_above: null })]);
+    assert.deepEqual(stocks.map(s => s.ticker), ["A", "B", "C", "D"]);
+    assert.equal(stocks[0].price, 50);
+    const plan = weeklyPlan(stocks, { C: { entry: 40, stop: 36 }, Z: { entry: 10, stop: 9 } });
+    assert.deepEqual(plan.orders.map(o => o.ticker), ["A", "D"]);
+    assert.equal(plan.skipped, 1);
+    assert.deepEqual(plan.positions.map(p => [p.ticker, p.code]), [["Z", "NA"], ["C", "HOLD"]]);
+    assert.equal(positionDecision({ entry: 40, stop: 36 }, { price: 35, macd_w_above: true }).code, "STOP");
+    assert.equal(positionDecision({ entry: 40, stop: 36 }, { price: 45, macd_w_above: false }).code, "SELL");
+});

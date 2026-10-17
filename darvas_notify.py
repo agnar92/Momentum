@@ -9,6 +9,7 @@ Stan karty liczy watchlist.py (pola dv_* w docs/data/watchlist.json i watchlists
      (GitHub wysyła e-mail i powiadomienie push w aplikacji GitHub Mobile). Stan „co już zgłoszono” trzyma ukryty komentarz w treści Issue.
 Wymaga tylko GITHUB_TOKEN (bez niego wypisuje sygnały na ekran). Informacja pomocnicza, nie rekomendacja.
 """
+import datetime
 import json
 import os
 import re
@@ -47,19 +48,23 @@ def open_positions(prefs):
 
 
 def signals(stocks, positions=()):
-    """Bieżące sygnały: [{key, ticker, kind: buy|ready|sell, ...}]. Klucz zawiera górę boxa, więc nowy (wyższy) box zgłasza się ponownie."""
+    """Bieżące sygnały jak w 📋 Planie na tydzień: [{key, ticker, kind: buy|ready|sell, ...}].
+    Kupno (KUP / GOTOWE, ≥ 2 rosnące boxy) tylko przy tygodniowym MACD nad sygnałem i bez otwartej pozycji;
+    sprzedaż = Twoja pozycja z tygodniowym MACD pod sygnałem (wyjście z backtestu). Klucz kupna zawiera górę boxa, więc wyższy box zgłasza się ponownie."""
     out = []
     for t, s in sorted(stocks.items()):
         st, n, top = s.get("dv_state"), s.get("dv_n") or 0, s.get("dv_top")
-        if top is None:
+        if t in positions:
+            if s.get("macd_w_above") is False:
+                out.append({"key": f"{t}:MACD", "ticker": t, "kind": "sell", "price": s.get("price")})
+            continue
+        if top is None or s.get("macd_w_above") is False:
             continue
         if st == "BUY" and n >= 2:
             entry = s.get("price") or top
-            out.append({"key": f"{t}:BUY:{top}", "ticker": t, "kind": "buy", "entry": entry, "stop": s.get("dv_stop") or round(entry * (1 - STOP_PCT / 100), 2), "n": n, "top": top})
+            out.append({"key": f"{t}:BUY:{top}", "ticker": t, "kind": "buy", "entry": entry, "stop": round(entry * (1 - STOP_PCT / 100), 2), "n": n, "top": top})
         elif st == "READY" and n >= 2:
-            out.append({"key": f"{t}:READY:{top}", "ticker": t, "kind": "ready", "entry": top, "stop": s.get("dv_stop") or round(top * (1 - STOP_PCT / 100), 2), "n": n, "top": top, "dist": s.get("dv_dist")})
-        elif st in ("SELL", "OUT") and t in positions:
-            out.append({"key": f"{t}:{st}:{top}", "ticker": t, "kind": "sell", "state": st, "bottom": s.get("dv_bottom"), "price": s.get("price")})
+            out.append({"key": f"{t}:READY:{top}", "ticker": t, "kind": "ready", "entry": top, "stop": round(top * (1 - STOP_PCT / 100), 2), "n": n, "top": top, "dist": s.get("dv_dist")})
     order = {"buy": 0, "ready": 1, "sell": 2}
     return sorted(out, key=lambda x: (order[x["kind"]], x.get("dist") if x.get("dist") is not None else 999, x["ticker"]))
 
@@ -79,8 +84,8 @@ def format_message(sigs, owner=None, as_of=None):
          lambda s: f"- **{s['ticker']}** wejście ~{s['entry']:.2f}, stop loss {s['stop']:.2f} ({s['n']} boxy ↑)"),
         ("ready", "🔵 **Gotowe do kupna** — zlecenie kupna stop nad górą boxa + stop loss 10 %:",
          lambda s: f"- **{s['ticker']}** kup stop {s['entry']:.2f}, stop loss {s['stop']:.2f}" + (f" (+{s['dist']:.1f} %)" if s.get("dist") is not None else "") + f", {s['n']} boxy ↑"),
-        ("sell", "🔴 **Twoje pozycje poza najwyższym boxem** — wg książki sprzedaj:",
-         lambda s: f"- **{s['ticker']}** " + ("cena pod dołem boxa" if s["state"] == "SELL" else "poza najwyższym boxem") + (f" {s['bottom']:.2f}" if s.get("bottom") is not None else "")),
+        ("sell", "🔴 **Sprzedaj** — tygodniowy MACD Twojej pozycji spadł pod linię sygnału (zlecenie sprzedaży na poniedziałek):",
+         lambda s: f"- **{s['ticker']}**" + (f" (cena {s['price']:.2f})" if s.get("price") is not None else "")),
     ]
     parts, n = [], 0
     for kind, head, fmt in groups:
@@ -89,7 +94,7 @@ def format_message(sigs, owner=None, as_of=None):
             continue
         lines = [fmt(s) for s in items[: max(0, MAX_LINES - n)]]
         n += len(lines)
-        more = f"\n- … i {len(items) - len(lines)} więcej (zobacz 📑 Watchlisty → 📋 Zlecenia)" if len(lines) < len(items) else ""
+        more = f"\n- … i {len(items) - len(lines)} więcej (zobacz 📋 Plan w aplikacji)" if len(lines) < len(items) else ""
         parts.append(head + "\n" + "\n".join(lines) + more)
     head = (f"@{owner} " if owner else "") + f"nowe sygnały Dar-Card{f' (sesja {as_of})' if as_of else ''}:"
     return head + "\n\n" + "\n\n".join(parts)
@@ -108,6 +113,11 @@ def find_or_create_issue(repo, gh_token):
 
 def main():
     stocks = load_stocks()
+    as_of = max((s.get("as_of") or "" for s in stocks.values()), default="") or None
+    # Rytm tygodniowy (📋 Plan na tydzień): z harmonogramu powiadamiamy tylko po sesji piątkowej; ręczne uruchomienie zawsze.
+    if os.environ.get("DARVAS_WEEKLY") == "1" and as_of and datetime.date.fromisoformat(as_of[:10]).weekday() != 4:
+        print(f"Sesja {as_of} to nie piątek — powiadomienia Darvasa tylko raz w tygodniu (po piątkowej sesji).")
+        return 0
     positions = set()
     gist_token = os.environ.get("GIST_TOKEN", "").strip()
     if gist_token:
@@ -116,7 +126,6 @@ def main():
         except (urllib.error.URLError, OSError, ValueError) as e:
             print(f"⚠️  Pozycje z Gista niedostępne ({e}) — bez sygnałów sprzedaży.")
     current = signals(stocks, positions)
-    as_of = max((s.get("as_of") or "" for s in stocks.values()), default="") or None
     print(f"Sygnały Darvasa: {len(current)} (KUP {sum(s['kind'] == 'buy' for s in current)}, GOTOWE {sum(s['kind'] == 'ready' for s in current)}, SPRZEDAJ {sum(s['kind'] == 'sell' for s in current)})")
     repo, gh_token = os.environ.get("GITHUB_REPOSITORY", ""), os.environ.get("GITHUB_TOKEN", "")
     if not repo or not gh_token:

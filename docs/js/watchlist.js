@@ -35,7 +35,7 @@ const SETTINGS_KEY = "momentum_watchlist_settings";
 const EARNINGS_SOON_DAYS = 7;
 const BASE_LABELS_PL = { flat: "Flat base", cup: "Cup base", double_bottom: "Double bottom", ascending: "Ascending base", htf: "High tight flag", square_box: "Square box", ipo: "Baza po debiucie (IPO)", correction: "Korekta", deep: "Głęboka korekta" };
 const DEFAULT_SETTINGS = {
-    tab: "LIST", csMin: 5, csCore: true, csAccel: true, csRs: 80, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
+    tab: "PLAN", csMin: 5, csCore: true, csAccel: true, csRs: 80, bases: { maxDistPct: 10, vcpOnly: false }, brk: { maxDistPct: 5 },
 };
 // Jedna lista (watchlist.json = skaner CANSLIM z Finviz); zakładki CANSLIM, Bazy… to tylko różne filtry i sortowania tych samych spółek.
 
@@ -56,8 +56,10 @@ const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], WATCH: ["darvas_rank", "asc"],
     CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"],
 };
-const BOTTOM_NAV_TABS = ["LIST", "CS", "POS", "BOXES"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
+const BOTTOM_NAV_TABS = ["PLAN", "POS", "CS", "BOXES"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const BOXES_TAB = "BOXES";   // podstrona „Boxy” (bez własnej tabeli) — przegląd boxów Darvasa: monitorowane, nowe, wybicia, trzymaj, sprzedaj; patrz #boxesPanel
+const PLAN_TAB = "PLAN";   // 📋 Plan na tydzień (start): pozycje z decyzją + zlecenia kupna Darvasa — patrz #planPanel, renderPlanPanel
+const LEAN_HIDDEN_TABS = ["LIST", "WATCH", "BASES", "FAV"];   // schowane po porządkach (Filtry → „Pokaż wszystkie zakładki” je przywraca)
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
 const TAB_TITLES = {
     LIST: "Lista Finviz", CS: "Lista CANSLIM (C A N S L I M)", POS: "Moje pozycje", WATCH: "Watchlisty (ręczne listy z Finviz)", BASES: "Bazy blisko pivotu", FAV: "Ulubione",
@@ -82,6 +84,7 @@ const state = {
     scoreMin: null,
     scoreMax: null,
     natrMax: null,      // filtr listy: maks. tygodniowy NATR spółki (%)
+    allTabs: false,     // po porządkach: false = widoczne tylko Plan, Pozycje, CANSLIM, Boxy, Filtry (LEAN_HIDDEN_TABS schowane)
     risingOnly: false,  // filtr listy: tylko akcje z ≥ 2 kolejnymi, rosnącymi pudełkami Dar-Card (s.rise_n z dziennych wykresów)
     boxNatrMax: null,   // filtr zakładki Boxy: maks. NATR samego boxa (%)
     search: "",
@@ -1019,14 +1022,96 @@ const DARVAS_ORDER_STOP_PCT = 10;
 function ordersText(orders) {
     return orders.map(o => `${o.ticker}: ${o.kind === "buy" ? "kup na otwarciu ~" : "kup, gdy cena > "}${o.entry.toFixed(2)} (buy stop); stop loss: sprzedaj, gdy < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
 }
+function ordersRowsHtml(orders, chartLink = false) {
+    return orders.map(o => `<tr><td><b>${chartLink ? `<a href="#" data-plan-chart="${escapeHtml(o.ticker)}">${escapeHtml(o.ticker)}</a>` : escapeHtml(o.ticker)}</b>${o.kind === "buy" ? " 🟢" : ""}<small>${o.n}× box ↑</small></td>`
+        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? "na otwarciu (wybicie dziś)" : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy &lt; ${o.stop.toFixed(2)} (−10 %)</small></td>`
+        + `<td>${o.size ? `<b>${fmtShares(o.size.shares)}</b><small>${pln0(o.size.value_pln)}</small><small>ryz. ${o.size.risk_pln !== null ? pln0(o.size.risk_pln) : "—"}</small>` : "—"}</td>`
+        + `<td><button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(o.ticker)}|${o.entry}|${o.bottom ?? o.stop}|0" title="Zapisz jako pozycję (wejście, stop 10 %)">💼</button></td></tr>`).join("");
+}
+
+// 📋 Plan na tydzień (user: „max 15–30 minut dziennie albo raz w tygodniu”): wejście z DZIENNYCH boxów Darvasa przez zlecenia
+// kupna stop złożone w weekend (broker sam wykona je w tygodniu), stop loss 10 %, wyjście po TYGODNIOWYM MACD pod sygnałem.
+// Backtest (153 spółki z listy, 2019–2026, scratchpad): ta rutyna ≈ +3,9 % na transakcję, tyle co codzienne pilnowanie wybić.
+// Nowe kupno tylko przy MACD tyg. nad sygnałem (inaczej wyjście wypadłoby od razu). Spółki z otwartą pozycją nie dostają zlecenia kupna.
+function planStocks(main, watch) {
+    const seen = new Map();
+    [...(main || []), ...(watch || [])].forEach(s => { if (!seen.has(s.ticker)) seen.set(s.ticker, s); });
+    return [...seen.values()];
+}
+function positionDecision(p, s) {
+    const price = s && Number.isFinite(s.price) ? s.price : null;
+    const stop = Number.isFinite(p.stop) ? p.stop : null;
+    if (price === null) return { code: "NA", label: "❔ Brak ceny", text: "spółki nie ma na listach — sprawdź ją u brokera" };
+    if (stop !== null && price <= stop) return { code: "STOP", label: "✂ Stop", text: `cena ${price.toFixed(2)} ≤ stop ${stop.toFixed(2)} — sprzedaj, jeśli broker jeszcze tego nie zrobił` };
+    if (s.macd_w_above === false) return { code: "SELL", label: "🔴 Sprzedaj", text: "tygodniowy MACD spadł pod linię sygnału — sprzedaj na otwarciu w poniedziałek" };
+    if (s.macd_w_above === true) return { code: "HOLD", label: "🟢 Trzymaj", text: `MACD tyg. nad sygnałem${stop !== null ? `; stop loss ${stop.toFixed(2)} zostaje u brokera` : ""}` };
+    return { code: "HOLD", label: "🟢 Trzymaj", text: "brak tygodniowego MACD (krótka historia) — pilnuje tylko stop loss" };
+}
+function weeklyPlan(stocks, positions, acct = null) {
+    const bySym = new Map(stocks.map(s => [s.ticker, s]));
+    const held = Object.keys(positions || {}).filter(t => positions[t]);
+    const heldSet = new Set(held);
+    const all = darvasOrders(stocks.filter(s => !heldSet.has(s.ticker)), acct);
+    const orders = all.filter(o => bySym.get(o.ticker).macd_w_above !== false);
+    const pos = held.map(t => {
+        const p = positions[t], s = bySym.get(t) || null;
+        const m = s ? positionMetrics(p, s.price) : null;
+        return { ticker: t, company: s ? s.company : "", price: s ? s.price : null, entry: p.entry, stop: p.stop, pl: m ? m.pl_pct : null, ...positionDecision(p, s) };
+    }).sort((a, b) => ["STOP", "SELL", "NA", "HOLD"].indexOf(a.code) - ["STOP", "SELL", "NA", "HOLD"].indexOf(b.code));
+    return { orders, skipped: all.length - orders.length, positions: pos };
+}
+
+function renderPlanPanel() {
+    const el = document.getElementById("planPanel");
+    if (!el || !state.data) return;
+    ensureRising("main"); ensureRising("watch");
+    const stocks = planStocks(state.data.stocks, watchData ? watchData.stocks : []);
+    const plan = weeklyPlan(stocks, state.pos, { ...state.acct, fx: usdPln() });
+    const loading = risingPending.main || risingPending.watch;
+    const mkt = state.data.market;
+    const weak = mkt && (mkt.m_regime || mkt.regime) === "correction";
+    const q = (state.search || "").trim().toLowerCase();
+    const match = t => !q || t.toLowerCase().includes(q);
+    const orders = plan.orders.filter(o => match(o.ticker));
+    const acctOk = orders.some(o => o.size);
+    const posRows = plan.positions.filter(p => match(p.ticker)).map(p => `<tr class="plan-${p.code.toLowerCase()}"><td><b><a href="#" data-plan-chart="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)}</a></b>`
+        + `<small>${Number.isFinite(p.pl) ? `${p.pl > 0 ? "+" : ""}${p.pl.toFixed(1)} %` : ""}</small></td><td><b>${p.label}</b><small>${escapeHtml(p.text)}</small></td></tr>`).join("");
+    el.innerHTML = `${weak ? `<p class="plan-meta plan-warn">🛑 Rynek w korekcie — Darvas w słabym rynku kupował mniej: rozważ mniejsze pozycje albo przerwę.</p>` : ""}
+        <section class="plan-sec"><h3>1. 💼 Twoje pozycje <small>${plan.positions.length}</small></h3>
+            ${posRows ? `<table class="orders-table plan-pos"><tbody>${posRows}</tbody></table>` : `<p class="muted">Brak pozycji. Po kupnie dodaj ją przyciskiem 💼 przy zleceniu.</p>`}</section>
+        <section class="plan-sec"><h3>2. 🛒 Zlecenia kupna na ten tydzień <small>${orders.length}</small></h3>
+            <p class="muted">Dla każdej spółki złóż u brokera <b>kupno stop</b> („kup, gdy &gt; X”, ważne do piątku) i po wykonaniu od razu <b>stop loss</b> („sprzedaj, gdy &lt; Y”, −10 %). Jeśli cena nie dojdzie do X, nic się nie dzieje.
+            Lista: spółki z ≥ 2 kolejnymi rosnącymi boxami Darvasa (dzienne zamknięcia) i tygodniowym MACD nad sygnałem${plan.skipped ? ` (pominięte z MACD tyg. pod sygnałem: ${plan.skipped})` : ""}.</p>
+            ${orders.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${ordersRowsHtml(orders, true)}</tbody></table>
+                ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
+                <button type="button" class="btn" id="planCopy">📋 Kopiuj zlecenia</button>`
+            : `<p class="muted">${loading ? "Liczę boxy…" : "W tym tygodniu brak spółek gotowych do kupna — to też jest sygnał: czekamy."}</p>`}</section>
+        <details class="plan-sec plan-help"><summary>Jak to działa — rutyna na weekend (15 min)</summary>
+            <ol><li><b>Pozycje</b>: „🔴 Sprzedaj” → zlecenie sprzedaży na poniedziałek. „✂ Stop” → sprawdź, czy broker sprzedał. „🟢 Trzymaj” → nic nie rób.</li>
+            <li><b>Zlecenia</b>: skopiuj i złóż u brokera kupno stop + stop loss. Nie wykonane do piątku? W następny weekend lista będzie nowa.</li>
+            <li>Kupione? Stuknij 💼 przy spółce — trafi do pozycji i w kolejnym tygodniu dostaniesz dla niej decyzję.</li>
+            <li>Wykres: stuknij ticker (🃏 karta Darvasa; stuknięcie w box → wykres słupkowy z MACD).</li></ol>
+            <p class="muted small">Dlaczego tak: boxy Darvasa lepiej działają na dziennych zamknięciach, a tygodniowy MACD trzyma zyskowne pozycje dłużej niż wyjście z boxa. Backtest na spółkach z listy (2019–2026): ≈ 35 % trafnych transakcji, średni zysk ≈ +26 %, średnia strata ≈ −8,6 %, średnio ≈ +3,9 % na transakcję — tyle samo co przy codziennym pilnowaniu wybić. Lista to dzisiejsi liderzy (przeżyli), więc wynik jest zawyżony — to wskazówka, nie gwarancja.</p></details>`;
+    const cp = document.getElementById("planCopy");
+    if (cp) cp.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(ordersText(orders)); showToast("Skopiowano zlecenia.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
+    });
+    el.querySelectorAll("[data-plan-chart]").forEach(a => a.addEventListener("click", ev => {
+        ev.preventDefault();
+        if (!chartCardOn) { chartCardOn = true; const cb = document.getElementById("chartCardBtn"); if (cb) cb.classList.add("active"); }
+        openChart(a.dataset.planChart);
+    }));
+    const meta = document.getElementById("drawerMeta");
+    if (meta) meta.textContent = `${plan.positions.length} pozycji · ${orders.length} zleceń kupna`;
+    const first = el.querySelector("[data-plan-chart]");   // PC (widok dzielony): wykres po prawej od razu pokazuje pierwszą spółkę z planu
+    if (splitMode && first && !chartRequested) first.click();
+}
+
 function openOrdersSheet() {
     if (!watchData) return;
     const inList = watchList ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
     const orders = darvasOrders(inList, { ...state.acct, fx: usdPln() });
-    const rows = orders.map(o => `<tr><td><b>${escapeHtml(o.ticker)}</b>${o.kind === "buy" ? " 🟢" : ""}<small>${o.n}× box ↑</small></td>`
-        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? "na otwarciu (wybicie dziś)" : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy &lt; ${o.stop.toFixed(2)} (−10 %)</small></td>`
-        + `<td>${o.size ? `<b>${fmtShares(o.size.shares)}</b><small>${pln0(o.size.value_pln)}</small><small>ryz. ${o.size.risk_pln !== null ? pln0(o.size.risk_pln) : "—"}</small>` : "—"}</td>`
-        + `<td><button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(o.ticker)}|${o.entry}|${o.bottom ?? o.stop}|0" title="Zapisz jako pozycję (wejście, stop 10 %)">💼</button></td></tr>`).join("");
+    const rows = ordersRowsHtml(orders);
     const acctOk = orders.some(o => o.size);
     showSheet(`📋 Zlecenia wg Darvasa${watchList ? " — " + escapeHtml(watchList) : ""}`, orders.length
         ? `<p class="muted">Dla każdej spółki składasz u brokera <b>dwa zlecenia</b> (Darvas, s. 11, 141):<br>
@@ -1210,6 +1295,7 @@ function renderTable() {
     if (!state.data) return;
     const tab = state.tab;
     if (tab === BOXES_TAB) { renderBoxesPanel(); return; }
+    if (tab === PLAN_TAB) { renderPlanPanel(); return; }
     if (tab === FILTERS_TAB) {
         state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
         tagBreakouts(state.data.stocks, [], state.brk.maxDistPct);
@@ -1402,7 +1488,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, boxNatrMax: state.boxNatrMax, risingOnly: state.risingOnly }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, boxNatrMax: state.boxNatrMax, risingOnly: state.risingOnly, allTabs: state.allTabs, planSeen: true }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -1410,7 +1496,9 @@ function loadSettings() {
     try {
         const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
         if (!saved) return;
-        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB || saved.tab === BOXES_TAB) state.tab = saved.tab;
+        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB || saved.tab === BOXES_TAB || saved.tab === PLAN_TAB) state.tab = saved.tab;
+        if (saved.allTabs === true) state.allTabs = true;
+        if (!saved.planSeen || (!state.allTabs && LEAN_HIDDEN_TABS.includes(state.tab))) state.tab = PLAN_TAB;   // po porządkach start = Plan
         if (Number.isFinite(saved.csMin)) state.csMin = saved.csMin;
         if (typeof saved.csCore === "boolean") state.csCore = saved.csCore;
         if (typeof saved.csAccel === "boolean") { state.csAccel = saved.csAccel; setCanslimAccel(saved.csAccel); }
@@ -1861,6 +1949,17 @@ function toggleFav(ticker) {
     renderTable();
 }
 
+function applyLeanUi() {
+    document.querySelectorAll(".drawer-tab").forEach(b => { if (LEAN_HIDDEN_TABS.includes(b.dataset.tab)) b.classList.toggle("lean-hide", !state.allTabs); });
+    const cb = document.getElementById("allTabs");
+    if (cb) cb.checked = state.allTabs;
+}
+function setAllTabs(on) {
+    state.allTabs = !!on;
+    applyLeanUi();
+    if (!state.allTabs && LEAN_HIDDEN_TABS.includes(state.tab)) showTab(PLAN_TAB); else saveSettings();
+}
+
 function showTab(tab, resetSort = true) {
     state.tab = tab;
     if (resetSort && TAB_DEFAULT_SORT[tab]) [state.sortKey, state.sortDir] = TAB_DEFAULT_SORT[tab];
@@ -1883,10 +1982,13 @@ function showTab(tab, resetSort = true) {
     });
     const onFilters = tab === FILTERS_TAB;
     const onBoxes = tab === BOXES_TAB;
+    const onPlan = tab === PLAN_TAB;
+    document.getElementById("planPanel").hidden = !onPlan;
     document.getElementById("filtersPanel").hidden = !onFilters;
     document.getElementById("boxesPanel").hidden = !onBoxes;
-    document.getElementById("cardSortBar").hidden = onFilters || onBoxes;
-    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : onBoxes ? "Boxy Darvasa" : TAB_TITLES[tab];
+    document.getElementById("cardSortBar").hidden = onFilters || onBoxes || onPlan;
+    document.body.classList.toggle("on-plan", onPlan);
+    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : onBoxes ? "Boxy Darvasa" : onPlan ? "Plan na tydzień" : TAB_TITLES[tab];
     saveSettings();
     renderTable();
 }
@@ -2010,6 +2112,7 @@ function initControls() {
             renderTable();
         });
     });
+    { const cb = document.getElementById("allTabs"); if (cb) cb.addEventListener("change", () => setAllTabs(cb.checked)); }
     { const cb = document.getElementById("risingOnly"); if (cb) { cb.checked = !!state.risingOnly; cb.addEventListener("change", () => { state.risingOnly = cb.checked; saveSettings(); renderTable(); }); } }
     [["natrMax", "natrMax"], ["boxNatrMax", "boxNatrMax"]].forEach(([id, key]) => {
         const el = document.getElementById(id);
@@ -2466,7 +2569,7 @@ function initBottomNav() {
     if (!nav) return;
     nav.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => showTab(b.dataset.tab)));
     document.getElementById("navMore").addEventListener("click", () => {
-        const items = [["FILTERS", "🔍", "Filtry"], ["CS", "🏆", "CANSLIM"], ["BOXES", "📦", "Boxy"], ["WATCH", "📑", "Watchlisty"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]];
+        const items = [["FILTERS", "⚙", "Filtry i ustawienia"], ...(state.allTabs ? [["LIST", "📋", "Lista"], ["WATCH", "📑", "Watchlisty"], ...(state.patterns ? [["BASES", "🧱", "Bazy"]] : []), ["FAV", "⭐", "Ulubione"]] : [])];
         const body = showSheet("Więcej", `<div class="sheet-menu">${items.map(([t, i, l]) => `<button type="button" data-tab="${t}"><span>${i}</span>${l}</button>`).join("")}
             <a href="${document.getElementById("refreshLink").href}" target="_blank" rel="noopener"><span>🔄</span>Odśwież dane (GitHub Actions)</a></div>`);
         body.querySelectorAll("button[data-tab]").forEach(b => b.addEventListener("click", () => { closeSheet(); showTab(b.dataset.tab); }));
@@ -2778,6 +2881,7 @@ if (typeof document !== "undefined") {
         initAnnotationIO();
         syncInit(() => { updateAlertBadge(); renderTable(); if (!document.getElementById("chartModal").hidden) drawChart(); });
         initBoxesPanel();
+        applyLeanUi();
         initSplitResizer();
         showTab(state.tab);
         hideLoadingOverlay();
@@ -2796,6 +2900,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
+        weeklyPlan, positionDecision, planStocks,
         darvasPick, darvasPickRows, darvasRank, darvasOrders, ordersText, darvasStateText, tagRisingFromFields,
         stopAdvice, watchListCounts,
         ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, tagRising, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,

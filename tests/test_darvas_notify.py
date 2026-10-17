@@ -22,10 +22,12 @@ def test_signals_book_rules_and_positions():
         "RD2": {"dv_state": "READY", "dv_n": 2, "dv_top": 8.0, "dv_dist": 1.0, "dv_stop": 7.2},
         "BUY": {"dv_state": "BUY", "dv_n": 3, "dv_top": 20.0, "price": 21.0},
         "ONE": {"dv_state": "BUY", "dv_n": 1, "dv_top": 10.0, "price": 10.5},    # pierwszy box: bez sygnału
-        "SEL": {"dv_state": "SELL", "dv_n": 0, "dv_top": 30.0, "dv_bottom": 27.0},
+        "SEL": {"dv_state": "HOLD", "dv_n": 2, "dv_top": 30.0, "macd_w_above": False, "price": 28.0},   # pozycja, MACD tyg. pod sygnałem
+        "HLD": {"dv_state": "READY", "dv_n": 2, "dv_top": 30.0, "macd_w_above": True},   # pozycja z MACD nad sygnałem: nic
+        "MCD": {"dv_state": "READY", "dv_n": 2, "dv_top": 5.0, "macd_w_above": False},    # bez pozycji, MACD pod sygnałem: bez kupna
         "OUT": {"dv_state": "OUT", "dv_n": 0, "dv_top": 9.0},
     }
-    sig = dn.signals(stocks, positions={"SEL"})
+    sig = dn.signals(stocks, positions={"SEL", "HLD"})
     assert [(s["ticker"], s["kind"]) for s in sig] == [("BUY", "buy"), ("RD2", "ready"), ("RDY", "ready"), ("SEL", "sell")]   # GOTOWE od najbliższego punktu kupna
     assert sig[2]["stop"] == 45.0 and sig[0]["stop"] == 18.9
     msg = dn.format_message(sig, "kamil", "2026-10-16")

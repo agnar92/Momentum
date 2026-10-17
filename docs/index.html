@@ -21,7 +21,7 @@
 </div>
 
 <div class="topbar">
-    <div class="brand">WATCHLIST<span class="brand-sub"> // Finviz + yfinance, odświeżane co tydzień (sobota rano)</span></div>
+    <div class="brand">WATCHLIST<span class="brand-sub"> // Finviz + yfinance, dane po każdej sesji, 📋 plan na weekend</span></div>
     <nav>
         <span id="connStatus" class="conn-status" title="Brak połączenia z siecią — pokazywane są ostatnie zapisane dane." hidden>⚠ Offline</span>
     </nav>
@@ -30,16 +30,17 @@
 <div class="workspace">
     <div class="table-drawer open" id="tableDrawer">
         <div class="drawer-header">
-            <div class="drawer-header-title"><h2 id="drawerTitle">Lista Finviz</h2><div class="drawer-meta" id="drawerMeta"></div></div>
+            <div class="drawer-header-title"><h2 id="drawerTitle">Plan na tydzień</h2><div class="drawer-meta" id="drawerMeta"></div></div>
             <div class="drawer-tabs">
-                <button class="drawer-tab" data-tab="FILTERS">🔍 Filtry</button>
-                <button class="drawer-tab active" data-tab="LIST">📋 Lista</button>
+                <button class="drawer-tab active" data-tab="PLAN">📋 Plan</button>
+                <button class="drawer-tab" data-tab="POS">💼 Pozycje</button>
+                <button class="drawer-tab" data-tab="LIST">📋 Lista</button>
                 <button class="drawer-tab" data-tab="CS">🏆 CANSLIM</button>
                 <button class="drawer-tab" data-tab="WATCH">📑 Watchlisty</button>
                 <button class="drawer-tab" data-tab="BASES">🧱 Bazy</button>
                 <button class="drawer-tab" data-tab="BOXES">📦 Boxy<span id="boxesBadge"></span></button>
-                <button class="drawer-tab" data-tab="POS">💼 Pozycje</button>
                 <button class="drawer-tab" data-tab="FAV">⭐ Ulubione</button>
+                <button class="drawer-tab" data-tab="FILTERS">⚙ Filtry</button>
             </div>
         </div>
 
@@ -48,14 +49,18 @@
         <div class="toolbar">
             <span class="toolbar-info" id="dataInfo"></span>
             <label class="field"><span>Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka"></label>
-            <a class="btn" id="refreshLink" href="#" target="_blank" rel="noopener" data-weekly-title="Dane odświeżają się same raz w tygodniu (sobota rano, po piątkowej sesji). Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu."
-               title="Dane odświeżają się same raz w tygodniu (sobota rano, po piątkowej sesji). Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
+            <a class="btn" id="refreshLink" href="#" target="_blank" rel="noopener" data-weekly-title="Dane odświeżają się same po każdej sesji w USA (pon–pt ok. 22:30–23:30 czasu polskiego); 📋 Plan i powiadomienia — raz w tygodniu, po piątkowej sesji. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu."
+               title="Dane odświeżają się same po każdej sesji w USA (pon–pt ok. 22:30–23:30 czasu polskiego); 📋 Plan i powiadomienia — raz w tygodniu, po piątkowej sesji. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
         </div>
 
+        <div class="plan-panel" id="planPanel"></div>
         <div class="tab-controls" id="controls-LIST"></div>
         <div class="filters-panel" id="filtersPanel" hidden>
             <p class="filters-intro">Konfiguracja wyszukiwania w jednym miejscu. Filtry wspólne działają na wszystkich zakładkach, progi poniżej — na swoich. Zapisują się w tej przeglądarce.</p>
             <div class="filter-counts" id="filtersSummary"></div>
+            <fieldset class="filter-group"><legend>🧹 Widok</legend>
+                <label class="field" title="Po porządkach widać tylko: 📋 Plan, 💼 Pozycje, 🏆 CANSLIM, 📦 Boxy i Filtry. Zaznacz, żeby wróciły stare zakładki: Lista, Watchlisty, Bazy, Ulubione."><input type="checkbox" id="allTabs"><span>Pokaż wszystkie zakładki (Lista, Watchlisty, Bazy, Ulubione)</span></label>
+            </fieldset>
             <fieldset class="filter-group"><legend>Wspólne (wszystkie zakładki)</legend>
                 <label class="field" title="Filtr po własnym score wpisanym ręcznie (spółki bez score odpadają, gdy ustawisz granicę)"><span>Score od:</span><input type="number" step="any" id="scoreMin" placeholder="–"></label>
                 <label class="field"><span>do:</span><input type="number" step="any" id="scoreMax" placeholder="–"></label>
@@ -192,9 +197,9 @@
 </div>
 
 <nav class="bottom-nav" id="bottomNav" aria-label="Główna nawigacja">
-    <button type="button" data-tab="LIST"><span class="bn-icon">📋</span><span class="bn-label">Lista</span></button>
-    <button type="button" data-tab="CS"><span class="bn-icon">🏆</span><span class="bn-label">CANSLIM</span></button>
+    <button type="button" data-tab="PLAN"><span class="bn-icon">📋</span><span class="bn-label">Plan</span></button>
     <button type="button" data-tab="POS"><span class="bn-icon">💼</span><span class="bn-label">Pozycje</span></button>
+    <button type="button" data-tab="CS"><span class="bn-icon">🏆</span><span class="bn-label">CANSLIM</span></button>
     <button type="button" data-tab="BOXES"><span class="bn-icon">📦</span><span class="bn-label">Boxy</span></button>
     <button type="button" id="navMore"><span class="bn-icon">☰</span><span class="bn-label">Więcej</span></button>
 </nav>

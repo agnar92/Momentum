@@ -111,7 +111,7 @@ jobs:
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python darvas_notify.py
+        run: DARVAS_WEEKLY=${{ github.event_name == 'schedule' && '1' || '0' }} python darvas_notify.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
