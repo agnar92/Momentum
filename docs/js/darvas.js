@@ -917,7 +917,7 @@ function darCardSvg(full, opts = {}) {
     const lo0 = Math.min(px, ...a.boxes.map(b => b.bottom * (1 - DARVAS_STOP_PCT / 100))), hi0 = Math.max(px, ...a.boxes.map(b => b.top));
     const span = Math.log(hi0 / lo0) || 0.1, lo = lo0 * Math.exp(-0.08 * span), hi = hi0 * Math.exp(0.08 * span);
     const y = v => L.top + ph * (1 - Math.log(v / lo) / Math.log(hi / lo));
-    const out = [`<defs><pattern id="dcHatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="4" height="4" fill="#111"/><line x1="0" y1="0" x2="0" y2="4" stroke="#000" stroke-width="2.2"/></pattern></defs>`];
+    const out = [`<defs><pattern id="dcHatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#f4efdc"/><line x1="0" y1="0" x2="0" y2="5" stroke="#555" stroke-width="1"/></pattern></defs>`];
     out.push(`<style>text,line,circle,polyline,path{pointer-events:none}</style>`);   // etykiety i linie nie przechwytują dotyku — stuknięcie w cenę na górze boxa trafia w box
     out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#e9e4d2"/>`);   // kartka papieru
     const qStep = Math.exp(Math.log(hi / lo) / 70);
@@ -937,7 +937,7 @@ function darCardSvg(full, opts = {}) {
         out.push(`<rect class="box-hit" data-box="${b.top}|${b.bottom}|${b.outcome}|1|${b.i0}|${b.i1}" style="cursor:pointer" x="${x0.toFixed(1)}" y="${yT.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yB - yT).toFixed(1)}" fill="#ffffff" stroke="${pinned ? "#d4a017" : b.inChain || topmost ? "#111" : "#8b8670"}" stroke-width="${pinned ? 3.2 : topmost ? 2.2 : 1.4}"${b.inChain || topmost ? "" : ' fill-opacity="0.6"'}><title>Box ${b.bottom}–${b.top} — stuknij: zaznacz, przypnij, panel MACD</title></rect>`);
         if (pinned) out.push(`<text x="${(x0 + bw - 2).toFixed(1)}" y="${(yT + fs(12)).toFixed(1)}" font-size="${fs(11)}" text-anchor="end">📌</text>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(H - tableH - fs(30)).toFixed(1)}" font-size="${fs(8.5)}" fill="#5a574a" text-anchor="middle">${mon(b.i0)}</text>`);
-        out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yZ - yB).toFixed(1)}" fill="url(#dcHatch)" stroke="#111" stroke-width="1"/>`);
+        out.push(`<rect x="${x0.toFixed(1)}" y="${yB.toFixed(1)}" width="${bw.toFixed(1)}" height="${(yZ - yB).toFixed(1)}" fill="url(#dcHatch)" stroke="#777" stroke-width="0.8"/>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yT + fs(11)).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.top * 100) / 100}</text>`);
         out.push(`<text x="${(x0 + bw / 2).toFixed(1)}" y="${(yZ + fs(10)).toFixed(1)}" font-size="${fs(9)}" fill="#2b2a24" text-anchor="middle">${Math.round(b.bottom * 100) / 100}</text>`);
         if (topmost) {   // punkt kupna: cienka linia tuż nad górą najwyższego boxa + opis; kropka = bieżące zamknięcie
