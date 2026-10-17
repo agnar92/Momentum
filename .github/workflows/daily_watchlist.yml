@@ -36,6 +36,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
+      - name: Blokada ponownego uruchomienia starego runu
+        if: ${{ github.run_attempt > 1 }}
+        run: |
+          echo "❌ To jest PONOWNE uruchomienie (Re-run jobs) starego runu — GitHub użyłby starego kodu i starych danych wejściowych i nadpisałby listy. Użyj 'Run workflow' i wpisz akcję / nazwę / filtr od nowa."
+          exit 1
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
