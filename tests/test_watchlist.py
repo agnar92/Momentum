@@ -1287,3 +1287,18 @@ def test_blueprint_weekly_fields():
     assert f["wk_vol_wow_pct"] == 50.0 and f["pct_above_sma20w"] > 0
     short = watchlist.blueprint_weekly_fields(wk.head(5))
     assert short["wk_hi10_close"] is None and short["pct_above_sma20w"] is None
+
+
+
+def test_parse_screener_json_new_layout():
+    """Nowy układ Finviz (2026): wiersze w JSON-ie strony, kapitalizacja w milionach, data wyników ISO."""
+    import json as _json
+    payload = {"data": {"totalCount": 309, "rows": [
+        {"text": {"ticker": "A", "company": "Agilent", "sector": "Healthcare", "earningsDate": "2026-08-26T16:30:00"},
+         "numbers": {"marketCap": 48765.23, "roe": 20.97, "salesQoQ": 8.06, "averageTrueRange": 4.6, "price": 172.9}}]}}
+    page = '<html><script type="application/json" data-ssr-props="ssr-island-1">' + _json.dumps(payload) + "</script></html>"
+    rows, total = finviz.parse_screener_page(page, "161")
+    assert total == 309 and len(rows) == 1
+    r = rows[0]
+    assert r["ticker"] == "A" and r["sector"] == "Healthcare" and r["market_cap"] == 48765230000.0
+    assert r["roe"] == 20.97 and r["sales_qq"] == 8.06 and r["atr_fv"] == 4.6 and r["earnings"] == "Aug 26/a" and "price" not in r
