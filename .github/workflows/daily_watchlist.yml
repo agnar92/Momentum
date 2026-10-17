@@ -1,6 +1,6 @@
-name: Weekly Watchlist Refresh
+name: Daily Watchlist Refresh
 
-# Raz w tygodniu, w sobotę rano (po piątkowej sesji USA — aplikacja ma tylko wykresy TYGODNIOWE, więc codzienne pobieranie jest zbędne;
+# Codziennie po sesji w Nowym Jorku (pon–pt wieczorem; Darvas liczy boxy na DZIENNYCH zamknięciach z ostatnich 12 miesięcy — charts.json `daily`, reszta analizy nadal tygodniowa;
 # plik zostaje pod starą nazwą daily_watchlist.yml, bo na niego wskazuje link „Odśwież dane” na stronie): watchlist.py pobiera JEDNĄ listę spółek z Finviz (filtr CANSLIM z finviz_screen.json: wzrost EPS i sprzedaży,
 # ROE, kapitalizacja od 300 mln, płynność), ceny z yfinance i liczy RS Rating, bazy, metryki cenowe
 # (obrót, ADR %, cena / minimum) -> docs/data/watchlist.json + charts.json, które następnie trafiają na GitHub Pages.
@@ -13,9 +13,9 @@ name: Weekly Watchlist Refresh
 #   python watchlist.py
 on:
   schedule:
-    # Sobota 03:17 UTC (05:17 latem / 04:17 zimą w Polsce) = po piątkowej sesji; do rana dane są gotowe. GitHub Actions liczy cron w UTC, bez przejścia na czas letni,
-    # a przy dużym ruchu opóźnia starty nawet o kilkadziesiąt minut — stąd zapas.
-    - cron: '17 3 * * 6'
+    # Pon–pt 21:30 UTC = po zamknięciu NYSE (16:00 w Nowym Jorku to 20:00 UTC latem i 21:00 UTC zimą) i po 22:00 czasu polskiego (22:30 zimą / 23:30 latem).
+    # GitHub Actions liczy cron w UTC, bez przejścia na czas letni, a przy dużym ruchu opóźnia starty nawet o kilkadziesiąt minut.
+    - cron: '30 21 * * 1-5'
   workflow_dispatch:
 
 permissions:

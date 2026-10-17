@@ -1456,7 +1456,7 @@ async function renderBoxesPanel() {
     const panel = document.getElementById("boxesPanel");
     if (!panel || !state.data) return;
     if (!boxesOverviewData) panel.innerHTML = '<p class="muted small" style="padding:10px">Ładuję boxy…</p>';
-    const charts = await loadCharts();
+    const charts = dailyCharts(await loadCharts());
     if (!charts) { panel.innerHTML = '<p class="muted small" style="padding:10px">Brak danych wykresów (charts.json).</p>'; return; }
     boxesCharts = charts;
     const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v, h: c.h, l: c.l } : null; }).filter(Boolean);
@@ -1500,7 +1500,7 @@ async function refreshBoxesBadge() {
     try { await renderBoxesPanelQuiet(); } catch (e) { /* bez wykresów brak znaczka */ }
 }
 async function renderBoxesPanelQuiet() {
-    const charts = await loadCharts();
+    const charts = dailyCharts(await loadCharts());
     if (!charts) return;
     const items = state.data.stocks.map(s => { const c = charts.stocks[s.ticker]; return c ? { ticker: s.ticker, price: s.price, c: c.c, v: c.v, h: c.h, l: c.l } : null; }).filter(Boolean);
     boxesOverviewData = filterBoxesByNatr(darvasOverview(items, charts.weeks, state.boxes), state.boxNatrMax);
@@ -1514,7 +1514,7 @@ async function renderBoxesPanelQuiet() {
 
 // Klik w wiersz: otwiera wykres tej spółki przybliżony na box (jak kliknięcie boxa); 📌 / ✕ przypina i odpina.
 async function openBoxRow(ticker, box) {
-    const charts = boxesCharts || await loadCharts();
+    const charts = boxesCharts || dailyCharts(await loadCharts());
     const weeks = (charts && charts.weeks) || [];
     const i0 = box.i0 >= 0 ? box.i0 : Math.max(0, dateToIndex(weeks, box.start));
     boxFocus = { ticker, top: box.top, bottom: box.bottom, i0, i1: box.i1 >= 0 ? box.i1 : weeks.length - 1, line: !!box.line };
@@ -1749,7 +1749,7 @@ function renderDataInfo() {
     const d = state.data;
     const info = document.getElementById("dataInfo");
     if (!d || !d.stocks || !d.stocks.length) {
-        info.textContent = "Brak danych — uruchom watchlist.py (albo workflow „Weekly Watchlist Refresh” na GitHubie).";
+        info.textContent = "Brak danych — uruchom watchlist.py (albo workflow „Daily Watchlist Refresh” na GitHubie).";
         return;
     }
     const generated = d.generated_at ? d.generated_at.replace("T", " ").replace("Z", " UTC") : "?";
@@ -1954,7 +1954,7 @@ function initAnnotationIO() {
 // ---------- okienko z wykresem (rysowanie: js/chart.js) ----------
 
 let chartsPromise = null;
-let chartWinLen = { w: null };   // długość okna suwaka (tygodnie) zapamiętana dla wszystkich spółek
+let chartWinLen = { d: null };   // długość okna suwaka (tygodnie) zapamiętana dla wszystkich spółek
 let chartWindows = [];      // okna suwaków {n, end} po jednym na wykres w siatce (puste = domyślne); zerowane przy nowej spółce / zmianie układu
 let chartEstOn = false;      // estymaty analityków na wykresie (cena celu + rewizje konsensusu EPS), przycisk „Estymaty”
 let estimatesPromise = null;
@@ -2120,8 +2120,8 @@ function chartStats(s) {
 
 // Zmiana DŁUGOŚCI okna suwaka jest zapamiętywana (localStorage) dla wszystkich spółek; samo przesuwanie okna nie.
 function rememberWindowLength(n) {
-    if (chartWinLen.w === n) return;
-    chartWinLen.w = n;
+    if (chartWinLen.d === n) return;
+    chartWinLen.d = n;
     try { localStorage.setItem(CHART_WINLEN_KEY, JSON.stringify(chartWinLen)); } catch (e) { /* brak localStorage */ }
 }
 
@@ -2130,9 +2130,13 @@ function chartCells() {
     return [{ ticker: currentChart.ticker }];
 }
 
-// Dane wykresu aktualnej spółki (tygodniowe; wykresów dziennych nie ma).
+// Dane wykresu aktualnej spółki: DZIENNE (charts.daily, 12 miesięcy — Darvas liczy boxy na dziennych zamknięciach), a do czasu pierwszego odświeżenia
+// danych po tej zmianie (brak `daily`) tygodniowe. Miniatury pozycji i karty telefonu zostają tygodniowe (loadCharts).
+function dailyCharts(charts) {
+    return (charts && typeof dailyChartsView === "function" && dailyChartsView(charts)) || charts;
+}
 function activeCharts() {
-    return currentChart ? currentChart.charts : null;
+    return currentChart ? dailyCharts(currentChart.charts) : null;
 }
 
 function posStockPin() { return currentChart ? findStock(currentChart.ticker) : null; }
@@ -2186,7 +2190,7 @@ function drawChart() {
             pinFlash: Date.now() < pinFlashUntil,
             noBench: !splitMode && annEdit.on && !annEdit.spaceOn,
             fit: phoneFit(cell),   // jeden wykres: viewBox = prawdziwy rozmiar miejsca (telefon i panel obok listy), bez pustych marginesów
-            window: chartWindows[i], windowLen: chartWinLen.w,
+            window: chartWindows[i], windowLen: chartWinLen.d,
             onWindow: w => { chartWindows[i] = w; rememberWindowLength(w.n); },
             gestures: null,   // gesty (szczypnięcie / przeciąganie po wykresie) wyłączone na życzenie — okno czasu zmienia tylko suwak pod wykresem
             estimates: chartEstOn && estimatesMap ? estimatesMap[c.ticker] || null : null,
@@ -2339,7 +2343,7 @@ function initChartModal() {
         chartLegendOn = localStorage.getItem(CHART_LEGEND_KEY) === "1";
         chartDarvasOn = true;   // Dar-Card jest jedynym widokiem (świece tylko po kliknięciu boxa)
         const saved = JSON.parse(localStorage.getItem(CHART_WINLEN_KEY) || "null");
-        if (saved && Number.isFinite(saved.w) && saved.w > 0) chartWinLen.w = saved.w;
+        if (saved && Number.isFinite(saved.d) && saved.d > 0) chartWinLen.d = saved.d;
         chartBookOn = localStorage.getItem(CHART_BOOK_KEY) !== "0";
     } catch (e) { /* brak localStorage */ }
     // Jedyny wykres to tygodniowy w stylu książki O'Neila (user: „usuń wszystko z wykresami dziennymi”).

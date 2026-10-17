@@ -40,6 +40,7 @@ EPS_STABILITY_WEIGHT = 0.2   # EPS Rating = 80 % percentyl wzrostu + 20 % percen
 EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/r) z dodatnim wzrostem EPS
 EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
+CHART_DAYS = 252             # ile sesji mieści dzienny wykres Darvasa (Dar-Card, karta, wykres słupkowy po kliknięciu boxa): 12 miesięcy
 CHART_WEEKS = 312            # ile tygodni mieści wykres w stylu książki O'Neila (6 lat; domyślnie widać 156 = 3 lata, resztę pokazuje suwak)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
@@ -1888,7 +1889,37 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         chart["tl"] = detect_consolidation(wk, WEEKLY_FLAG)
         chart["distribution"] = detect_distribution_week(wk)
         payload["stocks"][t] = chart
+    payload["daily"] = build_daily_block(cleaned, bench)
     return payload
+
+
+def build_daily_block(cleaned, bench, n_days=CHART_DAYS):
+    """Dzienny odpowiednik wykresu: ostatnie `n_days` sesji (O/H/L/C, wolumen w tys., SMA 10 / 50 liczone na pełnej historii) i S&P 500.
+    Przełącza się go tylko w ustawieniach „Więcej” (Dar-Card i wykres słupkowy); wzorce (bazy, flagi, climax) zostają tygodniowe."""
+    def norm(df):
+        d = df.copy()
+        d.index = pd.DatetimeIndex(d.index).tz_localize(None).normalize()
+        return d[~d.index.duplicated(keep="last")].sort_index()
+
+    ref_idx = norm(bench).index if bench is not None else None
+    if ref_idx is None:
+        ref_idx = max((norm(df).index for df in cleaned.values()), key=len, default=None)
+    if ref_idx is None or not len(ref_idx):
+        return None
+    dates = ref_idx[-n_days:]
+    out = {"dates": [d.strftime("%Y-%m-%d") for d in dates],
+           "spx": _series(norm(bench)["Close"].astype(float).reindex(dates)) if bench is not None else None,
+           "stocks": {}}
+    for t, df in cleaned.items():
+        d = norm(df)
+        close = d["Close"].astype(float)
+        w = d.reindex(dates)
+        out["stocks"][t] = {
+            "o": _series(w["Open"]), "h": _series(w["High"]), "l": _series(w["Low"]), "c": _series(w["Close"]),
+            "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
+            "sma10": _series(close.rolling(10).mean().reindex(dates)), "sma50": _series(close.rolling(50).mean().reindex(dates)),
+        }
+    return out
 
 
 # ============================================================================

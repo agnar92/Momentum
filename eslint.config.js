@@ -77,6 +77,7 @@ const browserGlobals = {
     logTicks: "readonly",
     renderStockChart: "readonly",
     dateToIndex: "readonly",
+    dailyChartsView: "readonly",
     indexToDate: "readonly",
     cupArcPoints: "readonly",
     miniChartSvg: "readonly",
