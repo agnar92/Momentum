@@ -48,8 +48,8 @@ test("darvasSvg: pudełka, punkty kupna i stopu; mało danych = komunikat", () =
     assert.match(lineSvg, /stroke="#3b9cff" stroke-width="2" stroke-dasharray="6 4"/);
     assert.doesNotMatch(lineSvg, /stroke="#ff6b6b" stroke-width="1.6" stroke-dasharray="4 3"/);   // stop 8 % NIE jest rysowany na stałe (tylko po zaznaczeniu / przypięciu)
     assert.doesNotMatch(lineSvg, /stop 8 % · 101\.2/);
-    assert.match(lineSvg, /stroke="#4ee08a" stroke-width="[\d.]+" stroke-linecap="round"/);   // linia cen: zielony odcinek przy wzroście
-    assert.match(lineSvg, /stroke="#ff6b6b" stroke-width="[\d.]+" stroke-linecap="round"/);   // czerwony przy spadku
+    assert.match(lineSvg, /<polyline points="[^"]+" fill="none" stroke="#4ee08a"/);   // linia cen: jedna zielona linia (bez kolorowania wg kierunku)
+    assert.doesNotMatch(lineSvg, /stroke="#ff6b6b" stroke-width="[\d.]+" stroke-linecap="round"/);
     assert.match(darvasSvg({ c: [1], weeks: ["2026-01-01"], n: 1 }, { n: 1, end: 1 }), /Za mało danych/);
 });
 
@@ -313,8 +313,8 @@ test("darCardPastRange i darCardSvg", () => {
     const weeks = ["2024-01-05", "2024-06-07", "2025-01-03", "2025-06-06"];
     const r = darCardPastRange(weeks, [10, 12, 9, 15]);
     assert.deepEqual(r, [{ year: "2024", hi: 12, lo: 10 }, { year: "2025", hi: 15, lo: 9 }]);
-    // „Past Price Range” = max 2 lata (bieżący i poprzedni rok)
-    assert.deepEqual(darCardPastRange(["2022-05-01", "2023-05-01", "2024-05-01", "2025-05-01"], [1, 2, 3, 4]).map(x => x.year), ["2024", "2025"]);
+    // „Past Price Range” = 3 lata kalendarzowe (bieżący + 2 poprzednie), High / Low z zamknięć
+    assert.deepEqual(darCardPastRange(["2022-05-01", "2023-05-01", "2024-05-01", "2025-05-01"], [1, 2, 3, 4]).map(x => x.year), ["2023", "2024", "2025"]);
     const svg = darCardSvg({ c: SERIES, v: null, weeks: SERIES.map((_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`) }, { bookTitle: "TST" });
     assert.ok(svg.includes("DAR·CARD") && svg.includes("Past Price Range"));
 });
@@ -335,4 +335,13 @@ test("darvasRisingInfo: schodkowa akcja wzrostowa = ≥ 2 kolejne coraz wyższe 
     assert.equal(flat.rising, false);
     const down = darvasRisingInfo(Array.from({ length: 30 }, (_, i) => 200 - i * 3));
     assert.equal(down.rising, false);
+});
+
+test("darvasSvg: linia zamknięć jest zielona, a kropki tylko na zamknięciu tygodnia i ostatnim zamknięciu (dane dzienne)", () => {
+    const { darvasSvg } = require("../../docs/js/darvas.js");
+    const dates = ["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"];
+    const c = [100, 101, 102, 101, 103, 104, 103, 105, 106, 107];
+    const svg = darvasSvg({ c, v: null, weeks: dates, h: c, l: c, o: c, n: 10 }, { n: 10, end: 10 });
+    const dots = (svg.match(/<circle cx="[\d.]+" cy="[\d.]+" r="[\d.]+" fill="#4ee08a" stroke="#0e0f13" stroke-width="0.8"/g) || []).length;
+    assert.equal(dots, 2);   // piątek 2026-10-09 i piątek 2026-10-16 (ostatnia sesja = koniec tygodnia)
 });

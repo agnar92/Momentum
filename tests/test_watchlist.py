@@ -381,9 +381,10 @@ class TestCharts:
         charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=400, daily=0.003)}, make_prices(n=400, daily=0.001), {}, now, n_weeks=52)
         assert len(charts["weeks"]) == 52
         d = charts["daily"]   # dzienny blok dla Darvasa: ostatnie CHART_DAYS sesji, O/H/L/C/V + SMA 10 / 50, wszystkie tablice tej samej długości
-        assert len(d["dates"]) == watchlist.CHART_DAYS == 252 and len(d["spx"]) == 252
+        assert len(d["dates"]) == watchlist.CHART_DAYS == 80 and len(d["spx"]) == 80
         a = d["stocks"]["AAA"]
-        assert set(a) == {"o", "h", "l", "c", "v", "sma10", "sma50"} and all(len(v) == 252 for v in a.values())
+        assert set(a) == {"yr", "o", "h", "l", "c", "v", "sma10", "sma50"} and all(len(v) == 80 for k, v in a.items() if k != "yr")
+        assert a["yr"] and all(len(r) == 3 and r[1] >= r[2] for r in a["yr"]) and len(a["yr"]) <= 3
         assert a["sma50"][-1] is not None and a["c"][-1] > a["c"][0]
 
     def test_build_charts_without_benchmark_still_works(self):

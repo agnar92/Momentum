@@ -40,7 +40,7 @@ EPS_STABILITY_WEIGHT = 0.2   # EPS Rating = 80 % percentyl wzrostu + 20 % percen
 EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/r) z dodatnim wzrostem EPS
 EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
-CHART_DAYS = 252             # ile sesji mieści dzienny wykres Darvasa (Dar-Card, karta, wykres słupkowy po kliknięciu boxa): 12 miesięcy
+CHART_DAYS = 80              # ile sesji dziennych wysyłamy do wykresu Darvasa: ostatni miesiąc (22 sesje) to widok, reszta to rozgrzewka dla MACD 12/26/9, SMA 20, NATR i boxów
 CHART_WEEKS = 312            # ile tygodni mieści wykres w stylu książki O'Neila (6 lat; domyślnie widać 156 = 3 lata, resztę pokazuje suwak)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
@@ -1914,7 +1914,9 @@ def build_daily_block(cleaned, bench, n_days=CHART_DAYS):
         d = norm(df)
         close = d["Close"].astype(float)
         w = d.reindex(dates)
+        yr = close.dropna().groupby(close.dropna().index.year).agg(["max", "min"]).tail(3)   # High / Low z zamknięć dla 3 ostatnich lat kalendarzowych (tylko informacja na karcie)
         out["stocks"][t] = {
+            "yr": [[int(y), round(float(r["max"]), 2), round(float(r["min"]), 2)] for y, r in yr.iterrows()],
             "o": _series(w["Open"]), "h": _series(w["High"]), "l": _series(w["Low"]), "c": _series(w["Close"]),
             "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
             "sma10": _series(close.rolling(10).mean().reindex(dates)), "sma50": _series(close.rolling(50).mean().reindex(dates)),
