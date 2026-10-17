@@ -2548,11 +2548,14 @@ async function refreshDataIfStale() {
     dataLoadedAt = Date.now();
     try {
         const cs = await fetchJson("data/watchlist.json");
-        if (!cs || !cs.stocks || !cs.stocks.length || cs.generated_at === state.data.generated_at) return;
-        state.data = cs;
+        const mainNew = !!(cs && cs.stocks && cs.stocks.length && cs.generated_at !== state.data.generated_at);
+        const oldWatch = watchData && watchData.generated_at;
+        const watch = await loadWatchData();   // workflow „Watchlisty” zapisuje własny plik — jego zmiana też odświeża widok
+        const watchNew = !!(watch && watch.generated_at !== oldWatch);
+        if (!mainNew && !watchNew) return;
+        if (mainNew) state.data = cs;
         chartsPromise = null; watchChartsPromise = null; estimatesPromise = null; estimatesMap = null;   // wykresy i estymaty też mogły się zmienić
-        loadWatchData().then(() => { if (state.tab === "WATCH") renderTable(); });
-        loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
+        if (mainNew) loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
         renderDataInfo();
         renderMarket();
         renderTable();
