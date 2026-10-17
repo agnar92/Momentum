@@ -31,9 +31,9 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm, minWee
         for (let k = i; k < n; k++) {
             if (!Number.isFinite(c[k]) || c[k] < runMax || (refTop !== null && c[k] <= refTop)) continue;
             runMax = c[k];
-            if (k + confirm - 1 < n) {   // szczyt = tydzień zerowy + (confirm − 1) kolejnych tygodni, które go nie przebiły (razem `confirm` tygodni)
+            if (k + confirm < n) {   // książka: punkt oporu, którego cena nie przebija przez `confirm` KOLEJNYCH okresów po nim (tydzień zerowy się nie wlicza)
                 let ok = true;   // luka w danych (null) nie potwierdza szczytu
-                for (let m = k + 1; m <= k + confirm - 1; m++) if (!(Number.isFinite(c[m]) && c[m] <= c[k])) { ok = false; break; }
+                for (let m = k + 1; m <= k + confirm; m++) if (!(Number.isFinite(c[m]) && c[m] <= c[k])) { ok = false; break; }
                 if (ok) { t = k; top = c[k]; break; }
             }
         }
@@ -51,7 +51,7 @@ function darvasScan(c, confirm = DARVAS_CONFIRM, bottomConfirm = confirm, minWee
             if (ok && ref !== null && !confirmed && v < refBot) { cancel = j; break; }
             if (confirmed && ok && v < bottom) { outcome = "down"; end = j; break; }
             if (!confirmed && ok && v < bottom) { bottom = v; bi = j; }
-            if (!confirmed && bi >= 0 && j - bi >= bottomConfirm - 1) confirmed = true;   // dół: tydzień dołka + (bottomConfirm − 1) kolejnych bez nowego minimum
+            if (!confirmed && bi >= 0 && j - bi >= bottomConfirm) confirmed = true;   // dół: `bottomConfirm` KOLEJNYCH okresów po dołku bez zejścia niżej
         }
         if (cancel !== null) { bxs[ref].end = cancel; bxs[ref].cancelled = true; ref = null; i = cancel; continue; }
         if (end < 0) end = n - 1;
