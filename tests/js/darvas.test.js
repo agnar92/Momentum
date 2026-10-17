@@ -316,7 +316,7 @@ test("darCardPastRange i darCardSvg", () => {
     // „Past Price Range” = 3 lata kalendarzowe (bieżący + 2 poprzednie), High / Low z zamknięć
     assert.deepEqual(darCardPastRange(["2022-05-01", "2023-05-01", "2024-05-01", "2025-05-01"], [1, 2, 3, 4]).map(x => x.year), ["2023", "2024", "2025"]);
     const svg = darCardSvg({ c: SERIES, v: null, weeks: SERIES.map((_, i) => `2025-01-${String(i + 1).padStart(2, "0")}`) }, { bookTitle: "TST" });
-    assert.ok(svg.includes("DAR·CARD") && svg.includes("Past Price Range"));
+    assert.ok(svg.includes("Dar•Card") && svg.includes("Past Price Range"));
 });
 
 test("darCardAnalyze: BUY podaje stop 10 % i poziom strefy zagrożenia (zlecenie stop od razu po zakupie)", () => {
@@ -344,4 +344,47 @@ test("darvasSvg: linia zamknięć jest zielona, a kropki tylko na zamknięciu ty
     const svg = darvasSvg({ c, v: null, weeks: dates, h: c, l: c, o: c, n: 10 }, { n: 10, end: 10 });
     const dots = (svg.match(/<circle cx="[\d.]+" cy="[\d.]+" r="[\d.]+" fill="#4ee08a" stroke="#0e0f13" stroke-width="0.8"/g) || []).length;
     assert.equal(dots, 2);   // piątek 2026-10-09 i piątek 2026-10-16 (ostatnia sesja = koniec tygodnia)
+});
+
+// --- Karta wg stron 135–142 książki ---
+// dwa kolejne rosnące boxy: 100–110 (dół 104) i 112–120 (dół 113); potem cena w drugim boxie
+const TWO_UP = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118];
+
+test("karta (s. 139–140): dwa kolejne rosnące boxy = GOTOWY DO KUPNA, wybicie z drugiego = KUP bez ostrzeżenia", () => {
+    const { darCardAnalyze, darvasRisingInfo } = require("../../docs/js/darvas.js");
+    const ready = darCardAnalyze(TWO_UP);
+    assert.equal(ready.status.state, "READY", ready.status.text);
+    assert.equal(ready.chainLen, 2);
+    assert.ok(darvasRisingInfo(TWO_UP).rising);
+    const buy = darCardAnalyze([...TWO_UP, 121]);
+    assert.equal(buy.status.state, "BUY");
+    assert.ok(!buy.status.warnings.some(w => w.includes("pierwszy box")), JSON.stringify(buy.status.warnings));
+});
+
+test("karta (s. 11 B): wybicie z pierwszego boxa = KUP z ostrzeżeniem; w pierwszym boxie = CZEKAJ", () => {
+    const { darCardAnalyze } = require("../../docs/js/darvas.js");
+    const first = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109];
+    assert.equal(darCardAnalyze(first).status.state, "WAIT");
+    const a = darCardAnalyze([...first, 112]);
+    assert.equal(a.status.state, "BUY");
+    assert.ok(a.status.warnings.some(w => w.includes("pierwszy box")));
+});
+
+test("karta spadająca (s. 135, 141): złamane boxy są rysowane, ostatni box niżej = POZA NAJWYŻSZYM BOXEM", () => {
+    const { darCardAnalyze, darCardSvg, darvasRisingInfo } = require("../../docs/js/darvas.js");
+    // box 100–110 (dół 104) złamany w dół, nowy niższy box 95–99 (dół 92)
+    const c = [100, 103, 108, 110, 108, 106, 104, 105, 106, 107, 101, 97, 99, 96, 95, 94, 92, 93, 94, 95, 96];
+    const a = darCardAnalyze(c);
+    assert.ok(a.boxes.length >= 2, JSON.stringify(a.boxes));
+    assert.ok(a.boxes.some(b => b.outcome === "down"));
+    assert.equal(a.status.state, "OUT", a.status.text);
+    assert.equal(darvasRisingInfo(c).rising, false);
+    const svg = darCardSvg({ c, v: null, weeks: c.map((_, i) => `2026-01-${String(i + 1).padStart(2, "0")}`) }, {});
+    assert.equal((svg.match(/class="box-hit"/g) || []).length, a.boxes.length);
+});
+
+test("karta: notka o splitach z lat tabelki („Split 2 for 1 in 1975”)", () => {
+    const { darCardSplits } = require("../../docs/js/darvas.js");
+    assert.equal(darCardSplits([{ d: "2025-06-12", r: 2 }, { d: "2019-01-01", r: 3 }], ["2024", "2025", "2026"]), "(Split 2 za 1 w 2025)");
+    assert.equal(darCardSplits([], ["2026"]), "");
 });
