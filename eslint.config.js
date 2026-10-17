@@ -80,6 +80,7 @@ const browserGlobals = {
     dateToIndex: "readonly",
     dailyChartsView: "readonly",
     darvasRisingInfo: "readonly",
+    darCardAnalyze: "readonly",
     indexToDate: "readonly",
     cupArcPoints: "readonly",
     miniChartSvg: "readonly",

@@ -963,6 +963,11 @@ function tagRising(stocks, charts) {
         const c = charts && charts.stocks && charts.stocks[s.ticker];
         const r = c && Array.isArray(c.c) ? darvasRisingInfo(c.c, c.v) : null;
         s.rise_n = r ? r.n : null; s.rise_state = r ? r.state : null; s.rise_text = r ? r.text : ""; s.rise_dist = r ? r.distPct : null;
+        // starszy plik bez pól dv_* z Pythona: poziomy karty z tych samych wykresów, żeby 📋 Zlecenia i kolumna „kup > X” też działały
+        if (r && s.dv_state === undefined) {
+            const st = darCardAnalyze(c.c, c.v).status;
+            Object.assign(s, { dv_state: st.state, dv_n: r.n, dv_top: st.buyLine ?? null, dv_bottom: st.bottom ?? null, dv_zone: st.zoneLow ?? null, dv_stop: st.stop ?? null, dv_dist: r.distPct });
+        }
         s.darvas_rank = darvasRank(s);
     });
 }
