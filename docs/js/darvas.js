@@ -868,6 +868,8 @@ function darCardAnalyze(c, vol = null) {
     let state, text, stop = null;
     if (stepDown) {
         state = "OUT"; text = `POZA NAJWYŻSZYM BOXEM — ostatni box ${r2(bottom)}–${r2(top)} leży niżej niż wcześniejszy (${r2(maxTop)}); karta spadająca: nie ma powodu, by trzymać ani kupować`;
+    } else if (topmost.outcome === "down" && px >= bottom) {   // najwyższy box złamany w dół, a cena wróciła do niego / nad niego — powrót nie wskrzesza boxa (pod dołem zostaje SPRZEDAJ)
+        state = "OUT"; text = `POZA BOXEM — box ${r2(bottom)}–${r2(top)} złamany w dół; czekamy na nowy box (nie kupuj ani nie trzymaj)`;
     } else if (px > top) {
         if (prevPx !== null && prevPx <= top) {
             state = "BUY"; stop = darvasInitialStop(top, bottom, px);

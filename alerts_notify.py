@@ -118,6 +118,12 @@ def api(method, url, token, body=None):
 
 
 def read_annotations(gist_token):
+    data = read_gist(gist_token)
+    return None if data is None else data.get("annotations") or {}
+
+
+def read_gist(gist_token):
+    """Cały plik synchronizacji z Gista ({annotations, prefs}) albo None, gdy go nie ma."""
     for page in range(1, 6):
         gists = api("GET", f"https://api.github.com/gists?per_page=100&page={page}", gist_token)
         for g in gists:
@@ -128,8 +134,7 @@ def read_annotations(gist_token):
                         text = r.read().decode()
                 else:
                     text = f.get("content") or "{}"
-                data = json.loads(text or "{}")
-                return data.get("annotations") or {}
+                return json.loads(text or "{}")
         if len(gists) < 100:
             break
     return None

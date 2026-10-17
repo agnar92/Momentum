@@ -235,6 +235,7 @@ def _realign(chart, old_weeks, new_weeks):
 
 
 def _finish(data_dir, lists, info, stocks, charts, now_utc, log, charts_replace=True):
+    watchlist.add_darvas_state(stocks, charts)   # stan karty Darvasa (dv_*) liczony przy każdej akcji z aktualnych wykresów dziennych
     meta = {"generated_at": now_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "lists": info}
     data_dir.mkdir(parents=True, exist_ok=True)
     payload = {**meta, "data_as_of": max((s["as_of"] for s in stocks), default=None), "n_stocks": len(stocks), "stocks": stocks}

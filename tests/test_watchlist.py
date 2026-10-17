@@ -1,5 +1,6 @@
 """Testy czystej logiki watchlist.py i finviz.py (bez sieci)."""
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -1308,3 +1309,25 @@ def test_parse_screener_json_new_layout():
     r = rows[0]
     assert r["ticker"] == "A" and r["sector"] == "Healthcare" and r["market_cap"] == 48765230000.0
     assert r["roe"] == 20.97 and r["sales_qq"] == 8.06 and r["atr_fv"] == 4.6 and r["earnings"] == "Aug 26/a" and "price" not in r
+
+
+# ---------- Darvas: port karty z docs/js/darvas.js ----------
+
+def test_darvas_card_state_matches_js_fixture():
+    """Python liczy stan karty Darvasa identycznie jak darCardAnalyze w JS (fixture wygenerowany z JS na prawdziwych danych)."""
+    fx = json.loads((Path(__file__).parent / "fixtures" / "darvas_parity.json").read_text(encoding="utf-8"))
+    states = set()
+    for case in fx["cases"]:
+        got = watchlist.darvas_card_state(case["c"])
+        assert {k: got[k] for k in case["expect"]} == case["expect"], case["name"]
+        states.add(got["state"])
+    assert {"BUY", "READY", "HOLD", "SELL", "OUT", "WAIT"} <= states
+
+
+def test_add_darvas_state_fills_dv_fields():
+    up = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118]
+    stocks = [{"ticker": "AAA"}, {"ticker": "BBB"}]
+    watchlist.add_darvas_state(stocks, {"daily": {"stocks": {"AAA": {"c": up}}}})
+    assert stocks[0]["dv_state"] == "READY" and stocks[0]["dv_n"] == 2 and stocks[0]["dv_top"] == 120
+    assert stocks[0]["dv_stop"] == 108.0 and stocks[0]["dv_dist"] == 1.7
+    assert stocks[1]["dv_state"] is None   # brak wykresu dziennego

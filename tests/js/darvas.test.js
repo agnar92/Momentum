@@ -197,13 +197,15 @@ test("Desktop: podwójne wybicie kupuje ponownie, nowy box wyżej przejmuje obow
     assert.deepEqual([nw.top, nw.bottom], [14.5, 14.0]);
 });
 
-test("Desktop: box złamany bez wybicia = odwrócony, SPRZEDAJ od razu; powrót nad dno = CZEKAJ", () => {
+test("Desktop: box złamany bez wybicia = odwrócony, poza boxem; powrót nad dno go nie wskrzesza (czekamy na nowy box)", () => {
     const { darvasStatus } = require("../../docs/js/darvas.js");
     const c = [...DS, 11.5];
     const bx = darvasBoxes(c);
     assert.ok(bx[0].outcome === "down" && bx[0].i1 === DS.length);
     assert.equal(darvasStatus(c).state, "OUT");   // wg książki: akcji spoza najwyższego boxa nie kupuj ani nie trzymaj
-    assert.equal(darvasStatus([...DS, 11.5, 12.9]).state, "WAIT");
+    const back = darvasStatus([...DS, 11.5, 12.9]);
+    assert.equal(back.state, "OUT");
+    assert.match(back.text, /złamany w dół; czekamy na nowy box/);
 });
 
 test("Desktop (MRVL): wybity box anulowany w strefie zagrożenia, brak wielkiego boxa przez całą korektę", () => {
@@ -387,4 +389,14 @@ test("karta: notka o splitach z lat tabelki („Split 2 for 1 in 1975”)", () =
     const { darCardSplits } = require("../../docs/js/darvas.js");
     assert.equal(darCardSplits([{ d: "2025-06-12", r: 2 }, { d: "2019-01-01", r: 3 }], ["2024", "2025", "2026"]), "(Split 2 za 1 w 2025)");
     assert.equal(darCardSplits([], ["2026"]), "");
+});
+
+test("zgodność z Pythonem: darCardAnalyze daje wyniki z tests/fixtures/darvas_parity.json (te same sprawdza pytest)", () => {
+    const { darCardAnalyze, darvasRisingInfo } = require("../../docs/js/darvas.js");
+    const fx = require("../fixtures/darvas_parity.json");
+    for (const cs of fx.cases) {
+        const a = darCardAnalyze(cs.c), st = a.status;
+        const got = { state: st.state, n: a.chainLen || 0, top: st.buyLine ?? null, bottom: st.bottom ?? null, zone: st.zoneLow ?? null, stop: st.stop ?? null, dist: darvasRisingInfo(cs.c).distPct };
+        assert.deepEqual(got, cs.expect, cs.name);
+    }
 });

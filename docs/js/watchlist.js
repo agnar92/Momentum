@@ -837,7 +837,8 @@ const COL = {
     darvas: ["Darvas", "darvas_rank", s => {
         const d = DARVAS_STATE_LABELS[s.rise_state];
         if (!d) return `<td class="muted" title="${escapeHtml(s.rise_text || "brak boxów Darvasa")}"></td>`;
-        const dist = s.rise_state === "READY" && Number.isFinite(s.rise_dist) ? ` · ${s.rise_dist.toFixed(1).replace(".", ",")} %` : "";
+        const lvl = Number.isFinite(s.dv_top) ? ` · kup > ${s.dv_top.toFixed(2)}` : "";
+        const dist = s.rise_state === "READY" && Number.isFinite(s.rise_dist) ? `${lvl} (${s.rise_dist.toFixed(1).replace(".", ",")} %)` : "";
         return `<td class="${d[1]}" title="${escapeHtml(s.rise_text || "")}">${d[0]}${dist}</td>`;
     }],
     rise2: ["Boxy ↑", "rise_n", s => Number.isFinite(s.rise_n) && s.rise_n >= 1
@@ -986,6 +987,42 @@ function darvasPickRows(stocks, pick) {
     if (pick === "all") return stocks;
     return stocks.filter(s => { const p = darvasPick(s); return pick === "go" ? p === "buy" || p === "ready" : p === pick; });
 }
+// Zlecenia jak u Darvasa (s. 11, 141): kupno stop tuż nad górą najwyższego boxa i od razu stop loss 10 % pod wejściem.
+// Spółki „Gotowe” (zlecenie czeka na wybicie) i „Kup dziś” (wybicie było dziś — wejście na otwarciu). acct = konto z 💼 Pozycje (PLN), null = bez liczby akcji.
+function darvasOrders(stocks, acct = null) {
+    return stocks.filter(s => { const p = darvasPick(s); return (p === "ready" || p === "buy") && Number.isFinite(s.dv_top); })
+        .map(s => {
+            const buy = s.rise_state === "BUY", entry = buy && Number.isFinite(s.price) ? s.price : s.dv_top;
+            const stop = Math.round(entry * (1 - DARVAS_ORDER_STOP_PCT / 100) * 100) / 100;
+            return { ticker: s.ticker, kind: buy ? "buy" : "ready", entry, stop, dist: s.dv_dist, n: s.dv_n, bottom: s.dv_bottom, size: acct ? positionSize(acct, entry, stop) : null };
+        })
+        .sort((a, b) => (a.kind === "buy" ? -1 : 0) - (b.kind === "buy" ? -1 : 0) || (a.dist ?? 99) - (b.dist ?? 99));
+}
+const DARVAS_ORDER_STOP_PCT = 10;
+function ordersText(orders) {
+    return orders.map(o => `${o.ticker}: ${o.kind === "buy" ? "KUP (wybicie dziś)" : "kup stop"} ${o.entry.toFixed(2)}, stop loss ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
+}
+function openOrdersSheet() {
+    if (!watchData) return;
+    const inList = watchList ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
+    const orders = darvasOrders(inList, { ...state.acct, fx: usdPln() });
+    const rows = orders.map(o => `<tr><td><b>${escapeHtml(o.ticker)}</b>${o.kind === "buy" ? " 🟢" : ""}<small>${o.n}× box ↑</small></td>`
+        + `<td>${o.kind === "buy" ? "otwarcie ~" : "stop "}<b>${o.entry.toFixed(2)}</b><small>SL ${o.stop.toFixed(2)}${o.kind === "ready" && Number.isFinite(o.dist) ? ` · +${o.dist.toFixed(1)} %` : ""}</small></td>`
+        + `<td>${o.size ? `<b>${fmtShares(o.size.shares)}</b><small>${pln0(o.size.value_pln)}</small><small>ryz. ${o.size.risk_pln !== null ? pln0(o.size.risk_pln) : "—"}</small>` : "—"}</td>`
+        + `<td><button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(o.ticker)}|${o.entry}|${o.bottom ?? o.stop}|0" title="Zapisz jako pozycję (wejście, stop 10 %)">💼</button></td></tr>`).join("");
+    const acctOk = orders.some(o => o.size);
+    showSheet(`📋 Zlecenia wg Darvasa${watchList ? " — " + escapeHtml(watchList) : ""}`, orders.length
+        ? `<p class="muted">Jak w książce (s. 11, 141): zlecenie <b>kupna stop</b> tuż nad górą najwyższego boxa i od razu <b>stop loss 10 %</b> pod wejściem. „🟢” = wybicie było dziś (wejście na otwarciu, stop od ceny wejścia). Nasze wybicie liczy się po zamknięciu sesji nad górą.</p>
+           <table class="orders-table"><thead><tr><th>Spółka</th><th>Kupno / stop loss</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${rows}</tbody></table>
+           ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
+           <button type="button" class="btn" id="ordersCopy">📋 Kopiuj zlecenia</button>`
+        : `<p>Dziś brak spółek „Gotowe” ani „Kup dziś” na tej liście.</p>`);
+    const cp = document.getElementById("ordersCopy");
+    if (cp) cp.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(ordersText(orders)); showToast("Skopiowano zlecenia.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
+    });
+}
+
 // Kolejność: KUP, potem GOTOWE od najbliższego punktu kupna, TRZYMAJ, pierwszy box, reszta.
 function darvasRank(s) {
     const p = darvasPick(s);
@@ -994,10 +1031,36 @@ function darvasRank(s) {
     if (p === "hold") return 2;
     return { WAIT: 3, BUY: 3, READY: 3, HOLD: 4, SELL: 5, OUT: 6 }[s.rise_state] ?? 7;
 }
+// Stan karty liczony w Pythonie (watchlist.add_darvas_state, pola dv_* w watchlist*.json — ten sam algorytm co darCardAnalyze, test zgodności
+// tests/fixtures/darvas_parity.json): lista „Do kupna” nie musi pobierać wykresów. Starsze pliki bez dv_* → liczymy z wykresów jak dawniej.
+function darvasStateText(s) {
+    const f = v => Number.isFinite(v) ? v.toFixed(2) : "?";
+    switch (s.dv_state) {
+        case "BUY": return `KUP — dzisiejsze zamknięcie nad górą najwyższego boxa ${f(s.dv_top)}${s.dv_n >= 2 ? ` (${s.dv_n} kolejne rosnące boxy)` : " (pierwszy box — książka kupuje po dwóch rosnących)"}; stop 10 %: ${f(s.dv_stop)}`;
+        case "READY": return `GOTOWY DO KUPNA — ${s.dv_n} kolejne rosnące boxy; kup po zamknięciu nad ${f(s.dv_top)}${Number.isFinite(s.dv_dist) ? ` (${s.dv_dist.toFixed(1)} % wyżej)` : ""}, stop 10 %: ${f(s.dv_stop)}`;
+        case "HOLD": return `TRZYMAJ — najwyższy box ${f(s.dv_bottom)}–${f(s.dv_top)}; wyjście pod strefą zagrożenia ${f(s.dv_zone)}`;
+        case "WAIT": return `CZEKAJ — pierwszy box ${f(s.dv_bottom)}–${f(s.dv_top)}; punkt kupna po dwóch kolejnych rosnących boxach`;
+        case "SELL": return `SPRZEDAJ — cena spadła pod dół najwyższego boxa ${f(s.dv_bottom)}`;
+        case "OUT": return "POZA NAJWYŻSZYM BOXEM — nie kupuj ani nie trzymaj";
+        default: return "brak boxa Darvasa";
+    }
+}
+function tagRisingFromFields(stocks) {
+    stocks.forEach(s => {
+        s.rise_n = s.dv_state ? s.dv_n : null; s.rise_state = s.dv_state || null; s.rise_dist = s.dv_dist ?? null;
+        s.rise_text = s.dv_state ? darvasStateText(s) : "";
+        s.darvas_rank = darvasRank(s);
+    });
+}
 async function ensureRising(which) {
     if (typeof darvasRisingInfo !== "function") return;
     const target = which === "watch" ? watchData : state.data;
     if (!target || risingState[which] === target || risingPending[which] === target) return;
+    if (target.stocks.length && target.stocks.every(s => s.dv_state !== undefined)) {   // pola z Pythona: od razu, bez wykresów
+        tagRisingFromFields(target.stocks);
+        risingState[which] = target;
+        return;
+    }
     risingPending[which] = target;
     try {
         const charts = dailyCharts(await (which === "watch" ? loadWatchCharts() : loadCharts()));
@@ -1059,7 +1122,8 @@ function renderWatchLists() {
     const dbtn = ([k, label, title]) => `<button type="button" class="ml-btn dv-btn${watchDarvas === k ? " active" : ""}" data-darvas="${k}" title="${escapeHtml(title)}">${escapeHtml(label)}${k === "all" ? "" : `<small>${loaded ? darvasPickRows(inList, k).length : "…"}</small>`}</button>`;
     el.innerHTML = `<div class="wl-row">${btn("", "Wszystkie", watchData.n_stocks, "Wszystkie zapamiętane listy razem (spółki bez duplikatów)")
         + counts.map(c => btn(c.name, c.name, c.n, "Filtr Finviz: " + c.filters)).join("")}</div>`
-        + `<div class="wl-row"><span class="dv-lbl">📦 Darvas:</span>${DARVAS_PICKS.map(dbtn).join("")}</div>`;
+        + `<div class="wl-row"><span class="dv-lbl">📦 Darvas:</span>${DARVAS_PICKS.map(dbtn).join("")}`
+        + `<button type="button" class="ml-btn dv-orders" data-orders="1" title="Zlecenia na następną sesję wg Darvasa: kupno stop nad górą boxa + stop loss 10 %">📋 Zlecenia${loaded ? `<small>${darvasOrders(inList).length}</small>` : ""}</button></div>`;
 }
 function setWatchList(name) {
     watchList = name || "";
@@ -1098,6 +1162,14 @@ const EMPTY_MESSAGES = {
 };
 
 function emptyMessage(tab) {
+    if (tab === "WATCH" && watchData && watchDarvas !== "all") {
+        if ((state.search || "").trim()) return "Żadna spółka z tego stanu Darvasa nie pasuje do wyszukiwania.";
+        const inList = watchList ? watchData.stocks.filter(s => (s.lists || []).includes(watchList)) : watchData.stocks;
+        if (!inList.some(s => s.rise_state !== undefined)) return "Liczę boxy Darvasa…";
+        const other = DARVAS_PICKS.filter(p => p[0] !== watchDarvas && p[0] !== "all" && p[0] !== "go").map(p => [p[1], darvasPickRows(inList, p[0]).length]).filter(x => x[1] > 0);
+        const label = (DARVAS_PICKS.find(p => p[0] === watchDarvas) || [])[1] || "";
+        return `Dziś brak spółek w stanie „${label}”${other.length ? " — zobacz: " + other.map(x => `${x[0]} (${x[1]})`).join(", ") : ""}.`;
+    }
     if (tab === "WATCH") return watchData ? "Żadna spółka nie przechodzi filtra tekstu / sektora / score." : "Brak watchlist — uruchom workflow „Watchlisty” (przycisk w opisie zakładki) i dodaj listę z filtrem Finviz.";
     return EMPTY_MESSAGES[tab];
 }
@@ -1979,6 +2051,7 @@ function initControls() {
     if (watchLists) watchLists.addEventListener("click", ev => {
         const d = ev.target.closest("[data-darvas]");
         if (d) { setWatchDarvas(d.dataset.darvas); return; }
+        if (ev.target.closest("[data-orders]")) { openOrdersSheet(); return; }
         const b = ev.target.closest("[data-list]");
         if (b) setWatchList(b.dataset.list);
     });
@@ -2159,6 +2232,11 @@ function loadCharts() {
 }
 
 async function openChart(ticker) {
+    if (state.tab === "WATCH" && watchDarvas !== "all" && !chartCardOn) {   // wyszukiwanie wg Darvasa → od razu 🃏 karta (przycisk „Karta” nadal przełącza)
+        chartCardOn = true;
+        const cb = document.getElementById("chartCardBtn");
+        if (cb) cb.classList.add("active");
+    }
     const stock = findStock(ticker);
     const modal = document.getElementById("chartModal");
     document.getElementById("chartTitle").textContent = `${ticker} — ${stock && stock.company ? stock.company : ""}`;
@@ -2695,7 +2773,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        darvasPick, darvasPickRows, darvasRank,
+        darvasPick, darvasPickRows, darvasRank, darvasOrders, ordersText, darvasStateText, tagRisingFromFields,
         stopAdvice, watchListCounts,
         ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, tagRising, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,
         fmtMarketCap, fmtVolume, fmtPct, state, COL, TAB_COLUMNS, tagStrategies, STRATEGIES, TAB_COLUMNS_COMPACT, TAB_TITLES,

@@ -1198,3 +1198,12 @@ body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-
 .box-natr.warn { color: #ffd166; }
 
 #chartCardBtn.active { border-color: #d4a017; color: #ffd978; }
+
+/* 📋 Zlecenia wg Darvasa (arkusz z Watchlist) */
+.watch-lists .dv-orders { border-color: var(--accent, #2ee6c5); color: var(--text, #e8e8e8); }
+.orders-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
+.orders-table th, .orders-table td { padding: 5px 4px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+.orders-table th:first-child, .orders-table td:first-child { text-align: left; }
+.orders-table small { display: block; color: var(--text-dim); font-size: 11px; white-space: normal; }
+.orders-table td:last-child { width: 1%; padding-right: 0; }
+.orders-table td:last-child .btn { padding: 4px 8px; }

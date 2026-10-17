@@ -1,1 +1,1 @@
-{"lists":[{"name":"Trend","filters":"ta_sma200_pa,ta_perf_13w30o"}]}
+{"lists":[{"name":"Trend","filters":"ta_sma200_pa,ta_perf_13w30o"},{"name":"Darvas","filters":"cap_smallover,sh_avgvol_o500,sh_price_o10,ta_highlow52w_b0to5h,ta_sma50_pa,ta_sma200_pa,ind_stocksonly"}]}
