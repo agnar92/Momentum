@@ -1898,7 +1898,7 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
 DARVAS_CONFIRM = 3          # top / dół = zamknięcie, którego nie przebiły 3 KOLEJNE tygodnie PO nim (Darvas na TYGODNIOWYCH zamknięciach)
 DARVAS_ZONE_PCT = 5         # strefa zagrożenia: 5 % pod dołem boxa
 DARVAS_START_STOP_PCT = 10  # stop przy pierwszym wybiciu: 10 % pod wejściem
-DARCARD_SESSIONS = 52       # karta = boxy z ostatniego roku (52 tygodnie)
+DARCARD_SESSIONS = 104      # karta = boxy z ostatnich 2 lat (104 tygodnie)
 DARVAS_NATR_MAX = 8         # wejście tylko z boxa o niskim NATR (średni True Range tygodni boxa / cena < 8 %, Blueprint)
 
 

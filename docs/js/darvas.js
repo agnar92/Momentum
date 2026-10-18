@@ -838,7 +838,7 @@ function attachDarvasHover(container, full, readoutEl) {
 // po utworzeniu NOWEGO, wyższego boxa cena pod jego dołem (w zacieniowanej strefie) = SPRZEDAJ; akcji spoza najwyższego boxa nie kupuj ani nie trzymaj.
 // Punkt kupna „po dwóch kolejnych rosnących boxach” (s. 140). Dodatki spoza książki (wolumen, +10 %, MACD) są tylko OSTRZEŻENIAMI. Brak: wersja dla shortów.
 // ============================================================
-const DARCARD_WEEKS = 52;   // karta pokazuje boxy z ostatniego roku (52 tygodnie, Darvas na TYGODNIOWYCH zamknięciach); przy krótszej historii (IPO) tyle, ile spółka istnieje
+const DARCARD_WEEKS = 104;   // karta pokazuje boxy z ostatnich 2 lat (104 tygodnie, Darvas na TYGODNIOWYCH zamknięciach); przy krótszej historii (IPO) tyle, ile spółka istnieje
 
 // Analiza karty: { boxes: WSZYSTKIE boxy z okna karty (jak w książce, także złamane i spadające — s. 30, 135, 141), topmost, rising (≥ 2 kolejne wyższe), status: {state, text, warnings[], top, bottom, zoneLow, stop, buyLine} }
 // states: BUY (pierwsze zamknięcie nad górą najwyższego boxa), HOLD, READY (≥ 2 kolejne rosnące boxy, cena w najwyższym — „Ready for buying”, s. 139–140),
@@ -955,7 +955,7 @@ function darCardSvg(full, opts = {}) {
     const n = a.boxes.length, slot = pw / Math.max(n, 3), bw = slot * 0.72;
     const dmy = d => `${d.slice(8, 10)}.${d.slice(5, 7)}`;
     const dEnd = full.weeks && full.weeks[lastReal], dBeg = full.weeks && full.weeks[Math.max(0, lastReal - DARCARD_WEEKS + 1)];
-    const asOf = dEnd && dBeg ? `${dmy(dBeg)}${dBeg.slice(0, 4) !== dEnd.slice(0, 4) ? "." + dBeg.slice(0, 4) : ""} – ${dmy(dEnd)}.${dEnd.slice(0, 4)}` : "";   // okno karty: rok (52 tygodnie) wstecz od ostatniego zamknięcia tygodnia
+    const asOf = dEnd && dBeg ? `${dmy(dBeg)}${dBeg.slice(0, 4) !== dEnd.slice(0, 4) ? "." + dBeg.slice(0, 4) : ""} – ${dmy(dEnd)}.${dEnd.slice(0, 4)}` : "";   // okno karty: 2 lata (104 tygodnie) wstecz od ostatniego zamknięcia tygodnia
     a.boxes.forEach((b, k) => {
         const x0 = L.left + slot * k + (slot - bw) / 2, yT = y(b.top), yB = y(b.bottom), yZ = y(b.bottom * (1 - DARVAS_STOP_PCT / 100));
         const topmost = b.i0 === a.topmost.i0;
