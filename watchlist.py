@@ -2085,6 +2085,155 @@ def add_darvas_state(stocks, charts):
 
 
 # ============================================================================
+# GLB — GREEN LINE BREAKOUT (Dr Wish): green line = rekord wszech czasów na MIESIĘCZNYCH zamknięciach, który stoi ≥ 3 zamknięte miesiące;
+# wejście i wyjście TYGODNIOWE: zlecenie kupna stop na linii, stop 1 % pod linią (zamknięcie tygodnia), potem przesuwanie stopu po tygodniowym MACD.
+# Rekord może być starszy niż 10 lat cen dziennych — maksimum z całej historii miesięcznej trzyma mały cache (glb_cache*.json),
+# pełną historię miesięczną pobieramy raz na ~kwartał na spółkę (dywidendy zmieniają ceny skorygowane), po splicie od razu.
+# ============================================================================
+GLB_CONFIRM = 3                 # rekord musi stać ≥ 3 zamknięte miesiące
+GLB_STOP_PCT = 1                # stop 1 % pod linią
+GLB_CHART_MONTHS = 60           # karta GLB: ostatnie 5 lat miesięcznych zamknięć
+GLB_CACHE_MAX_AGE_DAYS = 90
+GLB_PRE_YEARS = 9               # cache trzyma maksimum miesięcy starszych niż 9 lat od pobrania; nowsze miesiące liczymy z cen dziennych (10 lat)
+GLB_CACHE_PATH = Path(__file__).parent / "docs" / "data" / "glb_cache.json"
+
+
+def _ym(ts):
+    ts = pd.Timestamp(ts)
+    return f"{ts.year:04d}-{ts.month:02d}"
+
+
+def _ym_num(ym):
+    return int(ym[:4]) * 12 + int(ym[5:7]) - 1
+
+
+def download_monthly_max(tickers, batch_size=BATCH_SIZE):
+    """Pełna historia MIESIĘCZNYCH zamknięć (Yahoo, auto_adjust jak ceny dzienne) -> {ticker: [(YYYY-MM, close), ...]}."""
+    import yfinance as yf
+    out = {}
+    for i in range(0, len(tickers), batch_size):
+        batch = tickers[i:i + batch_size]
+        try:
+            data = yf.download(batch, period="max", interval="1mo", auto_adjust=True, group_by="ticker", threads=True, progress=False)
+        except Exception as e:
+            print(f"⚠️  GLB: paczka historii miesięcznej nieudana ({e}).")
+            continue
+        for t in batch:
+            try:
+                ser = (data[t] if isinstance(data.columns, pd.MultiIndex) else data)["Close"].dropna()
+            except KeyError:
+                continue
+            if len(ser):
+                out[t] = [(_ym(d), float(v)) for d, v in ser.items()]
+    return out
+
+
+def update_glb_cache(frames, cache_path=GLB_CACHE_PATH, now=None, download=download_monthly_max, max_age_days=GLB_CACHE_MAX_AGE_DAYS):
+    """Cache {ticker: {t: data pobrania, cut: YYYY-MM, max, m}} = najwyższe zamknięcie miesięczne SPRZED `cut` (pobranie − 9 lat).
+    Odświeża wpisy brakujące, starsze niż max_age_days albo sprzed splitu. Błąd pobierania nigdy nie przerywa (zostaje stary wpis)."""
+    now = pd.Timestamp(now if now is not None else datetime.now(timezone.utc)).tz_localize(None)
+    cache = _read_json(cache_path, {})
+
+    def stale(t):
+        e = cache.get(t)
+        if not e:
+            return True
+        if (now - pd.Timestamp(e["t"])).days >= max_age_days:
+            return True
+        return any(d > e["t"] for d, _ in (frames[t].attrs.get("splits") or []))
+    need = [t for t in frames if stale(t)]
+    if need:
+        print(f"⏳ GLB: pobieram historię miesięczną (max) dla {len(need)} spółek...")
+        try:
+            got = download(need)
+        except Exception as e:
+            print(f"⚠️  GLB: historia miesięczna niedostępna ({e}) — rekord z ostatnich 10 lat.")
+            got = {}
+        cut = _ym(now - pd.DateOffset(years=GLB_PRE_YEARS))
+        for t, rows in got.items():
+            pre = [(m, c) for m, c in rows if m < cut and c is not None and math.isfinite(c)]
+            best = max(pre, key=lambda r: r[1]) if pre else None
+            cache[t] = {"t": now.strftime("%Y-%m-%d"), "cut": cut, "max": round(best[1], 4) if best else None, "m": best[0] if best else None}
+    cache = {t: v for t, v in cache.items() if t in frames or (now - pd.Timestamp(v["t"])).days <= CACHE_KEEP_DAYS}
+    out = Path(cache_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(cache, ensure_ascii=False, sort_keys=True, separators=(",", ":")), encoding="utf-8")
+    return cache
+
+
+def monthly_closes(df):
+    """[(YYYY-MM, zamknięcie)] z dziennych świec + czy ostatni miesiąc jest zamknięty (ostatnia sesja = ostatni dzień roboczy miesiąca)."""
+    close = df["Close"].astype(float).copy()
+    close.index = pd.DatetimeIndex(close.index).tz_localize(None).normalize()
+    close = close.dropna()
+    if not len(close):
+        return [], False
+    last = close.index[-1]
+    m = close.groupby(close.index.to_period("M")).last()
+    return [(str(p), float(v)) for p, v in m.items()], bool(pd.offsets.BMonthEnd().rollforward(last) == last)
+
+
+def glb_line(months, complete, pre=None):
+    """Green line z zamkniętych miesięcy (jak backtest): rekord wszech czasów, który stoi ≥ GLB_CONFIRM miesięcy; po nowym rekordzie zostaje stara linia,
+    dopóki nowy nie przestoi 3 miesięcy. pre = (YYYY-MM, max) sprzed okna cen dziennych. -> (linia, miesiąc linii, ostatni zamknięty miesiąc) / (None, None, ym)."""
+    done = months if complete else months[:-1]
+    seq = ([pre] if pre and pre[1] is not None else []) + done
+    line, lm, mx, mym = None, None, -math.inf, None
+    for ym, c in seq:
+        if c > mx:
+            mx, mym = c, ym
+        if _ym_num(ym) - _ym_num(mym) >= GLB_CONFIRM:
+            line, lm = mx, mym
+    return line, lm, (done[-1][0] if done else None)
+
+
+def glb_state(line, wk_close):
+    """Stan na ostatnim zamknięciu TYGODNIA: WAIT (pod linią — zlecenie kupna stop), BREAK (to zamknięcie przebiło linię), ABOVE (nad linią), NONE."""
+    if line is None or wk_close is None or len(wk_close) < 1:
+        return "NONE"
+    px = float(wk_close.iloc[-1])
+    prev = float(wk_close.iloc[-2]) if len(wk_close) > 1 else None
+    if px < line:
+        return "WAIT"
+    if prev is not None and prev <= line:
+        return "BREAK"
+    return "ABOVE"
+
+
+def add_glb(stocks, charts, frames, cache, now_utc=None):
+    """Pola glb_* w spółkach + charts["stocks"][T]["glb"] (dane do karty GLB: ostatnie 5 lat miesięcznych zamknięć, linia, rekord)."""
+    data = (charts or {}).get("stocks") or {}
+    for st in stocks:
+        t = st["ticker"]
+        df = frames.get(t)
+        keys = ("line", "month", "age", "state", "dist", "stop")
+        if df is None or not len(df):
+            st.update({"glb_" + k: None for k in keys})
+            continue
+        df = drop_incomplete_bar(df, now_utc)
+        months, complete = monthly_closes(df)
+        e = (cache or {}).get(t) or {}
+        pre = (e.get("m"), e.get("max")) if e.get("max") is not None else None
+        line, lm, last_done = glb_line(months, complete, pre)
+        wk = weekly_close(df)
+        state = glb_state(line, wk)
+        px = float(wk.iloc[-1]) if wk is not None and len(wk) else None
+        st["glb_line"] = _js_round(line) if line is not None else None
+        st["glb_month"] = lm
+        st["glb_age"] = _ym_num(last_done) - _ym_num(lm) if line is not None and last_done else None
+        st["glb_state"] = state
+        st["glb_dist"] = _js_round((line / px - 1) * 100, 1) if line is not None and px else None
+        st["glb_stop"] = _js_round(line * (1 - GLB_STOP_PCT / 100)) if line is not None else None
+        if t in data and months:
+            shown = months[-GLB_CHART_MONTHS:]
+            allm = ([pre] if pre else []) + (months if complete else months[:-1])
+            ath = max(allm, key=lambda r: r[1]) if allm else None
+            data[t]["glb"] = {"m0": shown[0][0], "c": [_js_round(c) for _, c in shown], "partial": not complete,
+                              "line": st["glb_line"], "lm": lm, "ath": [ath[0], _js_round(ath[1])] if ath else None,
+                              "full": bool(e), "stop": st["glb_stop"], "state": state}
+
+
+# ============================================================================
 # SKŁADANIE I ZAPIS
 # ============================================================================
 def weekly_close(df):
@@ -2267,6 +2416,10 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
             update_estimates(have, Path(output_path).parent / "estimates.json")
         except Exception as e:
             print(f"⚠️  Krok estymat analityków pominięty ({e}).")
+        try:
+            update_glb_cache(frames, Path(output_path).parent / "glb_cache.json")
+        except Exception as e:
+            print(f"⚠️  Krok GLB (historia miesięczna) pominięty ({e}).")
         path = save_raw({"profile": RAW_PROFILE, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
                          "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
                          "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, RAW_PROFILE, raw_dir)
@@ -2304,6 +2457,16 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         st["rs_line_state"] = summary.get("state")
         st["rs_line_dist_pct"] = summary.get("dist_pct")
     add_darvas_state(stocks, charts)
+    glb_path = Path(output_path).parent / "glb_cache.json"
+    if stage == "compute":
+        glb_cache = _read_json(glb_path, {})
+    else:
+        try:
+            glb_cache = update_glb_cache(frames, glb_path)
+        except Exception as e:
+            print(f"⚠️  Krok GLB (historia miesięczna) pominięty ({e}) — rekord z ostatnich 10 lat.")
+            glb_cache = _read_json(glb_path, {})
+    add_glb(stocks, charts, frames, glb_cache, now_utc)
     payload = {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "data_as_of": max((s["as_of"] for s in stocks), default=None),

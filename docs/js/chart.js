@@ -1497,6 +1497,13 @@ function renderStockChart(container, readoutEl, charts, ticker, stock, opts = {}
     container.classList.toggle("scroll-y", !!opts.stack);   // układ z osobnymi panelami przewija się w pionie (suwak okna zostaje na górze)   // suwak NAD wykresem: na iPhonie dół ekranu to gest "home"/przewijanie (próba z suwakiem na dole nie działała)
     const plot = container.querySelector("#chartPlot");
     const draw = () => {
+        if (opts.darvas && opts.glb && typeof glbCardSvg === "function") {   // karta GLB (Green Line Breakout): rekord wszech czasów z zamknięć miesięcznych
+            const g = charts.stocks && charts.stocks[ticker] && charts.stocks[ticker].glb, lr = full.c.reduce((q, v, i) => (Number.isFinite(v) ? i : q), -1);
+            const px = lr >= 0 ? full.c[lr] : null;
+            plot.innerHTML = glbCardSvg(g, px, opts);
+            readoutEl.textContent = "GLB (Dr Wish): " + glbAnalyze(g, px).text;
+            return;
+        }
         if (opts.darvas && opts.card && typeof darCardSvg === "function") {   // widok „karta z książki” Darvasa: boxy obok siebie, reguły z książki
             plot.innerHTML = darCardSvg(full, opts);
             readoutEl.textContent = darCardReadout(full);

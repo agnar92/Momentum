@@ -29,6 +29,7 @@ LISTS_FILE = "watchlists_def.json"
 DATA_FILE = "watchlists.json"
 CHARTS_FILE = "charts_watchlists.json"
 EPS_FILE = "eps_cache_watchlists.json"
+GLB_FILE = "glb_cache_watchlists.json"
 ACTIONS = ("add", "remove", "refresh")
 _FILTER_TOKEN = re.compile(r"^[a-z0-9]+_[a-z0-9._-]+$")
 
@@ -205,6 +206,12 @@ def _scan(sel, data_dir, now_utc, log):
         summary = ((charts or {}).get("stocks", {}).get(s["ticker"]) or {}).get("rs_line") or {}
         s["rs_line_state"] = summary.get("state")
         s["rs_line_dist_pct"] = summary.get("dist_pct")
+    try:
+        glb_cache = watchlist.update_glb_cache(frames, data_dir / GLB_FILE)   # GLB: rekord wszech czasów z historii miesięcznej (osobny cache)
+    except Exception as e:
+        log(f"⚠️  Krok GLB (historia miesięczna) pominięty ({e}) — rekord z ostatnich 10 lat.")
+        glb_cache = watchlist._read_json(data_dir / GLB_FILE, {})
+    watchlist.add_glb(stocks, charts, frames, glb_cache, now_ts)
     return 0, stocks, charts, info, members
 
 

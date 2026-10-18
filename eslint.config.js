@@ -68,6 +68,12 @@ const browserGlobals = {
     boxNatr: "readonly",
     natrGrade: "readonly",
     heatmapHtml: "readonly",
+    // docs/js/glb.js (Green Line Breakout, ładowany po darvas.js)
+    glbAnalyze: "readonly",
+    glbOrders: "readonly",
+    glbCardSvg: "readonly",
+    GLB_STATE_LABELS: "readonly",
+    GLB_PLAN_MAX_DIST: "readonly",
     heatMetrics: "readonly",
     squarify: "readonly",
     DARVAS_NEW_WEEKS: "readonly",

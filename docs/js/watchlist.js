@@ -6,6 +6,7 @@ if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"));
     Object.assign(globalThis, require("./qol.js"));
     Object.assign(globalThis, require("./annotate.js"));
+    Object.assign(globalThis, require("./glb.js"));
 }
 
 // ============================================================
@@ -849,6 +850,13 @@ const COL = {
         const g = natrGrade(s.natr_w), d = Number.isFinite(s.natr_d) ? `, dzienny (ATR z Finviza): ${s.natr_d.toFixed(1)} %` : "";
         return Number.isFinite(s.natr_w) ? `<td class="${g.cls === "warn" ? "" : g.cls}" title="NATR tygodniowy = ATR(14) / cena: ${s.natr_w.toFixed(1)} % (${g.label})${d}. Blueprint: konsolidacja ma mieć NATR < 8.">${s.natr_w.toFixed(1)}%</td>` : `<td class="muted" title="Za krótka historia tygodniowa"></td>`;
     }, "NATR tygodniowy (ATR 14 tyg. w % ceny): im niższy, tym ciaśniejsze i spokojniejsze notowania. Blueprint: konsolidacja < 8 %."],
+    glb: ["GLB", "glb_dist", s => {
+        const d = GLB_STATE_LABELS[s.glb_state];
+        if (!d || !Number.isFinite(s.glb_line)) return `<td class="muted" title="Brak green line (rekord wszech czasów stoi krócej niż 3 miesiące albo brak danych)"></td>`;
+        const tip = `Green line ${s.glb_line.toFixed(2)} (rekord z ${s.glb_month}, stoi ${s.glb_age} mies.) · stop ${Number.isFinite(s.glb_stop) ? s.glb_stop.toFixed(2) : "?"}`;
+        const dist = s.glb_state === "WAIT" && Number.isFinite(s.glb_dist) ? ` · ${s.glb_dist.toFixed(1).replace(".", ",")} %` : "";
+        return `<td class="${d[1]}" title="${escapeHtml(tip)}">${d[0]}${dist}</td>`;
+    }],
     darvas: ["Darvas", "darvas_rank", s => {
         const d = DARVAS_STATE_LABELS[s.rise_state];
         if (!d) return `<td class="muted" title="${escapeHtml(s.rise_text || "brak boxów Darvasa")}"></td>`;
@@ -912,7 +920,7 @@ const actCell = (s, key) => s[key]
     ? `<td class="act-cell act-${s[key].tone}${s.action_tf === s[key].tf ? " act-primary" : ""}" title="${escapeHtml(s[key].why)}"><strong>${s[key].icon} ${s[key].label}</strong><span class="act-why">${escapeHtml(s[key].why.split(/(?<=[.!?])\s/)[0])}</span></td>` : `<td class="muted"></td>`;
 const LEAD = ["rank", "fav", "ticker", "score", "company", "sector"];
 // Wszystkie zakładki pokazują TE SAME kolumny (zakładka = strategia = inny filtr i inne domyślne sortowanie); kolumna "Strategie" mówi, z których strategii spółka przechodzi.
-const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "bp", "darvas", "rise2", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
+const ALL_COLUMNS = [...LEAD, "actW", "cs", "cx", "dist", "macd", "natr", "bp", "darvas", "rise2", "glb", "brk", "pos", "pbox", "strat", "toggle", "fchart", "cap", "price", "sma50", "sma200", "high52", "epsThis", "epsNext", "eps5", "epsNext5", "epsq", "eps3y", "epsStab", "buyback", "rs", "epsr", "comp", "leader", "grp", "ad", "inst", "rsLine", "r3", "r6", "r12",
     "dollarVol", "adr", "recom", "upside", "ptMean", "ptLow", "ptHigh", "analysts", "rev30", "rev90", "baseType", "depth", "baseWeeks", "pivot", "toPivot", "base", "trend", "earnings", "tv"];
 const POS_COLUMNS = ["posPl", "posR", "posToStop", "posMacd", "posMini", "posEntry", "posStop", "posShares", "posValue", "posRisk"];
 const TAB_COLUMNS = {
@@ -1073,18 +1081,41 @@ function weeklyPlan(stocks, positions, acct = null) {
     return { orders, skipped: all.length - orders.length, positions: pos };
 }
 
+// Widok wykresu: "" (Dar-Card czasowy), "card" (🃏 karta Darvasa z książki) albo "glb" (🟩 karta GLB) — przyciski wykluczają się.
+function setChartView(v) {
+    chartCardOn = v === "card"; chartGlbOn = v === "glb";
+    try { localStorage.setItem("momentum_watchlist_chart_card", chartCardOn ? "1" : "0"); localStorage.setItem("momentum_watchlist_chart_glb", chartGlbOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
+    const cb = document.getElementById("chartCardBtn"), gb = document.getElementById("chartGlbBtn");
+    if (cb) cb.classList.toggle("active", chartCardOn);
+    if (gb) gb.classList.toggle("active", chartGlbOn);
+}
+
+function glbRowsHtml(orders) {
+    return orders.map(o => `<tr><td><b><a href="#" data-plan-glb="${escapeHtml(o.ticker)}">${escapeHtml(o.ticker)}</a></b>${o.kind === "buy" ? " 🟢" : ""}<small>rekord ${escapeHtml(o.month || "?")}${Number.isFinite(o.age) ? ` · stoi ${o.age} mies.` : ""}</small></td>`
+        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? "na otwarciu (wybicie w tym tygodniu)" : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy tydzień zamknie się &lt; ${o.stop.toFixed(2)} (1 % pod linią)</small></td>`
+        + `<td>${o.size ? `<b>${fmtShares(o.size.shares)}</b><small>${pln0(o.size.value_pln)}</small><small>ryz. ${o.size.risk_pln !== null ? pln0(o.size.risk_pln) : "—"}</small>` : "—"}</td>`
+        + `<td><button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(o.ticker)}|${o.entry}|${o.stop}|1" title="Zapisz jako pozycję (wejście, stop 1 % pod green line)">💼</button></td></tr>`).join("");
+}
+function glbOrdersText(orders) {
+    return orders.map(o => `${o.ticker} (GLB): ${o.kind === "buy" ? "kup na otwarciu ~" : "kup, gdy cena > "}${o.entry.toFixed(2)} (buy stop); stop: sprzedaj, gdy tydzień zamknie się < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
+}
+
 function renderPlanPanel() {
     const el = document.getElementById("planPanel");
     if (!el || !state.data) return;
     ensureRising("main"); ensureRising("watch");
     const stocks = planStocks(state.data.stocks, watchData ? watchData.stocks : []);
     const plan = weeklyPlan(stocks, state.pos, { ...state.acct, fx: usdPln() });
+    const heldSet = new Set(Object.keys(state.pos || {}).filter(t => state.pos[t]));
+    const glbAll = glbOrders(stocks.filter(s => !heldSet.has(s.ticker)), { ...state.acct, fx: usdPln() }, positionSize);
+    const glbHasData = stocks.some(s => s.glb_state !== undefined);
     const loading = risingPending.main || risingPending.watch;
     const mkt = state.data.market;
     const weak = mkt && (mkt.m_regime || mkt.regime) === "correction";
     const q = (state.search || "").trim().toLowerCase();
     const match = t => !q || t.toLowerCase().includes(q);
     const orders = plan.orders.filter(o => match(o.ticker));
+    const glb = glbAll.filter(o => match(o.ticker));
     const acctOk = orders.some(o => o.size);
     const posRows = plan.positions.filter(p => match(p.ticker)).map(p => `<tr class="plan-${p.code.toLowerCase()}"><td><b><a href="#" data-plan-chart="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)}</a></b>`
         + `<small>${Number.isFinite(p.pl) ? `${p.pl > 0 ? "+" : ""}${p.pl.toFixed(1)} %` : ""}</small></td><td><b>${p.label}</b><small>${escapeHtml(p.text)}</small>`
@@ -1099,12 +1130,29 @@ function renderPlanPanel() {
                 ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
                 <button type="button" class="btn" id="planCopy">📋 Kopiuj zlecenia</button>`
             : `<p class="muted">${loading ? "Liczę boxy…" : "W tym tygodniu brak spółek gotowych do kupna — to też jest sygnał: czekamy."}</p>`}</section>
+        <section class="plan-sec"><h3>3. 🟩 GLB — zlecenia kupna na green line <small>${glb.length}</small></h3>
+            <p class="muted">Green Line Breakout (Dr Wish): <b>green line</b> = rekord wszech czasów na zamknięciach <b>miesięcznych</b>, który stoi co najmniej 3 miesiące. Złóż <b>kupno stop</b> na linii („kup, gdy &gt; X”);
+            stop <b>1 % pod linią</b> sprawdzasz sam w weekend — <b>zamknięcie tygodnia</b> pod nim = sprzedaj w poniedziałek (nie wystawiaj go u brokera: dzienne wahania wybijały w teście prawie każde wejście). Potem stop przesuwa tygodniowy MACD jak wyżej.
+            Lista: spółki ≤ ${GLB_PLAN_MAX_DIST} % pod linią albo z wybiciem w tym tygodniu (≤ +5 %).</p>
+            ${glb.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${glbRowsHtml(glb)}</tbody></table>
+                <button type="button" class="btn" id="planGlbCopy">📋 Kopiuj zlecenia GLB</button>`
+            : `<p class="muted">${glbHasData ? "W tym tygodniu żadna spółka nie jest blisko swojej green line." : "Dane GLB pojawią się po najbliższym odświeżeniu danych (sobota)."}</p>`}</section>
         <details class="plan-sec plan-help"><summary>Jak to działa — rutyna na weekend (15 min)</summary>
             <ol><li><b>Pozycje</b>: „⬆ Podnieś stop” → stuknij przycisk i zmień zlecenie stop loss u brokera. „🔴 Sprzedaj” → zlecenie sprzedaży na poniedziałek. „✂ Stop” → sprawdź, czy broker sprzedał. „🟢 Trzymaj” → nic nie rób.</li>
             <li><b>Zlecenia</b>: skopiuj i złóż u brokera kupno stop + stop loss 10 % (Darvas). Nie wykonane do piątku? W następny weekend lista będzie nowa.</li>
             <li>Kupione? Stuknij 💼 przy spółce — trafi do pozycji i w kolejnym tygodniu dostaniesz dla niej decyzję.</li>
-            <li>Wykres: stuknij ticker (🃏 karta Darvasa na tygodniowych zamknięciach; stuknięcie w box → wykres słupkowy z MACD).</li></ol>
+            <li>Wykres: stuknij ticker (🃏 karta Darvasa na tygodniowych zamknięciach; stuknięcie w box → wykres słupkowy z MACD). Ticker w sekcji GLB otwiera 🟩 kartę GLB.</li></ol>
+            <p class="muted small">GLB w teście na historycznym składzie S&amp;P 500 (2015–2026, linia z rekordu miesięcznego, wejście i wyjście tygodniowe po MACD): ok. +10,8 % rocznie wobec +13,6 % SPY, największy spadek ok. −31 %; wersja w pełni miesięczna ok. +11,6 %.</p>
             <p class="muted small">Zasady: boxy Darvasa na TYGODNIOWYCH zamknięciach (top / dół = zamknięcie nieprzebite przez 3 kolejne tygodnie), wejście przy wybiciu z boxa o niskim NATR po ≥ 2 rosnących boxach, stop początkowy 10 % pod wejściem, potem stop pod dołkiem świecy, w której tygodniowy MACD przetnie sygnał w dół. Test na historycznym składzie S&amp;P 500 (2015–2026) dla wersji dziennej dał ok. +4 % rocznie wobec +13,6 % kupna i trzymania SPY — traktuj to jako eksperyment na małym kapitale.</p></details>`;
+    const gcp = document.getElementById("planGlbCopy");
+    if (gcp) gcp.addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(glbOrdersText(glb)); showToast("Skopiowano zlecenia GLB.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
+    });
+    el.querySelectorAll("[data-plan-glb]").forEach(a => a.addEventListener("click", ev => {
+        ev.preventDefault();
+        setChartView("glb");
+        openChart(a.dataset.planGlb);
+    }));
     const cp = document.getElementById("planCopy");
     if (cp) cp.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(ordersText(orders)); showToast("Skopiowano zlecenia.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
@@ -1117,11 +1165,11 @@ function renderPlanPanel() {
     }));
     el.querySelectorAll("[data-plan-chart]").forEach(a => a.addEventListener("click", ev => {
         ev.preventDefault();
-        if (!chartCardOn) { chartCardOn = true; const cb = document.getElementById("chartCardBtn"); if (cb) cb.classList.add("active"); }
+        if (!chartCardOn) setChartView("card");
         openChart(a.dataset.planChart);
     }));
     const meta = document.getElementById("drawerMeta");
-    if (meta) meta.textContent = `${plan.positions.length} pozycji · ${orders.length} zleceń kupna`;
+    if (meta) meta.textContent = `${plan.positions.length} pozycji · ${orders.length} zleceń kupna · ${glb.length} GLB`;
     const first = el.querySelector("[data-plan-chart]");   // PC (widok dzielony): wykres po prawej od razu pokazuje pierwszą spółkę z planu
     if (splitMode && first && !chartRequested) first.click();
 }
@@ -2266,6 +2314,7 @@ let estimatesPromise = null;
 let estimatesMap = null;
 let estimatesFailed = false;   // data/estimates.json niedostępny (np. jeszcze nie wygenerowany przez workflow)
 let chartBookOn = true;     // 📖 Książka: opisy i oś jak na wykresach z książki O'Neila (tylko tygodniowy)
+let chartGlbOn = false;    // 🟩 karta GLB (Green Line Breakout) — wyłącza 🃏 kartę Darvasa i odwrotnie
 let chartCardOn = false;   // 🃏 karta Darvasa z książki (drugi widok obok czasowego Dar-Card)
 let chartDarvasOn = false;  // 📦 widok Darvasa (Dar-Card): pudełka na cenach zamknięcia zamiast świec
 let chartLegendOn = false;  // legenda i podpisy paneli na wykresie na telefonie (domyślnie ukryte — mały ekran)
@@ -2377,11 +2426,7 @@ function loadCharts() {
 }
 
 async function openChart(ticker) {
-    if (state.tab === "WATCH" && watchDarvas !== "all" && !chartCardOn) {   // wyszukiwanie wg Darvasa → od razu 🃏 karta (przycisk „Karta” nadal przełącza)
-        chartCardOn = true;
-        const cb = document.getElementById("chartCardBtn");
-        if (cb) cb.classList.add("active");
-    }
+    if (state.tab === "WATCH" && watchDarvas !== "all" && !chartCardOn) setChartView("card");   // wyszukiwanie wg Darvasa → od razu 🃏 karta (przycisk „Karta” nadal przełącza)
     const stock = findStock(ticker);
     const modal = document.getElementById("chartModal");
     document.getElementById("chartTitle").textContent = `${ticker} — ${stock && stock.company ? stock.company : ""}`;
@@ -2498,7 +2543,7 @@ function drawChart() {
         const opts = {
             log: chartLog, stack: true, uid: "c" + i,   // osobne wykresy (Cena / Wolumen / MACD / RS / EPS) jeden pod drugim, cena w skali logarytmicznej
             compact: chartCompact, wide: chartWide,
-            hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus, card: chartCardOn,
+            hideLabels: !splitMode && !chartLegendOn, darvas: chartDarvasOn && !focus, card: chartCardOn, glb: chartGlbOn,
             focusBox: focus,
             pinBox: pin,
             pinFlash: Date.now() < pinFlashUntil,
@@ -2668,9 +2713,14 @@ function initChartModal() {
     const cardBtn = document.getElementById("chartCardBtn");
     cardBtn.classList.toggle("active", chartCardOn);
     cardBtn.addEventListener("click", () => {
-        chartCardOn = !chartCardOn;
-        try { localStorage.setItem("momentum_watchlist_chart_card", chartCardOn ? "1" : "0"); } catch (e) { /* ignoruj */ }
-        cardBtn.classList.toggle("active", chartCardOn);
+        setChartView(chartCardOn ? "" : "card");
+        boxFocus = null; drawChart();
+    });
+    try { chartGlbOn = localStorage.getItem("momentum_watchlist_chart_glb") === "1" && !chartCardOn; } catch (e) { /* ignoruj */ }
+    const glbBtn = document.getElementById("chartGlbBtn");
+    glbBtn.classList.toggle("active", chartGlbOn);
+    glbBtn.addEventListener("click", () => {
+        setChartView(chartGlbOn ? "" : "glb");
         boxFocus = null; drawChart();
     });
     document.getElementById("chartPosBtn").addEventListener("click", () => { if (chartRequested) openPositionSheet(chartRequested); });

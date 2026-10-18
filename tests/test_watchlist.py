@@ -1347,3 +1347,60 @@ def test_box_natr_and_macd_cross_low():
     lows = [x * 0.97 for x in c2]
     low, i = watchlist.macd_cross_low(c2, lows)
     assert i is not None and i >= 60 and low == round(lows[i], 2)
+
+
+# ---------------------------------------------------------------- GLB (green line Dr Wisha, miesięczne maksimum)
+def test_glb_line_needs_three_closed_months_and_keeps_old_line_after_new_high():
+    m = [("2024-01", 10.0), ("2024-02", 12.0), ("2024-03", 11.0), ("2024-04", 11.5), ("2024-05", 11.8)]
+    assert watchlist.glb_line(m, complete=True) == (12.0, "2024-02", "2024-05")
+    assert watchlist.glb_line(m[:4], complete=True)[0] is None        # rekord z 02 stoi dopiero 2 miesiące
+    m2 = m + [("2024-06", 13.0), ("2024-07", 12.5)]
+    assert watchlist.glb_line(m2, complete=True)[:2] == (12.0, "2024-02")   # nowy rekord 13 stoi 1 miesiąc — zostaje stara (przebita) linia
+    assert watchlist.glb_line(m2 + [("2024-08", 12.0), ("2024-09", 12.2)], complete=True)[:2] == (13.0, "2024-06")
+    assert watchlist.glb_line(m + [("2024-06", 99.0)], complete=False)[:2] == (12.0, "2024-02")   # niezamknięty miesiąc się nie liczy
+
+
+def test_glb_line_uses_cached_record_older_than_daily_history():
+    m = [("2020-01", 50.0), ("2020-02", 55.0), ("2020-03", 52.0), ("2020-04", 53.0)]
+    assert watchlist.glb_line(m, complete=True, pre=("2000-03", 80.0))[:2] == (80.0, "2000-03")
+
+
+def test_glb_state_on_weekly_closes():
+    s = lambda *v: pd.Series(v, dtype=float)   # noqa: E731
+    assert watchlist.glb_state(10.0, s(9.0, 9.5)) == "WAIT"
+    assert watchlist.glb_state(10.0, s(9.5, 10.5)) == "BREAK"
+    assert watchlist.glb_state(10.0, s(10.2, 10.5)) == "ABOVE"
+    assert watchlist.glb_state(None, s(9.0)) == "NONE"
+
+
+def test_update_glb_cache_keeps_only_months_before_cut_and_refreshes_stale(tmp_path):
+    df = make_prices(n=50)
+    calls = []
+
+    def fake(tickers):
+        calls.append(list(tickers))
+        return {"AAA": [("1999-12", 120.0), ("2000-03", 150.0), ("2020-01", 500.0)]}
+    path = tmp_path / "glb.json"
+    cache = watchlist.update_glb_cache({"AAA": df}, path, now="2026-10-17", download=fake)
+    assert cache["AAA"] == {"t": "2026-10-17", "cut": "2017-10", "max": 150.0, "m": "2000-03"}   # 2020 jest już w cenach dziennych
+    watchlist.update_glb_cache({"AAA": df}, path, now="2026-11-01", download=fake)
+    assert len(calls) == 1                                    # świeży wpis — bez pobierania
+    df.attrs["splits"] = [["2026-10-20", 2.0]]
+    watchlist.update_glb_cache({"AAA": df}, path, now="2026-11-01", download=fake)
+    assert len(calls) == 2                                    # split po pobraniu — pełna historia od nowa
+
+
+def test_add_glb_sets_fields_and_card_data():
+    idx = pd.bdate_range("2025-01-01", "2025-09-30")
+    close = pd.Series(100.0, index=idx)
+    close[(idx.year == 2025) & (idx.month == 3)] = 120.0          # rekord w marcu, potem 6 miesięcy niżej
+    close[-3:] = [110.0, 118.0, 121.0]                            # ostatni tydzień przebija linię 120
+    df = pd.DataFrame({"Open": close, "High": close, "Low": close, "Close": close, "Volume": 1000})
+    stocks = [{"ticker": "AAA"}]
+    charts = {"stocks": {"AAA": {}}}
+    watchlist.add_glb(stocks, charts, {"AAA": df}, {}, pd.Timestamp("2025-10-04"))
+    st = stocks[0]
+    assert (st["glb_line"], st["glb_month"], st["glb_state"], st["glb_stop"]) == (120.0, "2025-03", "BREAK", 118.8)
+    assert st["glb_age"] == 6
+    g = charts["stocks"]["AAA"]["glb"]
+    assert g["m0"] == "2025-01" and g["c"][2] == 120.0 and g["partial"] is False and g["full"] is False
