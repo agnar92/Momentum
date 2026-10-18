@@ -16,20 +16,23 @@ test("glbAnalyze: czeka pod linią, wybicie, brak linii", () => {
     assert.equal(glbAnalyze(null, 115).state, "NONE");
 });
 
-test("glbOrders: tylko ≤ 10 % pod linią i wybicia ≤ +5 %, wybicia pierwsze", () => {
+test("glbOrders: ≤ 10 % pod linią i zamknięcia nad linią ≤ +5 % (BREAK i ABOVE), kupna pierwsze", () => {
     const st = [
         { ticker: "A", price: 95, glb_line: 100, glb_stop: 99, glb_state: "WAIT", glb_dist: 5.3, glb_month: "2025-01", glb_age: 8 },
         { ticker: "B", price: 80, glb_line: 100, glb_stop: 99, glb_state: "WAIT", glb_dist: 25 },
         { ticker: "C", price: 103, glb_line: 100, glb_stop: 99, glb_state: "BREAK", glb_dist: -2.9 },
         { ticker: "D", price: 110, glb_line: 100, glb_stop: 99, glb_state: "BREAK", glb_dist: -9.1 },
         { ticker: "E", price: 110, glb_line: 100, glb_stop: 99, glb_state: "ABOVE", glb_dist: -9.1 },
+        { ticker: "F", price: 101, glb_line: 100, glb_stop: 99, glb_state: "ABOVE", glb_dist: -1 },
     ];
     const o = glbOrders(st, { capital: 1 }, (acct, entry, stop) => ({ shares: 1, entry, stop }));
-    assert.deepEqual(o.map(x => x.ticker), ["C", "A"]);
-    assert.equal(o[0].entry, 103);
-    assert.equal(o[1].entry, 100);
-    assert.equal(o[1].stop, 99);
-    assert.deepEqual(o[1].size, { shares: 1, entry: 100, stop: 99 });
+    assert.deepEqual(o.map(x => x.ticker), ["F", "C", "A"]);
+    assert.equal(o[1].entry, 103);
+    assert.equal(o[1].fresh, true);
+    assert.equal(o[0].fresh, false);
+    assert.equal(o[2].entry, 100);
+    assert.equal(o[2].stop, 99);
+    assert.deepEqual(o[2].size, { shares: 1, entry: 100, stop: 99 });
 });
 
 test("glbCardSvg: rysuje kartę z green line i bez danych", () => {
