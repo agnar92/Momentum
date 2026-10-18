@@ -1209,6 +1209,7 @@ body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-
 .orders-table small.dn { color: var(--down, #ff6b6b); }
 .orders-table td:last-child { width: 1%; padding-right: 0; }
 .orders-table td:last-child .btn { padding: 4px 8px; }
+.orders-table a { color: #fff; text-decoration: none; }
 
 /* 📋 Plan na tydzień + porządki (schowane zakładki) */
 .drawer-tab.lean-hide { display: none; }
