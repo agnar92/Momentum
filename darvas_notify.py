@@ -4,11 +4,12 @@ Stan karty liczy watchlist.py (pola dv_* w docs/data/watchlist.json i watchlists
   1. zbiera spółki z obu plików (gdy spółka jest w obu, liczy się nowsza sesja `as_of`),
   2. wybiera sygnały wg książki: 🟢 KUP (dzisiejsze zamknięcie nad górą najwyższego boxa po ≥ 2 rosnących boxach),
      🔵 GOTOWE (≥ 2 rosnące boxy, cena w najwyższym — zlecenie kupna stop nad górą + stop loss 10 %) oraz,
-     gdy jest GIST_TOKEN, 🔴 SPRZEDAJ / poza boxem dla Twoich pozycji (💼 Pozycje z synchronizacji),
+     gdy jest GIST_TOKEN, 🔴 SPRZEDAJ / ⬆ PODNIEŚ STOP (MACD tyg.) dla Twoich pozycji (💼 Pozycje z synchronizacji),
   3. dla NOWYCH sygnałów (wcześniej niezgłoszonych) dopisuje komentarz w Issue "📦 Darvas — sygnały" z wzmianką właściciela repo
      (GitHub wysyła e-mail i powiadomienie push w aplikacji GitHub Mobile). Stan „co już zgłoszono” trzyma ukryty komentarz w treści Issue.
 Wymaga tylko GITHUB_TOKEN (bez niego wypisuje sygnały na ekran). Informacja pomocnicza, nie rekomendacja.
 """
+import datetime
 import json
 import os
 import re
@@ -20,6 +21,7 @@ from alerts_notify import api, read_gist
 DATA_FILES = [os.path.join("docs", "data", "watchlist.json"), os.path.join("docs", "data", "watchlists.json")]
 ISSUE_TITLE = "📦 Darvas — sygnały"
 STATE_RE = re.compile(r"<!-- darvas-state: ([^>]*) -->")
+NATR_MAX = 8   # wejście tylko z boxa o niskim NATR (jak 📋 Plan)
 STOP_PCT = 10
 MAX_LINES = 60
 
@@ -41,26 +43,44 @@ def load_stocks(paths=DATA_FILES):
 
 
 def open_positions(prefs):
-    """Tickery z otwartą pozycją z prefs.pos synchronizacji ({T: {v: {entry, stop, shares} | null, t}})."""
+    """Otwarte pozycje z prefs.pos synchronizacji ({T: {v: {entry, stop, shares} | null, t}}) -> {T: stop albo None}."""
     pos = (prefs or {}).get("pos") or {}
-    return {t for t, rec in pos.items() if isinstance(rec, dict) and isinstance(rec.get("v"), dict) and rec["v"].get("entry")}
+    out = {}
+    for t, rec in pos.items():
+        if isinstance(rec, dict) and isinstance(rec.get("v"), dict) and rec["v"].get("entry"):
+            stop = rec["v"].get("stop")
+            out[t] = float(stop) if isinstance(stop, (int, float)) else None
+    return out
 
 
-def signals(stocks, positions=()):
-    """Bieżące sygnały: [{key, ticker, kind: buy|ready|sell, ...}]. Klucz zawiera górę boxa, więc nowy (wyższy) box zgłasza się ponownie."""
+def signals(stocks, positions=None):
+    """Bieżące sygnały jak w 📋 Planie na tydzień: [{key, ticker, kind: buy|ready|raise|sell, ...}].
+    Kupno (KUP / GOTOWE, ≥ 2 rosnące boxy na tygodniowych zamknięciach) tylko z boxa o niskim NATR (< NATR_MAX), przy tygodniowym MACD
+    nad sygnałem i bez otwartej pozycji. Pozycje (positions = {T: stop}): MACD tyg. przeciął sygnał w dół → podnieś stop pod dołek tej
+    świecy (raise), cena pod tym dołkiem albo pod stopem → sprzedaj (sell). Klucz zawiera poziom, więc nowy box / nowy dołek zgłasza się ponownie."""
+    positions = positions if isinstance(positions, dict) else {t: None for t in (positions or ())}
     out = []
     for t, s in sorted(stocks.items()):
         st, n, top = s.get("dv_state"), s.get("dv_n") or 0, s.get("dv_top")
-        if top is None:
+        if t in positions:
+            stop, cl, px = positions[t], s.get("macd_w_cross_low"), s.get("price")
+            if px is not None and stop is not None and px <= stop:
+                out.append({"key": f"{t}:STOP:{stop}", "ticker": t, "kind": "sell", "price": px, "why": f"cena pod stopem {stop:.2f}"})
+            elif s.get("macd_w_above") is False and cl is not None:
+                if px is not None and px <= cl:
+                    out.append({"key": f"{t}:SELL:{cl}", "ticker": t, "kind": "sell", "price": px, "why": f"zamknięcie pod dołkiem świecy sygnału MACD {cl:.2f}"})
+                elif stop is None or cl > stop:
+                    out.append({"key": f"{t}:RAISE:{cl}", "ticker": t, "kind": "raise", "stop": cl, "old": stop})
+            continue
+        natr = s.get("dv_natr")
+        if top is None or s.get("macd_w_above") is False or natr is None or natr >= NATR_MAX:
             continue
         if st == "BUY" and n >= 2:
             entry = s.get("price") or top
-            out.append({"key": f"{t}:BUY:{top}", "ticker": t, "kind": "buy", "entry": entry, "stop": s.get("dv_stop") or round(entry * (1 - STOP_PCT / 100), 2), "n": n, "top": top})
+            out.append({"key": f"{t}:BUY:{top}", "ticker": t, "kind": "buy", "entry": entry, "stop": round(entry * (1 - STOP_PCT / 100), 2), "n": n, "top": top, "natr": natr})
         elif st == "READY" and n >= 2:
-            out.append({"key": f"{t}:READY:{top}", "ticker": t, "kind": "ready", "entry": top, "stop": s.get("dv_stop") or round(top * (1 - STOP_PCT / 100), 2), "n": n, "top": top, "dist": s.get("dv_dist")})
-        elif st in ("SELL", "OUT") and t in positions:
-            out.append({"key": f"{t}:{st}:{top}", "ticker": t, "kind": "sell", "state": st, "bottom": s.get("dv_bottom"), "price": s.get("price")})
-    order = {"buy": 0, "ready": 1, "sell": 2}
+            out.append({"key": f"{t}:READY:{top}", "ticker": t, "kind": "ready", "entry": top, "stop": round(top * (1 - STOP_PCT / 100), 2), "n": n, "top": top, "dist": s.get("dv_dist"), "natr": natr})
+    order = {"sell": 0, "raise": 1, "buy": 2, "ready": 3}
     return sorted(out, key=lambda x: (order[x["kind"]], x.get("dist") if x.get("dist") is not None else 999, x["ticker"]))
 
 
@@ -75,12 +95,14 @@ def render_state(keys):
 
 def format_message(sigs, owner=None, as_of=None):
     groups = [
-        ("buy", "🟢 **Kup** — dzisiejsze zamknięcie nad górą najwyższego boxa (po ≥ 2 rosnących boxach):",
-         lambda s: f"- **{s['ticker']}** wejście ~{s['entry']:.2f}, stop loss {s['stop']:.2f} ({s['n']} boxy ↑)"),
+        ("sell", "🔴 **Sprzedaj** — Twoje pozycje:",
+         lambda s: f"- **{s['ticker']}** {s['why']}" + (f" (cena {s['price']:.2f})" if s.get("price") is not None else "")),
+        ("raise", "⬆ **Podnieś stop** — tygodniowy MACD przeciął sygnał w dół, stop pod dołek tej świecy (zmień zlecenie u brokera):",
+         lambda s: f"- **{s['ticker']}** stop → {s['stop']:.2f}" + (f" (był {s['old']:.2f})" if s.get("old") is not None else "")),
+        ("buy", "🟢 **Kup teraz** — tygodniowe zamknięcie nad górą najwyższego boxa (po ≥ 2 rosnących boxach):",
+         lambda s: f"- **{s['ticker']}** wejście ~{s['entry']:.2f}, stop loss {s['stop']:.2f} ({s['n']} boxy ↑, NATR {s['natr']:.1f} %)"),
         ("ready", "🔵 **Gotowe do kupna** — zlecenie kupna stop nad górą boxa + stop loss 10 %:",
-         lambda s: f"- **{s['ticker']}** kup stop {s['entry']:.2f}, stop loss {s['stop']:.2f}" + (f" (+{s['dist']:.1f} %)" if s.get("dist") is not None else "") + f", {s['n']} boxy ↑"),
-        ("sell", "🔴 **Twoje pozycje poza najwyższym boxem** — wg książki sprzedaj:",
-         lambda s: f"- **{s['ticker']}** " + ("cena pod dołem boxa" if s["state"] == "SELL" else "poza najwyższym boxem") + (f" {s['bottom']:.2f}" if s.get("bottom") is not None else "")),
+         lambda s: f"- **{s['ticker']}** kup stop {s['entry']:.2f}, stop loss {s['stop']:.2f}" + (f" (+{s['dist']:.1f} %)" if s.get("dist") is not None else "") + f", {s['n']} boxy ↑, NATR {s['natr']:.1f} %"),
     ]
     parts, n = [], 0
     for kind, head, fmt in groups:
@@ -89,7 +111,7 @@ def format_message(sigs, owner=None, as_of=None):
             continue
         lines = [fmt(s) for s in items[: max(0, MAX_LINES - n)]]
         n += len(lines)
-        more = f"\n- … i {len(items) - len(lines)} więcej (zobacz 📑 Watchlisty → 📋 Zlecenia)" if len(lines) < len(items) else ""
+        more = f"\n- … i {len(items) - len(lines)} więcej (zobacz 📋 Plan w aplikacji)" if len(lines) < len(items) else ""
         parts.append(head + "\n" + "\n".join(lines) + more)
     head = (f"@{owner} " if owner else "") + f"nowe sygnały Dar-Card{f' (sesja {as_of})' if as_of else ''}:"
     return head + "\n\n" + "\n\n".join(parts)
@@ -108,7 +130,12 @@ def find_or_create_issue(repo, gh_token):
 
 def main():
     stocks = load_stocks()
-    positions = set()
+    as_of = max((s.get("as_of") or "" for s in stocks.values()), default="") or None
+    # Rytm tygodniowy (📋 Plan na tydzień): z harmonogramu powiadamiamy tylko po sesji piątkowej; ręczne uruchomienie zawsze.
+    if os.environ.get("DARVAS_WEEKLY") == "1" and as_of and datetime.date.fromisoformat(as_of[:10]).weekday() != 4:
+        print(f"Sesja {as_of} to nie piątek — powiadomienia Darvasa tylko raz w tygodniu (po piątkowej sesji).")
+        return 0
+    positions = {}
     gist_token = os.environ.get("GIST_TOKEN", "").strip()
     if gist_token:
         try:
@@ -116,8 +143,7 @@ def main():
         except (urllib.error.URLError, OSError, ValueError) as e:
             print(f"⚠️  Pozycje z Gista niedostępne ({e}) — bez sygnałów sprzedaży.")
     current = signals(stocks, positions)
-    as_of = max((s.get("as_of") or "" for s in stocks.values()), default="") or None
-    print(f"Sygnały Darvasa: {len(current)} (KUP {sum(s['kind'] == 'buy' for s in current)}, GOTOWE {sum(s['kind'] == 'ready' for s in current)}, SPRZEDAJ {sum(s['kind'] == 'sell' for s in current)})")
+    print(f"Sygnały Darvasa: {len(current)} (KUP {sum(s['kind'] == 'buy' for s in current)}, GOTOWE {sum(s['kind'] == 'ready' for s in current)}, SPRZEDAJ {sum(s['kind'] == 'sell' for s in current)}, PODNIEŚ STOP {sum(s['kind'] == 'raise' for s in current)})")
     repo, gh_token = os.environ.get("GITHUB_REPOSITORY", ""), os.environ.get("GITHUB_TOKEN", "")
     if not repo or not gh_token:
         print(format_message(current, None, as_of) if current else "Brak sygnałów.")

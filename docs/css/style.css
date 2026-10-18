@@ -1208,3 +1208,23 @@ body .wl-chart-head #chartInfoBtn { flex: 0 0 auto !important; width: auto; min-
 .orders-table small.dn { color: var(--down, #ff6b6b); }
 .orders-table td:last-child { width: 1%; padding-right: 0; }
 .orders-table td:last-child .btn { padding: 4px 8px; }
+
+/* 📋 Plan na tydzień + porządki (schowane zakładki) */
+.drawer-tab.lean-hide { display: none; }
+.plan-panel { padding: 8px 10px 80px; overflow-y: auto; }
+.plan-panel[hidden] { display: none; }
+.plan-meta { margin: 4px 0 10px; font-size: 13px; color: var(--text-dim); }
+.plan-sec { margin: 0 0 16px; }
+.plan-sec h3 { margin: 0 0 6px; font-size: 15px; }
+.plan-sec h3 small { margin-left: 6px; padding: 1px 7px; border-radius: 9px; background: var(--green); color: #fff; font-size: 11px; }
+.plan-sec .muted { font-size: 12.5px; line-height: 1.45; }
+.plan-sec a[data-plan-chart] { color: inherit; text-decoration: underline dotted; }
+.plan-stop td:nth-child(2) b, .plan-sell td:nth-child(2) b { color: var(--down, #ff6b6b); }
+.plan-hold td:nth-child(2) b { color: var(--up, #4ee08a); }
+.plan-help summary { cursor: pointer; font-weight: 600; }
+.plan-help ol { padding-left: 20px; font-size: 13px; line-height: 1.5; }
+.plan-pos td { text-align: left !important; white-space: normal !important; vertical-align: top; }
+.plan-pos td:first-child { width: 72px; }
+.plan-pos td:last-child { width: auto; }
+.plan-warn { color: var(--down, #ff6b6b); }
+body.on-plan .screener-guide { display: none; }

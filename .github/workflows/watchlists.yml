@@ -12,10 +12,10 @@ name: Watchlisty
 # Ręczne odpalenie: zakładka Actions -> "Watchlisty" -> "Run workflow" (albo przycisk „Odśwież dane” w zakładce Watchlisty), lub lokalnie:
 #   python watchlists_scan.py --action add --name "Wolumen" --filters "cap:midover sh_avgvol:o1000 ta_change:u5 ta_sma20:pa ta_sma200:pa"
 on:
-  # Codziennie po sesji w Nowym Jorku (pon–pt 21:50 UTC, po „Daily Watchlist Refresh” o 21:30 — wspólna kolejka „pages”): refresh wszystkich list,
-  # żeby stan karty Darvasa (Do kupna / Kup dziś / Gotowe) i powiadomienia liczyły się z dzisiejszego zamknięcia. Z harmonogramu akcja = refresh.
+  # Raz w tygodniu (sobota 03:37 UTC, po „Weekly Watchlist Refresh” o 03:17 — wspólna kolejka „pages”): refresh wszystkich list,
+  # żeby stan karty Darvasa (tygodniowe zamknięcia) i powiadomienia liczyły się z zamkniętego tygodnia. Z harmonogramu akcja = refresh.
   schedule:
-    - cron: '50 21 * * 1-5'
+    - cron: '37 3 * * 6'
   workflow_dispatch:
     inputs:
       action:
@@ -111,7 +111,7 @@ jobs:
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python darvas_notify.py
+        run: DARVAS_WEEKLY=${{ github.event_name == 'schedule' && '1' || '0' }} python darvas_notify.py
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

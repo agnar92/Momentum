@@ -1,4 +1,4 @@
-name: Daily Watchlist Refresh
+name: Weekly Watchlist Refresh
 
 # Codziennie po sesji w Nowym Jorku (pon–pt wieczorem; Darvas liczy boxy na DZIENNYCH zamknięciach z ostatnich 12 miesięcy — charts.json `daily`, reszta analizy nadal tygodniowa;
 # plik zostaje pod starą nazwą daily_watchlist.yml, bo na niego wskazuje link „Odśwież dane” na stronie): watchlist.py pobiera JEDNĄ listę spółek z Finviz (filtr CANSLIM z finviz_screen.json: wzrost EPS i sprzedaży,
@@ -13,9 +13,9 @@ name: Daily Watchlist Refresh
 #   python watchlist.py
 on:
   schedule:
-    # Pon–pt 21:30 UTC = po zamknięciu NYSE (16:00 w Nowym Jorku to 20:00 UTC latem i 21:00 UTC zimą) i po 22:00 czasu polskiego (22:30 zimą / 23:30 latem).
+    # Raz w tygodniu: sobota 03:17 UTC (≈ 05:17 w Polsce), po piątkowej sesji — Darvas liczy się na TYGODNIOWYCH zamknięciach, więc tydzień musi być zamknięty.
     # GitHub Actions liczy cron w UTC, bez przejścia na czas letni, a przy dużym ruchu opóźnia starty nawet o kilkadziesiąt minut.
-    - cron: '30 21 * * 1-5'
+    - cron: '17 3 * * 6'
   workflow_dispatch:
 
 permissions:
@@ -101,7 +101,7 @@ jobs:
         env:
           GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python darvas_notify.py
+        run: DARVAS_WEEKLY=${{ github.event_name == 'schedule' && '1' || '0' }} python darvas_notify.py
 
       - name: Persist docs/data/watchlist.json
         run: |
