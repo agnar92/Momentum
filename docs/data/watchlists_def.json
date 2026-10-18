@@ -1,1 +1,1 @@
-{"lists":[{"name":"Darvas","filters":"cap_smallover,sh_avgvol_o500,sh_price_o10,ta_highlow52w_b0to5h,ta_sma50_pa,ta_sma200_pa,ind_stocksonly"},{"name":"ATH","filters":"ta_alltime_b10h,cap_midover,sh_avgvol_o300"}]}
+{"lists":[{"name":"Darvas","filters":"cap_smallover,sh_avgvol_o500,sh_price_o10,ta_highlow52w_b0to5h,ta_sma50_pa,ta_sma200_pa,ind_stocksonly"},{"name":"ATH","filters":"cap_smallover,sh_avgvol_o100,ta_alltime_b0to10h"}]}
