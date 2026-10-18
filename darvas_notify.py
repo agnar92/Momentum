@@ -21,7 +21,6 @@ from alerts_notify import api, read_gist
 DATA_FILES = [os.path.join("docs", "data", "watchlist.json"), os.path.join("docs", "data", "watchlists.json")]
 ISSUE_TITLE = "📦 Darvas — sygnały"
 STATE_RE = re.compile(r"<!-- darvas-state: ([^>]*) -->")
-NATR_MAX = 8   # wejście tylko z boxa o niskim NATR (jak 📋 Plan)
 STOP_PCT = 10
 MAX_LINES = 60
 
@@ -55,8 +54,8 @@ def open_positions(prefs):
 
 def signals(stocks, positions=None):
     """Bieżące sygnały jak w 📋 Planie na tydzień: [{key, ticker, kind: buy|ready|raise|sell, ...}].
-    Kupno (KUP / GOTOWE, ≥ 2 rosnące boxy na tygodniowych zamknięciach) tylko z boxa o niskim NATR (< NATR_MAX), przy tygodniowym MACD
-    nad sygnałem i bez otwartej pozycji. Pozycje (positions = {T: stop}): MACD tyg. przeciął sygnał w dół → podnieś stop pod dołek tej
+    Kupno (KUP / GOTOWE, ≥ 2 rosnące boxy na tygodniowych zamknięciach) (sama karta, bez filtrów NATR / MACD przy wejściu — jak 📋 Plan)
+    i bez otwartej pozycji. Pozycje (positions = {T: stop}): MACD tyg. przeciął sygnał w dół → podnieś stop pod dołek tej
     świecy (raise), cena pod tym dołkiem albo pod stopem → sprzedaj (sell). Klucz zawiera poziom, więc nowy box / nowy dołek zgłasza się ponownie."""
     positions = positions if isinstance(positions, dict) else {t: None for t in (positions or ())}
     out = []
@@ -73,7 +72,7 @@ def signals(stocks, positions=None):
                     out.append({"key": f"{t}:RAISE:{cl}", "ticker": t, "kind": "raise", "stop": cl, "old": stop})
             continue
         natr = s.get("dv_natr")
-        if top is None or s.get("macd_w_above") is False or natr is None or natr >= NATR_MAX:
+        if top is None:
             continue
         if st == "BUY" and n >= 2:
             entry = s.get("price") or top
@@ -100,9 +99,9 @@ def format_message(sigs, owner=None, as_of=None):
         ("raise", "⬆ **Podnieś stop** — tygodniowy MACD przeciął sygnał w dół, stop pod dołek tej świecy (zmień zlecenie u brokera):",
          lambda s: f"- **{s['ticker']}** stop → {s['stop']:.2f}" + (f" (był {s['old']:.2f})" if s.get("old") is not None else "")),
         ("buy", "🟢 **Kup teraz** — tygodniowe zamknięcie nad górą najwyższego boxa (po ≥ 2 rosnących boxach):",
-         lambda s: f"- **{s['ticker']}** wejście ~{s['entry']:.2f}, stop loss {s['stop']:.2f} ({s['n']} boxy ↑, NATR {s['natr']:.1f} %)"),
+         lambda s: f"- **{s['ticker']}** wejście ~{s['entry']:.2f}, stop loss {s['stop']:.2f} ({s['n']} boxy ↑" + (f", NATR {s['natr']:.1f} %" if s.get("natr") is not None else "") + ")"),
         ("ready", "🔵 **Gotowe do kupna** — zlecenie kupna stop nad górą boxa + stop loss 10 %:",
-         lambda s: f"- **{s['ticker']}** kup stop {s['entry']:.2f}, stop loss {s['stop']:.2f}" + (f" (+{s['dist']:.1f} %)" if s.get("dist") is not None else "") + f", {s['n']} boxy ↑, NATR {s['natr']:.1f} %"),
+         lambda s: f"- **{s['ticker']}** kup stop {s['entry']:.2f}, stop loss {s['stop']:.2f}" + (f" (+{s['dist']:.1f} %)" if s.get("dist") is not None else "") + f", {s['n']} boxy ↑" + (f", NATR {s['natr']:.1f} %" if s.get("natr") is not None else "")),
     ]
     parts, n = [], 0
     for kind, head, fmt in groups:
