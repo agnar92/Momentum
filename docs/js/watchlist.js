@@ -1039,7 +1039,7 @@ function ordersRowsHtml(orders, chartLink = false) {
 }
 
 // 📋 Plan na tydzień (user: „max 15–30 minut dziennie albo raz w tygodniu”; „przejdźmy całkowicie na tygodniowe ceny zamknięcia”):
-// wejście z TYGODNIOWYCH boxów Darvasa o niskim NATR przez zlecenia kupna stop złożone w weekend, stop loss 10 % (Darvas),
+// wejście z TYGODNIOWYCH boxów Darvasa (≥ 2 rosnące boxy, bez filtrów NATR / MACD — w teście tylko obniżały wynik) przez zlecenia kupna stop złożone w weekend, stop loss 10 % (Darvas),
 // wyjście = przesuwanie stopu pod dołek świecy, w której tygodniowy MACD przeciął sygnał w dół. Nowe kupno tylko przy MACD tyg.
 // nad sygnałem. Spółki z otwartą pozycją nie dostają zlecenia kupna. To eksperyment usera na małym kapitale (test S&P 500 PIT: słabiej niż SPY).
 function planStocks(main, watch) {
@@ -1065,20 +1065,19 @@ function positionDecision(p, s) {
     if (s.macd_w_above === true) return { code: "HOLD", label: "🟢 Trzymaj", text: `MACD tyg. nad sygnałem${stop !== null ? `; stop ${stop.toFixed(2)} bez zmian` : ""}` };
     return { code: "HOLD", label: "🟢 Trzymaj", text: "brak tygodniowego MACD (krótka historia) — pilnuje tylko stop loss" };
 }
-const PLAN_NATR_MAX = 8;
 function weeklyPlan(stocks, positions, acct = null) {
     const bySym = new Map(stocks.map(s => [s.ticker, s]));
     const held = Object.keys(positions || {}).filter(t => positions[t]);
     const heldSet = new Set(held);
     const all = darvasOrders(stocks.filter(s => !heldSet.has(s.ticker)), acct);
-    // wejście: box z niskim NATR (< 8 %, Blueprint) i tygodniowy MACD nad sygnałem
-    const orders = all.filter(o => { const s = bySym.get(o.ticker); return s.macd_w_above !== false && Number.isFinite(s.dv_natr) && s.dv_natr < PLAN_NATR_MAX; });
+    // wejście: sama karta Darvasa (≥ 2 rosnące boxy) — filtry NATR < 8 i MACD przy wejściu usunięte (test S&P 500 PIT: +4,6 % → +11,3 % rocznie)
+    const orders = all;
     const pos = held.map(t => {
         const p = positions[t], s = bySym.get(t) || null;
         const m = s ? positionMetrics(p, s.price) : null;
         return { ticker: t, company: s ? s.company : "", price: s ? s.price : null, entry: p.entry, stop: p.stop, pl: m ? m.pl_pct : null, ...positionDecision(p, s) };
     }).sort((a, b) => ["STOP", "SELL", "RAISE", "NA", "HOLD"].indexOf(a.code) - ["STOP", "SELL", "RAISE", "NA", "HOLD"].indexOf(b.code));
-    return { orders, skipped: all.length - orders.length, positions: pos };
+    return { orders, positions: pos };
 }
 
 // Widok wykresu: "" (Dar-Card czasowy), "card" (🃏 karta Darvasa z książki) albo "glb" (🟩 karta GLB) — przyciski wykluczają się.
@@ -1125,7 +1124,7 @@ function renderPlanPanel() {
             ${posRows ? `<table class="orders-table plan-pos"><tbody>${posRows}</tbody></table>` : `<p class="muted">Brak pozycji. Po kupnie dodaj ją przyciskiem 💼 przy zleceniu.</p>`}</section>
         <section class="plan-sec"><h3>2. 🛒 Zlecenia kupna na ten tydzień <small>${orders.length}</small></h3>
             <p class="muted">Dla każdej spółki złóż u brokera <b>kupno stop</b> („kup, gdy &gt; X”, ważne do piątku) i po wykonaniu od razu <b>stop loss</b> („sprzedaj, gdy &lt; Y”, −10 %). Jeśli cena nie dojdzie do X, nic się nie dzieje.
-            Lista: spółki z ≥ 2 kolejnymi rosnącymi boxami Darvasa (tygodniowe zamknięcia), box z niskim NATR (&lt; 8 %) i tygodniowy MACD nad sygnałem${plan.skipped ? ` (pominięte przez NATR / MACD: ${plan.skipped})` : ""}.</p>
+            Lista: spółki z ≥ 2 kolejnymi rosnącymi boxami Darvasa (tygodniowe zamknięcia); NATR boxa jest tylko informacją.</p>
             ${orders.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${ordersRowsHtml(orders, true)}</tbody></table>
                 ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
                 <button type="button" class="btn" id="planCopy">📋 Kopiuj zlecenia</button>`
@@ -1143,7 +1142,7 @@ function renderPlanPanel() {
             <li>Kupione? Stuknij 💼 przy spółce — trafi do pozycji i w kolejnym tygodniu dostaniesz dla niej decyzję.</li>
             <li>Wykres: stuknij ticker (🃏 karta Darvasa na tygodniowych zamknięciach; stuknięcie w box → wykres słupkowy z MACD). Ticker w sekcji GLB otwiera 🟩 kartę GLB.</li></ol>
             <p class="muted small">GLB w teście na historycznym składzie S&amp;P 500 (2015–2026, linia z rekordu miesięcznego, wejście i wyjście tygodniowe po MACD): ok. +10,8 % rocznie wobec +13,6 % SPY, największy spadek ok. −31 %; wersja w pełni miesięczna ok. +11,6 %.</p>
-            <p class="muted small">Zasady: boxy Darvasa na TYGODNIOWYCH zamknięciach (top / dół = zamknięcie nieprzebite przez 3 kolejne tygodnie), wejście przy wybiciu z boxa o niskim NATR po ≥ 2 rosnących boxach, stop początkowy 10 % pod wejściem, potem stop pod dołkiem świecy, w której tygodniowy MACD przetnie sygnał w dół. Test na historycznym składzie S&amp;P 500 (2015–2026) dla wersji dziennej dał ok. +4 % rocznie wobec +13,6 % kupna i trzymania SPY — traktuj to jako eksperyment na małym kapitale.</p></details>`;
+            <p class="muted small">Zasady: boxy Darvasa na TYGODNIOWYCH zamknięciach (top / dół = zamknięcie nieprzebite przez 3 kolejne tygodnie), wejście przy wybiciu z boxa po ≥ 2 rosnących boxach, stop początkowy 10 % pod wejściem, potem stop pod dołkiem świecy, w której tygodniowy MACD przetnie sygnał w dół. Test na historycznym składzie S&amp;P 500 (2015–2026, tygodniowe boxy, wyjście po MACD): ok. +11 % rocznie (10 pozycji; 20 pozycji ok. +8,5 %), największy spadek ok. −24 %, wobec +13,6 % kupna i trzymania SPY (−34 %) — traktuj to jako eksperyment na małym kapitale.</p></details>`;
     const gcp = document.getElementById("planGlbCopy");
     if (gcp) gcp.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(glbOrdersText(glb)); showToast("Skopiowano zlecenia GLB.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
