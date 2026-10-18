@@ -85,6 +85,7 @@ const state = {
     scoreMin: null,
     scoreMax: null,
     natrMax: null,      // filtr listy: maks. tygodniowy NATR spółki (%)
+    maxPos: 10,         // 📋 Plan: maks. liczba pozycji — zleceń tyle, ile wolnych miejsc
     allTabs: false,     // po porządkach: false = widoczne tylko Plan, Pozycje, CANSLIM, Boxy, Filtry (LEAN_HIDDEN_TABS schowane)
     risingOnly: false,  // filtr listy: tylko akcje z ≥ 2 kolejnymi, rosnącymi pudełkami Dar-Card (s.rise_n z dziennych wykresów)
     boxNatrMax: null,   // filtr zakładki Boxy: maks. NATR samego boxa (%)
@@ -899,7 +900,7 @@ const COL = {
         ? `<td class="${s.pbox.state === "ABOVE" ? "positive" : s.pbox.state === "INSIDE" ? "" : "negative"}" title="Przypięty box ${s.pbox.bottom}–${s.pbox.top}: ${escapeHtml(s.pbox.text)}">📌 ${s.pbox.state === "ABOVE" ? "wybił" : s.pbox.state === "INSIDE" ? "w boxie" : s.pbox.state === "ZONE" ? "strefa!" : "EXIT"}</td>`
         : `<td class="muted"></td>`, "Przypięty (przytrzymaj box) box do monitorowania: wybił / w boxie / w strefie zagrożenia / exit"],
     posPl: ["Zysk", "pos_pl_pct", s => s.position
-        ? `<td class="${s.position.pl_pct >= 0 ? "positive" : "negative"}"><strong>${fmtPct(s.position.pl_pct)}</strong>${s.position.pl_usd !== null ? ` · <span class="small">${money0(s.position.pl_usd)}</span>` : ""}</td>` : `<td class="muted">—</td>`, "Zysk / strata od ceny wejścia (w % i w $)"],
+        ? `<td class="${s.position.pl_pct >= 0 ? "positive" : "negative"}"><strong>${fmtPct(s.position.pl_pct)}</strong>${s.position.pl_usd !== null ? ` · <span class="small">${money0(s.position.pl_usd)}</span>` : ""} <button type="button" class="btn pos-edit" data-pos-edit="${escapeHtml(s.ticker)}" title="Edytuj albo usuń pozycję">✏️</button></td>` : `<td class="muted">—</td>`, "Zysk / strata od ceny wejścia (w % i w $); ✏️ = edytuj / usuń pozycję"],
     posR: ["R", "pos_r", s => s.position && s.position.r !== null ? `<td class="${s.position.r >= 0 ? "positive" : "negative"}"><strong>${s.position.r.toFixed(2)}R</strong></td>` : `<td class="muted">—</td>`, "Zysk w wielokrotnościach początkowego ryzyka (cena − wejście) / (wejście − stop)"],
     posToStop: ["Do stopu", "pos_to_stop_pct", s => s.position && s.position.to_stop_pct !== null
         ? `<td class="${s.position.stop_hit ? "negative" : ""}">${s.position.stop_hit ? "🛑 STOP" : fmtPct(s.position.to_stop_pct)}</td>` : `<td class="muted">—</td>`, "O ile % cena musi spaść do stopu"],
@@ -1099,6 +1100,22 @@ function glbOrdersText(orders) {
     return orders.map(o => `${o.ticker} (GLB): ${o.kind === "buy" ? "kup na otwarciu ~" : "kup, gdy cena > "}${o.entry.toFixed(2)} (buy stop); stop: sprzedaj, gdy tydzień zamknie się < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
 }
 
+// Tyle zleceń, ile wolnych miejsc w portfelu (user: „max mogę 10, a jest 55”). Test na historycznym S&P 500 (karta Darvasa, wyjście MACD, 10 pozycji):
+// najbliżej punktu kupna +9,8 % rocznie, wg RS +6,8 %, wg 6-mies. momentum +4,0 %, wg NATR +4,6 %, wg liczby boxów +7,0 % — dalekie zlecenia rzadko się
+// wykonują i portfel stoi w gotówce. Kolejność: wybicia z tego tygodnia (kupno na otwarciu), potem najbliżej punktu kupna; Darvas i GLB razem, ticker raz.
+function pickOrders(darvas, glb, free) {
+    const key = o => (o.kind === "buy" ? -1 : Number.isFinite(o.dist) ? o.dist : 99);
+    const all = [...darvas.map(o => ({ o, src: "d" })), ...glb.map(o => ({ o, src: "g" }))].sort((a, b) => key(a.o) - key(b.o));
+    const seen = new Set(), pick = [], rest = [];
+    all.forEach(x => {
+        if (seen.has(x.o.ticker)) return;
+        seen.add(x.o.ticker);
+        (pick.length < free ? pick : rest).push(x);
+    });
+    const part = (arr, src) => arr.filter(x => x.src === src).map(x => x.o);
+    return { darvas: part(pick, "d"), glb: part(pick, "g"), restD: part(rest, "d"), restG: part(rest, "g"), free };
+}
+
 function renderPlanPanel() {
     const el = document.getElementById("planPanel");
     if (!el || !state.data) return;
@@ -1113,13 +1130,19 @@ function renderPlanPanel() {
     const weak = mkt && (mkt.m_regime || mkt.regime) === "correction";
     const q = (state.search || "").trim().toLowerCase();
     const match = t => !q || t.toLowerCase().includes(q);
-    const orders = plan.orders.filter(o => match(o.ticker));
-    const glb = glbAll.filter(o => match(o.ticker));
+    const free = Math.max(0, state.maxPos - plan.positions.length);
+    const picked = pickOrders(plan.orders.filter(o => match(o.ticker)), glbAll.filter(o => match(o.ticker)), free);
+    const orders = picked.darvas, glb = picked.glb, nRest = picked.restD.length + picked.restG.length;
     const acctOk = orders.some(o => o.size);
     const posRows = plan.positions.filter(p => match(p.ticker)).map(p => `<tr class="plan-${p.code.toLowerCase()}"><td><b><a href="#" data-plan-chart="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)}</a></b>`
         + `<small>${Number.isFinite(p.pl) ? `${p.pl > 0 ? "+" : ""}${p.pl.toFixed(1)} %` : ""}</small></td><td><b>${p.label}</b><small>${escapeHtml(p.text)}</small>`
-        + `${p.code === "RAISE" ? `<button type="button" class="btn plan-raise" data-raise="${escapeHtml(p.ticker)}|${p.newStop}">⬆ Ustaw stop ${p.newStop.toFixed(2)}</button>` : ""}</td></tr>`).join("");
+        + `${p.code === "RAISE" ? `<button type="button" class="btn plan-raise" data-raise="${escapeHtml(p.ticker)}|${p.newStop}">⬆ Ustaw stop ${p.newStop.toFixed(2)}</button>` : ""}</td>`
+        + `<td><button type="button" class="btn pos-edit" data-pos-edit="${escapeHtml(p.ticker)}" title="Edytuj albo usuń pozycję">✏️</button></td></tr>`).join("");
+    const restHtml = nRest ? `<details class="plan-sec plan-rest"><summary>Pozostałe kandydaty (${nRest}) — dalej od punktu kupna, nie składaj na nie zleceń w tym tygodniu</summary>
+            ${picked.restD.length ? `<table class="orders-table"><tbody>${ordersRowsHtml(picked.restD, true)}</tbody></table>` : ""}
+            ${picked.restG.length ? `<table class="orders-table"><tbody>${glbRowsHtml(picked.restG)}</tbody></table>` : ""}</details>` : "";
     el.innerHTML = `${weak ? `<p class="plan-meta plan-warn">🛑 Rynek w korekcie — Darvas w słabym rynku kupował mniej: rozważ mniejsze pozycje albo przerwę.</p>` : ""}
+        <p class="plan-meta">Maks. pozycji <input type="number" id="planMaxPos" min="1" max="50" step="1" value="${state.maxPos}" style="width:4em"> · zajęte ${plan.positions.length} · <b>wolne ${free}</b> → zleceń w tym tygodniu: <b>${orders.length + glb.length}</b>${nRest ? ` (z ${orders.length + glb.length + nRest} kandydatów, najbliżej punktu kupna)` : ""}</p>
         <section class="plan-sec"><h3>1. 💼 Twoje pozycje <small>${plan.positions.length}</small></h3>
             ${posRows ? `<table class="orders-table plan-pos"><tbody>${posRows}</tbody></table>` : `<p class="muted">Brak pozycji. Po kupnie dodaj ją przyciskiem 💼 przy zleceniu.</p>`}</section>
         <section class="plan-sec"><h3>2. 🛒 Zlecenia kupna na ten tydzień <small>${orders.length}</small></h3>
@@ -1128,14 +1151,15 @@ function renderPlanPanel() {
             ${orders.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${ordersRowsHtml(orders, true)}</tbody></table>
                 ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
                 <button type="button" class="btn" id="planCopy">📋 Kopiuj zlecenia</button>`
-            : `<p class="muted">${loading ? "Liczę boxy…" : "W tym tygodniu brak spółek gotowych do kupna — to też jest sygnał: czekamy."}</p>`}</section>
+            : `<p class="muted">${loading ? "Liczę boxy…" : !free ? "Portfel pełny — nowe zlecenia, gdy zwolni się miejsce." : picked.restD.length || picked.glb.length ? "Wolne miejsca zajęły bliższe zlecenia GLB." : "W tym tygodniu brak spółek gotowych do kupna — to też jest sygnał: czekamy."}</p>`}</section>
         <section class="plan-sec"><h3>3. 🟩 GLB — zlecenia kupna na green line <small>${glb.length}</small></h3>
             <p class="muted">Green Line Breakout (Dr Wish): <b>green line</b> = rekord wszech czasów na zamknięciach <b>miesięcznych</b>, który stoi co najmniej 3 miesiące. Złóż <b>kupno stop</b> na linii („kup, gdy &gt; X”);
             stop <b>1 % pod linią</b> sprawdzasz sam w weekend — <b>zamknięcie tygodnia</b> pod nim = sprzedaj w poniedziałek (nie wystawiaj go u brokera: dzienne wahania wybijały w teście prawie każde wejście). Potem stop przesuwa tygodniowy MACD jak wyżej.
             Lista: spółki ≤ ${GLB_PLAN_MAX_DIST} % pod linią albo z wybiciem w tym tygodniu (≤ +5 %).</p>
             ${glb.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${glbRowsHtml(glb)}</tbody></table>
                 <button type="button" class="btn" id="planGlbCopy">📋 Kopiuj zlecenia GLB</button>`
-            : `<p class="muted">${glbHasData ? "W tym tygodniu żadna spółka nie jest blisko swojej green line." : "Dane GLB pojawią się po najbliższym odświeżeniu danych (sobota)."}</p>`}</section>
+            : `<p class="muted">${!glbHasData ? "Dane GLB pojawią się po najbliższym odświeżeniu danych (sobota)." : !free ? "Portfel pełny." : picked.restG.length ? "Wolne miejsca zajęły bliższe zlecenia Darvasa." : "W tym tygodniu żadna spółka nie jest blisko swojej green line."}</p>`}</section>
+        ${restHtml}
         <details class="plan-sec plan-help"><summary>Jak to działa — rutyna na weekend (15 min)</summary>
             <ol><li><b>Pozycje</b>: „⬆ Podnieś stop” → stuknij przycisk i zmień zlecenie stop loss u brokera. „🔴 Sprzedaj” → zlecenie sprzedaży na poniedziałek. „✂ Stop” → sprawdź, czy broker sprzedał. „🟢 Trzymaj” → nic nie rób.</li>
             <li><b>Zlecenia</b>: skopiuj i złóż u brokera kupno stop + stop loss 10 % (Darvas). Nie wykonane do piątku? W następny weekend lista będzie nowa.</li>
@@ -1143,6 +1167,8 @@ function renderPlanPanel() {
             <li>Wykres: stuknij ticker (🃏 karta Darvasa na tygodniowych zamknięciach; stuknięcie w box → wykres słupkowy z MACD). Ticker w sekcji GLB otwiera 🟩 kartę GLB.</li></ol>
             <p class="muted small">GLB w teście na historycznym składzie S&amp;P 500 (2015–2026, linia z rekordu miesięcznego, wejście i wyjście tygodniowe po MACD): ok. +10,8 % rocznie wobec +13,6 % SPY, największy spadek ok. −31 %; wersja w pełni miesięczna ok. +11,6 %.</p>
             <p class="muted small">Zasady: boxy Darvasa na TYGODNIOWYCH zamknięciach (top / dół = zamknięcie nieprzebite przez 3 kolejne tygodnie), wejście przy wybiciu z boxa po ≥ 2 rosnących boxach, stop początkowy 10 % pod wejściem, potem stop pod dołkiem świecy, w której tygodniowy MACD przetnie sygnał w dół. Test na historycznym składzie S&amp;P 500 (2015–2026, tygodniowe boxy, wyjście po MACD): ok. +11 % rocznie (10 pozycji; 20 pozycji ok. +8,5 %), największy spadek ok. −24 %, wobec +13,6 % kupna i trzymania SPY (−34 %) — traktuj to jako eksperyment na małym kapitale.</p></details>`;
+    const mp = document.getElementById("planMaxPos");
+    if (mp) mp.addEventListener("change", () => { const v = Math.round(+mp.value); if (v >= 1 && v <= 50) { state.maxPos = v; saveSettings(); renderPlanPanel(); } });
     const gcp = document.getElementById("planGlbCopy");
     if (gcp) gcp.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(glbOrdersText(glb)); showToast("Skopiowano zlecenia GLB.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
@@ -1168,7 +1194,7 @@ function renderPlanPanel() {
         openChart(a.dataset.planChart);
     }));
     const meta = document.getElementById("drawerMeta");
-    if (meta) meta.textContent = `${plan.positions.length} pozycji · ${orders.length} zleceń kupna · ${glb.length} GLB`;
+    if (meta) meta.textContent = `${plan.positions.length} / ${state.maxPos} pozycji · ${orders.length + glb.length} zleceń`;
     const first = el.querySelector("[data-plan-chart]");   // PC (widok dzielony): wykres po prawej od razu pokazuje pierwszą spółkę z planu
     if (splitMode && first && !chartRequested) first.click();
 }
@@ -1554,7 +1580,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, boxNatrMax: state.boxNatrMax, risingOnly: state.risingOnly, allTabs: state.allTabs, planSeen: true }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, maxPos: state.maxPos, boxNatrMax: state.boxNatrMax, risingOnly: state.risingOnly, allTabs: state.allTabs, planSeen: true }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -1576,6 +1602,7 @@ function loadSettings() {
         if (saved.brk && Number.isFinite(saved.brk.maxDistPct)) state.brk.maxDistPct = saved.brk.maxDistPct;
         if (saved.patterns === false) state.patterns = false;
         if (Number.isFinite(saved.natrMax)) state.natrMax = saved.natrMax;
+        if (Number.isFinite(saved.maxPos) && saved.maxPos > 0) state.maxPos = saved.maxPos;
         if (Number.isFinite(saved.boxNatrMax)) state.boxNatrMax = saved.boxNatrMax;
         if (saved.risingOnly === true) state.risingOnly = true;
         if (!state.patterns && state.tab === "BASES") state.tab = "CS";
@@ -1754,6 +1781,12 @@ function createPositionFromBox(ticker, top, bottom, line = false) {
     savePosition(ticker, { entry: top, stop, shares: size ? size.shares : null });
     showToast(`💼 Pozycja ${ticker}: wejście ${top.toFixed(2)}, stop ${stop.toFixed(2)}${size ? `, ${fmtShares(size.shares)} akcji` : " (ustaw konto, by policzyć akcje)"} — zobaczysz ją w zakładce 💼 Pozycje.`, { type: "success" });
 }
+if (typeof document !== "undefined") document.addEventListener("click", ev => {   // ✏️ przy pozycji (📋 Plan, 💼 Pozycje): arkusz edycji z „Usuń pozycję”
+    const b = ev.target.closest && ev.target.closest("[data-pos-edit]");
+    if (!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    openPositionSheet(b.dataset.posEdit);
+}, true);
 if (typeof document !== "undefined") document.addEventListener("click", ev => {
     const b = ev.target.closest && ev.target.closest(".box-mkpos");
     if (!b) return;
@@ -1934,9 +1967,10 @@ function updatePosButton() {
 }
 
 function openPositionSheet(ticker) {
-    const stock = findStock(ticker);
-    if (!stock) return;
     const cur = state.pos[ticker] || {};
+    // spółka spoza list (pozycja dodana ręcznie albo lista się zmieniła): arkusz i tak się otwiera, żeby dało się ją poprawić lub usunąć
+    const stock = findStock(ticker) || (state.pos[ticker] ? { ticker, price: cur.entry } : null);
+    if (!stock) return;
     const stop = Number.isFinite(annPositionLineValue(annStore, ticker, "stop")) ? annPositionLineValue(annStore, ticker, "stop") : cur.stop;
     const v = x => (Number.isFinite(x) ? x : "");
     const html = `
@@ -2969,7 +3003,7 @@ if (typeof document !== "undefined") {
 // Eksport wyłącznie dla test runnera Node (tests/js/watchlist.test.js) — w przeglądarce module nie istnieje.
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        weeklyPlan, positionDecision, planStocks,
+        weeklyPlan, positionDecision, planStocks, pickOrders,
         darvasPick, darvasPickRows, darvasRank, darvasOrders, ordersText, darvasStateText, tagRisingFromFields,
         stopAdvice, watchListCounts,
         ratingChips, canslimMarket, ftdText, canslimInfo, canslimExplain, canslimSheetHtml, tagCanslim, canslimRows, setCanslimAccel, annualEpsGrowth, baseBoxData, baseSummary, positionSize, fmtShares, stopRuleCheck, positionMetrics, tagPositions, positionRows, positionTotals, swipeDirection, breakoutInfo, tagBreakouts, readinessLine, upsideMain, targetMain, recomLabel, fillTargets, baseRows, actionInfo, tagActions, ACTION_DEFS, setCanslimRs, earningsInDays, mergePrefs, prefsNormalize, applyCommonFilters, tagRising, scoreInRange, natrOk, filterBoxesByNatr, blueprintInfo, marketLines, MARKET_LABELS, ratingClass, decorateCell, githubActionsUrl, sortRows,

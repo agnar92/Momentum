@@ -749,3 +749,14 @@ test("weeklyPlan: zlecenia z karty Darvasa (bez filtrów NATR / MACD), bez spó�
     assert.equal(positionDecision({ entry: 40, stop: 43 }, { price: 45, macd_w_above: false, macd_w_cross_low: 41.5 }).code, "HOLD");   // stop już wyżej
     assert.equal(positionDecision({ entry: 40, stop: 36 }, { price: 45, macd_w_above: true }).code, "HOLD");
 });
+
+test("pickOrders: tyle zleceń, ile wolnych miejsc — najpierw wybicia, potem najbliżej punktu kupna, ticker raz", () => {
+    const { pickOrders } = require("../../docs/js/watchlist.js");
+    const d = [{ ticker: "A", kind: "ready", dist: 6 }, { ticker: "B", kind: "ready", dist: 1 }, { ticker: "C", kind: "buy", dist: null }, { ticker: "X", kind: "ready", dist: 9 }];
+    const g = [{ ticker: "G", kind: "ready", dist: 2 }, { ticker: "A", kind: "ready", dist: 3 }, { ticker: "H", kind: "ready", dist: 8 }];
+    const p = pickOrders(d, g, 3);
+    assert.deepEqual(p.darvas.map(o => o.ticker), ["C", "B"]);
+    assert.deepEqual(p.glb.map(o => o.ticker), ["G"]);
+    assert.deepEqual([...p.restD, ...p.restG].map(o => o.ticker).sort(), ["X", "A", "H"].sort());   // A raz (z GLB, bliżej), X i H dalej
+    assert.equal(pickOrders(d, g, 0).darvas.length, 0);
+});
