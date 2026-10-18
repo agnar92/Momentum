@@ -1030,7 +1030,7 @@ function darvasOrders(stocks, acct = null) {
 }
 const DARVAS_ORDER_STOP_PCT = 10;
 function ordersText(orders) {
-    return orders.map(o => `${o.ticker}: ${o.kind === "buy" ? "kup na otwarciu ~" : "kup, gdy cena > "}${o.entry.toFixed(2)} (buy stop); stop loss: sprzedaj, gdy < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
+    return orders.map(o => `${o.ticker}: ${o.kind === "buy" ? `kup na otwarciu ~${o.entry.toFixed(2)}` : `kup, gdy cena > ${o.entry.toFixed(2)} (buy stop)`}; stop loss: sprzedaj, gdy < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
 }
 function ordersRowsHtml(orders, chartLink = false) {
     return orders.map(o => `<tr><td><b>${chartLink ? `<a href="#" data-plan-chart="${escapeHtml(o.ticker)}">${escapeHtml(o.ticker)}</a>` : escapeHtml(o.ticker)}</b>${o.kind === "buy" ? " 🟢" : ""}<small>${o.n}× box ↑${Number.isFinite(o.natr) ? ` · NATR ${o.natr.toFixed(1).replace(".", ",")} %` : ""}</small></td>`
@@ -1092,28 +1092,33 @@ function setChartView(v) {
 
 function glbRowsHtml(orders) {
     return orders.map(o => `<tr><td><b><a href="#" data-plan-glb="${escapeHtml(o.ticker)}">${escapeHtml(o.ticker)}</a></b>${o.kind === "buy" ? " 🟢" : ""}<small>rekord ${escapeHtml(o.month || "?")}${Number.isFinite(o.age) ? ` · stoi ${o.age} mies.` : ""}</small></td>`
-        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? "na otwarciu (wybicie w tym tygodniu)" : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy tydzień zamknie się &lt; ${o.stop.toFixed(2)} (1 % pod linią)</small></td>`
+        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? `na otwarciu (${o.fresh ? "wybicie w tym tygodniu, " : ""}zamknięcie ${Number.isFinite(o.ext) ? `+${o.ext.toFixed(1)} %` : ""} nad linią ${o.line.toFixed(2)})` : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy tydzień zamknie się &lt; ${o.stop.toFixed(2)} (1 % pod linią)</small></td>`
         + `<td>${o.size ? `<b>${fmtShares(o.size.shares)}</b><small>${pln0(o.size.value_pln)}</small><small>ryz. ${o.size.risk_pln !== null ? pln0(o.size.risk_pln) : "—"}</small>` : "—"}</td>`
         + `<td><button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(o.ticker)}|${o.entry}|${o.stop}|1" title="Zapisz jako pozycję (wejście, stop 1 % pod green line)">💼</button></td></tr>`).join("");
 }
 function glbOrdersText(orders) {
-    return orders.map(o => `${o.ticker} (GLB): ${o.kind === "buy" ? "kup na otwarciu ~" : "kup, gdy cena > "}${o.entry.toFixed(2)} (buy stop); stop: sprzedaj, gdy tydzień zamknie się < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
+    return orders.map(o => `${o.ticker} (GLB): ${o.kind === "buy" ? `kup na otwarciu ~${o.entry.toFixed(2)}` : `kup, gdy cena > ${o.entry.toFixed(2)} (buy stop)`}; stop: sprzedaj, gdy tydzień zamknie się < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
 }
 
-// Tyle zleceń, ile wolnych miejsc w portfelu (user: „max mogę 10, a jest 55”). Test na historycznym S&P 500 (karta Darvasa, wyjście MACD, 10 pozycji):
-// najbliżej punktu kupna +9,8 % rocznie, wg RS +6,8 %, wg 6-mies. momentum +4,0 %, wg NATR +4,6 %, wg liczby boxów +7,0 % — dalekie zlecenia rzadko się
-// wykonują i portfel stoi w gotówce. Kolejność: wybicia z tego tygodnia (kupno na otwarciu), potem najbliżej punktu kupna; Darvas i GLB razem, ticker raz.
+// Tyle zleceń, ile wolnych miejsc w portfelu (user: „max mogę 10, a jest 55”) — OSOBNO dla Darvasa i dla GLB (user: „jak dam 10, to 10 z boxów i 10 z GLB”).
+// Test na historycznym S&P 500 (karta Darvasa, wyjście MACD, 10 pozycji): najbliżej punktu kupna +9,8 % rocznie, wg RS +6,8 %, wg 6-mies. momentum +4,0 %,
+// wg NATR +4,6 %, wg liczby boxów +7,0 % — dalekie zlecenia rzadko się wykonują i portfel stoi w gotówce. Darvas: wybicia z tego tygodnia, potem najbliżej
+// punktu kupna. GLB: tylko kupna (zamknięcie ≤ +5 % nad linią), najbliżej linii pierwsze; czekające pod linią idą do pozostałych. Ticker raz (Darvas ma pierwszeństwo).
 function pickOrders(darvas, glb, free) {
-    const key = o => (o.kind === "buy" ? -1 : Number.isFinite(o.dist) ? o.dist : 99);
-    const all = [...darvas.map(o => ({ o, src: "d" })), ...glb.map(o => ({ o, src: "g" }))].sort((a, b) => key(a.o) - key(b.o));
-    const seen = new Set(), pick = [], rest = [];
-    all.forEach(x => {
-        if (seen.has(x.o.ticker)) return;
-        seen.add(x.o.ticker);
-        (pick.length < free ? pick : rest).push(x);
-    });
-    const part = (arr, src) => arr.filter(x => x.src === src).map(x => x.o);
-    return { darvas: part(pick, "d"), glb: part(pick, "g"), restD: part(rest, "d"), restG: part(rest, "g"), free };
+    const seen = new Set();
+    const take = (arr, key, ok) => {
+        const pick = [], rest = [];
+        [...arr].sort((a, b) => key(a) - key(b)).forEach(o => {
+            if (seen.has(o.ticker)) return;
+            seen.add(o.ticker);
+            (ok(o) && pick.length < free ? pick : rest).push(o);
+        });
+        return [pick, rest];
+    };
+    const num = (v, d) => (Number.isFinite(v) ? v : d);
+    const [pd, rd] = take(darvas, o => (o.kind === "buy" ? -1 : num(o.dist, 99)), () => true);
+    const [pg, rg] = take(glb, o => (o.kind === "buy" ? num(o.ext, 0) : 100 + num(o.dist, 99)), o => o.kind === "buy");
+    return { darvas: pd, glb: pg, restD: rd, restG: rg, free };
 }
 
 function renderPlanPanel() {
@@ -1138,11 +1143,11 @@ function renderPlanPanel() {
         + `<small>${Number.isFinite(p.pl) ? `${p.pl > 0 ? "+" : ""}${p.pl.toFixed(1)} %` : ""}</small></td><td><b>${p.label}</b><small>${escapeHtml(p.text)}</small>`
         + `${p.code === "RAISE" ? `<button type="button" class="btn plan-raise" data-raise="${escapeHtml(p.ticker)}|${p.newStop}">⬆ Ustaw stop ${p.newStop.toFixed(2)}</button>` : ""}</td>`
         + `<td><button type="button" class="btn pos-edit" data-pos-edit="${escapeHtml(p.ticker)}" title="Edytuj albo usuń pozycję">✏️</button></td></tr>`).join("");
-    const restHtml = nRest ? `<details class="plan-sec plan-rest"><summary>Pozostałe kandydaty (${nRest}) — dalej od punktu kupna, nie składaj na nie zleceń w tym tygodniu</summary>
+    const restHtml = nRest ? `<details class="plan-sec plan-rest"><summary>Pozostałe kandydaty (${nRest}) — dalej od punktu kupna albo GLB jeszcze pod linią; nie składaj na nie zleceń w tym tygodniu</summary>
             ${picked.restD.length ? `<table class="orders-table"><tbody>${ordersRowsHtml(picked.restD, true)}</tbody></table>` : ""}
             ${picked.restG.length ? `<table class="orders-table"><tbody>${glbRowsHtml(picked.restG)}</tbody></table>` : ""}</details>` : "";
     el.innerHTML = `${weak ? `<p class="plan-meta plan-warn">🛑 Rynek w korekcie — Darvas w słabym rynku kupował mniej: rozważ mniejsze pozycje albo przerwę.</p>` : ""}
-        <p class="plan-meta">Maks. pozycji <input type="number" id="planMaxPos" min="1" max="50" step="1" value="${state.maxPos}" style="width:4em"> · zajęte ${plan.positions.length} · <b>wolne ${free}</b> → zleceń w tym tygodniu: <b>${orders.length + glb.length}</b>${nRest ? ` (z ${orders.length + glb.length + nRest} kandydatów, najbliżej punktu kupna)` : ""}</p>
+        <p class="plan-meta">Maks. pozycji <input type="number" id="planMaxPos" min="1" max="50" step="1" value="${state.maxPos}" style="width:4em"> · zajęte ${plan.positions.length} · <b>wolne ${free}</b> → do ${free} zleceń z boxów Darvasa (<b>${orders.length}</b>) i do ${free} z GLB (<b>${glb.length}</b>) — wybierz z nich tyle, ile masz wolnych miejsc</p>
         <section class="plan-sec"><h3>1. 💼 Twoje pozycje <small>${plan.positions.length}</small></h3>
             ${posRows ? `<table class="orders-table plan-pos"><tbody>${posRows}</tbody></table>` : `<p class="muted">Brak pozycji. Po kupnie dodaj ją przyciskiem 💼 przy zleceniu.</p>`}</section>
         <section class="plan-sec"><h3>2. 🛒 Zlecenia kupna na ten tydzień <small>${orders.length}</small></h3>
@@ -1151,14 +1156,14 @@ function renderPlanPanel() {
             ${orders.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${ordersRowsHtml(orders, true)}</tbody></table>
                 ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
                 <button type="button" class="btn" id="planCopy">📋 Kopiuj zlecenia</button>`
-            : `<p class="muted">${loading ? "Liczę boxy…" : !free ? "Portfel pełny — nowe zlecenia, gdy zwolni się miejsce." : picked.restD.length || picked.glb.length ? "Wolne miejsca zajęły bliższe zlecenia GLB." : "W tym tygodniu brak spółek gotowych do kupna — to też jest sygnał: czekamy."}</p>`}</section>
-        <section class="plan-sec"><h3>3. 🟩 GLB — zlecenia kupna na green line <small>${glb.length}</small></h3>
-            <p class="muted">Green Line Breakout (Dr Wish): <b>green line</b> = rekord wszech czasów na zamknięciach <b>miesięcznych</b>, który stoi co najmniej 3 miesiące. Złóż <b>kupno stop</b> na linii („kup, gdy &gt; X”);
+            : `<p class="muted">${loading ? "Liczę boxy…" : !free ? "Portfel pełny — nowe zlecenia, gdy zwolni się miejsce." : "W tym tygodniu brak spółek gotowych do kupna — to też jest sygnał: czekamy."}</p>`}</section>
+        <section class="plan-sec"><h3>3. 🟩 GLB — kupno po zamknięciu nad green line <small>${glb.length}</small></h3>
+            <p class="muted">Green Line Breakout (Dr Wish): <b>green line</b> = rekord wszech czasów na zamknięciach <b>miesięcznych</b>, który stoi co najmniej 3 miesiące. Kupujesz w poniedziałek na otwarciu, gdy tydzień <b>zamknął się nad linią, najwyżej +5 %</b> (wyżej = nie goń);
             stop <b>1 % pod linią</b> sprawdzasz sam w weekend — <b>zamknięcie tygodnia</b> pod nim = sprzedaj w poniedziałek (nie wystawiaj go u brokera: dzienne wahania wybijały w teście prawie każde wejście). Potem stop przesuwa tygodniowy MACD jak wyżej.
-            Lista: spółki ≤ ${GLB_PLAN_MAX_DIST} % pod linią albo z wybiciem w tym tygodniu (≤ +5 %).</p>
+            Lista: do ${free} spółek najbliżej linii; czekające ≤ ${GLB_PLAN_MAX_DIST} % pod linią są w „Pozostałych”.</p>
             ${glb.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${glbRowsHtml(glb)}</tbody></table>
                 <button type="button" class="btn" id="planGlbCopy">📋 Kopiuj zlecenia GLB</button>`
-            : `<p class="muted">${!glbHasData ? "Dane GLB pojawią się po najbliższym odświeżeniu danych (sobota)." : !free ? "Portfel pełny." : picked.restG.length ? "Wolne miejsca zajęły bliższe zlecenia Darvasa." : "W tym tygodniu żadna spółka nie jest blisko swojej green line."}</p>`}</section>
+            : `<p class="muted">${!glbHasData ? "Dane GLB pojawią się po najbliższym odświeżeniu danych (sobota)." : !free ? "Portfel pełny." : "W tym tygodniu żadna spółka nie zamknęła się 0–5 % nad swoją green line."}</p>`}</section>
         ${restHtml}
         <details class="plan-sec plan-help"><summary>Jak to działa — rutyna na weekend (15 min)</summary>
             <ol><li><b>Pozycje</b>: „⬆ Podnieś stop” → stuknij przycisk i zmień zlecenie stop loss u brokera. „🔴 Sprzedaj” → zlecenie sprzedaży na poniedziałek. „✂ Stop” → sprawdź, czy broker sprzedał. „🟢 Trzymaj” → nic nie rób.</li>

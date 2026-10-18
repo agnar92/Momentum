@@ -8,7 +8,7 @@ if (typeof require === "function" && typeof window === "undefined") {
 
 const GLB_STOP_PCT = 1;
 const GLB_PLAN_MAX_DIST = 10;   // w 📋 Planie zlecenia tylko dla spółek ≤ 10 % pod linią
-const GLB_BREAK_MAX_EXT = 5;    // wybicie w tym tygodniu: kupno na otwarciu tylko do +5 % nad linią
+const GLB_BREAK_MAX_EXT = 5;    // kupno tylko, gdy tydzień zamknął się nad linią najwyżej +5 %
 
 const GLB_STATE_LABELS = { WAIT: ["🟩 czeka", ""], BREAK: ["🟢 WYBICIE", "positive"], ABOVE: ["nad linią", "muted"], NONE: ["—", "muted"] };
 
@@ -36,17 +36,19 @@ function glbAnalyze(g, px) {
     return { state: st, line, stop, dist, text: `Nad green line ${f(line)}${since} — pozycję prowadzi tygodniowy MACD; nowa linia, gdy kolejny rekord przestoi 3 miesiące.` };
 }
 
-// Zlecenia GLB do 📋 Planu (pure): czekające pod linią (≤ 10 %) = kupno stop na linii; wybicie w tym tygodniu (≤ +5 %) = kupno na otwarciu.
+// Zlecenia GLB do 📋 Planu (pure). Kupno = tydzień zamknął się NAD green line, ale nie więcej niż +5 % (BREAK albo ABOVE; user: „jeśli przebiły,
+// zamknęły się ponad linią nie więcej niż 5 %”) — kupno na otwarciu; najbliżej linii pierwsze. Czekające pod linią (≤ 10 %) = kandydaci („ready”, kupno stop na linii).
 function glbOrders(stocks, acct = null, size = null) {
     return stocks.filter(s => Number.isFinite(s.glb_line) && Number.isFinite(s.price)
-        && ((s.glb_state === "WAIT" && s.glb_dist <= GLB_PLAN_MAX_DIST) || (s.glb_state === "BREAK" && s.price <= s.glb_line * (1 + GLB_BREAK_MAX_EXT / 100))))
+        && ((s.glb_state === "WAIT" && s.glb_dist <= GLB_PLAN_MAX_DIST) || ((s.glb_state === "BREAK" || s.glb_state === "ABOVE") && s.price <= s.glb_line * (1 + GLB_BREAK_MAX_EXT / 100))))
         .map(s => {
-            const brk = s.glb_state === "BREAK", entry = brk ? s.price : s.glb_line;
+            const buy = s.glb_state !== "WAIT", entry = buy ? s.price : s.glb_line;
             const stop = Number.isFinite(s.glb_stop) ? s.glb_stop : Math.round(s.glb_line * (1 - GLB_STOP_PCT / 100) * 100) / 100;
-            return { ticker: s.ticker, kind: brk ? "buy" : "ready", entry, stop, line: s.glb_line, dist: s.glb_dist, month: s.glb_month, age: s.glb_age,
+            return { ticker: s.ticker, kind: buy ? "buy" : "ready", fresh: s.glb_state === "BREAK", entry, stop, line: s.glb_line, dist: s.glb_dist,
+                ext: buy ? (s.price / s.glb_line - 1) * 100 : null, month: s.glb_month, age: s.glb_age,
                 size: acct && size ? size(acct, entry, stop) : null };
         })
-        .sort((a, b) => (a.kind === "buy" ? -1 : 0) - (b.kind === "buy" ? -1 : 0) || (a.dist ?? 99) - (b.dist ?? 99));
+        .sort((a, b) => (a.kind === "buy" ? -1 : 0) - (b.kind === "buy" ? -1 : 0) || (a.kind === "buy" ? a.ext - b.ext : (a.dist ?? 99) - (b.dist ?? 99)));
 }
 
 // Karta GLB w stylu Dar-Card: papier w linie, oś cen po lewej, miesięczne zamknięcia jako kreski (jak notowania wpisywane na kartę),
