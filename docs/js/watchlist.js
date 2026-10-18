@@ -979,22 +979,23 @@ function tagRising(stocks, charts) {
         const r = c && Array.isArray(c.c) ? darvasRisingInfo(c.c, c.v) : null;
         s.rise_n = r ? r.n : null; s.rise_state = r ? r.state : null; s.rise_text = r ? r.text : ""; s.rise_dist = r ? r.distPct : null;
         // starszy plik bez pól dv_* z Pythona: poziomy karty z tych samych wykresów, żeby 📋 Zlecenia i kolumna „kup > X” też działały
-        if (r && s.dv_state === undefined) {
-            const st = darCardAnalyze(c.c, c.v).status;
-            Object.assign(s, { dv_state: st.state, dv_n: r.n, dv_top: st.buyLine ?? null, dv_bottom: st.bottom ?? null, dv_zone: st.zoneLow ?? null, dv_stop: st.stop ?? null, dv_dist: r.distPct });
+        if (r && s.dv_tf !== "W") {   // stare pola dzienne nadpisujemy tygodniowymi
+            const a = darCardAnalyze(c.c, c.v), st = a.status, tb = a.topmost;
+            const natr = tb && Array.isArray(c.h) && Array.isArray(c.l) ? boxNatr(c.h, c.l, c.c, tb.i0, Math.min(tb.end ?? c.c.length - 1, c.c.length - 1)) : null;
+            Object.assign(s, { dv_state: st.state, dv_n: r.n, dv_top: st.buyLine ?? null, dv_bottom: st.bottom ?? null, dv_zone: st.zoneLow ?? null, dv_stop: st.stop ?? null, dv_dist: r.distPct, dv_natr: natr, dv_tf: "W" });
         }
         s.darvas_rank = darvasRank(s);
     });
 }
 
 // Wyszukiwanie wg Dar-Card (książka, s. 11 i 139–142) — JEDYNY filtr Watchlist w tym trybie (bez score / NATR / sektora):
-// „Kup dziś” = pierwsze zamknięcie nad górą najwyższego boxa po dwóch kolejnych rosnących boxach (s. 140);
+// „Kup teraz” = pierwsze tygodniowe zamknięcie nad górą najwyższego boxa po dwóch kolejnych rosnących boxach (s. 140);
 // „Gotowe do kupna” = dwa kolejne rosnące boxy, cena w najwyższym, jeszcze nie wybita (s. 139 „Ready for buying”);
 // „Trzymaj” = akcja w swoim najwyższym boxie albo nad nim po wybiciu, w rosnącej karcie (reguła A).
 const DARVAS_STATE_LABELS = { BUY: ["🟢 KUP", "positive"], READY: ["🔵 GOTOWE", ""], HOLD: ["TRZYMAJ", ""], WAIT: ["1. box", "muted"], SELL: ["🔴 SPRZEDAJ", "negative"], OUT: ["poza boxem", "muted"] };
 const DARVAS_PICKS = [
-    ["go", "Do kupna", "Kup dziś + Gotowe do kupna: co najmniej dwa kolejne rosnące boxy (książka, s. 139–140)"],
-    ["buy", "🟢 Kup dziś", "Dzisiejsze zamknięcie nad górą najwyższego boxa po dwóch kolejnych rosnących boxach; stop 10 % od razu"],
+    ["go", "Do kupna", "Kup teraz + Gotowe do kupna: co najmniej dwa kolejne rosnące boxy (książka, s. 139–140)"],
+    ["buy", "🟢 Kup teraz", "Zamknięcie tego tygodnia nad górą najwyższego boxa po dwóch kolejnych rosnących boxach; stop 10 % od razu"],
     ["ready", "🔵 Gotowe", "Dwa kolejne rosnące boxy, cena w najwyższym — kup po zamknięciu nad jego górą"],
     ["hold", "Trzymaj", "Rosnąca karta, cena w najwyższym boxie albo nad nim — wahania ignoruj (reguła A)"],
     ["all", "Wszystkie", "Bez filtra Darvasa — działają zwykłe filtry (score, NATR, sektor)"],
@@ -1008,13 +1009,13 @@ function darvasPickRows(stocks, pick) {
     return stocks.filter(s => { const p = darvasPick(s); return pick === "go" ? p === "buy" || p === "ready" : p === pick; });
 }
 // Zlecenia jak u Darvasa (s. 11, 141): kupno stop tuż nad górą najwyższego boxa i od razu stop loss 10 % pod wejściem.
-// Spółki „Gotowe” (zlecenie czeka na wybicie) i „Kup dziś” (wybicie było dziś — wejście na otwarciu). acct = konto z 💼 Pozycje (PLN), null = bez liczby akcji.
+// Spółki „Gotowe” (zlecenie czeka na wybicie) i „Kup teraz” (wybicie w tym tygodniu — wejście na otwarciu). acct = konto z 💼 Pozycje (PLN), null = bez liczby akcji.
 function darvasOrders(stocks, acct = null) {
     return stocks.filter(s => { const p = darvasPick(s); return (p === "ready" || p === "buy") && Number.isFinite(s.dv_top); })
         .map(s => {
             const buy = s.rise_state === "BUY", entry = buy && Number.isFinite(s.price) ? s.price : s.dv_top;
             const stop = Math.round(entry * (1 - DARVAS_ORDER_STOP_PCT / 100) * 100) / 100;
-            return { ticker: s.ticker, kind: buy ? "buy" : "ready", entry, stop, dist: s.dv_dist, n: s.dv_n, bottom: s.dv_bottom, size: acct ? positionSize(acct, entry, stop) : null };
+            return { ticker: s.ticker, kind: buy ? "buy" : "ready", entry, stop, dist: s.dv_dist, n: s.dv_n, bottom: s.dv_bottom, natr: s.dv_natr ?? null, size: acct ? positionSize(acct, entry, stop) : null };
         })
         .sort((a, b) => (a.kind === "buy" ? -1 : 0) - (b.kind === "buy" ? -1 : 0) || (a.dist ?? 99) - (b.dist ?? 99));
 }
@@ -1023,41 +1024,52 @@ function ordersText(orders) {
     return orders.map(o => `${o.ticker}: ${o.kind === "buy" ? "kup na otwarciu ~" : "kup, gdy cena > "}${o.entry.toFixed(2)} (buy stop); stop loss: sprzedaj, gdy < ${o.stop.toFixed(2)}${o.size ? `, ${fmtShares(o.size.shares)} akcji` : ""}`).join("\n");
 }
 function ordersRowsHtml(orders, chartLink = false) {
-    return orders.map(o => `<tr><td><b>${chartLink ? `<a href="#" data-plan-chart="${escapeHtml(o.ticker)}">${escapeHtml(o.ticker)}</a>` : escapeHtml(o.ticker)}</b>${o.kind === "buy" ? " 🟢" : ""}<small>${o.n}× box ↑</small></td>`
-        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? "na otwarciu (wybicie dziś)" : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy &lt; ${o.stop.toFixed(2)} (−10 %)</small></td>`
+    return orders.map(o => `<tr><td><b>${chartLink ? `<a href="#" data-plan-chart="${escapeHtml(o.ticker)}">${escapeHtml(o.ticker)}</a>` : escapeHtml(o.ticker)}</b>${o.kind === "buy" ? " 🟢" : ""}<small>${o.n}× box ↑${Number.isFinite(o.natr) ? ` · NATR ${o.natr.toFixed(1).replace(".", ",")} %` : ""}</small></td>`
+        + `<td><b>${o.kind === "buy" ? "kup ~" : "kup, gdy &gt; "}${o.entry.toFixed(2)}</b><small>${o.kind === "buy" ? "na otwarciu (wybicie w tym tygodniu)" : Number.isFinite(o.dist) ? `cena musi wzrosnąć o ${o.dist.toFixed(1)} %` : ""}</small><small class="dn">sprzedaj, gdy &lt; ${o.stop.toFixed(2)} (−10 %)</small></td>`
         + `<td>${o.size ? `<b>${fmtShares(o.size.shares)}</b><small>${pln0(o.size.value_pln)}</small><small>ryz. ${o.size.risk_pln !== null ? pln0(o.size.risk_pln) : "—"}</small>` : "—"}</td>`
         + `<td><button type="button" class="btn box-mkpos" data-mkpos="${escapeHtml(o.ticker)}|${o.entry}|${o.bottom ?? o.stop}|0" title="Zapisz jako pozycję (wejście, stop 10 %)">💼</button></td></tr>`).join("");
 }
 
-// 📋 Plan na tydzień (user: „max 15–30 minut dziennie albo raz w tygodniu”): wejście z DZIENNYCH boxów Darvasa przez zlecenia
-// kupna stop złożone w weekend (broker sam wykona je w tygodniu), stop loss 10 %, wyjście po TYGODNIOWYM MACD pod sygnałem.
-// Backtest (153 spółki z listy, 2019–2026, scratchpad): ta rutyna ≈ +3,9 % na transakcję, tyle co codzienne pilnowanie wybić.
-// Nowe kupno tylko przy MACD tyg. nad sygnałem (inaczej wyjście wypadłoby od razu). Spółki z otwartą pozycją nie dostają zlecenia kupna.
+// 📋 Plan na tydzień (user: „max 15–30 minut dziennie albo raz w tygodniu”; „przejdźmy całkowicie na tygodniowe ceny zamknięcia”):
+// wejście z TYGODNIOWYCH boxów Darvasa o niskim NATR przez zlecenia kupna stop złożone w weekend, stop loss 10 % (Darvas),
+// wyjście = przesuwanie stopu pod dołek świecy, w której tygodniowy MACD przeciął sygnał w dół. Nowe kupno tylko przy MACD tyg.
+// nad sygnałem. Spółki z otwartą pozycją nie dostają zlecenia kupna. To eksperyment usera na małym kapitale (test S&P 500 PIT: słabiej niż SPY).
 function planStocks(main, watch) {
     const seen = new Map();
     [...(main || []), ...(watch || [])].forEach(s => { if (!seen.has(s.ticker)) seen.set(s.ticker, s); });
     return [...seen.values()];
 }
+// Wyjście = przesuwanie stopu po MACD (Blueprint): gdy tygodniowy MACD przetnie sygnał w dół, stop idzie pod dołek tej świecy
+// (macd_w_cross_low z Pythona); zamknięcie pod nim = sprzedaż. Stop początkowy 10 % pod wejściem (Darvas).
 function positionDecision(p, s) {
     const price = s && Number.isFinite(s.price) ? s.price : null;
     const stop = Number.isFinite(p.stop) ? p.stop : null;
+    const cl = s && Number.isFinite(s.macd_w_cross_low) ? s.macd_w_cross_low : null;
     if (price === null) return { code: "NA", label: "❔ Brak ceny", text: "spółki nie ma na listach — sprawdź ją u brokera" };
     if (stop !== null && price <= stop) return { code: "STOP", label: "✂ Stop", text: `cena ${price.toFixed(2)} ≤ stop ${stop.toFixed(2)} — sprzedaj, jeśli broker jeszcze tego nie zrobił` };
-    if (s.macd_w_above === false) return { code: "SELL", label: "🔴 Sprzedaj", text: "tygodniowy MACD spadł pod linię sygnału — sprzedaj na otwarciu w poniedziałek" };
-    if (s.macd_w_above === true) return { code: "HOLD", label: "🟢 Trzymaj", text: `MACD tyg. nad sygnałem${stop !== null ? `; stop loss ${stop.toFixed(2)} zostaje u brokera` : ""}` };
+    if (s.macd_w_above === false && cl !== null) {
+        const when = s.macd_w_cross_date ? ` (świeca do ${s.macd_w_cross_date})` : "";
+        if (price <= cl) return { code: "SELL", label: "🔴 Sprzedaj", text: `cena ${price.toFixed(2)} zamknęła się pod dołkiem świecy, w której MACD tyg. przeciął sygnał w dół (${cl.toFixed(2)}${when}) — sprzedaj` };
+        if (stop === null || cl > stop) return { code: "RAISE", label: `⬆ Podnieś stop do ${cl.toFixed(2)}`, text: `tygodniowy MACD przeciął sygnał w dół — stop pod dołek tej świecy${when}${stop !== null ? `, teraz ${stop.toFixed(2)}` : ""}`, newStop: cl };
+        return { code: "HOLD", label: "🟢 Trzymaj", text: `MACD tyg. pod sygnałem, ale stop ${stop.toFixed(2)} jest już wyżej niż dołek świecy przecięcia (${cl.toFixed(2)})` };
+    }
+    if (s.macd_w_above === false) return { code: "HOLD", label: "🟡 Sprawdź stop", text: "MACD tyg. pod sygnałem — ustaw stop pod dołkiem świecy, w której go przeciął (dane po najbliższym odświeżeniu)" };
+    if (s.macd_w_above === true) return { code: "HOLD", label: "🟢 Trzymaj", text: `MACD tyg. nad sygnałem${stop !== null ? `; stop ${stop.toFixed(2)} bez zmian` : ""}` };
     return { code: "HOLD", label: "🟢 Trzymaj", text: "brak tygodniowego MACD (krótka historia) — pilnuje tylko stop loss" };
 }
+const PLAN_NATR_MAX = 8;
 function weeklyPlan(stocks, positions, acct = null) {
     const bySym = new Map(stocks.map(s => [s.ticker, s]));
     const held = Object.keys(positions || {}).filter(t => positions[t]);
     const heldSet = new Set(held);
     const all = darvasOrders(stocks.filter(s => !heldSet.has(s.ticker)), acct);
-    const orders = all.filter(o => bySym.get(o.ticker).macd_w_above !== false);
+    // wejście: box z niskim NATR (< 8 %, Blueprint) i tygodniowy MACD nad sygnałem
+    const orders = all.filter(o => { const s = bySym.get(o.ticker); return s.macd_w_above !== false && Number.isFinite(s.dv_natr) && s.dv_natr < PLAN_NATR_MAX; });
     const pos = held.map(t => {
         const p = positions[t], s = bySym.get(t) || null;
         const m = s ? positionMetrics(p, s.price) : null;
         return { ticker: t, company: s ? s.company : "", price: s ? s.price : null, entry: p.entry, stop: p.stop, pl: m ? m.pl_pct : null, ...positionDecision(p, s) };
-    }).sort((a, b) => ["STOP", "SELL", "NA", "HOLD"].indexOf(a.code) - ["STOP", "SELL", "NA", "HOLD"].indexOf(b.code));
+    }).sort((a, b) => ["STOP", "SELL", "RAISE", "NA", "HOLD"].indexOf(a.code) - ["STOP", "SELL", "RAISE", "NA", "HOLD"].indexOf(b.code));
     return { orders, skipped: all.length - orders.length, positions: pos };
 }
 
@@ -1075,27 +1087,34 @@ function renderPlanPanel() {
     const orders = plan.orders.filter(o => match(o.ticker));
     const acctOk = orders.some(o => o.size);
     const posRows = plan.positions.filter(p => match(p.ticker)).map(p => `<tr class="plan-${p.code.toLowerCase()}"><td><b><a href="#" data-plan-chart="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)}</a></b>`
-        + `<small>${Number.isFinite(p.pl) ? `${p.pl > 0 ? "+" : ""}${p.pl.toFixed(1)} %` : ""}</small></td><td><b>${p.label}</b><small>${escapeHtml(p.text)}</small></td></tr>`).join("");
+        + `<small>${Number.isFinite(p.pl) ? `${p.pl > 0 ? "+" : ""}${p.pl.toFixed(1)} %` : ""}</small></td><td><b>${p.label}</b><small>${escapeHtml(p.text)}</small>`
+        + `${p.code === "RAISE" ? `<button type="button" class="btn plan-raise" data-raise="${escapeHtml(p.ticker)}|${p.newStop}">⬆ Ustaw stop ${p.newStop.toFixed(2)}</button>` : ""}</td></tr>`).join("");
     el.innerHTML = `${weak ? `<p class="plan-meta plan-warn">🛑 Rynek w korekcie — Darvas w słabym rynku kupował mniej: rozważ mniejsze pozycje albo przerwę.</p>` : ""}
         <section class="plan-sec"><h3>1. 💼 Twoje pozycje <small>${plan.positions.length}</small></h3>
             ${posRows ? `<table class="orders-table plan-pos"><tbody>${posRows}</tbody></table>` : `<p class="muted">Brak pozycji. Po kupnie dodaj ją przyciskiem 💼 przy zleceniu.</p>`}</section>
         <section class="plan-sec"><h3>2. 🛒 Zlecenia kupna na ten tydzień <small>${orders.length}</small></h3>
             <p class="muted">Dla każdej spółki złóż u brokera <b>kupno stop</b> („kup, gdy &gt; X”, ważne do piątku) i po wykonaniu od razu <b>stop loss</b> („sprzedaj, gdy &lt; Y”, −10 %). Jeśli cena nie dojdzie do X, nic się nie dzieje.
-            Lista: spółki z ≥ 2 kolejnymi rosnącymi boxami Darvasa (dzienne zamknięcia) i tygodniowym MACD nad sygnałem${plan.skipped ? ` (pominięte z MACD tyg. pod sygnałem: ${plan.skipped})` : ""}.</p>
+            Lista: spółki z ≥ 2 kolejnymi rosnącymi boxami Darvasa (tygodniowe zamknięcia), box z niskim NATR (&lt; 8 %) i tygodniowy MACD nad sygnałem${plan.skipped ? ` (pominięte przez NATR / MACD: ${plan.skipped})` : ""}.</p>
             ${orders.length ? `<table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${ordersRowsHtml(orders, true)}</tbody></table>
                 ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
                 <button type="button" class="btn" id="planCopy">📋 Kopiuj zlecenia</button>`
             : `<p class="muted">${loading ? "Liczę boxy…" : "W tym tygodniu brak spółek gotowych do kupna — to też jest sygnał: czekamy."}</p>`}</section>
         <details class="plan-sec plan-help"><summary>Jak to działa — rutyna na weekend (15 min)</summary>
-            <ol><li><b>Pozycje</b>: „🔴 Sprzedaj” → zlecenie sprzedaży na poniedziałek. „✂ Stop” → sprawdź, czy broker sprzedał. „🟢 Trzymaj” → nic nie rób.</li>
-            <li><b>Zlecenia</b>: skopiuj i złóż u brokera kupno stop + stop loss. Nie wykonane do piątku? W następny weekend lista będzie nowa.</li>
+            <ol><li><b>Pozycje</b>: „⬆ Podnieś stop” → stuknij przycisk i zmień zlecenie stop loss u brokera. „🔴 Sprzedaj” → zlecenie sprzedaży na poniedziałek. „✂ Stop” → sprawdź, czy broker sprzedał. „🟢 Trzymaj” → nic nie rób.</li>
+            <li><b>Zlecenia</b>: skopiuj i złóż u brokera kupno stop + stop loss 10 % (Darvas). Nie wykonane do piątku? W następny weekend lista będzie nowa.</li>
             <li>Kupione? Stuknij 💼 przy spółce — trafi do pozycji i w kolejnym tygodniu dostaniesz dla niej decyzję.</li>
-            <li>Wykres: stuknij ticker (🃏 karta Darvasa; stuknięcie w box → wykres słupkowy z MACD).</li></ol>
-            <p class="muted small">Dlaczego tak: boxy Darvasa lepiej działają na dziennych zamknięciach, a tygodniowy MACD trzyma zyskowne pozycje dłużej niż wyjście z boxa. Backtest na spółkach z listy (2019–2026): ≈ 35 % trafnych transakcji, średni zysk ≈ +26 %, średnia strata ≈ −8,6 %, średnio ≈ +3,9 % na transakcję — tyle samo co przy codziennym pilnowaniu wybić. Lista to dzisiejsi liderzy (przeżyli), więc wynik jest zawyżony — to wskazówka, nie gwarancja.</p></details>`;
+            <li>Wykres: stuknij ticker (🃏 karta Darvasa na tygodniowych zamknięciach; stuknięcie w box → wykres słupkowy z MACD).</li></ol>
+            <p class="muted small">Zasady: boxy Darvasa na TYGODNIOWYCH zamknięciach (top / dół = zamknięcie nieprzebite przez 3 kolejne tygodnie), wejście przy wybiciu z boxa o niskim NATR po ≥ 2 rosnących boxach, stop początkowy 10 % pod wejściem, potem stop pod dołkiem świecy, w której tygodniowy MACD przetnie sygnał w dół. Test na historycznym składzie S&amp;P 500 (2015–2026) dla wersji dziennej dał ok. +4 % rocznie wobec +13,6 % kupna i trzymania SPY — traktuj to jako eksperyment na małym kapitale.</p></details>`;
     const cp = document.getElementById("planCopy");
     if (cp) cp.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(ordersText(orders)); showToast("Skopiowano zlecenia.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
     });
+    el.querySelectorAll("[data-raise]").forEach(b => b.addEventListener("click", () => {
+        const [t, ns] = b.dataset.raise.split("|"), p = state.pos[t];
+        if (!p) return;
+        savePosition(t, { ...p, stop: +ns });   // przesunięcie stopu po MACD — pamiętaj też zmienić zlecenie stop u brokera
+        showToast(`${t}: stop podniesiony do ${(+ns).toFixed(2)} — zmień też zlecenie stop loss u brokera.`, { type: "success" });
+    }));
     el.querySelectorAll("[data-plan-chart]").forEach(a => a.addEventListener("click", ev => {
         ev.preventDefault();
         if (!chartCardOn) { chartCardOn = true; const cb = document.getElementById("chartCardBtn"); if (cb) cb.classList.add("active"); }
@@ -1117,11 +1136,11 @@ function openOrdersSheet() {
         ? `<p class="muted">Dla każdej spółki składasz u brokera <b>dwa zlecenia</b> (Darvas, s. 11, 141):<br>
            1) <b>„kup, gdy &gt; X”</b> — zlecenie kupna <i>stop</i> (buy stop): kupujesz dopiero, gdy cena WZROŚNIE do X (góra boxa). Jeśli nie wzrośnie, nic się nie dzieje.<br>
            2) <b>„sprzedaj, gdy &lt; Y”</b> — <i>stop loss</i>: po kupnie broker sam sprzeda, gdy cena SPADNIE do Y (10 % pod wejściem), żeby ograniczyć stratę.<br>
-           „🟢” = wybicie było już dziś: kupujesz na otwarciu, bez czekania. 💼 = zapisz jako pozycję (pojawi się w zakładce 💼 Pozycje).</p>
+           „🟢” = wybicie było już w tym tygodniu: kupujesz na otwarciu w poniedziałek, bez czekania. 💼 = zapisz jako pozycję (pojawi się w zakładce 💼 Pozycje).</p>
            <table class="orders-table"><thead><tr><th>Spółka</th><th>Zlecenia</th><th>Akcje / wartość</th><th></th></tr></thead><tbody>${rows}</tbody></table>
            ${acctOk ? "" : `<p class="muted">Ustaw konto (PLN) i % konta / % ryzyka w zakładce 💼 Pozycje, żeby policzyć liczbę akcji.</p>`}
            <button type="button" class="btn" id="ordersCopy">📋 Kopiuj zlecenia</button>`
-        : `<p>Dziś brak spółek „Gotowe” ani „Kup dziś” na tej liście.</p>`);
+        : `<p>W tym tygodniu brak spółek „Gotowe” ani „Kup teraz” na tej liście.</p>`);
     const cp = document.getElementById("ordersCopy");
     if (cp) cp.addEventListener("click", async () => {
         try { await navigator.clipboard.writeText(ordersText(orders)); showToast("Skopiowano zlecenia.", { type: "success" }); } catch (e) { showToast("Nie udało się skopiować — zaznacz tabelę ręcznie."); }
@@ -1141,7 +1160,7 @@ function darvasRank(s) {
 function darvasStateText(s) {
     const f = v => Number.isFinite(v) ? v.toFixed(2) : "?";
     switch (s.dv_state) {
-        case "BUY": return `KUP — dzisiejsze zamknięcie nad górą najwyższego boxa ${f(s.dv_top)}${s.dv_n >= 2 ? ` (${s.dv_n} kolejne rosnące boxy)` : " (pierwszy box — książka kupuje po dwóch rosnących)"}; stop 10 %: ${f(s.dv_stop)}`;
+        case "BUY": return `KUP — zamknięcie tygodnia nad górą najwyższego boxa ${f(s.dv_top)}${s.dv_n >= 2 ? ` (${s.dv_n} kolejne rosnące boxy)` : " (pierwszy box — książka kupuje po dwóch rosnących)"}; stop 10 %: ${f(s.dv_stop)}`;
         case "READY": return `GOTOWY DO KUPNA — ${s.dv_n} kolejne rosnące boxy; kup po zamknięciu nad ${f(s.dv_top)}${Number.isFinite(s.dv_dist) ? ` (${s.dv_dist.toFixed(1)} % wyżej)` : ""}, stop 10 %: ${f(s.dv_stop)}`;
         case "HOLD": return `TRZYMAJ — najwyższy box ${f(s.dv_bottom)}–${f(s.dv_top)}; wyjście pod strefą zagrożenia ${f(s.dv_zone)}`;
         case "WAIT": return `CZEKAJ — pierwszy box ${f(s.dv_bottom)}–${f(s.dv_top)}; punkt kupna po dwóch kolejnych rosnących boxach`;
@@ -1161,7 +1180,7 @@ async function ensureRising(which) {
     if (typeof darvasRisingInfo !== "function") return;
     const target = which === "watch" ? watchData : state.data;
     if (!target || risingState[which] === target || risingPending[which] === target) return;
-    if (target.stocks.length && target.stocks.every(s => s.dv_state !== undefined)) {   // pola z Pythona: od razu, bez wykresów
+    if (target.stocks.length && target.stocks.every(s => s.dv_tf === "W")) {   // pola z Pythona (tygodniowe): od razu, bez wykresów
         tagRisingFromFields(target.stocks);
         risingState[which] = target;
         return;
@@ -1273,7 +1292,7 @@ function emptyMessage(tab) {
         if (!inList.some(s => s.rise_state !== undefined)) return "Liczę boxy Darvasa…";
         const other = DARVAS_PICKS.filter(p => p[0] !== watchDarvas && p[0] !== "all" && p[0] !== "go").map(p => [p[1], darvasPickRows(inList, p[0]).length]).filter(x => x[1] > 0);
         const label = (DARVAS_PICKS.find(p => p[0] === watchDarvas) || [])[1] || "";
-        return `Dziś brak spółek w stanie „${label}”${other.length ? " — zobacz: " + other.map(x => `${x[0]} (${x[1]})`).join(", ") : ""}.`;
+        return `W tym tygodniu brak spółek w stanie „${label}”${other.length ? " — zobacz: " + other.map(x => `${x[0]} (${x[1]})`).join(", ") : ""}.`;
     }
     if (tab === "WATCH") return watchData ? "Żadna spółka nie przechodzi filtra tekstu / sektora / score." : "Brak watchlist — uruchom workflow „Watchlisty” (przycisk w opisie zakładki) i dodaj listę z filtrem Finviz.";
     return EMPTY_MESSAGES[tab];
@@ -2426,8 +2445,9 @@ function chartCells() {
 
 // Dane wykresu aktualnej spółki: DZIENNE (charts.daily, 12 miesięcy — Darvas liczy boxy na dziennych zamknięciach), a do czasu pierwszego odświeżenia
 // danych po tej zmianie (brak `daily`) tygodniowe. Miniatury pozycji i karty telefonu zostają tygodniowe (loadCharts).
+// Darvas liczy się na TYGODNIOWYCH zamknięciach (Oct 2026, user: „przejdźmy całkowicie na tygodniowe ceny zamknięcia”) — dawny widok dzienny wyłączony.
 function dailyCharts(charts) {
-    return (charts && typeof dailyChartsView === "function" && dailyChartsView(charts)) || charts;
+    return charts;
 }
 function activeCharts() {
     return currentChart ? dailyCharts(currentChart.charts) : null;

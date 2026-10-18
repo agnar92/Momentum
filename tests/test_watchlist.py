@@ -377,16 +377,10 @@ class TestCharts:
         assert all(len(a[k]) == 52 for k in ("o", "h", "l", "c", "v", "sma10", "sma40"))
         assert a["eps"][-1] == {"d": "2026-07-30", "e": 2.0, "g": 100, "t": None} and a["eps_next"] == {"d": "2026-10-29", "e": 2.2, "t": None}   # t: za mało kwartałów na TTM
 
-    def test_build_charts_has_daily_block_for_darvas(self):
+    def test_build_charts_has_no_daily_block(self):
         now = pd.Timestamp("2026-10-01 05:00", tz="UTC")
         charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=400, daily=0.003)}, make_prices(n=400, daily=0.001), {}, now, n_weeks=52)
-        assert len(charts["weeks"]) == 52
-        d = charts["daily"]   # dzienny blok dla Darvasa: ostatnie CHART_DAYS sesji, O/H/L/C/V + SMA 10 / 50, wszystkie tablice tej samej długości
-        assert len(d["dates"]) == watchlist.CHART_DAYS == 170 and len(d["spx"]) == 170
-        a = d["stocks"]["AAA"]
-        assert set(a) == {"yr", "o", "h", "l", "c", "v", "sma10", "sma50"} and all(len(v) == 170 for k, v in a.items() if k != "yr")
-        assert a["yr"] and all(len(r) == 3 and r[1] >= r[2] for r in a["yr"]) and len(a["yr"]) <= 3
-        assert a["sma50"][-1] is not None and a["c"][-1] > a["c"][0]
+        assert "daily" not in charts   # Darvas liczy się na tygodniowych zamknięciach (od Oct 2026)
 
     def test_build_charts_without_benchmark_still_works(self):
         charts = watchlist.build_charts(["AAA"], {"AAA": make_prices(n=300)}, None, {}, pd.Timestamp("2026-10-01 05:00", tz="UTC"), 30)
@@ -1326,8 +1320,30 @@ def test_darvas_card_state_matches_js_fixture():
 
 def test_add_darvas_state_fills_dv_fields():
     up = [100, 102, 105, 110, 108, 106, 104, 105, 107, 109, 112, 114, 118, 120, 117, 115, 113, 114, 116, 118]
+    hi = [x * 1.02 for x in up]
+    lo = [x * 0.98 for x in up]
     stocks = [{"ticker": "AAA"}, {"ticker": "BBB"}]
-    watchlist.add_darvas_state(stocks, {"daily": {"stocks": {"AAA": {"c": up}}}})
-    assert stocks[0]["dv_state"] == "READY" and stocks[0]["dv_n"] == 2 and stocks[0]["dv_top"] == 120
-    assert stocks[0]["dv_stop"] == 108.0 and stocks[0]["dv_dist"] == 1.7
-    assert stocks[1]["dv_state"] is None   # brak wykresu dziennego
+    weeks = [f"2026-{1 + i // 4:02d}-{1 + 7 * (i % 4):02d}" for i in range(len(up))]
+    watchlist.add_darvas_state(stocks, {"weeks": weeks, "stocks": {"AAA": {"c": up, "h": hi, "l": lo}}})
+    a = stocks[0]
+    assert a["dv_state"] == "READY" and a["dv_n"] == 2 and a["dv_top"] == 120 and a["dv_tf"] == "W"
+    assert a["dv_stop"] == 108.0 and a["dv_dist"] == 1.7
+    assert a["dv_natr"] is not None and 0 < a["dv_natr"] < 8   # wąski box = niski NATR
+    assert a["macd_w_cross_low"] is None   # 20 tygodni to za mało na MACD 12/26/9
+    assert stocks[1]["dv_state"] is None   # brak wykresu
+
+
+def test_box_natr_and_macd_cross_low():
+    c = [10.0] * 3 + [10.2, 9.9, 10.1, 10.0]
+    hi = [x + 0.2 for x in c]
+    lo = [x - 0.2 for x in c]
+    tr = [max(hi[i] - lo[i], abs(hi[i] - c[i - 1]), abs(lo[i] - c[i - 1])) for i in range(3, 7)]
+    assert watchlist.box_natr(hi, lo, c, 3, 6) == round(sum(tr) / 4 / (sum(c[3:7]) / 4) * 100, 1)
+    assert watchlist.box_natr(hi, lo, c, 5, 6) is None   # < 3 tygodnie
+    # przyspieszający trend (MACD nad sygnałem), potem 4 tygodnie spadku: MACD przecina sygnał w dół → dołek świecy przecięcia
+    rise = [100 * 1.03 ** i for i in range(60)]
+    assert watchlist.macd_cross_low(rise, [x * 0.97 for x in rise]) == (None, None)
+    c2 = rise + [rise[-1] * f for f in (0.95, 0.9, 0.86, 0.83)]
+    lows = [x * 0.97 for x in c2]
+    low, i = watchlist.macd_cross_low(c2, lows)
+    assert i is not None and i >= 60 and low == round(lows[i], 2)

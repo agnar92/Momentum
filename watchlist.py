@@ -40,7 +40,6 @@ EPS_STABILITY_WEIGHT = 0.2   # EPS Rating = 80 % percentyl wzrostu + 20 % percen
 EPS_STABILITY_QUARTERS = 8   # stabilność: odsetek ostatnich 8 kwartałów (r/r) z dodatnim wzrostem EPS
 EPS_STABILITY_MIN = 4        # min. tyle porównań r/r, żeby liczyć stabilność
 COMPOSITE_RS_WEIGHT = 0.5    # Composite = 50 % RS Rating + 50 % EPS Rating
-CHART_DAYS = 170             # ile sesji dziennych wysyłamy do wykresu Darvasa: pół roku (126 sesji) to karta, reszta to rozgrzewka dla MACD 12/26/9, SMA 20, NATR i boxów
 CHART_WEEKS = 312            # ile tygodni mieści wykres w stylu książki O'Neila (6 lat; domyślnie widać 156 = 3 lata, resztę pokazuje suwak)
 BENCHMARK = "^GSPC"          # benchmark na wykresie (S&P 500)
 NASDAQ = "^IXIC"             # drugi indeks do oceny rynku (M z CANSLIM)
@@ -1889,49 +1888,18 @@ def build_charts(tickers, frames, benchmark_df, eps_cache, now_utc=None, n_weeks
         chart["tl"] = detect_consolidation(wk, WEEKLY_FLAG)
         chart["distribution"] = detect_distribution_week(wk)
         payload["stocks"][t] = chart
-    payload["daily"] = build_daily_block(cleaned, bench)
     return payload
-
-
-def build_daily_block(cleaned, bench, n_days=CHART_DAYS):
-    """Dzienny odpowiednik wykresu: ostatnie `n_days` sesji (O/H/L/C, wolumen w tys., SMA 10 / 50 liczone na pełnej historii) i S&P 500.
-    Przełącza się go tylko w ustawieniach „Więcej” (Dar-Card i wykres słupkowy); wzorce (bazy, flagi, climax) zostają tygodniowe."""
-    def norm(df):
-        d = df.copy()
-        d.index = pd.DatetimeIndex(d.index).tz_localize(None).normalize()
-        return d[~d.index.duplicated(keep="last")].sort_index()
-
-    ref_idx = norm(bench).index if bench is not None else None
-    if ref_idx is None:
-        ref_idx = max((norm(df).index for df in cleaned.values()), key=len, default=None)
-    if ref_idx is None or not len(ref_idx):
-        return None
-    dates = ref_idx[-n_days:]
-    out = {"dates": [d.strftime("%Y-%m-%d") for d in dates],
-           "spx": _series(norm(bench)["Close"].astype(float).reindex(dates)) if bench is not None else None,
-           "stocks": {}}
-    for t, df in cleaned.items():
-        d = norm(df)
-        close = d["Close"].astype(float)
-        w = d.reindex(dates)
-        yr = close.dropna().groupby(close.dropna().index.year).agg(["max", "min"]).tail(3)   # High / Low z zamknięć dla 3 ostatnich lat kalendarzowych (tylko informacja na karcie)
-        out["stocks"][t] = {
-            "yr": [[int(y), round(float(r["max"]), 2), round(float(r["min"]), 2)] for y, r in yr.iterrows()],
-            "o": _series(w["Open"]), "h": _series(w["High"]), "l": _series(w["Low"]), "c": _series(w["Close"]),
-            "v": [None if pd.isna(x) else int(round(x / 1000)) for x in w["Volume"]],
-            "sma10": _series(close.rolling(10).mean().reindex(dates)), "sma50": _series(close.rolling(50).mean().reindex(dates)),
-        }
-    return out
 
 
 # ============================================================================
 # DARVAS (KARTA Z KSIĄŻKI) — port 1:1 z docs/js/darvas.js (darvasScan + darCardAnalyze), test zgodności: tests/fixtures/darvas_parity.json
 # Liczone tutaj, żeby aplikacja nie musiała pobierać wykresów, by pokazać listę „Do kupna” (pola dv_* w watchlist*.json).
 # ============================================================================
-DARVAS_CONFIRM = 3          # top / dół = zamknięcie, którego nie przebiły 3 KOLEJNE sesje PO nim
+DARVAS_CONFIRM = 3          # top / dół = zamknięcie, którego nie przebiły 3 KOLEJNE tygodnie PO nim (Darvas na TYGODNIOWYCH zamknięciach)
 DARVAS_ZONE_PCT = 5         # strefa zagrożenia: 5 % pod dołem boxa
 DARVAS_START_STOP_PCT = 10  # stop przy pierwszym wybiciu: 10 % pod wejściem
-DARCARD_SESSIONS = 126      # karta = boxy z ostatniego pół roku
+DARCARD_SESSIONS = 52       # karta = boxy z ostatniego roku (52 tygodnie)
+DARVAS_NATR_MAX = 8         # wejście tylko z boxa o niskim NATR (średni True Range tygodni boxa / cena < 8 %, Blueprint)
 
 
 def _js_round(x, nd=2):
@@ -2011,7 +1979,7 @@ def darvas_card_state(c):
     boxes = darvas_scan(c)
     lr = max((i for i, v in enumerate(c) if ok(v)), default=-1)
     if lr < 0 or not boxes:
-        return {"state": "NONE", "n": 0, "top": None, "bottom": None, "zone": None, "stop": None, "dist": None}
+        return {"state": "NONE", "n": 0, "top": None, "bottom": None, "zone": None, "stop": None, "dist": None, "i0": None, "i1": None}
     chain = [boxes[-1]]
     for prev in reversed(boxes[:-1]):
         if prev["top"] < chain[0]["top"] and not prev["cancelled"] and prev["outcome"] == "up":
@@ -2051,17 +2019,69 @@ def darvas_card_state(c):
     live = not step_down and not topmost["cancelled"] and topmost["outcome"] != "down"
     buy_line = _js_round(top)
     return {"state": state, "n": len(chain) if live else 0, "top": buy_line, "bottom": _js_round(bottom), "zone": _js_round(zone_low),
-            "stop": stop, "dist": _js_round((buy_line / px - 1) * 100, 1) if px else None}
+            "stop": stop, "dist": _js_round((buy_line / px - 1) * 100, 1) if px else None,
+            "i0": topmost["i0"], "i1": min(topmost["end"], lr)}
+
+
+def box_natr(h, lo, c, i0, i1):
+    """NATR boxa = średni True Range tygodni boxa / ich średnie zamknięcie (%) — kopia boxNatr z darvas.js; None przy < 3 tygodniach."""
+    ok = lambda v: v is not None and math.isfinite(v)   # noqa: E731
+    tr, cl = [], []
+    for i in range(max(1, i0), min(i1, len(c) - 1) + 1):
+        if not (ok(h[i]) and ok(lo[i]) and ok(c[i]) and ok(c[i - 1])):
+            continue
+        tr.append(max(h[i] - lo[i], abs(h[i] - c[i - 1]), abs(lo[i] - c[i - 1])))
+        cl.append(c[i])
+    if len(tr) < 3:
+        return None
+    avg_c = sum(cl) / len(cl)
+    return _js_round(sum(tr) / len(tr) / avg_c * 100, 1) if avg_c > 0 else None
+
+
+def macd_cross_low(c, lows, fast=12, slow=26, sig=9):
+    """Wyjście z pozycji (przesuwanie stopu po MACD): jeśli tygodniowy MACD jest TERAZ pod sygnałem, zwraca
+    (dołek świecy, w której przeciął sygnał w dół, data-indeks); inaczej (None, None). Jak macdWeeklyState w chart.js."""
+    ok = lambda v: v is not None and math.isfinite(v)   # noqa: E731
+    vals = [float(v) if ok(v) else None for v in c]
+    # EMA liczymy od pierwszego notowania (puste tygodnie przed debiutem pomijamy), indeksy przesuwamy z powrotem
+    first = next((i for i, v in enumerate(vals) if v is not None), None)
+    if first is None:
+        return None, None
+    seg = vals[first:]
+    if any(v is None for v in seg):
+        return None, None
+    f, sl = _ema_tv(seg, fast), _ema_tv(seg, slow)
+    macd = [a - b if a is not None and b is not None else None for a, b in zip(f, sl)]
+    signal = _ema_tv(macd, sig)
+    hist = [m - s_ if m is not None and s_ is not None else None for m, s_ in zip(macd, signal)]
+    last = len(hist) - 1
+    if last < 1 or hist[last] is None or hist[last] >= 0:
+        return None, None
+    for i in range(last, 0, -1):
+        if hist[i - 1] is None:
+            return None, None
+        if hist[i] < 0 and hist[i - 1] >= 0:
+            low = lows[first + i]
+            return (_js_round(float(low)) if ok(low) else None), first + i
+    return None, None
 
 
 def add_darvas_state(stocks, charts):
-    """Pola dv_* (stan karty Darvasa z dziennych zamknięć bloku `daily` wykresów) na każdej spółce; brak danych dziennych = pola None."""
-    daily = ((charts or {}).get("daily") or {}).get("stocks") or {}
+    """Pola dv_* (stan karty Darvasa z TYGODNIOWYCH zamknięć wykresów) + dv_natr (NATR najwyższego boxa) i pola wyjścia po MACD
+    (macd_w_cross_low / macd_w_cross_date = dołek świecy, w której tygodniowy MACD przeciął sygnał w dół, gdy jest teraz pod nim)."""
+    weeks = (charts or {}).get("weeks") or []
+    data = (charts or {}).get("stocks") or {}
     for st in stocks:
-        d = daily.get(st["ticker"])
-        r = darvas_card_state(d["c"]) if d and d.get("c") else None
+        d = data.get(st["ticker"])
+        c = d.get("c") if d else None
+        r = darvas_card_state(c) if c else None
         for k in ("state", "n", "top", "bottom", "zone", "stop", "dist"):
             st["dv_" + k] = r[k] if r else None
+        st["dv_tf"] = "W"
+        st["dv_natr"] = box_natr(d["h"], d["l"], c, r["i0"], r["i1"]) if r and r["i0"] is not None and d.get("h") and d.get("l") else None
+        low, i = macd_cross_low(c, d.get("l") or [None] * len(c)) if c else (None, None)
+        st["macd_w_cross_low"] = low
+        st["macd_w_cross_date"] = weeks[i] if i is not None and i < len(weeks) else None
 
 
 # ============================================================================

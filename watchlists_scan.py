@@ -282,8 +282,8 @@ def run(data_dir=None, action="refresh", name="", filters="", log=print):
         info = [{**x, "n": counts.get(x["name"], 0)} for x in old_data.get("lists", []) if x["name"].lower() != gone]
         keep = {s["ticker"] for s in stocks}
         charts = {**old_charts, "stocks": {t: c for t, c in (old_charts.get("stocks") or {}).items() if t in keep}} if old_charts else None
-        if charts and charts.get("daily"):
-            charts["daily"] = {**charts["daily"], "stocks": {t: c for t, c in (charts["daily"].get("stocks") or {}).items() if t in keep}}
+        if charts:
+            charts.pop("daily", None)   # dawny dzienny blok (Darvas jest już tygodniowy)
         if stocks:
             _rerate(stocks)
         log("Bez odświeżania pozostałych list — tylko usunięcie.")
@@ -323,12 +323,6 @@ def run(data_dir=None, action="refresh", name="", filters="", log=print):
             for t, c in old_charts["stocks"].items():
                 if t in have and t not in charts["stocks"]:
                     charts["stocks"][t] = _realign(c, old_charts.get("weeks", []), new_charts["weeks"])
-            od, nd = old_charts.get("daily"), new_charts.get("daily")
-            if od and nd:   # dzienny blok (Dar-Card / karta): stare spółki przenosimy na nową oś sesji po datach
-                charts["daily"] = {**nd, "stocks": dict(nd["stocks"])}
-                for t, c in (od.get("stocks") or {}).items():
-                    if t in have and t not in charts["daily"]["stocks"]:
-                        charts["daily"]["stocks"][t] = _realign(c, od.get("dates", []), nd["dates"])
         log("Przeskanowano tylko: " + ", ".join(x["name"] for x in sel) + " — pozostałe listy bez odświeżania.")
         return _finish(data_dir, lists, info, stocks, charts, now_utc, log)
     code, stocks, charts, info, members = _scan(lists, data_dir, now_utc, log)   # refresh (albo add / remove bez poprzednich plików) = wszystkie listy

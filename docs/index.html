@@ -21,7 +21,7 @@
 </div>
 
 <div class="topbar">
-    <div class="brand">WATCHLIST<span class="brand-sub"> // Finviz + yfinance, dane po każdej sesji, 📋 plan na weekend</span></div>
+    <div class="brand">WATCHLIST<span class="brand-sub"> // Finviz + yfinance, tygodniowe zamknięcia, 📋 plan na weekend (sobota rano)</span></div>
     <nav>
         <span id="connStatus" class="conn-status" title="Brak połączenia z siecią — pokazywane są ostatnie zapisane dane." hidden>⚠ Offline</span>
     </nav>
@@ -49,8 +49,8 @@
         <div class="toolbar">
             <span class="toolbar-info" id="dataInfo"></span>
             <label class="field"><span>Szukaj:</span><input type="text" id="searchInput" placeholder="ticker / spółka"></label>
-            <a class="btn" id="refreshLink" href="#" target="_blank" rel="noopener" data-weekly-title="Dane odświeżają się same po każdej sesji w USA (pon–pt ok. 22:30–23:30 czasu polskiego); 📋 Plan i powiadomienia — raz w tygodniu, po piątkowej sesji. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu."
-               title="Dane odświeżają się same po każdej sesji w USA (pon–pt ok. 22:30–23:30 czasu polskiego); 📋 Plan i powiadomienia — raz w tygodniu, po piątkowej sesji. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
+            <a class="btn" id="refreshLink" href="#" target="_blank" rel="noopener" data-weekly-title="Dane odświeżają się same raz w tygodniu (sobota rano, po piątkowej sesji) — Darvas liczy się na tygodniowych zamknięciach. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu."
+               title="Dane odświeżają się same raz w tygodniu (sobota rano, po piątkowej sesji) — Darvas liczy się na tygodniowych zamknięciach. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
         </div>
 
         <div class="plan-panel" id="planPanel"></div>
