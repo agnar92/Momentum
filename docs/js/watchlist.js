@@ -899,7 +899,7 @@ const COL = {
         ? `<td class="${s.pbox.state === "ABOVE" ? "positive" : s.pbox.state === "INSIDE" ? "" : "negative"}" title="Przypięty box ${s.pbox.bottom}–${s.pbox.top}: ${escapeHtml(s.pbox.text)}">📌 ${s.pbox.state === "ABOVE" ? "wybił" : s.pbox.state === "INSIDE" ? "w boxie" : s.pbox.state === "ZONE" ? "strefa!" : "EXIT"}</td>`
         : `<td class="muted"></td>`, "Przypięty (przytrzymaj box) box do monitorowania: wybił / w boxie / w strefie zagrożenia / exit"],
     posPl: ["Zysk", "pos_pl_pct", s => s.position
-        ? `<td class="${s.position.pl_pct >= 0 ? "positive" : "negative"}"><strong>${fmtPct(s.position.pl_pct)}</strong>${s.position.pl_usd !== null ? ` · <span class="small">${money0(s.position.pl_usd)}</span>` : ""}</td>` : `<td class="muted">—</td>`, "Zysk / strata od ceny wejścia (w % i w $)"],
+        ? `<td class="${s.position.pl_pct >= 0 ? "positive" : "negative"}"><strong>${fmtPct(s.position.pl_pct)}</strong>${s.position.pl_usd !== null ? ` · <span class="small">${money0(s.position.pl_usd)}</span>` : ""} <button type="button" class="btn pos-edit" data-pos-edit="${escapeHtml(s.ticker)}" title="Edytuj albo usuń pozycję">✏️</button></td>` : `<td class="muted">—</td>`, "Zysk / strata od ceny wejścia (w % i w $); ✏️ = edytuj / usuń pozycję"],
     posR: ["R", "pos_r", s => s.position && s.position.r !== null ? `<td class="${s.position.r >= 0 ? "positive" : "negative"}"><strong>${s.position.r.toFixed(2)}R</strong></td>` : `<td class="muted">—</td>`, "Zysk w wielokrotnościach początkowego ryzyka (cena − wejście) / (wejście − stop)"],
     posToStop: ["Do stopu", "pos_to_stop_pct", s => s.position && s.position.to_stop_pct !== null
         ? `<td class="${s.position.stop_hit ? "negative" : ""}">${s.position.stop_hit ? "🛑 STOP" : fmtPct(s.position.to_stop_pct)}</td>` : `<td class="muted">—</td>`, "O ile % cena musi spaść do stopu"],
@@ -1118,7 +1118,8 @@ function renderPlanPanel() {
     const acctOk = orders.some(o => o.size);
     const posRows = plan.positions.filter(p => match(p.ticker)).map(p => `<tr class="plan-${p.code.toLowerCase()}"><td><b><a href="#" data-plan-chart="${escapeHtml(p.ticker)}">${escapeHtml(p.ticker)}</a></b>`
         + `<small>${Number.isFinite(p.pl) ? `${p.pl > 0 ? "+" : ""}${p.pl.toFixed(1)} %` : ""}</small></td><td><b>${p.label}</b><small>${escapeHtml(p.text)}</small>`
-        + `${p.code === "RAISE" ? `<button type="button" class="btn plan-raise" data-raise="${escapeHtml(p.ticker)}|${p.newStop}">⬆ Ustaw stop ${p.newStop.toFixed(2)}</button>` : ""}</td></tr>`).join("");
+        + `${p.code === "RAISE" ? `<button type="button" class="btn plan-raise" data-raise="${escapeHtml(p.ticker)}|${p.newStop}">⬆ Ustaw stop ${p.newStop.toFixed(2)}</button>` : ""}</td>`
+        + `<td><button type="button" class="btn pos-edit" data-pos-edit="${escapeHtml(p.ticker)}" title="Edytuj albo usuń pozycję">✏️</button></td></tr>`).join("");
     el.innerHTML = `${weak ? `<p class="plan-meta plan-warn">🛑 Rynek w korekcie — Darvas w słabym rynku kupował mniej: rozważ mniejsze pozycje albo przerwę.</p>` : ""}
         <section class="plan-sec"><h3>1. 💼 Twoje pozycje <small>${plan.positions.length}</small></h3>
             ${posRows ? `<table class="orders-table plan-pos"><tbody>${posRows}</tbody></table>` : `<p class="muted">Brak pozycji. Po kupnie dodaj ją przyciskiem 💼 przy zleceniu.</p>`}</section>
@@ -1754,6 +1755,12 @@ function createPositionFromBox(ticker, top, bottom, line = false) {
     savePosition(ticker, { entry: top, stop, shares: size ? size.shares : null });
     showToast(`💼 Pozycja ${ticker}: wejście ${top.toFixed(2)}, stop ${stop.toFixed(2)}${size ? `, ${fmtShares(size.shares)} akcji` : " (ustaw konto, by policzyć akcje)"} — zobaczysz ją w zakładce 💼 Pozycje.`, { type: "success" });
 }
+if (typeof document !== "undefined") document.addEventListener("click", ev => {   // ✏️ przy pozycji (📋 Plan, 💼 Pozycje): arkusz edycji z „Usuń pozycję”
+    const b = ev.target.closest && ev.target.closest("[data-pos-edit]");
+    if (!b) return;
+    ev.preventDefault(); ev.stopPropagation();
+    openPositionSheet(b.dataset.posEdit);
+}, true);
 if (typeof document !== "undefined") document.addEventListener("click", ev => {
     const b = ev.target.closest && ev.target.closest(".box-mkpos");
     if (!b) return;
@@ -1934,9 +1941,10 @@ function updatePosButton() {
 }
 
 function openPositionSheet(ticker) {
-    const stock = findStock(ticker);
-    if (!stock) return;
     const cur = state.pos[ticker] || {};
+    // spółka spoza list (pozycja dodana ręcznie albo lista się zmieniła): arkusz i tak się otwiera, żeby dało się ją poprawić lub usunąć
+    const stock = findStock(ticker) || (state.pos[ticker] ? { ticker, price: cur.entry } : null);
+    if (!stock) return;
     const stop = Number.isFinite(annPositionLineValue(annStore, ticker, "stop")) ? annPositionLineValue(annStore, ticker, "stop") : cur.stop;
     const v = x => (Number.isFinite(x) ? x : "");
     const html = `
