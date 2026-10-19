@@ -1253,7 +1253,7 @@ html:has(body.krok-page), body.krok-page { height: auto; overflow: auto; }
 .krok-verdict.positive { border-left-color: var(--green); color: #7ee2a1; }
 .krok-verdict.negative { border-left-color: var(--red); color: #ff8a8a; }
 .krok-verdict.warn { border-left-color: #f0b429; color: #f5cf6b; }
-.krok-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(560px, 1fr)); gap: 18px; }
+.krok-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .krok-tile { display: block; color: inherit; text-decoration: none; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 12px; }
 a.krok-tile:hover { border-color: #9be15d; }
 .krok-tile.up { border-color: #2f9e57; }
@@ -1264,14 +1264,15 @@ a.krok-tile:hover { border-color: #9be15d; }
 .krok-chip { font-size: 12px; padding: 2px 8px; border-radius: 10px; background: var(--panel-alt); white-space: nowrap; }
 .krok-chip.positive { color: #7ee2a1; background: #16301f; } .krok-chip.negative { color: #ff8a8a; background: #3a1a1e; }
 .krok-chip.signal { color: #f5cf6b; background: #3a3016; } .krok-chip.muted { color: var(--text-dim); }
-.krok-chart { margin: 4px 0 8px; border-radius: 6px; overflow: hidden; }
+.krok-row { display: grid; grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr); gap: 16px; align-items: start; }
+.krok-chart { margin: 4px 0 0; border-radius: 6px; overflow: hidden; }
 .krok-chart svg { display: block; width: 100%; height: auto; }
-.krok-stats { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px 10px; font-size: 13px; }
-.krok-stats div { display: flex; flex-direction: column; }
-.krok-stats span { color: var(--text-dim); font-size: 12px; }
-.krok-stats b { font-size: 16px; }
+.krok-stats { display: flex; flex-direction: column; gap: 0; font-size: 14px; margin-top: 4px; }
+.krok-stats div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 7px 2px; border-bottom: 1px solid var(--border); }
+.krok-stats span { color: var(--text-dim); font-size: 13px; }
+.krok-stats b { font-size: 16px; text-align: right; }
 .krok-stats .positive { color: #7ee2a1; } .krok-stats .negative { color: #ff8a8a; } .krok-stats .muted { color: var(--text-dim); }
 .krok-next { display: block; width: max-content; margin: 18px auto 0; padding: 10px 22px; border-radius: 22px; background: var(--green); color: #fff; text-decoration: none; font: inherit; font-weight: 600; border: 0; cursor: pointer; }
 .krok-note { color: var(--text-dim); font-size: 13px; }
 .krok-select select { font: inherit; font-size: 15px; padding: 4px 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
-@media (max-width: 700px) { .krok { padding: 10px 10px 50px; } .krok-grid { grid-template-columns: 1fr; } .krok-steps a { padding: 7px 12px; font-size: 14px; } .krok-stats { grid-template-columns: repeat(3, 1fr); } .krok-tile-head { font-size: 15px; } }
+@media (max-width: 700px) { .krok { padding: 10px 10px 50px; } .krok-grid { grid-template-columns: 1fr; } .krok-steps a { padding: 7px 12px; font-size: 14px; } .krok-row { grid-template-columns: 1fr; gap: 6px; } .krok-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; } .krok-stats div { flex-direction: column; align-items: flex-start; gap: 0; padding: 0; border: 0; } .krok-stats span { font-size: 11px; } .krok-stats b { font-size: 14px; } .krok-tile-head { font-size: 15px; } }

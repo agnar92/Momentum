@@ -37,12 +37,13 @@ function getJson(url) {
 
 function chartHtml(c, weeks, glb, v) {
     const narrow = window.innerWidth < 700;
-    if (krok.view === "card") return darCardSvg({ c, weeks, v }, { fit: { w: 620, h: narrow ? 380 : 360 }, mini: true }).replace(' id="chartSvg"', "");
+    const W = narrow ? 620 : 1100, H = narrow ? 360 : 380;   // jak w Finvizie: szeroki wykres (≈ 75 % kafelka), wysokość ≈ 1/3 szerokości
+    if (krok.view === "card") return darCardSvg({ c, weeks, v }, { fit: { w: W, h: H }, mini: true }).replace(' id="chartSvg"', "");
     if (krok.view === "glb") {
         const px = [...c].reverse().find(Number.isFinite);
-        return glb ? glbCardSvg(glb, px, { fit: { w: 620, h: narrow ? 380 : 360 }, mini: true }) : `<p class="krok-note">Brak green line dla tego waloru.</p>`;
+        return glb ? glbCardSvg(glb, px, { fit: { w: W, h: H }, mini: true }) : `<p class="krok-note">Brak green line dla tego waloru.</p>`;
     }
-    return chart1030Svg(c, weeks, { w: 620, h: narrow ? 300 : 330 });
+    return chart1030Svg(c, weeks, { w: W, h: narrow ? 300 : 360 });
 }
 const trendChip = st => { const [l, k] = TREND_LABELS[st] || TREND_LABELS.na; return `<span class="krok-chip ${k}">${l}</span>`; };
 const stat = (label, value, k = "") => `<div><span>${label}</span><b class="${k}">${value}</b></div>`;
@@ -50,7 +51,7 @@ const stat = (label, value, k = "") => `<div><span>${label}</span><b class="${k}
 function tile({ title, sub, chips, chart, stats, href, frame }) {
     const tag = href ? "a" : "div";
     return `<${tag} class="krok-tile ${frame || ""}"${href ? ` href="${href}"` : ""}><div class="krok-tile-head"><b>${escapeHtml(title)}</b>${chips}</div>`
-        + (sub ? `<div class="krok-sub">${escapeHtml(sub)}</div>` : "") + `<div class="krok-chart">${chart}</div><div class="krok-stats">${stats}</div></${tag}>`;
+        + (sub ? `<div class="krok-sub">${escapeHtml(sub)}</div>` : "") + `<div class="krok-row"><div class="krok-chart">${chart}</div><div class="krok-stats">${stats}</div></div></${tag}>`;
 }
 
 function itemTile(it, spx, href) {
