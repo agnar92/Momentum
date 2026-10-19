@@ -18,3 +18,18 @@ test("marketVerdict: rośnie / mieszany / spada", () => {
     assert.equal(marketVerdict([up, down, down]).cls, "warn");
     assert.equal(marketVerdict([down, down]).cls, "negative");
 });
+
+test("krokFavList / krokToggleFav: gwiazdka jak Ulubione w Strategiach", () => {
+    const { krokFavList, krokToggleFav, krokRoute } = require("../../docs/js/krok.js");
+    assert.deepEqual(krokFavList(null), []);
+    const p0 = { scores: { A: { v: 3, t: "x" } }, favs: { B: { v: false, t: "a" } } };
+    const p1 = krokToggleFav(p0, "NVDA", "2026-10-19T00:00:00Z");
+    assert.deepEqual(p1.favs.NVDA, { v: true, t: "2026-10-19T00:00:00Z" });
+    assert.deepEqual(p1.scores, p0.scores);
+    assert.equal(p0.favs.NVDA, undefined);
+    assert.deepEqual(krokFavList(p1), ["NVDA"]);
+    const p2 = krokToggleFav(p1, "NVDA", "2026-10-19T01:00:00Z");
+    assert.deepEqual(p2.favs.NVDA, { v: false, t: "2026-10-19T01:00:00Z" });
+    assert.deepEqual(krokFavList(p2), []);
+    assert.equal(krokRoute("#obserwowane").step, "obserwowane");
+});

@@ -1274,5 +1274,9 @@ a.krok-tile:hover { border-color: #9be15d; }
 .krok-stats .positive { color: #7ee2a1; } .krok-stats .negative { color: #ff8a8a; } .krok-stats .muted { color: var(--text-dim); }
 .krok-next { display: block; width: max-content; margin: 18px auto 0; padding: 10px 22px; border-radius: 22px; background: var(--green); color: #fff; text-decoration: none; font: inherit; font-weight: 600; border: 0; cursor: pointer; }
 .krok-note { color: var(--text-dim); font-size: 13px; }
+.krok-star { background: none; border: 1px solid var(--border); border-radius: 50%; width: 34px; height: 34px; font-size: 20px; line-height: 1; color: var(--text-dim); cursor: pointer; flex: none; padding: 0; }
+.krok-star:hover { border-color: #f0b429; color: #f0b429; }
+.krok-star.on { color: #f0b429; border-color: #f0b429; background: #3a3016; }
+.krok-count:not(:empty) { font-size: 12px; background: #f0b429; color: #111; border-radius: 9px; padding: 0 7px; }
 .krok-select select { font: inherit; font-size: 15px; padding: 4px 8px; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; }
 @media (max-width: 700px) { .krok { padding: 10px 10px 50px; } .krok-grid { grid-template-columns: 1fr; } .krok-steps a { padding: 7px 12px; font-size: 14px; } .krok-row { grid-template-columns: 1fr; gap: 6px; } .krok-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px 10px; } .krok-stats div { flex-direction: column; align-items: flex-start; gap: 0; padding: 0; border: 0; } .krok-stats span { font-size: 11px; } .krok-stats b { font-size: 14px; } .krok-tile-head { font-size: 15px; } }
