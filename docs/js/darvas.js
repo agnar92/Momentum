@@ -373,58 +373,86 @@ function darvasFlatStatus(c, box, name = "flat base") {
 function darvasPanelGroup(full, o) {
     const { W, left, right, pY0, pH, start, endExcl, lastReal, fs, x } = o;
     if (typeof macdSeries !== "function") return "";
+    const ms = macdSeries(full.c), pW = W - left - right, x1 = W - right, end = Math.min(endExcl, lastReal + 1);
+    const idx = []; for (let i = start; i < end; i++) if (ms.macd[i] !== null) idx.push(i);
+    if (idx.length < 3) return "";
+    // cztery pasma jedno pod drugim, każde z własnym tytułem (nad danymi, nic na nich nie leży) i bieżącą wartością po prawej
+    const titleH = fs(17), gap = 4, bands = [["macd", 0.32], ["hist", 0.2], ["vol", 0.26], ["natr", 0.22]];
+    const B = {}; let yy0 = pY0 + 2;
+    bands.forEach(([k, f]) => { const h = (pH - 4) * f; B[k] = { y0: yy0, t: yy0 + titleH, h: h - titleH - gap }; yy0 += h; });
+    const narrow = pW < 760;   // telefon: krótkie tytuły, żeby nie wchodziły na wartość po prawej
+    const f2 = v => (Math.abs(v) >= 10 ? v.toFixed(1) : v.toFixed(2));
+    const title = (b, txt, val, valCol = "#e8eaed") => `<text x="${left + 8}" y="${(b.y0 + titleH * 0.78).toFixed(1)}" font-size="${fs(12.5)}" font-weight="700" fill="#cfd5e0">${txt}</text>`
+        + (val ? `<text x="${x1 - 8}" y="${(b.y0 + titleH * 0.78).toFixed(1)}" font-size="${fs(12.5)}" font-weight="700" fill="${valCol}" text-anchor="end">${val}</text>` : "");
+    const bw = Math.max(1, Math.min(o.bw, 18));
+    const g = [`<g id="dMacd" opacity="${o.opacity ?? 0}" pointer-events="none">`, `<rect x="${left}" y="${pY0.toFixed(1)}" width="${pW}" height="${pH.toFixed(1)}" fill="#11151c" stroke="#3a4152"/>`];
+    // pasma: lekko różne tło, cienka linia podziału
+    bands.forEach(([k], n) => { const b = B[k]; g.push(`<rect x="${left}" y="${b.y0.toFixed(1)}" width="${pW}" height="${(b.t - b.y0 + b.h + gap).toFixed(1)}" fill="${n % 2 ? "#151a22" : "#11151c"}"/>`); if (n) g.push(`<line x1="${left}" x2="${x1}" y1="${b.y0.toFixed(1)}" y2="${b.y0.toFixed(1)}" stroke="#3a4152"/>`); });
+    // zakres tygodni boxa: delikatne złote tło + wyraźne pionowe krawędzie (nie przyciemnia danych)
+    g.push(`<rect id="dMacdSpan" x="${(o.spanX ?? 0).toFixed(1)}" y="${(pY0 + 1).toFixed(1)}" width="${(o.spanW ?? 0).toFixed(1)}" height="${(pH - 2).toFixed(1)}" fill="#ffd54a" fill-opacity="0.07" stroke="#ffd54a" stroke-width="1.5" stroke-dasharray="5 4" stroke-opacity="0.8"/>`);
+    const last = idx[idx.length - 1];
+    // 1) MACD i sygnał — własna skala (min…max obu linii), zero tylko gdy mieści się w zakresie
     {
-        const ms = macdSeries(full.c), pW = W - left - right;
-        const mH = pH * 0.5, vH = pH * 0.25, nH = pH * 0.25, vY0 = pY0 + mH, nY0 = vY0 + vH;
-        const idx = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (ms.macd[i] !== null) idx.push(i);
-        if (idx.length > 2) {
-            const vals = idx.flatMap(i => [ms.macd[i], ms.signal[i] ?? 0, ms.hist[i] ?? 0]);
-            const amp = Math.max(...vals.map(Math.abs)) * 1.1 || 1, ym = v => pY0 + 6 + (mH - 12) * (1 - (v + amp) / (2 * amp));
-            const lab = (yy, txt) => `<text x="${left + 6}" y="${(yy + fs(11)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#cfd5e0" stroke="#0f141a" stroke-width="3" paint-order="stroke">${txt}</text>`;
-            const g = [`<g id="dMacd" opacity="${o.opacity ?? 0}" pointer-events="none">`, `<rect x="${left}" y="${pY0.toFixed(1)}" width="${pW}" height="${pH.toFixed(1)}" fill="#0f141a" fill-opacity="1" stroke="#2c3140"/>`,
-                `<rect id="dMacdSpan" x="${(o.spanX ?? 0).toFixed(1)}" y="${pY0.toFixed(1)}" width="${(o.spanW ?? 0).toFixed(1)}" height="${pH.toFixed(1)}" fill="#ffd54a" fill-opacity="0.16"/>`,
-                `<line x1="${left}" x2="${W - right}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#4a5262" stroke-dasharray="3 3"/>`,
-                `<line x1="${left}" x2="${W - right}" y1="${vY0.toFixed(1)}" y2="${vY0.toFixed(1)}" stroke="#2c3140"/>`, `<line x1="${left}" x2="${W - right}" y1="${nY0.toFixed(1)}" y2="${nY0.toFixed(1)}" stroke="#2c3140"/>`];
-            const bwm = o.bw;
-            idx.forEach(i => { const h = ms.hist[i]; if (h === null) return; const yy = ym(h), y0 = ym(0); g.push(`<rect x="${(x(i) - bwm / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bwm.toFixed(1)}" height="${Math.max(0.5, Math.abs(yy - y0)).toFixed(1)}" fill="${h >= 0 ? "#2e9e5b" : "#c0504d"}" fill-opacity="0.8"/>`); });
-            const poly = arr => idx.filter(i => arr[i] !== null).map(i => `${x(i).toFixed(1)},${ym(arr[i]).toFixed(1)}`).join(" ");
-            g.push(`<polyline points="${poly(ms.macd)}" fill="none" stroke="#6ea8ff" stroke-width="${fs(1.8)}" stroke-linejoin="round"/>`, `<polyline points="${poly(ms.signal)}" fill="none" stroke="#ff9f43" stroke-width="${fs(1.6)}" stroke-linejoin="round"/>`);
-            idx.forEach(i => {   // przecięcia: ▼ czerwony (MACD w dół pod sygnał = wyjście), ▲ zielony
-                const a = ms.hist[i - 1], b = ms.hist[i];
-                if (a === null || a === undefined || b === null) return;
-                if (a >= 0 && b < 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) + 3).toFixed(1)} l-4,-7 h8 z" fill="#ff6b6b" transform="rotate(180 ${x(i).toFixed(1)} ${(ym(ms.macd[i]) - 0.5).toFixed(1)})"/>`);
-                else if (a < 0 && b >= 0) g.push(`<path d="M${x(i).toFixed(1)},${(ym(ms.macd[i]) - 3).toFixed(1)} l-4,7 h8 z" fill="#4ee08a"/>`);
+        const b = B.macd, vals = idx.flatMap(i => [ms.macd[i], ms.signal[i]]).filter(v => v !== null);
+        let lo = Math.min(...vals), hi = Math.max(...vals); const pad = (hi - lo) * 0.12 || Math.abs(hi) * 0.1 || 1; lo -= pad; hi += pad;
+        const ym = v => b.t + b.h * (1 - (v - lo) / (hi - lo));
+        if (lo < 0 && hi > 0) g.push(`<line x1="${left}" x2="${x1}" y1="${ym(0).toFixed(1)}" y2="${ym(0).toFixed(1)}" stroke="#5a6375" stroke-dasharray="3 3"/><text x="${x1 - 6}" y="${(ym(0) - 3).toFixed(1)}" font-size="${fs(10)}" fill="#8a8f9c" text-anchor="end">0</text>`);
+        const poly = arr => idx.filter(i => arr[i] !== null).map(i => `${x(i).toFixed(1)},${ym(arr[i]).toFixed(1)}`).join(" ");
+        g.push(`<polyline points="${poly(ms.signal)}" fill="none" stroke="#ff9f43" stroke-width="${fs(2.2)}" stroke-linejoin="round"/>`, `<polyline points="${poly(ms.macd)}" fill="none" stroke="#6ea8ff" stroke-width="${fs(2.4)}" stroke-linejoin="round"/>`);
+        idx.forEach(i => {   // przecięcia: ▼ czerwony (MACD w dół pod sygnał = wyjście), ▲ zielony
+            const a = ms.hist[i - 1], c = ms.hist[i];
+            if (a === null || a === undefined || c === null) return;
+            const cx = x(i).toFixed(1), cy = ym(ms.macd[i]);
+            if (a >= 0 && c < 0) g.push(`<path d="M${cx},${(cy + 11).toFixed(1)} l-6,-9 h12 z" fill="#ff5252" stroke="#11151c" stroke-width="1"/>`);
+            else if (a < 0 && c >= 0) g.push(`<path d="M${cx},${(cy - 11).toFixed(1)} l-6,9 h12 z" fill="#4ee08a" stroke="#11151c" stroke-width="1"/>`);
+        });
+        const above = ms.hist[last] >= 0;
+        g.push(title(b, narrow ? `<tspan fill="#6ea8ff">MACD</tspan> / <tspan fill="#ff9f43">sygnał</tspan>` : `MACD 12·26·9 tyg. · <tspan fill="#6ea8ff">━ MACD</tspan> <tspan fill="#ff9f43">━ sygnał</tspan> · <tspan fill="#ff5252">▼</tspan> wyjście <tspan fill="#4ee08a">▲</tspan> wejście`,
+            above ? (narrow ? "nad sygnałem ✓" : "MACD nad sygnałem ✓") : (narrow ? "pod sygnałem ✗" : "MACD pod sygnałem ✗"), above ? "#4ee08a" : "#ff6b6b"));
+    }
+    // 2) histogram MACD − sygnał — symetryczna skala wokół zera
+    {
+        const b = B.hist, hv = idx.map(i => ms.hist[i]).filter(v => v !== null), amp = Math.max(...hv.map(Math.abs)) * 1.1 || 1;
+        const yh = v => b.t + b.h / 2 - (b.h / 2) * (v / amp), y0 = yh(0);
+        g.push(`<line x1="${left}" x2="${x1}" y1="${y0.toFixed(1)}" y2="${y0.toFixed(1)}" stroke="#5a6375"/>`);
+        idx.forEach(i => { const h = ms.hist[i]; if (h === null) return; const yy = yh(h); g.push(`<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${Math.min(yy, y0).toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, Math.abs(yy - y0)).toFixed(1)}" fill="${h >= 0 ? "#3fbf72" : "#e05a56"}"/>`); });
+        const hl = ms.hist[last];
+        g.push(title(b, narrow ? "Histogram" : "Histogram (MACD − sygnał)", `${hl >= 0 ? "+" : ""}${f2(hl)}`, hl >= 0 ? "#4ee08a" : "#ff6b6b"));
+    }
+    // 3) wolumen tygodnia: zielone / czerwone wg kierunku zamknięcia, przerywana średnia z 10 poprzednich tygodni, złota obwódka = ≥ 1,4× średniej (reguła wybicia)
+    {
+        const b = B.vol, vv = full.v || [], cc = full.c || [];
+        const wk = []; for (let i = start; i < end; i++) if (Number.isFinite(vv[i])) wk.push(i);
+        const avgAt = i => { const prev = []; for (let j = i - 10; j < i; j++) if (Number.isFinite(vv[j])) prev.push(vv[j]); return prev.length >= 5 ? prev.reduce((a, c) => a + c, 0) / prev.length : null; };
+        if (wk.length > 2) {
+            const vmax = Math.max(...wk.map(i => vv[i])) * 1.05 || 1, yv = v => b.t + b.h - b.h * (v / vmax);
+            wk.forEach(i => {
+                const up = !(Number.isFinite(cc[i - 1]) && cc[i] < cc[i - 1]), av = avgAt(i), big = av !== null && vv[i] >= DARVAS_BREAKOUT_VOL * av, yy = yv(vv[i]);
+                g.push(`<rect x="${(x(i) - bw / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${bw.toFixed(1)}" height="${Math.max(1, b.t + b.h - yy).toFixed(1)}" fill="${up ? "#3fbf72" : "#e05a56"}"${big ? ` stroke="#ffd54a" stroke-width="2"` : ""}/>`);
             });
-            g.push(lab(pY0, `MACD 12·26·9 · <tspan fill="#6ea8ff">MACD</tspan> · <tspan fill="#ff9f43">sygnał</tspan> · ▼ wyjście`));
-            // wolumen tygodnia: słupki zielone / czerwone wg kierunku zamknięcia, przerywana średnia z 10 poprzednich tygodni, złota obwódka = wolumen ≥ 1,4× średniej (reguła wybicia)
-            const vv = full.v || [], cc = full.c || [];
-            const wk = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (Number.isFinite(vv[i])) wk.push(i);
-            if (wk.length > 2) {
-                const vmax = Math.max(...wk.map(i => vv[i])) * 1.08 || 1, yv = v => vY0 + vH - 3 - (vH - 18) * (v / vmax);
-                const avgAt = i => { const prev = []; for (let j = i - 10; j < i; j++) if (Number.isFinite(vv[j])) prev.push(vv[j]); return prev.length >= 5 ? prev.reduce((a, b2) => a + b2, 0) / prev.length : null; };
-                wk.forEach(i => {
-                    const up = !(Number.isFinite(cc[i - 1]) && cc[i] < cc[i - 1]), av = avgAt(i), big = av !== null && vv[i] >= DARVAS_BREAKOUT_VOL * av, yy = yv(vv[i]);
-                    g.push(`<rect x="${(x(i) - bwm / 2).toFixed(1)}" y="${yy.toFixed(1)}" width="${bwm.toFixed(1)}" height="${Math.max(0.5, vY0 + vH - 3 - yy).toFixed(1)}" fill="${up ? "#2e9e5b" : "#c0504d"}" fill-opacity="0.85"${big ? ` stroke="#ffd54a" stroke-width="1.4"` : ""}/>`);
-                });
-                const avgPts = wk.map(i => [i, avgAt(i)]).filter(p2 => p2[1] !== null).map(p2 => `${x(p2[0]).toFixed(1)},${yv(p2[1]).toFixed(1)}`).join(" ");
-                if (avgPts) g.push(`<polyline points="${avgPts}" fill="none" stroke="#cfd5e0" stroke-width="${fs(1.2)}" stroke-dasharray="4 3"/>`);
-                g.push(lab(vY0, `Wolumen · śr. 10 ses. · złota ≥ ${DARVAS_BREAKOUT_VOL}×`));
-            }
-            // NATR (14 tyg.): linia, zielona strefa poniżej 8 (Blueprint), przerywany próg 8
-            const nt = natrSeries(full.h || [], full.l || [], full.c || []);
-            const ni = []; for (let i = start; i < Math.min(endExcl, lastReal + 1); i++) if (nt[i] !== null) ni.push(i);
-            if (ni.length > 2) {
-                const nmax = Math.max(12, ...ni.map(i => nt[i])) * 1.1, yn = v => nY0 + nH - 3 - (nH - 18) * (v / nmax);
-                g.push(`<rect x="${left}" y="${yn(NATR_GOOD).toFixed(1)}" width="${pW}" height="${(nY0 + nH - 3 - yn(NATR_GOOD)).toFixed(1)}" fill="#2e9e5b" fill-opacity="0.12"/>`,
-                    `<line x1="${left}" x2="${W - right}" y1="${yn(NATR_GOOD).toFixed(1)}" y2="${yn(NATR_GOOD).toFixed(1)}" stroke="#4ee08a" stroke-dasharray="4 3" stroke-opacity="0.7"/>`,
-                    `<polyline points="${ni.map(i => `${x(i).toFixed(1)},${yn(nt[i]).toFixed(1)}`).join(" ")}" fill="none" stroke="#b57cff" stroke-width="${fs(1.8)}" stroke-linejoin="round"/>`);
-                g.push(lab(nY0, `NATR 14 · zielone < ${NATR_GOOD} · teraz ${nt[ni[ni.length - 1]].toFixed(1)} %`));
-            }
-            g.push(`</g>`);
-            return g.join("");
-        }
-        }
-    return "";
+            const avgPts = wk.map(i => [i, avgAt(i)]).filter(p => p[1] !== null).map(p => `${x(p[0]).toFixed(1)},${yv(p[1]).toFixed(1)}`).join(" ");
+            if (avgPts) g.push(`<polyline points="${avgPts}" fill="none" stroke="#e8eaed" stroke-width="${fs(1.6)}" stroke-dasharray="5 4"/>`);
+            const lw = wk[wk.length - 1], la = avgAt(lw), r = la ? vv[lw] / la : null;
+            g.push(title(b, narrow ? "Wolumen" : `Wolumen tyg. · <tspan fill="#e8eaed">┄ średnia 10 tyg.</tspan> · <tspan fill="#ffd54a">▢ ≥ ${DARVAS_BREAKOUT_VOL}× średniej</tspan>`, r ? `${r.toFixed(1)}×${narrow ? " śr." : " średniej"}` : "", r && r >= DARVAS_BREAKOUT_VOL ? "#ffd54a" : "#e8eaed"));
+        } else g.push(title(b, "Wolumen tyg. — brak danych"));
+    }
+    // 4) NATR (14 tyg.): skala dopasowana do wartości (z progiem 8), zielona strefa poniżej 8
+    {
+        const b = B.natr, nt = natrSeries(full.h || [], full.l || [], full.c || []);
+        const ni = []; for (let i = start; i < end; i++) if (nt[i] !== null) ni.push(i);
+        if (ni.length > 2) {
+            const nv = ni.map(i => nt[i]); let lo = Math.min(...nv, NATR_GOOD), hi = Math.max(...nv, NATR_GOOD); const pad = (hi - lo) * 0.15 || 1; lo = Math.max(0, lo - pad); hi += pad;
+            const yn = v => b.t + b.h * (1 - (v - lo) / (hi - lo)), yg = yn(NATR_GOOD);
+            g.push(`<rect x="${left}" y="${yg.toFixed(1)}" width="${pW}" height="${Math.max(0, b.t + b.h - yg).toFixed(1)}" fill="#2e9e5b" fill-opacity="0.14"/>`,
+                `<line x1="${left}" x2="${x1}" y1="${yg.toFixed(1)}" y2="${yg.toFixed(1)}" stroke="#4ee08a" stroke-dasharray="5 4" stroke-opacity="0.8"/>`,
+                `<text x="${x1 - 6}" y="${(yg - 3).toFixed(1)}" font-size="${fs(10)}" fill="#4ee08a" text-anchor="end">${NATR_GOOD} %</text>`,
+                `<polyline points="${ni.map(i => `${x(i).toFixed(1)},${yn(nt[i]).toFixed(1)}`).join(" ")}" fill="none" stroke="#c89bff" stroke-width="${fs(2.4)}" stroke-linejoin="round"/>`);
+            const nl = nt[ni[ni.length - 1]];
+            g.push(title(b, narrow ? `NATR 14 · <tspan fill="#4ee08a">&lt; ${NATR_GOOD} % ciasno</tspan>` : `NATR 14 tyg. (zmienność) · <tspan fill="#4ee08a">zielone = poniżej ${NATR_GOOD} %, ciasno</tspan>`, `${nl.toFixed(1)} %`, nl < NATR_GOOD ? "#4ee08a" : "#ff9f43"));
+        } else g.push(title(b, "NATR — za mało danych"));
+    }
+    g.push(`</g>`);
+    return g.join("");
 }
 
 function darvasSvg(full, win, opts = {}) {
@@ -696,7 +724,7 @@ function darvasSvg(full, win, opts = {}) {
     // gdzie leżą linie MACD i sygnału, czy wybicie miało wolumen i czy box jest ciasny (NATR < 8) względem boxa. Zakres tygodni zaznaczonego boxa jest podświetlony (dMacdSpan).
     // Oś czasu ta sama co wykres, panel zasłania tylko dół obszaru wykresu na czas zaznaczenia.
     if (typeof macdSeries === "function") {
-        const pH = Math.max(150, Math.min(250, ph * 0.44)), pY0 = H - L.bottom - 58 - pH;
+        const pH = Math.max(240, Math.min(380, ph * 0.5)), pY0 = H - L.bottom - 58 - pH;
         out.push(darvasPanelGroup(full, { W, left: L.left, right: L.right, pY0, pH, start, endExcl, lastReal, fs, x, bw: Math.max(1, pw / slots * 0.6) }));
     }
     return `<svg id="chartSvg" data-geom="${[W, H, L.left, L.right, L.top, L.bottom, start, slots, lo, hi].join(",")}" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Pudełka Darvasa ${escapeHtml(full.ticker || "")}">${out.join("")}</svg>`;
@@ -1022,7 +1050,7 @@ function attachDarCard(container, full, readoutEl) {
         el.setAttribute("stroke", "#ffd54a"); el.setAttribute("stroke-width", "3.4");
         const [t, bt, , , i0s, i1s] = el.dataset.box.split("|"), i0 = +i0s, i1 = +i1s;
         const start = Math.max(0, i0 - 20), endExcl = Math.min(lastReal + 1, Math.max(i1, i0 + 6) + 20), slots = Math.max(2, endExcl - start), pw = W - left - right;
-        const x = i => left + pw * (i - start + 0.5) / slots, pH = Math.max(120, Math.min(210, H * 0.34)), pY0 = H - pH - 66;   // nad paskiem akcji (≈ 56 px)
+        const x = i => left + pw * (i - start + 0.5) / slots, pH = Math.max(240, Math.min(380, H * 0.46)), pY0 = H - pH - 66;   // nad paskiem akcji (≈ 56 px)
         const xa = left + pw * (i0 - start) / slots, xb = left + pw * (Math.min(i1, endExcl - 1) - start + 1) / slots;
         clearPanel();
         const tb = svg.querySelector("#dcTable"); if (tb) tb.setAttribute("display", "none");
