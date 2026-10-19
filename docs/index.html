@@ -32,6 +32,7 @@
         <div class="drawer-header">
             <div class="drawer-header-title"><h2 id="drawerTitle">Plan na tydzień</h2><div class="drawer-meta" id="drawerMeta"></div></div>
             <div class="drawer-tabs">
+                <button class="drawer-tab" data-tab="FLOW">🧭 Krok po kroku</button>
                 <button class="drawer-tab active" data-tab="PLAN">📋 Plan</button>
                 <button class="drawer-tab" data-tab="POS">💼 Pozycje</button>
                 <button class="drawer-tab" data-tab="LIST">📋 Lista</button>
@@ -53,6 +54,7 @@
                title="Dane odświeżają się same raz w tygodniu (sobota rano, po piątkowej sesji) — Darvas liczy się na tygodniowych zamknięciach. Ten przycisk otwiera GitHub Actions — kliknij tam „Run workflow”, żeby pobrać świeże dane od razu.">🔄 Odśwież dane</a>
         </div>
 
+        <div class="plan-panel flow-panel" id="flowPanel" hidden></div>
         <div class="plan-panel" id="planPanel"></div>
         <div class="tab-controls" id="controls-LIST"></div>
         <div class="filters-panel" id="filtersPanel" hidden>
@@ -198,6 +200,7 @@
 </div>
 
 <nav class="bottom-nav" id="bottomNav" aria-label="Główna nawigacja">
+    <button type="button" data-tab="FLOW"><span class="bn-icon">🧭</span><span class="bn-label">Rynek</span></button>
     <button type="button" data-tab="PLAN"><span class="bn-icon">📋</span><span class="bn-label">Plan</span></button>
     <button type="button" data-tab="POS"><span class="bn-icon">💼</span><span class="bn-label">Pozycje</span></button>
     <button type="button" data-tab="CS"><span class="bn-icon">🏆</span><span class="bn-label">CANSLIM</span></button>
@@ -212,6 +215,7 @@
 <script src="js/darvas.js"></script>
 <script src="js/heatmap.js"></script>
 <script src="js/glb.js"></script>
+<script src="js/flow.js"></script>
 <script src="js/annotate.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/watchlist.js"></script>

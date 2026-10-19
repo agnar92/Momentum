@@ -68,6 +68,15 @@ const browserGlobals = {
     boxNatr: "readonly",
     natrGrade: "readonly",
     heatmapHtml: "readonly",
+    // docs/js/flow.js (🧭 Krok po kroku, ładowany po glb.js)
+    trend1030: "readonly",
+    mansfieldRS: "readonly",
+    flowBreakout: "readonly",
+    flowSortStocks: "readonly",
+    chart1030Svg: "readonly",
+    flowStatRows: "readonly",
+    flowStatsHtml: "readonly",
+    TREND_LABELS: "readonly",
     // docs/js/glb.js (Green Line Breakout, ładowany po darvas.js)
     glbAnalyze: "readonly",
     glbOrders: "readonly",

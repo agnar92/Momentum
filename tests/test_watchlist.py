@@ -1404,3 +1404,20 @@ def test_add_glb_sets_fields_and_card_data():
     assert st["glb_age"] == 6
     g = charts["stocks"]["AAA"]["glb"]
     assert g["m0"] == "2025-01" and g["c"][2] == 120.0 and g["partial"] is False and g["full"] is False
+
+
+def test_build_overview_aligns_weeks_on_sp500_and_adds_glb_card():
+    idx = pd.bdate_range("2023-01-02", "2025-09-30")
+    def frame(v):
+        close = pd.Series(v, index=idx, dtype=float)
+        return pd.DataFrame({"Open": close, "High": close, "Low": close, "Close": close, "Volume": 1000})
+    up = np.linspace(100, 200, len(idx))
+    frames = {"^GSPC": frame(up), "XLK": frame(up * 2), "XLE": frame(up[::-1])}
+    ov = watchlist.build_overview(frames, pd.Timestamp("2025-10-04"), n_weeks=50)
+    assert len(ov["weeks"]) == 50
+    by = {i["t"]: i for i in ov["items"]}
+    assert set(by) == {"^GSPC", "XLK", "XLE"}
+    assert by["^GSPC"]["kind"] == "index" and by["XLK"]["kind"] == "sector" and by["XLK"]["sector"] == "Technology"
+    assert len(by["XLK"]["c"]) == 50 and by["XLK"]["c"][-1] == pytest.approx(2 * by["^GSPC"]["c"][-1])
+    assert by["XLE"]["glb"]["line"] is not None          # spadająca seria: rekord z początku stoi > 3 miesiące
+    assert watchlist.build_overview({"XLK": frame(up)}) is None   # bez S&P 500 nie ma osi tygodni

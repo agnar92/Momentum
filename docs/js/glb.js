@@ -59,8 +59,8 @@ function glbCardSvg(g, px, opts = {}) {
     if (!g || !Array.isArray(g.c) || !g.c.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Brak danych GLB — pojawią się po najbliższym odświeżeniu danych (watchlist.py).</text></svg>`;
     const a = glbAnalyze(g, px);
     const n = g.c.length, m0 = ymNum(g.m0);
-    const tableH = fs(14) * 6 + fs(10);
-    const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: tableH + fs(36) };
+    const tableH = opts.mini ? 0 : fs(14) * 6 + fs(10);   // mini (kafelek 🧭 Krok po kroku): bez dolnej tabelki
+    const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: opts.mini ? fs(22) : tableH + fs(36) };
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const vals = g.c.filter(Number.isFinite).concat(Number.isFinite(px) ? [px] : []).concat(a.line ? [a.line * 1.02, a.stop] : []);
     const lo0 = Math.min(...vals), hi0 = Math.max(...vals);
@@ -113,6 +113,7 @@ function glbCardSvg(g, px, opts = {}) {
         const nearLine = a.line && Math.abs(y(a.line) - dcy) < fs(14);   // cena tuż przy linii: podpis pod kropką
         out.push(`<text x="${(dcx - fs(9)).toFixed(1)}" y="${(dcy + (nearLine && dcy >= y(a.line) ? fs(17) : nearLine ? -fs(9) : fs(3.5))).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24" text-anchor="end">${(Math.round(px * 100) / 100).toFixed(2)}</text>`);
     }
+    if (opts.mini) return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${out.join("")}</svg>`;
     const ty = H - tableH - 4, tx = L.left + 6, c2 = tx + fs(10) * 0.62 * 22;
     const maxCh = Math.max(6, Math.floor((W - L.right - tx) / (fs(11) * 0.62))), ttl = String(opts.bookTitle || ""), ttlShort = ttl.length > maxCh ? ttl.slice(0, maxCh - 1) + "…" : ttl;
     out.push(`<text x="${tx}" y="${ty - 4}" font-size="${fs(11)}" font-weight="700" fill="#2b2a24">${escapeHtml(ttlShort)}</text>`);
