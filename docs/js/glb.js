@@ -52,7 +52,6 @@ function glbOrders(stocks, acct = null, size = null) {
 }
 
 // Karta GLB w stylu Dar-Card: papier w linie, oś cen po lewej, miesięczne zamknięcia jako kreski (jak notowania wpisywane na kartę),
-// pod green line biały „box” od miesiąca rekordu do dziś (góra = linia, dół = najniższe zamknięcie od rekordu) z cienkim kreskowanym paskiem stopu,
 // zielona linia do prawego brzegu z opisem stanu, żółta kropka = bieżące zamknięcie, u dołu spółka, okres i tabelka „Rekord / Green line / Stop”.
 function glbCardSvg(g, px, opts = {}) {
     const W = opts.fit ? opts.fit.w : 1000, H = opts.fit ? opts.fit.h : 710, compact = !!opts.compact;
@@ -68,7 +67,7 @@ function glbCardSvg(g, px, opts = {}) {
     const span = Math.log(hi0 / lo0) || 0.1, lo = lo0 * Math.exp(-0.12 * span), hi = hi0 * Math.exp(0.12 * span);
     const y = v => L.top + ph * (1 - Math.log(v / lo) / Math.log(hi / lo));
     const slot = pw / (n + 1), x = i => L.left + slot * (i + 0.5);
-    const out = [`<defs><pattern id="glbHatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="5" height="5" fill="#9a9a9a"/><circle cx="1.2" cy="1.2" r="0.9" fill="#222"/><circle cx="3.7" cy="3.7" r="0.9" fill="#222"/></pattern></defs>`];
+    const out = [];
     out.push(`<style>text,line,circle,polyline,path,rect{pointer-events:none}</style>`);
     out.push(`<rect x="0" y="0" width="${W}" height="${H}" fill="#e9e4d2"/>`);
     const qStep = Math.exp(Math.log(hi / lo) / 70);
@@ -88,17 +87,11 @@ function glbCardSvg(g, px, opts = {}) {
         }
     }
     const brk = a.state === "BREAK", colr = brk ? "#0a8f3c" : a.state === "ABOVE" ? "#5c7a3a" : "#0f8a3a";
-    if (a.line) {   // box = baza pod green line: od miesiąca rekordu do pierwszego zamknięcia nad linią (albo do dziś); dalej linia przerywana
+    if (a.line) {   // sama green line (bez boxa, user: „do GLB wystarczy sama linia”): od miesiąca rekordu do pierwszego zamknięcia nad linią (albo do dziś); dalej przerywana
         const inCard = g.lm && ymNum(g.lm) >= m0, iR = inCard ? ymNum(g.lm) - m0 : 0;
         let iB = n;
         for (let i = iR + 1; i < n; i++) if (g.c[i] >= a.line) { iB = i; break; }
         const yT = y(a.line), xe = iB < n ? x(iB) - slot * 0.5 : W - L.right;
-        if (inCard && iB - iR >= 2) {
-            const base = g.c.slice(iR + 1, iB).filter(Number.isFinite), low = base.length ? Math.min(...base) : a.line * 0.9;
-            const xa = x(iR) - slot * 0.4, yB = y(Math.min(low, a.line * 0.995));
-            out.push(`<rect x="${xa.toFixed(1)}" y="${yT.toFixed(1)}" width="${(xe - xa).toFixed(1)}" height="${Math.max(2, yB - yT).toFixed(1)}" fill="#ffffff" stroke="#111" stroke-width="1.6"/>`);
-            out.push(`<rect x="${xa.toFixed(1)}" y="${yT.toFixed(1)}" width="${(xe - xa).toFixed(1)}" height="${Math.max(2, Math.min(y(a.stop) - yT, 7)).toFixed(1)}" fill="url(#glbHatch)" stroke="#333" stroke-width="0.6"/>`);
-        }
         out.push(`<line x1="${(inCard ? x(iR) : L.left).toFixed(1)}" x2="${xe.toFixed(1)}" y1="${yT.toFixed(1)}" y2="${yT.toFixed(1)}" stroke="${colr}" stroke-width="3"/>`);
         if (iB < n) out.push(`<line x1="${xe.toFixed(1)}" x2="${(W - L.right).toFixed(1)}" y1="${yT.toFixed(1)}" y2="${yT.toFixed(1)}" stroke="${colr}" stroke-width="1.8" stroke-dasharray="6 4"/>`);   // przebita: obowiązuje do potwierdzenia nowego rekordu
         if (inCard) out.push(`<circle cx="${x(iR).toFixed(1)}" cy="${yT.toFixed(1)}" r="${fs(4)}" fill="${colr}" stroke="#111" stroke-width="1"/>`);
