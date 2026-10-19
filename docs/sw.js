@@ -1,4 +1,4 @@
-const CACHE = "momentum-shell-v311";
+const CACHE = "momentum-shell-v312";
 const SHELL = [
   "index.html", "krok.html",
   "css/style.css",
