@@ -1,7 +1,7 @@
 {
   "name": "Watchlist",
   "short_name": "Watchlist",
-  "start_url": ".",
+  "start_url": "krok.html",
   "scope": ".",
   "display": "standalone",
   "background_color": "#0e0f13",

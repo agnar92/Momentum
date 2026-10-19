@@ -57,9 +57,8 @@ const TAB_DEFAULT_SORT = {
     LIST: ["ticker", "asc"], WATCH: ["darvas_rank", "asc"],
     CS: ["cs", "desc"], BASES: ["pct_to_pivot", "asc"], POS: ["pos_to_stop_pct", "desc"], FAV: ["ticker", "asc"],
 };
-const BOTTOM_NAV_TABS = ["FLOW", "PLAN", "POS", "CS", "BOXES"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
+const BOTTOM_NAV_TABS = ["PLAN", "POS", "CS", "BOXES"];   // zakładki z dolnej nawigacji telefonu; reszta jest w menu Więcej
 const BOXES_TAB = "BOXES";   // podstrona „Boxy” (bez własnej tabeli) — przegląd boxów Darvasa: monitorowane, nowe, wybicia, trzymaj, sprzedaj; patrz #boxesPanel
-const FLOW_TAB = "FLOW";   // 🧭 Krok po kroku: 1) rynek (indeksy), 2) sektory (ETF), 3) akcje z sektora — kafelki 10:30 / Dar-Card / GLB; patrz #flowPanel, renderFlowPanel
 const PLAN_TAB = "PLAN";   // 📋 Plan na tydzień (start): pozycje z decyzją + zlecenia kupna Darvasa — patrz #planPanel, renderPlanPanel
 const LEAN_HIDDEN_TABS = ["LIST", "WATCH", "BASES", "FAV"];   // schowane po porządkach (Filtry → „Pokaż wszystkie zakładki” je przywraca)
 const FILTERS_TAB = "FILTERS";   // zakładka z konfiguracją wyszukiwania (bez własnej tabeli) — patrz #filtersPanel
@@ -1394,7 +1393,6 @@ function renderTable() {
     const tab = state.tab;
     if (tab === BOXES_TAB) { renderBoxesPanel(); return; }
     if (tab === PLAN_TAB) { renderPlanPanel(); return; }
-    if (tab === FLOW_TAB) { renderFlowPanel(); return; }
     if (tab === FILTERS_TAB) {
         state.data.stocks.forEach(s => { s.score = Object.prototype.hasOwnProperty.call(state.scores, s.ticker) ? state.scores[s.ticker] : null; s.upside_main = upsideMain(s); });
         tagBreakouts(state.data.stocks, [], state.brk.maxDistPct);
@@ -1587,7 +1585,7 @@ function updateSortHeaders(table) {
 
 function saveSettings() {
     try {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, maxPos: state.maxPos, boxNatrMax: state.boxNatrMax, risingOnly: state.risingOnly, allTabs: state.allTabs, planSeen: true, flowSeen: true }));
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify({ tab: state.tab, csMin: state.csMin, csCore: state.csCore, csAccel: state.csAccel, csRs: state.csRs, bases: state.bases, brk: state.brk, patterns: state.patterns, natrMax: state.natrMax, maxPos: state.maxPos, boxNatrMax: state.boxNatrMax, risingOnly: state.risingOnly, allTabs: state.allTabs, planSeen: true }));
     } catch (e) { /* brak localStorage — ignorujemy */ }
 }
 
@@ -1595,10 +1593,9 @@ function loadSettings() {
     try {
         const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null");
         if (!saved) return;
-        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB || saved.tab === BOXES_TAB || saved.tab === PLAN_TAB || saved.tab === FLOW_TAB) state.tab = saved.tab;
+        if (TAB_TITLES[saved.tab] || saved.tab === FILTERS_TAB || saved.tab === BOXES_TAB || saved.tab === PLAN_TAB) state.tab = saved.tab;
         if (saved.allTabs === true) state.allTabs = true;
         if (!saved.planSeen || (!state.allTabs && LEAN_HIDDEN_TABS.includes(state.tab))) state.tab = PLAN_TAB;   // po porządkach start = Plan
-        if (!saved.flowSeen) state.tab = FLOW_TAB;   // nowy proces krok po kroku: pierwszy start po zmianie = 🧭 Rynek
         if (Number.isFinite(saved.csMin)) state.csMin = saved.csMin;
         if (typeof saved.csCore === "boolean") state.csCore = saved.csCore;
         if (typeof saved.csAccel === "boolean") { state.csAccel = saved.csAccel; setCanslimAccel(saved.csAccel); }
@@ -2091,143 +2088,14 @@ function showTab(tab, resetSort = true) {
     const onFilters = tab === FILTERS_TAB;
     const onBoxes = tab === BOXES_TAB;
     const onPlan = tab === PLAN_TAB;
-    const onFlow = tab === FLOW_TAB;
     document.getElementById("planPanel").hidden = !onPlan;
-    document.getElementById("flowPanel").hidden = !onFlow;
     document.getElementById("filtersPanel").hidden = !onFilters;
     document.getElementById("boxesPanel").hidden = !onBoxes;
-    document.getElementById("cardSortBar").hidden = onFilters || onBoxes || onPlan || onFlow;
-    document.body.classList.toggle("on-plan", onPlan || onFlow);
-    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : onBoxes ? "Boxy Darvasa" : onPlan ? "Plan na tydzień" : onFlow ? "Krok po kroku" : TAB_TITLES[tab];
+    document.getElementById("cardSortBar").hidden = onFilters || onBoxes || onPlan;
+    document.body.classList.toggle("on-plan", onPlan);
+    document.getElementById("drawerTitle").textContent = onFilters ? "Filtry" : onBoxes ? "Boxy Darvasa" : onPlan ? "Plan na tydzień" : TAB_TITLES[tab];
     saveSettings();
     renderTable();
-}
-
-// 🧭 Krok po kroku (user: „najpierw sprawdzam rynek — S&P 500, Nasdaq 100, Dow Jones — na tygodniowych 10:30, potem sektory, klik w sektor
-// = lista akcji z tego sektora w tym samym widoku, posortowana po boxach i GLB najbliżej wybicia; przycisk TA przełącza 10:30 / Dar-Card / GLB”).
-// Indeksy i ETF sektorów: docs/data/overview.json (watchlist.py::build_overview), akcje: watchlist.json + watchlists.json, wykresy: charts*.json.
-const FLOW_VIEWS = [["1030", "10:30"], ["card", "Dar-Card"], ["glb", "GLB"]];
-const FLOW_STEPS = [["market", "① Rynek"], ["sectors", "② Sektory"], ["stocks", "③ Akcje"]];
-const FLOW_PAGE = 20;
-const flowUi = { step: "market", sector: "", view: "1030", shown: FLOW_PAGE };
-try {
-    const f = JSON.parse(localStorage.getItem("momentum_watchlist_flow") || "null");
-    if (f && FLOW_VIEWS.some(v => v[0] === f.view)) flowUi.view = f.view;
-    if (f && FLOW_STEPS.some(v => v[0] === f.step)) flowUi.step = f.step;
-    if (f && typeof f.sector === "string") flowUi.sector = f.sector;
-} catch (e) { /* brak localStorage */ }
-function saveFlowUi() {
-    try { localStorage.setItem("momentum_watchlist_flow", JSON.stringify({ view: flowUi.view, step: flowUi.step, sector: flowUi.sector })); } catch (e) { /* ignoruj */ }
-}
-let overviewPromise = null;
-function loadOverview() {
-    if (!overviewPromise) overviewPromise = fetchJson("data/overview.json", true).then(d => { if (!d || !Array.isArray(d.items)) { overviewPromise = null; return null; } return d; });
-    return overviewPromise;
-}
-
-// Wykres kafelka w wybranym widoku TA: 10:30 (cena + SMA 10 / 30 tyg.), karta Darvasa (boxy z 2 lat) albo karta GLB (miesięczne zamknięcia, green line).
-function flowChartHtml(c, weeks, glb, v) {
-    const narrow = window.innerWidth < 640;
-    if (flowUi.view === "card") return darCardSvg({ c, weeks, v }, { fit: { w: 520, h: narrow ? 330 : 280 }, mini: true });
-    if (flowUi.view === "glb") {
-        const px = [...c].reverse().find(Number.isFinite);
-        return glb ? glbCardSvg(glb, px, { fit: { w: 520, h: narrow ? 330 : 280 }, mini: true }) : `<div class="empty-state">Brak danych GLB (green line) dla tego waloru.</div>`;
-    }
-    return chart1030Svg(c, weeks, { w: 520, h: narrow ? 250 : 230 });
-}
-function flowTileHtml({ key, title, sub, chips, chart, stats, cls, data }) {
-    return `<div class="ta-tile ${cls || ""}" ${data || ""} tabindex="0"><div class="ta-head"><b>${escapeHtml(title)}</b><span class="ta-sub">${escapeHtml(sub || "")}</span>${chips || ""}</div>`
-        + `<div class="ta-body"><div class="ta-chart" data-key="${escapeHtml(key)}">${chart}</div>${stats}</div></div>`;
-}
-const trendChip = t => { const [l, c] = TREND_LABELS[t.state] || TREND_LABELS.na; return `<span class="ta-chip ${c}">${l}</span>`; };
-
-function flowItemTile(it, ov, bench, clickable) {
-    const { rows, trend, mrs } = flowStatRows(it.c, ov.weeks, it.t === "^GSPC" ? null : bench);
-    const px = [...it.c].reverse().find(Number.isFinite);
-    const mrsChip = Number.isFinite(mrs) ? `<span class="ta-chip ${mrs > 0 ? "positive" : "negative"}">MRS ${(mrs > 0 ? "+" : "") + mrs.toFixed(1).replace(".", ",")}</span>` : "";
-    const nStocks = it.kind === "sector" ? flowStocks(it.sector, false).length : 0;
-    return flowTileHtml({ key: it.t, title: `${it.t.replace("^", "")} · ${it.name}`, sub: `${Number.isFinite(px) ? px.toFixed(2) : ""}${it.kind === "sector" ? ` · ${nStocks} spółek z list` : ""}`,
-        chips: trendChip(trend) + mrsChip, chart: flowChartHtml(it.c, ov.weeks, it.glb, null), stats: flowStatsHtml(rows),
-        cls: `${trend.state === "up" ? "ta-up" : trend.state === "down" ? "ta-down" : ""}${clickable ? " ta-click" : ""}`, data: clickable ? `data-flow-sector="${escapeHtml(it.t)}"` : "" });
-}
-// Spółki z obu list (CANSLIM + Watchlisty) z danego sektora Finviza; z wyszukiwarką.
-function flowStocks(sector, search = true) {
-    const q = search ? (state.search || "").trim().toLowerCase() : "";
-    return planStocks(state.data ? state.data.stocks : [], watchData ? watchData.stocks : [])
-        .filter(s => (!sector || s.sector === sector) && (!q || s.ticker.toLowerCase().includes(q) || String(s.company || "").toLowerCase().includes(q)));
-}
-function flowStockTile(s, charts, wcharts) {
-    const src = charts && charts.stocks && charts.stocks[s.ticker] ? charts : wcharts && wcharts.stocks && wcharts.stocks[s.ticker] ? wcharts : null;
-    const ch = src ? src.stocks[s.ticker] : null;
-    const brk = s.flow_brk || flowBreakout(s);
-    const dv = s.dv_state ? `${DARVAS_STATE_SHORT[s.dv_state] || s.dv_state}${Number.isFinite(s.dv_n) && s.dv_n ? ` · ${s.dv_n}× ↑` : ""}` : "—";
-    const glbTxt = s.glb_state && s.glb_state !== "NONE" ? `${(GLB_STATE_LABELS[s.glb_state] || [s.glb_state])[0]}${Number.isFinite(s.glb_dist) ? ` · ${Math.abs(s.glb_dist).toFixed(1).replace(".", ",")} % ${s.glb_dist > 0 ? "pod" : "nad"} linią` : ""}` : "—";
-    const head = [["Darvas", dv, ""], ["GLB", glbTxt, ""], ["RS Rating", Number.isFinite(s.rs_rating) ? String(s.rs_rating) : "—", Number.isFinite(s.rs_rating) && s.rs_rating >= 80 ? "positive" : ""],
-        ["MACD tyg.", s.macd_w_above === true ? "nad sygnałem" : s.macd_w_above === false ? "pod sygnałem" : "—", s.macd_w_above === true ? "positive" : s.macd_w_above === false ? "negative" : ""],
-        ["Kapitalizacja", fmtCap(s.market_cap), ""], ["Wyniki", s.earnings || "—", ""]];
-    const st = ch ? flowStatRows(ch.c, src.weeks, src.spx) : { rows: [], trend: { state: "na" } };
-    const chart = ch ? flowChartHtml(ch.c, src.weeks, ch.glb, ch.v) : `<div class="empty-state">Ładowanie wykresu…</div>`;
-    return flowTileHtml({ key: s.ticker, title: `${s.ticker} · ${s.company || ""}`, sub: [s.industry, Number.isFinite(s.price) ? s.price.toFixed(2) : ""].filter(Boolean).join(" · "),
-        chips: trendChip(st.trend) + (brk.text ? `<span class="ta-chip ta-brk">${escapeHtml(brk.text)}</span>` : ""), chart, stats: flowStatsHtml(head.concat(st.rows)),
-        cls: `ta-click${brk.key !== null && brk.key <= 0 ? " ta-up" : ""}`, data: `data-flow-stock="${escapeHtml(s.ticker)}"` });
-}
-const DARVAS_STATE_SHORT = { BUY: "🟢 KUP", READY: "🔵 gotowe", HOLD: "trzymaj", WAIT: "czeka", SELL: "🔴 sprzedaj", OUT: "poza boxem", NONE: "brak boxa" };
-function fmtCap(v) {
-    if (!Number.isFinite(v)) return "—";
-    return v >= 1e12 ? `${(v / 1e12).toFixed(2)} bln $` : v >= 1e9 ? `${(v / 1e9).toFixed(1)} mld $` : `${(v / 1e6).toFixed(0)} mln $`;
-}
-
-let flowRenderToken = 0;
-async function renderFlowPanel() {
-    const el = document.getElementById("flowPanel");
-    if (!el || !state.data) return;
-    const token = ++flowRenderToken;
-    const ov = await loadOverview();
-    if (token !== flowRenderToken || state.tab !== FLOW_TAB) return;
-    const steps = `<div class="flow-steps">${FLOW_STEPS.map(([k, l]) => `<button type="button" class="ml-btn${flowUi.step === k ? " active" : ""}" data-flow-step="${k}">${l}</button>`).join("")}</div>`;
-    const views = `<div class="flow-views"><span>TA:</span>${FLOW_VIEWS.map(([k, l]) => `<button type="button" class="ml-btn${flowUi.view === k ? " active" : ""}" data-flow-view="${k}">${l}</button>`).join("")}</div>`;
-    let body = "";
-    const meta = document.getElementById("drawerMeta");
-    if (!ov) {
-        body = `<p class="muted">Brak danych indeksów i sektorów (overview.json) — pojawią się po najbliższym odświeżeniu danych.</p>`;
-    } else if (flowUi.step === "market") {
-        const idx = ov.items.filter(i => i.kind === "index");
-        const spx = (ov.items.find(i => i.t === "^GSPC") || {}).c;
-        const up = idx.filter(i => trend1030(i.c).state === "up").length;
-        if (meta) meta.textContent = `rynek: ${up} z ${idx.length} indeksów rośnie (10:30) · tydzień do ${ov.weeks[ov.weeks.length - 1]}`;
-        body = `<p class="flow-lead ${up >= 2 ? "positive" : up === 0 ? "negative" : ""}">${up >= 2 ? "✅ Rynek rośnie" : up === 0 ? "🛑 Rynek spada" : "⚠ Rynek mieszany"}: ${up} z ${idx.length} indeksów nad rosnącą SMA 30 tyg. z SMA 10 nad SMA 30.</p>`
-            + idx.map(i => flowItemTile(i, ov, spx, false)).join("")
-            + `<button type="button" class="btn flow-next" data-flow-step="sectors">Dalej: ② Sektory ›</button>`;
-    } else if (flowUi.step === "sectors") {
-        const spx = (ov.items.find(i => i.t === "^GSPC") || {}).c;
-        const secs = ov.items.filter(i => i.kind === "sector").map(i => ({ i, m: mansfieldRS(i.c, spx) })).sort((a, b) => (b.m ?? -999) - (a.m ?? -999));
-        const strong = secs.filter(x => Number.isFinite(x.m) && x.m > 0).length;
-        if (meta) meta.textContent = `${strong} z ${secs.length} sektorów wygrywa z S&P 500 (Mansfield RS > 0) · stuknij sektor = jego akcje`;
-        body = `<p class="flow-lead">Sektory od najsilniejszego (Mansfield RS = ETF / S&P 500 względem średniej 52 tyg.; > 0 = wygrywa z rynkiem). Stuknij kafelek, żeby zobaczyć akcje z sektora.</p>`
-            + secs.map(x => flowItemTile(x.i, ov, spx, true)).join("");
-    } else {
-        const it = ov.items.find(i => i.t === flowUi.sector && i.kind === "sector");
-        const list = flowSortStocks(flowStocks(it ? it.sector : ""));
-        const [charts, wcharts] = await Promise.all([loadCharts(), loadWatchCharts()]);
-        if (token !== flowRenderToken || state.tab !== FLOW_TAB) return;
-        const secOpts = `<select id="flowSector"><option value="">wszystkie sektory</option>${ov.items.filter(i => i.kind === "sector").map(i => `<option value="${i.t}"${i.t === flowUi.sector ? " selected" : ""}>${escapeHtml(i.name)} (${i.t})</option>`).join("")}</select>`;
-        const withSig = list.filter(s => s.flow_brk && s.flow_brk.key !== null).length;
-        if (meta) meta.textContent = `${list.length} spółek${it ? ` · ${it.name}` : ""} · ${withSig} z sygnałem boxa / GLB · od najbliższego wybicia`;
-        body = `<p class="flow-lead">Sektor: ${secOpts} — akcje z list (CANSLIM + Watchlisty) od najbliższego wybicia: góra boxa Darvasa albo green line. Stuknij kafelek = pełny wykres.</p>`
-            + (list.length ? list.slice(0, flowUi.shown).map(s => flowStockTile(s, charts, wcharts)).join("") : `<p class="muted">Brak spółek z tego sektora na listach.</p>`)
-            + (list.length > flowUi.shown ? `<button type="button" class="btn flow-more" id="flowMore">Pokaż więcej (${list.length - flowUi.shown})</button>` : "");
-    }
-    el.innerHTML = steps + views + body;
-    el.querySelectorAll("[data-flow-step]").forEach(b => b.addEventListener("click", () => { flowUi.step = b.dataset.flowStep; flowUi.shown = FLOW_PAGE; saveFlowUi(); renderFlowPanel(); el.scrollTop = 0; }));
-    el.querySelectorAll("[data-flow-view]").forEach(b => b.addEventListener("click", () => { flowUi.view = b.dataset.flowView; saveFlowUi(); renderFlowPanel(); }));
-    el.querySelectorAll("[data-flow-sector]").forEach(t => t.addEventListener("click", () => { flowUi.sector = t.dataset.flowSector; flowUi.step = "stocks"; flowUi.shown = FLOW_PAGE; saveFlowUi(); renderFlowPanel(); el.scrollTop = 0; }));
-    el.querySelectorAll("[data-flow-stock]").forEach(t => t.addEventListener("click", () => openChart(t.dataset.flowStock)));
-    const sel = document.getElementById("flowSector");
-    if (sel) sel.addEventListener("change", () => { flowUi.sector = sel.value; flowUi.shown = FLOW_PAGE; saveFlowUi(); renderFlowPanel(); });
-    const more = document.getElementById("flowMore");
-    if (more) more.addEventListener("click", () => { flowUi.shown += FLOW_PAGE; renderFlowPanel(); });
-    const first = el.querySelector("[data-flow-stock]");   // PC (widok dzielony): wykres po prawej od razu pokazuje pierwszą spółkę z listy sektora
-    if (splitMode && first && (!chartRequested || !el.querySelector(`[data-flow-stock="${CSS.escape(chartRequested)}"]`))) openChart(first.dataset.flowStock);
 }
 
 // M z CANSLIM: stan rynku (S&P 500 i Nasdaq) policzony w watchlist.py::market_state — pasek nad listą.
@@ -3092,7 +2960,7 @@ async function refreshDataIfStale() {
         const watchNew = !!(watch && watch.generated_at !== oldWatch);
         if (!mainNew && !watchNew) return;
         if (mainNew) state.data = cs;
-        chartsPromise = null; watchChartsPromise = null; estimatesPromise = null; estimatesMap = null; overviewPromise = null;   // wykresy i estymaty też mogły się zmienić
+        chartsPromise = null; watchChartsPromise = null; estimatesPromise = null; estimatesMap = null;   // wykresy i estymaty też mogły się zmienić
         if (mainNew) loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
         renderDataInfo();
         renderMarket();
@@ -3125,6 +2993,11 @@ if (typeof document !== "undefined") {
         initSplitResizer();
         showTab(state.tab);
         hideLoadingOverlay();
+        const askTicker = new URLSearchParams(location.search).get("chart");   // krok.html → stuknięty kafelek akcji otwiera tu pełny wykres
+        if (askTicker && /^[A-Z0-9.^-]{1,12}$/i.test(askTicker)) {
+            history.replaceState(null, "", location.pathname);
+            openChart(askTicker.toUpperCase());
+        }
         refreshBoxesBadge();
         loadEstimates().then(map => { if (map) { fillTargets(state.data.stocks, map); renderTable(); } });
     })();
