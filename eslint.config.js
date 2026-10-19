@@ -20,6 +20,8 @@ const browserGlobals = {
     clearTimeout: "readonly",
     module: "readonly",
     URL: "readonly",
+    URLSearchParams: "readonly",
+    history: "readonly",
     // require pojawia sie tylko w galezi `typeof require === "function" &&
     // typeof window === "undefined"` na gorze plikow (Node/tests/js/).
     require: "readonly",
@@ -70,6 +72,7 @@ const browserGlobals = {
     heatmapHtml: "readonly",
     // docs/js/flow.js (🧭 Krok po kroku, ładowany po glb.js)
     trend1030: "readonly",
+    flowPerf: "readonly",
     mansfieldRS: "readonly",
     flowBreakout: "readonly",
     flowSortStocks: "readonly",
