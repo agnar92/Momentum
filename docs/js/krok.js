@@ -1,6 +1,8 @@
 // 🧭 Krok po kroku (osobna strona krok.html): 1) rynek — S&P 500, Nasdaq 100, Dow Jones, 2) sektory — ETF SPDR od najsilniejszego
 // (Mansfield RS), 3) akcje z wybranego sektora od najbliższego wybicia (box Darvasa / green line). Wszystko na tygodniowych wykresach
 // 10:30 (cena + SMA 10 i 30 tyg.) albo na karcie Darvasa / GLB. Stan kroku w adresie (#rynek, #sektory, #akcje/XLK), więc „wstecz” działa.
+// ⭐ Obserwowane (#obserwowane): spółki oznaczone gwiazdką na kafelkach — te same „Ulubione” co w Strategiach (localStorage momentum_watchlist_prefs,
+// favs: {T: {v, t}}), więc synchronizują się przez Gist przy następnym otwarciu Strategii.
 // Dane: data/overview.json (indeksy, ETF), watchlist.json + watchlists.json (akcje), charts*.json (wykresy akcji, ładowane w kroku 3).
 if (typeof require === "function" && typeof window === "undefined") {
     Object.assign(globalThis, require("./shared.js"), require("./flow.js"));
@@ -12,7 +14,7 @@ const KROK_VIEWS = ["1030", "card", "glb"];
 // Adres → krok (pure): "#akcje/XLK" → {step: "akcje", sector: "XLK"}; nieznany = rynek.
 function krokRoute(hash) {
     const [step, sector] = String(hash || "").replace(/^#/, "").split("/");
-    return { step: ["rynek", "sektory", "akcje"].includes(step) ? step : "rynek", sector: sector ? decodeURIComponent(sector).toUpperCase() : "" };
+    return { step: ["rynek", "sektory", "akcje", "obserwowane"].includes(step) ? step : "rynek", sector: sector ? decodeURIComponent(sector).toUpperCase() : "" };
 }
 
 // Werdykt rynku (pure): ile indeksów jest w trendzie 10:30.
@@ -22,6 +24,23 @@ function marketVerdict(items) {
     if (up === n) return { cls: "positive", up, n, text: `Rynek rośnie — ${up} z ${n} indeksów w trendzie wzrostowym. Można szukać okazji.` };
     if (up === 0) return { cls: "negative", up, n, text: `Rynek spada — żaden indeks nie jest w trendzie wzrostowym. Lepiej czekać.` };
     return { cls: "warn", up, n, text: `Rynek mieszany — ${up} z ${n} indeksów w trendzie wzrostowym. Ostrożnie, mniejsze pozycje.` };
+}
+
+// Ulubione (pure): lista tickerów z gwiazdką i przełączenie gwiazdki (wpis z czasem zmiany jak w watchlist.js; usunięcie = v false).
+const KROK_PREFS_KEY = "momentum_watchlist_prefs";
+function krokFavList(prefs) {
+    const f = (prefs && prefs.favs) || {};
+    return Object.keys(f).filter(t => f[t] && f[t].v === true).sort();
+}
+function krokToggleFav(prefs, ticker, now) {
+    const p = prefs && typeof prefs === "object" ? { ...prefs } : {};
+    p.favs = { ...(p.favs || {}) };
+    const on = !(p.favs[ticker] && p.favs[ticker].v === true);
+    p.favs[ticker] = { v: on, t: now };
+    return p;
+}
+function krokPrefs() {
+    try { return JSON.parse(localStorage.getItem(KROK_PREFS_KEY) || "null") || {}; } catch (e) { return {}; }
 }
 
 const pct = (v, d = 1) => (Number.isFinite(v) ? `${v > 0 ? "+" : ""}${v.toFixed(d).replace(".", ",")} %` : "—");
@@ -48,9 +67,9 @@ function chartHtml(c, weeks, glb, v) {
 const trendChip = st => { const [l, k] = TREND_LABELS[st] || TREND_LABELS.na; return `<span class="krok-chip ${k}">${l}</span>`; };
 const stat = (label, value, k = "") => `<div><span>${label}</span><b class="${k}">${value}</b></div>`;
 
-function tile({ title, sub, chips, chart, stats, href, frame }) {
+function tile({ title, sub, chips, chart, stats, href, frame, star }) {
     const tag = href ? "a" : "div";
-    return `<${tag} class="krok-tile ${frame || ""}"${href ? ` href="${href}"` : ""}><div class="krok-tile-head"><b>${escapeHtml(title)}</b>${chips}</div>`
+    return `<${tag} class="krok-tile ${frame || ""}"${href ? ` href="${href}"` : ""}><div class="krok-tile-head">${star || ""}<b>${escapeHtml(title)}</b>${chips}</div>`
         + (sub ? `<div class="krok-sub">${escapeHtml(sub)}</div>` : "") + `<div class="krok-row"><div class="krok-chart">${chart}</div><div class="krok-stats">${stats}</div></div></${tag}>`;
 }
 
@@ -65,9 +84,18 @@ function itemTile(it, spx, href) {
 }
 
 function stockList(sector) {
+    return flowSortStocks([...allStocks().values()].filter(s => !sector || s.sector === sector));
+}
+
+function starBtn(t) {
+    const on = krokFavList(krokPrefs()).includes(t);
+    return `<button type="button" class="krok-star${on ? " on" : ""}" data-fav="${escapeHtml(t)}" title="${on ? "Usuń z obserwowanych" : "Dodaj do obserwowanych"}" aria-pressed="${on}">${on ? "★" : "☆"}</button>`;
+}
+
+function allStocks() {
     const seen = new Map();
     [...((krok.main || {}).stocks || []), ...((krok.watch || {}).stocks || [])].forEach(s => { if (!seen.has(s.ticker)) seen.set(s.ticker, s); });
-    return flowSortStocks([...seen.values()].filter(s => !sector || s.sector === sector));
+    return seen;
 }
 
 function stockTile(s) {
@@ -80,7 +108,7 @@ function stockTile(s) {
         + stat("3 mies.", pct(p.q), cls(p.q)) + stat("vs SMA 30", pct(t.pct30), cls(t.pct30)) + stat("MACD tyg.", s.macd_w_above === true ? "nad sygnałem" : s.macd_w_above === false ? "pod sygnałem" : "—", s.macd_w_above === true ? "positive" : s.macd_w_above === false ? "negative" : "");
     return tile({ title: `${s.ticker} · ${s.company || ""}`, sub: [s.industry, s.earnings ? `wyniki ${s.earnings}` : ""].filter(Boolean).join(" · "),
         chips: trendChip(t.state) + signal, chart: ch ? chartHtml(ch.c, src.weeks, ch.glb, ch.v) : `<p class="krok-note">Brak wykresu.</p>`, stats,
-        href: `index.html?chart=${encodeURIComponent(s.ticker)}`, frame: b.key !== null && b.key <= 0 ? "up" : "" });
+        href: `index.html?chart=${encodeURIComponent(s.ticker)}`, frame: b.key !== null && b.key <= 0 ? "up" : "", star: starBtn(s.ticker) });
 }
 
 async function render() {
@@ -102,6 +130,17 @@ async function render() {
         body.innerHTML = `<h1>Krok 2 · Które sektory są silne?</h1><p class="krok-lead">Od najsilniejszego. Mansfield RS = sektor (ETF) względem S&amp;P 500, porównany ze swoją średnią z roku: powyżej 0 = sektor wygrywa z rynkiem. Stuknij sektor, żeby zobaczyć jego akcje.</p>`
             + `<p class="krok-verdict ${strong >= 6 ? "positive" : strong <= 3 ? "warn" : ""}">${strong} z ${secs.length} sektorów wygrywa z rynkiem.</p>`
             + `<div class="krok-grid">${secs.map(x => itemTile(x.i, spx, `#akcje/${x.i.t}`)).join("")}</div>`;
+    } else if (r.step === "obserwowane") {
+        const favs = krokFavList(krokPrefs());
+        body.innerHTML = `<h1>⭐ Obserwowane</h1><p class="krok-lead">Spółki oznaczone gwiazdką ☆ na kafelkach w kroku 3 — od najbliższego wybicia. Gwiazdka to te same „Ulubione” co w Strategiach (synchronizują się przez Gist po otwarciu Strategii). Stuknij ★, żeby usunąć.</p>`
+            + (favs.length ? `<p class="krok-note">Ładowanie wykresów…</p>` : `<p class="krok-verdict">Nic jeszcze nie obserwujesz. W kroku 3 stuknij ☆ przy spółce, żeby ją dodać.</p><a class="krok-next" href="#akcje">Przejdź do kroku 3 · Akcje ›</a>`);
+        if (!favs.length) return;
+        if (!krok.charts) [krok.charts, krok.wcharts] = await Promise.all([getJson("data/charts.json"), getJson("data/charts_watchlists.json")]);
+        if (krokRoute(location.hash).step !== "obserwowane") return;
+        const all = allStocks(), known = flowSortStocks(favs.filter(t => all.has(t)).map(t => all.get(t))), missing = favs.filter(t => !all.has(t));
+        body.querySelector(".krok-note").outerHTML = `<p class="krok-verdict ${known.some(s => s.flow_brk.key !== null) ? "positive" : ""}">${favs.length} obserwowanych · ${known.filter(s => s.flow_brk.key !== null).length} blisko wybicia (do 15 %).</p>`
+            + `<div class="krok-grid">${known.map(stockTile).join("")}</div>`
+            + (missing.length ? `<p class="krok-note">Bez danych w obecnych listach (wypadły ze skanów): ${missing.map(t => `${starBtn(t)} ${escapeHtml(t)}`).join(" · ")}</p>` : "");
     } else {
         const it = ov.items.find(i => i.kind === "sector" && i.t === r.sector);
         const opts = `<option value="">wszystkie sektory</option>` + ov.items.filter(i => i.kind === "sector").map(i => `<option value="${i.t}"${it && it.t === i.t ? " selected" : ""}>${escapeHtml(i.name)} (${i.t})</option>`).join("");
@@ -131,10 +170,26 @@ async function initKrok() {
         try { localStorage.setItem("momentum_watchlist_krok_view", krok.view); } catch (e) { /* ignoruj */ }
         render();
     }));
+    document.getElementById("krokBody").addEventListener("click", ev => {   // gwiazdka na kafelku (który jest linkiem): przełącz, nie otwieraj wykresu
+        const b = ev.target.closest && ev.target.closest("[data-fav]");
+        if (!b) return;
+        ev.preventDefault(); ev.stopPropagation();
+        const t = b.dataset.fav, next = krokToggleFav(krokPrefs(), t, new Date().toISOString());
+        try { localStorage.setItem(KROK_PREFS_KEY, JSON.stringify(next)); } catch (e) { /* brak localStorage */ }
+        updateFavCount();
+        if (krokRoute(location.hash).step === "obserwowane") { render(); return; }
+        const on = next.favs[t].v;
+        document.querySelectorAll(`[data-fav="${CSS.escape(t)}"]`).forEach(x => { x.classList.toggle("on", on); x.textContent = on ? "★" : "☆"; x.title = on ? "Usuń z obserwowanych" : "Dodaj do obserwowanych"; x.setAttribute("aria-pressed", on); });
+    }, true);
+    updateFavCount();
     window.addEventListener("hashchange", () => { krok.shown = KROK_PAGE; render(); window.scrollTo(0, 0); });
     render();
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
+function updateFavCount() {
+    const el = document.getElementById("krokFavCount");
+    if (el) { const n = krokFavList(krokPrefs()).length; el.textContent = n ? String(n) : ""; }
+}
 if (typeof window !== "undefined" && typeof document !== "undefined") initKrok();
 
-if (typeof module !== "undefined" && module.exports) module.exports = { krokRoute, marketVerdict };
+if (typeof module !== "undefined" && module.exports) module.exports = { krokRoute, marketVerdict, krokFavList, krokToggleFav };
