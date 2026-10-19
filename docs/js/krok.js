@@ -37,12 +37,12 @@ function getJson(url) {
 
 function chartHtml(c, weeks, glb, v) {
     const narrow = window.innerWidth < 700;
-    if (krok.view === "card") return darCardSvg({ c, weeks, v }, { fit: { w: 520, h: narrow ? 320 : 260 }, mini: true }).replace(' id="chartSvg"', "");
+    if (krok.view === "card") return darCardSvg({ c, weeks, v }, { fit: { w: 620, h: narrow ? 380 : 360 }, mini: true }).replace(' id="chartSvg"', "");
     if (krok.view === "glb") {
         const px = [...c].reverse().find(Number.isFinite);
-        return glb ? glbCardSvg(glb, px, { fit: { w: 520, h: narrow ? 320 : 260 }, mini: true }) : `<p class="krok-note">Brak green line dla tego waloru.</p>`;
+        return glb ? glbCardSvg(glb, px, { fit: { w: 620, h: narrow ? 380 : 360 }, mini: true }) : `<p class="krok-note">Brak green line dla tego waloru.</p>`;
     }
-    return chart1030Svg(c, weeks, { w: 520, h: narrow ? 240 : 210 });
+    return chart1030Svg(c, weeks, { w: 620, h: narrow ? 300 : 330 });
 }
 const trendChip = st => { const [l, k] = TREND_LABELS[st] || TREND_LABELS.na; return `<span class="krok-chip ${k}">${l}</span>`; };
 const stat = (label, value, k = "") => `<div><span>${label}</span><b class="${k}">${value}</b></div>`;
