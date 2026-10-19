@@ -2199,37 +2199,82 @@ def glb_state(line, wk_close):
     return "ABOVE"
 
 
+def _glb_for(df, pre=None, now_utc=None):
+    """GLB jednej serii dziennej -> (pola glb_* bez prefiksu, dane karty GLB albo None). pre = (YYYY-MM, max) sprzed okna cen dziennych."""
+    keys = ("line", "month", "age", "state", "dist", "stop")
+    if df is None or not len(df):
+        return {k: None for k in keys}, None
+    df = drop_incomplete_bar(df, now_utc)
+    months, complete = monthly_closes(df)
+    line, lm, last_done = glb_line(months, complete, pre)
+    wk = weekly_close(df)
+    state = glb_state(line, wk)
+    px = float(wk.iloc[-1]) if wk is not None and len(wk) else None
+    f = {"line": _js_round(line) if line is not None else None, "month": lm,
+         "age": _ym_num(last_done) - _ym_num(lm) if line is not None and last_done else None, "state": state,
+         "dist": _js_round((line / px - 1) * 100, 1) if line is not None and px else None,
+         "stop": _js_round(line * (1 - GLB_STOP_PCT / 100)) if line is not None else None}
+    card = None
+    if months:
+        shown = months[-GLB_CHART_MONTHS:]
+        allm = ([pre] if pre else []) + (months if complete else months[:-1])
+        ath = max(allm, key=lambda r: r[1]) if allm else None
+        card = {"m0": shown[0][0], "c": [_js_round(c) for _, c in shown], "partial": not complete,
+                "line": f["line"], "lm": lm, "ath": [ath[0], _js_round(ath[1])] if ath else None,
+                "full": pre is not None, "stop": f["stop"], "state": state}
+    return f, card
+
+
 def add_glb(stocks, charts, frames, cache, now_utc=None):
     """Pola glb_* w spółkach + charts["stocks"][T]["glb"] (dane do karty GLB: ostatnie 5 lat miesięcznych zamknięć, linia, rekord)."""
     data = (charts or {}).get("stocks") or {}
     for st in stocks:
         t = st["ticker"]
-        df = frames.get(t)
-        keys = ("line", "month", "age", "state", "dist", "stop")
-        if df is None or not len(df):
-            st.update({"glb_" + k: None for k in keys})
-            continue
-        df = drop_incomplete_bar(df, now_utc)
-        months, complete = monthly_closes(df)
         e = (cache or {}).get(t) or {}
         pre = (e.get("m"), e.get("max")) if e.get("max") is not None else None
-        line, lm, last_done = glb_line(months, complete, pre)
-        wk = weekly_close(df)
-        state = glb_state(line, wk)
-        px = float(wk.iloc[-1]) if wk is not None and len(wk) else None
-        st["glb_line"] = _js_round(line) if line is not None else None
-        st["glb_month"] = lm
-        st["glb_age"] = _ym_num(last_done) - _ym_num(lm) if line is not None and last_done else None
-        st["glb_state"] = state
-        st["glb_dist"] = _js_round((line / px - 1) * 100, 1) if line is not None and px else None
-        st["glb_stop"] = _js_round(line * (1 - GLB_STOP_PCT / 100)) if line is not None else None
-        if t in data and months:
-            shown = months[-GLB_CHART_MONTHS:]
-            allm = ([pre] if pre else []) + (months if complete else months[:-1])
-            ath = max(allm, key=lambda r: r[1]) if allm else None
-            data[t]["glb"] = {"m0": shown[0][0], "c": [_js_round(c) for _, c in shown], "partial": not complete,
-                              "line": st["glb_line"], "lm": lm, "ath": [ath[0], _js_round(ath[1])] if ath else None,
-                              "full": bool(e), "stop": st["glb_stop"], "state": state}
+        f, card = _glb_for(frames.get(t), pre, now_utc)
+        st.update({"glb_" + k: v for k, v in f.items()})
+        if t in data and card:
+            card["full"] = bool(e)
+            data[t]["glb"] = card
+
+
+# ============================================================================
+# KROK PO KROKU: RYNEK (INDEKSY) I SEKTORY (ETF) — tygodniowe zamknięcia do wykresów 10:30, karty Darvasa i GLB
+# ============================================================================
+OVERVIEW_PATH = Path(__file__).parent / "docs" / "data" / "overview.json"
+OVERVIEW_WEEKS = 160            # 3 lata widoku + rozgrzewka SMA 30 (liczone w JS)
+OVERVIEW_INDEXES = [("^GSPC", "S&P 500"), ("^NDX", "Nasdaq 100"), ("^DJI", "Dow Jones")]
+SECTOR_ETFS = [   # ETF SPDR sektora, nazwa, sektor w Finvizie (pole `sector` spółek)
+    ("XLK", "Technologia", "Technology"), ("XLF", "Finanse", "Financial"), ("XLV", "Ochrona zdrowia", "Healthcare"),
+    ("XLE", "Energia", "Energy"), ("XLI", "Przemysł", "Industrials"), ("XLY", "Dobra cykliczne", "Consumer Cyclical"),
+    ("XLP", "Dobra podstawowe", "Consumer Defensive"), ("XLU", "Użyteczność publiczna", "Utilities"),
+    ("XLB", "Surowce", "Basic Materials"), ("XLRE", "Nieruchomości", "Real Estate"), ("XLC", "Komunikacja", "Communication Services"),
+]
+
+
+def overview_tickers():
+    return [t for t, _ in OVERVIEW_INDEXES] + [t for t, _, _ in SECTOR_ETFS]
+
+
+def build_overview(frames, now_utc=None, n_weeks=OVERVIEW_WEEKS):
+    """Indeksy i ETF sektorów: tygodniowe zamknięcia na wspólnej osi tygodni (S&P 500) + dane karty GLB. None bez S&P 500."""
+    wk = {t: weekly_close(drop_incomplete_bar(df, now_utc)) for t, df in (frames or {}).items() if df is not None and len(df)}
+    base = wk.get("^GSPC")
+    if base is None or not len(base):
+        return None
+    axis = base.index[-n_weeks:]
+    items = []
+    rows = [(t, n, "index", None) for t, n in OVERVIEW_INDEXES] + [(t, n, "sector", sec) for t, n, sec in SECTOR_ETFS]
+    for t, name, kind, sec in rows:
+        if t not in wk:
+            continue
+        ser = wk[t].reindex(axis)
+        _, card = _glb_for(frames[t], None, now_utc)
+        items.append({"t": t, "name": name, "kind": kind, "sector": sec,
+                      "c": [_js_round(float(v)) if pd.notna(v) else None for v in ser.values], "glb": card})
+    return {"generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "weeks": [d.strftime("%Y-%m-%d") for d in axis], "items": items}
 
 
 # ============================================================================
@@ -2348,6 +2393,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
     previous = load_previous(output_path)
     finviz_rows, finviz_total, finviz_stale = [], None, False
     frames, benchmark_df, nasdaq_df, fx, now_utc = None, None, None, None, None
+    overview_frames = None
     if stage == "compute":
         raw = load_raw(RAW_PROFILE, raw_dir)
         if raw is None:
@@ -2355,6 +2401,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
             return 1
         finviz_rows, finviz_total, finviz_stale = raw["finviz_rows"], raw.get("finviz_total"), raw.get("finviz_stale", False)
         frames, benchmark_df, nasdaq_df, fx = raw["frames"], raw.get("benchmark"), raw.get("nasdaq"), raw.get("fx")
+        overview_frames = raw.get("overview")      # starsze migawki go nie mają — wtedy zostaje poprzedni overview.json
         now_utc = pd.Timestamp(raw["fetched_at"])        # „teraz” z chwili pobrania: wynik nie zależy od godziny liczenia
         print(f"ℹ️  Liczę z migawki z {raw['fetched_at']} ({len(frames)} spółek) — bez pobierania.")
 
@@ -2397,10 +2444,15 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         except Exception as e:
             print(f"⚠️  {NASDAQ} niedostępny ({e}) — ocena rynku tylko z S&P 500.")
             nasdaq_df = None
+        try:
+            overview_frames = download_prices(overview_tickers())
+        except Exception as e:
+            print(f"⚠️  Indeksy / ETF sektorów niedostępne ({e}) — zostaje poprzedni overview.json.")
+            overview_frames = None
     if stage == "all" and save_snapshot:   # liczymy jak dotąd, a przy okazji zapisujemy migawkę pobranych danych (deploy strony liczy z niej przy każdej zmianie kodu)
         fx = fetch_usdpln() or (previous or {}).get("fx")
         path = save_raw({"profile": RAW_PROFILE, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
-                         "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
+                         "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx, "overview": overview_frames,
                          "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, RAW_PROFILE, raw_dir)
         print(f"💾 Zapisano migawkę {path} ({path.stat().st_size / 1e6:.1f} MB).")
     if stage == "fetch":
@@ -2420,7 +2472,7 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         except Exception as e:
             print(f"⚠️  Krok GLB (historia miesięczna) pominięty ({e}).")
         path = save_raw({"profile": RAW_PROFILE, "finviz_rows": finviz_rows, "finviz_total": finviz_total, "finviz_stale": finviz_stale,
-                         "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx,
+                         "frames": frames, "benchmark": benchmark_df, "nasdaq": nasdaq_df, "fx": fx, "overview": overview_frames,
                          "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}, RAW_PROFILE, raw_dir)
         print(f"💾 Zapisano migawkę {path} ({len(frames)} spółek, {path.stat().st_size / 1e6:.1f} MB). Obliczenia: python watchlist.py --compute-only")
         return 0
@@ -2486,6 +2538,15 @@ def run(output_path=None, skip_finviz=False, max_tickers=None, charts_path=None,
         charts_out = Path(charts_path)
         charts_out.write_text(json.dumps(charts, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
         print(f"💾 Zapisano {charts_out} (wykresy tygodniowe {len(charts['stocks'])} spółek, {len(charts['weeks'])} tygodni).")
+    try:
+        overview = build_overview(overview_frames, now_utc) if overview_frames else None
+    except Exception as e:
+        print(f"⚠️  Przegląd rynku i sektorów pominięty ({e}).")
+        overview = None
+    if overview:
+        ov_out = out.parent / OVERVIEW_PATH.name
+        ov_out.write_text(json.dumps(overview, ensure_ascii=False, allow_nan=False, separators=(",", ":")), encoding="utf-8")
+        print(f"💾 Zapisano {ov_out} ({len(overview['items'])} indeksów / ETF sektorów).")
     return 0
 
 

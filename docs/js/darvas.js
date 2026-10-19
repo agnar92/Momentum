@@ -931,10 +931,10 @@ function darCardSvg(full, opts = {}) {
     const fs = v => Math.round(v * (compact ? 1.25 : 1) * 10) / 10;
     const a = darCardAnalyze(full.c, full.v);
     if (!a.boxes.length) return `<svg viewBox="0 0 ${W} ${H}" width="100%"><text x="20" y="30" fill="#8a8f9c" font-size="14">Brak boxów do narysowania na karcie Darvasa.</text></svg>`;
-    const range = darCardPastRange(full.weeks, full.c, full.yr);
-    const splitTxt = darCardSplits(full.splits, range.map(r => r.year));   // jak w książce: „(Split 2 for 1 in 1975)” pod nazwą spółki
-    const tableH = fs(14) * (range.length + 4 + (splitTxt ? 1 : 0)) + fs(10);   // nazwa, zakres dat i tabelka jedno pod drugim (nic nie leży obok siebie, więc nic się nie nakłada)
-    const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: tableH + fs(36) };
+    const range = opts.mini ? [] : darCardPastRange(full.weeks, full.c, full.yr);   // mini (kafelek 🧭 Krok po kroku): bez dolnej tabelki
+    const splitTxt = opts.mini ? "" : darCardSplits(full.splits, range.map(r => r.year));   // jak w książce: „(Split 2 for 1 in 1975)” pod nazwą spółki
+    const tableH = opts.mini ? 0 : fs(14) * (range.length + 4 + (splitTxt ? 1 : 0)) + fs(10);   // nazwa, zakres dat i tabelka jedno pod drugim (nic nie leży obok siebie, więc nic się nie nakłada)
+    const L = { left: compact ? 40 : 48, right: 8, top: fs(44), bottom: opts.mini ? fs(8) : tableH + fs(36) };
     const pw = W - L.left - L.right, ph = H - L.top - L.bottom;
     const lastReal = full.c.reduce((q, v, i) => (Number.isFinite(v) ? i : q), -1), px = full.c[lastReal];
     const st = a.status;
@@ -978,6 +978,7 @@ function darCardSvg(full, opts = {}) {
         const left = dcx > W * 0.6;
         out.push(`<text x="${(left ? dcx - fs(9) : dcx + fs(9)).toFixed(1)}" y="${(dcy + fs(3.5)).toFixed(1)}" font-size="${fs(10)}" font-weight="700" fill="#2b2a24" text-anchor="${left ? "end" : "start"}">${Math.round(px * 100) / 100}</text>`);
     }
+    if (opts.mini) return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">${out.join("")}</svg>`;
     const ty = H - tableH - 4;   // dół karty: spółka i „Past Price Range” (grupa #dcTable chowa się na czas panelu)
     out.push(`<g id="dcTable">`);
     const k = compact ? 1.25 : 1, tx = L.left + 6, cH = tx + 70 * k, cL = tx + 125 * k;
