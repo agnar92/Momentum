@@ -1,5 +1,7 @@
 {
-  "_instructions": "Lista obserwowana = skaner Finviz wskazany przez uzytkownika (okt 2026, link v=351): kapitalizacja od 300 mln USD (cap_smallover), EPS q/q w grupie 'High (>25%)' (fa_epsqoq_high, C), wzrost EPS TTM r/r w grupie 'High (>25%)' (fa_epsyoyttm_high, A — zysk zrealizowany z ostatnich 4 kwartalow, bez prognoz), sprzedaz q/q 'High (>25%)' (fa_salesqoq_high, C), tylko akcje (ind_stocksonly), sredni wolumen > 300 tys. (sh_avgvol_o300), cena > 1 USD (sh_price_o1), cena powyzej SMA200 (ta_sma200_pa). BEZ geo_usa (spolki zagraniczne wchodza), BEZ ROE (Finviz nie podaje go dla czesci spolek i filtr falszowal wynik), BEZ prognoz EPS na ten i przyszly rok. Reszte C i A (przyspieszenie EPS w 2-3 kwartalach, wzrost EPS >= 25 % w KAZDYM z 3 ostatnich lat obrotowych, ROE >= 17 %) liczy aplikacja z danych yfinance. 'filters' = kody filtrow darmowego screenera Finviz rozdzielone przecinkami (kopiuj z adresu skanera; parametry ft i v w linku pomijamy). Finviz po cichu ignoruje nieznany kod, wiec po zmianie sprawdz liczbe spolek. 'max_tickers' = limit listy. L, S, I, M, N liczy aplikacja.",
-  "filters": "cap_smallover,fa_epsqoq_high,fa_epsyoyttm_high,fa_salesqoq_high,ind_stocksonly,sh_avgvol_o300,sh_price_o1,ta_sma200_pa",
-  "max_tickers": 300
+  "_instructions": "filters = kody filtrów darmowego screenera Finviz rozdzielone przecinkami (skopiuj parametr f= z adresu skanera). Domyślny = bezpieczny filtr z backtestu: tylko akcje, cena > 10 $, śr. wolumen > 300 tys., przychody kw. > 15 % r/r — nie odciął żadnego z dużych zwycięzców. Finviz po cichu ignoruje nieznany kod, więc po zmianie sprawdź liczbę spółek. max_tickers = limit listy. symbols = dodatkowe symbole liczone tak samo (np. SPY) — Ctrl+K na stronie otwiera każdy symbol z listy albo z tego pola. sec_ua = User-Agent z kontaktem dla SEC (można też ustawić sekret SEC_UA).",
+  "filters": "ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15",
+  "max_tickers": 1500,
+  "symbols": ["SPY", "QQQ", "^GSPC"],
+  "sec_ua": "Momentum research@example.com"
 }

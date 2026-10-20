@@ -1,1 +1,0 @@
-{"lists":[{"name":"Trend 50/200","filters":"ta_sma50_pa,ta_sma200_pa,cap_midover,sh_avgvol_o300"},{"name":"ATH","filters":"cap_smallover,sh_avgvol_o100,ta_alltime_b0to10h"}]}
