@@ -23,7 +23,9 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   `scanners` field and the page has a scanner select (`state.scanner`). The desktop app has the same list in its settings (per-scanner data
   `data/scans/<slug>.json`). Finviz silently ignores unknown filter codes — check the count after editing.
 - **Conditions** (`passes`): daily turnover ≥ 50 M$ (`turnover` = mean weekly $-volume of the last 4 weeks / 5), quarterly revenue ≥ +15 % y/y,
-  operating margin change ≥ +3 pp y/y (SEC). **Mocne** (`strong`, `MIN_DOPM_STRONG` = 10): conditions + Δ op. margin ≥ 10 pp (user: "zmodyfikuj
+  operating margin change ≥ +3 pp y/y (SEC), plus guards (user: RGTI — revenue 5 M$, operating loss up 41 %, yet "Δ margin" +558 pp): operating income in $
+  better than a year ago (`op_d` > 0) and quarterly revenue ≥ 25 M$ (`rev_q`, `MIN_REV_Q`); test: +3.4 % vs +2.9 % per trade, Mocne +6.2 % vs +5.1 %, ~4 % of
+  signals dropped; missing fields (old SEC entry) don't block; `SEC_VERSION` 3. **Mocne** (`strong`, `MIN_DOPM_STRONG` = 10): conditions + Δ op. margin ≥ 10 pp (user: "zmodyfikuj
   strategię o nowe odkrycie"; all GLB 0–10 % signals 2015–2026, unlimited capital, raw prices: +5.1 % per trade vs +2.9 %, all-signal portfolio 22.7 % vs
   16.1 % a year, DD −40 % vs −34 %; the LEVEL of op. margin doesn't help, q/q change doesn't help, top 10 % of the market by Δ y/y + rev ≥ 15 % ≈ the same).
   Default order: strong + GLB signal, conditions + signal, strong, conditions, then by Δ operating margin.
