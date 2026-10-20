@@ -6,11 +6,9 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"], ["strong", "Mocne", "b"],
-    ["pot", "Potencjał", "n"], ["slow", "Hamuje", "w"],
+    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
+    ["slow", "Hamuje", "w"],
 ];
-// warunki potencjału (kolejność jak calc.POTENTIAL) i szansa na dalsze ≥ +100 % w 12 mies. po wybiciu z konsolidacji (bez warunków 5,1 %)
-const POTENTIAL = [["marża oper. ↑ ≥ +10 pp r/r", 6.2], ["marża brutto ↑ r/r", 5.0], ["rozwodnienie akcji < 10 % r/r (razem z Mocne: +8,0 %)", 8.0]];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
 const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
 const SETTINGS_KEY = "momentum_glb_settings";
@@ -23,16 +21,16 @@ function cell(v, f) {
     if (f === "%") return (v >= 0 ? "+" : "") + v.toFixed(1);
     if (f === "m") return (v / 1e6).toLocaleString("en-US", { maximumFractionDigits: 0 });
     if (f === "b") return v ? "✓" : "";
-    if (f === "n") return "★".repeat(v) + "☆".repeat(Math.max(0, POTENTIAL.length - v));
+    if (f === "x") return v.toFixed(1);
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
 
 const isSignal = (r) => !!(r.ok && SIGNAL.includes(r.glb_state));
 
-// najpierw „Mocne” z sygnałem GLB, potem spełniające warunki z sygnałem, potem „Mocne”, potem spełniające warunki; w grupie od największej zmiany marży oper.
+// najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki; w grupie od największej siły względnej
 function defaultCompare(a, b) {
-    const key = (r) => [!(r.strong && isSignal(r)), !isSignal(r), !r.strong, !r.ok, -(r.dopm ?? -1e9)];
+    const key = (r) => [!isSignal(r), !r.ok, -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
@@ -50,18 +48,17 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], strong: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
-    ["Mocne (Δ marży ≥ 10 pp) z sygnałem GLB", { strong: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
-    ["Potencjał ≥ 2 + nad GLB + MACD dodatni", { pot: { min: 2 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
-    ["Sygnał kupna z potencjałem ≥ 3", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
+    ["Sygnał kupna: warunki + 0–10 % nad GLB", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
+    ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] } }],
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (0–10 % nad GLB) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, macd: { in: ["nad"] } }],
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
 ];
 
-const filterValue = (r, k) => (k === "ok" || k === "strong" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
+const filterValue = (r, k) => (k === "ok" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
 
 function passFilters(r, filters) {
     for (const [k, f] of Object.entries(filters || {})) {
@@ -91,7 +88,7 @@ function weekInProgress(weekDate, generatedAt) {
 
 const fileName = (t) => t.replace(/[^A-Za-z0-9.-]/g, "_") + ".json";   // jak watchlist.file_name
 
-if (typeof module !== "undefined") module.exports = { COLUMNS, POTENTIAL, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
+if (typeof module !== "undefined") module.exports = { COLUMNS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
@@ -137,7 +134,7 @@ if (typeof document !== "undefined") (function () {
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
             const held = !!ast.pos[r.ticker], warn = held && (r.slow || (r.macd_stop && r.price < r.macd_stop));
-            const cls = [isSignal(r) ? (r.strong ? "signal strongsig" : "signal") : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
+            const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
@@ -466,7 +463,7 @@ if (typeof document !== "undefined") (function () {
         $("posBtn").classList.toggle("on", !!(current && ast.pos[current]));
         $("posBtn").textContent = current && ast.pos[current] ? "📌 Mam pozycję" : "📌 Pozycja";
         const r = current && rowFor(current);
-        $("potBadge").textContent = r ? `★ ${r.pot ?? 0}/5${r.slow ? " · ⚠ hamuje" : ""}` : "";
+        $("potBadge").textContent = r ? `${r.ok ? "✓ warunki" : "✗ warunki"}${r.slow ? " · ⚠ hamuje" : ""}` : "";
         $("potBadge").classList.toggle("warn", !!(r && r.slow));
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
         $("watchBtn").textContent = current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj";
@@ -524,15 +521,17 @@ if (typeof document !== "undefined") (function () {
         const fmtv = (v, u) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${u}`);
         const held = ast.pos[r.ticker];
         const rows = [
-            ["Warunek konieczny (obrót ≥ 50 mln $, przychody ≥ +15 % i ≥ 25 mln $, Δ marży oper. ≥ +3 pp i zysk oper. $ ↑, P/S < 20)", r.ok],
-            ["Mocne: Δ marży oper. ≥ +10 pp i rozwodnienie < 10 % <small>(+8,0 % vs +4,0 % na transakcję)</small>", !!r.strong],
-            ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(śr. transakcja +${p.toFixed(1).replace(".", ",")} % vs +4,0 %)</small>`, (r.pot_ok || [])[i] ?? null]),
+            [`Obrót ≥ 100 mln $ dziennie (${r.turnover != null ? (r.turnover / 1e6).toFixed(0) : "—"} mln $)`, r.turnover == null ? null : r.turnover >= 100e6],
+            [`Przychody kw. ≥ +15 % r/r (${fmtv(r.rev_rr, " %")})`, r.rev_rr == null ? null : r.rev_rr >= 15],
+            [`Marża oper. ≥ +3 pp r/r (${fmtv(r.dopm, " pp")})`, r.dopm == null ? null : r.dopm >= 3],
+            [`Wycena P/S < 20 (${r.ps != null ? r.ps.toFixed(1) : "—"})`, r.ps == null ? null : r.ps < 20],
+            [`Siła względna 52 tyg. ≥ +50 pp nad S&P 500 (${fmtv(r.rs, " pp")})`, r.rs == null ? null : r.rs >= 50],
             [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno 0–10 % nad)`, ["WYBICIE", "SYGNAŁ"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
             [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
             [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
         ];
-        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/${POTENTIAL.length}${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
-            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · P/S ${r.ps != null ? r.ps.toFixed(1) : "—"} · rozwodnienie ${fmtv(r.dil, " %")} · zysk oper. r/r ${r.op_d != null ? (r.op_d >= 0 ? "+" : "") + (r.op_d / 1e6).toFixed(1) + " mln $" : "—"} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
+        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — ${r.ok ? "spełnia warunki" : "nie spełnia warunków"}${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
+            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
             "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
             (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
     }

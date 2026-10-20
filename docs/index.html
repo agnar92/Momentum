@@ -26,7 +26,7 @@
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
        title="Dane odświeżają się same w sobotę rano (po piątkowej sesji). Tutaj w GitHub Actions kliknij „Run workflow”, żeby odświeżyć od razu.">⟳ Odśwież dane</a>
     <details class="rules"><summary>Zasady</summary>
-        <p><b>Warunki:</b> obrót dzienny ≥ 50 mln $, przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC). Kolejność: od największej zmiany marży operacyjnej.</p>
+        <p><b>Warunki:</b> obrót dzienny ≥ 100 mln $, przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC), P/S &lt; 20, siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500. Kolejność: sygnał GLB, potem od największej siły względnej.</p>
         <p><b>Wejście — Green Line:</b> rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). Kupno, gdy tydzień zamknie się 0–10 % nad linią.
             <i>WYBICIE</i> = ten tydzień nad linią, poprzedni pod; <i>SYGNAŁ</i> = 0–10 % nad; <i>NAD</i> = dalej; <i>POD</i>.</p>
         <p><b>Wyjście:</b> tygodniowy MACD (12, 26, 9) — po przecięciu sygnału w dół stop pod Low tego tygodnia; do tego stop 10 % pod wejściem.</p>
@@ -38,7 +38,7 @@
         <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
     </section>
     <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="periodBtn" hidden title="Tygodniowy / dzienny (RWB Guppy + Blue Dot) — dzienny tylko dla spółek nad Green Line">📅 Tygodniowy</button><button type="button" id="potBadge" class="badge" title="Potencjał z fundamentów (0–5) — kliknij: lista kontrolna"></button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
+        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="periodBtn" hidden title="Tygodniowy / dzienny (RWB Guppy + Blue Dot) — dzienny tylko dla spółek nad Green Line">📅 Tygodniowy</button><button type="button" id="potBadge" class="badge" title="Czy spółka spełnia warunki — kliknij: lista kontrolna"></button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
         <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
         <div class="chart-body" id="chartBody"></div>
         <div class="tip" id="tip" hidden></div>
@@ -64,36 +64,26 @@
 <dialog id="guideDlg" class="wide guide">
     <h3>Poradnik <small>co naprawdę działało w badaniach (płynny rynek USA, ceny bez korekty o dywidendy)</small></h3>
     <div id="guideStock"></div>
-    <details open><summary><b>Blueprint — sprawdzony w strategii GLB + MACD (wszystkie sygnały 2015–2026, ceny bez korekty)</b></summary>
-        <p>Wcześniejsza wersja liczyła „szansę na ruch +100 %”, a to głównie mierzy zmienność: najczęściej robią go spółki z mikro-przychodami (24 %), marżą &lt; −50 % (22 %)
-        i P/S &gt; 50 (17,5 %) — z medianą zwrotu −13…−31 % i 50–60 % szans na spadek ≥ 30 %. Tak trafił się RGTI. Teraz liczy się wynik strategii.</p>
+    <details open><summary><b>Warunki — tylko to, co w strategii działało najmocniej (GLB + MACD, wszystkie sygnały 2015–2026, ceny bez korekty)</b></summary>
+        <table class="gt"><tr><td>obrót ≥ 100 mln $ dziennie</td><td>odcina małe, dziwne spółki</td></tr>
+        <tr><td>przychody kwartału ≥ +15 % r/r</td><td>bez tego 34,9 % rocznie</td></tr>
+        <tr><td>marża operacyjna ≥ +3 pp r/r</td><td>bez tego 28,9 %</td></tr>
+        <tr><td>wycena P/S &lt; 20</td><td>bez tego 31,5 % (drogie tracą; odpada też RGTI)</td></tr>
+        <tr><td><b>siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500</b> (kolumna RS)</td><td>bez tego 21,4 %</td></tr></table>
+        <p>Razem: <b>+15,6 % na transakcję</b>, portfel wszystkich sygnałów <b>36,6 % rocznie</b> (2015–20: 43,9 %, 2021–26: 29,6 %; same lata 2020–26: 46,5 %), S&amp;P 500 13,6 %.
+        Cena za to: mało sygnałów naraz (średnio 2–4) i głębszy spadek portfela (−55 %). Wspólny mianownik dużych ruchów po GLB: rosnące przychody i marża
+        (fundamenty) + akcja już jest liderem rynku (siła względna). Sama technika (GLB, średnie, RS bez fundamentów) w 2020–26 nie pobiła S&amp;P 500.</p>
+        <p class="dimtxt">Usunięte, bo przy tych warunkach nic nie zmieniały: przychody kw. ≥ 25 mln $, zysk oper. w $ ↑, „Mocne” (Δ marży ≥ 10 pp), rozwodnienie, potencjał ★.</p>
     </details>
-    <details open><summary><b>1. Warunek konieczny (kolumna Warunki)</b></summary>
-        <table class="gt"><tr><td>obrót ≥ 50 mln $ dziennie</td></tr>
-        <tr><td>przychody kwartału ≥ +15 % r/r <b>i ≥ 25 mln $</b></td></tr>
-        <tr><td>marża operacyjna ≥ +3 pp r/r <b>i zysk operacyjny w $ lepszy niż rok wcześniej</b></td></tr>
-        <tr><td><b>wycena P/S &lt; 20</b> (kapitalizacja / przychody z 4 kwartałów)</td></tr></table>
-        <p>Bez fundamentów GLB działa jak zakup w losowym tygodniu (+2,6 % vs +2,4 % na transakcję). Z warunkiem: <b>+4,0 % na transakcję</b>, portfel wszystkich sygnałów
-        <b>19,4 % rocznie</b> (2015–20: 20,1 %, 2021–26: 19,1 %), maks. spadek −33 %. Drogie (P/S ≥ 20) przy tych samych warunkach: <b>−1,8 %</b> na transakcję.</p>
-    </details>
-    <details open><summary><b>2. Mocne (ciemniejsza zieleń)</b></summary>
-        <p>Warunek konieczny + <b>marża oper. ↑ ≥ 10 pp r/r</b> + <b>rozwodnienie akcji &lt; 10 % r/r</b>: <b>+8,0 % na transakcję</b> (2015–20: +10,7 %, 2021–26: +6,9 %),
-        portfel wszystkich 26,4 % rocznie, maks. spadek −39 %. Liczy się poprawa marży, nie jej poziom; zmiana kwartał do kwartału nie działa.</p>
-    </details>
-    <details open><summary><b>3. Potencjał ★ (0–3)</b> — średni wynik transakcji z cechą (bez niej +4,0 %)</summary>
-        <table class="gt"><tr><td>★ marża oper. ↑ ≥ +10 pp r/r</td><td><b>+6,2 %</b></td></tr>
-        <tr><td>★ marża brutto ↑ r/r</td><td>+5,0 % (mocno w 2015–20, słabiej w 2021–26)</td></tr>
-        <tr><td>★ rozwodnienie akcji &lt; 10 % r/r</td><td>razem z Mocne +8,0 %</td></tr></table>
-        <p>Usunięte, bo nagradzały ryzyko: „marża oper. &lt; 10 %” (łapała też −500 %), „przychody ≥ 25 % (dwa kwartały)” — w strategii bez poprawy.</p>
-    </details>
-    <details><summary><b>4. Jak wygląda duży ruch w raportach</b></summary>
+    <details><summary><b>Jak wygląda duży ruch w raportach</b></summary>
         <p><b>Start:</b> w dołku fundamenty są słabe (mediana: przychody +5 %, EPS −6 %, marża oper. −1 pp). Poprawę widać dopiero 2–3 raporty później (EPS +25 %, zysk oper. +25 %).
         Ceny nie wyprzedzisz fundamentami — od tego jest Green Line.</p>
         <p><b>Szczyt:</b> kurs kończy ruch przy raporcie z <b>najwyższym tempem wzrostu</b> (EPS +33 %, przychody przyspieszają). Kolejne raporty są dalej dobre, ale wolniejsze
         (EPS +27 → +15 → +11 %) — rynek sprzedaje hamowanie, nie złe wyniki.</p>
     </details>
-    <details><summary><b>5. Wejście i wyjście</b></summary>
-        <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad Green Line (rekord miesięcznego High, który stoi ≥ 3 miesiące). Stop 10 % pod wejściem.</p>
+    <details><summary><b>Wejście i wyjście</b></summary>
+        <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad Green Line (rekord miesięcznego High, który stoi ≥ 3 miesiące), na otwarciu następnego tygodnia.
+        Stop 10 % pod wejściem — zleceniem (w teście stop „na zamknięciu tygodnia” dawał podobny wynik, ale straty 15–35 %). Po wybiciu stopem wchodzisz ponownie przy następnym sygnale.</p>
         <p><b>Wyjście:</b> po przecięciu MACD tygodniowego w dół stop pod Low tego tygodnia (czerwona przerywana).</p>
         <p><b>⚠ Hamowanie</b> (kolumna Hamuje, alert dla 📌 pozycji): w nowym raporcie tempo przychodów spadło o ≥ 10 pp. Po takim raporcie spadek ≥ 20 % w 6 mies. w 44 % przypadków
         (normalnie 33 %); <b>⚠⚠ z marżą brutto spadającą r/r — 50 %</b>, średnio −1,8 % po 3 i 6 mies. To sygnał, żeby zacieśnić stop albo nie dokładać.</p>
@@ -101,10 +91,10 @@
     <details><summary><b>RWB + Blue Dot (wykres dzienny 📅) — podgląd, nie sygnał</b></summary>
         <p>Test 2015–2026, ceny bez korekty: RWB (6 szybkich EMA nad 6 wolnymi) + nad Green Line + Blue Dot (Stochastic 10,1 ↑ 20), kupno na zamknięciu, stop pod
         Low kropki, wyjście MACD: tylko <b>+1,0…+1,2 % na transakcję</b>, trafność 14–15 % (stop pod kropką wybija średnio po 4 sesjach). Ze stopem 10 %: +1,6…+1,8 %.
-        GLB 0–10 % na tygodniowym: +2,9 %, z Mocne +5,1 %. Przegapione wejście lepiej odpuścić albo czekać na nowe wybicie z linii.</p>
+        GLB 0–10 % na tygodniowym z warunkami: +15,6 %. Wykres dzienny: linia zamknięć, RWB, Blue Dot i Green Line.</p>
     </details>
-    <details><summary><b>6. Czego nie szukać (nic nie wnosiło)</b></summary>
-        <p>ROE / ROI, ranking po RS, Blue Dot, samo przyspieszenie przychodów, poziom marży brutto i operacyjnej, „marża oper. &gt; 0”, sam EPS ponad przychody i marże, zmiana marży kwartał do kwartału. Wykres: S&P 500 nad ceną pokazuje kierunek rynku;
+    <details><summary><b>Czego nie szukać (nic nie wnosiło)</b></summary>
+        <p>ROE / ROI, Blue Dot, stan MACD przy wejściu, trend S&amp;P 500, wolumen wybicia, długość bazy, kup +0,1 % / sprzedaj −0,1 % przy linii (dziennie: −0,3 % rocznie), samo przyspieszenie przychodów, poziom marży brutto i operacyjnej, „marża oper. &gt; 0”, sam EPS ponad przychody i marże, zmiana marży kwartał do kwartału. Wykres: S&P 500 nad ceną pokazuje kierunek rynku;
         słupki przychodów pod wolumenem — zielony ≥ +25 % r/r, żółty ≥ +15 %.</p>
     </details>
     <p class="dimtxt">Heurystyka z backtestu na spółkach notowanych dziś (bez spółek wycofanych z giełdy), nie porada inwestycyjna.</p>

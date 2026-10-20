@@ -85,12 +85,15 @@ def fetch_scanners(scans, prev, fetch_list, log):
 
 
 ABOVE_GLB = ("WYBICIE", "SYGNAŁ", "NAD")   # spółki z wykresem dziennym
+BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
         fund=sec.update, now=None, daily=prices.daily):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
+    if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
+        symbols.append(BENCH)
     ua = os.environ.get("SEC_UA") or config.get("sec_ua") or sec.UA
     prev = load_json(Path(out) / "watchlist.json", {})
     base, meta = fetch_scanners(scanners(config), prev, fetch_list, log)
@@ -114,7 +117,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     write_json(Path(cache_dir) / "sec.json", scache)
 
     def row(b):
-        return calc.build_row(b, series[b["ticker"]], prices.monthly_highs(mcache.get(b["ticker"])), scache.get(b["ticker"]))
+        return calc.build_row(b, series[b["ticker"]], prices.monthly_highs(mcache.get(b["ticker"])), scache.get(b["ticker"]), series.get(BENCH))
     rows = [row(b) for b in base if b["ticker"] in series]
     sym_rows = [row({"ticker": s}) for s in extra if s in series]
     if len(rows) < 0.7 * len(tickers):
@@ -152,7 +155,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta,
         "finviz_stale": any(m["stale"] for m in meta), "rules": {"confirm_months": calc.CONFIRM_MONTHS, "entry_max_pct": calc.ENTRY_MAX_PCT,
                                           "min_turnover": calc.MIN_TURNOVER, "min_rev_growth": calc.MIN_REV_GROWTH,
-                                          "min_dopm": calc.MIN_DOPM, "stop_pct": calc.STOP_PCT},
+                                          "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT},
         "rows": rows, "symbols": sym_rows})
     ok = sum(1 for r in rows if r["ok"])
     sig = sum(1 for r in rows if r["ok"] and r["glb_state"] in ("SYGNAŁ", "WYBICIE"))
