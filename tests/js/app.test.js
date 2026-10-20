@@ -62,7 +62,7 @@ test("column filters combine with AND", () => {
 
 test("potential stars, slowdown cell and filters", () => {
     const { passFilters } = require("../../docs/js/app.js");
-    assert.strictEqual(cell(3, "n"), "★★★☆☆");
+    assert.strictEqual(cell(2, "n"), "★★☆");
     assert.strictEqual(cell("HAMUJE+MB", "w"), "⚠⚠ + marża");
     assert.strictEqual(cell(null, "w"), "");
     assert.ok(passFilters({ pot: 4 }, { pot: { min: 3 } }) && !passFilters({ pot: 2 }, { pot: { min: 3 } }));

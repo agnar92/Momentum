@@ -64,37 +64,35 @@
 <dialog id="guideDlg" class="wide guide">
     <h3>Poradnik <small>co naprawdę działało w badaniach (płynny rynek USA, ceny bez korekty o dywidendy)</small></h3>
     <div id="guideStock"></div>
-    <details open><summary><b>1. Najpierw dobra spółka — bez tego GLB nie działa</b></summary>
-        <p>Wszystkie sygnały GLB 2015–2026, bez limitu kapitału: <b>bez fundamentów GLB wypada jak zakup w losowym tygodniu</b> (+2,6 % vs +2,4 % na transakcję).
-        Z warunkami strategii portfel wszystkich sygnałów GLB dał <b>16,1 % rocznie</b> (losowe wejście z tymi samymi warunkami: 10,3 %, SPY 13,6 %).</p>
-        <p><b>Warunki strategii</b> (kolumna Warunki): obrót ≥ 50 mln $ dziennie, przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r.</p>
-        <p><b>Zabezpieczenie</b> (przypadek RGTI): zysk operacyjny w $ musi być lepszy niż rok wcześniej, a przychody kwartału ≥ 25 mln $. Przy symbolicznych przychodach
-        zmiana marży w pp nic nie znaczy (RGTI: przychody 5 mln $, strata oper. większa o 41 %, a „Δ marży” +558 pp).</p>
+    <details open><summary><b>Blueprint — sprawdzony w strategii GLB + MACD (wszystkie sygnały 2015–2026, ceny bez korekty)</b></summary>
+        <p>Wcześniejsza wersja liczyła „szansę na ruch +100 %”, a to głównie mierzy zmienność: najczęściej robią go spółki z mikro-przychodami (24 %), marżą &lt; −50 % (22 %)
+        i P/S &gt; 50 (17,5 %) — z medianą zwrotu −13…−31 % i 50–60 % szans na spadek ≥ 30 %. Tak trafił się RGTI. Teraz liczy się wynik strategii.</p>
     </details>
-    <details open><summary><b>Mocne — zmiana marży operacyjnej ≥ +10 pp</b></summary>
-        <p>Kolumna <b>Mocne</b> (ciemniejsza zieleń): warunki strategii, ale zmiana marży oper. r/r ≥ 10 pp zamiast ≥ 3 pp. Wszystkie sygnały GLB 0–10 % 2015–2026:
-        <b>+5,1 % na transakcję</b> (obecne warunki +2,9 %), portfel wszystkich <b>22,7 % rocznie</b> (16,1 %), maks. spadek −40 % (−34 %).</p>
-        <p>Liczy się <b>poprawa</b> marży, nie jej poziom: top 5 % spółek wg samej marży dało +2,1 % na transakcję, wg zmiany marży r/r +8,7 %.
-        Zmiana kwartał do kwartału nie działa (+2,9 %). W konsolidacji po +30–100 % spółki z górnych 10 % rynku wg zmiany marży r/r robiły dalej ≥ +100 %
-        w 10–12 % przypadków (dolna połowa rynku: 4,8 %).</p>
+    <details open><summary><b>1. Warunek konieczny (kolumna Warunki)</b></summary>
+        <table class="gt"><tr><td>obrót ≥ 50 mln $ dziennie</td></tr>
+        <tr><td>przychody kwartału ≥ +15 % r/r <b>i ≥ 25 mln $</b></td></tr>
+        <tr><td>marża operacyjna ≥ +3 pp r/r <b>i zysk operacyjny w $ lepszy niż rok wcześniej</b></td></tr>
+        <tr><td><b>wycena P/S &lt; 20</b> (kapitalizacja / przychody z 4 kwartałów)</td></tr></table>
+        <p>Bez fundamentów GLB działa jak zakup w losowym tygodniu (+2,6 % vs +2,4 % na transakcję). Z warunkiem: <b>+4,0 % na transakcję</b>, portfel wszystkich sygnałów
+        <b>19,4 % rocznie</b> (2015–20: 20,1 %, 2021–26: 19,1 %), maks. spadek −33 %. Drogie (P/S ≥ 20) przy tych samych warunkach: <b>−1,8 %</b> na transakcję.</p>
     </details>
-    <details open><summary><b>2. Potencjał ★ — co podnosi szansę na bardzo duży ruch</b></summary>
-        <p>Wybicia z konsolidacji po pierwszym wzroście o 30–100 % (2021–2025, 7314 przypadków). Bez warunków tylko <b>5,1 %</b> dało dalej ≥ +100 % w 12 mies. Gdy spełnione:</p>
-        <table class="gt"><tr><td>przychody ≥ +25 % r/r i marża oper. ↑ ≥ +3 pp</td><td><b>9,6 %</b></td></tr>
-        <tr><td>★ przychody ≥ +25 % r/r dwa kwartały z rzędu</td><td>8,9 %</td></tr>
-        <tr><td>★ marża oper. ↑ ≥ +3 pp dwa kwartały z rzędu</td><td>8,9 %</td></tr>
-        <tr><td>★ marża oper. &lt; 10 % (spółka dopiero zaczyna zarabiać — dźwignia)</td><td>8,6 %</td></tr>
-        <tr><td>★ marża brutto ↑ ≥ +2 pp r/r</td><td>8,0 %</td></tr>
-        <tr><td>★ przychody ≥ +25 % r/r</td><td>7,9 %</td></tr></table>
-        <p>Uwaga: wysoki potencjał to większa szansa na duży ruch, ale też większa zmienność — średni wynik po 6 mies. nie jest wyższy. Dlatego <b>stop jest obowiązkowy</b>: GLB + MACD ucina straty, a zostawia duże ruchy.</p>
+    <details open><summary><b>2. Mocne (ciemniejsza zieleń)</b></summary>
+        <p>Warunek konieczny + <b>marża oper. ↑ ≥ 10 pp r/r</b> + <b>rozwodnienie akcji &lt; 10 % r/r</b>: <b>+8,0 % na transakcję</b> (2015–20: +10,7 %, 2021–26: +6,9 %),
+        portfel wszystkich 26,4 % rocznie, maks. spadek −39 %. Liczy się poprawa marży, nie jej poziom; zmiana kwartał do kwartału nie działa.</p>
     </details>
-    <details><summary><b>3. Jak wygląda duży ruch w raportach</b></summary>
+    <details open><summary><b>3. Potencjał ★ (0–3)</b> — średni wynik transakcji z cechą (bez niej +4,0 %)</summary>
+        <table class="gt"><tr><td>★ marża oper. ↑ ≥ +10 pp r/r</td><td><b>+6,2 %</b></td></tr>
+        <tr><td>★ marża brutto ↑ r/r</td><td>+5,0 % (mocno w 2015–20, słabiej w 2021–26)</td></tr>
+        <tr><td>★ rozwodnienie akcji &lt; 10 % r/r</td><td>razem z Mocne +8,0 %</td></tr></table>
+        <p>Usunięte, bo nagradzały ryzyko: „marża oper. &lt; 10 %” (łapała też −500 %), „przychody ≥ 25 % (dwa kwartały)” — w strategii bez poprawy.</p>
+    </details>
+    <details><summary><b>4. Jak wygląda duży ruch w raportach</b></summary>
         <p><b>Start:</b> w dołku fundamenty są słabe (mediana: przychody +5 %, EPS −6 %, marża oper. −1 pp). Poprawę widać dopiero 2–3 raporty później (EPS +25 %, zysk oper. +25 %).
         Ceny nie wyprzedzisz fundamentami — od tego jest Green Line.</p>
         <p><b>Szczyt:</b> kurs kończy ruch przy raporcie z <b>najwyższym tempem wzrostu</b> (EPS +33 %, przychody przyspieszają). Kolejne raporty są dalej dobre, ale wolniejsze
         (EPS +27 → +15 → +11 %) — rynek sprzedaje hamowanie, nie złe wyniki.</p>
     </details>
-    <details><summary><b>4. Wejście i wyjście</b></summary>
+    <details><summary><b>5. Wejście i wyjście</b></summary>
         <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad Green Line (rekord miesięcznego High, który stoi ≥ 3 miesiące). Stop 10 % pod wejściem.</p>
         <p><b>Wyjście:</b> po przecięciu MACD tygodniowego w dół stop pod Low tego tygodnia (czerwona przerywana).</p>
         <p><b>⚠ Hamowanie</b> (kolumna Hamuje, alert dla 📌 pozycji): w nowym raporcie tempo przychodów spadło o ≥ 10 pp. Po takim raporcie spadek ≥ 20 % w 6 mies. w 44 % przypadków
@@ -105,7 +103,7 @@
         Low kropki, wyjście MACD: tylko <b>+1,0…+1,2 % na transakcję</b>, trafność 14–15 % (stop pod kropką wybija średnio po 4 sesjach). Ze stopem 10 %: +1,6…+1,8 %.
         GLB 0–10 % na tygodniowym: +2,9 %, z Mocne +5,1 %. Przegapione wejście lepiej odpuścić albo czekać na nowe wybicie z linii.</p>
     </details>
-    <details><summary><b>5. Czego nie szukać (nic nie wnosiło)</b></summary>
+    <details><summary><b>6. Czego nie szukać (nic nie wnosiło)</b></summary>
         <p>ROE / ROI, ranking po RS, Blue Dot, samo przyspieszenie przychodów, poziom marży brutto i operacyjnej, „marża oper. &gt; 0”, sam EPS ponad przychody i marże, zmiana marży kwartał do kwartału. Wykres: S&P 500 nad ceną pokazuje kierunek rynku;
         słupki przychodów pod wolumenem — zielony ≥ +25 % r/r, żółty ≥ +15 %.</p>
     </details>

@@ -10,8 +10,7 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["pot", "Potencjał", "n"], ["slow", "Hamuje", "w"],
 ];
 // warunki potencjału (kolejność jak calc.POTENTIAL) i szansa na dalsze ≥ +100 % w 12 mies. po wybiciu z konsolidacji (bez warunków 5,1 %)
-const POTENTIAL = [["przychody ≥ +25 % r/r", 7.9], ["przychody ≥ +25 % r/r dwa kwartały z rzędu", 8.9], ["marża oper. ↑ ≥ +3 pp dwa kwartały z rzędu", 8.9],
-    ["marża brutto ↑ ≥ +2 pp r/r", 8.0], ["marża oper. < 10 % (dźwignia operacyjna na starcie)", 8.6]];
+const POTENTIAL = [["marża oper. ↑ ≥ +10 pp r/r", 6.2], ["marża brutto ↑ r/r", 5.0], ["rozwodnienie akcji < 10 % r/r (razem z Mocne: +8,0 %)", 8.0]];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
 const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
 const SETTINGS_KEY = "momentum_glb_settings";
@@ -24,7 +23,7 @@ function cell(v, f) {
     if (f === "%") return (v >= 0 ? "+" : "") + v.toFixed(1);
     if (f === "m") return (v / 1e6).toLocaleString("en-US", { maximumFractionDigits: 0 });
     if (f === "b") return v ? "✓" : "";
-    if (f === "n") return "★".repeat(v) + "☆".repeat(Math.max(0, 5 - v));
+    if (f === "n") return "★".repeat(v) + "☆".repeat(Math.max(0, POTENTIAL.length - v));
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
@@ -55,7 +54,7 @@ const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"]
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
     ["Mocne (Δ marży ≥ 10 pp) z sygnałem GLB", { strong: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
-    ["Potencjał ≥ 3 + nad GLB + MACD dodatni", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
+    ["Potencjał ≥ 2 + nad GLB + MACD dodatni", { pot: { min: 2 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna z potencjałem ≥ 3", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (0–10 % nad GLB) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, macd: { in: ["nad"] } }],
@@ -525,15 +524,15 @@ if (typeof document !== "undefined") (function () {
         const fmtv = (v, u) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${u}`);
         const held = ast.pos[r.ticker];
         const rows = [
-            ["Warunki strategii (obrót ≥ 50 mln $, przychody ≥ +15 %, Δ marży oper. ≥ +3 pp)", r.ok],
-            ["Mocne: Δ marży oper. ≥ +10 pp <small>(+5,1 % vs +2,9 % na transakcję)</small>", !!r.strong],
-            ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(szansa ${p.toFixed(1).replace(".", ",")} % vs 5,1 %)</small>`, (r.pot_ok || [])[i] ?? null]),
+            ["Warunek konieczny (obrót ≥ 50 mln $, przychody ≥ +15 % i ≥ 25 mln $, Δ marży oper. ≥ +3 pp i zysk oper. $ ↑, P/S < 20)", r.ok],
+            ["Mocne: Δ marży oper. ≥ +10 pp i rozwodnienie < 10 % <small>(+8,0 % vs +4,0 % na transakcję)</small>", !!r.strong],
+            ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(śr. transakcja +${p.toFixed(1).replace(".", ",")} % vs +4,0 %)</small>`, (r.pot_ok || [])[i] ?? null]),
             [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno 0–10 % nad)`, ["WYBICIE", "SYGNAŁ"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
             [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
             [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
         ];
-        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/5${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
-            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
+        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/${POTENTIAL.length}${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
+            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · P/S ${r.ps != null ? r.ps.toFixed(1) : "—"} · rozwodnienie ${fmtv(r.dil, " %")} · zysk oper. r/r ${r.op_d != null ? (r.op_d >= 0 ? "+" : "") + (r.op_d / 1e6).toFixed(1) + " mln $" : "—"} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
             "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
             (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
     }

@@ -22,24 +22,26 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   in the backtest; Trend 50/200; Blisko rekordu (ATH); CANSLIM). Every scanner runs the same strategy; rows are merged by ticker with a
   `scanners` field and the page has a scanner select (`state.scanner`). The desktop app has the same list in its settings (per-scanner data
   `data/scans/<slug>.json`). Finviz silently ignores unknown filter codes — check the count after editing.
-- **Conditions** (`passes`): daily turnover ≥ 50 M$ (`turnover` = mean weekly $-volume of the last 4 weeks / 5), quarterly revenue ≥ +15 % y/y,
-  operating margin change ≥ +3 pp y/y (SEC), plus guards (user: RGTI — revenue 5 M$, operating loss up 41 %, yet "Δ margin" +558 pp): operating income in $
-  better than a year ago (`op_d` > 0) and quarterly revenue ≥ 25 M$ (`rev_q`, `MIN_REV_Q`); test: +3.4 % vs +2.9 % per trade, Mocne +6.2 % vs +5.1 %, ~4 % of
-  signals dropped; missing fields (old SEC entry) don't block; `SEC_VERSION` 3. **Mocne** (`strong`, `MIN_DOPM_STRONG` = 10): conditions + Δ op. margin ≥ 10 pp (user: "zmodyfikuj
-  strategię o nowe odkrycie"; all GLB 0–10 % signals 2015–2026, unlimited capital, raw prices: +5.1 % per trade vs +2.9 %, all-signal portfolio 22.7 % vs
-  16.1 % a year, DD −40 % vs −34 %; the LEVEL of op. margin doesn't help, q/q change doesn't help, top 10 % of the market by Δ y/y + rev ≥ 15 % ≈ the same).
-  Default order: strong + GLB signal, conditions + signal, strong, conditions, then by Δ operating margin.
+- **Conditions = blueprint** (`passes`; user, Oct 2026: "przeanalizuj jeszcze raz … zrób blueprint idealnych warunków … tu nie ma pomyłek"): daily turnover
+  ≥ 50 M$ (`turnover` = mean weekly $-volume of the last 4 weeks / 5), quarterly revenue ≥ +15 % y/y AND ≥ 25 M$ (`rev_q`, `MIN_REV_Q`), operating margin
+  change ≥ +3 pp y/y AND operating income in $ better than a year ago (`op_d`), valuation P/S < 20 (`ps` = Finviz market cap / SEC TTM revenue, else
+  price × shares; `MAX_PS`). Missing guard data doesn't block. Why: the earlier study optimised the chance of a +100 % move, which mostly measures
+  volatility (micro revenue 24 %, op. margin < −50 % 22 %, P/S > 50 17.5 %, with median 12-month returns −13…−31 % and 50–60 % crash risk) — it rewarded
+  RGTI (revenue 5 M$, operating loss +41 %, "Δ margin" +558 pp). Tested in the strategy itself (all GLB 0–10 % signals 2015–2026, raw prices, stop 10 % +
+  weekly MACD): +4.0 % per trade (old conditions +2.9 %), all-signal portfolio 19.4 % a year (2015–20 20.1 / 2021–26 19.1), DD −33 %; expensive
+  (P/S ≥ 20) −1.8 % per trade. **Mocne** (`strong`): blueprint + Δ op. margin ≥ 10 pp + dilution < 10 % y/y (`dil`, SEC weighted diluted shares):
+  +8.0 % per trade (+10.7 / +6.9), 26.4 % a year. Default order: strong + GLB signal, conditions + signal, strong, conditions, then by Δ operating margin.
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
   NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood ≥ 3 closed months ("3 lub więcej"); after a new record the old
   line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (this week closed 0–10 % above,
   last week below), SYGNAŁ (0–10 % above), NAD (further), POD, BRAK.
 - **Exit**: weekly MACD (12, 26, 9) — stop = Low of the last cross-down week (`macd_info`), plus a 10 % initial stop (`STOP_PCT`, shown only).
-- **Potencjał / Hamuje** (`calc.potential`, `calc.slowdown`, from the Oct 2026 fundamentals study on raw prices — user: "dodaj rzeczy, które rzeczywiście mają
-  wpływ … pomiń te, które nic nie wnoszą"): `pot` 0–5 = rev ≥ 25 %, rev ≥ 25 % two quarters in a row, Δ op. margin ≥ 3 pp two quarters in a row, Δ gross
-  margin ≥ 2 pp, op. margin < 10 % (chance of a further ≥ +100 % move after a consolidation breakout 7.9–8.9 % each vs 5.1 % base); `slow` = revenue growth
-  fell ≥ 10 pp vs the previous quarter ('HAMUJE'), + gross margin down y/y ('HAMUJE+MB': 50 % chance of a ≥ 20 % drop in 6 months vs 33 %). SEC entries
-  carry `v: 2` with `rev_rr1`, `dopm1`, `accel` and `qs` (8 quarters for the revenue panel); older entries are refetched. Didn't help (left out):
-  revenue acceleration alone, EPS, gross-margin level, op. margin > 0, RS ranking, Blue Dot.
+- **Potencjał / Hamuje** (`calc.potential`, `calc.slowdown`): `pot` 0–3 = only features validated in the strategy (mean trade with the feature vs +4.0 %):
+  Δ op. margin ≥ 10 pp (+6.2 %), gross margin up y/y (+5.0 %, weaker in 2021–26), dilution < 10 % (with Mocne +8.0 %). Removed (rewarded risk): op. margin
+  < 10 % (also caught −500 %), revenue ≥ 25 % (two quarters). `slow` = revenue growth fell ≥ 10 pp vs the previous quarter ('HAMUJE'), + gross margin down
+  y/y ('HAMUJE+MB': 50 % chance of a ≥ 20 % drop in 6 months vs 33 %). SEC entries carry `v: 4` (`rev_rr1`, `dopm1`, `accel`, `qs`, `op_d`, `rev_q`,
+  `ttm_rev`, `shares`, `dil`); older entries are refetched. Didn't help: revenue acceleration alone, EPS, margin levels, op. margin > 0, q/q margin change,
+  RS ranking, Blue Dot / RWB as entry.
 - ROE / ROI were tested and rejected (big winners had low ROE). Don't add them back without a new backtest.
 
 ## Data flow (`watchlist.py`, run weekly)

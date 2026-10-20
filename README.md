@@ -29,14 +29,13 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
 - **Alerty** (🔔 Alerty na pasku): zamknięcie tygodnia przecięło linię trendu (🔔 alert linii) oraz dla obserwowanych spółek (🔕 Obserwuj na wykresie):
   sygnał GLB, przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Sprawdzane przy otwarciu strony po nowych danych; linie i alerty
   zapisują się w przeglądarce (każde urządzenie ma swoje). Opcjonalnie powiadomienie systemowe.
-- **Mocne** (kolumna, ciemniejsza zieleń): warunki strategii ze zmianą marży oper. r/r ≥ 10 pp — w teście wszystkich sygnałów GLB 2015–2026 +5,1 % na
-  transakcję (vs +2,9 %) i 22,7 % rocznie (vs 16,1 %). Takie spółki są na górze listy; liczy się poprawa marży, nie jej poziom.
+- **Mocne** (kolumna, ciemniejsza zieleń): spółki na górze listy — opis w punkcie „Warunki = blueprint”.
 - **📅 Dzienny** (przycisk na wykresie, dla spółek nad Green Line): rok świec dziennych z RWB Guppy (6 szybkich EMA czerwonych / 6 wolnych niebieskich, jaśniejsze
   tło = RWB), ● Blue Dot (Stochastic 10,1 ↑ 20 przy RWB nad Green Line) ze stopem pod Low kropki, Stochastic zamiast MACD. Tylko do podglądu — w teście
   RWB + Blue Dot dawało +1 % na transakcję (GLB tygodniowy +2,9 %, z Mocne +5,1 %).
-- **Potencjał ★ (0–5) i Hamuje ⚠**: cechy fundamentów, które w badaniu 2021–2026 podnosiły szansę na duży ruch (przychody ≥ 25 %, dwa kwartały z rzędu, marża oper.
-  ↑ dwa kwartały, marża brutto ↑, marża oper. < 10 %) i ostrzeżenie o hamowaniu przychodów. **📖 Poradnik**: zasady z badań i lista kontrolna spółki.
-  **📌 Pozycja**: zaznacz posiadane spółki — ostrzeżenie na liście i alerty (MACD, stop, hamowanie). Nad wykresem S&P 500, pod wolumenem przychody kwartalne (jak w IBD).
+- **Warunki = blueprint**: obrót ≥ 50 mln $, przychody kw. ≥ +15 % r/r i ≥ 25 mln $, marża oper. ≥ +3 pp r/r i zysk oper. w $ lepszy niż rok wcześniej,
+  wycena P/S < 20. **Mocne**: do tego marża oper. ↑ ≥ 10 pp i rozwodnienie akcji < 10 %. **Potencjał ★ (0–3)**: tylko cechy sprawdzone w strategii (marża oper.
+  ↑ ≥ 10 pp, marża brutto ↑, rozwodnienie < 10 %). **Hamuje ⚠**: tempo przychodów spadło o ≥ 10 pp (⚠⚠ z marżą brutto w dół). Liczby w 📖 Poradniku.
 - **Pasek ładowania** na dole przy wczytywaniu listy i wykresu (pobrane MB, procent, czas).
   Na szerokim ekranie wykres jest obok listy, na telefonie na pełnym ekranie (✕ / Esc zamyka).
 - **Ctrl+K**: dowolny symbol z danych — spółki z listy i symbole z `symbols` w `finviz_screen.json` (domyślnie SPY, QQQ, ^GSPC), liczone tak samo.
