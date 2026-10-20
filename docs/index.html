@@ -18,13 +18,15 @@
     <strong class="brand">MOMENTUM <span>// GLB + marża operacyjna</span></strong>
     <select id="scanner" title="Skaner Finviz (lista w finviz_screen.json; każdy liczy tę samą strategię)"></select>
     <label class="check"><input type="checkbox" id="onlyOk"> tylko spełniające warunki</label>
+    <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. nad GLB i MACD dodatni">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
+    <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
        title="Dane odświeżają się same w sobotę rano (po piątkowej sesji). Tutaj w GitHub Actions kliknij „Run workflow”, żeby odświeżyć od razu.">⟳ Odśwież dane</a>
     <details class="rules"><summary>Zasady</summary>
         <p><b>Warunki:</b> obrót dzienny ≥ 50 mln $, przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC). Kolejność: od największej zmiany marży operacyjnej.</p>
-        <p><b>Wejście — Green Line:</b> rekord wszech czasów na zamknięciach miesięcznych, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). Kupno, gdy tydzień zamknie się 0–10 % nad linią.
+        <p><b>Wejście — Green Line:</b> rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). Kupno, gdy tydzień zamknie się 0–10 % nad linią.
             <i>WYBICIE</i> = ten tydzień nad linią, poprzedni pod; <i>SYGNAŁ</i> = 0–10 % nad; <i>NAD</i> = dalej; <i>POD</i>.</p>
         <p><b>Wyjście:</b> tygodniowy MACD (12, 26, 9) — po przecięciu sygnału w dół stop pod Low tego tygodnia; do tego stop 10 % pod wejściem.</p>
         <p>Heurystyka z backtestu (płynny rynek USA 2015–2026), nie porada inwestycyjna.</p>
@@ -35,11 +37,11 @@
         <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
     </section>
     <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
+        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
         <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
         <div class="chart-body" id="chartBody"></div>
         <div class="tip" id="tip" hidden></div>
-        <p class="hint">suwak: przeciągnij ramkę / krawędzie · kółko lub + − = zoom · ← / → przesuń · ↑ / ↓ spółka · kursor = dane tygodnia</p>
+        <p class="hint">linia trendu: przeciągnij po wykresie (telefon: przytrzymaj palec i prowadź) · chwyć koniec / środek = zmień / przesuń · klik = zaznacz, Delete = usuń · suwak: przeciągnij ramkę / krawędzie · kółko lub + − = zoom · ← / → · ↑ / ↓ spółka</p>
     </section>
 </main>
 <div class="loadbar" id="loadbar" hidden><div class="loadtrack"><div class="loadfill" id="loadfill"></div></div><span id="loadtext"></span></div>
@@ -53,6 +55,18 @@
         <div class="dlg-btns"><button type="submit">Otwórz</button><button type="button" onclick="this.closest('dialog').close()">Anuluj</button></div>
     </form>
 </dialog>
+<dialog id="fltDlg" class="wide">
+    <h3>Filtry listy <small>wszystkie warunki naraz · kliknij wartość, żeby ją włączyć</small></h3>
+    <div id="fltBody"></div>
+    <div class="dlg-btns"><button type="button" id="fltClear">Wyczyść filtry</button><button type="button" onclick="this.closest('dialog').close()">Gotowe</button></div>
+</dialog>
+<dialog id="alertDlg" class="wide">
+    <h3>Alerty <small>sprawdzane po wczytaniu nowych danych (zamknięcia tygodni)</small></h3>
+    <ul id="alertList" class="alerts"></ul>
+    <p id="alertInfo" class="recent"></p>
+    <div class="dlg-btns"><button type="button" id="notifyBtn" hidden>Włącz powiadomienia</button><button type="button" id="alertClear">Wyczyść</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
+</dialog>
+<script src="js/lines.js"></script>
 <script src="js/chart.js"></script>
 <script src="js/app.js"></script>
 </body>

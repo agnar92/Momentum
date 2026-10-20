@@ -19,9 +19,16 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
 - **Lista**: ticker, spółka, sektor, cena, Green Line, odległość od linii, stan GLB (*WYBICIE* = ten tydzień zamknął się nad linią, poprzedni nie; *SYGNAŁ* = 0–10 % nad linią;
   *NAD* = dalej; *POD*), MACD (nad / pod sygnałem) i stop z ostatniego przecięcia, zmiana marży operacyjnej i brutto r/r, przychody r/r, kwartał danych, obrót.
   Zielone wiersze = warunki spełnione i sygnał GLB. Domyślnie widać tylko spółki spełniające warunki. Klik w nagłówek sortuje (drugi klik odwraca, trzeci wraca do kolejności domyślnej).
-- **Wykres** (jeden, tygodniowy, 3 lata): słupki High–Low z kreską zamknięcia, SMA 10 i 40 tyg., **Green Line** (z ceną i górną granicą kupna +10 %), stop z MACD (czerwona przerywana),
+- **Filtry** (przycisk na pasku): kilka warunków naraz po kolumnach — stan GLB, MACD, warunki, sektor (klik w wartość), a dla liczb od–do (np. do linii %, Δ marży,
+  obrót w mln $). Gotowe zestawy, np. „Nad GLB + MACD dodatni”.
+- **Wykres** (jeden, tygodniowy, 3 lata): słupki High–Low z kreską zamknięcia, SMA 10 i 30 tyg., **Green Line** (z ceną i górną granicą kupna +10 %), stop z MACD (czerwona przerywana),
   wolumen ze średnią 10 tyg., MACD z ▼ w tygodniach przecięcia w dół. Klik w wiersz otwiera, ↑ / ↓ = następna / poprzednia spółka, ruch kursora = dane tygodnia.
   **Suwak** nad wykresem (minimapa całej historii): przeciągnij ramkę = przesuń okno, krawędzie = zmień długość, klik obok = skok, kółko / + − = zoom, ← / → = przesuń.
+- **Linie trendu**: myszą przeciągnij po wykresie ceny; na telefonie przytrzymaj palec ~0,4 s i prowadź (szybki ruch palcem = dane tygodnia). Koniec linii
+  przyciąga się do High / Low tygodnia. Chwyć koniec = zmień punkt, chwyć środek = przesuń linię, klik / dotknięcie = zaznacz (🗑 usuwa, Delete też).
+- **Alerty** (🔔 Alerty na pasku): zamknięcie tygodnia przecięło linię trendu (🔔 alert linii) oraz dla obserwowanych spółek (🔕 Obserwuj na wykresie):
+  sygnał GLB, przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Sprawdzane przy otwarciu strony po nowych danych; linie i alerty
+  zapisują się w przeglądarce (każde urządzenie ma swoje). Opcjonalnie powiadomienie systemowe.
 - **Pasek ładowania** na dole przy wczytywaniu listy i wykresu (pobrane MB, procent, czas).
   Na szerokim ekranie wykres jest obok listy, na telefonie na pełnym ekranie (✕ / Esc zamyka).
 - **Ctrl+K**: dowolny symbol z danych — spółki z listy i symbole z `symbols` w `finviz_screen.json` (domyślnie SPY, QQQ, ^GSPC), liczone tak samo.

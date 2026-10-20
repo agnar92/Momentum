@@ -1,0 +1,119 @@
+// Linie trendu i alerty (port desktop/lines.py z Momentum Desktop). Linia = dwa punkty {d1, p1, d2, p2} (data tygodnia + cena), prosta na skali
+// logarytmicznej, przedłużona w prawo do ostatniego tygodnia. Alert linii: zamknięcie tygodnia przecięło linię. Obserwowana spółka (🔔): sygnał GLB,
+// przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Czyste funkcje — testy w tests/js/lines.test.js.
+"use strict";
+
+const SIGNAL_STATES = ["WYBICIE", "SYGNAŁ"];
+const MAX_LOG = 200;
+
+// indeks tygodnia daty: dokładny albo ostatni wcześniejszy; -1, gdy data przed historią
+function dateIndex(dates, d) {
+    let lo = 0, hi = dates.length - 1, out = -1;
+    while (lo <= hi) {
+        const m = (lo + hi) >> 1;
+        if (dates[m] <= d) { out = m; lo = m + 1; } else hi = m - 1;
+    }
+    return out;
+}
+
+// wartość linii w tygodniu j (interpolacja na log ceny); null, gdy punkty nie leżą w historii albo w tym samym tygodniu
+function lineAt(line, dates, j) {
+    const a = dateIndex(dates, line.d1), b = dateIndex(dates, line.d2);
+    if (a < 0 || b < 0 || a === b) return null;
+    const la = Math.log(line.p1), lb = Math.log(line.p2);
+    return Math.exp(la + (lb - la) * (j - a) / (b - a));
+}
+
+// przecięcie zamknięciem w ostatnim tygodniu: "up" / "down" / null (tylko po pierwszym punkcie linii)
+function lineCross(line, data) {
+    const c = data.c, j = c.length - 1;
+    if (j < 1 || c[j] == null || c[j - 1] == null) return null;
+    if (j - 1 < Math.min(dateIndex(data.d, line.d1), dateIndex(data.d, line.d2))) return null;
+    const v0 = lineAt(line, data.d, j - 1), v1 = lineAt(line, data.d, j);
+    if (v0 == null || v1 == null) return null;
+    if (c[j - 1] < v0 && c[j] >= v1) return "up";
+    if (c[j - 1] >= v0 && c[j] < v1) return "down";
+    return null;
+}
+
+// odległość punktu od odcinka (px)
+function segDist(px, py, x1, y1, x2, y2) {
+    const dx = x2 - x1, dy = y2 - y1, L = dx * dx + dy * dy;
+    const t = L ? Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / L)) : 0;
+    return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+}
+
+// segs = [{id, x1, y1, x2, y2, xe, ye}] (xe/ye = koniec przedłużenia) -> {id, part: "p1" | "p2" | "body"} albo null
+function hitLine(segs, x, y, tol) {
+    let best = null;
+    for (const s of segs) {
+        for (const part of ["p1", "p2"]) {
+            const d = Math.hypot(x - s["x" + part[1]], y - s["y" + part[1]]);
+            if (d <= tol * 1.4 && (!best || d < best.d)) best = { id: s.id, part, d: d - tol };   // uchwyt końca ma pierwszeństwo
+        }
+        const d = Math.min(segDist(x, y, s.x1, s.y1, s.x2, s.y2), segDist(x, y, s.x2, s.y2, s.xe, s.ye));
+        if (d <= tol && (!best || d < best.d)) best = { id: s.id, part: "body", d };
+    }
+    return best && { id: best.id, part: best.part };
+}
+
+// magnes: cena przyciągana do High / Low tygodnia, gdy kursor jest bliżej niż tol px
+function snapPrice(price, hi, lo, yf, y, tol) {
+    let best = price, bd = tol;
+    for (const v of [hi, lo]) {
+        if (v == null) continue;
+        const d = Math.abs(yf(v) - y);
+        if (d <= bd) { best = v; bd = d; }
+    }
+    return best;
+}
+
+// zmiany stanu obserwowanej spółki (prev = stan z poprzedniego sprawdzenia) -> lista komunikatów
+function stateAlerts(prev, row) {
+    const out = [];
+    if (!prev || !row) return out;
+    if (row.glb_state && SIGNAL_STATES.includes(row.glb_state) && !SIGNAL_STATES.includes(prev.glb_state))
+        out.push(`sygnał GLB: ${row.glb_state} (Green Line ${row.glb})`);
+    if (prev.macd === "nad" && row.macd === "pod") out.push(`MACD tyg. przeciął sygnał w dół — stop pod Low ${row.macd_stop}`);
+    if (row.macd_stop && row.price != null && row.price < row.macd_stop && !(prev.price != null && prev.macd_stop && prev.price < prev.macd_stop))
+        out.push(`zamknięcie ${row.price} pod stopem MACD ${row.macd_stop}`);
+    if (row.ok && !prev.ok) out.push("spełnia warunki strategii");
+    return out;
+}
+
+const snapshot = (r) => ({ glb_state: r.glb_state, macd: r.macd, macd_stop: r.macd_stop, price: r.price, ok: !!r.ok });
+
+// st = {lines: {ticker: [linia]}, watch: {ticker: stan}, log: [...]}; rowFor(t) -> wiersz, seriesFor(t) -> świece (albo null), asOf = ostatni tydzień danych
+// -> nowe wpisy (st.log i st.watch są aktualizowane); klucz z tygodniem, więc ten sam alert nie wraca przy następnym wczytaniu
+function evalAlerts(st, rowFor, seriesFor, now, asOf) {
+    const seen = new Set(st.log.map((a) => a.key)), fresh = [];
+    const add = (key, t, week, msg) => {
+        if (seen.has(key)) return;
+        seen.add(key);
+        fresh.push({ key, t, week, msg, at: now });
+    };
+    for (const [t, lines] of Object.entries(st.lines || {})) {
+        const data = seriesFor(t);
+        if (!data || !data.c || data.c.length < 2) continue;
+        const week = data.d[data.d.length - 1];
+        for (const ln of lines) {
+            if (ln.alert === false) continue;
+            const x = lineCross(ln, data);
+            if (x) {
+                const v = lineAt(ln, data.d, data.c.length - 1);
+                add(`L:${t}:${ln.id}:${week}:${x}`, t, week, `zamknięcie ${x === "up" ? "nad linią" : "pod linią"} trendu (${v.toFixed(2)})`);
+            }
+        }
+    }
+    for (const t of Object.keys(st.watch || {})) {
+        const row = rowFor(t);
+        if (!row) continue;
+        const week = asOf || "";
+        for (const msg of stateAlerts(st.watch[t], row)) add(`W:${t}:${msg}:${week}`, t, week, msg);
+        st.watch[t] = snapshot(row);
+    }
+    st.log = fresh.slice().reverse().concat(st.log).slice(0, MAX_LOG);
+    return fresh;
+}
+
+if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts };

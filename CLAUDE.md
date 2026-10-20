@@ -46,16 +46,25 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
 
 ## Frontend (`docs/`, plain HTML/CSS/JS, no build)
 
-- `index.html` + `js/app.js`: toolbar (scanner select, only-conditions checkbox, search, Ctrl+K, refresh link to `refresh.yml`, rules), one table
-  (`COLUMNS` = the desktop columns), sort by header (asc/desc/default), status bar. Click a row → chart; ↑/↓ step through the visible
+- `index.html` + `js/app.js`: toolbar (scanner select, only-conditions checkbox, **Filtry**, search, 🔔 Alerty, Ctrl+K, refresh link to `refresh.yml`,
+  rules), one table (`COLUMNS` = the desktop columns), sort by header (asc/desc/default), status bar. **Filters** (user: "dodaj filtry do listy, nie samo
+  sortowanie"): `state.filters` = {column: {in: [values]} | {min, max}}, all ANDed (`passFilters`; choices glb_state / macd / ok / sector, numeric from–to
+  in table units, turnover in M$), presets `FILTER_PRESETS` (e.g. "Nad GLB + MACD dodatni"); same in the desktop app (`FilterDialog`). Click a row → chart; ↑/↓ step through the visible
   list; Esc closes. Wide screens (≥ 1000 px): list left, chart right (first row auto-opens); phones: chart full screen.
 - **Ctrl+K**: dialog with a datalist of all tickers (`rows` + `symbols`), recent symbols in localStorage. The site is static, so a symbol
   that is not in the data must be added to `finviz_screen.json` `symbols` (computed on the next refresh).
-- `js/chart.js` (pure, port of `desktop/chart.py`): `chartSvg(data, row, w, h)` → `{svg, geom}`: log price scale, HLC bars, SMA 10 (red) /
-  40 (amber) weeks, thick green GLB line with "GREEN LINE x · kupno do x×1.1", red dashed MACD stop, volume + SMA 10, MACD panel with ▼
+- `js/chart.js` (pure, port of `desktop/chart.py`): `chartSvg(data, row, w, h, nShow, end, lines, sel)` → `{svg, geom}`: log price scale, HLC bars, SMA 10 (red) /
+  30 (amber) weeks (user: "zmień sma40 na sma30"), cyan user trend lines (segment + dashed extension to the last week, 🔔 value at the right edge), thick green GLB line with "GREEN LINE x · kupno do x×1.1", red dashed MACD stop, volume + SMA 10, MACD panel with ▼
   at cross-downs; hover readout from `infoLines`. Range slider above the chart (user: "suwak był fajny, dodaj go z powrotem"): `sliderSvg`
   minimap, `windowRange` / `sliderRect` / `sliderMode` / `sliderDrag` / `sliderJump` / `zoomWindow` (pure, same as `desktop/chart.py`);
   SMA / MACD are computed on the full series, then sliced. Window length persists (`state.nShow`), its end resets per stock.
+- **Trend lines + alerts** (`js/lines.js`, port of `desktop/lines.py`; user: "rysowanie linii jak przytrzymam … usuwanie, przesuwanie … alerty; webową
+  używam głównie na telefonie"): line = `{id, d1, p1, d2, p2, alert}` (week date + price, straight on the log scale). Mouse: drag on the price panel = new
+  line; phone: hold a finger ~0.4 s, then move (a quick move = crosshair readout); grab an end = move that point, grab the middle = move the line; tap = select
+  (🗑 / 🔔 alert buttons in the chart head, Delete key); magnet to the week's High/Low. `.chart-body` has `touch-action: none`. Alerts (`evalAlerts`, run after
+  `watchlist.json` loads): weekly close crossed a line with alert on; 🔔 Obserwuj a ticker = GLB signal, MACD cross-down, close under the MACD stop,
+  conditions met. Key includes the week, so nothing fires twice. localStorage `momentum_alerts` {lines, watch, log, seen}; system notification via the
+  service worker if allowed. The site is static, so alerts are checked only when the page is opened (data refresh is weekly).
 - Loading bar at the bottom (`#loadbar`, `fetchJson` streams the body: MB, % when the size is known, seconds).
 - `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_glb_settings`.
 

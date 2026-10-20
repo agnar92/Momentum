@@ -7,6 +7,8 @@ button, .btn, select, input[type=search], input:not([type]) { background: #222a3
 input[type=search] { cursor: text; min-width: 180px; }
 button:hover, .btn:hover { background: #2b3542; }
 a { color: #6ea8ff; }
+button.on { border-color: #4aa3ff; color: #fff; background: #1f3b5c; }
+.chart-head button { padding: 4px 8px; }
 
 .bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); position: relative; }
 .brand { letter-spacing: .5px; }
@@ -39,7 +41,7 @@ body.chart-open .chart { display: flex; }
 #chartTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .slider { height: 46px; flex: none; touch-action: none; cursor: ew-resize; border-bottom: 1px solid var(--line); }
 .slider svg { display: block; }
-.chart-body { flex: 1; min-height: 0; overflow: hidden; }
+.chart-body { flex: 1; min-height: 0; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .chart-body svg { display: block; width: 100%; height: 100%; }
 .note { color: var(--dim); padding: 20px; }
 .hint { margin: 0; padding: 4px 10px; color: var(--dim); font-size: 12px; }
@@ -59,7 +61,21 @@ dialog label { display: flex; flex-direction: column; gap: 6px; }
 dialog input { font-size: 16px; }
 .recent { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .msg { color: #ff8a5b; min-height: 1em; }
-.dlg-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.dlg-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
+dialog.wide { width: min(640px, 96vw); max-height: 88vh; }
+dialog h3 { margin: 4px 0 10px; font-size: 15px; }
+dialog h3 small { color: var(--dim); font-weight: normal; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.frow { display: flex; gap: 10px; align-items: center; padding: 5px 0; border-bottom: 1px solid #1a1f26; }
+.frow > span { flex: 0 0 130px; color: var(--dim); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 5px 10px; border-radius: 14px; }
+.range input { width: 90px; font-size: 16px; padding: 4px 8px; }
+.alerts { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+.alerts li { padding: 7px 4px; border-bottom: 1px solid #1a1f26; cursor: pointer; }
+.alerts li.new { background: #1d2a1f; }
+.alerts li.none { color: var(--dim); cursor: default; }
+.alerts .when { display: block; color: var(--dim); font-size: 11px; }
 
 /* szeroki ekran: lista po lewej, wykres po prawej */
 @media (min-width: 1000px) {
@@ -70,6 +86,11 @@ dialog input { font-size: 16px; }
 @media (max-width: 999px) {
     body.chart-open .chart { position: fixed; inset: 0; z-index: 30; background: var(--bg); border: 0; padding-bottom: env(safe-area-inset-bottom); }
     .hint { display: none; }
+    .frow { flex-direction: column; align-items: flex-start; gap: 4px; }
+    .frow > span { flex: none; }
+    .chart-head { flex-wrap: wrap; }
+    #chartTitle { flex: 1 1 100%; order: -1; }
+    .chart-head button { padding: 7px 10px; }
     input[type=search] { flex: 1; font-size: 16px; }
 }
 @media (max-width: 640px) {

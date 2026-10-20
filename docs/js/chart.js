@@ -1,5 +1,5 @@
 // Jeden wykres (port desktop/chart.py z Momentum Desktop): tygodniowy słupkowy (High–Low, kreska zamknięcia) z ostatnich 3 lat,
-// SMA 10 i 40 tyg., Green Line, stop z MACD, wolumen ze średnią 10 tyg. i MACD (12, 26, 9) ze znacznikiem przecięcia w dół.
+// SMA 10 i 30 tyg., Green Line, linie trendu użytkownika, stop z MACD, wolumen ze średnią 10 tyg. i MACD (12, 26, 9) ze znacznikiem przecięcia w dół.
 // Skala ceny logarytmiczna. Suwak nad wykresem (minimapa całej historii) wybiera okno: przeciągnij ramkę / krawędzie, klik obok = skok,
 // kółko = zoom. Średnie i MACD liczymy na całej historii, więc okno nie zmienia ich wartości.
 // Czyste funkcje (SVG jako tekst) — testy w tests/js/chart.test.js.
@@ -7,10 +7,11 @@
 
 const C = {
     bg: "#0e1116", grid: "#1a1f26", dim: "#6b7684", fg: "#d5d9e0", up: "#d5d9e0", down: "#e5484d",
-    sma10: "#e5484d", sma40: "#f0b429", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
+    sma10: "#e5484d", sma30: "#f0b429", tline: "#22d3ee", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
     macd: "#4aa3ff", signal: "#f0b429", histUp: "#2f9e5a", histDown: "#a33a3e", volAvg: "#ff9f43",
 };
-const SMA_PERIODS = [10, 40];
+const SMA_PERIODS = [10, 30];
+const LN = typeof require !== "undefined" ? require("./lines.js") : window;   // dateIndex, lineAt (lines.js ładowany przed chart.js)
 
 function sma(values, n) {
     const out = [];
@@ -147,8 +148,9 @@ function sliderSvg(closes, nShow, end, W, H) {
         `<text x="${(right ? x1 - 6 : x1 + 6).toFixed(1)}" y="13" fill="${C.fg}" font-size="11" text-anchor="${right ? "end" : "start"}">${i1 - i0} tyg.</text></svg>`;
 }
 
-// -> {svg, geom} albo null; data = {d, o, h, l, c, v}, row = wiersz listy (glb, macd_stop); okno = nShow tygodni do `end`
-function chartSvg(full, row, w, h, nShow, end) {
+// -> {svg, geom} albo null; data = {d, o, h, l, c, v}, row = wiersz listy (glb, macd_stop); okno = nShow tygodni do `end`;
+// lines = linie trendu [{id, d1, p1, d2, p2, alert}] (lines.js), sel = id zaznaczonej (uchwyty na końcach); geom.segs = linie w px (do trafienia)
+function chartSvg(full, row, w, h, nShow, end, lines, sel) {
     const total = full.c.length;
     if (total < 2) return null;
     const [i0, i1] = windowRange(total, nShow, end);
@@ -196,7 +198,7 @@ function chartSvg(full, row, w, h, nShow, end) {
             if (q++ % every === 0 && xf(i) > x0 + 28) text(xf(i), h - 8, dates[i].slice(0, 7), C.dim, 'text-anchor="middle"');
         }
     }
-    const smaColors = { 10: C.sma10, 40: C.sma40 };
+    const smaColors = { 10: C.sma10, 30: C.sma30 };
     for (const k of SMA_PERIODS) {
         const s = smaWin[k];
         poly(s.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), smaColors[k], 1.5);
@@ -221,6 +223,27 @@ function chartSvg(full, row, w, h, nShow, end) {
         const y = yf(stop);
         line(x0, y, x1, y, C.stop, 1, 'stroke-dasharray="5 4"');
         text(x1 + 4, y + 4, fmt(stop), C.stop);
+    }
+    // linie trendu: odcinek między punktami + przedłużenie (przerywane) do ostatniego tygodnia okna
+    const segs = [];
+    parts.push(`<defs><clipPath id="pclip"><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}"/></clipPath></defs><g clip-path="url(#pclip)">`);
+    for (const ln of lines || []) {
+        const a = LN.dateIndex(full.d, ln.d1), b = LN.dateIndex(full.d, ln.d2);
+        if (a < 0 || b < 0 || a === b) continue;
+        const [ia, pa, ib, pb] = a < b ? [a, ln.p1, b, ln.p2] : [b, ln.p2, a, ln.p1];
+        const s = { id: ln.id, x1: xf(a - i0), y1: yf(ln.p1), x2: xf(b - i0), y2: yf(ln.p2) };
+        const ie = Math.max(ib, i1 - 1), pe = LN.lineAt(ln, full.d, ie);
+        [s.xe, s.ye] = [xf(ie - i0), yf(pe)];
+        segs.push(s);
+        const on = ln.id === sel, wd = on ? 2.5 : 1.6;
+        line(xf(ia - i0), yf(pa), xf(ib - i0), yf(pb), C.tline, wd);
+        if (ie > ib) line(xf(ib - i0), yf(pb), s.xe, s.ye, C.tline, 1, `stroke-dasharray="4 4" opacity="0.7"`);
+        if (on) for (const [x, y] of [[s.x1, s.y1], [s.x2, s.y2]]) parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${C.bg}" stroke="${C.tline}" stroke-width="2"/>`);
+    }
+    parts.push("</g>");
+    for (const s of segs) {
+        const ln = (lines || []).find((x) => x.id === s.id);
+        if (ln.alert !== false && s.xe >= x1 - step && s.ye > y0 && s.ye < y1) text(x1 + 4, s.ye + 4, "🔔 " + fmt(LN.lineAt(ln, full.d, i1 - 1)), C.tline);
     }
     const last = c[n - 1];
     if (last) text(x1 + 4, yf(last) + 4, fmt(last), "#ffffff", 'font-weight="bold"');
@@ -249,12 +272,12 @@ function chartSvg(full, row, w, h, nShow, end) {
     for (const i of crosses) text(xf(i), m1 - 4, "▼", C.stop, 'text-anchor="middle"');
     text(x0 + 4, m0 + 10, small ? "MACD (12, 26, 9) tyg. · ▼ = stop pod Low" : "MACD (12, 26, 9) tyg. · ▼ przecięcie w dół = stop pod Low tego tygodnia", C.dim);
     text(x0 + 4, 14, "SMA 10 tyg.", C.sma10);
-    text(x0 + 84, 14, "SMA 40 tyg.", C.sma40);
+    text(x0 + 84, 14, "SMA 30 tyg.", C.sma30);
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Consolas, Menlo, monospace">` +
         `<rect width="${w}" height="${h}" fill="${C.bg}"/>${parts.join("")}` +
         `<line id="cross" x1="0" y1="${g.price[0]}" x2="0" y2="${g.macd[1]}" stroke="#3a4654" visibility="hidden"/></svg>`;
-    return { svg, geom: { ...g, step, n, i0 } };
+    return { svg, geom: { ...g, step, n, i0, lmin, lmax, segs } };
 }
 
 // dane tygodnia pod kursorem
