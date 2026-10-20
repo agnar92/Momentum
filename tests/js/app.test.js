@@ -45,3 +45,17 @@ test("week in progress until Saturday", () => {
     assert.ok(weekInProgress("2026-10-19", "2026-10-20T12:00:00Z"));
     assert.ok(!weekInProgress("2026-10-12", "2026-10-17T03:20:00Z"));
 });
+
+test("column filters combine with AND", () => {
+    const { passFilters, activeFilters, FILTER_PRESETS } = require("../../docs/js/app.js");
+    const rows = [
+        { ticker: "A", ok: true, glb_state: "NAD", macd: "nad", glb_pct: 15, turnover: 80e6 },
+        { ticker: "B", ok: true, glb_state: "NAD", macd: "pod", glb_pct: 12, turnover: 60e6 },
+        { ticker: "C", ok: false, glb_state: "POD", macd: "nad", glb_pct: -5, turnover: null },
+    ];
+    const f = FILTER_PRESETS[0][1];
+    assert.deepStrictEqual(rows.filter((r) => passFilters(r, f)).map((r) => r.ticker), ["A"]);
+    assert.deepStrictEqual(visibleRows(rows, { filters: { turnover: { min: 70 } } }).map((r) => r.ticker), ["A"]);
+    assert.deepStrictEqual(visibleRows(rows, { filters: { glb_pct: { max: 12 }, ok: { in: ["nie"] } } }).map((r) => r.ticker), ["C"]);
+    assert.strictEqual(activeFilters({ a: { in: [] }, b: { min: 1 }, c: {} }), 1);
+});
