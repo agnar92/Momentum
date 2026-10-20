@@ -490,10 +490,10 @@ if (typeof document !== "undefined") (function () {
             ["Warunki strategii (obrót ≥ 50 mln $, przychody ≥ +15 %, Δ marży oper. ≥ +3 pp)", r.ok],
             ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(szansa ${p.toFixed(1).replace(".", ",")} % vs 5,1 %)</small>`, (r.pot_ok || [])[i] ?? null]),
             [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno 0–10 % nad)`, ["WYBICIE", "SYGNAŁ"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
-            [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop ?? "—"})`, r.macd === "nad"],
+            [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
             [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
         ];
-        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/5${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price})` : ""}</h4>` +
+        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/5${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
             `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
             "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
             (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
