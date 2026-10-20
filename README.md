@@ -39,7 +39,7 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
 `python watchlist.py` (w CI: workflow **Weekly Refresh**, sobota 03:17 UTC, i ręcznie przyciskiem „⟳ Odśwież dane”):
 każdy skaner w Finviz → yfinance **tygodniowe 3 lata** dla sumy spółek (wykres, średnie, MACD, obrót) → dla spółek z obrotem ≥ 50 mln $: yfinance **miesięczne High z całej historii**
 (Green Line, `data/monthly.json`) i **SEC** (fundamenty, `data/sec.json`, odświeżane co 7 dni). **Tylko nowe dane**: spółka już zapisana w `docs/data/weekly/` dostaje tylko ostatnie tygodnie,
-a historia miesięczna tylko nowe zamknięte miesiące; całość tylko dla nowej spółki, po długiej przerwie albo gdy ceny wstecz się zmieniły (split / duża dywidenda).
+a historia miesięczna tylko nowe zamknięte miesiące; całość tylko dla nowej spółki, po długiej przerwie albo gdy ceny wstecz się zmieniły (split). Ceny są **nieskorygowane o dywidendy** (tylko o splity), jak na TradingView — inaczej dawne szczyty spółek z dużymi wypłatami (np. CLMT) wychodziły za nisko.
 Bez danych dziennych. Wynik: `docs/data/watchlist.json` (lista) i `docs/data/weekly/<ticker>.json` (świece). Gdy Finviz nie odpowie dla skanera, zostaje jego poprzednia lista.
 SEC prosi o User-Agent z kontaktem — wpisz swój w `finviz_screen.json` (`sec_ua`) albo w sekrecie repozytorium `SEC_UA`.
 
