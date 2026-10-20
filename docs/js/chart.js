@@ -97,10 +97,15 @@ function fmtVol(v) {
     return v >= 1e9 ? (v / 1e9).toFixed(1) + "B" : v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : (v / 1e3).toFixed(0) + "K";
 }
 
-// panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno)
-function geometry(w, h, right = 64) {
-    const top = 8, ph = h - top - 22, s1 = top + ph * 0.10, p0 = s1 + 8, p1 = p0 + ph * 0.50;
-    const v0 = p1 + 6, v1 = v0 + ph * 0.10, r0 = v1 + 8, r1 = r0 + ph * 0.11;
+// panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno);
+// dzienny (D): S&P 500, cena (linia zamknięć + RWB + Blue Dot + GLB) i wolumen — bez przychodów i Stochastic
+function geometry(w, h, right = 64, period = "W") {
+    const top = 8, ph = h - top - 22, s1 = top + ph * 0.10, p0 = s1 + 8;
+    if (period === "D") {
+        const p1 = p0 + ph * 0.74, v0 = p1 + 6, v1 = h - 22;
+        return { spx: [top, s1], price: [p0, p1], vol: [v0, v1], rev: null, macd: [v1, v1], x0: 6, x1: w - right, w, h };
+    }
+    const p1 = p0 + ph * 0.50, v0 = p1 + 6, v1 = v0 + ph * 0.10, r0 = v1 + 8, r1 = r0 + ph * 0.11;
     return { spx: [top, s1], price: [p0, p1], vol: [v0, v1], rev: [r0, r1], macd: [r1 + 8, h - 22], x0: 6, x1: w - right, w, h };
 }
 
@@ -178,7 +183,7 @@ function sliderSvg(closes, nShow, end, W, H, unit = "tyg.") {
 // -> {svg, geom} albo null; data = {d, o, h, l, c, v}, row = wiersz listy (glb, macd_stop); okno = nShow tygodni do `end`;
 // lines = linie trendu [{id, d1, p1, d2, p2, alert}] (lines.js), sel = id zaznaczonej (uchwyty na końcach); geom.segs = linie w px (do trafienia)
 // spx = tygodniowe {d, c} S&P 500 (SPY) do panelu nad wykresem; row.qs = kwartały [{quarter, rev, rev_rr}] do panelu przychodów
-// period = "W" (tygodniowy) albo "D" (dzienny: RWB + Blue Dot + Stochastic zamiast SMA i MACD)
+// period = "W" (tygodniowy) albo "D" (dzienny: linia zamknięć, RWB + Blue Dot + GLB, bez SMA, MACD, przychodów i Stochastic)
 function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     const D = period === "D", u = D ? "sesji" : "tyg.";
     const total = full.c.length;
@@ -195,7 +200,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     for (const k of ["d", "o", "h", "l", "c", "v"]) data[k] = full[k].slice(i0, i1);
     const c = data.c, hi = data.h, lo = data.l, vol = data.v, dates = data.d, n = c.length;
     const fs = w < 600 ? 10 : 11, small = w < 600;
-    const g = geometry(w, h, small ? 52 : 64), x0 = g.x0, x1 = g.x1, step = (x1 - x0) / n;
+    const g = geometry(w, h, small ? 52 : 64, period), x0 = g.x0, x1 = g.x1, step = (x1 - x0) / n;
     const xf = (i) => x0 + (i + 0.5) * step;
     const parts = [];
     const text = (x, y, s, fill, extra = "") =>
@@ -249,7 +254,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         poly(s.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), smaColors[k], 1.5);
     }
     const bw = Math.max(1, step * 0.25), tick = step * 0.35;
-    for (let i = 0; i < n; i++) {
+    if (D) poly(c.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), C.fg, 1.6);   // dzienny: linia zamknięć zamiast słupków
+    else for (let i = 0; i < n; i++) {
         if (hi[i] === null || lo[i] === null || c[i] === null) continue;
         const col = i === 0 || c[i - 1] === null || c[i] >= c[i - 1] ? C.up : C.down, x = xf(i);
         line(x, yf(hi[i]), x, yf(lo[i]), col, bw);
@@ -312,14 +318,9 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         text(xf(j - i0) + 6, yf(lw) + 24, `Blue Dot ${full.d[j]} · stop pod Low ${fmt(lw)}`, C.dot);
     }
 
-    // MACD (dzienny: Stochastic 10, 1 z poziomem 20)
+    // MACD (dzienny: bez dolnego panelu — tylko opis RWB / Blue Dot)
     const [m0, m1] = g.macd;
     if (D) {
-        const k = stochK(full.h, full.l, full.c).slice(i0, i1), ys = (v) => m1 - 4 - v / 100 * (m1 - m0 - 14);
-        line(x0, ys(20), x1, ys(20), C.dot, 1, 'stroke-dasharray="4 3"');
-        line(x0, ys(80), x1, ys(80), C.grid, 1, 'stroke-dasharray="4 3"');
-        poly(k.map((v, i) => (v != null ? [xf(i), ys(v)] : null)).filter(Boolean), C.fg, 1.2);
-        text(x0 + 4, m0 + 10, small ? "Stochastic (10, 1) · ↑ 20 = Blue Dot" : "Stochastic (10, 1) dzienny · przecięcie 20 od dołu = Blue Dot (przy RWB nad Green Line)", C.dim);
         text(x0 + 4, y1 - 6, small ? "GMMA · jasne tło = RWB · ● Blue Dot" : "GMMA: 6 szybkich EMA (czerwone) / 6 wolnych (niebieskie) · jasne tło = RWB · ● Blue Dot", C.fg);
     } else {
         const rng = (Math.max(...md.macd.concat(md.signal, md.hist).map(Math.abs)) || 1) * 1.25, mid = (m0 + m1) / 2;
@@ -350,6 +351,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     line(x0, s1 + 3, x1, s1 + 3, C.grid);
 
     // przychody kwartalne (słupki w okresie kwartału) z dynamiką r/r: zielony ≥ +25 %, żółty ≥ +15 %, szary niżej, czerwony < 0
+    if (D) return finish();
     const [q0, q1] = g.rev, qs = (row && row.qs) || [];
     const shown = qs.map((q, m) => {
         const b = LN.dateIndex(dates, q.quarter), a = m > 0 ? LN.dateIndex(dates, qs[m - 1].quarter) + 1 : b - 12;
@@ -363,11 +365,14 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         if (xb - xa > 30 && q.rev_rr != null) text((xa + xb) / 2, q1 - ht - 2, `${q.rev_rr >= 0 ? "+" : ""}${q.rev_rr.toFixed(0)}%`, col, 'text-anchor="middle"');
     }
     text(x0 + 4, q0 + 2, qs.length ? `Przychody kw. · r/r % (zielony ≥ 25 %, żółty ≥ 15 %) · ostatni ${fmtBig(qs[qs.length - 1].rev)} $` : "Przychody kw. — brak danych SEC", C.dim);
+    return finish();
 
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Consolas, Menlo, monospace">` +
-        `<rect width="${w}" height="${h}" fill="${C.bg}"/>${parts.join("")}` +
-        `<line id="cross" x1="0" y1="${g.spx[0]}" x2="0" y2="${g.macd[1]}" stroke="#3a4654" visibility="hidden"/></svg>`;
-    return { svg, geom: { ...g, step, n, i0, lmin, lmax, segs } };
+    function finish() {
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Consolas, Menlo, monospace">` +
+            `<rect width="${w}" height="${h}" fill="${C.bg}"/>${parts.join("")}` +
+            `<line id="cross" x1="0" y1="${g.spx[0]}" x2="0" y2="${g.macd[1]}" stroke="#3a4654" visibility="hidden"/></svg>`;
+        return { svg, geom: { ...g, step, n, i0, lmin, lmax, segs } };
+    }
 }
 
 // dane tygodnia pod kursorem

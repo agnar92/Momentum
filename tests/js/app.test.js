@@ -60,17 +60,18 @@ test("column filters combine with AND", () => {
     assert.strictEqual(activeFilters({ a: { in: [] }, b: { min: 1 }, c: {} }), 1);
 });
 
-test("potential stars, slowdown cell and filters", () => {
+test("P/S and RS cells, slowdown cell and filters", () => {
     const { passFilters } = require("../../docs/js/app.js");
-    assert.strictEqual(cell(2, "n"), "★★☆");
+    assert.strictEqual(cell(12.345, "x"), "12.3");
+    assert.strictEqual(cell(62.1, "%"), "+62.1");
     assert.strictEqual(cell("HAMUJE+MB", "w"), "⚠⚠ + marża");
     assert.strictEqual(cell(null, "w"), "");
-    assert.ok(passFilters({ pot: 4 }, { pot: { min: 3 } }) && !passFilters({ pot: 2 }, { pot: { min: 3 } }));
+    assert.ok(passFilters({ rs: 60 }, { rs: { min: 50 } }) && !passFilters({ rs: 20 }, { rs: { min: 50 } }));
     assert.ok(passFilters({ slow: null }, { slow: { in: ["—"] } }) && !passFilters({ slow: "HAMUJE" }, { slow: { in: ["—"] } }));
 });
 
-test("default order: strong (Δ op. margin ≥ 10 pp) with GLB signal first", () => {
-    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", dopm: 5 }, { ticker: "B", ok: true, strong: true, glb_state: "WYBICIE", dopm: 11 },
-        { ticker: "C", ok: true, strong: true, glb_state: "POD", dopm: 30 }, { ticker: "D", ok: false, dopm: 50 }];
+test("default order: conditions + GLB signal first, then by relative strength", () => {
+    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", rs: 55 }, { ticker: "B", ok: true, glb_state: "WYBICIE", rs: 90 },
+        { ticker: "C", ok: true, glb_state: "POD", rs: 120 }, { ticker: "D", ok: false, rs: 300 }];
     assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "C", "D"]);
 });

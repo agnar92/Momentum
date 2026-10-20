@@ -29,8 +29,6 @@ td.c-company { max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 tbody tr { cursor: pointer; }
 tbody tr:hover { background: #1a212b; }
 tr.signal { background: var(--sig); }
-tr.strongsig { background: #1c5a33; }
-td.c-strong { color: var(--green); text-align: center; }
 tr.dim { color: #6b7684; }
 tr.sel, tr.sel:hover { background: var(--sel); color: #fff; }
 td.c-ticker { font-weight: 700; }
@@ -101,7 +99,7 @@ dialog h3 small { color: var(--dim); font-weight: normal; }
 
 /* poradnik, potencjał, pozycje */
 tr.poswarn td.c-ticker { color: #ffb020; }
-td.c-pot { color: #f0b429; letter-spacing: 1px; }
+td.c-rs { text-align: right; }
 td.c-slow { color: #ffb020; }
 .badge { border-radius: 12px; color: #f0b429; }
 .badge.warn { color: #ffb020; border-color: #ffb020; }
