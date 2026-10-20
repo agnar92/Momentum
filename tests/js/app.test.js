@@ -68,3 +68,9 @@ test("potential stars, slowdown cell and filters", () => {
     assert.ok(passFilters({ pot: 4 }, { pot: { min: 3 } }) && !passFilters({ pot: 2 }, { pot: { min: 3 } }));
     assert.ok(passFilters({ slow: null }, { slow: { in: ["—"] } }) && !passFilters({ slow: "HAMUJE" }, { slow: { in: ["—"] } }));
 });
+
+test("default order: strong (Δ op. margin ≥ 10 pp) with GLB signal first", () => {
+    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", dopm: 5 }, { ticker: "B", ok: true, strong: true, glb_state: "WYBICIE", dopm: 11 },
+        { ticker: "C", ok: true, strong: true, glb_state: "POD", dopm: 30 }, { ticker: "D", ok: false, dopm: 50 }];
+    assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "C", "D"]);
+});

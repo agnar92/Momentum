@@ -6,7 +6,7 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
+    ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"], ["strong", "Mocne", "b"],
     ["pot", "Potencjał", "n"], ["slow", "Hamuje", "w"],
 ];
 // warunki potencjału (kolejność jak calc.POTENTIAL) i szansa na dalsze ≥ +100 % w 12 mies. po wybiciu z konsolidacji (bez warunków 5,1 %)
@@ -31,10 +31,11 @@ function cell(v, f) {
 
 const isSignal = (r) => !!(r.ok && SIGNAL.includes(r.glb_state));
 
-// najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki, w grupie od największej zmiany marży operacyjnej
+// najpierw „Mocne” z sygnałem GLB, potem spełniające warunki z sygnałem, potem „Mocne”, potem spełniające warunki; w grupie od największej zmiany marży oper.
 function defaultCompare(a, b) {
-    const ka = [!isSignal(a), !a.ok, -(a.dopm ?? -1e9)], kb = [!isSignal(b), !b.ok, -(b.dopm ?? -1e9)];
-    for (let i = 0; i < 3; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
+    const key = (r) => [!(r.strong && isSignal(r)), !isSignal(r), !r.strong, !r.ok, -(r.dopm ?? -1e9)];
+    const ka = key(a), kb = key(b);
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
 }
 
@@ -50,9 +51,10 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], strong: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
+    ["Mocne (Δ marży ≥ 10 pp) z sygnałem GLB", { strong: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
     ["Potencjał ≥ 3 + nad GLB + MACD dodatni", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna z potencjałem ≥ 3", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
@@ -60,7 +62,7 @@ const FILTER_PRESETS = [
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
 ];
 
-const filterValue = (r, k) => (k === "ok" ? (r.ok ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
+const filterValue = (r, k) => (k === "ok" || k === "strong" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
 
 function passFilters(r, filters) {
     for (const [k, f] of Object.entries(filters || {})) {
@@ -133,7 +135,7 @@ if (typeof document !== "undefined") (function () {
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
             const held = !!ast.pos[r.ticker], warn = held && (r.slow || (r.macd_stop && r.price < r.macd_stop));
-            const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
+            const cls = [isSignal(r) ? (r.strong ? "signal strongsig" : "signal") : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
@@ -488,6 +490,7 @@ if (typeof document !== "undefined") (function () {
         const held = ast.pos[r.ticker];
         const rows = [
             ["Warunki strategii (obrót ≥ 50 mln $, przychody ≥ +15 %, Δ marży oper. ≥ +3 pp)", r.ok],
+            ["Mocne: Δ marży oper. ≥ +10 pp <small>(+5,1 % vs +2,9 % na transakcję)</small>", !!r.strong],
             ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(szansa ${p.toFixed(1).replace(".", ",")} % vs 5,1 %)</small>`, (r.pot_ok || [])[i] ?? null]),
             [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno 0–10 % nad)`, ["WYBICIE", "SYGNAŁ"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
             [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],

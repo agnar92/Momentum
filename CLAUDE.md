@@ -23,7 +23,10 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   `scanners` field and the page has a scanner select (`state.scanner`). The desktop app has the same list in its settings (per-scanner data
   `data/scans/<slug>.json`). Finviz silently ignores unknown filter codes — check the count after editing.
 - **Conditions** (`passes`): daily turnover ≥ 50 M$ (`turnover` = mean weekly $-volume of the last 4 weeks / 5), quarterly revenue ≥ +15 % y/y,
-  operating margin change ≥ +3 pp y/y (SEC). Default order: conditions + GLB signal first, then conditions, then by Δ operating margin.
+  operating margin change ≥ +3 pp y/y (SEC). **Mocne** (`strong`, `MIN_DOPM_STRONG` = 10): conditions + Δ op. margin ≥ 10 pp (user: "zmodyfikuj
+  strategię o nowe odkrycie"; all GLB 0–10 % signals 2015–2026, unlimited capital, raw prices: +5.1 % per trade vs +2.9 %, all-signal portfolio 22.7 % vs
+  16.1 % a year, DD −40 % vs −34 %; the LEVEL of op. margin doesn't help, q/q change doesn't help, top 10 % of the market by Δ y/y + rev ≥ 15 % ≈ the same).
+  Default order: strong + GLB signal, conditions + signal, strong, conditions, then by Δ operating margin.
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
   NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood ≥ 3 closed months ("3 lub więcej"); after a new record the old
   line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (this week closed 0–10 % above,
