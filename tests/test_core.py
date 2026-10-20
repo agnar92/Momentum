@@ -172,7 +172,7 @@ W = {"d": ["2026-01-05"] * 40, "o": [1] * 40, "h": [1] * 40, "l": [1] * 40, "c":
 
 def _monthly(ts, cache, log):
     for t in ts:
-        cache[t] = {"h": [["2025-01", 50], ["2025-02", 100], ["2025-03", 90], ["2025-04", 90], ["2025-05", 90]], "upto": "2025-05"}
+        cache[t] = {"h": [["2025-01", 50], ["2025-02", 100], ["2025-03", 90], ["2025-04", 90], ["2025-05", 90]], "upto": "2025-05", "raw": 1}
 
 
 def _fund(ts, cache, ua, log):
@@ -245,3 +245,8 @@ def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
     data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
     assert {r["ticker"]: r["scanners"] for r in rows}["Z"] == ["Dwa"]
     assert [m["stale"] for m in data["scanners"]] == [False, True] and data["finviz_stale"]
+
+
+def test_monthly_highs_ignores_dividend_adjusted_entries():
+    assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09"}) == []
+    assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0]
