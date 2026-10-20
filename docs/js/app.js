@@ -99,7 +99,10 @@ if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
     const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {} }, readSettings());
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
-    let sel = null, gest = null, rafId = 0, spxData = null;   // zaznaczona linia trendu, gest na wykresie
+    let sel = null, gest = null, rafId = 0, spxData = null;
+    let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
+    const curShow = () => (period === "D" ? dShow : state.nShow);
+    const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
     const weeklyCache = new Map();
     const ast = readAlerts();   // linie trendu, obserwowane spółki, dziennik alertów
 
@@ -212,8 +215,41 @@ if (typeof document !== "undefined") (function () {
         gest = null;
         renderTools();
         drawChart();
-        const [d, spx] = await Promise.all([loadWeekly(t), loadWeekly("SPY")]);
+        const r = rowFor(t);
+        if (period === "D" && !(r && r.daily)) period = "W";
+        renderPeriod();
+        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), loadWeekly("SPY")]);
         spxData = spx;
+        if (current !== t) return;
+        series = d || false;
+        drawChart();
+    }
+
+    async function loadDaily(t) {
+        if (!dailyCache.has(t)) dailyCache.set(t, fetchJson("data/daily/" + encodeURIComponent(fileName(t)), `Dzienny ${t}`));
+        return dailyCache.get(t);
+    }
+
+    // przełącznik tygodniowy / dzienny (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy)
+    function renderPeriod() {
+        const r = current && rowFor(current), ok = !!(r && r.daily);
+        $("periodBtn").hidden = !ok;
+        $("periodBtn").textContent = period === "D" ? "📅 Dzienny" : "📅 Tygodniowy";
+        $("periodBtn").classList.toggle("on", period === "D");
+    }
+
+    async function togglePeriod() {
+        if (!current) return;
+        period = period === "D" ? "W" : "D";
+        dShow = 260;
+        end = null;
+        sel = null;
+        renderPeriod();
+        renderTools();
+        const t = current;
+        series = null;
+        drawChart();
+        const d = await (period === "D" ? loadDaily(t) : loadWeekly(t));
         if (current !== t) return;
         series = d || false;
         drawChart();
@@ -225,11 +261,11 @@ if (typeof document !== "undefined") (function () {
         if (!current) return;
         if (!series) {
             $("slider").innerHTML = "";
-            box.innerHTML = `<p class="note">${series === false ? "Brak danych tygodniowych." : "Ładowanie…"}</p>`;
+            box.innerHTML = `<p class="note">${series === false ? (period === "D" ? "Brak danych dziennych." : "Brak danych tygodniowych.") : "Ładowanie…"}</p>`;
             return;
         }
         drawSlider();
-        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), state.nShow, end, linesOf(current), sel, spxData || null);
+        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period);
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -237,12 +273,12 @@ if (typeof document !== "undefined") (function () {
 
     function drawSlider() {
         const el = $("slider");
-        el.innerHTML = series ? sliderSvg(series.c, state.nShow, end, el.clientWidth, el.clientHeight) : "";
+        el.innerHTML = series ? sliderSvg(series.c, curShow(), end, el.clientWidth, el.clientHeight, period === "D" ? "sesji" : "tyg.") : "";
     }
 
     function setWindow(n, e) {
         const total = series.c.length;
-        state.nShow = n >= total ? null : n;
+        if (period === "D") dShow = n >= total ? null : n; else state.nShow = n >= total ? null : n;
         end = e >= total ? null : e;
         saveSettings();
         drawChart();
@@ -256,10 +292,10 @@ if (typeof document !== "undefined") (function () {
     function sliderDown(ev) {
         if (!series) return;
         const total = series.c.length, W = $("slider").clientWidth, x = sliderX(ev);
-        const [x0, x1] = sliderRect(total, state.nShow, end, W);
+        const [x0, x1] = sliderRect(total, curShow(), end, W);
         let mode = sliderMode(x, x0, x1, ev.pointerType === "mouse" ? 9 : 16);
-        if (mode === "jump") { setWindow(...sliderJump(x, total, state.nShow, W)); mode = "move"; }
-        drag = { mode, x, start: [state.nShow, end] };
+        if (mode === "jump") { setWindow(...sliderJump(x, total, curShow(), W)); mode = "move"; }
+        drag = { mode, x, start: [curShow(), end] };
         $("slider").setPointerCapture(ev.pointerId);
         ev.preventDefault();
     }
@@ -270,12 +306,12 @@ if (typeof document !== "undefined") (function () {
     }
 
     function zoom(factor) {
-        if (series) setWindow(...zoomWindow(series.c.length, state.nShow, end, factor));
+        if (series) setWindow(...zoomWindow(series.c.length, curShow(), end, factor));
     }
 
     function pan(d) {
         if (!series) return;
-        const total = series.c.length, [i0, i1] = windowRange(total, state.nShow, end);
+        const total = series.c.length, [i0, i1] = windowRange(total, curShow(), end);
         setWindow(i1 - i0, Math.max(i1 - i0, Math.min(total, i1 + d)));
     }
 
@@ -309,7 +345,7 @@ if (typeof document !== "undefined") (function () {
     }
 
     function chartDown(ev) {
-        if (!geom || !series || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+        if (!geom || !series || period === "D" || (ev.pointerType === "mouse" && ev.button !== 0)) return;   // linie trendu tylko na tygodniowym
         const pt = chartPt(ev), touch = ev.pointerType !== "mouse", tol = touch ? 18 : 7;
         const hit = hitLine(geom.segs || [], pt.x, pt.y, tol);
         $("chartBody").setPointerCapture(ev.pointerId);
@@ -644,6 +680,7 @@ if (typeof document !== "undefined") (function () {
         body.addEventListener("contextmenu", (e) => e.preventDefault());   // długie przytrzymanie na telefonie nie otwiera menu
         $("watchBtn").addEventListener("click", toggleWatch);
         $("posBtn").addEventListener("click", togglePos);
+        $("periodBtn").addEventListener("click", togglePeriod);
         $("potBadge").addEventListener("click", openGuide);
         $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);

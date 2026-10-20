@@ -191,7 +191,8 @@ def _fund(ts, cache, ua, log):
 
 def _run(tmp_path, fetch_list, symbols=()):
     return watchlist.run({"symbols": list(symbols)}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch_list,
-                         weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 40} if t.startswith("B") else W) for t in ts}, monthly=_monthly, fund=_fund)
+                         weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 40} if t.startswith("B") else W) for t in ts}, monthly=_monthly, fund=_fund,
+                         daily=lambda ts, log: {t: W for t in ts})
 
 
 def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
@@ -205,6 +206,7 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert len(data["rows"]) == 21 and [r["ticker"] for r in data["symbols"]] == ["SPY", "^GSPC"] and not data["finviz_stale"]
     assert json.loads((tmp_path / "out" / "weekly" / "_GSPC.json").read_text())["c"][-1] == 104.0
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
+    assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
 
 
 def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
@@ -231,7 +233,7 @@ def test_second_run_passes_saved_weekly_series_as_cache(tmp_path):
         return {t: W for t in ts}
     for _ in range(2):
         watchlist.run({}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
-                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund)
+                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund, daily=lambda ts, log: {})
     assert seen[0] == [] and seen[1] == sorted(t["ticker"] for t in base)
 
 
@@ -241,7 +243,7 @@ def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
 
     def go(fetch):
         return watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch,
-                             weekly=lambda ts, log, cache: {t: W for t in ts}, monthly=_monthly, fund=_fund)
+                             weekly=lambda ts, log, cache: {t: W for t in ts}, monthly=_monthly, fund=_fund, daily=lambda ts, log: {})
     rows = go(lambda f, max_tickers, log: (lists[f], len(lists[f])))       # „Dwa” ma 2 spółki i Finviz mówi, że tyle jest — to nie blokada
     by = {r["ticker"]: r for r in rows}
     assert len(rows) == 21 and by["A0"]["scanners"] == ["Jeden", "Dwa"] and by["Z"]["scanners"] == ["Dwa"]

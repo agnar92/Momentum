@@ -68,3 +68,19 @@ test("S&P 500 panel and quarterly revenue bars", () => {
     assert.ok(res.geom.spx[1] < res.geom.price[0] && res.geom.vol[1] < res.geom.rev[0] && res.geom.rev[1] < res.geom.macd[0]);
     assert.ok(chartSvg(w, null, 1000, 700).svg.includes("brak danych SPY"));
 });
+
+test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
+    const { rwb, blueDots, stochK } = require("../../docs/js/chart.js");
+    const n = 160, c = [];
+    for (let i = 0; i < n; i++) c.push(50 + i * 0.4);
+    const top = c[149];
+    c.splice(150, 4, top - 3, top - 6, top - 7, top - 1);   // korekta w trendzie i odbicie: %K przecina 20 w górę
+    const h = c.map((x) => x + 1), l = c.map((x) => x - 1);
+    assert.ok(rwb(c)[148] && !rwb(Array.from({ length: 80 }, (_, i) => 100 - i))[79]);
+    assert.ok(stochK(h, l, c)[151] < 20 && stochK(h, l, c)[153] > 20);
+    assert.deepStrictEqual(blueDots(h, l, c, 40), [153]);
+    assert.deepStrictEqual(blueDots(h, l, c, 1e9), []);
+    const d = c.map((_, i) => `2026-${String(1 + Math.floor(i / 28)).padStart(2, "0")}-${String(1 + (i % 28)).padStart(2, "0")}`);
+    const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D");
+    assert.ok(res.svg.includes("Stochastic (10, 1)") && res.svg.includes("Blue Dot ") && !res.svg.includes("MACD (12"));
+});

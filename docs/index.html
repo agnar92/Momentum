@@ -38,7 +38,7 @@
         <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
     </section>
     <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="potBadge" class="badge" title="Potencjał z fundamentów (0–5) — kliknij: lista kontrolna"></button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
+        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="periodBtn" hidden title="Tygodniowy / dzienny (RWB Guppy + Blue Dot) — dzienny tylko dla spółek nad Green Line">📅 Tygodniowy</button><button type="button" id="potBadge" class="badge" title="Potencjał z fundamentów (0–5) — kliknij: lista kontrolna"></button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
         <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
         <div class="chart-body" id="chartBody"></div>
         <div class="tip" id="tip" hidden></div>
@@ -97,6 +97,11 @@
         <p><b>Wyjście:</b> po przecięciu MACD tygodniowego w dół stop pod Low tego tygodnia (czerwona przerywana).</p>
         <p><b>⚠ Hamowanie</b> (kolumna Hamuje, alert dla 📌 pozycji): w nowym raporcie tempo przychodów spadło o ≥ 10 pp. Po takim raporcie spadek ≥ 20 % w 6 mies. w 44 % przypadków
         (normalnie 33 %); <b>⚠⚠ z marżą brutto spadającą r/r — 50 %</b>, średnio −1,8 % po 3 i 6 mies. To sygnał, żeby zacieśnić stop albo nie dokładać.</p>
+    </details>
+    <details><summary><b>RWB + Blue Dot (wykres dzienny 📅) — podgląd, nie sygnał</b></summary>
+        <p>Test 2015–2026, ceny bez korekty: RWB (6 szybkich EMA nad 6 wolnymi) + nad Green Line + Blue Dot (Stochastic 10,1 ↑ 20), kupno na zamknięciu, stop pod
+        Low kropki, wyjście MACD: tylko <b>+1,0…+1,2 % na transakcję</b>, trafność 14–15 % (stop pod kropką wybija średnio po 4 sesjach). Ze stopem 10 %: +1,6…+1,8 %.
+        GLB 0–10 % na tygodniowym: +2,9 %, z Mocne +5,1 %. Przegapione wejście lepiej odpuścić albo czekać na nowe wybicie z linii.</p>
     </details>
     <details><summary><b>5. Czego nie szukać (nic nie wnosiło)</b></summary>
         <p>ROE / ROI, ranking po RS, Blue Dot, samo przyspieszenie przychodów, poziom marży brutto i operacyjnej, „marża oper. &gt; 0”, sam EPS ponad przychody i marże, zmiana marży kwartał do kwartału. Wykres: S&P 500 nad ceną pokazuje kierunek rynku;

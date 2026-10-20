@@ -84,8 +84,11 @@ def fetch_scanners(scans, prev, fetch_list, log):
     return list(base.values()), meta
 
 
+ABOVE_GLB = ("WYBICIE", "SYGNAŁ", "NAD")   # spółki z wykresem dziennym
+
+
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None):
+        fund=sec.update, now=None, daily=prices.daily):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     ua = os.environ.get("SEC_UA") or config.get("sec_ua") or sec.UA
@@ -125,6 +128,25 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     for f in wdir.glob("*.json"):
         if f.name not in keep:
             f.unlink()
+    # świece dzienne (1 rok) tylko dla spółek nad Green Line — wykres dzienny z RWB / Blue Dot (podgląd)
+    ddir = Path(out) / "daily"
+    above = [r["ticker"] for r in rows if r.get("glb_state") in ABOVE_GLB]
+    try:
+        dser = daily(above, log=log) if above else {}
+    except Exception as e:   # brak danych dziennych nie blokuje odświeżenia
+        log(f"⚠ dzienne niedostępne ({e})")
+        dser = None
+    if dser is not None:
+        ddir.mkdir(parents=True, exist_ok=True)
+        dkeep = set()
+        for t, sd in dser.items():
+            dkeep.add(file_name(t))
+            write_json(ddir / file_name(t), sd)
+        for f in ddir.glob("*.json"):
+            if f.name not in dkeep:
+                f.unlink()
+        for r in rows:
+            r["daily"] = r["ticker"] in dser
     last = max((series[r["ticker"]]["d"][-1] for r in rows), default=None)
     write_json(Path(out) / "watchlist.json", {
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta,

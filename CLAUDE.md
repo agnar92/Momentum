@@ -51,7 +51,8 @@ tickers / changed prices / old close-based `m` entries) and SEC companyfacts (`m
 `data/sec.json`, refreshed every 7 days; Q4 = FY − 3 quarters; needs a User-Agent: `SEC_UA` env / `finviz_screen.json` `sec_ua`).
 Prices are NOT dividend-adjusted (`prices.AUTO_ADJUST = False`, split-adjusted only, like TradingView; user bug report: "CLMT pokazuje GLB 30 a w TV
 55.26" — with dividend adjustment the 2007 high of an ex-MLP fell to ~20). Cached series / monthly entries carry `"raw": 1`; ones without it are
-refetched in full once. No daily data. Output: `docs/data/watchlist.json` (`generated_at`, `data_as_of`, `scanners` [{name, filters, total, n, stale}], `finviz_stale`, `rules`,
+refetched in full once. Daily candles (1 year, `prices.daily`) only for rows above the Green Line (`ABOVE_GLB`): `docs/data/daily/<file>.json`, row flag
+`daily`. Output: `docs/data/watchlist.json` (`generated_at`, `data_as_of`, `scanners` [{name, filters, total, n, stale}], `finviz_stale`, `rules`,
 `rows` (each with `scanners`), `symbols`) and `docs/data/weekly/<file_name(ticker)>.json` = `{d, o, h, l, c, v}` (stale files are deleted). If Finviz fails for a scanner or
 returns < 15 rows while it reports more, that scanner's previous rows are reused (`stale`); with prices for < 70 % of tickers nothing is written (exit 1).
 
@@ -79,6 +80,11 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
 - **Chart panels like IBD**: S&P 500 (SPY weekly file, `symbols`) above the price, quarterly revenue bars with y/y % (green ≥ 25 %, amber ≥ 15 %) under the volume.
 - **📖 Poradnik** (`#guideDlg`): the study's rules + a checklist of the open stock (`checklist(r)`); **📌 Pozycja** (`ast.pos`, also watched) marks a
   position: 📌 in the list, amber ticker when slowing / under the MACD stop, slowdown alert (`stateAlerts`, `snapshot.slow`).
+- **📅 Tygodniowy / Dzienny** (`#periodBtn`, only for `row.daily`; user: "Dr Wish używa RWB … blue dot"): daily mode of `chartSvg(…, period="D")` — Guppy GMMA
+  (`gmma`: fast 3–15 red, slow 30–60 blue), lighter background while RWB (`rwb`: lowest fast EMA above highest slow), ● Blue Dot (`blueDots`: Stochastic 10,1
+  crosses 20 up, RWB, close ≥ Green Line) with the stop under its Low, Stochastic panel instead of MACD; separate window (`dShow`, default 260 sessions);
+  trend lines only on the weekly chart. Preview only: the backtest (RWB + above GLB + Blue Dot, stop under the dot, MACD exit) gave +1.0…+1.2 % per trade,
+  14–15 % hit rate — weaker than the weekly GLB 0–10 % entry (+2.9 %, Mocne +5.1 %). Same functions in `calc.py` (`gmma`, `rwb`, `stoch_k`, `blue_dots`).
 - Loading bar at the bottom (`#loadbar`, `fetchJson` streams the body: MB, % when the size is known, seconds).
 - `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_glb_settings`.
 

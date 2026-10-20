@@ -177,3 +177,17 @@ def monthly_highs(entry):
     i nie była odświeżana) traktujemy jak brak — inaczej w tabeli zostawałaby za niska Green Line."""
     e = entry or {}
     return [h for _, h in e.get("h", [])] if e.get("raw") else []
+
+
+def daily(tickers, log=print, period="1y"):
+    """Świece dzienne z ostatniego roku dla spółek nad Green Line (wykres dzienny z RWB i Blue Dot na stronie) -> {ticker: {d, o, h, l, c, v}}."""
+    out = {}
+    for i in range(0, len(tickers), BATCH):
+        part = tickers[i:i + BATCH]
+        df = _yf().download(part, period=period, interval="1d", auto_adjust=AUTO_ADJUST, group_by="ticker", progress=False, threads=True)
+        for t, f in _frames(df, part).items():
+            s = _series(f)
+            if len(s["d"]) >= 30:
+                out[t] = s
+        log(f"yfinance dzienne (nad Green Line): {min(i + BATCH, len(tickers))}/{len(tickers)}")
+    return out
