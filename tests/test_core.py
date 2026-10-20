@@ -88,10 +88,10 @@ def test_sec_metrics_quarter_vs_year_ago_q4_from_annual():
 
 
 def test_potential_and_slowdown():
-    row = {"rev_rr": 30, "rev_rr1": 26, "dopm": 4, "dopm1": 3, "dgm": 1, "opm": 8, "accel": 4}
-    assert [v for *_, v in calc.potential(row)] == [True, True, True, False, True] and calc.slowdown(row) is None
+    row = {"rev_rr": 30, "dopm": 12, "dgm": 1, "dil": 15, "accel": 4}
+    assert [v for *_, v in calc.potential(row)] == [True, True, False] and calc.slowdown(row) is None
     assert calc.slowdown({"accel": -12, "dgm": 0.5}) == "HAMUJE" and calc.slowdown({"accel": -12, "dgm": -1}) == "HAMUJE+MB"
-    assert [v for *_, v in calc.potential({})] == [None] * 5
+    assert [v for *_, v in calc.potential({})] == [None] * 3
 
 
 def test_sec_update_uses_cache(monkeypatch):
@@ -191,7 +191,8 @@ def _fund(ts, cache, ua, log):
 
 def _run(tmp_path, fetch_list, symbols=()):
     return watchlist.run({"symbols": list(symbols)}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch_list,
-                         weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 40} if t.startswith("B") else W) for t in ts}, monthly=_monthly, fund=_fund)
+                         weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 40} if t.startswith("B") else W) for t in ts}, monthly=_monthly, fund=_fund,
+                         daily=lambda ts, log: {t: W for t in ts})
 
 
 def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
@@ -205,6 +206,7 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert len(data["rows"]) == 21 and [r["ticker"] for r in data["symbols"]] == ["SPY", "^GSPC"] and not data["finviz_stale"]
     assert json.loads((tmp_path / "out" / "weekly" / "_GSPC.json").read_text())["c"][-1] == 104.0
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
+    assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
 
 
 def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
@@ -231,7 +233,7 @@ def test_second_run_passes_saved_weekly_series_as_cache(tmp_path):
         return {t: W for t in ts}
     for _ in range(2):
         watchlist.run({}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
-                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund)
+                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund, daily=lambda ts, log: {})
     assert seen[0] == [] and seen[1] == sorted(t["ticker"] for t in base)
 
 
@@ -241,7 +243,7 @@ def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
 
     def go(fetch):
         return watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch,
-                             weekly=lambda ts, log, cache: {t: W for t in ts}, monthly=_monthly, fund=_fund)
+                             weekly=lambda ts, log, cache: {t: W for t in ts}, monthly=_monthly, fund=_fund, daily=lambda ts, log: {})
     rows = go(lambda f, max_tickers, log: (lists[f], len(lists[f])))       # „Dwa” ma 2 spółki i Finviz mówi, że tyle jest — to nie blokada
     by = {r["ticker"]: r for r in rows}
     assert len(rows) == 21 and by["A0"]["scanners"] == ["Jeden", "Dwa"] and by["Z"]["scanners"] == ["Dwa"]
@@ -259,3 +261,49 @@ def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
 def test_monthly_highs_ignores_dividend_adjusted_entries():
     assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09"}) == []
     assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0]
+
+
+    assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0]
+
+
+def test_strong_condition_and_default_order():
+    w = {"d": ["2026-01-05"] * 40, "o": [1] * 40, "h": [1] * 40, "l": [1] * 40, "c": [100.0] * 40, "v": [5e6] * 40}
+    weak = calc.build_row({"ticker": "W"}, w, [], {"rev_rr": 20, "dopm": 4})
+    strong = calc.build_row({"ticker": "S"}, w, [], {"rev_rr": 20, "dopm": 12})
+    assert weak["ok"] and not weak["strong"] and strong["ok"] and strong["strong"]
+
+
+
+def test_guard_tiny_revenue_and_growing_operating_loss():
+    """RGTI: przychody 5,1 mln $, strata oper. −28 mln $ (rok wcześniej −20), „Δ marży” +558 pp -> nie spełnia warunków."""
+    w = {"d": ["2026-01-05"] * 40, "o": [1] * 40, "h": [1] * 40, "l": [1] * 40, "c": [100.0] * 40, "v": [5e6] * 40}
+    rgti = {"rev_rr": 185, "dopm": 558, "op_d": -8.2e6, "rev_q": 5.1e6}
+    r = calc.build_row({"ticker": "RGTI"}, w, [], {**rgti, "dgm": 5})
+    assert not r["ok"] and r["pot"] == 0 and r["pot_ok"] == [None, None, None]     # bez warunku koniecznego nie ma gwiazdek
+    assert not calc.build_row({"ticker": "X"}, w, [], {**rgti, "op_d": 5e6})["ok"]          # same małe przychody
+    assert not calc.build_row({"ticker": "Y"}, w, [], {**rgti, "rev_q": 80e6})["ok"]        # sama rosnąca strata
+    good = calc.build_row({"ticker": "Z"}, w, [], {"rev_rr": 30, "dopm": 12, "op_d": 9e6, "rev_q": 80e6})
+    assert good["ok"] and good["strong"]
+    assert calc.build_row({"ticker": "OLD"}, w, [], {"rev_rr": 30, "dopm": 5})["ok"]       # stary wpis bez tych pól nie blokuje
+
+
+def test_blueprint_ps_and_dilution():
+    w = {"d": ["2026-01-05"] * 40, "o": [1] * 40, "h": [1] * 40, "l": [1] * 40, "c": [100.0] * 40, "v": [5e6] * 40}
+    f = {"rev_rr": 30, "dopm": 12, "op_d": 9e6, "rev_q": 80e6, "ttm_rev": 300e6, "dil": 2}
+    ok = calc.build_row({"ticker": "A", "market_cap": 3e9}, w, [], f)                  # P/S 10
+    assert ok["ok"] and ok["strong"] and ok["ps"] == 10
+    assert not calc.build_row({"ticker": "B", "market_cap": 9e9}, w, [], f)["ok"]      # P/S 30 -> drogie
+    diluted = calc.build_row({"ticker": "C", "market_cap": 3e9}, w, [], {**f, "dil": 25})
+    assert diluted["ok"] and not diluted["strong"]                                   # rozwodnienie 25 % -> nie Mocne
+    assert calc.build_row({"ticker": "D"}, w, [], {**f, "shares": 60e6})["ps"] == 20  # bez kapitalizacji: cena × akcje
+
+
+def test_sec_metrics_ttm_revenue_and_dilution():
+    rev = [_q("2025-01-01", "2025-03-31", 100), _q("2025-04-01", "2025-06-30", 110), _q("2025-07-01", "2025-09-30", 120),
+           _q("2025-10-01", "2025-12-31", 140), _q("2026-01-01", "2026-03-31", 150)]
+    op = [dict(x, val=x["val"] / 10) for x in rev]
+    sh = [_q("2025-01-01", "2025-03-31", 100), _q("2026-01-01", "2026-03-31", 110), _q("2025-01-01", "2025-12-31", 105)]   # roczna średnia nie daje Q4
+    facts = {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "OperatingIncomeLoss": {"units": {"USD": op}},
+                         "WeightedAverageNumberOfDilutedSharesOutstanding": {"units": {"shares": sh}}}}
+    m = sec.metrics(facts)
+    assert m["ttm_rev"] == pytest.approx(520) and m["shares"] == 110 and m["dil"] == pytest.approx(10) and m["v"] == sec.SEC_VERSION

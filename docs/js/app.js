@@ -6,12 +6,11 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
+    ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"], ["strong", "Mocne", "b"],
     ["pot", "Potencjał", "n"], ["slow", "Hamuje", "w"],
 ];
 // warunki potencjału (kolejność jak calc.POTENTIAL) i szansa na dalsze ≥ +100 % w 12 mies. po wybiciu z konsolidacji (bez warunków 5,1 %)
-const POTENTIAL = [["przychody ≥ +25 % r/r", 7.9], ["przychody ≥ +25 % r/r dwa kwartały z rzędu", 8.9], ["marża oper. ↑ ≥ +3 pp dwa kwartały z rzędu", 8.9],
-    ["marża brutto ↑ ≥ +2 pp r/r", 8.0], ["marża oper. < 10 % (dźwignia operacyjna na starcie)", 8.6]];
+const POTENTIAL = [["marża oper. ↑ ≥ +10 pp r/r", 6.2], ["marża brutto ↑ r/r", 5.0], ["rozwodnienie akcji < 10 % r/r (razem z Mocne: +8,0 %)", 8.0]];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
 const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
 const SETTINGS_KEY = "momentum_glb_settings";
@@ -24,17 +23,18 @@ function cell(v, f) {
     if (f === "%") return (v >= 0 ? "+" : "") + v.toFixed(1);
     if (f === "m") return (v / 1e6).toLocaleString("en-US", { maximumFractionDigits: 0 });
     if (f === "b") return v ? "✓" : "";
-    if (f === "n") return "★".repeat(v) + "☆".repeat(Math.max(0, 5 - v));
+    if (f === "n") return "★".repeat(v) + "☆".repeat(Math.max(0, POTENTIAL.length - v));
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
 
 const isSignal = (r) => !!(r.ok && SIGNAL.includes(r.glb_state));
 
-// najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki, w grupie od największej zmiany marży operacyjnej
+// najpierw „Mocne” z sygnałem GLB, potem spełniające warunki z sygnałem, potem „Mocne”, potem spełniające warunki; w grupie od największej zmiany marży oper.
 function defaultCompare(a, b) {
-    const ka = [!isSignal(a), !a.ok, -(a.dopm ?? -1e9)], kb = [!isSignal(b), !b.ok, -(b.dopm ?? -1e9)];
-    for (let i = 0; i < 3; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
+    const key = (r) => [!(r.strong && isSignal(r)), !isSignal(r), !r.strong, !r.ok, -(r.dopm ?? -1e9)];
+    const ka = key(a), kb = key(b);
+    for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
 }
 
@@ -50,17 +50,18 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], strong: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
-    ["Potencjał ≥ 3 + nad GLB + MACD dodatni", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
+    ["Mocne (Δ marży ≥ 10 pp) z sygnałem GLB", { strong: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
+    ["Potencjał ≥ 2 + nad GLB + MACD dodatni", { pot: { min: 2 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna z potencjałem ≥ 3", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (0–10 % nad GLB) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, macd: { in: ["nad"] } }],
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
 ];
 
-const filterValue = (r, k) => (k === "ok" ? (r.ok ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
+const filterValue = (r, k) => (k === "ok" || k === "strong" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
 
 function passFilters(r, filters) {
     for (const [k, f] of Object.entries(filters || {})) {
@@ -97,7 +98,10 @@ if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
     const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {} }, readSettings());
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
-    let sel = null, gest = null, rafId = 0, spxData = null;   // zaznaczona linia trendu, gest na wykresie
+    let sel = null, gest = null, rafId = 0, spxData = null;
+    let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
+    const curShow = () => (period === "D" ? dShow : state.nShow);
+    const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
     const weeklyCache = new Map();
     const ast = readAlerts();   // linie trendu, obserwowane spółki, dziennik alertów
 
@@ -133,7 +137,7 @@ if (typeof document !== "undefined") (function () {
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
             const held = !!ast.pos[r.ticker], warn = held && (r.slow || (r.macd_stop && r.price < r.macd_stop));
-            const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
+            const cls = [isSignal(r) ? (r.strong ? "signal strongsig" : "signal") : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
@@ -210,8 +214,41 @@ if (typeof document !== "undefined") (function () {
         gest = null;
         renderTools();
         drawChart();
-        const [d, spx] = await Promise.all([loadWeekly(t), loadWeekly("SPY")]);
+        const r = rowFor(t);
+        if (period === "D" && !(r && r.daily)) period = "W";
+        renderPeriod();
+        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), loadWeekly("SPY")]);
         spxData = spx;
+        if (current !== t) return;
+        series = d || false;
+        drawChart();
+    }
+
+    async function loadDaily(t) {
+        if (!dailyCache.has(t)) dailyCache.set(t, fetchJson("data/daily/" + encodeURIComponent(fileName(t)), `Dzienny ${t}`));
+        return dailyCache.get(t);
+    }
+
+    // przełącznik tygodniowy / dzienny (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy)
+    function renderPeriod() {
+        const r = current && rowFor(current), ok = !!(r && r.daily);
+        $("periodBtn").hidden = !ok;
+        $("periodBtn").textContent = period === "D" ? "📅 Dzienny" : "📅 Tygodniowy";
+        $("periodBtn").classList.toggle("on", period === "D");
+    }
+
+    async function togglePeriod() {
+        if (!current) return;
+        period = period === "D" ? "W" : "D";
+        dShow = 260;
+        end = null;
+        sel = null;
+        renderPeriod();
+        renderTools();
+        const t = current;
+        series = null;
+        drawChart();
+        const d = await (period === "D" ? loadDaily(t) : loadWeekly(t));
         if (current !== t) return;
         series = d || false;
         drawChart();
@@ -223,11 +260,11 @@ if (typeof document !== "undefined") (function () {
         if (!current) return;
         if (!series) {
             $("slider").innerHTML = "";
-            box.innerHTML = `<p class="note">${series === false ? "Brak danych tygodniowych." : "Ładowanie…"}</p>`;
+            box.innerHTML = `<p class="note">${series === false ? (period === "D" ? "Brak danych dziennych." : "Brak danych tygodniowych.") : "Ładowanie…"}</p>`;
             return;
         }
         drawSlider();
-        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), state.nShow, end, linesOf(current), sel, spxData || null);
+        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period);
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -235,12 +272,12 @@ if (typeof document !== "undefined") (function () {
 
     function drawSlider() {
         const el = $("slider");
-        el.innerHTML = series ? sliderSvg(series.c, state.nShow, end, el.clientWidth, el.clientHeight) : "";
+        el.innerHTML = series ? sliderSvg(series.c, curShow(), end, el.clientWidth, el.clientHeight, period === "D" ? "sesji" : "tyg.") : "";
     }
 
     function setWindow(n, e) {
         const total = series.c.length;
-        state.nShow = n >= total ? null : n;
+        if (period === "D") dShow = n >= total ? null : n; else state.nShow = n >= total ? null : n;
         end = e >= total ? null : e;
         saveSettings();
         drawChart();
@@ -254,10 +291,10 @@ if (typeof document !== "undefined") (function () {
     function sliderDown(ev) {
         if (!series) return;
         const total = series.c.length, W = $("slider").clientWidth, x = sliderX(ev);
-        const [x0, x1] = sliderRect(total, state.nShow, end, W);
+        const [x0, x1] = sliderRect(total, curShow(), end, W);
         let mode = sliderMode(x, x0, x1, ev.pointerType === "mouse" ? 9 : 16);
-        if (mode === "jump") { setWindow(...sliderJump(x, total, state.nShow, W)); mode = "move"; }
-        drag = { mode, x, start: [state.nShow, end] };
+        if (mode === "jump") { setWindow(...sliderJump(x, total, curShow(), W)); mode = "move"; }
+        drag = { mode, x, start: [curShow(), end] };
         $("slider").setPointerCapture(ev.pointerId);
         ev.preventDefault();
     }
@@ -268,12 +305,12 @@ if (typeof document !== "undefined") (function () {
     }
 
     function zoom(factor) {
-        if (series) setWindow(...zoomWindow(series.c.length, state.nShow, end, factor));
+        if (series) setWindow(...zoomWindow(series.c.length, curShow(), end, factor));
     }
 
     function pan(d) {
         if (!series) return;
-        const total = series.c.length, [i0, i1] = windowRange(total, state.nShow, end);
+        const total = series.c.length, [i0, i1] = windowRange(total, curShow(), end);
         setWindow(i1 - i0, Math.max(i1 - i0, Math.min(total, i1 + d)));
     }
 
@@ -307,7 +344,7 @@ if (typeof document !== "undefined") (function () {
     }
 
     function chartDown(ev) {
-        if (!geom || !series || (ev.pointerType === "mouse" && ev.button !== 0)) return;
+        if (!geom || !series || period === "D" || (ev.pointerType === "mouse" && ev.button !== 0)) return;   // linie trendu tylko na tygodniowym
         const pt = chartPt(ev), touch = ev.pointerType !== "mouse", tol = touch ? 18 : 7;
         const hit = hitLine(geom.segs || [], pt.x, pt.y, tol);
         $("chartBody").setPointerCapture(ev.pointerId);
@@ -487,14 +524,15 @@ if (typeof document !== "undefined") (function () {
         const fmtv = (v, u) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${u}`);
         const held = ast.pos[r.ticker];
         const rows = [
-            ["Warunki strategii (obrót ≥ 50 mln $, przychody ≥ +15 %, Δ marży oper. ≥ +3 pp)", r.ok],
-            ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(szansa ${p.toFixed(1).replace(".", ",")} % vs 5,1 %)</small>`, (r.pot_ok || [])[i] ?? null]),
+            ["Warunek konieczny (obrót ≥ 50 mln $, przychody ≥ +15 % i ≥ 25 mln $, Δ marży oper. ≥ +3 pp i zysk oper. $ ↑, P/S < 20)", r.ok],
+            ["Mocne: Δ marży oper. ≥ +10 pp i rozwodnienie < 10 % <small>(+8,0 % vs +4,0 % na transakcję)</small>", !!r.strong],
+            ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(śr. transakcja +${p.toFixed(1).replace(".", ",")} % vs +4,0 %)</small>`, (r.pot_ok || [])[i] ?? null]),
             [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno 0–10 % nad)`, ["WYBICIE", "SYGNAŁ"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
             [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
             [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
         ];
-        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/5${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
-            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
+        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/${POTENTIAL.length}${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
+            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · P/S ${r.ps != null ? r.ps.toFixed(1) : "—"} · rozwodnienie ${fmtv(r.dil, " %")} · zysk oper. r/r ${r.op_d != null ? (r.op_d >= 0 ? "+" : "") + (r.op_d / 1e6).toFixed(1) + " mln $" : "—"} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
             "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
             (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
     }
@@ -641,6 +679,7 @@ if (typeof document !== "undefined") (function () {
         body.addEventListener("contextmenu", (e) => e.preventDefault());   // długie przytrzymanie na telefonie nie otwiera menu
         $("watchBtn").addEventListener("click", toggleWatch);
         $("posBtn").addEventListener("click", togglePos);
+        $("periodBtn").addEventListener("click", togglePeriod);
         $("potBadge").addEventListener("click", openGuide);
         $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);

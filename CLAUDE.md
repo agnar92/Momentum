@@ -22,19 +22,26 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   in the backtest; Trend 50/200; Blisko rekordu (ATH); CANSLIM). Every scanner runs the same strategy; rows are merged by ticker with a
   `scanners` field and the page has a scanner select (`state.scanner`). The desktop app has the same list in its settings (per-scanner data
   `data/scans/<slug>.json`). Finviz silently ignores unknown filter codes — check the count after editing.
-- **Conditions** (`passes`): daily turnover ≥ 50 M$ (`turnover` = mean weekly $-volume of the last 4 weeks / 5), quarterly revenue ≥ +15 % y/y,
-  operating margin change ≥ +3 pp y/y (SEC). Default order: conditions + GLB signal first, then conditions, then by Δ operating margin.
+- **Conditions = blueprint** (`passes`; user, Oct 2026: "przeanalizuj jeszcze raz … zrób blueprint idealnych warunków … tu nie ma pomyłek"): daily turnover
+  ≥ 50 M$ (`turnover` = mean weekly $-volume of the last 4 weeks / 5), quarterly revenue ≥ +15 % y/y AND ≥ 25 M$ (`rev_q`, `MIN_REV_Q`), operating margin
+  change ≥ +3 pp y/y AND operating income in $ better than a year ago (`op_d`), valuation P/S < 20 (`ps` = Finviz market cap / SEC TTM revenue, else
+  price × shares; `MAX_PS`). Missing guard data doesn't block. Why: the earlier study optimised the chance of a +100 % move, which mostly measures
+  volatility (micro revenue 24 %, op. margin < −50 % 22 %, P/S > 50 17.5 %, with median 12-month returns −13…−31 % and 50–60 % crash risk) — it rewarded
+  RGTI (revenue 5 M$, operating loss +41 %, "Δ margin" +558 pp). Tested in the strategy itself (all GLB 0–10 % signals 2015–2026, raw prices, stop 10 % +
+  weekly MACD): +4.0 % per trade (old conditions +2.9 %), all-signal portfolio 19.4 % a year (2015–20 20.1 / 2021–26 19.1), DD −33 %; expensive
+  (P/S ≥ 20) −1.8 % per trade. **Mocne** (`strong`): blueprint + Δ op. margin ≥ 10 pp + dilution < 10 % y/y (`dil`, SEC weighted diluted shares):
+  +8.0 % per trade (+10.7 / +6.9), 26.4 % a year. Default order: strong + GLB signal, conditions + signal, strong, conditions, then by Δ operating margin.
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
   NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood ≥ 3 closed months ("3 lub więcej"); after a new record the old
   line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (this week closed 0–10 % above,
   last week below), SYGNAŁ (0–10 % above), NAD (further), POD, BRAK.
 - **Exit**: weekly MACD (12, 26, 9) — stop = Low of the last cross-down week (`macd_info`), plus a 10 % initial stop (`STOP_PCT`, shown only).
-- **Potencjał / Hamuje** (`calc.potential`, `calc.slowdown`, from the Oct 2026 fundamentals study on raw prices — user: "dodaj rzeczy, które rzeczywiście mają
-  wpływ … pomiń te, które nic nie wnoszą"): `pot` 0–5 = rev ≥ 25 %, rev ≥ 25 % two quarters in a row, Δ op. margin ≥ 3 pp two quarters in a row, Δ gross
-  margin ≥ 2 pp, op. margin < 10 % (chance of a further ≥ +100 % move after a consolidation breakout 7.9–8.9 % each vs 5.1 % base); `slow` = revenue growth
-  fell ≥ 10 pp vs the previous quarter ('HAMUJE'), + gross margin down y/y ('HAMUJE+MB': 50 % chance of a ≥ 20 % drop in 6 months vs 33 %). SEC entries
-  carry `v: 2` with `rev_rr1`, `dopm1`, `accel` and `qs` (8 quarters for the revenue panel); older entries are refetched. Didn't help (left out):
-  revenue acceleration alone, EPS, gross-margin level, op. margin > 0, RS ranking, Blue Dot.
+- **Potencjał / Hamuje** (`calc.potential`, `calc.slowdown`): `pot` 0–3 = only features validated in the strategy (mean trade with the feature vs +4.0 %):
+  Δ op. margin ≥ 10 pp (+6.2 %), gross margin up y/y (+5.0 %, weaker in 2021–26), dilution < 10 % (with Mocne +8.0 %). Removed (rewarded risk): op. margin
+  < 10 % (also caught −500 %), revenue ≥ 25 % (two quarters). `slow` = revenue growth fell ≥ 10 pp vs the previous quarter ('HAMUJE'), + gross margin down
+  y/y ('HAMUJE+MB': 50 % chance of a ≥ 20 % drop in 6 months vs 33 %). SEC entries carry `v: 4` (`rev_rr1`, `dopm1`, `accel`, `qs`, `op_d`, `rev_q`,
+  `ttm_rev`, `shares`, `dil`); older entries are refetched. Didn't help: revenue acceleration alone, EPS, margin levels, op. margin > 0, q/q margin change,
+  RS ranking, Blue Dot / RWB as entry.
 - ROE / ROI were tested and rejected (big winners had low ROE). Don't add them back without a new backtest.
 
 ## Data flow (`watchlist.py`, run weekly)
@@ -48,7 +55,8 @@ tickers / changed prices / old close-based `m` entries) and SEC companyfacts (`m
 `data/sec.json`, refreshed every 7 days; Q4 = FY − 3 quarters; needs a User-Agent: `SEC_UA` env / `finviz_screen.json` `sec_ua`).
 Prices are NOT dividend-adjusted (`prices.AUTO_ADJUST = False`, split-adjusted only, like TradingView; user bug report: "CLMT pokazuje GLB 30 a w TV
 55.26" — with dividend adjustment the 2007 high of an ex-MLP fell to ~20). Cached series / monthly entries carry `"raw": 1`; ones without it are
-refetched in full once. No daily data. Output: `docs/data/watchlist.json` (`generated_at`, `data_as_of`, `scanners` [{name, filters, total, n, stale}], `finviz_stale`, `rules`,
+refetched in full once. Daily candles (1 year, `prices.daily`) only for rows above the Green Line (`ABOVE_GLB`): `docs/data/daily/<file>.json`, row flag
+`daily`. Output: `docs/data/watchlist.json` (`generated_at`, `data_as_of`, `scanners` [{name, filters, total, n, stale}], `finviz_stale`, `rules`,
 `rows` (each with `scanners`), `symbols`) and `docs/data/weekly/<file_name(ticker)>.json` = `{d, o, h, l, c, v}` (stale files are deleted). If Finviz fails for a scanner or
 returns < 15 rows while it reports more, that scanner's previous rows are reused (`stale`); with prices for < 70 % of tickers nothing is written (exit 1).
 
@@ -76,6 +84,11 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
 - **Chart panels like IBD**: S&P 500 (SPY weekly file, `symbols`) above the price, quarterly revenue bars with y/y % (green ≥ 25 %, amber ≥ 15 %) under the volume.
 - **📖 Poradnik** (`#guideDlg`): the study's rules + a checklist of the open stock (`checklist(r)`); **📌 Pozycja** (`ast.pos`, also watched) marks a
   position: 📌 in the list, amber ticker when slowing / under the MACD stop, slowdown alert (`stateAlerts`, `snapshot.slow`).
+- **📅 Tygodniowy / Dzienny** (`#periodBtn`, only for `row.daily`; user: "Dr Wish używa RWB … blue dot"): daily mode of `chartSvg(…, period="D")` — Guppy GMMA
+  (`gmma`: fast 3–15 red, slow 30–60 blue), lighter background while RWB (`rwb`: lowest fast EMA above highest slow), ● Blue Dot (`blueDots`: Stochastic 10,1
+  crosses 20 up, RWB, close ≥ Green Line) with the stop under its Low, Stochastic panel instead of MACD; separate window (`dShow`, default 260 sessions);
+  trend lines only on the weekly chart. Preview only: the backtest (RWB + above GLB + Blue Dot, stop under the dot, MACD exit) gave +1.0…+1.2 % per trade,
+  14–15 % hit rate — weaker than the weekly GLB 0–10 % entry (+2.9 %, Mocne +5.1 %). Same functions in `calc.py` (`gmma`, `rwb`, `stoch_k`, `blue_dots`).
 - Loading bar at the bottom (`#loadbar`, `fetchJson` streams the body: MB, % when the size is known, seconds).
 - `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_glb_settings`.
 
