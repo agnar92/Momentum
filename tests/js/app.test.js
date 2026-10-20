@@ -24,6 +24,12 @@ test("default order: signal+ok first, then ok, by Δ operating margin", () => {
     assert.ok(isSignal(ROWS[1]) && !isSignal(ROWS[2]));
 });
 
+test("scanner filter", () => {
+    const rows = ROWS.map((r, i) => ({ ...r, scanners: i % 2 ? ["S1", "S2"] : ["S1"] }));
+    assert.deepStrictEqual(visibleRows(rows, { scanner: "S2" }).map((r) => r.ticker), ["B", "D"]);
+    assert.strictEqual(visibleRows(rows, { scanner: null }).length, 4);
+});
+
 test("search and column sort keep empty values last", () => {
     assert.deepStrictEqual(visibleRows(ROWS, { search: "ga" }).map((r) => r.ticker), ["C"]);
     assert.deepStrictEqual(visibleRows(ROWS, { sort: { key: "dopm", dir: -1 } }).map((r) => r.ticker), ["C", "A", "B", "D"]);

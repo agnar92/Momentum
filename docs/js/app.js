@@ -43,7 +43,7 @@ function compareBy(key, dir) {
 
 function visibleRows(rows, opts) {
     const q = (opts.search || "").trim().toLowerCase();
-    let out = rows.filter((r) => (!opts.onlyOk || r.ok) &&
+    let out = rows.filter((r) => (!opts.onlyOk || r.ok) && (!opts.scanner || (r.scanners || []).includes(opts.scanner)) &&
         (!q || r.ticker.toLowerCase().includes(q) || (r.company || "").toLowerCase().includes(q)));
     out = out.slice().sort(opts.sort ? compareBy(opts.sort.key, opts.sort.dir) : defaultCompare);
     return out;
@@ -62,15 +62,15 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, cell, defaultComp
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: true, sort: null, recent: [] }, readSettings());
-    let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null;
+    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null }, readSettings());
+    let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     const weeklyCache = new Map();
 
     function readSettings() {
         try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
     }
     function saveSettings() {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent })); } catch (e) { /* tryb prywatny */ }
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner })); } catch (e) { /* tryb prywatny */ }
     }
     const allRows = () => data.rows.concat(data.symbols || []);
     const rowFor = (t) => allRows().find((r) => r.ticker === t) || null;
@@ -83,25 +83,68 @@ if (typeof document !== "undefined") (function () {
     }
 
     function renderTable() {
-        shown = visibleRows(data.rows, { onlyOk: state.onlyOk, search: $("search").value, sort: state.sort });
+        shown = visibleRows(data.rows, { onlyOk: state.onlyOk, search: $("search").value, sort: state.sort, scanner: state.scanner });
         $("tbody").innerHTML = shown.map((r) => {
             const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki” albo zmień wyszukiwanie.</td></tr>`;
-        const ok = data.rows.filter((r) => r.ok).length, sig = data.rows.filter(isSignal).length;
-        $("counts").textContent = `${shown.length} na liście · ${data.rows.length} spółek z Finviz · warunki spełnia ${ok} · sygnał GLB ${sig}`;
+        const pool = visibleRows(data.rows, { scanner: state.scanner });
+        const ok = pool.filter((r) => r.ok).length, sig = pool.filter(isSignal).length;
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · warunki spełnia ${ok} · sygnał GLB ${sig}`;
+        renderStatus();
     }
 
     function escapeHtml(s) {
         return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
     }
 
-    async function loadWeekly(t) {
-        if (!weeklyCache.has(t)) {
-            weeklyCache.set(t, fetch("data/weekly/" + encodeURIComponent(fileName(t)), { cache: "no-cache" })
-                .then((r) => (r.ok ? r.json() : null)).catch(() => null));
+    // pasek ładowania na dole: etykieta, pobrane MB, procent (gdy serwer poda rozmiar) i czas od startu
+    const loads = new Map();
+    let loadSeq = 0, loadTimer = null;
+    function renderLoad() {
+        const bar = $("loadbar");
+        if (!loads.size) { bar.hidden = true; clearInterval(loadTimer); loadTimer = null; return; }
+        const items = [...loads.values()], done = items.reduce((a, x) => a + x.got, 0), total = items.reduce((a, x) => a + (x.total || 0), 0);
+        const known = items.every((x) => x.total), pct = known && total ? Math.min(99, Math.round(done / total * 100)) : null;
+        const secs = (Date.now() - Math.min(...items.map((x) => x.t0))) / 1000;
+        bar.hidden = false;
+        bar.classList.toggle("indet", pct === null);
+        $("loadfill").style.width = (pct === null ? 30 : pct) + "%";
+        $("loadtext").textContent = `${items.map((x) => x.label).join(" · ")} · ${(done / 1e6).toFixed(1)} MB` +
+            (pct === null ? "" : ` · ${pct} %`) + ` · ${secs.toFixed(0)} s`;
+    }
+
+    async function fetchJson(url, label) {
+        const id = ++loadSeq;
+        loads.set(id, { label, got: 0, total: 0, t0: Date.now() });
+        if (!loadTimer) loadTimer = setInterval(renderLoad, 500);
+        renderLoad();
+        try {
+            const r = await fetch(url, { cache: "no-cache" });
+            if (!r.ok) return null;
+            const enc = r.headers.get("content-encoding"), len = +r.headers.get("content-length") || 0;
+            loads.get(id).total = enc ? 0 : len;   // skompresowany rozmiar nie pasuje do pobranych bajtów -> bez procentu
+            if (!r.body || !r.body.getReader) return await r.json();
+            const reader = r.body.getReader(), chunks = [];
+            for (;;) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                chunks.push(value);
+                loads.get(id).got += value.length;
+                renderLoad();
+            }
+            return JSON.parse(new TextDecoder().decode(await new Blob(chunks).arrayBuffer()));
+        } catch (e) {
+            return null;
+        } finally {
+            loads.delete(id);
+            renderLoad();
         }
+    }
+
+    async function loadWeekly(t) {
+        if (!weeklyCache.has(t)) weeklyCache.set(t, fetchJson("data/weekly/" + encodeURIComponent(fileName(t)), `Wykres ${t}`));
         return weeklyCache.get(t);
     }
 
@@ -114,6 +157,7 @@ if (typeof document !== "undefined") (function () {
         const tr = document.querySelector(`#tbody tr[data-t="${CSS.escape(t)}"]`);
         if (tr) { tr.classList.add("sel"); tr.scrollIntoView({ block: "nearest" }); }
         series = null;
+        end = null;   // długość okna zostaje między spółkami, koniec wraca do ostatniego tygodnia
         drawChart();
         const d = await loadWeekly(t);
         if (current !== t) return;
@@ -125,11 +169,60 @@ if (typeof document !== "undefined") (function () {
         const box = $("chartBody");
         $("tip").hidden = true;
         if (!current) return;
-        if (!series) { box.innerHTML = `<p class="note">${series === false ? "Brak danych tygodniowych." : "Ładowanie…"}</p>`; return; }
-        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(300, box.clientHeight));
+        if (!series) {
+            $("slider").innerHTML = "";
+            box.innerHTML = `<p class="note">${series === false ? "Brak danych tygodniowych." : "Ładowanie…"}</p>`;
+            return;
+        }
+        drawSlider();
+        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(300, box.clientHeight), state.nShow, end);
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
+    }
+
+    function drawSlider() {
+        const el = $("slider");
+        el.innerHTML = series ? sliderSvg(series.c, state.nShow, end, el.clientWidth, el.clientHeight) : "";
+    }
+
+    function setWindow(n, e) {
+        const total = series.c.length;
+        state.nShow = n >= total ? null : n;
+        end = e >= total ? null : e;
+        saveSettings();
+        drawChart();
+    }
+
+    function sliderX(ev) {
+        const r = $("slider").getBoundingClientRect();
+        return ev.clientX - r.left;
+    }
+
+    function sliderDown(ev) {
+        if (!series) return;
+        const total = series.c.length, W = $("slider").clientWidth, x = sliderX(ev);
+        const [x0, x1] = sliderRect(total, state.nShow, end, W);
+        let mode = sliderMode(x, x0, x1, ev.pointerType === "mouse" ? 9 : 16);
+        if (mode === "jump") { setWindow(...sliderJump(x, total, state.nShow, W)); mode = "move"; }
+        drag = { mode, x, start: [state.nShow, end] };
+        $("slider").setPointerCapture(ev.pointerId);
+        ev.preventDefault();
+    }
+
+    function sliderMove(ev) {
+        if (!drag || !series) return;
+        setWindow(...sliderDrag(drag.mode, drag.start, sliderX(ev) - drag.x, series.c.length, $("slider").clientWidth));
+    }
+
+    function zoom(factor) {
+        if (series) setWindow(...zoomWindow(series.c.length, state.nShow, end, factor));
+    }
+
+    function pan(d) {
+        if (!series) return;
+        const total = series.c.length, [i0, i1] = windowRange(total, state.nShow, end);
+        setWindow(i1 - i0, Math.max(i1 - i0, Math.min(total, i1 + d)));
     }
 
     function closeChart() {
@@ -154,7 +247,7 @@ if (typeof document !== "undefined") (function () {
         const tip = $("tip"), cross = svg.querySelector("#cross");
         if (i < 0 || i >= geom.n) { tip.hidden = true; cross.setAttribute("visibility", "hidden"); return; }
         cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
-        tip.innerHTML = infoLines(series, i).map(escapeHtml).join("<br>");
+        tip.innerHTML = infoLines(series, geom.i0 + i).map(escapeHtml).join("<br>");
         tip.hidden = false;
         const bx = $("chartPane").getBoundingClientRect(), left = p.clientX - bx.left;
         tip.style.left = (left < bx.width - 200 ? left + 14 : left - 190) + "px";
@@ -189,6 +282,7 @@ if (typeof document !== "undefined") (function () {
         $("onlyOk").checked = state.onlyOk;
         $("onlyOk").addEventListener("change", () => { state.onlyOk = $("onlyOk").checked; saveSettings(); renderTable(); });
         $("search").addEventListener("input", renderTable);
+        $("scanner").addEventListener("change", () => { state.scanner = $("scanner").value || null; saveSettings(); renderTable(); });
         $("thead").addEventListener("click", (e) => {
             const th = e.target.closest("th");
             if (!th) return;
@@ -207,27 +301,53 @@ if (typeof document !== "undefined") (function () {
         body.addEventListener("mousemove", onMove);
         body.addEventListener("touchmove", onMove, { passive: true });
         body.addEventListener("mouseleave", () => { $("tip").hidden = true; });
+        const sl = $("slider");
+        sl.addEventListener("pointerdown", sliderDown);
+        sl.addEventListener("pointermove", sliderMove);
+        sl.addEventListener("pointerup", () => { drag = null; });
+        sl.addEventListener("pointercancel", () => { drag = null; });
+        for (const el of [sl, body]) {
+            el.addEventListener("wheel", (e) => { if (!series) return; e.preventDefault(); zoom(e.deltaY < 0 ? 0.85 : 1.18); }, { passive: false });
+        }
         let rt = null;
         window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawChart, 120); });
         document.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSymbol(); return; }
             if ($("symDlg").open || e.target.matches("input")) return;
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
+            else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }
+            else if (current && (e.key === "+" || e.key === "-")) zoom(e.key === "+" ? 0.85 : 1.18);
             else if (e.key === "Escape") closeChart();
         });
     }
 
+    function renderScanners() {
+        const scans = data.scanners || [];
+        if (state.scanner && !scans.some((m) => m.name === state.scanner)) state.scanner = null;
+        $("scanner").innerHTML = `<option value="">Wszystkie skanery (${data.rows.length})</option>` +
+            scans.map((m) => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${m.n})${m.stale ? " ⚠" : ""}</option>`).join("");
+        $("scanner").value = state.scanner || "";
+    }
+
+    function renderStatus() {
+        if (!data.generated_at) return;
+        const scans = (data.scanners || []).filter((m) => !state.scanner || m.name === state.scanner);
+        const stale = scans.filter((m) => m.stale).map((m) => m.name);
+        $("status").textContent = `Dane z ${data.generated_at.slice(0, 10)} (ostatni tydzień ${data.data_as_of || "—"}` +
+            `${weekInProgress(data.data_as_of, data.generated_at) ? " — w toku, sygnał obowiązuje po zamknięciu piątku" : ""})` +
+            (state.scanner && scans[0] ? ` · filtr Finviz ${scans[0].filters}` : "") +
+            (stale.length ? ` · ⚠ Finviz niedostępny dla: ${stale.join(", ")} — lista z poprzedniego odświeżenia` : "");
+    }
+
     async function init() {
         initUi();
-        try {
-            data = await fetch("data/watchlist.json", { cache: "no-cache" }).then((r) => r.json());
-        } catch (e) {
+        data = await fetchJson("data/watchlist.json", "Lista spółek");
+        if (!data) {
+            data = { rows: [], symbols: [] };
             $("status").textContent = "Nie udało się wczytać data/watchlist.json.";
             return;
         }
-        const stale = data.finviz_stale ? " · ⚠ Finviz niedostępny — lista z poprzedniego odświeżenia" : "";
-        $("status").textContent = `Dane z ${(data.generated_at || "").slice(0, 10)} (ostatni tydzień ${data.data_as_of || "—"}` +
-            `${weekInProgress(data.data_as_of, data.generated_at) ? " — w toku, sygnał obowiązuje po zamknięciu piątku" : ""}) · filtr Finviz ${data.finviz_filters}${stale}`;
+        renderScanners();
         renderTable();
         if (window.matchMedia("(min-width: 1000px)").matches && shown.length) openChart(shown[0].ticker);
     }

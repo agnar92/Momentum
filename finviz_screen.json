@@ -1,7 +1,31 @@
 {
-  "_instructions": "filters = kody filtrów darmowego screenera Finviz rozdzielone przecinkami (skopiuj parametr f= z adresu skanera). Domyślny = bezpieczny filtr z backtestu: tylko akcje, cena > 10 $, śr. wolumen > 300 tys., przychody kw. > 15 % r/r — nie odciął żadnego z dużych zwycięzców. Finviz po cichu ignoruje nieznany kod, więc po zmianie sprawdź liczbę spółek. max_tickers = limit listy. symbols = dodatkowe symbole liczone tak samo (np. SPY) — Ctrl+K na stronie otwiera każdy symbol z listy albo z tego pola. sec_ua = User-Agent z kontaktem dla SEC (można też ustawić sekret SEC_UA).",
-  "filters": "ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15",
-  "max_tickers": 1500,
-  "symbols": ["SPY", "QQQ", "^GSPC"],
+  "_instructions": "scanners = skanery Finviz do wyboru na stronie: name (nazwa na liście), filters (kody filtrów darmowego screenera rozdzielone przecinkami — skopiuj parametr f= z adresu skanera), max_tickers (limit). Każdy skaner liczy tę samą strategię (obrót, przychody, marża, Green Line, MACD); ceny i fundamenty pobieramy raz dla wszystkich spółek. Finviz po cichu ignoruje nieznany kod, więc po zmianie sprawdź liczbę spółek. Pierwszy = bezpieczny filtr z backtestu (nie odciął żadnego z dużych zwycięzców). symbols = dodatkowe symbole liczone tak samo (np. SPY) — Ctrl+K na stronie otwiera każdy symbol z danych. sec_ua = User-Agent z kontaktem dla SEC (można też ustawić sekret SEC_UA).",
+  "scanners": [
+    {
+      "name": "Bezpieczny (backtest)",
+      "filters": "ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15",
+      "max_tickers": 1500
+    },
+    {
+      "name": "Trend 50/200",
+      "filters": "ta_sma50_pa,ta_sma200_pa,cap_midover,sh_avgvol_o300",
+      "max_tickers": 1500
+    },
+    {
+      "name": "Blisko rekordu (ATH)",
+      "filters": "cap_smallover,sh_avgvol_o100,ta_alltime_b0to10h",
+      "max_tickers": 1500
+    },
+    {
+      "name": "CANSLIM",
+      "filters": "cap_smallover,fa_epsqoq_high,fa_epsyoyttm_high,fa_salesqoq_high,ind_stocksonly,sh_avgvol_o300,sh_price_o1,ta_sma200_pa",
+      "max_tickers": 1500
+    }
+  ],
+  "symbols": [
+    "SPY",
+    "QQQ",
+    "^GSPC"
+  ],
   "sec_ua": "Momentum research@example.com"
 }

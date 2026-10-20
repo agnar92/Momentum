@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { sma, macd, macdCrossDown, ticks, chartSvg, infoLines, titleText } = require("../../docs/js/chart.js");
+const { sma, macd, macdCrossDown, ticks, chartSvg, infoLines, titleText, windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg } = require("../../docs/js/chart.js");
 
 test("sma and ticks", () => {
     assert.deepStrictEqual(sma([1, 2, 3, 4], 2), [null, 1.5, 2.5, 3.5]);
@@ -35,4 +35,27 @@ test("chart draws green line, MACD stop and returns geometry", () => {
 test("info lines and title", () => {
     assert.deepStrictEqual(infoLines(weekly(3), 1).slice(0, 2), ["tydz. 2024-01-08", "O 51.00  H 52.00"]);
     assert.strictEqual(titleText("X", { company: "Xco", glb_pct: 4, turnover: 6e7 }), "X  ·  Xco  ·  do linii +4.0%  ·  obrót 60 mln $/dzień");
+});
+
+test("slider window, drag, jump, zoom", () => {
+    assert.deepStrictEqual(windowRange(156), [0, 156]);
+    assert.deepStrictEqual(windowRange(156, 5, 40), [28, 40]);            // minimum 12 tygodni
+    const [x0, x1] = sliderRect(156, 52, null, 164);
+    assert.deepStrictEqual([x0, x1], [4 + 104 / 156 * 156, 160]);
+    assert.strictEqual(sliderMode(x0 + 2, x0, x1), "left");
+    assert.strictEqual(sliderMode((x0 + x1) / 2, x0, x1), "move");
+    assert.strictEqual(sliderMode(10, x0, x1), "jump");
+    assert.deepStrictEqual(sliderDrag("move", [52, null], -1000, 156, 164), [52, 52]);
+    assert.deepStrictEqual(sliderDrag("left", [52, null], -52, 156, 164), [104, 156]);
+    assert.deepStrictEqual(sliderJump(4, 156, 52, 164), [52, 52]);
+    assert.deepStrictEqual(zoomWindow(156, null, null, 0.5), [78, 156]);
+    assert.ok(sliderSvg(weekly(156).c, 52, null, 400, 46).includes("52 tyg."));
+});
+
+test("chart window keeps indicators from full history", () => {
+    const full = chartSvg(weekly(156), null, 1000, 600), win = chartSvg(weekly(156), null, 1000, 600, 52, 100);
+    assert.strictEqual(win.geom.n, 52);
+    assert.strictEqual(win.geom.i0, 48);
+    assert.strictEqual(full.geom.i0, 0);
+    assert.deepStrictEqual(infoLines(weekly(156), win.geom.i0)[0], "tydz. " + weekly(156).d[48]);
 });

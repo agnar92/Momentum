@@ -4,9 +4,10 @@
 const browserGlobals = {
     window: "readonly", document: "readonly", navigator: "readonly", localStorage: "readonly", fetch: "readonly",
     console: "readonly", location: "readonly", setTimeout: "readonly", clearTimeout: "readonly", CSS: "readonly",
-    URL: "readonly", caches: "readonly", self: "readonly", module: "readonly",
+    URL: "readonly", setInterval: "readonly", clearInterval: "readonly", TextDecoder: "readonly", Blob: "readonly", caches: "readonly", self: "readonly", module: "readonly",
     // docs/js/chart.js (ładowany PRZED app.js)
-    chartSvg: "readonly", infoLines: "readonly", titleText: "readonly",
+    chartSvg: "readonly", infoLines: "readonly", titleText: "readonly", sliderSvg: "readonly", sliderRect: "readonly",
+    sliderMode: "readonly", sliderDrag: "readonly", sliderJump: "readonly", zoomWindow: "readonly", windowRange: "readonly",
 };
 const nodeGlobals = { require: "readonly", module: "readonly", process: "readonly", console: "readonly" };
 
