@@ -1,0 +1,245 @@
+"""Testy bez sieci: Green Line, stan GLB, MACD, obrót, warunki, parser Finviz (3 układy strony), fundamenty SEC i odświeżenie z podmienionymi źródłami."""
+import datetime as dt
+
+import pytest
+
+import json
+
+import watchlist
+from momentum import calc, finviz, prices, sec
+
+
+def test_green_line_needs_three_closed_months_and_keeps_old_line():
+    assert calc.green_line([10, 12, 11, 11]) == (None, None)            # rekord 12 stoi dopiero 2 miesiące
+    assert calc.green_line([10, 12, 11, 11, 11]) == (12, 1)             # ≥ 3 miesiące -> linia
+    assert calc.green_line([10, 12, 11, 11, 11, 15, 14]) == (12, 1)     # nowy rekord 15 jeszcze nie stoi 3 miesięcy: obowiązuje stara linia
+    assert calc.green_line([10, 12, 11, 11, 11, 15, 14, 14, 14]) == (15, 5)
+    assert calc.green_line([10, 12, 11, 11, 11, 11, 11, 11, 11])[0] == 12   # „3 lub więcej” — rekord stojący dłużej nadal jest linią
+
+
+def test_glb_state():
+    assert calc.glb_state(105, 99, 100) == "WYBICIE"
+    assert calc.glb_state(105, 103, 100) == "SYGNAŁ"
+    assert calc.glb_state(110, 103, 100) == "SYGNAŁ"
+    assert calc.glb_state(111, 103, 100) == "NAD"
+    assert calc.glb_state(99, 103, 100) == "POD"
+    assert calc.glb_state(99, 103, None) == "BRAK"
+
+
+def test_macd_cross_and_stop_is_low_of_cross_week():
+    closes = [float(i) for i in range(1, 60)] + [60 - i * 2.0 for i in range(1, 15)]
+    lows = [c - 1 for c in closes]
+    _, _, h = calc.macd(closes)
+    cross = calc.macd_cross_down(h)
+    assert cross and h[cross[-1]] < 0 <= h[cross[-1] - 1]
+    info = calc.macd_info(closes, lows)
+    assert info["state"] == "pod" and info["stop"] == lows[cross[-1]]
+
+
+def test_turnover_and_conditions():
+    assert calc.turnover([10, 10, 10, 10], [5e7] * 4) == pytest.approx(1e8)
+    good = {"turnover": 60e6, "rev_rr": 20, "dopm": 4}
+    assert calc.passes(good)
+    for k, v in (("turnover", 40e6), ("rev_rr", 10), ("dopm", 2), ("dopm", None)):
+        assert not calc.passes({**good, k: v})
+
+
+def test_build_row():
+    w = {"d": ["2026-01-05"] * 40, "o": [1] * 40, "h": [1] * 40, "l": [1] * 40, "c": [100.0] * 38 + [99.0, 104.0], "v": [3e6] * 40}
+    row = calc.build_row({"ticker": "X"}, w, [50, 100, 90, 90, 90, 95], {"rev_rr": 30, "dopm": 5})
+    assert row["glb"] == 100 and row["glb_state"] == "WYBICIE" and row["glb_pct"] == pytest.approx(4)
+    assert row["ok"] and row["turnover"] == pytest.approx(104 * 3e6 / 5, rel=0.05)
+
+
+NEW_LAYOUT = """<div>#1 / 2 Total</div>
+<div class="fv-table_row" data-row-key="NVDA"><div data-column-id="company">NVIDIA Corp</div><div data-column-id="sector">Technology</div>
+<div data-column-id="marketCap">4.5T</div></div>
+<div class="fv-table_row" data-row-key="MU"><div data-column-id="company">Micron</div><div data-column-id="marketCap">120.1B</div></div>"""
+
+
+def test_finviz_parse_and_fetch_pages():
+    rows, total = finviz.parse_page(NEW_LAYOUT)
+    assert total == 2 and rows[0] == {"ticker": "NVDA", "company": "NVIDIA Corp", "sector": "Technology", "market_cap": 4.5e12}
+    assert rows[1]["market_cap"] == pytest.approx(120.1e9)
+
+    class R:
+        text = NEW_LAYOUT
+
+        def raise_for_status(self):
+            pass
+    out, total = finviz.fetch("x", pause=0, log=lambda s: None, get=lambda *a, **k: R())
+    assert [r["ticker"] for r in out] == ["NVDA", "MU"] and total == 2
+
+
+def _q(start, end, val):
+    return {"start": start, "end": end, "val": val, "filed": "2026-01-01"}
+
+
+def test_sec_metrics_quarter_vs_year_ago_q4_from_annual():
+    rev = [_q("2025-01-01", "2025-03-31", 100), _q("2025-04-01", "2025-06-30", 110), _q("2025-07-01", "2025-09-30", 120),
+           _q("2025-01-01", "2025-12-31", 470), _q("2026-01-01", "2026-03-31", 150)]   # Q4 2025 = 470 − 330 = 140
+    op = [_q("2025-01-01", "2025-03-31", 10), _q("2025-04-01", "2025-06-30", 11), _q("2025-07-01", "2025-09-30", 12),
+          _q("2025-01-01", "2025-12-31", 47), _q("2026-01-01", "2026-03-31", 30)]
+    facts = {"us-gaap": {"Revenues": {"units": {"USD": rev}}, "OperatingIncomeLoss": {"units": {"USD": op}}}}
+    m = sec.metrics(facts)
+    assert m["quarter"] == "2026-03-31" and m["rev_rr"] == pytest.approx(50)
+    assert m["opm"] == pytest.approx(20) and m["dopm"] == pytest.approx(10)
+
+
+def test_sec_update_uses_cache(monkeypatch):
+    cache = {"OLD": {"at": dt.date.today().isoformat(), "rev_rr": 1}}
+    monkeypatch.setattr(sec, "cik_map", lambda ua: {"NEW": 1})
+    monkeypatch.setattr(sec, "_get", lambda url, ua: {"facts": {}})
+    assert sec.update(["OLD", "NEW", "ZZZ"], cache, log=lambda s: None, pause=0) == ["NEW"]
+    assert cache["OLD"]["rev_rr"] == 1 and "at" in cache["ZZZ"]
+
+
+class _Frame(dict):
+    empty = False
+
+    def dropna(self, subset=None):
+        return self
+
+
+def _yf_fake(monkeypatch, calls, frames):
+    monkeypatch.setattr(prices, "_yf", lambda: type("Y", (), {"download": staticmethod(lambda part, **k: calls.append((list(part), k["period"])) or "df")}))
+    monkeypatch.setattr(prices, "_frames", lambda df, part: {t: frames[t] for t in part if t in frames})
+
+
+def test_monthly_updates_only_new_months_and_uses_high(monkeypatch):
+    import pandas as pd
+    calls = []
+    hi = pd.Series([10.0, 12.0], index=pd.to_datetime(["2026-08-01", "2026-09-01"]))
+    _yf_fake(monkeypatch, calls, {"A": {"High": hi}, "B": {"High": hi}})
+    cache = {"A": {"h": [["2026-07", 9.0], ["2026-08", 10.0]], "upto": "2026-08"}, "C": {"h": [], "upto": "2026-09"},
+             "B": {"m": [["2026-09", 1.0]], "upto": "2026-09"}}      # stary wpis z zamknięciami (nawet aktualny) -> cała historia
+    prices.monthly(["A", "B", "C"], cache, log=lambda s: None, today=dt.date(2026, 10, 20))
+    assert calls == [(["A"], "6mo"), (["B"], "max")]                 # C aktualne: bez zapytania
+    assert cache["A"] == {"h": [["2026-07", 9.0], ["2026-08", 10.0], ["2026-09", 12.0]], "upto": "2026-09"}
+    assert prices.monthly_highs(cache["B"]) == [10.0, 12.0]
+
+
+def test_monthly_refetches_full_history_when_prices_changed(monkeypatch):
+    import pandas as pd
+    calls = []
+    _yf_fake(monkeypatch, calls, {"A": {"High": pd.Series([5.0, 6.0], index=pd.to_datetime(["2026-08-01", "2026-09-01"]))}})
+    cache = {"A": {"h": [["2026-08", 10.0]], "upto": "2026-08"}}   # split 2:1 — 10 -> 5
+    prices.monthly(["A"], cache, log=lambda s: None, today=dt.date(2026, 10, 20))
+    assert calls == [(["A"], "6mo"), (["A"], "max")] and cache["A"]["h"] == [["2026-08", 5.0], ["2026-09", 6.0]]
+
+
+def test_merge_weekly_appends_new_weeks_and_detects_adjusted_history():
+    old = {k: [1, 2, 3] for k in "ohlcv"} | {"d": ["2026-09-28", "2026-10-05", "2026-10-12"]}
+    new = {k: [3.01, 4] for k in "ohlcv"} | {"d": ["2026-10-12", "2026-10-19"]}
+    m = prices.merge_weekly(old, new)
+    assert m["d"] == ["2026-09-28", "2026-10-05", "2026-10-12", "2026-10-19"] and m["c"] == [1, 2, 3.01, 4]
+    assert prices.merge_weekly(old, {**new, "c": [1.5, 2]}) is None
+    assert prices.merge_weekly(old, new, keep=2)["d"] == ["2026-10-12", "2026-10-19"]
+
+
+def test_weekly_fetches_only_recent_weeks_for_cached(monkeypatch):
+    import pandas as pd
+    calls = []
+    idx = pd.to_datetime(["2026-10-12", "2026-10-19"])
+    f = {"Open": [3.0, 4.0], "High": [3.0, 4.0], "Low": [3.0, 4.0], "Close": [3.0, 4.0], "Volume": [1.0, 1.0]}
+    df = pd.DataFrame(f, index=idx)
+    full = pd.DataFrame({k: [1.0] * 12 for k in f}, index=pd.date_range("2026-08-03", periods=12, freq="W-MON"))
+    monkeypatch.setattr(prices, "_yf", lambda: type("Y", (), {"download": staticmethod(lambda part, **k: calls.append((list(part), k["period"])) or k["period"])}))
+    monkeypatch.setattr(prices, "_frames", lambda d, part: {t: (full if d == "3y" else df) for t in part})
+    cache = {"A": {k: [1, 2, 3] for k in "ohlcv"} | {"d": ["2026-09-28", "2026-10-05", "2026-10-12"]}}
+    out = prices.weekly(["A", "N"], log=lambda s: None, cache=cache, today=dt.date(2026, 10, 20))
+    assert calls == [(["A"], "1mo"), (["N"], "3y")]
+    assert out["A"]["c"] == [1, 2, 3.0, 4.0] and len(out["N"]["c"]) == 12
+
+
+OLD_TABLE = """<table class="screener_table"><thead><tr><th>No.</th><th>Ticker</th><th>Company</th><th>Sector</th></tr></thead>
+<tr class="styled-row"><td>1</td><td data-boxover-ticker="AAA">AAA</td><td>Alpha</td><td>Tech</td></tr></table>"""
+SSR_JSON = ('<script type="application/json" data-ssr-props="x">'
+            + json.dumps({"data": {"totalCount": 1, "rows": [{"text": {"ticker": "ZZ", "company": "Zeta"}, "numbers": {"marketCap": 1500}}]}})
+            + "</script>")
+
+
+def test_finviz_old_table_and_ssr_json_layouts():
+    assert finviz.parse_page(OLD_TABLE)[0] == [{"ticker": "AAA", "company": "Alpha", "sector": "Tech"}]
+    rows, total = finviz.parse_page(SSR_JSON)
+    assert total == 1 and rows == [{"ticker": "ZZ", "company": "Zeta", "sector": None, "industry": None, "market_cap": 1.5e9}]
+
+
+W = {"d": ["2026-01-05"] * 40, "o": [1] * 40, "h": [1] * 40, "l": [1] * 40, "c": [100.0] * 39 + [104.0], "v": [5e6] * 40}
+
+
+def _monthly(ts, cache, log):
+    for t in ts:
+        cache[t] = {"h": [["2025-01", 50], ["2025-02", 100], ["2025-03", 90], ["2025-04", 90], ["2025-05", 90]], "upto": "2025-05"}
+
+
+def _fund(ts, cache, ua, log):
+    for t in ts:
+        cache[t] = {"at": "2026-10-20", "rev_rr": 25, "dopm": 6}
+
+
+def _run(tmp_path, fetch_list, symbols=()):
+    return watchlist.run({"symbols": list(symbols)}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch_list,
+                         weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 40} if t.startswith("B") else W) for t in ts}, monthly=_monthly, fund=_fund)
+
+
+def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
+    base = [{"ticker": f"A{i}"} for i in range(20)] + [{"ticker": "B1"}]
+    rows = _run(tmp_path, lambda f, max_tickers, log: (base, 21), symbols=["SPY", "^GSPC"])
+    a = next(r for r in rows if r["ticker"] == "A0")
+    assert a["ok"] and a["glb_state"] == "SYGNAŁ"
+    assert not next(r for r in rows if r["ticker"] == "B1")["ok"]   # za mały obrót
+    data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
+    assert data["scanners"][0]["name"] == "Domyślny" and a["scanners"] == ["Domyślny"]
+    assert len(data["rows"]) == 21 and [r["ticker"] for r in data["symbols"]] == ["SPY", "^GSPC"] and not data["finviz_stale"]
+    assert json.loads((tmp_path / "out" / "weekly" / "_GSPC.json").read_text())["c"][-1] == 104.0
+    assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
+
+
+def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
+    base = [{"ticker": f"A{i}", "company": f"C{i}"} for i in range(20)]
+    _run(tmp_path, lambda f, max_tickers, log: (base, 20))
+
+    def blocked(f, max_tickers, log):
+        raise OSError("403")
+    rows = _run(tmp_path, blocked)
+    data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
+    assert len(rows) == 20 and data["finviz_stale"] and data["rows"][0]["company"] == "C0"
+
+
+def test_file_name():
+    assert watchlist.file_name("^GSPC") == "_GSPC.json" and watchlist.file_name("BRK-B") == "BRK-B.json"
+
+
+def test_second_run_passes_saved_weekly_series_as_cache(tmp_path):
+    base = [{"ticker": f"A{i}"} for i in range(20)]
+    seen = []
+
+    def weekly(ts, log, cache):
+        seen.append(sorted(cache))
+        return {t: W for t in ts}
+    for _ in range(2):
+        watchlist.run({}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
+                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund)
+    assert seen[0] == [] and seen[1] == sorted(t["ticker"] for t in base)
+
+
+def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
+    lists = {"f1": [{"ticker": f"A{i}"} for i in range(20)], "f2": [{"ticker": "A0"}, {"ticker": "Z"}]}
+    cfg = {"scanners": [{"name": "Jeden", "filters": "f1"}, {"name": "Dwa", "filters": "f2"}]}
+
+    def go(fetch):
+        return watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch,
+                             weekly=lambda ts, log, cache: {t: W for t in ts}, monthly=_monthly, fund=_fund)
+    rows = go(lambda f, max_tickers, log: (lists[f], len(lists[f])))       # „Dwa” ma 2 spółki i Finviz mówi, że tyle jest — to nie blokada
+    by = {r["ticker"]: r for r in rows}
+    assert len(rows) == 21 and by["A0"]["scanners"] == ["Jeden", "Dwa"] and by["Z"]["scanners"] == ["Dwa"]
+
+    def half(f, max_tickers, log):
+        if f == "f2":
+            raise OSError("403")
+        return lists[f], 20
+    rows = go(half)
+    data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
+    assert {r["ticker"]: r["scanners"] for r in rows}["Z"] == ["Dwa"]
+    assert [m["stale"] for m in data["scanners"]] == [False, True] and data["finviz_stale"]

@@ -1,0 +1,70 @@
+name: Weekly Refresh
+
+# Raz w tygodniu, w sobotę rano (po piątkowej sesji USA — sygnały liczą się na zamknięciu TYGODNIA): watchlist.py pobiera listę z Finviz
+# (finviz_screen.json), tygodniowe świece z yfinance, miesięczne zamknięcia z całej historii (Green Line) i fundamenty z SEC,
+# zapisuje docs/data/ (strona) i data/ (pamięć podręczna miesięcy i SEC), commituje i publikuje stronę.
+# Ręcznie: Actions -> "Weekly Refresh" -> "Run workflow" (przycisk „⟳ Odśwież dane” na stronie prowadzi tutaj). Lokalnie: python watchlist.py
+on:
+  schedule:
+    - cron: '17 3 * * 6'   # sobota 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Refresh data (Finviz + yfinance + SEC)
+        env:
+          SEC_UA: ${{ secrets.SEC_UA }}
+        run: python watchlist.py
+
+      - name: Commit data
+        run: |
+          if [ -z "$(git status --porcelain docs/data/ data/)" ]; then
+            echo "Brak zmian w danych."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3 4 5; do
+            # zawsze na AKTUALNY main (reset --mixed), żeby commit niósł tylko świeże dane
+            git fetch origin main
+            git reset --mixed origin/main
+            git add -A docs/data/ data/
+            git commit -m "chore: weekly refresh [skip ci]"
+            if git push; then exit 0; fi
+            echo "Push odrzucony (próba $attempt) — ponawiam."
+            sleep $((attempt * 3))
+          done
+          exit 1
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'docs/'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
