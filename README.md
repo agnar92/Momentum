@@ -29,6 +29,9 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
 - **Alerty** (🔔 Alerty na pasku): zamknięcie tygodnia przecięło linię trendu (🔔 alert linii) oraz dla obserwowanych spółek (🔕 Obserwuj na wykresie):
   sygnał GLB, przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Sprawdzane przy otwarciu strony po nowych danych; linie i alerty
   zapisują się w przeglądarce (każde urządzenie ma swoje). Opcjonalnie powiadomienie systemowe.
+- **Potencjał ★ (0–5) i Hamuje ⚠**: cechy fundamentów, które w badaniu 2021–2026 podnosiły szansę na duży ruch (przychody ≥ 25 %, dwa kwartały z rzędu, marża oper.
+  ↑ dwa kwartały, marża brutto ↑, marża oper. < 10 %) i ostrzeżenie o hamowaniu przychodów. **📖 Poradnik**: zasady z badań i lista kontrolna spółki.
+  **📌 Pozycja**: zaznacz posiadane spółki — ostrzeżenie na liście i alerty (MACD, stop, hamowanie). Nad wykresem S&P 500, pod wolumenem przychody kwartalne (jak w IBD).
 - **Pasek ładowania** na dole przy wczytywaniu listy i wykresu (pobrane MB, procent, czas).
   Na szerokim ekranie wykres jest obok listy, na telefonie na pełnym ekranie (✕ / Esc zamyka).
 - **Ctrl+K**: dowolny symbol z danych — spółki z listy i symbole z `symbols` w `finviz_screen.json` (domyślnie SPY, QQQ, ^GSPC), liczone tak samo.

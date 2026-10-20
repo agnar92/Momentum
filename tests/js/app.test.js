@@ -53,9 +53,18 @@ test("column filters combine with AND", () => {
         { ticker: "B", ok: true, glb_state: "NAD", macd: "pod", glb_pct: 12, turnover: 60e6 },
         { ticker: "C", ok: false, glb_state: "POD", macd: "nad", glb_pct: -5, turnover: null },
     ];
-    const f = FILTER_PRESETS[0][1];
+    const f = FILTER_PRESETS.find(([n]) => n === "Nad GLB + MACD dodatni")[1];
     assert.deepStrictEqual(rows.filter((r) => passFilters(r, f)).map((r) => r.ticker), ["A"]);
     assert.deepStrictEqual(visibleRows(rows, { filters: { turnover: { min: 70 } } }).map((r) => r.ticker), ["A"]);
     assert.deepStrictEqual(visibleRows(rows, { filters: { glb_pct: { max: 12 }, ok: { in: ["nie"] } } }).map((r) => r.ticker), ["C"]);
     assert.strictEqual(activeFilters({ a: { in: [] }, b: { min: 1 }, c: {} }), 1);
+});
+
+test("potential stars, slowdown cell and filters", () => {
+    const { passFilters } = require("../../docs/js/app.js");
+    assert.strictEqual(cell(3, "n"), "★★★☆☆");
+    assert.strictEqual(cell("HAMUJE+MB", "w"), "⚠⚠ + marża");
+    assert.strictEqual(cell(null, "w"), "");
+    assert.ok(passFilters({ pot: 4 }, { pot: { min: 3 } }) && !passFilters({ pot: 2 }, { pot: { min: 3 } }));
+    assert.ok(passFilters({ slow: null }, { slow: { in: ["—"] } }) && !passFilters({ slow: "HAMUJE" }, { slow: { in: ["—"] } }));
 });

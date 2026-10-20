@@ -59,3 +59,12 @@ test("chart window keeps indicators from full history", () => {
     assert.strictEqual(full.geom.i0, 0);
     assert.deepStrictEqual(infoLines(weekly(156), win.geom.i0)[0], "tydz. " + weekly(156).d[48]);
 });
+
+test("S&P 500 panel and quarterly revenue bars", () => {
+    const w = weekly(156), spx = { d: w.d, c: w.c.map((x) => x * 4) };
+    const qs = [{ quarter: w.d[100], rev: 1e9, rev_rr: 30 }, { quarter: w.d[113], rev: 1.2e9, rev_rr: 12 }];
+    const res = chartSvg(w, { qs }, 1000, 700, null, null, [], null, spx);
+    assert.ok(res.svg.includes("S&amp;P 500 (SPY)") && res.svg.includes("+30%") && res.svg.includes("+12%"));
+    assert.ok(res.geom.spx[1] < res.geom.price[0] && res.geom.vol[1] < res.geom.rev[0] && res.geom.rev[1] < res.geom.macd[0]);
+    assert.ok(chartSvg(w, null, 1000, 700).svg.includes("brak danych SPY"));
+});

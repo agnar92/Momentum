@@ -78,10 +78,12 @@ function stateAlerts(prev, row) {
     if (row.macd_stop && row.price != null && row.price < row.macd_stop && !(prev.price != null && prev.macd_stop && prev.price < prev.macd_stop))
         out.push(`zamknięcie ${row.price} pod stopem MACD ${row.macd_stop}`);
     if (row.ok && !prev.ok) out.push("spełnia warunki strategii");
+    if (row.slow && row.slow !== prev.slow) out.push(row.slow === "HAMUJE+MB" ? `⚠ hamowanie: tempo przychodów ${row.accel != null ? row.accel.toFixed(0) : ""} pp i marża brutto spada r/r — zacieśnij stop`
+        : `⚠ hamowanie: tempo przychodów ${row.accel != null ? row.accel.toFixed(0) : ""} pp względem kwartału wcześniej`);
     return out;
 }
 
-const snapshot = (r) => ({ glb_state: r.glb_state, macd: r.macd, macd_stop: r.macd_stop, price: r.price, ok: !!r.ok });
+const snapshot = (r) => ({ glb_state: r.glb_state, macd: r.macd, macd_stop: r.macd_stop, price: r.price, ok: !!r.ok, slow: r.slow || null });
 
 // st = {lines: {ticker: [linia]}, watch: {ticker: stan}, log: [...]}; rowFor(t) -> wiersz, seriesFor(t) -> świece (albo null), asOf = ostatni tydzień danych
 // -> nowe wpisy (st.log i st.watch są aktualizowane); klucz z tygodniem, więc ten sam alert nie wraca przy następnym wczytaniu
