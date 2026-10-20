@@ -7,9 +7,13 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
+    ["pot", "Potencjał", "n"], ["slow", "Hamuje", "w"],
 ];
+// warunki potencjału (kolejność jak calc.POTENTIAL) i szansa na dalsze ≥ +100 % w 12 mies. po wybiciu z konsolidacji (bez warunków 5,1 %)
+const POTENTIAL = [["przychody ≥ +25 % r/r", 7.9], ["przychody ≥ +25 % r/r dwa kwartały z rzędu", 8.9], ["marża oper. ↑ ≥ +3 pp dwa kwartały z rzędu", 8.9],
+    ["marża brutto ↑ ≥ +2 pp r/r", 8.0], ["marża oper. < 10 % (dźwignia operacyjna na starcie)", 8.6]];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
-const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter"];
+const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
 const SETTINGS_KEY = "momentum_glb_settings";
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
@@ -20,6 +24,8 @@ function cell(v, f) {
     if (f === "%") return (v >= 0 ? "+" : "") + v.toFixed(1);
     if (f === "m") return (v / 1e6).toLocaleString("en-US", { maximumFractionDigits: 0 });
     if (f === "b") return v ? "✓" : "";
+    if (f === "n") return "★".repeat(v) + "☆".repeat(Math.max(0, 5 - v));
+    if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
 
@@ -44,9 +50,11 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
+    ["Potencjał ≥ 3 + nad GLB + MACD dodatni", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
+    ["Sygnał kupna z potencjałem ≥ 3", { pot: { min: 3 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (0–10 % nad GLB) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, macd: { in: ["nad"] } }],
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
@@ -82,21 +90,21 @@ function weekInProgress(weekDate, generatedAt) {
 
 const fileName = (t) => t.replace(/[^A-Za-z0-9.-]/g, "_") + ".json";   // jak watchlist.file_name
 
-if (typeof module !== "undefined") module.exports = { COLUMNS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
+if (typeof module !== "undefined") module.exports = { COLUMNS, POTENTIAL, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
     const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {} }, readSettings());
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
-    let sel = null, gest = null, rafId = 0;   // zaznaczona linia trendu, gest na wykresie
+    let sel = null, gest = null, rafId = 0, spxData = null;   // zaznaczona linia trendu, gest na wykresie
     const weeklyCache = new Map();
     const ast = readAlerts();   // linie trendu, obserwowane spółki, dziennik alertów
 
     function readAlerts() {
         let a = {};
         try { a = JSON.parse(localStorage.getItem(ALERTS_KEY)) || {}; } catch (e) { /* tryb prywatny */ }
-        return { lines: a.lines || {}, watch: a.watch || {}, log: a.log || [], seen: a.seen || "" };
+        return { lines: a.lines || {}, watch: a.watch || {}, pos: a.pos || {}, log: a.log || [], seen: a.seen || "" };
     }
     function saveAlerts() {
         try { localStorage.setItem(ALERTS_KEY, JSON.stringify(ast)); } catch (e) { /* tryb prywatny */ }
@@ -124,9 +132,10 @@ if (typeof document !== "undefined") (function () {
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
-            const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : ""].join(" ");
+            const held = !!ast.pos[r.ticker], warn = held && (r.slow || (r.macd_stop && r.price < r.macd_stop));
+            const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
-                `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
+                `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
         const pool = visibleRows(data.rows, { scanner: state.scanner });
         const ok = pool.filter((r) => r.ok).length, sig = pool.filter(isSignal).length;
@@ -201,7 +210,8 @@ if (typeof document !== "undefined") (function () {
         gest = null;
         renderTools();
         drawChart();
-        const d = await loadWeekly(t);
+        const [d, spx] = await Promise.all([loadWeekly(t), loadWeekly("SPY")]);
+        spxData = spx;
         if (current !== t) return;
         series = d || false;
         drawChart();
@@ -217,7 +227,7 @@ if (typeof document !== "undefined") (function () {
             return;
         }
         drawSlider();
-        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(300, box.clientHeight), state.nShow, end, linesOf(current), sel);
+        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), state.nShow, end, linesOf(current), sel, spxData || null);
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -393,6 +403,19 @@ if (typeof document !== "undefined") (function () {
         drawChart();
     }
 
+    function togglePos() {
+        if (!current) return;
+        const r = rowFor(current) || {};
+        if (ast.pos[current]) delete ast.pos[current];
+        else {
+            ast.pos[current] = { since: data.data_as_of || "", price: r.price };
+            if (!ast.watch[current]) ast.watch[current] = snapshot(r);   // pozycja = też alerty strategii (MACD, stop, hamowanie)
+        }
+        saveAlerts();
+        renderTools();
+        renderTable();
+    }
+
     function toggleWatch() {
         if (!current) return;
         if (ast.watch[current]) delete ast.watch[current];
@@ -403,6 +426,11 @@ if (typeof document !== "undefined") (function () {
 
     function renderTools() {
         const ln = sel && findLine(sel);
+        $("posBtn").classList.toggle("on", !!(current && ast.pos[current]));
+        $("posBtn").textContent = current && ast.pos[current] ? "📌 Mam pozycję" : "📌 Pozycja";
+        const r = current && rowFor(current);
+        $("potBadge").textContent = r ? `★ ${r.pot ?? 0}/5${r.slow ? " · ⚠ hamuje" : ""}` : "";
+        $("potBadge").classList.toggle("warn", !!(r && r.slow));
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
         $("watchBtn").textContent = current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj";
         $("lineAlertBtn").hidden = $("lineDelBtn").hidden = !ln;
@@ -442,14 +470,39 @@ if (typeof document !== "undefined") (function () {
         const seen = ast.seen;
         $("alertList").innerHTML = ast.log.map((a) => `<li data-t="${escapeHtml(a.t)}" class="${a.at > seen ? "new" : ""}"><b>${escapeHtml(a.t)}</b> ${escapeHtml(a.msg)}` +
             `<span class="when">tydz. ${escapeHtml(a.week)} · ${escapeHtml(a.at.slice(0, 10))}</span></li>`).join("") || '<li class="none">Brak alertów.</li>';
-        const watched = Object.keys(ast.watch), lined = Object.keys(ast.lines);
+        const watched = Object.keys(ast.watch), lined = Object.keys(ast.lines), held = Object.keys(ast.pos);
         $("alertInfo").innerHTML = (watched.length ? "Obserwowane: " + watched.map((t) => `<button type="button" data-t="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("") : "Brak obserwowanych spółek (🔕 Obserwuj na wykresie).") +
+            "<br>" + (held.length ? "📌 Pozycje: " + held.map((t) => { const r = rowFor(t); return `<button type="button" data-t="${escapeHtml(t)}">${escapeHtml(t)}${r && r.slow ? " ⚠" : ""}</button>`; }).join("") : "Brak pozycji (📌 Pozycja na wykresie).") +
             "<br>" + (lined.length ? "Linie trendu: " + lined.map((t) => `<button type="button" data-t="${escapeHtml(t)}">${escapeHtml(t)} (${ast.lines[t].length})</button>`).join("") : "Brak linii trendu.");
         $("notifyBtn").hidden = typeof Notification === "undefined" || Notification.permission !== "default";
         ast.seen = new Date().toISOString();
         saveAlerts();
         renderAlertBtn();
         $("alertDlg").showModal();
+    }
+
+    // ---------- poradnik: zasady z badań + lista kontrolna otwartej spółki ----------
+    function checklist(r) {
+        const yes = (v) => (v === true ? '<b class="ok">✓</b>' : v === false ? '<b class="no">✗</b>' : '<b class="na">—</b>');
+        const fmtv = (v, u) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${u}`);
+        const held = ast.pos[r.ticker];
+        const rows = [
+            ["Warunki strategii (obrót ≥ 50 mln $, przychody ≥ +15 %, Δ marży oper. ≥ +3 pp)", r.ok],
+            ...POTENTIAL.map(([txt, p], i) => [`${txt} <small>(szansa ${p.toFixed(1).replace(".", ",")} % vs 5,1 %)</small>`, (r.pot_ok || [])[i] ?? null]),
+            [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno 0–10 % nad)`, ["WYBICIE", "SYGNAŁ"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
+            [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
+            [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
+        ];
+        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — potencjał ★ ${r.pot ?? 0}/5${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
+            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
+            "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
+            (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
+    }
+
+    function openGuide() {
+        const r = current && rowFor(current);
+        $("guideStock").innerHTML = r ? checklist(r) : '<p class="dimtxt">Otwórz wykres spółki, żeby zobaczyć jej listę kontrolną.</p>';
+        $("guideDlg").showModal();
     }
 
     // ---------- filtry ----------
@@ -463,7 +516,7 @@ if (typeof document !== "undefined") (function () {
                 vals.map((v) => `<button type="button" class="chip${on.includes(v) ? " on" : ""}" data-k="${k}" data-v="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join("") + "</div></div>";
         }
         for (const [k, h, fm] of COLUMNS) {
-            if (!"p%m".includes(fm)) continue;
+            if (!"p%mn".includes(fm)) continue;
             const c = f[k] || {};
             html += `<div class="frow"><span>${escapeHtml(h)}</span><div class="range">` +
                 ["min", "max"].map((b) => `<input data-k="${k}" data-b="${b}" inputmode="decimal" placeholder="${b === "min" ? "od" : "do"}" value="${c[b] == null ? "" : c[b]}">`).join(" – ") + "</div></div>";
@@ -587,6 +640,9 @@ if (typeof document !== "undefined") (function () {
         body.addEventListener("pointercancel", chartUp);
         body.addEventListener("contextmenu", (e) => e.preventDefault());   // długie przytrzymanie na telefonie nie otwiera menu
         $("watchBtn").addEventListener("click", toggleWatch);
+        $("posBtn").addEventListener("click", togglePos);
+        $("potBadge").addEventListener("click", openGuide);
+        $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
         $("fltBtn").addEventListener("click", () => { renderFilters(); $("fltDlg").showModal(); });
@@ -611,7 +667,7 @@ if (typeof document !== "undefined") (function () {
         window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawChart, 120); });
         document.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSymbol(); return; }
-            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || e.target.matches("input")) return;
+            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("guideDlg").open || e.target.matches("input")) return;
             if (current && sel && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); deleteSelected(); return; }
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
             else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }

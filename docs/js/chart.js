@@ -7,7 +7,7 @@
 
 const C = {
     bg: "#0e1116", grid: "#1a1f26", dim: "#6b7684", fg: "#d5d9e0", up: "#d5d9e0", down: "#e5484d",
-    sma10: "#e5484d", sma30: "#f0b429", tline: "#22d3ee", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
+    sma10: "#e5484d", sma30: "#f0b429", tline: "#22d3ee", spx: "#b392f0", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
     macd: "#4aa3ff", signal: "#f0b429", histUp: "#2f9e5a", histDown: "#a33a3e", volAvg: "#ff9f43",
 };
 const SMA_PERIODS = [10, 30];
@@ -72,12 +72,14 @@ function fmtVol(v) {
     return v >= 1e9 ? (v / 1e9).toFixed(1) + "B" : v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : (v / 1e3).toFixed(0) + "K";
 }
 
-// panele: cena 62 %, wolumen 14 %, MACD reszta (oś czasu i odstępy osobno)
+// panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno)
 function geometry(w, h, right = 64) {
-    const top = 22, ph = h - top - 22, p1 = top + ph * 0.62;
-    const v0 = p1 + 6, v1 = v0 + ph * 0.14;
-    return { price: [top, p1], vol: [v0, v1], macd: [v1 + 8, h - 22], x0: 6, x1: w - right, w, h };
+    const top = 8, ph = h - top - 22, s1 = top + ph * 0.10, p0 = s1 + 8, p1 = p0 + ph * 0.50;
+    const v0 = p1 + 6, v1 = v0 + ph * 0.10, r0 = v1 + 8, r1 = r0 + ph * 0.11;
+    return { spx: [top, s1], price: [p0, p1], vol: [v0, v1], rev: [r0, r1], macd: [r1 + 8, h - 22], x0: 6, x1: w - right, w, h };
 }
+
+const fmtBig = (v) => (v >= 1e9 ? (v / 1e9).toFixed(1) + " mld" : (v / 1e6).toFixed(0) + " mln");
 
 function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -150,7 +152,8 @@ function sliderSvg(closes, nShow, end, W, H) {
 
 // -> {svg, geom} albo null; data = {d, o, h, l, c, v}, row = wiersz listy (glb, macd_stop); okno = nShow tygodni do `end`;
 // lines = linie trendu [{id, d1, p1, d2, p2, alert}] (lines.js), sel = id zaznaczonej (uchwyty na końcach); geom.segs = linie w px (do trafienia)
-function chartSvg(full, row, w, h, nShow, end, lines, sel) {
+// spx = tygodniowe {d, c} S&P 500 (SPY) do panelu nad wykresem; row.qs = kwartały [{quarter, rev, rev_rr}] do panelu przychodów
+function chartSvg(full, row, w, h, nShow, end, lines, sel, spx) {
     const total = full.c.length;
     if (total < 2) return null;
     const [i0, i1] = windowRange(total, nShow, end);
@@ -271,12 +274,39 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel) {
     poly(md.signal.map((v, i) => [xf(i), ym(v)]), C.signal, 1.3);
     for (const i of crosses) text(xf(i), m1 - 4, "▼", C.stop, 'text-anchor="middle"');
     text(x0 + 4, m0 + 10, small ? "MACD (12, 26, 9) tyg. · ▼ = stop pod Low" : "MACD (12, 26, 9) tyg. · ▼ przecięcie w dół = stop pod Low tego tygodnia", C.dim);
-    text(x0 + 4, 14, "SMA 10 tyg.", C.sma10);
-    text(x0 + 84, 14, "SMA 30 tyg.", C.sma30);
+    text(x0 + 4, y0 + 12, "SMA 10 tyg.", C.sma10);
+    text(x0 + 84, y0 + 12, "SMA 30 tyg.", C.sma30);
+
+    // S&P 500 nad wykresem: kierunek rynku (skala log w oknie)
+    const [s0, s1] = g.spx;
+    const sv = spx && spx.d ? dates.map((d) => { const k = LN.dateIndex(spx.d, d); return k >= 0 ? spx.c[k] : null; }) : [];
+    const sok = sv.filter((v) => v);
+    if (sok.length > 1) {
+        const lo = Math.log(Math.min(...sok)), hi2 = Math.log(Math.max(...sok)), ys = (v) => s1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (s1 - s0 - 4) - 2;
+        poly(sv.map((v, i) => (v ? [xf(i), ys(v)] : null)).filter(Boolean), C.spx, 1.3);
+        const ch = (sok[sok.length - 1] / sok[0] - 1) * 100;
+        text(x0 + 4, s0 + 10, `S&P 500 (SPY) ${fmt(sok[sok.length - 1])} · w oknie ${ch >= 0 ? "+" : ""}${ch.toFixed(1)} %`, C.spx);
+    } else text(x0 + 4, s0 + 10, "S&P 500 — brak danych SPY", C.dim);
+    line(x0, s1 + 3, x1, s1 + 3, C.grid);
+
+    // przychody kwartalne (słupki w okresie kwartału) z dynamiką r/r: zielony ≥ +25 %, żółty ≥ +15 %, szary niżej, czerwony < 0
+    const [q0, q1] = g.rev, qs = (row && row.qs) || [];
+    const shown = qs.map((q, m) => {
+        const b = LN.dateIndex(dates, q.quarter), a = m > 0 ? LN.dateIndex(dates, qs[m - 1].quarter) + 1 : b - 12;
+        return { ...q, a: Math.max(0, a), b };
+    }).filter((q) => q.b >= 0 && q.a <= n - 1 && q.rev > 0);
+    const rmax = Math.max(1, ...shown.map((q) => q.rev));
+    for (const q of shown) {
+        const xa = xf(q.a) - step * 0.45, xb = xf(Math.min(q.b, n - 1)) + step * 0.45, ht = q.rev / rmax * (q1 - q0 - 12);
+        const col = q.rev_rr == null ? C.dim : q.rev_rr >= 25 ? C.glb : q.rev_rr >= 15 ? C.signal : q.rev_rr >= 0 ? "#6b7684" : C.down;
+        parts.push(`<rect x="${(xa + 1).toFixed(1)}" y="${(q1 - ht).toFixed(1)}" width="${Math.max(1, xb - xa - 2).toFixed(1)}" height="${ht.toFixed(1)}" fill="${col}" opacity="0.75"/>`);
+        if (xb - xa > 30 && q.rev_rr != null) text((xa + xb) / 2, q1 - ht - 2, `${q.rev_rr >= 0 ? "+" : ""}${q.rev_rr.toFixed(0)}%`, col, 'text-anchor="middle"');
+    }
+    text(x0 + 4, q0 + 2, qs.length ? `Przychody kw. · r/r % (zielony ≥ 25 %, żółty ≥ 15 %) · ostatni ${fmtBig(qs[qs.length - 1].rev)} $` : "Przychody kw. — brak danych SEC", C.dim);
 
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Consolas, Menlo, monospace">` +
         `<rect width="${w}" height="${h}" fill="${C.bg}"/>${parts.join("")}` +
-        `<line id="cross" x1="0" y1="${g.price[0]}" x2="0" y2="${g.macd[1]}" stroke="#3a4654" visibility="hidden"/></svg>`;
+        `<line id="cross" x1="0" y1="${g.spx[0]}" x2="0" y2="${g.macd[1]}" stroke="#3a4654" visibility="hidden"/></svg>`;
     return { svg, geom: { ...g, step, n, i0, lmin, lmax, segs } };
 }
 

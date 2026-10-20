@@ -29,6 +29,12 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (this week closed 0–10 % above,
   last week below), SYGNAŁ (0–10 % above), NAD (further), POD, BRAK.
 - **Exit**: weekly MACD (12, 26, 9) — stop = Low of the last cross-down week (`macd_info`), plus a 10 % initial stop (`STOP_PCT`, shown only).
+- **Potencjał / Hamuje** (`calc.potential`, `calc.slowdown`, from the Oct 2026 fundamentals study on raw prices — user: "dodaj rzeczy, które rzeczywiście mają
+  wpływ … pomiń te, które nic nie wnoszą"): `pot` 0–5 = rev ≥ 25 %, rev ≥ 25 % two quarters in a row, Δ op. margin ≥ 3 pp two quarters in a row, Δ gross
+  margin ≥ 2 pp, op. margin < 10 % (chance of a further ≥ +100 % move after a consolidation breakout 7.9–8.9 % each vs 5.1 % base); `slow` = revenue growth
+  fell ≥ 10 pp vs the previous quarter ('HAMUJE'), + gross margin down y/y ('HAMUJE+MB': 50 % chance of a ≥ 20 % drop in 6 months vs 33 %). SEC entries
+  carry `v: 2` with `rev_rr1`, `dopm1`, `accel` and `qs` (8 quarters for the revenue panel); older entries are refetched. Didn't help (left out):
+  revenue acceleration alone, EPS, gross-margin level, op. margin > 0, RS ranking, Blue Dot.
 - ROE / ROI were tested and rejected (big winners had low ROE). Don't add them back without a new backtest.
 
 ## Data flow (`watchlist.py`, run weekly)
@@ -67,6 +73,9 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
   `watchlist.json` loads): weekly close crossed a line with alert on; 🔔 Obserwuj a ticker = GLB signal, MACD cross-down, close under the MACD stop,
   conditions met. Key includes the week, so nothing fires twice. localStorage `momentum_alerts` {lines, watch, log, seen}; system notification via the
   service worker if allowed. The site is static, so alerts are checked only when the page is opened (data refresh is weekly).
+- **Chart panels like IBD**: S&P 500 (SPY weekly file, `symbols`) above the price, quarterly revenue bars with y/y % (green ≥ 25 %, amber ≥ 15 %) under the volume.
+- **📖 Poradnik** (`#guideDlg`): the study's rules + a checklist of the open stock (`checklist(r)`); **📌 Pozycja** (`ast.pos`, also watched) marks a
+  position: 📌 in the list, amber ticker when slowing / under the MACD stop, slowdown alert (`stateAlerts`, `snapshot.slow`).
 - Loading bar at the bottom (`#loadbar`, `fetchJson` streams the body: MB, % when the size is known, seconds).
 - `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_glb_settings`.
 
