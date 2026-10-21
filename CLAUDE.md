@@ -41,8 +41,10 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   backtested (no history in yfinance). Columns `surp`, `beat2`, `eps_rev`.
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
   NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood ≥ 3 closed months ("3 lub więcej"); after a new record the old
-  line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (this week closed 0–10 % above,
-  last week below), SYGNAŁ (0–10 % above), NAD (further), POD, BRAK.
+  line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (breakout week — last week below —
+  at ANY height = strong breakout), SYGNAŁ (0–10 % above), BLUE DOT (a later week > 10 % above AND a daily Blue Dot in the last 5 sessions,
+  `calc.fresh_blue_dot`, set by `watchlist.py` / desktop `sync.run` from the 1-year daily candles; user: "jeżeli jesteśmy ponad 10 % i to nie jest świeca
+  przebijająca … szukamy blue dot"; not backtested in this combination), NAD (> 10 % without a dot), POD, BRAK.
 - **Exit**: weekly MACD (12, 26, 9) — stop = Low of the last cross-down week (`macd_info`), plus a 10 % initial stop (`STOP_PCT`, shown only).
   Second method (user: "dodaj jako drugą metodę wyjścia … i 3 zasadę: spadek 20 % od szczytu, sprzedaj połowę"): **pod GLB** = sell on a weekly close below the
   current Green Line (the line stays at the breakout level while new records keep coming; once a peak has stood 3 months it becomes the line). Toggle 🚪
