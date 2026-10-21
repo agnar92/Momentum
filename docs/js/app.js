@@ -688,6 +688,25 @@ if (typeof document !== "undefined") (function () {
         if (shown[j].ticker !== current) openChart(shown[j].ticker);
     }
 
+    function blueDots(highs, lows, closes, level, lvl = 20) {
+        const ema = (values, n) => {
+            const out = [], k = 2 / (n + 1); let prev = null;
+            for (const v of values) { prev = prev === null ? v : prev + k * (v - prev); out.push(prev); }
+            return out;
+        };
+        const fast = [3, 5, 8, 10, 12, 15].map((n) => ema(closes.map((v) => v || 0), n));
+        const slow = [30, 35, 40, 45, 50, 60].map((n) => ema(closes.map((v) => v || 0), n));
+        const rwb = closes.map((_, i) => Math.min(...fast.map((a) => a[i])) > Math.max(...slow.map((a) => a[i])));
+        const k = closes.map((c, i) => {
+            if (i < 9 || c == null) return null;
+            const hh = Math.max(...highs.slice(i - 9, i + 1).filter((v) => v != null));
+            const ll = Math.min(...lows.slice(i - 9, i + 1).filter((v) => v != null));
+            return hh > ll ? (c - ll) / (hh - ll) * 100 : null;
+        });
+        const out = [];
+        for (let i = 1; i < closes.length; i++) if (k[i] != null && k[i - 1] != null && k[i - 1] < lvl && k[i] >= lvl && rwb[i] && level && closes[i] >= level) out.push(i);
+        return out;
+    }
     function onMove(e) {
         const svg = $("chartBody").querySelector("svg");
         if (!svg || !geom || !series) return;
