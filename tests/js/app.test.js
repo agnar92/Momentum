@@ -83,3 +83,9 @@ test("SMA 10 > 30 filter and preset", () => {
     const f = FILTER_PRESETS.find(([n]) => n.startsWith("Przebicie GLB + SMA 10 > 30"))[1];
     assert.ok(passFilters({ trend: true, glb_state: "NAD" }, f) && !passFilters({ trend: false, glb_state: "NAD" }, f));
 });
+
+test("fundamentals column is available for each stock", () => {
+    const { COLUMNS, TEXT_COLS } = require("../../docs/js/app.js");
+    assert.ok(COLUMNS.some(([key, label]) => key === "fundamentals" && label === "Fundamenty"));
+    assert.ok(TEXT_COLS.includes("fundamentals"));
+});
