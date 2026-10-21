@@ -32,6 +32,12 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   (all GLB breakouts vs the big +100 % moves): the common denominator was growing revenue + margin AND the stock already leading the market; pure technical
   rules (GLB, EMA/SMA crosses, RS without fundamentals, Qullamaggie-style daily breakouts, buy +0.1 % / sell −0.1 % at the line) did not beat SPY in 2020–26.
   Default order: conditions + GLB signal, conditions, then by RS.
+  **EPS surprises** (user asked to check another AI's idea: estimate revisions + accelerating revenue): condition `beat2` = the last 2 reports beat the EPS
+  consensus (`calc.surprises`, last report ≤ 120 days old; missing blocks, as in the backtest). Data: `momentum/estimates.py` (same file in the desktop app) —
+  yfinance `get_earnings_dates` (surprise %) and `eps_trend` (+1y estimate now vs 90 days ago = `eps_rev`, preview only; weekly snapshots kept in `hist`),
+  cache `data/estimates.json`, refreshed every 7 days. Backtest (surprises since 2014, 1763 tickers): 36.6 → 42.4 %/yr (2015–20 48.7 / 2021–26 36.4; 2020–26 53.7 %),
+  +19.2 % per trade, DD −51 %; a miss before the signal: 3 %/yr; thresholds ≥ 5 / 10 % and 2-quarter revenue acceleration didn't help. Revisions can't be
+  backtested (no history in yfinance). Columns `surp`, `beat2`, `eps_rev`.
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
   NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood ≥ 3 closed months ("3 lub więcej"); after a new record the old
   line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (this week closed 0–10 % above,
