@@ -114,8 +114,14 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         scans = [saved]
         log(f"Zapisano skaner '{name}'; filtry: {filters}")
     else:
-        scans = scans[-1:]
-        log(f"Brak nowego linku — odświeżam ostatnio zapisany skaner: {scans[0]['name']}")
+        # Zachowaj domyślne skanery i ich sumę. Gdy istnieją zapisane własne linki,
+        # odświeżaj tylko ostatni zapisany skaner (ostatni na liście).
+        custom = [sc for sc in scans if sc.get("url")]
+        if custom:
+            scans = [custom[-1]]
+            log(f"Brak nowego linku — odświeżam ostatnio zapisany skaner: {scans[0]['name']}")
+        else:
+            log(f"Brak własnego linku — odświeżam wszystkie domyślne skanery ({len(scans)}).")
     base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=1 if finviz_url else MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
