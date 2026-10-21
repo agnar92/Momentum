@@ -686,7 +686,16 @@ if (typeof document !== "undefined") (function () {
         const tip = $("tip"), cross = svg.querySelector("#cross");
         if (i < 0 || i >= geom.n) { tip.hidden = true; cross.setAttribute("visibility", "hidden"); return; }
         cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
-        tip.innerHTML = infoLines(series, geom.i0 + i).map(escapeHtml).join("<br>");
+        const index = geom.i0 + i;
+        const lines = infoLines(series, index);
+        if (period === "D") {
+            const r = rowFor(current) || {};
+            const dots = blueDots(series.h, series.l, series.c, r.glb);
+            if (dots.includes(index)) {
+                lines.push("BLUE DOT · " + series.d[index], "Stop pod Low: " + (series.l[index] == null ? "—" : series.l[index].toFixed(2)));
+            }
+        }
+        tip.innerHTML = lines.map(escapeHtml).join("<br>");
         tip.hidden = false;
         const bx = $("chartPane").getBoundingClientRect(), left = p.clientX - bx.left;
         tip.style.left = (left < bx.width - 200 ? left + 14 : left - 190) + "px";
