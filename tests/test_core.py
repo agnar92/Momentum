@@ -297,6 +297,30 @@ def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
     assert [m["stale"] for m in data["scanners"]] == [False, True] and data["finviz_stale"]
 
 
+def test_new_scanner_refresh_preserves_other_named_lists_and_merges_overlap():
+    prev = {
+        "rows": [
+            {"ticker": "OLD", "company": "Old Co", "scanners": ["Saved A"]},
+            {"ticker": "BOTH", "company": "Shared Co", "scanners": ["Saved A"]},
+            {"ticker": "REPLACE", "company": "Previous", "scanners": ["Saved B"]},
+        ],
+        "scanners": [
+            {"name": "Saved A", "filters": "fa", "total": 2, "n": 2, "stale": False},
+            {"name": "Saved B", "filters": "fb", "total": 1, "n": 1, "stale": False},
+        ],
+    }
+    scans = [{"name": "New List", "filters": "fn", "max_tickers": 1500}]
+    fresh = [{"ticker": "BOTH", "company": "Shared Co updated"}, {"ticker": "NEW", "company": "New Co"}]
+    rows, meta = watchlist.fetch_scanners(scans, prev, lambda f, max_tickers, log: (fresh, 2), lambda _: None, min_tickers=1)
+    by = {r["ticker"]: r for r in rows}
+    assert set(by) == {"OLD", "BOTH", "REPLACE", "NEW"}
+    assert by["OLD"]["scanners"] == ["Saved A"]
+    assert by["REPLACE"]["scanners"] == ["Saved B"]
+    assert by["BOTH"]["scanners"] == ["New List", "Saved A"]
+    assert by["NEW"]["scanners"] == ["New List"]
+    assert [m["name"] for m in meta] == ["Saved A", "Saved B", "New List"]
+
+
 def test_monthly_highs_ignores_dividend_adjusted_entries():
     assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09"}) == []
     assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0]

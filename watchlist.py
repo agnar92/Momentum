@@ -80,9 +80,35 @@ def fetch_scanners(scans, prev, fetch_list, log, min_tickers=MIN_TICKERS):
             b["scanners"].append(sc["name"])
         meta.append({"name": sc["name"], "filters": sc["filters"], "total": total, "n": len(rows), "stale": stale})
         log(f"Finviz [{sc['name']}]: {len(rows)} spółek{f' z {total}' if total and total != len(rows) else ''}")
+    # Zachowaj skanery, których nie odświeżaliśmy w tym uruchomieniu.
+    # Dzięki temu zapis nowego linku pod nową nazwą nie usuwa poprzednich list z tabeli.
+    refreshed = {sc["name"] for sc in scans}
+    previous_meta = prev.get("scanners") or []
+    preserved_names = {m.get("name") for m in previous_meta if m.get("name") and m.get("name") not in refreshed}
+    for r in prev_rows:
+        memberships = [name for name in (r.get("scanners") or []) if name in preserved_names]
+        if not memberships:
+            continue
+        b = base.setdefault(r["ticker"], {**{k: r.get(k) for k in KEYS}, "scanners": []})
+        for name in memberships:
+            if name not in b["scanners"]:
+                b["scanners"].append(name)
+
     if not base:
         raise RuntimeError("Finviz nie zwrócił spółek, a poprzedniej listy nie ma.")
-    return list(base.values()), meta
+
+    # Zachowaj kolejność skanerów z poprzedniego wyniku; zaktualizuj metadane
+    # tych odświeżonych i dopisz nowe skanery na końcu.
+    updated_meta = {m["name"]: m for m in meta}
+    ordered_meta = []
+    for old_meta in previous_meta:
+        name = old_meta.get("name")
+        if name in updated_meta:
+            ordered_meta.append(updated_meta.pop(name))
+        elif name in preserved_names:
+            ordered_meta.append(old_meta)
+    ordered_meta.extend(updated_meta.values())
+    return list(base.values()), ordered_meta
 
 
 ABOVE_GLB = ("WYBICIE", "SYGNAŁ", "NAD")   # spółki z wykresem dziennym
