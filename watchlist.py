@@ -103,9 +103,8 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     wdir = Path(out) / "weekly"
     saved = {t: load_json(wdir / file_name(t), None) for t in tickers + extra}
     series = weekly(tickers + extra, log=log, cache={t: s for t, s in saved.items() if s})
-    # fundamenty i całą historię miesięczną pobieramy tylko dla spółek, które przechodzą próg obrotu (reszta i tak odpada)
-    liquid = [t for t in tickers if t in series and (calc.turnover(series[t]["c"], series[t]["v"]) or 0) >= calc.MIN_TURNOVER]
-    log(f"Obrót ≥ {calc.MIN_TURNOVER / 1e6:.0f} mln $ dziennie: {len(liquid)} spółek")
+    # miesięczne High (Green Line), fundamenty, prognozy i świece dzienne dla wszystkich spółek ze skanerów (bez progu obrotu)
+    liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
     scache = load_json(Path(cache_dir) / "sec.json", {})
     monthly(liquid + [s for s in extra if s in series], mcache, log=log)
@@ -170,7 +169,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     write_json(Path(out) / "watchlist.json", {
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta,
         "finviz_stale": any(m["stale"] for m in meta), "rules": {"confirm_months": calc.CONFIRM_MONTHS, "entry_max_pct": calc.ENTRY_MAX_PCT,
-                                          "min_turnover": calc.MIN_TURNOVER, "min_rev_growth": calc.MIN_REV_GROWTH,
+                                          "min_rev_growth": calc.MIN_REV_GROWTH,
                                           "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT},
         "rows": rows, "symbols": sym_rows})
     ok = sum(1 for r in rows if r["ok"])
