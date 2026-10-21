@@ -217,7 +217,7 @@ def slowdown(row):
 
 def build_row(base, weekly, months, fund, spy=None, est=None):
     """Wiersz listy: base (z Finviz), weekly {d, o, h, l, c, v}, months (High zamkniętych miesięcy), fund (z SEC albo None), spy (tygodniowe {d, c}),
-    est (prognozy z yfinance: niespodzianki EPS i rewizja 90 dni)."""
+    est (prognozy yfinance: niespodzianki, rewizja, historia EPS i konsensus analityków)."""
     c, lo, v = weekly.get("c") or [], weekly.get("l") or [], weekly.get("v") or []
     row = dict(base)
     price = c[-1] if c else None
@@ -241,6 +241,9 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     # tydzień z danych zaczyna się w poniedziałek: raport z tego tygodnia (do piątku) też jest znany
     row["surp"], row["surp_prev"], row["beat2"] = surprises(est, (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()) if as_of else (None, None, None)
     row["eps_rev"] = (est or {}).get("rev90")
+    row["eps_q"] = (est or {}).get("eps_q") or []
+    row["eps_est"] = (est or {}).get("eps_est") or []
+    row["surp_hist"] = (est or {}).get("surp") or []
     row["ok"] = passes(row)
     row["slow"] = slowdown(row)
     return row
