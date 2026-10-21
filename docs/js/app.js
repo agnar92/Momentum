@@ -91,7 +91,7 @@ function weekInProgress(weekDate, generatedAt) {
 
 const fileName = (t) => t.replace(/[^A-Za-z0-9.-]/g, "_") + ".json";   // jak watchlist.file_name
 
-if (typeof module !== "undefined") module.exports = { COLUMNS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
+if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
@@ -545,7 +545,7 @@ if (typeof document !== "undefined") (function () {
         });
         const estimates = [["0q","Bieżący kwartał"],["+1q","Następny kwartał"],["0y","Bieżący rok"],["+1y","Następny rok"]].map(([key,label]) => {
             const x = (r.eps_est || []).find(v => v.period === key);
-            return "<tr><td>" + label + "</td><td class='num'>" + n(x && x.avg,3) + "</td><td class='num'>" + n(x && x.low,3) + " – " + n(x && x.high,3) + "</td><td class='num'>" + pct(x && x.growth != null ? Number(x.growth)*100 : null) + "</td><td class='num'>" + (x && x.numberOfAnalysts != null ? e(x.numberOfAnalysts) : "—") + "</td></tr>";
+            return "<tr><td>" + label + "</td><td class='num'>" + n(x && x.avg,3) + "</td><td class='num'>" + n(x && x.low,3) + " – " + n(x && x.high,3) + "</td><td class='num'>" + pct(x && x.growth != null ? Number(x.growth) : null) + "</td><td class='num'>" + (x && x.numberOfAnalysts != null ? e(x.numberOfAnalysts) : "—") + "</td></tr>";
         });
         const revenues = (r.qs || []).slice(-8).map(q => "<tr><td>" + e(q.quarter || "—") + "</td><td class='num'>" + money(q.rev) + "</td><td class='num'>" + pct(q.rev_rr) + "</td></tr>");
         $("fundTitle").textContent = t + " · " + (r.company || "") + " · Fundamenty";
