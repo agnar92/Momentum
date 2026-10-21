@@ -83,7 +83,7 @@ test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
     const d = c.map((_, i) => `2026-${String(1 + Math.floor(i / 28)).padStart(2, "0")}-${String(1 + (i % 28)).padStart(2, "0")}`);
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D");
     assert.ok(res.svg.includes("GREEN LINE") && !res.svg.includes("MACD (12"));
-    assert.ok(res.svg.includes(`fill="${require("../../docs/js/chart.js").C?.dot || "#3b82f6"}"` ) || res.svg.includes('r="4" fill="#3b82f6"') || res.svg.includes('r="4" fill="#60a5fa"')); // Blue Dot marker stays on chart; its stop level is tooltip-only.
+    assert.ok(res.svg.includes('r="4" fill="#4aa3ff"')); // Blue Dot marker stays on chart; its stop level is tooltip-only.
     assert.ok(!res.svg.includes("Blue Dot 2026-") && !res.svg.includes("stop pod Low"));
     assert.ok(!res.svg.includes("Przychody kw.") && !res.svg.includes("Stochastic (10, 1) dzienny"));   // dzienny: bez przychodów i panelu Stochastic
     assert.strictEqual(res.geom.rev, null);
