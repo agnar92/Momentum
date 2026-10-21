@@ -347,3 +347,31 @@ def test_estimates_update_keeps_history_and_skips_fresh():
                            fetch_one=lambda t: {"surp": [["2026-08-01", 5.0]], "rev90": 7.5})
     assert got == ["X", "N"] and cache["OLD"]["rev90"] == 1.0                              # świeży wpis bez pobierania
     assert cache["X"]["hist"] == [["2026-10-01", 2.0], ["2026-10-21", 7.5]] and cache["N"]["surp"] == [["2026-08-01", 5.0]]
+
+
+def test_eps_history_and_estimate_rows_are_json_safe():
+    import pandas as pd
+    from momentum import estimates
+    income = pd.DataFrame(
+        [[1.25, 1.75, None]],
+        index=["Diluted EPS"],
+        columns=[pd.Timestamp("2025-03-31"), pd.Timestamp("2025-06-30"), pd.Timestamp("2025-09-30")],
+    )
+    assert estimates._eps_history(income) == [["2025-03-31", 1.25], ["2025-06-30", 1.75]]
+    forecasts = pd.DataFrame(
+        [{"numberOfAnalysts": 12, "avg": 2.5, "low": 2.0, "high": 3.0, "yearAgoEps": 2.1, "growth": "+19.0%"}],
+        index=["+1y"],
+    )
+    assert estimates._estimate_rows(forecasts) == [{
+        "period": "+1y", "numberOfAnalysts": 12, "avg": 2.5, "low": 2.0,
+        "high": 3.0, "yearAgoEps": 2.1, "growth": 19.0,
+    }]
+
+
+def test_build_row_exposes_eps_history_and_forecasts():
+    w = {"d": ["2026-10-12", "2026-10-19"], "o": [10, 11], "h": [11, 12], "l": [9, 10], "c": [10, 11], "v": [100, 110]}
+    estimates = {"surp": [], "rev90": 5.0, "eps_q": [["2026-06-30", 1.2]], "eps_est": [{"period": "+1y", "avg": 4.0}], "hist": []}
+    row = calc.build_row({"ticker": "X"}, w, [], {}, None, estimates)
+    assert row["eps_q"] == [["2026-06-30", 1.2]]
+    assert row["eps_est"][0]["avg"] == 4.0
+    assert row["surp_hist"] == []
