@@ -75,3 +75,11 @@ test("default order: conditions + GLB signal first, then by relative strength", 
         { ticker: "C", ok: true, glb_state: "POD", rs: 120 }, { ticker: "D", ok: false, rs: 300 }];
     assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "C", "D"]);
 });
+
+test("SMA 10 > 30 filter and preset", () => {
+    const { passFilters, filterValue, FILTER_PRESETS } = require("../../docs/js/app.js");
+    assert.strictEqual(filterValue({ trend: true }, "trend"), "tak");
+    assert.strictEqual(filterValue({ trend: null }, "trend"), "nie");
+    const f = FILTER_PRESETS.find(([n]) => n.startsWith("Przebicie GLB + SMA 10 > 30"))[1];
+    assert.ok(passFilters({ trend: true, glb_state: "NAD" }, f) && !passFilters({ trend: false, glb_state: "NAD" }, f));
+});
