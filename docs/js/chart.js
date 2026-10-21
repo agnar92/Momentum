@@ -293,7 +293,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         line(x0, y, x1, y, C.glb, 3);
         parts.push(`<rect x="${(x1 + 1).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${(w - x1 - 3).toFixed(1)}" height="18" fill="${C.glb}"/>`);
         text(x1 + 4, y + 4, fmt(level), "#000");
-        boxText(x0 + 4, y - 10 > y0 + 26 ? y - 10 : y + 16, `GREEN LINE ${fmt(level)} · kupno do ${fmt(level * 1.1)}` + (row.exit === "GLB" ? " · wyjście: zamknięcie tyg. pod linią" : ""), C.glb);   // przy górnej krawędzi (legenda) pod linią
+        const aboveGlb = last0 != null && last0 >= level;
+        boxText(x0 + 4, y0 + 13, `GLB ${fmt(level)} · CENA ${aboveGlb ? "NAD" : "POD"} LINIĄ`, aboveGlb ? C.glb : C.stop);
     }
     const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
     if (stop && stop > pmin && stop < pmax) {
@@ -305,7 +306,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     if (pl) for (const [v, col, lab] of [[pl.stopInit, C.stop, `stop −10 % ${fmt(pl.stopInit)}`], [pl.halfAt, C.signal, `½ przy ${fmt(pl.halfAt)} (−20 % od szczytu ${fmt(pl.peak)})`]]) {
         if (!(v && v > pmin && v < pmax)) continue;
         line(x0, yf(v), x1, yf(v), col, 1, 'stroke-dasharray="2 3"');
-        boxText(x0 + 4, yf(v) - 5, lab, col);
+        // Linie planu pozostają na wykresie; opisy poziomów trafiają do dymka, nie zasłaniają ceny.
     }
     // linie trendu: odcinek między punktami + przedłużenie (przerywane) do ostatniego tygodnia okna
     const segs = [];
