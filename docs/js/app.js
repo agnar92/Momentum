@@ -718,6 +718,14 @@ if (typeof document !== "undefined") (function () {
         cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
         const index = geom.i0 + i;
         const lines = infoLines(series, index);
+        const activeRow = rowFor(current) || {};
+        if (activeRow.glb != null && series.c[index] != null) {
+            lines.push(`GLB ${activeRow.glb.toFixed(2)} · cena ${series.c[index] >= activeRow.glb ? "NAD" : "POD"} linią`);
+            if (activeRow.plan) {
+                if (activeRow.plan.stopInit != null) lines.push(`Stop −10%: ${activeRow.plan.stopInit.toFixed(2)}`);
+                if (activeRow.plan.halfAt != null) lines.push(`Sprzedaż połowy: ${activeRow.plan.halfAt.toFixed(2)}`);
+            }
+        }
         if (period === "D") {
             const r = rowFor(current) || {};
             const dots = blueDots(series.h, series.l, series.c, r.glb);
