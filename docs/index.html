@@ -38,7 +38,7 @@
         <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
     </section>
     <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="periodBtn" hidden title="Tygodniowy / dzienny (RWB Guppy + Blue Dot) — dzienny tylko dla spółek nad Green Line">📅 Tygodniowy</button><button type="button" id="potBadge" class="badge" title="Czy spółka spełnia warunki — kliknij: lista kontrolna"></button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
+        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="periodBtn" hidden title="Tygodniowy / dzienny (RWB Guppy + Blue Dot) — dzienny tylko dla spółek nad Green Line">📅 Tygodniowy</button><button type="button" id="potBadge" class="badge" title="Czy spółka spełnia warunki — kliknij: lista kontrolna"></button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 % i ½ przy −20 % od szczytu">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
         <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
         <div class="chart-body" id="chartBody"></div>
         <div class="tip" id="tip" hidden></div>
@@ -80,6 +80,15 @@
         Ceny nie wyprzedzisz fundamentami — od tego jest Green Line.</p>
         <p><b>Szczyt:</b> kurs kończy ruch przy raporcie z <b>najwyższym tempem wzrostu</b> (EPS +33 %, przychody przyspieszają). Kolejne raporty są dalej dobre, ale wolniejsze
         (EPS +27 → +15 → +11 %) — rynek sprzedaje hamowanie, nie złe wyniki.</p>
+    </details>
+    <details open><summary><b>Wyjście — dwie metody (przycisk 🚪 na wykresie) + sprzedaż połowy</b></summary>
+        <table class="gt"><tr><td><b>MACD</b> (domyślna)</td><td>po przecięciu MACD tyg. w dół stop pod Low tego tygodnia (czerwona przerywana)</td></tr>
+        <tr><td><b>pod GLB</b> (jak Dr Wish)</td><td>sprzedaj, gdy tydzień zamknie się pod Green Line. Linia stoi na poziomie wybicia, dopóki akcja robi nowe rekordy; gdy szczyt przestoi 3 mies., staje się nową linią — trzymasz, póki trend trwa</td></tr>
+        <tr><td>zawsze</td><td>stop 10 % pod ceną kupna; <b>spadek 20 % od szczytu</b> (zamknięcie tyg. od wejścia) = sprzedaj połowę — przy 📌 pozycji alert i żółta przerywana „½ przy”</td></tr></table>
+        <p>Test 2015–2026 (pozycje po 20 % kapitału). Metoda pod GLB trzyma największe ruchy: SNDK 09/25 +2409 %, MU 10/25 +472 %, NVDA 05/23 +221 %, PLTR 11/24 +169 %
+        (z MACD: +1833 / +115 / +3 / +28 %), ale 77–82 % transakcji to małe straty. Najlepiej działa z wejściem „przebicie GLB dowolnie wysoko” + warunki: 19,7 % rocznie
+        (2020–26: 37,8 %), DD −51 %. Przy wejściu 0–10 % nad linią lepszy jest MACD: 22,2 % rocznie, DD −35 % (pod GLB: 15,8 %, DD −41 %).
+        Sprzedaż połowy przy −20 % od szczytu: płytsze spadki portfela (MACD: DD −35 → −31 %; pod GLB: −51 → −45 %) za cenę 1–3 pp rocznie (20,6 % i 17,2 %).</p>
     </details>
     <details><summary><b>Wejście i wyjście</b></summary>
         <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad Green Line (rekord miesięcznego High, który stoi ≥ 3 miesiące), na otwarciu następnego tygodnia.

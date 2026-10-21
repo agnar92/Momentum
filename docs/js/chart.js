@@ -267,13 +267,19 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         line(x0, y, x1, y, C.glb, 3);
         parts.push(`<rect x="${(x1 + 1).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${(w - x1 - 3).toFixed(1)}" height="18" fill="${C.glb}"/>`);
         text(x1 + 4, y + 4, fmt(level), "#000");
-        text(x0 + 4, y - 9, `GREEN LINE ${fmt(level)} · kupno do ${fmt(level * 1.1)}`, C.glb);
+        text(x0 + 4, y - 9, `GREEN LINE ${fmt(level)} · kupno do ${fmt(level * 1.1)}` + (row.exit === "GLB" ? " · wyjście: zamknięcie tyg. pod linią" : ""), C.glb);
     }
-    const stop = row && row.macd_stop;
+    const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
     if (stop && stop > pmin && stop < pmax) {
         const y = yf(stop);
         line(x0, y, x1, y, C.stop, 1, 'stroke-dasharray="5 4"');
         text(x1 + 4, y + 4, fmt(stop), C.stop);
+    }
+    const pl = row && row.plan;   // 📌 pozycja: stop początkowy −10 % i „sprzedaj połowę” przy −20 % od szczytu
+    if (pl) for (const [v, col, lab] of [[pl.stopInit, C.stop, `stop −10 % ${fmt(pl.stopInit)}`], [pl.halfAt, C.signal, `½ przy ${fmt(pl.halfAt)} (−20 % od szczytu ${fmt(pl.peak)})`]]) {
+        if (!(v && v > pmin && v < pmax)) continue;
+        line(x0, yf(v), x1, yf(v), col, 1, 'stroke-dasharray="2 3"');
+        text(x0 + 4, yf(v) - 4, lab, col);
     }
     // linie trendu: odcinek między punktami + przedłużenie (przerywane) do ostatniego tygodnia okna
     const segs = [];

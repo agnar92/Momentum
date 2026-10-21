@@ -86,3 +86,11 @@ test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
     assert.ok(!res.svg.includes("Przychody kw.") && !res.svg.includes("Stochastic (10, 1) dzienny"));   // dzienny: bez przychodów i panelu Stochastic
     assert.strictEqual(res.geom.rev, null);
 });
+
+test("GLB exit method hides the MACD stop; position plan draws −10 % stop and half-sell level", () => {
+    const w = weekly(150), row = { glb: 120, macd_stop: 150 };
+    const plan = { stopInit: 135, halfAt: 140, peak: 175 };
+    const macd = chartSvg(w, row, 1000, 600).svg, glbm = chartSvg(w, { ...row, exit: "GLB", plan }, 1000, 600).svg;
+    assert.ok(!macd.includes("wyjście: zamknięcie tyg. pod linią") && glbm.includes("wyjście: zamknięcie tyg. pod linią"));
+    assert.ok(glbm.includes("½ przy 140.00") && glbm.includes("stop −10 % 135.00"));
+});

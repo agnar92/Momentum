@@ -1,10 +1,13 @@
 // Linie trendu i alerty (port desktop/lines.py z Momentum Desktop). Linia = dwa punkty {d1, p1, d2, p2} (data tygodnia + cena), prosta na skali
 // logarytmicznej, przedłużona w prawo do ostatniego tygodnia. Alert linii: zamknięcie tygodnia przecięło linię. Obserwowana spółka (🔔): sygnał GLB,
-// przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Czyste funkcje — testy w tests/js/lines.test.js.
+// przecięcie MACD w dół, zamknięcie pod stopem MACD, zamknięcie pod Green Line, spełnione warunki; pozycja (📌): spadek 20 % od szczytu = sprzedaj połowę.
+// Czyste funkcje — testy w tests/js/lines.test.js.
 "use strict";
 
 const SIGNAL_STATES = ["WYBICIE", "SYGNAŁ"];
 const MAX_LOG = 200;
+const STOP_PCT = 10;    // stop początkowy pod ceną kupna
+const HALF_DROP = 20;   // spadek od szczytu (zamknięcia tygodnia od wejścia), przy którym sprzedajesz połowę
 
 // indeks tygodnia daty: dokładny albo ostatni wcześniejszy; -1, gdy data przed historią
 function dateIndex(dates, d) {
@@ -77,10 +80,23 @@ function stateAlerts(prev, row) {
     if (prev.macd === "nad" && row.macd === "pod") out.push(`MACD tyg. przeciął sygnał w dół — stop pod Low ${row.macd_stop}`);
     if (row.macd_stop && row.price != null && row.price < row.macd_stop && !(prev.price != null && prev.macd_stop && prev.price < prev.macd_stop))
         out.push(`zamknięcie ${row.price} pod stopem MACD ${row.macd_stop}`);
+    if (row.glb_state === "POD" && prev.glb_state && prev.glb_state !== "POD" && prev.glb_state !== "BRAK")
+        out.push(`zamknięcie tygodnia pod Green Line ${row.glb} — wyjście (metoda GLB)`);
     if (row.ok && !prev.ok) out.push("spełnia warunki strategii");
     if (row.slow && row.slow !== prev.slow) out.push(row.slow === "HAMUJE+MB" ? `⚠ hamowanie: tempo przychodów ${row.accel != null ? row.accel.toFixed(0) : ""} pp i marża brutto spada r/r — zacieśnij stop`
         : `⚠ hamowanie: tempo przychodów ${row.accel != null ? row.accel.toFixed(0) : ""} pp względem kwartału wcześniej`);
     return out;
+}
+
+// plan wyjścia pozycji: pos = {since, price}, data = tygodniowe {d, c}, row = wiersz (glb, macd_stop) ->
+// {entry, stopInit (−10 %), peak (najwyższe zamknięcie tygodnia od wejścia), halfAt (−20 % od szczytu), half (ostatnie zamknięcie ≤ halfAt), last, glbExit}
+function positionPlan(pos, data, row) {
+    const c = (data && data.c) || [], d = (data && data.d) || [], entry = pos && pos.price != null ? pos.price : null;
+    let peak = entry;
+    for (let i = 0; i < c.length; i++) if (c[i] != null && d[i] >= ((pos && pos.since) || "") && (peak == null || c[i] > peak)) peak = c[i];
+    const last = c.length ? c[c.length - 1] : null, halfAt = peak != null ? peak * (1 - HALF_DROP / 100) : null;
+    return { entry, stopInit: entry != null ? entry * (1 - STOP_PCT / 100) : null, peak, halfAt, last,
+        half: last != null && halfAt != null && last <= halfAt, glbExit: !!(last != null && row && row.glb && last < row.glb) };
 }
 
 const snapshot = (r) => ({ glb_state: r.glb_state, macd: r.macd, macd_stop: r.macd_stop, price: r.price, ok: !!r.ok, slow: r.slow || null });
@@ -107,6 +123,12 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
             }
         }
     }
+    for (const [t, p] of Object.entries(st.pos || {})) {   // pozycja: spadek 20 % od szczytu -> sprzedaj połowę (raz na szczyt)
+        const data = seriesFor(t);
+        if (!data || !data.c || !data.c.length) continue;
+        const pl = positionPlan(p, data, rowFor(t)), week = data.d[data.d.length - 1];
+        if (pl.half) add(`H:${t}:${pl.peak}`, t, week, `spadek ${HALF_DROP} % od szczytu ${pl.peak.toFixed(2)} (zamknięcie ${pl.last.toFixed(2)}) — sprzedaj połowę`);
+    }
     for (const t of Object.keys(st.watch || {})) {
         const row = rowFor(t);
         if (!row) continue;
@@ -118,4 +140,4 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
     return fresh;
 }
 
-if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts };
+if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts, positionPlan, HALF_DROP, STOP_PCT };

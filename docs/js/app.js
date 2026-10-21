@@ -93,13 +93,13 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, cell, defaultComp
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {} }, readSettings());
+    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
     let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
     const curShow = () => (period === "D" ? dShow : state.nShow);
     const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
-    const weeklyCache = new Map();
+    const weeklyCache = new Map(), weeklyData = new Map();   // obietnice pobrania / gotowe serie (plan wyjścia pozycji)
     const ast = readAlerts();   // linie trendu, obserwowane spółki, dziennik alertów
 
     function readAlerts() {
@@ -115,10 +115,17 @@ if (typeof document !== "undefined") (function () {
         try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
     }
     function saveSettings() {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters })); } catch (e) { /* tryb prywatny */ }
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
     }
     const allRows = () => data.rows.concat(data.symbols || []);
     const rowFor = (t) => allRows().find((r) => r.ticker === t) || null;
+    const planFor = (t) => (ast.pos[t] && weeklyData.get(t) ? positionPlan(ast.pos[t], weeklyData.get(t), rowFor(t)) : null);
+    // pozycja do wyjścia wg wybranej metody: MACD = zamknięcie pod stopem MACD, GLB = zamknięcie pod Green Line; zawsze: −20 % od szczytu, hamowanie
+    function posWarn(r) {
+        const pl = planFor(r.ticker);
+        const exitNow = state.exit === "GLB" ? r.glb && r.price < r.glb : r.macd_stop && r.price < r.macd_stop;
+        return !!(r.slow || exitNow || (pl && pl.half));
+    }
 
     function renderHead() {
         $("thead").innerHTML = "<tr>" + COLUMNS.map(([k, h]) => {
@@ -133,7 +140,7 @@ if (typeof document !== "undefined") (function () {
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
-            const held = !!ast.pos[r.ticker], warn = held && (r.slow || (r.macd_stop && r.price < r.macd_stop));
+            const held = !!ast.pos[r.ticker], warn = held && posWarn(r);
             const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
@@ -193,7 +200,7 @@ if (typeof document !== "undefined") (function () {
     }
 
     async function loadWeekly(t) {
-        if (!weeklyCache.has(t)) weeklyCache.set(t, fetchJson("data/weekly/" + encodeURIComponent(fileName(t)), `Wykres ${t}`));
+        if (!weeklyCache.has(t)) weeklyCache.set(t, fetchJson("data/weekly/" + encodeURIComponent(fileName(t)), `Wykres ${t}`).then((d) => { if (d) weeklyData.set(t, d); return d; }));
         return weeklyCache.get(t);
     }
 
@@ -261,7 +268,8 @@ if (typeof document !== "undefined") (function () {
             return;
         }
         drawSlider();
-        const res = chartSvg(series, rowFor(current), Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period);
+        const row = rowFor(current) && { ...rowFor(current), exit: state.exit, plan: planFor(current) };
+        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period);
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -465,6 +473,7 @@ if (typeof document !== "undefined") (function () {
         const r = current && rowFor(current);
         $("potBadge").textContent = r ? `${r.ok ? "✓ warunki" : "✗ warunki"}${r.slow ? " · ⚠ hamuje" : ""}` : "";
         $("potBadge").classList.toggle("warn", !!(r && r.slow));
+        $("exitBtn").textContent = state.exit === "GLB" ? "🚪 Wyjście: pod GLB" : "🚪 Wyjście: MACD";
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
         $("watchBtn").textContent = current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj";
         $("lineAlertBtn").hidden = $("lineDelBtn").hidden = !ln;
@@ -473,11 +482,13 @@ if (typeof document !== "undefined") (function () {
 
     // ---------- alerty ----------
     async function checkAlerts() {
-        const ts = Object.keys(ast.lines).filter((t) => rowFor(t) && ast.lines[t].some((x) => x.alert !== false));
+        const ts = [...new Set(Object.keys(ast.lines).filter((t) => rowFor(t) && ast.lines[t].some((x) => x.alert !== false))
+            .concat(Object.keys(ast.pos).filter((t) => rowFor(t))))];   // pozycje: spadek 20 % od szczytu
         const got = new Map(await Promise.all(ts.map(async (t) => [t, await loadWeekly(t)])));
         const fresh = evalAlerts(ast, rowFor, (t) => got.get(t) || null, new Date().toISOString(), data.data_as_of);
         saveAlerts();
         renderAlertBtn();
+        if (Object.keys(ast.pos).length) renderTable();   // ostrzeżenia pozycji po wczytaniu świec
         if (fresh.length) notify(fresh);
     }
 
@@ -528,12 +539,27 @@ if (typeof document !== "undefined") (function () {
             [`Siła względna 52 tyg. ≥ +50 pp nad S&P 500 (${fmtv(r.rs, " pp")})`, r.rs == null ? null : r.rs >= 50],
             [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno 0–10 % nad)`, ["WYBICIE", "SYGNAŁ"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
             [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
+            [`Zamknięcie nad Green Line ${r.glb != null ? r.glb.toFixed(2) : "—"} (wyjście metodą GLB: zamknięcie tygodnia pod linią)`, r.glb == null || r.price == null ? null : r.price >= r.glb],
             [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
         ];
         return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — ${r.ok ? "spełnia warunki" : "nie spełnia warunków"}${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
             `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
             "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
+            posPlanHtml(r) +
             (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
+    }
+
+    // 📌 pozycja: poziomy wyjścia (stop −10 %, ½ przy −20 % od szczytu, metoda MACD albo GLB)
+    function posPlanHtml(r) {
+        const pl = planFor(r.ticker);
+        if (!ast.pos[r.ticker]) return "";
+        const f = (v) => (v == null ? "—" : v.toFixed(2));
+        if (!pl) return '<p class="dimtxt">Plan wyjścia: wczytuję świece…</p>';
+        const exitTxt = state.exit === "GLB" ? `zamknięcie tygodnia pod Green Line ${f(r.glb)}` : `stop MACD ${f(r.macd_stop)} (Low tygodnia przecięcia w dół)`;
+        return `<p><b>Plan wyjścia</b> (metoda: ${state.exit === "GLB" ? "pod GLB" : "MACD"}, zmiana przyciskiem 🚪 na wykresie): kupno ${f(pl.entry)} · stop −10 % ${f(pl.stopInit)} · ` +
+            `szczyt od wejścia ${f(pl.peak)} → <b>½ przy ${f(pl.halfAt)}</b> (−20 %) · reszta: ${exitTxt}</p>` +
+            (pl.half ? `<p class="warnbox">⚠ Zamknięcie ${f(pl.last)} jest ≥ 20 % pod szczytem ${f(pl.peak)} — sprzedaj połowę.</p>` : "") +
+            ((state.exit === "GLB" ? pl.glbExit : r.macd_stop && r.price < r.macd_stop) ? `<p class="warnbox">⚠ Sygnał wyjścia (${state.exit === "GLB" ? "zamknięcie pod Green Line" : "zamknięcie pod stopem MACD"}).</p>` : "");
     }
 
     function openGuide() {
@@ -678,6 +704,11 @@ if (typeof document !== "undefined") (function () {
         body.addEventListener("contextmenu", (e) => e.preventDefault());   // długie przytrzymanie na telefonie nie otwiera menu
         $("watchBtn").addEventListener("click", toggleWatch);
         $("posBtn").addEventListener("click", togglePos);
+        $("exitBtn").addEventListener("click", () => {
+            state.exit = state.exit === "GLB" ? "MACD" : "GLB";
+            saveSettings();
+            renderTable();
+        });
         $("periodBtn").addEventListener("click", togglePeriod);
         $("potBadge").addEventListener("click", openGuide);
         $("guideBtn").addEventListener("click", openGuide);

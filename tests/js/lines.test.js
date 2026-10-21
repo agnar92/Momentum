@@ -54,3 +54,22 @@ test("stateAlerts and evalAlerts deduplicate per week", () => {
     st.log = [];
     assert.strictEqual(evalAlerts(st, () => row, () => series, "x", D[4]).length, 0);
 });
+
+test("positionPlan: stop −10 %, half at −20 % from the peak close since entry, GLB exit", () => {
+    const { positionPlan } = require("../../docs/js/lines.js");
+    const data = { d: D, c: [100, 120, 150, 130, 118] };
+    const pl = positionPlan({ since: D[1], price: 120 }, data, { glb: 125 });
+    assert.ok(Math.abs(pl.stopInit - 108) < 1e-9 && pl.peak === 150 && Math.abs(pl.halfAt - 120) < 1e-9);
+    assert.ok(pl.half && pl.glbExit && pl.last === 118);
+    const early = positionPlan({ since: D[1], price: 120 }, { d: D.slice(0, 3), c: [100, 120, 150] }, { glb: 110 });
+    assert.ok(!early.half && !early.glbExit);
+});
+
+test("evalAlerts: half-sell alert for a position once per peak, GLB exit for watched", () => {
+    const st = { lines: {}, watch: { X: { glb_state: "SYGNAŁ", macd: "nad", price: 130, ok: true } }, pos: { X: { since: D[1], price: 120 } }, log: [] };
+    const row = { ticker: "X", glb: 125, glb_state: "POD", macd: "nad", price: 118, ok: true };
+    const series = { d: D, c: [100, 120, 150, 130, 118] };
+    const fresh = evalAlerts(st, () => row, () => series, "now", D[4]);
+    assert.ok(fresh.some((a) => a.msg.includes("sprzedaj połowę")) && fresh.some((a) => a.msg.includes("pod Green Line")));
+    assert.strictEqual(evalAlerts(st, () => row, () => series, "later", D[4]).length, 0);
+});
