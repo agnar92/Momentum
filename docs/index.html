@@ -29,7 +29,8 @@
     <details class="rules"><summary>Zasady</summary>
         <p><b>Warunki:</b> przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC), P/S &lt; 20, siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500. Kolejność: sygnał GLB, potem od największej siły względnej.</p>
         <p><b>Wejście — Green Line:</b> rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). Kupno, gdy tydzień zamknie się 0–10 % nad linią.
-            <i>WYBICIE</i> = ten tydzień nad linią, poprzedni pod; <i>SYGNAŁ</i> = 0–10 % nad; <i>NAD</i> = dalej; <i>POD</i>.</p>
+            <i>WYBICIE</i> = tydzień przebicia (poprzedni pod linią) — kupno przy dowolnej wysokości, to mocne wybicie; <i>SYGNAŁ</i> = 0–10 % nad;
+            <i>BLUE DOT</i> = kolejny tydzień &gt; 10 % nad linią i Blue Dot na dziennym w ostatnich 5 sesjach — kupno; <i>NAD</i> = &gt; 10 % bez kropki (czekaj na Blue Dot); <i>POD</i>.</p>
         <p><b>Wyjście:</b> tygodniowy MACD (12, 26, 9) — po przecięciu sygnału w dół stop pod Low tego tygodnia; do tego stop 10 % pod wejściem.</p>
         <p>Heurystyka z backtestu (płynny rynek USA 2015–2026), nie porada inwestycyjna.</p>
     </details>
@@ -97,7 +98,7 @@
         Sprzedaż połowy przy −20 % od szczytu: płytsze spadki portfela (MACD: DD −35 → −31 %; pod GLB: −51 → −45 %) za cenę 1–3 pp rocznie (20,6 % i 17,2 %).</p>
     </details>
     <details><summary><b>Wejście i wyjście</b></summary>
-        <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad Green Line (rekord miesięcznego High, który stoi ≥ 3 miesiące), na otwarciu następnego tygodnia.
+        <p><b>Kupno:</b> tydzień przebicia Green Line (poprzedni tydzień pod linią) przy dowolnej wysokości albo zamknięcie tygodnia 0–10 % nad linią (rekord miesięcznego High, który stoi ≥ 3 miesiące), na otwarciu następnego tygodnia. Gdy to już kolejny tydzień i cena jest &gt; 10 % nad linią — wejście po <b>Blue Dot</b> na dziennym (stan BLUE DOT; nie testowane wstecz w tym połączeniu).
         Stop 10 % pod wejściem — zleceniem (w teście stop „na zamknięciu tygodnia” dawał podobny wynik, ale straty 15–35 %). Po wybiciu stopem wchodzisz ponownie przy następnym sygnale.</p>
         <p><b>Wyjście:</b> po przecięciu MACD tygodniowego w dół stop pod Low tego tygodnia (czerwona przerywana).</p>
         <p><b>⚠ Hamowanie</b> (kolumna Hamuje, alert dla 📌 pozycji): w nowym raporcie tempo przychodów spadło o ≥ 10 pp. Po takim raporcie spadek ≥ 20 % w 6 mies. w 44 % przypadków

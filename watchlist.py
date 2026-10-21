@@ -155,6 +155,9 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
                 f.unlink()
         for r in rows:
             r["daily"] = r["ticker"] in dser
+            bd = calc.fresh_blue_dot(dser.get(r["ticker"]), r.get("glb")) if r.get("glb_state") == "NAD" else None
+            if bd:   # > 10 % nad linią i nie tydzień przebicia: wejście po Blue Dot na dziennym
+                r["glb_state"], r["bdot"] = "BLUE DOT", bd
     # wolumen relatywny dzienny (sesja / średnia 50 sesji): świece nad Green Line już są, reszta płynnych — 3 miesiące, bez zapisu
     rest = [t for t in liquid if t not in (dser or {})]
     try:

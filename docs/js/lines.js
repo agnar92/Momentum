@@ -4,7 +4,7 @@
 // Czyste funkcje — testy w tests/js/lines.test.js.
 "use strict";
 
-const SIGNAL_STATES = ["WYBICIE", "SYGNAŁ"];
+const SIGNAL_STATES = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
 const MAX_LOG = 200;
 const STOP_PCT = 10;    // stop początkowy pod ceną kupna
 const HALF_DROP = 20;   // spadek od szczytu (zamknięcia tygodnia od wejścia), przy którym sprzedajesz połowę
