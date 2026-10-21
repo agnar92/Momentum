@@ -21,6 +21,7 @@
     <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. nad GLB i MACD dodatni">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
     <button type="button" id="guideBtn" title="Czego szukać w spółce: zasady z badań i lista kontrolna otwartej spółki">📖 Poradnik</button>
+    <button type="button" id="posListBtn" title="Pozycje (plan wyjścia, co zrobić teraz) i obserwowane spółki">📌 Pozycje</button>
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
@@ -38,7 +39,7 @@
         <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
     </section>
     <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="periodBtn" hidden title="Tygodniowy / dzienny (RWB Guppy + Blue Dot) — dzienny tylko dla spółek nad Green Line">📅 Tygodniowy</button><button type="button" id="potBadge" class="badge" title="Czy spółka spełnia warunki — kliknij: lista kontrolna"></button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 % i ½ przy −20 % od szczytu">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
+        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="perW" class="per" title="Wykres tygodniowy">T</button><button type="button" id="perD" class="per" hidden title="Wykres dzienny (RWB Guppy + Blue Dot) — tylko dla spółek nad Green Line">D</button><button type="button" id="potBadge" class="badge" title="Czy spółka spełnia warunki — kliknij: lista kontrolna"></button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 % i ½ przy −20 % od szczytu">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
         <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
         <div class="chart-body" id="chartBody"></div>
         <div class="tip" id="tip" hidden></div>
@@ -97,7 +98,7 @@
         <p><b>⚠ Hamowanie</b> (kolumna Hamuje, alert dla 📌 pozycji): w nowym raporcie tempo przychodów spadło o ≥ 10 pp. Po takim raporcie spadek ≥ 20 % w 6 mies. w 44 % przypadków
         (normalnie 33 %); <b>⚠⚠ z marżą brutto spadającą r/r — 50 %</b>, średnio −1,8 % po 3 i 6 mies. To sygnał, żeby zacieśnić stop albo nie dokładać.</p>
     </details>
-    <details><summary><b>RWB + Blue Dot (wykres dzienny 📅) — podgląd, nie sygnał</b></summary>
+    <details><summary><b>RWB + Blue Dot (wykres dzienny, przycisk D) — podgląd, nie sygnał</b></summary>
         <p>Test 2015–2026, ceny bez korekty: RWB (6 szybkich EMA nad 6 wolnymi) + nad Green Line + Blue Dot (Stochastic 10,1 ↑ 20), kupno na zamknięciu, stop pod
         Low kropki, wyjście MACD: tylko <b>+1,0…+1,2 % na transakcję</b>, trafność 14–15 % (stop pod kropką wybija średnio po 4 sesjach). Ze stopem 10 %: +1,6…+1,8 %.
         GLB 0–10 % na tygodniowym z warunkami: +15,6 %. Wykres dzienny: linia zamknięć, RWB, Blue Dot i Green Line.</p>
@@ -114,6 +115,14 @@
     <ul id="alertList" class="alerts"></ul>
     <p id="alertInfo" class="recent"></p>
     <div class="dlg-btns"><button type="button" id="notifyBtn" hidden>Włącz powiadomienia</button><button type="button" id="alertClear">Wyczyść</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
+</dialog>
+<dialog id="posDlg" class="wide poslist">
+    <h3>📌 Pozycje i obserwowane <small id="posMethod"></small></h3>
+    <div class="tblwrap"><table class="gt" id="posTable"></table></div>
+    <h4>🔔 Obserwowane (bez pozycji)</h4>
+    <div class="tblwrap"><table class="gt" id="watchTable"></table></div>
+    <p class="dimtxt">Klik w ticker = wykres · ✕ = usuń pozycję / przestań obserwować. Pozycję zaznaczasz przyciskiem 📌 na wykresie (kupno = ostatnie zamknięcie).</p>
+    <div class="dlg-btns"><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
 </dialog>
 <script src="js/lines.js"></script>
 <script src="js/chart.js"></script>

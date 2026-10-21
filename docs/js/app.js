@@ -4,9 +4,9 @@
 
 const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
-    ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"],
+    ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
+    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
     ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
@@ -48,17 +48,19 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
     ["Sygnał kupna: warunki + 0–10 % nad GLB", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] } }],
+    ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] } }],
+    ["Aktywne: RVol tyg. ≥ 1,5 + nad GLB", { rvol_w: { min: 1.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] } }],
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (0–10 % nad GLB) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, macd: { in: ["nad"] } }],
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
 ];
 
-const filterValue = (r, k) => (k === "ok" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
+const filterValue = (r, k) => (k === "ok" || k === "trend" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
 
 function passFilters(r, filters) {
     for (const [k, f] of Object.entries(filters || {})) {
@@ -233,17 +235,17 @@ if (typeof document !== "undefined") (function () {
         return dailyCache.get(t);
     }
 
-    // przełącznik tygodniowy / dzienny (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy)
+    // przyciski T / D (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy; tylko spółki nad Green Line)
     function renderPeriod() {
         const r = current && rowFor(current), ok = !!(r && r.daily);
-        $("periodBtn").hidden = !ok;
-        $("periodBtn").textContent = period === "D" ? "📅 Dzienny" : "📅 Tygodniowy";
-        $("periodBtn").classList.toggle("on", period === "D");
+        $("perD").hidden = !ok;
+        $("perW").classList.toggle("on", period === "W");
+        $("perD").classList.toggle("on", period === "D");
     }
 
-    async function togglePeriod() {
-        if (!current) return;
-        period = period === "D" ? "W" : "D";
+    async function togglePeriod(to) {
+        if (!current || to === period) return;
+        period = to || (period === "D" ? "W" : "D");
         dShow = 260;
         end = null;
         sel = null;
@@ -526,6 +528,44 @@ if (typeof document !== "undefined") (function () {
         $("alertDlg").showModal();
     }
 
+    // ---------- panel: pozycje (plan wyjścia, co zrobić teraz) i obserwowane ----------
+    async function openPositions() {
+        await Promise.all(Object.keys(ast.pos).filter((t) => rowFor(t)).map((t) => loadWeekly(t)));
+        const f = (v) => (v == null ? "—" : v.toFixed(2)), pct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`), e = escapeHtml;
+        $("posMethod").textContent = state.exit === "GLB" ? "wyjście: pod GLB (zamknięcie tygodnia pod Green Line)" : "wyjście: MACD (stop pod Low tygodnia przecięcia w dół)";
+        const pos = Object.entries(ast.pos).map(([t, p]) => {
+            const r = rowFor(t) || {}, pl = positionPlan(p, weeklyData.get(t), r), last = pl.last != null ? pl.last : r.price;
+            const st = positionStatus(pl, r, state.exit), ex = state.exit === "GLB" ? r.glb : r.macd_stop;
+            return `<tr class="${st.length ? "warn" : ""}"><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td class="now">${e(st.join(" · ") || "trzymaj")}</td><td>${e(p.since || "")}</td><td>${f(pl.entry)}</td>` +
+                `<td>${f(last)}</td><td>${pct(last && pl.entry ? (last / pl.entry - 1) * 100 : null)}</td><td>${f(pl.peak)}</td><td>${f(pl.halfAt)}</td><td>${f(pl.stopInit)}</td>` +
+                `<td>${f(ex)}</td><td>${e(r.glb_state || "")}</td><td>${e(r.macd || "")}</td>` +
+                `<td><button type="button" data-del-pos="${e(t)}" title="Usuń pozycję">✕</button></td></tr>`;
+        });
+        $("posTable").innerHTML = "<tr><th>Ticker</th><th>Co teraz</th><th>Od</th><th>Kupno</th><th>Cena</th><th>Zmiana %</th><th>Szczyt</th><th>½ przy</th><th>Stop −10 %</th>" +
+            `<th>Wyjście</th><th>GLB</th><th>MACD</th><th></th></tr>` + (pos.join("") || '<tr><td colspan="13">Brak pozycji (📌 Pozycja na wykresie).</td></tr>');
+        const watch = Object.keys(ast.watch).filter((t) => !ast.pos[t]).map((t) => {
+            const r = rowFor(t) || {};
+            return `<tr><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td>${f(r.price)}</td><td>${f(r.glb)}</td><td>${pct(r.glb_pct)}</td><td>${e(r.glb_state || "")}</td>` +
+                `<td>${e(r.macd || "")}</td><td>${r.trend ? "✓" : ""}</td><td>${pct(r.rs)}</td><td>${r.ok ? "✓" : ""}</td>` +
+                `<td><button type="button" data-del-watch="${e(t)}" title="Przestań obserwować">✕</button></td></tr>`;
+        });
+        $("watchTable").innerHTML = "<tr><th>Ticker</th><th>Cena</th><th>Green Line</th><th>Do linii %</th><th>GLB</th><th>MACD</th><th>SMA 10>30</th><th>RS pp</th><th>Warunki</th><th></th></tr>" +
+            (watch.join("") || '<tr><td colspan="10">Brak obserwowanych (🔕 Obserwuj na wykresie).</td></tr>');
+        if (!$("posDlg").open) $("posDlg").showModal();
+    }
+
+    function posListClick(ev) {
+        const b = ev.target.closest("button");
+        if (!b) return;
+        if (b.dataset.t && rowFor(b.dataset.t)) { $("posDlg").close(); openChart(b.dataset.t); return; }
+        if (b.dataset.delPos) delete ast.pos[b.dataset.delPos];
+        else if (b.dataset.delWatch) delete ast.watch[b.dataset.delWatch];
+        else return;
+        saveAlerts();
+        renderTable();
+        openPositions();
+    }
+
     // ---------- poradnik: zasady z badań + lista kontrolna otwartej spółki ----------
     function checklist(r) {
         const yes = (v) => (v === true ? '<b class="ok">✓</b>' : v === false ? '<b class="no">✗</b>' : '<b class="na">—</b>');
@@ -709,7 +749,8 @@ if (typeof document !== "undefined") (function () {
             saveSettings();
             renderTable();
         });
-        $("periodBtn").addEventListener("click", togglePeriod);
+        $("perW").addEventListener("click", () => togglePeriod("W"));
+        $("perD").addEventListener("click", () => togglePeriod("D"));
         $("potBadge").addEventListener("click", openGuide);
         $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
@@ -719,6 +760,8 @@ if (typeof document !== "undefined") (function () {
         $("fltBody").addEventListener("input", fltInput);
         $("fltClear").addEventListener("click", () => { state.filters = {}; saveSettings(); renderFilters(); renderTable(); });
         $("alertBtn").addEventListener("click", openAlerts);
+        $("posListBtn").addEventListener("click", openPositions);
+        $("posDlg").addEventListener("click", posListClick);
         $("alertClear").addEventListener("click", () => { ast.log = []; saveAlerts(); openAlerts(); });
         $("notifyBtn").addEventListener("click", () => { Notification.requestPermission().then(() => { $("notifyBtn").hidden = true; }); });
         for (const id of ["alertList", "alertInfo"]) {
@@ -736,7 +779,7 @@ if (typeof document !== "undefined") (function () {
         window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawChart, 120); });
         document.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSymbol(); return; }
-            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("guideDlg").open || e.target.matches("input")) return;
+            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("posDlg").open || $("guideDlg").open || e.target.matches("input")) return;
             if (current && sel && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); deleteSelected(); return; }
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
             else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }

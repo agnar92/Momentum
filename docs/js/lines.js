@@ -99,6 +99,17 @@ function positionPlan(pos, data, row) {
         half: last != null && halfAt != null && last <= halfAt, glbExit: !!(last != null && row && row.glb && last < row.glb) };
 }
 
+// co zrobić z pozycją teraz -> lista komunikatów (pusta = trzymaj): stop −10 %, ½ przy −20 % od szczytu, wyjście wg metody, hamowanie — jak lines.position_status
+function positionStatus(pl, row, exit) {
+    const out = [], r = row || {}, p = pl || {}, last = p.last;
+    if (last != null && p.stopInit != null && last <= p.stopInit) out.push("STOP −10 %");
+    if (exit === "GLB" && p.glbExit) out.push("WYJŚCIE: zamknięcie pod GLB");
+    if (exit !== "GLB" && r.macd_stop && last != null && last < r.macd_stop) out.push("WYJŚCIE: pod stopem MACD");
+    if (p.half) out.push("SPRZEDAJ ½ (−20 % od szczytu)");
+    if (r.slow) out.push("⚠ hamuje" + (r.slow === "HAMUJE+MB" ? " + marża brutto" : ""));
+    return out;
+}
+
 const snapshot = (r) => ({ glb_state: r.glb_state, macd: r.macd, macd_stop: r.macd_stop, price: r.price, ok: !!r.ok, slow: r.slow || null });
 
 // st = {lines: {ticker: [linia]}, watch: {ticker: stan}, log: [...]}; rowFor(t) -> wiersz, seriesFor(t) -> świece (albo null), asOf = ostatni tydzień danych
@@ -140,4 +151,4 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
     return fresh;
 }
 
-if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts, positionPlan, HALF_DROP, STOP_PCT };
+if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, HALF_DROP, STOP_PCT };

@@ -70,7 +70,7 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
 - `index.html` + `js/app.js`: toolbar (scanner select, only-conditions checkbox, **Filtry**, search, 🔔 Alerty, Ctrl+K, refresh link to `refresh.yml`,
   rules), one table (`COLUMNS` = the desktop columns), sort by header (asc/desc/default), status bar. **Filters** (user: "dodaj filtry do listy, nie samo
   sortowanie"): `state.filters` = {column: {in: [values]} | {min, max}}, all ANDed (`passFilters`; choices glb_state / macd / ok / sector, numeric from–to
-  in table units, turnover in M$), presets `FILTER_PRESETS` (e.g. "Nad GLB + MACD dodatni"); same in the desktop app (`FilterDialog`). Click a row → chart; ↑/↓ step through the visible
+  in table units, turnover in M$), presets `FILTER_PRESETS` (e.g. "Nad GLB + MACD dodatni", "Przebicie GLB + SMA 10 > 30"; column `trend` = weekly SMA 10 > SMA 30 from `build_row`, user: "nie mam filtra sma 10 > sma 30"); relative volume `rvol_w` = last week / mean of the 10 previous weeks (`calc.rel_volume`, `RVOL_W`) and `rvol_d` = last session / mean of the 50 previous (`RVOL_D`; filled by `watchlist.py` from the daily candles — 1 y for rows above GLB, 3 mo for the other liquid ones, not saved; desktop `sync.run` via `prices.daily`), preset "Aktywne: RVol tyg. ≥ 1,5 + nad GLB", chart volume label "RVol x×" (amber ≥ 1.5), daily volume average SMA 50 (user: "wolumen relatywny … dla tygodnia sma10, dla dnia sma50"); same in the desktop app (`FilterDialog`). Click a row → chart; ↑/↓ step through the visible
   list; Esc closes. Wide screens (≥ 1000 px): list left, chart right (first row auto-opens); phones: chart full screen.
 - **Ctrl+K**: dialog with a datalist of all tickers (`rows` + `symbols`), recent symbols in localStorage. The site is static, so a symbol
   that is not in the data must be added to `finviz_screen.json` `symbols` (computed on the next refresh).
@@ -87,9 +87,15 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
   conditions met. Key includes the week, so nothing fires twice. localStorage `momentum_alerts` {lines, watch, log, seen}; system notification via the
   service worker if allowed. The site is static, so alerts are checked only when the page is opened (data refresh is weekly).
 - **Chart panels like IBD**: S&P 500 (SPY weekly file, `symbols`) above the price, quarterly revenue bars with y/y % (green ≥ 25 %, amber ≥ 15 %) under the volume.
+  Weekly only: IBD relative-strength line (`rsLine` / `chart.rs_line` = close / SPY close, own log scale in the bottom 22 % of the price panel, ● and
+  "RS na szczycie 52 tyg." when the last value is the 52-week high; user: "nie widzę wykresu siły relatywnej jak mają w IBD"). Period buttons T / D
+  (`#perW` / `#perD`; desktop M / T / D, `per_btns`; user: "osobne przyciski … M, T, D").
 - **📖 Poradnik** (`#guideDlg`): the study's rules + a checklist of the open stock (`checklist(r)`); **📌 Pozycja** (`ast.pos`, also watched) marks a
   position: 📌 in the list, amber ticker when slowing / under the MACD stop, slowdown alert (`stateAlerts`, `snapshot.slow`).
-- **📅 Tygodniowy / Dzienny** (`#periodBtn`, only for `row.daily`; user: "Dr Wish używa RWB … blue dot"): daily mode of `chartSvg(…, period="D")` — Guppy GMMA
+  **📌 Pozycje** panel (`#posDlg` / desktop `PositionsDialog`; user: "nie mam panelu pozycje i obserwowane"): positions with plan (entry, peak, ½ at, stop −10 %,
+  exit level by method) and "Co teraz" (`positionStatus` / `lines.position_status`: STOP −10 %, WYJŚCIE, SPRZEDAJ ½, hamuje; empty = trzymaj), watched tickers
+  below; click = chart, ✕ = remove.
+- **T / D** (`#perW` / `#perD`, D only for `row.daily`; user: "Dr Wish używa RWB … blue dot"): daily mode of `chartSvg(…, period="D")` — Guppy GMMA
   (`gmma`: fast 3–15 red, slow 30–60 blue), lighter background while RWB (`rwb`: lowest fast EMA above highest slow), ● Blue Dot (`blueDots`: Stochastic 10,1
   crosses 20 up, RWB, close ≥ Green Line) with the stop under its Low; price as a close LINE, no MACD / revenue / Stochastic panels (user: "linia ceny nie słupki, wywal przychody i Stoch"); separate window (`dShow`, default 260 sessions);
   trend lines only on the weekly chart. Preview only: the backtest (RWB + above GLB + Blue Dot, stop under the dot, MACD exit) gave +1.0…+1.2 % per trade,

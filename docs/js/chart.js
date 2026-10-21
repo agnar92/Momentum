@@ -7,7 +7,7 @@
 
 const C = {
     bg: "#0e1116", grid: "#1a1f26", dim: "#6b7684", fg: "#d5d9e0", up: "#d5d9e0", down: "#e5484d",
-    sma10: "#e5484d", sma30: "#f0b429", tline: "#22d3ee", spx: "#b392f0", fast: "#e5484d", slow: "#3b82f6", rwbBg: "#232a33", dot: "#4aa3ff", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
+    rs: "#38bdf8", sma10: "#e5484d", sma30: "#f0b429", tline: "#22d3ee", spx: "#b392f0", fast: "#e5484d", slow: "#3b82f6", rwbBg: "#232a33", dot: "#4aa3ff", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
     macd: "#4aa3ff", signal: "#f0b429", histUp: "#2f9e5a", histDown: "#a33a3e", volAvg: "#ff9f43",
 };
 const SMA_PERIODS = [10, 30];
@@ -96,6 +96,16 @@ function fmtVol(v) {
     if (v === null || v === undefined) return "—";
     return v >= 1e9 ? (v / 1e9).toFixed(1) + "B" : v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : (v / 1e3).toFixed(0) + "K";
 }
+
+// wolumen relatywny: ostatni / średnia n poprzednich (null przy braku danych) — jak calc.rel_volume
+function relVolume(vols, n) {
+    if (vols.length < n + 1 || !vols[vols.length - 1]) return null;
+    const prev = vols.slice(-1 - n, -1).filter((x) => x != null && isFinite(x)), avg = prev.length >= n * 0.8 ? prev.reduce((a, b) => a + b, 0) / prev.length : 0;
+    return avg > 0 ? vols[vols.length - 1] / avg : null;
+}
+
+// linia siły relatywnej jak w IBD: zamknięcie akcji / zamknięcie S&P 500 w tym samym tygodniu (null, gdy brak) — jak chart.rs_line
+const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] : null));
 
 // panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno);
 // dzienny (D): S&P 500, cena (linia zamknięć + RWB + Blue Dot + GLB) i wolumen — bez przychodów i Stochastic
@@ -194,7 +204,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     const md = { macd: mdFull.macd.slice(i0, i1), signal: mdFull.signal.slice(i0, i1), hist: mdFull.hist.slice(i0, i1) };
     const smaWin = {};
     for (const k of SMA_PERIODS) smaWin[k] = sma(cfull, k).slice(i0, i1);
-    const vavg = sma(full.v.map((x) => x || 0), 10).slice(i0, i1);
+    const nv = D ? 50 : 10;   // średnia wolumenu i wolumen relatywny: dzienny 50 sesji, tygodniowy 10 tygodni
+    const vavg = sma(full.v.map((x) => x || 0), nv).slice(i0, i1), rv = relVolume(full.v, nv);
     const crosses = macdCrossDown(mdFull.hist).filter((i) => i >= i0 && i < i1).map((i) => i - i0);
     const data = {};
     for (const k of ["d", "o", "h", "l", "c", "v"]) data[k] = full[k].slice(i0, i1);
@@ -313,7 +324,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         parts.push(`<rect x="${(xf(i) - tick).toFixed(1)}" y="${vy(vv[i]).toFixed(1)}" width="${(2 * tick).toFixed(1)}" height="${(v1 - vy(vv[i])).toFixed(1)}" fill="${col}"/>`);
     }
     poly(vavg.map((a, i) => (a ? [xf(i), vy(a)] : null)).filter(Boolean), C.volAvg, 1.5);
-    text(x0 + 4, v0 + 10, `Wolumen · śr. 10 ${u}`, C.dim);
+    text(x0 + 4, v0 + 10, `Wolumen · śr. ${nv} ${u}` + (rv != null ? ` · RVol ${rv.toFixed(1)}×` : ""), rv != null && rv >= 1.5 ? C.signal : C.dim);
     for (const i of dots) {   // ● Blue Dot pod świecą; stop pod Low ostatniej kropki
         const lw = full.l[i];
         if (lw) parts.push(`<circle cx="${xf(i - i0).toFixed(1)}" cy="${(yf(lw) + 9).toFixed(1)}" r="4" fill="${C.dot}"/>`);
@@ -355,6 +366,23 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         text(x0 + 4, s0 + 10, `S&P 500 (SPY) ${fmt(sok[sok.length - 1])} · w oknie ${ch >= 0 ? "+" : ""}${ch.toFixed(1)} %`, C.spx);
     } else text(x0 + 4, s0 + 10, "S&P 500 — brak danych SPY", C.dim);
     line(x0, s1 + 3, x1, s1 + 3, C.grid);
+    if (!D) {   // linia siły relatywnej jak w IBD: cena / S&P 500, na dole panelu ceny (własna skala log); ● gdy RS na szczycie 52 tyg.
+        const rs = rsLine(c, sv), ok = rs.filter((v) => v);
+        if (ok.length > 1) {
+            const b0 = y1 - (y1 - y0) * 0.22, b1 = y1 - 4, lo = Math.log(Math.min(...ok)), hi2 = Math.log(Math.max(...ok));
+            const yr = (v) => b1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (b1 - b0);
+            const pts = rs.map((v, i) => (v ? [xf(i), yr(v)] : null)).filter(Boolean);
+            poly(pts, C.rs, 1.4);
+            let lab = "RS (cena / S&P 500)" + (row && row.rs != null ? ` · 52 tyg. ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp` : "");
+            const last = rs[rs.length - 1];
+            if (last && last >= Math.max(...rs.slice(-52).filter((v) => v))) {
+                const [px, py] = pts[pts.length - 1];
+                parts.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${C.rs}"/>`);
+                lab += " · ● RS na szczycie 52 tyg.";
+            }
+            text(x0 + 4, b0 - 4, lab, C.rs);
+        }
+    }
 
     // przychody kwartalne (słupki w okresie kwartału) z dynamiką r/r: zielony ≥ +25 %, żółty ≥ +15 %, szary niżej, czerwony < 0
     if (D) return finish();
@@ -400,6 +428,6 @@ function titleText(t, row) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-    sma, ema, macd, gmma, rwb, stochK, blueDots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
+    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, relVolume, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };

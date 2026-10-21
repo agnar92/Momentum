@@ -150,6 +150,16 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
                 f.unlink()
         for r in rows:
             r["daily"] = r["ticker"] in dser
+    # wolumen relatywny dzienny (sesja / średnia 50 sesji): świece nad Green Line już są, reszta płynnych — 3 miesiące, bez zapisu
+    rest = [t for t in liquid if t not in (dser or {})]
+    try:
+        dshort = daily(rest, log=log, period="3mo") if rest else {}
+    except Exception as e:
+        log(f"⚠ dzienne (wolumen relatywny) niedostępne ({e})")
+        dshort = {}
+    for r in rows:
+        sd = (dser or {}).get(r["ticker"]) or dshort.get(r["ticker"])
+        r["rvol_d"] = calc.rel_volume(sd["v"], calc.RVOL_D) if sd else None
     last = max((series[r["ticker"]]["d"][-1] for r in rows), default=None)
     write_json(Path(out) / "watchlist.json", {
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta,
