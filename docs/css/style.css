@@ -64,6 +64,12 @@ dialog input { font-size: 16px; }
 .msg { color: #ff8a5b; min-height: 1em; }
 .dlg-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
 dialog.wide { width: min(640px, 96vw); max-height: 88vh; }
+dialog.poslist { width: min(1100px, 98vw); }
+.tblwrap { overflow-x: auto; }
+.tblwrap td, .tblwrap th { white-space: nowrap; padding: 3px 6px; }
+.tblwrap .warn { color: #ffb020; }
+.tblwrap td.now { white-space: normal; min-width: 170px; }
+.tblwrap button { padding: 2px 6px; }
 dialog h3 { margin: 4px 0 10px; font-size: 15px; }
 dialog h3 small { color: var(--dim); font-weight: normal; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }

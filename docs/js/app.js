@@ -527,6 +527,44 @@ if (typeof document !== "undefined") (function () {
         $("alertDlg").showModal();
     }
 
+    // ---------- panel: pozycje (plan wyjścia, co zrobić teraz) i obserwowane ----------
+    async function openPositions() {
+        await Promise.all(Object.keys(ast.pos).filter((t) => rowFor(t)).map((t) => loadWeekly(t)));
+        const f = (v) => (v == null ? "—" : v.toFixed(2)), pct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`), e = escapeHtml;
+        $("posMethod").textContent = state.exit === "GLB" ? "wyjście: pod GLB (zamknięcie tygodnia pod Green Line)" : "wyjście: MACD (stop pod Low tygodnia przecięcia w dół)";
+        const pos = Object.entries(ast.pos).map(([t, p]) => {
+            const r = rowFor(t) || {}, pl = positionPlan(p, weeklyData.get(t), r), last = pl.last != null ? pl.last : r.price;
+            const st = positionStatus(pl, r, state.exit), ex = state.exit === "GLB" ? r.glb : r.macd_stop;
+            return `<tr class="${st.length ? "warn" : ""}"><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td class="now">${e(st.join(" · ") || "trzymaj")}</td><td>${e(p.since || "")}</td><td>${f(pl.entry)}</td>` +
+                `<td>${f(last)}</td><td>${pct(last && pl.entry ? (last / pl.entry - 1) * 100 : null)}</td><td>${f(pl.peak)}</td><td>${f(pl.halfAt)}</td><td>${f(pl.stopInit)}</td>` +
+                `<td>${f(ex)}</td><td>${e(r.glb_state || "")}</td><td>${e(r.macd || "")}</td>` +
+                `<td><button type="button" data-del-pos="${e(t)}" title="Usuń pozycję">✕</button></td></tr>`;
+        });
+        $("posTable").innerHTML = "<tr><th>Ticker</th><th>Co teraz</th><th>Od</th><th>Kupno</th><th>Cena</th><th>Zmiana %</th><th>Szczyt</th><th>½ przy</th><th>Stop −10 %</th>" +
+            `<th>Wyjście</th><th>GLB</th><th>MACD</th><th></th></tr>` + (pos.join("") || '<tr><td colspan="13">Brak pozycji (📌 Pozycja na wykresie).</td></tr>');
+        const watch = Object.keys(ast.watch).filter((t) => !ast.pos[t]).map((t) => {
+            const r = rowFor(t) || {};
+            return `<tr><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td>${f(r.price)}</td><td>${f(r.glb)}</td><td>${pct(r.glb_pct)}</td><td>${e(r.glb_state || "")}</td>` +
+                `<td>${e(r.macd || "")}</td><td>${r.trend ? "✓" : ""}</td><td>${pct(r.rs)}</td><td>${r.ok ? "✓" : ""}</td>` +
+                `<td><button type="button" data-del-watch="${e(t)}" title="Przestań obserwować">✕</button></td></tr>`;
+        });
+        $("watchTable").innerHTML = "<tr><th>Ticker</th><th>Cena</th><th>Green Line</th><th>Do linii %</th><th>GLB</th><th>MACD</th><th>SMA 10>30</th><th>RS pp</th><th>Warunki</th><th></th></tr>" +
+            (watch.join("") || '<tr><td colspan="10">Brak obserwowanych (🔕 Obserwuj na wykresie).</td></tr>');
+        if (!$("posDlg").open) $("posDlg").showModal();
+    }
+
+    function posListClick(ev) {
+        const b = ev.target.closest("button");
+        if (!b) return;
+        if (b.dataset.t && rowFor(b.dataset.t)) { $("posDlg").close(); openChart(b.dataset.t); return; }
+        if (b.dataset.delPos) delete ast.pos[b.dataset.delPos];
+        else if (b.dataset.delWatch) delete ast.watch[b.dataset.delWatch];
+        else return;
+        saveAlerts();
+        renderTable();
+        openPositions();
+    }
+
     // ---------- poradnik: zasady z badań + lista kontrolna otwartej spółki ----------
     function checklist(r) {
         const yes = (v) => (v === true ? '<b class="ok">✓</b>' : v === false ? '<b class="no">✗</b>' : '<b class="na">—</b>');
@@ -721,6 +759,8 @@ if (typeof document !== "undefined") (function () {
         $("fltBody").addEventListener("input", fltInput);
         $("fltClear").addEventListener("click", () => { state.filters = {}; saveSettings(); renderFilters(); renderTable(); });
         $("alertBtn").addEventListener("click", openAlerts);
+        $("posListBtn").addEventListener("click", openPositions);
+        $("posDlg").addEventListener("click", posListClick);
         $("alertClear").addEventListener("click", () => { ast.log = []; saveAlerts(); openAlerts(); });
         $("notifyBtn").addEventListener("click", () => { Notification.requestPermission().then(() => { $("notifyBtn").hidden = true; }); });
         for (const id of ["alertList", "alertInfo"]) {
@@ -738,7 +778,7 @@ if (typeof document !== "undefined") (function () {
         window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawChart, 120); });
         document.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSymbol(); return; }
-            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("guideDlg").open || e.target.matches("input")) return;
+            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("posDlg").open || $("guideDlg").open || e.target.matches("input")) return;
             if (current && sel && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); deleteSelected(); return; }
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
             else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }

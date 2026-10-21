@@ -21,6 +21,7 @@
     <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. nad GLB i MACD dodatni">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
     <button type="button" id="guideBtn" title="Czego szukać w spółce: zasady z badań i lista kontrolna otwartej spółki">📖 Poradnik</button>
+    <button type="button" id="posListBtn" title="Pozycje (plan wyjścia, co zrobić teraz) i obserwowane spółki">📌 Pozycje</button>
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
@@ -114,6 +115,14 @@
     <ul id="alertList" class="alerts"></ul>
     <p id="alertInfo" class="recent"></p>
     <div class="dlg-btns"><button type="button" id="notifyBtn" hidden>Włącz powiadomienia</button><button type="button" id="alertClear">Wyczyść</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
+</dialog>
+<dialog id="posDlg" class="wide poslist">
+    <h3>📌 Pozycje i obserwowane <small id="posMethod"></small></h3>
+    <div class="tblwrap"><table class="gt" id="posTable"></table></div>
+    <h4>🔔 Obserwowane (bez pozycji)</h4>
+    <div class="tblwrap"><table class="gt" id="watchTable"></table></div>
+    <p class="dimtxt">Klik w ticker = wykres · ✕ = usuń pozycję / przestań obserwować. Pozycję zaznaczasz przyciskiem 📌 na wykresie (kupno = ostatnie zamknięcie).</p>
+    <div class="dlg-btns"><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
 </dialog>
 <script src="js/lines.js"></script>
 <script src="js/chart.js"></script>

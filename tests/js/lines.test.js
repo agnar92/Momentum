@@ -73,3 +73,11 @@ test("evalAlerts: half-sell alert for a position once per peak, GLB exit for wat
     assert.ok(fresh.some((a) => a.msg.includes("sprzedaj połowę")) && fresh.some((a) => a.msg.includes("pod Green Line")));
     assert.strictEqual(evalAlerts(st, () => row, () => series, "later", D[4]).length, 0);
 });
+
+test("positionStatus: what to do with a position now", () => {
+    const { positionStatus } = require("../../docs/js/lines.js");
+    const pl = { last: 100, stopInit: 108, half: true, glbExit: true };
+    assert.deepStrictEqual(positionStatus(pl, { slow: "HAMUJE" }, "GLB"), ["STOP −10 %", "WYJŚCIE: zamknięcie pod GLB", "SPRZEDAJ ½ (−20 % od szczytu)", "⚠ hamuje"]);
+    assert.deepStrictEqual(positionStatus({ ...pl, stopInit: 90, half: false }, { macd_stop: 105 }, "MACD"), ["WYJŚCIE: pod stopem MACD"]);
+    assert.deepStrictEqual(positionStatus({ last: 150, stopInit: 108 }, { macd_stop: 105 }, "MACD"), []);
+});
