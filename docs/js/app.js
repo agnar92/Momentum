@@ -7,10 +7,10 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc250", "C/C250", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
-    ["slow", "Hamuje", "w"], ["fundamentals", "Fundamenty", "s"],
+    ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
-const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow", "fundamentals"];
+const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
 const SETTINGS_KEY = "momentum_glb_settings";
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
@@ -146,7 +146,7 @@ if (typeof document !== "undefined") (function () {
             const held = !!ast.pos[r.ticker], warn = held && posWarn(r);
             const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
-                `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${k === "fundamentals" ? `<button type="button" class="fund-btn" data-fundamentals="${escapeHtml(r.ticker)}">EPS / prognozy</button>` : escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
+                `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
         const pool = visibleRows(data.rows, { scanner: state.scanner });
         const ok = pool.filter((r) => r.ok).length, sig = pool.filter(isSignal).length;
@@ -535,22 +535,23 @@ if (typeof document !== "undefined") (function () {
         if (!r) return;
         const e = escapeHtml, n = (v, d = 2) => v == null || !Number.isFinite(Number(v)) ? "—" : Number(v).toFixed(d);
         const pct = (v) => v == null || !Number.isFinite(Number(v)) ? "—" : (Number(v) >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
+        const tone = (v) => v == null || !Number.isFinite(Number(v)) || Number(v) === 0 ? "neutral" : Number(v) > 0 ? "positive" : "negative";
         const money = (v) => v == null ? "—" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
         const eps = (r.eps_q || []).slice().sort((a, b) => a[0].localeCompare(b[0]));
         const actual = eps.slice(-8).map(([date, value]) => {
             const prior = eps.find(([d]) => d.slice(5) === date.slice(5) && Number(d.slice(0, 4)) === Number(date.slice(0, 4)) - 1);
             const q = (r.qs || []).find(x => x.quarter === date) || {};
             const s = (r.surp_hist || []).find(x => x[0].slice(0, 7) === date.slice(0, 7));
-            return "<tr><td>" + e(date) + "</td><td class='num'>" + n(value, 3) + "</td><td class='num'>" + pct(prior && prior[1] ? (value / prior[1] - 1) * 100 : null) + "</td><td class='num'>" + pct(q.rev_rr) + "</td><td class='num'>" + pct(s && s[1]) + "</td></tr>";
+            return "<tr><td>" + e(date) + "</td><td class='num " + tone(value) + "'>" + n(value, 3) + "</td><td class='num " + tone(prior && prior[1] ? (value / prior[1] - 1) * 100 : null) + "'>" + pct(prior && prior[1] ? (value / prior[1] - 1) * 100 : null) + "</td><td class='num " + tone(q.rev_rr) + "'>" + pct(q.rev_rr) + "</td><td class='num " + tone(s && s[1]) + "'>" + pct(s && s[1]) + "</td></tr>";
         });
         const estimates = [["0q","Bieżący kwartał"],["+1q","Następny kwartał"],["0y","Bieżący rok"],["+1y","Następny rok"]].map(([key,label]) => {
             const x = (r.eps_est || []).find(v => v.period === key);
-            return "<tr><td>" + label + "</td><td class='num'>" + n(x && x.avg,3) + "</td><td class='num'>" + n(x && x.low,3) + " – " + n(x && x.high,3) + "</td><td class='num'>" + pct(x && x.growth != null ? Number(x.growth) : null) + "</td><td class='num'>" + (x && x.numberOfAnalysts != null ? e(x.numberOfAnalysts) : "—") + "</td></tr>";
+            return "<tr><td>" + label + "</td><td class='num'>" + n(x && x.avg,3) + "</td><td class='num'>" + n(x && x.low,3) + " – " + n(x && x.high,3) + "</td><td class='num " + tone(x && x.growth != null ? Number(x.growth) : null) + "'>" + pct(x && x.growth != null ? Number(x.growth) : null) + "</td><td class='num'>" + (x && x.numberOfAnalysts != null ? e(x.numberOfAnalysts) : "—") + "</td></tr>";
         });
         const revenues = (r.qs || []).slice(-8).map(q => "<tr><td>" + e(q.quarter || "—") + "</td><td class='num'>" + money(q.rev) + "</td><td class='num'>" + pct(q.rev_rr) + "</td></tr>");
         $("fundTitle").textContent = t + " · " + (r.company || "") + " · Fundamenty";
         $("fundBody").innerHTML = "<p class='dimtxt'>EPS i konsensus z yfinance; przychody i marże z SEC. Brak wartości oznacza brak danych, nie zero. Prognozy nie są gwarancją.</p>" +
-          "<div class='fund-summary'><div><span>Ostatni EPS</span><b>" + n(eps.length ? eps[eps.length-1][1] : null,3) + "</b></div><div><span>Niespodzianka EPS</span><b>" + pct(r.surp) + "</b></div><div><span>Rewizja EPS 90 dni</span><b>" + pct(r.eps_rev) + "</b></div><div><span>Przychody r/r</span><b>" + pct(r.rev_rr) + "</b></div></div>" +
+          "<div class='fund-summary'><div><span>Ostatni EPS</span><b class='" + tone(eps.length ? eps[eps.length-1][1] : null) + "'>" + n(eps.length ? eps[eps.length-1][1] : null,3) + "</b></div><div><span>Niespodzianka EPS</span><b class='" + tone(r.surp) + "'>" + pct(r.surp) + "</b></div><div><span>Rewizja EPS 90 dni</span><b class='" + tone(r.eps_rev) + "'>" + pct(r.eps_rev) + "</b></div><div><span>Przychody r/r</span><b class='" + tone(r.rev_rr) + "'>" + pct(r.rev_rr) + "</b></div></div>" +
           "<h4>EPS — wyniki kwartalne</h4><div class='tblwrap'><table class='gt'><thead><tr><th>Kwartał</th><th>EPS</th><th>EPS r/r</th><th>Przychody r/r</th><th>Niespodzianka EPS</th></tr></thead><tbody>" + (actual.join("") || "<tr><td colspan='5'>Brak historii EPS.</td></tr>") + "</tbody></table></div>" +
           "<h4>Prognozy EPS analityków</h4><div class='tblwrap'><table class='gt'><thead><tr><th>Okres</th><th>Średnia EPS</th><th>Low–high</th><th>Prognozowany wzrost</th><th>Analitycy</th></tr></thead><tbody>" + estimates.join("") + "</tbody></table></div>" +
           "<h4>Przychody — ostatnie kwartały</h4><div class='tblwrap'><table class='gt'><thead><tr><th>Kwartał</th><th>Przychody ($)</th><th>Zmiana r/r</th></tr></thead><tbody>" + (revenues.join("") || "<tr><td colspan='3'>Brak danych SEC.</td></tr>") + "</tbody></table></div>" +
@@ -818,6 +819,7 @@ if (typeof document !== "undefined") (function () {
             const b = e.target.closest("button[data-t]");
             if (b && rowFor(b.dataset.t)) { $("fundDlg").close(); openChart(b.dataset.t); }
         });
+        $("fundBtn").addEventListener("click", () => { if (current) openFundamentals(current); });
         $("closeChart").addEventListener("click", closeChart);
         $("symBtn").addEventListener("click", openSymbol);
         $("symForm").addEventListener("submit", (e) => { e.preventDefault(); chooseSymbol($("symInput").value); });
