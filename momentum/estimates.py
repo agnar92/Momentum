@@ -14,7 +14,7 @@ def _yf():
 
 def _finite(v):
     try:
-        n = float(v)
+        n = float(str(v).strip().replace("%", ""))
         return n if math.isfinite(n) else None
     except (TypeError, ValueError):
         return None
@@ -56,6 +56,8 @@ def _estimate_rows(frame):
                     item[key] = None
             else:
                 n = _finite(value)
+                if key == "growth" and n is not None and "%" not in str(value):
+                    n *= 100
                 item[key] = round(n, 4) if n is not None else None
         out.append(item)
     return out
