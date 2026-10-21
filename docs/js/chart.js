@@ -303,7 +303,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         text(x1 + 4, stopY + 4, fmt(stop), C.stop);
     }
     const pl = row && row.plan;   // 📌 pozycja: stop początkowy −10 % i „sprzedaj połowę” przy −20 % od szczytu
-    if (pl) for (const [v, col, lab] of [[pl.stopInit, C.stop, `stop −10 % ${fmt(pl.stopInit)}`], [pl.halfAt, C.signal, `½ przy ${fmt(pl.halfAt)} (−20 % od szczytu ${fmt(pl.peak)})`]]) {
+    if (pl) for (const [v, col] of [[pl.stopInit, C.stop], [pl.halfAt, C.signal]]) {
         if (!(v && v > pmin && v < pmax)) continue;
         line(x0, yf(v), x1, yf(v), col, 1, 'stroke-dasharray="2 3"');
         // Linie planu pozostają na wykresie; opisy poziomów trafiają do dymka, nie zasłaniają ceny.
