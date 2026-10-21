@@ -14,7 +14,7 @@ import re
 import sys
 from pathlib import Path
 
-from momentum import calc, finviz, prices, sec
+from momentum import calc, estimates, finviz, prices, sec
 
 ROOT = Path(__file__).resolve().parent
 CONFIG = ROOT / "finviz_screen.json"
@@ -89,7 +89,7 @@ BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily):
+        fund=sec.update, now=None, daily=prices.daily, est=estimates.update):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
@@ -115,9 +115,15 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     except Exception as e:
         log(f"⚠ SEC niedostępny ({e}) — używam zapisanych fundamentów.")
     write_json(Path(cache_dir) / "sec.json", scache)
+    ecache = load_json(Path(cache_dir) / "estimates.json", {})   # niespodzianki EPS i rewizja prognoz (yfinance), co 7 dni
+    try:
+        est(liquid + [s for s in extra if s in series and s != BENCH], ecache, log=log)
+    except Exception as e:
+        log(f"⚠ prognozy EPS niedostępne ({e}) — używam zapisanych.")
+    write_json(Path(cache_dir) / "estimates.json", ecache)
 
     def row(b):
-        return calc.build_row(b, series[b["ticker"]], prices.monthly_highs(mcache.get(b["ticker"])), scache.get(b["ticker"]), series.get(BENCH))
+        return calc.build_row(b, series[b["ticker"]], prices.monthly_highs(mcache.get(b["ticker"])), scache.get(b["ticker"]), series.get(BENCH), ecache.get(b["ticker"]))
     rows = [row(b) for b in base if b["ticker"] in series]
     sym_rows = [row({"ticker": s}) for s in extra if s in series]
     if len(rows) < 0.7 * len(tickers):
