@@ -121,7 +121,11 @@ ul.chk li { padding: 3px 0; }
 .warnbox { border: 1px solid #ffb020; border-radius: 6px; padding: 6px 10px; color: #ffd27a; }
 #guideStock h4 { margin: 6px 0 2px; }
 
-.fund-btn { padding: 3px 7px; font-size: 11px; white-space: nowrap; }
+.positive { color: #3ddc84 !important; }
+.negative { color: #ff626c !important; }
+.neutral { color: var(--fg); }
+.fundamentals .positive, .fundamentals .negative { font-weight: 700; }
+.fundamentals .fund-summary b { font-variant-numeric: tabular-nums; }
 .fundamentals { width: min(1000px, 98vw) !important; max-height: 92vh; overflow: auto; }
 .fundamentals h4 { margin: 14px 0 6px; }
 .fund-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0 16px; }
