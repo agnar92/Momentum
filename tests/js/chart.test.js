@@ -112,3 +112,10 @@ test("relative volume: weekly vs 10 weeks, daily vs 50 sessions", () => {
     w.v[59] = w.v[58] * 3;
     assert.ok(chartSvg(w, null, 1000, 700).svg.includes("Wolumen · śr. 10 tyg. · RVol 3.0×"));
 });
+
+test("axis labels do not overlap", () => {
+    const { axisSpots } = require("../../docs/js/chart.js");
+    assert.deepStrictEqual(axisSpots(100, 105, null), [116, null]);
+    assert.deepStrictEqual(axisSpots(100, 95, 300), [84, 300]);
+    assert.deepStrictEqual(axisSpots(100, 200, 110), [200, 116]);
+});

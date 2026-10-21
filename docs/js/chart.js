@@ -104,6 +104,13 @@ function relVolume(vols, n) {
     return avg > 0 ? vols[vols.length - 1] / avg : null;
 }
 
+// pozycje napisów na prawej osi: Green Line zostaje, ostatnia cena i stop odsuwają się, gdy nachodzą — jak chart.axis_spots
+function axisSpots(levelY, lastY, stopY, gap = 16) {
+    const away = (y, ref) => (y == null || ref == null || Math.abs(y - ref) >= gap ? y : y >= ref ? ref + gap : ref - gap);
+    const l = away(lastY, levelY);
+    return [l, away(away(stopY, levelY), l)];
+}
+
 // linia siły relatywnej jak w IBD: zamknięcie akcji / zamknięcie S&P 500 w tym samym tygodniu (null, gdy brak) — jak chart.rs_line
 const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] : null));
 
@@ -218,6 +225,10 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         parts.push(`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" fill="${fill}" font-size="${fs}" ${extra}>${esc(s)}</text>`);
     const line = (a, b, cc, d, stroke, width = 1, extra = "") =>
         parts.push(`<line x1="${a.toFixed(1)}" y1="${b.toFixed(1)}" x2="${cc.toFixed(1)}" y2="${d.toFixed(1)}" stroke="${stroke}" stroke-width="${width}" ${extra}/>`);
+    const boxText = (x, y, str, fill, extra = "") => {   // napis na tle wykresu, żeby nie zlewał się ze świecami
+        parts.push(`<rect x="${(x - 2).toFixed(1)}" y="${(y - fs).toFixed(1)}" width="${(String(str).length * fs * 0.6 + 4).toFixed(1)}" height="${fs + 4}" fill="${C.bg}" opacity="0.85"/>`);
+        text(x, y, str, fill, extra);
+    };
     const poly = (pts, stroke, width) => {
         if (pts.length > 1) parts.push(`<polyline fill="none" stroke="${stroke}" stroke-width="${width}" points="${pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"/>`);
     };
@@ -230,12 +241,16 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     const [y0, y1] = g.price, lmin = Math.log(pmin), lmax = Math.log(pmax);
     const yf = (p) => y1 - (Math.log(p) - lmin) / (lmax - lmin) * (y1 - y0);
 
+    const stop0 = row && row.exit !== "GLB" && row.macd_stop, last0 = c[n - 1];
+    const lvY = level && level > pmin && level < pmax ? yf(level) : null;
+    const [lastY, stopY] = axisSpots(lvY, last0 ? yf(last0) : null, stop0 && stop0 > pmin && stop0 < pmax ? yf(stop0) : null);
+    const taken = [lvY, lastY, stopY].filter((v) => v != null);
     for (const t of ticks(pmin, pmax)) {
         const y = yf(t);
         line(x0, y, x1, y, C.grid);
-        text(x1 + 4, y + 4, fmt(t), C.dim);
+        if (taken.every((v) => Math.abs(y - v) >= 13)) text(x1 + 4, y + 4, fmt(t), C.dim);   // podziałka ustępuje Green Line / cenie / stopowi
     }
-    const every = small ? 2 : 1;   // na telefonie co drugi kwartał
+    const every = Math.max(1, Math.ceil((fs * 6.6 + 8) / Math.max(1e-9, step * (D ? 63 : 13))));   // co który kwartał podpis, żeby daty (7 znaków) się nie nakładały
     let q = 0;
     for (let i = 0; i < n; i++) {
         const m = dates[i].slice(5, 7);
@@ -278,19 +293,19 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         line(x0, y, x1, y, C.glb, 3);
         parts.push(`<rect x="${(x1 + 1).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${(w - x1 - 3).toFixed(1)}" height="18" fill="${C.glb}"/>`);
         text(x1 + 4, y + 4, fmt(level), "#000");
-        text(x0 + 4, y - 9, `GREEN LINE ${fmt(level)} · kupno do ${fmt(level * 1.1)}` + (row.exit === "GLB" ? " · wyjście: zamknięcie tyg. pod linią" : ""), C.glb);
+        boxText(x0 + 4, y - 10 > y0 + 26 ? y - 10 : y + 16, `GREEN LINE ${fmt(level)} · kupno do ${fmt(level * 1.1)}` + (row.exit === "GLB" ? " · wyjście: zamknięcie tyg. pod linią" : ""), C.glb);   // przy górnej krawędzi (legenda) pod linią
     }
     const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
     if (stop && stop > pmin && stop < pmax) {
         const y = yf(stop);
         line(x0, y, x1, y, C.stop, 1, 'stroke-dasharray="5 4"');
-        text(x1 + 4, y + 4, fmt(stop), C.stop);
+        text(x1 + 4, stopY + 4, fmt(stop), C.stop);
     }
     const pl = row && row.plan;   // 📌 pozycja: stop początkowy −10 % i „sprzedaj połowę” przy −20 % od szczytu
     if (pl) for (const [v, col, lab] of [[pl.stopInit, C.stop, `stop −10 % ${fmt(pl.stopInit)}`], [pl.halfAt, C.signal, `½ przy ${fmt(pl.halfAt)} (−20 % od szczytu ${fmt(pl.peak)})`]]) {
         if (!(v && v > pmin && v < pmax)) continue;
         line(x0, yf(v), x1, yf(v), col, 1, 'stroke-dasharray="2 3"');
-        text(x0 + 4, yf(v) - 4, lab, col);
+        boxText(x0 + 4, yf(v) - 5, lab, col);
     }
     // linie trendu: odcinek między punktami + przedłużenie (przerywane) do ostatniego tygodnia okna
     const segs = [];
@@ -314,7 +329,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         if (ln.alert !== false && s.xe >= x1 - step && s.ye > y0 && s.ye < y1) text(x1 + 4, s.ye + 4, "🔔 " + fmt(LN.lineAt(ln, full.d, i1 - 1)), C.tline);
     }
     const last = c[n - 1];
-    if (last) text(x1 + 4, yf(last) + 4, fmt(last), "#ffffff", 'font-weight="bold"');
+    if (last) text(x1 + 4, lastY + 4, fmt(last), "#ffffff", 'font-weight="bold"');
 
     // wolumen + średnia 10 tyg.
     const [v0, v1] = g.vol, vv = vol.map((x) => x || 0), vmax = Math.max(...vv) || 1;
@@ -351,8 +366,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         poly(md.signal.map((v, i) => [xf(i), ym(v)]), C.signal, 1.3);
         for (const i of crosses) text(xf(i), m1 - 4, "▼", C.stop, 'text-anchor="middle"');
         text(x0 + 4, m0 + 10, small ? "MACD (12, 26, 9) tyg. · ▼ = stop pod Low" : "MACD (12, 26, 9) tyg. · ▼ przecięcie w dół = stop pod Low tego tygodnia", C.dim);
-        text(x0 + 4, y0 + 12, "SMA 10 tyg.", C.sma10);
-        text(x0 + 84, y0 + 12, "SMA 30 tyg.", C.sma30);
+        boxText(x0 + 4, y0 + 12, "SMA 10 tyg.", C.sma10);
+        boxText(x0 + 84, y0 + 12, "SMA 30 tyg.", C.sma30);
     }
 
     // S&P 500 nad wykresem: kierunek rynku (skala log w oknie)
@@ -380,7 +395,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
                 parts.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${C.rs}"/>`);
                 lab += " · ● RS na szczycie 52 tyg.";
             }
-            text(x0 + 4, b0 - 4, lab, C.rs);
+            boxText(x0 + 4, b0 - 5, lab, C.rs);
         }
     }
 
@@ -393,7 +408,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     }).filter((q) => q.b >= 0 && q.a <= n - 1 && q.rev > 0);
     const rmax = Math.max(1, ...shown.map((q) => q.rev));
     for (const q of shown) {
-        const xa = xf(q.a) - step * 0.45, xb = xf(Math.min(q.b, n - 1)) + step * 0.45, ht = q.rev / rmax * (q1 - q0 - 12);
+        const xa = xf(q.a) - step * 0.45, xb = xf(Math.min(q.b, n - 1)) + step * 0.45, ht = q.rev / rmax * (q1 - q0 - 24);
         const col = q.rev_rr == null ? C.dim : q.rev_rr >= 25 ? C.glb : q.rev_rr >= 15 ? C.signal : q.rev_rr >= 0 ? "#6b7684" : C.down;
         parts.push(`<rect x="${(xa + 1).toFixed(1)}" y="${(q1 - ht).toFixed(1)}" width="${Math.max(1, xb - xa - 2).toFixed(1)}" height="${ht.toFixed(1)}" fill="${col}" opacity="0.75"/>`);
         if (xb - xa > 30 && q.rev_rr != null) text((xa + xb) / 2, q1 - ht - 2, `${q.rev_rr >= 0 ? "+" : ""}${q.rev_rr.toFixed(0)}%`, col, 'text-anchor="middle"');
@@ -428,6 +443,6 @@ function titleText(t, row) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, relVolume, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
+    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };

@@ -79,6 +79,9 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
   at cross-downs; hover readout from `infoLines`. Range slider above the chart (user: "suwak był fajny, dodaj go z powrotem"): `sliderSvg`
   minimap, `windowRange` / `sliderRect` / `sliderMode` / `sliderDrag` / `sliderJump` / `zoomWindow` (pure, same as `desktop/chart.py`);
   SMA / MACD are computed on the full series, then sliced. Window length persists (`state.nShow`), its end resets per stock.
+  Labels must not overlap (user: "dużo napisów nachodzi na siebie"): left labels on a background box (`boxText` / desktop `boxed`); the GLB label goes under
+  the line near the top edge; right-axis labels via `axisSpots` / `axis_spots` (GLB fixed, last close and MACD stop move 16 px away, ticks near them hidden);
+  quarter dates every N quarters by label width; revenue bars leave room for the title.
 - **Trend lines + alerts** (`js/lines.js`, port of `desktop/lines.py`; user: "rysowanie linii jak przytrzymam … usuwanie, przesuwanie … alerty; webową
   używam głównie na telefonie"): line = `{id, d1, p1, d2, p2, alert}` (week date + price, straight on the log scale). Mouse: drag on the price panel = new
   line; phone: hold a finger ~0.4 s, then move (a quick move = crosshair readout); grab an end = move that point, grab the middle = move the line; tap = select
