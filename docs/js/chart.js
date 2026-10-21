@@ -388,14 +388,11 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
             const yr = (v) => b1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (b1 - b0);
             const pts = rs.map((v, i) => (v ? [xf(i), yr(v)] : null)).filter(Boolean);
             poly(pts, C.rs, 1.4);
-            let lab = "RS (cena / S&P 500)" + (row && row.rs != null ? ` · 52 tyg. ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp` : "");
-            const last = rs[rs.length - 1];
-            if (last && last >= Math.max(...rs.slice(-52).filter((v) => v))) {
-                const [px, py] = pts[pts.length - 1];
-                parts.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${C.rs}"/>`);
-                lab += " · ● RS na szczycie 52 tyg.";
-            }
-            boxText(x0 + 4, b0 - 5, lab, C.rs);
+            const last = rs[rs.length - 1], [px, py] = pts[pts.length - 1];
+            if (last && last >= Math.max(...rs.slice(-52).filter((v) => v)))   // ● = RS na szczycie 52 tyg.
+                parts.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${C.rs}"><title>RS na szczycie 52 tyg.</title></circle>`);
+            // na końcu linii tylko liczba: siła względna 52 tyg. w pp vs S&P 500 (jak kolumna RS)
+            if (row && row.rs != null) boxText(x1 + 4, py + 4, `${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
         }
     }
 
