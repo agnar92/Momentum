@@ -93,8 +93,9 @@ test("GLB exit method hides the MACD stop; position plan draws −10 % stop and 
     const w = weekly(150), row = { glb: 120, macd_stop: 150 };
     const plan = { stopInit: 135, halfAt: 140, peak: 175 };
     const macd = chartSvg(w, row, 1000, 600).svg, glbm = chartSvg(w, { ...row, exit: "GLB", plan }, 1000, 600).svg;
-    assert.ok(!macd.includes("wyjście: zamknięcie tyg. pod linią") && glbm.includes("wyjście: zamknięcie tyg. pod linią"));
-    assert.ok(glbm.includes("½ przy 140.00") && glbm.includes("stop −10 % 135.00"));
+    assert.ok(!macd.includes("wyjście: zamknięcie tyg. pod linią") && !glbm.includes("wyjście: zamknięcie tyg. pod linią"));
+    assert.ok(!glbm.includes("½ przy 140.00") && !glbm.includes("stop −10 % 135.00"));
+    assert.ok(glbm.includes('stroke-dasharray="2 3"'));   // linie poziomów planu pozostają, bez podpisów
 });
 
 test("IBD relative strength line on the weekly chart", () => {
