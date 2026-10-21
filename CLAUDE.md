@@ -90,8 +90,8 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
   conditions met. Key includes the week, so nothing fires twice. localStorage `momentum_alerts` {lines, watch, log, seen}; system notification via the
   service worker if allowed. The site is static, so alerts are checked only when the page is opened (data refresh is weekly).
 - **Chart panels like IBD**: S&P 500 (SPY weekly file, `symbols`) above the price, quarterly revenue bars with y/y % (green ≥ 25 %, amber ≥ 15 %) under the volume.
-  Weekly only: IBD relative-strength line (`rsLine` / `chart.rs_line` = close / SPY close, own log scale in the bottom 22 % of the price panel, ● and
-  "RS na szczycie 52 tyg." when the last value is the 52-week high; user: "nie widzę wykresu siły relatywnej jak mają w IBD"). Period buttons T / D
+  Weekly only: IBD relative-strength line (`rsLine` / `chart.rs_line` = close / SPY close, own log scale in the bottom 22 % of the price panel, ● when the last
+  value is the 52-week high, and only the number "+x pp" (`row.rs`) at the line's end on the right axis — no text label (user: "wystarczy numer na końcu linii"); user: "nie widzę wykresu siły relatywnej jak mają w IBD"). Period buttons T / D
   (`#perW` / `#perD`; desktop M / T / D, `per_btns`; user: "osobne przyciski … M, T, D").
 - **📖 Poradnik** (`#guideDlg`): the study's rules + a checklist of the open stock (`checklist(r)`); **📌 Pozycja** (`ast.pos`, also watched) marks a
   position: 📌 in the list, amber ticker when slowing / under the MACD stop, slowdown alert (`stateAlerts`, `snapshot.slow`).
