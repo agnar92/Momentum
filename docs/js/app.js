@@ -6,7 +6,7 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
+    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc250", "C/C250", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
     ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
@@ -22,6 +22,7 @@ function cell(v, f) {
     if (f === "m") return (v / 1e6).toLocaleString("en-US", { maximumFractionDigits: 0 });
     if (f === "b") return v ? "✓" : "";
     if (f === "x") return v.toFixed(1);
+    if (f === "r") return v.toFixed(2);
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
@@ -620,7 +621,7 @@ if (typeof document !== "undefined") (function () {
                 vals.map((v) => `<button type="button" class="chip${on.includes(v) ? " on" : ""}" data-k="${k}" data-v="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join("") + "</div></div>";
         }
         for (const [k, h, fm] of COLUMNS) {
-            if (!"p%mn".includes(fm)) continue;
+            if (!"p%mrn".includes(fm)) continue;
             const c = f[k] || {};
             html += `<div class="frow"><span>${escapeHtml(h)}</span><div class="range">` +
                 ["min", "max"].map((b) => `<input data-k="${k}" data-b="${b}" inputmode="decimal" placeholder="${b === "min" ? "od" : "do"}" value="${c[b] == null ? "" : c[b]}">`).join(" – ") + "</div></div>";

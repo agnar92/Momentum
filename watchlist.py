@@ -13,6 +13,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, urlparse
 
 from momentum import calc, estimates, finviz, prices, sec
 
@@ -56,7 +57,7 @@ def scanners(config):
 KEYS = ("ticker", "company", "sector", "industry", "market_cap")
 
 
-def fetch_scanners(scans, prev, fetch_list, log):
+def fetch_scanners(scans, prev, fetch_list, log, min_tickers=MIN_TICKERS):
     """Każdy skaner osobno w Finviz; spółki łączone po tickerze (pole `scanners` = nazwy skanerów, w których jest).
     Skaner, którego Finviz nie zwrócił (blokada / błąd), dostaje spółki z poprzedniego pliku. -> (spółki, opis skanerów)."""
     base, meta = {}, []
@@ -68,7 +69,7 @@ def fetch_scanners(scans, prev, fetch_list, log):
         except Exception as e:   # Finviz bywa blokowany z serwerów — wtedy poprzednia lista
             log(f"⚠ Finviz [{sc['name']}]: {e}")
             rows, total = [], None
-        stale = not rows or (len(rows) < MIN_TICKERS and (total is None or total >= MIN_TICKERS))
+        stale = not rows or (len(rows) < min_tickers and (total is None or total >= min_tickers))
         if stale:
             old = [r for r in prev_rows if sc["name"] in (r.get("scanners") or [sc["name"]])]
             log(f"⚠ Finviz [{sc['name']}] zwrócił {len(rows)} spółek — używam poprzedniej listy ({len(old)}).")
@@ -89,14 +90,26 @@ BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily, est=estimates.update):
+        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
         symbols.append(BENCH)
     ua = os.environ.get("SEC_UA") or config.get("sec_ua") or sec.UA
     prev = load_json(Path(out) / "watchlist.json", {})
-    base, meta = fetch_scanners(scanners(config), prev, fetch_list, log)
+    scans = scanners(config)
+    if finviz_url:
+        parsed = urlparse(finviz_url.strip())
+        params = parse_qs(parsed.query)
+        filters = (params.get("f") or [None])[0]
+        if not filters or not parsed.netloc.lower().endswith("finviz.com"):
+            raise RuntimeError("Nieprawidłowy link Finviz. Wklej adres screenera zawierający parametr f=.")
+        scans = [{"name": "Finviz (link z uruchomienia)", "filters": filters, "max_tickers": finviz.MAX_TICKERS}]
+        log(f"Lista z przekazanego linku Finviz: {filters}")
+    else:
+        scans = scans[-1:]
+        log(f"Brak linku Finviz — odświeżam ostatni skaner: {scans[0]['name']}")
+    base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=1 if finviz_url else MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
     log(f"Razem {len(tickers)} spółek ze skanerów; symbole dodatkowe: {', '.join(extra) or '—'}")
@@ -136,37 +149,36 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     for f in wdir.glob("*.json"):
         if f.name not in keep:
             f.unlink()
-    # świece dzienne (1 rok) tylko dla spółek nad Green Line — wykres dzienny z RWB / Blue Dot (podgląd)
+    # Świece dzienne z 2 lat dla C/C[250] i RVol dziennego (50 sesji).
+    # Do plików wykresu zapisujemy tylko spółki z sygnałem/ponad GLB.
     ddir = Path(out) / "daily"
     above = [r["ticker"] for r in rows if r.get("glb_state") in ABOVE_GLB]
     try:
-        dser = daily(above, log=log) if above else {}
-    except Exception as e:   # brak danych dziennych nie blokuje odświeżenia
-        log(f"⚠ dzienne niedostępne ({e})")
-        dser = None
-    if dser is not None:
-        ddir.mkdir(parents=True, exist_ok=True)
-        dkeep = set()
-        for t, sd in dser.items():
+        dser = daily(liquid, log=log, period="2y") if liquid else {}
+    except Exception as e:
+        log(f"⚠ dzienne (RVol/C/C[250]) niedostępne ({e})")
+        dser = {}
+    ddir.mkdir(parents=True, exist_ok=True)
+    dkeep = set()
+    for t in above:
+        sd = dser.get(t)
+        if sd:
             dkeep.add(file_name(t))
             write_json(ddir / file_name(t), sd)
-        for f in ddir.glob("*.json"):
-            if f.name not in dkeep:
-                f.unlink()
-        for r in rows:
-            r["daily"] = r["ticker"] in dser
-            bd = calc.fresh_blue_dot(dser.get(r["ticker"]), r.get("glb")) if r.get("glb_state") == "NAD" else None
-            if bd:   # > 10 % nad linią i nie tydzień przebicia: wejście po Blue Dot na dziennym
-                r["glb_state"], r["bdot"] = "BLUE DOT", bd
-    # wolumen relatywny dzienny (sesja / średnia 50 sesji): świece nad Green Line już są, reszta płynnych — 3 miesiące, bez zapisu
-    rest = [t for t in liquid if t not in (dser or {})]
-    try:
-        dshort = daily(rest, log=log, period="3mo") if rest else {}
-    except Exception as e:
-        log(f"⚠ dzienne (wolumen relatywny) niedostępne ({e})")
-        dshort = {}
+    for f in ddir.glob("*.json"):
+        if f.name not in dkeep:
+            f.unlink()
     for r in rows:
-        sd = (dser or {}).get(r["ticker"]) or dshort.get(r["ticker"])
+        sd = dser.get(r["ticker"])
+        r["daily"] = r["ticker"] in above and sd is not None
+        closes = sd.get("c", []) if sd else []
+        # C/C[250]: 250 sesji wstecz; przy krótszej historii użyj najstarszego dostępnego zamknięcia.
+        base_i = max(0, len(closes) - 251)
+        base_close = closes[base_i] if closes else None
+        r["cc250"] = closes[-1] / base_close if len(closes) >= 2 and base_close else None
+        bd = calc.fresh_blue_dot(sd, r.get("glb")) if r.get("glb_state") == "NAD" else None
+        if bd:
+            r["glb_state"], r["bdot"] = "BLUE DOT", bd
         r["rvol_d"] = calc.rel_volume(sd["v"], calc.RVOL_D) if sd else None
     last = max((series[r["ticker"]]["d"][-1] for r in rows), default=None)
     write_json(Path(out) / "watchlist.json", {
@@ -184,6 +196,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--max-tickers", type=int)
+    ap.add_argument("--finviz-url", default=os.environ.get("FINVIZ_URL") or None, help="Link do screenera Finviz; bez niego odświeża ostatni skaner z konfiguracji.")
     args = ap.parse_args(argv)
     config = load_json(CONFIG, {})
     if args.max_tickers:   # limit dla każdego skanera (test na małej liście)
@@ -191,7 +204,7 @@ def main(argv=None):
         for sc in config.get("scanners") or []:
             sc["max_tickers"] = args.max_tickers
     try:
-        run(config)
+        run(config, finviz_url=args.finviz_url)
     except RuntimeError as e:
         print(f"❌ {e}")
         return 1
