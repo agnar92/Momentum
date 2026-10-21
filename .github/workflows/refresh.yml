@@ -46,7 +46,12 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
           FINVIZ_URL: ${{ inputs.finviz_url }}
-        run: python watchlist.py ${FINVIZ_URL:+--finviz-url "$FINVIZ_URL"}
+        run: |
+          if [ -n "$FINVIZ_URL" ]; then
+            python watchlist.py --finviz-url "$FINVIZ_URL"
+          else
+            python watchlist.py
+          fi
 
       - name: Commit data
         run: |
