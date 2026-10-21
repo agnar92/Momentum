@@ -103,3 +103,12 @@ test("IBD relative strength line on the weekly chart", () => {
     assert.ok(svg.includes("RS (cena / S&amp;P 500) · 52 tyg. +61 pp") && svg.includes("RS na szczycie 52 tyg."));
     assert.ok(!chartSvg(w, { glb: 40 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("RS (cena"));
 });
+
+test("relative volume: weekly vs 10 weeks, daily vs 50 sessions", () => {
+    const { relVolume } = require("../../docs/js/chart.js");
+    assert.ok(Math.abs(relVolume(Array(10).fill(10).concat([25]), 10) - 2.5) < 1e-9);
+    assert.strictEqual(relVolume([10, 10], 10), null);
+    const w = weekly(60);
+    w.v[59] = w.v[58] * 3;
+    assert.ok(chartSvg(w, null, 1000, 700).svg.includes("Wolumen · śr. 10 tyg. · RVol 3.0×"));
+});

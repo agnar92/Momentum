@@ -97,6 +97,13 @@ function fmtVol(v) {
     return v >= 1e9 ? (v / 1e9).toFixed(1) + "B" : v >= 1e6 ? (v / 1e6).toFixed(1) + "M" : (v / 1e3).toFixed(0) + "K";
 }
 
+// wolumen relatywny: ostatni / średnia n poprzednich (null przy braku danych) — jak calc.rel_volume
+function relVolume(vols, n) {
+    if (vols.length < n + 1 || !vols[vols.length - 1]) return null;
+    const prev = vols.slice(-1 - n, -1).filter((x) => x != null && isFinite(x)), avg = prev.length >= n * 0.8 ? prev.reduce((a, b) => a + b, 0) / prev.length : 0;
+    return avg > 0 ? vols[vols.length - 1] / avg : null;
+}
+
 // linia siły relatywnej jak w IBD: zamknięcie akcji / zamknięcie S&P 500 w tym samym tygodniu (null, gdy brak) — jak chart.rs_line
 const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] : null));
 
@@ -197,7 +204,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     const md = { macd: mdFull.macd.slice(i0, i1), signal: mdFull.signal.slice(i0, i1), hist: mdFull.hist.slice(i0, i1) };
     const smaWin = {};
     for (const k of SMA_PERIODS) smaWin[k] = sma(cfull, k).slice(i0, i1);
-    const vavg = sma(full.v.map((x) => x || 0), 10).slice(i0, i1);
+    const nv = D ? 50 : 10;   // średnia wolumenu i wolumen relatywny: dzienny 50 sesji, tygodniowy 10 tygodni
+    const vavg = sma(full.v.map((x) => x || 0), nv).slice(i0, i1), rv = relVolume(full.v, nv);
     const crosses = macdCrossDown(mdFull.hist).filter((i) => i >= i0 && i < i1).map((i) => i - i0);
     const data = {};
     for (const k of ["d", "o", "h", "l", "c", "v"]) data[k] = full[k].slice(i0, i1);
@@ -316,7 +324,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         parts.push(`<rect x="${(xf(i) - tick).toFixed(1)}" y="${vy(vv[i]).toFixed(1)}" width="${(2 * tick).toFixed(1)}" height="${(v1 - vy(vv[i])).toFixed(1)}" fill="${col}"/>`);
     }
     poly(vavg.map((a, i) => (a ? [xf(i), vy(a)] : null)).filter(Boolean), C.volAvg, 1.5);
-    text(x0 + 4, v0 + 10, `Wolumen · śr. 10 ${u}`, C.dim);
+    text(x0 + 4, v0 + 10, `Wolumen · śr. ${nv} ${u}` + (rv != null ? ` · RVol ${rv.toFixed(1)}×` : ""), rv != null && rv >= 1.5 ? C.signal : C.dim);
     for (const i of dots) {   // ● Blue Dot pod świecą; stop pod Low ostatniej kropki
         const lw = full.l[i];
         if (lw) parts.push(`<circle cx="${xf(i - i0).toFixed(1)}" cy="${(yf(lw) + 9).toFixed(1)}" r="4" fill="${C.dot}"/>`);
@@ -420,6 +428,6 @@ function titleText(t, row) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
+    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, relVolume, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };

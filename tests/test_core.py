@@ -202,7 +202,7 @@ def _run(tmp_path, fetch_list, symbols=()):
     return watchlist.run({"symbols": list(symbols)}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch_list,
                          weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 60} if t.startswith("B") else SPY if t == "SPY" else W) for t in ts},
                          monthly=_monthly, fund=_fund,
-                         daily=lambda ts, log: {t: W for t in ts})
+                         daily=lambda ts, log, **kw: {t: W for t in ts})
 
 
 def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
@@ -217,6 +217,7 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert json.loads((tmp_path / "out" / "weekly" / "_GSPC.json").read_text())["c"][-1] == 104.0
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
     assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
+    assert a["rvol_w"] == pytest.approx(1.0) and a["rvol_d"] == pytest.approx(1.0)   # wolumen relatywny tydzień / sesja
 
 
 def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
@@ -243,7 +244,7 @@ def test_second_run_passes_saved_weekly_series_as_cache(tmp_path):
         return {t: SPY if t == "SPY" else W for t in ts}
     for _ in range(2):
         watchlist.run({}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
-                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund, daily=lambda ts, log: {})
+                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund, daily=lambda ts, log, **kw: {})
     assert seen[0] == [] and seen[1] == sorted([t["ticker"] for t in base] + ["SPY"])    # SPY zawsze (siła względna)
 
 
@@ -253,7 +254,7 @@ def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
 
     def go(fetch):
         return watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch,
-                             weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, daily=lambda ts, log: {})
+                             weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, daily=lambda ts, log, **kw: {})
     rows = go(lambda f, max_tickers, log: (lists[f], len(lists[f])))       # „Dwa” ma 2 spółki i Finviz mówi, że tyle jest — to nie blokada
     by = {r["ticker"]: r for r in rows}
     assert len(rows) == 21 and by["A0"]["scanners"] == ["Jeden", "Dwa"] and by["Z"]["scanners"] == ["Dwa"]
@@ -302,3 +303,9 @@ def test_trend_sma10_above_sma30():
     down = calc.build_row({"ticker": "D"}, {**W, "c": W["c"][::-1]}, [50, 100, 90, 90, 90], {"rev_rr": 30, "dopm": 5}, SPY)
     short = calc.build_row({"ticker": "S"}, {k: v[:20] for k, v in W.items()}, [], None)
     assert up["trend"] is True and down["trend"] is False and short["trend"] is None
+
+
+def test_rel_volume():
+    assert calc.rel_volume([10] * 10 + [25], 10) == pytest.approx(2.5)
+    assert calc.rel_volume([10] * 5, 10) is None and calc.rel_volume([0] * 10 + [5], 10) is None
+    assert calc.rel_volume([10] * 9 + [None, 20], 10) == pytest.approx(2.0)          # brak jednego tygodnia nie blokuje
