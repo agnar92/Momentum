@@ -84,8 +84,8 @@ test("SMA 10 > 30 filter and preset", () => {
     assert.ok(passFilters({ trend: true, glb_state: "NAD" }, f) && !passFilters({ trend: false, glb_state: "NAD" }, f));
 });
 
-test("fundamentals column is available for each stock", () => {
+test("fundamentals are not a table column", () => {
     const { COLUMNS, TEXT_COLS } = require("../../docs/js/app.js");
-    assert.ok(COLUMNS.some(([key, label]) => key === "fundamentals" && label === "Fundamenty"));
-    assert.ok(TEXT_COLS.includes("fundamentals"));
+    assert.ok(!COLUMNS.some(([key]) => key === "fundamentals"));
+    assert.ok(!TEXT_COLS.includes("fundamentals"));
 });
