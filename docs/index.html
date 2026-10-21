@@ -25,7 +25,7 @@
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
-       title="Dane odświeżają się same w sobotę rano (po piątkowej sesji). Tutaj w GitHub Actions kliknij „Run workflow”, żeby odświeżyć od razu.">⟳ Odśwież dane</a>
+       title="W GitHub Actions → Run workflow możesz wkleić link Finviz i podać nazwę. Link zapisze się pod tą nazwą; przy pustym linku odświeży się ostatnio zapisany skaner.">⟳ Odśwież dane</a>
     <details class="rules"><summary>Zasady</summary>
         <p><b>Warunki:</b> przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC), P/S &lt; 20, siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500. Kolejność: sygnał GLB, potem od największej siły względnej.</p>
         <p><b>Wejście — Green Line:</b> rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). Kupno, gdy tydzień zamknie się 0–10 % nad linią.

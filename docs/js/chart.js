@@ -7,10 +7,10 @@
 
 const C = {
     bg: "#0e1116", grid: "#1a1f26", dim: "#6b7684", fg: "#d5d9e0", up: "#d5d9e0", down: "#e5484d",
-    rs: "#38bdf8", sma10: "#e5484d", sma30: "#f0b429", tline: "#22d3ee", spx: "#b392f0", fast: "#e5484d", slow: "#3b82f6", rwbBg: "#232a33", dot: "#4aa3ff", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
+    rs: "#38bdf8", sma4: "#22d3ee", sma10: "#e5484d", sma30: "#f0b429", tline: "#22d3ee", spx: "#b392f0", fast: "#e5484d", slow: "#3b82f6", rwbBg: "#232a33", dot: "#4aa3ff", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
     macd: "#4aa3ff", signal: "#f0b429", histUp: "#2f9e5a", histDown: "#a33a3e", volAvg: "#ff9f43",
 };
-const SMA_PERIODS = [10, 30];
+const SMA_PERIODS = [4, 10, 30];
 const LN = typeof require !== "undefined" ? require("./lines.js") : window;   // dateIndex, lineAt (lines.js ładowany przed chart.js)
 
 function sma(values, n) {
@@ -259,7 +259,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
             if (q++ % every === 0 && xf(i) > x0 + 28) text(xf(i), h - 8, dates[i].slice(0, 7), C.dim, 'text-anchor="middle"');
         }
     }
-    const smaColors = { 10: C.sma10, 30: C.sma30 };
+    const smaColors = { 4: C.sma4, 10: C.sma10, 30: C.sma30 };
     let dots = [];
     if (D) {   // jaśniejsze tło przy RWB, wolne (niebieskie) i szybkie (czerwone) EMA
         const rw = rwb(cfull).slice(i0, i1);
@@ -344,11 +344,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         const lw = full.l[i];
         if (lw) parts.push(`<circle cx="${xf(i - i0).toFixed(1)}" cy="${(yf(lw) + 9).toFixed(1)}" r="4" fill="${C.dot}"/>`);
     }
-    if (dots.length) {
-        const j = dots[dots.length - 1], lw = full.l[j];
-        line(xf(j - i0), yf(lw), x1, yf(lw), C.dot, 1, 'stroke-dasharray="2 3"');
-        text(xf(j - i0) + 6, yf(lw) + 24, `Blue Dot ${full.d[j]} · stop pod Low ${fmt(lw)}`, C.dot);
-    }
+    // Blue Dot pozostaje samą kropką; data i stop będą pokazywane w dymku po najechaniu.
 
     // MACD (dzienny: bez dolnego panelu — tylko opis RWB / Blue Dot)
     const [m0, m1] = g.macd;
@@ -366,8 +362,9 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         poly(md.signal.map((v, i) => [xf(i), ym(v)]), C.signal, 1.3);
         for (const i of crosses) text(xf(i), m1 - 4, "▼", C.stop, 'text-anchor="middle"');
         text(x0 + 4, m0 + 10, small ? "MACD (12, 26, 9) tyg. · ▼ = stop pod Low" : "MACD (12, 26, 9) tyg. · ▼ przecięcie w dół = stop pod Low tego tygodnia", C.dim);
-        boxText(x0 + 4, y0 + 12, "SMA 10 tyg.", C.sma10);
-        boxText(x0 + 84, y0 + 12, "SMA 30 tyg.", C.sma30);
+        boxText(x0 + 4, y0 + 12, "SMA 4 tyg.", C.sma4);
+        boxText(x0 + 84, y0 + 12, "SMA 10 tyg.", C.sma10);
+        boxText(x0 + 174, y0 + 12, "SMA 30 tyg.", C.sma30);
     }
 
     // S&P 500 nad wykresem: kierunek rynku (skala log w oknie)

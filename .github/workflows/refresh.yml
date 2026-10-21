@@ -9,8 +9,13 @@ on:
     - cron: '17 3 * * 6'   # sobota 03:17 UTC
   workflow_dispatch:
     inputs:
+      finviz_name:
+        description: 'Nazwa skanera do zapisania (ta sama nazwa aktualizuje zapisany link)'
+        required: false
+        type: string
+        default: ''
       finviz_url:
-        description: 'Opcjonalny link do screenera Finviz (pusty = ostatni skaner z konfiguracji)'
+        description: 'Opcjonalny link do screenera Finviz (pusty = ostatni zapisany skaner)'
         required: false
         type: string
         default: ''
@@ -46,16 +51,17 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
           FINVIZ_URL: ${{ inputs.finviz_url }}
+          FINVIZ_NAME: ${{ inputs.finviz_name }}
         run: |
           if [ -n "$FINVIZ_URL" ]; then
-            python watchlist.py --finviz-url "$FINVIZ_URL"
+            python watchlist.py --finviz-url "$FINVIZ_URL" --finviz-name "$FINVIZ_NAME"
           else
             python watchlist.py
           fi
 
       - name: Commit data
         run: |
-          if [ -z "$(git status --porcelain docs/data/ data/)" ]; then
+          if [ -z "$(git status --porcelain docs/data/ data/ finviz_screen.json)" ]; then
             echo "Brak zmian w danych."
             exit 0
           fi
@@ -65,7 +71,7 @@ jobs:
             # zawsze na AKTUALNY main (reset --mixed), żeby commit niósł tylko świeże dane
             git fetch origin main
             git reset --mixed origin/main
-            git add -A docs/data/ data/
+            git add -A docs/data/ data/ finviz_screen.json
             git commit -m "chore: weekly refresh [skip ci]"
             if git push; then exit 0; fi
             echo "Push odrzucony (próba $attempt) — ponawiam."

@@ -540,7 +540,7 @@ if (typeof document !== "undefined") (function () {
             return `<tr class="${st.length ? "warn" : ""}"><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td class="now">${e(st.join(" · ") || "trzymaj")}</td><td>${e(p.since || "")}</td><td>${f(pl.entry)}</td>` +
                 `<td>${f(last)}</td><td>${pct(last && pl.entry ? (last / pl.entry - 1) * 100 : null)}</td><td>${f(pl.peak)}</td><td>${f(pl.halfAt)}</td><td>${f(pl.stopInit)}</td>` +
                 `<td>${f(ex)}</td><td>${e(r.glb_state || "")}</td><td>${e(r.macd || "")}</td>` +
-                `<td><button type="button" data-del-pos="${e(t)}" title="Usuń pozycję">✕</button></td></tr>`;
+                `<td><button type="button" data-edit-pos="${e(t)}" title="Edytuj datę i cenę wejścia">Edytuj</button> <button type="button" data-del-pos="${e(t)}" title="Usuń pozycję">✕</button></td></tr>`;
         });
         $("posTable").innerHTML = "<tr><th>Ticker</th><th>Co teraz</th><th>Od</th><th>Kupno</th><th>Cena</th><th>Zmiana %</th><th>Szczyt</th><th>½ przy</th><th>Stop −10 %</th>" +
             `<th>Wyjście</th><th>GLB</th><th>MACD</th><th></th></tr>` + (pos.join("") || '<tr><td colspan="13">Brak pozycji (📌 Pozycja na wykresie).</td></tr>');
@@ -559,7 +559,18 @@ if (typeof document !== "undefined") (function () {
         const b = ev.target.closest("button");
         if (!b) return;
         if (b.dataset.t && rowFor(b.dataset.t)) { $("posDlg").close(); openChart(b.dataset.t); return; }
-        if (b.dataset.delPos) delete ast.pos[b.dataset.delPos];
+        if (b.dataset.editPos) {
+            const t = b.dataset.editPos, p = ast.pos[t];
+            if (!p) return;
+            const since = window.prompt("Data wejścia (RRRR-MM-DD):", p.since || "");
+            if (since === null) return;
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || Number.isNaN(Date.parse(since))) { window.alert("Podaj datę w formacie RRRR-MM-DD."); return; }
+            const raw = window.prompt("Rzeczywista cena kupna:", String(p.price ?? ""));
+            if (raw === null) return;
+            const price = Number(raw.replace(",", "."));
+            if (!Number.isFinite(price) || price <= 0) { window.alert("Cena musi być liczbą większą od zera."); return; }
+            p.since = since; p.price = price;
+        } else if (b.dataset.delPos) delete ast.pos[b.dataset.delPos];
         else if (b.dataset.delWatch) delete ast.watch[b.dataset.delWatch];
         else return;
         saveAlerts();
@@ -677,6 +688,25 @@ if (typeof document !== "undefined") (function () {
         if (shown[j].ticker !== current) openChart(shown[j].ticker);
     }
 
+    function blueDots(highs, lows, closes, level, lvl = 20) {
+        const ema = (values, n) => {
+            const out = [], k = 2 / (n + 1); let prev = null;
+            for (const v of values) { prev = prev === null ? v : prev + k * (v - prev); out.push(prev); }
+            return out;
+        };
+        const fast = [3, 5, 8, 10, 12, 15].map((n) => ema(closes.map((v) => v || 0), n));
+        const slow = [30, 35, 40, 45, 50, 60].map((n) => ema(closes.map((v) => v || 0), n));
+        const rwb = closes.map((_, i) => Math.min(...fast.map((a) => a[i])) > Math.max(...slow.map((a) => a[i])));
+        const k = closes.map((c, i) => {
+            if (i < 9 || c == null) return null;
+            const hh = Math.max(...highs.slice(i - 9, i + 1).filter((v) => v != null));
+            const ll = Math.min(...lows.slice(i - 9, i + 1).filter((v) => v != null));
+            return hh > ll ? (c - ll) / (hh - ll) * 100 : null;
+        });
+        const out = [];
+        for (let i = 1; i < closes.length; i++) if (k[i] != null && k[i - 1] != null && k[i - 1] < lvl && k[i] >= lvl && rwb[i] && level && closes[i] >= level) out.push(i);
+        return out;
+    }
     function onMove(e) {
         const svg = $("chartBody").querySelector("svg");
         if (!svg || !geom || !series) return;
@@ -686,7 +716,16 @@ if (typeof document !== "undefined") (function () {
         const tip = $("tip"), cross = svg.querySelector("#cross");
         if (i < 0 || i >= geom.n) { tip.hidden = true; cross.setAttribute("visibility", "hidden"); return; }
         cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
-        tip.innerHTML = infoLines(series, geom.i0 + i).map(escapeHtml).join("<br>");
+        const index = geom.i0 + i;
+        const lines = infoLines(series, index);
+        if (period === "D") {
+            const r = rowFor(current) || {};
+            const dots = blueDots(series.h, series.l, series.c, r.glb);
+            if (dots.includes(index)) {
+                lines.push("BLUE DOT · " + series.d[index], "Stop pod Low: " + (series.l[index] == null ? "—" : series.l[index].toFixed(2)));
+            }
+        }
+        tip.innerHTML = lines.map(escapeHtml).join("<br>");
         tip.hidden = false;
         const bx = $("chartPane").getBoundingClientRect(), left = p.clientX - bx.left;
         tip.style.left = (left < bx.width - 200 ? left + 14 : left - 190) + "px";
