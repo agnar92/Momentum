@@ -37,6 +37,12 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (this week closed 0–10 % above,
   last week below), SYGNAŁ (0–10 % above), NAD (further), POD, BRAK.
 - **Exit**: weekly MACD (12, 26, 9) — stop = Low of the last cross-down week (`macd_info`), plus a 10 % initial stop (`STOP_PCT`, shown only).
+  Second method (user: "dodaj jako drugą metodę wyjścia … i 3 zasadę: spadek 20 % od szczytu, sprzedaj połowę"): **pod GLB** = sell on a weekly close below the
+  current Green Line (the line stays at the breakout level while new records keep coming; once a peak has stood 3 months it becomes the line). Toggle 🚪
+  (`state.exit` / desktop `settings["exit"]`, MACD default); GLB mode hides the MACD stop line. Always: stop −10 % and half-sell at −20 % from the highest weekly
+  close since entry (`positionPlan` / `lines.position_plan`, drawn for 📌 positions, alert key `H:<t>:<peak>`); `stateAlerts` adds "zamknięcie pod Green Line".
+  Backtest (5 positions × 20 %): GLB exit keeps the huge moves (SNDK +2409 %, MU +472 %, NVDA 2023 +221 %) but 77–82 % of trades are small losses; best with the
+  "breakout at any height" entry (19.7 %/yr, DD −51 %), with the 0–10 % entry MACD is better (22.2 % vs 15.8 %); half at −20 %: DD −4…−6 pp, return −1…−3 pp.
 - **Hamuje** (`calc.slowdown`): `slow` = revenue growth fell ≥ 10 pp vs the previous quarter ('HAMUJE'), + gross margin down y/y ('HAMUJE+MB': 50 % chance
   of a ≥ 20 % drop in 6 months vs 33 %); position warning only, not an entry condition. SEC entries carry `v: 4` (`rev_rr1`, `dopm1`, `accel`, `qs`, `op_d`,
   `rev_q`, `ttm_rev`, `shares`, `dil`); older entries are refetched. Didn't help: revenue acceleration alone, EPS, margin levels, q/q margin change,
