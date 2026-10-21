@@ -564,7 +564,7 @@ if (typeof document !== "undefined") (function () {
             if (!p) return;
             const since = window.prompt("Data wejścia (RRRR-MM-DD):", p.since || "");
             if (since === null) return;
-            if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(since) || Number.isNaN(Date.parse(since))) { window.alert("Podaj datę w formacie RRRR-MM-DD."); return; }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(since) || Number.isNaN(Date.parse(since))) { window.alert("Podaj datę w formacie RRRR-MM-DD."); return; }
             const raw = window.prompt("Rzeczywista cena kupna:", String(p.price ?? ""));
             if (raw === null) return;
             const price = Number(raw.replace(",", "."));
