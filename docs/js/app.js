@@ -540,7 +540,7 @@ if (typeof document !== "undefined") (function () {
             return `<tr class="${st.length ? "warn" : ""}"><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td class="now">${e(st.join(" · ") || "trzymaj")}</td><td>${e(p.since || "")}</td><td>${f(pl.entry)}</td>` +
                 `<td>${f(last)}</td><td>${pct(last && pl.entry ? (last / pl.entry - 1) * 100 : null)}</td><td>${f(pl.peak)}</td><td>${f(pl.halfAt)}</td><td>${f(pl.stopInit)}</td>` +
                 `<td>${f(ex)}</td><td>${e(r.glb_state || "")}</td><td>${e(r.macd || "")}</td>` +
-                `<td><button type="button" data-del-pos="${e(t)}" title="Usuń pozycję">✕</button></td></tr>`;
+                `<td><button type="button" data-edit-pos="${e(t)}" title="Edytuj datę i cenę wejścia">Edytuj</button> <button type="button" data-del-pos="${e(t)}" title="Usuń pozycję">✕</button></td></tr>`;
         });
         $("posTable").innerHTML = "<tr><th>Ticker</th><th>Co teraz</th><th>Od</th><th>Kupno</th><th>Cena</th><th>Zmiana %</th><th>Szczyt</th><th>½ przy</th><th>Stop −10 %</th>" +
             `<th>Wyjście</th><th>GLB</th><th>MACD</th><th></th></tr>` + (pos.join("") || '<tr><td colspan="13">Brak pozycji (📌 Pozycja na wykresie).</td></tr>');
@@ -559,7 +559,18 @@ if (typeof document !== "undefined") (function () {
         const b = ev.target.closest("button");
         if (!b) return;
         if (b.dataset.t && rowFor(b.dataset.t)) { $("posDlg").close(); openChart(b.dataset.t); return; }
-        if (b.dataset.delPos) delete ast.pos[b.dataset.delPos];
+        if (b.dataset.editPos) {
+            const t = b.dataset.editPos, p = ast.pos[t];
+            if (!p) return;
+            const since = window.prompt("Data wejścia (RRRR-MM-DD):", p.since || "");
+            if (since === null) return;
+            if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(since) || Number.isNaN(Date.parse(since))) { window.alert("Podaj datę w formacie RRRR-MM-DD."); return; }
+            const raw = window.prompt("Rzeczywista cena kupna:", String(p.price ?? ""));
+            if (raw === null) return;
+            const price = Number(raw.replace(",", "."));
+            if (!Number.isFinite(price) || price <= 0) { window.alert("Cena musi być liczbą większą od zera."); return; }
+            p.since = since; p.price = price;
+        } else if (b.dataset.delPos) delete ast.pos[b.dataset.delPos];
         else if (b.dataset.delWatch) delete ast.watch[b.dataset.delWatch];
         else return;
         saveAlerts();
