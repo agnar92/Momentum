@@ -572,7 +572,6 @@ if (typeof document !== "undefined") (function () {
         const fmtv = (v, u) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${u}`);
         const held = ast.pos[r.ticker];
         const rows = [
-            [`Obrót ≥ 100 mln $ dziennie (${r.turnover != null ? (r.turnover / 1e6).toFixed(0) : "—"} mln $)`, r.turnover == null ? null : r.turnover >= 100e6],
             [`Przychody kw. ≥ +15 % r/r (${fmtv(r.rev_rr, " %")})`, r.rev_rr == null ? null : r.rev_rr >= 15],
             [`Marża oper. ≥ +3 pp r/r (${fmtv(r.dopm, " pp")})`, r.dopm == null ? null : r.dopm >= 3],
             [`Wycena P/S < 20 (${r.ps != null ? r.ps.toFixed(1) : "—"})`, r.ps == null ? null : r.ps < 20],

@@ -27,7 +27,7 @@
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
        title="Dane odświeżają się same w sobotę rano (po piątkowej sesji). Tutaj w GitHub Actions kliknij „Run workflow”, żeby odświeżyć od razu.">⟳ Odśwież dane</a>
     <details class="rules"><summary>Zasady</summary>
-        <p><b>Warunki:</b> obrót dzienny ≥ 100 mln $, przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC), P/S &lt; 20, siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500. Kolejność: sygnał GLB, potem od największej siły względnej.</p>
+        <p><b>Warunki:</b> przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC), P/S &lt; 20, siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500. Kolejność: sygnał GLB, potem od największej siły względnej.</p>
         <p><b>Wejście — Green Line:</b> rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). Kupno, gdy tydzień zamknie się 0–10 % nad linią.
             <i>WYBICIE</i> = ten tydzień nad linią, poprzedni pod; <i>SYGNAŁ</i> = 0–10 % nad; <i>NAD</i> = dalej; <i>POD</i>.</p>
         <p><b>Wyjście:</b> tygodniowy MACD (12, 26, 9) — po przecięciu sygnału w dół stop pod Low tego tygodnia; do tego stop 10 % pod wejściem.</p>
@@ -66,8 +66,7 @@
     <h3>Poradnik <small>co naprawdę działało w badaniach (płynny rynek USA, ceny bez korekty o dywidendy)</small></h3>
     <div id="guideStock"></div>
     <details open><summary><b>Warunki — tylko to, co w strategii działało najmocniej (GLB + MACD, wszystkie sygnały 2015–2026, ceny bez korekty)</b></summary>
-        <table class="gt"><tr><td>obrót ≥ 100 mln $ dziennie</td><td>odcina małe, dziwne spółki</td></tr>
-        <tr><td>przychody kwartału ≥ +15 % r/r</td><td>bez tego 34,9 % rocznie</td></tr>
+        <table class="gt"><tr><td>przychody kwartału ≥ +15 % r/r</td><td>bez tego 34,9 % rocznie</td></tr>
         <tr><td>marża operacyjna ≥ +3 pp r/r</td><td>bez tego 28,9 %</td></tr>
         <tr><td>wycena P/S &lt; 20</td><td>bez tego 31,5 % (drogie tracą; odpada też RGTI)</td></tr>
         <tr><td><b>siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500</b> (kolumna RS)</td><td>bez tego 21,4 %</td></tr>
@@ -78,6 +77,8 @@
         <p>Razem (z niespodziankami EPS): <b>+19,2 % na transakcję</b>, portfel wszystkich sygnałów <b>42,4 % rocznie</b> (2015–20: 48,7 %, 2021–26: 36,4 %; same lata 2020–26: 53,7 %), S&amp;P 500 13,6 %.
         Cena za to: mało sygnałów naraz (średnio 2–4) i głębszy spadek portfela (−51 %). Wspólny mianownik dużych ruchów po GLB: rosnące przychody i marża
         (fundamenty) + akcja już jest liderem rynku (siła względna). Sama technika (GLB, średnie, RS bez fundamentów) w 2020–26 nie pobiła S&amp;P 500.</p>
+        <p class="dimtxt">Obrót nie jest warunkiem — płynność ustawiasz filtrem skanera w Finviz (np. średni wolumen). Backtest liczono na spółkach z obrotem ≥ 100 mln $ dziennie;
+        przy mniej płynnych spółkach wyniki mogą być inne (w teście sam obrót ≥ 50 mln $ dawał +9,4 % zamiast +15,6 % na transakcję).</p>
         <p class="dimtxt">Usunięte, bo przy tych warunkach nic nie zmieniały: przychody kw. ≥ 25 mln $, zysk oper. w $ ↑, „Mocne” (Δ marży ≥ 10 pp), rozwodnienie, potencjał ★.</p>
     </details>
     <details><summary><b>Jak wygląda duży ruch w raportach</b></summary>

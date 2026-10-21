@@ -23,7 +23,8 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   `scanners` field and the page has a scanner select (`state.scanner`). The desktop app has the same list in its settings (per-scanner data
   `data/scans/<slug>.json`). Finviz silently ignores unknown filter codes — check the count after editing.
 - **Conditions** (`passes`; user, Oct 2026: "ogranicz parametry do tych najważniejszych … tylko te które działają i mają największy wpływ. Zwiększ obrót"):
-  daily turnover ≥ 100 M$ (`turnover` = mean weekly $-volume of the last 4 weeks / 5), quarterly revenue ≥ +15 % y/y, operating margin change ≥ +3 pp y/y,
+  NO turnover limit any more (user: "usuń limit obrotu w ogóle, sam będę filtrował w Finviz po wolumenie"; `turnover` = mean weekly $-volume of the last
+  4 weeks / 5 is only a column; the backtest below was run on turnover ≥ 100 M$), quarterly revenue ≥ +15 % y/y, operating margin change ≥ +3 pp y/y,
   P/S < 20 (`ps` = Finviz market cap / SEC TTM revenue, else price × shares; missing doesn't block), relative strength `rs` ≥ 50 pp (`rel_strength`: 52-week
   close change minus SPY's over the same weeks; SPY is always fetched, `watchlist.BENCH`; missing history blocks, as in the backtest). Backtest (all GLB 0–10 %
   signals 2015–2026, raw prices, stop 10 % + weekly MACD): +15.6 % per trade, all-signal portfolio 36.6 % a year (2015–20 43.9 / 2021–26 29.6; 2020–26 46.5 %),
@@ -60,7 +61,7 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
 Finviz per scanner (`momentum/finviz.py`; reads the SSR-JSON layout, the `div.fv-table_row` layout and the old table; a scanner that
 fails keeps its previous rows) → yfinance WEEKLY for the union + `symbols` (`momentum/prices.weekly`; INCREMENTAL: tickers already in
 `docs/data/weekly/` get only the last 1–6 months merged in (`merge_weekly`), full 3 years only for new tickers, gaps > ~5 months or when the
-overlapping close differs > 1.5 % = adjusted history) → only for turnover ≥ 100 M$: yfinance MONTHLY HIGH (`prices.monthly`, closed months
+overlapping close differs > 1.5 % = adjusted history) → for every scanner ticker (no turnover gate): yfinance MONTHLY HIGH (`prices.monthly`, closed months
 only, cache `data/monthly.json` `{h, upto}`; after a month closes only `6mo` is fetched and merged (`merge_monthly`), `max` only for new
 tickers / changed prices / old close-based `m` entries) and SEC companyfacts (`momentum/sec.py`, cache
 `data/sec.json`, refreshed every 7 days; Q4 = FY − 3 quarters; needs a User-Agent: `SEC_UA` env / `finviz_screen.json` `sec_ua`).
