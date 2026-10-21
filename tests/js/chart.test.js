@@ -27,7 +27,7 @@ function weekly(n) {
 
 test("chart draws green line, MACD stop and returns geometry", () => {
     const res = chartSvg(weekly(150), { glb: 120, macd_stop: 150 }, 1000, 600);
-    assert.ok(res.svg.includes("GREEN LINE 120.00") && res.svg.includes('stroke-dasharray="5 4"'));
+    assert.ok(res.svg.includes("GLB 120.00") && res.svg.includes("CENA NAD LINIĄ") && res.svg.includes('stroke-dasharray="5 4"'));
     assert.strictEqual(res.geom.n, 150);
     assert.strictEqual(chartSvg(weekly(1), null, 800, 600), null);
 });
@@ -82,7 +82,7 @@ test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
     assert.deepStrictEqual(blueDots(h, l, c, 1e9), []);
     const d = c.map((_, i) => `2026-${String(1 + Math.floor(i / 28)).padStart(2, "0")}-${String(1 + (i % 28)).padStart(2, "0")}`);
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D");
-    assert.ok(res.svg.includes("GREEN LINE") && !res.svg.includes("MACD (12"));
+    assert.ok(res.svg.includes("GLB") && !res.svg.includes("MACD (12"));
     assert.ok(res.svg.includes('r="4" fill="#4aa3ff"')); // Blue Dot marker stays on chart; its stop level is tooltip-only.
     assert.ok(!res.svg.includes("Blue Dot 2026-") && !res.svg.includes("stop pod Low"));
     assert.ok(!res.svg.includes("Przychody kw.") && !res.svg.includes("Stochastic (10, 1) dzienny"));   // dzienny: bez przychodów i panelu Stochastic
