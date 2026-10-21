@@ -57,7 +57,7 @@ def scanners(config):
 KEYS = ("ticker", "company", "sector", "industry", "market_cap")
 
 
-def fetch_scanners(scans, prev, fetch_list, log):
+def fetch_scanners(scans, prev, fetch_list, log, min_tickers=MIN_TICKERS):
     """Każdy skaner osobno w Finviz; spółki łączone po tickerze (pole `scanners` = nazwy skanerów, w których jest).
     Skaner, którego Finviz nie zwrócił (blokada / błąd), dostaje spółki z poprzedniego pliku. -> (spółki, opis skanerów)."""
     base, meta = {}, []
@@ -69,7 +69,7 @@ def fetch_scanners(scans, prev, fetch_list, log):
         except Exception as e:   # Finviz bywa blokowany z serwerów — wtedy poprzednia lista
             log(f"⚠ Finviz [{sc['name']}]: {e}")
             rows, total = [], None
-        stale = not rows or (len(rows) < MIN_TICKERS and (total is None or total >= MIN_TICKERS))
+        stale = not rows or (len(rows) < min_tickers and (total is None or total >= min_tickers))
         if stale:
             old = [r for r in prev_rows if sc["name"] in (r.get("scanners") or [sc["name"]])]
             log(f"⚠ Finviz [{sc['name']}] zwrócił {len(rows)} spółek — używam poprzedniej listy ({len(old)}).")
@@ -109,7 +109,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     else:
         scans = scans[-1:]
         log(f"Brak linku Finviz — odświeżam ostatni skaner: {scans[0]['name']}")
-    base, meta = fetch_scanners(scans, prev, fetch_list, log)
+    base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=1 if finviz_url else MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
     log(f"Razem {len(tickers)} spółek ze skanerów; symbole dodatkowe: {', '.join(extra) or '—'}")
