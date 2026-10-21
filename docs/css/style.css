@@ -9,6 +9,7 @@ button:hover, .btn:hover { background: #2b3542; }
 a { color: #6ea8ff; }
 button.on { border-color: #4aa3ff; color: #fff; background: #1f3b5c; }
 .chart-head button { padding: 4px 8px; }
+.chart-head button.per { min-width: 30px; font-weight: bold; }
 
 .bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line); position: relative; }
 .brand { letter-spacing: .5px; }

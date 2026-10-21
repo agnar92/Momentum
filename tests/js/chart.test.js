@@ -94,3 +94,12 @@ test("GLB exit method hides the MACD stop; position plan draws −10 % stop and 
     assert.ok(!macd.includes("wyjście: zamknięcie tyg. pod linią") && glbm.includes("wyjście: zamknięcie tyg. pod linią"));
     assert.ok(glbm.includes("½ przy 140.00") && glbm.includes("stop −10 % 135.00"));
 });
+
+test("IBD relative strength line on the weekly chart", () => {
+    const { rsLine } = require("../../docs/js/chart.js");
+    assert.deepStrictEqual(rsLine([10, 20, null], [5, 4, 2]), [2, 5, null]);
+    const w = weekly(150), spx = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // SPY spada, akcja rośnie -> RS na szczycie
+    const svg = chartSvg(w, { rs: 61 }, 1000, 700, null, null, [], null, spx).svg;
+    assert.ok(svg.includes("RS (cena / S&amp;P 500) · 52 tyg. +61 pp") && svg.includes("RS na szczycie 52 tyg."));
+    assert.ok(!chartSvg(w, { glb: 40 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("RS (cena"));
+});

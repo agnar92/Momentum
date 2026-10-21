@@ -233,17 +233,17 @@ if (typeof document !== "undefined") (function () {
         return dailyCache.get(t);
     }
 
-    // przełącznik tygodniowy / dzienny (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy)
+    // przyciski T / D (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy; tylko spółki nad Green Line)
     function renderPeriod() {
         const r = current && rowFor(current), ok = !!(r && r.daily);
-        $("periodBtn").hidden = !ok;
-        $("periodBtn").textContent = period === "D" ? "📅 Dzienny" : "📅 Tygodniowy";
-        $("periodBtn").classList.toggle("on", period === "D");
+        $("perD").hidden = !ok;
+        $("perW").classList.toggle("on", period === "W");
+        $("perD").classList.toggle("on", period === "D");
     }
 
-    async function togglePeriod() {
-        if (!current) return;
-        period = period === "D" ? "W" : "D";
+    async function togglePeriod(to) {
+        if (!current || to === period) return;
+        period = to || (period === "D" ? "W" : "D");
         dShow = 260;
         end = null;
         sel = null;
@@ -709,7 +709,8 @@ if (typeof document !== "undefined") (function () {
             saveSettings();
             renderTable();
         });
-        $("periodBtn").addEventListener("click", togglePeriod);
+        $("perW").addEventListener("click", () => togglePeriod("W"));
+        $("perD").addEventListener("click", () => togglePeriod("D"));
         $("potBadge").addEventListener("click", openGuide);
         $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
