@@ -363,6 +363,9 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     row["eps_q"] = (est or {}).get("eps_q") or []
     row["eps_est"] = (est or {}).get("eps_est") or []
     row["surp_hist"] = (est or {}).get("surp") or []
+    revenue_surprises = (est or {}).get("revenue_surp") or []
+    row["revenue_surp"] = revenue_surprises[-1][1] if revenue_surprises else None
+    row["revenue_surp_hist"] = revenue_surprises
     row["ok"] = passes(row)
     row["slow"] = slowdown(row)
     row["growth_score"] = growth_score(row)
