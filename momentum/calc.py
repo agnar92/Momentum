@@ -291,7 +291,7 @@ def _estimate_growth(est):
 
 def growth_score(row, min_coverage=GROWTH_SCORE_MIN_COVERAGE):
     """Growth Score 0–100 w pięciu kategoriach. Braki pomijamy i normalizujemy do dostępnych wag.
-    ROI/ROA są bramką wstępnego filtra Finviz; nie udajemy, że znamy surowe wartości do rankingu.
+    ROIC jest estymowany z SEC i punktowany, jeśli dane bilansowe oraz operacyjne są dostępne.
     Trwałość to mierzalny proxy z historii wzrostu przychodów; katalizatory wymagają osobnej analizy.
     """
     row = row or {}
