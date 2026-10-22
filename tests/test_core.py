@@ -363,13 +363,13 @@ def test_rel_volume():
     assert calc.rel_volume([10] * 9 + [None, 20], 10) == pytest.approx(2.0)          # brak jednego tygodnia nie blokuje
 
 
-def test_estimates_update_keeps_history_and_skips_fresh():
+def test_estimates_update_migrates_old_cache_and_keeps_history():
     from momentum import estimates
     cache = {"OLD": {"at": "2026-10-19", "surp": [], "rev90": 1.0, "hist": [["2026-10-19", 1.0]]},
              "X": {"at": "2026-10-01", "surp": [], "rev90": 2.0, "hist": [["2026-10-01", 2.0]]}}
     got = estimates.update(["OLD", "X", "N"], cache, log=lambda s: None, today=dt.date(2026, 10, 21), pause=0,
                            fetch_one=lambda t: {"surp": [["2026-08-01", 5.0]], "rev90": 7.5})
-    assert got == ["X", "N"] and cache["OLD"]["rev90"] == 1.0                              # świeży wpis bez pobierania
+    assert got == ["OLD", "X", "N"] and cache["OLD"]["rev90"] == 7.5                    # jednorazowa migracja starego cache
     assert cache["X"]["hist"] == [["2026-10-01", 2.0], ["2026-10-21", 7.5]] and cache["N"]["surp"] == [["2026-08-01", 5.0]]
 
 

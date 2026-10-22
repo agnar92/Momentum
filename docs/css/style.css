@@ -135,3 +135,16 @@ ul.chk li { padding: 3px 0; }
 .fundamentals .tblwrap { margin-bottom: 8px; }
 .fundamentals .tblwrap td, .fundamentals .tblwrap th { padding: 5px 7px; }
 @media (max-width: 640px) { .fund-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Growth Score TOP 10 */
+dialog.growth-dialog { width: min(900px, 97vw); max-height: 90vh; overflow: auto; }
+#growthTable { width: min(360px, 100%); margin-bottom: 12px; }
+#growthTable tr.sel { background: var(--sel); }
+#growthTable button { padding: 2px 6px; background: transparent; border: 0; font-weight: 700; }
+#growthDetailBody { margin-top: 10px; }
+#growthDetailBody h4 { margin: 8px 0 4px; }
+#growthDetailBody .tblwrap { max-height: 42vh; overflow: auto; }
+#growthDetailBody .tblwrap td { white-space: normal; }
+#growthDetailBody .tblwrap td:last-child { white-space: nowrap; }
+.growth-dialog details { margin-top: 8px; }
+.growth-dialog summary { cursor: pointer; }

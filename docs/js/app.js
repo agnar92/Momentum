@@ -560,6 +560,66 @@ if (typeof document !== "undefined") (function () {
     }
 
 
+    // Growth Score: fundamentalny ranking niezależny od ceny i sygnałów GLB.
+    function growthRows() {
+        const rows = data.rows.filter((r) => !state.scanner || (r.scanners || []).includes(state.scanner));
+        return rows.filter((r) => r.growth_score && r.growth_score.score != null)
+            .sort((a, b) => (b.growth_score.score - a.growth_score.score) || a.ticker.localeCompare(b.ticker))
+            .slice(0, 10);
+    }
+
+    function renderGrowthDetails(r) {
+        const result = r.growth_score;
+        if (!result) {
+            $("growthDetailBody").innerHTML = '<p class="dimtxt">Brak wystarczających danych do policzenia Growth Score.</p>';
+            return;
+        }
+        const specs = [
+            ["revenue_growth", "Przychody r/r", r.rev_rr, "%", 10],
+            ["revenue_acceleration", "Przyspieszenie przychodów", r.accel, " pp", 8],
+            ["eps_growth", "Wzrost EPS r/r", r.eps_growth_q, "%", 12],
+            ["eps_surprise", "EPS Surprise", r.surp, "%", 10],
+            ["revenue_surprise", "Revenue Surprise", r.revenue_surprise, "%", 10],
+            ["eps_next_year", "Prognozowany wzrost EPS +1y", r.eps_growth_next_year, "%", 10],
+            ["eps_revision", "Rewizja EPS 90 dni", r.eps_rev, "%", 10],
+            ["operating_margin", "Marża operacyjna", r.opm, "%", 10],
+            ["margin_change", "Zmiana marży operacyjnej", r.dopm, " pp", 5],
+            ["roi", "ROI/ROIC", r.roic == null ? r.roi : r.roic, "%", 5],
+            ["revenue_consistency", "Spójność wzrostu przychodów", null, "", 5],
+            ["eps_consistency", "Spójność wzrostu EPS", null, "", 3],
+            ["catalyst", "Katalizator: produkt / popyt / kontrakty", r.growth_catalyst_score, "/2", 2],
+        ];
+        const fmt = (v, suffix) => v == null || !Number.isFinite(Number(v)) ? "brak danych" : (Number(v) > 0 ? "+" : "") + Number(v).toFixed(1) + suffix;
+        const points = (v, max) => v == null ? '<span class="na">brak danych · pominięte</span>' : '<b>' + Number(v).toFixed(1) + "/" + max + " pkt</b>";
+        const rows = specs.map(([key, label, value, suffix, weight]) => {
+            const shown = ["revenue_consistency", "eps_consistency"].includes(key) ? "historia wielokwartałowa" : fmt(value, suffix);
+            return '<tr><td>' + escapeHtml(label) + '</td><td>' + escapeHtml(shown) + '</td><td class="num">' + points(result.components[key], weight) + '</td></tr>';
+        }).join("");
+        $("growthDetailBody").innerHTML =
+            '<h4>' + escapeHtml(r.ticker) + ' · ' + result.score.toFixed(1) + '/100</h4>' +
+            '<p class="dimtxt">Pokrycie danych: ' + result.coverage + '/100 wag · wynik znormalizowany do dostępnych danych. Bez wyceny i bez ceny akcji.</p>' +
+            '<div class="tblwrap"><table class="gt"><thead><tr><th>Składowa</th><th>Wartość / źródło</th><th>Punkty</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+            '<p><b>Grupy:</b> wzrost ' + result.groups.acceleration.toFixed(1) + '/30 · surprise ' + result.groups.surprises.toFixed(1) + '/20 · przyszłość ' + result.groups.future.toFixed(1) + '/20 · jakość ' + result.groups.quality.toFixed(1) + '/20 · trwałość ' + result.groups.durability.toFixed(1) + '/10</p>' +
+            '<p class="dimtxt">Revenue Surprise i ROI/ROIC mogą nie być dostępne. Katalizatory nie są zgadywane ani punktowane, dopóki nie ma ustrukturyzowanych danych.</p>';
+    }
+
+    function renderGrowthScore() {
+        const rows = growthRows();
+        const scannerRows = data.rows.filter((r) => !state.scanner || (r.scanners || []).includes(state.scanner));
+        const scored = scannerRows.filter((r) => r.growth_score && r.growth_score.score != null).length;
+        $("growthMeta").textContent = 'TOP 10 · ' + rows.length + ' najlepszych z ' + scored + ' ocenionych spółek · skaner: ' + (state.scanner || "wszystkie");
+        $("growthTable").innerHTML = '<thead><tr><th>Ticker</th><th class="num">Score</th></tr></thead><tbody>' +
+            (rows.map((r, i) => '<tr data-t="' + escapeHtml(r.ticker) + '" class="' + (i === 0 ? "sel" : "") + '"><td><button type="button" data-growth-t="' + escapeHtml(r.ticker) + '">' + escapeHtml(r.ticker) + '</button></td><td class="num">' + r.growth_score.score.toFixed(1) + '</td></tr>').join("") ||
+            '<tr><td colspan="2" class="empty">Brak spółek z pokryciem danych ≥ 70/100. Odśwież dane lub sprawdź inny skaner.</td></tr>') + '</tbody>';
+        if (rows.length) renderGrowthDetails(rows[0]);
+        else $("growthDetailBody").innerHTML = '<p class="dimtxt">Brak wystarczających danych do rankingu.</p>';
+    }
+
+    function openGrowthScore() {
+        renderGrowthScore();
+        $("growthDlg").showModal();
+    }
+
     function openFundamentals(t) {
         const r = rowFor(t);
         if (!r) return;
@@ -873,6 +933,23 @@ if (typeof document !== "undefined") (function () {
             if (b && rowFor(b.dataset.t)) { $("fundDlg").close(); openChart(b.dataset.t); }
         });
         $("fundBtn").addEventListener("click", () => { if (current) openFundamentals(current); });
+        $("growthBtn").addEventListener("click", openGrowthScore);
+        $("growthTable").addEventListener("click", (e) => {
+            const b = e.target.closest("button[data-growth-t]");
+            if (!b) return;
+            const ticker = b.dataset.growthT;
+            const row = rowFor(ticker);
+            if (row) {
+                renderGrowthDetails(row);
+                $("growthTable").querySelectorAll("tr").forEach((tr) => tr.classList.toggle("sel", tr.dataset.t === ticker));
+            }
+        });
+        $("growthOpenBtn").addEventListener("click", () => {
+            const b = $("growthTable").querySelector("tr.sel button[data-growth-t]") || $("growthTable").querySelector("button[data-growth-t]");
+            if (!b) return;
+            $("growthDlg").close();
+            openChart(b.dataset.growthT);
+        });
         $("closeChart").addEventListener("click", closeChart);
         $("symBtn").addEventListener("click", openSymbol);
         $("symForm").addEventListener("submit", (e) => { e.preventDefault(); chooseSymbol($("symInput").value); });
