@@ -70,3 +70,8 @@ cd docs && python3 -m http.server        # strona: http://localhost:8000
 python -m pytest -q && ruff check .      # testy Pythona
 npm ci && npm test && npm run lint       # testy i lint JS
 ```
+
+
+## Growth Score — TOP 10 fundamentalny
+
+Osobny ranking spółek z bieżącego skanera Finviz, niezależny od GLB i wykresu ceny. Wagi: przyspieszenie wzrostu 30 pkt (przychody, przyspieszenie sprzedaży, wzrost EPS), zaskoczenia wynikowe 20 (EPS Surprise i Revenue Surprise), przyszły wzrost 20 (prognoza EPS +1y i rewizje EPS 90 dni), jakość biznesu 20 (marża operacyjna, jej zmiana, ROI/ROIC jeśli dostępne), trwałość wzrostu 10 (spójność wielokwartałowa i jawne katalizatory). Brakujące dane są pomijane, score jest normalizowany do dostępnych wag i wymaga pokrycia co najmniej 70/100. Katalizatory nie są zgadywane; Revenue Surprise i ROI/ROIC mogą być niedostępne w źródle.
