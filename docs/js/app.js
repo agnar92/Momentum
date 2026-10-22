@@ -92,7 +92,7 @@ function weekInProgress(weekDate, generatedAt) {
 const GROWTH_SCORE_WEIGHTS = {
     revenue_growth: 10, eps_growth: 10, revenue_acceleration: 10,
     eps_surprise: 10, revenue_surprise: 10, eps_next_year: 10, eps_revision: 10,
-    op_margin: 6, op_margin_change: 4, roi: 5, profit_conversion: 5, durability: 10
+    op_margin: 5, op_margin_change: 3, roi: 7, profit_conversion: 5, durability: 10
 };
 const GROWTH_SCORE_GROUPS = {
     growth: ["Przyspieszenie wzrostu", ["revenue_growth", "eps_growth", "revenue_acceleration"]],
@@ -132,7 +132,7 @@ function growthScore(row) {
         eps_revision: growthComponentPoints(row.eps_rev, [[-10,0],[0,0],[5,6],[10,8],[20,10]]),
         op_margin: growthComponentPoints(row.opm, [[-10,0],[0,1],[10,2.5],[20,4],[30,5]]),
         op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,1],[3,2],[6,3]]),
-        roi: growthComponentPoints(row.roi !== null && row.roi !== undefined ? row.roi : row.roic, [[0,0],[5,1],[10,2.5],[15,4],[25,5]]),
+        roi: growthComponentPoints(row.roi !== null && row.roi !== undefined ? row.roi : row.roic, [[0,0],[5,1.5],[10,3.5],[15,5.5],[25,7]]),
         profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,2],[10,3],[25,5]]),
         durability: growthComponentPoints(row.catalyst_score, [[0,0],[10,10]]) ?? growthDurability(row.qs)
     };
