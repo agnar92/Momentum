@@ -122,7 +122,7 @@ def update(tickers, cache, log=print, today=None, pause=0.1, progress=None, fetc
     """Refresh stale estimates; preserve prior values when one ticker fails."""
     today = today or dt.date.today()
     fetch_one = fetch_one or fetch
-    todo = [t for t in tickers if not (cache.get(t) and (today - dt.date.fromisoformat(cache[t]["at"])).days < FRESH_DAYS)]
+    todo = [t for t in tickers if not (cache.get(t) and "revenue_surp" in cache[t] and "eps_q" in cache[t] and "eps_est" in cache[t] and (today - dt.date.fromisoformat(cache[t]["at"])).days < FRESH_DAYS)]
     done = []
     for n, t in enumerate(todo, 1):
         try:
