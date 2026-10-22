@@ -364,17 +364,24 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     row["rs"] = rel_strength(weekly, spy)
     as_of = (weekly.get("d") or [""])[-1]
     # tydzień z danych zaczyna się w poniedziałek: raport z tego tygodnia (do piątku) też jest znany
-    row["surp"], row["surp_prev"], row["beat2"] = surprises(est, (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()) if as_of else (None, None, None)
-    if not _ok(row.get("surp")):
-        row["surp"] = row.get("eps_surprise_finviz")
+    yahoo_surp, yahoo_surp_prev, yahoo_beat2 = surprises(
+        est, (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()
+    ) if as_of else (None, None, None)
+    finviz_surp = row.get("eps_surprise_finviz")
+    if _ok(finviz_surp):
+        row["surp"] = finviz_surp
+        row["surp_prev"] = yahoo_surp_prev
+        row["beat2"] = bool(finviz_surp > 0 and yahoo_surp_prev > 0) if _ok(yahoo_surp_prev) else None
+    else:
+        row["surp"], row["surp_prev"], row["beat2"] = yahoo_surp, yahoo_surp_prev, yahoo_beat2
     row["eps_rev"] = (est or {}).get("rev90")
     row["eps_growth_q"] = row.get("eps_qoq") if _ok(row.get("eps_qoq")) else _eps_growth_yoy((est or {}).get("eps_q"))
     row["eps_growth_next_year"] = row.get("eps_next_year") if _ok(row.get("eps_next_year")) else _estimate_growth(est)
     as_of = (weekly.get("d") or [""])[-1]
     known_through = (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat() if as_of else ""
-    row["rev_surp"] = _latest_surprise((est or {}).get("revenue_surp"), known_through) if known_through else None
-    if not _ok(row.get("rev_surp")):
-        row["rev_surp"] = row.get("revenue_surprise_finviz")
+    yahoo_rev_surp = _latest_surprise((est or {}).get("revenue_surp"), known_through) if known_through else None
+    finviz_rev_surp = row.get("revenue_surprise_finviz")
+    row["rev_surp"] = finviz_rev_surp if _ok(finviz_rev_surp) else yahoo_rev_surp
     rev_history = [x for x in ((est or {}).get("revenue_surp") or [])
                    if isinstance(x, (list, tuple)) and len(x) >= 2 and x[0] <= known_through]
     row["rev_surp_prev"] = rev_history[-2][1] if len(rev_history) > 1 else None
