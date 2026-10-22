@@ -399,3 +399,10 @@ def test_build_row_exposes_eps_history_and_forecasts():
     assert row["eps_q"] == [["2026-06-30", 1.2]]
     assert row["eps_est"][0]["avg"] == 4.0
     assert row["surp_hist"] == []
+
+
+def test_revenue_surprise_requires_actual_and_consensus():
+    from momentum import estimates
+    assert estimates._revenue_surprise({"Reported Revenue": 120, "Revenue Estimate": 100}) == 20.0
+    assert estimates._revenue_surprise({"Reported Revenue": 80, "Revenue Estimate": 100}) == -20.0
+    assert estimates._revenue_surprise({"Reported Revenue": 120}) is None
