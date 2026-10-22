@@ -134,7 +134,7 @@ function growthScore(row) {
         op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,3],[3,5],[6,6]]),
         roic: growthComponentPoints(row.roic, [[0,0],[5,2],[10,4],[15,5],[25,6]]),
         profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,3],[10,5],[25,6]]),
-        durability: growthDurability(row.qs)
+        durability: growthComponentPoints(row.catalyst_score, [[0,0],[10,10]]) ?? growthDurability(row.qs)
     };
     const coverage = Object.entries(components).reduce((sum, [key, value]) => sum + (value === null ? 0 : GROWTH_SCORE_WEIGHTS[key]), 0);
     const points = Object.values(components).reduce((sum, value) => sum + (value === null ? 0 : value), 0);
@@ -157,7 +157,7 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
+    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD", growthCatalysts: {} }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let growthSelected = null, growthShowDetails = false;
     let sel = null, gest = null, rafId = 0, spxData = null;
@@ -180,7 +180,7 @@ if (typeof document !== "undefined") (function () {
         try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
     }
     function saveSettings() {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit, growthCatalysts: state.growthCatalysts || {} })); } catch (e) { /* tryb prywatny */ }
     }
     const allRows = () => data.rows.concat(data.symbols || []);
     const rowFor = (t) => allRows().find((r) => r.ticker === t) || null;
@@ -718,7 +718,11 @@ if (typeof document !== "undefined") (function () {
     }
     function growthPool() {
         return data.rows.filter(r => !state.scanner || (r.scanners || []).includes(state.scanner))
-            .map(r => ({row:r, result:growthResult(r)}))
+            .map(r => {
+                const catalyst = (state.growthCatalysts || {})[r.ticker] || {};
+                return {row:{...r, catalyst_score:catalyst.score, catalyst_note:catalyst.note},
+                    result:growthScore({...r, catalyst_score:catalyst.score})};
+            })
             .sort((a,b) => {
                 const x=a.result.score, y=b.result.score;
                 if (x === null || x === undefined) return y === null || y === undefined ? a.row.ticker.localeCompare(b.row.ticker) : 1;
@@ -749,7 +753,7 @@ if (typeof document !== "undefined") (function () {
             roic:["ROIC estymowany z SEC",row.roic,"%"],
             profit_conversion:["EPS growth minus sales growth",
                 row.eps_growth_q == null || row.rev_rr == null ? null : row.eps_growth_q-row.rev_rr," pp"],
-            durability:["Regularność wzrostu przychodów (proxy)",null,""]
+            durability:["Ocena katalizatora (ręczna; inaczej proxy)",row.catalyst_score,"/10"]
         };
         for (const [key, [label, members]] of Object.entries(GROWTH_SCORE_GROUPS)) {
             const group=result.categories[key];
@@ -766,7 +770,9 @@ if (typeof document !== "undefined") (function () {
             }
             html += '</ul></section>';
         }
-        html += '<p class="dimtxt">ROIC to szacunek z danych SEC: zysk operacyjny TTM po szacowanym podatku / (aktywa − zobowiązania krótkoterminowe); brak składników oznacza brak punktów. Trwałość opiera się na historii przychodów; popyt, nowe produkty i kontrakty wymagają ręcznej weryfikacji.</p>';
+        html += '<p>Katalizator: ' + escapeHtml(row.catalyst_note || "brak ręcznej oceny — użyto proxy historii przychodów") + '</p>' +
+            '<button type="button" data-growth-catalyst="' + escapeHtml(row.ticker) + '">Oceń katalizator (0–10)</button>' +
+            '<p class="dimtxt">ROIC to szacunek z SEC: zysk operacyjny TTM po szacowanym podatku / (aktywa − zobowiązania krótkoterminowe). Ocena katalizatora jest ręczna i wymaga konkretnego uzasadnienia.</p>';
         wrap.innerHTML=html;
     }
     function renderGrowthScore() {
@@ -963,6 +969,22 @@ if (typeof document !== "undefined") (function () {
         $("growthComponentsBtn").addEventListener("click", () => {
             growthShowDetails = !growthShowDetails;
             $("growthComponentsBtn").textContent = growthShowDetails ? "▾ Ukryj składowe" : "▸ Składowe score";
+            renderGrowthScore();
+        });
+        $("growthDetails").addEventListener("click", (e) => {
+            const button = e.target.closest("[data-growth-catalyst]");
+            if (!button) return;
+            const ticker = button.dataset.growthCatalyst;
+            const old = (state.growthCatalysts || {})[ticker] || {};
+            const rawScore = window.prompt("Oceń wiarygodność dalszego wzrostu 0–10 (popyt, produkt, kontrakt, ekspansja):", old.score == null ? "" : String(old.score));
+            if (rawScore === null) return;
+            const score = Number(rawScore);
+            if (!Number.isInteger(score) || score < 0 || score > 10) { window.alert("Wpisz liczbę całkowitą od 0 do 10."); return; }
+            const note = window.prompt("Podaj konkretne uzasadnienie (produkt, kontrakt, popyt):", old.note || "");
+            if (note === null) return;
+            state.growthCatalysts = state.growthCatalysts || {};
+            state.growthCatalysts[ticker] = {score, note:note.trim()};
+            saveSettings();
             renderGrowthScore();
         });
         $("growthTable").addEventListener("click", (e) => {
