@@ -27,6 +27,36 @@ function cell(v, f) {
     return String(v);
 }
 
+function growthScore(r) {
+    const n = (v) => typeof v === "number" && Number.isFinite(v);
+    const pts = (v, knots) => {
+        if (!n(v)) return null;
+        if (v <= knots[0][0]) return knots[0][1];
+        for (let i=1;i<knots.length;i++) if(v<=knots[i][0]) {
+            const [x0,y0]=knots[i-1], [x1,y1]=knots[i];
+            return y0+(v-x0)*(y1-y0)/(x1-x0);
+        }
+        return knots[knots.length-1][1];
+    };
+    const est = (r.eps_est||[]).find(x=>x.period==="+1y");
+    const next = est && n(est.growth) ? (Math.abs(est.growth)<=1 ? est.growth*100 : est.growth) : null;
+    const rev = r.rev_rr, accel = r.accel;
+    const accVals=[rev,accel].filter(n);
+    const acceleration=accVals.length ? accVals.reduce((a,b)=>a+b,0)/accVals.length : null;
+    const surprise = n(r.surp) ? pts(r.surp, [[-20,0],[0,8],[5,14],[10,18],[20,20]]) : null;
+    const futureVals=[pts(next,[[0,0],[5,6],[10,12],[20,17],[35,20]]),pts(r.eps_rev,[[-10,0],[0,8],[5,14],[10,18],[20,20]])].filter(n);
+    const future=futureVals.length?futureVals.reduce((a,b)=>a+b,0)/futureVals.length:null;
+    const qualityVals=[pts(r.opm,[[0,0],[5,8],[15,14],[30,17],[50,20]]),pts(r.dopm,[[-5,0],[0,8],[3,14],[8,20]])].filter(n);
+    const quality=qualityVals.length?qualityVals.reduce((a,b)=>a+b,0)/qualityVals.length:null;
+    const qs=(r.qs||[]).map(x=>x.rev_rr).filter(n).slice(-4);
+    const durability=qs.length?pts(qs.reduce((a,b)=>a+b,0)/qs.length,[[0,0],[5,3],[10,6],[20,8],[35,10]]):null;
+    const components={acceleration:pts(acceleration,[[-10,0],[0,10],[10,20],[20,26],[35,30]]),surprises:surprise,future,quality,durability};
+    const weights={acceleration:30,surprises:20,future:20,quality:20,durability:10};
+    const coverage=Object.keys(weights).reduce((a,k)=>a+(components[k]===null?0:weights[k]),0);
+    const earned=Object.keys(weights).reduce((a,k)=>a+(components[k]===null?0:components[k]),0);
+    return {score:coverage>=70&&coverage?Math.round(earned/coverage*1000)/10:null,coverage,components,notes:"Revenue Surprise i ROI/ROIC nie są obecnie dostępne w danych; katalizatory wymagają ręcznej oceny."};
+}
+
 const isSignal = (r) => !!(r.ok && SIGNAL.includes(r.glb_state));
 
 // najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki; w grupie od największej siły względnej
@@ -794,8 +824,31 @@ if (typeof document !== "undefined") (function () {
         openChart(t);
     }
 
+    function openGrowthScore() {
+        let dlg = $("growthScoreDlg");
+        if (!dlg) {
+            dlg = document.createElement("dialog"); dlg.id="growthScoreDlg"; dlg.className="wide";
+            dlg.innerHTML='<h3>Growth Score — TOP 10 <small>ranking fundamentalny, niezależny od wykresu ceny</small></h3><p class="dimtxt" id="growthScoreNote"></p><div class="tblwrap"><table class="gt"><thead><tr><th>Ticker</th><th>Score</th><th>Pokrycie</th></tr></thead><tbody id="growthScoreRows"></tbody></table></div><details id="growthScoreDetail"><summary>Składowe zaznaczonej spółki</summary><div id="growthScoreComponents"></div></details><div class="dlg-btns"><button type="button" id="growthScoreClose">Zamknij</button></div>';
+            document.body.appendChild(dlg);
+            dlg.querySelector("#growthScoreClose").addEventListener("click",()=>dlg.close());
+            dlg.querySelector("#growthScoreRows").addEventListener("click",e=>{
+                const tr=e.target.closest("tr[data-t]"); if(!tr)return;
+                const r=rowFor(tr.dataset.t), result=growthScore(r); 
+                dlg.querySelectorAll("#growthScoreRows tr").forEach(x=>x.classList.toggle("sel",x===tr));
+                const labels={acceleration:"Przyspieszenie wzrostu (30)",surprises:"Zaskoczenia EPS (20)",future:"Przyszły wzrost / rewizje EPS (20)",quality:"Jakość biznesu (20)",durability:"Trwałość wzrostu — proxy historyczne (10)"};
+                dlg.querySelector("#growthScoreComponents").innerHTML='<p><b>'+tr.dataset.t+' · '+(result.score===null?'brak score':result.score+'/100')+'</b> · pokrycie '+result.coverage+'/100</p>'+Object.entries(labels).map(([k,v])=>'<p>'+v+': '+(result.components[k]===null?'brak danych':result.components[k].toFixed(1)+' pkt')+'</p>').join('')+'<p class="dimtxt">'+result.notes+'</p>';
+                dlg.querySelector("#growthScoreDetail").open=true;
+            });
+        }
+        const scored=data.rows.filter(r=>!state.scanner||(r.scanners||[]).includes(state.scanner)).map(r=>({r,s:growthScore(r)})).filter(x=>x.s.score!==null).sort((a,b)=>b.s.score-a.s.score).slice(0,10);
+        dlg.querySelector("#growthScoreRows").innerHTML=scored.map(x=>'<tr data-t="'+escapeHtml(x.r.ticker)+'"><td>'+escapeHtml(x.r.ticker)+'</td><td>'+x.s.score.toFixed(1)+'</td><td>'+x.s.coverage+'/100</td></tr>').join('')||'<tr><td colspan="3">Za mało danych do policzenia score</td></tr>';
+        dlg.querySelector("#growthScoreNote").textContent='TOP 10 z aktualnie wczytanej listy Finviz. Braki danych obniżają pokrycie; score ukryty poniżej 70/100. Trwałość to proxy z historii przychodów, nie automatyczna ocena katalizatorów.';
+        dlg.showModal();
+    }
+
     function initUi() {
         renderHead();
+        if (!$("growthScoreBtn")) { const b=document.createElement("button"); b.id="growthScoreBtn"; b.type="button"; b.textContent="Growth Score"; b.title="TOP 10 spółek według fundamentów"; $("fltBtn").insertAdjacentElement("afterend",b); b.addEventListener("click",openGrowthScore); }
         $("onlyOk").checked = state.onlyOk;
         $("onlyOk").addEventListener("change", () => { state.onlyOk = $("onlyOk").checked; saveSettings(); renderTable(); });
         $("search").addEventListener("input", renderTable);
