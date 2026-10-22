@@ -130,10 +130,10 @@ function growthScore(row) {
         revenue_surprise: growthComponentPoints(row.rev_surp, [[-20,0],[0,0],[5,6],[15,9],[30,10]]),
         eps_next_year: growthComponentPoints(row.eps_growth_next_year, [[-10,0],[0,0],[10,4],[25,7],[50,10]]),
         eps_revision: growthComponentPoints(row.eps_rev, [[-10,0],[0,0],[5,6],[10,8],[20,10]]),
-        op_margin: growthComponentPoints(row.opm, [[-10,0],[0,1],[10,5],[20,7],[30,8]]),
-        op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,3],[3,5],[6,6]]),
+        op_margin: growthComponentPoints(row.opm, [[-10,0],[0,1],[10,3],[20,5],[30,6]]),
+        op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,2],[3,3],[6,4]]),
         roic: growthComponentPoints(row.roic, [[0,0],[5,2],[10,4],[15,5],[25,6]]),
-        profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,3],[10,5],[25,6]]),
+        profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,2],[10,3],[25,4]]),
         durability: growthComponentPoints(row.catalyst_score, [[0,0],[10,10]]) ?? growthDurability(row.qs)
     };
     const coverage = Object.entries(components).reduce((sum, [key, value]) => sum + (value === null ? 0 : GROWTH_SCORE_WEIGHTS[key]), 0);
