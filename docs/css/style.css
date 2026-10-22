@@ -135,3 +135,16 @@ ul.chk li { padding: 3px 0; }
 .fundamentals .tblwrap { margin-bottom: 8px; }
 .fundamentals .tblwrap td, .fundamentals .tblwrap th { padding: 5px 7px; }
 @media (max-width: 640px) { .fund-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Growth Score: ranking fundamentalny, niezależny od wykresu i sygnałów GLB. */
+#growthTable tbody tr.selected { background: #1f3b5c; }
+#growthTable .growth-open { padding: 1px 2px; border: 0; background: transparent; color: #6ea8ff; font-weight: 700; }
+#growthTable .growth-open:hover { text-decoration: underline; background: transparent; }
+.growth-details { margin-top: 10px; padding: 10px; border-top: 1px solid var(--line); max-height: 42vh; overflow: auto; }
+.growth-details[hidden] { display: none; }
+.growth-details h4 { margin: 0 0 6px; font-size: 14px; }
+.growth-details p { color: var(--dim); white-space: normal; }
+.growth-group { border-top: 1px solid #263040; padding: 7px 0; }
+.growth-group > span { float: right; color: var(--dim); }
+.growth-group ul { margin: 4px 0 0; padding-left: 18px; }
+.growth-group li { padding: 2px 0; white-space: normal; }

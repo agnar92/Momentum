@@ -363,13 +363,13 @@ def test_rel_volume():
     assert calc.rel_volume([10] * 9 + [None, 20], 10) == pytest.approx(2.0)          # brak jednego tygodnia nie blokuje
 
 
-def test_estimates_update_keeps_history_and_skips_fresh():
+def test_estimates_update_migrates_old_cache_and_keeps_history():
     from momentum import estimates
     cache = {"OLD": {"at": "2026-10-19", "surp": [], "rev90": 1.0, "hist": [["2026-10-19", 1.0]]},
              "X": {"at": "2026-10-01", "surp": [], "rev90": 2.0, "hist": [["2026-10-01", 2.0]]}}
     got = estimates.update(["OLD", "X", "N"], cache, log=lambda s: None, today=dt.date(2026, 10, 21), pause=0,
                            fetch_one=lambda t: {"surp": [["2026-08-01", 5.0]], "rev90": 7.5})
-    assert got == ["X", "N"] and cache["OLD"]["rev90"] == 1.0                              # świeży wpis bez pobierania
+    assert got == ["OLD", "X", "N"] and cache["OLD"]["rev90"] == 7.5                    # jednorazowa migracja starego cache bez Revenue Surprise
     assert cache["X"]["hist"] == [["2026-10-01", 2.0], ["2026-10-21", 7.5]] and cache["N"]["surp"] == [["2026-08-01", 5.0]]
 
 
@@ -399,3 +399,92 @@ def test_build_row_exposes_eps_history_and_forecasts():
     assert row["eps_q"] == [["2026-06-30", 1.2]]
     assert row["eps_est"][0]["avg"] == 4.0
     assert row["surp_hist"] == []
+
+
+def test_revenue_surprise_requires_actual_and_consensus():
+    from momentum import estimates
+    assert estimates._revenue_surprise({"Reported Revenue": 120, "Revenue Estimate": 100}) == 20.0
+    assert estimates._revenue_surprise({"Reported Revenue": 80, "Revenue Estimate": 100}) == -20.0
+    assert estimates._revenue_surprise({"Reported Revenue": 120}) is None
+
+
+def test_finviz_all_views_merge_fundamental_fields():
+    calls = []
+
+    class Response:
+        def __init__(self, view):
+            self.text = (
+                '<div>#1 / 1 Total</div><div class="fv-table_row" data-row-key="AAA">'
+                '<div data-column-id="company">Alpha</div>'
+                '<div data-column-id="marketCap">2.5B</div>'
+                '<div data-column-id="operMargin">18.2%</div>'
+                '<div data-column-id="roi">22.4%</div>'
+                '<div data-column-id="salesQoq">31.0%</div>'
+                '<div data-column-id="epsQoq">42.0%</div>'
+                '<div data-column-id="ps">8.5</div>'
+                '</div>'
+            )
+
+        def raise_for_status(self):
+            pass
+
+    def get(url, params, **kwargs):
+        calls.append(int(params["v"]))
+        return Response(params["v"])
+
+    rows, total = finviz.fetch_all(
+        "test", max_tickers=10, pause=0, log=lambda _: None, get=get
+    )
+    assert total == 1
+    assert calls == list(finviz.ALL_VIEWS)
+    assert len(rows) == 1 and rows[0]["ticker"] == "AAA"
+    assert rows[0]["opm"] == pytest.approx(18.2)
+    assert rows[0]["roi"] == pytest.approx(22.4)
+    assert rows[0]["sales_qoq"] == pytest.approx(31.0)
+    assert rows[0]["eps_qoq"] == pytest.approx(42.0)
+    assert rows[0]["ps"] == pytest.approx(8.5)
+    assert set(rows[0]["finviz_views"]) == set(finviz.ALL_VIEWS)
+    assert {"roi", "opm", "sales_qoq", "eps_qoq", "ps"}.issubset(rows[0]["finviz_fields"])
+
+
+def test_finviz_legacy_headers_normalize_financial_and_valuation_metrics():
+    page = """<div>#1 / 1 Total</div><table class="screener_table"><thead><tr>
+    <th>No.</th><th>Ticker</th><th>ROI</th><th>ROA</th><th>Forward P/E</th>
+    <th>EPS growth next year</th><th>Gross Margin</th><th>Perf Quarter</th>
+    </tr></thead><tbody><tr class="styled-row"><td>1</td><td data-boxover-ticker="AAA">AAA</td>
+    <td>22.4%</td><td>18.1%</td><td>24.5</td><td>35.0%</td><td>60.2%</td><td>18.5%</td>
+    </tr></tbody></table>"""
+    rows, total = finviz.parse_data_page(page)
+    assert total == 1 and rows[0]["ticker"] == "AAA"
+    assert rows[0]["roi"] == pytest.approx(22.4)
+    assert rows[0]["roa"] == pytest.approx(18.1)
+    assert rows[0]["forward_pe"] == pytest.approx(24.5)
+    assert rows[0]["eps_next_year"] == pytest.approx(35.0)
+    assert rows[0]["gross_margin"] == pytest.approx(60.2)
+    assert rows[0]["perf_quarter"] == pytest.approx(18.5)
+
+
+def test_build_row_prefers_finviz_surprises_and_roi_over_fallbacks():
+    est = {**EST, "revenue_surp": [["2026-02-01", 9.0]]}
+    base = {
+        "ticker": "FINVIZ_FIRST",
+        "eps_surprise_finviz": -3.0,
+        "revenue_surprise_finviz": 2.0,
+        "roi": 22.4,
+    }
+    row = calc.build_row(base, W, [50, 100, 90, 90, 90, 95], {"dopm": 5, "roic": 8}, SPY, est)
+    assert row["surp"] == pytest.approx(-3.0)
+    assert row["rev_surp"] == pytest.approx(2.0)
+    assert row["roi"] == pytest.approx(22.4)
+
+
+def test_growth_score_uses_finviz_roi_and_growth_fields():
+    result = calc.growth_score({
+        "sales_qoq": 30, "eps_qoq": 40, "roi": 20,
+        "opm": 18, "dopm": 4, "eps_next_year": 25,
+        "surp": 8, "rev_surp": 6,
+        "qs": [{"rev_rr": 10}, {"rev_rr": 20}],
+    })
+    assert result["score"] is not None
+    assert result["coverage"] >= 70
+    assert result["components"].get("roi") is not None
