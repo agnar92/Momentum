@@ -17,6 +17,7 @@
 <header class="bar">
     <strong class="brand">MOMENTUM <span>// GLB + marża operacyjna</span></strong>
     <select id="scanner" title="Skaner Finviz (lista w finviz_screen.json; każdy liczy tę samą strategię)"></select>
+    <button type="button" id="growthBtn" title="Ranking TOP 10 spółek według fundamentów, bez sygnałów wykresu">Growth Score</button>
     <label class="check"><input type="checkbox" id="onlyOk"> tylko spełniające warunki</label>
     <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. nad GLB i MACD dodatni">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
@@ -49,6 +50,12 @@
 </main>
 <div class="loadbar" id="loadbar" hidden><div class="loadtrack"><div class="loadfill" id="loadfill"></div></div><span id="loadtext"></span></div>
 <footer class="status"><span id="counts"></span> · <span id="status">Ładowanie…</span></footer>
+<dialog id="growthDlg" class="wide growth">
+    <h3>Growth Score — TOP 10 <small id="growthCount"></small></h3>
+    <div class="tblwrap"><table class="gt" id="growthTable"></table></div>
+    <div id="growthDetails" class="growth-details" hidden></div>
+    <div class="dlg-btns"><button type="button" id="growthComponentsBtn">▸ Składowe score</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
+</dialog>
 <dialog id="fundDlg" class="wide fundamentals"><h3 id="fundTitle">Fundamenty</h3><div id="fundBody"></div></dialog>
 <dialog id="symDlg">
     <form id="symForm">
