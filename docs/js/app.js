@@ -92,13 +92,13 @@ function weekInProgress(weekDate, generatedAt) {
 const GROWTH_SCORE_WEIGHTS = {
     revenue_growth: 10, eps_growth: 10, revenue_acceleration: 10,
     eps_surprise: 10, revenue_surprise: 10, eps_next_year: 10, eps_revision: 10,
-    op_margin: 6, op_margin_change: 4, roic: 6, profit_conversion: 4, durability: 10
+    op_margin: 6, op_margin_change: 4, roi: 5, profit_conversion: 5, durability: 10
 };
 const GROWTH_SCORE_GROUPS = {
     growth: ["Przyspieszenie wzrostu", ["revenue_growth", "eps_growth", "revenue_acceleration"]],
     surprises: ["Zaskoczenia wynikowe", ["eps_surprise", "revenue_surprise"]],
     future: ["Przyszły wzrost", ["eps_next_year", "eps_revision"]],
-    quality: ["Jakość biznesu", ["op_margin", "op_margin_change", "roic", "profit_conversion"]],
+    quality: ["Jakość biznesu", ["op_margin", "op_margin_change", "roi", "profit_conversion"]],
     durability: ["Trwałość wzrostu", ["durability"]]
 };
 function growthComponentPoints(value, knots) {
@@ -123,17 +123,17 @@ function growthScore(row) {
     const conversion = rev !== null && rev !== undefined && eps !== null && eps !== undefined &&
         Number.isFinite(Number(rev)) && Number.isFinite(Number(eps)) ? Number(eps) - Number(rev) : null;
     const components = {
-        revenue_growth: growthComponentPoints(rev, [[0,0],[10,4],[20,7],[35,10]]),
-        eps_growth: growthComponentPoints(eps, [[0,0],[10,4],[25,7],[50,10]]),
+        revenue_growth: growthComponentPoints(row.sales_qoq !== null && row.sales_qoq !== undefined ? row.sales_qoq : rev, [[0,0],[10,4],[20,7],[35,10]]),
+        eps_growth: growthComponentPoints(row.eps_qoq !== null && row.eps_qoq !== undefined ? row.eps_qoq : eps, [[0,0],[10,4],[25,7],[50,10]]),
         revenue_acceleration: growthComponentPoints(row.accel, [[-10,0],[0,3],[5,7],[10,10]]),
-        eps_surprise: growthComponentPoints(row.surp, [[-20,0],[0,0],[5,6],[15,9],[30,10]]),
-        revenue_surprise: growthComponentPoints(row.rev_surp, [[-20,0],[0,0],[5,6],[15,9],[30,10]]),
-        eps_next_year: growthComponentPoints(row.eps_growth_next_year, [[-10,0],[0,0],[10,4],[25,7],[50,10]]),
+        eps_surprise: growthComponentPoints(row.surp !== null && row.surp !== undefined ? row.surp : row.eps_surprise_finviz, [[-20,0],[0,0],[5,6],[15,9],[30,10]]),
+        revenue_surprise: growthComponentPoints(row.rev_surp !== null && row.rev_surp !== undefined ? row.rev_surp : row.revenue_surprise_finviz, [[-20,0],[0,0],[5,6],[15,9],[30,10]]),
+        eps_next_year: growthComponentPoints(row.eps_next_year !== null && row.eps_next_year !== undefined ? row.eps_next_year : row.eps_growth_next_year, [[-10,0],[0,0],[10,4],[25,7],[50,10]]),
         eps_revision: growthComponentPoints(row.eps_rev, [[-10,0],[0,0],[5,6],[10,8],[20,10]]),
-        op_margin: growthComponentPoints(row.opm, [[-10,0],[0,1],[10,3],[20,5],[30,6]]),
-        op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,2],[3,3],[6,4]]),
-        roic: growthComponentPoints(row.roic, [[0,0],[5,2],[10,4],[15,5],[25,6]]),
-        profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,2],[10,3],[25,4]]),
+        op_margin: growthComponentPoints(row.opm, [[-10,0],[0,1],[10,2.5],[20,4],[30,5]]),
+        op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,1],[3,2],[6,3]]),
+        roi: growthComponentPoints(row.roi !== null && row.roi !== undefined ? row.roi : row.roic, [[0,0],[5,1],[10,2.5],[15,4],[25,5]]),
+        profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,2],[10,3],[25,5]]),
         durability: growthComponentPoints(row.catalyst_score, [[0,0],[10,10]]) ?? growthDurability(row.qs)
     };
     const coverage = Object.entries(components).reduce((sum, [key, value]) => sum + (value === null ? 0 : GROWTH_SCORE_WEIGHTS[key]), 0);
