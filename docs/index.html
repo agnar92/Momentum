@@ -21,6 +21,7 @@
     <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. nad GLB i MACD dodatni">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
     <button type="button" id="guideBtn" title="Czego szukać w spółce: zasady z badań i lista kontrolna otwartej spółki">📖 Poradnik</button>
+    <button type="button" id="growthBtn" title="Ranking TOP 10 wyłącznie według fundamentów, bez wykresu ceny">Growth Score · TOP 10</button>
     <button type="button" id="posListBtn" title="Pozycje (plan wyjścia, co zrobić teraz) i obserwowane spółki">📌 Pozycje</button>
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
@@ -50,6 +51,16 @@
 <div class="loadbar" id="loadbar" hidden><div class="loadtrack"><div class="loadfill" id="loadfill"></div></div><span id="loadtext"></span></div>
 <footer class="status"><span id="counts"></span> · <span id="status">Ładowanie…</span></footer>
 <dialog id="fundDlg" class="wide fundamentals"><h3 id="fundTitle">Fundamenty</h3><div id="fundBody"></div></dialog>
+<dialog id="growthDlg" class="wide growth-dialog">
+    <h3>Growth Score · TOP 10 <small>ranking fundamentalny, niezależny od GLB i ceny</small></h3>
+    <p id="growthMeta" class="dimtxt"></p>
+    <div class="tblwrap"><table class="gt" id="growthTable"></table></div>
+    <details open>
+        <summary><b>Składowe score</b></summary>
+        <div id="growthDetailBody"></div>
+    </details>
+    <div class="dlg-btns"><button type="button" id="growthOpenBtn">Otwórz wykres wybranej spółki</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
+</dialog>
 <dialog id="symDlg">
     <form id="symForm">
         <label>Symbol (np. SPY, ^GSPC, NVDA)<input id="symInput" list="symList" autocomplete="off" autocapitalize="characters"></label>
