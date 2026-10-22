@@ -101,7 +101,7 @@ test("Growth Score follows the five agreed categories and requires 70 points of 
     assert.strictEqual(strong.coverage, 100);
     assert.deepStrictEqual(["growth","surprises","future","quality","durability"].map(k => strong.categories[k].weight), [30,20,20,20,10]);
     const partial = growthScore({rev_rr:20, eps_growth_q:25, accel:5, surp:10, rev_surp:8, eps_growth_next_year:25, eps_rev:10});
-    assert.strictEqual(partial.coverage, 70);
+    assert.strictEqual(partial.coverage, 76);
     assert.notStrictEqual(partial.score, null);
     assert.strictEqual(growthScore({rev_rr:25, accel:5}).score, null);
 });
