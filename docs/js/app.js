@@ -840,7 +840,7 @@ if (typeof document !== "undefined") (function () {
                 dlg.querySelector("#growthScoreDetail").open=true;
             });
         }
-        const scored=data.rows.map(r=>({r,s:growthScore(r)})).filter(x=>x.s.score!==null).sort((a,b)=>b.s.score-a.s.score).slice(0,10);
+        const scored=data.rows.filter(r=>!state.scanner||(r.scanners||[]).includes(state.scanner)).map(r=>({r,s:growthScore(r)})).filter(x=>x.s.score!==null).sort((a,b)=>b.s.score-a.s.score).slice(0,10);
         dlg.querySelector("#growthScoreRows").innerHTML=scored.map(x=>'<tr data-t="'+escapeHtml(x.r.ticker)+'"><td>'+escapeHtml(x.r.ticker)+'</td><td>'+x.s.score.toFixed(1)+'</td><td>'+x.s.coverage+'/100</td></tr>').join('')||'<tr><td colspan="3">Za mało danych do policzenia score</td></tr>';
         dlg.querySelector("#growthScoreNote").textContent='TOP 10 z aktualnie wczytanej listy Finviz. Braki danych obniżają pokrycie; score ukryty poniżej 70/100. Trwałość to proxy z historii przychodów, nie automatyczna ocena katalizatorów.';
         dlg.showModal();
