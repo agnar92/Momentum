@@ -66,7 +66,7 @@ def _latest_instant(facts, tags):
             units = (facts.get(tax, {}).get(tag) or {}).get("units", {})
             for unit in ("USD",):
                 for item in units.get(unit, []):
-                    if "start" not in item and item.get("end") and _ok(item.get("val")):
+                    if "start" not in item and item.get("end") and isinstance(item.get("val"), (int, float)):
                         values.append((item["end"], item.get("filed", ""), float(item["val"])))
     return max(values, default=(None, None, None), key=lambda x: (x[0], x[1]))[2]
 
