@@ -89,3 +89,19 @@ test("fundamentals are not a table column", () => {
     assert.ok(!COLUMNS.some(([key]) => key === "fundamentals"));
     assert.ok(!TEXT_COLS.includes("fundamentals"));
 });
+
+test("Growth Score follows the five agreed categories and requires 70 points of coverage", () => {
+    const { growthScore } = require("../../docs/js/app.js");
+    const strong = growthScore({
+        rev_rr: 35, eps_growth_q: 60, accel: 10, surp: 30, rev_surp: 30,
+        eps_growth_next_year: 50, eps_rev: 20, opm: 30, dopm: 6,
+        qs: [{rev_rr:10},{rev_rr:20},{rev_rr:30},{rev_rr:40}]
+    });
+    assert.strictEqual(strong.score, 100);
+    assert.strictEqual(strong.coverage, 100);
+    assert.deepStrictEqual(["growth","surprises","future","quality","durability"].map(k => strong.categories[k].weight), [30,20,20,20,10]);
+    const partial = growthScore({rev_rr:20, eps_growth_q:25, accel:5, surp:10, rev_surp:8, eps_growth_next_year:25, eps_rev:10});
+    assert.strictEqual(partial.coverage, 70);
+    assert.notStrictEqual(partial.score, null);
+    assert.strictEqual(growthScore({rev_rr:25, accel:5}).score, null);
+});
