@@ -92,13 +92,13 @@ function weekInProgress(weekDate, generatedAt) {
 const GROWTH_SCORE_WEIGHTS = {
     revenue_growth: 10, eps_growth: 10, revenue_acceleration: 10,
     eps_surprise: 10, revenue_surprise: 10, eps_next_year: 10, eps_revision: 10,
-    op_margin: 8, op_margin_change: 6, profit_conversion: 6, durability: 10
+    op_margin: 6, op_margin_change: 4, roic: 6, profit_conversion: 4, durability: 10
 };
 const GROWTH_SCORE_GROUPS = {
     growth: ["Przyspieszenie wzrostu", ["revenue_growth", "eps_growth", "revenue_acceleration"]],
     surprises: ["Zaskoczenia wynikowe", ["eps_surprise", "revenue_surprise"]],
     future: ["Przyszły wzrost", ["eps_next_year", "eps_revision"]],
-    quality: ["Jakość biznesu", ["op_margin", "op_margin_change", "profit_conversion"]],
+    quality: ["Jakość biznesu", ["op_margin", "op_margin_change", "roic", "profit_conversion"]],
     durability: ["Trwałość wzrostu", ["durability"]]
 };
 function growthComponentPoints(value, knots) {
@@ -132,6 +132,7 @@ function growthScore(row) {
         eps_revision: growthComponentPoints(row.eps_rev, [[-10,0],[0,0],[5,6],[10,8],[20,10]]),
         op_margin: growthComponentPoints(row.opm, [[-10,0],[0,1],[10,5],[20,7],[30,8]]),
         op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,3],[3,5],[6,6]]),
+        roic: growthComponentPoints(row.roic, [[0,0],[5,2],[10,4],[15,5],[25,6]]),
         profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,3],[10,5],[25,6]]),
         durability: growthDurability(row.qs)
     };
