@@ -221,14 +221,14 @@ GROWTH_SCORE_WEIGHTS = {
     "revenue_growth": 10.0, "eps_growth": 10.0, "revenue_acceleration": 10.0,
     "eps_surprise": 10.0, "revenue_surprise": 10.0,
     "eps_next_year": 10.0, "eps_revision": 10.0,
-    "op_margin": 8.0, "op_margin_change": 6.0, "profit_conversion": 6.0,
+    "op_margin": 6.0, "op_margin_change": 4.0, "roi": 5.0, "profit_conversion": 5.0,
     "durability": 10.0,
 }
 GROWTH_SCORE_GROUPS = {
     "growth": ("Przyspieszenie wzrostu", ("revenue_growth", "eps_growth", "revenue_acceleration")),
     "surprises": ("Zaskoczenia wynikowe", ("eps_surprise", "revenue_surprise")),
     "future": ("Przyszły wzrost", ("eps_next_year", "eps_revision")),
-    "quality": ("Jakość biznesu", ("op_margin", "op_margin_change", "profit_conversion")),
+    "quality": ("Jakość biznesu", ("op_margin", "op_margin_change", "roi", "profit_conversion")),
     "durability": ("Trwałość wzrostu", ("durability",)),
 }
 
@@ -291,23 +291,25 @@ def _estimate_growth(est):
 
 def growth_score(row, min_coverage=GROWTH_SCORE_MIN_COVERAGE):
     """Growth Score 0–100 w pięciu kategoriach. Braki pomijamy i normalizujemy do dostępnych wag.
-    ROIC jest estymowany z SEC i punktowany, jeśli dane bilansowe oraz operacyjne są dostępne.
+    Najpierw używa metryk Finviz; SEC jest źródłem uzupełniającym, gdy Finviz nie udostępnia pola.
     Trwałość to mierzalny proxy z historii wzrostu przychodów; katalizatory wymagają osobnej analizy.
     """
     row = row or {}
-    rev_growth, eps_growth = row.get("rev_rr"), row.get("eps_growth_q")
+    rev_growth = row.get("sales_qoq") if _ok(row.get("sales_qoq")) else row.get("rev_rr")
+    eps_growth = row.get("eps_qoq") if _ok(row.get("eps_qoq")) else row.get("eps_growth_q")
     conversion = (eps_growth - rev_growth) if _ok(eps_growth) and _ok(rev_growth) else None
     points = {
         "revenue_growth": _growth_component_points(rev_growth, ((0, 0), (10, 4), (20, 7), (35, 10))),
         "eps_growth": _growth_component_points(eps_growth, ((0, 0), (10, 4), (25, 7), (50, 10))),
         "revenue_acceleration": _growth_component_points(row.get("accel"), ((-10, 0), (0, 3), (5, 7), (10, 10))),
-        "eps_surprise": _growth_component_points(row.get("surp"), ((-20, 0), (0, 0), (5, 6), (15, 9), (30, 10))),
-        "revenue_surprise": _growth_component_points(row.get("rev_surp"), ((-20, 0), (0, 0), (5, 6), (15, 9), (30, 10))),
-        "eps_next_year": _growth_component_points(row.get("eps_growth_next_year"), ((-10, 0), (0, 0), (10, 4), (25, 7), (50, 10))),
+        "eps_surprise": _growth_component_points(row.get("surp") if _ok(row.get("surp")) else row.get("eps_surprise_finviz"), ((-20, 0), (0, 0), (5, 6), (15, 9), (30, 10))),
+        "revenue_surprise": _growth_component_points(row.get("rev_surp") if _ok(row.get("rev_surp")) else row.get("revenue_surprise_finviz"), ((-20, 0), (0, 0), (5, 6), (15, 9), (30, 10))),
+        "eps_next_year": _growth_component_points(row.get("eps_next_year") if _ok(row.get("eps_next_year")) else row.get("eps_growth_next_year"), ((-10, 0), (0, 0), (10, 4), (25, 7), (50, 10))),
         "eps_revision": _growth_component_points(row.get("eps_rev"), ((-10, 0), (0, 0), (5, 6), (10, 8), (20, 10))),
-        "op_margin": _growth_component_points(row.get("opm"), ((-10, 0), (0, 1), (10, 5), (20, 7), (30, 8))),
-        "op_margin_change": _growth_component_points(row.get("dopm"), ((-5, 0), (0, 3), (3, 5), (6, 6))),
-        "profit_conversion": _growth_component_points(conversion, ((-20, 0), (-5, 1), (0, 3), (10, 5), (25, 6))),
+        "op_margin": _growth_component_points(row.get("opm"), ((-10, 0), (0, 1), (10, 3), (20, 5), (30, 6))),
+        "op_margin_change": _growth_component_points(row.get("dopm"), ((-5, 0), (0, 2), (3, 3), (6, 4))),
+        "roi": _growth_component_points(row.get("roi") if _ok(row.get("roi")) else row.get("roic"), ((0, 0), (5, 1), (10, 2.5), (15, 4), (25, 5))),
+        "profit_conversion": _growth_component_points(conversion, ((-20, 0), (-5, 1), (0, 2), (10, 3), (25, 5))),
         "durability": _revenue_durability(row.get("qs")),
     }
     coverage = sum(GROWTH_SCORE_WEIGHTS[k] for k, value in points.items() if value is not None)
@@ -343,20 +345,35 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     row["trend"] = s10 > s30 if s10 is not None and s30 is not None else None   # trend tygodniowy: SMA 10 > SMA 30 (filtr listy)
     row["rvol_w"] = rel_volume(v, RVOL_W)
     row["rvol_d"] = None   # dzienny: uzupełnia odświeżenie ze świec dziennych (rel_volume(v_dzienne, RVOL_D))
-    row.update({k: (fund or {}).get(k) for k in ("rev_rr", "rev_rr1", "accel", "dopm", "dopm1", "opm", "dgm", "quarter", "qs", "op_d", "rev_q", "ttm_rev", "dil", "roic")})
     f = fund or {}
+    # Prefer Finviz screener columns when present; SEC fills historical/derived fields that Finviz does not expose.
+    for key in ("rev_rr1", "accel", "dopm", "dopm1", "dgm", "quarter", "qs", "op_d", "rev_q", "ttm_rev", "dil", "roic"):
+        if row.get(key) is None:
+            row[key] = f.get(key)
+    if not _ok(row.get("sales_qoq")):
+        row["rev_rr"] = f.get("rev_rr")
+    else:
+        row["rev_rr"] = row["sales_qoq"]
+    if not _ok(row.get("opm")):
+        row["opm"] = f.get("opm")
+    if not _ok(row.get("roi")) and not _ok(row.get("roic")):
+        row["roic"] = f.get("roic")
     mcap = row.get("market_cap") or (price * f["shares"] if _ok(price) and _ok(f.get("shares")) else None)
     row["ps"] = mcap / f["ttm_rev"] if _ok(mcap) and _ok(f.get("ttm_rev")) and f["ttm_rev"] > 0 else None
     row["rs"] = rel_strength(weekly, spy)
     as_of = (weekly.get("d") or [""])[-1]
     # tydzień z danych zaczyna się w poniedziałek: raport z tego tygodnia (do piątku) też jest znany
     row["surp"], row["surp_prev"], row["beat2"] = surprises(est, (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()) if as_of else (None, None, None)
+    if not _ok(row.get("surp")):
+        row["surp"] = row.get("eps_surprise_finviz")
     row["eps_rev"] = (est or {}).get("rev90")
-    row["eps_growth_q"] = _eps_growth_yoy((est or {}).get("eps_q"))
-    row["eps_growth_next_year"] = _estimate_growth(est)
+    row["eps_growth_q"] = row.get("eps_qoq") if _ok(row.get("eps_qoq")) else _eps_growth_yoy((est or {}).get("eps_q"))
+    row["eps_growth_next_year"] = row.get("eps_next_year") if _ok(row.get("eps_next_year")) else _estimate_growth(est)
     as_of = (weekly.get("d") or [""])[-1]
     known_through = (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat() if as_of else ""
     row["rev_surp"] = _latest_surprise((est or {}).get("revenue_surp"), known_through) if known_through else None
+    if not _ok(row.get("rev_surp")):
+        row["rev_surp"] = row.get("revenue_surprise_finviz")
     rev_history = [x for x in ((est or {}).get("revenue_surp") or [])
                    if isinstance(x, (list, tuple)) and len(x) >= 2 and x[0] <= known_through]
     row["rev_surp_prev"] = rev_history[-2][1] if len(rev_history) > 1 else None
