@@ -119,77 +119,15 @@ function weekInProgress(weekDate, generatedAt) {
     return Date.parse(generatedAt) < Date.parse(weekDate + "T00:00:00Z") + 5 * 864e5;
 }
 
-const GROWTH_SCORE_WEIGHTS = {
-    revenue_growth: 10, eps_growth: 10, revenue_acceleration: 10,
-    eps_surprise: 10, revenue_surprise: 10, eps_next_year: 10, eps_revision: 10,
-    op_margin: 5, op_margin_change: 3, roi: 7, profit_conversion: 5, durability: 10
-};
-const GROWTH_SCORE_GROUPS = {
-    growth: ["Przyspieszenie wzrostu", ["revenue_growth", "eps_growth", "revenue_acceleration"]],
-    surprises: ["Zaskoczenia wynikowe", ["eps_surprise", "revenue_surprise"]],
-    future: ["Przyszły wzrost", ["eps_next_year", "eps_revision"]],
-    quality: ["Jakość biznesu", ["op_margin", "op_margin_change", "roi", "profit_conversion"]],
-    durability: ["Trwałość wzrostu", ["durability"]]
-};
-function growthComponentPoints(value, knots) {
-    if (value === null || value === undefined || !Number.isFinite(Number(value))) return null;
-    value = Number(value);
-    if (value <= knots[0][0]) return knots[0][1];
-    for (let i = 0; i < knots.length - 1; i++) {
-        const [x0, y0] = knots[i], [x1, y1] = knots[i + 1];
-        if (value <= x1) return y0 + (value - x0) * (y1 - y0) / (x1 - x0);
-    }
-    return knots[knots.length - 1][1];
-}
-function growthDurability(qs) {
-    const values = (Array.isArray(qs) ? qs.slice(-4) : []).map(q => q && q.rev_rr).filter(v => v !== null && v !== undefined && Number.isFinite(Number(v))).map(Number);
-    if (values.length < 2) return null;
-    return values.filter(v => v > 0).length / values.length * 5 +
-        values.slice(1).filter((v, i) => v > values[i]).length / (values.length - 1) * 5;
-}
-function growthScore(row) {
-    row = row || {};
-    const rev = row.rev_rr, eps = row.eps_growth_q;
-    const conversion = rev !== null && rev !== undefined && eps !== null && eps !== undefined &&
-        Number.isFinite(Number(rev)) && Number.isFinite(Number(eps)) ? Number(eps) - Number(rev) : null;
-    const components = {
-        revenue_growth: growthComponentPoints(row.sales_qoq !== null && row.sales_qoq !== undefined ? row.sales_qoq : rev, [[0,0],[10,4],[20,7],[35,10]]),
-        eps_growth: growthComponentPoints(row.eps_qoq !== null && row.eps_qoq !== undefined ? row.eps_qoq : eps, [[0,0],[10,4],[25,7],[50,10]]),
-        revenue_acceleration: growthComponentPoints(row.accel, [[-10,0],[0,3],[5,7],[10,10]]),
-        eps_surprise: growthComponentPoints(row.surp !== null && row.surp !== undefined ? row.surp : row.eps_surprise_finviz, [[-20,0],[0,0],[5,6],[15,9],[30,10]]),
-        revenue_surprise: growthComponentPoints(row.rev_surp !== null && row.rev_surp !== undefined ? row.rev_surp : row.revenue_surprise_finviz, [[-20,0],[0,0],[5,6],[15,9],[30,10]]),
-        eps_next_year: growthComponentPoints(row.eps_next_year !== null && row.eps_next_year !== undefined ? row.eps_next_year : row.eps_growth_next_year, [[-10,0],[0,0],[10,4],[25,7],[50,10]]),
-        eps_revision: growthComponentPoints(row.eps_rev, [[-10,0],[0,0],[5,6],[10,8],[20,10]]),
-        op_margin: growthComponentPoints(row.opm, [[-10,0],[0,1],[10,2.5],[20,4],[30,5]]),
-        op_margin_change: growthComponentPoints(row.dopm, [[-5,0],[0,1],[3,2],[6,3]]),
-        roi: growthComponentPoints(row.roi !== null && row.roi !== undefined ? row.roi : row.roic, [[0,0],[5,1.5],[10,3.5],[15,5.5],[25,7]]),
-        profit_conversion: growthComponentPoints(conversion, [[-20,0],[-5,1],[0,2],[10,3],[25,5]]),
-        durability: growthComponentPoints(row.catalyst_score, [[0,0],[10,10]]) ?? growthDurability(row.qs)
-    };
-    const coverage = Object.entries(components).reduce((sum, [key, value]) => sum + (value === null ? 0 : GROWTH_SCORE_WEIGHTS[key]), 0);
-    const points = Object.values(components).reduce((sum, value) => sum + (value === null ? 0 : value), 0);
-    const categories = {};
-    for (const [key, [label, members]] of Object.entries(GROWTH_SCORE_GROUPS)) {
-        const available = members.reduce((sum, member) => sum + (components[member] === null ? 0 : GROWTH_SCORE_WEIGHTS[member]), 0);
-        const earned = members.reduce((sum, member) => sum + (components[member] === null ? 0 : components[member]), 0);
-        categories[key] = {label, points: Math.round(earned * 100) / 100, coverage: available,
-            weight: members.reduce((sum, member) => sum + GROWTH_SCORE_WEIGHTS[member], 0)};
-    }
-    return {score: coverage >= 70 && coverage > 0 ? Math.round(points / coverage * 1000) / 10 : null,
-        coverage, points: Math.round(points * 100) / 100, components, categories};
-}
-const growthResult = (row) => row && row.growth_score && row.growth_score.components ? row.growth_score : growthScore(row);
-
 const fileName = (t) => t.replace(/[^A-Za-z0-9.-]/g, "_") + ".json";   // jak watchlist.file_name
 
-if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS, growthScore };
+if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD", growthCatalysts: {} }, readSettings());   // exit: MACD / GLB
+    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
-    let growthSelected = null, growthShowDetails = false;
     let sel = null, gest = null, rafId = 0, spxData = null;
     let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
     const curShow = () => (period === "D" ? dShow : state.nShow);
@@ -210,7 +148,7 @@ if (typeof document !== "undefined") (function () {
         try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
     }
     function saveSettings() {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit, growthCatalysts: state.growthCatalysts || {} })); } catch (e) { /* tryb prywatny */ }
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
     }
     const allRows = () => data.rows.concat(data.symbols || []);
     const rowFor = (t) => allRows().find((r) => r.ticker === t) || null;
@@ -738,89 +676,6 @@ if (typeof document !== "undefined") (function () {
             ((state.exit === "GLB" ? pl.glbExit : r.macd_stop && r.price < r.macd_stop) ? `<p class="warnbox">⚠ Sygnał wyjścia (${state.exit === "GLB" ? "zamknięcie pod Green Line" : "zamknięcie pod stopem MACD"}).</p>` : "");
     }
 
-    function growthFmt(value, suffix = "") {
-        if (value === null || value === undefined || !Number.isFinite(Number(value))) return "brak danych";
-        const n = Number(value);
-        return (n >= 0 ? "+" : "") + n.toFixed(1).replace(".", ",") + suffix;
-    }
-    function growthPts(value, weight) {
-        return value === null || value === undefined ? "brak danych · pominięte" : Number(value).toFixed(1).replace(".", ",") + "/" + weight + " pkt";
-    }
-    function growthPool() {
-        return data.rows.filter(r => !state.scanner || (r.scanners || []).includes(state.scanner))
-            .map(r => {
-                const catalyst = (state.growthCatalysts || {})[r.ticker] || {};
-                return {row:{...r, catalyst_score:catalyst.score, catalyst_note:catalyst.note},
-                    result:growthScore({...r, catalyst_score:catalyst.score})};
-            })
-            .sort((a,b) => {
-                const x=a.result.score, y=b.result.score;
-                if (x === null || x === undefined) return y === null || y === undefined ? a.row.ticker.localeCompare(b.row.ticker) : 1;
-                if (y === null || y === undefined) return -1;
-                return y-x || a.row.ticker.localeCompare(b.row.ticker);
-            });
-    }
-    function renderGrowthDetails() {
-        const wrap = $("growthDetails");
-        if (!growthShowDetails) { wrap.hidden = true; return; }
-        wrap.hidden = false;
-        const item = growthPool().find(x => x.row.ticker === growthSelected);
-        if (!item) { wrap.textContent = "Brak spółki z wystarczającymi danymi."; return; }
-        const {row, result} = item;
-        let html = '<h4>' + escapeHtml(row.ticker) + ' · Growth Score: ' +
-            (result.score == null ? 'brak (pokrycie < 70/100)' : result.score.toFixed(1).replace(".", ",") + '/100') + '</h4>' +
-            '<p>Pokrycie: ' + result.coverage + '/100 pkt wag · suma zdobytych punktów / dostępne wagi × 100. Brakujące dane są pomijane, nie dostają zera.</p>';
-        const raw = {
-            revenue_growth:["Przychody r/r (Finviz, gdy dostępne)",row.sales_qoq == null ? row.rev_rr : row.sales_qoq,"%"],
-            eps_growth:["EPS Growth r/r (Finviz, gdy dostępne)",row.eps_qoq == null ? row.eps_growth_q : row.eps_qoq,"%"],
-            revenue_acceleration:["Zmiana tempa przychodów",row.accel," pp"],
-            eps_surprise:["EPS Surprise",row.surp == null ? row.eps_surprise_finviz : row.surp,"%"],
-            revenue_surprise:["Revenue Surprise",row.rev_surp == null ? row.revenue_surprise_finviz : row.rev_surp,"%"],
-            eps_next_year:["Prognozowany wzrost EPS +1y",row.eps_next_year == null ? row.eps_growth_next_year : row.eps_next_year,"%"],
-            eps_revision:["Rewizja EPS 90 dni",row.eps_rev,"%"],
-            op_margin:["Marża operacyjna",row.opm,"%"],
-            op_margin_change:["Zmiana marży operacyjnej",row.dopm," pp"],
-            roi:["ROI (Finviz; SEC ROIC jako fallback)",row.roi == null ? row.roic : row.roi,"%"],
-            profit_conversion:["EPS growth minus sales growth",
-                (row.eps_qoq == null && row.eps_growth_q == null) || (row.sales_qoq == null && row.rev_rr == null) ? null : (row.eps_qoq == null ? row.eps_growth_q : row.eps_qoq) - (row.sales_qoq == null ? row.rev_rr : row.sales_qoq)," pp"],
-            durability:["Ocena katalizatora (ręczna; inaczej proxy)",row.catalyst_score,"/10"]
-        };
-        for (const [key, [label, members]] of Object.entries(GROWTH_SCORE_GROUPS)) {
-            const group=result.categories[key];
-            html += '<section class="growth-group"><b>' + escapeHtml(group.label) + '</b> <span>' +
-                group.points.toFixed(1).replace(".", ",") + '/' + group.coverage + ' dostępnych / ' + group.weight + ' pkt</span><ul>';
-            for (const member of members) {
-                const [label2,value,suffix]=raw[member];
-                html += '<li>' + escapeHtml(label2) + ': ' + growthFmt(value,suffix) + ' → ' +
-                    growthPts(result.components[member],GROWTH_SCORE_WEIGHTS[member]) + '</li>';
-            }
-            if (key === "durability") {
-                const history=(row.qs||[]).slice(-4).filter(q=>q && q.rev_rr!=null).map(q=>growthFmt(q.rev_rr,"%"));
-                html += '<li>Ostatnie tempo przychodów r/r: ' + (history.length ? history.map(escapeHtml).join(", ") : "brak danych") + '</li>';
-            }
-            html += '</ul></section>';
-        }
-        html += '<p>Katalizator: ' + escapeHtml(row.catalyst_note || "brak ręcznej oceny — użyto proxy historii przychodów") + '</p>' +
-            '<button type="button" data-growth-catalyst="' + escapeHtml(row.ticker) + '">Oceń katalizator (0–10)</button>' +
-            '<p class="dimtxt">Najpierw używane są metryki z zakładek Finviz. Jeśli brakuje ROI, SEC-owy ROIC jest tylko szacunkiem zastępczym. EPS revisions 90 dni i Revenue Surprise są pobierane z Yahoo tylko wtedy, gdy Finviz nie udostępnia potrzebnych danych. Ocena katalizatora jest ręczna i wymaga konkretnego uzasadnienia.</p>';
-        wrap.innerHTML=html;
-    }
-    function renderGrowthScore() {
-        const pool=growthPool(), scored=pool.filter(x=>x.result.score!=null), top=scored.slice(0,10);
-        $("growthCount").textContent = 'TOP ' + top.length + ' · ' + scored.length + ' spółek ma wystarczające dane z ' + pool.length;
-        if (!top.some(x=>x.row.ticker===growthSelected)) growthSelected=top.length?top[0].row.ticker:null;
-        $("growthTable").innerHTML='<thead><tr><th>Ticker</th><th class="num">Score</th></tr></thead><tbody>' +
-            (top.map(x=>'<tr data-growth-row="' + escapeHtml(x.row.ticker) + '" class="' + (x.row.ticker===growthSelected?'selected':'') + '">' +
-                '<td><button type="button" class="growth-open" data-growth-open="' + escapeHtml(x.row.ticker) + '">' + escapeHtml(x.row.ticker) + '</button></td>' +
-                '<td class="num">' + x.result.score.toFixed(1).replace(".", ",") + '</td></tr>').join("") ||
-             '<tr><td colspan="2" class="empty">Brak spółek z pokryciem danych co najmniej 70/100.</td></tr>') + '</tbody>';
-        renderGrowthDetails();
-    }
-    function openGrowthScore() {
-        renderGrowthScore();
-        $("growthDlg").showModal();
-    }
-
     function openGuide() {
         const r = current && rowFor(current);
         $("guideStock").innerHTML = r ? checklist(r) : '<p class="dimtxt">Otwórz wykres spółki, żeby zobaczyć jej listę kontrolną.</p>';
@@ -1018,34 +873,6 @@ if (typeof document !== "undefined") (function () {
             if (b && rowFor(b.dataset.t)) { $("fundDlg").close(); openChart(b.dataset.t); }
         });
         $("fundBtn").addEventListener("click", () => { if (current) openFundamentals(current); });
-        $("growthBtn").addEventListener("click", openGrowthScore);
-        $("growthComponentsBtn").addEventListener("click", () => {
-            growthShowDetails = !growthShowDetails;
-            $("growthComponentsBtn").textContent = growthShowDetails ? "▾ Ukryj składowe" : "▸ Składowe score";
-            renderGrowthScore();
-        });
-        $("growthDetails").addEventListener("click", (e) => {
-            const button = e.target.closest("[data-growth-catalyst]");
-            if (!button) return;
-            const ticker = button.dataset.growthCatalyst;
-            const old = (state.growthCatalysts || {})[ticker] || {};
-            const rawScore = window.prompt("Oceń wiarygodność dalszego wzrostu 0–10 (popyt, produkt, kontrakt, ekspansja):", old.score == null ? "" : String(old.score));
-            if (rawScore === null) return;
-            const score = Number(rawScore);
-            if (!Number.isInteger(score) || score < 0 || score > 10) { window.alert("Wpisz liczbę całkowitą od 0 do 10."); return; }
-            const note = window.prompt("Podaj konkretne uzasadnienie (produkt, kontrakt, popyt):", old.note || "");
-            if (note === null) return;
-            state.growthCatalysts = state.growthCatalysts || {};
-            state.growthCatalysts[ticker] = {score, note:note.trim()};
-            saveSettings();
-            renderGrowthScore();
-        });
-        $("growthTable").addEventListener("click", (e) => {
-            const open = e.target.closest("[data-growth-open]");
-            if (open) { const ticker = open.dataset.growthOpen; $("growthDlg").close(); openChart(ticker); return; }
-            const tr = e.target.closest("[data-growth-row]");
-            if (tr) { growthSelected = tr.dataset.growthRow; renderGrowthScore(); }
-        });
         $("closeChart").addEventListener("click", closeChart);
         $("symBtn").addEventListener("click", openSymbol);
         $("symForm").addEventListener("submit", (e) => { e.preventDefault(); chooseSymbol($("symInput").value); });

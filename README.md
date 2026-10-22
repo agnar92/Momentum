@@ -70,10 +70,3 @@ cd docs && python3 -m http.server        # strona: http://localhost:8000
 python -m pytest -q && ruff check .      # testy Pythona
 npm ci && npm test && npm run lint       # testy i lint JS
 ```
-
-
-## Growth Score — ranking fundamentalny
-
-Przycisk **Growth Score** otwiera ranking TOP 10 spółek bieżącego skanera Finviz, niezależnie od sygnałów GLB i wykresu ceny. Wagi: przyspieszenie wzrostu 30 pkt (przychody r/r, EPS r/r, zmiana tempa przychodów), zaskoczenia wynikowe 20 pkt (EPS i przychody vs konsensus), przyszły wzrost 20 pkt (prognoza EPS na kolejny rok i rewizje EPS z 90 dni), jakość biznesu 20 pkt (marża operacyjna, jej zmiana oraz wzrost EPS względem sprzedaży), trwałość wzrostu 10 pkt (regularność wzrostu przychodów w ostatnich kwartałach).
-
-Brakujące dane są pomijane, a wynik normalizowany do dostępnych wag; score jest pokazywany od pokrycia 70/100. ROI/ROA z filtra Finviz są bramką wstępną, nie dodatkową punktacją. Trwałość jest mierzalnym przybliżeniem na podstawie historii przychodów — katalizatory takie jak popyt, nowe produkty i kontrakty wymagają ręcznej weryfikacji. Growth Score nie jest sygnałem kupna ani potwierdzoną przewagą inwestycyjną.
