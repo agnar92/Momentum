@@ -746,6 +746,7 @@ if (typeof document !== "undefined") (function () {
             eps_revision:["Rewizja EPS 90 dni",row.eps_rev,"%"],
             op_margin:["Marża operacyjna",row.opm,"%"],
             op_margin_change:["Zmiana marży operacyjnej",row.dopm," pp"],
+            roic:["ROIC estymowany z SEC",row.roic,"%"],
             profit_conversion:["EPS growth minus sales growth",
                 row.eps_growth_q == null || row.rev_rr == null ? null : row.eps_growth_q-row.rev_rr," pp"],
             durability:["Regularność wzrostu przychodów (proxy)",null,""]
@@ -765,7 +766,7 @@ if (typeof document !== "undefined") (function () {
             }
             html += '</ul></section>';
         }
-        html += '<p class="dimtxt">ROI/ROA > 15% to bramka wstępnego filtra Finviz, a nie dodatkowe punkty — aplikacja nie przechowuje tu surowych wartości. Trwałość jest proxy z historii przychodów; popyt, nowe produkty i kontrakty wymagają ręcznej weryfikacji.</p>';
+        html += '<p class="dimtxt">ROIC to szacunek z danych SEC: zysk operacyjny TTM po szacowanym podatku / (aktywa − zobowiązania krótkoterminowe); brak składników oznacza brak punktów. Trwałość opiera się na historii przychodów; popyt, nowe produkty i kontrakty wymagają ręcznej weryfikacji.</p>';
         wrap.innerHTML=html;
     }
     function renderGrowthScore() {
