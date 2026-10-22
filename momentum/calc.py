@@ -359,7 +359,8 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     if not _ok(row.get("roi")) and not _ok(row.get("roic")):
         row["roic"] = f.get("roic")
     mcap = row.get("market_cap") or (price * f["shares"] if _ok(price) and _ok(f.get("shares")) else None)
-    row["ps"] = mcap / f["ttm_rev"] if _ok(mcap) and _ok(f.get("ttm_rev")) and f["ttm_rev"] > 0 else None
+    if not _ok(row.get("ps")):
+        row["ps"] = mcap / f["ttm_rev"] if _ok(mcap) and _ok(f.get("ttm_rev")) and f["ttm_rev"] > 0 else None
     row["rs"] = rel_strength(weekly, spy)
     as_of = (weekly.get("d") or [""])[-1]
     # tydzień z danych zaczyna się w poniedziałek: raport z tego tygodnia (do piątku) też jest znany
