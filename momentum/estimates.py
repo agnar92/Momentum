@@ -78,22 +78,37 @@ def _revenue_surprise(row):
     return round((actual - estimate) / abs(estimate) * 100, 2)
 
 
+def _revenue_surprise(row):
+    """Revenue surprise (%) only when Yahoo supplies actual and consensus revenue."""
+    for key in ("Revenue Surprise(%)", "Revenue Surprise (%)"):
+        value = _finite(row.get(key))
+        if value is not None:
+            return round(value, 2)
+    actual = next((_finite(row.get(k)) for k in ("Reported Revenue", "Revenue Actual", "Actual Revenue")
+                   if _finite(row.get(k)) is not None), None)
+    estimate = next((_finite(row.get(k)) for k in ("Revenue Estimate", "Estimated Revenue")
+                     if _finite(row.get(k)) is not None), None)
+    if actual is None or estimate is None or estimate == 0:
+        return None
+    return round((actual - estimate) / abs(estimate) * 100, 2)
+
+
 def fetch(t):
-    """Return EPS surprises, 90-day revision, quarterly EPS history and analyst estimates."""
+    """Return EPS/revenue surprises, quarterly EPS history, estimates and 90-day EPS revisions."""
     tk = _yf().Ticker(t)
     surp, revenue_surp = [], []
     try:
-        d = tk.get_earnings_dates(limit=12)
+        d = tk.get_earnings_dates(limit=32)
         if d is not None and len(d):
+            today = dt.date.today().isoformat()
             for ts, r in d.sort_index().iterrows():
-                est, rep, s = r.get("EPS Estimate"), r.get("Reported EPS"), r.get("Surprise(%)")
-                values = [_finite(x) for x in (est, rep, s)]
-                report_date = ts.strftime("%Y-%m-%d")
-                if all(x is not None for x in values) and abs(values[0]) >= 0.01:
-                    surp.append([report_date, round(values[2], 2)])
-                rev_surp = _revenue_surprise(r)
-                if rev_surp is not None and report_date <= dt.date.today().isoformat():
-                    revenue_surp.append([report_date, rev_surp])
+                day = ts.strftime("%Y-%m-%d")
+                est, rep, surprise = (_finite(r.get(k)) for k in ("EPS Estimate", "Reported EPS", "Surprise(%)"))
+                if est is not None and rep is not None and surprise is not None and abs(est) >= 0.01 and day <= today:
+                    surp.append([day, round(surprise, 2)])
+                rev = _revenue_surprise(r)
+                if rev is not None and day <= today:
+                    revenue_surp.append([day, rev])
     except Exception:
         pass
     rev90 = None
@@ -105,17 +120,16 @@ def fetch(t):
                 rev90 = round((cur / old - 1) * 100, 2)
     except Exception:
         pass
-    eps_q, eps_est = [], []
     try:
         eps_q = _eps_history(tk.quarterly_income_stmt)
     except Exception:
-        pass
+        eps_q = []
     try:
         eps_est = _estimate_rows(tk.earnings_estimate)
     except Exception:
-        pass
-    return {"surp": surp[-24:], "revenue_surp": revenue_surp[-24:], "rev90": rev90, "eps_q": eps_q, "eps_est": eps_est}
-
+        eps_est = []
+    return {"surp": surp[-24:], "revenue_surp": revenue_surp[-24:], "rev90": rev90,
+            "eps_q": eps_q, "eps_est": eps_est}
 
 def update(tickers, cache, log=print, today=None, pause=0.1, progress=None, fetch_one=None):
     """Refresh stale estimates; preserve prior values when one ticker fails."""
