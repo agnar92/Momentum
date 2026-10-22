@@ -105,3 +105,11 @@ test("Growth Score follows the five agreed categories and requires 70 points of 
     assert.notStrictEqual(partial.score, null);
     assert.strictEqual(growthScore({rev_rr:25, accel:5}).score, null);
 });
+
+
+test("manual catalyst assessment overrides the historical durability proxy", () => {
+    const { growthScore } = require("../../docs/js/app.js");
+    const result = growthScore({ qs: [{rev_rr:-10},{rev_rr:-20}], catalyst_score: 8 });
+    assert.strictEqual(result.components.durability, 8);
+    assert.strictEqual(result.categories.durability.coverage, 10);
+});
