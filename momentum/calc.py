@@ -221,7 +221,7 @@ GROWTH_SCORE_WEIGHTS = {
     "revenue_growth": 10.0, "eps_growth": 10.0, "revenue_acceleration": 10.0,
     "eps_surprise": 10.0, "revenue_surprise": 10.0,
     "eps_next_year": 10.0, "eps_revision": 10.0,
-    "op_margin": 6.0, "op_margin_change": 4.0, "roi": 5.0, "profit_conversion": 5.0,
+    "op_margin": 5.0, "op_margin_change": 3.0, "roi": 7.0, "profit_conversion": 5.0,
     "durability": 10.0,
 }
 GROWTH_SCORE_GROUPS = {
@@ -308,7 +308,7 @@ def growth_score(row, min_coverage=GROWTH_SCORE_MIN_COVERAGE):
         "eps_revision": _growth_component_points(row.get("eps_rev"), ((-10, 0), (0, 0), (5, 6), (10, 8), (20, 10))),
         "op_margin": _growth_component_points(row.get("opm"), ((-10, 0), (0, 1), (10, 3), (20, 5), (30, 6))),
         "op_margin_change": _growth_component_points(row.get("dopm"), ((-5, 0), (0, 2), (3, 3), (6, 4))),
-        "roi": _growth_component_points(row.get("roi") if _ok(row.get("roi")) else row.get("roic"), ((0, 0), (5, 1), (10, 2.5), (15, 4), (25, 5))),
+        "roi": _growth_component_points(row.get("roi") if _ok(row.get("roi")) else row.get("roic"), ((0, 0), (5, 1.5), (10, 3.5), (15, 5.5), (25, 7))),
         "profit_conversion": _growth_component_points(conversion, ((-20, 0), (-5, 1), (0, 2), (10, 3), (25, 5))),
         "durability": _revenue_durability(row.get("qs")),
     }
