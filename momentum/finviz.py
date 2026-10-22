@@ -143,7 +143,7 @@ _FIELD_ALIASES = {
     "insiderOwn": "insider_ownership", "insiderTrans": "insider_change", "high52": "high_52w",
     "low52": "low_52w", "forwardPE": "forward_pe", "peg": "peg", "ps": "ps", "pb": "pb",
     "pfcf": "pfcf", "pe": "pe", "evEbitda": "ev_ebitda", "evSales": "ev_sales",
-    "grossMargin": "gross_margin", "dividend": "dividend", "payout": "payout",
+    "dividend": "dividend", "payout": "payout",
     "sales": "sales", "income": "income", "bookSh": "book_value_share", "cashSh": "cash_share",
     "employees": "employees", "country": "country", "exchange": "exchange", "industry": "industry",
     "sector": "sector", "index": "index", "earnings": "earnings_date", "recom": "analyst_recommendation",
