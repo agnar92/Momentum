@@ -741,18 +741,18 @@ if (typeof document !== "undefined") (function () {
             (result.score == null ? 'brak (pokrycie < 70/100)' : result.score.toFixed(1).replace(".", ",") + '/100') + '</h4>' +
             '<p>Pokrycie: ' + result.coverage + '/100 pkt wag · suma zdobytych punktów / dostępne wagi × 100. Brakujące dane są pomijane, nie dostają zera.</p>';
         const raw = {
-            revenue_growth:["Przychody r/r",row.rev_rr,"%"],
-            eps_growth:["EPS Growth r/r",row.eps_growth_q,"%"],
+            revenue_growth:["Przychody r/r (Finviz, gdy dostępne)",row.sales_qoq == null ? row.rev_rr : row.sales_qoq,"%"],
+            eps_growth:["EPS Growth r/r (Finviz, gdy dostępne)",row.eps_qoq == null ? row.eps_growth_q : row.eps_qoq,"%"],
             revenue_acceleration:["Zmiana tempa przychodów",row.accel," pp"],
-            eps_surprise:["EPS Surprise",row.surp,"%"],
-            revenue_surprise:["Revenue Surprise",row.rev_surp,"%"],
-            eps_next_year:["Prognozowany wzrost EPS +1y",row.eps_growth_next_year,"%"],
+            eps_surprise:["EPS Surprise",row.surp == null ? row.eps_surprise_finviz : row.surp,"%"],
+            revenue_surprise:["Revenue Surprise",row.rev_surp == null ? row.revenue_surprise_finviz : row.rev_surp,"%"],
+            eps_next_year:["Prognozowany wzrost EPS +1y",row.eps_next_year == null ? row.eps_growth_next_year : row.eps_next_year,"%"],
             eps_revision:["Rewizja EPS 90 dni",row.eps_rev,"%"],
             op_margin:["Marża operacyjna",row.opm,"%"],
             op_margin_change:["Zmiana marży operacyjnej",row.dopm," pp"],
-            roic:["ROIC estymowany z SEC",row.roic,"%"],
+            roi:["ROI (Finviz; SEC ROIC jako fallback)",row.roi == null ? row.roic : row.roi,"%"],
             profit_conversion:["EPS growth minus sales growth",
-                row.eps_growth_q == null || row.rev_rr == null ? null : row.eps_growth_q-row.rev_rr," pp"],
+                (row.eps_qoq == null && row.eps_growth_q == null) || (row.sales_qoq == null && row.rev_rr == null) ? null : (row.eps_qoq == null ? row.eps_growth_q : row.eps_qoq) - (row.sales_qoq == null ? row.rev_rr : row.sales_qoq)," pp"],
             durability:["Ocena katalizatora (ręczna; inaczej proxy)",row.catalyst_score,"/10"]
         };
         for (const [key, [label, members]] of Object.entries(GROWTH_SCORE_GROUPS)) {
@@ -772,7 +772,7 @@ if (typeof document !== "undefined") (function () {
         }
         html += '<p>Katalizator: ' + escapeHtml(row.catalyst_note || "brak ręcznej oceny — użyto proxy historii przychodów") + '</p>' +
             '<button type="button" data-growth-catalyst="' + escapeHtml(row.ticker) + '">Oceń katalizator (0–10)</button>' +
-            '<p class="dimtxt">ROIC to szacunek z SEC: zysk operacyjny TTM po szacowanym podatku / (aktywa − zobowiązania krótkoterminowe). Ocena katalizatora jest ręczna i wymaga konkretnego uzasadnienia.</p>';
+            '<p class="dimtxt">Najpierw używane są metryki z zakładek Finviz. Jeśli brakuje ROI, SEC-owy ROIC jest tylko szacunkiem zastępczym. EPS revisions 90 dni i Revenue Surprise są pobierane z Yahoo tylko wtedy, gdy Finviz nie udostępnia potrzebnych danych. Ocena katalizatora jest ręczna i wymaga konkretnego uzasadnienia.</p>';
         wrap.innerHTML=html;
     }
     function renderGrowthScore() {
