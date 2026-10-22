@@ -73,11 +73,14 @@ def fetch_scanners(scans, prev, fetch_list, log, min_tickers=MIN_TICKERS):
         if stale:
             old = [r for r in prev_rows if sc["name"] in (r.get("scanners") or [sc["name"]])]
             log(f"⚠ Finviz [{sc['name']}] zwrócił {len(rows)} spółek — używam poprzedniej listy ({len(old)}).")
-            rows = [{k: r.get(k) for k in KEYS} for r in old]
+            rows = [dict(r) for r in old]
             total = next((m.get("total") for m in prev.get("scanners") or [] if m.get("name") == sc["name"]), prev.get("finviz_total"))
         for r in rows:
-            b = base.setdefault(r["ticker"], {**{k: r.get(k) for k in KEYS}, "scanners": []})
-            b["scanners"].append(sc["name"])
+            b = base.setdefault(r["ticker"], {**r, "scanners": []})
+            # Preserve fields collected from all Finviz tabs across overlapping scanners.
+            b.update({k: v for k, v in r.items() if v is not None and k != "scanners"})
+            if sc["name"] not in b["scanners"]:
+                b["scanners"].append(sc["name"])
         meta.append({"name": sc["name"], "filters": sc["filters"], "total": total, "n": len(rows), "stale": stale})
         log(f"Finviz [{sc['name']}]: {len(rows)} spółek{f' z {total}' if total and total != len(rows) else ''}")
     # Zachowaj skanery, których nie odświeżaliśmy w tym uruchomieniu.
@@ -115,7 +118,7 @@ ABOVE_GLB = ("WYBICIE", "SYGNAŁ", "NAD")   # spółki z wykresem dziennym
 BENCH = "SPY"
 
 
-def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
+def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch_all, weekly=prices.weekly, monthly=prices.monthly,
         fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, finviz_name=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
