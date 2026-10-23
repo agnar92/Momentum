@@ -45,6 +45,20 @@ def green_line(months, confirm=CONFIRM_MONTHS):
     return level, at
 
 
+def blue_line(weekly_highs, confirm=13):
+    """Blue Line z tygodniowych High: rekord wszech czasów staje się linią po 13 zamkniętych tygodniach.
+    Odpowiednik GLB na interwale tygodniowym (kwartał potwierdzenia zamiast 3 miesięcy)."""
+    level = at = None
+    mx, mi = -math.inf, None
+    for i, value in enumerate(weekly_highs):
+        if not _ok(value):
+            continue
+        if value > mx:
+            mx, mi = value, i
+        if i - mi >= confirm:
+            level, at = mx, mi
+    return level, at
+
 def green_line_series(months, confirm=CONFIRM_MONTHS):
     """Green Line obowiązująca w każdym miesiącu: wartość i = linia z miesięcy zamkniętych przed miesiącem i (wykres miesięczny)."""
     out, level, mx, mi = [None], None, -math.inf, None
@@ -311,8 +325,11 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     price = c[-1] if c else None
     prev = c[-2] if len(c) > 1 else None
     level, _ = green_line(months)
-    row.update(price=price, glb=level, glb_state=glb_state(price, prev, level),
+    blue, _ = blue_line(weekly.get("h") or [])
+    row.update(price=price, glb=level, blb=blue, glb_state=glb_state(price, prev, level),
                glb_pct=(price / level - 1) * 100 if _ok(price) and _ok(level) and level else None,
+               blb_pct=(price / blue - 1) * 100 if _ok(price) and _ok(blue) and blue else None,
+               blb_state=glb_state(price, prev, blue),
                turnover=turnover(c, v))
     m = macd_info(c, lo)
     row.update(macd=m["state"], macd_stop=m["stop"])
