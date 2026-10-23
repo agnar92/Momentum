@@ -586,11 +586,11 @@ if (typeof document !== "undefined") (function () {
         const watch = Object.keys(ast.watch).filter((t) => !ast.pos[t]).map((t) => {
             const r = rowFor(t) || {};
             return `<tr><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td>${f(r.price)}</td><td>${f(r.glb)}</td><td>${pct(r.glb_pct)}</td><td>${e(r.glb_state || "")}</td>` +
-                `<td>${e(r.macd || "")}</td><td>${r.trend ? "✓" : ""}</td><td>${pct(r.rs)}</td><td>${r.ok ? "✓" : ""}</td>` +
+                `<td>${e(r.macd || "")}</td><td>${r.trend ? "✓" : ""}</td><td>${pct(r.rs)}</td>` +
                 `<td><button type="button" data-del-watch="${e(t)}" title="Przestań obserwować">✕</button></td></tr>`;
         });
-        $("watchTable").innerHTML = "<tr><th>Ticker</th><th>Cena</th><th>Green Line</th><th>Do linii %</th><th>GLB</th><th>MACD</th><th>SMA 10>30</th><th>RS pp</th><th>Warunki</th><th></th></tr>" +
-            (watch.join("") || '<tr><td colspan="10">Brak obserwowanych (🔕 Obserwuj na wykresie).</td></tr>');
+        $("watchTable").innerHTML = "<tr><th>Ticker</th><th>Cena</th><th>Green Line</th><th>Do linii %</th><th>GLB</th><th>MACD</th><th>SMA 10>30</th><th>RS pp</th><th></th></tr>" +
+            (watch.join("") || '<tr><td colspan="9">Brak obserwowanych (🔕 Obserwuj na wykresie).</td></tr>');
         if (!$("posDlg").open) $("posDlg").showModal();
     }
 
@@ -617,48 +617,7 @@ if (typeof document !== "undefined") (function () {
         openPositions();
     }
 
-    // ---------- poradnik: zasady z badań + lista kontrolna otwartej spółki ----------
-    function checklist(r) {
-        const yes = (v) => (v === true ? '<b class="ok">✓</b>' : v === false ? '<b class="no">✗</b>' : '<b class="na">—</b>');
-        const fmtv = (v, u) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${u}`);
-        const held = ast.pos[r.ticker];
-        const rows = [
-            [`Przychody kw. ≥ +15 % r/r (${fmtv(r.rev_rr, " %")})`, r.rev_rr == null ? null : r.rev_rr >= 15],
-            [`Marża oper. ≥ +3 pp r/r (${fmtv(r.dopm, " pp")})`, r.dopm == null ? null : r.dopm >= 3],
-            [`Wycena P/S < 20 (${r.ps != null ? r.ps.toFixed(1) : "—"})`, r.ps == null ? null : r.ps < 20],
-            [`Siła względna 52 tyg. ≥ +50 pp nad S&P 500 (${fmtv(r.rs, " pp")})`, r.rs == null ? null : r.rs >= 50],
-            [`2 ostatnie raporty powyżej konsensusu EPS (${fmtv(r.surp, " %")}, wcześniej ${fmtv(r.surp_prev, " %")})`, r.beat2 == null ? null : r.beat2],
-            [`Rewizja prognozy EPS na przyszły rok, 90 dni: ${fmtv(r.eps_rev, " %")} <small>(podgląd — bez backtestu, yfinance nie ma historii)</small>`, r.eps_rev == null ? null : r.eps_rev > 0],
-            [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno: tydzień przebicia dowolnie wysoko, 0–10 % nad albo Blue Dot na dziennym, gdy > 10 %)`, ["WYBICIE", "SYGNAŁ", "BLUE DOT"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
-            [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
-            [`Zamknięcie nad Green Line ${r.glb != null ? r.glb.toFixed(2) : "—"} (wyjście metodą GLB: zamknięcie tygodnia pod linią)`, r.glb == null || r.price == null ? null : r.price >= r.glb],
-            [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
-        ];
-        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — ${r.ok ? "spełnia warunki" : "nie spełnia warunków"}${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
-            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
-            "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
-            posPlanHtml(r) +
-            (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
-    }
 
-    // 📌 pozycja: poziomy wyjścia (stop −10 %, ½ przy −20 % od szczytu, metoda MACD albo GLB)
-    function posPlanHtml(r) {
-        const pl = planFor(r.ticker);
-        if (!ast.pos[r.ticker]) return "";
-        const f = (v) => (v == null ? "—" : v.toFixed(2));
-        if (!pl) return '<p class="dimtxt">Plan wyjścia: wczytuję świece…</p>';
-        const exitTxt = state.exit === "GLB" ? `zamknięcie tygodnia pod Green Line ${f(r.glb)}` : `stop MACD ${f(r.macd_stop)} (Low tygodnia przecięcia w dół)`;
-        return `<p><b>Plan wyjścia</b> (metoda: ${state.exit === "GLB" ? "pod GLB" : "MACD"}, zmiana przyciskiem 🚪 na wykresie): kupno ${f(pl.entry)} · stop −10 % ${f(pl.stopInit)} · ` +
-            `szczyt od wejścia ${f(pl.peak)} → <b>½ przy ${f(pl.halfAt)}</b> (−20 %) · reszta: ${exitTxt}</p>` +
-            (pl.half ? `<p class="warnbox">⚠ Zamknięcie ${f(pl.last)} jest ≥ 20 % pod szczytem ${f(pl.peak)} — sprzedaj połowę.</p>` : "") +
-            ((state.exit === "GLB" ? pl.glbExit : r.macd_stop && r.price < r.macd_stop) ? `<p class="warnbox">⚠ Sygnał wyjścia (${state.exit === "GLB" ? "zamknięcie pod Green Line" : "zamknięcie pod stopem MACD"}).</p>` : "");
-    }
-
-    function openGuide() {
-        const r = current && rowFor(current);
-        $("guideStock").innerHTML = r ? checklist(r) : '<p class="dimtxt">Otwórz wykres spółki, żeby zobaczyć jej listę kontrolną.</p>';
-        $("guideDlg").showModal();
-    }
 
     // ---------- filtry ----------
     function renderFilters() {
@@ -851,7 +810,6 @@ if (typeof document !== "undefined") (function () {
         $("perW").addEventListener("click", () => togglePeriod("W"));
         $("perD").addEventListener("click", () => togglePeriod("D"));
         $("dayRwbBtn").addEventListener("click", () => { dailyRwb = !dailyRwb; renderPeriod(); drawChart(); });
-        $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
         $("fltBtn").addEventListener("click", () => { renderFilters(); $("fltDlg").showModal(); });
