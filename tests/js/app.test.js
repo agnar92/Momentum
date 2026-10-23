@@ -18,9 +18,9 @@ const ROWS = [
     { ticker: "D", company: "Delta", ok: true, glb_state: "NAD", dopm: null },
 ];
 
-test("default order: GLB signals rank first even when extra legacy conditions fail", () => {
+test("default order uses breakout signals without reapplying extra fundamental conditions", () => {
     assert.deepStrictEqual(visibleRows(ROWS, {}).map((r) => r.ticker), ["B", "C", "A", "D"]);
-    assert.deepStrictEqual(visibleRows(ROWS, { onlyOk: true }).map((r) => r.ticker), ["B", "A", "D"]);
+    assert.deepStrictEqual(visibleRows(ROWS, { filters: {} }).map((r) => r.ticker), ["B", "C", "A", "D"]);
     assert.ok(isSignal(ROWS[1]) && isSignal(ROWS[2]));
 });
 
