@@ -55,7 +55,7 @@ function compareBy(key, dir) {
 const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
-    ["Sygnał kupna: warunki + wybicie / 0–10 % / Blue Dot", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
+    ["Wybicie / sygnał / Blue Dot", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Aktywne: RVol tyg. ≥ 1,5 + nad GLB", { rvol_w: { min: 1.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
@@ -146,7 +146,7 @@ if (typeof document !== "undefined") (function () {
         // Raw price/SPY ratios are not comparable across tickers because nominal share prices and splits differ.
         const ranked = pool.filter((r) => Number.isFinite(r.rs_rating_score)).sort((a, b) => a.rs_rating_score - b.rs_rating_score);
         ranked.forEach((r, i) => { r.rs_rating = ranked.length < 2 ? 50 : Math.max(1, Math.min(99, Math.round(1 + 98 * i / (ranked.length - 1)))); });
-        pool.filter((r) => !Number.isFinite(r.rs)).forEach((r) => { r.rs_rating = null; });
+        pool.filter((r) => !Number.isFinite(r.rs_rating_score)).forEach((r) => { r.rs_rating = null; });
         shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
