@@ -411,7 +411,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
                 const x = xf(i - i0), y = yr(v), color = priceMadeHigh ? C.glb : "#f472b6";
                 parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${color}"><title>${priceMadeHigh ? "RS new high" : "RS new high before price"}</title></circle>`);
             }
-            const last = rs[rs.length - 1], [px, py] = pts.filter(Boolean).slice(-1)[0] || [x1, b1];
+            const lastPt = pts.filter(Boolean).slice(-1)[0];
+            const py = lastPt ? lastPt[1] : b1;
             if (row && row.rs != null) boxText(x1 + 4, py + 4, `RS 52W ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
             if (row && row.rs_rating != null) boxText(x0 + 4, b0 - 4, `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
             text(x0 + 4, b1 - 3, `RS Line / MA ${D ? "252 sesji" : "52 tyg."} · zielony = nowy szczyt RS · różowy = RS przed ceną`, "#f0b429");
