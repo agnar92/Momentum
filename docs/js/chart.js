@@ -296,7 +296,6 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         text(x1 + 4, y + 4, fmt(level), "#000");
         const aboveGlb = last0 != null && last0 >= level;
         boxText(x0 + 4, y0 + 13, `GLB ${fmt(level)} · CENA ${aboveGlb ? "NAD" : "POD"} LINIĄ`, aboveGlb ? C.glb : C.stop);
-        boxText(x0 + 4, y0 + 13, `GLB ${fmt(level)} · CENA ${aboveGlb ? "NAD" : "POD"} LINIĄ`, aboveGlb ? C.glb : C.stop);
     }
     if (blueLevel && blueLevel > pmin && blueLevel < pmax) {
         const y = yf(blueLevel);
@@ -306,7 +305,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         text(x1 + 4, y + 4, fmt(blueLevel), "#000");
         const aboveBlb = last0 != null && last0 >= blueLevel;
         boxText(x0 + 4, y0 + 27, `BLB ${fmt(blueLevel)} · CENA ${aboveBlb ? "NAD" : "POD"} LINIĄ`, aboveBlb ? "#60a5fa" : C.stop);
-    }    const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
+    }
+    const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
     if (stop && stop > pmin && stop < pmax) {
         const y = yf(stop);
         line(x0, y, x1, y, C.stop, 1, 'stroke-dasharray="5 4"');
