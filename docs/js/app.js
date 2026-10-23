@@ -485,7 +485,6 @@ if (typeof document !== "undefined") (function () {
         const ln = sel && findLine(sel);
         $("posBtn").classList.toggle("on", !!(current && ast.pos[current]));
         $("posBtn").textContent = current && ast.pos[current] ? "📌 Mam pozycję" : "📌 Pozycja";
-        const r = current && rowFor(current);
         $("exitBtn").textContent = state.exit === "GLB" ? "🚪 Wyjście: pod GLB" : "🚪 Wyjście: MACD";
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
         $("watchBtn").textContent = current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj";
