@@ -426,7 +426,10 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     text(x0 + 4, q0 + 2, qs.length ? `Przychody kw. · r/r % (zielony ≥ 25 %, żółty ≥ 15 %) · ostatni ${fmtBig(qs[qs.length - 1].rev)} $` : "Przychody kw. — brak danych SEC", C.dim);
     // EPS IBD-style: kwartalne wyniki rzeczywiste jako linia z własną skalą w panelu fundamentalnym.
     const eps = ((row && row.eps_q) || []).filter((x) => Array.isArray(x) && x.length >= 2 && Number.isFinite(x[1])).slice().sort((a, b) => a[0].localeCompare(b[0]));
-    const epsVisible = eps.map((x) => ({ date: x[0], value: x[1], idx: LN.dateIndex(dates, x[0]) })).filter((x) => x.idx >= 0);
+    const epsVisible = eps.map((x) => {
+        const next = dates.findIndex((d) => d >= x[0]);
+        return { date: x[0], value: x[1], idx: next < 0 ? -1 : Math.max(0, next - 1) };
+    }).filter((x) => x.idx >= 0);
     if (epsVisible.length > 1) {
         const vals = epsVisible.map((x) => x.value), emin = Math.min(...vals), emax = Math.max(...vals), erange = emax - emin || Math.max(1, Math.abs(emax) * 0.1);
         const ey = (v) => q1 - 4 - (v - emin) / erange * Math.max(4, q1 - q0 - 28);
