@@ -17,6 +17,14 @@ def test_green_line_needs_three_closed_months_and_keeps_old_line():
     assert calc.green_line([10, 12, 11, 11, 11, 11, 11, 11, 11])[0] == 12   # „3 lub więcej” — rekord stojący dłużej nadal jest linią
 
 
+def test_blue_line_uses_weekly_highs_and_13_week_confirmation():
+    assert calc.blue_line([10, 12] + [11] * 12) == (None, None)
+    assert calc.blue_line([10, 12] + [11] * 13) == (12, 1)
+    # A fresh higher high does not replace the confirmed old line until it has aged 13 weeks.
+    assert calc.blue_line([10, 12] + [11] * 13 + [15, 14] + [14] * 11) == (12, 1)
+    assert calc.blue_line([10, 12] + [11] * 13 + [15, 14] + [14] * 12) == (15, 15)
+
+
 def test_glb_state():
     assert calc.glb_state(105, 99, 100) == "WYBICIE"
     assert calc.glb_state(105, 103, 100) == "SYGNAŁ"
