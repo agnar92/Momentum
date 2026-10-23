@@ -102,7 +102,7 @@ if (typeof document !== "undefined") (function () {
     const state = Object.assign({ sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
-    let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
+    let period = "W", dShow = 260, dailyRwb = true;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
     const curShow = () => (period === "D" ? dShow : state.nShow);
     const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
     const weeklyCache = new Map(), weeklyData = new Map();   // obietnice pobrania / gotowe serie (plan wyjścia pozycji)
@@ -144,7 +144,7 @@ if (typeof document !== "undefined") (function () {
         const pool = visibleRows(data.rows, { scanner: state.scanner });
         // Cross-sectional RS Rating: percentile of 52-week relative performance (share price / SPY normalized over time).
         // Raw price/SPY ratios are not comparable across tickers because nominal share prices and splits differ.
-        const ranked = pool.filter((r) => Number.isFinite(r.rs)).sort((a, b) => a.rs - b.rs);
+        const ranked = pool.filter((r) => Number.isFinite(r.rs_rating_score)).sort((a, b) => a.rs_rating_score - b.rs_rating_score);
         ranked.forEach((r, i) => { r.rs_rating = ranked.length < 2 ? 50 : Math.max(1, Math.min(99, Math.round(1 + 98 * i / (ranked.length - 1)))); });
         pool.filter((r) => !Number.isFinite(r.rs)).forEach((r) => { r.rs_rating = null; });
         shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
@@ -232,7 +232,7 @@ if (typeof document !== "undefined") (function () {
         const r = rowFor(t);
         if (period === "D" && !(r && r.daily)) period = "W";
         renderPeriod();
-        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), loadWeekly("SPY")]);
+        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), period === "D" ? loadDaily("SPY") : loadWeekly("SPY")]);
         spxData = spx;
         if (current !== t) return;
         series = d || false;
@@ -248,6 +248,9 @@ if (typeof document !== "undefined") (function () {
     function renderPeriod() {
         const r = current && rowFor(current), ok = !!(r && r.daily);
         $("perD").hidden = !ok;
+        $("dayRwbBtn").hidden = !ok || period !== "D";
+        $("dayRwbBtn").classList.toggle("on", dailyRwb);
+        $("dayRwbBtn").textContent = dailyRwb ? "RWB: ON" : "RWB: OFF";
         $("perW").classList.toggle("on", period === "W");
         $("perD").classList.toggle("on", period === "D");
     }
@@ -263,8 +266,9 @@ if (typeof document !== "undefined") (function () {
         const t = current;
         series = null;
         drawChart();
-        const d = await (period === "D" ? loadDaily(t) : loadWeekly(t));
+        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), period === "D" ? loadDaily("SPY") : loadWeekly("SPY")]);
         if (current !== t) return;
+        spxData = spx;
         series = d || false;
         drawChart();
     }
@@ -280,7 +284,7 @@ if (typeof document !== "undefined") (function () {
         }
         drawSlider();
         const row = rowFor(current) && { ...rowFor(current), exit: state.exit, plan: planFor(current) };
-        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period);
+        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period, dailyRwb);
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -847,6 +851,7 @@ if (typeof document !== "undefined") (function () {
         });
         $("perW").addEventListener("click", () => togglePeriod("W"));
         $("perD").addEventListener("click", () => togglePeriod("D"));
+        $("dayRwbBtn").addEventListener("click", () => { dailyRwb = !dailyRwb; renderPeriod(); drawChart(); });
         $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
