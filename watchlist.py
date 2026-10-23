@@ -205,13 +205,14 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     ddir = Path(out) / "daily"
     above = [r["ticker"] for r in rows if r.get("glb_state") in ABOVE_GLB]
     try:
-        dser = daily(liquid, log=log, period="2y") if liquid else {}
+        daily_symbols = list(dict.fromkeys(liquid + [BENCH]))
+        dser = daily(daily_symbols, log=log, period="2y") if daily_symbols else {}
     except Exception as e:
         log(f"⚠ dzienne (RVol/C/C[250]) niedostępne ({e})")
         dser = {}
     ddir.mkdir(parents=True, exist_ok=True)
     dkeep = set()
-    for t in above:
+    for t in list(dict.fromkeys(above + [BENCH])):
         sd = dser.get(t)
         if sd:
             dkeep.add(file_name(t))

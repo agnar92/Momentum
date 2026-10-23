@@ -415,3 +415,12 @@ def test_build_row_exposes_eps_history_and_forecasts():
     assert row["eps_q"] == [["2026-06-30", 1.2]]
     assert row["eps_est"][0]["avg"] == 4.0
     assert row["surp_hist"] == []
+
+
+def test_deepvue_style_rs_score_weights_recent_relative_performance():
+    dates = [(dt.date(2025, 1, 6) + dt.timedelta(days=7 * i)).isoformat() for i in range(60)]
+    stock = {"d": dates, "c": [100 + i for i in range(60)]}
+    spy = {"d": dates, "c": [100.0] * 60}
+    score = calc.rs_rating_score(stock, spy)
+    assert score is not None and score > 0
+    assert calc.rs_rating_score({"d": dates[:3], "c": [100, 101, 102]}, spy) is None

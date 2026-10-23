@@ -110,16 +110,10 @@ td.c-rs { text-align: right; }
 td.c-slow { color: #ffb020; }
 .badge { border-radius: 12px; color: #f0b429; }
 .badge.warn { color: #ffb020; border-color: #ffb020; }
-dialog.guide { width: min(760px, 96vw); }
-.guide details { margin: 8px 0; }
-.guide summary { cursor: pointer; }
 .gt td { padding: 2px 10px 2px 0; border-bottom: 1px solid #1a1f26; }
-ul.chk { list-style: none; padding: 0; margin: 6px 0; display: block; }
-ul.chk li { padding: 3px 0; }
 .ok { color: var(--green); } .no { color: #ff5c5c; } .na { color: var(--dim); }
 .dimtxt { color: var(--dim); font-size: 12px; }
 .warnbox { border: 1px solid #ffb020; border-radius: 6px; padding: 6px 10px; color: #ffd27a; }
-#guideStock h4 { margin: 6px 0 2px; }
 
 .positive { color: #3ddc84 !important; }
 .negative { color: #ff626c !important; }
@@ -135,16 +129,3 @@ ul.chk li { padding: 3px 0; }
 .fundamentals .tblwrap { margin-bottom: 8px; }
 .fundamentals .tblwrap td, .fundamentals .tblwrap th { padding: 5px 7px; }
 @media (max-width: 640px) { .fund-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
-/* Growth Score TOP 10 */
-dialog.growth-dialog { width: min(900px, 97vw); max-height: 90vh; overflow: auto; }
-#growthTable { width: min(360px, 100%); margin-bottom: 12px; }
-#growthTable tr.sel { background: var(--sel); }
-#growthTable button { padding: 2px 6px; background: transparent; border: 0; font-weight: 700; }
-#growthDetailBody { margin-top: 10px; }
-#growthDetailBody h4 { margin: 8px 0 4px; }
-#growthDetailBody .tblwrap { max-height: 42vh; overflow: auto; }
-#growthDetailBody .tblwrap td { white-space: normal; }
-#growthDetailBody .tblwrap td:last-child { white-space: nowrap; }
-.growth-dialog details { margin-top: 8px; }
-.growth-dialog summary { cursor: pointer; }

@@ -1,4 +1,4 @@
-// Strona: jedna lista (skan Finviz + warunki strategii) i jeden wykres tygodniowy — ta sama aplikacja co Momentum Desktop.
+// Strona: uniwersum z Finviz, filtry, GLB/BLB i wykresy dzienne/tygodniowe.
 // Ctrl+K = dowolny symbol z listy albo z `symbols` w finviz_screen.json. Czyste funkcje na górze (testy w tests/js/app.test.js).
 "use strict";
 
@@ -8,8 +8,7 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["blb", "Blue Line", "p"], ["blb_pct", "Do BLB %", "%"], ["blb_state", "BLB", "s"],
     ["rs_rating", "RS Rating", "rating"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc250", "C/C250", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
-    ["slow", "Hamuje", "w"],
+    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc250", "C/C250", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
 const BLB_SIGNAL = ["WYBICIE", "SYGNAŁ"];
@@ -31,39 +30,9 @@ function cell(v, f) {
     return String(v);
 }
 
-function growthScore(r) {
-    const n = (v) => typeof v === "number" && Number.isFinite(v);
-    const pts = (v, knots) => {
-        if (!n(v)) return null;
-        if (v <= knots[0][0]) return knots[0][1];
-        for (let i=1;i<knots.length;i++) if(v<=knots[i][0]) {
-            const [x0,y0]=knots[i-1], [x1,y1]=knots[i];
-            return y0+(v-x0)*(y1-y0)/(x1-x0);
-        }
-        return knots[knots.length-1][1];
-    };
-    const est = (r.eps_est||[]).find(x=>x.period==="+1y");
-    const next = est && n(est.growth) ? (Math.abs(est.growth)<=1 ? est.growth*100 : est.growth) : null;
-    const rev = r.rev_rr, accel = r.accel;
-    const accVals=[rev,accel].filter(n);
-    const acceleration=accVals.length ? accVals.reduce((a,b)=>a+b,0)/accVals.length : null;
-    const surprise = n(r.surp) ? pts(r.surp, [[-20,0],[0,8],[5,14],[10,18],[20,20]]) : null;
-    const futureVals=[pts(next,[[0,0],[5,6],[10,12],[20,17],[35,20]]),pts(r.eps_rev,[[-10,0],[0,8],[5,14],[10,18],[20,20]])].filter(n);
-    const future=futureVals.length?futureVals.reduce((a,b)=>a+b,0)/futureVals.length:null;
-    const qualityVals=[pts(r.opm,[[0,0],[5,8],[15,14],[30,17],[50,20]]),pts(r.dopm,[[-5,0],[0,8],[3,14],[8,20]])].filter(n);
-    const quality=qualityVals.length?qualityVals.reduce((a,b)=>a+b,0)/qualityVals.length:null;
-    const qs=(r.qs||[]).map(x=>x.rev_rr).filter(n).slice(-4);
-    const durability=qs.length?pts(qs.reduce((a,b)=>a+b,0)/qs.length,[[0,0],[5,3],[10,6],[20,8],[35,10]]):null;
-    const components={acceleration:pts(acceleration,[[-10,0],[0,10],[10,20],[20,26],[35,30]]),surprises:surprise,future,quality,durability};
-    const weights={acceleration:30,surprises:20,future:20,quality:20,durability:10};
-    const coverage=Object.keys(weights).reduce((a,k)=>a+(components[k]===null?0:weights[k]),0);
-    const earned=Object.keys(weights).reduce((a,k)=>a+(components[k]===null?0:components[k]),0);
-    return {score:coverage>=70&&coverage?Math.round(earned/coverage*1000)/10:null,coverage,components,notes:"Revenue Surprise i ROI/ROIC nie są obecnie dostępne w danych; katalizatory wymagają ręcznej oceny."};
-}
-
 const isSignal = (r) => !!(SIGNAL.includes(r.glb_state) || BLB_SIGNAL.includes(r.blb_state));
 
-// najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki; w grupie od największej siły względnej
+// najpierw sygnały GLB/BLB, potem pozostałe; w grupie od najwyższego RS Rating.
 function defaultCompare(a, b) {
     const key = (r) => [!isSignal(r), -(r.rs_rating ?? -1e9), -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
@@ -83,10 +52,10 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
-    ["Sygnał kupna: warunki + wybicie / 0–10 % / Blue Dot", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
+    ["Wybicie / sygnał / Blue Dot", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Aktywne: RVol tyg. ≥ 1,5 + nad GLB", { rvol_w: { min: 1.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
@@ -95,7 +64,7 @@ const FILTER_PRESETS = [
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
 ];
 
-const filterValue = (r, k) => (k === "ok" || k === "trend" || k === "beat2" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
+const filterValue = (r, k) => (k === "trend" || k === "beat2" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
 
 function passFilters(r, filters) {
     for (const [k, f] of Object.entries(filters || {})) {
@@ -111,7 +80,7 @@ const activeFilters = (filters) => Object.values(filters || {}).filter((f) => (f
 
 function visibleRows(rows, opts) {
     const q = (opts.search || "").trim().toLowerCase();
-    let out = rows.filter((r) => (!opts.onlyOk || r.ok) && (!opts.scanner || (r.scanners || []).includes(opts.scanner)) && passFilters(r, opts.filters) &&
+    let out = rows.filter((r) => (!opts.scanner || (r.scanners || []).includes(opts.scanner)) && passFilters(r, opts.filters) &&
         (!q || r.ticker.toLowerCase().includes(q) || (r.company || "").toLowerCase().includes(q)));
     out = out.slice().sort(opts.sort ? compareBy(opts.sort.key, opts.sort.dir) : defaultCompare);
     return out;
@@ -130,10 +99,10 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: false, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
+    const state = Object.assign({ sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
-    let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
+    let period = "W", dShow = 260, dailyRwb = true;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
     const curShow = () => (period === "D" ? dShow : state.nShow);
     const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
     const weeklyCache = new Map(), weeklyData = new Map();   // obietnice pobrania / gotowe serie (plan wyjścia pozycji)
@@ -152,7 +121,7 @@ if (typeof document !== "undefined") (function () {
         try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
     }
     function saveSettings() {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
     }
     const allRows = () => data.rows.concat(data.symbols || []);
     const rowFor = (t) => allRows().find((r) => r.ticker === t) || null;
@@ -175,21 +144,23 @@ if (typeof document !== "undefined") (function () {
         const pool = visibleRows(data.rows, { scanner: state.scanner });
         // Cross-sectional RS Rating: percentile of 52-week relative performance (share price / SPY normalized over time).
         // Raw price/SPY ratios are not comparable across tickers because nominal share prices and splits differ.
-        const ranked = pool.filter((r) => Number.isFinite(r.rs)).sort((a, b) => a.rs - b.rs);
+        const ranked = pool.filter((r) => Number.isFinite(r.rs_rating_score)).sort((a, b) => a.rs_rating_score - b.rs_rating_score);
         ranked.forEach((r, i) => { r.rs_rating = ranked.length < 2 ? 50 : Math.max(1, Math.min(99, Math.round(1 + 98 * i / (ranked.length - 1)))); });
-        pool.filter((r) => !Number.isFinite(r.rs)).forEach((r) => { r.rs_rating = null; });
-        shown = visibleRows(data.rows, { onlyOk: state.onlyOk, search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
+        pool.filter((r) => !Number.isFinite(r.rs_rating_score)).forEach((r) => { r.rs_rating = null; });
+        shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
             const held = !!ast.pos[r.ticker], warn = held && posWarn(r);
-            const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
+            const cls = [isSignal(r) ? "signal" : "", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
-        }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
-        const ok = pool.filter((r) => r.ok).length, sig = pool.filter(isSignal).length;
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · warunki spełnia ${ok} · sygnał GLB ${sig}`;
+        }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
+        const sig = pool.filter((r) => isSignal(r)).length;
+        const ratingNeedsRefresh = pool.length > 0 && pool.every((r) => !Number.isFinite(r.rs_rating_score));
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB/BLB ${sig}` +
+            (ratingNeedsRefresh ? " · odśwież dane, aby policzyć RS Rating" : "");
         renderStatus();
     }
 
@@ -263,7 +234,7 @@ if (typeof document !== "undefined") (function () {
         const r = rowFor(t);
         if (period === "D" && !(r && r.daily)) period = "W";
         renderPeriod();
-        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), loadWeekly("SPY")]);
+        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), period === "D" ? loadDaily("SPY") : loadWeekly("SPY")]);
         spxData = spx;
         if (current !== t) return;
         series = d || false;
@@ -275,10 +246,13 @@ if (typeof document !== "undefined") (function () {
         return dailyCache.get(t);
     }
 
-    // przyciski T / D (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy; tylko spółki nad Green Line)
+    // Przyciski T / D; wykres dzienny pokazuje OHLC, a RWB/GMMA i Blue Dot są opcjonalną nakładką.
     function renderPeriod() {
         const r = current && rowFor(current), ok = !!(r && r.daily);
         $("perD").hidden = !ok;
+        $("dayRwbBtn").hidden = !ok || period !== "D";
+        $("dayRwbBtn").classList.toggle("on", dailyRwb);
+        $("dayRwbBtn").textContent = dailyRwb ? "RWB: ON" : "RWB: OFF";
         $("perW").classList.toggle("on", period === "W");
         $("perD").classList.toggle("on", period === "D");
     }
@@ -294,8 +268,9 @@ if (typeof document !== "undefined") (function () {
         const t = current;
         series = null;
         drawChart();
-        const d = await (period === "D" ? loadDaily(t) : loadWeekly(t));
+        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), period === "D" ? loadDaily("SPY") : loadWeekly("SPY")]);
         if (current !== t) return;
+        spxData = spx;
         series = d || false;
         drawChart();
     }
@@ -311,7 +286,7 @@ if (typeof document !== "undefined") (function () {
         }
         drawSlider();
         const row = rowFor(current) && { ...rowFor(current), exit: state.exit, plan: planFor(current) };
-        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period);
+        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period, dailyRwb);
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -512,9 +487,6 @@ if (typeof document !== "undefined") (function () {
         const ln = sel && findLine(sel);
         $("posBtn").classList.toggle("on", !!(current && ast.pos[current]));
         $("posBtn").textContent = current && ast.pos[current] ? "📌 Mam pozycję" : "📌 Pozycja";
-        const r = current && rowFor(current);
-        $("potBadge").textContent = r ? `${r.ok ? "✓ warunki" : "✗ warunki"}${r.slow ? " · ⚠ hamuje" : ""}` : "";
-        $("potBadge").classList.toggle("warn", !!(r && r.slow));
         $("exitBtn").textContent = state.exit === "GLB" ? "🚪 Wyjście: pod GLB" : "🚪 Wyjście: MACD";
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
         $("watchBtn").textContent = current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj";
@@ -568,67 +540,6 @@ if (typeof document !== "undefined") (function () {
         $("alertDlg").showModal();
     }
 
-
-    // Growth Score: fundamentalny ranking niezależny od ceny i sygnałów GLB.
-    function growthRows() {
-        const rows = data.rows.filter((r) => !state.scanner || (r.scanners || []).includes(state.scanner));
-        return rows.filter((r) => r.growth_score && r.growth_score.score != null)
-            .sort((a, b) => (b.growth_score.score - a.growth_score.score) || a.ticker.localeCompare(b.ticker))
-            .slice(0, 10);
-    }
-
-    function renderGrowthDetails(r) {
-        const result = r.growth_score;
-        if (!result) {
-            $("growthDetailBody").innerHTML = '<p class="dimtxt">Brak wystarczających danych do policzenia Growth Score.</p>';
-            return;
-        }
-        const specs = [
-            ["revenue_growth", "Przychody r/r", r.rev_rr, "%", 10],
-            ["revenue_acceleration", "Przyspieszenie przychodów", r.accel, " pp", 8],
-            ["eps_growth", "Wzrost EPS r/r", r.eps_growth_q, "%", 12],
-            ["eps_surprise", "EPS Surprise", r.surp, "%", 10],
-            ["revenue_surprise", "Revenue Surprise", r.revenue_surprise, "%", 10],
-            ["eps_next_year", "Prognozowany wzrost EPS +1y", r.eps_growth_next_year, "%", 10],
-            ["eps_revision", "Rewizja EPS 90 dni", r.eps_rev, "%", 10],
-            ["operating_margin", "Marża operacyjna", r.opm, "%", 10],
-            ["margin_change", "Zmiana marży operacyjnej", r.dopm, " pp", 5],
-            ["roi", "ROI/ROIC", r.roic == null ? r.roi : r.roic, "%", 5],
-            ["revenue_consistency", "Spójność wzrostu przychodów", null, "", 5],
-            ["eps_consistency", "Spójność wzrostu EPS", null, "", 3],
-            ["catalyst", "Katalizator: produkt / popyt / kontrakty", r.growth_catalyst_score, "/2", 2],
-        ];
-        const fmt = (v, suffix) => v == null || !Number.isFinite(Number(v)) ? "brak danych" : (Number(v) > 0 ? "+" : "") + Number(v).toFixed(1) + suffix;
-        const points = (v, max) => v == null ? '<span class="na">brak danych · pominięte</span>' : '<b>' + Number(v).toFixed(1) + "/" + max + " pkt</b>";
-        const rows = specs.map(([key, label, value, suffix, weight]) => {
-            const shown = ["revenue_consistency", "eps_consistency"].includes(key) ? "historia wielokwartałowa" : fmt(value, suffix);
-            return '<tr><td>' + escapeHtml(label) + '</td><td>' + escapeHtml(shown) + '</td><td class="num">' + points(result.components[key], weight) + '</td></tr>';
-        }).join("");
-        $("growthDetailBody").innerHTML =
-            '<h4>' + escapeHtml(r.ticker) + ' · ' + result.score.toFixed(1) + '/100</h4>' +
-            '<p class="dimtxt">Pokrycie danych: ' + result.coverage + '/100 wag · wynik znormalizowany do dostępnych danych. Bez wyceny i bez ceny akcji.</p>' +
-            '<div class="tblwrap"><table class="gt"><thead><tr><th>Składowa</th><th>Wartość / źródło</th><th>Punkty</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-            '<p><b>Grupy:</b> wzrost ' + result.groups.acceleration.toFixed(1) + '/30 · surprise ' + result.groups.surprises.toFixed(1) + '/20 · przyszłość ' + result.groups.future.toFixed(1) + '/20 · jakość ' + result.groups.quality.toFixed(1) + '/20 · trwałość ' + result.groups.durability.toFixed(1) + '/10</p>' +
-            '<p class="dimtxt">Revenue Surprise i ROI/ROIC mogą nie być dostępne. Katalizatory nie są zgadywane ani punktowane, dopóki nie ma ustrukturyzowanych danych.</p>';
-    }
-
-    function renderGrowthScore() {
-        const rows = growthRows();
-        const scannerRows = data.rows.filter((r) => !state.scanner || (r.scanners || []).includes(state.scanner));
-        const scored = scannerRows.filter((r) => r.growth_score && r.growth_score.score != null).length;
-        $("growthMeta").textContent = 'TOP 10 · ' + rows.length + ' najlepszych z ' + scored + ' ocenionych spółek · skaner: ' + (state.scanner || "wszystkie");
-        $("growthTable").innerHTML = '<thead><tr><th>Ticker</th><th class="num">Score</th></tr></thead><tbody>' +
-            (rows.map((r, i) => '<tr data-t="' + escapeHtml(r.ticker) + '" class="' + (i === 0 ? "sel" : "") + '"><td><button type="button" data-growth-t="' + escapeHtml(r.ticker) + '">' + escapeHtml(r.ticker) + '</button></td><td class="num">' + r.growth_score.score.toFixed(1) + '</td></tr>').join("") ||
-            '<tr><td colspan="2" class="empty">Brak spółek z pokryciem danych ≥ 70/100. Odśwież dane lub sprawdź inny skaner.</td></tr>') + '</tbody>';
-        if (rows.length) renderGrowthDetails(rows[0]);
-        else $("growthDetailBody").innerHTML = '<p class="dimtxt">Brak wystarczających danych do rankingu.</p>';
-    }
-
-    function openGrowthScore() {
-        renderGrowthScore();
-        $("growthDlg").showModal();
-    }
-
     function openFundamentals(t) {
         const r = rowFor(t);
         if (!r) return;
@@ -677,11 +588,11 @@ if (typeof document !== "undefined") (function () {
         const watch = Object.keys(ast.watch).filter((t) => !ast.pos[t]).map((t) => {
             const r = rowFor(t) || {};
             return `<tr><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td>${f(r.price)}</td><td>${f(r.glb)}</td><td>${pct(r.glb_pct)}</td><td>${e(r.glb_state || "")}</td>` +
-                `<td>${e(r.macd || "")}</td><td>${r.trend ? "✓" : ""}</td><td>${pct(r.rs)}</td><td>${r.ok ? "✓" : ""}</td>` +
+                `<td>${e(r.macd || "")}</td><td>${r.trend ? "✓" : ""}</td><td>${pct(r.rs)}</td>` +
                 `<td><button type="button" data-del-watch="${e(t)}" title="Przestań obserwować">✕</button></td></tr>`;
         });
-        $("watchTable").innerHTML = "<tr><th>Ticker</th><th>Cena</th><th>Green Line</th><th>Do linii %</th><th>GLB</th><th>MACD</th><th>SMA 10>30</th><th>RS pp</th><th>Warunki</th><th></th></tr>" +
-            (watch.join("") || '<tr><td colspan="10">Brak obserwowanych (🔕 Obserwuj na wykresie).</td></tr>');
+        $("watchTable").innerHTML = "<tr><th>Ticker</th><th>Cena</th><th>Green Line</th><th>Do linii %</th><th>GLB</th><th>MACD</th><th>SMA 10>30</th><th>RS pp</th><th></th></tr>" +
+            (watch.join("") || '<tr><td colspan="9">Brak obserwowanych (🔕 Obserwuj na wykresie).</td></tr>');
         if (!$("posDlg").open) $("posDlg").showModal();
     }
 
@@ -708,48 +619,7 @@ if (typeof document !== "undefined") (function () {
         openPositions();
     }
 
-    // ---------- poradnik: zasady z badań + lista kontrolna otwartej spółki ----------
-    function checklist(r) {
-        const yes = (v) => (v === true ? '<b class="ok">✓</b>' : v === false ? '<b class="no">✗</b>' : '<b class="na">—</b>');
-        const fmtv = (v, u) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}${u}`);
-        const held = ast.pos[r.ticker];
-        const rows = [
-            [`Przychody kw. ≥ +15 % r/r (${fmtv(r.rev_rr, " %")})`, r.rev_rr == null ? null : r.rev_rr >= 15],
-            [`Marża oper. ≥ +3 pp r/r (${fmtv(r.dopm, " pp")})`, r.dopm == null ? null : r.dopm >= 3],
-            [`Wycena P/S < 20 (${r.ps != null ? r.ps.toFixed(1) : "—"})`, r.ps == null ? null : r.ps < 20],
-            [`Siła względna 52 tyg. ≥ +50 pp nad S&P 500 (${fmtv(r.rs, " pp")})`, r.rs == null ? null : r.rs >= 50],
-            [`2 ostatnie raporty powyżej konsensusu EPS (${fmtv(r.surp, " %")}, wcześniej ${fmtv(r.surp_prev, " %")})`, r.beat2 == null ? null : r.beat2],
-            [`Rewizja prognozy EPS na przyszły rok, 90 dni: ${fmtv(r.eps_rev, " %")} <small>(podgląd — bez backtestu, yfinance nie ma historii)</small>`, r.eps_rev == null ? null : r.eps_rev > 0],
-            [`Green Line: ${r.glb_state || "—"} (${fmtv(r.glb_pct, " %")} od linii; kupno: tydzień przebicia dowolnie wysoko, 0–10 % nad albo Blue Dot na dziennym, gdy > 10 %)`, ["WYBICIE", "SYGNAŁ", "BLUE DOT"].includes(r.glb_state) ? true : r.glb_state === "NAD" ? null : false],
-            [`MACD tyg. ${r.macd || "—"} sygnałem (stop pod ${r.macd_stop != null ? r.macd_stop.toFixed(2) : "—"})`, r.macd === "nad"],
-            [`Zamknięcie nad Green Line ${r.glb != null ? r.glb.toFixed(2) : "—"} (wyjście metodą GLB: zamknięcie tygodnia pod linią)`, r.glb == null || r.price == null ? null : r.price >= r.glb],
-            [`Brak hamowania (tempo przychodów ${fmtv(r.accel, " pp")}, Δ marży brutto ${fmtv(r.dgm, " pp")})`, r.slow ? false : r.accel == null ? null : true],
-        ];
-        return `<h4>${escapeHtml(r.ticker)} ${escapeHtml(r.company || "")} — ${r.ok ? "spełnia warunki" : "nie spełnia warunków"}${held ? ` · 📌 pozycja od ${escapeHtml(held.since)} (${held.price != null ? held.price.toFixed(2) : "—"})` : ""}</h4>` +
-            `<p class="dimtxt">Przychody: ${fmtv(r.rev_rr, " %")} r/r (kwartał wcześniej ${fmtv(r.rev_rr1, " %")}), Δ marży oper. ${fmtv(r.dopm, " pp")} (wcześniej ${fmtv(r.dopm1, " pp")}), marża oper. ${fmtv(r.opm, " %")} · kwartał ${escapeHtml(r.quarter || "—")}</p>` +
-            "<ul class=\"chk\">" + rows.map(([t, v]) => `<li>${yes(v)} ${t}</li>`).join("") + "</ul>" +
-            posPlanHtml(r) +
-            (held && r.slow ? '<p class="warnbox">⚠ Masz pozycję, a ostatni raport pokazuje hamowanie' + (r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : "") + " — w badaniu po takim raporcie spadek ≥ 20 % w 6 mies. zdarzał się w " + (r.slow === "HAMUJE+MB" ? "50" : "44") + " % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.</p>" : "");
-    }
 
-    // 📌 pozycja: poziomy wyjścia (stop −10 %, ½ przy −20 % od szczytu, metoda MACD albo GLB)
-    function posPlanHtml(r) {
-        const pl = planFor(r.ticker);
-        if (!ast.pos[r.ticker]) return "";
-        const f = (v) => (v == null ? "—" : v.toFixed(2));
-        if (!pl) return '<p class="dimtxt">Plan wyjścia: wczytuję świece…</p>';
-        const exitTxt = state.exit === "GLB" ? `zamknięcie tygodnia pod Green Line ${f(r.glb)}` : `stop MACD ${f(r.macd_stop)} (Low tygodnia przecięcia w dół)`;
-        return `<p><b>Plan wyjścia</b> (metoda: ${state.exit === "GLB" ? "pod GLB" : "MACD"}, zmiana przyciskiem 🚪 na wykresie): kupno ${f(pl.entry)} · stop −10 % ${f(pl.stopInit)} · ` +
-            `szczyt od wejścia ${f(pl.peak)} → <b>½ przy ${f(pl.halfAt)}</b> (−20 %) · reszta: ${exitTxt}</p>` +
-            (pl.half ? `<p class="warnbox">⚠ Zamknięcie ${f(pl.last)} jest ≥ 20 % pod szczytem ${f(pl.peak)} — sprzedaj połowę.</p>` : "") +
-            ((state.exit === "GLB" ? pl.glbExit : r.macd_stop && r.price < r.macd_stop) ? `<p class="warnbox">⚠ Sygnał wyjścia (${state.exit === "GLB" ? "zamknięcie pod Green Line" : "zamknięcie pod stopem MACD"}).</p>` : "");
-    }
-
-    function openGuide() {
-        const r = current && rowFor(current);
-        $("guideStock").innerHTML = r ? checklist(r) : '<p class="dimtxt">Otwórz wykres spółki, żeby zobaczyć jej listę kontrolną.</p>';
-        $("guideDlg").showModal();
-    }
 
     // ---------- filtry ----------
     function renderFilters() {
@@ -893,33 +763,10 @@ if (typeof document !== "undefined") (function () {
         openChart(t);
     }
 
-    function openGrowthScore() {
-        let dlg = $("growthScoreDlg");
-        if (!dlg) {
-            dlg = document.createElement("dialog"); dlg.id="growthScoreDlg"; dlg.className="wide";
-            dlg.innerHTML='<h3>Growth Score — TOP 10 <small>ranking fundamentalny, niezależny od wykresu ceny</small></h3><p class="dimtxt" id="growthScoreNote"></p><div class="tblwrap"><table class="gt"><thead><tr><th>Ticker</th><th>Score</th><th>Pokrycie</th></tr></thead><tbody id="growthScoreRows"></tbody></table></div><details id="growthScoreDetail"><summary>Składowe zaznaczonej spółki</summary><div id="growthScoreComponents"></div></details><div class="dlg-btns"><button type="button" id="growthScoreClose">Zamknij</button></div>';
-            document.body.appendChild(dlg);
-            dlg.querySelector("#growthScoreClose").addEventListener("click",()=>dlg.close());
-            dlg.querySelector("#growthScoreRows").addEventListener("click",e=>{
-                const tr=e.target.closest("tr[data-t]"); if(!tr)return;
-                const r=rowFor(tr.dataset.t), result=growthScore(r); 
-                dlg.querySelectorAll("#growthScoreRows tr").forEach(x=>x.classList.toggle("sel",x===tr));
-                const labels={acceleration:"Przyspieszenie wzrostu (30)",surprises:"Zaskoczenia EPS (20)",future:"Przyszły wzrost / rewizje EPS (20)",quality:"Jakość biznesu (20)",durability:"Trwałość wzrostu — proxy historyczne (10)"};
-                dlg.querySelector("#growthScoreComponents").innerHTML='<p><b>'+tr.dataset.t+' · '+(result.score===null?'brak score':result.score+'/100')+'</b> · pokrycie '+result.coverage+'/100</p>'+Object.entries(labels).map(([k,v])=>'<p>'+v+': '+(result.components[k]===null?'brak danych':result.components[k].toFixed(1)+' pkt')+'</p>').join('')+'<p class="dimtxt">'+result.notes+'</p>';
-                dlg.querySelector("#growthScoreDetail").open=true;
-            });
-        }
-        const scored=data.rows.filter(r=>!state.scanner||(r.scanners||[]).includes(state.scanner)).map(r=>({r,s:growthScore(r)})).filter(x=>x.s.score!==null).sort((a,b)=>b.s.score-a.s.score).slice(0,10);
-        dlg.querySelector("#growthScoreRows").innerHTML=scored.map(x=>'<tr data-t="'+escapeHtml(x.r.ticker)+'"><td>'+escapeHtml(x.r.ticker)+'</td><td>'+x.s.score.toFixed(1)+'</td><td>'+x.s.coverage+'/100</td></tr>').join('')||'<tr><td colspan="3">Za mało danych do policzenia score</td></tr>';
-        dlg.querySelector("#growthScoreNote").textContent='TOP 10 z aktualnie wczytanej listy Finviz. Braki danych obniżają pokrycie; score ukryty poniżej 70/100. Trwałość to proxy z historii przychodów, nie automatyczna ocena katalizatorów.';
-        dlg.showModal();
-    }
+
 
     function initUi() {
         renderHead();
-        if (!$("growthScoreBtn")) { const b=document.createElement("button"); b.id="growthScoreBtn"; b.type="button"; b.textContent="Growth Score"; b.title="TOP 10 spółek według fundamentów"; $("fltBtn").insertAdjacentElement("afterend",b); b.addEventListener("click",openGrowthScore); }
-        $("onlyOk").checked = state.onlyOk;
-        $("onlyOk").addEventListener("change", () => { state.onlyOk = $("onlyOk").checked; saveSettings(); renderTable(); });
         $("search").addEventListener("input", renderTable);
         $("scanner").addEventListener("change", () => { state.scanner = $("scanner").value || null; saveSettings(); renderTable(); });
         $("thead").addEventListener("click", (e) => {
@@ -942,23 +789,6 @@ if (typeof document !== "undefined") (function () {
             if (b && rowFor(b.dataset.t)) { $("fundDlg").close(); openChart(b.dataset.t); }
         });
         $("fundBtn").addEventListener("click", () => { if (current) openFundamentals(current); });
-        $("growthBtn").addEventListener("click", openGrowthScore);
-        $("growthTable").addEventListener("click", (e) => {
-            const b = e.target.closest("button[data-growth-t]");
-            if (!b) return;
-            const ticker = b.dataset.growthT;
-            const row = rowFor(ticker);
-            if (row) {
-                renderGrowthDetails(row);
-                $("growthTable").querySelectorAll("tr").forEach((tr) => tr.classList.toggle("sel", tr.dataset.t === ticker));
-            }
-        });
-        $("growthOpenBtn").addEventListener("click", () => {
-            const b = $("growthTable").querySelector("tr.sel button[data-growth-t]") || $("growthTable").querySelector("button[data-growth-t]");
-            if (!b) return;
-            $("growthDlg").close();
-            openChart(b.dataset.growthT);
-        });
         $("closeChart").addEventListener("click", closeChart);
         $("symBtn").addEventListener("click", openSymbol);
         $("symForm").addEventListener("submit", (e) => { e.preventDefault(); chooseSymbol($("symInput").value); });
@@ -981,8 +811,7 @@ if (typeof document !== "undefined") (function () {
         });
         $("perW").addEventListener("click", () => togglePeriod("W"));
         $("perD").addEventListener("click", () => togglePeriod("D"));
-        $("potBadge").addEventListener("click", openGuide);
-        $("guideBtn").addEventListener("click", openGuide);
+        $("dayRwbBtn").addEventListener("click", () => { dailyRwb = !dailyRwb; renderPeriod(); drawChart(); });
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
         $("fltBtn").addEventListener("click", () => { renderFilters(); $("fltDlg").showModal(); });
@@ -1009,7 +838,7 @@ if (typeof document !== "undefined") (function () {
         window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawChart, 120); });
         document.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSymbol(); return; }
-            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("posDlg").open || $("guideDlg").open || e.target.matches("input")) return;
+            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("posDlg").open || e.target.matches("input")) return;
             if (current && sel && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); deleteSelected(); return; }
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
             else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }

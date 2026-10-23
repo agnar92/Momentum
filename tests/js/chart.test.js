@@ -83,7 +83,11 @@ test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
     const d = c.map((_, i) => `2026-${String(1 + Math.floor(i / 28)).padStart(2, "0")}-${String(1 + (i % 28)).padStart(2, "0")}`);
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D");
     assert.ok(res.svg.includes("GLB") && !res.svg.includes("MACD (12"));
+    assert.ok(res.svg.includes("Słupki OHLC"));
     assert.ok(res.svg.includes('r="4" fill="#4aa3ff"')); // Blue Dot marker stays on chart; its stop level is tooltip-only.
+    const barsOnly = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D", false);
+    assert.ok(barsOnly.svg.includes("Słupki OHLC · nakładka RWB wyłączona"));
+    assert.ok(!barsOnly.svg.includes('r="4" fill="#4aa3ff"'));
     assert.ok(!res.svg.includes("Blue Dot 2026-") && !res.svg.includes("stop pod Low"));
     assert.ok(!res.svg.includes("Przychody kw.") && !res.svg.includes("Stochastic (10, 1) dzienny"));   // dzienny: bez przychodów i panelu Stochastic
     assert.strictEqual(res.geom.rev, null);
@@ -103,8 +107,8 @@ test("IBD relative strength line on the weekly chart", () => {
     assert.deepStrictEqual(rsLine([10, 20, null], [5, 4, 2]), [2, 5, null]);
     const w = weekly(150), spx = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // SPY spada, akcja rośnie -> RS na szczycie
     const svg = chartSvg(w, { rs: 61 }, 1000, 700, null, null, [], null, spx).svg;
-    assert.ok(svg.includes(">+61 pp<") && svg.includes("RS na szczycie 52 tyg.") && !svg.includes("RS (cena"));
-    assert.ok(!chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("+61 pp"));
+    assert.ok(svg.includes("RS 52W +61 pp") && svg.includes("RS Line / MA 52 tyg.") && !svg.includes("RS (cena"));
+    assert.ok(chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("RS 52W +61 pp"));
 });
 
 test("relative volume: weekly vs 10 weeks, daily vs 50 sessions", () => {
@@ -121,4 +125,20 @@ test("axis labels do not overlap", () => {
     assert.deepStrictEqual(axisSpots(100, 105, null), [116, null]);
     assert.deepStrictEqual(axisSpots(100, 95, 300), [84, 300]);
     assert.deepStrictEqual(axisSpots(100, 200, 110), [200, 116]);
+});
+
+
+test("Deepvue-style RS line includes new-high-before-price markers on daily charts", () => {
+    const n = 300;
+    const d = [], c = [], h = [], l = [], spy = [];
+    for (let i = 0; i < n; i++) {
+        d.push(new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10));
+        c.push(100);
+        h.push(101);
+        l.push(99);
+        spy.push(500 - i);
+    }
+    const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { rs_rating: 95, rs: 12 }, 1000, 700, null, null, [], null, { d, c: spy }, "D", false);
+    assert.ok(res.svg.includes("RS new high before price"));
+    assert.ok(res.svg.includes("RS Rating 95 / 99"));
 });

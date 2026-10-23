@@ -18,9 +18,9 @@ const ROWS = [
     { ticker: "D", company: "Delta", ok: true, glb_state: "NAD", dopm: null },
 ];
 
-test("default order: GLB signals rank first even when extra legacy conditions fail", () => {
+test("default order uses breakout signals without reapplying extra fundamental conditions", () => {
     assert.deepStrictEqual(visibleRows(ROWS, {}).map((r) => r.ticker), ["B", "C", "A", "D"]);
-    assert.deepStrictEqual(visibleRows(ROWS, { onlyOk: true }).map((r) => r.ticker), ["B", "A", "D"]);
+    assert.deepStrictEqual(visibleRows(ROWS, { filters: {} }).map((r) => r.ticker), ["B", "C", "A", "D"]);
     assert.ok(isSignal(ROWS[1]) && isSignal(ROWS[2]));
 });
 
@@ -56,7 +56,7 @@ test("column filters combine with AND", () => {
     const f = FILTER_PRESETS.find(([n]) => n === "Nad GLB + MACD dodatni")[1];
     assert.deepStrictEqual(rows.filter((r) => passFilters(r, f)).map((r) => r.ticker), ["A"]);
     assert.deepStrictEqual(visibleRows(rows, { filters: { turnover: { min: 70 } } }).map((r) => r.ticker), ["A"]);
-    assert.deepStrictEqual(visibleRows(rows, { filters: { glb_pct: { max: 12 }, ok: { in: ["nie"] } } }).map((r) => r.ticker), ["C"]);
+    assert.deepStrictEqual(visibleRows(rows, { filters: { glb_pct: { max: 12 }, macd: { in: ["nad"] } } }).map((r) => r.ticker), ["C"]);
     assert.strictEqual(activeFilters({ a: { in: [] }, b: { min: 1 }, c: {} }), 1);
 });
 
