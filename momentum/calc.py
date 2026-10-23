@@ -261,6 +261,21 @@ def slowdown(row):
 
 
 
+
+def _latest_growth(values, lag=4):
+    vals = sorted((x for x in (values or []) if isinstance(x, (list, tuple)) and len(x) >= 2
+                   and _ok(x[1])), key=lambda x: str(x[0]))
+    if len(vals) <= lag:
+        return None
+    now, old = float(vals[-1][1]), float(vals[-1 - lag][1])
+    return (now / old - 1) * 100 if old > 0 else None
+
+
+def _latest_surprise(values):
+    valid = [x for x in (values or []) if isinstance(x, (list, tuple)) and len(x) >= 2 and _ok(x[1])]
+    return float(sorted(valid, key=lambda x: str(x[0]))[-1][1]) if valid else None
+
+
 def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None):
     """Wiersz listy: base (z Finviz), weekly {d, o, h, l, c, v}, months (High zamkniętych miesięcy), fund (z SEC albo None), spy (tygodniowe {d, c}),
     est (prognozy yfinance: niespodzianki, rewizja, historia EPS i konsensus analityków)."""
