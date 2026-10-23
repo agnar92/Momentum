@@ -131,7 +131,7 @@ def update(tickers, cache, log=print, today=None, pause=0.1, progress=None, fetc
         log("yfinance prognozy EPS: cache aktualny (0 do pobrania)")
         return []
 
-    done = []
+    successful = set()
     # Store results in the main thread only; worker threads perform network reads.
     with ThreadPoolExecutor(max_workers=max(1, int(max_workers))) as pool:
         futures = {pool.submit(fetch_one, t): t for t in todo}
@@ -147,9 +147,10 @@ def update(tickers, cache, log=print, today=None, pause=0.1, progress=None, fetc
             if e.get("rev90") is not None:
                 hist = (hist + [[today.isoformat(), e["rev90"]]])[-KEEP_HIST:]
             cache[t] = {"at": today.isoformat(), **{k: e.get(k, old.get(k)) for k in ("surp", "rev90", "eps_q", "eps_est")}, "hist": hist}
-            done.append(t)
+            successful.add(t)
             if progress:
                 progress(n, len(todo))
             if n % 25 == 0 or n == len(todo):
                 log(f"yfinance prognozy EPS: {n}/{len(todo)}")
-    return done
+    # Preserve input ticker order for callers/tests even though futures complete out of order.
+    return [t for t in todo if t in successful]
