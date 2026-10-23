@@ -42,15 +42,14 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Refresh data (Finviz + yfinance + SEC)
+      - name: Refresh data (Finviz + yfinance; SEC reports disabled)
         env:
-          SEC_UA: ${{ secrets.SEC_UA }}
           FINVIZ_URL: ${{ inputs.finviz_url }}
         run: |
           if [ -n "$FINVIZ_URL" ]; then
-            python watchlist.py --finviz-url "$FINVIZ_URL"
+            python watchlist.py --no-sec --finviz-url "$FINVIZ_URL"
           else
-            python watchlist.py
+            python watchlist.py --no-sec
           fi
 
       - name: Commit data
