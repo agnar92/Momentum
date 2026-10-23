@@ -221,15 +221,69 @@ def monthly_highs(entry):
     return [h for _, h in e.get("h", [])] if e.get("raw") else []
 
 
-def daily(tickers, log=print, period="1y"):
-    """Świece dzienne z ostatniego roku dla spółek nad Green Line (wykres dzienny z RWB i Blue Dot na stronie) -> {ticker: {d, o, h, l, c, v}}."""
+def merge_daily(old, new, keep=520):
+    """Dokleja dzienne świece do cache. Zwraca None, jeśli ceny na wspólnej dacie wskazują na korektę historii."""
+    if not new.get("d"):
+        return old
+    old_dates = old.get("d") or []
+    new_dates = new["d"]
+    overlap = set(old_dates).intersection(new_dates)
+    if overlap:
+        od, nd = old_dates.index(max(overlap)), new_dates.index(max(overlap))
+        if not _same(old["c"][od], new["c"][nd]):
+            return None
+    first = new_dates[0]
+    cut = next((i for i, day in enumerate(old_dates) if day >= first), len(old_dates))
+    return {"raw": 1, **{k: (old[k][:cut] + new[k])[-keep:] for k in ("d", "o", "h", "l", "c", "v")}}
+
+
+def daily(tickers, log=print, period="2y", cache=None, today=None):
+    """Świece dzienne z cache: nowe tickery dostają 2 lata, istniejące tylko ostatni miesiąc/półrocze."""
+    cache, today = cache or {}, today or dt.date.today()
     out = {}
-    for i in range(0, len(tickers), BATCH):
-        part = tickers[i:i + BATCH]
-        df = _yf().download(part, period=period, interval="1d", auto_adjust=AUTO_ADJUST, group_by="ticker", progress=False, threads=True)
-        for t, f in _frames(df, part).items():
-            s = _series(f)
-            if len(s["d"]) >= 30:
-                out[t] = s
-        log(f"yfinance dzienne (nad Green Line): {min(i + BATCH, len(tickers))}/{len(tickers)}")
+    updates, full = {}, []
+    for ticker in tickers:
+        old = cache.get(ticker)
+        if old and old.get("raw") and old.get("d"):
+            gap = (today - dt.date.fromisoformat(old["d"][-1])).days
+            per = "1mo" if gap <= 21 else "6mo" if gap <= 150 else None
+            (updates.setdefault(per, []) if per else full).append(ticker)
+            out[ticker] = old
+        else:
+            full.append(ticker)
+    total = len(tickers)
+    done = 0
+
+    def fetch(part, per):
+        nonlocal done
+        got = {}
+        for i in range(0, len(part), BATCH):
+            batch = part[i:i + BATCH]
+            df = _yf().download(batch, period=per, interval="1d", auto_adjust=AUTO_ADJUST,
+                                group_by="ticker", progress=False, threads=True)
+            frames = _frames(df, batch)
+            for ticker, frame in frames.items():
+                if frame is None or frame.empty:
+                    continue
+                fresh = _series(frame)
+                if len(fresh["d"]) < 30:
+                    continue
+                old = cache.get(ticker) if per != period else None
+                merged = merge_daily(old, fresh) if old else fresh
+                if merged is None:
+                    full.append(ticker)
+                    continue
+                got[ticker] = merged
+            done += len(batch)
+            log(f"yfinance dzienne ({'2 lata' if per == period else 'aktualizacja'}): {min(done, total)}/{total}")
+        return got
+
+    # Existing symbols: small updates first; changed history is queued for a full refresh.
+    for per, part in updates.items():
+        if per is None:
+            continue
+        out.update(fetch(part, per))
+    # Avoid duplicate full-downloads for tickers queued after an overlap mismatch.
+    full = list(dict.fromkeys(full))
+    out.update(fetch(full, period))
     return out

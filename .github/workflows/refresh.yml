@@ -9,11 +9,6 @@ on:
     - cron: '17 3 * * 6'   # sobota 03:17 UTC
   workflow_dispatch:
     inputs:
-      finviz_name:
-        description: 'Nazwa skanera do zapisania (ta sama nazwa aktualizuje zapisany link)'
-        required: false
-        type: string
-        default: ''
       finviz_url:
         description: 'Opcjonalny link do screenera Finviz (pusty = ostatni zapisany skaner)'
         required: false
@@ -51,10 +46,9 @@ jobs:
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
           FINVIZ_URL: ${{ inputs.finviz_url }}
-          FINVIZ_NAME: ${{ inputs.finviz_name }}
         run: |
           if [ -n "$FINVIZ_URL" ]; then
-            python watchlist.py --finviz-url "$FINVIZ_URL" --finviz-name "$FINVIZ_NAME"
+            python watchlist.py --finviz-url "$FINVIZ_URL"
           else
             python watchlist.py
           fi

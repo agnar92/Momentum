@@ -292,25 +292,21 @@ def test_second_run_passes_saved_weekly_series_as_cache(tmp_path):
     assert seen[0] == [] and seen[1] == sorted([t["ticker"] for t in base] + ["SPY"])    # SPY zawsze (siła względna)
 
 
-def test_several_scanners_union_and_stale_scanner_keeps_previous(tmp_path):
+def test_run_uses_only_one_configured_scanner(tmp_path):
     lists = {"f1": [{"ticker": f"A{i}"} for i in range(20)], "f2": [{"ticker": "A0"}, {"ticker": "Z"}]}
     cfg = {"scanners": [{"name": "Jeden", "filters": "f1"}, {"name": "Dwa", "filters": "f2"}]}
+    seen = []
 
-    def go(fetch):
-        return watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch,
-                             weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
-    rows = go(lambda f, max_tickers, log: (lists[f], len(lists[f])))       # „Dwa” ma 2 spółki i Finviz mówi, że tyle jest — to nie blokada
-    by = {r["ticker"]: r for r in rows}
-    assert len(rows) == 21 and by["A0"]["scanners"] == ["Jeden", "Dwa"] and by["Z"]["scanners"] == ["Dwa"]
+    def fetch(filters, max_tickers, log):
+        seen.append(filters)
+        return lists[filters], len(lists[filters])
 
-    def half(f, max_tickers, log):
-        if f == "f2":
-            raise OSError("403")
-        return lists[f], 20
-    rows = go(half)
+    rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch,
+                         weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
     data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
-    assert {r["ticker"]: r["scanners"] for r in rows}["Z"] == ["Dwa"]
-    assert [m["stale"] for m in data["scanners"]] == [False, True] and data["finviz_stale"]
+    assert seen == ["f1"]
+    assert len(rows) == 20 and all(r["scanners"] == ["Jeden"] for r in rows)
+    assert [m["name"] for m in data["scanners"]] == ["Jeden"]
 
 
 def test_new_scanner_refresh_preserves_other_named_lists_and_merges_overlap():
@@ -424,3 +420,28 @@ def test_deepvue_style_rs_score_weights_recent_relative_performance():
     score = calc.rs_rating_score(stock, spy)
     assert score is not None and score > 0
     assert calc.rs_rating_score({"d": dates[:3], "c": [100, 101, 102]}, spy) is None
+
+
+def test_merge_daily_appends_only_new_dates_and_detects_changed_history():
+    old = {"raw": 1, "d": ["2026-10-19", "2026-10-20"], "o": [1, 2], "h": [2, 3], "l": [0, 1], "c": [1, 2], "v": [10, 20]}
+    fresh = {"raw": 1, "d": ["2026-10-20", "2026-10-21"], "o": [2, 3], "h": [3, 4], "l": [1, 2], "c": [2, 3], "v": [20, 30]}
+    merged = prices.merge_daily(old, fresh)
+    assert merged["d"] == ["2026-10-19", "2026-10-20", "2026-10-21"]
+    assert merged["c"] == [1, 2, 3]
+    changed = {**fresh, "c": [9, 3]}
+    assert prices.merge_daily(old, changed) is None
+
+
+def test_finviz_url_replaces_previous_scanner_and_saves_one_url(tmp_path, monkeypatch):
+    config_path = tmp_path / "finviz_screen.json"
+    monkeypatch.setattr(watchlist, "CONFIG", config_path)
+    cfg = {"symbols": ["SPY"], "scanners": [{"name": "old", "filters": "old", "url": "https://finviz.com/screener.ashx?v=111&f=old"}]}
+    rows = [{"ticker": f"A{i}"} for i in range(20)]
+    seen = []
+    watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
+                  fetch_list=lambda f, max_tickers, log: (seen.append(f) or (rows, len(rows))),
+                  weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, est=_est,
+                  daily=lambda ts, log, **kw: {}, finviz_url="https://finviz.com/screener.ashx?v=111&f=fa_salesqoq_o15,sh_price_o10")
+    saved = json.loads(config_path.read_text())
+    assert seen == ["fa_salesqoq_o15,sh_price_o10"]
+    assert len(saved["scanners"]) == 1 and saved["scanners"][0]["url"].endswith("f=fa_salesqoq_o15,sh_price_o10")
