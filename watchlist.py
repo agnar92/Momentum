@@ -116,7 +116,7 @@ BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None):
+        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, fetch_sec=True):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
@@ -163,14 +163,17 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     # miesięczne High (Green Line), fundamenty, prognozy i świece dzienne dla wszystkich spółek ze skanerów (bez progu obrotu)
     liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
-    scache = load_json(Path(cache_dir) / "sec.json", {})
+    scache = load_json(Path(cache_dir) / "sec.json", {}) if fetch_sec else {}
     monthly(liquid + [s for s in extra if s in series], mcache, log=log)
     write_json(Path(cache_dir) / "monthly.json", mcache)
-    try:
-        fund(liquid + [s for s in extra if s in series], scache, ua=ua, log=log)
-    except Exception as e:
-        log(f"⚠ SEC niedostępny ({e}) — używam zapisanych fundamentów.")
-    write_json(Path(cache_dir) / "sec.json", scache)
+    if fetch_sec:
+        try:
+            fund(liquid + [s for s in extra if s in series], scache, ua=ua, log=log)
+        except Exception as e:
+            log(f"⚠ SEC niedostępny ({e}) — używam zapisanych fundamentów.")
+        write_json(Path(cache_dir) / "sec.json", scache)
+    else:
+        log("SEC/raporty fundamentalne: wyłączone na ten moment.")
     ecache = load_json(Path(cache_dir) / "estimates.json", {})   # niespodzianki EPS i rewizja prognoz (yfinance), co 7 dni
     try:
         est(liquid + [s for s in extra if s in series and s != BENCH], ecache, log=log)
@@ -252,6 +255,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--max-tickers", type=int)
     ap.add_argument("--finviz-url", default=os.environ.get("FINVIZ_URL") or None, help="Link do screenera Finviz; zapisze się w konfiguracji.")
+    ap.add_argument("--no-sec", action="store_true", help="Wyłącz pobieranie raportów i fundamentów z SEC.")
     args = ap.parse_args(argv)
     config = load_json(CONFIG, {})
     if args.max_tickers:   # limit dla każdego skanera (test na małej liście)
@@ -259,7 +263,7 @@ def main(argv=None):
         for sc in config.get("scanners") or []:
             sc["max_tickers"] = args.max_tickers
     try:
-        run(config, finviz_url=args.finviz_url)
+        run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec)
     except RuntimeError as e:
         print(f"❌ {e}")
         return 1
