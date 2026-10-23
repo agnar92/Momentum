@@ -40,7 +40,8 @@ td.empty { text-align: center; color: var(--dim); padding: 24px; white-space: no
 body.chart-open .chart { display: flex; }
 .chart-head { display: flex; gap: 10px; align-items: center; padding: 6px 10px; background: var(--panel); border-bottom: 1px solid var(--line); }
 #chartTitle { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
-.slider { height: 46px; flex: none; touch-action: none; cursor: ew-resize; border-bottom: 1px solid var(--line); }
+.slider { height: 16px; flex: none; touch-action: none; cursor: ew-resize; border-bottom: 1px solid var(--line); }
+.slider svg { display: block; }
 .slider svg { display: block; }
 .chart-body { flex: 1; min-height: 0; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .chart-body svg { display: block; width: 100%; height: 100%; }
