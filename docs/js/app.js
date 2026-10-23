@@ -836,7 +836,7 @@ if (typeof document !== "undefined") (function () {
         window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawChart, 120); });
         document.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSymbol(); return; }
-            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("posDlg").open || $("guideDlg").open || e.target.matches("input")) return;
+            if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("posDlg").open || e.target.matches("input")) return;
             if (current && sel && (e.key === "Delete" || e.key === "Backspace")) { e.preventDefault(); deleteSelected(); return; }
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
             else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }
