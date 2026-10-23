@@ -233,10 +233,11 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         if (pts.length > 1) parts.push(`<polyline fill="none" stroke="${stroke}" stroke-width="${width}" points="${pts.map((p) => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"/>`);
     };
 
-    const level = row && row.glb;
+    const level = row && row.glb, blueLevel = row && row.blb;
     const valid = hi.concat(lo).filter((v) => v);
     const lmin0 = Math.min(...lo.filter((v) => v)), hmax0 = Math.max(...hi.filter((v) => v));
     if (level && level > lmin0 * 0.5 && level < hmax0 * 2) valid.push(level);
+    if (blueLevel && blueLevel > lmin0 * 0.5 && blueLevel < hmax0 * 2) valid.push(blueLevel);
     const pmin = Math.min(...valid) * 0.97, pmax = Math.max(...valid) * 1.03;
     const [y0, y1] = g.price, lmin = Math.log(pmin), lmax = Math.log(pmax);
     const yf = (p) => y1 - (Math.log(p) - lmin) / (lmax - lmin) * (y1 - y0);
@@ -295,8 +296,17 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         text(x1 + 4, y + 4, fmt(level), "#000");
         const aboveGlb = last0 != null && last0 >= level;
         boxText(x0 + 4, y0 + 13, `GLB ${fmt(level)} · CENA ${aboveGlb ? "NAD" : "POD"} LINIĄ`, aboveGlb ? C.glb : C.stop);
+        boxText(x0 + 4, y0 + 13, `GLB ${fmt(level)} · CENA ${aboveGlb ? "NAD" : "POD"} LINIĄ`, aboveGlb ? C.glb : C.stop);
     }
-    const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
+    if (blueLevel && blueLevel > pmin && blueLevel < pmax) {
+        const y = yf(blueLevel);
+        line(x0, y, x1, y, "#102d50", 5);
+        line(x0, y, x1, y, "#60a5fa", 2);
+        parts.push(`<rect x="${(x1 + 1).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${(w - x1 - 3).toFixed(1)}" height="18" fill="#60a5fa"/>`);
+        text(x1 + 4, y + 4, fmt(blueLevel), "#000");
+        const aboveBlb = last0 != null && last0 >= blueLevel;
+        boxText(x0 + 4, y0 + 27, `BLB ${fmt(blueLevel)} · CENA ${aboveBlb ? "NAD" : "POD"} LINIĄ`, aboveBlb ? "#60a5fa" : C.stop);
+    }    const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
     if (stop && stop > pmin && stop < pmax) {
         const y = yf(stop);
         line(x0, y, x1, y, C.stop, 1, 'stroke-dasharray="5 4"');
@@ -380,17 +390,22 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     } else text(x0 + 4, s0 + 10, "S&P 500 — brak danych SPY", C.dim);
     line(x0, s1 + 3, x1, s1 + 3, C.grid);
     if (!D) {   // linia siły relatywnej jak w IBD: cena / S&P 500, na dole panelu ceny (własna skala log); ● gdy RS na szczycie 52 tyg.
-        const rs = rsLine(c, sv), ok = rs.filter((v) => v);
+        const spxFull = spx && spx.d ? full.d.map((d) => { const k = LN.dateIndex(spx.d, d); return k >= 0 ? spx.c[k] : null; }) : [];
+        const rsFull = rsLine(full.c, spxFull);
+        const rsAvgFull = sma(rsFull.map((v) => v == null ? 0 : v), 52).map((v, i) => i < 51 || rsFull[i] == null ? null : v);
+        const rs = rsFull.slice(i0, i1), rsAvg = rsAvgFull.slice(i0, i1), ok = rs.filter((v) => v);
         if (ok.length > 1) {
-            const b0 = y1 - (y1 - y0) * 0.22, b1 = y1 - 4, lo = Math.log(Math.min(...ok)), hi2 = Math.log(Math.max(...ok));
+            const all = rs.concat(rsAvg).filter((v) => v > 0);
+            const b0 = y1 - (y1 - y0) * 0.22, b1 = y1 - 4, lo = Math.log(Math.min(...all)), hi2 = Math.log(Math.max(...all));
             const yr = (v) => b1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (b1 - b0);
             const pts = rs.map((v, i) => (v ? [xf(i), yr(v)] : null)).filter(Boolean);
             poly(pts, C.rs, 1.4);
+            poly(rsAvg.map((v, i) => (v ? [xf(i), yr(v)] : null)).filter(Boolean), "#f0b429", 1.4);
             const last = rs[rs.length - 1], [px, py] = pts[pts.length - 1];
-            if (last && last >= Math.max(...rs.slice(-52).filter((v) => v)))   // ● = RS na szczycie 52 tyg.
+            if (last && last >= Math.max(...rsFull.slice(Math.max(0, i1 - 52), i1).filter((v) => v)))
                 parts.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${C.rs}"><title>RS na szczycie 52 tyg.</title></circle>`);
-            // na końcu linii tylko liczba: siła względna 52 tyg. w pp vs S&P 500 (jak kolumna RS)
-            if (row && row.rs != null) boxText(x1 + 4, py + 4, `${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
+            if (row && row.rs != null) boxText(x1 + 4, py + 4, `RS ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
+            if (rsAvg[rsAvg.length - 1]) text(x0 + 4, b1 - 3, "RS / średnia 52 tyg. (żółta)", "#f0b429");
         }
     }
 
@@ -409,6 +424,22 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
         if (xb - xa > 30 && q.rev_rr != null) text((xa + xb) / 2, q1 - ht - 2, `${q.rev_rr >= 0 ? "+" : ""}${q.rev_rr.toFixed(0)}%`, col, 'text-anchor="middle"');
     }
     text(x0 + 4, q0 + 2, qs.length ? `Przychody kw. · r/r % (zielony ≥ 25 %, żółty ≥ 15 %) · ostatni ${fmtBig(qs[qs.length - 1].rev)} $` : "Przychody kw. — brak danych SEC", C.dim);
+    // EPS IBD-style: kwartalne wyniki rzeczywiste jako linia z własną skalą w panelu fundamentalnym.
+    const eps = ((row && row.eps_q) || []).filter((x) => Array.isArray(x) && x.length >= 2 && Number.isFinite(x[1])).slice().sort((a, b) => a[0].localeCompare(b[0]));
+    const epsVisible = eps.map((x) => ({ date: x[0], value: x[1], idx: LN.dateIndex(dates, x[0]) })).filter((x) => x.idx >= 0);
+    if (epsVisible.length > 1) {
+        const vals = epsVisible.map((x) => x.value), emin = Math.min(...vals), emax = Math.max(...vals), erange = emax - emin || Math.max(1, Math.abs(emax) * 0.1);
+        const ey = (v) => q1 - 4 - (v - emin) / erange * Math.max(4, q1 - q0 - 28);
+        poly(epsVisible.map((x) => [xf(x.idx), ey(x.value)]), "#fb7185", 1.8);
+        epsVisible.forEach((x) => {
+            const prev = eps.find((e) => e[0].slice(0, 4) === String(Number(x.date.slice(0, 4)) - 1) && e[0].slice(5, 7) === x.date.slice(5, 7));
+            const growth = prev && prev[1] !== 0 ? (x.value / prev[1] - 1) * 100 : null;
+            parts.push(`<circle cx="${xf(x.idx).toFixed(1)}" cy="${ey(x.value).toFixed(1)}" r="2.5" fill="#fb7185"><title>EPS ${x.value.toFixed(2)}${growth == null ? "" : " · r/r " + growth.toFixed(1) + "%"}</title></circle>`);
+        });
+        const lastEps = epsVisible[epsVisible.length - 1];
+        boxText(x0 + 4, q0 + 11, `EPS kwartalny ${lastEps.value.toFixed(2)} (różowa linia; r/r w dymku)`, "#fb7185");
+    }
+
     return finish();
 
     function finish() {
