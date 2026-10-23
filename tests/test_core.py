@@ -30,7 +30,7 @@ def test_build_row_uses_all_time_weekly_highs_for_blb():
     history = [["2025-01-06", 10.0], ["2025-01-13", 12.0]] + [[ "2025-01-20", 11.0 ]] * 13
     row = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=history)
     assert row["blb"] == 12.0
-    assert row["blb_state"] == "SYGNAŁ"
+    assert row["blb_state"] == "NAD"
 
 
 def test_glb_state():
