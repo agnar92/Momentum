@@ -13,8 +13,8 @@ const COLUMNS = [ // [klucz, nagłówek, format]
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
 const BLB_SIGNAL = ["WYBICIE", "SYGNAŁ"];
-const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
-const SETTINGS_KEY = "momentum_glb_settings";
+const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "blb_state", "macd", "quarter", "slow"];
+const SETTINGS_KEY = "momentum_glb_blb_settings";
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
 
