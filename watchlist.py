@@ -116,7 +116,7 @@ BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, finviz_name=None):
+        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
@@ -131,23 +131,16 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         filters = (params.get("f") or [None])[0]
         if not filters or not parsed.netloc.lower().endswith("finviz.com") or parsed.scheme not in ("http", "https"):
             raise RuntimeError("Nieprawidłowy link Finviz. Wklej pełny adres screenera Finviz z parametrem f=.")
-        name = (finviz_name or "").strip() or "Mój skaner"
-        saved = {"name": name, "filters": filters, "url": clean_url, "max_tickers": finviz.MAX_TICKERS}
-        # Ta sama nazwa aktualizuje zapisany skaner; nowa nazwa dodaje kolejny.
-        existing = [x for x in config.get("scanners") or [] if isinstance(x, dict) and x.get("name") != name]
-        config["scanners"] = existing + [saved]
+        saved = {"name": "Finviz", "filters": filters, "url": clean_url, "max_tickers": finviz.MAX_TICKERS}
+        config["scanners"] = [saved]
         write_json(CONFIG, config)
         scans = [saved]
-        log(f"Zapisano skaner '{name}'; filtry: {filters}")
+        log(f"Zapisano jedyny skaner Finviz; filtry: {filters}")
     else:
-        # Zachowaj domyślne skanery i ich sumę. Gdy istnieją zapisane własne linki,
-        # odświeżaj tylko ostatni zapisany skaner (ostatni na liście).
+        # Zawsze jeden skaner: zapisany URL ma pierwszeństwo; bez niego użyj pierwszego skonfigurowanego filtra.
         custom = [sc for sc in scans if sc.get("url")]
-        if custom:
-            scans = [custom[-1]]
-            log(f"Brak nowego linku — odświeżam ostatnio zapisany skaner: {scans[0]['name']}")
-        else:
-            log(f"Brak własnego linku — odświeżam wszystkie domyślne skanery ({len(scans)}).")
+        scans = [custom[-1] if custom else scans[0]]
+        log("Odświeżam jedyny skaner: " + (scans[0].get("url") or scans[0]["name"]))
     base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=1 if finviz_url else MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
@@ -204,12 +197,22 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     # Do plików wykresu zapisujemy tylko spółki z sygnałem/ponad GLB.
     ddir = Path(out) / "daily"
     above = [r["ticker"] for r in rows if r.get("glb_state") in ABOVE_GLB]
+    daily_symbols = list(dict.fromkeys(liquid + [BENCH]))
+    daily_cache_dir = Path(cache_dir) / "daily"
+    daily_cache = {t: load_json(daily_cache_dir / file_name(t), None) for t in daily_symbols}
+    daily_cache = {t: series for t, series in daily_cache.items() if series}
     try:
-        daily_symbols = list(dict.fromkeys(liquid + [BENCH]))
-        dser = daily(daily_symbols, log=log, period="2y") if daily_symbols else {}
+        if daily_symbols and daily is prices.daily:
+            dser = daily(daily_symbols, log=log, period="2y", cache=daily_cache, today=now.date())
+        else:
+            dser = daily(daily_symbols, log=log, period="2y") if daily_symbols else {}
     except Exception as e:
         log(f"⚠ dzienne (RVol/C/C[250]) niedostępne ({e})")
-        dser = {}
+        dser = daily_cache
+    daily_cache_dir.mkdir(parents=True, exist_ok=True)
+    for t, sd in dser.items():
+        if sd:
+            write_json(daily_cache_dir / file_name(t), sd)
     ddir.mkdir(parents=True, exist_ok=True)
     dkeep = set()
     for t in list(dict.fromkeys(above + [BENCH])):
@@ -249,7 +252,6 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--max-tickers", type=int)
     ap.add_argument("--finviz-url", default=os.environ.get("FINVIZ_URL") or None, help="Link do screenera Finviz; zapisze się w konfiguracji.")
-    ap.add_argument("--finviz-name", default=os.environ.get("FINVIZ_NAME") or None, help="Nazwa zapisywanego skanera Finviz.")
     args = ap.parse_args(argv)
     config = load_json(CONFIG, {})
     if args.max_tickers:   # limit dla każdego skanera (test na małej liście)
@@ -257,7 +259,7 @@ def main(argv=None):
         for sc in config.get("scanners") or []:
             sc["max_tickers"] = args.max_tickers
     try:
-        run(config, finviz_url=args.finviz_url, finviz_name=args.finviz_name)
+        run(config, finviz_url=args.finviz_url)
     except RuntimeError as e:
         print(f"❌ {e}")
         return 1
