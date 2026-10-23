@@ -1,4 +1,4 @@
-// Strona: jedna lista (skan Finviz + warunki strategii) i jeden wykres tygodniowy — ta sama aplikacja co Momentum Desktop.
+// Strona: uniwersum z Finviz, filtry, GLB/BLB i wykresy dzienne/tygodniowe.
 // Ctrl+K = dowolny symbol z listy albo z `symbols` w finviz_screen.json. Czyste funkcje na górze (testy w tests/js/app.test.js).
 "use strict";
 
@@ -32,7 +32,7 @@ function cell(v, f) {
 
 const isSignal = (r) => !!(SIGNAL.includes(r.glb_state) || BLB_SIGNAL.includes(r.blb_state));
 
-// najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki; w grupie od największej siły względnej
+// najpierw sygnały GLB/BLB, potem pozostałe; w grupie od najwyższego RS Rating.
 function defaultCompare(a, b) {
     const key = (r) => [!isSignal(r), -(r.rs_rating ?? -1e9), -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
@@ -156,7 +156,7 @@ if (typeof document !== "undefined") (function () {
             const cls = [isSignal(r) ? "signal" : "", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
-        }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
+        }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
         const sig = pool.filter((r) => isSignal(r)).length;
         $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB/BLB ${sig}`;
         renderStatus();
