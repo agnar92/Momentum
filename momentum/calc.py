@@ -342,6 +342,13 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     mcap = row.get("market_cap") or (price * f["shares"] if _ok(price) and _ok(f.get("shares")) else None)
     row["ps"] = mcap / f["ttm_rev"] if _ok(mcap) and _ok(f.get("ttm_rev")) and f["ttm_rev"] > 0 else None
     row["rs"] = rel_strength(weekly, spy)
+    # RS line value = stock close / SPY close on the same date (nominal ratio is for charting, not cross-stock ranking).
+    sd, sc = (spy or {}).get("d") or [], (spy or {}).get("c") or []
+    if c and weekly.get("d") and sd:
+        j = bisect.bisect_right(sd, weekly["d"][-1]) - 1
+        row["rs_value"] = price / sc[j] if j >= 0 and _ok(price) and _ok(sc[j]) and sc[j] > 0 else None
+    else:
+        row["rs_value"] = None
     as_of = (weekly.get("d") or [""])[-1]
     # tydzień z danych zaczyna się w poniedziałek: raport z tego tygodnia (do piątku) też jest znany
     row["surp"], row["surp_prev"], row["beat2"] = surprises(est, (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()) if as_of else (None, None, None)
