@@ -246,7 +246,7 @@ if (typeof document !== "undefined") (function () {
         return dailyCache.get(t);
     }
 
-    // przyciski T / D (dzienny: RWB Guppy + Blue Dot, tylko do podglądu — w teście słabszy niż GLB tygodniowy; tylko spółki nad Green Line)
+    // Przyciski T / D; wykres dzienny pokazuje OHLC, a RWB/GMMA i Blue Dot są opcjonalną nakładką.
     function renderPeriod() {
         const r = current && rowFor(current), ok = !!(r && r.daily);
         $("perD").hidden = !ok;
