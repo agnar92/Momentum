@@ -237,7 +237,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
     const valid = hi.concat(lo).filter((v) => v);
     const lmin0 = Math.min(...lo.filter((v) => v)), hmax0 = Math.max(...hi.filter((v) => v));
     if (level && level > lmin0 * 0.5 && level < hmax0 * 2) valid.push(level);
-    if (blueLevel && blueLevel > lmin0 * 0.5 && blueLevel < hmax0 * 2) valid.push(blueLevel);
+    if (blueLevel && blueLevel > 0) valid.push(blueLevel);
     const pmin = Math.min(...valid) * 0.97, pmax = Math.max(...valid) * 1.03;
     const [y0, y1] = g.price, lmin = Math.log(pmin), lmax = Math.log(pmax);
     const yf = (p) => y1 - (Math.log(p) - lmin) / (lmax - lmin) * (y1 - y0);
