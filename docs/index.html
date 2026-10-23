@@ -19,7 +19,6 @@
     <select id="scanner" title="Skaner Finviz (lista w finviz_screen.json; każdy liczy tę samą strategię)"></select>
     <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. wybicie GLB/BLB i RS Rating">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
-    <button type="button" id="guideBtn" title="Czego szukać w spółce: zasady z badań i lista kontrolna otwartej spółki">📖 Poradnik</button>
     <button type="button" id="posListBtn" title="Pozycje (plan wyjścia, co zrobić teraz) i obserwowane spółki">📌 Pozycje</button>
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
@@ -63,59 +62,6 @@
     <h3>Filtry listy <small>wszystkie warunki naraz · kliknij wartość, żeby ją włączyć</small></h3>
     <div id="fltBody"></div>
     <div class="dlg-btns"><button type="button" id="fltClear">Wyczyść filtry</button><button type="button" onclick="this.closest('dialog').close()">Gotowe</button></div>
-</dialog>
-<dialog id="guideDlg" class="wide guide">
-    <h3>Poradnik <small>co naprawdę działało w badaniach (płynny rynek USA, ceny bez korekty o dywidendy)</small></h3>
-    <div id="guideStock"></div>
-    <details open><summary><b>Warunki — tylko to, co w strategii działało najmocniej (GLB + MACD, wszystkie sygnały 2015–2026, ceny bez korekty)</b></summary>
-        <table class="gt"><tr><td>przychody kwartału ≥ +15 % r/r</td><td>bez tego 34,9 % rocznie</td></tr>
-        <tr><td>marża operacyjna ≥ +3 pp r/r</td><td>bez tego 28,9 %</td></tr>
-        <tr><td>wycena P/S &lt; 20</td><td>bez tego 31,5 % (drogie tracą; odpada też RGTI)</td></tr>
-        <tr><td><b>siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500</b> (kolumna RS)</td><td>bez tego 21,4 %</td></tr>
-        <tr><td><b>2 ostatnie raporty powyżej konsensusu EPS</b> (kolumna „2× nad konsensus”)</td><td>bez tego 36,6 % (z nim 42,4 %)</td></tr></table>
-        <p>Niespodzianki EPS (konsensus vs wynik, yfinance, od 2014): z warunkiem 42,4 % rocznie (2015–20 48,7 / 2021–26 36,4; 2020–26 53,7 %), +19,2 % na transakcję, DD −51 %.
-        Spółki, które ostatnio zawiodły rynek, dawały 3 % rocznie. Progi ≥ 5 / 10 % nie pomagały (za mało sygnałów). Przyspieszenie przychodów przez 2 kwartały — bez poprawy.
-        <b>Rewizja EPS 90 dni</b> (prognoza na przyszły rok dziś vs 90 dni temu) to tylko podgląd: brak historii do testu, zapisujemy ją co tydzień.</p>
-        <p>Razem (z niespodziankami EPS): <b>+19,2 % na transakcję</b>, portfel wszystkich sygnałów <b>42,4 % rocznie</b> (2015–20: 48,7 %, 2021–26: 36,4 %; same lata 2020–26: 53,7 %), S&amp;P 500 13,6 %.
-        Cena za to: mało sygnałów naraz (średnio 2–4) i głębszy spadek portfela (−51 %). Wspólny mianownik dużych ruchów po GLB: rosnące przychody i marża
-        (fundamenty) + akcja już jest liderem rynku (siła względna). Sama technika (GLB, średnie, RS bez fundamentów) w 2020–26 nie pobiła S&amp;P 500.</p>
-        <p class="dimtxt">Obrót nie jest warunkiem — płynność ustawiasz filtrem skanera w Finviz (np. średni wolumen). Backtest liczono na spółkach z obrotem ≥ 100 mln $ dziennie;
-        przy mniej płynnych spółkach wyniki mogą być inne (w teście sam obrót ≥ 50 mln $ dawał +9,4 % zamiast +15,6 % na transakcję).</p>
-        <p class="dimtxt">Usunięte, bo przy tych warunkach nic nie zmieniały: przychody kw. ≥ 25 mln $, zysk oper. w $ ↑, „Mocne” (Δ marży ≥ 10 pp), rozwodnienie, potencjał ★.</p>
-    </details>
-    <details><summary><b>Jak wygląda duży ruch w raportach</b></summary>
-        <p><b>Start:</b> w dołku fundamenty są słabe (mediana: przychody +5 %, EPS −6 %, marża oper. −1 pp). Poprawę widać dopiero 2–3 raporty później (EPS +25 %, zysk oper. +25 %).
-        Ceny nie wyprzedzisz fundamentami — od tego jest Green Line.</p>
-        <p><b>Szczyt:</b> kurs kończy ruch przy raporcie z <b>najwyższym tempem wzrostu</b> (EPS +33 %, przychody przyspieszają). Kolejne raporty są dalej dobre, ale wolniejsze
-        (EPS +27 → +15 → +11 %) — rynek sprzedaje hamowanie, nie złe wyniki.</p>
-    </details>
-    <details open><summary><b>Wyjście — dwie metody (przycisk 🚪 na wykresie) + sprzedaż połowy</b></summary>
-        <table class="gt"><tr><td><b>MACD</b> (domyślna)</td><td>po przecięciu MACD tyg. w dół stop pod Low tego tygodnia (czerwona przerywana)</td></tr>
-        <tr><td><b>pod GLB</b> (jak Dr Wish)</td><td>sprzedaj, gdy tydzień zamknie się pod Green Line. Linia stoi na poziomie wybicia, dopóki akcja robi nowe rekordy; gdy szczyt przestoi 3 mies., staje się nową linią — trzymasz, póki trend trwa</td></tr>
-        <tr><td>zawsze</td><td>stop 10 % pod ceną kupna; <b>spadek 20 % od szczytu</b> (zamknięcie tyg. od wejścia) = sprzedaj połowę — przy 📌 pozycji alert i żółta przerywana „½ przy”</td></tr></table>
-        <p>Test 2015–2026 (pozycje po 20 % kapitału). Metoda pod GLB trzyma największe ruchy: SNDK 09/25 +2409 %, MU 10/25 +472 %, NVDA 05/23 +221 %, PLTR 11/24 +169 %
-        (z MACD: +1833 / +115 / +3 / +28 %), ale 77–82 % transakcji to małe straty. Najlepiej działa z wejściem „przebicie GLB dowolnie wysoko” + warunki: 19,7 % rocznie
-        (2020–26: 37,8 %), DD −51 %. Przy wejściu 0–10 % nad linią lepszy jest MACD: 22,2 % rocznie, DD −35 % (pod GLB: 15,8 %, DD −41 %).
-        Sprzedaż połowy przy −20 % od szczytu: płytsze spadki portfela (MACD: DD −35 → −31 %; pod GLB: −51 → −45 %) za cenę 1–3 pp rocznie (20,6 % i 17,2 %).</p>
-    </details>
-    <details><summary><b>Wejście i wyjście</b></summary>
-        <p><b>Kupno:</b> tydzień przebicia Green Line (poprzedni tydzień pod linią) przy dowolnej wysokości albo zamknięcie tygodnia 0–10 % nad linią (rekord miesięcznego High, który stoi ≥ 3 miesiące), na otwarciu następnego tygodnia. Gdy to już kolejny tydzień i cena jest &gt; 10 % nad linią — wejście po <b>Blue Dot</b> na dziennym (stan BLUE DOT; nie testowane wstecz w tym połączeniu).
-        Stop 10 % pod wejściem — zleceniem (w teście stop „na zamknięciu tygodnia” dawał podobny wynik, ale straty 15–35 %). Po wybiciu stopem wchodzisz ponownie przy następnym sygnale.</p>
-        <p><b>Wyjście:</b> po przecięciu MACD tygodniowego w dół stop pod Low tego tygodnia (czerwona przerywana).</p>
-        <p><b>⚠ Hamowanie</b> (kolumna Hamuje, alert dla 📌 pozycji): w nowym raporcie tempo przychodów spadło o ≥ 10 pp. Po takim raporcie spadek ≥ 20 % w 6 mies. w 44 % przypadków
-        (normalnie 33 %); <b>⚠⚠ z marżą brutto spadającą r/r — 50 %</b>, średnio −1,8 % po 3 i 6 mies. To sygnał, żeby zacieśnić stop albo nie dokładać.</p>
-    </details>
-    <details><summary><b>RWB + Blue Dot (wykres dzienny, przycisk D) — podgląd, nie sygnał</b></summary>
-        <p>Test 2015–2026, ceny bez korekty: RWB (6 szybkich EMA nad 6 wolnymi) + nad Green Line + Blue Dot (Stochastic 10,1 ↑ 20), kupno na zamknięciu, stop pod
-        Low kropki, wyjście MACD: tylko <b>+1,0…+1,2 % na transakcję</b>, trafność 14–15 % (stop pod kropką wybija średnio po 4 sesjach). Ze stopem 10 %: +1,6…+1,8 %.
-        GLB 0–10 % na tygodniowym z warunkami: +15,6 %. Wykres dzienny: linia zamknięć, RWB, Blue Dot i Green Line.</p>
-    </details>
-    <details><summary><b>Czego nie szukać (nic nie wnosiło)</b></summary>
-        <p>ROE / ROI, Blue Dot, stan MACD przy wejściu, trend S&amp;P 500, wolumen wybicia, długość bazy, kup +0,1 % / sprzedaj −0,1 % przy linii (dziennie: −0,3 % rocznie), samo przyspieszenie przychodów, poziom marży brutto i operacyjnej, „marża oper. &gt; 0”, sam EPS ponad przychody i marże, zmiana marży kwartał do kwartału. Wykres: S&P 500 nad ceną pokazuje kierunek rynku;
-        słupki przychodów pod wolumenem — zielony ≥ +25 % r/r, żółty ≥ +15 %.</p>
-    </details>
-    <p class="dimtxt">Heurystyka z backtestu na spółkach notowanych dziś (bez spółek wycofanych z giełdy), nie porada inwestycyjna.</p>
-    <div class="dlg-btns"><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
 </dialog>
 <dialog id="alertDlg" class="wide">
     <h3>Alerty <small>sprawdzane po wczytaniu nowych danych (zamknięcia tygodni)</small></h3>
