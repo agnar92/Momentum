@@ -279,6 +279,18 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         const s = smaWin[k];
         poly(s.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), smaColors[k], 1.5);
     }
+    if (D) {
+        // Daily chart overlays are calculated on the complete history, then clipped to the visible window.
+        const dailyAverages = [
+            { label: "EMA 10", values: ema(cfull, 10).slice(i0, i1), color: "#f0b429" },
+            { label: "SMA 20", values: sma(cfull, 20).slice(i0, i1), color: "#22d3ee" },
+            { label: "SMA 50", values: sma(cfull, 50).slice(i0, i1), color: "#a78bfa" },
+        ];
+        for (const avg of dailyAverages) {
+            poly(avg.values.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), avg.color, 1.8);
+        }
+        dailyAverages.forEach((avg, i) => boxText(x0 + 4 + i * 76, y0 + 13, avg.label, avg.color));
+    }
     const bw = Math.max(1, step * 0.25), tick = step * 0.35;
     for (let i = 0; i < n; i++) {
         if (hi[i] === null || lo[i] === null || c[i] === null) continue;
