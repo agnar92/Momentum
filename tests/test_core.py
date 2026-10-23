@@ -25,6 +25,14 @@ def test_blue_line_uses_weekly_highs_and_13_week_confirmation():
     assert calc.blue_line([10, 12] + [11] * 13 + [15, 14] + [14] * 12) == (15, 15)
 
 
+def test_build_row_uses_all_time_weekly_highs_for_blb():
+    weekly = {"d": ["2026-10-19"], "o": [19.0], "h": [20.0], "l": [18.0], "c": [19.5], "v": [1000]}
+    history = [["2025-01-06", 10.0], ["2025-01-13", 12.0]] + [[ "2025-01-20", 11.0 ]] * 13
+    row = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=history)
+    assert row["blb"] == 12.0
+    assert row["blb_state"] == "SYGNAŁ"
+
+
 def test_glb_state():
     assert calc.glb_state(105, 99, 100) == "WYBICIE"
     assert calc.glb_state(105, 103, 100) == "SYGNAŁ"
