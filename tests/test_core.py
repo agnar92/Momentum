@@ -423,4 +423,4 @@ def test_deepvue_style_rs_score_weights_recent_relative_performance():
     spy = {"d": dates, "c": [100.0] * 60}
     score = calc.rs_rating_score(stock, spy)
     assert score is not None and score > 0
-    assert calc.rs_rating_score({"d": dates[:3], "c": [100, 101, 102]}, spy) is not None
+    assert calc.rs_rating_score({"d": dates[:3], "c": [100, 101, 102]}, spy) is None
