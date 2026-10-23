@@ -1,9 +1,9 @@
 """EPS actuals, analyst estimates and surprises from yfinance; refreshed weekly with a 7-day cache."""
 import datetime as dt
 import math
-import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-FRESH_DAYS = 7
+FRESH_DAYS = 8  # weekly workflow runs every 7 days; avoid refetching everything on the boundary
 KEEP_HIST = 104
 
 
@@ -118,27 +118,39 @@ def fetch(t):
     return {"surp": surp[-8:], "revenue_surp": revenue_surp[-8:], "rev90": rev90, "eps_q": eps_q, "eps_est": eps_est}
 
 
-def update(tickers, cache, log=print, today=None, pause=0.1, progress=None, fetch_one=None):
-    """Refresh stale estimates; preserve prior values when one ticker fails."""
+def update(tickers, cache, log=print, today=None, pause=0.1, progress=None, fetch_one=None, max_workers=6):
+    """Refresh stale estimates concurrently; preserve prior values when one ticker fails.
+
+    A 7-day scheduled run must still regard data fetched exactly 7 days ago as fresh.
+    yfinance requests are independent, so a small worker pool avoids serial network waits.
+    """
     today = today or dt.date.today()
     fetch_one = fetch_one or fetch
     todo = [t for t in tickers if not (cache.get(t) and "revenue_surp" in cache[t] and "eps_q" in cache[t] and "eps_est" in cache[t] and (today - dt.date.fromisoformat(cache[t]["at"])).days < FRESH_DAYS)]
-    done = []
-    for n, t in enumerate(todo, 1):
-        try:
-            e = fetch_one(t)
-        except Exception as ex:
-            log(f"prognozy: {t} — {ex}")
-            continue
-        old = cache.get(t) or {}
-        hist = old.get("hist", [])
-        if e.get("rev90") is not None:
-            hist = (hist + [[today.isoformat(), e["rev90"]]])[-KEEP_HIST:]
-        cache[t] = {"at": today.isoformat(), **{k: e.get(k, old.get(k)) for k in ("surp", "rev90", "eps_q", "eps_est")}, "hist": hist}
-        done.append(t)
-        if progress:
-            progress(n, len(todo))
-        if n % 50 == 0 or n == len(todo):
-            log(f"yfinance prognozy EPS: {n}/{len(todo)}")
-        time.sleep(pause)
-    return done
+    if not todo:
+        log("yfinance prognozy EPS: cache aktualny (0 do pobrania)")
+        return []
+
+    successful = set()
+    # Store results in the main thread only; worker threads perform network reads.
+    with ThreadPoolExecutor(max_workers=max(1, int(max_workers))) as pool:
+        futures = {pool.submit(fetch_one, t): t for t in todo}
+        for n, future in enumerate(as_completed(futures), 1):
+            t = futures[future]
+            try:
+                e = future.result()
+            except Exception as ex:
+                log(f"prognozy: {t} — {ex}")
+                continue
+            old = cache.get(t) or {}
+            hist = old.get("hist", [])
+            if e.get("rev90") is not None:
+                hist = (hist + [[today.isoformat(), e["rev90"]]])[-KEEP_HIST:]
+            cache[t] = {"at": today.isoformat(), **{k: e.get(k, old.get(k)) for k in ("surp", "rev90", "eps_q", "eps_est")}, "hist": hist}
+            successful.add(t)
+            if progress:
+                progress(n, len(todo))
+            if n % 25 == 0 or n == len(todo):
+                log(f"yfinance prognozy EPS: {n}/{len(todo)}")
+    # Preserve input ticker order for callers/tests even though futures complete out of order.
+    return [t for t in todo if t in successful]

@@ -10,7 +10,7 @@ import urllib.request
 
 UA = "Momentum research@example.com"
 SEC_VERSION = 4     # 4 = przychody TTM i liczba akcji (rozwodnienie, P/S); 3 = zmiana zysku oper. w $; 2 = 8 kwartałów
-FRESH_DAYS = 7
+FRESH_DAYS = 8  # weekly workflow runs every 7 days; avoid a full refresh at the boundary
 TICKERS_URL = "https://www.sec.gov/files/company_tickers.json"
 FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{:010d}.json"
 TAGS = {

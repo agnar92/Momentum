@@ -95,7 +95,7 @@ def parse_page(page):
     return rows, total
 
 
-def fetch(filters, max_tickers=MAX_TICKERS, pause=0.7, log=print, get=None, progress=None):
+def fetch(filters, max_tickers=MAX_TICKERS, pause=0.15, log=print, get=None, progress=None):
     """Wszystkie strony screenera (po 20 wierszy). -> (wiersze, łączna liczba wg Finviz). progress(wiersze, oczekiwane) po każdej stronie."""
     get = get or requests.Session().get
     out, seen, offset, total = [], set(), 1, None
