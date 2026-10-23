@@ -107,8 +107,8 @@ test("IBD relative strength line on the weekly chart", () => {
     assert.deepStrictEqual(rsLine([10, 20, null], [5, 4, 2]), [2, 5, null]);
     const w = weekly(150), spx = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // SPY spada, akcja rośnie -> RS na szczycie
     const svg = chartSvg(w, { rs: 61 }, 1000, 700, null, null, [], null, spx).svg;
-    assert.ok(svg.includes(">+61 pp<") && svg.includes("RS na szczycie 52 tyg.") && !svg.includes("RS (cena"));
-    assert.ok(!chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("+61 pp"));
+    assert.ok(svg.includes("RS 52W +61 pp") && svg.includes("RS Line / MA 52 tyg.") && !svg.includes("RS (cena"));
+    assert.ok(chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("RS 52W +61 pp"));
 });
 
 test("relative volume: weekly vs 10 weeks, daily vs 50 sessions", () => {
