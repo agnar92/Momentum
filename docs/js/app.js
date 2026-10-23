@@ -768,7 +768,6 @@ if (typeof document !== "undefined") (function () {
     function initUi() {
         renderHead();
         $("search").addEventListener("input", renderTable);
-        $("scanner").addEventListener("change", () => { state.scanner = $("scanner").value || null; saveSettings(); renderTable(); });
         $("thead").addEventListener("click", (e) => {
             const th = e.target.closest("th");
             if (!th) return;
@@ -848,11 +847,8 @@ if (typeof document !== "undefined") (function () {
     }
 
     function renderScanners() {
-        const scans = data.scanners || [];
-        if (state.scanner && !scans.some((m) => m.name === state.scanner)) state.scanner = null;
-        $("scanner").innerHTML = `<option value="">Wszystkie skanery (${data.rows.length})</option>` +
-            scans.map((m) => `<option value="${escapeHtml(m.name)}">${escapeHtml(m.name)} (${m.n})${m.stale ? " ⚠" : ""}</option>`).join("");
-        $("scanner").value = state.scanner || "";
+        // Aplikacja korzysta z jednego źródła Finviz; wyczyść ewentualny wybór zapisany w starszej wersji.
+        state.scanner = null;
     }
 
     function renderStatus() {
