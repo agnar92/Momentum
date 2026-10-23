@@ -18,10 +18,10 @@ const ROWS = [
     { ticker: "D", company: "Delta", ok: true, glb_state: "NAD", dopm: null },
 ];
 
-test("default order: signal+ok first, then ok, by Δ operating margin", () => {
-    assert.deepStrictEqual(visibleRows(ROWS, {}).map((r) => r.ticker), ["B", "A", "D", "C"]);
+test("default order: GLB signals rank first even when extra legacy conditions fail", () => {
+    assert.deepStrictEqual(visibleRows(ROWS, {}).map((r) => r.ticker), ["B", "C", "A", "D"]);
     assert.deepStrictEqual(visibleRows(ROWS, { onlyOk: true }).map((r) => r.ticker), ["B", "A", "D"]);
-    assert.ok(isSignal(ROWS[1]) && !isSignal(ROWS[2]));
+    assert.ok(isSignal(ROWS[1]) && isSignal(ROWS[2]));
 });
 
 test("scanner filter", () => {
@@ -73,7 +73,7 @@ test("P/S and RS cells, slowdown cell and filters", () => {
 test("default order: conditions + GLB signal first, then by relative strength", () => {
     const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", rs: 55 }, { ticker: "B", ok: true, glb_state: "WYBICIE", rs: 90 },
         { ticker: "C", ok: true, glb_state: "POD", rs: 120 }, { ticker: "D", ok: false, rs: 300 }];
-    assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "C", "D"]);
+    assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "D", "C"]);
 });
 
 test("SMA 10 > 30 filter and preset", () => {
