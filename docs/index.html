@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Momentum — GLB + marża operacyjna</title>
+<title>Momentum — CAN SLIM · GLB / BLB · RS Rating</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e1116">
@@ -15,10 +15,10 @@
 </head>
 <body>
 <header class="bar">
-    <strong class="brand">MOMENTUM <span>// GLB + marża operacyjna</span></strong>
+    <strong class="brand">MOMENTUM <span>// CAN SLIM · GLB / BLB · RS Rating</span></strong>
     <select id="scanner" title="Skaner Finviz (lista w finviz_screen.json; każdy liczy tę samą strategię)"></select>
-    <label class="check"><input type="checkbox" id="onlyOk"> tylko spełniające warunki</label>
-    <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. nad GLB i MACD dodatni">Filtry</button>
+    <label class="check"><input type="checkbox" id="onlyOk"> tylko spełniające dodatkowe warunki</label>
+    <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. wybicie GLB/BLB i RS Rating">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
     <button type="button" id="guideBtn" title="Czego szukać w spółce: zasady z badań i lista kontrolna otwartej spółki">📖 Poradnik</button>
     <button type="button" id="growthBtn" title="Ranking TOP 10 wyłącznie według fundamentów, bez wykresu ceny">Growth Score · TOP 10</button>
@@ -28,8 +28,8 @@
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
        title="W GitHub Actions → Run workflow możesz wkleić link Finviz i podać nazwę. Link zapisze się pod tą nazwą; przy pustym linku odświeży się ostatnio zapisany skaner.">⟳ Odśwież dane</a>
     <details class="rules"><summary>Zasady</summary>
-        <p><b>Warunki:</b> przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (SEC), P/S &lt; 20, siła względna 52 tyg. ≥ +50 pp nad S&amp;P 500. Kolejność: sygnał GLB, potem od największej siły względnej.</p>
-        <p><b>Wejście — Green Line:</b> rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). Kupno, gdy tydzień zamknie się 0–10 % nad linią.
+        <p><b>Uniwersum:</b> spółki dostarczone przez skaner Finviz (C i A z CAN SLIM). Momentum nie ocenia ponownie tych dwóch kryteriów. RS Rating to percentyl względnej siły w obrębie wybranego skanera.</p>
+        <p><b>GLB — Green Line:</b> rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy). <b>BLB — Blue Line:</b> analogiczna reguła dla tygodniowych High, z potwierdzeniem 13 tygodni. Kupno, gdy tydzień zamknie się 0–10 % nad linią.
             <i>WYBICIE</i> = tydzień przebicia (poprzedni pod linią) — kupno przy dowolnej wysokości, to mocne wybicie; <i>SYGNAŁ</i> = 0–10 % nad;
             <i>BLUE DOT</i> = kolejny tydzień &gt; 10 % nad linią i Blue Dot na dziennym w ostatnich 5 sesjach — kupno; <i>NAD</i> = &gt; 10 % bez kropki (czekaj na Blue Dot); <i>POD</i>.</p>
         <p><b>Wyjście:</b> tygodniowy MACD (12, 26, 9) — po przecięciu sygnału w dół stop pod Low tego tygodnia; do tego stop 10 % pod wejściem.</p>
