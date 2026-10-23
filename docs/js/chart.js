@@ -115,7 +115,7 @@ function axisSpots(levelY, lastY, stopY, gap = 16) {
 const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] : null));
 
 // panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno);
-// dzienny (D): S&P 500, cena (linia zamknięć + RWB + Blue Dot + GLB) i wolumen — bez przychodów i Stochastic
+// dzienny (D): słupki OHLC, opcjonalna nakładka RWB/GMMA + Blue Dot, RS Line i wolumen — bez przychodów i MACD
 function geometry(w, h, right = 64, period = "W") {
     const top = 8, ph = h - top - 22, s1 = top + ph * 0.10, p0 = s1 + 8;
     if (period === "D") {
