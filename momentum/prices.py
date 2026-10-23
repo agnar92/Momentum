@@ -112,7 +112,9 @@ def weekly_highs(tickers, cache=None, log=print, today=None):
     """All-time weekly High history for BLB, separate from the 3-year chart cache.
     Refresh the latest six months, preserve older highs, and fully reload a ticker if overlapping prices changed."""
     cache, today = cache or {}, today or dt.date.today()
-    out = {t: list(cache.get(t) or []) for t in tickers}
+    week_start = today - dt.timedelta(days=today.weekday())
+    # Only closed weeks are eligible for an ATH; discard the currently forming weekly candle.
+    out = {t: [[d, v] for d, v in (cache.get(t) or []) if d < week_start.isoformat()] for t in tickers}
     missing = [t for t in tickers if not out[t]]
     recent = [t for t in tickers if out[t]]
     batches = [(missing, "max"), (recent, "6mo")]
@@ -129,7 +131,8 @@ def weekly_highs(tickers, cache=None, log=print, today=None):
                 frame = frames.get(t)
                 if frame is None or getattr(frame, "empty", True) or "High" not in frame:
                     continue
-                fresh = [[d.strftime("%Y-%m-%d"), round(float(v), 4)] for d, v in frame["High"].dropna().items()]
+                fresh = [[d.strftime("%Y-%m-%d"), round(float(v), 4)] for d, v in frame["High"].dropna().items()
+                         if d.strftime("%Y-%m-%d") < week_start.isoformat()]
                 old = dict(out.get(t) or [])
                 changed = any(day in old and not _same(old[day], value) for day, value in fresh)
                 if changed and period != "max":
@@ -138,7 +141,8 @@ def weekly_highs(tickers, cache=None, log=print, today=None):
                                              group_by="ticker", progress=False, threads=True)
                     full_frame = _frames(full_df, [t]).get(t)
                     if full_frame is not None and not full_frame.empty and "High" in full_frame:
-                        fresh = [[d.strftime("%Y-%m-%d"), round(float(v), 4)] for d, v in full_frame["High"].dropna().items()]
+                        fresh = [[d.strftime("%Y-%m-%d"), round(float(v), 4)] for d, v in full_frame["High"].dropna().items()
+                                 if d.strftime("%Y-%m-%d") < week_start.isoformat()]
                         old = {}
                 merged = {**old, **dict(fresh)}
                 out[t] = sorted(merged.items())
