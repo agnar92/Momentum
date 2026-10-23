@@ -61,11 +61,11 @@ function growthScore(r) {
     return {score:coverage>=70&&coverage?Math.round(earned/coverage*1000)/10:null,coverage,components,notes:"Revenue Surprise i ROI/ROIC nie są obecnie dostępne w danych; katalizatory wymagają ręcznej oceny."};
 }
 
-const isSignal = (r) => !!((r.ok && SIGNAL.includes(r.glb_state)) || BLB_SIGNAL.includes(r.blb_state));
+const isSignal = (r) => !!(SIGNAL.includes(r.glb_state) || BLB_SIGNAL.includes(r.blb_state));
 
 // najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki; w grupie od największej siły względnej
 function defaultCompare(a, b) {
-    const key = (r) => [!isSignal(r), !r.ok, -(r.rs ?? -1e9)];
+    const key = (r) => [!isSignal(r), -(r.rs_rating ?? -1e9), -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
@@ -130,7 +130,7 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
+    const state = Object.assign({ onlyOk: false, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
     let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
