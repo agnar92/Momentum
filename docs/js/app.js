@@ -4,14 +4,17 @@
 
 const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
-    ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
+    ["glb", "Green Line", "p"], ["glb_pct", "Do GLB %", "%"], ["glb_state", "GLB", "s"],
+    ["blb", "Blue Line", "p"], ["blb_pct", "Do BLB %", "%"], ["blb_state", "BLB", "s"],
+    ["rs_rating", "RS Rating", "rating"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc250", "C/C250", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
     ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
-const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
-const SETTINGS_KEY = "momentum_glb_settings";
+const BLB_SIGNAL = ["WYBICIE", "SYGNAŁ"];
+const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "blb_state", "macd", "quarter", "slow"];
+const SETTINGS_KEY = "momentum_glb_blb_settings";
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
 
@@ -23,6 +26,7 @@ function cell(v, f) {
     if (f === "b") return v ? "✓" : "";
     if (f === "x") return v.toFixed(1);
     if (f === "r") return v.toFixed(2);
+    if (f === "rating") return Math.round(v).toString();
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
@@ -57,11 +61,11 @@ function growthScore(r) {
     return {score:coverage>=70&&coverage?Math.round(earned/coverage*1000)/10:null,coverage,components,notes:"Revenue Surprise i ROI/ROIC nie są obecnie dostępne w danych; katalizatory wymagają ręcznej oceny."};
 }
 
-const isSignal = (r) => !!(r.ok && SIGNAL.includes(r.glb_state));
+const isSignal = (r) => !!(SIGNAL.includes(r.glb_state) || BLB_SIGNAL.includes(r.blb_state));
 
 // najpierw spełniające warunki z sygnałem GLB, potem spełniające warunki; w grupie od największej siły względnej
 function defaultCompare(a, b) {
-    const key = (r) => [!isSignal(r), !r.ok, -(r.rs ?? -1e9)];
+    const key = (r) => [!isSignal(r), -(r.rs_rating ?? -1e9), -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
@@ -79,7 +83,7 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
     ["Sygnał kupna: warunki + wybicie / 0–10 % / Blue Dot", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
@@ -126,7 +130,7 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: true, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
+    const state = Object.assign({ onlyOk: false, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
     let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
@@ -168,6 +172,12 @@ if (typeof document !== "undefined") (function () {
     }
 
     function renderTable() {
+        const pool = visibleRows(data.rows, { scanner: state.scanner });
+        // Cross-sectional RS Rating: percentile of 52-week relative performance (share price / SPY normalized over time).
+        // Raw price/SPY ratios are not comparable across tickers because nominal share prices and splits differ.
+        const ranked = pool.filter((r) => Number.isFinite(r.rs)).sort((a, b) => a.rs - b.rs);
+        ranked.forEach((r, i) => { r.rs_rating = ranked.length < 2 ? 50 : Math.max(1, Math.min(99, Math.round(1 + 98 * i / (ranked.length - 1)))); });
+        pool.filter((r) => !Number.isFinite(r.rs)).forEach((r) => { r.rs_rating = null; });
         shown = visibleRows(data.rows, { onlyOk: state.onlyOk, search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
@@ -178,7 +188,6 @@ if (typeof document !== "undefined") (function () {
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
-        const pool = visibleRows(data.rows, { scanner: state.scanner });
         const ok = pool.filter((r) => r.ok).length, sig = pool.filter(isSignal).length;
         $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · warunki spełnia ${ok} · sygnał GLB ${sig}`;
         renderStatus();

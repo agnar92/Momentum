@@ -45,6 +45,20 @@ def green_line(months, confirm=CONFIRM_MONTHS):
     return level, at
 
 
+def blue_line(weekly_highs, confirm=13):
+    """Blue Line z tygodniowych High: rekord wszech czasów staje się linią po 13 zamkniętych tygodniach.
+    Odpowiednik GLB na interwale tygodniowym (kwartał potwierdzenia zamiast 3 miesięcy)."""
+    level = at = None
+    mx, mi = -math.inf, None
+    for i, value in enumerate(weekly_highs):
+        if not _ok(value):
+            continue
+        if value > mx:
+            mx, mi = value, i
+        if i - mi >= confirm:
+            level, at = mx, mi
+    return level, at
+
 def green_line_series(months, confirm=CONFIRM_MONTHS):
     """Green Line obowiązująca w każdym miesiącu: wartość i = linia z miesięcy zamkniętych przed miesiącem i (wykres miesięczny)."""
     out, level, mx, mi = [None], None, -math.inf, None
@@ -303,7 +317,7 @@ def growth_score(row, min_coverage=GROWTH_SCORE_MIN_COVERAGE):
     return {"score": round(score, 1) if score is not None else None, "coverage": round(coverage, 1),
             "points": round(earned, 2), "components": components, "groups": groups, "weights": dict(GROWTH_SCORE_WEIGHTS)}
 
-def build_row(base, weekly, months, fund, spy=None, est=None):
+def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None):
     """Wiersz listy: base (z Finviz), weekly {d, o, h, l, c, v}, months (High zamkniętych miesięcy), fund (z SEC albo None), spy (tygodniowe {d, c}),
     est (prognozy yfinance: niespodzianki, rewizja, historia EPS i konsensus analityków)."""
     c, lo, v = weekly.get("c") or [], weekly.get("l") or [], weekly.get("v") or []
@@ -311,8 +325,12 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     price = c[-1] if c else None
     prev = c[-2] if len(c) > 1 else None
     level, _ = green_line(months)
-    row.update(price=price, glb=level, glb_state=glb_state(price, prev, level),
+    all_weekly_highs = [x[1] for x in weekly_highs] if weekly_highs else (weekly.get("h") or [])
+    blue, _ = blue_line(all_weekly_highs)
+    row.update(price=price, glb=level, blb=blue, glb_state=glb_state(price, prev, level),
                glb_pct=(price / level - 1) * 100 if _ok(price) and _ok(level) and level else None,
+               blb_pct=(price / blue - 1) * 100 if _ok(price) and _ok(blue) and blue else None,
+               blb_state=glb_state(price, prev, blue),
                turnover=turnover(c, v))
     m = macd_info(c, lo)
     row.update(macd=m["state"], macd_stop=m["stop"])
@@ -325,6 +343,13 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     mcap = row.get("market_cap") or (price * f["shares"] if _ok(price) and _ok(f.get("shares")) else None)
     row["ps"] = mcap / f["ttm_rev"] if _ok(mcap) and _ok(f.get("ttm_rev")) and f["ttm_rev"] > 0 else None
     row["rs"] = rel_strength(weekly, spy)
+    # RS line value = stock close / SPY close on the same date (nominal ratio is for charting, not cross-stock ranking).
+    sd, sc = (spy or {}).get("d") or [], (spy or {}).get("c") or []
+    if c and weekly.get("d") and sd:
+        j = bisect.bisect_right(sd, weekly["d"][-1]) - 1
+        row["rs_value"] = price / sc[j] if j >= 0 and _ok(price) and _ok(sc[j]) and sc[j] > 0 else None
+    else:
+        row["rs_value"] = None
     as_of = (weekly.get("d") or [""])[-1]
     # tydzień z danych zaczyna się w poniedziałek: raport z tego tygodnia (do piątku) też jest znany
     row["surp"], row["surp_prev"], row["beat2"] = surprises(est, (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()) if as_of else (None, None, None)
