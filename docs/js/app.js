@@ -8,8 +8,7 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["blb", "Blue Line", "p"], ["blb_pct", "Do BLB %", "%"], ["blb_state", "BLB", "s"],
     ["rs_rating", "RS Rating", "rating"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc250", "C/C250", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["ok", "Warunki", "b"],
-    ["slow", "Hamuje", "w"],
+    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc250", "C/C250", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
 const BLB_SIGNAL = ["WYBICIE", "SYGNAŁ"];
@@ -29,36 +28,6 @@ function cell(v, f) {
     if (f === "rating") return Math.round(v).toString();
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
-}
-
-function growthScore(r) {
-    const n = (v) => typeof v === "number" && Number.isFinite(v);
-    const pts = (v, knots) => {
-        if (!n(v)) return null;
-        if (v <= knots[0][0]) return knots[0][1];
-        for (let i=1;i<knots.length;i++) if(v<=knots[i][0]) {
-            const [x0,y0]=knots[i-1], [x1,y1]=knots[i];
-            return y0+(v-x0)*(y1-y0)/(x1-x0);
-        }
-        return knots[knots.length-1][1];
-    };
-    const est = (r.eps_est||[]).find(x=>x.period==="+1y");
-    const next = est && n(est.growth) ? (Math.abs(est.growth)<=1 ? est.growth*100 : est.growth) : null;
-    const rev = r.rev_rr, accel = r.accel;
-    const accVals=[rev,accel].filter(n);
-    const acceleration=accVals.length ? accVals.reduce((a,b)=>a+b,0)/accVals.length : null;
-    const surprise = n(r.surp) ? pts(r.surp, [[-20,0],[0,8],[5,14],[10,18],[20,20]]) : null;
-    const futureVals=[pts(next,[[0,0],[5,6],[10,12],[20,17],[35,20]]),pts(r.eps_rev,[[-10,0],[0,8],[5,14],[10,18],[20,20]])].filter(n);
-    const future=futureVals.length?futureVals.reduce((a,b)=>a+b,0)/futureVals.length:null;
-    const qualityVals=[pts(r.opm,[[0,0],[5,8],[15,14],[30,17],[50,20]]),pts(r.dopm,[[-5,0],[0,8],[3,14],[8,20]])].filter(n);
-    const quality=qualityVals.length?qualityVals.reduce((a,b)=>a+b,0)/qualityVals.length:null;
-    const qs=(r.qs||[]).map(x=>x.rev_rr).filter(n).slice(-4);
-    const durability=qs.length?pts(qs.reduce((a,b)=>a+b,0)/qs.length,[[0,0],[5,3],[10,6],[20,8],[35,10]]):null;
-    const components={acceleration:pts(acceleration,[[-10,0],[0,10],[10,20],[20,26],[35,30]]),surprises:surprise,future,quality,durability};
-    const weights={acceleration:30,surprises:20,future:20,quality:20,durability:10};
-    const coverage=Object.keys(weights).reduce((a,k)=>a+(components[k]===null?0:weights[k]),0);
-    const earned=Object.keys(weights).reduce((a,k)=>a+(components[k]===null?0:components[k]),0);
-    return {score:coverage>=70&&coverage?Math.round(earned/coverage*1000)/10:null,coverage,components,notes:"Revenue Surprise i ROI/ROIC nie są obecnie dostępne w danych; katalizatory wymagają ręcznej oceny."};
 }
 
 const isSignal = (r) => !!(SIGNAL.includes(r.glb_state) || BLB_SIGNAL.includes(r.blb_state));
@@ -83,7 +52,7 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
     ["Sygnał kupna: warunki + wybicie / 0–10 % / Blue Dot", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
@@ -95,7 +64,7 @@ const FILTER_PRESETS = [
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
 ];
 
-const filterValue = (r, k) => (k === "ok" || k === "trend" || k === "beat2" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
+const filterValue = (r, k) => (k === "trend" || k === "beat2" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
 
 function passFilters(r, filters) {
     for (const [k, f] of Object.entries(filters || {})) {
@@ -111,7 +80,7 @@ const activeFilters = (filters) => Object.values(filters || {}).filter((f) => (f
 
 function visibleRows(rows, opts) {
     const q = (opts.search || "").trim().toLowerCase();
-    let out = rows.filter((r) => (!opts.onlyOk || r.ok) && (!opts.scanner || (r.scanners || []).includes(opts.scanner)) && passFilters(r, opts.filters) &&
+    let out = rows.filter((r) => (!opts.scanner || (r.scanners || []).includes(opts.scanner)) && passFilters(r, opts.filters) &&
         (!q || r.ticker.toLowerCase().includes(q) || (r.company || "").toLowerCase().includes(q)));
     out = out.slice().sort(opts.sort ? compareBy(opts.sort.key, opts.sort.dir) : defaultCompare);
     return out;
@@ -130,7 +99,7 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ onlyOk: false, sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
+    const state = Object.assign({ sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
     let period = "W", dShow = 260;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
@@ -152,7 +121,7 @@ if (typeof document !== "undefined") (function () {
         try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
     }
     function saveSettings() {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ onlyOk: state.onlyOk, sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
+        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
     }
     const allRows = () => data.rows.concat(data.symbols || []);
     const rowFor = (t) => allRows().find((r) => r.ticker === t) || null;
@@ -178,18 +147,18 @@ if (typeof document !== "undefined") (function () {
         const ranked = pool.filter((r) => Number.isFinite(r.rs)).sort((a, b) => a.rs - b.rs);
         ranked.forEach((r, i) => { r.rs_rating = ranked.length < 2 ? 50 : Math.max(1, Math.min(99, Math.round(1 + 98 * i / (ranked.length - 1)))); });
         pool.filter((r) => !Number.isFinite(r.rs)).forEach((r) => { r.rs_rating = null; });
-        shown = visibleRows(data.rows, { onlyOk: state.onlyOk, search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
+        shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
             const held = !!ast.pos[r.ticker], warn = held && posWarn(r);
-            const cls = [isSignal(r) ? "signal" : "", r.ok ? "" : "dim", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
+            const cls = [isSignal(r) ? "signal" : "", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
                 `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — wyłącz „tylko spełniające warunki”, zmień filtry albo wyszukiwanie.</td></tr>`;
-        const ok = pool.filter((r) => r.ok).length, sig = pool.filter(isSignal).length;
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · warunki spełnia ${ok} · sygnał GLB ${sig}`;
+        const sig = pool.filter((r) => isSignal(r)).length;
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB/BLB ${sig}`;
         renderStatus();
     }
 
@@ -513,8 +482,6 @@ if (typeof document !== "undefined") (function () {
         $("posBtn").classList.toggle("on", !!(current && ast.pos[current]));
         $("posBtn").textContent = current && ast.pos[current] ? "📌 Mam pozycję" : "📌 Pozycja";
         const r = current && rowFor(current);
-        $("potBadge").textContent = r ? `${r.ok ? "✓ warunki" : "✗ warunki"}${r.slow ? " · ⚠ hamuje" : ""}` : "";
-        $("potBadge").classList.toggle("warn", !!(r && r.slow));
         $("exitBtn").textContent = state.exit === "GLB" ? "🚪 Wyjście: pod GLB" : "🚪 Wyjście: MACD";
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
         $("watchBtn").textContent = current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj";
@@ -566,67 +533,6 @@ if (typeof document !== "undefined") (function () {
         saveAlerts();
         renderAlertBtn();
         $("alertDlg").showModal();
-    }
-
-
-    // Growth Score: fundamentalny ranking niezależny od ceny i sygnałów GLB.
-    function growthRows() {
-        const rows = data.rows.filter((r) => !state.scanner || (r.scanners || []).includes(state.scanner));
-        return rows.filter((r) => r.growth_score && r.growth_score.score != null)
-            .sort((a, b) => (b.growth_score.score - a.growth_score.score) || a.ticker.localeCompare(b.ticker))
-            .slice(0, 10);
-    }
-
-    function renderGrowthDetails(r) {
-        const result = r.growth_score;
-        if (!result) {
-            $("growthDetailBody").innerHTML = '<p class="dimtxt">Brak wystarczających danych do policzenia Growth Score.</p>';
-            return;
-        }
-        const specs = [
-            ["revenue_growth", "Przychody r/r", r.rev_rr, "%", 10],
-            ["revenue_acceleration", "Przyspieszenie przychodów", r.accel, " pp", 8],
-            ["eps_growth", "Wzrost EPS r/r", r.eps_growth_q, "%", 12],
-            ["eps_surprise", "EPS Surprise", r.surp, "%", 10],
-            ["revenue_surprise", "Revenue Surprise", r.revenue_surprise, "%", 10],
-            ["eps_next_year", "Prognozowany wzrost EPS +1y", r.eps_growth_next_year, "%", 10],
-            ["eps_revision", "Rewizja EPS 90 dni", r.eps_rev, "%", 10],
-            ["operating_margin", "Marża operacyjna", r.opm, "%", 10],
-            ["margin_change", "Zmiana marży operacyjnej", r.dopm, " pp", 5],
-            ["roi", "ROI/ROIC", r.roic == null ? r.roi : r.roic, "%", 5],
-            ["revenue_consistency", "Spójność wzrostu przychodów", null, "", 5],
-            ["eps_consistency", "Spójność wzrostu EPS", null, "", 3],
-            ["catalyst", "Katalizator: produkt / popyt / kontrakty", r.growth_catalyst_score, "/2", 2],
-        ];
-        const fmt = (v, suffix) => v == null || !Number.isFinite(Number(v)) ? "brak danych" : (Number(v) > 0 ? "+" : "") + Number(v).toFixed(1) + suffix;
-        const points = (v, max) => v == null ? '<span class="na">brak danych · pominięte</span>' : '<b>' + Number(v).toFixed(1) + "/" + max + " pkt</b>";
-        const rows = specs.map(([key, label, value, suffix, weight]) => {
-            const shown = ["revenue_consistency", "eps_consistency"].includes(key) ? "historia wielokwartałowa" : fmt(value, suffix);
-            return '<tr><td>' + escapeHtml(label) + '</td><td>' + escapeHtml(shown) + '</td><td class="num">' + points(result.components[key], weight) + '</td></tr>';
-        }).join("");
-        $("growthDetailBody").innerHTML =
-            '<h4>' + escapeHtml(r.ticker) + ' · ' + result.score.toFixed(1) + '/100</h4>' +
-            '<p class="dimtxt">Pokrycie danych: ' + result.coverage + '/100 wag · wynik znormalizowany do dostępnych danych. Bez wyceny i bez ceny akcji.</p>' +
-            '<div class="tblwrap"><table class="gt"><thead><tr><th>Składowa</th><th>Wartość / źródło</th><th>Punkty</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-            '<p><b>Grupy:</b> wzrost ' + result.groups.acceleration.toFixed(1) + '/30 · surprise ' + result.groups.surprises.toFixed(1) + '/20 · przyszłość ' + result.groups.future.toFixed(1) + '/20 · jakość ' + result.groups.quality.toFixed(1) + '/20 · trwałość ' + result.groups.durability.toFixed(1) + '/10</p>' +
-            '<p class="dimtxt">Revenue Surprise i ROI/ROIC mogą nie być dostępne. Katalizatory nie są zgadywane ani punktowane, dopóki nie ma ustrukturyzowanych danych.</p>';
-    }
-
-    function renderGrowthScore() {
-        const rows = growthRows();
-        const scannerRows = data.rows.filter((r) => !state.scanner || (r.scanners || []).includes(state.scanner));
-        const scored = scannerRows.filter((r) => r.growth_score && r.growth_score.score != null).length;
-        $("growthMeta").textContent = 'TOP 10 · ' + rows.length + ' najlepszych z ' + scored + ' ocenionych spółek · skaner: ' + (state.scanner || "wszystkie");
-        $("growthTable").innerHTML = '<thead><tr><th>Ticker</th><th class="num">Score</th></tr></thead><tbody>' +
-            (rows.map((r, i) => '<tr data-t="' + escapeHtml(r.ticker) + '" class="' + (i === 0 ? "sel" : "") + '"><td><button type="button" data-growth-t="' + escapeHtml(r.ticker) + '">' + escapeHtml(r.ticker) + '</button></td><td class="num">' + r.growth_score.score.toFixed(1) + '</td></tr>').join("") ||
-            '<tr><td colspan="2" class="empty">Brak spółek z pokryciem danych ≥ 70/100. Odśwież dane lub sprawdź inny skaner.</td></tr>') + '</tbody>';
-        if (rows.length) renderGrowthDetails(rows[0]);
-        else $("growthDetailBody").innerHTML = '<p class="dimtxt">Brak wystarczających danych do rankingu.</p>';
-    }
-
-    function openGrowthScore() {
-        renderGrowthScore();
-        $("growthDlg").showModal();
     }
 
     function openFundamentals(t) {
@@ -893,33 +799,10 @@ if (typeof document !== "undefined") (function () {
         openChart(t);
     }
 
-    function openGrowthScore() {
-        let dlg = $("growthScoreDlg");
-        if (!dlg) {
-            dlg = document.createElement("dialog"); dlg.id="growthScoreDlg"; dlg.className="wide";
-            dlg.innerHTML='<h3>Growth Score — TOP 10 <small>ranking fundamentalny, niezależny od wykresu ceny</small></h3><p class="dimtxt" id="growthScoreNote"></p><div class="tblwrap"><table class="gt"><thead><tr><th>Ticker</th><th>Score</th><th>Pokrycie</th></tr></thead><tbody id="growthScoreRows"></tbody></table></div><details id="growthScoreDetail"><summary>Składowe zaznaczonej spółki</summary><div id="growthScoreComponents"></div></details><div class="dlg-btns"><button type="button" id="growthScoreClose">Zamknij</button></div>';
-            document.body.appendChild(dlg);
-            dlg.querySelector("#growthScoreClose").addEventListener("click",()=>dlg.close());
-            dlg.querySelector("#growthScoreRows").addEventListener("click",e=>{
-                const tr=e.target.closest("tr[data-t]"); if(!tr)return;
-                const r=rowFor(tr.dataset.t), result=growthScore(r); 
-                dlg.querySelectorAll("#growthScoreRows tr").forEach(x=>x.classList.toggle("sel",x===tr));
-                const labels={acceleration:"Przyspieszenie wzrostu (30)",surprises:"Zaskoczenia EPS (20)",future:"Przyszły wzrost / rewizje EPS (20)",quality:"Jakość biznesu (20)",durability:"Trwałość wzrostu — proxy historyczne (10)"};
-                dlg.querySelector("#growthScoreComponents").innerHTML='<p><b>'+tr.dataset.t+' · '+(result.score===null?'brak score':result.score+'/100')+'</b> · pokrycie '+result.coverage+'/100</p>'+Object.entries(labels).map(([k,v])=>'<p>'+v+': '+(result.components[k]===null?'brak danych':result.components[k].toFixed(1)+' pkt')+'</p>').join('')+'<p class="dimtxt">'+result.notes+'</p>';
-                dlg.querySelector("#growthScoreDetail").open=true;
-            });
-        }
-        const scored=data.rows.filter(r=>!state.scanner||(r.scanners||[]).includes(state.scanner)).map(r=>({r,s:growthScore(r)})).filter(x=>x.s.score!==null).sort((a,b)=>b.s.score-a.s.score).slice(0,10);
-        dlg.querySelector("#growthScoreRows").innerHTML=scored.map(x=>'<tr data-t="'+escapeHtml(x.r.ticker)+'"><td>'+escapeHtml(x.r.ticker)+'</td><td>'+x.s.score.toFixed(1)+'</td><td>'+x.s.coverage+'/100</td></tr>').join('')||'<tr><td colspan="3">Za mało danych do policzenia score</td></tr>';
-        dlg.querySelector("#growthScoreNote").textContent='TOP 10 z aktualnie wczytanej listy Finviz. Braki danych obniżają pokrycie; score ukryty poniżej 70/100. Trwałość to proxy z historii przychodów, nie automatyczna ocena katalizatorów.';
-        dlg.showModal();
-    }
+
 
     function initUi() {
         renderHead();
-        if (!$("growthScoreBtn")) { const b=document.createElement("button"); b.id="growthScoreBtn"; b.type="button"; b.textContent="Growth Score"; b.title="TOP 10 spółek według fundamentów"; $("fltBtn").insertAdjacentElement("afterend",b); b.addEventListener("click",openGrowthScore); }
-        $("onlyOk").checked = state.onlyOk;
-        $("onlyOk").addEventListener("change", () => { state.onlyOk = $("onlyOk").checked; saveSettings(); renderTable(); });
         $("search").addEventListener("input", renderTable);
         $("scanner").addEventListener("change", () => { state.scanner = $("scanner").value || null; saveSettings(); renderTable(); });
         $("thead").addEventListener("click", (e) => {
@@ -942,23 +825,6 @@ if (typeof document !== "undefined") (function () {
             if (b && rowFor(b.dataset.t)) { $("fundDlg").close(); openChart(b.dataset.t); }
         });
         $("fundBtn").addEventListener("click", () => { if (current) openFundamentals(current); });
-        $("growthBtn").addEventListener("click", openGrowthScore);
-        $("growthTable").addEventListener("click", (e) => {
-            const b = e.target.closest("button[data-growth-t]");
-            if (!b) return;
-            const ticker = b.dataset.growthT;
-            const row = rowFor(ticker);
-            if (row) {
-                renderGrowthDetails(row);
-                $("growthTable").querySelectorAll("tr").forEach((tr) => tr.classList.toggle("sel", tr.dataset.t === ticker));
-            }
-        });
-        $("growthOpenBtn").addEventListener("click", () => {
-            const b = $("growthTable").querySelector("tr.sel button[data-growth-t]") || $("growthTable").querySelector("button[data-growth-t]");
-            if (!b) return;
-            $("growthDlg").close();
-            openChart(b.dataset.growthT);
-        });
         $("closeChart").addEventListener("click", closeChart);
         $("symBtn").addEventListener("click", openSymbol);
         $("symForm").addEventListener("submit", (e) => { e.preventDefault(); chooseSymbol($("symInput").value); });
@@ -981,7 +847,6 @@ if (typeof document !== "undefined") (function () {
         });
         $("perW").addEventListener("click", () => togglePeriod("W"));
         $("perD").addEventListener("click", () => togglePeriod("D"));
-        $("potBadge").addEventListener("click", openGuide);
         $("guideBtn").addEventListener("click", openGuide);
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
