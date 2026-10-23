@@ -404,7 +404,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W") {
             const last = rs[rs.length - 1], [px, py] = pts[pts.length - 1];
             if (last && last >= Math.max(...rsFull.slice(Math.max(0, i1 - 52), i1).filter((v) => v)))
                 parts.push(`<circle cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4" fill="${C.rs}"><title>RS na szczycie 52 tyg.</title></circle>`);
-            if (row && row.rs != null) boxText(x1 + 4, py + 4, `RS ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
+            if (row && row.rs != null) boxText(x1 + 4, py + 4, `${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
             if (rsAvg[rsAvg.length - 1]) text(x0 + 4, b1 - 3, "RS / średnia 52 tyg. (żółta)", "#f0b429");
         }
     }
