@@ -84,6 +84,7 @@ test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D");
     assert.ok(res.svg.includes("GLB") && !res.svg.includes("MACD (12"));
     assert.ok(res.svg.includes("Słupki OHLC"));
+    assert.ok(res.svg.includes("EMA 10") && res.svg.includes("SMA 20") && res.svg.includes("SMA 50"));
     assert.ok(res.svg.includes('r="4" fill="#4aa3ff"')); // Blue Dot marker stays on chart; its stop level is tooltip-only.
     const barsOnly = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D", false);
     assert.ok(barsOnly.svg.includes("Słupki OHLC · nakładka RWB wyłączona"));
