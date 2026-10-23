@@ -5,7 +5,7 @@ Strategię wybrano w backteście na płynnym rynku USA w latach 2015–2026:
 
 | Etap | Reguła |
 |---|---|
-| Lista do pobrania | **Skaner Finviz** do wyboru na stronie; skanery (nazwa + filtr + limit) są w `finviz_screen.json`: Bezpieczny (backtest) `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15` (tylko akcje, cena > 10 $, śr. wolumen > 300 tys., przychody kw. > 15 % r/r — nie odciął żadnego z dużych zwycięzców), Trend 50/200, Blisko rekordu (ATH), CANSLIM |
+| Lista do pobrania | **Jeden skaner Finviz**: wklej jeden URL w `Actions → Weekly Refresh → Run workflow`; nowy URL zastępuje poprzedni, a pusty odświeża zapisany link. W `finviz_screen.json` jest jeden zapasowy filtr: Bezpieczny (backtest) `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15` (tylko akcje, cena > 10 $, śr. wolumen > 300 tys., przychody kw. > 15 % r/r — nie odciął żadnego z dużych zwycięzców), Trend 50/200, Blisko rekordu (ATH), CANSLIM |
 | Warunki | przychody kw. **≥ +15 % r/r**, marża operacyjna **≥ +3 pp r/r** (SEC EDGAR), **P/S < 20**, siła względna 52 tyg. **≥ +50 pp nad S&P 500** |
 | Kolejność | od największej zmiany marży operacyjnej r/r |
 | Wejście | **Green Line**: rekord wszech czasów **miesięcznego High** (jak w oryginale Dr. Wisha), który stoi **≥ 3 zamknięte miesiące** (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy); kupno, gdy tydzień zamknie się **0–10 % nad linią** |
@@ -55,7 +55,7 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
 ## Dane (darmowe źródła, jak najmniej zapytań)
 
 `python watchlist.py` (w CI: workflow **Weekly Refresh**, sobota 03:17 UTC, i ręcznie przyciskiem „⟳ Odśwież dane”):
-każdy skaner w Finviz → yfinance **tygodniowe 3 lata** dla sumy spółek (wykres, średnie, MACD, obrót) → dla wszystkich spółek ze skanera: yfinance **miesięczne High z całej historii**
+jeden skaner Finviz → yfinance **tygodniowe 3 lata** dla sumy spółek (wykres, średnie, MACD, obrót) → dla wszystkich spółek ze skanera: yfinance **miesięczne High z całej historii**
 (Green Line, `data/monthly.json`) i **SEC** (fundamenty, `data/sec.json`, odświeżane co 7 dni). **Tylko nowe dane**: spółka już zapisana w `docs/data/weekly/` dostaje tylko ostatnie tygodnie,
 a historia miesięczna tylko nowe zamknięte miesiące; całość tylko dla nowej spółki, po długiej przerwie albo gdy ceny wstecz się zmieniły (split). Ceny są **nieskorygowane o dywidendy** (tylko o splity), jak na TradingView — inaczej dawne szczyty spółek z dużymi wypłatami (np. CLMT) wychodziły za nisko.
 Bez danych dziennych. Wynik: `docs/data/watchlist.json` (lista) i `docs/data/weekly/<ticker>.json` (świece). Gdy Finviz nie odpowie dla skanera, zostaje jego poprzednia lista.
