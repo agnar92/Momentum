@@ -56,7 +56,7 @@ test("column filters combine with AND", () => {
     const f = FILTER_PRESETS.find(([n]) => n === "Nad GLB + MACD dodatni")[1];
     assert.deepStrictEqual(rows.filter((r) => passFilters(r, f)).map((r) => r.ticker), ["A"]);
     assert.deepStrictEqual(visibleRows(rows, { filters: { turnover: { min: 70 } } }).map((r) => r.ticker), ["A"]);
-    assert.deepStrictEqual(visibleRows(rows, { filters: { glb_pct: { max: 12 }, ok: { in: ["nie"] } } }).map((r) => r.ticker), ["C"]);
+    assert.deepStrictEqual(visibleRows(rows, { filters: { glb_pct: { max: 12 }, macd: { in: ["nad"] } } }).map((r) => r.ticker), ["C"]);
     assert.strictEqual(activeFilters({ a: { in: [] }, b: { min: 1 }, c: {} }), 1);
 });
 
