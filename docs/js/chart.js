@@ -413,7 +413,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             const lastPt = pts.filter(Boolean).slice(-1)[0];
             const py = lastPt ? lastPt[1] : b1;
             if (row && row.rs != null) boxText(x1 + 4, py + 4, `RS 52W ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
-            if (row && row.rs_rating != null) boxText(x0 + 4, b0 - 4, `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
+            if (row && row.rs_rating != null) boxText(x0 + 4, b0 + 13, `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
             text(x0 + 4, b1 - 3, `RS Line / MA ${D ? "252 sesji" : "52 tyg."} · zielony = nowy szczyt RS · różowy = RS przed ceną`, "#f0b429");
         }
     }
@@ -441,7 +441,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     }).filter((x) => x.idx >= 0);
     if (epsVisible.length) {
         const vals = epsVisible.map((x) => x.value), emin = Math.min(0, ...vals), emax = Math.max(0, ...vals), erange = emax - emin || 1;
-        const ey = (v) => e1 - 5 - (v - emin) / erange * Math.max(4, e1 - e0 - 24);
+        const ey = (v) => e0 + 5 + (emax - v) / erange * Math.max(4, e1 - e0 - 10);
         const zero = ey(0);
         line(x0, zero, x1, zero, C.grid);
         epsVisible.forEach((x) => {
