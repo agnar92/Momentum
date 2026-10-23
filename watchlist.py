@@ -158,11 +158,15 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     # BLB needs all-time weekly highs; keep them separately from the 3-year chart candles.
     wh_path = Path(cache_dir) / "weekly_highs.json"
     wh_cache = load_json(wh_path, {})
-    try:
-        wh_cache = prices.weekly_highs(tickers + extra, cache=wh_cache, log=log, today=now.date())
-        write_json(wh_path, wh_cache)
-    except Exception as e:
-        log(f"⚠ historia tygodniowych High dla BLB niedostępna ({e}) — używam dostępnych świec 3-letnich.")
+    if weekly is prices.weekly:
+        try:
+            wh_cache = prices.weekly_highs(tickers + extra, cache=wh_cache, log=log, today=now.date())
+            write_json(wh_path, wh_cache)
+        except Exception as e:
+            log(f"⚠ historia tygodniowych High dla BLB niedostępna ({e}) — używam dostępnych świec 3-letnich.")
+    else:
+        # Testy / wywołania z wstrzykniętym dostawcą cen nie powinny uruchamiać dodatkowych zapytań sieciowych.
+        wh_cache = {t: wh_cache.get(t, []) for t in tickers + extra}
     # miesięczne High (Green Line), fundamenty, prognozy i świece dzienne dla wszystkich spółek ze skanerów (bez progu obrotu)
     liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
