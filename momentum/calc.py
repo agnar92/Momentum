@@ -317,7 +317,7 @@ def growth_score(row, min_coverage=GROWTH_SCORE_MIN_COVERAGE):
     return {"score": round(score, 1) if score is not None else None, "coverage": round(coverage, 1),
             "points": round(earned, 2), "components": components, "groups": groups, "weights": dict(GROWTH_SCORE_WEIGHTS)}
 
-def build_row(base, weekly, months, fund, spy=None, est=None):
+def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None):
     """Wiersz listy: base (z Finviz), weekly {d, o, h, l, c, v}, months (High zamkniętych miesięcy), fund (z SEC albo None), spy (tygodniowe {d, c}),
     est (prognozy yfinance: niespodzianki, rewizja, historia EPS i konsensus analityków)."""
     c, lo, v = weekly.get("c") or [], weekly.get("l") or [], weekly.get("v") or []
@@ -325,7 +325,8 @@ def build_row(base, weekly, months, fund, spy=None, est=None):
     price = c[-1] if c else None
     prev = c[-2] if len(c) > 1 else None
     level, _ = green_line(months)
-    blue, _ = blue_line(weekly.get("h") or [])
+    all_weekly_highs = [x[1] for x in weekly_highs] if weekly_highs else (weekly.get("h") or [])
+    blue, _ = blue_line(all_weekly_highs)
     row.update(price=price, glb=level, blb=blue, glb_state=glb_state(price, prev, level),
                glb_pct=(price / level - 1) * 100 if _ok(price) and _ok(level) and level else None,
                blb_pct=(price / blue - 1) * 100 if _ok(price) and _ok(blue) and blue else None,
