@@ -155,6 +155,14 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     wdir = Path(out) / "weekly"
     saved = {t: load_json(wdir / file_name(t), None) for t in tickers + extra}
     series = weekly(tickers + extra, log=log, cache={t: s for t, s in saved.items() if s})
+    # BLB needs all-time weekly highs; keep them separately from the 3-year chart candles.
+    wh_path = Path(cache_dir) / "weekly_highs.json"
+    wh_cache = load_json(wh_path, {})
+    try:
+        wh_cache = prices.weekly_highs(tickers + extra, cache=wh_cache, log=log, today=now.date())
+        write_json(wh_path, wh_cache)
+    except Exception as e:
+        log(f"⚠ historia tygodniowych High dla BLB niedostępna ({e}) — używam dostępnych świec 3-letnich.")
     # miesięczne High (Green Line), fundamenty, prognozy i świece dzienne dla wszystkich spółek ze skanerów (bez progu obrotu)
     liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
@@ -174,7 +182,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     write_json(Path(cache_dir) / "estimates.json", ecache)
 
     def row(b):
-        return calc.build_row(b, series[b["ticker"]], prices.monthly_highs(mcache.get(b["ticker"])), scache.get(b["ticker"]), series.get(BENCH), ecache.get(b["ticker"]))
+        return calc.build_row(b, series[b["ticker"]], prices.monthly_highs(mcache.get(b["ticker"])), scache.get(b["ticker"]), series.get(BENCH), ecache.get(b["ticker"]), weekly_highs=wh_cache.get(b["ticker"]))
     rows = [row(b) for b in base if b["ticker"] in series]
     sym_rows = [row({"ticker": s}) for s in extra if s in series]
     if len(rows) < 0.7 * len(tickers):
