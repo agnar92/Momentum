@@ -284,17 +284,19 @@ def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None)
     price = c[-1] if c else None
     prev = c[-2] if len(c) > 1 else None
     level, _ = green_line(months)
+    s10, s30 = sma(c, 10)[-1] if len(c) >= 10 else None, sma(c, 30)[-1] if len(c) >= 30 else None
+    uptrend = s10 is not None and s30 is not None and s10 > s30
+    row["trend"] = uptrend if s10 is not None and s30 is not None else None   # trend tygodniowy: SMA 10 > SMA 30
+    # BLB is a trend-continuation setup: expose/search for it only while weekly SMA10 > SMA30.
     all_weekly_highs = [x[1] for x in weekly_highs] if weekly_highs else (weekly.get("h") or [])
-    blue, _ = blue_line(all_weekly_highs)
+    blue, _ = blue_line(all_weekly_highs) if uptrend else (None, None)
     row.update(price=price, glb=level, blb=blue, glb_state=glb_state(price, prev, level),
                glb_pct=(price / level - 1) * 100 if _ok(price) and _ok(level) and level else None,
                blb_pct=(price / blue - 1) * 100 if _ok(price) and _ok(blue) and blue else None,
-               blb_state=glb_state(price, prev, blue),
+               blb_state=glb_state(price, prev, blue) if blue is not None else None,
                turnover=turnover(c, v))
     m = macd_info(c, lo)
     row.update(macd=m["state"], macd_stop=m["stop"])
-    s10, s30 = sma(c, 10)[-1] if len(c) >= 10 else None, sma(c, 30)[-1] if len(c) >= 30 else None
-    row["trend"] = s10 > s30 if s10 is not None and s30 is not None else None   # trend tygodniowy: SMA 10 > SMA 30 (filtr listy)
     row["rvol_w"] = rel_volume(v, RVOL_W)
     row["rvol_d"] = None   # dzienny: uzupełnia odświeżenie ze świec dziennych (rel_volume(v_dzienne, RVOL_D))
     row.update({k: (fund or {}).get(k) for k in ("rev_rr", "rev_rr1", "accel", "dopm", "dopm1", "opm", "dgm", "quarter", "qs", "op_d", "rev_q", "ttm_rev", "dil")})
