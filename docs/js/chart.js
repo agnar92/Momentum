@@ -125,7 +125,7 @@ const smaValid = (values, period) => values.map((_, i) => {
     return window.every((v) => Number.isFinite(v) && v > 0) ? window.reduce((a, b) => a + b, 0) / period : null;
 });
 
-// panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno);
+// panele: RS, cena/cena sprzed 52 tygodni, cena, wolumen, przychody kwartalne i MACD (oś czasu i odstępy osobno);
 // dzienny (D): słupki OHLC, opcjonalna nakładka RWB/GMMA + Blue Dot, RS Line i wolumen — bez przychodów i MACD
 function geometry(w, h, right = 64, period = "W") {
     const top = 8, ph = h - top - 22;
@@ -136,7 +136,7 @@ function geometry(w, h, right = 64, period = "W") {
         const p1 = p0 + ph * 0.69, v0 = p1 + 6, v1 = h - 22;
         return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: null, eps: null, macd: [v1, v1], x0: 6, x1: w - right, w, h };
     }
-    // Weekly layout: compact RS/SPY, price, volume, revenue and EPS, then a readable MACD pane.
+    // Weekly layout: compact RS and 52-week price-ratio panels, price, volume, revenue and EPS, then a readable MACD pane.
     const p1 = p0 + ph * 0.40, v0 = p1 + 6, v1 = v0 + ph * 0.08;
     const r0 = v1 + 6, r1 = r0 + ph * 0.055, e0 = r1 + 6, e1 = e0 + ph * 0.055;
     return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: [r0, r1], eps: [e0, e1], macd: [e1 + 6, h - 22], x0: 6, x1: w - right, w, h };
