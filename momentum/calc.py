@@ -59,6 +59,36 @@ def blue_line(weekly_highs, confirm=3):
             level, at = mx, mi
     return level, at
 
+
+def blue_line_in_uptrend(weekly_highs, weekly, confirm=3):
+    """BLB: initiate a candidate only on an all-time weekly High made while weekly SMA10 > SMA30.
+    Once confirmed, the line remains valid after the trend filter turns off."""
+    dates = (weekly or {}).get("d") or []
+    closes = (weekly or {}).get("c") or []
+    fast, slow = sma(closes, 10), sma(closes, 30)
+    trend_by_date = {
+        day: (fast[i] is not None and slow[i] is not None and fast[i] > slow[i])
+        for i, day in enumerate(dates)
+    }
+    highs = weekly_highs or list(zip(dates, (weekly or {}).get("h") or []))
+    highs = sorted((str(x[0]), x[1]) for x in highs if isinstance(x, (list, tuple)) and len(x) >= 2 and _ok(x[1]))
+    max_high = -math.inf
+    candidate = candidate_at = None
+    line = line_at = None
+    for i, (day, high) in enumerate(highs):
+        if high > max_high:
+            max_high = high
+            # An ATH set outside the uptrend cannot start a new BLB search candidate.
+            if trend_by_date.get(day) is True:
+                candidate, candidate_at = high, i
+            else:
+                candidate = candidate_at = None
+        if candidate is not None and i - candidate_at >= confirm:
+            line, line_at = candidate, candidate_at
+            candidate = candidate_at = None
+    return line, line_at
+
+
 def green_line_series(months, confirm=CONFIRM_MONTHS):
     """Green Line obowiązująca w każdym miesiącu: wartość i = linia z miesięcy zamkniętych przed miesiącem i (wykres miesięczny)."""
     out, level, mx, mi = [None], None, -math.inf, None
@@ -276,7 +306,7 @@ def _latest_surprise(values):
     return float(sorted(valid, key=lambda x: str(x[0]))[-1][1]) if valid else None
 
 
-def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None):
+def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None, previous_row=None):
     """Wiersz listy: base (z Finviz), weekly {d, o, h, l, c, v}, months (High zamkniętych miesięcy), fund (z SEC albo None), spy (tygodniowe {d, c}),
     est (prognozy yfinance: niespodzianki, rewizja, historia EPS i konsensus analityków)."""
     c, lo, v = weekly.get("c") or [], weekly.get("l") or [], weekly.get("v") or []
@@ -287,10 +317,15 @@ def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None)
     s10, s30 = sma(c, 10)[-1] if len(c) >= 10 else None, sma(c, 30)[-1] if len(c) >= 30 else None
     uptrend = s10 is not None and s30 is not None and s10 > s30
     row["trend"] = uptrend if s10 is not None and s30 is not None else None   # trend tygodniowy: SMA 10 > SMA 30
-    # BLB is a trend-continuation setup: expose/search for it only while weekly SMA10 > SMA30.
-    all_weekly_highs = [x[1] for x in weekly_highs] if weekly_highs else (weekly.get("h") or [])
-    blue, _ = blue_line(all_weekly_highs) if uptrend else (None, None)
-    row.update(price=price, glb=level, blb=blue, glb_state=glb_state(price, prev, level),
+    # The SMA filter gates candidate discovery, not visibility of an already confirmed BLB.
+    blue, _ = blue_line_in_uptrend(weekly_highs, weekly) if weekly_highs else blue_line(weekly.get("h") or [])
+    previous_blb = (previous_row or {}).get("blb")
+    previous_started = (previous_row or {}).get("blb_search_started") is True
+    if blue is None and previous_started and _ok(previous_blb):
+        blue = previous_blb
+    blb_search_started = bool(blue is not None or previous_started)
+    row.update(price=price, glb=level, blb=blue, blb_search_started=blb_search_started,
+               glb_state=glb_state(price, prev, level),
                glb_pct=(price / level - 1) * 100 if _ok(price) and _ok(level) and level else None,
                blb_pct=(price / blue - 1) * 100 if _ok(price) and _ok(blue) and blue else None,
                blb_state=glb_state(price, prev, blue) if blue is not None else None,
