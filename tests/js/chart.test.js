@@ -103,7 +103,13 @@ test("GLB exit method hides the MACD stop; position plan draws −10 % stop and 
     assert.ok(glbm.includes('stroke-dasharray="2 3"'));   // linie poziomów planu pozostają, bez podpisów
 });
 
-test("rolling price ratio uses 52 bars or 252 daily sessions", () => {\n    const { priceRatioLine } = require("../../docs/js/chart.js");\n    assert.deepStrictEqual(priceRatioLine([100, 110, 120, 130], 2), [null, null, 1.2, 130 / 110]);\n    assert.strictEqual(priceRatioLine([100, 110], 2)[1], null);\n});\n\ntest("IBD relative strength line on the weekly chart", () => {
+test("rolling price ratio uses 52 bars or 252 daily sessions", () => {
+    const { priceRatioLine } = require("../../docs/js/chart.js");
+    assert.deepStrictEqual(priceRatioLine([100, 110, 120, 130], 2), [null, null, 1.2, 130 / 110]);
+    assert.strictEqual(priceRatioLine([100, 110], 2)[1], null);
+});
+
+test("IBD relative strength line on the weekly chart", () => {
     const { rsLine } = require("../../docs/js/chart.js");
     assert.deepStrictEqual(rsLine([10, 20, null], [5, 4, 2]), [2, 5, null]);
     const w = weekly(150), spx = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // SPY spada, akcja rośnie -> RS na szczycie
