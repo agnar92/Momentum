@@ -1,5 +1,5 @@
 """Ceny z yfinance — tylko dwa rodzaje zapytań i tylko o to, czego jeszcze nie mamy:
-  - tygodniowe świece z ostatnich 3 lat (wykres, średnie, MACD, wolumen, obrót): spółka już pobrana dostaje tylko ostatnie tygodnie
+  - tygodniowe świece z ostatnich 5 lat (wykres, średnie, MACD, wolumen, obrót oraz rozgrzewka wskaźników 52-tygodniowych): spółka już pobrana dostaje tylko ostatnie tygodnie
     (doklejane do zapisanych), pełne 5 lat pobieramy dla nowej spółki, po długiej przerwie albo gdy ceny wstecz się zmieniły (split / dywidenda),
   - miesięczne HIGH z całej historii (Green Line jak w oryginale Dr. Wisha): zamknięte miesiące się nie zmieniają, więc po zamknięciu
     kolejnego miesiąca dociągamy tylko ostatnie miesiące; całą historię tylko dla nowej spółki albo gdy ceny wstecz się zmieniły.
