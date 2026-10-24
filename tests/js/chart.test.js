@@ -112,6 +112,18 @@ test("IBD relative strength line on the weekly chart", () => {
     assert.ok(chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("RS 52W +61 pp"));
 });
 
+test("weekly layout reserves a readable mobile MACD panel and shortens mobile labels", () => {
+    const w = weekly(156), spx = { d: w.d, c: w.c.map((x) => x * 4) };
+    const g = require("../../docs/js/chart.js").geometry(390, 700, 52, "W");
+    assert.ok(g.macd[1] - g.macd[0] > 100, "MACD should have a real panel, not a thin strip");
+    const svg = chartSvg(w, { rs_rating: 97, rs: 61, eps_q: [[w.d[100], -2.56]] }, 390, 700, null, null, [], null, spx).svg;
+    assert.ok(svg.includes("RS 97/99"));
+    assert.ok(svg.includes("RS / MA 52t"));
+    assert.ok(svg.includes("MACD 12·26·9"));
+    assert.ok(svg.includes("EPS kw. -2.56"));
+    assert.ok(!svg.includes("RS Line / MA 52 tyg. · zielony"));
+});
+
 test("RS has its own top panel and quarterly EPS is rendered as bars", () => {
     const w = weekly(156), eps_q = [[w.d[40], 1.2], [w.d[53], 1.8], [w.d[66], -0.3]];
     const res = chartSvg(w, { eps_q }, 1000, 700, null, null, [], null, { d: w.d, c: w.c.map((x) => x * 4) });
