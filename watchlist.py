@@ -1,4 +1,4 @@
-"""Odświeżenie danych strony (raz w tygodniu w CI, po zamknięciu piątkowej sesji): Finviz (lista) → yfinance tygodniowe 3 lata
+"""Odświeżenie danych strony (raz w tygodniu w CI, po zamknięciu piątkowej sesji): Finviz (lista) → yfinance tygodniowe 5 lat
 (wykres, średnie, MACD, obrót; spółki już zapisane w docs/data/weekly dostają tylko nowe tygodnie) → dla spółek z obrotem ≥ 50 mln $:
 yfinance miesięczne High z całej historii (Green Line; tylko nowe zamknięte miesiące) i SEC (fundamenty, z pamięci podręcznej) → docs/data/watchlist.json + docs/data/weekly/<ticker>.json.
 Ta sama strategia i te same obliczenia co w Momentum Desktop (agnar92/MomentumDesktop). Funkcje sieciowe można podmienić (testy).
@@ -157,7 +157,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     wdir = Path(out) / "weekly"
     saved = {t: load_json(wdir / file_name(t), None) for t in tickers + extra}
     series = weekly(tickers + extra, log=log, cache={t: s for t, s in saved.items() if s})
-    # BLB needs all-time weekly highs; keep them separately from the 3-year chart candles.
+    # BLB needs all-time weekly highs; keep them separately from the 5-year chart candles.
     wh_path = Path(cache_dir) / "weekly_highs.json"
     wh_cache = load_json(wh_path, {})
     if weekly is prices.weekly:
@@ -165,7 +165,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
             wh_cache = prices.weekly_highs(tickers + extra, cache=wh_cache, log=log, today=now.date())
             write_json(wh_path, wh_cache)
         except Exception as e:
-            log(f"⚠ historia tygodniowych High dla BLB niedostępna ({e}) — używam dostępnych świec 3-letnich.")
+            log(f"⚠ historia tygodniowych High dla BLB niedostępna ({e}) — używam dostępnych świec 5-letnich.")
     else:
         # Testy / wywołania z wstrzykniętym dostawcą cen nie powinny uruchamiać dodatkowych zapytań sieciowych.
         wh_cache = {t: wh_cache.get(t, []) for t in tickers + extra}
@@ -207,7 +207,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     for f in wdir.glob("*.json"):
         if f.name not in keep:
             f.unlink()
-    # Świece dzienne z 2 lat dla C/C[250] i RVol dziennego (50 sesji).
+    # Świece dzienne z 2 lat dla C/C[252] i RVol dziennego (50 sesji).
     # Do plików wykresu zapisujemy tylko spółki z sygnałem/ponad GLB.
     ddir = Path(out) / "daily"
     above = [r["ticker"] for r in rows if r.get("glb_state") in ABOVE_GLB]
@@ -241,7 +241,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         sd = dser.get(r["ticker"])
         r["daily"] = r["ticker"] in above and sd is not None
         closes = sd.get("c", []) if sd else []
-        # C/C[52 tyg.]: 252 sesje wstecz; przy krótszej historii użyj najstarszego dostępnego zamknięcia.
+        # C/C[52 tyg.]: 252 sesje wstecz; wskaźnik wykresu pozostaje pusty do uzyskania pełnego okresu.
         r["cc52w"] = price_ratio(closes)
         bd = calc.fresh_blue_dot(sd, r.get("glb")) if r.get("glb_state") == "NAD" else None
         if bd:
