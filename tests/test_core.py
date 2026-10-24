@@ -21,8 +21,8 @@ def test_blue_line_uses_weekly_highs_and_three_week_confirmation():
     assert calc.blue_line([10, 12] + [11] * 2) == (None, None)
     assert calc.blue_line([10, 12] + [11] * 3) == (12, 1)
     # A fresh higher high does not replace the confirmed old line until it has aged 3 closed weeks.
-    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 2) == (12, 1)
-    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 3) == (15, 5)
+    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 1) == (12, 1)
+    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 2) == (15, 5)
 
 
 def test_build_row_uses_all_time_weekly_highs_for_blb():
