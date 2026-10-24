@@ -25,12 +25,24 @@ def test_blue_line_uses_weekly_highs_and_three_week_confirmation():
     assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 2) == (15, 5)
 
 
-def test_build_row_uses_all_time_weekly_highs_for_blb():
-    weekly = {"d": ["2026-10-19"], "o": [19.0], "h": [20.0], "l": [18.0], "c": [19.5], "v": [1000]}
-    history = [["2025-01-06", 10.0], ["2025-01-13", 12.0]] + [[ "2025-01-20", 11.0 ]] * 13
-    row = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=history)
-    assert row["blb"] == 12.0
-    assert row["blb_state"] == "NAD"
+def test_build_row_only_exposes_blb_when_weekly_sma10_above_sma30():
+    closes = [float(x) for x in range(1, 36)]
+    weekly = {
+        "d": [f"2026-10-{(i % 28) + 1:02d}" for i in range(len(closes))],
+        "o": closes, "h": [x + 1 for x in closes], "l": [x - 1 for x in closes],
+        "c": closes, "v": [1000.0] * len(closes),
+    }
+    history = [["2025-01-06", 10.0], ["2025-01-13", 12.0]] + [["2025-01-20", 11.0]] * 13
+    up = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=history)
+    assert up["trend"] is True
+    assert up["blb"] == 12.0
+    assert up["blb_state"] == "NAD"
+
+    down = calc.build_row({"ticker": "AAA"}, {**weekly, "c": closes[::-1]}, [], None, weekly_highs=history)
+    assert down["trend"] is False
+    assert down["blb"] is None
+    assert down["blb_pct"] is None
+    assert down["blb_state"] is None
 
 
 def test_glb_state():
