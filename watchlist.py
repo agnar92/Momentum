@@ -40,6 +40,15 @@ def write_json(path, data):
     os.replace(tmp, path)
 
 
+def price_ratio(closes, sessions=252):
+    """Aktualne zamknięcie / zamknięcie sprzed 252 sesji (ok. 52 tygodni); przy krótszej historii użyj najstarszej ceny."""
+    if len(closes) < 2:
+        return None
+    base_i = max(0, len(closes) - (sessions + 1))
+    base_close = closes[base_i]
+    return closes[-1] / base_close if base_close else None
+
+
 def file_name(ticker):
     """Nazwa pliku świec: znaki spoza [A-Za-z0-9.-] -> '_' (np. ^GSPC -> _GSPC). Ta sama funkcja jest w docs/js/app.js."""
     return re.sub(r"[^A-Za-z0-9.-]", "_", ticker) + ".json"
@@ -232,10 +241,8 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         sd = dser.get(r["ticker"])
         r["daily"] = r["ticker"] in above and sd is not None
         closes = sd.get("c", []) if sd else []
-        # C/C[250]: 250 sesji wstecz; przy krótszej historii użyj najstarszego dostępnego zamknięcia.
-        base_i = max(0, len(closes) - 251)
-        base_close = closes[base_i] if closes else None
-        r["cc250"] = closes[-1] / base_close if len(closes) >= 2 and base_close else None
+        # C/C[52 tyg.]: 252 sesje wstecz; przy krótszej historii użyj najstarszego dostępnego zamknięcia.
+        r["cc52w"] = price_ratio(closes)
         bd = calc.fresh_blue_dot(sd, r.get("glb")) if r.get("glb_state") == "NAD" else None
         if bd:
             r["glb_state"], r["bdot"] = "BLUE DOT", bd
