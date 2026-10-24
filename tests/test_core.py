@@ -292,7 +292,14 @@ def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
     assert len(rows) == 20 and data["finviz_stale"] and data["rows"][0]["company"] == "C0"
 
 
-def test_price_ratio_uses_252_sessions_and_short_history_fallback():\n    assert watchlist.price_ratio([100, 110, 120], sessions=2) == pytest.approx(1.2)\n    assert watchlist.price_ratio([100], sessions=2) is None\n    prices = list(range(100, 354))\n    assert watchlist.price_ratio(prices, sessions=252) == pytest.approx(353 / 101)\n\n\ndef test_file_name():
+def test_price_ratio_uses_252_sessions_and_short_history_fallback():
+    assert watchlist.price_ratio([100, 110, 120], sessions=2) == pytest.approx(1.2)
+    assert watchlist.price_ratio([100], sessions=2) is None
+    prices = list(range(100, 354))
+    assert watchlist.price_ratio(prices, sessions=252) == pytest.approx(353 / 101)
+
+
+def test_file_name():
     assert watchlist.file_name("^GSPC") == "_GSPC.json" and watchlist.file_name("BRK-B") == "BRK-B.json"
 
 
