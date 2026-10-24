@@ -217,10 +217,23 @@ if (typeof document !== "undefined") (function () {
         return weeklyCache.get(t);
     }
 
+    function compactChartUI() {
+        return window.matchMedia("(max-width: 999px)").matches;
+    }
+
+    function chartHeading(t) {
+        const r = rowFor(t) || {};
+        if (!compactChartUI()) return titleText(t, r);
+        const bits = [t];
+        if (r.glb_pct !== null && r.glb_pct !== undefined) bits.push(`${r.glb_pct >= 0 ? "+" : ""}${r.glb_pct.toFixed(1)}% do GLB`);
+        if (r.turnover) bits.push(`${(r.turnover / 1e6).toFixed(0)}M$/d`);
+        return bits.join(" · ");
+    }
+
     async function openChart(t) {
         current = t;
         document.body.classList.add("chart-open");
-        $("chartTitle").textContent = titleText(t, rowFor(t));
+        $("chartTitle").textContent = chartHeading(t);
         $("tvLink").href = "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(t.replace("^", ""));
         document.querySelectorAll("#tbody tr.sel").forEach((tr) => tr.classList.remove("sel"));
         const tr = document.querySelector(`#tbody tr[data-t="${CSS.escape(t)}"]`);
@@ -248,11 +261,13 @@ if (typeof document !== "undefined") (function () {
 
     // Przyciski T / D; wykres dzienny pokazuje OHLC, a RWB/GMMA i Blue Dot są opcjonalną nakładką.
     function renderPeriod() {
-        const r = current && rowFor(current), ok = !!(r && r.daily);
+        const r = current && rowFor(current), ok = !!(r && r.daily), compact = compactChartUI();
         $("perD").hidden = !ok;
         $("dayRwbBtn").hidden = !ok || period !== "D";
         $("dayRwbBtn").classList.toggle("on", dailyRwb);
-        $("dayRwbBtn").textContent = dailyRwb ? "RWB: ON" : "RWB: OFF";
+        $("dayRwbBtn").textContent = compact ? (dailyRwb ? "RWB ✓" : "RWB —") : (dailyRwb ? "RWB: ON" : "RWB: OFF");
+        $("perW").textContent = "T";
+        $("perD").textContent = "D";
         $("perW").classList.toggle("on", period === "W");
         $("perD").classList.toggle("on", period === "D");
     }
@@ -484,12 +499,20 @@ if (typeof document !== "undefined") (function () {
     }
 
     function renderTools() {
-        const ln = sel && findLine(sel);
+        const ln = sel && findLine(sel), compact = compactChartUI();
+        $("fundBtn").textContent = compact ? "📊 Fund." : "📊 Fundamenty";
+        $("tvLink").textContent = compact ? "TV ↗" : "TradingView ↗";
         $("posBtn").classList.toggle("on", !!(current && ast.pos[current]));
-        $("posBtn").textContent = current && ast.pos[current] ? "📌 Mam pozycję" : "📌 Pozycja";
-        $("exitBtn").textContent = state.exit === "GLB" ? "🚪 Wyjście: pod GLB" : "🚪 Wyjście: MACD";
+        $("posBtn").textContent = compact
+            ? (current && ast.pos[current] ? "📌 Mam" : "📌 Pozycja")
+            : (current && ast.pos[current] ? "📌 Mam pozycję" : "📌 Pozycja");
+        $("exitBtn").textContent = compact
+            ? (state.exit === "GLB" ? "🚪 GLB" : "🚪 MACD")
+            : (state.exit === "GLB" ? "🚪 Wyjście: pod GLB" : "🚪 Wyjście: MACD");
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
-        $("watchBtn").textContent = current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj";
+        $("watchBtn").textContent = compact
+            ? (current && ast.watch[current] ? "🔔 On" : "🔕 Obserwuj")
+            : (current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj");
         $("lineAlertBtn").hidden = $("lineDelBtn").hidden = !ln;
         if (ln) $("lineAlertBtn").textContent = ln.alert === false ? "🔕 alert linii" : "🔔 alert linii";
     }
@@ -834,7 +857,17 @@ if (typeof document !== "undefined") (function () {
             el.addEventListener("wheel", (e) => { if (!series) return; e.preventDefault(); zoom(e.deltaY < 0 ? 0.85 : 1.18); }, { passive: false });
         }
         let rt = null;
-        window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(drawChart, 120); });
+        window.addEventListener("resize", () => {
+            clearTimeout(rt);
+            rt = setTimeout(() => {
+                if (current) {
+                    $("chartTitle").textContent = chartHeading(current);
+                    renderTools();
+                    renderPeriod();
+                }
+                drawChart();
+            }, 120);
+        });
         document.addEventListener("keydown", (e) => {
             if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openSymbol(); return; }
             if ($("symDlg").open || $("fltDlg").open || $("alertDlg").open || $("posDlg").open || e.target.matches("input")) return;

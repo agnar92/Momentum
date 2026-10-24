@@ -118,13 +118,16 @@ const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] :
 // dzienny (D): słupki OHLC, opcjonalna nakładka RWB/GMMA + Blue Dot, RS Line i wolumen — bez przychodów i MACD
 function geometry(w, h, right = 64, period = "W") {
     const top = 8, ph = h - top - 22;
-    const rs1 = top + ph * 0.10, s0 = rs1 + 5, s1 = s0 + ph * 0.08, p0 = s1 + 8;
+    // The old stacked percentages left almost no height for MACD. Keep price dominant,
+    // trim the auxiliary panels, and explicitly reserve a useful lower pane.
+    const rs1 = top + ph * 0.07, s0 = rs1 + 5, s1 = s0 + ph * 0.06, p0 = s1 + 8;
     if (period === "D") {
         const p1 = p0 + ph * 0.69, v0 = p1 + 6, v1 = h - 22;
         return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: null, eps: null, macd: [v1, v1], x0: 6, x1: w - right, w, h };
     }
-    const p1 = p0 + ph * 0.43, v0 = p1 + 6, v1 = v0 + ph * 0.10;
-    const r0 = v1 + 6, r1 = r0 + ph * 0.10, e0 = r1 + 6, e1 = e0 + ph * 0.10;
+    // Weekly layout: compact RS/SPY, price, volume, revenue and EPS, then a readable MACD pane.
+    const p1 = p0 + ph * 0.40, v0 = p1 + 6, v1 = v0 + ph * 0.08;
+    const r0 = v1 + 6, r1 = r0 + ph * 0.055, e0 = r1 + 6, e1 = e0 + ph * 0.055;
     return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: [r0, r1], eps: [e0, e1], macd: [e1 + 6, h - 22], x0: 6, x1: w - right, w, h };
 }
 
@@ -216,7 +219,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     const data = {};
     for (const k of ["d", "o", "h", "l", "c", "v"]) data[k] = full[k].slice(i0, i1);
     const c = data.c, hi = data.h, lo = data.l, vol = data.v, dates = data.d, n = c.length;
-    const fs = w < 600 ? 10 : 11, small = w < 600;
+    const fs = w < 600 ? 12 : 11, small = w < 600;
     const g = geometry(w, h, small ? 52 : 64, period), x0 = g.x0, x1 = g.x1, step = (x1 - x0) / n;
     const xf = (i) => x0 + (i + 0.5) * step;
     const parts = [];
@@ -282,14 +285,14 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     if (D) {
         // Daily chart overlays are calculated on the complete history, then clipped to the visible window.
         const dailyAverages = [
-            { label: "EMA 10", values: ema(cfull, 10).slice(i0, i1), color: "#f0b429" },
-            { label: "SMA 20", values: sma(cfull, 20).slice(i0, i1), color: "#22d3ee" },
-            { label: "SMA 50", values: sma(cfull, 50).slice(i0, i1), color: "#a78bfa" },
+            { label: small ? "EMA10" : "EMA 10", values: ema(cfull, 10).slice(i0, i1), color: "#f0b429" },
+            { label: small ? "SMA20" : "SMA 20", values: sma(cfull, 20).slice(i0, i1), color: "#22d3ee" },
+            { label: small ? "SMA50" : "SMA 50", values: sma(cfull, 50).slice(i0, i1), color: "#a78bfa" },
         ];
         for (const avg of dailyAverages) {
             poly(avg.values.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), avg.color, 1.8);
         }
-        dailyAverages.forEach((avg, i) => boxText(x0 + 4 + i * 76, y0 + 13, avg.label, avg.color));
+        dailyAverages.forEach((avg, i) => boxText(x0 + 4 + i * (small ? 58 : 76), y0 + 13, avg.label, avg.color));
     }
     const bw = Math.max(1, step * 0.25), tick = step * 0.35;
     for (let i = 0; i < n; i++) {
@@ -305,7 +308,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         parts.push(`<rect x="${(x1 + 1).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${(w - x1 - 3).toFixed(1)}" height="18" fill="${C.glb}"/>`);
         text(x1 + 4, y + 4, fmt(level), "#000");
         const aboveGlb = last0 != null && last0 >= level;
-        boxText(x0 + 4, y0 + 13, `GLB ${fmt(level)} · CENA ${aboveGlb ? "NAD" : "POD"} LINIĄ`, aboveGlb ? C.glb : C.stop);
+        boxText(x0 + 4, y0 + 13, small ? `GLB ${fmt(level)} ${aboveGlb ? "↑" : "↓"}` : `GLB ${fmt(level)} · CENA ${aboveGlb ? "NAD" : "POD"} LINIĄ`, aboveGlb ? C.glb : C.stop);
     }
     if (blueLevel && blueLevel > pmin && blueLevel < pmax) {
         const y = yf(blueLevel);
@@ -314,7 +317,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         parts.push(`<rect x="${(x1 + 1).toFixed(1)}" y="${(y - 9).toFixed(1)}" width="${(w - x1 - 3).toFixed(1)}" height="18" fill="#60a5fa"/>`);
         text(x1 + 4, y + 4, fmt(blueLevel), "#000");
         const aboveBlb = last0 != null && last0 >= blueLevel;
-        boxText(x0 + 4, y0 + 27, `BLB ${fmt(blueLevel)} · CENA ${aboveBlb ? "NAD" : "POD"} LINIĄ`, aboveBlb ? "#60a5fa" : C.stop);
+        boxText(x0 + 4, y0 + 27, small ? `BLB ${fmt(blueLevel)} ${aboveBlb ? "↑" : "↓"}` : `BLB ${fmt(blueLevel)} · CENA ${aboveBlb ? "NAD" : "POD"} LINIĄ`, aboveBlb ? "#60a5fa" : C.stop);
     }
     const stop = row && row.exit !== "GLB" && row.macd_stop;   // metoda GLB: wyjście = zamknięcie pod Green Line, bez stopu MACD
     if (stop && stop > pmin && stop < pmax) {
@@ -360,7 +363,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         parts.push(`<rect x="${(xf(i) - tick).toFixed(1)}" y="${vy(vv[i]).toFixed(1)}" width="${(2 * tick).toFixed(1)}" height="${(v1 - vy(vv[i])).toFixed(1)}" fill="${col}"/>`);
     }
     poly(vavg.map((a, i) => (a ? [xf(i), vy(a)] : null)).filter(Boolean), C.volAvg, 1.5);
-    text(x0 + 4, v0 + 10, `Wolumen · śr. ${nv} ${u}` + (rv != null ? ` · RVol ${rv.toFixed(1)}×` : ""), rv != null && rv >= 1.5 ? C.signal : C.dim);
+    const volLabel = `Wolumen · śr. ${nv} ${u}` + (rv != null ? ` · RVol ${rv.toFixed(1)}×` : "");
+    text(x0 + 4, v0 + 10, small ? `Vol · MA${nv}${rv != null ? ` · RV ${rv.toFixed(1)}×` : ""}` : volLabel, rv != null && rv >= 1.5 ? C.signal : C.dim);
     for (const i of dots) {   // ● Blue Dot pod świecą; stop pod Low ostatniej kropki
         const lw = full.l[i];
         if (lw) parts.push(`<circle cx="${xf(i - i0).toFixed(1)}" cy="${(yf(lw) + 9).toFixed(1)}" r="4" fill="${C.dot}"/>`);
@@ -382,10 +386,16 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         poly(md.macd.map((v, i) => [xf(i), ym(v)]), C.macd, 1.3);
         poly(md.signal.map((v, i) => [xf(i), ym(v)]), C.signal, 1.3);
         for (const i of crosses) text(xf(i), m1 - 4, "▼", C.stop, 'text-anchor="middle"');
-        text(x0 + 4, m0 + 10, small ? "MACD (12, 26, 9) tyg. · ▼ = stop pod Low" : "MACD (12, 26, 9) tyg. · ▼ przecięcie w dół = stop pod Low tego tygodnia", C.dim);
-        boxText(x0 + 4, y0 + 12, "SMA 4 tyg.", C.sma4);
-        boxText(x0 + 84, y0 + 12, "SMA 10 tyg.", C.sma10);
-        boxText(x0 + 174, y0 + 12, "SMA 30 tyg.", C.sma30);
+        text(x0 + 4, m0 + 10, small ? "MACD 12·26·9 · ▼ stop → Low" : "MACD (12, 26, 9) tyg. · ▼ przecięcie w dół = stop pod Low tego tygodnia", C.dim);
+        if (small) {
+            boxText(x0 + 4, y0 + 12, "SMA4", C.sma4);
+            boxText(x0 + 62, y0 + 12, "SMA10", C.sma10);
+            boxText(x0 + 130, y0 + 12, "SMA30", C.sma30);
+        } else {
+            boxText(x0 + 4, y0 + 12, "SMA 4 tyg.", C.sma4);
+            boxText(x0 + 84, y0 + 12, "SMA 10 tyg.", C.sma10);
+            boxText(x0 + 174, y0 + 12, "SMA 30 tyg.", C.sma30);
+        }
     }
 
     // S&P 500 nad wykresem: kierunek rynku (skala log w oknie)
@@ -396,8 +406,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         const lo = Math.log(Math.min(...sok)), hi2 = Math.log(Math.max(...sok)), ys = (v) => s1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (s1 - s0 - 4) - 2;
         poly(sv.map((v, i) => (v ? [xf(i), ys(v)] : null)).filter(Boolean), C.spx, 1.3);
         const ch = (sok[sok.length - 1] / sok[0] - 1) * 100;
-        text(x0 + 4, s0 + 10, `S&P 500 (SPY) ${fmt(sok[sok.length - 1])} · w oknie ${ch >= 0 ? "+" : ""}${ch.toFixed(1)} %`, C.spx);
-    } else text(x0 + 4, s0 + 10, "S&P 500 — brak danych SPY", C.dim);
+        text(x0 + 4, s0 + 10, small ? `SPY ${fmt(sok[sok.length - 1])} ${ch >= 0 ? "+" : ""}${ch.toFixed(1)}%` : `S&P 500 (SPY) ${fmt(sok[sok.length - 1])} · w oknie ${ch >= 0 ? "+" : ""}${ch.toFixed(1)} %`, C.spx);
+    } else text(x0 + 4, s0 + 10, small ? "SPY —" : "S&P 500 — brak danych SPY", C.dim);
     line(x0, s1 + 3, x1, s1 + 3, C.grid);
     {   // Deepvue-style RS Line: stock / SPY, moving average, RS new-high and RS-new-high-before-price markers.
         const spxFull = spx && spx.d ? full.d.map((d) => { const k = LN.dateIndex(spx.d, d); return k >= 0 ? spx.c[k] : null; }) : [];
@@ -424,9 +434,9 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             }
             const lastPt = pts.filter(Boolean).slice(-1)[0];
             const py = lastPt ? lastPt[1] : b1;
-            if (row && row.rs != null) boxText(x1 + 4, py + 4, `RS 52W ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
-            if (row && row.rs_rating != null) boxText(x0 + 4, b0 + 13, `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
-            text(x0 + 4, b1 - 3, `RS Line / MA ${D ? "252 sesji" : "52 tyg."} · zielony = nowy szczyt RS · różowy = RS przed ceną`, "#f0b429");
+            if (row && row.rs != null) boxText(x1 + 4, py + 4, small ? `RS ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)}` : `RS 52W ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
+            if (row && row.rs_rating != null) boxText(x0 + 4, b0 + 13, small ? `RS ${Math.round(row.rs_rating)}/99` : `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
+            text(x0 + 4, b1 - 3, small ? `RS / MA ${D ? "252s" : "52t"}` : `RS Line / MA ${D ? "252 sesji" : "52 tyg."} · zielony = nowy szczyt RS · różowy = RS przed ceną`, "#f0b429");
         }
     }
 
@@ -444,7 +454,9 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         parts.push(`<rect x="${(xa + 1).toFixed(1)}" y="${(q1 - ht).toFixed(1)}" width="${Math.max(1, xb - xa - 2).toFixed(1)}" height="${ht.toFixed(1)}" fill="${col}" opacity="0.75"/>`);
         if (xb - xa > 30 && q.rev_rr != null) text((xa + xb) / 2, q1 - ht - 2, `${q.rev_rr >= 0 ? "+" : ""}${q.rev_rr.toFixed(0)}%`, col, 'text-anchor="middle"');
     }
-    text(x0 + 4, q0 + 2, qs.length ? `Przychody kw. · r/r % (zielony ≥ 25 %, żółty ≥ 15 %) · ostatni ${fmtBig(qs[qs.length - 1].rev)} $` : "Przychody kw. — brak danych SEC", C.dim);
+    text(x0 + 4, q0 + 2, qs.length
+        ? (small ? `Przychody r/r · ${fmtBig(qs[qs.length - 1].rev)}` : `Przychody kw. · r/r % (zielony ≥ 25 %, żółty ≥ 15 %) · ostatni ${fmtBig(qs[qs.length - 1].rev)} $`)
+        : (small ? "Przychody: brak danych" : "Przychody kw. — brak danych SEC"), C.dim);
     // EPS kwartalny jako osobne słupki, ze skalą obejmującą wartości dodatnie i ujemne.
     const [e0, e1] = g.eps, eps = ((row && row.eps_q) || []).filter((x) => Array.isArray(x) && x.length >= 2 && Number.isFinite(x[1])).slice().sort((a, b) => a[0].localeCompare(b[0]));
     const epsVisible = eps.map((x) => {
@@ -463,7 +475,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             parts.push(`<rect x="${(xf(x.idx) - Math.max(2, step * 0.28)).toFixed(1)}" y="${top.toFixed(1)}" width="${Math.max(3, step * 0.56).toFixed(1)}" height="${height.toFixed(1)}" fill="${x.value >= 0 ? C.glb : C.down}" opacity="0.85"><title>EPS ${x.value.toFixed(2)}${growth == null ? "" : " · r/r " + growth.toFixed(1) + "%"}</title></rect>`);
         });
         const lastEps = epsVisible[epsVisible.length - 1];
-        boxText(x0 + 4, e0 + 11, `EPS kwartalny ${lastEps.value.toFixed(2)} · słupki r/r w dymku`, lastEps.value >= 0 ? C.glb : C.down);
+        boxText(x0 + 4, e0 + 11, small ? `EPS kw. ${lastEps.value.toFixed(2)}` : `EPS kwartalny ${lastEps.value.toFixed(2)} · słupki r/r w dymku`, lastEps.value >= 0 ? C.glb : C.down);
     }
 
     return finish();
