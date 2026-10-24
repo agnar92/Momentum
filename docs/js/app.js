@@ -154,8 +154,10 @@ if (typeof document !== "undefined") (function () {
         $("tbody").innerHTML = shown.map((r) => {
             const held = !!ast.pos[r.ticker], warn = held && posWarn(r);
             const cls = [isSignal(r) ? "signal" : "", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
-            return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) =>
-                `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(r[k], f))}</td>`).join("") + "</tr>";
+            return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) => {
+                const value = k === "cc52w" ? (r.cc52w ?? r.cc250) : r[k]; // zgodność ze starym JSON-em do najbliższego odświeżenia
+                return `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(value, f))}</td>`;
+            }).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
         const sig = pool.filter((r) => isSignal(r)).length;
         const ratingNeedsRefresh = pool.length > 0 && pool.every((r) => !Number.isFinite(r.rs_rating_score));
