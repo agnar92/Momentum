@@ -60,13 +60,13 @@ test("chart window keeps indicators from full history", () => {
     assert.deepStrictEqual(infoLines(weekly(156), win.geom.i0)[0], "tydz. " + weekly(156).d[48]);
 });
 
-test("S&P 500 panel and quarterly revenue bars", () => {
+test("52-week price-ratio panel and quarterly revenue bars", () => {
     const w = weekly(156), spx = { d: w.d, c: w.c.map((x) => x * 4) };
     const qs = [{ quarter: w.d[100], rev: 1e9, rev_rr: 30 }, { quarter: w.d[113], rev: 1.2e9, rev_rr: 12 }];
     const res = chartSvg(w, { qs }, 1000, 700, null, null, [], null, spx);
-    assert.ok(res.svg.includes("S&amp;P 500 (SPY)") && res.svg.includes("+30%") && res.svg.includes("+12%"));
+    assert.ok(res.svg.includes("Cena/Cena 52 tyg.") && !res.svg.includes("S&amp;P 500 (SPY)") && res.svg.includes("+30%") && res.svg.includes("+12%"));
     assert.ok(res.geom.spx[1] < res.geom.price[0] && res.geom.vol[1] < res.geom.rev[0] && res.geom.rev[1] < res.geom.macd[0]);
-    assert.ok(chartSvg(w, null, 1000, 700).svg.includes("brak danych SPY"));
+    assert.ok(chartSvg(w, null, 1000, 700).svg.includes("Cena/Cena 52 tyg."));
 });
 
 test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
@@ -103,7 +103,7 @@ test("GLB exit method hides the MACD stop; position plan draws −10 % stop and 
     assert.ok(glbm.includes('stroke-dasharray="2 3"'));   // linie poziomów planu pozostają, bez podpisów
 });
 
-test("IBD relative strength line on the weekly chart", () => {
+test("rolling price ratio uses 52 bars or 252 daily sessions", () => {\n    const { priceRatioLine } = require("../../docs/js/chart.js");\n    assert.deepStrictEqual(priceRatioLine([100, 110, 120, 130], 2), [null, null, 1.2, 130 / 110]);\n    assert.strictEqual(priceRatioLine([100, 110], 2)[1], null);\n});\n\ntest("IBD relative strength line on the weekly chart", () => {
     const { rsLine } = require("../../docs/js/chart.js");
     assert.deepStrictEqual(rsLine([10, 20, null], [5, 4, 2]), [2, 5, null]);
     const w = weekly(150), spx = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // SPY spada, akcja rośnie -> RS na szczycie
