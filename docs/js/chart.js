@@ -117,13 +117,15 @@ const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] :
 // panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno);
 // dzienny (D): słupki OHLC, opcjonalna nakładka RWB/GMMA + Blue Dot, RS Line i wolumen — bez przychodów i MACD
 function geometry(w, h, right = 64, period = "W") {
-    const top = 8, ph = h - top - 22, s1 = top + ph * 0.10, p0 = s1 + 8;
+    const top = 8, ph = h - top - 22;
+    const rs1 = top + ph * 0.10, s0 = rs1 + 5, s1 = s0 + ph * 0.08, p0 = s1 + 8;
     if (period === "D") {
-        const p1 = p0 + ph * 0.74, v0 = p1 + 6, v1 = h - 22;
-        return { spx: [top, s1], price: [p0, p1], vol: [v0, v1], rev: null, macd: [v1, v1], x0: 6, x1: w - right, w, h };
+        const p1 = p0 + ph * 0.69, v0 = p1 + 6, v1 = h - 22;
+        return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: null, eps: null, macd: [v1, v1], x0: 6, x1: w - right, w, h };
     }
-    const p1 = p0 + ph * 0.50, v0 = p1 + 6, v1 = v0 + ph * 0.10, r0 = v1 + 8, r1 = r0 + ph * 0.11;
-    return { spx: [top, s1], price: [p0, p1], vol: [v0, v1], rev: [r0, r1], macd: [r1 + 8, h - 22], x0: 6, x1: w - right, w, h };
+    const p1 = p0 + ph * 0.43, v0 = p1 + 6, v1 = v0 + ph * 0.10;
+    const r0 = v1 + 6, r1 = r0 + ph * 0.10, e0 = r1 + 6, e1 = e0 + ph * 0.10;
+    return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: [r0, r1], eps: [e0, e1], macd: [e1 + 6, h - 22], x0: 6, x1: w - right, w, h };
 }
 
 const fmtBig = (v) => (v >= 1e9 ? (v / 1e9).toFixed(1) + " mld" : (v / 1e6).toFixed(0) + " mln");
@@ -182,19 +184,16 @@ function zoomWindow(total, nShow, end, factor) {
 
 // minimapa zamknięć (skala log) + ramka okna z uchwytami i długością
 function sliderSvg(closes, nShow, end, W, H, unit = "tyg.") {
-    const vals = closes.filter((v) => v), total = closes.length;
-    if (W < 40 || vals.length < 2) return "";
-    const lo = Math.log(Math.min(...vals)), hi = Math.log(Math.max(...vals));
-    const y = (v) => (hi === lo ? H / 2 : H - 6 - (Math.log(v) - lo) / (hi - lo) * (H - 12));
+    const total = closes.length;
+    if (W < 40 || total < 2) return "";
     const [x0, x1] = sliderRect(total, nShow, end, W), [i0, i1] = windowRange(total, nShow, end);
-    const pts = closes.map((v, i) => (v ? `${(4 + (i + 0.5) / total * (W - 8)).toFixed(1)},${y(v).toFixed(1)}` : null)).filter(Boolean).join(" ");
-    const right = x1 - x0 > 90;
+    const cy = H / 2, left = 5, right = W - 5, label = `${i1 - i0} ${unit}`;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" font-family="Consolas, Menlo, monospace">` +
-        `<rect width="${W}" height="${H}" fill="${C.bg}"/><rect x="${x0.toFixed(1)}" y="0" width="${(x1 - x0).toFixed(1)}" height="${H}" fill="#16202c"/>` +
-        `<polyline fill="none" stroke="#8b95a3" stroke-width="1" points="${pts}"/>` +
-        `<rect x="${x0.toFixed(1)}" y="1" width="${(x1 - x0).toFixed(1)}" height="${H - 2}" fill="none" stroke="#4aa3ff" stroke-width="2"/>` +
-        [x0, x1].map((x) => `<rect x="${(x - 3).toFixed(1)}" y="${H / 2 - 9}" width="6" height="18" fill="#4aa3ff"/>`).join("") +
-        `<text x="${(right ? x1 - 6 : x1 + 6).toFixed(1)}" y="13" fill="${C.fg}" font-size="11" text-anchor="${right ? "end" : "start"}">${i1 - i0} ${unit}</text></svg>`;
+        `<rect width="${W}" height="${H}" fill="${C.bg}"/>` +
+        `<line x1="${left}" y1="${cy}" x2="${right}" y2="${cy}" stroke="#354150" stroke-width="3" stroke-linecap="round"/>` +
+        `<line x1="${x0.toFixed(1)}" y1="${cy}" x2="${x1.toFixed(1)}" y2="${cy}" stroke="#4aa3ff" stroke-width="3" stroke-linecap="round"/>` +
+        [x0, x1].map((x) => `<circle cx="${x.toFixed(1)}" cy="${cy}" r="5" fill="#4aa3ff" stroke="${C.bg}" stroke-width="1.5"/>`).join("") +
+        `<text x="${Math.max(8, Math.min(W - 8, (x0 + x1) / 2)).toFixed(1)}" y="${Math.max(10, cy - 5).toFixed(1)}" fill="${C.fg}" font-size="10" text-anchor="middle">${label}</text></svg>`;
 }
 
 // -> {svg, geom} albo null; data = {d, o, h, l, c, v}, row = wiersz listy (glb, macd_stop); okno = nShow tygodni do `end`;
@@ -279,6 +278,18 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     } else if (!D) for (const k of SMA_PERIODS) {
         const s = smaWin[k];
         poly(s.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), smaColors[k], 1.5);
+    }
+    if (D) {
+        // Daily chart overlays are calculated on the complete history, then clipped to the visible window.
+        const dailyAverages = [
+            { label: "EMA 10", values: ema(cfull, 10).slice(i0, i1), color: "#f0b429" },
+            { label: "SMA 20", values: sma(cfull, 20).slice(i0, i1), color: "#22d3ee" },
+            { label: "SMA 50", values: sma(cfull, 50).slice(i0, i1), color: "#a78bfa" },
+        ];
+        for (const avg of dailyAverages) {
+            poly(avg.values.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), avg.color, 1.8);
+        }
+        dailyAverages.forEach((avg, i) => boxText(x0 + 4 + i * 76, y0 + 13, avg.label, avg.color));
     }
     const bw = Math.max(1, step * 0.25), tick = step * 0.35;
     for (let i = 0; i < n; i++) {
@@ -396,7 +407,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         const rs = rsFull.slice(i0, i1), rsAvg = rsAvgFull.slice(i0, i1), ok = rs.filter((v) => v > 0);
         if (ok.length > 1) {
             const all = rs.concat(rsAvg).filter((v) => v > 0);
-            const b0 = y1 - (y1 - y0) * 0.22, b1 = y1 - 4, lo = Math.log(Math.min(...all)), hi2 = Math.log(Math.max(...all));
+            const [b0, b1] = g.rs, lo = Math.log(Math.min(...all)), hi2 = Math.log(Math.max(...all));
             const yr = (v) => b1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (b1 - b0);
             const pts = rs.map((v, i) => (v ? [xf(i), yr(v)] : null));
             poly(pts.filter(Boolean), C.rs, 1.6);
@@ -414,7 +425,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             const lastPt = pts.filter(Boolean).slice(-1)[0];
             const py = lastPt ? lastPt[1] : b1;
             if (row && row.rs != null) boxText(x1 + 4, py + 4, `RS 52W ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
-            if (row && row.rs_rating != null) boxText(x0 + 4, b0 - 4, `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
+            if (row && row.rs_rating != null) boxText(x0 + 4, b0 + 13, `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
             text(x0 + 4, b1 - 3, `RS Line / MA ${D ? "252 sesji" : "52 tyg."} · zielony = nowy szczyt RS · różowy = RS przed ceną`, "#f0b429");
         }
     }
@@ -434,23 +445,25 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         if (xb - xa > 30 && q.rev_rr != null) text((xa + xb) / 2, q1 - ht - 2, `${q.rev_rr >= 0 ? "+" : ""}${q.rev_rr.toFixed(0)}%`, col, 'text-anchor="middle"');
     }
     text(x0 + 4, q0 + 2, qs.length ? `Przychody kw. · r/r % (zielony ≥ 25 %, żółty ≥ 15 %) · ostatni ${fmtBig(qs[qs.length - 1].rev)} $` : "Przychody kw. — brak danych SEC", C.dim);
-    // EPS IBD-style: kwartalne wyniki rzeczywiste jako linia z własną skalą w panelu fundamentalnym.
-    const eps = ((row && row.eps_q) || []).filter((x) => Array.isArray(x) && x.length >= 2 && Number.isFinite(x[1])).slice().sort((a, b) => a[0].localeCompare(b[0]));
+    // EPS kwartalny jako osobne słupki, ze skalą obejmującą wartości dodatnie i ujemne.
+    const [e0, e1] = g.eps, eps = ((row && row.eps_q) || []).filter((x) => Array.isArray(x) && x.length >= 2 && Number.isFinite(x[1])).slice().sort((a, b) => a[0].localeCompare(b[0]));
     const epsVisible = eps.map((x) => {
         const next = dates.findIndex((d) => d >= x[0]);
         return { date: x[0], value: x[1], idx: next < 0 ? -1 : Math.max(0, next - 1) };
     }).filter((x) => x.idx >= 0);
-    if (epsVisible.length > 1) {
-        const vals = epsVisible.map((x) => x.value), emin = Math.min(...vals), emax = Math.max(...vals), erange = emax - emin || Math.max(1, Math.abs(emax) * 0.1);
-        const ey = (v) => q1 - 4 - (v - emin) / erange * Math.max(4, q1 - q0 - 28);
-        poly(epsVisible.map((x) => [xf(x.idx), ey(x.value)]), "#fb7185", 1.8);
+    if (epsVisible.length) {
+        const vals = epsVisible.map((x) => x.value), emin = Math.min(0, ...vals), emax = Math.max(0, ...vals), erange = emax - emin || 1;
+        const ey = (v) => e0 + 5 + (emax - v) / erange * Math.max(4, e1 - e0 - 10);
+        const zero = ey(0);
+        line(x0, zero, x1, zero, C.grid);
         epsVisible.forEach((x) => {
+            const yy = ey(x.value), top = Math.min(zero, yy), height = Math.max(1, Math.abs(zero - yy));
             const prev = eps.find((e) => e[0].slice(0, 4) === String(Number(x.date.slice(0, 4)) - 1) && e[0].slice(5, 7) === x.date.slice(5, 7));
             const growth = prev && prev[1] !== 0 ? (x.value / prev[1] - 1) * 100 : null;
-            parts.push(`<circle cx="${xf(x.idx).toFixed(1)}" cy="${ey(x.value).toFixed(1)}" r="2.5" fill="#fb7185"><title>EPS ${x.value.toFixed(2)}${growth == null ? "" : " · r/r " + growth.toFixed(1) + "%"}</title></circle>`);
+            parts.push(`<rect x="${(xf(x.idx) - Math.max(2, step * 0.28)).toFixed(1)}" y="${top.toFixed(1)}" width="${Math.max(3, step * 0.56).toFixed(1)}" height="${height.toFixed(1)}" fill="${x.value >= 0 ? C.glb : C.down}" opacity="0.85"><title>EPS ${x.value.toFixed(2)}${growth == null ? "" : " · r/r " + growth.toFixed(1) + "%"}</title></rect>`);
         });
         const lastEps = epsVisible[epsVisible.length - 1];
-        boxText(x0 + 4, q0 + 11, `EPS kwartalny ${lastEps.value.toFixed(2)} (różowa linia; r/r w dymku)`, "#fb7185");
+        boxText(x0 + 4, e0 + 11, `EPS kwartalny ${lastEps.value.toFixed(2)} · słupki r/r w dymku`, lastEps.value >= 0 ? C.glb : C.down);
     }
 
     return finish();

@@ -84,6 +84,7 @@ test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D");
     assert.ok(res.svg.includes("GLB") && !res.svg.includes("MACD (12"));
     assert.ok(res.svg.includes("Słupki OHLC"));
+    assert.ok(res.svg.includes("EMA 10") && res.svg.includes("SMA 20") && res.svg.includes("SMA 50"));
     assert.ok(res.svg.includes('r="4" fill="#4aa3ff"')); // Blue Dot marker stays on chart; its stop level is tooltip-only.
     const barsOnly = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D", false);
     assert.ok(barsOnly.svg.includes("Słupki OHLC · nakładka RWB wyłączona"));
@@ -109,6 +110,14 @@ test("IBD relative strength line on the weekly chart", () => {
     const svg = chartSvg(w, { rs: 61 }, 1000, 700, null, null, [], null, spx).svg;
     assert.ok(svg.includes("RS 52W +61 pp") && svg.includes("RS Line / MA 52 tyg.") && !svg.includes("RS (cena"));
     assert.ok(chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("RS 52W +61 pp"));
+});
+
+test("RS has its own top panel and quarterly EPS is rendered as bars", () => {
+    const w = weekly(156), eps_q = [[w.d[40], 1.2], [w.d[53], 1.8], [w.d[66], -0.3]];
+    const res = chartSvg(w, { eps_q }, 1000, 700, null, null, [], null, { d: w.d, c: w.c.map((x) => x * 4) });
+    assert.ok(res.svg.includes("EPS kwartalny") && res.svg.includes("<rect") && !res.svg.includes("różowa linia"));
+    assert.ok(res.geom.rs[1] < res.geom.spx[0] && res.geom.spx[1] < res.geom.price[0]);
+    assert.ok(res.geom.eps[0] > res.geom.rev[1] && res.geom.eps[1] < res.geom.macd[0]);
 });
 
 test("relative volume: weekly vs 10 weeks, daily vs 50 sessions", () => {
