@@ -25,24 +25,30 @@ def test_blue_line_uses_weekly_highs_and_three_week_confirmation():
     assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 2) == (15, 5)
 
 
-def test_build_row_only_exposes_blb_when_weekly_sma10_above_sma30():
-    closes = [float(x) for x in range(1, 36)]
-    weekly = {
-        "d": [f"2026-10-{(i % 28) + 1:02d}" for i in range(len(closes))],
-        "o": closes, "h": [x + 1 for x in closes], "l": [x - 1 for x in closes],
-        "c": closes, "v": [1000.0] * len(closes),
-    }
-    history = [["2025-01-06", 10.0], ["2025-01-13", 12.0]] + [["2025-01-20", 11.0]] * 13
-    up = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=history)
+def test_build_row_blb_search_is_gated_by_uptrend_but_confirmed_line_persists():
+    dates = [(dt.date(2025, 1, 6) + dt.timedelta(weeks=i)).isoformat() for i in range(40)]
+    closes = [float(x) for x in range(1, 41)]
+    weekly = {"d": dates, "o": closes, "h": [x + 1 for x in closes],
+              "l": [x - 1 for x in closes], "c": closes, "v": [1000.0] * len(closes)}
+    # ATH 12 occurs while SMA10>SMA30 and remains unbroken for 3 full weeks.
+    highs = [[dates[2], 10.0], [dates[3], 12.0]] + [[dates[i], 11.0] for i in range(4, 20)]
+    up = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=highs)
     assert up["trend"] is True
     assert up["blb"] == 12.0
-    assert up["blb_state"] == "NAD"
+    assert up["blb_search_started"] is True
 
-    down = calc.build_row({"ticker": "AAA"}, {**weekly, "c": closes[::-1]}, [], None, weekly_highs=history)
+    down_closes = closes[:30] + [float(x) for x in range(30, 20, -1)]
+    down_weekly = {**weekly, "c": down_closes}
+    down = calc.build_row({"ticker": "AAA"}, down_weekly, [], None, weekly_highs=highs,
+                          previous_row={"blb": 12.0, "blb_search_started": True})
     assert down["trend"] is False
-    assert down["blb"] is None
-    assert down["blb_pct"] is None
-    assert down["blb_state"] is None
+    assert down["blb"] == 12.0
+    assert down["blb_state"] is not None
+
+    # A historical ATH formed during a downtrend does not initiate a fresh BLB.
+    down_history = [[dates[i], float(100 + i)] for i in range(10, 20)]
+    no_new = calc.build_row({"ticker": "BBB"}, down_weekly, [], None, weekly_highs=down_history)
+    assert no_new["blb"] is None
 
 
 def test_glb_state():
