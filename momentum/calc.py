@@ -45,9 +45,9 @@ def green_line(months, confirm=CONFIRM_MONTHS):
     return level, at
 
 
-def blue_line(weekly_highs, confirm=13):
-    """Blue Line z tygodniowych High: rekord wszech czasów staje się linią po 13 zamkniętych tygodniach.
-    Odpowiednik GLB na interwale tygodniowym (kwartał potwierdzenia zamiast 3 miesięcy)."""
+def blue_line(weekly_highs, confirm=3):
+    """Blue Line z tygodniowych High: rekord wszech czasów staje się linią po 3 zamkniętych tygodniach.
+    Nowszy rekord zastępuje dotychczasową linię dopiero po trzech pełnych tygodniach bez kolejnego rekordu."""
     level = at = None
     mx, mi = -math.inf, None
     for i, value in enumerate(weekly_highs):
