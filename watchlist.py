@@ -181,8 +181,10 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         log(f"⚠ prognozy EPS niedostępne ({e}) — używam zapisanych.")
     write_json(Path(cache_dir) / "estimates.json", ecache)
 
+    previous_rows = {r.get("ticker"): r for r in (prev.get("rows") or []) if isinstance(r, dict)}
     def row(b):
-        return calc.build_row(b, series[b["ticker"]], prices.monthly_highs(mcache.get(b["ticker"])), scache.get(b["ticker"]), series.get(BENCH), ecache.get(b["ticker"]), weekly_highs=wh_cache.get(b["ticker"]))
+        ticker = b["ticker"]
+        return calc.build_row(b, series[ticker], prices.monthly_highs(mcache.get(ticker)), scache.get(ticker), series.get(BENCH), ecache.get(ticker), weekly_highs=wh_cache.get(ticker), previous_row=previous_rows.get(ticker))
     rows = [row(b) for b in base if b["ticker"] in series]
     sym_rows = [row({"ticker": s}) for s in extra if s in series]
     if len(rows) < 0.7 * len(tickers):
