@@ -114,6 +114,17 @@ function axisSpots(levelY, lastY, stopY, gap = 16) {
 // linia siły relatywnej jak w IBD: zamknięcie akcji / zamknięcie S&P 500 w tym samym tygodniu (null, gdy brak) — jak chart.rs_line
 const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] : null));
 
+// Cena / cena sprzed 52 tygodni (lub 252 sesji na wykresie dziennym); null przed pełnym okresem.
+const priceRatioLine = (closes, lookback) => closes.map((c, i) => {
+    const base = i >= lookback ? closes[i - lookback] : null;
+    return c > 0 && base > 0 ? c / base : null;
+});
+const smaValid = (values, period) => values.map((_, i) => {
+    if (i < period - 1) return null;
+    const window = values.slice(i - period + 1, i + 1);
+    return window.every((v) => Number.isFinite(v) && v > 0) ? window.reduce((a, b) => a + b, 0) / period : null;
+});
+
 // panele (jak w IBD): S&P 500 10 %, cena 50 %, wolumen 10 %, przychody kwartalne 11 %, MACD reszta (oś czasu i odstępy osobno);
 // dzienny (D): słupki OHLC, opcjonalna nakładka RWB/GMMA + Blue Dot, RS Line i wolumen — bez przychodów i MACD
 function geometry(w, h, right = 64, period = "W") {
@@ -201,7 +212,7 @@ function sliderSvg(closes, nShow, end, W, H, unit = "tyg.") {
 
 // -> {svg, geom} albo null; data = {d, o, h, l, c, v}, row = wiersz listy (glb, macd_stop); okno = nShow tygodni do `end`;
 // lines = linie trendu [{id, d1, p1, d2, p2, alert}] (lines.js), sel = id zaznaczonej (uchwyty na końcach); geom.segs = linie w px (do trafienia)
-// spx = tygodniowe {d, c} S&P 500 (SPY) do panelu nad wykresem; row.qs = kwartały [{quarter, rev, rev_rr}] do panelu przychodów
+// spx = tygodniowe {d, c} SPY do obliczania RS; górny panel pokazuje cenę/cenę sprzed 52 tygodni; row.qs = kwartały [{quarter, rev, rev_rr}] do panelu przychodów
 // period = "W" (tygodniowy) albo "D" (dzienny: linia zamknięć, RWB + Blue Dot + GLB, bez SMA, MACD, przychodów i Stochastic)
 function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", dailyRwb = true) {
     const D = period === "D", u = D ? "sesji" : "tyg.";
@@ -398,16 +409,31 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         }
     }
 
-    // S&P 500 nad wykresem: kierunek rynku (skala log w oknie)
-    const [s0, s1] = g.spx;
-    const sv = spx && spx.d ? dates.map((d) => { const k = LN.dateIndex(spx.d, d); return k >= 0 ? spx.c[k] : null; }) : [];
-    const sok = sv.filter((v) => v);
-    if (sok.length > 1) {
-        const lo = Math.log(Math.min(...sok)), hi2 = Math.log(Math.max(...sok)), ys = (v) => s1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (s1 - s0 - 4) - 2;
-        poly(sv.map((v, i) => (v ? [xf(i), ys(v)] : null)).filter(Boolean), C.spx, 1.3);
-        const ch = (sok[sok.length - 1] / sok[0] - 1) * 100;
-        text(x0 + 4, s0 + 10, small ? `SPY ${fmt(sok[sok.length - 1])} ${ch >= 0 ? "+" : ""}${ch.toFixed(1)}%` : `S&P 500 (SPY) ${fmt(sok[sok.length - 1])} · w oknie ${ch >= 0 ? "+" : ""}${ch.toFixed(1)} %`, C.spx);
-    } else text(x0 + 4, s0 + 10, small ? "SPY —" : "S&P 500 — brak danych SPY", C.dim);
+    // Cena/Cena sprzed 52 tygodni (252 sesji na wykresie dziennym), ze średnią i szczytami jak w panelu RS.
+    const [s0, s1] = g.spx, ccLookback = D ? 252 : 52;
+    const ccFull = priceRatioLine(full.c, ccLookback);
+    const ccAvgFull = smaValid(ccFull, ccLookback);
+    const cc = ccFull.slice(i0, i1), ccAvg = ccAvgFull.slice(i0, i1);
+    const ccOk = cc.filter((v) => v > 0);
+    if (ccOk.length > 1) {
+        const all = cc.concat(ccAvg).filter((v) => v > 0);
+        const lo = Math.log(Math.min(...all)), hi2 = Math.log(Math.max(...all));
+        const yc = (v) => s1 - (Math.log(v) - lo) / ((hi2 - lo) || 1) * (s1 - s0 - 4) - 2;
+        poly(cc.map((v, i) => (v ? [xf(i), yc(v)] : null)).filter(Boolean), C.spx, 1.4);
+        poly(ccAvg.map((v, i) => (v ? [xf(i), yc(v)] : null)).filter(Boolean), "#f0b429", 1.4);
+        for (let i = Math.max(i0, ccLookback * 2 - 1); i < i1; i++) {
+            const v = ccFull[i];
+            if (!(v > 0)) continue;
+            const prior = ccFull.slice(Math.max(0, i - ccLookback), i).filter((x) => x > 0);
+            if (!prior.length || v <= Math.max(...prior)) continue;
+            const priorPriceHighs = full.h.slice(Math.max(0, i - ccLookback), i).filter((x) => x > 0);
+            const priceMadeHigh = !priorPriceHighs.length || full.h[i] > Math.max(...priorPriceHighs);
+            const x = xf(i - i0), y = yc(v), color = priceMadeHigh ? C.glb : "#f472b6";
+            parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.5" fill="${color}"><title>${priceMadeHigh ? "Cena/Cena 52 tyg. — nowy szczyt wskaźnika i ceny" : "Cena/Cena 52 tyg. — nowy szczyt wskaźnika przed ceną"}</title></circle>`);
+        }
+        const last = ccOk[ccOk.length - 1];
+        text(x0 + 4, s0 + 10, small ? `C/C52T ${last.toFixed(2)}×` : `Cena/Cena 52 tyg. ${last.toFixed(2)}× · zielony = szczyt wskaźnika i ceny · różowy = wskaźnik przed ceną`, C.spx);
+    } else text(x0 + 4, s0 + 10, small ? "C/C52T —" : "Cena/Cena 52 tyg. — brak pełnej historii", C.dim);
     line(x0, s1 + 3, x1, s1 + 3, C.grid);
     {   // Deepvue-style RS Line: stock / SPY, moving average, RS new-high and RS-new-high-before-price markers.
         const spxFull = spx && spx.d ? full.d.map((d) => { const k = LN.dateIndex(spx.d, d); return k >= 0 ? spx.c[k] : null; }) : [];
@@ -507,6 +533,6 @@ function titleText(t, row) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
+    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, priceRatioLine, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };
