@@ -30,14 +30,14 @@ def test_build_row_blb_search_is_gated_by_uptrend_but_confirmed_line_persists():
     closes = [float(x) for x in range(1, 41)]
     weekly = {"d": dates, "o": closes, "h": [x + 1 for x in closes],
               "l": [x - 1 for x in closes], "c": closes, "v": [1000.0] * len(closes)}
-    # ATH 12 occurs while SMA10>SMA30 and remains unbroken for 3 full weeks.
-    highs = [[dates[2], 10.0], [dates[3], 12.0]] + [[dates[i], 11.0] for i in range(4, 20)]
+    # An ATH formed during the uptrend (week 31) stays unbroken for 3 closed weeks.
+    highs = [[dates[i], 10.0] for i in range(30)] + [[dates[30], 12.0]] + [[dates[i], 11.0] for i in range(31, 40)]
     up = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=highs)
     assert up["trend"] is True
     assert up["blb"] == 12.0
     assert up["blb_search_started"] is True
 
-    down_closes = closes[:30] + [float(x) for x in range(30, 20, -1)]
+    down_closes = closes[:30] + [float(x) for x in range(0, -10, -1)]
     down_weekly = {**weekly, "c": down_closes}
     down = calc.build_row({"ticker": "AAA"}, down_weekly, [], None, weekly_highs=highs,
                           previous_row={"blb": 12.0, "blb_search_started": True})
@@ -45,11 +45,10 @@ def test_build_row_blb_search_is_gated_by_uptrend_but_confirmed_line_persists():
     assert down["blb"] == 12.0
     assert down["blb_state"] is not None
 
-    # A historical ATH formed during a downtrend does not initiate a fresh BLB.
-    down_history = [[dates[i], float(100 + i)] for i in range(10, 20)]
+    # ATHs formed while the trend filter is off cannot initiate a new BLB.
+    down_history = [[dates[i], float(100 + i)] for i in range(10, 40)]
     no_new = calc.build_row({"ticker": "BBB"}, down_weekly, [], None, weekly_highs=down_history)
     assert no_new["blb"] is None
-
 
 def test_glb_state():
     assert calc.glb_state(105, 99, 100) == "WYBICIE"
