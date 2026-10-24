@@ -209,7 +209,7 @@ def test_merge_weekly_appends_new_weeks_and_detects_adjusted_history():
     assert prices.merge_weekly(old, new, keep=2)["d"] == ["2026-10-12", "2026-10-19"]
 
 
-def test_weekly_fetches_only_recent_weeks_for_cached(monkeypatch):
+def test_weekly_refetches_short_or_adjusted_cache_and_updates_full_cache(monkeypatch):
     import pandas as pd
     calls = []
     idx = pd.to_datetime(["2026-10-12", "2026-10-19"])
@@ -217,12 +217,16 @@ def test_weekly_fetches_only_recent_weeks_for_cached(monkeypatch):
     df = pd.DataFrame(f, index=idx)
     full = pd.DataFrame({k: [1.0] * 12 for k in f}, index=pd.date_range("2026-08-03", periods=12, freq="W-MON"))
     monkeypatch.setattr(prices, "_yf", lambda: type("Y", (), {"download": staticmethod(lambda part, **k: calls.append((list(part), k["period"])) or k["period"])}))
-    monkeypatch.setattr(prices, "_frames", lambda d, part: {t: (full if d == "3y" else df) for t in part})
-    cache = {"A": {k: [1, 2, 3] for k in "ohlcv"} | {"d": ["2026-09-28", "2026-10-05", "2026-10-12"], "raw": 1},
-             "S": {k: [1, 2, 3] for k in "ohlcv"} | {"d": ["2026-09-28", "2026-10-05", "2026-10-12"]}}   # bez "raw": ceny skorygowane -> 3 lata
+    monkeypatch.setattr(prices, "_frames", lambda d, part: {t: (full if d == "5y" else df) for t in part})
+    # A ma pełny cache i powinien dostać tylko aktualizację; S ma stare dane bez "raw", a N nie ma cache.
+    dates = pd.date_range(end="2026-10-12", periods=220, freq="W-MON").strftime("%Y-%m-%d").tolist()
+    cache_a = {k: [1.0] * len(dates) for k in "ohlv"}
+    cache_a["c"] = [1.0] * (len(dates) - 1) + [3.0]
+    cache = {"A": cache_a | {"d": dates, "raw": 1},
+             "S": {k: [1, 2, 3] for k in "ohlcv"} | {"d": ["2026-09-28", "2026-10-05", "2026-10-12"]}}
     out = prices.weekly(["A", "N", "S"], log=lambda s: None, cache=cache, today=dt.date(2026, 10, 20))
-    assert calls == [(["A"], "1mo"), (["N", "S"], "3y")] and out["A"]["raw"] == 1
-    assert out["A"]["c"] == [1, 2, 3.0, 4.0] and len(out["N"]["c"]) == 12
+    assert calls == [(["A"], "1mo"), (["N", "S"], "5y")] and out["A"]["raw"] == 1
+    assert out["A"]["c"][-2:] == [3.0, 4.0] and len(out["N"]["c"]) == 12
 
 
 OLD_TABLE = """<table class="screener_table"><thead><tr><th>No.</th><th>Ticker</th><th>Company</th><th>Sector</th></tr></thead>
