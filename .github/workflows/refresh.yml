@@ -1,8 +1,7 @@
 name: Weekly Refresh
 
-# Raz w tygodniu, w sobotę rano (po piątkowej sesji USA — sygnały liczą się na zamknięciu TYGODNIA): watchlist.py pobiera listę z Finviz
-# (finviz_screen.json), tygodniowe świece z yfinance, miesięczne zamknięcia z całej historii (Green Line) i fundamenty z SEC,
-# zapisuje docs/data/ (strona) i data/ (pamięć podręczna miesięcy i SEC), commituje i publikuje stronę.
+# Raz w tygodniu pobiera/aktualizuje źródła danych Finviz + yfinance oraz zapisane cache.
+# Po zapisaniu danych strona jest przeliczana i publikowana przez workflow Deploy Pages; deploy nie odpytuje źródeł rynkowych.
 # Ręcznie: Actions -> "Weekly Refresh" -> "Run workflow" (przycisk „⟳ Odśwież dane” na stronie prowadzi tutaj). Lokalnie: python watchlist.py
 on:
   schedule:
