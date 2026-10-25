@@ -21,7 +21,7 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
   Zielone wiersze = warunki spełnione i sygnał GLB. Domyślnie widać tylko spółki spełniające warunki. Klik w nagłówek sortuje (drugi klik odwraca, trzeci wraca do kolejności domyślnej).
 - **Filtry** (przycisk na pasku): kilka warunków naraz po kolumnach — stan GLB, MACD, warunki, sektor (klik w wartość), a dla liczb od–do (np. do linii %, Δ marży,
   obrót w mln $). Gotowe zestawy, np. „Nad GLB + MACD dodatni”.
-- **Wykres** (jeden, tygodniowy, domyślnie ostatnie 52 tygodnie (suwakiem można wybrać całą dostępną historię)): słupki High–Low z kreską zamknięcia, SMA 10 i 30 tyg., **Green Line** (z ceną i górną granicą kupna +10 %), stop z MACD (czerwona przerywana),
+- **Wykres** (jeden, tygodniowy; domyślnie ostatnie 52 tygodnie, suwak pozwala wybrać całą dostępną historię): słupki High–Low z kreską zamknięcia, SMA 10 i 30 tyg., **Green Line** (z ceną i górną granicą kupna +10 %), stop z MACD (czerwona przerywana),
   wolumen ze średnią 10 tyg., MACD z ▼ w tygodniach przecięcia w dół. Klik w wiersz otwiera, ↑ / ↓ = następna / poprzednia spółka, ruch kursora = dane tygodnia.
   **Suwak** nad wykresem (minimapa całej historii): przeciągnij ramkę = przesuń okno, krawędzie = zmień długość, klik obok = skok, kółko / + − = zoom, ← / → = przesuń.
 - **Linie trendu**: myszą przeciągnij po wykresie ceny; na telefonie przytrzymaj palec ~0,4 s i prowadź (szybki ruch palcem = dane tygodnia). Koniec linii
