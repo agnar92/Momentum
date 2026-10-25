@@ -1,6 +1,6 @@
 """Ceny z yfinance — tylko dwa rodzaje zapytań i tylko o to, czego jeszcze nie mamy:
-  - tygodniowe świece z ostatnich 5 lat (wykres, średnie, MACD, wolumen, obrót oraz rozgrzewka wskaźników 52-tygodniowych): spółka już pobrana dostaje tylko ostatnie tygodnie
-    (doklejane do zapisanych), pełne 5 lat pobieramy dla nowej spółki, po długiej przerwie albo gdy ceny wstecz się zmieniły (split / dywidenda),
+  - tygodniowe świece z ostatnich 3 lat (wykres, średnie, MACD, wolumen, obrót oraz rozgrzewka wskaźników 52-tygodniowych): spółka już pobrana dostaje tylko ostatnie tygodnie
+    (doklejane do zapisanych), pełne 3 lata pobieramy dla nowej spółki, po długiej przerwie albo gdy ceny wstecz się zmieniły (split / dywidenda),
   - miesięczne HIGH z całej historii (Green Line jak w oryginale Dr. Wisha): zamknięte miesiące się nie zmieniają, więc po zamknięciu
     kolejnego miesiąca dociągamy tylko ostatnie miesiące; całą historię tylko dla nowej spółki albo gdy ceny wstecz się zmieniły.
 Ceny NIESKORYGOWANE o dywidendy (tylko o splity, auto_adjust=False) — jak na TradingView. Z korektą o dywidendy dawne szczyty spółek
@@ -10,8 +10,8 @@ z dużymi wypłatami (np. MLP: CLMT, szczyt 55,26 z 04.2007 -> ~20) spadały i G
 import datetime as dt
 import math
 
-WEEKLY_PERIOD = "5y"
-KEEP_WEEKS = 261          # ~5 lat świec tygodniowych; 52 tyg. rozgrzewki + pełne 3 lata wykresu
+WEEKLY_PERIOD = "3y"
+KEEP_WEEKS = 156          # około 3 lata historii: 52 tyg. wskaźników + 52 tyg. widocznego wykresu
 BATCH = 100
 AUTO_ADJUST = False       # True = ceny skorygowane o dywidendy (Yahoo „Adj”), False = tylko splity (jak TradingView)
 ADJ_TOL = 0.015           # różnica cen na wspólnej dacie > 1,5 % = ceny wstecz zmienione (split / dywidenda) -> pełne pobranie
@@ -76,8 +76,8 @@ def weekly(tickers, log=print, period=WEEKLY_PERIOD, cache=None, today=None, pro
     update, full = {}, []
     for t in tickers:
         old = cache.get(t) if (cache.get(t) or {}).get("raw") else None   # seria ze skorygowanymi cenami -> pełne pobranie
-        # Starszy cache (~3 lata) nie ma rozgrzewki dla całego widocznego zakresu C/C[52] i RS; pobierz pełne 5 lat.
-        if old and len(old.get("d") or []) < 200:
+        # Cache krótszy niż 130 tygodni nie daje wystarczającej historii dla wskaźników 52-tygodniowych i rocznego okna wykresu; pobierz pełne 3 lata.
+        if old and len(old.get("d") or []) < 130:
             old = None
         p = _recent_period(old["d"][-1], today) if old and old.get("d") else None
         (update.setdefault(p, []) if p else full).append(t)
@@ -89,7 +89,7 @@ def weekly(tickers, log=print, period=WEEKLY_PERIOD, cache=None, today=None, pro
         done += len(part)
         if progress:
             progress(done, total)
-        log(f"yfinance tygodniowe ({'5 lat' if per == period else 'aktualizacja'}): {done}/{total}")
+        log(f"yfinance tygodniowe ({'3 lata' if per == period else 'aktualizacja'}): {done}/{total}")
         return {t: _series(f) for t, f in _frames(df, part).items()}
 
     for per, ts in update.items():

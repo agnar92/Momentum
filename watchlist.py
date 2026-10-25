@@ -1,9 +1,10 @@
-"""Odświeżenie danych strony (raz w tygodniu w CI, po zamknięciu piątkowej sesji): Finviz (lista) → yfinance tygodniowe 5 lat
+"""Odświeżenie danych strony (raz w tygodniu w CI, po zamknięciu piątkowej sesji): Finviz (lista) → yfinance tygodniowe 3 lata
 (wykres, średnie, MACD, obrót; spółki już zapisane w docs/data/weekly dostają tylko nowe tygodnie) → dla spółek z obrotem ≥ 50 mln $:
 yfinance miesięczne High z całej historii (Green Line; tylko nowe zamknięte miesiące) i SEC (fundamenty, z pamięci podręcznej) → docs/data/watchlist.json + docs/data/weekly/<ticker>.json.
 Ta sama strategia i te same obliczenia co w Momentum Desktop (agnar92/MomentumDesktop). Funkcje sieciowe można podmienić (testy).
 
-    python watchlist.py                 # pełne odświeżenie
+    python watchlist.py                 # pobierz dane i przelicz lokalnie
+    python watchlist.py --build-only    # przelicz stronę bez pobierania danych
     python watchlist.py --max-tickers 50
 """
 import argparse
@@ -125,7 +126,7 @@ BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, fetch_sec=True):
+        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, fetch_sec=True, fetch_only=False):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
@@ -189,6 +190,39 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     except Exception as e:
         log(f"⚠ prognozy EPS niedostępne ({e}) — używam zapisanych.")
     write_json(Path(cache_dir) / "estimates.json", ecache)
+
+    if fetch_only:
+        # Refresh pobiera tylko dane źródłowe/cache. Wskaźniki i końcowy watchlist.json
+        # są liczone osobno przez Deploy Pages na podstawie tych zapisanych plików.
+        wdir.mkdir(parents=True, exist_ok=True)
+        keep = set()
+        for ticker, data in series.items():
+            name = file_name(ticker)
+            keep.add(name)
+            write_json(wdir / name, data)
+        for path in wdir.glob("*.json"):
+            if path.name not in keep:
+                path.unlink()
+
+        daily_symbols = list(dict.fromkeys(liquid + [BENCH]))
+        daily_cache_dir = Path(cache_dir) / "daily"
+        daily_cache = {t: load_json(daily_cache_dir / file_name(t), None) for t in daily_symbols}
+        daily_cache = {t: data for t, data in daily_cache.items() if data}
+        try:
+            dser = daily(daily_symbols, log=log, period="2y", cache=daily_cache, today=now.date()) if daily_symbols else {}
+        except Exception as e:
+            log(f"⚠ dzienne dane źródłowe niedostępne ({e}) — zachowuję cache.")
+            dser = daily_cache
+        daily_cache_dir.mkdir(parents=True, exist_ok=True)
+        for ticker, data in dser.items():
+            if data:
+                write_json(daily_cache_dir / file_name(ticker), data)
+        write_json(Path(out) / "source_list.json", {
+            "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "scanners": meta, "rows": base, "symbols": extra,
+        })
+        log(f"✓ Dane źródłowe zapisane: {len(series)} serii tygodniowych; bez obliczania wskaźników.")
+        return []
 
     previous_rows = {r.get("ticker"): r for r in (prev.get("rows") or []) if isinstance(r, dict)}
     def row(b):
@@ -265,6 +299,9 @@ def main(argv=None):
     ap.add_argument("--max-tickers", type=int)
     ap.add_argument("--finviz-url", default=os.environ.get("FINVIZ_URL") or None, help="Link do screenera Finviz; zapisze się w konfiguracji.")
     ap.add_argument("--no-sec", action="store_true", help="Wyłącz pobieranie raportów i fundamentów z SEC.")
+    ap.add_argument("--fetch-only", action="store_true", help="Pobierz/uzupełnij źródła danych i cache bez liczenia wskaźników.")
+    ap.add_argument("--build-only", action="store_true",
+                    help="Przelicz stronę wyłącznie z zapisanych danych; nie odpytuj Finviz, yfinance ani SEC.")
     args = ap.parse_args(argv)
     config = load_json(CONFIG, {})
     if args.max_tickers:   # limit dla każdego skanera (test na małej liście)
@@ -272,7 +309,48 @@ def main(argv=None):
         for sc in config.get("scanners") or []:
             sc["max_tickers"] = args.max_tickers
     try:
-        run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec)
+        if args.build_only:
+            # Deploy Page: deterministyczne przeliczenie wskaźników z zapisanych danych.
+            # Dostawcy poniżej czytają JSON/cache i nie wykonują zapytań sieciowych.
+            previous = load_json(OUT / "source_list.json", {})
+            previous_rows = previous.get("rows") or load_json(OUT / "watchlist.json", {}).get("rows") or []
+            if not previous_rows:
+                raise RuntimeError("Brak zapisanej listy spółek — uruchom najpierw Weekly Refresh.")
+
+            def offline_fetch(_filters, max_tickers=None, log=print):
+                return previous_rows, len(previous_rows)
+
+            def offline_weekly(tickers, log=print, cache=None, **_kwargs):
+                out = {}
+                for ticker in tickers:
+                    series = load_json(OUT / "weekly" / file_name(ticker), None)
+                    if series:
+                        out[ticker] = series
+                return out
+
+            def offline_daily(tickers, log=print, **_kwargs):
+                out = {}
+                for ticker in tickers:
+                    series = load_json(CACHE / "daily" / file_name(ticker), None)
+                    if series:
+                        out[ticker] = series
+                return out
+
+            built_at = None
+            if previous.get("generated_at"):
+                try:
+                    built_at = dt.datetime.fromisoformat(previous["generated_at"].replace("Z", "+00:00"))
+                except ValueError:
+                    pass
+            run(config, fetch_list=offline_fetch, weekly=offline_weekly,
+                monthly=lambda _tickers, _cache, **_kwargs: None,
+                fund=lambda _tickers, _cache, **_kwargs: None,
+                daily=offline_daily, est=lambda _tickers, _cache, **_kwargs: None,
+                fetch_sec=True, now=built_at)
+        elif args.fetch_only:
+            run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec, fetch_only=True)
+        else:
+            run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec)
     except RuntimeError as e:
         print(f"❌ {e}")
         return 1
