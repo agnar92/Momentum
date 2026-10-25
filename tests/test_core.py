@@ -283,6 +283,7 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
     assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
     assert a["rvol_w"] == pytest.approx(1.0) and a["rvol_d"] == pytest.approx(1.0)   # wolumen relatywny tydzień / sesja
+    assert "vol52" in a                                                                    # zmienność 52 tyg. (None przy krótkiej historii)
 
 
 def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
@@ -395,6 +396,18 @@ def test_trend_sma10_above_sma30():
     down = calc.build_row({"ticker": "D"}, {**W, "c": W["c"][::-1]}, [50, 100, 90, 90, 90], {"rev_rr": 30, "dopm": 5}, SPY)
     short = calc.build_row({"ticker": "S"}, {k: v[:20] for k, v in W.items()}, [], None)
     assert up["trend"] is True and down["trend"] is False and short["trend"] is None
+
+
+def test_volatility():
+    import math
+    up = [100 * 1.02 ** i for i in range(53)]                                 # stały wzrost: zerowa zmienność
+    assert calc.volatility(up) == pytest.approx(0.0, abs=1e-9)
+    zz = [100 * (1.1 if i % 2 else 1.0) for i in range(53)]                   # naprzemiennie ±log(1.1)
+    r = [math.log(1.1), -math.log(1.1)] * 26
+    m = sum(r) / len(r)
+    assert calc.volatility(zz) == pytest.approx(math.sqrt(sum((x - m) ** 2 for x in r) / 51) * math.sqrt(52))
+    assert calc.volatility(up[:30]) is None                                   # za krótka historia
+    assert calc.volatility(up[:-1] + [None]) is not None                      # pojedynczy brak nie blokuje
 
 
 def test_rel_volume():
