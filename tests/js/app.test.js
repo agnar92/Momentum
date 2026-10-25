@@ -76,6 +76,16 @@ test("default order: conditions + GLB signal first, then by relative strength", 
     assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "D", "C"]);
 });
 
+test("volatility column and presets", () => {
+    const { passFilters, FILTER_PRESETS, COLUMNS } = require("../../docs/js/app.js");
+    assert.ok(COLUMNS.some(([k]) => k === "vol52"));
+    const f = FILTER_PRESETS.find(([n]) => n === "Ruchliwe: zmienność ≥ 0,50")[1];
+    assert.ok(passFilters({ vol52: 0.62 }, f) && !passFilters({ vol52: 0.31 }, f) && !passFilters({ vol52: null }, f));
+    const g = FILTER_PRESETS.find(([n]) => n.startsWith("Ruchliwe (zmienność ≥ 0,50) + nad GLB"))[1];
+    assert.ok(passFilters({ vol52: 0.7, glb_state: "WYBICIE" }, g) && !passFilters({ vol52: 0.7, glb_state: "POD" }, g));
+    assert.strictEqual(cell(0.5234, "r"), "0.52");
+});
+
 test("SMA 10 > 30 filter and preset", () => {
     const { passFilters, filterValue, FILTER_PRESETS } = require("../../docs/js/app.js");
     assert.strictEqual(filterValue({ trend: true }, "trend"), "tak");

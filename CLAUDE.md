@@ -56,6 +56,13 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   of a ≥ 20 % drop in 6 months vs 33 %); position warning only, not an entry condition. SEC entries carry `v: 4` (`rev_rr1`, `dopm1`, `accel`, `qs`, `op_d`,
   `rev_q`, `ttm_rev`, `shares`, `dil`); older entries are refetched. Didn't help: revenue acceleration alone, EPS, margin levels, q/q margin change,
   MACD state / SPY trend / breakout volume / base length at entry, Blue Dot / RWB as entry.
+- **Zmienność 52 tyg.** (`calc.volatility`, column `vol52`, user Oct 2026: "sama zmienność powyżej 0,50 odsiewa spółki stojące … dodaj to sortowanie"):
+  sample std of weekly log returns over 52 weeks × √52 (0.50 = 50 %/yr; `None` with < 80 % valid weeks), `MIN_VOL = 0.50` (presets "Ruchliwe: zmienność ≥ 0,50"
+  and "+ nad GLB"; sort by the header). Only a column / filter, NOT a `passes` condition. Study behind it (S&P 500 point-in-time 1978–2024, weekly, train ≤ 2009 /
+  test 2011–24): volatility is the strongest technical predictor of a +100 % move within 52 weeks (top quintile 10.4 % / 6.4 % vs bottom 0.8 % / 0.1 %, AUC 0.79)
+  but it raises the −50 % risk equally (mean 52-week return unchanged) — it finds stocks that CAN move; direction comes from trend (far above the 52-week low,
+  C/C13–26, fresh high: fewer crashes, more +100 % among stocks near highs). C/C52 × volatility and C/C52 ÷ volatility were tested as one indicator: × works best
+  at 0.4–0.8, ÷ selects calm stocks (AUC 0.27–0.32, worse than random); volume features added nothing. Desktop app not updated yet.
 - ROE / ROI were tested and rejected (big winners had low ROE). Don't add them back without a new backtest.
 
 ## Data flow (`watchlist.py`, run weekly)
