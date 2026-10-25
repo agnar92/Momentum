@@ -3,7 +3,8 @@
 yfinance miesięczne High z całej historii (Green Line; tylko nowe zamknięte miesiące) i SEC (fundamenty, z pamięci podręcznej) → docs/data/watchlist.json + docs/data/weekly/<ticker>.json.
 Ta sama strategia i te same obliczenia co w Momentum Desktop (agnar92/MomentumDesktop). Funkcje sieciowe można podmienić (testy).
 
-    python watchlist.py                 # pełne odświeżenie
+    python watchlist.py                 # pobierz dane i przelicz lokalnie
+    python watchlist.py --build-only    # przelicz stronę bez pobierania danych
     python watchlist.py --max-tickers 50
 """
 import argparse
@@ -265,6 +266,8 @@ def main(argv=None):
     ap.add_argument("--max-tickers", type=int)
     ap.add_argument("--finviz-url", default=os.environ.get("FINVIZ_URL") or None, help="Link do screenera Finviz; zapisze się w konfiguracji.")
     ap.add_argument("--no-sec", action="store_true", help="Wyłącz pobieranie raportów i fundamentów z SEC.")
+    ap.add_argument("--build-only", action="store_true",
+                    help="Przelicz stronę wyłącznie z zapisanych danych; nie odpytuj Finviz, yfinance ani SEC.")
     args = ap.parse_args(argv)
     config = load_json(CONFIG, {})
     if args.max_tickers:   # limit dla każdego skanera (test na małej liście)
@@ -272,7 +275,40 @@ def main(argv=None):
         for sc in config.get("scanners") or []:
             sc["max_tickers"] = args.max_tickers
     try:
-        run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec)
+        if args.build_only:
+            # Deploy Page: deterministyczne przeliczenie wskaźników z zapisanych danych.
+            # Dostawcy poniżej czytają JSON/cache i nie wykonują zapytań sieciowych.
+            previous = load_json(OUT / "watchlist.json", {})
+            previous_rows = previous.get("rows") or []
+            if not previous_rows:
+                raise RuntimeError("Brak zapisanej listy spółek — uruchom najpierw Weekly Refresh.")
+
+            def offline_fetch(_filters, max_tickers=None, log=print):
+                return previous_rows, len(previous_rows)
+
+            def offline_weekly(tickers, log=print, cache=None, **_kwargs):
+                out = {}
+                for ticker in tickers:
+                    series = load_json(OUT / "weekly" / file_name(ticker), None)
+                    if series:
+                        out[ticker] = series
+                return out
+
+            def offline_daily(tickers, log=print, **_kwargs):
+                out = {}
+                for ticker in tickers:
+                    series = load_json(CACHE / "daily" / file_name(ticker), None)
+                    if series:
+                        out[ticker] = series
+                return out
+
+            run(config, fetch_list=offline_fetch, weekly=offline_weekly,
+                monthly=lambda _tickers, _cache, **_kwargs: None,
+                fund=lambda _tickers, _cache, **_kwargs: None,
+                daily=offline_daily, est=lambda _tickers, _cache, **_kwargs: None,
+                fetch_sec=True)
+        else:
+            run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec)
     except RuntimeError as e:
         print(f"❌ {e}")
         return 1
