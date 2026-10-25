@@ -1,6 +1,7 @@
 name: Deploy Pages
 
-# Publikuje docs/ na GitHub Pages po każdym pushu do main (dane odświeża "Weekly Refresh").
+# Przelicza wskaźniki z zapisanych danych i publikuje docs/; bez pobierania danych rynkowych.
+# Nowe dane pobiera wyłącznie workflow "Weekly Refresh".
 on:
   push:
     branches: [main]
@@ -23,6 +24,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Recalculate indicators from cached data (no market-data downloads)
+        run: python watchlist.py --build-only
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
