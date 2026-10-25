@@ -217,7 +217,7 @@ def test_weekly_refetches_short_or_adjusted_cache_and_updates_full_cache(monkeyp
     df = pd.DataFrame(f, index=idx)
     full = pd.DataFrame({k: [1.0] * 12 for k in f}, index=pd.date_range("2026-08-03", periods=12, freq="W-MON"))
     monkeypatch.setattr(prices, "_yf", lambda: type("Y", (), {"download": staticmethod(lambda part, **k: calls.append((list(part), k["period"])) or k["period"])}))
-    monkeypatch.setattr(prices, "_frames", lambda d, part: {t: (full if d == "5y" else df) for t in part})
+    monkeypatch.setattr(prices, "_frames", lambda d, part: {t: (full if d == "3y" else df) for t in part})
     # A ma pełny cache i powinien dostać tylko aktualizację; S ma stare dane bez "raw", a N nie ma cache.
     dates = pd.date_range(end="2026-10-12", periods=220, freq="W-MON").strftime("%Y-%m-%d").tolist()
     cache_a = {k: [1.0] * len(dates) for k in "ohlv"}
@@ -225,7 +225,7 @@ def test_weekly_refetches_short_or_adjusted_cache_and_updates_full_cache(monkeyp
     cache = {"A": cache_a | {"d": dates, "raw": 1},
              "S": {k: [1, 2, 3] for k in "ohlcv"} | {"d": ["2026-09-28", "2026-10-05", "2026-10-12"]}}
     out = prices.weekly(["A", "N", "S"], log=lambda s: None, cache=cache, today=dt.date(2026, 10, 20))
-    assert calls == [(["A"], "1mo"), (["N", "S"], "5y")] and out["A"]["raw"] == 1
+    assert calls == [(["A"], "1mo"), (["N", "S"], "3y")] and out["A"]["raw"] == 1
     assert out["A"]["c"][-2:] == [3.0, 4.0] and len(out["N"]["c"]) == 12
 
 
