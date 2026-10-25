@@ -25,9 +25,6 @@ concurrency:
 
 jobs:
   refresh:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -46,9 +43,9 @@ jobs:
           FINVIZ_URL: ${{ inputs.finviz_url }}
         run: |
           if [ -n "$FINVIZ_URL" ]; then
-            python watchlist.py --no-sec --finviz-url "$FINVIZ_URL"
+            python watchlist.py --fetch-only --no-sec --finviz-url "$FINVIZ_URL"
           else
-            python watchlist.py --no-sec
+            python watchlist.py --fetch-only --no-sec
           fi
 
       - name: Commit data
@@ -71,6 +68,25 @@ jobs:
           done
           exit 1
 
+  deploy:
+    needs: refresh
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Recalculate indicators from cached data (no market-data downloads)
+        run: python watchlist.py --build-only
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
