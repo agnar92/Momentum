@@ -99,7 +99,8 @@ if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ sort: null, recent: [], nShow: null, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
+    const state = Object.assign({ sort: null, recent: [], nShow: 52, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
+    if (state.nShow == null) state.nShow = 52;   // domyślnie pokazuj ostatnie 52 tygodnie; pełną historię można wybrać suwakiem
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
     let period = "W", dShow = 260, dailyRwb = true;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
