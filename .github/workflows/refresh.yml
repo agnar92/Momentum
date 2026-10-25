@@ -2,7 +2,7 @@ name: Weekly Refresh
 
 # Raz w tygodniu pobiera/aktualizuje źródła danych Finviz + yfinance oraz zapisane cache.
 # Po zapisaniu danych strona jest przeliczana i publikowana przez workflow Deploy Pages; deploy nie odpytuje źródeł rynkowych.
-# Ręcznie: Actions -> "Weekly Refresh" -> "Run workflow" (przycisk „⟳ Odśwież dane” na stronie prowadzi tutaj). Lokalnie: python watchlist.py
+# Ręcznie: Actions -> "Weekly Refresh" -> "Run workflow" (przycisk „⟳ Odśwież dane” na stronie prowadzi tutaj). Lokalnie: python watchlist.py --fetch-only
 on:
   schedule:
     - cron: '17 3 * * 6'   # sobota 03:17 UTC
