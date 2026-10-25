@@ -1,4 +1,4 @@
-"""Odświeżenie danych strony (raz w tygodniu w CI, po zamknięciu piątkowej sesji): Finviz (lista) → yfinance tygodniowe 5 lat
+"""Odświeżenie danych strony (raz w tygodniu w CI, po zamknięciu piątkowej sesji): Finviz (lista) → yfinance tygodniowe 3 lata
 (wykres, średnie, MACD, obrót; spółki już zapisane w docs/data/weekly dostają tylko nowe tygodnie) → dla spółek z obrotem ≥ 50 mln $:
 yfinance miesięczne High z całej historii (Green Line; tylko nowe zamknięte miesiące) i SEC (fundamenty, z pamięci podręcznej) → docs/data/watchlist.json + docs/data/weekly/<ticker>.json.
 Ta sama strategia i te same obliczenia co w Momentum Desktop (agnar92/MomentumDesktop). Funkcje sieciowe można podmienić (testy).
@@ -336,11 +336,17 @@ def main(argv=None):
                         out[ticker] = series
                 return out
 
+            built_at = None
+            if previous.get("generated_at"):
+                try:
+                    built_at = dt.datetime.fromisoformat(previous["generated_at"].replace("Z", "+00:00"))
+                except ValueError:
+                    pass
             run(config, fetch_list=offline_fetch, weekly=offline_weekly,
                 monthly=lambda _tickers, _cache, **_kwargs: None,
                 fund=lambda _tickers, _cache, **_kwargs: None,
                 daily=offline_daily, est=lambda _tickers, _cache, **_kwargs: None,
-                fetch_sec=True)
+                fetch_sec=True, now=built_at)
         elif args.fetch_only:
             run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec, fetch_only=True)
         else:
