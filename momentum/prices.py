@@ -89,7 +89,7 @@ def weekly(tickers, log=print, period=WEEKLY_PERIOD, cache=None, today=None, pro
         done += len(part)
         if progress:
             progress(done, total)
-        log(f"yfinance tygodniowe ({'5 lat' if per == period else 'aktualizacja'}): {done}/{total}")
+        log(f"yfinance tygodniowe ({'3 lata' if per == period else 'aktualizacja'}): {done}/{total}")
         return {t: _series(f) for t, f in _frames(df, part).items()}
 
     for per, ts in update.items():
