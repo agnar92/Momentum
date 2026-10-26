@@ -112,7 +112,7 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
 - **Trend lines + alerts** (`js/lines.js`, port of `desktop/lines.py`; user: "rysowanie linii jak przytrzymam … usuwanie, przesuwanie … alerty; webową
   używam głównie na telefonie"): line = `{id, d1, p1, d2, p2, alert}` (week date + price, straight on the log scale). Mouse: drag on the price panel = new
   line; phone: hold a finger ~0.4 s, then move (a quick move = crosshair readout); grab an end = move that point, grab the middle = move the line; tap = select
-  (🗑 / 🔔 alert buttons in the chart head, Delete key); magnet to the week's High/Low. `.chart-body` has `touch-action: none`. Alerts (`evalAlerts`, run after
+  (🗑 / 🔔 alert buttons in the chart head, Delete key); magnet to the week's High/Low. Ruler (user: "prawym przyciskiem … ile procent urosła cena i w ile tygodni"): hold the RIGHT mouse button on the price panel → `rulerSvg` / `rulerText` (% change from the click point + number of weeks / sessions), same in desktop `ChartWindow.ruler_*`. RS Rating and Upside were removed in both apps (user: "nie działa"). `.chart-body` has `touch-action: none`. Alerts (`evalAlerts`, run after
   `watchlist.json` loads): weekly close crossed a line with alert on; 🔔 Obserwuj a ticker = GLB signal, MACD cross-down, close under the MACD stop,
   conditions met. Key includes the week, so nothing fires twice. localStorage `momentum_alerts` {lines, watch, log, seen}; system notification via the
   service worker if allowed. The site is static, so alerts are checked only when the page is opened (data refresh is weekly).

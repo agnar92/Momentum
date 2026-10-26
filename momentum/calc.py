@@ -224,37 +224,6 @@ def rel_strength(weekly, spy, weeks=RS_WEEKS):
     return ((c[-1] / c[-1 - weeks]) - (b / a)) * 100
 
 
-
-def rs_rating_score(weekly, spy):
-    """Przybliżenie Deepvue RS Rating: ranking względnej siły z większą wagą ostatnich miesięcy.
-    Używa nadwyżkowej stopy zwrotu względem SPY za 1/3/6/12 miesięcy; wagi 40/30/20/10.
-    Dokładne wagi Deepvue nie są publiczne, więc jest to jawnie oznaczona implementacja zgodna z opisaną metodą."""
-    d, c = (weekly or {}).get("d") or [], (weekly or {}).get("c") or []
-    sd, sc = (spy or {}).get("d") or [], (spy or {}).get("c") or []
-    if not d or not c or not sd or not sc or not _ok(c[-1]) or c[-1] <= 0:
-        return None
-
-    def spy_at(day):
-        i = bisect.bisect_right(sd, day) - 1
-        return sc[i] if i >= 0 and _ok(sc[i]) and sc[i] > 0 else None
-
-    current_spy = spy_at(d[-1])
-    if current_spy is None:
-        return None
-    weighted, weight_total = 0.0, 0.0
-    for weeks, weight in ((4, 0.40), (13, 0.30), (26, 0.20), (52, 0.10)):
-        i = len(c) - 1 - weeks
-        if i < 0 or not _ok(c[i]) or c[i] <= 0:
-            continue
-        old_spy = spy_at(d[i])
-        if old_spy is None:
-            continue
-        excess = ((c[-1] / c[i]) - 1.0 - (current_spy / old_spy - 1.0)) * 100.0
-        weighted += excess * weight
-        weight_total += weight
-    return weighted / weight_total if weight_total else None
-
-
 def volatility(closes, weeks=VOL_WEEKS):
     """Zmienność roczna: odchylenie standardowe (próbkowe) tygodniowych log-zwrotów z ostatnich `weeks` tygodni × √52. 0.50 = 50 % rocznie.
     None, gdy mniej niż 80 % ważnych zwrotów w oknie. Badanie (S&P 500 1978–2024, bez błędu przeżywalności): najsilniej odsiewa spółki, które
@@ -353,7 +322,6 @@ def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None,
     mcap = row.get("market_cap") or (price * f["shares"] if _ok(price) and _ok(f.get("shares")) else None)
     row["ps"] = mcap / f["ttm_rev"] if _ok(mcap) and _ok(f.get("ttm_rev")) and f["ttm_rev"] > 0 else None
     row["rs"] = rel_strength(weekly, spy)
-    row["rs_rating_score"] = rs_rating_score(weekly, spy)
     # RS line value = stock close / SPY close on the same date (nominal ratio is for charting, not cross-stock ranking).
     sd, sc = (spy or {}).get("d") or [], (spy or {}).get("c") or []
     if c and weekly.get("d") and sd:

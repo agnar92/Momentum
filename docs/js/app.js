@@ -6,7 +6,7 @@ const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do GLB %", "%"], ["glb_state", "GLB", "s"], ["ok", "Warunki", "b"],
     ["blb", "Blue Line", "p"], ["blb_pct", "Do BLB %", "%"], ["blb_state", "BLB", "s"],
-    ["rs_rating", "RS Rating", "rating"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
+    ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["vol52", "Zmienność 52 tyg.", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["slow", "Hamuje", "w"],
 ];
@@ -25,7 +25,6 @@ function cell(v, f) {
     if (f === "b") return v ? "✓" : "";
     if (f === "x") return v.toFixed(1);
     if (f === "r") return v.toFixed(2);
-    if (f === "rating") return Math.round(v).toString();
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
@@ -34,9 +33,9 @@ function cell(v, f) {
 const isSignal = (r) => SIGNAL.includes(r.glb_state) && (r.glb_pct == null || r.glb_pct <= ENTRY_MAX);
 
 // najpierw sygnały spełniające warunki, potem pozostałe sygnały, potem reszta; w grupie najbliżej Green Line
-// (przy nadmiarze sygnałów najbliższe linii: ten sam wynik, mniejsze obsunięcie), na końcu RS Rating.
+// (przy nadmiarze sygnałów najbliższe linii: ten sam wynik, mniejsze obsunięcie), na końcu RS 52 tyg.
 function defaultCompare(a, b) {
-    const key = (r) => [!(isSignal(r) && r.ok), !isSignal(r), r.glb_pct == null ? 1e9 : Math.abs(r.glb_pct), -(r.rs_rating ?? -1e9)];
+    const key = (r) => [!(isSignal(r) && r.ok), !isSignal(r), r.glb_pct == null ? 1e9 : Math.abs(r.glb_pct), -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
@@ -149,11 +148,6 @@ if (typeof document !== "undefined") (function () {
 
     function renderTable() {
         const pool = visibleRows(data.rows, { scanner: state.scanner });
-        // Cross-sectional RS Rating: percentile of 52-week relative performance (share price / SPY normalized over time).
-        // Raw price/SPY ratios are not comparable across tickers because nominal share prices and splits differ.
-        const ranked = pool.filter((r) => Number.isFinite(r.rs_rating_score)).sort((a, b) => a.rs_rating_score - b.rs_rating_score);
-        ranked.forEach((r, i) => { r.rs_rating = ranked.length < 2 ? 50 : Math.max(1, Math.min(99, Math.round(1 + 98 * i / (ranked.length - 1)))); });
-        pool.filter((r) => !Number.isFinite(r.rs_rating_score)).forEach((r) => { r.rs_rating = null; });
         shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
@@ -167,9 +161,7 @@ if (typeof document !== "undefined") (function () {
             }).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
         const sig = pool.filter((r) => isSignal(r)).length;
-        const ratingNeedsRefresh = pool.length > 0 && pool.every((r) => !Number.isFinite(r.rs_rating_score));
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB 0–10 % ${sig}` +
-            (ratingNeedsRefresh ? " · odśwież dane, aby policzyć RS Rating" : "");
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB 0–10 % ${sig}`;
         renderStatus();
     }
 
@@ -389,7 +381,32 @@ if (typeof document !== "undefined") (function () {
         saveAlerts();
     }
 
+    // punkt wykresu bez magnesu -> {x (środek świecy), y, p, k} dla miarki
+    function rulerPt(pt) {
+        const [y0, y1] = geom.price, y = Math.max(y0, Math.min(y1, pt.y));
+        const i = Math.max(0, Math.min(geom.n - 1, Math.floor((pt.x - geom.x0) / geom.step)));
+        return { x: geom.x0 + (i + 0.5) * geom.step, y, p: Math.exp(geom.lmin + (y1 - y) / (y1 - y0) * (geom.lmax - geom.lmin)), k: geom.i0 + i };
+    }
+
+    // miarka: przytrzymany prawy przycisk myszy — od punktu kliknięcia % zmiany ceny i liczba tygodni (sesji na D)
+    function drawRuler(b) {
+        const svg = $("chartBody").querySelector("svg");
+        if (!svg || !gest || gest.mode !== "ruler") return;
+        let g = svg.querySelector("#ruler");
+        if (!g) { g = document.createElementNS("http://www.w3.org/2000/svg", "g"); g.id = "ruler"; svg.appendChild(g); }
+        g.innerHTML = rulerSvg(gest.a, b, period, geom.x1 || geom.w);
+    }
+
     function chartDown(ev) {
+        if (geom && series && ev.pointerType === "mouse" && ev.button === 2) {
+            const pt = chartPt(ev);
+            if (pt.y < geom.price[0] || pt.y > geom.price[1]) return;
+            $("chartBody").setPointerCapture(ev.pointerId);
+            gest = { mode: "ruler", a: rulerPt(pt) };
+            $("tip").hidden = true;
+            ev.preventDefault();
+            return;
+        }
         if (!geom || !series || period === "D" || (ev.pointerType === "mouse" && ev.button !== 0)) return;   // linie trendu tylko na tygodniowym
         const pt = chartPt(ev), touch = ev.pointerType !== "mouse", tol = touch ? 18 : 7;
         const hit = hitLine(geom.segs || [], pt.x, pt.y, tol);
@@ -429,6 +446,7 @@ if (typeof document !== "undefined") (function () {
 
     function chartMoveGest(ev) {
         if (!gest) return;
+        if (gest.mode === "ruler") { drawRuler(rulerPt(chartPt(ev))); ev.preventDefault(); return; }
         const pt = chartPt(ev), moved = Math.hypot(pt.x - gest.x, pt.y - gest.y);
         if (gest.mode === "press") {
             if (moved > 10) { clearTimeout(gest.timer); gest.mode = "scrub"; }
@@ -458,6 +476,12 @@ if (typeof document !== "undefined") (function () {
     function chartUp() {
         if (!gest) return;
         clearTimeout(gest.timer);
+        if (gest.mode === "ruler") {
+            const g = $("chartBody").querySelector("#ruler");
+            if (g) g.remove();
+            gest = null;
+            return;
+        }
         if (gest.mode === "press" || gest.mode === "pend") { sel = null; renderTools(); redrawSoon(); }   // dotknięcie / klik obok linii = odznacz
         else if (gest.mode !== "scrub") {
             saveLines();

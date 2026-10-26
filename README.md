@@ -26,6 +26,7 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
   **Suwak** nad wykresem (minimapa całej historii): przeciągnij ramkę = przesuń okno, krawędzie = zmień długość, klik obok = skok, kółko / + − = zoom, ← / → = przesuń.
 - **Linie trendu**: myszą przeciągnij po wykresie ceny; na telefonie przytrzymaj palec ~0,4 s i prowadź (szybki ruch palcem = dane tygodnia). Koniec linii
   przyciąga się do High / Low tygodnia. Chwyć koniec = zmień punkt, chwyć środek = przesuń linię, klik / dotknięcie = zaznacz (🗑 usuwa, Delete też).
+- **Miarka** (mysz): przytrzymaj prawy przycisk na wykresie ceny i przesuwaj — od punktu kliknięcia widać zmianę ceny w % i liczbę tygodni (sesji na D); puszczenie chowa miarkę.
 - **Alerty** (🔔 Alerty na pasku): zamknięcie tygodnia przecięło linię trendu (🔔 alert linii) oraz dla obserwowanych spółek (🔕 Obserwuj na wykresie):
   sygnał GLB, przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Sprawdzane przy otwarciu strony po nowych danych; linie i alerty
   zapisują się w przeglądarce (każde urządzenie ma swoje). Opcjonalnie powiadomienie systemowe.

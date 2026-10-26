@@ -84,9 +84,9 @@ test("P/S and RS cells, slowdown cell and filters", () => {
     assert.ok(passFilters({ slow: null }, { slow: { in: ["—"] } }) && !passFilters({ slow: "HAMUJE" }, { slow: { in: ["—"] } }));
 });
 
-test("default order: conditions + GLB signal first, then nearest the line, then RS Rating", () => {
-    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", glb_pct: 7, rs_rating: 55 }, { ticker: "B", ok: true, glb_state: "WYBICIE", glb_pct: 3, rs_rating: 90 },
-        { ticker: "C", ok: true, glb_state: "POD", glb_pct: -20, rs_rating: 99 }, { ticker: "D", ok: false, glb_pct: -5, rs_rating: 10 }];
+test("default order: conditions + GLB signal first, then nearest the line, then RS 52 tyg.", () => {
+    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", glb_pct: 7, rs: 55 }, { ticker: "B", ok: true, glb_state: "WYBICIE", glb_pct: 3, rs: 90 },
+        { ticker: "C", ok: true, glb_state: "POD", glb_pct: -20, rs: 99 }, { ticker: "D", ok: false, glb_pct: -5, rs: 10 }];
     assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "D", "C"]);
 });
 

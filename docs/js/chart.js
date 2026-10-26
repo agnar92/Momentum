@@ -461,7 +461,6 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             const lastPt = pts.filter(Boolean).slice(-1)[0];
             const py = lastPt ? lastPt[1] : b1;
             if (row && row.rs != null) boxText(x1 + 4, py + 4, small ? `RS ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)}` : `RS 52W ${row.rs >= 0 ? "+" : ""}${row.rs.toFixed(0)} pp`, C.rs);
-            if (row && row.rs_rating != null) boxText(x0 + 4, b0 + 13, small ? `RS ${Math.round(row.rs_rating)}/99` : `RS Rating ${Math.round(row.rs_rating)} / 99`, C.glb);
             text(x0 + 4, b1 - 3, small ? `RS / MA ${D ? "252s" : "52t"}` : `RS Line / MA ${D ? "252 sesji" : "52 tyg."} · zielony = nowy szczyt RS · różowy = RS przed ceną`, "#f0b429");
         }
     }
@@ -532,7 +531,26 @@ function titleText(t, row) {
     return parts.filter(Boolean).join("  ·  ");
 }
 
+// miarka (prawy przycisk myszy): zmiana ceny w % od punktu kliknięcia i liczba świec między punktami
+function rulerText(p1, p2, k1, k2, period = "W") {
+    const unit = period === "D" ? "sesji" : period === "M" ? "mies." : "tyg.";
+    const pct = p1 ? (p2 / p1 - 1) * 100 : 0;
+    return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)} % · ${Math.abs(k2 - k1)} ${unit} · ${fmt(p1)} → ${fmt(p2)}`;
+}
+
+// a, b = {x, y, p, k} (px w układzie SVG); w = szerokość wykresu (napis po lewej, gdy brak miejsca) -> zawartość <g> miarki
+function rulerSvg(a, b, period, w) {
+    const color = b.p >= a.p ? C.glb : C.down, str = rulerText(a.p, b.p, a.k, b.k, period), fs = 12;
+    const tw = str.length * fs * 0.6 + 8, right = b.x + 10 + tw < w, tx = right ? b.x + 10 : b.x - 10 - tw, ty = b.y > a.y ? b.y + 20 : b.y - 10;
+    const x0 = Math.min(a.x, b.x), y0 = Math.min(a.y, b.y);
+    return `<rect x="${x0.toFixed(1)}" y="${y0.toFixed(1)}" width="${Math.abs(b.x - a.x).toFixed(1)}" height="${Math.abs(b.y - a.y).toFixed(1)}" fill="${color}" fill-opacity="0.08" stroke="${color}" stroke-dasharray="3 3"/>` +
+        `<line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}" stroke="${color}" stroke-width="1.5"/>` +
+        `<circle cx="${a.x.toFixed(1)}" cy="${a.y.toFixed(1)}" r="3" fill="${color}"/>` +
+        `<rect x="${tx.toFixed(1)}" y="${(ty - fs - 2).toFixed(1)}" width="${tw.toFixed(1)}" height="${fs + 8}" rx="3" fill="${C.bg}" stroke="${color}"/>` +
+        `<text x="${(tx + 4).toFixed(1)}" y="${ty.toFixed(1)}" fill="${color}" font-size="${fs}">${str}</text>`;
+}
+
 if (typeof module !== "undefined") module.exports = {
-    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, priceRatioLine, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
+    rulerText, rulerSvg, sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, priceRatioLine, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };

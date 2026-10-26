@@ -122,8 +122,8 @@ test("weekly layout reserves a readable mobile MACD panel and shortens mobile la
     const w = weekly(156), spx = { d: w.d, c: w.c.map((x) => x * 4) };
     const g = require("../../docs/js/chart.js").geometry(390, 700, 52, "W");
     assert.ok(g.macd[1] - g.macd[0] > 100, "MACD should have a real panel, not a thin strip");
-    const svg = chartSvg(w, { rs_rating: 97, rs: 61, eps_q: [[w.d[100], -2.56]] }, 390, 700, null, null, [], null, spx).svg;
-    assert.ok(svg.includes("RS 97/99"));
+    const svg = chartSvg(w, { rs: 61, eps_q: [[w.d[100], -2.56]] }, 390, 700, null, null, [], null, spx).svg;
+    assert.ok(!svg.includes("/99"));   // RS Rating usunięty
     assert.ok(svg.includes("RS / MA 52t"));
     assert.ok(svg.includes("MACD 12·26·9"));
     assert.ok(svg.includes("EPS kw. -2.56"));
@@ -165,7 +165,16 @@ test("Deepvue-style RS line includes new-high-before-price markers on daily char
         l.push(99);
         spy.push(500 - i);
     }
-    const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { rs_rating: 95, rs: 12 }, 1000, 700, null, null, [], null, { d, c: spy }, "D", false);
+    const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { rs: 12 }, 1000, 700, null, null, [], null, { d, c: spy }, "D", false);
     assert.ok(res.svg.includes("RS new high before price"));
-    assert.ok(res.svg.includes("RS Rating 95 / 99"));
+    assert.ok(!res.svg.includes("RS Rating"));
+});
+
+test("ruler: percent change and number of bars from the click point", () => {
+    const { rulerText, rulerSvg } = require("../../docs/js/chart.js");
+    assert.ok(rulerText(100, 150, 10, 22).startsWith("+50.0 % · 12 tyg."));
+    assert.ok(rulerText(100, 80, 5, 2, "D").startsWith("-20.0 % · 3 sesji"));
+    const up = rulerSvg({ x: 10, y: 200, p: 100, k: 0 }, { x: 300, y: 50, p: 125, k: 8 }, "W", 800);
+    assert.ok(up.includes("+25.0 % · 8 tyg.") && up.includes("#3ddc84"));
+    assert.ok(rulerSvg({ x: 10, y: 50, p: 100, k: 0 }, { x: 790, y: 200, p: 90, k: 8 }, "W", 800).includes("#e5484d"));
 });

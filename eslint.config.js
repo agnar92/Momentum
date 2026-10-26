@@ -8,7 +8,7 @@ const browserGlobals = {
     require: "readonly",   // tylko w testach (chart.js sprawdza typeof require)
     // docs/js/lines.js i chart.js (ładowane PRZED app.js)
     dateIndex: "readonly", lineAt: "readonly", hitLine: "readonly", snapPrice: "readonly", evalAlerts: "readonly", snapshot: "readonly", positionPlan: "readonly", positionStatus: "readonly", MAX_POSITIONS: "readonly",
-    chartSvg: "readonly", infoLines: "readonly", titleText: "readonly", sliderSvg: "readonly", sliderRect: "readonly",
+    chartSvg: "readonly", rulerSvg: "readonly", infoLines: "readonly", titleText: "readonly", sliderSvg: "readonly", sliderRect: "readonly",
     sliderMode: "readonly", sliderDrag: "readonly", sliderJump: "readonly", zoomWindow: "readonly", windowRange: "readonly",
 };
 const nodeGlobals = { require: "readonly", module: "readonly", process: "readonly", console: "readonly" };
