@@ -27,7 +27,7 @@ function weekly(n) {
 
 test("chart draws green line, MACD stop and returns geometry", () => {
     const res = chartSvg(weekly(150), { glb: 120, macd_stop: 150 }, 1000, 600);
-    assert.ok(res.svg.includes("GLB 120.00") && res.svg.includes("CENA NAD LINIĄ") && res.svg.includes('stroke-dasharray="5 4"'));
+    assert.ok(res.svg.includes("GREEN LINE 120.00 · kupno do 132.00") && res.svg.includes('stroke-dasharray="5 4"'));
     assert.strictEqual(res.geom.n, 150);
     assert.strictEqual(chartSvg(weekly(1), null, 800, 600), null);
 });
@@ -60,13 +60,14 @@ test("chart window keeps indicators from full history", () => {
     assert.deepStrictEqual(infoLines(weekly(156), win.geom.i0)[0], "tydz. " + weekly(156).d[48]);
 });
 
-test("52-week price-ratio panel and quarterly revenue bars", () => {
+test("layout like desktop: RS panel on top, quarterly revenue bars, no C/C52 or EPS panel", () => {
     const w = weekly(156), spx = { d: w.d, c: w.c.map((x) => x * 4) };
     const qs = [{ quarter: w.d[100], rev: 1e9, rev_rr: 30 }, { quarter: w.d[113], rev: 1.2e9, rev_rr: 12 }];
-    const res = chartSvg(w, { qs }, 1000, 700, null, null, [], null, spx);
-    assert.ok(res.svg.includes("Cena/Cena 52 tyg.") && !res.svg.includes("S&amp;P 500 (SPY)") && res.svg.includes("+30%") && res.svg.includes("+12%"));
-    assert.ok(res.geom.spx[1] < res.geom.price[0] && res.geom.vol[1] < res.geom.rev[0] && res.geom.rev[1] < res.geom.macd[0]);
-    assert.ok(chartSvg(w, null, 1000, 700).svg.includes("Cena/Cena 52 tyg."));
+    const res = chartSvg(w, { qs, eps_q: [[w.d[100], 1.2]] }, 1000, 700, null, null, [], null, spx);
+    assert.ok(res.svg.includes("+30%") && res.svg.includes("+12%") && res.svg.includes("RS Line (akcja / SPY)"));
+    assert.ok(!res.svg.includes("Cena/Cena 52 tyg.") && !res.svg.includes("EPS kw"));
+    assert.ok(res.geom.rs[1] < res.geom.price[0] && res.geom.vol[1] < res.geom.rev[0] && res.geom.rev[1] < res.geom.macd[0]);
+    assert.ok(!("spx" in res.geom) && !("eps" in res.geom));
 });
 
 test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
@@ -82,13 +83,11 @@ test("RWB, Stochastic and Blue Dot like calc.py; daily chart mode", () => {
     assert.deepStrictEqual(blueDots(h, l, c, 1e9), []);
     const d = c.map((_, i) => `2026-${String(1 + Math.floor(i / 28)).padStart(2, "0")}-${String(1 + (i % 28)).padStart(2, "0")}`);
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D");
-    assert.ok(res.svg.includes("GLB") && !res.svg.includes("MACD (12"));
-    assert.ok(res.svg.includes("Słupki OHLC"));
-    assert.ok(res.svg.includes("EMA 10") && res.svg.includes("SMA 20") && res.svg.includes("SMA 50"));
-    assert.ok(res.svg.includes('r="4" fill="#4aa3ff"')); // Blue Dot marker stays on chart; its stop level is tooltip-only.
-    const barsOnly = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D", false);
-    assert.ok(barsOnly.svg.includes("Słupki OHLC · nakładka RWB wyłączona"));
-    assert.ok(!barsOnly.svg.includes('r="4" fill="#4aa3ff"'));
+    assert.ok(res.svg.includes("GREEN LINE 40.00") && !res.svg.includes("MACD (12"));
+    assert.ok(res.svg.includes("GMMA: szybkie EMA (czerwone) / wolne (niebieskie) · jasne tło = RWB · ● Blue Dot"));   // styl „linia + RWB”
+    assert.ok(res.svg.includes('r="4" fill="#4aa3ff"'));
+    const bars = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { glb: 40 }, 1000, 700, null, null, [], null, null, "D", false);
+    assert.ok(bars.svg.includes("EMA 8  EMA 10  EMA 20  SMA 50 · ● Blue Dot") && bars.svg.includes('r="4" fill="#4aa3ff"'));   // słupki + średnie, Blue Dot też
     assert.ok(!res.svg.includes("Blue Dot 2026-") && !res.svg.includes("stop pod Low"));
     assert.ok(!res.svg.includes("Przychody kw.") && !res.svg.includes("Stochastic (10, 1) dzienny"));   // dzienny: bez przychodów i panelu Stochastic
     assert.strictEqual(res.geom.rev, null);
@@ -98,44 +97,35 @@ test("GLB exit method hides the MACD stop; position plan draws −10 % stop and 
     const w = weekly(150), row = { glb: 120, macd_stop: 150 };
     const plan = { stopInit: 135, halfAt: 140, peak: 175 };
     const macd = chartSvg(w, row, 1000, 600).svg, glbm = chartSvg(w, { ...row, exit: "GLB", plan }, 1000, 600).svg;
-    assert.ok(!macd.includes("wyjście: zamknięcie tyg. pod linią") && !glbm.includes("wyjście: zamknięcie tyg. pod linią"));
-    assert.ok(!glbm.includes("½ przy 140.00") && !glbm.includes("stop −10 % 135.00"));
-    assert.ok(glbm.includes('stroke-dasharray="2 3"'));   // linie poziomów planu pozostają, bez podpisów
+    assert.ok(!macd.includes("wyjście: zamknięcie tyg. pod linią") && glbm.includes("wyjście: zamknięcie tyg. pod linią"));
+    assert.ok(glbm.includes("½ przy 140.00 (−20 % od szczytu 175.00)") && glbm.includes("stop −10 % 135.00") && glbm.includes('stroke-dasharray="2 3"'));
 });
 
-test("rolling price ratio uses 52 bars or 252 daily sessions", () => {
-    const { priceRatioLine } = require("../../docs/js/chart.js");
-    assert.deepStrictEqual(priceRatioLine([100, 110, 120, 130], 2), [null, null, 1.2, 130 / 110]);
-    assert.strictEqual(priceRatioLine([100, 110], 2)[1], null);
+test("earnings E markers and ruler text like desktop", () => {
+    const { earningsIndices, rulerText } = require("../../docs/js/chart.js");
+    const w = weekly(60);
+    assert.deepStrictEqual(earningsIndices(w.d, [w.d[10], "2024-03-13"], "W"), [10]);   // 2024-03-13 jest w tygodniu od 2024-03-11 (indeks 10)
+    assert.deepStrictEqual(earningsIndices(["2024-01-02", "2024-01-03"], ["2024-01-01", "2024-01-03"], "D"), [1]);
+    const svg = chartSvg(w, { glb: 60, earn: [[w.d[40], 5.2, null]] }, 1000, 700).svg;
+    assert.ok(svg.includes(">E<title>WYNIKI · " + w.d[40] + " · EPS +5.2% · przychody N/D</title>"));
+    assert.strictEqual(rulerText(100, 125, 3, 11, "W"), "+25.0 % · 8 tyg. · 100.00 → 125.00");
 });
 
-test("IBD relative strength line on the weekly chart", () => {
+test("RS Line like Deepvue on the weekly chart", () => {
     const { rsLine } = require("../../docs/js/chart.js");
     assert.deepStrictEqual(rsLine([10, 20, null], [5, 4, 2]), [2, 5, null]);
-    const w = weekly(150), spx = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // SPY spada, akcja rośnie -> RS na szczycie
+    const w = weekly(150), spx = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // SPY spada, akcja rośnie -> nowe szczyty RS
     const svg = chartSvg(w, { rs: 61 }, 1000, 700, null, null, [], null, spx).svg;
-    assert.ok(svg.includes("RS 52W +61 pp") && svg.includes("RS Line / MA 52 tyg.") && !svg.includes("RS (cena"));
-    assert.ok(chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("RS 52W +61 pp"));
+    assert.ok(svg.includes("+61 pp") && svg.includes("RS Line (akcja / SPY) · średnia 52 tyg.") && !svg.includes("RS Rating"));
+    assert.ok(chartSvg(w, { glb: 40, rs: 61 }, 1000, 700, null, null, [], null, spx, "D").svg.includes("+61 pp"));
 });
 
 test("weekly layout reserves a readable mobile MACD panel and shortens mobile labels", () => {
     const w = weekly(156), spx = { d: w.d, c: w.c.map((x) => x * 4) };
     const g = require("../../docs/js/chart.js").geometry(390, 700, 52, "W");
-    assert.ok(g.macd[1] - g.macd[0] > 100, "MACD should have a real panel, not a thin strip");
-    const svg = chartSvg(w, { rs_rating: 97, rs: 61, eps_q: [[w.d[100], -2.56]] }, 390, 700, null, null, [], null, spx).svg;
-    assert.ok(svg.includes("RS 97/99"));
-    assert.ok(svg.includes("RS / MA 52t"));
-    assert.ok(svg.includes("MACD 12·26·9"));
-    assert.ok(svg.includes("EPS kw. -2.56"));
-    assert.ok(!svg.includes("RS Line / MA 52 tyg. · zielony"));
-});
-
-test("RS has its own top panel and quarterly EPS is rendered as bars", () => {
-    const w = weekly(156), eps_q = [[w.d[40], 1.2], [w.d[53], 1.8], [w.d[66], -0.3]];
-    const res = chartSvg(w, { eps_q }, 1000, 700, null, null, [], null, { d: w.d, c: w.c.map((x) => x * 4) });
-    assert.ok(res.svg.includes("EPS kwartalny") && res.svg.includes("<rect") && !res.svg.includes("różowa linia"));
-    assert.ok(res.geom.rs[1] < res.geom.spx[0] && res.geom.spx[1] < res.geom.price[0]);
-    assert.ok(res.geom.eps[0] > res.geom.rev[1] && res.geom.eps[1] < res.geom.macd[0]);
+    assert.ok(g.macd[1] - g.macd[0] > 80, "MACD should have a real panel, not a thin strip");
+    const svg = chartSvg(w, { rs: 61 }, 390, 700, null, null, [], null, spx).svg;
+    assert.ok(svg.includes("RS / MA 52 tyg.") && svg.includes("MACD 12·26·9"));
 });
 
 test("relative volume: weekly vs 10 weeks, daily vs 50 sessions", () => {
@@ -155,17 +145,14 @@ test("axis labels do not overlap", () => {
 });
 
 
-test("Deepvue-style RS line includes new-high-before-price markers on daily charts", () => {
-    const n = 300;
-    const d = [], c = [], h = [], l = [], spy = [];
+test("Deepvue-style RS markers: RS high with price (green) and before price (pink)", () => {
+    const { rsMarkers } = require("../../docs/js/chart.js");
+    assert.deepStrictEqual(rsMarkers([1, 1, 1, 1.2, 1.3], [10, 10, 10, 11, 9], 3), { 3: true, 4: false });
+    const n = 300, d = [], c = [], h = [], l = [], spy = [];
     for (let i = 0; i < n; i++) {
         d.push(new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10));
-        c.push(100);
-        h.push(101);
-        l.push(99);
-        spy.push(500 - i);
+        c.push(100); h.push(101); l.push(99); spy.push(500 - i);
     }
-    const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { rs_rating: 95, rs: 12 }, 1000, 700, null, null, [], null, { d, c: spy }, "D", false);
-    assert.ok(res.svg.includes("RS new high before price"));
-    assert.ok(res.svg.includes("RS Rating 95 / 99"));
+    const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { rs: 12 }, 1000, 700, null, null, [], null, { d, c: spy }, "D", false);
+    assert.ok(res.svg.includes("szczyt RS przed ceną") && res.svg.includes("+12 pp"));
 });

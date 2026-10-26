@@ -17,39 +17,6 @@ def test_green_line_needs_three_closed_months_and_keeps_old_line():
     assert calc.green_line([10, 12, 11, 11, 11, 11, 11, 11, 11])[0] == 12   # „3 lub więcej” — rekord stojący dłużej nadal jest linią
 
 
-def test_blue_line_uses_weekly_highs_and_three_week_confirmation():
-    assert calc.blue_line([10, 12] + [11] * 2) == (None, None)
-    assert calc.blue_line([10, 12] + [11] * 3) == (12, 1)
-    # A fresh higher high does not replace the confirmed old line until it has aged 3 closed weeks.
-    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 1) == (12, 1)
-    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 2) == (15, 5)
-
-
-def test_build_row_blb_search_is_gated_by_uptrend_but_confirmed_line_persists():
-    dates = [(dt.date(2025, 1, 6) + dt.timedelta(weeks=i)).isoformat() for i in range(40)]
-    closes = [float(x) for x in range(1, 41)]
-    weekly = {"d": dates, "o": closes, "h": [x + 1 for x in closes],
-              "l": [x - 1 for x in closes], "c": closes, "v": [1000.0] * len(closes)}
-    # An ATH formed during the uptrend (week 31) stays unbroken for 3 closed weeks.
-    highs = [[dates[i], 10.0] for i in range(30)] + [[dates[30], 12.0]] + [[dates[i], 11.0] for i in range(31, 40)]
-    up = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=highs)
-    assert up["trend"] is True
-    assert up["blb"] == 12.0
-    assert up["blb_search_started"] is True
-
-    down_closes = closes[:30] + [float(x) for x in range(0, -10, -1)]
-    down_weekly = {**weekly, "c": down_closes}
-    down = calc.build_row({"ticker": "AAA"}, down_weekly, [], None, weekly_highs=highs,
-                          previous_row={"blb": 12.0, "blb_search_started": True})
-    assert down["trend"] is False
-    assert down["blb"] == 12.0
-    assert down["blb_state"] is not None
-
-    # ATHs formed while the trend filter is off cannot initiate a new BLB.
-    down_history = [[dates[i], float(100 + i)] for i in range(10, 40)]
-    no_new = calc.build_row({"ticker": "BBB"}, down_weekly, [], None, weekly_highs=down_history)
-    assert no_new["blb"] is None
-
 def test_glb_state():
     assert calc.glb_state(105, 99, 100) == "WYBICIE"
     assert calc.glb_state(105, 103, 100) == "SYGNAŁ"
@@ -284,7 +251,7 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
     assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
     assert a["rvol_w"] == pytest.approx(1.0) and a["rvol_d"] == pytest.approx(1.0)   # wolumen relatywny tydzień / sesja
-    assert "vol52" in a                                                                    # zmienność 52 tyg. (None przy krótkiej historii)
+    assert "earn" in a                                                                     # daty raportów (E na wykresie)
 
 
 def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
@@ -299,10 +266,10 @@ def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
 
 
 def test_price_ratio_uses_252_sessions_and_short_history_fallback():
-    assert watchlist.price_ratio([100, 110, 120], sessions=2) == pytest.approx(1.2)
-    assert watchlist.price_ratio([100], sessions=2) is None
+    assert calc.price_ratio([100, 110, 120], sessions=2) == pytest.approx(1.2)
+    assert calc.price_ratio([100], sessions=2) is None
     prices = list(range(100, 354))
-    assert watchlist.price_ratio(prices, sessions=252) == pytest.approx(353 / 101)
+    assert calc.price_ratio(prices, sessions=252) == pytest.approx(353 / 101)
 
 
 def test_file_name():
@@ -398,18 +365,6 @@ def test_trend_sma10_above_sma30():
     assert up["trend"] is True and down["trend"] is False and short["trend"] is None
 
 
-def test_volatility():
-    import math
-    up = [100 * 1.02 ** i for i in range(53)]                                 # stały wzrost: zerowa zmienność
-    assert calc.volatility(up) == pytest.approx(0.0, abs=1e-9)
-    zz = [100 * (1.1 if i % 2 else 1.0) for i in range(53)]                   # naprzemiennie ±log(1.1)
-    r = [math.log(1.1), -math.log(1.1)] * 26
-    m = sum(r) / len(r)
-    assert calc.volatility(zz) == pytest.approx(math.sqrt(sum((x - m) ** 2 for x in r) / 51) * math.sqrt(52))
-    assert calc.volatility(up[:30]) is None                                   # za krótka historia
-    assert calc.volatility(up[:-1] + [None]) is not None                      # pojedynczy brak nie blokuje
-
-
 def test_rel_volume():
     assert calc.rel_volume([10] * 10 + [25], 10) == pytest.approx(2.5)
     assert calc.rel_volume([10] * 5, 10) is None and calc.rel_volume([0] * 10 + [5], 10) is None
@@ -443,24 +398,6 @@ def test_eps_history_and_estimate_rows_are_json_safe():
         "period": "+1y", "numberOfAnalysts": 12, "avg": 2.5, "low": 2.0,
         "high": 3.0, "yearAgoEps": 2.1, "growth": 19.0,
     }]
-
-
-def test_build_row_exposes_eps_history_and_forecasts():
-    w = {"d": ["2026-10-12", "2026-10-19"], "o": [10, 11], "h": [11, 12], "l": [9, 10], "c": [10, 11], "v": [100, 110]}
-    estimates = {"surp": [], "rev90": 5.0, "eps_q": [["2026-06-30", 1.2]], "eps_est": [{"period": "+1y", "avg": 4.0}], "hist": []}
-    row = calc.build_row({"ticker": "X"}, w, [], {}, None, estimates)
-    assert row["eps_q"] == [["2026-06-30", 1.2]]
-    assert row["eps_est"][0]["avg"] == 4.0
-    assert row["surp_hist"] == []
-
-
-def test_deepvue_style_rs_score_weights_recent_relative_performance():
-    dates = [(dt.date(2025, 1, 6) + dt.timedelta(days=7 * i)).isoformat() for i in range(60)]
-    stock = {"d": dates, "c": [100 + i for i in range(60)]}
-    spy = {"d": dates, "c": [100.0] * 60}
-    score = calc.rs_rating_score(stock, spy)
-    assert score is not None and score > 0
-    assert calc.rs_rating_score({"d": dates[:3], "c": [100, 101, 102]}, spy) is None
 
 
 def test_merge_daily_appends_only_new_dates_and_detects_changed_history():

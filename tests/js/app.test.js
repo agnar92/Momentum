@@ -18,18 +18,16 @@ const ROWS = [
     { ticker: "D", company: "Delta", ok: true, glb_state: "NAD", glb_pct: 14, dopm: null },
 ];
 
-test("default order: signals meeting conditions, other signals, then nearest the Green Line", () => {
-    assert.deepStrictEqual(visibleRows(ROWS, {}).map((r) => r.ticker), ["B", "C", "A", "D"]);
-    assert.deepStrictEqual(visibleRows(ROWS, { filters: {} }).map((r) => r.ticker), ["B", "C", "A", "D"]);
+test("default order like desktop: conditions + signal, then conditions, then nearest the Green Line", () => {
+    assert.deepStrictEqual(visibleRows(ROWS, {}).map((r) => r.ticker), ["B", "A", "D", "C"]);
     assert.ok(isSignal(ROWS[1]) && isSignal(ROWS[2]) && !isSignal(ROWS[3]));
     const two = [{ ticker: "X", ok: true, glb_state: "SYGNAŁ", glb_pct: 8 }, { ticker: "Y", ok: true, glb_state: "WYBICIE", glb_pct: 1 }];
     assert.deepStrictEqual(visibleRows(two, {}).map((r) => r.ticker), ["Y", "X"]);
 });
-
-test("signal only 0–10 % above the Green Line; Blue Line and Blue Dot are informational", () => {
+test("signal only 0–10 % above the Green Line; Blue Dot is informational", () => {
     assert.ok(!isSignal({ glb_state: "WYBICIE", glb_pct: 14 }));
     assert.ok(!isSignal({ glb_state: "BLUE DOT", glb_pct: 15 }));
-    assert.ok(!isSignal({ glb_state: "POD", blb_state: "SYGNAŁ" }));
+    assert.ok(!isSignal({ glb_state: "POD" }));
 });
 
 test("rules preset: signal 0–10 % and conditions", () => {
@@ -84,22 +82,18 @@ test("P/S and RS cells, slowdown cell and filters", () => {
     assert.ok(passFilters({ slow: null }, { slow: { in: ["—"] } }) && !passFilters({ slow: "HAMUJE" }, { slow: { in: ["—"] } }));
 });
 
-test("default order: conditions + GLB signal first, then nearest the line, then RS Rating", () => {
-    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", glb_pct: 7, rs_rating: 55 }, { ticker: "B", ok: true, glb_state: "WYBICIE", glb_pct: 3, rs_rating: 90 },
-        { ticker: "C", ok: true, glb_state: "POD", glb_pct: -20, rs_rating: 99 }, { ticker: "D", ok: false, glb_pct: -5, rs_rating: 10 }];
-    assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "D", "C"]);
+test("default order: same distance to the line -> higher RS 52 weeks first", () => {
+    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", glb_pct: 5, rs: 10 }, { ticker: "B", ok: true, glb_state: "SYGNAŁ", glb_pct: 5, rs: 90 }];
+    assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A"]);
 });
-
-test("volatility column and presets", () => {
-    const { passFilters, FILTER_PRESETS, COLUMNS } = require("../../docs/js/app.js");
-    assert.ok(COLUMNS.some(([k]) => k === "vol52"));
-    const f = FILTER_PRESETS.find(([n]) => n === "Ruchliwe: zmienność ≥ 0,50")[1];
-    assert.ok(passFilters({ vol52: 0.62 }, f) && !passFilters({ vol52: 0.31 }, f) && !passFilters({ vol52: null }, f));
-    const g = FILTER_PRESETS.find(([n]) => n.startsWith("Ruchliwe (zmienność ≥ 0,50) + nad GLB"))[1];
-    assert.ok(passFilters({ vol52: 0.7, glb_state: "WYBICIE" }, g) && !passFilters({ vol52: 0.7, glb_state: "POD" }, g));
-    assert.strictEqual(cell(0.5234, "r"), "0.52");
+test("columns and presets like the desktop app", () => {
+    const { FILTER_PRESETS, COLUMNS } = require("../../docs/js/app.js");
+    const keys = COLUMNS.map(([k]) => k);
+    for (const k of ["peg", "pegy", "dgm", "quarter", "cc52w", "ok", "slow"]) assert.ok(keys.includes(k), k);
+    for (const k of ["vol52", "rs_rating", "blb", "blb_state"]) assert.ok(!keys.includes(k), k);
+    assert.strictEqual(FILTER_PRESETS.length, 7);
+    assert.strictEqual(cell(0.987, "x2"), "0.99");
 });
-
 test("SMA 10 > 30 filter and preset", () => {
     const { passFilters, filterValue, FILTER_PRESETS } = require("../../docs/js/app.js");
     assert.strictEqual(filterValue({ trend: true }, "trend"), "tak");

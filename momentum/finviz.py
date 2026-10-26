@@ -1,7 +1,8 @@
 """Lista spółek z darmowego screenera Finviz (widok Overview: ticker, spółka, sektor, branża, kapitalizacja).
 Finviz robi tylko wstępne cięcie listy do pobrania; dokładne warunki liczy aplikacja. UWAGA: Finviz po cichu ignoruje nieznany kod
 filtra (lista robi się szersza zamiast błędu) — po zmianie filtra sprawdź liczbę spółek.
-Strona bywa w trzech układach: wiersze w JSON-ie (`data-ssr-props`, 2026), wiersze `div.fv-table_row` albo stara tabela HTML — czytamy każdy."""
+Strona bywa w trzech układach: wiersze w JSON-ie (`data-ssr-props`, 2026), wiersze `div.fv-table_row` albo stara tabela HTML — czytamy każdy.
+Ten sam plik co w Momentum Desktop (desktop/finviz.py) + odczyt układu JSON."""
 import json
 import re
 import time
@@ -13,12 +14,56 @@ from lxml import html as lxml_html
 DEFAULT_FILTERS = "ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15"
 MAX_TICKERS = 1500
 PAGE = 20
-URL = "https://finviz.com/screener.ashx"
+URL = "https://finviz.com/screener/stocks"
 HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
-COLUMN_IDS = {"company": "company", "sector": "sector", "industry": "industry", "marketCap": "market_cap"}
-HEADERS_OLD = {"Company": "company", "Sector": "sector", "Industry": "industry", "Market Cap": "market_cap"}
+COLUMN_IDS = {
+    "company": "company", "sector": "sector", "industry": "industry", "marketCap": "market_cap",
+    "pe": "pe", "forwardPE": "forward_pe", "forwardPe": "forward_pe", "fwdPE": "forward_pe",
+    "peg": "peg", "dividend": "dividend_yield", "dividendYield": "dividend_yield",
+    "roe": "roe", "sharesOutstanding": "shares_outstanding", "outstanding": "shares_outstanding",
+    "float": "shares_float", "instOwn": "institutional_ownership", "instTrans": "institutional_transactions",
+    "shortFloat": "short_float", "shortRatio": "short_ratio",
+}
+HEADERS_OLD = {
+    "Company": "company", "Sector": "sector", "Industry": "industry", "Market Cap": "market_cap",
+    "P/E": "pe", "Forward P/E": "forward_pe", "Fwd P/E": "forward_pe", "PEG": "peg",
+    "Dividend": "dividend_yield", "Div": "dividend_yield", "Dividend Yield": "dividend_yield",
+    "ROE": "roe", "Outstanding": "shares_outstanding", "Shares Outstanding": "shares_outstanding",
+    "Float": "shares_float", "Inst Own": "institutional_ownership", "Inst Trans": "institutional_transactions",
+    "Short Float": "short_float", "Short Ratio": "short_ratio",
+}
 TEXT = {"company", "sector", "industry"}
 _SUFFIX = {"K": 1e3, "M": 1e6, "B": 1e9, "T": 1e12}
+
+# Finviz column IDs vary in capitalization and naming between table views and UI versions.
+_COLUMN_ALIASES = {
+    "company": "company", "sector": "sector", "industry": "industry",
+    "marketcap": "market_cap", "mktcap": "market_cap",
+    "pe": "pe", "forwardpe": "forward_pe", "fwdpe": "forward_pe",
+    "forwardperatio": "forward_pe", "fwdperatio": "forward_pe",
+    "peg": "peg", "pegratio": "peg", "priceearningsgrowth": "peg",
+    "dividend": "dividend_yield", "div": "dividend_yield",
+    "dividendyield": "dividend_yield", "dividendyieldttm": "dividend_yield",
+    "roe": "roe", "sharesoutstanding": "shares_outstanding", "outstanding": "shares_outstanding",
+    "sharesfloat": "shares_float", "float": "shares_float",
+    "instown": "institutional_ownership", "institutionalownership": "institutional_ownership",
+    "insttrans": "institutional_transactions", "institutionaltransactions": "institutional_transactions",
+    "shortfloat": "short_float", "shortratio": "short_ratio",
+}
+
+
+def _normalised_name(value):
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
+def _column_key(value):
+    """Map current Finviz data-column-id variants to stable internal fields."""
+    return _COLUMN_ALIASES.get(_normalised_name(value)) or COLUMN_IDS.get(value)
+
+
+def _header_key(value):
+    """Map old table headers (including abbreviated Finviz labels) to fields."""
+    return HEADERS_OLD.get(value) or _COLUMN_ALIASES.get(_normalised_name(value))
 
 
 def parse_number(text):
@@ -50,20 +95,22 @@ def _parse_json(page):
         t = (vals.get("ticker") or "").strip()
         if not t:
             continue
-        row = {"ticker": t}
-        for src, key in COLUMN_IDS.items():
-            v = vals.get(src)
+        row = {"ticker": t, "company": None, "sector": None, "industry": None}
+        for src, v in vals.items():
+            key = _column_key(src)
+            if not key:
+                continue
             if key in TEXT:
                 row[key] = v or None
             elif isinstance(v, (int, float)) and not isinstance(v, bool):
-                row[key] = v * 1e6
+                row[key] = v * 1e6 if key == "market_cap" else v
         rows.append(row)
     total = data.get("totalCount")
     return rows, int(total) if isinstance(total, (int, float)) else None
 
 
 def parse_page(page):
-    """-> (wiersze, łączna liczba wg strony albo None)."""
+    """-> (wiersze, łączna liczba wg strony albo None). Obsługuje nowy układ (div.fv-table_row) i stary (tabela)."""
     m = re.search(r"#\d+\s*/\s*(\d+)\s*Total", page)
     total = int(m.group(1)) if m else None
     rows, jtotal = _parse_json(page)
@@ -73,10 +120,16 @@ def parse_page(page):
     for tr in tree.xpath("//div[contains(@class, 'fv-table_row') and @data-row-key]"):
         row = {"ticker": tr.get("data-row-key").strip()}
         for cell in tr.xpath(".//div[@data-column-id]"):
-            key = COLUMN_IDS.get(cell.get("data-column-id"))
+            key = _column_key(cell.get("data-column-id"))
             if key:
                 txt = cell.text_content().strip()
-                row[key] = (txt or None) if key in TEXT else parse_number(txt)
+                if key in TEXT:
+                    row[key] = txt or None
+                elif key == "dividend_yield" and txt in ("", "-", "—"):
+                    # Finviz wyświetla brak wypłaty dywidendy jako „-”; dla PEGY to 0%.
+                    row[key] = 0.0
+                else:
+                    row[key] = parse_number(txt)
         rows.append(row)
     if rows:
         return rows, total
@@ -87,18 +140,24 @@ def parse_page(page):
             continue
         row = {"ticker": (tds[1].get("data-boxover-ticker") or tds[1].text_content()).strip()}
         for h, td in zip(heads, tds):
-            key = HEADERS_OLD.get(h)
+            key = _header_key(h)
             if key:
                 txt = td.text_content().strip()
-                row[key] = (txt or None) if key in TEXT else parse_number(txt)
+                if key in TEXT:
+                    row[key] = txt or None
+                elif key == "dividend_yield" and txt in ("", "-", "—"):
+                    row[key] = 0.0
+                else:
+                    row[key] = parse_number(txt)
         rows.append(row)
     return rows, total
 
 
-def fetch(filters, max_tickers=MAX_TICKERS, pause=0.15, log=print, get=None, progress=None):
+def fetch(filters, max_tickers=MAX_TICKERS, pause=0.7, log=print, get=None, progress=None):
     """Wszystkie strony screenera (po 20 wierszy). -> (wiersze, łączna liczba wg Finviz). progress(wiersze, oczekiwane) po każdej stronie."""
     get = get or requests.Session().get
     out, seen, offset, total = [], set(), 1, None
+    failed_views = set()
     while len(out) < max_tickers:
         r = get(URL, params={"v": "111", "f": filters, "r": offset}, headers=HEADERS, timeout=30)
         r.raise_for_status()
@@ -107,7 +166,51 @@ def fetch(filters, max_tickers=MAX_TICKERS, pause=0.15, log=print, get=None, pro
         new = [x for x in rows if x["ticker"] not in seen]
         if not new:
             break
+
+        # PEG/Forward P/E z Valuation (v=121), ROE/Dividend z Financial (v=161),
+        # a ownership/float z Ownership (v=131). Zawsze dopasowujemy po tickerze.
+        page_metrics = {}
+        page_tickers = [x["ticker"] for x in new]
+        for view in ("121", "161", "131"):
+            if view in failed_views:
+                continue
+            view_rows_by_ticker = {}
+            try:
+                vr = get(URL, params={"v": view, "t": ",".join(page_tickers)}, headers=HEADERS, timeout=30)
+                vr.raise_for_status()
+                view_rows, _ = parse_page(vr.text)
+                view_rows_by_ticker = {item["ticker"]: item for item in view_rows}
+
+                # Fallback dla Finviz, który może zignorować listę tickerów lub zwrócić tylko część.
+                missing = [ticker for ticker in page_tickers if ticker not in view_rows_by_ticker]
+                if missing:
+                    fr = get(URL, params={"v": view, "f": filters, "r": offset}, headers=HEADERS, timeout=30)
+                    fr.raise_for_status()
+                    fallback_rows, _ = parse_page(fr.text)
+                    fallback_by_ticker = {item["ticker"]: item for item in fallback_rows}
+                    for ticker in missing:
+                        if ticker in fallback_by_ticker:
+                            view_rows_by_ticker[ticker] = fallback_by_ticker[ticker]
+
+                matched = sum(ticker in view_rows_by_ticker for ticker in page_tickers)
+                if matched == 0:
+                    log(f"⚠ Finviz widok {view}: nie udało się dopasować danych dla {len(page_tickers)} tickerów; metryki tego widoku pozostaną puste.")
+                page_metrics[view] = view_rows_by_ticker
+            except Exception as exc:  # brak wskaźników nie może przerwać całego skanu
+                failed_views.add(view)
+                log(f"Finviz widok {view} niedostępny — odpowiednie kolumny pozostaną puste ({exc})")
+                page_metrics[view] = {}
         for x in new:
+            for view, keys in (
+                ("121", ("forward_pe", "peg")),
+                ("161", ("dividend_yield", "roe")),
+                ("131", ("shares_outstanding", "shares_float", "institutional_ownership",
+                         "institutional_transactions", "short_float", "short_ratio")),
+            ):
+                metrics = page_metrics.get(view, {}).get(x["ticker"], {})
+                for key in keys:
+                    if key in metrics:
+                        x[key] = metrics[key]
             seen.add(x["ticker"])
             out.append(x)
         if progress:

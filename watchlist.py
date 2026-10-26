@@ -41,15 +41,6 @@ def write_json(path, data):
     os.replace(tmp, path)
 
 
-def price_ratio(closes, sessions=252):
-    """Aktualne zamknięcie / zamknięcie sprzed 252 sesji (ok. 52 tygodni); przy krótszej historii użyj najstarszej ceny."""
-    if len(closes) < 2:
-        return None
-    base_i = max(0, len(closes) - (sessions + 1))
-    base_close = closes[base_i]
-    return closes[-1] / base_close if base_close else None
-
-
 def file_name(ticker):
     """Nazwa pliku świec: znaki spoza [A-Za-z0-9.-] -> '_' (np. ^GSPC -> _GSPC). Ta sama funkcja jest w docs/js/app.js."""
     return re.sub(r"[^A-Za-z0-9.-]", "_", ticker) + ".json"
@@ -158,18 +149,6 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     wdir = Path(out) / "weekly"
     saved = {t: load_json(wdir / file_name(t), None) for t in tickers + extra}
     series = weekly(tickers + extra, log=log, cache={t: s for t, s in saved.items() if s})
-    # BLB needs all-time weekly highs; keep them separately from the 5-year chart candles.
-    wh_path = Path(cache_dir) / "weekly_highs.json"
-    wh_cache = load_json(wh_path, {})
-    if weekly is prices.weekly:
-        try:
-            wh_cache = prices.weekly_highs(tickers + extra, cache=wh_cache, log=log, today=now.date())
-            write_json(wh_path, wh_cache)
-        except Exception as e:
-            log(f"⚠ historia tygodniowych High dla BLB niedostępna ({e}) — używam dostępnych świec 5-letnich.")
-    else:
-        # Testy / wywołania z wstrzykniętym dostawcą cen nie powinny uruchamiać dodatkowych zapytań sieciowych.
-        wh_cache = {t: wh_cache.get(t, []) for t in tickers + extra}
     # miesięczne High (Green Line), fundamenty, prognozy i świece dzienne dla wszystkich spółek ze skanerów (bez progu obrotu)
     liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
@@ -224,11 +203,14 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         log(f"✓ Dane źródłowe zapisane: {len(series)} serii tygodniowych; bez obliczania wskaźników.")
         return []
 
-    previous_rows = {r.get("ticker"): r for r in (prev.get("rows") or []) if isinstance(r, dict)}
     def row(b):
         ticker = b["ticker"]
-        return calc.build_row(b, series[ticker], prices.monthly_highs(mcache.get(ticker)), scache.get(ticker), series.get(BENCH), ecache.get(ticker), weekly_highs=wh_cache.get(ticker), previous_row=previous_rows.get(ticker))
+        return calc.build_row(b, series[ticker], prices.monthly_highs(mcache.get(ticker)), scache.get(ticker), series.get(BENCH), ecache.get(ticker))
     rows = [row(b) for b in base if b["ticker"] in series]
+    for r in rows:   # E na wykresie: daty raportów z niespodziankami EPS / przychodów (yfinance) — jak earnings_dates w Momentum Desktop
+        e = ecache.get(r["ticker"]) or {}
+        rs = {str(d)[:10]: v for d, v in e.get("revenue_surp") or []}
+        r["earn"] = [[str(d)[:10], v, rs.get(str(d)[:10])] for d, v in sorted(e.get("surp") or [])][-12:]
     sym_rows = [row({"ticker": s}) for s in extra if s in series]
     if len(rows) < 0.7 * len(tickers):
         raise RuntimeError(f"Ceny tylko dla {len(rows)} z {len(tickers)} spółek — nic nie zapisuję.")
@@ -276,7 +258,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         r["daily"] = r["ticker"] in above and sd is not None
         closes = sd.get("c", []) if sd else []
         # C/C[52 tyg.]: 252 sesje wstecz; wskaźnik wykresu pozostaje pusty do uzyskania pełnego okresu.
-        r["cc52w"] = price_ratio(closes)
+        r["cc52w"] = calc.price_ratio(closes)
         bd = calc.fresh_blue_dot(sd, r.get("glb")) if r.get("glb_state") == "NAD" else None
         if bd:
             r["glb_state"], r["bdot"] = "BLUE DOT", bd

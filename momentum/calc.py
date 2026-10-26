@@ -1,8 +1,8 @@
 """Obliczenia (czyste funkcje, bez sieci i GUI): Green Line z miesięcznych High (jak w oryginale Dr. Wisha), stan GLB na zamknięciu tygodnia, MACD tygodniowy,
-średnie, obrót i warunki strategii (badanie 2011–2025, szeroki rynek USA, portfel 10 pozycji):
+średnie, obrót i warunki strategii (badanie 2011–2025, szeroki rynek USA, portfel 10 pozycji — jak w aplikacji webowej Momentum):
   - przychody kw. ≥ +15 % r/r i marża operacyjna ≥ +3 pp r/r (z SEC); skaner Finviz: cena > 10, śr. wolumen > 300 tys., Sales Q/Q > 15 %,
-  - wejście: zamknięcie tygodnia 0–10 % nad Green Line (rekord wszech czasów miesięcznego High, który stoi ≥ 3 zamknięte miesiące); BLB tylko informacyjnie,
-  - wyjście: stop 10 % pod wejściem i tygodniowy MACD (12, 26, 9) — stop pod Low tygodnia przecięcia w dół PO wejściu (pozycje liczy aplikacja).
+  - wejście: zamknięcie tygodnia 0–10 % nad Green Line (rekord wszech czasów miesięcznego High, który stoi ≥ 3 zamknięte miesiące),
+  - wyjście: stop 10 % pod wejściem i tygodniowy MACD (12, 26, 9) — stop pod Low tygodnia przecięcia w dół PO wejściu (lines.position_plan).
 Heurystyka z backtestu, nie porada inwestycyjna."""
 import bisect
 import datetime as dt
@@ -10,21 +10,26 @@ import math
 
 CONFIRM_MONTHS = 3      # rekord musi stać co najmniej tyle zamkniętych miesięcy
 ENTRY_MAX_PCT = 10.0    # wejście do 10 % nad linią
-# Badanie 2011–2025 (≈5600 spółek, ceny bez korekty o dywidendy, fundamenty SEC znane 50/80 dni po kwartale, portfel 10 pozycji, koszt 0,1 %/stronę):
-# GLB bez warunków ≈ 12 % rocznie, z warunkami przychody ≥ 15 % i Δ marży ≥ 3 pp ≈ 21 % (2011–17 ≈ 13 %, 2018–25 ≈ 28 %), DD ≈ −37 %;
-# z wolną gotówką w SPY ≈ 25 %. Strefa 0–10 %, stop 10 % i MACD wygrały z 20 wariantami (strefy 0–3…0–20 %, stopy 7–15 %, trailing, SMA, stop czasowy, dokładki).
+# Badanie 2011–2025 (≈5600 spółek, fundamenty SEC znane 50/80 dni po kwartale, portfel 10 pozycji, koszt 0,1 %/stronę): GLB bez warunków ≈ 12 % rocznie,
+# z przychodami ≥ 15 % i Δ marży ≥ 3 pp ≈ 21 % (2011–17 ≈ 13 %, 2018–25 ≈ 28 %), DD ≈ −37 %; z wolną gotówką w SPY ≈ 25 %. RS ≥ 50 pp jako warunek obniżał
+# wynik (za mało sygnałów), P/S i beat2 nie dało się sprawdzić historycznie — domyślnie wyłączone (można włączyć w ustawieniach warunków).
 # Usunięte, bo przy tych warunkach nic nie zmieniały: przychody kw. ≥ 25 mln $, zysk oper. w $ ↑, „Mocne” (Δ marży ≥ 10 pp), rozwodnienie, Potencjał.
-# Obrót nie jest warunkiem — płynność ustawia skaner Finviz (śr. wolumen > 300 tys.; wyższy próg odcinał dobre sygnały).
-MIN_REV_GROWTH = 15.0   # przychody kw. r/r (%); progi 10–20 % dawały podobnie (≈ 20 % rocznie)
-MIN_DOPM = 3.0          # zmiana marży operacyjnej r/r (pp); najsilniejszy pojedynczy warunek (0–5 pp podobnie)
-MAX_PS = 20.0           # wycena P/S (tylko kolumna): bez historii kapitalizacji nie dało się jej sprawdzić w badaniu 2011–2025
-MIN_RS = 50.0           # siła względna (tylko kolumna / filtr listy): jako warunek obniżała wynik portfela 10 pozycji — za mało sygnałów
+# Obrót nie jest warunkiem (użytkownik: „usuń limit obrotu w ogóle, sam będę filtrował w Finviz po wolumenie”); backtest liczono na obrocie ≥ 100 mln $.
+MIN_REV_GROWTH = 15.0   # przychody kw. r/r (%) — bez niego 34,9 % rocznie
+MIN_DOPM = 3.0          # zmiana marży operacyjnej r/r (pp) — bez niej 28,9 %
+MAX_PS = 20.0           # wycena P/S < 20 (kapitalizacja / przychody TTM) — bez niej 31,5 % (drogie spółki tracą); odcina też RGTI (P/S 200)
+MIN_RS = 50.0           # siła względna: zmiana ceny z 52 tyg. minus zmiana SPY ≥ 50 pp — bez niej 21,4 %; próg 40 pp: 31,3 %
+DEFAULT_CONDITIONS = {
+    "rev_growth": {"enabled": True, "threshold": MIN_REV_GROWTH},
+    "op_margin": {"enabled": True, "threshold": MIN_DOPM},
+    "ps": {"enabled": False, "threshold": MAX_PS},
+    "rs": {"enabled": False, "threshold": MIN_RS},
+    "beat2": {"enabled": False},
+}
 RS_WEEKS = 52
 STOP_PCT = 10.0         # stop początkowy pod wejściem
 SURPRISE_DAYS = 120     # niespodzianka EPS: ostatni raport nie starszy niż 120 dni (jak w backteście)
 RVOL_W, RVOL_D = 10, 50  # wolumen relatywny: tydzień vs średnia 10 poprzednich tygodni, sesja vs średnia 50 poprzednich sesji
-VOL_WEEKS = 52          # zmienność: odchylenie std tygodniowych log-zwrotów z 52 tyg. × √52 (roczna)
-MIN_VOL = 0.50          # próg „ruchliwych” spółek z badania S&P 500 1978–2024: P(+100 % w rok) 6–10 % vs 0,1–1 % w najniższym kwintylu
 SLOW_ACCEL = -10.0      # hamowanie: tempo przychodów spadło o ≥ 10 pp względem kwartału wcześniej (cena 3 mies. −0,5 % vs +2,1 %, spadek ≥ 20 %: 44 % vs 33 %)
 
 
@@ -45,50 +50,6 @@ def green_line(months, confirm=CONFIRM_MONTHS):
         if i - mi >= confirm:
             level, at = mx, mi
     return level, at
-
-
-def blue_line(weekly_highs, confirm=3):
-    """Blue Line z tygodniowych High: rekord wszech czasów staje się linią po 3 zamkniętych tygodniach.
-    Nowszy rekord zastępuje dotychczasową linię dopiero po trzech pełnych tygodniach bez kolejnego rekordu."""
-    level = at = None
-    mx, mi = -math.inf, None
-    for i, value in enumerate(weekly_highs):
-        if not _ok(value):
-            continue
-        if value > mx:
-            mx, mi = value, i
-        if i - mi >= confirm:
-            level, at = mx, mi
-    return level, at
-
-
-def blue_line_in_uptrend(weekly_highs, weekly, confirm=3):
-    """BLB: initiate a candidate only on an all-time weekly High made while weekly SMA10 > SMA30.
-    Once confirmed, the line remains valid after the trend filter turns off."""
-    dates = (weekly or {}).get("d") or []
-    closes = (weekly or {}).get("c") or []
-    fast, slow = sma(closes, 10), sma(closes, 30)
-    trend_by_date = {
-        day: (fast[i] is not None and slow[i] is not None and fast[i] > slow[i])
-        for i, day in enumerate(dates)
-    }
-    highs = weekly_highs or list(zip(dates, (weekly or {}).get("h") or []))
-    highs = sorted((str(x[0]), x[1]) for x in highs if isinstance(x, (list, tuple)) and len(x) >= 2 and _ok(x[1]))
-    max_high = -math.inf
-    candidate = candidate_at = None
-    line = line_at = None
-    for i, (day, high) in enumerate(highs):
-        if high > max_high:
-            max_high = high
-            # An ATH set outside the uptrend cannot start a new BLB search candidate.
-            if trend_by_date.get(day) is True:
-                candidate, candidate_at = high, i
-            else:
-                candidate = candidate_at = None
-        if candidate is not None and i - candidate_at >= confirm:
-            line, line_at = candidate, candidate_at
-            candidate = candidate_at = None
-    return line, line_at
 
 
 def green_line_series(months, confirm=CONFIRM_MONTHS):
@@ -224,49 +185,6 @@ def rel_strength(weekly, spy, weeks=RS_WEEKS):
     return ((c[-1] / c[-1 - weeks]) - (b / a)) * 100
 
 
-
-def rs_rating_score(weekly, spy):
-    """Przybliżenie Deepvue RS Rating: ranking względnej siły z większą wagą ostatnich miesięcy.
-    Używa nadwyżkowej stopy zwrotu względem SPY za 1/3/6/12 miesięcy; wagi 40/30/20/10.
-    Dokładne wagi Deepvue nie są publiczne, więc jest to jawnie oznaczona implementacja zgodna z opisaną metodą."""
-    d, c = (weekly or {}).get("d") or [], (weekly or {}).get("c") or []
-    sd, sc = (spy or {}).get("d") or [], (spy or {}).get("c") or []
-    if not d or not c or not sd or not sc or not _ok(c[-1]) or c[-1] <= 0:
-        return None
-
-    def spy_at(day):
-        i = bisect.bisect_right(sd, day) - 1
-        return sc[i] if i >= 0 and _ok(sc[i]) and sc[i] > 0 else None
-
-    current_spy = spy_at(d[-1])
-    if current_spy is None:
-        return None
-    weighted, weight_total = 0.0, 0.0
-    for weeks, weight in ((4, 0.40), (13, 0.30), (26, 0.20), (52, 0.10)):
-        i = len(c) - 1 - weeks
-        if i < 0 or not _ok(c[i]) or c[i] <= 0:
-            continue
-        old_spy = spy_at(d[i])
-        if old_spy is None:
-            continue
-        excess = ((c[-1] / c[i]) - 1.0 - (current_spy / old_spy - 1.0)) * 100.0
-        weighted += excess * weight
-        weight_total += weight
-    return weighted / weight_total if weight_total else None
-
-
-def volatility(closes, weeks=VOL_WEEKS):
-    """Zmienność roczna: odchylenie standardowe (próbkowe) tygodniowych log-zwrotów z ostatnich `weeks` tygodni × √52. 0.50 = 50 % rocznie.
-    None, gdy mniej niż 80 % ważnych zwrotów w oknie. Badanie (S&P 500 1978–2024, bez błędu przeżywalności): najsilniej odsiewa spółki, które
-    nie robią dużych ruchów (najniższy kwintyl < 0,17: +100 % w rok u ~0,1–1 %), ale podnosi też ryzyko dużego spadku — kierunek ocenia GLB/trend."""
-    seg = closes[-(weeks + 1):]
-    r = [math.log(b / a) for a, b in zip(seg, seg[1:]) if _ok(a) and _ok(b) and a > 0 and b > 0]
-    if len(r) < max(2, int(weeks * 0.8)):
-        return None
-    m = sum(r) / len(r)
-    return math.sqrt(sum((x - m) ** 2 for x in r) / (len(r) - 1)) * math.sqrt(52)
-
-
 def rel_volume(vols, n):
     """Wolumen relatywny: ostatni wolumen / średnia z `n` poprzednich (bez ostatniego); None, gdy za mało danych. 2.0 = dwa razy więcej niż zwykle."""
     if len(vols) < n + 1 or not _ok(vols[-1]):
@@ -286,12 +204,47 @@ def surprises(est, as_of):
     return last, prev, bool(last > 0 and prev is not None and prev > 0)
 
 
-def passes(row):
-    """Warunki strategii (badanie 2011–2025, szeroki rynek USA, GLB 0–10 % + stop 10 % + MACD tyg., portfel 10 pozycji):
-    przychody kw. ≥ +15 % r/r i marża oper. ≥ +3 pp r/r. P/S, RS 52 tyg. i beat2 zostają kolumnami, ale nie blokują —
-    RS ≥ 50 pp obniżał wynik (za mało sygnałów: 12,5 % vs 18,6 % rocznie), P/S i beat2 nie dało się sprawdzić historycznie."""
-    r, d = row.get("rev_rr"), row.get("dopm")
-    return _ok(r) and r >= MIN_REV_GROWTH and _ok(d) and d >= MIN_DOPM
+def normalize_conditions(conditions=None):
+    """Wypełnia brakujące progi ustawieniami domyślnymi i odrzuca niepoprawne wartości."""
+    source = conditions if isinstance(conditions, dict) else {}
+    out = {}
+    for key, default in DEFAULT_CONDITIONS.items():
+        saved = source.get(key) if isinstance(source.get(key), dict) else {}
+        enabled = saved.get("enabled", default["enabled"])
+        if key == "beat2":
+            out[key] = {"enabled": bool(enabled)}
+            continue
+        try:
+            threshold = float(saved.get("threshold", default["threshold"]))
+        except (TypeError, ValueError):
+            threshold = default["threshold"]
+        if not math.isfinite(threshold):
+            threshold = default["threshold"]
+        if key == "ps" and threshold <= 0:
+            threshold = default["threshold"]
+        out[key] = {"enabled": bool(enabled), "threshold": threshold}
+    return out
+
+
+def passes(row, conditions=None):
+    """Sprawdza tylko włączone warunki konieczne; brak P/S nie blokuje, jeśli próg P/S jest włączony."""
+    cfg = normalize_conditions(conditions)
+    required = []
+    if cfg["rev_growth"]["enabled"]:
+        value = row.get("rev_rr")
+        required.append(_ok(value) and value >= cfg["rev_growth"]["threshold"])
+    if cfg["op_margin"]["enabled"]:
+        value = row.get("dopm")
+        required.append(_ok(value) and value >= cfg["op_margin"]["threshold"])
+    if cfg["ps"]["enabled"]:
+        value = row.get("ps")
+        required.append(not _ok(value) or value < cfg["ps"]["threshold"])
+    if cfg["rs"]["enabled"]:
+        value = row.get("rs")
+        required.append(_ok(value) and value >= cfg["rs"]["threshold"])
+    if cfg["beat2"]["enabled"]:
+        required.append(row.get("beat2") is True)
+    return all(required)
 
 
 def slowdown(row):
@@ -303,76 +256,77 @@ def slowdown(row):
     return "HAMUJE+MB" if _ok(g) and g < 0 else "HAMUJE"
 
 
-
-
-def _latest_growth(values, lag=4):
-    vals = sorted((x for x in (values or []) if isinstance(x, (list, tuple)) and len(x) >= 2
-                   and _ok(x[1])), key=lambda x: str(x[0]))
-    if len(vals) <= lag:
+def _latest_surprise(history, known_through):
+    """Najnowsza procentowa niespodzianka z datą raportu nie późniejszą niż known_through."""
+    values = [item for item in (history or [])
+              if isinstance(item, (list, tuple)) and len(item) >= 2
+              and isinstance(item[0], str) and item[0] <= known_through and _ok(item[1])]
+    if not values:
         return None
-    now, old = float(vals[-1][1]), float(vals[-1 - lag][1])
-    return (now / old - 1) * 100 if old > 0 else None
+    latest = max(values, key=lambda item: item[0])
+    try:
+        age = (dt.date.fromisoformat(known_through) - dt.date.fromisoformat(latest[0])).days
+    except ValueError:
+        return None
+    return latest[1] if 0 <= age <= SURPRISE_DAYS else None
 
 
-def _latest_surprise(values):
-    valid = [x for x in (values or []) if isinstance(x, (list, tuple)) and len(x) >= 2 and _ok(x[1])]
-    return float(sorted(valid, key=lambda x: str(x[0]))[-1][1]) if valid else None
+def price_ratio(closes, sessions=252):
+    """C/C[52 tyg.]: aktualne zamknięcie / zamknięcie sprzed 252 sesji; przy krótszej historii najstarsze (jak w webowym Momentum)."""
+    if len(closes or []) < 2:
+        return None
+    base = closes[max(0, len(closes) - (sessions + 1))]
+    return closes[-1] / base if base else None
 
 
-def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None, previous_row=None):
+def pegy_ratio(peg, forward_pe, dividend_yield_pct):
+    """PEGY = Forward P/E / (EPS growth % + dividend yield %).
+
+    Finviz defines PEG as Forward P/E / annual EPS growth. We infer the growth
+    rate from these two Finviz valuation fields and add the Finviz dividend yield.
+    Dividend yield is in percentage points (e.g. 2.0 means 2%).
+    """
+    if not (_ok(peg) and _ok(forward_pe) and _ok(dividend_yield_pct)):
+        return None
+    if peg <= 0 or forward_pe <= 0 or dividend_yield_pct < 0:
+        return None
+    growth_pct = float(forward_pe) / float(peg)
+    denominator = growth_pct + float(dividend_yield_pct)
+    if not math.isfinite(denominator) or denominator <= 0:
+        return None
+    return round(float(forward_pe) / denominator, 2)
+
+
+def build_row(base, weekly, months, fund, spy=None, est=None, conditions=None):
     """Wiersz listy: base (z Finviz), weekly {d, o, h, l, c, v}, months (High zamkniętych miesięcy), fund (z SEC albo None), spy (tygodniowe {d, c}),
-    est (prognozy yfinance: niespodzianki, rewizja, historia EPS i konsensus analityków)."""
+    est (prognozy z yfinance: niespodzianki EPS i rewizja 90 dni)."""
     c, lo, v = weekly.get("c") or [], weekly.get("l") or [], weekly.get("v") or []
     row = dict(base)
     price = c[-1] if c else None
     prev = c[-2] if len(c) > 1 else None
     level, _ = green_line(months)
-    s10, s30 = sma(c, 10)[-1] if len(c) >= 10 else None, sma(c, 30)[-1] if len(c) >= 30 else None
-    uptrend = s10 is not None and s30 is not None and s10 > s30
-    row["trend"] = uptrend if s10 is not None and s30 is not None else None   # trend tygodniowy: SMA 10 > SMA 30
-    # The SMA filter gates candidate discovery, not visibility of an already confirmed BLB.
-    blue, _ = blue_line_in_uptrend(weekly_highs, weekly) if weekly_highs else blue_line(weekly.get("h") or [])
-    previous_blb = (previous_row or {}).get("blb")
-    previous_started = (previous_row or {}).get("blb_search_started") is True
-    if blue is None and previous_started and _ok(previous_blb):
-        blue = previous_blb
-    blb_search_started = bool(blue is not None or previous_started)
-    row.update(price=price, glb=level, blb=blue, blb_search_started=blb_search_started,
-               glb_state=glb_state(price, prev, level),
+    row.update(price=price, glb=level, glb_state=glb_state(price, prev, level),
                glb_pct=(price / level - 1) * 100 if _ok(price) and _ok(level) and level else None,
-               blb_pct=(price / blue - 1) * 100 if _ok(price) and _ok(blue) and blue else None,
-               blb_state=glb_state(price, prev, blue) if blue is not None else None,
                turnover=turnover(c, v))
     m = macd_info(c, lo)
     row.update(macd=m["state"], macd_stop=m["stop"])
+    s10, s30 = sma(c, 10)[-1] if len(c) >= 10 else None, sma(c, 30)[-1] if len(c) >= 30 else None
+    row["trend"] = s10 > s30 if s10 is not None and s30 is not None else None   # trend tygodniowy: SMA 10 > SMA 30 (filtr listy)
     row["rvol_w"] = rel_volume(v, RVOL_W)
-    row["vol52"] = volatility(c)
     row["rvol_d"] = None   # dzienny: uzupełnia odświeżenie ze świec dziennych (rel_volume(v_dzienne, RVOL_D))
     row.update({k: (fund or {}).get(k) for k in ("rev_rr", "rev_rr1", "accel", "dopm", "dopm1", "opm", "dgm", "quarter", "qs", "op_d", "rev_q", "ttm_rev", "dil")})
     f = fund or {}
     mcap = row.get("market_cap") or (price * f["shares"] if _ok(price) and _ok(f.get("shares")) else None)
     row["ps"] = mcap / f["ttm_rev"] if _ok(mcap) and _ok(f.get("ttm_rev")) and f["ttm_rev"] > 0 else None
+    row["pegy"] = pegy_ratio(row.get("peg"), row.get("forward_pe"), row.get("dividend_yield"))
     row["rs"] = rel_strength(weekly, spy)
-    row["rs_rating_score"] = rs_rating_score(weekly, spy)
-    # RS line value = stock close / SPY close on the same date (nominal ratio is for charting, not cross-stock ranking).
-    sd, sc = (spy or {}).get("d") or [], (spy or {}).get("c") or []
-    if c and weekly.get("d") and sd:
-        j = bisect.bisect_right(sd, weekly["d"][-1]) - 1
-        row["rs_value"] = price / sc[j] if j >= 0 and _ok(price) and _ok(sc[j]) and sc[j] > 0 else None
-    else:
-        row["rs_value"] = None
     as_of = (weekly.get("d") or [""])[-1]
     # tydzień z danych zaczyna się w poniedziałek: raport z tego tygodnia (do piątku) też jest znany
-    row["surp"], row["surp_prev"], row["beat2"] = surprises(est, (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()) if as_of else (None, None, None)
-    row["eps_rev"] = (est or {}).get("rev90")
+    known_through = (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat() if as_of else ""
+    row["surp"], row["surp_prev"], row["beat2"] = surprises(est, known_through) if known_through else (None, None, None)
+    row["rev_surp"] = _latest_surprise((est or {}).get("revenue_surp"), known_through) if known_through else None
     row["eps_q"] = (est or {}).get("eps_q") or []
-    row["eps_est"] = (est or {}).get("eps_est") or []
-    row["surp_hist"] = (est or {}).get("surp") or []
-    row["revenue_surp"] = (est or {}).get("revenue_surp") or []
-    row["revenue_surprise"] = _latest_surprise([x for x in row["revenue_surp"] if not as_of or str(x[0]) <= (dt.date.fromisoformat(as_of) + dt.timedelta(days=6)).isoformat()])
-    row["eps_growth_q"] = _latest_growth(row["eps_q"])
-    row["eps_growth_history"] = [_latest_growth(row["eps_q"][:i]) for i in range(5, len(row["eps_q"]) + 1)]
-    row["eps_growth_next_year"] = next((float(x["growth"]) for x in row["eps_est"] if isinstance(x, dict) and x.get("period") == "+1y" and _ok(x.get("growth"))), None)
-    row["ok"] = passes(row)
+    row["eps_rev"] = (est or {}).get("rev90")
+    row["ok"] = passes(row, conditions)
     row["slow"] = slowdown(row)
     return row
