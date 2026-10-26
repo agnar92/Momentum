@@ -289,7 +289,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
                                           "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT},
         "rows": rows, "symbols": sym_rows})
     ok = sum(1 for r in rows if r["ok"])
-    sig = sum(1 for r in rows if r["ok"] and r["glb_state"] in ("SYGNAŁ", "WYBICIE"))
+    sig = sum(1 for r in rows if r["ok"] and r["glb_state"] in ("SYGNAŁ", "WYBICIE") and (r["glb_pct"] or 0) <= calc.ENTRY_MAX_PCT)
     log(f"✓ Gotowe: {len(rows)} spółek, warunki spełnia {ok}, sygnał GLB: {sig}")
     return rows
 

@@ -82,10 +82,11 @@ def test_macd_cross_and_stop_is_low_of_cross_week():
 
 def test_turnover_and_conditions():
     assert calc.turnover([10, 10, 10, 10], [5e7] * 4) == pytest.approx(1e8)
-    good = {"turnover": 120e6, "rev_rr": 20, "dopm": 4, "rs": 60, "beat2": True}
-    assert calc.passes(good) and calc.passes({**good, "ps": 15}) and calc.passes({**good, "ps": None})
-    assert calc.passes({**good, "turnover": 1e3})                      # obrót nie jest warunkiem (filtr w Finviz)
-    for k, v in (("rev_rr", 10), ("dopm", 2), ("dopm", None), ("rs", 40), ("rs", None), ("ps", 25), ("beat2", False), ("beat2", None)):
+    good = {"turnover": 120e6, "rev_rr": 20, "dopm": 4}
+    assert calc.passes(good) and calc.passes({**good, "turnover": 1e3})   # obrót nie jest warunkiem (filtr w Finviz)
+    # RS, P/S i beat2 tylko informacyjnie (badanie 2011–2025: RS ≥ 50 pp obniżał wynik portfela)
+    assert calc.passes({**good, "rs": 10, "ps": 40, "beat2": False})
+    for k, v in (("rev_rr", 10), ("rev_rr", None), ("dopm", 2), ("dopm", None)):
         assert not calc.passes({**good, k: v})
 
 
@@ -94,11 +95,11 @@ def test_build_row():
     row = calc.build_row({"ticker": "X"}, w, [50, 100, 90, 90, 90, 95], {"rev_rr": 30, "dopm": 5})
     assert row["glb"] == 100 and row["glb_state"] == "WYBICIE" and row["glb_pct"] == pytest.approx(4)
     assert row["turnover"] == pytest.approx(104 * 3e6 / 5, rel=0.05)
-    assert row["rs"] is None and not row["ok"]          # 40 tygodni historii i brak SPY -> brak siły względnej -> nie spełnia
+    assert row["rs"] is None and row["ok"]              # brak SPY -> brak RS, ale RS nie jest warunkiem
     r = calc.build_row({"ticker": "Y"}, W, [50, 100, 90, 90, 90, 95], {"rev_rr": 30, "dopm": 5}, SPY, EST)
     assert r["rs"] == pytest.approx(108) and r["ok"] and r["glb_state"] == "SYGNAŁ"
     assert r["surp"] == 8.0 and r["surp_prev"] == 4.0 and r["beat2"] and r["eps_rev"] == 12.0
-    assert not calc.build_row({"ticker": "Y"}, W, [50, 100, 90, 90, 90, 95], {"rev_rr": 30, "dopm": 5}, SPY)["ok"]   # bez niespodzianek nie spełnia
+    assert calc.build_row({"ticker": "Y"}, W, [50, 100, 90, 90, 90, 95], {"rev_rr": 30, "dopm": 5}, SPY)["ok"]   # niespodzianki tylko informacyjnie
 
 
 def test_surprises_known_at_date_and_fresh():
@@ -370,13 +371,12 @@ def test_monthly_highs_ignores_dividend_adjusted_entries():
     assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0]
 
 
-def test_conditions_cut_rgti_and_expensive():
-    """RGTI: „Δ marży” +558 pp przy przychodach 5 mln $ — odpada na P/S (≈ 200); drogie (P/S ≥ 20) odpadają; brak kapitalizacji: cena × akcje."""
+def test_ps_is_informational():
+    """P/S zostaje kolumną (cena × akcje, gdy brak kapitalizacji), ale nie blokuje warunków — nie dało się go sprawdzić historycznie."""
     f = {"rev_rr": 30, "dopm": 12, "ttm_rev": 300e6}
     assert calc.build_row({"ticker": "A", "market_cap": 3e9}, W, [50, 100, 90, 90, 90], f, SPY, EST)["ok"]      # P/S 10
-    assert not calc.build_row({"ticker": "B", "market_cap": 9e9}, W, [50, 100, 90, 90, 90], f, SPY)["ok"]      # P/S 30
-    rgti = calc.build_row({"ticker": "RGTI", "market_cap": 4e9}, W, [], {"rev_rr": 185, "dopm": 558, "ttm_rev": 20e6}, SPY)
-    assert rgti["ps"] == 200 and not rgti["ok"]
+    b = calc.build_row({"ticker": "B", "market_cap": 9e9}, W, [50, 100, 90, 90, 90], f, SPY)
+    assert b["ps"] == pytest.approx(30) and b["ok"]
     assert calc.build_row({"ticker": "D"}, W, [], {**f, "shares": 60e6}, SPY)["ps"] == pytest.approx(104 * 60e6 / 300e6)
 
 

@@ -4,10 +4,11 @@
 // Czyste funkcje — testy w tests/js/lines.test.js.
 "use strict";
 
-const SIGNAL_STATES = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
+const SIGNAL_STATES = ["WYBICIE", "SYGNAŁ"];   // kupno: zamknięcie tygodnia 0–10 % nad Green Line
 const MAX_LOG = 200;
 const STOP_PCT = 10;    // stop początkowy pod ceną kupna
-const HALF_DROP = 20;   // spadek od szczytu (zamknięcia tygodnia od wejścia), przy którym sprzedajesz połowę
+const HALF_DROP = 20;   // spadek od szczytu (zamknięcia tygodnia od wejścia), przy którym można sprzedać połowę (wynik bez zmian, opcja)
+const MAX_POSITIONS = 10;   // portfel: 10 pozycji po równo; wolne miejsca = gotówka w SPY do nowego sygnału
 
 // indeks tygodnia daty: dokładny albo ostatni wcześniejszy; -1, gdy data przed historią
 function dateIndex(dates, d) {
@@ -75,7 +76,7 @@ function snapPrice(price, hi, lo, yf, y, tol) {
 function stateAlerts(prev, row) {
     const out = [];
     if (!prev || !row) return out;
-    if (row.glb_state && SIGNAL_STATES.includes(row.glb_state) && !SIGNAL_STATES.includes(prev.glb_state))
+    if (row.glb_state && SIGNAL_STATES.includes(row.glb_state) && !(row.glb_pct > 10) && !SIGNAL_STATES.includes(prev.glb_state))
         out.push(`sygnał GLB: ${row.glb_state} (Green Line ${row.glb})`);
     if (prev.macd === "nad" && row.macd === "pod") out.push(`MACD tyg. przeciął sygnał w dół — stop pod Low ${row.macd_stop}`);
     if (row.macd_stop && row.price != null && row.price < row.macd_stop && !(prev.price != null && prev.macd_stop && prev.price < prev.macd_stop))
@@ -88,14 +89,33 @@ function stateAlerts(prev, row) {
     return out;
 }
 
-// plan wyjścia pozycji: pos = {since, price}, data = tygodniowe {d, c}, row = wiersz (glb, macd_stop) ->
-// {entry, stopInit (−10 %), peak (najwyższe zamknięcie tygodnia od wejścia), halfAt (−20 % od szczytu), half (ostatnie zamknięcie ≤ halfAt), last, glbExit}
+function emaSeries(values, n) {
+    const k = 2 / (n + 1), out = [];
+    let prev = null;
+    for (const v of values) { prev = prev == null ? v : prev + k * (v - prev); out.push(prev); }
+    return out;
+}
+
+// stop MACD pozycji: Low ostatniego tygodnia, w którym MACD (12, 26, 9) przeciął sygnał w dół PO tygodniu wejścia; null = jeszcze nie było
+// (badanie 2011–2025: przecięcia sprzed wejścia obniżały wynik z ≈ 21 % do ≈ 13 % rocznie)
+function macdStopSince(data, since) {
+    const c = (data && data.c) || [], l = (data && data.l) || [], d = (data && data.d) || [];
+    if (c.length < 35 || !l.length) return null;
+    const f = emaSeries(c, 12), sl = emaSeries(c, 26), m = f.map((x, i) => x - sl[i]), sg = emaSeries(m, 9), h = m.map((x, i) => x - sg[i]);
+    const from = dateIndex(d, since || "");
+    let out = null;
+    for (let i = Math.max(1, from + 1); i < c.length; i++) if (h[i] < 0 && h[i - 1] >= 0 && l[i] != null) out = l[i];
+    return out;
+}
+
+// plan wyjścia pozycji: pos = {since, price}, data = tygodniowe {d, c, l}, row = wiersz (glb) ->
+// {entry, stopInit (−10 %), macdStop (MACD od wejścia), peak (najwyższe zamknięcie tygodnia od wejścia), halfAt (−20 % od szczytu), half, last, glbExit}
 function positionPlan(pos, data, row) {
     const c = (data && data.c) || [], d = (data && data.d) || [], entry = pos && pos.price != null ? pos.price : null;
     let peak = entry;
     for (let i = 0; i < c.length; i++) if (c[i] != null && d[i] >= ((pos && pos.since) || "") && (peak == null || c[i] > peak)) peak = c[i];
     const last = c.length ? c[c.length - 1] : null, halfAt = peak != null ? peak * (1 - HALF_DROP / 100) : null;
-    return { entry, stopInit: entry != null ? entry * (1 - STOP_PCT / 100) : null, peak, halfAt, last,
+    return { entry, stopInit: entry != null ? entry * (1 - STOP_PCT / 100) : null, macdStop: macdStopSince(data, pos && pos.since), peak, halfAt, last,
         half: last != null && halfAt != null && last <= halfAt, glbExit: !!(last != null && row && row.glb && last < row.glb) };
 }
 
@@ -104,7 +124,8 @@ function positionStatus(pl, row, exit) {
     const out = [], r = row || {}, p = pl || {}, last = p.last;
     if (last != null && p.stopInit != null && last <= p.stopInit) out.push("STOP −10 %");
     if (exit === "GLB" && p.glbExit) out.push("WYJŚCIE: zamknięcie pod GLB");
-    if (exit !== "GLB" && r.macd_stop && last != null && last < r.macd_stop) out.push("WYJŚCIE: pod stopem MACD");
+    const ms = p.macdStop !== undefined ? p.macdStop : r.macd_stop;   // plan pozycji: MACD od wejścia
+    if (exit !== "GLB" && ms && last != null && last < ms) out.push("WYJŚCIE: pod stopem MACD");
     if (p.half) out.push("SPRZEDAJ ½ (−20 % od szczytu)");
     if (r.slow) out.push("⚠ hamuje" + (r.slow === "HAMUJE+MB" ? " + marża brutto" : ""));
     return out;
@@ -151,4 +172,4 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
     return fresh;
 }
 
-if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, HALF_DROP, STOP_PCT };
+if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, macdStopSince, HALF_DROP, STOP_PCT, MAX_POSITIONS };
