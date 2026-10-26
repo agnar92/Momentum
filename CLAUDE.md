@@ -63,6 +63,13 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   but it raises the −50 % risk equally (mean 52-week return unchanged) — it finds stocks that CAN move; direction comes from trend (far above the 52-week low,
   C/C13–26, fresh high: fewer crashes, more +100 % among stocks near highs). C/C52 × volatility and C/C52 ÷ volatility were tested as one indicator: × works best
   at 0.4–0.8, ÷ selects calm stocks (AUC 0.27–0.32, worse than random); volume features added nothing. Desktop app not updated yet.
+- **Energia ruchu** (`calc.energy` = `chart.energyLine`, column `energy`, weekly chart panel between volume and revenue; user: "zaproponuj wskaźnik który
+  pozwoli wykryć te ruchy … dodaj do listy i do wykresu"): volatility 52 w × ln(close / lowest weekly Low of 52 w incl. the current week). Zones (`ENERGY_LEVELS`,
+  `energyColor`): < 0.10 grey (stoi), 0.10–0.20 amber (budzi się), ≥ 0.20 green (aktywna, `MIN_ENERGY`), ≥ 0.40 pink (skrajna). Presets "Energia ≥ 0,20 (aktywna)"
+  and "+ nad GLB". Column / filter only, not a `passes` condition. Chosen out of 7 candidates on 1978–2009, tested 2011–24: top 10 % of stocks +100 % in a year
+  7.1 %, −50 % 7.3 %, mean 52-w return 16.4 % (volatility alone 8.6 / 13.5 / 14.3 %; base 2.1 / 3.5 / 13.0 %); a cross above 0.20 → doubling within 52 w 9.2 %
+  vs 3.4 % base, in big winners ~13 w after the move began with a median +72 % left. Before 2010 high energy also raised the crash rate (no gain in mean return).
+  As a GLB ranking in a K=10 portfolio it matched the volatility + C/C52 rank sum (12.2 vs 12.7 %/yr 2011–25), so it is a watch / scan tool.
 - ROE / ROI were tested and rejected (big winners had low ROE). Don't add them back without a new backtest.
 
 ## Data flow (`watchlist.py`, run weekly)

@@ -25,6 +25,7 @@ SURPRISE_DAYS = 120     # niespodzianka EPS: ostatni raport nie starszy niż 120
 RVOL_W, RVOL_D = 10, 50  # wolumen relatywny: tydzień vs średnia 10 poprzednich tygodni, sesja vs średnia 50 poprzednich sesji
 VOL_WEEKS = 52          # zmienność: odchylenie std tygodniowych log-zwrotów z 52 tyg. × √52 (roczna)
 MIN_VOL = 0.50          # próg „ruchliwych” spółek z badania S&P 500 1978–2024: P(+100 % w rok) 6–10 % vs 0,1–1 % w najniższym kwintylu
+MIN_ENERGY = 0.20       # Energia ruchu ≥ 0,20 = aktywna (górne ~10 % spółek): P(+100 % w rok) 6–9 % vs baza 3,4 %
 SLOW_ACCEL = -10.0      # hamowanie: tempo przychodów spadło o ≥ 10 pp względem kwartału wcześniej (cena 3 mies. −0,5 % vs +2,1 %, spadek ≥ 20 %: 44 % vs 33 %)
 
 
@@ -267,6 +268,18 @@ def volatility(closes, weeks=VOL_WEEKS):
     return math.sqrt(sum((x - m) ** 2 for x in r) / (len(r) - 1)) * math.sqrt(52)
 
 
+def energy(closes, lows, weeks=VOL_WEEKS):
+    """Energia ruchu = zmienność 52 tyg. × ln(zamknięcie / najniższy Low z 52 tyg., z bieżącym tygodniem). Potencjał (zmienność) × kierunek
+    (jak daleko od dna). Badanie S&P 500 (dobór 1978–2009, test 2011–2024): < 0,10 spółka stoi, 0,10–0,20 budzi się, ≥ 0,20 aktywna
+    (2011–24: +100 % w rok 6–8 %, −50 % 5–6 %, śr. zwrot 20 %), ≥ 0,40 skrajna (13–22 % / 6 % / 31–39 %; w 1978–2009 krach 16–22 %).
+    Przecięcie 0,20 w górę: podwojenie w 52 tyg. 9,2 % vs 3,4 % bazy, u wygranych średnio 13 tyg. po starcie, zostaje mediana +72 %."""
+    v = volatility(closes, weeks)
+    lo = [x for x in lows[-weeks:] if _ok(x) and x > 0]
+    if v is None or not lo or not closes or not _ok(closes[-1]) or closes[-1] <= 0:
+        return None
+    return v * math.log(closes[-1] / min(lo))
+
+
 def rel_volume(vols, n):
     """Wolumen relatywny: ostatni wolumen / średnia z `n` poprzednich (bez ostatniego); None, gdy za mało danych. 2.0 = dwa razy więcej niż zwykle."""
     if len(vols) < n + 1 or not _ok(vols[-1]):
@@ -348,6 +361,7 @@ def build_row(base, weekly, months, fund, spy=None, est=None, weekly_highs=None,
     row.update(macd=m["state"], macd_stop=m["stop"])
     row["rvol_w"] = rel_volume(v, RVOL_W)
     row["vol52"] = volatility(c)
+    row["energy"] = energy(c, lo)
     row["rvol_d"] = None   # dzienny: uzupełnia odświeżenie ze świec dziennych (rel_volume(v_dzienne, RVOL_D))
     row.update({k: (fund or {}).get(k) for k in ("rev_rr", "rev_rr1", "accel", "dopm", "dopm1", "opm", "dgm", "quarter", "qs", "op_d", "rev_q", "ttm_rev", "dil")})
     f = fund or {}

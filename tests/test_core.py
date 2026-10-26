@@ -283,7 +283,7 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
     assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
     assert a["rvol_w"] == pytest.approx(1.0) and a["rvol_d"] == pytest.approx(1.0)   # wolumen relatywny tydzień / sesja
-    assert "vol52" in a                                                                    # zmienność 52 tyg. (None przy krótkiej historii)
+    assert "vol52" in a and "energy" in a                                                                   # zmienność 52 tyg. (None przy krótkiej historii)
 
 
 def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
@@ -408,6 +408,17 @@ def test_volatility():
     assert calc.volatility(zz) == pytest.approx(math.sqrt(sum((x - m) ** 2 for x in r) / 51) * math.sqrt(52))
     assert calc.volatility(up[:30]) is None                                   # za krótka historia
     assert calc.volatility(up[:-1] + [None]) is not None                      # pojedynczy brak nie blokuje
+
+
+def test_energy():
+    import math
+    zz = [100 * (1.1 if i % 2 else 1.0) for i in range(53)]
+    lows = [95.0] * 53
+    assert calc.energy(zz, lows) == pytest.approx(calc.volatility(zz) * math.log(zz[-1] / 95.0))
+    assert calc.energy(zz[:30], lows[:30]) is None                            # za krótka historia
+    assert calc.energy(zz, [None] * 53) is None                               # brak dołków
+    up = [100 * 1.02 ** i for i in range(53)]
+    assert calc.energy(up, up) == pytest.approx(0.0, abs=1e-9)                # zerowa zmienność -> zero
 
 
 def test_rel_volume():

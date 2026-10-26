@@ -122,6 +122,7 @@ test("weekly layout reserves a readable mobile MACD panel and shortens mobile la
     const w = weekly(156), spx = { d: w.d, c: w.c.map((x) => x * 4) };
     const g = require("../../docs/js/chart.js").geometry(390, 700, 52, "W");
     assert.ok(g.macd[1] - g.macd[0] > 100, "MACD should have a real panel, not a thin strip");
+    assert.ok(g.energy[1] - g.energy[0] > 30 && g.energy[0] > g.vol[1] && g.energy[1] < g.rev[0], "energy panel between volume and revenue");
     const svg = chartSvg(w, { rs_rating: 97, rs: 61, eps_q: [[w.d[100], -2.56]] }, 390, 700, null, null, [], null, spx).svg;
     assert.ok(svg.includes("RS 97/99"));
     assert.ok(svg.includes("RS / MA 52t"));
@@ -168,4 +169,19 @@ test("Deepvue-style RS line includes new-high-before-price markers on daily char
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { rs_rating: 95, rs: 12 }, 1000, 700, null, null, [], null, { d, c: spy }, "D", false);
     assert.ok(res.svg.includes("RS new high before price"));
     assert.ok(res.svg.includes("RS Rating 95 / 99"));
+});
+
+test("energy line matches the definition and is drawn on the weekly chart", () => {
+    const { energyLine, energyColor, chartSvg } = require("../../docs/js/chart.js");
+    const c = Array.from({ length: 60 }, (_, i) => 100 * (i % 2 ? 1.1 : 1.0)), l = c.map(() => 95);
+    const e = energyLine(c, l);
+    assert.strictEqual(e[30], null);
+    const r = [];
+    for (let k = 8; k <= 59; k++) r.push(Math.log(c[k] / c[k - 1]));
+    const m = r.reduce((a, b) => a + b, 0) / r.length, vol = Math.sqrt(r.reduce((a, b) => a + (b - m) ** 2, 0) / (r.length - 1)) * Math.sqrt(52);
+    assert.ok(Math.abs(e[59] - vol * Math.log(c[59] / 95)) < 1e-12);
+    assert.strictEqual(energyColor(0.25), "#3ddc84");
+    const d = c.map((_, i) => new Date(Date.UTC(2024, 0, 1 + 7 * i)).toISOString().slice(0, 10));
+    const svg = chartSvg({ d, o: c, h: c, l, c, v: c.map(() => 1e6) }, {}, 1000, 700, null, null, [], null, null).svg;
+    assert.ok(svg.includes("Energia ruchu"));
 });

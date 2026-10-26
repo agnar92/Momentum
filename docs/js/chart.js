@@ -119,6 +119,22 @@ const priceRatioLine = (closes, lookback) => closes.map((c, i) => {
     const base = i >= lookback ? closes[i - lookback] : null;
     return c > 0 && base > 0 ? c / base : null;
 });
+// Energia ruchu (jak calc.energy): zmienność 52 tyg. (odch. std log-zwrotów × √52, ≥ 80 % ważnych) × ln(zamknięcie / najniższy Low z 52 tyg.)
+function energyLine(closes, lows, weeks = 52) {
+    return closes.map((c, i) => {
+        if (!(c > 0) || i < 1) return null;
+        const r = [];
+        for (let k = Math.max(1, i - weeks + 1); k <= i; k++) if (closes[k] > 0 && closes[k - 1] > 0) r.push(Math.log(closes[k] / closes[k - 1]));
+        if (r.length < Math.max(2, Math.floor(weeks * 0.8))) return null;
+        const m = r.reduce((a, b) => a + b, 0) / r.length;
+        const vol = Math.sqrt(r.reduce((a, b) => a + (b - m) ** 2, 0) / (r.length - 1)) * Math.sqrt(52);
+        const lo = lows.slice(Math.max(0, i - weeks + 1), i + 1).filter((x) => x > 0);
+        return lo.length ? vol * Math.log(c / Math.min(...lo)) : null;
+    });
+}
+const ENERGY_LEVELS = [0.1, 0.2, 0.4];
+const energyColor = (v) => (v >= 0.4 ? "#f472b6" : v >= 0.2 ? "#3ddc84" : v >= 0.1 ? "#f0b429" : "#6b7684");
+
 const smaValid = (values, period) => values.map((_, i) => {
     if (i < period - 1) return null;
     const window = values.slice(i - period + 1, i + 1);
@@ -134,12 +150,12 @@ function geometry(w, h, right = 64, period = "W") {
     const rs1 = top + ph * 0.07, s0 = rs1 + 5, s1 = s0 + ph * 0.06, p0 = s1 + 8;
     if (period === "D") {
         const p1 = p0 + ph * 0.69, v0 = p1 + 6, v1 = h - 22;
-        return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: null, eps: null, macd: [v1, v1], x0: 6, x1: w - right, w, h };
+        return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], energy: null, rev: null, eps: null, macd: [v1, v1], x0: 6, x1: w - right, w, h };
     }
     // Weekly layout: compact RS and 52-week price-ratio panels, price, volume, revenue and EPS, then a readable MACD pane.
-    const p1 = p0 + ph * 0.40, v0 = p1 + 6, v1 = v0 + ph * 0.08;
-    const r0 = v1 + 6, r1 = r0 + ph * 0.055, e0 = r1 + 6, e1 = e0 + ph * 0.055;
-    return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], rev: [r0, r1], eps: [e0, e1], macd: [e1 + 6, h - 22], x0: 6, x1: w - right, w, h };
+    const p1 = p0 + ph * 0.345, v0 = p1 + 6, v1 = v0 + ph * 0.08, n0 = v1 + 6, n1 = n0 + ph * 0.075;
+    const r0 = n1 + 6, r1 = r0 + ph * 0.055, e0 = r1 + 6, e1 = e0 + ph * 0.055;
+    return { rs: [top, rs1], spx: [s0, s1], price: [p0, p1], vol: [v0, v1], energy: [n0, n1], rev: [r0, r1], eps: [e0, e1], macd: [e1 + 6, h - 22], x0: 6, x1: w - right, w, h };
 }
 
 const fmtBig = (v) => (v >= 1e9 ? (v / 1e9).toFixed(1) + " mld" : (v / 1e6).toFixed(0) + " mln");
@@ -468,6 +484,21 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
 
     // przychody kwartalne (słupki w okresie kwartału) z dynamiką r/r: zielony ≥ +25 %, żółty ≥ +15 %, szary niżej, czerwony < 0
     if (D) return finish();
+    {   // Energia ruchu: linia z progami 0,10 / 0,20 / 0,40, kolor wg strefy (szary stoi, żółty budzi się, zielony aktywna, różowy skrajna)
+        const [n0, n1] = g.energy, en = energyLine(full.c, full.l).slice(i0, i1), okE = en.filter((v) => v != null);
+        if (okE.length > 1) {
+            const emax = Math.max(0.5, ...okE), emin = Math.min(0, ...okE);
+            const ye = (v) => n1 - 2 - (v - emin) / (emax - emin) * (n1 - n0 - 18);   // 16 px u góry na opis
+            for (const lv of ENERGY_LEVELS) line(x0, ye(lv), x1, ye(lv), energyColor(lv), 0.8, 'stroke-dasharray="3 4" opacity="0.6"');
+            for (let i = 1; i < en.length; i++) {
+                if (en[i] == null || en[i - 1] == null) continue;
+                line(xf(i - 1), ye(en[i - 1]), xf(i), ye(en[i]), energyColor(en[i]), 1.6);
+            }
+            const last = okE[okE.length - 1];
+            boxText(x0 + 4, n0 + 11, small ? `Energia ${last.toFixed(2)}` : `Energia ruchu ${last.toFixed(2)} · zmienność × ln(C / dołek 52 tyg.) · ≥ 0,20 aktywna, ≥ 0,40 skrajna`, energyColor(last));
+        } else text(x0 + 4, n0 + 11, small ? "Energia —" : "Energia ruchu — za krótka historia (52 tyg.)", C.dim);
+        line(x0, n1 + 3, x1, n1 + 3, C.grid);
+    }
     const [q0, q1] = g.rev, qs = (row && row.qs) || [];
     const shown = qs.map((q, m) => {
         const b = LN.dateIndex(dates, q.quarter), a = m > 0 ? LN.dateIndex(dates, qs[m - 1].quarter) + 1 : b - 12;
@@ -533,6 +564,6 @@ function titleText(t, row) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, priceRatioLine, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
+    sma, ema, macd, gmma, rwb, stochK, blueDots, rsLine, priceRatioLine, energyLine, energyColor, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, geometry, chartSvg, infoLines, titleText,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };
