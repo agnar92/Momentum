@@ -9,11 +9,11 @@ import watchlist
 from momentum import calc, finviz, prices, sec
 
 
-def test_green_line_needs_three_closed_months_and_keeps_old_line():
-    assert calc.green_line([10, 12, 11, 11]) == (None, None)            # rekord 12 stoi dopiero 2 miesiące
-    assert calc.green_line([10, 12, 11, 11, 11]) == (12, 1)             # ≥ 3 miesiące -> linia
-    assert calc.green_line([10, 12, 11, 11, 11, 15, 14]) == (12, 1)     # nowy rekord 15 jeszcze nie stoi 3 miesięcy: obowiązuje stara linia
-    assert calc.green_line([10, 12, 11, 11, 11, 15, 14, 14, 14]) == (15, 5)
+def test_green_line_needs_peak_plus_two_closed_months_and_keeps_old_line():
+    assert calc.green_line([10, 12, 11]) == (None, None)                # rekord 12 + 1 miesiąc = 2 świece
+    assert calc.green_line([10, 12, 11, 11]) == (12, 1)                 # szczyt + 2 zamknięte miesiące = 3 świece -> linia
+    assert calc.green_line([10, 12, 11, 11, 11, 15, 14]) == (12, 1)     # nowy rekord 15 ma szczyt + 1 miesiąc: obowiązuje stara linia
+    assert calc.green_line([10, 12, 11, 11, 11, 15, 14, 14]) == (15, 5)  # nowy rekord 15 + 2 miesiące: zastępuje starą linię
     assert calc.green_line([10, 12, 11, 11, 11, 11, 11, 11, 11])[0] == 12   # „3 lub więcej” — rekord stojący dłużej nadal jest linią
 
 

@@ -26,7 +26,7 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   `isSignal`: WYBICIE/SYGNAŁ with `glb_pct` ≤ 10; Blue Dot is informational); exit = close ≤ −10 % from entry or below the Low of the last weekly MACD cross-down **after the entry week** (`macdStopSince` /
   `positionPlan.macdStop`; using pre-entry crosses dropped ≈ 21 → 13 %/yr); default order = conditions + signal, then nearest the line; no rotation,
   no pyramiding, no time stop, no trailing (all tested worse); ½ at −20 % optional (neutral); free slots (`MAX_POSITIONS` = 10) parked in SPY.
-  Result with the breakout-from-below rule ≈ 14 %/yr (2011–17 ≈ 10 %, 2018–25 ≈ 22 %), DD ≈ −40 %; with idle cash in SPY ≈ 20 % (979 signals vs 1255 and ≈ 21 / 25 %/yr before the rule). Survivorship-biased data (no delisted stocks).
+  Result with the breakout-from-below rule and the line confirmed after peak + 2 closed months ≈ 11 %/yr (2011–17 ≈ 10 %, 2018–25 ≈ 14 %), DD ≈ −40 %; with idle cash in SPY ≈ 17 % (1041 signals; before: 1255 signals and ≈ 21 / 25 %/yr; breakout rule alone with 3 closed months ≈ 14 / 20 %). Survivorship-biased data (no delisted stocks).
   SEC fetching is back on in `refresh.yml` (Δ margin needs it).
 
 - **One Finviz list** (`finviz_screen.json` `scanners` = one entry "Finviz"; a full screener URL pasted in Actions → Weekly Refresh replaces it;
@@ -36,8 +36,8 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   surprises / estimate revision, `momentum/estimates.py`, cache `data/estimates.json`, 7 days), `cc52w` (C/C[52 tyg.] = close / close 52 weeks
   ago, `calc.price_ratio`), `rvol_w` / `rvol_d`, `turnover`, `dgm`, `slow`. The fundamentals panel lists P/S, RS and beat2 as "kryterium wyłączone".
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
-  NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood ≥ 3 closed months ("3 lub więcej"); after a new record the old
-  line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (breakout week — last week below —
+  NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood 3 months in total = the peak month + 2 closed ones (`CONFIRM_MONTHS` = 2; Dr Wish: "at least 3 months", user: "licz łącznie czyli dwie świeczki po szczycie"; after a new record the old
+  line stays valid until the new one has stood the same 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (breakout week — last week below —
   at ANY height = strong breakout), SYGNAŁ (0–10 % above), BLUE DOT (a later week > 10 % above AND a daily Blue Dot in the last 5 sessions,
   `calc.fresh_blue_dot`, set by `watchlist.py` / desktop `sync.run` from the 1-year daily candles; user: "jeżeli jesteśmy ponad 10 % i to nie jest świeca
   przebijająca … szukamy blue dot"; not backtested in this combination), NAD (> 10 % without a dot), POD, BRAK.
