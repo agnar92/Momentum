@@ -617,7 +617,7 @@ if (typeof document !== "undefined") (function () {
         item(null, "wycena P/S — kryterium wyłączone (próg 20)");
         item(null, "siła względna — kryterium wyłączone (próg +50 pp)");
         item(null, "2 ostatnie raporty EPS — kryterium wyłączone");
-        item(isSignal(r) ? true : ["NAD", "BLUE DOT", "WYBICIE"].includes(r.glb_state) ? null : false, `Green Line: ${r.glb_state || "—"} (kupno: zamknięcie tygodnia 0–10 % nad linią)`);
+        item(isSignal(r) ? true : ["NAD", "BLUE DOT", "WYBICIE"].includes(r.glb_state) ? null : false, `Green Line: ${r.glb_state || "—"} (kupno: zamknięcie tygodnia 0–10 % nad linią po przebiciu od dołu)`);
         item(r.macd === "nad", `MACD tyg. ${r.macd || "—"} sygnałem` + (r.macd_stop ? ` · stop ${r.macd_stop.toFixed(2)}` : ""));
         item(r.slow ? false : r.accel == null ? null : true, "brak hamowania przychodów");
         item(r.glb == null || r.price == null ? null : r.price >= r.glb, `zamknięcie nad Green Line ${f(r.glb)} (wyjście metodą GLB: zamknięcie tyg. pod linią)`);

@@ -21,11 +21,12 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   0.1 %/side; user: "wprowadź te reguły do repo i aplikacji desktop")** — these override the older notes below:
   Finviz pre-filter `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15` (higher volume / SMA200 / near-52w-high filters cut winners);
   `passes` = revenue q y/y ≥ 15 % AND Δ operating margin ≥ 3 pp only (RS ≥ 50 pp lowered the result — too few signals; P/S and beat2 are columns only,
-  not testable historically); buy = weekly close 0–10 % above the **Green Line** (`isSignal`: WYBICIE/SYGNAŁ with `glb_pct` ≤ 10; BLB and Blue Dot are
-  informational); exit = close ≤ −10 % from entry or below the Low of the last weekly MACD cross-down **after the entry week** (`macdStopSince` /
+  not testable historically); buy = weekly close 0–10 % above the **Green Line** AFTER A BREAKOUT FROM BELOW (`calc.glb_armed`: a close under the line arms, a close > 10 % above disarms;
+  coming back into the 0–10 % zone after running higher = buying a dip, state NAD, not a signal; user, Oct 2026, CDLX 03/2020 retest of the old 282 line;
+  `isSignal`: WYBICIE/SYGNAŁ with `glb_pct` ≤ 10; Blue Dot is informational); exit = close ≤ −10 % from entry or below the Low of the last weekly MACD cross-down **after the entry week** (`macdStopSince` /
   `positionPlan.macdStop`; using pre-entry crosses dropped ≈ 21 → 13 %/yr); default order = conditions + signal, then nearest the line; no rotation,
   no pyramiding, no time stop, no trailing (all tested worse); ½ at −20 % optional (neutral); free slots (`MAX_POSITIONS` = 10) parked in SPY.
-  Result ≈ 21 %/yr (2011–17 ≈ 13 %, 2018–25 ≈ 28 %), DD ≈ −37 %; with idle cash in SPY ≈ 25 %. Survivorship-biased data (no delisted stocks).
+  Result with the breakout-from-below rule ≈ 14 %/yr (2011–17 ≈ 10 %, 2018–25 ≈ 22 %), DD ≈ −40 %; with idle cash in SPY ≈ 20 % (979 signals vs 1255 and ≈ 21 / 25 %/yr before the rule). Survivorship-biased data (no delisted stocks).
   SEC fetching is back on in `refresh.yml` (Δ margin needs it).
 
 - **One Finviz list** (`finviz_screen.json` `scanners` = one entry "Finviz"; a full screener URL pasted in Actions → Weekly Refresh replaces it;
