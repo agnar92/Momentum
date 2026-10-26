@@ -21,12 +21,12 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   0.1 %/side; user: "wprowadź te reguły do repo i aplikacji desktop")** — these override the older notes below:
   Finviz pre-filter `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15` (higher volume / SMA200 / near-52w-high filters cut winners);
   `passes` = revenue q y/y ≥ 15 % AND Δ operating margin ≥ 3 pp only (RS ≥ 50 pp lowered the result — too few signals; P/S and beat2 are columns only,
-  not testable historically); buy = weekly close 0–10 % above the **Green Line** AFTER A BREAKOUT FROM BELOW (`calc.glb_armed`: a close under the line arms, a close > 10 % above disarms;
-  coming back into the 0–10 % zone after running higher = buying a dip, state NAD, not a signal; user, Oct 2026, CDLX 03/2020 retest of the old 282 line;
+  not testable historically); buy = weekly close 0–10 % above the **Green Line** AFTER A BREAKOUT FROM BELOW (`calc.glb_armed`: a close under the line arms, a close > 10 % above makes the line EXPIRE until a new Green Line forms;
+  coming back into the 0–10 % zone after running higher = buying a dip after a higher record, state NAD, not a signal; user, Oct 2026: a line within 10 % of price is the current ATH, so price can't be under SMA 200 / 50 — CDLX 03/2020, MA / TT 03/2020;
   `isSignal`: WYBICIE/SYGNAŁ with `glb_pct` ≤ 10; Blue Dot is informational); exit = close ≤ −10 % from entry or below the Low of the last weekly MACD cross-down **after the entry week** (`macdStopSince` /
   `positionPlan.macdStop`; using pre-entry crosses dropped ≈ 21 → 13 %/yr); default order = conditions + signal, then nearest the line; no rotation,
   no pyramiding, no time stop, no trailing (all tested worse); ½ at −20 % optional (neutral); free slots (`MAX_POSITIONS` = 10) parked in SPY.
-  Result with the breakout-from-below rule and the line confirmed after peak + 2 closed months ≈ 11 %/yr (2011–17 ≈ 10 %, 2018–25 ≈ 14 %), DD ≈ −40 %; with idle cash in SPY ≈ 17 % (1041 signals; before: 1255 signals and ≈ 21 / 25 %/yr; breakout rule alone with 3 closed months ≈ 14 / 20 %). Survivorship-biased data (no delisted stocks).
+  Result with the breakout-from-below rule and the line confirmed after peak + 2 closed months ≈ 9 %/yr (2011–17 ≈ 10 %, 2018–25 ≈ 8 %), DD ≈ −40 %; with idle cash in SPY ≈ 16 % (929 signals, none under SMA 200; before: 1255 signals and ≈ 21 / 25 %/yr; breakout-from-below without expiry ≈ 11 / 17 %). Survivorship-biased data (no delisted stocks).
   SEC fetching is back on in `refresh.yml` (Δ margin needs it).
 
 - **One Finviz list** (`finviz_screen.json` `scanners` = one entry "Finviz"; a full screener URL pasted in Actions → Weekly Refresh replaces it;
