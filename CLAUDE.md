@@ -17,6 +17,17 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
 
 ## Strategy (`momentum/calc.py`, constants at the top)
 
+- **Rules from the broad-market study (Oct 2026; ≈5600 US stocks 2011–2025, SEC fundamentals known 50/80 days after the quarter, 10 equal positions,
+  0.1 %/side; user: "wprowadź te reguły do repo i aplikacji desktop")** — these override the older notes below:
+  Finviz pre-filter `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15` (higher volume / SMA200 / near-52w-high filters cut winners);
+  `passes` = revenue q y/y ≥ 15 % AND Δ operating margin ≥ 3 pp only (RS ≥ 50 pp lowered the result — too few signals; P/S and beat2 are columns only,
+  not testable historically); buy = weekly close 0–10 % above the **Green Line** (`isSignal`: WYBICIE/SYGNAŁ with `glb_pct` ≤ 10; BLB and Blue Dot are
+  informational); exit = close ≤ −10 % from entry or below the Low of the last weekly MACD cross-down **after the entry week** (`macdStopSince` /
+  `positionPlan.macdStop`; using pre-entry crosses dropped ≈ 21 → 13 %/yr); default order = conditions + signal, then nearest the line; no rotation,
+  no pyramiding, no time stop, no trailing (all tested worse); ½ at −20 % optional (neutral); free slots (`MAX_POSITIONS` = 10) parked in SPY.
+  Result ≈ 21 %/yr (2011–17 ≈ 13 %, 2018–25 ≈ 28 %), DD ≈ −37 %; with idle cash in SPY ≈ 25 %. Survivorship-biased data (no delisted stocks).
+  SEC fetching is back on in `refresh.yml` (Δ margin needs it).
+
 - **Scanners** (user: "daj mi możliwość wybrania skanerów, jak było wcześniej"): `finviz_screen.json` `scanners` = [{name, filters, max_tickers}]
   (default: Bezpieczny (backtest) = safe pre-filter `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15`, it cut none of the big winners
   in the backtest; Trend 50/200; Blisko rekordu (ATH); CANSLIM). Every scanner runs the same strategy; rows are merged by ticker with a

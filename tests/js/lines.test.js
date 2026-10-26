@@ -74,10 +74,27 @@ test("evalAlerts: half-sell alert for a position once per peak, GLB exit for wat
     assert.strictEqual(evalAlerts(st, () => row, () => series, "later", D[4]).length, 0);
 });
 
+test("macdStopSince: only MACD cross-downs after the entry week", () => {
+    const { macdStopSince, positionPlan } = require("../../docs/js/lines.js");
+    const n = 60, d = [], c = [], l = [];
+    for (let i = 0; i < n; i++) {
+        d.push(new Date(Date.UTC(2025, 0, 6 + 7 * i)).toISOString().slice(0, 10));
+        const v = i < 20 ? 100 + i : i < 26 ? 120 - (i - 20) * 3 : i < 45 ? 102 + (i - 26) * 2 : 140 - (i - 45) * 2;
+        c.push(v); l.push(v - 1);
+    }
+    const all = macdStopSince({ d, c, l }, "");
+    assert.ok(all != null);
+    assert.strictEqual(macdStopSince({ d, c, l }, d[46]), all);   // przecięcie po spadku od tygodnia 45 jest po wejściu
+    assert.strictEqual(macdStopSince({ d, c, l }, d[n - 1]), null);   // brak przecięcia po wejściu
+    assert.strictEqual(positionPlan({ since: d[n - 1], price: 120 }, { d, c, l }, {}).macdStop, null);
+});
+
 test("positionStatus: what to do with a position now", () => {
     const { positionStatus } = require("../../docs/js/lines.js");
     const pl = { last: 100, stopInit: 108, half: true, glbExit: true };
     assert.deepStrictEqual(positionStatus(pl, { slow: "HAMUJE" }, "GLB"), ["STOP −10 %", "WYJŚCIE: zamknięcie pod GLB", "SPRZEDAJ ½ (−20 % od szczytu)", "⚠ hamuje"]);
     assert.deepStrictEqual(positionStatus({ ...pl, stopInit: 90, half: false }, { macd_stop: 105 }, "MACD"), ["WYJŚCIE: pod stopem MACD"]);
     assert.deepStrictEqual(positionStatus({ last: 150, stopInit: 108 }, { macd_stop: 105 }, "MACD"), []);
+    assert.deepStrictEqual(positionStatus({ last: 100, stopInit: 90, macdStop: null }, { macd_stop: 105 }, "MACD"), []);   // MACD sprzed wejścia nie liczy się
+    assert.deepStrictEqual(positionStatus({ last: 100, stopInit: 90, macdStop: 104 }, { macd_stop: 95 }, "MACD"), ["WYJŚCIE: pod stopem MACD"]);
 });

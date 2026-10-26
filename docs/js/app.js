@@ -4,14 +4,14 @@
 
 const COLUMNS = [ // [klucz, nagłówek, format]
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
-    ["glb", "Green Line", "p"], ["glb_pct", "Do GLB %", "%"], ["glb_state", "GLB", "s"],
+    ["glb", "Green Line", "p"], ["glb_pct", "Do GLB %", "%"], ["glb_state", "GLB", "s"], ["ok", "Warunki", "b"],
     ["blb", "Blue Line", "p"], ["blb_pct", "Do BLB %", "%"], ["blb_state", "BLB", "s"],
     ["rs_rating", "RS Rating", "rating"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["vol52", "Zmienność 52 tyg.", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["slow", "Hamuje", "w"],
 ];
-const SIGNAL = ["WYBICIE", "SYGNAŁ", "BLUE DOT"];
-const BLB_SIGNAL = ["WYBICIE", "SYGNAŁ"];
+const SIGNAL = ["WYBICIE", "SYGNAŁ"];
+const ENTRY_MAX = 10;   // wejście: zamknięcie tygodnia 0–10 % nad Green Line (BLB tylko informacyjnie)
 const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "blb_state", "macd", "quarter", "slow"];
 const SETTINGS_KEY = "momentum_glb_blb_settings";
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
@@ -30,11 +30,13 @@ function cell(v, f) {
     return String(v);
 }
 
-const isSignal = (r) => !!(SIGNAL.includes(r.glb_state) || BLB_SIGNAL.includes(r.blb_state));
+// sygnał kupna = Green Line, zamknięcie tygodnia 0–10 % nad linią (badanie 2011–2025: szersza strefa, Blue Dot i BLB dawały mniej)
+const isSignal = (r) => SIGNAL.includes(r.glb_state) && (r.glb_pct == null || r.glb_pct <= ENTRY_MAX);
 
-// najpierw sygnały GLB/BLB, potem pozostałe; w grupie od najwyższego RS Rating.
+// najpierw sygnały spełniające warunki, potem pozostałe sygnały, potem reszta; w grupie najbliżej Green Line
+// (przy nadmiarze sygnałów najbliższe linii: ten sam wynik, mniejsze obsunięcie), na końcu RS Rating.
 function defaultCompare(a, b) {
-    const key = (r) => [!isSignal(r), -(r.rs_rating ?? -1e9), -(r.rs ?? -1e9)];
+    const key = (r) => [!(isSignal(r) && r.ok), !isSignal(r), r.glb_pct == null ? 1e9 : Math.abs(r.glb_pct), -(r.rs_rating ?? -1e9)];
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
@@ -52,9 +54,10 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { ok: ["tak", "nie"], glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [
+    ["Reguły: sygnał GLB 0–10 % + warunki (przychody, marża)", { glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 }, ok: { in: ["tak"] } }],
     ["Wybicie / sygnał / Blue Dot", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
@@ -66,7 +69,7 @@ const FILTER_PRESETS = [
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
 ];
 
-const filterValue = (r, k) => (k === "trend" || k === "beat2" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
+const filterValue = (r, k) => (k === "trend" || k === "beat2" || k === "ok" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
 
 function passFilters(r, filters) {
     for (const [k, f] of Object.entries(filters || {})) {
@@ -132,7 +135,8 @@ if (typeof document !== "undefined") (function () {
     // pozycja do wyjścia wg wybranej metody: MACD = zamknięcie pod stopem MACD, GLB = zamknięcie pod Green Line; zawsze: −20 % od szczytu, hamowanie
     function posWarn(r) {
         const pl = planFor(r.ticker);
-        const exitNow = state.exit === "GLB" ? r.glb && r.price < r.glb : r.macd_stop && r.price < r.macd_stop;
+        const ms = pl ? pl.macdStop : r.macd_stop;
+        const exitNow = state.exit === "GLB" ? r.glb && r.price < r.glb : (ms && r.price < ms) || (pl && pl.stopInit != null && r.price <= pl.stopInit);
         return !!(r.slow || exitNow || (pl && pl.half));
     }
 
@@ -164,7 +168,7 @@ if (typeof document !== "undefined") (function () {
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
         const sig = pool.filter((r) => isSignal(r)).length;
         const ratingNeedsRefresh = pool.length > 0 && pool.every((r) => !Number.isFinite(r.rs_rating_score));
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB/BLB ${sig}` +
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB 0–10 % ${sig}` +
             (ratingNeedsRefresh ? " · odśwież dane, aby policzyć RS Rating" : "");
         renderStatus();
     }
@@ -602,10 +606,12 @@ if (typeof document !== "undefined") (function () {
     async function openPositions() {
         await Promise.all(Object.keys(ast.pos).filter((t) => rowFor(t)).map((t) => loadWeekly(t)));
         const f = (v) => (v == null ? "—" : v.toFixed(2)), pct = (v) => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`), e = escapeHtml;
-        $("posMethod").textContent = state.exit === "GLB" ? "wyjście: pod GLB (zamknięcie tygodnia pod Green Line)" : "wyjście: MACD (stop pod Low tygodnia przecięcia w dół)";
+        const free = Math.max(0, MAX_POSITIONS - Object.keys(ast.pos).length);
+        $("posMethod").textContent = (state.exit === "GLB" ? "wyjście: pod GLB (zamknięcie tygodnia pod Green Line)" : "wyjście: MACD (stop pod Low tygodnia przecięcia w dół po wejściu) lub −10 %") +
+            ` · wolne miejsca: ${free} z ${MAX_POSITIONS}` + (free ? ` → ok. ${free * 100 / MAX_POSITIONS} % kapitału trzymaj w SPY do nowego sygnału` : "");
         const pos = Object.entries(ast.pos).map(([t, p]) => {
             const r = rowFor(t) || {}, pl = positionPlan(p, weeklyData.get(t), r), last = pl.last != null ? pl.last : r.price;
-            const st = positionStatus(pl, r, state.exit), ex = state.exit === "GLB" ? r.glb : r.macd_stop;
+            const st = positionStatus(pl, r, state.exit), ex = state.exit === "GLB" ? r.glb : pl.macdStop;
             return `<tr class="${st.length ? "warn" : ""}"><td><button type="button" data-t="${e(t)}">${e(t)}</button></td><td class="now">${e(st.join(" · ") || "trzymaj")}</td><td>${e(p.since || "")}</td><td>${f(pl.entry)}</td>` +
                 `<td>${f(last)}</td><td>${pct(last && pl.entry ? (last / pl.entry - 1) * 100 : null)}</td><td>${f(pl.peak)}</td><td>${f(pl.halfAt)}</td><td>${f(pl.stopInit)}</td>` +
                 `<td>${f(ex)}</td><td>${e(r.glb_state || "")}</td><td>${e(r.macd || "")}</td>` +

@@ -12,16 +12,30 @@ test("cell formats", () => {
 });
 
 const ROWS = [
-    { ticker: "A", company: "Alpha", ok: true, glb_state: "POD", dopm: 9 },
-    { ticker: "B", company: "Beta", ok: true, glb_state: "SYGNAŁ", dopm: 4 },
-    { ticker: "C", company: "Gamma", ok: false, glb_state: "WYBICIE", dopm: 20 },
-    { ticker: "D", company: "Delta", ok: true, glb_state: "NAD", dopm: null },
+    { ticker: "A", company: "Alpha", ok: true, glb_state: "POD", glb_pct: -3, dopm: 9 },
+    { ticker: "B", company: "Beta", ok: true, glb_state: "SYGNAŁ", glb_pct: 6, dopm: 4 },
+    { ticker: "C", company: "Gamma", ok: false, glb_state: "WYBICIE", glb_pct: 2, dopm: 20 },
+    { ticker: "D", company: "Delta", ok: true, glb_state: "NAD", glb_pct: 14, dopm: null },
 ];
 
-test("default order uses breakout signals without reapplying extra fundamental conditions", () => {
+test("default order: signals meeting conditions, other signals, then nearest the Green Line", () => {
     assert.deepStrictEqual(visibleRows(ROWS, {}).map((r) => r.ticker), ["B", "C", "A", "D"]);
     assert.deepStrictEqual(visibleRows(ROWS, { filters: {} }).map((r) => r.ticker), ["B", "C", "A", "D"]);
-    assert.ok(isSignal(ROWS[1]) && isSignal(ROWS[2]));
+    assert.ok(isSignal(ROWS[1]) && isSignal(ROWS[2]) && !isSignal(ROWS[3]));
+    const two = [{ ticker: "X", ok: true, glb_state: "SYGNAŁ", glb_pct: 8 }, { ticker: "Y", ok: true, glb_state: "WYBICIE", glb_pct: 1 }];
+    assert.deepStrictEqual(visibleRows(two, {}).map((r) => r.ticker), ["Y", "X"]);
+});
+
+test("signal only 0–10 % above the Green Line; Blue Line and Blue Dot are informational", () => {
+    assert.ok(!isSignal({ glb_state: "WYBICIE", glb_pct: 14 }));
+    assert.ok(!isSignal({ glb_state: "BLUE DOT", glb_pct: 15 }));
+    assert.ok(!isSignal({ glb_state: "POD", blb_state: "SYGNAŁ" }));
+});
+
+test("rules preset: signal 0–10 % and conditions", () => {
+    const { passFilters, FILTER_PRESETS } = require("../../docs/js/app.js");
+    const f = FILTER_PRESETS[0][1];
+    assert.deepStrictEqual(ROWS.filter((r) => passFilters(r, f)).map((r) => r.ticker), ["B"]);
 });
 
 test("scanner filter", () => {
@@ -70,9 +84,9 @@ test("P/S and RS cells, slowdown cell and filters", () => {
     assert.ok(passFilters({ slow: null }, { slow: { in: ["—"] } }) && !passFilters({ slow: "HAMUJE" }, { slow: { in: ["—"] } }));
 });
 
-test("default order: conditions + GLB signal first, then by relative strength", () => {
-    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", rs: 55 }, { ticker: "B", ok: true, glb_state: "WYBICIE", rs: 90 },
-        { ticker: "C", ok: true, glb_state: "POD", rs: 120 }, { ticker: "D", ok: false, rs: 300 }];
+test("default order: conditions + GLB signal first, then nearest the line, then RS Rating", () => {
+    const rows = [{ ticker: "A", ok: true, glb_state: "SYGNAŁ", glb_pct: 7, rs_rating: 55 }, { ticker: "B", ok: true, glb_state: "WYBICIE", glb_pct: 3, rs_rating: 90 },
+        { ticker: "C", ok: true, glb_state: "POD", glb_pct: -20, rs_rating: 99 }, { ticker: "D", ok: false, glb_pct: -5, rs_rating: 10 }];
     assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["B", "A", "D", "C"]);
 });
 

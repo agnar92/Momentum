@@ -1,9 +1,8 @@
 """Obliczenia (czyste funkcje, bez sieci i GUI): Green Line z miesięcznych High (jak w oryginale Dr. Wisha), stan GLB na zamknięciu tygodnia, MACD tygodniowy,
-średnie, obrót i warunki strategii z backtestu (płynny rynek USA 2015–2026):
-  - przychody kw. ≥ +15 % r/r, marża operacyjna ≥ +3 pp r/r (z SEC), P/S < 20,
-  - siła względna: akcja przez 52 tyg. ≥ 50 pp lepiej od S&P 500 (SPY),
-  - wejście: zamknięcie tygodnia 0–10 % nad Green Line (rekord wszech czasów miesięcznego High, który stoi ≥ 3 zamknięte miesiące),
-  - wyjście: tygodniowy MACD (12, 26, 9) — stop pod Low tygodnia, w którym MACD przeciął sygnał w dół, plus stop 10 % pod wejściem.
+średnie, obrót i warunki strategii (badanie 2011–2025, szeroki rynek USA, portfel 10 pozycji):
+  - przychody kw. ≥ +15 % r/r i marża operacyjna ≥ +3 pp r/r (z SEC); skaner Finviz: cena > 10, śr. wolumen > 300 tys., Sales Q/Q > 15 %,
+  - wejście: zamknięcie tygodnia 0–10 % nad Green Line (rekord wszech czasów miesięcznego High, który stoi ≥ 3 zamknięte miesiące); BLB tylko informacyjnie,
+  - wyjście: stop 10 % pod wejściem i tygodniowy MACD (12, 26, 9) — stop pod Low tygodnia przecięcia w dół PO wejściu (pozycje liczy aplikacja).
 Heurystyka z backtestu, nie porada inwestycyjna."""
 import bisect
 import datetime as dt
@@ -11,14 +10,15 @@ import math
 
 CONFIRM_MONTHS = 3      # rekord musi stać co najmniej tyle zamkniętych miesięcy
 ENTRY_MAX_PCT = 10.0    # wejście do 10 % nad linią
-# Warunki = tylko te, które w strategii (GLB 0–10 %, stop 10 % + MACD tyg., wszystkie sygnały 2015–2026, ceny bez korekty) mają największy wpływ.
-# Razem: +15,6 % na transakcję, portfel wszystkich 36,6 % rocznie (2015–20 43,9 / 2021–26 29,6; 2020–26 46,5 %), DD −55 %, mało sygnałów naraz.
+# Badanie 2011–2025 (≈5600 spółek, ceny bez korekty o dywidendy, fundamenty SEC znane 50/80 dni po kwartale, portfel 10 pozycji, koszt 0,1 %/stronę):
+# GLB bez warunków ≈ 12 % rocznie, z warunkami przychody ≥ 15 % i Δ marży ≥ 3 pp ≈ 21 % (2011–17 ≈ 13 %, 2018–25 ≈ 28 %), DD ≈ −37 %;
+# z wolną gotówką w SPY ≈ 25 %. Strefa 0–10 %, stop 10 % i MACD wygrały z 20 wariantami (strefy 0–3…0–20 %, stopy 7–15 %, trailing, SMA, stop czasowy, dokładki).
 # Usunięte, bo przy tych warunkach nic nie zmieniały: przychody kw. ≥ 25 mln $, zysk oper. w $ ↑, „Mocne” (Δ marży ≥ 10 pp), rozwodnienie, Potencjał.
-# Obrót nie jest warunkiem (użytkownik: „usuń limit obrotu w ogóle, sam będę filtrował w Finviz po wolumenie”); backtest liczono na obrocie ≥ 100 mln $.
-MIN_REV_GROWTH = 15.0   # przychody kw. r/r (%) — bez niego 34,9 % rocznie
-MIN_DOPM = 3.0          # zmiana marży operacyjnej r/r (pp) — bez niej 28,9 %
-MAX_PS = 20.0           # wycena P/S < 20 (kapitalizacja / przychody TTM) — bez niej 31,5 % (drogie spółki tracą); odcina też RGTI (P/S 200)
-MIN_RS = 50.0           # siła względna: zmiana ceny z 52 tyg. minus zmiana SPY ≥ 50 pp — bez niej 21,4 %; próg 40 pp: 31,3 %
+# Obrót nie jest warunkiem — płynność ustawia skaner Finviz (śr. wolumen > 300 tys.; wyższy próg odcinał dobre sygnały).
+MIN_REV_GROWTH = 15.0   # przychody kw. r/r (%); progi 10–20 % dawały podobnie (≈ 20 % rocznie)
+MIN_DOPM = 3.0          # zmiana marży operacyjnej r/r (pp); najsilniejszy pojedynczy warunek (0–5 pp podobnie)
+MAX_PS = 20.0           # wycena P/S (tylko kolumna): bez historii kapitalizacji nie dało się jej sprawdzić w badaniu 2011–2025
+MIN_RS = 50.0           # siła względna (tylko kolumna / filtr listy): jako warunek obniżała wynik portfela 10 pozycji — za mało sygnałów
 RS_WEEKS = 52
 STOP_PCT = 10.0         # stop początkowy pod wejściem
 SURPRISE_DAYS = 120     # niespodzianka EPS: ostatni raport nie starszy niż 120 dni (jak w backteście)
@@ -287,12 +287,11 @@ def surprises(est, as_of):
 
 
 def passes(row):
-    """Warunki strategii: przychody kw. ≥ +15 % r/r, marża oper. ≥ +3 pp r/r, P/S < 20 (brak P/S nie blokuje),
-    siła względna 52 tyg. ≥ 50 pp nad SPY, 2 ostatnie raporty powyżej konsensusu EPS (brak historii / niespodzianek blokuje — tak było w backteście:
-    bez niespodzianek 36,6 % rocznie, z nimi 42,4 %, oba okresy lepiej)."""
-    r, d, ps, rs = (row.get(k) for k in ("rev_rr", "dopm", "ps", "rs"))
-    return (_ok(r) and r >= MIN_REV_GROWTH and _ok(d) and d >= MIN_DOPM
-            and not (_ok(ps) and ps >= MAX_PS) and _ok(rs) and rs >= MIN_RS and row.get("beat2") is True)
+    """Warunki strategii (badanie 2011–2025, szeroki rynek USA, GLB 0–10 % + stop 10 % + MACD tyg., portfel 10 pozycji):
+    przychody kw. ≥ +15 % r/r i marża oper. ≥ +3 pp r/r. P/S, RS 52 tyg. i beat2 zostają kolumnami, ale nie blokują —
+    RS ≥ 50 pp obniżał wynik (za mało sygnałów: 12,5 % vs 18,6 % rocznie), P/S i beat2 nie dało się sprawdzić historycznie."""
+    r, d = row.get("rev_rr"), row.get("dopm")
+    return _ok(r) and r >= MIN_REV_GROWTH and _ok(d) and d >= MIN_DOPM
 
 
 def slowdown(row):
