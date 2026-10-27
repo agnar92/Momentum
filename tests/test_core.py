@@ -460,3 +460,17 @@ def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp
     assert queries == ["sec_technology,f", "sec_energy,f"] and len(rows) == 40
     assert [x["etf"] for x in data["sectors"] if x["selected"]] == ["XLK", "XLE"] and rows[0]["sector_rs"] > rows[-1]["sector_rs"] > 0
     assert (tmp_path / "out" / "weekly" / "XLK.json").exists() and "XLK" not in json.loads((tmp_path / "cache" / "sec.json").read_text())
+
+
+def test_build_only_without_etf_candles_keeps_previous_list(tmp_path):
+    cfg = {"scanners": [{"name": "Sektory", "filters": "f", "top_sectors": 2}], "symbols": ["SPY"]}
+    prev = [{"ticker": f"A{i}", "sector": "Technology"} for i in range(20)]
+
+    def weekly(ts, log, cache):   # offline: są tylko świece spółek i SPY, brak ETF-ów
+        return {t: SPY if t == "SPY" else W for t in ts if not t.startswith("XL")}
+    kw = dict(out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=lambda f, max_tickers, log: (prev, 20), weekly=weekly,
+              monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+    with pytest.raises(RuntimeError, match="Żaden sektor"):
+        watchlist.run(cfg, **kw)
+    rows = watchlist.run(cfg, offline=True, **kw)
+    assert len(rows) == 20 and json.loads((tmp_path / "out" / "watchlist.json").read_text())["sectors"] == []
