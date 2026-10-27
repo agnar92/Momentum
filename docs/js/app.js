@@ -3,10 +3,10 @@
 "use strict";
 
 const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
-    ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
+    ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
+    ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
     ["ps", "P/S", "x"], ["peg", "PEG", "x2"], ["pegy", "PEGY", "x2"],
     ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"],
     ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["ok", "Warunki", "b"], ["slow", "Hamuje", "w"],
@@ -27,6 +27,7 @@ function cell(v, f) {
     if (f === "x") return v.toFixed(1);
     if (f === "r") return v.toFixed(2);
     if (f === "x2") return v.toFixed(2);
+    if (f === "i") return v.toFixed(0);
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
@@ -59,6 +60,7 @@ const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "P
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [   // jak desktop/app.py FILTER_PRESETS
     ["Reguły: sygnał GLB 0–10 % + warunki (przychody, marża)", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
+    ["EPS Rating ≥ 80 + sygnał GLB 0–10 %", { eps_rating: { min: 80 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Aktywne: RVol tyg. ≥ 1,5 + nad GLB", { rvol_w: { min: 1.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
@@ -607,6 +609,9 @@ if (typeof document !== "undefined") (function () {
         val("Przychody r/r", v(r.rev_rr, " %")); val("  poprzedni kw.", v(r.rev_rr1, " %")); val("  zmiana tempa", v(r.accel, " pp"));
         val("Δ marży oper. r/r", v(r.dopm, " pp")); val("  poprzedni kw.", v(r.dopm1, " pp")); val("Marża oper.", v(r.opm, " %"));
         val("Δ marży brutto r/r", v(r.dgm, " pp")); val("Wycena P/S", r.ps ? r.ps.toFixed(1) : "—"); val("RS 52 tyg. vs S&P", v(r.rs, " pp"));
+        val("RS sektora (ETF / SPY nad SMA 52)", v(r.sector_rs, " %")); val("EPS Rating (1–99, przybliżenie IBD)", r.eps_rating == null ? "—" : String(r.eps_rating));
+        val("  wzrost EPS 2 ost. kw. r/r", v(r.eps_g2, " %", 0)); val("  EPS 3 lata (TTM, rocznie)", v(r.eps_cagr3, " %", 0));
+        val("  stabilność (kw. ze wzrostem r/r)", r.eps_stab == null ? "—" : Math.round(r.eps_stab * 100) + " %");
         val("Niespodzianka EPS", v(r.surp, " %")); val("Rewizja EPS 90 dni", v(r.eps_rev, " %"));
         val("Obrót dzienny", r.turnover ? `${(r.turnover / 1e6).toFixed(0)} mln $` : "—"); val("Do Green Line", v(r.glb_pct, " %"));
         add("LISTA KONTROLNA", "sec");
@@ -935,6 +940,7 @@ if (typeof document !== "undefined") (function () {
         $("status").textContent = `Dane z ${data.generated_at.slice(0, 10)} (ostatni tydzień ${data.data_as_of || "—"}` +
             `${weekInProgress(data.data_as_of, data.generated_at) ? " — w toku, sygnał obowiązuje po zamknięciu piątku" : ""})` +
             (state.scanner && scans[0] ? ` · filtr Finviz ${scans[0].filters}` : "") +
+            ((data.sectors || []).some((x) => x.selected) ? ` · sektory top (RS nad SMA 52 tyg.): ${data.sectors.filter((x) => x.selected).map((x) => `${x.etf} ${x.pct >= 0 ? "+" : ""}${x.pct.toFixed(1)} %`).join(", ")}` : "") +
             (stale.length ? ` · ⚠ Finviz niedostępny dla: ${stale.join(", ")} — lista z poprzedniego odświeżenia` : "");
     }
 

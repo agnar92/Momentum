@@ -1,1 +1,15 @@
-{"_instructions":"Jedna lista Finviz. Wklej pełny URL screenera w Actions → Weekly Refresh → Run workflow. Nowy URL zastępuje poprzedni; bez URL odświeżany jest zapisany filtr. symbols zawiera wyłącznie SPY, potrzebny do RS.","scanners":[{"name":"Finviz","filters":"ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15","url":"https://finviz.com/screener/stocks?f=ind_stocksonly%2Csh_price_o10%2Csh_avgvol_o300%2Cfa_salesqoq_o15&ft=1","max_tickers":1500}],"symbols":["SPY"],"sec_ua":"Momentum research@example.com"}
+{
+ "_instructions": "Domyślnie skaner sektorowy: 3 sektory z najsilniejszym RS (ETF / SPY nad SMA 52 tyg.) × zapytanie Finviz (sektor + filtr). Wklej pełny URL screenera w Actions → Weekly Refresh → Run workflow, aby zastąpić go zwykłą listą Finviz. symbols = SPY (RS); ETF-y sektorowe dodawane automatycznie.",
+ "scanners": [
+  {
+   "name": "Sektory top 3 (RS)",
+   "filters": "ind_stocksonly,sh_price_o15,sh_avgvol_o300,fa_salesqoq_o15",
+   "top_sectors": 3,
+   "max_tickers": 500
+  }
+ ],
+ "symbols": [
+  "SPY"
+ ],
+ "sec_ua": "Momentum research@example.com"
+}

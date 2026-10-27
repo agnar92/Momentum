@@ -29,6 +29,12 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   Result with the breakout-from-below rule and the line confirmed after peak + 2 closed months ≈ 9 %/yr (2011–17 ≈ 10 %, 2018–25 ≈ 8 %), DD ≈ −40 %; with idle cash in SPY ≈ 16 % (929 signals, none under SMA 200; before: 1255 signals and ≈ 21 / 25 %/yr; breakout-from-below without expiry ≈ 11 / 17 %). Survivorship-biased data (no delisted stocks).
   SEC fetching is back on in `refresh.yml` (Δ margin needs it).
 
+- **Basic screener = sector scanner** (user, Oct 2026: "weź sektory i ten RS … top 3 sektory, potem 3 zapytania do Finviz … sektor + cena > 15 USD + fundamenty, które pomagają … nasz basic screener"; both apps): sector RS = weekly ETF (XLB, XLC, XLY, XLP, XLE, XLF, XLV, XLI, XLRE, XLK, XLU; `calc.SECTOR_ETFS`) / SPY, positive when above its own SMA 52 (`calc.sector_rs`, `top_sectors`: top 3 positive by % above SMA);
+  3 Finviz queries `sec_<sector>,ind_stocksonly,sh_price_o15,sh_avgvol_o300,fa_salesqoq_o15` (`calc.sector_filter`, `SECTOR_FILTERS`; revenue Q/Q ≥ 15 % is the only fundamental with a detectable per-trade effect), merged without duplicates
+  (`watchlist.sector_fetch`; `finviz_screen.json` scanner has `top_sectors: 3`; a pasted Finviz URL replaces it with a plain list). ETF candles are saved with `symbols` (needed by `--build-only`); no SEC/monthly for them. `watchlist.json` has `sectors` [{etf, sector, pct, selected}], rows `sector_rs`.
+  Test 2011–25 (GLB without fundamentals, 10 positions): top-3 sectors ≈ 11.8 %/yr, DD −28 % vs ≈ 9.3 % / −38 % for all sectors — NOT statistically validated.
+- **EPS Rating** (`calc.eps_features` / `assign_eps_rating`, column only, NOT in `passes`): IBD's formula is not public, so this is an approximation: 0.5 × avg y/y EPS growth of the last 2 quarters + 0.3 × 3-year TTM EPS CAGR + 0.2 × stability (share of the last 8 y/y comparisons positive),
+  then percentile 1–99 among the rows of the current list (not all US stocks). Source `eps_q` from `estimates.py`.
 - **One Finviz list** (`finviz_screen.json` `scanners` = one entry "Finviz"; a full screener URL pasted in Actions → Weekly Refresh replaces it;
   `symbols` = SPY only, for RS). Finviz silently ignores unknown filter codes — check the count after editing. Extra Finviz views 121/161/131
   give PEG, forward P/E, dividend yield (`peg`, `pegy` = P/E ÷ (growth + yield), `calc.pegy_ratio`) — columns only.
