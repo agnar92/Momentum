@@ -323,28 +323,27 @@ def test_run_uses_only_one_configured_scanner(tmp_path):
     assert [m["name"] for m in data["scanners"]] == ["Jeden"]
 
 
-def test_new_scanner_refresh_preserves_other_named_lists_and_merges_overlap():
+def test_only_the_refreshed_scanner_defines_the_universe():
     prev = {
         "rows": [
-            {"ticker": "OLD", "company": "Old Co", "scanners": ["Saved A"]},
-            {"ticker": "BOTH", "company": "Shared Co", "scanners": ["Saved A"]},
-            {"ticker": "REPLACE", "company": "Previous", "scanners": ["Saved B"]},
+            {"ticker": "OLD", "company": "Old Co", "scanners": ["Stary skaner"]},
+            {"ticker": "BOTH", "company": "Shared Co", "scanners": ["Stary skaner", "Sektory"]},
+            {"ticker": "KEEP", "company": "Prev", "scanners": ["Sektory"]},
         ],
-        "scanners": [
-            {"name": "Saved A", "filters": "fa", "total": 2, "n": 2, "stale": False},
-            {"name": "Saved B", "filters": "fb", "total": 1, "n": 1, "stale": False},
-        ],
+        "scanners": [{"name": "Stary skaner", "filters": "fa", "total": 2, "n": 2, "stale": False}, {"name": "Sektory", "filters": "fn", "total": 2, "n": 2, "stale": False}],
     }
-    scans = [{"name": "New List", "filters": "fn", "max_tickers": 1500}]
+    scans = [{"name": "Sektory", "filters": "fn", "max_tickers": 1500}]
     fresh = [{"ticker": "BOTH", "company": "Shared Co updated"}, {"ticker": "NEW", "company": "New Co"}]
     rows, meta = watchlist.fetch_scanners(scans, prev, lambda f, max_tickers, log: (fresh, 2), lambda _: None, min_tickers=1)
-    by = {r["ticker"]: r for r in rows}
-    assert set(by) == {"OLD", "BOTH", "REPLACE", "NEW"}
-    assert by["OLD"]["scanners"] == ["Saved A"]
-    assert by["REPLACE"]["scanners"] == ["Saved B"]
-    assert by["BOTH"]["scanners"] == ["New List", "Saved A"]
-    assert by["NEW"]["scanners"] == ["New List"]
-    assert [m["name"] for m in meta] == ["Saved A", "Saved B", "New List"]
+    assert {r["ticker"] for r in rows} == {"BOTH", "NEW"} and all(r["scanners"] == ["Sektory"] for r in rows)   # bez OLD i KEEP z poprzednich list
+    assert [m["name"] for m in meta] == ["Sektory"]
+    stale_rows, stale_meta = watchlist.fetch_scanners(scans, prev, lambda f, max_tickers, log: ([], 0), lambda _: None, min_tickers=1)
+    assert {r["ticker"] for r in stale_rows} == {"BOTH", "KEEP"} and stale_meta[0]["stale"]                      # awaria Finviz: poprzednia lista TEGO skanera
+
+
+def test_rows_of_scanner_drops_rows_of_old_scanners():
+    rows = [{"ticker": "A", "scanners": ["Sektory", "CANSLIM"]}, {"ticker": "B", "scanners": ["CANSLIM"]}, {"ticker": "C"}]
+    assert [r["ticker"] for r in watchlist.rows_of_scanner(rows, "Sektory")] == ["A", "C"]
 
 
 def test_monthly_highs_ignores_dividend_adjusted_entries():
