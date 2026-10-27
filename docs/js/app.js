@@ -6,14 +6,14 @@ const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
+    ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
     ["ps", "P/S", "x"], ["peg", "PEG", "x2"], ["pegy", "PEGY", "x2"],
     ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"],
     ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["ok", "Warunki", "b"], ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
 const ENTRY_MAX = 10;   // wejście: zamknięcie tygodnia 0–10 % nad Green Line (BLUE DOT i wyżej — tylko informacyjnie)
-const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
+const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow", "pattern"];
 const SETTINGS_KEY = "momentum_settings_v2";   // nowy klucz: stare filtry odwoływały się do usuniętych kolumn
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
@@ -56,11 +56,13 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"], pattern: ["Cup & Handle", "Flat Base", "Ascending Triangle", "Flaga/Proporzec"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [   // jak desktop/app.py FILTER_PRESETS
     ["Reguły: sygnał GLB 0–10 % + warunki (przychody, marża)", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
     ["EPS Rating ≥ 80 + sygnał GLB 0–10 %", { eps_rating: { min: 80 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
+    ["Wzorzec Zangera: wybicie (0–10 % nad kupnem) + warunki", { ok: { in: ["tak"] }, pattern: { in: ["Cup & Handle", "Flat Base", "Ascending Triangle", "Flaga/Proporzec"] }, pattern_pct: { min: 0, max: 10 } }],
+    ["Wzorzec Zangera: budowany, do 3 % pod kupnem", { pattern: { in: ["Cup & Handle", "Flat Base", "Ascending Triangle", "Flaga/Proporzec"] }, pattern_pct: { min: -3, max: 0 } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Aktywne: RVol tyg. ≥ 1,5 + nad GLB", { rvol_w: { min: 1.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
@@ -108,7 +110,7 @@ if (typeof document !== "undefined") (function () {
     if (state.nShow == null) state.nShow = 52;   // domyślnie pokazuj ostatnie 52 tygodnie; pełną historię można wybrać suwakiem
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null;
-    let period = "W", dShow = 260, dailyRwb = true;   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
+    let period = "W", dShow = 260, dailyRwb = true, zanger = false;   // zanger = widok Zangera (tylko tygodniowy): cena + wolumen + wzorce   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
     const curShow = () => (period === "D" ? dShow : state.nShow);
     const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
     const weeklyCache = new Map(), weeklyData = new Map();   // obietnice pobrania / gotowe serie (plan wyjścia pozycji)
@@ -270,12 +272,22 @@ if (typeof document !== "undefined") (function () {
         $("perW").textContent = "T";
         $("perD").textContent = "D";
         $("perW").classList.toggle("on", period === "W");
+        $("zangerBtn").classList.toggle("on", zanger && period === "W");
         $("perD").classList.toggle("on", period === "D");
+    }
+
+    async function toggleZanger() {   // Z: widok Zangera (jak klawisz z w aplikacji desktopowej)
+        if (!current) return;
+        if (period !== "W") await togglePeriod("W");
+        zanger = !zanger;
+        renderPeriod();
+        drawChart();
     }
 
     async function togglePeriod(to) {
         if (!current || to === period) return;
         period = to || (period === "D" ? "W" : "D");
+        if (period !== "W") zanger = false;
         dShow = 260;
         end = null;
         sel = null;
@@ -302,7 +314,7 @@ if (typeof document !== "undefined") (function () {
         }
         drawSlider();
         const row = rowFor(current) && { ...rowFor(current), exit: state.exit, plan: planFor(current) };
-        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period, dailyRwb);
+        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period, dailyRwb, zanger && period === "W");
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -609,7 +621,8 @@ if (typeof document !== "undefined") (function () {
         val("Przychody r/r", v(r.rev_rr, " %")); val("  poprzedni kw.", v(r.rev_rr1, " %")); val("  zmiana tempa", v(r.accel, " pp"));
         val("Δ marży oper. r/r", v(r.dopm, " pp")); val("  poprzedni kw.", v(r.dopm1, " pp")); val("Marża oper.", v(r.opm, " %"));
         val("Δ marży brutto r/r", v(r.dgm, " pp")); val("Wycena P/S", r.ps ? r.ps.toFixed(1) : "—"); val("RS 52 tyg. vs S&P", v(r.rs, " pp"));
-        val("RS sektora (ETF / SPY nad SMA 52)", v(r.sector_rs, " %")); val("EPS Rating (1–99, przybliżenie IBD)", r.eps_rating == null ? "—" : String(r.eps_rating));
+        val("RS sektora (ETF / SPY nad SMA 52)", v(r.sector_rs, " %"));
+        val("Wzorzec Zangera", r.pattern ? `${r.pattern} · ${r.pattern_state} · ${v(r.pattern_pct, " % do kupna")}` : "—"); val("Parabolic Curve (wyjście)", r.parabola ? r.parabola.note : "—"); val("EPS Rating (1–99, przybliżenie IBD)", r.eps_rating == null ? "—" : String(r.eps_rating));
         val("  wzrost EPS 2 ost. kw. r/r", v(r.eps_g2, " %", 0)); val("  EPS 3 lata (TTM, rocznie)", v(r.eps_cagr3, " %", 0));
         val("  stabilność (kw. ze wzrostem r/r)", r.eps_stab == null ? "—" : Math.round(r.eps_stab * 100) + " %");
         val("Niespodzianka EPS", v(r.surp, " %")); val("Rewizja EPS 90 dni", v(r.eps_rev, " %"));
@@ -882,6 +895,7 @@ if (typeof document !== "undefined") (function () {
         });
         $("perW").addEventListener("click", () => togglePeriod("W"));
         $("perD").addEventListener("click", () => togglePeriod("D"));
+        $("zangerBtn").addEventListener("click", toggleZanger);
         $("dayRwbBtn").addEventListener("click", () => { dailyRwb = !dailyRwb; renderPeriod(); drawChart(); });
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
@@ -924,6 +938,7 @@ if (typeof document !== "undefined") (function () {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
             else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }
             else if (current && (e.key === "+" || e.key === "-")) zoom(e.key === "+" ? 0.85 : 1.18);
+            else if (current && e.key.toLowerCase() === "z") toggleZanger();
             else if (e.key === "Escape") { if (sel) { sel = null; renderTools(); drawChart(); } else closeChart(); }
         });
     }

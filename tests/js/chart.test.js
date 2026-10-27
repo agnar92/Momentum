@@ -156,3 +156,19 @@ test("Deepvue-style RS markers: RS high with price (green) and before price (pin
     const res = chartSvg({ d, o: c, h, l, c, v: c.map(() => 1e6) }, { rs: 12 }, 1000, 700, null, null, [], null, { d, c: spy }, "D", false);
     assert.ok(res.svg.includes("szczyt RS przed ceną") && res.svg.includes("+12 pp"));
 });
+
+test("Zanger view: price + volume only, pattern outline, buy label and parabola exit", () => {
+    const w = weekly(120), last = w.c[w.c.length - 1];
+    const row = {
+        patterns: [{ name: "Flat Base", state: "BUDUJE SIĘ", buy: last * 1.02, pct: -2, end: w.d[w.d.length - 1], vol_x: null,
+            shapes: [{ kind: "box", d1: w.d[100], d2: w.d[119], lo: last * 0.95, hi: last * 1.02 }] }],
+        parabola: { exit: last * 0.9, shapes: [{ kind: "curve", d1: w.d[90], pts: w.d.slice(90, 120).map((d, k) => [d, last * (0.8 + 0.007 * k)]) }] },
+    };
+    const z = chartSvg(w, row, 1000, 600, null, null, [], null, null, "W", true, true);
+    assert.ok(z.svg.includes("Flat Base · kupno &gt;") || z.svg.includes("Flat Base · kupno >"));
+    assert.ok(z.svg.includes("PARABOLA"));
+    assert.ok(!z.svg.includes("MACD (12, 26, 9)") && !z.svg.includes("Przychody kw.") && !z.svg.includes("RS Line"));
+    assert.strictEqual(z.geom.rs, null);
+    const plain = chartSvg(w, row, 1000, 600);
+    assert.ok(plain.svg.includes("MACD (12, 26, 9)") && !plain.svg.includes("PARABOLA"));
+});

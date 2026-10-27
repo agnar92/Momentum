@@ -4,6 +4,7 @@ import datetime as dt
 import pytest
 
 import json
+import math
 
 import watchlist
 from momentum import calc, finviz, prices, sec
@@ -460,3 +461,12 @@ def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp
     assert queries == ["sec_technology,f", "sec_energy,f"] and len(rows) == 40
     assert [x["etf"] for x in data["sectors"] if x["selected"]] == ["XLK", "XLE"] and rows[0]["sector_rs"] > rows[-1]["sector_rs"] > 0
     assert (tmp_path / "out" / "weekly" / "XLK.json").exists() and "XLK" not in json.loads((tmp_path / "cache" / "sec.json").read_text())
+
+
+def test_rows_carry_zanger_patterns_and_parabola(tmp_path):
+    para = [20 * math.exp(0.004 * i + 0.0009 * i * i) for i in range(60)]
+    d = [(dt.date(2024, 1, 1) + dt.timedelta(weeks=i)).isoformat() for i in range(60)]
+    w = {"d": d, "o": para, "h": [x * 1.01 for x in para], "l": [x * 0.99 for x in para], "c": para, "v": [1e6] * 60}
+    row = calc.build_row({"ticker": "P"}, w, [], None)
+    assert row["parabola"]["exit"] > 0 and isinstance(row["patterns"], list) and "pattern_pct" in row
+    json.dumps(row)   # wiersz trafia do watchlist.json

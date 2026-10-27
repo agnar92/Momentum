@@ -89,9 +89,9 @@ test("default order: same distance to the line -> higher RS 52 weeks first", () 
 test("columns and presets like the desktop app", () => {
     const { FILTER_PRESETS, COLUMNS } = require("../../docs/js/app.js");
     const keys = COLUMNS.map(([k]) => k);
-    for (const k of ["sector_rs", "eps_rating", "peg", "pegy", "dgm", "quarter", "cc52w", "ok", "slow"]) assert.ok(keys.includes(k), k);
+    for (const k of ["sector_rs", "eps_rating", "pattern", "pattern_pct", "peg", "pegy", "dgm", "quarter", "cc52w", "ok", "slow"]) assert.ok(keys.includes(k), k);
     for (const k of ["vol52", "rs_rating", "blb", "blb_state"]) assert.ok(!keys.includes(k), k);
-    assert.strictEqual(FILTER_PRESETS.length, 8);
+    assert.strictEqual(FILTER_PRESETS.length, 10);
     assert.strictEqual(cell(0.987, "x2"), "0.99");
     assert.strictEqual(cell(83.4, "i"), "83");
 });

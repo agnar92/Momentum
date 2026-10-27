@@ -118,6 +118,10 @@ const rsLine = (closes, spx) => closes.map((c, i) => (c && spx[i] ? c / spx[i] :
 // dzienny (D): RS Line, cena (linia zamknięć + RWB + Blue Dot albo słupki + średnie) i wolumen — bez przychodów i MACD
 function geometry(w, h, right = 64, period = "W") {
     const top = 8, ph = h - top - 22, s1 = top + ph * 0.10, p0 = s1 + 8;
+    if (period === "Z") {   // widok Zangera: sama cena (log) i wolumen, bez RS / przychodów / MACD
+        const p1 = top + ph * 0.80;
+        return { rs: null, price: [top, p1], vol: [p1 + 6, h - 22], rev: null, macd: [h - 22, h - 22], x0: 6, x1: w - right, w, h };
+    }
     if (period === "D") {
         const p1 = p0 + ph * 0.74;
         return { rs: [top, s1], price: [p0, p1], vol: [p1 + 6, h - 22], rev: null, macd: [h - 22, h - 22], x0: 6, x1: w - right, w, h };
@@ -231,7 +235,11 @@ function rsMarkers(rs, highs, lookback) {
 const DAILY_MA = [["EMA 8", 8, "#e5484d", "ema"], ["EMA 10", 10, "#f0b429", "ema"], ["EMA 20", 20, "#3b82f6", "ema"], ["SMA 50", 50, "#22d3ee", "sma"]];
 
 // port desktop chart.draw: dailyRwb = styl dzienny „linia + RWB/GMMA + Blue Dot” (inaczej słupki OHLC + EMA 8/10/20 + SMA 50)
-function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", dailyRwb = true) {
+const PATTERN_COLORS = { "Cup & Handle": "#4da3ff", "Flat Base": "#f0b429", "Ascending Triangle": "#b084f5", "Flaga/Proporzec": "#2ec4b6" };
+const PARABOLA_COLOR = "#ff4d8d";
+const patternLevels = (row) => (((row && row.patterns) || []).map((p) => p.buy)).concat(row && row.parabola ? [row.parabola.exit] : []);
+
+function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", dailyRwb = true, zanger = false) {
     const D = period === "D", u = D ? "sesji" : "tyg.";
     const total = full.c.length;
     if (total < 2) return null;
@@ -252,7 +260,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             if (i >= i0 && i < i1) earnTip[i - i0] = (earnTip[i - i0] ? earnTip[i - i0] + "\n" : "") + `WYNIKI · ${d0} · EPS ${pctS(es)} · przychody ${pctS(rs0)}`;
     const earn = new Set(Object.keys(earnTip).map(Number));
     const fs = w < 600 ? 12 : 11, small = w < 600;
-    const g = geometry(w, h, small ? 52 : 64, period), x0 = g.x0, x1 = g.x1, step = (x1 - x0) / n;
+    const g = geometry(w, h, small ? 52 : 64, zanger ? "Z" : period), x0 = g.x0, x1 = g.x1, step = (x1 - x0) / n;
     const xf = (i) => x0 + (i + 0.5) * step;
     const parts = [];
     const text = (x, y, s, fill, extra = "") =>
@@ -272,6 +280,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     const valid = hi.concat(lo).filter((v) => v);
     const lmin0 = Math.min(...lo.filter((v) => v)), hmax0 = Math.max(...hi.filter((v) => v));
     if (level && level > lmin0 * 0.5 && level < hmax0 * 2) valid.push(level);
+    if (zanger) for (const v of patternLevels(row)) if (v > hmax0 * 0.6 && v < hmax0 * 1.25) valid.push(v);   // kupno wzorców / wyjście z paraboli mają się zmieścić
     const pmin = Math.min(...valid) * (earn.size ? 0.92 : 0.97), pmax = Math.max(...valid) * 1.03;   // margines pod E tylko przy raportach
     const [y0, y1] = g.price, lmin = Math.log(pmin), lmax = Math.log(pmax);
     const yf = (p) => y1 - (Math.log(p) - lmin) / (lmax - lmin) * (y1 - y0);
@@ -312,7 +321,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     } else if (D) {
         for (const [, k, col, kind] of DAILY_MA)
             poly((kind === "ema" ? ema(cfull, k) : sma(cfull, k)).slice(i0, i1).map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), col, 1.5);
-    } else {
+    } else if (!zanger) {
         const smaColors = { 4: C.sma4, 10: C.sma10, 30: C.sma30 };
         for (const k of SMA_PERIODS) poly(sma(cfull, k).slice(i0, i1).map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), smaColors[k], 1.5);
     }
@@ -361,6 +370,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         used.push(ly);
         boxText(x0 + 4, ly + 4, lab, col);
     }
+    if (zanger) drawPatterns();
     // linie trendu: odcinek między punktami + przedłużenie (przerywane) do ostatniego tygodnia okna
     const segs = [];
     parts.push(`<defs><clipPath id="pclip"><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}"/></clipPath></defs><g clip-path="url(#pclip)">`);
@@ -398,7 +408,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
 
     // MACD (dzienny: bez dolnego panelu — wyjście i tak po tygodniowym MACD)
     const [m0, m1] = g.macd;
-    if (!D) {
+    if (!D && !zanger) {
         const rng = (Math.max(...md.macd.concat(md.signal, md.hist).map(Math.abs)) || 1) * 1.25, mid = (m0 + m1) / 2;
         const ym = (v) => mid - v / rng * (m1 - m0) / 2;
         line(x0, mid, x1, mid, C.grid);
@@ -413,10 +423,10 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     }
     const legend = D ? (dailyRwb ? (small ? "GMMA · RWB · ● Blue Dot" : "GMMA: szybkie EMA (czerwone) / wolne (niebieskie) · jasne tło = RWB · ● Blue Dot")
         : DAILY_MA.map((x) => x[0]).join("  ") + " · ● Blue Dot") : SMA_PERIODS.map((k) => `SMA ${k} ${u}`).join("  ");
-    boxText(x0 + 4, D ? y1 - 6 : y0 + 14, legend, C.fg);
+    boxText(x0 + 4, D ? y1 - 6 : y0 + 14, zanger ? "Widok Zangera: cena (log) + wolumen · wzorce: " + (((row && row.patterns) || []).map((p) => p.name).join(", ") || "brak") : legend, C.fg);
 
     // RS Line jak w Deepvue nad wykresem: akcja / SPY, średnia 52 tyg. (252 sesje), szczyty RS — jak chart.draw_rs_panel
-    {
+    if (!zanger) {
         const [s0, s1] = g.rs, lookback = D ? 252 : 52;
         const spxFull = spx && spx.d ? full.d.map((d) => { const k = LN.dateIndex(spx.d, d); return k >= 0 ? spx.c[k] : null; }) : [];
         const rsFull = spxFull.length ? rsLine(full.c, spxFull) : [];
@@ -445,7 +455,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     }
 
     // przychody kwartalne (słupki w okresie kwartału) z dynamiką r/r: zielony ≥ +25 %, żółty ≥ +15 %, szary niżej, czerwony < 0 (dzienny: bez)
-    if (D) return finish();
+    if (D || zanger) return finish();
     const [q0, q1] = g.rev, qs = (row && row.qs) || [];
     const shown = qs.map((qq, m) => {
         const b = LN.dateIndex(dates, qq.quarter), a = m > 0 ? LN.dateIndex(dates, qs[m - 1].quarter) + 1 : b - 12;
@@ -463,10 +473,47 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         : (small ? "Przychody: brak danych" : "Przychody kw. — brak danych SEC"), C.dim);
     return finish();
 
+    function drawPatterns() {   // jak desktop chart.draw_patterns: kontur wzorca, linia i podpis kupna; Parabolic Curve = krzywa + poziom wyjścia
+        const px = (d) => { const j = LN.dateIndex(dates, d); return j < 0 ? null : xf(Math.min(j, n - 1)); };
+        const shapes = (items, col) => {
+            for (const sh of items) {
+                if (sh.kind === "curve") poly(sh.pts.map(([d, p]) => [px(d), yf(p)]).filter(([x, y], k) => x != null && sh.pts[k][1] > pmin && sh.pts[k][1] < pmax), col, 2);
+                else if (sh.kind === "box") {
+                    const a = px(sh.d1), b = px(sh.d2);
+                    if (a != null && b != null) parts.push(`<rect x="${(a - step * 0.45).toFixed(1)}" y="${yf(Math.min(sh.hi, pmax)).toFixed(1)}" width="${(b - a + step * 0.9).toFixed(1)}" height="${Math.max(1, yf(Math.max(sh.lo, pmin)) - yf(Math.min(sh.hi, pmax))).toFixed(1)}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="4 3"/>`);
+                } else if (sh.kind === "line") {
+                    const a = px(sh.d1), b = px(sh.d2);
+                    if (a != null && b != null) line(a, yf(sh.p1), b, yf(sh.p2), col, 2);
+                }
+            }
+        };
+        const usedY = [];
+        ((row && row.patterns) || []).forEach((p) => {
+            const col = PATTERN_COLORS[p.name] || C.fg;
+            shapes(p.shapes, col);
+            if (!(p.buy > pmin && p.buy < pmax)) return;
+            const y = yf(p.buy), a = px(p.end);
+            line(a != null ? a : x0, y, x1, y, col, 2, 'stroke-dasharray="6 3"');
+            let ly = y - 9;
+            for (let t = 0; t < 6 && usedY.some((u2) => Math.abs(ly - u2) < 16); t++) ly = y + 9 + 16 * t;   // podpisy kolejnych wzorców jeden pod drugim
+            usedY.push(ly);
+            boxText(x1 - 6, ly + 4, small ? `${p.name} > ${fmt(p.buy)} · ${p.state}` : `${p.name} · kupno > ${fmt(p.buy)} · ${p.state} (${p.pct >= 0 ? "+" : ""}${p.pct.toFixed(1)} %)${p.vol_x != null ? ` · wol. ${p.vol_x.toFixed(1)}×` : ""}`, col, 'text-anchor="end"');
+        });
+        const para = row && row.parabola;
+        if (para) {
+            shapes(para.shapes, PARABOLA_COLOR);
+            if (para.exit > pmin && para.exit < pmax) {
+                const y = yf(para.exit);
+                line(x0, y, x1, y, PARABOLA_COLOR, 1, 'stroke-dasharray="2 3"');
+                boxText(x0 + 4, y + 13, `PARABOLA · wyjście: zamknięcie tyg. pod SMA 10 ${fmt(para.exit)}`, PARABOLA_COLOR);
+            }
+        }
+    }
+
     function finish() {
         const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" font-family="Consolas, Menlo, monospace">` +
             `<rect width="${w}" height="${h}" fill="${C.bg}"/>${parts.join("")}` +
-            `<line id="cross" x1="0" y1="${g.rs[0]}" x2="0" y2="${g.macd[1]}" stroke="#3a4654" visibility="hidden"/></svg>`;
+            `<line id="cross" x1="0" y1="${(g.rs || g.price)[0]}" x2="0" y2="${g.macd[1]}" stroke="#3a4654" visibility="hidden"/></svg>`;
         return { svg, geom: { ...g, step, n, i0, lmin, lmax, segs } };
     }
 }
