@@ -470,3 +470,17 @@ def test_rows_carry_zanger_patterns_and_parabola(tmp_path):
     row = calc.build_row({"ticker": "P"}, w, [], None)
     assert row["parabola"]["exit"] > 0 and isinstance(row["patterns"], list) and "pattern_pct" in row
     json.dumps(row)   # wiersz trafia do watchlist.json
+
+
+def test_build_only_without_etf_candles_keeps_previous_list(tmp_path):
+    cfg = {"scanners": [{"name": "Sektory", "filters": "f", "top_sectors": 2}], "symbols": ["SPY"]}
+    prev = [{"ticker": f"A{i}", "sector": "Technology"} for i in range(20)]
+
+    def weekly(ts, log, cache):   # offline: są tylko świece spółek i SPY, brak ETF-ów
+        return {t: SPY if t == "SPY" else W for t in ts if not t.startswith("XL")}
+    kw = dict(out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=lambda f, max_tickers, log: (prev, 20), weekly=weekly,
+              monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+    with pytest.raises(RuntimeError, match="Żaden sektor"):
+        watchlist.run(cfg, **kw)
+    rows = watchlist.run(cfg, offline=True, **kw)
+    assert len(rows) == 20 and json.loads((tmp_path / "out" / "watchlist.json").read_text())["sectors"] == []
