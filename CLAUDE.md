@@ -5,10 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this repo is
 
 A static site (`docs/`, GitHub Pages) with **one strategy** — a web copy of the desktop app
-[agnar92/MomentumDesktop](https://github.com/agnar92/MomentumDesktop) (user, Oct 2026: "zrób ten sam refaktor dla aplikacji webowej
-momentum, chcę mieć taką samą kopię co na desktop"). The strategy and every number come from the backtests done for the desktop app
-(liquid US market 2015–2026); keep both apps in sync — a rule change goes into `momentum/calc.py` here AND `desktop/calc.py` there.
-Informational only, not investment advice.
+[agnar92/MomentumDesktop](https://github.com/agnar92/MomentumDesktop). **The desktop app is the source of truth** (user, Oct 2026: "Dekstop to
+zrodla prawdy … web ma byc zrobiona do niej. Plus usun niepotrzebne rzeczy ktore sa ze starych wersji"): `momentum/calc.py` and
+`momentum/finviz.py` are copies of `desktop/calc.py` / `desktop/finviz.py` (web additions in finviz: the SSR-JSON layout `_parse_json`);
+a rule change goes into BOTH repos. Informational only, not investment advice.
 
 **History:** this repo used to be a large app (CANSLIM checklist, O'Neil bases, Darvas boxes / Dar-Card, Qullamaggie, Watchlisty, Krok po
 kroku, positions, alerts, gist sync, estimates, book-style charts, daily charts …). At the user's request ("usuń Dar-Card, usuń wszystkie
@@ -21,38 +21,29 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   0.1 %/side; user: "wprowadź te reguły do repo i aplikacji desktop")** — these override the older notes below:
   Finviz pre-filter `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15` (higher volume / SMA200 / near-52w-high filters cut winners);
   `passes` = revenue q y/y ≥ 15 % AND Δ operating margin ≥ 3 pp only (RS ≥ 50 pp lowered the result — too few signals; P/S and beat2 are columns only,
-  not testable historically); buy = weekly close 0–10 % above the **Green Line** (`isSignal`: WYBICIE/SYGNAŁ with `glb_pct` ≤ 10; BLB and Blue Dot are
-  informational); exit = close ≤ −10 % from entry or below the Low of the last weekly MACD cross-down **after the entry week** (`macdStopSince` /
+  not testable historically); buy = weekly close 0–10 % above the **Green Line** AFTER A BREAKOUT FROM BELOW (`calc.glb_armed`: a close under the line arms, a close > 10 % above makes the line EXPIRE until a new Green Line forms;
+  coming back into the 0–10 % zone after running higher = buying a dip after a higher record, state NAD, not a signal; user, Oct 2026: a line within 10 % of price is the current ATH, so price can't be under SMA 200 / 50 — CDLX 03/2020, MA / TT 03/2020;
+  `isSignal`: WYBICIE/SYGNAŁ with `glb_pct` ≤ 10; Blue Dot is informational); exit = close ≤ −10 % from entry or below the Low of the last weekly MACD cross-down **after the entry week** (`macdStopSince` /
   `positionPlan.macdStop`; using pre-entry crosses dropped ≈ 21 → 13 %/yr); default order = conditions + signal, then nearest the line; no rotation,
   no pyramiding, no time stop, no trailing (all tested worse); ½ at −20 % optional (neutral); free slots (`MAX_POSITIONS` = 10) parked in SPY.
-  Result ≈ 21 %/yr (2011–17 ≈ 13 %, 2018–25 ≈ 28 %), DD ≈ −37 %; with idle cash in SPY ≈ 25 %. Survivorship-biased data (no delisted stocks).
+  Result with the breakout-from-below rule and the line confirmed after peak + 2 closed months ≈ 9 %/yr (2011–17 ≈ 10 %, 2018–25 ≈ 8 %), DD ≈ −40 %; with idle cash in SPY ≈ 16 % (929 signals, none under SMA 200; before: 1255 signals and ≈ 21 / 25 %/yr; breakout-from-below without expiry ≈ 11 / 17 %). Survivorship-biased data (no delisted stocks).
   SEC fetching is back on in `refresh.yml` (Δ margin needs it).
 
-- **Scanners** (user: "daj mi możliwość wybrania skanerów, jak było wcześniej"): `finviz_screen.json` `scanners` = [{name, filters, max_tickers}]
-  (default: Bezpieczny (backtest) = safe pre-filter `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15`, it cut none of the big winners
-  in the backtest; Trend 50/200; Blisko rekordu (ATH); CANSLIM). Every scanner runs the same strategy; rows are merged by ticker with a
-  `scanners` field and the page has a scanner select (`state.scanner`). The desktop app has the same list in its settings (per-scanner data
-  `data/scans/<slug>.json`). Finviz silently ignores unknown filter codes — check the count after editing.
-- **Conditions** (`passes`; user, Oct 2026: "ogranicz parametry do tych najważniejszych … tylko te które działają i mają największy wpływ. Zwiększ obrót"):
-  NO turnover limit any more (user: "usuń limit obrotu w ogóle, sam będę filtrował w Finviz po wolumenie"; `turnover` = mean weekly $-volume of the last
-  4 weeks / 5 is only a column; the backtest below was run on turnover ≥ 100 M$), quarterly revenue ≥ +15 % y/y, operating margin change ≥ +3 pp y/y,
-  P/S < 20 (`ps` = Finviz market cap / SEC TTM revenue, else price × shares; missing doesn't block), relative strength `rs` ≥ 50 pp (`rel_strength`: 52-week
-  close change minus SPY's over the same weeks; SPY is always fetched, `watchlist.BENCH`; missing history blocks, as in the backtest). Backtest (all GLB 0–10 %
-  signals 2015–2026, raw prices, stop 10 % + weekly MACD): +15.6 % per trade, all-signal portfolio 36.6 % a year (2015–20 43.9 / 2021–26 29.6; 2020–26 46.5 %),
-  DD −55 %, only 2–4 positions open on average; without RS 21.4 %, without Δ margin 28.9 %, without P/S 31.5 %, without revenue 34.9 %. Removed because they
-  changed nothing with these conditions: revenue ≥ 25 M$, operating income in $ up, "Mocne" (Δ margin ≥ 10 pp), dilution, Potencjał ★. Study behind RS
-  (all GLB breakouts vs the big +100 % moves): the common denominator was growing revenue + margin AND the stock already leading the market; pure technical
-  rules (GLB, EMA/SMA crosses, RS without fundamentals, Qullamaggie-style daily breakouts, buy +0.1 % / sell −0.1 % at the line) did not beat SPY in 2020–26.
-  Default order: conditions + GLB signal, conditions, then by RS.
-  **EPS surprises** (user asked to check another AI's idea: estimate revisions + accelerating revenue): condition `beat2` = the last 2 reports beat the EPS
-  consensus (`calc.surprises`, last report ≤ 120 days old; missing blocks, as in the backtest). Data: `momentum/estimates.py` (same file in the desktop app) —
-  yfinance `get_earnings_dates` (surprise %) and `eps_trend` (+1y estimate now vs 90 days ago = `eps_rev`, preview only; weekly snapshots kept in `hist`),
-  cache `data/estimates.json`, refreshed every 7 days. Backtest (surprises since 2014, 1763 tickers): 36.6 → 42.4 %/yr (2015–20 48.7 / 2021–26 36.4; 2020–26 53.7 %),
-  +19.2 % per trade, DD −51 %; a miss before the signal: 3 %/yr; thresholds ≥ 5 / 10 % and 2-quarter revenue acceleration didn't help. Revisions can't be
-  backtested (no history in yfinance). Columns `surp`, `beat2`, `eps_rev`.
+- **Basic screener = sector scanner** (user, Oct 2026: "weź sektory i ten RS … top 3 sektory, potem 3 zapytania do Finviz … sektor + cena > 15 USD + fundamenty, które pomagają … nasz basic screener"; both apps): sector RS = weekly ETF (XLB, XLC, XLY, XLP, XLE, XLF, XLV, XLI, XLRE, XLK, XLU; `calc.SECTOR_ETFS`) / SPY, positive when above its own SMA 52 (`calc.sector_rs`, `top_sectors`: top 3 positive by % above SMA);
+  3 Finviz queries `sec_<sector>,ind_stocksonly,sh_price_o15,sh_avgvol_o300,fa_salesqoq_o15` (`calc.sector_filter`, `SECTOR_FILTERS`; revenue Q/Q ≥ 15 % is the only fundamental with a detectable per-trade effect), merged without duplicates
+  (`watchlist.sector_fetch`; `finviz_screen.json` scanner has `top_sectors: 3`; a pasted Finviz URL replaces it with a plain list). ETF candles are saved with `symbols` (needed by `--build-only`); no SEC/monthly for them. `watchlist.json` has `sectors` [{etf, sector, pct, selected}], rows `sector_rs`.
+  Test 2011–25 (GLB without fundamentals, 10 positions): top-3 sectors ≈ 11.8 %/yr, DD −28 % vs ≈ 9.3 % / −38 % for all sectors — NOT statistically validated.
+- **EPS Rating** (`calc.eps_features` / `assign_eps_rating`, column only, NOT in `passes`): IBD's formula is not public, so this is an approximation: 0.5 × avg y/y EPS growth of the last 2 quarters + 0.3 × 3-year TTM EPS CAGR + 0.2 × stability (share of the last 8 y/y comparisons positive),
+  then percentile 1–99 among the rows of the current list (not all US stocks). Source `eps_q` from `estimates.py`.
+- **One Finviz list** (`finviz_screen.json` `scanners` = one entry "Finviz"; a full screener URL pasted in Actions → Weekly Refresh replaces it;
+  `symbols` = SPY only, for RS). Finviz silently ignores unknown filter codes — check the count after editing. Extra Finviz views 121/161/131
+  give PEG, forward P/E, dividend yield (`peg`, `pegy` = P/E ÷ (growth + yield), `calc.pegy_ratio`) — columns only.
+- **Informational columns only** (NOT in `passes`): `rs` (52-week close change minus SPY's, pp), `ps` (P/S), `surp` / `beat2` / `eps_rev` (EPS
+  surprises / estimate revision, `momentum/estimates.py`, cache `data/estimates.json`, 7 days), `cc52w` (C/C[52 tyg.] = close / close 52 weeks
+  ago, `calc.price_ratio`), `rvol_w` / `rvol_d`, `turnover`, `dgm`, `slow`. The fundamentals panel lists P/S, RS and beat2 as "kryterium wyłączone".
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
-  NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood ≥ 3 closed months ("3 lub więcej"); after a new record the old
-  line stays valid until the new one has stood 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (breakout week — last week below —
+  NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood 3 months in total = the peak month + 2 closed ones (`CONFIRM_MONTHS` = 2; Dr Wish: "at least 3 months", user: "licz łącznie czyli dwie świeczki po szczycie"; after a new record the old
+  line stays valid until the new one has stood the same 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (breakout week — last week below —
   at ANY height = strong breakout), SYGNAŁ (0–10 % above), BLUE DOT (a later week > 10 % above AND a daily Blue Dot in the last 5 sessions,
   `calc.fresh_blue_dot`, set by `watchlist.py` / desktop `sync.run` from the 1-year daily candles; user: "jeżeli jesteśmy ponad 10 % i to nie jest świeca
   przebijająca … szukamy blue dot"; not backtested in this combination), NAD (> 10 % without a dot), POD, BRAK.
@@ -67,13 +58,6 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   of a ≥ 20 % drop in 6 months vs 33 %); position warning only, not an entry condition. SEC entries carry `v: 4` (`rev_rr1`, `dopm1`, `accel`, `qs`, `op_d`,
   `rev_q`, `ttm_rev`, `shares`, `dil`); older entries are refetched. Didn't help: revenue acceleration alone, EPS, margin levels, q/q margin change,
   MACD state / SPY trend / breakout volume / base length at entry, Blue Dot / RWB as entry.
-- **Zmienność 52 tyg.** (`calc.volatility`, column `vol52`, user Oct 2026: "sama zmienność powyżej 0,50 odsiewa spółki stojące … dodaj to sortowanie"):
-  sample std of weekly log returns over 52 weeks × √52 (0.50 = 50 %/yr; `None` with < 80 % valid weeks), `MIN_VOL = 0.50` (presets "Ruchliwe: zmienność ≥ 0,50"
-  and "+ nad GLB"; sort by the header). Only a column / filter, NOT a `passes` condition. Study behind it (S&P 500 point-in-time 1978–2024, weekly, train ≤ 2009 /
-  test 2011–24): volatility is the strongest technical predictor of a +100 % move within 52 weeks (top quintile 10.4 % / 6.4 % vs bottom 0.8 % / 0.1 %, AUC 0.79)
-  but it raises the −50 % risk equally (mean 52-week return unchanged) — it finds stocks that CAN move; direction comes from trend (far above the 52-week low,
-  C/C13–26, fresh high: fewer crashes, more +100 % among stocks near highs). C/C52 × volatility and C/C52 ÷ volatility were tested as one indicator: × works best
-  at 0.4–0.8, ÷ selects calm stocks (AUC 0.27–0.32, worse than random); volume features added nothing. Desktop app not updated yet.
 - ROE / ROI were tested and rejected (big winners had low ROE). Don't add them back without a new backtest.
 
 ## Data flow (`watchlist.py`, run weekly)
@@ -116,22 +100,24 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
   `watchlist.json` loads): weekly close crossed a line with alert on; 🔔 Obserwuj a ticker = GLB signal, MACD cross-down, close under the MACD stop,
   conditions met. Key includes the week, so nothing fires twice. localStorage `momentum_alerts` {lines, watch, log, seen}; system notification via the
   service worker if allowed. The site is static, so alerts are checked only when the page is opened (data refresh is weekly).
-- **Chart panels like IBD**: S&P 500 (SPY weekly file, `symbols`) above the price, quarterly revenue bars with y/y % (green ≥ 25 %, amber ≥ 15 %) under the volume.
-  Weekly only: IBD relative-strength line (`rsLine` / `chart.rs_line` = close / SPY close, own log scale in the bottom 22 % of the price panel, ● when the last
-  value is the 52-week high, and only the number "+x pp" (`row.rs`) at the line's end on the right axis — no text label (user: "wystarczy numer na końcu linii"); user: "nie widzę wykresu siły relatywnej jak mają w IBD"). Period buttons T / D
-  (`#perW` / `#perD`; desktop M / T / D, `per_btns`; user: "osobne przyciski … M, T, D").
-- **📖 Poradnik** (`#guideDlg`): the study's rules + a checklist of the open stock (`checklist(r)`); **📌 Pozycja** (`ast.pos`, also watched) marks a
+- **Chart like the desktop** (`desktop/chart.py`): Deepvue-style RS Line panel on top (stock / SPY, `rsLine`, 52-week MA — 252 sessions on D,
+  `rsMarkers`: ● green = new RS high together with price, ● pink = RS high before price; "+x pp" = `row.rs` on the right axis), price with SMA 4 / 10 / 30
+  weeks, "E" earnings markers on candles (`earningsIndices`, `row.earn` = [[date, EPS surprise %, revenue surprise %]] from `watchlist.py`), plan
+  labels (stop −10 %, ½ at −20 % from the peak; `stopLevel`), volume, quarterly revenue bars with y/y %, MACD. Ruler: right mouse drag on the price
+  panel (`rulerText`: % change · bars · from → to). No S&P 500 / C/C52 / EPS panels, no RS Rating (removed with the desktop's Growth Score / CAN SLIM).
+  Period buttons T / D (`#perW` / `#perD`; desktop also has M).
+- **📊 Fundamenty** (`#fundDlg`, port of desktop `fund_panel_lines`): status, last report, LISTA KONTROLNA, PLAN WYJŚCIA. **📌 Pozycja** (`ast.pos`, also watched) marks a
   position: 📌 in the list, amber ticker when slowing / under the MACD stop, slowdown alert (`stateAlerts`, `snapshot.slow`).
   **📌 Pozycje** panel (`#posDlg` / desktop `PositionsDialog`; user: "nie mam panelu pozycje i obserwowane"): positions with plan (entry, peak, ½ at, stop −10 %,
   exit level by method) and "Co teraz" (`positionStatus` / `lines.position_status`: STOP −10 %, WYJŚCIE, SPRZEDAJ ½, hamuje; empty = trzymaj), watched tickers
   below; click = chart, ✕ = remove.
 - **T / D** (`#perW` / `#perD`, D only for `row.daily`; user: "Dr Wish używa RWB … blue dot"): daily mode of `chartSvg(…, period="D")` — Guppy GMMA
   (`gmma`: fast 3–15 red, slow 30–60 blue), lighter background while RWB (`rwb`: lowest fast EMA above highest slow), ● Blue Dot (`blueDots`: Stochastic 10,1
-  crosses 20 up, RWB, close ≥ Green Line) with the stop under its Low; price as a close LINE, no MACD / revenue / Stochastic panels (user: "linia ceny nie słupki, wywal przychody i Stoch"); separate window (`dShow`, default 260 sessions);
+  crosses 20 up, RWB, close ≥ Green Line) with the stop under its Low; two styles (`D: RWB` / `D: słupki`, `dailyRwb`): close LINE + GMMA/RWB, or OHLC bars + EMA 8/10/20 + SMA 50 (`DAILY_MA`); no MACD / revenue / Stochastic panels (user: "linia ceny nie słupki, wywal przychody i Stoch"); separate window (`dShow`, default 260 sessions);
   trend lines only on the weekly chart. Preview only: the backtest (RWB + above GLB + Blue Dot, stop under the dot, MACD exit) gave +1.0…+1.2 % per trade,
   14–15 % hit rate — weaker than the weekly GLB 0–10 % entry. Same functions in `calc.py` (`gmma`, `rwb`, `stoch_k`, `blue_dots`).
 - Loading bar at the bottom (`#loadbar`, `fetchJson` streams the body: MB, % when the size is known, seconds).
-- `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_glb_settings`.
+- `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_settings_v2`.
 
 ## CI (`.github/workflows/`)
 

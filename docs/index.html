@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Momentum — CAN SLIM · GLB / BLB · RS Rating</title>
+<title>Momentum — GLB + marża operacyjna</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#0e1116">
@@ -15,8 +15,8 @@
 </head>
 <body>
 <header class="bar">
-    <strong class="brand">MOMENTUM <span>// CAN SLIM · GLB / BLB · RS Rating</span></strong>
-    <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. wybicie GLB/BLB i RS Rating">Filtry</button>
+    <strong class="brand">MOMENTUM <span>// GLB + marża operacyjna</span></strong>
+    <button type="button" id="fltBtn" title="Filtry po kolumnach (wszystkie naraz), np. sygnał GLB 0–10 % i warunki">Filtry</button>
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
     <button type="button" id="posListBtn" title="Pozycje (plan wyjścia, co zrobić teraz) i obserwowane spółki">📌 Pozycje</button>
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
@@ -24,15 +24,16 @@
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
        title="W GitHub Actions → Run workflow możesz wkleić link Finviz i podać nazwę. Link zapisze się pod tą nazwą; przy pustym linku odświeży się ostatnio zapisany skaner.">⟳ Odśwież dane</a>
     <details class="rules"><summary>Zasady</summary>
-        <p><b>Reguły (badanie 2011–2025, ≈5600 spółek USA, portfel 10 pozycji):</b> skaner Finviz <i>cena &gt; 10, śr. wolumen &gt; 300 tys., Sales Q/Q &gt; 15 %</i>;
+        <p><b>Reguły (badanie 2011–2025, ≈5600 spółek USA, portfel 10 pozycji):</b> skaner sektorowy — 3 sektory z najsilniejszym RS (ETF sektora / SPY nad własną SMA 52 tyg.), po jednym zapytaniu Finviz na sektor: <i>cena &gt; 15, śr. wolumen &gt; 300 tys., Sales Q/Q &gt; 15 %</i> (kolumna <i>RS sektora</i>; EPS Rating 1–99 = przybliżenie IBD, percentyl wśród spółek listy, tylko kolumna);
             warunek: przychody kw. ≥ +15 % r/r i marża operacyjna ≥ +3 pp r/r (SEC, kolumna <i>Warunki</i>). RS, P/S i niespodzianki EPS są tylko kolumnami.</p>
-        <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad <b>Green Line</b> (rekord wszech czasów na miesięcznych High, który stoi ≥ 3 zamknięte miesiące; po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy).
-            <i>WYBICIE</i> = tydzień przebicia, <i>SYGNAŁ</i> = kolejny tydzień 0–10 % nad linią; dalej niż 10 % — nie kupuj. Ponowne wejście po wyjściu, gdy cena znów jest w strefie.
-            <b>BLB</b> (Blue Line, tygodniowe High) tylko informacyjnie — jako sygnał dawała gorsze wyniki.</p>
+        <p><b>Kupno:</b> zamknięcie tygodnia 0–10 % nad <b>Green Line</b> (rekord wszech czasów na miesięcznych High, który stoi 3 miesiące łącznie, czyli szczyt i 2 zamknięte kolejne; po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy łącznie).
+            <i>WYBICIE</i> = tydzień przebicia, <i>SYGNAŁ</i> = kolejny tydzień 0–10 % nad linią po przebiciu od dołu; dalej niż 10 % — nie kupuj, a powrót w strefę po wyjściu wyżej to kupowanie spadku (stan <i>NAD</i>): po rajdzie > 10 % nad linią ta linia wygasa do powstania nowej. Linia ≤ 10 % nad ceną to aktualne ATH, więc cena jest wtedy nad SMA 50 i 200.
+</p>
         <p><b>Wyjście (zamknięcie tygodnia):</b> −10 % od ceny kupna albo pod Low tygodnia, w którym MACD (12, 26, 9) przeciął sygnał w dół <i>po wejściu</i>. Bez trailing stopów, stopu czasowego i dokładek; zwycięzców trzymaj do wyjścia. ½ przy −20 % od szczytu — opcjonalnie (wynik bez zmian).</p>
         <p><b>Portfel:</b> 8–10 pozycji po równo; najpierw wyjścia, potem wejścia. Gdy sygnałów jest więcej niż miejsc — najbliżej Green Line (domyślna kolejność listy); nie sprzedawaj pozycji dla nowego sygnału. Wolne miejsca = gotówka w SPY. Nie pomijaj sygnałów: wynik robi kilka dużych ruchów.</p>
-        <p><b>RS Rating:</b> ranking 1–99 w obrębie skanera (1/3/6/12 mies. vs SPY, wagi 40/30/20/10). <b>RS Line:</b> cena / SPY. <b>Cena/Cena [52 tyg.]:</b> zamknięcie / zamknięcie sprzed 52 tygodni.</p>
-        <p>Historycznie ≈ 18–25 % rocznie przy obsunięciach ≈ −35 % (dane bez spółek zdelistowanych, więc wynik zawyżony). Heurystyka z backtestu, nie porada inwestycyjna.</p>
+        <p><b>Wykres:</b> nad ceną RS Line jak w Deepvue (akcja / SPY, średnia 52 tyg., ● zielony = nowy szczyt RS i ceny, ● różowy = RS przed ceną); E = raport kwartalny;
+            słupki przychodów pod wolumenem — zielony ≥ +25 % r/r, żółty ≥ +15 %. Prawy przycisk myszy na cenie = miarka (% i liczba tygodni). <b>C/C[52 tyg.]</b> = zamknięcie / zamknięcie sprzed 252 sesji.</p>
+        <p>Historycznie ≈ 9–16 % rocznie przy obsunięciach ≈ −40 % (dane bez spółek zdelistowanych, więc wynik zawyżony). Heurystyka z backtestu, nie porada inwestycyjna.</p>
     </details>
 </header>
 <main class="work">
@@ -40,7 +41,7 @@
         <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
     </section>
     <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="fundBtn" title="Wyniki, wzrost EPS i przychodów, niespodzianki oraz prognozy analityków">📊 Fundamenty</button><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="perW" class="per" title="Wykres tygodniowy">T</button><button type="button" id="perD" class="per" hidden title="Wykres dzienny OHLC">D</button><button type="button" id="dayRwbBtn" class="per" hidden title="Włącz/wyłącz nakładkę RWB Guppy i Blue Dot">RWB</button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół po wejściu) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 %; ½ przy −20 % od szczytu opcjonalnie">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
+        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="fundBtn" title="Ostatni raport, lista kontrolna strategii i plan wyjścia pozycji">📊 Fundamenty</button><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="perW" class="per" title="Wykres tygodniowy">T</button><button type="button" id="perD" class="per" hidden title="Wykres dzienny OHLC">D</button><button type="button" id="dayRwbBtn" class="per" hidden title="Styl wykresu dziennego: linia + RWB / GMMA + Blue Dot albo słupki + EMA 8/10/20, SMA 50 (klawisz R)">RWB</button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół po wejściu) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 %; ½ przy −20 % od szczytu opcjonalnie">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
         <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
         <div class="chart-body" id="chartBody"></div>
         <div class="tip" id="tip" hidden></div>

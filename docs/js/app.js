@@ -1,19 +1,20 @@
-// Strona: uniwersum z Finviz, filtry, GLB/BLB i wykresy dzienne/tygodniowe.
+// Strona (kopia Momentum Desktop): uniwersum z Finviz, filtry, Green Line i wykresy dzienne/tygodniowe.
 // Ctrl+K = dowolny symbol z listy albo z `symbols` w finviz_screen.json. Czyste funkcje na górze (testy w tests/js/app.test.js).
 "use strict";
 
-const COLUMNS = [ // [klucz, nagłówek, format]
-    ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["price", "Cena", "p"],
-    ["glb", "Green Line", "p"], ["glb_pct", "Do GLB %", "%"], ["glb_state", "GLB", "s"], ["ok", "Warunki", "b"],
-    ["blb", "Blue Line", "p"], ["blb_pct", "Do BLB %", "%"], ["blb_state", "BLB", "s"],
-    ["rs_rating", "RS Rating", "rating"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
+const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
+    ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
+    ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["ps", "P/S", "x"], ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"], ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["vol52", "Zmienność 52 tyg.", "r"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"], ["slow", "Hamuje", "w"],
+    ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
+    ["ps", "P/S", "x"], ["peg", "PEG", "x2"], ["pegy", "PEGY", "x2"],
+    ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"],
+    ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["ok", "Warunki", "b"], ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
-const ENTRY_MAX = 10;   // wejście: zamknięcie tygodnia 0–10 % nad Green Line (BLB tylko informacyjnie)
-const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "blb_state", "macd", "quarter", "slow"];
-const SETTINGS_KEY = "momentum_glb_blb_settings";
+const ENTRY_MAX = 10;   // wejście: zamknięcie tygodnia 0–10 % nad Green Line (BLUE DOT i wyżej — tylko informacyjnie)
+const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow"];
+const SETTINGS_KEY = "momentum_settings_v2";   // nowy klucz: stare filtry odwoływały się do usuniętych kolumn
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
 
@@ -25,18 +26,19 @@ function cell(v, f) {
     if (f === "b") return v ? "✓" : "";
     if (f === "x") return v.toFixed(1);
     if (f === "r") return v.toFixed(2);
-    if (f === "rating") return Math.round(v).toString();
+    if (f === "x2") return v.toFixed(2);
+    if (f === "i") return v.toFixed(0);
     if (f === "w") return v === "HAMUJE+MB" ? "⚠⚠ + marża" : v ? "⚠ hamuje" : "";
     return String(v);
 }
 
-// sygnał kupna = Green Line, zamknięcie tygodnia 0–10 % nad linią (badanie 2011–2025: szersza strefa, Blue Dot i BLB dawały mniej)
+// sygnał kupna = Green Line, zamknięcie tygodnia 0–10 % nad linią (badanie 2011–2025: szersza strefa i Blue Dot dawały mniej) — jak app.is_signal
 const isSignal = (r) => SIGNAL.includes(r.glb_state) && (r.glb_pct == null || r.glb_pct <= ENTRY_MAX);
 
-// najpierw sygnały spełniające warunki, potem pozostałe sygnały, potem reszta; w grupie najbliżej Green Line
-// (przy nadmiarze sygnałów najbliższe linii: ten sam wynik, mniejsze obsunięcie), na końcu RS Rating.
+// jak app.default_order: najpierw warunki + sygnał GLB 0–10 %, potem spełniające warunki; w grupie najbliżej Green Line
+// (przy nadmiarze sygnałów najbliższe linii: ten sam wynik, mniejsze obsunięcie), potem siła względna.
 function defaultCompare(a, b) {
-    const key = (r) => [!(isSignal(r) && r.ok), !isSignal(r), r.glb_pct == null ? 1e9 : Math.abs(r.glb_pct), -(r.rs_rating ?? -1e9)];
+    const key = (r) => [!(r.ok && isSignal(r)), !r.ok, r.glb_pct == null ? 1e9 : Math.abs(r.glb_pct), -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
@@ -54,16 +56,14 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { ok: ["tak", "nie"], glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], blb_state: ["WYBICIE", "SYGNAŁ", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"] };
 const FILTER_SCALE = { turnover: 1e6 };
-const FILTER_PRESETS = [
-    ["Reguły: sygnał GLB 0–10 % + warunki (przychody, marża)", { glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 }, ok: { in: ["tak"] } }],
-    ["Wybicie / sygnał / Blue Dot", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] } }],
+const FILTER_PRESETS = [   // jak desktop/app.py FILTER_PRESETS
+    ["Reguły: sygnał GLB 0–10 % + warunki (przychody, marża)", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
+    ["EPS Rating ≥ 80 + sygnał GLB 0–10 %", { eps_rating: { min: 80 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Aktywne: RVol tyg. ≥ 1,5 + nad GLB", { rvol_w: { min: 1.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
-    ["Ruchliwe: zmienność ≥ 0,50", { vol52: { min: 0.5 } }],
-    ["Ruchliwe (zmienność ≥ 0,50) + nad GLB", { vol52: { min: 0.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (wybicie / 0–10 % / Blue Dot) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] }, macd: { in: ["nad"] } }],
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
@@ -149,11 +149,6 @@ if (typeof document !== "undefined") (function () {
 
     function renderTable() {
         const pool = visibleRows(data.rows, { scanner: state.scanner });
-        // Cross-sectional RS Rating: percentile of 52-week relative performance (share price / SPY normalized over time).
-        // Raw price/SPY ratios are not comparable across tickers because nominal share prices and splits differ.
-        const ranked = pool.filter((r) => Number.isFinite(r.rs_rating_score)).sort((a, b) => a.rs_rating_score - b.rs_rating_score);
-        ranked.forEach((r, i) => { r.rs_rating = ranked.length < 2 ? 50 : Math.max(1, Math.min(99, Math.round(1 + 98 * i / (ranked.length - 1)))); });
-        pool.filter((r) => !Number.isFinite(r.rs_rating_score)).forEach((r) => { r.rs_rating = null; });
         shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
         $("fltBtn").textContent = nf ? `Filtry (${nf})` : "Filtry";
@@ -166,10 +161,7 @@ if (typeof document !== "undefined") (function () {
                 return `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(value, f))}</td>`;
             }).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
-        const sig = pool.filter((r) => isSignal(r)).length;
-        const ratingNeedsRefresh = pool.length > 0 && pool.every((r) => !Number.isFinite(r.rs_rating_score));
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · sygnał GLB 0–10 % ${sig}` +
-            (ratingNeedsRefresh ? " · odśwież dane, aby policzyć RS Rating" : "");
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · spełnia warunki ${pool.filter((r) => r.ok).length} · sygnał GLB ${pool.filter((r) => r.ok && isSignal(r)).length}`;
         renderStatus();
     }
 
@@ -274,7 +266,7 @@ if (typeof document !== "undefined") (function () {
         $("perD").hidden = !ok;
         $("dayRwbBtn").hidden = !ok || period !== "D";
         $("dayRwbBtn").classList.toggle("on", dailyRwb);
-        $("dayRwbBtn").textContent = compact ? (dailyRwb ? "RWB ✓" : "RWB —") : (dailyRwb ? "RWB: ON" : "RWB: OFF");
+        $("dayRwbBtn").textContent = compact ? (dailyRwb ? "RWB" : "słupki") : (dailyRwb ? "D: RWB" : "D: słupki");   // jak desktop: styl dziennego
         $("perW").textContent = "T";
         $("perD").textContent = "D";
         $("perW").classList.toggle("on", period === "W");
@@ -389,7 +381,35 @@ if (typeof document !== "undefined") (function () {
         saveAlerts();
     }
 
+    // miarka (prawy przycisk myszy na panelu ceny): % zmiany ceny i liczba świec od punktu kliknięcia — jak ChartWindow.ruler_move w desktopie
+    function rulerPoint(pt) {
+        const [y0, y1] = geom.price, y = Math.max(y0, Math.min(y1, pt.y));
+        const i = Math.max(0, Math.min(geom.n - 1, Math.floor((pt.x - geom.x0) / geom.step)));
+        return { p: Math.exp(geom.lmin + (y1 - y) / (y1 - y0) * (geom.lmax - geom.lmin)), k: geom.i0 + i, x: geom.x0 + (i + 0.5) * geom.step, y };
+    }
+    function drawRuler(pt) {
+        const svg = $("chartBody").querySelector("svg"), old = svg && svg.querySelector("#ruler");
+        if (old) old.remove();
+        if (!svg || !gest || gest.mode !== "ruler") return;
+        const a = gest.a, b = rulerPoint(pt), col = b.p >= a.p ? "#26a65b" : "#e5534b", right = b.x < geom.x1 - 240, txt = rulerText(a.p, b.p, a.k, b.k, period);
+        const ty = b.y > a.y ? b.y + 16 : b.y - 8, wd = txt.length * 6.6 + 8, tx = right ? b.x + 10 : b.x - 10 - wd;
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        g.id = "ruler";
+        g.innerHTML = `<rect x="${Math.min(a.x, b.x)}" y="${Math.min(a.y, b.y)}" width="${Math.abs(b.x - a.x)}" height="${Math.abs(b.y - a.y)}" fill="none" stroke="${col}" stroke-dasharray="3 3"/>` +
+            `<line x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}" stroke="${col}" stroke-width="1.5"/>` +
+            `<rect x="${tx - 2}" y="${ty - 12}" width="${wd}" height="16" fill="#0e1116" opacity="0.9"/><text x="${tx + 2}" y="${ty}" fill="${col}" font-size="11">${escapeHtml(txt)}</text>`;
+        svg.appendChild(g);
+    }
+
     function chartDown(ev) {
+        if (geom && series && ev.pointerType === "mouse" && ev.button === 2) {   // prawy przycisk = miarka (także na dziennym)
+            const pt = chartPt(ev);
+            if (pt.y < geom.price[0] || pt.y > geom.price[1]) return;
+            $("chartBody").setPointerCapture(ev.pointerId);
+            gest = { mode: "ruler", a: rulerPoint(pt) };
+            ev.preventDefault();
+            return;
+        }
         if (!geom || !series || period === "D" || (ev.pointerType === "mouse" && ev.button !== 0)) return;   // linie trendu tylko na tygodniowym
         const pt = chartPt(ev), touch = ev.pointerType !== "mouse", tol = touch ? 18 : 7;
         const hit = hitLine(geom.segs || [], pt.x, pt.y, tol);
@@ -429,6 +449,7 @@ if (typeof document !== "undefined") (function () {
 
     function chartMoveGest(ev) {
         if (!gest) return;
+        if (gest.mode === "ruler") { drawRuler(chartPt(ev)); return; }
         const pt = chartPt(ev), moved = Math.hypot(pt.x - gest.x, pt.y - gest.y);
         if (gest.mode === "press") {
             if (moved > 10) { clearTimeout(gest.timer); gest.mode = "scrub"; }
@@ -457,6 +478,7 @@ if (typeof document !== "undefined") (function () {
 
     function chartUp() {
         if (!gest) return;
+        if (gest.mode === "ruler") { gest = null; drawRuler(null); return; }
         clearTimeout(gest.timer);
         if (gest.mode === "press" || gest.mode === "pend") { sel = null; renderTools(); redrawSoon(); }   // dotknięcie / klik obok linii = odznacz
         else if (gest.mode !== "scrub") {
@@ -572,33 +594,49 @@ if (typeof document !== "undefined") (function () {
         $("alertDlg").showModal();
     }
 
+    // panel fundamentów jak desktop chart.fund_panel_lines (domyślne warunki: przychody + marża; P/S, RS i beat2 wyłączone)
     function openFundamentals(t) {
         const r = rowFor(t);
         if (!r) return;
-        const e = escapeHtml, n = (v, d = 2) => v == null || !Number.isFinite(Number(v)) ? "—" : Number(v).toFixed(d);
-        const pct = (v) => v == null || !Number.isFinite(Number(v)) ? "—" : (Number(v) >= 0 ? "+" : "") + Number(v).toFixed(1) + "%";
-        const tone = (v) => v == null || !Number.isFinite(Number(v)) || Number(v) === 0 ? "neutral" : Number(v) > 0 ? "positive" : "negative";
-        const money = (v) => v == null ? "—" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 });
-        const eps = (r.eps_q || []).slice().sort((a, b) => a[0].localeCompare(b[0]));
-        const actual = eps.slice(-8).map(([date, value]) => {
-            const prior = eps.find(([d]) => d.slice(5) === date.slice(5) && Number(d.slice(0, 4)) === Number(date.slice(0, 4)) - 1);
-            const q = (r.qs || []).find(x => x.quarter === date) || {};
-            const s = (r.surp_hist || []).find(x => x[0].slice(0, 7) === date.slice(0, 7));
-            return "<tr><td>" + e(date) + "</td><td class='num " + tone(value) + "'>" + n(value, 3) + "</td><td class='num " + tone(prior && prior[1] ? (value / prior[1] - 1) * 100 : null) + "'>" + pct(prior && prior[1] ? (value / prior[1] - 1) * 100 : null) + "</td><td class='num " + tone(q.rev_rr) + "'>" + pct(q.rev_rr) + "</td><td class='num " + tone(s && s[1]) + "'>" + pct(s && s[1]) + "</td></tr>";
-        });
-        const estimates = [["0q","Bieżący kwartał"],["+1q","Następny kwartał"],["0y","Bieżący rok"],["+1y","Następny rok"]].map(([key,label]) => {
-            const x = (r.eps_est || []).find(v => v.period === key);
-            return "<tr><td>" + label + "</td><td class='num'>" + n(x && x.avg,3) + "</td><td class='num'>" + n(x && x.low,3) + " – " + n(x && x.high,3) + "</td><td class='num " + tone(x && x.growth != null ? Number(x.growth) : null) + "'>" + pct(x && x.growth != null ? Number(x.growth) : null) + "</td><td class='num'>" + (x && x.numberOfAnalysts != null ? e(x.numberOfAnalysts) : "—") + "</td></tr>";
-        });
-        const revenues = (r.qs || []).slice(-8).map(q => "<tr><td>" + e(q.quarter || "—") + "</td><td class='num'>" + money(q.rev) + "</td><td class='num'>" + pct(q.rev_rr) + "</td></tr>");
+        const e = escapeHtml, f = (x) => (x == null ? "—" : x.toLocaleString("en-US", { maximumFractionDigits: 2 }));
+        const v = (x, u, d = 1) => (x == null ? "—" : (x >= 0 ? "+" : "") + x.toFixed(d) + u);
+        const pos = ast.pos[t], pl = planFor(t), out = [];
+        const add = (txt, cls) => out.push(`<div class="fl ${cls}">${e(txt)}</div>`);
+        const val = (k, x) => out.push(`<div class="fl val"><span>${e(k)}</span><b>${e(x)}</b></div>`);
+        add((r.ok ? "✓ spełnia warunki" : "✗ nie spełnia warunków") + (pos ? "   ·   📌 masz pozycję" : ""), r.ok ? "status_ok" : "status_no");
+        if (r.slow) add(r.slow === "HAMUJE+MB" ? "⚠⚠ hamuje + marża brutto spada" : "⚠ hamuje (tempo przychodów −10 pp lub więcej)", "warn");
+        add(`OSTATNI RAPORT · kwartał ${r.quarter || "—"}`, "sec");
+        val("Przychody r/r", v(r.rev_rr, " %")); val("  poprzedni kw.", v(r.rev_rr1, " %")); val("  zmiana tempa", v(r.accel, " pp"));
+        val("Δ marży oper. r/r", v(r.dopm, " pp")); val("  poprzedni kw.", v(r.dopm1, " pp")); val("Marża oper.", v(r.opm, " %"));
+        val("Δ marży brutto r/r", v(r.dgm, " pp")); val("Wycena P/S", r.ps ? r.ps.toFixed(1) : "—"); val("RS 52 tyg. vs S&P", v(r.rs, " pp"));
+        val("RS sektora (ETF / SPY nad SMA 52)", v(r.sector_rs, " %")); val("EPS Rating (1–99, przybliżenie IBD)", r.eps_rating == null ? "—" : String(r.eps_rating));
+        val("  wzrost EPS 2 ost. kw. r/r", v(r.eps_g2, " %", 0)); val("  EPS 3 lata (TTM, rocznie)", v(r.eps_cagr3, " %", 0));
+        val("  stabilność (kw. ze wzrostem r/r)", r.eps_stab == null ? "—" : Math.round(r.eps_stab * 100) + " %");
+        val("Niespodzianka EPS", v(r.surp, " %")); val("Rewizja EPS 90 dni", v(r.eps_rev, " %"));
+        val("Obrót dzienny", r.turnover ? `${(r.turnover / 1e6).toFixed(0)} mln $` : "—"); val("Do Green Line", v(r.glb_pct, " %"));
+        add("LISTA KONTROLNA", "sec");
+        const item = (ok, txt) => add((ok === true ? "✓ " : ok === false ? "✗ " : "— ") + txt, ok === true ? "ok" : ok === false ? "no" : "na");
+        const cond = (x, test) => (x == null ? null : test(x));
+        item(cond(r.rev_rr, (x) => x >= 15), "przychody kw. ≥ +15 % r/r");
+        item(cond(r.dopm, (x) => x >= 3), "marża oper. ≥ +3 pp r/r");
+        item(null, "wycena P/S — kryterium wyłączone (próg 20)");
+        item(null, "siła względna — kryterium wyłączone (próg +50 pp)");
+        item(null, "2 ostatnie raporty EPS — kryterium wyłączone");
+        item(isSignal(r) ? true : ["NAD", "BLUE DOT", "WYBICIE"].includes(r.glb_state) ? null : false, `Green Line: ${r.glb_state || "—"} (kupno: zamknięcie tygodnia 0–10 % nad linią po przebiciu od dołu)`);
+        item(r.macd === "nad", `MACD tyg. ${r.macd || "—"} sygnałem` + (r.macd_stop ? ` · stop ${r.macd_stop.toFixed(2)}` : ""));
+        item(r.slow ? false : r.accel == null ? null : true, "brak hamowania przychodów");
+        item(r.glb == null || r.price == null ? null : r.price >= r.glb, `zamknięcie nad Green Line ${f(r.glb)} (wyjście metodą GLB: zamknięcie tyg. pod linią)`);
+        if (pl) {
+            const g = state.exit === "GLB";
+            add("PLAN WYJŚCIA · metoda " + (g ? "pod GLB" : "MACD"), "sec");
+            val("Kupno", f(pl.entry)); val("Stop −10 %", f(pl.stopInit)); val("Szczyt od wejścia", f(pl.peak)); val("½ przy (−20 %)", f(pl.halfAt));
+            val("Reszta", g ? `zamknięcie tyg. pod Green Line ${f(r.glb)}` : `stop MACD od wejścia ${f(pl.macdStop)}`);
+            if (pl.half) add(`⚠ Zamknięcie ${f(pl.last)} jest ≥ 20 % pod szczytem ${f(pl.peak)} — sprzedaj połowę.`, "warn");
+            if (g ? pl.glbExit : pl.macdStop && (r.price || 0) < pl.macdStop) add("⚠ Sygnał wyjścia (" + (g ? "zamknięcie pod Green Line" : "zamknięcie pod stopem MACD") + ").", "warn");
+        }
+        if (pos && r.slow) add(`⚠ Masz pozycję, a raport pokazuje hamowanie${r.slow === "HAMUJE+MB" ? " i spadek marży brutto" : ""} — spadek ≥ 20 % w 6 mies. w ${r.slow === "HAMUJE+MB" ? "50" : "44"} % przypadków (normalnie 33 %). Rozważ zacieśnienie stopu.`, "warn");
         $("fundTitle").textContent = t + " · " + (r.company || "") + " · Fundamenty";
-        $("fundBody").innerHTML = "<p class='dimtxt'>EPS i konsensus z yfinance; przychody i marże z SEC. Brak wartości oznacza brak danych, nie zero. Prognozy nie są gwarancją.</p>" +
-          "<div class='fund-summary'><div><span>Ostatni EPS</span><b class='" + tone(eps.length ? eps[eps.length-1][1] : null) + "'>" + n(eps.length ? eps[eps.length-1][1] : null,3) + "</b></div><div><span>Niespodzianka EPS</span><b class='" + tone(r.surp) + "'>" + pct(r.surp) + "</b></div><div><span>Rewizja EPS 90 dni</span><b class='" + tone(r.eps_rev) + "'>" + pct(r.eps_rev) + "</b></div><div><span>Przychody r/r</span><b class='" + tone(r.rev_rr) + "'>" + pct(r.rev_rr) + "</b></div></div>" +
-          "<h4>EPS — wyniki kwartalne</h4><div class='tblwrap'><table class='gt'><thead><tr><th>Kwartał</th><th>EPS</th><th>EPS r/r</th><th>Przychody r/r</th><th>Niespodzianka EPS</th></tr></thead><tbody>" + (actual.join("") || "<tr><td colspan='5'>Brak historii EPS.</td></tr>") + "</tbody></table></div>" +
-          "<h4>Prognozy EPS analityków</h4><div class='tblwrap'><table class='gt'><thead><tr><th>Okres</th><th>Średnia EPS</th><th>Low–high</th><th>Prognozowany wzrost</th><th>Analitycy</th></tr></thead><tbody>" + estimates.join("") + "</tbody></table></div>" +
-          "<h4>Przychody — ostatnie kwartały</h4><div class='tblwrap'><table class='gt'><thead><tr><th>Kwartał</th><th>Przychody ($)</th><th>Zmiana r/r</th></tr></thead><tbody>" + (revenues.join("") || "<tr><td colspan='3'>Brak danych SEC.</td></tr>") + "</tbody></table></div>" +
-          "<h4>Marże i wycena</h4><div class='tblwrap'><table class='gt'><tbody><tr><td>Marża operacyjna</td><td>" + pct(r.opm) + "</td><td>Zmiana marży operacyjnej r/r</td><td>" + n(r.dopm,1) + " pp</td></tr><tr><td>Zmiana marży brutto r/r</td><td>" + n(r.dgm,1) + " pp</td><td>P/S</td><td>" + n(r.ps,1) + "</td></tr><tr><td>Siła względna 52 tyg. vs SPY</td><td>" + n(r.rs,1) + " pp</td><td>Rewizja prognozy EPS 90 dni</td><td>" + pct(r.eps_rev) + "</td></tr></tbody></table></div>" +
-          "<div class='dlg-btns'><button type='button' data-t='" + e(t) + "'>Otwórz wykres</button><button type='button' data-close-fund>Zamknij</button></div>";
+        $("fundBody").innerHTML = out.join("") + "<div class='dlg-btns'><button type='button' data-t='" + e(t) + "'>Otwórz wykres</button><button type='button' data-close-fund>Zamknij</button></div>";
         $("fundDlg").showModal();
     }
 
@@ -902,6 +940,7 @@ if (typeof document !== "undefined") (function () {
         $("status").textContent = `Dane z ${data.generated_at.slice(0, 10)} (ostatni tydzień ${data.data_as_of || "—"}` +
             `${weekInProgress(data.data_as_of, data.generated_at) ? " — w toku, sygnał obowiązuje po zamknięciu piątku" : ""})` +
             (state.scanner && scans[0] ? ` · filtr Finviz ${scans[0].filters}` : "") +
+            ((data.sectors || []).some((x) => x.selected) ? ` · sektory top (RS nad SMA 52 tyg.): ${data.sectors.filter((x) => x.selected).map((x) => `${x.etf} ${x.pct >= 0 ? "+" : ""}${x.pct.toFixed(1)} %`).join(", ")}` : "") +
             (stale.length ? ` · ⚠ Finviz niedostępny dla: ${stale.join(", ")} — lista z poprzedniego odświeżenia` : "");
     }
 

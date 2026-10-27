@@ -9,46 +9,13 @@ import watchlist
 from momentum import calc, finviz, prices, sec
 
 
-def test_green_line_needs_three_closed_months_and_keeps_old_line():
-    assert calc.green_line([10, 12, 11, 11]) == (None, None)            # rekord 12 stoi dopiero 2 miesiące
-    assert calc.green_line([10, 12, 11, 11, 11]) == (12, 1)             # ≥ 3 miesiące -> linia
-    assert calc.green_line([10, 12, 11, 11, 11, 15, 14]) == (12, 1)     # nowy rekord 15 jeszcze nie stoi 3 miesięcy: obowiązuje stara linia
-    assert calc.green_line([10, 12, 11, 11, 11, 15, 14, 14, 14]) == (15, 5)
+def test_green_line_needs_peak_plus_two_closed_months_and_keeps_old_line():
+    assert calc.green_line([10, 12, 11]) == (None, None)                # rekord 12 + 1 miesiąc = 2 świece
+    assert calc.green_line([10, 12, 11, 11]) == (12, 1)                 # szczyt + 2 zamknięte miesiące = 3 świece -> linia
+    assert calc.green_line([10, 12, 11, 11, 11, 15, 14]) == (12, 1)     # nowy rekord 15 ma szczyt + 1 miesiąc: obowiązuje stara linia
+    assert calc.green_line([10, 12, 11, 11, 11, 15, 14, 14]) == (15, 5)  # nowy rekord 15 + 2 miesiące: zastępuje starą linię
     assert calc.green_line([10, 12, 11, 11, 11, 11, 11, 11, 11])[0] == 12   # „3 lub więcej” — rekord stojący dłużej nadal jest linią
 
-
-def test_blue_line_uses_weekly_highs_and_three_week_confirmation():
-    assert calc.blue_line([10, 12] + [11] * 2) == (None, None)
-    assert calc.blue_line([10, 12] + [11] * 3) == (12, 1)
-    # A fresh higher high does not replace the confirmed old line until it has aged 3 closed weeks.
-    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 1) == (12, 1)
-    assert calc.blue_line([10, 12] + [11] * 3 + [15, 14] + [14] * 2) == (15, 5)
-
-
-def test_build_row_blb_search_is_gated_by_uptrend_but_confirmed_line_persists():
-    dates = [(dt.date(2025, 1, 6) + dt.timedelta(weeks=i)).isoformat() for i in range(40)]
-    closes = [float(x) for x in range(1, 41)]
-    weekly = {"d": dates, "o": closes, "h": [x + 1 for x in closes],
-              "l": [x - 1 for x in closes], "c": closes, "v": [1000.0] * len(closes)}
-    # An ATH formed during the uptrend (week 31) stays unbroken for 3 closed weeks.
-    highs = [[dates[i], 10.0] for i in range(30)] + [[dates[30], 12.0]] + [[dates[i], 11.0] for i in range(31, 40)]
-    up = calc.build_row({"ticker": "AAA"}, weekly, [], None, weekly_highs=highs)
-    assert up["trend"] is True
-    assert up["blb"] == 12.0
-    assert up["blb_search_started"] is True
-
-    down_closes = closes[:30] + [float(x) for x in range(0, -10, -1)]
-    down_weekly = {**weekly, "c": down_closes}
-    down = calc.build_row({"ticker": "AAA"}, down_weekly, [], None, weekly_highs=highs,
-                          previous_row={"blb": 12.0, "blb_search_started": True})
-    assert down["trend"] is False
-    assert down["blb"] == 12.0
-    assert down["blb_state"] is not None
-
-    # ATHs formed while the trend filter is off cannot initiate a new BLB.
-    down_history = [[dates[i], float(100 + i)] for i in range(10, 40)]
-    no_new = calc.build_row({"ticker": "BBB"}, down_weekly, [], None, weekly_highs=down_history)
-    assert no_new["blb"] is None
 
 def test_glb_state():
     assert calc.glb_state(105, 99, 100) == "WYBICIE"
@@ -56,6 +23,22 @@ def test_glb_state():
     assert calc.glb_state(110, 103, 100) == "SYGNAŁ"
     assert calc.glb_state(111, 103, 100) == "NAD"
     assert calc.glb_state(125, 99, 100) == "WYBICIE"                    # tydzień przebicia: dowolnie wysoko = mocne wybicie
+    assert calc.glb_state(105, 103, 100, armed=False) == "NAD"          # powrót w strefę po wyjściu wyżej: kupowanie spadku, nie sygnał
+
+
+def test_glb_armed_only_after_breakout_from_below_and_expires_after_a_run():
+    assert calc.glb_armed([90, 95, 101, 104], 100)                       # zamknięcie pod linią, potem przebicie i kolejny tydzień w strefie
+    assert calc.glb_armed([90, 105, 95, 103], 100)                       # zeszła pod linię i przebiła ponownie bez rajdu > 10 %: nadal sygnał
+    assert not calc.glb_armed([90, 101, 115, 108], 100)                  # wyszła > 10 % nad linię i wróciła w strefę (CDLX 03/2020)
+    assert not calc.glb_armed([90, 101, 115, 98], 100)                   # po rajdzie > 10 % linia wygasa także po zejściu pod nią
+    assert not calc.glb_armed([105, 108, 104], 100)                      # nigdy pod linią w oknie
+    assert not calc.glb_armed([90, 95], None)
+    row = calc.build_row({"ticker": "X"}, {"d": [f"2026-01-{i + 1:02d}" for i in range(4)], "o": [0] * 4, "h": [0] * 4, "l": [1] * 4,
+                                           "c": [90, 115, 108, 106], "v": [1] * 4}, [100] * 5, None)
+    assert row["glb"] == 100 and row["glb_state"] == "NAD"
+    row = calc.build_row({"ticker": "X"}, {"d": [f"2026-01-{i + 1:02d}" for i in range(3)], "o": [0] * 3, "h": [0] * 3, "l": [1] * 3,
+                                           "c": [90, 95, 104], "v": [1] * 3}, [100] * 5, None)
+    assert row["glb_state"] == "WYBICIE"
 
 
 def test_fresh_blue_dot_only_in_last_sessions():
@@ -284,7 +267,7 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
     assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
     assert a["rvol_w"] == pytest.approx(1.0) and a["rvol_d"] == pytest.approx(1.0)   # wolumen relatywny tydzień / sesja
-    assert "vol52" in a                                                                    # zmienność 52 tyg. (None przy krótkiej historii)
+    assert "earn" in a                                                                     # daty raportów (E na wykresie)
 
 
 def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
@@ -299,10 +282,10 @@ def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
 
 
 def test_price_ratio_uses_252_sessions_and_short_history_fallback():
-    assert watchlist.price_ratio([100, 110, 120], sessions=2) == pytest.approx(1.2)
-    assert watchlist.price_ratio([100], sessions=2) is None
+    assert calc.price_ratio([100, 110, 120], sessions=2) == pytest.approx(1.2)
+    assert calc.price_ratio([100], sessions=2) is None
     prices = list(range(100, 354))
-    assert watchlist.price_ratio(prices, sessions=252) == pytest.approx(353 / 101)
+    assert calc.price_ratio(prices, sessions=252) == pytest.approx(353 / 101)
 
 
 def test_file_name():
@@ -398,18 +381,6 @@ def test_trend_sma10_above_sma30():
     assert up["trend"] is True and down["trend"] is False and short["trend"] is None
 
 
-def test_volatility():
-    import math
-    up = [100 * 1.02 ** i for i in range(53)]                                 # stały wzrost: zerowa zmienność
-    assert calc.volatility(up) == pytest.approx(0.0, abs=1e-9)
-    zz = [100 * (1.1 if i % 2 else 1.0) for i in range(53)]                   # naprzemiennie ±log(1.1)
-    r = [math.log(1.1), -math.log(1.1)] * 26
-    m = sum(r) / len(r)
-    assert calc.volatility(zz) == pytest.approx(math.sqrt(sum((x - m) ** 2 for x in r) / 51) * math.sqrt(52))
-    assert calc.volatility(up[:30]) is None                                   # za krótka historia
-    assert calc.volatility(up[:-1] + [None]) is not None                      # pojedynczy brak nie blokuje
-
-
 def test_rel_volume():
     assert calc.rel_volume([10] * 10 + [25], 10) == pytest.approx(2.5)
     assert calc.rel_volume([10] * 5, 10) is None and calc.rel_volume([0] * 10 + [5], 10) is None
@@ -445,24 +416,6 @@ def test_eps_history_and_estimate_rows_are_json_safe():
     }]
 
 
-def test_build_row_exposes_eps_history_and_forecasts():
-    w = {"d": ["2026-10-12", "2026-10-19"], "o": [10, 11], "h": [11, 12], "l": [9, 10], "c": [10, 11], "v": [100, 110]}
-    estimates = {"surp": [], "rev90": 5.0, "eps_q": [["2026-06-30", 1.2]], "eps_est": [{"period": "+1y", "avg": 4.0}], "hist": []}
-    row = calc.build_row({"ticker": "X"}, w, [], {}, None, estimates)
-    assert row["eps_q"] == [["2026-06-30", 1.2]]
-    assert row["eps_est"][0]["avg"] == 4.0
-    assert row["surp_hist"] == []
-
-
-def test_deepvue_style_rs_score_weights_recent_relative_performance():
-    dates = [(dt.date(2025, 1, 6) + dt.timedelta(days=7 * i)).isoformat() for i in range(60)]
-    stock = {"d": dates, "c": [100 + i for i in range(60)]}
-    spy = {"d": dates, "c": [100.0] * 60}
-    score = calc.rs_rating_score(stock, spy)
-    assert score is not None and score > 0
-    assert calc.rs_rating_score({"d": dates[:3], "c": [100, 101, 102]}, spy) is None
-
-
 def test_merge_daily_appends_only_new_dates_and_detects_changed_history():
     old = {"raw": 1, "d": ["2026-10-19", "2026-10-20"], "o": [1, 2], "h": [2, 3], "l": [0, 1], "c": [1, 2], "v": [10, 20]}
     fresh = {"raw": 1, "d": ["2026-10-20", "2026-10-21"], "o": [2, 3], "h": [3, 4], "l": [1, 2], "c": [2, 3], "v": [20, 30]}
@@ -486,3 +439,24 @@ def test_finviz_url_replaces_previous_scanner_and_saves_one_url(tmp_path, monkey
     saved = json.loads(config_path.read_text())
     assert seen == ["fa_salesqoq_o15,sh_price_o10"]
     assert len(saved["scanners"]) == 1 and saved["scanners"][0]["url"].endswith("f=fa_salesqoq_o15,sh_price_o10")
+
+
+def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp_path):
+    cfg = {"scanners": [{"name": "Sektory", "filters": "f", "top_sectors": 2}], "symbols": ["SPY"]}
+    queries = []
+
+    def fetch(filters, max_tickers, log):
+        queries.append(filters)
+        return [{"ticker": f"{filters[4:7].upper()}{i}", "sector": "Technology" if "technology" in filters else "Energy"} for i in range(20)], 20
+
+    def weekly(ts, log, cache):
+        out = {}
+        for t in ts:
+            out[t] = {**SPY, "c": [100.0] * 60} if t == "SPY" else {**W, "c": [100.0 * (1.01 if t == "XLK" else 1.005 if t == "XLE" else 0.99) ** i for i in range(60)]} if t.startswith("XL") else W
+        return out
+    rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch, weekly=weekly,
+                         monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+    data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
+    assert queries == ["sec_technology,f", "sec_energy,f"] and len(rows) == 40
+    assert [x["etf"] for x in data["sectors"] if x["selected"]] == ["XLK", "XLE"] and rows[0]["sector_rs"] > rows[-1]["sector_rs"] > 0
+    assert (tmp_path / "out" / "weekly" / "XLK.json").exists() and "XLK" not in json.loads((tmp_path / "cache" / "sec.json").read_text())

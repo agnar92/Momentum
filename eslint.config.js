@@ -7,7 +7,7 @@ const browserGlobals = {
     URL: "readonly", setInterval: "readonly", clearInterval: "readonly", TextDecoder: "readonly", Blob: "readonly", caches: "readonly", Notification: "readonly", requestAnimationFrame: "readonly", self: "readonly", module: "readonly",
     require: "readonly",   // tylko w testach (chart.js sprawdza typeof require)
     // docs/js/lines.js i chart.js (ładowane PRZED app.js)
-    dateIndex: "readonly", lineAt: "readonly", hitLine: "readonly", snapPrice: "readonly", evalAlerts: "readonly", snapshot: "readonly", positionPlan: "readonly", positionStatus: "readonly", MAX_POSITIONS: "readonly",
+    dateIndex: "readonly", lineAt: "readonly", hitLine: "readonly", snapPrice: "readonly", evalAlerts: "readonly", snapshot: "readonly", positionPlan: "readonly", positionStatus: "readonly", MAX_POSITIONS: "readonly", rulerText: "readonly",
     chartSvg: "readonly", infoLines: "readonly", titleText: "readonly", sliderSvg: "readonly", sliderRect: "readonly",
     sliderMode: "readonly", sliderDrag: "readonly", sliderJump: "readonly", zoomWindow: "readonly", windowRange: "readonly",
 };
