@@ -464,7 +464,7 @@ def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp
 
 
 def test_rows_carry_zanger_patterns_and_parabola(tmp_path):
-    para = [20 * math.exp(0.004 * i + 0.0009 * i * i) for i in range(60)]
+    para = [20 * math.exp(0.004 * i + 0.0004 * i * i) * (1 + 0.08 * math.sin(2 * math.pi * i / 7)) for i in range(60)]
     d = [(dt.date(2024, 1, 1) + dt.timedelta(weeks=i)).isoformat() for i in range(60)]
     w = {"d": d, "o": para, "h": [x * 1.01 for x in para], "l": [x * 0.99 for x in para], "c": para, "v": [1e6] * 60}
     row = calc.build_row({"ticker": "P"}, w, [], None)
