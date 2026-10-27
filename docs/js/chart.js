@@ -483,7 +483,10 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
                     if (a != null && b != null) parts.push(`<rect x="${(a - step * 0.45).toFixed(1)}" y="${yf(Math.min(sh.hi, pmax)).toFixed(1)}" width="${(b - a + step * 0.9).toFixed(1)}" height="${Math.max(1, yf(Math.max(sh.lo, pmin)) - yf(Math.min(sh.hi, pmax))).toFixed(1)}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="4 3"/>`);
                 } else if (sh.kind === "line") {
                     const a = px(sh.d1), b = px(sh.d2);
-                    if (a != null && b != null) line(a, yf(sh.p1), b, yf(sh.p2), col, 2);
+                    if (a != null && b != null) {
+                        line(a, yf(sh.p1), b, yf(sh.p2), col, 2);
+                        if (sh.label) text(a + 5, yf(sh.p1) + 14, sh.label, col, 'font-weight="bold"');   // numer linii (1, 2, 3) przy lewym końcu, jak na schemacie Zangera
+                    }
                 }
             }
         };
@@ -505,7 +508,8 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             if (para.exit > pmin && para.exit < pmax) {
                 const y = yf(para.exit);
                 line(x0, y, x1, y, PARABOLA_COLOR, 1, 'stroke-dasharray="2 3"');
-                boxText(x0 + 4, y + 13, `PARABOLA · wyjście: zamknięcie tyg. pod SMA 10 ${fmt(para.exit)}`, PARABOLA_COLOR);
+                boxText(x0 + 4, y + 13, para.state === "ZŁAMANA" ? `PARABOLA · ZŁAMANA najbardziej stroma linia — sprzedaż${para.vol_x ? ` · wol. ${para.vol_x.toFixed(1)}×` : ""}`
+                    : `PARABOLA · wyjście: zamknięcie tyg. pod linią 3 (${fmt(para.exit)})`, PARABOLA_COLOR);
             }
         }
     }

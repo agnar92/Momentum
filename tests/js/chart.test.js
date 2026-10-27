@@ -172,3 +172,12 @@ test("Zanger view: price + volume only, pattern outline, buy label and parabola 
     const plain = chartSvg(w, row, 1000, 600);
     assert.ok(plain.svg.includes("MACD (12, 26, 9)") && !plain.svg.includes("PARABOLA"));
 });
+
+test("Parabolic Curve draws numbered rising lines and the exit / break label", () => {
+    const w = weekly(80), d = w.d, last = w.c[w.c.length - 1];
+    const lines = [[10, 60, 1], [30, 70, 2], [50, 76, 3]].map(([a, b, k]) => ({ kind: "line", d1: d[a], d2: d[79], p1: 50 + a, p2: last - 8 + b / 10, label: String(k) }));
+    const mk = (state) => chartSvg(w, { parabola: { state, exit: last - 1, vol_x: 1.7, shapes: lines } }, 1000, 600, null, null, [], null, null, "W", true, true).svg;
+    assert.ok(mk("TRWA").includes("wyjście: zamknięcie tyg. pod linią 3") && !mk("TRWA").includes("ZŁAMANA"));
+    assert.ok(mk("ZŁAMANA").includes("ZŁAMANA najbardziej stroma linia") && mk("ZŁAMANA").includes("wol. 1.7×"));
+    assert.ok(/>1<\/text>/.test(mk("TRWA")) && />3<\/text>/.test(mk("TRWA")));
+});
