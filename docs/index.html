@@ -22,7 +22,7 @@
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
-       title="W GitHub Actions → Run workflow możesz wkleić link Finviz i podać nazwę. Link zapisze się pod tą nazwą; przy pustym linku odświeży się ostatnio zapisany skaner.">⟳ Odśwież dane</a>
+       title="W GitHub Actions → Run workflow odświeża dane: RS sektorów (ETF / SPY nad SMA 52 tyg.), 3 najsilniejsze sektory = 3 zapytania Finviz (sektor + cena > 15 $ + przychody kw. > 15 %), potem ceny, SEC i EPS.">⟳ Odśwież dane</a>
     <details class="rules"><summary>Zasady</summary>
         <p><b>Reguły (badanie 2011–2025, ≈5600 spółek USA, portfel 10 pozycji):</b> skaner sektorowy — 3 sektory z najsilniejszym RS (ETF sektora / SPY nad własną SMA 52 tyg.), po jednym zapytaniu Finviz na sektor: <i>cena &gt; 15, śr. wolumen &gt; 300 tys., Sales Q/Q &gt; 15 %</i> (kolumna <i>RS sektora</i>; EPS Rating 1–99 = przybliżenie IBD, percentyl wśród spółek listy, tylko kolumna);
             warunek: przychody kw. ≥ +15 % r/r i marża operacyjna ≥ +3 pp r/r (SEC, kolumna <i>Warunki</i>). RS, P/S i niespodzianki EPS są tylko kolumnami.</p>

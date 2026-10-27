@@ -5,7 +5,7 @@ Strategię wybrano w backteście na płynnym rynku USA w latach 2015–2026:
 
 | Etap | Reguła |
 |---|---|
-| Lista do pobrania | **Jeden skaner Finviz**: wklej jeden URL w `Actions → Weekly Refresh → Run workflow`; nowy URL zastępuje poprzedni, a pusty odświeża zapisany link. W `finviz_screen.json` jest jeden zapasowy filtr: Bezpieczny (backtest) `ind_stocksonly,sh_price_o10,sh_avgvol_o300,fa_salesqoq_o15` (tylko akcje, cena > 10 $, śr. wolumen > 300 tys., przychody kw. > 15 % r/r — nie odciął żadnego z dużych zwycięzców), Trend 50/200, Blisko rekordu (ATH), CANSLIM |
+| Lista do pobrania | **Jeden skaner — sektorowy** (jak w desktopie): `Weekly Refresh` liczy RS sektorów (ETF SPDR / SPY nad SMA 52 tyg.), bierze 3 najsilniejsze sektory i robi 3 zapytania Finviz (`sec_<sektor>` + `ind_stocksonly,sh_price_o15,sh_avgvol_o300,fa_salesqoq_o15`: tylko akcje, cena > 15 $, śr. wolumen > 300 tys., przychody kw. > 15 % r/r). Brak wklejania własnego linku Finviz; ranking sektorów w pasku statusu strony |
 | Warunki | przychody kw. **≥ +15 % r/r**, marża operacyjna **≥ +3 pp r/r** (SEC EDGAR), **P/S < 20**, siła względna 52 tyg. **≥ +50 pp nad S&P 500** |
 | Kolejność | od największej zmiany marży operacyjnej r/r |
 | Wejście | **Green Line**: rekord wszech czasów **miesięcznego High** (jak w oryginale Dr. Wisha), który stoi **≥ 3 zamknięte miesiące** (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy); kupno, gdy tydzień zamknie się **0–10 % nad linią** |

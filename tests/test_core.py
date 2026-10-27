@@ -249,7 +249,7 @@ def _est(ts, cache, log):
 
 
 def _run(tmp_path, fetch_list, symbols=()):
-    return watchlist.run({"symbols": list(symbols)}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch_list,
+    return watchlist.run({"symbols": list(symbols), "scanners": [{"name": "Domyślny", "filters": "f"}]}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch_list,
                          weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 60} if t.startswith("B") else SPY if t == "SPY" else W) for t in ts},
                          monthly=_monthly, fund=_fund, est=_est,
                          daily=lambda ts, log, **kw: {t: W for t in ts})
@@ -301,7 +301,7 @@ def test_second_run_passes_saved_weekly_series_as_cache(tmp_path):
         seen.append(sorted(cache))
         return {t: SPY if t == "SPY" else W for t in ts}
     for _ in range(2):
-        watchlist.run({}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
+        watchlist.run({"scanners": [{"name": "Domyślny", "filters": "f"}]}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
                       fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
     assert seen[0] == [] and seen[1] == sorted([t["ticker"] for t in base] + ["SPY"])    # SPY zawsze (siła względna)
 
@@ -427,19 +427,22 @@ def test_merge_daily_appends_only_new_dates_and_detects_changed_history():
     assert prices.merge_daily(old, changed) is None
 
 
-def test_finviz_url_replaces_previous_scanner_and_saves_one_url(tmp_path, monkeypatch):
-    config_path = tmp_path / "finviz_screen.json"
-    monkeypatch.setattr(watchlist, "CONFIG", config_path)
-    cfg = {"symbols": ["SPY"], "scanners": [{"name": "old", "filters": "old", "url": "https://finviz.com/screener.ashx?v=111&f=old"}]}
-    rows = [{"ticker": f"A{i}"} for i in range(20)]
-    seen = []
-    watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
-                  fetch_list=lambda f, max_tickers, log: (seen.append(f) or (rows, len(rows))),
-                  weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, est=_est,
-                  daily=lambda ts, log, **kw: {}, finviz_url="https://finviz.com/screener.ashx?v=111&f=fa_salesqoq_o15,sh_price_o10")
-    saved = json.loads(config_path.read_text())
-    assert seen == ["fa_salesqoq_o15,sh_price_o10"]
-    assert len(saved["scanners"]) == 1 and saved["scanners"][0]["url"].endswith("f=fa_salesqoq_o15,sh_price_o10")
+def test_default_scanner_is_the_sector_scanner_and_only_one_is_refreshed(tmp_path):
+    sc = watchlist.scanners({})
+    assert len(sc) == 1 and sc[0]["top_sectors"] == calc.TOP_SECTORS and sc[0]["filters"] == calc.SECTOR_FILTERS   # bez konfiguracji: jak desktop
+    cfg = {"symbols": ["SPY"], "scanners": [{"name": "Sektory", "filters": "f", "top_sectors": 1}, {"name": "Inny", "filters": "g"}]}
+    queries = []
+
+    def fetch(f, max_tickers, log):
+        queries.append(f)
+        return [{"ticker": f"A{i}", "sector": "Technology"} for i in range(20)], 20
+
+    def weekly(ts, log, cache):
+        return {t: ({**SPY, "c": [100.0] * 60} if t == "SPY" else {**W, "c": [100.0 * (1.01 if t == "XLK" else 0.99) ** i for i in range(60)]} if t.startswith("XL") else W) for t in ts}
+    rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch, weekly=weekly,
+                         monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+    assert queries == ["sec_technology,f"] and len(rows) == 20      # tylko pierwszy skaner; 1 zapytanie na najsilniejszy sektor
+    assert not hasattr(watchlist, "urlparse")                        # brak podmiany skanera linkiem Finviz
 
 
 def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp_path):

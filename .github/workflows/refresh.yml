@@ -1,18 +1,12 @@
 name: Weekly Refresh
 
-# Raz w tygodniu pobiera/aktualizuje źródła danych Finviz + yfinance oraz zapisane cache.
+# Raz w tygodniu: RS sektorów (ETF / SPY nad SMA 52 tyg.) -> 3 najsilniejsze sektory -> po 1 zapytaniu Finviz na sektor; yfinance + SEC + zapisane cache.
 # Po zapisaniu danych strona jest przeliczana i publikowana przez workflow Deploy Pages; deploy nie odpytuje źródeł rynkowych.
 # Ręcznie: Actions -> "Weekly Refresh" -> "Run workflow" (przycisk „⟳ Odśwież dane” na stronie prowadzi tutaj). Lokalnie: python watchlist.py --fetch-only
 on:
   schedule:
     - cron: '17 3 * * 6'   # sobota 03:17 UTC
   workflow_dispatch:
-    inputs:
-      finviz_url:
-        description: 'Opcjonalny link do screenera Finviz (pusty = ostatni zapisany skaner)'
-        required: false
-        type: string
-        default: ''
 
 permissions:
   contents: write
@@ -38,19 +32,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Refresh data (Finviz + yfinance + SEC)
-        env:
-          FINVIZ_URL: ${{ inputs.finviz_url }}
-        run: |
-          if [ -n "$FINVIZ_URL" ]; then
-            python watchlist.py --fetch-only --finviz-url "$FINVIZ_URL"
-          else
-            python watchlist.py --fetch-only
-          fi
+      - name: Refresh data (sektory RS + Finviz + yfinance + SEC)
+        run: python watchlist.py --fetch-only
 
       - name: Commit data
         run: |
-          if [ -z "$(git status --porcelain docs/data/ data/ finviz_screen.json)" ]; then
+          if [ -z "$(git status --porcelain docs/data/ data/)" ]; then
             echo "Brak zmian w danych."
             exit 0
           fi
@@ -60,7 +47,7 @@ jobs:
             # zawsze na AKTUALNY main (reset --mixed), żeby commit niósł tylko świeże dane
             git fetch origin main
             git reset --mixed origin/main
-            git add -A docs/data/ data/ finviz_screen.json
+            git add -A docs/data/ data/
             git commit -m "chore: weekly refresh [skip ci]"
             if git push; then exit 0; fi
             echo "Push odrzucony (próba $attempt) — ponawiam."
