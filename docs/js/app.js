@@ -459,7 +459,7 @@ if (typeof document !== "undefined") (function () {
 
     function startDraw(x, y) {
         const a = ptValue(x, y, gest.tol), id = Date.now().toString(36);
-        ast.lines[current] = linesOf(current).concat([{ id, d1: a.d, p1: a.p, d2: a.d, p2: a.p, alert: true }]);
+        ast.lines[current] = linesOf(current).concat([{ id, d1: a.d, p1: a.p, d2: a.d, p2: a.p, alert: false }]);   // nowa linia: bez alarmu i przedłużenia — alarm użytkownik włącza sam
         sel = id;
         gest.mode = "p2";
         gest.orig = { ...findLine(id) };

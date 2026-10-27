@@ -379,7 +379,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         if (a < 0 || b < 0 || a === b) continue;
         const [ia, pa, ib, pb] = a < b ? [a, ln.p1, b, ln.p2] : [b, ln.p2, a, ln.p1];
         const s = { id: ln.id, x1: xf(a - i0), y1: yf(ln.p1), x2: xf(b - i0), y2: yf(ln.p2) };
-        const ie = Math.max(ib, i1 - 1), pe = LN.lineAt(ln, full.d, ie);
+        const ie = ln.alert !== false ? Math.max(ib, i1 - 1) : ib, pe = LN.lineAt(ln, full.d, ie);   // przedłużenie tylko przy włączonym alarmie (to ono jest pilnowane)
         [s.xe, s.ye] = [xf(ie - i0), yf(pe)];
         segs.push(s);
         const on = ln.id === sel, wd = on ? 2.5 : 1.6;

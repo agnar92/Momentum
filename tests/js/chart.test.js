@@ -172,3 +172,11 @@ test("Zanger view: price + volume only, pattern outline, buy label and parabola 
     const plain = chartSvg(w, row, 1000, 600);
     assert.ok(plain.svg.includes("MACD (12, 26, 9)") && !plain.svg.includes("PARABOLA"));
 });
+
+test("trend line extension is drawn only when its alert is on", () => {
+    const w = weekly(60), ln = (alert) => [{ id: "a", d1: w.d[20], p1: 71, d2: w.d[40], p2: 91, alert }];
+    const off = chartSvg(w, null, 1000, 600, null, null, ln(false), null), on = chartSvg(w, null, 1000, 600, null, null, ln(true), null);
+    assert.ok(!off.svg.includes('stroke-dasharray="4 4"') && on.svg.includes('stroke-dasharray="4 4"'));
+    assert.strictEqual(off.geom.segs[0].xe, off.geom.segs[0].x2);
+    assert.ok(on.geom.segs[0].xe > on.geom.segs[0].x2);
+});
