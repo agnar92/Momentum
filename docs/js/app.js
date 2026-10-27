@@ -109,7 +109,8 @@ if (typeof document !== "undefined") (function () {
     const state = Object.assign({ sort: null, recent: [], nShow: 52, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
     if (state.nShow == null) state.nShow = 52;   // domyślnie pokazuj ostatnie 52 tygodnie; pełną historię można wybrać suwakiem
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
-    let sel = null, gest = null, rafId = 0, spxData = null;
+    let sel = null, gest = null, rafId = 0, spxData = null, drawMode = false, hint = null;
+    const lineUndo = new Map();   // ticker -> stos poprzednich stanów linii (JSON), do ↶ / Ctrl+Z
     let period = "W", dShow = 260, dailyRwb = true, zanger = false;   // zanger = widok Zangera (tylko tygodniowy): cena + wolumen + wzorce   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
     const curShow = () => (period === "D" ? dShow : state.nShow);
     const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
@@ -245,6 +246,7 @@ if (typeof document !== "undefined") (function () {
         end = null;   // długość okna zostaje między spółkami, koniec wraca do ostatniego tygodnia
         sel = null;
         gest = null;
+        hint = null;
         renderTools();
         drawChart();
         const r = rowFor(t);
@@ -318,6 +320,7 @@ if (typeof document !== "undefined") (function () {
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
+        renderHint();
     }
 
     function drawSlider() {
@@ -423,19 +426,25 @@ if (typeof document !== "undefined") (function () {
             return;
         }
         if (!geom || !series || period === "D" || (ev.pointerType === "mouse" && ev.button !== 0)) return;   // linie trendu tylko na tygodniowym
-        const pt = chartPt(ev), touch = ev.pointerType !== "mouse", tol = touch ? 18 : 7;
+        const pt = chartPt(ev), touch = ev.pointerType !== "mouse", tol = touch ? 24 : 9;
         const hit = hitLine(geom.segs || [], pt.x, pt.y, tol);
         $("chartBody").setPointerCapture(ev.pointerId);
         if (hit) {
             sel = hit.id;
             const ln = findLine(hit.id);
-            gest = { mode: hit.part, x: pt.x, y: pt.y, orig: { ...ln }, ka: series.d.indexOf(ln.d1), kb: series.d.indexOf(ln.d2), tol };
+            gest = { mode: hit.part, x: pt.x, y: pt.y, orig: { ...ln }, ka: series.d.indexOf(ln.d1), kb: series.d.indexOf(ln.d2), tol, snap: JSON.stringify(linesOf(current)) };
             renderTools();
             redrawSoon();
             ev.preventDefault();
             return;
         }
         if (pt.y < geom.price[0] || pt.y > geom.price[1]) return;
+        if (drawMode) {   // tryb ✏: jedno przeciągnięcie (mysz albo palec) = nowa linia, bez przytrzymywania
+            gest = { mode: "draw", x: pt.x, y: pt.y, tol };
+            startDraw(pt.x, pt.y);
+            ev.preventDefault();
+            return;
+        }
         gest = { mode: touch ? "press" : "pend", x: pt.x, y: pt.y, tol };
         if (touch) {
             gest.timer = setTimeout(() => {
@@ -454,6 +463,7 @@ if (typeof document !== "undefined") (function () {
         sel = id;
         gest.mode = "p2";
         gest.orig = { ...findLine(id) };
+        gest.snap = JSON.stringify(linesOf(current).filter((x) => x.id !== id));   // stan sprzed nowej linii (do ↶)
         $("tip").hidden = true;
         renderTools();
         redrawSoon();
@@ -475,9 +485,13 @@ if (typeof document !== "undefined") (function () {
         const ln = findLine(sel);
         if (!ln) return;
         if (gest.mode === "p1" || gest.mode === "p2") {
-            const v = ptValue(pt.x, pt.y, gest.tol);
-            ln["d" + gest.mode[1]] = v.d;
-            ln["p" + gest.mode[1]] = v.p;
+            const me = gest.mode[1], other = me === "1" ? "2" : "1", v = ptValue(pt.x, pt.y, gest.tol);
+            const [y0, y1] = geom.price, yf = (p) => y1 - (Math.log(p) - geom.lmin) / (geom.lmax - geom.lmin) * (y1 - y0);
+            const flat = snapHorizontal(v.p, ln["p" + other], yf, pt.y, gest.tol * 0.6) === ln["p" + other] && ln["d" + other] !== v.d;
+            ln["d" + me] = v.d;
+            ln["p" + me] = flat ? ln["p" + other] : v.p;
+            const k1 = series.d.indexOf(ln["d" + other]), k2 = v.k;
+            hint = { x: geom.x0 + (k2 - geom.i0 + 0.5) * geom.step, y: yf(ln["p" + me]), flat, text: rulerText(ln["p" + other], ln["p" + me], k1, k2, period) + (flat ? " · poziomo" : "") };
         } else if (gest.mode === "body" && gest.ka >= 0 && gest.kb >= 0) {
             const last = series.d.length - 1, db = Math.round((pt.x - gest.x) / geom.step);
             const d = Math.max(-Math.min(gest.ka, gest.kb), Math.min(last - Math.max(gest.ka, gest.kb), db));
@@ -492,9 +506,11 @@ if (typeof document !== "undefined") (function () {
         if (!gest) return;
         if (gest.mode === "ruler") { gest = null; drawRuler(null); return; }
         clearTimeout(gest.timer);
+        hint = null;
         if (gest.mode === "press" || gest.mode === "pend") { sel = null; renderTools(); redrawSoon(); }   // dotknięcie / klik obok linii = odznacz
         else if (gest.mode !== "scrub") {
             saveLines();
+            if (gest.snap !== undefined && gest.snap !== JSON.stringify(linesOf(current))) pushUndo(gest.snap);   // zmiana -> można cofnąć
             if (!findLine(sel)) sel = null;
             renderTools();
             redrawSoon();
@@ -502,8 +518,39 @@ if (typeof document !== "undefined") (function () {
         gest = null;
     }
 
+    // ---------- cofanie ----------
+    const undoStack = () => { if (!lineUndo.has(current)) lineUndo.set(current, []); return lineUndo.get(current); };
+    function pushUndo(snap) {
+        const st = undoStack();
+        st.push(snap);
+        if (st.length > 30) st.shift();
+        renderTools();
+    }
+    function undoLine() {
+        const snap = undoStack().pop();
+        if (snap === undefined) return;
+        const ls = JSON.parse(snap);
+        if (ls.length) ast.lines[current] = ls; else delete ast.lines[current];
+        sel = null;
+        saveAlerts();
+        renderTools();
+        drawChart();
+    }
+
+    // podgląd przy rysowaniu / ciągnięciu końca: kółko w punkcie i napis „% · tygodnie · cena" (jak miarka); „poziomo", gdy zadziałał magnes
+    function renderHint() {
+        const svg = $("chartBody").querySelector("svg");
+        if (!svg || !hint || !gest) return;
+        const g = document.createElementNS("http://www.w3.org/2000/svg", "g");
+        const txt = hint.text, wd = txt.length * 6.6 + 10, right = hint.x < geom.x1 - wd - 14, tx = right ? hint.x + 12 : hint.x - 12 - wd, ty = Math.max(geom.price[0] + 14, hint.y - 14);
+        g.innerHTML = `<circle cx="${hint.x}" cy="${hint.y}" r="9" fill="none" stroke="${hint.flat ? "#f0b429" : "#4da3ff"}" stroke-width="2"/>` +
+            `<rect x="${tx - 3}" y="${ty - 12}" width="${wd}" height="17" fill="#0e1116" opacity="0.92"/><text x="${tx + 2}" y="${ty}" fill="${hint.flat ? "#f0b429" : "#d6dde6"}" font-size="12">${escapeHtml(txt)}</text>`;
+        svg.appendChild(g);
+    }
+
     function deleteSelected() {
         if (!sel) return;
+        pushUndo(JSON.stringify(linesOf(current)));
         ast.lines[current] = linesOf(current).filter((x) => x.id !== sel);
         sel = null;
         saveLines();
@@ -556,6 +603,12 @@ if (typeof document !== "undefined") (function () {
         $("watchBtn").textContent = compact
             ? (current && ast.watch[current] ? "🔔 On" : "🔕 Obserwuj")
             : (current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj");
+        const canDraw = !!current && period === "W";
+        $("drawBtn").hidden = !canDraw;
+        $("drawBtn").classList.toggle("on", drawMode && canDraw);
+        $("drawBtn").textContent = compact ? "✏" : "✏ Linia";
+        $("chartBody").classList.toggle("drawing", drawMode && canDraw);
+        $("undoBtn").hidden = !canDraw || !(lineUndo.get(current) || []).length;
         $("lineAlertBtn").hidden = $("lineDelBtn").hidden = !ln;
         if (ln) $("lineAlertBtn").textContent = ln.alert === false ? "🔕 alert linii" : "🔔 alert linii";
     }
@@ -896,6 +949,8 @@ if (typeof document !== "undefined") (function () {
         $("perW").addEventListener("click", () => togglePeriod("W"));
         $("perD").addEventListener("click", () => togglePeriod("D"));
         $("zangerBtn").addEventListener("click", toggleZanger);
+        $("drawBtn").addEventListener("click", () => { drawMode = !drawMode; renderTools(); });
+        $("undoBtn").addEventListener("click", undoLine);
         $("dayRwbBtn").addEventListener("click", () => { dailyRwb = !dailyRwb; renderPeriod(); drawChart(); });
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
@@ -938,8 +993,10 @@ if (typeof document !== "undefined") (function () {
             if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); step(e.key === "ArrowDown" ? 1 : -1); }
             else if (current && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); pan(e.key === "ArrowLeft" ? -4 : 4); }
             else if (current && (e.key === "+" || e.key === "-")) zoom(e.key === "+" ? 0.85 : 1.18);
-            else if (current && e.key.toLowerCase() === "z") toggleZanger();
-            else if (e.key === "Escape") { if (sel) { sel = null; renderTools(); drawChart(); } else closeChart(); }
+            else if (current && e.key.toLowerCase() === "z" && !(e.ctrlKey || e.metaKey)) toggleZanger();
+            else if (current && e.key.toLowerCase() === "z") { e.preventDefault(); undoLine(); }
+            else if (current && period === "W" && e.key.toLowerCase() === "l") { drawMode = !drawMode; renderTools(); }
+            else if (e.key === "Escape") { if (sel) { sel = null; renderTools(); drawChart(); } else if (drawMode) { drawMode = false; renderTools(); } else closeChart(); }
         });
     }
 

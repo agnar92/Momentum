@@ -329,7 +329,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
     const bw = Math.max(1, step * 0.25), tick = step * 0.35;
     if (!(D && dailyRwb)) for (let i = 0; i < n; i++) {
         if (hi[i] === null || lo[i] === null || c[i] === null) continue;
-        const col = i === 0 || c[i - 1] === null || c[i] >= c[i - 1] ? C.up : C.down, x = xf(i);
+        const col = zanger ? C.fg : i === 0 || c[i - 1] === null || c[i] >= c[i - 1] ? C.up : C.down, x = xf(i);   // widok Zangera: słupki jednokolorowe
         line(x, yf(hi[i]), x, yf(lo[i]), col, bw);
         if (D) {
             if (data.o[i]) line(x - step * 0.3, yf(data.o[i]), x, yf(data.o[i]), col);
@@ -385,12 +385,12 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
         const on = ln.id === sel, wd = on ? 2.5 : 1.6;
         line(xf(ia - i0), yf(pa), xf(ib - i0), yf(pb), C.tline, wd);
         if (ie > ib) line(xf(ib - i0), yf(pb), s.xe, s.ye, C.tline, 1, `stroke-dasharray="4 4" opacity="0.7"`);
-        if (on) for (const [x, y] of [[s.x1, s.y1], [s.x2, s.y2]]) parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${C.bg}" stroke="${C.tline}" stroke-width="2"/>`);
+        if (on) for (const [x, y] of [[s.x1, s.y1], [s.x2, s.y2]]) parts.push(`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8" fill="${C.bg}" stroke="${C.tline}" stroke-width="2"/>`);
     }
     parts.push("</g>");
     for (const s of segs) {
         const ln = (lines || []).find((x) => x.id === s.id);
-        if (ln.alert !== false && s.xe >= x1 - step && s.ye > y0 && s.ye < y1) text(x1 + 4, s.ye + 4, "🔔 " + fmt(LN.lineAt(ln, full.d, i1 - 1)), C.tline);
+        if ((ln.alert !== false || ln.id === sel) && s.xe >= x1 - step && s.ye > y0 && s.ye < y1) text(x1 + 4, s.ye + 4, (ln.alert !== false ? "🔔 " : "") + fmt(LN.lineAt(ln, full.d, i1 - 1)), C.tline);
     }
     const last = c[n - 1];
     if (last) text(x1 + 4, lastY + 4, fmt(last), "#ffffff", 'font-weight="bold"');

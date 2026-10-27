@@ -98,3 +98,11 @@ test("positionStatus: what to do with a position now", () => {
     assert.deepStrictEqual(positionStatus({ last: 100, stopInit: 90, macdStop: null }, { macd_stop: 105 }, "MACD"), []);   // MACD sprzed wejścia nie liczy się
     assert.deepStrictEqual(positionStatus({ last: 100, stopInit: 90, macdStop: 104 }, { macd_stop: 95 }, "MACD"), ["WYJŚCIE: pod stopem MACD"]);
 });
+
+test("snapHorizontal pulls the price to the other end's level only near it", () => {
+    const { snapHorizontal } = require("../../docs/js/lines.js");
+    const yf = (p) => 500 - p * 2;   // 1 USD = 2 px
+    assert.strictEqual(snapHorizontal(101, 100, yf, yf(101), 4), 100);   // 2 px od poziomu -> poziomo
+    assert.strictEqual(snapHorizontal(110, 100, yf, yf(110), 4), 110);   // 20 px -> bez zmian
+    assert.strictEqual(snapHorizontal(101, null, yf, yf(101), 4), 101);
+});

@@ -72,6 +72,11 @@ function snapPrice(price, hi, lo, yf, y, tol) {
     return best;
 }
 
+// magnes poziomy: cena przyciągana do ceny drugiego końca linii, gdy kursor jest bliżej niż tol px od jej poziomu (-> linia dokładnie pozioma)
+function snapHorizontal(price, other, yf, y, tol) {
+    return other != null && Math.abs(yf(other) - y) <= tol ? other : price;
+}
+
 // zmiany stanu obserwowanej spółki (prev = stan z poprzedniego sprawdzenia) -> lista komunikatów
 function stateAlerts(prev, row) {
     const out = [];
@@ -173,4 +178,4 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
     return fresh;
 }
 
-if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, macdStopSince, HALF_DROP, STOP_PCT, MAX_POSITIONS };
+if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, snapHorizontal, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, macdStopSince, HALF_DROP, STOP_PCT, MAX_POSITIONS };
