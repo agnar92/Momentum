@@ -485,3 +485,45 @@ def test_parabolic_curve_three_steepening_lines_and_break():
     c = steps(58) + [steps(58)[-1] * 0.8, steps(58)[-1] * 0.7]
     b = calc.parabola(weekly(c, [1e6] * 59 + [4e6]))
     assert b and b["state"] == "ZŁAMANA" and b["vol_x"] == 4.0
+
+
+def _pts_weekly(pts, vols=None, spread=0.01):
+    c = []
+    for (i0, p0), (i1, p1) in zip(pts, pts[1:]):
+        c += [p0 + (p1 - p0) * (i - i0) / (i1 - i0) for i in range(i0, i1)]
+    c.append(pts[-1][1])
+    d = [(dt.date(2024, 1, 1) + dt.timedelta(weeks=i)).isoformat() for i in range(len(c))]
+    return {"d": d, "o": c, "h": [x * (1 + spread) for x in c], "l": [x * (1 - spread) for x in c], "c": c, "v": vols or [1e6] * len(c)}
+
+
+def _zigzag(lows, highs, last, start=30, leg=3):
+    pts, i = [(0, 50), (start, 100)], start
+    for lo, hi in zip(lows, highs):
+        pts += [(i + leg, hi), (i + 2 * leg, lo)]
+        i += 2 * leg
+    return pts + [(i + leg, last)]
+
+
+def _only(w, name):
+    return next((p for p in calc.find_patterns(w) if p["name"] == name), None)
+
+
+def test_all_eleven_zanger_patterns_buy_and_sell_sides():
+    sym = _only(_pts_weekly(_zigzag([100 + 3 * k for k in range(5)], [130 - 3 * k for k in range(5)], 116)), "Symmetrical Triangle")
+    assert sym and sym["side"] == "buy" and sym["state"] == "BUDUJE SIĘ"
+    assert _only(_pts_weekly(_zigzag([100] * 6, [118] * 6, 117.5)), "Channel")["side"] == "buy"
+    fw = _only(_pts_weekly(_zigzag([100 - k for k in range(5)], [130 - 4 * k for k in range(5)], 113)), "Falling Wedge")
+    assert fw and fw["state"] == "WYBICIE" and fw["pct"] > 0
+    rw = _only(_pts_weekly(_zigzag([100 + 4 * k for k in range(5)], [120 + 2 * k for k in range(5)], 120)), "Rising Wedge")
+    assert rw and rw["side"] == "sell"
+    hs = [(0, 50), (30, 100), (36, 120), (40, 105), (46, 135), (50, 106), (56, 121), (60, 112)]
+    warn = _only(_pts_weekly(hs), "Head & Shoulders")
+    assert warn and warn["side"] == "sell" and [x["text"] for x in warn["shapes"] if x["kind"] == "mark"] == ["LS", "H", "RS"]
+    assert _only(_pts_weekly(hs[:-1] + [(60, 103)]), "Head & Shoulders")["state"] == "ZŁAMANA"
+    inv = _only(_pts_weekly([(0, 130), (30, 100), (36, 88), (40, 97), (46, 80), (50, 98), (56, 88), (60, 95)]), "Inverted H&S")
+    assert inv and inv["side"] == "buy"
+    flag = _only(_pts_weekly([(0, 50), (30, 66), (32, 80), (34, 94), (35, 91), (37, 88), (39, 85.5)], [1e6] * 30 + [3e6] * 5 + [8e5] * 5), "Flaga/Proporzec")
+    assert flag and flag["state"] == "BUDUJE SIĘ"
+    row = calc.build_row({"ticker": "S"}, _pts_weekly(_zigzag([100 + 3 * k for k in range(5)], [130 - 3 * k for k in range(5)], 116)), [], None)
+    assert row["pattern"] == "Symmetrical Triangle" and row["pattern_pct"] < 0
+    json.dumps(row)

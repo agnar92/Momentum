@@ -181,3 +181,18 @@ test("Parabolic Curve draws numbered rising lines and the exit / break label", (
     assert.ok(mk("ZŁAMANA").includes("ZŁAMANA najbardziej stroma linia") && mk("ZŁAMANA").includes("wol. 1.7×"));
     assert.ok(/>1<\/text>/.test(mk("TRWA")) && />3<\/text>/.test(mk("TRWA")));
 });
+
+test("Zanger patterns: sell-side label, LS / H / RS marks and the new colours", () => {
+    const w = weekly(80), d = w.d, last = w.c[w.c.length - 1];
+    const row = {
+        patterns: [
+            { name: "Head & Shoulders", side: "sell", state: "ZŁAMANA", buy: last + 2, pct: -2.5, end: d[75], vol_x: null, shapes: [
+                { kind: "line", d1: d[40], d2: d[79], p1: last - 10, p2: last + 2 }, ...[[50, "LS"], [60, "H"], [70, "RS"]].map(([i, t]) => ({ kind: "mark", d: d[i], p: w.c[i] + 3, text: t, below: false }))] },
+            { name: "Falling Wedge", side: "buy", state: "WYBICIE", buy: last - 3, pct: 4, end: d[75], vol_x: 1.4, shapes: [{ kind: "line", d1: d[40], d2: d[79], p1: last + 8, p2: last - 3 }] },
+        ],
+    };
+    const svg = chartSvg(w, row, 1000, 600, null, null, [], null, null, "W", true, true).svg;
+    assert.ok(svg.includes("⚠ Head &amp; Shoulders · linia") && svg.includes("ZŁAMANA") && svg.includes("Falling Wedge · kupno &gt;"));
+    for (const t of ["LS", "H", "RS"]) assert.ok(new RegExp(`>${t}</text>`).test(svg), t);
+    assert.ok(svg.includes("#ff6b6b") && svg.includes("#34d399"));
+});

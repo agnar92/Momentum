@@ -235,7 +235,8 @@ function rsMarkers(rs, highs, lookback) {
 const DAILY_MA = [["EMA 8", 8, "#e5484d", "ema"], ["EMA 10", 10, "#f0b429", "ema"], ["EMA 20", 20, "#3b82f6", "ema"], ["SMA 50", 50, "#22d3ee", "sma"]];
 
 // port desktop chart.draw: dailyRwb = styl dzienny „linia + RWB/GMMA + Blue Dot” (inaczej słupki OHLC + EMA 8/10/20 + SMA 50)
-const PATTERN_COLORS = { "Cup & Handle": "#4da3ff", "Flat Base": "#f0b429", "Ascending Triangle": "#b084f5", "Flaga/Proporzec": "#2ec4b6" };
+const PATTERN_COLORS = { "Cup & Handle": "#4da3ff", "Flat Base": "#f0b429", "Ascending Triangle": "#b084f5", "Flaga/Proporzec": "#2ec4b6", Channel: "#5fd0ff", "Symmetrical Triangle": "#e879f9",
+    "Descending Triangle": "#fb923c", "Falling Wedge": "#34d399", "Inverted H&S": "#a3e635", "Head & Shoulders": "#ff6b6b", "Rising Wedge": "#f87171" };
 const PARABOLA_COLOR = "#ff4d8d";
 const patternLevels = (row) => (((row && row.patterns) || []).map((p) => p.buy)).concat(row && row.parabola ? [row.parabola.exit] : []);
 
@@ -481,6 +482,9 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
                 else if (sh.kind === "box") {
                     const a = px(sh.d1), b = px(sh.d2);
                     if (a != null && b != null) parts.push(`<rect x="${(a - step * 0.45).toFixed(1)}" y="${yf(Math.min(sh.hi, pmax)).toFixed(1)}" width="${(b - a + step * 0.9).toFixed(1)}" height="${Math.max(1, yf(Math.max(sh.lo, pmin)) - yf(Math.min(sh.hi, pmax))).toFixed(1)}" fill="none" stroke="${col}" stroke-width="2" stroke-dasharray="4 3"/>`);
+                } else if (sh.kind === "mark") {   // LS / H / RS przy szczytach (dołkach) Head & Shoulders
+                    const a = px(sh.d);
+                    if (a != null && sh.p > pmin && sh.p < pmax) text(a, yf(sh.p) + (sh.below ? 18 : -10), sh.text, col, 'text-anchor="middle" font-weight="bold"');
                 } else if (sh.kind === "line") {
                     const a = px(sh.d1), b = px(sh.d2);
                     if (a != null && b != null) {
@@ -497,10 +501,11 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", da
             if (!(p.buy > pmin && p.buy < pmax)) return;
             const y = yf(p.buy), a = px(p.end);
             line(a != null ? a : x0, y, x1, y, col, 2, 'stroke-dasharray="6 3"');
-            let ly = y - 9;
-            for (let t = 0; t < 6 && usedY.some((u2) => Math.abs(ly - u2) < 16); t++) ly = y + 9 + 16 * t;   // podpisy kolejnych wzorców jeden pod drugim
+            let ly = Math.max(y - 9, y0 + 32);   // pod legendą u góry wykresu
+            for (let t = 0; t < 6 && usedY.some((u2) => Math.abs(ly - u2) < 16); t++) ly = Math.max(y + 9 + 16 * t, y0 + 32);   // podpisy kolejnych wzorców jeden pod drugim
             usedY.push(ly);
-            boxText(x1 - 6, ly + 4, small ? `${p.name} > ${fmt(p.buy)} · ${p.state}` : `${p.name} · kupno > ${fmt(p.buy)} · ${p.state} (${p.pct >= 0 ? "+" : ""}${p.pct.toFixed(1)} %)${p.vol_x != null ? ` · wol. ${p.vol_x.toFixed(1)}×` : ""}`, col, 'text-anchor="end"');
+            const sell = p.side === "sell";
+            boxText(x1 - 6, ly + 4, small ? `${sell ? "⚠ " : ""}${p.name} ${sell ? "" : "> "}${fmt(p.buy)} · ${p.state}` : `${sell ? "⚠ " : ""}${p.name} · ${sell ? "linia" : "kupno >"} ${fmt(p.buy)} · ${p.state} (${p.pct >= 0 ? "+" : ""}${p.pct.toFixed(1)} %)${p.vol_x != null ? ` · wol. ${p.vol_x.toFixed(1)}×` : ""}`, col, 'text-anchor="end"');
         });
         const para = row && row.parabola;
         if (para) {
