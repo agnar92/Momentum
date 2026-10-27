@@ -132,7 +132,8 @@ function positionStatus(pl, row, exit) {
     const ms = p.macdStop !== undefined ? p.macdStop : r.macd_stop;   // plan pozycji: MACD od wejścia
     if (exit !== "GLB" && ms && last != null && last < ms) out.push("WYJŚCIE: pod stopem MACD");
     if (p.half) out.push("SPRZEDAJ ½ (−20 % od szczytu)");
-    if (r.parabola) out.push("⚠ PARABOLA: wyjście przy zamknięciu tygodnia pod SMA 10");
+    for (const p of r.patterns || []) if (p.side === "sell") out.push(`⚠ ${p.name}: ${p.state === "ZŁAMANA" ? "złamana linia — sprzedaż" : `uwaga na linię ${p.buy.toFixed(2)}`}`);   // wzorce niedźwiedzie
+    if (r.parabola) out.push(r.parabola.state === "ZŁAMANA" ? "⚠ PARABOLA: złamana najbardziej stroma linia — sprzedaż" : "⚠ PARABOLA: wyjście przy zamknięciu tygodnia pod najbardziej stromą linią");
     if (r.slow) out.push("⚠ hamuje" + (r.slow === "HAMUJE+MB" ? " + marża brutto" : ""));
     return out;
 }

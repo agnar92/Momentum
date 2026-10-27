@@ -172,3 +172,35 @@ test("Zanger view: price + volume only, pattern outline, buy label and parabola 
     const plain = chartSvg(w, row, 1000, 600);
     assert.ok(plain.svg.includes("MACD (12, 26, 9)") && !plain.svg.includes("PARABOLA"));
 });
+
+test("Parabolic Curve draws numbered rising lines and the exit / break label", () => {
+    const w = weekly(80), d = w.d, last = w.c[w.c.length - 1];
+    const lines = [[10, 60, 1], [30, 70, 2], [50, 76, 3]].map(([a, b, k]) => ({ kind: "line", d1: d[a], d2: d[79], p1: 50 + a, p2: last - 8 + b / 10, label: String(k) }));
+    const mk = (state) => chartSvg(w, { parabola: { state, exit: last - 1, vol_x: 1.7, shapes: lines } }, 1000, 600, null, null, [], null, null, "W", true, true).svg;
+    assert.ok(mk("TRWA").includes("wyjście: zamknięcie tyg. pod linią 3") && !mk("TRWA").includes("ZŁAMANA"));
+    assert.ok(mk("ZŁAMANA").includes("ZŁAMANA najbardziej stroma linia") && mk("ZŁAMANA").includes("wol. 1.7×"));
+    assert.ok(/>1<\/text>/.test(mk("TRWA")) && />3<\/text>/.test(mk("TRWA")));
+});
+
+test("Zanger patterns: sell-side label, LS / H / RS marks and the new colours", () => {
+    const w = weekly(80), d = w.d, last = w.c[w.c.length - 1];
+    const row = {
+        patterns: [
+            { name: "Head & Shoulders", side: "sell", state: "ZŁAMANA", buy: last + 2, pct: -2.5, end: d[75], vol_x: null, shapes: [
+                { kind: "line", d1: d[40], d2: d[79], p1: last - 10, p2: last + 2 }, ...[[50, "LS"], [60, "H"], [70, "RS"]].map(([i, t]) => ({ kind: "mark", d: d[i], p: w.c[i] + 3, text: t, below: false }))] },
+            { name: "Falling Wedge", side: "buy", state: "WYBICIE", buy: last - 3, pct: 4, end: d[75], vol_x: 1.4, shapes: [{ kind: "line", d1: d[40], d2: d[79], p1: last + 8, p2: last - 3 }] },
+        ],
+    };
+    const svg = chartSvg(w, row, 1000, 600, null, null, [], null, null, "W", true, true).svg;
+    assert.ok(svg.includes("⚠ Head &amp; Shoulders · linia") && svg.includes("ZŁAMANA") && svg.includes("Falling Wedge · kupno &gt;"));
+    for (const t of ["LS", "H", "RS"]) assert.ok(new RegExp(`>${t}</text>`).test(svg), t);
+    assert.ok(svg.includes("#ff6b6b") && svg.includes("#34d399"));
+});
+
+test("trend line extension is drawn only when its alert is on", () => {
+    const w = weekly(60), ln = (alert) => [{ id: "a", d1: w.d[20], p1: 71, d2: w.d[40], p2: 91, alert }];
+    const off = chartSvg(w, null, 1000, 600, null, null, ln(false), null), on = chartSvg(w, null, 1000, 600, null, null, ln(true), null);
+    assert.ok(!off.svg.includes('stroke-dasharray="4 4"') && on.svg.includes('stroke-dasharray="4 4"'));
+    assert.strictEqual(off.geom.segs[0].xe, off.geom.segs[0].x2);
+    assert.ok(on.geom.segs[0].xe > on.geom.segs[0].x2);
+});

@@ -141,7 +141,7 @@ BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, fetch_sec=True, fetch_only=False):
+        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, fetch_sec=True, fetch_only=False, offline=False):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
@@ -173,13 +173,18 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         esaved = {t: load_json(wdir / file_name(t), None) for t in etfs + [BENCH]}
         eser = weekly(etfs + [BENCH], log=log, cache={t: s for t, s in esaved.items() if s})
         ranked = calc.sector_rs({e: eser[e] for e in etfs if e in eser}, eser.get(BENCH) or {})
-        fetch_list, top = sector_fetch(scans[0], fetch_list, ranked, log)
-        if not top:
-            raise RuntimeError("Żaden sektor nie ma RS nad SMA 52 tyg. (albo brak danych ETF) — lista bez zmian.")
-        names = {x["etf"] for x in top}
-        sectors = [{"etf": x["etf"], "sector": x["sector"], "pct": round(x["pct"], 2), "selected": x["etf"] in names} for x in ranked]
-        log("Sektory (RS = ETF / SPY, % nad SMA 52 tyg.): " + ", ".join(f"{x['etf']} {x['pct']:+.1f} %" + (" ✓" if x["etf"] in names else "") for x in ranked))
+        sector_list, top = sector_fetch(scans[0], fetch_list, ranked, log)
         symbols += [e for e in etfs if e not in symbols]   # świece ETF-ów zapisujemy obok spółek (ranking przy --build-only)
+        if top:
+            fetch_list = sector_list
+            names = {x["etf"] for x in top}
+            sectors = [{"etf": x["etf"], "sector": x["sector"], "pct": round(x["pct"], 2), "selected": x["etf"] in names} for x in ranked]
+            log("Sektory (RS = ETF / SPY, % nad SMA 52 tyg.): " + ", ".join(f"{x['etf']} {x['pct']:+.1f} %" + (" ✓" if x["etf"] in names else "") for x in ranked))
+        elif offline:   # --build-only przed pierwszym odświeżeniem: brak świec ETF-ów, zostaje poprzednia lista i ranking
+            sectors = prev.get("sectors") or []
+            log("⚠ Brak świec ETF-ów sektorowych — używam poprzedniej listy i rankingu sektorów (uruchom Weekly Refresh).")
+        else:
+            raise RuntimeError("Żaden sektor nie ma RS nad SMA 52 tyg. (albo brak danych ETF) — lista bez zmian.")
     base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=1 if finviz_url else MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
@@ -372,7 +377,7 @@ def main(argv=None):
                 monthly=lambda _tickers, _cache, **_kwargs: None,
                 fund=lambda _tickers, _cache, **_kwargs: None,
                 daily=offline_daily, est=lambda _tickers, _cache, **_kwargs: None,
-                fetch_sec=True, now=built_at)
+                fetch_sec=True, now=built_at, offline=True)
         elif args.fetch_only:
             run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec, fetch_only=True)
         else:

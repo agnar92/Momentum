@@ -6,14 +6,14 @@ const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
-    ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
+    ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["pattern_exit", "Ostrzeżenie wzorca", "s"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
     ["ps", "P/S", "x"], ["peg", "PEG", "x2"], ["pegy", "PEGY", "x2"],
     ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"],
     ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["ok", "Warunki", "b"], ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
 const ENTRY_MAX = 10;   // wejście: zamknięcie tygodnia 0–10 % nad Green Line (BLUE DOT i wyżej — tylko informacyjnie)
-const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow", "pattern"];
+const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow", "pattern", "pattern_exit"];
 const SETTINGS_KEY = "momentum_settings_v2";   // nowy klucz: stare filtry odwoływały się do usuniętych kolumn
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
@@ -56,13 +56,14 @@ function compareBy(key, dir) {
 
 // ---------- filtry listy (wszystkie naraz, ORAZ) ----------
 // filters = {kolumna: {in: [wartości]} | {min, max}}; kolumny tekstowe = wybór wartości, liczbowe = od / do w jednostkach tabeli (obrót w mln $)
-const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"], pattern: ["Cup & Handle", "Flat Base", "Ascending Triangle", "Flaga/Proporzec"] };
+const BUY_PATTERNS = ["Cup & Handle", "Flat Base", "Ascending Triangle", "Flaga/Proporzec", "Channel", "Symmetrical Triangle", "Descending Triangle", "Falling Wedge", "Inverted H&S"];   // wzorce kupna Zangera (jak calc.PATTERN_NAMES)
+const FILTER_CHOICES = { glb_state: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD", "POD", "BRAK"], macd: ["nad", "pod"], ok: ["tak", "nie"], trend: ["tak", "nie"], beat2: ["tak", "nie"], slow: ["HAMUJE", "HAMUJE+MB", "—"], pattern: BUY_PATTERNS, pattern_exit: ["Head & Shoulders", "Rising Wedge", "Parabolic Curve"] };
 const FILTER_SCALE = { turnover: 1e6 };
 const FILTER_PRESETS = [   // jak desktop/app.py FILTER_PRESETS
     ["Reguły: sygnał GLB 0–10 % + warunki (przychody, marża)", { ok: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
     ["EPS Rating ≥ 80 + sygnał GLB 0–10 %", { eps_rating: { min: 80 }, glb_state: { in: ["WYBICIE", "SYGNAŁ"] }, glb_pct: { min: 0, max: 10 } }],
-    ["Wzorzec Zangera: wybicie (0–10 % nad kupnem) + warunki", { ok: { in: ["tak"] }, pattern: { in: ["Cup & Handle", "Flat Base", "Ascending Triangle", "Flaga/Proporzec"] }, pattern_pct: { min: 0, max: 10 } }],
-    ["Wzorzec Zangera: budowany, do 3 % pod kupnem", { pattern: { in: ["Cup & Handle", "Flat Base", "Ascending Triangle", "Flaga/Proporzec"] }, pattern_pct: { min: -3, max: 0 } }],
+    ["Wzorzec Zangera: wybicie (0–10 % nad kupnem) + warunki", { ok: { in: ["tak"] }, pattern: { in: BUY_PATTERNS }, pattern_pct: { min: 0, max: 10 } }],
+    ["Wzorzec Zangera: budowany, do 3 % pod kupnem", { pattern: { in: BUY_PATTERNS }, pattern_pct: { min: -3, max: 0 } }],
     ["Liderzy: RS 52 tyg. ≥ 50 pp + nad GLB", { rs: { min: 50 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Przebicie GLB + SMA 10 > 30 (dowolnie wysoko)", { trend: { in: ["tak"] }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
     ["Aktywne: RVol tyg. ≥ 1,5 + nad GLB", { rvol_w: { min: 1.5 }, glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] } }],
@@ -459,7 +460,7 @@ if (typeof document !== "undefined") (function () {
 
     function startDraw(x, y) {
         const a = ptValue(x, y, gest.tol), id = Date.now().toString(36);
-        ast.lines[current] = linesOf(current).concat([{ id, d1: a.d, p1: a.p, d2: a.d, p2: a.p, alert: true }]);
+        ast.lines[current] = linesOf(current).concat([{ id, d1: a.d, p1: a.p, d2: a.d, p2: a.p, alert: false }]);   // nowa linia: bez alarmu i przedłużenia — alarm użytkownik włącza sam
         sel = id;
         gest.mode = "p2";
         gest.orig = { ...findLine(id) };
@@ -675,7 +676,7 @@ if (typeof document !== "undefined") (function () {
         val("Δ marży oper. r/r", v(r.dopm, " pp")); val("  poprzedni kw.", v(r.dopm1, " pp")); val("Marża oper.", v(r.opm, " %"));
         val("Δ marży brutto r/r", v(r.dgm, " pp")); val("Wycena P/S", r.ps ? r.ps.toFixed(1) : "—"); val("RS 52 tyg. vs S&P", v(r.rs, " pp"));
         val("RS sektora (ETF / SPY nad SMA 52)", v(r.sector_rs, " %"));
-        val("Wzorzec Zangera", r.pattern ? `${r.pattern} · ${r.pattern_state} · ${v(r.pattern_pct, " % do kupna")}` : "—"); val("Parabolic Curve (wyjście)", r.parabola ? r.parabola.note : "—"); val("EPS Rating (1–99, przybliżenie IBD)", r.eps_rating == null ? "—" : String(r.eps_rating));
+        val("Wzorzec Zangera", r.pattern ? `${r.pattern} · ${r.pattern_state} · ${v(r.pattern_pct, " % do kupna")}` : "—"); val("Ostrzeżenie wzorca", r.pattern_exit || "—"); val("Parabolic Curve (wyjście)", r.parabola ? r.parabola.note : "—"); val("EPS Rating (1–99, przybliżenie IBD)", r.eps_rating == null ? "—" : String(r.eps_rating));
         val("  wzrost EPS 2 ost. kw. r/r", v(r.eps_g2, " %", 0)); val("  EPS 3 lata (TTM, rocznie)", v(r.eps_cagr3, " %", 0));
         val("  stabilność (kw. ze wzrostem r/r)", r.eps_stab == null ? "—" : Math.round(r.eps_stab * 100) + " %");
         val("Niespodzianka EPS", v(r.surp, " %")); val("Rewizja EPS 90 dni", v(r.eps_rev, " %"));
