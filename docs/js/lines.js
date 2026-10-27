@@ -72,6 +72,11 @@ function snapPrice(price, hi, lo, yf, y, tol) {
     return best;
 }
 
+// magnes poziomy: cena przyciągana do ceny drugiego końca linii, gdy kursor jest bliżej niż tol px od jej poziomu (-> linia dokładnie pozioma)
+function snapHorizontal(price, other, yf, y, tol) {
+    return other != null && Math.abs(yf(other) - y) <= tol ? other : price;
+}
+
 // zmiany stanu obserwowanej spółki (prev = stan z poprzedniego sprawdzenia) -> lista komunikatów
 function stateAlerts(prev, row) {
     const out = [];
@@ -127,6 +132,7 @@ function positionStatus(pl, row, exit) {
     const ms = p.macdStop !== undefined ? p.macdStop : r.macd_stop;   // plan pozycji: MACD od wejścia
     if (exit !== "GLB" && ms && last != null && last < ms) out.push("WYJŚCIE: pod stopem MACD");
     if (p.half) out.push("SPRZEDAJ ½ (−20 % od szczytu)");
+    if (r.parabola) out.push("⚠ PARABOLA: wyjście przy zamknięciu tygodnia pod SMA 10");
     if (r.slow) out.push("⚠ hamuje" + (r.slow === "HAMUJE+MB" ? " + marża brutto" : ""));
     return out;
 }
@@ -172,4 +178,4 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
     return fresh;
 }
 
-if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, macdStopSince, HALF_DROP, STOP_PCT, MAX_POSITIONS };
+if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, snapHorizontal, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, macdStopSince, HALF_DROP, STOP_PCT, MAX_POSITIONS };
