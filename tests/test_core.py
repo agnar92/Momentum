@@ -464,7 +464,7 @@ def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp
 
 
 def test_rows_carry_zanger_patterns_and_parabola(tmp_path):
-    para = [20 * math.exp(0.004 * i + 0.0004 * i * i) * (1 + 0.08 * math.sin(2 * math.pi * i / 7)) for i in range(60)]
+    para = [20 * math.exp(0.004 * i + 0.0003 * i * i) * (1 + 0.08 * math.sin(2 * math.pi * i / 7)) for i in range(60)]
     d = [(dt.date(2024, 1, 1) + dt.timedelta(weeks=i)).isoformat() for i in range(60)]
     w = {"d": d, "o": para, "h": [x * 1.01 for x in para], "l": [x * 0.99 for x in para], "c": para, "v": [1e6] * 60}
     row = calc.build_row({"ticker": "P"}, w, [], None)
@@ -474,13 +474,15 @@ def test_rows_carry_zanger_patterns_and_parabola(tmp_path):
 
 def test_parabolic_curve_three_steepening_lines_and_break():
     def steps(n=60):
-        return [20 * math.exp(0.004 * i + 0.0004 * i * i) * (1 + 0.08 * math.sin(2 * math.pi * i / 7)) for i in range(n)]
+        return [20 * math.exp(0.004 * i + 0.0003 * i * i) * (1 + 0.08 * math.sin(2 * math.pi * i / 7)) for i in range(n)]
 
     def weekly(c, v=None):
         d = [(dt.date(2024, 1, 1) + dt.timedelta(weeks=i)).isoformat() for i in range(len(c))]
         return {"d": d, "o": c, "h": [x * 1.01 for x in c], "l": [x * 0.99 for x in c], "c": c, "v": v or [1e6] * len(c)}
     r = calc.parabola(weekly(steps()))
     assert r and r["state"] == "TRWA" and r["n"] == 3 and [s["label"] for s in r["shapes"]] == ["1", "2", "3"] and r["exit"] > 0
+    gap = steps(56) + [x * 1.6 for x in steps(60)[56:]]   # luka w górę: cena daleko nad najbardziej stromą linią
+    assert calc.parabola(weekly(gap)) is None
     assert calc.parabola(weekly([20 * 1.02 ** i * (1 + 0.08 * math.sin(2 * math.pi * i / 7)) for i in range(60)])) is None   # stałe tempo = nie parabola
     c = steps(58) + [steps(58)[-1] * 0.8, steps(58)[-1] * 0.7]
     b = calc.parabola(weekly(c, [1e6] * 59 + [4e6]))
