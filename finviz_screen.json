@@ -1,5 +1,5 @@
 {
- "_instructions": "Domyślnie skaner sektorowy: 3 sektory z najsilniejszym RS (ETF / SPY nad SMA 52 tyg.) × zapytanie Finviz (sektor + filtr). Wklej pełny URL screenera w Actions → Weekly Refresh → Run workflow, aby zastąpić go zwykłą listą Finviz. symbols = SPY (RS); ETF-y sektorowe dodawane automatycznie.",
+ "_instructions": "Jeden skaner: sektorowy — 3 sektory z najsilniejszym RS (ETF / SPY nad SMA 52 tyg.) × zapytanie Finviz (sektor + filtr), jak w desktopie. symbols = SPY (RS); ETF-y sektorowe dodawane automatycznie.",
  "scanners": [
   {
    "name": "Sektory top 3 (RS)",

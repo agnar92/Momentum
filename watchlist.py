@@ -14,7 +14,6 @@ import os
 import re
 import sys
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
 
 from momentum import calc, estimates, finviz, prices, sec
 
@@ -66,14 +65,14 @@ def sector_fetch(sc, fetch_list, ranked, log):
 
 
 def scanners(config):
-    """Skanery z finviz_screen.json: [{name, filters, max_tickers}]. Stary zapis (samo `filters`) = jeden skaner „Domyślny”."""
+    """Skanery z finviz_screen.json: [{name, filters, max_tickers, top_sectors}]. Bez wpisu w konfiguracji = domyślny skaner sektorowy (jak w desktopie)."""
     items = [x for x in config.get("scanners") or [] if isinstance(x, dict) and x.get("filters")]
     if not items:
-        items = [{"name": "Domyślny", "filters": config.get("filters") or finviz.DEFAULT_FILTERS, "max_tickers": config.get("max_tickers")}]
+        items = [{"name": "Sektory top 3 (RS)", "filters": calc.SECTOR_FILTERS, "top_sectors": calc.TOP_SECTORS, "max_tickers": 500}]
     out = [{"name": str(x.get("name") or f"Skaner {i + 1}"), "filters": x["filters"], "max_tickers": int(x.get("max_tickers") or finviz.MAX_TICKERS)}
            for i, x in enumerate(items)]
     for o, x in zip(out, items):
-        for k in ("url", "top_sectors"):   # skaner sektorowy: N najsilniejszych sektorów = N zapytań Finviz (sektor + filtr)
+        for k in ("top_sectors",):   # skaner sektorowy: N najsilniejszych sektorów = N zapytań Finviz (sektor + filtr)
             if x.get(k):
                 o[k] = x[k]
     return out
@@ -141,7 +140,7 @@ BENCH = "SPY"
 
 
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, finviz_url=None, fetch_sec=True, fetch_only=False, offline=False):
+        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, fetch_sec=True, fetch_only=False, offline=False):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
@@ -149,23 +148,8 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     ua = os.environ.get("SEC_UA") or config.get("sec_ua") or sec.UA
     prev = load_json(Path(out) / "watchlist.json", {})
     scans = scanners(config)
-    if finviz_url:
-        clean_url = finviz_url.strip()
-        parsed = urlparse(clean_url)
-        params = parse_qs(parsed.query)
-        filters = (params.get("f") or [None])[0]
-        if not filters or not parsed.netloc.lower().endswith("finviz.com") or parsed.scheme not in ("http", "https"):
-            raise RuntimeError("Nieprawidłowy link Finviz. Wklej pełny adres screenera Finviz z parametrem f=.")
-        saved = {"name": "Finviz", "filters": filters, "url": clean_url, "max_tickers": finviz.MAX_TICKERS}
-        config["scanners"] = [saved]
-        write_json(CONFIG, config)
-        scans = [saved]
-        log(f"Zapisano jedyny skaner Finviz; filtry: {filters}")
-    else:
-        # Zawsze jeden skaner: zapisany URL ma pierwszeństwo; bez niego użyj pierwszego skonfigurowanego filtra.
-        custom = [sc for sc in scans if sc.get("url")]
-        scans = [custom[-1] if custom else scans[0]]
-        log("Odświeżam jedyny skaner: " + (scans[0].get("url") or scans[0]["name"]))
+    scans = scans[:1]   # zawsze jeden skaner: sektorowy (3 sektory z najsilniejszym RS), jak w desktopie
+    log("Odświeżam jedyny skaner: " + scans[0]["name"])
     wdir = Path(out) / "weekly"
     sectors = None
     if scans[0].get("top_sectors"):   # RS sektorów: ETF / SPY nad SMA 52 tyg. -> top N -> zapytania Finviz
@@ -185,7 +169,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
             log("⚠ Brak świec ETF-ów sektorowych — używam poprzedniej listy i rankingu sektorów (uruchom Weekly Refresh).")
         else:
             raise RuntimeError("Żaden sektor nie ma RS nad SMA 52 tyg. (albo brak danych ETF) — lista bez zmian.")
-    base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=1 if finviz_url else MIN_TICKERS)
+    base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
     log(f"Razem {len(tickers)} spółek ze skanerów; symbole dodatkowe: {', '.join(extra) or '—'}")
@@ -328,7 +312,6 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--max-tickers", type=int)
-    ap.add_argument("--finviz-url", default=os.environ.get("FINVIZ_URL") or None, help="Link do screenera Finviz; zapisze się w konfiguracji.")
     ap.add_argument("--no-sec", action="store_true", help="Wyłącz pobieranie raportów i fundamentów z SEC.")
     ap.add_argument("--fetch-only", action="store_true", help="Pobierz/uzupełnij źródła danych i cache bez liczenia wskaźników.")
     ap.add_argument("--build-only", action="store_true",
@@ -379,9 +362,9 @@ def main(argv=None):
                 daily=offline_daily, est=lambda _tickers, _cache, **_kwargs: None,
                 fetch_sec=True, now=built_at, offline=True)
         elif args.fetch_only:
-            run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec, fetch_only=True)
+            run(config, fetch_sec=not args.no_sec, fetch_only=True)
         else:
-            run(config, finviz_url=args.finviz_url, fetch_sec=not args.no_sec)
+            run(config, fetch_sec=not args.no_sec)
     except RuntimeError as e:
         print(f"❌ {e}")
         return 1
