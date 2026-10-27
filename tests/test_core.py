@@ -439,3 +439,24 @@ def test_finviz_url_replaces_previous_scanner_and_saves_one_url(tmp_path, monkey
     saved = json.loads(config_path.read_text())
     assert seen == ["fa_salesqoq_o15,sh_price_o10"]
     assert len(saved["scanners"]) == 1 and saved["scanners"][0]["url"].endswith("f=fa_salesqoq_o15,sh_price_o10")
+
+
+def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp_path):
+    cfg = {"scanners": [{"name": "Sektory", "filters": "f", "top_sectors": 2}], "symbols": ["SPY"]}
+    queries = []
+
+    def fetch(filters, max_tickers, log):
+        queries.append(filters)
+        return [{"ticker": f"{filters[4:7].upper()}{i}", "sector": "Technology" if "technology" in filters else "Energy"} for i in range(20)], 20
+
+    def weekly(ts, log, cache):
+        out = {}
+        for t in ts:
+            out[t] = {**SPY, "c": [100.0] * 60} if t == "SPY" else {**W, "c": [100.0 * (1.01 if t == "XLK" else 1.005 if t == "XLE" else 0.99) ** i for i in range(60)]} if t.startswith("XL") else W
+        return out
+    rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch, weekly=weekly,
+                         monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+    data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
+    assert queries == ["sec_technology,f", "sec_energy,f"] and len(rows) == 40
+    assert [x["etf"] for x in data["sectors"] if x["selected"]] == ["XLK", "XLE"] and rows[0]["sector_rs"] > rows[-1]["sector_rs"] > 0
+    assert (tmp_path / "out" / "weekly" / "XLK.json").exists() and "XLK" not in json.loads((tmp_path / "cache" / "sec.json").read_text())

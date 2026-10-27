@@ -46,13 +46,37 @@ def file_name(ticker):
     return re.sub(r"[^A-Za-z0-9.-]", "_", ticker) + ".json"
 
 
+def sector_fetch(sc, fetch_list, ranked, log):
+    """Skaner sektorowy: po jednym zapytaniu Finviz na każdy z N najsilniejszych sektorów (sektor + wspólny filtr), spółki bez powtórzeń."""
+    top = calc.top_sectors(ranked, int(sc["top_sectors"]))
+
+    def fetch(filters, max_tickers=None, log=log):
+        rows, seen, total = [], set(), 0
+        for sector in top:
+            flt = calc.sector_filter(filters, sector)
+            log(f"Finviz [{sector['sector']}]: filtr {flt}")
+            part, tot = fetch_list(flt, max_tickers=max_tickers, log=log)
+            total += tot or len(part)
+            for r in part:
+                if r["ticker"] not in seen:
+                    seen.add(r["ticker"])
+                    rows.append({**r, "sector": r.get("sector") or sector["sector"]})
+        return rows, total
+    return fetch, top
+
+
 def scanners(config):
     """Skanery z finviz_screen.json: [{name, filters, max_tickers}]. Stary zapis (samo `filters`) = jeden skaner „Domyślny”."""
     items = [x for x in config.get("scanners") or [] if isinstance(x, dict) and x.get("filters")]
     if not items:
         items = [{"name": "Domyślny", "filters": config.get("filters") or finviz.DEFAULT_FILTERS, "max_tickers": config.get("max_tickers")}]
-    return [{"name": str(x.get("name") or f"Skaner {i + 1}"), "filters": x["filters"], "max_tickers": int(x.get("max_tickers") or finviz.MAX_TICKERS)}
-            for i, x in enumerate(items)]
+    out = [{"name": str(x.get("name") or f"Skaner {i + 1}"), "filters": x["filters"], "max_tickers": int(x.get("max_tickers") or finviz.MAX_TICKERS)}
+           for i, x in enumerate(items)]
+    for o, x in zip(out, items):
+        for k in ("url", "top_sectors"):   # skaner sektorowy: N najsilniejszych sektorów = N zapytań Finviz (sektor + filtr)
+            if x.get(k):
+                o[k] = x[k]
+    return out
 
 
 KEYS = ("ticker", "company", "sector", "industry", "market_cap")
@@ -142,22 +166,37 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         custom = [sc for sc in scans if sc.get("url")]
         scans = [custom[-1] if custom else scans[0]]
         log("Odświeżam jedyny skaner: " + (scans[0].get("url") or scans[0]["name"]))
+    wdir = Path(out) / "weekly"
+    sectors = None
+    if scans[0].get("top_sectors"):   # RS sektorów: ETF / SPY nad SMA 52 tyg. -> top N -> zapytania Finviz
+        etfs = [e for e, _, _ in calc.SECTOR_ETFS]
+        esaved = {t: load_json(wdir / file_name(t), None) for t in etfs + [BENCH]}
+        eser = weekly(etfs + [BENCH], log=log, cache={t: s for t, s in esaved.items() if s})
+        ranked = calc.sector_rs({e: eser[e] for e in etfs if e in eser}, eser.get(BENCH) or {})
+        fetch_list, top = sector_fetch(scans[0], fetch_list, ranked, log)
+        if not top:
+            raise RuntimeError("Żaden sektor nie ma RS nad SMA 52 tyg. (albo brak danych ETF) — lista bez zmian.")
+        names = {x["etf"] for x in top}
+        sectors = [{"etf": x["etf"], "sector": x["sector"], "pct": round(x["pct"], 2), "selected": x["etf"] in names} for x in ranked]
+        log("Sektory (RS = ETF / SPY, % nad SMA 52 tyg.): " + ", ".join(f"{x['etf']} {x['pct']:+.1f} %" + (" ✓" if x["etf"] in names else "") for x in ranked))
+        symbols += [e for e in etfs if e not in symbols]   # świece ETF-ów zapisujemy obok spółek (ranking przy --build-only)
     base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=1 if finviz_url else MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
     log(f"Razem {len(tickers)} spółek ze skanerów; symbole dodatkowe: {', '.join(extra) or '—'}")
-    wdir = Path(out) / "weekly"
     saved = {t: load_json(wdir / file_name(t), None) for t in tickers + extra}
     series = weekly(tickers + extra, log=log, cache={t: s for t, s in saved.items() if s})
     # miesięczne High (Green Line), fundamenty, prognozy i świece dzienne dla wszystkich spółek ze skanerów (bez progu obrotu)
     liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
     scache = load_json(Path(cache_dir) / "sec.json", {}) if fetch_sec else {}
-    monthly(liquid + [s for s in extra if s in series], mcache, log=log)
+    etf_set = {e for e, _, _ in calc.SECTOR_ETFS}
+    stocks_extra = [s for s in extra if s not in etf_set]   # ETF-y sektorowe służą tylko do rankingu RS
+    monthly(liquid + [s for s in stocks_extra if s in series], mcache, log=log)
     write_json(Path(cache_dir) / "monthly.json", mcache)
     if fetch_sec:
         try:
-            fund(liquid + [s for s in extra if s in series], scache, ua=ua, log=log)
+            fund(liquid + [s for s in stocks_extra if s in series], scache, ua=ua, log=log)
         except Exception as e:
             log(f"⚠ SEC niedostępny ({e}) — używam zapisanych fundamentów.")
         write_json(Path(cache_dir) / "sec.json", scache)
@@ -165,7 +204,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         log("SEC/raporty fundamentalne: wyłączone na ten moment.")
     ecache = load_json(Path(cache_dir) / "estimates.json", {})   # niespodzianki EPS i rewizja prognoz (yfinance), co 7 dni
     try:
-        est(liquid + [s for s in extra if s in series and s != BENCH], ecache, log=log)
+        est(liquid + [s for s in stocks_extra if s in series and s != BENCH], ecache, log=log)
     except Exception as e:
         log(f"⚠ prognozy EPS niedostępne ({e}) — używam zapisanych.")
     write_json(Path(cache_dir) / "estimates.json", ecache)
@@ -212,6 +251,11 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         rs = {str(d)[:10]: v for d, v in e.get("revenue_surp") or []}
         r["earn"] = [[str(d)[:10], v, rs.get(str(d)[:10])] for d, v in sorted(e.get("surp") or [])][-12:]
     sym_rows = [row({"ticker": s}) for s in extra if s in series]
+    by_sector = {x["sector"]: x["pct"] for x in sectors or []}
+    for r in rows + sym_rows:
+        r["sector_rs"] = by_sector.get(r.get("sector"))   # RS sektora spółki (% nad SMA 52 tyg.) — tylko w skanerze sektorowym
+    calc.assign_eps_rating(rows)   # EPS Rating 1–99: percentyl wśród spółek tej listy
+    calc.assign_eps_rating(sym_rows, pool=rows)
     if len(rows) < 0.7 * len(tickers):
         raise RuntimeError(f"Ceny tylko dla {len(rows)} z {len(tickers)} spółek — nic nie zapisuję.")
     wdir.mkdir(parents=True, exist_ok=True)
@@ -265,7 +309,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         r["rvol_d"] = calc.rel_volume(sd["v"], calc.RVOL_D) if sd else None
     last = max((series[r["ticker"]]["d"][-1] for r in rows), default=None)
     write_json(Path(out) / "watchlist.json", {
-        "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta,
+        "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta, "sectors": sectors or [],
         "finviz_stale": any(m["stale"] for m in meta), "rules": {"confirm_months": calc.CONFIRM_MONTHS, "entry_max_pct": calc.ENTRY_MAX_PCT,
                                           "min_rev_growth": calc.MIN_REV_GROWTH,
                                           "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT},
