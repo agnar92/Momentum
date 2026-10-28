@@ -554,3 +554,16 @@ def test_build_only_without_etf_candles_keeps_previous_list(tmp_path):
         watchlist.run(cfg, **kw)
     rows = watchlist.run(cfg, offline=True, **kw)
     assert len(rows) == 20 and json.loads((tmp_path / "out" / "watchlist.json").read_text())["sectors"] == []
+
+
+def test_rwb_gap_and_dokup_like_desktop():
+    c = [100 + i for i in range(170)]
+    lo, hi = calc.rwb_gap(c)[120]
+    f, s = calc.gmma(c)
+    assert lo < hi and lo == max(x[120] for x in s) and hi == min(x[120] for x in f)
+    assert all(g == (None, None) for g in calc.rwb_gap([300 - i for i in range(120)])[60:])     # w spadku nie ma RWB, więc nie ma przerwy
+    low = [x - 1 for x in c]
+    assert calc.rwb_dokup(low, c) == []
+    low[120], low[121], low[135] = (lo + hi) / 2, hi - 0.01, hi - 0.01
+    assert calc.rwb_dokup(low, c) == [120, 135]                                               # pierwsza świeca każdego wejścia w przerwę
+    assert calc.rwb_dokup([x - 5 for x in c[:50]], c[:50]) == []                              # rozgrzewka
