@@ -114,7 +114,7 @@ if (typeof document !== "undefined") (function () {
     if (typeof state.stops !== "object" || !state.stops) state.stops = {};
     if (typeof state.gist !== "object" || !state.gist) state.gist = { id: "", mode: "auto" };
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
-    let sel = null, gest = null, rafId = 0, spxData = null, drawMode = false, hint = null;
+    let sel = null, gest = null, rafId = 0, spxData = null, spyMData = null, drawMode = false, hint = null;
     const lineUndo = new Map();   // ticker -> stos poprzednich stanów linii (JSON), do ↶ / Ctrl+Z
     let period = "W", zanger = false;   // W = tygodniowy (T), M = miesięczny; zanger = widok Zangera (tylko T): cena + wolumen + wzorce
     const viewOf = () => (state.view[period] = state.view[period] || {});
@@ -337,9 +337,10 @@ if (typeof document !== "undefined") (function () {
     // seria i SPY bieżącego interwału; wynik trafia na wykres, o ile użytkownik nie zmienił spółki ani interwału w międzyczasie
     async function loadChartData(t) {
         const per = period;
-        const [d, spx] = await Promise.all([loadSeries(t, per), loadSeries("SPY", per)]);
+        const [d, spx, spyM] = await Promise.all([loadSeries(t, per), loadSeries("SPY", per), loadSeries("SPY", "M")]);   // tło zawsze z SPY miesięcznego
         if (current !== t || period !== per) return;
         spxData = spx || null;
+        spyMData = spyM || null;
         series = d || false;
         drawChart();
     }
@@ -400,7 +401,7 @@ if (typeof document !== "undefined") (function () {
             if (r && r.shares) label += ` · ${sharesText(r.shares)} akcji (${money(r.valuePln)} PLN)`;
         }
         const v = vseries();
-        return { rwb: !!state.rwb, zanger: zanger && period === "W", real: v ? v.real : undefined, pv: pvOf(), stop: st || null, stopLabel: label };
+        return { rwb: !!state.rwb, zanger: zanger && period === "W", spyM: spyMData, real: v ? v.real : undefined, pv: pvOf(), stop: st || null, stopLabel: label };
     }
 
     function drawChart() {
