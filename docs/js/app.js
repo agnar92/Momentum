@@ -400,7 +400,8 @@ if (typeof document !== "undefined") (function () {
             if (r && r.shares) label += ` · ${sharesText(r.shares)} akcji (${money(r.valuePln)} PLN)`;
         }
         const v = vseries();
-        return { rwb: !!state.rwb, zanger: zanger && period === "W", real: v ? v.real : undefined, pv: pvOf(), stop: st || null, stopLabel: label };
+        const pos = current && ast.pos[current];
+        return { rwb: !!state.rwb, zanger: zanger && period === "W", real: v ? v.real : undefined, pv: pvOf(), stop: st || null, stopLabel: label, entry: pos && pos.price > 0 ? pos.price : null };
     }
 
     function drawChart() {
@@ -734,6 +735,7 @@ if (typeof document !== "undefined") (function () {
         saveAlerts();
         renderTools();
         renderTable();
+        drawChart();   // linia ceny wejścia pojawia się / znika od razu
     }
 
     function toggleWatch() {
@@ -914,6 +916,7 @@ if (typeof document !== "undefined") (function () {
         else return;
         saveAlerts();
         renderTable();
+        if (current && series) drawChart();   // linia ceny wejścia przesuwa się po edycji pozycji
         openPositions();
     }
 

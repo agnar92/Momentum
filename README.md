@@ -34,6 +34,7 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
   **RWB** (przycisk / R, T i M): pasek RWB u dołu ceny, ● Blue Dot i żółta strzałka ▲ pod Low świecy, na której RWB wraca po cofnięciu (= dokup); kolumna **RWB tyg.** sortuje najświeższe starty na górę.
   **⇥ N** = puste świece po prawej (linie w przyszłość); skala ceny: kółko nad osią albo Shift+kółko, przeciągnięcie osi, środkowy przycisk, dwuklik na osi = auto; widok zapamiętany (osobno T i M).
   **🛑 Stop** = ręczna linia do przeciągania (dwuklik na wykresie = stop tu), **💰 Wielkość** = kapitał w PLN, kurs USD/PLN (NBP), ryzyko % → liczba akcji (ułamkowych). Linie T / Z i M widać wzajemnie (blade).
+- **Linia wejścia** (📌 Pozycja): bursztynowa przerywana linia na cenie kupna z pozycji, z napisem „WEJŚCIE cena · wynik %” i ceną na osi, na T, M i Z; przesuwa się po edycji pozycji (Pozycje → Edytuj), znika po zamknięciu pozycji.
 - **☁ Gist**: dane wysłane z desktopa (☁ Web (gist)) do tajnego gista; strona bierze nowsze: gist albo repo (Weekly Refresh działa osobno, więc strona ma dane także bez dostępu do PC). ID gista wpisujesz raz w przeglądarce.
 - **Warunki** (tylko te o największym wpływie w backteście; bez progu obrotu — płynność ustawiasz filtrem w Finviz): przychody kw. ≥ +15 % r/r, marża oper. ≥ +3 pp r/r, P/S < 20 i siła
   względna (kolumna RS): zmiana ceny z 52 tyg. ≥ 50 pp lepsza od S&P 500. Backtest 2015–2026: +15,6 % na transakcję, portfel wszystkich sygnałów 36,6 % rocznie
