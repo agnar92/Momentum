@@ -10,6 +10,8 @@ const browserGlobals = {
     dateIndex: "readonly", lineAt: "readonly", hitLine: "readonly", snapPrice: "readonly", snapHorizontal: "readonly", evalAlerts: "readonly", snapshot: "readonly", positionPlan: "readonly", positionStatus: "readonly", MAX_POSITIONS: "readonly", rulerText: "readonly",
     chartSvg: "readonly", infoLines: "readonly", titleText: "readonly", sliderSvg: "readonly", sliderRect: "readonly",
     sliderMode: "readonly", sliderDrag: "readonly", sliderJump: "readonly", zoomWindow: "readonly", windowRange: "readonly",
+    FUTURE_STEPS: "readonly", FUTURE_DEFAULT: "readonly", DEFAULT_WEEKS: "readonly", monthlyWithOpen: "readonly", extendData: "readonly", fmt: "readonly", sharesText: "readonly",
+    positionSize: "readonly", earningsIndices: "readonly", rwbStarts: "readonly", glbPeak: "readonly", blueDots: "readonly",
 };
 const nodeGlobals = { require: "readonly", module: "readonly", process: "readonly", console: "readonly" };
 

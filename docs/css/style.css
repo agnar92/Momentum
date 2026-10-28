@@ -66,6 +66,10 @@ dialog input { font-size: 16px; }
 .dlg-btns { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 10px; }
 dialog.wide { width: min(640px, 96vw); max-height: 88vh; }
 dialog.poslist { width: min(1100px, 98vw); }
+dialog.sizedlg { width: min(460px, 96vw); }
+.szgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.szgrid input { width: 100%; text-align: right; background: #0f1318; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 16px; }
+.szout { background: #10151c; color: #e5ebf2; padding: 10px; border-radius: 6px; font-size: 12px; white-space: pre-wrap; margin: 8px 0 0; }
 .tblwrap { overflow-x: auto; }
 .tblwrap td, .tblwrap th { white-space: nowrap; padding: 3px 6px; }
 .tblwrap .warn { color: #ffb020; }

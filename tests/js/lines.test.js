@@ -106,3 +106,25 @@ test("snapHorizontal pulls the price to the other end's level only near it", () 
     assert.strictEqual(snapHorizontal(110, 100, yf, yf(110), 4), 110);   // 20 px -> bez zmian
     assert.strictEqual(snapHorizontal(101, null, yf, yf(101), 4), 101);
 });
+
+test("slotIndex continues the grid after the last candle (lines drawn into the future)", () => {
+    const { slotIndex, lineAt } = require("../../docs/js/lines.js");
+    const d = ["2024-01-01", "2024-01-08", "2024-01-15"];
+    assert.strictEqual(slotIndex(d, "2024-01-08"), 1);
+    assert.strictEqual(slotIndex(d, "2024-01-29"), 4);
+    assert.strictEqual(slotIndex(d, "2023-12-01"), -1);
+    const ln = { d1: "2024-01-01", p1: 100, d2: "2024-01-29", p2: 200 };   // sięga 4 tygodnie w przyszłość
+    assert.ok(Math.abs(lineAt(ln, d, 2) - 100 * Math.pow(2, 2 / 4)) < 1e-9);
+});
+
+test("position size: PLN capital to USD, fractional shares rounded down", () => {
+    const { positionSize } = require("../../docs/js/lines.js");
+    const r = positionSize(40000, 4, 100, 95, 1);
+    assert.deepStrictEqual([r.capitalUsd, r.riskUsd, r.shares, r.limitedBy, r.valueUsd, r.valuePln, r.lossPln], [10000, 100, 20, "ryzyko", 2000, 8000, 400]);
+    assert.strictEqual(r.fullShares, 100);
+    assert.strictEqual(positionSize(4000, 4, 100, 99, 5).limitedBy, "kapitał");
+    assert.strictEqual(positionSize(4000, 4, 300, 285, 1).shares, 0.6666);
+    assert.strictEqual(positionSize(1000, 4, 100, 100, 1), null);
+    assert.strictEqual(positionSize(1000, 0, 100, 90, 1), null);
+    assert.strictEqual(positionSize("x", 4, 100, 90, 1), null);
+});

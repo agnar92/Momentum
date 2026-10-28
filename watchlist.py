@@ -1,6 +1,6 @@
 """Odświeżenie danych strony (raz w tygodniu w CI, po zamknięciu piątkowej sesji): Finviz (lista) → yfinance tygodniowe 3 lata
 (wykres, średnie, MACD, obrót; spółki już zapisane w docs/data/weekly dostają tylko nowe tygodnie) → dla spółek z obrotem ≥ 50 mln $:
-yfinance miesięczne High z całej historii (Green Line; tylko nowe zamknięte miesiące) i SEC (fundamenty, z pamięci podręcznej) → docs/data/watchlist.json + docs/data/weekly/<ticker>.json.
+yfinance miesięczne świece z całej historii (Green Line z High, wykres M; tylko nowe zamknięte miesiące) i SEC (fundamenty, z pamięci podręcznej) → docs/data/watchlist.json + docs/data/weekly/<ticker>.json.
 Ta sama strategia i te same obliczenia co w Momentum Desktop (agnar92/MomentumDesktop). Funkcje sieciowe można podmienić (testy).
 
     python watchlist.py                 # pobierz dane i przelicz lokalnie
@@ -114,12 +114,26 @@ def rows_of_scanner(rows, name):
     return [r for r in rows if name in (r.get("scanners") or [name])]
 
 
-ABOVE_GLB = ("WYBICIE", "SYGNAŁ", "NAD")   # spółki z wykresem dziennym
 BENCH = "SPY"
 
 
+def write_monthly(out, mcache, tickers):
+    """docs/data/monthly/<ticker>.json = zamknięte miesiące (d, o, h, l, c, v) spółek listy i SPY (wykres M; bieżący miesiąc dokleja strona z tygodniowych)."""
+    mdir = Path(out) / "monthly"
+    mdir.mkdir(parents=True, exist_ok=True)
+    keep = set()
+    for t in dict.fromkeys(tickers):
+        m = prices.monthly_series(mcache.get(t))
+        if m:
+            keep.add(file_name(t))
+            write_json(mdir / file_name(t), m)
+    for f in mdir.glob("*.json"):
+        if f.name not in keep:
+            f.unlink()
+
+
 def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, weekly=prices.weekly, monthly=prices.monthly,
-        fund=sec.update, now=None, daily=prices.daily, est=estimates.update, fetch_sec=True, fetch_only=False, offline=False):
+        fund=sec.update, now=None, est=estimates.update, fetch_sec=True, fetch_only=False, offline=False):
     now = now or dt.datetime.now(dt.timezone.utc)
     symbols = [s.strip().upper() for s in config.get("symbols") or [] if s.strip()]
     if BENCH not in symbols:   # SPY zawsze: siła względna i panel S&P 500
@@ -154,7 +168,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     log(f"Razem {len(tickers)} spółek ze skanerów; symbole dodatkowe: {', '.join(extra) or '—'}")
     saved = {t: load_json(wdir / file_name(t), None) for t in tickers + extra}
     series = weekly(tickers + extra, log=log, cache={t: s for t, s in saved.items() if s})
-    # miesięczne High (Green Line), fundamenty, prognozy i świece dzienne dla wszystkich spółek ze skanerów (bez progu obrotu)
+    # miesięczne świece (Green Line z High, wykres M), fundamenty i prognozy dla wszystkich spółek ze skanerów (bez progu obrotu)
     liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
     scache = load_json(Path(cache_dir) / "sec.json", {}) if fetch_sec else {}
@@ -190,19 +204,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
             if path.name not in keep:
                 path.unlink()
 
-        daily_symbols = list(dict.fromkeys(liquid + [BENCH]))
-        daily_cache_dir = Path(cache_dir) / "daily"
-        daily_cache = {t: load_json(daily_cache_dir / file_name(t), None) for t in daily_symbols}
-        daily_cache = {t: data for t, data in daily_cache.items() if data}
-        try:
-            dser = daily(daily_symbols, log=log, period="2y", cache=daily_cache, today=now.date()) if daily_symbols else {}
-        except Exception as e:
-            log(f"⚠ dzienne dane źródłowe niedostępne ({e}) — zachowuję cache.")
-            dser = daily_cache
-        daily_cache_dir.mkdir(parents=True, exist_ok=True)
-        for ticker, data in dser.items():
-            if data:
-                write_json(daily_cache_dir / file_name(ticker), data)
+        write_monthly(out, mcache, liquid + [s for s in stocks_extra if s in series])
         write_json(Path(out) / "source_list.json", {
             "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "scanners": meta, "rows": base, "symbols": extra,
@@ -235,46 +237,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     for f in wdir.glob("*.json"):
         if f.name not in keep:
             f.unlink()
-    # Świece dzienne z 2 lat dla C/C[252] i RVol dziennego (50 sesji).
-    # Do plików wykresu zapisujemy tylko spółki z sygnałem/ponad GLB.
-    ddir = Path(out) / "daily"
-    above = [r["ticker"] for r in rows if r.get("glb_state") in ABOVE_GLB]
-    daily_symbols = list(dict.fromkeys(liquid + [BENCH]))
-    daily_cache_dir = Path(cache_dir) / "daily"
-    daily_cache = {t: load_json(daily_cache_dir / file_name(t), None) for t in daily_symbols}
-    daily_cache = {t: series for t, series in daily_cache.items() if series}
-    try:
-        if daily_symbols and daily is prices.daily:
-            dser = daily(daily_symbols, log=log, period="2y", cache=daily_cache, today=now.date())
-        else:
-            dser = daily(daily_symbols, log=log, period="2y") if daily_symbols else {}
-    except Exception as e:
-        log(f"⚠ dzienne (RVol/C/C[250]) niedostępne ({e})")
-        dser = daily_cache
-    daily_cache_dir.mkdir(parents=True, exist_ok=True)
-    for t, sd in dser.items():
-        if sd:
-            write_json(daily_cache_dir / file_name(t), sd)
-    ddir.mkdir(parents=True, exist_ok=True)
-    dkeep = set()
-    for t in list(dict.fromkeys(above + [BENCH])):
-        sd = dser.get(t)
-        if sd:
-            dkeep.add(file_name(t))
-            write_json(ddir / file_name(t), sd)
-    for f in ddir.glob("*.json"):
-        if f.name not in dkeep:
-            f.unlink()
-    for r in rows:
-        sd = dser.get(r["ticker"])
-        r["daily"] = r["ticker"] in above and sd is not None
-        closes = sd.get("c", []) if sd else []
-        # C/C[52 tyg.]: 252 sesje wstecz; wskaźnik wykresu pozostaje pusty do uzyskania pełnego okresu.
-        r["cc52w"] = calc.price_ratio(closes)
-        bd = calc.fresh_blue_dot(sd, r.get("glb")) if r.get("glb_state") == "NAD" else None
-        if bd:
-            r["glb_state"], r["bdot"] = "BLUE DOT", bd
-        r["rvol_d"] = calc.rel_volume(sd["v"], calc.RVOL_D) if sd else None
+    write_monthly(out, mcache, [r["ticker"] for r in rows + sym_rows])
     last = max((series[r["ticker"]]["d"][-1] for r in rows), default=None)
     write_json(Path(out) / "watchlist.json", {
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta, "sectors": sectors or [],
@@ -322,14 +285,6 @@ def main(argv=None):
                         out[ticker] = series
                 return out
 
-            def offline_daily(tickers, log=print, **_kwargs):
-                out = {}
-                for ticker in tickers:
-                    series = load_json(CACHE / "daily" / file_name(ticker), None)
-                    if series:
-                        out[ticker] = series
-                return out
-
             built_at = None
             if previous.get("generated_at"):
                 try:
@@ -339,7 +294,7 @@ def main(argv=None):
             run(config, fetch_list=offline_fetch, weekly=offline_weekly,
                 monthly=lambda _tickers, _cache, **_kwargs: None,
                 fund=lambda _tickers, _cache, **_kwargs: None,
-                daily=offline_daily, est=lambda _tickers, _cache, **_kwargs: None,
+                est=lambda _tickers, _cache, **_kwargs: None,
                 fetch_sec=True, now=built_at, offline=True)
         elif args.fetch_only:
             run(config, fetch_sec=not args.no_sec, fetch_only=True)
