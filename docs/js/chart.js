@@ -62,6 +62,27 @@ function rwbStarts(closes, warmup = 60) {
     return out;
 }
 
+// przerwa RWB (tło między czerwonym pasem szybkich EMA a niebieskim wolnych): [najwyższa wolna, najniższa szybka] dla każdej świecy, [null, null] gdy RWB nie ma — jak calc.rwb_gap
+function rwbGap(closes) {
+    const [f, s] = gmma(closes);
+    return closes.map((_, i) => {
+        const lo = Math.max(...s.map((x) => x[i])), hi = Math.min(...f.map((x) => x[i]));
+        return hi > lo ? [lo, hi] : [null, null];
+    });
+}
+
+// dokup: RWB trwa, a Low (albo zamknięcie) weszło w przerwę (do najniższej czerwonej EMA lub niżej) — pierwsza świeca każdego takiego wejścia; jak calc.rwb_dokup
+function rwbDokup(lows, closes, warmup = 60) {
+    const gap = rwbGap(closes), out = [];
+    let prev = false;
+    for (let i = 0; i < closes.length; i++) {
+        const hi = gap[i][1], px = lows[i] == null ? closes[i] : Math.min(lows[i], closes[i]), touch = hi != null && px <= hi;
+        if (touch && !prev && i >= warmup) out.push(i);
+        prev = touch;
+    }
+    return out;
+}
+
 // Stochastic (n, 1) %K (null bez n świec albo przy zerowym zakresie) — jak calc.stoch_k
 function stochK(highs, lows, closes, n = 10) {
     return closes.map((c, i) => {
@@ -426,7 +447,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", op
             else if (!on && b !== null) { rect(xf(b) - step / 2, y1 - 4, xf(i - 1) - xf(b) + step, 4, C.slow); b = null; }
         });
         dots = blueDots(full.h.slice(0, real), full.l.slice(0, real), full.c.slice(0, real), level).filter((i) => i >= i0 && i < i1);
-        starts = rwbStarts(cfull).filter((i) => i >= i0 && i < i1);
+        starts = rwbDokup(full.l.slice(0, real), cfull).filter((i) => i >= i0 && i < i1);
     }
     openClip();
     const bw = M ? Math.min(2.5, Math.max(1, step * 0.2)) : Math.max(1, step * 0.25), tickW = Math.min(2, Math.max(1, step * 0.12));
@@ -444,11 +465,11 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", op
     }
     if (!zanger) poly(sma10.map((v, i) => (v ? [xf(i), yf(v)] : null)).filter(Boolean), C.sma, 2.4);   // SMA 10 (przycięta do panelu ceny)
     closeClip();
-    for (const i of starts) {   // początek RWB = sygnał „dokup”: sama żółta strzałka pod Low świecy (bez napisu, żeby było widać całą świecę)
+    for (const i of starts) {   // dokup = RWB trwa, a Low / zamknięcie weszło w przerwę między czerwonym a niebieskim pasem: sama żółta strzałka pod Low (bez napisu, żeby było widać całą świecę)
         const lw = full.l[i];
         if (lw && lw > pmin && lw < pmax) {
             const tx = xf(i - i0), ty = yf(lw) + 8;
-            parts.push(`<polygon points="${tx.toFixed(1)},${(ty - 5).toFixed(1)} ${(tx - 5).toFixed(1)},${(ty + 4).toFixed(1)} ${(tx + 5).toFixed(1)},${(ty + 4).toFixed(1)}" fill="${C.rwbStart}"><title>RWB START · dokup (stop pod Low ${fmt(lw)})</title></polygon>`);
+            parts.push(`<polygon points="${tx.toFixed(1)},${(ty - 5).toFixed(1)} ${(tx - 5).toFixed(1)},${(ty + 4).toFixed(1)} ${(tx + 5).toFixed(1)},${(ty + 4).toFixed(1)}" fill="${C.rwbStart}"><title>DOKUP · RWB + cena w przerwie (stop pod Low ${fmt(lw)})</title></polygon>`);
         }
     }
     for (const i of dots) {   // ● Blue Dot pod świecą
@@ -545,7 +566,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", op
     }
     const legendParts = zanger ? ["Widok Zangera: cena (log) + wolumen · wzorce: " + (((row && row.patterns) || []).map((p) => p.name).join(", ") || "brak")]
         : [`SMA 10 ${u}` + (regime.some((x) => x !== null) ? "" : " · brak danych SPY"), `zielone tło = SPY nad SMA 10 ${u}`, lvY != null ? "szary pas = 0–10 % nad GLB" : "",
-            opt.rwb ? "pasek RWB, ● Blue Dot, ▲ start RWB = dokup" : ""].filter(Boolean);
+            opt.rwb ? "pasek RWB, ● Blue Dot, ▲ dokup = cena w przerwie RWB" : ""].filter(Boolean);
     let legend = legendParts.join(" · ");
     while (legendParts.length > 1 && legend.length * fs * 0.6 + 8 > x1 - x0) { legendParts.pop(); legend = legendParts.join(" · "); }   // za długa legenda: odcinamy końcówkę, żeby nie wychodziła poza wykres
     boxText(x0 + 4, y0 + 14, legend, zanger ? C.fg : C.sma);
@@ -658,7 +679,7 @@ function titleText(t, row) {
 }
 
 if (typeof module !== "undefined") module.exports = {
-    sma, ema, macd, gmma, rwb, rwbStarts, stochK, blueDots, greenLine, rsLine, rsMarkers, earningsIndices, rulerText, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, sharesText,
+    sma, ema, macd, gmma, rwb, rwbStarts, rwbGap, rwbDokup, stochK, blueDots, greenLine, rsLine, rsMarkers, earningsIndices, rulerText, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, sharesText,
     geometry, chartSvg, infoLines, titleText, futureDates, extendData, priceView, spyRegime, glbPeak, monthlyWithOpen, mix, FUTURE_STEPS, FUTURE_DEFAULT, DEFAULT_WEEKS,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };

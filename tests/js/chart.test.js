@@ -93,15 +93,34 @@ test("RWB, Stochastic, Blue Dot and RWB starts like calc.py", () => {
     assert.deepStrictEqual(rwbStarts(Array.from({ length: 50 }, (_, i) => 100 + i)), []);
 });
 
-test("RWB strip, Blue Dot and start arrow are drawn only with the RWB toggle; no GMMA fan", () => {
-    const t = Array.from({ length: 120 }, (_, i) => 100 + i).concat(Array.from({ length: 25 }, (_, i) => 220 - 3 * i), Array.from({ length: 60 }, (_, i) => 145 + 2 * i));
-    const d = t.map((_, i) => new Date(Date.UTC(2020, 0, 6 + 7 * i)).toISOString().slice(0, 10));
-    const w = { d, o: t, h: t.map((x) => x + 1), l: t.map((x) => x - 1), c: t, v: t.map(() => 1e6) };
+test("RWB gap and DOKUP: price (Low / close) entering the gap between red and blue bands while RWB lasts", () => {
+    const { rwbGap, rwbDokup, gmma } = CH;
+    const c = Array.from({ length: 170 }, (_, i) => 100 + i), low = c.map((x) => x - 1);
+    const gap = rwbGap(c), [lo, hi] = gap[120], [f, s] = gmma(c);
+    assert.ok(lo != null && hi > lo && lo === Math.max(...s.map((x) => x[120])) && hi === Math.min(...f.map((x) => x[120])));   // przerwa: najwyższa wolna < najniższa szybka
+    assert.ok(rwbGap(Array.from({ length: 120 }, (_, i) => 300 - i)).slice(60).every((g) => g[0] === null && g[1] === null));   // bez RWB nie ma przerwy
+    assert.deepStrictEqual(rwbDokup(low, c), []);   // zwykłe świece nie dochodzą do czerwonego pasa
+    low[120] = (lo + hi) / 2; low[121] = hi - 0.01; low[135] = hi - 0.01;
+    assert.deepStrictEqual(rwbDokup(low, c), [120, 135]);   // pierwsza świeca każdego wejścia w przerwę
+    const closeIn = c.slice(); closeIn[150] = rwbGap(c)[150][1] - 4;
+    assert.ok(rwbDokup(c.map(() => null), closeIn).includes(150));   // samo zamknięcie w przerwie też liczy się (Low = null)
+    assert.deepStrictEqual(rwbDokup(c.slice(0, 50).map((x) => x - 5), c.slice(0, 50)), []);   // rozgrzewka 60 świec
+    const d = Array.from({ length: 120 }, (_, i) => 300 - i);
+    assert.deepStrictEqual(rwbDokup(d.map((x) => x - 30), d), []);   // bez RWB nie ma dokupu
+});
+
+test("RWB strip and Blue Dot only with the toggle; yellow arrow only where price enters the gap; no GMMA fan, no label", () => {
+    const { rwbGap } = CH;
+    const t = Array.from({ length: 170 }, (_, i) => 100 + i), d = t.map((_, i) => new Date(Date.UTC(2020, 0, 6 + 7 * i)).toISOString().slice(0, 10));
+    const [lo, hi] = rwbGap(t)[150], low = t.map((x) => x - 1);
+    low[150] = (lo + hi) / 2;
+    const w = { d, o: t, h: t.map((x) => x + 1), l: low, c: t, v: t.map(() => 1e6) };
     const off = chartSvg(w, null, 1000, 700), on = chartSvg(w, null, 1000, 700, null, null, [], null, null, "W", { rwb: true });
-    assert.ok(!off.svg.includes('fill="#f5c518"') && !off.svg.includes("start RWB"));
-    assert.ok(on.svg.includes('fill="#f5c518"') && on.svg.includes("RWB START · dokup") && on.svg.includes('height="4.0" fill="#3b82f6"'));
-    assert.ok(on.svg.includes("pasek RWB, ● Blue Dot, ▲ start RWB = dokup") && !on.svg.includes('stroke="#e5484d" stroke-width="1"'));   // sam wskaźnik, bez wachlarza
-    assert.ok(!/<text[^>]*>RWB START/.test(on.svg));   // sama strzałka, bez napisu na wykresie (tytuł tylko w dymku)
+    assert.ok(!off.svg.includes('fill="#f5c518"') && !off.svg.includes("dokup"));
+    assert.strictEqual((on.svg.match(/fill="#f5c518"/g) || []).length, 1);   // jedna strzałka: świeca 150, nie start RWB
+    assert.ok(on.svg.includes("DOKUP · RWB + cena w przerwie") && on.svg.includes('height="4.0" fill="#3b82f6"'));
+    assert.ok(on.svg.includes("pasek RWB, ● Blue Dot, ▲ dokup = cena w przerwie RWB") && !on.svg.includes('stroke="#e5484d" stroke-width="1"'));   // sam wskaźnik, bez wachlarza
+    assert.ok(!/<text[^>]*>(DOKUP|RWB START)/.test(on.svg));   // sama strzałka, bez napisu na wykresie (tytuł tylko w dymku)
 });
 
 test("earnings, ruler text, RS Line", () => {

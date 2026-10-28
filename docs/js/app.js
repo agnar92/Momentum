@@ -1009,9 +1009,9 @@ if (typeof document !== "undefined") (function () {
             const pctS = (x) => (x == null ? "N/D" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(1)}%`);
             for (const [d0, es, rs0] of activeRow.earn || []) if (earningsIndices(series.d, [d0]).includes(index)) lines.push(`WYNIKI · ${d0} · EPS ${pctS(es)} · przychody ${pctS(rs0)}`);
         }
-        if (state.rwb && !zanger) {   // start RWB = dokup, Blue Dot (tylko do odczytu na świecy)
+        if (state.rwb && !zanger) {   // dokup (RWB + cena w przerwie), Blue Dot (tylko do odczytu na świecy)
             const closes = series.c.map((v) => v || 0);
-            if (rwbStarts(closes).includes(index)) lines.push(`RWB START · dokup (stop pod Low ${series.l[index] == null ? "—" : series.l[index].toFixed(2)})`);
+            if (rwbDokup(series.l, closes).includes(index)) lines.push(`DOKUP · RWB + cena w przerwie (stop pod Low ${series.l[index] == null ? "—" : series.l[index].toFixed(2)})`);
             const [lvl] = glbPeak({ ...series, real: series.c.length }, activeRow, period);
             if (blueDots(series.h, series.l, series.c, lvl).includes(index)) lines.push("BLUE DOT · " + series.d[index], "Stop pod Low: " + (series.l[index] == null ? "—" : series.l[index].toFixed(2)));
         }

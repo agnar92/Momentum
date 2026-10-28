@@ -31,7 +31,7 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
   zapisują się w przeglądarce (każde urządzenie ma swoje). Opcjonalnie powiadomienie systemowe.
 - **T / M / Z** (przyciski na wykresie, klawisze W / M / Z): prosty wykres jak w desktopie — szare słupki, niebieska SMA 10, RS Line u góry, zielone tło, gdy SPY jest nad SMA 10 tego samego interwału,
   Green Line kropkowana od świecy rekordu ze strefą kupna 0–10 % (przerywana na +5 %), wolumen i MACD. **M** = pełna historia miesięczna (`docs/data/monthly`), bieżący miesiąc dobudowany z tygodniowych.
-  **RWB** (przycisk / R, T i M): pasek RWB u dołu ceny, ● Blue Dot i żółta strzałka ▲ pod Low świecy, na której RWB wraca po cofnięciu (= dokup); kolumna **RWB tyg.** sortuje najświeższe starty na górę.
+  **RWB** (przycisk / R, T i M): pasek RWB u dołu ceny, ● Blue Dot i żółta strzałka ▲ pod Low świecy = **dokup**: RWB trwa (czerwone EMA nad niebieskimi), a Low albo zamknięcie weszło w przerwę między czerwonym a niebieskim pasem; kolumna **RWB tyg.** sortuje najświeższe starty na górę.
   **⇥ N** = puste świece po prawej (linie w przyszłość); skala ceny: kółko nad osią albo Shift+kółko, przeciągnięcie osi, środkowy przycisk, dwuklik na osi = auto; widok zapamiętany (osobno T i M).
   **🛑 Stop** = ręczna linia do przeciągania (dwuklik na wykresie = stop tu), **💰 Wielkość** = kapitał w PLN, kurs USD/PLN (NBP), ryzyko % → liczba akcji (ułamkowych). Linie T / Z i M widać wzajemnie (blade).
 - **☁ Gist**: dane wysłane z desktopa (☁ Web (gist)) do tajnego gista; strona bierze nowsze: gist albo repo (Weekly Refresh działa osobno, więc strona ma dane także bez dostępu do PC). ID gista wpisujesz raz w przeglądarce.
