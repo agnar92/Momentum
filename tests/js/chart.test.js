@@ -275,3 +275,19 @@ test("shares text: fractional, no trailing zeros", () => {
     const { sharesText } = CH;
     assert.deepStrictEqual([20, 12.5, 0.3333, 0.6666].map(sharesText), ["20", "12,5", "0,3333", "0,6666"]);
 });
+
+test("entry line of the 📌 position: amber dashed line, label with result, price on the axis, arrow outside the scale", () => {
+    const w = weekly(100), last = w.c[99];
+    const res = chartSvg(w, { glb: 120 }, 1000, 700, null, null, [], null, null, "W", { entry: 120 });
+    assert.ok(res.svg.includes('stroke="#ffb020" stroke-width="1.6" stroke-dasharray="9 4"'));
+    assert.ok(res.svg.includes(`WEJŚCIE 120.00 · ${last / 120 - 1 >= 0 ? "+" : ""}${((last / 120 - 1) * 100).toFixed(1)} %`) && res.svg.includes('fill="#ffb020"'));
+    assert.ok(!chartSvg(w, { glb: 120 }, 1000, 700).svg.includes("WEJŚCIE"));   // bez pozycji nie ma linii
+    const far = chartSvg(w, null, 1000, 700, null, null, [], null, null, "W", { entry: 100000 });
+    assert.ok(far.svg.includes("▲ WEJŚCIE") && !far.svg.includes('stroke-dasharray="9 4"'));   // poza skalą: strzałka przy krawędzi
+    assert.ok(chartSvg(w, null, 1000, 700, null, null, [], null, null, "W", { entry: 1 }).svg.includes("▼ WEJŚCIE"));
+    const z = chartSvg(w, null, 1000, 700, null, null, [], null, null, "W", { zanger: true, entry: 120 });
+    assert.ok(z.svg.includes("WEJŚCIE 120.00"));   // też w widoku Z
+    const sameSpot = chartSvg(w, null, 1000, 700, null, null, [], null, null, "W", { entry: last, stop: last, stopLabel: "stop" });   // wejście = ostatnia cena = stop: napisy na osi się nie zlewają
+    const ys = [...sameSpot.svg.matchAll(/<rect x="[\d.]+" y="([\d.]+)" width="[\d.]+" height="16\.0" fill="(#ffb020|#ff5c5c|#4b5563)"/g)].map((m) => +m[1]).sort((a, b) => a - b);
+    assert.ok(ys.length === 3 && ys[1] - ys[0] >= 15.9 && ys[2] - ys[1] >= 15.9);   // trzy napisy na osi (wejście, stop, ostatnia cena) bez nachodzenia
+});

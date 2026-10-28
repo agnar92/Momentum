@@ -8,7 +8,7 @@
 
 const C = {
     bg: "#0e1116", grid: "#1a1f26", dim: "#6b7684", fg: "#d5d9e0", up: "#d5d9e0", down: "#e5484d",
-    rs: "#38bdf8", tline: "#22d3ee", tlineRo: "#6b9fc8", fast: "#e5484d", slow: "#3b82f6", dot: "#4aa3ff", rwbStart: "#f5c518", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
+    rs: "#38bdf8", entry: "#ffb020", tline: "#22d3ee", tlineRo: "#6b9fc8", fast: "#e5484d", slow: "#3b82f6", dot: "#4aa3ff", rwbStart: "#f5c518", glb: "#3ddc84", glbHalo: "#0a2e18", stop: "#ff5c5c",
     signal: "#f0b429", volAvg: "#ff9f43", bar: "#a9b1bb", sma: "#2f6bff", regime: "#0f2a1c", zone: "#9aa3ad", volUp: "#1f7a6d", volDown: "#7d3c38",
     macdLine: "#2f6bff", signalLine: "#c850e8", hist: { "1,1": "#00e676", "1,0": "#2e8b57", "0,0": "#ff5252", "0,1": "#8b8f98" },
 };
@@ -513,6 +513,20 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", op
             rect(x1 + 1, stopY - 8, w - x1 - 3, 16, C.stop);
             text(x1 + 4, stopY + 4, fmt(stop), "#ffffff", 'font-weight="bold"');
         } else boxText(x0 + 4, (stop <= pmin ? y1 - 9 : y0 + 9) + 4, (stop <= pmin ? "▼ " : "▲ ") + (opt.stopLabel || "stop"), C.stop);
+    }
+    // linia ceny wejścia 📌 pozycji (cena kupna z pozycji, także po edycji): przerywana, bursztynowa; napis przy prawej krawędzi panelu, cena na osi odsunięta od innych napisów; poza skalą — strzałka
+    const entry = opt.entry;
+    if (entry) {
+        const txt = `WEJŚCIE ${fmt(entry)}` + (last0 ? ` · ${last0 / entry - 1 >= 0 ? "+" : ""}${((last0 / entry - 1) * 100).toFixed(1)} %` : "");
+        if (entry > pmin && entry < pmax) {
+            const y = yf(entry);
+            line(x0, y, x1, y, C.entry, 1.6, 'stroke-dasharray="9 4"');
+            boxText(x1 - 4, (y - 9 > y0 + 8 ? y - 9 : y + 9) + 4, txt, C.entry, 'text-anchor="end"');
+            let ay = y;
+            for (const ref of [lvY, lastY, stopY]) if (ref != null && Math.abs(ay - ref) < 16) ay = ay >= ref ? ref + 16 : ref - 16;
+            rect(x1 + 1, ay - 8, w - x1 - 3, 16, C.entry);
+            text(x1 + 4, ay + 4, fmt(entry), "#000", 'font-weight="bold"');
+        } else boxText(x1 - 4, (entry <= pmin ? y1 - 9 : y0 + 9) + 4, (entry <= pmin ? "▼ " : "▲ ") + txt, C.entry, 'text-anchor="end"');
     }
     if (zanger) drawPatterns();
     // linie trendu: odcinek między punktami + przedłużenie (przerywane) do ostatniej świecy okna; ro = z drugiego interwału (blada, przerywana, bez uchwytów)
