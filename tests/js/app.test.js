@@ -108,3 +108,15 @@ test("fundamentals are not a table column", () => {
     assert.ok(!COLUMNS.some(([key]) => key === "fundamentals"));
     assert.ok(!TEXT_COLS.includes("fundamentals"));
 });
+
+test("RWB weeks column sorts ascending first and number columns get from–to filters (EPS Rating, RVol, RWB)", () => {
+    const { COLUMNS, NUMERIC_FORMATS, passFilters } = require("../../docs/js/app.js");
+    const keys = COLUMNS.map(([k]) => k);
+    assert.ok(keys.includes("rwb_weeks") && !keys.includes("rvol_d"));
+    const numeric = COLUMNS.filter(([, , f]) => NUMERIC_FORMATS.includes(f)).map(([k]) => k);
+    for (const k of ["eps_rating", "rwb_weeks", "rvol_w", "ps", "peg", "pegy", "cc52w"]) assert.ok(numeric.includes(k), k);
+    assert.ok(!numeric.includes("ticker") && !numeric.includes("ok"));
+    assert.ok(passFilters({ eps_rating: 85 }, { eps_rating: { min: 80, max: 99 } }) && !passFilters({ eps_rating: 70 }, { eps_rating: { min: 80 } }));
+    assert.ok(!passFilters({ rwb_weeks: null }, { rwb_weeks: { min: 0 } }));   // puste = brak RWB
+    assert.strictEqual(cell(3, "i"), "3");
+});

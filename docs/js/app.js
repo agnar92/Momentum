@@ -1,20 +1,21 @@
-// Strona (kopia Momentum Desktop): uniwersum z Finviz, filtry, Green Line i wykresy dzienne/tygodniowe.
+// Strona (kopia Momentum Desktop): uniwersum z Finviz, filtry, Green Line i wykresy T (tygodniowy) / M (miesięczny).
 // Ctrl+K = dowolny symbol z listy albo z `symbols` w finviz_screen.json. Czyste funkcje na górze (testy w tests/js/app.test.js).
 "use strict";
 
 const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
-    ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"],
+    ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"], ["rwb_weeks", "RWB tyg.", "i"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["pattern_exit", "Ostrzeżenie wzorca", "s"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
     ["ps", "P/S", "x"], ["peg", "PEG", "x2"], ["pegy", "PEGY", "x2"],
     ["rs", "RS 52 tyg. pp", "%"], ["surp", "Niesp. EPS %", "%"], ["beat2", "2× nad konsensus", "b"], ["eps_rev", "Rewizja EPS 90 dni %", "%"],
-    ["rvol_w", "RVol tyg.", "x"], ["rvol_d", "RVol dz.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["ok", "Warunki", "b"], ["slow", "Hamuje", "w"],
+    ["rvol_w", "RVol tyg.", "x"], ["cc52w", "C/C[52 tyg.]", "r"], ["ok", "Warunki", "b"], ["slow", "Hamuje", "w"],
 ];
 const SIGNAL = ["WYBICIE", "SYGNAŁ"];
 const ENTRY_MAX = 10;   // wejście: zamknięcie tygodnia 0–10 % nad Green Line (BLUE DOT i wyżej — tylko informacyjnie)
 const TEXT_COLS = ["ticker", "company", "sector", "glb_state", "macd", "quarter", "slow", "pattern", "pattern_exit"];
 const SETTINGS_KEY = "momentum_settings_v2";   // nowy klucz: stare filtry odwoływały się do usuniętych kolumn
+const NUMERIC_FORMATS = ["p", "%", "m", "r", "x", "x2", "i"];   // kolumny z polami „od – do” w filtrach (też EPS Rating, RWB tyg., RVol, P/S, PEG, C/C[52 tyg.])
 const ALERTS_KEY = "momentum_alerts";   // {lines, watch, log, seen}
 const REPO = "https://github.com/agnar92/Momentum";
 
@@ -102,20 +103,29 @@ function weekInProgress(weekDate, generatedAt) {
 
 const fileName = (t) => t.replace(/[^A-Za-z0-9.-]/g, "_") + ".json";   // jak watchlist.file_name
 
-if (typeof module !== "undefined") module.exports = { COLUMNS, TEXT_COLS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
+if (typeof module !== "undefined") module.exports = { COLUMNS, NUMERIC_FORMATS, TEXT_COLS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
-    const state = Object.assign({ sort: null, recent: [], nShow: 52, filters: {}, exit: "MACD" }, readSettings());   // exit: MACD / GLB
-    if (state.nShow == null) state.nShow = 52;   // domyślnie pokazuj ostatnie 52 tygodnie; pełną historię można wybrać suwakiem
+    // exit: MACD / GLB; view = ustawienia widoku osobno dla T (W) i M: {fut: puste świece po prawej, n: długość okna, z / s: skala ceny}; stops = ręczne stopy {ticker: cena}
+    const state = Object.assign({ sort: null, recent: [], filters: {}, exit: "MACD", view: {}, stops: {}, rwb: false, capital: 10000, risk: 1, gist: { id: "", mode: "auto" } }, readSettings());
+    if (typeof state.view !== "object" || !state.view) state.view = {};
+    if (typeof state.stops !== "object" || !state.stops) state.stops = {};
+    if (typeof state.gist !== "object" || !state.gist) state.gist = { id: "", mode: "auto" };
     let data = { rows: [], symbols: [] }, shown = [], current = null, geom = null, series = null, end = null, drag = null;
     let sel = null, gest = null, rafId = 0, spxData = null, drawMode = false, hint = null;
     const lineUndo = new Map();   // ticker -> stos poprzednich stanów linii (JSON), do ↶ / Ctrl+Z
-    let period = "W", dShow = 260, dailyRwb = true, zanger = false;   // zanger = widok Zangera (tylko tygodniowy): cena + wolumen + wzorce   // W = tygodniowy, D = dzienny (tylko spółki nad Green Line, data/daily/; okno osobne, domyślnie rok)
-    const curShow = () => (period === "D" ? dShow : state.nShow);
-    const dailyCache = new Map();   // zaznaczona linia trendu, gest na wykresie
+    let period = "W", zanger = false;   // W = tygodniowy (T), M = miesięczny; zanger = widok Zangera (tylko T): cena + wolumen + wzorce
+    const viewOf = () => (state.view[period] = state.view[period] || {});
+    const futOf = () => (viewOf().fut == null ? FUTURE_DEFAULT[period] : viewOf().fut);
+    const nShowOf = () => (viewOf().n == null ? (period === "W" ? DEFAULT_WEEKS : null) : viewOf().n);   // T: domyślnie 3 lata, resztę historii pokazuje suwak
+    const pvOf = () => [viewOf().z || 1, viewOf().s || 0];
     const weeklyCache = new Map(), weeklyData = new Map();   // obietnice pobrania / gotowe serie (plan wyjścia pozycji)
+    const monthlyCache = new Map(), builtCache = new Map(), extCache = { key: null, val: null };   // miesięczne pliki, zbudowane serie T / M, seria z pustymi świecami
+    const FX_KEY = "momentum_fx";   // {usdpln, date}
+    let source = { kind: "repo" }, gistInfo = { repo: null, gist: null, error: "" };   // źródło danych: repo (Weekly Refresh) albo gist (wysłany z desktopa), stan do okna ☁ Gist
+    const gistChunks = new Map();   // "weekly_01.json" -> obietnica paczki serii z gista
     const ast = readAlerts();   // linie trendu, obserwowane spółki, dziennik alertów
 
     function readAlerts() {
@@ -131,7 +141,10 @@ if (typeof document !== "undefined") (function () {
         try { return JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}; } catch (e) { return {}; }
     }
     function saveSettings() {
-        try { localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sort: state.sort, recent: state.recent, nShow: state.nShow, scanner: state.scanner, filters: state.filters, exit: state.exit })); } catch (e) { /* tryb prywatny */ }
+        try {
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sort: state.sort, recent: state.recent, scanner: state.scanner, filters: state.filters, exit: state.exit,
+                view: state.view, stops: state.stops, rwb: state.rwb, capital: state.capital, risk: state.risk, gist: state.gist }));
+        } catch (e) { /* tryb prywatny */ }
     }
     const allRows = () => data.rows.concat(data.symbols || []);
     const rowFor = (t) => allRows().find((r) => r.ticker === t) || null;
@@ -217,9 +230,76 @@ if (typeof document !== "undefined") (function () {
         }
     }
 
+    // paczka serii z gista (weekly_NN.json / monthly_NN.json = {ticker: seria}); null przy błędzie
+    function gistChunk(name) {
+        if (!gistChunks.has(name)) gistChunks.set(name, source.files[name] ? fetchJson(source.files[name], `Gist ${name}`) : Promise.resolve(null));
+        return gistChunks.get(name);
+    }
+    async function fromGist(kind, t) {
+        const n = source.kind === "gist" && source.manifest.chunks && (source.manifest.chunks[kind] || {})[t];
+        if (!n) return null;
+        const part = await gistChunk(`${kind}_${String(n).padStart(2, "0")}.json`);
+        return (part && part[t]) || null;
+    }
+
     async function loadWeekly(t) {
-        if (!weeklyCache.has(t)) weeklyCache.set(t, fetchJson("data/weekly/" + encodeURIComponent(fileName(t)), `Wykres ${t}`).then((d) => { if (d) weeklyData.set(t, d); return d; }));
+        if (!weeklyCache.has(t)) weeklyCache.set(t, (async () => {
+            const d = (await fromGist("weekly", t)) || (await fetchJson("data/weekly/" + encodeURIComponent(fileName(t)), `Wykres ${t}`));
+            if (d) weeklyData.set(t, d);
+            return d;
+        })());
         return weeklyCache.get(t);
+    }
+
+    async function loadMonthly(t) {
+        if (!monthlyCache.has(t)) monthlyCache.set(t, (async () => (await fromGist("monthly", t)) || fetchJson("data/monthly/" + encodeURIComponent(fileName(t)), `Miesięczny ${t}`))());
+        return monthlyCache.get(t);
+    }
+
+    // ---------- źródło danych: repo (Weekly Refresh) albo gist wysłany z desktopa; w trybie auto wygrywa nowsze (generated_at) ----------
+    async function loadGist(id) {
+        try {
+            const r = await fetch("https://api.github.com/gists/" + encodeURIComponent(id), { headers: { Accept: "application/vnd.github+json" } });
+            if (!r.ok) return { error: r.status === 404 ? "nie ma gista o takim ID" : r.status === 403 ? "limit zapytań GitHub (spróbuj za chwilę)" : `GitHub ${r.status}` };
+            const files = Object.fromEntries(Object.entries((await r.json()).files || {}).map(([n, f]) => [n, f.raw_url]));
+            if (!files["momentum.json"]) return { error: "w gistcie brak pliku momentum.json (wyślij dane z desktopa: ☁ Web)" };
+            const manifest = await fetchJson(files["momentum.json"], "Gist: lista");
+            return manifest && manifest.rows ? { kind: "gist", id, files, manifest } : { error: "nie udało się pobrać momentum.json z gista" };
+        } catch (e) {
+            return { error: "brak połączenia z GitHub" };
+        }
+    }
+
+    // wybór źródła: tryb repo = zawsze repo; gist = gist (gdy dostępny); auto = nowsze z obu
+    function chooseSource(repo, g) {
+        const mode = state.gist.mode;
+        if (!g || g.error || mode === "repo") return { kind: "repo" };
+        if (mode === "gist" || !repo || (g.manifest.generated_at || "") > (repo.generated_at || "")) return g;
+        return { kind: "repo" };
+    }
+
+    // seria wykresu: T = tygodniowe świece, M = zamknięte miesiące + bieżący miesiąc zbudowany z tygodniowych; false = brak danych
+    async function loadSeries(t, per) {
+        const key = per + ":" + t;
+        if (builtCache.has(key)) return builtCache.get(key);
+        let out;
+        if (per === "M") {
+            const [m, w] = await Promise.all([loadMonthly(t), loadWeekly(t)]);
+            out = m && m.c && m.c.length > 1 ? monthlyWithOpen(m, w) : false;
+        } else out = (await loadWeekly(t)) || false;
+        builtCache.set(key, out);
+        return out;
+    }
+
+    // seria z pustymi świecami po prawej (miejsce na linie w przyszłość); odświeżana przy zmianie serii / liczby świec / interwału
+    function vseries() {
+        if (!series) return null;
+        const key = [current, period, futOf(), series.c.length];
+        if (extCache.key && extCache.key.join() === key.join() && extCache.src === series) return extCache.val;
+        extCache.key = key;
+        extCache.src = series;
+        extCache.val = extendData(series, futOf(), period);
+        return extCache.val;
     }
 
     function compactChartUI() {
@@ -244,39 +324,36 @@ if (typeof document !== "undefined") (function () {
         const tr = document.querySelector(`#tbody tr[data-t="${CSS.escape(t)}"]`);
         if (tr) { tr.classList.add("sel"); tr.scrollIntoView({ block: "nearest" }); }
         series = null;
-        end = null;   // długość okna zostaje między spółkami, koniec wraca do ostatniego tygodnia
+        end = null;   // długość okna zostaje między spółkami, koniec wraca do ostatniej świecy
         sel = null;
         gest = null;
         hint = null;
         renderTools();
         drawChart();
-        const r = rowFor(t);
-        if (period === "D" && !(r && r.daily)) period = "W";
         renderPeriod();
-        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), period === "D" ? loadDaily("SPY") : loadWeekly("SPY")]);
-        spxData = spx;
-        if (current !== t) return;
+        await loadChartData(t);
+    }
+
+    // seria i SPY bieżącego interwału; wynik trafia na wykres, o ile użytkownik nie zmienił spółki ani interwału w międzyczasie
+    async function loadChartData(t) {
+        const per = period;
+        const [d, spx] = await Promise.all([loadSeries(t, per), loadSeries("SPY", per)]);
+        if (current !== t || period !== per) return;
+        spxData = spx || null;
         series = d || false;
         drawChart();
     }
 
-    async function loadDaily(t) {
-        if (!dailyCache.has(t)) dailyCache.set(t, fetchJson("data/daily/" + encodeURIComponent(fileName(t)), `Dzienny ${t}`));
-        return dailyCache.get(t);
-    }
-
-    // Przyciski T / D; wykres dzienny pokazuje OHLC, a RWB/GMMA i Blue Dot są opcjonalną nakładką.
+    // przyciski T / M / Z, RWB, ⇥ (puste świece), ⤢ Cena
     function renderPeriod() {
-        const r = current && rowFor(current), ok = !!(r && r.daily), compact = compactChartUI();
-        $("perD").hidden = !ok;
-        $("dayRwbBtn").hidden = !ok || period !== "D";
-        $("dayRwbBtn").classList.toggle("on", dailyRwb);
-        $("dayRwbBtn").textContent = compact ? (dailyRwb ? "RWB" : "słupki") : (dailyRwb ? "D: RWB" : "D: słupki");   // jak desktop: styl dziennego
         $("perW").textContent = "T";
-        $("perD").textContent = "D";
+        $("perM").textContent = "M";
         $("perW").classList.toggle("on", period === "W");
+        $("perM").classList.toggle("on", period === "M");
         $("zangerBtn").classList.toggle("on", zanger && period === "W");
-        $("perD").classList.toggle("on", period === "D");
+        $("rwbBtn").classList.toggle("on", !!state.rwb);
+        $("futBtn").textContent = "⇥ " + futOf();
+        $("priceBtn").classList.toggle("on", pvOf()[0] !== 1 || pvOf()[1] !== 0);
     }
 
     async function toggleZanger() {   // Z: widok Zangera (jak klawisz z w aplikacji desktopowej)
@@ -289,21 +366,41 @@ if (typeof document !== "undefined") (function () {
 
     async function togglePeriod(to) {
         if (!current || to === period) return;
-        period = to || (period === "D" ? "W" : "D");
+        period = to || (period === "M" ? "W" : "M");
         if (period !== "W") zanger = false;
-        dShow = 260;
         end = null;
         sel = null;
         renderPeriod();
         renderTools();
-        const t = current;
         series = null;
         drawChart();
-        const [d, spx] = await Promise.all([period === "D" ? loadDaily(t) : loadWeekly(t), period === "D" ? loadDaily("SPY") : loadWeekly("SPY")]);
-        if (current !== t) return;
-        spxData = spx;
-        series = d || false;
+        await loadChartData(current);
+    }
+
+    function setView(upd) {
+        Object.assign(viewOf(), upd);
+        saveSettings();
+        renderPeriod();
         drawChart();
+    }
+
+    function cycleFuture() {
+        const f = futOf(), i = FUTURE_STEPS.indexOf(f);
+        end = null;
+        setView({ fut: FUTURE_STEPS[(i + 1) % FUTURE_STEPS.length] });
+    }
+
+    // ręczny stop bieżącej spółki: etykieta na linii (cena, % od wejścia, liczba akcji z kalkulatora) i opcje wykresu
+    function chartOpts() {
+        const st = state.stops[current], [entry] = autoSizeDefaults();
+        let label = "";
+        if (st) {
+            label = `STOP ${fmt(st)}` + (entry ? ` · ${st / entry - 1 >= 0 ? "+" : ""}${((st / entry - 1) * 100).toFixed(1)} %` : "");
+            const fx = fxRate(), r = fx && entry && state.capital ? positionSize(state.capital, fx, entry, st, state.risk) : null;
+            if (r && r.shares) label += ` · ${sharesText(r.shares)} akcji (${money(r.valuePln)} PLN)`;
+        }
+        const v = vseries();
+        return { rwb: !!state.rwb, zanger: zanger && period === "W", real: v ? v.real : undefined, pv: pvOf(), stop: st || null, stopLabel: label };
     }
 
     function drawChart() {
@@ -312,12 +409,12 @@ if (typeof document !== "undefined") (function () {
         if (!current) return;
         if (!series) {
             $("slider").innerHTML = "";
-            box.innerHTML = `<p class="note">${series === false ? (period === "D" ? "Brak danych dziennych." : "Brak danych tygodniowych.") : "Ładowanie…"}</p>`;
+            box.innerHTML = `<p class="note">${series === false ? (period === "M" ? "Brak danych miesięcznych." : "Brak danych tygodniowych.") : "Ładowanie…"}</p>`;
             return;
         }
         drawSlider();
         const row = rowFor(current) && { ...rowFor(current), exit: state.exit, plan: planFor(current) };
-        const res = chartSvg(series, row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), curShow(), end, linesOf(current), sel, spxData || null, period, dailyRwb, zanger && period === "W");
+        const res = chartSvg(vseries(), row, Math.max(320, box.clientWidth), Math.max(360, box.clientHeight), nShowOf(), end, shownLines(current), sel, spxData || null, period, chartOpts());
         if (!res) { box.innerHTML = '<p class="note">Brak danych.</p>'; return; }
         box.innerHTML = res.svg;
         geom = res.geom;
@@ -326,12 +423,14 @@ if (typeof document !== "undefined") (function () {
 
     function drawSlider() {
         const el = $("slider");
-        el.innerHTML = series ? sliderSvg(series.c, curShow(), end, el.clientWidth, el.clientHeight, period === "D" ? "sesji" : "tyg.") : "";
+        el.innerHTML = series ? sliderSvg(vseries().c, nShowOf(), end, el.clientWidth, el.clientHeight, period === "M" ? "mies." : "tyg.") : "";
     }
 
+    // okno (n świec, koniec) — zawsze ≥ 2 prawdziwe świece w oknie; długość pamiętana osobno dla T i M
     function setWindow(n, e) {
-        const total = series.c.length;
-        if (period === "D") dShow = n >= total ? null : n; else state.nShow = n >= total ? null : n;
+        const v = vseries(), total = v.c.length;
+        e = Math.min(e, v.real + Math.max(0, n - 2));
+        viewOf().n = n >= total ? 100000 : n;
         end = e >= total ? null : e;
         saveSettings();
         drawChart();
@@ -344,35 +443,48 @@ if (typeof document !== "undefined") (function () {
 
     function sliderDown(ev) {
         if (!series) return;
-        const total = series.c.length, W = $("slider").clientWidth, x = sliderX(ev);
-        const [x0, x1] = sliderRect(total, curShow(), end, W);
+        const total = vseries().c.length, W = $("slider").clientWidth, x = sliderX(ev);
+        const [x0, x1] = sliderRect(total, nShowOf(), end, W);
         let mode = sliderMode(x, x0, x1, ev.pointerType === "mouse" ? 9 : 16);
-        if (mode === "jump") { setWindow(...sliderJump(x, total, curShow(), W)); mode = "move"; }
-        drag = { mode, x, start: [curShow(), end] };
+        if (mode === "jump") { setWindow(...sliderJump(x, total, nShowOf(), W)); mode = "move"; }
+        drag = { mode, x, start: [nShowOf(), end] };
         $("slider").setPointerCapture(ev.pointerId);
         ev.preventDefault();
     }
 
     function sliderMove(ev) {
         if (!drag || !series) return;
-        setWindow(...sliderDrag(drag.mode, drag.start, sliderX(ev) - drag.x, series.c.length, $("slider").clientWidth));
+        setWindow(...sliderDrag(drag.mode, drag.start, sliderX(ev) - drag.x, vseries().c.length, $("slider").clientWidth));
     }
 
     function zoom(factor) {
-        if (series) setWindow(...zoomWindow(series.c.length, curShow(), end, factor));
+        if (series) setWindow(...zoomWindow(vseries().c.length, nShowOf(), end, factor));
     }
 
     function pan(d) {
         if (!series) return;
-        const total = series.c.length, [i0, i1] = windowRange(total, curShow(), end);
+        const total = vseries().c.length, [i0, i1] = windowRange(total, nShowOf(), end);
         setWindow(i1 - i0, Math.max(i1 - i0, Math.min(total, i1 + d)));
+    }
+
+    // skala ceny: kółko nad osią (po prawej) albo z Shift = powiększ / zmniejsz, przeciąganie osi = przesuń w pionie, dwuklik na osi albo ⤢ Cena = automatyczna
+    function priceZoom(factor) {
+        setView({ z: Math.max(0.2, Math.min(8, pvOf()[0] * factor)) });
     }
 
     // ---------- linie trendu na wykresie ----------
     // mysz: przeciągnij po pustym miejscu = nowa linia; telefon: przytrzymaj palec ~0,4 s i prowadź = nowa linia (krótki ruch = dane tygodnia).
     // Chwyć koniec linii = zmień punkt, chwyć środek = przesuń całą; klik / dotknięcie linii = zaznacz (🗑 usuń, 🔔 alert); Delete = usuń.
-    const linesOf = (t) => ast.lines[t] || [];
+    // linia ma interwał (period: W = T i widok Z, M); stare linie bez period są tygodniowe. Edytujesz tylko linie bieżącego interwału, drugiego interwału są blade (ro)
+    const allLines = (t) => ast.lines[t] || [];
+    const periodOf = (ln) => ln.period || "W";
+    const linesOf = (t) => allLines(t).filter((x) => periodOf(x) === period);
+    const shownLines = (t) => linesOf(t).concat(allLines(t).filter((x) => ["W", "M"].includes(periodOf(x)) && periodOf(x) !== period).map((x) => ({ ...x, ro: true })));
     const findLine = (id) => linesOf(current).find((x) => x.id === id);
+    function setOwnLines(t, own) {
+        const all = allLines(t).filter((x) => periodOf(x) !== period).concat(own);
+        if (all.length) ast.lines[t] = all; else delete ast.lines[t];
+    }
 
     function redrawSoon() {
         if (!rafId) rafId = requestAnimationFrame(() => { rafId = 0; drawChart(); });
@@ -385,15 +497,14 @@ if (typeof document !== "undefined") (function () {
 
     // punkt wykresu -> {d, p} (tydzień + cena); snap = magnes do High / Low tygodnia
     function ptValue(x, y, tol) {
-        const [y0, y1] = geom.price, i = Math.max(0, Math.min(geom.n - 1, Math.floor((x - geom.x0) / geom.step))), k = geom.i0 + i;
+        const vs = vseries(), [y0, y1] = geom.price, i = Math.max(0, Math.min(geom.n - 1, Math.floor((x - geom.x0) / geom.step))), k = geom.i0 + i;
         const yf = (p) => y1 - (Math.log(p) - geom.lmin) / (geom.lmax - geom.lmin) * (y1 - y0);
         const p = Math.exp(geom.lmin + (y1 - y) / (y1 - y0) * (geom.lmax - geom.lmin));
-        return { d: series.d[k], p: +snapPrice(p, series.h[k], series.l[k], yf, y, tol).toPrecision(6), k };
+        return { d: vs.d[k], p: +snapPrice(p, vs.h[k], vs.l[k], yf, y, tol).toPrecision(6), k };
     }
 
     function saveLines() {
-        const ls = linesOf(current).filter((x) => x.d1 !== x.d2);
-        if (ls.length) ast.lines[current] = ls; else delete ast.lines[current];
+        setOwnLines(current, linesOf(current).filter((x) => x.d1 !== x.d2));
         saveAlerts();
     }
 
@@ -418,7 +529,30 @@ if (typeof document !== "undefined") (function () {
     }
 
     function chartDown(ev) {
-        if (geom && series && ev.pointerType === "mouse" && ev.button === 2) {   // prawy przycisk = miarka (także na dziennym)
+        if (geom && series && ev.pointerType === "mouse" && ev.button === 1) {   // środkowy przycisk = swobodne przesuwanie wykresu (czas i cena naraz)
+            const pt = chartPt(ev), [i0, i1] = windowRange(vseries().c.length, nShowOf(), end);
+            $("chartBody").setPointerCapture(ev.pointerId);
+            gest = { mode: "free", x: pt.x, y: pt.y, i1, s: pvOf()[1], n: i1 - i0 };
+            ev.preventDefault();
+            return;
+        }
+        if (geom && series && (ev.pointerType !== "mouse" || ev.button === 0)) {
+            const pt = chartPt(ev), inPrice = pt.y >= geom.price[0] && pt.y <= geom.price[1];
+            if (inPrice && pt.x > geom.x1) {   // oś ceny: przeciąganie = przesuwanie skali ceny w pionie
+                $("chartBody").setPointerCapture(ev.pointerId);
+                gest = { mode: "axis", y: pt.y, s: pvOf()[1] };
+                ev.preventDefault();
+                return;
+            }
+            if (inPrice && geom.stopY != null && pt.x >= geom.x0 && pt.x <= geom.x1 && Math.abs(pt.y - geom.stopY) <= (ev.pointerType === "mouse" ? 6 : 14)
+                && !hitLine(geom.segs || [], pt.x, pt.y, ev.pointerType === "mouse" ? 9 : 24)) {   // chwycona linia ręcznego stopu: przeciąganie w pionie
+                $("chartBody").setPointerCapture(ev.pointerId);
+                gest = { mode: "stop" };
+                ev.preventDefault();
+                return;
+            }
+        }
+        if (geom && series && ev.pointerType === "mouse" && ev.button === 2) {   // prawy przycisk = miarka
             const pt = chartPt(ev);
             if (pt.y < geom.price[0] || pt.y > geom.price[1]) return;
             $("chartBody").setPointerCapture(ev.pointerId);
@@ -426,14 +560,15 @@ if (typeof document !== "undefined") (function () {
             ev.preventDefault();
             return;
         }
-        if (!geom || !series || period === "D" || (ev.pointerType === "mouse" && ev.button !== 0)) return;   // linie trendu tylko na tygodniowym
+        if (!geom || !series || (ev.pointerType === "mouse" && ev.button !== 0)) return;
         const pt = chartPt(ev), touch = ev.pointerType !== "mouse", tol = touch ? 24 : 9;
         const hit = hitLine(geom.segs || [], pt.x, pt.y, tol);
         $("chartBody").setPointerCapture(ev.pointerId);
         if (hit) {
             sel = hit.id;
             const ln = findLine(hit.id);
-            gest = { mode: hit.part, x: pt.x, y: pt.y, orig: { ...ln }, ka: series.d.indexOf(ln.d1), kb: series.d.indexOf(ln.d2), tol, snap: JSON.stringify(linesOf(current)) };
+            const vd = vseries().d;
+            gest = { mode: hit.part, x: pt.x, y: pt.y, orig: { ...ln }, ka: vd.indexOf(ln.d1), kb: vd.indexOf(ln.d2), tol, snap: JSON.stringify(linesOf(current)) };
             renderTools();
             redrawSoon();
             ev.preventDefault();
@@ -460,7 +595,7 @@ if (typeof document !== "undefined") (function () {
 
     function startDraw(x, y) {
         const a = ptValue(x, y, gest.tol), id = Date.now().toString(36);
-        ast.lines[current] = linesOf(current).concat([{ id, d1: a.d, p1: a.p, d2: a.d, p2: a.p, alert: false }]);   // nowa linia: bez alarmu i przedłużenia — alarm użytkownik włącza sam
+        setOwnLines(current, linesOf(current).concat([{ id, period, d1: a.d, p1: a.p, d2: a.d, p2: a.p, alert: false }]));   // nowa linia: bez alarmu i przedłużenia — alarm użytkownik włącza sam
         sel = id;
         gest.mode = "p2";
         gest.orig = { ...findLine(id) };
@@ -473,6 +608,26 @@ if (typeof document !== "undefined") (function () {
     function chartMoveGest(ev) {
         if (!gest) return;
         if (gest.mode === "ruler") { drawRuler(chartPt(ev)); return; }
+        if (gest.mode === "axis") {   // przesunięcie skali ceny (dodatnie s = w górę)
+            const [y0, y1] = geom.price;
+            viewOf().s = gest.s + (chartPt(ev).y - gest.y) / (y1 - y0) / pvOf()[0];
+            renderPeriod();
+            redrawSoon();
+            return;
+        }
+        if (gest.mode === "stop") {
+            const pt = chartPt(ev), y = Math.max(geom.price[0] + 1, Math.min(geom.price[1] - 1, pt.y));
+            state.stops[current] = ptValue(pt.x, y, 8).p;
+            redrawSoon();
+            return;
+        }
+        if (gest.mode === "free") {   // środkowy przycisk: czas i cena naraz
+            const pt = chartPt(ev), [y0, y1] = geom.price, vs = vseries();
+            viewOf().s = gest.s + (pt.y - gest.y) / (y1 - y0) / pvOf()[0];
+            const e2 = Math.max(gest.n, Math.min(vs.c.length, gest.i1 - Math.round((pt.x - gest.x) / geom.step)));
+            setWindow(gest.n, e2);
+            return;
+        }
         const pt = chartPt(ev), moved = Math.hypot(pt.x - gest.x, pt.y - gest.y);
         if (gest.mode === "press") {
             if (moved > 10) { clearTimeout(gest.timer); gest.mode = "scrub"; }
@@ -491,13 +646,13 @@ if (typeof document !== "undefined") (function () {
             const flat = snapHorizontal(v.p, ln["p" + other], yf, pt.y, gest.tol * 0.6) === ln["p" + other] && ln["d" + other] !== v.d;
             ln["d" + me] = v.d;
             ln["p" + me] = flat ? ln["p" + other] : v.p;
-            const k1 = series.d.indexOf(ln["d" + other]), k2 = v.k;
+            const k1 = vseries().d.indexOf(ln["d" + other]), k2 = v.k;
             hint = { x: geom.x0 + (k2 - geom.i0 + 0.5) * geom.step, y: yf(ln["p" + me]), flat, text: rulerText(ln["p" + other], ln["p" + me], k1, k2, period) + (flat ? " · poziomo" : "") };
         } else if (gest.mode === "body" && gest.ka >= 0 && gest.kb >= 0) {
-            const last = series.d.length - 1, db = Math.round((pt.x - gest.x) / geom.step);
+            const vd = vseries().d, last = vd.length - 1, db = Math.round((pt.x - gest.x) / geom.step);
             const d = Math.max(-Math.min(gest.ka, gest.kb), Math.min(last - Math.max(gest.ka, gest.kb), db));
             const ratio = Math.exp(-(pt.y - gest.y) / (geom.price[1] - geom.price[0]) * (geom.lmax - geom.lmin));
-            Object.assign(ln, { d1: series.d[gest.ka + d], d2: series.d[gest.kb + d], p1: +(gest.orig.p1 * ratio).toPrecision(6), p2: +(gest.orig.p2 * ratio).toPrecision(6) });
+            Object.assign(ln, { d1: vd[gest.ka + d], d2: vd[gest.kb + d], p1: +(gest.orig.p1 * ratio).toPrecision(6), p2: +(gest.orig.p2 * ratio).toPrecision(6) });
         }
         ev.preventDefault();
         redrawSoon();
@@ -506,6 +661,7 @@ if (typeof document !== "undefined") (function () {
     function chartUp() {
         if (!gest) return;
         if (gest.mode === "ruler") { gest = null; drawRuler(null); return; }
+        if (["axis", "stop", "free"].includes(gest.mode)) { saveSettings(); gest = null; renderTools(); drawChart(); return; }
         clearTimeout(gest.timer);
         hint = null;
         if (gest.mode === "press" || gest.mode === "pend") { sel = null; renderTools(); redrawSoon(); }   // dotknięcie / klik obok linii = odznacz
@@ -530,8 +686,7 @@ if (typeof document !== "undefined") (function () {
     function undoLine() {
         const snap = undoStack().pop();
         if (snap === undefined) return;
-        const ls = JSON.parse(snap);
-        if (ls.length) ast.lines[current] = ls; else delete ast.lines[current];
+        setOwnLines(current, JSON.parse(snap));
         sel = null;
         saveAlerts();
         renderTools();
@@ -552,7 +707,7 @@ if (typeof document !== "undefined") (function () {
     function deleteSelected() {
         if (!sel) return;
         pushUndo(JSON.stringify(linesOf(current)));
-        ast.lines[current] = linesOf(current).filter((x) => x.id !== sel);
+        setOwnLines(current, linesOf(current).filter((x) => x.id !== sel));
         sel = null;
         saveLines();
         renderTools();
@@ -600,11 +755,15 @@ if (typeof document !== "undefined") (function () {
         $("exitBtn").textContent = compact
             ? (state.exit === "GLB" ? "🚪 GLB" : "🚪 MACD")
             : (state.exit === "GLB" ? "🚪 Wyjście: pod GLB" : "🚪 Wyjście: MACD");
+        const stopOn = !!(current && state.stops[current]);
+        $("stopBtn").classList.toggle("on", stopOn);
+        $("stopBtn").textContent = compact ? (stopOn ? "🛑 ✕" : "🛑") : (stopOn ? "🛑 Stop ✕" : "🛑 Stop");
+        $("sizeBtn").textContent = compact ? "💰" : "💰 Wielkość";
         $("watchBtn").classList.toggle("on", !!(current && ast.watch[current]));
         $("watchBtn").textContent = compact
             ? (current && ast.watch[current] ? "🔔 On" : "🔕 Obserwuj")
             : (current && ast.watch[current] ? "🔔 Obserwujesz" : "🔕 Obserwuj");
-        const canDraw = !!current && period === "W";
+        const canDraw = !!current;
         $("drawBtn").hidden = !canDraw;
         $("drawBtn").classList.toggle("on", drawMode && canDraw);
         $("drawBtn").textContent = compact ? "✏" : "✏ Linia";
@@ -771,7 +930,7 @@ if (typeof document !== "undefined") (function () {
                 vals.map((v) => `<button type="button" class="chip${on.includes(v) ? " on" : ""}" data-k="${k}" data-v="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join("") + "</div></div>";
         }
         for (const [k, h, fm] of COLUMNS) {
-            if (!"p%mrn".includes(fm)) continue;
+            if (!NUMERIC_FORMATS.includes(fm)) continue;
             const c = f[k] || {};
             html += `<div class="frow"><span>${escapeHtml(h)}</span><div class="range">` +
                 ["min", "max"].map((b) => `<input data-k="${k}" data-b="${b}" inputmode="decimal" placeholder="${b === "min" ? "od" : "do"}" value="${c[b] == null ? "" : c[b]}">`).join(" – ") + "</div></div>";
@@ -827,25 +986,6 @@ if (typeof document !== "undefined") (function () {
         if (shown[j].ticker !== current) openChart(shown[j].ticker);
     }
 
-    function blueDots(highs, lows, closes, level, lvl = 20) {
-        const ema = (values, n) => {
-            const out = [], k = 2 / (n + 1); let prev = null;
-            for (const v of values) { prev = prev === null ? v : prev + k * (v - prev); out.push(prev); }
-            return out;
-        };
-        const fast = [3, 5, 8, 10, 12, 15].map((n) => ema(closes.map((v) => v || 0), n));
-        const slow = [30, 35, 40, 45, 50, 60].map((n) => ema(closes.map((v) => v || 0), n));
-        const rwb = closes.map((_, i) => Math.min(...fast.map((a) => a[i])) > Math.max(...slow.map((a) => a[i])));
-        const k = closes.map((c, i) => {
-            if (i < 9 || c == null) return null;
-            const hh = Math.max(...highs.slice(i - 9, i + 1).filter((v) => v != null));
-            const ll = Math.min(...lows.slice(i - 9, i + 1).filter((v) => v != null));
-            return hh > ll ? (c - ll) / (hh - ll) * 100 : null;
-        });
-        const out = [];
-        for (let i = 1; i < closes.length; i++) if (k[i] != null && k[i - 1] != null && k[i - 1] < lvl && k[i] >= lvl && rwb[i] && level && closes[i] >= level) out.push(i);
-        return out;
-    }
     function onMove(e) {
         const svg = $("chartBody").querySelector("svg");
         if (!svg || !geom || !series) return;
@@ -855,9 +995,26 @@ if (typeof document !== "undefined") (function () {
         const tip = $("tip"), cross = svg.querySelector("#cross");
         if (i < 0 || i >= geom.n) { tip.hidden = true; cross.setAttribute("visibility", "hidden"); return; }
         cross.setAttribute("x1", x); cross.setAttribute("x2", x); cross.setAttribute("visibility", "visible");
-        const index = geom.i0 + i;
-        const lines = infoLines(series, index);
-        const activeRow = rowFor(current) || {};
+        const index = geom.i0 + i, vs = vseries(), activeRow = rowFor(current) || {};
+        if (index >= vs.real) {   // puste miejsce w przyszłości: tylko data (tu rysuje się linie)
+            tip.innerHTML = escapeHtml(`${vs.d[index]} · przyszłość`);
+            tip.hidden = false;
+            const bx0 = $("chartPane").getBoundingClientRect(), left0 = p.clientX - bx0.left;
+            tip.style.left = (left0 < bx0.width - 200 ? left0 + 14 : left0 - 190) + "px";
+            tip.style.top = (p.clientY - bx0.top + 12) + "px";
+            return;
+        }
+        const lines = infoLines(series, index, period);
+        if (period === "W") {   // E = raport kwartalny w tym tygodniu: niespodzianka EPS / przychodów (dymek jak earnings_tooltip_lines)
+            const pctS = (x) => (x == null ? "N/D" : `${x >= 0 ? "+" : ""}${Number(x).toFixed(1)}%`);
+            for (const [d0, es, rs0] of activeRow.earn || []) if (earningsIndices(series.d, [d0]).includes(index)) lines.push(`WYNIKI · ${d0} · EPS ${pctS(es)} · przychody ${pctS(rs0)}`);
+        }
+        if (state.rwb && !zanger) {   // start RWB = dokup, Blue Dot (tylko do odczytu na świecy)
+            const closes = series.c.map((v) => v || 0);
+            if (rwbStarts(closes).includes(index)) lines.push(`RWB START · dokup (stop pod Low ${series.l[index] == null ? "—" : series.l[index].toFixed(2)})`);
+            const [lvl] = glbPeak({ ...series, real: series.c.length }, activeRow, period);
+            if (blueDots(series.h, series.l, series.c, lvl).includes(index)) lines.push("BLUE DOT · " + series.d[index], "Stop pod Low: " + (series.l[index] == null ? "—" : series.l[index].toFixed(2)));
+        }
         if (activeRow.glb != null && series.c[index] != null) {
             lines.push(`GLB ${activeRow.glb.toFixed(2)} · cena ${series.c[index] >= activeRow.glb ? "NAD" : "POD"} linią`);
             if (activeRow.plan) {
@@ -865,18 +1022,153 @@ if (typeof document !== "undefined") (function () {
                 if (activeRow.plan.halfAt != null) lines.push(`Sprzedaż połowy: ${activeRow.plan.halfAt.toFixed(2)}`);
             }
         }
-        if (period === "D") {
-            const r = rowFor(current) || {};
-            const dots = blueDots(series.h, series.l, series.c, r.glb);
-            if (dots.includes(index)) {
-                lines.push("BLUE DOT · " + series.d[index], "Stop pod Low: " + (series.l[index] == null ? "—" : series.l[index].toFixed(2)));
-            }
-        }
         tip.innerHTML = lines.map(escapeHtml).join("<br>");
         tip.hidden = false;
         const bx = $("chartPane").getBoundingClientRect(), left = p.clientX - bx.left;
         tip.style.left = (left < bx.width - 200 ? left + 14 : left - 190) + "px";
         tip.style.top = (p.clientY - bx.top + 12) + "px";
+    }
+
+    // ---------- ręczny stop i wielkość pozycji (kapitał w PLN, akcje ułamkowe) — jak desktop PositionSizeDialog ----------
+    const money = (v, d = 0) => v.toLocaleString("pl-PL", { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/[\u00a0\u202f]/g, " ");
+    const num = (txt) => { const n = parseFloat(String(txt).replace(/[\s\u00a0]/g, "").replace(",", ".")); return Number.isFinite(n) ? n : null; };
+
+    function fxRate() {
+        try { const f = JSON.parse(localStorage.getItem(FX_KEY)); return f && f.usdpln > 0 ? f.usdpln : null; } catch (e) { return null; }
+    }
+
+    // kurs USD/PLN (NBP, awaryjnie Frankfurter) — przeglądarka nie dostanie Yahoo (CORS); przy braku sieci zostaje poprzedni albo wpisany ręcznie
+    async function refreshFx() {
+        const sources = [
+            ["https://api.nbp.pl/api/exchangerates/rates/a/usd/?format=json", (j) => j.rates[0].mid],
+            ["https://api.frankfurter.app/latest?from=USD&to=PLN", (j) => j.rates.PLN],
+        ];
+        for (const [url, pick] of sources) {
+            try {
+                const r = await fetch(url);
+                if (!r.ok) continue;
+                const v = pick(await r.json());
+                if (v > 0) {
+                    try { localStorage.setItem(FX_KEY, JSON.stringify({ usdpln: v, date: new Date().toISOString().slice(0, 10) })); } catch (e) { /* tryb prywatny */ }
+                    return v;
+                }
+            } catch (e) { /* następne źródło */ }
+        }
+        return null;
+    }
+
+    // wejście i stop z 📌 pozycji (stop = większy z −10 % i MACD od wejścia) albo cena i Green Line / −10 %
+    function autoSizeDefaults() {
+        const r = rowFor(current) || {}, pos = ast.pos[current];
+        if (pos && pos.price) {
+            const pl = planFor(current) || {};
+            return [pos.price, Math.max(pl.macdStop || 0, pl.stopInit || 0) || null, "📌 pozycja: wejście z chwili kliknięcia, stop = większy z −10 % i stopu MACD od wejścia."];
+        }
+        const last = r.price || null;
+        if (last && r.glb && r.glb < last) return [last, r.glb, "Bez pozycji: wejście = ostatnia cena, stop = Green Line."];
+        return [last, last ? last * 0.9 : null, "Bez pozycji: wejście = ostatnia cena, stop = −10 % (Green Line nie jest pod ceną)."];
+    }
+
+    function sizeDefaults() {
+        const [entry, stop, src] = autoSizeDefaults(), manual = state.stops[current];
+        return manual ? [entry, manual, "Stop ręczny z wykresu — przeciągnij czerwoną linię STOP (albo dwuklik na wykresie), aby go zmienić."] : [entry, stop, src];
+    }
+
+    // ustawia (price) albo usuwa (null) ręczny stop spółki; ten sam poziom na T, M i Z
+    function setStop(price, sync = true) {
+        if (price) state.stops[current] = +Number(price).toPrecision(6); else delete state.stops[current];
+        saveSettings();
+        renderTools();
+        drawChart();
+        if (sync && $("sizeDlg").open) loadSizeDefaults();
+    }
+
+    function toggleStop() {
+        if (!current) return;
+        if (state.stops[current]) { setStop(null); return; }
+        const [entry, stop] = autoSizeDefaults();
+        setStop(stop || (entry ? entry * 0.9 : null));
+    }
+
+    function sizeLines(r, ticker) {
+        if (!r) return ["Podaj kapitał, ryzyko, kurs, cenę wejścia i stop pod ceną wejścia."];
+        const out = [`Kapitał ${money(r.capitalUsd)} USD · ryzyko ${money(r.riskPln)} PLN (${money(r.riskUsd)} USD)`, `Strata na akcję przy stopie: ${money(r.perShare, 2)} USD`, ""];
+        if (r.shares) out.push(`POZYCJA ${ticker}: ${sharesText(r.shares)} akcji (ogranicza: ${r.limitedBy})`, `Wartość: ${money(r.valueUsd)} USD = ${money(r.valuePln)} PLN (${money(r.valuePct, 1)} % kapitału)`,
+            `Strata przy stopie: ${money(r.lossUsd)} USD = ${money(r.lossPln)} PLN (${money(r.lossPct, 2)} % kapitału)`);
+        else out.push("POZYCJA: 0 akcji — kapitał albo ryzyko są za małe");
+        out.push("", `Cały kapitał: ${sharesText(r.fullShares)} akcji → strata przy stopie ${money(r.fullLossUsd)} USD = ${money(r.fullLossPln)} PLN (${money(r.fullLossPct, 2)} % kapitału)`);
+        return out;
+    }
+
+    let sizeLoading = false;
+    function loadSizeDefaults() {
+        const [entry, stop, src] = sizeDefaults();
+        sizeLoading = true;
+        $("szEntry").value = entry == null ? "" : entry.toFixed(2);
+        $("szStop").value = stop == null ? "" : stop.toFixed(2);
+        sizeLoading = false;
+        $("sizeTitle").textContent = "Wielkość pozycji · " + current;
+        $("szNote").textContent = src;
+        recalcSize();
+    }
+
+    function recalcSize() {
+        const v = { capital: num($("szCapital").value), risk: num($("szRisk").value), fx: num($("szFx").value), entry: num($("szEntry").value), stop: num($("szStop").value) };
+        if (v.capital > 0 && v.risk != null && v.risk >= 0 && (state.capital !== v.capital || state.risk !== v.risk)) {   // zapamiętujemy kapitał i ryzyko
+            state.capital = v.capital;
+            state.risk = v.risk;
+            saveSettings();
+            if (state.stops[current]) drawChart();   // napis na linii stopu pokazuje liczbę akcji dla nowego kapitału / ryzyka
+        }
+        if (v.fx > 0) try { localStorage.setItem(FX_KEY, JSON.stringify({ usdpln: v.fx, date: new Date().toISOString().slice(0, 10) })); } catch (e) { /* tryb prywatny */ }
+        let out = sizeLines(positionSize(v.capital, v.fx, v.entry, v.stop, v.risk), current);
+        if (v.entry && v.stop && v.stop >= v.entry) out = ["Stop jest na poziomie ceny wejścia albo nad nią — ryzyka nie da się policzyć (wpisz stop pod ceną wejścia)."];
+        $("szOut").textContent = out.join("\n");
+    }
+
+    async function openSize() {
+        if (!current) return;
+        $("szCapital").value = String(state.capital);
+        $("szRisk").value = String(state.risk);
+        const fx = fxRate();
+        $("szFx").value = fx ? fx.toFixed(4) : "";
+        loadSizeDefaults();
+        if (!$("sizeDlg").open) $("sizeDlg").showModal();
+        let today = false;
+        try { today = (JSON.parse(localStorage.getItem(FX_KEY)) || {}).date === new Date().toISOString().slice(0, 10); } catch (e) { /* tryb prywatny */ }
+        if (!fx || !today) await pullFx();
+    }
+
+    async function pullFx() {
+        const v = await refreshFx();
+        if (v) { $("szFx").value = v.toFixed(4); recalcSize(); if (state.stops[current]) drawChart(); }
+        else if (!$("szFx").value) $("szNote").textContent = "Brak sieci — wpisz kurs USD/PLN ręcznie.";
+    }
+
+    function szInput(e) {
+        if (sizeLoading) return;
+        if (e.target.id === "szStop") {   // stop wpisany w oknie = ręczny stop na wykresie (programowe wypełnianie pól go nie ustawia)
+            const v = num($("szStop").value);
+            if (v && v > 0 && v !== state.stops[current]) setStop(v, false);
+        }
+        recalcSize();
+    }
+
+    // okno ☁ Gist: ID gista z desktopa (☁ Web), tryb wyboru źródła i daty obu źródeł
+    function openGist() {
+        $("gistId").value = state.gist.id || "";
+        $("gistMode").value = state.gist.mode || "auto";
+        const d = (x) => (x ? `${x.at ? x.at.slice(0, 16).replace("T", " ") : "—"} · ostatni tydzień ${x.asOf || "—"} · ${x.n} spółek` : "brak");
+        $("gistInfo").innerHTML = `Repo (Weekly Refresh): ${escapeHtml(d(gistInfo.repo))}<br>Gist (desktop): ${escapeHtml(gistInfo.gist ? d(gistInfo.gist) : gistInfo.error ? "⚠ " + gistInfo.error : state.gist.id ? "—" : "nie ustawiono")}` +
+            `<br>Używane teraz: <b>${source.kind === "gist" ? "gist" : "repo"}</b>`;
+        $("gistDlg").showModal();
+    }
+
+    function saveGist() {
+        state.gist = { id: $("gistId").value.trim(), mode: $("gistMode").value };
+        saveSettings();
+        $("gistDlg").close();
+        window.location.reload();   // lista i serie wczytują się od nowa z wybranego źródła
     }
 
     function openSymbol() {
@@ -912,7 +1204,7 @@ if (typeof document !== "undefined") (function () {
             if (!th) return;
             const k = th.dataset.key;
             state.sort = state.sort && state.sort.key === k ? (state.sort.dir > 0 ? { key: k, dir: -1 } : null)
-                : { key: k, dir: TEXT_COLS.includes(k) ? 1 : -1 };
+                : { key: k, dir: TEXT_COLS.includes(k) || k === "rwb_weeks" ? 1 : -1 };   // RWB tyg.: najpierw najświeższe starty
             saveSettings(); renderHead(); renderTable();
         });
         $("tbody").addEventListener("click", (e) => {
@@ -948,14 +1240,23 @@ if (typeof document !== "undefined") (function () {
             renderTable();
         });
         $("perW").addEventListener("click", () => togglePeriod("W"));
-        $("perD").addEventListener("click", () => togglePeriod("D"));
+        $("perM").addEventListener("click", () => togglePeriod("M"));
         $("zangerBtn").addEventListener("click", toggleZanger);
+        $("rwbBtn").addEventListener("click", () => { state.rwb = !state.rwb; saveSettings(); renderPeriod(); drawChart(); });
+        $("futBtn").addEventListener("click", cycleFuture);
+        $("priceBtn").addEventListener("click", () => setView({ z: 1, s: 0 }));
+        $("stopBtn").addEventListener("click", toggleStop);
+        $("sizeBtn").addEventListener("click", openSize);
+        $("sizeDlg").addEventListener("input", szInput);
+        $("szFxBtn").addEventListener("click", pullFx);
+        $("szDefaults").addEventListener("click", loadSizeDefaults);
         $("drawBtn").addEventListener("click", () => { drawMode = !drawMode; renderTools(); });
         $("undoBtn").addEventListener("click", undoLine);
-        $("dayRwbBtn").addEventListener("click", () => { dailyRwb = !dailyRwb; renderPeriod(); drawChart(); });
         $("lineAlertBtn").addEventListener("click", toggleLineAlert);
         $("lineDelBtn").addEventListener("click", deleteSelected);
         $("fltBtn").addEventListener("click", () => { renderFilters(); $("fltDlg").showModal(); });
+        $("gistBtn").addEventListener("click", openGist);
+        $("gistSave").addEventListener("click", saveGist);
         $("fltBody").addEventListener("click", fltClick);
         $("fltBody").addEventListener("input", fltInput);
         $("fltClear").addEventListener("click", () => { state.filters = {}; saveSettings(); renderFilters(); renderTable(); });
@@ -973,8 +1274,20 @@ if (typeof document !== "undefined") (function () {
         sl.addEventListener("pointerup", () => { drag = null; });
         sl.addEventListener("pointercancel", () => { drag = null; });
         for (const el of [sl, body]) {
-            el.addEventListener("wheel", (e) => { if (!series) return; e.preventDefault(); zoom(e.deltaY < 0 ? 0.85 : 1.18); }, { passive: false });
+            el.addEventListener("wheel", (e) => {
+                if (!series) return;
+                e.preventDefault();
+                if (el === body && geom && (e.shiftKey || chartPt(e).x > geom.x1)) priceZoom(e.deltaY < 0 ? 1.18 : 0.85);   // nad osią ceny / z Shift: skala ceny
+                else zoom(e.deltaY < 0 ? 0.85 : 1.18);
+            }, { passive: false });
         }
+        body.addEventListener("dblclick", (ev) => {   // dwuklik: na osi ceny = skala automatyczna, na cenie = stop w tym miejscu (magnes do High / Low)
+            if (!geom || !series) return;
+            const pt = chartPt(ev);
+            if (pt.y < geom.price[0] || pt.y > geom.price[1]) return;
+            if (pt.x > geom.x1) setView({ z: 1, s: 0 });
+            else if (pt.x >= geom.x0) { gest = null; setStop(ptValue(pt.x, pt.y, 8).p); }
+        });
         let rt = null;
         window.addEventListener("resize", () => {
             clearTimeout(rt);
@@ -996,7 +1309,10 @@ if (typeof document !== "undefined") (function () {
             else if (current && (e.key === "+" || e.key === "-")) zoom(e.key === "+" ? 0.85 : 1.18);
             else if (current && e.key.toLowerCase() === "z" && !(e.ctrlKey || e.metaKey)) toggleZanger();
             else if (current && e.key.toLowerCase() === "z") { e.preventDefault(); undoLine(); }
-            else if (current && period === "W" && e.key.toLowerCase() === "l") { drawMode = !drawMode; renderTools(); }
+            else if (current && e.key.toLowerCase() === "l") { drawMode = !drawMode; renderTools(); }
+            else if (current && e.key.toLowerCase() === "m") togglePeriod("M");
+            else if (current && e.key.toLowerCase() === "w") togglePeriod("W");
+            else if (current && e.key.toLowerCase() === "r") { state.rwb = !state.rwb; saveSettings(); renderPeriod(); drawChart(); }
             else if (e.key === "Escape") { if (sel) { sel = null; renderTools(); drawChart(); } else if (drawMode) { drawMode = false; renderTools(); } else closeChart(); }
         });
     }
@@ -1008,9 +1324,9 @@ if (typeof document !== "undefined") (function () {
 
     function renderStatus() {
         if (!data.generated_at) return;
-        const scans = (data.scanners || []).filter((m) => !state.scanner || m.name === state.scanner);
+        const scans = (data.scanners || []).filter((m) => !state.scanner || m.name === state.scanner);   // gist: dane z desktopa, filtr Finviz nie jest podany
         const stale = scans.filter((m) => m.stale).map((m) => m.name);
-        $("status").textContent = `Dane z ${data.generated_at.slice(0, 10)} (ostatni tydzień ${data.data_as_of || "—"}` +
+        $("status").textContent = (source.kind === "gist" ? "☁ Gist (z desktopa) · " : "") + `Dane z ${data.generated_at.slice(0, 10)} (ostatni tydzień ${data.data_as_of || "—"}` +
             `${weekInProgress(data.data_as_of, data.generated_at) ? " — w toku, sygnał obowiązuje po zamknięciu piątku" : ""})` +
             (state.scanner && scans[0] ? ` · filtr Finviz ${scans[0].filters}` : "") +
             ((data.sectors || []).some((x) => x.selected) ? ` · sektory top (RS nad SMA 52 tyg.): ${data.sectors.filter((x) => x.selected).map((x) => `${x.etf} ${x.pct >= 0 ? "+" : ""}${x.pct.toFixed(1)} %`).join(", ")}` : "") +
@@ -1019,12 +1335,18 @@ if (typeof document !== "undefined") (function () {
 
     async function init() {
         initUi();
-        data = await fetchJson("data/watchlist.json", "Lista spółek");
+        const repo = await fetchJson("data/watchlist.json", "Lista spółek");
+        const g = state.gist.id && state.gist.mode !== "repo" ? await loadGist(state.gist.id) : null;
+        gistInfo = { repo: repo ? { at: repo.generated_at, asOf: repo.data_as_of, n: (repo.rows || []).length } : null,
+            gist: g && g.manifest ? { at: g.manifest.generated_at, asOf: g.manifest.data_as_of, n: g.manifest.rows.length } : null, error: g && g.error ? g.error : "" };
+        source = chooseSource(repo, g);
+        data = source.kind === "gist" ? source.manifest : repo;
         if (!data) {
             data = { rows: [], symbols: [] };
             $("status").textContent = "Nie udało się wczytać data/watchlist.json.";
             return;
         }
+        if (!data.symbols) data.symbols = [];
         renderScanners();
         renderTable();
         renderAlertBtn();

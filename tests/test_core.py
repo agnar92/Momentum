@@ -42,13 +42,13 @@ def test_glb_armed_only_after_breakout_from_below_and_expires_after_a_run():
     assert row["glb_state"] == "WYBICIE"
 
 
-def test_fresh_blue_dot_only_in_last_sessions():
+def test_fresh_blue_dot_only_in_last_weeks():
     n = 160
     c = [50 + i * 0.4 for i in range(n)]
     c[150:154] = [c[149] - 3, c[149] - 6, c[149] - 7, c[149] - 1]       # korekta w trendzie, potem odbicie: Stochastic przecina 20 w górę
     d = {"d": [f"2026-{1 + i // 28:02d}-{1 + i % 28:02d}" for i in range(n)], "h": [x + 1 for x in c], "l": [x - 1 for x in c], "c": c}
-    assert calc.fresh_blue_dot(d, 40, sessions=10) == d["d"][153]
-    assert calc.fresh_blue_dot(d, 40, sessions=5) is None                 # kropka starsza niż 5 sesji
+    assert calc.fresh_blue_dot(d, 40, weeks=10) == d["d"][153]
+    assert calc.fresh_blue_dot(d, 40, weeks=2) is None                    # kropka starsza niż 2 tygodnie
     assert calc.fresh_blue_dot(d, 1e9) is None and calc.fresh_blue_dot(None, 40) is None
     assert calc.glb_state(99, 103, 100) == "POD"
     assert calc.glb_state(99, 103, None) == "BRAK"
@@ -162,27 +162,33 @@ def _yf_fake(monkeypatch, calls, frames):
     monkeypatch.setattr(prices, "_frames", lambda df, part: {t: frames[t] for t in part if t in frames})
 
 
-def test_monthly_updates_only_new_months_and_uses_high(monkeypatch):
+def _mframe(months, highs):
     import pandas as pd
+    return pd.DataFrame({"Open": [h - 1 for h in highs], "High": highs, "Low": [h - 2 for h in highs], "Close": [h - 0.5 for h in highs], "Volume": [1e6] * len(highs)},
+                        index=pd.to_datetime([m + "-01" for m in months]))
+
+
+def test_monthly_updates_only_new_months_and_stores_ohlc(monkeypatch):
     calls = []
-    hi = pd.Series([10.0, 12.0], index=pd.to_datetime(["2026-08-01", "2026-09-01"]))
-    cache = {"A": {"h": [["2026-07", 9.0], ["2026-08", 10.0]], "upto": "2026-08", "raw": 1}, "C": {"h": [], "upto": "2026-09", "raw": 1},
-             "B": {"m": [["2026-09", 1.0]], "upto": "2026-09"},     # stary wpis z zamknięciami (nawet aktualny) -> cała historia
-             "D": {"h": [["2026-09", 1.0]], "upto": "2026-09"}}     # aktualny, ale ze skorygowanymi cenami (bez "raw") -> cała historia
-    _yf_fake(monkeypatch, calls, {"A": {"High": hi}, "B": {"High": hi}, "D": {"High": hi}})
-    prices.monthly(["A", "B", "C", "D"], cache, log=lambda s: None, today=dt.date(2026, 10, 20))
-    assert calls == [(["A"], "6mo"), (["B", "D"], "max")]            # C aktualne: bez zapytania
-    assert cache["A"] == {"h": [["2026-07", 9.0], ["2026-08", 10.0], ["2026-09", 12.0]], "upto": "2026-09", "raw": 1}
-    assert prices.monthly_highs(cache["B"]) == [10.0, 12.0]
+    fr = _mframe(["2026-08", "2026-09"], [10.0, 12.0])
+    row = lambda m, h: [m, h - 1, h, h - 2, h - 0.5, 1e6]   # noqa: E731
+    cache = {"A": {"r": [row("2026-07", 9.0), row("2026-08", 10.0)], "upto": "2026-08", "raw": 1}, "C": {"r": [row("2026-09", 1.0)], "upto": "2026-09", "raw": 1},
+             "B": {"m": [["2026-09", 1.0]], "upto": "2026-09"},          # stary wpis z zamknięciami -> cała historia
+             "D": {"h": [["2026-09", 1.0]], "upto": "2026-09", "raw": 1},   # stary format (same High) -> cała historia
+             "E": {"r": [row("2026-09", 1.0)], "upto": "2026-09"}}       # aktualny, ale ze skorygowanymi cenami (bez "raw") -> cała historia
+    _yf_fake(monkeypatch, calls, {"A": fr, "B": fr, "D": fr, "E": fr})
+    prices.monthly(["A", "B", "C", "D", "E"], cache, log=lambda s: None, today=dt.date(2026, 10, 20))
+    assert calls == [(["A"], "6mo"), (["B", "D", "E"], "max")]           # C aktualne: bez zapytania
+    assert cache["A"] == {"r": [row("2026-07", 9.0), row("2026-08", 10.0), row("2026-09", 12.0)], "upto": "2026-09", "raw": 1}
+    assert prices.monthly_highs(cache["B"]) == [10.0, 12.0] and cache["B"]["r"][0][5] == 1e6
 
 
 def test_monthly_refetches_full_history_when_prices_changed(monkeypatch):
-    import pandas as pd
     calls = []
-    _yf_fake(monkeypatch, calls, {"A": {"High": pd.Series([5.0, 6.0], index=pd.to_datetime(["2026-08-01", "2026-09-01"]))}})
-    cache = {"A": {"h": [["2026-08", 10.0]], "upto": "2026-08", "raw": 1}}   # split 2:1 — 10 -> 5
+    _yf_fake(monkeypatch, calls, {"A": _mframe(["2026-08", "2026-09"], [5.0, 6.0])})
+    cache = {"A": {"r": [["2026-08", 9.0, 10.0, 8.0, 9.5, 1e6]], "upto": "2026-08", "raw": 1}}   # split 2:1 — 10 -> 5
     prices.monthly(["A"], cache, log=lambda s: None, today=dt.date(2026, 10, 20))
-    assert calls == [(["A"], "6mo"), (["A"], "max")] and cache["A"]["h"] == [["2026-08", 5.0], ["2026-09", 6.0]]
+    assert calls == [(["A"], "6mo"), (["A"], "max")] and prices.monthly_highs(cache["A"]) == [5.0, 6.0]
 
 
 def test_merge_weekly_appends_new_weeks_and_detects_adjusted_history():
@@ -235,7 +241,7 @@ SPY = {"d": _D, "o": [1] * 60, "h": [1] * 60, "l": [1] * 60, "c": [400.0] * 60, 
 
 def _monthly(ts, cache, log):
     for t in ts:
-        cache[t] = {"h": [["2025-01", 50], ["2025-02", 100], ["2025-03", 90], ["2025-04", 90], ["2025-05", 90]], "upto": "2025-05", "raw": 1}
+        cache[t] = {"r": [[m, h, h, h, h, 1e6] for m, h in (("2025-01", 50), ("2025-02", 100), ("2025-03", 90), ("2025-04", 90), ("2025-05", 90))], "upto": "2025-05", "raw": 1}
 
 
 def _fund(ts, cache, ua, log):
@@ -251,8 +257,7 @@ def _est(ts, cache, log):
 def _run(tmp_path, fetch_list, symbols=()):
     return watchlist.run({"symbols": list(symbols), "scanners": [{"name": "Domyślny", "filters": "f"}]}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch_list,
                          weekly=lambda ts, log, cache: {t: ({**W, "v": [1e3] * 60} if t.startswith("B") else SPY if t == "SPY" else W) for t in ts},
-                         monthly=_monthly, fund=_fund, est=_est,
-                         daily=lambda ts, log, **kw: {t: W for t in ts})
+                         monthly=_monthly, fund=_fund, est=_est)
 
 
 def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
@@ -266,8 +271,10 @@ def test_run_writes_rows_weekly_files_symbols_and_caches(tmp_path):
     assert len(data["rows"]) == 21 and [r["ticker"] for r in data["symbols"]] == ["SPY", "^GSPC"] and not data["finviz_stale"]
     assert json.loads((tmp_path / "out" / "weekly" / "_GSPC.json").read_text())["c"][-1] == 104.0
     assert "A0" in json.loads((tmp_path / "cache" / "sec.json").read_text())
-    assert a["daily"] and (tmp_path / "out" / "daily" / "A0.json").exists()   # nad Green Line -> świece dzienne
-    assert a["rvol_w"] == pytest.approx(1.0) and a["rvol_d"] == pytest.approx(1.0)   # wolumen relatywny tydzień / sesja
+    assert a["rvol_w"] == pytest.approx(1.0) and "rvol_d" not in a and "daily" not in a and not (tmp_path / "out" / "daily").exists()   # wolumen relatywny tylko tygodniowy, bez danych dziennych
+    mon = json.loads((tmp_path / "out" / "monthly" / "A0.json").read_text())   # miesięczne świece do wykresu M (zamknięte miesiące)
+    assert mon["d"][0] == "2025-01-01" and mon["h"][:2] == [50, 100] and set(mon) == {"d", "o", "h", "l", "c", "v"}
+    assert "rwb_weeks" in a and a["cc52w"] is not None
     assert "earn" in a                                                                     # daty raportów (E na wykresie)
 
 
@@ -282,11 +289,19 @@ def test_run_keeps_previous_list_when_finviz_fails(tmp_path):
     assert len(rows) == 20 and data["finviz_stale"] and data["rows"][0]["company"] == "C0"
 
 
-def test_price_ratio_uses_252_sessions_and_short_history_fallback():
-    assert calc.price_ratio([100, 110, 120], sessions=2) == pytest.approx(1.2)
-    assert calc.price_ratio([100], sessions=2) is None
-    prices = list(range(100, 354))
-    assert calc.price_ratio(prices, sessions=252) == pytest.approx(353 / 101)
+def test_price_ratio_uses_52_weeks_and_short_history_fallback():
+    assert calc.price_ratio([100, 110, 120], weeks=2) == pytest.approx(1.2)
+    assert calc.price_ratio([100], weeks=2) is None
+    prices = list(range(100, 160))
+    assert calc.price_ratio(prices, weeks=52) == pytest.approx(159 / 107)
+
+
+def test_rwb_starts_and_weeks_since_start():
+    c = [100 + i for i in range(120)] + [220 - 3 * i for i in range(25)] + [145 + 2 * i for i in range(60)]   # trend, cofnięcie, powrót
+    starts = calc.rwb_starts(c)
+    assert starts and all(calc.rwb(c)[i] and not calc.rwb(c)[i - 1] for i in starts) and starts[-1] > 145
+    assert calc.rwb_weeks(c) == len(c) - 1 - starts[-1] and calc.rwb_weeks(c[:starts[-1] + 1]) == 0
+    assert calc.rwb_weeks([100 - i * 0.5 for i in range(100)]) is None and calc.rwb_weeks(c[:40]) is None
 
 
 def test_file_name():
@@ -302,7 +317,7 @@ def test_second_run_passes_saved_weekly_series_as_cache(tmp_path):
         return {t: SPY if t == "SPY" else W for t in ts}
     for _ in range(2):
         watchlist.run({"scanners": [{"name": "Domyślny", "filters": "f"}]}, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None,
-                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+                      fetch_list=lambda f, max_tickers, log: (base, 20), weekly=weekly, monthly=_monthly, fund=_fund, est=_est)
     assert seen[0] == [] and seen[1] == sorted([t["ticker"] for t in base] + ["SPY"])    # SPY zawsze (siła względna)
 
 
@@ -316,7 +331,7 @@ def test_run_uses_only_one_configured_scanner(tmp_path):
         return lists[filters], len(lists[filters])
 
     rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch,
-                         weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+                         weekly=lambda ts, log, cache: {t: SPY if t == "SPY" else W for t in ts}, monthly=_monthly, fund=_fund, est=_est)
     data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
     assert seen == ["f1"]
     assert len(rows) == 20 and all(r["scanners"] == ["Jeden"] for r in rows)
@@ -344,14 +359,6 @@ def test_only_the_refreshed_scanner_defines_the_universe():
 def test_rows_of_scanner_drops_rows_of_old_scanners():
     rows = [{"ticker": "A", "scanners": ["Sektory", "CANSLIM"]}, {"ticker": "B", "scanners": ["CANSLIM"]}, {"ticker": "C"}]
     assert [r["ticker"] for r in watchlist.rows_of_scanner(rows, "Sektory")] == ["A", "C"]
-
-
-def test_monthly_highs_ignores_dividend_adjusted_entries():
-    assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09"}) == []
-    assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0]
-
-
-    assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0]
 
 
 def test_ps_is_informational():
@@ -416,14 +423,16 @@ def test_eps_history_and_estimate_rows_are_json_safe():
     }]
 
 
-def test_merge_daily_appends_only_new_dates_and_detects_changed_history():
-    old = {"raw": 1, "d": ["2026-10-19", "2026-10-20"], "o": [1, 2], "h": [2, 3], "l": [0, 1], "c": [1, 2], "v": [10, 20]}
-    fresh = {"raw": 1, "d": ["2026-10-20", "2026-10-21"], "o": [2, 3], "h": [3, 4], "l": [1, 2], "c": [2, 3], "v": [20, 30]}
-    merged = prices.merge_daily(old, fresh)
-    assert merged["d"] == ["2026-10-19", "2026-10-20", "2026-10-21"]
-    assert merged["c"] == [1, 2, 3]
-    changed = {**fresh, "c": [9, 3]}
-    assert prices.merge_daily(old, changed) is None
+def test_merge_monthly_appends_new_months_and_detects_changed_history():
+    old = [["2026-08", 1, 5, 1, 4, 10], ["2026-09", 4, 6, 3, 5, 10]]
+    fresh = [["2026-09", 4, 6, 3, 5, 10], ["2026-10", 5, 7, 4, 6, 12]]
+    assert [r[0] for r in prices.merge_monthly(old, fresh)] == ["2026-08", "2026-09", "2026-10"]
+    assert prices.merge_monthly(old, [["2026-09", 8, 12, 6, 10, 10]]) is None                    # High zmieniony wstecz (split)
+    assert prices.monthly_highs({"r": old, "raw": 1}) == [5, 6] and prices.monthly_highs({"r": old}) == []
+    assert prices.monthly_highs({"h": [["2026-09", 5.0]], "upto": "2026-09", "raw": 1}) == [5.0] and prices.monthly_highs({"h": [["2026-09", 5.0]]}) == []   # stary format do odświeżenia
+    ser = prices.monthly_series({"r": old, "raw": 1})
+    assert ser == {"d": ["2026-08-01", "2026-09-01"], "o": [1, 4], "h": [5, 6], "l": [1, 3], "c": [4, 5], "v": [10, 10]}
+    assert prices.monthly_series({"r": old[:1], "raw": 1}) is None
 
 
 def test_default_scanner_is_the_sector_scanner_and_only_one_is_refreshed(tmp_path):
@@ -439,7 +448,7 @@ def test_default_scanner_is_the_sector_scanner_and_only_one_is_refreshed(tmp_pat
     def weekly(ts, log, cache):
         return {t: ({**SPY, "c": [100.0] * 60} if t == "SPY" else {**W, "c": [100.0 * (1.01 if t == "XLK" else 0.99) ** i for i in range(60)]} if t.startswith("XL") else W) for t in ts}
     rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch, weekly=weekly,
-                         monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+                         monthly=_monthly, fund=_fund, est=_est)
     assert queries == ["sec_technology,f"] and len(rows) == 20      # tylko pierwszy skaner; 1 zapytanie na najsilniejszy sektor
     assert not hasattr(watchlist, "urlparse")                        # brak podmiany skanera linkiem Finviz
 
@@ -458,7 +467,7 @@ def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp
             out[t] = {**SPY, "c": [100.0] * 60} if t == "SPY" else {**W, "c": [100.0 * (1.01 if t == "XLK" else 1.005 if t == "XLE" else 0.99) ** i for i in range(60)]} if t.startswith("XL") else W
         return out
     rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch, weekly=weekly,
-                         monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+                         monthly=_monthly, fund=_fund, est=_est)
     data = json.loads((tmp_path / "out" / "watchlist.json").read_text())
     assert queries == ["sec_technology,f", "sec_energy,f"] and len(rows) == 40
     assert [x["etf"] for x in data["sectors"] if x["selected"]] == ["XLK", "XLE"] and rows[0]["sector_rs"] > rows[-1]["sector_rs"] > 0
@@ -540,7 +549,7 @@ def test_build_only_without_etf_candles_keeps_previous_list(tmp_path):
     def weekly(ts, log, cache):   # offline: są tylko świece spółek i SPY, brak ETF-ów
         return {t: SPY if t == "SPY" else W for t in ts if not t.startswith("XL")}
     kw = dict(out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=lambda f, max_tickers, log: (prev, 20), weekly=weekly,
-              monthly=_monthly, fund=_fund, est=_est, daily=lambda ts, log, **kw: {})
+              monthly=_monthly, fund=_fund, est=_est)
     with pytest.raises(RuntimeError, match="Żaden sektor"):
         watchlist.run(cfg, **kw)
     rows = watchlist.run(cfg, offline=True, **kw)

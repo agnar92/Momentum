@@ -39,17 +39,17 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
   The rest of the site is verbal, so all other thresholds are MY APPROXIMATION and not backtested as a strategy; ~366 of ~1630 stocks show at least one pattern. Active only when the pattern ends in the last 4 weeks, price within 15 % of the 52-week high, state BUDUJE SIĘ (−8…0 % to the buy point) or WYBICIE (0–10 % above it; `vol_x` = breakout week volume / 10-week mean).
   `calc.parabola` = Parabolic Curve as an EXIT warning, per the site's diagram (user pasted it: "step-like formation" of bases, 3 rising lines each steeper, SELL when the steepest breaks, on high volume): chain of 3 CONNECTED rising support lines through weekly Low pivots (`_support_lines`, each ≥ 15 % steeper, each steeper line's anchor lies on the previous line within 2 % — a fan like the site's diagram; steepest has an anchor in the last ~22 weeks and the price is ≤ 20 % above it unless it is broken, so a gap-up does not leave a useless exit level; user: "parabolic trochę źle działa, linie muszą się łączyć"), ≥ +100 % from the flattest line's start; state TRWA (exit = weekly close under the steepest line) or ZŁAMANA (close under it in the last 3 weeks, `vol_x`); `shapes` = lines labelled 1/2/3; `positionStatus` adds "PARABOLA". ~10 of ~1630 stocks match. Row fields: `pattern`, `pattern_state`, `pattern_buy`, `pattern_pct` (best BUY pattern; columns, filter presets), `pattern_exit` (first warning: H&S / Rising Wedge / Parabolic Curve; `positionStatus` warns too), `patterns` (with `shapes` by date for drawing), `parabola`.
   Bars in the Z view are ONE colour (user: "bary powinny być jednokolorowe").
-  Chart button **Z** / key z (`chartSvg(..., zanger)` / `chart.draw(..., zanger)`, geometry "Z"): log price + volume only (no RS / MACD / revenue / SMA), pattern outline, dashed buy line with label, parabola curve + exit level; weekly only (switching to D / M leaves it).
+  Chart button **Z** / key z (`chartSvg(..., zanger)` / `chart.draw(..., zanger)`, geometry "Z"): log price + volume only (no RS / MACD / revenue / SMA), pattern outline, dashed buy line with label, parabola curve + exit level; weekly only (switching to M leaves it).
 - **One scanner** (`finviz_screen.json` `scanners` = one entry, the sector scanner; no URL override; `symbols` = SPY only, for RS). Finviz silently ignores unknown filter codes — check the count after editing. Extra Finviz views 121/161/131
   give PEG, forward P/E, dividend yield (`peg`, `pegy` = P/E ÷ (growth + yield), `calc.pegy_ratio`) — columns only.
 - **Informational columns only** (NOT in `passes`): `rs` (52-week close change minus SPY's, pp), `ps` (P/S), `surp` / `beat2` / `eps_rev` (EPS
   surprises / estimate revision, `momentum/estimates.py`, cache `data/estimates.json`, 7 days), `cc52w` (C/C[52 tyg.] = close / close 52 weeks
-  ago, `calc.price_ratio`), `rvol_w` / `rvol_d`, `turnover`, `dgm`, `slow`. The fundamentals panel lists P/S, RS and beat2 as "kryterium wyłączone".
+  ago in WEEKS, `calc.price_ratio`), `rvol_w` (week / 10 previous weeks), `rwb_weeks` (weeks since the start of the current weekly RWB, `calc.rwb_weeks`; empty = no RWB; first header click sorts ascending = freshest starts first), `turnover`, `dgm`, `slow`. The fundamentals panel lists P/S, RS and beat2 as "kryterium wyłączone".
 - **Green Line** (`green_line`): all-time-high MONTHLY HIGH (user: "zrób GLB na high jak oryginalnie, nie na close"; re-run on
   NOT dividend-adjusted prices, Oct 2026, per trade: High line +1.9 % vs Close +0.2 %, with the margin filter; portfolio CAGRs are path-dependent noise) that has stood 3 months in total = the peak month + 2 closed ones (`CONFIRM_MONTHS` = 2; Dr Wish: "at least 3 months", user: "licz łącznie czyli dwie świeczki po szczycie"; after a new record the old
   line stays valid until the new one has stood the same 3 months. Entry is still judged on the weekly CLOSE. `glb_state`: WYBICIE (breakout week — last week below —
-  at ANY height = strong breakout), SYGNAŁ (0–10 % above), BLUE DOT (a later week > 10 % above AND a daily Blue Dot in the last 5 sessions,
-  `calc.fresh_blue_dot`, set by `watchlist.py` / desktop `sync.run` from the 1-year daily candles; user: "jeżeli jesteśmy ponad 10 % i to nie jest świeca
+  at ANY height = strong breakout), SYGNAŁ (0–10 % above), BLUE DOT (a later week > 10 % above AND a WEEKLY Blue Dot in the last 2 weeks,
+  `calc.fresh_blue_dot(weekly, level, weeks=2)`, set in `calc.build_row`; daily data was removed in Oct 2026 like in the desktop; user: "jeżeli jesteśmy ponad 10 % i to nie jest świeca
   przebijająca … szukamy blue dot"; not backtested in this combination), NAD (> 10 % without a dot), POD, BRAK.
 - **Exit**: weekly MACD (12, 26, 9) — stop = Low of the last cross-down week (`macd_info`), plus a 10 % initial stop (`STOP_PCT`, shown only).
   Second method (user: "dodaj jako drugą metodę wyjścia … i 3 zasadę: spadek 20 % od szczytu, sprzedaj połowę"): **pod GLB** = sell on a weekly close below the
@@ -69,14 +69,15 @@ git history (last full version: the commit before "Refaktor: jedna strategia z b
 Finviz per scanner (`momentum/finviz.py`; reads the SSR-JSON layout, the `div.fv-table_row` layout and the old table; a scanner that
 fails keeps its previous rows) → yfinance WEEKLY for the union + `symbols` (`momentum/prices.weekly`; INCREMENTAL: tickers already in
 `docs/data/weekly/` get only the last 1–6 months merged in (`merge_weekly`), full 3 years only for new tickers, gaps > ~5 months or when the
-overlapping close differs > 1.5 % = adjusted history) → for every scanner ticker (no turnover gate): yfinance MONTHLY HIGH (`prices.monthly`, closed months
-only, cache `data/monthly.json` `{h, upto}`; after a month closes only `6mo` is fetched and merged (`merge_monthly`), `max` only for new
-tickers / changed prices / old close-based `m` entries) and SEC companyfacts (`momentum/sec.py`, cache
+overlapping close differs > 1.5 % = adjusted history) → for every scanner ticker (no turnover gate): yfinance MONTHLY candles (`prices.monthly`, closed months
+only, cache `data/monthly.json` `{r: [[YYYY-MM, o, h, l, c, v]], upto, raw}`; High feeds the Green Line (`monthly_highs`; the old `{h}` format still works until the
+next full refresh), the whole OHLC feeds the M chart (`write_monthly` → `docs/data/monthly/<file>.json` = `{d: [YYYY-MM-01], o, h, l, c, v}`, closed months only — the page
+adds the month in progress from the weekly candles, `monthlyWithOpen`); after a month closes only `6mo` is fetched and merged (`merge_monthly`), `max` only for new
+tickers / changed prices / old formats) and SEC companyfacts (`momentum/sec.py`, cache
 `data/sec.json`, refreshed every 7 days; Q4 = FY − 3 quarters; needs a User-Agent: `SEC_UA` env / `finviz_screen.json` `sec_ua`).
 Prices are NOT dividend-adjusted (`prices.AUTO_ADJUST = False`, split-adjusted only, like TradingView; user bug report: "CLMT pokazuje GLB 30 a w TV
 55.26" — with dividend adjustment the 2007 high of an ex-MLP fell to ~20). Cached series / monthly entries carry `"raw": 1`; ones without it are
-refetched in full once. Daily candles (1 year, `prices.daily`) only for rows above the Green Line (`ABOVE_GLB`): `docs/data/daily/<file>.json`, row flag
-`daily`. Output: `docs/data/watchlist.json` (`generated_at`, `data_as_of`, `scanners` [{name, filters, total, n, stale}], `finviz_stale`, `rules`,
+refetched in full once. No daily data any more (user, Oct 2026, like the desktop: "usuń dane dzienne, będę używał miesięcznego i tygodniowego"). Output: `docs/data/watchlist.json` (`generated_at`, `data_as_of`, `scanners` [{name, filters, total, n, stale}], `finviz_stale`, `rules`,
 `rows` (each with `scanners`), `symbols`) and `docs/data/weekly/<file_name(ticker)>.json` = `{d, o, h, l, c, v}` (stale files are deleted). If Finviz fails for a scanner or
 returns < 15 rows while it reports more, that scanner's previous rows are reused (`stale`); with prices for < 70 % of tickers nothing is written (exit 1).
 
@@ -85,31 +86,32 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
 - `index.html` + `js/app.js`: toolbar (scanner select, only-conditions checkbox, **Filtry**, search, 🔔 Alerty, Ctrl+K, refresh link to `refresh.yml`,
   rules), one table (`COLUMNS` = the desktop columns), sort by header (asc/desc/default), status bar. **Filters** (user: "dodaj filtry do listy, nie samo
   sortowanie"): `state.filters` = {column: {in: [values]} | {min, max}}, all ANDed (`passFilters`; choices glb_state / macd / ok / sector, numeric from–to
-  in table units, turnover in M$), presets `FILTER_PRESETS` (e.g. "Nad GLB + MACD dodatni", "Przebicie GLB + SMA 10 > 30"; column `trend` = weekly SMA 10 > SMA 30 from `build_row`, user: "nie mam filtra sma 10 > sma 30"); relative volume `rvol_w` = last week / mean of the 10 previous weeks (`calc.rel_volume`, `RVOL_W`) and `rvol_d` = last session / mean of the 50 previous (`RVOL_D`; filled by `watchlist.py` from the daily candles — 1 y for rows above GLB, 3 mo for the other liquid ones, not saved; desktop `sync.run` via `prices.daily`), preset "Aktywne: RVol tyg. ≥ 1,5 + nad GLB", chart volume label "RVol x×" (amber ≥ 1.5), daily volume average SMA 50 (user: "wolumen relatywny … dla tygodnia sma10, dla dnia sma50"); same in the desktop app (`FilterDialog`). Click a row → chart; ↑/↓ step through the visible
+  in table units, turnover in M$), presets `FILTER_PRESETS` (e.g. "Nad GLB + MACD dodatni", "Przebicie GLB + SMA 10 > 30"; column `trend` = weekly SMA 10 > SMA 30 from `build_row`, user: "nie mam filtra sma 10 > sma 30"); relative volume `rvol_w` = last week / mean of the 10 previous weeks (`calc.rel_volume`, `RVOL_W`), preset "Aktywne: RVol tyg. ≥ 1,5 + nad GLB", chart volume label "RVol x×" (amber ≥ 1.5); EVERY number column (`NUMERIC_FORMATS`: p % m r x x2 i — also EPS Rating, RWB tyg., RVol, P/S, PEG, C/C[52 tyg.]) has from–to fields (user: "dodaj w filtrach możliwość podania od do EPS rating"); same in the desktop app (`FilterDialog`). Click a row → chart; ↑/↓ step through the visible
   list; Esc closes. Wide screens (≥ 1000 px): list left, chart right (first row auto-opens); phones: chart full screen.
 - **Ctrl+K**: dialog with a datalist of all tickers (`rows` + `symbols`), recent symbols in localStorage. The site is static, so a symbol
   that is not in the data must be added to `finviz_screen.json` `symbols` (computed on the next refresh).
-- `js/chart.js` (pure, port of `desktop/chart.py`): `chartSvg(data, row, w, h, nShow, end, lines, sel)` → `{svg, geom}`: log price scale, HLC bars, SMA 10 (red) /
-  30 (amber) weeks (user: "zmień sma40 na sma30"), cyan user trend lines (segment + dashed extension to the last week, 🔔 value at the right edge), thick green GLB line with "GREEN LINE x · kupno do x×1.1", red dashed MACD stop, volume + SMA 10, MACD panel with ▼
-  at cross-downs; hover readout from `infoLines`. Range slider above the chart (user: "suwak był fajny, dodaj go z powrotem"): `sliderSvg`
-  minimap, `windowRange` / `sliderRect` / `sliderMode` / `sliderDrag` / `sliderJump` / `zoomWindow` (pure, same as `desktop/chart.py`);
-  SMA / MACD are computed on the full series, then sliced. Window length persists (`state.nShow`), its end resets per stock.
-  Labels must not overlap (user: "dużo napisów nachodzi na siebie"): left labels on a background box (`boxText` / desktop `boxed`); the GLB label goes under
-  the line near the top edge; right-axis labels via `axisSpots` / `axis_spots` (GLB fixed, last close and MACD stop move 16 px away, ticks near them hidden);
-  quarter dates every N quarters by label width; revenue bars leave room for the title.
+- `js/chart.js` (pure, port of `desktop/chart.py`; since Oct 2026 the SIMPLE T / M layout of the desktop — user: "zmień desktopa na takie coś" and then "zmień to co dodaliśmy w webowej"):
+  `chartSvg(data, row, w, h, nShow, end, lines, sel, spx, period, opt)` → `{svg, geom}`, `period` = `"W"` (T) or `"M"`, `opt` = `{rwb, zanger, real, pv, stop, stopLabel}`. Panels: RS Line (12 %, Deepvue:
+  stock / SPY, `rsLine`, MA 52 weeks / 12 months, `rsMarkers` ● green = new RS high with price, ● pink = RS high before price, "+x pp" = `row.rs`), price (52 %: ONE grey colour OHLC bars,
+  blue SMA 10, dotted green GLB line from the record candle with the price on the axis, **buy zone 0–10 % above GLB** = flat band `mix(bg or regime, ZONE, 0.16)` + dashed line at +5 %, "+5 % / +10 %"
+  labels), volume + SMA 10, MACD (4-colour histogram). Green background where SPY of the SAME interval is above its SMA 10 (`spyRegime`) — also in Z. No revenue panel, no SMA 4 / 30, no E markers
+  (earnings only in the tooltip), no MACD / plan lines (the position panel still plans exits). **M**: closed months from `docs/data/monthly` + the month in progress built from the weekly candles
+  (`monthlyWithOpen`, `nClosed`); Green Line = `greenLine` of the closed months (`glbPeak`). **Z** (weekly only): price + volume + patterns, same SPY background, thick GLB line.
+  **RWB** (button / key `r`, T and M): ONLY the indicator — blue strip at the bottom of the price panel, ● Blue Dot and a yellow ▲ under the Low of every candle where RWB starts again
+  (`rwbStarts`, = add to the position; no label on the chart, the tooltip says "RWB START · dokup"; user: "daj samą strzałkę pod low żeby widzieć całą świecę. nie chcę tego napisu"); no GMMA fan.
+  **Future slots** (`⇥ N` button cycles 0 / 6 / 12 / 20 / 30; `extendData` / `futureDates`, `real` = real candle count): empty candles to the right so lines can be drawn into the future (`slotIndex` in `lines.js`
+  extends the grid, lines keep working after new data arrives). **Price scale**: `priceView(lmin, lmax, z, s)`; wheel over the right axis or Shift+wheel = zoom, drag the axis = pan, middle button = free pan
+  (time + price), double click on the axis / `⤢ Cena` = automatic; SMA / bars are clipped to the price panel (`clipPath`), nothing sticks to the edge. **Persisted view** (`state.view[period]` =
+  `{fut, n, z, s}` in localStorage, separately for T and M; T opens on the last 156 weeks, the rest is behind the slider). Range slider above the chart: `sliderSvg` minimap, `windowRange` / `sliderRect` /
+  `sliderMode` / `sliderDrag` / `sliderJump` / `zoomWindow` (pure, same as `desktop/chart.py`); SMA / MACD are computed on the real series, then sliced. Labels must not overlap: left labels on a
+  background box (`boxText`), right-axis labels via `axisSpots`, the legend drops its tail when it does not fit. Ruler: right mouse drag on the price panel (`rulerText`).
 - **Trend lines + alerts** (`js/lines.js`, port of `desktop/lines.py`; user: "rysowanie linii jak przytrzymam … usuwanie, przesuwanie … alerty; webową
-  używam głównie na telefonie"): line = `{id, d1, p1, d2, p2, alert}` (week date + price, straight on the log scale). Mouse: drag on the price panel = new
+  używam głównie na telefonie"): line = `{id, period, d1, p1, d2, p2, alert}` (candle date + price, straight on the log scale; `period` "W" = T and Z, "M"; old lines without it are weekly; lines of the OTHER interval are drawn pale and dashed, read-only, `ro` — user: "linie na Z pokaż na M i T, moje linie nie patterny"). Mouse: drag on the price panel = new
   line; phone: hold a finger ~0.4 s, then move (a quick move = crosshair readout); grab an end = move that point, grab the middle = move the line; tap = select
   (🗑 / 🔔 alert buttons in the chart head, Delete key); magnet to the week's High/Low. `.chart-body` has `touch-action: none`. Alerts (`evalAlerts`, run after
   `watchlist.json` loads): weekly close crossed a line with alert on; 🔔 Obserwuj a ticker = GLB signal, MACD cross-down, close under the MACD stop,
   conditions met. Key includes the week, so nothing fires twice. localStorage `momentum_alerts` {lines, watch, log, seen}; system notification via the
   service worker if allowed. The site is static, so alerts are checked only when the page is opened (data refresh is weekly).
-- **Chart like the desktop** (`desktop/chart.py`): Deepvue-style RS Line panel on top (stock / SPY, `rsLine`, 52-week MA — 252 sessions on D,
-  `rsMarkers`: ● green = new RS high together with price, ● pink = RS high before price; "+x pp" = `row.rs` on the right axis), price with SMA 4 / 10 / 30
-  weeks, "E" earnings markers on candles (`earningsIndices`, `row.earn` = [[date, EPS surprise %, revenue surprise %]] from `watchlist.py`), plan
-  labels (stop −10 %, ½ at −20 % from the peak; `stopLevel`), volume, quarterly revenue bars with y/y %, MACD. Ruler: right mouse drag on the price
-  panel (`rulerText`: % change · bars · from → to). No S&P 500 / C/C52 / EPS panels, no RS Rating (removed with the desktop's Growth Score / CAN SLIM).
-  Period buttons T / D (`#perW` / `#perD`; desktop also has M).
 - **Line drawing UX** (user, Oct 2026: "linie są słabo zaimplementowane … ma być przyjemnie, super łatwo rysować" — Zanger works on trend lines): button **✏ Linia** / key `l` = draw mode: ONE drag (mouse or finger, no long-press) = new line, sticky until Esc / the button; without the mode the old gestures still work (mouse drag, phone long-press);
   a line whose end lands near the level of its other end snaps to horizontal (`snapHorizontal`, `tol × 0.6`, hint "poziomo"); live hint circle + `rulerText` (% · weeks · price) while drawing / moving an end; bigger hit targets (touch 24, mouse 9 px) and handles (r 8); selected line always shows its price on the right edge;
   **↶ / Ctrl+Z** undo per ticker (`lineUndo`, 30 states, pushed when a gesture changed the lines or on delete); NEW lines have `alert: false` and no dashed extension (user: "bez alarmów i przedłużeń, sam chcę dodać alarmy"); the extension to the last week (and 🔔 value) appears only with the alert on (old lines without the flag count as on); a bare click in draw mode leaves no line (zero-length lines are dropped by `saveLines`). The desktop app has the same horizontal snap / hint / undo (`ChartWindow`, `lines.snap_horizontal`) but no ✏ mode — the mouse already draws with one drag.
@@ -118,11 +120,15 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
   **📌 Pozycje** panel (`#posDlg` / desktop `PositionsDialog`; user: "nie mam panelu pozycje i obserwowane"): positions with plan (entry, peak, ½ at, stop −10 %,
   exit level by method) and "Co teraz" (`positionStatus` / `lines.position_status`: STOP −10 %, WYJŚCIE, SPRZEDAJ ½, hamuje; empty = trzymaj), watched tickers
   below; click = chart, ✕ = remove.
-- **T / D** (`#perW` / `#perD`, D only for `row.daily`; user: "Dr Wish używa RWB … blue dot"): daily mode of `chartSvg(…, period="D")` — Guppy GMMA
-  (`gmma`: fast 3–15 red, slow 30–60 blue), lighter background while RWB (`rwb`: lowest fast EMA above highest slow), ● Blue Dot (`blueDots`: Stochastic 10,1
-  crosses 20 up, RWB, close ≥ Green Line) with the stop under its Low; two styles (`D: RWB` / `D: słupki`, `dailyRwb`): close LINE + GMMA/RWB, or OHLC bars + EMA 8/10/20 + SMA 50 (`DAILY_MA`); no MACD / revenue / Stochastic panels (user: "linia ceny nie słupki, wywal przychody i Stoch"); separate window (`dShow`, default 260 sessions);
-  trend lines only on the weekly chart. Preview only: the backtest (RWB + above GLB + Blue Dot, stop under the dot, MACD exit) gave +1.0…+1.2 % per trade,
-  14–15 % hit rate — weaker than the weekly GLB 0–10 % entry. Same functions in `calc.py` (`gmma`, `rwb`, `stoch_k`, `blue_dots`).
+- **Manual stop + 💰 Wielkość** (ports of desktop `PositionSizeDialog` / `lines.position_size`; user: "daj mi możliwość ręcznego przesuwania stopa … bo będę używał chart patternów"): 🛑 Stop (or double click on the
+  price panel, magnet to High / Low) = red dashed line you drag (mouse or finger); one level per ticker for T, M and Z (`state.stops`), label "STOP x · −y % · N akcji (PLN)". 💰 (`#sizeDlg`):
+  capital in PLN, risk %, USD/PLN (NBP, fallback Frankfurter — the browser cannot read Yahoo; editable), entry and stop (defaults from the 📌 position: stop = max(−10 %, MACD since entry), otherwise
+  last price and Green Line / −10 %; a typed stop becomes the manual stop); `positionSize` (shares are FRACTIONAL, rounded down to 4 decimals, `sharesText`; user: "pozycja może mieć akcje ułamkowe").
+- **Gist (desktop → web)** (user: "jak pobiorę dane z desktopa chcę mieć możliwość wysłania do webowej … przez gist; weekly refresh będzie pobierał osobno, na wypadek gdybym nie miał dostępu do PC"):
+  the desktop's ☁ Web (gist) uploads `momentum.json` (manifest: rows, symbols, sectors, `generated_at`, `data_as_of`, `chunks` map ticker → chunk number) + `weekly_NN.json` / `monthly_NN.json`
+  ({ticker: series}, ≈ 0.9 MB each; manifest last) to a SECRET gist (token with the `gist` scope kept in the desktop's `settings.json`). The page's ☁ Gist button stores the gist ID (localStorage
+  `state.gist` = {id, mode: auto / gist / repo}); `loadGist` reads `api.github.com/gists/<id>` and the `raw_url`s (no token), `chooseSource` picks the NEWER `generated_at` in auto mode, `fromGist`
+  serves candles from the chunks and falls back to `docs/data/...` for tickers that are not in the gist. The Weekly Refresh workflow is independent (repo data), so the page works without the PC.
 - Loading bar at the bottom (`#loadbar`, `fetchJson` streams the body: MB, % when the size is known, seconds).
 - `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_settings_v2`.
 

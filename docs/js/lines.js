@@ -20,9 +20,18 @@ function dateIndex(dates, d) {
     return out;
 }
 
+// jak dateIndex, ale data po ostatniej świecy daje indeks w przyszłość (ostatni + liczba okresów) — linie narysowane za ostatnią świecą (puste miejsce po prawej)
+const dayNum = (s) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10)) / 864e5;
+function slotIndex(dates, d) {
+    const k = dateIndex(dates, d);
+    if (k < dates.length - 1 || dates.length < 2 || d <= dates[dates.length - 1]) return k;
+    const span = (dayNum(dates[dates.length - 1]) - dayNum(dates[Math.max(0, dates.length - 13)])) / Math.min(12, dates.length - 1);
+    return k + Math.max(1, Math.round((dayNum(d) - dayNum(dates[dates.length - 1])) / span));
+}
+
 // wartość linii w tygodniu j (interpolacja na log ceny); null, gdy punkty nie leżą w historii albo w tym samym tygodniu
 function lineAt(line, dates, j) {
-    const a = dateIndex(dates, line.d1), b = dateIndex(dates, line.d2);
+    const a = slotIndex(dates, line.d1), b = slotIndex(dates, line.d2);
     if (a < 0 || b < 0 || a === b) return null;
     const la = Math.log(line.p1), lb = Math.log(line.p2);
     return Math.exp(la + (lb - la) * (j - a) / (b - a));
@@ -138,6 +147,20 @@ function positionStatus(pl, row, exit) {
     return out;
 }
 
+// wielkość pozycji w USD z kapitału w PLN (jak lines.position_size): ryzyko = riskPct % kapitału, akcje (ułamkowe, w dół do 4 miejsc) = ryzyko / (wejście − stop),
+// nie więcej niż za cały kapitał; null przy złych danych albo stopie nie pod ceną wejścia
+const floor4 = (x) => Math.floor(x * 1e4 + 1e-9) / 1e4;
+function positionSize(capitalPln, usdpln, entry, stop, riskPct) {
+    [capitalPln, usdpln, entry, stop, riskPct] = [capitalPln, usdpln, entry, stop, riskPct].map(Number);
+    if (![capitalPln, usdpln, entry, stop, riskPct].every(Number.isFinite) || Math.min(capitalPln, usdpln, entry) <= 0 || riskPct < 0 || !(stop > 0 && stop < entry)) return null;
+    const capitalUsd = capitalPln / usdpln, riskUsd = capitalUsd * riskPct / 100, perShare = entry - stop;
+    const byRisk = floor4(riskUsd / perShare), byCapital = floor4(capitalUsd / entry), shares = Math.min(byRisk, byCapital);
+    const valueUsd = shares * entry, lossUsd = shares * perShare, fullLoss = byCapital * perShare;
+    return { capitalUsd, riskUsd, riskPln: riskUsd * usdpln, perShare, shares, limitedBy: byCapital < byRisk ? "kapitał" : "ryzyko", valueUsd, valuePln: valueUsd * usdpln,
+        valuePct: valueUsd / capitalUsd * 100, lossUsd, lossPln: lossUsd * usdpln, lossPct: lossUsd / capitalUsd * 100,
+        fullShares: byCapital, fullLossUsd: fullLoss, fullLossPln: fullLoss * usdpln, fullLossPct: fullLoss / capitalUsd * 100 };
+}
+
 const snapshot = (r) => ({ glb_state: r.glb_state, macd: r.macd, macd_stop: r.macd_stop, price: r.price, ok: !!r.ok, slow: r.slow || null });
 
 // st = {lines: {ticker: [linia]}, watch: {ticker: stan}, log: [...]}; rowFor(t) -> wiersz, seriesFor(t) -> świece (albo null), asOf = ostatni tydzień danych
@@ -154,7 +177,7 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
         if (!data || !data.c || data.c.length < 2) continue;
         const week = data.d[data.d.length - 1];
         for (const ln of lines) {
-            if (ln.alert === false) continue;
+            if (ln.alert === false || (ln.period && ln.period !== "W" && ln.period !== "M")) continue;   // stare linie dzienne są pomijane; M i T liczone względem zamknięcia tygodnia
             const x = lineCross(ln, data);
             if (x) {
                 const v = lineAt(ln, data.d, data.c.length - 1);
@@ -179,4 +202,4 @@ function evalAlerts(st, rowFor, seriesFor, now, asOf) {
     return fresh;
 }
 
-if (typeof module !== "undefined") module.exports = { dateIndex, lineAt, lineCross, segDist, hitLine, snapPrice, snapHorizontal, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, macdStopSince, HALF_DROP, STOP_PCT, MAX_POSITIONS };
+if (typeof module !== "undefined") module.exports = { dateIndex, slotIndex, positionSize, lineAt, lineCross, segDist, hitLine, snapPrice, snapHorizontal, stateAlerts, snapshot, evalAlerts, positionPlan, positionStatus, macdStopSince, HALF_DROP, STOP_PCT, MAX_POSITIONS };

@@ -118,31 +118,38 @@ def last_closed_month(today=None):
 
 
 def _months(f, upto):
-    s = f["High"].dropna()
-    return [[d.strftime("%Y-%m"), round(float(v), 4)] for d, v in s.items() if d.strftime("%Y-%m") <= upto]
+    """Zamknięte miesiące (YYYY-MM <= upto) -> [[YYYY-MM, open, high, low, close, volume]] (ceny bez korekty o dywidendy)."""
+    f = f.dropna(subset=["Close"])
+    out = []
+    for d, o, h, lo, c, v in zip(f.index, f["Open"], f["High"], f["Low"], f["Close"], f["Volume"]):
+        ym = d.strftime("%Y-%m")
+        if ym <= upto:
+            out.append([ym] + [_clean(x) for x in (o, h, lo, c)] + [_clean(v) or 0])
+    return out
 
 
 def merge_monthly(old, new):
     """Dokleja nowe zamknięte miesiące. -> lista albo None, gdy High na wspólnym miesiącu się różni (ceny zmienione wstecz)."""
-    known = dict(old)
-    for ym, v in new:
-        if ym in known and not _same(known[ym], v):
+    known = {r[0]: r for r in old}
+    for r in new:
+        if r[0] in known and not _same(known[r[0]][2], r[2]):
             return None
     last = old[-1][0] if old else ""
-    return old + [x for x in new if x[0] > last]
+    return old + [r for r in new if r[0] > last]
 
 
 def monthly(tickers, cache, log=print, today=None, progress=None):
-    """Uzupełnia `cache` {ticker: {"h": [[YYYY-MM, high]...], "upto": YYYY-MM}} o miesięczne High z całej historii (tylko ZAMKNIĘTE miesiące).
-    Spółka z zapisem sprzed ostatniego zamkniętego miesiąca dostaje tylko ostatnie miesiące; całą historię — nowa spółka albo zmienione ceny.
-    Stare wpisy z zamknięciami ("m") albo bez "raw" (ceny skorygowane o dywidendy) traktujemy jak brak. -> lista pobranych tickerów."""
+    """Uzupełnia `cache` {ticker: {"r": [[YYYY-MM, o, h, l, c, v]...], "upto": YYYY-MM, "raw": 1}} o miesięczne świece z całej historii (tylko ZAMKNIĘTE miesiące):
+    High liczy Green Line, całość rysuje wykres M. Spółka z zapisem sprzed ostatniego zamkniętego miesiąca dostaje tylko ostatnie miesiące; całą historię —
+    nowa spółka albo zmienione ceny. Wpisy w starym formacie (same High, zamknięcia "m", bez "raw") traktujemy jak brak. -> lista pobranych tickerów."""
     need = last_closed_month(today)
+
     def fresh(t):
         e = cache.get(t) or {}
-        return "h" in e and e.get("raw")
+        return bool(e.get("r")) and e.get("raw")
 
     todo = [t for t in tickers if not fresh(t) or cache[t].get("upto") != need]
-    update = [t for t in todo if fresh(t) and cache[t].get("h")]
+    update = [t for t in todo if fresh(t)]
     full = [t for t in todo if t not in update]
     total, done = len(todo), 0
 
@@ -154,13 +161,13 @@ def monthly(tickers, cache, log=print, today=None, progress=None):
             rows = _months(f, need)
             if per == "max":
                 if rows:
-                    cache[t] = {"h": rows, "upto": need, "raw": 1}
+                    cache[t] = {"r": rows, "upto": need, "raw": 1}
                 continue
-            m = merge_monthly(cache[t]["h"], rows)
+            m = merge_monthly(cache[t]["r"], rows)
             if m is None:
                 redo.append(t)
             else:
-                cache[t] = {"h": m, "upto": need, "raw": 1}
+                cache[t] = {"r": m, "upto": need, "raw": 1}
         done += len(part)
         if progress:
             progress(min(done, total), total)
@@ -177,75 +184,18 @@ def monthly(tickers, cache, log=print, today=None, progress=None):
 
 
 def monthly_highs(entry):
-    """High zamkniętych miesięcy; wpis bez "raw" (stare ceny skorygowane o dywidendy, np. spółka, która od tamtej pory nie przeszła progu obrotu
-    i nie była odświeżana) traktujemy jak brak — inaczej w tabeli zostawałaby za niska Green Line."""
+    """High zamkniętych miesięcy (do Green Line); wpis bez "raw" (stare ceny skorygowane o dywidendy) albo w starym formacie traktujemy jak brak —
+    inaczej w tabeli zostawałaby za niska Green Line."""
     e = entry or {}
-    return [h for _, h in e.get("h", [])] if e.get("raw") else []
+    if not e.get("raw"):
+        return []
+    return [r[2] for r in e["r"]] if e.get("r") else [h for _, h in e.get("h", [])]   # stary format (same High) działa do pierwszego pełnego odświeżenia
 
 
-def merge_daily(old, new, keep=520):
-    """Dokleja dzienne świece do cache. Zwraca None, jeśli ceny na wspólnej dacie wskazują na korektę historii."""
-    if not new.get("d"):
-        return old
-    old_dates = old.get("d") or []
-    new_dates = new["d"]
-    overlap = set(old_dates).intersection(new_dates)
-    if overlap:
-        od, nd = old_dates.index(max(overlap)), new_dates.index(max(overlap))
-        if not _same(old["c"][od], new["c"][nd]):
-            return None
-    first = new_dates[0]
-    cut = next((i for i, day in enumerate(old_dates) if day >= first), len(old_dates))
-    return {"raw": 1, **{k: (old[k][:cut] + new[k])[-keep:] for k in ("d", "o", "h", "l", "c", "v")}}
-
-
-def daily(tickers, log=print, period="2y", cache=None, today=None):
-    """Świece dzienne z cache: nowe tickery dostają 2 lata, istniejące tylko ostatni miesiąc/półrocze."""
-    cache, today = cache or {}, today or dt.date.today()
-    out = {}
-    updates, full = {}, []
-    for ticker in tickers:
-        old = cache.get(ticker)
-        if old and old.get("raw") and old.get("d"):
-            gap = (today - dt.date.fromisoformat(old["d"][-1])).days
-            per = "1mo" if gap <= 21 else "6mo" if gap <= 150 else None
-            (updates.setdefault(per, []) if per else full).append(ticker)
-            out[ticker] = old
-        else:
-            full.append(ticker)
-    total = len(tickers)
-    done = 0
-
-    def fetch(part, per):
-        nonlocal done
-        got = {}
-        for i in range(0, len(part), BATCH):
-            batch = part[i:i + BATCH]
-            df = _yf().download(batch, period=per, interval="1d", auto_adjust=AUTO_ADJUST,
-                                group_by="ticker", progress=False, threads=True)
-            frames = _frames(df, batch)
-            for ticker, frame in frames.items():
-                if frame is None or frame.empty:
-                    continue
-                fresh = _series(frame)
-                if len(fresh["d"]) < 30:
-                    continue
-                old = cache.get(ticker) if per != period else None
-                merged = merge_daily(old, fresh) if old else fresh
-                if merged is None:
-                    full.append(ticker)
-                    continue
-                got[ticker] = merged
-            done += len(batch)
-            log(f"yfinance dzienne ({'2 lata' if per == period else 'aktualizacja'}): {min(done, total)}/{total}")
-        return got
-
-    # Existing symbols: small updates first; changed history is queued for a full refresh.
-    for per, part in updates.items():
-        if per is None:
-            continue
-        out.update(fetch(part, per))
-    # Avoid duplicate full-downloads for tickers queued after an overlap mismatch.
-    full = list(dict.fromkeys(full))
-    out.update(fetch(full, period))
-    return out
+def monthly_series(entry):
+    """Zamknięte miesiące wpisu cache -> {d: [YYYY-MM-01], o, h, l, c, v} (plik docs/data/monthly/<ticker>.json) albo None."""
+    e = entry or {}
+    rows = e.get("r") if e.get("raw") else None
+    if not rows or len(rows) < 2:
+        return None
+    return {"d": [r[0] + "-01" for r in rows], **{k: [r[i] for r in rows] for k, i in (("o", 1), ("h", 2), ("l", 3), ("c", 4), ("v", 5))}}

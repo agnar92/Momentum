@@ -29,19 +29,22 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
 - **Alerty** (🔔 Alerty na pasku): zamknięcie tygodnia przecięło linię trendu (🔔 alert linii) oraz dla obserwowanych spółek (🔕 Obserwuj na wykresie):
   sygnał GLB, przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Sprawdzane przy otwarciu strony po nowych danych; linie i alerty
   zapisują się w przeglądarce (każde urządzenie ma swoje). Opcjonalnie powiadomienie systemowe.
-- **T / D** (przyciski na wykresie; D dla spółek nad Green Line): rok świec dziennych z RWB Guppy (6 szybkich EMA czerwonych / 6 wolnych niebieskich, jaśniejsze
-  tło = RWB), ● Blue Dot (Stochastic 10,1 ↑ 20 przy RWB nad Green Line) ze stopem pod Low kropki i Green Line; cena jako linia zamknięć, bez MACD,
-  przychodów i Stochastic. Tylko do podglądu — w teście RWB + Blue Dot dawało +1 % na transakcję.
+- **T / M / Z** (przyciski na wykresie, klawisze W / M / Z): prosty wykres jak w desktopie — szare słupki, niebieska SMA 10, RS Line u góry, zielone tło, gdy SPY jest nad SMA 10 tego samego interwału,
+  Green Line kropkowana od świecy rekordu ze strefą kupna 0–10 % (przerywana na +5 %), wolumen i MACD. **M** = pełna historia miesięczna (`docs/data/monthly`), bieżący miesiąc dobudowany z tygodniowych.
+  **RWB** (przycisk / R, T i M): pasek RWB u dołu ceny, ● Blue Dot i żółta strzałka ▲ pod Low świecy, na której RWB wraca po cofnięciu (= dokup); kolumna **RWB tyg.** sortuje najświeższe starty na górę.
+  **⇥ N** = puste świece po prawej (linie w przyszłość); skala ceny: kółko nad osią albo Shift+kółko, przeciągnięcie osi, środkowy przycisk, dwuklik na osi = auto; widok zapamiętany (osobno T i M).
+  **🛑 Stop** = ręczna linia do przeciągania (dwuklik na wykresie = stop tu), **💰 Wielkość** = kapitał w PLN, kurs USD/PLN (NBP), ryzyko % → liczba akcji (ułamkowych). Linie T / Z i M widać wzajemnie (blade).
+- **☁ Gist**: dane wysłane z desktopa (☁ Web (gist)) do tajnego gista; strona bierze nowsze: gist albo repo (Weekly Refresh działa osobno, więc strona ma dane także bez dostępu do PC). ID gista wpisujesz raz w przeglądarce.
 - **Warunki** (tylko te o największym wpływie w backteście; bez progu obrotu — płynność ustawiasz filtrem w Finviz): przychody kw. ≥ +15 % r/r, marża oper. ≥ +3 pp r/r, P/S < 20 i siła
   względna (kolumna RS): zmiana ceny z 52 tyg. ≥ 50 pp lepsza od S&P 500. Backtest 2015–2026: +15,6 % na transakcję, portfel wszystkich sygnałów 36,6 % rocznie
   (S&P 500 13,6 %), ale mało sygnałów naraz i spadek portfela do −55 %. **Hamuje ⚠**: tempo przychodów spadło o ≥ 10 pp (⚠⚠ z marżą brutto w dół). Liczby w 📖 Poradniku.
 - **Linia siły relatywnej (RS) jak w IBD** na wykresie tygodniowym: cena / S&P 500 na dole panelu ceny, na końcu linii liczba „+x pp” (RS 52 tyg.), ● gdy RS jest na szczycie 52 tyg.
 - **Wejście:** WYBICIE = tydzień przebicia Green Line przy dowolnej wysokości (mocne wybicie), SYGNAŁ = 0–10 % nad linią, **BLUE DOT** = kolejny tydzień
-  > 10 % nad linią i Blue Dot na dziennym w ostatnich 5 sesjach (wejście; bez kropki stan NAD = czekaj).
+  > 10 % nad linią i Blue Dot na tygodniowym w ostatnich 2 tygodniach (wejście; bez kropki stan NAD = czekaj).
 - **Niespodzianki EPS** (warunek „2× nad konsensus”: 2 ostatnie raporty powyżej konsensusu EPS; kolumny Niesp. EPS % i Rewizja EPS 90 dni %, z yfinance,
   co 7 dni). W backteście warunek podniósł wynik z 36,6 do 42,4 % rocznie. Rewizja prognozy na przyszły rok (dziś vs 90 dni temu) to podgląd — bez historii do testu.
-- **Wolumen relatywny** (kolumny RVol tyg. / RVol dz. i opis panelu wolumenu): wolumen ostatniego tygodnia / średnia 10 poprzednich tygodni oraz
-  ostatniej sesji / średnia 50 sesji — 2,0 = dwa razy więcej niż zwykle; gotowy filtr „Aktywne: RVol tyg. ≥ 1,5 + nad GLB”.
+- **Wolumen relatywny** (kolumna RVol tyg. i opis panelu wolumenu): wolumen ostatniego tygodnia / średnia 10 poprzednich tygodni — 2,0 = dwa razy więcej niż zwykle;
+  gotowy filtr „Aktywne: RVol tyg. ≥ 1,5 + nad GLB”. W filtrach listy każda kolumna liczbowa (też EPS Rating, RWB tyg., RVol, P/S, PEG) ma pola „od – do”.
 - **📌 Pozycje** (pasek narzędzi): pozycje z planem wyjścia i kolumną „Co teraz” (trzymaj / stop −10 % / wyjście / sprzedaj ½ / hamuje) oraz obserwowane spółki;
   klik = wykres, usuwanie pozycji i obserwowanych.
 - **🚪 Wyjście** (przycisk na wykresie, zapamiętany): **MACD** (stop pod Low tygodnia przecięcia w dół) albo **pod GLB** (zamknięcie tygodnia pod Green Line,

@@ -20,6 +20,7 @@
     <input type="search" id="search" placeholder="Szukaj: ticker / spółka">
     <button type="button" id="posListBtn" title="Pozycje (plan wyjścia, co zrobić teraz) i obserwowane spółki">📌 Pozycje</button>
     <button type="button" id="alertBtn" title="Alerty: linie trendu i obserwowane spółki (sprawdzane po wczytaniu nowych danych)">🔔 Alerty</button>
+    <button type="button" id="gistBtn" title="Źródło danych: repo (Weekly Refresh) albo gist wysłany z desktopa (☁ Web) — wejdź na stronę z telefonu bez PC; w trybie auto wygrywa nowsze">☁ Gist</button>
     <button type="button" id="symBtn" title="Dowolny symbol z danych (np. SPY)">Ctrl+K — symbol</button>
     <a id="refreshLink" class="btn" target="_blank" rel="noopener"
        title="W GitHub Actions → Run workflow odświeża dane: RS sektorów (ETF / SPY nad SMA 52 tyg.), 3 najsilniejsze sektory = 3 zapytania Finviz (sektor + cena > 15 $ + przychody kw. > 15 %), potem ceny, SEC i EPS.">⟳ Odśwież dane</a>
@@ -32,8 +33,12 @@
         <p><b>Wzorce Zangera (przycisk Z na wykresie):</b> Cup &amp; Handle, Flat Base, Ascending Triangle, Flaga/Proporzec — podpowiedź punktu kupna na tygodniowych świecach (progi poza Cup &amp; Handle to przybliżenie opisów ze strony chartpattern.com, niesprawdzone jako strategia). <i>Parabolic Curve</i> = ostrzeżenie przy wyjściu (zamknięcie tygodnia pod SMA 10).</p>
         <p><b>Wyjście (zamknięcie tygodnia):</b> −10 % od ceny kupna albo pod Low tygodnia, w którym MACD (12, 26, 9) przeciął sygnał w dół <i>po wejściu</i>. Bez trailing stopów, stopu czasowego i dokładek; zwycięzców trzymaj do wyjścia. ½ przy −20 % od szczytu — opcjonalnie (wynik bez zmian).</p>
         <p><b>Portfel:</b> 8–10 pozycji po równo; najpierw wyjścia, potem wejścia. Gdy sygnałów jest więcej niż miejsc — najbliżej Green Line (domyślna kolejność listy); nie sprzedawaj pozycji dla nowego sygnału. Wolne miejsca = gotówka w SPY. Nie pomijaj sygnałów: wynik robi kilka dużych ruchów.</p>
-        <p><b>Wykres:</b> nad ceną RS Line jak w Deepvue (akcja / SPY, średnia 52 tyg., ● zielony = nowy szczyt RS i ceny, ● różowy = RS przed ceną); E = raport kwartalny;
-            słupki przychodów pod wolumenem — zielony ≥ +25 % r/r, żółty ≥ +15 %. Prawy przycisk myszy na cenie = miarka (% i liczba tygodni). <b>C/C[52 tyg.]</b> = zamknięcie / zamknięcie sprzed 252 sesji.</p>
+        <p><b>Wykres (T = tygodniowy, M = miesięczny, Z = widok Zangera):</b> nad ceną RS Line jak w Deepvue (akcja / SPY, średnia 52 tyg. / 12 mies., ● zielony = nowy szczyt RS i ceny, ● różowy = RS przed ceną);
+            szare słupki, niebieska SMA 10, Green Line (kropkowana od świecy rekordu) ze strefą kupna 0–10 % nad linią i przerywaną na +5 %; zielone tło = SPY nad SMA 10 tego samego interwału.
+            <b>RWB</b> (przycisk / klawisz R): pasek u dołu ceny, ● Blue Dot i żółta strzałka pod świecą, na której RWB wraca po cofnięciu (= dokup); kolumna <i>RWB tyg.</i> = ile tygodni trwa bieżące RWB.
+            <b>⇥</b> = puste świece po prawej (linie w przyszłość), skala ceny: kółko nad osią / Shift, przeciągnięcie osi, środkowy przycisk; widok jest zapamiętany. <b>🛑 Stop</b> = ręczna linia do przeciągania,
+            <b>💰 Wielkość</b> = kapitał w PLN → akcje (ułamkowe) przy ryzyku w % kapitału. Prawy przycisk myszy na cenie = miarka (% i liczba świec). <b>C/C[52 tyg.]</b> = zamknięcie / zamknięcie sprzed 52 tygodni.
+            <b>☁ Gist</b> = dane wysłane z desktopa (tajny gist) — strona bierze nowsze: gist albo repo (Weekly Refresh działa osobno).</p>
         <p>Historycznie ≈ 9–16 % rocznie przy obsunięciach ≈ −40 % (dane bez spółek zdelistowanych, więc wynik zawyżony). Heurystyka z backtestu, nie porada inwestycyjna.</p>
     </details>
 </header>
@@ -42,11 +47,11 @@
         <div class="tablewrap"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table></div>
     </section>
     <section class="chart" id="chartPane">
-        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="fundBtn" title="Ostatni raport, lista kontrolna strategii i plan wyjścia pozycji">📊 Fundamenty</button><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="perW" class="per" title="Wykres tygodniowy">T</button><button type="button" id="drawBtn" class="per" title="Tryb rysowania linii trendu (klawisz L): jedno przeciągnięcie myszą lub palcem = nowa linia, bez przytrzymywania. Linia sama staje się pozioma blisko poziomu. Esc wyłącza.">✏ Linia</button><button type="button" id="undoBtn" class="per" hidden title="Cofnij ostatnią zmianę linii (Ctrl+Z)">↶</button><button type="button" id="zangerBtn" class="per" title="Widok Zangera (klawisz Z): cena w skali log. i wolumen, bez RS / MACD / przychodów, z konturem wzorca (Cup &amp; Handle, Flat Base, Ascending Triangle, Flaga/Proporzec) i poziomem kupna; Parabolic Curve = ostrzeżenie przy wyjściu">Z</button><button type="button" id="perD" class="per" hidden title="Wykres dzienny OHLC">D</button><button type="button" id="dayRwbBtn" class="per" hidden title="Styl wykresu dziennego: linia + RWB / GMMA + Blue Dot albo słupki + EMA 8/10/20, SMA 50 (klawisz R)">RWB</button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół po wejściu) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 %; ½ przy −20 % od szczytu opcjonalnie">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
+        <div class="chart-head"><span id="chartTitle"></span><button type="button" id="fundBtn" title="Ostatni raport, lista kontrolna strategii i plan wyjścia pozycji">📊 Fundamenty</button><button type="button" id="lineAlertBtn" hidden title="Alert, gdy zamknięcie tygodnia przetnie zaznaczoną linię">🔔 alert linii</button><button type="button" id="lineDelBtn" hidden title="Usuń zaznaczoną linię (Delete)">🗑 linia</button><button type="button" id="perW" class="per" title="Wykres tygodniowy (klawisz W)">T</button><button type="button" id="perM" class="per" title="Wykres miesięczny (klawisz M): pełna historia, Green Line z miesięcznych High; bieżący miesiąc z tygodniowych świec">M</button><button type="button" id="drawBtn" class="per" title="Tryb rysowania linii trendu (klawisz L): jedno przeciągnięcie myszą lub palcem = nowa linia, bez przytrzymywania. Linia sama staje się pozioma blisko poziomu. Esc wyłącza.">✏ Linia</button><button type="button" id="undoBtn" class="per" hidden title="Cofnij ostatnią zmianę linii (Ctrl+Z)">↶</button><button type="button" id="zangerBtn" class="per" title="Widok Zangera (klawisz Z): cena w skali log. i wolumen, bez RS / MACD / przychodów, z konturem wzorca (Cup &amp; Handle, Flat Base, Ascending Triangle, Flaga/Proporzec) i poziomem kupna; Parabolic Curve = ostrzeżenie przy wyjściu">Z</button><button type="button" id="rwbBtn" class="per" title="RWB (klawisz R): pasek RWB u dołu ceny, ● Blue Dot i żółta strzałka ▲ pod Low świecy, na której RWB wraca po cofnięciu (= dokup)">RWB</button><button type="button" id="futBtn" class="per" title="Puste świece po prawej (0 / 6 / 12 / 20 / 30) — miejsce na linie w przyszłość">⇥ 12</button><button type="button" id="priceBtn" class="per" title="Skala ceny: kółko nad osią (po prawej) albo z Shift = powiększ, przeciągnij oś = przesuń, środkowy przycisk = swobodne przesuwanie; ten przycisk (albo dwuklik na osi) = skala automatyczna">⤢ Cena</button><button type="button" id="stopBtn" class="per" title="Ręczny stop: czerwona linia do przeciągnięcia (dwuklik na wykresie = stop w tym miejscu, przyciąga do High / Low); ten sam poziom na T, M i Z">🛑 Stop</button><button type="button" id="sizeBtn" class="per" title="Wielkość pozycji: kapitał w PLN, kurs USD/PLN, ryzyko w % kapitału, akcje ułamkowe">💰 Wielkość</button><button type="button" id="exitBtn" title="Metoda wyjścia: MACD (stop pod Low tygodnia przecięcia w dół po wejściu) albo pod GLB (zamknięcie tygodnia pod Green Line); zawsze stop −10 %; ½ przy −20 % od szczytu opcjonalnie">🚪 Wyjście: MACD</button><button type="button" id="posBtn" title="Zaznacz, że masz pozycję: alerty MACD / stop / hamowanie i ostrzeżenie na liście">📌 Pozycja</button><button type="button" id="watchBtn" title="Alert przy sygnale GLB, przecięciu MACD w dół, zamknięciu pod stopem i spełnieniu warunków">🔕 Obserwuj</button><a id="tvLink" target="_blank" rel="noopener">TradingView ↗</a><button type="button" id="closeChart" title="Zamknij (Esc)">✕</button></div>
         <div class="slider" id="slider" title="Przeciągnij ramkę = przesuń okno · krawędzie = długość · klik obok = skok · kółko = zoom"></div>
         <div class="chart-body" id="chartBody"></div>
         <div class="tip" id="tip" hidden></div>
-        <p class="hint">linie trendu: ✏ Linia (L) i jedno przeciągnięcie = nowa linia (myszą też bez włączania; telefon bez ✏: przytrzymaj palec i prowadź) · blisko poziomu linia sama się prostuje · ↶ / Ctrl+Z cofa · chwyć koniec / środek = zmień / przesuń · klik = zaznacz, Delete = usuń · suwak: przeciągnij ramkę / krawędzie · kółko lub + − = zoom · ← / → · ↑ / ↓ spółka</p>
+        <p class="hint">linie trendu: ✏ Linia (L) i jedno przeciągnięcie = nowa linia (myszą też bez włączania; telefon bez ✏: przytrzymaj palec i prowadź), także w pustym miejscu po prawej · linie T / Z i M widać wzajemnie (blade = tylko do odczytu) · blisko poziomu linia sama się prostuje · ↶ / Ctrl+Z cofa · chwyć koniec / środek = zmień / przesuń · klik = zaznacz, Delete = usuń · stop: dwuklik albo 🛑, przeciągnij czerwoną linię · skala ceny: kółko nad osią / Shift+kółko, przeciągnij oś, środkowy przycisk · suwak: przeciągnij ramkę / krawędzie · kółko lub + − = zoom · ← / → · ↑ / ↓ spółka</p>
     </section>
 </main>
 <div class="loadbar" id="loadbar" hidden><div class="loadtrack"><div class="loadfill" id="loadfill"></div></div><span id="loadtext"></span></div>
@@ -71,6 +76,29 @@
     <ul id="alertList" class="alerts"></ul>
     <p id="alertInfo" class="recent"></p>
     <div class="dlg-btns"><button type="button" id="notifyBtn" hidden>Włącz powiadomienia</button><button type="button" id="alertClear">Wyczyść</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
+</dialog>
+<dialog id="gistDlg">
+    <h3>☁ Źródło danych <small>repo / gist z desktopa</small></h3>
+    <label>ID gista (z desktopa: ☁ Web (gist))<input id="gistId" autocomplete="off" spellcheck="false" placeholder="np. 3f2a…"></label>
+    <label>Które dane pokazywać
+        <select id="gistMode"><option value="auto">nowsze (gist albo repo)</option><option value="gist">zawsze gist</option><option value="repo">zawsze repo (Weekly Refresh)</option></select>
+    </label>
+    <p id="gistInfo" class="dimtxt"></p>
+    <p class="dimtxt">Gist jest tajny: czyta go przeglądarka po samym ID (bez tokenu). Weekly Refresh na GitHubie działa osobno, więc strona ma dane także wtedy, gdy nie masz dostępu do PC.</p>
+    <div class="dlg-btns"><button type="button" id="gistSave">Zapisz i wczytaj ponownie</button><button type="button" onclick="this.closest('dialog').close()">Anuluj</button></div>
+</dialog>
+<dialog id="sizeDlg" class="sizedlg">
+    <h3 id="sizeTitle">Wielkość pozycji</h3>
+    <div class="szgrid">
+        <label>Kapitał (PLN)<input id="szCapital" inputmode="decimal"></label>
+        <label>Ryzyko (% kapitału)<input id="szRisk" inputmode="decimal"></label>
+        <label>Kurs USD/PLN<input id="szFx" inputmode="decimal"></label>
+        <label>Wejście (USD)<input id="szEntry" inputmode="decimal"></label>
+        <label>Stop (USD)<input id="szStop" inputmode="decimal"></label>
+    </div>
+    <p id="szNote" class="dimtxt"></p>
+    <pre id="szOut" class="szout"></pre>
+    <div class="dlg-btns"><button type="button" id="szFxBtn">⟳ Kurs USD/PLN</button><button type="button" id="szDefaults">↺ Wejście i stop z wykresu</button><button type="button" onclick="this.closest('dialog').close()">Zamknij</button></div>
 </dialog>
 <dialog id="posDlg" class="wide poslist">
     <h3>📌 Pozycje i obserwowane <small id="posMethod"></small></h3>
