@@ -29,7 +29,7 @@ Heurystyka z backtestu (spółki z dzisiejszej listy, bez spółek wycofanych z 
 - **Alerty** (🔔 Alerty na pasku): zamknięcie tygodnia przecięło linię trendu (🔔 alert linii) oraz dla obserwowanych spółek (🔕 Obserwuj na wykresie):
   sygnał GLB, przecięcie MACD w dół, zamknięcie pod stopem MACD, spełnione warunki. Sprawdzane przy otwarciu strony po nowych danych; linie i alerty
   zapisują się w przeglądarce (każde urządzenie ma swoje). Opcjonalnie powiadomienie systemowe.
-- **T / M / Z** (przyciski na wykresie, klawisze W / M / Z): prosty wykres jak w desktopie — szare słupki, niebieska SMA 10, RS Line u góry, zielone tło, gdy SPY jest nad SMA 10 tego samego interwału,
+- **T / M / Z** (przyciski na wykresie, klawisze W / M / Z): prosty wykres jak w desktopie — szare słupki, niebieska SMA 10, RS Line u góry, zielone tło, gdy SPY na wykresie miesięcznym jest nad SMA 10 mies. (zawsze miesięczny, także na T i Z),
   Green Line kropkowana od świecy rekordu ze strefą kupna 0–10 % (przerywana na +5 %), wolumen i MACD. **M** = pełna historia miesięczna (`docs/data/monthly`), bieżący miesiąc dobudowany z tygodniowych.
   **RWB** (przycisk / R, T i M): pasek RWB u dołu ceny, ● Blue Dot i żółta strzałka ▲ pod Low świecy, na której RWB wraca po cofnięciu (= dokup); kolumna **RWB tyg.** sortuje najświeższe starty na górę.
   **⇥ N** = puste świece po prawej (linie w przyszłość); skala ceny: kółko nad osią albo Shift+kółko, przeciągnięcie osi, środkowy przycisk, dwuklik na osi = auto; widok zapamiętany (osobno T i M).

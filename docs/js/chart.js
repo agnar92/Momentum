@@ -184,6 +184,19 @@ function spyRegime(dates, spx, period = "W", n = 10) {
     });
 }
 
+// tło wykresu: SPY na MIESIĘCZNYM nad SMA 10 mies. — zawsze miesięczny interwał, także na T i Z (tydzień dostaje stan miesiąca swojego piątku = to, co pokazuje M); jak chart.monthly_regime
+function monthlyRegime(dates, spyM, period = "W", n = 10) {
+    if (period === "M") return spyRegime(dates, spyM, "M", n);
+    if (!spyM || !spyM.d || !spyM.c || !spyM.d.length) return dates.map(() => null);
+    const by = new Map(), st = spyRegime(spyM.d, spyM, "M", n);
+    spyM.d.forEach((d, i) => by.set(d.slice(0, 7), st[i]));
+    return dates.map((d) => {
+        if (!d) return null;
+        const v = by.get(new Date(Date.parse(d.slice(0, 10)) + 4 * 864e5).toISOString().slice(0, 7));
+        return v === undefined ? null : v;
+    });
+}
+
 // poziom Green Line i indeks świecy rekordu: M = z zamkniętych miesięcy wykresu (data.nClosed), T = poziom wiersza i świeca z takim High; jak chart.glb_peak
 function glbPeak(data, row, period) {
     const hs = data.h, real = data.real == null ? hs.length : data.real;
@@ -322,7 +335,7 @@ const patternLevels = (row) => (((row && row.patterns) || []).map((p) => p.buy))
 
 // -> {svg, geom} albo null; full = seria (d, o, h, l, c, v; po `opt.real` świec puste miejsce w przyszłości — extendData), row = wiersz listy (glb, rs, patterns),
 // okno = nShow świec do `end`; lines = linie trendu [{id, d1, p1, d2, p2, alert, ro}] (ro = linia z drugiego interwału, tylko do odczytu), sel = id zaznaczonej;
-// spx = {d, c} SPY tego samego interwału (RS i tło); period = "W" albo "M"; opt = {rwb, zanger (tylko W), real, pv: [z, s] skala ceny, stop, stopLabel}
+// spx = {d, c} SPY tego samego interwału (RS Line), opt.spyM = SPY miesięczny (tło „SPY nad SMA 10 mies.” na T, M i Z); period = "W" albo "M"; opt = {rwb, zanger (tylko W), real, pv: [z, s] skala ceny, stop, stopLabel}
 function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", opt = {}) {
     const M = period === "M", zanger = !!opt.zanger && !M, u = M ? "mies." : "tyg.";
     const total = full.c.length;
@@ -370,7 +383,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", op
     parts.push(`<defs><clipPath id="pclip"><rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}"/></clipPath></defs>`);
 
     // tło: zielone, gdy SPY nad SMA 10 tego samego interwału (pod ceną i wolumenem)
-    const regime = spyRegime(dates, spx, zanger ? "W" : period);
+    const regime = monthlyRegime(dates, opt.spyM !== undefined ? opt.spyM : (M ? spx : null), zanger ? "W" : period);
     const bgBottom = zanger ? v1 : v1;
     let a = null;
     regime.map(Boolean).concat([false]).forEach((on, i) => {
@@ -544,7 +557,7 @@ function chartSvg(full, row, w, h, nShow, end, lines, sel, spx, period = "W", op
         poly(md.signal.map((v, i) => [xf(i), ym(v)]), C.signalLine, 1.4);
     }
     const legendParts = zanger ? ["Widok Zangera: cena (log) + wolumen · wzorce: " + (((row && row.patterns) || []).map((p) => p.name).join(", ") || "brak")]
-        : [`SMA 10 ${u}` + (regime.some((x) => x !== null) ? "" : " · brak danych SPY"), `zielone tło = SPY nad SMA 10 ${u}`, lvY != null ? "szary pas = 0–10 % nad GLB" : "",
+        : [`SMA 10 ${u}` + (regime.some((x) => x !== null) ? "" : " · brak danych SPY"), "zielone tło = SPY mies. nad SMA 10 mies.", lvY != null ? "szary pas = 0–10 % nad GLB" : "",
             opt.rwb ? "pasek RWB, ● Blue Dot, ▲ start RWB = dokup" : ""].filter(Boolean);
     let legend = legendParts.join(" · ");
     while (legendParts.length > 1 && legend.length * fs * 0.6 + 8 > x1 - x0) { legendParts.pop(); legend = legendParts.join(" · "); }   // za długa legenda: odcinamy końcówkę, żeby nie wychodziła poza wykres
@@ -659,6 +672,6 @@ function titleText(t, row) {
 
 if (typeof module !== "undefined") module.exports = {
     sma, ema, macd, gmma, rwb, rwbStarts, stochK, blueDots, greenLine, rsLine, rsMarkers, earningsIndices, rulerText, relVolume, axisSpots, macdCrossDown, ticks, fmt, fmtVol, sharesText,
-    geometry, chartSvg, infoLines, titleText, futureDates, extendData, priceView, spyRegime, glbPeak, monthlyWithOpen, mix, FUTURE_STEPS, FUTURE_DEFAULT, DEFAULT_WEEKS,
+    geometry, chartSvg, infoLines, titleText, futureDates, extendData, priceView, spyRegime, monthlyRegime, glbPeak, monthlyWithOpen, mix, FUTURE_STEPS, FUTURE_DEFAULT, DEFAULT_WEEKS,
     windowRange, sliderRect, sliderMode, sliderDrag, sliderJump, zoomWindow, sliderSvg,
 };

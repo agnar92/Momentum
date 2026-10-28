@@ -17,6 +17,12 @@ test("macd cross down like calc.macd_cross_down", () => {
     assert.ok(x.length && h[x[x.length - 1]] < 0 && h[x[x.length - 1] - 1] >= 0);
 });
 
+// miesięczny SPY od 2023-12 (rosnący albo spadający) — źródło tła na T, M i Z
+function spyMonthly(rising = true) {
+    const d = Array.from({ length: 60 }, (_, i) => `${2023 + Math.floor((11 + i) / 12)}-${String(1 + ((11 + i) % 12)).padStart(2, "0")}-01`), c = d.map((_, i) => 100 + (rising ? i : -i * 0.3));
+    return { d, o: c, h: c, l: c, c, v: c.map(() => 1e9) };
+}
+
 function weekly(n) {
     const d = [], c = [];
     for (let i = 0; i < n; i++) {
@@ -28,11 +34,11 @@ function weekly(n) {
 
 test("T chart: RS panel, grey bars, SMA 10, green line zone 0–10 %, geometry", () => {
     const w = weekly(150), spx = { d: w.d, c: w.c.map((x) => x * 4) };
-    const res = chartSvg(w, { glb: 120, rs: 20 }, 1000, 700, null, null, [], null, spx);
+    const res = chartSvg(w, { glb: 120, rs: 20 }, 1000, 700, null, null, [], null, spx, "W", { spyM: spyMonthly() });
     assert.ok(res.svg.includes('stroke="#a9b1bb"') && res.svg.includes('stroke="#2f6bff"'));   // słupki szare, SMA 10 niebieska
     assert.ok(res.svg.includes("RS Line (akcja / SPY)") && res.svg.includes("+20 pp"));
     assert.ok(res.svg.includes('stroke-dasharray="2 4"') && res.svg.includes("+5 %") && res.svg.includes("+10 %"));   // kropkowana GLB, opisy strefy
-    assert.ok(res.svg.includes("zielone tło = SPY nad SMA 10 tyg.") && res.svg.includes("szary pas = 0–10 % nad GLB"));
+    assert.ok(res.svg.includes("zielone tło = SPY mies. nad SMA 10 mies.") && res.svg.includes("szary pas = 0–10 % nad GLB"));
     assert.ok(res.svg.includes('fill="#0f2a1c"'));   // tło SPY > SMA 10
     assert.ok(!res.svg.includes("Przychody kw.") && !res.svg.includes("SMA 4"));
     const g = res.geom;
@@ -210,7 +216,7 @@ test("Zanger view: price + volume only, pattern outline, buy label, parabola exi
             shapes: [{ kind: "box", d1: w.d[100], d2: w.d[119], lo: last * 0.95, hi: last * 1.02 }] }],
         parabola: { exit: last * 0.9, shapes: [{ kind: "curve", d1: w.d[90], pts: w.d.slice(90, 120).map((d, k) => [d, last * (0.8 + 0.007 * k)]) }] },
     };
-    const z = chartSvg(w, row, 1000, 600, null, null, [], null, spx, "W", { zanger: true });
+    const z = chartSvg(w, row, 1000, 600, null, null, [], null, spx, "W", { zanger: true, spyM: spyMonthly() });
     assert.ok(z.svg.includes("Flat Base · kupno &gt;") || z.svg.includes("Flat Base · kupno >"));
     assert.ok(z.svg.includes("PARABOLA"));
     assert.ok(!z.svg.includes("MACD") && !z.svg.includes("Przychody kw.") && !z.svg.includes("RS Line"));
@@ -255,4 +261,19 @@ test("trend line extension is drawn only when its alert is on", () => {
 test("shares text: fractional, no trailing zeros", () => {
     const { sharesText } = CH;
     assert.deepStrictEqual([20, 12.5, 0.3333, 0.6666].map(sharesText), ["20", "12,5", "0,3333", "0,6666"]);
+});
+
+
+test("background always comes from SPY on the MONTHLY chart (SMA 10 mies.), also on T and Z", () => {
+    const { monthlyRegime } = CH;
+    const w = weekly(100), fallingWeekly = { d: w.d, c: w.c.map((_, i) => 400 - i) };   // tygodniowy SPY spada
+    const bg = (svg) => svg.includes('fill="#0f2a1c"');
+    assert.ok(bg(chartSvg(w, null, 1000, 700, null, null, [], null, fallingWeekly, "W", { spyM: spyMonthly(true) }).svg));    // miesięczny rośnie -> tło mimo spadku tygodniowego
+    assert.ok(!bg(chartSvg(w, null, 1000, 700, null, null, [], null, { d: w.d, c: w.c.map((x) => 100 + x) }, "W", { spyM: spyMonthly(false) }).svg));   // miesięczny spada -> brak tła mimo wzrostu tygodniowego
+    assert.ok(!bg(chartSvg(w, null, 1000, 700, null, null, [], null, { d: w.d, c: w.c.map((x) => 100 + x) }).svg));   // bez miesięcznego SPY brak tła (nie ma zastępstwa tygodniowym)
+    assert.ok(bg(chartSvg(w, null, 1000, 700, null, null, [], null, null, "W", { zanger: true, spyM: spyMonthly(true) }).svg));   // Z: to samo
+    const sm = spyMonthly(true);
+    assert.deepStrictEqual(monthlyRegime(["2025-03-03", "2025-03-31"], sm, "W"), [true, true]);   // tydzień dostaje stan miesiąca swojego piątku
+    assert.deepStrictEqual(monthlyRegime(["2025-03-03"], null, "W"), [null]);
+    assert.deepStrictEqual(monthlyRegime(sm.d, sm, "M"), CH.spyRegime(sm.d, sm, "M"));   // na M bez zmian
 });
