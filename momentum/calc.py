@@ -331,6 +331,16 @@ def momentum_12_1(closes, weeks=52, skip=4):
     return (a / b - 1) * 100 if _ok(a) and _ok(b) and b > 0 else None
 
 
+def momentum_6(closes, weeks=26):
+    """Momentum 6 mies. (%): zamknięcie / zamknięcie sprzed `weeks` tygodni − 1, bez pomijania ostatniego miesiąca (w badaniu 2010–2026 ranking 6 mies. wypadał
+    nie gorzej niż 12-1). Brak wyniku przy krótszej historii."""
+    c = closes or []
+    if len(c) < weeks + 1:
+        return None
+    a, b = c[-1], c[-1 - weeks]
+    return (a / b - 1) * 100 if _ok(a) and _ok(b) and b > 0 else None
+
+
 def cem_c8(closes, q_weeks=13, y_weeks=52, y_min=0.30):
     """Filtr C-8 z CEM10: zwrot z kwartału (13 tyg.) > 0 i zwrot z roku (52 tyg.) > +30 % — liczony z tygodniowych zamknięć.
     False, gdy historia jest za krótka."""
@@ -340,9 +350,10 @@ def cem_c8(closes, q_weeks=13, y_weeks=52, y_min=0.30):
     return c[-1] / c[-1 - q_weeks] > 1 and c[-1] / c[-1 - y_weeks] > 1 + y_min
 
 
-def assign_cem_rank(rows, top=CEM_TOP):
-    """Ranking CEM10: spółki z C-8 malejąco po momentum 12-1 -> `cem_rank` 1..N, `cem_top` = pierwsze `top` (do zakupu). Reszta: None / False."""
-    ranked = sorted((r for r in rows if r.get("c8") and _ok(r.get("mom121"))), key=lambda r: -r["mom121"])
+def assign_cem_rank(rows, top=CEM_TOP, key="mom121"):
+    """Ranking CEM10: spółki z C-8 malejąco po momentum (`key`: mom121 = 12-1 albo mom6 = 6 mies.) -> `cem_rank` 1..N, `cem_top` = pierwsze `top` (do zakupu). Reszta: None / False.
+    Strona przelicza to samo w przeglądarce po wyborze rankingu (docs/js/app.js `rankCem`)."""
+    ranked = sorted((r for r in rows if r.get("c8") and _ok(r.get(key))), key=lambda r: -r[key])
     for r in rows:
         r["cem_rank"], r["cem_top"] = None, False
     for i, r in enumerate(ranked, 1):
@@ -866,6 +877,7 @@ def build_row(base, weekly, months, fund, spy=None, est=None, conditions=None):
     row["rvol_w"] = rel_volume(v, RVOL_W)
     row["cc52w"] = price_ratio(c)
     row["mom121"] = momentum_12_1(c)   # ranking CEM10 (assign_cem_rank)
+    row["mom6"] = momentum_6(c)        # drugi ranking do wyboru na stronie
     row["c8"] = cem_c8(c)
     row["rwb_weeks"] = rwb_weeks([x or 0 for x in c])   # tygodnie od startu bieżącego RWB (sortowanie: świeże starty na górze)
     bdot = fresh_blue_dot(weekly, level) if row["glb_state"] == "NAD" else None   # > 10 % nad linią, nie tydzień przebicia: wejście po Blue Dot na tygodniowym

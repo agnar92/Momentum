@@ -458,6 +458,10 @@ def test_cem_momentum_c8_and_rank():
     assert calc.momentum_12_1(c) == pytest.approx((c[-5] / c[-53] - 1) * 100) and calc.momentum_12_1(c[:50]) is None   # ostatni miesiąc pominięty
     assert calc.cem_c8(c) and not calc.cem_c8([100.0] * 60) and not calc.cem_c8(c[:40])                                 # kwartał > 0 i rok > +30 %
     assert not calc.cem_c8([100.0 * 1.01 ** i for i in range(47)] + [60.0] * 13)                                         # rok w górę, ale kwartał w dół
+    assert calc.momentum_6(c) == pytest.approx((c[-1] / c[-27] - 1) * 100) and calc.momentum_6(c[:20]) is None                  # 26 tygodni, bez pomijania
+    rows = [{"ticker": "A", "c8": True, "mom121": 50.0, "mom6": 90.0}, {"ticker": "B", "c8": True, "mom121": 90.0, "mom6": 10.0}]
+    calc.assign_cem_rank(rows, top=1, key="mom6")
+    assert [(r["cem_rank"], r["cem_top"]) for r in rows] == [(1, True), (2, False)]                                              # ranking po wybranym momentum
     rows = [{"ticker": "A", "c8": True, "mom121": 50.0}, {"ticker": "B", "c8": True, "mom121": 90.0}, {"ticker": "C", "c8": False, "mom121": 99.0}, {"ticker": "D", "c8": True, "mom121": None}]
     calc.assign_cem_rank(rows, top=1)
     assert [(r["cem_rank"], r["cem_top"]) for r in rows] == [(2, False), (1, True), (None, False), (None, False)]

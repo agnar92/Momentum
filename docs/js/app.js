@@ -4,7 +4,7 @@
 
 const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
-    ["cem_rank", "CEM #", "i"], ["mom121", "Momentum 12-1 %", "%"],
+    ["cem_rank", "CEM #", "i"], ["mom121", "Momentum 12-1 %", "%"], ["mom6", "Momentum 6 mies. %", "%"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"], ["rwb_weeks", "RWB tyg.", "i"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["pattern_exit", "Ostrzeżenie wzorca", "s"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
@@ -44,6 +44,14 @@ function defaultCompare(a, b) {
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
+}
+
+// skaner CEM10: ranking po wybranym momentum (mom121 = 12-1, mom6 = 6 mies.): spółki z C-8 malejąco -> cem_rank 1..N, cem_top = pierwsze `top` (zielone). Wiersze bez pola c8 (np. z desktopa) bez zmian.
+function rankCem(rows, key, top) {
+    if (!rows.some((r) => r.c8 !== undefined)) return;
+    const ranked = rows.filter((r) => r.c8 && Number.isFinite(r[key])).sort((a, b) => b[key] - a[key]);
+    for (const r of rows) { r.cem_rank = null; r.cem_top = false; }
+    ranked.forEach((r, i) => { r.cem_rank = i + 1; r.cem_top = i < top; });
 }
 
 // puste wartości zawsze na końcu
@@ -104,13 +112,13 @@ function weekInProgress(weekDate, generatedAt) {
 
 const fileName = (t) => t.replace(/[^A-Za-z0-9.-]/g, "_") + ".json";   // jak watchlist.file_name
 
-if (typeof module !== "undefined") module.exports = { COLUMNS, NUMERIC_FORMATS, TEXT_COLS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
+if (typeof module !== "undefined") module.exports = { rankCem, COLUMNS, NUMERIC_FORMATS, TEXT_COLS, cell, defaultCompare, compareBy, visibleRows, fileName, isSignal, weekInProgress, passFilters, activeFilters, filterValue, FILTER_PRESETS };
 
 // ---------- DOM ----------
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
     // exit: MACD / GLB; view = ustawienia widoku osobno dla T (W) i M: {fut: puste świece po prawej, n: długość okna, z / s: skala ceny}; stops = ręczne stopy {ticker: cena}
-    const state = Object.assign({ sort: null, recent: [], filters: {}, exit: "MACD", view: {}, stops: {}, rwb: false, capital: 10000, risk: 1, gist: { id: "", mode: "auto" } }, readSettings());
+    const state = Object.assign({ sort: null, rank: "mom121", recent: [], filters: {}, exit: "MACD", view: {}, stops: {}, rwb: false, capital: 10000, risk: 1, gist: { id: "", mode: "auto" } }, readSettings());
     if (typeof state.view !== "object" || !state.view) state.view = {};
     if (typeof state.stops !== "object" || !state.stops) state.stops = {};
     if (typeof state.gist !== "object" || !state.gist) state.gist = { id: "", mode: "auto" };
@@ -143,7 +151,7 @@ if (typeof document !== "undefined") (function () {
     }
     function saveSettings() {
         try {
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sort: state.sort, recent: state.recent, scanner: state.scanner, filters: state.filters, exit: state.exit,
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify({ sort: state.sort, rank: state.rank, recent: state.recent, scanner: state.scanner, filters: state.filters, exit: state.exit,
                 view: state.view, stops: state.stops, rwb: state.rwb, capital: state.capital, risk: state.risk, gist: state.gist }));
         } catch (e) { /* tryb prywatny */ }
     }
@@ -166,6 +174,11 @@ if (typeof document !== "undefined") (function () {
     }
 
     function renderTable() {
+        if (!["mom121", "mom6"].includes(state.rank)) state.rank = "mom121";
+        const cem = data.rows.some((r) => r.c8 !== undefined);
+        $("rankSel").hidden = !cem;
+        $("rankSel").value = state.rank;
+        if (cem) rankCem(data.rows, state.rank, (data.rules && data.rules.cem_top) || 20);   // zielone top N i kolejność wg wybranego momentum
         const pool = visibleRows(data.rows, { scanner: state.scanner });
         shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
@@ -1260,6 +1273,7 @@ if (typeof document !== "undefined") (function () {
         $("gistSave").addEventListener("click", saveGist);
         $("fltBody").addEventListener("click", fltClick);
         $("fltBody").addEventListener("input", fltInput);
+        $("rankSel").addEventListener("change", () => { state.rank = $("rankSel").value; state.sort = null; saveSettings(); renderHead(); renderTable(); });   // wybór rankingu = domyślna kolejność
         $("fltClear").addEventListener("click", () => { state.filters = {}; saveSettings(); renderFilters(); renderTable(); });
         $("alertBtn").addEventListener("click", openAlerts);
         $("posListBtn").addEventListener("click", openPositions);

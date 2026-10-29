@@ -276,7 +276,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta, "sectors": sectors or [],
         "finviz_stale": any(m["stale"] for m in meta), "rules": {"confirm_months": calc.CONFIRM_MONTHS, "entry_max_pct": calc.ENTRY_MAX_PCT,
                                           "min_rev_growth": calc.MIN_REV_GROWTH,
-                                          "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT},
+                                          "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT, "cem_top": int(cem_top) if cem_top else None},
         "rows": rows, "symbols": sym_rows})
     ok = sum(1 for r in rows if r["ok"])
     sig = sum(1 for r in rows if r["ok"] and r["glb_state"] in ("SYGNAŁ", "WYBICIE") and (r["glb_pct"] or 0) <= calc.ENTRY_MAX_PCT)
