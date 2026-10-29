@@ -453,6 +453,36 @@ def test_default_scanner_is_the_sector_scanner_and_only_one_is_refreshed(tmp_pat
     assert not hasattr(watchlist, "urlparse")                        # brak podmiany skanera linkiem Finviz
 
 
+def test_cem_momentum_c8_and_rank():
+    c = [100.0 * 1.01 ** i for i in range(60)]
+    assert calc.momentum_12_1(c) == pytest.approx((c[-5] / c[-53] - 1) * 100) and calc.momentum_12_1(c[:50]) is None   # ostatni miesiąc pominięty
+    assert calc.cem_c8(c) and not calc.cem_c8([100.0] * 60) and not calc.cem_c8(c[:40])                                 # kwartał > 0 i rok > +30 %
+    assert not calc.cem_c8([100.0 * 1.01 ** i for i in range(47)] + [60.0] * 13)                                         # rok w górę, ale kwartał w dół
+    rows = [{"ticker": "A", "c8": True, "mom121": 50.0}, {"ticker": "B", "c8": True, "mom121": 90.0}, {"ticker": "C", "c8": False, "mom121": 99.0}, {"ticker": "D", "c8": True, "mom121": None}]
+    calc.assign_cem_rank(rows, top=1)
+    assert [(r["cem_rank"], r["cem_top"]) for r in rows] == [(2, False), (1, True), (None, False), (None, False)]
+
+
+def test_run_cem_scanner_queries_each_index_keeps_only_c8_and_ranks(tmp_path):
+    cfg = {"scanners": [{"name": "CEM10", "filters": "f", "indexes": ["idx_sp500", "idx_ndx"], "cem_top": 1}], "symbols": ["SPY"]}
+    queries = []
+
+    def fetch(filters, max_tickers, log):
+        queries.append(filters)
+        names = ["UP2", "FLAT", "UP1"] if "idx_sp500" in filters else ["UP1", "UP3"]   # UP1 w obu indeksach: bez powtórzeń
+        return [{"ticker": t, "sector": "Technology"} for t in names], len(names)
+
+    def weekly(ts, log, cache):
+        rate = {"UP1": 1.01, "UP2": 1.015, "UP3": 1.012, "FLAT": 1.0}
+        return {t: ({**SPY, "c": [100.0] * 60} if t == "SPY" else {**W, "c": [100.0 * rate[t] ** i for i in range(60)]}) for t in ts}
+    rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch, weekly=weekly, monthly=_monthly, fund=_fund, est=_est)
+    assert queries == ["idx_sp500,f", "idx_ndx,f"]
+    by = {r["ticker"]: r for r in rows}
+    assert set(by) == {"UP1", "UP2", "UP3"}                                                     # FLAT nie ma C-8
+    assert [(t, by[t]["cem_rank"], by[t]["cem_top"]) for t in ("UP2", "UP3", "UP1")] == [("UP2", 1, True), ("UP3", 2, False), ("UP1", 3, False)]
+    assert not (tmp_path / "out" / "weekly" / "FLAT.json").exists()                            # świece tylko dla spółek z listy
+
+
 def test_run_sector_scanner_makes_one_query_per_top_sector_and_saves_ranking(tmp_path):
     cfg = {"scanners": [{"name": "Sektory", "filters": "f", "top_sectors": 2}], "symbols": ["SPY"]}
     queries = []

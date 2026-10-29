@@ -1,10 +1,14 @@
 {
- "_instructions": "Jeden skaner: sektorowy — 3 sektory z najsilniejszym RS (ETF / SPY nad SMA 52 tyg.) × zapytanie Finviz (sektor + filtr), jak w desktopie. symbols = SPY (RS); ETF-y sektorowe dodawane automatycznie.",
+ "_instructions": "Jeden skaner: CEM10 — po jednym zapytaniu Finviz na indeks (S&P 500, Nasdaq-100) + wspólne filtry (zwrot kwartału > 0, zwrot roku > +30 %, cena nad SMA 200 jako wstępne cięcie). C-8 liczy potem strona z tygodniowych cen; ranking po momentum 12-1, pierwsze cem_top zielone. symbols = SPY (RS).",
  "scanners": [
   {
-   "name": "Sektory top 3 (RS)",
-   "filters": "ind_stocksonly,sh_price_o15,sh_avgvol_o300,fa_salesqoq_o15",
-   "top_sectors": 3,
+   "name": "CEM10 (S&P 500 + Nasdaq-100)",
+   "filters": "ta_perf_13wup,ta_perf2_52w30o,ta_sma200_pa",
+   "indexes": [
+    "idx_sp500",
+    "idx_ndx"
+   ],
+   "cem_top": 20,
    "max_tickers": 500
   }
  ],

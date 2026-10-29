@@ -64,15 +64,32 @@ def sector_fetch(sc, fetch_list, ranked, log):
     return fetch, top
 
 
+def index_fetch(sc, fetch_list, log):
+    """Skaner CEM10: po jednym zapytaniu Finviz na każdy indeks (`indexes`, np. idx_sp500, idx_ndx) + wspólne filtry; spółki bez powtórzeń (Finviz nie łączy indeksów warunkiem „lub”)."""
+    def fetch(filters, max_tickers=None, log=log):
+        rows, seen, total = [], set(), 0
+        for index in sc["indexes"]:
+            flt = f"{index},{filters}"
+            log(f"Finviz [{index}]: filtr {flt}")
+            part, tot = fetch_list(flt, max_tickers=max_tickers, log=log)
+            total += tot or len(part)
+            for r in part:
+                if r["ticker"] not in seen:
+                    seen.add(r["ticker"])
+                    rows.append(r)
+        return rows, total
+    return fetch
+
+
 def scanners(config):
-    """Skanery z finviz_screen.json: [{name, filters, max_tickers, top_sectors}]. Bez wpisu w konfiguracji = domyślny skaner sektorowy (jak w desktopie)."""
+    """Skanery z finviz_screen.json: [{name, filters, max_tickers, top_sectors, indexes, cem_top}]. Bez wpisu w konfiguracji = domyślny skaner sektorowy (jak w desktopie)."""
     items = [x for x in config.get("scanners") or [] if isinstance(x, dict) and x.get("filters")]
     if not items:
         items = [{"name": "Sektory top 3 (RS)", "filters": calc.SECTOR_FILTERS, "top_sectors": calc.TOP_SECTORS, "max_tickers": 500}]
     out = [{"name": str(x.get("name") or f"Skaner {i + 1}"), "filters": x["filters"], "max_tickers": int(x.get("max_tickers") or finviz.MAX_TICKERS)}
            for i, x in enumerate(items)]
     for o, x in zip(out, items):
-        for k in ("top_sectors",):   # skaner sektorowy: N najsilniejszych sektorów = N zapytań Finviz (sektor + filtr)
+        for k in ("top_sectors", "indexes", "cem_top"):   # sektorowy: N sektorów = N zapytań Finviz; CEM10: po zapytaniu na indeks + ranking, `cem_top` pierwszych do zakupu
             if x.get(k):
                 o[k] = x[k]
     return out
@@ -141,7 +158,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     ua = os.environ.get("SEC_UA") or config.get("sec_ua") or sec.UA
     prev = load_json(Path(out) / "watchlist.json", {})
     scans = scanners(config)
-    scans = scans[:1]   # zawsze jeden skaner: sektorowy (3 sektory z najsilniejszym RS), jak w desktopie
+    scans = scans[:1]   # zawsze jeden skaner (CEM10 albo sektorowy)
     log("Odświeżam jedyny skaner: " + scans[0]["name"])
     wdir = Path(out) / "weekly"
     sectors = None
@@ -162,12 +179,26 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
             log("⚠ Brak świec ETF-ów sektorowych — używam poprzedniej listy i rankingu sektorów (uruchom Weekly Refresh).")
         else:
             raise RuntimeError("Żaden sektor nie ma RS nad SMA 52 tyg. (albo brak danych ETF) — lista bez zmian.")
+    elif scans[0].get("indexes"):   # CEM10: zapytanie na każdy indeks
+        fetch_list = index_fetch(scans[0], fetch_list, log)
     base, meta = fetch_scanners(scans, prev, fetch_list, log, min_tickers=MIN_TICKERS)
     tickers = [r["ticker"] for r in base]
     extra = [s for s in symbols if s not in tickers]
     log(f"Razem {len(tickers)} spółek ze skanerów; symbole dodatkowe: {', '.join(extra) or '—'}")
     saved = {t: load_json(wdir / file_name(t), None) for t in tickers + extra}
     series = weekly(tickers + extra, log=log, cache={t: s for t, s in saved.items() if s})
+    cem_top = scans[0].get("cem_top")
+    if cem_top:   # CEM10: Finviz to tylko wstępne cięcie; na liście zostają spółki z C-8 policzonym z tygodniowych cen (jak w rankingu)
+        have = [t for t in tickers if t in series]
+        if len(have) < 0.7 * len(tickers):
+            raise RuntimeError(f"Ceny tylko dla {len(have)} z {len(tickers)} spółek — nic nie zapisuję.")
+        c8 = {t for t in have if calc.cem_c8(series[t]["c"])}
+        log(f"C-8 (kwartał > 0, rok > +30 %): {len(c8)} z {len(tickers)} spółek ze skanera")
+        if not c8:
+            raise RuntimeError("Żadna spółka nie spełnia C-8 — lista bez zmian.")
+        base = [b for b in base if b["ticker"] in c8]
+        tickers = [b["ticker"] for b in base]
+        series = {t: s for t, s in series.items() if t in c8 or t in extra}
     # miesięczne świece (Green Line z High, wykres M), fundamenty i prognozy dla wszystkich spółek ze skanerów (bez progu obrotu)
     liquid = [t for t in tickers if t in series]   # bez progu obrotu — płynność ustawia filtr skanera Finviz
     mcache = load_json(Path(cache_dir) / "monthly.json", {})
@@ -224,6 +255,8 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     by_sector = {x["sector"]: x["pct"] for x in sectors or []}
     for r in rows + sym_rows:
         r["sector_rs"] = by_sector.get(r.get("sector"))   # RS sektora spółki (% nad SMA 52 tyg.) — tylko w skanerze sektorowym
+    if cem_top:
+        calc.assign_cem_rank(rows, int(cem_top))   # ranking CEM10: po momentum 12-1; cem_top pierwszych = do zakupu (zielone wiersze)
     calc.assign_eps_rating(rows)   # EPS Rating 1–99: percentyl wśród spółek tej listy
     calc.assign_eps_rating(sym_rows, pool=rows)
     if len(rows) < 0.7 * len(tickers):
