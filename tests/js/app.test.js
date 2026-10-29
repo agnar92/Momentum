@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { cell, visibleRows, fileName, isSignal, weekInProgress } = require("../../docs/js/app.js");
+const { rankCem, cell, visibleRows, fileName, isSignal, weekInProgress } = require("../../docs/js/app.js");
 
 test("cell formats", () => {
     assert.strictEqual(cell(1234.5, "p"), "1,234.50");
@@ -125,4 +125,15 @@ test("skaner CEM10: domyślna kolejność = ranking po momentum 12-1, reszta po 
     const rows = [{ ticker: "C", cem_rank: 3, mom121: 50 }, { ticker: "A", cem_rank: 1, mom121: 90 }, { ticker: "B", cem_rank: 2, mom121: 70 }];
     assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["A", "B", "C"]);
     assert.deepStrictEqual(visibleRows(rows, { sort: { key: "mom121", dir: -1 } }).map((r) => r.ticker), ["A", "B", "C"]);
+});
+
+test("skaner CEM10: wybór rankingu przelicza cem_rank / cem_top po 12-1 albo po 6 mies.", () => {
+    const rows = [{ ticker: "A", c8: true, mom121: 50, mom6: 90 }, { ticker: "B", c8: true, mom121: 90, mom6: 10 }, { ticker: "C", c8: false, mom121: 99, mom6: 99 }, { ticker: "D", c8: true, mom121: null, mom6: 5 }];
+    rankCem(rows, "mom121", 1);
+    assert.deepStrictEqual(rows.map((r) => [r.cem_rank, r.cem_top]), [[2, false], [1, true], [null, false], [null, false]]);
+    rankCem(rows, "mom6", 2);
+    assert.deepStrictEqual(rows.map((r) => [r.cem_rank, r.cem_top]), [[1, true], [2, true], [null, false], [3, false]]);
+    const old = [{ ticker: "X", glb_pct: 3 }];
+    rankCem(old, "mom6", 20);   // dane bez pola c8 (desktop / stary skaner) bez zmian
+    assert.strictEqual(old[0].cem_rank, undefined);
 });
