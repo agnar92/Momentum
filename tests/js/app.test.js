@@ -120,3 +120,9 @@ test("RWB weeks column sorts ascending first and number columns get from–to fi
     assert.ok(!passFilters({ rwb_weeks: null }, { rwb_weeks: { min: 0 } }));   // puste = brak RWB
     assert.strictEqual(cell(3, "i"), "3");
 });
+
+test("skaner CEM10: domyślna kolejność = ranking po momentum 12-1, reszta po staremu", () => {
+    const rows = [{ ticker: "C", cem_rank: 3, mom121: 50 }, { ticker: "A", cem_rank: 1, mom121: 90 }, { ticker: "B", cem_rank: 2, mom121: 70 }];
+    assert.deepStrictEqual(visibleRows(rows, {}).map((r) => r.ticker), ["A", "B", "C"]);
+    assert.deepStrictEqual(visibleRows(rows, { sort: { key: "mom121", dir: -1 } }).map((r) => r.ticker), ["A", "B", "C"]);
+});

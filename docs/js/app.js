@@ -4,6 +4,7 @@
 
 const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
+    ["cem_rank", "CEM #", "i"], ["mom121", "Momentum 12-1 %", "%"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"], ["rwb_weeks", "RWB tyg.", "i"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["pattern_exit", "Ostrzeżenie wzorca", "s"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
@@ -36,10 +37,10 @@ function cell(v, f) {
 // sygnał kupna = Green Line, zamknięcie tygodnia 0–10 % nad linią (badanie 2011–2025: szersza strefa i Blue Dot dawały mniej) — jak app.is_signal
 const isSignal = (r) => SIGNAL.includes(r.glb_state) && (r.glb_pct == null || r.glb_pct <= ENTRY_MAX);
 
-// jak app.default_order: najpierw warunki + sygnał GLB 0–10 %, potem spełniające warunki; w grupie najbliżej Green Line
-// (przy nadmiarze sygnałów najbliższe linii: ten sam wynik, mniejsze obsunięcie), potem siła względna.
+// skaner CEM10: kolejność rankingu (momentum 12-1 malejąco, `cem_rank`); bez rankingu — jak app.default_order: najpierw warunki + sygnał GLB 0–10 %,
+// potem spełniające warunki; w grupie najbliżej Green Line (przy nadmiarze sygnałów najbliższe linii: ten sam wynik, mniejsze obsunięcie), potem siła względna.
 function defaultCompare(a, b) {
-    const key = (r) => [!(r.ok && isSignal(r)), !r.ok, r.glb_pct == null ? 1e9 : Math.abs(r.glb_pct), -(r.rs ?? -1e9)];
+    const key = (r) => [r.cem_rank == null ? 1e9 : r.cem_rank, !(r.ok && isSignal(r)), !r.ok, r.glb_pct == null ? 1e9 : Math.abs(r.glb_pct), -(r.rs ?? -1e9)];
     const ka = key(a), kb = key(b);
     for (let i = 0; i < ka.length; i++) if (ka[i] !== kb[i]) return ka[i] < kb[i] ? -1 : 1;
     return 0;
@@ -172,13 +173,13 @@ if (typeof document !== "undefined") (function () {
         $("fltBtn").classList.toggle("on", nf > 0);
         $("tbody").innerHTML = shown.map((r) => {
             const held = !!ast.pos[r.ticker], warn = held && posWarn(r);
-            const cls = [isSignal(r) ? "signal" : "", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");
+            const cls = [r.cem_rank != null ? (r.cem_top ? "cemtop" : "") : isSignal(r) ? "signal" : "", r.ticker === current ? "sel" : "", warn ? "poswarn" : ""].join(" ");   // CEM10: zielone = top do zakupu (zamiast sygnału GLB)
             return `<tr data-t="${r.ticker}" class="${cls}">` + COLUMNS.map(([k, , f]) => {
                 const value = k === "cc52w" ? (r.cc52w ?? r.cc250) : r[k]; // zgodność ze starym JSON-em do najbliższego odświeżenia
                 return `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(value, f))}</td>`;
             }).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · spełnia warunki ${pool.filter((r) => r.ok).length} · sygnał GLB ${pool.filter((r) => r.ok && isSignal(r)).length}`;
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · ${pool.some((r) => r.cem_rank != null) ? `z C-8 · do zakupu (zielone) ${pool.filter((r) => r.cem_top).length}` : `spełnia warunki ${pool.filter((r) => r.ok).length} · sygnał GLB ${pool.filter((r) => r.ok && isSignal(r)).length}`}`;
         renderStatus();
     }
 

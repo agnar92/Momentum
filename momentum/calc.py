@@ -317,6 +317,38 @@ def price_ratio(closes, weeks=52):
     return closes[-1] / base if base else None
 
 
+CEM_TOP = 20   # ile pierwszych spółek rankingu CEM10 zaznaczamy do zakupu (zielone wiersze); lista pokazuje wszystkie spełniające C-8
+
+
+def momentum_12_1(closes, weeks=52, skip=4):
+    """Momentum 12-1 (%): zamknięcie sprzed `skip` tygodni (≈ miesiąc temu) / zamknięcie sprzed `weeks` tygodni (≈ 12 miesięcy temu) − 1.
+    Ostatni miesiąc jest pominięty (efekt krótkoterminowego odwrócenia); odpowiednik miesięcznego c[t-1] / c[t-12] − 1 z badania CEM10.
+    Brak wyniku, gdy historia jest krótsza niż `weeks` tygodni (jak desktop/calc.py)."""
+    c = closes or []
+    if len(c) < weeks + 1:
+        return None
+    a, b = c[-1 - skip], c[-1 - weeks]
+    return (a / b - 1) * 100 if _ok(a) and _ok(b) and b > 0 else None
+
+
+def cem_c8(closes, q_weeks=13, y_weeks=52, y_min=0.30):
+    """Filtr C-8 z CEM10: zwrot z kwartału (13 tyg.) > 0 i zwrot z roku (52 tyg.) > +30 % — liczony z tygodniowych zamknięć.
+    False, gdy historia jest za krótka."""
+    c = closes or []
+    if len(c) < y_weeks + 1 or not (_ok(c[-1]) and _ok(c[-1 - q_weeks]) and _ok(c[-1 - y_weeks])) or c[-1 - q_weeks] <= 0 or c[-1 - y_weeks] <= 0:
+        return False
+    return c[-1] / c[-1 - q_weeks] > 1 and c[-1] / c[-1 - y_weeks] > 1 + y_min
+
+
+def assign_cem_rank(rows, top=CEM_TOP):
+    """Ranking CEM10: spółki z C-8 malejąco po momentum 12-1 -> `cem_rank` 1..N, `cem_top` = pierwsze `top` (do zakupu). Reszta: None / False."""
+    ranked = sorted((r for r in rows if r.get("c8") and _ok(r.get("mom121"))), key=lambda r: -r["mom121"])
+    for r in rows:
+        r["cem_rank"], r["cem_top"] = None, False
+    for i, r in enumerate(ranked, 1):
+        r["cem_rank"], r["cem_top"] = i, i <= top
+
+
 def pegy_ratio(peg, forward_pe, dividend_yield_pct):
     """PEGY = Forward P/E / (EPS growth % + dividend yield %).
 
@@ -833,6 +865,8 @@ def build_row(base, weekly, months, fund, spy=None, est=None, conditions=None):
     row["trend"] = s10 > s30 if s10 is not None and s30 is not None else None   # trend tygodniowy: SMA 10 > SMA 30 (filtr listy)
     row["rvol_w"] = rel_volume(v, RVOL_W)
     row["cc52w"] = price_ratio(c)
+    row["mom121"] = momentum_12_1(c)   # ranking CEM10 (assign_cem_rank)
+    row["c8"] = cem_c8(c)
     row["rwb_weeks"] = rwb_weeks([x or 0 for x in c])   # tygodnie od startu bieżącego RWB (sortowanie: świeże starty na górze)
     bdot = fresh_blue_dot(weekly, level) if row["glb_state"] == "NAD" else None   # > 10 % nad linią, nie tydzień przebicia: wejście po Blue Dot na tygodniowym
     if bdot:

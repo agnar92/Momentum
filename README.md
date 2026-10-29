@@ -5,7 +5,7 @@ Strategię wybrano w backteście na płynnym rynku USA w latach 2015–2026:
 
 | Etap | Reguła |
 |---|---|
-| Lista do pobrania | **Jeden skaner — sektorowy** (jak w desktopie): `Weekly Refresh` liczy RS sektorów (ETF SPDR / SPY nad SMA 52 tyg.), bierze 3 najsilniejsze sektory i robi 3 zapytania Finviz (`sec_<sektor>` + `ind_stocksonly,sh_price_o15,sh_avgvol_o300,fa_salesqoq_o15`: tylko akcje, cena > 15 $, śr. wolumen > 300 tys., przychody kw. > 15 % r/r). Brak wklejania własnego linku Finviz; ranking sektorów w pasku statusu strony |
+| Lista do pobrania | **Jeden skaner — CEM10**: `Weekly Refresh` robi po jednym zapytaniu Finviz na indeks (`idx_sp500`, `idx_ndx`) + `ta_perf_13wup,ta_perf2_52w30o,ta_sma200_pa` (kwartał w górę, rok > +30 %, cena nad SMA 200 = wstępne cięcie). C-8 (zwrot 13 tyg. > 0 i 52 tyg. > +30 %) liczy potem strona z tygodniowych cen; lista pokazuje wszystkie spółki z C-8 posortowane po momentum 12-1 (`CEM #`), a pierwsze 20 jest na zielono (do zakupu). Wyjście i reszta bez zmian. Skaner sektorowy (RS sektorów) zostaje w kodzie, ale nie jest domyślny |
 | Warunki | przychody kw. **≥ +15 % r/r**, marża operacyjna **≥ +3 pp r/r** (SEC EDGAR), **P/S < 20**, siła względna 52 tyg. **≥ +50 pp nad S&P 500** |
 | Kolejność | od największej zmiany marży operacyjnej r/r |
 | Wejście | **Green Line**: rekord wszech czasów **miesięcznego High** (jak w oryginale Dr. Wisha), który stoi **≥ 3 zamknięte miesiące** (po nowym rekordzie obowiązuje stara linia, dopóki nowy nie przestoi 3 miesięcy); kupno, gdy tydzień zamknie się **0–10 % nad linią** |
