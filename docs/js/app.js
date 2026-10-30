@@ -4,7 +4,7 @@
 
 const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
-    ["cem_rank", "CEM #", "i"], ["mom121", "Momentum 12-1 %", "%"], ["mom6", "Momentum 6 mies. %", "%"],
+    ["cem_rank", "CEM #", "i"], ["mom121", "Momentum 12-1 %", "%"], ["mom6", "Momentum 6 mies. %", "%"], ["tempo", "TEMPO %", "%"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"], ["rwb_weeks", "RWB tyg.", "i"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["pattern_exit", "Ostrzeżenie wzorca", "s"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
@@ -80,6 +80,8 @@ const FILTER_PRESETS = [   // jak desktop/app.py FILTER_PRESETS
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (wybicie / 0–10 % / Blue Dot) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] }, macd: { in: ["nad"] } }],
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
+    ["TEMPO ≥ 0 (tempo 3 mies. nie słabnie względem 12 mies.)", { tempo: { min: 0 } }],
+    ["Momentum 6 mies. ≥ 30 % + TEMPO ≥ 0", { mom6: { min: 30 }, tempo: { min: 0 } }],
 ];
 
 const filterValue = (r, k) => (k === "trend" || k === "beat2" || k === "ok" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
