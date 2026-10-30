@@ -352,16 +352,16 @@ def cem_c8(closes, q_weeks=13, y_weeks=52, y_min=0.30):
 
 def assign_cem_rank(rows, top=CEM_TOP, key="mom6"):
     """Ranking CEM10: spółki z C-8 malejąco po momentum (`key`: mom6 = 6 mies., domyślnie; mom121 = 12-1) -> `cem_rank` 1..N, `cem_top` = do zakupu.
-    `top` = liczba (pierwsze `top` z całej listy) albo {indeks: N} (np. {"sp500": 10, "ndx": 5}: pierwsze N spółek każdego indeksu wg pola `indexes`;
-    spółka z obu indeksów jest zielona, gdy łapie się w którymkolwiek). Strona przelicza to samo w przeglądarce (docs/js/app.js `rankCem`)."""
+    `top` = liczba (pierwsze `top` z całej listy) albo {indeks: N} (np. {"sp500": 10, "ndx": 5}: najpierw pierwsze 10 spółek S&P 500, potem pierwsze 5 z NDX spośród
+    jeszcze niewybranych wg pola `indexes`, więc zielone spółki są różne). Strona przelicza to samo w przeglądarce (docs/js/app.js `rankCem`)."""
     ranked = sorted((r for r in rows if r.get("c8") and _ok(r.get(key))), key=lambda r: -r[key])
     for r in rows:
         r["cem_rank"], r["cem_top"] = None, False
     for i, r in enumerate(ranked, 1):
         r["cem_rank"] = i
     if isinstance(top, dict) and any(r.get("indexes") for r in ranked):
-        for index, n in top.items():
-            for r in [r for r in ranked if index in (r.get("indexes") or [])][:int(n)]:
+        for index, n in top.items():   # kolejność słownika = kolejność wyboru: spółka już zielona z wcześniejszego indeksu jest pomijana (bez dubli)
+            for r in [r for r in ranked if index in (r.get("indexes") or []) and not r["cem_top"]][:int(n)]:
                 r["cem_top"] = True
     else:   # liczba albo stare wiersze bez `indexes`: jedno top N z całej listy
         for r in ranked[:sum(map(int, top.values())) if isinstance(top, dict) else top]:
