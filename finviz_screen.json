@@ -1,5 +1,5 @@
 {
- "_instructions": "Jeden skaner: CEM10 — po jednym zapytaniu Finviz na indeks (S&P 500, Nasdaq-100) + wspólne filtry (zwrot kwartału > 0, zwrot roku > +30 %, cena nad SMA 200 jako wstępne cięcie). C-8 liczy potem strona z tygodniowych cen; ranking po momentum 6 mies.; zielone = top N na indeks (cem_top: S&P 500 10, Nasdaq-100 5). symbols = SPY (RS).",
+ "_instructions": "Jeden skaner: CEM10 — po jednym zapytaniu Finviz na indeks (S&P 500, Nasdaq-100) + wspólne filtry (zwrot kwartału > 0, zwrot roku > +30 %, cena nad SMA 200 jako wstępne cięcie). C-8 liczy potem strona z tygodniowych cen; jeden wspólny ranking po momentum 6 mies. (spółka z obu indeksów tylko raz), pierwsze cem_top = 20 zielone. symbols = SPY (RS).",
  "scanners": [
   {
    "name": "CEM10 (S&P 500 + Nasdaq-100)",
@@ -8,10 +8,7 @@
     "idx_sp500",
     "idx_ndx"
    ],
-   "cem_top": {
-    "sp500": 10,
-    "ndx": 5
-   },
+   "cem_top": 20,
    "max_tickers": 500
   }
  ],
