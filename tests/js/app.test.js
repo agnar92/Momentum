@@ -91,7 +91,7 @@ test("columns and presets like the desktop app", () => {
     const keys = COLUMNS.map(([k]) => k);
     for (const k of ["sector_rs", "eps_rating", "pattern", "pattern_pct", "peg", "pegy", "dgm", "quarter", "cc52w", "ok", "slow"]) assert.ok(keys.includes(k), k);
     for (const k of ["vol52", "rs_rating", "blb", "blb_state"]) assert.ok(!keys.includes(k), k);
-    assert.strictEqual(FILTER_PRESETS.length, 12);
+    assert.strictEqual(FILTER_PRESETS.length, 11);
     assert.strictEqual(cell(0.987, "x2"), "0.99");
     assert.strictEqual(cell(83.4, "i"), "83");
 });
@@ -144,6 +144,5 @@ test("TEMPO i Momentum 6 mies.: kolumny i presety jak w desktopie", () => {
     assert.ok(keys.indexOf("mom6") === keys.indexOf("mom121") + 1 && keys.indexOf("tempo") === keys.indexOf("mom6") + 1);
     const f = FILTER_PRESETS.find(([n]) => n.startsWith("TEMPO ≥ 0"))[1];
     assert.ok(passFilters({ tempo: 0 }, f) && passFilters({ tempo: 3.2 }, f) && !passFilters({ tempo: -0.1 }, f) && !passFilters({ tempo: null }, f));
-    const g = FILTER_PRESETS.find(([n]) => n.startsWith("Momentum 6 mies."))[1];
-    assert.ok(passFilters({ mom6: 45, tempo: 1 }, g) && !passFilters({ mom6: 20, tempo: 1 }, g));
+    assert.ok(!FILTER_PRESETS.some(([n]) => n.startsWith("Momentum 6 mies.")));   // 6 mies. tylko jako kolumna do sortowania, bez presetu
 });
