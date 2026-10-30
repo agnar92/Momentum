@@ -341,18 +341,6 @@ def momentum_6(closes, weeks=26):
     return (a / b - 1) * 100 if _ok(a) and _ok(b) and b > 0 else None
 
 
-def tempo_margin(closes, q_weeks=13, y_weeks=52):
-    """TEMPO (%): średnie miesięczne tempo wzrostu z kwartału (13 tyg., zwrot^(1/3)) w stosunku do średniego tempa z roku (52 tyg., zwrot^(1/12)) − 1.
-    >= 0 = tempo nie słabnie: (1 + r3)^(1/3) >= (1 + r12)^(1/12) (ten sam znak co BURST, patrz CLAUDE.md). Brak wyniku przy krótszej historii."""
-    c = closes or []
-    if len(c) < y_weeks + 1:
-        return None
-    a, b, d = c[-1], c[-1 - q_weeks], c[-1 - y_weeks]
-    if not (_ok(a) and _ok(b) and _ok(d)) or a <= 0 or b <= 0 or d <= 0:
-        return None
-    return ((a / b) ** (1 / 3) / (a / d) ** (1 / 12) - 1) * 100
-
-
 def cem_c8(closes, q_weeks=13, y_weeks=52, y_min=0.30):
     """Filtr C-8 z CEM10: zwrot z kwartału (13 tyg.) > 0 i zwrot z roku (52 tyg.) > +30 % — liczony z tygodniowych zamknięć.
     False, gdy historia jest za krótka."""
@@ -362,14 +350,41 @@ def cem_c8(closes, q_weeks=13, y_weeks=52, y_min=0.30):
     return c[-1] / c[-1 - q_weeks] > 1 and c[-1] / c[-1 - y_weeks] > 1 + y_min
 
 
-def assign_cem_rank(rows, top=CEM_TOP, key="mom121"):
-    """Ranking CEM10: spółki z C-8 malejąco po momentum (`key`: mom121 = 12-1 albo mom6 = 6 mies.) -> `cem_rank` 1..N, `cem_top` = pierwsze `top` (do zakupu). Reszta: None / False.
-    Strona przelicza to samo w przeglądarce po wyborze rankingu (docs/js/app.js `rankCem`)."""
+def assign_cem_rank(rows, top=CEM_TOP, key="mom6"):
+    """Ranking CEM10: spółki z C-8 malejąco po momentum (`key`: mom6 = 6 mies., domyślnie; mom121 = 12-1) -> `cem_rank` 1..N, `cem_top` = do zakupu.
+    `top` = liczba (pierwsze `top` z całej listy) albo {indeks: N} (np. {"sp500": 10, "ndx": 5}: pierwsze N spółek każdego indeksu wg pola `indexes`;
+    spółka z obu indeksów jest zielona, gdy łapie się w którymkolwiek). Strona przelicza to samo w przeglądarce (docs/js/app.js `rankCem`)."""
     ranked = sorted((r for r in rows if r.get("c8") and _ok(r.get(key))), key=lambda r: -r[key])
     for r in rows:
         r["cem_rank"], r["cem_top"] = None, False
     for i, r in enumerate(ranked, 1):
-        r["cem_rank"], r["cem_top"] = i, i <= top
+        r["cem_rank"] = i
+    if isinstance(top, dict) and any(r.get("indexes") for r in ranked):
+        for index, n in top.items():
+            for r in [r for r in ranked if index in (r.get("indexes") or [])][:int(n)]:
+                r["cem_top"] = True
+    else:   # liczba albo stare wiersze bez `indexes`: jedno top N z całej listy
+        for r in ranked[:sum(map(int, top.values())) if isinstance(top, dict) else top]:
+            r["cem_top"] = True
+
+
+MARKET_SMA_MONTHS = 12   # filtr rynku CEM10: SPY pod miesięczną SMA 12 = bez nowych wejść
+
+
+def market_regime(weekly, n=MARKET_SMA_MONTHS):
+    """Filtr rynku CEM10 (badanie S&P 500 point-in-time 1997–2026): gdy SPY zamyka miesiąc pod swoją SMA z `n` miesięcy, nie otwieramy nowych pozycji
+    (otwarte zostają, wychodzą na SMA 10). CAGR 15,1 → 15,9 %, max DD −52 → −32 %; działa dla SMA 9–14. `weekly` = {d, c}; miesiąc = ostatnie zamknięcie tygodnia,
+    bieżący miesiąc = ostatnie zamknięcie. -> {ok, spy, sma, pct} albo None przy krótszej historii."""
+    d, c = (weekly or {}).get("d") or [], (weekly or {}).get("c") or []
+    months = {}
+    for day, x in zip(d, c):
+        if _ok(x):
+            months[str(day)[:7]] = x
+    closes = list(months.values())
+    if len(closes) < n:
+        return None
+    sma = sum(closes[-n:]) / n
+    return {"ok": closes[-1] >= sma, "spy": closes[-1], "sma": sma, "pct": (closes[-1] / sma - 1) * 100}
 
 
 def pegy_ratio(peg, forward_pe, dividend_yield_pct):
@@ -890,7 +905,6 @@ def build_row(base, weekly, months, fund, spy=None, est=None, conditions=None):
     row["cc52w"] = price_ratio(c)
     row["mom121"] = momentum_12_1(c)   # ranking CEM10 (assign_cem_rank)
     row["mom6"] = momentum_6(c)        # drugi ranking do wyboru na stronie
-    row["tempo"] = tempo_margin(c)     # TEMPO %: >= 0 = tempo z 3 mies. nie słabnie względem 12 mies. (filtr od–do)
     row["c8"] = cem_c8(c)
     row["rwb_weeks"] = rwb_weeks([x or 0 for x in c])   # tygodnie od startu bieżącego RWB (sortowanie: świeże starty na górze)
     bdot = fresh_blue_dot(weekly, level) if row["glb_state"] == "NAD" else None   # > 10 % nad linią, nie tydzień przebicia: wejście po Blue Dot na tygodniowym

@@ -4,7 +4,7 @@
 
 const COLUMNS = [ // [klucz, nagłówek, format] — jak desktop/app.py COLUMNS
     ["ticker", "Ticker", "s"], ["company", "Spółka", "s"], ["sector", "Sektor", "s"], ["sector_rs", "RS sektora %", "%"], ["price", "Cena", "p"],
-    ["cem_rank", "CEM #", "i"], ["mom121", "Momentum 12-1 %", "%"], ["mom6", "Momentum 6 mies. %", "%"], ["tempo", "TEMPO %", "%"],
+    ["cem_rank", "CEM #", "i"], ["mom121", "Momentum 12-1 %", "%"], ["mom6", "Momentum 6 mies. %", "%"],
     ["glb", "Green Line", "p"], ["glb_pct", "Do linii %", "%"], ["glb_state", "GLB", "s"], ["macd", "MACD", "s"], ["trend", "SMA 10>30", "b"], ["rwb_weeks", "RWB tyg.", "i"],
     ["macd_stop", "Stop MACD", "p"], ["dopm", "Δ marża oper. pp", "%"], ["rev_rr", "Przychody r/r %", "%"],
     ["eps_rating", "EPS Rating", "i"], ["dgm", "Δ marża brutto pp", "%"], ["pattern", "Wzorzec Zangera", "s"], ["pattern_pct", "Do kupna wzorca %", "%"], ["pattern_exit", "Ostrzeżenie wzorca", "s"], ["quarter", "Kwartał", "s"], ["turnover", "Obrót mln $", "m"],
@@ -46,12 +46,20 @@ function defaultCompare(a, b) {
     return 0;
 }
 
-// skaner CEM10: ranking po wybranym momentum (mom121 = 12-1, mom6 = 6 mies.): spółki z C-8 malejąco -> cem_rank 1..N, cem_top = pierwsze `top` (zielone). Wiersze bez pola c8 (np. z desktopa) bez zmian.
-function rankCem(rows, key, top) {
+// skaner CEM10: ranking po wybranym momentum (mom6 = 6 mies., mom121 = 12-1): spółki z C-8 malejąco -> cem_rank 1..N, cem_top = do zakupu (zielone):
+// `top` = liczba (pierwsze z całej listy) albo {indeks: N} (np. {sp500: 10, ndx: 5} — pierwsze N każdego indeksu wg `indexes`), jak calc.assign_cem_rank. Wiersze bez pola c8 (np. z desktopa) bez zmian.
+function rankCem(rows, key, top, marketOk = true) {
     if (!rows.some((r) => r.c8 !== undefined)) return;
     const ranked = rows.filter((r) => r.c8 && Number.isFinite(r[key])).sort((a, b) => b[key] - a[key]);
     for (const r of rows) { r.cem_rank = null; r.cem_top = false; }
-    ranked.forEach((r, i) => { r.cem_rank = i + 1; r.cem_top = i < top; });
+    ranked.forEach((r, i) => { r.cem_rank = i + 1; });
+    if (!marketOk) return;   // rynek pod SMA 12 (SPY): nic do kupienia
+    if (top && typeof top === "object" && ranked.some((r) => (r.indexes || []).length)) {
+        for (const [index, n] of Object.entries(top)) ranked.filter((r) => (r.indexes || []).includes(index)).slice(0, n).forEach((r) => { r.cem_top = true; });
+    } else {
+        const n = top && typeof top === "object" ? Object.values(top).reduce((a, b) => a + b, 0) : top;
+        ranked.slice(0, n).forEach((r) => { r.cem_top = true; });
+    }
 }
 
 // puste wartości zawsze na końcu
@@ -80,8 +88,6 @@ const FILTER_PRESETS = [   // jak desktop/app.py FILTER_PRESETS
     ["Nad GLB + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT", "NAD"] }, macd: { in: ["nad"] } }],
     ["Sygnał kupna (wybicie / 0–10 % / Blue Dot) + MACD dodatni", { glb_state: { in: ["WYBICIE", "SYGNAŁ", "BLUE DOT"] }, macd: { in: ["nad"] } }],
     ["Blisko linii (−10…+10 %)", { glb_pct: { min: -10, max: 10 } }],
-    ["TEMPO ≥ 0 (tempo 3 mies. nie słabnie względem 12 mies.)", { tempo: { min: 0 } }],
-    ["Momentum 6 mies. ≥ 30 % + TEMPO ≥ 0", { mom6: { min: 30 }, tempo: { min: 0 } }],
 ];
 
 const filterValue = (r, k) => (k === "trend" || k === "beat2" || k === "ok" ? (r[k] ? "tak" : "nie") : r[k] == null ? "—" : String(r[k]));
@@ -120,7 +126,7 @@ if (typeof module !== "undefined") module.exports = { rankCem, COLUMNS, NUMERIC_
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
     // exit: MACD / GLB; view = ustawienia widoku osobno dla T (W) i M: {fut: puste świece po prawej, n: długość okna, z / s: skala ceny}; stops = ręczne stopy {ticker: cena}
-    const state = Object.assign({ sort: null, rank: "mom121", recent: [], filters: {}, exit: "MACD", view: {}, stops: {}, rwb: false, capital: 10000, risk: 1, gist: { id: "", mode: "auto" } }, readSettings());
+    const state = Object.assign({ sort: null, rank: "mom6", recent: [], filters: {}, exit: "MACD", view: {}, stops: {}, rwb: false, capital: 10000, risk: 1, gist: { id: "", mode: "auto" } }, readSettings());
     if (typeof state.view !== "object" || !state.view) state.view = {};
     if (typeof state.stops !== "object" || !state.stops) state.stops = {};
     if (typeof state.gist !== "object" || !state.gist) state.gist = { id: "", mode: "auto" };
@@ -176,11 +182,12 @@ if (typeof document !== "undefined") (function () {
     }
 
     function renderTable() {
-        if (!["mom121", "mom6"].includes(state.rank)) state.rank = "mom121";
+        if (!["mom121", "mom6"].includes(state.rank)) state.rank = "mom6";
         const cem = data.rows.some((r) => r.c8 !== undefined);
         $("rankSel").hidden = !cem;
         $("rankSel").value = state.rank;
-        if (cem) rankCem(data.rows, state.rank, (data.rules && data.rules.cem_top) || 20);   // zielone top N i kolejność wg wybranego momentum
+        const mk = data.rules && data.rules.market;
+        if (cem) rankCem(data.rows, state.rank, (data.rules && data.rules.cem_top) || 20, !(mk && mk.ok === false));   // zielone top N i kolejność wg wybranego momentum; filtr rynku: SPY pod SMA 12 mies. = brak zielonych
         const pool = visibleRows(data.rows, { scanner: state.scanner });
         shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
@@ -194,7 +201,7 @@ if (typeof document !== "undefined") (function () {
                 return `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(value, f))}</td>`;
             }).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · ${pool.some((r) => r.cem_rank != null) ? `z C-8 · do zakupu (zielone) ${pool.filter((r) => r.cem_top).length}` : `spełnia warunki ${pool.filter((r) => r.ok).length} · sygnał GLB ${pool.filter((r) => r.ok && isSignal(r)).length}`}`;
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · ${pool.some((r) => r.cem_rank != null) ? `z C-8 · do zakupu (zielone) ${pool.filter((r) => r.cem_top).length}${mk ? (mk.ok ? " · rynek: SPY nad SMA 12 mies." : ` · RYNEK: SPY ${mk.pct.toFixed(1)} % pod SMA 12 mies. — bez nowych wejść`) : ""}` : `spełnia warunki ${pool.filter((r) => r.ok).length} · sygnał GLB ${pool.filter((r) => r.ok && isSignal(r)).length}`}`;
         renderStatus();
     }
 

@@ -91,7 +91,7 @@ test("columns and presets like the desktop app", () => {
     const keys = COLUMNS.map(([k]) => k);
     for (const k of ["sector_rs", "eps_rating", "pattern", "pattern_pct", "peg", "pegy", "dgm", "quarter", "cc52w", "ok", "slow"]) assert.ok(keys.includes(k), k);
     for (const k of ["vol52", "rs_rating", "blb", "blb_state"]) assert.ok(!keys.includes(k), k);
-    assert.strictEqual(FILTER_PRESETS.length, 12);
+    assert.strictEqual(FILTER_PRESETS.length, 10);
     assert.strictEqual(cell(0.987, "x2"), "0.99");
     assert.strictEqual(cell(83.4, "i"), "83");
 });
@@ -134,16 +134,18 @@ test("skaner CEM10: wybór rankingu przelicza cem_rank / cem_top po 12-1 albo po
     rankCem(rows, "mom6", 2);
     assert.deepStrictEqual(rows.map((r) => [r.cem_rank, r.cem_top]), [[1, true], [2, true], [null, false], [3, false]]);
     const old = [{ ticker: "X", glb_pct: 3 }];
+    rankCem(rows, "mom121", 2, false);
+    assert.deepEqual(rows.map((r) => r.cem_top), rows.map(() => false));   // filtr rynku: SPY pod SMA 12 mies. = brak zielonych, ranking zostaje
+    assert.ok(rows.some((r) => r.cem_rank != null));
+    const ix = [["A", 90, ["sp500"]], ["B", 80, ["sp500", "ndx"]], ["C", 70, ["sp500"]], ["D", 60, ["ndx"]], ["E", 50, ["ndx"]]].map(([ticker, mom6, indexes]) => ({ ticker, c8: true, mom6, indexes }));
+    rankCem(ix, "mom6", { sp500: 2, ndx: 2 });
+    assert.deepStrictEqual(ix.filter((r) => r.cem_top).map((r) => r.ticker), ["A", "B", "D"]);   // top N na indeks (S&P 500 10, Nasdaq-100 5 w konfiguracji)
     rankCem(old, "mom6", 20);   // dane bez pola c8 (desktop / stary skaner) bez zmian
     assert.strictEqual(old[0].cem_rank, undefined);
 });
 
-test("TEMPO i Momentum 6 mies.: kolumny i presety jak w desktopie", () => {
-    const { COLUMNS, FILTER_PRESETS, passFilters } = require("../../docs/js/app.js");
+test("Momentum 6 mies.: kolumna po momentum 12-1", () => {
+    const { COLUMNS } = require("../../docs/js/app.js");
     const keys = COLUMNS.map(([k]) => k);
-    assert.ok(keys.indexOf("mom6") === keys.indexOf("mom121") + 1 && keys.indexOf("tempo") === keys.indexOf("mom6") + 1);
-    const f = FILTER_PRESETS.find(([n]) => n.startsWith("TEMPO ≥ 0"))[1];
-    assert.ok(passFilters({ tempo: 0 }, f) && passFilters({ tempo: 3.2 }, f) && !passFilters({ tempo: -0.1 }, f) && !passFilters({ tempo: null }, f));
-    const g = FILTER_PRESETS.find(([n]) => n.startsWith("Momentum 6 mies."))[1];
-    assert.ok(passFilters({ mom6: 45, tempo: 1 }, g) && !passFilters({ mom6: 20, tempo: 1 }, g));
+    assert.ok(keys.indexOf("mom6") === keys.indexOf("mom121") + 1 && !keys.includes("tempo"));
 });

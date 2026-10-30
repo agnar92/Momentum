@@ -456,10 +456,6 @@ def test_default_scanner_is_the_sector_scanner_and_only_one_is_refreshed(tmp_pat
 def test_cem_momentum_c8_and_rank():
     c = [100.0 * 1.01 ** i for i in range(60)]
     assert calc.momentum_12_1(c) == pytest.approx((c[-5] / c[-53] - 1) * 100) and calc.momentum_12_1(c[:50]) is None   # ostatni miesiąc pominięty
-    assert calc.tempo_margin(c) == pytest.approx(((c[-1] / c[-14]) ** (1 / 3) / (c[-1] / c[-53]) ** (1 / 12) - 1) * 100) and abs(calc.tempo_margin(c)) < 1e-6   # stały wzrost: tempo 3 i 12 mies. równe
-    accel = [100.0 * 1.005 ** i for i in range(47)] + [100.0 * 1.005 ** 46 * 1.03 ** k for k in range(1, 14)]
-    fade = [100.0 * 1.03 ** i for i in range(47)] + [100.0 * 1.03 ** 46 * 1.001 ** k for k in range(1, 14)]
-    assert calc.tempo_margin(accel) > 0 > calc.tempo_margin(fade) and calc.tempo_margin(c[:40]) is None                          # przyspiesza >= 0, wygasa < 0
     assert calc.cem_c8(c) and not calc.cem_c8([100.0] * 60) and not calc.cem_c8(c[:40])                                 # kwartał > 0 i rok > +30 %
     assert not calc.cem_c8([100.0 * 1.01 ** i for i in range(47)] + [60.0] * 13)                                         # rok w górę, ale kwartał w dół
     assert calc.momentum_6(c) == pytest.approx((c[-1] / c[-27] - 1) * 100) and calc.momentum_6(c[:20]) is None                  # 26 tygodni, bez pomijania
@@ -467,8 +463,15 @@ def test_cem_momentum_c8_and_rank():
     calc.assign_cem_rank(rows, top=1, key="mom6")
     assert [(r["cem_rank"], r["cem_top"]) for r in rows] == [(1, True), (2, False)]                                              # ranking po wybranym momentum
     rows = [{"ticker": "A", "c8": True, "mom121": 50.0}, {"ticker": "B", "c8": True, "mom121": 90.0}, {"ticker": "C", "c8": False, "mom121": 99.0}, {"ticker": "D", "c8": True, "mom121": None}]
-    calc.assign_cem_rank(rows, top=1)
+    calc.assign_cem_rank(rows, top=1, key="mom121")
     assert [(r["cem_rank"], r["cem_top"]) for r in rows] == [(2, False), (1, True), (None, False), (None, False)]
+    rows = [{"ticker": t, "c8": True, "mom6": m, "indexes": ix} for t, m, ix in
+            (("A", 90.0, ["sp500"]), ("B", 80.0, ["sp500", "ndx"]), ("C", 70.0, ["sp500"]), ("D", 60.0, ["ndx"]), ("E", 50.0, ["ndx"]))]
+    calc.assign_cem_rank(rows, top={"sp500": 2, "ndx": 2})                                                                        # domyślnie 6 mies.
+    assert [r["ticker"] for r in rows if r["cem_top"]] == ["A", "B", "D"] and [r["cem_rank"] for r in rows] == [1, 2, 3, 4, 5]   # top 2 na indeks, B liczy się w obu
+    old = [{"ticker": t, "c8": True, "mom6": m} for t, m in (("A", 3.0), ("B", 2.0), ("C", 1.0))]
+    calc.assign_cem_rank(old, top={"sp500": 1, "ndx": 1})
+    assert [r["cem_top"] for r in old] == [True, True, False]                                                                     # bez `indexes`: suma jako jedno top N
 
 
 def test_run_cem_scanner_queries_each_index_keeps_only_c8_and_ranks(tmp_path):
@@ -486,6 +489,7 @@ def test_run_cem_scanner_queries_each_index_keeps_only_c8_and_ranks(tmp_path):
     rows = watchlist.run(cfg, out=tmp_path / "out", cache_dir=tmp_path / "cache", log=lambda s: None, fetch_list=fetch, weekly=weekly, monthly=_monthly, fund=_fund, est=_est)
     assert queries == ["idx_sp500,f", "idx_ndx,f"]
     by = {r["ticker"]: r for r in rows}
+    assert by["UP1"]["indexes"] == ["sp500", "ndx"] and by["UP3"]["indexes"] == ["ndx"]                    # indeksy spółki do top N na indeks
     assert set(by) == {"UP1", "UP2", "UP3"}                                                     # FLAT nie ma C-8
     assert [(t, by[t]["cem_rank"], by[t]["cem_top"]) for t in ("UP2", "UP3", "UP1")] == [("UP2", 1, True), ("UP3", 2, False), ("UP1", 3, False)]
     assert not (tmp_path / "out" / "weekly" / "FLAT.json").exists()                            # świece tylko dla spółek z listy
@@ -592,3 +596,13 @@ def test_build_only_without_etf_candles_keeps_previous_list(tmp_path):
         watchlist.run(cfg, **kw)
     rows = watchlist.run(cfg, offline=True, **kw)
     assert len(rows) == 20 and json.loads((tmp_path / "out" / "watchlist.json").read_text())["sectors"] == []
+
+
+def test_market_regime_spy_under_monthly_sma():
+    d = [f"{2025 + (m - 1) // 12}-{(m - 1) % 12 + 1:02d}-{day:02d}" for m in range(1, 17) for day in (8, 22)]
+    up = {"d": d, "c": [100.0 + i for i in range(len(d))]}
+    r = calc.market_regime(up)
+    assert r["ok"] and r["pct"] > 0 and r["spy"] == up["c"][-1]                                                      # rosnący SPY: nad SMA 12 mies.
+    down = {"d": d, "c": up["c"][:-2] + [90.0, 90.0]}
+    assert calc.market_regime(down)["ok"] is False                                                                   # ostatni miesiąc mocno pod średnią -> bez nowych wejść
+    assert calc.market_regime({"d": d[:10], "c": up["c"][:10]}) is None and calc.market_regime(None) is None         # za krótka historia
