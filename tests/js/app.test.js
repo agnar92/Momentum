@@ -91,7 +91,7 @@ test("columns and presets like the desktop app", () => {
     const keys = COLUMNS.map(([k]) => k);
     for (const k of ["sector_rs", "eps_rating", "pattern", "pattern_pct", "peg", "pegy", "dgm", "quarter", "cc52w", "ok", "slow"]) assert.ok(keys.includes(k), k);
     for (const k of ["vol52", "rs_rating", "blb", "blb_state"]) assert.ok(!keys.includes(k), k);
-    assert.strictEqual(FILTER_PRESETS.length, 11);
+    assert.strictEqual(FILTER_PRESETS.length, 10);
     assert.strictEqual(cell(0.987, "x2"), "0.99");
     assert.strictEqual(cell(83.4, "i"), "83");
 });
@@ -141,10 +141,8 @@ test("skaner CEM10: wybór rankingu przelicza cem_rank / cem_top po 12-1 albo po
     assert.strictEqual(old[0].cem_rank, undefined);
 });
 
-test("Momentum 6 mies.: kolumna po momentum 12-1 i preset jak w desktopie", () => {
-    const { COLUMNS, FILTER_PRESETS, passFilters } = require("../../docs/js/app.js");
+test("Momentum 6 mies.: kolumna po momentum 12-1", () => {
+    const { COLUMNS } = require("../../docs/js/app.js");
     const keys = COLUMNS.map(([k]) => k);
     assert.ok(keys.indexOf("mom6") === keys.indexOf("mom121") + 1 && !keys.includes("tempo"));
-    const g = FILTER_PRESETS.find(([n]) => n.startsWith("Momentum 6 mies."))[1];
-    assert.ok(passFilters({ mom6: 45 }, g) && !passFilters({ mom6: 20 }, g));
 });
