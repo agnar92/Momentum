@@ -46,12 +46,20 @@ function defaultCompare(a, b) {
     return 0;
 }
 
-// skaner CEM10: ranking po wybranym momentum (mom121 = 12-1, mom6 = 6 mies.): spółki z C-8 malejąco -> cem_rank 1..N, cem_top = pierwsze `top` (zielone). Wiersze bez pola c8 (np. z desktopa) bez zmian.
+// skaner CEM10: ranking po wybranym momentum (mom6 = 6 mies., mom121 = 12-1): spółki z C-8 malejąco -> cem_rank 1..N, cem_top = do zakupu (zielone):
+// `top` = liczba (pierwsze z całej listy) albo {indeks: N} (np. {sp500: 10, ndx: 5} — pierwsze N każdego indeksu wg `indexes`), jak calc.assign_cem_rank. Wiersze bez pola c8 (np. z desktopa) bez zmian.
 function rankCem(rows, key, top, marketOk = true) {
     if (!rows.some((r) => r.c8 !== undefined)) return;
     const ranked = rows.filter((r) => r.c8 && Number.isFinite(r[key])).sort((a, b) => b[key] - a[key]);
     for (const r of rows) { r.cem_rank = null; r.cem_top = false; }
-    ranked.forEach((r, i) => { r.cem_rank = i + 1; r.cem_top = marketOk && i < top; });   // rynek pod SMA 12 (SPY): nic do kupienia
+    ranked.forEach((r, i) => { r.cem_rank = i + 1; });
+    if (!marketOk) return;   // rynek pod SMA 12 (SPY): nic do kupienia
+    if (top && typeof top === "object" && ranked.some((r) => (r.indexes || []).length)) {
+        for (const [index, n] of Object.entries(top)) ranked.filter((r) => (r.indexes || []).includes(index)).slice(0, n).forEach((r) => { r.cem_top = true; });
+    } else {
+        const n = top && typeof top === "object" ? Object.values(top).reduce((a, b) => a + b, 0) : top;
+        ranked.slice(0, n).forEach((r) => { r.cem_top = true; });
+    }
 }
 
 // puste wartości zawsze na końcu
@@ -118,7 +126,7 @@ if (typeof module !== "undefined") module.exports = { rankCem, COLUMNS, NUMERIC_
 if (typeof document !== "undefined") (function () {
     const $ = (id) => document.getElementById(id);
     // exit: MACD / GLB; view = ustawienia widoku osobno dla T (W) i M: {fut: puste świece po prawej, n: długość okna, z / s: skala ceny}; stops = ręczne stopy {ticker: cena}
-    const state = Object.assign({ sort: null, rank: "mom121", recent: [], filters: {}, exit: "MACD", view: {}, stops: {}, rwb: false, capital: 10000, risk: 1, gist: { id: "", mode: "auto" } }, readSettings());
+    const state = Object.assign({ sort: null, rank: "mom6", recent: [], filters: {}, exit: "MACD", view: {}, stops: {}, rwb: false, capital: 10000, risk: 1, gist: { id: "", mode: "auto" } }, readSettings());
     if (typeof state.view !== "object" || !state.view) state.view = {};
     if (typeof state.stops !== "object" || !state.stops) state.stops = {};
     if (typeof state.gist !== "object" || !state.gist) state.gist = { id: "", mode: "auto" };
@@ -174,7 +182,7 @@ if (typeof document !== "undefined") (function () {
     }
 
     function renderTable() {
-        if (!["mom121", "mom6"].includes(state.rank)) state.rank = "mom121";
+        if (!["mom121", "mom6"].includes(state.rank)) state.rank = "mom6";
         const cem = data.rows.some((r) => r.c8 !== undefined);
         $("rankSel").hidden = !cem;
         $("rankSel").value = state.rank;

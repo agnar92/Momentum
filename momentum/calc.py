@@ -350,14 +350,22 @@ def cem_c8(closes, q_weeks=13, y_weeks=52, y_min=0.30):
     return c[-1] / c[-1 - q_weeks] > 1 and c[-1] / c[-1 - y_weeks] > 1 + y_min
 
 
-def assign_cem_rank(rows, top=CEM_TOP, key="mom121"):
-    """Ranking CEM10: spółki z C-8 malejąco po momentum (`key`: mom121 = 12-1 albo mom6 = 6 mies.) -> `cem_rank` 1..N, `cem_top` = pierwsze `top` (do zakupu). Reszta: None / False.
-    Strona przelicza to samo w przeglądarce po wyborze rankingu (docs/js/app.js `rankCem`)."""
+def assign_cem_rank(rows, top=CEM_TOP, key="mom6"):
+    """Ranking CEM10: spółki z C-8 malejąco po momentum (`key`: mom6 = 6 mies., domyślnie; mom121 = 12-1) -> `cem_rank` 1..N, `cem_top` = do zakupu.
+    `top` = liczba (pierwsze `top` z całej listy) albo {indeks: N} (np. {"sp500": 10, "ndx": 5}: pierwsze N spółek każdego indeksu wg pola `indexes`;
+    spółka z obu indeksów jest zielona, gdy łapie się w którymkolwiek). Strona przelicza to samo w przeglądarce (docs/js/app.js `rankCem`)."""
     ranked = sorted((r for r in rows if r.get("c8") and _ok(r.get(key))), key=lambda r: -r[key])
     for r in rows:
         r["cem_rank"], r["cem_top"] = None, False
     for i, r in enumerate(ranked, 1):
-        r["cem_rank"], r["cem_top"] = i, i <= top
+        r["cem_rank"] = i
+    if isinstance(top, dict) and any(r.get("indexes") for r in ranked):
+        for index, n in top.items():
+            for r in [r for r in ranked if index in (r.get("indexes") or [])][:int(n)]:
+                r["cem_top"] = True
+    else:   # liczba albo stare wiersze bez `indexes`: jedno top N z całej listy
+        for r in ranked[:sum(map(int, top.values())) if isinstance(top, dict) else top]:
+            r["cem_top"] = True
 
 
 MARKET_SMA_MONTHS = 12   # filtr rynku CEM10: SPY pod miesięczną SMA 12 = bez nowych wejść

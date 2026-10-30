@@ -67,16 +67,18 @@ def sector_fetch(sc, fetch_list, ranked, log):
 def index_fetch(sc, fetch_list, log):
     """Skaner CEM10: po jednym zapytaniu Finviz na każdy indeks (`indexes`, np. idx_sp500, idx_ndx) + wspólne filtry; spółki bez powtórzeń (Finviz nie łączy indeksów warunkiem „lub”)."""
     def fetch(filters, max_tickers=None, log=log):
-        rows, seen, total = [], set(), 0
+        rows, seen, total = [], {}, 0
         for index in sc["indexes"]:
             flt = f"{index},{filters}"
             log(f"Finviz [{index}]: filtr {flt}")
             part, tot = fetch_list(flt, max_tickers=max_tickers, log=log)
             total += tot or len(part)
+            name = index.removeprefix("idx_")   # sp500 / ndx: osobne top N na indeks (`cem_top` = {indeks: N})
             for r in part:
                 if r["ticker"] not in seen:
-                    seen.add(r["ticker"])
-                    rows.append(r)
+                    seen[r["ticker"]] = {**r, "indexes": []}
+                    rows.append(seen[r["ticker"]])
+                seen[r["ticker"]]["indexes"].append(name)
         return rows, total
     return fetch
 
@@ -95,7 +97,7 @@ def scanners(config):
     return out
 
 
-KEYS = ("ticker", "company", "sector", "industry", "market_cap")
+KEYS = ("ticker", "company", "sector", "industry", "market_cap", "indexes")   # indexes: sp500 / ndx (skaner CEM10, top N na indeks)
 
 
 def fetch_scanners(scans, prev, fetch_list, log, min_tickers=MIN_TICKERS):
@@ -256,7 +258,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
     for r in rows + sym_rows:
         r["sector_rs"] = by_sector.get(r.get("sector"))   # RS sektora spółki (% nad SMA 52 tyg.) — tylko w skanerze sektorowym
     if cem_top:
-        calc.assign_cem_rank(rows, int(cem_top))   # ranking CEM10: po momentum 12-1; cem_top pierwszych = do zakupu (zielone wiersze)
+        calc.assign_cem_rank(rows, cem_top if isinstance(cem_top, dict) else int(cem_top))   # ranking CEM10: po momentum 6 mies.; top N (na indeks) = do zakupu (zielone wiersze)
     calc.assign_eps_rating(rows)   # EPS Rating 1–99: percentyl wśród spółek tej listy
     calc.assign_eps_rating(sym_rows, pool=rows)
     if len(rows) < 0.7 * len(tickers):
@@ -276,7 +278,7 @@ def run(config, out=OUT, cache_dir=CACHE, log=print, fetch_list=finviz.fetch, we
         "generated_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "data_as_of": last, "scanners": meta, "sectors": sectors or [],
         "finviz_stale": any(m["stale"] for m in meta), "rules": {"confirm_months": calc.CONFIRM_MONTHS, "entry_max_pct": calc.ENTRY_MAX_PCT,
                                           "min_rev_growth": calc.MIN_REV_GROWTH,
-                                          "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT, "cem_top": int(cem_top) if cem_top else None,
+                                          "min_dopm": calc.MIN_DOPM, "max_ps": calc.MAX_PS, "min_rs": calc.MIN_RS, "stop_pct": calc.STOP_PCT, "cem_top": (cem_top if isinstance(cem_top, dict) else int(cem_top)) if cem_top else None,
                                           "market": calc.market_regime(series.get(BENCH)) if cem_top else None},
         "rows": rows, "symbols": sym_rows})
     ok = sum(1 for r in rows if r["ok"])

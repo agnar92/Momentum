@@ -137,6 +137,9 @@ test("skaner CEM10: wybór rankingu przelicza cem_rank / cem_top po 12-1 albo po
     rankCem(rows, "mom121", 2, false);
     assert.deepEqual(rows.map((r) => r.cem_top), rows.map(() => false));   // filtr rynku: SPY pod SMA 12 mies. = brak zielonych, ranking zostaje
     assert.ok(rows.some((r) => r.cem_rank != null));
+    const ix = [["A", 90, ["sp500"]], ["B", 80, ["sp500", "ndx"]], ["C", 70, ["sp500"]], ["D", 60, ["ndx"]], ["E", 50, ["ndx"]]].map(([ticker, mom6, indexes]) => ({ ticker, c8: true, mom6, indexes }));
+    rankCem(ix, "mom6", { sp500: 2, ndx: 2 });
+    assert.deepStrictEqual(ix.filter((r) => r.cem_top).map((r) => r.ticker), ["A", "B", "D"]);   // top N na indeks (S&P 500 10, Nasdaq-100 5 w konfiguracji)
     rankCem(old, "mom6", 20);   // dane bez pola c8 (desktop / stary skaner) bez zmian
     assert.strictEqual(old[0].cem_rank, undefined);
 });
