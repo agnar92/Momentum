@@ -592,3 +592,13 @@ def test_build_only_without_etf_candles_keeps_previous_list(tmp_path):
         watchlist.run(cfg, **kw)
     rows = watchlist.run(cfg, offline=True, **kw)
     assert len(rows) == 20 and json.loads((tmp_path / "out" / "watchlist.json").read_text())["sectors"] == []
+
+
+def test_market_regime_spy_under_monthly_sma():
+    d = [f"{2025 + (m - 1) // 12}-{(m - 1) % 12 + 1:02d}-{day:02d}" for m in range(1, 17) for day in (8, 22)]
+    up = {"d": d, "c": [100.0 + i for i in range(len(d))]}
+    r = calc.market_regime(up)
+    assert r["ok"] and r["pct"] > 0 and r["spy"] == up["c"][-1]                                                      # rosnący SPY: nad SMA 12 mies.
+    down = {"d": d, "c": up["c"][:-2] + [90.0, 90.0]}
+    assert calc.market_regime(down)["ok"] is False                                                                   # ostatni miesiąc mocno pod średnią -> bez nowych wejść
+    assert calc.market_regime({"d": d[:10], "c": up["c"][:10]}) is None and calc.market_regime(None) is None         # za krótka historia

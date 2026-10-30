@@ -47,11 +47,11 @@ function defaultCompare(a, b) {
 }
 
 // skaner CEM10: ranking po wybranym momentum (mom121 = 12-1, mom6 = 6 mies.): spółki z C-8 malejąco -> cem_rank 1..N, cem_top = pierwsze `top` (zielone). Wiersze bez pola c8 (np. z desktopa) bez zmian.
-function rankCem(rows, key, top) {
+function rankCem(rows, key, top, marketOk = true) {
     if (!rows.some((r) => r.c8 !== undefined)) return;
     const ranked = rows.filter((r) => r.c8 && Number.isFinite(r[key])).sort((a, b) => b[key] - a[key]);
     for (const r of rows) { r.cem_rank = null; r.cem_top = false; }
-    ranked.forEach((r, i) => { r.cem_rank = i + 1; r.cem_top = i < top; });
+    ranked.forEach((r, i) => { r.cem_rank = i + 1; r.cem_top = marketOk && i < top; });   // rynek pod SMA 12 (SPY): nic do kupienia
 }
 
 // puste wartości zawsze na końcu
@@ -180,7 +180,8 @@ if (typeof document !== "undefined") (function () {
         const cem = data.rows.some((r) => r.c8 !== undefined);
         $("rankSel").hidden = !cem;
         $("rankSel").value = state.rank;
-        if (cem) rankCem(data.rows, state.rank, (data.rules && data.rules.cem_top) || 20);   // zielone top N i kolejność wg wybranego momentum
+        const mk = data.rules && data.rules.market;
+        if (cem) rankCem(data.rows, state.rank, (data.rules && data.rules.cem_top) || 20, !(mk && mk.ok === false));   // zielone top N i kolejność wg wybranego momentum; filtr rynku: SPY pod SMA 12 mies. = brak zielonych
         const pool = visibleRows(data.rows, { scanner: state.scanner });
         shown = visibleRows(data.rows, { search: $("search").value, sort: state.sort, scanner: state.scanner, filters: state.filters });
         const nf = activeFilters(state.filters);
@@ -194,7 +195,7 @@ if (typeof document !== "undefined") (function () {
                 return `<td class="${TEXT_COLS.includes(k) ? "" : "num"} c-${k}">${k === "ticker" && held ? "📌 " : ""}${escapeHtml(cell(value, f))}</td>`;
             }).join("") + "</tr>";
         }).join("") || `<tr><td colspan="${COLUMNS.length}" class="empty">Brak spółek — zmień filtry albo wyszukiwanie.</td></tr>`;
-        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · ${pool.some((r) => r.cem_rank != null) ? `z C-8 · do zakupu (zielone) ${pool.filter((r) => r.cem_top).length}` : `spełnia warunki ${pool.filter((r) => r.ok).length} · sygnał GLB ${pool.filter((r) => r.ok && isSignal(r)).length}`}`;
+        $("counts").textContent = `${shown.length} na liście · ${pool.length} spółek ze skanera · ${pool.some((r) => r.cem_rank != null) ? `z C-8 · do zakupu (zielone) ${pool.filter((r) => r.cem_top).length}${mk ? (mk.ok ? " · rynek: SPY nad SMA 12 mies." : ` · RYNEK: SPY ${mk.pct.toFixed(1)} % pod SMA 12 mies. — bez nowych wejść`) : ""}` : `spełnia warunki ${pool.filter((r) => r.ok).length} · sygnał GLB ${pool.filter((r) => r.ok && isSignal(r)).length}`}`;
         renderStatus();
     }
 
