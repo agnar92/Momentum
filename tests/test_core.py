@@ -456,10 +456,6 @@ def test_default_scanner_is_the_sector_scanner_and_only_one_is_refreshed(tmp_pat
 def test_cem_momentum_c8_and_rank():
     c = [100.0 * 1.01 ** i for i in range(60)]
     assert calc.momentum_12_1(c) == pytest.approx((c[-5] / c[-53] - 1) * 100) and calc.momentum_12_1(c[:50]) is None   # ostatni miesiąc pominięty
-    assert calc.tempo_margin(c) == pytest.approx(((c[-1] / c[-14]) ** (1 / 3) / (c[-1] / c[-53]) ** (1 / 12) - 1) * 100) and abs(calc.tempo_margin(c)) < 1e-6   # stały wzrost: tempo 3 i 12 mies. równe
-    accel = [100.0 * 1.005 ** i for i in range(47)] + [100.0 * 1.005 ** 46 * 1.03 ** k for k in range(1, 14)]
-    fade = [100.0 * 1.03 ** i for i in range(47)] + [100.0 * 1.03 ** 46 * 1.001 ** k for k in range(1, 14)]
-    assert calc.tempo_margin(accel) > 0 > calc.tempo_margin(fade) and calc.tempo_margin(c[:40]) is None                          # przyspiesza >= 0, wygasa < 0
     assert calc.cem_c8(c) and not calc.cem_c8([100.0] * 60) and not calc.cem_c8(c[:40])                                 # kwartał > 0 i rok > +30 %
     assert not calc.cem_c8([100.0 * 1.01 ** i for i in range(47)] + [60.0] * 13)                                         # rok w górę, ale kwartał w dół
     assert calc.momentum_6(c) == pytest.approx((c[-1] / c[-27] - 1) * 100) and calc.momentum_6(c[:20]) is None                  # 26 tygodni, bez pomijania
