@@ -47,7 +47,7 @@ function defaultCompare(a, b) {
 }
 
 // skaner CEM10: ranking po wybranym momentum (mom6 = 6 mies., mom121 = 12-1): spółki z C-8 malejąco -> cem_rank 1..N, cem_top = do zakupu (zielone):
-// `top` = liczba (pierwsze z całej listy) albo {indeks: N} (np. {sp500: 10, ndx: 5} — pierwsze N każdego indeksu wg `indexes`), jak calc.assign_cem_rank. Wiersze bez pola c8 (np. z desktopa) bez zmian.
+// `top` = liczba (pierwsze z całej listy) albo {indeks: N} (np. {sp500: 10, ndx: 5} — kolejno pierwsze N każdego indeksu wg `indexes`, bez już wybranych), jak calc.assign_cem_rank. Wiersze bez pola c8 (np. z desktopa) bez zmian.
 function rankCem(rows, key, top, marketOk = true) {
     if (!rows.some((r) => r.c8 !== undefined)) return;
     const ranked = rows.filter((r) => r.c8 && Number.isFinite(r[key])).sort((a, b) => b[key] - a[key]);
@@ -55,7 +55,7 @@ function rankCem(rows, key, top, marketOk = true) {
     ranked.forEach((r, i) => { r.cem_rank = i + 1; });
     if (!marketOk) return;   // rynek pod SMA 12 (SPY): nic do kupienia
     if (top && typeof top === "object" && ranked.some((r) => (r.indexes || []).length)) {
-        for (const [index, n] of Object.entries(top)) ranked.filter((r) => (r.indexes || []).includes(index)).slice(0, n).forEach((r) => { r.cem_top = true; });
+        for (const [index, n] of Object.entries(top)) ranked.filter((r) => (r.indexes || []).includes(index) && !r.cem_top).slice(0, n).forEach((r) => { r.cem_top = true; });   // kolejność = kolejność wyboru, bez dubli
     } else {
         const n = top && typeof top === "object" ? Object.values(top).reduce((a, b) => a + b, 0) : top;
         ranked.slice(0, n).forEach((r) => { r.cem_top = true; });

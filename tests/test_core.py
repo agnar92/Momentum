@@ -468,7 +468,7 @@ def test_cem_momentum_c8_and_rank():
     rows = [{"ticker": t, "c8": True, "mom6": m, "indexes": ix} for t, m, ix in
             (("A", 90.0, ["sp500"]), ("B", 80.0, ["sp500", "ndx"]), ("C", 70.0, ["sp500"]), ("D", 60.0, ["ndx"]), ("E", 50.0, ["ndx"]))]
     calc.assign_cem_rank(rows, top={"sp500": 2, "ndx": 2})                                                                        # domyślnie 6 mies.
-    assert [r["ticker"] for r in rows if r["cem_top"]] == ["A", "B", "D"] and [r["cem_rank"] for r in rows] == [1, 2, 3, 4, 5]   # top 2 na indeks, B liczy się w obu
+    assert [r["ticker"] for r in rows if r["cem_top"]] == ["A", "B", "D", "E"] and [r["cem_rank"] for r in rows] == [1, 2, 3, 4, 5]   # 2 z S&P (A, B), potem 2 z NDX bez B (D, E)
     old = [{"ticker": t, "c8": True, "mom6": m} for t, m in (("A", 3.0), ("B", 2.0), ("C", 1.0))]
     calc.assign_cem_rank(old, top={"sp500": 1, "ndx": 1})
     assert [r["cem_top"] for r in old] == [True, True, False]                                                                     # bez `indexes`: suma jako jedno top N
