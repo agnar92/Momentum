@@ -63,3 +63,15 @@ test("computeFromRaw: lider, kandydaci USA i GPW z surowych świec", () => {
     assert.deepStrictEqual(usaCandidates(d.usa.rows, d.usa.lead).map((r) => r.t), ["AAA"]);
     assert.deepStrictEqual(gpwCandidates(d.gpw.rows).map((r) => r.t), ["PKO"]);
 });
+
+test("computeFromRaw z sitem Finviz: braki tylko wśród pobranych, pełny skład do sprawdzania trzymanych", () => {
+    const ts = Array.from({ length: 24 }, (_, i) => Date.UTC(2024, 10 + i, 1, 5) / 1000);
+    const ser = (f) => ({ t: ts, c: ts.map((_, i) => f(i)), a: ts.map((_, i) => f(i)), o: -18000 });
+    const raw = { today: "2026-11-02", prefilter: { sp: 1, nq: 0, filtr: "6M > +20 %" }, requested: ["AAA", "CCC"],
+        members: { sp: { AAA: "A", BBB: "B", CCC: "C" }, nq: {} }, gpw: { WIG20: {}, mWIG40: {} },
+        px: { SPY: ser(() => 100), QQQ: ser(() => 100), AAA: ser((i) => 50 + i) } };
+    const d = computeFromRaw(raw);
+    assert.deepStrictEqual(d.usa.missing, ["CCC"]);
+    assert.deepStrictEqual(d.usa.all, ["AAA", "BBB", "CCC"]);
+    assert.deepStrictEqual(d.usa.prefilter, { sp: 1, nq: 0, filtr: "6M > +20 %" });
+});

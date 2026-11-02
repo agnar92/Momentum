@@ -155,9 +155,13 @@ które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_h
 `parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
 **On the user's PC** (user: "chcę na komputerze to odpalić … nie potrzebuję dużej aplikacji", Windows without Python): `cem10_windows/CEM10.bat`
 (double click) -> `cem10.ps1` (Windows PowerShell 5.1, ASCII only, `$ProgressPreference = 'SilentlyContinue'`): members from Wikipedia by regex
-(same result as pandas; fallback + cache `sklad_usa.json`), `sklad_gpw.json`, Yahoo `/v8/finance/chart/<sym>?range=2y&interval=1mo` responses saved
+(same result as pandas; fallback + cache `sklad_usa.json`), Finviz PRE-FILTER (user: "czemu pobierasz 580 tickerów … zrób scan finviz, w sumie dwa"):
+`screener.ashx?v=411` (Tickers view, all rows in one page, `data-ticker=`) for `idx_sp500,ta_perf_26w20o` and `idx_ndx,ta_perf_26w20o`
+(+20 % margin below the 6M > +30 % rule; on 2026-11-02 it covered 69 of 70 candidates, the miss TWLO = index-membership lag on Finviz),
+plus the tickers in the newest `*moje_spolki*.txt` in the folder (the page's export) so held stocks always get prices; Finviz down -> all members;
+`raw.prefilter` / `raw.requested` -> `usa.prefilter`, `usa.all` (holdings check explains "nie przeszła sita"); ~176 Yahoo calls instead of 576. `sklad_gpw.json` (all 60), Yahoo `/v8/finance/chart/<sym>?range=2y&interval=1mo` responses saved
 UNCHANGED (no number formatting in PowerShell — Polish locale uses a decimal comma) into `dane.js` (`window.CEM10_RAW`), then `CEM10_lista.html` =
-`docs/cem10.html` with `dane.js` + `../docs/js/cem10.js` and opens it. ALL the maths is in `cem10.js` `computeFromRaw` (port of `cem10.build`;
+`docs/cem10.html` with `dane.js` + `../docs/js/cem10.js` (or `szablon.html` + `cem10.js` in the same folder = the standalone package) and opens it. ALL the maths is in `cem10.js` `computeFromRaw` (port of `cem10.build`;
 `yahooSeries`, `monthMap` adds +2 h because Yahoo's `gmtoffset` is TODAY's offset while monthly bars start at local midnight of their own DST state —
 without it every month shifted by one). Checked: identical rows / leader / filters to `cem10.py` on live data (574 stocks); the PowerShell itself was not run here
 (no pwsh in the container). `dane.js` / `CEM10_lista.html` are in `.gitignore`; `CZYTAJ.txt` = instructions.

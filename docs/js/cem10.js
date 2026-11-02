@@ -99,7 +99,8 @@ function computeFromRaw(raw) {
     const rows = all.filter((t) => m[t] && m[t].a.length >= SMA_N).map((t) => stockRow(t, String(names[t]).slice(0, 40), m[t].a, m[t].r, { sp: t in mem.sp, nq: t in mem.nq }));
     const k = m.SPY.r[m.SPY.r.length - 1] / spy[spy.length - 1];
     const usa = { lead: q5 > s5 ? "NDX" : "SP", spy5: rnd(s5), qqq5: rnd(q5), spy: rnd(m.SPY.r[m.SPY.r.length - 1], 2), spy_sma12: rnd(spy12 * k, 2),
-        bear: spy[spy.length - 1] < spy12, n: N_USA, rows, missing: all.filter((t) => !rows.some((r) => r.t === t)) };
+        bear: spy[spy.length - 1] < spy12, n: N_USA, rows, missing: (raw.requested || all).filter((t) => !rows.some((r) => r.t === t)) };
+    if (raw.prefilter) { usa.prefilter = raw.prefilter; usa.all = all; }   // sito Finviz: ceny tylko dla spółek po sicie i Twoich
     const w20 = gpw.WIG20, w40 = gpw.mWIG40, gall = [...new Set([...Object.keys(w20), ...Object.keys(w40)])].sort(), grows = [], ser = {};
     for (const t of gall) {
         const s = m[t + ".WA"];
@@ -151,6 +152,9 @@ if (typeof document !== "undefined") {
         const idxG = (r) => r.w20 ? "WIG20" : "mWIG40";
         const allU = [...U.rows].sort((a, b) => (b.r6 ?? -9) - (a.r6 ?? -9)), allG = [...G.rows].sort((a, b) => (b.r6 ?? -9) - (a.r6 ?? -9));
         $("usaCount").textContent = allU.length; $("gpwCount").textContent = allG.length;
+        if (U.prefilter) {
+            $("usaAllBox").querySelector("summary").innerHTML = `USA: spółki po sicie Finviz (6M &gt; +20 %: S&amp;P 500 ${U.prefilter.sp}, Nasdaq‑100 ${U.prefilter.nq}) i Twoje (<span id="usaCount">${allU.length}</span>)`;
+        }
         const hit = (r, q) => !q || r.t.includes(q) || r.n.toUpperCase().includes(q);
         const drawU = (q) => { q = q.trim().toUpperCase(); $("usaAll").innerHTML = allU.filter((r) => hit(r, q)).map((r) => `<tr><td class="t">${esc(r.t)}</td><td class="nm">${esc(r.n)}</td><td>${idxU(r)}</td><td class="n ${cls(r.r6)}">${pct(r.r6)}</td><td class="n">${num(r.c)}</td><td class="n">${num(r.sma)}</td><td class="n ${cls(r.dist)}">${pct(r.dist)}</td><td>${isCandU(r) ? (inLead(r) ? "tak" : "tak (drugi indeks)") : ""}</td></tr>`).join(""); };
         const drawG = (q) => { q = q.trim().toUpperCase(); $("gpwAll").innerHTML = allG.filter((r) => hit(r, q)).map((r) => `<tr><td class="t">${esc(r.t)}</td><td class="nm">${esc(r.n)}</td><td>${idxG(r)}</td><td class="n ${cls(r.r6)}">${pct(r.r6)}</td><td class="n ${cls(r.r3)}">${pct(r.r3)}</td><td class="n ${cls(r.r12)}">${pct(r.r12)}</td><td class="n">${num(r.c)}</td><td class="n ${cls(r.dist)}">${pct(r.dist)}</td><td>${isC8(r) ? "tak" : ""}</td></tr>`).join(""); };
@@ -164,6 +168,7 @@ if (typeof document !== "undefined") {
             if (!ts.length) { $("holdBody").innerHTML = "<tr><td colspan=\"8\" class=\"empty\">Wpisz tickery, aby zobaczyć decyzję dla każdej spółki.</td></tr>"; return; }
             $("holdBody").innerHTML = ts.map((t) => {
                 const r = map[t] || map[t.replace(".", "-")];
+                if (!r && U.all && U.all.includes(t)) return `<tr><td class="t">${esc(t)}</td><td class="nm" colspan="6">Spółka jest w S&amp;P 500 / Nasdaq‑100, ale nie przeszła sita Finviz (6M poniżej +20 %), więc nie ma jej cen. Zapisz listę do pliku w folderze CEM10 i uruchom CEM10.bat ponownie.</td><td><span class="st s">sprawdź</span></td></tr>`;
                 if (!r) return `<tr><td class="t">${esc(t)}</td><td class="nm" colspan="6">Nie ma tej spółki w S&amp;P 500, Nasdaq‑100, WIG20 ani mWIG40. W USA wypadnięcie z indeksów oznacza sprzedaż; sprawdź ticker.</td><td><span class="st s">sprawdź</span></td></tr>`;
                 const d = decide(r);
                 return `<tr><td class="t">${esc(r.t)}</td><td class="nm">${esc(r.n)}</td><td>${r.m} · ${r.idx}</td><td class="n">${num(r.c)}</td><td class="n">${num(r.sma)}</td><td class="n ${cls(r.dist)}">${pct(r.dist)}</td><td class="n ${cls(r.r6)}">${pct(r.r6)}</td><td><span class="st ${d === "trzymaj" ? "h" : "s"}">${d}</span></td></tr>`;
