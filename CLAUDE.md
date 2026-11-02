@@ -137,10 +137,29 @@ returns < 15 rows while it reports more, that scanner's previous rows are reused
 - Loading bar at the bottom (`#loadbar`, `fetchJson` streams the body: MB, % when the size is known, seconds).
 - `sw.js`: network-first PWA cache (bump `CACHE`, keep `SHELL` in sync). Settings in localStorage `momentum_settings_v2`.
 
+## CEM10 monthly list (`cem10.py`, `momentum/cem10.py`, `docs/cem10.html`, `docs/js/cem10.js`)
+
+User, Nov 2026: "w momentum jako miesięczne odświeżanie … 5 spółek z GPW … bez lidera GPW … możliwość wyexportowania listy". A separate page with the
+final CEM10 rules from the study (NOT the Finviz scanner of the main list): **USA** 10 positions, leader = SPY or QQQ with the higher 5-month return
+(user: Stooq offers 5 months; 5M ≈ 6M in the tests, 91 % same leader), candidates from the leader's index (S&P 500 / Nasdaq-100): 6M > +30 % and
+monthly close over SMA 10, ranked by 6M; no buys while SPY closes the month under SMA 12. **GPW** 5 positions, NO leader (WIG20 + mWIG40 together),
+C-8 (3M > 0, 12M > +30 %, over SMA 10), ranked by 6M; no buys while the equal-weight index of the current components (mean monthly return,
+|r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (USA also leaving both indexes), stop −40 % (shown in the rules only).
+Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) reads S&P 500 / Nasdaq-100 members from Wikipedia
+(`List_of_S%26P_500_companies`, `List_of_NASDAQ-100_companies`; on error the previous file's members stay), WIG20 / mWIG40 from `cem10_gpw.json`
+(update by hand after each GPW revision: March, June, September, December), yfinance daily candles 3 y (`auto_adjust=False`: returns / SMA on
+`Adj Close`, displayed prices raw) -> last session of each CLOSED month (`prices.last_closed_month`) -> `docs/data/cem10.json`
+(`month`, `usa` {lead, spy5, qqq5, bear, rows [t, n, sp, nq, c, sma, dist, r3, r6, r12], missing}, `gpw` {w20_6, w40_6, lv, lv12, bear, rows, rewizja}).
+With prices for < 90 % of tickers nothing is written (exit 1). The page: chips (leader, market filter), buy list (green = first N), "Sprawdź spółki,
+które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_hold`; export to a .txt file, copy, import from .txt / .json —
+`parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
+
 ## CI (`.github/workflows/`)
 
 - `refresh.yml` ("Weekly Refresh"): Saturday 03:17 UTC + manual; runs `python watchlist.py`, commits `docs/data/` and `data/` with
   `[skip ci]` (reset onto current `origin/main`, retry loop) and deploys Pages.
+- `cem10.yml` ("CEM10 Monthly"): 1st of the month 06:23 UTC + manual; runs `python cem10.py`, commits only `docs/data/cem10.json`
+  (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
 - `deploy.yml`: Pages deploy on push to `main`.
 - `tests.yml`: ruff + pytest, ESLint + `node --test`.
 
@@ -151,6 +170,7 @@ Code comments and CLI messages are in Polish; keep that convention.
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 python watchlist.py [--max-tickers N]
+python cem10.py
 python -m pytest -q && ruff check .
 npm ci && npm test && npm run lint
 cd docs && python3 -m http.server
