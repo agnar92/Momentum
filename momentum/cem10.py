@@ -18,7 +18,7 @@ MKT_N = 12
 
 
 def month_closes(dates, values, upto):
-    """Dzienne (data 'YYYY-MM-DD', wartość) -> {YYYY-MM: ostatnia wartość miesiąca} dla zamkniętych miesięcy <= upto."""
+    """(data 'YYYY-MM-DD', wartość) -> {YYYY-MM: ostatnia wartość miesiąca} dla zamkniętych miesięcy <= upto (świece miesięczne albo dzienne)."""
     out = {}
     for d, v in zip(dates, values):
         if v is None or v != v:

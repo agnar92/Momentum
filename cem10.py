@@ -1,7 +1,7 @@
 """CEM10: miesięczna lista spółek (USA + GPW) -> docs/data/cem10.json. Uruchamiany 1. dnia miesiąca przez workflow „CEM10 Monthly”.
 
 Skład S&P 500 i Nasdaq-100: tabele z Wikipedii (przy błędzie zostaje skład z poprzedniego pliku). Skład WIG20 i mWIG40: cem10_gpw.json
-(ręcznie po kwartalnej rewizji GPW). Ceny: dzienne świece yfinance (3 lata) -> zamknięcia ostatnich sesji zamkniętych miesięcy."""
+(ręcznie po kwartalnej rewizji GPW). Ceny: miesięczne świece yfinance (2 lata: 12M zwrotu + SMA 12 filtra rynku); bieżący, niepełny miesiąc jest odrzucany."""
 import argparse
 import datetime as dt
 import io
@@ -48,12 +48,12 @@ def members(old, log=print):
 
 
 def download(tickers, log=print):
-    """Dzienne świece (3 lata, ceny surowe + skorygowane) -> {ticker: (daty, adj, raw)}."""
+    """Miesięczne świece (2 lata, ceny surowe + skorygowane) -> {ticker: (daty, adj, raw)}."""
     import yfinance as yf
     out = {}
     for i in range(0, len(tickers), 100):
         part = tickers[i:i + 100]
-        df = yf.download(part, period="3y", interval="1d", auto_adjust=False, group_by="ticker", progress=False, threads=True)
+        df = yf.download(part, period="2y", interval="1mo", auto_adjust=False, group_by="ticker", progress=False, threads=True)
         for t in part:
             try:
                 f = df[t] if len(part) > 1 else df

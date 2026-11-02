@@ -147,8 +147,8 @@ C-8 (3M > 0, 12M > +30 %, over SMA 10), ranked by 6M; no buys while the equal-we
 |r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (USA also leaving both indexes), stop −40 % (shown in the rules only).
 Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) reads S&P 500 / Nasdaq-100 members from Wikipedia
 (`List_of_S%26P_500_companies`, `List_of_NASDAQ-100_companies`; on error the previous file's members stay), WIG20 / mWIG40 from `cem10_gpw.json`
-(update by hand after each GPW revision: March, June, September, December), yfinance daily candles 3 y (`auto_adjust=False`: returns / SMA on
-`Adj Close`, displayed prices raw) -> last session of each CLOSED month (`prices.last_closed_month`) -> `docs/data/cem10.json`
+(update by hand after each GPW revision: March, June, September, December), yfinance MONTHLY candles 2 y (user: "po co pobierasz dzienne";
+13 closes for 12M + SMA 12 of the market filter; `auto_adjust=False`: returns / SMA on `Adj Close`, displayed prices raw) -> CLOSED months only (`prices.last_closed_month`) -> `docs/data/cem10.json`
 (`month`, `usa` {lead, spy5, qqq5, bear, rows [t, n, sp, nq, c, sma, dist, r3, r6, r12], missing}, `gpw` {w20_6, w40_6, lv, lv12, bear, rows, rewizja}).
 With prices for < 90 % of tickers nothing is written (exit 1). The page: chips (leader, market filter), buy list (green = first N), "Sprawdź spółki,
 które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_hold`; export to a .txt file, copy, import from .txt / .json —
