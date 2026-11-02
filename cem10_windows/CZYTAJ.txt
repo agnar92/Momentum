@@ -1,0 +1,19 @@
+CEM10 na komputerze (Windows) - bez instalowania czegokolwiek
+==============================================================
+
+1. Pobierz cale repozytorium jako ZIP (GitHub: Code -> Download ZIP) i rozpakuj.
+2. Wejdz do folderu cem10_windows i kliknij dwa razy CEM10.bat.
+   Za pierwszym razem Windows moze zapytac o uruchomienie pliku z internetu - wybierz "Wiecej informacji" -> "Uruchom mimo to".
+3. Skrypt pobiera sklad S&P 500 i Nasdaq-100 (Wikipedia) oraz ceny miesieczne z Yahoo Finance
+   (ok. 580 spolek, zwykle 2-5 minut), po czym otwiera w przegladarce strone CEM10_lista.html.
+
+Uruchamiaj po zamknieciu miesiaca (np. 1. dnia nowego miesiaca). Lista liczona jest tylko z zamknietych miesiecy.
+
+Pliki:
+- CEM10.bat       - to klikasz
+- cem10.ps1       - skrypt (PowerShell, wbudowany w Windows)
+- sklad_gpw.json  - sklad WIG20 i mWIG40; popraw po kazdej rewizji GPW (marzec, czerwiec, wrzesien, grudzien)
+- sklad_usa.json  - zapasowy sklad S&P 500 / Nasdaq-100, gdy Wikipedia nie odpowiada (aktualizuje sie sam)
+- dane.js, CEM10_lista.html - tworzone przy kazdym uruchomieniu
+
+Liste trzymanych spolek zapisz przyciskiem "Zapisz liste do pliku" - przegladarka trzyma ja tylko lokalnie.

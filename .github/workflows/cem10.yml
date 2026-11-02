@@ -31,7 +31,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Lista CEM10 (Wikipedia + cem10_gpw.json + yfinance)
+      - name: Lista CEM10 (Wikipedia + cem10_windows/sklad_gpw.json + yfinance)
         run: python cem10.py
 
       - name: Commit data

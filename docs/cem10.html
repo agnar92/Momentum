@@ -113,7 +113,7 @@ code{font-family:var(--mono);font-size:.92em}
     <li><b>USA:</b> 10 pozycji; lider to SPY albo QQQ z wyższym zwrotem 5M. Kandydaci z indeksu lidera: zwrot 6M powyżej +30 % i zamknięcie nad SMA 10, sortowanie po 6M. Brak zakupów, gdy SPY zamyka miesiąc pod SMA 12.</li>
     <li><b>GPW:</b> bez lidera, pula to WIG20 i mWIG40 razem, 5 pozycji. Kandydaci C‑8: 3M powyżej 0 %, 12M powyżej +30 %, zamknięcie nad SMA 10, sortowanie po 6M. Brak zakupów, gdy równo ważony indeks składników WIG20+mWIG40 jest pod SMA 12.</li>
     <li><b>Wyjście:</b> zamknięcie miesiąca pod SMA 10 (w USA także wypadnięcie z S&amp;P 500 i Nasdaq‑100). Awaryjny stop −40 % od ceny zakupu.</li>
-    <li>Ceny: zamknięcia miesięczne EODHD; zwroty i SMA liczone na cenach skorygowanych o dywidendy, kolumny „Zamknięcie” i „SMA 10” w cenach notowań. Ceny z Yahoo Finance (dzienne świece, ostatnia sesja miesiąca). Skład S&amp;P 500 i Nasdaq‑100 z Wikipedii w dniu odświeżenia, WIG20 i mWIG40 z pliku <code>cem10_gpw.json</code> (rewizja <span id="rew"></span>; aktualizowany ręcznie po rewizjach GPW w marcu, czerwcu, wrześniu i grudniu). Odświeżane 1. dnia miesiąca przez workflow „CEM10 Monthly”.</li>
+    <li>Ceny: miesięczne świece Yahoo Finance, tylko zamknięte miesiące; zwroty i SMA liczone na cenach skorygowanych o dywidendy, kolumny „Zamknięcie” i „SMA 10” w cenach notowań. Skład S&amp;P 500 i Nasdaq‑100 z Wikipedii w dniu odświeżenia, WIG20 i mWIG40 z pliku <code>cem10_windows/sklad_gpw.json</code> (rewizja <span id="rew"></span>; aktualizowany ręcznie po rewizjach GPW w marcu, czerwcu, wrześniu i grudniu). <span id="src">Odświeżane 1. dnia miesiąca przez workflow „CEM10 Monthly”.</span></li>
   </ul>
 </section>
 </main>

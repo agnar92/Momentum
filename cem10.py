@@ -1,6 +1,6 @@
 """CEM10: miesięczna lista spółek (USA + GPW) -> docs/data/cem10.json. Uruchamiany 1. dnia miesiąca przez workflow „CEM10 Monthly”.
 
-Skład S&P 500 i Nasdaq-100: tabele z Wikipedii (przy błędzie zostaje skład z poprzedniego pliku). Skład WIG20 i mWIG40: cem10_gpw.json
+Skład S&P 500 i Nasdaq-100: tabele z Wikipedii (przy błędzie zostaje skład z poprzedniego pliku). Skład WIG20 i mWIG40: cem10_windows/sklad_gpw.json
 (ręcznie po kwartalnej rewizji GPW). Ceny: miesięczne świece yfinance (2 lata: 12M zwrotu + SMA 12 filtra rynku); bieżący, niepełny miesiąc jest odrzucany."""
 import argparse
 import datetime as dt
@@ -13,7 +13,7 @@ from momentum import cem10
 from momentum.prices import last_closed_month
 
 OUT = os.path.join("docs", "data", "cem10.json")
-GPW_FILE = "cem10_gpw.json"
+GPW_FILE = os.path.join("cem10_windows", "sklad_gpw.json")
 UA = {"User-Agent": "Mozilla/5.0 (Momentum CEM10; +https://github.com/agnar92/Momentum)"}
 WIKI = {"sp": ("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", ("Symbol",), ("Security",)),
         "nq": ("https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies", ("Ticker", "Symbol"), ("Company", "Security"))}

@@ -29,7 +29,93 @@ function decide(row) {
     return row.dist != null && row.dist >= 0 ? "trzymaj" : "sprzedaj";
 }
 
-if (typeof module !== "undefined") module.exports = { usaCandidates, gpwCandidates, isC8, parseHold, decide };
+// ---- liczenie listy w przeglądarce z surowych danych (wersja na komputer: cem10_windows/cem10.ps1 -> dane.js) ----
+// Ten sam wynik co cem10.py (momentum/cem10.py): zamknięte miesiące, zwroty / SMA na cenach skorygowanych, ceny pokazywane surowe.
+const SMA_N = 10, MKT_N = 12, LEAD_MONTHS = 5, N_USA = 10, N_GPW = 5;
+// poprzedni (ostatni zamknięty) miesiąc dla daty "YYYY-MM-DD"
+function lastClosedMonth(today) {
+    const [y, m] = today.split("-").map(Number);
+    return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+}
+// świece z Yahoo (sekundy UTC + przesunięcie strefy giełdy) -> {YYYY-MM: wartość} dla miesięcy <= upto (ostatnia wartość miesiąca wygrywa).
+// Świeca miesięczna zaczyna się o północy czasu giełdy, a gmtoffset jest z DZISIEJSZEJ strefy (zima / lato), więc +2 h zapasu,
+// żeby północ 1. dnia miesiąca nie wypadła o 23:00 poprzedniego dnia.
+function monthMap(ts, vals, off, upto) {
+    const out = {};
+    for (let i = 0; i < ts.length; i++) {
+        const v = vals[i];
+        if (v == null || !isFinite(v)) continue;
+        const ym = new Date((ts[i] + (off || 0) + 7200) * 1000).toISOString().slice(0, 7);
+        if (ym <= upto) out[ym] = v;
+    }
+    return out;
+}
+// odpowiedź Yahoo /v8/finance/chart (zapisana bez zmian przez cem10.ps1) -> {t, c, a, o}; dane już w tej postaci zostają
+function yahooSeries(j) {
+    if (!j || j.t) return j;
+    const r = j.chart && j.chart.result && j.chart.result[0];
+    if (!r || !r.timestamp) return null;
+    const q = (r.indicators.quote || [])[0] || {}, adj = (r.indicators.adjclose || [])[0] || {};
+    return { t: r.timestamp, c: q.close || [], a: adj.adjclose || q.close || [], o: (r.meta && r.meta.gmtoffset) || 0 };
+}
+function monthly(px, upto) {
+    const out = {};
+    for (const [t, j] of Object.entries(px)) {
+        const s = yahooSeries(j);
+        if (!s || !s.t) continue;
+        const ma = monthMap(s.t, s.a, s.o, upto), mr = monthMap(s.t, s.c, s.o, upto);
+        const ms = Object.keys(ma).filter((m) => m in mr).sort();
+        if (ms.length && ms[ms.length - 1] === upto) out[t] = { m: ms, a: ms.map((m) => ma[m]), r: ms.map((m) => mr[m]) };
+    }
+    return out;
+}
+const ret = (c, k) => (c.length > k && c[c.length - 1 - k] ? c[c.length - 1] / c[c.length - 1 - k] - 1 : null);
+const smaLast = (c, n) => (c.length >= n ? c.slice(-n).reduce((s, x) => s + x, 0) / n : null);
+const rnd = (x, n = 4) => (x == null ? null : Math.round(x * 10 ** n) / 10 ** n);
+function stockRow(t, name, adj, raw, flags) {
+    const s = smaLast(adj, SMA_N), k = adj[adj.length - 1] ? raw[raw.length - 1] / adj[adj.length - 1] : 1;
+    return { t, n: name, c: rnd(raw[raw.length - 1], 2), sma: rnd(s == null ? null : s * k, 2), dist: rnd(s == null ? null : adj[adj.length - 1] / s - 1),
+        r3: rnd(ret(adj, 3)), r6: rnd(ret(adj, 6)), r12: rnd(ret(adj, 12)), ...flags };
+}
+function ewLevel(ser, months) {
+    const lv = [1];
+    let cur = 1;
+    for (let i = 1; i < months.length; i++) {
+        const a = months[i - 1], b = months[i], rs = [];
+        for (const s of Object.values(ser)) {
+            if (a in s && b in s && s[a]) { const r = s[b] / s[a] - 1; if (Math.abs(r) < 1.5) rs.push(r); }
+        }
+        cur *= 1 + (rs.length ? rs.reduce((x, y) => x + y, 0) / rs.length : 0);
+        lv.push(cur);
+    }
+    return lv;
+}
+// surowe dane {today, members: {sp, nq}, gpw: {rewizja, WIG20, mWIG40}, px: {symbol: {t, c, a, o}}} -> to samo co docs/data/cem10.json
+function computeFromRaw(raw) {
+    const upto = lastClosedMonth(raw.today), m = monthly(raw.px, upto), mem = raw.members, gpw = raw.gpw;
+    if (!m.SPY || !m.QQQ) throw new Error(`brak cen SPY / QQQ za ${upto}`);
+    const spy = m.SPY.a, s5 = ret(spy, LEAD_MONTHS), q5 = ret(m.QQQ.a, LEAD_MONTHS), spy12 = smaLast(spy, MKT_N);
+    const names = { ...mem.nq, ...mem.sp }, all = [...new Set([...Object.keys(mem.sp), ...Object.keys(mem.nq)])].sort();
+    const rows = all.filter((t) => m[t] && m[t].a.length >= SMA_N).map((t) => stockRow(t, String(names[t]).slice(0, 40), m[t].a, m[t].r, { sp: t in mem.sp, nq: t in mem.nq }));
+    const k = m.SPY.r[m.SPY.r.length - 1] / spy[spy.length - 1];
+    const usa = { lead: q5 > s5 ? "NDX" : "SP", spy5: rnd(s5), qqq5: rnd(q5), spy: rnd(m.SPY.r[m.SPY.r.length - 1], 2), spy_sma12: rnd(spy12 * k, 2),
+        bear: spy[spy.length - 1] < spy12, n: N_USA, rows, missing: all.filter((t) => !rows.some((r) => r.t === t)) };
+    const w20 = gpw.WIG20, w40 = gpw.mWIG40, gall = [...new Set([...Object.keys(w20), ...Object.keys(w40)])].sort(), grows = [], ser = {};
+    for (const t of gall) {
+        const s = m[t + ".WA"];
+        if (!s || s.a.length < SMA_N) continue;
+        grows.push(stockRow(t, String(w20[t] || w40[t]).slice(0, 40), s.a, s.r, { w20: t in w20, w40: t in w40 }));
+        ser[t] = Object.fromEntries(s.m.map((x, i) => [x, s.a[i]]));
+    }
+    const months = [...new Set(Object.values(ser).flatMap((s) => Object.keys(s)))].sort().slice(-25), lv = ewLevel(ser, months);
+    const lv12 = lv.slice(-MKT_N).reduce((a, b) => a + b, 0) / MKT_N;
+    const avg6 = (ix) => { const v = grows.filter((r) => r[ix] && r.r6 != null).map((r) => r.r6); return v.length ? rnd(v.reduce((a, b) => a + b, 0) / v.length) : null; };
+    const g = { w20_6: avg6("w20"), w40_6: avg6("w40"), lv: rnd(lv[lv.length - 1]), lv12: rnd(lv12), bear: lv[lv.length - 1] < lv12, n: N_GPW, rows: grows,
+        rewizja: gpw.rewizja || null, missing: gall.filter((t) => !grows.some((r) => r.t === t)) };
+    return { generated_at: raw.today, month: upto, usa, gpw: g };
+}
+
+if (typeof module !== "undefined") module.exports = { usaCandidates, gpwCandidates, isC8, parseHold, decide, lastClosedMonth, monthMap, yahooSeries, computeFromRaw };
 
 if (typeof document !== "undefined") {
     const $ = (id) => document.getElementById(id);
@@ -111,6 +197,16 @@ if (typeof document !== "undefined") {
         });
     }
 
-    fetch("data/cem10.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(render)
-        .catch((e) => { const el = $("err"); el.hidden = false; el.textContent = `Nie udało się wczytać data/cem10.json (${e.message}). Uruchom workflow „CEM10 Monthly” w GitHub Actions.`; });
+    const fail = (t) => { const el = $("err"); el.hidden = false; el.textContent = t; };
+    if (typeof window !== "undefined" && window.CEM10_RAW) {
+        // wersja na komputer: dane pobrane przez cem10_windows/CEM10.bat, liczone tutaj
+        try {
+            const R = window.CEM10_RAW;
+            render(computeFromRaw(R));
+            $("src").textContent = `Dane pobrane na tym komputerze ${R.today} (CEM10.bat; skład USA: ${R.members_src === "wikipedia" ? "Wikipedia" : "zapisany plik sklad_usa.json"}). Uruchom CEM10.bat ponownie po zamknięciu miesiąca.`;
+        } catch (e) { fail(`Nie udało się policzyć listy z pobranych danych (${e.message}). Uruchom CEM10.bat ponownie.`); }
+    } else {
+        fetch("data/cem10.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(render)
+            .catch((e) => fail(`Nie udało się wczytać data/cem10.json (${e.message}). Uruchom workflow „CEM10 Monthly” w GitHub Actions.`));
+    }
 }

@@ -221,3 +221,7 @@ __marimo__/
 # the deployed site itself has no build step and no Node dependency)
 node_modules/
 raw/
+
+# CEM10 na komputerze: pliki tworzone przez CEM10.bat
+cem10_windows/dane.js
+cem10_windows/CEM10_lista.html
