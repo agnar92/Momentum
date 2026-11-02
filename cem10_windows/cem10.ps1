@@ -1,6 +1,6 @@
 # CEM10 na komputerze (Windows PowerShell 5.1, bez instalowania niczego).
 # Pobiera: sklad S&P 500 i Nasdaq-100 (Wikipedia), sklad WIG20 / mWIG40 (sklad_gpw.json), miesieczne swiece z Yahoo Finance (2 lata).
-# Zapisuje surowe dane do dane.js, tworzy CEM10_lista.html (strona ..\docs\cem10.html) i otwiera ja w przegladarce.
+# Zapisuje surowe dane do dane.js, tworzy CEM10_lista.html (szablon.html z paczki albo ..\docs\cem10.html z repo) i otwiera ja w przegladarce.
 # Cale liczenie listy robi strona (docs/js/cem10.js, computeFromRaw) - ten sam wynik co cem10.py w GitHub Actions.
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # pasek postepu Invoke-WebRequest bardzo spowalnia PowerShell 5.1
@@ -92,8 +92,12 @@ if ($parts.Count -lt 0.9 * $syms.Count) { throw "Za malo cen ($($parts.Count) z 
 # 4. dane.js + strona
 $raw = '{"today":"' + $today + '","members_src":"' + $membersSrc + '","members":' + $membersJson + ',"gpw":' + $gpwJson + ',"px":{' + ($parts -join ',') + '}}'
 Write-Utf8 (Join-Path $Dir 'dane.js') ("window.CEM10_RAW = " + $raw + ";`n")
-$page = Read-Utf8 (Join-Path $Repo 'docs\cem10.html')
-$page = $page.Replace('<script src="js/cem10.js"></script>', '<script src="dane.js"></script><script src="../docs/js/cem10.js"></script>')
+# szablon strony: paczka (szablon.html + cem10.js w tym folderze) albo repozytorium (..\docs\cem10.html + ..\docs\js\cem10.js)
+if (Test-Path (Join-Path $Dir 'szablon.html')) {
+    $page = (Read-Utf8 (Join-Path $Dir 'szablon.html')).Replace('<script src="js/cem10.js"></script>', '<script src="dane.js"></script><script src="cem10.js"></script>')
+} else {
+    $page = (Read-Utf8 (Join-Path $Repo 'docs\cem10.html')).Replace('<script src="js/cem10.js"></script>', '<script src="dane.js"></script><script src="../docs/js/cem10.js"></script>')
+}
 $out = Join-Path $Dir 'CEM10_lista.html'
 Write-Utf8 $out $page
 Write-Host "Gotowe: $out" -ForegroundColor Green
