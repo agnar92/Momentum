@@ -64,16 +64,16 @@ test("computeFromRaw: lider, kandydaci USA i GPW z surowych świec", () => {
     assert.deepStrictEqual(gpwCandidates(d.gpw.rows).map((r) => r.t), ["PKO"]);
 });
 
-test("computeFromRaw z sitem Finviz: trzymane spółki dostają wiersz bez flagi indeksu, braki tylko wśród pobranych", () => {
+test("computeFromRaw ze składem z Finviz: trzymane spółki dostają wiersz bez flagi indeksu, braki tylko wśród pobranych", () => {
     const ts = Array.from({ length: 24 }, (_, i) => Date.UTC(2024, 10 + i, 1, 5) / 1000);
     const ser = (f, n) => ({ t: ts, c: ts.map((_, i) => f(i)), a: ts.map((_, i) => f(i)), o: -18000, n });
-    const raw = { today: "2026-11-02", prefilter: { sp: 2, nq: 0, filtr: "6M > +30 %" }, requested: ["AAA", "CCC", "HLD"],
+    const raw = { today: "2026-11-02", index: { lead: "SP", n: 2 }, requested: ["AAA", "CCC", "HLD"],
         members: { sp: { AAA: "AAA", BBB: "BBB" }, nq: {} }, gpw: { WIG20: {}, mWIG40: {} },
         px: { SPY: ser(() => 100), QQQ: ser(() => 100), AAA: ser((i) => 50 + i, "Alfa Inc"), HLD: ser((i) => 20 - i / 10, "Trzymana Co") } };
     const d = computeFromRaw(raw);
     assert.deepStrictEqual(d.usa.missing, ["BBB", "CCC"]);
     assert.strictEqual(d.usa.all, undefined);
-    assert.deepStrictEqual(d.usa.prefilter, { sp: 2, nq: 0, filtr: "6M > +30 %" });
+    assert.deepStrictEqual(d.usa.index, { lead: "SP", n: 2 });
     const h = d.usa.rows.find((r) => r.t === "HLD"), a = d.usa.rows.find((r) => r.t === "AAA");
     assert.ok(h && !h.sp && !h.nq && h.n === "Trzymana Co");
     assert.strictEqual(a.n, "Alfa Inc");

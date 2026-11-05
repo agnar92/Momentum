@@ -102,7 +102,7 @@ function computeFromRaw(raw) {
     const k = m.SPY.r[m.SPY.r.length - 1] / spy[spy.length - 1];
     const usa = { lead: q5 > s5 ? "NDX" : "SP", spy5: rnd(s5), qqq5: rnd(q5), spy: rnd(m.SPY.r[m.SPY.r.length - 1], 2), spy_sma12: rnd(spy12 * k, 2),
         bear: spy[spy.length - 1] < spy12, n: N_USA, rows, missing: all.filter((t) => !rows.some((r) => r.t === t)) };
-    if (raw.prefilter) usa.prefilter = raw.prefilter;   // sito Finviz: ceny tylko dla spółek po sicie i Twoich
+    if (raw.index) usa.index = raw.index;   // skład indeksu lidera z Finviz
     const w20 = gpw.WIG20, w40 = gpw.mWIG40, gall = [...new Set([...Object.keys(w20), ...Object.keys(w40)])].sort(), grows = [], ser = {};
     for (const t of gall) {
         const s = m[t + ".WA"];
@@ -154,8 +154,8 @@ if (typeof document !== "undefined") {
         const idxG = (r) => r.w20 ? "WIG20" : "mWIG40";
         const allU = [...U.rows].sort((a, b) => (b.r6 ?? -9) - (a.r6 ?? -9)), allG = [...G.rows].sort((a, b) => (b.r6 ?? -9) - (a.r6 ?? -9));
         $("usaCount").textContent = allU.length; $("gpwCount").textContent = allG.length;
-        if (U.prefilter) {
-            $("usaAllBox").querySelector("summary").innerHTML = `USA: spółki po sicie Finviz (6M &gt; +30 %, tylko indeks lidera: ${U.prefilter.lead === "NDX" ? "Nasdaq‑100 " + U.prefilter.nq : "S&amp;P 500 " + U.prefilter.sp}) i Twoje (<span id="usaCount">${allU.length}</span>)`;
+        if (U.index) {
+            $("usaAllBox").querySelector("summary").innerHTML = `USA: indeks lidera z Finviz (${U.index.lead === "NDX" ? "Nasdaq‑100" : "S&amp;P 500"}, ${U.index.n} spółek) i Twoje (<span id="usaCount">${allU.length}</span>)`;
         }
         const hit = (r, q) => !q || r.t.includes(q) || r.n.toUpperCase().includes(q);
         const drawU = (q) => { q = q.trim().toUpperCase(); $("usaAll").innerHTML = allU.filter((r) => hit(r, q)).map((r) => `<tr><td class="t">${esc(r.t)}</td><td class="nm">${esc(r.n)}</td><td>${idxU(r)}</td><td class="n ${cls(r.r6)}">${pct(r.r6)}</td><td class="n">${num(r.c)}</td><td class="n">${num(r.sma)}</td><td class="n ${cls(r.dist)}">${pct(r.dist)}</td><td>${isCandU(r) ? (inLead(r) ? "tak" : "tak (drugi indeks)") : ""}</td></tr>`).join(""); };
@@ -209,7 +209,7 @@ if (typeof document !== "undefined") {
         try {
             const R = window.CEM10_RAW;
             render(computeFromRaw(R));
-            $("src").textContent = `Dane pobrane na tym komputerze ${R.today} (CEM10.bat; sito Finviz). Uruchom CEM10.bat ponownie po zamknięciu miesiąca.`;
+            $("src").textContent = `Dane pobrane na tym komputerze ${R.today} (CEM10.bat; skład indeksu lidera z Finviz). Uruchom CEM10.bat ponownie po zamknięciu miesiąca.`;
         } catch (e) { fail(`Nie udało się policzyć listy z pobranych danych (${e.message}). Uruchom CEM10.bat ponownie.`); }
     } else {
         fetch("data/cem10.json", { cache: "no-cache" }).then((r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(render)

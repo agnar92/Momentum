@@ -1,6 +1,6 @@
 """CEM10: miesięczna lista spółek (USA + GPW) -> docs/data/cem10.json. Uruchamiany 1. dnia miesiąca przez workflow „CEM10 Monthly”.
 
-USA: najpierw lider (SPY / QQQ), potem sito Finviz (idx_sp500 ALBO idx_ndx, zwrot 26 tygodni > +30 %) tylko dla indeksu lidera, bez Wikipedii; błąd Finviz = błąd zadania.
+USA: najpierw lider (SPY / QQQ), potem z Finviz lista tickerów indeksu lidera (idx_sp500 ALBO idx_ndx, bez filtrów, bez Wikipedii), ceny z yfinance na koniec miesiąca, zwrot 6M i ranking liczy build; błąd Finviz = błąd zadania.
 Skład WIG20 i mWIG40: cem10_windows/sklad_gpw.json
 (ręcznie po kwartalnej rewizji GPW). Ceny: miesięczne świece yfinance (2 lata: 12M zwrotu + SMA 12 filtra rynku); bieżący, niepełny miesiąc jest odrzucany."""
 import argparse
@@ -14,9 +14,9 @@ from momentum.prices import last_closed_month
 
 OUT = os.path.join("docs", "data", "cem10.json")
 GPW_FILE = os.path.join("cem10_windows", "sklad_gpw.json")
-# sito Finviz = reguła: zwrot 26 tygodni > +30 % (Finviz liczy od dzisiejszej ceny, reguła od zamknięcia miesiąca, więc tuż przy progu wynik może
-# się nieco różnić; ostateczny próg 6M > +30 % liczy build z miesięcznych zamknięć). Skład indeksów = wynik skanu idx_sp500 / idx_ndx.
-SIEVE = ("idx_sp500,ta_perf_26w30o", "idx_ndx,ta_perf_26w30o")
+# Finviz daje TYLKO skład indeksu (dzisiejszy; bez filtrów zwrotu — Finviz liczy od dzisiejszej ceny, a reguła od zamknięcia miesiąca).
+# Zwrot 6M, SMA 10 i ranking liczy build z miesięcznych zamknięć yfinance.
+INDEX_FILTERS = ("idx_sp500", "idx_ndx")
 
 
 def finviz_members(filters, get=None, pause=0.7):
@@ -46,15 +46,15 @@ def finviz_members(filters, get=None, pause=0.7):
     return out
 
 
-def sieve_members(lead, get=None, log=print):
-    """Spółki z 6M > +30 % (Finviz) TYLKO z indeksu lidera: {"sp": {...}, "nq": {...}} (drugi indeks pusty — kandydaci pochodzą wyłącznie z indeksu
-    lidera, więc go nie pobieramy). Bez zapasowego źródła."""
-    k, name = ("nq", "Nasdaq-100") if lead == "NDX" else ("sp", "S&P 500")
+def index_members(lead, get=None, log=print):
+    """Skład indeksu lidera z Finviz: {"sp": {...}, "nq": {...}} (drugi indeks pusty — kandydaci pochodzą tylko z indeksu lidera).
+    Bez zapasowego źródła: błąd Finviz albo podejrzana liczba spółek = błąd zadania."""
+    k, name, lo, hi = ("nq", "Nasdaq-100", 80, 120) if lead == "NDX" else ("sp", "S&P 500", 400, 600)
     out = {"sp": {}, "nq": {}}
-    out[k] = finviz_members(SIEVE[1 if k == "nq" else 0], get=get)
-    log(f"Finviz ({name}, lider {lead}): {len(out[k])} spółek z 6M > +30 %")
-    if len(out[k]) > (80 if k == "nq" else 300):
-        raise ValueError("Finviz: filtr nie zadziałał (zbyt dużo spółek) — sprawdź kod filtra")
+    out[k] = finviz_members(INDEX_FILTERS[1 if k == "nq" else 0], get=get)
+    log(f"Finviz ({name}, lider {lead}): {len(out[k])} spółek w indeksie")
+    if not lo <= len(out[k]) <= hi:
+        raise ValueError(f"Finviz: {len(out[k])} spółek w {name} (oczekiwano {lo}–{hi}) — zmieniony układ strony albo blokada")
     return out
 
 
@@ -138,7 +138,7 @@ def main(argv=None):
         print(f"Brak cen SPY / QQQ za {upto} — nic nie zapisuję.")
         return 1
     lead = leader(m0)[0]
-    mem = sieve_members(lead)
+    mem = index_members(lead)
     gpw = json.load(open(GPW_FILE, encoding="utf-8"))
     us = sorted((set(mem["sp"]) | set(mem["nq"])) - {"SPY", "QQQ"})
     tickers = us + [t + ".WA" for t in sorted(set(gpw["WIG20"]) | set(gpw["mWIG40"]))]
@@ -148,7 +148,7 @@ def main(argv=None):
         print(f"Za mało cen: {have}/{len(tickers)} — nic nie zapisuję.")
         return 1
     out = build(mem, gpw, px, upto, today)
-    out["usa"]["prefilter"] = {"lead": lead, "sp": len(mem["sp"]), "nq": len(mem["nq"]), "filtr": "6M > +30 %"}
+    out["usa"]["index"] = {"lead": lead, "n": len(mem["nq"] if lead == "NDX" else mem["sp"])}
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
