@@ -81,7 +81,7 @@ if (typeof document !== "undefined") {
             if (!ts.length) { $("holdBody").innerHTML = "<tr><td colspan=\"8\" class=\"empty\">Wpisz tickery, aby zobaczyć decyzję dla każdej spółki.</td></tr>"; return; }
             $("holdBody").innerHTML = ts.map((t) => {
                 const r = map[t] || map[t.replace(".", "-")];
-                if (!r) return `<tr><td class="t">${esc(t)}</td><td class="nm" colspan="6">Brak notowań tej spółki w pobranych danych. Sprawdź ticker; w wersji na komputer zapisz listę do pliku w folderze CEM10 i uruchom CEM10.bat ponownie.</td><td><span class="st s">sprawdź</span></td></tr>`;
+                if (!r) return `<tr><td class="t">${esc(t)}</td><td class="nm" colspan="6">Brak notowań tej spółki w pobranych danych. Sprawdź ticker (lista obejmuje tylko indeks lidera i spółki GPW).</td><td><span class="st s">sprawdź</span></td></tr>`;
                 const d = decide(r);
                 return `<tr><td class="t">${esc(r.t)}</td><td class="nm">${esc(r.n)}</td><td>${r.m} · ${r.idx}</td><td class="n">${num(r.c)}</td><td class="n">${num(r.sma)}</td><td class="n ${cls(r.dist)}">${pct(r.dist)}</td><td class="n ${cls(r.r6)}">${pct(r.r6)}</td><td><span class="st ${d === "trzymaj" ? "h" : "s"}">${d}</span></td></tr>`;
             }).join("");
