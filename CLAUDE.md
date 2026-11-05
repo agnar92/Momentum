@@ -144,9 +144,11 @@ final CEM10 rules from the study (NOT the Finviz scanner of the main list): **US
 (user: Stooq offers 5 months; 5M ≈ 6M in the tests, 91 % same leader), candidates from the leader's index (S&P 500 / Nasdaq-100): 6M > +30 % and
 monthly close over SMA 10, ranked by 6M; no buys while SPY closes the month under SMA 12. **GPW** 5 positions, NO leader (WIG20 + mWIG40 together),
 C-8 (3M > 0, 12M > +30 %, over SMA 10), ranked by 6M; no buys while the equal-weight index of the current components (mean monthly return,
-|r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (USA also leaving both indexes), stop −40 % (shown in the rules only).
-Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) reads S&P 500 / Nasdaq-100 members from Wikipedia
-(`List_of_S%26P_500_companies`, `List_of_NASDAQ-100_companies`; on error the previous file's members stay), WIG20 / mWIG40 from `cem10_windows/sklad_gpw.json`
+|r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (index membership is NOT an exit condition — user, Nov 2026: a stock with +200 % results cannot drop out of a top-10 ranking, and Wikipedia is an unverified source), stop −40 % (shown in the rules only).
+Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) takes the USA universe from the Finviz sieve ONLY, no Wikipedia
+(user, Nov 2026: "zrób sito 30 % … po co nam 20 … sprawdzanie wiki szkodzi"; `finviz_members` = Overview view v=111, 20 rows/page, `idx_sp500,ta_perf_26w30o` and `idx_ndx,ta_perf_26w30o`
+= index membership AND the 6M > +30 % rule in one scan; Finviz error = job error, no fallback; > 300 / 80 names = the filter was ignored = error; `usa.prefilter` {sp, nq, filtr}).
+Known limit: Finviz measures 26 weeks from TODAY's price while the rule uses the month-end close, so right at the threshold a name can be missed (earlier test at 30 %: 8 of 70 candidates, e.g. PLTR) — chosen deliberately). WIG20 / mWIG40 from `cem10_windows/sklad_gpw.json`
 (update by hand after each GPW revision: March, June, September, December), yfinance MONTHLY candles 2 y (user: "po co pobierasz dzienne";
 13 closes for 12M + SMA 12 of the market filter; `auto_adjust=False`: returns / SMA on `Adj Close`, displayed prices raw) -> CLOSED months only (`prices.last_closed_month`) -> `docs/data/cem10.json`
 (`month`, `usa` {lead, spy5, qqq5, bear, rows [t, n, sp, nq, c, sma, dist, r3, r6, r12], missing}, `gpw` {w20_6, w40_6, lv, lv12, bear, rows, rewizja}).
@@ -154,12 +156,11 @@ With prices for < 90 % of tickers nothing is written (exit 1). The page: chips (
 które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_hold`; export to a .txt file, copy, import from .txt / .json —
 `parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
 **On the user's PC** (user: "chcę na komputerze to odpalić … nie potrzebuję dużej aplikacji", Windows without Python): `cem10_windows/CEM10.bat`
-(double click) -> `cem10.ps1` (Windows PowerShell 5.1, ASCII only, `$ProgressPreference = 'SilentlyContinue'`): members from Wikipedia by regex
-(same result as pandas; fallback + cache `sklad_usa.json`), Finviz PRE-FILTER (user: "czemu pobierasz 580 tickerów … zrób scan finviz, w sumie dwa"):
-`screener.ashx?v=411` (Tickers view, all rows in one page, `data-ticker=`) for `idx_sp500,ta_perf_26w20o` and `idx_ndx,ta_perf_26w20o`
-(+20 % margin below the 6M > +30 % rule; on 2026-11-02 it covered 69 of 70 candidates, the miss TWLO = index-membership lag on Finviz),
-plus the tickers in the newest `*moje_spolki*.txt` in the folder (the page's export) so held stocks always get prices; Finviz down -> all members;
-`raw.prefilter` / `raw.requested` -> `usa.prefilter`, `usa.all` (holdings check explains "nie przeszła sita"); ~176 Yahoo calls instead of 576. `sklad_gpw.json` (all 60), Yahoo `/v8/finance/chart/<sym>?range=2y&interval=1mo` responses saved
+(double click) -> `cem10.ps1` (Windows PowerShell 5.1, ASCII only, `$ProgressPreference = 'SilentlyContinue'`): Finviz sieve (user: "czemu pobierasz 580 tickerów … zrób scan finviz, w sumie dwa"):
+`screener.ashx?v=411` (Tickers view, all rows in one page, `data-ticker=`) for `idx_sp500,ta_perf_26w30o` and `idx_ndx,ta_perf_26w30o` — membership AND threshold, no Wikipedia, no `sklad_usa.json`
+(removed); names come from Yahoo `meta.shortName` (`yahooSeries().n`, `nameOf`); Finviz down = the script stops with an error;
+plus the tickers in the newest `*moje_spolki*.txt` in the folder (the page's export) so held stocks always get a row (no index flag, decision by SMA 10 only);
+`raw.prefilter` / `raw.requested` -> `usa.prefilter` (no `usa.all` any more); ~100 Yahoo calls instead of 576. `sklad_gpw.json` (all 60), Yahoo `/v8/finance/chart/<sym>?range=2y&interval=1mo` responses saved
 UNCHANGED (no number formatting in PowerShell — Polish locale uses a decimal comma) into `dane.js` (`window.CEM10_RAW`), then `CEM10_lista.html` =
 `docs/cem10.html` with `dane.js` + `../docs/js/cem10.js` (or `szablon.html` + `cem10.js` in the same folder = the standalone package) and opens it. ALL the maths is in `cem10.js` `computeFromRaw` (port of `cem10.build`;
 `yahooSeries`, `monthMap` adds +2 h because Yahoo's `gmtoffset` is TODAY's offset while monthly bars start at local midnight of their own DST state —

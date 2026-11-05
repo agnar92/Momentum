@@ -45,7 +45,7 @@ test("zamknięty miesiąc i świece Yahoo z przesunięciem strefy (czas letni / 
     const oct = Date.UTC(2026, 8, 30, 22) / 1000, nov = Date.UTC(2026, 9, 31, 23) / 1000;
     assert.deepStrictEqual(monthMap([oct, nov], [10, 11], 3600, "2026-10"), { "2026-10": 10 });
     const ys = yahooSeries({ chart: { result: [{ timestamp: [1, 2], meta: { gmtoffset: 0 }, indicators: { quote: [{ close: [5, 6] }], adjclose: [{ adjclose: [4, 5] }] } }] } });
-    assert.deepStrictEqual(ys, { t: [1, 2], c: [5, 6], a: [4, 5], o: 0 });
+    assert.deepStrictEqual(ys, { t: [1, 2], c: [5, 6], a: [4, 5], o: 0, n: "" });
     assert.strictEqual(yahooSeries({ chart: { result: null } }), null);
 });
 
@@ -64,14 +64,17 @@ test("computeFromRaw: lider, kandydaci USA i GPW z surowych świec", () => {
     assert.deepStrictEqual(gpwCandidates(d.gpw.rows).map((r) => r.t), ["PKO"]);
 });
 
-test("computeFromRaw z sitem Finviz: braki tylko wśród pobranych, pełny skład do sprawdzania trzymanych", () => {
+test("computeFromRaw z sitem Finviz: trzymane spółki dostają wiersz bez flagi indeksu, braki tylko wśród pobranych", () => {
     const ts = Array.from({ length: 24 }, (_, i) => Date.UTC(2024, 10 + i, 1, 5) / 1000);
-    const ser = (f) => ({ t: ts, c: ts.map((_, i) => f(i)), a: ts.map((_, i) => f(i)), o: -18000 });
-    const raw = { today: "2026-11-02", prefilter: { sp: 1, nq: 0, filtr: "6M > +20 %" }, requested: ["AAA", "CCC"],
-        members: { sp: { AAA: "A", BBB: "B", CCC: "C" }, nq: {} }, gpw: { WIG20: {}, mWIG40: {} },
-        px: { SPY: ser(() => 100), QQQ: ser(() => 100), AAA: ser((i) => 50 + i) } };
+    const ser = (f, n) => ({ t: ts, c: ts.map((_, i) => f(i)), a: ts.map((_, i) => f(i)), o: -18000, n });
+    const raw = { today: "2026-11-02", prefilter: { sp: 2, nq: 0, filtr: "6M > +30 %" }, requested: ["AAA", "CCC", "HLD"],
+        members: { sp: { AAA: "AAA", BBB: "BBB" }, nq: {} }, gpw: { WIG20: {}, mWIG40: {} },
+        px: { SPY: ser(() => 100), QQQ: ser(() => 100), AAA: ser((i) => 50 + i, "Alfa Inc"), HLD: ser((i) => 20 - i / 10, "Trzymana Co") } };
     const d = computeFromRaw(raw);
-    assert.deepStrictEqual(d.usa.missing, ["CCC"]);
-    assert.deepStrictEqual(d.usa.all, ["AAA", "BBB", "CCC"]);
-    assert.deepStrictEqual(d.usa.prefilter, { sp: 1, nq: 0, filtr: "6M > +20 %" });
+    assert.deepStrictEqual(d.usa.missing, ["BBB", "CCC"]);
+    assert.strictEqual(d.usa.all, undefined);
+    assert.deepStrictEqual(d.usa.prefilter, { sp: 2, nq: 0, filtr: "6M > +30 %" });
+    const h = d.usa.rows.find((r) => r.t === "HLD"), a = d.usa.rows.find((r) => r.t === "AAA");
+    assert.ok(h && !h.sp && !h.nq && h.n === "Trzymana Co");
+    assert.strictEqual(a.n, "Alfa Inc");
 });

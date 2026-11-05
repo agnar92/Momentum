@@ -4,10 +4,10 @@ CEM10 na komputerze (Windows) - bez instalowania czegokolwiek
 1. Pobierz cale repozytorium jako ZIP (GitHub: Code -> Download ZIP) i rozpakuj; wejdz do folderu cem10_windows.
 2. Kliknij dwa razy CEM10.bat.
    Za pierwszym razem Windows moze zapytac o uruchomienie pliku z internetu - wybierz "Wiecej informacji" -> "Uruchom mimo to".
-3. Skrypt pobiera sklad S&P 500 i Nasdaq-100 (Wikipedia), robi 2 skany Finviz (S&P 500 i Nasdaq-100 ze zwrotem
-   z pol roku > +20 %), a ceny miesieczne z Yahoo Finance pobiera tylko dla spolek z sita, Twoich spolek i calej GPW
-   (ok. 180 spolek, zwykle 1-2 minuty). Potem otwiera w przegladarce strone CEM10_lista.html.
-   Gdy Finviz nie odpowiada, skrypt pobiera wszystkie ok. 580 spolek.
+3. Skrypt robi 2 skany Finviz (S&P 500 i Nasdaq-100 ze zwrotem z pol roku > +30 % - to jest regula; skan mowi tez,
+   ktora spolka jest w ktorym indeksie), a ceny miesieczne z Yahoo Finance pobiera tylko dla spolek z sita, Twoich spolek
+   i calej GPW (ok. 100 spolek, zwykle 1-2 minuty). Potem otwiera w przegladarce strone CEM10_lista.html.
+   Gdy Finviz nie odpowiada, skrypt konczy sie bledem - sprobuj ponownie za chwile (nie ma zapasowego zrodla skladu).
 
 Uruchamiaj po zamknieciu miesiaca (np. 1. dnia nowego miesiaca). Lista liczona jest tylko z zamknietych miesiecy.
 
@@ -16,7 +16,6 @@ Pliki:
 - cem10.ps1       - skrypt (PowerShell, wbudowany w Windows), tylko pobiera dane
 - szablon.html, cem10.js - strona i obliczenia listy
 - sklad_gpw.json  - sklad WIG20 i mWIG40; popraw po kazdej rewizji GPW (marzec, czerwiec, wrzesien, grudzien)
-- sklad_usa.json  - zapasowy sklad S&P 500 / Nasdaq-100, gdy Wikipedia nie odpowiada (aktualizuje sie sam)
 - dane.js, CEM10_lista.html - tworzone przy kazdym uruchomieniu
 
 Liste trzymanych spolek zapisz przyciskiem "Zapisz liste do pliku" i zapisz plik W TYM FOLDERZE

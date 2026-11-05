@@ -53,3 +53,28 @@ def test_build_leader_market_filter_and_rows():
     assert [r["t"] for r in cem10.usa_candidates(u["rows"], u["lead"])] == ["AAA"]
     assert [r["t"] for r in cem10.gpw_candidates(g["rows"])] == ["PKO"] and g["missing"] == []
     assert not g["bear"]
+
+
+def test_finviz_sieve_members(monkeypatch):
+    from momentum import finviz
+    calls = []
+
+    class R:
+        text = ""
+
+        def raise_for_status(self):
+            pass
+
+    def get(url, params=None, **k):
+        calls.append(params["f"])
+        return R()
+    monkeypatch.setattr(finviz, "parse_page", lambda text: ([{"ticker": "BRK.B", "company": "Berkshire"}, {"ticker": "MRNA", "company": "Moderna"}], 2))
+    out = script.finviz_members("idx_sp500,ta_perf_26w30o", get=get, pause=0)
+    assert out == {"BRK-B": "Berkshire", "MRNA": "Moderna"} and calls == ["idx_sp500,ta_perf_26w30o"]
+    monkeypatch.setattr(finviz, "parse_page", lambda text: ([], None))
+    try:
+        script.finviz_members("x", get=get, pause=0)
+        assert False
+    except ValueError:
+        pass
+    assert all("26w30o" in f for f in script.SIEVE)
