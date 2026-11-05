@@ -1,10 +1,10 @@
 """CEM10: miesięczna lista spółek (USA + GPW) -> docs/data/cem10.json. Uruchamiany 1. dnia miesiąca przez workflow „CEM10 Monthly”.
 
-Skład S&P 500 i Nasdaq-100: tabele z Wikipedii (przy błędzie zostaje skład z poprzedniego pliku). Skład WIG20 i mWIG40: cem10_gpw.json
+USA: najpierw lider (SPY / QQQ), potem z Finviz lista tickerów indeksu lidera (idx_sp500 ALBO idx_ndx, bez filtrów, bez Wikipedii), ceny z yfinance na koniec miesiąca, zwrot 6M i ranking liczy build; błąd Finviz = błąd zadania.
+Skład WIG20 i mWIG40: cem10_windows/sklad_gpw.json
 (ręcznie po kwartalnej rewizji GPW). Ceny: miesięczne świece yfinance (2 lata: 12M zwrotu + SMA 12 filtra rynku); bieżący, niepełny miesiąc jest odrzucany."""
 import argparse
 import datetime as dt
-import io
 import json
 import os
 import sys
@@ -13,37 +13,49 @@ from momentum import cem10
 from momentum.prices import last_closed_month
 
 OUT = os.path.join("docs", "data", "cem10.json")
-GPW_FILE = "cem10_gpw.json"
-UA = {"User-Agent": "Mozilla/5.0 (Momentum CEM10; +https://github.com/agnar92/Momentum)"}
-WIKI = {"sp": ("https://en.wikipedia.org/wiki/List_of_S%26P_500_companies", ("Symbol",), ("Security",)),
-        "nq": ("https://en.wikipedia.org/wiki/List_of_NASDAQ-100_companies", ("Ticker", "Symbol"), ("Company", "Security"))}
+GPW_FILE = os.path.join("cem10_windows", "sklad_gpw.json")
+# Finviz daje TYLKO skład indeksu (dzisiejszy; bez filtrów zwrotu — Finviz liczy od dzisiejszej ceny, a reguła od zamknięcia miesiąca).
+# Zwrot 6M, SMA 10 i ranking liczy build z miesięcznych zamknięć yfinance.
+INDEX_FILTERS = ("idx_sp500", "idx_ndx")
 
 
-def wiki_members(url, tcols, ncols):
-    """Tabela składu z Wikipedii -> {ticker: nazwa} (pierwsza tabela z kolumną tickera)."""
-    import pandas as pd
+def finviz_members(filters, get=None, pause=0.7):
+    """Skan Finviz (widok Overview, 20 wierszy na stronę) -> {ticker: nazwa} (BRK.B -> BRK-B).
+    Strona bez liczby wyników (blokada albo zmieniony układ) = ValueError, żeby pusty wynik nie udawał braku kandydatów."""
+    import time
+
     import requests
-    html = requests.get(url, headers=UA, timeout=30).text
-    for t in pd.read_html(io.StringIO(html)):
-        tc = next((c for c in tcols if c in t.columns), None)
-        nc = next((c for c in ncols if c in t.columns), None)
-        if tc and nc and len(t) >= 90:
-            return {str(a).strip().replace(".", "-"): str(b).strip() for a, b in zip(t[tc], t[nc])}
-    raise ValueError(f"brak tabeli składu: {url}")
+
+    from momentum.finviz import HEADERS, PAGE, URL, parse_page
+    get = get or requests.get
+    out, offset, total = {}, 1, None
+    while total is None or offset <= total:
+        r = get(URL, params={"v": "111", "f": filters, "r": offset}, headers=HEADERS, timeout=30)
+        r.raise_for_status()
+        rows, t = parse_page(r.text)
+        if t is None:
+            raise ValueError("Finviz: brak liczby wyników na stronie (blokada albo zmieniony układ)")
+        total = t
+        if not rows:
+            break
+        for x in rows:
+            out[x["ticker"].replace(".", "-")] = x.get("company") or x["ticker"]
+        offset += PAGE
+        print(f"Finviz: pobrano {len(out)} z {total} spółek…", flush=True)
+        if offset <= total:
+            time.sleep(pause)
+    return out
 
 
-def members(old, log=print):
-    out = {}
-    for k, (url, tc, nc) in WIKI.items():
-        try:
-            out[k] = wiki_members(url, tc, nc)
-            log(f"Skład {k}: {len(out[k])} spółek (Wikipedia)")
-        except Exception as e:
-            prev = {r["t"]: r["n"] for r in (old or {}).get("usa", {}).get("rows", []) if r.get(k)}
-            if not prev:
-                raise
-            log(f"Skład {k}: błąd Wikipedii ({e}) — zostaje poprzedni skład ({len(prev)})")
-            out[k] = prev
+def index_members(lead, get=None, log=print):
+    """Skład indeksu lidera z Finviz: {"sp": {...}, "nq": {...}} (drugi indeks pusty — kandydaci pochodzą tylko z indeksu lidera).
+    Bez zapasowego źródła: błąd Finviz albo podejrzana liczba spółek = błąd zadania."""
+    k, name, lo, hi = ("nq", "Nasdaq-100", 80, 120) if lead == "NDX" else ("sp", "S&P 500", 400, 600)
+    out = {"sp": {}, "nq": {}}
+    out[k] = finviz_members(INDEX_FILTERS[1 if k == "nq" else 0], get=get)
+    log(f"Finviz ({name}, lider {lead}): {len(out[k])} spółek w indeksie")
+    if not lo <= len(out[k]) <= hi:
+        raise ValueError(f"Finviz: {len(out[k])} spółek w {name} (oczekiwano {lo}–{hi}) — zmieniony układ strony albo blokada")
     return out
 
 
@@ -56,7 +68,7 @@ def download(tickers, log=print):
         df = yf.download(part, period="2y", interval="1mo", auto_adjust=False, group_by="ticker", progress=False, threads=True)
         for t in part:
             try:
-                f = df[t] if len(part) > 1 else df
+                f = df[t] if getattr(df.columns, "nlevels", 1) > 1 else df   # jeden ticker w paczce: nowsze yfinance też zwraca kolumny (ticker, pole)
                 f = f.dropna(subset=["Close"])
             except KeyError:
                 continue
@@ -77,17 +89,22 @@ def monthly(px, upto):
     return out
 
 
+def leader(m):
+    """Lider USA: QQQ, gdy jego zwrot 5M jest wyższy niż SPY -> ("NDX" | "SP", spy5, qqq5)."""
+    s5, q5 = cem10.ret(m["SPY"][1], cem10.LEAD_MONTHS), cem10.ret(m["QQQ"][1], cem10.LEAD_MONTHS)
+    return ("NDX" if q5 > s5 else "SP"), s5, q5
+
+
 def build(mem, gpw, px, upto, today):
     m = monthly(px, upto)
-    spy, qqq = m["SPY"][1], m["QQQ"][1]
-    s5, q5 = cem10.ret(spy, cem10.LEAD_MONTHS), cem10.ret(qqq, cem10.LEAD_MONTHS)
-    lead = "NDX" if q5 > s5 else "SP"
+    spy = m["SPY"][1]
+    lead, s5, q5 = leader(m)
     spy12 = cem10.sma(spy, cem10.MKT_N)
     names = {**mem["nq"], **mem["sp"]}
     rows = []
     for t in sorted(set(mem["sp"]) | set(mem["nq"])):
         if t in m and len(m[t][1]) >= cem10.SMA_N:
-            rows.append(cem10.stock_row(t, names[t][:40], m[t][1], m[t][2], sp=t in mem["sp"], nq=t in mem["nq"]))
+            rows.append(cem10.stock_row(t, (names.get(t) or t)[:40], m[t][1], m[t][2], sp=t in mem["sp"], nq=t in mem["nq"]))
     k = m["SPY"][2][-1] / spy[-1]
     usa = dict(lead=lead, spy5=round(s5, 4), qqq5=round(q5, 4), spy=round(m["SPY"][2][-1], 2), spy_sma12=round(spy12 * k, 2),
                bear=bool(spy[-1] < spy12), n=cem10.N_USA, rows=rows, missing=sorted((set(mem["sp"]) | set(mem["nq"])) - {r["t"] for r in rows}))
@@ -114,19 +131,25 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default=OUT)
     a = ap.parse_args(argv)
-    old = json.load(open(a.out, encoding="utf-8")) if os.path.exists(a.out) else None
     today = dt.date.today()
     upto = last_closed_month(today)
-    mem = members(old)
+    px = download(["SPY", "QQQ"])
+    m0 = monthly(px, upto)
+    if "SPY" not in m0 or "QQQ" not in m0:
+        print(f"Brak cen SPY / QQQ za {upto} — nic nie zapisuję.")
+        return 1
+    lead = leader(m0)[0]
+    mem = index_members(lead)
     gpw = json.load(open(GPW_FILE, encoding="utf-8"))
-    us = sorted(set(mem["sp"]) | set(mem["nq"]))
-    tickers = ["SPY", "QQQ"] + us + [t + ".WA" for t in sorted(set(gpw["WIG20"]) | set(gpw["mWIG40"]))]
-    px = download(tickers)
+    us = sorted((set(mem["sp"]) | set(mem["nq"])) - {"SPY", "QQQ"})
+    tickers = us + [t + ".WA" for t in sorted(set(gpw["WIG20"]) | set(gpw["mWIG40"]))]
+    px.update(download(tickers))
     have = sum(1 for t in tickers if t in px)
-    if have < 0.9 * len(tickers) or "SPY" not in px or "QQQ" not in px:
+    if have < 0.9 * len(tickers):
         print(f"Za mało cen: {have}/{len(tickers)} — nic nie zapisuję.")
         return 1
     out = build(mem, gpw, px, upto, today)
+    out["usa"]["index"] = {"lead": lead, "n": len(mem["nq"] if lead == "NDX" else mem["sp"])}
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))
