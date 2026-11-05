@@ -23,7 +23,7 @@ function parseHold(text) {
     } catch { /* zwykły tekst */ }
     return [...new Set(t.toUpperCase().split(/[\s,;]+/).filter(Boolean))];
 }
-// decyzja dla trzymanej spółki: brak w indeksach -> sprawdź; zamknięcie pod SMA 10 -> sprzedaj
+// decyzja dla trzymanej spółki: brak notowań -> sprawdź; zamknięcie miesiąca pod SMA 10 -> sprzedaj
 function decide(row) {
     if (!row) return "sprawdź";
     return row.dist != null && row.dist >= 0 ? "trzymaj" : "sprzedaj";

@@ -111,3 +111,15 @@ def test_index_members_only_for_leader_and_main_order(monkeypatch, tmp_path):
     u = json.loads(out.read_text(encoding="utf-8"))["usa"]
     assert u["lead"] == "NDX" and u["index"] == {"lead": "NDX", "n": 100}
     assert [r["t"] for r in script.cem10.usa_candidates(u["rows"], "NDX")] == ["N0"]
+
+
+def test_download_single_ticker_chunk_with_multiindex_columns(monkeypatch):
+    import sys
+    import types
+
+    import pandas as pd
+    idx = pd.to_datetime(["2026-09-01", "2026-10-01"])
+    df = pd.DataFrame([[10.0, 9.0], [11.0, 10.0]], index=idx, columns=pd.MultiIndex.from_product([["AAA"], ["Close", "Adj Close"]]))
+    monkeypatch.setitem(sys.modules, "yfinance", types.SimpleNamespace(download=lambda part, **k: df))
+    out = script.download(["AAA"], log=lambda *a: None)
+    assert out["AAA"] == (["2026-09-01", "2026-10-01"], [9.0, 10.0], [10.0, 11.0])
