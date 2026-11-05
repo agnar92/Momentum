@@ -41,6 +41,7 @@ def finviz_members(filters, get=None, pause=0.7):
         for x in rows:
             out[x["ticker"].replace(".", "-")] = x.get("company") or x["ticker"]
         offset += PAGE
+        print(f"Finviz: pobrano {len(out)} z {total} spółek…", flush=True)
         if offset <= total:
             time.sleep(pause)
     return out
