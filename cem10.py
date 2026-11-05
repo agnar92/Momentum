@@ -1,6 +1,6 @@
 """CEM10: miesięczna lista spółek (USA + GPW) -> docs/data/cem10.json. Uruchamiany 1. dnia miesiąca przez workflow „CEM10 Monthly”.
 
-USA: sito Finviz (idx_sp500 / idx_ndx ze zwrotem 26 tygodni > +30 %) daje kandydatów i ich indeks, bez Wikipedii; błąd Finviz = błąd zadania.
+USA: najpierw lider (SPY / QQQ), potem sito Finviz (idx_sp500 ALBO idx_ndx, zwrot 26 tygodni > +30 %) tylko dla indeksu lidera, bez Wikipedii; błąd Finviz = błąd zadania.
 Skład WIG20 i mWIG40: cem10_windows/sklad_gpw.json
 (ręcznie po kwartalnej rewizji GPW). Ceny: miesięczne świece yfinance (2 lata: 12M zwrotu + SMA 12 filtra rynku); bieżący, niepełny miesiąc jest odrzucany."""
 import argparse
@@ -46,16 +46,14 @@ def finviz_members(filters, get=None, pause=0.7):
     return out
 
 
-def sieve_members(get=None, log=print):
-    """{"sp": {ticker: nazwa}, "nq": {...}} spółek z 6M > +30 % (Finviz). Bez zapasowego źródła."""
-    import time
-    out = {}
-    for k, f in zip(("sp", "nq"), SIEVE):
-        out[k] = finviz_members(f, get=get)
-        log(f"Finviz ({'S&P 500' if k == 'sp' else 'Nasdaq-100'}): {len(out[k])} spółek z 6M > +30 %")
-        if k == "sp":
-            time.sleep(0.8)
-    if len(out["sp"]) > 300 or len(out["nq"]) > 80:
+def sieve_members(lead, get=None, log=print):
+    """Spółki z 6M > +30 % (Finviz) TYLKO z indeksu lidera: {"sp": {...}, "nq": {...}} (drugi indeks pusty — kandydaci pochodzą wyłącznie z indeksu
+    lidera, więc go nie pobieramy). Bez zapasowego źródła."""
+    k, name = ("nq", "Nasdaq-100") if lead == "NDX" else ("sp", "S&P 500")
+    out = {"sp": {}, "nq": {}}
+    out[k] = finviz_members(SIEVE[1 if k == "nq" else 0], get=get)
+    log(f"Finviz ({name}, lider {lead}): {len(out[k])} spółek z 6M > +30 %")
+    if len(out[k]) > (80 if k == "nq" else 300):
         raise ValueError("Finviz: filtr nie zadziałał (zbyt dużo spółek) — sprawdź kod filtra")
     return out
 
@@ -90,11 +88,16 @@ def monthly(px, upto):
     return out
 
 
+def leader(m):
+    """Lider USA: QQQ, gdy jego zwrot 5M jest wyższy niż SPY -> ("NDX" | "SP", spy5, qqq5)."""
+    s5, q5 = cem10.ret(m["SPY"][1], cem10.LEAD_MONTHS), cem10.ret(m["QQQ"][1], cem10.LEAD_MONTHS)
+    return ("NDX" if q5 > s5 else "SP"), s5, q5
+
+
 def build(mem, gpw, px, upto, today):
     m = monthly(px, upto)
-    spy, qqq = m["SPY"][1], m["QQQ"][1]
-    s5, q5 = cem10.ret(spy, cem10.LEAD_MONTHS), cem10.ret(qqq, cem10.LEAD_MONTHS)
-    lead = "NDX" if q5 > s5 else "SP"
+    spy = m["SPY"][1]
+    lead, s5, q5 = leader(m)
     spy12 = cem10.sma(spy, cem10.MKT_N)
     names = {**mem["nq"], **mem["sp"]}
     rows = []
@@ -129,17 +132,23 @@ def main(argv=None):
     a = ap.parse_args(argv)
     today = dt.date.today()
     upto = last_closed_month(today)
-    mem = sieve_members()
+    px = download(["SPY", "QQQ"])
+    m0 = monthly(px, upto)
+    if "SPY" not in m0 or "QQQ" not in m0:
+        print(f"Brak cen SPY / QQQ za {upto} — nic nie zapisuję.")
+        return 1
+    lead = leader(m0)[0]
+    mem = sieve_members(lead)
     gpw = json.load(open(GPW_FILE, encoding="utf-8"))
-    us = sorted(set(mem["sp"]) | set(mem["nq"]))
-    tickers = ["SPY", "QQQ"] + us + [t + ".WA" for t in sorted(set(gpw["WIG20"]) | set(gpw["mWIG40"]))]
-    px = download(tickers)
+    us = sorted((set(mem["sp"]) | set(mem["nq"])) - {"SPY", "QQQ"})
+    tickers = us + [t + ".WA" for t in sorted(set(gpw["WIG20"]) | set(gpw["mWIG40"]))]
+    px.update(download(tickers))
     have = sum(1 for t in tickers if t in px)
-    if have < 0.9 * len(tickers) or "SPY" not in px or "QQQ" not in px:
+    if have < 0.9 * len(tickers):
         print(f"Za mało cen: {have}/{len(tickers)} — nic nie zapisuję.")
         return 1
     out = build(mem, gpw, px, upto, today)
-    out["usa"]["prefilter"] = {"sp": len(mem["sp"]), "nq": len(mem["nq"]), "filtr": "6M > +30 %"}
+    out["usa"]["prefilter"] = {"lead": lead, "sp": len(mem["sp"]), "nq": len(mem["nq"]), "filtr": "6M > +30 %"}
     os.makedirs(os.path.dirname(a.out), exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, separators=(",", ":"))

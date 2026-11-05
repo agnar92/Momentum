@@ -78,3 +78,26 @@ def test_finviz_sieve_members(monkeypatch):
     except ValueError:
         pass
     assert all("26w30o" in f for f in script.SIEVE)
+
+
+def test_sieve_only_for_leader_index_and_main_order(monkeypatch, tmp_path):
+    calls = []
+    monkeypatch.setattr(script, "finviz_members", lambda f, get=None, pause=0.7: calls.append(f) or {"AAA": "A"})
+    assert script.sieve_members("SP", log=lambda *a: None) == {"sp": {"AAA": "A"}, "nq": {}} and calls == ["idx_sp500,ta_perf_26w30o"]
+    calls.clear()
+    assert script.sieve_members("NDX", log=lambda *a: None) == {"sp": {}, "nq": {"AAA": "A"}} and calls == ["idx_ndx,ta_perf_26w30o"]
+    n, order = 24, []
+
+    def fake_download(tickers, log=print):
+        order.append(list(tickers))
+        mk = {"SPY": [100] * n, "QQQ": [100 * 1.03 ** i for i in range(n)], "AAA": [50] * 12 + [50 * 1.1 ** i for i in range(12)]}
+        return {t: _px(mk.get(t, [10] * n)) for t in tickers}
+    monkeypatch.setattr(script, "download", fake_download)
+    monkeypatch.setattr(script, "last_closed_month", lambda today: _px([1] * n)[0][-1][:7])
+    calls.clear()
+    out = tmp_path / "c.json"
+    assert script.main(["--out", str(out)]) == 0
+    assert order[0] == ["SPY", "QQQ"] and order[1][0] == "AAA" and calls == ["idx_ndx,ta_perf_26w30o"]
+    import json
+    u = json.loads(out.read_text(encoding="utf-8"))["usa"]
+    assert u["lead"] == "NDX" and u["prefilter"]["lead"] == "NDX" and u["prefilter"]["sp"] == 0

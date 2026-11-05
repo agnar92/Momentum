@@ -155,7 +155,7 @@ if (typeof document !== "undefined") {
         const allU = [...U.rows].sort((a, b) => (b.r6 ?? -9) - (a.r6 ?? -9)), allG = [...G.rows].sort((a, b) => (b.r6 ?? -9) - (a.r6 ?? -9));
         $("usaCount").textContent = allU.length; $("gpwCount").textContent = allG.length;
         if (U.prefilter) {
-            $("usaAllBox").querySelector("summary").innerHTML = `USA: spółki po sicie Finviz (6M &gt; +30 %: S&amp;P 500 ${U.prefilter.sp}, Nasdaq‑100 ${U.prefilter.nq}) i Twoje (<span id="usaCount">${allU.length}</span>)`;
+            $("usaAllBox").querySelector("summary").innerHTML = `USA: spółki po sicie Finviz (6M &gt; +30 %, tylko indeks lidera: ${U.prefilter.lead === "NDX" ? "Nasdaq‑100 " + U.prefilter.nq : "S&amp;P 500 " + U.prefilter.sp}) i Twoje (<span id="usaCount">${allU.length}</span>)`;
         }
         const hit = (r, q) => !q || r.t.includes(q) || r.n.toUpperCase().includes(q);
         const drawU = (q) => { q = q.trim().toUpperCase(); $("usaAll").innerHTML = allU.filter((r) => hit(r, q)).map((r) => `<tr><td class="t">${esc(r.t)}</td><td class="nm">${esc(r.n)}</td><td>${idxU(r)}</td><td class="n ${cls(r.r6)}">${pct(r.r6)}</td><td class="n">${num(r.c)}</td><td class="n">${num(r.sma)}</td><td class="n ${cls(r.dist)}">${pct(r.dist)}</td><td>${isCandU(r) ? (inLead(r) ? "tak" : "tak (drugi indeks)") : ""}</td></tr>`).join(""); };

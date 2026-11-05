@@ -4,9 +4,9 @@ CEM10 na komputerze (Windows) - bez instalowania czegokolwiek
 1. Pobierz cale repozytorium jako ZIP (GitHub: Code -> Download ZIP) i rozpakuj; wejdz do folderu cem10_windows.
 2. Kliknij dwa razy CEM10.bat.
    Za pierwszym razem Windows moze zapytac o uruchomienie pliku z internetu - wybierz "Wiecej informacji" -> "Uruchom mimo to".
-3. Skrypt robi 2 skany Finviz (S&P 500 i Nasdaq-100 ze zwrotem z pol roku > +30 % - to jest regula; skan mowi tez,
-   ktora spolka jest w ktorym indeksie), a ceny miesieczne z Yahoo Finance pobiera tylko dla spolek z sita, Twoich spolek
-   i calej GPW (ok. 100 spolek, zwykle 1-2 minuty). Potem otwiera w przegladarce strone CEM10_lista.html.
+3. Skrypt najpierw sprawdza lidera (SPY albo QQQ - wyzszy zwrot 5M), potem robi JEDEN skan Finviz tylko dla indeksu lidera
+   (zwrot z pol roku > +30 % - to jest regula; drugiego indeksu sie nie pobiera), a ceny miesieczne z Yahoo Finance pobiera tylko dla spolek z sita, Twoich spolek
+   i calej GPW (kilkadziesiat spolek, zwykle okolo minuty). Potem otwiera w przegladarce strone CEM10_lista.html.
    Gdy Finviz nie odpowiada, skrypt konczy sie bledem - sprobuj ponownie za chwile (nie ma zapasowego zrodla skladu).
 
 Uruchamiaj po zamknieciu miesiaca (np. 1. dnia nowego miesiaca). Lista liczona jest tylko z zamknietych miesiecy.
