@@ -147,24 +147,14 @@ C-8 (3M > 0, 12M > +30 %, over SMA 10), ranked by 6M; no buys while the equal-we
 |r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (index membership is NOT an exit condition — user, Nov 2026: a stock with +200 % results cannot drop out of a top-10 ranking, and Wikipedia is an unverified source), stop −40 % (shown in the rules only).
 Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) FIRST decides the leader (downloads only SPY + QQQ, `leader(m)`), THEN takes ONLY the ticker LIST of the LEADER's index from Finviz (no return filter; user, Nov 2026: "z finviz pobieraj liste tickerow indeksu ktory wygrywa, potem ceny z yfinance na koniec miesiaca i ranking po zwrocie z 6 msc") (user, Nov 2026: "po co pobierasz NDX skoro liderem jest SPY"; the other index stays empty), no Wikipedia
 (user, Nov 2026: "zrób sito 30 % … po co nam 20 … sprawdzanie wiki szkodzi"; `finviz_members` = Overview view v=111, 20 rows/page, `idx_sp500` or `idx_ndx`
-= membership only; Finviz error or a count outside 400–600 (S&P) / 80–120 (NDX) = job error, no fallback; `usa.index` {lead, n}). Finviz only gives TODAY's membership; every number of the rule (6M, SMA 10, leader, SPY vs SMA 12) comes from Yahoo month-end closes (current month dropped), so no candidate is lost to Finviz measuring 26 weeks from today's price (the earlier `ta_perf_26w30o` sieve missed 8 of 70, e.g. PLTR). Cost: ~500 Yahoo calls when SPY leads, ~100 when QQQ leads. WIG20 / mWIG40 from `cem10_windows/sklad_gpw.json`
+= membership only; Finviz error or a count outside 400–600 (S&P) / 80–120 (NDX) = job error, no fallback; `usa.index` {lead, n}). Finviz only gives TODAY's membership; every number of the rule (6M, SMA 10, leader, SPY vs SMA 12) comes from Yahoo month-end closes (current month dropped), so no candidate is lost to Finviz measuring 26 weeks from today's price (the earlier `ta_perf_26w30o` sieve missed 8 of 70, e.g. PLTR). Cost: ~500 Yahoo calls when SPY leads, ~100 when QQQ leads (yfinance, 100 per batch). WIG20 / mWIG40 from `cem10_windows/sklad_gpw.json`
 (update by hand after each GPW revision: March, June, September, December), yfinance MONTHLY candles 2 y (user: "po co pobierasz dzienne";
 13 closes for 12M + SMA 12 of the market filter; `auto_adjust=False`: returns / SMA on `Adj Close`, displayed prices raw) -> CLOSED months only (`prices.last_closed_month`) -> `docs/data/cem10.json`
 (`month`, `usa` {lead, spy5, qqq5, bear, rows [t, n, sp, nq, c, sma, dist, r3, r6, r12], missing}, `gpw` {w20_6, w40_6, lv, lv12, bear, rows, rewizja}).
 With prices for < 90 % of tickers nothing is written (exit 1). The page: chips (leader, market filter), buy list (green = first N), "Sprawdź spółki,
 które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_hold`; export to a .txt file, copy, import from .txt / .json —
 `parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
-**On the user's PC** (user: "chcę na komputerze to odpalić … nie potrzebuję dużej aplikacji", Windows without Python): `cem10_windows/CEM10.bat`
-(double click) -> `cem10.ps1` (Windows PowerShell 5.1, ASCII only, `$ProgressPreference = 'SilentlyContinue'`): Finviz sieve (user: "czemu pobierasz 580 tickerów … zrób scan finviz, w sumie dwa"):
-`screener.ashx?v=411` (Tickers view, all rows in one page, `data-ticker=`) for the leader's index only (`idx_sp500` or `idx_ndx`, no return filter; the leader comes first from SPY / QQQ Yahoo JSON, `Get-Ret5`) — membership only, no Wikipedia, no `sklad_usa.json`
-(removed); names come from Yahoo `meta.shortName` (`yahooSeries().n`, `nameOf`); Finviz down = the script stops with an error;
-plus the tickers in the newest `*moje_spolki*.txt` in the folder (the page's export) so held stocks always get a row (no index flag, decision by SMA 10 only);
-`raw.index` / `raw.requested` -> `usa.index`; ~500 Yahoo calls when SPY leads, ~100 for QQQ (instead of 576 always). `sklad_gpw.json` (all 60), Yahoo `/v8/finance/chart/<sym>?range=2y&interval=1mo` responses saved
-UNCHANGED (no number formatting in PowerShell — Polish locale uses a decimal comma) into `dane.js` (`window.CEM10_RAW`), then `CEM10_lista.html` =
-`docs/cem10.html` with `dane.js` + `../docs/js/cem10.js` (or `szablon.html` + `cem10.js` in the same folder = the standalone package) and opens it. ALL the maths is in `cem10.js` `computeFromRaw` (port of `cem10.build`;
-`yahooSeries`, `monthMap` adds +2 h because Yahoo's `gmtoffset` is TODAY's offset while monthly bars start at local midnight of their own DST state —
-without it every month shifted by one). Checked: identical rows / leader / filters to `cem10.py` on live data (574 stocks); the PowerShell itself was not run here
-(no pwsh in the container). `dane.js` / `CEM10_lista.html` are in `.gitignore`; `CZYTAJ.txt` = instructions.
+**No Windows script any more** (user, Nov 2026: "po co nam ps1 … chcę tylko desktopowe CEM10"): `cem10_windows/CEM10.bat`, `cem10.ps1`, `CZYTAJ.txt`, `sklad_usa.json` and the in-browser `computeFromRaw` (`dane.js`) were removed; the PC version is the desktop program in agnar92/MomentumDesktop (CEM10 only since Nov 2026). `cem10_windows/sklad_gpw.json` stays (the monthly job reads it).
 
 ## CI (`.github/workflows/`)
 
