@@ -14,6 +14,7 @@ warnings.filterwarnings('ignore')
 DB = os.environ.get('RESEARCH_DB', '/home/user/ndx/db/research.duckdb')
 KAT = os.path.join(os.path.dirname(DB), 'kat.duckdb')
 WYN = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wyniki')
+wmean = lambda v: v.clip(v.quantile(0.01), v.quantile(0.99)).mean()  # średnia winsoryzowana 1/99 %
 SEED = 20261110; rng = np.random.default_rng(SEED); B = 2000
 
 con = duckdb.connect(KAT, read_only=True)
@@ -42,7 +43,7 @@ for f, opis in FL.items():
     b, se = m.params[f], m.bse[f]
     rows.append(dict(flaga=opis, udzial=round(z[f].mean(), 3), s50_z=round(z.s50[z[f] == 1].mean(), 3), s50_bez=round(z.s50[z[f] == 0].mean(), 3),
                      OR=round(np.exp(b), 3), ci95=f'{np.exp(b-1.96*se):.2f}-{np.exp(b+1.96*se):.2f}', p=m.pvalues[f],
-                     f52_z=round(z.f52[z[f] == 1].mean(), 3), f52_bez=round(z.f52[z[f] == 0].mean(), 3)))
+                     f52w_z=round(wmean(z.f52[z[f] == 1]), 3), f52w_bez=round(wmean(z.f52[z[f] == 0]), 3), f52med_z=round(z.f52[z[f] == 1].median(), 3), f52med_bez=round(z.f52[z[f] == 0].median(), 3)))
 P3 = pd.DataFrame(rows); P3['q_BH'] = multipletests(P3.p, method='fdr_bh')[1]
 P3['p'] = P3.p.map('{:.2e}'.format); P3['q_BH'] = P3.q_BH.map('{:.2e}'.format)
 out += ['## P3: ślad katalizatora w tygodniu wybicia lub tygodniu przed', '',
@@ -50,7 +51,7 @@ out += ['## P3: ślad katalizatora w tygodniu wybicia lub tygodniu przed', '',
         P3.to_markdown(index=False), '']
 # relacja dawka-odpowiedź: kwintyle max_rv
 z['kw_rv'] = pd.qcut(z.max_rv.rank(method='first'), 5, labels=False)
-d = z.groupby('kw_rv').agg(max_rv_mediana=('max_rv', 'median'), n=('s50', 'size'), s50=('s50', 'mean'), f52_sr=('f52', 'mean'), mfe_med=('mfe52', 'median')).round(3).reset_index()
+d = z.groupby('kw_rv').agg(max_rv_mediana=('max_rv', 'median'), n=('s50', 'size'), s50=('s50', 'mean'), f52_sr_w=('f52', wmean), mfe_med=('mfe52', 'median')).round(3).reset_index()
 out += ['Kwintyle największego dziennego wolumenu względnego w tygodniu wybicia (lub tydzień przed):', '', d.to_markdown(index=False), '']
 
 # P4
@@ -97,7 +98,7 @@ out += ['## P4: czy wolumen poprawia prognozę sukcesu (LightGBM, prognozy spoza
 # kwintyle prognozy: praktyczne znaczenie (odsetek sukcesu w górnym kwintylu)
 for nm, p in [('cena', p_c), ('cena + wolumen', p_cw)]:
     q = pd.qcut(p.rank(method='first'), 5, labels=False)
-    t = z2.groupby(q.to_numpy()).agg(s50=('s50', 'mean'), f52_sr=('f52', 'mean'), f52_med=('f52', 'median')).round(3)
+    t = z2.groupby(q.to_numpy()).agg(s50=('s50', 'mean'), f52_sr_w=('f52', wmean), f52_med=('f52', 'median')).round(3)
     out += [f'Kwintyle prognozy, model {nm} (0 = najniższa):', '', t.reset_index(names='kwintyl').to_markdown(index=False), '']
 open(os.path.join(WYN, 'r09_katalizator.md'), 'w').write('\n'.join(out))
 print('\n'.join(out))

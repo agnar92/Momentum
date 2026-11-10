@@ -67,7 +67,7 @@ def spolka(tk, okres, o, h, l, c, vol, dv, ok, spy_ok, ew13, wycofana):
         vu, vd = vol[t - 10:t][up].sum(), vol[t - 10:t][~up].sum()
         ksz_c = np.log(c[t - 52:t].reshape(13, 4).mean(1) / c[t])
         ksz_v = np.log((vol[t - 52:t].reshape(13, 4).mean(1) + 1) / (v52 + 1))
-        f = dict(ticker=tk, okres=okres[t], cena=c[t],
+        f = dict(ticker=tk.split('~')[0], seria=tk, okres=okres[t], cena=c[t],
                  r4=c[t] / c[t - 4] - 1, r13=c[t] / c[t - 13] - 1, r26=c[t] / c[t - 26] - 1, r52=c[t] / c[t - 52] - 1,
                  od_max52=c[t] / mx52 - 1, od_min52=c[t] / mn52 - 1, od_ath=c[t] / ath - 1, nowy_ath=int(c[t] > ath),
                  dl_bazy=dl_bazy, gl_bazy=gl_bazy,
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     rw.loc[rw.spy.isna(), 'spy_ok'] = np.nan
     rw['ew13'] = np.exp(np.log1p(rw.ew_r.fillna(0)).rolling(13).sum()) - 1
     rw = rw.set_index('okres')
-    w = con.execute("""SELECT ticker, okres, o, h, l, c, vol, dv, ok, ostatni FROM w WHERE c > 0 ORDER BY ticker, okres""").df()
+    w = con.execute("""SELECT seria AS ticker, okres, o, h, l, c, vol, dv, ok, ostatni FROM w WHERE c > 0 ORDER BY seria, okres""").df()
     print('wczytano', len(w), f'{time.time()-t0:.0f} s')
     spy_ok = rw.spy_ok.reindex(w.okres).to_numpy(); ew13 = rw.ew13.reindex(w.okres).to_numpy()
     gr = np.flatnonzero(np.r_[True, w.ticker.values[1:] != w.ticker.values[:-1], True])

@@ -59,3 +59,7 @@ P5 czas trwania · P6 wygasanie · P7 czas trzymania / wyjście · P8 przewidywa
    potwierdza ruch dopiero po wzroście o 33 % od dołka, więc próba była warunkowa na sukcesie (błąd selekcji).
    Poprawka: perspektywa bezwarunkowa liczona ze wszystkich świeżych wybić (tabela zdarzenia), koniec ruchu =
    spadek o Y od maksimum po wybiciu; opis ruchów zygzaka zostaje jako jawnie warunkowy.
+6. 2026-11-10, etap 5: szeregi dzielone na serie przy przerwie w notowaniach > 30 dni kalendarzowych (ponowne użycie
+   tickera, np. TCT: 2006-03-31 = 40,59 USD, 2014-12-04 = 79 000 USD; 0,1 % zdarzeń dawało 74 % sumy zwrotów 52 tyg.).
+   Koniec serii = wyjście po ostatniej cenie. Średnie zwrotów raportowane jako winsoryzowane 1/99 % obok median.
+   Przeliczone etapy 2-5.

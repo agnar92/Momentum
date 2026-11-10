@@ -43,7 +43,7 @@ def fmt(v, ci, p=1, pct=False):
 
 
 def przygotuj(y):
-    r = con.execute("""SELECT r.*, s.is_delisted FROM ruchy r JOIN sec s USING (ticker)
+    r = con.execute("""SELECT r.* FROM ruchy r
         WHERE y = ? AND kier = 1 AND t_wyb IS NOT NULL AND ok_wyb = 1
           AND t_wyb BETWEEN '1998-01-01' AND '2012-12-31'""", [y]).df()
     for k in ('t0', 't1', 't_kon', 't_wyb'):
@@ -83,7 +83,8 @@ for y in [25, 15, 35]:
     for nm, col, pct in [('zysk wybicie->szczyt [%]', 'zpk', True), ('tygodnie wybicie->szczyt', 'tpk', False)]:
         for qq in q:
             rows.append((nm, f'{int(qq*100)}. percentyl', fmt(zak[col].quantile(qq), blok_ci(zak, lambda e, c=col, qq=qq: e[c].quantile(qq)), 1, pct)))
-    rows.append(('zysk wybicie->szczyt [%]', 'średnia', fmt(zak.zpk.mean(), blok_ci(zak, lambda e: e.zpk.mean()), 1, True)))
+    wm = lambda v: v.clip(v.quantile(0.01), v.quantile(0.99)).mean()
+    rows.append(('zysk wybicie->szczyt [%]', 'średnia winsoryzowana 1/99 %', fmt(wm(zak.zpk), blok_ci(zak, lambda e: wm(e.zpk)), 1, True)))
     for x in [0.3, 0.5, 1.0]:
         rows.append((f'odsetek wybić ze szczytem >= +{int(x*100)} %', '', fmt((zak.zpk >= x).mean(), blok_ci(zak, lambda e, x=x: (e.zpk >= x).mean()), 1, True)))
     out += ['### (a) Wszystkie świeże wybicia: zysk i czas do szczytu (zakończone)', '',

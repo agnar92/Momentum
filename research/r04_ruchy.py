@@ -67,8 +67,8 @@ if __name__ == '__main__':
     con = duckdb.connect(DB)
     con.execute("SET threads=4; SET memory_limit='11GB'")
     koniec = con.execute("SELECT max(okres) FROM w").fetchone()[0]
-    w = con.execute("""SELECT w.ticker, w.okres, w.c, w.ok, s.is_delisted, s.last_date FROM w JOIN sec s USING (ticker)
-                       WHERE w.c > 0 ORDER BY w.ticker, w.okres""").df()
+    w = con.execute("""SELECT w.seria AS ticker, w.okres, w.c, w.ok FROM w
+                       WHERE w.c > 0 ORDER BY w.seria, w.okres""").df()
     print('wczytano', len(w), f'{time.time()-t0:.0f} s')
     gr = np.flatnonzero(np.r_[True, w.ticker.values[1:] != w.ticker.values[:-1], True])
     okres = w.okres.values; c_all = w.c.to_numpy(float); ok_all = w.ok.to_numpy(); tick = w.ticker.values
