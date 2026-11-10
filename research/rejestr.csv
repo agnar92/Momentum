@@ -1,5 +1,5 @@
 id,data,etap,hipoteza,zbior,metoda,wynik,p,q,uwagi
-R001,2026-11-10,1,Zwroty EODHD zgodne z Yahoo,"1995-2012, 300 losowych par","% par z >=95 % dni zgodnych (<0,5 pp)",124/124 = 100 % (95 %: 97-100 %); 176 par brak w Yahoo,,,tylko spółki obecne w Yahoo
-R002,2026-11-10,1,Obroty EODHD (ps*vol) zgodne z Yahoo,j.w.,"% par z medianą 0,5-2x",96 % (95 %: 91-98 %),,,
+R001,2026-11-10,1,Zwroty EODHD zgodne z Yahoo,"1995-2012, 300 losowych par","% par z >=95 % dni zgodnych (<0,5 pp)",wersja ostateczna: 99,1 % z 115 par (95 %: 95,2-99,8 %); reszta brak w Yahoo,,,tylko spółki obecne w Yahoo
+R002,2026-11-10,1,Obroty EODHD (ps*vol) zgodne z Yahoo,j.w.,"% par z medianą 0,5-2x",94,8 % z 115 (95 %: 89,1-97,6 %),,,
 R003,2026-11-10,1,Skoki > +300 % to błędy,1995-2012 po filtrze,% powrotu w 5 sesjach,74 % (95 %: 71-78 %),,,podstawa reguły skoki
 R004,2026-11-10,1,Pokrycie spółek wycofanych,1985-2025,liczba w roku,skok 339 -> 2267 między 1997 a 1998,,,odstępstwo 1
