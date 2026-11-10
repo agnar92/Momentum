@@ -35,8 +35,13 @@ out = ['# Etap 4: wzorce bez nadzoru (wybicia 1998-01 ... 2012-06)', '',
 
 # 2. wybór k
 sub = rng.choice(len(Xs), min(20000, len(Xs)), replace=False)
+import pickle
+CACHE = os.path.join(WYN, 'r07_kmeans.pkl')  # zapis pośredni (nie w repo): wybór k liczy się ok. 20 min
 rows = []; modele = {}
+if os.path.exists(CACHE):
+    rows, modele = pickle.load(open(CACHE, 'rb'))
 for k in range(3, 13):
+    if k in modele: continue
     km = KMeans(k, n_init=10, random_state=SEED).fit(Xs)
     modele[k] = km
     sil = silhouette_score(Xs[sub], km.labels_[sub])
@@ -47,6 +52,7 @@ for k in range(3, 13):
         ari.append(adjusted_rand_score(km.labels_, kh.predict(Xs)))
     rows.append((k, round(sil, 4), round(np.mean(ari), 3), round(np.min(ari), 3)))
     print('k', k, rows[-1], flush=True)
+    pickle.dump((rows, modele), open(CACHE, 'wb'))
 wk = pd.DataFrame(rows, columns=['k', 'sylwetka', 'ARI średnio', 'ARI min'])
 stab = wk[wk['ARI średnio'] >= 0.6]
 K = int(stab.sort_values('sylwetka').iloc[-1].k) if len(stab) else int(wk.sort_values('ARI średnio').iloc[-1].k)
@@ -86,11 +92,11 @@ out += ['## Grupy kształtów i lift sukcesu', '',
         L.sort_values('lift', ascending=False).to_markdown(index=False), '']
 
 # kształt centroidów w jednostkach pierwotnych (% od zamknięcia wybicia, wolumen x średnia)
-C = modele[K].cluster_centers_ * sd + mu
+CEN = modele[K].cluster_centers_ * sd + mu
 cen = pd.DataFrame({'tyg_przed': [-(52 - 4 * i - 2) for i in range(13)]})
 for g in range(K):
-    cen[f'g{g}_cena_%'] = ((np.exp(C[g, :13]) - 1) * 100).round(1)
-    cen[f'g{g}_vol_x'] = np.exp(C[g, 13:]).round(2)
+    cen[f'g{g}_cena_%'] = ((np.exp(CEN[g, :13]) - 1) * 100).round(1)
+    cen[f'g{g}_vol_x'] = np.exp(CEN[g, 13:]).round(2)
 cen.to_csv(os.path.join(WYN, 'r07_centroidy.csv'), index=False)
 out += ['## Kształty (centroidy): cena w % względem zamknięcia wybicia, wolumen jako krotność średniej 52 tyg.', '',
         cen.to_markdown(index=False), '']
