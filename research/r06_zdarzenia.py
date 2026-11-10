@@ -6,6 +6,7 @@ Cechy (dane do t włącznie): zwroty 4/13/26/52 tyg., odległość od szczytu/do
 i głębokość bazy, zawężanie zmienności, wolumen wybicia i bazy, akumulacja (wolumen tygodni wzrostowych / spadkowych),
 siła zamknięcia tygodnia, rynek (SPY nad SMA 40 tyg., zwrot indeksu równoważonego 13 tyg.), wielkość (obroty).
 Kształt do grupowania: 13 punktów log(c[t-k]/c[t]) (średnie z 4 tygodni) i 13 punktów log wolumenu względem średniej 52 tyg.
+Trwanie: tpk/zpk/kon dla 15/25/35 % = tygodnie i zysk do szczytu, tydzień końca (spadek o próg od maksimum po wybiciu).
 Wyniki: zwrot 4/13/26/52 tyg. (spółka wycofana: ostatnia cena), MFE/MAE 52 tyg., sukces = cena dochodzi do +50 % nad
 zamknięciem wybicia, zanim spadnie o 25 % od bieżącego maksimum (horyzont 52 tyg.); warianty 30/15 i 100/35.
 """
@@ -22,6 +23,16 @@ def sukces(c, i, cel, dd, h=H):
         mx = max(mx, c[j])
         if c[j] <= mx * (1 - dd): return 0
     return 0
+
+
+def trwanie(c, i, dd):
+    """Od wybicia w tygodniu i: ruch trwa, dopóki cena nie spadnie o dd od maksimum osiągniętego od wybicia.
+    Zwraca (tygodnie do szczytu, zysk do szczytu, indeks tygodnia końca albo -1, gdy koniec nie nastąpił w danych)."""
+    mx, imx = c[i], i
+    for j in range(i + 1, len(c)):
+        if c[j] > mx: mx, imx = c[j], j
+        elif c[j] <= mx * (1 - dd): return imx - i, mx / c[i] - 1, j
+    return imx - i, mx / c[i] - 1, -1
 
 
 def spolka(tk, okres, o, h, l, c, vol, dv, ok, spy_ok, ew13, wycofana):
@@ -78,6 +89,11 @@ def spolka(tk, okres, o, h, l, c, vol, dv, ok, spy_ok, ew13, wycofana):
         f['mae52'] = fut.min() / c[t] - 1 if len(fut) else np.nan
         f['pelny_h'] = int(t + H < n or wycofana)
         f['s50'] = sukces(c, t, 0.5, 0.25); f['s30'] = sukces(c, t, 0.3, 0.15); f['s100'] = sukces(c, t, 1.0, 0.35)
+        for dd in (15, 25, 35):
+            tp, zp, kk = trwanie(c, t, dd / 100)
+            f[f'tpk{dd}'] = tp; f[f'zpk{dd}'] = zp
+            f[f'kon{dd}'] = okres[kk] if kk >= 0 else pd.NaT  # tydzień końca (NaT: brak końca w danych)
+        f['ost_tydz'] = okres[n - 1]; f['wycofana'] = int(wycofana)
         out.append(f)
     return out
 

@@ -2,3 +2,4 @@ duckdb_tmp/
 *.duckdb
 *.duckdb.wal
 __pycache__/
+wyniki/*.log

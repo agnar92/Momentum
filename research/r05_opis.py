@@ -6,9 +6,12 @@ nie spadnie o Y od szczytu. Ruchy z wybiciem 1998-01-01 ... 2012-12-31; wszystko
 (cenzurowanie), więc nie czytamy cen z okresu walidacji.
 
 Dwie perspektywy:
- (a) bezwarunkowa: WSZYSTKIE wybicia w ruchach w górę (tak widzi je inwestor) -> zysk wybicie->szczyt, czas do szczytu,
-     funkcja hazardu końca ruchu w tygodniach od wybicia;
- (b) warunkowa: tylko ruchy, które okazały się duże (zmiana dołek->szczyt >= 30/50/100 %) -> typowy czas i zysk.
+ (a) bezwarunkowa: WSZYSTKIE świeże wybicia (tabela zdarzenia, r06) -> ruch trwa, dopóki cena nie spadnie o Y od maksimum
+     po wybiciu; czas życia = wybicie -> tydzień tego spadku (czas trzymania z trailing stopem Y), zysk i czas do szczytu,
+     hazard końca w tygodniach od wybicia, Weibull.
+ (b) warunkowa: ruchy potwierdzone zygzakiem (tabela ruchy). Zygzak potwierdza ruch w górę dopiero po wzroście o
+     -ln(1-Y) od dołka, więc te ruchy są z definicji udane; to opis "jak wyglądają duże ruchy", nie szansa sukcesu.
+     (Pierwsza wersja tego skryptu nazywała (b) bezwarunkową; błąd selekcji poprawiony, protokół: odstępstwo 5.)
 Przedziały 95 %: bootstrap blokowy po miesiącach kalendarzowych wybicia (2000 losowań), bo wybicia z tego samego
 miesiąca są zależne (wspólny rynek).
 """
@@ -58,65 +61,72 @@ def przygotuj(y):
 
 
 out = ['# Etap 3: opis statystyczny ruchów (próba ucząca, wybicia 1998-2012)', '']
-for y in [0.25, 0.15, 0.35]:
-    r = przygotuj(y)
-    zak = r[r.zdarzenie == 1]
-    out += [f'## Próg odwrócenia Y = {int(y*100)} %', '',
-            f'Wybić w ruchach w górę (płynnych w tygodniu wybicia): {len(r):,}; zakończonych w próbie: {len(zak):,}; '
-            f'uciętych: {len(r)-len(zak):,}; niezależnych miesięcy wybicia: {r.mies.nunique()}.', '']
-    # (a) bezwarunkowo: rozkład zysku wybicie -> szczyt (tylko zakończone; ucięte zaniżałyby zysk)
+z = con.execute("""SELECT * FROM zdarzenia WHERE okres BETWEEN '1998-01-01' AND '2012-12-31'""").df()
+for k in ('okres', 'kon15', 'kon25', 'kon35', 'ost_tydz'):
+    z[k] = pd.to_datetime(z[k])
+z['mies'] = z.okres.dt.to_period('M')
+for y in [25, 15, 35]:
+    d = z.copy()
+    kon = d[f'kon{y}']
+    # koniec przez wycofanie z notowań = koniec ruchu w ostatnim tygodniu notowań
+    kon = kon.where(kon.notna() | (d.wycofana == 0), d.ost_tydz)
+    d['zdarzenie'] = (kon.notna() & (kon <= KONIEC_UCZ)).astype(int)
+    koniec = kon.where(d.zdarzenie == 1, KONIEC_UCZ)
+    d['zycie'] = ((koniec - d.okres).dt.days / 7).round().clip(lower=1)
+    d['tpk'] = d[f'tpk{y}']; d['zpk'] = d[f'zpk{y}']
+    zak = d[d.zdarzenie == 1]
+    out += [f'## Próg trailing stopu / końca ruchu Y = {y} %', '',
+            f'Świeżych wybić (płynnych): {len(d):,}; zakończonych w próbie: {len(zak):,}; uciętych na 2013-06-30: {len(d)-len(zak):,}; '
+            f'niezależnych miesięcy: {d.mies.nunique()}.', '']
     q = [0.1, 0.25, 0.5, 0.75, 0.9]
     rows = []
-    for nm, col, pct in [('zysk wybicie->szczyt [%]', 'zysk_wyb', True), ('tygodnie wybicie->szczyt', 'tyg', False)]:
+    for nm, col, pct in [('zysk wybicie->szczyt [%]', 'zpk', True), ('tygodnie wybicie->szczyt', 'tpk', False)]:
         for qq in q:
-            v = zak[col].quantile(qq)
-            ci = blok_ci(zak, lambda d: d[col].quantile(qq))
-            rows.append((nm, f'{int(qq*100)}. percentyl', fmt(v, ci, 1, pct)))
-    rows.append(('zysk wybicie->szczyt [%]', 'średnia', fmt(zak.zysk_wyb.mean(), blok_ci(zak, lambda d: d.zysk_wyb.mean()), 1, True)))
+            rows.append((nm, f'{int(qq*100)}. percentyl', fmt(zak[col].quantile(qq), blok_ci(zak, lambda e, c=col, qq=qq: e[c].quantile(qq)), 1, pct)))
+    rows.append(('zysk wybicie->szczyt [%]', 'średnia', fmt(zak.zpk.mean(), blok_ci(zak, lambda e: e.zpk.mean()), 1, True)))
     for x in [0.3, 0.5, 1.0]:
-        rows.append((f'odsetek wybić kończących się zyskiem >= {int(x*100)} % do szczytu', '', fmt((zak.zysk_wyb >= x).mean(), blok_ci(zak, lambda d: (d.zysk_wyb >= x).mean()), 1, True)))
-    out += ['### (a) Wszystkie wybicia (zakończone ruchy)', '', pd.DataFrame(rows, columns=['miara', '', 'wartość (95 %)']).to_markdown(index=False), '',
-            'Zysk do szczytu to górna granica: realne wyjście jest zawsze po spadku od szczytu.', '']
-    # Kaplan-Meier i hazard (wszystkie, z ucięciem)
+        rows.append((f'odsetek wybić ze szczytem >= +{int(x*100)} %', '', fmt((zak.zpk >= x).mean(), blok_ci(zak, lambda e, x=x: (e.zpk >= x).mean()), 1, True)))
+    out += ['### (a) Wszystkie świeże wybicia: zysk i czas do szczytu (zakończone)', '',
+            pd.DataFrame(rows, columns=['miara', '', 'wartość (95 %)']).to_markdown(index=False), '',
+            'Zysk do szczytu to górna granica zysku; po szczycie cena spada o Y, zanim ruch uznamy za zakończony.', '']
     tyg = [4, 8, 13, 26, 52, 104]
-    s = km(r.tyg, r.zdarzenie, tyg)
-    ci_km = [blok_ci(r, lambda d, t=t: km(d.tyg, d.zdarzenie, [t])[0], 'mies', 500) for t in tyg] if y == 0.25 else [(np.nan, np.nan)] * len(tyg)
-    # hazard dyskretny: P(szczyt w tygodniu [t, t+k) | ruch trwał do t)
+    s_km = km(d.zycie, d.zdarzenie, tyg)
+    nb = 500 if y == 25 else 0
+    ci_km = [blok_ci(d, lambda e, t=t: km(e.zycie, e.zdarzenie, [t])[0], 'mies', nb) if nb else (np.nan, np.nan) for t in tyg]
     edges = [0, 4, 8, 13, 26, 52, 104, 1000]
     hz = []
-    for a, b in zip(edges[:-1], edges[1:]):
-        at = (r.tyg >= a).sum(); ev = ((r.tyg >= a) & (r.tyg < b) & (r.zdarzenie == 1)).sum()
-        hz.append((f'{a}-{b if b < 1000 else "..."}', at, ev, ev / at / (min(b, 260) - a) if at else np.nan))
-    out += ['### Jak długo wybicie "żyje" (Kaplan-Meier, z ucięciem)', '',
-            pd.DataFrame({'tygodnie od wybicia': tyg, 'odsetek ruchów jeszcze przed szczytem': [f'{v*100:.1f}' + (f' ({c[0]*100:.1f}-{c[1]*100:.1f})' if not np.isnan(c[0]) else '') for v, c in zip(s, ci_km)]}).to_markdown(index=False), '',
-            f'Mediana czasu do szczytu: {km_mediana(r.tyg, r.zdarzenie):.0f} tyg.', '',
-            'Hazard (szansa, że szczyt przypada w danym tygodniu, jeśli ruch dotrwał do początku przedziału):', '',
-            pd.DataFrame(hz, columns=['przedział tygodni', 'w ryzyku', 'szczytów', 'hazard na tydzień']).round(4).to_markdown(index=False), '']
-    # Weibull vs wykładniczy: kształt k < 1 = im dłużej trwa, tym mniejsza szansa końca (ruch się nie starzeje)
-    t_pos = r.tyg.clip(lower=0.5)
-    k_w, lam_w, ll_w, ll_1 = weibull(t_pos, r.zdarzenie)
-    lr = 2 * (ll_w - ll_1)
-    k_ci = blok_ci(r.assign(t=t_pos), lambda d: weibull(d.t, d.zdarzenie)[0], 'mies', 300) if y == 0.25 else (np.nan, np.nan)
-    out += [f'Weibull: kształt k = {k_w:.3f}, skala = {lam_w:.1f} tyg.' + (f' (95 % blokowo: {k_ci[0]:.3f}-{k_ci[1]:.3f})' if not np.isnan(k_ci[0]) else '') +
-            f'; test ilorazu wiarygodności vs wykładniczy: LR = {lr:.1f} (1 st. swobody). k < 1: hazard maleje z wiekiem ruchu.', '']
-    # (b) warunkowo na dużym ruchu
-    rows = []
-    for x in [0.3, 0.5, 1.0]:
-        d = zak[zak.zmiana >= x]
-        if len(d) < 30: continue
-        rows.append((f'>= {int(x*100)} %', len(d), d.mies.nunique(),
-                     fmt(d.tyg.median(), blok_ci(d, lambda e: e.tyg.median()), 0),
-                     fmt(d.zysk_wyb.median(), blok_ci(d, lambda e: e.zysk_wyb.median()), 1, True),
-                     f'{(d.t_wyb - d.t0).dt.days.median()/7:.0f}'))
-    out += ['### (b) Tylko ruchy, które okazały się duże (dołek->szczyt)', '',
-            pd.DataFrame(rows, columns=['ruch', 'n', 'miesięcy', 'mediana tygodni wybicie->szczyt (95 %)', 'mediana zysku wybicie->szczyt (95 %)', 'mediana tygodni dołek->wybicie']).to_markdown(index=False), '']
-    # liczba dużych ruchów na rok (stabilność w czasie)
-    if y == 0.25:
-        rok = zak.assign(rok=zak.t_wyb.dt.year).groupby('rok').agg(wybic=('ticker', 'size'), duze50=('zmiana', lambda v: (v >= 0.5).sum()),
-                                                                   mediana_zysku=('zysk_wyb', 'median'), mediana_tyg=('tyg', 'median')).reset_index()
-        rok['udzial_duzych'] = (rok.duze50 / rok.wybic).round(3)
+    for a_, b_ in zip(edges[:-1], edges[1:]):
+        at = (d.zycie > a_).sum(); ev = ((d.zycie > a_) & (d.zycie <= b_) & (d.zdarzenie == 1)).sum()
+        hz.append((f'{a_}-{b_ if b_ < 1000 else "..."}', at, ev, ev / at / (min(b_, 260) - a_) if at else np.nan))
+    out += [f'### Czas życia ruchu (trzymanie z trailing stopem {y} %), Kaplan-Meier z ucięciem', '',
+            pd.DataFrame({'tygodnie od wybicia': tyg, 'odsetek ruchów wciąż żywych (95 %)': [f'{v*100:.1f}' + (f' ({c[0]*100:.1f}-{c[1]*100:.1f})' if not np.isnan(c[0]) else '') for v, c in zip(s_km, ci_km)]}).to_markdown(index=False), '',
+            f'Mediana czasu życia: {km_mediana(d.zycie, d.zdarzenie):.0f} tyg.', '',
+            'Hazard końca ruchu (szansa końca na tydzień, jeśli ruch dotrwał do początku przedziału):', '',
+            pd.DataFrame(hz, columns=['przedział tygodni', 'w ryzyku', 'końców', 'hazard na tydzień']).round(4).to_markdown(index=False), '']
+    k_w, lam_w, ll_w, ll_1 = weibull(d.zycie, d.zdarzenie)
+    k_ci = blok_ci(d, lambda e: weibull(e.zycie, e.zdarzenie)[0], 'mies', 300) if y == 25 else (np.nan, np.nan)
+    out += [f'Weibull: kształt k = {k_w:.3f}' + (f' (95 % blokowo: {k_ci[0]:.3f}-{k_ci[1]:.3f})' if not np.isnan(k_ci[0]) else '') +
+            f', skala = {lam_w:.1f} tyg.; LR vs wykładniczy = {2*(ll_w-ll_1):.1f}. k < 1: im dłużej ruch trwa, tym mniejsza szansa końca w kolejnym tygodniu.', '']
+    if y == 25:
+        rok = zak.assign(rok=zak.okres.dt.year).groupby('rok').agg(wybic=('ticker', 'size'), szczyt50=('zpk', lambda v: (v >= 0.5).mean()),
+              mediana_zysku=('zpk', 'median'), mediana_zycia=('zycie', 'median')).reset_index()
         out += ['### Po latach (Y = 25 %, zakończone)', '', rok.round(3).to_markdown(index=False), '']
-    print(f'Y={y} gotowe')
+    print(f'(a) Y={y} gotowe', flush=True)
+
+# (b) ruchy potwierdzone zygzakiem (warunkowo)
+for yy in [0.25]:
+    r = przygotuj(yy)
+    zak = r[r.zdarzenie == 1]
+    rows = []
+    for x in [0.5, 1.0, 2.0]:
+        e = zak[zak.zmiana >= x]
+        rows.append((f'>= {int(x*100)} %', len(e), fmt(e.tyg.median(), blok_ci(e, lambda f: f.tyg.median()), 0),
+                     fmt(e.zysk_wyb.median(), blok_ci(e, lambda f: f.zysk_wyb.median()), 1, True),
+                     f'{(e.t_wyb - e.t0).dt.days.median()/7:.0f}', f'{(e.t1 - e.t0).dt.days.median()/7:.0f}'))
+    out += ['## (b) Warunkowo: ruchy potwierdzone zygzakiem (Y = 25 %), wybicie 1998-2012', '',
+            'Opis "jak wyglądają duże ruchy", które już się wydarzyły; nie jest to szansa sukcesu wybicia.', '',
+            pd.DataFrame(rows, columns=['ruch dołek->szczyt', 'n', 'mediana tyg. wybicie->szczyt (95 %)', 'mediana zysku wybicie->szczyt (95 %)',
+                                        'mediana tyg. dołek->wybicie', 'mediana tyg. dołek->szczyt']).to_markdown(index=False), '']
 
 open(OUT, 'w').write('\n'.join(out))
 print('\n'.join(out))
