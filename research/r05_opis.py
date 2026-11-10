@@ -13,7 +13,7 @@ Przedziały 95 %: bootstrap blokowy po miesiącach kalendarzowych wybicia (2000 
 miesiąca są zależne (wspólny rynek).
 """
 import os, warnings, duckdb, numpy as np, pandas as pd
-from lifelines import KaplanMeierFitter, WeibullFitter, ExponentialFitter
+from przezycie import km, km_mediana, weibull
 warnings.filterwarnings('ignore')
 DB = os.environ.get('RESEARCH_DB', '/home/user/ndx/db/research.duckdb')
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'wyniki', 'r05_opis.md')
@@ -78,10 +78,9 @@ for y in [0.25, 0.15, 0.35]:
     out += ['### (a) Wszystkie wybicia (zakończone ruchy)', '', pd.DataFrame(rows, columns=['miara', '', 'wartość (95 %)']).to_markdown(index=False), '',
             'Zysk do szczytu to górna granica: realne wyjście jest zawsze po spadku od szczytu.', '']
     # Kaplan-Meier i hazard (wszystkie, z ucięciem)
-    km = KaplanMeierFitter().fit(r.tyg, r.zdarzenie)
     tyg = [4, 8, 13, 26, 52, 104]
-    s = km.survival_function_at_times(tyg).to_numpy()
-    ci_km = [blok_ci(r, lambda d, t=t: KaplanMeierFitter().fit(d.tyg, d.zdarzenie).survival_function_at_times([t]).iloc[0], 'mies', 500) for t in tyg] if y == 0.25 else [(np.nan, np.nan)] * len(tyg)
+    s = km(r.tyg, r.zdarzenie, tyg)
+    ci_km = [blok_ci(r, lambda d, t=t: km(d.tyg, d.zdarzenie, [t])[0], 'mies', 500) for t in tyg] if y == 0.25 else [(np.nan, np.nan)] * len(tyg)
     # hazard dyskretny: P(szczyt w tygodniu [t, t+k) | ruch trwał do t)
     edges = [0, 4, 8, 13, 26, 52, 104, 1000]
     hz = []
@@ -90,15 +89,15 @@ for y in [0.25, 0.15, 0.35]:
         hz.append((f'{a}-{b if b < 1000 else "..."}', at, ev, ev / at / (min(b, 260) - a) if at else np.nan))
     out += ['### Jak długo wybicie "żyje" (Kaplan-Meier, z ucięciem)', '',
             pd.DataFrame({'tygodnie od wybicia': tyg, 'odsetek ruchów jeszcze przed szczytem': [f'{v*100:.1f}' + (f' ({c[0]*100:.1f}-{c[1]*100:.1f})' if not np.isnan(c[0]) else '') for v, c in zip(s, ci_km)]}).to_markdown(index=False), '',
-            f'Mediana czasu do szczytu: {km.median_survival_time_:.0f} tyg.', '',
+            f'Mediana czasu do szczytu: {km_mediana(r.tyg, r.zdarzenie):.0f} tyg.', '',
             'Hazard (szansa, że szczyt przypada w danym tygodniu, jeśli ruch dotrwał do początku przedziału):', '',
             pd.DataFrame(hz, columns=['przedział tygodni', 'w ryzyku', 'szczytów', 'hazard na tydzień']).round(4).to_markdown(index=False), '']
     # Weibull vs wykładniczy: kształt k < 1 = im dłużej trwa, tym mniejsza szansa końca (ruch się nie starzeje)
     t_pos = r.tyg.clip(lower=0.5)
-    wb = WeibullFitter().fit(t_pos, r.zdarzenie); ex = ExponentialFitter().fit(t_pos, r.zdarzenie)
-    lr = 2 * (wb.log_likelihood_ - ex.log_likelihood_)
-    k_ci = blok_ci(r.assign(t=t_pos), lambda d: WeibullFitter().fit(d.t, d.zdarzenie).rho_, 'mies', 300) if y == 0.25 else (np.nan, np.nan)
-    out += [f'Weibull: kształt k = {wb.rho_:.3f}' + (f' (95 % blokowo: {k_ci[0]:.3f}-{k_ci[1]:.3f})' if not np.isnan(k_ci[0]) else '') +
+    k_w, lam_w, ll_w, ll_1 = weibull(t_pos, r.zdarzenie)
+    lr = 2 * (ll_w - ll_1)
+    k_ci = blok_ci(r.assign(t=t_pos), lambda d: weibull(d.t, d.zdarzenie)[0], 'mies', 300) if y == 0.25 else (np.nan, np.nan)
+    out += [f'Weibull: kształt k = {k_w:.3f}, skala = {lam_w:.1f} tyg.' + (f' (95 % blokowo: {k_ci[0]:.3f}-{k_ci[1]:.3f})' if not np.isnan(k_ci[0]) else '') +
             f'; test ilorazu wiarygodności vs wykładniczy: LR = {lr:.1f} (1 st. swobody). k < 1: hazard maleje z wiekiem ruchu.', '']
     # (b) warunkowo na dużym ruchu
     rows = []
