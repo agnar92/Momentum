@@ -3,3 +3,9 @@ R001,2026-11-10,1,Zwroty EODHD zgodne z Yahoo,"1995-2012, 300 losowych par","% p
 R002,2026-11-10,1,Obroty EODHD (ps*vol) zgodne z Yahoo,j.w.,"% par z medianą 0,5-2x",94,8 % z 115 (95 %: 89,1-97,6 %),,,
 R003,2026-11-10,1,Skoki > +300 % to błędy,1995-2012 po filtrze,% powrotu w 5 sesjach,74 % (95 %: 71-78 %),,,podstawa reguły skoki
 R004,2026-11-10,1,Pokrycie spółek wycofanych,1985-2025,liczba w roku,skok 339 -> 2267 między 1997 a 1998,,,odstępstwo 1
+R005,2026-11-10,3,Czas życia ruchu po wybiciu (trailing 25 %),"wybicia 1998-2012, n=69 tys.","KM z ucięciem, Weibull","mediana 42 tyg.; S(52)=43 %, S(104)=25 %; Weibull k=0,947 (95 %: 0,911-0,987)",,,"hazard najwyższy w tyg. 8-13, potem maleje"
+R006,2026-11-10,3,Zysk wybicie->szczyt,"j.w., zakończone","kwantyle, bootstrap blokowy","mediana 23,7 %; >=+50 %: 30,1 %; >=+100 %: 14,0 %",,,górna granica zysku
+R007,2026-11-10,4,Grupy surowych kształtów: lift s50,"wybicia 1998-2012/06, n=66 tys.","k-średnie k=3, bootstrap blokowy","grupa silnego wcześniejszego wzrostu lift 1,47 (1,36-1,58), stabilna; = momentum (pseudo-R2 0,0557->0,0570)","0,0005","0,0008",
+R008,2026-11-10,4b,Sam kształt (bez wielkości) ponad momentum,j.w.,"k-średnie na ścieżkach 0-1, lift vs model momentum","żadna grupa nie spełnia kryterium; lifty 0,92-1,08, CI obejmują 1 (cena i cena+wolumen)","0,038-0,89",">=0,11",wynik zerowy dla P1
+R009,2026-11-10,5,Ślad katalizatora (luka/dzień +8 % przy wolumenie),j.w.,"logit s50 ~ flaga + dec r26 + rok, błędy grupowane","OR 1,13-1,22 (np. 1,20; 1,10-1,30); ale mediana f52 niższa (1 % vs 6 %)","2,8e-05 (dzień 8/3)","5,7e-05","katalizator zwiększa rozrzut, nie oczekiwany zwrot"
+R010,2026-11-10,5,Wolumen poprawia prognozę ponad cenę (P4),prognozy spoza próby 2003-2012,"LightGBM krokowo, ΔAUC bootstrap blokowy","ΔAUC -0,0005 (95 %: -0,0037..0,0026); placebo -0,0011","~0,62 (udział losowań <=0)",,wynik zerowy dla P4
