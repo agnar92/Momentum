@@ -11,13 +11,17 @@ F = "close >= 1 AND dv20 >= 1e6 AND zero20 <= 0.2"
 t0 = time.time()
 con = duckdb.connect(DB)
 con.execute(f"SET threads=4; SET memory_limit='11GB'; SET preserve_insertion_order=false; SET temp_directory='{os.path.dirname(DB)}/duckdb_tmp'")
+# widok dc liczy złączenia czyszczące przy każdym użyciu; materializujemy raz potrzebne kolumny
+con.execute(f"""CREATE OR REPLACE TEMP TABLE dcm AS SELECT ticker, date, open, high, low, close, adj, volume, dv,
+               ({F})::INT AS okf FROM dc""")
+print('dcm', f'{time.time()-t0:.0f} s')
 for tab, okres in [('w', 'week'), ('m', 'month')]:
     con.execute(f"""CREATE OR REPLACE TABLE {tab} AS
       SELECT ticker, date_trunc('{okres}', date)::DATE AS okres,
         arg_min(open * adj / close, date) AS o, max(high * adj / close) AS h, min(low * adj / close) AS l,
         arg_max(adj, date) AS c, sum(volume) AS vol, sum(dv) AS dv, arg_max(close, date) AS cena,
-        arg_max(({F})::INT, date) AS ok, count(*) AS ndni, max(date) AS ostatni
-      FROM dc GROUP BY 1, 2 ORDER BY 1, 2""")
+        arg_max(okf, date) AS ok, count(*) AS ndni, max(date) AS ostatni
+      FROM dcm GROUP BY 1, 2""")
     print(tab, con.execute(f'SELECT count(*) FROM {tab}').fetchone()[0], f'{time.time()-t0:.0f} s')
 
 con.execute(f"ATTACH '{SRC}' AS m (READ_ONLY)")
