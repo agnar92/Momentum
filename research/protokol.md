@@ -53,3 +53,5 @@ P5 czas trwania · P6 wygasanie · P7 czas trzymania / wyjście · P8 przewidywa
 3. 2026-11-10, etap 1: obroty liczone z ceny skorygowanej tylko o splity (`ps`), bo wolumen EODHD jest
    skorygowany o splity, a close nie. Reguły czyszczenia w `r01_baza.py` (błędy adj, filtr Hampela, tickery
    z niemożliwymi obrotami, duplikaty, skoki-błędy).
+4. 2026-11-10, etap 1/2: KM i Weibull w bootstrapie liczone na 500 / 300 losowaniach (zamiast 2000) z powodu czasu
+   obliczeń; pozostałe przedziały 2000 losowań.

@@ -23,14 +23,14 @@ rng = np.random.default_rng(20261110)
 con = duckdb.connect(DB, read_only=True)
 
 
-def blok_ci(df, stat, key='mies'):
-    """Bootstrap blokowy: losujemy miesiące wybicia ze zwracaniem, liczymy statystykę na sklejonej próbie."""
-    grupy = {k: g for k, g in df.groupby(key)}
-    klucze = np.array(list(grupy))
+def blok_ci(df, stat, key='mies', b=B):
+    """Bootstrap blokowy: losujemy miesiące wybicia ze zwracaniem i liczymy statystykę na sklejonej próbie."""
+    df = df.reset_index(drop=True)
+    idx = list(df.groupby(key).indices.values())
     wyn = []
-    for _ in range(B):
-        prob = pd.concat([grupy[k] for k in rng.choice(klucze, len(klucze))])
-        wyn.append(stat(prob))
+    for _ in range(b):
+        wyb = rng.integers(0, len(idx), len(idx))
+        wyn.append(stat(df.iloc[np.concatenate([idx[i] for i in wyb])]))
     return np.nanpercentile(wyn, [2.5, 97.5])
 
 
@@ -81,7 +81,7 @@ for y in [0.25, 0.15, 0.35]:
     km = KaplanMeierFitter().fit(r.tyg, r.zdarzenie)
     tyg = [4, 8, 13, 26, 52, 104]
     s = km.survival_function_at_times(tyg).to_numpy()
-    ci_km = [blok_ci(r, lambda d, t=t: KaplanMeierFitter().fit(d.tyg, d.zdarzenie).survival_function_at_times([t]).iloc[0]) for t in tyg] if y == 0.25 else [(np.nan, np.nan)] * len(tyg)
+    ci_km = [blok_ci(r, lambda d, t=t: KaplanMeierFitter().fit(d.tyg, d.zdarzenie).survival_function_at_times([t]).iloc[0], 'mies', 500) for t in tyg] if y == 0.25 else [(np.nan, np.nan)] * len(tyg)
     # hazard dyskretny: P(szczyt w tygodniu [t, t+k) | ruch trwał do t)
     edges = [0, 4, 8, 13, 26, 52, 104, 1000]
     hz = []
@@ -97,7 +97,7 @@ for y in [0.25, 0.15, 0.35]:
     t_pos = r.tyg.clip(lower=0.5)
     wb = WeibullFitter().fit(t_pos, r.zdarzenie); ex = ExponentialFitter().fit(t_pos, r.zdarzenie)
     lr = 2 * (wb.log_likelihood_ - ex.log_likelihood_)
-    k_ci = blok_ci(r.assign(t=t_pos), lambda d: WeibullFitter().fit(d.t, d.zdarzenie).rho_, 'mies') if y == 0.25 else (np.nan, np.nan)
+    k_ci = blok_ci(r.assign(t=t_pos), lambda d: WeibullFitter().fit(d.t, d.zdarzenie).rho_, 'mies', 300) if y == 0.25 else (np.nan, np.nan)
     out += [f'Weibull: kształt k = {wb.rho_:.3f}' + (f' (95 % blokowo: {k_ci[0]:.3f}-{k_ci[1]:.3f})' if not np.isnan(k_ci[0]) else '') +
             f'; test ilorazu wiarygodności vs wykładniczy: LR = {lr:.1f} (1 st. swobody). k < 1: hazard maleje z wiekiem ruchu.', '']
     # (b) warunkowo na dużym ruchu

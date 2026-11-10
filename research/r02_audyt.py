@@ -23,7 +23,7 @@ n_d = con.execute("SELECT count(*), count(DISTINCT ticker) FROM d").fetchone()
 rows = [('wszystkie wiersze akcji zwykłych (prices_valid, bez adj = 999999,9999)', *n_d)]
 rows.append(('adj skacze > 50 % bez ruchu close (błąd korekty)', *con.execute("SELECT count(*), count(DISTINCT ticker) FROM d WHERE zly").fetchone()))
 rows.append(('filtr Hampela: cena > 3x od mediany 21 sesji', *con.execute("SELECT count(*), count(DISTINCT ticker) FROM hampel").fetchone()))
-rows.append(('tickery z niemożliwymi obrotami (> 150 mld USD/dzień lub > 6 % rynku w roku)', *con.execute("SELECT count(*) FROM d WHERE ticker IN (SELECT ticker FROM zle_tickery)").fetchone(), con.execute("SELECT count(*) FROM zle_tickery").fetchone()[0]))
+rows.append(('lata spółek z niemożliwymi obrotami (> 150 mld USD/dzień lub > 10 % rynku; tickery = pary ticker-rok)', con.execute("SELECT count(*) FROM d JOIN zle_lata z ON z.ticker=d.ticker AND z.rok=year(d.date)").fetchone()[0], con.execute("SELECT count(*) FROM zle_lata").fetchone()[0]))
 rows.append(('duplikaty tickerów (ta sama data, close i wolumen w >= 20 dniach próbki)', *con.execute("SELECT count(*) FROM d WHERE ticker IN (SELECT usun FROM duplikaty)").fetchone(), con.execute("SELECT count(DISTINCT usun) FROM duplikaty").fetchone()[0]))
 n_dc = con.execute("SELECT count(*), count(DISTINCT ticker) FROM dc").fetchone()
 rows.append(('po czyszczeniu (widok dc)', *n_dc))

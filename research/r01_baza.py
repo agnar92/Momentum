@@ -54,25 +54,32 @@ con.execute("""CREATE OR REPLACE TABLE hampel AS
   SELECT ticker, date FROM (
     SELECT ticker, date, close, median(close) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 10 PRECEDING AND 10 FOLLOWING) m21
     FROM d) WHERE abs(ln(close / m21)) > ln(3)""")
-# Tickery z niespójnymi jednostkami: po wycięciu złych dni nadal obroty > 150 mld USD w jeden dzień
-# (największe realne obroty pojedynczej spółki USA są kilkukrotnie niższe).
-con.execute("""CREATE OR REPLACE TABLE zle_tickery AS
-  SELECT ticker, max(dv) mx FROM d ANTI JOIN hampel USING (ticker, date) WHERE NOT zly GROUP BY 1 HAVING max(dv) > 1.5e11""")
-for t in ['hampel', 'zle_tickery']:
-    print(t, con.execute(f'SELECT count(*) FROM {t}').fetchone()[0])
-
-# Tickery z niemożliwym udziałem w obrotach rynku: iteracyjnie ticker-rok > 6 % rocznych obrotów
-# wszystkich akcji (realne maksimum pojedynczej spółki USA to ok. 4-5 %: AAPL, TSLA, NVDA).
+# Lata spółek z niespójnymi jednostkami (cena skorygowana o odwrócone splity, wolumen nie albo odwrotnie).
+# Wykluczamy parę ticker-rok, a nie cały ticker (LUV, MCO, KEY mają błędne lata 70.-90., poprawne późniejsze):
+#  - dzień z obrotami > 150 mld USD po czyszczeniu, albo
+#  - udział w rocznych obrotach akcji > 10 % w latach z >= 1000 spółek (realne maksimum: NVDA 2024 = 8,8 %;
+#    w latach z kilkudziesięcioma spółkami reguła nie działa, bo każda ma duży udział), iteracyjnie.
+# Pierwsza wersja (cały ticker, próg 6 %, wszystkie lata) wycięła m.in. NVDA, IBM, KO, PG, JNJ: błąd poprawiony.
 import pandas as pd
+con.execute("""CREATE OR REPLACE TABLE zle_lata AS
+  SELECT DISTINCT ticker, year(date) AS rok FROM d ANTI JOIN hampel USING (ticker, date)
+  WHERE NOT zly AND dv > 1.5e11""")
 y = con.execute("""SELECT ticker, year(date) r, sum(dv) s FROM d ANTI JOIN hampel USING(ticker,date)
                    WHERE NOT zly AND close >= 1 GROUP BY 1,2""").df()
+y = y.merge(con.execute("SELECT ticker, rok AS r, 1 AS zle FROM zle_lata").df(), how='left', on=['ticker', 'r'])
+y = y[y.zle.isna()].drop(columns='zle')
+n = y.groupby('r').ticker.nunique(); y = y[y.r.isin(n[n >= 1000].index)]
 bad = set()
 for _ in range(50):
-    z = y[~y.ticker.isin(bad)].copy(); z['sh'] = z.s / z.groupby('r').s.transform('sum')
-    new = set(z[z.sh > 0.06].ticker)
+    z = y[~pd.MultiIndex.from_frame(y[['ticker', 'r']]).isin(list(bad))].copy()
+    z['sh'] = z.s / z.groupby('r').s.transform('sum')
+    new = set(map(tuple, z.loc[z.sh > 0.10, ['ticker', 'r']].values.tolist()))
     if not new: break
     bad |= new
-con.execute("INSERT INTO zle_tickery SELECT ticker, NULL FROM (SELECT unnest(?::VARCHAR[]) ticker) ANTI JOIN zle_tickery USING (ticker)", [sorted(bad)])
+if bad:
+    con.execute("INSERT INTO zle_lata SELECT * FROM (SELECT unnest(?::VARCHAR[]) t, unnest(?::INT[]) r)",
+                [[t for t, _ in sorted(bad)], [int(r) for _, r in sorted(bad)]])
+print('zle_lata', con.execute('SELECT count(*), count(DISTINCT ticker) FROM zle_lata').fetchone())
 
 # Duplikaty: dwa tickery z tym samym (data, close, wolumen) w >= 20 dniach z próbki (15. dzień miesiąca).
 con.execute("""CREATE OR REPLACE TABLE duplikaty AS
@@ -114,9 +121,9 @@ con.execute("""CREATE OR REPLACE VIEW dc AS
   SELECT d.*, p.spread20, p.zero20 FROM d
   LEFT JOIN plyn p USING (ticker, date)
   ANTI JOIN hampel USING (ticker, date)
-  ANTI JOIN zle_tickery USING (ticker)
+  ANTI JOIN zle_lata z ON z.ticker = d.ticker AND z.rok = year(d.date)
   ANTI JOIN skoki k ON k.ticker = d.ticker AND d.date BETWEEN k.od AND k.do_
   WHERE NOT zly AND ticker NOT IN (SELECT usun FROM duplikaty)""")
-for t in ['zle_tickery', 'duplikaty', 'plyn', 'skoki']:
+for t in ['duplikaty', 'plyn', 'skoki']:
     print(t, con.execute(f'SELECT count(*) FROM {t}').fetchone()[0])
 print('dc', con.execute('SELECT count(*) FROM dc').fetchone()[0], f'{time.time()-t0:.0f} s')
