@@ -85,32 +85,32 @@ Dni po filtrze: 11,611,067. "Wraca" = w 5 kolejnych sesjach cena wraca do 75-133
 
 | status       |   n |
 |:-------------|----:|
-| brak w Yahoo | 174 |
-| ok           | 126 |
+| brak w Yahoo | 177 |
+| ok           | 123 |
 
-Wśród 126 porównanych: dzienne zwroty zgodne (różnica < 0,5 pp) w >= 95 % dni: 0.976 (0.932-0.992); mediana obrotów EODHD w przedziale 0,5-2x Yahoo: 0.976 (0.932-0.992).
+Wśród 123 porównanych: dzienne zwroty zgodne (różnica < 0,5 pp) w >= 95 % dni: 0.976 (0.931-0.992); mediana obrotów EODHD w przedziale 0,5-2x Yahoo: 0.976 (0.931-0.992).
 
 Rozkład (kwantyle 5 / 25 / 50 / 75 / 95 %):
 
 |   kwantyl |   zgodne_zwroty |   korelacja |   obroty_eodhd_do_yahoo |
 |----------:|----------------:|------------:|------------------------:|
-|      0.05 |               1 |           1 |                   0.82  |
-|      0.25 |               1 |           1 |                   1     |
-|      0.5  |               1 |           1 |                   1     |
-|      0.75 |               1 |           1 |                   1     |
-|      0.95 |               1 |           1 |                   1.022 |
+|      0.05 |           0.992 |       0.998 |                   0.979 |
+|      0.25 |           1     |       1     |                   1     |
+|      0.5  |           1     |       1     |                   1     |
+|      0.75 |           1     |       1     |                   1     |
+|      0.95 |           1     |       1     |                   1.144 |
 
 Najgorsze przypadki:
 
-| ticker      |   rok | status   |   zgodne_zwroty |   korelacja |   obroty_eodhd_do_yahoo |
-|:------------|------:|:---------|----------------:|------------:|------------------------:|
-| ACRU.US     |  1999 | ok       |           0.057 |      -0.135 |                 nan     |
-| ENDO_old.US |  2002 | ok       |           0.108 |       0.031 |               49417.4   |
-| HTHIY.US    |  2012 | ok       |           0.607 |       0.725 |                   0.999 |
-| ADBE.US     |  2001 | ok       |           0.992 |       1     |                   1     |
-| IX.US       |  2009 | ok       |           0.992 |       0.992 |                   1     |
-| TRP.US      |  2003 | ok       |           0.996 |       0.999 |                   1     |
-| BA.US       |  2001 | ok       |           1     |       1     |                   1     |
-| CHD.US      |  2010 | ok       |           1     |       1     |                   1     |
-| AZZ.US      |  2008 | ok       |           1     |       1     |                   1     |
-| PRXIQ.US    |  2007 | ok       |           1     |       1     |                   1     |
+| ticker   |   rok | status   |   zgodne_zwroty |   korelacja |   obroty_eodhd_do_yahoo |
+|:---------|------:|:---------|----------------:|------------:|------------------------:|
+| B_old.US |  2008 | ok       |           0.095 |       0.134 |                   0.027 |
+| CDVIQ.US |  2007 | ok       |           0.736 |       0.87  |                   1.058 |
+| TSM.US   |  2000 | ok       |           0.869 |       0.95  |                   1.487 |
+| KMT.US   |  2001 | ok       |           0.992 |       0.999 |                   1     |
+| HEINY.US |  2006 | ok       |           0.992 |       0.999 |                   0.851 |
+| VCST.US  |  1999 | ok       |           0.992 |       1     |                   1     |
+| SBS.US   |  2005 | ok       |           0.992 |       0.999 |                   1     |
+| AZO.US   |  1999 | ok       |           0.992 |       1     |                   1     |
+| VRSN.US  |  2000 | ok       |           0.992 |       0.998 |                   1     |
+| WELL.US  |  2000 | ok       |           0.992 |       0.998 |                   1     |
