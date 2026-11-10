@@ -9,3 +9,10 @@ R007,2026-11-10,4,Grupy surowych kształtów: lift s50,"wybicia 1998-2012/06, n=
 R008,2026-11-10,4b,Sam kształt (bez wielkości) ponad momentum,j.w.,"k-średnie na ścieżkach 0-1, lift vs model momentum","żadna grupa nie spełnia kryterium; lifty 0,92-1,08, CI obejmują 1 (cena i cena+wolumen)","0,038-0,89",">=0,11",wynik zerowy dla P1
 R009,2026-11-10,5,Ślad katalizatora (luka/dzień +8 % przy wolumenie),j.w.,"logit s50 ~ flaga + dec r26 + rok, błędy grupowane","OR 1,13-1,22 (np. 1,20; 1,10-1,30); ale mediana f52 niższa (1 % vs 6 %)","2,8e-05 (dzień 8/3)","5,7e-05","katalizator zwiększa rozrzut, nie oczekiwany zwrot"
 R010,2026-11-10,5,Wolumen poprawia prognozę ponad cenę (P4),prognozy spoza próby 2003-2012,"LightGBM krokowo, ΔAUC bootstrap blokowy","ΔAUC -0,0005 (95 %: -0,0037..0,0026); placebo -0,0011","~0,62 (udział losowań <=0)",,wynik zerowy dla P4
+R011,2026-11-10,5b,Zmienność dzienna -> zwrot nadwyżkowy,"spółki płynne 1998-2012/06, 516 tys. spółka-mies.","IC Spearmana, NW t, decyle","IC -0,055..-0,149 (H 1-12), t -3,3; D10: -1,2 %/mies.; stabilne w 3 okresach","<0,01","<0,05",anomalia niskiej zmienności
+R012,2026-11-10,5b,Największy dzienny wzrost w miesiącu (MAX),j.w.,j.w.,"IC -0,052..-0,128, t -3,3..-3,6; D10: -1,0 %/mies.; stabilne","<0,01","<0,05","efekt ""loterii"""
+R013,2026-11-10,5b,Odsetek dni wzrostowych (gładkość trendu),j.w.,j.w.,"H=12: IC +0,050, t 4,15; H=6: t 3,58; stabilne","<0,001","<0,01","""frog in the pan"""
+R014,2026-11-10,5b,Zwrot ostatniego tygodnia -> następny tydzień,"j.w., tygodniowo","IC, NW t","IC -0,024, t -6,1; D10-D1 -0,66 %/tydz.",<1e-6,,"krótkoterminowe odwrócenie, przed kosztami"
+R015,2026-11-10,5b,Momentum 12-1,j.w.,j.w.,"IC +0,030 (H1), t 2,1; silne 1998-2002, ok. 0 w 2003-2012; skrajny decyl słabszy po 12 mies.","0,03",">0,05",niestabilne
+R016,2026-11-10,5b,Zawężenie zmienności -> wielkość ruchu,j.w.,"IC z |x3|, decyle","rozszerzenie zmienności zapowiada większy ruch (D9 |x3| 18,8 % vs 15,5 %); zawężenie nie",,,konsolidacja nie zapowiada eksplozji
+R017,2026-11-10,5b,Sezonowość własna spółki,j.w.,j.w.,"H=1: IC +0,017, t 3,1; 0,57 %/mies. D10-D1; stabilne","0,002","<0,05",mały efekt
