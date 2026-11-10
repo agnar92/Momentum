@@ -4,3 +4,4 @@ duckdb_tmp/
 __pycache__/
 wyniki/*.log
 wyniki/*.pkl
+wyniki/*.parquet
