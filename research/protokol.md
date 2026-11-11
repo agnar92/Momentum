@@ -86,3 +86,8 @@ Wynik raportowany niezależnie od tego, jaki będzie; żadnych zmian parametrów
    jawnie oznaczona jako drugie spojrzenie. Uwaga projektowa: odniesienie "500 spółek o największych obrotach" przegrywa
    z RSP także w próbie uczącej (5,8 % vs ok. 10 % rocznie), więc nie jest dobrym przybliżeniem rynku dużych spółek;
    w raportach dodane SPY i RSP jako odniesienia opisowe.
+
+## Wynik walidacji (2026-11-11)
+Żaden kandydat nie spełnił kryteriów (szczegóły: wyniki/r16_walidacja_spojrzenie1.md i _spojrzenie2.md, rejestr R022-R023).
+Zgodnie z protokołem test nietknięty 2019-07 ... nie jest otwierany: nie ma strategii, która przeszła walidację.
+Okres testowy zostaje zachowany dla przyszłych hipotez.
