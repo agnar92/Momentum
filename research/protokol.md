@@ -91,3 +91,9 @@ Wynik raportowany niezależnie od tego, jaki będzie; żadnych zmian parametrów
 Żaden kandydat nie spełnił kryteriów (szczegóły: wyniki/r16_walidacja_spojrzenie1.md i _spojrzenie2.md, rejestr R022-R023).
 Zgodnie z protokołem test nietknięty 2019-07 ... nie jest otwierany: nie ma strategii, która przeszła walidację.
 Okres testowy zostaje zachowany dla przyszłych hipotez.
+9. 2026-11-11, etap 12 (CEM10): kolejne błędy danych wykryte na transakcjach CEM10: (a) nowa seria, gdy adj i close
+   rozjeżdżają się > 1,5x w jeden dzień bez rozpoznanego splitu (TWX 1999: close +11 %, adj +100 %; 511 takich dni
+   w płynnych spółkach >= 5 USD); (b) dopasowanie składu indeksu do serii tylko przy obrotach >= 50 mln USD w miesiącu
+   (CBE.US w 2003 = spółka groszowa zamiast Cooper Industries; TEK_old z wolumenem 70 akcji). Przeliczone etapy 2-7,
+   6b, 11, 12. Walidacja (r16) NIE jest uruchamiana ponownie: obowiązuje wynik spojrzenia 2 (uniknięcie kolejnych
+   spojrzeń na lata 2013-2018); wynik mógłby się nieznacznie zmienić po poprawce (a).

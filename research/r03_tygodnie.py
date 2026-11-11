@@ -16,11 +16,14 @@ con.execute(f"SET threads=4; SET memory_limit='11GB'; SET preserve_insertion_ord
 # TCT kończy 2006-03-31 przy 40,59 USD i wraca 2014-12-04 przy 79 000 USD; zwrot przez przerwę jest fikcją),
 # albo po spadku > 80 % w jeden dzień przy cenie > 500 USD lub bez skoku wolumenu (>= 3x średniej 20 dni; prawdziwy
 # krach ma wybuch wolumenu, błąd jednostek nie: ASRT 68 760 -> 1 USD, ZCZZT 199 999 -> 1 USD),
+# albo gdy adj i close rozjeżdżają się > 1,5x w jeden dzień bez rozpoznanego splitu (błędna korekta, np. TWX 1999-02-24:
+# close +11 %, adj +100 %),
 # albo po dziennym wzroście > +400 % bez powrotu (zmiana jednostek, np. SPM 2012-06: 40 -> 35 600 USD, wolumen / 1000).
 con.execute(f"""CREATE OR REPLACE TEMP TABLE dcm AS
   WITH a AS (SELECT ticker, date, open, high, low, close, adj, volume, dv, ({F})::INT AS okf,
                     coalesce((date - lag(date) OVER (PARTITION BY ticker ORDER BY date) > 30
                               OR adj / lag(adj) OVER (PARTITION BY ticker ORDER BY date) > 5
+                              OR (NOT split_dzien AND r_adj > -1 AND r_close > -1 AND abs(ln(1 + r_adj) - ln(1 + r_close)) > ln(1.5))
                               OR (adj / lag(adj) OVER (PARTITION BY ticker ORDER BY date) < 0.2
                                   AND (lag(close) OVER (PARTITION BY ticker ORDER BY date) > 500
                                        OR volume < 3 * avg(volume) OVER (PARTITION BY ticker ORDER BY date ROWS BETWEEN 20 PRECEDING AND 1 PRECEDING)))

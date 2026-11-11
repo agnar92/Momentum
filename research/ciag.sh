@@ -13,5 +13,6 @@ log "r05 r09 r10"; python3 r05_opis.py > wyniki/r05.log 2>&1 & python3 r09_katal
 log "r13 r12"; python3 r13_wyjscie.py > wyniki/r13.log 2>&1; python3 r12_model.py > wyniki/r12.log 2>&1; UNIW=duze python3 r12_model.py > wyniki/r12d.log 2>&1
 log "r15"; python3 r15_uczenie.py > wyniki/r15.log 2>&1; python3 r15b_unikaj.py > wyniki/r15b.log 2>&1
 log "r07 r07b"; rm -f wyniki/r07_kmeans.pkl; python3 r07_wzorce.py > wyniki/r07.log 2>&1; python3 r07b_ksztalt.py > wyniki/r07b.log 2>&1
-log r16; python3 r16_walidacja.py > wyniki/r16.log 2>&1
+log "r17 r18"; python3 r17_anatomia.py > wyniki/r17.log 2>&1; python3 r18_kontynuacja.py > wyniki/r18.log 2>&1
+log r19; python3 r19_cem10.py > wyniki/r19.log 2>&1
 log KONIEC
