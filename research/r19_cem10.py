@@ -68,7 +68,10 @@ spy = etf['SPY']; spy_bear = spy < spy.rolling(12).mean()
 qqq = etf['QQQ'].reindex(spy.index)
 lider = pd.Series(np.where((qqq / qqq.shift(5)) > (spy / spy.shift(5)), 'NDX', 'SP'), index=spy.index)
 
-P = p.set_index(['m', 'seria'])
+# tylko serie, które kiedykolwiek były w S&P 500 lub NDX (pamięć)
+_uz = set().union(*SP.values(), *ND.values())
+p = p[p.seria.isin(_uz)]
+del pk, best, idx_kod
 C = p.pivot_table(index='m', columns='seria', values='c'); S10 = p.pivot_table(index='m', columns='seria', values='sma10')
 R6 = p.pivot_table(index='m', columns='seria', values='r6').reindex(columns=C.columns)
 S10 = S10.reindex(index=C.index, columns=C.columns); R6 = R6.reindex(index=C.index)
