@@ -23,7 +23,7 @@ FEAT = ['r1m', 'r3', 'r6', 'r12', 'r12_1', 'r36_12', 'od_max12', 'od_min12', 'od
 PAR = dict(objective='regression', learning_rate=0.03, num_leaves=31, min_child_samples=500, subsample=0.7, subsample_freq=1,
            colsample_bytree=0.8, reg_lambda=5.0, n_estimators=300, verbose=-1, random_state=SEED)
 
-p = pd.read_parquet(PANEL)
+p = pd.read_parquet(PANEL); p['okres'] = pd.to_datetime(p.okres)
 p = p[(p.ok == 1) & (p.okres >= '1998-01-01') & (p.okres <= '2012-12-31') & p.f1.notna() & p.r6.notna()].copy()
 p['f1'] = p.f1.clip(lower=-1)
 p['f1_kara'] = np.where(p.koniec1 == 1, (1 + p.f1) * 0.7 - 1, p.f1)
