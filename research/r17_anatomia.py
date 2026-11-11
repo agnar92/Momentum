@@ -21,26 +21,31 @@ con = duckdb.connect(DB, read_only=True)
 R = con.execute("""SELECT ticker AS seria, t0, t1, t_kon, p0, p1, zmiana FROM ruchy WHERE y = 0.25 AND kier = 1 AND status = 'zakonczony'
                    AND zmiana >= 0.5 AND t0 BETWEEN '1998-01-01' AND '2018-12-31'""").df()
 for k in ('t0', 't1', 't_kon'): R[k] = pd.to_datetime(R[k])
-w = con.execute("""SELECT seria, okres, c, vol, ok FROM w WHERE seria IN (SELECT DISTINCT ticker FROM ruchy WHERE y = 0.25 AND kier = 1
-                   AND zmiana >= 0.5 AND t0 BETWEEN '1998-01-01' AND '2018-12-31') ORDER BY seria, okres""").df()
+con.execute(f"SET threads=4; SET memory_limit='6GB'; SET temp_directory='{os.path.dirname(DB)}/duckdb_tmp'")
+# łączenie z tygodniową zmiennością dzienną w DuckDB (wersja w pandas przekraczała pamięć)
+w = con.execute("""WITH s AS (SELECT DISTINCT ticker AS seria FROM ruchy WHERE y = 0.25 AND kier = 1 AND zmiana >= 0.5
+                                AND t0 BETWEEN '1998-01-01' AND '2018-12-31'),
+     x AS (SELECT ticker, date_trunc('week', date)::DATE okres, stddev(r_adj)::FLOAT rv_t FROM dc
+           WHERE date BETWEEN '1996-01-01' AND '2020-12-31' GROUP BY 1, 2)
+  SELECT w.seria, w.okres, w.c::FLOAT c, w.vol::FLOAT vol, w.ok::TINYINT ok, x.rv_t
+  FROM w JOIN s USING (seria) LEFT JOIN x ON x.ticker = w.ticker AND x.okres = w.okres
+  ORDER BY w.seria, w.okres""").df()
 w['okres'] = pd.to_datetime(w.okres)
 print('ruchy', len(R), 'tygodnie', len(w), flush=True)
-dd = con.execute("""SELECT seria, okres, rv_t FROM (SELECT d.ticker, date_trunc('week', date)::DATE okres, stddev(r_adj) rv_t FROM dc d
-                    WHERE date BETWEEN '1996-01-01' AND '2020-12-31' GROUP BY 1, 2) x JOIN (SELECT DISTINCT ticker, seria, okres FROM w) y USING (ticker, okres)""").df()
-dd['okres'] = pd.to_datetime(dd.okres)
-w = w.merge(dd, on=['seria', 'okres'], how='left')
-G = {s: g.reset_index(drop=True) for s, g in w.groupby('seria', sort=False)}
+_gr = np.flatnonzero(np.r_[True, w.seria.values[1:] != w.seria.values[:-1], True])
+G = {w.seria.values[a]: (a, b) for a, b in zip(_gr[:-1], _gr[1:])}
+WO, WC, WV, WR, WK = w.okres.to_numpy(), w.c.to_numpy(float), w.vol.to_numpy(float), w.rv_t.to_numpy(float), w.ok.to_numpy()
 rows, paths, prof = [], [], []
 for r in R.itertuples():
-    g = G.get(r.seria)
-    if g is None: continue
-    ok_ = g.okres.to_numpy()
+    ab = G.get(r.seria)
+    if ab is None: continue
+    a_, b_ = ab; ok_ = WO[a_:b_]; ng = b_ - a_
     i0 = np.searchsorted(ok_, np.datetime64(r.t0)); i1 = np.searchsorted(ok_, np.datetime64(r.t1))
-    if i1 >= len(g) or i1 - i0 < 4: continue
-    c = g.c.to_numpy(float); v = g.vol.to_numpy(float); rv = g.rv_t.to_numpy(float)
+    if i1 >= ng or i1 - i0 < 4: continue
+    c = WC[a_:b_]; v = WV[a_:b_]; rv = WR[a_:b_]
     seg = c[i0:i1 + 1]
     i30 = np.flatnonzero(seg >= seg[0] * 1.3)
-    if not len(i30) or not g.ok.iloc[i0 + i30[0]]: continue
+    if not len(i30) or not WK[a_ + i0 + i30[0]]: continue
     n = i1 - i0
     runmax = np.maximum.accumulate(seg); dds = seg / runmax - 1
     # korekty >= 10 %: liczymy zejścia poniżej -10 % od bieżącego maksimum (nowa korekta po nowym maksimum)
@@ -57,7 +62,7 @@ for r in R.itertuples():
     after = {}
     for h in (13, 26, 52):
         j = i1 + h
-        after[h] = c[j] / c[i1] - 1 if j < len(g) else (c[-1] / c[i1] - 1 if g.okres.iloc[-1] < pd.Timestamp('2026-10-01') else np.nan)
+        after[h] = c[j] / c[i1] - 1 if j < ng else (c[-1] / c[i1] - 1 if ok_[-1] < np.datetime64('2026-10-01') else np.nan)
     zost52 = np.log(1 + after[52]) / np.log(seg[-1] / seg[0]) + 1 if not np.isnan(after[52]) else np.nan
     tyg_spadku = (r.t_kon - r.t1).days / 7 if pd.notna(r.t_kon) else np.nan
     rows.append(dict(seria=r.seria, t0=r.t0, zmiana=r.zmiana, tyg=n, tempo_tydz=(seg[-1] / seg[0]) ** (1 / n) - 1, korekty10=kor,
@@ -66,7 +71,7 @@ for r in R.itertuples():
                      zostaje_po_52=zost52, tyg_szczyt_do_minus25=tyg_spadku))
     tt = np.linspace(0, n, 20)
     paths.append((np.interp(tt, np.arange(n + 1), l) - l[0]) / (l[-1] - l[0]))
-    if i1 - 26 >= 0 and i1 + 26 < len(g) and r.zmiana >= 1.0:
+    if i1 - 26 >= 0 and i1 + 26 < ng and r.zmiana >= 1.0:
         o = np.arange(-26, 27)
         v52 = np.nanmean(v[max(i1 - 78, 0):i1 - 26]) + 1
         prof.append(pd.DataFrame({'tyg': o, 'cena': c[i1 + o] / c[i1], 'wolumen': (v[i1 + o] + 1) / v52, 'zmiennosc': rv[i1 + o]}))
