@@ -15,15 +15,14 @@ con.execute(f"ATTACH '{DB}' AS r (READ_ONLY)")
 con.execute("""CREATE OR REPLACE TEMP TABLE dd AS SELECT ticker, date, open*adj/close AS o, high*adj/close AS h, low*adj/close AS l, adj AS c, volume
                FROM r.dc""")
 print('dd', f'{time.time()-t0:.0f} s', flush=True)
-con.execute("""CREATE OR REPLACE TABLE kat_d AS
-  SELECT ticker, date, date_trunc('week', date)::DATE AS okres,
-    o / lag(c) OVER w - 1 AS luka,
-    volume / nullif(avg(volume) OVER (w ROWS BETWEEN 50 PRECEDING AND 1 PRECEDING), 0) AS rv,
-    CASE WHEN h > l THEN (c - l) / (h - l) END AS sila_d,
-    c / lag(c) OVER w - 1 AS r_d
-  FROM dd WINDOW w AS (PARTITION BY ticker ORDER BY date)""")
-print('kat_d', f'{time.time()-t0:.0f} s', flush=True)
 con.execute("""CREATE OR REPLACE TABLE kat_w AS
+  WITH kat_d AS (
+    SELECT ticker, date, date_trunc('week', date)::DATE AS okres,
+      o / lag(c) OVER w - 1 AS luka,
+      volume / nullif(avg(volume) OVER (w ROWS BETWEEN 50 PRECEDING AND 1 PRECEDING), 0) AS rv,
+      CASE WHEN h > l THEN (c - l) / (h - l) END AS sila_d,
+      c / lag(c) OVER w - 1 AS r_d
+    FROM dd WINDOW w AS (PARTITION BY ticker ORDER BY date))
   SELECT ticker, okres,
     max(luka) AS max_luka, max(rv) AS max_rv,
     max((luka >= 0.04 AND rv >= 3)::INT) AS kat_4_3,
@@ -34,4 +33,3 @@ con.execute("""CREATE OR REPLACE TABLE kat_w AS
     sum((rv >= 2)::INT) AS dni_rv2
   FROM kat_d GROUP BY 1, 2""")
 print('kat_w', con.execute('SELECT count(*) FROM kat_w').fetchone()[0], f'{time.time()-t0:.0f} s')
-con.execute("DROP TABLE kat_d")

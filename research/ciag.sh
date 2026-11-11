@@ -3,6 +3,7 @@
 cd "$(dirname "$0")"
 set -e
 log() { echo "$(date +%H:%M) $1"; }
+log r01; python3 r01_baza.py > wyniki/r01_baza.log 2>&1
 log r03; python3 r03_tygodnie.py > wyniki/r03.log 2>&1
 log r04; python3 r04_ruchy.py > wyniki/r04.log 2>&1
 log r06; python3 r06_zdarzenia.py > wyniki/r06.log 2>&1
