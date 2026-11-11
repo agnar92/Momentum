@@ -25,6 +25,9 @@ PAR = dict(objective='regression', learning_rate=0.03, num_leaves=31, min_child_
 
 p = pd.read_parquet(PANEL); p['okres'] = pd.to_datetime(p.okres)
 p = p[(p.ok == 1) & (p.okres >= '1998-01-01') & (p.okres <= '2012-12-31') & p.f1.notna() & p.r6.notna()].copy()
+UNIW = os.environ.get('UNIW', 'wszystkie')   # 'duze' = 500 spółek o największych obrotach 3 mies. w danym miesiącu
+if UNIW == 'duze':
+    p = p[p.groupby('okres').log_dv.rank(ascending=False) <= 500].copy()
 p['f1'] = p.f1.clip(lower=-1)
 p['f1_kara'] = np.where(p.koniec1 == 1, (1 + p.f1) * 0.7 - 1, p.f1)
 p['koszt'] = np.select([p.dv1 / 21 >= 2e7, p.dv1 / 21 >= 5e6], [0.001, 0.0025], 0.005)
@@ -79,7 +82,8 @@ def blok(x, f=np.mean, b=12):
 
 ew = o.groupby('okres').f1.mean()
 ew_k = o.groupby('okres').f1_kara.mean()
-out = ['# Etap 6: model łączący cechy vs momentum 6M (prognozy krokowe 2003-01 ... 2012-12, próba ucząca)', '',
+out = [f'# Etap 6: model łączący cechy vs momentum 6M i rynek (prognozy krokowe 2003-01 ... 2012-12, próba ucząca, uniwersum: {UNIW})', '',
+       'Uwaga: momentum tutaj to ranking 6M w całym uniwersum z miesięczną rotacją, NIE reguły CEM10 (indeksy, filtry, wyjście SMA 10).', '',
        f'Spółek-miesięcy w ocenie: {len(o):,}; miesięcy: {len(mies)}. Rynek = równe wagi wszystkich płynnych spółek (bez kosztów).', '']
 # IC
 icr = []
@@ -112,6 +116,10 @@ for kol in ['f1', 'f1_kara']:
             lo, hi = blok(d)
             roz.append(dict(wariant=kol, portfel=nm, ranking=s, roznica_mies=d.mean(), ci95=f'{lo*100:.2f}…{hi*100:.2f} %',
                             roznica_rocznie=(1 + d.mean()) ** 12 - 1, lata_lepsze=f'{(d.groupby(d.index.year).sum() > 0).sum()}/10'))
+        for s in ['s_B1', 's_M']:
+            d = serie[(s, nm, kol)] - serie[('rynek', kol)]; lo, hi = blok(d)
+            roz.append(dict(wariant=kol, portfel=nm, ranking=f'{s} vs rynek', roznica_mies=d.mean(), ci95=f'{lo*100:.2f}…{hi*100:.2f} %',
+                            roznica_rocznie=(1 + d.mean()) ** 12 - 1, lata_lepsze=f'{(d.groupby(d.index.year).sum() > 0).sum()}/10'))
         d = base - serie[('rynek', kol)]; lo, hi = blok(d)
         roz.append(dict(wariant=kol, portfel=nm, ranking='s_B0 vs rynek', roznica_mies=d.mean(), ci95=f'{lo*100:.2f}…{hi*100:.2f} %',
                         roznica_rocznie=(1 + d.mean()) ** 12 - 1, lata_lepsze=f'{(d.groupby(d.index.year).sum() > 0).sum()}/10'))
@@ -123,5 +131,5 @@ ann = ann.groupby(ann.index.year).apply(lambda v: (1 + v).prod() - 1)
 out += ['## Zwroty roczne netto (top 50, bez kary)', '', ann.round(3).reset_index(names='rok').to_markdown(index=False), '']
 I = pd.Series(np.mean(imp, 0), index=FEAT).sort_values(ascending=False)
 out += ['## Ważność cech w LightGBM (średnie |SHAP|, w jednostkach rangi zwrotu)', '', I.round(5).reset_index().rename(columns={'index': 'cecha', 0: 'SHAP'}).to_markdown(index=False), '']
-open(os.path.join(WYN, 'r12_model.md'), 'w').write('\n'.join(out))
+open(os.path.join(WYN, f'r12_model_{UNIW}.md'), 'w').write('\n'.join(out))
 print('\n'.join(out))
