@@ -97,3 +97,17 @@ Okres testowy zostaje zachowany dla przyszłych hipotez.
    (CBE.US w 2003 = spółka groszowa zamiast Cooper Industries; TEK_old z wolumenem 70 akcji). Przeliczone etapy 2-7,
    6b, 11, 12. Walidacja (r16) NIE jest uruchamiana ponownie: obowiązuje wynik spojrzenia 2 (uniknięcie kolejnych
    spojrzeń na lata 2013-2018); wynik mógłby się nieznacznie zmienić po poprawce (a).
+
+## Etap 13: warianty CEM10 łapiące wcześniej / oddające mniej (zapisane 2026-11-11 PRZED uruchomieniem)
+Pytanie użytkownika: czy CEM10 może łapać większą część ruchu niż ok. 30 % (wejście przy ok. 78 % ruchu w log).
+Zamknięta lista wariantów (skład S&P 500 point-in-time, 10 pozycji, filtr SPY < SMA 12 i koszty jak w r19):
+ M0 baza CEM10 (6M > 30 %, > SMA 10 mies., ranking 6M, wyjście < SMA 10 mies.);
+ M1 próg 6M > 15 %; M2 3M > 15 % i > SMA 10, ranking 3M; M3 6M w przedziale 15-60 % (bez przegrzanych), ranking 6M;
+ M4 początek trendu: pierwszy miesiąc nad SMA 10 po >= 3 miesiącach pod nią i 3M > 0, ranking 6M;
+ M5 baza, wyjście trailing -20 % od maks. zamknięcia miesiąca; M6 baza, wyjście < SMA 10 lub trailing -25 %;
+ W1 tygodniowy CEM10: 26 tyg. > 30 %, > SMA 40 tyg., ranking 26 tyg., wyjście < SMA 40 tyg.;
+ W2 tygodniowy wczesny: 13 tyg. > 15 %, > SMA 40 tyg., ranking 13 tyg., wyjście < SMA 40 tyg.
+Miary: CAGR, maks. obsunięcie, faza wejścia (mediana części ruchu zygzaka już za nami), część złapanego ruchu
+wśród złapanych dużych wzrostów, różnica miesięcznego zwrotu vs M0 (bootstrap blokowy 12 mies.).
+Wariant "lepszy", jeśli: niższa faza wejścia lub większa część złapanego ruchu ORAZ wyższy CAGR w obu połowach
+(1998-2012 i 2013-2026) ORAZ dolna granica 95 % różnicy vs M0 > 0. Charakter rozpoznawczy (CEM10 dobierany na tych latach).
