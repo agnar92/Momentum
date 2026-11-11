@@ -79,3 +79,10 @@ Kandydaci wybrani na próbie uczącej (dane po poprawce 7):
   "czas 52"; wejścia 2013-07 ... 2017-06 (ścieżka do 2018-12-31). Sukces, jeśli zwrot na tydzień trzymania
   "trailing 25" > "czas 52" z dolną granicą 95 % (bootstrap blokowy po miesiącach) > 0.
 Wynik raportowany niezależnie od tego, jaki będzie; żadnych zmian parametrów po spojrzeniu.
+8. 2026-11-11, PO pierwszym spojrzeniu na walidację: odkryte błędy jednostek w dół (26 miesięcy z f1 < -80 % w walidacji,
+   ceny > 1000 USD spadające do 1 USD). Nowa seria także przy spadku > 80 % w jeden dzień, gdy cena przed > 500 USD lub
+   wolumen < 3x średniej 20 dni (prawdziwy krach ma wybuch wolumenu). To poprawka danych, nie zmiana parametrów strategii;
+   kryteria walidacji bez zmian. Raportowane są oba wyniki walidacji (przed i po poprawce danych), a druga ocena jest
+   jawnie oznaczona jako drugie spojrzenie. Uwaga projektowa: odniesienie "500 spółek o największych obrotach" przegrywa
+   z RSP także w próbie uczącej (5,8 % vs ok. 10 % rocznie), więc nie jest dobrym przybliżeniem rynku dużych spółek;
+   w raportach dodane SPY i RSP jako odniesienia opisowe.
