@@ -111,3 +111,23 @@ Miary: CAGR, maks. obsunięcie, faza wejścia (mediana części ruchu zygzaka ju
 wśród złapanych dużych wzrostów, różnica miesięcznego zwrotu vs M0 (bootstrap blokowy 12 mies.).
 Wariant "lepszy", jeśli: niższa faza wejścia lub większa część złapanego ruchu ORAZ wyższy CAGR w obu połowach
 (1998-2012 i 2013-2026) ORAZ dolna granica 95 % różnicy vs M0 > 0. Charakter rozpoznawczy (CEM10 dobierany na tych latach).
+
+## Etap 14: Minervini Trend Template + VCP (zapisane 2026-11-12 PRZED uruchomieniem)
+Hipoteza zewnętrzna (nie z naszych danych), więc oceniana na 1998-2018 ORAZ jednorazowo na nietkniętym 2019-07 ... 2026.
+Dane dzienne po czyszczeniu (dc), serie dzielone jak w r03; uniwersum: filtr główny + cena >= 5 USD.
+Trend Template (dzień t, wszystkie 10 warunków): RP > 70, close > SMA 50, > SMA 150, > SMA 200, SMA 50 > SMA 150,
+SMA 50 > SMA 200, SMA 150 > SMA 200, close >= 1,3 x min 252 dni, close >= 0,75 x max 252 dni, SMA 200 > SMA 200 sprzed
+22 sesji. RP = percentyl (0-100) wśród spółek uniwersum w dniu t wskaźnika 0,4 r63 + 0,2 r126 + 0,2 r189 + 0,2 r252
+(przybliżenie IBD RS).
+VCP (przybliżenie opisu Minerviniego, sprawdzane w dniu t z TT): baza = od najwyższego zamknięcia z ostatnich 120 sesji
+(bez 5 ostatnich) do t-1, długość >= 15 sesji; zygzak 5 % na zamknięciach w bazie daje kolejne cofnięcia (szczyt -> dołek);
+>= 2 cofnięcia, każde płytsze niż poprzednie, pierwsze <= 35 %, ostatnie <= 12 %; wolumen 10 sesji przed t < średniej 50;
+punkt zwrotny (pivot) = najwyższe zamknięcie od ostatniego szczytu cofnięcia; sygnał: close_t > pivot i wolumen_t >= 1,4 x średniej 50.
+Transakcje: wejście po otwarciu następnej sesji; stop początkowy = max(dołek ostatniego cofnięcia, wejście x 0,92) w trakcie
+sesji (wykonanie po stopie lub po otwarciu przy luce); wyjście: zamknięcie < SMA 50 (sprzedaż po następnym otwarciu); koszt 0,1 %/stronę.
+Porównanie "TT bez VCP": wejście w pierwszym dniu spełnienia TT (po >= 20 sesjach bez TT), stop = wejście x 0,92, te same wyjścia.
+Portfel: maks. 10 pozycji, równe kwoty, kolejność sygnałów wg RP; odniesienie SPY.
+Kryteria: H1 selekcja: spółki z TT na koniec miesiąca mają dodatni średni zwrot nadwyżkowy (vs równe wagi uniwersum) za 1/3/6/12 mies.,
+t Neweya-Westa > 2 w 1998-2018 i ten sam znak w 2019-2026. H2 wejście VCP: oczekiwany zwrot na transakcję (śr. winsoryzowana)
+TT+VCP > TT bez VCP z dolną granicą 95 % (bootstrap blokowy po miesiącach) > 0 w 1998-2018 i ten sam znak w 2019-2026;
+portfel TT+VCP: CAGR > SPY w obu okresach.
