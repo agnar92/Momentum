@@ -179,3 +179,13 @@ po miesiącach; wybrane = dolna granica 95 % > 0 (jeśli żaden: 2 najlepsze wg 
 Krok 2 (sprawdzian, jedno spojrzenie) na wejściach 2013-2026: filtr działa, jeśli dolna granica 95 % nadwyżki > 0
 z korektą Bonferroniego na liczbę wybranych filtrów. Wszystkie filtry raportowane w obu okresach dla przejrzystości.
 Wynik etapu 17 (2026-11-12): w sprawdzianie 2013-2026 żaden filtr wybrany w 1998-2012 nie działa; sam sygnał też traci przewagę (-3 % vs SPY na transakcję).
+
+## Etap 18: szukanie strategii 50-100 % rocznie (zapisane 2026-11-12 PRZED uruchomieniem)
+Rodzina prostych reguł miesięcznych (zamknięta lista, 320 wariantów): uniwersum {S&P 500 point-in-time; 1000 spółek
+o największych obrotach 3 mies. z ceną >= 5 USD i filtrem płynności} x ranking {zwrot 1M, 3M, 6M, 12-1} x liczba pozycji
+{1, 2, 3, 5, 10} x próg {brak, 6M > 30 %} x wyjście {zamknięcie < SMA 10; rotacja: sprzedaż, gdy spółka wypada poza
+2 x N najlepszych lub zamyka < SMA 10} x filtr rynku {brak, brak zakupów przy SPY < SMA 12}. Wejście: zamknięcie > SMA 10.
+Równe kwoty przy wejściu, koszt 0,1 % (S&P 500) / 0,25 % (1000 płynnych) na stronę, koniec serii = ostatnia cena.
+Procedura: CAGR w okresie wyboru 1998-2012 i w okresie sprawdzianu 2013-2026 (osobne symulacje). Raport: ile wariantów
+>= 50 % rocznie w każdym okresie, 10 najlepszych z okresu wyboru i ich wynik w sprawdzianie, korelacja rang między okresami.
+Charakter rozpoznawczy: żaden okres nie jest już nietknięty; 2026 (do września) zawiera wyjątkowo silne ruchy.
