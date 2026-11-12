@@ -167,3 +167,14 @@ w tym samym okresie trzymania (średnia, 95 % z bootstrapu po miesiącach wejśc
 średni zwrot nadwyżkowy na transakcję ma dolną granicę 95 % > 0 dla co najmniej jednego wariantu (z retestem / bez; A / B) z
 korektą Bonferroniego na 4 warianty (granice 98,75 %). U1 raportowane opisowo (mała liczba transakcji).
 Wynik etapu 16 (2026-11-12): kryterium niespełnione (U2: żaden wariant nie ma dolnej granicy 98,75 % > 0); U1 tylko 7-10 transakcji.
+
+## Etap 17: filtry dla linii trendu (zapisane 2026-11-12 PRZED uruchomieniem)
+Transakcje z etapu 16, uniwersum U2 (S&P 500), wyjście B (sam stop), z retestem i bez (raportowane osobno).
+Zamknięta lista filtrów (znane w miesiącu przebicia): F1 SPY > SMA 10 mies.; F2 zwrot 6 mies. > 0; F3 zwrot 6 mies. > 30 %;
+F4 zamknięcie > SMA 10 mies.; F5 zamknięcie >= 0,85 x max 12 mies.; F6 zmienność 12 mies. poniżej mediany członków S&P 500
+w tym miesiącu; F7 wysokość trójkąta >= 15 %; F8 wysokość trójkąta < 15 %; F9 wolumen miesiąca przebicia >= 1,5 x średniej
+12 mies.; F10 obroty powyżej mediany członków; F11 zwrot 12 mies. spółki > zwrot SPY; F12 czerwona linia trwa >= 24 mies.
+Procedura: krok 1 (szukanie) na wejściach 1998-2012: dla każdego filtra średnia nadwyżka vs SPY na transakcję i 95 % z bootstrapu
+po miesiącach; wybrane = dolna granica 95 % > 0 (jeśli żaden: 2 najlepsze wg dolnej granicy) oraz kombinacja 2 najlepszych.
+Krok 2 (sprawdzian, jedno spojrzenie) na wejściach 2013-2026: filtr działa, jeśli dolna granica 95 % nadwyżki > 0
+z korektą Bonferroniego na liczbę wybranych filtrów. Wszystkie filtry raportowane w obu okresach dla przejrzystości.
