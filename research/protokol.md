@@ -134,3 +134,13 @@ portfel TT+VCP: CAGR > SPY w obu okresach.
 Wynik etapu 14 (2026-11-12): H1 nie spełniona (nadwyżka TT dodatnia w obu okresach, ok. +2..+5 % rocznie, ale t < 2);
 H2 nie spełniona (VCP nie poprawia transakcji, w okresie B istotnie gorszy; portfele TT i TT+VCP poniżej SPY).
 Uwaga: do pierwszej wersji raportu H1 grupowała miesiące po dacie ostatniej sesji spółki (błąd, poprawione na miesiąc kalendarzowy).
+
+## Etap 15: CEM10 + filtr przyspieszenia EPS (zapisane 2026-11-12 PRZED uruchomieniem)
+Dane: kwartalny EPS rozwodniony z SEC companyfacts (/home/user/ndx/sec_q, 710 spółek; Q4 = rok - Q1..Q3), znany od daty
+złożenia raportu (filed). Pokrycie składu S&P 500: 64 % (2010) ... 96 % (2026), braki głównie spółek usuniętych później,
+dlatego WSZYSTKIE warianty liczone na tym samym uniwersum: członkowie S&P 500 z danymi SEC. Okres 2011-01 ... 2026-09.
+g_k = EPS kwartału k / EPS tego samego kwartału rok wcześniej - 1 (tylko gdy EPS rok wcześniej > 0); g0 = ostatni znany kwartał.
+ E0 baza CEM10 na tym uniwersum (6M > 30 %, > SMA 10, ranking 6M, wyjście < SMA 10, SPY < SMA 12, 10 pozycji);
+ E1 + g0 > 0 i g0 > g1 (przyspieszenie 1 kwartał); E2 + g0 > g1 > g2 i g0 > 0 (2 kwartały); E3 + g0 >= 25 % (CANSLIM "C").
+Filtr działa tylko przy wejściu. Kryterium "lepszy": CAGR > E0 w obu połowach (2011-2018, 2019-2026) i dolna granica 95 %
+różnicy miesięcznej vs E0 (bootstrap blokowy 12 mies.) > 0. Charakter rozpoznawczy (CEM10 dobierany na tych latach).
