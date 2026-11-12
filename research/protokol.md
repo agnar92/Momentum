@@ -166,3 +166,4 @@ Miary: liczba transakcji, trafione, średni / mediana zwrot, R (zysk / ryzyko po
 w tym samym okresie trzymania (średnia, 95 % z bootstrapu po miesiącach wejścia). Strategię uznaję za działającą, jeśli w U2
 średni zwrot nadwyżkowy na transakcję ma dolną granicę 95 % > 0 dla co najmniej jednego wariantu (z retestem / bez; A / B) z
 korektą Bonferroniego na 4 warianty (granice 98,75 %). U1 raportowane opisowo (mała liczba transakcji).
+Wynik etapu 16 (2026-11-12): kryterium niespełnione (U2: żaden wariant nie ma dolnej granicy 98,75 % > 0); U1 tylko 7-10 transakcji.
