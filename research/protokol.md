@@ -145,3 +145,24 @@ g_k = EPS kwartału k / EPS tego samego kwartału rok wcześniej - 1 (tylko gdy 
 Filtr działa tylko przy wejściu. Kryterium "lepszy": CAGR > E0 w obu połowach (2011-2018, 2019-2026) i dolna granica 95 %
 różnicy miesięcznej vs E0 (bootstrap blokowy 12 mies.) > 0. Charakter rozpoznawczy (CEM10 dobierany na tych latach).
 Wynik etapu 15 (2026-11-12): żaden filtr EPS nie spełnia kryteriów; wszystkie obniżają CAGR (E3 istotnie).
+
+## Etap 16: linie trendu w stylu Tori Trades na wykresach miesięcznych (zapisane 2026-11-12 PRZED uruchomieniem)
+Tylko strona długa (IKE). Świece miesięczne OHLC skorygowane (tabela m). Log ceny.
+Szczyt / dołek lokalny w miesiącu i: high (low) jest najwyższy (najniższy) w oknie i-2 ... i+2; potwierdzony w miesiącu i+2
+(linia w miesiącu t używa tylko punktów i <= t-2). Okno szukania: 60 miesięcy.
+Czerwona linia: przez 2 szczyty lokalne, nachylenie <= 0, co najmniej 3 szczyty w odległości <= 3 % od linii, rozpiętość >= 6 mies.,
+żadne zamknięcie miesiąca nad linią od pierwszego dotknięcia do t-1. Zielona linia: analogicznie dołki, nachylenie >= 0, żadne
+zamknięcie pod linią. Przy kilku liniach: najwięcej dotknięć, potem najświeższe ostatnie dotknięcie. Trójkąt: obie linie
+istnieją i zielona(t) < czerwona(t).
+Przebicie: zamknięcie_t > czerwona(t) przy zamknięciu_{t-1} <= czerwona(t-1). Retest: w miesiącach t+1..t+3 low <= czerwona x 1,03
+i zamknięcie >= czerwona x 0,97 -> wejście na zamknięciu miesiąca retestu (bez retestu w 3 mies. lub zamknięcie pod zieloną = brak transakcji).
+Wariant bez retestu: wejście na zamknięciu miesiąca przebicia.
+Stop: zielona linia przedłużona (low miesiąca < zielona -> wyjście po zielonej albo po otwarciu przy luce). Wyjście A: cel =
+cena przebicia x wysokość trójkąta w momencie przebicia (exp(log czerwona - log zielona)), high >= cel -> wyjście po celu.
+Wyjście B: sam stop (maks. 60 mies.). Koszt 0,1 %/stronę.
+Uniwersa: U1 (prośba użytkownika) = 10 największych spółek S&P 500 po kapitalizacji w miesiącu przebicia (kapitalizacja z
+pit_cap2.npy; klasy akcji jednej spółki liczone raz), 2010-2026; U2 (moc statystyczna) = wszyscy członkowie S&P 500, 1998-2026.
+Miary: liczba transakcji, trafione, średni / mediana zwrot, R (zysk / ryzyko początkowe), czas trzymania, zwrot nadwyżkowy vs SPY
+w tym samym okresie trzymania (średnia, 95 % z bootstrapu po miesiącach wejścia). Strategię uznaję za działającą, jeśli w U2
+średni zwrot nadwyżkowy na transakcję ma dolną granicę 95 % > 0 dla co najmniej jednego wariantu (z retestem / bez; A / B) z
+korektą Bonferroniego na 4 warianty (granice 98,75 %). U1 raportowane opisowo (mała liczba transakcji).
