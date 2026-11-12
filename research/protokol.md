@@ -131,3 +131,6 @@ Kryteria: H1 selekcja: spółki z TT na koniec miesiąca mają dodatni średni z
 t Neweya-Westa > 2 w 1998-2018 i ten sam znak w 2019-2026. H2 wejście VCP: oczekiwany zwrot na transakcję (śr. winsoryzowana)
 TT+VCP > TT bez VCP z dolną granicą 95 % (bootstrap blokowy po miesiącach) > 0 w 1998-2018 i ten sam znak w 2019-2026;
 portfel TT+VCP: CAGR > SPY w obu okresach.
+Wynik etapu 14 (2026-11-12): H1 nie spełniona (nadwyżka TT dodatnia w obu okresach, ok. +2..+5 % rocznie, ale t < 2);
+H2 nie spełniona (VCP nie poprawia transakcji, w okresie B istotnie gorszy; portfele TT i TT+VCP poniżej SPY).
+Uwaga: do pierwszej wersji raportu H1 grupowała miesiące po dacie ostatniej sesji spółki (błąd, poprawione na miesiąc kalendarzowy).

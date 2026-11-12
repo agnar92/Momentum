@@ -106,7 +106,7 @@ for h in (1, 3, 6, 12):
     f = f.where(f.notna() | (kon >= KONIEC - pd.Timedelta(days=7)), ostc / ME.c - 1)
     f[ME.date + pd.DateOffset(months=h) > KONIEC] = np.nan
     ME[f'f{h}'] = f
-U = ME[ME.uni == 1].copy(); U['okres'] = okres(U.date.values)
+U = ME[ME.uni == 1].copy(); U['okres'] = okres(U.date.values); U['mies'] = U.date.dt.to_period('M')
 
 
 def nw_t(x, lags):
@@ -121,7 +121,7 @@ for per in ('A 1998-2018', 'B 2019-2026'):
     for h in (1, 3, 6, 12):
         def ex(v):
             w = v[f'f{h}'].clip(v[f'f{h}'].quantile(0.01), v[f'f{h}'].quantile(0.99)); return pd.Series({'tt': (w[v.tt == 1] - w.mean()).mean(), 'n_tt': (v.tt == 1).sum(), 'n': len(v)})
-        s = P.dropna(subset=[f'f{h}']).groupby('date').apply(ex)
+        s = P.dropna(subset=[f'f{h}']).groupby('mies').apply(ex)   # miesiąc kalendarzowy (ostatnia sesja różni się między spółkami)
         s = s[s.n_tt > 0]
         h1.append(dict(okres=per, H_mies=h, sr_spolek_TT=s.n_tt.mean(), udzial_TT=(s.n_tt / s.n).mean(), nadwyzka_TT_za_H=s.tt.mean(),
                        nadwyzka_rocznie=(1 + s.tt.mean()) ** (12 / h) - 1, t_NW=nw_t(s.tt.values, h), miesiecy=len(s), dodatnie=(s.tt > 0).mean()))
@@ -198,6 +198,9 @@ for per in ('A 1998-2018', 'B 2019-2026'):
         sp = spm[(spm.index >= e.index[0]) & (spm.index <= e.index[-1])]
     pf.append(dict(okres=per, portfel='SPY', od=str(sp.index[0]), do=str(sp.index[-1]), **miary(sp)))
 PF = pd.DataFrame(pf)
+T['dni'] = (T.wyj_d - T.wej_d).dt.days
+DN = T.groupby(['okres', 'typ']).dni.describe(percentiles=[0.5])[['50%', 'mean']].rename(columns={'50%': 'mediana_dni', 'mean': 'srednia_dni'}).round(0).reset_index()
+DN = DN[DN.okres != '']
 out = ['# Etap 14: Minervini Trend Template i VCP (definicje i kryteria w protokole, zapisane przed uruchomieniem)', '',
        'Okres A: sygnały 1998-2018; okres B: 2019-07 ... 2026 (otwarty po raz pierwszy). Uniwersum: płynne spółki USA, cena >= 5 USD.', '',
        '## H1: czy spółki spełniające Trend Template wypadają lepiej od rynku', '',
@@ -205,7 +208,7 @@ out = ['# Etap 14: Minervini Trend Template i VCP (definicje i kryteria w protok
        H1.round(4).to_markdown(index=False), '',
        '## H2: transakcje (wejście po otwarciu następnej sesji, stop w trakcie sesji, wyjście pod SMA 50, koszt 0,1 %/stronę)', '',
        H2.round(4).to_markdown(index=False), '', 'Różnica średniego zwrotu na transakcję (TT + VCP minus TT bez VCP, 95 % bootstrap blokowy po miesiącach):', '',
-       DIF.round(4).to_markdown(index=False), '',
+       DIF.round(4).to_markdown(index=False), '', 'Czas trzymania (dni kalendarzowe):', '', DN.to_markdown(index=False), '',
        '## Portfel: maks. 10 pozycji, równe kwoty, kolejność sygnałów wg RP', '', PF.round(4).to_markdown(index=False), '']
 open(os.path.join(WYN, 'r22_minervini.md'), 'w').write('\n'.join(out))
 T.drop(columns=['mies']).to_parquet(os.path.join(os.path.dirname(DB), 'mv_transakcje.parquet'))
