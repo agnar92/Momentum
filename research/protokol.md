@@ -178,3 +178,4 @@ Procedura: krok 1 (szukanie) na wejściach 1998-2012: dla każdego filtra średn
 po miesiącach; wybrane = dolna granica 95 % > 0 (jeśli żaden: 2 najlepsze wg dolnej granicy) oraz kombinacja 2 najlepszych.
 Krok 2 (sprawdzian, jedno spojrzenie) na wejściach 2013-2026: filtr działa, jeśli dolna granica 95 % nadwyżki > 0
 z korektą Bonferroniego na liczbę wybranych filtrów. Wszystkie filtry raportowane w obu okresach dla przejrzystości.
+Wynik etapu 17 (2026-11-12): w sprawdzianie 2013-2026 żaden filtr wybrany w 1998-2012 nie działa; sam sygnał też traci przewagę (-3 % vs SPY na transakcję).
