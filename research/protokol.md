@@ -189,3 +189,4 @@ Równe kwoty przy wejściu, koszt 0,1 % (S&P 500) / 0,25 % (1000 płynnych) na s
 Procedura: CAGR w okresie wyboru 1998-2012 i w okresie sprawdzianu 2013-2026 (osobne symulacje). Raport: ile wariantów
 >= 50 % rocznie w każdym okresie, 10 najlepszych z okresu wyboru i ich wynik w sprawdzianie, korelacja rang między okresami.
 Charakter rozpoznawczy: żaden okres nie jest już nietknięty; 2026 (do września) zawiera wyjątkowo silne ruchy.
+Wynik etapu 18 (2026-11-12): żaden z 320 wariantów nie daje >= 50 % (ani >= 30 %) rocznie w obu okresach; najlepsze z 1998-2012 dały w 2013-2026 21-35 %.
