@@ -144,3 +144,4 @@ g_k = EPS kwartału k / EPS tego samego kwartału rok wcześniej - 1 (tylko gdy 
  E1 + g0 > 0 i g0 > g1 (przyspieszenie 1 kwartał); E2 + g0 > g1 > g2 i g0 > 0 (2 kwartały); E3 + g0 >= 25 % (CANSLIM "C").
 Filtr działa tylko przy wejściu. Kryterium "lepszy": CAGR > E0 w obu połowach (2011-2018, 2019-2026) i dolna granica 95 %
 różnicy miesięcznej vs E0 (bootstrap blokowy 12 mies.) > 0. Charakter rozpoznawczy (CEM10 dobierany na tych latach).
+Wynik etapu 15 (2026-11-12): żaden filtr EPS nie spełnia kryteriów; wszystkie obniżają CAGR (E3 istotnie).
