@@ -154,12 +154,28 @@ With prices for < 90 % of tickers nothing is written (exit 1). The page: chips (
 które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_hold`; export to a .txt file, copy, import from .txt / .json —
 `parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
 
+## Quality ranking (`quality.py`, `momentum/quality.py`, `docs/quality.html`, `docs/js/quality.js`)
+
+User, Nov 2026: a fundamental-only list for long-term (Buffett-style) investing, chosen once a year, top 10; "10 lat to nie za długo?" -> compromise:
+minimum 5 years of data, up to 10, median ROIC instead of minimum, a counter of years with ROIC ≥ 15 % (out of 10, so young companies get fewer points),
+recent years weighted more (`roic_recent` = mean of the last 3). Sieve = the user's Finviz link (`finviz_screen.json` `quality_filters`, default
+`quality.QUALITY_FILTERS`); `quality.py` reads ALL pages of views 111 / 121 / 161 from the SSR JSON (`ssr_rows`, raw Finviz keys: PFCF, forwardPE, PE,
+estLTGrowth, debtEq, curRatio, roi, grossMargin …), then SEC companyfacts per ticker (`quality.history`: annual 350–380-day facts, latest filed wins,
+balance sheet instants; ROIC ≈ op × (1 − tax rate, default 21 %) / (equity + debt − cash), IC ≤ 0 with profit -> 100 %, capped ±100 %; foreign 20-F filers
+in their own currency; share counts split-adjusted by `split_adjust`, integer jumps ×k / ÷k ± 6 %). `summary` needs ≥ `MIN_YEARS` = 5 and the last
+annual report ≤ 550 days old. Score = weighted percentiles within the sieve (`WEIGHTS`: quality 45, valuation 30, growth 15, capital 10; a missing metric's
+weight goes to the rest of its block), `pick_top` = top 10, max 3 per sector; Financial and Real Estate are skipped. NOT backtested (Finviz has no
+point-in-time history). Output `docs/data/quality.json` (`rows` with `pts`, `score`, `rank`, `top`, `hist` per year; `skipped` with a reason).
+Page: top 10, sortable full ranking, card dialog (bars of ROIC / gross margin / FCF margin / revenue / shares, Finviz numbers, links, 4 Buffett questions +
+thesis in localStorage `quality_notes`, export / import JSON, CSV export). Workflow `quality.yml` ("Quality Yearly", Jan 2 05:41 UTC + manual).
+
 ## CI (`.github/workflows/`)
 
 - `refresh.yml` ("Weekly Refresh"): Saturday 03:17 UTC + manual; runs `python watchlist.py`, commits `docs/data/` and `data/` with
   `[skip ci]` (reset onto current `origin/main`, retry loop) and deploys Pages.
 - `cem10.yml` ("CEM10 Monthly"): 1st of the month 06:23 UTC + manual; runs `python cem10.py`, commits only `docs/data/cem10.json`
   (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
+- `quality.yml` ("Quality Yearly"): Jan 2 05:41 UTC + manual; runs `python quality.py`, commits only `docs/data/quality.json`, deploys Pages.
 - `deploy.yml`: Pages deploy on push to `main`.
 - `tests.yml`: ruff + pytest, ESLint + `node --test`.
 
@@ -171,6 +187,7 @@ Code comments and CLI messages are in Polish; keep that convention.
 pip install -r requirements.txt -r requirements-dev.txt
 python watchlist.py [--max-tickers N]
 python cem10.py
+python quality.py
 python -m pytest -q && ruff check .
 npm ci && npm test && npm run lint
 cd docs && python3 -m http.server

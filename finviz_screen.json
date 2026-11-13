@@ -18,5 +18,6 @@
  "symbols": [
   "SPY"
  ],
+ "quality_filters": "cap_midover,fa_roic_o15,fa_opermargin_o10,fa_debteq_u1,fa_curratio_o1,fa_sales5years_o5,fa_eps5years_o5,fa_pfcf_u20",
  "sec_ua": "Momentum research@example.com"
 }
