@@ -5,7 +5,7 @@ Reguły (rekomendacja po badaniach, listopad 2026):
        miesiąca nad SMA 10; ranking po 6M malejąco, 10 pozycji; brak zakupów, gdy SPY zamyka miesiąc pod SMA 12.
   GPW: bez lidera, pula WIG20 + mWIG40 razem; C-8: zwrot 3M > 0 %, 12M > +30 %, zamknięcie nad SMA 10; ranking po 6M, 5 pozycji;
        brak zakupów, gdy równo ważony indeks składników (średni miesięczny zwrot) jest pod SMA 12.
-  Wyjście (oba rynki): zamknięcie miesiąca pod SMA 10 (w USA także wypadnięcie z S&P 500 i Nasdaq-100); awaryjny stop -40 %.
+  Wyjście (oba rynki): zamknięcie miesiąca pod SMA 10; awaryjny stop -40 %. Przynależność do indeksu nie jest warunkiem wyjścia.
 Zwroty i SMA liczone na zamknięciach skorygowanych o dywidendy; ceny pokazywane na stronie są surowe (jak w notowaniach)."""
 
 N_USA = 10

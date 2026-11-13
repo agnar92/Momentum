@@ -1,0 +1,192 @@
+# Protokół badania ruchów ceny (etap 0, preregistracja)
+
+Data zamrożenia: 2026-11-10. Każda późniejsza zmiana trafia do sekcji "Odstępstwa" z datą i powodem.
+Pełny plan z uzasadnieniem: dokument "Plan badania ruchów ceny" (claude.ai).
+
+## Zasada nadrzędna
+Wnioski wynikają z danych. Tam, gdzie wybór progu nie może wynikać z danych bez podglądania wyniku
+(definicja ruchu, podział czasu), wariant główny jest ustalony tutaj z góry, a wszystkie inne warianty
+są raportowane obok (siatka wrażliwości). Wniosek uznajemy, gdy ma ten sam znak w ≥ 75 % wariantów.
+
+## Pytania
+P1 wzorce przed ruchem · P2 parametry początkowe · P3 ślad katalizatora · P4 wolumen ·
+P5 czas trwania · P6 wygasanie · P7 czas trzymania / wyjście · P8 przewidywania psychologii tłumu.
+
+## Dane
+- Źródło: EODHD, `eodhd.duckdb` (skrypty `01_symbols.py` … `05_finalize.py`), widok `prices_valid`.
+- Uniwersum: akcje zwykłe USA (`type = 'Common Stock'`), w tym wycofane. Giełdy: rozstrzyga audyt (etap 1).
+- Filtr dnia (wariant główny): close ≥ 1 USD, mediana obrotów 20 dni ≥ 1 mln USD, dni bez zmiany ceny w 20 sesjach ≤ 20 %,
+  dane po czyszczeniu z `r01_baza.py` (widok `dc`).
+  Warianty: obroty ≥ 0,2 / 5 / 20 mln USD.
+- Ceny: kształt i zwroty z `adjusted_close`; OHLC skalowane współczynnikiem adjusted_close / close.
+
+## Podział czasu (nie zmieniany)
+- Uczenie 1998-01-01 … 2012-12-31 (pierwotnie 1995, odstępstwo 1); walidacja 2013-07-01 … 2018-12-31 (pół roku embarga);
+  test nietknięty 2019-07-01 … koniec danych. Test otwierany raz, po zamrożeniu kodu (tag git `test-freeze`).
+- Lata < 1995: tylko test odporności.
+- Do etapu 10 żaden skrypt nie czyta dat ≥ 2013-07-01, z wyjątkiem walidacji oznaczonej w rejestrze.
+
+## Definicja ruchu (wariant główny + siatka)
+- Wzrost: tygodniowe zamknięcia; od dołka do szczytu ≥ +50 %, bez obsunięcia > 25 % od bieżącego szczytu.
+  Siatka: wzrost {30, 50, 100} % × obsunięcie {15, 25, 35} %.
+- Spadek (symetria): ≥ −40 % od szczytu bez odbicia > 25 % od bieżącego dołka.
+- Wybicie: pierwsze zamknięcie tygodnia > max zamknięć z 26 tyg. przed tym tygodniem.
+- Koniec: obsunięcie o próg od szczytu; ruch trwający na końcu danych = ucięty (cenzurowanie).
+
+## Statystyka
+- Przedziały 95 %: błędy grupowane po dacie i spółce lub bootstrap blokowy (bloki 12 mies., 2000 losowań).
+- Wielokrotne testy: rejestr `rejestr.csv`, FDR Benjaminiego-Hochberga q < 0,05; główne hipotezy t > 3.
+- Efekt praktyczny: lift ≥ 1,2; przewaga ≥ 2 pp/rok netto; ΔAUC ≥ 0,02.
+- Koszty: 0,1 % na stronę (obroty ≥ 20 mln), 0,25 % (5–20 mln), 0,5 % (< 5 mln).
+- Model bazowy dla każdego predyktora: samo momentum 6M.
+- Ziarno losowości: 20261110.
+
+## Odstępstwa
+1. 2026-11-10, etap 1 (dane): próba ucząca zaczyna się 1998-01-01, nie 1995-01-01. Powód: EODHD ma spółki
+   wycofane dopiero od 1998 r. (spółek wycofanych później, obecnych w danym roku: 1997 = 339, 1998 = 2 267,
+   `wyniki/r02_audyt.md`, sekcja B), więc lata 1995-1997 mają silny błąd przeżywalności. Lata 1985-1997 = tylko
+   test odporności.
+2. 2026-11-10, etap 1: filtr dnia uzupełniony o "odsetek dni bez zmiany zamknięcia w 20 sesjach <= 20 %".
+   Powód: obroty w USD są w części szeregów EODHD w niespójnych jednostkach (cena skorygowana o odwrócone splity,
+   wolumen nie); miara bez jednostek odcina śmieciowe spółki, które dzięki temu błędowi przechodzą filtr obrotów.
+   Spread Corwina-Schultza sprawdzony i odrzucony (w starych danych high = low = close, spread = 0).
+3. 2026-11-10, etap 1: obroty liczone z ceny skorygowanej tylko o splity (`ps`), bo wolumen EODHD jest
+   skorygowany o splity, a close nie. Reguły czyszczenia w `r01_baza.py` (błędy adj, filtr Hampela, tickery
+   z niemożliwymi obrotami, duplikaty, skoki-błędy).
+4. 2026-11-10, etap 1/2: KM i Weibull w bootstrapie liczone na 500 / 300 losowaniach (zamiast 2000) z powodu czasu
+   obliczeń; pozostałe przedziały 2000 losowań.
+5. 2026-11-10, etap 3: pierwsza wersja opisu liczyła "wszystkie wybicia" z ruchów potwierdzonych zygzakiem; zygzak
+   potwierdza ruch dopiero po wzroście o 33 % od dołka, więc próba była warunkowa na sukcesie (błąd selekcji).
+   Poprawka: perspektywa bezwarunkowa liczona ze wszystkich świeżych wybić (tabela zdarzenia), koniec ruchu =
+   spadek o Y od maksimum po wybiciu; opis ruchów zygzaka zostaje jako jawnie warunkowy.
+6. 2026-11-10, etap 5: szeregi dzielone na serie przy przerwie w notowaniach > 30 dni kalendarzowych (ponowne użycie
+   tickera, np. TCT: 2006-03-31 = 40,59 USD, 2014-12-04 = 79 000 USD; 0,1 % zdarzeń dawało 74 % sumy zwrotów 52 tyg.).
+   Koniec serii = wyjście po ostatniej cenie. Średnie zwrotów raportowane jako winsoryzowane 1/99 % obok median.
+   Przeliczone etapy 2-5.
+7. 2026-11-11, etap 6b: nowa seria także po dziennym wzroście adj > +400 % (zmiana jednostek bez przerwy w notowaniach,
+   np. SPM 2012-06: 40 -> 35 600 USD przy wolumenie spadającym 1000x; 395 obserwacji panelu ze zwrotem 52 tyg. > +500 %).
+   Duże jednodniowe spadki zostają (bankructwa są realne; ich wycięcie zawyżałoby wyniki). Przeliczone etapy 2-7 i 6b.
+
+## Walidacja 2013-07 ... 2018-12 (zapisane 2026-11-11 PRZED uruchomieniem, jedno spojrzenie)
+Kandydaci wybrani na próbie uczącej (dane po poprawce 7):
+- V1 "spokojny trend": ranking s_B1 z r12_model.py (średnia rang: -zmienność dzienna, -maks. dzienny wzrost,
+  +odsetek dni wzrostowych, +bliskość szczytu 12 mies., +sezonowość własna), 500 spółek o największych obrotach,
+  top 10 i top 50, równe wagi, rebalancing co miesiąc, koszty jak w r12. Odniesienie: równe wagi 500 największych.
+  Sukces, jeśli: (a) zmienność portfela top 50 <= 70 % zmienności odniesienia ORAZ (b) dolna granica 95 % różnicy
+  miesięcznego zwrotu netto top 50 vs odniesienie >= -0,25 pp/mies. (nie gorzej o więcej niż ok. 3 % rocznie).
+  Dodatkowo raportowane: CAGR, Sharpe, maks. obsunięcie, top 10.
+- V2 "trailing stop": wejście = świeże wybicie (r06), wyjście "stop 15 + trailing 25" i "trailing 25" vs
+  "czas 52"; wejścia 2013-07 ... 2017-06 (ścieżka do 2018-12-31). Sukces, jeśli zwrot na tydzień trzymania
+  "trailing 25" > "czas 52" z dolną granicą 95 % (bootstrap blokowy po miesiącach) > 0.
+Wynik raportowany niezależnie od tego, jaki będzie; żadnych zmian parametrów po spojrzeniu.
+8. 2026-11-11, PO pierwszym spojrzeniu na walidację: odkryte błędy jednostek w dół (26 miesięcy z f1 < -80 % w walidacji,
+   ceny > 1000 USD spadające do 1 USD). Nowa seria także przy spadku > 80 % w jeden dzień, gdy cena przed > 500 USD lub
+   wolumen < 3x średniej 20 dni (prawdziwy krach ma wybuch wolumenu). To poprawka danych, nie zmiana parametrów strategii;
+   kryteria walidacji bez zmian. Raportowane są oba wyniki walidacji (przed i po poprawce danych), a druga ocena jest
+   jawnie oznaczona jako drugie spojrzenie. Uwaga projektowa: odniesienie "500 spółek o największych obrotach" przegrywa
+   z RSP także w próbie uczącej (5,8 % vs ok. 10 % rocznie), więc nie jest dobrym przybliżeniem rynku dużych spółek;
+   w raportach dodane SPY i RSP jako odniesienia opisowe.
+
+## Wynik walidacji (2026-11-11)
+Żaden kandydat nie spełnił kryteriów (szczegóły: wyniki/r16_walidacja_spojrzenie1.md i _spojrzenie2.md, rejestr R022-R023).
+Zgodnie z protokołem test nietknięty 2019-07 ... nie jest otwierany: nie ma strategii, która przeszła walidację.
+Okres testowy zostaje zachowany dla przyszłych hipotez.
+9. 2026-11-11, etap 12 (CEM10): kolejne błędy danych wykryte na transakcjach CEM10: (a) nowa seria, gdy adj i close
+   rozjeżdżają się > 1,5x w jeden dzień bez rozpoznanego splitu (TWX 1999: close +11 %, adj +100 %; 511 takich dni
+   w płynnych spółkach >= 5 USD); (b) dopasowanie składu indeksu do serii tylko przy obrotach >= 50 mln USD w miesiącu
+   (CBE.US w 2003 = spółka groszowa zamiast Cooper Industries; TEK_old z wolumenem 70 akcji). Przeliczone etapy 2-7,
+   6b, 11, 12. Walidacja (r16) NIE jest uruchamiana ponownie: obowiązuje wynik spojrzenia 2 (uniknięcie kolejnych
+   spojrzeń na lata 2013-2018); wynik mógłby się nieznacznie zmienić po poprawce (a).
+
+## Etap 13: warianty CEM10 łapiące wcześniej / oddające mniej (zapisane 2026-11-11 PRZED uruchomieniem)
+Pytanie użytkownika: czy CEM10 może łapać większą część ruchu niż ok. 30 % (wejście przy ok. 78 % ruchu w log).
+Zamknięta lista wariantów (skład S&P 500 point-in-time, 10 pozycji, filtr SPY < SMA 12 i koszty jak w r19):
+ M0 baza CEM10 (6M > 30 %, > SMA 10 mies., ranking 6M, wyjście < SMA 10 mies.);
+ M1 próg 6M > 15 %; M2 3M > 15 % i > SMA 10, ranking 3M; M3 6M w przedziale 15-60 % (bez przegrzanych), ranking 6M;
+ M4 początek trendu: pierwszy miesiąc nad SMA 10 po >= 3 miesiącach pod nią i 3M > 0, ranking 6M;
+ M5 baza, wyjście trailing -20 % od maks. zamknięcia miesiąca; M6 baza, wyjście < SMA 10 lub trailing -25 %;
+ W1 tygodniowy CEM10: 26 tyg. > 30 %, > SMA 40 tyg., ranking 26 tyg., wyjście < SMA 40 tyg.;
+ W2 tygodniowy wczesny: 13 tyg. > 15 %, > SMA 40 tyg., ranking 13 tyg., wyjście < SMA 40 tyg.
+Miary: CAGR, maks. obsunięcie, faza wejścia (mediana części ruchu zygzaka już za nami), część złapanego ruchu
+wśród złapanych dużych wzrostów, różnica miesięcznego zwrotu vs M0 (bootstrap blokowy 12 mies.).
+Wariant "lepszy", jeśli: niższa faza wejścia lub większa część złapanego ruchu ORAZ wyższy CAGR w obu połowach
+(1998-2012 i 2013-2026) ORAZ dolna granica 95 % różnicy vs M0 > 0. Charakter rozpoznawczy (CEM10 dobierany na tych latach).
+
+## Etap 14: Minervini Trend Template + VCP (zapisane 2026-11-12 PRZED uruchomieniem)
+Hipoteza zewnętrzna (nie z naszych danych), więc oceniana na 1998-2018 ORAZ jednorazowo na nietkniętym 2019-07 ... 2026.
+Dane dzienne po czyszczeniu (dc), serie dzielone jak w r03; uniwersum: filtr główny + cena >= 5 USD.
+Trend Template (dzień t, wszystkie 10 warunków): RP > 70, close > SMA 50, > SMA 150, > SMA 200, SMA 50 > SMA 150,
+SMA 50 > SMA 200, SMA 150 > SMA 200, close >= 1,3 x min 252 dni, close >= 0,75 x max 252 dni, SMA 200 > SMA 200 sprzed
+22 sesji. RP = percentyl (0-100) wśród spółek uniwersum w dniu t wskaźnika 0,4 r63 + 0,2 r126 + 0,2 r189 + 0,2 r252
+(przybliżenie IBD RS).
+VCP (przybliżenie opisu Minerviniego, sprawdzane w dniu t z TT): baza = od najwyższego zamknięcia z ostatnich 120 sesji
+(bez 5 ostatnich) do t-1, długość >= 15 sesji; zygzak 5 % na zamknięciach w bazie daje kolejne cofnięcia (szczyt -> dołek);
+>= 2 cofnięcia, każde płytsze niż poprzednie, pierwsze <= 35 %, ostatnie <= 12 %; wolumen 10 sesji przed t < średniej 50;
+punkt zwrotny (pivot) = najwyższe zamknięcie od ostatniego szczytu cofnięcia; sygnał: close_t > pivot i wolumen_t >= 1,4 x średniej 50.
+Transakcje: wejście po otwarciu następnej sesji; stop początkowy = max(dołek ostatniego cofnięcia, wejście x 0,92) w trakcie
+sesji (wykonanie po stopie lub po otwarciu przy luce); wyjście: zamknięcie < SMA 50 (sprzedaż po następnym otwarciu); koszt 0,1 %/stronę.
+Porównanie "TT bez VCP": wejście w pierwszym dniu spełnienia TT (po >= 20 sesjach bez TT), stop = wejście x 0,92, te same wyjścia.
+Portfel: maks. 10 pozycji, równe kwoty, kolejność sygnałów wg RP; odniesienie SPY.
+Kryteria: H1 selekcja: spółki z TT na koniec miesiąca mają dodatni średni zwrot nadwyżkowy (vs równe wagi uniwersum) za 1/3/6/12 mies.,
+t Neweya-Westa > 2 w 1998-2018 i ten sam znak w 2019-2026. H2 wejście VCP: oczekiwany zwrot na transakcję (śr. winsoryzowana)
+TT+VCP > TT bez VCP z dolną granicą 95 % (bootstrap blokowy po miesiącach) > 0 w 1998-2018 i ten sam znak w 2019-2026;
+portfel TT+VCP: CAGR > SPY w obu okresach.
+Wynik etapu 14 (2026-11-12): H1 nie spełniona (nadwyżka TT dodatnia w obu okresach, ok. +2..+5 % rocznie, ale t < 2);
+H2 nie spełniona (VCP nie poprawia transakcji, w okresie B istotnie gorszy; portfele TT i TT+VCP poniżej SPY).
+Uwaga: do pierwszej wersji raportu H1 grupowała miesiące po dacie ostatniej sesji spółki (błąd, poprawione na miesiąc kalendarzowy).
+
+## Etap 15: CEM10 + filtr przyspieszenia EPS (zapisane 2026-11-12 PRZED uruchomieniem)
+Dane: kwartalny EPS rozwodniony z SEC companyfacts (/home/user/ndx/sec_q, 710 spółek; Q4 = rok - Q1..Q3), znany od daty
+złożenia raportu (filed). Pokrycie składu S&P 500: 64 % (2010) ... 96 % (2026), braki głównie spółek usuniętych później,
+dlatego WSZYSTKIE warianty liczone na tym samym uniwersum: członkowie S&P 500 z danymi SEC. Okres 2011-01 ... 2026-09.
+g_k = EPS kwartału k / EPS tego samego kwartału rok wcześniej - 1 (tylko gdy EPS rok wcześniej > 0); g0 = ostatni znany kwartał.
+ E0 baza CEM10 na tym uniwersum (6M > 30 %, > SMA 10, ranking 6M, wyjście < SMA 10, SPY < SMA 12, 10 pozycji);
+ E1 + g0 > 0 i g0 > g1 (przyspieszenie 1 kwartał); E2 + g0 > g1 > g2 i g0 > 0 (2 kwartały); E3 + g0 >= 25 % (CANSLIM "C").
+Filtr działa tylko przy wejściu. Kryterium "lepszy": CAGR > E0 w obu połowach (2011-2018, 2019-2026) i dolna granica 95 %
+różnicy miesięcznej vs E0 (bootstrap blokowy 12 mies.) > 0. Charakter rozpoznawczy (CEM10 dobierany na tych latach).
+Wynik etapu 15 (2026-11-12): żaden filtr EPS nie spełnia kryteriów; wszystkie obniżają CAGR (E3 istotnie).
+
+## Etap 16: linie trendu w stylu Tori Trades na wykresach miesięcznych (zapisane 2026-11-12 PRZED uruchomieniem)
+Tylko strona długa (IKE). Świece miesięczne OHLC skorygowane (tabela m). Log ceny.
+Szczyt / dołek lokalny w miesiącu i: high (low) jest najwyższy (najniższy) w oknie i-2 ... i+2; potwierdzony w miesiącu i+2
+(linia w miesiącu t używa tylko punktów i <= t-2). Okno szukania: 60 miesięcy.
+Czerwona linia: przez 2 szczyty lokalne, nachylenie <= 0, co najmniej 3 szczyty w odległości <= 3 % od linii, rozpiętość >= 6 mies.,
+żadne zamknięcie miesiąca nad linią od pierwszego dotknięcia do t-1. Zielona linia: analogicznie dołki, nachylenie >= 0, żadne
+zamknięcie pod linią. Przy kilku liniach: najwięcej dotknięć, potem najświeższe ostatnie dotknięcie. Trójkąt: obie linie
+istnieją i zielona(t) < czerwona(t).
+Przebicie: zamknięcie_t > czerwona(t) przy zamknięciu_{t-1} <= czerwona(t-1). Retest: w miesiącach t+1..t+3 low <= czerwona x 1,03
+i zamknięcie >= czerwona x 0,97 -> wejście na zamknięciu miesiąca retestu (bez retestu w 3 mies. lub zamknięcie pod zieloną = brak transakcji).
+Wariant bez retestu: wejście na zamknięciu miesiąca przebicia.
+Stop: zielona linia przedłużona (low miesiąca < zielona -> wyjście po zielonej albo po otwarciu przy luce). Wyjście A: cel =
+cena przebicia x wysokość trójkąta w momencie przebicia (exp(log czerwona - log zielona)), high >= cel -> wyjście po celu.
+Wyjście B: sam stop (maks. 60 mies.). Koszt 0,1 %/stronę.
+Uniwersa: U1 (prośba użytkownika) = 10 największych spółek S&P 500 po kapitalizacji w miesiącu przebicia (kapitalizacja z
+pit_cap2.npy; klasy akcji jednej spółki liczone raz), 2010-2026; U2 (moc statystyczna) = wszyscy członkowie S&P 500, 1998-2026.
+Miary: liczba transakcji, trafione, średni / mediana zwrot, R (zysk / ryzyko początkowe), czas trzymania, zwrot nadwyżkowy vs SPY
+w tym samym okresie trzymania (średnia, 95 % z bootstrapu po miesiącach wejścia). Strategię uznaję za działającą, jeśli w U2
+średni zwrot nadwyżkowy na transakcję ma dolną granicę 95 % > 0 dla co najmniej jednego wariantu (z retestem / bez; A / B) z
+korektą Bonferroniego na 4 warianty (granice 98,75 %). U1 raportowane opisowo (mała liczba transakcji).
+Wynik etapu 16 (2026-11-12): kryterium niespełnione (U2: żaden wariant nie ma dolnej granicy 98,75 % > 0); U1 tylko 7-10 transakcji.
+
+## Etap 17: filtry dla linii trendu (zapisane 2026-11-12 PRZED uruchomieniem)
+Transakcje z etapu 16, uniwersum U2 (S&P 500), wyjście B (sam stop), z retestem i bez (raportowane osobno).
+Zamknięta lista filtrów (znane w miesiącu przebicia): F1 SPY > SMA 10 mies.; F2 zwrot 6 mies. > 0; F3 zwrot 6 mies. > 30 %;
+F4 zamknięcie > SMA 10 mies.; F5 zamknięcie >= 0,85 x max 12 mies.; F6 zmienność 12 mies. poniżej mediany członków S&P 500
+w tym miesiącu; F7 wysokość trójkąta >= 15 %; F8 wysokość trójkąta < 15 %; F9 wolumen miesiąca przebicia >= 1,5 x średniej
+12 mies.; F10 obroty powyżej mediany członków; F11 zwrot 12 mies. spółki > zwrot SPY; F12 czerwona linia trwa >= 24 mies.
+Procedura: krok 1 (szukanie) na wejściach 1998-2012: dla każdego filtra średnia nadwyżka vs SPY na transakcję i 95 % z bootstrapu
+po miesiącach; wybrane = dolna granica 95 % > 0 (jeśli żaden: 2 najlepsze wg dolnej granicy) oraz kombinacja 2 najlepszych.
+Krok 2 (sprawdzian, jedno spojrzenie) na wejściach 2013-2026: filtr działa, jeśli dolna granica 95 % nadwyżki > 0
+z korektą Bonferroniego na liczbę wybranych filtrów. Wszystkie filtry raportowane w obu okresach dla przejrzystości.
+Wynik etapu 17 (2026-11-12): w sprawdzianie 2013-2026 żaden filtr wybrany w 1998-2012 nie działa; sam sygnał też traci przewagę (-3 % vs SPY na transakcję).
+
+## Etap 18: szukanie strategii 50-100 % rocznie (zapisane 2026-11-12 PRZED uruchomieniem)
+Rodzina prostych reguł miesięcznych (zamknięta lista, 320 wariantów): uniwersum {S&P 500 point-in-time; 1000 spółek
+o największych obrotach 3 mies. z ceną >= 5 USD i filtrem płynności} x ranking {zwrot 1M, 3M, 6M, 12-1} x liczba pozycji
+{1, 2, 3, 5, 10} x próg {brak, 6M > 30 %} x wyjście {zamknięcie < SMA 10; rotacja: sprzedaż, gdy spółka wypada poza
+2 x N najlepszych lub zamyka < SMA 10} x filtr rynku {brak, brak zakupów przy SPY < SMA 12}. Wejście: zamknięcie > SMA 10.
+Równe kwoty przy wejściu, koszt 0,1 % (S&P 500) / 0,25 % (1000 płynnych) na stronę, koniec serii = ostatnia cena.
+Procedura: CAGR w okresie wyboru 1998-2012 i w okresie sprawdzianu 2013-2026 (osobne symulacje). Raport: ile wariantów
+>= 50 % rocznie w każdym okresie, 10 najlepszych z okresu wyboru i ich wynik w sprawdzianie, korelacja rang między okresami.
+Charakter rozpoznawczy: żaden okres nie jest już nietknięty; 2026 (do września) zawiera wyjątkowo silne ruchy.
+Wynik etapu 18 (2026-11-12): żaden z 320 wariantów nie daje >= 50 % (ani >= 30 %) rocznie w obu okresach; najlepsze z 1998-2012 dały w 2013-2026 21-35 %.

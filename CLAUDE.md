@@ -144,15 +144,17 @@ final CEM10 rules from the study (NOT the Finviz scanner of the main list): **US
 (user: Stooq offers 5 months; 5M ≈ 6M in the tests, 91 % same leader), candidates from the leader's index (S&P 500 / Nasdaq-100): 6M > +30 % and
 monthly close over SMA 10, ranked by 6M; no buys while SPY closes the month under SMA 12. **GPW** 5 positions, NO leader (WIG20 + mWIG40 together),
 C-8 (3M > 0, 12M > +30 %, over SMA 10), ranked by 6M; no buys while the equal-weight index of the current components (mean monthly return,
-|r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (USA also leaving both indexes), stop −40 % (shown in the rules only).
-Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) reads S&P 500 / Nasdaq-100 members from Wikipedia
-(`List_of_S%26P_500_companies`, `List_of_NASDAQ-100_companies`; on error the previous file's members stay), WIG20 / mWIG40 from `cem10_gpw.json`
+|r| < 150 %) is under SMA 12. Exit: monthly close under SMA 10 (index membership is NOT an exit condition — user, Nov 2026: a stock with +200 % results cannot drop out of a top-10 ranking, and Wikipedia is an unverified source), stop −40 % (shown in the rules only).
+Data: `cem10.py` (workflow `cem10.yml`, 1st of the month 06:23 UTC + manual) FIRST decides the leader (downloads only SPY + QQQ, `leader(m)`), THEN takes ONLY the ticker LIST of the LEADER's index from Finviz (no return filter; user, Nov 2026: "z finviz pobieraj liste tickerow indeksu ktory wygrywa, potem ceny z yfinance na koniec miesiaca i ranking po zwrocie z 6 msc") (user, Nov 2026: "po co pobierasz NDX skoro liderem jest SPY"; the other index stays empty), no Wikipedia
+(user, Nov 2026: "zrób sito 30 % … po co nam 20 … sprawdzanie wiki szkodzi"; `finviz_members` = Overview view v=111, 20 rows/page, `idx_sp500` or `idx_ndx`
+= membership only; Finviz error or a count outside 400–600 (S&P) / 80–120 (NDX) = job error, no fallback; `usa.index` {lead, n}). Finviz only gives TODAY's membership; every number of the rule (6M, SMA 10, leader, SPY vs SMA 12) comes from Yahoo month-end closes (current month dropped), so no candidate is lost to Finviz measuring 26 weeks from today's price (the earlier `ta_perf_26w30o` sieve missed 8 of 70, e.g. PLTR). Cost: ~500 Yahoo calls when SPY leads, ~100 when QQQ leads (yfinance, 100 per batch). WIG20 / mWIG40 from `cem10_windows/sklad_gpw.json`
 (update by hand after each GPW revision: March, June, September, December), yfinance MONTHLY candles 2 y (user: "po co pobierasz dzienne";
 13 closes for 12M + SMA 12 of the market filter; `auto_adjust=False`: returns / SMA on `Adj Close`, displayed prices raw) -> CLOSED months only (`prices.last_closed_month`) -> `docs/data/cem10.json`
 (`month`, `usa` {lead, spy5, qqq5, bear, rows [t, n, sp, nq, c, sma, dist, r3, r6, r12], missing}, `gpw` {w20_6, w40_6, lv, lv12, bear, rows, rewizja}).
 With prices for < 90 % of tickers nothing is written (exit 1). The page: chips (leader, market filter), buy list (green = first N), "Sprawdź spółki,
 które trzymasz" (tickers -> trzymaj / sprzedaj by SMA 10; localStorage `cem10_hold`; export to a .txt file, copy, import from .txt / .json —
 `parseHold`), full searchable tables. `watchlist.py` never touches `cem10.json` (it only prunes `weekly/` and `monthly/`).
+**No Windows script any more** (user, Nov 2026: "po co nam ps1 … chcę tylko desktopowe CEM10"): `cem10_windows/CEM10.bat`, `cem10.ps1`, `CZYTAJ.txt`, `sklad_usa.json` and the in-browser `computeFromRaw` (`dane.js`) were removed; the PC version is the desktop program in agnar92/MomentumDesktop (CEM10 only since Nov 2026). `cem10_windows/sklad_gpw.json` stays (the monthly job reads it).
 
 ## CI (`.github/workflows/`)
 
