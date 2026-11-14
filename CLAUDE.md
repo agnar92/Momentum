@@ -175,6 +175,16 @@ Google AI Studio, secret `GEMINI_API_KEY`, model `GEMINI_MODEL` env, default `ge
 (`annotate_ai`, `ai_prompt` / `parse_ai`: biznes, fosa silna/umiarkowana/brak/nie wiem, fosa_typ, zarzad, ryzyka, teza; answers < 300 days old are reused
 from the previous file; `python quality.py --ai-only` adds them to an existing file). Without the key the ranking is written without AI. The page shows
 hints under each question (`hints` in `quality.js`: ✓ / ✗ "liczby" / "AI"), never ticks the boxes — the user decides.
+**Backtest (Nov 2026, user: "zrób backtest"; scripts were in the session scratchpad, not committed)**: SEC XBRL frames (all filers, CY2007–2025, latest-filed values
+= small restatement look-ahead), the Finviz sieve rebuilt from SEC (ROIC my approximation — Finviz's ROIC cannot be replicated, P/FCF from March price ×
+diluted shares with split correction, no forward P/E / estimates), non-financial (SIC 6000–6799 out), > 2 bn $, selection at the end of March Y with CY ≤ Y−1,
+12-month hold, equal weights, yfinance monthly total returns; only companies with a CURRENT ticker (≈ 30 % of the 2015 sieve missing = survivorship bias,
+same pool for benchmarks). 2015-03…2026-03: strict sieve (13–44 names/yr) EW 11.1 %, ranking top 10 7.5 % (better than only 12 % of random 10-from-sieve
+draws), top 20 12.9 %; loose sieve (67–105) EW 12.0 %, top 10 8.6 %; no sieve (> 2 bn $, 562–1081) EW 10.9 %, top 10 9.3 %; SPY 12.9 %, RSP 10.0 %.
+Score quintiles (all > 2 bn $): 11.1 / 11.8 / 11.2 / 10.0 / 9.9 % — top − bottom +1.2 pp/yr, t = 0.4 (noise). Single metrics: ROIC persistence
+(`roic_hits` Q1–Q4 ≈ 11–12 % vs Q5 7.5 %, 9/11 years, t = 1.4), `roic_recent`, `roic_med`, buybacks (`sh_cagr`) slightly positive; gross margin level and
+stability NEGATIVE; FCF yield / E/P / revenue growth / Debt/Eq ≈ nothing in this period (value lagged 2015–26). EW of companies with ROIC ≥ 15 % in ≥ 8 of 10 years
+12.1 % vs 10.9 % for all (in-sample idea, below SPY). Conclusion shown on the page: no evidence the ranking beats the index or a random pick from the sieve.
 
 ## CI (`.github/workflows/`)
 

@@ -92,4 +92,4 @@ Kliknięcie spółki otwiera kartę z wykresami 10 lat, 4 pytaniami Buffetta i p
 Pod każdym pytaniem są podpowiedzi: pytanie 4 (cena) liczy się samo (FCF yield + ostrożny wzrost ≥ 9 % rocznie, kolumna „Oczek. zwrot”),
 pytanie 3 ma część liczbową (ROIC się trzyma, brak rozwodnienia), a opis biznesu, fosę i ocenę zarządu podpowiada **Gemini** dla 30 pierwszych spółek —
 wystarczy darmowy klucz z [Google AI Studio](https://aistudio.google.com/apikey) zapisany jako sekret repozytorium `GEMINI_API_KEY` (bez klucza ranking działa bez AI).
-Odświeżanie: workflow **Quality Yearly** (2 stycznia albo ręcznie). Metoda nie była testowana historycznie — to lista do ręcznej analizy.
+Odświeżanie: workflow **Quality Yearly** (2 stycznia albo ręcznie). **Backtest 2015–2026** (dane SEC frames, sito odtworzone bez Finviz, wybór co marzec, 10 spółek): top 10 ≈ 7,5 %/rok vs sito po równo ≈ 11 % i SPY ≈ 12,9 % — bez przewagi nad losowym wyborem; to lista do ręcznej analizy, nie sygnał.
