@@ -79,3 +79,14 @@ npm ci && npm test && npm run lint       # testy i lint JS
 ## Growth Score — TOP 10 fundamentalny
 
 Osobny ranking spółek z bieżącego skanera Finviz, niezależny od GLB i wykresu ceny. Wagi: przyspieszenie wzrostu 30 pkt (przychody, przyspieszenie sprzedaży, wzrost EPS), zaskoczenia wynikowe 20 (EPS Surprise i Revenue Surprise), przyszły wzrost 20 (prognoza EPS +1y i rewizje EPS 90 dni), jakość biznesu 20 (marża operacyjna, jej zmiana, ROI/ROIC jeśli dostępne), trwałość wzrostu 10 (spójność wielokwartałowa i jawne katalizatory). Brakujące dane są pomijane, score jest normalizowany do dostępnych wag i wymaga pokrycia co najmniej 70/100. Katalizatory nie są zgadywane; Revenue Surprise i ROI/ROIC mogą być niedostępne w źródle.
+
+## Ranking jakości — spółki na lata (`quality.py`, `docs/quality.html`)
+
+Osobna strona (przycisk „🏛 Ranking jakości”) do wyboru spółek długoterminowych **raz w roku, tylko po fundamentach**. Sito Finviz
+(`finviz_screen.json` `quality_filters`: mid cap+, ROIC > 15 %, marża operacyjna > 10 %, Debt/Eq < 1, current ratio > 1, sprzedaż i EPS 5 lat > 5 %,
+P/FCF < 20), potem **10 lat raportów rocznych z SEC** (minimum 5 lat): lata z ROIC ≥ 15 % (liczone na 10, więc młodsza spółka ma mniej punktów),
+mediana ROIC i średnia z 3 ostatnich lat, mediana i rozrzut marży brutto, marża FCF, FCF / zysk netto, wzrost przychodów, zmiana liczby akcji
+(z korektą splitów). Wynik = średnia ważona percentyli w obrębie sita: trwałość i jakość 45, wycena 30 (FCF yield, 1 / Forward P/E, 1 / P/E),
+wzrost 15, kapitał i bilans 10. Pomijane: sektory Financial i Real Estate oraz spółki bez historii w SEC. Top 10 z limitem 3 spółek na sektor.
+Kliknięcie spółki otwiera kartę z wykresami 10 lat, 4 pytaniami Buffetta i polem na tezę (zapis w przeglądarce, eksport / import pliku JSON).
+Odświeżanie: workflow **Quality Yearly** (2 stycznia albo ręcznie). Metoda nie była testowana historycznie — to lista do ręcznej analizy.
