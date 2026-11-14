@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { sortRows, barsSvg, mergeNotes, fmt } = require("../../docs/js/quality.js");
+const { sortRows, barsSvg, mergeNotes, fmt, hints } = require("../../docs/js/quality.js");
 
 const R = [
     { t: "A", score: 50, pts: { q: 70 }, roic_hits: 8 },
@@ -37,4 +37,19 @@ test("import notatek scala z istniejącymi", () => {
     assert.deepStrictEqual(Object.keys(out), ["AAA", "BBB"]);
     assert.deepStrictEqual(out.BBB.q, [true, false, true, true]);
     assert.throws(() => mergeNotes(cur, "[1,2]"));
+});
+
+test("podpowiedzi do pytań: liczby i AI", () => {
+    const r = {
+        auto: { q3: { ok: true, why: "wysoki ROIC się trzyma" }, q4: { ok: false, why: "FCF yield 2 % + wzrost 5 % = 7 %" } },
+        ai: { biznes: "Sprzedaje buty.", fosa: "silna", fosa_typ: ["marka"], fosa_why: "Marka.", zarzad: "zły", zarzad_why: "Przejęcia." },
+    };
+    const h = hints(r);
+    assert.strictEqual(h[0][0].text, "Sprzedaje buty.");
+    assert.strictEqual(h[1][0].ok, true);
+    assert.match(h[1][0].text, /fosa: silna \(marka\)/);
+    assert.deepStrictEqual(h[2].map((x) => [x.src, x.ok]), [["liczby", true], ["AI", false]]);
+    assert.strictEqual(h[3][0].ok, false);
+    assert.match(h[3][0].text, /poniżej 9 %/);
+    assert.deepStrictEqual(hints({}), [[], [], [], []]);
 });

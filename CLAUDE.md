@@ -167,7 +167,14 @@ annual report ≤ 550 days old. Score = weighted percentiles within the sieve (`
 weight goes to the rest of its block), `pick_top` = top 10, max 3 per sector; Financial and Real Estate are skipped. NOT backtested (Finviz has no
 point-in-time history). Output `docs/data/quality.json` (`rows` with `pts`, `score`, `rank`, `top`, `hist` per year; `skipped` with a reason).
 Page: top 10, sortable full ranking, card dialog (bars of ROIC / gross margin / FCF margin / revenue / shares, Finviz numbers, links, 4 Buffett questions +
-thesis in localStorage `quality_notes`, export / import JSON, CSV export). Workflow `quality.yml` ("Quality Yearly", Jan 2 05:41 UTC + manual).
+thesis in localStorage `quality_notes`, export / import JSON, CSV export; the card head with ✕ is sticky — user: "na telefonie … x zamknięcia chowa się na górze"). Workflow `quality.yml` ("Quality Yearly", Jan 2 05:41 UTC + manual).
+**Automated hints for the 4 questions** (user: "zautomatyzować z AI np Gemini darmowe … ostatnie da radę policzyć?"): `auto_checks` = Q4 computed
+(`expected_return` = FCF yield + the more conservative of revenue CAGR / Finviz EPS 5-year estimate, clamped 0–15 %, OK ≥ 9 %; column `exp_ret`) and the
+numeric part of Q3 (ROIC of the last 3 years ≥ 15 % and ≥ 80 % of the median, shares growing ≤ 0.5 %/yr). Q1–Q2 and management: Gemini API (free key from
+Google AI Studio, secret `GEMINI_API_KEY`, model `GEMINI_MODEL` env, default `gemini-2.5-flash`, JSON response, no search grounding) for the first 30 rows
+(`annotate_ai`, `ai_prompt` / `parse_ai`: biznes, fosa silna/umiarkowana/brak/nie wiem, fosa_typ, zarzad, ryzyka, teza; answers < 300 days old are reused
+from the previous file; `python quality.py --ai-only` adds them to an existing file). Without the key the ranking is written without AI. The page shows
+hints under each question (`hints` in `quality.js`: ✓ / ✗ "liczby" / "AI"), never ticks the boxes — the user decides.
 
 ## CI (`.github/workflows/`)
 

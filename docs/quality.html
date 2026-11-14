@@ -62,15 +62,17 @@ th[data-k]{cursor:pointer;user-select:none}th[aria-sort=ascending]::after{conten
 .nd{font:500 11px/1 var(--sans);color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:2px 5px}
 dialog{width:min(980px,calc(100vw - 24px));max-height:calc(100vh - 24px);border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);padding:20px}
 dialog::backdrop{background:rgba(10,15,20,.55)}
-.dhead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}
+.dhead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;position:sticky;top:-20px;z-index:2;margin:-20px -20px 0;padding:14px 20px 10px;background:var(--surface);border-bottom:1px solid var(--line)}
 .charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:14px 0}
 figure{margin:0;display:grid;gap:4px}figcaption{display:grid;font-size:13px}
 .bars{width:100%;height:auto}.bars .bar{fill:var(--accent)}.bars .good{fill:var(--good)}.bars .weak{fill:var(--bad)}
 .bars .axis{stroke:var(--line)}.bars .thr{stroke:var(--warn);stroke-dasharray:4 3}.bars .lbl{font:10px var(--mono);fill:var(--mut)}
 dl{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px;margin:0}dt{font-size:12px;color:var(--mut)}dd{margin:0;font:500 15px var(--mono)}
-.qs{display:grid;gap:8px;font-size:14px}.qs label{display:flex;gap:8px;align-items:flex-start}.qs input{margin-top:4px}
+.qs{display:grid;gap:12px;font-size:14px}.qrow{display:grid;gap:4px}
+.hint{font-size:13px;color:var(--mut);margin-left:26px;max-width:none}.hint b{font-weight:600}.hint.ok b{color:var(--good)}.hint.no b{color:var(--bad)}
+.ai{display:grid;gap:6px;font-size:13px;margin-top:12px;padding:12px;border-radius:8px;background:var(--accent-soft)}.ai p{max-width:none}.ai button{justify-self:start}.qs label{display:flex;gap:8px;align-items:flex-start}.qs input{margin-top:4px}
 textarea{width:100%;box-sizing:border-box;min-height:84px;font:14px/1.5 var(--sans);padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
-@media (max-width:600px){dialog{padding:14px}}
+@media (max-width:600px){dialog{padding:14px}.dhead{top:-14px;margin:-14px -14px 0;padding:10px 14px 8px}.dhead h2{font-size:17px}}
 </style>
 </head>
 <body>
@@ -114,6 +116,7 @@ textarea{width:100%;box-sizing:border-box;min-height:84px;font:14px/1.5 var(--sa
     <li><b>Pominięte:</b> sektory Financial i Real Estate (ROIC, current ratio i dług nie mają u nich sensu) oraz spółki bez wystarczającej historii w SEC.</li>
     <li><b>Wycena</b> z Finviz w dniu odświeżenia (P/FCF, Forward P/E, P/E), <b>prognoza wzrostu EPS</b> to konsensus analityków z Finviz.</li>
     <li>Odświeżanie: workflow „Quality Yearly” (2 stycznia albo ręcznie w GitHub Actions). Sito zmienisz w <code>finviz_screen.json</code> (<code>quality_filters</code>).</li>
+    <li><b>Pytania na karcie spółki:</b> pytanie 4 (cena) liczy się samo: FCF yield + wzrost, gdzie wzrost to ostrożniejsza z dwóch liczb (przychody rocznie z historii, prognoza EPS 5 lat), obcięta do 0–15 %; próg 9 %. Pytanie 3 ma część liczbową: ROIC z 3 ostatnich lat ≥ 15 % i nie niższy niż 80 % mediany, liczba akcji nie rośnie szybciej niż 0,5 % rocznie. Pytania 1–2 i ocenę zarządu podpowiada AI (Gemini, darmowy klucz z Google AI Studio w sekrecie <code>GEMINI_API_KEY</code>) dla 30 pierwszych spółek. Kolumna „Oczek. zwrot” to ten sam szacunek. Odpowiedź zaznaczasz sam.</li>
     <li><b>Sprzedaż</b> nie wynika z ceny, tylko z tezy: raz w roku sprawdź, czy ROIC i marże się trzymają, czy zarząd dobrze wydaje gotówkę i czy wycena nie stała się absurdalna (np. FCF yield poniżej 2 %).</li>
   </ul>
 </section>
@@ -127,6 +130,7 @@ textarea{width:100%;box-sizing:border-box;min-height:84px;font:14px/1.5 var(--sa
   <p class="mut" id="cLinks" style="margin:12px 0"></p>
   <h3 style="margin:14px 0 8px">Twoja analiza</h3>
   <div class="qs" id="cQs"></div>
+  <div class="ai" id="cAi" hidden></div>
   <label for="cThesis" class="mut" style="display:block;margin:12px 0 4px">Teza w 3 zdaniach: dlaczego ta spółka będzie zarabiać więcej za 10 lat i co by tę tezę złamało</label>
   <textarea id="cThesis"></textarea>
 </dialog>

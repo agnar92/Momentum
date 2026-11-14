@@ -1,5 +1,5 @@
 // Network-first: najpierw sieć, offline -> ostatnia wersja z cache (dane i powłoka). Po zmianie plików podbij CACHE i popraw SHELL.
-const CACHE = "momentum-glb-v33";
+const CACHE = "momentum-glb-v34";
 const SHELL = ["index.html", "css/style.css", "js/lines.js", "js/chart.js", "js/app.js", "cem10.html", "js/cem10.js", "quality.html", "js/quality.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
