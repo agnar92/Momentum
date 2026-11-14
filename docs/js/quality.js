@@ -177,6 +177,7 @@ if (typeof document !== "undefined") {
             $("cThesis").value = n.thesis || "";
             $("card").dataset.t = r.t;
             $("card").showModal();
+            document.body.classList.add("modal");          // iOS: strona pod kartą się nie przewija
         };
         const saveCard = () => {
             const t = $("card").dataset.t;
@@ -187,7 +188,8 @@ if (typeof document !== "undefined") {
         };
         $("cQs").addEventListener("change", saveCard);
         $("cThesis").addEventListener("input", saveCard);
-        $("card").addEventListener("close", () => { $("topBody").innerHTML = top.map((r) => `<tr class="buy" data-t="${esc(r.t)}" tabindex="0">${cells(r, COLS)}</tr>`).join(""); drawAll(); });
+        $("card").addEventListener("close", () => {
+            document.body.classList.remove("modal"); $("topBody").innerHTML = top.map((r) => `<tr class="buy" data-t="${esc(r.t)}" tabindex="0">${cells(r, COLS)}</tr>`).join(""); drawAll(); });
         $("cClose").addEventListener("click", () => $("card").close());
         for (const id of ["topBody", "allBody"]) {
             $(id).addEventListener("click", (e) => { const tr = e.target.closest("tr[data-t]"); if (tr) open(tr.dataset.t); });
