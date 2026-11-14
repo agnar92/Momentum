@@ -89,4 +89,7 @@ mediana ROIC i średnia z 3 ostatnich lat, mediana i rozrzut marży brutto, mar�
 (z korektą splitów). Wynik = średnia ważona percentyli w obrębie sita: trwałość i jakość 45, wycena 30 (FCF yield, 1 / Forward P/E, 1 / P/E),
 wzrost 15, kapitał i bilans 10. Pomijane: sektory Financial i Real Estate oraz spółki bez historii w SEC. Top 10 z limitem 3 spółek na sektor.
 Kliknięcie spółki otwiera kartę z wykresami 10 lat, 4 pytaniami Buffetta i polem na tezę (zapis w przeglądarce, eksport / import pliku JSON).
+Pod każdym pytaniem są podpowiedzi: pytanie 4 (cena) liczy się samo (FCF yield + ostrożny wzrost ≥ 9 % rocznie, kolumna „Oczek. zwrot”),
+pytanie 3 ma część liczbową (ROIC się trzyma, brak rozwodnienia), a opis biznesu, fosę i ocenę zarządu podpowiada **Gemini** dla 30 pierwszych spółek —
+wystarczy darmowy klucz z [Google AI Studio](https://aistudio.google.com/apikey) zapisany jako sekret repozytorium `GEMINI_API_KEY` (bez klucza ranking działa bez AI).
 Odświeżanie: workflow **Quality Yearly** (2 stycznia albo ręcznie). Metoda nie była testowana historycznie — to lista do ręcznej analizy.

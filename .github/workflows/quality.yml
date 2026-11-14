@@ -31,9 +31,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Ranking jakości (Finviz + SEC)
+      - name: Ranking jakości (Finviz + SEC + opcjonalnie Gemini)
         env:
           SEC_UA: ${{ secrets.SEC_UA }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}   # opcjonalny: podpowiedzi AI dla top 30 (klucz z aistudio.google.com)
         run: python quality.py
 
       - name: Commit data

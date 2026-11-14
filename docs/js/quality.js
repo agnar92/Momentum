@@ -14,10 +14,25 @@ const COLS = [
     ["q", "Jakość", "b", -1], ["v", "Wycena", "b", -1], ["g", "Wzrost", "b", -1], ["b", "Kapitał", "b", -1],
     ["roic_hits", "ROIC ≥ 15 %", "h", -1], ["roic_med", "ROIC med.", "p", -1], ["gm_med", "Marża brutto", "p", -1],
     ["fcf_yield", "FCF yield", "p", -1], ["rev_cagr", "Przychody / rok", "p", -1], ["sh_cagr", "Akcje / rok", "p", 1],
+    ["exp_ret", "Oczek. zwrot", "p", -1], ["fosa", "Fosa (AI)", "s", 1],
 ];
 
 function val(r, k) {
+    if (k === "fosa") return r.ai ? r.ai.fosa : null;
     return ["q", "v", "g", "b"].includes(k) ? (r.pts || {})[k] : r[k];
+}
+// podpowiedzi do 4 pytań: [{ok: true/false/null, src: "liczby" | "AI", text}] na pytanie; pytania 1–2 tylko z AI, 3 z liczb + AI, 4 z liczb
+function hints(r) {
+    const a = r.ai, au = r.auto || {}, out = [[], [], [], []];
+    const okOf = (v, good, bad) => v === good ? true : v === bad ? false : null;
+    if (a) {
+        out[0].push({ ok: null, src: "AI", text: a.biznes });
+        out[1].push({ ok: okOf(a.fosa, "silna", "brak"), src: "AI", text: `fosa: ${a.fosa}${a.fosa_typ && a.fosa_typ.length ? " (" + a.fosa_typ.join(", ") + ")" : ""}. ${a.fosa_why || ""}`.trim() });
+    }
+    if (au.q3) out[2].push({ ok: au.q3.ok, src: "liczby", text: au.q3.why });
+    if (a) out[2].push({ ok: okOf(a.zarzad, "dobry", "zły"), src: "AI", text: `zarząd: ${a.zarzad}. ${a.zarzad_why || ""}`.trim() });
+    if (au.q4) out[3].push({ ok: au.q4.ok, src: "liczby", text: au.q4.why + (au.q4.ok === false ? " (poniżej 9 %)" : "") });
+    return out;
 }
 // sortowanie: brakujące wartości zawsze na końcu
 function sortRows(rows, key, dir) {
@@ -73,7 +88,7 @@ function mergeNotes(cur, text) {
     return out;
 }
 
-if (typeof module !== "undefined") module.exports = { sortRows, barsSvg, mergeNotes, fmt, val };
+if (typeof module !== "undefined") module.exports = { sortRows, barsSvg, mergeNotes, fmt, val, hints };
 
 if (typeof document !== "undefined") {
     const $ = (id) => document.getElementById(id);
@@ -150,7 +165,15 @@ if (typeof document !== "undefined") {
                 `<a href="https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&amp;type=10-K&amp;CIK=${encodeURIComponent(r.t)}" target="_blank" rel="noopener">Raporty 10-K (SEC)</a> · ` +
                 `<a href="https://stockanalysis.com/stocks/${encodeURIComponent(r.t.toLowerCase())}/financials/" target="_blank" rel="noopener">Stock Analysis</a>`;
             const n = notes[r.t] || {}; n.q = n.q || [];
-            $("cQs").innerHTML = QUESTIONS.map((q, i) => `<label><input type="checkbox" data-i="${i}" ${n.q[i] ? "checked" : ""}> ${q}</label>`).join("");
+            const hs = hints(r), mark = (ok) => ok === true ? "✓" : ok === false ? "✗" : "•";
+            $("cQs").innerHTML = QUESTIONS.map((q, i) => `<div class="qrow"><label><input type="checkbox" data-i="${i}" ${n.q[i] ? "checked" : ""}> ${q}</label>` +
+                hs[i].map((h) => `<p class="hint ${h.ok === true ? "ok" : h.ok === false ? "no" : ""}"><b>${mark(h.ok)} ${h.src}:</b> ${esc(h.text)}</p>`).join("") + "</div>").join("");
+            const a = r.ai;
+            $("cAi").hidden = !a;
+            $("cAi").innerHTML = a ? `<p><b>Ryzyka (AI):</b> ${esc((a.ryzyka || []).join(" · ") || "–")}</p><p><b>Teza (AI):</b> ${esc(a.teza || "–")}</p>` +
+                `<p class="mut">Podpowiedź ${esc(a.model || "AI")} z ${esc(a.at)}. Model może się mylić albo mieć nieaktualną wiedzę; zaznacz pytanie dopiero, gdy sam to sprawdzisz.</p>` +
+                "<button type=\"button\" class=\"sec\" id=\"cUseAi\">Wstaw tezę AI do swojej tezy</button>" : "";
+            if (a) $("cUseAi").addEventListener("click", () => { const t = $("cThesis"); t.value = (t.value.trim() ? t.value.trim() + "\n" : "") + a.teza; saveCard(); });
             $("cThesis").value = n.thesis || "";
             $("card").dataset.t = r.t;
             $("card").showModal();

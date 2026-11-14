@@ -101,3 +101,69 @@ def test_ssr_rows():
     page = ('<script type="application/json" data-ssr-props="x">{"data":{"totalCount":2,"rows":[{"text":{"ticker":"A","sector":"T"},'
             '"numbers":{"PFCF":10}},{"text":{"ticker":""}}]}}</script>')
     assert script.ssr_rows(page) == ([{"ticker": "A", "sector": "T", "PFCF": 10}], 2)
+
+
+def test_expected_return_and_auto_checks():
+    r = dict(fcf_yield=0.05, rev_cagr=0.12, est_lt=0.08, roic_recent=0.25, roic_med=0.28, sh_cagr=-0.01)
+    assert quality.expected_return(r) == (0.13, 0.08)                       # ostrożniejsza z dwóch liczb
+    assert quality.expected_return(dict(r, rev_cagr=0.4, est_lt=None)) == (0.2, 0.15)   # wzrost obcięty do 15 %
+    assert quality.expected_return(dict(r, fcf_yield=None)) == (None, None)
+    a = quality.auto_checks(r)
+    assert a["q3"]["ok"] is True and "maleje" in a["q3"]["why"] and a["q4"]["ok"] is True
+    b = quality.auto_checks(dict(r, roic_recent=0.12, sh_cagr=0.03, fcf_yield=0.02, rev_cagr=0.03, est_lt=0.05))
+    assert b["q3"]["ok"] is False and "rozwodnienie" in b["q3"]["why"] and "< 15 %" in b["q3"]["why"]
+    assert b["q4"]["ok"] is False and b["q4"]["er"] == 0.05
+    assert quality.auto_checks({})["q3"]["ok"] is None and quality.auto_checks({})["q4"]["ok"] is None
+
+
+def test_parse_ai_and_prompt():
+    txt = '```json\n{"biznes": "Sprzedaje buty.", "fosa": "SILNA", "fosa_typ": ["marka"], "zarzad": "świetny", "ryzyka": ["moda"], "teza": "T"}\n```'
+    a = quality.parse_ai(txt)
+    assert a["fosa"] == "silna" and a["zarzad"] == "nie wiem" and a["fosa_typ"] == ["marka"] and a["ryzyka"] == ["moda"]
+    for bad in ("nie json", "[]", '{"fosa": "silna"}'):
+        try:
+            quality.parse_ai(bad)
+            raise AssertionError(bad)
+        except ValueError:
+            pass
+    p = quality.ai_prompt(dict(t="X", n="X Inc", hist=[dict(y=2025, roic=0.2, gm=0.5, fcfm=None)], rev_cagr=0.1))
+    assert "X Inc (X)" in p and "2025: ROIC 20%" in p and "JSON" in p
+
+
+def test_annotate_ai_reuses_fresh_answers():
+    today = dt.date(2026, 11, 14)
+    ok = '{"biznes": "B", "fosa": "brak", "zarzad": "dobry", "teza": "T"}'
+    asked = []
+
+    def ask(prompt):
+        asked.append(prompt)
+        if "Y Inc" in prompt:
+            raise RuntimeError("limit")
+        return ok
+    out = {"rows": [dict(t="X", n="X Inc"), dict(t="Y", n="Y Inc"), dict(t="Z", n="Z Inc"), dict(t="W", n="W Inc")]}
+    old = {"rows": [dict(t="Z", ai=dict(biznes="stare", at="2026-06-01")), dict(t="X", ai=dict(biznes="b", at="2025-01-01"))]}
+    n = script.annotate_ai(out, "k", old, top=3, ask=ask, log=lambda *_: None, pause=0, today=today)
+    assert n == 1 and len(asked) == 2                                     # X (stara odpowiedź) i Y (błąd); Z świeże, W poza top 3
+    assert out["rows"][0]["ai"]["fosa"] == "brak" and out["rows"][0]["ai"]["at"] == "2026-11-14"
+    assert "ai" not in out["rows"][1] and out["rows"][2]["ai"]["biznes"] == "stare" and "ai" not in out["rows"][3]
+
+
+def test_gemini_retries_on_limit():
+    class R:
+        def __init__(self, code):
+            self.status_code = code
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise RuntimeError(self.status_code)
+
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"text": "{}"}]}}]}
+    codes = [429, 200]
+    sent = []
+
+    def post(url, headers, json, timeout):
+        sent.append((url, headers["x-goog-api-key"], json["generationConfig"]["responseMimeType"]))
+        return R(codes.pop(0))
+    assert script.gemini("p", "KEY", "m1", post=post, wait=0) == "{}"
+    assert len(sent) == 2 and sent[0] == (script.GEMINI_URL.format("m1"), "KEY", "application/json")

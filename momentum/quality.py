@@ -274,3 +274,94 @@ def pick_top(rows, top=TOP, cap=SECTOR_CAP):
         r["top"] = True
         out.append(r["t"])
     return out
+
+
+# --- pytania z karty: co da się policzyć -------------------------------------------------------------------------
+EXP_RET_MIN = 0.09      # pytanie 4: FCF yield + realny wzrost ≥ ~9 % rocznie
+GROWTH_CAP = 0.15       # wzrostu powyżej 15 % rocznie nie zakładamy na 10 lat
+DILUTION_MAX = 0.005    # pytanie 3: liczba akcji rośnie najwyżej 0,5 % rocznie
+
+
+def expected_return(r):
+    """Pytanie 4: oczekiwany zwrot ≈ FCF yield + wzrost. Wzrost = OSTROŻNIEJSZA z dwóch liczb: przychody rocznie z historii SEC
+    i prognoza wzrostu EPS 5 lat (Finviz), obcięta do 0–15 %. -> (zwrot, wzrost) albo (None, None)."""
+    g = [x for x in (r.get("rev_cagr"), r.get("est_lt")) if x is not None]
+    if r.get("fcf_yield") is None or not g:
+        return None, None
+    gr = max(0.0, min(min(g), GROWTH_CAP))
+    return round(r["fcf_yield"] + gr, 4), round(gr, 4)
+
+
+def auto_checks(r):
+    """Odpowiedzi z liczb na pytania 3 (część liczbowa: reinwestycja przy wysokim ROIC, brak rozwodnienia, ROIC nie słabnie) i 4 (cena)
+    -> {"q3": {ok, why}, "q4": {ok, er, g, why}}; ok = None, gdy brak danych. Pytania 1–2 nie są liczbowe (podpowiedź AI)."""
+    why3, ok3 = [], True
+    rr, med, sh = r.get("roic_recent"), r.get("roic_med"), r.get("sh_cagr")
+    if rr is None:
+        ok3 = None
+    else:
+        if rr < ROIC_HIT:
+            ok3 = False
+            why3.append(f"ROIC z 3 ost. lat {rr * 100:.0f} % < 15 %")
+        if med and rr < 0.8 * med:
+            ok3 = False
+            why3.append(f"ROIC słabnie ({rr * 100:.0f} % wobec mediany {med * 100:.0f} %)")
+    if sh is not None and sh > DILUTION_MAX:
+        ok3 = False
+        why3.append(f"rozwodnienie {sh * 100:+.1f} % akcji rocznie")
+    if ok3:
+        why3.append("wysoki ROIC się trzyma" + (", liczba akcji maleje" if sh is not None and sh < 0 else ", bez rozwodnienia" if sh is not None else ""))
+    er, g = expected_return(r)
+    q4 = dict(ok=None if er is None else er >= EXP_RET_MIN, er=er, g=g,
+              why="brak danych" if er is None else f"FCF yield {r['fcf_yield'] * 100:.1f} % + wzrost {g * 100:.1f} % = {er * 100:.1f} % rocznie")
+    q4["why"] = q4["why"].replace(".", ",")                     # polski zapis liczb na stronie
+    return {"q3": dict(ok=ok3, why=("; ".join(why3) or "brak danych").replace(".", ",")), "q4": q4}
+
+
+# --- podpowiedź AI (Gemini) dla pytań 1–3: opis biznesu, fosa, zarząd, ryzyka, teza ---------------------------------------
+AI_MOAT = ("silna", "umiarkowana", "brak", "nie wiem")
+AI_MGMT = ("dobry", "mieszany", "zły", "nie wiem")
+
+
+def ai_prompt(r):
+    """Prompt dla modelu językowego z liczbami spółki; odpowiedź ma być JSON-em (parse_ai)."""
+    def p(x):
+        return "–" if x is None else f"{x * 100:.0f}%"
+    hist = "; ".join(f"{h['y']}: ROIC {p(h.get('roic'))}, marża brutto {p(h.get('gm'))}, marża FCF {p(h.get('fcfm'))}"
+                     for h in r.get("hist") or [])
+    return f"""Jesteś analitykiem inwestującym długoterminowo w stylu Warrena Buffetta. Oceń spółkę {r['n']} ({r['t']}),
+branża: {r.get('industry') or '?'}, sektor: {r.get('sector') or '?'}.
+Liczby z raportów rocznych SEC (najstarsze pierwsze): {hist}.
+Przychody rosły {p(r.get('rev_cagr'))} rocznie, liczba akcji zmieniała się o {p(r.get('sh_cagr'))} rocznie, FCF yield {p(r.get('fcf_yield'))},
+Debt/Eq {r.get('debt_eq')}.
+Odpowiedz po polsku, zwięźle i konkretnie, WYŁĄCZNIE obiektem JSON z polami:
+"biznes": 2–3 zdania: kto płaci tej spółce, za co i dlaczego nie odchodzi do konkurencji;
+"fosa": jedno z {list(AI_MOAT)};
+"fosa_typ": lista źródeł przewagi spośród ["marka", "koszt zmiany", "efekt sieci", "przewaga kosztowa", "licencje i regulacje"];
+"fosa_why": 1–2 zdania uzasadnienia;
+"zarzad": jedno z {list(AI_MGMT)} (alokacja kapitału: przejęcia, skup akcji, dywidendy, rozwodnienie);
+"zarzad_why": 1–2 zdania;
+"ryzyka": lista 2–3 krótkich ryzyk, które mogą złamać tezę;
+"teza": 3 zdania: dlaczego spółka może zarabiać więcej za 10 lat i co by tę tezę złamało.
+Jeśli czegoś nie wiesz, napisz "nie wiem" — nie zgaduj. Twoja wiedza może być nieaktualna."""
+
+
+def _s(x, n):
+    return str(x or "").strip()[:n]
+
+
+def parse_ai(text):
+    """Odpowiedź modelu -> słownik z polami z ai_prompt (bez znanych pól albo nie-JSON -> ValueError). Ucina długie teksty."""
+    import json
+    import re
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", (text or "").strip())
+    j = json.loads(t)
+    if not isinstance(j, dict) or not j.get("biznes"):
+        raise ValueError("brak pola biznes")
+    fosa, zarz = str(j.get("fosa", "")).lower(), str(j.get("zarzad", "")).lower()
+
+    def lst(v):
+        return [_s(x, 160) for x in v][:5] if isinstance(v, list) else []
+    return dict(biznes=_s(j["biznes"], 600), fosa=fosa if fosa in AI_MOAT else "nie wiem", fosa_typ=lst(j.get("fosa_typ")),
+                fosa_why=_s(j.get("fosa_why"), 400), zarzad=zarz if zarz in AI_MGMT else "nie wiem", zarzad_why=_s(j.get("zarzad_why"), 400),
+                ryzyka=lst(j.get("ryzyka")), teza=_s(j.get("teza"), 700))
