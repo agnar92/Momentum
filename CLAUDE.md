@@ -186,6 +186,25 @@ Score quintiles (all > 2 bn $): 11.1 / 11.8 / 11.2 / 10.0 / 9.9 % — top − bo
 stability NEGATIVE; FCF yield / E/P / revenue growth / Debt/Eq ≈ nothing in this period (value lagged 2015–26). EW of companies with ROIC ≥ 15 % in ≥ 8 of 10 years
 12.1 % vs 10.9 % for all (in-sample idea, below SPY). Conclusion shown on the page: no evidence the ranking beats the index or a random pick from the sieve.
 
+## FLIP + TVOD (`flip.py`, `momentum/flip.py`, `flip_config.json`, `docs/flip.html`, `docs/js/flip.js`)
+
+User, Nov 2026: two YouTube videos by "Paul" (FLIP stock picking + position building + TVOD exits) -> "zrób osobną stronę flipa i tego drugiego
+zaczynającego się na t". FLIP letters (`flip.checks`): F = FCF > 0 and (cash ≥ debt or net debt ≤ 3 × FCF; cash = mcap / P/C, debt = Debt/Eq × mcap / P/B
+from Finviz); L = founder in `flip_config.json` `founders` (value not starting with "nie") or insiders ≥ 10 %; I = Finviz industry in `industries` or
+ticker in `include`; P = profitable (oper. margin or FCF > 0) and (largest company of the same Finviz industry among > 10 bn $ not ≥ 10× bigger, or
+`leaders` niche override — Finviz puts CRWD with MSFT). Valuation: `required_growth(P/FCF)` = FCF growth for 10 years to earn 10 %/yr with a 20× FCF exit;
+`actual_growth` = mean of Finviz sales 5Y and EPS next 5Y; `margin` = actual − required. T = last quarter from SEC (`sec.update`, cache `data/flip_sec.json`
+— not committed by the workflow): `słabnie` when revenue y/y < 10 % or Δ op margin < −2 pp, `dobre` ≥ 15 % and margin not down. `rank`: FLIP passers,
+non-weakening first, by margin; first `TOP` = 10 non-weakening are `pick` (Nov 2026: 8 — NVDA, PLTR, DELL, ANET, FTNT, CRWD, UI, GOOGL; META, NET,
+TSLA pass FLIP but weaken). `flip.py`: Finviz `cap_largeover` view 111 (all pages, also the `prices` map for the positions tool), views 121/131/161 for
+candidates (industries + include + founders), share classes deduplicated by company name (founders key first). Page: pick list, all candidates, "Moje
+pozycje" (localStorage `flip_positions`, JSON export/import): `ladderPlan` (40 % first, 10 tranches, next buy ≥ highest × 1.07 or ≤ lowest × 0.93),
+`tvod` signals KUP / T / V (required − actual > 15 pp) / O (a pick with margin 10 pp higher) / D (value ≥ 2× invested, until "took" is ticked).
+Test of the tranche rule (scratchpad, Nov 2026; 520 current S&P 500 / NDX members, daily, quarterly starts 2010–2023): better than buying at once in
+29 % (1 y) / 22 % (3 y) of cases, mean 500 zł -> 557 vs 598 (1 y) and 748 vs 837 (3 y); wins only when the stock falls. Same rule on top-10 by market
+cap (16.5 vs 17.0 %/yr) and on CEM10 (−2…−7 pp/yr, same drawdowns) was worse than buying at once. FLIP itself is untested.
+Workflow `flip.yml` ("FLIP Monthly", 2nd of the month 07:41 UTC + manual) commits only `docs/data/flip.json`.
+
 ## CI (`.github/workflows/`)
 
 - `refresh.yml` ("Weekly Refresh"): Saturday 03:17 UTC + manual; runs `python watchlist.py`, commits `docs/data/` and `data/` with
@@ -193,6 +212,7 @@ stability NEGATIVE; FCF yield / E/P / revenue growth / Debt/Eq ≈ nothing in th
 - `cem10.yml` ("CEM10 Monthly"): 1st of the month 06:23 UTC + manual; runs `python cem10.py`, commits only `docs/data/cem10.json`
   (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
 - `quality.yml` ("Quality Yearly"): Jan 2 05:41 UTC + manual; runs `python quality.py`, commits only `docs/data/quality.json`, deploys Pages.
+- `flip.yml` ("FLIP Monthly"): 2nd of the month 07:41 UTC + manual; runs `python flip.py`, commits only `docs/data/flip.json`, deploys Pages.
 - `deploy.yml`: Pages deploy on push to `main`.
 - `tests.yml`: ruff + pytest, ESLint + `node --test`.
 
@@ -205,6 +225,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python watchlist.py [--max-tickers N]
 python cem10.py
 python quality.py
+python flip.py
 python -m pytest -q && ruff check .
 npm ci && npm test && npm run lint
 cd docs && python3 -m http.server
