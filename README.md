@@ -92,4 +92,13 @@ Kliknięcie spółki otwiera kartę z wykresami 10 lat, 4 pytaniami Buffetta i p
 Pod każdym pytaniem są podpowiedzi: pytanie 4 (cena) liczy się samo (FCF yield + ostrożny wzrost ≥ 9 % rocznie, kolumna „Oczek. zwrot”),
 pytanie 3 ma część liczbową (ROIC się trzyma, brak rozwodnienia), a opis biznesu, fosę i ocenę zarządu podpowiada **Gemini** dla 30 pierwszych spółek —
 wystarczy darmowy klucz z [Google AI Studio](https://aistudio.google.com/apikey) zapisany jako sekret repozytorium `GEMINI_API_KEY` (bez klucza ranking działa bez AI).
-Odświeżanie: workflow **Quality Yearly** (2 stycznia albo ręcznie). Metoda nie była testowana historycznie — to lista do ręcznej analizy.
+Odświeżanie: workflow **Quality Yearly** (2 stycznia albo ręcznie). **Backtest 2015–2026** (dane SEC frames, sito odtworzone bez Finviz, wybór co marzec, 10 spółek): top 10 ≈ 7,5 %/rok vs sito po równo ≈ 11 % i SPY ≈ 12,9 % — bez przewagi nad losowym wyborem; to lista do ręcznej analizy, nie sygnał.
+
+## FLIP + TVOD (`flip.py`, `docs/flip.html`)
+
+Strona „🧭 FLIP” — metoda z filmów Paula: wybór spółek po 4 literach (**F**inanse: dodatni FCF i dług pod kontrolą, **L**iderzy: założyciel
+albo insiderzy ≥ 10 %, **I**ndustry: kluczowa branża, **P**ozycja: lider branży i zyski), budowanie pozycji (40 % budżetu na start, reszta w 10 transzach
+przy ruchu ±7 % od najwyższego / najniższego zakupu) i sygnały wyjścia **TVOD** (Teza – raporty słabną, Valuation – cena zakłada dużo więcej wzrostu,
+Opportunity – lepsza spółka na liście, Double – pozycja się podwoiła). Litery L i I są jakościowe: edytujesz je w `flip_config.json`. Dane: Finviz
+(spółki USA > 10 mld $) i SEC (ostatni kwartał), workflow **FLIP Monthly** (2. dnia miesiąca + ręcznie). Pozycje użytkownika są w przeglądarce
+(eksport / import JSON). Test budowania pozycji (520 spółek S&P 500 / Nasdaq-100, 2010–2023): strata > 20 % 2–3× rzadziej niż przy kupnie od razu i rzadziej niż przy DCA w czasie, za cenę średniego zysku niższego o ok. 7–10 %.

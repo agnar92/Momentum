@@ -175,6 +175,43 @@ Google AI Studio, secret `GEMINI_API_KEY`, model `GEMINI_MODEL` env, default `ge
 (`annotate_ai`, `ai_prompt` / `parse_ai`: biznes, fosa silna/umiarkowana/brak/nie wiem, fosa_typ, zarzad, ryzyka, teza; answers < 300 days old are reused
 from the previous file; `python quality.py --ai-only` adds them to an existing file). Without the key the ranking is written without AI. The page shows
 hints under each question (`hints` in `quality.js`: ✓ / ✗ "liczby" / "AI"), never ticks the boxes — the user decides.
+**Backtest (Nov 2026, user: "zrób backtest"; scripts were in the session scratchpad, not committed)**: SEC XBRL frames (all filers, CY2007–2025, latest-filed values
+= small restatement look-ahead), the Finviz sieve rebuilt from SEC (ROIC my approximation — Finviz's ROIC cannot be replicated, P/FCF from March price ×
+diluted shares with split correction, no forward P/E / estimates), non-financial (SIC 6000–6799 out), > 2 bn $, selection at the end of March Y with CY ≤ Y−1,
+12-month hold, equal weights, yfinance monthly total returns; only companies with a CURRENT ticker (≈ 30 % of the 2015 sieve missing = survivorship bias,
+same pool for benchmarks). 2015-03…2026-03: strict sieve (13–44 names/yr) EW 11.1 %, ranking top 10 7.5 % (better than only 12 % of random 10-from-sieve
+draws), top 20 12.9 %; loose sieve (67–105) EW 12.0 %, top 10 8.6 %; no sieve (> 2 bn $, 562–1081) EW 10.9 %, top 10 9.3 %; SPY 12.9 %, RSP 10.0 %.
+Score quintiles (all > 2 bn $): 11.1 / 11.8 / 11.2 / 10.0 / 9.9 % — top − bottom +1.2 pp/yr, t = 0.4 (noise). Single metrics: ROIC persistence
+(`roic_hits` Q1–Q4 ≈ 11–12 % vs Q5 7.5 %, 9/11 years, t = 1.4), `roic_recent`, `roic_med`, buybacks (`sh_cagr`) slightly positive; gross margin level and
+stability NEGATIVE; FCF yield / E/P / revenue growth / Debt/Eq ≈ nothing in this period (value lagged 2015–26). EW of companies with ROIC ≥ 15 % in ≥ 8 of 10 years
+12.1 % vs 10.9 % for all (in-sample idea, below SPY). Conclusion shown on the page: no evidence the ranking beats the index or a random pick from the sieve.
+
+## FLIP + TVOD (`flip.py`, `momentum/flip.py`, `flip_config.json`, `docs/flip.html`, `docs/js/flip.js`)
+
+User, Nov 2026: two YouTube videos by "Paul" (FLIP stock picking + position building + TVOD exits) -> "zrób osobną stronę flipa i tego drugiego
+zaczynającego się na t". FLIP letters (`flip.checks`): F = FCF > 0 and (cash ≥ debt or net debt ≤ 3 × FCF; cash = mcap / P/C, debt = Debt/Eq × mcap / P/B
+from Finviz); L = founder in `flip_config.json` `founders` (value not starting with "nie") or insiders ≥ 10 %; I = Finviz industry in `industries` or
+ticker in `include`; P = profitable (oper. margin or FCF > 0) and (largest company of the same Finviz industry among > 10 bn $ not ≥ 10× bigger, or
+`leaders` niche override — Finviz puts CRWD with MSFT). Valuation: `required_growth(P/FCF)` = FCF growth for 10 years to earn 10 %/yr with a 20× FCF exit;
+`actual_growth` = mean of Finviz sales 5Y and EPS next 5Y; `margin` = actual − required. T = last quarter from SEC (`sec.update`, cache `data/flip_sec.json`
+— not committed by the workflow): `słabnie` when revenue y/y < 10 % or Δ op margin < −2 pp, `dobre` ≥ 15 % and margin not down. `rank`: FLIP passers,
+non-weakening first, by margin; first `TOP` = 10 non-weakening are `pick` (Nov 2026: 8 — NVDA, PLTR, DELL, ANET, FTNT, CRWD, UI, GOOGL; META, NET,
+TSLA pass FLIP but weaken). `flip.py`: Finviz `cap_largeover` view 111 (all pages, also the `prices` map for the positions tool), views 121/131/161 for
+candidates (industries + include + founders), share classes deduplicated by company name (founders key first). Page: pick list, all candidates, "Moje
+pozycje" (localStorage `flip_positions`, JSON export/import): `ladderPlan` (40 % first, 10 tranches, next buy ≥ highest × 1.07 or ≤ lowest × 0.93),
+`tvod` signals KUP / T / V (required − actual > 15 pp) / O (a pick with margin 10 pp higher) / D (value ≥ 2× invested, until "took" is ticked).
+Test of the tranche rule (scratchpad, Nov 2026; 520 current S&P 500 / NDX members, daily, quarterly starts 2010–2023): better than buying at once in
+29 % (1 y) / 22 % (3 y) of cases, mean 500 zł -> 557 vs 598 (1 y) and 748 vs 837 (3 y); wins only when the stock falls. User: "to jest budowanie pozycji …
+żeby nie musieć zgadywać momentu wejścia … nie jest to maksymalny zwrot" — the page presents it as risk control: positive 75 / 87 % (all at once 73 / 85 %,
+DCA 10 monthly instalments 73 / 84 %), loss > 20 % 2.5 / 3.7 % (8.5 / 6.6 %, DCA 5.3 / 6.6 %), worst 5 % ≥ 429 / 424 zł (362 / 369, DCA 397 / 372). Same rule on top-10 by market
+cap (16.5 vs 17.0 %/yr) and on CEM10 (−2…−7 pp/yr, same drawdowns) was worse than buying at once. FLIP itself is untested.
+**T exit = `thesis_broken`: revenue y/y negative two quarters in a row** (SEC `rev_rr` and `rev_rr1`; row fields `t_exit`, `t_exit_txt`); a single weaker
+quarter (`t_state` "słabnie") or falling out of FLIP is only a "!" warning (user: "sprawdź … na T"). Test (scratchpad, Nov 2026; 10 slots, leaders = #1–2 by
+mcap in their SEC SIC-3 group among mission-critical SICs, opm and FCF > 0, revenue ≥ +10 % y/y, picked after earnings seasons, daily prices of current
+S&P 500 / NDX members 2011–2026): tranches + T(2 quarters down) 16.7 %/yr (all at once 19.5 %), DD −34 %; no T 15.8 / 17.0 %; T(revenue < +10 % or margin
+−2 pp, the old page rule) 7.1 / 10.9 % (132 sales, only 42 % invested); T(1 quarter down) 14.3 / 16.8 %; + D (take out the stake after doubling, cash idle)
+14.1 %; SPY 13.8 %, QQQ 18.4 %. Entry list still requires a non-weakening last report.
+Workflow `flip.yml` ("FLIP Monthly", 2nd of the month 07:41 UTC + manual) commits only `docs/data/flip.json`.
 
 ## CI (`.github/workflows/`)
 
@@ -183,6 +220,7 @@ hints under each question (`hints` in `quality.js`: ✓ / ✗ "liczby" / "AI"), 
 - `cem10.yml` ("CEM10 Monthly"): 1st of the month 06:23 UTC + manual; runs `python cem10.py`, commits only `docs/data/cem10.json`
   (`[skip ci]`, reset onto `origin/main`, retry loop) and deploys Pages.
 - `quality.yml` ("Quality Yearly"): Jan 2 05:41 UTC + manual; runs `python quality.py`, commits only `docs/data/quality.json`, deploys Pages.
+- `flip.yml` ("FLIP Monthly"): 2nd of the month 07:41 UTC + manual; runs `python flip.py`, commits only `docs/data/flip.json`, deploys Pages.
 - `deploy.yml`: Pages deploy on push to `main`.
 - `tests.yml`: ruff + pytest, ESLint + `node --test`.
 
@@ -195,6 +233,7 @@ pip install -r requirements.txt -r requirements-dev.txt
 python watchlist.py [--max-tickers N]
 python cem10.py
 python quality.py
+python flip.py
 python -m pytest -q && ruff check .
 npm ci && npm test && npm run lint
 cd docs && python3 -m http.server
