@@ -199,3 +199,4 @@ w miesiącu t, wejście: zamknięcie > SMA 10 i wkład > 0; wyjście < SMA 10; b
 Okres 2010-01 ... 2026-09 (kapitalizacja wiarygodna od 2010), połowy 2010-2017 i 2018-2026. Porównanie: CEM10 (ranking 6M,
 6M > 30 %) na tym samym okresie, SPY, QQQ, losowy wybór (20 prób). Wariant "lepszy od CEM10", jeśli wyższy CAGR w obu połowach
 i dolna granica 95 % różnicy miesięcznej (bootstrap blokowy 12 mies.) > 0. Rozpoznawcze (8 wariantów, okres znany).
+Wynik etapu 19 (2026-11-15): ranking po wkładzie w indeks bije SPY i losowy wybór, ale żaden wariant nie jest lepszy od CEM10 (gorszy w 2018-2026).
