@@ -208,3 +208,4 @@ Filtry przy wejściu, osobno dla RSP i SPY: (a) zwrot 12M spółki > zwrot 12M i
 linii RS; (c) linia RS na maksimum 12 mies. Dodatkowo ranking po RS 12M vs RSP (dla potwierdzenia równoważności z rankingiem 12M).
 "Lepszy", jeśli wyższy CAGR w obu połowach (2005-2015, 2016-2026) i dolna granica 95 % różnicy vs CEM10 > 0.
 Wynik etapu 20 (2026-11-15): żaden filtr RS (vs RSP ani SPY) nie poprawia CEM10; ranking RS 12M = ranking 12M, gorszy od 6M.
+Etap 20b (2026-11-15): RS 6M - ranking = CEM10; filtry zwrot 6M > indeks i RS > SMA 6 nic nie zmieniają; RS na max 6M: +0,05..+0,18 pp/mies. (wszystkie przedziały obejmują 0).
