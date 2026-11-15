@@ -190,3 +190,12 @@ Procedura: CAGR w okresie wyboru 1998-2012 i w okresie sprawdzianu 2013-2026 (os
 >= 50 % rocznie w każdym okresie, 10 najlepszych z okresu wyboru i ich wynik w sprawdzianie, korelacja rang między okresami.
 Charakter rozpoznawczy: żaden okres nie jest już nietknięty; 2026 (do września) zawiera wyjątkowo silne ruchy.
 Wynik etapu 18 (2026-11-12): żaden z 320 wariantów nie daje >= 50 % (ani >= 30 %) rocznie w obu okresach; najlepsze z 1998-2012 dały w 2013-2026 21-35 %.
+
+## Etap 19: spółki napędzające indeks (zapisane 2026-11-15 PRZED uruchomieniem)
+Pomysł użytkownika: inwestować w spółki, które napędzają wzrost S&P 500. Wkład spółki i w okresie k miesięcy:
+w_i(t-k) x r_i(t-k, t), gdzie w_i = kapitalizacja spółki / suma kapitalizacji członków S&P 500 w miesiącu t-k (pit_cap2.npy,
+klasy akcji jednej spółki raz), r_i = zwrot w okresie. Ranking po wkładzie, k = 1, 3, 6, 12. Zasady jak CEM10: skład indeksu
+w miesiącu t, wejście: zamknięcie > SMA 10 i wkład > 0; wyjście < SMA 10; brak zakupów przy SPY < SMA 12; N = 5 i 10; koszt 0,1 %.
+Okres 2010-01 ... 2026-09 (kapitalizacja wiarygodna od 2010), połowy 2010-2017 i 2018-2026. Porównanie: CEM10 (ranking 6M,
+6M > 30 %) na tym samym okresie, SPY, QQQ, losowy wybór (20 prób). Wariant "lepszy od CEM10", jeśli wyższy CAGR w obu połowach
+i dolna granica 95 % różnicy miesięcznej (bootstrap blokowy 12 mies.) > 0. Rozpoznawcze (8 wariantów, okres znany).
