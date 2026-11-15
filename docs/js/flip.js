@@ -23,8 +23,9 @@ function tvod(pos, price, row, rows, rules) {
     const out = [], plan = ladderPlan(pos.buys, pos.budget, rules);
     if (price && plan.up && price >= plan.up) out.push({ k: "KUP", txt: `kurs ${price.toFixed(2)} $ ≥ ${plan.up.toFixed(2)} $ (+7 % od najwyższego zakupu): dokup ${plan.tranche.toFixed(0)} zł` });
     if (price && plan.down && price <= plan.down) out.push({ k: "KUP", txt: `kurs ${price.toFixed(2)} $ ≤ ${plan.down.toFixed(2)} $ (−7 % od najniższego zakupu): dokup ${plan.tranche.toFixed(0)} zł` });
-    if (row && row.t_state === "słabnie") out.push({ k: "T", txt: `teza: raporty słabną (${row.t_txt}) — sprawdź, czy powód zakupu jest aktualny` });
-    if (row && !row.flip) out.push({ k: "T", txt: `nie przechodzi już FLIP (${Object.entries(row.checks).filter(([, v]) => !v[0]).map(([k, v]) => `${k}: ${v[1]}`).join("; ")})` });
+    if (row && row.t_exit) out.push({ k: "T", txt: `teza złamana: przychody spadają r/r dwa kwartały z rzędu (${row.t_exit_txt}) — sprzedaj, chyba że wiesz, że to jednorazowe` });
+    else if (row && row.t_state === "słabnie") out.push({ k: "!", txt: `raport słabszy (${row.t_txt}) — jeszcze nie powód do sprzedaży; T dopiero przy spadku przychodów dwa kwartały z rzędu` });
+    if (row && !row.flip) out.push({ k: "!", txt: `nie przechodzi już FLIP (${Object.entries(row.checks).filter(([, v]) => !v[0]).map(([k, v]) => `${k}: ${v[1]}`).join("; ")})` });
     if (row && row.req != null && row.act != null && row.req - row.act > V_GAP) out.push({ k: "V", txt: `wycena: cena zakłada ${(row.req * 100).toFixed(0)} % wzrostu rocznie, spółka daje ok. ${(row.act * 100).toFixed(0)} %` });
     if (row && rows) {
         const best = rows.filter((r) => r.pick && r.t !== row.t && r.margin != null).sort((a, b) => b.margin - a.margin)[0];
@@ -67,7 +68,7 @@ if (typeof document !== "undefined") {
         const c = r.checks;
         return `<b>${esc(r.t)} · ${esc(r.n)}</b> <span class="mut">(${esc(r.ind)})</span><ul>` +
             [["F – finanse", c.F], ["L – liderzy", c.L], ["I – branża", c.I], ["P – pozycja i zyski", c.P]].map(([k, v]) => `<li>${v[0] ? "✓" : "✗"} <b>${k}:</b> ${esc(v[1])}</li>`).join("") +
-            `<li><b>T – ostatni raport</b> (${esc(r.quarter || "–")}): ${esc(r.t_txt)}</li>` +
+            `<li><b>Ostatni raport</b> (${esc(r.quarter || "–")}): ${esc(r.t_txt)}. <b>T (sprzedaż):</b> ${r.t_exit ? "TAK" : "nie"} — ${esc(r.t_exit_txt || "–")}</li>` +
             `<li><b>Wycena:</b> P/FCF ${num(r.pfcf, 0)} — cena zakłada wzrost wolnej gotówki ok. ${pct(r.req)} rocznie przez 10 lat; spółka rośnie ok. ${pct(r.act)} (sprzedaż 5 lat ${num(r.s5, 0)} %, prognoza EPS 5 lat ${num(r.e5, 0)} %).</li></ul>` +
             `<a href="https://finviz.com/quote.ashx?t=${encodeURIComponent(r.t)}" target="_blank" rel="noopener">Finviz</a>`;
     }
@@ -100,7 +101,7 @@ if (typeof document !== "undefined") {
             const price = D && D.prices[p.t], row = byT[p.t], res = tvod(p, price, row, D && D.rows, R), pl = res.plan;
             const val = price && p.buys.length ? valueNow(p.buys, price) : null;
             const buys = p.buys.map((b, j) => `<li>${esc(b.d)} ${num(b.price, 2)} $ · ${num(b.amount, 0)} zł <button type="button" class="x" data-i="${i}" data-j="${j}" aria-label="Usuń zakup">✕</button></li>`).join("");
-            const sig = res.signals.map((s) => `<li class="sig ${s.k === "KUP" ? "k" : "w"}"><b>${s.k}</b> ${esc(s.txt)}</li>`).join("") || "<li class=\"sig ok\">Bez sygnałów: trzymaj i czekaj na ruch ±7 %.</li>";
+            const sig = res.signals.map((s) => `<li class="sig ${s.k === "KUP" ? "k" : s.k === "!" ? "i" : "w"}"><b>${s.k}</b> ${esc(s.txt)}</li>`).join("") || "<li class=\"sig ok\">Bez sygnałów: trzymaj i czekaj na ruch ±7 %.</li>";
             return `<div class="pos"><div class="phead"><b class="t">${esc(p.t)}</b><span class="mut">${row ? esc(row.n) : "spoza listy FLIP"}</span>` +
                 `<button type="button" class="sec del" data-i="${i}">Usuń pozycję</button></div>` +
                 `<div class="pgrid"><div><dt>Budżet</dt><dd>${num(p.budget, 0)} zł</dd></div><div><dt>Włożone</dt><dd>${num(pl.spent, 0)} zł</dd></div><div><dt>Zostało</dt><dd>${num(pl.left, 0)} zł</dd></div>` +

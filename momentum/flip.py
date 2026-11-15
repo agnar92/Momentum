@@ -11,7 +11,7 @@ Kolejność listy: „zapas wzrostu” = wzrost spółki (średnia: sprzedaż 5 
 Budowanie pozycji: z budżetu spółki FIRST_PCT na start, reszta w TRANCHES równych transzach przy ruchu ±STEP od najwyższego / najniższego
 zakupu. Nasz test (520 spółek, 2010–2023): uśrednia wejście bez zgadywania momentu — strata > 20 % 2–3× rzadziej niż przy kupnie
 od razu (i rzadziej niż przy DCA w czasie), za cenę średniego zysku niższego o ok. 7–10 %.
-TVOD (wyjście): T – teza (raporty słabną), V – wycena (cena zakłada dużo więcej wzrostu niż spółka daje), O – lepsza okazja na liście,
+TVOD (wyjście): T – teza złamana (przychody spadają r/r dwa kwartały z rzędu — `thesis_broken`), V – wycena (cena zakłada dużo więcej wzrostu niż spółka daje), O – lepsza okazja na liście,
 D – pozycja się podwoiła (wyjmij 30–50 % włożonych pieniędzy albo całość)."""
 
 TOP = 10
@@ -100,6 +100,16 @@ def report_state(sec):
     if rr >= 15 and (dm is None or dm >= 0):
         return "dobre", txt
     return "neutralne", txt
+
+
+def thesis_broken(sec):
+    """T (wyjście): przychody spadają r/r dwa kwartały z rzędu. Test 2011–2026 (10 liderów branż): najlepsza reguła — 16,7 % rocznie z transzami
+    (19,5 % kupując od razu) wobec 7,1 % przy sprzedaży po każdym słabszym kwartale (przychody < +10 % lub marża −2 pp: za dużo sprzedaży,
+    gotówka czekała). -> (czy złamana, opis)."""
+    if not sec or sec.get("rev_rr") is None or sec.get("rev_rr1") is None:
+        return False, "brak dwóch kwartałów danych"
+    a, b = sec["rev_rr"], sec["rev_rr1"]
+    return a < 0 and b < 0, f"przychody r/r: ostatni kwartał {a:+.0f} %, poprzedni {b:+.0f} %"
 
 
 def rank(rows, top=TOP):

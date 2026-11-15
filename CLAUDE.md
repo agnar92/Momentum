@@ -205,6 +205,12 @@ Test of the tranche rule (scratchpad, Nov 2026; 520 current S&P 500 / NDX member
 żeby nie musieć zgadywać momentu wejścia … nie jest to maksymalny zwrot" — the page presents it as risk control: positive 75 / 87 % (all at once 73 / 85 %,
 DCA 10 monthly instalments 73 / 84 %), loss > 20 % 2.5 / 3.7 % (8.5 / 6.6 %, DCA 5.3 / 6.6 %), worst 5 % ≥ 429 / 424 zł (362 / 369, DCA 397 / 372). Same rule on top-10 by market
 cap (16.5 vs 17.0 %/yr) and on CEM10 (−2…−7 pp/yr, same drawdowns) was worse than buying at once. FLIP itself is untested.
+**T exit = `thesis_broken`: revenue y/y negative two quarters in a row** (SEC `rev_rr` and `rev_rr1`; row fields `t_exit`, `t_exit_txt`); a single weaker
+quarter (`t_state` "słabnie") or falling out of FLIP is only a "!" warning (user: "sprawdź … na T"). Test (scratchpad, Nov 2026; 10 slots, leaders = #1–2 by
+mcap in their SEC SIC-3 group among mission-critical SICs, opm and FCF > 0, revenue ≥ +10 % y/y, picked after earnings seasons, daily prices of current
+S&P 500 / NDX members 2011–2026): tranches + T(2 quarters down) 16.7 %/yr (all at once 19.5 %), DD −34 %; no T 15.8 / 17.0 %; T(revenue < +10 % or margin
+−2 pp, the old page rule) 7.1 / 10.9 % (132 sales, only 42 % invested); T(1 quarter down) 14.3 / 16.8 %; + D (take out the stake after doubling, cash idle)
+14.1 %; SPY 13.8 %, QQQ 18.4 %. Entry list still requires a non-weakening last report.
 Workflow `flip.yml` ("FLIP Monthly", 2nd of the month 07:41 UTC + manual) commits only `docs/data/flip.json`.
 
 ## CI (`.github/workflows/`)

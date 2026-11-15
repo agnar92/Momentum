@@ -58,3 +58,9 @@ def test_build_file():
     ts = [r["t"] for r in out["rows"]]
     assert ts == ["AAA", "ZZZ"] and out["rows"][0]["pick"] and out["rows"][0]["t_state"] == "dobre"      # AAAB = druga klasa akcji
     assert out["prices"] == {"AAA": 50.0, "AAAB": 49.0, "ZZZ": 10.0} and out["rules"]["top"] == 10
+
+
+def test_thesis_broken():
+    assert flip.thesis_broken({"rev_rr": -3, "rev_rr1": -1})[0] is True
+    assert flip.thesis_broken({"rev_rr": -3, "rev_rr1": 5})[0] is False      # jeden słabszy kwartał to jeszcze nie T
+    assert flip.thesis_broken({"rev_rr": 5})[0] is False and flip.thesis_broken(None)[0] is False

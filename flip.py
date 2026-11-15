@@ -67,6 +67,7 @@ def build(base, det, cfg, secd, today):
         m, cash, debt, fcf = flip.money(r)
         req, act = flip.required_growth(r.get("PFCF")), flip.actual_growth(r)
         ts, tt = flip.report_state(secd.get(t))
+        tb, tbt = flip.thesis_broken(secd.get(t))
         rows.append(dict(t=t, n=(r.get("company") or "")[:40], ind=r.get("industry"), mcap=round(m / 1e9, 1), price=r.get("price"),
                          cash=None if cash is None else round(cash / 1e9, 1), debt=None if debt is None else round(debt / 1e9, 1),
                          fcf=None if fcf is None else round(fcf / 1e9, 2), ins=r.get("insiderOwn"), opm=r.get("operMargin"),
@@ -74,7 +75,7 @@ def build(base, det, cfg, secd, today):
                          req=None if req is None else round(req, 4), act=None if act is None else round(act, 4),
                          margin=None if req is None or act is None else round(act - req, 4),
                          checks={k: [v[0], v[1]] for k, v in c.items()}, flip=all(v[0] for v in c.values()),
-                         t_state=ts, t_txt=tt, quarter=(secd.get(t) or {}).get("quarter")))
+                         t_state=ts, t_txt=tt, t_exit=tb, t_exit_txt=tbt, quarter=(secd.get(t) or {}).get("quarter")))
     flip.rank(rows)
     rows.sort(key=lambda r: (r["rank"] is None, r["rank"] or 0, -r["mcap"]))
     prices = {x["ticker"]: x.get("price") for x in base if x.get("price")}
