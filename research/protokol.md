@@ -200,3 +200,11 @@ Okres 2010-01 ... 2026-09 (kapitalizacja wiarygodna od 2010), połowy 2010-2017 
 6M > 30 %) na tym samym okresie, SPY, QQQ, losowy wybór (20 prób). Wariant "lepszy od CEM10", jeśli wyższy CAGR w obu połowach
 i dolna granica 95 % różnicy miesięcznej (bootstrap blokowy 12 mies.) > 0. Rozpoznawcze (8 wariantów, okres znany).
 Wynik etapu 19 (2026-11-15): ranking po wkładzie w indeks bije SPY i losowy wybór, ale żaden wariant nie jest lepszy od CEM10 (gorszy w 2018-2026).
+
+## Etap 20: siła względna vs RSP i SPY (zapisane 2026-11-15 PRZED uruchomieniem, rozpoznawcze)
+Ranking po RS 12 mies. (spółka / indeks) = ranking po zwrocie 12 mies. (ten sam mianownik dla wszystkich), więc testowane są filtry.
+S&P 500 PIT, zasady CEM10 (6M > 30 %, > SMA 10, ranking 6M, wyjście < SMA 10, SPY < SMA 12), N = 5 i 10, 2005-01 ... 2026-09.
+Filtry przy wejściu, osobno dla RSP i SPY: (a) zwrot 12M spółki > zwrot 12M indeksu; (b) linia RS (cena spółki / indeks) > SMA 10 mies.
+linii RS; (c) linia RS na maksimum 12 mies. Dodatkowo ranking po RS 12M vs RSP (dla potwierdzenia równoważności z rankingiem 12M).
+"Lepszy", jeśli wyższy CAGR w obu połowach (2005-2015, 2016-2026) i dolna granica 95 % różnicy vs CEM10 > 0.
+Wynik etapu 20 (2026-11-15): żaden filtr RS (vs RSP ani SPY) nie poprawia CEM10; ranking RS 12M = ranking 12M, gorszy od 6M.
