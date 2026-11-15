@@ -101,4 +101,4 @@ albo insiderzy ≥ 10 %, **I**ndustry: kluczowa branża, **P**ozycja: lider bran
 przy ruchu ±7 % od najwyższego / najniższego zakupu) i sygnały wyjścia **TVOD** (Teza – raporty słabną, Valuation – cena zakłada dużo więcej wzrostu,
 Opportunity – lepsza spółka na liście, Double – pozycja się podwoiła). Litery L i I są jakościowe: edytujesz je w `flip_config.json`. Dane: Finviz
 (spółki USA > 10 mld $) i SEC (ostatni kwartał), workflow **FLIP Monthly** (2. dnia miesiąca + ręcznie). Pozycje użytkownika są w przeglądarce
-(eksport / import JSON). Test reguły transz (520 spółek S&P 500 / Nasdaq-100, 2010–2023): lepsza od kupna od razu tylko w 22–29 % przypadków.
+(eksport / import JSON). Test budowania pozycji (520 spółek S&P 500 / Nasdaq-100, 2010–2023): strata > 20 % 2–3× rzadziej niż przy kupnie od razu i rzadziej niż przy DCA w czasie, za cenę średniego zysku niższego o ok. 7–10 %.

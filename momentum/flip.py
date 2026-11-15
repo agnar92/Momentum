@@ -9,7 +9,8 @@ FLIP = cztery litery, każda musi być zielona:
 Kolejność listy: „zapas wzrostu” = wzrost spółki (średnia: sprzedaż 5 lat i prognoza EPS 5 lat) minus wzrost, który zakłada cena
 (`required_growth`); spółki ze słabnącymi raportami (T) na koniec. Pierwsze TOP = 10 to lista do kupna.
 Budowanie pozycji: z budżetu spółki FIRST_PCT na start, reszta w TRANCHES równych transzach przy ruchu ±STEP od najwyższego / najniższego
-zakupu. Nasz test (520 spółek, 2010–2023): kupno od razu lepsze w 71–78 % przypadków; reguła chroni tylko przy spadkach.
+zakupu. Nasz test (520 spółek, 2010–2023): uśrednia wejście bez zgadywania momentu — strata > 20 % 2–3× rzadziej niż przy kupnie
+od razu (i rzadziej niż przy DCA w czasie), za cenę średniego zysku niższego o ok. 7–10 %.
 TVOD (wyjście): T – teza (raporty słabną), V – wycena (cena zakłada dużo więcej wzrostu niż spółka daje), O – lepsza okazja na liście,
 D – pozycja się podwoiła (wyjmij 30–50 % włożonych pieniędzy albo całość)."""
 

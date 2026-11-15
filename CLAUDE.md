@@ -201,7 +201,9 @@ candidates (industries + include + founders), share classes deduplicated by comp
 pozycje" (localStorage `flip_positions`, JSON export/import): `ladderPlan` (40 % first, 10 tranches, next buy ≥ highest × 1.07 or ≤ lowest × 0.93),
 `tvod` signals KUP / T / V (required − actual > 15 pp) / O (a pick with margin 10 pp higher) / D (value ≥ 2× invested, until "took" is ticked).
 Test of the tranche rule (scratchpad, Nov 2026; 520 current S&P 500 / NDX members, daily, quarterly starts 2010–2023): better than buying at once in
-29 % (1 y) / 22 % (3 y) of cases, mean 500 zł -> 557 vs 598 (1 y) and 748 vs 837 (3 y); wins only when the stock falls. Same rule on top-10 by market
+29 % (1 y) / 22 % (3 y) of cases, mean 500 zł -> 557 vs 598 (1 y) and 748 vs 837 (3 y); wins only when the stock falls. User: "to jest budowanie pozycji …
+żeby nie musieć zgadywać momentu wejścia … nie jest to maksymalny zwrot" — the page presents it as risk control: positive 75 / 87 % (all at once 73 / 85 %,
+DCA 10 monthly instalments 73 / 84 %), loss > 20 % 2.5 / 3.7 % (8.5 / 6.6 %, DCA 5.3 / 6.6 %), worst 5 % ≥ 429 / 424 zł (362 / 369, DCA 397 / 372). Same rule on top-10 by market
 cap (16.5 vs 17.0 %/yr) and on CEM10 (−2…−7 pp/yr, same drawdowns) was worse than buying at once. FLIP itself is untested.
 Workflow `flip.yml` ("FLIP Monthly", 2nd of the month 07:41 UTC + manual) commits only `docs/data/flip.json`.
 
