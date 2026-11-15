@@ -209,3 +209,11 @@ linii RS; (c) linia RS na maksimum 12 mies. Dodatkowo ranking po RS 12M vs RSP (
 "Lepszy", jeśli wyższy CAGR w obu połowach (2005-2015, 2016-2026) i dolna granica 95 % różnicy vs CEM10 > 0.
 Wynik etapu 20 (2026-11-15): żaden filtr RS (vs RSP ani SPY) nie poprawia CEM10; ranking RS 12M = ranking 12M, gorszy od 6M.
 Etap 20b (2026-11-15): RS 6M - ranking = CEM10; filtry zwrot 6M > indeks i RS > SMA 6 nic nie zmieniają; RS na max 6M: +0,05..+0,18 pp/mies. (wszystkie przedziały obejmują 0).
+
+## Etap 21: ranking łączony 1M + 6M (zapisane 2026-11-15 PRZED uruchomieniem)
+Wynik spółki = w x ranga percentylowa zwrotu 1M + (1 - w) x ranga percentylowa zwrotu 6M (rangi wśród członków indeksu
+w danym miesiącu), w = 0,5 i 1/3. Zasady CEM10: wejście > SMA 10 i 6M > 30 % (oraz wariant bez progu), wyjście < SMA 10,
+filtr SPY < SMA 12, koszt 0,1 %. S&P 500 1998-2026 (połowy 1998-2012 / 2013-2026), NDX 2008-2026 (połowy 2008-2016 / 2017-2026),
+N = 5 i 10. Porównanie z rankingiem 6M (CEM10) przy tych samych ustawieniach. "Lepszy": wyższy CAGR w obu połowach i dolna
+granica 95 % różnicy miesięcznej (bootstrap blokowy 12 mies.) > 0. Rozpoznawcze (okresy znane, 16 porównań).
+Wynik etapu 21 (2026-11-15): ranking łączony 1M + 6M gorszy od 6M we wszystkich 16 porównaniach; żaden nie spełnia kryteriów.
