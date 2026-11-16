@@ -363,3 +363,11 @@ EPS 5 lat > 15 % -> co decyzję 40 spółek z najwyższym CAGR EPS z 5 lat (wśr
 forward P/E. N = 10 (dodatkowo 20 dla porównania). Trzymanie: (R1) dopóki spółka jest w top 40 po EPS 5 lat, (R3) dopóki w top 2N rankingu forward P/E
 wśród tej czterdziestki. Reszta bez zmian.
 Wynik etapu 31 (2026-11-16): top 40 po EPS 5 lat + najniższe forward P/E: 5,9-10,9 % rocznie, wszystkie poniżej równych wag (12,8 %); 2011-2018 ok. 0 %; estymata z przychodów dodaje ok. +1 pp względem trailing P/E.
+
+## Etap 32: GARP (wzrost w rozsądnej cenie, wersja Lyncha) (zapisane 2026-11-16 PRZED uruchomieniem)
+Reguły (z literatury, bez dopasowania do wyników): (1) umiarkowany wzrost: CAGR EPS TTM z 5 lat w przedziale 10-30 % (wyklucza odbicia
+z niskiej bazy i spółki cykliczne na szczycie), (2) stabilność: EPS TTM > 0 w każdym z 6 punktów rocznych i wzrost r/r w co najmniej 4 z 5 lat,
+(3) wzrost trwa: ważona średnia kwartalnych zmian przychodów r/r (etap 30) > 5 %, (4) cena: PEG = P/E / (100 g) <= 1, gdzie g = mniejsza z
+(CAGR EPS 5 lat, ważony wzrost przychodów) - konserwatywnie. Ranking rosnąco po PEG, N = 10 i 20, decyzje co miesiąc i co kwartał,
+trzymanie dopóki spełnia warunki (R1). Warianty: G1 pełny GARP; G2 bez warunku stabilności; G3 pełny GARP + zamknięcie miesiąca nad SMA 10
+(trend, jak w CEM10). Uniwersum, okres 2011-2026, koszty, odniesienia i kryterium "lepszy" jak etap 29c. Rozpoznawcze (12 wariantów).
