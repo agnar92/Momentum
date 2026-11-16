@@ -263,3 +263,13 @@ Wynik etapu 24 (2026-11-16): limit 10 % obniża CAGR CEM10 (S&P N=10 18,1 vs 19,
 Jak etap 24, ale wyrównanie wszystkich pozycji do kapitał / N raz w roku (koniec grudnia); dla porównania co kwartał
 (marzec, czerwiec, wrzesień, grudzień) i co miesiąc. Pozostałe zasady, okresy, N i kryterium bez zmian. Rozpoznawcze.
 Wynik etapu 24b (2026-11-16): rebalancing (rocznie, kwartalnie, miesięcznie) nie poprawia CEM10; żaden wariant nie spełnia kryteriów (szczegóły w wyniki/r41_rebal_rok.md).
+
+## Etap 25: arkusz użytkownika - PEG i wartość wewnętrzna Lyncha (zapisane 2026-11-16 PRZED uruchomieniem)
+Arkusz: P/E = cena / EPS (TTM); g = oczekiwany wzrost EPS w % (użytkownik: średni wzrost rok do roku z poprzednich lat);
+PEG = P/E / g; wartość wewnętrzna = g x EPS (P/E "uczciwe" = tempo wzrostu, Peter Lynch); potencjał = wartość / cena - 1.
+Uwaga: potencjał = 1 / PEG - 1, więc oba wskaźniki dają ten sam ranking; "wartość > cena" = PEG < 1.
+Odtworzenie historyczne: EPS TTM z SEC (jak etap 23, baza ceny skorygowanej), g = średnia arytmetyczna K ostatnich zmian r/r
+EPS TTM (co 12 mies.), K = 3 i 5; wszystkie EPS w łańcuchu > 0, g > 0, bez górnego limitu g i P/E (jak w arkuszu).
+Warianty: A_K top 20 najniższy PEG, decyzje kwartalne, trzymaj dopóki w top 40 (jak etap 23); B_K wszystkie spółki z PEG < 1
+(wartość > cena), równe wagi, przebudowa co kwartał; C CEM10 (N = 10) tylko spółki z PEG_3 < 1 przy wejściu.
+Uniwersum, okres, koszty, odniesienia i kryterium "lepszy" jak etap 23 (równe wagi uniwersum, SPY, CEM10 na tym uniwersum).
