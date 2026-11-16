@@ -42,21 +42,25 @@ if (typeof document !== "undefined") {
     const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c]));
     const load = () => { try { return { ...DEFAULT_OPT, ...JSON.parse(localStorage.getItem(OPT_KEY) || "{}"), q: "" }; } catch { return { ...DEFAULT_OPT }; } };
     const save = (o) => { try { localStorage.setItem(OPT_KEY, JSON.stringify({ ...o, q: "" })); } catch { /* brak pamięci przeglądarki */ } };
-    const COLS = [["rank", "#", "n"], ["t", "Ticker", ""], ["n", "Spółka", ""], ["c", "Cena", "n"], ["eps", "EPS (TTM)", "n"], ["pe", "P/E", "n"],
-        ["g", "Wzrost EPS (nast. rok)", "n"], ["peg", "PEG", "n"], ["fpeg", "Forward PEG", "n"], ["iv", "Wartość (fair value)", "n"],
-        ["pot", "Potencjał", "n"], ["na", "Analityków", "n"]];
+    const COLS = [["rank", "#", "n"], ["t", "Ticker", ""], ["pot", "Potencjał", "n"], ["c", "Cena", "n"], ["iv", "Wartość", "n"], ["peg", "PEG", "n"],
+        ["g", "Wzrost EPS", "n"], ["pe", "P/E", "n"], ["eps", "EPS", "n"], ["fpeg", "Fwd PEG", "n"], ["na", "Analit.", "n"], ["n", "Spółka", ""]];
+    const TIPS = { pot: "wartość / cena − 1", iv: "fair value = EPS × wzrost w %", g: "prognoza wzrostu EPS na następny rok (analitycy)", eps: "EPS z ostatnich 12 miesięcy",
+        fpeg: "cena / (EPS × (1 + wzrost)) / wzrost w %", na: "liczba analityków prognozujących następny rok" };
+    // ostrzeżenie: bardzo wysoki prognozowany wzrost albo P/E zwykle oznacza odbicie po jednorazowo zaniżonym zysku
+    const warn = (r) => (r.g != null && r.g > 1) || (r.pe != null && r.pe > 60);
     let D = null, o = load();
 
     function draw() {
         const f = filterRows(D.rows, o), rk = rankMap(f);
         const rows = o.sort === "rank" ? sortRows(f, "pot", -1) : sortRows(f, o.sort, o.dir);
         $("count").textContent = `${f.length} spółek spełnia warunki (z ${D.rows.length} w S&P 500 i Nasdaq‑100)`;
-        $("head").innerHTML = COLS.map(([k, l, c]) => `<th class="${c}"><button type="button" class="sort" data-k="${k}">${l}${o.sort === k ? (o.dir < 0 ? " ↓" : " ↑") : ""}</button></th>`).join("");
+        $("head").innerHTML = COLS.map(([k, l, c]) => `<th class="${c}"${TIPS[k] ? ` title="${TIPS[k]}"` : ""}><button type="button" class="sort" data-k="${k}">${l}${o.sort === k ? (o.dir < 0 ? " ↓" : " ↑") : ""}</button></th>`).join("");
         $("body").innerHTML = rows.map((r) => {
             const i = rk[r.t];
-            return `<tr class="${i <= o.top ? "buy" : ""}"><td class="n rank">${i}</td><td class="t">${esc(r.t)}</td><td class="nm">${esc(r.n)}</td>`
-                + `<td class="n">${num(r.c)}</td><td class="n">${num(r.eps)}</td><td class="n">${num(r.pe, 1)}</td><td class="n ${cls(r.g)}">${pct(r.g)}</td>`
-                + `<td class="n">${num(r.peg)}</td><td class="n">${num(r.fpeg)}</td><td class="n">${num(r.iv)}</td><td class="n ${cls(r.pot)}">${pct(r.pot)}</td><td class="n">${r.na ?? "–"}</td></tr>`;
+            const w = warn(r) ? ` <span class="warn" title="Bardzo wysoki wzrost lub P/E: zwykle odbicie po jednorazowo zaniżonym zysku — wartość może być zawyżona">⚠</span>` : "";
+            return `<tr class="${i <= o.top ? "buy" : ""}"><td class="n rank">${i}</td><td class="t">${esc(r.t)}${w}</td><td class="n ${cls(r.pot)}"><b>${pct(r.pot)}</b></td>`
+                + `<td class="n">${num(r.c)}</td><td class="n">${num(r.iv)}</td><td class="n">${num(r.peg)}</td><td class="n ${cls(r.g)}">${pct(r.g)}</td>`
+                + `<td class="n">${num(r.pe, 1)}</td><td class="n">${num(r.eps)}</td><td class="n">${num(r.fpeg)}</td><td class="n">${r.na ?? "–"}</td><td class="nm">${esc(r.n)}</td></tr>`;
         }).join("") || `<tr><td colspan="${COLS.length}" class="empty">Brak spółek przy tych ustawieniach.</td></tr>`;
         document.querySelectorAll("button.sort").forEach((b) => b.addEventListener("click", () => {
             const k = b.dataset.k;
