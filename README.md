@@ -79,3 +79,26 @@ npm ci && npm test && npm run lint       # testy i lint JS
 ## Growth Score — TOP 10 fundamentalny
 
 Osobny ranking spółek z bieżącego skanera Finviz, niezależny od GLB i wykresu ceny. Wagi: przyspieszenie wzrostu 30 pkt (przychody, przyspieszenie sprzedaży, wzrost EPS), zaskoczenia wynikowe 20 (EPS Surprise i Revenue Surprise), przyszły wzrost 20 (prognoza EPS +1y i rewizje EPS 90 dni), jakość biznesu 20 (marża operacyjna, jej zmiana, ROI/ROIC jeśli dostępne), trwałość wzrostu 10 (spójność wielokwartałowa i jawne katalizatory). Brakujące dane są pomijane, score jest normalizowany do dostępnych wag i wymaga pokrycia co najmniej 70/100. Katalizatory nie są zgadywane; Revenue Surprise i ROI/ROIC mogą być niedostępne w źródle.
+
+## Ranking jakości — spółki na lata (`quality.py`, `docs/quality.html`)
+
+Osobna strona (przycisk „🏛 Ranking jakości”) do wyboru spółek długoterminowych **raz w roku, tylko po fundamentach**. Sito Finviz
+(`finviz_screen.json` `quality_filters`: mid cap+, ROIC > 15 %, marża operacyjna > 10 %, Debt/Eq < 1, current ratio > 1, sprzedaż i EPS 5 lat > 5 %,
+P/FCF < 20), potem **10 lat raportów rocznych z SEC** (minimum 5 lat): lata z ROIC ≥ 15 % (liczone na 10, więc młodsza spółka ma mniej punktów),
+mediana ROIC i średnia z 3 ostatnich lat, mediana i rozrzut marży brutto, marża FCF, FCF / zysk netto, wzrost przychodów, zmiana liczby akcji
+(z korektą splitów). Wynik = średnia ważona percentyli w obrębie sita: trwałość i jakość 45, wycena 30 (FCF yield, 1 / Forward P/E, 1 / P/E),
+wzrost 15, kapitał i bilans 10. Pomijane: sektory Financial i Real Estate oraz spółki bez historii w SEC. Top 10 z limitem 3 spółek na sektor.
+Kliknięcie spółki otwiera kartę z wykresami 10 lat, 4 pytaniami Buffetta i polem na tezę (zapis w przeglądarce, eksport / import pliku JSON).
+Pod każdym pytaniem są podpowiedzi: pytanie 4 (cena) liczy się samo (FCF yield + ostrożny wzrost ≥ 9 % rocznie, kolumna „Oczek. zwrot”),
+pytanie 3 ma część liczbową (ROIC się trzyma, brak rozwodnienia), a opis biznesu, fosę i ocenę zarządu podpowiada **Gemini** dla 30 pierwszych spółek —
+wystarczy darmowy klucz z [Google AI Studio](https://aistudio.google.com/apikey) zapisany jako sekret repozytorium `GEMINI_API_KEY` (bez klucza ranking działa bez AI).
+Odświeżanie: workflow **Quality Yearly** (2 stycznia albo ręcznie). **Backtest 2015–2026** (dane SEC frames, sito odtworzone bez Finviz, wybór co marzec, 10 spółek): top 10 ≈ 7,5 %/rok vs sito po równo ≈ 11 % i SPY ≈ 12,9 % — bez przewagi nad losowym wyborem; to lista do ręcznej analizy, nie sygnał.
+
+## FLIP + TVOD (`flip.py`, `docs/flip.html`)
+
+Strona „🧭 FLIP” — metoda z filmów Paula: wybór spółek po 4 literach (**F**inanse: dodatni FCF i dług pod kontrolą, **L**iderzy: założyciel
+albo insiderzy ≥ 10 %, **I**ndustry: kluczowa branża, **P**ozycja: lider branży i zyski), budowanie pozycji (40 % budżetu na start, reszta w 10 transzach
+przy ruchu ±7 % od najwyższego / najniższego zakupu) i sygnały wyjścia **TVOD** (Teza – raporty słabną, Valuation – cena zakłada dużo więcej wzrostu,
+Opportunity – lepsza spółka na liście, Double – pozycja się podwoiła). Litery L i I są jakościowe: edytujesz je w `flip_config.json`. Dane: Finviz
+(spółki USA > 10 mld $) i SEC (ostatni kwartał), workflow **FLIP Monthly** (2. dnia miesiąca + ręcznie). Pozycje użytkownika są w przeglądarce
+(eksport / import JSON). Test budowania pozycji (520 spółek S&P 500 / Nasdaq-100, 2010–2023): strata > 20 % 2–3× rzadziej niż przy kupnie od razu i rzadziej niż przy DCA w czasie, za cenę średniego zysku niższego o ok. 7–10 %.

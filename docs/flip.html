@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<link rel="icon" href="icons/favicon-32.png" type="image/png">
+<title>FLIP i TVOD</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* uklad: lista FLIP -> kandydaci -> moje pozycje (transze + TVOD) -> jak to robic; style jak cem10.html */
+:root{
+  --bg:#f4f6f8;--surface:#ffffff;--fg:#17202b;--mut:#5b6675;--line:#d9dfe6;--accent:#0f5f74;--accent-soft:#e2eff2;
+  --good:#17784a;--good-soft:#e3f3ea;--bad:#b23a2e;--bad-soft:#f8e6e3;--warn:#8a5c00;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f141a;--surface:#161d25;--fg:#e3e8ee;--mut:#97a3b2;--line:#28323e;--accent:#5fb4c9;--accent-soft:#16313a;--good:#5ccf93;--good-soft:#15301f;--bad:#ff8b7e;--bad-soft:#3a1d1a;--warn:#e2b24f;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#0f141a;--surface:#161d25;--fg:#e3e8ee;--mut:#97a3b2;--line:#28323e;--accent:#5fb4c9;--accent-soft:#16313a;--good:#5ccf93;--good-soft:#15301f;--bad:#ff8b7e;--bad-soft:#3a1d1a;--warn:#e2b24f;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 var(--sans);padding-top:calc(28px + env(safe-area-inset-top,0px));padding-bottom:calc(56px + env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+main{max-width:1180px;margin:0 auto;display:grid;gap:30px}
+h1{font:600 28px/1.2 var(--sans);margin:0;text-wrap:balance}
+h2{font:600 20px/1.3 var(--sans);margin:0;text-wrap:balance}
+h3{font:600 12px/1.3 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin:0}
+p{margin:0;max-width:72ch}.mut{color:var(--mut)}
+.top{display:grid;gap:8px}
+.market{display:grid;gap:14px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px 18px 20px}
+.mhead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 11px;font:500 13px/1.4 var(--sans);background:var(--accent-soft);color:var(--fg)}
+.chip b{font-weight:600}.chip.ok{background:var(--good-soft)}.chip.no{background:var(--bad-soft)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}.ok .dot{background:var(--good)}.no .dot{background:var(--bad)}
+.scroll{overflow-x:auto;border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:14px}
+th,td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+th{font:600 12px/1.3 var(--sans);color:var(--mut);background:var(--bg);position:sticky;top:0}
+tbody tr:last-child td{border-bottom:0}
+td.n,th.n{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+td.t{font-family:var(--mono);font-weight:500}
+td.nm{white-space:normal;min-width:150px;color:var(--mut)}
+tr.buy td{background:var(--good-soft)}
+.pos{color:var(--good)}.neg{color:var(--bad)}
+.st{font:600 12px/1 var(--sans);padding:3px 8px;border-radius:4px;display:inline-block}
+.st.h{background:var(--good-soft);color:var(--good)}.st.s{background:var(--bad-soft);color:var(--bad)}
+.rank{font-family:var(--mono);color:var(--mut)}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-weight:600;color:var(--accent)}
+summary:focus-visible,input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0}
+input[type=search],input[type=text]{font:15px var(--mono);padding:7px 10px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);min-width:0;width:min(100%,420px)}
+.check{display:grid;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.rules{display:grid;gap:6px;font-size:14px;color:var(--mut)}
+.rules li{max-width:80ch}
+ul{margin:0;padding-left:20px}
+button,.btn{font:600 14px/1 var(--sans);padding:9px 14px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:var(--surface);cursor:pointer}
+button.sec,.btn.sec{background:transparent;color:var(--accent)}
+.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}.back{text-decoration:none;letter-spacing:0;text-transform:none}
+.err{background:var(--bad-soft);color:var(--bad);padding:12px 14px;border-radius:8px}
+code{font-family:var(--mono);font-size:.92em}
+.empty{padding:12px;color:var(--mut)}
+tbody tr[data-t]{cursor:pointer}tbody tr[data-t]:hover td{background:var(--accent-soft)}
+th[data-k]{cursor:pointer;user-select:none}th[aria-sort=ascending]::after{content:" ▲"}th[aria-sort=descending]::after{content:" ▼"}
+.nd{font:500 11px/1 var(--sans);color:var(--accent);background:var(--accent-soft);border-radius:4px;padding:2px 5px}
+dialog{width:min(980px,calc(100vw - 24px));max-height:calc(100dvh - 24px);overscroll-behavior:contain;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--fg);padding:20px}
+dialog::backdrop{background:rgba(10,15,20,.55)}
+.dhead{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;position:sticky;top:-20px;z-index:2;margin:-20px -20px 0;padding:14px 20px 10px;background:var(--surface);border-bottom:1px solid var(--line)}
+.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin:14px 0}
+figure{margin:0;display:grid;gap:4px}figcaption{display:grid;font-size:13px}
+.bars{width:100%;height:auto}.bars .bar{fill:var(--accent)}.bars .good{fill:var(--good)}.bars .weak{fill:var(--bad)}
+.bars .axis{stroke:var(--line)}.bars .thr{stroke:var(--warn);stroke-dasharray:4 3}.bars .lbl{font:10px var(--mono);fill:var(--mut)}
+dl{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px;margin:0}dt{font-size:12px;color:var(--mut)}dd{margin:0;font:500 15px var(--mono)}
+.qs{display:grid;gap:12px;font-size:14px}.qrow{display:grid;gap:4px}
+.hint{font-size:13px;color:var(--mut);margin-left:26px;max-width:none}.hint b{font-weight:600}.hint.ok b{color:var(--good)}.hint.no b{color:var(--bad)}
+.ai{display:grid;gap:6px;font-size:13px;margin-top:12px;padding:12px;border-radius:8px;background:var(--accent-soft)}.ai p{max-width:none}.ai button{justify-self:start}.qs label{display:flex;gap:8px;align-items:flex-start}.qs input{margin-top:4px}
+textarea{width:100%;box-sizing:border-box;min-height:84px;font:14px/1.5 var(--sans);padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--fg)}
+body.modal{overflow:hidden}
+@media (max-width:600px){
+  dialog{inset:0;width:auto;max-width:none;height:auto;max-height:none;margin:0;border:0;border-radius:0;padding:14px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+  .dhead{top:-14px;margin:-14px -14px 0;padding:calc(10px + env(safe-area-inset-top,0px)) 14px 8px}.dhead h2{font-size:17px}
+}
+@media (min-width:701px){.tall420{max-height:420px}.tall640{max-height:640px}}
+.lts{white-space:nowrap}.lt{font-size:15px;margin-right:2px}.lt.ok{color:var(--good)}.lt.no{color:var(--bad)}
+.detail{background:var(--accent-soft);border-radius:8px;padding:12px 14px;font-size:14px}.detail ul{margin:6px 0}
+.pos{border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px;background:var(--bg)}
+.phead{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}.phead .del{margin-left:auto;padding:6px 10px;font-size:13px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px 14px}.pgrid dt{font-size:12px;color:var(--mut)}.pgrid dd{margin:0;font:500 14px var(--mono)}
+.sigs{list-style:none;padding:0;margin:0;display:grid;gap:6px;font-size:14px}.sig{padding:6px 10px;border-radius:6px}
+.sig.k{background:var(--good-soft)}.sig.i{background:var(--accent-soft)}.sig.w{background:var(--bad-soft)}.sig.ok{background:var(--surface);color:var(--mut)}
+.buys{margin:6px 0;padding-left:18px;font:13px var(--mono)}.x{padding:2px 6px;font-size:11px;background:transparent;color:var(--bad);border-color:var(--line)}
+.addbuy,#addPos{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+.addbuy input,#addPos input{font:14px var(--mono);padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg);width:120px}
+ol.steps{display:grid;gap:8px;padding-left:22px;margin:0}ol.steps li{max-width:80ch}
+.tbl td,.tbl th{white-space:normal}
+</style>
+</head>
+<body>
+<main>
+<p id="err" class="err" hidden></p>
+<div class="top">
+  <h3><a href="index.html" class="back">← Momentum</a> · FLIP + TVOD · dane z <span id="asof"></span></h3>
+  <h1>FLIP: wybór spółek, budowanie pozycji, TVOD: wyjście</h1>
+  <p class="mut">Metoda z filmów Paula (wybór: <b>F</b>inanse, <b>L</b>iderzy, <b>I</b>ndustry – branża, <b>P</b>ozycja i zyski; wyjście: <b>T</b>eza, <b>V</b>aluation – wycena, <b>O</b>kazja, <b>D</b>ouble – podwojenie). Litery liczone automatycznie z Finviz i SEC; L i I to ocena jakościowa z pliku <code>flip_config.json</code>. Wybór FLIP nie był testowany historycznie. Budowanie pozycji ±7 % sprawdziliśmy: działa jak zabezpieczenie — duże straty zdarzały się 2–3 razy rzadziej niż przy kupnie od razu, za cenę niższego średniego zysku (szczegóły na dole). To nie jest rekomendacja inwestycyjna.</p>
+</div>
+
+<section class="market">
+  <div class="mhead"><h2>Lista do kupna</h2></div>
+  <p class="mut" id="pickNote"></p>
+  <p class="mut">Kolejność: najpierw spółki z dobrym ostatnim raportem, potem największy <b>zapas</b> = o ile spółka rośnie szybciej, niż zakłada jej cena. Kliknij wiersz, żeby zobaczyć uzasadnienie każdej litery. ● zielona litera, ○ czerwona.</p>
+  <div class="scroll"><table><thead><tr><th>#</th><th>Ticker</th><th>Spółka</th><th>F L I P</th><th>Raport (T)</th><th class="n">Cena zakłada</th><th class="n">Spółka rośnie</th><th class="n">Wycena</th><th class="n">P/FCF</th><th class="n">Kap. mld $</th></tr></thead><tbody id="pickBody"></tbody></table></div>
+  <div class="detail" id="pickDetail" hidden></div>
+</section>
+
+<section class="check">
+  <h2>Moje pozycje: transze i TVOD</h2>
+  <p class="mut">Dodaj spółkę i budżet na nią (w filmie 500 zł na spółkę, 2 spółki na każde 1000 zł). Pierwszy zakup: 40 % budżetu (200 z 500 zł), reszta w 10 transzach po 30 zł — kupujesz następną, gdy kurs wzrośnie o 7 % ponad najwyższy Twój zakup albo spadnie 7 % pod najniższy. Strona pokazuje, kiedy dokupić, i sygnały TVOD. Kurs to cena z ostatniego odświeżenia listy (spółki USA > 10 mld $). Pozycje zapisują się w tej przeglądarce; zapisz je też do pliku.</p>
+  <form id="addPos"><input id="newT" list="tickers" placeholder="ticker, np. NVDA" aria-label="Ticker" autocomplete="off" spellcheck="false"><datalist id="tickers"></datalist>
+    <input id="newB" type="number" min="1" step="1" value="500" aria-label="Budżet na spółkę w zł"><span class="mut">zł budżetu</span><button type="submit">Dodaj spółkę</button></form>
+  <div id="posList" style="display:grid;gap:12px"></div>
+  <div class="tools"><button type="button" id="expBtn">Zapisz pozycje do pliku</button><label for="impFile" class="btn sec">Wczytaj z pliku</label><input type="file" id="impFile" accept=".json,application/json" hidden><span id="posMsg" class="mut" role="status"></span></div>
+</section>
+
+<section class="check">
+  <h2>Wszyscy sprawdzeni kandydaci</h2>
+  <div class="tools"><label for="q" class="mut">Szukaj</label><input type="search" id="q" placeholder="ticker, nazwa lub branża"><label class="mut"><input type="checkbox" id="onlyFlip"> tylko 4 zielone litery</label></div>
+  <div class="scroll tall640"><table><thead><tr><th>#</th><th>Ticker</th><th>Spółka</th><th>F L I P</th><th>Raport (T)</th><th class="n">Cena zakłada</th><th class="n">Spółka rośnie</th><th class="n">Wycena</th><th class="n">P/FCF</th><th class="n">Kap. mld $</th></tr></thead><tbody id="allBody"></tbody></table></div>
+  <div class="detail" id="allDetail" hidden></div>
+</section>
+
+<section class="check">
+  <h2>Jak to robić co miesiąc (10 minut)</h2>
+  <ol class="steps">
+    <li><b>Otwórz tę stronę po 2. dniu miesiąca</b> (lista odświeża się sama). Zielone wiersze to kandydaci: wszystkie 4 litery FLIP na zielono i ostatni raport nie słabnie.</li>
+    <li><b>Kliknij spółkę i przeczytaj uzasadnienie.</b> Sprawdź sam literę L (czy założyciel dalej rządzi — wpisz w Google „TICKER founder CEO”) i I (test wtorku: czy świat zauważy, gdy spółka zniknie?). Jeśli coś się zmieniło, popraw <code>flip_config.json</code>.</li>
+    <li><b>Patrz na wycenę.</b> „Cena zakłada” to wzrost wolnej gotówki rocznie przez 10 lat potrzebny, żebyś zarabiał 10 % rocznie. „Spółka rośnie” to średnia ze sprzedaży 5 lat i prognozy analityków. Zapas = rośnie szybciej, niż zakłada cena. „Drogo” = cena zakłada więcej, niż spółka daje — nawet dobre raporty mogą wtedy nie wystarczyć.</li>
+    <li><b>Kupuj.</b> 2 spółki na każde 1000 zł, równe budżety. Metoda z filmu: dodaj spółkę w „Moje pozycje”, kup 40 % budżetu, a strona powie, kiedy dokupić kolejną transzę — nie musisz zgadywać momentu wejścia. Kupno całości od razu daje średnio więcej, ale z większym ryzykiem dużej straty. Transze tylko u brokera bez prowizji i z akcjami ułamkowymi; trzymaj subkonto w USD, żeby nie płacić za przewalutowanie przy każdej transzy.</li>
+    <li><b>Co miesiąc sprawdź sygnały TVOD przy pozycjach.</b> Żaden nie jest automatycznym „sprzedaj” — to powód, żeby się zastanowić:
+      <ul><li><b>T – teza:</b> przychody spadają r/r <b>dwa kwartały z rzędu</b> — wtedy sprzedaj. Słabszy pojedynczy kwartał albo wypadnięcie z FLIP to tylko ostrzeżenie (!), nie sprzedaż: w teście sprzedawanie po każdym słabszym raporcie obniżało wynik ponad dwukrotnie. Spadek ceny sam w sobie nie jest powodem do sprzedaży.</li>
+      <li><b>V – wycena:</b> cena zakłada o ponad 15 pp szybszy wzrost, niż spółka daje.</li>
+      <li><b>O – okazja:</b> na liście jest spółka z wyraźnie większym zapasem (o 10 pp) — możesz przenieść pieniądze.</li>
+      <li><b>D – podwojenie:</b> pozycja jest warta 2× tyle, ile włożyłeś — wyjmij 30–50 % włożonych pieniędzy albo całość i zaznacz „wyjęte”.</li></ul></li>
+  </ol>
+</section>
+
+<section class="rules">
+  <h3>Skąd te reguły i co pokazał nasz test</h3>
+  <ul>
+    <li><b>F:</b> wolna gotówka (FCF) dodatnia i gotówka ≥ dług albo dług netto ≤ 3 lata FCF. <b>L:</b> założyciel prowadzi albo kontroluje firmę (lista w <code>flip_config.json</code>) albo insiderzy mają ≥ 10 % akcji. <b>I:</b> branża z listy kluczowych (półprzewodniki, oprogramowanie infrastrukturalne, sprzęt, sieci, internet, obronność, energia) albo wyjątek z uzasadnieniem. <b>P:</b> największa spółka w tej samej branży Finviz nie jest 10× większa (albo lider niszy z uzasadnieniem) i spółka zarabia (marża operacyjna albo FCF dodatnie).</li>
+    <li><b>Wycena:</b> P/FCF przeliczone na wymagany wzrost: P/FCF 15 → ok. 7 % rocznie, 25 → 12 %, 50 → 21 %, 100 → 29 %, 300 → 45 %.</li>
+    <li><b>Budowanie pozycji ±7 % — test</b> (520 spółek S&amp;P 500 i Nasdaq‑100, dzienne kursy, starty co kwartał 2010–2023, 26 tys. przypadków, 500 zł na spółkę). Po roku: na plusie 75 % przypadków (kupno od razu 73 %, DCA 10 rat co miesiąc 73 %), strata &gt; 20 % w 2,5 % przypadków (od razu 8,5 %, DCA 5,3 %), najgorsze 5 % wyników ≥ 429 zł (od razu 362 zł, DCA 397 zł); średnio 557 zł (od razu 598 zł, DCA 552 zł). Po 3 latach: na plusie 87 % (85 % / 84 %), strata &gt; 20 % w 3,7 % (6,6 % / 6,6 %), średnio 748 zł (837 zł / 777 zł). Wniosek: metoda spełnia swój cel — uśrednia wejście bez zgadywania momentu i wyraźnie zmniejsza ryzyko dużej straty, lepiej niż zwykłe DCA; ceną jest średni zysk niższy o ok. 7–10 % niż przy kupnie od razu (część pieniędzy czeka w gotówce, gdy spółka rośnie). Dzisiejszy skład indeksów zawyża wszystkie wyniki tak samo.</li>
+    <li><b>Liderzy + transze + TVOD — test</b> (2011–2026, 10 miejsc, lider = największa lub druga spółka w swojej branży SEC wśród kluczowych, zyskowna, z dodatnim FCF i przychodami ≥ +10 % r/r; wybór po sezonie wyników; dzienne kursy; dzisiejszy skład S&amp;P 500 i Nasdaq‑100 zawyża wyniki, porównanie wariantów jest uczciwe): transze ±7 % + T „przychody spadają dwa kwartały z rzędu” = <b>16,7 % rocznie</b> (kupno od razu 19,5 %), maks. spadek −34 %; bez T 15,8 %; T „przychody &lt; +10 % albo marża −2 pp” tylko 7,1 % (132 sprzedaże, średnio zainwestowane 42 % pieniędzy). D (wyjęcie wkładu po podwojeniu) obniżało wynik do 14,1 %, bo wyjęte pieniądze leżały w gotówce — ma sens tylko, gdy od razu idą w kolejnego lidera. SPY 13,8 %, QQQ 18,4 %. Litera L (założyciel) nie dała się sprawdzić historycznie.</li>
+    <li><b>FLIP</b> to ocena zdroworozsądkowa i nikt jej nie przetestował; przykłady z filmu (Google, Amazon, Tesla) wybrano po fakcie. Litera L wycina wielu świetnych liderów bez założyciela (Microsoft, Apple, Broadcom, TSMC). Dla porównania: przetestowana strategia CEM10 dawała ok. 15–21 % rocznie.</li>
+    <li><b>Dane:</b> Finviz (spółki USA &gt; 10 mld $, ceny, P/FCF, P/C, P/B, Debt/Eq, insiderzy, marża, wzrost) i SEC (ostatni kwartał). Odświeżanie: workflow „FLIP Monthly” (2. dnia miesiąca, 07:41 UTC, albo ręcznie w GitHub Actions).</li>
+  </ul>
+</section>
+</main>
+<script src="js/flip.js"></script>
+</body>
+</html>
