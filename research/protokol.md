@@ -387,3 +387,4 @@ ostatni kwartał przychodów r/r < 0 (wariant S); (b) cena docelowa = mediana P/
 niższa niż 3 miesiące wcześniej. Warianty: P i S, każdy z regułą (b) i bez niej, z przycinaniem i bez (8 wariantów). Koszt 0,1 %/stronę.
 Uniwersum: członkowie S&P 500 z danymi SEC, 2011-2026 (połowy 2011-2018 / 2019-2026) i od 2015-03. Odniesienia: równe wagi, SPY, CEM10 (etap 27).
 "Lepszy": wyższy CAGR w obu połowach i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze.
+Wynik etapu 33 (2026-11-16): 6,7-11,4 % rocznie (od 2015: 6,4-12,8 % vs równe wagi 11,4 %, CEM10 25,9 %); najlepsze: sprzedaż tylko przy spadku r/r, bez ceny docelowej i bez przycinania (11,4 %); wariant 'pogorszenie' istotnie gorszy od równych wag.
