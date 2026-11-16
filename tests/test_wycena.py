@@ -50,3 +50,9 @@ def test_dcf_value_two_stage():
     assert wycena.dcf_value(1, 1, 0, 0, 0.1, r=0.02, tg=0.025) is None
     r = wycena.value_row("X", "X", 100, 5, 0.3, analysts=5, fcf=100e6, shares=10e6, cash=50e6, debt=20e6)
     assert r["dcf"] == round(v, 2) and r["fcf"] == 100.0 and r["sh"] == 10.0 and r["cash"] == 50.0 and r["debt"] == 20.0
+
+
+def test_dcf_inputs_currency_mismatch():
+    assert wycena.dcf_inputs(dict(fcf=1, shares=2, cash=3, debt=4, fin_cur="CNY", cur="USD")) == (None, None, None, None)
+    assert wycena.dcf_inputs(dict(fcf=1, shares=2, cash=3, debt=4, fin_cur="USD", cur="USD")) == (1, 2, 3, 4)
+    assert wycena.dcf_inputs(dict(fcf=1, shares=2, cash=3, debt=4)) == (1, 2, 3, 4)

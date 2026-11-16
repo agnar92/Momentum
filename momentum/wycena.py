@@ -45,6 +45,14 @@ def value_row(ticker, name, price, eps, g, g0=None, analysts=None, fwd_eps=None,
                 peg=_rnd(peg, 3), fpeg=_rnd(fpeg, 3), iv=_rnd(iv, 2), pot=_rnd(pot), na=analysts, fpe=_rnd(price / fwd_eps if price and fwd_eps and fwd_eps > 0 else None, 2), **flags)
 
 
+def dcf_inputs(d):
+    """(fcf, shares, cash, debt) do DCF; raport w innej walucie niż notowanie (np. ADR z Chin: CNY vs USD) = brak DCF."""
+    fc, cur = d.get("fin_cur"), d.get("cur")
+    if fc and cur and fc != cur:
+        return None, None, None, None
+    return d.get("fcf"), d.get("shares"), d.get("cash"), d.get("debt")
+
+
 DCF = dict(r=0.09, tg=0.025, years=5, fade=5, gmax=0.25)
 
 

@@ -46,7 +46,8 @@ def fetch(ticker, yf=None, tries=3):
                 na = int(ee.loc["+1y", "numberOfAnalysts"]) if ee.loc["+1y", "numberOfAnalysts"] == ee.loc["+1y", "numberOfAnalysts"] else None
             return dict(price=info.get("currentPrice") or info.get("regularMarketPrice"), eps=info.get("trailingEps"),
                         fwd_eps=info.get("forwardEps"), g=g, g0=g0, na=na, fcf=info.get("freeCashflow"),
-                        shares=info.get("sharesOutstanding"), cash=info.get("totalCash"), debt=info.get("totalDebt"))
+                        shares=info.get("sharesOutstanding"), cash=info.get("totalCash"), debt=info.get("totalDebt"),
+                        fin_cur=info.get("financialCurrency"), cur=info.get("currency"))
         except Exception as e:      # noqa: BLE001 — sieć / limit Yahoo: ponów
             if k == tries - 1:
                 print(f"{ticker}: błąd yfinance ({e})", flush=True)
@@ -60,7 +61,7 @@ def build(mem, data, today):
         d = data.get(t)
         if d and d.get("price"):
             rows.append(wycena.value_row(t, m["n"], d["price"], d["eps"], d["g"], d["g0"], d["na"], d["fwd_eps"],
-                                           d.get("fcf"), d.get("shares"), d.get("cash"), d.get("debt"), sp=m["sp"], nq=m["nq"]))
+                                           *wycena.dcf_inputs(d), sp=m["sp"], nq=m["nq"]))
     return dict(generated_at=today.isoformat(), dcf=wycena.DCF, peg_max=wycena.PEG_MAX, min_analysts=wycena.MIN_ANALYSTS, rows=rows,
                 missing=sorted(set(mem) - {r["t"] for r in rows}))
 

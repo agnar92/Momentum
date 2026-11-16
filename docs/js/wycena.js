@@ -82,6 +82,8 @@ if (typeof document !== "undefined") {
     const LOW_FIRST = new Set(["t", "n", "peg", "fpeg", "pe", "rank"]);
     // ostrzeżenie: bardzo wysoki prognozowany wzrost albo P/E zwykle oznacza odbicie po jednorazowo zaniżonym zysku
     const warn = (r) => (r.g != null && r.g > 1) || (r.pe != null && r.pe > 60);
+    // DCF: FCF powyżej 15 % kapitalizacji to zwykle jednorazowe wpływy albo przepływy działalności finansowej (sprawdź raport)
+    const warnDcf = (r) => r.fy != null && r.fy > 0.15;
     let D = null, o = load();
 
     function cells(r, mode) {
@@ -103,7 +105,8 @@ if (typeof document !== "undefined") {
         $("head").innerHTML = cols.map(([k, l, c]) => `<th class="${c}"${TIPS[k] ? ` title="${TIPS[k]}"` : ""}><button type="button" class="sort" data-k="${k}">${l}${o.sort === k ? (o.dir < 0 ? " ↓" : " ↑") : ""}</button></th>`).join("");
         $("body").innerHTML = rows.map((r) => {
             const i = rk[r.t];
-            const w = !dcf && warn(r) ? ` <span class="warn" title="Bardzo wysoki wzrost lub P/E: zwykle odbicie po jednorazowo zaniżonym zysku — wartość może być zawyżona">⚠</span>` : "";
+            const w = (!dcf && warn(r)) ? ` <span class="warn" title="Bardzo wysoki wzrost lub P/E: zwykle odbicie po jednorazowo zaniżonym zysku — wartość może być zawyżona">⚠</span>`
+                : (dcf && warnDcf(r)) ? ` <span class="warn" title="FCF powyżej 15 % kapitalizacji: zwykle jednorazowe wpływy albo przepływy działalności finansowej — wartość DCF może być zawyżona">⚠</span>` : "";
             return `<tr class="${i <= o.top ? "buy" : ""}"><td class="n rank">${i}</td><td class="t">${esc(r.t)}${w}</td>${cells(r, o.mode)}<td class="n">${r.na ?? "–"}</td><td class="nm">${esc(r.n)}</td></tr>`;
         }).join("") || `<tr><td colspan="${cols.length}" class="empty">Brak spółek przy tych ustawieniach.</td></tr>`;
         document.querySelectorAll("button.sort").forEach((b) => b.addEventListener("click", () => {
