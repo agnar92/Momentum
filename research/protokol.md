@@ -377,3 +377,13 @@ g = CAGR EPS z 5 lat (jak u Lyncha, bez minimum z przychodami), filtry (1) EPS 5
 ranking rosnąco po PEG = P/E / (100 g); warianty progu: bez progu (zawsze top N) i PEG <= 1,5; G3 jak wyżej + nad SMA 10. Reszta jak etap 32.
 Diagnostyka etapów 31 i 32b (2026-11-16): CAGR EPS 5 lat wymaga TTM sprzed 5 lat, a dane SEC zaczynają się ok. 2009-2010 -> w 2011-2014 mogło brakować kandydatów (portfel w gotówce). Ponowne uruchomienie z liczbą kandydatów wg lat i CAGR od 2015-03 (porównanie z równymi wagami od tej samej daty).
 Wynik etapu 32b (2026-11-16): dane EPS 5 lat dostępne od 2015 (2011-2014 bez kandydatów). Od 2015-03: GARP 4,2-11,9 % vs równe wagi 11,4 %; etap 31 od 2015-03: metoda użytkownika 9,8-12,6 %, trailing P/E 8,4-13,1 %, jak analityk 11,4-15,5 %.
+
+## Etap 33: strategia użytkownika - szybki wzrost EPS i przychodów, PEG z estymaty, przycinanie, cena docelowa (zapisane 2026-11-16 PRZED uruchomieniem)
+Decyzje co miesiąc, 10 miejsc (nowa pozycja = kapitał / 10). g = ważona średnia kwartalnych zmian przychodów r/r (etap 30, estymata użytkownika).
+Kandydaci: EPS TTM > 0, wzrost EPS TTM r/r >= 25 % i g >= 25 %; ranking malejąco po wzroście EPS TTM r/r (najszybciej rosnące);
+kupno tylko przy PEG = P/E / (100 g) <= 1. Trzymane pozycje: PEG > 1 i udział > 7 % -> przycięcie do 7 % (gotówka czeka na kolejne zakupy).
+Sprzedaż całości, gdy: (a) pogorszenie: wzrost EPS TTM r/r albo g niższe niż 3 miesiące wcześniej (wariant P) / spadek: EPS TTM r/r < 0 albo
+ostatni kwartał przychodów r/r < 0 (wariant S); (b) cena docelowa = mediana P/E z ostatnich 36 mies. (tylko P/E > 0, min. 12 mies.) x EPS TTM x (1 + g)
+niższa niż 3 miesiące wcześniej. Warianty: P i S, każdy z regułą (b) i bez niej, z przycinaniem i bez (8 wariantów). Koszt 0,1 %/stronę.
+Uniwersum: członkowie S&P 500 z danymi SEC, 2011-2026 (połowy 2011-2018 / 2019-2026) i od 2015-03. Odniesienia: równe wagi, SPY, CEM10 (etap 27).
+"Lepszy": wyższy CAGR w obu połowach i dolna granica 95 % różnicy vs równe wagi > 0. Rozpoznawcze.
