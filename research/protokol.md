@@ -362,3 +362,4 @@ Poprawka etapu 31 (2026-11-16, PRZED wynikami; pierwsze uruchomienie przerwane b
 EPS 5 lat > 15 % -> co decyzję 40 spółek z najwyższym CAGR EPS z 5 lat (wśród członków S&P 500 z dodatnim EPS), z nich 10 z najniższym
 forward P/E. N = 10 (dodatkowo 20 dla porównania). Trzymanie: (R1) dopóki spółka jest w top 40 po EPS 5 lat, (R3) dopóki w top 2N rankingu forward P/E
 wśród tej czterdziestki. Reszta bez zmian.
+Wynik etapu 31 (2026-11-16): top 40 po EPS 5 lat + najniższe forward P/E: 5,9-10,9 % rocznie, wszystkie poniżej równych wag (12,8 %); 2011-2018 ok. 0 %; estymata z przychodów dodaje ok. +1 pp względem trailing P/E.
