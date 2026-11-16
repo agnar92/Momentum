@@ -273,3 +273,10 @@ EPS TTM (co 12 mies.), K = 3 i 5; wszystkie EPS w łańcuchu > 0, g > 0, bez gó
 Warianty: A_K top 20 najniższy PEG, decyzje kwartalne, trzymaj dopóki w top 40 (jak etap 23); B_K wszystkie spółki z PEG < 1
 (wartość > cena), równe wagi, przebudowa co kwartał; C CEM10 (N = 10) tylko spółki z PEG_3 < 1 przy wejściu.
 Uniwersum, okres, koszty, odniesienia i kryterium "lepszy" jak etap 23 (równe wagi uniwersum, SPY, CEM10 na tym uniwersum).
+
+## Etap 25b: wartość z arkusza jako prognoza ceny za rok (zapisane 2026-11-16 PRZED uruchomieniem)
+Doprecyzowanie użytkownika: wartość wewnętrzna (g x EPS) = cena, jakiej można się spodziewać za rok. Sprawdzian prognozy:
+dla par (spółka, koniec lutego / maja / sierpnia / listopada) 2011-2025 z uniwersum etapu 25: prognoza = g x EPS / cena - 1,
+faktycznie = cena skorygowana za 12 mies. / cena - 1 (bez dywidend poza korektą ceny). Miary: mediana i średnia faktycznej
+zmiany w decylach prognozy; odsetek przypadków, gdy cena za rok >= wartość; mediana błędu (faktyczna - prognoza); średnia
+korelacja rang (IC) prognozy z faktyczną zmianą per data z t-statystyką Newey-West (lag 4). K = 3 i 5. Opisowe.
