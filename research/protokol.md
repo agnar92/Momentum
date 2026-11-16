@@ -230,3 +230,4 @@ Wynik etapu 22 (2026-11-16): filtr beta 0,9-1,1 obniża CAGR we wszystkich 24 wa
 
 ## Etap 22b: filtr beta > 1,5 (zapisane 2026-11-16 PRZED uruchomieniem)
 Jak etap 22 (te same bety 1 / 3 / 5 lat, zasady, okresy, N, kryterium "lepszy"), ale filtr przy wejściu: beta > 1,5. 24 porównania, rozpoznawcze.
+Wynik etapu 22b (2026-11-16): beta > 1,5 - przy N = 5 częściej wyżej, przy N = 10 częściej niżej niż CEM10; wszystkie 24 przedziały różnicy obejmują 0; żaden wariant nie spełnia kryteriów.
