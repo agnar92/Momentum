@@ -398,3 +398,4 @@ potencjał ceny docelowej >= 50 %, cena docelowa = mediana P/E z 36 mies. x EPS 
 Co miesiąc ranking malejąco po potencjale, portfel = top 10 (równe kwoty dla nowych; wypadnięcie z top 10 = sprzedaż, wolne miejsce = kolejna
 z rankingu). Warianty: Z1 pełny screener; Z2 bez progu potencjału 50 % (sam ranking); Z3 jak Z1, decyzje co kwartał; Z4 jak Z1 z g jak analityk
 (faktyczny wzrost EPS + błąd 10 pp, nierealne). Uniwersum S&P 500 PIT z danymi SEC, 2011-2026 i od 2015-03; koszty, odniesienia, kryterium jak etap 33.
+Wynik etapu 34 (2026-11-16): z estymatą użytkownika (przychody ważone) 6,7-12,8 % (równe wagi 12,8 %, od 2015 9,7-12,9 % vs 11,4 %); z prognozą jak analityk (nierealne) 25,2 % (od 2015 30,3 %, CEM10 25,9 %). Ograniczenia: cena docelowa = formuła użytkownika, nie analityków; brak tagów długu w SEC = D/E 0.
