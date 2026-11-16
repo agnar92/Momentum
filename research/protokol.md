@@ -371,3 +371,7 @@ z niskiej bazy i spółki cykliczne na szczycie), (2) stabilność: EPS TTM > 0 
 (CAGR EPS 5 lat, ważony wzrost przychodów) - konserwatywnie. Ranking rosnąco po PEG, N = 10 i 20, decyzje co miesiąc i co kwartał,
 trzymanie dopóki spełnia warunki (R1). Warianty: G1 pełny GARP; G2 bez warunku stabilności; G3 pełny GARP + zamknięcie miesiąca nad SMA 10
 (trend, jak w CEM10). Uniwersum, okres 2011-2026, koszty, odniesienia i kryterium "lepszy" jak etap 29c. Rozpoznawcze (12 wariantów).
+Wynik etapu 32 (2026-11-16): reguły zbyt ostre - kandydatów w miesiącu mediana 1-4,5, portfel głównie w gotówce, CAGR 0,1-4,2 %; test nieinformacyjny.
+Odstępstwo 10 / etap 32b (zapisane PO wyniku etapu 32, PRZED uruchomieniem 32b; wynik 32 znany tylko co do liczby kandydatów i zwrotu):
+g = CAGR EPS z 5 lat (jak u Lyncha, bez minimum z przychodami), filtry (1) EPS 5 lat 10-30 %, (2) stabilność >= 4 z 5 lat, (3) ważony wzrost przychodów > 5 %;
+ranking rosnąco po PEG = P/E / (100 g); warianty progu: bez progu (zawsze top N) i PEG <= 1,5; G3 jak wyżej + nad SMA 10. Reszta jak etap 32.
