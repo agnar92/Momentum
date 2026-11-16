@@ -35,3 +35,18 @@ def test_build_with_fake_data():
     out = script.build(mem, data, dt.date(2026, 12, 1))
     assert out["generated_at"] == "2026-12-01" and out["missing"] == ["B"] and len(out["rows"]) == 1
     assert out["rows"][0]["iv"] == 100.0 and out["rows"][0]["pot"] == 1.0
+
+
+def test_dcf_value_two_stage():
+    v = wycena.dcf_value(100e6, 10e6, 50e6, 20e6, 0.30)          # wzrost obcięty do 25 %, potem wygaszanie do 2,5 %
+    # ręcznie: 5 lat po 25 %, 5 lat wygaszania, wartość końcowa
+    pv, f = 0.0, 100e6
+    for t, gt in enumerate([0.25] * 5 + [0.25 + (0.025 - 0.25) * k / 5 for k in range(1, 6)], 1):
+        f *= 1 + gt
+        pv += f / 1.09 ** t
+    pv += f * 1.025 / (0.09 - 0.025) / 1.09 ** 10
+    assert abs(v - (pv + 30e6) / 10e6) < 1e-9
+    assert wycena.dcf_value(-1, 10, 0, 0, 0.1) is None and wycena.dcf_value(1, 0, 0, 0, 0.1) is None
+    assert wycena.dcf_value(1, 1, 0, 0, 0.1, r=0.02, tg=0.025) is None
+    r = wycena.value_row("X", "X", 100, 5, 0.3, analysts=5, fcf=100e6, shares=10e6, cash=50e6, debt=20e6)
+    assert r["dcf"] == round(v, 2) and r["fcf"] == 100.0 and r["sh"] == 10.0 and r["cash"] == 50.0 and r["debt"] == 20.0

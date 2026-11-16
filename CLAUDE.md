@@ -171,6 +171,11 @@ check 400–600 / 80–120 = job error); `wycena.py` fetches yfinance per ticker
 the market (≈ 10–12 %/yr, value does not predict next-year price, past EPS growth mean-reverts); with an accurate forecast (simulation with
 future knowledge, ±10 pp) top 10–20 checked monthly / quarterly ≈ 25–27 %/yr, yearly ≈ 18–20 %; trimming to 7–10 % hurt. Consensus is public
 and priced in, so the real result is in between — the page says it is a screen, not a buy signal.
+**DCF mode** (user, Nov 2026: "dodaj jeszcze DCF Mode"): toggle `#mode` (PEG / DCF, `o.mode`). Two-stage DCF (`wycena.dcf_value` = JS `dcfValue`, same numbers, tested in
+both): FCF TTM (yfinance `freeCashflow`) grows `years` years at the analysts' EPS growth clipped to 0…`gmax`, then fades linearly over 5 years to the terminal
+growth `tg`; terminal value FCF × (1 + tg) / (r − tg); discount rate `r`; value per share = (PV + `totalCash` − `totalDebt`) / `sharesOutstanding`.
+Defaults r 9 %, tg 2.5 %, 5 years, gmax 25 % (`wycena.DCF`), editable on the page (computed in the browser, `withDcf`); rows carry `fcf`, `sh`, `cash`, `debt`
+in millions. No positive FCF (banks) = no DCF. DCF is NOT backtested (the research data has no FCF history).
 
 ## CI (`.github/workflows/`)
 

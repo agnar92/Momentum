@@ -2,7 +2,7 @@
 
 Uruchamiany 1. dnia miesiąca przez workflow „Wycena Monthly” (i ręcznie). Skład indeksów: Finviz (idx_sp500, idx_ndx). Dla każdej spółki
 yfinance: cena, EPS TTM (trailingEps), EPS prognozowany (forwardEps) i Growth Estimates (`+1y` = następny rok, `0y` = bieżący), liczba
-analityków z earnings_estimate. Wzory w momentum/wycena.py."""
+analityków z earnings_estimate; do trybu DCF: wolne przepływy (freeCashflow), liczba akcji, gotówka i dług. Wzory w momentum/wycena.py."""
 import argparse
 import datetime as dt
 import json
@@ -45,7 +45,8 @@ def fetch(ticker, yf=None, tries=3):
             if ee is not None and len(ee) and "numberOfAnalysts" in ee.columns and "+1y" in ee.index:
                 na = int(ee.loc["+1y", "numberOfAnalysts"]) if ee.loc["+1y", "numberOfAnalysts"] == ee.loc["+1y", "numberOfAnalysts"] else None
             return dict(price=info.get("currentPrice") or info.get("regularMarketPrice"), eps=info.get("trailingEps"),
-                        fwd_eps=info.get("forwardEps"), g=g, g0=g0, na=na)
+                        fwd_eps=info.get("forwardEps"), g=g, g0=g0, na=na, fcf=info.get("freeCashflow"),
+                        shares=info.get("sharesOutstanding"), cash=info.get("totalCash"), debt=info.get("totalDebt"))
         except Exception as e:      # noqa: BLE001 — sieć / limit Yahoo: ponów
             if k == tries - 1:
                 print(f"{ticker}: błąd yfinance ({e})", flush=True)
@@ -58,8 +59,9 @@ def build(mem, data, today):
     for t, m in mem.items():
         d = data.get(t)
         if d and d.get("price"):
-            rows.append(wycena.value_row(t, m["n"], d["price"], d["eps"], d["g"], d["g0"], d["na"], d["fwd_eps"], sp=m["sp"], nq=m["nq"]))
-    return dict(generated_at=today.isoformat(), peg_max=wycena.PEG_MAX, min_analysts=wycena.MIN_ANALYSTS, rows=rows,
+            rows.append(wycena.value_row(t, m["n"], d["price"], d["eps"], d["g"], d["g0"], d["na"], d["fwd_eps"],
+                                           d.get("fcf"), d.get("shares"), d.get("cash"), d.get("debt"), sp=m["sp"], nq=m["nq"]))
+    return dict(generated_at=today.isoformat(), dcf=wycena.DCF, peg_max=wycena.PEG_MAX, min_analysts=wycena.MIN_ANALYSTS, rows=rows,
                 missing=sorted(set(mem) - {r["t"] for r in rows}))
 
 

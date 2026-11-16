@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <link rel="icon" href="icons/favicon-32.png" type="image/png">
-<title>Wycena PEG</title>
+<title>Wycena PEG i DCF</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 /* uklad: ustawienia filtra -> lista tanich spolek (top N na zielono) -> wzory i wyniki badania */
@@ -67,6 +67,10 @@ th.n button.sort{display:block;text-align:right;width:100%}
 .warn{color:var(--warn);font-family:var(--sans);cursor:help}
 .ctl input[type=search]{width:min(100%,220px)}
 .ctl .chk{display:flex;align-items:center;gap:6px;color:var(--fg);font-size:14px;padding-bottom:8px}
+.seg{display:inline-flex;border:1px solid var(--accent);border-radius:8px;overflow:hidden;width:max-content;max-width:100%}
+.seg button{border:0;border-radius:0;background:transparent;color:var(--accent);padding:9px 14px}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--surface)}
+.only-peg[hidden],.only-dcf[hidden]{display:none}
 .note{background:var(--accent-soft);border-radius:8px;padding:12px 14px;font-size:14px;display:grid;gap:6px}
 </style>
 </head>
@@ -75,13 +79,20 @@ th.n button.sort{display:block;text-align:right;width:100%}
 <p id="err" class="err" hidden></p>
 <div class="top">
   <h3><a href="index.html" class="back">← Momentum</a> · Wycena · dane z <span id="asof"></span></h3>
-  <h1>Niedowartościowane spółki: PEG i wartość wewnętrzna</h1>
-  <p class="mut">Spółki z S&amp;P 500 i Nasdaq‑100, których cena jest niższa od wartości wyliczonej z bieżącego zysku i prognozy wzrostu zysku analityków. Sortowanie po potencjale; pierwsze miejsca na zielono. Lista odświeża się sama 1. dnia miesiąca. To sito do dalszej analizy, nie rekomendacja inwestycyjna.</p>
+  <h1>Niedowartościowane spółki: PEG, wartość wewnętrzna i DCF</h1>
+  <p class="mut">Spółki z S&amp;P 500 i Nasdaq‑100, których cena jest niższa od wartości wyliczonej z bieżącego zysku i prognozy wzrostu zysku analityków (tryb PEG) albo z zdyskontowanych wolnych przepływów pieniężnych (tryb DCF). Sortowanie po potencjale; pierwsze miejsca na zielono. Lista odświeża się sama 1. dnia miesiąca. To sito do dalszej analizy, nie rekomendacja inwestycyjna.</p>
 </div>
 
 <section class="market">
+  <div class="seg" id="mode" role="group" aria-label="Metoda wyceny"><button type="button" data-m="peg" aria-pressed="true">PEG i wartość z arkusza</button><button type="button" data-m="dcf" aria-pressed="false">DCF</button></div>
+  <div class="ctl only-dcf" hidden>
+    <label for="r">Stopa dyskontowa %<input type="text" id="r" inputmode="decimal" autocomplete="off"></label>
+    <label for="tg">Wzrost końcowy %<input type="text" id="tg" inputmode="decimal" autocomplete="off"></label>
+    <label for="years">Lata wzrostu<input type="text" id="years" inputmode="numeric" autocomplete="off"></label>
+    <label for="gmax">Maks. wzrost %<input type="text" id="gmax" inputmode="decimal" autocomplete="off"></label>
+  </div>
   <div class="ctl">
-    <label for="pegMax">PEG maks.<input type="text" id="pegMax" inputmode="decimal" autocomplete="off"></label>
+    <label for="pegMax" class="only-peg">PEG maks.<input type="text" id="pegMax" inputmode="decimal" autocomplete="off"></label>
     <label for="minAn">Min. analityków<input type="text" id="minAn" inputmode="numeric" autocomplete="off"></label>
     <label for="idx">Indeks<select id="idx"><option value="all">S&amp;P 500 i NDX</option><option value="sp">S&amp;P 500</option><option value="nq">Nasdaq‑100</option></select></label>
     <label for="top">Na zielono<select id="top"><option value="10">top 10</option><option value="20">top 20</option><option value="0">bez</option></select></label>
@@ -101,11 +112,12 @@ th.n button.sort{display:block;text-align:right;width:100%}
     <li><b>Wartość (fair value)</b> = EPS × wzrost w % (Peter Lynch: uczciwe P/E równa się tempu wzrostu). <b>Potencjał</b> = wartość / cena − 1, czyli 1 / PEG − 1: PEG &lt; 1 oznacza wartość wyższą od ceny.</li>
     <li><b>⚠</b> przy tickerze: prognozowany wzrost powyżej +100 % albo P/E powyżej 60. Zwykle to odbicie po roku z jednorazowo zaniżonym zyskiem (odpisy, strata), więc wartość jest zawyżona; badanie pokazało, że takie skoki rzadko się powtarzają.</li>
     <li>Spółki bez dodatniego EPS albo z prognozą spadku zysku nie mają PEG ani wartości. Mała liczba analityków to mniej pewna prognoza (domyślnie co najmniej 3).</li>
+    <li><b>DCF</b> (model dwuetapowy): wolne przepływy pieniężne z ostatnich 12 miesięcy (FCF) rosną przez „lata wzrostu” w tempie prognozy wzrostu EPS obciętej do 0 … „maks. wzrost”, potem przez 5 lat tempo spada liniowo do „wzrostu końcowego”; wartość końcowa = FCF × (1 + wzrost końcowy) / (stopa − wzrost końcowy). Wszystko dyskontowane „stopą dyskontową”; wartość akcji = (suma + gotówka − dług) / liczba akcji. Domyślnie 9 %, 2,5 %, 5 lat, 25 %. Spółki bez dodatniego FCF (np. banki) nie mają wartości DCF. <b>FCF yield</b> = FCF / kapitalizacja.</li>
     <li>Dane: skład indeksów z Finviz, ceny, EPS i prognozy z Yahoo Finance (yfinance), odświeżane 1. dnia miesiąca przez workflow „Wycena Monthly”.</li>
   </ul>
   <div class="note">
     <b>Co pokazało badanie (S&amp;P 500, 2011–2026, research/wyniki/r42–r50)</b>
-    <span>Wartość liczona z przeszłego wzrostu EPS nie przewidywała ceny za rok i portfele z niej dawały ok. 10–12 % rocznie, tyle co rynek. Z trafną prognozą wzrostu (symulacja z wiedzą o przyszłości) portfel top 10–20 sprawdzany co miesiąc lub kwartał dawał ok. 25–27 % rocznie. Prognozy analityków są publiczne i już zawarte w cenie, więc realny wynik jest gdzieś pomiędzy. Wartość to orientacyjny ranking, nie cena za rok: typowy błąd ±70 pp. Sprawdzanie co miesiąc lub co kwartał działało lepiej niż raz w roku; przycinanie pozycji do 7–10 % obniżało wynik.</span>
+    <span>Wartość liczona z przeszłego wzrostu EPS nie przewidywała ceny za rok i portfele z niej dawały ok. 10–12 % rocznie, tyle co rynek. Z trafną prognozą wzrostu (symulacja z wiedzą o przyszłości) portfel top 10–20 sprawdzany co miesiąc lub kwartał dawał ok. 25–27 % rocznie. Prognozy analityków są publiczne i już zawarte w cenie, więc realny wynik jest gdzieś pomiędzy. Wartość to orientacyjny ranking, nie cena za rok: typowy błąd ±70 pp. Sprawdzanie co miesiąc lub co kwartał działało lepiej niż raz w roku; przycinanie pozycji do 7–10 % obniżało wynik. DCF nie był testowany historycznie (dane badania nie mają historii wolnych przepływów); wynik silnie zależy od stopy dyskontowej i wzrostu — zmiana stopy o 1 pp zmienia wartość o kilkanaście procent.</span>
   </div>
 </section>
 </main>
