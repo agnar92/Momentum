@@ -247,3 +247,4 @@ S4 forward PEG z WIEDZĄ O PRZYSZŁOŚCI (faktyczny EPS następnych 4 kwartałó
 dobrych prognoz). Odniesienia: równe wagi całego uniwersum (miesięcznie), SPY, CEM10 na tym samym uniwersum (N = 10).
 "Lepszy od równych wag": wyższy CAGR w obu połowach i dolna granica 95 % różnicy miesięcznej (bootstrap blokowy) > 0.
 Ograniczenie: lista 710 spółek SEC to w dużej części obecni członkowie indeksów (przeżywalność) - porównania tylko wewnątrz uniwersum.
+Wynik etapu 23 (2026-11-16): niskie P/E i PEG (1 i 3 lata) ~10,2 % rocznie, poniżej równych wag uniwersum (12,8 %) i SPY (14,1 %); forward PEG z faktycznym przyszłym zyskiem 22,8 % (nierealne); CEM10 na tym samym uniwersum 21,9 %.
