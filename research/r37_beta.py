@@ -27,7 +27,6 @@ for L, nm in ((52, '1 rok'), (156, '3 lata'), (260, '5 lat')):
     ss = s_.rolling(L, min_periods=mp).sum(); s2 = (s_ ** 2).rolling(L, min_periods=mp).sum()
     b = (sxy - sx * ss / n) / (s2 - ss ** 2 / n)
     b = b.where(n >= mp).iloc[ost.values]; b.index = ost.index
-    B = np.full((NT, NS), np.nan)
     bm = b.reindex(index=ms, columns=ser)
     BETA[nm] = bm.to_numpy(); print('beta', nm, np.nanmedian(BETA[nm]), flush=True)
 
@@ -68,17 +67,17 @@ for un, U, od, pol in (('S&P 500', U_SP, '1998-01', '2012-12'), ('NDX', U_ND, '2
             e0 = sim_f(U, N, prog, od, '2026-09', None, log)
             if N == 10 and prog:                                # opis bety kupowanych i kandydatów
                 i0 = im[pd.Period(od, 'M')]
-                for nm, B in BETA.items():
-                    bk = np.array([B[i, j] for i, j in log['kup']]); bk = bk[np.isfinite(bk)]
-                    kk = np.concatenate([B[i0 + t][log['kand'][t]] for t in range(len(log['kand']))]); kk = kk[np.isfinite(kk)]
-                    ca = np.concatenate([B[i][U[i]] for i in range(i0, im[pd.Period('2026-09', 'M')])]); ca = ca[np.isfinite(ca)]
+                for nm, Bm in BETA.items():
+                    bk = np.array([Bm[i, j] for i, j in log['kup']]); bk = bk[np.isfinite(bk)]
+                    kk = np.concatenate([Bm[i0 + t][log['kand'][t]] for t in range(len(log['kand']))]); kk = kk[np.isfinite(kk)]
+                    ca = np.concatenate([Bm[i][U[i]] for i in range(i0, im[pd.Period('2026-09', 'M')])]); ca = ca[np.isfinite(ca)]
                     opis.append(dict(indeks=un, okno=nm, beta_kupowanych_mediana=np.median(bk), kupowanych_kw25_75=f'{np.percentile(bk,25):.2f}…{np.percentile(bk,75):.2f}',
                                      kupowanych_w_09_11=((bk >= .9) & (bk <= 1.1)).mean(), kandydatow_w_09_11=((kk >= .9) & (kk <= 1.1)).mean(),
                                      calego_indeksu_mediana=np.median(ca), calego_indeksu_w_09_11=((ca >= .9) & (ca <= 1.1)).mean()))
             rows.append(dict(indeks=un, N=N, prog_6M_30=prog, wariant='CEM10 bez filtra', CAGR=cagr(e0), pierwsza_polowa=cagr(e0, None, pol),
                              druga_polowa=cagr(e0, pol), maxDD=(e0 / e0.cummax() - 1).min(), roznica='', lepszy=False))
-            for nm, B in BETA.items():
-                F = (B >= 0.9) & (B <= 1.1)
+            for nm, Bm in BETA.items():
+                F = (Bm >= 0.9) & (Bm <= 1.1)
                 e = sim_f(U, N, prog, od, '2026-09', F)
                 d = (e.pct_change() - e0.pct_change()).dropna(); lo, hi = blok(d.values)
                 c1, c2, b1, b2 = cagr(e, None, pol), cagr(e, pol), cagr(e0, None, pol), cagr(e0, pol)
