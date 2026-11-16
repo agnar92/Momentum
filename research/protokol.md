@@ -342,3 +342,11 @@ Jak etap 29 (PEG <= 1 i IV > cena = akcja "tania", ranking po potencjale IV), be
 raz w roku. Trzymanie: (R1) dopóki tania (IV > cena i PEG <= 1), (R3) dopóki w top 2N. Wolne miejsca = kolejni z rankingu, kwota =
 kapitał / N z gotówki. Wzrost A (CAGR EPS od początku, realne) i B (jak analityk, nierealne). N = 10 i 20. Reszta jak etap 29.
 Wynik etapu 29c (2026-11-16): realne (CAGR EPS) 8,7-12,5 %, żaden lepszy; z prognozą jak analityk co miesiąc 26-27 % (DD -21..-28 %), co kwartał podobnie, raz w roku 18-20 %.
+
+## Etap 30: wzrost z ważonej średniej kwartalnych zmian przychodów r/r (metoda użytkownika) (zapisane 2026-11-16 PRZED uruchomieniem)
+Metoda użytkownika: g = 0,1 x gQ(t-3) + 0,2 x gQ(t-2) + 0,3 x gQ(t-1) + 0,4 x gQ(t), gdzie gQ = zmiana r/r przychodów kwartału
+(4 ostatnie znane kwartały, kolejne, odstępy 75-110 dni; kwartał rok wcześniej > 0; znany od późniejszej daty złożenia z obu).
+Wariant: średnia arytmetyczna tych 4 zmian. g używane jako prognoza wzrostu EPS na następny rok: IV = EPS TTM x 100 g, PEG = P/E / (100 g),
+forward PEG jak etap 29. Sprawdziany: (1) IC g z faktyczną zmianą EPS TTM za 4 kwartały i potencjału IV z ceną za rok (decyzje kwartalne);
+(2) portfele jak etap 29c: kandydaci PEG <= 1 i IV > cena, ranking po potencjale, N = 10 i 20, decyzje co miesiąc / kwartał / rok,
+trzymanie dopóki tania (R1) albo w top 2N (R3), bez przycinania. Uniwersum, okres 2011-2026, koszty, odniesienia, kryterium jak etap 29c.
