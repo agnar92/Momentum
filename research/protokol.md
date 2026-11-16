@@ -231,3 +231,19 @@ Wynik etapu 22 (2026-11-16): filtr beta 0,9-1,1 obniża CAGR we wszystkich 24 wa
 ## Etap 22b: filtr beta > 1,5 (zapisane 2026-11-16 PRZED uruchomieniem)
 Jak etap 22 (te same bety 1 / 3 / 5 lat, zasady, okresy, N, kryterium "lepszy"), ale filtr przy wejściu: beta > 1,5. 24 porównania, rozpoznawcze.
 Wynik etapu 22b (2026-11-16): beta > 1,5 - przy N = 5 częściej wyżej, przy N = 10 częściej niżej niż CEM10; wszystkie 24 przedziały różnicy obejmują 0; żaden wariant nie spełnia kryteriów.
+
+## Etap 23: "wzrost w rozsądnej cenie" - P/E względem wzrostu zysku (zapisane 2026-11-16 PRZED uruchomieniem)
+Pomysł z filmu (inwestor wartościowy: nie niskie P/E, tylko P/E uczciwe względem tempa wzrostu zysku; forward P/E dla spółek
+rosnących). Mechaniczna wersja; elementy uznaniowe (fosa, zarząd, przekonanie) są nietestowalne.
+Dane: EPS kwartalny z SEC (/home/user/ndx/sec_q, 710 spółek, pierwsza publikacja, znany od daty złożenia; Q4 = rok - Q1..Q3),
+przeliczony na bazę ceny skorygowanej: EPS x adj / close z dnia złożenia (splity). TTM = suma 4 kolejnych kwartałów.
+P/E = cena skorygowana na koniec miesiąca / TTM (tylko TTM > 0, P/E <= 100). g1 = TTM / TTM sprzed 4 kwartałów - 1,
+g3 = CAGR TTM z 3 lat. PEG = P/E / (100 x g), tylko 10 % <= g <= 100 %.
+Uniwersum: członkowie S&P 500 point-in-time z danymi SEC; okres 2011-01 ... 2026-09; połowy 2011-2018 / 2019-2026.
+Decyzje co kwartał (koniec lutego, maja, sierpnia, listopada), N = 20 równych kwot, bez rebalancingu; pozycja trzymana, dopóki
+spółka jest w top 2N według swojego wskaźnika i spełnia warunki (sprzedaż = "lepsza okazja / za drogo"); koszt 0,1 %/stronę.
+Warianty: S1 najniższe P/E (błąd "tanie = niskie P/E"); S2 najniższy PEG z g1; S3 najniższy PEG z g3;
+S4 forward PEG z WIEDZĄ O PRZYSZŁOŚCI (faktyczny EPS następnych 4 kwartałów; nie do zrealizowania, górna granica wartości
+dobrych prognoz). Odniesienia: równe wagi całego uniwersum (miesięcznie), SPY, CEM10 na tym samym uniwersum (N = 10).
+"Lepszy od równych wag": wyższy CAGR w obu połowach i dolna granica 95 % różnicy miesięcznej (bootstrap blokowy) > 0.
+Ograniczenie: lista 710 spółek SEC to w dużej części obecni członkowie indeksów (przeżywalność) - porównania tylko wewnątrz uniwersum.
