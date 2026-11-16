@@ -375,3 +375,4 @@ Wynik etapu 32 (2026-11-16): reguły zbyt ostre - kandydatów w miesiącu median
 Odstępstwo 10 / etap 32b (zapisane PO wyniku etapu 32, PRZED uruchomieniem 32b; wynik 32 znany tylko co do liczby kandydatów i zwrotu):
 g = CAGR EPS z 5 lat (jak u Lyncha, bez minimum z przychodami), filtry (1) EPS 5 lat 10-30 %, (2) stabilność >= 4 z 5 lat, (3) ważony wzrost przychodów > 5 %;
 ranking rosnąco po PEG = P/E / (100 g); warianty progu: bez progu (zawsze top N) i PEG <= 1,5; G3 jak wyżej + nad SMA 10. Reszta jak etap 32.
+Diagnostyka etapów 31 i 32b (2026-11-16): CAGR EPS 5 lat wymaga TTM sprzed 5 lat, a dane SEC zaczynają się ok. 2009-2010 -> w 2011-2014 mogło brakować kandydatów (portfel w gotówce). Ponowne uruchomienie z liczbą kandydatów wg lat i CAGR od 2015-03 (porównanie z równymi wagami od tej samej daty).

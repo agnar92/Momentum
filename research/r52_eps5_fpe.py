@@ -338,6 +338,7 @@ for gn, G in GWS.items():
         ok = top40[np.nan_to_num(fe[i, top40], nan=-1) > 0]
         P_[i, ok] = -(Cv[i, ok] / fe[i, ok])      # strat2 sortuje malejąco -> najniższe forward P/E pierwsze
     ile = [np.sum(U[im_[m]] & np.isfinite(P_[im_[m]])) for m in mies if m.month == 2]
+    print(gn, 'kandydaci w lutym wg lat', dict(zip([m.year for m in mies if m.month == 2], ile)), flush=True)
     print(gn, 'kandydatów w lutym: mediana', np.median(ile), flush=True)
     for N in (10, 20):
         for regula, rn in (('R1', 'dopóki w top 40 po EPS 5 l.'), ('R3', 'dopóki w top 2N')):
@@ -345,7 +346,7 @@ for gn, G in GWS.items():
                 e = strat2(P_, N, mm, regula)
                 d = (e.pct_change() - ew.pct_change()).dropna(); lo, hi = blok(d.values)
                 c1, c2, b1, b2 = cg(e, None, POL), cg(e, POL), cg(ew, None, POL), cg(ew, POL)
-                rows.append(dict(estymata=gn, N=N, trzymanie=rn, decyzje=cz, CAGR=cg(e), CAGR_2011_18=c1, CAGR_2019_26=c2, maxDD=(e / e.cummax() - 1).min(),
+                rows.append(dict(estymata=gn, N=N, trzymanie=rn, decyzje=cz, CAGR=cg(e), CAGR_2011_18=c1, CAGR_2019_26=c2, CAGR_od_2015_03=cg(e, pd.Period('2015-03', 'M')), rowne_od_2015_03=cg(ew, pd.Period('2015-03', 'M')), maxDD=(e / e.cummax() - 1).min(),
                                  z_10k=round(10000 * e.iloc[-1]), roznica_vs_rowne=f'{d.mean()*100:+.2f} ({lo*100:.2f}…{hi*100:.2f})', lepszy=c1 > b1 and c2 > b2 and lo > 0))
         print(gn, N, flush=True)
 T = pd.DataFrame(rows)

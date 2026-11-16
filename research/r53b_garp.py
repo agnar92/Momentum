@@ -343,13 +343,14 @@ ew = rowne(); rows = []
 for nm, X in WAR.items():
     P_ = -X                                       # strat2 sortuje malejąco -> najniższy PEG pierwszy
     ile = [np.sum(U[im_[m]] & np.isfinite(P_[im_[m]])) for m in mies if m.month == 2]
+    print(nm, 'kandydaci w lutym wg lat', dict(zip([m.year for m in mies if m.month == 2], ile)), flush=True)
     print(nm, 'kandydatów w lutym: mediana', np.median(ile), 'min', min(ile), flush=True)
     for N in (10, 20):
         for cz in ('co miesiąc', 'co kwartał'):
             e = strat2(P_, N, CZ[cz], 'R1')
             d = (e.pct_change() - ew.pct_change()).dropna(); lo, hi = blok(d.values)
             c1, c2, b1, b2 = cg(e, None, POL), cg(e, POL), cg(ew, None, POL), cg(ew, POL)
-            rows.append(dict(wariant=nm, N=N, decyzje=cz, kandydatow_mediana=np.median(ile), CAGR=cg(e), CAGR_2011_18=c1, CAGR_2019_26=c2,
+            rows.append(dict(wariant=nm, N=N, decyzje=cz, kandydatow_mediana=np.median(ile), CAGR=cg(e), CAGR_2011_18=c1, CAGR_2019_26=c2, CAGR_od_2015_03=cg(e, pd.Period('2015-03', 'M')), rowne_od_2015_03=cg(ew, pd.Period('2015-03', 'M')),
                              maxDD=(e / e.cummax() - 1).min(), z_10k=round(10000 * e.iloc[-1]), roznica_vs_rowne=f'{d.mean()*100:+.2f} ({lo*100:.2f}…{hi*100:.2f})',
                              lepszy=c1 > b1 and c2 > b2 and lo > 0))
 T = pd.DataFrame(rows)
